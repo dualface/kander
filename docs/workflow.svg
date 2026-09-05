@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="968" viewBox="0 0 800 968" role="img" aria-labelledby="wf-title wf-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="994" viewBox="0 0 800 994" role="img" aria-labelledby="wf-title wf-desc">
   <title id="wf-title">Kander 工作流</title>
   <desc id="wf-desc">新建 agent 会话讨论需求, 确认后用看板流程完成任务, 重复安排所有任务, 用命令 kander 打开可视化看板关注任务进度.</desc>
 
@@ -28,7 +28,7 @@
     </style>
   </defs>
 
-  <rect width="800" height="968" fill="url(#bg)"/>
+  <rect width="800" height="994" fill="url(#bg)"/>
 
   <text x="48" y="64" class="s h1">Kander 工作流</text>
   <text x="48" y="100" class="s h2">新建会话讨论 → 建卡启动 → 重复安排 → TUI 跟进</text>
@@ -50,7 +50,7 @@
   <path d="M400 344 V368" class="flow"/>
 
   <!-- step 2 -->
-  <rect x="48" y="368" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="48" y="368" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
   <rect x="80" y="392" width="40" height="40" rx="12" fill="#d97706"/>
   <text x="100" y="419" text-anchor="middle" class="s num">2</text>
   <text x="136" y="414" class="s pt">确认后建卡启动</text>
@@ -59,31 +59,33 @@
   <circle cx="90" cy="488" r="4" fill="#fbbf24"/>
   <text x="106" y="493" class="s bt">需求确认才建卡</text>
   <circle cx="90" cy="514" r="4" fill="#fbbf24"/>
-  <text x="106" y="519" class="s bt">每张卡独立 Agent 执行</text>
+  <text x="106" y="519" class="s bt">建卡后自审任务契约, 再启动执行</text>
+  <circle cx="90" cy="540" r="4" fill="#fbbf24"/>
+  <text x="106" y="545" class="s bt">每张卡独立 Agent 执行</text>
 
-  <path d="M400 536 V560" class="flow"/>
+  <path d="M400 562 V586" class="flow"/>
 
   <!-- step 3 -->
-  <rect x="48" y="560" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
-  <rect x="80" y="584" width="40" height="40" rx="12" fill="#0d9488"/>
-  <text x="100" y="611" text-anchor="middle" class="s num">3</text>
-  <text x="136" y="606" class="s pt">重复安排</text>
-  <text x="136" y="632" class="s pn">逐个落实全部需求</text>
-  <line x1="80" y1="656" x2="720" y2="656" stroke="#eef1f6" stroke-width="1.5"/>
-  <circle cx="90" cy="680" r="4" fill="#5eead4"/>
-  <text x="106" y="685" class="s bt">多个需求重复步骤 1-2</text>
+  <rect x="48" y="586" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="610" width="40" height="40" rx="12" fill="#0d9488"/>
+  <text x="100" y="637" text-anchor="middle" class="s num">3</text>
+  <text x="136" y="632" class="s pt">重复安排</text>
+  <text x="136" y="658" class="s pn">逐个落实全部需求</text>
+  <line x1="80" y1="682" x2="720" y2="682" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="706" r="4" fill="#5eead4"/>
-  <text x="106" y="711" class="s bt">一次安排一个, 并行执行</text>
+  <text x="106" y="711" class="s bt">多个需求重复步骤 1-2</text>
+  <circle cx="90" cy="732" r="4" fill="#5eead4"/>
+  <text x="106" y="737" class="s bt">一次安排一个, 并行执行</text>
 
-  <path d="M400 728 V752" class="flow"/>
+  <path d="M400 754 V778" class="flow"/>
 
   <!-- step 4 -->
-  <rect x="48" y="752" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
-  <rect x="80" y="776" width="40" height="40" rx="12" fill="#7c3aed"/>
-  <text x="100" y="803" text-anchor="middle" class="s num">4</text>
-  <text x="136" y="798" class="s pt">TUI 跟进</text>
-  <text x="136" y="824" class="s pn">查看所有任务状态</text>
-  <line x1="80" y1="848" x2="720" y2="848" stroke="#eef1f6" stroke-width="1.5"/>
-  <circle cx="90" cy="884" r="4" fill="#c4b5fd"/>
-  <text x="106" y="889" class="s bt">用命令 <tspan class="hl">kander</tspan> 打开可视化看板, 关注任务进度</text>
+  <rect x="48" y="778" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="802" width="40" height="40" rx="12" fill="#7c3aed"/>
+  <text x="100" y="829" text-anchor="middle" class="s num">4</text>
+  <text x="136" y="824" class="s pt">TUI 跟进</text>
+  <text x="136" y="850" class="s pn">查看所有任务状态</text>
+  <line x1="80" y1="874" x2="720" y2="874" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="910" r="4" fill="#c4b5fd"/>
+  <text x="106" y="915" class="s bt">用命令 <tspan class="hl">kander</tspan> 打开可视化看板, 关注任务进度</text>
 </svg>

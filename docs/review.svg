@@ -38,7 +38,7 @@
   <!-- 触发判定 -->
   <rect x="48" y="176" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
   <rect x="80" y="200" width="40" height="40" rx="12" fill="#d97706"/>
-  <text x="100" y="228" text-anchor="middle" class="s num">?</text>
+  <text x="100" y="227" text-anchor="middle" class="s num">?</text>
   <text x="136" y="222" class="s pt">是否命中审核白名单</text>
   <text x="136" y="248" class="s pn">按任务实际改动判定, 不看标题或标签</text>
   <line x1="80" y1="272" x2="720" y2="272" stroke="#eef1f6" stroke-width="1.5"/>
