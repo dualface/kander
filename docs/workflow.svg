@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="968" viewBox="0 0 800 968" role="img" aria-labelledby="wf-title wf-desc">
+  <title id="wf-title">Kander 工作流</title>
+  <desc id="wf-desc">新建 agent 会话讨论需求, 确认后用看板流程完成任务, 重复安排所有任务, 用命令 kander 打开可视化看板关注任务进度.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfcfe"/>
+      <stop offset="1" stop-color="#f1f4f9"/>
+    </linearGradient>
+    <filter id="card" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0f172a" flood-opacity="0.06"/>
+    </filter>
+    <marker id="a-slate" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .s { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif; }
+      .h1 { font-size: 38px; font-weight: 700; fill: #0f172a; }
+      .h2 { font-size: 18px; fill: #64748b; }
+      .tag { font-size: 15px; fill: #94a3b8; }
+      .pt { font-size: 22px; font-weight: 700; fill: #0f172a; }
+      .pn { font-size: 15px; fill: #64748b; }
+      .bt { font-size: 16px; fill: #334155; }
+      .num { font-size: 20px; font-weight: 700; fill: #ffffff; }
+      .hl { font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace; font-size: 16px; font-weight: 700; fill: #6d28d9; }
+      .panel { fill: #ffffff; stroke: #e6eaf0; stroke-width: 1.5; }
+      .flow { fill: none; stroke: #94a3b8; stroke-width: 2.5; stroke-linecap: round; marker-end: url(#a-slate); }
+    </style>
+  </defs>
+
+  <rect width="800" height="968" fill="url(#bg)"/>
+
+  <text x="48" y="64" class="s h1">Kander 工作流</text>
+  <text x="48" y="100" class="s h2">新建会话讨论 → 建卡启动 → 重复安排 → TUI 跟进</text>
+  <text x="48" y="126" class="s tag">一个人用看板调度多个 AI Agent</text>
+  <line x1="48" y1="150" x2="752" y2="150" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- step 1 -->
+  <rect x="48" y="176" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="200" width="40" height="40" rx="12" fill="#4f46e5"/>
+  <text x="100" y="227" text-anchor="middle" class="s num">1</text>
+  <text x="136" y="222" class="s pt">新建会话</text>
+  <text x="136" y="248" class="s pn">讨论需求</text>
+  <line x1="80" y1="272" x2="720" y2="272" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="296" r="4" fill="#a5b4fc"/>
+  <text x="106" y="301" class="s bt">说清目标与背景</text>
+  <circle cx="90" cy="322" r="4" fill="#a5b4fc"/>
+  <text x="106" y="327" class="s bt">定验收条件与不做的范围</text>
+
+  <path d="M400 344 V368" class="flow"/>
+
+  <!-- step 2 -->
+  <rect x="48" y="368" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="392" width="40" height="40" rx="12" fill="#d97706"/>
+  <text x="100" y="419" text-anchor="middle" class="s num">2</text>
+  <text x="136" y="414" class="s pt">确认后建卡启动</text>
+  <text x="136" y="440" class="s pn">用看板流程交付</text>
+  <line x1="80" y1="464" x2="720" y2="464" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="488" r="4" fill="#fbbf24"/>
+  <text x="106" y="493" class="s bt">需求确认才建卡</text>
+  <circle cx="90" cy="514" r="4" fill="#fbbf24"/>
+  <text x="106" y="519" class="s bt">每张卡独立 Agent 执行</text>
+
+  <path d="M400 536 V560" class="flow"/>
+
+  <!-- step 3 -->
+  <rect x="48" y="560" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="584" width="40" height="40" rx="12" fill="#0d9488"/>
+  <text x="100" y="611" text-anchor="middle" class="s num">3</text>
+  <text x="136" y="606" class="s pt">重复安排</text>
+  <text x="136" y="632" class="s pn">逐个落实全部需求</text>
+  <line x1="80" y1="656" x2="720" y2="656" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="680" r="4" fill="#5eead4"/>
+  <text x="106" y="685" class="s bt">多个需求重复步骤 1-2</text>
+  <circle cx="90" cy="706" r="4" fill="#5eead4"/>
+  <text x="106" y="711" class="s bt">一次安排一个, 并行执行</text>
+
+  <path d="M400 728 V752" class="flow"/>
+
+  <!-- step 4 -->
+  <rect x="48" y="752" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="776" width="40" height="40" rx="12" fill="#7c3aed"/>
+  <text x="100" y="803" text-anchor="middle" class="s num">4</text>
+  <text x="136" y="798" class="s pt">TUI 跟进</text>
+  <text x="136" y="824" class="s pn">查看所有任务状态</text>
+  <line x1="80" y1="848" x2="720" y2="848" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="884" r="4" fill="#c4b5fd"/>
+  <text x="106" y="889" class="s bt">用命令 <tspan class="hl">kander</tspan> 打开可视化看板, 关注任务进度</text>
+</svg>
