@@ -116,13 +116,23 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 	return inv, cwd, nil
 }
 
+// syncStream 只对普通文件落盘. Windows 上对管道写端调用 FlushFileBuffers 会一直阻塞到
+// 读端取走全部数据, 控制台句柄上又没有意义; os.File 的写入本身不带缓冲, 无需额外冲刷.
+func syncStream(stream *os.File) {
+	info, err := stream.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	_ = stream.Sync()
+}
+
 func printFile(runtime, path string, stream *os.File) {
 	data, err := fs.ReadRegularFile(runtime, path)
 	if err != nil {
 		return
 	}
 	_, _ = stream.Write(data)
-	_ = stream.Sync()
+	syncStream(stream)
 }
 
 func printErrorTail(runtime, path string) {
@@ -149,7 +159,7 @@ func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string
 			return newGate(1, "review.codex_review_did_not_complete_with_review_text")
 		}
 		_, _ = os.Stdout.Write(data)
-		_ = os.Stdout.Sync()
+		syncStream(os.Stdout)
 		return nil
 	}
 	raw, err := fs.ReadRegularFile(runtime, outputFile)

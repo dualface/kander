@@ -272,7 +272,10 @@ func TestWindowsInstallerRejectsDirectoryTarget(t *testing.T) {
 		t.Fatalf("stderr=%s", err)
 	}
 	assertNotExist(t, filepath.Join(home, ".local", "bin"))
-	assertNotExist(t, filepath.Join(home, ".agents"))
+	assertNotExist(t, filepath.Join(home, ".agents", "AGENTS.md"))
+	if info, statErr := os.Stat(blocked); statErr != nil || !info.IsDir() {
+		t.Fatalf("blocked target changed: %v", statErr)
+	}
 }
 
 func TestWindowsInstallerLanguageValidation(t *testing.T) {
@@ -464,5 +467,8 @@ func TestWindowsInstallerRejectsAgentsDirIsFile(t *testing.T) {
 		t.Fatalf("stderr=%s", err)
 	}
 	assertNotExist(t, filepath.Join(home, ".local", "bin"))
-	assertNotExist(t, filepath.Join(home, ".agents"))
+	got, readErr := os.ReadFile(blocked)
+	if readErr != nil || string(got) != "not a directory\n" {
+		t.Fatalf("blocked target changed: %v %q", readErr, got)
+	}
 }

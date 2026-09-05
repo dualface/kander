@@ -100,6 +100,12 @@ func tmuxDirectNotify(tmux, paneID, instruction, marker string, timeout float64)
 	}
 }
 
+// flushStdout 只对普通文件落盘. Windows 上对管道写端调用 FlushFileBuffers 会一直阻塞到
+// 读端取走全部数据, 控制台句柄上又没有意义; os.File 的写入本身不带缓冲, 无需额外冲刷.
 func flushStdout() {
+	info, err := os.Stdout.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
 	_ = os.Stdout.Sync()
 }

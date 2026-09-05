@@ -176,7 +176,7 @@ func RemoveRegularFileIfExists(root, path string) (bool, error) {
 	if err != nil || !exists {
 		return false, err
 	}
-	abs, handle, cleanup, err := openChain(root, path, windows.DELETE, kindFile)
+	abs, handle, cleanup, err := openChain(root, path, windows.DELETE|windows.FILE_READ_ATTRIBUTES, kindFile)
 	if err != nil {
 		if isMissingWin(err) || isNotExist(err) {
 			return false, nil
@@ -867,10 +867,13 @@ func CreatePrivateTempDir(parent, prefix string) (*TempDir, error) {
 	for range tempNameAttempts {
 		name := prefix + randomHex(16)
 		candidate := filepath.Join(parentAbs, name)
+		// 租约句柄常驻到 Close, 共享 write 是必需的: renameHandle 把临时文件改名到
+		// 该目录时, 内核会以写权限打开目标父目录, 不共享 write 就 sharing violation.
+		// 不共享 delete: 没有调用点会对这个目录再请求 DELETE, 保持最小放开.
 		handle, err := openRelative(
 			parentHandle, name, candidate,
 			windows.DELETE|windows.READ_CONTROL|windows.WRITE_DAC|windows.FILE_LIST_DIRECTORY|windows.FILE_READ_ATTRIBUTES,
-			true, kindDirectory, false, false, kindDirectory,
+			true, kindDirectory, true, false, kindDirectory,
 		)
 		if err != nil {
 			if isExistWin(err) || isExist(err) {

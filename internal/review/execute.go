@@ -183,7 +183,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	}
 	if len(errorOutput) > 0 {
 		_, _ = os.Stderr.Write(errorOutput)
-		_ = os.Stderr.Sync()
+		syncStream(os.Stderr)
 	}
 	if err := parseReviewOutput(ctx, runtime, outputFile, stdoutFile); err != nil {
 		fail(err)

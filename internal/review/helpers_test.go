@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
+	"time"
 )
 
 func captureRun(t *testing.T, args []string) (int, string, string) {
@@ -101,4 +102,28 @@ func assertArg(t *testing.T, argv []string, flag, value string) {
 		}
 	}
 	t.Fatalf("missing %s in %v", flag, argv)
+}
+
+// Windows 上对管道写端调用 FlushFileBuffers 会阻塞到读端读完.
+// 审核结果通过 stdout 交回调用方, 守卫失效就是死锁.
+func TestSyncStreamDoesNotBlockOnPipe(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+	if _, err := writer.WriteString("pending output\n"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		syncStream(writer)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("syncStream blocked on an undrained pipe")
+	}
 }

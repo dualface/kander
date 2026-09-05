@@ -478,3 +478,47 @@ func TestIsReparsePointSymlink(t *testing.T) {
 		t.Fatal("missing")
 	}
 }
+
+// 私有临时目录被创建者一直握着句柄. Windows 上该句柄的共享模式必须允许后续
+// 写入和删除, 否则 review runtime 在自己的目录里既写不出文件也读不回来.
+func TestPrivateTempDirSupportsProtectedIO(t *testing.T) {
+	temp, err := CreatePrivateTempDir(t.TempDir(), "codex-review.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := temp.Close(); err != nil {
+			t.Errorf("cleanup: %v", err)
+		}
+	}()
+	evidence := filepath.Join(temp.Path, "evidence.txt")
+	errorLog := filepath.Join(temp.Path, "error.log")
+	for _, path := range []string{evidence, errorLog} {
+		if err := WriteTextAtomic(temp.Path, path, "body\n", false); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	stream, err := OpenWritableRegularFile(temp.Path, errorLog)
+	if err != nil {
+		t.Fatalf("open writable: %v", err)
+	}
+	defer stream.Close()
+	data, err := ReadRegularFile(temp.Path, evidence)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(data) != "body\n" {
+		t.Fatalf("data=%q", data)
+	}
+	// ListDirectory 的 finalAccess 含 FILE_LIST_DIRECTORY, 会真正触发目录叶的共享检查.
+	entries, err := ListDirectory(temp.Path, temp.Path)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries=%v", entries)
+	}
+	if _, err := RemoveRegularFileIfExists(temp.Path, evidence); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+}

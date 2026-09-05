@@ -429,3 +429,30 @@ func TestNotifyStaleTmuxRewritesWindow(t *testing.T) {
 		t.Fatalf("body=%s", body)
 	}
 }
+
+// Windows 上对管道写端调用 FlushFileBuffers 会阻塞到读端读完.
+// kander notify 的输出常被 Agent 或 `| more` 接走, 守卫失效就是死锁.
+func TestFlushStdoutDoesNotBlockOnPipe(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+	original := os.Stdout
+	os.Stdout = writer
+	defer func() { os.Stdout = original }()
+	if _, err := writer.WriteString("pending output\n"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		flushStdout()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("flushStdout blocked on an undrained pipe")
+	}
+}

@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -181,5 +184,22 @@ func TestDefaultRunner(t *testing.T) {
 	}
 	if code := Run([]string{"kander"}); code != 7 || !called {
 		t.Fatalf("code=%d called=%v", code, called)
+	}
+}
+
+// Windows PowerShell 5.1 用 ANSI 代码页读没有 BOM 的 .ps1, 会把安装器里的中文
+// 拆成乱码并直接语法报错. install.ps1 必须保留 UTF-8 BOM.
+func TestInstallerScriptKeepsUTF8BOM(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate test source")
+	}
+	script := filepath.Join(filepath.Dir(file), "..", "..", "install.ps1")
+	data, err := os.ReadFile(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(data, []byte{0xEF, 0xBB, 0xBF}) {
+		t.Fatalf("install.ps1 lost its UTF-8 BOM: % x", data[:min(3, len(data))])
 	}
 }

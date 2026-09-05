@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -186,8 +187,11 @@ exit 1
 	}
 }
 
-func installFakes(t *testing.T, herdr bool) {
+func installPOSIXFakes(t *testing.T, herdr bool) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux/herdr fakes are POSIX")
+	}
 	bin := t.TempDir()
 	writeFakeTmux(t, filepath.Join(bin, "tmux"))
 	if herdr {
@@ -199,7 +203,7 @@ func installFakes(t *testing.T, herdr bool) {
 func TestCheckReportsAliveStoppedAndUnknown(t *testing.T) {
 	root := tempBoard(t)
 	_ = root
-	installFakes(t, false)
+	installPOSIXFakes(t, false)
 	aliveID, alive := makeWorking(t, "liveness-alive", "存活")
 	stoppedID, stopped := makeWorking(t, "liveness-stopped", "停止")
 	unknownID, unknown := makeWorking(t, "liveness-unknown", "未知")
@@ -229,7 +233,7 @@ func TestCheckReportsAliveStoppedAndUnknown(t *testing.T) {
 
 func TestCheckReportsDriftedWithNewAddress(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, false)
+	installPOSIXFakes(t, false)
 	taskID, path := makeWorking(t, "liveness-drifted", "漂移")
 	setLocation(t, path, "codex session-2", "tmux:$1:@1:%1")
 	t.Setenv("KANBAN_TMUX_STALE_PANE", "%1")
@@ -249,7 +253,7 @@ func TestCheckReportsDriftedWithNewAddress(t *testing.T) {
 
 func TestCheckUnknownReverseLookedUpHerdrStatusIsNotDrifted(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, true)
+	installPOSIXFakes(t, true)
 	taskID, path := makeWorking(t, "liveness-drifted-unknown", "反查未知")
 	setLocation(t, path, "claude session-unknown", "herdr:w0:t0:w0:p0")
 	t.Setenv("KANBAN_HERDR_STALE_PANE", "w0:p0")
@@ -272,7 +276,7 @@ func TestCheckUnknownReverseLookedUpHerdrStatusIsNotDrifted(t *testing.T) {
 
 func TestCheckLivenessDoesNotAffectExitCode(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, false)
+	installPOSIXFakes(t, false)
 	_, path := makeWorking(t, "liveness-exit", "退出码")
 	setLocation(t, path, "codex session-3", "tmux:$1:@1:%1")
 	t.Setenv("KANBAN_TMUX_STALE_PANE", "%1")
@@ -285,7 +289,7 @@ func TestCheckLivenessDoesNotAffectExitCode(t *testing.T) {
 
 func TestCheckSkipsReviewAndProbesOnlyWorking(t *testing.T) {
 	root := tempBoard(t)
-	installFakes(t, false)
+	installPOSIXFakes(t, false)
 	workingID, working := makeWorking(t, "liveness-working-only", "工作")
 	reviewID, review := makeWorking(t, "liveness-review-skip", "审核")
 	setLocation(t, working, "codex session-4", "tmux:$1:@1:%1")
@@ -313,7 +317,7 @@ func TestCheckSkipsReviewAndProbesOnlyWorking(t *testing.T) {
 
 func TestCheckProbeFailuresDegradeToUnknown(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, true)
+	installPOSIXFakes(t, true)
 	taskID, path := makeWorking(t, "liveness-probe-failure", "探测失败")
 	setLocation(t, path, "codex session-5", "herdr:w1:t1:w1:p1")
 	t.Setenv("KANBAN_HERDR_GET_FAIL", "1")
@@ -326,7 +330,7 @@ func TestCheckProbeFailuresDegradeToUnknown(t *testing.T) {
 
 func TestCheckUnreportedHerdrSessionIsAliveUndeliverable(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, true)
+	installPOSIXFakes(t, true)
 	taskID, path := makeWorking(t, "liveness-unreported", "未上报")
 	setLocation(t, path, "codex session-6", "herdr:w1:t1:w1:p1")
 	t.Setenv("KANBAN_HERDR_SESSION", "")
@@ -342,7 +346,7 @@ func TestCheckUnreportedHerdrSessionIsAliveUndeliverable(t *testing.T) {
 
 func TestCheckCodexWithoutReferenceUsesAgentIdentity(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, true)
+	installPOSIXFakes(t, true)
 	taskID, path := makeWorking(t, "liveness-codex-reference", "无引用")
 	setLocation(t, path, "codex", "herdr:w1:t1:w1:p1")
 	t.Setenv("KANBAN_HERDR_SESSION", "reported-session")
@@ -368,7 +372,7 @@ func TestWindowsLivenessIsUnknown(t *testing.T) {
 
 func TestTmuxReverseLookupUniqueMarker(t *testing.T) {
 	resetLang(t)
-	installFakes(t, false)
+	installPOSIXFakes(t, false)
 	t.Setenv("KANBAN_TMUX_LIST_PANES", strings.Join([]string{
 		"%1\t$1\tone\t@1\tclaude\t0\tother",
 		"%2\t$2\ttwo\t@2\tcodex\t0\twanted",
@@ -446,7 +450,7 @@ func startTestSubscription(t *testing.T, root string, opts subscribeOptions) (*s
 
 func TestSubscribeHeartbeatIncludesWorkingLiveness(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, false)
+	installPOSIXFakes(t, false)
 	groupID := time.Now().Format("20060102") + "-liveness-heartbeat-group"
 	taskID, path := makeWorking(t, "liveness-heartbeat", "心跳")
 	setTaskGroup(t, path, groupID)
@@ -485,7 +489,7 @@ func TestSubscribeHeartbeatIncludesWorkingLiveness(t *testing.T) {
 
 func TestSubscribeHeartbeatProbeFailureReportsUnknownWithoutExiting(t *testing.T) {
 	tempBoard(t)
-	installFakes(t, true)
+	installPOSIXFakes(t, true)
 	groupID := time.Now().Format("20060102") + "-liveness-failure-group"
 	taskID, path := makeWorking(t, "liveness-heartbeat-failure", "心跳失败")
 	setTaskGroup(t, path, groupID)
