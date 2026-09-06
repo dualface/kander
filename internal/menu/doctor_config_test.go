@@ -335,3 +335,15 @@ func TestDoctorTmuxSessionOutsideTmux(t *testing.T) {
 		t.Fatalf("%s", err)
 	}
 }
+
+func TestConfigPrintsAgentLanguage(t *testing.T) {
+	h := newHarness(t)
+	h.writeConfig(defaultPayload(map[string]any{"language": "en", "agent_language": "ja"}))
+	code, out, err := h.run("config")
+	if code != 0 {
+		t.Fatalf("%d %s", code, err)
+	}
+	if !strings.Contains(out, "agent language: ja") {
+		t.Fatalf("%s", out)
+	}
+}

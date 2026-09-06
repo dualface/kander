@@ -7,6 +7,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -321,18 +323,22 @@ func DefaultAgentLanguage(language string) string {
 	return agentLanguageDefaults["en"]
 }
 
-// validateAgentLanguage accepts any short, single-line, non-empty language name such as en, zh-CN, or ja.
+// agentLanguageMaxRunes bounds agent_language so it stays a language name rather than a prompt.
+const agentLanguageMaxRunes = 64
+
+// validateAgentLanguage accepts any non-empty single-line language name of at most 64 characters, such as en, zh-CN, or ja.
 func validateAgentLanguage(value any) (string, error) {
 	text, ok := value.(string)
 	if !ok {
 		return "", configErrorf("config.agent_language_invalid")
 	}
 	text = strings.TrimSpace(text)
-	if text == "" || len(text) > 64 {
+	if text == "" || utf8.RuneCountInString(text) > agentLanguageMaxRunes {
 		return "", configErrorf("config.agent_language_invalid")
 	}
 	for _, r := range text {
-		if r < 0x20 || r == 0x7f {
+		// Control characters cover CR, LF, NEL and DEL; the two Unicode separators are category Z, so they are named explicitly.
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' || r == utf8.RuneError {
 			return "", configErrorf("config.agent_language_invalid")
 		}
 	}

@@ -98,6 +98,7 @@ func (s *Session) prepare(configValid bool) error {
 	cfg := config.DefaultConfig()
 	cfg.Models = copyModels(s.existing.Models)
 	cfg.KanbanAgent = s.existing.KanbanAgent
+	cfg.AgentLanguage = s.existing.AgentLanguage
 	cfg.KanbanAgents = map[string]string{}
 	for k, v := range s.existing.KanbanAgents {
 		cfg.KanbanAgents[k] = v
@@ -519,6 +520,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.Launcher = existing.Launcher
 	cfg.TUI = existing.TUI
 	cfg.Language = existing.Language
+	cfg.AgentLanguage = existing.AgentLanguage
 	session.Config = cfg
 	return session, nil
 }

@@ -1,6 +1,6 @@
 # Kander Minimal Tool Protocol
 
-- Before using Kander, read the current scope's configuration as described in `KANDER-AGENTS.md`. This file only constrains the tool; it does not prescribe communication, architecture, code verification, Git, or automatic review flows.
+- Before using Kander, read the current scope's configuration as described in `KANDER-AGENTS.md`. This file only constrains the tool and the language used with the user; it does not prescribe communication style, architecture, code verification, Git, or automatic review flows.
 - Talk to the user, and write cards, records, and reports, in the `agent_language` from the configuration, as described in `KANDER-AGENTS.md` "Language".
 - When using kanban commands, read the structure, state, claiming, notification, and recovery protocol in `KANDER-KANBAN-RULES.md`; no optional module needs to be enabled.
 

@@ -251,9 +251,11 @@ func splitAgentArgs(args []string) (agent string, rest []string, err error) {
 
 var errUsage = errors.New("usage")
 
-// reportLanguageFromConfig returns the agent_language the review report should be written in, or empty when no config is readable.
+// reportLanguageFromConfig returns the agent_language the review report should be written in.
+// It is empty when no config.json exists or the file does not validate; a config that has not
+// finished initialization still counts, because its explicit agent_language is the user's choice.
 func reportLanguageFromConfig() string {
-	cfg, err := config.Effective(nil)
+	cfg, err := config.Load(false)
 	if err != nil || cfg == nil {
 		return ""
 	}

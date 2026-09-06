@@ -44,7 +44,7 @@
 
 - 运行时看板数据目录仍是主 worktree 的 `kanban/`, 覆盖仍是 `KANBAN_DIR`. 配置键 `kanban_agent` / `kanban_agents` / `models.kanban` 保持 onevoke schema, 不改名.
 - `rules` 保存 collaboration/code/git/review/task_intake/task_groups/reporting 七个可选模块开关. 新配置默认全开; 合法旧配置缺整个 rules 段时保留原七项全开, 段内缺项关闭. 解析与 doctor 修复复用 internal/config, 开关独立于 `welcome_complete` 初始化状态. task_groups 依赖 git; TUI 选项面板复用 `menu.Session.SetRules`, 启动/恢复/接管/通知在副作用前复核任务组依赖. 卡片任务组解析复用 `board.TaskGroupFrom`, 包括旧讨论区字段.
-- `language` 只决定 kander 自身的界面与命令输出语言, 取值 `cn`/`en`. `agent_language` 是 Agent 与用户沟通的语言, 自由字符串 (如 `en`, `zh-CN`, `ja`), 非空即合法; 配置缺该键时由 `language` 推导 (cn 得 `zh-CN`, en 得 `en`), doctor 修复同样按此推导. 安装器不再按语种释出规则, `kander-rules-state.json` 不再记录语言.
+- `language` 只决定 kander 自身的界面与命令输出语言, 取值 `cn`/`en`. `agent_language` 是 Agent 与用户沟通的语言, 自由字符串 (如 `en`, `zh-CN`, `ja`), 须非空、单行且不超过 64 个字符; 配置缺该键时由 `language` 推导 (cn 得 `zh-CN`, en 得 `en`), doctor 修复同样按此推导. 安装器不再按语种释出规则, `kander-rules-state.json` 不再记录语言.
 - `review_stages.<role>` 为四个审核角色保存 `auto` / `skip` / `required`, 缺失整个段或段内角色时默认 `auto`; 本仓库上方的角色特例优先于该配置.
 - `models.kanban.<agent>` 的模型按任务规模存放在 `large_model` / `small_model`. codex/claude/grok 的推理档位存放在 `large_effort` / `small_effort`, 并继续接受旧共享键 `model`: 规模模型为空时回落到它. Cursor 只接受两个规模模型键, 不接受共享 `model` 或推理档位. 选项面板只编辑规模键.
 - `models.review_roles.<role>` 保存角色自己的 `model` / `effort` 覆盖. 默认及合法旧配置可为空; 空项由 `config.ReviewModelFor(cfg, agent, role)` 在运行时回落到调用方所给 agent 的 `models.review.<agent>` 值. 进入选项面板的「审核与模型」分区时, `menu.Session` 才尝试用当前 Reviewer 的值填缺项; Reviewer 的源值为空或无该字段时仍保留空值. `kander review` 可显式指定 reviewer, 未必等于配置里该角色的 Reviewer.
