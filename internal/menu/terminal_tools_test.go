@@ -135,3 +135,31 @@ func TestHerdrWindowsInstallerArguments(t *testing.T) {
 		t.Fatalf("missing failure report: %+v", lines)
 	}
 }
+
+// The official installer only edits PATH in a shell rc, which the current
+// process cannot see. Finding herdr in the default install directory must not be
+// reported as "not installed", and must not prompt for a second install.
+// This is the POSIX twin of TestHerdrDetectedOutsidePathOnWindows.
+func TestHerdrDetectedOutsidePathOnPOSIX(t *testing.T) {
+	h := newHarness(t)
+	bin := filepath.Join(h.home, ".local", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(bin, "herdr")
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", h.fakeBin)
+
+	tools := CheckTerminalTools()
+	if tools.Herdr.Available() {
+		t.Fatalf("off-PATH herdr must not count as available: %+v", tools.Herdr)
+	}
+	if tools.Herdr.OffPath != binary {
+		t.Fatalf("off-PATH herdr not found: %+v", tools.Herdr)
+	}
+	if tools.NeedsHerdrInstall() {
+		t.Fatal("herdr is already installed; must not offer to install it again")
+	}
+}
