@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
@@ -40,11 +39,12 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	t.Setenv(board.EnvBoardDir, root)
 
 	slug := "full-binary-check"
-	id := time.Now().Format("20060102") + "-" + slug + "-task"
-	if _, err := board.NewTask(root, "chore", slug, "binding", false); err != nil {
+	created, err := board.NewTask(root, "chore", slug, "binding", false)
+	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(root, "backlog", id+".md")
+	path := created
+	id := strings.TrimSuffix(filepath.Base(path), ".md")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
