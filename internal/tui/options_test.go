@@ -472,3 +472,82 @@ func TestRootCursorRestoredAfterCloseConfirmKeepEditing(t *testing.T) {
 	pumpPanel(panel, panel.finishCloseConfirm())
 	assertRootFocus(t, panel, sectionExecution)
 }
+
+// typeRune 把一个字符作为键盘事件送进当前表单, 走真实输入路径.
+func typeRune(panel *optionsPanel, ch rune) {
+	drivePanel(panel, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+}
+
+func assertTypedIntoView(t *testing.T, panel *optionsPanel, want string) {
+	t.Helper()
+	view := ansi.Strip(panel.form.View())
+	if !strings.Contains(view, want) {
+		t.Fatalf("form view missing typed value %q:\n%s", want, view)
+	}
+}
+
+func TestExecutionModelInputSavesWhenAgentsMatch(t *testing.T) {
+	_, panel := openPanel(t)
+	pumpPanel(panel, panel.dispatch(sectionExecution))
+	large := panel.session.Config.KanbanAgents["large"]
+	small := panel.session.Config.KanbanAgents["small"]
+	if large == "" || large != small {
+		t.Fatalf("need the same agent for large and small, got large=%q small=%q", large, small)
+	}
+	if len(panel.bind.modelFields) < 2 {
+		t.Fatal("need multiple model fields so later appends can grow the binding slice")
+	}
+	before := panel.session.Config.Models.Kanban[large]["large_model"]
+	drivePanel(panel, keyMsg("down"))
+	if panel.form.GetFocusedField() != panel.bind.formFields[1] {
+		t.Fatal("down should focus the large-task model input")
+	}
+	typeRune(panel, 'X')
+	want := before + "X"
+	assertTypedIntoView(t, panel, want)
+	if got := panel.session.Config.Models.Kanban[large]["large_model"]; got != want {
+		t.Fatalf("session large_model=%q want %q", got, want)
+	}
+	if !panel.dirty {
+		t.Fatal("typing into the model input must mark unsaved changes")
+	}
+	drivePanel(panel, keyMsg("enter"))
+	loaded, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.Models.Kanban[large]["large_model"]; got != want {
+		t.Fatalf("disk large_model=%q want %q", got, want)
+	}
+}
+
+func TestReviewModelInputSavesPMRole(t *testing.T) {
+	_, panel := openPanel(t)
+	pumpPanel(panel, panel.dispatch(sectionReview))
+	if len(panel.bind.formFields) < 3 {
+		t.Fatal("review section should have reviewer, stage, and model fields")
+	}
+	before := panel.session.Config.Models.ReviewRoles["PM"]["model"]
+	drivePanel(panel, keyMsg("down"))
+	drivePanel(panel, keyMsg("down"))
+	if panel.form.GetFocusedField() != panel.bind.formFields[2] {
+		t.Fatal("two downs should focus the PM model input")
+	}
+	typeRune(panel, 'X')
+	want := before + "X"
+	assertTypedIntoView(t, panel, want)
+	if got := panel.session.Config.Models.ReviewRoles["PM"]["model"]; got != want {
+		t.Fatalf("session PM model=%q want %q", got, want)
+	}
+	if !panel.dirty {
+		t.Fatal("typing into the PM model input must mark unsaved changes")
+	}
+	drivePanel(panel, keyMsg("enter"))
+	loaded, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.Models.ReviewRoles["PM"]["model"]; got != want {
+		t.Fatalf("disk PM model=%q want %q", got, want)
+	}
+}

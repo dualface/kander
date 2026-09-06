@@ -36,7 +36,9 @@ type formBinding struct {
 	prevRulePreset string
 
 	modelFields []menu.ModelField
-	modelValues []string
+	// modelValues 存每个输入框自己的字符串指针. 不能绑切片元素地址:
+	// 后续 append 扩容会换底层数组, 先建字段的指针就会悬空.
+	modelValues []*string
 	modelSeen   map[string]struct{}
 	// fieldIndex 记录各选择器在本次表单里排第几个可聚焦字段, 供重建后恢复焦点.
 	fieldIndex map[string]int
@@ -509,14 +511,15 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) 
 		bind.modelSeen[field.Key()] = struct{}{}
 		index := len(bind.modelFields)
 		bind.modelFields = append(bind.modelFields, field)
-		bind.modelValues = append(bind.modelValues, field.Value())
+		value := field.Value()
+		bind.modelValues = append(bind.modelValues, &value)
 		// Inline 让标题与取值同占一行, 一个角色/规模的整块从 7 行压到 4 行.
 		out = append(out, huh.NewInput().
 			Title(modelIndent+field.Short+"  ").
 			Prompt("").
 			Inline(true).
 			Placeholder(t("tui.empty_means_cli_default")).
-			Value(&bind.modelValues[index]))
+			Value(bind.modelValues[index]))
 	}
 	return out
 }
@@ -628,8 +631,11 @@ func (b *formBinding) apply(p *optionsPanel) {
 // applyModels 把模型输入框里的改动即时写回配置会话.
 func (b *formBinding) applyModels(p *optionsPanel) {
 	for i, field := range b.modelFields {
-		if i < len(b.modelValues) && field.Value() != b.modelValues[i] {
-			field.Set(b.modelValues[i])
+		if i >= len(b.modelValues) || b.modelValues[i] == nil {
+			continue
+		}
+		if field.Value() != *b.modelValues[i] {
+			field.Set(*b.modelValues[i])
 			p.markDirty()
 		}
 	}
