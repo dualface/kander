@@ -134,7 +134,7 @@ func printResult(result Result) {
 	}
 }
 
-// RunInteractive runs the install wizard, performs the install, and hands off to the dest binary when it is a different file.
+// RunInteractive runs the install wizard, performs the install, and always hands off to the dest binary.
 func RunInteractive() int {
 	if err := requireInteractive(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -170,13 +170,15 @@ func RunInteractive() int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	return finishSuccessfulInstall(result, req.Language)
+}
+
+// finishSuccessfulInstall prints the install result and always hands off to the installed binary.
+func finishSuccessfulInstall(result Result, lang string) int {
 	printResult(result)
-	source, _ := lookupExecutable()
-	if source != "" && !sameFile(source, result.DestBinary) {
-		if err := handoff(result.DestBinary, req.Language); err != nil {
-			fmt.Fprintln(os.Stderr, config.Text("install.failed_handoff", err.Error()))
-			return 1
-		}
+	if err := launchInstalled(result.DestBinary, lang); err != nil {
+		fmt.Fprintln(os.Stderr, config.Text("install.failed_handoff", err.Error()))
+		return 1
 	}
 	return 0
 }

@@ -22,8 +22,16 @@ func fail(err error) int {
 	return 1
 }
 
+// runBoardTUI starts the interactive board; tests may override it to inspect the App without Bubble Tea.
+var runBoardTUI = runTUI
+
+// isInteractiveTerminal reports whether stdin/stdout are TTYs; tests may override it.
+var isInteractiveTerminal = func() bool {
+	return isTTY(os.Stdin) && isTTY(os.Stdout)
+}
+
 func requireTerminal() error {
-	if isTTY(os.Stdin) && isTTY(os.Stdout) {
+	if isInteractiveTerminal() {
 		return nil
 	}
 	return errors.New(t(
@@ -33,15 +41,20 @@ func requireTerminal() error {
 
 // Run is the default TUI entry point used when no subcommand is given.
 func Run(_ []string) int {
+	postInstall := os.Getenv(install.EnvPostInstall) != ""
+	_ = os.Unsetenv(install.EnvPostInstall)
+
 	if err := requireTerminal(); err != nil {
 		return fail(err)
 	}
-	runWizard, err := install.ShouldRunWizard()
-	if err != nil {
-		return fail(err)
-	}
-	if runWizard {
-		return install.RunInteractive()
+	if !postInstall {
+		runWizard, err := install.ShouldRunWizard()
+		if err != nil {
+			return fail(err)
+		}
+		if runWizard {
+			return install.RunInteractive()
+		}
 	}
 	configExists, err := config.Exists()
 	if err != nil {
@@ -63,7 +76,8 @@ func Run(_ []string) int {
 	root, err := board.BoardRoot()
 	emptyBoard := false
 	if err != nil {
-		if configExists || !board.IsBoardNotFound(err) {
+		tolerateMissing := postInstall || !configExists
+		if !tolerateMissing || !board.IsBoardNotFound(err) {
 			return fail(err)
 		}
 		emptyBoard = true
@@ -90,10 +104,10 @@ func Run(_ []string) int {
 	app := newApp(prefs.Single, prefs.Refresh, ctx, getBoard, getTask, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)
-	if !configExists {
+	if postInstall || !configExists {
 		app.openOptionsAt(sectionInterface)
 	}
-	if err := runTUI(app); err != nil {
+	if err := runBoardTUI(app); err != nil {
 		return fail(err)
 	}
 	return 0

@@ -7,12 +7,12 @@ import (
 	"os/exec"
 )
 
-func handoff(dest, lang string) error {
-	cmd := exec.Command(dest, "--lang", lang)
+func defaultHandoff(dest string, argv, env []string) error {
+	cmd := exec.Command(dest, argv[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
+	cmd.Env = env
 	err := cmd.Run()
 	code := 1
 	if cmd.ProcessState != nil {

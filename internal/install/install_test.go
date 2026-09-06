@@ -663,3 +663,67 @@ func TestWriteBinaryBusyRenameAside(t *testing.T) {
 		t.Fatalf("aside=%q err=%v", aside, err)
 	}
 }
+
+func TestFinishSuccessfulInstallAlwaysHandoffs(t *testing.T) {
+	home := setupInstallHome(t)
+	src := stubBinary(t)
+	result, err := Perform(Request{Language: "cn", Source: src})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(home, ".local", "bin", binaryName())
+	if result.DestBinary != dest {
+		t.Fatalf("dest=%s", result.DestBinary)
+	}
+
+	var calls int
+	var gotDest, gotLangFlag, gotLang string
+	var gotEnv []string
+	handoff = func(path string, argv, env []string) error {
+		calls++
+		gotDest = path
+		gotEnv = append([]string(nil), env...)
+		if len(argv) >= 3 {
+			gotLangFlag, gotLang = argv[1], argv[2]
+		}
+		return nil
+	}
+	t.Cleanup(func() { handoff = defaultHandoff })
+
+	if code := finishSuccessfulInstall(result, "cn"); code != 0 {
+		t.Fatalf("code=%d", code)
+	}
+	if calls != 1 || gotDest != dest || gotLangFlag != "--lang" || gotLang != "cn" {
+		t.Fatalf("first handoff: calls=%d dest=%q argv=%q %q", calls, gotDest, gotLangFlag, gotLang)
+	}
+	if !envHasPostInstall(gotEnv) {
+		t.Fatalf("missing %s in env: %v", EnvPostInstall, gotEnv)
+	}
+
+	// Re-install from the destination itself (same file); handoff must still run.
+	same, err := Perform(Request{Language: "en", Source: dest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls = 0
+	gotEnv = nil
+	if code := finishSuccessfulInstall(same, "en"); code != 0 {
+		t.Fatalf("same-file code=%d", code)
+	}
+	if calls != 1 || gotDest != dest || gotLang != "en" {
+		t.Fatalf("same-file handoff: calls=%d dest=%q lang=%q", calls, gotDest, gotLang)
+	}
+	if !envHasPostInstall(gotEnv) {
+		t.Fatalf("same-file missing %s in env: %v", EnvPostInstall, gotEnv)
+	}
+}
+
+func envHasPostInstall(env []string) bool {
+	want := EnvPostInstall + "=1"
+	for _, e := range env {
+		if e == want {
+			return true
+		}
+	}
+	return false
+}
