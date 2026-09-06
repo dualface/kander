@@ -13,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/process"
 )
 
 func resetLang(t *testing.T) {
@@ -930,5 +931,100 @@ func testConsoleStart(t *testing.T) {
 	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
 	if !strings.Contains(string(text), "- 窗口: console\n") {
 		t.Fatalf("card=%s", text)
+	}
+}
+
+// A herdr pane runs PowerShell on Windows: a quoted executable path only runs
+// behind the call operator &, otherwise the shell prints the line back verbatim
+// and the agent never starts.
+func TestPaneCommandQuotesForTheContainerShell(t *testing.T) {
+	t.Cleanup(func() { runtimeWindows = func() bool { return isWindowsGOOS() } })
+
+	runtimeWindows = func() bool { return true }
+	got, err := paneCommand(process.ProcessInvocation{
+		Argv: []string{`C:\Program Files\codex\codex.cmd`, "exec", "it's"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `& 'C:\Program Files\codex\codex.cmd' 'exec' 'it''s'`
+	if got != want {
+		t.Fatalf("windows got %q want %q", got, want)
+	}
+
+	// When argv hides behind %VAR% references, the pane command must assign the variables back first.
+	got, err = paneCommand(process.ProcessInvocation{
+		Argv:     []string{`C:\Windows\system32\cmd.exe`, "/d", "/s", "/v:off", "/c", "%KDR_0% %KDR_1%"},
+		ShellEnv: map[string]string{"KDR_1": "exec", "KDR_0": `"C:\codex.cmd"`},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = `$env:KDR_0='"C:\codex.cmd"'; $env:KDR_1='exec'; & 'C:\Windows\system32\cmd.exe' '/d' '/s' '/v:off' '/c' '%KDR_0% %KDR_1%'`
+	if got != want {
+		t.Fatalf("batch got %q want %q", got, want)
+	}
+
+	runtimeWindows = func() bool { return false }
+	got, err = paneCommand(process.ProcessInvocation{Argv: []string{"/usr/bin/codex", "exec", "it's"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = `/usr/bin/codex exec 'it'"'"'s'`
+	if got != want {
+		t.Fatalf("posix got %q want %q", got, want)
+	}
+}
+
+// A terminal container treats the command as one line plus Enter, so argv with a
+// newline must fail outright rather than send half a command.
+func TestPaneCommandRejectsControlCharacters(t *testing.T) {
+	t.Cleanup(func() { runtimeWindows = func() bool { return isWindowsGOOS() } })
+	for _, value := range []string{"a\nb", "a\rb", "a\x00b"} {
+		for _, windows := range []bool{true, false} {
+			runtimeWindows = func() bool { return windows }
+			if _, err := paneCommand(process.ProcessInvocation{Argv: []string{"codex", value}}); err == nil {
+				t.Fatalf("windows=%v value=%q accepted", windows, value)
+			}
+			if _, err := paneCommand(process.ProcessInvocation{
+				Argv:     []string{"cmd.exe", "/c", "%KDR_0%"},
+				ShellEnv: map[string]string{"KDR_0": value},
+			}); err == nil {
+				t.Fatalf("windows=%v shellenv=%q accepted", windows, value)
+			}
+		}
+	}
+}
+
+// When PowerShell 5.1 hands arguments to a native exe it rebuilds the command
+// line, swallowing embedded double quotes and dropping empty arguments. So on
+// Windows an invocation bound for a terminal container always takes cmd.exe's
+// variable-reference form, batch or not; directly spawned launchers keep native argv.
+func TestLaunchInvocationUsesShellFormForPaneLaunchers(t *testing.T) {
+	t.Cleanup(func() {
+		newInvocation = process.NewProcessInvocation
+		newShellInvocation = process.NewShellInvocation
+	})
+	var shell, direct int
+	newShellInvocation = func(p process.AgentProgram, a []string, e map[string]string) (process.ProcessInvocation, error) {
+		shell++
+		return process.ProcessInvocation{}, nil
+	}
+	newInvocation = func(p process.AgentProgram, a []string, e map[string]string) (process.ProcessInvocation, error) {
+		direct++
+		return process.ProcessInvocation{}, nil
+	}
+	for _, launcher := range []string{"herdr", "tmux", "tmux-session"} {
+		if _, err := launchInvocation(LaunchPlan{Launcher: launcher}, process.AgentProgram{}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, launcher := range []string{"console", "foreground"} {
+		if _, err := launchInvocation(LaunchPlan{Launcher: launcher}, process.AgentProgram{}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if shell != 3 || direct != 2 {
+		t.Fatalf("shell=%d direct=%d", shell, direct)
 	}
 }

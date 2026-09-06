@@ -6,12 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/process"
 )
 
 func resolveStartLauncher(launcher string) (string, error) {
@@ -20,6 +22,12 @@ func resolveStartLauncher(launcher string) (string, error) {
 	}
 	if os.Getenv("HERDR_ENV") == "1" {
 		return "herdr", nil
+	}
+	if runtimeWindows() {
+		// Native Windows has no tmux, so auto can only resolve to herdr.
+		return "", launchError(
+			"launch.auto_cannot_be_resolved_not_in_herdr_on_windows",
+		)
 	}
 	if os.Getenv("TMUX") != "" {
 		return "tmux", nil
@@ -30,7 +38,8 @@ func resolveStartLauncher(launcher string) (string, error) {
 }
 
 func prepareLaunch(launcher, project, command string) (LaunchPlan, error) {
-	if runtimeWindows() && (launcher == "auto" || launcher == "tmux" || launcher == "tmux-session" || launcher == "herdr") {
+	// herdr has a native Windows build; only tmux is still POSIX-only.
+	if runtimeWindows() && (launcher == "tmux" || launcher == "tmux-session") {
 		return LaunchPlan{}, launchError(
 			"launch.windows_does_not_support_the_launcher_use_console_or", launcher,
 		)
@@ -327,6 +336,85 @@ func configAgentExe(agent string) string {
 
 func lookPathName(agent string) string {
 	return config.AgentExecutableName(agent)
+}
+
+// paneLauncher reports whether this launcher hands the agent to a terminal
+// container's shell, which parses the single-line command back into argv.
+func paneLauncher(launcher string) bool {
+	return launcher == "herdr" || launcher == "tmux" || launcher == "tmux-session"
+}
+
+// launchInvocation picks the invocation form by launcher: a terminal container
+// only takes one line, so argv has to survive being parsed by a shell again;
+// foreground and console spawn directly and keep native argv.
+func launchInvocation(plan LaunchPlan, program process.AgentProgram, arguments []string) (process.ProcessInvocation, error) {
+	if paneLauncher(plan.Launcher) {
+		return newShellInvocation(program, arguments, nil)
+	}
+	return newInvocation(program, arguments, nil)
+}
+
+// paneCommand renders one process invocation as a single line the terminal
+// container's shell can run. POSIX containers are sh-like; a herdr pane on
+// Windows runs PowerShell, where a quoted executable path only runs behind the
+// call operator & — otherwise the shell just prints the line back and the agent
+// never starts. Argv carried in ShellEnv variables has to be assigned back in
+// the pane first.
+// This assumes the container shell is PowerShell on Windows (herdr's default)
+// and sh-like on POSIX. If a user points herdr's default_shell at cmd or
+// git-bash the line comes out wrong; the container only types the text in, it
+// never reports an error.
+func paneCommand(inv process.ProcessInvocation) (string, error) {
+	for _, value := range inv.Argv {
+		if err := rejectPaneControlChars(value); err != nil {
+			return "", err
+		}
+	}
+	for _, value := range inv.ShellEnv {
+		if err := rejectPaneControlChars(value); err != nil {
+			return "", err
+		}
+	}
+	if !runtimeWindows() {
+		return posixJoin(inv.Argv), nil
+	}
+	return powershellJoin(inv.Argv, inv.ShellEnv), nil
+}
+
+// rejectPaneControlChars: a terminal container treats the command as one typed
+// line plus Enter, so a bare newline submits early and turns the remainder into
+// a second command. Failing to start beats sending half a command.
+func rejectPaneControlChars(value string) error {
+	if strings.ContainsAny(value, "\r\n\x00") {
+		return launchError("launch.agent_command_contains_a_control_character")
+	}
+	return nil
+}
+
+func powershellJoin(argv []string, shellEnv map[string]string) string {
+	if len(argv) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(shellEnv)+len(argv)+1)
+	names := make([]string, 0, len(shellEnv))
+	for name := range shellEnv {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		parts = append(parts, "$env:"+name+"="+powershellQuote(shellEnv[name])+";")
+	}
+	parts = append(parts, "&")
+	for _, a := range argv {
+		parts = append(parts, powershellQuote(a))
+	}
+	return strings.Join(parts, " ")
+}
+
+// powershellQuote always single-quotes: a PowerShell single-quoted string is
+// literal, and an inner single quote is escaped by doubling it.
+func powershellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 func posixJoin(argv []string) string {

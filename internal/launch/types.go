@@ -98,6 +98,7 @@ var (
 	lookPath            = lookPathExec
 	resolveAgent        = process.ResolveAgentProgram
 	newInvocation       = process.NewProcessInvocation
+	newShellInvocation  = process.NewShellInvocation
 	createTaskFile      = process.CreateTaskFile
 	removeTaskFile      = os.Remove
 	taskInstruction     = process.TaskFileInstruction

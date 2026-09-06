@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -357,16 +358,78 @@ func TestCheckCodexWithoutReferenceUsesAgentIdentity(t *testing.T) {
 	}
 }
 
-func TestWindowsLivenessIsUnknown(t *testing.T) {
+// fakeHerdrSource is a minimal fake herdr that only answers `pane get`. It is
+// compiled to a binary rather than written as a /bin/sh script so the herdr
+// probe path is covered on Windows too: herdr has a native Windows build, and
+// liveness probing no longer short-circuits by platform.
+const fakeHerdrSource = `package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+)
+
+func main() {
+	if len(os.Args) >= 4 && os.Args[1] == "pane" && os.Args[2] == "get" {
+		payload, _ := json.Marshal(map[string]any{
+			"id": "cli:pane:get",
+			"result": map[string]any{
+				"type": "pane_info",
+				"pane": map[string]any{
+					"pane_id":       os.Args[3],
+					"tab_id":        os.Getenv("FAKE_HERDR_TAB_ID"),
+					"agent":         os.Getenv("FAKE_HERDR_AGENT"),
+					"agent_status":  os.Getenv("FAKE_HERDR_STATUS"),
+					"agent_session": map[string]any{"value": os.Getenv("FAKE_HERDR_SESSION")},
+				},
+			},
+		})
+		fmt.Println(string(payload))
+		return
+	}
+	fmt.Fprintln(os.Stderr, "unexpected herdr args")
+	os.Exit(1)
+}
+`
+
+func installFakeHerdrBinary(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	source := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(source, []byte(fakeHerdrSource), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	name := "herdr"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	build := exec.Command("go", "build", "-o", filepath.Join(dir, name), source)
+	build.Dir = dir
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build fake herdr: %v %s", err, out)
+	}
+	t.Setenv("PATH", dir)
+}
+
+// herdr liveness probing takes the same path on every platform; Windows must really probe.
+func TestCheckProbesHerdrOnEveryPlatform(t *testing.T) {
 	tempBoard(t)
-	orig := isWindows
-	isWindows = func() bool { return true }
-	t.Cleanup(func() { isWindows = orig })
-	taskID, path := makeWorking(t, "liveness-windows", "Windows")
-	setLocation(t, path, "codex session-w", "tmux:$1:@1:%1")
+	installFakeHerdrBinary(t)
+	t.Setenv("FAKE_HERDR_TAB_ID", "w1:t9")
+	t.Setenv("FAKE_HERDR_AGENT", "codex")
+	t.Setenv("FAKE_HERDR_STATUS", "idle")
+	t.Setenv("FAKE_HERDR_SESSION", "session-h")
+	taskID, path := makeWorking(t, "liveness-herdr-any", "herdr")
+	setLocation(t, path, "codex session-h", "herdr:w1:t9:w1:p9")
 	code, out, _ := capture(t, func() int { return RunCheck([]string{taskID}) })
-	if code != 0 || !strings.Contains(out, "状态=unknown") || !strings.Contains(out, "Windows") {
-		t.Fatalf("out=%s", out)
+	if code != 0 {
+		t.Fatalf("code=%d out=%s", code, out)
+	}
+	for _, want := range []string{taskID, "Agent=codex", "状态=alive", "通道=herdr"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q in %s", want, out)
+		}
 	}
 }
 

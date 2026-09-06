@@ -95,18 +95,27 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 	return changes
 }
 
+// doctorLauncherAvailable only serves the "should we rewrite the user's
+// launcher" decision, which is why it asks herdr for Installed() rather than
+// Available(): when herdr is installed but not on PATH yet, telling the user to
+// reopen the terminal beats silently switching the config to console. It does
+// not mean the launcher can start right now — prepareLaunch still requires
+// herdr to actually be on PATH.
 func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 	if launcher == "foreground" {
 		return true
 	}
-	if isWindowsOS() {
-		return launcher == "console"
+	if isWindowsOS() && (launcher == "tmux" || launcher == "tmux-session") {
+		return false
+	}
+	if launcher == "console" {
+		return isWindowsOS()
 	}
 	switch launcher {
 	case "auto":
-		return tools.Herdr.Available() || tools.Tmux.Available()
+		return tools.Herdr.Installed() || tools.Tmux.Available()
 	case "herdr":
-		return tools.Herdr.Available()
+		return tools.Herdr.Installed()
 	case "tmux", "tmux-session":
 		return tools.Tmux.Available()
 	}

@@ -146,20 +146,25 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 		return
 	}
 	switch {
-	case isWindowsOS() && cfg.Launcher != "console" && cfg.Launcher != "foreground":
+	case isWindowsOS() && (cfg.Launcher == "tmux" || cfg.Launcher == "tmux-session"):
 		cfg.Launcher = "console"
 		warning(config.Text(
-			"menu.native_windows_does_not_support_auto_tmux_or_herdr",
+			"menu.windows_does_not_support_tmux_using_console",
 		))
 	case (cfg.Launcher == "tmux" || cfg.Launcher == "tmux-session") && lookPath("tmux") == "":
 		cfg.Launcher = "foreground"
 		warning(config.Text(
 			"menu.tmux_is_not_installed_using_foreground_the_launcher_menu",
 		))
-	case cfg.Launcher == "herdr" && lookPath("herdr") == "":
-		if lookPath("tmux") != "" {
+	// On POSIX auto holds as long as tmux exists, so a missing herdr must not
+	// rewrite it; on Windows auto can only land on herdr, so a missing herdr does.
+	case (cfg.Launcher == "herdr" || (cfg.Launcher == "auto" && isWindowsOS())) && lookPath("herdr") == "":
+		switch {
+		case isWindowsOS():
+			cfg.Launcher = "console"
+		case lookPath("tmux") != "":
 			cfg.Launcher = "tmux"
-		} else {
+		default:
 			cfg.Launcher = "foreground"
 		}
 		warning(config.Text(
@@ -216,7 +221,7 @@ const LauncherInstallValue = "install-tmux"
 // LauncherChoices returns the launchers available on the current platform, plus the install item when tmux is missing.
 func (s *Session) LauncherChoices() []Choice {
 	if isWindowsOS() {
-		return windowsLauncherChoices()
+		return windowsLauncherChoices(s.Config)
 	}
 	foreground := Choice{Value: "foreground", Label: config.Text("menu.foreground_in_this_terminal")}
 	choices := []Choice{autoLauncherChoice()}

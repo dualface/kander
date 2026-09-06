@@ -771,11 +771,11 @@ func TestDefaultLauncherMatchesPlatform(t *testing.T) {
 		if got != "console" {
 			t.Fatalf("got %s", got)
 		}
-		if err := CheckLauncherPlatform("auto"); !IsError(err) {
-			t.Fatalf("auto should be rejected: %v", err)
-		}
-		if err := CheckLauncherPlatform("herdr"); !IsError(err) {
-			t.Fatalf("herdr should be rejected: %v", err)
+		// herdr has a native Windows build, so auto/herdr are no longer rejected by platform.
+		for _, launcher := range []string{"auto", "herdr", "console"} {
+			if err := CheckLauncherPlatform(launcher); err != nil {
+				t.Fatalf("%s should be accepted: %v", launcher, err)
+			}
 		}
 		return
 	}

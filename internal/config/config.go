@@ -334,17 +334,11 @@ func validateChoice(value any, choices []string, name string) (string, error) {
 	return text, nil
 }
 
-func launcherPlatformError(launcher string) *Error {
-	switch launcher {
-	case "console":
-		return configErrorf("config.console_is_windows_only")
-	case "auto", "herdr":
-		return configErrorf(
-			"config.is_posix_only", launcher,
-		)
-	default:
-		return choiceError("launcher", strings.Join(Launchers, ", "))
-	}
+// launcherPlatformError now covers a single platform conflict: console is
+// Windows-only. tmux's platform limit is reported by launch at start time, and
+// herdr/auto work on both sides.
+func launcherPlatformError() *Error {
+	return configErrorf("config.console_is_windows_only")
 }
 
 func validateLauncher(value any) (string, error) {
@@ -359,16 +353,11 @@ func validateLauncher(value any) (string, error) {
 }
 
 // CheckLauncherPlatform validates the launcher against the current OS.
+// herdr has shipped a native Windows build since 0.8, so auto/herdr are no
+// longer POSIX-only; tmux still needs POSIX, but launch reports that at start.
 func CheckLauncherPlatform(launcher string) error {
-	switch launcher {
-	case "console":
-		if runtime.GOOS != "windows" {
-			return launcherPlatformError(launcher)
-		}
-	case "auto", "herdr":
-		if runtime.GOOS == "windows" {
-			return launcherPlatformError(launcher)
-		}
+	if launcher == "console" && runtime.GOOS != "windows" {
+		return launcherPlatformError()
 	}
 	return nil
 }

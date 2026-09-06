@@ -2,7 +2,6 @@ package takeover
 
 import (
 	"regexp"
-	"runtime"
 	"strings"
 
 	"github.com/dualface/kander/internal/launch"
@@ -15,10 +14,6 @@ var (
 	tmuxWindowRe  = regexp.MustCompile(`^(tmux|tmux-session):([^:\s]+):([^:\s]+):([^:\s]+)$`)
 )
 
-func init() {
-	isWindows = func() bool { return runtime.GOOS == "windows" }
-}
-
 func closed(oldWindow, channel, container string) launch.CleanupResult {
 	return launch.CleanupResult{Cleaned: true, OldWindow: orNA(oldWindow), Channel: channel, Container: container}
 }
@@ -29,7 +24,7 @@ func retained(oldWindow, detail string) launch.CleanupResult {
 
 // Cleanup closes the original container under the dismiss gates once the new agent is alive after a takeover; on failure it only keeps and reports it.
 func Cleanup(oldWindow string, oldSession launch.AgentSession, newWindow string, timeout float64) launch.CleanupResult {
-	if isWindows() || oldWindow == "" || oldWindow == "foreground" || oldWindow == "console" {
+	if oldWindow == "" || oldWindow == "foreground" || oldWindow == "console" {
 		return closed("N/A", "N/A", "N/A")
 	}
 	if oldWindow == newWindow {

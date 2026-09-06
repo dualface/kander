@@ -95,6 +95,12 @@ func newHarness(t *testing.T) *harness {
 	if err := copyFile(testKander, filepath.Join(fakeBin, "kander"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// In-process probes (the herdr default install directory and friends) also
+	// read HOME/USERPROFILE/LOCALAPPDATA, so isolate those to the temp dir too
+	// instead of letting them reach the developer's real home.
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	cfg := filepath.Join(home, ".config", "kander", "config.json")
 	h := &harness{
 		t: t, root: root, home: home, configPath: cfg, fakeBin: fakeBin,

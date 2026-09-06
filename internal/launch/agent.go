@@ -38,7 +38,10 @@ func launchAgent(
 		}
 		return LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}, nil
 	}
-	command := posixJoin(invocation.Argv)
+	command, err := paneCommand(invocation)
+	if err != nil {
+		return LaunchOutcome{}, fail(err)
+	}
 	if plan.Launcher == "herdr" {
 		tab, pane, err := herdrCreateTab(plan.HerdrBin, plan.HerdrWorkspace, filepath.Dir(root), name)
 		if err != nil {

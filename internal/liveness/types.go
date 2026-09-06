@@ -3,7 +3,6 @@ package liveness
 import (
 	"os/exec"
 	"regexp"
-	"runtime"
 
 	"github.com/dualface/kander/internal/config"
 )
@@ -21,8 +20,7 @@ var (
 	tmuxWindowRe       = regexp.MustCompile(`^(tmux|tmux-session):([^:\s]+):([^:\s]+):([^:\s]+)$`)
 	taskGroupRe        = regexp.MustCompile(`^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*-group$`)
 
-	lookPath  = exec.LookPath
-	isWindows = func() bool { return runtime.GOOS == "windows" }
+	lookPath = exec.LookPath
 )
 
 // TaskSession is the parsed session field of a card.

@@ -39,11 +39,6 @@ func commandDismiss(root, taskID string, timeout float64) error {
 	if err := launch.ValidateTimeout(timeout, "dismiss"); err != nil {
 		return err
 	}
-	if isWindows() {
-		return takeoverError(
-			"takeover.windows_currently_has_no_direct_terminal_channel_for_dismiss",
-		)
-	}
 	text, err := board.ReadDocument(entry)
 	if err != nil {
 		return err

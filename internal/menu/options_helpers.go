@@ -109,11 +109,14 @@ func herdrLauncherChoices(cfg *config.Config) []Choice {
 	return []Choice{{Value: "herdr", Label: label}}
 }
 
-func windowsLauncherChoices() []Choice {
-	return []Choice{
-		{Value: "console", Label: config.Text("menu.separate_windows_console")},
-		{Value: "foreground", Label: config.Text("menu.foreground_in_this_terminal")},
-	}
+// windowsLauncherChoices leaves out tmux: native Windows has none.
+// herdr has a native Windows build, so it is offered once installed.
+func windowsLauncherChoices(cfg *config.Config) []Choice {
+	choices := []Choice{{Value: "console", Label: config.Text("menu.separate_windows_console")}}
+	choices = append(choices, herdrLauncherChoices(cfg)...)
+	return append(choices, Choice{
+		Value: "foreground", Label: config.Text("menu.foreground_in_this_terminal"),
+	})
 }
 
 func copyModels(src config.Models) config.Models {

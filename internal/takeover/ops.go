@@ -17,10 +17,9 @@ import (
 const pollInterval = 100 * time.Millisecond
 
 var (
-	lookPath  = exec.LookPath
-	sleepFn   = time.Sleep
-	nowFn     = time.Now
-	isWindows = func() bool { return false }
+	lookPath = exec.LookPath
+	sleepFn  = time.Sleep
+	nowFn    = time.Now
 )
 
 func t(id string, args ...any) string {

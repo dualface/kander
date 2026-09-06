@@ -54,29 +54,28 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	}
 	if isWindowsOS() {
 		success(config.Text("menu.windows_console_launcher_available"))
+	} else if tools.Tmux.Available() {
+		if os.Getenv("TMUX") == "" && configuredLauncher != "tmux-session" && configuredLauncher != "auto" && configuredLauncher != "herdr" {
+			hint(config.Text(
+				"menu.tmux_installed_but_not_in_a_session_start_one", tmuxSessionHint,
+			))
+		}
 	} else {
-		if tools.Tmux.Available() {
-			if os.Getenv("TMUX") == "" && configuredLauncher != "tmux-session" && configuredLauncher != "auto" && configuredLauncher != "herdr" {
-				hint(config.Text(
-					"menu.tmux_installed_but_not_in_a_session_start_one", tmuxSessionHint,
-				))
-			}
-		} else {
+		hint(config.Text(
+			"menu.tmux_unavailable_welcome_can_select_foreground_mode",
+		))
+	}
+	// herdr works on Windows too, so these hints are not platform-specific.
+	if tools.Herdr.Available() {
+		if os.Getenv("HERDR_ENV") != "1" && configuredLauncher == "herdr" {
 			hint(config.Text(
-				"menu.tmux_unavailable_welcome_can_select_foreground_mode",
+				"menu.herdr_installed_but_not_currently_in_herdr_the_herdr",
 			))
 		}
-		if tools.Herdr.Available() {
-			if os.Getenv("HERDR_ENV") != "1" && configuredLauncher == "herdr" {
-				hint(config.Text(
-					"menu.herdr_installed_but_not_currently_in_herdr_the_herdr",
-				))
-			}
-		} else if configuredLauncher == "herdr" {
-			hint(config.Text(
-				"menu.herdr_unavailable_welcome_can_select_another_launcher",
-			))
-		}
+	} else if configuredLauncher == "herdr" {
+		hint(config.Text(
+			"menu.herdr_unavailable_welcome_can_select_another_launcher",
+		))
 	}
 
 	labels := agentLabels()
@@ -211,12 +210,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			))
 		}
 	case "herdr":
-		if isWindowsOS() {
-			healthy = false
-			warning(config.Text(
-				"menu.the_configured_launcher_is_herdr_but_native_windows_does",
-			))
-		} else if !tools.Herdr.Available() {
+		if !tools.Herdr.Available() {
 			healthy = false
 			warning(config.Text(
 				"menu.the_configured_launcher_is_herdr_but_herdr_is_not",
@@ -238,16 +232,14 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			))
 		}
 	case "auto":
-		if isWindowsOS() {
+		if !tools.Tmux.Available() && !tools.Herdr.Available() {
 			healthy = false
-			warning(config.Text(
-				"menu.the_configured_launcher_is_auto_but_native_windows_does",
-			))
-		} else if !tools.Tmux.Available() && !tools.Herdr.Available() {
-			healthy = false
-			warning(config.Text(
-				"menu.the_configured_launcher_is_auto_but_neither_herdr_nor",
-			))
+			// Native Windows never probes tmux and auto can only land on herdr, so the hint must not mention tmux.
+			key := "menu.the_configured_launcher_is_auto_but_neither_herdr_nor"
+			if isWindowsOS() {
+				key = "menu.the_configured_launcher_is_auto_but_herdr_is_not_available"
+			}
+			warning(config.Text(key))
 		} else {
 			hint(config.Text(
 				"menu.launcher_auto_chooses_at_start_a_herdr_tab_if",

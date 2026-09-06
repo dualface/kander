@@ -3,7 +3,6 @@ package notify
 import (
 	"fmt"
 	"os"
-	"runtime"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -11,8 +10,6 @@ import (
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/window"
 )
-
-var isWindows = func() bool { return runtime.GOOS == "windows" }
 
 func commandNotify(root, taskID, message, messageFile, pane string, messageSet bool, timeout float64) error {
 	loaded, err := board.LoadBoard(root)
@@ -76,9 +73,6 @@ func commandNotify(root, taskID, message, messageFile, pane string, messageSet b
 		target, err := ResolveTarget(windowValue, pane, liveSession, timeout)
 		if err != nil {
 			return err
-		}
-		if isWindows() {
-			return notifyError("notify.windows_currently_has_no_terminal_direct_delivery_channel")
 		}
 		if target.Window != "" && target.Window != windowValue {
 			updated, err := window.RenderWindowMetadata(text, target.Window)

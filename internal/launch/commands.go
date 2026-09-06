@@ -144,7 +144,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 	if err != nil {
 		return err
 	}
-	inv, err := newInvocation(*program, append(args, prompt), nil)
+	inv, err := launchInvocation(plan, *program, append(args, prompt))
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 	if err != nil {
 		return err
 	}
-	inv, err := newInvocation(*program, append(args, prompt), nil)
+	inv, err := launchInvocation(plan, *program, append(args, prompt))
 	if err != nil {
 		return err
 	}

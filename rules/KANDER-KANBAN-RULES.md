@@ -151,7 +151,7 @@ foreground/console 归一为 launcher 名.
 - tmux/tmux-session 的 Codex 接管会发现本次精确 session id, 写为 `codex <id>` 并设置 pane 标记.
 - herdr 与进程型 Codex 缺少发现通道, 保留 `codex` 并在后续恢复时按 rollout mtime 解析.
 - 新 Agent 通过存活校验后、输出 `已接管` 前, 命令按 `dismiss` 的身份和单 pane 拓扑门禁尝试优雅退出并关闭原 herdr/tmux 容器.
-- 原 Agent 已死时仅在容器拓扑可证时关闭, 原地址为空、foreground/console、Windows 或与新地址相同时记为 N/A.
+- 原 Agent 已死时仅在容器拓扑可证时关闭, 原地址为空、foreground/console 或与新地址相同时记为 N/A.
 - 校验、退出或关闭失败只输出 `原容器保留` 及原因, 不强杀、不回滚新 Agent, 命令仍成功.
 - 清理与存活观察各可使用一次完整 `--timeout`, 最坏耗时为约 2 倍 timeout.
 - 成功先输出 `已清理原容器: ...`, 再输出 `已接管: ...`.
@@ -208,7 +208,7 @@ foreground/console 归一为 launcher 名.
 - 只有确认 Agent 进程已退出才关 herdr tab 或 tmux window.
 - tmux window 已随 Agent 自动消失时视为已关闭.
 - 任何身份、状态、容器归属、投递、退出确认或关闭失败, 以及超时时都非零返回并保留当时现场, 不强杀、不降级关容器.
-- `foreground`/`console` 没有可关的终端容器, Windows 当前无直投通道, 均在不做部分动作的前提下报错.
+- `foreground`/`console` 没有可关的终端容器, 在不做部分动作的前提下报错.
 
 **初始化看板**
 
@@ -232,7 +232,10 @@ foreground/console 归一为 launcher 名.
 - `console` 仅支持原生 Windows, 在独立控制台窗口启动 Agent 后立即返回 PID.
 - `console` 没有 session/window 复用、attach 或输出抓取能力, 不是 tmux 或 `tmux-session` 的等价实现.
 - POSIX 默认 `auto`, Windows 默认 `console`.
-- Windows 拒绝 `auto` 和 `herdr`.
+- Windows 拒绝 `tmux` 和 `tmux-session`; herdr 有原生 Windows 版本, `herdr` 在 Windows 可用, 选项面板在装了 herdr 时提供它.
+- 配置同样接受 Windows 上的 `auto`, 但它在 Windows 只会落到 herdr; 选项面板不提供 `auto`.
+- 送进终端容器的 Agent 命令要经该容器的 shell 再解析一次: POSIX 按 sh 拼接; Windows 假定 herdr pane 是 PowerShell, argv 一律编码进 `%VAR%` 变量后由 `cmd.exe /d /s /v:off /c` 还原, 不依赖 PowerShell 向原生程序传参.
+- Agent 命令含换行或 NUL 时拒绝启动, 不向容器发送半条命令.
 
 **herdr 会话上报**
 
@@ -260,7 +263,7 @@ foreground/console 归一为 launcher 名.
 - 汇总行前输出四态存活段: `alive` 为 Agent 与可用会话身份匹配.
 - `stopped` 为 pane 消失或 Agent/进程不匹配且反查未命中.
 - `drifted` 为会话唯一反查到新 pane, 附新地址.
-- `unknown` 为会话/窗口无效、foreground/console、Windows、程序不可用、状态或探测失败.
+- `unknown` 为会话/窗口无效、foreground/console、程序不可用、状态或探测失败.
 - herdr 身份缺失但 Agent 和状态有效仍为 `alive`, 注明无法直投.
 - Codex 空 reference 不反查.
 - 探测错误折算 `unknown`, 不写卡、不影响 `check` 退出码.

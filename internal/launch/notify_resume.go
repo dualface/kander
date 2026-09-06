@@ -71,7 +71,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	inv, err := newInvocation(*program, append(args, prompt), nil)
+	inv, err := launchInvocation(plan, *program, append(args, prompt))
 	if err != nil {
 		return ResumeLaunch{}, err
 	}

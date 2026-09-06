@@ -90,9 +90,6 @@ func probeTaskLiveness(entry board.Entry, text string, allowReverseLookup bool) 
 	if session == nil {
 		return report(entry, nil, Unknown, "unknown", window, t("liveness.missing_or_invalid_session_metadata"), "")
 	}
-	if isWindows() {
-		return report(entry, session, Unknown, "unknown", window, t("liveness.agent_liveness_is_not_probed_on_windows"), "")
-	}
 	if window == "foreground" || window == "console" {
 		return report(entry, session, Unknown, window, window, t("liveness.this_launcher_has_no_probeable_address"), "")
 	}

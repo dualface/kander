@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -258,5 +259,124 @@ func TestBatchQuoteRejectsNUL(t *testing.T) {
 	_, err := quoteWindowsBatchArgument("a\x00b")
 	if err != ErrNUL {
 		t.Fatalf("err = %v, want ErrNUL", err)
+	}
+}
+
+// Windows environment variable names are case-insensitive, but containers spell
+// them differently: a herdr pane gives ComSpec and SYSTEMROOT. Looking the map
+// up under one fixed spelling misses both, and batch agents then fail with
+// "could not resolve an absolute Windows cmd.exe path".
+func TestWindowsCommandInterpreterIgnoresEnvNameCase(t *testing.T) {
+	for _, environment := range []map[string]string{
+		{"ComSpec": `C:\WINDOWS\system32\cmd.exe`},
+		{"comspec": `C:\WINDOWS\system32\cmd.exe`},
+		{"SYSTEMROOT": `C:\WINDOWS`},
+		{"systemroot": `C:\WINDOWS`},
+	} {
+		got, err := windowsCommandInterpreter(environment)
+		if err != nil {
+			t.Fatalf("%v: %v", environment, err)
+		}
+		if !strings.EqualFold(windowsPathName(got), "cmd.exe") {
+			t.Fatalf("%v: got %q", environment, got)
+		}
+	}
+	if _, err := windowsCommandInterpreter(map[string]string{"PATH": "x"}); err == nil {
+		t.Fatal("expected ErrNoCmd without ComSpec or SystemRoot")
+	}
+}
+
+// A batch agent's argv hides behind %VAR% references. A terminal container
+// (herdr pane) receives a single shell command rather than argv+env, so
+// ShellEnv is what lets those variables be assigned back inside the container.
+func TestBatchInvocationExposesShellEnv(t *testing.T) {
+	withWindows(t)
+	program := AgentProgram{Path: `C:\tools\codex.cmd`, Batch: true}
+	invocation, err := NewProcessInvocation(program, []string{"exec", "任务 & 提示"}, map[string]string{
+		"ComSpec": `C:\WINDOWS\system32\cmd.exe`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(invocation.ShellEnv) != 3 {
+		t.Fatalf("ShellEnv = %#v", invocation.ShellEnv)
+	}
+	// Every reference in the /c text must have a matching ShellEnv entry that agrees with Env.
+	references := invocation.Argv[len(invocation.Argv)-1]
+	for name, value := range invocation.ShellEnv {
+		if !strings.Contains(references, "%"+name+"%") {
+			t.Fatalf("%s is not referenced by %q", name, references)
+		}
+		if invocation.Env[name] != value {
+			t.Fatalf("%s: Env=%q ShellEnv=%q", name, invocation.Env[name], value)
+		}
+	}
+	if got := strings.Count(references, "%"); got != 2*len(invocation.ShellEnv) {
+		t.Fatalf("references = %q", references)
+	}
+	if !strings.Contains(invocation.ShellEnv[shellEnvName(t, invocation, 0)], "codex.cmd") {
+		t.Fatalf("program is not the first reference: %#v", invocation.ShellEnv)
+	}
+}
+
+func shellEnvName(t *testing.T, invocation ProcessInvocation, index int) string {
+	t.Helper()
+	suffix := "_" + strconv.Itoa(index)
+	for name := range invocation.ShellEnv {
+		if strings.HasSuffix(name, suffix) {
+			return name
+		}
+	}
+	t.Fatalf("no ShellEnv entry with suffix %q", suffix)
+	return ""
+}
+
+// On Windows an invocation bound for a terminal container always takes cmd.exe's
+// %VAR% form, batch or not: when PowerShell hands arguments to a native exe it
+// rebuilds the command line and swallows embedded double quotes.
+// Directly spawned invocations must keep native argv, or the console launcher
+// would report cmd.exe's PID instead of the agent's.
+func TestShellInvocationUsesVariableFormForNonBatch(t *testing.T) {
+	withWindows(t)
+	program := AgentProgram{Path: `C:\tools\codex.exe`}
+	arguments := []string{"--config", `model_reasoning_effort="medium"`}
+	environment := map[string]string{"ComSpec": `C:\WINDOWS\system32\cmd.exe`}
+
+	shell, err := NewShellInvocation(program, arguments, environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.EqualFold(windowsPathName(shell.Argv[0]), "cmd.exe") {
+		t.Fatalf("argv[0] = %q", shell.Argv[0])
+	}
+	references := shell.Argv[len(shell.Argv)-1]
+	if strings.Contains(references, "codex") || strings.Contains(references, "medium") {
+		t.Fatalf("/c 文本必须只含变量引用: %q", references)
+	}
+	if len(shell.ShellEnv) != 3 {
+		t.Fatalf("ShellEnv = %#v", shell.ShellEnv)
+	}
+	for _, want := range []string{"codex.exe", `model_reasoning_effort=`} {
+		found := false
+		for _, value := range shell.ShellEnv {
+			if strings.Contains(value, want) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("%q 没有出现在 ShellEnv 里: %#v", want, shell.ShellEnv)
+		}
+	}
+
+	// The same input must still be native argv when it is spawned directly.
+	direct, err := NewProcessInvocation(program, arguments, environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if direct.ShellEnv != nil {
+		t.Fatalf("直接 spawn 不该产出 ShellEnv: %#v", direct.ShellEnv)
+	}
+	if direct.Argv[0] != program.Path || direct.Argv[2] != arguments[1] {
+		t.Fatalf("直接 spawn 的 argv 被改写: %#v", direct.Argv)
 	}
 }

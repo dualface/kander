@@ -485,11 +485,13 @@ func TestValidateResumedAgentHerdrIdentityPolicy(t *testing.T) {
 	}
 }
 
-func TestWindowsRejectsAutoHerdrAndConsoleCreateRollback(t *testing.T) {
+func TestWindowsRejectsTmuxAndRequiresHerdrEnvCreateRollback(t *testing.T) {
 	root, _, _ := setupBoard(t)
 	runtimeWindows = func() bool { return true }
 	t.Cleanup(func() { runtimeWindows = func() bool { return isWindowsGOOS() } })
-	for _, launcher := range []string{"auto", "herdr", "tmux-session"} {
+	t.Setenv("HERDR_ENV", "")
+	// tmux is still rejected by platform.
+	for _, launcher := range []string{"tmux", "tmux-session"} {
 		taskID, path := makeTodo(t, root, "win-"+launcher)
 		original, _ := os.ReadFile(path)
 		_, _, err := capture(t, func() error { return commandStart(root, "", launcher, taskID) })
@@ -501,18 +503,34 @@ func TestWindowsRejectsAutoHerdrAndConsoleCreateRollback(t *testing.T) {
 			t.Fatalf("claimed launcher=%s", launcher)
 		}
 	}
-	loadEffective = func() (*config.Config, error) {
-		return envConfig("codex", "auto", nil), nil
+	// herdr and auto are no longer rejected by platform on Windows, but they still require being inside herdr.
+	for _, launcher := range []string{"auto", "herdr"} {
+		taskID, path := makeTodo(t, root, "win-"+launcher)
+		original, _ := os.ReadFile(path)
+		_, _, err := capture(t, func() error { return commandStart(root, "", launcher, taskID) })
+		if err == nil || strings.Contains(err.Error(), "Windows") {
+			t.Fatalf("launcher=%s err=%v", launcher, err)
+		}
+		if !strings.Contains(err.Error(), "herdr") {
+			t.Fatalf("launcher=%s err=%v", launcher, err)
+		}
+		got, _ := os.ReadFile(path)
+		if string(got) != string(original) {
+			t.Fatalf("claimed launcher=%s", launcher)
+		}
 	}
-	taskID, path := makeTodo(t, root, "win-cfg-auto")
+	loadEffective = func() (*config.Config, error) {
+		return envConfig("codex", "tmux-session", nil), nil
+	}
+	taskID, path := makeTodo(t, root, "win-cfg-tmux")
 	original, _ := os.ReadFile(path)
 	_, _, err := capture(t, func() error { return commandStart(root, "", "", taskID) })
 	if err == nil || !strings.Contains(err.Error(), "Windows") {
-		t.Fatalf("configured auto err=%v", err)
+		t.Fatalf("configured tmux-session err=%v", err)
 	}
 	got, _ := os.ReadFile(path)
 	if string(got) != string(original) {
-		t.Fatal("configured auto claimed")
+		t.Fatal("configured tmux-session claimed")
 	}
 
 	oldStart := startProcessFn
