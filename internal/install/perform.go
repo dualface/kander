@@ -164,17 +164,27 @@ func readSource(path string) ([]byte, error) {
 	return fs.ReadRegularFile(anchor, path)
 }
 
+var (
+	writeExec   = fs.WriteExecutableAtomicInherited
+	fileIsBusy  = fs.IsBusyFile
+	asideOnBusy = windowsBusyAside
+)
+
+func windowsBusyAside() bool {
+	return runtime.GOOS == "windows"
+}
+
 func writeBinary(dest string, data []byte) error {
 	anchor, err := fileAnchor(dest)
 	if err != nil {
 		return err
 	}
 	CleanupStaleBinary(config.InstallPaths{BinDir: filepath.Dir(dest)})
-	err = fs.WriteExecutableAtomicInherited(anchor, dest, data, true)
+	err = writeExec(anchor, dest, data, true)
 	if err == nil {
 		return nil
 	}
-	if runtime.GOOS != "windows" || !fs.IsBusyFile(err) {
+	if !asideOnBusy() || !fileIsBusy(err) {
 		return err
 	}
 	aside := dest + ".old"
@@ -182,5 +192,5 @@ func writeBinary(dest string, data []byte) error {
 	if renameErr := fs.Rename(anchor, dest, aside); renameErr != nil {
 		return err
 	}
-	return fs.WriteExecutableAtomicInherited(anchor, dest, data, false)
+	return writeExec(anchor, dest, data, false)
 }

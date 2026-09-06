@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -622,5 +623,43 @@ func TestShouldRunWizard(t *testing.T) {
 	ok, err = ShouldRunWizard()
 	if err != nil || ok {
 		t.Fatalf("configured: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestWriteBinaryBusyRenameAside(t *testing.T) {
+	home := setupInstallHome(t)
+	dest := filepath.Join(home, ".local", "bin", binaryName())
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dest, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origAside, origBusy, origWrite := asideOnBusy, fileIsBusy, writeExec
+	t.Cleanup(func() {
+		asideOnBusy = origAside
+		fileIsBusy = origBusy
+		writeExec = origWrite
+	})
+	calls := 0
+	asideOnBusy = func() bool { return true }
+	fileIsBusy = func(error) bool { return true }
+	writeExec = func(root, path string, data []byte, replace bool) error {
+		calls++
+		if calls == 1 {
+			return errors.New("sharing violation")
+		}
+		return origWrite(root, path, data, replace)
+	}
+	if err := writeBinary(dest, []byte("new-bytes")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil || string(got) != "new-bytes" {
+		t.Fatalf("dest=%q err=%v", got, err)
+	}
+	aside, err := os.ReadFile(dest + ".old")
+	if err != nil || string(aside) != "old" {
+		t.Fatalf("aside=%q err=%v", aside, err)
 	}
 }
