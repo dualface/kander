@@ -70,7 +70,7 @@ kander            # 打开终端看板
 
 任一侧非空且与卡片会话一致即命中, 两侧皆空才算标记缺失.
 
-`resume` 及 `notify` 的恢复/接管通道成功后必须把新容器地址回写到卡片 `窗口`.
+`resume` 及 `notify` 的恢复/接管通道成功后必须把新容器地址回写到卡片 `WINDOW`.
 
 foreground/console 归一为 launcher 名.
 
@@ -78,7 +78,7 @@ foreground/console 归一为 launcher 名.
 
 `notify` 与 `resume` 都不迁移卡片: `review -> working` 由被通知或被唤醒的执行 Agent 在处理事项前自行执行 `kander move <task-id> working`, 该状态变化即为「已收到并开工」的回执.
 
-`notify` 探查已记录的 `窗口` 时按三类处理. 本分类优先于后文的恢复概述.
+`notify` 探查已记录的 `WINDOW` 时按三类处理. 本分类优先于后文的恢复概述.
 
 - (1) **忙态**: pane 存在且 Agent/会话匹配, 但 herdr 非 `idle`/`done` 或 tmux 在 copy-mode.
   - 在同一 `--timeout` 预算内按固定间隔重试探查.
@@ -90,7 +90,7 @@ foreground/console 归一为 launcher 名.
   - tmux 用 `list-panes -a -F` 按非空 `@kander_session` 或 `@onevoke_session`、`pane_dead=0`、Agent 可执行名三重过滤.
   - 唯一命中后重跑完整目标校验, 通过才回写兼容地址并直投.
   - `tmux` 回写 session id; `tmux-session` 回写 session name.
-  - 空 `窗口` 的 tmux 旧卡不反查.
+  - 空 `WINDOW` 的 tmux 旧卡不反查.
 - (3) **反查失败**: 0 个/多个命中、反查不可用或新 pane 复检失败时, 按既有链路恢复.
   - 同时报原地址过期原因与反查原因.
 
@@ -102,20 +102,20 @@ foreground/console 归一为 launcher 名.
 - `--agent` 与 `--launcher` 只覆盖本次.
 - 大任务 (含 `spec.md` 的目录卡) 用 `kanban_agents.large`, 小任务 (单文件卡) 用 `kanban_agents.small`, 缺省均取 `kanban_agent`.
 - 成功输出规模和实际 Agent.
-- `start` 默认免确认, 将会话标识写入 `会话`:
+- `start` 默认免确认, 将会话标识写入 `SESSION`:
   - Claude/Grok 为 UUID; Cursor 为 chat id; Codex 只记 Agent 名.
-- 紧邻的 `窗口` 字段写投递地址:
+- 紧邻的 `WINDOW` 字段写投递地址:
   - herdr: `herdr:<tab-id>:<pane-id>`.
   - tmux/tmux-session: `<launcher>:<session-id>:<window-id>:<pane-id>`.
   - foreground/console: launcher 名.
-- tmux/tmux-session 先建占位 window/pane, 持久化 `窗口`, 再 `respawn-pane` 启动 Agent, 用 `tmux set-option -p -t <pane-id> @kander_session <会话-id>` 写 pane 标记.
+- tmux/tmux-session 先建占位 window/pane, 持久化 `WINDOW`, 再 `respawn-pane` 启动 Agent, 用 `tmux set-option -p -t <pane-id> @kander_session <会话-id>` 写 pane 标记.
 - Claude/Grok/Cursor 用卡片 id, Codex 复用 `notify`/`resume` rollout 解析.
 - 地址写入、启动或标记写入失败均关闭本次 window 并回滚卡片.
-- 旧卡缺两字段时按序插在 `负责人` 后, 不批量改写未启动旧卡.
+- 旧卡缺两字段时按序插在 `OWNER` 后, 不批量改写未启动旧卡.
 
 **恢复原会话**
 
-- `resume` 按卡片 `会话` 唤醒原 Agent, 保留上下文:
+- `resume` 按卡片 `SESSION` 唤醒原 Agent, 保留上下文:
   - Claude/Grok 用 `--resume <uuid>`; Cursor 用 `--resume <chat-id>`.
   - Codex 用 `codex resume <session-id>`.
   - Codex session id 在 `CODEX_HOME` (默认 `~/.codex`) 的 rollout 记录中检索.
@@ -132,7 +132,7 @@ foreground/console 归一为 launcher 名.
 - 这里判断的是已知新 pane 是否存活, 与直投和反查必须靠会话身份确定目标的职责不同.
 - 该降级不是同用户安全边界.
 - 秒退时清理新实例, 非零退出并附可取得的 Agent 原始输出, 只有校验通过才按 `start` 的输出格式报告 `已唤醒`.
-- 没有 `会话` 记录的卡 (未经 `start` 启动) 不能 `resume`.
+- 没有 `SESSION` 记录的卡 (未经 `start` 启动) 不能 `resume`.
 - `start`, `resume` 和需要恢复进程的 `notify` 在所有平台都把完整 prompt 写入 UTF-8 临时任务文件, 内含任务 ID、固定要求和消息正文.
 - Agent 命令行只接收一句包含该绝对路径的指令.
 - 任务文件内要求 Agent 完成后尝试删除, 删除失败或遗留不影响结果.
@@ -144,9 +144,9 @@ foreground/console 归一为 launcher 名.
 
 - `resume` 缺省按「恢复原会话」保留原 Agent 与上下文.
 - 显式 `--agent <name>` 表示用户授权接管, 即使名称与原 Agent 相同也分配全新会话, 不迁移旧 CLI 上下文: 新 Agent 先从卡片、任务 worktree、Git 状态和实施记录重建进度, 再处理消息.
-- 未经 `start`、没有原 `会话` 记录的卡仍不可接管.
+- 未经 `start`、没有原 `SESSION` 记录的卡仍不可接管.
 - Cursor `create-chat` 等新会话准备失败时卡片不变.
-- 启动前以新 Agent、新会话和新 launcher 覆写 `负责人`/`会话`/`窗口`, 不改 `开始时间`.
+- 启动前以新 Agent、新会话和新 launcher 覆写 `OWNER`/`SESSION`/`WINDOW`, 不改 `STARTED_AT`.
 - 启动或存活校验失败时整文恢复并复原原状态.
 - tmux/tmux-session 的 Codex 接管会发现本次精确 session id, 写为 `codex <id>` 并设置 pane 标记.
 - herdr 与进程型 Codex 缺少发现通道, 保留 `codex` 并在后续恢复时按 rollout mtime 解析.
@@ -160,11 +160,11 @@ foreground/console 归一为 launcher 名.
 
 - `notify` 是主控向原执行 Agent 派回事项的单一接口.
 - 它与 `resume` 一样只接受 `review/` 或 `working/` 卡, 必须且只能给非空的 `--message` 或 `--message-file`, `--timeout` 必须是大于 60 的有限秒数且默认 120 秒.
-- 地址优先级为显式 `--pane` 覆盖、卡片 `窗口` 快路径、缺窗口时按 Agent 与会话 id 扫描 `herdr pane list`.
+- 地址优先级为显式 `--pane` 覆盖、卡片 `WINDOW` 快路径、缺窗口时按 Agent 与会话 id 扫描 `herdr pane list`.
 - 覆盖与反查均继续用 `pane get` 验证 pane 存在、Agent 和 `agent_session.value` 完全匹配且既有 pane 状态为 `idle` 或 `done`.
 - 卡片已记录 id 的 Claude/Grok/Cursor 直接比对, 只有缺 id 的旧 Codex 卡复用 `resume` 的 rollout 检索.
 - Kander 不设 Agent 白名单, herdr 反查覆盖范围取决于当前版本及各 `source: herdr:<agent>` 集成是否实际报告会话身份.
-- 唯一命中后把 `herdr:<tab-id>:<pane-id>` 写回 `窗口`.
+- 唯一命中后把 `herdr:<tab-id>:<pane-id>` 写回 `WINDOW`.
 - 0 个或多个命中不投递.
 - 直投与反查负责确定既有目标身份, 因此 pane 未上报有效会话身份时继续拒绝并进入恢复链, 不使用恢复存活校验的降级判据.
 - tmux/tmux-session 的旧卡缺窗口时仍不能反查.
@@ -195,9 +195,9 @@ foreground/console 归一为 launcher 名.
 
 - `dismiss` 只接受 `done/` 或 `archived/` 卡, 不改卡片正文和状态.
 - `--timeout` 必须是大于 60 的有限秒数且默认 120 秒.
-- 它按卡片 `窗口` 定位 herdr pane 或 tmux/tmux-session pane.
-- 缺 `窗口` 的旧 herdr 卡, 以及 pane 不存在/已死, Agent, 会话标记或前台进程不匹配的过期地址, 复用 `notify` 的唯一会话反查.
-- herdr 以命中 pane 实际所属 tab 为容器, tmux 以 `display-message` 读取命中 pane 实际所属 session/window, 不回写卡片 `窗口`.
+- 它按卡片 `WINDOW` 定位 herdr pane 或 tmux/tmux-session pane.
+- 缺 `WINDOW` 的旧 herdr 卡, 以及 pane 不存在/已死, Agent, 会话标记或前台进程不匹配的过期地址, 复用 `notify` 的唯一会话反查.
+- herdr 以命中 pane 实际所属 tab 为容器, tmux 以 `display-message` 读取命中 pane 实际所属 session/window, 不回写卡片 `WINDOW`.
 - 0 个或多个命中都拒绝.
 - 忙态不反查且继续拒绝.
 - 投递前复用 `notify` 的 Agent 与会话精确匹配: herdr 另要求 `agent_status` 为 `idle` 或 `done`, tmux 另要求 pane 存活、不在 copy-mode 且前台进程匹配.
@@ -251,10 +251,10 @@ foreground/console 归一为 launcher 名.
 **检查与存活分类**
 
 - `check` 默认检查除 `done/` `archived/` 外的无效入口, 有错非零退出.
-- 对 `todo/`, `working/`, `review/` 卡另检查契约完整性: 必填章节缺失或残留 `<填写>` 占位符、验收条件没有 `- [ ]` 条目, 均计入无效项.
+- 对 `todo/`, `working/`, `review/` 卡另检查契约完整性: 必填章节缺失或残留 `<FILL_IN>` 占位符、验收条件没有 `- [ ]` 条目, 均计入无效项.
 - `--all` 纳入两栏.
 - 指定任务 ID 时仅检查目标及跨状态/形态冲突, 无关无效入口不影响结果, 目标在 `done/` 或 `archived/` 也检查.
-- 均解析适用卡片的 `前置任务`, 确认引用存在、依赖无环.
+- 均解析适用卡片的 `PREREQUISITES`, 确认引用存在、依赖无环.
 - 定向检查遍历可达依赖, 包括跨组环.
 - 默认对 `done/` 或 `archived/` 前置卡只确认存在, `--all` 才检查其自身及完整可达图.
 - 依赖未满足不使 `check` 失败.
@@ -362,7 +362,7 @@ backlog, todo, working, review -> archived            仅限用户授权的终�
 除 trash 外任意状态 -> trash                            仅限用户明确要求
 ```
 
-- 进 `todo/` 须完成任务目标, 预期成果, 验收条件 (至少一条顶层 `- [ ]` 且有内容的可判定条目) 和不在本轮范围, 且这四个章节不残留 `<填写>` 占位符, 并附「建卡后自审」的 `自审:` 记录行 (大任务与任务组成员卡另附 `卡审:` 行); 进 `review/` 须已填写 `任务分支`; 进 `done/` 的门禁见「执行与完成」, 其余见「终止与清理」.
+- 进 `todo/` 须完成 `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` (至少一条顶层 `- [ ]` 且有内容的可判定条目) 和不在本轮范围, 且这四个章节不残留 `<FILL_IN>` 占位符, 并附「建卡后自审」的 `SELF_REVIEW:` 记录行 (大任务与任务组成员卡另附 `CARD_REVIEW:` 行); 进 `review/` 须已填写 `TASK_BRANCH`; 进 `done/` 的门禁见「执行与完成」, 其余见「终止与清理」.
 - 旧版看板没有 `review/`: 其余 6 个状态目录齐全时, 任一 `kander` 命令首次定位看板即自动补建 `review/`, 不要求用户重跑 `init`.
 
   其他状态目录缺失时停止普通看板操作, 可用前述初始化命令补建.
@@ -388,72 +388,72 @@ backlog, todo, working, review -> archived            仅限用户授权的终�
 ```markdown
 # <任务标题>
 
-- 类型: Feature | Bug | Chore | Research
-- 任务组:
-- 创建时间: YYYY-MM-DD HH:MM
-- 负责人:
-- 会话:
-- 窗口:
-- 开始时间:
-- 完成时间:
-- 任务分支:
-- 结果:
+- TYPE: Feature | Bug | Chore | Research
+- TASK_GROUP:
+- CREATED_AT: YYYY-MM-DD HH:MM
+- OWNER:
+- SESSION:
+- WINDOW:
+- STARTED_AT:
+- FINISHED_AT:
+- TASK_BRANCH:
+- RESULT:
 
-## 任务目标
+## GOAL
 
 <改什么, 为什么改>
 
-## 用户决策
+## USER_DECISIONS
 
 <用户已确认的方向和取舍; 没有则写 N/A>
 
-## 预期成果
+## EXPECTED_OUTCOME
 
 <完成后可观察, 可验证的状态>
 
-## 验收条件
+## ACCEPTANCE_CRITERIA
 
 - [ ] <条件>
 
-## 威胁模型
+## THREAT_MODEL
 
 <安全任务写资产, 可信主体和攻击者能力; 非安全任务写 N/A>
 
-## 不在本轮范围
+## OUT_OF_SCOPE
 
 - <按既有问题, 加固, 共享契约与文档, 相邻功能四类逐一写明排除或纳入, 每条附理由>
 
-## 讨论与决策
+## DISCUSSION
 
-<关键结论; 任务组卡片还要在开头记录前置任务>
+<关键结论; 任务组卡片还要在开头记录 PREREQUISITES>
 
-## 实施与验证
+## IMPLEMENTATION
 
 <计划, 分支, commit, 验证命令, 结果, 环境缺口和阻塞>
 
-## 完成总结
+## SUMMARY
 
 <实际成果, 偏差, 未处理问题和验收结论; 完成前留空>
 ```
 
 ### 大任务文档
 
-- `spec.md` 必需, 含小任务的元数据及契约章节: 任务目标, 用户决策, 预期成果, 验收条件, 威胁模型, 不在本轮范围, 讨论与决策.
+- `spec.md` 必需, 含小任务的元数据及契约章节: `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`.
 - `plan.md` 按需创建, 记录实施步骤, 影响模块, 验证, 发布和回滚计划, 不得修改 `spec.md` 契约.
 - `report.md` 完成时创建, 记录实际改动, 最终 commit, 验证, 偏差, 未处理问题, 风险和验收结论; 不建空文件.
 
 ### 契约与记录
 
-- 领取后填写负责人, 开始时间和任务分支, 无分支写 `N/A`.
+- 领取后填写 `OWNER`, `STARTED_AT` 和 `TASK_BRANCH`, 无分支写 `N/A`.
 
-  `start` 同时写入相邻的 `会话` 与 `窗口` 字段, 旧卡缺字段时插在负责人之后, 手工领取的卡留空.
+  `start` 同时写入相邻的 `SESSION` 与 `WINDOW` 字段, 旧卡缺字段时插在 `OWNER` 之后, 手工领取的卡留空.
 
-  命令迁入 `done/` 时填写完成时间.
+  命令迁入 `done/` 时填写 `FINISHED_AT`.
 
   结果只在进入 `done/`, `archived/` 或 `trash/` 前填写.
 
-- 卡片进入 `todo/` 后, 任务目标, 用户决策, 预期成果, 验收条件, 不在本轮范围以及任务组关系冻结. 修改任何一项都要先取得用户明确决策.
-- 「不在本轮范围」如实界定任务边界, 不把未确认的扩展目标写入验收条件. 审核模块启用时再按 `KANDER-REVIEW-RULES.md` 的审核契约细化范围.
+- 卡片进入 `todo/` 后, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE` 以及任务组关系冻结. 修改任何一项都要先取得用户明确决策.
+- `OUT_OF_SCOPE` 如实界定任务边界, 不把未确认的扩展目标写入 `ACCEPTANCE_CRITERIA`. 审核模块启用时再按 `KANDER-REVIEW-RULES.md` 的审核契约细化范围.
 - 实施期只追加关键决策, 验证, 环境缺口, commit, 阻塞和下一步, 不复制会话流水. 稳定的架构, API 和长期规则仍须写入仓库文档或项目规则.
 
 ## 任务规模与分组
@@ -468,7 +468,7 @@ backlog, todo, working, review -> archived            仅限用户授权的终�
 
 - 卡片保留可选的任务组字段及依赖记录. 关闭 task_groups 时不自动拆组, 独立单卡仍可使用. 开启时按 KANDER-TASK-GROUP-RULES.md 规划和执行, 必须同时开启 git.
 - 建卡引导属于 KANDER-TASK-INTAKE-RULES.md, 仅在 rules.task_intake=true 时读取; 用户主动操作看板不要求开启它.
-- kander new 在 backlog 创建模板, 调用者按已确认内容填写任务目标、预期成果和验收条件, 不将建议写成用户决定.
+- kander new 在 backlog 创建模板, 调用者按已确认内容填写 `GOAL`, `EXPECTED_OUTCOME` 和 `ACCEPTANCE_CRITERIA`, 不将建议写成用户决定.
 
 ### 建卡后自审
 
@@ -477,9 +477,9 @@ backlog, todo, working, review -> archived            仅限用户授权的终�
   - 目标与成果一致, 没有遗漏已确认需求, 没有把建议或假设写成用户决策.
   - 任务边界清楚, 本轮范围与排除项不冲突, 不将达成目标所必需的工作排除在外.
   - 约束准确且可执行, 符合用户决策、项目规则及实际接口和环境, 没有互相矛盾的要求.
-  - 验收条件覆盖目标与成果, 可执行、可判定, 没有遗漏关键条件或引入范围外要求.
-- 在 `讨论与决策` 中以独立一行 `自审: <结论>` 记录自审结论与修正项 (ASCII 冒号, 可为列表项); 进入 `todo/` 的门禁校验该行存在. 可依据既有决策修正的内容直接修正; 需要新增或改变用户决策的歧义, 明确列出并等待用户决定, 不自行补成契约.
-- 大任务目录卡与任务组成员卡在自审之外还须独立审卡: 由不共享建卡会话上下文的独立 Agent (新会话或子 Agent) 只读卡片与用户原始需求, 按上述四条出具结论; 创建者修正后在 `讨论与决策` 以 `卡审: <结论>` 行记录结论与审卡者, 门禁同样校验该行. 工具只校验记录行存在, 审卡者的独立性与结论质量仍由创建者如实保证, 不得由建卡 Agent 自己补写 `卡审:` 行敷衍门禁.
+  - `ACCEPTANCE_CRITERIA` 覆盖目标与成果, 可执行、可判定, 没有遗漏关键条件或引入范围外要求.
+- 在 `DISCUSSION` 中以独立一行 `SELF_REVIEW: <结论>` 记录自审结论与修正项 (ASCII 冒号, 可为列表项); 进入 `todo/` 的门禁校验该行存在. 可依据既有决策修正的内容直接修正; 需要新增或改变用户决策的歧义, 明确列出并等待用户决定, 不自行补成契约.
+- 大任务目录卡与任务组成员卡在自审之外还须独立审卡: 由不共享建卡会话上下文的独立 Agent (新会话或子 Agent) 只读卡片与用户原始需求, 按上述四条出具结论; 创建者修正后在 `DISCUSSION` 以 `CARD_REVIEW: <结论>` 行记录结论与审卡者, 门禁同样校验该行. 工具只校验记录行存在, 审卡者的独立性与结论质量仍由创建者如实保证, 不得由建卡 Agent 自己补写 `CARD_REVIEW:` 行敷衍门禁.
 
 ## 领取, 启动与协调
 
@@ -490,7 +490,7 @@ backlog, todo, working, review -> archived            仅限用户授权的终�
 # 委派给新执行 Agent: start 原子领取并启动
 kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
 
-# 用户明确要求当前 Agent 执行既有任务卡: 只迁移, 随后手工填写负责人和开始时间
+# 用户明确要求当前 Agent 执行既有任务卡: 只迁移, 随后手工填写 `OWNER` 和 `STARTED_AT`
 kander move <task-id> working
 ```
 
@@ -531,7 +531,7 @@ kander move <task-id> working
 
   执行 Agent 先按入口核对配置, 再读本协议、卡片和项目规则, 按适用流程准备实际工作目录.
 
-  确实使用任务分支时填写任务分支.
+  确实使用任务分支时填写 `TASK_BRANCH`.
 
   任务组的启动任务文件中“退出”表示结束本轮响应, 不要求主动退出交互式 Agent CLI 或关闭终端容器. 非交互式调用自然结束时, 后续派回由 `notify` 选择恢复; 交互式会话保留到用户明确同意遣散.
 
@@ -572,7 +572,7 @@ kander move <task-id> working
 
 - 根据卡片记录确认实际工作目录, 记录实施与验证及未处理问题.
 
-  完成任务契约和所有适用交付步骤后填写完成总结或 report.md, 填 结果: completed, 执行 kander move <task-id> done 和 kander check.
+  完成任务契约和所有适用交付步骤后填写 `SUMMARY` 或 report.md, 填 `RESULT: completed`, 执行 kander move <task-id> done 和 kander check.
 
 - 失败或暂停时保持实际状态并记录阻塞和解除条件. 不适用的 Git 或审核步骤写 N/A, 不把未执行的验证写为通过.
 - 任务组成员仅在启用 task_groups 和 git 时按 KANDER-TASK-GROUP-RULES.md 执行 review、集成和收尾. 不能把这些门禁应用到独立单卡.

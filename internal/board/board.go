@@ -47,7 +47,7 @@ var (
 		"research": "Research",
 	}
 
-	readySections  = []string{"任务目标", "预期成果", "验收条件", "不在本轮范围"}
+	readySections  = []string{SectionGoal, SectionExpectedOutcome, SectionAcceptanceCriteria, SectionOutOfScope}
 	archiveResults = map[string]struct{}{
 		"completed": {}, "cancelled": {}, "duplicate": {}, "wontfix": {},
 	}

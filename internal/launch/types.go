@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	sessionField = "会话"
-	windowField  = "窗口"
+	sessionField = board.FieldSession
+	windowField  = board.FieldWindow
 
 	paneSessionOption   = "@kander_session"
 	projectSessionOpt   = "@kander_project"

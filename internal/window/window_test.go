@@ -14,20 +14,20 @@ import (
 func TestRenderWindowMetadataInsertAndReplace(t *testing.T) {
 	t.Setenv(config.EnvLang, "cn")
 	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
-	withWindow := "- 负责人: claude\n- 会话: claude abc\n- 窗口: old\n"
+	withWindow := "- OWNER: claude\n- SESSION: claude abc\n- WINDOW: old\n"
 	updated, err := RenderWindowMetadata(withWindow, "herdr:w1:t9:w1:p9")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(updated, "- 窗口: herdr:w1:t9:w1:p9\n") {
+	if !strings.Contains(updated, "- WINDOW: herdr:w1:t9:w1:p9\n") {
 		t.Fatalf("replace: %q", updated)
 	}
-	without := "- 负责人: claude\n- 会话: claude abc\n- 开始时间: 2026-09-04 12:00\n"
+	without := "- OWNER: claude\n- SESSION: claude abc\n- STARTED_AT: 2026-09-04 12:00\n"
 	inserted, err := RenderWindowMetadata(without, "foreground")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(inserted, "- 会话: claude abc\n- 窗口: foreground\n") {
+	if !strings.Contains(inserted, "- SESSION: claude abc\n- WINDOW: foreground\n") {
 		t.Fatalf("insert: %q", inserted)
 	}
 }
@@ -57,5 +57,37 @@ func TestRestoreWindowTextAndFailureMessage(t *testing.T) {
 	}
 	if ResumeFailureMessage(errors.New("only"), nil, nil) != "" {
 		t.Fatal("expected empty when no extra failures")
+	}
+}
+
+// A card still using the legacy Chinese fields is updated in place: the window
+// line keeps its single occurrence and switches to the canonical name, instead
+// of the card gaining a second window field.
+func TestRenderWindowMetadataUpdatesLegacyFieldsInPlace(t *testing.T) {
+	t.Setenv(config.EnvLang, "cn")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
+
+	withWindow := "- 负责人: claude\n- 会话: claude abc\n- 窗口: old\n"
+	updated, err := RenderWindowMetadata(withWindow, "herdr:t1:p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := len(board.FieldLineRe(WindowField).FindAllString(updated, -1)); count != 1 {
+		t.Fatalf("window fields: %d in %q", count, updated)
+	}
+	if !strings.Contains(updated, "- "+board.FieldWindow+": herdr:t1:p1\n") || strings.Contains(updated, "窗口") {
+		t.Fatalf("replace: %q", updated)
+	}
+
+	without := "- 负责人: claude\n- 会话: claude abc\n- 开始时间: 2026-09-04 12:00\n"
+	inserted, err := RenderWindowMetadata(without, "foreground")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(inserted, "- 会话: claude abc\n- "+board.FieldWindow+": foreground\n") {
+		t.Fatalf("insert: %q", inserted)
+	}
+	if count := len(board.FieldLineRe(SessionField).FindAllString(inserted, -1)); count != 1 {
+		t.Fatalf("session fields: %d in %q", count, inserted)
 	}
 }

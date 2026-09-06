@@ -114,9 +114,9 @@ func padDisplay(text string, width int) string {
 func taskTimestamp(entry Entry, text string) string {
 	switch entry.State {
 	case "working", "review":
-		return MetadataFrom(text, "开始时间")
+		return MetadataFrom(text, FieldStartedAt)
 	case "done":
-		if value := MetadataFrom(text, "完成时间"); value != "" {
+		if value := MetadataFrom(text, FieldFinishedAt); value != "" {
 			return value
 		}
 		info, err := os.Stat(entry.Document)

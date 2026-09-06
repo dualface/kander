@@ -64,7 +64,7 @@ func TestTaskPayloadTaskGroupLegacyAndCurrent(t *testing.T) {
 	taskID := todayID("web-task-group")
 	path := filepath.Join(root, "backlog", taskID+".md")
 
-	setMeta(t, path, "- 任务组:\n", "")
+	setMeta(t, path, "- TASK_GROUP:\n", "")
 	payload, err := BoardPayload(root)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestTaskPayloadTaskGroupLegacyAndCurrent(t *testing.T) {
 	}
 
 	legacy := "20260820-legacy-web-group"
-	setMeta(t, path, "## 讨论与决策\n\n", "## 讨论与决策\n\n任务组: "+legacy+"\n前置任务: N/A\n\n")
+	setMeta(t, path, "## DISCUSSION\n\n", "## DISCUSSION\n\nTASK_GROUP: "+legacy+"\nPREREQUISITES: N/A\n\n")
 	detail, err := TaskPayload(root, taskID)
 	if err != nil {
 		t.Fatal(err)
@@ -92,10 +92,10 @@ func TestTaskPayloadTaskGroupLegacyAndCurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if !strings.Contains(text, "- 任务组:") {
-		text = strings.Replace(text, "- 负责人:", "- 任务组: "+current+"\n- 负责人:", 1)
+	if !strings.Contains(text, "- TASK_GROUP:") {
+		text = strings.Replace(text, "- OWNER:", "- TASK_GROUP: "+current+"\n- OWNER:", 1)
 	} else {
-		text = strings.Replace(text, "- 任务组:\n", "- 任务组: "+current+"\n", 1)
+		text = strings.Replace(text, "- TASK_GROUP:\n", "- TASK_GROUP: "+current+"\n", 1)
 	}
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)

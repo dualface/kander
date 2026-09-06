@@ -68,9 +68,9 @@ func makeReady(t *testing.T, path string) {
 	}
 	text := string(data)
 	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
-		text = strings.Replace(text, "<填写>", replacement, 1)
+		text = strings.Replace(text, "<FILL_IN>", replacement, 1)
 	}
-	text = strings.Replace(text, "## 讨论与决策\n", "## 讨论与决策\n\n自审: 通过\n卡审: 通过\n", 1)
+	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n", 1)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func makeWorking(t *testing.T, slug, title string) (string, string) {
 	root := os.Getenv(board.EnvBoardDir)
 	path := filepath.Join(root, "backlog", id+".md")
 	makeReady(t, path)
-	setMeta(t, path, "- 任务分支:\n", "- 任务分支: task/"+slug+"\n")
+	setMeta(t, path, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/"+slug+"\n")
 	moved, err := board.MoveEntry(board.Entry{
 		TaskID: id, State: "backlog", Path: path, Document: path, Kind: "small",
 	}, root, "todo")
@@ -116,8 +116,8 @@ func makeWorking(t *testing.T, slug, title string) (string, string) {
 
 func setLocation(t *testing.T, path, session, window string) {
 	t.Helper()
-	setMeta(t, path, "- 会话:\n", "- 会话: "+session+"\n")
-	setMeta(t, path, "- 窗口:\n", "- 窗口: "+window+"\n")
+	setMeta(t, path, "- SESSION:\n", "- SESSION: "+session+"\n")
+	setMeta(t, path, "- WINDOW:\n", "- WINDOW: "+window+"\n")
 }
 
 func writeFakeTmux(t *testing.T, path string) {
@@ -464,7 +464,7 @@ func TestTmuxReverseLookupUniqueMarker(t *testing.T) {
 
 func setTaskGroup(t *testing.T, path, group string) {
 	t.Helper()
-	setMeta(t, path, "- 任务组:\n", "- 任务组: "+group+"\n")
+	setMeta(t, path, "- TASK_GROUP:\n", "- TASK_GROUP: "+group+"\n")
 }
 
 // subscriptionOutput permits the test to inspect output while Subscribe writes it.
@@ -601,7 +601,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 	secondID := todayID("event-second")
 	second := filepath.Join(root, "backlog", secondID+".md")
 	makeReady(t, second)
-	setMeta(t, second, "- 任务分支:\n", "- 任务分支: task/event-second\n")
+	setMeta(t, second, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/event-second\n")
 	setTaskGroup(t, first, groupID)
 	setTaskGroup(t, second, groupID)
 	todo, err := board.MoveEntry(board.Entry{TaskID: secondID, State: "backlog", Path: second, Document: second, Kind: "small"}, root, "todo")
@@ -615,7 +615,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 		}
 		path := filepath.Join(root, "backlog", id+".md")
 		makeReady(t, path)
-		setMeta(t, path, "- 任务分支:\n", "- 任务分支: task/ext\n")
+		setMeta(t, path, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/ext\n")
 		moved, err := board.MoveEntry(board.Entry{TaskID: id, State: "backlog", Path: path, Document: path, Kind: "small"}, root, "todo")
 		if err != nil {
 			t.Fatal(err)

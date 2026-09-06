@@ -22,61 +22,74 @@ func replaceLiteral(pattern *regexp.Regexp, text, repl string) string {
 	return pattern.ReplaceAllString(text, quoteReplacement(repl))
 }
 
-func replaceKeep1(pattern *regexp.Regexp, text, suffix string) string {
-	return pattern.ReplaceAllString(text, "${1}"+quoteReplacement(suffix))
-}
-
 func replaceUniqueField(text, name, value string) (string, error) {
-	pattern := regexp.MustCompile(`(?m)^- ` + regexp.QuoteMeta(name) + `:.*$`)
+	pattern := board.FieldLineRe(name)
 	if len(pattern.FindAllStringIndex(text, -1)) != 1 {
 		return "", launchError(
 			"launch.task_document_must_contain_exactly_one_metadata_field", name,
 		)
 	}
-	return replaceLiteral(pattern, text, "- "+name+": "+strings.TrimRight(value, " ")), nil
+	return replaceLiteral(pattern, text, board.RenderField(name, value)), nil
+}
+
+// insertAfterField appends a new metadata line right below an existing one,
+// which must be present exactly once.
+func insertAfterField(text, anchor, name, value string) (string, error) {
+	pattern := board.FieldLineRe(anchor)
+	lines := pattern.FindAllString(text, -1)
+	if len(lines) != 1 {
+		return "", launchError(
+			"launch.task_document_must_contain_exactly_one_metadata_field", anchor,
+		)
+	}
+	return replaceLiteral(pattern, text, lines[0]+"\n"+board.RenderField(name, value)), nil
 }
 
 func renderStartMetadata(text, agent, session, window string) (string, error) {
 	for _, pair := range [][2]string{
-		{"负责人", agent},
-		{"开始时间", nowStamp()},
+		{board.FieldOwner, agent},
+		{board.FieldStartedAt, nowStamp()},
 	} {
-		pattern := regexp.MustCompile(`(?m)^- ` + pair[0] + `:\s*$`)
+		pattern := regexp.MustCompile(`(?m)^- ` + board.TokenPattern(pair[0]) + `:\s*$`)
 		if len(pattern.FindAllStringIndex(text, -1)) != 1 {
 			return "", launchError(
 				"launch.task_document_must_contain_exactly_one_metadata_field", pair[0],
 			)
 		}
-		text = replaceLiteral(pattern, text, "- "+pair[0]+": "+pair[1])
+		text = replaceLiteral(pattern, text, board.RenderField(pair[0], pair[1]))
 	}
-	sessionLines := regexp.MustCompile(`(?m)^- `+sessionField+`:.*$`).FindAllString(text, -1)
+	sessionRe := board.FieldLineRe(sessionField)
+	sessionLines := sessionRe.FindAllString(text, -1)
 	if len(sessionLines) > 1 {
 		return "", launchError(
 			"launch.task_document_must_contain_exactly_one_metadata_field", sessionField,
 		)
 	}
-	rendered := "- " + sessionField + ": " + session
+	var err error
 	if len(sessionLines) > 0 {
-		text = replaceLiteral(regexp.MustCompile(`(?m)^- `+sessionField+`:.*$`), text, rendered)
+		text = replaceLiteral(sessionRe, text, board.RenderField(sessionField, session))
 	} else {
-		text = replaceKeep1(regexp.MustCompile(`(?m)^(- 负责人: .*)$`), text, "\n"+rendered)
+		text, err = insertAfterField(text, board.FieldOwner, sessionField, session)
+		if err != nil {
+			return "", err
+		}
 	}
-	windowLines := regexp.MustCompile(`(?m)^- `+windowField+`:.*$`).FindAllString(text, -1)
+	windowRe := board.FieldLineRe(windowField)
+	windowLines := windowRe.FindAllString(text, -1)
 	if len(windowLines) > 1 {
 		return "", launchError(
 			"launch.task_document_must_contain_exactly_one_metadata_field", windowField,
 		)
 	}
 	if len(windowLines) > 0 {
-		text = regexp.MustCompile(`(?m)^- `+windowField+`:.*\n?`).ReplaceAllString(text, "")
+		text = regexp.MustCompile(`(?m)^- `+board.TokenPattern(windowField)+`:.*\n?`).ReplaceAllString(text, "")
 	}
-	renderedWindow := strings.TrimRight("- "+windowField+": "+window, " ")
-	return replaceKeep1(regexp.MustCompile(`(?m)^(- `+sessionField+`:.*)$`), text, "\n"+renderedWindow), nil
+	return insertAfterField(text, sessionField, windowField, window)
 }
 
 func renderTakeoverMetadata(text, agent, session, window string) (string, error) {
 	var err error
-	text, err = replaceUniqueField(text, "负责人", agent)
+	text, err = replaceUniqueField(text, board.FieldOwner, agent)
 	if err != nil {
 		return "", err
 	}
@@ -84,7 +97,7 @@ func renderTakeoverMetadata(text, agent, session, window string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	windowLines := regexp.MustCompile(`(?m)^- `+windowField+`:.*$`).FindAllString(text, -1)
+	windowLines := board.FieldLineRe(windowField).FindAllString(text, -1)
 	if len(windowLines) > 1 {
 		return "", launchError(
 			"launch.task_document_must_contain_exactly_one_metadata_field", windowField,
@@ -93,7 +106,7 @@ func renderTakeoverMetadata(text, agent, session, window string) (string, error)
 	if len(windowLines) > 0 {
 		return replaceUniqueField(text, windowField, window)
 	}
-	return replaceKeep1(regexp.MustCompile(`(?m)^(- `+sessionField+`:.*)$`), text, "\n- "+windowField+": "+strings.TrimRight(window, " ")), nil
+	return insertAfterField(text, sessionField, windowField, window)
 }
 
 func renderSessionMetadata(text, session string) (string, error) {

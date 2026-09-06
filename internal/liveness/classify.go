@@ -86,7 +86,7 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 
 func probeTaskLiveness(entry board.Entry, text string, allowReverseLookup bool) Report {
 	session := ParseTaskSession(text)
-	window := board.MetadataFrom(text, "窗口")
+	window := board.MetadataFrom(text, board.FieldWindow)
 	if session == nil {
 		return report(entry, nil, Unknown, "unknown", window, t("liveness.missing_or_invalid_session_metadata"), "")
 	}
@@ -189,7 +189,7 @@ func classifyTmux(entry board.Entry, session TaskSession, launcher, tmuxContaine
 }
 
 func unknownFrom(entry board.Entry, text, detail string) Report {
-	return report(entry, ParseTaskSession(text), Unknown, "unknown", board.MetadataFrom(text, "窗口"), detail, "")
+	return report(entry, ParseTaskSession(text), Unknown, "unknown", board.MetadataFrom(text, board.FieldWindow), detail, "")
 }
 
 // ClassifyTask classifies one card; a failed probe collapses to unknown, and reverse lookup is allowed by default.

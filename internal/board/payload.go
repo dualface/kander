@@ -34,12 +34,12 @@ type BoardView struct {
 func TaskDisplayTime(entry Entry, text string) string {
 	switch entry.State {
 	case "working", "review":
-		if value := MetadataFrom(text, "开始时间"); value != "" {
+		if value := MetadataFrom(text, FieldStartedAt); value != "" {
 			return value
 		}
 		return "-"
 	case "done":
-		if value := MetadataFrom(text, "完成时间"); value != "" {
+		if value := MetadataFrom(text, FieldFinishedAt); value != "" {
 			return value
 		}
 		info, err := os.Stat(entry.Document)
@@ -48,7 +48,7 @@ func TaskDisplayTime(entry Entry, text string) string {
 		}
 		return "-"
 	}
-	if value := MetadataFrom(text, "创建时间"); value != "" {
+	if value := MetadataFrom(text, FieldCreatedAt); value != "" {
 		return value
 	}
 	return "-"
@@ -60,7 +60,7 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 	if kind == "" {
 		kind = "small"
 	}
-	taskType := MetadataFrom(text, "类型")
+	taskType := MetadataFrom(text, FieldType)
 	if taskType == "" {
 		taskType = "-"
 	}
@@ -71,10 +71,10 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 		Kind:        kind,
 		Type:        taskType,
 		TaskGroup:   taskGroupFrom(text),
-		Assignee:    MetadataFrom(text, "负责人"),
-		CreatedAt:   MetadataFrom(text, "创建时间"),
-		StartedAt:   MetadataFrom(text, "开始时间"),
-		CompletedAt: MetadataFrom(text, "完成时间"),
+		Assignee:    MetadataFrom(text, FieldOwner),
+		CreatedAt:   MetadataFrom(text, FieldCreatedAt),
+		StartedAt:   MetadataFrom(text, FieldStartedAt),
+		CompletedAt: MetadataFrom(text, FieldFinishedAt),
 		Time:        TaskDisplayTime(entry, text),
 		Result:      resultFrom(text),
 	}

@@ -208,7 +208,7 @@ exit 0
 }
 
 func cardTemplate(title string) string {
-	return "# " + title + "\n\n- 类型: Feature\n- 任务组:\n- 创建时间: 2026-09-04 02:19\n- 负责人: claude\n- 会话: claude session-1\n- 窗口: herdr:w1:t9:w1:p9\n- 开始时间: 2026-09-04 11:00\n- 完成时间:\n- 任务分支: task/demo\n- 结果:\n\n## 任务目标\n\n实现目标\n\n## 用户决策\n\nN/A\n\n## 预期成果\n\n产生可验证结果\n\n## 验收条件\n\n- [ ] 满足验收\n\n## 威胁模型\n\nN/A\n\n## 不在本轮范围\n\n- 无额外范围\n\n## 讨论与决策\n\n自审: 通过\n卡审: 通过\n\n## 实施与验证\n\n## 完成总结\n"
+	return "# " + title + "\n\n- TYPE: Feature\n- TASK_GROUP:\n- CREATED_AT: 2026-09-04 02:19\n- OWNER: claude\n- SESSION: claude session-1\n- WINDOW: herdr:w1:t9:w1:p9\n- STARTED_AT: 2026-09-04 11:00\n- FINISHED_AT:\n- TASK_BRANCH: task/demo\n- RESULT:\n\n## GOAL\n\n实现目标\n\n## USER_DECISIONS\n\nN/A\n\n## EXPECTED_OUTCOME\n\n产生可验证结果\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] 满足验收\n\n## THREAT_MODEL\n\nN/A\n\n## OUT_OF_SCOPE\n\n- 无额外范围\n\n## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n\n## IMPLEMENTATION\n\n## SUMMARY\n"
 }
 
 func makeReview(t *testing.T, root, slug string) (string, string) {
@@ -249,7 +249,7 @@ func setWindow(t *testing.T, path, window string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := regexp.MustCompile(`(?m)^- 窗口:.*$`).ReplaceAllLiteralString(string(data), "- 窗口: "+window)
+	text := regexp.MustCompile(`(?m)^- WINDOW:.*$`).ReplaceAllLiteralString(string(data), "- WINDOW: "+window)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestNotifyStaleHerdrRewritesAndDelivers(t *testing.T) {
 		t.Fatal("notify must not move the card out of review")
 	}
 	body, _ := os.ReadFile(path)
-	if !strings.Contains(string(body), "- 窗口: herdr:w1:t9:w1:p9\n") {
+	if !strings.Contains(string(body), "- WINDOW: herdr:w1:t9:w1:p9\n") {
 		t.Fatalf("window not rewritten: %s", body)
 	}
 	prompt, _ := os.ReadFile(filepath.Join(root, "herdr.log.prompt"))
@@ -425,7 +425,7 @@ func TestNotifyStaleTmuxRewritesWindow(t *testing.T) {
 		t.Fatal("notify must not move the card out of review")
 	}
 	body, _ := os.ReadFile(path)
-	if !strings.Contains(string(body), "- 窗口: tmux:$42:@new:%new\n") {
+	if !strings.Contains(string(body), "- WINDOW: tmux:$42:@new:%new\n") {
 		t.Fatalf("body=%s", body)
 	}
 }

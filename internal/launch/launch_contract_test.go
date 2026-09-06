@@ -376,7 +376,7 @@ func TestResumeMessageFileCursorWorkingAndMissingSession(t *testing.T) {
 	_, _, err = capture(t, func() error {
 		return commandResume(root, nil, "", manualID, "x", "", true, 61)
 	})
-	if err == nil || !strings.Contains(err.Error(), "会话") {
+	if err == nil || !strings.Contains(err.Error(), "SESSION") {
 		t.Fatalf("err=%v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(manualPath))); err != nil {

@@ -11,19 +11,19 @@ import (
 
 var (
 	headingRe    = regexp.MustCompile(`(?m)^## `)
-	resultRe     = regexp.MustCompile(`(?m)^- 结果:\s*(.*?)\s*$`)
-	oldGroupRe   = regexp.MustCompile(`(?m)^任务组:[ \t]*(.*?)[ \t\r]*$`)
-	completeRe   = regexp.MustCompile(`(?m)^- 完成时间:.*$`)
-	startRe      = regexp.MustCompile(`(?m)^- 开始时间:.*$`)
-	prereqLineRe = regexp.MustCompile(`^前置任务[ \t]*:[ \t]*(.*?)[ \t\r]*$`)
-	selfReviewRe = regexp.MustCompile(`(?m)^(?:- )?自审[ \t]*:[ \t]*\S`)
-	cardReviewRe = regexp.MustCompile(`(?m)^(?:- )?卡审[ \t]*:[ \t]*\S`)
+	resultRe     = regexp.MustCompile(`(?m)^- ` + TokenPattern(FieldResult) + `:\s*(.*?)\s*$`)
+	oldGroupRe   = regexp.MustCompile(`(?m)^` + TokenPattern(FieldTaskGroup) + `:[ \t]*(.*?)[ \t\r]*$`)
+	completeRe   = FieldLineRe(FieldFinishedAt)
+	startRe      = FieldLineRe(FieldStartedAt)
+	prereqLineRe = regexp.MustCompile(`^` + TokenPattern(MarkerPrerequisites) + `[ \t]*:[ \t]*(.*?)[ \t\r]*$`)
+	selfReviewRe = regexp.MustCompile(`(?m)^(?:- )?` + TokenPattern(MarkerSelfReview) + `[ \t]*:[ \t]*\S`)
+	cardReviewRe = regexp.MustCompile(`(?m)^(?:- )?` + TokenPattern(MarkerCardReview) + `[ \t]*:[ \t]*\S`)
 	checkboxRe   = regexp.MustCompile(`(?m)^- \[[ xX]\][ \t]*\S`)
 )
 
 // MetadataFrom reads a `- field:` metadata value.
 func MetadataFrom(text, name string) string {
-	re := regexp.MustCompile(`(?m)^- ` + regexp.QuoteMeta(name) + `:[ \t]*(.*?)[ \t\r]*$`)
+	re := regexp.MustCompile(`(?m)^- ` + TokenPattern(name) + `:[ \t]*(.*?)[ \t\r]*$`)
 	match := re.FindStringSubmatch(text)
 	if match == nil {
 		return ""
@@ -67,7 +67,7 @@ func TitleFrom(text string) string {
 
 // SectionBody returns the body of a ## section.
 func SectionBody(text, heading string) (string, bool) {
-	re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(heading) + `\s*$`)
+	re := regexp.MustCompile(`(?m)^## ` + TokenPattern(heading) + `\s*$`)
 	loc := re.FindStringIndex(text)
 	if loc == nil {
 		return "", false
@@ -91,10 +91,10 @@ func resultFrom(text string) string {
 
 // TaskGroupFrom also recognizes legacy group metadata in the discussion section.
 func TaskGroupFrom(text string) string {
-	if value := MetadataFrom(text, "任务组"); value != "" {
+	if value := MetadataFrom(text, FieldTaskGroup); value != "" {
 		return value
 	}
-	discussion, ok := SectionBody(text, "讨论与决策")
+	discussion, ok := SectionBody(text, SectionDiscussion)
 	if !ok {
 		return ""
 	}
@@ -108,14 +108,14 @@ func TaskGroupFrom(text string) string {
 func taskGroupFrom(text string) string { return TaskGroupFrom(text) }
 
 func prerequisiteIDsFrom(text, taskID string) ([]string, error) {
-	discussion, ok := SectionBody(text, "讨论与决策")
+	discussion, ok := SectionBody(text, SectionDiscussion)
 	if !ok {
 		return nil, nil
 	}
 	lines := strings.Split(discussion, "\n")
 	var positions []int
 	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "前置任务") {
+		if HasMarkerPrefix(line, MarkerPrerequisites) {
 			positions = append(positions, i)
 		}
 	}
@@ -162,7 +162,7 @@ func completionMetadata(text string) (string, error) {
 	value := nowStamp()
 	matches := completeRe.FindAllStringIndex(text, -1)
 	if len(matches) == 1 {
-		return completeRe.ReplaceAllString(text, "- 完成时间: "+value), nil
+		return completeRe.ReplaceAllString(text, RenderField(FieldFinishedAt, value)), nil
 	}
 	if len(matches) > 1 {
 		return "", kanbanError("board.task_document_must_contain_exactly_one_completion_time_metadata")
@@ -177,7 +177,7 @@ func completionMetadata(text string) (string, error) {
 			return s
 		}
 		replaced = true
-		return s + "\n- 完成时间: " + value
+		return s + "\n" + RenderField(FieldFinishedAt, value)
 	}), nil
 }
 
@@ -185,7 +185,7 @@ func incompleteReadySections(text string) []string {
 	var missing []string
 	for _, heading := range readySections {
 		body, ok := SectionBody(text, heading)
-		if !ok || body == "" || strings.Contains(body, "<填写>") {
+		if !ok || body == "" || ContainsPlaceholder(body) {
 			missing = append(missing, heading)
 		}
 	}
@@ -193,7 +193,7 @@ func incompleteReadySections(text string) []string {
 }
 
 func lacksAcceptanceItems(text string) bool {
-	body, ok := SectionBody(text, "验收条件")
+	body, ok := SectionBody(text, SectionAcceptanceCriteria)
 	return ok && !checkboxRe.MatchString(body)
 }
 
@@ -210,7 +210,7 @@ func validateReady(text string) error {
 // validateReviewRecords checks that the post-creation self-review (plus the independent card review for large cards and task-group member cards) left a
 // machine-checkable conclusion line in the card's discussion section. It only proves the step was explicitly acknowledged, never its quality.
 func validateReviewRecords(entry Entry, text string) error {
-	discussion, ok := SectionBody(text, "讨论与决策")
+	discussion, ok := SectionBody(text, SectionDiscussion)
 	if !ok || !selfReviewRe.MatchString(discussion) {
 		return kanbanError("board.task_requires_self_review_record")
 	}
@@ -230,7 +230,7 @@ func validateTarget(entry Entry, targetState, text string) error {
 		}
 		return validateReviewRecords(entry, text)
 	case "review":
-		if MetadataFrom(text, "任务分支") == "" {
+		if MetadataFrom(text, FieldTaskBranch) == "" {
 			return kanbanError("board.before_moving_to_review_set")
 		}
 	case "done":
@@ -238,8 +238,8 @@ func validateTarget(entry Entry, targetState, text string) error {
 			return kanbanError("board.before_moving_to_done_set_completed")
 		}
 		if entry.Kind == "small" {
-			summary, ok := SectionBody(text, "完成总结")
-			if !ok || summary == "" || strings.Contains(summary, "<填写>") {
+			summary, ok := SectionBody(text, SectionSummary)
+			if !ok || summary == "" || ContainsPlaceholder(summary) {
 				return kanbanError("board.complete_the_summary_before_moving_a_small_task_to")
 			}
 		} else {
@@ -270,59 +270,4 @@ func validateTarget(entry Entry, targetState, text string) error {
 		}
 	}
 	return nil
-}
-
-func renderContract(title, taskType string) string {
-	created := nowStamp()
-	return "# " + title + `
-
-- 类型: ` + typeNames[taskType] + `
-- 任务组:
-- 创建时间: ` + created + `
-- 负责人:
-- 会话:
-- 窗口:
-- 开始时间:
-- 完成时间:
-- 任务分支:
-- 结果:
-
-## 任务目标
-
-<填写>
-
-## 用户决策
-
-N/A
-
-## 预期成果
-
-<填写>
-
-## 验收条件
-
-- [ ] <填写>
-
-## 威胁模型
-
-N/A
-
-## 不在本轮范围
-
-- <填写>
-
-## 讨论与决策
-
-`
-}
-
-func smallTaskExtra() string {
-	return `## 实施与验证
-
-<填写>
-
-## 完成总结
-
-<填写>
-`
 }

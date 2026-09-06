@@ -54,9 +54,9 @@ func makeReady(t *testing.T, path string) {
 	}
 	text := string(data)
 	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
-		text = strings.Replace(text, "<填写>", replacement, 1)
+		text = strings.Replace(text, "<FILL_IN>", replacement, 1)
 	}
-	text = strings.Replace(text, "## 讨论与决策\n", "## 讨论与决策\n\n自审: 通过\n卡审: 通过\n", 1)
+	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n", 1)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func setBranch(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := strings.Replace(string(data), "- 任务分支:\n", "- 任务分支: task-branch\n", 1)
+	text := strings.Replace(string(data), "- TASK_BRANCH:\n", "- TASK_BRANCH: task-branch\n", 1)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +383,7 @@ func TestStartSelectsAgentByScaleAndRecordsWindow(t *testing.T) {
 		t.Fatalf("command=%s", cmd)
 	}
 	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(smallPath)))
-	if !strings.Contains(string(text), "- 负责人: cursor\n- 会话: cursor chat-fake-0001\n- 窗口: tmux:$42:@9:%9\n") {
+	if !strings.Contains(string(text), "- OWNER: cursor\n- SESSION: cursor chat-fake-0001\n- WINDOW: tmux:$42:@9:%9\n") {
 		t.Fatalf("card=%s", text)
 	}
 
@@ -430,7 +430,7 @@ func TestStartAgentOverrideAndClaudeSession(t *testing.T) {
 		t.Fatalf("command=%s", cmd)
 	}
 	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
-	if !strings.Contains(string(text), "- 会话: claude "+match[1]+"\n") {
+	if !strings.Contains(string(text), "- SESSION: claude "+match[1]+"\n") {
 		t.Fatalf("card=%s", text)
 	}
 	if strings.Contains(cmd, "--resume") {
@@ -522,7 +522,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 		return cfg, nil
 	}
 	data, _ := os.ReadFile(groupPath)
-	updated := strings.Replace(string(data), "- 任务组:\n", "- 任务组: 20260901-demo-group\n", 1)
+	updated := strings.Replace(string(data), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-demo-group\n", 1)
 	_ = os.WriteFile(groupPath, []byte(updated), 0o644)
 	_, _, err = capture(t, func() error { return commandStart(root, "", "", groupID) })
 	if err != nil {
@@ -659,7 +659,7 @@ func TestTmuxPersistsWindowBeforeMutationAndPaneMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, _ := os.ReadFile(working)
-	if !strings.Contains(string(text), "- 窗口: tmux:$42:@9:%9\n") || !strings.HasSuffix(string(text), "# agent mutation\n") {
+	if !strings.Contains(string(text), "- WINDOW: tmux:$42:@9:%9\n") || !strings.HasSuffix(string(text), "# agent mutation\n") {
 		t.Fatalf("card=%s", text)
 	}
 	setopt, _ := os.ReadFile(filepath.Join(root, "tmux.log.pane-setopt"))
@@ -701,7 +701,7 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 		t.Fatal(err)
 	}
 	working := moved.Path
-	mut := strings.Replace(string(original), "- 负责人:\n", "- 负责人: codex\n", 1)
+	mut := strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)
 	_ = os.WriteFile(working, []byte(mut), 0o644)
 	orig := string(original)
 	err = rollbackLaunch(root, moved, "todo", &LaunchFailure{Err: launchError("tmux new-window 失败", "tmux new-window 失败")}, &orig)
@@ -717,7 +717,7 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 	loaded, _ = board.LoadBoard(root)
 	entry, _ = board.Locate(loaded, taskID)
 	moved, _ = board.MoveEntry(entry, root, "working")
-	_ = os.WriteFile(moved.Path, []byte(strings.Replace(string(original), "- 负责人:\n", "- 负责人: codex\n", 1)), 0o644)
+	_ = os.WriteFile(moved.Path, []byte(strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)), 0o644)
 	oldWrite := writeDocumentFn
 	writeDocumentFn = func(string, board.Entry, string) error { return os.ErrPermission }
 	t.Cleanup(func() { writeDocumentFn = oldWrite })
@@ -807,7 +807,7 @@ func TestTakeoverHookReportsNA(t *testing.T) {
 	}
 	// A takeover does not move the card: it stays in review and the metadata is rewritten in place.
 	text, _ := os.ReadFile(filepath.Join(root, "review", filepath.Base(path)))
-	if !strings.Contains(string(text), "- 负责人: grok\n") {
+	if !strings.Contains(string(text), "- OWNER: grok\n") {
 		t.Fatalf("card=%s", text)
 	}
 	if _, err := os.Stat(working); err == nil {
@@ -852,7 +852,7 @@ func TestHerdrStartWritesWindow(t *testing.T) {
 		t.Fatalf("stdout=%s", out)
 	}
 	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
-	if !strings.Contains(string(text), "- 窗口: herdr:w1:t9:w1:p9\n") {
+	if !strings.Contains(string(text), "- WINDOW: herdr:w1:t9:w1:p9\n") {
 		t.Fatalf("card=%s", text)
 	}
 }
@@ -929,7 +929,7 @@ func testConsoleStart(t *testing.T) {
 		t.Fatalf("stdout=%s", out)
 	}
 	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
-	if !strings.Contains(string(text), "- 窗口: console\n") {
+	if !strings.Contains(string(text), "- WINDOW: console\n") {
 		t.Fatalf("card=%s", text)
 	}
 }

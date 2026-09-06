@@ -29,7 +29,7 @@ func TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery(t *testing.T) 
 				}
 			} else {
 				// Match the board's legacy group parser, not just the top-level field.
-				data = []byte(strings.Replace(string(data), "## 讨论与决策", "## 讨论与决策\n\n```text\n任务组: 20260901-disabled-group\n```", 1))
+				data = []byte(strings.Replace(string(data), "## DISCUSSION", "## DISCUSSION\n\n```text\nTASK_GROUP: 20260901-disabled-group\n```", 1))
 				if err := os.WriteFile(path, data, 0o600); err != nil {
 					t.Fatal(err)
 				}

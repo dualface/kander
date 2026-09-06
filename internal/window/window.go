@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	SessionField = "会话"
-	WindowField  = "窗口"
+	SessionField = board.FieldSession
+	WindowField  = board.FieldWindow
 )
 
 // Error is a failed window write-back.
@@ -32,28 +32,27 @@ func replaceLiteral(pattern *regexp.Regexp, text, repl string) string {
 	return pattern.ReplaceAllString(text, quoteReplacement(repl))
 }
 
-func replaceKeep1(pattern *regexp.Regexp, text, suffix string) string {
-	return pattern.ReplaceAllString(text, "${1}"+quoteReplacement(suffix))
-}
-
 // RenderWindowMetadata writes or inserts the single window field; when the field is missing it is inserted after the session field.
+// A legacy Chinese field is updated in place, so the card keeps exactly one window field instead of gaining an English duplicate.
 func RenderWindowMetadata(text, value string) (string, error) {
-	lines := regexp.MustCompile(`(?m)^- `+WindowField+`:.*$`).FindAllString(text, -1)
+	windowRe := board.FieldLineRe(WindowField)
+	lines := windowRe.FindAllString(text, -1)
 	if len(lines) > 1 {
 		return "", windowError(
 			"launch.task_document_must_contain_exactly_one_metadata_field", WindowField,
 		)
 	}
 	if len(lines) == 0 {
-		sessionLines := regexp.MustCompile(`(?m)^- `+SessionField+`:.*$`).FindAllString(text, -1)
+		sessionRe := board.FieldLineRe(SessionField)
+		sessionLines := sessionRe.FindAllString(text, -1)
 		if len(sessionLines) != 1 {
 			return "", windowError(
 				"launch.task_document_must_contain_exactly_one_metadata_field", SessionField,
 			)
 		}
-		return replaceKeep1(regexp.MustCompile(`(?m)^(- `+SessionField+`:.*)$`), text, "\n- "+WindowField+": "+value), nil
+		return replaceLiteral(sessionRe, text, sessionLines[0]+"\n"+board.RenderField(WindowField, value)), nil
 	}
-	return replaceLiteral(regexp.MustCompile(`(?m)^- `+WindowField+`:.*$`), text, "- "+WindowField+": "+value), nil
+	return replaceLiteral(windowRe, text, board.RenderField(WindowField, value)), nil
 }
 
 // WriteDocument atomically writes the task document back.

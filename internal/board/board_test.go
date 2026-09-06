@@ -91,9 +91,9 @@ func makeReady(t *testing.T, path string) {
 	}
 	text := string(data)
 	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
-		text = strings.Replace(text, "<填写>", replacement, 1)
+		text = strings.Replace(text, "<FILL_IN>", replacement, 1)
 	}
-	text = strings.Replace(text, "## 讨论与决策\n", "## 讨论与决策\n\n自审: 通过\n卡审: 通过\n", 1)
+	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n", 1)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +105,8 @@ func complete(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := strings.Replace(string(data), "- 结果:\n", "- 结果: completed\n", 1)
-	text = strings.ReplaceAll(text, "<填写>", "验证通过")
+	text := strings.Replace(string(data), "- RESULT:\n", "- RESULT: completed\n", 1)
+	text = strings.ReplaceAll(text, "<FILL_IN>", "验证通过")
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSmallAndLargeLifecycle(t *testing.T) {
 	capture(t, func() int { return RunMove([]string{largeID, "working"}) })
 	spec = filepath.Join(root, "working", largeID, "spec.md")
 	complete(t, spec)
-	setMeta(t, spec, "- 完成时间:\n", "")
+	setMeta(t, spec, "- FINISHED_AT:\n", "")
 	if code, _, _ := capture(t, func() int { return RunMove([]string{largeID, "done"}) }); code == 0 {
 		t.Fatal("expected missing report")
 	}
@@ -180,7 +180,7 @@ func TestSmallAndLargeLifecycle(t *testing.T) {
 		t.Fatalf("timestamp: %s", out)
 	}
 	completed, _ := os.ReadFile(filepath.Join(root, "done", smallID+".md"))
-	if !regexp.MustCompile(`(?m)^- 完成时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$`).Match(completed) {
+	if !regexp.MustCompile(`(?m)^- FINISHED_AT: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$`).Match(completed) {
 		t.Fatalf("completion field: %s", completed)
 	}
 	code, out, _ = capture(t, func() int { return RunCheck(nil) })
@@ -231,10 +231,10 @@ func TestPickAndReviewTransitions(t *testing.T) {
 	capture(t, func() int { return RunMove([]string{taskID, "working"}) })
 	working := filepath.Join(root, "working", taskID+".md")
 	code, _, err = capture(t, func() int { return RunMove([]string{taskID, "review"}) })
-	if code == 0 || !strings.Contains(err, "任务分支") {
+	if code == 0 || !strings.Contains(err, "TASK_BRANCH") {
 		t.Fatalf("review branch: %s", err)
 	}
-	setMeta(t, working, "- 任务分支:\n", "- 任务分支: review-flow\n")
+	setMeta(t, working, "- TASK_BRANCH:\n", "- TASK_BRANCH: review-flow\n")
 	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "review"}) }); code != 0 {
 		t.Fatalf("to review: %s", err)
 	}
@@ -309,14 +309,14 @@ func TestCheckDependenciesAndScope(t *testing.T) {
 		capture(t, func() int { return RunMove([]string{id, "todo"}) })
 	}
 	todo := func(slug string) string { return filepath.Join(root, "todo", ids[slug]+".md") }
-	setMeta(t, todo("dependency-source"), "- 任务组:\n", "- 任务组: 20260901-source-group\n")
-	setMeta(t, todo("dependency-internal"), "- 任务组:\n", "- 任务组: 20260901-source-group\n")
-	setMeta(t, todo("dependency-external"), "- 任务组:\n", "- 任务组: 20260901-external-group\n")
-	setMeta(t, todo("dependency-group-first"), "- 任务组:\n", "- 任务组: 20260901-expanded-group\n")
-	setMeta(t, todo("dependency-group-second"), "- 任务组:\n", "- 任务组: 20260901-expanded-group\n")
+	setMeta(t, todo("dependency-source"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-source-group\n")
+	setMeta(t, todo("dependency-internal"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-source-group\n")
+	setMeta(t, todo("dependency-external"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-external-group\n")
+	setMeta(t, todo("dependency-group-first"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-expanded-group\n")
+	setMeta(t, todo("dependency-group-second"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-expanded-group\n")
 	prereq := ids["dependency-internal"] + ", " + ids["dependency-external"] + ", 20260901-expanded-group"
-	setMeta(t, todo("dependency-source"), "## 讨论与决策\n\n", "## 讨论与决策\n\n```text\n前置任务: "+prereq+"\n```\n\n")
-	setMeta(t, todo("dependency-internal"), "## 讨论与决策\n\n", "## 讨论与决策\n\n```text\n前置任务: N/A\n```\n\n")
+	setMeta(t, todo("dependency-source"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+prereq+"\n```\n\n")
+	setMeta(t, todo("dependency-internal"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: N/A\n```\n\n")
 
 	board, err := Scan(root)
 	if err != nil {
@@ -349,8 +349,8 @@ func TestCheckDependenciesAndScope(t *testing.T) {
 	mp := filepath.Join(root, "backlog", missingID+".md")
 	makeReady(t, mp)
 	capture(t, func() int { return RunMove([]string{missingID, "todo"}) })
-	setMeta(t, filepath.Join(root, "todo", missingID+".md"), "- 任务组:\n", "- 任务组: 20260901-validation-group\n")
-	setMeta(t, filepath.Join(root, "todo", missingID+".md"), "## 讨论与决策\n\n", "## 讨论与决策\n\n```text\n前置任务: 20260901-does-not-exist-task\n```\n\n")
+	setMeta(t, filepath.Join(root, "todo", missingID+".md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-validation-group\n")
+	setMeta(t, filepath.Join(root, "todo", missingID+".md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: 20260901-does-not-exist-task\n```\n\n")
 	code, _, errb := capture(t, func() int { return RunCheck([]string{missingID}) })
 	if code == 0 || !strings.Contains(errb, "20260901-does-not-exist-task") {
 		t.Fatalf("missing prereq: %s", errb)
@@ -456,7 +456,7 @@ func TestInitLayoutAndArchive(t *testing.T) {
 	if code, _, _ := capture(t, func() int { return RunMove([]string{taskID, "archived"}) }); code == 0 {
 		t.Fatal("archive without result")
 	}
-	setMeta(t, task, "- 结果:\n", "- 结果: cancelled\n")
+	setMeta(t, task, "- RESULT:\n", "- RESULT: cancelled\n")
 	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "archived"}) }); code != 0 {
 		t.Fatalf("archive: %s", err)
 	}
@@ -464,7 +464,7 @@ func TestInitLayoutAndArchive(t *testing.T) {
 	if code, _, _ := capture(t, func() int { return RunMove([]string{taskID, "trash"}) }); code == 0 {
 		t.Fatal("trash without result")
 	}
-	setMeta(t, task, "- 结果: cancelled\n", "- 结果: trashed\n")
+	setMeta(t, task, "- RESULT: cancelled\n", "- RESULT: trashed\n")
 	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "trash"}) }); code != 0 {
 		t.Fatalf("trash: %s", err)
 	}
@@ -536,10 +536,10 @@ func TestDuplicateCycleAndSymlinkTargets(t *testing.T) {
 		makeReady(t, p)
 		capture(t, func() int { return RunMove([]string{todayID(slug), "todo"}) })
 	}
-	setMeta(t, filepath.Join(root, "todo", first+".md"), "- 任务组:\n", "- 任务组: 20260901-cycle-first-group\n")
-	setMeta(t, filepath.Join(root, "todo", second+".md"), "- 任务组:\n", "- 任务组: 20260901-cycle-second-group\n")
-	setMeta(t, filepath.Join(root, "todo", first+".md"), "## 讨论与决策\n\n", "## 讨论与决策\n\n```text\n前置任务: "+second+"\n```\n\n")
-	setMeta(t, filepath.Join(root, "todo", second+".md"), "## 讨论与决策\n\n", "## 讨论与决策\n\n```text\n前置任务: "+first+"\n```\n\n")
+	setMeta(t, filepath.Join(root, "todo", first+".md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-cycle-first-group\n")
+	setMeta(t, filepath.Join(root, "todo", second+".md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-cycle-second-group\n")
+	setMeta(t, filepath.Join(root, "todo", first+".md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+second+"\n```\n\n")
+	setMeta(t, filepath.Join(root, "todo", second+".md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+first+"\n```\n\n")
 	code, _, errb = capture(t, func() int { return RunCheck([]string{first}) })
 	if code == 0 || !strings.Contains(errb, "依赖成环") {
 		t.Fatalf("cycle: %s", errb)
@@ -618,9 +618,9 @@ func TestDoneMetadataKeepsWorking(t *testing.T) {
 	p = filepath.Join(root, "working", taskID+".md")
 	complete(t, p)
 	data, _ := os.ReadFile(p)
-	_ = os.WriteFile(p, bytes.Replace(data, []byte("- 完成时间:\n"), []byte("- 完成时间:\n- 完成时间:\n"), 1), 0o644)
+	_ = os.WriteFile(p, bytes.Replace(data, []byte("- FINISHED_AT:\n"), []byte("- FINISHED_AT:\n- FINISHED_AT:\n"), 1), 0o644)
 	code, _, err := capture(t, func() int { return RunMove([]string{taskID, "done"}) })
-	if code == 0 || !strings.Contains(err, "缺少唯一元数据字段: 完成时间") {
+	if code == 0 || !strings.Contains(err, "缺少唯一元数据字段: FINISHED_AT") {
 		t.Fatalf("dup complete: %s", err)
 	}
 	if _, e := os.Stat(p); e != nil {
