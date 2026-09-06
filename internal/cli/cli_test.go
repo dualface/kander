@@ -88,7 +88,7 @@ func TestUnimplementedCommands(t *testing.T) {
 	resetLang(t)
 	implemented := map[string]struct{}{
 		"init": {}, "list": {}, "ls": {}, "show": {},
-		"new": {}, "move": {}, "pick": {}, "check": {},
+		"new": {}, "move": {}, "pick": {},
 		"guard-write": {},
 		"doctor":      {}, "config": {},
 		"version": {},

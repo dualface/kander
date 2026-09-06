@@ -9,6 +9,7 @@ func init() {
 	Commands["new"] = board.RunNew
 	Commands["move"] = board.RunMove
 	Commands["pick"] = board.RunPick
-	Commands["check"] = board.RunCheck
+	// check is registered only by internal/liveness (blank-imported from cmd/kander).
+	// board.RunCheck remains the structural-only helper used by board package tests.
 	Commands["guard-write"] = board.RunGuardWrite
 }
