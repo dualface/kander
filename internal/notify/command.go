@@ -50,8 +50,8 @@ func commandNotify(root, taskID, message, messageFile, pane string, messageSet b
 	if err != nil {
 		return err
 	}
-	// notify 不迁移卡片状态: review 卡的迁移由被通知的执行 Agent 自行完成,
-	// 消息正文前置该要求, review -> working 的状态变化即为开工回执.
+	// notify never moves the card state: a review card is moved by the notified execution agent itself,
+	// the message body carries that requirement up front, and the review -> working transition is the acknowledgement of work starting.
 	directMessage := launch.RuleLoadingInstruction(paths)
 	if selfMove := launch.SelfMoveInstruction(paths, entry.TaskID, entry.State); selfMove != "" {
 		directMessage += "\n\n" + selfMove

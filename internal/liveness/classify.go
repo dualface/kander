@@ -195,12 +195,12 @@ func unknownFrom(entry board.Entry, text, detail string) Report {
 	return report(entry, ParseTaskSession(text), Unknown, "unknown", board.MetadataFrom(text, "窗口"), detail, "")
 }
 
-// ClassifyTask 分类一张卡; 探测失败折算 unknown, 默认允许反查.
+// ClassifyTask classifies one card; a failed probe collapses to unknown, and reverse lookup is allowed by default.
 func ClassifyTask(entry board.Entry, text string) Report {
 	return ClassifyTaskLookup(entry, text, true)
 }
 
-// ClassifyTaskLookup 允许关闭反查. 永不写卡.
+// ClassifyTaskLookup allows reverse lookup to be disabled. It never writes to the card.
 func ClassifyTaskLookup(entry board.Entry, text string, allowReverseLookup bool) (out Report) {
 	defer func() {
 		if rec := recover(); rec != nil {

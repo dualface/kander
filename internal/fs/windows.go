@@ -388,9 +388,9 @@ func openChain(root, path string, finalAccess uint32, finalExpected objectKind) 
 		expected := kindDirectory
 		if final {
 			expected = finalExpected
-			// 目录叶按共享 delete 打开: 私有临时目录的租约句柄一直握着 DELETE,
-			// 再次打开该目录时共享模式不含 FILE_SHARE_DELETE 就会 sharing violation.
-			// 文件叶保持窄共享, 由调用方自己的 DELETE 访问权决定.
+			// The directory leaf is opened with shared delete: the lease handle of a private temporary directory holds DELETE the whole time,
+			// so reopening that directory without FILE_SHARE_DELETE in the share mode would hit a sharing violation.
+			// File leaves keep the narrow sharing, governed by the caller's own DELETE access.
 			leaf, err := tryOpenLeaf(handles[len(handles)-1], part, current, finalAccess, expected, true, expected == kindDirectory)
 			if err != nil {
 				cleanup()
@@ -403,7 +403,7 @@ func openChain(root, path string, finalAccess uint32, finalExpected objectKind) 
 			handles = append(handles, leaf)
 			continue
 		}
-		// 同上: 链上任一分量都可能是握着 DELETE 的私有临时目录.
+		// Same as above: any component of the chain may be a private temporary directory holding DELETE.
 		next, err := openRelative(handles[len(handles)-1], part, current, windows.FILE_READ_ATTRIBUTES, false, kindDirectory, true, true, kindAny)
 		if err != nil {
 			cleanup()

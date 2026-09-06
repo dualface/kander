@@ -51,19 +51,19 @@ func walkEnsure(path string, mkdirMode uint32) (string, error) {
 	return candidate, nil
 }
 
-// EnsureDirectoryPath 从锚点逐分量打开或创建, 新建目录为 0700.
+// EnsureDirectoryPath opens or creates component by component from the anchor, creating new directories as 0700.
 func EnsureDirectoryPath(path string) error {
 	_, err := walkEnsure(path, uint32(privateDirMode))
 	return err
 }
 
-// EnsureInheritedDirectoryPath 逐分量创建目录, 保留既有 mode 且让新目录应用调用方 umask.
+// EnsureInheritedDirectoryPath creates directories component by component, keeping existing modes and letting new directories take the caller's umask.
 func EnsureInheritedDirectoryPath(path string) error {
 	_, err := walkEnsure(path, uint32(inheritedDirMode))
 	return err
 }
 
-// DirectoryIdentity 逐级固定目录链并返回叶目录身份.
+// DirectoryIdentity pins the directory chain level by level and returns the identity of the leaf directory.
 func DirectoryIdentity(root, path string) (Identity, error) {
 	dir, err := openPosixDirectory(root, path)
 	if err != nil {
@@ -77,7 +77,7 @@ func DirectoryIdentity(root, path string) (Identity, error) {
 	return id, nil
 }
 
-// DirectoryExists 安全区分目录缺失与 symlink/类型错误.
+// DirectoryExists safely tells a missing directory apart from a symlink or a type error.
 func DirectoryExists(root, path string) (bool, error) {
 	_, err := DirectoryIdentity(root, path)
 	if isNotExist(err) {
@@ -89,7 +89,7 @@ func DirectoryExists(root, path string) (bool, error) {
 	return true, nil
 }
 
-// ListDirectory 通过固定目录描述符枚举直接成员并拒绝 symlink.
+// ListDirectory enumerates direct members through a pinned directory descriptor and rejects symlinks.
 func ListDirectory(root, path string) ([]DirEntry, error) {
 	dir, err := openPosixDirectory(root, path)
 	if err != nil {
@@ -136,7 +136,7 @@ func ListDirectory(root, path string) ([]DirEntry, error) {
 	return entries, nil
 }
 
-// CreatePrivateDirectory 相对 no-follow 父目录严格创建单个 0700 目录.
+// CreatePrivateDirectory strictly creates a single 0700 directory relative to a no-follow parent directory.
 func CreatePrivateDirectory(root, path string) error {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -169,7 +169,7 @@ func CreatePrivateDirectory(root, path string) error {
 	return nil
 }
 
-// EnsurePrivateDirectory 逐级创建或打开目录, 并把新旧叶目录都收紧为 0700.
+// EnsurePrivateDirectory creates or opens directories level by level and tightens both new and existing leaf directories to 0700.
 func EnsurePrivateDirectory(root, path string, create bool) error {
 	rootAbs, candidate, parts, err := relativeParts(root, path)
 	if err != nil {
@@ -208,7 +208,7 @@ func EnsurePrivateDirectory(root, path string, create bool) error {
 	return nil
 }
 
-// CreateDirectoryWithTextFile 以父目录 fd 原子占用任务目录, 再安全写入其文档.
+// CreateDirectoryWithTextFile atomically claims the task directory through the parent directory fd, then safely writes its document.
 func CreateDirectoryWithTextFile(root, directory, filename, text string) error {
 	if filename == "" || filename == "." || filename == ".." || filepath.Base(filename) != filename {
 		return failClosed("create", filename, "invalid protected filename")
@@ -237,7 +237,7 @@ func CreateDirectoryWithTextFile(root, directory, filename, text string) error {
 	return nil
 }
 
-// Rename 在受保护根下原子改名, 目标必须不存在. POSIX 要求入口位于状态目录之下.
+// Rename renames atomically under a protected root; the target must not exist. POSIX requires the entry to live under a state directory.
 func Rename(root, source, target string) error {
 	rootAbs, sourceAbs, sourceParts, err := relativeParts(root, source)
 	if err != nil {

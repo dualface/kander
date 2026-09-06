@@ -14,7 +14,7 @@ import (
 
 var installPathsFn = config.CurrentInstallPaths
 
-// notFoundError 表示当前环境定位不到看板 (含 cwd 不可用), 供调用方与其他定位错误区分.
+// notFoundError means no board can be located in the current environment (including an unusable cwd); it lets callers tell this apart from other location errors.
 type notFoundError struct{ inner *Error }
 
 func (e *notFoundError) Error() string { return e.inner.Error() }
@@ -23,7 +23,7 @@ func boardNotFound() error {
 	return &notFoundError{inner: kanbanError("board.board_directory_not_found_run_inside_a_project_or")}
 }
 
-// IsBoardNotFound 判断错误是否为「定位不到看板」.
+// IsBoardNotFound reports whether the error means "no board could be located".
 func IsBoardNotFound(err error) bool {
 	var nf *notFoundError
 	return errors.As(err, &nf)
@@ -150,8 +150,8 @@ func boardRootReparseError(path string) error {
 	)
 }
 
-// inspectBoardCandidate 检查 locate 候选: 不存在则继续; reparse 立即 fail-closed;
-// 存在且为普通目录则命中; 存在但不是目录则失败, 不继续父目录.
+// inspectBoardCandidate checks one locate candidate: a missing candidate continues the search; a reparse point fails closed immediately;
+// an existing regular directory hits; anything else that exists fails without walking further up.
 func inspectBoardCandidate(candidate string) (abs string, hit bool, err error) {
 	if err := ensureWindowsLexicalPathSafe(candidate); err != nil {
 		return "", false, err
@@ -184,7 +184,7 @@ func isFileNoFollow(path string) bool {
 	return info.Mode().IsRegular()
 }
 
-// BoardRoot 按 KANBAN_DIR -> 主 worktree kanban/ -> 向上查找 定位看板.
+// BoardRoot locates the board in the order KANBAN_DIR -> the main worktree's kanban/ -> an upward search.
 func BoardRoot() (string, error) {
 	if configured := os.Getenv(EnvBoardDir); configured != "" {
 		root, err := absoluteUserPath(configured)

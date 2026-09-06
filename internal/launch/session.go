@@ -331,7 +331,7 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 	if kind == "large" {
 		scale = "large"
 	}
-	// 模型按任务规模取, 规模模型为空时回落到旧配置的共享 "model" 键.
+	// The model is picked per task scale; an empty scale model falls back to the shared "model" key of legacy configs.
 	modelID := config.KanbanModelFor(model, scale)
 	if agent == "cursor" {
 		var args []string

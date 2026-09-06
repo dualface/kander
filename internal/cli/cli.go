@@ -1,7 +1,7 @@
-// Package cli 注册全部 kander 子命令, 解析全局 --lang, 并分发到各实现包.
+// Package cli registers every kander subcommand, parses the global --lang, and dispatches to the implementation packages.
 //
-// 本文件的命令表一次注册完毕. 后续实现卡只覆写对应 Runner, 不要为接线
-// 改命令名列表或 main.go.
+// The command table in this file is registered once. Later implementation cards only override their Runner;
+// they must not edit the command name list or main.go just to wire themselves in.
 package cli
 
 import (
@@ -15,7 +15,7 @@ import (
 	"github.com/dualface/kander/internal/version"
 )
 
-// Runner 是子命令入口. args 不含程序名和子命令名.
+// Runner is a subcommand entry point. args excludes the program name and the subcommand name.
 type Runner func(args []string) int
 
 var commandNames = []string{
@@ -42,11 +42,11 @@ var aliases = map[string]string{
 	"ls": "list",
 }
 
-// Commands 是冻结的注册表. 缺省全部为未实现; 后续包可覆写同名项.
+// Commands is the frozen registry. Every entry starts unimplemented; later packages override entries by name.
 var Commands = map[string]Runner{}
 
-// DefaultRunner 是不带子命令时要运行的入口. internal/tui 在注册时设置它,
-// 于是裸 kander 直接进入 alt-screen 看板; 为空则打印用法.
+// DefaultRunner is what runs without a subcommand. internal/tui sets it on registration,
+// so a bare kander opens the alt-screen board; when nil, the usage text is printed.
 var DefaultRunner Runner
 
 func init() {
@@ -71,7 +71,7 @@ func runVersion(args []string) int {
 	return 0
 }
 
-// Unimplemented 返回稳定非零退出的占位实现, 不 panic.
+// Unimplemented returns a placeholder that exits non-zero in a stable way instead of panicking.
 func Unimplemented(name string) Runner {
 	return func(args []string) int {
 		fmt.Fprintln(os.Stderr, unimplementedMessage(name))
@@ -214,7 +214,7 @@ func unknownCommandMessage(name string) string {
 	return config.Text("cli.error_unknown_command", name)
 }
 
-// Run 解析 os.Args 形态的参数并分发. 返回进程退出码.
+// Run parses os.Args-shaped arguments and dispatches. It returns the process exit code.
 func Run(arguments []string) int {
 	langKind := validateLang(arguments)
 	config.ApplyLanguageArgument(arguments)

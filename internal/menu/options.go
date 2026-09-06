@@ -7,41 +7,41 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// Choice 是选项面板里的一个可选值.
+// Choice is one selectable value in the options panel.
 type Choice struct {
 	Value string
 	Label string
 }
 
-// ModelField 是「模型与推理档位」里的一个可编辑字段.
+// ModelField is one editable field of "model and reasoning effort".
 type ModelField struct {
-	// Label 是行式菜单用的完整标签, 例如「kanban Codex 模型」.
+	// Label is the full label used by the line-based menu, e.g. "kanban Codex model".
 	Label string
-	// Short 是嵌在 Agent 选项下方时用的短标签, 例如「Codex 模型」.
+	// Short is the short label used when nested under an agent option, e.g. "Codex model".
 	Short string
-	// Agent 是这个字段所属的对象 (执行侧是 Agent, 审核侧是角色),
-	// 与 field 一起构成去重用的键.
+	// Agent is the object this field belongs to (an agent on the execution side, a role on the review side),
+	// and together with field it forms the deduplication key.
 	Agent  string
 	Prompt string
 	entry  map[string]string
 	field  string
 }
 
-// Key 唯一标识一个配置项. 两个任务规模或两个审核角色选了同一个 Agent 时,
-// 它们指向的其实是同一份配置, 界面上只应出现一次.
+// Key uniquely identifies one config item. When two task scales or two review roles pick the same agent,
+// they point at the very same config entry, which must appear only once in the UI.
 func (f ModelField) Key() string { return f.Agent + "." + f.field }
 
-// Value 返回该字段当前值; 空串表示沿用 CLI 默认.
+// Value returns the current value of the field; an empty string means the CLI default is used.
 func (f ModelField) Value() string { return f.entry[f.field] }
 
-// Set 写入该字段.
+// Set writes the field.
 func (f ModelField) Set(value string) { f.entry[f.field] = value }
 
-// Session 承载选项面板的可编辑配置和一次性环境探测结果.
+// Session carries the editable config of the options panel plus the one-shot environment probe results.
 type Session struct {
-	// Config 是本次编辑中的配置, 保存前不落盘.
+	// Config is the config being edited; it does not reach disk before saving.
 	Config *config.Config
-	// Warnings 是构造期间的环境告警, 由调用方决定如何展示.
+	// Warnings are environment warnings raised while constructing the session; the caller decides how to display them.
 	Warnings []ReportLine
 
 	existing *config.Config
@@ -50,15 +50,15 @@ type Session struct {
 	review   []Choice
 }
 
-// NewSession 探测 Agent 与启动方式, 并以 existing 为基准准备可编辑配置.
-// configValid 表示磁盘上已有一份通过 schema 校验的配置.
+// NewSession probes agents and launchers, and prepares the editable config from existing.
+// configValid means a schema-validated config already exists on disk.
 func NewSession(existing *config.Config, configValid bool) (*Session, error) {
 	session := &Session{existing: existing}
 	var err error
 	session.Warnings = CaptureReport(func() {
 		err = session.prepare(configValid)
 	})
-	// 出错时也返回 session, 让调用方仍能展示已收集到的环境告警.
+	// A session is returned even on error, so the caller can still display the environment warnings collected so far.
 	return session, err
 }
 
@@ -168,52 +168,52 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 	}
 }
 
-// ExecutionChoices 返回当前可用的执行 Agent.
+// ExecutionChoices returns the execution agents currently available.
 func (s *Session) ExecutionChoices() []Choice {
 	return append([]Choice{}, s.exec...)
 }
 
-// ExecutionChoicesFor 在可用列表前补上当前值, 避免已配置但不可用的 Agent 被静默改掉.
+// ExecutionChoicesFor prepends the current value to the available list, so a configured but unavailable agent is not silently replaced.
 func (s *Session) ExecutionChoicesFor(current string) []Choice {
 	return choicesWithCurrent(s.exec, current)
 }
 
-// ReviewerChoicesFor 返回某个审核角色的候选 Reviewer.
+// ReviewerChoicesFor returns the candidate reviewers for one review role.
 func (s *Session) ReviewerChoicesFor(current string) []Choice {
 	return choicesWithCurrent(s.review, current)
 }
 
-// SetExecutionAgent 设置某个任务规模 (large/small) 的执行 Agent.
+// SetExecutionAgent sets the execution agent of one task scale (large/small).
 func (s *Session) SetExecutionAgent(scale, agent string) {
 	s.Config.KanbanAgents[scale] = agent
 	s.Config.KanbanAgent = s.Config.KanbanAgents["large"]
 }
 
-// SetReviewer 设置某个审核角色的 Reviewer.
+// SetReviewer sets the reviewer of one review role.
 func (s *Session) SetReviewer(role, agent string) {
 	s.Config.Reviewers[role] = agent
 }
 
-// SetReviewStage 设置某个审核角色的默认环节策略.
+// SetReviewStage sets the default stage policy of one review role.
 func (s *Session) SetReviewStage(role, mode string) {
 	s.Config.ReviewStages[role] = mode
 }
 
-// SetLanguage 设置默认输出语言并立即生效.
+// SetLanguage sets the default output language and applies it immediately.
 func (s *Session) SetLanguage(language string) {
 	s.Config.Language = language
 	config.BindConfigLanguage(s.Config)
 }
 
-// SetLauncher 设置启动方式.
+// SetLauncher sets the launcher.
 func (s *Session) SetLauncher(launcher string) {
 	s.Config.Launcher = launcher
 }
 
-// LauncherInstallValue 是启动方式列表里「安装 tmux」这一项的取值.
+// LauncherInstallValue is the value of the "install tmux" item in the launcher list.
 const LauncherInstallValue = "install-tmux"
 
-// LauncherChoices 返回当前平台可选的启动方式; tmux 缺失时附带安装项.
+// LauncherChoices returns the launchers available on the current platform, plus the install item when tmux is missing.
 func (s *Session) LauncherChoices() []Choice {
 	if isWindowsOS() {
 		return windowsLauncherChoices()
@@ -238,12 +238,12 @@ func (s *Session) LauncherChoices() []Choice {
 	})
 }
 
-// TmuxModeChoices 返回安装 tmux 之后可选的两种 tmux 启动方式.
+// TmuxModeChoices returns the two tmux launchers available once tmux is installed.
 func (s *Session) TmuxModeChoices() []Choice {
 	return tmuxLauncherChoices()
 }
 
-// InstallTmux 调用系统包管理器安装 tmux. 它会占用当前终端, TUI 必须先挂起屏幕.
+// InstallTmux installs tmux through the system package manager. It takes over the current terminal, so the TUI must suspend the screen first.
 func (s *Session) InstallTmux() ([]ReportLine, bool) {
 	installed := false
 	lines := CaptureReport(func() {
@@ -252,22 +252,22 @@ func (s *Session) InstallTmux() ([]ReportLine, bool) {
 	return lines, installed
 }
 
-// ReviewStageChoices 返回审核环节策略的候选值.
+// ReviewStageChoices returns the candidate review stage policies.
 func (s *Session) ReviewStageChoices() []Choice {
 	return reviewStageChoices()
 }
 
-// LanguageChoices 返回默认语言的候选值.
+// LanguageChoices returns the candidate default languages.
 func (s *Session) LanguageChoices() []Choice {
 	return languageChoices()
 }
 
-// ModelFields 按当前实际在用的执行 Agent 与 Reviewer 生成可编辑的模型字段.
+// ModelFields builds the editable model fields for the execution agents and reviewers actually in use.
 func (s *Session) ModelFields() []ModelField {
 	return append(s.ExecutionModelFields(), s.ReviewModelFields()...)
 }
 
-// kanbanModelField 构造一个执行侧的模型字段.
+// kanbanModelField builds one model field on the execution side.
 func (s *Session) kanbanModelField(agent, field, label, short, prompt string) ModelField {
 	return ModelField{
 		Label:  label,
@@ -279,16 +279,16 @@ func (s *Session) kanbanModelField(agent, field, label, short, prompt string) Mo
 	}
 }
 
-// ExecutionModelFieldsFor 返回某个任务规模 (large/small) 当前所选 Agent 的模型字段.
-// 模型与推理档位都按规模独立存放, 所以大小任务即便选同一个 Agent,
-// 也各有一套可以分别设置的取值.
+// ExecutionModelFieldsFor returns the model fields of the agent currently selected for one task scale (large/small).
+// Model and reasoning effort are stored per scale, so large and small tasks each keep their own
+// independently editable values even when they select the same agent.
 func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 	agent := s.Config.KanbanAgents[scale]
 	if agent == "" {
 		return nil
 	}
-	// 旧配置只有共享的 model 键时, 把规模模型补成同样的具体值,
-	// 界面上就不会出现「空着但其实有值」的情况.
+	// When a legacy config only has the shared model key, the scale models are filled in with the same concrete value,
+	// so the UI never shows a field that looks empty but actually has a value.
 	if entry := s.Config.Models.Kanban[agent]; entry != nil {
 		if entry[scale+"_model"] == "" && entry["model"] != "" {
 			entry[scale+"_model"] = entry["model"]
@@ -312,7 +312,7 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 		config.Text("menu.reasoning_effort_for_s", scaleLabel)))
 }
 
-// ExecutionModelFields 是各任务规模字段按顺序去重后的平铺结果, 供行式菜单使用.
+// ExecutionModelFields is the flattened, order-preserving deduplication of the per-scale fields, for the line-based menu.
 func (s *Session) ExecutionModelFields() []ModelField {
 	var out []ModelField
 	seen := map[string]struct{}{}
@@ -328,9 +328,9 @@ func (s *Session) ExecutionModelFields() []ModelField {
 	return out
 }
 
-// ReviewModelFieldsFor 返回某个审核角色的模型字段.
-// 每个角色都存自己的一份具体取值, 界面上看到什么就是什么, 没有隐藏的继承层;
-// 角色还没有取值时, 用它所选 Reviewer 的默认值填上.
+// ReviewModelFieldsFor returns the model fields of one review role.
+// Every role stores its own concrete values, so what the UI shows is what is used, with no hidden inheritance layer;
+// while a role has no value yet, it is filled in from the default of its selected reviewer.
 func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
 	reviewer := s.Config.Reviewers[role]
 	if reviewer == "" {
@@ -358,7 +358,7 @@ func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
 	})
 }
 
-// seedReviewRole 保证角色有一份自己的取值: 缺哪一项就用该 Reviewer 的默认值补上.
+// seedReviewRole makes sure the role owns its values: whichever item is missing is filled in from that reviewer's default.
 func (s *Session) seedReviewRole(role, reviewer string) map[string]string {
 	entry := s.Config.Models.ReviewRoles[role]
 	if entry == nil {
@@ -375,14 +375,14 @@ func (s *Session) seedReviewRole(role, reviewer string) map[string]string {
 	return entry
 }
 
-// ResetReviewRoleModel 把某个角色的模型与推理档位重置成新 Reviewer 的默认值.
-// 角色换了 Reviewer 时调用: 旧取值是照着旧 Reviewer 配的, 留着会张冠李戴.
+// ResetReviewRoleModel resets the model and reasoning effort of one role to the defaults of its new reviewer.
+// Call it when a role changes reviewer: the old values were configured for the old reviewer and would otherwise be misattributed.
 func (s *Session) ResetReviewRoleModel(role string) {
 	s.Config.Models.ReviewRoles[role] = map[string]string{}
 	s.seedReviewRole(role, s.Config.Reviewers[role])
 }
 
-// ReviewModelFields 是各审核角色字段按顺序去重后的平铺结果, 供行式菜单使用.
+// ReviewModelFields is the flattened, order-preserving deduplication of the per-role fields, for the line-based menu.
 func (s *Session) ReviewModelFields() []ModelField {
 	var out []ModelField
 	seen := map[string]struct{}{}
@@ -398,7 +398,7 @@ func (s *Session) ReviewModelFields() []ModelField {
 	return out
 }
 
-// Finish 做保存前的收尾: 报告规则接入情况, 标记初始化完成.
+// Finish wraps up before saving: it reports how the rules were installed and marks initialization complete.
 func (s *Session) Finish() ([]ReportLine, error) {
 	var err error
 	lines := CaptureReport(func() {
@@ -436,7 +436,7 @@ func (s *Session) finish() error {
 	return nil
 }
 
-// Save 落盘当前配置, 返回配置文件路径.
+// Save writes the current config to disk and returns the config file path.
 func (s *Session) Save() (string, error) {
 	path, err := config.SaveIfUnchanged(s.Config, s.existing)
 	if err == nil {
@@ -445,7 +445,7 @@ func (s *Session) Save() (string, error) {
 	return path, err
 }
 
-// Summary 返回「当前配置」概览, 供菜单标题与面板顶部显示.
+// Summary returns the "current configuration" overview shown in the menu title and at the top of the panel.
 func (s *Session) Summary() []string {
 	cfg := s.Config
 	lines := []string{config.Text("menu.current_configuration")}
@@ -487,8 +487,8 @@ func indexLabel(index int) string {
 	return strconv.Itoa(index + 1)
 }
 
-// NewSessionForTest 构造一个跳过环境探测的会话, 只供测试使用.
-// 候选 Agent 直接取 schema 允许的全部取值, 不调用任何 Agent 可执行文件.
+// NewSessionForTest builds a session that skips environment probing; it is for tests only.
+// The candidate agents are simply every value the schema allows, and no agent executable is invoked.
 func NewSessionForTest(existing *config.Config) (*Session, error) {
 	session := &Session{existing: existing}
 	labels := agentLabels()

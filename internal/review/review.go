@@ -10,7 +10,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// Run 是 `kander review` 子命令入口. args 不含程序名和子命令名.
+// Run is the entry point of the `kander review` subcommand. args excludes the program name and the subcommand name.
 func Run(args []string) int {
 	if len(args) > 0 && args[0] == windowsJobBootstrap {
 		return windowsJobBootstrapMain(args[1:])

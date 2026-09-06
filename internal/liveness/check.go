@@ -93,7 +93,7 @@ func usageCheck(w *os.File) {
 	fmt.Fprintln(w, t("liveness.usage_kander_check_all_task"))
 }
 
-// RunCheck 实现 kander check, 复用 board 结构校验并追加只读存活段.
+// RunCheck implements kander check, reusing the board structural validation and appending a read-only liveness section.
 func RunCheck(args []string) int {
 	args, all := takeFlag(args, "--all")
 	var tasks []string

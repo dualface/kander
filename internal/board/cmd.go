@@ -52,7 +52,7 @@ func requireRoot() (string, error) {
 	return BoardRoot()
 }
 
-// RunInit 实现 kander init.
+// RunInit implements kander init.
 func RunInit(args []string) int {
 	if len(args) > 1 {
 		return usageFail("init", "board.too_many_arguments")
@@ -76,7 +76,7 @@ func RunInit(args []string) int {
 	return 0
 }
 
-// RunList 实现 kander list / ls.
+// RunList implements kander list / ls.
 func RunList(args []string) int {
 	args, mobile := takeFlag(args, "--mobile")
 	for _, arg := range args {
@@ -110,7 +110,7 @@ func RunList(args []string) int {
 	return 0
 }
 
-// RunShow 实现 kander show.
+// RunShow implements kander show.
 func RunShow(args []string) int {
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return usageFail("show", "board.task_id_required")
@@ -131,14 +131,14 @@ func RunShow(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	// 定位头供 Agent 写卡前重新定位; 卡片可能已被迁移, 不得复用旧路径.
+	// The location header lets an agent re-locate the card before writing to it; the card may have moved, so the old path must not be reused.
 	fmt.Println(t("board.show_location", entry.State, entry.Path))
 	fmt.Println()
 	os.Stdout.WriteString(text)
 	return 0
 }
 
-// RunNew 实现 kander new.
+// RunNew implements kander new.
 func RunNew(args []string) int {
 	args, large := takeFlag(args, "--large")
 	for _, arg := range args {
@@ -163,7 +163,7 @@ func RunNew(args []string) int {
 	return 0
 }
 
-// RunMove 实现 kander move.
+// RunMove implements kander move.
 func RunMove(args []string) int {
 	if len(args) != 2 || strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[1], "-") {
 		return usageFail("move", "board.task_id_and_state_are_required")
@@ -191,7 +191,7 @@ func RunMove(args []string) int {
 	return 0
 }
 
-// RunPick 实现 kander pick.
+// RunPick implements kander pick.
 func RunPick(args []string) int {
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
@@ -226,7 +226,7 @@ func RunPick(args []string) int {
 	return 0
 }
 
-// RunCheck 实现 kander check, 不含存活探测.
+// RunCheck implements kander check, without liveness probing.
 func RunCheck(args []string) int {
 	args, all := takeFlag(args, "--all")
 	var tasks []string

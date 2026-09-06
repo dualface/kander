@@ -13,19 +13,19 @@ const (
 	popupSideMargin = 2
 )
 
-// popupBox 是弹窗在屏幕上的几何位置, 供渲染与鼠标命中共用.
+// popupBox is the geometry of a popup on screen, shared by rendering and mouse hit testing.
 type popupBox struct {
 	X, Y          int
 	Width, Height int
 }
 
-// centerPopup 按内容需要的尺寸在屏幕上居中摆放弹窗.
+// centerPopup centers a popup on screen at the size its content needs.
 func centerPopup(screenWidth, screenHeight, wantWidth, wantHeight int) popupBox {
 	return centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, popupMaxWidth)
 }
 
-// centerPopupMax 与 centerPopup 相同, 但可以放宽最大宽度;
-// 按键说明这类以表格排布的内容需要比设置面板更宽.
+// centerPopupMax is centerPopup with a relaxed maximum width;
+// table-shaped content such as the key reference needs more width than the settings panel.
 func centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, maxWidth int) popupBox {
 	width := wantWidth
 	if width > maxWidth {
@@ -61,8 +61,8 @@ func centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, maxWidth i
 	return popupBox{X: x, Y: y, Width: width, Height: height}
 }
 
-// popupFrame 是弹窗外框: 圆角边框加左右各一列内边距.
-// Lip Gloss 的 Width 含内边距, 因此这里传的是边框内的总宽度.
+// popupFrame is the outer frame of a popup: a rounded border plus one column of padding on each side.
+// Lip Gloss counts padding inside Width, so what is passed here is the total width inside the border.
 func popupFrame(p palette, width int) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -74,12 +74,12 @@ func popupFrame(p palette, width int) lipgloss.Style {
 		Width(width)
 }
 
-// withDefaultColors 给组件输出中的样式重置补回弹窗默认颜色.
-// Lip Gloss 的外层 Background 不会穿过嵌套的 SGR reset: Huh 拼接的
-// 候选行补白、箭头间距和按钮边距会因此露出终端底色. 在外框合成后处理,
-// 保留组件明确指定的颜色与强调样式, 只改变 reset 后的默认画布.
+// withDefaultColors restores the popup's default colors after style resets in component output.
+// An outer Lip Gloss Background does not survive a nested SGR reset: the candidate-line padding, arrow spacing
+// and button margins assembled by Huh would let the terminal background show through. It runs after the frame is
+// composed, keeping the colors and emphasis the components asked for and only changing the default canvas after a reset.
 func withDefaultColors(text string, colors lipgloss.Style) string {
-	// 通过渲染器取得前缀, 遵循终端颜色能力和 NO_COLOR, 不硬编码色彩模式.
+	// Take the prefix from the renderer, honoring terminal color capabilities and NO_COLOR instead of hardcoding a color profile.
 	prefix, _, _ := strings.Cut(colors.Render(" "), " ")
 	if prefix == "" {
 		return text
@@ -92,8 +92,8 @@ func withDefaultColors(text string, colors lipgloss.Style) string {
 	return prefix + text + reset
 }
 
-// overlay 把 top 逐行叠加到 base 的 (x, y) 位置.
-// 两侧都可能带 ANSI 样式, 因此按显示列而不是字节切片.
+// overlay composites top onto base line by line at (x, y).
+// Both sides may carry ANSI styling, so slicing goes by display column rather than by byte.
 func overlay(base, top string, x, y int, p palette) string {
 	if top == "" {
 		return base
@@ -124,7 +124,7 @@ func overlay(base, top string, x, y int, p palette) string {
 	return strings.Join(baseLines, "\n")
 }
 
-// padLine 把一行补齐到给定显示宽度; 超宽时按显示列截断.
+// padLine pads one line to the given display width; anything wider is truncated by display column.
 func padLine(text string, width int) string {
 	if width <= 0 {
 		return ""
@@ -136,7 +136,7 @@ func padLine(text string, width int) string {
 	return text + strings.Repeat(" ", width-current)
 }
 
-// padLineFill 与 padLine 相同, 但补齐的空格带主题背景, 避免行尾漏出终端底色.
+// padLineFill is padLine with the padding spaces carrying the theme background, so no terminal background leaks at the end of a line.
 func padLineFill(text string, width int, p palette) string {
 	if width <= 0 {
 		return ""

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Result 是一次外部程序采集的退出码与输出.
+// Result is the exit code and output of one external program run.
 type Result struct {
 	Code   int
 	Stdout string

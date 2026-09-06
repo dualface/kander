@@ -7,7 +7,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// 流程预设只管理此列表; 独立模块单独渲染, 不参与预设应用与匹配.
+// The workflow presets only manage this list; standalone modules are rendered separately and take part in neither preset application nor matching.
 var workflowRuleModules = []string{
 	config.RuleCollaboration, config.RuleGit, config.RuleReview,
 	config.RuleTaskIntake, config.RuleTaskGroups, config.RuleReporting,
@@ -92,7 +92,7 @@ func (b *formBinding) applyRules(p *optionsPanel) {
 			rules[module] = *value
 		}
 	}
-	// 只在用户切换选择器时应用预设, 避免随后逐项编辑被旧预设覆盖.
+	// Apply a preset only when the user switches the selector, so later per-item edits are not overwritten by the old preset.
 	presetChanged := b.rulePreset != b.prevRulePreset
 	if presetChanged {
 		for _, preset := range workflowRulePresets {

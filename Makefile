@@ -1,5 +1,5 @@
-# Kander 构建入口. 产物与 install.sh / install.ps1 期望的路径一致,
-# 安装器会直接复用仓库根目录下已构建的二进制.
+# Kander build entry point. Artifacts land where install.sh / install.ps1 expect them,
+# so the installers reuse the binary already built in the repository root.
 
 GO ?= go
 PKG := ./cmd/kander
@@ -20,35 +20,35 @@ endif
 
 all: build
 
-## build: 构建 kander 二进制到仓库根目录
+## build: build the kander binary into the repository root
 build:
 	$(GO) build $(GOFLAGS) -ldflags '$(VERSION_LDFLAGS) $(LDFLAGS)' -o $(BIN) $(PKG)
 
-## test: 运行全部测试
+## test: run the whole test suite
 test:
 	$(GO) test ./...
 
-## vet: 静态检查
+## vet: run static analysis
 vet:
 	$(GO) vet ./...
 
-## fmt: 格式化全部 Go 源码
+## fmt: format all Go sources
 fmt:
 	$(GO) fmt ./...
 
-## fmt-check: 只报告未格式化的文件, 不改写
+## fmt-check: only report unformatted files, never rewrite them
 fmt-check:
 	@out=$$(gofmt -l .); \
 	if [ -n "$$out" ]; then echo "$$out"; exit 1; fi
 
-## clean: 删除构建产物
+## clean: remove build artifacts
 clean:
 	rm -f kander kander.exe
 
-## install: 构建后调用安装脚本安装到当前作用域
+## install: build, then run the install script for the current scope
 install: build
 	sh install.sh
 
-## help: 列出可用目标
+## help: list the available targets
 help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //'

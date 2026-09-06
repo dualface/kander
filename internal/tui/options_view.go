@@ -11,7 +11,7 @@ import (
 	"github.com/dualface/kander/internal/version"
 )
 
-// innerWidth 是弹窗边框内可写的列数, 渲染与测量必须用同一个值.
+// innerWidth is the number of writable columns inside the popup border; rendering and measuring must use the same value.
 func (p *optionsPanel) innerWidth() int {
 	_, screenWidth := p.app.size()
 	boxWidth := screenWidth - 8
@@ -31,8 +31,8 @@ func (p *optionsPanel) innerWidth() int {
 	return inner
 }
 
-// startForm 装上新表单: 先 Init 把字段画进视口, 再量自然高度.
-// 量早了视口还是空的, 去掉尾随空行会得到 1, 随后 WithHeight(1) 把整页裁掉.
+// startForm installs a new form: Init first draws the fields into the viewport, then the natural height is measured.
+// Measuring too early finds an empty viewport, dropping the trailing blanks yields 1, and the following WithHeight(1) cuts the whole page away.
 func (p *optionsPanel) startForm(form *huh.Form) tea.Cmd {
 	p.form = form
 	cmd := form.Init()
@@ -40,10 +40,10 @@ func (p *optionsPanel) startForm(form *huh.Form) tea.Cmd {
 	return cmd
 }
 
-// measureForm 记下表单的自然高度. Huh 的 WithHeight 会把表单补齐到指定高度,
-// 所以必须在设置高度之前量一次, 之后弹窗才能贴着内容收紧.
-// NewGroup 会在套主题前按 Charm 默认样式把视口撑高, View() 因此带着底部空白;
-// 量高度时去掉这些尾随空行, 否则审核这种字段多的页会留下一大截留白.
+// measureForm records the natural height of the form. Huh's WithHeight pads the form up to the given height,
+// so it has to be measured once before the height is set, for the popup to hug its content afterwards.
+// NewGroup inflates the viewport with Charm's default style before the theme is applied, so View() carries trailing blanks;
+// they are dropped while measuring, otherwise a field-heavy page such as review would keep a large empty tail.
 func (p *optionsPanel) measureForm() {
 	if p.form == nil {
 		return
@@ -73,18 +73,18 @@ func optionsHeader(left string, width int) string {
 	return left + strings.Repeat(" ", gap) + right
 }
 
-// view 渲染弹窗, 并记录几何供鼠标命中测试.
-// 先按可用空间渲染正文, 再按正文实际高度收紧边框, 避免大片空白.
+// view renders the popup and records its geometry for mouse hit testing.
+// The body is rendered against the available space first, then the border is tightened to the body's actual height to avoid large blank areas.
 func (p *optionsPanel) view() (popupBox, string) {
 	palette := themePalette(p.app.Theme)
 	screenHeight, screenWidth := p.app.size()
 
 	inner := p.innerWidth()
 	boxWidth := inner + 4
-	// 标题行, 分隔线, 上下边框.
+	// The title line, the separator and the top and bottom borders.
 	chrome := 4
-	// 内容放不下时允许选项弹窗贴到终端上下边缘，避免规则模块仅因
-	// 弹窗外留白而提前进入滚动。
+	// When the content does not fit, the options popup may reach the top and bottom edges of the terminal, so the rule modules do not
+	// start scrolling merely because of the popup's outer margin.
 	maxBody := screenHeight - chrome
 	if maxBody < 3 {
 		maxBody = 3
@@ -102,7 +102,7 @@ func (p *optionsPanel) view() (popupBox, string) {
 
 	box := centerOptionsPopup(screenWidth, screenHeight, boxWidth, bodyHeight+chrome)
 	p.box = box
-	// 正文从上边框, 标题行与分隔线之后开始; 左侧让出边框与内边距各一列.
+	// The body starts after the top border, the title line and the separator; on the left it gives up one column each to the border and the padding.
 	p.bodyX, p.bodyY = box.X+2, box.Y+3
 	p.bodyWidth, p.bodyHeight = inner, bodyHeight
 	p.bodyLines = lines
@@ -116,7 +116,7 @@ func (p *optionsPanel) view() (popupBox, string) {
 	return box, withDefaultColors(popupFrame(palette, boxWidth-2).Render(content), palette.ink(palette.Base))
 }
 
-// centerOptionsPopup 在内容能放下时沿用普通弹窗边距；只有高度受限时才占用边距。
+// centerOptionsPopup keeps the ordinary popup margins while the content fits; only a height shortage consumes them.
 func centerOptionsPopup(screenWidth, screenHeight, wantWidth, wantHeight int) popupBox {
 	box := centerPopup(screenWidth, screenHeight, wantWidth, wantHeight)
 	height := wantHeight
@@ -141,7 +141,7 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	switch {
 	case p.report != nil:
 		count := p.report.build(palette, width)
-		// 报告正文与底部操作提示之间固定留一个空行.
+		// One blank line is always kept between the report body and the action hint at the bottom.
 		body := height - 2
 		if count < body {
 			body = count
@@ -167,8 +167,8 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	p.syncFormTheme(palette)
 	formHeight, footerGap := fitOptionsForm(p.formNatural, height)
 	p.form.WithWidth(width)
-	// 内容能放下时保留 Huh 的自然高度。即使传入相同高度，WithHeight 也会
-	// 把 Group 切换成 viewport 布局，导致本可完整显示的页面参与上下滚动。
+	// Keep Huh's natural height while the content fits. Even when given the same height, WithHeight switches the
+	// Group to a viewport layout, making a page that could be shown in full take part in scrolling.
 	if formHeight < p.formNatural {
 		p.form.WithHeight(formHeight)
 	}
@@ -179,19 +179,19 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	case p.current != "":
 		title = sectionTitle(p.current)
 	}
-	// 未保存标记常驻标题, 进了分区也看得见.
+	// The unsaved marker stays in the title, so it remains visible inside a section too.
 	if p.dirty {
 		title += t("tui.unsaved")
 	}
 	hint := styleFor("popup-dim", palette).Render(p.hintLine())
-	// 未约束的 Huh Group 可能带初始化视口的尾随空行。先裁掉再加提示，
-	// 否则空行会变成正文内部空白，弹窗不能按实际内容收紧。
+	// An unconstrained Huh Group may carry the trailing blanks of an initialized viewport. Trim them before adding the hint,
+	// otherwise those blanks become interior whitespace and the popup cannot hug its actual content.
 	formView := strings.Join(trimTrailingBlank(strings.Split(p.form.View(), "\n")), "\n")
 	return title, formView + footerGap + hint
 }
 
-// fitOptionsForm 统一管理所有分区的垂直布局：优先保留提示前空行，
-// 空间不足时先压掉空行，仍放不下才缩短 Huh 视口并滚动。
+// fitOptionsForm owns the vertical layout of every section: the blank line before the hint is preserved first,
+// a shortage drops that blank line next, and only if it still does not fit is the Huh viewport shortened and scrolled.
 func fitOptionsForm(natural, available int) (height int, footerGap string) {
 	footerHeight := 2
 	footerGap = "\n\n"
@@ -209,7 +209,7 @@ func fitOptionsForm(natural, available int) (height int, footerGap string) {
 	return height, footerGap
 }
 
-// hintLine 是弹窗底部的按键提示, 按当前页面给出准确的一行.
+// hintLine is the key hint at the bottom of the popup, giving one accurate line for the current page.
 func (p *optionsPanel) hintLine() string {
 	switch {
 	case p.current == sectionDoctor:
@@ -240,7 +240,7 @@ func sectionTitle(section string) string {
 	return t("tui.options_2")
 }
 
-// padBlock 把内容补齐成固定宽高的矩形, 保证弹窗边框不抖动.
+// padBlock pads the content into a rectangle of fixed width and height, so the popup border does not jitter.
 func padBlock(text string, width, height int, p palette) string {
 	lines := strings.Split(text, "\n")
 	if len(lines) > height {
@@ -255,14 +255,14 @@ func padBlock(text string, width, height int, p palette) string {
 	return strings.Join(lines, "\n")
 }
 
-// 焦点标记: 选中项前缀由本包在 huhTheme 里指定, 焦点字段的左边框由 Huh 画出.
+// Focus markers: the prefix of a selected item is set by this package in huhTheme, while the left border of a focused field is drawn by Huh.
 const (
 	focusMarker = "▸"
 	focusBorder = "┃"
 )
 
-// focusRange 从渲染结果里找出当前焦点所在的行区间.
-// 有选中项标记时精确到那一行, 否则退回焦点字段的整段左边框.
+// focusRange finds the line range currently holding focus in the rendered output.
+// With a selected-item marker it is exact to that line, otherwise it falls back to the whole left border segment of the focused field.
 func focusRange(lines []string) (lo, hi int, ok bool) {
 	lo, hi = -1, -1
 	for i, line := range lines {
@@ -280,14 +280,14 @@ func focusRange(lines []string) (lo, hi int, ok bool) {
 	return lo, hi, lo >= 0
 }
 
-// keyCmd 把一次按键包装成命令交回 Bubble Tea, 由它异步送进 Update.
-// 不能就地调用表单返回的命令: 文本输入框的光标闪烁链里有一个 tea.Tick,
-// 同步执行会真的 sleep 半秒以上, 表现就是按一下卡一下.
+// keyCmd wraps one key press as a command handed back to Bubble Tea, which delivers it into Update asynchronously.
+// The commands returned by the form must not be called in place: the cursor blink chain of a text input contains a tea.Tick,
+// and running it synchronously really does sleep for over half a second, which feels like a hitch on every key press.
 func keyCmd(key tea.KeyType) tea.Cmd {
 	return func() tea.Msg { return tea.KeyMsg{Type: key} }
 }
 
-// repeatCmd 把同一个命令重复 n 次交给 Bubble Tea.
+// repeatCmd hands the same command to Bubble Tea n times.
 func repeatCmd(n int, cmd tea.Cmd) tea.Cmd {
 	if n <= 0 {
 		return nil
@@ -299,7 +299,7 @@ func repeatCmd(n int, cmd tea.Cmd) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// bodyLines 取当前表单正文的渲染行, 用于把鼠标坐标换算成字段位置.
+// bodyLines returns the rendered lines of the current form body, used to convert mouse coordinates into field positions.
 func (p *optionsPanel) currentBodyLines() []string {
 	if p.form == nil {
 		return p.bodyLines
@@ -307,8 +307,8 @@ func (p *optionsPanel) currentBodyLines() []string {
 	return trimTrailingBlank(strings.Split(p.form.View(), "\n"))
 }
 
-// HandleMouse 让弹窗支持点击聚焦, 双击确认与滚轮滚动.
-// 所有的焦点移动都折算成命令交回 Bubble Tea, 不在这里同步驱动表单.
+// HandleMouse gives the popup click-to-focus, double-click confirmation and wheel scrolling.
+// Every focus move is turned into a command handed back to Bubble Tea rather than driving the form synchronously here.
 func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 	if p.report != nil {
 		delta := mouseWheelDelta(bstate)
@@ -341,15 +341,15 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 	}
 	move, already := p.focusMove(lines, target)
 	if already || mouseLeftDoubleClicked(bstate) {
-		// 点已经聚焦的行, 或双击, 等同确认.
+		// Clicking an already focused line, or double-clicking, counts as confirmation.
 		return tea.Batch(move, keyCmd(tea.KeyEnter))
 	}
 	return move
 }
 
-// focusMove 计算把焦点移到目标行所需的命令, 并报告目标是否已经处于焦点.
-// 单选页 (根菜单, 关闭确认) 按候选行移动; 设置页按各字段实际渲染出的高度换算,
-// 不依赖字段之间有没有空行.
+// focusMove computes the commands needed to move focus to the target line and reports whether the target already has focus.
+// Single-choice pages (the root menu, the close confirmation) move by candidate line; settings pages convert using the actual rendered height
+// of each field, independently of whether blank lines sit between them.
 func (p *optionsPanel) focusMove(lines []string, target int) (tea.Cmd, bool) {
 	for i, line := range lines {
 		if strings.Contains(ansi.Strip(line), focusMarker) {

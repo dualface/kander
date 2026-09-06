@@ -4,7 +4,7 @@ package fs
 
 import "os"
 
-// IsReparsePoint 不跟随路径, 判断它是否为 symlink.
+// IsReparsePoint reports whether the path is a symlink, without following it.
 func IsReparsePoint(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil {

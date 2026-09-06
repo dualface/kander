@@ -13,7 +13,7 @@ import (
 	"github.com/dualface/kander/internal/menu"
 )
 
-// 选项面板的各个分区. 根表单是一个 Select, 选中后打开对应分区表单.
+// The sections of the options panel. The root form is a Select that opens the matching section form.
 const (
 	sectionInterface = "interface"
 	sectionExecution = "execution"
@@ -24,8 +24,8 @@ const (
 	sectionClose     = "close"
 )
 
-// reportView 展示 doctor 与保存结果这类多行文本.
-// 原始行保留到渲染时再按弹窗宽度折行, 因为宽度依赖终端尺寸.
+// reportView displays multi-line text such as doctor output and save results.
+// The raw lines are kept until render time and wrapped to the popup width there, because that width depends on the terminal size.
 type reportView struct {
 	title string
 	extra string
@@ -34,8 +34,8 @@ type reportView struct {
 	width int
 }
 
-// optionsPanel 是「按 o 打开」的选项弹窗.
-// 表单部分由 Huh 承载, 报告部分由 Bubbles viewport 承载.
+// optionsPanel is the options popup opened with o.
+// The form part is carried by Huh, the report part by a Bubbles viewport.
 type optionsPanel struct {
 	app     *App
 	session *menu.Session
@@ -47,12 +47,12 @@ type optionsPanel struct {
 	formWidth   int
 	section     string
 	current     string
-	// confirming 为真时表单是「关闭前确认」而不是某个设置分区.
+	// While confirming is true the form is the "confirm before closing" prompt rather than a settings section.
 	confirming  bool
 	closeChoice string
-	// rebuildFocus 非空表示本轮更新后要重建当前分区, 并把焦点落回该选择器.
-	// 记的是选择器的标识而不是行号: 重建后字段数量可能变化 (不同 Agent 的
-	// 模型字段数不同), 行号必须在新表单里重新查.
+	// A non-empty rebuildFocus means the current section must be rebuilt after this update, with focus landing back on that selector.
+	// It records the selector's identifier rather than a line number: a rebuild may change the field count (different agents have
+	// different numbers of model fields), so the line number has to be looked up again in the new form.
 	rebuildFocus string
 	bind         *formBinding
 	report       *reportView
@@ -64,7 +64,7 @@ type optionsPanel struct {
 	dirty        bool
 	initial      string
 
-	// 最近一次渲染的几何与正文行, 供鼠标命中测试使用.
+	// The geometry and body lines of the most recent render, for mouse hit testing.
 	box        popupBox
 	bodyX      int
 	bodyY      int
@@ -99,7 +99,7 @@ func (a *App) openOptionsAt(section string) {
 	panel.requestSession()
 }
 
-// Init 返回面板启动时要执行的命令 (载入中的 spinner 或表单初始化).
+// Init returns the command to run when the panel starts (the loading spinner or the form initialization).
 func (p *optionsPanel) Init() tea.Cmd {
 	if p.form != nil {
 		return p.form.Init()
@@ -131,7 +131,7 @@ type doctorResult struct {
 	after   *config.Config
 }
 
-// applyWork 消化后台任务的结果, 由 Bubble Tea 外壳在收到 workMsg 时调用.
+// applyWork consumes the result of a background task; the Bubble Tea shell calls it on a workMsg.
 func (a *App) applyWork(payload any) tea.Cmd {
 	panel := a.Options
 	if panel == nil {
@@ -174,12 +174,12 @@ func (p *optionsPanel) markDirty() {
 	p.dirty = true
 }
 
-// showReport 用 viewport 展示一段报告, 覆盖在表单之上.
+// showReport displays one report through a viewport, on top of the form.
 func (p *optionsPanel) showReport(title string, lines []menu.ReportLine, extra string) {
 	p.report = &reportView{title: title, extra: extra, lines: lines, view: viewport.New(1, 1)}
 }
 
-// spaceSaveReport 把 Agent 接入结果和最后的注意事项分成可读的段落.
+// spaceSaveReport splits the agent wiring results and the closing notes into readable paragraphs.
 func spaceSaveReport(lines []menu.ReportLine) []menu.ReportLine {
 	out := make([]menu.ReportLine, 0, len(lines)+2)
 	for index, line := range lines {
@@ -192,7 +192,7 @@ func spaceSaveReport(lines []menu.ReportLine) []menu.ReportLine {
 	return out
 }
 
-// build 按给定宽度折行并着色, 返回内容实际行数.
+// build wraps and colors the lines at the given width and returns the actual line count.
 func (r *reportView) build(palette palette, width int) int {
 	var body []string
 	if r.extra != "" {
@@ -231,7 +231,7 @@ func reportTag(level string) string {
 	return "popup"
 }
 
-// Update 是面板的输入入口: 报告优先, 其次是当前 Huh 表单.
+// Update is the input entry point of the panel: the report first, then the current Huh form.
 func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
 	if tick, ok := msg.(spinner.TickMsg); ok {
 		if p.form != nil || p.loadErr != "" {
@@ -247,7 +247,7 @@ func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
 	if event, ok := msg.(tea.KeyMsg); ok && p.form != nil && !p.acceptsText() {
 		switch mapKey(event) {
 		case "q", "Q", "o", "O":
-			// 与看板其他位置一致: q 关闭, o 再按一次也关闭.
+			// Consistent with the rest of the board: q closes, and pressing o again closes too.
 			return p.requestClose()
 		}
 	}
@@ -279,21 +279,21 @@ func (p *optionsPanel) updateReport(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// acceptsText 报告当前分区是否含有文本输入框;
-// 这种时候 q 与 o 必须原样交给输入框, 关闭面板改用 Esc.
+// acceptsText reports whether the current section contains a text input;
+// while it does, q and o must reach the input verbatim and the panel is closed with Esc instead.
 func (p *optionsPanel) acceptsText() bool {
 	return p.current == sectionExecution || p.current == sectionReview
 }
 
-// rebuildAt 请求在本轮更新后重建当前分区, 并把焦点落回 key 标识的选择器.
-// 执行 Agent 或 Reviewer 改变时, 同屏的模型字段换了对象, 必须重建.
+// rebuildAt requests a rebuild of the current section after this update, with focus landing back on the selector named by key.
+// When the execution agent or the reviewer changes, the model fields on the same screen belong to a different object and must be rebuilt.
 func (p *optionsPanel) rebuildAt(key string) {
 	p.rebuildFocus = key
 }
 
-// rebuildSection 重建当前分区并把焦点移回原来那个字段.
-// 焦点移动交给 Bubble Tea 异步执行, 不能在这里同步跑表单命令:
-// 文本输入框的闪烁链里有 tea.Tick, 同步执行会阻塞半秒以上.
+// rebuildSection rebuilds the current section and moves focus back to the original field.
+// The focus move is left to Bubble Tea to run asynchronously; the form commands must not run synchronously here,
+// because the blink chain of a text input contains a tea.Tick that would block for over half a second.
 func (p *optionsPanel) rebuildSection() tea.Cmd {
 	key := p.rebuildFocus
 	p.rebuildFocus = ""
@@ -302,7 +302,7 @@ func (p *optionsPanel) rebuildSection() tea.Cmd {
 		return nil
 	}
 	cmd := p.openSection(section)
-	// openSection 重建了 bind, 这时才知道该选择器在新表单里排第几.
+	// openSection rebuilt bind, so only now is it known which position that selector holds in the new form.
 	index := 0
 	if p.bind != nil {
 		index = p.bind.fieldIndex[key]
@@ -310,8 +310,8 @@ func (p *optionsPanel) rebuildSection() tea.Cmd {
 	return tea.Batch(cmd, repeatCmd(index, huh.NextField))
 }
 
-// resizeForm 重建表单，让每个页面按新终端宽高重新测量自然高度。
-// Huh 的 WithHeight 不能撤销；曾被矮终端压缩的表单只能通过重建退出滚动布局。
+// resizeForm rebuilds the form so every page re-measures its natural height against the new terminal size.
+// Huh's WithHeight cannot be undone; a form once compressed by a short terminal can only leave the scrolling layout through a rebuild.
 func (p *optionsPanel) resizeForm() tea.Cmd {
 	if p.form == nil || p.report != nil {
 		return nil
@@ -340,7 +340,7 @@ func (p *optionsPanel) resizeForm() tea.Cmd {
 	return tea.Batch(cmd, repeatCmd(index, huh.NextField))
 }
 
-// requestClose 关闭面板; 有未保存改动时先让用户选一次.
+// requestClose closes the panel; unsaved changes make the user choose first.
 func (p *optionsPanel) requestClose() tea.Cmd {
 	if !p.dirty {
 		p.close()
@@ -350,8 +350,8 @@ func (p *optionsPanel) requestClose() tea.Cmd {
 }
 
 func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
-	// Enter 在面板里一律表示「提交当前表单」, 不管光标停在第几个字段;
-	// Huh 默认把 Enter 当成跳到下一个字段, 这里先截下来.
+	// Inside the panel Enter always means "submit the current form", no matter which field the cursor is on;
+	// Huh treats Enter as "move to the next field" by default, so it is intercepted here first.
 	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "enter" {
 		if p.bind != nil {
 			p.bind.apply(p)
@@ -365,7 +365,7 @@ func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
 	if form, ok := model.(*huh.Form); ok {
 		p.form = form
 	}
-	// 绑定值随光标移动即时写回, 主题一类的界面偏好因此可以边选边预览.
+	// Bound values are written back as the cursor moves, which is what lets UI preferences such as the theme preview while being selected.
 	if p.bind != nil {
 		p.bind.apply(p)
 	}
@@ -401,9 +401,9 @@ func (p *optionsPanel) finishCloseConfirm() tea.Cmd {
 	return p.openRoot()
 }
 
-// finishSection 在一个分区表单确认完成时执行副作用并回到根菜单.
-// 普通取值在 apply 里已经即时写回; 界面 / 任务执行 / 审核 / 规则在提交时落盘,
-// 不必再回到根菜单点「保存并应用」.
+// finishSection runs the side effects and returns to the root menu once a section form is confirmed.
+// Ordinary values were already written back in apply; interface / task execution / review / rules reach disk on submit,
+// so there is no need to return to the root menu and pick "save and apply".
 func (p *optionsPanel) finishSection() tea.Cmd {
 	if p.current == sectionDoctor {
 		return p.finishHerdrInstall()
@@ -428,7 +428,7 @@ func (p *optionsPanel) savesOnSubmit() bool {
 	return p.current == sectionInterface || p.current == sectionExecution || p.current == sectionReview || p.current == sectionRules
 }
 
-// persistNow 把当前会话写入配置文件, 界面偏好一并落盘.
+// persistNow writes the current session to the config file, UI preferences included.
 func (p *optionsPanel) persistNow() error {
 	p.persistUI()
 	if p.session == nil {
@@ -442,8 +442,8 @@ func (p *optionsPanel) persistNow() error {
 	return nil
 }
 
-// abortSection 处理 Esc: 分区退回根菜单, 根菜单则关闭面板.
-// 已改的取值保留 (apply 早已写回), 只有需要确认的副作用不执行.
+// abortSection handles Esc: a section returns to the root menu, the root menu closes the panel.
+// Changed values are kept (apply wrote them back long ago); only side effects that need confirmation are skipped.
 func (p *optionsPanel) abortSection() tea.Cmd {
 	if p.current == sectionDoctor {
 		p.installHerdr = false
@@ -514,7 +514,7 @@ func (p *optionsPanel) persistUI() {
 		Single:         p.app.Model.Single,
 	}
 	written, err := savePrefs(prefs)
-	// 落盘失败时只更新会话中的编辑值, 不推进基线.
+	// When the write fails, only the edited value in the session is updated and the baseline is not advanced.
 	p.session.SyncTUI(written, err == nil)
 	if err != nil {
 		p.app.PrefsError = err.Error()

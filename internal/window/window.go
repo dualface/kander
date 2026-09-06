@@ -1,4 +1,4 @@
-// Package window 负责卡片「窗口」字段的回写与失败恢复原文.
+// Package window writes the card's window field back and restores the original text on failure.
 package window
 
 import (
@@ -15,7 +15,7 @@ const (
 	WindowField  = "窗口"
 )
 
-// Error 是窗口回写失败.
+// Error is a failed window write-back.
 type Error struct{ Message string }
 
 func (e *Error) Error() string { return e.Message }
@@ -36,7 +36,7 @@ func replaceKeep1(pattern *regexp.Regexp, text, suffix string) string {
 	return pattern.ReplaceAllString(text, "${1}"+quoteReplacement(suffix))
 }
 
-// RenderWindowMetadata 写入或插入唯一的窗口字段; 缺字段时插在会话之后.
+// RenderWindowMetadata writes or inserts the single window field; when the field is missing it is inserted after the session field.
 func RenderWindowMetadata(text, value string) (string, error) {
 	lines := regexp.MustCompile(`(?m)^- `+WindowField+`:.*$`).FindAllString(text, -1)
 	if len(lines) > 1 {
@@ -56,7 +56,7 @@ func RenderWindowMetadata(text, value string) (string, error) {
 	return replaceLiteral(regexp.MustCompile(`(?m)^- `+WindowField+`:.*$`), text, "- "+WindowField+": "+value), nil
 }
 
-// WriteDocument 原子回写任务文档.
+// WriteDocument atomically writes the task document back.
 func WriteDocument(root string, entry board.Entry, text string) error {
 	err := fs.WriteTextAtomic(root, entry.Document, text, true)
 	if err != nil {
@@ -67,12 +67,12 @@ func WriteDocument(root string, entry board.Entry, text string) error {
 	return nil
 }
 
-// RestoreWindowText 把卡片恢复为调用前原文. 失败返回错误, 成功返回 nil.
+// RestoreWindowText restores the card to the text it had before the call. It returns an error on failure and nil on success.
 func RestoreWindowText(root string, entry board.Entry, text string) error {
 	return WriteDocument(root, entry, text)
 }
 
-// ResumeFailureMessage 合并恢复失败、清理失败和窗口回滚失败.
+// ResumeFailureMessage merges a failed resume, a failed cleanup and a failed window rollback.
 func ResumeFailureMessage(primary error, cleanup error, rollback error) string {
 	if primary == nil {
 		return ""

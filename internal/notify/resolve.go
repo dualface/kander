@@ -17,7 +17,7 @@ var (
 	nowFn    = time.Now
 )
 
-// DirectTarget 是已通过完整校验、可以创建载荷的直投地址.
+// DirectTarget is a fully validated direct-delivery address that may receive a payload.
 type DirectTarget struct {
 	Kind    string
 	Program string
@@ -79,7 +79,7 @@ func staleLookup(detail string, lookup func() (DirectTarget, error)) (DirectTarg
 	return target, nil
 }
 
-// ResolveTarget 在创建载荷前解析并完整校验直投目标.
+// ResolveTarget resolves and fully validates the direct-delivery target before any payload is created.
 func ResolveTarget(window, paneOverride string, session liveness.TaskSession, timeout float64) (DirectTarget, error) {
 	herdrMatch := herdrWindowRe.FindStringSubmatch(window)
 	tmuxMatch := tmuxWindowRe.FindStringSubmatch(window)

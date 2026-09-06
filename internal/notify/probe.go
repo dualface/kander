@@ -11,7 +11,7 @@ import (
 	"github.com/dualface/kander/internal/probe"
 )
 
-// TargetProbe 是直投目标探查: ready / busy / stale / fallback.
+// TargetProbe is the probe of a direct-delivery target: ready / busy / stale / fallback.
 type TargetProbe struct {
 	State  string
 	Detail string
@@ -43,7 +43,7 @@ func herdrPane(herdr, paneID string) (map[string]any, error) {
 	return probeResult.Pane, nil
 }
 
-// HerdrNotifyTarget 校验既有 herdr pane 可直投 (idle/done + 身份匹配).
+// HerdrNotifyTarget validates that an existing herdr pane accepts direct delivery (idle/done + matching identity).
 func HerdrNotifyTarget(herdr, paneID string, session liveness.TaskSession) (map[string]any, error) {
 	pane, err := herdrPane(herdr, paneID)
 	if err != nil {
@@ -70,7 +70,7 @@ func HerdrNotifyTarget(herdr, paneID string, session liveness.TaskSession) (map[
 	return pane, nil
 }
 
-// HerdrNotifyProbe 分类 herdr 目标: stale / busy / ready. 身份不匹配为过期, 状态忙才重试.
+// HerdrNotifyProbe classifies a herdr target: stale / busy / ready. A mismatched identity is stale; only a busy status is retried.
 func HerdrNotifyProbe(herdr, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
 	paneProbe, err := probe.ProbeHerdrPane(herdr, paneID, timeout)
 	if err != nil {
@@ -106,7 +106,7 @@ func HerdrNotifyProbe(herdr, paneID string, session liveness.TaskSession, timeou
 	return TargetProbe{State: "ready", Pane: pane}
 }
 
-// HerdrExplicitTarget 解析 --pane 覆盖的 tab/pane, 不做过期反查.
+// HerdrExplicitTarget resolves the tab/pane of a --pane override, without stale-address reverse lookup.
 func HerdrExplicitTarget(herdr, paneID string) (tabID, resolvedPane string, err error) {
 	pane, err := herdrPane(herdr, paneID)
 	if err != nil {
@@ -125,7 +125,7 @@ func agentCommandName(agent string) string {
 	return filepath.Base(config.AgentExecutableName(agent))
 }
 
-// TmuxNotifyTarget 校验既有 tmux pane 可直投.
+// TmuxNotifyTarget validates that an existing tmux pane accepts direct delivery.
 func TmuxNotifyTarget(tmux, paneID string, session liveness.TaskSession) error {
 	paneProbe, err := probe.ProbeTmuxPane(tmux, paneID)
 	if err != nil {
@@ -160,7 +160,7 @@ func TmuxNotifyTarget(tmux, paneID string, session liveness.TaskSession) error {
 	return nil
 }
 
-// TmuxNotifyProbe 分类 tmux 目标. 标记缺失为 fallback (无直投通道), 不一致为 stale.
+// TmuxNotifyProbe classifies a tmux target. A missing marker is fallback (no direct-delivery channel), a mismatched one is stale.
 func TmuxNotifyProbe(tmux, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
 	paneProbe, err := probe.ProbeTmuxPaneWithin(tmux, paneID, timeout)
 	if err != nil {

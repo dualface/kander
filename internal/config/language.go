@@ -14,7 +14,7 @@ var (
 	configLanguage      string
 )
 
-// ApplyLanguageArgument 扫描 argv 中的 --lang, 并设置 KANDER_LANG / KANDER_LANG_CLI.
+// ApplyLanguageArgument scans argv for --lang and sets KANDER_LANG / KANDER_LANG_CLI.
 func ApplyLanguageArgument(arguments []string) {
 	langMu.Lock()
 	defer langMu.Unlock()
@@ -39,7 +39,7 @@ func ApplyLanguageArgument(arguments []string) {
 	}
 }
 
-// BindConfigLanguage 把已校验配置中的 language 绑到进程内读取口.
+// BindConfigLanguage binds the language of a validated config to the in-process accessor.
 func BindConfigLanguage(cfg *Config) {
 	langMu.Lock()
 	defer langMu.Unlock()
@@ -65,7 +65,7 @@ func explicitConfigLanguage(raw map[string]any) string {
 	return ""
 }
 
-// ConfiguredLanguage 返回有效 config.json 里显式保存的 language, 否则空字符串.
+// ConfiguredLanguage returns the language explicitly saved in a valid config.json, otherwise an empty string.
 func ConfiguredLanguage() string {
 	path, err := ConfigPath()
 	if err != nil {
@@ -98,7 +98,7 @@ func effectiveLocale() string {
 	return ""
 }
 
-// ResolveLanguage 优先级: --lang (KANDER_LANG_CLI) > 配置 > 环境变量; 默认 cn.
+// ResolveLanguage resolves in order: --lang (KANDER_LANG_CLI) > config > environment; the default is cn.
 func ResolveLanguage() string {
 	langMu.Lock()
 	cli := cliLanguageOverride
@@ -122,7 +122,7 @@ func ResolveLanguage() string {
 	return "cn"
 }
 
-// BindEffectiveLanguage 从磁盘配置绑定 language, 无效则清空.
+// BindEffectiveLanguage binds the language from the on-disk config, clearing it when invalid.
 func BindEffectiveLanguage() {
 	language := ConfiguredLanguage()
 	if language == "" {

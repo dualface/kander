@@ -9,7 +9,7 @@ import (
 	"github.com/dualface/kander/internal/fs"
 )
 
-// RepairResult 记录 doctor 对磁盘配置的变更, 不包含配置值.
+// RepairResult records what doctor changed in the on-disk config, without holding any config value.
 type RepairResult struct {
 	Path       string
 	BackupPath string
@@ -17,8 +17,8 @@ type RepairResult struct {
 	Changed    bool
 }
 
-// Repair 修复 schema 后调用 adjust 调整环境相关选择, 校验通过后备份并原子保存.
-// 普通 Load 不修复; 读取失败时不覆盖文件, 已有效且无需调整的配置不重写.
+// Repair fixes the schema, then calls adjust for environment-dependent choices, and backs up and atomically saves once validation passes.
+// A plain Load never repairs; a read failure leaves the file untouched, and a config that is already valid and needs no adjustment is not rewritten.
 func Repair(adjust func(*Config)) (*Config, RepairResult, error) {
 	path, err := ConfigPath()
 	result := RepairResult{Path: path}
@@ -49,7 +49,7 @@ func repairAt(path string, adjust func(*Config)) (*Config, RepairResult, error) 
 		return nil, result, err
 	}
 	raw, _ := decodeJSON(data)
-	// 损坏 JSON 不尝试猜测内容; 可解析的 object 逐字段保留合法设置.
+	// Broken JSON is never guessed at; a parseable object keeps every legal setting field by field.
 	if !json.Valid(data) {
 		raw = nil
 	}
@@ -81,7 +81,7 @@ func repairAt(path string, adjust func(*Config)) (*Config, RepairResult, error) 
 		}
 		result.BackupPath = backup
 	}
-	// 创建目录与权限行为沿用 Save, 不引入旧配置迁移或私有权限检查.
+	// Directory creation and permission behavior follow Save; no legacy config migration or private permission check is introduced.
 	if _, err := saveConfigAt(filepath.Clean(path), cfg); err != nil {
 		return nil, result, err
 	}
@@ -92,11 +92,11 @@ func repairAt(path string, adjust func(*Config)) (*Config, RepairResult, error) 
 
 func repairValues(raw any) (*Config, error) {
 	defaults := DefaultConfig()
-	// doctor 在配置未指定有效语言时默认使用英文.
+	// doctor defaults to English when the config names no valid language.
 	defaults.Language = "en"
 	provided, _ := asObject(raw)
-	// 新配置默认全开。已有但损坏的 rules 从全关基线逐项恢复，避免默认启用的
-	// task_groups 阻止 doctor 保留用户明确关闭的 git。
+	// A new config defaults to all rules on. An existing but broken rules section is restored field by field from an all-off baseline, so
+	// the on-by-default task_groups cannot make doctor keep a git switch the user explicitly turned off.
 	if _, exists := provided["rules"]; exists {
 		defaults.Rules = DefaultRules(false)
 	} else {
@@ -124,7 +124,7 @@ func repairValues(raw any) (*Config, error) {
 	return Validate(root)
 }
 
-// 整段合法时直接接受; 否则按默认 schema 的键向下恢复, 校验始终复用 Validate.
+// A wholly valid section is accepted as is; otherwise it is restored key by key from the default schema, and validation always goes through Validate.
 func recoverConfigFields(target, provided, root map[string]any) {
 	keys := make([]string, 0, len(target))
 	for key := range target {

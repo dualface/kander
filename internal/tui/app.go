@@ -67,13 +67,13 @@ type App struct {
 	ShowCursor       bool
 	mouse            mouseTracker
 
-	// Options 非空时选项弹窗覆盖在看板之上并接管输入.
+	// While Options is non-nil the options popup covers the board and takes over input.
 	Options *optionsPanel
-	// Session 是配置会话, 首次打开选项时按需加载.
+	// Session is the config session, loaded on demand when the options are first opened.
 	Session *menu.Session
-	// Help 为真时按键说明浮层覆盖在看板之上.
+	// While Help is true the key reference overlay covers the board.
 	Help bool
-	// pendingShell 是需要把终端交还出去的操作; pendingWork 是后台任务.
+	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()
 	pendingWork  func() any
 
@@ -81,7 +81,7 @@ type App struct {
 	detailCache detailRender
 }
 
-// Update 是 App 的消息入口: 选项面板打开时由它接管, 否则交给看板与详情.
+// Update is the message entry point of App: the options panel takes over while open, otherwise the board and detail view handle it.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
 	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" {
 		a.Running = false
@@ -102,7 +102,7 @@ func (a *App) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// View 渲染整屏: 看板或详情作为底层, 选项弹窗叠加在上面.
+// View renders the whole screen: the board or the detail view underneath, with the options popup on top.
 func (a *App) View() string {
 	var base string
 	switch {
@@ -327,8 +327,8 @@ func (a *App) boardCardLines(task Task, contentWidth int) []string {
 	}
 }
 
-// detailBodyHeight 是详情面板里正文可见的行数:
-// 扣掉顶栏, 留白, 面板上边框, 元信息, 分隔线, 面板下边框与状态栏.
+// detailBodyHeight is the number of body lines visible in the detail panel:
+// the header, the blank line, the panel top border, the metadata, the separator, the panel bottom border and the status bar are all subtracted.
 func (a *App) detailBodyHeight() int {
 	h, _ := a.size()
 	n := h - detailBodyTop - 2
@@ -490,8 +490,8 @@ func (a *App) visibleColumnLayout() []boardLayout {
 	return out
 }
 
-// adjustColumns 改变用户希望同屏显示的栏目数. 实际显示几栏还要看终端宽度,
-// 由 visibleColumnCount 结算.
+// adjustColumns changes how many columns the user wants on screen. How many are actually shown also depends on the terminal width
+// and is settled by visibleColumnCount.
 func (a *App) adjustColumns(delta int) {
 	next := clampColumns(a.Columns + delta)
 	if next == a.Columns {
@@ -507,7 +507,7 @@ func (a *App) adjustColumns(delta int) {
 		a.PrefsError = err.Error()
 		return
 	}
-	// 偏好已落盘, 同步缓存的选项会话基线, 否则下次保存会误报配置被其他进程修改.
+	// The preference already reached disk, so the cached baseline of the options session is synced, otherwise the next save would blame another process for the change.
 	a.Session.SyncTUI(written, true)
 	a.PrefsError = ""
 }
@@ -787,7 +787,7 @@ func (a *App) HandleKey(key string) {
 		a.Running = false
 		return
 	}
-	// 帮助浮层是只读的, 任意键关闭.
+	// The help overlay is read-only and any key closes it.
 	if a.Help {
 		a.Help = false
 		return

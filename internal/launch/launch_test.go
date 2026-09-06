@@ -487,7 +487,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 	if !strings.Contains(out, "已唤醒: "+taskID+"\t规模=小任务\tAgent=claude") {
 		t.Fatalf("stdout=%s", out)
 	}
-	// resume 不迁卡: review 卡保持原位, 迁移由被唤醒的 Agent 自行执行.
+	// resume does not move the card: a review card stays put and the move is performed by the woken agent itself.
 	if _, err := os.Stat(filepath.Join(root, "review", filepath.Base(path))); err != nil {
 		t.Fatal(err)
 	}
@@ -804,7 +804,7 @@ func TestTakeoverHookReportsNA(t *testing.T) {
 	if !strings.Contains(out, "已接管") || !strings.Contains(out, "已清理原容器: N/A") {
 		t.Fatalf("stdout=%s", out)
 	}
-	// 接管不迁卡: 卡片保持 review, 元数据在原位改写.
+	// A takeover does not move the card: it stays in review and the metadata is rewritten in place.
 	text, _ := os.ReadFile(filepath.Join(root, "review", filepath.Base(path)))
 	if !strings.Contains(string(text), "- 负责人: grok\n") {
 		t.Fatalf("card=%s", text)

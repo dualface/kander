@@ -40,7 +40,7 @@ func validateContext(agent string, arguments []string) (reviewContext, error) {
 	if !ok {
 		return reviewContext{}, newGate(2, "review.unsupported_role", roleInput)
 	}
-	// 模型与推理档位可以按角色单独配置, 所以要先定出角色再取设置.
+	// Model and reasoning effort can be configured per role, so the role must be settled before the settings are read.
 	settings, err := agentSettingsFor(agent, role)
 	if err != nil {
 		return reviewContext{}, err

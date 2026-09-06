@@ -430,8 +430,8 @@ func TestNotifyStaleTmuxRewritesWindow(t *testing.T) {
 	}
 }
 
-// Windows 上对管道写端调用 FlushFileBuffers 会阻塞到读端读完.
-// kander notify 的输出常被 Agent 或 `| more` 接走, 守卫失效就是死锁.
+// On Windows, FlushFileBuffers on the write end of a pipe blocks until the read end drains it.
+// The output of kander notify is usually consumed by an agent or `| more`, so a broken guard means a deadlock.
 func TestFlushStdoutDoesNotBlockOnPipe(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {

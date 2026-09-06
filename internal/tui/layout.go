@@ -1,16 +1,16 @@
 package tui
 
-// visibleColumnCount 结算本次实际并排的栏目数.
-// 用户设定的是想同屏看几栏 (desired), 栏宽由 columnGeometry 平分终端宽度得出.
-// 终端放不下就减栏, 连两栏最小宽度都放不下时只显示一栏.
+// visibleColumnCount settles how many columns are actually placed side by side this time.
+// The user configures how many columns they want on screen (desired); the column width comes from columnGeometry splitting the terminal width evenly.
+// Columns are dropped when the terminal cannot fit them, down to a single column when even two columns cannot meet the minimum width.
 func visibleColumnCount(width, total int, single bool, desired, minWidth int) int {
 	if single || total <= 1 {
 		return 1
 	}
 	count := clampColumns(desired)
 	minWidth = clampMinColumnWidth(minWidth)
-	// 每两栏之间还有 1 列分隔线, 放得下 n 栏的条件是 n*minWidth + (n-1) <= width.
-	// 漏算分隔线会多排一栏, 平分后每栏都低于用户设定的最小宽度.
+	// Every pair of columns is separated by 1 column, so n columns fit only while n*minWidth + (n-1) <= width.
+	// Ignoring the separators places one column too many, and after the even split every column falls below the user's minimum width.
 	if fit := (width + 1) / (minWidth + 1); count > fit {
 		count = fit
 	}

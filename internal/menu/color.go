@@ -4,7 +4,7 @@ import (
 	"os"
 )
 
-// 报告行的级别. TUI 面板按级别着色, 行式回退按级别加前缀.
+// Severity of a report line. The TUI panel colors lines by severity, the line-based fallback prefixes them by severity.
 const (
 	LevelInfo    = "info"
 	LevelOK      = "ok"
@@ -12,16 +12,16 @@ const (
 	LevelNote    = "note"
 )
 
-// ReportLine 是 doctor 与选项面板的一行输出.
+// ReportLine is one output line of doctor and the options panel.
 type ReportLine struct {
 	Level string
 	Text  string
 }
 
-// reportSink 非空时, 全部报告行改为收集而不写 stderr.
+// While reportSink is non-nil, every report line is collected instead of written to stderr.
 var reportSink *[]ReportLine
 
-// CaptureReport 收集 fn 期间产生的报告行, 期间不写 stderr. 可嵌套.
+// CaptureReport collects the report lines produced during fn without writing to stderr. It nests.
 func CaptureReport(fn func()) []ReportLine {
 	lines := []ReportLine{}
 	previous := reportSink
@@ -31,7 +31,7 @@ func CaptureReport(fn func()) []ReportLine {
 	return lines
 }
 
-// FlushReport 把收集到的报告行按原级别写回 stderr.
+// FlushReport writes collected report lines back to stderr at their original severity.
 func FlushReport(lines []ReportLine) {
 	for _, line := range lines {
 		emit(line.Level, line.Text)

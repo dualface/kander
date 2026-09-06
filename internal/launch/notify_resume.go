@@ -5,28 +5,28 @@ import (
 	"github.com/dualface/kander/internal/window"
 )
 
-// ResumeLaunch 是 notify 恢复通道成功后的 launcher 与进程/终端地址.
+// ResumeLaunch is the launcher plus the process/terminal address after the notify recovery channel succeeds.
 type ResumeLaunch struct {
 	Plan    LaunchPlan
 	Outcome LaunchOutcome
 }
 
-// ValidateTimeout 要求 timeout 为大于 60 的有限秒数.
+// ValidateTimeout requires timeout to be a finite number of seconds greater than 60.
 func ValidateTimeout(timeout float64, command string) error {
 	return validateLivenessTimeout(timeout, command)
 }
 
-// ReadMessage 读取 --message 或 --message-file, 二者必须且只能提供一个.
+// ReadMessage reads --message or --message-file; exactly one of them must be given.
 func ReadMessage(message string, messageSet bool, messageFile, command string) (string, error) {
 	return readTaskMessage(message, messageSet, messageFile, command)
 }
 
-// ResolvedSession 解析卡片会话; 缺 id 的 Codex 走 rollout 检索.
+// ResolvedSession resolves the card session; Codex cards without an id go through rollout lookup.
 func ResolvedSession(taskID, text string) (AgentSession, error) {
 	return resolvedTaskSession(taskID, text)
 }
 
-// NotifyViaResume 在直投失败后恢复原会话; 失败时恢复调用前窗口原文.
+// NotifyViaResume resumes the original session after direct delivery failed; on failure it restores the card text as it was before the call.
 func NotifyViaResume(root string, entry board.Entry, originalText, message string, timeout float64) (ResumeLaunch, error) {
 	session, err := resolvedTaskSession(entry.TaskID, originalText)
 	if err != nil {

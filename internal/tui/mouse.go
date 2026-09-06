@@ -59,7 +59,7 @@ func (a *App) detailHit(x, y int) *mouseSel {
 	if lineIndex < 0 || lineIndex >= len(lines) {
 		return nil
 	}
-	// 正文在面板内: 左边框 1 列, 内边距 1 列.
+	// The body sits inside the panel: 1 column for the left border, 1 for the padding.
 	displayCol := x - 2
 	if displayCol < 0 {
 		displayCol = 0

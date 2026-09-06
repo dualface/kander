@@ -31,7 +31,7 @@ func renameEntry(root string, entry Entry, targetState string) (string, error) {
 	return target, nil
 }
 
-// MoveEntry 校验转移并迁移入口; 进 done 时写入完成时间, 失败则回滚.
+// MoveEntry validates the transition and moves the entry; it writes the completion time when entering done, and rolls back on failure.
 func MoveEntry(entry Entry, root, targetState string) (Entry, error) {
 	if !allowedMove(entry.State, targetState) {
 		return Entry{}, kanbanError("board.move_not_allowed", entry.State, targetState)
@@ -72,7 +72,7 @@ func MoveEntry(entry Entry, root, targetState string) (Entry, error) {
 	return moved, nil
 }
 
-// NewTask 在 backlog 创建小任务或大任务目录卡.
+// NewTask creates a small task or a large directory card in backlog.
 func NewTask(root, kind, slug, title string, large bool) (string, error) {
 	if !slugRe.MatchString(slug) {
 		return "", kanbanError("board.slug_may_contain_only_lowercase_ascii_letters_digits_and")

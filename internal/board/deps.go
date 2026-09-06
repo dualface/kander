@@ -20,7 +20,7 @@ func taskGroupMembers(documents map[string]string) map[string][]string {
 	return members
 }
 
-// TaskDependenciesOf 解析并分类依赖; 任务组引用展开为该组当前全部成员卡.
+// TaskDependenciesOf resolves and classifies dependencies; a task-group reference expands to every current member card of that group.
 func TaskDependenciesOf(entry Entry, board Board, documents map[string]string) (TaskDependencies, error) {
 	texts := documents
 	if texts == nil {
@@ -105,9 +105,9 @@ func problemInCheckScope(root string, problem Problem, includeAll bool) bool {
 
 var contractCheckStates = map[string]struct{}{"todo": {}, "working": {}, "review": {}}
 
-// contractProblems 检查已承诺执行的卡 (todo/working/review) 的契约完整性:
-// 必填章节缺失或残留 <填写> 占位符, 以及验收条件没有可判定条目.
-// backlog 卡尚在起草不检查; done/archived 已收口不检查.
+// contractProblems checks contract completeness for cards already committed to (todo/working/review):
+// missing required sections or leftover <fill in> placeholders, and acceptance criteria without a decidable item.
+// Backlog cards are still being drafted and done/archived cards are closed, so neither is checked.
 func contractProblems(board Board) []Problem {
 	ids := make([]string, 0, len(board.Entries))
 	for taskID := range board.Entries {
@@ -122,7 +122,7 @@ func contractProblems(board Board) []Problem {
 		}
 		text, err := ReadDocument(entry)
 		if err != nil {
-			// 文档不可读由结构扫描或依赖检查报告, 这里不重复.
+			// An unreadable document is reported by the structural scan or the dependency check, so it is not repeated here.
 			continue
 		}
 		var defects []string
@@ -268,7 +268,7 @@ func dependencyProblems(board Board, selected map[string]struct{}, skipStates ma
 	return problems
 }
 
-// CheckBoard 校验入口与依赖图, 不含存活探测. 返回退出码与 stdout 汇总行.
+// CheckBoard validates entries and the dependency graph, without liveness probing. It returns the exit code and the stdout summary line.
 func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdout string, stderr []string, err error) {
 	skipStates := map[string]struct{}{}
 	if !includeAll {

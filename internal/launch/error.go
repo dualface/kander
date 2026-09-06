@@ -4,7 +4,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// Error 是 start/resume 的可展示失败.
+// Error is a displayable failure of start/resume.
 type Error struct {
 	Message string
 }

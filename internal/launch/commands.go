@@ -310,7 +310,7 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 	if err != nil {
 		return err
 	}
-	// resume 不迁移卡片状态; review 卡由被唤醒的 Agent 自行迁回 working.
+	// resume never moves the card state; a review card is moved back to working by the woken agent itself.
 	moved := entry
 	effective := session
 	paneCB := (func() (AgentSession, error))(nil)

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// HerdrPaneProbe 是 herdr pane get 的事实: pane 存在或已消失.
+// HerdrPaneProbe is the fact reported by herdr pane get: the pane exists, or it is gone.
 type HerdrPaneProbe struct {
 	Pane       map[string]any
 	GoneDetail string
@@ -36,7 +36,7 @@ func herdrErrorCode(res Result) string {
 	return ""
 }
 
-// PublicID 校验 herdr 公开 id: 非空且不含 NUL.
+// PublicID validates a public herdr id: non-empty and free of NUL.
 func PublicID(value any) string {
 	s, ok := value.(string)
 	if !ok || s == "" || strings.ContainsRune(s, 0) {
@@ -45,7 +45,7 @@ func PublicID(value any) string {
 	return s
 }
 
-// ProbeHerdrPane 采集 herdr pane get 事实. pane_not_found 记为消失, 其它失败返回 Error.
+// ProbeHerdrPane collects the facts of herdr pane get. pane_not_found is recorded as gone; other failures return an Error.
 func ProbeHerdrPane(herdr, paneID string, timeout time.Duration) (HerdrPaneProbe, error) {
 	res, err := runCommand(herdr, []string{"pane", "get", paneID}, timeout)
 	if err != nil {
@@ -92,7 +92,7 @@ func ProbeHerdrPane(herdr, paneID string, timeout time.Duration) (HerdrPaneProbe
 	return HerdrPaneProbe{Pane: pane}, nil
 }
 
-// HerdrProbePane 返回 pane 对象或 nil (已消失).
+// HerdrProbePane returns the pane object, or nil when it is gone.
 func HerdrProbePane(herdr, paneID string, timeout time.Duration) (map[string]any, error) {
 	probe, err := ProbeHerdrPane(herdr, paneID, timeout)
 	if err != nil {
@@ -101,7 +101,7 @@ func HerdrProbePane(herdr, paneID string, timeout time.Duration) (map[string]any
 	return probe.Pane, nil
 }
 
-// HerdrResult 解析 herdr JSON 成功响应的 result 对象.
+// HerdrResult extracts the result object of a successful herdr JSON response.
 func HerdrResult(res Result) (map[string]any, error) {
 	if res.Code != 0 {
 		return nil, probeError(failureDetail(res), failureDetail(res))
@@ -118,7 +118,7 @@ func HerdrResult(res Result) (map[string]any, error) {
 	return data, nil
 }
 
-// Capture 运行外部程序, 供 liveness 反查复用同一采集口.
+// Capture runs an external program, so liveness reverse lookup reuses the same collection point.
 func Capture(program string, args []string, timeout time.Duration) (Result, error) {
 	return runCommand(program, args, timeout)
 }

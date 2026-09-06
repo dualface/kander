@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	// 不带子命令时直接进看板, 全部界面都发生在 alt-screen 内.
+	// Without a subcommand the board opens directly, and the whole UI happens inside the alt-screen.
 	cli.DefaultRunner = Run
 }
 
@@ -30,7 +30,7 @@ func requireTerminal() error {
 	))
 }
 
-// Run 是不带子命令时的默认 TUI 入口.
+// Run is the default TUI entry point used when no subcommand is given.
 func Run(_ []string) int {
 	if err := requireTerminal(); err != nil {
 		return fail(err)
@@ -40,7 +40,7 @@ func Run(_ []string) int {
 		return fail(err)
 	}
 	if !configExists {
-		// 首次启动先用 doctor 探测环境并生成适用配置; 健康检查失败不阻止用户修正选项.
+		// The first launch probes the environment with doctor and produces a usable config; a failed health check does not stop the user from fixing the options.
 		_ = menu.Doctor(nil)
 	}
 	config.BindEffectiveLanguage()

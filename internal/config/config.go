@@ -1,4 +1,4 @@
-// Package config 解析 Kander 安装作用域并读写 schema 校验后的 config.json.
+// Package config resolves the Kander install scope and reads/writes the schema-validated config.json.
 package config
 
 import (
@@ -48,7 +48,7 @@ const (
 	MaxTUIRefresh            = 3600
 )
 
-// AgentExecutables 把配置/命令里的 agent 名映射到 PATH 可执行文件名.
+// AgentExecutables maps agent names used in the config and on the command line to executable names on PATH.
 var AgentExecutables = map[string]string{
 	"codex":  "codex",
 	"claude": "claude",
@@ -62,9 +62,9 @@ var modelIDFields = map[string]struct{}{
 	"small_model": {},
 }
 
-// kanbanModelDefaults 里每个 Agent 都按任务规模各有一份模型:
-// 大小任务即便选同一个 Agent, 也能分别配模型与推理档位.
-// 保留的 "model" 是旧配置的兼容键: 规模模型为空时回落到它, 新配置不再写入.
+// Every agent in kanbanModelDefaults carries one model per task scale:
+// large and small tasks can use different models and reasoning efforts even when they pick the same agent.
+// The retained "model" key is for legacy configs: a scale model falls back to it when empty, and new configs no longer write it.
 var kanbanModelDefaults = map[string]map[string]string{
 	"codex": {
 		"model":        "",
@@ -105,7 +105,7 @@ var languageLabels = map[string]string{
 	"en": "config.languageLabels.en",
 }
 
-// Error 表示配置不可读或 schema 非法.
+// Error means the config is unreadable or violates the schema.
 type Error struct {
 	Msg string
 	Err error
@@ -138,10 +138,10 @@ func IsError(err error) bool {
 	return errors.As(err, &target)
 }
 
-// InstallPaths 是当前安装作用域的公共路径.
+// InstallPaths holds the shared paths of the current install scope.
 //
-// global 映射到用户 HOME 下的布局; project 映射到 Git 主 worktree 的 .kander/.
-// 源码树直接运行属于 global, 即使仓库根同时含 cmd/ 与 rules/.
+// global maps to the layout under the user's HOME; project maps to .kander/ in the Git main worktree.
+// Running from the source tree counts as global, even when the repository root holds both cmd/ and rules/.
 type InstallPaths struct {
 	Mode        Mode
 	ConfigPath  string
@@ -152,16 +152,16 @@ type InstallPaths struct {
 	InstallRoot string
 }
 
-// Models 对齐 onevoke schema 的 models 段.
-// ReviewRoles 是按审核角色的覆盖: 取值为空表示继承该角色所选 Reviewer 的取值,
-// 于是四个角色即便都选同一个 Reviewer, 也能各自配模型与推理档位.
+// Models matches the models section of the onevoke schema.
+// ReviewRoles holds per-role overrides: an empty value means the role inherits the value of its selected reviewer,
+// so all four roles can use different models and reasoning efforts even when they select the same reviewer.
 type Models struct {
 	Kanban      map[string]map[string]string `json:"kanban"`
 	Review      map[string]map[string]string `json:"review"`
 	ReviewRoles map[string]map[string]string `json:"review_roles"`
 }
 
-// TUI 保存终端界面的持久偏好. 命令行参数只覆盖本次运行, 不改这里的值.
+// TUI holds the persistent terminal UI preferences. Command-line flags only affect the current run and never change these values.
 type TUI struct {
 	Columns        int    `json:"columns"`
 	MinColumnWidth int    `json:"min_column_width"`
@@ -170,7 +170,7 @@ type TUI struct {
 	Theme          string `json:"theme"`
 }
 
-// Config 是 schema 校验后的配置.
+// Config is the schema-validated configuration.
 type Config struct {
 	SchemaVersion   int               `json:"schema_version"`
 	WelcomeComplete bool              `json:"welcome_complete"`
@@ -185,7 +185,7 @@ type Config struct {
 	Language        string            `json:"language"`
 }
 
-// Clone 深拷贝配置, 供长生命周期编辑会话保留基线.
+// Clone deep-copies the config so a long-lived editing session can keep its baseline.
 func Clone(src *Config) *Config {
 	if src == nil {
 		return nil
@@ -222,7 +222,7 @@ func cloneNested(src map[string]map[string]string) map[string]map[string]string 
 func defaultReviewRoles() map[string]map[string]string {
 	out := make(map[string]map[string]string, len(ReviewRoles))
 	for _, role := range ReviewRoles {
-		// 默认全空: 表示继承该角色 Reviewer 的取值.
+		// Empty by default: the role inherits the value of its reviewer.
 		out[role] = map[string]string{"model": "", "effort": ""}
 	}
 	return out
@@ -245,9 +245,9 @@ func DefaultTUI() TUI {
 	}
 }
 
-// ReviewModelFor 返回某个审核角色实际生效的模型与推理档位.
-// 角色覆盖为空时回落到 agent 那份取值; agent 由调用方给出, 因为
-// kander review 可以显式指定 reviewer, 未必等于配置里该角色的 Reviewer.
+// ReviewModelFor returns the model and reasoning effort actually in force for a review role.
+// An empty role override falls back to the agent's own value; the agent comes from the caller because
+// kander review may name a reviewer explicitly, which need not match the reviewer configured for that role.
 func ReviewModelFor(cfg *Config, agent, role string) (model, effort string) {
 	if cfg == nil {
 		return "", ""
@@ -358,7 +358,7 @@ func validateLauncher(value any) (string, error) {
 	return launcher, nil
 }
 
-// CheckLauncherPlatform 校验 launcher 与当前 OS 是否匹配.
+// CheckLauncherPlatform validates the launcher against the current OS.
 func CheckLauncherPlatform(launcher string) error {
 	switch launcher {
 	case "console":
@@ -410,7 +410,7 @@ func validateKanbanAgents(raw any, defaultAgent string) (map[string]string, erro
 	return agents, nil
 }
 
-// KanbanAgentFor 按任务规模选执行 Agent; 未知规模拒绝.
+// KanbanAgentFor picks the execution agent for a task scale; an unknown scale is rejected.
 func KanbanAgentFor(cfg *Config, kind string) (string, error) {
 	if cfg == nil || cfg.KanbanAgents == nil {
 		return "", configErrorf("config.unknown_task_scale", kind)
@@ -421,7 +421,7 @@ func KanbanAgentFor(cfg *Config, kind string) (string, error) {
 	return cfg.KanbanAgents[kind], nil
 }
 
-// ExecutionAgentsInUse 按大, 小任务顺序去重列出实际会启动的执行 Agent.
+// ExecutionAgentsInUse lists the execution agents that will actually be launched, deduplicated, large task first.
 func ExecutionAgentsInUse(cfg *Config) []string {
 	seen := map[string]struct{}{}
 	var out []string
@@ -489,10 +489,10 @@ func validateModels(raw any) (Models, error) {
 	}
 	sections := []struct {
 		name string
-		// agents 是该段允许出现的键: 前两段是 Agent 名, review_roles 是审核角色名.
+		// agents lists the keys allowed in this section: the first two sections use agent names, review_roles uses review role names.
 		agents []string
 		dest   map[string]map[string]string
-		// allowEmpty 为真时该段的取值允许是空串; review_roles 用空串表示继承.
+		// When allowEmpty is true the values of this section may be empty strings; review_roles uses an empty string to mean inherit.
 		allowEmpty bool
 	}{
 		{"kanban", ExecutionAgents, models.Kanban, false},
@@ -644,7 +644,7 @@ func schemaVersionOf(raw any) any {
 	}
 }
 
-// Validate 校验并补齐 schema; 未知规模或非法 Agent 拒绝.
+// Validate checks and completes the schema; an unknown scale or an illegal agent is rejected.
 func Validate(raw any) (*Config, error) {
 	obj, ok := asObject(raw)
 	if !ok {

@@ -1,4 +1,4 @@
-// Package board 实现看板定位、卡片校验与状态迁移, 对标 onevoke 不启动 Agent 的生命周期命令.
+// Package board implements board location, card validation and state transitions, matching the onevoke lifecycle commands that do not launch agents.
 package board
 
 import (
@@ -61,7 +61,7 @@ var (
 	}()
 )
 
-// Error 是看板命令的可展示失败.
+// Error is a displayable failure of a board command.
 type Error struct {
 	Message string
 }
@@ -80,7 +80,7 @@ func untitled() string {
 	return t("board.untitled")
 }
 
-// Entry 是一张任务卡入口.
+// Entry is one task card entry.
 type Entry struct {
 	TaskID   string
 	State    string
@@ -89,21 +89,21 @@ type Entry struct {
 	Kind     string
 }
 
-// Board 是一次扫描结果. 无效入口进入 Problems; 与任务 ID 绑定的违规进入 Blocked.
+// Board is the result of one scan. Invalid entries go to Problems; violations bound to a task ID go to Blocked.
 type Board struct {
 	Entries  map[string]Entry
 	Blocked  map[string]string
 	Problems []Problem
 }
 
-// Problem 是 check 汇报的结构问题.
+// Problem is a structural issue reported by check.
 type Problem struct {
 	Path         string
 	Message      string
 	RelatedPaths []string
 }
 
-// TaskDependencies 是一张卡的前置依赖及任务组展开结果.
+// TaskDependencies holds the prerequisites of one card and the expansion of its task groups.
 type TaskDependencies struct {
 	PrerequisiteIDs []string
 	InternalTasks   []string

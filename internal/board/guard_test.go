@@ -14,22 +14,22 @@ func TestGuardWriteRejectsMissingDirectChildAndReportsMove(t *testing.T) {
 	capture(t, func() int { return RunNew([]string{"chore", "guard-card", "护栏测试"}) })
 	existing := filepath.Join(root, "backlog", taskID+".md")
 
-	// 已存在的卡: 放行.
+	// Existing card: allowed.
 	if code, _, errOut := capture(t, func() int { return RunGuardWrite([]string{existing}) }); code != 0 {
 		t.Fatalf("existing card rejected: %d %s", code, errOut)
 	}
-	// 状态目录直接子项且不存在, 同 ID 在别处: 拒绝并提示迁移.
+	// Direct child of a state directory that does not exist while the same ID lives elsewhere: rejected with a moved-card hint.
 	stale := filepath.Join(root, "working", taskID+".md")
 	code, _, errOut := capture(t, func() int { return RunGuardWrite([]string{stale}) })
 	if code != 1 || !strings.Contains(errOut, taskID) || !strings.Contains(errOut, "backlog") {
 		t.Fatalf("stale path: %d %s", code, errOut)
 	}
-	// 直接子项且全看板无此 ID: 同样拒绝 (新建只能经 kander new).
+	// Direct child and the ID is nowhere on the board: also rejected (new cards only come from kander new).
 	fresh := filepath.Join(root, "todo", "20990101-nonexistent-task.md")
 	if code, _, errOut := capture(t, func() int { return RunGuardWrite([]string{fresh}) }); code != 1 || !strings.Contains(errOut, "kander new") {
 		t.Fatalf("fresh direct child: %d %s", code, errOut)
 	}
-	// 目录卡内部文件: 目录卡入口存在时放行, 不存在时拒绝 (否则写入会静默重建整个目录卡).
+	// File inside a directory card: allowed when the card entry exists, rejected when it does not (otherwise the write would silently rebuild the whole directory card).
 	dirID := todayID("guard-dir")
 	if err := os.MkdirAll(filepath.Join(root, "review", dirID), 0o755); err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestGuardWriteRejectsMissingDirectChildAndReportsMove(t *testing.T) {
 	}); code != 1 {
 		t.Fatal("inner file under missing card entry must be rejected")
 	}
-	// 看板之外与非状态目录: 放行.
+	// Outside the board and outside a state directory: allowed.
 	outside := filepath.Join(t.TempDir(), "elsewhere.md")
 	if code, _, _ := capture(t, func() int { return RunGuardWrite([]string{outside}) }); code != 0 {
 		t.Fatal("outside path rejected")
@@ -55,7 +55,7 @@ func TestGuardWriteRejectsMissingDirectChildAndReportsMove(t *testing.T) {
 	if code, _, _ := capture(t, func() int { return RunGuardWrite([]string{filepath.Join(root, "notes.md")}) }); code != 0 {
 		t.Fatal("non-state kanban file rejected")
 	}
-	// 缺参数: 用法错误.
+	// Missing argument: usage error.
 	if code, _, _ := capture(t, func() int { return RunGuardWrite(nil) }); code != 2 {
 		t.Fatal("missing argument must be a usage error")
 	}

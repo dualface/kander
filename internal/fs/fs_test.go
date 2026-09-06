@@ -479,8 +479,8 @@ func TestIsReparsePointSymlink(t *testing.T) {
 	}
 }
 
-// 私有临时目录被创建者一直握着句柄. Windows 上该句柄的共享模式必须允许后续
-// 写入和删除, 否则 review runtime 在自己的目录里既写不出文件也读不回来.
+// The creator keeps a handle on the private temporary directory the whole time. On Windows that handle's share mode must allow
+// later writes and deletes, otherwise the review runtime can neither write nor read back files in its own directory.
 func TestPrivateTempDirSupportsProtectedIO(t *testing.T) {
 	temp, err := CreatePrivateTempDir(t.TempDir(), "codex-review.")
 	if err != nil {
@@ -510,7 +510,7 @@ func TestPrivateTempDirSupportsProtectedIO(t *testing.T) {
 	if string(data) != "body\n" {
 		t.Fatalf("data=%q", data)
 	}
-	// ListDirectory 的 finalAccess 含 FILE_LIST_DIRECTORY, 会真正触发目录叶的共享检查.
+	// The finalAccess of ListDirectory includes FILE_LIST_DIRECTORY, which really does trigger the sharing check on the directory leaf.
 	entries, err := ListDirectory(temp.Path, temp.Path)
 	if err != nil {
 		t.Fatalf("list: %v", err)

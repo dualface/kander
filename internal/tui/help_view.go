@@ -7,13 +7,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// helpEntry 是帮助浮层里的一行: 左边按键, 右边说明.
+// helpEntry is one line of the help overlay: the key on the left, its description on the right.
 type helpEntry struct {
 	Keys string
 	Desc string
 }
 
-// helpGroup 是一组按键说明.
+// helpGroup is one group of key descriptions.
 type helpGroup struct {
 	Title   string
 	Entries []helpEntry
@@ -63,8 +63,8 @@ func boardHelpGroups() []helpGroup {
 	}
 }
 
-// renderHelp 画出帮助浮层. 按键说明按两栏排布: 左栏是看板, 右栏是详情与鼠标;
-// 终端太窄时退回单栏竖排, 保证不会被弹窗宽度截断.
+// renderHelp draws the help overlay. The keys are laid out in two columns: the board on the left, the detail view and the mouse on the right;
+// on a narrow terminal it falls back to a single vertical column so nothing is truncated by the popup width.
 func (a *App) renderHelp() (popupBox, string) {
 	h, w := a.size()
 	p := themePalette(a.Theme)
@@ -103,7 +103,7 @@ func (a *App) renderHelp() (popupBox, string) {
 		inner = width
 	}
 
-	// 上下边框 2 行, 标题, 分隔线, 空行与提示各 1 行.
+	// 2 lines for the top and bottom borders, and 1 line each for the title, the separator, the blank line and the hint.
 	box := centerPopupMax(w, h, inner+4, len(lines)+6, available)
 	inner = box.Width - 4
 	bodyHeight := box.Height - 6

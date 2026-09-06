@@ -116,8 +116,8 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 	return inv, cwd, nil
 }
 
-// syncStream 只对普通文件落盘. Windows 上对管道写端调用 FlushFileBuffers 会一直阻塞到
-// 读端取走全部数据, 控制台句柄上又没有意义; os.File 的写入本身不带缓冲, 无需额外冲刷.
+// syncStream only syncs regular files. On Windows, FlushFileBuffers on the write end of a pipe blocks until the read
+// end has drained everything, and it is meaningless on a console handle; os.File writes are unbuffered anyway, so no extra flush is needed.
 func syncStream(stream *os.File) {
 	info, err := stream.Stat()
 	if err != nil || !info.Mode().IsRegular() {

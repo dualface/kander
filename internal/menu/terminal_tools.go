@@ -11,7 +11,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// TerminalTool 是一次有超时的命令可用性探测结果.
+// TerminalTool is the result of one command availability probe with a timeout.
 type TerminalTool struct {
 	Path  string
 	Error string
@@ -19,7 +19,7 @@ type TerminalTool struct {
 
 func (t TerminalTool) Available() bool { return t.Path != "" && t.Error == "" }
 
-// TerminalTools 供 doctor 与 Settings 共用, 不修改 launcher 配置.
+// TerminalTools is shared by doctor and Settings; it never modifies the launcher config.
 type TerminalTools struct {
 	Herdr TerminalTool
 	Tmux  TerminalTool
@@ -47,7 +47,7 @@ func probeTerminalTool(name, flag string) TerminalTool {
 	return result
 }
 
-// CheckTerminalTools 只探测命令, 不启动 session/window/tab, 也不安装软件.
+// CheckTerminalTools only probes commands: it starts no session/window/tab and installs no software.
 func CheckTerminalTools() TerminalTools {
 	return TerminalTools{Herdr: probeTerminalTool("herdr", "--version"), Tmux: probeTerminalTool("tmux", "-V")}
 }
@@ -63,8 +63,8 @@ func HerdrInstallCommand() string {
 	return "curl -fsSL https://herdr.dev/install.sh | sh"
 }
 
-// InstallHerdr 在用户确认后调用官方安装器; TUI 必须先挂起终端.
-// 失败以报告返回, 调用方继续后续检查, 不修改配置或当前进程 PATH.
+// InstallHerdr runs the official installer once the user confirms; the TUI must suspend the terminal first.
+// Failures come back as report lines, the caller continues with the remaining checks, and neither the config nor the process PATH is modified.
 func (s *Session) InstallHerdr() ([]ReportLine, bool) {
 	installed := false
 	lines := CaptureReport(func() {
@@ -88,7 +88,7 @@ func runHerdrInstaller() error {
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 		return cmd.Run()
 	}
-	// 分别等待管道两端, 避免 curl 失败被 sh 对空输入的成功退出掩盖.
+	// Wait on both ends of the pipe separately, so a curl failure is not masked by sh exiting successfully on empty input.
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		return err

@@ -66,7 +66,7 @@ func loadValidated(path string, missingOK bool) (*Config, error) {
 	return Validate(raw)
 }
 
-// Load 读取并校验配置; missingOK 时缺失文件返回默认配置.
+// Load reads and validates the config; with missingOK a missing file yields the default config.
 func Load(missingOK bool) (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
@@ -75,7 +75,7 @@ func Load(missingOK bool) (*Config, error) {
 	return loadValidated(path, missingOK)
 }
 
-// Exists 报告当前作用域的 config.json 是否存在, 并沿用配置读取的安全检查.
+// Exists reports whether config.json exists in the current scope, reusing the safety checks of config reads.
 func Exists() (bool, error) {
 	path, err := ConfigPath()
 	if err != nil {
@@ -88,7 +88,7 @@ func Exists() (bool, error) {
 	return data != nil, nil
 }
 
-// Effective 返回运行时生效值; 规则开关立即适用, 其他选择在初始化完成后生效.
+// Effective returns the values in force at runtime; rule switches apply immediately, other choices only once initialization is complete.
 func Effective(cfg *Config) (*Config, error) {
 	if cfg == nil {
 		loaded, err := Load(true)
@@ -170,7 +170,7 @@ func withConfigLock(path string, fn func() error) error {
 	return nil
 }
 
-// saveConfigAt 校验后原子写入指定的 config.json.
+// saveConfigAt validates and then atomically writes the given config.json.
 func saveConfigAt(path string, cfg *Config) (string, error) {
 	encoded, err := json.Marshal(cfg)
 	if err != nil {
@@ -205,7 +205,7 @@ func saveConfigAt(path string, cfg *Config) (string, error) {
 	return path, nil
 }
 
-// Save 校验后原子写入 config.json.
+// Save validates and then atomically writes config.json.
 func Save(cfg *Config) (string, error) {
 	path, err := ConfigPath()
 	if err != nil {
@@ -220,7 +220,7 @@ func Save(cfg *Config) (string, error) {
 	return saved, err
 }
 
-// Update 在同一跨进程锁内重读、修改并保存配置.
+// Update re-reads, mutates and saves the config inside a single cross-process lock.
 func Update(mutate func(*Config) error) (string, error) {
 	path, err := ConfigPath()
 	if err != nil {
@@ -262,7 +262,7 @@ func configEditConflicts(current, baseline, target *Config) bool {
 	return false
 }
 
-// SaveIfUnchanged 仅在磁盘配置仍等于编辑基线时保存; 缺失文件可直接创建.
+// SaveIfUnchanged saves only while the on-disk config still equals the editing baseline; a missing file may be created directly.
 func SaveIfUnchanged(cfg, baseline *Config) (string, error) {
 	path, err := ConfigPath()
 	if err != nil {

@@ -12,8 +12,8 @@ import (
 	"github.com/dualface/kander/internal/menu"
 )
 
-// formBinding 是 Huh 表单绑定的可变取值. Huh 需要稳定指针,
-// 因此这里按分区一次性铺平, 表单关闭时再写回 App 与配置会话.
+// formBinding holds the mutable values bound to a Huh form. Huh needs stable pointers,
+// so everything is flattened per section up front and written back to App and the config session when the form closes.
 type formBinding struct {
 	theme    string
 	columns  int
@@ -36,32 +36,32 @@ type formBinding struct {
 	prevRulePreset string
 
 	modelFields []menu.ModelField
-	// modelValues 存每个输入框自己的字符串指针. 不能绑切片元素地址:
-	// 后续 append 扩容会换底层数组, 先建字段的指针就会悬空.
+	// modelValues holds one string pointer per input. Binding the address of a slice element is not allowed:
+	// a later append may reallocate the backing array and leave the pointers of already-built fields dangling.
 	modelValues []*string
 	modelSeen   map[string]struct{}
-	// fieldIndex 记录各选择器在本次表单里排第几个可聚焦字段, 供重建后恢复焦点.
+	// fieldIndex records which focusable position each selector holds in this form, so focus can be restored after a rebuild.
 	fieldIndex map[string]int
-	// formFields 是本次表单的全部字段 (含用作空行的 Note),
-	// 鼠标命中时按它们的实际渲染高度换算行号.
+	// formFields are all the fields of this form (including the Notes used as blank lines),
+	// converted to line numbers by their actual rendered height during mouse hit testing.
 	formFields []huh.Field
-	// focusable 是已加入的可聚焦字段数; 空行不计入, 因为 NextField 会跳过它们.
+	// focusable is the number of focusable fields added so far; blank lines are excluded because NextField skips them.
 	focusable int
 }
 
-// addField 追加一个可聚焦字段.
+// addField appends one focusable field.
 func (b *formBinding) addField(field huh.Field) {
 	b.formFields = append(b.formFields, field)
 	b.focusable++
 }
 
-// addSpacer 追加一个只占一行的空白字段, 用来把不同分组隔开.
-// Note 默认是 skip 的, 不会被 ↑↓ 或 NextField 选中.
+// addSpacer appends a blank field one line tall, used to separate groups.
+// A Note is skipped by default, so ↑↓ and NextField never select it.
 func (b *formBinding) addSpacer() {
 	b.formFields = append(b.formFields, huh.NewNote())
 }
 
-// reset 清掉上一次构建留下的模型字段, 供重建表单时复用同一个绑定结构.
+// reset clears the model fields left by the previous build so the same binding struct can be reused when rebuilding the form.
 func (b *formBinding) reset() {
 	b.modelFields = nil
 	b.modelValues = nil
@@ -77,16 +77,16 @@ func huhTheme(p palette) *huh.Theme {
 	return theme
 }
 
-// applyHuhPalette 把浅色/深色画布写进已有的 Huh 主题.
-// Huh 字段只在第一次 WithTheme 时接上这个指针, 之后再 WithTheme 会被忽略,
-// 原地修改只更新样式, Huh 的视口缓存仍需在主题切换后通过重建表单刷新.
+// applyHuhPalette writes the light/dark canvas into an existing Huh theme.
+// Huh fields only pick up this pointer on the first WithTheme and ignore later ones,
+// so mutating in place only updates the styles; Huh's viewport cache still needs a form rebuild to refresh after a theme switch.
 func applyHuhPalette(theme *huh.Theme, p palette) {
 	if theme == nil {
 		return
 	}
 	fresh := huh.ThemeBase()
-	// 标签与取值分主次: 标签一律暗色不加粗, 取值加粗, 选中的还上强调色.
-	// 否则一个选项的两行同缩进同样式, 第一眼分不出哪行是标签哪行是取值.
+	// Labels and values are ranked: labels are always dim and never bold, values are bold, and the selected one also takes the accent color.
+	// Otherwise the two lines of an option share the same indentation and style, and at a glance neither reads as the label or the value.
 	theme.Focused.Title = p.paint(fresh.Focused.Title.Foreground(p.Dim).Bold(false))
 	theme.Blurred.Title = p.paint(fresh.Blurred.Title.Foreground(p.Dim).Bold(false))
 	theme.Focused.Description = p.paint(fresh.Focused.Description.Foreground(p.Separator))
@@ -98,8 +98,8 @@ func applyHuhPalette(theme *huh.Theme, p palette) {
 	theme.Blurred.Option = p.paint(fresh.Blurred.Option.Foreground(p.Base))
 	theme.Focused.UnselectedOption = p.paint(fresh.Focused.UnselectedOption.Foreground(p.Base))
 	theme.Blurred.UnselectedOption = p.paint(fresh.Blurred.UnselectedOption.Foreground(p.Base))
-	// 左右箭头只留给聚焦的字段: 它画在字段最左侧, 会顶到缩进外面去,
-	// 同时给每一行都加反而更乱. 未聚焦的行靠「标签暗, 取值加粗」区分.
+	// The left/right arrows are reserved for the focused field: they are drawn at the very left of the field and stick out past the indentation,
+	// so adding them to every line only makes it busier. Unfocused lines are told apart by "dim label, bold value".
 	theme.Focused.PrevIndicator = p.paint(fresh.Focused.PrevIndicator.Foreground(p.Accent))
 	theme.Focused.NextIndicator = p.paint(fresh.Focused.NextIndicator.Foreground(p.Accent))
 	theme.Focused.TextInput.Text = p.paint(fresh.Focused.TextInput.Text.Foreground(p.Accent).Bold(true))
@@ -111,11 +111,11 @@ func applyHuhPalette(theme *huh.Theme, p palette) {
 	theme.Help.ShortKey = p.paint(fresh.Help.ShortKey.Foreground(p.Accent))
 	theme.Help.ShortDesc = p.paint(fresh.Help.ShortDesc.Foreground(p.Dim))
 
-	// Huh 默认主题的是非按钮是「黑字浅灰底 / 浅灰字黑底」: 在浅色终端上,
-	// 未选中的那个反而变成一整块黑, 看起来像被选中, 三个是非项因此全是反的.
-	// 这里改成与顶栏同一套强调色: 选中是实心色块, 未选中只有暗色文字.
-	// 字段之间默认隔一个空行, 改成只换行: 空行由本包按分组自己插,
-	// 这样同一个 Agent/角色的几项贴在一起, 只有不同分组之间才空一行.
+	// The confirm buttons of Huh's default theme are "black on light grey / light grey on black": on a light terminal
+	// the unselected one turns into a solid black block that reads as selected, so all three confirm items look inverted.
+	// They are switched to the same accent color as the header: selected is a solid block, unselected is dim text only.
+	// Fields are separated by a blank line by default, which is reduced to a plain newline: this package inserts the blank lines per group,
+	// so the items of one agent/role stay together and only different groups are separated by a blank line.
 	theme.FieldSeparator = lipgloss.NewStyle().SetString("\n")
 
 	selected, unselected := confirmButtonStyles(p)
@@ -133,13 +133,13 @@ func (p *optionsPanel) syncFormTheme(palette palette) {
 	p.spinner.Style = lipgloss.NewStyle().Foreground(palette.Accent).Background(palette.Bg)
 }
 
-// pillBorder 是是非按钮的轮廓. 用方括号而不是半块字符:
-// 半块要同时依赖字体有这个字形和终端把它的颜色画出来, 两样有一样不成立就什么也看不到;
-// 方括号在任何字体, 任何配色, 甚至完全没有颜色时都能看出哪一个被选中.
+// pillBorder is the outline of a confirm button. It uses square brackets rather than half-block characters:
+// a half block needs both a font that has the glyph and a terminal that paints its color, and missing either shows nothing at all;
+// square brackets show which one is selected in any font, any color scheme, even with no color at all.
 var pillBorder = lipgloss.Border{Left: "[", Right: "]"}
 
-// confirmButtonStyles 返回是非按钮的选中态与未选中态样式.
-// 选中态有方括号轮廓加填色, 未选中态用等宽的隐藏边框占位, 切换时不抖动.
+// confirmButtonStyles returns the selected and unselected styles of a confirm button.
+// The selected state has the bracket outline plus a fill, the unselected one holds the same width with a hidden border, so toggling does not jitter.
 func confirmButtonStyles(p palette) (selected, unselected lipgloss.Style) {
 	selected = lipgloss.NewStyle().
 		MarginLeft(1).
@@ -155,14 +155,14 @@ func confirmButtonStyles(p palette) (selected, unselected lipgloss.Style) {
 	return selected, unselected
 }
 
-// disableFilter 关掉候选项过滤: 候选都很短, 过滤只会吃掉 q 之类的按键.
+// disableFilter turns off candidate filtering: the candidates are all short, and filtering would only swallow keys such as q.
 func disableFilter(keys *huh.KeyMap) {
 	keys.Select.Filter = key.NewBinding(key.WithDisabled())
 	keys.Select.SetFilter = key.NewBinding(key.WithDisabled())
 	keys.Select.ClearFilter = key.NewBinding(key.WithDisabled())
 }
 
-// rootKeyMap 用于根菜单. 根菜单是一个条目列表, ↑↓ 在条目间移动, Enter 进入.
+// rootKeyMap is for the root menu. The root menu is a list of items: ↑↓ moves between them, Enter enters one.
 func rootKeyMap() *huh.KeyMap {
 	keys := huh.NewDefaultKeyMap()
 	keys.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", t("tui.close")))
@@ -170,14 +170,14 @@ func rootKeyMap() *huh.KeyMap {
 	return keys
 }
 
-// sectionKeyMap 用于分区表单. 分区是设置列表而不是向导:
-// ↑↓ 在字段间移动, ←→ 就地改值, 不必一路 Enter 走到底.
+// sectionKeyMap is for a section form. A section is a settings list rather than a wizard:
+// ↑↓ moves between fields and ←→ edits in place, so there is no need to Enter all the way through.
 func sectionKeyMap() *huh.KeyMap {
 	keys := huh.NewDefaultKeyMap()
 	keys.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", t("tui.back")))
 	disableFilter(keys)
 
-	// Enter 一律是「提交本节」, 不再是「跳到下一个字段」; 换字段用 ↑↓ 或 Tab.
+	// Enter always means "submit this section" instead of "jump to the next field"; fields are changed with ↑↓ or Tab.
 	next := key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("↑↓", t("tui.move")))
 	prev := key.NewBinding(key.WithKeys("up", "shift+tab"))
 	submit := key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", t("tui.submit")))
@@ -187,7 +187,7 @@ func sectionKeyMap() *huh.KeyMap {
 	keys.Select.Next = next
 	keys.Select.Prev = prev
 	keys.Select.Submit = submit
-	// ↑↓ 让给字段导航, 取值改用 ←→; Inline 的 Select 才会启用 Left/Right.
+	// ↑↓ is given to field navigation and values change with ←→; only an Inline Select enables Left/Right.
 	keys.Select.Up = key.NewBinding(key.WithDisabled())
 	keys.Select.Down = key.NewBinding(key.WithDisabled())
 	keys.Select.Left = changeBack
@@ -198,7 +198,7 @@ func sectionKeyMap() *huh.KeyMap {
 	keys.Confirm.Submit = submit
 	keys.Confirm.Toggle = key.NewBinding(key.WithKeys("left", "right", "h", "l"), key.WithHelp("←→", t("tui.toggle")))
 
-	// 文本输入里 ←→ 仍然移动光标, 只把上下键让给字段导航.
+	// Inside a text input ←→ still moves the cursor, and only the up/down keys are given to field navigation.
 	keys.Input.Next = next
 	keys.Input.Prev = prev
 	keys.Input.Submit = submit
@@ -210,15 +210,15 @@ func (p *optionsPanel) newForm(keys *huh.KeyMap, groups ...*huh.Group) *huh.Form
 	return huh.NewForm(groups...).
 		WithTheme(p.formTheme).
 		WithKeyMap(keys).
-		// 提示行由本包自绘: Huh 的 help 会按内部宽度截断, 把 Enter 这类
-		// 排在后面的绑定吞掉, 还会为没有说明的绑定留下空段.
+		// The hint line is drawn by this package: Huh's help truncates by its internal width, swallowing later bindings
+		// such as Enter, and it also leaves empty segments for bindings that have no description.
 		WithShowHelp(false).
 		WithShowErrors(true)
 }
 
-// openRoot 建根菜单: 一个列出各分区及当前取值的 Select.
-// 不重置 p.section: Huh Select 按绑定值恢复 selected, 从子级返回时
-// 才能停在进入前那一项. 首次打开仍是空串, Huh 落到第一项.
+// openRoot builds the root menu: one Select listing the sections and their current values.
+// p.section is deliberately not reset: a Huh Select restores its selection from the bound value, which is what lets a return
+// from a child land on the item entered from. On the first open it is still empty and Huh falls to the first item.
 func (p *optionsPanel) openRoot() tea.Cmd {
 	p.current = ""
 	p.bind = nil
@@ -286,14 +286,14 @@ func (p *optionsPanel) reviewSummary() string {
 	return out
 }
 
-// 关闭前确认的三个取值.
+// The three values of the confirm-before-closing prompt.
 const (
 	closeSave    = "save"
 	closeDiscard = "discard"
 	closeBack    = "back"
 )
 
-// openCloseConfirm 在有未保存改动时挡一道, 避免改完直接关掉.
+// openCloseConfirm interposes a step while there are unsaved changes, so an edit session is not simply closed away.
 func (p *optionsPanel) openCloseConfirm() tea.Cmd {
 	if !p.confirming {
 		p.closeChoice = closeSave
@@ -314,7 +314,7 @@ func (p *optionsPanel) openCloseConfirm() tea.Cmd {
 	return p.startForm(form)
 }
 
-// openSection 建某个分区的表单.
+// openSection builds the form of one section.
 func (p *optionsPanel) openSection(section string) tea.Cmd {
 	p.current = section
 	bind := &formBinding{
@@ -353,8 +353,8 @@ func toOptions(choices []menu.Choice) []huh.Option[string] {
 	return out
 }
 
-// tip 给 inline Confirm / Input 的 Description 加前导空格.
-// Huh 把 Title 和 Description 直接拼在同一行, 需要空格分隔.
+// tip prepends a space to the Description of an inline Confirm / Input.
+// Huh joins Title and Description on the same line, so a separating space is needed.
 func tip(text string) string {
 	if text == "" {
 		return ""
@@ -445,10 +445,10 @@ func minColumnWidthChoices(current int) []int {
 	return out
 }
 
-// modelIndent 是嵌在 Agent 选项下方的模型字段的缩进, 用来表示归属关系.
+// modelIndent is the indentation of the model fields nested under an agent option, expressing that they belong to it.
 const modelIndent = "  "
 
-// 重建分区后用来定位选择器的键.
+// Keys used to locate a selector after a section rebuild.
 func scaleFocusKey(scale string) string    { return "scale:" + scale }
 func roleFocusKey(role string) string      { return "role:" + role }
 func interfaceFocusKey(name string) string { return "ui:" + name }
@@ -484,12 +484,12 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 			Options(toOptions(session.ExecutionChoicesFor(*values[scale]))...).
 			Value(values[scale]).
 			Inline(true))
-		// 模型与推理档位紧跟在它所属的 Agent 下面, 中间不留空行.
+		// Model and reasoning effort follow immediately below the agent they belong to, with no blank line in between.
 		for _, field := range p.modelInputs(bind, session.ExecutionModelFieldsFor(scale)) {
 			bind.addField(field)
 		}
 	}
-	// 启动方式与具体 Agent 无关, 放在最后, 前面空一行隔开.
+	// The launcher is independent of any particular agent, so it goes last, separated by a blank line.
 	bind.addSpacer()
 	bind.addField(huh.NewSelect[string]().
 		Title(t("menu.launcher")).
@@ -500,8 +500,8 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 	return huh.NewGroup(bind.formFields...)
 }
 
-// modelInputs 把一组模型字段做成缩进的文本输入.
-// 同一个 Agent 被两个规模或两个角色共用时, 指向的是同一份配置, 只显示一次.
+// modelInputs turns a set of model fields into indented text inputs.
+// When one agent is shared by two scales or two roles they point at the same config entry, which is shown only once.
 func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) []huh.Field {
 	out := make([]huh.Field, 0, len(fields))
 	for _, field := range fields {
@@ -513,7 +513,7 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) 
 		bind.modelFields = append(bind.modelFields, field)
 		value := field.Value()
 		bind.modelValues = append(bind.modelValues, &value)
-		// Inline 让标题与取值同占一行, 一个角色/规模的整块从 7 行压到 4 行.
+		// Inline puts the title and the value on one line, compressing the block of one role/scale from 7 lines to 4.
 		out = append(out, huh.NewInput().
 			Title(modelIndent+field.Short+"  ").
 			Prompt("").
@@ -541,12 +541,12 @@ func (p *optionsPanel) reviewGroup(bind *formBinding) *huh.Group {
 			Options(toOptions(session.ReviewerChoicesFor(value))...).
 			Value(bind.reviewers[role]).
 			Inline(true))
-		// 该角色的环节与模型档位紧跟其后, 中间不留空行.
+		// The stage and the model settings of that role follow immediately, with no blank line in between.
 		stage := cfg.ReviewStages[role]
 		bind.stages[role] = &stage
 		bind.addField(huh.NewSelect[string]().
 			Title(modelIndent + t("tui.review_stage", role)).
-			// 取值行跟着标题一起缩进: Select 的取值另起一行, 只缩进标题会参差.
+			// The value line is indented along with the title: a Select puts its value on its own line, so indenting the title alone would look ragged.
 			Options(reviewStageOptions()...).
 			Value(bind.stages[role]).
 			Inline(true))
@@ -557,7 +557,7 @@ func (p *optionsPanel) reviewGroup(bind *formBinding) *huh.Group {
 	return huh.NewGroup(bind.formFields...)
 }
 
-// reviewStageOptions 是审核环节三档的界面文案; 配置取值仍是 auto/skip/required.
+// reviewStageOptions is the UI wording of the three review stage policies; the config values remain auto/skip/required.
 func reviewStageOptions() []huh.Option[string] {
 	labels := map[string]string{
 		"auto":     "tui.labels.auto",
@@ -572,10 +572,10 @@ func reviewStageOptions() []huh.Option[string] {
 	return out
 }
 
-// apply 把表单里已经变化的取值即时写回 App 与配置会话.
-// Huh 的绑定指针随光标移动就更新, 所以这里做到「边选边生效」;
-// Esc 返回时不会丢改动, 因为改动早已落在会话里.
-// 有副作用的项 (安装 tmux) 不在这里执行, 见 commitSideEffects.
+// apply writes the values changed in the form back to App and the config session immediately.
+// Huh updates its bound pointers as the cursor moves, which is what makes changes take effect while selecting;
+// returning with Esc loses nothing, because the changes already landed in the session.
+// Items with side effects (installing tmux) are not run here, see commitSideEffects.
 func (b *formBinding) apply(p *optionsPanel) {
 	switch p.current {
 	case sectionRules:
@@ -589,8 +589,8 @@ func (b *formBinding) apply(p *optionsPanel) {
 		}
 	case sectionExecution:
 		session := p.session
-		// Agent 变了, 下面的模型字段就换了对象, 必须重建本屏;
-		// 焦点回到刚改的那一行, 不打断操作.
+		// The agent changed, so the model fields below it belong to a different object and this screen must be rebuilt;
+		// focus returns to the line just edited so the interaction is not interrupted.
 		if session.Config.KanbanAgents["large"] != b.large {
 			session.SetExecutionAgent("large", b.large)
 			p.markDirty()
@@ -612,7 +612,7 @@ func (b *formBinding) apply(p *optionsPanel) {
 			value := b.reviewers[role]
 			if value != nil && session.Config.Reviewers[role] != *value {
 				session.SetReviewer(role, *value)
-				// 旧取值是照着旧 Reviewer 配的, 换人之后重置成新 Reviewer 的默认值.
+				// The old values were configured for the old reviewer, so after the switch they are reset to the new reviewer's defaults.
 				session.ResetReviewRoleModel(role)
 				p.markDirty()
 				p.rebuildAt(roleFocusKey(role))
@@ -628,7 +628,7 @@ func (b *formBinding) apply(p *optionsPanel) {
 	}
 }
 
-// applyModels 把模型输入框里的改动即时写回配置会话.
+// applyModels writes changes made in the model inputs back to the config session immediately.
 func (b *formBinding) applyModels(p *optionsPanel) {
 	for i, field := range b.modelFields {
 		if i >= len(b.modelValues) || b.modelValues[i] == nil {
@@ -647,8 +647,8 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	if containsString(themes, b.theme) && app.Theme != b.theme {
 		app.Theme = b.theme
 		changed = true
-		// Huh 在 Update 时缓存正文, 此时缓存仍使用旧主题.
-		// 复用分区重建路径, 让当前帧生效并把焦点保留在主题选择器.
+		// Huh caches the body during Update, and that cache still uses the old theme at this point.
+		// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
 		p.rebuildAt(interfaceFocusKey("theme"))
 	}
 	if count := clampColumns(b.columns); app.Columns != count {
@@ -672,14 +672,14 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		app.Model.ToggleArchived()
 		changed = true
 	}
-	// 界面偏好改完立刻写入 config.json, Esc 返回也不会丢.
+	// UI preferences reach config.json as soon as they change, so returning with Esc loses nothing.
 	if changed {
 		p.persistUI()
 	}
 }
 
-// commitSideEffects 执行只能由用户确认整节后才触发的动作:
-// 安装 tmux 会占用终端并改动本机环境, 不能随光标移动就跑.
+// commitSideEffects runs the actions that may only fire once the user confirms the whole section:
+// installing tmux occupies the terminal and changes the local environment, so it must not run as the cursor moves.
 func (b *formBinding) commitSideEffects(p *optionsPanel) {
 	switch p.current {
 	case sectionExecution:
@@ -692,7 +692,7 @@ func (b *formBinding) commitLauncher(p *optionsPanel) {
 	if b.launcher != menu.LauncherInstallValue {
 		return
 	}
-	// 安装 tmux 会占用当前终端, 先把终端还给它, 结束后再回到 alt-screen.
+	// Installing tmux occupies the current terminal, so hand the terminal over first and return to the alt-screen afterwards.
 	p.app.pendingShell = func() {
 		lines, installed := session.InstallTmux()
 		menu.FlushReport(lines)

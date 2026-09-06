@@ -11,8 +11,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// detailRender 缓存一次 Markdown 渲染结果. 任务卡正文是 Markdown,
-// 由 Glamour 渲染; 选区与光标计算都基于去掉 ANSI 之后的纯文本.
+// detailRender caches one Markdown render. A task card body is Markdown rendered by Glamour;
+// selection and cursor math are all done on the plain text with ANSI stripped.
 type detailRender struct {
 	key    string
 	styled []string
@@ -28,7 +28,7 @@ func (a *App) detailRenderWidth() int {
 	return width
 }
 
-// renderedDetail 返回带样式的正文行, 必要时重新渲染.
+// renderedDetail returns the styled body lines, re-rendering when needed.
 func (a *App) renderedDetail() []string {
 	doc := ""
 	if a.Detail != nil {
@@ -49,7 +49,7 @@ func (a *App) renderedDetail() []string {
 	return styled
 }
 
-// detailLines 是正文的纯文本行, 供搜索, 光标和选区复制使用.
+// detailLines are the plain-text body lines used by search, the cursor and selection copying.
 func (a *App) detailLines() []string {
 	a.renderedDetail()
 	return a.detailCache.plain
@@ -81,8 +81,8 @@ func renderMarkdown(doc string, width int, theme string) []string {
 	return lines
 }
 
-// markdownCanvasStyle 在 Glamour 标准浅色/深色上补上与看板相同的文档底色,
-// 避免详情正文把整屏背景戳出一块终端原色.
+// markdownCanvasStyle adds the same document background as the board to the standard Glamour light/dark styles,
+// so the detail body does not punch a patch of the raw terminal color through the screen background.
 func markdownCanvasStyle(theme string) glamansi.StyleConfig {
 	name := resolveTheme(theme)
 	src, ok := glamstyles.DefaultStyles[name]
@@ -95,8 +95,8 @@ func markdownCanvasStyle(theme string) glamansi.StyleConfig {
 	return style
 }
 
-// detailBody 组装可视正文: 命中搜索, 选区和光标的行改用纯文本加样式,
-// 其余行保留 Glamour 的原始配色.
+// detailBody assembles the visible body: lines hit by search, selection or the cursor switch to plain text plus styling,
+// while the remaining lines keep Glamour's original colors.
 func (a *App) detailBody(p palette) string {
 	styled := a.renderedDetail()
 	plain := a.detailLines()
@@ -146,7 +146,7 @@ func renderSpans(text string, spans [][2]int, style lipgloss.Style) string {
 	return sliceRunes(text, 0, start) + style.Render(sliceRunes(text, start, end)) + sliceRunes(text, end, n)
 }
 
-// renderCaret 在纯文本行上画出块状光标. 选区已经反色时不再叠加.
+// renderCaret draws a block cursor on a plain-text line. It is not added on top of an already inverted selection.
 func renderCaret(text string, col int, style lipgloss.Style, fallback string, selected bool) string {
 	if selected {
 		return fallback
@@ -164,8 +164,8 @@ func renderCaret(text string, col int, style lipgloss.Style, fallback string, se
 	return sliceRunes(text, 0, col) + style.Render(sliceRunes(text, col, col+1)) + sliceRunes(text, col+1, n)
 }
 
-// renderDetailView 是任务卡详情整屏: 顶栏, 留白, 一个与看板栏目同样式的
-// 圆角面板 (标题嵌在上边框, 内含元信息, 分隔线与 Glamour 正文), 底部状态栏.
+// renderDetailView is the whole task card detail screen: header, blank line, one rounded panel styled like a board column
+// (title embedded in the top border, holding the metadata, a separator and the Glamour body), and the bottom status bar.
 func (a *App) renderDetailView() string {
 	h, w := a.size()
 	p := themePalette(a.Theme)
@@ -226,7 +226,7 @@ func (a *App) renderDetailView() string {
 	)
 }
 
-// renderDetailStatusBar 是详情页的状态栏: 左侧是任务身份, 右侧是返回提示.
+// renderDetailStatusBar is the status bar of the detail screen: the task identity on the left, the back hint on the right.
 func (a *App) renderDetailStatusBar(p palette, w int, task Task) string {
 	if notice := a.transientNotice(); notice != "" {
 		return styleFor("footer", p).Render(padLine(" "+clipText(notice, max(0, w-1)), w))

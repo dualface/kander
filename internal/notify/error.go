@@ -9,12 +9,12 @@ import (
 
 const pollInterval = 100 * time.Millisecond
 
-// Error 是 notify 策略层的可展示失败.
+// Error is a displayable failure of the notify policy layer.
 type Error struct{ Message string }
 
 func (e *Error) Error() string { return e.Message }
 
-// BusyError 表示目标忙且 timeout 内未空闲; 不走恢复, 不改卡片.
+// BusyError means the target was busy and never went idle within the timeout; it neither recovers nor touches the card.
 type BusyError struct{ Message string }
 
 func (e *BusyError) Error() string { return e.Message }

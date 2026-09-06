@@ -104,8 +104,8 @@ func assertArg(t *testing.T, argv []string, flag, value string) {
 	t.Fatalf("missing %s in %v", flag, argv)
 }
 
-// Windows 上对管道写端调用 FlushFileBuffers 会阻塞到读端读完.
-// 审核结果通过 stdout 交回调用方, 守卫失效就是死锁.
+// On Windows, FlushFileBuffers on the write end of a pipe blocks until the read end drains it.
+// The review result is handed back to the caller through stdout, so a broken guard means a deadlock.
 func TestSyncStreamDoesNotBlockOnPipe(t *testing.T) {
 	reader, writer, err := os.Pipe()
 	if err != nil {

@@ -28,8 +28,8 @@ func FormatKanbanAgentsSummary(cfg *Config) string {
 	)
 }
 
-// KanbanModelFor 取某个任务规模实际生效的模型 id.
-// 规模模型为空时回落到旧配置里的共享 "model" 键.
+// KanbanModelFor returns the model id in force for one task scale.
+// An empty scale model falls back to the shared "model" key of legacy configs.
 func KanbanModelFor(entry map[string]string, scale string) string {
 	if model := entry[scale+"_model"]; model != "" {
 		return model
@@ -84,7 +84,7 @@ func FormatReviewStagesSummary(stages map[string]string) string {
 	return strings.Join(parts, " ")
 }
 
-// FormatConfigLines 供 kander config 使用的只读人类可读输出.
+// FormatConfigLines produces the read-only human-readable output of kander config.
 func FormatConfigLines(cfg *Config) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {
@@ -123,7 +123,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 	return lines, nil
 }
 
-// ReviewModelLines 输出两行: model 与 effort, 供审核入口读取.
+// ReviewModelLines returns two lines, model and effort, for the review entry point to read.
 func ReviewModelLines(cfg *Config, agent string) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {
@@ -136,7 +136,7 @@ func ReviewModelLines(cfg *Config, agent string) ([]string, error) {
 	return []string{entry["model"], entry["effort"]}, nil
 }
 
-// ReviewStageLines 按 PM/CSA/Hacker/QA 顺序输出 auto|skip|required.
+// ReviewStageLines prints auto|skip|required in PM/CSA/Hacker/QA order.
 func ReviewStageLines(cfg *Config) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {

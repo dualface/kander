@@ -38,7 +38,7 @@ var agentExitCommands = map[string]string{
 	"cursor": "/quit",
 }
 
-// AgentExitCommand 返回 Claude/Codex 的 /exit 或 Grok/Cursor 的 /quit.
+// AgentExitCommand returns /exit for Claude/Codex or /quit for Grok/Cursor.
 func AgentExitCommand(agent string) (string, error) {
 	cmd, ok := agentExitCommands[agent]
 	if !ok {
@@ -134,7 +134,7 @@ func herdrTabPanes(herdr, tabID string) ([]string, error) {
 	return matching, nil
 }
 
-// ValidateHerdrContainer 要求 pane 仍在目标 tab 且该 tab 只有这一 pane.
+// ValidateHerdrContainer requires the pane to still live in the target tab and that tab to hold only this pane.
 func ValidateHerdrContainer(herdr, tabID, paneID string, pane map[string]any) error {
 	actualTab := probe.PublicID(pane["tab_id"])
 	if actualTab != tabID {
@@ -154,7 +154,7 @@ func ValidateHerdrContainer(herdr, tabID, paneID string, pane map[string]any) er
 	return nil
 }
 
-// ValidateTmuxContainer 要求 pane 仍在目标 session/window 且 window 只有这一 pane.
+// ValidateTmuxContainer requires the pane to still live in the target session/window and that window to hold only this pane.
 func ValidateTmuxContainer(tmux, paneID, launcher, expectedSession, expectedWindow string) error {
 	facts, err := probe.ProbeTmuxContainer(tmux, paneID)
 	if err != nil {

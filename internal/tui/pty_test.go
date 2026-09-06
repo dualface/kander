@@ -20,8 +20,8 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// ptySession 在伪终端里跑 kander, 并像真实终端一样回答能力查询,
-// 否则 Bubble Tea 会一直等待背景色与光标位置的响应.
+// ptySession runs kander inside a pseudo-terminal and answers capability queries like a real terminal would,
+// otherwise Bubble Tea keeps waiting for the background color and cursor position responses.
 type ptySession struct {
 	t      *testing.T
 	cmd    *exec.Cmd
@@ -89,7 +89,7 @@ func (s *ptySession) text() string {
 	return string(s.out)
 }
 
-// waitFor 等待伪终端输出里出现某段文本.
+// waitFor waits for some text to appear in the pseudo-terminal output.
 func (s *ptySession) waitFor(needle string, timeout time.Duration) bool {
 	s.t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -124,8 +124,8 @@ func buildKander(t *testing.T) string {
 	return bin
 }
 
-// isolatedHome 给子进程一份独立的 HOME 与配置路径, 并放一个假的 codex,
-// 保证用例既不读也不写用户真实的 Kander 配置.
+// isolatedHome gives the child process its own HOME and config path and drops in a fake codex,
+// so the test neither reads nor writes the user's real Kander config.
 func isolatedHome(t *testing.T) (home string, env []string) {
 	t.Helper()
 	root := t.TempDir()
@@ -191,7 +191,7 @@ func writeCompleteConfig(t *testing.T, env []string) {
 	}
 }
 
-// 首次裸启动先执行 doctor, 再进看板并自动打开界面选项.
+// A bare first launch runs doctor, then enters the board and opens the interface options automatically.
 func TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY(t *testing.T) {
 	bin := buildKander(t)
 	_, env := boardEnv(t)
@@ -229,7 +229,7 @@ func TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY(t *testing.T) {
 	}
 }
 
-// 看板里按 o 打开选项面板.
+// Press o on the board to open the options panel.
 func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
 	bin := buildKander(t)
 	_, env := boardEnv(t)
@@ -242,7 +242,7 @@ func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
 	if !session.waitFor("Save and apply", 10*time.Second) {
 		t.Fatalf("options panel did not open\npty:\n%s", session.text())
 	}
-	// Esc 与后续按键之间必须留出间隔, 否则终端会把它们解析成 alt+<key>.
+	// A gap is required between Esc and the following key, otherwise the terminal parses them as alt+<key>.
 	session.send("\x1b")
 	time.Sleep(300 * time.Millisecond)
 	session.send("q")

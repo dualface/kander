@@ -53,8 +53,8 @@ func newPanelApp(t *testing.T) *App {
 	return app
 }
 
-// newTestSession 直接构造一个不做环境探测的配置会话.
-// 始终覆盖进程继承的 KANDER_CONFIG, 禁止测试写入用户配置.
+// newTestSession builds a config session directly, without any environment probing.
+// It always overrides the inherited KANDER_CONFIG, so tests can never write the user's config.
 func newTestSession(t *testing.T, initial ...*config.Config) *menu.Session {
 	t.Helper()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
@@ -117,13 +117,13 @@ func TestOpenOptionsAtInterface(t *testing.T) {
 	}
 }
 
-// 送一个消息给面板并跑完它返回的命令, 模拟 Bubble Tea 的事件循环.
+// Send one message to the panel and run the commands it returns, simulating the Bubble Tea event loop.
 func drivePanel(panel *optionsPanel, msg teaMsg) {
 	pumpPanel(panel, panel.Update(msg))
 }
 
-// pumpPanel 代替 Bubble Tea 跑一遍命令链. 命令里可能混有光标闪烁这类
-// 定时器命令, 同步执行会真的 sleep, 所以给每一步加个很短的超时.
+// pumpPanel runs one command chain in place of Bubble Tea. The chain may contain timer commands such as
+// cursor blinking, which would really sleep when run synchronously, so each step gets a very short timeout.
 func pumpPanel(panel *optionsPanel, cmd teaCmd) {
 	for i := 0; i < 24 && cmd != nil; i++ {
 		msg, ok := runCmd(cmd)
@@ -168,13 +168,13 @@ func TestEscapeKeepsSectionEdits(t *testing.T) {
 		t.Fatalf("section=%q", panel.current)
 	}
 	before := panel.session.Config.Reviewers["PM"]
-	// ←→ 就地改值, 不需要 Enter 走完整节.
+	// ←→ edits in place, with no need to Enter through the whole section.
 	drivePanel(panel, keyMsg("right"))
 	after := panel.session.Config.Reviewers["PM"]
 	if after == before {
 		t.Fatalf("right arrow did not change the reviewer (%s)", after)
 	}
-	// Esc 只是返回上一层, 不能把已改的值丢掉.
+	// Esc only returns one level up and must not drop the values already changed.
 	drivePanel(panel, keyMsg("esc"))
 	if panel.current != "" {
 		t.Fatalf("esc should return to the root menu, got %q", panel.current)
@@ -230,7 +230,7 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 	if panel.form.GetFocusedField() != panel.bind.formFields[0] || panel.bind.fieldIndex[interfaceFocusKey("language")] != 0 {
 		t.Fatal("default language should be the first interface option")
 	}
-	// 先改相邻字段, 再连续切换主题, 验证刷新不丢设置也不移动焦点.
+	// Change a neighboring field first, then switch themes repeatedly, verifying that the refresh loses no setting and does not move focus.
 	drivePanel(panel, keyMsg("down"))
 	drivePanel(panel, keyMsg("down"))
 	drivePanel(panel, keyMsg("right"))
@@ -307,7 +307,7 @@ func TestArrowsMoveBetweenFields(t *testing.T) {
 
 func TestUnsavedChangesGuardOnClose(t *testing.T) {
 	app, panel := openPanel(t)
-	// 干净状态下 q 直接关闭.
+	// In a clean state q closes right away.
 	drivePanel(panel, keyMsg("q"))
 	if app.Options != nil {
 		t.Fatal("q should close a clean panel")
@@ -347,7 +347,7 @@ func TestMouseClickFocusesRow(t *testing.T) {
 	}
 }
 
-// TestMeasureFormDropsViewportPadding 保证量到的是内容高度, 不是 Huh 视口补的空白.
+// TestMeasureFormDropsViewportPadding makes sure the measured value is the content height, not the padding Huh's viewport adds.
 func TestMeasureFormDropsViewportPadding(t *testing.T) {
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReview))
@@ -361,8 +361,8 @@ func TestMeasureFormDropsViewportPadding(t *testing.T) {
 	}
 }
 
-// 嵌套布局里, 小任务 Agent 前面隔着大任务的模型字段, 它的位置不是固定的 1.
-// 重建分区后要按这个位置恢复焦点, 否则焦点会跳回第一个 Agent 的模型输入框.
+// In the nested layout the small task agent sits behind the model fields of the large task, so its position is not a fixed 1.
+// Focus has to be restored to that position after a section rebuild, otherwise it jumps back to the model input of the first agent.
 func TestSelectorFieldIndexAccountsForNestedModels(t *testing.T) {
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionExecution))
@@ -375,7 +375,7 @@ func TestSelectorFieldIndexAccountsForNestedModels(t *testing.T) {
 	if large != 0 {
 		t.Fatalf("大任务 Agent 应排在最前, got %d", large)
 	}
-	// 大任务 Agent 下面挂着它的模型与推理档位, 所以小任务至少要往后让两位.
+	// The large task agent carries its model and reasoning effort below it, so the small task must be at least two positions further down.
 	if small < large+3 {
 		t.Fatalf("小任务 Agent 位置 %d 没有跳过大任务的模型字段", small)
 	}
@@ -473,7 +473,7 @@ func TestRootCursorRestoredAfterCloseConfirmKeepEditing(t *testing.T) {
 	assertRootFocus(t, panel, sectionExecution)
 }
 
-// typeRune 把一个字符作为键盘事件送进当前表单, 走真实输入路径.
+// typeRune sends one character into the current form as a keyboard event, through the real input path.
 func typeRune(panel *optionsPanel, ch rune) {
 	drivePanel(panel, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
 }

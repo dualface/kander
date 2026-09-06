@@ -42,7 +42,7 @@ func takeValue(args []string, i int) (string, int, bool) {
 	return args[i+1], i + 1, true
 }
 
-// RunNotify 实现 kander notify.
+// RunNotify implements kander notify.
 func RunNotify(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {

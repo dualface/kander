@@ -31,8 +31,8 @@ func promptAgents(paths config.InstallPaths) string {
 	return t("launch.the_target_project_s_agents_md")
 }
 
-// SelfMoveInstruction 在卡片处于 review 时生成「先自行迁回 working 再处理」的要求;
-// 其他状态返回空串. notify/resume 不再代迁卡, 迁移由被通知的执行 Agent 完成.
+// SelfMoveInstruction produces the "move yourself back to working before handling this" requirement while the card sits in review;
+// other states return an empty string. notify/resume no longer move cards, the notified execution agent does it.
 func SelfMoveInstruction(paths config.InstallPaths, taskID, state string) string {
 	if state != "review" {
 		return ""

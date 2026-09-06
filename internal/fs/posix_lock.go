@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// LockExclusive 在整个文件上取得阻塞式跨进程独占锁.
+// LockExclusive takes a blocking cross-process exclusive lock on the whole file.
 func LockExclusive(file *os.File) (*ExclusiveLock, error) {
 	if file == nil {
 		return nil, wrap("lock", "", os.ErrInvalid)
@@ -19,7 +19,7 @@ func LockExclusive(file *os.File) (*ExclusiveLock, error) {
 	return &ExclusiveLock{file: file}, nil
 }
 
-// Unlock 释放独占锁.
+// Unlock releases the exclusive lock.
 func (l *ExclusiveLock) Unlock() error {
 	if l == nil || l.file == nil {
 		return nil
@@ -43,12 +43,12 @@ func tightenPath(path string, dir bool) error {
 	return nil
 }
 
-// TightenPrivateFile 把文件权限收紧为 0600.
+// TightenPrivateFile tightens the file permissions to 0600.
 func TightenPrivateFile(path string) error {
 	return tightenPath(path, false)
 }
 
-// TightenPrivateDirectory 把目录权限收紧为 0700.
+// TightenPrivateDirectory tightens the directory permissions to 0700.
 func TightenPrivateDirectory(path string) error {
 	return tightenPath(path, true)
 }

@@ -322,7 +322,7 @@ func validateSubscribe(root string, opts subscribeOptions) ([]string, []string, 
 	return members, watched, nil
 }
 
-// Subscribe 向 w 输出 JSON Lines, 直到 stop 关闭.
+// Subscribe writes JSON Lines to w until stop is closed.
 func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan struct{}) error {
 	members, watched, err := validateSubscribe(root, opts)
 	if err != nil {
@@ -392,7 +392,7 @@ func usageSubscribe(w io.Writer) {
 	))
 }
 
-// RunSubscribe 实现 kander subscribe.
+// RunSubscribe implements kander subscribe.
 func RunSubscribe(args []string) int {
 	opts, parseErr := parseSubscribeArgs(args)
 	if parseErr == "usage" {

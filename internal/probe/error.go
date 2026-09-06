@@ -2,7 +2,7 @@ package probe
 
 import "github.com/dualface/kander/internal/config"
 
-// Error 是 pane 事实采集的可展示失败, 不含投递或存活策略.
+// Error is a displayable failure of pane fact collection; it carries no delivery or liveness policy.
 type Error struct {
 	Message string
 }

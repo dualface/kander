@@ -35,7 +35,7 @@ func TestDoctorSyncPreservesPendingSettings(t *testing.T) {
 func TestDoctorInstallDecision(t *testing.T) {
 	for _, action := range []string{"default", "escape", "confirm", "available"} {
 		t.Run(action, func(t *testing.T) {
-			// 空 PATH 保证确认流程也只会遇到缺失安装器, 不执行真实下载.
+			// An empty PATH guarantees the confirmation flow only ever meets a missing installer and never performs a real download.
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 			t.Setenv("USERPROFILE", home)

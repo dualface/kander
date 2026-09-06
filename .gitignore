@@ -1,8 +1,8 @@
-# 本机生成的目录, 不属于仓库内容
+# Locally generated directories, not repository content
 .code-review-graph/
 .memsearch/
 
-# 构建与系统产物
+# Build and system artifacts
 /kander
 *.exe
 *.test
@@ -10,8 +10,8 @@
 .DS_Store
 Thumbs.db
 
-# kanban/ 不写在这里: `kander init` 把它加进 .git/info/exclude,
-# 按 rules/KANDER-KANBAN-RULES.md 不得用项目 .gitignore 传播本机看板.
+# kanban/ is not listed here: `kander init` adds it to .git/info/exclude,
+# and rules/KANDER-KANBAN-RULES.md forbids propagating the local board via the project .gitignore.
 
 /worktrees/
 

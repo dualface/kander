@@ -1,12 +1,12 @@
-// Package version 暴露构建时注入的 Kander 版本标识.
+// Package version exposes the Kander version identity injected at build time.
 package version
 
 import "strings"
 
 var (
-	// BuildTimestamp 由构建入口以 UTC YYYYMMDDTHHMMSSZ 格式注入.
+	// BuildTimestamp is injected by the build entry point in UTC YYYYMMDDTHHMMSSZ format.
 	BuildTimestamp = "dev"
-	// GitHash 由构建入口注入当前提交的短 hash.
+	// GitHash is injected by the build entry point as the short hash of the current commit.
 	GitHash = "unknown"
 )
 
@@ -18,7 +18,7 @@ func component(value, fallback string) string {
 	return strings.Join(strings.Fields(value), "_")
 }
 
-// String 返回稳定的 <build-timestamp>-<git-hash> 版本号.
+// String returns the stable <build-timestamp>-<git-hash> version.
 func String() string {
 	return component(BuildTimestamp, "dev") + "-" + component(GitHash, "unknown")
 }

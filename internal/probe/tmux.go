@@ -14,7 +14,7 @@ const (
 
 var tmuxGoneMarkers = []string{"can't find", "no server running", "no sessions"}
 
-// TmuxPaneFacts 是存活的 tmux pane 事实.
+// TmuxPaneFacts are the facts of a live tmux pane.
 type TmuxPaneFacts struct {
 	Command       string
 	InMode        string
@@ -22,13 +22,13 @@ type TmuxPaneFacts struct {
 	SessionMarker string
 }
 
-// TmuxPaneProbe 是 tmux pane 探查结果: 事实或已消失.
+// TmuxPaneProbe is the result of probing a tmux pane: the facts, or gone.
 type TmuxPaneProbe struct {
 	Facts      *TmuxPaneFacts
 	GoneDetail string
 }
 
-// TmuxContainerFacts 是 pane 所属 session/window 容器事实.
+// TmuxContainerFacts are the facts of the session/window container owning the pane.
 type TmuxContainerFacts struct {
 	SessionID   string
 	SessionName string
@@ -81,12 +81,12 @@ func orExit(detail string, code int) string {
 	return "exit " + strconv.Itoa(code)
 }
 
-// ProbeTmuxPane 采集 tmux pane 命令/模式/dead 与会话标记. 双读 @kander_session 与 @onevoke_session.
+// ProbeTmuxPane collects the command/mode/dead state of a tmux pane plus its session marker. It reads both @kander_session and @onevoke_session.
 func ProbeTmuxPane(tmux, paneID string) (TmuxPaneProbe, error) {
 	return ProbeTmuxPaneWithin(tmux, paneID, 0)
 }
 
-// ProbeTmuxPaneWithin 在指定时限内采集 pane 事实; 非正值使用默认有界时限.
+// ProbeTmuxPaneWithin collects the pane facts within the given deadline; a non-positive value uses the default bounded deadline.
 func ProbeTmuxPaneWithin(tmux, paneID string, timeout time.Duration) (TmuxPaneProbe, error) {
 	if timeout <= 0 {
 		timeout = DefaultCommandTimeout
@@ -144,7 +144,7 @@ func readSessionMarker(tmux, paneID string, deadline time.Time) (string, string,
 	return "", "", nil
 }
 
-// TmuxPaneFactsOf 返回 pane 事实或 nil (已消失).
+// TmuxPaneFactsOf returns the pane facts, or nil when the pane is gone.
 func TmuxPaneFactsOf(tmux, paneID string) (*TmuxPaneFacts, error) {
 	probe, err := ProbeTmuxPane(tmux, paneID)
 	if err != nil {
@@ -153,12 +153,12 @@ func TmuxPaneFactsOf(tmux, paneID string) (*TmuxPaneFacts, error) {
 	return probe.Facts, nil
 }
 
-// ProbeTmuxContainer 采集 pane 所属容器坐标.
+// ProbeTmuxContainer collects the container coordinates owning the pane.
 func ProbeTmuxContainer(tmux, paneID string) (TmuxContainerFacts, error) {
 	return ProbeTmuxContainerWithin(tmux, paneID, 0)
 }
 
-// ProbeTmuxContainerWithin 在指定时限内采集 pane 容器坐标.
+// ProbeTmuxContainerWithin collects the pane container coordinates within the given deadline.
 func ProbeTmuxContainerWithin(tmux, paneID string, timeout time.Duration) (TmuxContainerFacts, error) {
 	res, err := runCommand(tmux, []string{
 		"display-message", "-p", "-t", paneID,

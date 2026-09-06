@@ -167,7 +167,7 @@ func palette() map[string]string {
 	}
 }
 
-// FormatList 渲染 list 输出.
+// FormatList renders the list output.
 func FormatList(board Board, state string, mobile bool) (string, error) {
 	rows, err := collectRows(board, state)
 	if err != nil {

@@ -1,11 +1,11 @@
-// Package fs 是 Kander 的跨平台安全文件边界.
+// Package fs is Kander's cross-platform safe file boundary.
 //
-// POSIX 使用 openat 与 O_NOFOLLOW 逐级打开, 私有文件 0600, 私有目录 0700,
-// 阻塞独占锁用 flock, 原子替换用 rename/os.replace 等价语义.
-// Windows 从卷/UNC anchor 逐分量拒绝全部 reparse point, 用已校验句柄完成
-// 读写、原子替换与锁; 私有对象在创建瞬间即当前用户独占的受保护 DACL,
-// 不得先按继承 ACL 发布再收紧. 任一安全后端失败显式报错, 不静默回落
-// 普通路径 API.
+// On POSIX it opens component by component with openat and O_NOFOLLOW, creates private files 0600 and private directories 0700,
+// takes blocking exclusive locks with flock, and replaces atomically with rename/os.replace-equivalent semantics.
+// On Windows it rejects every reparse point component by component from the volume/UNC anchor and performs reads, writes,
+// atomic replacement and locking through validated handles; a private object gets a protected DACL owned solely by the current user
+// at creation time, never published with inherited ACLs and tightened afterwards. Any failure of a safe backend is reported explicitly,
+// never silently downgraded to the ordinary path API.
 package fs
 
 import (
@@ -24,13 +24,13 @@ const (
 	tempNameAttempts                  = 128
 )
 
-// ErrUnsafe 表示路径越界, 含 reparse/symlink, 或最终对象类型不符合契约.
+// ErrUnsafe means the path escaped its boundary, contains a reparse point or symlink, or the final object type violates the contract.
 var ErrUnsafe = errors.New("unsafe path")
 
-// ErrTempCleanup 表示私有临时目录无法通过固定句柄完整清理.
+// ErrTempCleanup means a private temporary directory could not be fully cleaned up through its pinned handle.
 var ErrTempCleanup = errors.New("private temporary directory cleanup failed")
 
-// Kind 是 no-follow 枚举得到的直接成员类型.
+// Kind is the type of a direct member as enumerated without following links.
 type Kind string
 
 const (
@@ -39,13 +39,13 @@ const (
 	KindOther     Kind = "other"
 )
 
-// DirEntry 是 ListDirectory 返回的直接成员. 调用方随后仍须用本包原语打开叶对象.
+// DirEntry is a direct member returned by ListDirectory. Callers must still open the leaf object through this package's primitives.
 type DirEntry struct {
 	Name string
 	Kind Kind
 }
 
-// Identity 是已固定对象的稳定身份. POSIX 使用 Dev/Ino; Windows 使用 Volume 与 FileIndex.
+// Identity is the stable identity of a pinned object. POSIX uses Dev/Ino; Windows uses Volume and FileIndex.
 type Identity struct {
 	Dev       uint64
 	Ino       uint64
@@ -105,17 +105,17 @@ func isExist(err error) bool {
 	return errors.Is(err, os.ErrExist)
 }
 
-// ExclusiveLock 是跨进程阻塞独占锁. Unlock 必须成对调用.
+// ExclusiveLock is a cross-process blocking exclusive lock. Unlock must be paired with it.
 type ExclusiveLock struct {
 	file *os.File
 }
 
-// AppendFile 是固定叶句柄上的追加流. Close 会先 Sync 再关闭.
+// AppendFile is an append stream on a pinned leaf handle. Close syncs before closing.
 type AppendFile struct {
 	*os.File
 }
 
-// Close 先 Sync 再关闭, 对齐 onevoke 退出时 fsync.
+// Close syncs before closing, matching the fsync-on-exit behavior of onevoke.
 func (f *AppendFile) Close() error {
 	if f == nil || f.File == nil {
 		return nil
@@ -129,14 +129,14 @@ func (f *AppendFile) Close() error {
 	return closeErr
 }
 
-// TempDir 是已固定身份的私有临时目录. Close 从同一根句柄清理.
-// POSIX 将成员中的 symlink 当非目录 unlink (只删链接本身); Windows 遇任何 reparse point 失败关闭.
+// TempDir is a private temporary directory with a pinned identity. Close cleans it up through the same root handle.
+// POSIX unlinks a symlink member as a non-directory (removing the link only); Windows fails the close on any reparse point.
 type TempDir struct {
 	Path string
 	impl tempDirImpl
 }
 
-// Close 清理并删除临时目录.
+// Close cleans up and removes the temporary directory.
 func (d *TempDir) Close() error {
 	if d == nil || d.impl == nil {
 		return nil

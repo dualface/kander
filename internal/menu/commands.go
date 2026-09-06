@@ -41,7 +41,7 @@ func parseConfigArgs(args []string) (jsonOut bool, err error) {
 	return jsonOut, nil
 }
 
-// Doctor 实现 kander doctor.
+// Doctor implements kander doctor.
 func Doctor(args []string) int {
 	prepareLanguage()
 	for _, arg := range args {
@@ -58,7 +58,7 @@ func Doctor(args []string) int {
 	return 1
 }
 
-// Config 实现 kander config [--json].
+// Config implements kander config [--json].
 func Config(args []string) int {
 	prepareLanguage()
 	jsonOut, err := parseConfigArgs(args)

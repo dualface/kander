@@ -10,12 +10,12 @@ import (
 
 const (
 	cardHeight = 4
-	// 栏目最小宽度. 低于这个宽度的卡片已经读不出内容, 所以宁可少显示一栏.
+	// Minimum column width. Cards narrower than this are already unreadable, so showing one column fewer is preferable.
 	minColumnWidth     = config.DefaultTUIMinColumnWidth
 	minMinColumnWidth  = config.MinTUIMinColumnWidth
 	maxMinColumnWidth  = config.MaxTUIMinColumnWidth
 	minColumnWidthStep = 4
-	// 用户设置的是同屏栏目数, 宽度由终端宽度平分得出.
+	// The user configures the number of columns on screen; the width comes from splitting the terminal width evenly.
 	defaultColumns = config.DefaultTUIColumns
 	minColumns     = config.MinTUIColumns
 	minBoardHeight = 8
@@ -23,7 +23,7 @@ const (
 	spacerRow      = 1
 	panelTopRow    = 2
 	bodyTop        = 3
-	// 详情面板: 上边框, 元信息行, 分隔线, 然后才是正文.
+	// Detail panel: the top border, the metadata line, the separator, and only then the body.
 	detailPanelTopRow  = 2
 	detailMetaRow      = 3
 	detailRuleRow      = 4
@@ -42,7 +42,7 @@ var (
 	themes       = config.TUIThemes
 )
 
-// Task 与 BoardPayload 直接复用 board 包的领域视图, 避免解析规则分叉.
+// Task and BoardPayload reuse the domain views of the board package directly, so the parsing rules cannot fork.
 type Task = board.TaskSummary
 type BoardPayload = board.BoardView
 
@@ -104,7 +104,7 @@ func containsString(list []string, value string) bool {
 	return false
 }
 
-// maxColumns 是栏目数上限: 活跃栏目全部显示出来就到头了.
+// maxColumns is the upper bound on the column count: showing every active column is as far as it goes.
 func maxColumns() int {
 	return config.MaxTUIColumns
 }

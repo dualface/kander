@@ -187,8 +187,8 @@ func TestDefaultRunner(t *testing.T) {
 	}
 }
 
-// Windows PowerShell 5.1 用 ANSI 代码页读没有 BOM 的 .ps1, 会把安装器里的中文
-// 拆成乱码并直接语法报错. install.ps1 必须保留 UTF-8 BOM.
+// Windows PowerShell 5.1 reads a BOM-less .ps1 using the ANSI code page, which mangles the Chinese text
+// in the installer into a syntax error. install.ps1 must keep its UTF-8 BOM.
 func TestInstallerScriptKeepsUTF8BOM(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {

@@ -25,13 +25,13 @@ var (
 	isWindows = func() bool { return runtime.GOOS == "windows" }
 )
 
-// TaskSession 是卡片「会话」字段解析结果.
+// TaskSession is the parsed session field of a card.
 type TaskSession struct {
 	Agent     string
 	Reference string
 }
 
-// TmuxPaneLocation 是 tmux 反查命中的 pane 坐标.
+// TmuxPaneLocation is the pane coordinate hit by a tmux reverse lookup.
 type TmuxPaneLocation struct {
 	SessionID   string
 	SessionName string
@@ -39,7 +39,7 @@ type TmuxPaneLocation struct {
 	PaneID      string
 }
 
-// Report 是一张卡的只读存活分类, 永不写卡.
+// Report is the read-only liveness classification of one card; it never writes to the card.
 type Report struct {
 	TaskID    string
 	Agent     string

@@ -4,7 +4,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// uiPrefs 是 TUI 内部使用的界面偏好视图, 持久化统一交给 config.json.
+// uiPrefs is the UI preference view used inside the TUI; persistence goes through config.json alone.
 type uiPrefs struct {
 	Columns        int
 	MinColumnWidth int
@@ -25,7 +25,7 @@ func loadPrefs() uiPrefs {
 	return prefsFromConfig(cfg.TUI)
 }
 
-// savePrefs 落盘界面偏好, 返回实际写入的取值, 便于调用方同步选项会话基线.
+// savePrefs writes the UI preferences to disk and returns the values actually written, so the caller can sync the options session baseline.
 func savePrefs(prefs uiPrefs) (config.TUI, error) {
 	value := prefsConfig(prefs)
 	_, err := config.Update(func(cfg *config.Config) error {
@@ -59,7 +59,7 @@ func prefsConfig(prefs uiPrefs) config.TUI {
 	}
 }
 
-// saveColumns 记住用户希望同屏显示的栏目数.
+// saveColumns remembers how many columns the user wants on screen.
 func saveColumns(count int) (config.TUI, error) {
 	prefs := loadPrefs()
 	prefs.Columns = clampColumns(count)

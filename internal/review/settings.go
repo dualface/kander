@@ -81,8 +81,8 @@ func positiveInteger(value, variable string) (int, error) {
 	return n, nil
 }
 
-// configuredModel 取某个审核角色实际生效的模型与推理档位:
-// 先看该角色的覆盖, 为空再回落到它所选 Reviewer 的取值.
+// configuredModel returns the model and reasoning effort in force for a review role:
+// the role's own override first, falling back to the value of its selected reviewer when empty.
 func configuredModel(agent, role string) (string, string, bool) {
 	cfg, err := config.Effective(nil)
 	if err != nil || cfg == nil {

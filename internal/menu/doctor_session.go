@@ -7,7 +7,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// ApplyDoctorConfig 同步 doctor 修复结果, 保留面板中尚未保存的编辑.
+// ApplyDoctorConfig adopts the doctor repair result while keeping edits not yet saved in the panel.
 func (s *Session) ApplyDoctorConfig(before, after *config.Config, dirty bool) error {
 	merged := after
 	if dirty {
@@ -53,8 +53,8 @@ func preserveDoctorEdits(before, edited, after map[string]any) {
 	}
 }
 
-// SyncTUI 同步已在会话之外改动的界面偏好.
-// persisted 表示该取值已经落盘, 需要一并推进编辑基线, 否则保存时会被误判为其他进程改动.
+// SyncTUI adopts UI preferences that changed outside this session.
+// persisted means the value already reached disk and the editing baseline must advance with it, otherwise saving would mistake it for another process's change.
 func (s *Session) SyncTUI(value config.TUI, persisted bool) {
 	if s == nil {
 		return

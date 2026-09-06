@@ -164,7 +164,7 @@ func randomHex(n int) string {
 	return hex.EncodeToString(buf)
 }
 
-// CreatePrivateTempDir 用固定 parent/root fd 创建 0700 私有临时目录.
+// CreatePrivateTempDir creates a 0700 private temporary directory through pinned parent/root fds.
 func CreatePrivateTempDir(parent, prefix string) (*TempDir, error) {
 	parentAbs, err := absolutePath(parent)
 	if err != nil {

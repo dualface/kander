@@ -1,9 +1,9 @@
 #!/bin/sh
-# 看板写入护栏 hook 样例: 从 stdin 读取 Claude Code PreToolUse JSON,
-# 把 tool_input.file_path 交给 kander guard-write 判定.
-# 退出码 0 放行; 2 阻止本次工具调用 (stderr 会回显给 Agent).
-# 依赖 jq; 缺 jq、无 payload 或无 file_path 时放行, 不阻塞非看板写入.
-# 用法见 docs/kanban-write-guard.md. KANDER_BIN 可覆盖 kander 命令路径.
+# Example board write guard hook: read the Claude Code PreToolUse JSON from stdin
+# and hand tool_input.file_path to kander guard-write for a verdict.
+# Exit code 0 allows; 2 blocks this tool call (stderr is echoed back to the agent).
+# Requires jq; a missing jq, payload or file_path allows the write, so non-board writes are never blocked.
+# See docs/kanban-write-guard.md for usage. KANDER_BIN overrides the path to the kander command.
 
 set -u
 

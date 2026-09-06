@@ -40,7 +40,7 @@ func (p *optionsPanel) finishHerdrInstall() tea.Cmd {
 		lines, _ := p.session.InstallHerdr()
 		p.doctorLines = lines
 		p.status = t("tui.running_environment_check")
-		// 安装失败也重新探测并继续; 不在安装器运行期间并发检查.
+		// Re-probe and continue even when the install fails; no concurrent check runs while the installer does.
 		p.app.pendingWork = func() any {
 			return runDoctorReport(menu.CheckTerminalTools())
 		}

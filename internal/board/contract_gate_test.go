@@ -56,11 +56,11 @@ func TestTodoGateRequiresSelfReviewRecord(t *testing.T) {
 	path := filepath.Join(root, "backlog", taskID+".md")
 	fillSections(t, path)
 
-	// 契约完整但无自审记录: 拒绝.
+	// Complete contract but no self-review record: rejected.
 	if err := moveToTodo(t, root, taskID); err == nil || !strings.Contains(err.Error(), "自审") {
 		t.Fatalf("expected self-review gate, got %v", err)
 	}
-	// 补自审行后放行.
+	// Accepted once the self-review line is added.
 	appendDiscussion(t, path, "自审: 通过, 契约与用户目标一致")
 	if err := moveToTodo(t, root, taskID); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestTodoGateRequiresAcceptanceCheckbox(t *testing.T) {
 	path := filepath.Join(root, "backlog", taskID+".md")
 	fillSections(t, path)
 	appendDiscussion(t, path, "自审: 通过")
-	// 把验收条件改成没有勾选条目的纯文字.
+	// Rewrite the acceptance criteria as plain text with no checklist item.
 	data, _ := os.ReadFile(path)
 	text := strings.Replace(string(data), "- [ ] 满足验收", "尽量做好", 1)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
@@ -126,7 +126,7 @@ func TestTodoGateIgnoresEmptyCRLFGroupMetadata(t *testing.T) {
 	path := filepath.Join(root, "backlog", taskID+".md")
 	fillSections(t, path)
 	appendDiscussion(t, path, "自审: 通过")
-	// CRLF 保存的卡: 空「任务组:」不得被当成组员卡索要卡审.
+	// Card saved with CRLF: an empty task-group field must not be treated as a group member needing card review.
 	data, _ := os.ReadFile(path)
 	crlf := strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n", "\r\n")
 	if err := os.WriteFile(path, []byte(crlf), 0o644); err != nil {
@@ -141,10 +141,10 @@ func TestCheckFlagsContractDefectsForCommittedCards(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 
-	// backlog 卡带占位符: 不检查.
+	// Backlog card with placeholders: not checked.
 	capture(t, func() int { return RunNew([]string{"chore", "draft-card", "草稿"}) })
 
-	// working 卡残留 <填写> 且验收条件无条目: 逐项报契约缺陷.
+	// Working card that still has <fill in> and no acceptance item: report each contract defect.
 	badID := todayID("bad-working")
 	bad := "# 缺陷卡\n\n- 类型: Chore\n- 任务组:\n- 创建时间: 2026-09-06 03:00\n- 负责人:\n- 会话:\n- 窗口:\n- 开始时间:\n- 完成时间:\n- 任务分支:\n- 结果:\n\n" +
 		"## 任务目标\n\n<填写>\n\n## 用户决策\n\nN/A\n\n## 预期成果\n\n成果\n\n## 验收条件\n\n尽量做好\n\n## 威胁模型\n\nN/A\n\n## 不在本轮范围\n\n- 无\n\n## 讨论与决策\n\n自审: 通过\n\n## 实施与验证\n\n\n## 完成总结\n"

@@ -18,7 +18,7 @@ func reject(board *Board, path, message, taskID string, related ...string) {
 	}
 }
 
-// Scan 枚举全部状态栏入口.
+// Scan enumerates the entries of every state column.
 func Scan(root string) (Board, error) {
 	if err := ensureLayout(root); err != nil {
 		return Board{}, err
@@ -194,7 +194,7 @@ func scanTargetsOnce(root string, taskIDs []string) (Board, bool) {
 	return board, needsConfirmation
 }
 
-// ScanTargets 只探测明确任务 ID.
+// ScanTargets probes only the given task IDs.
 func ScanTargets(root string, values []string) (Board, error) {
 	if err := ensureLayout(root); err != nil {
 		return Board{}, err
@@ -223,7 +223,7 @@ func ScanTargets(root string, values []string) (Board, error) {
 	return board, nil
 }
 
-// LoadBoard 扫描并在存在无效入口时向 stderr 警告.
+// LoadBoard scans and warns on stderr when invalid entries exist.
 func LoadBoard(root string) (Board, error) {
 	board, err := Scan(root)
 	if err != nil {
@@ -242,7 +242,7 @@ func itoa(n int) string {
 	return strconv.Itoa(n)
 }
 
-// NormalizeTaskID 校验任务参数.
+// NormalizeTaskID validates a task argument.
 func NormalizeTaskID(value string) (string, error) {
 	if strings.ContainsAny(value, `/\`) {
 		return "", kanbanError("board.task_argument_must_be_a_task_id_or_entry")
@@ -257,7 +257,7 @@ func NormalizeTaskID(value string) (string, error) {
 	return taskID, nil
 }
 
-// Locate 按任务 ID 查找入口.
+// Locate finds an entry by task ID.
 func Locate(board Board, value string) (Entry, error) {
 	taskID, err := NormalizeTaskID(value)
 	if err != nil {

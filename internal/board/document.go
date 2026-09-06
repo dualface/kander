@@ -21,7 +21,7 @@ var (
 	checkboxRe   = regexp.MustCompile(`(?m)^- \[[ xX]\][ \t]*\S`)
 )
 
-// MetadataFrom 读取 `- 字段:` 元数据.
+// MetadataFrom reads a `- field:` metadata value.
 func MetadataFrom(text, name string) string {
 	re := regexp.MustCompile(`(?m)^- ` + regexp.QuoteMeta(name) + `:[ \t]*(.*?)[ \t\r]*$`)
 	match := re.FindStringSubmatch(text)
@@ -31,7 +31,7 @@ func MetadataFrom(text, name string) string {
 	return match[1]
 }
 
-// ReadDocument 以 UTF-8 读取任务文档.
+// ReadDocument reads the task document as UTF-8.
 func ReadDocument(entry Entry) (string, error) {
 	data, err := fs.ReadRegularFile(boardRootFromEntry(entry), entry.Document)
 	if err != nil {
@@ -55,7 +55,7 @@ func writeDocument(entry Entry, text string) error {
 	return nil
 }
 
-// TitleFrom 取首个一级标题.
+// TitleFrom returns the first level-one heading.
 func TitleFrom(text string) string {
 	for _, line := range strings.Split(text, "\n") {
 		if strings.HasPrefix(line, "# ") {
@@ -65,7 +65,7 @@ func TitleFrom(text string) string {
 	return untitled()
 }
 
-// SectionBody 取 ## 章节正文.
+// SectionBody returns the body of a ## section.
 func SectionBody(text, heading string) (string, bool) {
 	re := regexp.MustCompile(`(?m)^## ` + regexp.QuoteMeta(heading) + `\s*$`)
 	loc := re.FindStringIndex(text)
@@ -207,8 +207,8 @@ func validateReady(text string) error {
 	return nil
 }
 
-// validateReviewRecords 校验建卡后自审 (及大卡/任务组成员卡的独立审卡) 已在
-// 「讨论与决策」留下机器可查的结论行. 只能证明步骤被显式确认, 不能证明质量.
+// validateReviewRecords checks that the post-creation self-review (plus the independent card review for large cards and task-group member cards) left a
+// machine-checkable conclusion line under "Discussion and decisions". It only proves the step was explicitly acknowledged, never its quality.
 func validateReviewRecords(entry Entry, text string) error {
 	discussion, ok := SectionBody(text, "讨论与决策")
 	if !ok || !selfReviewRe.MatchString(discussion) {

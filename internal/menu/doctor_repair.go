@@ -8,7 +8,7 @@ import (
 func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*config.Config, bool) {
 	var changes []string
 	language := "en"
-	// 配置结果提示只使用磁盘配置的语言, 不受界面或进程语言覆盖影响.
+	// Config result messages only use the language of the on-disk config, unaffected by the UI or process language override.
 	text := func(id string, args ...any) string {
 		return i18n.Text(language, id, args...)
 	}
@@ -71,7 +71,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		if (!agentUsable(agents[selected]) || !agents[selected].Review) && reviewer != "" {
 			set("reviewers."+role, &selected, reviewer)
 			cfg.Reviewers[role] = selected
-			// 模型与 Reviewer 绑定; 改选时使用新 Reviewer 的模型设置.
+			// Models are bound to the reviewer; picking a new one adopts that reviewer's model settings.
 			entry := cfg.Models.Review[selected]
 			cfg.Models.ReviewRoles[role] = map[string]string{"model": entry["model"], "effort": entry["effort"]}
 		}
@@ -88,7 +88,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		}
 		set("launcher", &cfg.Launcher, replacement)
 	}
-	// 有可执行 Agent 和 Reviewer 时, 修复后的选择应立即成为有效配置.
+	// Once an execution agent and a reviewer exist, the repaired choices should immediately become the effective config.
 	if execution != "" && reviewer != "" {
 		cfg.WelcomeComplete = true
 	}

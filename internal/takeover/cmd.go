@@ -44,7 +44,7 @@ func takeValue(args []string, i int) (string, int, bool) {
 	return args[i+1], i + 1, true
 }
 
-// RunDismiss 实现 kander dismiss.
+// RunDismiss implements kander dismiss.
 func RunDismiss(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {

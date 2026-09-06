@@ -171,8 +171,8 @@ func currentEntry() (string, error) {
 	return lexicalAbsolute(exe)
 }
 
-// InstallPathsFromEntry 按入口解析全局或项目安装路径.
-// 仅当入口位于名为 .kander/bin/ 的目录时进入项目模式; 源码树的 cmd/ 不会被误判.
+// InstallPathsFromEntry resolves global or project install paths from the entry point.
+// Project mode is entered only when the entry lives in a directory named .kander/bin/, so a source tree's cmd/ is never mistaken for one.
 func InstallPathsFromEntry(entry string) (InstallPaths, error) {
 	source, err := lexicalAbsolute(entry)
 	if err != nil {
@@ -223,7 +223,7 @@ func InstallPathsFromEntry(entry string) (InstallPaths, error) {
 	return paths, nil
 }
 
-// CurrentInstallPaths 按当前可执行入口解析作用域.
+// CurrentInstallPaths resolves the scope from the current executable entry point.
 func CurrentInstallPaths() (InstallPaths, error) {
 	entry, err := currentEntry()
 	if err != nil {
@@ -232,7 +232,7 @@ func CurrentInstallPaths() (InstallPaths, error) {
 	return InstallPathsFromEntry(entry)
 }
 
-// ProjectInstallPaths 把用户给出的项目目录归一到 Git 主 worktree 下的项目安装路径.
+// ProjectInstallPaths normalizes a user-supplied project directory to the project install paths under the Git main worktree.
 func ProjectInstallPaths(project string) (InstallPaths, error) {
 	candidate, err := lexicalAbsolute(project)
 	if err != nil {
@@ -353,7 +353,7 @@ func appendGitExcludePattern(gitRoot, pattern string) (string, error) {
 	return exclude, nil
 }
 
-// EnsureProjectGitExclude 幂等把 /.kander/ 写入仓库本地 Git exclude, 并保持既有权限.
+// EnsureProjectGitExclude idempotently writes /.kander/ into the repository-local Git exclude while preserving existing permissions.
 func EnsureProjectGitExclude(project string) (string, error) {
 	paths, err := ProjectInstallPaths(project)
 	if err != nil {
@@ -367,7 +367,7 @@ func EnsureProjectGitExclude(project string) (string, error) {
 	return appendGitExcludePattern(paths.ProjectRoot, ProjectGitExcludePattern)
 }
 
-// ConfigPath 返回生效的配置文件路径; KANDER_CONFIG 覆盖作用域默认值.
+// ConfigPath returns the config file path in force; KANDER_CONFIG overrides the scope default.
 func ConfigPath() (string, error) {
 	if override := os.Getenv(EnvConfig); override != "" {
 		return expandUser(override), nil

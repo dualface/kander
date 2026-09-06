@@ -17,7 +17,7 @@ var (
 	errInputEnded    = errors.New("input ended")
 )
 
-// choice 是 Choice 的包内别名, 保留行式菜单里的旧写法.
+// choice is a package-local alias of Choice, kept for the older spelling in the line-based menu.
 type choice = Choice
 
 var pendingMu sync.Mutex

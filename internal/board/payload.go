@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TaskSummary 是 tui 扫描用的任务摘要, 字段与 onevoke payload 对齐.
+// TaskSummary is the task digest used by tui; its fields match the onevoke payload.
 type TaskSummary struct {
 	TaskID      string `json:"task_id"`
 	Title       string `json:"title"`
@@ -23,14 +23,14 @@ type TaskSummary struct {
 	Document    string `json:"document,omitempty"`
 }
 
-// BoardView 是只读看板 JSON, 供 tui 使用.
+// BoardView is the read-only board JSON consumed by tui.
 type BoardView struct {
 	GeneratedAt string        `json:"generated_at"`
 	Root        string        `json:"root"`
 	Tasks       []TaskSummary `json:"tasks"`
 }
 
-// TaskDisplayTime 对标 onevoke task_display_time.
+// TaskDisplayTime matches onevoke task_display_time.
 func TaskDisplayTime(entry Entry, text string) string {
 	switch entry.State {
 	case "working", "review":
@@ -54,7 +54,7 @@ func TaskDisplayTime(entry Entry, text string) string {
 	return "-"
 }
 
-// TaskSummaryOf 从入口和文档构造摘要.
+// TaskSummaryOf builds a digest from an entry and its document.
 func TaskSummaryOf(entry Entry, text string) TaskSummary {
 	kind := entry.Kind
 	if kind == "" {
@@ -92,7 +92,7 @@ func sortTaskSummaries(tasks []TaskSummary) {
 	})
 }
 
-// BoardPayload 用 Scan 构建 payload, 不经 LoadBoard, 不向终端打 check 警告.
+// BoardPayload builds the payload from Scan, bypassing LoadBoard so no check warning is printed to the terminal.
 func BoardPayload(root string) (BoardView, error) {
 	scanned, err := Scan(root)
 	if err != nil {
@@ -114,7 +114,7 @@ func BoardPayload(root string) (BoardView, error) {
 	}, nil
 }
 
-// TaskPayload 返回单卡摘要加正文, 同样走 Scan.
+// TaskPayload returns one card digest plus its body, also via Scan.
 func TaskPayload(root, taskID string) (TaskSummary, error) {
 	scanned, err := Scan(root)
 	if err != nil {

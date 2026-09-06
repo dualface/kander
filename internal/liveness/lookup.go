@@ -14,7 +14,7 @@ func taskGroupFrom(text string) string {
 	return board.TaskGroupFrom(text)
 }
 
-// ParseTaskSession 解析卡片会话字段; 无法解析时返回 nil.
+// ParseTaskSession parses the session field of a card; it returns nil when the field cannot be parsed.
 func ParseTaskSession(text string) *TaskSession {
 	value := board.MetadataFrom(text, "会话")
 	if value == "" {
@@ -46,7 +46,7 @@ func markersMatch(kander, onevoke, reference string) bool {
 	return kander == reference || onevoke == reference
 }
 
-// HerdrReverseLookup 按 Agent 与会话 identity 唯一反查 herdr pane.
+// HerdrReverseLookup uniquely locates a herdr pane by agent and session identity.
 func HerdrReverseLookup(herdr string, session TaskSession) (tabID, paneID string, err error) {
 	res, err := probe.Capture(herdr, []string{"pane", "list"}, 0)
 	if err != nil {
@@ -93,7 +93,7 @@ func HerdrReverseLookup(herdr string, session TaskSession) (tabID, paneID string
 	return matches[0][0], matches[0][1], nil
 }
 
-// TmuxReverseLookup 按会话标记、存活与前台进程名唯一反查 tmux pane. 双读 kander/onevoke 标记.
+// TmuxReverseLookup uniquely locates a tmux pane by session marker, liveness and foreground process name. It reads both the kander and onevoke markers.
 func TmuxReverseLookup(tmux string, session TaskSession) (TmuxPaneLocation, error) {
 	res, err := probe.Capture(tmux, []string{
 		"list-panes", "-a", "-F",
@@ -142,7 +142,7 @@ func TmuxReverseLookup(tmux string, session TaskSession) (TmuxPaneLocation, erro
 	return matches[0], nil
 }
 
-// RenderTmuxWindow 按 launcher 把反查坐标写成卡片窗口地址.
+// RenderTmuxWindow formats reverse-lookup coordinates as the window address stored on a card.
 func RenderTmuxWindow(launcher string, loc TmuxPaneLocation) string {
 	container := loc.SessionID
 	if launcher == "tmux-session" {

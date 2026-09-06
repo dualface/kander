@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// boardLayout 是一次渲染中各栏目的几何, 鼠标命中直接复用.
+// boardLayout is the geometry of each column in one render, reused directly for mouse hit testing.
 type boardLayout struct {
 	State        string
 	X            int
@@ -14,7 +14,7 @@ type boardLayout struct {
 	HasSeparator bool
 }
 
-// 栏目面板的圆角边框字符.
+// Rounded border characters of a column panel.
 const (
 	borderTopLeft     = "╭"
 	borderTopRight    = "╮"
@@ -24,13 +24,13 @@ const (
 	borderVertical    = "│"
 )
 
-// panelChrome 是一个栏目面板左右各占的列数: 边框 2 列, 内边距 2 列.
+// panelChrome is the number of columns a column panel takes on each side: 2 for the border, 2 for the padding.
 const panelChrome = 4
 
-// panelDetailChrome 与 panelChrome 相同, 详情面板铺满整屏宽度时同样要扣掉它.
+// panelDetailChrome equals panelChrome; the detail panel has to subtract it too when it spans the full screen width.
 const panelDetailChrome = 4
 
-// renderBoardView 用 Lip Gloss 组装看板: 顶栏, 留白, 若干栏目面板, 底部状态栏.
+// renderBoardView assembles the board with Lip Gloss: header, blank line, the column panels, and the bottom status bar.
 func (a *App) renderBoardView() string {
 	h, w := a.size()
 	p := themePalette(a.Theme)
@@ -63,17 +63,17 @@ func (a *App) renderBoardView() string {
 	board := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
-		// 顶栏与栏目面板之间留一行空白, 免得挤在一起.
+		// Leave one blank line between the header and the column panels so they are not cramped together.
 		p.fillLine(w),
 		padBlock(board, w, columnHeight, p),
 		a.renderStatusBar(p, w, len(layout)),
 	)
 }
 
-// renderHeader 是顶部单行: 左边是标题与搜索, 右边是栏目数与更新时间.
+// renderHeader is the single top line: title and search on the left, column count and update time on the right.
 func (a *App) renderHeader(p palette, w int) string {
-	// 搜索框用文字标签而不是放大镜 emoji: emoji 的显示宽度在各终端不一致,
-	// 会把按列计算的整行布局撑歪.
+	// The search box uses a text label rather than a magnifier emoji: emoji display widths differ across terminals
+	// and would skew the whole line, which is laid out by columns.
 	left := " " + a.Context.Title + "   " + a.Context.Search + ": " + a.Model.Query
 	if a.Searching {
 		left += "▏"
@@ -93,7 +93,7 @@ func (a *App) renderHeader(p palette, w int) string {
 	return styleFor("title", p).Render(padLine(clipText(left, w)+strings.Repeat(" ", gap)+right, w))
 }
 
-// compactStamp 只保留时间部分, 顶栏不需要重复今天的日期.
+// compactStamp keeps only the time part; the header need not repeat today's date.
 func compactStamp(value string) string {
 	if value == "" {
 		return "-"
@@ -104,8 +104,8 @@ func compactStamp(value string) string {
 	return value
 }
 
-// renderStatusBar 是底部状态栏: 左边是分段信息, 右边是最常用的两个按键.
-// 完整键位表交给 ? 帮助浮层, 底栏不再塞一长串被截断的提示.
+// renderStatusBar is the bottom status bar: segmented information on the left, the two most used keys on the right.
+// The full key table belongs to the ? help overlay, so the status bar no longer carries a long truncated hint.
 func (a *App) renderStatusBar(p palette, w, visible int) string {
 	if notice := a.transientNotice(); notice != "" {
 		return styleFor("footer", p).Render(padLine(" "+clipText(notice, max(0, w-1)), w))
@@ -124,7 +124,7 @@ func (a *App) renderStatusBar(p palette, w, visible int) string {
 	return styleFor("footer", p).Render(padLine(left+strings.Repeat(" ", gap)+right, w))
 }
 
-// transientNotice 是复制结果与错误这类临时消息, 出现时占满整条状态栏.
+// transientNotice covers the whole status bar while showing temporary messages such as copy results and errors.
 func (a *App) transientNotice() string {
 	if a.Now().Before(a.CopyNoticeUntil) && a.CopyNotice != "" {
 		return a.CopyNotice
@@ -146,7 +146,7 @@ func (a *App) visibleTaskCount() int {
 	return total
 }
 
-// renderColumnPanel 把一个栏目画成带标题的圆角面板.
+// renderColumnPanel draws one column as a rounded panel with a title.
 func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, first, last, moreLeft, moreRight bool) string {
 	width := col.Width
 	focused := col.State == a.Model.CurrentState()
@@ -189,8 +189,8 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, firs
 	return strings.Join(lines, "\n")
 }
 
-// renderCard 画一张任务卡. 卡片左右各留一列内边距, 且这两列一起参与着色,
-// 所以选中的卡是一整块铺满面板内宽的色块, 不需要再额外画一根竖条.
+// renderCard draws one task card. The card keeps one column of padding on each side and both take part in the coloring,
+// so a selected card is one solid block spanning the panel's inner width, with no extra vertical bar needed.
 func (a *App) renderCard(p palette, state string, task Task, contentWidth int, focused bool) []string {
 	selected := focused && task.TaskID == a.Model.SelectedIDs[state]
 	card := a.boardCardLines(task, contentWidth)
@@ -210,8 +210,8 @@ func (a *App) renderCard(p palette, state string, task Task, contentWidth int, f
 	return out
 }
 
-// panelTop 画面板上边框, 标题与数量徽标嵌在边框里: ╭─ 待办池 3 ────╮
-// 左右还有更多栏目时, 用边框两端的箭头提示, 不占标题的位置.
+// panelTop draws the panel top border with the title and the count badge embedded in it: ╭─ Todo 3 ────╮
+// When more columns exist to either side, arrows at the ends of the border hint at them without taking the title's place.
 func (a *App) panelTop(p palette, state, label, badge string, width int, focused, moreLeft, moreRight bool) string {
 	border := panelBorderStyle(p, state, focused)
 	if width < 6 {
@@ -225,7 +225,7 @@ func (a *App) panelTop(p palette, state, label, badge string, width int, focused
 	if moreRight {
 		tail = a.Glyphs["right"] + borderTopRight
 	}
-	// 有徽标时标题不留右侧空格, 由徽标自己带上左右各一格, 做成完整的小块.
+	// With a badge the title keeps no trailing space; the badge brings one space on each side itself, forming a complete little block.
 	title := " " + label + " "
 	chip := ""
 	if badge != "" {
@@ -259,7 +259,7 @@ func (a *App) panelBottom(p palette, state string, width int, focused bool) stri
 	return border.Render(borderBottomLeft + strings.Repeat(borderHorizontal, width-2) + borderBottomRight)
 }
 
-// panelRow 把一行内容裹进面板的左右边框.
+// panelRow wraps one line of content in the left and right panel borders.
 func (a *App) panelRow(p palette, state, content string, width int, focused bool) string {
 	border := panelBorderStyle(p, state, focused)
 	inner := width - 2

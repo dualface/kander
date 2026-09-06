@@ -7,17 +7,17 @@ import (
 	"strings"
 )
 
-// GuardVerdict 是 guard-write 的判定结果.
+// GuardVerdict is the decision of guard-write.
 type GuardVerdict struct {
 	Allowed bool
 	Reason  string
 }
 
-// GuardWrite 判定对 path 的写入是否会在看板状态目录复活旧卡.
-// 状态目录直接子项 (卡片入口) 当前不存在时拒绝: 合法新建只经 kander new,
-// 缺失的入口意味着卡片已迁移或从未存在, 原地新建会产生跨状态副本.
-// 目录卡内部文件同样要求所属目录卡入口存在, 否则写入会静默重建整个目录卡.
-// root 为空表示当前环境定位不到看板, 一律放行.
+// GuardWrite decides whether writing to path would resurrect a stale card in a board state directory.
+// A direct child of a state directory (a card entry) that does not currently exist is rejected: a legitimate new card only comes from kander new,
+// so a missing entry means the card has moved or never existed, and writing it in place would create a cross-state duplicate.
+// Files inside a directory card likewise require the owning card entry to exist, otherwise the write would silently rebuild the whole directory card.
+// An empty root means no board can be located in the current environment, which always passes.
 func GuardWrite(root, path string) (GuardVerdict, error) {
 	if root == "" {
 		return GuardVerdict{Allowed: true}, nil
@@ -59,15 +59,15 @@ func GuardWrite(root, path string) (GuardVerdict, error) {
 	return GuardVerdict{Reason: t("board.guard_missing_direct_child", state)}, nil
 }
 
-// RunGuardWrite 实现 kander guard-write. 退出码 0 放行, 1 拒绝, 2 用法错误.
+// RunGuardWrite implements kander guard-write. Exit code 0 allows, 1 rejects, 2 is a usage error.
 func RunGuardWrite(args []string) int {
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return usageFail("guard-write", "board.guard_path_required")
 	}
 	root, err := BoardRoot()
 	if err != nil {
-		// 定位不到看板 (非 Git 项目且未设 KANBAN_DIR) 时不阻塞宿主项目的写入;
-		// 其他定位错误 (非法路径, 不安全入口) 仍然失败, 不静默放行.
+		// When no board can be located (not a Git project and KANBAN_DIR unset) the host project's write is not blocked;
+		// other location errors (illegal path, unsafe entry) still fail instead of silently passing.
 		if IsBoardNotFound(err) {
 			return 0
 		}

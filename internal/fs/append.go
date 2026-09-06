@@ -5,8 +5,8 @@ import (
 	"io"
 )
 
-// AppendUniqueLine 在同一固定叶句柄内去重追加一行, 不改既有 ACL/mode.
-// 用于 Git exclude 等中性对象. 行匹配按整行精确比较, 不含换行符.
+// AppendUniqueLine appends one deduplicated line through a single pinned leaf handle, leaving existing ACLs/modes untouched.
+// It is meant for neutral objects such as the Git exclude. Lines are matched by exact full-line comparison, excluding the newline.
 func AppendUniqueLine(root, path, line string) error {
 	file, err := OpenAppendFile(root, path)
 	if err != nil {

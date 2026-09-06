@@ -174,7 +174,7 @@ func writeFD(fd int, data []byte) error {
 	return unix.Fsync(fd)
 }
 
-// ReadRegularFile 相对受保护根 no-follow 读取普通文件.
+// ReadRegularFile reads a regular file relative to a protected root without following links.
 func ReadRegularFile(root, path string) ([]byte, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -196,7 +196,7 @@ func ReadRegularFile(root, path string) ([]byte, error) {
 	return data, nil
 }
 
-// ReadRegularFileIfExists 读取可选普通文件; 只把真实缺失视为 (nil, false).
+// ReadRegularFileIfExists reads an optional regular file; only genuine absence yields (nil, false).
 func ReadRegularFileIfExists(root, path string) ([]byte, bool, error) {
 	data, err := ReadRegularFile(root, path)
 	if isNotExist(err) {
@@ -208,7 +208,7 @@ func ReadRegularFileIfExists(root, path string) ([]byte, bool, error) {
 	return data, true, nil
 }
 
-// RegularFileExists 用非阻塞 no-follow 打开判断普通文件, 避免 FIFO 挂起.
+// RegularFileExists detects a regular file with a non-blocking no-follow open, so a FIFO cannot hang it.
 func RegularFileExists(root, path string) (bool, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -232,7 +232,7 @@ func RegularFileExists(root, path string) (bool, error) {
 	return true, nil
 }
 
-// OpenRegularFileIfExists 安全打开可选普通文件. 缺失时返回 (nil, nil).
+// OpenRegularFileIfExists safely opens an optional regular file. Absence returns (nil, nil).
 func OpenRegularFileIfExists(root, path string) (*os.File, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -256,7 +256,7 @@ func OpenRegularFileIfExists(root, path string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), parent.path), nil
 }
 
-// OpenWritableRegularFile 相对受保护根 no-follow 打开已有普通文件供覆写.
+// OpenWritableRegularFile opens an existing regular file for overwriting relative to a protected root, without following links.
 func OpenWritableRegularFile(root, path string) (*os.File, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -274,7 +274,7 @@ func OpenWritableRegularFile(root, path string) (*os.File, error) {
 	return os.NewFile(uintptr(fd), parent.path), nil
 }
 
-// MakeRegularFileReadOnly 通过已验证句柄把普通文件设为 0400.
+// MakeRegularFileReadOnly sets a regular file to 0400 through an already validated handle.
 func MakeRegularFileReadOnly(root, path string) error {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -295,7 +295,7 @@ func MakeRegularFileReadOnly(root, path string) error {
 	return nil
 }
 
-// RemoveRegularFileIfExists 不跟随链接删除一个普通文件.
+// RemoveRegularFileIfExists removes one regular file without following links.
 func RemoveRegularFileIfExists(root, path string) (bool, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -325,7 +325,7 @@ func RemoveRegularFileIfExists(root, path string) (bool, error) {
 	return true, nil
 }
 
-// OpenAppendFile 固定普通文件描述符读取和追加, 且不修改既有 mode.
+// OpenAppendFile pins a regular file descriptor for reading and appending, leaving the existing mode untouched.
 func OpenAppendFile(root, path string) (*AppendFile, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -343,13 +343,13 @@ func OpenAppendFile(root, path string) (*AppendFile, error) {
 	return &AppendFile{File: os.NewFile(uintptr(fd), parent.path)}, nil
 }
 
-// WriteTextAtomic 相对固定父目录原子写入 UTF-8 文本.
-// replace=false 时独占占用新入口 (Linux Renameat2, Darwin RenameatxNp, 其余 Linkat), 已存在则失败.
+// WriteTextAtomic atomically writes UTF-8 text relative to a pinned parent directory.
+// With replace=false it claims the new entry exclusively (Renameat2 on Linux, RenameatxNp on Darwin, Linkat elsewhere) and fails when it already exists.
 func WriteTextAtomic(root, path, text string, replace bool) error {
 	return writeTextAtomic(root, path, text, replace, uint32(privateFileMode))
 }
 
-// WriteTextAtomicInherited 保留既有文件 mode, 新文件按 0666 与进程 umask 创建.
+// WriteTextAtomicInherited keeps the existing file mode and creates new files as 0666 masked by the process umask.
 func WriteTextAtomicInherited(root, path, text string, replace bool) error {
 	return writeTextAtomic(root, path, text, replace, 0o666)
 }

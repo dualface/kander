@@ -17,7 +17,7 @@ import (
 
 var procNtQueryDirectoryFile = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtQueryDirectoryFile")
 
-// IsReparsePoint 不跟随路径, 判断它是否为 reparse point 或 symlink.
+// IsReparsePoint reports whether the path is a reparse point or a symlink, without following it.
 func IsReparsePoint(path string) bool {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -160,7 +160,7 @@ func OpenWritableRegularFile(root, path string) (*os.File, error) {
 	return os.NewFile(uintptr(handle), candidate), nil
 }
 
-// MakeRegularFileReadOnly 在 Windows 上保留原有 ACL/属性, 但仍通过固定句柄验证对象.
+// MakeRegularFileReadOnly keeps the existing ACLs and attributes on Windows but still validates the object through a pinned handle.
 func MakeRegularFileReadOnly(root, path string) error {
 	_, _, cleanup, err := openChain(root, path, windows.FILE_READ_ATTRIBUTES, kindFile)
 	if err != nil {
@@ -170,7 +170,7 @@ func MakeRegularFileReadOnly(root, path string) error {
 	return nil
 }
 
-// RemoveRegularFileIfExists 通过固定叶句柄删除一个普通文件.
+// RemoveRegularFileIfExists deletes one regular file through a pinned leaf handle.
 func RemoveRegularFileIfExists(root, path string) (bool, error) {
 	exists, err := RegularFileExists(root, path)
 	if err != nil || !exists {
@@ -492,7 +492,7 @@ func WriteTextAtomic(root, path, text string, replace bool) error {
 	return writeTextAtomic(root, path, text, replace, true)
 }
 
-// WriteTextAtomicInherited 以父目录继承的 ACL 创建替换文件, 不检查或收紧 DACL.
+// WriteTextAtomicInherited creates the replacement file with the ACLs inherited from the parent directory, without inspecting or tightening the DACL.
 func WriteTextAtomicInherited(root, path, text string, replace bool) error {
 	return writeTextAtomic(root, path, text, replace, false)
 }
@@ -867,9 +867,9 @@ func CreatePrivateTempDir(parent, prefix string) (*TempDir, error) {
 	for range tempNameAttempts {
 		name := prefix + randomHex(16)
 		candidate := filepath.Join(parentAbs, name)
-		// 租约句柄常驻到 Close, 共享 write 是必需的: renameHandle 把临时文件改名到
-		// 该目录时, 内核会以写权限打开目标父目录, 不共享 write 就 sharing violation.
-		// 不共享 delete: 没有调用点会对这个目录再请求 DELETE, 保持最小放开.
+		// The lease handle lives until Close, so shared write is required: when renameHandle renames the temporary file into
+		// that directory, the kernel opens the target parent directory for write, which is a sharing violation without shared write.
+		// Delete is not shared: no call site requests DELETE on this directory again, so the opening stays minimal.
 		handle, err := openRelative(
 			parentHandle, name, candidate,
 			windows.DELETE|windows.READ_CONTROL|windows.WRITE_DAC|windows.FILE_LIST_DIRECTORY|windows.FILE_READ_ATTRIBUTES,

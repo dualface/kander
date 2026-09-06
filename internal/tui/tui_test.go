@@ -49,7 +49,7 @@ func TestDisplayHelpers(t *testing.T) {
 }
 
 func TestVisibleColumns(t *testing.T) {
-	// 用户设定同屏栏目数; 终端放不下 desired*minColumnWidth 时自动减少栏数.
+	// The user configures the number of columns on screen; when the terminal cannot fit desired*minColumnWidth, columns are dropped automatically.
 	for _, tc := range []struct {
 		name                  string
 		width, total, desired int
@@ -57,7 +57,7 @@ func TestVisibleColumns(t *testing.T) {
 	}{
 		{"宽度充裕按用户设定", 160, 5, 3, 3},
 		{"宽度充裕也不超过栏目总数", 400, 2, 5, 2},
-		// 3 栏还要占 2 列分隔线, 所以"刚好放下"是 minColumnWidth*3+2.
+		// 3 columns also take 2 separator columns, so "exactly fits" is minColumnWidth*3+2.
 		{"刚好放下", minColumnWidth*3 + 2, 5, 3, 3},
 		{"差一列就减一栏", minColumnWidth*3 + 1, 5, 3, 2},
 		{"放不下两栏最小宽度就只显示一栏", minColumnWidth * 2, 5, 4, 1},
@@ -76,7 +76,7 @@ func TestVisibleColumns(t *testing.T) {
 	if got := visibleColumnCount(81, 5, false, 4, 40); got != 2 {
 		t.Fatalf("min width 40 should fit 2 columns in 81, got %d", got)
 	}
-	// 结算出的栏宽必须铺满终端宽度.
+	// The computed column widths must fill the terminal width.
 	layout := columnGeometry(160, 3)
 	total := 0
 	for _, col := range layout {
@@ -91,7 +91,7 @@ func TestVisibleColumns(t *testing.T) {
 	if total != 160 {
 		t.Fatalf("columns must fill the width, got %d: %+v", total, layout)
 	}
-	// 回归: 结算栏数时漏算分隔线, 会让每栏都窄于用户设定的最小宽度.
+	// Regression: ignoring the separators while computing the column count makes every column narrower than the user's minimum width.
 	for _, minWidth := range []int{minMinColumnWidth, 40, 48, maxMinColumnWidth} {
 		for width := 40; width <= 400; width++ {
 			count := visibleColumnCount(width, 5, false, maxColumns(), minWidth)
@@ -355,7 +355,7 @@ func TestColumnCountPrefs(t *testing.T) {
 	if app.Columns != 3 {
 		t.Fatalf("%d", app.Columns)
 	}
-	// 栏目数有上下界: 最少 1 栏, 最多把活跃栏目全放下.
+	// The column count is bounded: at least 1, at most all active columns.
 	for i := 0; i < 20; i++ {
 		app.handleBoardKey("-")
 	}
@@ -390,7 +390,7 @@ func TestRenderKeepsFocusColumn(t *testing.T) {
 	for _, state := range []string{"backlog", "todo", "working", "done"} {
 		tasks = append(tasks, Task{TaskID: "20260821-" + state + "-task", Title: state, State: state})
 	}
-	// 同屏只要 2 栏, 便于观察左右切换时选中栏是否始终可见.
+	// Only 2 columns on screen, which makes it easy to watch whether the selected column stays visible while moving left and right.
 	app := newApp(false, 30, pageContext{
 		StateLabels: map[string]string{"backlog": "backlog", "todo": "todo", "working": "working", "review": "review", "done": "done"},
 		Empty:       "No tasks",
@@ -407,7 +407,7 @@ func TestRenderKeepsFocusColumn(t *testing.T) {
 	if !strings.Contains(headings, "review") || strings.Contains(headings, "backlog") {
 		t.Fatalf("focused %q", headings)
 	}
-	// 终端窄到放不下 2 栏最小宽度时收敛成一栏, 而不是硬排两栏.
+	// A terminal too narrow for the minimum width of 2 columns converges to one column instead of forcing two.
 	app.Width = minColumnWidth + 4
 	if strings.Contains(strings.ToLower(viewLine(app, panelTopRow)+viewLine(app, headerRow)), "too small") {
 		t.Fatal("narrow should still render")
@@ -601,12 +601,12 @@ func TestAutoRefreshInterval(t *testing.T) {
 	}
 }
 
-// stripANSI 去掉样式转义, 便于断言渲染后的可见文本.
+// stripANSI removes the styling escapes so the rendered visible text can be asserted on.
 func stripANSI(text string) string {
 	return ansi.Strip(text)
 }
 
-// viewLine 返回渲染结果里第 index 行的可见文本.
+// viewLine returns the visible text of line index in the rendered output.
 func viewLine(app *App, index int) string {
 	lines := strings.Split(stripANSI(app.View()), "\n")
 	if index < 0 || index >= len(lines) {
@@ -615,8 +615,8 @@ func viewLine(app *App, index int) string {
 	return lines[index]
 }
 
-// 看板界面调整栏目数会直接写 config.json; 缓存的选项会话必须同步基线,
-// 否则随后的保存会误报「配置已被其他进程修改」.
+// Adjusting the column count from the board UI writes config.json directly; the cached options session must sync its baseline,
+// otherwise a later save would wrongly claim "the config was modified by another process".
 func TestAdjustColumnsKeepsOptionsSessionInSync(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(config.EnvConfig, filepath.Join(dir, "config.json"))

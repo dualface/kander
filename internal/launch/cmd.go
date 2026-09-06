@@ -90,7 +90,7 @@ func parseAgentLauncher(args []string) (rest []string, agent, launcher string, a
 	return rest, agent, launcher, agentSet, ""
 }
 
-// RunStart 实现 kander start.
+// RunStart implements kander start.
 func RunStart(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
@@ -124,7 +124,7 @@ func RunStart(args []string) int {
 	return 0
 }
 
-// RunResume 实现 kander resume.
+// RunResume implements kander resume.
 func RunResume(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {

@@ -10,7 +10,7 @@ import (
 	"golang.org/x/term"
 )
 
-// mouseButtons 是与终端库无关的按键集合, 便于测试直接构造事件.
+// mouseButtons is a terminal-library-independent button set, so tests can build events directly.
 type mouseButtons int
 
 const (
@@ -30,8 +30,8 @@ type mouseTracker struct {
 
 const doubleClickWindow = 500 * time.Millisecond
 
-// mapButtons 把一次原始按键状态折算成 selection.go 的 bstate 位掩码,
-// 并在此识别按下, 拖动, 释放, 单击与双击.
+// mapButtons converts one raw button state into the bstate bitmask of selection.go,
+// recognizing press, drag, release, click and double-click along the way.
 func (m *mouseTracker) mapButtons(x, y int, btns mouseButtons, when time.Time) int {
 	if when.IsZero() {
 		when = time.Now()
@@ -79,8 +79,8 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(uiTickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// shellOut 让 App 请求把终端暂时交还给一个会占用当前终端的操作
-// (安装 tmux). Bubble Tea 在执行期间退出 alt-screen.
+// shellOut lets App ask for the terminal to be handed back temporarily to an action that occupies it
+// (installing tmux). Bubble Tea leaves the alt-screen while it runs.
 type shellOut struct {
 	run  func()
 	done func()
@@ -97,10 +97,10 @@ func (s *shellOut) Run() error {
 
 type shellDoneMsg struct{}
 
-// workMsg 携带后台任务的结果 (环境探测, 环境检查).
+// workMsg carries the result of a background task (environment probing, environment checks).
 type workMsg struct{ payload any }
 
-// program 是 App 的 Bubble Tea 外壳: 只做事件翻译, 不含界面逻辑.
+// program is the Bubble Tea shell of App: it only translates events and holds no UI logic.
 type program struct {
 	app *App
 }
@@ -141,7 +141,7 @@ func (p program) View() string {
 	return p.app.View()
 }
 
-// takePending 取出 App 排队的终端占用请求与后台任务, 没有时返回 nil.
+// takePending takes the terminal handover requests and background tasks App has queued, returning nil when there are none.
 func (a *App) takePending() tea.Cmd {
 	var cmds []tea.Cmd
 	if a.pendingShell != nil {
@@ -226,8 +226,8 @@ func mapKey(event tea.KeyMsg) string {
 	return ""
 }
 
-// runTUI 启动 Bubble Tea. 程序一开始就进入 alt-screen, 之后的加载,
-// 刷新与报错都发生在备用屏幕内, 不污染用户原有终端内容.
+// runTUI starts Bubble Tea. The program enters the alt-screen right away, so all later loading,
+// refreshing and error reporting happen on the alternate screen and never pollute the user's terminal scrollback.
 func runTUI(app *App) error {
 	p := tea.NewProgram(
 		program{app: app},

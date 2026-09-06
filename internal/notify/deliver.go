@@ -16,7 +16,7 @@ func herdrFailureDetail(res probe.Result) string {
 	return fmt.Sprintf("exit %d", res.Code)
 }
 
-// HerdrAgentPrompt 向 pane 内已运行的 Agent TUI 投递正文, 不用 pane run.
+// HerdrAgentPrompt delivers the body to the agent TUI already running in the pane, without using pane run.
 func HerdrAgentPrompt(herdr, paneID, text string) error {
 	res, err := probe.Capture(herdr, []string{"agent", "prompt", paneID, text}, 0)
 	if err != nil {
@@ -100,8 +100,8 @@ func tmuxDirectNotify(tmux, paneID, instruction, marker string, timeout float64)
 	}
 }
 
-// flushStdout 只对普通文件落盘. Windows 上对管道写端调用 FlushFileBuffers 会一直阻塞到
-// 读端取走全部数据, 控制台句柄上又没有意义; os.File 的写入本身不带缓冲, 无需额外冲刷.
+// flushStdout only syncs regular files. On Windows, FlushFileBuffers on the write end of a pipe blocks until the read
+// end has drained everything, and it is meaningless on a console handle; os.File writes are unbuffered anyway, so no extra flush is needed.
 func flushStdout() {
 	info, err := os.Stdout.Stat()
 	if err != nil || !info.Mode().IsRegular() {

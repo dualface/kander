@@ -8,8 +8,8 @@ import (
 
 var detectDarkBackground = lipgloss.HasDarkBackground
 
-// palette 是一套解析后的主题配色. 浅色/深色会铺满整屏背景,
-// 不再把底色交给终端, 避免浅色主题在深色终端里只剩黑字。
+// palette is one resolved theme. Light and dark both fill the whole screen background
+// instead of leaving it to the terminal, so a light theme is not reduced to black text in a dark terminal.
 type palette struct {
 	Base      lipgloss.Color
 	Bg        lipgloss.Color
@@ -40,8 +40,8 @@ func themePalette(name string) palette {
 	base := lipgloss.Color("15")
 	bg := lipgloss.Color("0")
 	dim := lipgloss.Color("8")
-	// 分隔线只是分栏用的辅助线, 取比 Dim (ANSI 8, 中灰) 更贴近背景的一档:
-	// 深色底用 240, 浅色底用 250, 两边都明显低于正文对比度但仍看得见.
+	// The separator is only a helper line between columns, so it takes a shade closer to the background than Dim (ANSI 8, mid grey):
+	// 240 on a dark background and 250 on a light one, both clearly below body contrast yet still visible.
 	separator := lipgloss.Color("240")
 	if resolveTheme(name) == "light" {
 		base = lipgloss.Color("0")
@@ -92,7 +92,7 @@ func (p palette) paint(style lipgloss.Style) lipgloss.Style {
 	return style.Background(p.Bg)
 }
 
-// paintScreen 把内容铺到固定宽高的画布上, 行尾和空行也带主题背景.
+// paintScreen lays the content on a canvas of fixed width and height, with line ends and blank lines carrying the theme background too.
 func paintScreen(content string, width, height int, p palette) string {
 	if width < 1 {
 		width = 1
@@ -112,7 +112,7 @@ func paintScreen(content string, width, height int, p palette) string {
 	return strings.Join(out, "\n")
 }
 
-// styleFor 把 screenBuffer 的单元格标签映射为 lipgloss 样式.
+// styleFor maps a screenBuffer cell tag to a lipgloss style.
 func styleFor(tag string, p palette) lipgloss.Style {
 	style := p.ink(p.Base)
 	switch {
@@ -158,8 +158,8 @@ func styleFor(tag string, p palette) lipgloss.Style {
 	return style
 }
 
-// headingStyle 是栏目标题的样式. 当前选中的栏目反色显示,
-// 让「焦点在哪一栏」在没有选中卡片时也一眼可见.
+// headingStyle is the style of a column title. The selected column is inverted,
+// so which column has focus is obvious at a glance even when no card is selected.
 func headingStyle(p palette, state string, focused bool) lipgloss.Style {
 	style := styleFor("heading-"+state, p)
 	if focused {
@@ -168,8 +168,8 @@ func headingStyle(p palette, state string, focused bool) lipgloss.Style {
 	return style
 }
 
-// headingRuleStyle 是标题下方的横线. 选中栏用栏目色作焦点提示,
-// 其余栏与竖分隔线同样走低对比度的 separator, 不跟内容抢注意力.
+// headingRuleStyle is the rule below the title. The selected column uses its column color as a focus hint,
+// while the others take the same low-contrast separator as the vertical dividers and do not compete with the content.
 func headingRuleStyle(p palette, state string, focused bool) lipgloss.Style {
 	if focused {
 		return styleFor("heading-"+state, p)
@@ -177,7 +177,7 @@ func headingRuleStyle(p palette, state string, focused bool) lipgloss.Style {
 	return styleFor("separator", p)
 }
 
-// stateColor 是某个栏目的主题色, 未知栏目退回基础前景色.
+// stateColor is the theme color of one column, falling back to the base foreground for an unknown column.
 func stateColor(p palette, state string) lipgloss.Color {
 	if color, ok := p.Headings[state]; ok {
 		return color
@@ -185,9 +185,9 @@ func stateColor(p palette, state string) lipgloss.Color {
 	return p.Base
 }
 
-// cardStyle 是任务卡某一行的样式. 第 0 行是标题, 用所在栏目的颜色,
-// 与栏目标题保持同一色系; 其余行是任务 ID 与元信息, 保持基础色.
-// 选中的卡整张按栏目色反色, 让选中项与所属栏目一眼对得上.
+// cardStyle is the style of one line of a task card. Line 0 is the title and takes the color of its column,
+// staying in the same family as the column title; the remaining lines are the task ID and metadata and keep the base color.
+// A selected card is inverted in its column color as one block, so the selection and its column match up at a glance.
 func cardStyle(p palette, state string, line int, selected bool) lipgloss.Style {
 	color := stateColor(p, state)
 	if selected {
@@ -203,8 +203,8 @@ func cardStyle(p palette, state string, line int, selected bool) lipgloss.Style 
 	return p.ink(p.Base)
 }
 
-// panelBorderStyle 是栏目面板的边框: 选中栏用栏目色勾出焦点,
-// 其余栏走低对比度的 separator, 不与卡片内容抢注意力.
+// panelBorderStyle is the border of a column panel: the selected column outlines focus in its column color,
+// while the others take the low-contrast separator and do not compete with the card content.
 func panelBorderStyle(p palette, state string, focused bool) lipgloss.Style {
 	if focused {
 		return p.ink(stateColor(p, state))
@@ -212,8 +212,8 @@ func panelBorderStyle(p palette, state string, focused bool) lipgloss.Style {
 	return styleFor("separator", p)
 }
 
-// badgeStyle 是栏目标题后那颗任务数徽标. 做成反色小块而不是裸数字:
-// 选中栏用栏目色, 与同样反色的标题连成一块; 其余栏用暗色, 只做提示不抢眼.
+// badgeStyle is the task count badge after a column title. It is an inverted little block rather than a bare number:
+// the selected column uses its column color and joins the equally inverted title, while the others go dim and only hint.
 func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
 	if focused {
 		return p.ink(stateColor(p, state)).Reverse(true).Bold(true)
@@ -221,8 +221,8 @@ func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
 	return p.ink(p.Dim).Reverse(true)
 }
 
-// resolveTheme 把 auto 解析为 light 或 dark; 显式主题忽略终端探测结果.
-// Bubble Tea 在启动前已让 Lip Gloss 探测并缓存背景类型, 这里直接复用结果.
+// resolveTheme resolves auto into light or dark; an explicit theme ignores the terminal probe.
+// Bubble Tea already had Lip Gloss probe and cache the background type before startup, so the result is simply reused here.
 func resolveTheme(name string) string {
 	if name == "light" || name == "dark" {
 		return name

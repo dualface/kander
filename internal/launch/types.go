@@ -28,7 +28,7 @@ const (
 	resumeOutputLimit    = 8192
 )
 
-// AgentSession 是写进任务卡供 resume 唤醒的会话标识.
+// AgentSession is the session identity written into the task card so resume can wake it.
 type AgentSession struct {
 	Agent     string
 	Reference string
@@ -41,7 +41,7 @@ func (s AgentSession) Render() string {
 	return s.Agent + " " + s.Reference
 }
 
-// LaunchPlan 是领取前完成的 launcher 前置检查结果; 检查失败不领取.
+// LaunchPlan is the result of the launcher preflight checks run before claiming; a failed check does not claim the card.
 type LaunchPlan struct {
 	Launcher       string
 	Project        string
@@ -52,7 +52,7 @@ type LaunchPlan struct {
 	HerdrWorkspace string
 }
 
-// LaunchOutcome 是一次启动的进程或终端地址.
+// LaunchOutcome is the process or terminal address of one launch.
 type LaunchOutcome struct {
 	Process *os.Process
 	Wait    func() (int, error)
@@ -62,7 +62,7 @@ type LaunchOutcome struct {
 	Pane    string
 }
 
-// LaunchFailure 是启动失败; 附带关闭本次新建容器的结果.
+// LaunchFailure is a failed launch, together with the result of closing the container created by this attempt.
 type LaunchFailure struct {
 	Err        error
 	CloseError string
@@ -82,7 +82,7 @@ func (f *LaunchFailure) Unwrap() error {
 	return f.Err
 }
 
-// CleanupResult 是接管后旧容器清理结果. 由 dismiss/takeover 包填充 hook.
+// CleanupResult is the outcome of cleaning up the old container after a takeover. The dismiss/takeover package fills in the hook.
 type CleanupResult struct {
 	Cleaned   bool
 	OldWindow string
@@ -91,7 +91,7 @@ type CleanupResult struct {
 	Detail    string
 }
 
-// CleanupTakeover 在 dismiss 卡提供包 API 后由该包赋值; 未提供时 start/resume 输出 N/A.
+// CleanupTakeover is assigned by the dismiss package once it exposes its API; while unset, start/resume report N/A.
 var CleanupTakeover func(oldWindow string, oldSession AgentSession, newWindow string, timeout float64) CleanupResult
 
 var (
