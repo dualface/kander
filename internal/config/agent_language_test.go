@@ -40,7 +40,11 @@ func TestAgentLanguageDefaultsFollowInterfaceLanguage(t *testing.T) {
 		"agent_language": strings.Repeat("语", 64)}); err != nil || utf8.RuneCountInString(cfg.AgentLanguage) != 64 {
 		t.Fatalf("64 multibyte characters must be accepted: %q err=%v", cfg.AgentLanguage, err)
 	}
-	for _, bad := range []any{"", "   ", nil, 3, "a\nb", "a\rb", "a\u2028b", "a\u2029b", "a\u0085b", strings.Repeat("x", 65), strings.Repeat("语", 65)} {
+	payload["agent_language"] = "\uFFFD"
+	if cfg, err = Validate(payload); err != nil || cfg.AgentLanguage != "\uFFFD" {
+		t.Fatalf("a literal replacement character is a valid single-line value, got %q err=%v", cfg.AgentLanguage, err)
+	}
+	for _, bad := range []any{"", "   ", nil, 3, "a\nb", "a\rb", "a\u2028b", "a\u2029b", "a\u0085b", "\u2028ja", "ja\n", strings.Repeat("x", 65), strings.Repeat("语", 65)} {
 		payload["agent_language"] = bad
 		if _, err := Validate(payload); !IsError(err) {
 			t.Fatalf("expected error for agent_language %#v, got %v", bad, err)

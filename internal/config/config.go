@@ -332,15 +332,16 @@ func validateAgentLanguage(value any) (string, error) {
 	if !ok {
 		return "", configErrorf("config.agent_language_invalid")
 	}
+	// Scan before trimming: TrimSpace would silently swallow a line separator at either end.
+	for _, r := range text {
+		// Control characters cover CR, LF, NEL and DEL; the two Unicode separators are category Z, so they are named explicitly.
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return "", configErrorf("config.agent_language_invalid")
+		}
+	}
 	text = strings.TrimSpace(text)
 	if text == "" || utf8.RuneCountInString(text) > agentLanguageMaxRunes {
 		return "", configErrorf("config.agent_language_invalid")
-	}
-	for _, r := range text {
-		// Control characters cover CR, LF, NEL and DEL; the two Unicode separators are category Z, so they are named explicitly.
-		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' || r == utf8.RuneError {
-			return "", configErrorf("config.agent_language_invalid")
-		}
 	}
 	return text, nil
 }
