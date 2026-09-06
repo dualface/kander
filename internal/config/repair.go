@@ -98,6 +98,13 @@ func repairValues(raw any) (*Config, error) {
 		defaults.Language = lang
 	}
 	provided, _ := asObject(raw)
+	// A missing agent_language follows the interface language the config will end up with, so a Chinese
+	// config repaired by doctor keeps talking Chinese instead of picking up doctor's English default.
+	if lang, err := validateChoice(provided["language"], Languages, "language"); err == nil {
+		defaults.AgentLanguage = DefaultAgentLanguage(lang)
+	} else {
+		defaults.AgentLanguage = DefaultAgentLanguage(defaults.Language)
+	}
 	// A new config defaults to all rules on. An existing but broken rules section is restored field by field from an all-off baseline, so
 	// the on-by-default task_groups cannot stop doctor from preserving a git switch the user explicitly turned off.
 	if _, exists := provided["rules"]; exists {

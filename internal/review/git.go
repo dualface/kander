@@ -185,5 +185,15 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 		"Prefer exact file and line evidence. Inspect schemas, generators, and handwritten consumers before\n" +
 		"generated output when relevant. " + ctx.settings.inspectionRules + " Do not modify files, the index, refs, or the\n" +
 		"worktree. Begin the report with Role, Commit, Task Context, and Reviewed Scope.\n" +
-		"Use role-prefixed stable IDs for findings and threats.\n"
+		"Use role-prefixed stable IDs for findings and threats.\n" +
+		reportLanguageRule(ctx.reportLanguage)
+}
+
+// reportLanguageRule tells the reviewer which language to write prose in while keeping evidence verbatim.
+func reportLanguageRule(language string) string {
+	if language == "" {
+		return ""
+	}
+	return "Write the report prose in the language \"" + language + "\"; keep the fixed section names, finding IDs, " +
+		"severity labels, claim labels, file paths, identifiers, and quoted code exactly as they are.\n"
 }

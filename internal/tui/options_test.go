@@ -231,6 +231,8 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 		t.Fatal("default language should be the first interface option")
 	}
 	// Change a neighboring field first, then switch themes repeatedly, verifying that the refresh loses no setting and does not move focus.
+	// The interface section is ordered language, agent language, theme, refresh.
+	drivePanel(panel, keyMsg("down"))
 	drivePanel(panel, keyMsg("down"))
 	drivePanel(panel, keyMsg("down"))
 	drivePanel(panel, keyMsg("right"))
@@ -243,7 +245,7 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 		if app.Theme != step.theme || panel.bind.theme != step.theme {
 			t.Fatalf("theme=%q binding=%q want %q", app.Theme, panel.bind.theme, step.theme)
 		}
-		if panel.current != sectionInterface || panel.form.GetFocusedField() != panel.bind.formFields[2] {
+		if panel.current != sectionInterface || panel.form.GetFocusedField() != panel.bind.formFields[4] {
 			t.Fatal("theme change should keep the interface section and theme focus")
 		}
 		if app.RefreshSecs != refresh || panel.bind.refresh != refresh {

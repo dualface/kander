@@ -120,6 +120,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 		language = ResolveLanguage()
 	}
 	lines = append(lines, Text("config.language")+": "+FormatLanguageSummary(language))
+	lines = append(lines, Text("config.agent_language")+": "+effective.AgentLanguage)
 	return lines, nil
 }
 

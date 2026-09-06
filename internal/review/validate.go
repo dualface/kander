@@ -209,18 +209,19 @@ func validateContext(agent string, arguments []string) (reviewContext, error) {
 		)
 	}
 	return reviewContext{
-		agent:         agent,
-		settings:      settings,
-		root:          root,
-		base:          base,
-		commit:        commit,
-		role:          role,
-		taskContext:   taskContext,
-		taskSpec:      taskSpec,
-		reviewContext: reviewCtx,
-		reviewed:      reviewed,
-		program:       *program,
-		tempRoot:      tempRoot,
+		agent:          agent,
+		settings:       settings,
+		root:           root,
+		base:           base,
+		commit:         commit,
+		role:           role,
+		taskContext:    taskContext,
+		taskSpec:       taskSpec,
+		reviewContext:  reviewCtx,
+		reviewed:       reviewed,
+		program:        *program,
+		tempRoot:       tempRoot,
+		reportLanguage: reportLanguageFromConfig(),
 	}, nil
 }
 

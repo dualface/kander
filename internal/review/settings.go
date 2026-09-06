@@ -60,6 +60,8 @@ type reviewContext struct {
 	reviewed      string
 	program       process.AgentProgram
 	tempRoot      string
+	// reportLanguage is the config agent_language; the reviewer writes its report in it. Empty leaves the language unspecified.
+	reportLanguage string
 }
 
 func userError(message string) {
@@ -248,6 +250,15 @@ func splitAgentArgs(args []string) (agent string, rest []string, err error) {
 }
 
 var errUsage = errors.New("usage")
+
+// reportLanguageFromConfig returns the agent_language the review report should be written in, or empty when no config is readable.
+func reportLanguageFromConfig() string {
+	cfg, err := config.Effective(nil)
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return cfg.AgentLanguage
+}
 
 func reviewerFromConfig(role string) string {
 	cfg, err := config.Effective(nil)

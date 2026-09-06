@@ -183,6 +183,7 @@ type Config struct {
 	Models          Models            `json:"models"`
 	TUI             TUI               `json:"tui"`
 	Language        string            `json:"language"`
+	AgentLanguage   string            `json:"agent_language"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -301,7 +302,41 @@ func DefaultConfig() *Config {
 		Models:          DefaultModels(),
 		TUI:             DefaultTUI(),
 		Language:        "cn",
+		AgentLanguage:   DefaultAgentLanguage("cn"),
 	}
+}
+
+// agentLanguageDefaults maps an interface language to the agent communication language a config
+// without agent_language falls back to.
+var agentLanguageDefaults = map[string]string{
+	"cn": "zh-CN",
+	"en": "en",
+}
+
+// DefaultAgentLanguage returns the agent communication language derived from an interface language.
+func DefaultAgentLanguage(language string) string {
+	if value, ok := agentLanguageDefaults[language]; ok {
+		return value
+	}
+	return agentLanguageDefaults["en"]
+}
+
+// validateAgentLanguage accepts any short, single-line, non-empty language name such as en, zh-CN, or ja.
+func validateAgentLanguage(value any) (string, error) {
+	text, ok := value.(string)
+	if !ok {
+		return "", configErrorf("config.agent_language_invalid")
+	}
+	text = strings.TrimSpace(text)
+	if text == "" || len(text) > 64 {
+		return "", configErrorf("config.agent_language_invalid")
+	}
+	for _, r := range text {
+		if r < 0x20 || r == 0x7f {
+			return "", configErrorf("config.agent_language_invalid")
+		}
+	}
+	return text, nil
 }
 
 func AgentExecutableName(agent string) string {
@@ -720,6 +755,14 @@ func Validate(raw any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	agentLanguageRaw, hasAgentLanguage := obj["agent_language"]
+	if !hasAgentLanguage {
+		agentLanguageRaw = DefaultAgentLanguage(language)
+	}
+	agentLanguage, err := validateAgentLanguage(agentLanguageRaw)
+	if err != nil {
+		return nil, err
+	}
 	return &Config{
 		SchemaVersion:   SchemaVersion,
 		WelcomeComplete: welcome,
@@ -732,6 +775,7 @@ func Validate(raw any) (*Config, error) {
 		Models:          models,
 		TUI:             tui,
 		Language:        language,
+		AgentLanguage:   agentLanguage,
 	}, nil
 }
 

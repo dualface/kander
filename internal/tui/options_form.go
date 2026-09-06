@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
+	"strings"
 )
 
 // formBinding holds the mutable values bound to a Huh form. Huh needs stable pointers,
@@ -31,6 +32,7 @@ type formBinding struct {
 	stages    map[string]*string
 
 	language       string
+	agentLanguage  string
 	rules          map[string]*bool
 	rulePreset     string
 	prevRulePreset string
@@ -387,6 +389,16 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 			Value(&bind.language).
 			Inline(true))
 		bind.addSpacer()
+		bind.agentLanguage = p.session.Config.AgentLanguage
+		bind.fieldIndex[interfaceFocusKey("agent_language")] = bind.focusable
+		bind.addField(huh.NewInput().
+			Title(t("menu.agent_language")).
+			Description(t("tui.agent_language_hint")).
+			Prompt("").
+			Placeholder(config.DefaultAgentLanguage(bind.language)).
+			Value(&bind.agentLanguage).
+			Inline(true))
+		bind.addSpacer()
 	}
 	bind.fieldIndex[interfaceFocusKey("theme")] = bind.focusable
 	bind.addField(huh.NewSelect[string]().
@@ -585,6 +597,11 @@ func (b *formBinding) apply(p *optionsPanel) {
 		if p.session != nil && b.language != "" && p.session.Config.Language != b.language {
 			p.session.SetLanguage(b.language)
 			p.app.Context = tuiPageContext()
+			p.markDirty()
+		}
+		// An emptied input is not a value: the stored agent language stays until a real name is typed.
+		if p.session != nil && strings.TrimSpace(b.agentLanguage) != "" && p.session.Config.AgentLanguage != strings.TrimSpace(b.agentLanguage) {
+			p.session.SetAgentLanguage(b.agentLanguage)
 			p.markDirty()
 		}
 	case sectionExecution:

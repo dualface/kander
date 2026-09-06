@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/dualface/kander/internal/config"
+	"strings"
 )
 
 // Choice is one selectable value in the options panel.
@@ -208,6 +209,11 @@ func (s *Session) SetReviewStage(role, mode string) {
 func (s *Session) SetLanguage(language string) {
 	s.Config.Language = language
 	config.BindConfigLanguage(s.Config)
+}
+
+// SetAgentLanguage sets the language the agent uses when talking to the user.
+func (s *Session) SetAgentLanguage(language string) {
+	s.Config.AgentLanguage = strings.TrimSpace(language)
 }
 
 // SetLauncher sets the launcher.
