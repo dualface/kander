@@ -95,6 +95,9 @@ func Perform(req Request) (Result, error) {
 	if err := extractRules(paths, lang, project); err != nil {
 		return result, fmt.Errorf("%s", config.Text("install.failed_to_extract_rules", err.Error()))
 	}
+	if err := config.SetLanguageIfPresent(paths.ConfigPath, lang); err != nil {
+		return result, err
+	}
 	if err := linkAgentsEntry(paths); err != nil {
 		return result, fmt.Errorf("%s", config.Text("install.failed_to_link_agents", err.Error()))
 	}

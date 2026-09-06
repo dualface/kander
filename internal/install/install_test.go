@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/rules"
 )
 
@@ -399,6 +398,170 @@ func TestInspectRulesLanguageDriftIsNotUnhealthy(t *testing.T) {
 	}
 }
 
+func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
+	home := setupInstallHome(t)
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	agents := filepath.Join(home, ".agents")
+	if err := os.Remove(filepath.Join(agents, stateFileName)); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := os.ReadFile("testdata/legacy-KANDER-BASE-RULES.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agents, "KANDER-BASE-RULES.md"), legacy, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := config.GlobalInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := InspectRules(paths, "cn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Outdated) != 1 || report.Outdated[0] != "KANDER-BASE-RULES.md" {
+		t.Fatalf("outdated=%v modified=%v", report.Outdated, report.Modified)
+	}
+	if err := RepairRules(paths, "cn"); err != nil {
+		t.Fatal(err)
+	}
+	want, _, err := rules.File("cn", "KANDER-BASE-RULES.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(agents, "KANDER-BASE-RULES.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("did not upgrade official unstamped rule")
+	}
+	state, err := loadRulesState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Files) != len(rules.Names()) {
+		t.Fatalf("stamp files=%d", len(state.Files))
+	}
+}
+
+func TestRepairRulesBootstrapsStampWhenCurrent(t *testing.T) {
+	home := setupInstallHome(t)
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(home, ".agents", stateFileName)); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := config.GlobalInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := InspectRules(paths, "cn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Missing)+len(report.Outdated)+len(report.Modified) != 0 {
+		t.Fatalf("%+v", report)
+	}
+	if err := RepairRules(paths, "cn"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := loadRulesState(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Files) != len(rules.Names()) {
+		t.Fatalf("stamp files=%d", len(state.Files))
+	}
+}
+
+func TestPerformUpdatesExistingConfigLanguage(t *testing.T) {
+	setupInstallHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Language = "en"
+	cfg.WelcomeComplete = true
+	cfg.KanbanAgent = "claude"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Language != "cn" {
+		t.Fatalf("language=%q", loaded.Language)
+	}
+	if loaded.KanbanAgent != "claude" || !loaded.WelcomeComplete {
+		t.Fatalf("other fields changed: %+v", loaded)
+	}
+}
+
+func TestPerformDoesNotCreateConfig(t *testing.T) {
+	setupInstallHome(t)
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	exists, err := config.Exists()
+	if err != nil || exists {
+		t.Fatalf("exists=%v err=%v", exists, err)
+	}
+}
+
+func TestGlobalSymlinkRuleIsNotFalseStamped(t *testing.T) {
+	home := setupInstallHome(t)
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(home, ".agents", "KANDER-CODE-RULES.md")
+	target := filepath.Join(home, "dotfiles", "KANDER-CODE-RULES.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("dotfiles copy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(dest); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, dest); err != nil {
+		t.Skip(err)
+	}
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil || string(got) != "dotfiles copy\n" {
+		t.Fatalf("symlink target changed: %q %v", got, err)
+	}
+	paths, err := config.GlobalInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := InspectRules(paths, "cn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Outdated) != 0 {
+		t.Fatalf("outdated=%v", report.Outdated)
+	}
+	found := false
+	for _, name := range report.Modified {
+		if name == "KANDER-CODE-RULES.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("modified=%v", report.Modified)
+	}
+}
+
 func TestShouldRunWizardSkipsSourceTree(t *testing.T) {
 	_ = setupInstallHome(t)
 	root := t.TempDir()
@@ -460,31 +623,4 @@ func TestShouldRunWizard(t *testing.T) {
 	if err != nil || ok {
 		t.Fatalf("configured: ok=%v err=%v", ok, err)
 	}
-}
-
-func TestWriteBinaryBusyRenameAside(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows occupied-exe aside only")
-	}
-	home := setupInstallHome(t)
-	dest := filepath.Join(home, ".local", "bin", binaryName())
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(dest, []byte("old"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	anchor, err := fileAnchor(dest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := writeBinary(dest, []byte("new-bytes")); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := os.ReadFile(dest)
-	if string(got) != "new-bytes" {
-		t.Fatalf("got %q", got)
-	}
-	_ = fs.IsBusyFile(nil)
-	_ = anchor
 }

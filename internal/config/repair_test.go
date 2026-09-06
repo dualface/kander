@@ -88,3 +88,36 @@ func TestRepairHonorsCLILanguage(t *testing.T) {
 		t.Fatalf("default language=%q created=%v", cfg.Language, result.Created)
 	}
 }
+
+func TestSetLanguageIfPresent(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.json")
+	if err := SetLanguageIfPresent(missing, "cn"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("created missing config: %v", err)
+	}
+	path := filepath.Join(dir, "config.json")
+	t.Setenv(EnvConfig, path)
+	cfg := DefaultConfig()
+	cfg.Language = "en"
+	cfg.WelcomeComplete = true
+	cfg.KanbanAgent = "claude"
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetLanguageIfPresent(path, "cn"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Language != "cn" || loaded.KanbanAgent != "claude" || !loaded.WelcomeComplete {
+		t.Fatalf("%+v", loaded)
+	}
+	if err := SetLanguageIfPresent(path, "nope"); err == nil {
+		t.Fatal("invalid language")
+	}
+}

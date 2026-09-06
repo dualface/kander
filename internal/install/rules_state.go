@@ -122,6 +122,15 @@ func InspectRules(paths config.InstallPaths, cfgLang string) (RulesReport, error
 		if err != nil {
 			return report, err
 		}
+		dest := filepath.Join(paths.RulesDir, name)
+		// Global rule symlinks are user-managed; doctor must not classify them as
+		// outdated because writeRule will not replace a reparse point.
+		if paths.Mode != config.ModeProject && fs.IsReparsePoint(dest) {
+			if got != want {
+				report.Modified = append(report.Modified, name)
+			}
+			continue
+		}
 		stamped := state.Files[name]
 		if stamped != "" {
 			if got != stamped {
@@ -133,9 +142,14 @@ func InspectRules(paths config.InstallPaths, cfgLang string) (RulesReport, error
 			}
 			continue
 		}
-		if got != want {
-			report.Modified = append(report.Modified, name)
+		if got == want {
+			continue
 		}
+		if isPreviousOfficial(name, got) {
+			report.Outdated = append(report.Outdated, name)
+			continue
+		}
+		report.Modified = append(report.Modified, name)
 	}
 	return report, nil
 }
@@ -147,27 +161,48 @@ func extractRules(paths config.InstallPaths, lang string, project bool) error {
 		if err != nil {
 			return err
 		}
-		if err := writeRule(paths, name, data, project); err != nil {
+		wrote, err := writeRule(paths, name, data, project)
+		if err != nil {
 			return err
 		}
-		state.Files[name] = fileHash(data)
+		if digest, ok := stampDigest(paths, name, data, wrote); ok {
+			state.Files[name] = digest
+		}
 	}
 	return saveRulesState(paths, state)
 }
 
-func writeRule(paths config.InstallPaths, name string, data []byte, project bool) error {
+func stampDigest(paths config.InstallPaths, name string, embedded []byte, wrote bool) (string, bool) {
+	if wrote {
+		return fileHash(embedded), true
+	}
+	installed, ok, err := readInstalledRule(paths, name)
+	if err != nil || !ok {
+		return "", false
+	}
+	digest := fileHash(installed)
+	if digest != fileHash(embedded) {
+		return "", false
+	}
+	return digest, true
+}
+
+func writeRule(paths config.InstallPaths, name string, data []byte, project bool) (bool, error) {
 	dest := filepath.Join(paths.RulesDir, name)
 	if err := rejectDest(dest, project); err != nil {
-		return err
+		return false, err
 	}
 	if !project && fs.IsReparsePoint(dest) {
-		return nil
+		return false, nil
 	}
 	anchor, err := fileAnchor(dest)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return fs.WriteBytesAtomicInherited(anchor, dest, data, true)
+	if err := fs.WriteBytesAtomicInherited(anchor, dest, data, true); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // RepairRules restores missing and outdated rule files. Locally edited files are left untouched.
@@ -193,10 +228,11 @@ func RepairRules(paths config.InstallPaths, cfgLang string) error {
 	if state.Files == nil {
 		state.Files = map[string]string{}
 	}
+	changed := false
 	if state.Language == "" {
 		state.Language = lang
+		changed = true
 	}
-	changed := false
 	repair := append(append([]string{}, report.Missing...), report.Outdated...)
 	project := paths.Mode == config.ModeProject
 	for _, name := range repair {
@@ -204,10 +240,34 @@ func RepairRules(paths config.InstallPaths, cfgLang string) error {
 		if err != nil {
 			return err
 		}
-		if err := writeRule(paths, name, data, project); err != nil {
+		wrote, err := writeRule(paths, name, data, project)
+		if err != nil {
 			return err
 		}
-		state.Files[name] = fileHash(data)
+		if digest, ok := stampDigest(paths, name, data, wrote); ok {
+			state.Files[name] = digest
+			changed = true
+		}
+	}
+	for _, name := range rules.Names() {
+		if _, ok := state.Files[name]; ok {
+			continue
+		}
+		data, ok, err := readInstalledRule(paths, name)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		want, _, err := rules.Hash(lang, name)
+		if err != nil {
+			return err
+		}
+		if fileHash(data) != want {
+			continue
+		}
+		state.Files[name] = want
 		changed = true
 	}
 	if !changed {

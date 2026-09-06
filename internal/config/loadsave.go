@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 
 	"github.com/dualface/kander/internal/fs"
 )
@@ -242,6 +243,35 @@ func Update(mutate func(*Config) error) (string, error) {
 		return saveErr
 	})
 	return saved, err
+}
+
+// SetLanguageIfPresent updates language in an existing config.json and does nothing when the file is missing.
+func SetLanguageIfPresent(path, lang string) error {
+	if !contains(Languages, lang) {
+		return choiceError("language", strings.Join(Languages, ", "))
+	}
+	if path == "" {
+		return nil
+	}
+	data, err := readConfigBytes(path)
+	if err != nil {
+		return configErrorfWrap(err, "config.failed_to_read_config", path, err.Error())
+	}
+	if data == nil {
+		return nil
+	}
+	return withConfigLock(path, func() error {
+		cfg, loadErr := loadValidated(path, false)
+		if loadErr != nil {
+			return loadErr
+		}
+		if cfg.Language == lang {
+			return nil
+		}
+		cfg.Language = lang
+		_, saveErr := saveConfigAt(path, cfg)
+		return saveErr
+	})
 }
 
 func configEditConflicts(current, baseline, target *Config) bool {

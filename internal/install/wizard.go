@@ -90,8 +90,8 @@ func confirmDeleteLegacy(names []string) (bool, error) {
 	form := huh.NewForm(huh.NewGroup(
 		huh.NewConfirm().
 			Title(config.Text("install.delete_legacy")).
-			Affirmative("Yes").
-			Negative("No").
+			Affirmative(config.Text("install.confirm_yes")).
+			Negative(config.Text("install.confirm_no")).
 			Value(&delete),
 	))
 	if err := form.Run(); err != nil {
