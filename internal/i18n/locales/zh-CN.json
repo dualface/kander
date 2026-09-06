@@ -162,7 +162,6 @@
   "install.rule_missing": "规则文件缺失: {{.V0}}",
   "install.rule_outdated": "规则文件过期: {{.V0}}",
   "install.rule_modified": "规则文件已被本地修改, 未覆盖: {{.V0}}",
-  "install.rule_language_drift": "配置语言是 {{.V0}}, 已安装规则是 {{.V1}}; 需要重释时请运行 kander install",
   "install.failed_to_write_binary": "写入 kander 失败: {{.V0}}",
   "install.failed_to_extract_rules": "释出规则失败: {{.V0}}",
   "install.failed_to_link_agents": "创建 AGENTS.md 链接失败: {{.V0}}",

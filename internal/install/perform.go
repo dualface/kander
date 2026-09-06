@@ -92,7 +92,7 @@ func Perform(req Request) (Result, error) {
 	if lang == "" {
 		lang = config.ResolveLanguage()
 	}
-	if err := extractRules(paths, lang, project); err != nil {
+	if err := extractRules(paths, project); err != nil {
 		return result, fmt.Errorf("%s", config.Text("install.failed_to_extract_rules", err.Error()))
 	}
 	if err := config.SetLanguageIfPresent(paths.ConfigPath, lang); err != nil {

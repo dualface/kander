@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestNamesAreChineseMarkdownOnly(t *testing.T) {
+func TestNamesAreMarkdownOnly(t *testing.T) {
 	names := Names()
 	if len(names) != 10 {
 		t.Fatalf("names=%v", names)
@@ -25,48 +25,34 @@ func TestNamesAreChineseMarkdownOnly(t *testing.T) {
 	}
 }
 
-func TestFileEnglishFallsBackToChinese(t *testing.T) {
-	cn, actualCN, err := File(LangCN, "KANDER-AGENTS.md")
-	if err != nil || actualCN != LangCN || len(cn) == 0 {
-		t.Fatalf("cn: actual=%s err=%v", actualCN, err)
-	}
-	en, actualEN, err := File(LangEN, "KANDER-AGENTS.md")
+func TestEntryDeclaresAgentLanguage(t *testing.T) {
+	data, err := File("KANDER-AGENTS.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if actualEN != LangCN {
-		t.Fatalf("expected cn fallback, got %s", actualEN)
-	}
-	if string(en) != string(cn) {
-		t.Fatal("en fallback must return the chinese original")
+	if !strings.Contains(string(data), "`agent_language`") {
+		t.Fatal("the rules entry must tell agents to honor agent_language")
 	}
 }
 
-func TestFileChineseNeverFallsBack(t *testing.T) {
-	_, actual, err := File("fr", "KANDER-AGENTS.md")
-	if err != nil || actual != LangCN {
-		t.Fatalf("unknown lang must read cn: actual=%s err=%v", actual, err)
+func TestFileRejectsInvalidNames(t *testing.T) {
+	if _, err := File("embed.go"); err == nil {
+		t.Fatal("non-markdown must not be readable as a rule")
 	}
-}
-
-func TestFileRejectsPlaceholderAndInvalidNames(t *testing.T) {
-	if _, _, err := File(LangEN, "README.txt"); err == nil {
-		t.Fatal("placeholder must not be readable as a rule")
-	}
-	if _, _, err := File(LangCN, "../embed.go"); err == nil {
+	if _, err := File("../embed.go"); err == nil {
 		t.Fatal("path escape must fail")
 	}
-	if _, _, err := File(LangCN, "missing.md"); err == nil {
-		t.Fatal("missing cn file must fail without fallback")
+	if _, err := File("missing.md"); err == nil {
+		t.Fatal("missing file must fail")
 	}
 }
 
 func TestHashStable(t *testing.T) {
-	digest, actual, err := Hash(LangEN, "KANDER-BASE-RULES.md")
-	if err != nil || actual != LangCN || len(digest) != 64 {
-		t.Fatalf("digest=%s actual=%s err=%v", digest, actual, err)
+	digest, err := Hash("KANDER-BASE-RULES.md")
+	if err != nil || len(digest) != 64 {
+		t.Fatalf("digest=%s err=%v", digest, err)
 	}
-	again, _, err := Hash(LangCN, "KANDER-BASE-RULES.md")
+	again, err := Hash("KANDER-BASE-RULES.md")
 	if err != nil || again != digest {
 		t.Fatalf("hash mismatch: %s vs %s", digest, again)
 	}

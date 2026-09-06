@@ -1,9 +1,8 @@
 // Package rules embeds the published Kander markdown rule files.
 //
-// Chinese originals live in cn/. English translations live in en/ as matching *.md files.
-// Names() treats cn/ as the only source of truth, so non-markdown placeholders in en/ are neither
-// enumerated nor installed. Requesting en falls back to the Chinese original when that file is
-// missing; requesting cn never falls back.
+// The rules ship in English only. The language an agent uses to talk to the user is the
+// agent_language config value, which the rules themselves instruct the agent to honor, so no
+// per-language rule copies exist.
 package rules
 
 import (
@@ -17,17 +16,12 @@ import (
 	"strings"
 )
 
-//go:embed cn en
+//go:embed *.md
 var content embed.FS
 
-const (
-	LangCN = "cn"
-	LangEN = "en"
-)
-
-// Names returns the markdown rule files under cn/, sorted.
+// Names returns the embedded markdown rule files, sorted.
 func Names() []string {
-	entries, err := fs.ReadDir(content, LangCN)
+	entries, err := fs.ReadDir(content, ".")
 	if err != nil {
 		return nil
 	}
@@ -42,41 +36,26 @@ func Names() []string {
 	return names
 }
 
-// File returns the bytes for name in lang. When lang is en and en/name is missing, it returns the
-// Chinese original and reports actual language cn. A cn request never falls back.
-func File(lang, name string) (data []byte, actual string, err error) {
+// File returns the bytes of the embedded rule file name.
+func File(name string) ([]byte, error) {
 	if err := validateName(name); err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	switch lang {
-	case LangEN:
-		data, err = content.ReadFile(path.Join(LangEN, name))
-		if err == nil {
-			return data, LangEN, nil
-		}
-		data, err = content.ReadFile(path.Join(LangCN, name))
-		if err != nil {
-			return nil, "", fmt.Errorf("rules: missing %s: %w", name, err)
-		}
-		return data, LangCN, nil
-	default:
-		data, err = content.ReadFile(path.Join(LangCN, name))
-		if err != nil {
-			return nil, "", fmt.Errorf("rules: missing %s: %w", name, err)
-		}
-		return data, LangCN, nil
+	data, err := content.ReadFile(name)
+	if err != nil {
+		return nil, fmt.Errorf("rules: missing %s: %w", name, err)
 	}
+	return data, nil
 }
 
-// Hash returns the SHA-256 hex digest of the bytes File would install for lang and name,
-// using the actual language after fallback.
-func Hash(lang, name string) (digest, actual string, err error) {
-	data, actual, err := File(lang, name)
+// Hash returns the SHA-256 hex digest of the embedded rule file name.
+func Hash(name string) (string, error) {
+	data, err := File(name)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:]), actual, nil
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func validateName(name string) error {

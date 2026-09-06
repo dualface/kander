@@ -11,7 +11,8 @@
 
 - 提交备注一律英文: 标题, 正文, 尾注全部用英文, 不留中文. 已有历史已统一为英文, 后续提交不得回退.
 - 代码注释一律英文: `.go` 的行注释, 块注释和文档注释, 以及 `.sh` / `.ps1` 等脚本内的注释都用英文.
-- 本条只管注释与提交备注. 面向用户的字符串仍走 `internal/i18n` 双语资源, 不因本条改写; Markdown 文档 (`AGENTS.md`, `README.md`, `rules/`, `docs/`) 保持中文.
+- 发布规则 `rules/*.md` 一律英文, 只保留这一份, 不再按语种维护译本. Agent 与用户沟通所用语言由配置 `agent_language` 决定, 规则入口 `KANDER-AGENTS.md`「Language」一节要求 Agent 遵守; 改规则时保持该节存在.
+- 本条只管注释, 提交备注与发布规则. 面向用户的字符串仍走 `internal/i18n` 双语资源, 不因本条改写; 仓库自身文档 (`AGENTS.md`, `README.md`, `docs/`) 保持中文.
 
 ## Go 模块与包图
 
@@ -24,7 +25,7 @@
 | 包                  | 职责                                                                 |
 | ------------------- | -------------------------------------------------------------------- |
 | `internal/cli`      | 命令名与 Runner 注册表, 全局 `--lang`, 参数解析和分发                    |
-| `internal/config`   | 安装作用域, `config.json` schema/修复, 语言/launcher/Agent/模型/规则/TUI 读取口 |
+| `internal/config`   | 安装作用域, `config.json` schema/修复, 语言/沟通语言/launcher/Agent/模型/规则/TUI 读取口 |
 | `internal/version`  | 构建时间戳与 Git hash 组成的统一版本号                                   |
 | `internal/i18n`     | go-i18n 消息目录与模板渲染; 不依赖 config, 语言由调用方传入              |
 | `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/锁                          |
@@ -43,6 +44,7 @@
 
 - 运行时看板数据目录仍是主 worktree 的 `kanban/`, 覆盖仍是 `KANBAN_DIR`. 配置键 `kanban_agent` / `kanban_agents` / `models.kanban` 保持 onevoke schema, 不改名.
 - `rules` 保存 collaboration/code/git/review/task_intake/task_groups/reporting 七个可选模块开关. 新配置默认全开; 合法旧配置缺整个 rules 段时保留原七项全开, 段内缺项关闭. 解析与 doctor 修复复用 internal/config, 开关独立于 `welcome_complete` 初始化状态. task_groups 依赖 git; TUI 选项面板复用 `menu.Session.SetRules`, 启动/恢复/接管/通知在副作用前复核任务组依赖. 卡片任务组解析复用 `board.TaskGroupFrom`, 包括旧讨论区字段.
+- `language` 只决定 kander 自身的界面与命令输出语言, 取值 `cn`/`en`. `agent_language` 是 Agent 与用户沟通的语言, 自由字符串 (如 `en`, `zh-CN`, `ja`), 非空即合法; 配置缺该键时由 `language` 推导 (cn 得 `zh-CN`, en 得 `en`), doctor 修复同样按此推导. 安装器不再按语种释出规则, `kander-rules-state.json` 不再记录语言.
 - `review_stages.<role>` 为四个审核角色保存 `auto` / `skip` / `required`, 缺失整个段或段内角色时默认 `auto`; 本仓库上方的角色特例优先于该配置.
 - `models.kanban.<agent>` 的模型按任务规模存放在 `large_model` / `small_model`. codex/claude/grok 的推理档位存放在 `large_effort` / `small_effort`, 并继续接受旧共享键 `model`: 规模模型为空时回落到它. Cursor 只接受两个规模模型键, 不接受共享 `model` 或推理档位. 选项面板只编辑规模键.
 - `models.review_roles.<role>` 保存角色自己的 `model` / `effort` 覆盖. 默认及合法旧配置可为空; 空项由 `config.ReviewModelFor(cfg, agent, role)` 在运行时回落到调用方所给 agent 的 `models.review.<agent>` 值. 进入选项面板的「审核与模型」分区时, `menu.Session` 才尝试用当前 Reviewer 的值填缺项; Reviewer 的源值为空或无该字段时仍保留空值. `kander review` 可显式指定 reviewer, 未必等于配置里该角色的 Reviewer.
@@ -102,6 +104,6 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 
 ## 发布规则
 
-- `rules/cn/KANDER-AGENTS.md` 是发布规则入口, 先读取当前作用域的 `kander config --json`. `KANDER-BASE-RULES.md` 与 `KANDER-KANBAN-RULES.md` 是工具协议, 其余七个模块分册按开关和需要加载, 全部位于 `rules/cn/` (英文译文在 `rules/en/`, 缺失时回落中文原文); 不生成定制规则文件, 不经交叉引用加载关闭模块.
+- `rules/KANDER-AGENTS.md` 是发布规则入口, 先读取当前作用域的 `kander config --json`. `KANDER-BASE-RULES.md` 与 `KANDER-KANBAN-RULES.md` 是工具协议, 其余七个模块分册按开关和需要加载, 全部位于 `rules/` 且只有英文一份; 不生成定制规则文件, 不经交叉引用加载关闭模块.
 - 根目录 `AGENTS.md` 只约束本仓库开发; 改发布工作流时改 `rules/`, 不要把实现细节写进发布分册, 也不要把包图写进 `KANDER-AGENTS.md`.
 - 运行时创建的 `kanban/` 是本机共享数据, 不得提交, 也不得写入项目 `.gitignore`.

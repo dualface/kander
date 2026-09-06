@@ -93,12 +93,9 @@ func TestPerformGlobalInstall(t *testing.T) {
 		t.Fatalf("names=%v", rules.Names())
 	}
 	for _, name := range rules.Names() {
-		data, actual, err := rules.File("cn", name)
+		data, err := rules.File(name)
 		if err != nil {
 			t.Fatal(err)
-		}
-		if actual != "cn" {
-			t.Fatalf("%s actual=%s", name, actual)
 		}
 		got, err := os.ReadFile(filepath.Join(home, ".agents", name))
 		if err != nil || !bytes.Equal(got, data) {
@@ -359,7 +356,7 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := InspectRules(paths, "cn")
+	report, err := InspectRules(paths)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +366,7 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	if err := os.Remove(filepath.Join(home, ".agents", "KANDER-AGENTS.md")); err != nil {
 		t.Fatal(err)
 	}
-	if err := RepairRules(paths, "cn"); err != nil {
+	if err := RepairRules(paths); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".agents", "KANDER-AGENTS.md")); err != nil {
@@ -378,24 +375,6 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	got, _ := os.ReadFile(edited)
 	if string(got) != "edited locally\n" {
 		t.Fatalf("overwrote modified file: %q", got)
-	}
-}
-
-func TestInspectRulesLanguageDriftIsNotUnhealthy(t *testing.T) {
-	setupInstallHome(t)
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
-		t.Fatal(err)
-	}
-	paths, err := config.GlobalInstallPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	report, err := InspectRules(paths, "en")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.LanguageDrift || len(report.Missing) != 0 || len(report.Outdated) != 0 {
-		t.Fatalf("%+v", report)
 	}
 }
 
@@ -419,17 +398,17 @@ func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := InspectRules(paths, "cn")
+	report, err := InspectRules(paths)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(report.Outdated) != 1 || report.Outdated[0] != "KANDER-BASE-RULES.md" {
 		t.Fatalf("outdated=%v modified=%v", report.Outdated, report.Modified)
 	}
-	if err := RepairRules(paths, "cn"); err != nil {
+	if err := RepairRules(paths); err != nil {
 		t.Fatal(err)
 	}
-	want, _, err := rules.File("cn", "KANDER-BASE-RULES.md")
+	want, err := rules.File("KANDER-BASE-RULES.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,14 +440,14 @@ func TestRepairRulesBootstrapsStampWhenCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := InspectRules(paths, "cn")
+	report, err := InspectRules(paths)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(report.Missing)+len(report.Outdated)+len(report.Modified) != 0 {
 		t.Fatalf("%+v", report)
 	}
-	if err := RepairRules(paths, "cn"); err != nil {
+	if err := RepairRules(paths); err != nil {
 		t.Fatal(err)
 	}
 	state, err := loadRulesState(paths)
@@ -545,7 +524,7 @@ func TestGlobalSymlinkRuleIsNotFalseStamped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := InspectRules(paths, "cn")
+	report, err := InspectRules(paths)
 	if err != nil {
 		t.Fatal(err)
 	}

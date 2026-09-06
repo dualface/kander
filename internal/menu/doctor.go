@@ -30,17 +30,13 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		success(config.Text("menu.install_mode_global"))
 	}
 	install.CleanupStaleBinary(paths)
-	cfgLang := config.ResolveLanguage()
-	if loaded, loadErr := config.Load(true); loadErr == nil && loaded.Language != "" {
-		cfgLang = loaded.Language
-	}
 	if repair {
-		if repairErr := install.RepairRules(paths, cfgLang); repairErr != nil {
+		if repairErr := install.RepairRules(paths); repairErr != nil {
 			warning(repairErr.Error())
 			healthy = false
 		}
 	}
-	if report, inspectErr := install.InspectRules(paths, cfgLang); inspectErr != nil {
+	if report, inspectErr := install.InspectRules(paths); inspectErr != nil {
 		warning(inspectErr.Error())
 		healthy = false
 	} else {
@@ -54,9 +50,6 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		}
 		for _, name := range report.Modified {
 			hint(config.Text("install.rule_modified", name))
-		}
-		if report.LanguageDrift {
-			note(config.Text("install.rule_language_drift", report.ConfigLanguage, report.InstalledLanguage))
 		}
 	}
 	for name, path := range findCommands(paths) {

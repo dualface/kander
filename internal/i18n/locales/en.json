@@ -162,7 +162,6 @@
   "install.rule_missing": "rule file is missing: {{.V0}}",
   "install.rule_outdated": "rule file is out of date: {{.V0}}",
   "install.rule_modified": "rule file was edited locally and was not overwritten: {{.V0}}",
-  "install.rule_language_drift": "config language is {{.V0}} but installed rules are {{.V1}}; run kander install to re-extract",
   "install.failed_to_write_binary": "failed to write kander: {{.V0}}",
   "install.failed_to_extract_rules": "failed to extract rules: {{.V0}}",
   "install.failed_to_link_agents": "failed to link AGENTS.md: {{.V0}}",
