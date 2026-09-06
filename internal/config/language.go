@@ -50,6 +50,22 @@ func BindConfigLanguage(cfg *Config) {
 	configLanguage = cfg.Language
 }
 
+// CLILanguage returns the language selected by --lang / KANDER_LANG_CLI, or empty when none was set.
+func CLILanguage() string {
+	langMu.Lock()
+	cli := cliLanguageOverride
+	langMu.Unlock()
+	if contains(Languages, cli) {
+		return cli
+	}
+	if os.Getenv(EnvLangCLI) != "" {
+		if lang := os.Getenv(EnvLang); contains(Languages, lang) {
+			return lang
+		}
+	}
+	return ""
+}
+
 func explicitConfigLanguage(raw map[string]any) string {
 	welcome, _ := raw["welcome_complete"].(bool)
 	if !welcome {

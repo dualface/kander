@@ -28,39 +28,37 @@ kander
 
 需要 Go 1.25+, Git, 以及 Codex, Claude, Grok 或 Cursor 中至少一个.
 
+拿到 kander 二进制后直接运行即可. 首次启动若尚未安装, 会进入交互向导: 选择语言 (同时决定界面、规则原文和配置语言) 与安装位置, 再释出规则并把自身拷到目的地. 之后自动进入环境检查和选项面板. 已安装用户可用 `kander install` 重跑向导 (升级规则或改安装位置).
+
+用 Go 从源码安装:
+
+```sh
+go install github.com/dualface/kander/cmd/kander@latest
+```
+
+或在仓库根构建后运行:
+
+```sh
+make
+./kander
+```
+
+Windows:
+
+```powershell
+go build -o kander.exe ./cmd/kander
+.\kander.exe
+```
+
 Kander 有两种安装作用域, 共用同一套规则和程序.
 
 ### 2.1 全局安装
 
-macOS/Linux:
-
-```sh
-./install.sh
-```
-
-Windows (PowerShell):
-
-```powershell
-.\install.ps1
-```
-
-安装完成后退出安装器, 在项目目录运行 `kander` 打开看板, 按 `o` 配置各个角色要使用的 Agent 和模型. 命令不可用时, 先把用户主目录下的 `.local/bin` 加入 PATH.
+向导里选全局. 二进制落到 `~/.local/bin/kander` (Windows 为 `kander.exe`), 规则落到 `~/.agents/`. 命令不可用时, 先把用户主目录下的 `.local/bin` 加入 PATH.
 
 ### 2.2 项目本地安装
 
-macOS/Linux:
-
-```sh
-./install.sh --project <项目目录>
-```
-
-Windows (PowerShell):
-
-```powershell
-.\install.ps1 --project <项目目录>
-```
-
-项目安装位于该 Git 仓库主 worktree 的 `.kander/`, 全部 worktree 共用这份安装. 用安装器输出的绝对命令路径打开看板, 后文的 `kander` 命令也用这个入口. 项目配置独立于全局配置, 进入项目目录不会自动切换 PATH 中的命令.
+向导里选项目并给出 Git 仓库目录. 安装位于该仓库主 worktree 的 `.kander/`, 全部 worktree 共用这份安装, 并向 `.git/info/exclude` 幂等追加 `/.kander/`. 用向导输出的绝对命令路径打开看板, 后文的 `kander` 命令也用这个入口. 项目配置独立于全局配置, 进入项目目录不会自动切换 PATH 中的命令.
 
 ## 3. 常用命令
 
@@ -72,7 +70,7 @@ Windows (PowerShell):
 
 常用按键: 方向键或 `hjkl` 移动, `Enter` 看任务卡, `/` 搜索, `y` 复制任务 ID, `-`/`=` 增减同屏栏目数, `a` 切换存档栏目, `t` 换主题, `o` 打开选项, `r` 刷新, `q` 退出. 按 `?` 调出完整按键说明.
 
-其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dismiss` 派发消息与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander version` 查看版本号.
+其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dismiss` 派发消息与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
 
 `kander show <task-id>` 在卡片正文前输出当前状态与绝对路径, 供 Agent 写卡前重新定位; `kander guard-write <path>` 供宿主项目的写入前 hook 拦截「旧路径复活卡片」的误写, 接入方式见 [docs/kanban-write-guard.md](docs/kanban-write-guard.md).
 

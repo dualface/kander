@@ -39,6 +39,7 @@
 | `internal/review`   | `kander review` 单一审核门禁                                             |
 | `internal/tui`      | 裸 `kander` 的终端看板与 Huh 选项面板                                    |
 | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |
+| `internal/install`  | 首次运行向导, `kander install`, 规则释出与 doctor 修复                     |
 
 - 运行时看板数据目录仍是主 worktree 的 `kanban/`, 覆盖仍是 `KANBAN_DIR`. 配置键 `kanban_agent` / `kanban_agents` / `models.kanban` 保持 onevoke schema, 不改名.
 - `rules` 保存 collaboration/code/git/review/task_intake/task_groups/reporting 七个可选模块开关. 新配置默认全开; 合法旧配置缺整个 rules 段时保留原七项全开, 段内缺项关闭. 解析与 doctor 修复复用 internal/config, 开关独立于 `welcome_complete` 初始化状态. task_groups 依赖 git; TUI 选项面板复用 `menu.Session.SetRules`, 启动/恢复/接管/通知在副作用前复核任务组依赖. 卡片任务组解析复用 `board.TaskGroupFrom`, 包括旧讨论区字段.
@@ -65,7 +66,7 @@
 
 ## 子命令
 
-Runner 注册表包含: `doctor` `config` `version` `review` `init` `list`/`ls` `show` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en}`.
+Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en}`.
 
 ## TUI 测试
 
@@ -91,16 +92,16 @@ go test ./internal/config
 
 ## Windows 句柄 / reparse / DACL
 
-Go 运行时写入配置, 看板迁移, 审核 runtime 或 Git exclude 时经过 `internal/fs`. `install.sh` 与 `install.ps1` 是例外: 项目安装时由脚本自行检查符号链接/reparse point, 再用平台普通文件 API 将 `/.kander/` 写入 Git exclude.
+Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装器释出的二进制和规则时经过 `internal/fs`.
 
 - 从卷/UNC anchor 逐分量拒绝符号链接, junction 和其他 reparse point.
 - 配置读写不检查或自动收紧权限: POSIX 保存保留既有文件 mode, 新文件与目录遵循 umask; Windows 新文件与目录继承父目录 ACL.
 - `internal/fs` 管理的其他私有对象创建瞬间即当前用户独占的受保护 DACL, 不得先按继承 ACL 发布再收紧.
 - 阻塞独占锁用 `LockFileEx`; POSIX 对应 `flock`.
-- `internal/fs` 的原子替换相对固定父句柄; 任一安全后端失败显式报错, 不静默回落普通路径 API. 安装脚本不提供同等的固定句柄或文件锁语义.
+- `internal/fs` 的原子替换相对固定父句柄; 任一安全后端失败显式报错, 不静默回落普通路径 API.
 
 ## 发布规则
 
-- `rules/KANDER-AGENTS.md` 是发布规则入口, 先读取当前作用域的 `kander config --json`. `KANDER-BASE-RULES.md` 与 `KANDER-KANBAN-RULES.md` 是工具协议, 其余七个模块分册按开关和需要加载, 全部位于 `rules/`; 不生成定制规则文件, 不经交叉引用加载关闭模块.
+- `rules/cn/KANDER-AGENTS.md` 是发布规则入口, 先读取当前作用域的 `kander config --json`. `KANDER-BASE-RULES.md` 与 `KANDER-KANBAN-RULES.md` 是工具协议, 其余七个模块分册按开关和需要加载, 全部位于 `rules/cn/` (英文译文在 `rules/en/`, 缺失时回落中文原文); 不生成定制规则文件, 不经交叉引用加载关闭模块.
 - 根目录 `AGENTS.md` 只约束本仓库开发; 改发布工作流时改 `rules/`, 不要把实现细节写进发布分册, 也不要把包图写进 `KANDER-AGENTS.md`.
 - 运行时创建的 `kanban/` 是本机共享数据, 不得提交, 也不得写入项目 `.gitignore`.

@@ -8,6 +8,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/menu"
 )
 
@@ -35,6 +36,13 @@ func Run(_ []string) int {
 	if err := requireTerminal(); err != nil {
 		return fail(err)
 	}
+	runWizard, err := install.ShouldRunWizard()
+	if err != nil {
+		return fail(err)
+	}
+	if runWizard {
+		return install.RunInteractive()
+	}
 	configExists, err := config.Exists()
 	if err != nil {
 		return fail(err)
@@ -53,14 +61,31 @@ func Run(_ []string) int {
 		return fail(fmt.Errorf("%s: %s", ctx.UnknownTheme, prefs.Theme))
 	}
 	root, err := board.BoardRoot()
+	emptyBoard := false
 	if err != nil {
-		return fail(err)
+		if configExists || !board.IsBoardNotFound(err) {
+			return fail(err)
+		}
+		emptyBoard = true
 	}
-	getBoard := func() (BoardPayload, error) { return loadBoardPayload(root) }
-	getTask := func(id string) (Task, error) { return loadTaskPayload(root, id) }
-	initial, err := getBoard()
-	if err != nil {
-		return fail(err)
+	getBoard := func() (BoardPayload, error) {
+		if emptyBoard {
+			return BoardPayload{}, nil
+		}
+		return loadBoardPayload(root)
+	}
+	getTask := func(id string) (Task, error) {
+		if emptyBoard {
+			return Task{}, fmt.Errorf("%s", t("board.board_directory_not_found_run_inside_a_project_or"))
+		}
+		return loadTaskPayload(root, id)
+	}
+	initial := BoardPayload{}
+	if !emptyBoard {
+		initial, err = getBoard()
+		if err != nil {
+			return fail(err)
+		}
 	}
 	app := newApp(prefs.Single, prefs.Refresh, ctx, getBoard, getTask, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)

@@ -346,15 +346,26 @@ func OpenAppendFile(root, path string) (*AppendFile, error) {
 // WriteTextAtomic atomically writes UTF-8 text relative to a pinned parent directory.
 // With replace=false it claims the new entry exclusively (Renameat2 on Linux, RenameatxNp on Darwin, Linkat elsewhere) and fails when it already exists.
 func WriteTextAtomic(root, path, text string, replace bool) error {
-	return writeTextAtomic(root, path, text, replace, uint32(privateFileMode))
+	return writeBytesAtomic(root, path, []byte(text), replace, uint32(privateFileMode), false)
 }
 
 // WriteTextAtomicInherited keeps the existing file mode and creates new files as 0666 masked by the process umask.
 func WriteTextAtomicInherited(root, path, text string, replace bool) error {
-	return writeTextAtomic(root, path, text, replace, 0o666)
+	return writeBytesAtomic(root, path, []byte(text), replace, 0o666, false)
 }
 
-func writeTextAtomic(root, path, text string, replace bool, createMode uint32) error {
+// WriteBytesAtomicInherited writes arbitrary bytes with inherited (umask-masked) permissions.
+func WriteBytesAtomicInherited(root, path string, data []byte, replace bool) error {
+	return writeBytesAtomic(root, path, data, replace, 0o666, false)
+}
+
+// WriteExecutableAtomicInherited writes a replacement executable. New files are created 0755
+// (umask applied). Existing files keep their mode with execute bits added.
+func WriteExecutableAtomicInherited(root, path string, data []byte, replace bool) error {
+	return writeBytesAtomic(root, path, data, replace, 0o755, true)
+}
+
+func writeBytesAtomic(root, path string, data []byte, replace bool, createMode uint32, executable bool) error {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
 		return err
@@ -376,6 +387,9 @@ func writeTextAtomic(root, path, text string, replace bool, createMode uint32) e
 			return wrap("fstat", parent.path, err)
 		}
 		m := uint32(st.Mode & 0o777)
+		if executable {
+			m |= 0o111
+		}
 		mode = &m
 		unix.Close(existing)
 		if !replace {
@@ -401,7 +415,7 @@ func writeTextAtomic(root, path, text string, replace bool, createMode uint32) e
 			return wrap("fchmod", parent.path, err)
 		}
 	}
-	if err := writeFD(tempFD, []byte(text)); err != nil {
+	if err := writeFD(tempFD, data); err != nil {
 		return wrap("write", parent.path, err)
 	}
 	if err := unix.Close(tempFD); err != nil {

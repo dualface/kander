@@ -61,3 +61,30 @@ func TestRepairDoesNotOverwriteUnreadableConfig(t *testing.T) {
 		t.Fatalf("original directory changed: %v", err)
 	}
 }
+
+func TestRepairHonorsCLILanguage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv(EnvConfig, path)
+	t.Setenv(EnvLang, "cn")
+	t.Setenv(EnvLangCLI, "1")
+	ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
+	cfg, result, err := Repair(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Created || cfg.Language != "cn" {
+		t.Fatalf("language=%q created=%v", cfg.Language, result.Created)
+	}
+	ApplyLanguageArgument(nil)
+	t.Setenv(EnvLangCLI, "")
+	t.Setenv(EnvLang, "")
+	path2 := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv(EnvConfig, path2)
+	cfg, result, err = Repair(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Created || cfg.Language != "en" {
+		t.Fatalf("default language=%q created=%v", cfg.Language, result.Created)
+	}
+}

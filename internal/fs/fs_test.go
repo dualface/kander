@@ -522,3 +522,58 @@ func TestPrivateTempDirSupportsProtectedIO(t *testing.T) {
 		t.Fatalf("remove: %v", err)
 	}
 }
+
+func TestWriteExecutableAtomicInherited(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "kander")
+	if err := WriteExecutableAtomicInherited(root, path, []byte("#!/bin/sh\n"), false); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && st.Mode()&0o111 == 0 {
+		t.Fatalf("missing execute bits: %o", st.Mode().Perm())
+	}
+	if err := WriteExecutableAtomicInherited(root, path, []byte("#!/bin/sh\necho 1\n"), true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != "#!/bin/sh\necho 1\n" {
+		t.Fatalf("got %q err=%v", got, err)
+	}
+}
+
+func TestCreateRelativeSymlinkAndRemoveNonDirectory(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "KANDER-AGENTS.md")
+	if err := WriteBytesAtomicInherited(root, target, []byte("# rules\n"), false); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "AGENTS.md")
+	if err := CreateRelativeSymlink(root, link, "KANDER-AGENTS.md"); err != nil {
+		if runtime.GOOS == "windows" {
+			if err := CreateRelativeHardLink(root, link, "KANDER-AGENTS.md"); err != nil {
+				t.Skipf("symlink and hardlink unavailable: %v", err)
+			}
+		} else {
+			t.Fatal(err)
+		}
+	}
+	data, err := os.ReadFile(link)
+	if err != nil || string(data) != "# rules\n" {
+		t.Fatalf("link data=%q err=%v", data, err)
+	}
+	if err := CreateRelativeSymlink(root, link, "KANDER-AGENTS.md"); err == nil {
+		t.Fatal("existing link must fail")
+	}
+	ok, err := RemoveNonDirectoryIfExists(root, link)
+	if err != nil || !ok {
+		t.Fatalf("remove link: ok=%v err=%v", ok, err)
+	}
+	ok, err = RemoveNonDirectoryIfExists(root, filepath.Join(root, "missing"))
+	if err != nil || ok {
+		t.Fatalf("missing: ok=%v err=%v", ok, err)
+	}
+}

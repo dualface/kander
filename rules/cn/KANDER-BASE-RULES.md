@@ -14,7 +14,7 @@
 
 **安装与任务文件**
 
-- POSIX 用 `install.sh`, 原生 Windows 用 `install.ps1`.
+- 安装由二进制自身完成: 首次运行未安装的 `kander` 进入交互向导, 或运行 `kander install` 重跑.
 - Windows 不自动修改 `PATH`.
 - 含特殊字符的自动化须用进程 API 的 argv 数组直调命令根的 `kander`, 禁拼 PowerShell/cmd 命令字符串.
 - 所有平台的执行 Agent 与 Reviewer 均从 UTF-8 临时文件读取完整任务, 启动参数只含 CLI 必需控制项与一句文件路径指令.

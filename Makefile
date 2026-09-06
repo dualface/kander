@@ -1,5 +1,4 @@
-# Kander build entry point. Artifacts land where install.sh / install.ps1 expect them,
-# so the installers reuse the binary already built in the repository root.
+# Kander build entry point. The binary is self-installing: run it to open the wizard.
 
 GO ?= go
 PKG := ./cmd/kander
@@ -45,9 +44,9 @@ fmt-check:
 clean:
 	rm -f kander kander.exe
 
-## install: build, then run the install script for the current scope
+## install: build, then run the interactive installer
 install: build
-	sh install.sh
+	./$(BIN) install
 
 ## help: list the available targets
 help:

@@ -150,6 +150,11 @@ func globalInstallPaths() (InstallPaths, error) {
 	}, nil
 }
 
+// GlobalInstallPaths returns the HOME-scoped install layout.
+func GlobalInstallPaths() (InstallPaths, error) {
+	return globalInstallPaths()
+}
+
 func projectInstallLayout(projectRoot string) InstallPaths {
 	installRoot := filepath.Join(projectRoot, ProjectInstallDirname)
 	return InstallPaths{

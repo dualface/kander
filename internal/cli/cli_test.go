@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"io"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -62,6 +59,7 @@ func TestHelpListsAllCommandsAndLang(t *testing.T) {
 	required := []string{
 		"doctor", "config", "review", "init",
 		"version",
+		"install",
 		"list / ls", "show", "new", "move", "pick", "start", "resume",
 		"notify", "dismiss", "check", "subscribe",
 		"--lang {cn,en}",
@@ -91,7 +89,7 @@ func TestUnimplementedCommands(t *testing.T) {
 		"new": {}, "move": {}, "pick": {},
 		"guard-write": {},
 		"doctor":      {}, "config": {},
-		"version": {},
+		"version": {}, "install": {},
 	}
 	names := append([]string{"ls"}, commandNames...)
 	for _, name := range names {
@@ -170,6 +168,23 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestInstallRejectsNonInteractiveFlags(t *testing.T) {
+	resetLang(t)
+	for _, arg := range []string{"--yes", "--scope", "--project"} {
+		code, _, err := captureRun(t, []string{"kander", "install", arg})
+		if code != 2 {
+			t.Fatalf("%s code=%d stderr=%q", arg, code, err)
+		}
+		if !strings.Contains(err, arg) {
+			t.Fatalf("%s stderr=%q", arg, err)
+		}
+	}
+	code, out, err := captureRun(t, []string{"kander", "install", "--help"})
+	if code != 0 || !strings.Contains(out, "kander install") || err != "" {
+		t.Fatalf("help code=%d out=%q err=%q", code, out, err)
+	}
+}
+
 func TestDefaultRunner(t *testing.T) {
 	resetLang(t)
 	old := DefaultRunner
@@ -184,22 +199,5 @@ func TestDefaultRunner(t *testing.T) {
 	}
 	if code := Run([]string{"kander"}); code != 7 || !called {
 		t.Fatalf("code=%d called=%v", code, called)
-	}
-}
-
-// Windows PowerShell 5.1 reads a BOM-less .ps1 using the ANSI code page, which mangles the Chinese text
-// in the installer into a syntax error. install.ps1 must keep its UTF-8 BOM.
-func TestInstallerScriptKeepsUTF8BOM(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot locate test source")
-	}
-	script := filepath.Join(filepath.Dir(file), "..", "..", "install.ps1")
-	data, err := os.ReadFile(script)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.HasPrefix(data, []byte{0xEF, 0xBB, 0xBF}) {
-		t.Fatalf("install.ps1 lost its UTF-8 BOM: % x", data[:min(3, len(data))])
 	}
 }

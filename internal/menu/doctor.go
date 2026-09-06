@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/install"
 )
 
 const tmuxSessionHint = "tmux new -A -s kander"
@@ -27,6 +28,36 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		success(config.Text("menu.rules_entry", rulesEntry(paths)))
 	} else {
 		success(config.Text("menu.install_mode_global"))
+	}
+	install.CleanupStaleBinary(paths)
+	cfgLang := config.ResolveLanguage()
+	if loaded, loadErr := config.Load(true); loadErr == nil && loaded.Language != "" {
+		cfgLang = loaded.Language
+	}
+	if repair {
+		if repairErr := install.RepairRules(paths, cfgLang); repairErr != nil {
+			warning(repairErr.Error())
+			healthy = false
+		}
+	}
+	if report, inspectErr := install.InspectRules(paths, cfgLang); inspectErr != nil {
+		warning(inspectErr.Error())
+		healthy = false
+	} else {
+		for _, name := range report.Missing {
+			healthy = false
+			warning(config.Text("install.rule_missing", name))
+		}
+		for _, name := range report.Outdated {
+			healthy = false
+			warning(config.Text("install.rule_outdated", name))
+		}
+		for _, name := range report.Modified {
+			hint(config.Text("install.rule_modified", name))
+		}
+		if report.LanguageDrift {
+			note(config.Text("install.rule_language_drift", report.ConfigLanguage, report.InstalledLanguage))
+		}
 	}
 	for name, path := range findCommands(paths) {
 		if path != "" {

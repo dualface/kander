@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/menu"
 	"github.com/dualface/kander/internal/version"
 )
@@ -22,6 +23,7 @@ var commandNames = []string{
 	"doctor",
 	"config",
 	"version",
+	"install",
 	"review",
 	"init",
 	"list",
@@ -56,6 +58,7 @@ func init() {
 	Commands["doctor"] = menu.Doctor
 	Commands["config"] = menu.Config
 	Commands["version"] = runVersion
+	Commands["install"] = install.Run
 }
 
 func runVersion(args []string) int {

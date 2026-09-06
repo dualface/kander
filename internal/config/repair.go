@@ -94,6 +94,9 @@ func repairValues(raw any) (*Config, error) {
 	defaults := DefaultConfig()
 	// doctor defaults to English when the config names no valid language.
 	defaults.Language = "en"
+	if lang := CLILanguage(); contains(Languages, lang) {
+		defaults.Language = lang
+	}
 	provided, _ := asObject(raw)
 	// A new config defaults to all rules on. An existing but broken rules section is restored field by field from an all-off baseline, so
 	// the on-by-default task_groups cannot stop doctor from preserving a git switch the user explicitly turned off.

@@ -489,15 +489,25 @@ func OpenAppendFile(root, path string) (*AppendFile, error) {
 }
 
 func WriteTextAtomic(root, path, text string, replace bool) error {
-	return writeTextAtomic(root, path, text, replace, true)
+	return writeBytesAtomic(root, path, []byte(text), replace, true)
 }
 
 // WriteTextAtomicInherited creates the replacement file with the ACLs inherited from the parent directory, without inspecting or tightening the DACL.
 func WriteTextAtomicInherited(root, path, text string, replace bool) error {
-	return writeTextAtomic(root, path, text, replace, false)
+	return writeBytesAtomic(root, path, []byte(text), replace, false)
 }
 
-func writeTextAtomic(root, path, text string, replace bool, private bool) error {
+// WriteBytesAtomicInherited writes arbitrary bytes using the parent directory's inherited ACL.
+func WriteBytesAtomicInherited(root, path string, data []byte, replace bool) error {
+	return writeBytesAtomic(root, path, data, replace, false)
+}
+
+// WriteExecutableAtomicInherited writes a replacement executable using inherited ACLs. Windows has no POSIX execute bit.
+func WriteExecutableAtomicInherited(root, path string, data []byte, replace bool) error {
+	return writeBytesAtomic(root, path, data, replace, false)
+}
+
+func writeBytesAtomic(root, path string, data []byte, replace bool, private bool) error {
 	rootAbs, candidate, parts, err := relativeParts(root, path)
 	if err != nil {
 		return err
@@ -549,7 +559,7 @@ func writeTextAtomic(root, path, text string, replace bool, private bool) error 
 			return err
 		}
 	}
-	if err := writeHandle(temp, tempPath, []byte(text)); err != nil {
+	if err := writeHandle(temp, tempPath, data); err != nil {
 		return err
 	}
 	if err := renameHandle(temp, parent, candidate, replace); err != nil {

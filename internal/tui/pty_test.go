@@ -147,6 +147,7 @@ func isolatedHome(t *testing.T) (home string, env []string) {
 		"USERPROFILE=" + home,
 		"KANDER_CONFIG=" + filepath.Join(home, ".config", "kander", "config.json"),
 		"KANDER_LANG=en",
+		"KANDER_SKIP_INSTALL=1",
 	}
 	return home, env
 }
