@@ -51,10 +51,15 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	}
 	text := string(data)
 	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
-		text = strings.Replace(text, "<填写>", replacement, 1)
+		text = strings.Replace(text, board.Placeholder, replacement, 1)
 	}
-	text = strings.Replace(text, "## 讨论与决策\n", "## 讨论与决策\n\n自审: 通过\n卡审: 通过\n", 1)
-	text = strings.Replace(text, "- 任务分支:\n", "- 任务分支: task/"+slug+"\n", 1)
+	discussion := "## " + board.SectionDiscussion + "\n"
+	text = strings.Replace(
+		text, discussion,
+		discussion+"\n"+board.MarkerSelfReview+": 通过\n"+board.MarkerCardReview+": 通过\n", 1,
+	)
+	branch := "- " + board.FieldTaskBranch + ":"
+	text = strings.Replace(text, branch+"\n", branch+" task/"+slug+"\n", 1)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
