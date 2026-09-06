@@ -144,7 +144,7 @@ func TestCheckFlagsContractDefectsForCommittedCards(t *testing.T) {
 	// Backlog card with placeholders: not checked.
 	capture(t, func() int { return RunNew([]string{"chore", "draft-card", "草稿"}) })
 
-	// Working card that still has <fill in> and no acceptance item: report each contract defect.
+	// Working card that still has a placeholder marker and no acceptance item: report each contract defect.
 	badID := todayID("bad-working")
 	bad := "# 缺陷卡\n\n- 类型: Chore\n- 任务组:\n- 创建时间: 2026-09-06 03:00\n- 负责人:\n- 会话:\n- 窗口:\n- 开始时间:\n- 完成时间:\n- 任务分支:\n- 结果:\n\n" +
 		"## 任务目标\n\n<填写>\n\n## 用户决策\n\nN/A\n\n## 预期成果\n\n成果\n\n## 验收条件\n\n尽量做好\n\n## 威胁模型\n\nN/A\n\n## 不在本轮范围\n\n- 无\n\n## 讨论与决策\n\n自审: 通过\n\n## 实施与验证\n\n\n## 完成总结\n"

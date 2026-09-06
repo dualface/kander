@@ -106,7 +106,7 @@ func problemInCheckScope(root string, problem Problem, includeAll bool) bool {
 var contractCheckStates = map[string]struct{}{"todo": {}, "working": {}, "review": {}}
 
 // contractProblems checks contract completeness for cards already committed to (todo/working/review):
-// missing required sections or leftover <fill in> placeholders, and acceptance criteria without a decidable item.
+// missing required sections or leftover placeholder markers, and acceptance criteria without a decidable item.
 // Backlog cards are still being drafted and done/archived cards are closed, so neither is checked.
 func contractProblems(board Board) []Problem {
 	ids := make([]string, 0, len(board.Entries))

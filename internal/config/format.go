@@ -136,7 +136,7 @@ func ReviewModelLines(cfg *Config, agent string) ([]string, error) {
 	return []string{entry["model"], entry["effort"]}, nil
 }
 
-// ReviewStageLines prints auto|skip|required in PM/CSA/Hacker/QA order.
+// ReviewStageLines returns auto|skip|required in PM/CSA/Hacker/QA order.
 func ReviewStageLines(cfg *Config) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {

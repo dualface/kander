@@ -208,7 +208,7 @@ func validateReady(text string) error {
 }
 
 // validateReviewRecords checks that the post-creation self-review (plus the independent card review for large cards and task-group member cards) left a
-// machine-checkable conclusion line under "Discussion and decisions". It only proves the step was explicitly acknowledged, never its quality.
+// machine-checkable conclusion line in the card's discussion section. It only proves the step was explicitly acknowledged, never its quality.
 func validateReviewRecords(entry Entry, text string) error {
 	discussion, ok := SectionBody(text, "讨论与决策")
 	if !ok || !selfReviewRe.MatchString(discussion) {

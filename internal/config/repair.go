@@ -96,7 +96,7 @@ func repairValues(raw any) (*Config, error) {
 	defaults.Language = "en"
 	provided, _ := asObject(raw)
 	// A new config defaults to all rules on. An existing but broken rules section is restored field by field from an all-off baseline, so
-	// the on-by-default task_groups cannot make doctor keep a git switch the user explicitly turned off.
+	// the on-by-default task_groups cannot stop doctor from preserving a git switch the user explicitly turned off.
 	if _, exists := provided["rules"]; exists {
 		defaults.Rules = DefaultRules(false)
 	} else {

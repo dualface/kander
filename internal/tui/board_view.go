@@ -24,7 +24,7 @@ const (
 	borderVertical    = "│"
 )
 
-// panelChrome is the number of columns a column panel takes on each side: 2 for the border, 2 for the padding.
+// panelChrome is the total number of columns a column panel takes on both sides: 1 border and 1 padding column per side.
 const panelChrome = 4
 
 // panelDetailChrome equals panelChrome; the detail panel has to subtract it too when it spans the full screen width.
