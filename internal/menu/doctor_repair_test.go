@@ -123,7 +123,7 @@ func TestDoctorRepairsUnavailableLaunchers(t *testing.T) {
 	}
 }
 
-func TestDoctorWindowsLauncherFallback(t *testing.T) {
+func TestDoctorWindowsLauncherKeepsHerdrWhenInstalled(t *testing.T) {
 	previous := windowsOS
 	windowsOS = true
 	t.Cleanup(func() { windowsOS = previous })
@@ -131,6 +131,19 @@ func TestDoctorWindowsLauncherFallback(t *testing.T) {
 	cfg.Launcher = "herdr"
 	agents := map[string]agentState{"codex": {Path: "codex.exe", Version: "1", Review: true}}
 	repairConfiguredTools(cfg, agents, TerminalTools{Herdr: TerminalTool{Path: "herdr.exe"}})
+	if cfg.Launcher != "herdr" {
+		t.Fatalf("launcher=%s", cfg.Launcher)
+	}
+}
+
+func TestDoctorWindowsLauncherFallbackWithoutHerdr(t *testing.T) {
+	previous := windowsOS
+	windowsOS = true
+	t.Cleanup(func() { windowsOS = previous })
+	cfg := config.DefaultConfig()
+	cfg.Launcher = "herdr"
+	agents := map[string]agentState{"codex": {Path: "codex.exe", Version: "1", Review: true}}
+	repairConfiguredTools(cfg, agents, TerminalTools{})
 	if cfg.Launcher != "console" {
 		t.Fatalf("launcher=%s", cfg.Launcher)
 	}
