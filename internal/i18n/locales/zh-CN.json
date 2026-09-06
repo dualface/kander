@@ -105,7 +105,7 @@
   "board.task_entry_must_not_be_a_symlink_reparse_point": "任务入口不得是符号链接/重解析点: {{.V0}}",
   "board.task_has_invalid_prerequisite_syntax": "任务 {{.V0}} 的前置任务语法非法: {{.V1}}",
   "board.task_has_invalid_prerequisite_syntax_close_the_code_block": "任务 {{.V0}} 的前置任务语法非法: 代码块必须在该行后结束",
-  "board.task_has_invalid_prerequisite_syntax_it_must_be_in": "任务 {{.V0}} 的前置任务语法非法: 必须位于讨论与决策开头的代码块中",
+  "board.task_has_invalid_prerequisite_syntax_it_must_be_in": "任务 {{.V0}} 的前置任务语法非法: 必须位于 DISCUSSION 开头的代码块中",
   "board.task_has_invalid_prerequisite_syntax_use_n_a_for": "任务 {{.V0}} 的前置任务语法非法: 无依赖时写 N/A",
   "board.task_requires_acceptance_items": "ACCEPTANCE_CRITERIA 须至少包含一条 - [ ] 可判定条目",
   "board.task_requires_card_review_record": "大任务或任务组成员卡进入 todo 前, 须在「DISCUSSION」记录独立审卡结论行 (CARD_REVIEW: <结论>)",

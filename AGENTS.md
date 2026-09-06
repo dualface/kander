@@ -35,7 +35,7 @@
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
 | `internal/notify`   | notify 直投, 忙/过期判断, resume 恢复与失败回滚                           |
 | `internal/takeover` | dismiss 及 resume 接管成功后的旧容器清理                                 |
-| `internal/window`   | 卡片 `窗口` 元数据回写与失败恢复原文                                     |
+| `internal/window`   | 卡片 `WINDOW` 元数据回写与失败恢复原文                                     |
 | `internal/review`   | `kander review` 单一审核门禁                                             |
 | `internal/tui`      | 裸 `kander` 的终端看板与 Huh 选项面板                                    |
 | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |

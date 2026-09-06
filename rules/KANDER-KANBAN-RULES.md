@@ -362,7 +362,7 @@ backlog, todo, working, review -> archived            仅限用户授权的终�
 除 trash 外任意状态 -> trash                            仅限用户明确要求
 ```
 
-- 进 `todo/` 须完成 `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` (至少一条顶层 `- [ ]` 且有内容的可判定条目) 和不在本轮范围, 且这四个章节不残留 `<FILL_IN>` 占位符, 并附「建卡后自审」的 `SELF_REVIEW:` 记录行 (大任务与任务组成员卡另附 `CARD_REVIEW:` 行); 进 `review/` 须已填写 `TASK_BRANCH`; 进 `done/` 的门禁见「执行与完成」, 其余见「终止与清理」.
+- 进 `todo/` 须完成 `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` (至少一条顶层 `- [ ]` 且有内容的可判定条目) 和 `OUT_OF_SCOPE`, 且这四个章节不残留 `<FILL_IN>` 占位符, 并附「建卡后自审」的 `SELF_REVIEW:` 记录行 (大任务与任务组成员卡另附 `CARD_REVIEW:` 行); 进 `review/` 须已填写 `TASK_BRANCH`; 进 `done/` 的门禁见「执行与完成」, 其余见「终止与清理」.
 - 旧版看板没有 `review/`: 其余 6 个状态目录齐全时, 任一 `kander` 命令首次定位看板即自动补建 `review/`, 不要求用户重跑 `init`.
 
   其他状态目录缺失时停止普通看板操作, 可用前述初始化命令补建.
@@ -590,7 +590,7 @@ kander move <task-id> working
   `completed` 只用于 `done -> archived`.
 
 - 卡片迁入 `archived/` 或 `trash/` 后, 执行或操作该卡的 Agent 按用户约定汇报结果 (仅在 `rules.reporting=true` 时使用 `KANDER-REPORTING-RULES.md` 模板), 末行状态写实际去向和结果.
-- `done/` 保留近期完成项, 用户确认无需展示后再归档. 只有用户明确要求删除具体卡片时才移入 `trash/`; 迁移前写 `结果: trashed`, 原因和时间. 不自动清空或永久删除; 永久删除须逐项授权.
+- `done/` 保留近期完成项, 用户确认无需展示后再归档. 只有用户明确要求删除具体卡片时才移入 `trash/`; 迁移前写 `RESULT: trashed`, 原因和时间. 不自动清空或永久删除; 永久删除须逐项授权.
 
 ## 异常恢复
 

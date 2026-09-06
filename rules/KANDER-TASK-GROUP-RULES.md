@@ -30,7 +30,7 @@
   - 通常任务组建议不超过 3 个任务卡.
   - 如果任务组超过 5 个任务卡, 尝试进一步拆分为多个任务组; 数量是建议, 不代替目标与依赖判断.
   - 任务组 ID 为 `YYYYMMDD-short-slug-group`, 全看板唯一.
-  - 每张成员卡的 `- 任务组:` 元数据填所属组 ID, 非成员留空. 任务组是卡片关系, 不新增看板入口或状态.
+  - 每张成员卡的 `- TASK_GROUP:` 元数据填所属组 ID, 非成员留空. 任务组是卡片关系, 不新增看板入口或状态.
 
 - 优先拆为小卡; 无法继续拆成可独立验收的小卡且确需大卡时, 按 `KANDER-KANBAN-RULES.md`「任务规模与分组」选形态. 共享接口或数据契约先明确, 需要独立交付时建契约卡作为前置.
 - 建组时列全成员与依赖图, 排除缺失引用、依赖环和职责重叠; 进入 `todo/` 后按看板协议冻结任务组关系. 旧卡在 `DISCUSSION` 中记录的 `任务组: ...` 继续兼容, 不要求批量改写.
@@ -38,7 +38,7 @@
 
 ## 任务卡之间的依赖关系
 
-- 组内卡对任务卡或任务组的依赖, 写在该卡 `DISCUSSION` 开头的独立代码块中. 字段名必须为 `前置任务`, 使用 ASCII 逗号分隔 ID, 可混写卡 ID 与组 ID:
+- 组内卡对任务卡或任务组的依赖, 写在该卡 `DISCUSSION` 开头的独立代码块中. 字段名必须为 `PREREQUISITES`, 使用 ASCII 逗号分隔 ID, 可混写卡 ID 与组 ID:
 
 ```text
 PREREQUISITES: 20260905-contract-task,20260905-foundation-group
@@ -201,7 +201,7 @@ PREREQUISITES: N/A
 
 - finding 由主控按卡片的修改范围归属: 命中哪张卡的 `GOAL`/`OUT_OF_SCOPE`/实际改动就派给哪张卡.
 
-  跨卡的集成类 finding 派给修改范围命中的卡, 都命不中时主控建一张小修复卡加入本组 (填 `TASK_GROUP` 与 `前置任务`, `pick` 后 `start`).
+  跨卡的集成类 finding 派给修改范围命中的卡, 都命不中时主控建一张小修复卡加入本组 (填 `TASK_GROUP` 与 `PREREQUISITES`, `pick` 后 `start`).
 
 **派回 finding**
 
@@ -240,7 +240,7 @@ PREREQUISITES: N/A
 - 执行 Agent 按 `KANDER-GIT-RULES.md`「集成与清理」确认本卡改动在 `develop`: 直接集成以最终组 HEAD 核对 `git merge-base --is-ancestor`, 结合通知确认本卡改动包含在内.
 - 不用 rebase 前旧 SHA 判祖先, PR 按 Git 分册「集成与清理」的 merged 判据确认.
 - 未满足则保留现场并报主控.
-- 满足后删本卡 worktree、本地任务分支及适用的远端任务分支, 不删组 worktree 或组分支, 补全总结的审核与收尾 (角色结论或 N/A、适用轮次、最终 commit、组分支与 `develop` 集成结果), 填 `结果: completed`, `kander move <task-id> done`, 按适用 `KANDER-REPORTING-RULES.md` 模板或用户格式汇报并结束本轮响应, 保留交互式 Agent CLI 会话等待用户决定是否遣散.
+- 满足后删本卡 worktree、本地任务分支及适用的远端任务分支, 不删组 worktree 或组分支, 补全总结的审核与收尾 (角色结论或 N/A、适用轮次、最终 commit、组分支与 `develop` 集成结果), 填 `RESULT: completed`, `kander move <task-id> done`, 按适用 `KANDER-REPORTING-RULES.md` 模板或用户格式汇报并结束本轮响应, 保留交互式 Agent CLI 会话等待用户决定是否遣散.
 - 主控不改其迁入 `review/` 前已写的交付、验收、验证记录.
 
 **主控代做收尾**
