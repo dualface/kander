@@ -57,10 +57,12 @@ func TestVisibleColumns(t *testing.T) {
 	}{
 		{"宽度充裕按用户设定", 160, 5, 3, 3},
 		{"宽度充裕也不超过栏目总数", 400, 2, 5, 2},
-		{"刚好放下", minColumnWidth * 3, 5, 3, 3},
-		{"差一列就减一栏", minColumnWidth*3 - 1, 5, 3, 2},
-		{"很窄时仍尊重非单栏设置", minColumnWidth, 5, 4, 2},
-		{"比最小宽度还窄仍显示两栏", minColumnWidth - 5, 5, 4, 2},
+		// 3 栏还要占 2 列分隔线, 所以"刚好放下"是 minColumnWidth*3+2.
+		{"刚好放下", minColumnWidth*3 + 2, 5, 3, 3},
+		{"差一列就减一栏", minColumnWidth*3 + 1, 5, 3, 2},
+		{"放不下两栏最小宽度就只显示一栏", minColumnWidth * 2, 5, 4, 1},
+		{"比最小宽度还窄也只显示一栏", minColumnWidth - 5, 5, 4, 1},
+		{"够两栏最小宽度加分隔线才排两栏", minColumnWidth*2 + 1, 5, 4, 2},
 		{"用户只要一栏", 400, 5, 1, 1},
 		{"越界的设定被夹住", 400, 5, 99, 5},
 	} {
@@ -71,8 +73,8 @@ func TestVisibleColumns(t *testing.T) {
 	if visibleColumnCount(400, 4, true, 4, minColumnWidth) != 1 {
 		t.Fatal("single")
 	}
-	if got := visibleColumnCount(80, 5, false, 4, 40); got != 2 {
-		t.Fatalf("min width 40 should fit 2 columns in 80, got %d", got)
+	if got := visibleColumnCount(81, 5, false, 4, 40); got != 2 {
+		t.Fatalf("min width 40 should fit 2 columns in 81, got %d", got)
 	}
 	// 结算出的栏宽必须铺满终端宽度.
 	layout := columnGeometry(160, 3)
@@ -88,6 +90,20 @@ func TestVisibleColumns(t *testing.T) {
 	}
 	if total != 160 {
 		t.Fatalf("columns must fill the width, got %d: %+v", total, layout)
+	}
+	// 回归: 结算栏数时漏算分隔线, 会让每栏都窄于用户设定的最小宽度.
+	for _, minWidth := range []int{minMinColumnWidth, 40, 48, maxMinColumnWidth} {
+		for width := 40; width <= 400; width++ {
+			count := visibleColumnCount(width, 5, false, maxColumns(), minWidth)
+			if count < 2 {
+				continue
+			}
+			for _, col := range columnGeometry(width, count) {
+				if col.Width < minWidth {
+					t.Fatalf("width=%d min=%d count=%d: column %d narrower than the minimum", width, minWidth, count, col.Width)
+				}
+			}
+		}
 	}
 }
 
@@ -391,13 +407,13 @@ func TestRenderKeepsFocusColumn(t *testing.T) {
 	if !strings.Contains(headings, "review") || strings.Contains(headings, "backlog") {
 		t.Fatalf("focused %q", headings)
 	}
-	// 终端窄到放不下 2 栏最小宽度时仍遵循非单栏设置.
+	// 终端窄到放不下 2 栏最小宽度时收敛成一栏, 而不是硬排两栏.
 	app.Width = minColumnWidth + 4
 	if strings.Contains(strings.ToLower(viewLine(app, panelTopRow)+viewLine(app, headerRow)), "too small") {
 		t.Fatal("narrow should still render")
 	}
-	if got := len(app.visibleColumnLayout()); got != 2 {
-		t.Fatalf("narrow terminal should keep two columns, got %d", got)
+	if got := len(app.visibleColumnLayout()); got != 1 {
+		t.Fatalf("narrow terminal should fall back to one column, got %d", got)
 	}
 }
 

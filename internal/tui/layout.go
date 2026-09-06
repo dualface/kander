@@ -2,21 +2,20 @@ package tui
 
 // visibleColumnCount 结算本次实际并排的栏目数.
 // 用户设定的是想同屏看几栏 (desired), 栏宽由 columnGeometry 平分终端宽度得出.
-// 非单栏设置允许因宽度减少栏目, 但不会自行变成单栏.
+// 终端放不下就减栏, 连两栏最小宽度都放不下时只显示一栏.
 func visibleColumnCount(width, total int, single bool, desired, minWidth int) int {
 	if single || total <= 1 {
 		return 1
 	}
 	count := clampColumns(desired)
 	minWidth = clampMinColumnWidth(minWidth)
-	if fit := width / minWidth; count > fit {
+	// 每两栏之间还有 1 列分隔线, 放得下 n 栏的条件是 n*minWidth + (n-1) <= width.
+	// 漏算分隔线会多排一栏, 平分后每栏都低于用户设定的最小宽度.
+	if fit := (width + 1) / (minWidth + 1); count > fit {
 		count = fit
 	}
 	if count > total {
 		count = total
-	}
-	if desired > 1 && total > 1 && count < 2 {
-		count = 2
 	}
 	if count < 1 {
 		count = 1
