@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,5 +213,24 @@ func TestDispatchWrapUpRecordAndCompletionKeepOriginalEvidence(t *testing.T) {
 	}
 	if current.State != DispatchAccepted || current.Completed != nil {
 		t.Fatal("invalid completion persisted")
+	}
+}
+
+func TestDispatchWrapUpSnapshotUsesCurrentGrantDeadline(t *testing.T) {
+	root, d, exit := wrapUpGrantFixture(t, true)
+	grant, err := AuthorizeDispatchWrapUp(root, d.Input.TaskID, d.Input.ID, d.Revision, "coordinator", "确认退出", exit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := ScanDispatchesContext(context.Background(), root, []string{d.Input.TaskID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fact, err := view.CurrentDispatch(d.Input.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fact.Epoch != grant.Authorization.Epoch || !fact.ConfirmBy.Equal(grant.WrapUpAuthority.ConfirmBy) || !fact.ConfirmBy.After(time.Now()) || !grant.Input.ConfirmBy.Equal(d.Input.ConfirmBy) {
+		t.Fatal("snapshot used expired original deadline", fact)
 	}
 }

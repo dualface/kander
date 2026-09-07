@@ -58,7 +58,7 @@ func snapshotDispatch(tx *Transaction, id, text string, revision uint64) (*Dispa
 	}
 	return &DispatchSummary{ID: d.Input.ID, TaskID: id, Kind: d.Input.Kind,
 		State: d.State, Revision: d.Revision, Epoch: d.Authorization.Epoch,
-		CreatedAt: d.Input.CreatedAt, ConfirmBy: d.Input.ConfirmBy,
+		CreatedAt: d.Input.CreatedAt, ConfirmBy: dispatchAcceptBefore(d),
 		Accepted: d.Accepted, Completed: d.Completed}, nil
 }
 

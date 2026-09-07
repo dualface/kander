@@ -42,7 +42,7 @@ func TestSubscribeRestartProcess(t *testing.T) {
 		}
 		return event
 	}
-	dispatch := prepareSubscriptionDispatch(t, root, id, "fix", time.Minute)
+	dispatch := prepareSubscriptionDispatch(t, root, id, "sync", time.Minute)
 	before := readChild()
 	completeSubscriptionDispatch(t, root, id, dispatch, "review")
 	after := readChild()

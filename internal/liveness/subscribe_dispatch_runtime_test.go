@@ -64,7 +64,7 @@ func TestSubscriptionDispatchDeadlineDoesNotWaitForProbe(t *testing.T) {
 
 func TestSubscriptionAcceptanceEndsConfirmationDeadline(t *testing.T) {
 	root, opts, id := factsMember(t)
-	dispatch := prepareSubscriptionDispatch(t, root, id, "fix", time.Minute)
+	dispatch := prepareSubscriptionDispatch(t, root, id, "sync", time.Minute)
 	if _, err := board.MoveWithOptions(currentEntry(t, root, id), root, "working", board.MoveOptions{Authorization: dispatch.Authorization}); err != nil {
 		t.Fatal(err)
 	}

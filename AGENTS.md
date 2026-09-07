@@ -19,7 +19,7 @@
 - 模块路径: `github.com/dualface/kander`.
 - 单二进制入口: `cmd/kander`. `main.go` 只调用 `internal/cli.Run`; 同目录其余文件以空白 import 接入实现包, 触发各包的 `init` 绑定. 禁止再拆第二个命令入口.
 - 不带子命令运行 `kander` 直接打开终端看板: `internal/cli` 暴露 `DefaultRunner`, 由 `internal/tui` 在注册时设置, `internal/cli` 不反向依赖 `internal/tui`.
-- `internal/cli` 集中维护命令名与 Runner 注册表. `doctor`/`config`/`version` 及 board 命令在本包接线; launch/liveness/notify/review/takeover 由实现包覆写对应 Runner. `check` 先接 board 结构检查, 完整二进制再由 liveness 覆写为结构检查加存活段.
+- `internal/cli` 集中维护命令名与 Runner 注册表. `doctor`/`config`/`version` 及 board 命令在本包接线; launch/liveness/notify/review/takeover 由实现包覆写对应 Runner. `check` 先接 board 结构检查, 完整二进制再由 liveness 覆写为结构检查加存活段. `dispatch` 的存储命令先接 board，完整二进制由 launch 增加 Git 集成证据与退出事实验证入口。
 - 包职责:
 
 | 包                  | 职责                                                                 |
@@ -30,8 +30,8 @@
 | `internal/i18n`     | go-i18n 消息目录与模板渲染; 不依赖 config, 语言由调用方传入              |
 | `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/共享及独占锁                          |
 | `internal/process`  | Agent CLI 解析, UTF-8 任务文件, argv/env 调用构造                         |
-| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验，dispatch 意图、epoch 与原子回执                 |
-| `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚                               |
+| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验，dispatch 意图、审核原件绑定、epoch、仅收尾授权与原子回执                 |
+| `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚，dispatch 的 Git 集成与退出事实校验                               |
 | `internal/probe`    | herdr/tmux pane 事实采集                                                 |
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
 | `internal/notify`   | notify 直投, 忙/过期判断, resume 恢复与版本冲突处理                           |

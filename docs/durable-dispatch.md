@@ -94,7 +94,7 @@ kander dispatch authorize-wrap-up <request.json>
 
 `expected_revision` 是 dispatch revision。没有派回记录时，给请求附加完整 `intent`（kind 必须为 wrap-up，显式 ID/任务与外层一致）；先创建意图，再观测，不凭空授予权限。此前合法回收可另填 `reclaim_decision`，引用已存在的用户授权；此字段不触发回收，不替代 stopped 观测。缺 SESSION、unknown、alive/drifted 均拒绝；必须先通过既有授权流程建立可核验退出事实。工具不扩大接管权限，不因等待够久就推断同意。
 
-代收尾入口在投递锁内先读取当前回执：completed 或同作者/原因已有专用 grant 直接对账，不重复授予。否则采集新的、与当前卡片身份一致的 stopped 观测，携带 card revision 与 dispatch revision 做 CAS。delivery-unknown/accepted 均必须经过这套核验；若并发接受或 WINDOW 变化，CAS 拒绝旧事实。授权事务先保存 `execution-<old-epoch>.json`，提高 epoch，并发布 `wrap-up-authority-<epoch>.json`；旧执行者不能借最新 revision 更新正文、WINDOW、作者处置或完成回执。新专用 grant 有独立 120 秒接受期限，原意图期限不改写；这不是以期限届满证明退出。
+代收尾入口在投递锁内先读取当前回执：completed 或同作者/原因已有专用 grant 直接对账，不重复授予。否则采集新的、与当前卡片身份一致的 stopped 观测，携带 card revision 与 dispatch revision 做 CAS。delivery-unknown/accepted 均必须经过这套核验；若并发接受或 WINDOW 变化，CAS 拒绝旧事实。授权事务先保存 `execution-<old-epoch>.json`，提高 epoch，并发布 `wrap-up-authority-<epoch>.json`；旧执行者不能借最新 revision 更新正文、WINDOW、作者处置或完成回执。新专用 grant 有独立 120 秒接受期限，原意图期限不改写；订阅所用 board 快照的 confirm_by 则输出当前 epoch 的实际接受期限，避免将刚授予的收尾权限误报过期。这不是以期限届满证明退出。
 
 拿到专用 grant 后按原子回执入口 `move working`，仅在 replayed=false 时开始清理。只允许用户已授权的清理和追加记录，不允许代码修改、Agent 启动、通知投递、升级普通接管授权、重写原作者 disposition 或运行时身份。普通 update 仅接受保留原 spec 全文后追加 `## WRAP_UP_RECORDS`，或首次写入 `wrap-up/<dispatch-id>-<epoch>.md`（相同内容重试可读写，不同内容不能覆盖）。原 OWNER、SESSION、既有作者记录保持不变，实际代办作者记录在 grant 中。完成仍走 done 的原门禁；不得用伪作者结论凑通过。
 

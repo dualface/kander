@@ -16,9 +16,14 @@ import (
 func prepareSubscriptionDispatch(t *testing.T, root, id, kind string, deadline time.Duration) board.Dispatch {
 	t.Helper()
 	now := time.Now().UTC()
-	dispatch, err := board.PrepareDispatch(root, board.DispatchInput{ID: "subscription-round", TaskID: id,
+	in := board.DispatchInput{ID: "subscription-round", TaskID: id,
 		Kind: kind, Message: "private dispatch payload", Base: strings.Repeat("a", 40),
-		CreatedAt: now.Add(-time.Minute), ConfirmBy: now.Add(deadline)})
+		CreatedAt: now.Add(-time.Minute), ConfirmBy: now.Add(deadline)}
+	if kind == "wrap-up" {
+		in.Base = strings.Repeat("b", 40)
+		in.Evidence.WrapUp = &board.DispatchWrapUpBinding{Artifact: board.ArtifactReference{TaskID: id, Path: "dispatches/" + in.ID + "/integration.json"}, Git: board.DispatchIntegration{DispatchID: in.ID, TaskID: id, CWD: t.TempDir(), SourceCommit: in.Base, ReviewTarget: in.Base, TargetCommit: in.Base, TargetRef: "refs/heads/develop", Author: "fixture", Basis: "structural subscription fixture; no Git verification claimed", VerifiedAt: now}}
+	}
+	dispatch, err := board.PrepareDispatch(root, in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +170,7 @@ func TestSubscriptionDispatchDeadlineSurvivesOtherEvents(t *testing.T) {
 	external := addFactsExternal(t, root, "dispatch-changing", "20260908-external-group")
 	opts.Watch = []string{external}
 	opts.Refresh, opts.Heartbeat = .005, 3600
-	dispatch := prepareSubscriptionDispatch(t, root, id, "fix", 200*time.Millisecond)
+	dispatch := prepareSubscriptionDispatch(t, root, id, "sync", 200*time.Millisecond)
 	if _, err := board.BeginDispatchAttempt(root, id, dispatch.Input.ID, dispatch.Revision); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +205,7 @@ func TestSubscriptionDispatchDeadlineSurvivesOtherEvents(t *testing.T) {
 
 func TestSubscriptionDispatchCorruptionFailsClosed(t *testing.T) {
 	root, opts, id := factsMember(t)
-	dispatch := prepareSubscriptionDispatch(t, root, id, "fix", time.Minute)
+	dispatch := prepareSubscriptionDispatch(t, root, id, "sync", time.Minute)
 	path := filepath.Join(currentEntry(t, root, id).Path, "dispatches", dispatch.Input.ID, "state.json")
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)

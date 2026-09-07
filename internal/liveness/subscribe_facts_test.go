@@ -76,7 +76,7 @@ func TestAuditRoundTripIsInvisible(t *testing.T) {
 			opts.Refresh, opts.Heartbeat = 1, 1.5
 			var dispatch board.Dispatch
 			if roundTrip {
-				dispatch = prepareSubscriptionDispatch(t, root, id, "fix", time.Minute)
+				dispatch = prepareSubscriptionDispatch(t, root, id, "sync", time.Minute)
 			}
 			events, err := factsEvents(t, root, opts, func(event groupEvent) error {
 				if event.Event != "snapshot" {
