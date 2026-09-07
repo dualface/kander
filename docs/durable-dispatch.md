@@ -56,7 +56,7 @@ P3 的批量 context 入口提供探测总预算（默认 10 秒），接受期�
 
 ## 兼容与能力边界
 
-未绑定模式的 working 普通消息、无组卡继续使用既有消息流程，不补造历史 accepted/completed 回执。绑定 working 卡的普通 notify 只允许直投信息，不通过旧模式恢复进程；resume 必须显式携带 dispatch ID。恢复启动成功后，resume 可返回真实的 delivery-unknown（尚未接受）状态；调用方仍须读取业务回执。foreground 的进程等待在释放投递锁后继续，不能以会话时长锁住同 ID 对账。持久模式优先于旧规则中把 review-working 栏目变化或终端 marker 当作确认的表述。已绑定卡不得用无授权 update/move 回到旧协议。旧二进制不认识本协议，升级/恢复时仍须遵守现有维护窗口规则；不得与绕过协议的旧写入者并行运行。
+未绑定模式的 working 普通消息、无组卡继续使用既有消息流程，不补造历史 accepted/completed 回执。绑定 working 卡的普通 notify 只允许直投信息，不通过旧模式恢复进程；resume 必须显式携带 dispatch ID。恢复启动成功且确认预算尚未耗尽时，resume 可返回真实的 delivery-unknown（尚未接受）状态；调用方仍须读取业务回执。确认预算耗尽时，重新读取后仍没有接受/完成回执必须返回非零 pending；foreground/console 仅存活不满足接受条件，未知执行者及载荷继续保留。foreground 的进程等待在释放投递锁后继续，不能以会话时长锁住同 ID 对账。持久模式优先于旧规则中把 review-working 栏目变化或终端 marker 当作确认的表述。已绑定卡不得用无授权 update/move 回到旧协议。旧二进制不认识本协议，升级/恢复时仍须遵守现有维护窗口规则；不得与绕过协议的旧写入者并行运行。
 
 保证限于遵守受控入口的本机进程：重复接受不会生成第二份回执；新 epoch 拒绝旧受控写入。磁盘协议不可能让任意 Git、网络、文件编辑等外部副作用 exactly-once。若执行者在接受后、外部操作中途死亡，已有 accepted 也不会被误当 completed；后续决策须重建实际工作进度，不能盲重放。
 

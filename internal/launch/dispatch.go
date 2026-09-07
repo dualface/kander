@@ -207,6 +207,9 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 	if err != nil {
 		return err
 	}
+	if ctx.Err() != nil {
+		return launchError("launch.dispatch_pending", d.Input.ID)
+	}
 	return PrintDispatchResult(current)
 }
 
@@ -264,7 +267,7 @@ func validateResumedDispatch(root string, entry board.Entry, text string, plan L
 	if remaining < timeout {
 		timeout = remaining
 	}
-	return validateResumedAgentReceipt(plan, outcome, session, timeout, func() (bool, error) {
+	receipt := func() (bool, error) {
 		current, err := board.ReadDispatch(root, entry.TaskID, id)
 		if err != nil {
 			return false, err
@@ -273,7 +276,21 @@ func validateResumedDispatch(root string, entry board.Entry, text string, plan L
 			return false, launchError("board.dispatch_conflict", id)
 		}
 		return dispatchFinished(current), nil
-	})
+	}
+	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
+	if err = validateResumedAgentReceipt(plan, outcome, session, timeout, receipt); err != nil {
+		return err
+	}
+	// Process liveness can consume the entire acceptance budget. Reconcile once
+	// more before reporting pending; preserve any executor whose delivery is unknown.
+	consumed, err := receipt()
+	if err != nil {
+		return err
+	}
+	if !consumed && !nowFn().Before(deadline) {
+		return launchError("launch.dispatch_pending", id)
+	}
+	return nil
 }
 
 type resumeBinding struct {
