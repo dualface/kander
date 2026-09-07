@@ -56,7 +56,12 @@ func dispositionPath(d ReviewDisposition) string {
 	return "reviews/" + d.RunID + "/dispositions/" + d.RecordID + ".json"
 }
 func dispositionKey(d ReviewDisposition) string { return d.FindingID + "/" + d.TaskID }
-func runFindings(tx *Transaction, run ReviewRun) (ReviewFindings, error) {
+func runFindings(tx *Transaction, run ReviewRun) (findings ReviewFindings, err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%s: %w", run.RunID, err)
+		}
+	}()
 	data, ok, err := tx.ReadGroup(reviewControlGroup, "runs/"+run.RunID+"/originals/report.md")
 	if err != nil {
 		return ReviewFindings{}, err
