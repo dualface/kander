@@ -122,6 +122,7 @@
   "board.too_many_arguments": "引数が多すぎます",
   "board.type_slug_and_title_are_required": "type、slug、title が必要です",
   "board.unknown_option": "未知のオプション {{.V0}}",
+  "board.option_requires_a_value": "オプション {{.V0}} には値が必要です",
   "board.unknown_state": "未知の状態 {{.V0}}",
   "board.unknown_task_type": "未知のタスク種別: {{.V0}}",
   "board.untitled": "(無題)",
