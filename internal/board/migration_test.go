@@ -112,11 +112,11 @@ func TestMigrationAllStatesAndIdempotence(t *testing.T) {
 	mtimes := map[string]time.Time{}
 	for id, text := range original {
 		s := transactionSnapshot(t, root, id)
-		if !s.Entry.IsDirectory() || s.Entry.Kind != "small" || s.Text != addSize(text, "small") {
+		if !s.Entry.IsDirectory() || s.Entry.Kind != "small" || s.Text != addSize(strings.ReplaceAll(text, "(notes.txt)", "(../notes.txt)"), "small") {
 			t.Fatalf("lost content %+v", s)
 		}
-		if strings.Replace(s.Text, "- SIZE: small\r\n", "", 1) != text {
-			t.Fatal("migration changed non-SIZE bytes")
+		if strings.Replace(strings.Replace(s.Text, "- SIZE: small\r\n", "", 1), "(../notes.txt)", "(notes.txt)", 1) != text {
+			t.Fatal("migration changed bytes outside SIZE and destination")
 		}
 		info, err := os.Stat(s.Entry.Document)
 		if err != nil {

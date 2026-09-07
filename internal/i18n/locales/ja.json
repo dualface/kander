@@ -1,4 +1,5 @@
 {
+  "board.migration_link_unsupported": "{{.V0}} の相対リンクを安全に移行できません：{{.V1}}。本文は保持されています。構文を修正して再実行してください",
   "board.guard_form_changed": "タスク {{.V0}} は {{.V1}} のディレクトリ形式に移行済みです。旧 .md パスへの書き込みは重複を作成します。kander show --json と kander update を使用してください。",
   "launch.prompt.size": "タスク規模は {{.V0}}（SIZE）です。ディレクトリ形式で規模を判断せず、対応する完了要件に従ってください。",
   "board.size_invalid": "タスク {{.V0}} の SIZE が不正または重複しています。small/large のみ有効です",

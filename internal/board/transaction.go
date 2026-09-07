@@ -45,16 +45,17 @@ type EntryChange struct {
 // OperationRecord is the versioned recovery format. A prepared record always
 // rolls forward on init. Readers reject prepared records without repairing them.
 type OperationRecord struct {
-	Purpose     string            `json:"purpose,omitempty"`
-	Schema      int               `json:"schema"`
-	ID          string            `json:"operation_id"`
-	Phase       string            `json:"phase"`
-	Revisions   map[string]uint64 `json:"revisions"`
-	Groups      []string          `json:"groups,omitempty"`
-	Directories []string          `json:"directories,omitempty"`
-	Files       []FileChange      `json:"files,omitempty"`
-	Entries     []EntryChange     `json:"entries,omitempty"`
-	Migrations  []FormMigration   `json:"migrations,omitempty"`
+	LinkRelocation bool              `json:"link_relocation,omitempty"`
+	Purpose        string            `json:"purpose,omitempty"`
+	Schema         int               `json:"schema"`
+	ID             string            `json:"operation_id"`
+	Phase          string            `json:"phase"`
+	Revisions      map[string]uint64 `json:"revisions"`
+	Groups         []string          `json:"groups,omitempty"`
+	Directories    []string          `json:"directories,omitempty"`
+	Files          []FileChange      `json:"files,omitempty"`
+	Entries        []EntryChange     `json:"entries,omitempty"`
+	Migrations     []FormMigration   `json:"migrations,omitempty"`
 }
 
 // Transaction stages multi-file publications under a fixed lock set. Callers

@@ -63,25 +63,11 @@ func MigrateCards(root string, options InitOptions) (count int, err error) {
 	if len(b.Problems) > 0 {
 		return count, errors.New(b.Problems[0].Message)
 	}
-	type candidate struct {
-		entry         Entry
-		before, after string
+	record, err := planMigration(root, b)
+	if err != nil {
+		return count, err
 	}
-	var candidates []candidate
-	for _, e := range selectedEntries(b.Entries, "") {
-		text, err := readDocument(e)
-		if err != nil {
-			return count, err
-		}
-		size, err := taskSize(e, text)
-		if err != nil {
-			return count, err
-		}
-		if !e.IsDirectory() || len(fieldLines(text, FieldSize)) == 0 {
-			candidates = append(candidates, candidate{e, text, addSize(text, size)})
-		}
-	}
-	if len(candidates) == 0 {
+	if len(record.Revisions) == 0 {
 		return count, nil
 	}
 	// Even an unchanged active card can have an in-flight legacy writer. Require
@@ -98,38 +84,17 @@ func MigrateCards(root string, options InitOptions) (count int, err error) {
 			return count, kanbanError("board.migration_maintenance", strings.Join(active, ", "))
 		}
 	}
-	for _, c := range candidates {
-		id, err := operationID()
-		if err != nil {
-			return count, err
-		}
-		v, err := revision(root, c.entry.TaskID)
-		if err != nil {
-			return count, err
-		}
-		if v == ^uint64(0) {
-			return count, kanbanError("board.transaction_invalid", "revision overflow")
-		}
-		record := OperationRecord{Schema: 1, Purpose: "migration", ID: id, Phase: "prepared", Revisions: map[string]uint64{c.entry.TaskID: v + 1}}
-		from, _ := filepath.Rel(root, c.entry.Path)
-		if c.entry.IsDirectory() {
-			doc, _ := filepath.Rel(root, c.entry.Document)
-			record.Files = []FileChange{{Path: doc, Before: &c.before, After: c.after}}
-		} else {
-			record.Migrations = []FormMigration{{From: from, To: strings.TrimSuffix(from, ".md"), Before: c.before, After: c.after, Rewrite: "spec.write-" + id, Original: "spec.original-" + id}}
-		}
-		path := control(root, "operations", id+".json")
-		if err = validateRecord(root, &record); err != nil {
-			return count, err
-		}
-		if err = writeOperation(root, path, record, false); err != nil {
-			return count, err
-		}
-		if err = applyRecord(root, path, &record); err != nil {
-			return count, err
-		}
-		count++
+	path := control(root, "operations", record.ID+".json")
+	if err = validateRecord(root, &record); err != nil {
+		return count, err
 	}
+	if err = writeOperation(root, path, record, false); err != nil {
+		return count, err
+	}
+	if err = applyRecord(root, path, &record); err != nil {
+		return count, err
+	}
+	count += len(record.Revisions)
 	return count, nil
 }
 
@@ -250,7 +215,11 @@ func validateMigration(root string, record *OperationRecord, m FormMigration) er
 	if err != nil {
 		return err
 	}
-	if m.After != addSize(m.Before, size) {
+	expected, err := relocateMarkdown(addSize(m.Before, size), filepath.Join(root, m.From), filepath.Join(root, m.To, "spec.md"), migrationPathMap(root, record))
+	if err != nil {
+		return err
+	}
+	if m.After != expected {
 		return kanbanError("board.transaction_invalid", m.To)
 	}
 	return nil

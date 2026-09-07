@@ -118,6 +118,16 @@ func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint
 		if err = fs.WriteTextAtomic(root, p, f.After, f.Before != nil); err != nil {
 			return err
 		}
+		if r.Purpose == "migration" {
+			if err := checkpoint("migration-link-file"); err != nil {
+				return err
+			}
+		}
+	}
+	if r.Purpose == "migration" {
+		if err := checkpoint("migration-links"); err != nil {
+			return err
+		}
 	}
 	for _, e := range r.Entries {
 		to, err := safeRecordPath(root, e.To)
@@ -264,12 +274,21 @@ func RecoverTransactions(root string) (err error) {
 }
 
 func validateRecord(root string, r *OperationRecord) error {
-	if r.Purpose != "" && r.Purpose != "migration" {
+	if r.LinkRelocation && r.Purpose != "migration" || r.Purpose != "" && r.Purpose != "migration" {
 		return kanbanError("board.transaction_invalid", r.Purpose)
 	}
 	if len(r.Migrations) > 0 {
-		if len(r.Migrations) != 1 || len(r.Revisions) != 1 || len(r.Files) > 0 || len(r.Entries) > 0 || len(r.Directories) > 0 || len(r.Groups) > 0 {
+		if r.Purpose != "migration" || len(r.Entries) > 0 || len(r.Directories) > 0 || len(r.Groups) > 0 {
 			return kanbanError("board.transaction_invalid", r.ID)
+		}
+	}
+
+	if r.Purpose == "migration" {
+		if len(r.Entries) > 0 || len(r.Directories) > 0 || len(r.Groups) > 0 {
+			return kanbanError("board.transaction_invalid", r.ID)
+		}
+		if err := validateMigrationFiles(root, r); err != nil {
+			return err
 		}
 	}
 

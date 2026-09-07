@@ -19,19 +19,27 @@ Entry.Kind 和 TaskSummary.kind、list、TUI、启动/恢复/通知模型参数�
 
 复用 [卡片事务](card-transactions.md) 的看板锁、revision、操作 ID 和 prepared/committed 日志. 文件转目录分阶段执行:
 
-1. 保存 from/to 和原文/补 SIZE 后正文的持久记录.
+1. 预检全部卡片, 保存整批 from/to 映射及各文档原文/补 SIZE 与链接调整后正文到一个持久记录. 相互引用的卡片不会分成可独立提交的迁移.
 2. 建立同卷 `.kander/migrations/<operation-id>/<task-id>/` 暂存目录.
 3. 将源 `.md` 改名为暂存目录内的 spec.md. 此时状态目录中暂时没有该 ID 的入口.
-4. 在日志登记的 `spec.write-<operation-id>` 写入补 SIZE 后正文; 中断后只接受 After 的精确前缀, 从已写位置继续并同步. 原 spec.md 先改名为登记的 `spec.original-<operation-id>`, 再发布完整替换; 仅在匹配原文时移除备份. 不依赖进程 defer 清理随机临时文件.
+4. 在日志登记的 `spec.write-<operation-id>` 写入补 SIZE 与链接调整后正文; 中断后只接受 After 的精确前缀, 从已写位置继续并同步. 原 spec.md 先改名为登记的 `spec.original-<operation-id>`, 再发布完整替换; 仅在匹配原文时移除备份. 不依赖进程 defer 清理随机临时文件.
 5. 将完整目录发布到原状态的 `<task-id>/`.
 6. 提交 revision 和 committed 日志.
 
 这些操作不是一次原子 rename. 正常读者被排他锁隔离; 进程被终止后, 读者依据 prepared 记录诊断待恢复事务, 不把它当普通缺卡或自动修复. init 根据源、暂存、目标的存在性及准确正文匹配继续完成; 双入口、异常正文、无记录暂存物、symlink/junction/reparse 均报错并保留现场. 已提交记录和空暂存父目录保留作诊断, 不通过忽略状态目录点前缀隐藏半成品.
 
-既有目录只补 SIZE: large, 附件和相对链接原样保留. 已有合法 SIZE 保留, 每次实际迁移增加一次 revision. 再次 init 返回迁移数 0, 不重写卡片内容和 mtime. 底层仍经过 internal/fs 的 POSIX no-follow 和 Windows 固定句柄/reparse/DACL 边界. 测试针对进程中断与重启, 不宣称任意硬件掉电保障.
+既有目录缺 SIZE 时补 large; 其 spec.md 及目录内 Markdown 附件引用旧文件卡时同批调整地址. 二进制等普通附件不改写. 已有合法 SIZE 保留, 每张发生形态或正文变化的卡片增加一次 revision, 迁移计数包含只调整链接的卡片. 再次 init 返回迁移数 0, 不重写卡片内容和 mtime. 底层仍经过 internal/fs 的 POSIX no-follow 和 Windows 固定句柄/reparse/DACL 边界. 测试针对进程中断与重启, 不宣称任意硬件掉电保障.
+
+## 相对链接
+
+按引用方原位置解析 URL 路径, 再使用整批旧文件至新 spec.md 的映射转换目标, 最后相对引用方新位置生成地址. 因此双方都迁移、既有目录卡引用旧文件、引用看板外 README 等场景均能保持目标; 不一律添加 ../. 源代码和恢复校验共用此算法, prepared 记录保留完整映射, 不从半迁移现场重新猜测.
+
+复用 Goldmark 的 CommonMark 解析, 只替换目标地址的源字节片段. 支持普通链接、图片、引用定义 (含未使用/重复定义)、角括号地址、转义/百分号编码、查询与片段. 链接文字、标题、CRLF、正文其他字节以及代码行内/围栏/缩进示例不变. 网页 URL、根路径 URL、纯锚点和纯查询引用保持原样. 仅扫描看板卡片内的 Markdown 文档, 不扫描或修改看板外仓库文件.
+
+Wiki 链接、HTML srcset、需要重定位的 HTML href/src、无效 URL 和不具备跨平台语义的反斜线路径不猜测改写: 在发布前报错给出文档与原因, 保留原文, 由操作方先转换为支持的 Markdown 链接再重试. 本轮不声称能修复旧版本已经 committed 的损坏链接; 无 link_relocation 标记的旧日志按原 SIZE-only 计划恢复, 新迁移计划带该标记并校验完整映射.
 
 ## 过渡读取
 
 list/show/check/TUI/subscribe 继续读取旧文件, 不触发批量迁移. new 始终创建目录. 对旧文件的 update/move/pick/start/resume/notify/dismiss 以及生命周期回写在副作用前要求 init, 不允许用旧二进制绕过限制. guard-write 对同状态旧 .md 拼写及跨状态旧路径给出提示; 它仍不是原子写入入口.
 
-迁移失败注入及子进程 kill/restart 覆盖 prepared、暂存目录、源移走、临时替换创建、同步、原文备份、替换发布、备份移除、SIZE 完成、目标发布、revision 和 committed. 未登记的旧原子写入残留及非前缀内容仍报冲突并保留, 不按文件名模式猜测归属. 并发测试验证维护锁阻塞 init、快照、update、归档/move, 释放后只产生串行提交或 revision 冲突. 原生 Windows 用例需在 Windows 执行; 交叉编译不能替代实机结果.
+迁移失败注入及子进程 kill/restart 覆盖已有目录每份链接正文发布、全部链接正文发布、prepared、暂存目录、源移走、临时替换创建、同步、原文备份、替换发布、备份移除、SIZE 完成、目标发布、revision 和 committed. 未登记的旧原子写入残留及非前缀内容仍报冲突并保留, 不按文件名模式猜测归属. 并发测试验证维护锁阻塞 init、快照、update、归档/move, 释放后只产生串行提交或 revision 冲突. 原生 Windows 用例需在 Windows 执行; 交叉编译不能替代实机结果.

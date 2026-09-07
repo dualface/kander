@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -35,4 +36,21 @@ func TestMigrationRejectsWindowsStagingJunction(t *testing.T) {
 	if _, err := os.Lstat(stage); err != nil {
 		t.Fatal("junction removed")
 	}
+}
+
+func TestMigrationWindowsLinkPathCase(t *testing.T) {
+	root := linkMigrationFixture(t)
+	path := filepath.Join(root, "backlog", linkA+".md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.ReplaceAll(string(data), "../done/", "../DONE/")
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := MigrateCards(root, InitOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	assertLinkTargets(t, root)
 }
