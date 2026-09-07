@@ -2,7 +2,7 @@ package board
 
 import "strings"
 
-// IsDirectory reports storage form; Kind always represents task size.
+// IsDirectory reports storage form; Kind is populated with task size when the document is attached.
 func (e Entry) IsDirectory() bool { return !strings.HasSuffix(e.Path, ".md") }
 
 // storageKind preserves schema-1 transaction entry form encoding.
@@ -65,6 +65,18 @@ func addSize(text, size string) string {
 			line = newline + line
 		}
 		return text[:end] + line + text[end:]
+	}
+	// A malformed legacy card may lack TYPE; keep its H1 first without
+	// inventing metadata or rewriting any existing line.
+	offset := 0
+	for _, title := range strings.SplitAfter(text, "\n") {
+		offset += len(title)
+		if strings.HasPrefix(title, "# ") {
+			if !strings.HasSuffix(title, "\n") {
+				line = newline + line
+			}
+			return text[:offset] + line + text[offset:]
+		}
 	}
 	return line + text
 }

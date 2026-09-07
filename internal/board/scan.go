@@ -85,7 +85,7 @@ func scan(root string) (Board, error) {
 				), taskID, existing.Path)
 				continue
 			}
-			board.Entries[taskID] = Entry{TaskID: taskID, State: state, Path: path, Document: document, Kind: kind}
+			board.Entries[taskID] = Entry{TaskID: taskID, State: state, Path: path, Document: document}
 		}
 	}
 	return board, nil
@@ -117,7 +117,7 @@ func scanTargetsOnce(root string, taskIDs []string) (Board, bool) {
 						Message: t("board.task_entry_has_the_wrong_type", smallPath),
 					})
 				} else if exists {
-					matches = append(matches, Entry{TaskID: taskID, State: state, Path: smallPath, Document: smallPath, Kind: "small"})
+					matches = append(matches, Entry{TaskID: taskID, State: state, Path: smallPath, Document: smallPath})
 				}
 			}
 
@@ -162,7 +162,7 @@ func scanTargetsOnce(root string, taskIDs []string) (Board, bool) {
 				})
 				continue
 			}
-			matches = append(matches, Entry{TaskID: taskID, State: state, Path: largePath, Document: document, Kind: "large"})
+			matches = append(matches, Entry{TaskID: taskID, State: state, Path: largePath, Document: document})
 		}
 		var taskProblems []Problem
 		for _, problem := range board.Problems {

@@ -301,7 +301,8 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 		}
 		text, e := board.Document(entry.TaskID)
 		if e != nil {
-			return 1, "", nil, e
+			// The dependency pass below aggregates this document error once.
+			continue
 		}
 		if _, e = taskSize(entry, text); e != nil {
 			allProblems = append(allProblems, Problem{Path: entry.Path, Message: e.Error()})

@@ -245,32 +245,44 @@ func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint
 	return checkpoint("committed")
 }
 
-// RecoverTransactions is init's explicit, idempotent roll-forward recovery. It
-// never guesses a preferred copy when both source and target are present.
+// RecoverTransactions is the compatibility entrance for recovery without new
+// migrations. Init uses MigrateCards; both share the same locked recovery core.
 func RecoverTransactions(root string) (err error) {
 	locks, err := acquire(root, LockScope{ExclusiveBoard: true})
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, locks.close()) }()
+	_, err = recoverMigrationRecords(root, InitOptions{})
+	return err
+}
+
+// The caller holds exclusive board access. Recovery precedes structural scan;
+// unrelated board problems cannot prevent replay of a valid pending operation.
+func recoverMigrationRecords(root string, options InitOptions) (int, error) {
 	records, err := operationRecords(root)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if err = requireMigrationWindow(root, records, false); err != nil {
-		return err
+	if err := validateMigrationStaging(root, records); err != nil {
+		return 0, err
 	}
-	if err = validateMigrationStaging(root, records); err != nil {
-		return err
+	if err := requireMigrationWindow(root, records, options.Maintenance); err != nil {
+		return 0, err
 	}
-	for _, r := range records {
-		if r.Phase == "prepared" {
-			if err = applyRecord(root, control(root, "operations", r.ID+".json"), &r); err != nil {
-				return fmt.Errorf("%s: %w", r.ID, err)
-			}
+	count := 0
+	for _, record := range records {
+		if record.Phase != "prepared" {
+			continue
+		}
+		if err := applyRecord(root, control(root, "operations", record.ID+".json"), &record); err != nil {
+			return count, fmt.Errorf("%s: %w", record.ID, err)
+		}
+		if record.Purpose == "migration" || len(record.Migrations) > 0 {
+			count += len(record.Revisions)
 		}
 	}
-	return nil
+	return count, nil
 }
 
 func validateRecord(root string, r *OperationRecord) error {
@@ -278,7 +290,7 @@ func validateRecord(root string, r *OperationRecord) error {
 		return kanbanError("board.transaction_invalid", r.Purpose)
 	}
 	if len(r.Migrations) > 0 {
-		if r.Purpose != "migration" || len(r.Entries) > 0 || len(r.Directories) > 0 || len(r.Groups) > 0 {
+		if r.Purpose != "migration" {
 			return kanbanError("board.transaction_invalid", r.ID)
 		}
 	}

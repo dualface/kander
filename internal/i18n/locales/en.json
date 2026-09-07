@@ -1,4 +1,5 @@
 {
+  "board.migration_structure": "Migration stopped; run kander check for structural problems:\n{{.V0}}",
   "board.migration_link_unsupported": "Cannot safely migrate relative links in {{.V0}}: {{.V1}}; content is preserved; resolve this syntax before retrying",
   "board.guard_form_changed": "Task {{.V0}} now uses directory form at {{.V1}}; the old .md spelling would create a duplicate. Use kander show --json and kander update.",
   "launch.prompt.size": "Task size is {{.V0}} (SIZE); directory form does not determine size. Follow the corresponding completion requirements.",

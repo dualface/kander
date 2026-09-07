@@ -42,7 +42,7 @@
 | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |
 | `internal/install`  | 首次运行向导, `kander install`, 规则释出与 doctor 修复                     |
 
-- 卡片新建统一为 `<task-id>/spec.md`, SIZE 决定 small/large 语义; `Entry.Kind`/`TaskSummary.kind` 表示规模, 物理形态使用 `Entry.IsDirectory()`. 文件卡只读兼容, init 在显式维护窗口通过既有事务迁移; 不能以目录形态判断完成门禁或模型.
+- 卡片新建统一为 `<task-id>/spec.md`, SIZE 决定 small/large 语义; 公开快照中的 `Entry.Kind`/`TaskSummary.kind` 表示规模 (包内结构扫描 Kind 留空, attachSize 后填入), 物理形态使用 `Entry.IsDirectory()`. 文件卡只读兼容, init 在显式维护窗口通过既有事务迁移; 不能以目录形态判断完成门禁或模型.
 - 运行时看板数据目录仍是主 worktree 的 `kanban/`, 覆盖仍是 `KANBAN_DIR`. 配置键 `kanban_agent` / `kanban_agents` / `models.kanban` 保持 onevoke schema, 不改名.
 - `rules` 保存 collaboration/code/git/review/task_intake/task_groups/reporting 七个可选模块开关. 新配置默认全开; 合法旧配置缺整个 rules 段时保留原七项全开, 段内缺项关闭. 解析与 doctor 修复复用 internal/config, 开关独立于 `welcome_complete` 初始化状态. task_groups 依赖 git; TUI 选项面板复用 `menu.Session.SetRules`, 启动/恢复/接管/通知在副作用前复核任务组依赖. 卡片任务组解析复用 `board.TaskGroupFrom`, 包括旧讨论区字段.
 - `language` 只决定 kander 自身的界面与命令输出语言, 取值 `cn`/`en`/`ja`. `agent_language` 是 Agent 与用户沟通的语言, 自由字符串 (如 `en`, `zh-CN`, `ja`), 须非空、单行且不超过 64 个字符; 配置缺该键时由 `language` 推导 (cn 得 `zh-CN`, en 得 `en`, ja 得 `ja`), doctor 修复同样按此推导. 选项面板提供固定候选列表, schema 仍接受列表外的手改值. `kander new` 把当时的 `agent_language` (或 `--language` 显式值, 同一校验规则) 写入卡片 `LANGUAGE` 字段, 卡片语种自此冻结并优先于配置; 旧卡缺该字段时回落配置, `kander check` 不校验它. `kander start` / `resume` / `notify` (直投与恢复) 写入的任务文件会带一句固定英文语种指令, 值与卡片 `LANGUAGE` (或缺字段时的配置) 一致. 安装器不再按语种释出规则, `kander-rules-state.json` 不再记录语言.

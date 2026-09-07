@@ -88,7 +88,7 @@ type Entry struct {
 	State    string
 	Path     string
 	Document string
-	Kind     string // Task size, independent of storage form.
+	Kind     string // Task size after document attachment; empty in structural scans.
 }
 
 // Board is the result of one scan. Invalid entries go to Problems; violations bound to a task ID go to Blocked.

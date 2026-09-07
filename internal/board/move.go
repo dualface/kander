@@ -38,7 +38,6 @@ func newTask(tx *Transaction, root, kind, slug, title, language string, large bo
 	target := filepath.Join(root, "backlog", taskID)
 	if large {
 		taskKind = "large"
-		target = filepath.Join(root, "backlog", taskID)
 	} else {
 		contract += smallTaskExtra()
 	}

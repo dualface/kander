@@ -53,6 +53,9 @@ func GuardWrite(root, path string) (GuardVerdict, error) {
 			return GuardVerdict{Reason: t("board.guard_task_moved", taskID, other)}, nil
 		}
 		if _, err := os.Lstat(filepath.Join(root, other, taskID+".md")); err == nil {
+			if other == state {
+				return GuardVerdict{Reason: t("board.migration_required", taskID)}, nil
+			}
 			return GuardVerdict{Reason: t("board.guard_task_moved", taskID, other)}, nil
 		}
 	}

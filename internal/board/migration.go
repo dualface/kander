@@ -35,36 +35,19 @@ func MigrateCards(root string, options InitOptions) (count int, err error) {
 		return 0, err
 	}
 	defer func() { err = errors.Join(err, locks.close()) }()
-	records, err := operationRecords(root)
+	count, err = recoverMigrationRecords(root, options)
 	if err != nil {
-		return 0, err
-	}
-	if err = validateMigrationStaging(root, records); err != nil {
 		return count, err
-	}
-	if err = requireMigrationWindow(root, records, options.Maintenance); err != nil {
-		return count, err
-	}
-
-	for _, record := range records {
-		if record.Phase == "prepared" {
-			if err = applyRecord(root, control(root, "operations", record.ID+".json"), &record); err != nil {
-				return count, err
-			}
-			if record.Purpose == "migration" || len(record.Migrations) > 0 {
-				count += len(record.Revisions)
-			}
-		}
 	}
 	b, err := scan(root)
 	if err != nil {
 		return count, err
 	}
-	if len(b.Problems) > 0 {
-		return count, errors.New(b.Problems[0].Message)
-	}
 	record, err := planMigration(root, b)
 	if err != nil {
+		return count, err
+	}
+	if err := migrationStructure(root, b, len(record.Revisions) > 0); err != nil {
 		return count, err
 	}
 	if len(record.Revisions) == 0 {
