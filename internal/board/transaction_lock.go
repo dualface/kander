@@ -9,7 +9,8 @@ import (
 )
 
 // LockScope declares the complete lock set before any task is accessed. Ordering
-// is board, sorted groups, sorted tasks. Migration requires ExclusiveBoard.
+// is board, sorted groups, sorted tasks, then the short-lived journal lock.
+// Migration requires ExclusiveBoard.
 type LockScope struct {
 	Groups         []string
 	Tasks          []string

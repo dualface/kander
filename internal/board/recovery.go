@@ -212,7 +212,7 @@ func applyRecord(root, path string, r *OperationRecord) error {
 		}
 	}
 	r.Phase = "committed"
-	return writeJSON(root, path, r, true)
+	return writeOperation(root, path, r, true)
 }
 
 // RecoverTransactions is init's explicit, idempotent roll-forward recovery. It

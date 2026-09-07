@@ -28,6 +28,7 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <user-
 
 - `locks/board.lock`: 普通读写共享; new、move 和恢复独占.
 - `locks/<group-id>.lock`, `locks/<task-id>.lock`: 先排序组 ID, 再排序任务 ID. 读者共享, 写者独占. 锁文件是稳定 inode/句柄, 不替换、不删除.
+- `locks/journal.lock`: 在看板/组/任务锁之后短暂取得; 全局日志枚举和读取共享, prepared/committed 原子发布独占. 锁覆盖临时文件创建至所有读写句柄关闭; 持此锁时不再取得看板/组/任务锁.
 - `versions/<task-id>.json`: `{revision, operation_id, contract_frozen}`. 旧卡缺文件等价于 revision 0.
 - `operations/<operation-id>.json`: 写前持久记录, 完成后保留 committed 记录供诊断与恢复核验.
 - `groups/<group-id>/...`: 后续生产者的组控制文档; 不作为任务卡扫描.

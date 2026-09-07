@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/dualface/kander/internal/fs"
+	"errors"
 	"strings"
+
+	"github.com/dualface/kander/internal/fs"
 )
 
 // versionRecord persists the last commit identity and never unfreezes a contract.
@@ -54,7 +56,18 @@ func pending(root string, ids []string) error {
 	}
 	return nil
 }
-func operationRecords(root string) ([]OperationRecord, error) {
+
+// operationRecords holds the journal read lock through enumeration and the
+// closing of all read handles. Windows readers must not overlap replacement.
+func operationRecords(root string) (records []OperationRecord, err error) {
+	err = withJournalLock(root, true, func() error {
+		var readErr error
+		records, readErr = readOperationRecords(root)
+		return readErr
+	})
+	return records, err
+}
+func readOperationRecords(root string) ([]OperationRecord, error) {
 	files, err := fs.ListDirectory(root, control(root, "operations"))
 	if err != nil {
 		return nil, err
@@ -89,4 +102,19 @@ func writeJSON(root, path string, value any, replace bool) error {
 		return err
 	}
 	return fs.WriteTextAtomic(root, path, string(b)+"\n", replace)
+}
+
+// Journal locks are terminal locks: acquire after board/group/task locks and
+// release before attempting any further board/group/task lock. No callback may
+// reenter a board API. Writers hold the lock until atomic-write handles close.
+func withJournalLock(root string, shared bool, fn func() error) (err error) {
+	var locks lockSet
+	if err = locks.take(root, control(root, "locks", "journal.lock"), shared); err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, locks.close()) }()
+	return fn()
+}
+func writeOperation(root, path string, record any, replace bool) error {
+	return withJournalLock(root, false, func() error { return writeJSON(root, path, record, replace) })
 }

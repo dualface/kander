@@ -112,7 +112,7 @@ func WithTransaction(root string, scope LockScope, fn func(*Transaction) error) 
 		return err
 	}
 	path := control(root, "operations", id+".json")
-	if err = writeJSON(root, path, tx.record, false); err != nil {
+	if err = writeOperation(root, path, tx.record, false); err != nil {
 		return err
 	}
 	return applyRecord(root, path, &tx.record)
