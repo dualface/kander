@@ -26,7 +26,9 @@ func ResolvedSession(taskID, text string) (AgentSession, error) {
 	return resolvedTaskSession(taskID, text)
 }
 
-// NotifyViaResume resumes the original session after direct delivery failed; on failure it restores the card text as it was before the call.
+// NotifyViaResume resumes the original session after direct delivery failed.
+// On failure it restores the pre-call text only while this operation still owns
+// the current revision; otherwise it preserves newer records and reports a conflict.
 func NotifyViaResume(root string, entry board.Entry, originalText, message string, timeout float64) (ResumeLaunch, error) {
 	session, err := resolvedTaskSession(entry.TaskID, originalText)
 	if err != nil {
