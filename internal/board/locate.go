@@ -186,6 +186,9 @@ func isFileNoFollow(path string) bool {
 
 // BoardRoot locates the board in the order KANBAN_DIR -> the main worktree's kanban/ -> an upward search.
 func BoardRoot() (string, error) {
+	if os.Getenv(EnvBoardDir) != "" {
+		return BoardRootAt("")
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", boardNotFound()
