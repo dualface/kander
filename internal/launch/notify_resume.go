@@ -51,7 +51,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	promptBody, err := resumePrompt(entry.TaskID, message, paths, entry.State)
+	promptBody, err := resumePrompt(entry.TaskID, message, paths, entry.State, originalText)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}

@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 		BinDir:      filepath.Join(t.TempDir(), "bin"),
 		RulesDir:    filepath.Join(t.TempDir(), "rules"),
 	}
+	card := "- LANGUAGE: en\n"
 	want := filepath.Join(paths.RulesDir, "KANDER-KANBAN-RULES.md")
 	bootstrap := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 	configuration := filepath.Join(paths.BinDir, "kander") + " config --json"
@@ -26,10 +28,10 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 		name string
 		make func() (string, error)
 	}{
-		{"start", func() (string, error) { return startAgentPrompt("task-1", paths, "") }},
-		{"resume", func() (string, error) { return resumeAgentPrompt("task-1", "继续", paths, "working") }},
-		{"notify-resume", func() (string, error) { return resumePrompt("task-1", "继续", paths, "review") }},
-		{"takeover", func() (string, error) { return takeoverAgentPrompt("task-1", "继续", paths, "codex", "review") }},
+		{"start", func() (string, error) { return startAgentPrompt("task-1", paths, "", card) }},
+		{"resume", func() (string, error) { return resumeAgentPrompt("task-1", "继续", paths, "working", card) }},
+		{"notify-resume", func() (string, error) { return resumePrompt("task-1", "继续", paths, "review", card) }},
+		{"takeover", func() (string, error) { return takeoverAgentPrompt("task-1", "继续", paths, "codex", "review", card) }},
 	}
 	for _, lang := range []string{"cn", "en", "ja"} {
 		for _, tc := range prompts {
@@ -48,6 +50,12 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 				if strings.Index(prompt, bootstrap) < 0 || strings.Index(prompt, configuration) < strings.Index(prompt, bootstrap) || strings.Index(prompt, want) < strings.Index(prompt, configuration) {
 					t.Fatalf("bootstrap/configuration/contract order is wrong: %s", prompt)
 				}
+				directive := promptLanguageDirective("en")
+				ruleIdx := strings.Index(prompt, bootstrap)
+				dirIdx := strings.Index(prompt, directive)
+				if dirIdx < 0 || dirIdx < ruleIdx {
+					t.Fatalf("language directive must follow rule loading: %s", prompt)
+				}
 				for _, requirement := range []string{"提交并 push", "合回 develop", "进入任务 worktree", "补充任务分支", "commit and push", "merge back into develop", "enter the task worktree", "record the task branch"} {
 					if strings.Contains(prompt, requirement) {
 						t.Fatalf("unconditional workflow requirement %q: %s", requirement, prompt)
@@ -64,15 +72,16 @@ func TestLocalizedPromptsAndSessionLookup(t *testing.T) {
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Setenv(config.EnvLangCLI, "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	card := "- LANGUAGE: zh-CN\n"
 	for _, lang := range []string{"cn", "en", "ja"} {
 		t.Run(lang, func(t *testing.T) {
 			t.Setenv(config.EnvLang, lang)
 			message := "user input {{.V0}} 100% <&>"
-			normal, err := resumePrompt("task-1", message, paths, "working")
+			normal, err := resumePrompt("task-1", message, paths, "working", card)
 			if err != nil {
 				t.Fatal(err)
 			}
-			pending, err := resumePrompt("task-1", message, paths, "review")
+			pending, err := resumePrompt("task-1", message, paths, "review", card)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -110,4 +119,93 @@ func TestLocalizedPromptsAndSessionLookup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPromptLanguageDirectiveFromCardAndConfig(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "en")
+
+	paths := config.InstallPaths{
+		Mode:     config.ModeGlobal,
+		RulesDir: filepath.Join(t.TempDir(), "rules"),
+	}
+
+	makeAll := func(card string) []struct {
+		name string
+		body string
+		err  error
+	} {
+		start, startErr := startAgentPrompt("task-1", paths, "", card)
+		resume, resumeErr := resumeAgentPrompt("task-1", "go", paths, "working", card)
+		notify, notifyErr := resumePrompt("task-1", "go", paths, "review", card)
+		takeover, takeoverErr := takeoverAgentPrompt("task-1", "go", paths, "codex", "working", card)
+		return []struct {
+			name string
+			body string
+			err  error
+		}{
+			{"start", start, startErr},
+			{"resume", resume, resumeErr},
+			{"notify-resume", notify, notifyErr},
+			{"takeover", takeover, takeoverErr},
+		}
+	}
+
+	t.Run("card LANGUAGE", func(t *testing.T) {
+		want := `in "ja"`
+		for _, tc := range makeAll("- LANGUAGE: ja\n") {
+			if tc.err != nil {
+				t.Fatalf("%s: %v", tc.name, tc.err)
+			}
+			if !strings.Contains(tc.body, want) {
+				t.Fatalf("%s missing %q: %s", tc.name, want, tc.body)
+			}
+			if !strings.Contains(tc.body, promptLanguageDirective("ja")) {
+				t.Fatalf("%s missing full language directive: %s", tc.name, tc.body)
+			}
+		}
+	})
+
+	t.Run("fallback to agent_language", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.json")
+		t.Setenv(config.EnvConfig, path)
+		payload := `{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"zh-CN","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`
+		if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		want := `in "zh-CN"`
+		for _, tc := range makeAll("- TYPE: Feature\n") {
+			if tc.err != nil {
+				t.Fatalf("%s: %v", tc.name, tc.err)
+			}
+			if !strings.Contains(tc.body, want) {
+				t.Fatalf("%s missing %q: %s", tc.name, want, tc.body)
+			}
+		}
+	})
+
+	t.Run("corrupt config without LANGUAGE", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.json")
+		t.Setenv(config.EnvConfig, path)
+		if err := os.WriteFile(path, []byte("{not-json"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range makeAll("- TYPE: Feature\n") {
+			if tc.err == nil {
+				t.Fatalf("%s: expected config error, got prompt %q", tc.name, tc.body)
+			}
+		}
+		// Card LANGUAGE still wins even when config is unreadable.
+		for _, tc := range makeAll("- LANGUAGE: ko\n") {
+			if tc.err != nil {
+				t.Fatalf("%s: card LANGUAGE should skip config: %v", tc.name, tc.err)
+			}
+			if !strings.Contains(tc.body, `in "ko"`) {
+				t.Fatalf("%s missing ko directive: %s", tc.name, tc.body)
+			}
+		}
+	})
 }

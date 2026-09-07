@@ -124,7 +124,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 	if err != nil {
 		return err
 	}
-	body, err := startAgentPrompt(entry.TaskID, paths, taskGroupFrom(original))
+	body, err := startAgentPrompt(entry.TaskID, paths, taskGroupFrom(original), original)
 	if err != nil {
 		return err
 	}
@@ -275,9 +275,9 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 	}
 	var instruction string
 	if takeover {
-		instruction, err = takeoverAgentPrompt(entry.TaskID, msg, paths, oldSession.Agent, entry.State)
+		instruction, err = takeoverAgentPrompt(entry.TaskID, msg, paths, oldSession.Agent, entry.State, text)
 	} else {
-		instruction, err = resumeAgentPrompt(entry.TaskID, msg, paths, entry.State)
+		instruction, err = resumeAgentPrompt(entry.TaskID, msg, paths, entry.State, text)
 	}
 	if err != nil {
 		return err

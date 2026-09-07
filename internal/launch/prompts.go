@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 )
@@ -47,36 +48,96 @@ func cardStateStatus(paths config.InstallPaths, taskID, state string) string {
 	return t("launch.prompt.working")
 }
 
-func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup string) (string, error) {
+// resolvePromptLanguage returns the agent communication language for start/resume/takeover prompts.
+// Card LANGUAGE wins; when the field is absent it falls back to the install scope's agent_language,
+// matching kander new (no config file derives from the interface language; a corrupt config is an error).
+// paths is the install scope used to assemble the prompt; agent_language is read from that scope
+// via ConfigPath / KANDER_CONFIG, the same resolution kander new uses.
+func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, error) {
+	if lang := strings.TrimSpace(metadataFrom(cardText, board.FieldLanguage)); lang != "" {
+		return lang, nil
+	}
+	return agentLanguageForScope(paths)
+}
+
+// agentLanguageForScope loads agent_language for the prompt's install scope.
+// Callers pass CurrentInstallPaths(); tests pin the file with t.Setenv(config.EnvConfig, ...).
+// The paths value identifies that scope for the API; config I/O goes through ConfigPath /
+// KANDER_CONFIG, which matches paths.ConfigPath when the caller used CurrentInstallPaths.
+func agentLanguageForScope(paths config.InstallPaths) (string, error) {
+	_ = paths
+	exists, err := config.Exists()
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return config.DefaultAgentLanguage(config.ResolveLanguage()), nil
+	}
+	cfg, err := config.Load(false)
+	if err != nil {
+		return "", err
+	}
+	return cfg.AgentLanguage, nil
+}
+
+// promptLanguageDirective is the fixed English hard instruction embedded in launch prompts.
+func promptLanguageDirective(language string) string {
+	return `Communicate with the user and write all card content, records and reports in "` + language +
+		`". Commit messages and code comments follow the project's conventions.`
+}
+
+// ruleLoadingWithLanguage appends the language directive after the rule-loading instruction.
+// A trailing space keeps the localized template suffix from gluing onto the English sentence.
+func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string, error) {
+	lang, err := resolvePromptLanguage(cardText, paths)
+	if err != nil {
+		return "", err
+	}
+	return RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " ", nil
+}
+
+func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
+	}
+	rules, err := ruleLoadingWithLanguage(paths, cardText)
+	if err != nil {
+		return "", err
 	}
 	cmd := commandName(paths)
 	ending := t("launch.prompt.start_single")
 	if taskGroup != "" {
 		ending = t("launch.prompt.start_group", cmd, taskID)
 	}
-	return t("launch.prompt.start", t("launch.prompt.start_head", taskID), RuleLoadingInstruction(paths), cmd, taskID, promptAgents(paths), ending), nil
+	return t("launch.prompt.start", t("launch.prompt.start_head", taskID), rules, cmd, taskID, promptAgents(paths), ending), nil
 }
 
-func resumeAgentPrompt(taskID, message string, paths config.InstallPaths, state string) (string, error) {
-	return resumePrompt(taskID, message, paths, state)
+func resumeAgentPrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
+	return resumePrompt(taskID, message, paths, state, cardText)
 }
 
-func resumePrompt(taskID, message string, paths config.InstallPaths, state string) (string, error) {
+func resumePrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
+	rules, err := ruleLoadingWithLanguage(paths, cardText)
+	if err != nil {
+		return "", err
+	}
 	status := cardStateStatus(paths, taskID, state)
-	return t("launch.prompt.resume", t("launch.prompt.resume_head", taskID), status, RuleLoadingInstruction(paths), commandName(paths), taskID, message, promptAgents(paths)), nil
+	return t("launch.prompt.resume", t("launch.prompt.resume_head", taskID), status, rules, commandName(paths), taskID, message, promptAgents(paths)), nil
 }
 
-func takeoverAgentPrompt(taskID, message string, paths config.InstallPaths, previous, state string) (string, error) {
+func takeoverAgentPrompt(taskID, message string, paths config.InstallPaths, previous, state, cardText string) (string, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
+	rules, err := ruleLoadingWithLanguage(paths, cardText)
+	if err != nil {
+		return "", err
+	}
 	status := cardStateStatus(paths, taskID, state)
-	return t("launch.prompt.takeover", t("launch.prompt.takeover_head", taskID), previous, status, RuleLoadingInstruction(paths), commandName(paths), taskID, message, promptAgents(paths)), nil
+	return t("launch.prompt.takeover", t("launch.prompt.takeover_head", taskID), previous, status, rules, commandName(paths), taskID, message, promptAgents(paths)), nil
 }
 
 func readTaskMessage(message string, messageSet bool, messageFile string, command string) (string, error) {
