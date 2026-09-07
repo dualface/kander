@@ -134,11 +134,15 @@ func groupMembers(root string) (map[string][]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return groupMembersFrom(scanned)
+}
+
+func groupMembersFrom(scanned board.Board) (map[string][]string, error) {
 	members := map[string][]string{}
 	for taskID, entry := range scanned.Entries {
 		text, err := board.ReadDocument(entry)
 		if err != nil {
-			continue
+			return nil, err
 		}
 		if group := taskGroupFrom(text); group != "" {
 			members[group] = append(members[group], taskID)
