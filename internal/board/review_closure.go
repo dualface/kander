@@ -36,6 +36,7 @@ type ReviewOpinion struct {
 	Finding *FindingRef `json:"finding,omitempty"`
 }
 type ReviewCloseRequest struct {
+	Mechanical       []ReviewMechanicalAssessment    `json:"mechanical,omitempty"`
 	BatchID          string                          `json:"batch_id"`
 	ExpectedRevision uint64                          `json:"expected_revision"`
 	ViewHash         string                          `json:"view_hash"`
@@ -49,11 +50,12 @@ type ReviewGitEdge struct {
 	Descendant string `json:"descendant"`
 }
 type ReviewGitEvidence struct {
-	NotApplicable string          `json:"not_applicable,omitempty"`
-	CWD           string          `json:"cwd"`
-	Head          string          `json:"head"`
-	VerifiedAt    string          `json:"verified_at"`
-	Edges         []ReviewGitEdge `json:"edges"`
+	Mechanical    []ReviewMechanicalGit `json:"mechanical,omitempty"`
+	NotApplicable string                `json:"not_applicable,omitempty"`
+	CWD           string                `json:"cwd"`
+	Head          string                `json:"head"`
+	VerifiedAt    string                `json:"verified_at"`
+	Edges         []ReviewGitEdge       `json:"edges"`
 }
 type ReviewClosure struct {
 	Schema       int                `json:"schema"`
@@ -236,6 +238,9 @@ func latestViewRecords(rv ReviewRunView) []ReviewDisposition {
 // which the review layer must verify. Structural validation makes no Git calls.
 func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdge, map[string]string, error) {
 	b := v.Batch
+	if _, err := ReviewMechanicalClaims(v, r); err != nil {
+		return nil, nil, err
+	}
 	if r.BatchID != b.BatchID || r.ExpectedRevision != b.Revision || r.ViewHash != ReviewViewDigest(v) || strings.TrimSpace(r.Author) == "" {
 		return nil, nil, reviewError("close target/revision/view CAS")
 	}
@@ -436,6 +441,9 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 		if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(evidence.NotApplicable) != "") {
 			return reviewError("Git N/A evidence binding")
 		}
+		if e = verifyMechanicalEvidence(v, r, evidence); e != nil {
+			return e
+		}
 		if evidence.CWD != p.CWD || evidence.Head != b.TargetCommit || !reflect.DeepEqual(edges, evidence.Edges) {
 			return reviewError("Git evidence binding")
 		}
@@ -516,6 +524,9 @@ func verifyClosureIntegrity(tx *Transaction, c ReviewClosure) error {
 	}
 	edges, statuses, err := ReviewClosureEdges(v, c.Request)
 	if err != nil {
+		return err
+	}
+	if err = verifyMechanicalEvidence(v, c.Request, c.Git); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(edges, c.Git.Edges) || !reflect.DeepEqual(statuses, c.RoleStatuses) {

@@ -139,19 +139,24 @@ func TestIncrementalTaskReviewReadsFailingAuthorEvidenceAndRejectsWrongSources(t
 	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "本批任务修复", Deliveries: map[string]string{next: id}}
 	advanceFile := dispositionJSON(t, h, "advance", advance)
 	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
-	nextArgs := []string{"codex", "--task", id, "--batch-id", "batch", "--run-id", "next", "--previous-run-id", "stable", "--advance-file", advanceFile, h.repo, h.base, next, "PM", "原始目标"}
+	nextArgs := []string{"codex", "--task", id, "--batch-id", "batch", "--run-id", "next", "--previous-run-id", "stable", "--advance-file", advanceFile, h.repo, h.base, next, "PM", "原始目标", "实现由其他 Agent 完成。\n独立核对补充材料。"}
 	code, _, stderr = captureRun(t, nextArgs)
 	if code != 0 {
 		t.Fatalf("automatic incremental %d %s", code, stderr)
 	}
 	prompt, err := board.ReadReviewOriginal(root, "next", "prompt.txt")
-	if err != nil || !strings.Contains(string(prompt), f.Text) || !strings.Contains(string(prompt), d.Basis) || !strings.Contains(string(prompt), "PREVIOUS_RUN_ID: stable") {
+	if err != nil || !strings.Contains(string(prompt), f.Text) || !strings.Contains(string(prompt), d.Basis) || !strings.Contains(string(prompt), "PREVIOUS_RUN_ID: stable") || !strings.Contains(string(prompt), nextArgs[len(nextArgs)-1]) {
 		t.Fatalf("missing verbatim evidence %s %v", prompt, err)
 	}
 	// A retry uses the original context, even though the batch now contains next.
 	code, _, stderr = captureRun(t, nextArgs)
 	if code != 0 {
 		t.Fatalf("incremental replay %d %s", code, stderr)
+	}
+	changedSupplement := append([]string{}, nextArgs...)
+	changedSupplement[len(changedSupplement)-1] = "changed caller context"
+	if code, _, _ := captureRun(t, changedSupplement); code == 0 {
+		t.Fatal("changed supplemental context replay accepted")
 	}
 	wrong := append([]string{}, nextArgs...)
 	wrong[4] = "wrong-batch"

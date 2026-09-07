@@ -46,7 +46,7 @@ kander review [agent] [--task <id>]...
 
 review 验证 old 是 new 的祖先，old..new 每个提交都在映射中且归属本批成员；board 在组控制锁内 CAS 当前 target，保存旧/新目标、依据及版本。归属是调用方提供的事实，不承诺从任意代码推导业务归属；不得伪称组外交付为本批修复。存在执行中或未完整发布的本批 run 时拒绝推进。
 
-增量轮通过 previous-run-id 自动读取原报告与作者处置，reviewed-commit 可省略，显式传入时必须匹配。前驱须同 batch/base/role/reviewer 且已完整发布。处置、计划与闭批见 [审核完成门禁](review-disposition.md)；本协议不根据报告中出现 PASS 自动放行。
+增量轮通过 previous-run-id 自动读取原报告与作者处置，调用方 review-context 逐字保留为独立补充；reviewed-commit 可省略，显式传入时必须匹配。前驱须同 batch/base/role/reviewer 且已完整发布。处置、计划与闭批见 [审核完成门禁](review-disposition.md)；本协议不根据报告中出现 PASS 自动放行。
 
 ## 原件与 schema
 

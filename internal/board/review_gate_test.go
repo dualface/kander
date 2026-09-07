@@ -274,8 +274,26 @@ func TestMechanicalFixAndNonMechanicalRerunGate(t *testing.T) {
 			conclusion := passRole(run)
 			conclusion.PassedAt = d.FixCommit
 			_, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": conclusion})
-			if mechanical && err != nil || !mechanical && err == nil {
-				t.Fatalf("mechanical=%v err=%v", mechanical, err)
+			if err == nil {
+				t.Fatal("bare mechanical tag bypassed rerun")
+			}
+			if mechanical {
+				v, e := ReadReviewBatchView(root, "batch")
+				if e != nil {
+					t.Fatal(e)
+				}
+				r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "coordinator", Roles: map[string]ReviewRoleConclusion{"PM": conclusion}, Mechanical: []ReviewMechanicalAssessment{{RecordID: d.RecordID, Finding: FindingRef{RunID: d.RunID, FindingID: d.FindingID}, TaskID: id, Author: "coordinator", Category: "documentation", ReportedCategory: "", ReportHash: d.ReportHash, FixCommit: d.FixCommit, Basis: "Main agent independently classifies missing reviewer label", Facts: "Compared each changed sentence against implementation", Paths: []string{"README.md"}, DiffHash: strings.Repeat("d", 64)}}}
+				edges, _, e := ReviewClosureEdges(v, r)
+				if e != nil {
+					t.Fatal(e)
+				}
+				claims, e := ReviewMechanicalClaims(v, r)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if _, e = CloseReviewBatch(root, r, ReviewGitEvidence{CWD: "/repo", Head: d.FixCommit, Edges: edges, Mechanical: claims, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano)}); e != nil {
+					t.Fatal(e)
+				}
 			}
 		})
 	}
@@ -322,15 +340,8 @@ func TestLegacyMappingRequiresOriginalLocations(t *testing.T) {
 }
 func TestPlanExtensionUsesClosedCommitNotArbitraryRolePass(t *testing.T) {
 	root := tempBoard(t)
-	id := gateCard(t, root, "chain")
-	p := gatePlan(t, root, []string{id}, noReviewRequirements())
-	// Build an unsealed fixture through the normal creation input on a fresh board.
-	root = tempBoard(t)
-	id = gateCard(t, root, "chain-open")
-	p.PlanID = "open"
-	p.TaskIDs = []string{id}
-	p.Batches[0].TaskIDs = []string{id}
-	p.Sealed = false
+	id := gateCard(t, root, "chain-open")
+	p := ReviewPlan{Schema: 1, PlanID: "open", Author: "coordinator", Basis: "batch chain fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: noReviewRequirements()}}}
 	if err := CreateReviewPlan(root, p); err != nil {
 		t.Fatal(err)
 	}

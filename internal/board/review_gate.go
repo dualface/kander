@@ -10,10 +10,11 @@ import (
 )
 
 type ReviewProgress struct {
-	TaskID  string   `json:"task_id"`
-	PlanID  string   `json:"plan_id,omitempty"`
-	Status  string   `json:"status"`
-	Pending []string `json:"pending,omitempty"`
+	TaskID       string            `json:"task_id"`
+	PlanID       string            `json:"plan_id,omitempty"`
+	Status       string            `json:"status"`
+	Pending      []string          `json:"pending,omitempty"`
+	RebindCycles map[string]string `json:"rebind_cycles,omitempty"`
 }
 
 func reviewGateScope(root, id string, exclusive bool) (LockScope, error) {
@@ -67,8 +68,27 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	if err = checkUnplannedReviewRuns(tx, p); err != nil {
 		return progress, err
 	}
-	if err = verifyPlanCopies(tx, p); err != nil {
+	if err = verifyPlanCopiesFor(tx, p, false); err != nil {
 		return progress, err
+	}
+	for _, member := range p.TaskIDs {
+		card, e := tx.Snapshot(member)
+		if e != nil {
+			return progress, e
+		}
+		if p.Cycles[member] != planCycle(card) {
+			if progress.RebindCycles == nil {
+				progress.RebindCycles = map[string]string{}
+			}
+			progress.RebindCycles[member] = planCycle(card)
+		}
+	}
+	if len(progress.RebindCycles) > 0 {
+		progress.Status = "requirements-needed"
+		if completion {
+			return progress, reviewError("execution cycle changed; extend-plan with rebind_cycles retains all existing requirements and failures")
+		}
+		return progress, nil
 	}
 	if !p.Sealed {
 		progress.Pending = append(progress.Pending, "unsealed-plan")
@@ -131,6 +151,9 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		if e != nil {
 			return progress, e
 		}
+		if e = verifyMechanicalEvidence(v, c.Request, c.Git); e != nil {
+			return progress, e
+		}
 		if !reflect.DeepEqual(edges, c.Git.Edges) || !reflect.DeepEqual(statuses, c.RoleStatuses) {
 			return progress, reviewError("closed conclusion mismatch")
 		}
@@ -176,15 +199,8 @@ func checkPendingDispositions(tx *Transaction, b ReviewBatch) error {
 		if err = validateFindingLineage(tx, run, f); err != nil {
 			return err
 		}
-		var ledger dispositionLedger
-		ok, err := readReviewJSON(tx, ledgerName(run.RunID), &ledger)
-		if err != nil {
+		if _, err = readDispositionLedger(tx, run, false); err != nil {
 			return err
-		}
-		if ok {
-			if _, err = readDispositionLedger(tx, run, false); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -201,14 +217,14 @@ func ReviewTaskProgress(root, id string) (p ReviewProgress, err error) {
 
 // CheckReviewGate reports structural damage, while pending conclusions remain
 // ordinary execution progress. The exact same validator enforces move done.
-func CheckReviewGate(root string, ids []string) ([]Problem, error) {
+func CheckReviewGate(root string, ids []string) []Problem {
 	var problems []Problem
 	for _, id := range ids {
 		if _, err := ReviewTaskProgress(root, id); err != nil {
 			problems = append(problems, Problem{Path: id, Message: err.Error()})
 		}
 	}
-	return problems, nil
+	return problems
 }
 
 func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {

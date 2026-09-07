@@ -317,3 +317,12 @@ the review closure command with every required role, author disposition and fina
 satisfied. Release the next batch only from that exact closed target. During wrap-up, verify the
 sealed plan and all closures in addition to actual develop integration; preserve unresolved
 items and all original author records.
+
+- Reclaiming a planned card with `move working --owner` may change its execution-cycle binding.
+  `review progress` then reports `requirements-needed` and the complete `rebind_cycles` map.
+  Use `review extend-plan` with the existing plan ID, expected revision, that map, author and
+  basis to restore the same requirements for the whole plan. This operation cannot change
+  batches, sealing, role requirements, member states or earlier evidence. Old failures and
+  findings remain binding; creating another plan to discard them is forbidden. A successor
+  OWNER may append their own disposition to an assigned finding, preserving the old author's
+  immutable original and record lineage. Advance and extend-plan use the plan's exact CWD.

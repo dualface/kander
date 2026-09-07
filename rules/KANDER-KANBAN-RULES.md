@@ -680,3 +680,12 @@ continuing execution does not require fabricating a semantic PASS just to make c
 For a non-Git project with every role explicitly N/A, the plan may use `N/A` for both base
 and target_commit. Closure records Git as not applicable, with no claim of commit verification.
 Any required role still needs real commit targets.
+
+- Reclaiming a planned card with `move working --owner` may change its execution-cycle binding.
+  `review progress` then reports `requirements-needed` and the complete `rebind_cycles` map.
+  Use `review extend-plan` with the existing plan ID, expected revision, that map, author and
+  basis to restore the same requirements for the whole plan. This operation cannot change
+  batches, sealing, role requirements, member states or earlier evidence. Old failures and
+  findings remain binding; creating another plan to discard them is forbidden. A successor
+  OWNER may append their own disposition to an assigned finding, preserving the old author's
+  immutable original and record lineage. Advance and extend-plan use the plan's exact CWD.

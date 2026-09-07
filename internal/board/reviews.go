@@ -386,7 +386,11 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				if e != nil {
 					return e
 				}
-				if ReviewDigest(context) != input.InputHashes["review-context.md"] {
+				source, _, e := SplitReviewContext(originals["review-context.md"])
+				if e != nil {
+					return e
+				}
+				if ReviewDigest(context) != ReviewDigest(source) {
 					return reviewError("incremental source changed before intent publication")
 				}
 			}
@@ -492,6 +496,13 @@ func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, er
 		}
 		if run.ExecutionStatus == "ok" && (run.ExitCode != 0 || run.LaunchStatus != "started" || len(report) == 0) {
 			return reviewError("invalid ok finalization")
+		}
+		if run.ExecutionStatus == "ok" && run.FindingsSchema > 0 {
+			if _, e := ParseReviewFindings(report); e != nil {
+				run.ExecutionStatus = "failed"
+				run.ExitCode = 1
+				run.FailureReason = "invalid structured review report: " + e.Error()
+			}
 		}
 		if run.ExecutionStatus != "ok" && (run.ExitCode == 0 || run.FailureReason == "") {
 			return reviewError("missing failure facts")

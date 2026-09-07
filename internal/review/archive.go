@@ -214,6 +214,9 @@ func (a *archiveExecution) finish(code int) int {
 		userError(config.Text("review.archive_publish_failed", a.run.RunID, err.Error()))
 		return 2
 	}
+	if code == 0 && run.ExitCode != 0 {
+		userError(run.FailureReason)
+	}
 	a.run = run
 	return a.publish()
 }

@@ -185,6 +185,9 @@ func readTaskPlan(tx *Transaction, id string) (p ReviewPlan, exists bool, err er
 	return
 }
 func verifyPlanCopies(tx *Transaction, p ReviewPlan) error {
+	return verifyPlanCopiesFor(tx, p, true)
+}
+func verifyPlanCopiesFor(tx *Transaction, p ReviewPlan, currentCycle bool) error {
 	if p.Schema != 1 || !ValidReviewID(p.PlanID) || len(p.Batches) == 0 {
 		return reviewError("plan schema")
 	}
@@ -193,7 +196,17 @@ func verifyPlanCopies(tx *Transaction, p ReviewPlan) error {
 		if err != nil {
 			return err
 		}
-		if p.Cycles[id] != planCycle(s) {
+		var tracked struct {
+			Cycle string `json:"cycle"`
+		}
+		ok, e := readReviewJSON(tx, "tracked-cycles/"+id+".json", &tracked)
+		if e != nil {
+			return e
+		}
+		if !ok || tracked.Cycle != p.Cycles[id] {
+			return reviewError("tracked cycle/plan mismatch: " + id)
+		}
+		if currentCycle && p.Cycles[id] != planCycle(s) {
 			return reviewError("plan execution cycle mismatch")
 		}
 		text, err := tx.Read(id, "reviews/plan.json")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +55,9 @@ func runDispositionCommand(args []string) int {
 			var b board.ReviewBatch
 			b, err = board.ReadReviewBatch(root, x.BatchID)
 			if err == nil {
+				err = verifyPlanCWD(root, b.PlanID, cwd)
+			}
+			if err == nil {
 				err = verifyClosureHead(cwd, x.Advance.Target)
 			}
 			if err == nil {
@@ -67,7 +71,8 @@ func runDispositionCommand(args []string) int {
 	case "extend-plan":
 		var x board.ReviewPlanExtension
 		if err = readArchiveJSON(input, &x); err == nil {
-			if x.Batch != nil && board.ReviewNeedsGit(*x.Batch) {
+			err = verifyPlanCWD(root, x.PlanID, cwd)
+			if err == nil && x.Batch != nil && board.ReviewNeedsGit(*x.Batch) {
 				err = verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: x.Batch.Base, Descendant: x.Batch.TargetCommit})
 			}
 			if err == nil {
@@ -188,11 +193,15 @@ func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClo
 			return c, err
 		}
 	}
+	mechanical, err := verifyMechanicalGit(cwd, v, r)
+	if err != nil {
+		return c, err
+	}
 	// Recheck after the potentially long Git work; board then CASes the exact view.
 	if err = verifyClosureHead(cwd, v.Batch.TargetCommit); err != nil {
 		return c, err
 	}
-	return board.CloseReviewBatch(root, r, board.ReviewGitEvidence{CWD: cwd, Head: v.Batch.TargetCommit, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
+	return board.CloseReviewBatch(root, r, board.ReviewGitEvidence{CWD: cwd, Head: v.Batch.TargetCommit, Mechanical: mechanical, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
 }
 
 func hydrateIncremental(root string, options archiveOptions, arguments []string, replay bool) ([]string, error) {
@@ -203,11 +212,15 @@ func hydrateIncremental(root string, options archiveOptions, arguments []string,
 	if err != nil {
 		return nil, err
 	}
-	if previous.BatchID != options.batchID || !sameTasks(previous.TaskIDs, options.tasks) {
+	if previous.BatchID != options.batchID || !slices.Equal(previous.TaskIDs, options.tasks) {
 		return nil, archiveError("incremental batch/members mismatch")
 	}
 	if len(arguments) == 7 && arguments[6] != "" && arguments[6] != previous.Commit {
 		return nil, archiveError("incremental commit mismatch")
+	}
+	supplement := ""
+	if len(arguments) >= 6 {
+		supplement = arguments[5]
 	}
 	var context []byte
 	if replay {
@@ -218,17 +231,27 @@ func hydrateIncremental(root string, options archiveOptions, arguments []string,
 	if err != nil {
 		return nil, err
 	}
+	if replay {
+		_, frozen, e := board.SplitReviewContext(context)
+		if e != nil {
+			return nil, e
+		}
+		if frozen != supplement {
+			return nil, archiveError("incremental supplemental context replay mismatch")
+		}
+	} else {
+		context = board.MergeReviewContext(context, supplement)
+	}
 	result := append([]string{}, arguments[:5]...)
 	return append(result, string(context), previous.Commit), nil
 }
-func sameTasks(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+func verifyPlanCWD(root, planID, cwd string) error {
+	p, err := board.ReadReviewPlan(root, planID)
+	if err != nil {
+		return err
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
+	if p.CWD != cwd {
+		return archiveError("plan CWD mismatch")
 	}
-	return true
+	return nil
 }

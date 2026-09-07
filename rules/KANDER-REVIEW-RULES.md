@@ -158,7 +158,7 @@ Stage transitions follow this diagram; each fix triggers an incremental re-revie
 
 Incremental re-review: for the same role under the same base, the second round and later are always incremental re-reviews, never full re-reviews.
 
-- The incremental invocation passes the commit that role reviewed last round as `reviewed-commit`, which must lie strictly between the base and the new HEAD.
+- Incremental review uses the commit that role reviewed last round as `reviewed-commit`, strictly between base and new HEAD. Task-bound invocations derive it from `--previous-run-id`; an explicitly supplied value must match. Unbound invocations supply it positionally.
 
   Only `reviewed-commit..commit` is new material.
 
@@ -166,7 +166,7 @@ Incremental re-review: for the same role under the same base, the second round a
 
   Unchanged code is treated as accepted; re-auditing it or expanding the scope is forbidden.
 
-- The review context must list every finding from the previous round together with the main agent's handling conclusion: for confirmed items, the fix commit and verification result; for rejected items, the verification basis; for unverifiable items, the user's decision.
+- The review context must include every finding from the previous round together with the main agent's handling conclusion. For task-bound runs, the tool includes the original report, author records and batch view automatically; positional review-context is preserved as a separately delimited supplement. For unbound runs, the caller supplies the full context: for confirmed items, the fix commit and verification result; for rejected items, the verification basis; for unverifiable items, the user's decision.
 
   The reviewer only checks these facts; the main agent must not omit or rewrite last round's list.
 
@@ -237,7 +237,7 @@ Incremental re-review: for the same role under the same base, the second round a
 - `CWD` is the absolute path of the target worktree.
 - All commit arguments are full SHAs.
 - The base is an ancestor of the commit, `HEAD` equals the commit, and there are no uncommitted or untracked files.
-- Only incremental re-reviews pass `reviewed-commit`, which must lie strictly between the base and the commit; the review-context must contain a non-empty list of last round's findings.
+- Only incremental re-reviews use `reviewed-commit`, strictly between base and commit. Task-bound runs derive it from `--previous-run-id` and preserve the complete prior report and author conclusions automatically; an explicit value must match. Caller review-context is an optional supplement. Unbound incremental runs require positional reviewed-commit and a nonempty review-context containing the complete prior finding list and conclusions.
 
 **Carrying Conclusions Forward**
 
@@ -257,10 +257,11 @@ Incremental re-review: for the same role under the same base, the second round a
 - For a new batch, establish its review plan first; when supplying `--requirements-file`, use an absolute JSON path matching that plan. Name all roles (`PM`, `QA`, `CSA`, `Hacker`) with values `required` or `N/A: <reason>`, resolved through the existing precedence and stage rules. Requirements, members, base, task-context bytes and report language are fixed for the batch. If the live spec changes or moves, subsequent roles, fix rounds and recovery retries must pass the absolute path to the archived `task-context.md` to retain the original bytes and batch ID. Before any card publication, the original input is available in the run control directory under `inputs/task-context.md`.
 - Use a distinct `--run-id` for each actual reviewer invocation. Omit it to generate a random ID printed to stderr, then record that ID. PM/QA on one commit share the batch ID and use different run IDs. Timestamps do not establish identity or predecessor order.
 - A same-ID retry with identical inputs does not launch the reviewer again. It verifies existing evidence and fills missing card publications. If the original gate process ended before finalization, recovery marks the run interrupted, preserves partial raw output, and does not invent a report or successful cleanup.
-- An incremental invocation includes `--previous-run-id` as well as the positional reviewed-commit. Its predecessor must be a fully published run for the same batch, base and role, whose commit equals reviewed-commit.
+- A task-bound incremental invocation includes `--previous-run-id`. Positional reviewed-commit may be omitted; an explicit value must equal the predecessor commit. The predecessor must be fully published for the same batch, base, role and reviewer. The tool retains its original report, author records and batch view; caller context is a verbatim supplement, never a replacement.
 - Keep the batch ID for fixes. To advance its target, pass an absolute `--advance-file` JSON path with `previous_target`, `target`, a nonempty `reason`, and `deliveries` mapping every commit in that exact Git range to a member task ID. The caller supplies truthful task attribution; the command verifies the range and membership and applies a compare-and-swap. Outstanding executions or incomplete publications must settle first. Do not include outside deliveries.
 - Each card retains complete immutable originals under `reviews/<run_id>/`: input context, raw output, logs, any valid report, sidecar and manifest. Failed launches after intent creation, timeout, invalid output, leftover processes and cleanup failure also retain evidence. Preflight failures do not invent an executed run. The report language freezes from card LANGUAGE, falling back to configuration only when absent.
 - The tool appends one JSON index line per run in REVIEWS. Do not derive this index from reviewer prose, paste reports into the body, edit originals through update, or remove archived evidence during temporary cleanup.
+- A new structured report with missing/invalid findings fails output validation at finalization: archive it with `execution_status=failed`, a nonzero gate exit and the parse reason, retaining report and raw output. Retry a full invocation in the same batch with a new run ID, without using the invalid run as --previous-run-id, and explicitly bind the failed attempt through `resolved_failures`; same-ID recovery never launches another reviewer.
 - `execution_status=ok`, readable stdout and a zero command exit do not imply semantic PASS. Interpret the actual report through this review workflow. Failed/interrupted runs never establish a passing role.
 - Pending reviews allow ordinary updates and moves between working and review. Finish publication before any terminal move. The review-plan and disposition gate below blocks done until the execution cycle is complete. A card moved prematurely by an external older writer retains unpublished originals in the control directory, and explicit `kander check <task-id>` or `kander check --all` still diagnoses incomplete publication. Do not move a done card back or bypass controlled writes to repair it.
 - Publication settles only after process collection, worktree verification and runtime cleanup. Each card publication is atomic; a cross-card failure preserves successful publications, reports each failed card and exits nonzero. Retry the same run ID after resolving the error; if init is required, obey its maintenance preconditions. An incomplete publication must not count toward batch completion.
@@ -527,6 +528,11 @@ When the implementation was done by other agents, state that in the review conte
   with the expected plan revision to append a batch after its predecessor closes. Preserve
   existing batches, requirements and membership. Seal only after every member is assigned.
   Unsealed plans and unclosed batches block done. Never replace a plan to discard failed runs.
+  Reclaim-induced cycle changes report requirements-needed with rebind_cycles. Use extend-plan
+  with that complete map, expected revision, author and basis to rebind the existing obligations
+  atomically for all members, including in a sealed plan. Rebinding changes neither batches nor
+  member states, preserves the previous plan in history, and retains every failure and finding.
+  Same-cycle resets are forbidden. Advance and extend-plan must use the plan's exact CWD.
 - New reports must contain exactly one `kander-findings` fenced JSON object with mandatory
   `FINDINGS` and `NON_BLOCKING` arrays. Each item has `id`, `tier`, `text`, and `evidence`;
   IDs are unique across both arrays. Gate tiers belong only to FINDINGS, and low/recommend/suggest
@@ -549,7 +555,11 @@ When the implementation was done by other agents, state that in the review conte
   Bind record/run/finding/batch/task IDs, author, original report hash and item text, status,
   factual basis, and applicable fix SHA and verification. The tool records time. Revisions append
   a new record ID referencing the previous record, preserving the original author text.
-  The orchestrator must never impersonate an executing author or overwrite those records.
+  A successor OWNER may append their own independently verified conclusion on the same assigned
+  task. The tool binds each new record to the current working OWNER and card revision; original
+  assignment ownership and all former authors' records remain unchanged. Former owners cannot
+  submit after handoff. The orchestrator must never impersonate an executing author or overwrite
+  those records.
 - Must-fix statuses are confirmed/fixed/rejected/unverifiable/waived. Confirmed and unverifiable
   items remain unresolved; rejected items require factual evidence and remain in the final
   unresolved list. Fixed items bind a later fix commit and actual verification. Non-blocking
@@ -567,13 +577,20 @@ When the implementation was done by other agents, state that in the review conte
   batch target without starting a reviewer. Supply batch ID, expected revision, and the existing
   advance contract with every in-batch delivery. The worktree must be clean at the target.
   Preserve mechanical category (documentation/dead-code/redundant-test), fix SHA and actual
-  verification. Only those allowed fixes may advance PASSED_AT without a new role run.
+  verification. A disposition's mechanical label alone cannot advance PASSED_AT. The closing main
+  agent must supply a separate `mechanical` assessment for each exception, bound to the exact
+  run/finding/task/author-record, report hash, fix SHA, reviewer category (including an absent label),
+  actual verification facts and changed paths with their Git diff hash. The tool binds that scope
+  to Git evidence; the main agent still verifies the mechanical definition and factual conclusion.
+  Missing reviewer labels may be classified after independent verification; existing labels are
+  not proof. Only those allowed fixes may advance PASSED_AT without a new role run.
   Non-mechanical must-fix items require a subsequent review covering the fix commit.
 - Incremental `review --task ... --previous-run-id ...` automatically loads the previous report
-  and author records plus the generated batch view. Manual context does not replace originals;
+  and author records plus the generated batch view. Manual context is preserved verbatim in a separate
+  supplemental section and does not replace originals;
   reviewed-commit may be omitted and an explicit value must match. The prior semantic conclusion
   may be FAIL. Missing, inconsistent, foreign-member, wrong-language or wrong-round evidence
-  rejects before reviewer launch; retries retain the original frozen input.
+  rejects before reviewer launch; retries retain the original frozen input and reject changed supplemental text.
 - Close through `review close <CWD> <absolute-request.json>` only after each required role has
   a valid conclusion. Bind batch ID, expected revision, the SHA-256 of the exact aggregate JSON
   output, selected role run IDs, PASSED_AT and verification basis. Explicitly link any failed

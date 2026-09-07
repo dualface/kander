@@ -28,22 +28,23 @@ type ReviewWaiver struct {
 // ReviewDisposition is an immutable original author's observation. Revisions append
 // using PreviousRecordID; the previous original remains available and attributable.
 type ReviewDisposition struct {
-	RecordID         string        `json:"record_id"`
-	PreviousRecordID string        `json:"previous_record_id,omitempty"`
-	RunID            string        `json:"run_id"`
-	FindingID        string        `json:"finding_id"`
-	BatchID          string        `json:"batch_id"`
-	TaskID           string        `json:"task_id"`
-	Author           string        `json:"author"`
-	RecordedAt       string        `json:"recorded_at"`
-	ReportHash       string        `json:"report_hash"`
-	Original         string        `json:"original"`
-	Status           string        `json:"status"`
-	Basis            string        `json:"basis"`
-	FixCommit        string        `json:"fix_commit,omitempty"`
-	Mechanical       string        `json:"mechanical,omitempty"`
-	Verification     string        `json:"verification,omitempty"`
-	Waiver           *ReviewWaiver `json:"waiver,omitempty"`
+	SubmittedRevision uint64        `json:"submitted_revision,omitempty"`
+	RecordID          string        `json:"record_id"`
+	PreviousRecordID  string        `json:"previous_record_id,omitempty"`
+	RunID             string        `json:"run_id"`
+	FindingID         string        `json:"finding_id"`
+	BatchID           string        `json:"batch_id"`
+	TaskID            string        `json:"task_id"`
+	Author            string        `json:"author"`
+	RecordedAt        string        `json:"recorded_at"`
+	ReportHash        string        `json:"report_hash"`
+	Original          string        `json:"original"`
+	Status            string        `json:"status"`
+	Basis             string        `json:"basis"`
+	FixCommit         string        `json:"fix_commit,omitempty"`
+	Mechanical        string        `json:"mechanical,omitempty"`
+	Verification      string        `json:"verification,omitempty"`
+	Waiver            *ReviewWaiver `json:"waiver,omitempty"`
 }
 type dispositionLedger struct {
 	Assignment ReviewAssignment    `json:"assignment"`
@@ -213,7 +214,7 @@ func AssignReviewFindings(root string, a ReviewAssignment) error {
 	})
 }
 func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding, a ReviewAssignment) error {
-	if !ValidReviewID(d.RecordID) || d.RunID != run.RunID || d.BatchID != run.BatchID || d.FindingID != item.ID || !containsID(a.Items[item.ID], d.TaskID) || d.Author != a.Owners[d.TaskID] || d.Author == "" {
+	if !ValidReviewID(d.RecordID) || d.RunID != run.RunID || d.BatchID != run.BatchID || d.FindingID != item.ID || !containsID(a.Items[item.ID], d.TaskID) || d.Author != a.Owners[d.TaskID] && d.SubmittedRevision == 0 || d.Author == "" {
 		return reviewError("disposition identity/ownership")
 	}
 	if d.ReportHash != run.Hashes["report.md"] || d.Original != item.Text || strings.TrimSpace(d.Basis) == "" {
@@ -273,6 +274,7 @@ func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision 
 		if MetadataFrom(s.Text, FieldOwner) != d.Author {
 			return reviewError("only current executing owner may submit")
 		}
+		d.SubmittedRevision = s.Revision
 		var ledger dispositionLedger
 		exists, err := readReviewJSON(tx, ledgerName(d.RunID), &ledger)
 		if err != nil {
@@ -298,6 +300,7 @@ func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision 
 		for _, record := range ledger.Records {
 			if record.RecordID == d.RecordID {
 				d.RecordedAt = record.RecordedAt
+				d.SubmittedRevision = record.SubmittedRevision
 				if reflect.DeepEqual(d, record) {
 					return nil
 				}
@@ -326,6 +329,9 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 		return l, err
 	}
 	if !ok {
+		if !complete {
+			return l, nil
+		}
 		return l, reviewError("assignment and author dispositions required: " + run.RunID)
 	}
 	f, err := runFindings(tx, run)

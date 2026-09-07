@@ -44,9 +44,10 @@ func archiveHarnessFor(t *testing.T, h *reviewHarness, agent string) (*reviewHar
 }
 func TestArchiveCLIOutputRetryAndLanguage(t *testing.T) {
 	h, root, args := archiveHarness(t)
-	t.Setenv("FAKE_CODEX_REPORT", "FAIL: 原始审核意见")
+	report := "FAIL: 原始审核意见\n" + emptyStructuredReview
+	t.Setenv("FAKE_CODEX_REPORT", report)
 	code, out, stderr := captureRun(t, args)
-	if code != 0 || out != "FAIL: 原始审核意见\n" {
+	if code != 0 || out != report+"\n" {
 		t.Fatalf("%d %q %s", code, out, stderr)
 	}
 	run, err := board.ReadReviewRun(root, "stable")
@@ -414,10 +415,14 @@ func TestArchiveInvalidUTF8IsRawEvidenceNotValidReport(t *testing.T) {
 }
 
 func TestArchiveJSONReviewerReplayBytes(t *testing.T) {
-	for _, report := range []string{"original report", "original report\\n"} {
+	for _, report := range []string{"original report\n" + emptyStructuredReview, "original report\\n\n" + emptyStructuredReview + "\n"} {
 		t.Run(report, func(t *testing.T) {
 			h, root, args := archiveHarnessFor(t, newClaudeHarness(t), "claude")
-			t.Setenv("FAKE_CLAUDE_REPORT", report)
+			encoded, err := json.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("FAKE_CLAUDE_REPORT", string(encoded[1:len(encoded)-1]))
 			code, first, stderr := captureRun(t, args)
 			if code != 0 {
 				t.Fatalf("%d %s", code, stderr)
