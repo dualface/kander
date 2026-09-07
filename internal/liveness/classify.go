@@ -1,6 +1,7 @@
 package liveness
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -36,7 +37,7 @@ func herdrSessionValue(pane map[string]any) string {
 	return value
 }
 
-func staleReport(entry board.Entry, session TaskSession, channel, container, detail, program, launcher string, allowReverseLookup bool) Report {
+func staleReport(ctx context.Context, entry board.Entry, session TaskSession, channel, container, detail, program, launcher string, allowReverseLookup bool) Report {
 	sess := session
 	lookupFailure := func(err error) Report {
 		status := Unknown
@@ -45,7 +46,7 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 			status = Stopped
 		}
 		return report(entry, &sess, status, channel, container,
-			t("liveness.stale_address_reverse_lookup", detail, err.Error()), "")
+			t("liveness.stale_address_reverse_lookup", detail, probe.FailureDetail(err)), "")
 	}
 	if !allowReverseLookup || session.Reference == "" {
 		if session.Agent == "codex" && session.Reference == "" {
@@ -55,15 +56,15 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 	}
 	var newWindow string
 	if channel == "herdr" {
-		tabID, paneID, err := HerdrReverseLookup(program, session)
+		tabID, paneID, err := HerdrReverseLookupContext(ctx, program, session)
 		if err != nil {
 			return lookupFailure(err)
 		}
 		newWindow = "herdr:" + tabID + ":" + paneID
-		paneProbe, err := probe.ProbeHerdrPane(program, paneID, 0)
+		paneProbe, err := probe.ProbeHerdrPaneContext(ctx, program, paneID)
 		if err != nil {
 			return lookupFailure(&probe.Error{Message: t(
-				"liveness.failed_to_probe_the_reverse_looked_up_pane", err.Error())})
+				"liveness.failed_to_probe_the_reverse_looked_up_pane", probe.FailureDetail(err))})
 		}
 		pane := paneProbe.Pane
 		agent, _ := pane["agent"].(string)
@@ -83,7 +84,7 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 				"liveness.the_reverse_looked_up_pane_agent_status_cannot_be", status)})
 		}
 	} else {
-		location, err := TmuxReverseLookup(program, session)
+		location, err := TmuxReverseLookupContext(ctx, program, session)
 		if err != nil {
 			return lookupFailure(err)
 		}
@@ -92,7 +93,7 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 	return report(entry, &sess, Drifted, channel, container, detail, newWindow)
 }
 
-func probeTaskLiveness(entry board.Entry, text string, allowReverseLookup bool) Report {
+func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) Report {
 	session := ParseTaskSession(text)
 	window := board.MetadataFrom(text, board.FieldWindow)
 	if session == nil {
@@ -107,22 +108,22 @@ func probeTaskLiveness(entry board.Entry, text string, allowReverseLookup bool) 
 		return report(entry, session, Unknown, "unknown", window, t("liveness.window_metadata_is_empty_or_invalid"), "")
 	}
 	if herdrMatch != nil {
-		return classifyHerdr(entry, *session, herdrMatch[1], herdrMatch[2], allowReverseLookup)
+		return classifyHerdr(ctx, entry, *session, herdrMatch[1], herdrMatch[2], allowReverseLookup)
 	}
-	return classifyTmux(entry, *session, tmuxMatch[1], tmuxMatch[2], tmuxMatch[3], tmuxMatch[4], allowReverseLookup)
+	return classifyTmux(ctx, entry, *session, tmuxMatch[1], tmuxMatch[2], tmuxMatch[3], tmuxMatch[4], allowReverseLookup)
 }
 
-func classifyHerdr(entry board.Entry, session TaskSession, tabID, paneID string, allowReverseLookup bool) Report {
+func classifyHerdr(ctx context.Context, entry board.Entry, session TaskSession, tabID, paneID string, allowReverseLookup bool) Report {
 	herdr, err := lookPath("herdr")
 	if err != nil {
 		return report(entry, &session, Unknown, "herdr", tabID, t("liveness.herdr_is_not_in_path"), "")
 	}
-	paneProbe, err := probe.ProbeHerdrPane(herdr, paneID, 0)
+	paneProbe, err := probe.ProbeHerdrPaneContext(ctx, herdr, paneID)
 	if err != nil {
-		return report(entry, &session, Unknown, "herdr", tabID, err.Error(), "")
+		return report(entry, &session, Unknown, "herdr", tabID, probe.FailureDetail(err), "")
 	}
 	if paneProbe.Pane == nil {
-		return staleReport(entry, session, "herdr", tabID, t("launch.pane_does_not_exist_2", paneID), herdr, "herdr", allowReverseLookup)
+		return staleReport(ctx, entry, session, "herdr", tabID, t("launch.pane_does_not_exist_2", paneID), herdr, "herdr", allowReverseLookup)
 	}
 	pane := paneProbe.Pane
 	actualAgent, _ := pane["agent"].(string)
@@ -131,13 +132,13 @@ func classifyHerdr(entry board.Entry, session TaskSession, tabID, paneID string,
 		if actual == "" {
 			actual = "N/A"
 		}
-		return staleReport(entry, session, "herdr", tabID, t(
+		return staleReport(ctx, entry, session, "herdr", tabID, t(
 			"liveness.agent_mismatch_expected_actual", session.Agent, actual,
 		), herdr, "herdr", allowReverseLookup)
 	}
 	actualSession := herdrSessionValue(pane)
 	if session.Reference != "" && actualSession != "" && actualSession != session.Reference {
-		return staleReport(entry, session, "herdr", tabID, t("liveness.session_identity_mismatch"), herdr, "herdr", allowReverseLookup)
+		return staleReport(ctx, entry, session, "herdr", tabID, t("liveness.session_identity_mismatch"), herdr, "herdr", allowReverseLookup)
 	}
 	status, _ := pane["agent_status"].(string)
 	if status != "idle" && status != "working" && status != "blocked" && status != "done" {
@@ -156,18 +157,18 @@ func classifyHerdr(entry board.Entry, session TaskSession, tabID, paneID string,
 	return report(entry, &session, Alive, "herdr", tabID, t("liveness.agent_status", status), "")
 }
 
-func classifyTmux(entry board.Entry, session TaskSession, launcher, tmuxContainer, windowID, paneID string, allowReverseLookup bool) Report {
+func classifyTmux(ctx context.Context, entry board.Entry, session TaskSession, launcher, tmuxContainer, windowID, paneID string, allowReverseLookup bool) Report {
 	container := tmuxContainer + ":" + windowID
 	tmux, err := lookPath("tmux")
 	if err != nil {
 		return report(entry, &session, Unknown, launcher, container, t("liveness.tmux_is_not_in_path"), "")
 	}
-	paneProbe, err := probe.ProbeTmuxPane(tmux, paneID)
+	paneProbe, err := probe.ProbeTmuxPaneContext(ctx, tmux, paneID)
 	if err != nil {
-		return report(entry, &session, Unknown, launcher, container, err.Error(), "")
+		return report(entry, &session, Unknown, launcher, container, probe.FailureDetail(err), "")
 	}
 	if paneProbe.Facts == nil {
-		return staleReport(entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), tmux, launcher, allowReverseLookup)
+		return staleReport(ctx, entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), tmux, launcher, allowReverseLookup)
 	}
 	facts := paneProbe.Facts
 	expected := agentCommandName(session.Agent)
@@ -179,13 +180,13 @@ func classifyTmux(entry board.Entry, session TaskSession, launcher, tmuxContaine
 		detail := t(
 			"liveness.pane_is_dead_or_foreground_process_mismatches_expected_actual", expected, actual,
 		)
-		return staleReport(entry, session, launcher, container, detail, tmux, launcher, allowReverseLookup)
+		return staleReport(ctx, entry, session, launcher, container, detail, tmux, launcher, allowReverseLookup)
 	}
 	if facts.SessionMarker == "" {
 		return report(entry, &session, Unknown, launcher, container, t("liveness.tmux_pane_has_no_session_marker"), "")
 	}
 	if session.Reference != "" && facts.SessionMarker != session.Reference {
-		return staleReport(entry, session, launcher, container, t("liveness.tmux_session_marker_mismatch"), tmux, launcher, allowReverseLookup)
+		return staleReport(ctx, entry, session, launcher, container, t("liveness.tmux_session_marker_mismatch"), tmux, launcher, allowReverseLookup)
 	}
 	detail := t("liveness.agent_is_reachable")
 	if facts.InMode != "0" {
@@ -206,11 +207,31 @@ func ClassifyTask(entry board.Entry, text string) Report {
 }
 
 // ClassifyTaskLookup allows reverse lookup to be disabled. It never writes to the card.
-func ClassifyTaskLookup(entry board.Entry, text string, allowReverseLookup bool) (out Report) {
+func ClassifyTaskLookup(entry board.Entry, text string, allowReverseLookup bool) Report {
+	return ClassifyTaskLookupContext(context.Background(), entry, text, allowReverseLookup)
+}
+
+// ClassifyTaskContext shares one deadline across forward lookup, reverse lookup,
+// revalidation and process cleanup. It never writes to the card.
+func ClassifyTaskContext(ctx context.Context, entry board.Entry, text string) Report {
+	return ClassifyTaskLookupContext(ctx, entry, text, true)
+}
+
+// ClassifyTaskLookupContext additionally controls whether stale addresses are searched.
+func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) (out Report) {
+	ctx, cancel := probe.WithDefaultTimeout(ctx)
+	defer cancel()
 	defer func() {
 		if rec := recover(); rec != nil {
 			out = unknownFrom(entry, text, "panic")
 		}
 	}()
-	return probeTaskLiveness(entry, text, allowReverseLookup)
+	if err := ctx.Err(); err != nil {
+		return unknownFrom(entry, text, probe.FailureDetail(err))
+	}
+	out = probeTaskLiveness(ctx, entry, text, allowReverseLookup)
+	if err := ctx.Err(); err != nil && out.Status != Unknown {
+		return unknownFrom(entry, text, probe.FailureDetail(err))
+	}
+	return out
 }

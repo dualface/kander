@@ -47,9 +47,18 @@ func PublicID(value any) string {
 
 // ProbeHerdrPane collects the facts of herdr pane get. pane_not_found is recorded as gone; other failures return an Error.
 func ProbeHerdrPane(herdr, paneID string, timeout time.Duration) (HerdrPaneProbe, error) {
-	res, err := runCommand(herdr, []string{"pane", "get", paneID}, timeout)
+	ctx, cancel := timeoutContext(timeout)
+	defer cancel()
+	return ProbeHerdrPaneContext(ctx, herdr, paneID)
+}
+
+// ProbeHerdrPaneContext collects pane facts using the caller's shared budget.
+func ProbeHerdrPaneContext(ctx context.Context, herdr, paneID string) (HerdrPaneProbe, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	res, err := CaptureContext(ctx, herdr, []string{"pane", "get", paneID})
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return HerdrPaneProbe{}, err
 		}
 		return HerdrPaneProbe{}, probeError("launch.herdr_invocation_failed", err.Error())
@@ -89,6 +98,9 @@ func ProbeHerdrPane(herdr, paneID string, timeout time.Duration) (HerdrPaneProbe
 	if pane == nil || actual != paneID || actual == "" {
 		return HerdrPaneProbe{}, probeError("launch.pane_does_not_exist_2", paneID)
 	}
+	if err := ctx.Err(); err != nil {
+		return HerdrPaneProbe{}, err
+	}
 	return HerdrPaneProbe{Pane: pane}, nil
 }
 
@@ -120,5 +132,21 @@ func HerdrResult(res Result) (map[string]any, error) {
 
 // Capture runs an external program, so liveness reverse lookup reuses the same collection point.
 func Capture(program string, args []string, timeout time.Duration) (Result, error) {
-	return runCommand(program, args, timeout)
+	ctx, cancel := timeoutContext(timeout)
+	defer cancel()
+	return CaptureContext(ctx, program, args)
+}
+
+// CaptureContext shares a caller deadline and cancellation with process cleanup.
+func CaptureContext(ctx context.Context, program string, args []string) (Result, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	res, err := runCommand(ctx, program, args)
+	if contextErr := ctx.Err(); contextErr != nil && !errors.Is(err, contextErr) {
+		return res, errors.Join(contextErr, err)
+	}
+	return res, err
 }

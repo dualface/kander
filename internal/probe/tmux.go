@@ -54,8 +54,8 @@ func optionMissing(detail, option string) bool {
 	return lowered == "invalid option: "+option || lowered == "unknown option: "+option
 }
 
-func showPaneOption(tmux, paneID, option string, timeout time.Duration) (value string, gone string, missing bool, err error) {
-	res, runErr := runCommand(tmux, []string{"show-options", "-p", "-v", "-t", paneID, option}, timeout)
+func showPaneOption(ctx context.Context, tmux, paneID, option string) (value string, gone string, missing bool, err error) {
+	res, runErr := CaptureContext(ctx, tmux, []string{"show-options", "-p", "-v", "-t", paneID, option})
 	if runErr != nil {
 		return "", "", false, runErr
 	}
@@ -88,14 +88,19 @@ func ProbeTmuxPane(tmux, paneID string) (TmuxPaneProbe, error) {
 
 // ProbeTmuxPaneWithin collects the pane facts within the given deadline; a non-positive value uses the default bounded deadline.
 func ProbeTmuxPaneWithin(tmux, paneID string, timeout time.Duration) (TmuxPaneProbe, error) {
-	if timeout <= 0 {
-		timeout = DefaultCommandTimeout
-	}
-	deadline := time.Now().Add(timeout)
-	res, err := runCommand(tmux, []string{
+	ctx, cancel := timeoutContext(timeout)
+	defer cancel()
+	return ProbeTmuxPaneContext(ctx, tmux, paneID)
+}
+
+// ProbeTmuxPaneContext shares one budget across facts and both session markers.
+func ProbeTmuxPaneContext(ctx context.Context, tmux, paneID string) (TmuxPaneProbe, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	res, err := CaptureContext(ctx, tmux, []string{
 		"display-message", "-p", "-t", paneID,
 		"#{pane_current_command}\t#{pane_in_mode}\t#{pane_dead}",
-	}, timeout)
+	})
 	if err != nil {
 		return TmuxPaneProbe{}, err
 	}
@@ -112,7 +117,7 @@ func ProbeTmuxPaneWithin(tmux, paneID string, timeout time.Duration) (TmuxPanePr
 	if len(fields) != 3 {
 		return TmuxPaneProbe{}, probeError("launch.tmux_pane_probe_returned_an_invalid_response")
 	}
-	marker, gone, err := readSessionMarker(tmux, paneID, deadline)
+	marker, gone, err := readSessionMarker(ctx, tmux, paneID)
 	if err != nil {
 		return TmuxPaneProbe{}, err
 	}
@@ -123,13 +128,12 @@ func ProbeTmuxPaneWithin(tmux, paneID string, timeout time.Duration) (TmuxPanePr
 	return TmuxPaneProbe{Facts: &facts}, nil
 }
 
-func readSessionMarker(tmux, paneID string, deadline time.Time) (string, string, error) {
+func readSessionMarker(ctx context.Context, tmux, paneID string) (string, string, error) {
 	for _, option := range []string{PaneSessionOption, LegacyPaneSession} {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return "", "", context.DeadlineExceeded
+		if err := ctx.Err(); err != nil {
+			return "", "", err
 		}
-		value, gone, missing, err := showPaneOption(tmux, paneID, option, remaining)
+		value, gone, missing, err := showPaneOption(ctx, tmux, paneID, option)
 		if err != nil {
 			return "", "", err
 		}
@@ -160,10 +164,19 @@ func ProbeTmuxContainer(tmux, paneID string) (TmuxContainerFacts, error) {
 
 // ProbeTmuxContainerWithin collects the pane container coordinates within the given deadline.
 func ProbeTmuxContainerWithin(tmux, paneID string, timeout time.Duration) (TmuxContainerFacts, error) {
-	res, err := runCommand(tmux, []string{
+	ctx, cancel := timeoutContext(timeout)
+	defer cancel()
+	return ProbeTmuxContainerContext(ctx, tmux, paneID)
+}
+
+// ProbeTmuxContainerContext collects container coordinates with caller cancellation.
+func ProbeTmuxContainerContext(ctx context.Context, tmux, paneID string) (TmuxContainerFacts, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	res, err := CaptureContext(ctx, tmux, []string{
 		"display-message", "-p", "-t", paneID,
 		"#{session_id}\t#{session_name}\t#{window_id}\t#{window_panes}",
-	}, timeout)
+	})
 	if err != nil {
 		return TmuxContainerFacts{}, err
 	}

@@ -26,7 +26,7 @@ func withRun(t *testing.T, fn runFunc) {
 
 func TestTmuxDisplayGonePreservesDetail(t *testing.T) {
 	resetLang(t)
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		return Result{Code: 1, Stderr: "can't find pane: %9"}, nil
 	})
 	probe, err := ProbeTmuxPane("tmux", "%9")
@@ -48,7 +48,7 @@ func TestTmuxDisplayGonePreservesDetail(t *testing.T) {
 func TestTmuxIdentityGonePreservesDetail(t *testing.T) {
 	resetLang(t)
 	calls := 0
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		calls++
 		if args[0] == "display-message" {
 			return Result{Stdout: "codex\t0\t0\n"}, nil
@@ -66,7 +66,7 @@ func TestTmuxIdentityGonePreservesDetail(t *testing.T) {
 
 func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 	resetLang(t)
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		if args[0] == "display-message" {
 			return Result{Stdout: "codex\t0\t0\n"}, nil
 		}
@@ -78,7 +78,7 @@ func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 		t.Fatalf("facts=%+v err=%v", facts, err)
 	}
 
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		if args[0] == "display-message" {
 			return Result{Stdout: "codex\t0\t0\n"}, nil
 		}
@@ -90,7 +90,7 @@ func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 	}
 
 	for _, detail := range []string{"invalid option: -p", "unknown option: -v"} {
-		withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+		withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 			if args[0] == "display-message" {
 				return Result{Stdout: "codex\t0\t0\n"}, nil
 			}
@@ -105,7 +105,7 @@ func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 
 func TestTmuxDualReadPrefersKanderThenOnevoke(t *testing.T) {
 	resetLang(t)
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		if args[0] == "display-message" {
 			return Result{Stdout: "codex\t0\t0\n"}, nil
 		}
@@ -120,7 +120,7 @@ func TestTmuxDualReadPrefersKanderThenOnevoke(t *testing.T) {
 		t.Fatalf("facts=%+v err=%v", facts, err)
 	}
 
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		if args[0] == "display-message" {
 			return Result{Stdout: "codex\t0\t0\n"}, nil
 		}
@@ -140,7 +140,7 @@ func TestTmuxDualReadPrefersKanderThenOnevoke(t *testing.T) {
 func TestHerdrGonePreservesDetail(t *testing.T) {
 	resetLang(t)
 	detail := `{"error":{"code":"pane_not_found","message":"gone"}}`
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		return Result{Code: 1, Stderr: detail}, nil
 	})
 	probe, err := ProbeHerdrPane("herdr", "w1:p9", 0)
@@ -158,7 +158,7 @@ func TestHerdrGonePreservesDetail(t *testing.T) {
 
 func TestHerdrOtherFailureRaises(t *testing.T) {
 	resetLang(t)
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		return Result{Code: 1, Stderr: "fake pane not found"}, nil
 	})
 	_, err := ProbeHerdrPane("herdr", "w1:p9", 0)
@@ -169,7 +169,7 @@ func TestHerdrOtherFailureRaises(t *testing.T) {
 
 func TestHerdrProbePreservesDeadline(t *testing.T) {
 	resetLang(t)
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		return Result{}, context.DeadlineExceeded
 	})
 	_, err := ProbeHerdrPane("herdr", "w1:p9", time.Millisecond)
@@ -180,14 +180,14 @@ func TestHerdrProbePreservesDeadline(t *testing.T) {
 
 func TestTmuxContainerProbe(t *testing.T) {
 	resetLang(t)
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		return Result{Stdout: "$1\tsess\t@1\t1\n"}, nil
 	})
 	facts, err := ProbeTmuxContainer("tmux", "%1")
 	if err != nil || facts.SessionID != "$1" || facts.PaneCount != "1" {
 		t.Fatalf("%+v %v", facts, err)
 	}
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
 		return Result{Code: 1, Stderr: "boom"}, nil
 	})
 	_, err = ProbeTmuxContainer("tmux", "%1")
@@ -199,7 +199,12 @@ func TestTmuxContainerProbe(t *testing.T) {
 func TestTmuxProbePropagatesCallerTimeout(t *testing.T) {
 	resetLang(t)
 	want := 37 * time.Millisecond
-	withRun(t, func(program string, args []string, timeout time.Duration) (Result, error) {
+	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("missing deadline")
+		}
+		timeout := time.Until(deadline)
 		if timeout <= 0 || timeout > want {
 			t.Fatalf("timeout=%s want (0,%s]", timeout, want)
 		}
@@ -210,5 +215,61 @@ func TestTmuxProbePropagatesCallerTimeout(t *testing.T) {
 	})
 	if _, err := ProbeTmuxPaneWithin("tmux", "%9", want); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestContextBudgetDefaultsAndInheritance(t *testing.T) {
+	for _, duration := range []time.Duration{0, 25 * time.Millisecond, 30 * time.Second} {
+		parent := context.Background()
+		parentCancel := func() {}
+		if duration != 0 {
+			parent, parentCancel = context.WithTimeout(parent, duration)
+		}
+		ctx, cancel := WithDefaultTimeout(parent)
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("missing default deadline")
+		}
+		if duration == 0 {
+			if remaining := time.Until(deadline); remaining <= 0 || remaining > DefaultCommandTimeout {
+				t.Fatalf("remaining=%s", remaining)
+			}
+		} else if inherited, _ := parent.Deadline(); deadline != inherited {
+			t.Fatalf("deadline reset: %s != %s", deadline, inherited)
+		}
+		cancel()
+		parentCancel()
+	}
+}
+
+func TestHerdrProbePreservesCancellation(t *testing.T) {
+	withRun(t, func(context.Context, string, []string) (Result, error) { return Result{}, context.Canceled })
+	_, err := ProbeHerdrPaneContext(context.Background(), "herdr", "w1:p1")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestCancellationMessagesInAllLanguages(t *testing.T) {
+	for _, test := range []struct{ language, deadline, canceled string }{
+		{"cn", "探测期限已耗尽", "探测已取消"},
+		{"en", "Probe deadline exhausted", "Probe canceled"},
+		{"ja", "プローブの期限を超過", "プローブをキャンセル"},
+	} {
+		t.Run(test.language, func(t *testing.T) {
+			t.Setenv(config.EnvLang, test.language)
+			t.Setenv(config.EnvLangCLI, "1")
+			config.ApplyLanguageArgument([]string{"kander", "--lang", test.language})
+			defer config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
+			for _, item := range []struct {
+				err  error
+				want string
+			}{{context.DeadlineExceeded, test.deadline}, {context.Canceled, test.canceled}} {
+				detail := FailureDetail(item.err)
+				if !strings.Contains(detail, item.want) || !strings.Contains(detail, item.err.Error()) {
+					t.Fatalf("detail=%q", detail)
+				}
+			}
+		})
 	}
 }

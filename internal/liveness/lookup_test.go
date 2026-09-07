@@ -1,11 +1,13 @@
 package liveness
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 )
@@ -123,7 +125,9 @@ func TestReverseLookupTimeoutIsUnknown(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), channel), []byte("#!/bin/sh\nexec /bin/sleep 30\n"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			report := staleReport(board.Entry{TaskID: "timeout"}, TaskSession{Agent: "codex", Reference: "wanted"}, channel, "old", "old pane gone", channel, channel, true)
+			ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+			defer cancel()
+			report := staleReport(ctx, board.Entry{TaskID: "timeout"}, TaskSession{Agent: "codex", Reference: "wanted"}, channel, "old", "old pane gone", channel, channel, true)
 			if report.Status != Unknown || report.NewWindow != "" || !strings.Contains(report.Detail, "context deadline exceeded") || !strings.Contains(report.Detail, "old pane gone") || !strings.Contains(report.Detail, "反查:") {
 				t.Fatalf("report=%+v", report)
 			}

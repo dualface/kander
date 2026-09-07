@@ -269,6 +269,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - A herdr pane with missing identity but a valid agent and state is still `alive`, noted as not directly deliverable.
 - A Codex empty reference gets no reverse lookup.
 - Probe errors are counted as `unknown`; they do not write the card or affect the `check` exit code.
+- One card's forward probe, session reverse lookup, revalidation, and process cleanup share one deadline (10 seconds by default). Exhaustion or cancellation stops subsequent queries and reports `unknown`. Cancellation closes inherited output-pipe waits and terminates the owned process group/job; process creation, kernel I/O and reaping still depend on the operating system. This is a per-card budget, not a whole-board scheduling guarantee.
 - `subscribe` requires an explicit group ID and non-empty member IDs, and validates member ownership.
 - `--watch` may be repeated with external card or group IDs; a group is expanded to all its current members through the dependency resolution reader, without validating external target ownership.
 - When an external target does not exist, expands to nothing, duplicates a member, or expansions duplicate each other, fail before subscribing.
