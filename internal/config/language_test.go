@@ -41,3 +41,37 @@ func TestResolveLanguageJapaneseLocale(t *testing.T) {
 		t.Fatalf("ja_JP locale should resolve to ja, got %q", got)
 	}
 }
+
+func TestJapaneseConfigAndMenuLabels(t *testing.T) {
+	setupHome(t)
+	t.Cleanup(resetLanguageState)
+	ApplyLanguageArgument([]string{"--lang", "ja"})
+	want := map[string]string{
+		"config.kanban_agent": "かんばん Agent",
+		"config.kanban_model": "かんばんモデル",
+		"config.large":        "大規模",
+		"config.launcher":     "起動方式",
+		"config.small":        "小規模",
+		"menu.launcher":       "起動方式",
+		"menu.model_2":        "codex モデル",
+		"menu.effort_2":       "codex 推論強度",
+		"menu.large_task":     "大規模タスク",
+		"menu.review":         "レビュー",
+		"config.languageLabels.ja": "日本語",
+	}
+	for id, expected := range want {
+		got := Text(id)
+		if id == "menu.model_2" {
+			got = Text(id, "codex")
+		}
+		if id == "menu.effort_2" {
+			got = Text(id, "codex")
+		}
+		if got != expected {
+			t.Fatalf("%s = %q, want %q", id, got, expected)
+		}
+	}
+	if FormatLanguageSummary("ja") != "日本語" {
+		t.Fatalf("FormatLanguageSummary(ja)=%q", FormatLanguageSummary("ja"))
+	}
+}
