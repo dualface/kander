@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"slices"
 	"strings"
 
@@ -8,6 +9,10 @@ import (
 )
 
 func verifyMechanicalGit(cwd string, v board.ReviewBatchView, r board.ReviewCloseRequest) ([]board.ReviewMechanicalGit, error) {
+	return verifyMechanicalGitContext(context.Background(), cwd, v, r)
+}
+
+func verifyMechanicalGitContext(ctx context.Context, cwd string, v board.ReviewBatchView, r board.ReviewCloseRequest) ([]board.ReviewMechanicalGit, error) {
 	claims, err := board.ReviewMechanicalClaims(v, r)
 	if err != nil {
 		return nil, err
@@ -19,7 +24,7 @@ func verifyMechanicalGit(cwd string, v board.ReviewBatchView, r board.ReviewClos
 			paths[i] = ":(literal)" + name
 		}
 		args := append([]string{"diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z", c.From, c.To, "--"}, paths...)
-		out, _, code, err := gitCommand(args, cwd, "")
+		out, _, code, err := gitCommandContext(ctx, args, cwd, "")
 		if err != nil {
 			return nil, err
 		}
@@ -29,7 +34,7 @@ func verifyMechanicalGit(cwd string, v board.ReviewBatchView, r board.ReviewClos
 			return nil, archiveError("mechanical scope must contain exactly changed files")
 		}
 		args = append([]string{"diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--full-index", "--no-color", c.From, c.To, "--"}, paths...)
-		out, _, code, err = gitCommand(args, cwd, "")
+		out, _, code, err = gitCommandContext(ctx, args, cwd, "")
 		if err != nil {
 			return nil, err
 		}

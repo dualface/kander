@@ -78,14 +78,18 @@ func validateDispatchEvidence(tx *Transaction, in DispatchInput, initial bool) e
 	return nil
 }
 
-func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool) error {
+func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, historical ...bool) error {
 	binding := in.Evidence.Fix
+	if binding == nil {
+		return dispatchEvidenceError("fix binding required")
+	}
+	completed := len(historical) > 0 && historical[0]
 	var batch ReviewBatch
 	ok, err := readReviewJSON(tx, reviewBatchName(binding.BatchID), &batch)
 	if err != nil {
 		return err
 	}
-	if !ok || batch.BatchID != binding.BatchID || batch.TargetCommit != in.Base || !containsID(batch.TaskIDs, in.TaskID) || len(binding.Findings) == 0 {
+	if !ok || batch.BatchID != binding.BatchID || !completed && batch.TargetCommit != in.Base || !containsID(batch.TaskIDs, in.TaskID) || len(binding.Findings) == 0 {
 		return dispatchEvidenceError("batch, target or membership")
 	}
 	runs, err := batchRuns(tx, batch)
@@ -107,7 +111,7 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool) error 
 			return dispatchEvidenceError("run, predecessor or task binding")
 		}
 		for _, other := range runs {
-			if other.PreviousRunID == run.RunID {
+			if !completed && other.PreviousRunID == run.RunID {
 				return dispatchEvidenceError("superseded review round")
 			}
 		}

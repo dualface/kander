@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -70,15 +71,31 @@ type Transaction struct {
 // WithTransaction commits all staged writes, or leaves a prepared recovery record
 // on publication failure. No user callback runs during recovery.
 func WithTransaction(root string, scope LockScope, fn func(*Transaction) error) (err error) {
+	return withTransaction(nil, root, scope, fn)
+}
+
+// WithTransactionContext bounds lock contention and preparation. Once a redo
+// intent is published, completion follows the existing non-cancellable journal
+// protocol; OS file operations and crash recovery retain their existing limits.
+func WithTransactionContext(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error) error {
+	return withTransaction(ctx, root, scope, fn)
+}
+
+func withTransaction(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error) (err error) {
 	if err = ensureLayout(root); err != nil {
 		return err
 	}
-	locks, err := acquire(root, scope)
+	var locks lockSet
+	if ctx == nil {
+		locks, err = acquire(root, scope)
+	} else {
+		locks, err = acquireContext(ctx, root, scope)
+	}
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, locks.close()) }()
-	if err = pending(root, append(append([]string(nil), scope.Tasks...), scope.Groups...)); err != nil {
+	if err = pendingContext(ctx, root, append(append([]string(nil), scope.Tasks...), scope.Groups...)); err != nil {
 		return err
 	}
 	id, err := operationID()
@@ -88,6 +105,11 @@ func WithTransaction(root string, scope LockScope, fn func(*Transaction) error) 
 	tx := &Transaction{root: root, scope: scope, record: OperationRecord{Schema: 1, ID: id, Phase: "prepared", Revisions: map[string]uint64{}, Groups: append([]string(nil), scope.Groups...)}}
 	if err = fn(tx); err != nil {
 		return err
+	}
+	if ctx != nil {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
 	}
 	if len(tx.record.Files) == 0 && len(tx.record.Entries) == 0 {
 		return nil

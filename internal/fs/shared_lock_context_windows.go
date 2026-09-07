@@ -6,9 +6,13 @@ import (
 	"os"
 )
 
-func trySharedLock(file *os.File) (bool, error) {
+func tryContextLock(file *os.File, shared bool) (bool, error) {
 	var ov windows.Overlapped
-	err := windows.LockFileEx(windows.Handle(file.Fd()), windows.LOCKFILE_FAIL_IMMEDIATELY, 0, 0xFFFFFFFF, 0xFFFFFFFF, &ov)
+	flags := uint32(windows.LOCKFILE_FAIL_IMMEDIATELY)
+	if !shared {
+		flags |= windows.LOCKFILE_EXCLUSIVE_LOCK
+	}
+	err := windows.LockFileEx(windows.Handle(file.Fd()), flags, 0, 0xFFFFFFFF, 0xFFFFFFFF, &ov)
 	if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
 		return false, nil
 	}

@@ -1,12 +1,59 @@
 package board
 
 import (
+	"context"
 	"errors"
 	"github.com/dualface/kander/internal/fs"
 	"os"
 	"path/filepath"
 	"sort"
 )
+
+func acquireContext(ctx context.Context, root string, scope LockScope) (locks lockSet, err error) {
+	tasks, err := orderedIDs(scope.Tasks, false)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := orderedIDs(scope.Groups, true)
+	if err != nil {
+		return nil, err
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err = ensureControl(root); err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, locks.close())
+		}
+	}()
+	take := func(path string, shared bool) error {
+		if shared {
+			return locks.takeSharedContext(ctx, root, path)
+		}
+		f, e := fs.OpenLockFile(root, path)
+		if e != nil {
+			return e
+		}
+		l, e := fs.LockExclusiveContext(ctx, f)
+		if e != nil {
+			return errors.Join(e, f.Close())
+		}
+		locks = append(locks, heldLock{f, l})
+		return nil
+	}
+	if err = take(control(root, "locks", "board.lock"), !scope.ExclusiveBoard); err != nil {
+		return locks, err
+	}
+	for _, id := range append(groups, tasks...) {
+		if err = take(control(root, "locks", id+".lock"), scope.ReadOnly); err != nil {
+			return locks, err
+		}
+	}
+	return locks, nil
+}
 
 // LockScope declares the complete lock set before any task is accessed. Ordering
 // is board, sorted groups, sorted tasks, then the short-lived journal lock.

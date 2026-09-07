@@ -16,6 +16,7 @@ func init() {
 	cli.Commands["start"] = RunStart
 	cli.Commands["resume"] = RunResume
 	cli.Commands["dispatch"] = RunDispatch
+	cli.Commands["coordinator"] = RunCoordinator
 }
 
 func fail(err error) int {

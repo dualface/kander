@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -140,11 +141,15 @@ func validatePlanGit(p board.ReviewPlan) error {
 	return nil
 }
 func verifyGitEdge(cwd string, e board.ReviewGitEdge) error {
+	return verifyGitEdgeContext(context.Background(), cwd, e)
+}
+
+func verifyGitEdgeContext(ctx context.Context, cwd string, e board.ReviewGitEdge) error {
 	for _, sha := range []string{e.Ancestor, e.Descendant} {
 		if len(sha) != 40 && len(sha) != 64 || strings.Trim(sha, "0123456789abcdef") != "" {
 			return archiveError("full commit SHA required")
 		}
-		out, _, code, err := gitCommand([]string{"cat-file", "-t", sha}, cwd, "")
+		out, _, code, err := gitCommandContext(ctx, []string{"cat-file", "-t", sha}, cwd, "")
 		if err != nil {
 			return err
 		}
@@ -152,7 +157,7 @@ func verifyGitEdge(cwd string, e board.ReviewGitEdge) error {
 			return archiveError("Git commit required: " + sha)
 		}
 	}
-	_, _, code, err := gitCommand([]string{"merge-base", "--is-ancestor", e.Ancestor, e.Descendant}, cwd, "")
+	_, _, code, err := gitCommandContext(ctx, []string{"merge-base", "--is-ancestor", e.Ancestor, e.Descendant}, cwd, "")
 	if err != nil {
 		return err
 	}

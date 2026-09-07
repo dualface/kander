@@ -2,17 +2,24 @@ package review
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
 )
 
 func gitCommand(arguments []string, cwd, inputText string) (stdout, stderr string, code int, err error) {
-	cmd := exec.Command("git", arguments...)
+	return gitCommandContext(context.Background(), arguments, cwd, inputText)
+}
+
+func gitCommandContext(ctx context.Context, arguments []string, cwd, inputText string) (stdout, stderr string, code int, err error) {
+	cmd := exec.CommandContext(ctx, "git", arguments...)
+	cmd.WaitDelay = 100 * time.Millisecond
 	if cwd != "" {
 		cmd.Dir = cwd
 	}

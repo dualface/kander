@@ -1,4 +1,6 @@
 {
+  "board.coordinator_conflict": "Coordinator checkpoint conflict or invalid facts: {{.V0}}",
+  "board.coordinator_usage": "Usage: kander coordinator show <group-id> | claim <claim.json> | reconcile <observations.json>",
   "board.dispatch_evidence_invalid": "Invalid dispatch evidence: {{.V0}}",
   "launch.dispatch_wrap_up_only": "Wrap-up-only authority for {{.V0}}: dispatch {{.V1}}, epoch {{.V2}}. Only cleanup and append-only records are allowed. No code changes, runtime takeover or author conclusions.",
   "board.dispatch_conflict": "Dispatch conflict, expired deadline or stale execution authorization: {{.V0}}",

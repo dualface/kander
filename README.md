@@ -84,6 +84,8 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 任务组 review 派回使用持久 dispatch；普通 working 消息可用 `--kind fix|sync|wrap-up` 显式选择。发送前打印稳定 ID，重试带 `--dispatch-id`；只有执行端带 ID/epoch 的受控 move 才生成接受/完成回执。终端回显不代表开工，unknown 不自动启动第二执行者。命令、期限、兼容和恢复见 [持久派回协议](docs/durable-dispatch.md)。
 
+`kander coordinator show/claim/reconcile` 通过 CAS 和 coordinator epoch 保存编排检查点。初始快照与后续事件同样消费持久 dispatch、审核原件和实际 Git 证据；重启不必补见 working 边沿，也不自动通知或集成。详见 [编排检查点与恢复](docs/coordinator-recovery.md)。
+
 `kander check` 的存活段与 `subscribe` 心跳只报告观测结果. `alive` 表示 Agent 存在, 不代表已就绪或任务有进展; `notify` 仍独立检查能否接收消息. 旧地址失效后, 有效反查确认零匹配才据此报告 `stopped`, 唯一匹配报告 `drifted`; 反查失败、非法输出、超时或多匹配报告 `unknown`, 保留原地址失效原因及反查阶段和原因. 禁用反查或会话引用为空时保留原有直接探测语义, Codex 空引用不反查. 存活探测不写卡, 也不改变 `check` 的结构检查退出码.
 
 单卡存活探测的前向查询、session 反查、复查及进程回收共享 10 秒默认期限；context API 使用调用方期限和取消信号。耗尽预算后不再启动后续查询，结果为 `unknown`。取消时关闭输出管道并回收所属进程；平台边界及验证范围见 [探测期限与取消](docs/probe-deadlines.md)。

@@ -3,6 +3,7 @@
 package review
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -91,6 +92,19 @@ func TestDispositionCLIClosesOnlyCompleteRolesAtActualHead(t *testing.T) {
 	code, out, stderr := captureRun(t, []string{"close", h.repo, file})
 	if code != 0 || !strings.Contains(out, `"PM": "PASS"`) {
 		t.Fatalf("close %d %s %s", code, out, stderr)
+	}
+	var closure board.ReviewClosure
+	if err = json.Unmarshal([]byte(out), &closure); err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, h.repo, "later.txt", "later delivery", "later delivery")
+	if err = VerifyClosedReviewGit(context.Background(), h.repo, closure); err != nil {
+		t.Fatal("historical closure failed at later HEAD", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err = VerifyClosedReviewGit(ctx, h.repo, closure); err == nil {
+		t.Fatal("canceled recovery accepted")
 	}
 	code, out, stderr = captureRun(t, []string{"progress", h.repo, id})
 	if code != 0 || !strings.Contains(out, `"status": "closed"`) {

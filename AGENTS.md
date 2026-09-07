@@ -31,13 +31,13 @@
 | `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/共享及独占锁                          |
 | `internal/process`  | Agent CLI 解析, UTF-8 任务文件, argv/env 调用构造                         |
 | `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验，dispatch 意图、审核原件绑定、epoch、仅收尾授权与原子回执                 |
-| `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚，dispatch 的 Git 集成与退出事实校验                               |
+| `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚；编排 Git 对账单向复用 review，dispatch 的 Git 集成与退出事实校验                               |
 | `internal/probe`    | herdr/tmux pane 事实采集                                                 |
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
 | `internal/notify`   | notify 直投, 忙/过期判断, resume 恢复与版本冲突处理                           |
 | `internal/takeover` | dismiss 及 resume 接管成功后的旧容器清理                                 |
 | `internal/window`   | 卡片 `WINDOW` 回写; 复用 board 事务, 过期回滚保留新记录                                     |
-| `internal/review`   | `kander review` 单一审核门禁                                             |
+| `internal/review`   | `kander review` 单一审核门禁与闭批历史 Git 校验                                             |
 | `internal/tui`      | 裸 `kander` 的终端看板与 Huh 选项面板                                    |
 | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |
 | `internal/install`  | 首次运行向导, `kander install`, 规则释出与 doctor 修复                     |
@@ -69,7 +69,7 @@
 
 ## 子命令
 
-Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en,ja}`.
+Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en,ja}`.
 
 ## TUI 测试
 
@@ -121,3 +121,6 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 
 - [订阅事实与成员集合](docs/subscription-facts.md)：JSONL 版本、revision、动态组引用、完整性告警、协调读取期限、持久派回摘要与确认期限注意事件，以及有界探测和输出生命周期。
 - [持久派回协议](docs/durable-dispatch.md)：稳定 ID、原子接受/完成回执、执行 epoch、投递对账与兼容边界。
+
+- [编排检查点与恢复](docs/coordinator-recovery.md)：coordinator epoch、CAS、快照对账、原件与 Git 收尾证据、恢复边界。
+- [原始复现验收映射](docs/recovery-regressions.md)：13 个原始坏行为、所属回归和跨模块恢复验收。

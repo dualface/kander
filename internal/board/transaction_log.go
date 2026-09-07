@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -41,7 +42,22 @@ func operationID() (string, error) {
 }
 
 func pending(root string, ids []string) error {
-	records, err := operationRecords(root)
+	return pendingContext(nil, root, ids)
+}
+
+func pendingContext(ctx context.Context, root string, ids []string) error {
+	var records []OperationRecord
+	var err error
+	if ctx == nil {
+		records, err = operationRecords(root)
+	} else {
+		var locks lockSet
+		if err = locks.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
+			return err
+		}
+		records, err = readOperationRecords(root)
+		err = errors.Join(err, locks.close())
+	}
 	if err != nil {
 		return err
 	}

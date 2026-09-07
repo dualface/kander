@@ -668,6 +668,28 @@ kander move <task-id> working --owner <agent>
 - On duplicate IDs, cross-state copies, a file and a directory with the same ID, a directory card missing `spec.md`, conflicting targets, or missing or unwritable state directories, stop the affected operation and preserve the working state. Do not bypass the error by deleting, renaming, or moving.
 - The board has no Git history; on accidental deletion, first check `trash/` and local backups; do not fabricate content.
 
+## Coordinator Checkpoints
+
+```text
+kander coordinator show <group-id>
+kander coordinator claim <claim.json>
+kander coordinator reconcile <observations.json>
+```
+
+These single-binary producers store group checkpoints through the existing transaction protocol.
+They read task/dispatch/review originals and never notify, move cards, integrate Git or grant task
+execution authority. Group workflow policy is loaded only when the task_groups module is enabled.
+`show` returns the committed schema, revision, coordinator authority and member facts.
+`claim` requires group_id, expected_revision, expected_epoch, owner, unique token, basis and members.
+`reconcile` requires group_id, expected_revision, authority and a members object keyed by task ID;
+each member names revision and, when bound, dispatch_id, epoch, base and its completed delivery_commit.
+An optional absolute cwd selects a surviving repository for read-only Git verification; first
+unbound deliveries require it. Authority contains owner, token and epoch from the successful claim.
+Retry the same JSON after a lost response; changed inputs or stale coordinator authority conflict.
+A pending transaction is never repaired by show or reconcile. Use explicit init recovery only under
+its existing maintenance preconditions. A checkpoint is a recovery cursor, never acceptance or
+integration authorization. Confirmation comes from same-round receipts, including in snapshots.
+
 ## Review Evidence Completion Gate
 
 Active execution cycles require an explicit review plan before `move done`, even when REVIEWS

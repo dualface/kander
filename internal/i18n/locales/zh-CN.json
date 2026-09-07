@@ -1,4 +1,6 @@
 {
+  "board.coordinator_conflict": "编排检查点冲突或事实无效：{{.V0}}",
+  "board.coordinator_usage": "用法：kander coordinator show <group-id> | claim <claim.json> | reconcile <observations.json>",
   "board.dispatch_evidence_invalid": "派回证据无效：{{.V0}}",
   "launch.dispatch_wrap_up_only": "已为 {{.V0}} 授予仅收尾授权：dispatch {{.V1}}，epoch {{.V2}}。只允许清理和追加收尾记录；禁止代码修改、运行时接管及原作者结论。",
   "board.dispatch_conflict": "派回冲突、期限已过或执行授权过期：{{.V0}}",
