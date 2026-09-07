@@ -148,6 +148,8 @@ func incrementalScopeRules(ctx reviewContext) string {
 		"   prior fix breaks a requirement it touched. Treat code unchanged since " + ctx.reviewed + " as\n" +
 		"   already accepted by your role: do not re-audit it, do not raise findings on it, and do not widen\n" +
 		"   the review into unchanged areas. Use unchanged code only to judge the impact of the fix range.\n" +
+		"   A finding on code outside the fix range that is not blocking goes to NON-BLOCKING with the tag\n" +
+		"   [outside-fix-range]; only a blocking defect introduced by the fix may enter the gate findings.\n" +
 		"The FIX RANGE sections of the evidence file are your navigation; the full " + ctx.base + ".." + ctx.commit + "\n" +
 		"range is context only.\n"
 }
@@ -161,7 +163,10 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 		"end-to-end data/control flows, including affected siblings and reachable failure paths. Stop when\n" +
 		"every explicit or logically necessary requirement, changed behavior, and affected consumer relevant\n" +
 		"to the task is supported by evidence or marked Unverifiable. Do not continue into an unrelated\n" +
-		"repository-wide audit.\n"
+		"repository-wide audit.\n" +
+		"Report size: a first-round report is complete when every gate finding has evidence and the\n" +
+		"NON-BLOCKING section is within its limit; do not pad the report with restated requirement rows,\n" +
+		"file inventories, or pre-existing conditions.\n"
 	if ctx.reviewed != "" {
 		scopeRules = incrementalScopeRules(ctx)
 	}

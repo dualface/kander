@@ -5,7 +5,10 @@ const (
 Treat the task context as the requirements contract. Decompose it into atomic, observable
 requirements, then trace each one to full implementation evidence at the target commit.
 Build a requirement table with requirement, expected behavior, code evidence, and status:
-Complete, Partial, Missing, Contradicted, or Unverifiable. Inspect only the user flows, platforms,
+Complete, Partial, Missing, Contradicted, or Unverifiable. The requirement table is analysis, not
+findings: a row with status Complete, or a Partial row whose gap is outside the contract, produces
+no finding; on an incremental round, list only rows whose status changed since your previous
+report. Inspect only the user flows, platforms,
 states, error paths, permissions, and integrations that the task context makes required; tests and
 comments are supporting evidence, not proof that production behavior exists. Only create requirements
 explicitly stated by the task context or logically required by an existing contract, and cite that
@@ -44,6 +47,11 @@ boundaries directly affected by the review range. Do not enumerate contrived com
 edge cases, speculative failure modes, or low-realism concerns. Output a behavior/quality table, then
 the gate findings with confidence, exact evidence, a concrete realistic failure scenario, impact, and
 the smallest durable fix. State explicitly when none are found.
+
+Verification claims: when the caller's review context records a command and its output at the
+delivery commit, treat it as evidence unless you can point to a contradiction in the code; do not
+mark it Unverifiable merely because you could not rerun it. When you cannot execute commands, say
+so once in Reviewed Scope instead of on every item.
 `
 
 	roleRuleCSA = `Act as a Code Security Analyst. Review only security defects introduced, worsened, or concealed by
@@ -104,6 +112,16 @@ item, or the single line "NON-BLOCKING: none". Non-blocking items never gate the
 never be worded as required work, but they carry the same evidence bar as gate findings: exact file
 and line evidence, concrete impact or rationale, and the smallest change that would address them.
 At every tier, omit speculative, infeasible, generic, and pure defense-in-depth noise.
+
+One ID per root cause: when one defect shows up at several locations, report a single finding that
+lists every location; never split one root cause into per-location IDs. If another role on this
+commit would obviously report the same root cause, still report it, but keep it to one ID in your
+report.
+
+NON-BLOCKING discipline: list at most ten items, each with exact evidence. Do not list unchanged
+pre-existing conditions, items already covered by the task context's OUT_OF_SCOPE, style
+preferences without a project rule, or restatements of a gate finding. When you have more than ten
+candidates, keep the ten with the highest concrete impact and say how many were dropped.
 `
 )
 
