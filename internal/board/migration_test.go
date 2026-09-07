@@ -204,7 +204,7 @@ func mustScan(t *testing.T, root string) Board {
 	return b
 }
 
-var migrationStages = []string{"prepared", "migration-stage", "migration-source", "migration-size", "migration-publish", "revision", "committed"}
+var migrationStages = []string{"prepared", "migration-stage", "migration-source", "migration-write-created", "migration-write-synced", "migration-original-saved", "migration-write-published", "migration-original-removed", "migration-size", "migration-publish", "revision", "committed"}
 
 func migrationRecord(t *testing.T, root string) OperationRecord {
 	t.Helper()
@@ -214,7 +214,7 @@ func migrationRecord(t *testing.T, root string) OperationRecord {
 	if err := ensureControl(root); err != nil {
 		t.Fatal(err)
 	}
-	r := OperationRecord{Schema: 1, Purpose: "migration", ID: "migration-crash", Phase: "prepared", Revisions: map[string]uint64{id: 1}, Migrations: []FormMigration{{From: filepath.Join("backlog", id+".md"), To: filepath.Join("backlog", id), Before: before, After: addSize(before, "small")}}}
+	r := OperationRecord{Schema: 1, Purpose: "migration", ID: "migration-crash", Phase: "prepared", Revisions: map[string]uint64{id: 1}, Migrations: []FormMigration{{From: filepath.Join("backlog", id+".md"), To: filepath.Join("backlog", id), Before: before, After: addSize(before, "small"), Rewrite: "spec.write-migration-crash", Original: "spec.original-migration-crash"}}}
 	if err := writeOperation(root, control(root, "operations", r.ID+".json"), r, false); err != nil {
 		t.Fatal(err)
 	}

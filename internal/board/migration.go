@@ -13,10 +13,12 @@ import (
 // lives on the same volume under .kander/migrations/<operation>/<task>/spec.md.
 // Source removal and target publication are separate, recoverable steps.
 type FormMigration struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	Before string `json:"before"`
-	After  string `json:"after"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Before   string `json:"before"`
+	After    string `json:"after"`
+	Rewrite  string `json:"rewrite,omitempty"`
+	Original string `json:"original,omitempty"`
 }
 
 // InitOptions records an operator's explicit maintenance-window acknowledgement.
@@ -114,7 +116,7 @@ func MigrateCards(root string, options InitOptions) (count int, err error) {
 			doc, _ := filepath.Rel(root, c.entry.Document)
 			record.Files = []FileChange{{Path: doc, Before: &c.before, After: c.after}}
 		} else {
-			record.Migrations = []FormMigration{{From: from, To: strings.TrimSuffix(from, ".md"), Before: c.before, After: c.after}}
+			record.Migrations = []FormMigration{{From: from, To: strings.TrimSuffix(from, ".md"), Before: c.before, After: c.after, Rewrite: "spec.write-" + id, Original: "spec.original-" + id}}
 		}
 		path := control(root, "operations", id+".json")
 		if err = validateRecord(root, &record); err != nil {
@@ -137,6 +139,7 @@ func applyMigration(root string, record *OperationRecord, m FormMigration, check
 	stageParent := control(root, "migrations", record.ID)
 	stage := filepath.Join(stageParent, filepath.Base(m.To))
 	stagedSpec := filepath.Join(stage, "spec.md")
+	rewrite, original := migrationWriteNames(record.ID, m)
 	source, sourceExists, err := fs.ReadRegularFileIfExists(root, from)
 	if err != nil {
 		return err
@@ -171,7 +174,7 @@ func applyMigration(root string, record *OperationRecord, m FormMigration, check
 			return err
 		}
 		for _, item := range items {
-			if item.Name != "spec.md" || item.Kind != fs.KindFile {
+			if (item.Name != "spec.md" && item.Name != rewrite && item.Name != original) || item.Kind != fs.KindFile {
 				return kanbanError("board.transaction_conflict", stage)
 			}
 		}
@@ -189,7 +192,7 @@ func applyMigration(root string, record *OperationRecord, m FormMigration, check
 	if err := checkpoint("migration-stage"); err != nil {
 		return err
 	}
-	staged, exists, err := fs.ReadRegularFileIfExists(root, stagedSpec)
+	_, exists, err := fs.ReadRegularFileIfExists(root, stagedSpec)
 	if err != nil {
 		return err
 	}
@@ -197,22 +200,24 @@ func applyMigration(root string, record *OperationRecord, m FormMigration, check
 		if exists {
 			return kanbanError("board.transaction_conflict", m.From)
 		}
+		for _, name := range []string{rewrite, original} {
+			if present, err := fs.RegularFileExists(root, filepath.Join(stage, name)); err != nil {
+				return err
+			} else if present {
+				return kanbanError("board.transaction_conflict", m.From)
+			}
+		}
 		if err = fs.Rename(root, from, stagedSpec); err != nil {
 			return err
 		}
-		staged, exists = source, true
 	}
 	if err := checkpoint("migration-source"); err != nil {
 		return err
 	}
-	if !exists || (string(staged) != m.Before && string(staged) != m.After) {
-		return kanbanError("board.transaction_conflict", stagedSpec)
+	if err := rewriteMigrationDocument(root, stage, record.ID, m, checkpoint); err != nil {
+		return err
 	}
-	if string(staged) != m.After {
-		if err = fs.WriteTextAtomic(root, stagedSpec, m.After, true); err != nil {
-			return err
-		}
-	}
+
 	if err := checkpoint("migration-size"); err != nil {
 		return err
 	}
@@ -223,6 +228,10 @@ func applyMigration(root string, record *OperationRecord, m FormMigration, check
 }
 
 func validateMigration(root string, record *OperationRecord, m FormMigration) error {
+	if m.Rewrite != "" && m.Rewrite != "spec.write-"+record.ID || m.Original != "" && m.Original != "spec.original-"+record.ID {
+		return kanbanError("board.transaction_invalid", m.To)
+	}
+
 	if filepath.Base(record.ID) != record.ID || strings.HasPrefix(record.ID, ".") || strings.ContainsAny(record.ID, "\\:/") {
 		return kanbanError("board.transaction_invalid", record.ID)
 	}

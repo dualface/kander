@@ -71,7 +71,7 @@ schema 1 操作记录包含:
 
 持锁读者不会见到正在发布的多文件中间态. 若进程中断并释放锁, prepared 记录让读命令报告明确的待恢复错误. 读者不自动修复. Scan/ScanTargets 在同一锁内捕获入口和正文; list/TUI/订阅/依赖检查通过 Board.Document 消费已提交快照, 不因随后发生的迁移混用新路径与旧正文, 不返回部分成员集. 新扫描仍对未完成事务显式失败. `kander init` 取得看板独占锁后按记录完成重做; 已完成的步骤用匹配的内容/版本确认, 未完成步骤继续, 恢复可重复执行. 未知版本、内容冲突、重复入口和 reparse 均失败关闭, 保留现场. 新卡已建立目录但缺 spec 时, 仅在有效创建记录下补完正文.
 
-目录迁移在同一 schema 1 记录中增加 `purpose: "migration"` 及 `migrations: [{from,to,before,after}]`; 暂存目录为 `.kander/migrations/<operation-id>/<task-id>/`. 已提交记录及空的操作暂存父目录保留供核验; 未登记产物报错保留. 缺 SIZE 的旧目录使用普通 files 补写. 维护窗口、恢复顺序与边界见 [目录卡迁移](directory-cards.md).
+目录迁移在同一 schema 1 记录中增加 `purpose: "migration"` 及 `migrations: [{from,to,before,after,rewrite,original}]`; 暂存目录为 `.kander/migrations/<operation-id>/<task-id>/`. rewrite/original 是由操作 ID 绑定的明确临时替换与原文备份名称; 缺这两项的 schema 1 记录按相同固定命名协议解释. 恢复仅接受完整原文及 After 的精确前缀, 不采用随机命名的未知残留. 已提交记录及空的操作暂存父目录保留供核验; 未登记产物报错保留. 缺 SIZE 的旧目录使用普通 files 补写. 维护窗口、恢复顺序与边界见 [目录卡迁移](directory-cards.md).
 
 ## 验证与能力边界
 

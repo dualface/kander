@@ -22,7 +22,7 @@ Entry.Kind 和 TaskSummary.kind、list、TUI、启动/恢复/通知模型参数�
 1. 保存 from/to 和原文/补 SIZE 后正文的持久记录.
 2. 建立同卷 `.kander/migrations/<operation-id>/<task-id>/` 暂存目录.
 3. 将源 `.md` 改名为暂存目录内的 spec.md. 此时状态目录中暂时没有该 ID 的入口.
-4. 在暂存 spec.md 补 SIZE, 不改原有正文其他字节.
+4. 在日志登记的 `spec.write-<operation-id>` 写入补 SIZE 后正文; 中断后只接受 After 的精确前缀, 从已写位置继续并同步. 原 spec.md 先改名为登记的 `spec.original-<operation-id>`, 再发布完整替换; 仅在匹配原文时移除备份. 不依赖进程 defer 清理随机临时文件.
 5. 将完整目录发布到原状态的 `<task-id>/`.
 6. 提交 revision 和 committed 日志.
 
@@ -34,4 +34,4 @@ Entry.Kind 和 TaskSummary.kind、list、TUI、启动/恢复/通知模型参数�
 
 list/show/check/TUI/subscribe 继续读取旧文件, 不触发批量迁移. new 始终创建目录. 对旧文件的 update/move/pick/start/resume/notify/dismiss 以及生命周期回写在副作用前要求 init, 不允许用旧二进制绕过限制. guard-write 对同状态旧 .md 拼写及跨状态旧路径给出提示; 它仍不是原子写入入口.
 
-迁移失败注入及子进程 kill/restart 覆盖 prepared、暂存目录、源移走、SIZE 补写、目标发布、revision 和 committed. 并发测试验证维护锁阻塞 init、快照、update、归档/move, 释放后只产生串行提交或 revision 冲突. 原生 Windows 用例需在 Windows 执行; 交叉编译不能替代实机结果.
+迁移失败注入及子进程 kill/restart 覆盖 prepared、暂存目录、源移走、临时替换创建、同步、原文备份、替换发布、备份移除、SIZE 完成、目标发布、revision 和 committed. 未登记的旧原子写入残留及非前缀内容仍报冲突并保留, 不按文件名模式猜测归属. 并发测试验证维护锁阻塞 init、快照、update、归档/move, 释放后只产生串行提交或 revision 冲突. 原生 Windows 用例需在 Windows 执行; 交叉编译不能替代实机结果.
