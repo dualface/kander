@@ -49,7 +49,7 @@ Creating entries, querying, and moving between states use only `kander`; replaci
 kander init [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show <task-id>
-kander new [--large] <feature|bug|chore|research> <slug> <title...>
+kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash>
 kander pick [task-id]
 kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
@@ -390,6 +390,7 @@ any state except trash -> trash                       only on explicit user requ
 
 - TYPE: Feature | Bug | Chore | Research
 - TASK_GROUP:
+- LANGUAGE: <agent communication language, e.g. en, zh-CN, ja>
 - CREATED_AT: YYYY-MM-DD HH:MM
 - OWNER:
 - SESSION:
@@ -444,6 +445,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ### Contract and Records
 
+- `LANGUAGE` is the language for everything written for the user about this card: its title and body, records, reports, review reports, and the messages passed to `kander notify` and `kander resume`. `kander new` fills it from the configured `agent_language`, or from `--language <value>` when given; the value follows the `agent_language` format. It is fixed at creation and overrides the configuration; an old card without the field falls back to the current configuration per `KANDER-AGENTS.md` "Language".
 - After claiming, fill in `OWNER`, `STARTED_AT`, and `TASK_BRANCH`; write `N/A` when there is no branch.
 
   `start` also writes the adjacent `SESSION` and `WINDOW` fields, inserting them after `OWNER` when an old card lacks them; manually claimed cards leave them empty.
@@ -468,7 +470,7 @@ any state except trash -> trash                       only on explicit user requ
 
 - Cards keep optional task group fields and dependency records. When task_groups is off, groups are not split automatically and independent single cards remain usable. When on, plan and execute per KANDER-TASK-GROUP-RULES.md; git must be on as well.
 - Intake guidance belongs to KANDER-TASK-INTAKE-RULES.md and is read only when rules.task_intake=true; a user operating the board directly does not require it to be on.
-- kander new creates the template in backlog; the caller fills in `GOAL`, `EXPECTED_OUTCOME`, and `ACCEPTANCE_CRITERIA` from confirmed content and does not write suggestions as user decisions.
+- kander new creates the template in backlog; the caller fills in `GOAL`, `EXPECTED_OUTCOME`, and `ACCEPTANCE_CRITERIA` from confirmed content and does not write suggestions as user decisions. The card text is written in the card's `LANGUAGE`.
 
 ### Post-Creation Self-Review
 

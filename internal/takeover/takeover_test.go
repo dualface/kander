@@ -180,7 +180,7 @@ func doneCard(title string) string {
 
 func makeDone(t *testing.T, root, slug, window string) (string, string) {
 	t.Helper()
-	path, err := board.NewTask(root, "feature", slug, "任务 "+slug, false)
+	path, err := board.NewTask(root, "feature", slug, "任务 "+slug, "en", false)
 	if err != nil {
 		t.Fatal(err)
 	}

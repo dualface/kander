@@ -300,7 +300,7 @@ exit 1
 
 func makeTodo(t *testing.T, root, slug string) (string, string) {
 	t.Helper()
-	path, err := board.NewTask(root, "chore", slug, "任务 "+slug, false)
+	path, err := board.NewTask(root, "chore", slug, "任务 "+slug, "en", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestStartSelectsAgentByScaleAndRecordsWindow(t *testing.T) {
 		t.Fatalf("card=%s", text)
 	}
 
-	largePath, err := board.NewTask(root, "chore", "scale-large", "大任务", true)
+	largePath, err := board.NewTask(root, "chore", "scale-large", "大任务", "en", true)
 	if err != nil {
 		t.Fatal(err)
 	}

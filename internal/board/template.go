@@ -19,8 +19,8 @@ var contractTemplates = template.Must(
 // templateFields and templateSections give the templates short handles for the
 // schema constants.
 type templateFields struct {
-	Type, TaskGroup, CreatedAt, Owner, Session, Window string
-	StartedAt, FinishedAt, TaskBranch, Result          string
+	Type, TaskGroup, Language, CreatedAt, Owner, Session, Window string
+	StartedAt, FinishedAt, TaskBranch, Result                    string
 }
 
 type templateSections struct {
@@ -32,20 +32,22 @@ type templateSections struct {
 type templateData struct {
 	Title       string
 	Type        string
+	Language    string
 	Created     string
 	Placeholder string
 	F           templateFields
 	S           templateSections
 }
 
-func newTemplateData(title, taskType, created string) templateData {
+func newTemplateData(title, taskType, language, created string) templateData {
 	return templateData{
 		Title:       title,
 		Type:        taskType,
+		Language:    language,
 		Created:     created,
 		Placeholder: Placeholder,
 		F: templateFields{
-			Type: FieldType, TaskGroup: FieldTaskGroup, CreatedAt: FieldCreatedAt,
+			Type: FieldType, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
 			Owner: FieldOwner, Session: FieldSession, Window: FieldWindow,
 			StartedAt: FieldStartedAt, FinishedAt: FieldFinishedAt,
 			TaskBranch: FieldTaskBranch, Result: FieldResult,
@@ -70,10 +72,11 @@ func renderTemplate(name string, data templateData) string {
 	return out.String()
 }
 
-func renderContract(title, taskType string) string {
-	return renderTemplate("contract.md.tmpl", newTemplateData(title, typeNames[taskType], nowStamp()))
+// renderContract renders the card skeleton; language is the agent communication language recorded in the LANGUAGE field.
+func renderContract(title, taskType, language string) string {
+	return renderTemplate("contract.md.tmpl", newTemplateData(title, typeNames[taskType], language, nowStamp()))
 }
 
 func smallTaskExtra() string {
-	return renderTemplate("small_extra.md.tmpl", newTemplateData("", "", ""))
+	return renderTemplate("small_extra.md.tmpl", newTemplateData("", "", "", ""))
 }

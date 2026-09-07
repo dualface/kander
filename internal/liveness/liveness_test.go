@@ -94,7 +94,7 @@ func todayID(slug string) string {
 func makeWorking(t *testing.T, slug, title string) (string, string) {
 	t.Helper()
 	id := todayID(slug)
-	if _, err := board.NewTask(os.Getenv(board.EnvBoardDir), "chore", slug, title, false); err != nil {
+	if _, err := board.NewTask(os.Getenv(board.EnvBoardDir), "chore", slug, title, "en", false); err != nil {
 		t.Fatal(err)
 	}
 	root := os.Getenv(board.EnvBoardDir)
@@ -594,7 +594,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 	root := tempBoard(t)
 	groupID := time.Now().Format("20060102") + "-events-group"
 	firstID, first := makeWorking(t, "event-first", "成员一")
-	_, err := board.NewTask(root, "chore", "event-second", "成员二", false)
+	_, err := board.NewTask(root, "chore", "event-second", "成员二", "en", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,7 +610,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 	}
 	externalID, _ := func() (string, string) {
 		id := todayID("watch-external")
-		if _, err := board.NewTask(root, "chore", "watch-external", "外部", false); err != nil {
+		if _, err := board.NewTask(root, "chore", "watch-external", "外部", "en", false); err != nil {
 			t.Fatal(err)
 		}
 		path := filepath.Join(root, "backlog", id+".md")

@@ -1,7 +1,9 @@
 package board
 
 import (
+	"errors"
 	"fmt"
+	"github.com/dualface/kander/internal/config"
 	"io"
 	"os"
 	"strings"
@@ -33,6 +35,42 @@ func usageFail(cmd, id string, args ...any) int {
 		fmt.Fprintln(os.Stderr, t(id, args...))
 	}
 	return 2
+}
+
+// takeValueFlag removes `name value` from args and returns the value and whether the flag was present;
+// a trailing name without a value is an error.
+func takeValueFlag(args []string, name string) (rest []string, value string, found bool, err error) {
+	rest = make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		if args[i] != name {
+			rest = append(rest, args[i])
+			continue
+		}
+		if i+1 >= len(args) {
+			return nil, "", true, errors.New(name)
+		}
+		value = args[i+1]
+		found = true
+		i++
+	}
+	return rest, value, found, nil
+}
+
+// defaultCardLanguage is the agent_language of the current scope's config; without a config file it is
+// derived from the effective interface language, and an invalid config is an error rather than a guess.
+func defaultCardLanguage() (string, error) {
+	exists, err := config.Exists()
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return config.DefaultAgentLanguage(config.ResolveLanguage()), nil
+	}
+	cfg, err := config.Load(false)
+	if err != nil {
+		return "", err
+	}
+	return cfg.AgentLanguage, nil
 }
 
 func takeFlag(args []string, name string) ([]string, bool) {
@@ -141,6 +179,10 @@ func RunShow(args []string) int {
 // RunNew implements kander new.
 func RunNew(args []string) int {
 	args, large := takeFlag(args, "--large")
+	args, language, languageGiven, err := takeValueFlag(args, "--language")
+	if err != nil {
+		return usageFail("new", "board.option_requires_a_value", "--language")
+	}
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
 			return usageFail("new", "board.unknown_option", arg)
@@ -151,11 +193,21 @@ func RunNew(args []string) int {
 	}
 	kind, slug := args[0], args[1]
 	title := strings.Join(args[2:], " ")
+	if !languageGiven {
+		language, err = defaultCardLanguage()
+		if err != nil {
+			return fail(err)
+		}
+	}
+	language, err = config.ValidateAgentLanguage(language)
+	if err != nil {
+		return fail(err)
+	}
 	root, err := requireRoot()
 	if err != nil {
 		return fail(err)
 	}
-	target, err := NewTask(root, kind, slug, title, large)
+	target, err := NewTask(root, kind, slug, title, language, large)
 	if err != nil {
 		return fail(err)
 	}

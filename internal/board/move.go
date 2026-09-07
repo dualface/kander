@@ -72,8 +72,9 @@ func MoveEntry(entry Entry, root, targetState string) (Entry, error) {
 	return moved, nil
 }
 
-// NewTask creates a small task or a large directory card in backlog.
-func NewTask(root, kind, slug, title string, large bool) (string, error) {
+// NewTask creates a small task or a large directory card in backlog. language is written to the
+// card's LANGUAGE field and must already satisfy config.ValidateAgentLanguage.
+func NewTask(root, kind, slug, title, language string, large bool) (string, error) {
 	if !slugRe.MatchString(slug) {
 		return "", kanbanError("board.slug_may_contain_only_lowercase_ascii_letters_digits_and")
 	}
@@ -95,7 +96,7 @@ func NewTask(root, kind, slug, title string, large bool) (string, error) {
 	if _, ok := board.Blocked[taskID]; ok {
 		return "", kanbanError("board.task_already_exists", taskID)
 	}
-	contract := renderContract(title, kind)
+	contract := renderContract(title, kind, language)
 	if large {
 		target := filepath.Join(root, "backlog", taskID)
 		if err := fs.CreateDirectoryWithTextFile(root, target, "spec.md", contract); err != nil {

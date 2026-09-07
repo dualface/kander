@@ -39,7 +39,7 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	t.Setenv(board.EnvBoardDir, root)
 
 	slug := "full-binary-check"
-	created, err := board.NewTask(root, "chore", slug, "binding", false)
+	created, err := board.NewTask(root, "chore", slug, "binding", "en", false)
 	if err != nil {
 		t.Fatal(err)
 	}

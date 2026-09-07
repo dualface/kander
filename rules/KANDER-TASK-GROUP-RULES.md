@@ -31,6 +31,7 @@ Task groups always use the `KANDER-GIT-RULES.md` rules; a custom group integrati
   - If a task group exceeds 5 task cards, try to split it further into multiple task groups; the counts are suggestions and do not replace judgment about goals and dependencies.
   - A task group ID is `YYYYMMDD-short-slug-group`, unique across the whole board.
   - Each member card's `- TASK_GROUP:` metadata holds the ID of its group; non-members leave it empty. A task group is a relationship between cards and adds no board entry or state.
+  - Member cards of one group share the same `LANGUAGE`; create them with the same `--language` or under the same configuration.
 
 - Prefer splitting into small cards; when no further independently acceptable small cards can be split out and a large card is truly needed, choose the form per `KANDER-KANBAN-RULES.md` "Task Scale and Grouping". Clarify shared interfaces or data contracts first; when they need separate delivery, create a contract card as a prerequisite.
 - When creating a group, list all members and the dependency graph, and rule out missing references, dependency cycles, and overlapping responsibilities; once in `todo/`, task group relationships are frozen per the kanban protocol. The `任务组: ...` line recorded in `DISCUSSION` on old cards remains compatible; no bulk rewrite is required.
@@ -207,7 +208,7 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
 - A dispatch-back calls `kander notify <task-id> --message-file <findings>` exactly once and checks the exit code; channel selection, recovery, and window/document rollback are handled inside the command.
 - A non-zero exit means stop and report to the user.
-- The file states the reviewer role, tier, the findings verbatim, and facts known to the orchestrator; it does not contain the orchestrator's own conclusions.
+- The file states the reviewer role, tier, the findings verbatim, and facts known to the orchestrator; it does not contain the orchestrator's own conclusions. It is written in the target card's `LANGUAGE`.
 - On receiving the notice, the original executing agent first runs `kander move <task-id> working` itself to move back to `working/`, then continues with context: verify each finding, fix, commit, rebase onto the group branch head and re-verify, update the task branch, write in `IMPLEMENTATION` the previous round's finding list, handling conclusions, and the latest delivery SHA, then `move review` and end the current response turn.
 - From a successful `notify` return until the card's `review -> working` `state-change` is observed, the card is "dispatched, pending confirmation": the orchestrator does not add it to the pending review set, release its dependencies, or dispatch again; if it still has not moved after a reasonable wait, handle per "Failure Recovery".
 - On receiving the `state-change`, the orchestrator first receives and syncs the fix delivery per "Delivering a Task Branch to the Group Branch", then aggregates each card's list into the review context and triggers the incremental re-review.

@@ -12,6 +12,7 @@ import (
 const (
 	FieldType       = "TYPE"
 	FieldTaskGroup  = "TASK_GROUP"
+	FieldLanguage   = "LANGUAGE"
 	FieldCreatedAt  = "CREATED_AT"
 	FieldOwner      = "OWNER"
 	FieldSession    = "SESSION"

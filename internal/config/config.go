@@ -326,6 +326,12 @@ func DefaultAgentLanguage(language string) string {
 // agentLanguageMaxRunes bounds agent_language so it stays a language name rather than a prompt.
 const agentLanguageMaxRunes = 64
 
+// ValidateAgentLanguage normalizes an agent communication language given outside config.json, such as the
+// LANGUAGE of a new task card, under the same rule as the agent_language key.
+func ValidateAgentLanguage(value string) (string, error) {
+	return validateAgentLanguage(value)
+}
+
 // validateAgentLanguage accepts any non-empty single-line language name of at most 64 characters, such as en, zh-CN, or ja.
 func validateAgentLanguage(value any) (string, error) {
 	text, ok := value.(string)

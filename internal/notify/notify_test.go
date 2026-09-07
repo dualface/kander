@@ -213,7 +213,7 @@ func cardTemplate(title string) string {
 
 func makeReview(t *testing.T, root, slug string) (string, string) {
 	t.Helper()
-	path, err := board.NewTask(root, "feature", slug, "任务 "+slug, false)
+	path, err := board.NewTask(root, "feature", slug, "任务 "+slug, "en", false)
 	if err != nil {
 		t.Fatal(err)
 	}
