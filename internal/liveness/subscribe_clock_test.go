@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/board"
 )
 
 // clockEvents changes only the temporary board, synchronously between scans.
@@ -38,12 +39,17 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				root := tempBoard(t)
 				group := time.Now().Format("20060102") + "-clock-group"
-				movingID, movingPath := makeWorking(t, "clock-moving", "Moving task")
+				if _, err := board.NewTask(root, "chore", "clock-moving", "Moving task", "en", false); err != nil {
+					t.Fatal(err)
+				}
+				movingID := todayID("clock-moving")
+				movingPath := currentEntry(t, root, movingID).Document
+				makeReady(t, movingPath)
 				idleID, idlePath := makeWorking(t, "clock-idle", "Unchanged task")
 				setTaskGroup(t, idlePath, group)
 				setLocation(t, idlePath, "codex", "foreground")
 				if !working {
-					if err := os.Rename(idlePath, filepath.Join(root, "review", idleID+".md")); err != nil {
+					if _, err := board.MoveEntry(currentEntry(t, root, idleID), root, "review"); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -54,11 +60,8 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 					setTaskGroup(t, movingPath, group)
 					opts.Members = append(opts.Members, movingID)
 				}
-				state := "backlog"
-				path := filepath.Join(root, state, movingID+".md")
-				if err := os.Rename(movingPath, path); err != nil {
-					t.Fatal(err)
-				}
+				movingEntry := currentEntry(t, root, movingID)
+				state := movingEntry.State
 				// Advance the clock on each delivered change, avoiding wall-clock races.
 				oldNow := nowFn
 				clock := time.Now()
@@ -103,11 +106,11 @@ func TestAuditChangesSuppressLiveness(t *testing.T) {
 					if state == "todo" {
 						next = "backlog"
 					}
-					target := filepath.Join(root, next, movingID+".md")
-					if err := os.Rename(path, target); err != nil {
+					moved, err := board.MoveEntry(movingEntry, root, next)
+					if err != nil {
 						return err
 					}
-					state, path = next, target
+					movingEntry, state = moved, moved.State
 					return nil
 				}
 				if err := Subscribe(root, opts, writer, stop); err != nil {
@@ -126,7 +129,7 @@ func TestSubscribePureHeartbeatBeforeRefresh(t *testing.T) {
 	group := time.Now().Format("20060102") + "-pure-clock-group"
 	id, path := makeWorking(t, "pure-clock", "Idle task")
 	setTaskGroup(t, path, group)
-	if err := os.Rename(path, filepath.Join(root, "review", id+".md")); err != nil {
+	if _, err := board.MoveEntry(currentEntry(t, root, id), root, "review"); err != nil {
 		t.Fatal(err)
 	}
 	stop := make(chan struct{})
