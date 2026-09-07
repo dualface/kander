@@ -201,6 +201,10 @@ func RunNew(args []string) int {
 	}
 	language, err = config.ValidateAgentLanguage(language)
 	if err != nil {
+		// An explicit flag value is a usage error; a bad value from the configuration is an ordinary failure.
+		if languageGiven {
+			return usageFail("new", "config.agent_language_invalid")
+		}
 		return fail(err)
 	}
 	root, err := requireRoot()
