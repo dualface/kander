@@ -119,6 +119,7 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 - Skipping on your own is forbidden; switching reviewer without the user's explicit designation is forbidden.
 
 - Before review, commit all task changes since the review base grouped by concern, keeping the worktree free of uncommitted or untracked files.
+- Before review, the author completes `KANDER-CODE-RULES.md` "Delivery Self-Check" and records it. Mechanical findings that the self-check should have caught are returned to the author as self-check failures, not as a review round.
 
 **Review Base**
 
@@ -172,6 +173,7 @@ Incremental re-review: for the same role under the same base, the second round a
 
 - The first round does not pass `reviewed-commit`. Once that role has PASSed it is not re-run (see "Carrying Conclusions Forward"). A base change, a mid-way reviewer switch or a task context change invalidates the incremental chain, and that role restarts from a full first round.
 - The main agent's verification duty is not reduced by incremental re-review: every conclusion of an incremental re-review is likewise verified item by item.
+- A fix round for a role that already produced a report on this base is invalid unless it runs in incremental mode (task-bound `--previous-run-id`, or positional `reviewed-commit` with the full prior list). Running a full first round again on the same base is forbidden; the tool refuses it when a prior run for the same batch, base, and role exists.
 
 - Severity tiers: the output of every role is labeled with the six tiers in the table below; a missing tier makes the conclusion invalid, and the main agent assigns one.
 
@@ -188,13 +190,11 @@ Incremental re-review: for the same role under the same base, the second round a
   - Documentation or code comments inconsistent with the actual implementation.
   - Dead code (unreachable, or code with no calls or references at all).
   - Redundant tests (tests that duplicate coverage of the same behavior, or whose assertions are unrelated to the behavior under test).
-- Mechanical must-fix items are the three categories under "Fixed Archiving", labeled `[mechanical]` in the report.
+- Mechanical must-fix items are the three categories under "Fixed Archiving", labeled `[mechanical]` in the report. They are dispatched together with gate findings, fixed and committed, and closed by the main agent's mechanical evidence (sentence-by-sentence comment comparison, reference search output, or test lists).
 
-  Once verified as confirmed they must still be fixed and committed, with closure recorded by mechanical evidence such as sentence-by-sentence comment comparison, reference search output or test lists.
+  A round whose confirmed must-fix items are all mechanical never re-runs the reviewer; that role passes on the new HEAD after mechanical verification.
 
-  When all confirmed must-fix items for a role this round are mechanical, that role passes on the new HEAD after the main agent verifies, without re-running.
-
-  When mixed with non-mechanical items, they are incrementally re-reviewed together and do not count as a separate round.
+  When mixed with non-mechanical items, the incremental re-review covers only the non-mechanical items and states that the mechanical ones were closed by the caller; the mechanical items do not count as a separate round.
 
   A missing `[mechanical]` label is assigned by the main agent per the definition; classifying non-mechanical defects as mechanical to skip re-review is forbidden.
 
@@ -205,6 +205,7 @@ Incremental re-review: for the same role under the same base, the second round a
   If that section is missing, do not re-run the role; record "this role provided no non-blocking items" and add it to the unresolved items list.
 
 - Must-fix threshold: only `blocking`, `high` and `medium` verified and accepted by the main agent must be fixed. `low`, `recommend` and `suggest` never block review or integration; record their handling conclusion per "Conclusions and Failure Handling".
+- `low`, `recommend` and `suggest` items are never dispatched back through `notify` and never open a fix round. They are recorded on the card's unresolved list with the author's disposition and handled at the next delivery or in a follow-up card. Dispatching a non-blocking list to the author to "triage" is forbidden.
 - In stage two, only `blocking`, `high` and `medium` findings returned by an actually running `CSA` or `Hacker` and confirmed by the main agent's verification are sent to the user for decision.
 
   Each item lists the problem, impact, fix method and at least three options: `1. Fix and re-review`, `2. Confirm pass and accept the risk`, `3. Stop integration`.
@@ -305,6 +306,8 @@ This section changes only the review unit and role split; stage policy, incremen
   Only fix rounds within a batch are incremental re-reviews: same base, same batch task context, `reviewed-commit` is the group branch commit that role reviewed last round, and the review context contains last round's finding list.
 
   The previous batch's unresolved items are written into the exclusions of later batches' task contexts and not reported again.
+
+- Carrying conclusions across a re-based or re-split group: when a delivery is replayed onto a new group base by cherry-pick or rebase, files whose content at the new target is byte-identical to the previously passed target are treated as already reviewed. The next batch reviews only files that changed during conflict resolution, plus the integration seams named in the batch context. Re-running a full first round on byte-identical code is forbidden.
 
 **Verification Split Between Orchestrator and Executing Agent**
 
@@ -426,6 +429,7 @@ Review profiles decide which roles run in a review round and the default content
 
 - All rejected and unverifiable items go into the unresolved items list at the end of the loop for the user to re-check; the user may overturn any conclusion, and overturned items are handled as must-fix.
 - Confirming a finding does not mean copying the reviewer's fix: the main agent applies the minimal correct fix. If the reviewer's fix would change a direction the user has explicitly set or an external contract, send it to the user for decision per "Goals and Boundaries".
+- One root cause, one ID: when `PM` and `QA` report the same root cause, the main agent merges them under one disposition and cites both source IDs. Splitting one root cause into per-location IDs, or counting the same defect twice across roles, is forbidden in the dispatch file and on the card.
 
 ## task context and review context Templates
 
@@ -499,7 +503,7 @@ When the implementation was done by other agents, state that in the review conte
 - Reporting only "review passed" or "no blocking issues" is forbidden.
 - When review is skipped because no whitelist entry was hit, following the notification rule in "Preconditions and Execution" is sufficient.
 
-- There is no cap on the number of restarted rounds. But when the same finding still fails after several consecutive rounds of fixes, stop spinning, explain to the user where it is stuck, what has been tried and the next options, and let the user decide.
+- Round cap: when the same finding is still open after two fix rounds, or a batch has run three fix rounds, stop. Report to the user which finding is stuck, what was tried, and numbered options (`1. Accept the current state and record the item as unresolved`, `2. Change the contract`, `3. Continue with one more round`). Do not open a further round on your own.
 - Review entry argument, authentication, precondition or local environment errors must be corrected first.
 
   Only when the same role invocation with correct arguments and preconditions returns HTTP 5xx or an explicit service unavailable error 3 times in a row is it treated as a persistent backend failure of that reviewer.

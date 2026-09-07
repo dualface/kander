@@ -84,6 +84,10 @@ PREREQUISITES: N/A
 - Only after the orchestrator confirms that the card's latest delivery commit is in the actual local or remote group branch and the group worktree is synced to that head does it add the card to the pending review set or release its direct successor cards. If the push, ff, or verification fails, keep `review/` and the working state and do not release dependencies. If the group branch shows unexpected changes or divergence, report; do not overwrite the remote or rewrite reviewed history.
 - Deliveries are received serially by the orchestrator without generating merge commits. When review applies, arrange the batch before receiving deliveries; each batch covers all unreviewed deliveries from its base to this batch's HEAD, and out-of-batch changes are not mixed into the group branch. Other `review/` cards queue until the current batch completes; in-batch fixes are received after the Reviewer exits and then re-reviewed, so that the review target matches the batch contract. When review does not apply, receive directly in dependency order.
 
+**Topology Freeze**
+
+- While any review batch of a group is open, the orchestrator does not re-split the group, move cards between groups, change a card's owner, or accept a contract change. A user request for any of these first closes the open batch (pass, or record the round as abandoned with its evidence), then applies the change, then starts a new batch. Applying such a change mid-batch invalidates the batch and must be reported as wasted rounds, not silently absorbed.
+
 **Merge-Back and Cleanup Preconditions**
 
 - Once all of a group's deliveries are in the group branch, all members have reached `review/`, and applicable reviews are complete, the orchestrator checks integration authorization per the Git rule file "Integration and Cleanup", rebases onto the latest `develop`, re-verifies, and merges back. Successor groups in the same orchestration are unlocked by this prerequisite group's `done/` and actual delivery; do not wait for all groups to finish before integrating.
@@ -203,20 +207,22 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
   Each batch is independent; a later batch's base is the commit at which the previous batch completed review, and only in-batch fixes get incremental re-review.
 
+- Default batching: at batch time, every card already received on the group branch joins the same batch. One batch per card is used only when a dependency chain forces a later card to wait for an earlier card's review result. Serial per-card batches for independent cards are forbidden.
+
 - Findings are attributed by the orchestrator according to the cards' modification scopes: whichever card's `GOAL`/`OUT_OF_SCOPE`/actual changes a finding hits, that card gets it.
 
   Cross-card integration findings go to the card whose modification scope they hit; when none matches, the orchestrator creates a small fix card and adds it to this group (fill in `TASK_GROUP` and `PREREQUISITES`, then `pick` and `start`).
 
 **Dispatching Findings Back**
 
-- A dispatch-back calls `kander notify <task-id> --message-file <findings>` exactly once and checks the exit code; channel selection, recovery, and window/document rollback are handled inside the command.
+- A dispatch-back calls `kander notify <task-id> --message-file <findings>` exactly once and checks the exit code; channel selection, recovery, and window/document rollback are handled inside the command. A dispatch-back carries only gate findings (`blocking`, `high`, `medium`, including `[mechanical]`); `low`, `recommend` and `suggest` items go to the card's unresolved list and are never dispatched, and no dispatch asks the author to "triage" a non-blocking list.
 - A non-zero exit means stop and report to the user.
 - The file states the reviewer role, tier, the findings verbatim, and facts known to the orchestrator; it does not contain the orchestrator's own conclusions. It is written in the target card's `LANGUAGE`.
 - On receiving the notice, the original executing agent first runs `kander move <task-id> working` itself to move back to `working/`, then continues with context: verify each finding, fix, commit, rebase onto the group branch head and re-verify, update the task branch, write in `IMPLEMENTATION` the previous round's finding list, handling conclusions, and the latest delivery SHA, then `move review` and end the current response turn.
 - From a successful `notify` return until the card's `review -> working` `state-change` is observed, the card is "dispatched, pending confirmation": the orchestrator does not add it to the pending review set, release its dependencies, or dispatch again; if it still has not moved after a reasonable wait, handle per "Failure Recovery".
 - On receiving the `state-change`, the orchestrator first receives and syncs the fix delivery per "Delivering a Task Branch to the Group Branch", then aggregates each card's list into the review context and triggers the incremental re-review.
 - Findings the executing agent judges invalid or outside the contract return to the orchestrator together with the reasoning; the orchestrator must not rewrite them and includes them in the unresolved items for the user to re-check per `KANDER-REVIEW-RULES.md` "Main Agent Verification Duty".
-- When a card dispatched back via `notify` has not entered `review/` and the executing agent has exited, or the same finding fails to close in two rounds, record the current state and report to the user per "Failure Recovery"; do not reassign and do not let the orchestrator fix it on its behalf.
+- When a card dispatched back via `notify` has not entered `review/` and the executing agent has exited, or the same finding fails to close in two rounds, apply the round cap in `KANDER-REVIEW-RULES.md` "Conclusions and Failure Handling": record the current state and report to the user with numbered options per "Failure Recovery"; do not reassign and do not let the orchestrator fix it on its behalf.
 
 ### Integration and Wrap-Up
 

@@ -22,6 +22,27 @@
 - Follow the project's formatting, lint, error-handling, and logging conventions; never disable checks or suppress warnings without explanation.
 - Comment complex decisions with the reason, not a line-by-line restatement. Remove temporary code in this task or isolate it explicitly.
 
+## Delivery Self-Check
+
+Before a card moves to `review/`, or a single card requests review, run this checklist and record
+each result under `IMPLEMENTATION` with the command and its output. A reviewer finding in any of
+these categories means the self-check was skipped, and the orchestrator may return the delivery
+without a review round.
+
+1. `git diff --check` is clean; no leftover conflict markers, trailing whitespace, or EOF drift.
+2. Every non-generated code file touched by this delivery is at most 1000 physical lines, and a file
+   that was already above 1000 lines has no net increase.
+3. Comments and documents that describe changed behavior are updated in the same diff; no comment
+   claims behavior the code no longer has.
+4. No dead code: nothing unreachable, uncalled, or unreferenced was added or left behind.
+5. No redundant tests: no duplicated coverage of one behavior, no assertion unrelated to the
+   behavior under test.
+6. The touched modules compile, and the targeted tests for the changed behavior were actually run
+   at the final delivery commit; cite that commit next to the result. Evidence produced before the
+   last code change is stale and must be rerun.
+7. Claims of "all tests pass" name the command, the commit, and the count; a claim without those
+   three is treated as not executed.
+
 ## Verification Records
 
 - Run the minimal verification that directly proves the change.

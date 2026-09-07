@@ -145,6 +145,8 @@ An explicit `--pane` override does no stale-address reverse lookup.
 
 - By default `resume` keeps the original agent and context per "Resuming the Original Session".
 - An explicit `--agent <name>` means the user authorizes a takeover; even when the name equals the original agent, a brand-new session is allocated and the old CLI context is not migrated: the new agent first rebuilds progress from the card, task worktree, Git state, and implementation records, then handles the message.
+
+  The takeover verifies delivery facts against the card, the task branch, and the review originals. It does not reset acceptance criteria, rewrite the contract, or reopen a finding closed by verified evidence unless it cites the specific gap (command, output, commit). Retracting a predecessor's completion claim is recorded as a separate `TAKEOVER_AUDIT` entry with the evidence that invalidated it, and the card keeps the predecessor's original claim as history.
 - Cards that never went through `start` and have no original `SESSION` record still cannot be taken over.
 - When new-session preparation such as Cursor `create-chat` fails, the card is unchanged.
 - Before launch, overwrite `OWNER`/`SESSION`/`WINDOW` with the new agent, new session, and new launcher; do not change `STARTED_AT`.
@@ -474,7 +476,7 @@ any state except trash -> trash                       only on explicit user requ
 
 - Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, and task group relations are frozen. Changing any of them requires an explicit user decision first.
 - `OUT_OF_SCOPE` defines the task boundary truthfully; unconfirmed extended goals are not written into `ACCEPTANCE_CRITERIA`. When the review module is enabled, refine the scope further per the review contract of `KANDER-REVIEW-RULES.md`.
-- During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps; do not copy the session transcript. Stable architecture, APIs, and long-term rules must still go into repository documentation or project rules.
+- During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps; do not copy the session transcript. Each round adds at most one dated entry; earlier rounds are compressed to one summary line each once they are superseded. Review reports, finding lists, and dispositions are referenced by `reviews/<run_id>/` and `dispatches/`, never pasted into the card body; a card body above roughly 30 KB signals that history is being duplicated instead of referenced. Stable architecture, APIs, and long-term rules must still go into repository documentation or project rules.
 
 ## Archived Review Evidence
 
