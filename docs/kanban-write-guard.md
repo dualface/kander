@@ -24,6 +24,7 @@ kander guard-write <path>
 | 同状态旧 `<task-id>.md` 拼写, 目录卡已存在 | 拒绝, 提示当前 spec.md 路径及 update 入口 |
 | 状态目录直接子项, 当前不存在 | 拒绝 (新卡只能经 `kander new`; 旧路径写入会复活副本) |
 | 目录卡内部文件 (`spec.md`, `plan.md`, `report.md` 等), 目录卡入口存在 | 放行 |
+| 目录卡内部文件, 该 ID 仍是同状态旧 `.md` | 拒绝, 提示暂停写入并先运行 `kander init` |
 | 目录卡内部文件, 目录卡入口不存在 | 拒绝 (写入会静默重建整个目录卡) |
 
 看板定位沿用 `KANBAN_DIR` -> 当前 Git 仓库主 worktree 的 `kanban/` -> 向上查找的既有顺序. 定位不到看板 (非 Git 项目且未设 `KANBAN_DIR`) 时放行, 不阻塞非看板项目; 其他定位错误仍然失败.

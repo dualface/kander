@@ -1,5 +1,5 @@
 {
-  "board.migration_structure": "迁移已中止；请运行 kander check 检查结构问题：\n{{.V0}}",
+  "board.migration_structure": "init 已中止；请运行 kander check 检查结构问题：\n{{.V0}}",
   "board.migration_link_unsupported": "无法安全迁移相对链接（{{.V0}}）：{{.V1}}；正文已保留，请处理该语法后重试",
   "board.guard_form_changed": "任务 {{.V0}} 已改为目录卡，正文位于 {{.V1}}；旧 .md 拼写会产生同 ID 副本。请使用 kander show --json 和 kander update。",
   "launch.prompt.size": "任务规模为 {{.V0}}（SIZE）；目录形态不决定规模。遵守对应规模的完成要求。",

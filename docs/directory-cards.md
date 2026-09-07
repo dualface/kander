@@ -42,6 +42,6 @@ init 通过 MigrateCards 进入恢复; 兼容入口 RecoverTransactions 与其�
 
 ## 过渡读取
 
-list/show/check/TUI/subscribe 继续读取旧文件, 不触发批量迁移. new 始终创建目录. 对旧文件的 update/move/pick/start/resume/notify/dismiss 以及生命周期回写在副作用前要求 init, 不允许用旧二进制绕过限制. guard-write 对同状态旧 .md 拼写及跨状态旧路径给出提示; 它仍不是原子写入入口.
+list/show/check/TUI/subscribe 继续读取旧文件, 不触发批量迁移. new 始终创建目录. 对旧文件的 update/move/pick/start/resume/notify/dismiss 以及生命周期回写在副作用前要求 init, 不允许用旧二进制绕过限制. guard-write 对同状态旧 .md 拼写及跨状态旧路径给出提示; 它仍不是原子写入入口. 写目录内部文件而该 ID 仍为同状态旧 `.md` 时, 提示暂停写入并先运行 init.
 
 迁移失败注入及子进程 kill/restart 覆盖已有目录每份链接正文发布、全部链接正文发布、prepared、暂存目录、源移走、临时替换创建、同步、原文备份、替换发布、备份移除、SIZE 完成、目标发布、revision 和 committed. 未登记的旧原子写入残留及非前缀内容仍报冲突并保留, 不按文件名模式猜测归属. 并发测试验证维护锁阻塞 init、快照、update、归档/move, 释放后只产生串行提交或 revision 冲突. 原生 Windows 用例需在 Windows 执行; 交叉编译不能替代实机结果.

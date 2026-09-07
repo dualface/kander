@@ -1,7 +1,6 @@
 package board
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +27,6 @@ func migrationStructure(root string, b Board, changes bool) error {
 	if !harmless {
 		return kanbanError("board.migration_structure", strings.Join(messages, "\n"))
 	}
-	fmt.Fprintln(os.Stderr, t("board.kander_warning_ignored_invalid_entries_run_kander_check_for", itoa(len(b.Problems))))
+	os.Stderr.WriteString(t("board.kander_warning_ignored_invalid_entries_run_kander_check_for", itoa(len(b.Problems))))
 	return nil
 }
