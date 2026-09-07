@@ -624,7 +624,7 @@
   "review.task_goal_must_not_be_empty": "task goal must not be empty",
   "review.unsupported_reviewer_agent": "unsupported reviewer agent: {{.V0}}",
   "review.unsupported_role": "unsupported role: {{.V0}}",
-  "review.usage": "Usage: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]\nAgents: codex, claude, grok, cursor\nRoles: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: the commit this role reviewed last round; passing it makes an incremental re-review",
+  "review.usage": "Usage: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]\nAgents: codex, claude, grok, cursor\nRoles: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: the commit this role reviewed last round; passing it makes an incremental re-review\nEvidence commands:\nkander review <plan|extend-plan|assign|map-legacy|advance|close> <CWD> <JSON>\nkander review disposition <CWD> <JSON> <expected-revision>\nkander review <aggregate|progress> <CWD> <batch-id|task-id>\nPlans record explicit role requirements; aggregate preserves author records; close validates final Git evidence.",
   "review.windows_reviewer_process_did_not_exit_after_its_job": "Windows Reviewer process did not exit after its Job Object was terminated",
   "review.worktree_has_uncommitted_or_untracked_changes": "worktree has uncommitted or untracked changes: {{.V0}}",
   "review.worktree_head_does_not_match_commit": "worktree HEAD does not match commit",
@@ -812,5 +812,6 @@
   "review.archive_publish_failed": "Review {{.V0}} publication failed: {{.V1}}; execution and publication are separate outcomes; retry the same run_id",
   "review.archive_card_failed": "Card {{.V0}} not published: {{.V1}}",
   "review.archive_card_published": "Card {{.V0}} published run {{.V1}} (execution={{.V2}}; semantic result unassessed)",
-  "review.archive_tree_incomplete": "Reviewer process collection is incomplete; result rejected"
+  "review.archive_tree_incomplete": "Reviewer process collection is incomplete; result rejected",
+  "review.gate_usage": "Evidence commands:\nkander review <plan|extend-plan|assign|map-legacy|advance|close> <CWD> <JSON>\nkander review disposition <CWD> <JSON> <expected-revision>\nkander review <aggregate|progress> <CWD> <batch-id|task-id>\nPlans record explicit role requirements; aggregate preserves author records; close validates final Git evidence."
 }

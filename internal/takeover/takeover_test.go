@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -209,7 +210,30 @@ func makeDone(t *testing.T, root, slug, window string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	done, err := board.MoveEntry(review, root, "done")
+	// Dismissal fixtures record review as explicitly inapplicable before completion.
+	requirements := map[string]string{"PM": "N/A: dismissal fixture", "QA": "N/A: dismissal fixture", "CSA": "N/A: dismissal fixture", "Hacker": "N/A: dismissal fixture"}
+	batchID := "dismiss-" + slug
+	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: batchID, Author: "fixture", Basis: "container cleanup test", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{review.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: batchID, TaskIDs: []string{review.TaskID}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: requirements}}}
+	if err = board.CreateReviewPlan(root, p); err != nil {
+		t.Fatal(err)
+	}
+	view, err := board.ReadReviewBatchView(root, batchID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := board.ReviewCloseRequest{BatchID: batchID, ExpectedRevision: view.Batch.Revision, ViewHash: board.ReviewViewDigest(view), Author: "fixture", Roles: map[string]board.ReviewRoleConclusion{}}
+	edges, _, err := board.ReviewClosureEdges(view, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = board.CloseReviewBatch(root, request, board.ReviewGitEvidence{CWD: "/repo", Head: view.Batch.TargetCommit, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := board.ReadSnapshot(root, review.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := board.MoveEntry(snapshot.Entry, root, "done")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -110,6 +110,9 @@ func complete(t *testing.T, path string) {
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if filepath.Base(path) == "spec.md" {
+		exemptReviewFixture(t, filepath.Dir(filepath.Dir(filepath.Dir(path))), filepath.Base(filepath.Dir(path)))
+	}
 }
 
 func setMeta(t *testing.T, path, old, neu string) {

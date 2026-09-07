@@ -182,7 +182,14 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		entry.Version.mu.Lock()
 		defer entry.Version.mu.Unlock()
 	}
-	err = WithTransaction(root, LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: true}, func(tx *Transaction) error {
+	scope := LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: true}
+	if target == "done" {
+		scope, err = reviewGateScope(root, entry.TaskID, true)
+		if err != nil {
+			return moved, err
+		}
+	}
+	err = WithTransaction(root, scope, func(tx *Transaction) error {
 		s, e := tx.Snapshot(entry.TaskID)
 		if e != nil {
 			return e
@@ -201,6 +208,9 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 			return e
 		}
 		if target == "done" {
+			if _, e = validateTaskReview(tx, entry.TaskID, true); e != nil {
+				return e
+			}
 			updated, e = completionMetadata(updated)
 			if e != nil {
 				return e

@@ -1,9 +1,7 @@
 package review
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -135,7 +133,7 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 	if len(arguments) >= 6 {
 		reviewContext = []byte(arguments[5])
 	}
-	input := board.ReviewInput{RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage}
+	input := board.ReviewInput{FindingsSchema: 1, RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage}
 	run, fresh, err := board.PrepareReviewRun(root, input, requirements, advance, map[string][]byte{"task-context.md": task, "review-context.md": reviewContext}, version.String())
 	if err != nil {
 		return false, err
@@ -157,16 +155,7 @@ func readArchiveJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.DisallowUnknownFields()
-	if err = decoder.Decode(value); err != nil {
-		return archiveError(err.Error())
-	}
-	var extra any
-	if err = decoder.Decode(&extra); err != io.EOF {
-		return archiveError("trailing JSON")
-	}
-	return nil
+	return board.DecodeReviewJSON(data, value)
 }
 func validateReviewAdvance(ctx reviewContext, advance board.ReviewAdvance, tasks []string) error {
 	if advance.Target != ctx.commit || advance.PreviousTarget == "" || strings.TrimSpace(advance.Reason) == "" {

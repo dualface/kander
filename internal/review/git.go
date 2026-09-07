@@ -181,7 +181,7 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 		"safety property; a reachable behavior path; exact code evidence; concrete impact; and the smallest\n" +
 		"sound fix. Label each claim Observed, Inferred, or Unverifiable. Only Observed or well-supported\n" +
 		"Inferred claims can be Blocking/High/Medium findings.\n\n" +
-		tierRules + "\n" +
+		tierRules + "\n" + structuredFindingRules + "\n" +
 		"Prefer exact file and line evidence. Inspect schemas, generators, and handwritten consumers before\n" +
 		"generated output when relevant. " + ctx.settings.inspectionRules + " Do not modify files, the index, refs, or the\n" +
 		"worktree. Begin the report with Role, Commit, Task Context, and Reviewed Scope.\n" +

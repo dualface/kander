@@ -75,6 +75,9 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 				add(id, e)
 			}
 			for _, entry := range archiveEntries {
+				if entry.Name == "plan.json" && entry.Kind == fs.KindFile || entry.Name == "batches" && entry.Kind == fs.KindDirectory {
+					continue
+				}
 				if entry.Kind != fs.KindDirectory || !indexed[entry.Name] {
 					add(id, reviewError(entry.Name+": unindexed archive"))
 				}
@@ -115,6 +118,11 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 				if e = verifyCardReview(tx, id, manifest, sidecar); e != nil {
 					add(id, e)
 				}
+				if run.FindingsSchema > 0 && run.ExecutionStatus == "ok" {
+					if _, e := runFindings(tx, run); e != nil {
+						add(id, e)
+					}
+				}
 			}
 		}
 		return nil
@@ -135,7 +143,7 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		}
 	}()
 
-	if run.Schema != 1 || !reviewRole(run.Role) || run.SemanticStatus != "unassessed" || run.ReportLanguage == "" {
+	if run.FindingsSchema < 0 || run.FindingsSchema > 1 || run.Schema != 1 || !reviewRole(run.Role) || run.SemanticStatus != "unassessed" || run.ReportLanguage == "" {
 		return reviewError("schema")
 	}
 	if run.ExecutionStatus != "ok" && run.ExecutionStatus != "failed" && run.ExecutionStatus != "interrupted" && run.ExecutionStatus != "not_started" {
@@ -154,6 +162,15 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 	}
 	if !ok || batch.Schema != 1 || batch.TaskContextHash != run.InputHashes["task-context.md"] || batch.BatchID != run.BatchID || batch.Base != run.Base || !reflect.DeepEqual(batch.TaskIDs, run.TaskIDs) || batch.ReportLanguage != run.ReportLanguage || batch.Requirements[run.Role] != "required" {
 		return reviewError("batch mismatch")
+	}
+	if batch.PlanID != "" {
+		p, e := batchPlan(tx, batch)
+		if e != nil {
+			return e
+		}
+		if p.CWD != run.CWD {
+			return reviewError("run/plan worktree mismatch")
+		}
 	}
 	for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
 		requirement := batch.Requirements[role]
@@ -256,6 +273,9 @@ func reviewAncestors(tx *Transaction, run ReviewRun) (map[string]ReviewRun, erro
 
 func settledReviewBatch(tx *Transaction, batchID string) error {
 	entries, err := fs.ListDirectory(tx.root, control(tx.root, "groups", reviewControlGroup, "runs"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

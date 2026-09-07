@@ -22,6 +22,9 @@ func Run(args []string) (exitCode int) {
 		usage()
 		return 2
 	}
+	if dispositionCommand(args[0]) {
+		return runDispositionCommand(args)
+	}
 	options, args, err := parseArchiveOptions(args)
 	if err != nil {
 		userError(err.Error())
@@ -91,6 +94,13 @@ func Run(args []string) (exitCode int) {
 			return 2
 		}
 		replay = exists
+	}
+	if len(options.tasks) > 0 {
+		rest, err = hydrateIncremental(archiveRoot, options, rest, replay)
+		if err != nil {
+			userError(err.Error())
+			return 2
+		}
 	}
 	ctx, err := validateContextMode(agent, rest, replay)
 	if err != nil {

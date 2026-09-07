@@ -46,7 +46,7 @@ kander review [agent] [--task <id>]...
 
 review 验证 old 是 new 的祖先，old..new 每个提交都在映射中且归属本批成员；board 在组控制锁内 CAS 当前 target，保存旧/新目标、依据及版本。归属是调用方提供的事实，不承诺从任意代码推导业务归属；不得伪称组外交付为本批修复。存在执行中或未完整发布的本批 run 时拒绝推进。
 
-增量轮同时传 previous-run-id 和 reviewed-commit；前驱须同 batch/base/role，commit 等于 reviewed-commit，且已完整发布。finding/disposition/闭批门禁归后续任务；本协议不根据报告中出现 PASS 自动放行。
+增量轮通过 previous-run-id 自动读取原报告与作者处置，reviewed-commit 可省略，显式传入时必须匹配。前驱须同 batch/base/role/reviewer 且已完整发布。处置、计划与闭批见 [审核完成门禁](review-disposition.md)；本协议不根据报告中出现 PASS 自动放行。
 
 ## 原件与 schema
 
@@ -99,7 +99,7 @@ kanban/.kander/groups/00000000-review-archive-group/
 
 这是工具保留命名空间，不是看板任务组，不创建组卡。run.json 保存逐卡发布回执；每张卡独立持有完整原件和不可覆盖清单。哈希用于完整性检测，不防御任意同用户篡改。
 
-按 run ID 的 OS 执行锁位于稳定 locks 目录，独立于卡片锁。持有期间只短暂进入 S 的看板、组、任务事务；没有代码反向取得执行锁，不形成循环。不同角色可并行，同一 run 的并发重试等待前次释放后读取结果。普通 update 及 working/review 之间的 move 可在长审核期间执行。终态迁移应等待发布完成；本归档协议不新增 done 门禁。若提前进入 done 等终态，原件仍在控制目录，发布失败且不重建旧路径；默认 check 跳过延后检查状态，须用 `kander check <task-id>` 或 `kander check --all` 定位未完成发布。done 卡不可移回复用，也不可绕过受控入口修补；后续处理须另行确认，不能以同 run 重试承诺自动修复终态。
+按 run ID 的 OS 执行锁位于稳定 locks 目录，独立于卡片锁。持有期间只短暂进入 S 的看板、组、任务事务；没有代码反向取得执行锁，不形成循环。不同角色可并行，同一 run 的并发重试等待前次释放后读取结果。普通 update 及 working/review 之间的 move 可在长审核期间执行。done 现由审核计划和处置门禁检查，未完成归档不能合法进入 done。若外部旧程序提前将卡移入 done 等终态，原件仍在控制目录，发布失败且不重建旧路径；默认 check 跳过延后检查状态，须用 `kander check <task-id>` 或 `kander check --all` 定位未完成发布。done 卡不可移回复用，也不可绕过受控入口修补；后续处理须另行确认，不能以同 run 重试承诺自动修复终态。
 
 输入与意图先事务落盘，输出写受控 staging。进程回收、worktree 检查、runtime 清理都有结论后，冻结 originals/sidecar；随后逐卡原子发布原件、清单、索引及回执。跨卡并非一个大事务，部分失败保留成功卡、逐卡报告、退出非零。重试验证成功卡且不重写，只补缺项。
 

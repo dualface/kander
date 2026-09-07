@@ -326,6 +326,11 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 		allProblems = append(allProblems, Problem{Path: root, Message: reviewErr.Error()})
 	}
 	allProblems = append(allProblems, reviewProblems...)
+	gateProblems, gateErr := CheckReviewGate(root, reviewTasks)
+	if gateErr != nil {
+		allProblems = append(allProblems, Problem{Path: root, Message: gateErr.Error()})
+	}
+	allProblems = append(allProblems, gateProblems...)
 	dependencyBoard := board
 	if len(taskIDs) > 0 {
 		dependencyBoard, err = Scan(root)

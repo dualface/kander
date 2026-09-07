@@ -156,7 +156,11 @@ func TestReviewPublicationRejectsTerminalMove(t *testing.T) {
 	s = transactionSnapshot(t, root, id)
 	updateSnapshot(t, root, s, strings.Replace(s.Text, "## SUMMARY\n\n<FILL_IN>", "## SUMMARY\n\nCompleted fixture", 1))
 	s = transactionSnapshot(t, root, id)
-	entry, err := MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed"})
+	// Simulate an externally moved legacy card. The public done gate now rejects
+	// this pending publication before movement. Publication must still reject it.
+	err := WithTransaction(root, LockScope{Tasks: []string{id}, ExclusiveBoard: true}, func(tx *Transaction) error { return tx.Relocate(id, "done") })
+	entry := s.Entry
+	entry.State = "done"
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -291,3 +291,29 @@ This section runs only when review applies. A dispatch-back solely for task bran
   After all attempts finish, summarize the results per card.
 
   This is optional terminal cleanup after the task group completes; failure does not roll back completed cards, does not restore deleted branches or worktrees, and does not change the completion reports and group-level conclusions already issued.
+
+## Machine Aggregation and Author Boundaries
+
+When review applies, the orchestrator establishes the group's execution review plan before
+closing a batch. Resolve role applicability through the existing rules, recording explicit N/A
+reasons and rule bases. Use an unsealed plan for progressive batching; append each later batch
+with the expected plan revision only after the previous closed target is known, then seal before
+wrap-up. Keep the fixed cycle membership and existing batch evidence.
+
+Attribute findings with the controlled assignment command. Shared findings name all affected
+cards. Dispatch actual findings to their original executing owners. Each owner submits its own
+immutable disposition originals and revisions. The orchestrator references these records and
+may separately record its own verification opinion with its own author identity; it never
+rewrites or impersonates execution-side conclusions.
+
+Use `kander review aggregate <CWD> <batch-id>` to mechanically publish the complete disposition
+to all members. A member without findings is not dispatched solely to copy a report. Aggregation
+is not author verification and does not decide acceptance on an executing owner's behalf.
+
+Receive in-batch fixes, CAS the same batch target, and perform required incremental reviews.
+Mechanical-only fixes can advance the target without a new reviewer using the controlled
+advance command, preserving the existing mechanical evidence rules. Close the batch only through
+the review closure command with every required role, author disposition and final Git relation
+satisfied. Release the next batch only from that exact closed target. During wrap-up, verify the
+sealed plan and all closures in addition to actual develop integration; preserve unresolved
+items and all original author records.

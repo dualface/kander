@@ -635,3 +635,48 @@ kander move <task-id> working --owner <agent>
 
 - On duplicate IDs, cross-state copies, a file and a directory with the same ID, a directory card missing `spec.md`, conflicting targets, or missing or unwritable state directories, stop the affected operation and preserve the working state. Do not bypass the error by deleting, renaming, or moving.
 - The board has no Git history; on accidental deletion, first check `trash/` and local backups; do not fabricate content.
+
+## Review Evidence Completion Gate
+
+Active execution cycles require an explicit review plan before `move done`, even when REVIEWS
+is empty or no reviewer ran. Record each role as required or N/A with an actual reason and rule
+basis. Review-disabled workflows record explicit N/A and close the plan; they do not load or
+execute the disabled review workflow module. Already completed historical cards without a plan
+remain readable as legacy-untracked, never as an invented historical PASS.
+
+Controlled review evidence commands, all under the existing single review entry:
+
+```text
+kander review plan <absolute-CWD> <absolute-plan.json>
+kander review extend-plan <absolute-CWD> <absolute-extension.json>
+kander review assign <absolute-CWD> <absolute-assignment.json>
+kander review disposition <absolute-CWD> <absolute-author-record.json> <expected-card-revision>
+kander review map-legacy <absolute-CWD> <absolute-map.json>
+kander review aggregate <absolute-CWD> <batch-id>
+kander review advance <absolute-CWD> <absolute-advance-request.json>
+kander review close <absolute-CWD> <absolute-close-request.json>
+kander review progress <absolute-CWD> <task-id>
+```
+
+Plan, assignment, author originals, generated disposition and closure artifacts are producer-owned
+reviews attachments; ordinary update cannot replace them. Authors submit only their own assigned
+items while working, with expected revision. Revisions append; the orchestrator cannot overwrite
+or impersonate an author's disposition. A generated complete batch view may be published to every
+member without notifying members that have no findings merely to duplicate records.
+
+Check and completion use the same structural validator. A valid current plan awaiting conclusions
+is pending, and a legacy active card without one needs requirements; malformed existing evidence,
+wrong identities, missing copies or stale closure bindings are errors. Done additionally requires
+a sealed plan, coverage of every cycle member, all required successful role conclusions, author
+coverage, and every batch closed at its final target. Explicit N/A is valid; empty indexes, all
+failed runs, empty conclusions, an arbitrary old role PASS and partial publication are not.
+
+Review closure validates Git in the review layer and stores evidence bound to the final target.
+The board revalidates structure and bindings without interpreting Git or claiming integration.
+Existing authorization, actual source-branch delivery and final Git verification remain separate
+mandatory workflow duties. Inspect machine progress through `review progress` when needed;
+continuing execution does not require fabricating a semantic PASS just to make check succeed.
+
+For a non-Git project with every role explicitly N/A, the plan may use `N/A` for both base
+and target_commit. Closure records Git as not applicable, with no claim of commit verification.
+Any required role still needs real commit targets.

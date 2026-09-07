@@ -624,7 +624,7 @@
   "review.task_goal_must_not_be_empty": "task goal は空であってはなりません",
   "review.unsupported_reviewer_agent": "未対応の reviewer agent: {{.V0}}",
   "review.unsupported_role": "未対応のロール: {{.V0}}",
-  "review.usage": "用法: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]\nAgents: codex, claude, grok, cursor\nRoles: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: このロールが前回レビューした commit; 渡すと増分再レビューになります",
+  "review.usage": "用法: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]\nAgents: codex, claude, grok, cursor\nRoles: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: このロールが前回レビューした commit; 渡すと増分再レビューになります\n証拠コマンド:\nkander review <plan|extend-plan|assign|map-legacy|advance|close> <CWD> <JSON>\nkander review disposition <CWD> <JSON> <expected-revision>\nkander review <aggregate|progress> <CWD> <batch-id|task-id>\n計画はロール要件を明示し、集約は原著者の記録を保持し、終了処理は最終 Git 証拠を検証します。",
   "review.windows_reviewer_process_did_not_exit_after_its_job": "Windows Reviewer プロセスが Job Object 終了後も終了しませんでした",
   "review.worktree_has_uncommitted_or_untracked_changes": "worktree に未コミットまたは未追跡の変更があります: {{.V0}}",
   "review.worktree_head_does_not_match_commit": "worktree HEAD が commit と一致しません",
@@ -812,5 +812,6 @@
   "review.archive_publish_failed": "レビュー {{.V0}} の公開に失敗しました: {{.V1}}。実行結果と公開結果は別です。同じ run_id で再試行してください",
   "review.archive_card_failed": "カード {{.V0}} は未公開です: {{.V1}}",
   "review.archive_card_published": "カード {{.V0}} に実行 {{.V1}} を公開しました（実行={{.V2}}、意味上の結果は未判定）",
-  "review.archive_tree_incomplete": "Reviewer プロセスの回収が未完了です。結果を拒否しました"
+  "review.archive_tree_incomplete": "Reviewer プロセスの回収が未完了です。結果を拒否しました",
+  "review.gate_usage": "証拠コマンド:\nkander review <plan|extend-plan|assign|map-legacy|advance|close> <CWD> <JSON>\nkander review disposition <CWD> <JSON> <expected-revision>\nkander review <aggregate|progress> <CWD> <batch-id|task-id>\n計画はロール要件を明示し、集約は原著者の記録を保持し、終了処理は最終 Git 証拠を検証します。"
 }

@@ -167,6 +167,7 @@ func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 			if _, err := MigrateCards(root, InitOptions{Maintenance: true}); err != nil {
 				t.Fatal(err)
 			}
+			exemptReviewFixture(t, root, taskID)
 			if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "done"}) }); code != 0 {
 				t.Fatalf("done: %s", err)
 			}

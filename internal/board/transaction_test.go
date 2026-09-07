@@ -87,6 +87,7 @@ func TestControlledSmallLifecycleAndContractDecisions(t *testing.T) {
 	}
 	body := strings.Replace(s.Text, "## SUMMARY\n\n<FILL_IN>", "## SUMMARY\n\n已实现，验证通过。", 1)
 	updateSnapshot(t, root, s, body)
+	exemptReviewFixture(t, root, working.TaskID)
 	s = transactionSnapshot(t, root, working.TaskID)
 	done, err := MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed"})
 	if err != nil {

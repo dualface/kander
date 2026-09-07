@@ -160,3 +160,5 @@ PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进�
 ## 6. 许可
 
 本项目使用 MIT License, 见 [LICENSE](LICENSE).
+
+审核归档后的计划、原作者处置、批次汇总和完成门禁见 [审核处置协议](docs/review-disposition.md)。

@@ -113,3 +113,20 @@ var roleRules = map[string]string{
 	"CSA":    roleRuleCSA,
 	"Hacker": roleRuleHacker,
 }
+
+const structuredFindingRules = `After the human-readable analysis, emit exactly one fenced block named
+kander-findings containing a JSON object with exactly two mandatory array fields:
+FINDINGS and NON_BLOCKING. Use [] when a section has no items. Every item has
+id (a stable role-prefixed ID), tier, text (the complete finding), and evidence
+(exact original source locations and rationale). No duplicate IDs across arrays.
+FINDINGS accepts blocking/high/medium; NON_BLOCKING accepts low/recommend/suggest.
+Optional mechanical is documentation, dead-code, or redundant-test, only for the
+three mechanical categories defined above. Never label a logic fix mechanical.
+On an incremental round, an item carried from the previous report must include
+lineage: {"run_id":"<PREVIOUS_RUN_ID>","finding_id":"<previous item ID>"}.
+A new finding omits lineage. IDs mentioned in prose are not structured items.
+Do not omit an item from this block merely because the analysis already describes
+it. Do not include PASS assertions as substitutes for empty arrays. The caller
+verifies the findings and submits author dispositions separately.
+Example empty block:
+` + "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```\n"

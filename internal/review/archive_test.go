@@ -225,6 +225,7 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 }
 func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
 	h, root, args := archiveHarness(t)
+	t.Setenv("FAKE_CODEX_REPORT", "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```")
 	options, _, err := parseArchiveOptions(args)
 	if err != nil {
 		t.Fatal(err)
@@ -237,6 +238,9 @@ func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
 	code, _, stderr := captureRun(t, args)
 	if code != 0 {
 		t.Fatalf("%d %s", code, stderr)
+	}
+	if err = board.AssignReviewFindings(root, board.ReviewAssignment{RunID: "stable", BatchID: "batch", Author: "coordinator", Basis: "empty structured report", Items: map[string][]string{}}); err != nil {
+		t.Fatal(err)
 	}
 	next := commitFile(t, h.repo, "fix.txt", "fix", "fix")
 	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "member fix", Deliveries: map[string]string{next: "20260907-foreign-task"}}

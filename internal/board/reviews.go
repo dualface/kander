@@ -27,6 +27,7 @@ var reviewIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 // ReviewInput is the immutable identity of one invocation. Hashes cover bytes,
 // not normalized Markdown. ReportLanguage is frozen at intent creation.
 type ReviewInput struct {
+	FindingsSchema int               `json:"findings_schema,omitempty"`
 	TaskGroup      string            `json:"task_group"`
 	Advance        *ReviewAdvance    `json:"advance,omitempty"`
 	RunID          string            `json:"run_id"`
@@ -55,6 +56,8 @@ type ReviewAdvance struct {
 }
 
 type ReviewBatch struct {
+	PlanID          string            `json:"plan_id,omitempty"`
+	PreviousBatchID string            `json:"previous_batch_id,omitempty"`
 	TaskContextHash string            `json:"task_context_hash"`
 	Schema          int               `json:"schema"`
 	BatchID         string            `json:"batch_id"`
@@ -126,7 +129,7 @@ func readReviewJSON(tx *Transaction, name string, value any) (bool, error) {
 	if err != nil || !exists {
 		return exists, err
 	}
-	if err := json.Unmarshal(b, value); err != nil {
+	if err := DecodeReviewJSON(b, value); err != nil {
 		return true, reviewError(name + ": " + err.Error())
 	}
 	return true, nil
@@ -215,7 +218,7 @@ func reviewCards(tx *Transaction, ids []string, fallback, frozen string) (string
 // PrepareReviewRun commits all input bytes and intent before process launch.
 // Reusing an identity returns its durable state and never authorizes a rerun.
 func PrepareReviewRun(root string, input ReviewInput, requirements map[string]string, advance *ReviewAdvance, originals map[string][]byte, version string) (run ReviewRun, fresh bool, err error) {
-	if !ValidReviewID(input.RunID) || !ValidReviewID(input.BatchID) || input.PreviousRunID != "" && !ValidReviewID(input.PreviousRunID) {
+	if input.FindingsSchema < 0 || input.FindingsSchema > 1 || input.RunID == "batches" || !ValidReviewID(input.RunID) || !ValidReviewID(input.BatchID) || input.PreviousRunID != "" && !ValidReviewID(input.PreviousRunID) {
 		return run, false, reviewError("run/batch/previous ID")
 	}
 	input.TaskIDs, err = normalizedReviewTasks(input.TaskIDs)
@@ -233,7 +236,26 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 	if len(originals) != 2 {
 		return run, false, reviewError("missing inputs")
 	}
-	err = WithTransaction(root, reviewScope(input.TaskIDs, false), func(tx *Transaction) error {
+	scopeIDs := input.TaskIDs
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+		var batch ReviewBatch
+		ok, e := readReviewJSON(tx, reviewBatchName(input.BatchID), &batch)
+		if e != nil {
+			return e
+		}
+		if ok && batch.PlanID != "" {
+			p, e := batchPlan(tx, batch)
+			if e != nil {
+				return e
+			}
+			scopeIDs = p.TaskIDs
+		}
+		return nil
+	})
+	if err != nil {
+		return run, false, err
+	}
+	err = WithTransaction(root, reviewScope(scopeIDs, false), func(tx *Transaction) error {
 		exists, e := readReviewJSON(tx, reviewRunName(input.RunID), &run)
 		if e != nil {
 			return e
@@ -300,6 +322,9 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			}
 			batch = ReviewBatch{TaskContextHash: input.InputHashes["task-context.md"], Schema: 1, BatchID: input.BatchID, TaskIDs: input.TaskIDs, Base: input.Base, TargetCommit: input.Commit, ReportLanguage: language, Requirements: requirements, Revision: 1}
 		} else {
+			if batch.TaskContextHash == "" {
+				batch.TaskContextHash = input.InputHashes["task-context.md"]
+			}
 			if batch.Schema != 1 || batch.TaskContextHash != input.InputHashes["task-context.md"] || batch.Base != input.Base || !reflect.DeepEqual(batch.TaskIDs, input.TaskIDs) || batch.ReportLanguage != language || len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
 				return reviewError("batch binding conflict")
 			}
@@ -322,6 +347,22 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				return reviewError("redundant batch advance")
 			}
 		}
+		var closed ReviewClosure
+		if ok, e := readReviewJSON(tx, closureName(batch.BatchID), &closed); e != nil {
+			return e
+		} else if ok {
+			return reviewError("batch already closed")
+		}
+		if batch.PlanID != "" {
+			if p, e := batchPlan(tx, batch); e != nil {
+				return e
+			} else if p.CWD != input.CWD {
+				return reviewError("run/plan worktree mismatch")
+			}
+			if e := validatePreviousClosure(tx, batch); e != nil {
+				return e
+			}
+		}
 		if batch.Requirements[input.Role] != "required" {
 			return reviewError("role is not required")
 		}
@@ -334,11 +375,20 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if e != nil {
 				return e
 			}
-			if !ok || previous.Phase != "finalized" || previous.BatchID != input.BatchID || previous.Role != input.Role || previous.Base != input.Base || previous.Commit != input.ReviewedCommit || !allPublished(previous) {
+			if !ok || previous.Phase != "finalized" || previous.BatchID != input.BatchID || previous.Role != input.Role || previous.Reviewer != input.Reviewer || previous.Base != input.Base || previous.Commit != input.ReviewedCommit || !allPublished(previous) {
 				return reviewError("previous run mismatch or incomplete publication")
 			}
 			if e = verifyPublishedReview(tx, previous); e != nil {
 				return e
+			}
+			if input.FindingsSchema > 0 {
+				context, e := incrementalReviewContext(tx, previous)
+				if e != nil {
+					return e
+				}
+				if ReviewDigest(context) != input.InputHashes["review-context.md"] {
+					return reviewError("incremental source changed before intent publication")
+				}
 			}
 		}
 		run = ReviewRun{Schema: 1, ReviewInput: input, KanderVersion: version, Phase: "prepared", LaunchStatus: "not_started", ExecutionStatus: "incomplete", SemanticStatus: "unassessed", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Hashes: map[string]string{}, Published: map[string]bool{}}

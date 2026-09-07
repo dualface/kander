@@ -624,7 +624,7 @@
   "review.task_goal_must_not_be_empty": "task goal 不能为空",
   "review.unsupported_reviewer_agent": "不支持的 reviewer agent: {{.V0}}",
   "review.unsupported_role": "不支持的角色: {{.V0}}",
-  "review.usage": "用法: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|绝对 spec 路径> [review-context] [reviewed-commit]\nAgent: codex, claude, grok, cursor\n角色: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: 同一角色上一轮审过的 commit; 传入即为增量复审",
+  "review.usage": "用法: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|绝对 spec 路径> [review-context] [reviewed-commit]\nAgent: codex, claude, grok, cursor\n角色: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: 同一角色上一轮审过的 commit; 传入即为增量复审\n证据命令:\nkander review <plan|extend-plan|assign|map-legacy|advance|close> <CWD> <JSON>\nkander review disposition <CWD> <JSON> <expected-revision>\nkander review <aggregate|progress> <CWD> <batch-id|task-id>\n计划显式记录角色要求；汇总保留原作者记录；关闭批次核验最终 Git 证据。",
   "review.windows_reviewer_process_did_not_exit_after_its_job": "Windows Reviewer 主进程未在 Job Object 终止后退出",
   "review.worktree_has_uncommitted_or_untracked_changes": "worktree 有未提交或未跟踪文件: {{.V0}}",
   "review.worktree_head_does_not_match_commit": "worktree HEAD 与 commit 不一致",
@@ -812,5 +812,6 @@
   "review.archive_publish_failed": "审核 {{.V0}} 发布失败：{{.V1}}；执行结论与发布结果独立；请使用相同 run_id 重试",
   "review.archive_card_failed": "卡片 {{.V0}} 未发布：{{.V1}}",
   "review.archive_card_published": "卡片 {{.V0}} 已发布运行 {{.V1}}（执行={{.V2}}；语义结论未判定）",
-  "review.archive_tree_incomplete": "Reviewer 进程回收未完成；结果已拒绝"
+  "review.archive_tree_incomplete": "Reviewer 进程回收未完成；结果已拒绝",
+  "review.gate_usage": "证据命令:\nkander review <plan|extend-plan|assign|map-legacy|advance|close> <CWD> <JSON>\nkander review disposition <CWD> <JSON> <expected-revision>\nkander review <aggregate|progress> <CWD> <batch-id|task-id>\n计划显式记录角色要求；汇总保留原作者记录；关闭批次核验最终 Git 证据。"
 }

@@ -254,7 +254,7 @@ Incremental re-review: for the same role under the same base, the second round a
 
 - Without task binding, save each role's stdout in a separate report outside the target worktree, in a private temporary directory. Keep only reports there, and clean it after the round passes, terminates, or the stage-two decision finishes; explain first when retaining diagnostics.
 - For Kanban reviews, pass every reviewed card with repeated `--task <id>` flags before CWD, together with `--batch-id <id>`. Directory cards in working/review and a common report language are required both at intent creation and when a card is first published; legacy file cards must first follow the init maintenance protocol.
-- For a new batch, pass an absolute `--requirements-file` JSON path. Name all roles (`PM`, `QA`, `CSA`, `Hacker`) with values `required` or `N/A: <reason>`, resolved through the existing precedence and stage rules. Requirements, members, base, task-context bytes and report language are fixed for the batch. If the live spec changes or moves, subsequent roles, fix rounds and recovery retries must pass the absolute path to the archived `task-context.md` to retain the original bytes and batch ID. Before any card publication, the original input is available in the run control directory under `inputs/task-context.md`.
+- For a new batch, establish its review plan first; when supplying `--requirements-file`, use an absolute JSON path matching that plan. Name all roles (`PM`, `QA`, `CSA`, `Hacker`) with values `required` or `N/A: <reason>`, resolved through the existing precedence and stage rules. Requirements, members, base, task-context bytes and report language are fixed for the batch. If the live spec changes or moves, subsequent roles, fix rounds and recovery retries must pass the absolute path to the archived `task-context.md` to retain the original bytes and batch ID. Before any card publication, the original input is available in the run control directory under `inputs/task-context.md`.
 - Use a distinct `--run-id` for each actual reviewer invocation. Omit it to generate a random ID printed to stderr, then record that ID. PM/QA on one commit share the batch ID and use different run IDs. Timestamps do not establish identity or predecessor order.
 - A same-ID retry with identical inputs does not launch the reviewer again. It verifies existing evidence and fills missing card publications. If the original gate process ended before finalization, recovery marks the run interrupted, preserves partial raw output, and does not invent a report or successful cleanup.
 - An incremental invocation includes `--previous-run-id` as well as the positional reviewed-commit. Its predecessor must be a fully published run for the same batch, base and role, whose commit equals reviewed-commit.
@@ -262,7 +262,7 @@ Incremental re-review: for the same role under the same base, the second round a
 - Each card retains complete immutable originals under `reviews/<run_id>/`: input context, raw output, logs, any valid report, sidecar and manifest. Failed launches after intent creation, timeout, invalid output, leftover processes and cleanup failure also retain evidence. Preflight failures do not invent an executed run. The report language freezes from card LANGUAGE, falling back to configuration only when absent.
 - The tool appends one JSON index line per run in REVIEWS. Do not derive this index from reviewer prose, paste reports into the body, edit originals through update, or remove archived evidence during temporary cleanup.
 - `execution_status=ok`, readable stdout and a zero command exit do not imply semantic PASS. Interpret the actual report through this review workflow. Failed/interrupted runs never establish a passing role.
-- Pending reviews allow ordinary updates and moves between working and review. Finish publication before any terminal move; this archive protocol does not add a done gate. A prematurely terminal card retains unpublished originals in the control directory, and explicit `kander check <task-id>` or `kander check --all` still diagnoses incomplete publication. Do not move a done card back or bypass controlled writes to repair it.
+- Pending reviews allow ordinary updates and moves between working and review. Finish publication before any terminal move. The review-plan and disposition gate below blocks done until the execution cycle is complete. A card moved prematurely by an external older writer retains unpublished originals in the control directory, and explicit `kander check <task-id>` or `kander check --all` still diagnoses incomplete publication. Do not move a done card back or bypass controlled writes to repair it.
 - Publication settles only after process collection, worktree verification and runtime cleanup. Each card publication is atomic; a cross-card failure preserves successful publications, reports each failed card and exits nonzero. Retry the same run ID after resolving the error; if init is required, obey its maintenance preconditions. An incomplete publication must not count toward batch completion.
 - `kander check` validates intents, manifests, indexes, original hashes, language, membership and predecessor relations. It does not infer semantic PASS or close a batch.
 - Reviewer isolation arguments and end-of-run worktree verification still apply; do not bypass the gate.
@@ -512,3 +512,83 @@ When the implementation was done by other agents, state that in the review conte
 - A persistent backend failure of `CSA` or `Hacker` does not block review: record that role as "not completed due to backend failure", state it in the delivery notes and the report, and let `PM` and `QA` decide the review conclusion.
 
   When both security roles trigger and one fails, the other still produces its conclusion and is handled per the stage two rules.
+
+## Controlled Plans, Author Dispositions, and Batch Closure
+
+- Before completing an active card, establish a machine-readable execution review plan with
+  `kander review plan <CWD> <absolute-plan.json>`. The plan names the cycle, author and basis,
+  worktree, language, members, ordered batch IDs, each batch base/target, and all four role
+  requirements. Use `required` or `N/A: <reason and applicable rule basis>` after resolving
+  existing precedence. Disabled or inapplicable review needs explicit N/A records; empty indexes
+  never imply exemption. Already completed historical cards may remain `legacy-untracked`,
+  without inventing a past PASS.
+- A single known batch may use a sealed plan. For incremental batch scheduling, start unsealed
+  with the whole cycle's members, then use `review extend-plan <CWD> <absolute-request.json>`
+  with the expected plan revision to append a batch after its predecessor closes. Preserve
+  existing batches, requirements and membership. Seal only after every member is assigned.
+  Unsealed plans and unclosed batches block done. Never replace a plan to discard failed runs.
+- New reports must contain exactly one `kander-findings` fenced JSON object with mandatory
+  `FINDINGS` and `NON_BLOCKING` arrays. Each item has `id`, `tier`, `text`, and `evidence`;
+  IDs are unique across both arrays. Gate tiers belong only to FINDINGS, and low/recommend/suggest
+  only to NON_BLOCKING. Empty arrays explicitly mean no items. References in ordinary prose
+  are not entries. Missing/duplicate IDs, duplicate JSON keys, invalid structure, and empty
+  author dispositions cannot waive coverage.
+- The finding identity is `(run_id, finding_id)`. Incremental carried items use explicit
+  `lineage: {run_id, finding_id}` pointing to an actual item in the immediate predecessor.
+  Preserve stable IDs and report complete items in the structured block.
+- Old unstructured reports retain their originals. To use them, submit an explicit complete
+  human mapping through `review map-legacy <CWD> <absolute-map.json>`, including the author,
+  basis, original report hash, structured items, and exact original line ranges and quotes.
+  A missing ID search or empty mapping is not evidence of no findings. New-schema reports
+  cannot use this compatibility route; obtain a valid new report.
+- Attribute every item through `review assign <CWD> <absolute-assignment.json>` with run/batch,
+  the assigning author and basis, and explicit item-to-task arrays. Cross-card findings require
+  every actual owner. An empty assignment is valid only for a parsed report with no items.
+- Each executing agent independently verifies and submits only its own assigned findings through
+  `review disposition <CWD> <absolute-record.json> <expected-card-revision>` while working.
+  Bind record/run/finding/batch/task IDs, author, original report hash and item text, status,
+  factual basis, and applicable fix SHA and verification. The tool records time. Revisions append
+  a new record ID referencing the previous record, preserving the original author text.
+  The orchestrator must never impersonate an executing author or overwrite those records.
+- Must-fix statuses are confirmed/fixed/rejected/unverifiable/waived. Confirmed and unverifiable
+  items remain unresolved; rejected items require factual evidence and remain in the final
+  unresolved list. Fixed items bind a later fix commit and actual verification. Non-blocking
+  statuses are fixed/deferred/rejected, all with a basis. Delegated placeholders are invalid.
+- Waived is restricted to the existing CSA/Hacker accepted-risk or kanban timeout rules.
+  Record the applicable policy and actual user decision, or the full notification basis and
+  send/timeout times separated by at least 15 minutes. A waiver is not PASS. PM/QA must-fix
+  items, unverifiable items, and acceptance/integration authorization cannot use that exception.
+- `review aggregate <CWD> <batch-id>` validates all run publications and author originals,
+  deduplicates run IDs, and publishes a generated disposition view to every member. Preserve
+  author wording and attribution. Members without findings need no notification merely to
+  copy conclusions. The orchestrator may add separately attributed verification opinions to
+  the closure request; these do not replace author dispositions.
+- Mechanical-only fixes use `review advance <CWD> <absolute-request.json>` to CAS the existing
+  batch target without starting a reviewer. Supply batch ID, expected revision, and the existing
+  advance contract with every in-batch delivery. The worktree must be clean at the target.
+  Preserve mechanical category (documentation/dead-code/redundant-test), fix SHA and actual
+  verification. Only those allowed fixes may advance PASSED_AT without a new role run.
+  Non-mechanical must-fix items require a subsequent review covering the fix commit.
+- Incremental `review --task ... --previous-run-id ...` automatically loads the previous report
+  and author records plus the generated batch view. Manual context does not replace originals;
+  reviewed-commit may be omitted and an explicit value must match. The prior semantic conclusion
+  may be FAIL. Missing, inconsistent, foreign-member, wrong-language or wrong-round evidence
+  rejects before reviewer launch; retries retain the original frozen input.
+- Close through `review close <CWD> <absolute-request.json>` only after each required role has
+  a valid conclusion. Bind batch ID, expected revision, the SHA-256 of the exact aggregate JSON
+  output, selected role run IDs, PASSED_AT and verification basis. Explicitly link any failed
+  attempts to their successful replacements. Failed execution is never PASS, and one successful
+  role cannot stand in for missing roles.
+- Closure verifies the actual final clean HEAD and Git relationships among the base, passing
+  commits, fixes and target. It publishes the final target and exact verified evidence with the
+  complete disposition. Partial publication is not closure. A closed batch accepts no new runs,
+  target advances or author changes. The next batch names the previous closed batch and uses
+  its final target as base, never an arbitrary older role's pass or wall-clock ordering.
+- `check` and `move done` share structural evidence validation. Pending author conclusions are
+  legitimate execution progress; malformed existing evidence is an error. Structural validation
+  never asserts that code was integrated. Existing integration authorization, delivery checks,
+  rebase handling and final Git verification remain mandatory.
+
+For a non-Git workflow with all four roles explicitly N/A, base and target_commit may both
+be N/A. The closure records Git as inapplicable instead of fabricating ancestry evidence.
+Required review roles always require real commit targets.
