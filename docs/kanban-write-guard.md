@@ -1,8 +1,8 @@
 # 看板写入护栏 (kander guard-write)
 
-看板重复卡的产生方式只有一种: 在状态目录 (`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`) 下新建直接子项. 合法的新建只有 `kander new` 一个入口; Agent 拿着已迁移卡片的旧路径写入时, 编辑工具会静默重建文件, 在原位置复活一份跨状态副本.
+常见的看板重复卡来源是: 在状态目录 (`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`) 下新建直接子项. 合法的新建只有 `kander new` 一个入口; Agent 拿着已迁移卡片的旧路径写入时, 编辑工具会静默重建文件, 在原位置复活一份跨状态副本.
 
-`kander guard-write` 把这种写入变成显式报错, 供宿主项目的写入前 hook (PreToolUse 等) 调用.
+`kander guard-write` 在检查时发现旧路径会显式报错, 供宿主项目的写入前 hook (PreToolUse 等) 调用. 检查与后续外部写入之间仍有竞态, 因此它只是辅助检查. Agent 必须通过 [受控 update 事务](card-transactions.md) 写卡; 不得把 hook 放行当作原子写入保证.
 
 ## 命令
 
@@ -50,7 +50,7 @@ kander guard-write <path>
 
 脚本从 stdin 读取 hook JSON, 取 `tool_input.file_path` 交给 `kander guard-write`; 拒绝时以退出码 2 阻止本次工具调用并把原因回显给 Agent.
 
-`Bash` 里的重定向、heredoc、`sed -i` 等写入手段无法从工具参数可靠还原目标路径, hook 不覆盖; 对应约束由看板规则的「写卡前必须以任务 ID 重新定位」条款承担.
+`Bash` 里的重定向、heredoc、`sed -i` 等写入手段无法从工具参数可靠还原目标路径, hook 不覆盖; Kander 内部写入也不经过此 hook. 并发与恢复保证由按任务 ID 的受控写入事务承担.
 
 ## Codex 接入
 

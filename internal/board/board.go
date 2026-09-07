@@ -1,4 +1,5 @@
-// Package board implements board location, card validation and state transitions, matching the onevoke lifecycle commands that do not launch agents.
+// Package board implements card snapshots, versioned transactions, recovery and
+// lifecycle commands. Agent launch and liveness belong to their caller packages.
 package board
 
 import (
@@ -82,6 +83,7 @@ func untitled() string {
 
 // Entry is one task card entry.
 type Entry struct {
+	Version  *Version `json:"-"`
 	TaskID   string
 	State    string
 	Path     string

@@ -457,7 +457,9 @@ func TestInitLayoutAndArchive(t *testing.T) {
 		t.Fatal("archive without result")
 	}
 	setMeta(t, task, "- RESULT:\n", "- RESULT: cancelled\n")
-	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "archived"}) }); code != 0 {
+	if code, _, err := capture(t, func() int {
+		return RunMove([]string{taskID, "archived", "--reason", "cancelled by user", "--decision", "test decision"})
+	}); code != 0 {
 		t.Fatalf("archive: %s", err)
 	}
 	task = filepath.Join(root, "archived", taskID+".md")
@@ -465,7 +467,9 @@ func TestInitLayoutAndArchive(t *testing.T) {
 		t.Fatal("trash without result")
 	}
 	setMeta(t, task, "- RESULT: cancelled\n", "- RESULT: trashed\n")
-	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "trash"}) }); code != 0 {
+	if code, _, err := capture(t, func() int {
+		return RunMove([]string{taskID, "trash", "--reason", "deleted by user", "--decision", "test decision"})
+	}); code != 0 {
 		t.Fatalf("trash: %s", err)
 	}
 }

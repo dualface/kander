@@ -101,9 +101,7 @@ func makeWorking(t *testing.T, slug, title string) (string, string) {
 	path := filepath.Join(root, "backlog", id+".md")
 	makeReady(t, path)
 	setMeta(t, path, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/"+slug+"\n")
-	moved, err := board.MoveEntry(board.Entry{
-		TaskID: id, State: "backlog", Path: path, Document: path, Kind: "small",
-	}, root, "todo")
+	moved, err := board.MoveEntry(currentEntry(t, root, id), root, "todo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,9 +293,7 @@ func TestCheckSkipsReviewAndProbesOnlyWorking(t *testing.T) {
 	reviewID, review := makeWorking(t, "liveness-review-skip", "审核")
 	setLocation(t, working, "codex session-4", "tmux:$1:@1:%1")
 	setLocation(t, review, "codex session-4", "tmux:$1:@1:%1")
-	moved, err := board.MoveEntry(board.Entry{
-		TaskID: reviewID, State: "working", Path: review, Document: review, Kind: "small",
-	}, root, "review")
+	moved, err := board.MoveEntry(currentEntry(t, root, reviewID), root, "review")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,7 +600,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 	setMeta(t, second, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/event-second\n")
 	setTaskGroup(t, first, groupID)
 	setTaskGroup(t, second, groupID)
-	todo, err := board.MoveEntry(board.Entry{TaskID: secondID, State: "backlog", Path: second, Document: second, Kind: "small"}, root, "todo")
+	todo, err := board.MoveEntry(currentEntry(t, root, secondID), root, "todo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,7 +612,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 		path := filepath.Join(root, "backlog", id+".md")
 		makeReady(t, path)
 		setMeta(t, path, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/ext\n")
-		moved, err := board.MoveEntry(board.Entry{TaskID: id, State: "backlog", Path: path, Document: path, Kind: "small"}, root, "todo")
+		moved, err := board.MoveEntry(currentEntry(t, root, id), root, "todo")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -767,4 +763,13 @@ func TestSubscribeExpandsWatchedTaskGroup(t *testing.T) {
 	if !got[firstID] || !got[secondID] || len(watched) != 2 {
 		t.Fatalf("watched=%v", watched)
 	}
+}
+
+func currentEntry(t *testing.T, root, id string) board.Entry {
+	t.Helper()
+	s, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.Entry
 }

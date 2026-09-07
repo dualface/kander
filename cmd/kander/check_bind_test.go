@@ -63,9 +63,11 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	moved, err := board.MoveEntry(board.Entry{
-		TaskID: id, State: "backlog", Path: path, Document: path, Kind: "small",
-	}, root, "todo")
+	snapshot, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := board.MoveEntry(snapshot.Entry, root, "todo")
 	if err != nil {
 		t.Fatal(err)
 	}

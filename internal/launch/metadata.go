@@ -1,12 +1,10 @@
 package launch
 
 import (
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/window"
 )
 
@@ -119,19 +117,6 @@ func startMetadata(text, agent string, session AgentSession, window string) (str
 
 func windowMetadata(text, value string) (string, error) {
 	return window.RenderWindowMetadata(text, value)
-}
-
-func renameEntry(root string, entry board.Entry, targetState string) (board.Entry, error) {
-	target := filepath.Join(root, targetState, filepath.Base(entry.Path))
-	err := fs.Rename(root, entry.Path, target)
-	if err != nil {
-		return board.Entry{}, launchError("board.move_failed", err.Error())
-	}
-	document := target
-	if entry.Kind == "large" {
-		document = filepath.Join(target, "spec.md")
-	}
-	return board.Entry{TaskID: entry.TaskID, State: targetState, Path: target, Document: document, Kind: entry.Kind}, nil
 }
 
 func windowName(entry board.Entry, text string) string {

@@ -1,4 +1,5 @@
-// Package window writes the card's window field back and restores the original text on failure.
+// Package window renders window metadata and commits it through board transactions.
+// Rollbacks reject stale revisions and never recreate moved cards.
 package window
 
 import (
@@ -7,7 +8,6 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/fs"
 )
 
 const (
@@ -55,18 +55,13 @@ func RenderWindowMetadata(text, value string) (string, error) {
 	return replaceLiteral(windowRe, text, board.RenderField(WindowField, value)), nil
 }
 
-// WriteDocument atomically writes the task document back.
+// WriteDocument commits through the operation-local version cursor.
 func WriteDocument(root string, entry board.Entry, text string) error {
-	err := fs.WriteTextAtomic(root, entry.Document, text, true)
-	if err != nil {
-		return windowError(
-			"board.task_path_must_not_contain_a_symlink_reparse_point", err.Error(),
-		)
-	}
-	return nil
+	return board.WriteManagedDocument(root, entry, text)
 }
 
-// RestoreWindowText restores the card to the text it had before the call. It returns an error on failure and nil on success.
+// RestoreWindowText restores the pre-call text only while this operation owns
+// the current revision. Newer records and moved paths produce a conflict.
 func RestoreWindowText(root string, entry board.Entry, text string) error {
 	return WriteDocument(root, entry, text)
 }

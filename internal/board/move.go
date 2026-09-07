@@ -2,79 +2,15 @@ package board
 
 import (
 	"bufio"
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/dualface/kander/internal/fs"
 )
-
-func renameEntry(root string, entry Entry, targetState string) (string, error) {
-	target := filepath.Join(root, targetState, filepath.Base(entry.Path))
-	err := fs.Rename(root, entry.Path, target)
-	if err != nil {
-		if isExist(err) {
-			return "", kanbanError("board.target_already_exists", target)
-		}
-		if errors.Is(err, fs.ErrUnsafe) {
-			return "", kanbanError(
-				"board.task_path_must_not_contain_a_symlink_reparse_point_2", err.Error(),
-			)
-		}
-		return "", kanbanError("board.move_failed", err.Error())
-	}
-	if existsNoFollow(entry.Path) || !existsNoFollow(target) || fs.IsReparsePoint(target) {
-		return "", kanbanError("board.post_move_state_verification_failed_preserve_the_current_state")
-	}
-	return target, nil
-}
-
-// MoveEntry validates the transition and moves the entry; it writes the completion time when entering done, and rolls back on failure.
-func MoveEntry(entry Entry, root, targetState string) (Entry, error) {
-	if !allowedMove(entry.State, targetState) {
-		return Entry{}, kanbanError("board.move_not_allowed", entry.State, targetState)
-	}
-	text, err := ReadDocument(entry)
-	if err != nil {
-		return Entry{}, err
-	}
-	if err := validateTarget(entry, targetState, text); err != nil {
-		return Entry{}, err
-	}
-	updated := text
-	if targetState == "done" {
-		updated, err = completionMetadata(text)
-		if err != nil {
-			return Entry{}, err
-		}
-	}
-	target, err := renameEntry(root, entry, targetState)
-	if err != nil {
-		return Entry{}, err
-	}
-	document := target
-	if entry.Kind == "large" {
-		document = filepath.Join(target, "spec.md")
-	}
-	moved := Entry{TaskID: entry.TaskID, State: targetState, Path: target, Document: document, Kind: entry.Kind}
-	if updated != text {
-		if err := writeDocument(moved, updated); err != nil {
-			if _, rollbackErr := renameEntry(root, moved, entry.State); rollbackErr != nil {
-				return Entry{}, kanbanError(
-					"board.failed_to_record_completion_time_and_rollback_task_remains", err.Error(), rollbackErr.Error(),
-				)
-			}
-			return Entry{}, kanbanError("board.failed_to_record_completion_time", err.Error())
-		}
-	}
-	return moved, nil
-}
 
 // NewTask creates a small task or a large directory card in backlog. language is written to the
 // card's LANGUAGE field and must already satisfy config.ValidateAgentLanguage.
-func NewTask(root, kind, slug, title, language string, large bool) (string, error) {
+func newTask(tx *Transaction, root, kind, slug, title, language string, large bool) (string, error) {
 	if !slugRe.MatchString(slug) {
 		return "", kanbanError("board.slug_may_contain_only_lowercase_ascii_letters_digits_and")
 	}
@@ -85,7 +21,7 @@ func NewTask(root, kind, slug, title, language string, large bool) (string, erro
 	if _, ok := typeNames[kind]; !ok {
 		return "", kanbanError("board.unknown_task_type", kind)
 	}
-	board, err := LoadBoard(root)
+	board, err := scan(root)
 	if err != nil {
 		return "", err
 	}
@@ -97,28 +33,32 @@ func NewTask(root, kind, slug, title, language string, large bool) (string, erro
 		return "", kanbanError("board.task_already_exists", taskID)
 	}
 	contract := renderContract(title, kind, language)
-	if large {
-		target := filepath.Join(root, "backlog", taskID)
-		if err := fs.CreateDirectoryWithTextFile(root, target, "spec.md", contract); err != nil {
-			if isExist(err) {
-				return "", kanbanError("board.task_already_exists", taskID)
-			}
-			return "", kanbanError(
-				"board.task_path_must_not_contain_a_symlink_reparse_point_2", err.Error(),
-			)
-		}
-		return target, nil
-	}
+
+	taskKind := "small"
 	target := filepath.Join(root, "backlog", taskID+".md")
-	if err := fs.WriteTextAtomic(root, target, contract+smallTaskExtra(), false); err != nil {
-		if isExist(err) {
-			return "", kanbanError("board.task_already_exists", taskID)
-		}
-		return "", kanbanError(
-			"board.task_path_must_not_contain_a_symlink_reparse_point_2", err.Error(),
-		)
+	if large {
+		taskKind = "large"
+		target = filepath.Join(root, "backlog", taskID)
+	} else {
+		contract += smallTaskExtra()
 	}
+	if err := tx.touch(taskID); err != nil {
+		return "", err
+	}
+	rel, _ := filepath.Rel(root, target)
+	tx.record.Entries = append(tx.record.Entries, EntryChange{To: rel, Kind: taskKind, Text: contract})
 	return target, nil
+}
+
+// NewTask creates an entry under the board and task locks, including identity allocation.
+func NewTask(root, kind, slug, title, language string, large bool) (target string, err error) {
+	id := todayPrefix() + "-" + slug + "-task"
+	err = WithTransaction(root, LockScope{Tasks: []string{id}, ExclusiveBoard: true}, func(tx *Transaction) error {
+		var e error
+		target, e = newTask(tx, root, kind, slug, title, language, large)
+		return e
+	})
+	return target, err
 }
 
 func selectedEntries(entries map[string]Entry, state string) []Entry {

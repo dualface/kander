@@ -28,15 +28,15 @@
 | `internal/config`   | 安装作用域, `config.json` schema/修复, 语言/沟通语言/launcher/Agent/模型/规则/TUI 读取口 |
 | `internal/version`  | 构建时间戳与 Git hash 组成的统一版本号                                   |
 | `internal/i18n`     | go-i18n 消息目录与模板渲染; 不依赖 config, 语言由调用方传入              |
-| `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/锁                          |
+| `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/共享及独占锁                          |
 | `internal/process`  | Agent CLI 解析, UTF-8 任务文件, argv/env 调用构造                         |
-| `internal/board`    | 看板定位, 卡片校验, 状态迁移及不含存活探测的生命周期命令                 |
-| `internal/launch`   | start/resume, 接管启动, 存活确认与失败回滚                               |
+| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令                 |
+| `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚                               |
 | `internal/probe`    | herdr/tmux pane 事实采集                                                 |
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
-| `internal/notify`   | notify 直投, 忙/过期判断, resume 恢复与失败回滚                           |
+| `internal/notify`   | notify 直投, 忙/过期判断, resume 恢复与版本冲突处理                           |
 | `internal/takeover` | dismiss 及 resume 接管成功后的旧容器清理                                 |
-| `internal/window`   | 卡片 `WINDOW` 元数据回写与失败恢复原文                                     |
+| `internal/window`   | 卡片 `WINDOW` 回写; 复用 board 事务, 过期回滚保留新记录                                     |
 | `internal/review`   | `kander review` 单一审核门禁                                             |
 | `internal/tui`      | 裸 `kander` 的终端看板与 Huh 选项面板                                    |
 | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |
@@ -68,7 +68,7 @@
 
 ## 子命令
 
-Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en,ja}`.
+Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en,ja}`.
 
 ## TUI 测试
 
@@ -107,3 +107,8 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 - `rules/KANDER-AGENTS.md` 是发布规则入口, 先读取当前作用域的 `kander config --json`. `KANDER-BASE-RULES.md` 与 `KANDER-KANBAN-RULES.md` 是工具协议, 其余七个模块分册按开关和需要加载, 全部位于 `rules/` 且只有英文一份; 不生成定制规则文件, 不经交叉引用加载关闭模块.
 - 根目录 `AGENTS.md` 只约束本仓库开发; 改发布工作流时改 `rules/`, 不要把实现细节写进发布分册, 也不要把包图写进 `KANDER-AGENTS.md`.
 - 运行时创建的 `kanban/` 是本机共享数据, 不得提交, 也不得写入项目 `.gitignore`.
+
+## 文档索引
+
+- [卡片事务与恢复](docs/card-transactions.md): 锁顺序、revision、受控命令、多文件发布接口和恢复格式.
+- [写前辅助检查](docs/kanban-write-guard.md): guard-write 的接入与能力边界.

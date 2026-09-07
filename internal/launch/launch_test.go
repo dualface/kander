@@ -718,9 +718,14 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 	entry, _ = board.Locate(loaded, taskID)
 	moved, _ = board.MoveEntry(entry, root, "working")
 	_ = os.WriteFile(moved.Path, []byte(strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)), 0o644)
-	oldWrite := writeDocumentFn
-	writeDocumentFn = func(string, board.Entry, string) error { return os.ErrPermission }
-	t.Cleanup(func() { writeDocumentFn = oldWrite })
+
+	newer, readErr := board.ReadSnapshot(root, taskID)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if writeErr := board.WriteManagedDocument(root, newer.Entry, newer.Text+"\nnew executor record\n"); writeErr != nil {
+		t.Fatal(writeErr)
+	}
 	orig = string(original)
 	err = rollbackLaunch(root, moved, "todo", &LaunchFailure{Err: launchError("tmux new-window 失败", "tmux new-window 失败")}, &orig)
 	if err == nil || !strings.Contains(err.Error(), "卡片保留在 working") {

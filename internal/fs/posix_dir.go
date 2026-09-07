@@ -119,6 +119,9 @@ func ListDirectory(root, path string) ([]DirEntry, error) {
 		child := filepath.Join(dir.path, name)
 		var st unix.Stat_t
 		if err := unix.Fstatat(dir.fd, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			if err == unix.ENOENT {
+				continue
+			}
 			return nil, mapOpenErr("lstat", child, err)
 		}
 		if st.Mode&unix.S_IFMT == unix.S_IFLNK {

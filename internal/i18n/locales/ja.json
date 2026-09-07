@@ -72,10 +72,10 @@
   "board.messages.guard-write": "用法: kander guard-write <path>",
   "board.messages.init": "用法: kander init [project]",
   "board.messages.list": "用法: kander list [--mobile] [state]",
-  "board.messages.move": "用法: kander move <task> <state>",
+  "board.messages.move": "使い方: kander move <task> <state> [--owner <agent>] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task>] [--expect-revision <revision>]",
   "board.messages.new": "用法: kander new [--large] <feature|bug|chore|research> <slug> <title...>",
   "board.messages.pick": "用法: kander pick [task]",
-  "board.messages.show": "用法: kander show <task>",
+  "board.messages.show": "使い方: kander show [--json] <task>",
   "board.move_failed": "移動に失敗しました: {{.V0}}",
   "board.move_not_allowed": "移動は許可されていません: {{.V0}} -> {{.V1}}",
   "board.no_task_selected_specify_task_id": "タスクが選択されていません; task-id を指定してください",
@@ -787,5 +787,12 @@
   "tui.which_agent_reviews_this_role": "このロールをレビューする Agent",
   "tui.working": "作業中",
   "window.cleanup": "クリーンアップ={{.V0}}",
-  "window.window_rollback": "ウィンドウロールバック={{.V0}}"
+  "window.window_rollback": "ウィンドウロールバック={{.V0}}",
+  "board.transaction_conflict": "タスクの競合: {{.V0}}。現在のリビジョンを再取得してください。",
+  "board.transaction_pending": "未完了のトランザクション {{.V0}}。kander init で復旧してください。",
+  "board.transaction_invalid": "無効なトランザクション入力: {{.V0}}",
+  "board.transaction_directory_required": "添付にはディレクトリカードが必要です。",
+  "board.transaction_decision_required": "明示的な決定の参照と終了理由、または契約変更の決定が必要です。",
+  "board.transaction_managed": "update では管理対象を変更できません: {{.V0}}",
+  "board.messages.update": "使い方: kander update <id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <file>]"
 }

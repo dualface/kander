@@ -74,7 +74,7 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dismiss` 派发消息与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
 
-`kander show <task-id>` 在卡片正文前输出当前状态与绝对路径, 供 Agent 写卡前重新定位; `kander guard-write <path>` 供宿主项目的写入前 hook 拦截「旧路径复活卡片」的误写, 接入方式见 [docs/kanban-write-guard.md](docs/kanban-write-guard.md).
+`kander show --json <task-id>` 返回正文、当前位置、revision 和操作 ID. Agent 将修改稿写入独立 UTF-8 文件后, 用 `kander update <task-id> --document spec.md --file <input> --expect-revision <revision>` 提交; 小卡也使用逻辑文档名 `spec.md`. 冲突必须重新读取并合并. 完成用 `move <task-id> done --result completed`, 手工认领用 `move <task-id> working --owner <agent>`. 协议与恢复见 [卡片事务](docs/card-transactions.md); [guard-write](docs/kanban-write-guard.md) 仅为辅助检查, 不保证检查与外部写入原子性.
 
 ## 4. 工作流程
 

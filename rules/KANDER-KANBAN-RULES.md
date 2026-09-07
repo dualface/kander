@@ -48,9 +48,10 @@ Creating entries, querying, and moving between states use only `kander`; replaci
 ```text
 kander init [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
-kander show <task-id>
+kander show [--json] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
-kander move <task-id> <backlog|todo|working|review|done|archived|trash>
+kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--expect-revision <revision>]
+kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>]
 kander pick [task-id]
 kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
 kander resume [--agent codex|claude|grok|cursor] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] <task-id>
@@ -62,7 +63,7 @@ kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] <task-group> <task-id
 kander            # open the terminal board
 ```
 
-`kander show` prints the current state and absolute path before the card body, so the card can be relocated before writing; `kander move` prints the new path after a successful move. `kander guard-write` lets a host project's pre-write hook decide whether a target path would resurrect an old card in a state directory; it exits 0 to allow and non-zero to reject.
+`kander show` prints the current state and absolute path before the card body, so the card can be relocated before writing; `kander move` prints the new path after a successful move. `kander show --json` returns the committed `text`, `revision`, `operation_id` and `entry` location. `kander guard-write` is an advisory pre-write check: it exits 0 to allow and non-zero to reject, but the check and an external write are not atomic. It does not cover arbitrary shell commands, external tools, or internal writes. Agents must use `update` for card edits.
 
 New writes use `@kander_session`, `@kander_project`, and `# kander-notify:`.
 
@@ -74,7 +75,7 @@ After the recovery/takeover channel of `resume` and `notify` succeeds, the new c
 
 foreground/console are normalized to the launcher name.
 
-When start or liveness validation fails, restore the pre-call original text and do not change the card state.
+When start or liveness validation fails, restore the pre-call text only if the operation still owns the current revision; otherwise preserve the actual state and newer text and report a conflict.
 
 Neither `notify` nor `resume` moves the card: `review -> working` is performed by the notified or woken executing agent itself via `kander move <task-id> working` before handling the items; that state change is the "received and started" acknowledgement.
 
@@ -147,7 +148,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Cards that never went through `start` and have no original `SESSION` record still cannot be taken over.
 - When new-session preparation such as Cursor `create-chat` fails, the card is unchanged.
 - Before launch, overwrite `OWNER`/`SESSION`/`WINDOW` with the new agent, new session, and new launcher; do not change `STARTED_AT`.
-- When start or liveness validation fails, restore the whole text and the original state.
+- When start or liveness validation fails, restore the original text and state only while the operation still owns the current revision; otherwise report a conflict and preserve the newer records.
 - A Codex takeover on tmux/tmux-session discovers this invocation's exact session id, writes it as `codex <id>`, and sets the pane marker.
 - herdr and process-type Codex lack a discovery channel; keep `codex` and resolve by rollout mtime in later recoveries.
 - After the new agent passes liveness validation and before printing `taken over`, the command attempts a graceful exit and closes the original herdr/tmux container under the identity and single-pane topology gate of `dismiss`.
@@ -380,8 +381,21 @@ any state except trash -> trash                       only on explicit user requ
   The entry name without extension is the task ID.
 
 - Task IDs are unique across the whole board; they must not repeat across states or exist as both file and directory at once. A move moves the whole entry; the entry name never changes after creation, is never copied then deleted, and leaves no copies. Large task directories use only relative links so they stay valid after a move.
-- The card path changes with state moves. Before any write, relocate by task ID and take the state and path printed by `kander show <task-id>` as authoritative; when the file at the original path no longer exists, always treat the card as moved, never create a new one at the original path, and relocate before writing. New cards are created only through `kander new`. A host project can call `kander guard-write <path>` in a pre-write hook to intercept such mistaken writes.
+- The card path changes with state moves. Before editing, obtain `kander show --json <task-id>`, prepare the replacement in a separate UTF-8 input file, and publish with `kander update` using that revision. Do not write a cached card path directly. A revision conflict requires reading and reconciling the current document before retrying. New cards are created only through `kander new`; missing cards are never recreated by update or rollback.
 - Cards must not contain tokens, credentials, sensitive service addresses, or personal data that should not stay on this machine.
+
+### Controlled Documents and Recovery
+
+- Use `update --document spec.md` for the body of either card form: for a small card it maps to the existing `.md` file, and for a directory card it maps to `spec.md`. Directory cards also accept `plan.md`, `report.md` and ordinary attachments, including relative subdirectories. Attachments require a directory card.
+- Paths must be canonical, relative, and free of traversal, symlinks and reparse points. Never edit managed `reviews/`, `dispatches/`, manifests, indexes or control records through update. Dedicated producers own those records.
+- Full-body replacements must preserve `LANGUAGE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata and managed indexes. Keep `TASK_BRANCH` and ordinary implementation/summary records current through update.
+- Manual claiming uses `kander move <task-id> working --owner <agent>` to write `OWNER` and `STARTED_AT` with the state transition. `start` and `resume` own session/window metadata. Dispatch-back moves to working do not replace the existing owner.
+- Completion uses `kander move <task-id> done --result completed`; validation, `RESULT` and `FINISHED_AT` are one transaction. Write the completed summary or report through update first.
+- Termination uses `move <task-id> archived --result cancelled|duplicate|wontfix --reason <reason> --decision <user-decision-reference>`. For duplicate, also provide `--duplicate-of <replacement-id>`. Archiving a completed card uses `--result completed` with the reason and decision reference. Trash uses `move <task-id> trash --result trashed --reason <reason> --decision <user-decision-reference>`.
+- Those references record the authorization basis; the tool does not verify user intent. Existing user-authorization rules still apply. `--expect-revision` is available on move when the transition must match a previously read snapshot.
+- After a card enters todo, its contract remains frozen even if withdrawn to backlog. A user-authorized contract change uses update with `--contract-decision-file <UTF8-decision>` and the expected revision. Kander records the decision and old/new frozen fields in the protected `CONTRACT_DECISIONS` section. This option never authorizes changing managed metadata or language.
+- A process interrupted during publication leaves a recoverable transaction. Readers report the unfinished operation without repairing it or treating its intermediate files as ordinary missing cards. Run `kander init` explicitly to finish prepared writes and moves. A recovery conflict preserves the evidence and both copies; do not guess a primary copy or delete one automatically.
+- Transactions protect commands and agents that follow this protocol. They do not prevent arbitrary local processes from bypassing the command and editing files directly. Coordinate maintenance with older agents or binaries before switching the board to this protocol.
 
 ### Small Task Template
 
@@ -446,13 +460,13 @@ any state except trash -> trash                       only on explicit user requ
 ### Contract and Records
 
 - `LANGUAGE` is the language for everything written for the user about this card: its title and body, records, reports, review reports, and the messages passed to `kander notify` and `kander resume`. `kander new` fills it from the configured `agent_language`, or from `--language <value>` when given; the value follows the `agent_language` format. It is fixed at creation and overrides the configuration; an old card without the field falls back to the current configuration per `KANDER-AGENTS.md` "Language".
-- After claiming, fill in `OWNER`, `STARTED_AT`, and `TASK_BRANCH`; write `N/A` when there is no branch.
+- After manual claiming, use `move working --owner <agent>` for `OWNER` and `STARTED_AT`; update `TASK_BRANCH` through the controlled body entrance, using `N/A` when there is no branch.
 
   `start` also writes the adjacent `SESSION` and `WINDOW` fields, inserting them after `OWNER` when an old card lacks them; manually claimed cards leave them empty.
 
   The command fills in `FINISHED_AT` when moving into `done/`.
 
-  The result is filled in only before entering `done/`, `archived/`, or `trash/`.
+  The dedicated move options fill the result atomically when entering `done/`, `archived/`, or `trash/`.
 
 - Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, and task group relations are frozen. Changing any of them requires an explicit user decision first.
 - `OUT_OF_SCOPE` defines the task boundary truthfully; unconfirmed extended goals are not written into `ACCEPTANCE_CRITERIA`. When the review module is enabled, refine the scope further per the review contract of `KANDER-REVIEW-RULES.md`.
@@ -460,13 +474,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ## Task Scale and Grouping
 
-- New cards default to small tasks; complex tasks may use directory cards.
-
-  A form upgrade is done only by the current editor in backlog or the owner in working, keeps the same ID, moves the original content into spec.md, and keeps no copy.
-
-  The form does not change in todo.
-
-  A started card is not re-`start`ed or given a different agent because of it.
+- New cards default to small tasks; complex tasks may use `new --large`. This release preserves both existing forms. Do not convert entries with direct file operations; a form migration requires dedicated migration support. Body updates and lifecycle commands remain available for small cards.
 
 - Cards keep optional task group fields and dependency records. When task_groups is off, groups are not split automatically and independent single cards remain usable. When on, plan and execute per KANDER-TASK-GROUP-RULES.md; git must be on as well.
 - Intake guidance belongs to KANDER-TASK-INTAKE-RULES.md and is read only when rules.task_intake=true; a user operating the board directly does not require it to be on.
@@ -492,8 +500,8 @@ any state except trash -> trash                       only on explicit user requ
 # Delegate to a new executing agent: start claims and launches atomically
 kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
 
-# The user explicitly asks the current agent to execute an existing card: move only, then fill in `OWNER` and `STARTED_AT` manually
-kander move <task-id> working
+# The user explicitly asks the current agent to execute an existing card: claim and record ownership atomically
+kander move <task-id> working --owner <agent>
 ```
 
 - `kander move <task-id> working` applies only when the user explicitly asks the current agent to execute an existing task card.
@@ -574,7 +582,7 @@ kander move <task-id> working
 
 - Confirm the actual working directory from the card records; record implementation, verification, and unresolved issues.
 
-  After completing the task contract and all applicable delivery steps, fill in `SUMMARY` or report.md, set `RESULT: completed`, run kander move <task-id> done and kander check.
+  After completing the task contract and all applicable delivery steps, write `SUMMARY` or report.md through update, then run `kander move <task-id> done --result completed` and `kander check`.
 
 - On failure or pause, keep the actual state and record the blocker and the condition to unblock. Write N/A for inapplicable Git or review steps; do not write unexecuted verification as passed.
 - Task group members run review, integration, and wrap-up per KANDER-TASK-GROUP-RULES.md only when task_groups and git are enabled. These gates cannot be applied to independent single cards.
@@ -592,7 +600,7 @@ kander move <task-id> working
   `completed` is used only for `done -> archived`.
 
 - After a card moves into `archived/` or `trash/`, the agent executing or operating on that card reports the result per the user's convention (using the `KANDER-REPORTING-RULES.md` template only when `rules.reporting=true`), with the last status line stating the actual destination and result.
-- `done/` keeps recently completed items; archive them after the user confirms they need not be shown. Move a card into `trash/` only when the user explicitly asks to delete that specific card; before moving, write `RESULT: trashed`, the reason, and the time. Do not empty or permanently delete automatically; permanent deletion requires per-item authorization.
+- `done/` keeps recently completed items; archive them after the user confirms they need not be shown. Move a card into `trash/` only when the user explicitly asks to delete that specific card; use the dedicated trash move options to record `RESULT: trashed`, the reason, the decision reference, and the time atomically. Do not empty or permanently delete automatically; permanent deletion requires per-item authorization.
 
 ## Failure Recovery
 

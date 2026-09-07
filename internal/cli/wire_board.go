@@ -6,6 +6,7 @@ func init() {
 	Commands["init"] = board.RunInit
 	Commands["list"] = board.RunList
 	Commands["show"] = board.RunShow
+	Commands["update"] = board.RunUpdate
 	Commands["new"] = board.RunNew
 	Commands["move"] = board.RunMove
 	Commands["pick"] = board.RunPick

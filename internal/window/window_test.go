@@ -36,11 +36,21 @@ func TestRestoreWindowTextAndFailureMessage(t *testing.T) {
 	t.Setenv(config.EnvLang, "cn")
 	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
 	root := t.TempDir()
-	doc := filepath.Join(root, "card.md")
+	for _, state := range board.States {
+		if err := os.Mkdir(filepath.Join(root, state), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := "20260907-window-task"
+	doc := filepath.Join(root, "working", id+".md")
 	if err := os.WriteFile(doc, []byte("original\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	entry := board.Entry{Document: doc, Path: doc, Kind: "small"}
+	snapshot, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := snapshot.Entry
 	if err := WriteDocument(root, entry, "changed\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -89,5 +99,92 @@ func TestRenderWindowMetadataUpdatesLegacyFieldsInPlace(t *testing.T) {
 	}
 	if count := len(board.FieldLineRe(SessionField).FindAllString(inserted, -1)); count != 1 {
 		t.Fatalf("session fields: %d in %q", count, inserted)
+	}
+}
+
+func TestRollbackNeverResurrectsMovedSmallCard(t *testing.T) {
+	root := t.TempDir()
+	for _, state := range board.States {
+		if err := os.Mkdir(filepath.Join(root, state), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := "20260907-moved-window-task"
+	old := filepath.Join(root, "working", id+".md")
+	text := "# Card\n- OWNER: codex\n- SESSION: codex\n- WINDOW: old\n- TASK_BRANCH: task\n"
+	if err := os.WriteFile(old, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := RenderWindowMetadata(text, "new")
+	if err = WriteDocument(root, snapshot.Entry, updated); err != nil {
+		t.Fatal(err)
+	}
+	mover, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := board.MoveEntry(mover.Entry, root, "review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = RestoreWindowText(root, snapshot.Entry, text); err == nil {
+		t.Fatal("stale rollback succeeded")
+	}
+	if _, err = os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("old card resurrected: %v", err)
+	}
+	body, err := board.ReadDocument(moved)
+	if err != nil || body != updated {
+		t.Fatalf("moved body changed: %q %v", body, err)
+	}
+	loaded, err := board.Scan(root)
+	if err != nil || len(loaded.Entries) != 1 || len(loaded.Problems) != 0 {
+		t.Fatalf("duplicate: %+v %v", loaded, err)
+	}
+}
+
+func TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback(t *testing.T) {
+	root := t.TempDir()
+	for _, state := range board.States {
+		if err := os.Mkdir(filepath.Join(root, state), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := "20260907-stale-window-task"
+	path := filepath.Join(root, "working", id+".md")
+	if err := os.WriteFile(path, []byte("original\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = WriteDocument(root, first.Entry, "window changed\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err = RestoreWindowText(root, second.Entry, "original\n"); err == nil {
+		t.Fatal("second operation overwrote first")
+	}
+	next, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", Text: "new body\n", ExpectedRevision: next.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	if err = RestoreWindowText(root, first.Entry, "original\n"); err == nil {
+		t.Fatal("stale full rollback succeeded")
+	}
+	body, _ := os.ReadFile(path)
+	if string(body) != "new body\n" {
+		t.Fatalf("new body lost: %q", body)
 	}
 }

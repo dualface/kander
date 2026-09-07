@@ -1,0 +1,319 @@
+package board
+
+import (
+	"errors"
+	"fmt"
+	"github.com/dualface/kander/internal/fs"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func safeRecordPath(root, path string) (string, error) {
+	if filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsAny(path, "\x00") {
+		return "", kanbanError("board.transaction_invalid", path)
+	}
+	rel := filepath.ToSlash(path)
+	parts := strings.Split(rel, "/")
+	if len(parts) < 2 {
+		return "", kanbanError("board.transaction_invalid", path)
+	}
+	if _, ok := stateSet[parts[0]]; !ok {
+		if len(parts) < 3 || parts[0] != ".kander" || parts[1] != "groups" || !taskGroupRe.MatchString(parts[2]) {
+			return "", kanbanError("board.transaction_invalid", path)
+		}
+	}
+	for _, p := range parts {
+		if p == ".." || p == "." || p == "" || strings.ContainsAny(p, ":\\") {
+			return "", kanbanError("board.transaction_invalid", path)
+		}
+	}
+	return filepath.Join(root, path), nil
+}
+func applyRecord(root, path string, r *OperationRecord) error {
+	if err := validateRecord(root, r); err != nil {
+		return err
+	}
+	for _, directory := range r.Directories {
+		p, err := safeRecordPath(root, directory)
+		if err != nil {
+			return err
+		}
+		exists, err := fs.DirectoryExists(root, p)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			relocated := false
+			for _, entry := range r.Entries {
+				if entry.From != "" && entry.Kind == "large" && strings.HasPrefix(directory, entry.From+string(os.PathSeparator)) {
+					target := filepath.Join(root, entry.To+strings.TrimPrefix(directory, entry.From))
+					present, err := fs.DirectoryExists(root, target)
+					if err != nil {
+						return err
+					}
+					if present {
+						relocated = true
+						break
+					}
+				}
+			}
+			if relocated {
+				continue
+			}
+		}
+		if !exists {
+			if err = fs.CreatePrivateDirectory(root, p); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, f := range r.Files {
+		p, err := safeRecordPath(root, f.Path)
+		if err != nil {
+			return err
+		}
+		b, exists, err := fs.ReadRegularFileIfExists(root, p)
+		if err != nil {
+			return err
+		}
+		if exists && string(b) == f.After {
+			continue
+		}
+		// Files precede renames. A completed rename means the matching final file
+		// must already contain the staged bytes; never recreate its source path.
+		moved := false
+		if !exists {
+			for _, e := range r.Entries {
+				if e.From != "" && (f.Path == e.From || strings.HasPrefix(f.Path, e.From+string(os.PathSeparator))) {
+					q := filepath.Join(root, e.To+strings.TrimPrefix(f.Path, e.From))
+					data, ok, er := fs.ReadRegularFileIfExists(root, q)
+					if er != nil {
+						return er
+					}
+					if ok && string(data) == f.After {
+						moved = true
+						break
+					}
+				}
+			}
+		}
+		if moved {
+			continue
+		}
+		if (f.Before == nil && exists) || (f.Before != nil && (!exists || string(b) != *f.Before)) {
+			return kanbanError("board.transaction_conflict", f.Path)
+		}
+		if err = fs.WriteTextAtomic(root, p, f.After, f.Before != nil); err != nil {
+			return err
+		}
+	}
+	for _, e := range r.Entries {
+		to, err := safeRecordPath(root, e.To)
+		if err != nil {
+			return err
+		}
+
+		if e.From == "" {
+			if e.Kind == "large" {
+				exists, err := fs.DirectoryExists(root, to)
+				if err != nil {
+					return err
+				}
+				if !exists {
+					if err = fs.CreatePrivateDirectory(root, to); err != nil {
+						return err
+					}
+				}
+				to = filepath.Join(to, "spec.md")
+			}
+			data, exists, err := fs.ReadRegularFileIfExists(root, to)
+			if err != nil {
+				return err
+			}
+			if exists {
+				if string(data) != e.Text {
+					return kanbanError("board.transaction_conflict", e.To)
+				}
+			} else if err = fs.WriteTextAtomic(root, to, e.Text, false); err != nil {
+				return err
+			}
+			continue
+		}
+
+		from, err := safeRecordPath(root, e.From)
+		if err != nil {
+			return err
+		}
+		var source, target bool
+		if e.Kind == "large" {
+			source, err = fs.DirectoryExists(root, from)
+			if err == nil {
+				target, err = fs.DirectoryExists(root, to)
+			}
+		} else {
+			source, err = fs.RegularFileExists(root, from)
+			if err == nil {
+				target, err = fs.RegularFileExists(root, to)
+			}
+		}
+		if err != nil {
+			return err
+		}
+		if !source && target {
+			document := to
+			if e.Kind == "large" {
+				document = filepath.Join(to, "spec.md")
+			}
+			data, err := fs.ReadRegularFile(root, document)
+			if err != nil {
+				return err
+			}
+			if string(data) != e.Text {
+				return kanbanError("board.transaction_conflict", e.To)
+			}
+			continue
+		}
+		if !source || target {
+			return kanbanError("board.transaction_conflict", e.From)
+		}
+		if err = fs.Rename(root, from, to); err != nil {
+			return err
+		}
+	}
+	for id, v := range r.Revisions {
+		if !taskIDRe.MatchString(id) || v == 0 {
+			return kanbanError("board.transaction_invalid", id)
+		}
+		old, err := revision(root, id)
+		if err != nil {
+			return err
+		}
+		if old != v && old != v-1 {
+			return kanbanError("board.transaction_conflict", id)
+		}
+		if old != v {
+			prior, err := readVersion(root, id)
+			if err != nil {
+				return err
+			}
+			prior.Revision = v
+			prior.OperationID = r.ID
+			for _, entry := range r.Entries {
+				if strings.TrimSuffix(filepath.Base(entry.To), ".md") == id && (strings.Split(filepath.ToSlash(entry.To), "/")[0] != "backlog" || entry.From != "") {
+					prior.ContractFrozen = true
+				}
+			}
+			if err = writeJSON(root, control(root, "versions", id+".json"), prior, true); err != nil {
+				return err
+			}
+		}
+	}
+	r.Phase = "committed"
+	return writeJSON(root, path, r, true)
+}
+
+// RecoverTransactions is init's explicit, idempotent roll-forward recovery. It
+// never guesses a preferred copy when both source and target are present.
+func RecoverTransactions(root string) (err error) {
+	locks, err := acquire(root, LockScope{ExclusiveBoard: true})
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, locks.close()) }()
+	records, err := operationRecords(root)
+	if err != nil {
+		return err
+	}
+	for _, r := range records {
+		if r.Phase == "prepared" {
+			if err = applyRecord(root, control(root, "operations", r.ID+".json"), &r); err != nil {
+				return fmt.Errorf("%s: %w", r.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+func validateRecord(root string, r *OperationRecord) error {
+	if r.Schema != 1 || r.ID == "" || len(r.Revisions) == 0 && len(r.Groups) == 0 {
+		return kanbanError("board.transaction_invalid", r.ID)
+	}
+	for id, v := range r.Revisions {
+		if !taskIDRe.MatchString(id) || v == 0 {
+			return kanbanError("board.transaction_invalid", id)
+		}
+		current, err := readVersion(root, id)
+		if err != nil {
+			return err
+		}
+		if current.Revision != v-1 && (current.Revision != v || current.OperationID != r.ID) {
+			return kanbanError("board.transaction_conflict", id)
+		}
+		// A true duplicate blocks recovery before any bytes are changed.
+		matches := 0
+		for _, state := range States {
+			file := filepath.Join(root, state, id+".md")
+			dir := filepath.Join(root, state, id)
+			exists, err := fs.RegularFileExists(root, file)
+			if err != nil {
+				return err
+			}
+			if exists {
+				matches++
+			}
+			exists, err = fs.DirectoryExists(root, dir)
+			if err != nil {
+				return err
+			}
+			if exists {
+				matches++
+			}
+		}
+		if matches > 1 {
+			return kanbanError("board.transaction_conflict", id)
+		}
+	}
+	check := func(path string) error {
+		if _, err := safeRecordPath(root, path); err != nil {
+			return err
+		}
+		parts := strings.Split(filepath.ToSlash(path), "/")
+		if parts[0] == ".kander" {
+			if !containsID(r.Groups, parts[2]) {
+				return kanbanError("board.transaction_invalid", path)
+			}
+		} else {
+			if _, ok := r.Revisions[strings.TrimSuffix(parts[1], ".md")]; !ok {
+				return kanbanError("board.transaction_invalid", path)
+			}
+		}
+		return nil
+	}
+	for _, path := range r.Directories {
+		if err := check(path); err != nil {
+			return err
+		}
+	}
+	for _, f := range r.Files {
+		if err := check(f.Path); err != nil {
+			return err
+		}
+	}
+	for _, e := range r.Entries {
+		if e.Kind != "small" && e.Kind != "large" {
+			return kanbanError("board.transaction_invalid", e.Kind)
+		}
+		if err := check(e.To); err != nil {
+			return err
+		}
+		if e.From != "" {
+			if err := check(e.From); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

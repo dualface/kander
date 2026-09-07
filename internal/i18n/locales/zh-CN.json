@@ -72,10 +72,10 @@
   "board.messages.guard-write": "用法: kander guard-write <路径>",
   "board.messages.init": "用法: kander init [项目路径]",
   "board.messages.list": "用法: kander list [--mobile] [状态]",
-  "board.messages.move": "用法: kander move <任务> <状态>",
+  "board.messages.move": "用法: kander move <task> <state> [--owner <agent>] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task>] [--expect-revision <revision>]",
   "board.messages.new": "用法: kander new [--large] [--language <沟通语言>] <feature|bug|chore|research> <slug> <标题...>",
   "board.messages.pick": "用法: kander pick [任务]",
-  "board.messages.show": "用法: kander show <任务>",
+  "board.messages.show": "用法: kander show [--json] <task>",
   "board.move_failed": "迁移失败: {{.V0}}",
   "board.move_not_allowed": "不允许迁移: {{.V0}} -> {{.V1}}",
   "board.no_task_selected_specify_task_id": "未选择任务; 请指定 task-id",
@@ -787,5 +787,12 @@
   "tui.which_agent_reviews_this_role": "该角色用哪个 Agent 审核",
   "tui.working": "进行中",
   "window.cleanup": "清理={{.V0}}",
-  "window.window_rollback": "窗口回滚={{.V0}}"
+  "window.window_rollback": "窗口回滚={{.V0}}",
+  "board.transaction_conflict": "任务事务冲突：{{.V0}}；重新读取当前版本后重试。",
+  "board.transaction_pending": "事务 {{.V0}} 尚未完成；运行 kander init 恢复。",
+  "board.transaction_invalid": "事务输入无效：{{.V0}}",
+  "board.transaction_directory_required": "附件需要目录卡。",
+  "board.transaction_decision_required": "必须提供明确决定引用及终止原因，或契约修订决定。",
+  "board.transaction_managed": "update 不得修改受管字段或文档：{{.V0}}",
+  "board.messages.update": "用法: kander update <id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <file>]"
 }

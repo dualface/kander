@@ -913,6 +913,18 @@ func LockExclusive(file *os.File) (*ExclusiveLock, error) {
 	return &ExclusiveLock{file: file}, nil
 }
 
+// LockShared takes a blocking shared byte-range lock through the validated handle.
+func LockShared(file *os.File) (*ExclusiveLock, error) {
+	if file == nil {
+		return nil, wrap("lock", "", os.ErrInvalid)
+	}
+	var ov windows.Overlapped
+	if err := windows.LockFileEx(windows.Handle(file.Fd()), 0, 0, 0xFFFFFFFF, 0xFFFFFFFF, &ov); err != nil {
+		return nil, wrap("lock", file.Name(), err)
+	}
+	return &ExclusiveLock{file: file}, nil
+}
+
 func (l *ExclusiveLock) Unlock() error {
 	if l == nil || l.file == nil {
 		return nil
@@ -953,4 +965,25 @@ func TightenPrivateFile(path string) error {
 
 func TightenPrivateDirectory(path string) error {
 	return tightenPath(path, true)
+}
+
+// OpenLockFile opens or creates a stable private lock file through pinned handles.
+func OpenLockFile(root, path string) (*os.File, error) {
+	rootAbs, candidate, parts, err := relativeParts(root, path)
+	if err != nil {
+		return nil, err
+	}
+	if len(parts) == 0 {
+		return nil, failClosed("lock-open", path, "lock cannot be the root")
+	}
+	_, parent, cleanup, err := openChain(rootAbs, filepath.Dir(candidate), windows.FILE_READ_ATTRIBUTES, kindDirectory)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	handle, err := openOrCreateFile(parent, filepath.Base(candidate), candidate, windows.GENERIC_READ|windows.GENERIC_WRITE|windows.FILE_READ_ATTRIBUTES, true)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(handle), candidate), nil
 }

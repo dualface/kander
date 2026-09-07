@@ -136,18 +136,9 @@ func splitTab(s string) []string {
 
 func rollbackLaunch(root string, moved board.Entry, originalState string, failure *LaunchFailure, originalText *string) error {
 	var rollbackErrors []string
-	restored := true
 	if originalText != nil {
-		if err := writeDocumentFn(root, moved, *originalText); err != nil {
-			restored = false
+		if err := board.RollbackDocument(root, moved, *originalText, originalState); err != nil {
 			rollbackErrors = append(rollbackErrors, t("launch.failed_to_restore_document", err.Error()))
-		}
-	}
-	if restored && moved.State != originalState {
-		if _, err := renameEntry(root, moved, originalState); err != nil {
-			rollbackErrors = append(rollbackErrors, t(
-				"launch.failed_to_move_back_to", originalState, err.Error(),
-			))
 		}
 	}
 	primary := failure.Err

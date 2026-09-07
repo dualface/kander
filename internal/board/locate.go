@@ -396,6 +396,9 @@ func InitBoard(project string) (root string, exclude string, rules string, err e
 			return "", "", "", err
 		}
 	}
+	if err = RecoverTransactions(root); err != nil {
+		return "", "", "", err
+	}
 	exclude, err = addGitExclude(root)
 	if err != nil {
 		return "", "", "", err

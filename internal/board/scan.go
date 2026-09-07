@@ -19,7 +19,7 @@ func reject(board *Board, path, message, taskID string, related ...string) {
 }
 
 // Scan enumerates the entries of every state column.
-func Scan(root string) (Board, error) {
+func scan(root string) (Board, error) {
 	if err := ensureLayout(root); err != nil {
 		return Board{}, err
 	}
@@ -195,7 +195,7 @@ func scanTargetsOnce(root string, taskIDs []string) (Board, bool) {
 }
 
 // ScanTargets probes only the given task IDs.
-func ScanTargets(root string, values []string) (Board, error) {
+func scanTargets(root string, values []string) (Board, error) {
 	if err := ensureLayout(root); err != nil {
 		return Board{}, err
 	}

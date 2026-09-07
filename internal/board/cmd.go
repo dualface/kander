@@ -1,12 +1,15 @@
 package board
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dualface/kander/internal/config"
 	"io"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 func fail(err error) int {
@@ -19,6 +22,7 @@ func usage(w io.Writer, cmd string) {
 		"init":        "board.messages.init",
 		"list":        "board.messages.list",
 		"show":        "board.messages.show",
+		"update":      "board.messages.update",
 		"new":         "board.messages.new",
 		"move":        "board.messages.move",
 		"pick":        "board.messages.pick",
@@ -150,6 +154,7 @@ func RunList(args []string) int {
 
 // RunShow implements kander show.
 func RunShow(args []string) int {
+	args, machine := takeFlag(args, "--json")
 	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
 		return usageFail("show", "board.task_id_required")
 	}
@@ -157,18 +162,18 @@ func RunShow(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	board, err := LoadBoard(root)
+
+	snapshot, err := ReadSnapshot(root, args[0])
 	if err != nil {
 		return fail(err)
 	}
-	entry, err := Locate(board, args[0])
-	if err != nil {
-		return fail(err)
+	if machine {
+		if err = json.NewEncoder(os.Stdout).Encode(snapshot); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
-	text, err := ReadDocument(entry)
-	if err != nil {
-		return fail(err)
-	}
+	entry, text := snapshot.Entry, snapshot.Text
 	// The location header lets an agent re-locate the card before writing to it; the card may have moved, so the old path must not be reused.
 	fmt.Println(t("board.show_location", entry.State, entry.Path))
 	fmt.Println()
@@ -221,6 +226,23 @@ func RunNew(args []string) int {
 
 // RunMove implements kander move.
 func RunMove(args []string) int {
+	values := map[string]string{}
+	for _, name := range []string{"--owner", "--result", "--reason", "--decision", "--duplicate-of", "--expect-revision"} {
+		var err error
+		args, values[name], _, err = takeValueFlag(args, name)
+		if err != nil {
+			return usageFail("move", "board.option_requires_a_value", name)
+		}
+	}
+	options := MoveOptions{Owner: values["--owner"], Result: values["--result"], Reason: values["--reason"], Decision: values["--decision"], DuplicateOf: values["--duplicate-of"]}
+	if raw := values["--expect-revision"]; raw != "" {
+		v, e := strconv.ParseUint(raw, 10, 64)
+		if e != nil {
+			return fail(e)
+		}
+		options.ExpectedRevision = &v
+	}
+
 	if len(args) != 2 || strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[1], "-") {
 		return usageFail("move", "board.task_id_and_state_are_required")
 	}
@@ -239,7 +261,7 @@ func RunMove(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	moved, err := MoveEntry(entry, root, args[1])
+	moved, err := MoveWithOptions(entry, root, args[1], options)
 	if err != nil {
 		return fail(err)
 	}

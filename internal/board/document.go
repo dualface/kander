@@ -32,7 +32,7 @@ func MetadataFrom(text, name string) string {
 }
 
 // ReadDocument reads the task document as UTF-8.
-func ReadDocument(entry Entry) (string, error) {
+func readDocument(entry Entry) (string, error) {
 	data, err := fs.ReadRegularFile(boardRootFromEntry(entry), entry.Document)
 	if err != nil {
 		return "", kanbanError(
@@ -43,16 +43,6 @@ func ReadDocument(entry Entry) (string, error) {
 		return "", kanbanError("board.task_document_is_not_valid_utf_8", entry.Document)
 	}
 	return string(data), nil
-}
-
-func writeDocument(entry Entry, text string) error {
-	err := fs.WriteTextAtomic(boardRootFromEntry(entry), entry.Document, text, true)
-	if err != nil {
-		return kanbanError(
-			"board.task_path_must_not_contain_a_symlink_reparse_point", err.Error(),
-		)
-	}
-	return nil
 }
 
 // TitleFrom returns the first level-one heading.
