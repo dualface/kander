@@ -83,18 +83,12 @@ func TestStructuralScanDoesNotMislabelSize(t *testing.T) {
 	}
 }
 
-func TestLegacyDirectoryGuardAndMissingTypeLayout(t *testing.T) {
+func TestLegacyDirectoryGuard(t *testing.T) {
 	root := tempBoard(t)
 	legacyMigrationCard(t, root, "backlog", linkA, false, "# Original\n")
 	verdict, err := GuardWrite(root, filepath.Join(root, "backlog", linkA, "plan.md"))
 	if err != nil || verdict.Allowed || !strings.Contains(verdict.Reason, "init") {
 		t.Fatal(verdict, err)
-	}
-	for _, body := range []string{"# Title\nbody\n", "# Title\r\nbody\r\n", "# Title"} {
-		got := addSize(body, "small")
-		if !strings.HasPrefix(got, "# Title") || !strings.Contains(got, "SIZE: small") {
-			t.Fatal(got)
-		}
 	}
 }
 
@@ -112,5 +106,23 @@ func TestMigrationUnknownArtifactsStillBlockIdleInit(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal("unknown artifact removed")
+	}
+}
+
+func TestMissingTypeSizeSkipsCodeAndKeepsExactPlacement(t *testing.T) {
+	cases := []struct{ before, after string }{
+		{"# Title\nbody\n", "# Title\n- SIZE: small\nbody\n"},
+		{"# Title\r\nbody\r\n", "# Title\r\n- SIZE: small\r\nbody\r\n"},
+		{"# Title", "# Title\n- SIZE: small\n"},
+		{"```\n# sample\n```\n\n# Title\n", "```\n# sample\n```\n\n# Title\n- SIZE: small\n"},
+		{"~~~md\r\n# sample\r\n~~~\r\n\r\n# Title\r\n", "~~~md\r\n# sample\r\n~~~\r\n\r\n# Title\r\n- SIZE: small\r\n"},
+		{"    # sample\n\n# Title\n", "    # sample\n\n# Title\n- SIZE: small\n"},
+		{"> # quoted\n\n# Title\n", "> # quoted\n\n# Title\n- SIZE: small\n"},
+		{"```\n# sample\n```\n", "- SIZE: small\n```\n# sample\n```\n"},
+	}
+	for _, c := range cases {
+		if got := addSize(c.before, "small"); got != c.after {
+			t.Fatalf("got %q want %q", got, c.after)
+		}
 	}
 }

@@ -1,6 +1,11 @@
 package board
 
-import "strings"
+import (
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	markdowntext "github.com/yuin/goldmark/text"
+	"strings"
+)
 
 // IsDirectory reports storage form; Kind is populated with task size when the document is attached.
 func (e Entry) IsDirectory() bool { return !strings.HasSuffix(e.Path, ".md") }
@@ -66,17 +71,31 @@ func addSize(text, size string) string {
 		}
 		return text[:end] + line + text[end:]
 	}
-	// A malformed legacy card may lack TYPE; keep its H1 first without
-	// inventing metadata or rewriting any existing line.
-	offset := 0
-	for _, title := range strings.SplitAfter(text, "\n") {
-		offset += len(title)
-		if strings.HasPrefix(title, "# ") {
-			if !strings.HasSuffix(title, "\n") {
-				line = newline + line
-			}
-			return text[:offset] + line + text[offset:]
+	// Only a top-level parsed ATX H1 can anchor missing-TYPE metadata.
+	// Text resembling a heading inside code, lists or quotes is not an anchor.
+	source := []byte(text)
+	document := goldmark.DefaultParser().Parse(markdowntext.NewReader(source))
+	for node := document.FirstChild(); node != nil; node = node.NextSibling() {
+		heading, ok := node.(*ast.Heading)
+		if !ok || heading.Level != 1 || heading.Lines().Len() == 0 {
+			continue
 		}
+		start := heading.Lines().At(0).Start
+		start = strings.LastIndexByte(text[:start], '\n') + 1
+		end := strings.IndexByte(text[start:], '\n')
+		if end < 0 {
+			end = len(text)
+		} else {
+			end += start + 1
+		}
+		title := text[start:end]
+		if !strings.HasPrefix(strings.TrimLeft(title, " "), "# ") {
+			continue
+		}
+		if !strings.HasSuffix(title, "\n") {
+			line = newline + line
+		}
+		return text[:end] + line + text[end:]
 	}
 	return line + text
 }
