@@ -48,23 +48,17 @@ func cardStateStatus(paths config.InstallPaths, taskID, state string) string {
 	return t("launch.prompt.working")
 }
 
-// resolvePromptLanguage returns the agent communication language for start/resume/takeover prompts.
-// Card LANGUAGE wins; when the field is absent it falls back to the install scope's agent_language,
-// matching kander new (no config file derives from the interface language; a corrupt config is an error).
-// paths is the install scope used to assemble the prompt; agent_language is read from that scope
-// via ConfigPath / KANDER_CONFIG, the same resolution kander new uses.
+// resolvePromptLanguage returns the agent communication language for start/resume/takeover
+// prompts and notify direct delivery. Card LANGUAGE wins; when the field is absent it falls
+// back to agent_language from the process config scope (ConfigPath / KANDER_CONFIG), matching
+// kander new (no config file derives from the interface language; a corrupt config is an error).
+// paths is the install scope used alongside this language for rule-loading paths in the same
+// prompt; config I/O intentionally follows ConfigPath rather than paths.ConfigPath so
+// KANDER_CONFIG overrides remain consistent with the rest of the tool.
 func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, error) {
 	if lang := strings.TrimSpace(metadataFrom(cardText, board.FieldLanguage)); lang != "" {
 		return lang, nil
 	}
-	return agentLanguageForScope(paths)
-}
-
-// agentLanguageForScope loads agent_language for the prompt's install scope.
-// Callers pass CurrentInstallPaths(); tests pin the file with t.Setenv(config.EnvConfig, ...).
-// The paths value identifies that scope for the API; config I/O goes through ConfigPath /
-// KANDER_CONFIG, which matches paths.ConfigPath when the caller used CurrentInstallPaths.
-func agentLanguageForScope(paths config.InstallPaths) (string, error) {
 	_ = paths
 	exists, err := config.Exists()
 	if err != nil {
@@ -84,6 +78,12 @@ func agentLanguageForScope(paths config.InstallPaths) (string, error) {
 func promptLanguageDirective(language string) string {
 	return `Communicate with the user and write all card content, records and reports in "` + language +
 		`". Commit messages and code comments follow the project's conventions.`
+}
+
+// RuleLoadingWithLanguage appends the card language directive after the rule-loading instruction.
+// Used by start/resume/takeover task files and by notify direct delivery.
+func RuleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string, error) {
+	return ruleLoadingWithLanguage(paths, cardText)
 }
 
 // ruleLoadingWithLanguage appends the language directive after the rule-loading instruction.

@@ -49,7 +49,10 @@ func commandNotify(root, taskID, message, messageFile, pane string, messageSet b
 	}
 	// notify never moves the card state: a review card is moved by the notified execution agent itself,
 	// the message body carries that requirement up front, and the review -> working transition is the acknowledgement of work starting.
-	directMessage := launch.RuleLoadingInstruction(paths)
+	directMessage, err := launch.RuleLoadingWithLanguage(paths, text)
+	if err != nil {
+		return err
+	}
 	if selfMove := launch.SelfMoveInstruction(paths, entry.TaskID, entry.State); selfMove != "" {
 		directMessage += "\n\n" + selfMove
 	}

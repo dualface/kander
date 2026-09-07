@@ -313,6 +313,75 @@ func TestNotifyKeepsReviewAndRequiresSelfMove(t *testing.T) {
 	}
 }
 
+func TestNotifyDirectPayloadIncludesCardLanguage(t *testing.T) {
+	writeConfig := func(t *testing.T, root string) {
+		t.Helper()
+		configPath := os.Getenv(config.EnvConfig)
+		if err := os.WriteFile(configPath, []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"zh-CN","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("card LANGUAGE", func(t *testing.T) {
+		root, _ := setupBoard(t)
+		t.Setenv("KANBAN_HERDR_SESSION", "session-1")
+		writeConfig(t, root)
+		taskID, path := makeReview(t, root, "notify-lang-card")
+		text, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated := strings.Replace(string(text), "- TASK_GROUP:\n", "- TASK_GROUP:\n- LANGUAGE: ja\n", 1)
+		if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		setWindow(t, path, "herdr:w1:t9:w1:p9")
+		out, _, err := capture(t, func() error {
+			return commandNotify(root, taskID, "hello", "", "", true, 61)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fields := regexp.MustCompile(`消息文件=(\S+)`).FindStringSubmatch(out)
+		if len(fields) != 2 {
+			t.Fatalf("no message file in output: %s", out)
+		}
+		payload, err := os.ReadFile(fields[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := `Communicate with the user and write all card content, records and reports in "ja". Commit messages and code comments follow the project's conventions.`
+		if !strings.Contains(string(payload), want) {
+			t.Fatalf("direct payload missing card language directive: %s", payload)
+		}
+	})
+
+	t.Run("fallback to agent_language", func(t *testing.T) {
+		root, _ := setupBoard(t)
+		t.Setenv("KANBAN_HERDR_SESSION", "session-1")
+		writeConfig(t, root)
+		taskID, path := makeReview(t, root, "notify-lang-fallback")
+		setWindow(t, path, "herdr:w1:t9:w1:p9")
+		out, _, err := capture(t, func() error {
+			return commandNotify(root, taskID, "hello", "", "", true, 61)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fields := regexp.MustCompile(`消息文件=(\S+)`).FindStringSubmatch(out)
+		if len(fields) != 2 {
+			t.Fatalf("no message file in output: %s", out)
+		}
+		payload, err := os.ReadFile(fields[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(payload), `in "zh-CN"`) {
+			t.Fatalf("direct payload missing config language fallback: %s", payload)
+		}
+	})
+}
+
 func TestNotifyAmbiguousLookupDegradesToResumeReason(t *testing.T) {
 	root, _ := setupBoard(t)
 	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
