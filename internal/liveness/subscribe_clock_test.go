@@ -14,7 +14,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 )
 
-// clockEvents changes only the temporary board, synchronously between scans.
+// clockEvents records delivery and changes only the temporary board from the output worker.
 type clockEvents struct {
 	events  []groupEvent
 	onEvent func(groupEvent) error
