@@ -36,6 +36,7 @@ type CoordinatorMember struct {
 	Revision       uint64               `json:"revision"`
 	Cycle          string               `json:"cycle"`
 	AwaitingStart  bool                 `json:"awaiting_start,omitempty"`
+	StartAttempt   string               `json:"start_attempt,omitempty"`
 	State          string               `json:"state"`
 	DeliveryCommit string               `json:"delivery_commit,omitempty"`
 	Dispatch       *CoordinatorDispatch `json:"dispatch,omitempty"`
@@ -194,7 +195,7 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 		return c, coordinatorError("claim identity, basis or members")
 	}
 	r.Members = ids
-	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{r.GroupID}, Tasks: ids, ExclusiveBoard: true}, func(tx *Transaction) error {
+	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{r.GroupID, taskStartGroup}, Tasks: ids, ExclusiveBoard: true}, func(tx *Transaction) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -226,7 +227,16 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 			if e != nil {
 				return e
 			}
-			c.Members[id] = CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: s.Entry.State, AwaitingStart: MetadataFrom(s.Text, FieldStartedAt) == "" && (s.Entry.State == "todo" || s.Entry.State == "backlog")}
+			m := CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: s.Entry.State, AwaitingStart: MetadataFrom(s.Text, FieldStartedAt) == "" && (s.Entry.State == "todo" || s.Entry.State == "backlog")}
+			if a, exists, e := readTaskStart(tx, id, ""); e != nil {
+				return e
+			} else if exists {
+				m.StartAttempt = a.ID
+				if a.Status == "pending" {
+					m.Cycle, m.AwaitingStart = ReviewDigest([]byte(id+"\n")), true
+				}
+			}
+			c.Members[id] = m
 		}
 		c.Revision++
 		c.Authority = CoordinatorAuthority{Owner: r.Owner, Token: r.Token, Epoch: c.Authority.Epoch + 1}
@@ -275,7 +285,7 @@ func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconci
 	if len(ids) == 0 {
 		return c, coordinatorError("members required")
 	}
-	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{r.GroupID, reviewControlGroup, dispatchRegistry}, Tasks: ids, ExclusiveBoard: true}, func(tx *Transaction) error {
+	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{r.GroupID, reviewControlGroup, dispatchRegistry, taskStartGroup}, Tasks: ids, ExclusiveBoard: true}, func(tx *Transaction) error {
 		var exists bool
 		c, exists, err = readCheckpoint(tx, r.GroupID)
 		if err != nil {

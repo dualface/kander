@@ -173,6 +173,13 @@ func TestCoordinatorLegacyWaitingCursorAndIncompleteLaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	c = coordinatorReconcile(t, root, c)
+	if !c.Members[s.Entry.TaskID].AwaitingStart {
+		t.Fatal("metadata alone confirmed the launcher")
+	}
+	if err := ConfirmTaskStart(root, s.Entry); err != nil {
+		t.Fatal(err)
+	}
+	c = coordinatorReconcile(t, root, c)
 	if c.Members[s.Entry.TaskID].AwaitingStart {
 		t.Fatal("first start remains pending")
 	}

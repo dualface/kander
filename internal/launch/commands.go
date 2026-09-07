@@ -181,6 +181,9 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 		return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
 	taskFileHandedOff = true
+	if err = board.ConfirmTaskStart(root, moved); err != nil {
+		return err
+	}
 	return reportLaunch(t("launch.started"), moved, agentName, plan, outcome)
 }
 

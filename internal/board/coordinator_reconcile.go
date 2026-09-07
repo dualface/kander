@@ -15,11 +15,14 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if s.Revision < old.Revision {
 		return m, coordinatorError("member revision or execution cycle changed: " + id)
 	}
-	cycle, awaiting, err := coordinatorMemberCycle(id, old, s)
+	cycle, awaiting, attempt, err := coordinatorStartCycle(ctx, tx, id, old, s)
 	if err != nil {
 		return m, err
 	}
-	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: cycle, AwaitingStart: awaiting, DeliveryCommit: old.DeliveryCommit}
+	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: cycle, AwaitingStart: awaiting, StartAttempt: attempt, DeliveryCommit: old.DeliveryCommit}
+	if awaiting && attempt != "" && o.DeliveryCommit != "" {
+		return m, coordinatorError("unconfirmed start cannot establish delivery")
+	}
 	p, err := validateTaskReview(tx, id, false)
 	if err != nil {
 		return m, err

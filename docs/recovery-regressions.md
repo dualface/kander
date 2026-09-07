@@ -24,6 +24,8 @@
 
 - `TestCoordinatorConcurrentClaimAndFencing`：双写者竞争，单一有效 coordinator epoch，相同 claim 重试及旧会话拒写。
 - `TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot`、`TestCoordinatorFirstStartRequiresPersistentFactsAndCAS`、`TestCoordinatorLegacyWaitingCursorAndIncompleteLaunch`：双卡含 todo、编排重启、首次启动及漏过 working、重复观察、历史保留；缺持久事实、旧 revision/CAS 和已绑定周期替换均拒绝；兼容旧等待游标及启动元数据尚未发布的中间快照。`TestCoordinatorReconcilesSequentialCommandStart` 使用真实 start 生产路径与隔离的假 tmux/Agent 验证顺序启动，不能算真实终端冒烟。
+- `TestCoordinatorRecoversStartRollbackAndRetry`：在真实 commandStart 的元数据提交后确定性对账，注入 launcher 失败并完成真实回滚；编排重启、显式或漏过回滚快照后再次启动，按成功原件恢复，重复对账幂等。终端/Agent 为隔离假实现。
+- `TestStartResultsFenceRetryAndPreserveTaskRevision`、`TestStartOriginalDamageStopsRecovery`、`TestConfirmedStartCannotBeRolledBackOrSilentlyReplaced`、`TestStartRollbackProofRevokesPrematureCursorAndAllowsManualClaim`、`TestStartSuccessAndRollbackHaveOneWinner`：启动期间首次 claim、同分钟旧尝试隔离、快速作者新记录/review 保留、成功与回滚互斥、各原件/指针缺失拒绝、已确认周期不可任意改写。
 - `TestCoordinatorKillRestartPreservesCommittedEpoch`：在意图发布前、prepared、history、checkpoint、committed 五个真实子进程 kill 边界恢复；不丢已提交版本，不增重复事务。
 - `TestCoordinatorSnapshotCompletesLostRoundTripOnce`：执行端/订阅端/编排端状态重建，快速完成、重复及重排观察，dispatch/卡片不被重写。
 - `TestCoordinatorRejectsUnprovenFactsWithoutWrites`、`TestCoordinatorMembershipAndCorruptionStop`：错 ID/epoch/base/delivery/revision、未知/新增组员、损坏与 reparse 不更新检查点。

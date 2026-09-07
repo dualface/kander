@@ -46,7 +46,7 @@ func managedMutation(root string, entry Entry, text, state string) error {
 	}
 	entry.Version.mu.Lock()
 	defer entry.Version.mu.Unlock()
-	err := WithTransaction(root, LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State}, func(tx *Transaction) error {
+	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State}, func(tx *Transaction) error {
 		s, err := tx.Expect(entry.TaskID, entry.State, entry.Version.revision)
 		if err != nil {
 			return err
@@ -62,6 +62,9 @@ func managedMutation(root string, entry Entry, text, state string) error {
 		}
 		if s.Entry.Path != entry.Path {
 			return kanbanError("board.transaction_conflict", entry.TaskID)
+		}
+		if err = stageTaskStart(tx, s, text, state); err != nil {
+			return err
 		}
 		if err = tx.Put(entry.TaskID, "spec.md", text); err != nil {
 			return err

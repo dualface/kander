@@ -65,7 +65,11 @@ reconcile 使用 show 返回的 authority，成员键必须完整，每个 revis
 
 每个成员保存已观察 revision、执行周期、卡态事实、交付 SHA、dispatch ID/epoch/base/revision 和 pending confirmation/delivery/wrap-up，以及相对 intent/integration/专用授权引用。审核部分保存 plan ID、batch ID、run 相对引用及既有验证器的结构进度。失败审核引用 output.raw，不补造 report.md。检查点不复制审核正文，不替作者写处置，不产生语义 PASS。
 
-完整成员集合可包含尚未启动的 backlog/todo 卡；空 STARTED_AT 对应 `awaiting_start: true`。首次启动后，在同一任务 revision 与检查点 CAS 下核对更高 revision、持久 OWNER/STARTED_AT 及已启动卡态，才绑定执行周期并清除此标记。只看到 start 的 working 状态、尚无启动元数据时继续等待；漏过 working 而直接看到 review 也走相同核验。再次 claim 保留等待事实，旧历史版本不改写。旧 schema 1 中没有该标记的 backlog/todo 空周期、无审核/派回/交付游标可受控升级；已有非空周期禁止静默替换。
+完整成员集合可包含尚未启动的 backlog/todo 卡；空 STARTED_AT 对应 `awaiting_start: true`。launcher 发布 working、OWNER/STARTED_AT 时只建立启动尝试，检查点保持未绑定周期及 `start_attempt` ID，直到受控成功原件存在。再次 claim 或错过 working/回滚快照均使用同一证据路径；结果确认可以发生在同一任务 revision 上，但仍受检查点 CAS、原件及任务事实校验。没有启动尝试原件的旧卡或显式 move --owner 继续按既有持久元数据核验；已有非空周期不能任意替换。旧 schema 1 中无等待标记的 backlog/todo 空周期、无审核/派回/交付游标仍可受控升级，旧历史不改写。
+
+启动原件由 board 的既有事务发布到 `.kander/groups/00000000-start-group/<task-id>/`：`current.json` 指向最新尝试，`<attempt-id>/pending.json` 保存不可变尝试，`result.json` 保存不可变 `succeeded` 或 `rolled-back` 结果。启动元数据与 pending 同事务；合法 launcher 回滚与 rolled-back 同事务。成功由 launch 在启动后调用 `board.ConfirmTaskStart`，只写结果原件，不改任务 revision/正文，允许执行者已经写新记录或进入 review。启动尝试 ID 与 revision 区分同一分钟内的重试，不能只比较 STARTED_AT。
+
+协调者遵守 board/group/task 锁序并消费这些原件；重试链每次必须有前次 rolled-back 结果。只看到元数据、缺成功结果或不确定退出时保持待启动，不推断交付或授权另一个执行者。受控回滚可撤销该尝试的临时观察；成功确认后拒绝回滚和任意周期替换。已确认事实或任务新记录不会因为失败的旧 launcher 被擦除。原件、current 指针或链缺失/损坏则显式停止；保留原件后删除指针不能降级成旧卡。成功结果写入中断时，沿既有事务恢复；如果尚未发布结果，保持未知，不能从外部窗口状态伪造成功。
 
 accepted 或 completed 原件解除同轮待确认；只有 completed 及匹配交付才解除同轮待交付/收尾。执行端在 notify 返回前完成、同一扫描间隔内快速往返，或订阅/编排端重启后只见最终快照，均可恢复。重复相同观察会再次验证原件和实际 Git，保持 checkpoint revision 和事务数量不变。过期 revision、旧 epoch、错轮次、错交付保留原记录并报错。
 
