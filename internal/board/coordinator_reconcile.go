@@ -12,10 +12,14 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if err != nil {
 		return m, err
 	}
-	if s.Revision < old.Revision || planCycle(s) != old.Cycle {
+	if s.Revision < old.Revision {
 		return m, coordinatorError("member revision or execution cycle changed: " + id)
 	}
-	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: old.Cycle, DeliveryCommit: old.DeliveryCommit}
+	cycle, awaiting, err := coordinatorMemberCycle(id, old, s)
+	if err != nil {
+		return m, err
+	}
+	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: cycle, AwaitingStart: awaiting, DeliveryCommit: old.DeliveryCommit}
 	p, err := validateTaskReview(tx, id, false)
 	if err != nil {
 		return m, err

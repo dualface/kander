@@ -35,6 +35,7 @@ type CoordinatorCheckpoint struct {
 type CoordinatorMember struct {
 	Revision       uint64               `json:"revision"`
 	Cycle          string               `json:"cycle"`
+	AwaitingStart  bool                 `json:"awaiting_start,omitempty"`
 	State          string               `json:"state"`
 	DeliveryCommit string               `json:"delivery_commit,omitempty"`
 	Dispatch       *CoordinatorDispatch `json:"dispatch,omitempty"`
@@ -225,7 +226,7 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 			if e != nil {
 				return e
 			}
-			c.Members[id] = CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: s.Entry.State}
+			c.Members[id] = CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: s.Entry.State, AwaitingStart: MetadataFrom(s.Text, FieldStartedAt) == "" && (s.Entry.State == "todo" || s.Entry.State == "backlog")}
 		}
 		c.Revision++
 		c.Authority = CoordinatorAuthority{Owner: r.Owner, Token: r.Token, Epoch: c.Authority.Epoch + 1}

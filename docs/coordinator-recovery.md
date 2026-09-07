@@ -65,6 +65,8 @@ reconcile 使用 show 返回的 authority，成员键必须完整，每个 revis
 
 每个成员保存已观察 revision、执行周期、卡态事实、交付 SHA、dispatch ID/epoch/base/revision 和 pending confirmation/delivery/wrap-up，以及相对 intent/integration/专用授权引用。审核部分保存 plan ID、batch ID、run 相对引用及既有验证器的结构进度。失败审核引用 output.raw，不补造 report.md。检查点不复制审核正文，不替作者写处置，不产生语义 PASS。
 
+完整成员集合可包含尚未启动的 backlog/todo 卡；空 STARTED_AT 对应 `awaiting_start: true`。首次启动后，在同一任务 revision 与检查点 CAS 下核对更高 revision、持久 OWNER/STARTED_AT 及已启动卡态，才绑定执行周期并清除此标记。只看到 start 的 working 状态、尚无启动元数据时继续等待；漏过 working 而直接看到 review 也走相同核验。再次 claim 保留等待事实，旧历史版本不改写。旧 schema 1 中没有该标记的 backlog/todo 空周期、无审核/派回/交付游标可受控升级；已有非空周期禁止静默替换。
+
 accepted 或 completed 原件解除同轮待确认；只有 completed 及匹配交付才解除同轮待交付/收尾。执行端在 notify 返回前完成、同一扫描间隔内快速往返，或订阅/编排端重启后只见最终快照，均可恢复。重复相同观察会再次验证原件和实际 Git，保持 checkpoint revision 和事务数量不变。过期 revision、旧 epoch、错轮次、错交付保留原记录并报错。
 
 确认期限来自 dispatch 原件，不能因其他事件或重启续期。heartbeat 表示订阅活着；alive 表示会话存在；任务 revision 与 dispatch receipt 才提供持久进展。无输出不触发重启，alive 不证明推进，超时不证明退出。入口不自动发送或恢复执行者。
