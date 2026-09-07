@@ -1,4 +1,7 @@
 {
+  "board.membership_invalid": "タスクグループの所属が無効または不明確です：{{.V0}}",
+  "liveness.subscription_members_required": "購読には少なくとも1つのメンバータスクが必要です",
+  "liveness.subscription_facts_unavailable": "購読の事実を確認できません。依存関係の解除を停止して再確認してください：{{.V0}}",
   "liveness.batch_not_observed": "バッチ内のタスクは未観測です: {{.V0}}",
   "liveness.observation": "観測時刻={{.V0}} 有効={{.V1}} 実行状態={{.V2}}",
   "board.migration_structure": "init を中止しました。kander check で構造の問題を確認してください：\n{{.V0}}",

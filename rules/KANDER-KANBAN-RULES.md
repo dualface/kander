@@ -274,26 +274,23 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - One card's forward probe, session reverse lookup, revalidation, and process cleanup share one deadline (10 seconds by default). Exhaustion or cancellation stops subsequent queries and reports `unknown`. Cancellation closes inherited output-pipe waits and terminates the owned process group/job; process creation, kernel I/O and reaping still depend on the operating system.
 - The `check` liveness section collects all selected working cards within one 10-second batch budget, with at most 4 concurrent card probes. Completed observations remain available; unfinished or unstarted cards retain an `unknown` reason. Output includes observation time, validity and a separate runtime state. These facts do not establish delivery readiness or business progress. The budget excludes board reads and output writes and is not a hard real-time return guarantee. Subscription scheduling remains unchanged.
 - `subscribe` requires an explicit group ID and non-empty member IDs, and validates member ownership.
-- `--watch` may be repeated with external card or group IDs; a group is expanded to all its current members through the dependency resolution reader, without validating external target ownership.
+- `--watch` may be repeated with external card or group IDs; original group references are retained and expanded again on each observation through the shared board membership reader. External tasks need not belong to the subscribed group.
 - When an external target does not exist, expands to nothing, duplicates a member, or expansions duplicate each other, fail before subscribing.
 - Bare `kander` displays the board read-only; it does not create, move, or start agents.
 
 **Subscription Events**
 
-- `subscribe` prints one JSON object per line containing `event`, `group_id`, and a `tasks` map from task ID to state.
-- The initial `event` is `snapshot`.
-- State changes are `state-change`, with a `changed` array whose items contain `task_id`, `from`, `to`.
-- Heartbeats are `heartbeat`.
-- When monitored `working/` cards exist, the heartbeat carries a `liveness` map whose items contain `agent`, `status`, `channel`, `detail`, reusing the four-state classifier of `check`.
-- Probe failures count as `unknown` and do not end the subscription; fast refreshes do not probe.
-- Probing and output remain synchronous; the heartbeat deadline does not interrupt a slow probe or blocked writer.
-- Without `working/` cards, `liveness` is omitted.
-- With `--watch`, `tasks` contains the members and the expanded external tasks, and every event carries a `watched` array of external IDs.
-- Without it, `watched` is not printed.
-- External state changes also produce `state-change`; neither member nor external state changes reset the heartbeat deadline.
-- `--refresh` is the scan interval in seconds, default 1.
-- `--heartbeat` is the independent heartbeat interval in seconds, default 900. It starts after the snapshot and restarts after each heartbeat is emitted, including when no tasks are working.
-- Both must be finite, at least `1e-9` seconds (1 ns), and less than `9223372036.854776` seconds, so conversion to `time.Duration` stays positive without overflow. Fractional nanoseconds are truncated.
+- `subscribe` prints one JSON object per line. Existing `event`, `group_id`, `tasks`, and state-change `changed` items (`task_id`, `from`, `to`) remain available.
+- Every line has `schema_version: 1`, a fresh `subscription_id`, `seq` starting at 1, `observed_at` (UTC snapshot time), and `task_revisions` captured with the committed states and documents. `seq` is local to that subscription, never a restart cursor.
+- The initial event is `snapshot`. State differences emit `state-change`; revision differences without state differences emit `task-update`. Both may carry `updated` task IDs. A same-refresh review-working-review round trip is visible by revision; revision alone does not prove business completion or dispatch acceptance. Restart with a new snapshot and compare saved revisions; no replay log is implied. Legacy unversioned cards have revision 0; uncontrolled file edits need not advance it.
+- With `--watch`, events retain `watch_references`, expand external IDs into `watched`, and include all current monitored tasks in `tasks` and `task_revisions`. `watched` is omitted when empty. Group references also carry complete `memberships` and deterministic `membership_versions`; the version hashes the sorted member IDs, with `empty` for a group emptied after startup.
+- Group membership changes emit `membership-change`. Additions join immediately. Removals and ownership changes that remove a member from its former watched group (even if it remains in another watched group) carry `removed` and set `reconciliation_required: true` for the rest of the subscription. Do not infer satisfied dependencies from a shrinking set: re-check the contract, membership versions, and actual delivery first. An initially empty group and overlapping targets are rejected.
+- `membership_complete: true` and `read_status: committed` describe a complete observation, not authorization to release dependencies. Scan problems or unreadable ownership fail closed with a terminal `membership-unknown` event, `membership_complete: false`, `reconciliation_required: true`, and a nonzero exit. Task values on that event are the previous complete snapshot, or empty maps before any successful snapshot; never treat them as fresh complete facts. Explicit task-only watches use targeted reads; group expansion checks all possible members without probing unrelated agents.
+- Coordinated fact reads have a shared 2-second lock-contention budget. Lock exhaustion emits terminal `read-error` with `read_status: maintenance`; a known prepared transaction emits `read-error` with `read_status: recoverable` immediately. Both set incomplete/reconciliation flags and exit nonzero without repair. The maintenance status can also mean ordinary writer contention. OS file operations remain OS-bound; these are not hard real-time guarantees. Follow the existing explicit init maintenance protocol for recovery.
+- Heartbeats remain independent of state, task-update, and membership events. When monitored `working/` cards exist, the heartbeat carries `liveness` items with `agent`, `status`, `channel`, and `detail`, reusing check's four-state classifier. Probe failures count as `unknown` and do not end the subscription; fast refreshes do not probe. Without working cards, liveness is omitted.
+- Probing and output remain synchronous; the fact-read deadline does not interrupt a slow probe or blocked writer.
+- `--refresh` defaults to 1 second. `--heartbeat` defaults to 900 seconds, starts after the snapshot, and restarts only after each heartbeat is emitted, even when no tasks are working.
+- Both intervals must be finite, at least `1e-9` seconds (1 ns), and less than `9223372036.854776` seconds. Fractional nanoseconds are truncated.
 
 **Board Display and Interaction**
 

@@ -1,104 +1,15 @@
 package board
 
-import "errors"
+import (
+	"context"
+)
 
-// Scan obtains a stable directory view and shared task locks before attaching
-// versions. Mutations of unrelated cards may run concurrently.
-func Scan(root string) (b Board, err error) {
-	locks, err := acquire(root, LockScope{ReadOnly: true})
-	if err != nil {
-		return b, err
-	}
-	defer func() { err = errors.Join(err, locks.close()) }()
-	b, err = scan(root)
-	if err != nil {
-		return b, err
-	}
-	ids := make([]string, 0, len(b.Entries))
-	for id := range b.Entries {
-		ids = append(ids, id)
-	}
-	ids, err = orderedIDs(ids, false)
-	if err != nil {
-		return b, err
-	}
-	for _, id := range ids {
-		if err = locks.take(root, control(root, "locks", id+".lock"), true); err != nil {
-			return b, err
-		}
-	}
-	if err = pending(root, ids); err != nil {
-		return b, err
-	}
-	b.documents = make(map[string]string, len(b.Entries))
-	b.documentErrors = make(map[string]error)
-	for id, e := range b.Entries {
-		v, er := revision(root, id)
-		if er != nil {
-			return b, er
-		}
-		text, er := readDocument(e)
-		if er != nil {
-			b.documentErrors[id] = er
-			e.Version = &Version{revision: v}
-			b.Entries[id] = e
-			continue
-		}
-		b.documents[id] = text
-		e = attachSize(e, text)
-		e.Version = &Version{revision: v}
-		b.Entries[id] = e
-	}
-	// Also identify interrupted entry creation, whose task is not visible yet.
-	records, err := operationRecords(root)
-	if err != nil {
-		return b, err
-	}
-	for _, rec := range records {
-		if rec.Phase == "prepared" && (len(rec.Entries) > 0 || len(rec.Migrations) > 0) {
-			return b, kanbanError("board.transaction_pending", rec.ID)
-		}
-	}
-	return b, nil
-}
+// Scan reads a coordinated committed view with blocking lock acquisition.
+func Scan(root string) (Board, error) { return ScanContext(context.Background(), root) }
 
-// ScanTargets reads selected identities with the same visibility guarantees as Scan.
-func ScanTargets(root string, values []string) (b Board, err error) {
-	ids := make([]string, len(values))
-	for i, v := range values {
-		ids[i], err = NormalizeTaskID(v)
-		if err != nil {
-			return b, err
-		}
-	}
-	err = WithTransaction(root, LockScope{Tasks: ids, ReadOnly: true}, func(tx *Transaction) error {
-		var e error
-		b, e = scanTargets(root, ids)
-		if e != nil {
-			return e
-		}
-		b.documents = make(map[string]string, len(b.Entries))
-		b.documentErrors = make(map[string]error)
-		for id, entry := range b.Entries {
-			v, er := revision(root, id)
-			if er != nil {
-				return er
-			}
-			text, er := readDocument(entry)
-			if er != nil {
-				b.documentErrors[id] = er
-				entry.Version = &Version{revision: v}
-				b.Entries[id] = entry
-				continue
-			}
-			b.documents[id] = text
-			entry = attachSize(entry, text)
-			entry.Version = &Version{revision: v}
-			b.Entries[id] = entry
-		}
-		return nil
-	})
-	return b, err
+// ScanTargets reads only selected identities with blocking lock acquisition.
+func ScanTargets(root string, values []string) (Board, error) {
+	return ScanTargetsContext(context.Background(), root, values)
 }
 
 // ReadDocument reads a committed revision and rejects an Entry invalidated by a

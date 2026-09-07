@@ -1,4 +1,7 @@
 {
+  "board.membership_invalid": "任务组归属无效或不明确：{{.V0}}",
+  "liveness.subscription_members_required": "订阅至少需要一张成员卡",
+  "liveness.subscription_facts_unavailable": "订阅事实不可用；停止依赖放行并重新核对：{{.V0}}",
   "liveness.batch_not_observed": "批量任务未采集：{{.V0}}",
   "liveness.observation": "观测时间={{.V0}} 有效={{.V1}} 运行状态={{.V2}}",
   "board.migration_structure": "init 已中止；请运行 kander check 检查结构问题：\n{{.V0}}",

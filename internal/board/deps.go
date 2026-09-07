@@ -42,6 +42,16 @@ func TaskDependenciesOf(entry Entry, board Board, documents map[string]string) (
 		return TaskDependencies{}, err
 	}
 	groupMembers := taskGroupMembers(texts)
+	for _, id := range prerequisiteIDs {
+		if taskGroupRe.MatchString(id) {
+			membership := board.GroupMembership()
+			if err := membership.Err(); err != nil {
+				return TaskDependencies{}, err
+			}
+			groupMembers = membership.Groups
+			break
+		}
+	}
 	var internalTasks, externalTasks, groups, expanded []string
 	for _, prerequisiteID := range prerequisiteIDs {
 		if taskGroupRe.MatchString(prerequisiteID) {

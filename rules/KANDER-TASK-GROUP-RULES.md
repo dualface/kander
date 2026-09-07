@@ -177,6 +177,10 @@ PREREQUISITES: N/A
 
 **Handling State Changes**
 
+- Consume versioned subscription facts as observations. A `task-update` requires re-reading the affected delivery record even when its state is unchanged; revision is not a dispatch completion receipt. On restart, compare the new snapshot with saved task revisions and membership versions, not the process-local sequence number.
+- A `membership-change` requires re-checking the complete dependency set. A removed or regrouped member never automatically satisfies its former obligation. When `reconciliation_required` is true, reconcile the contract and delivery before releasing dependencies.
+- A terminal `membership-unknown` or `read-error`, or `membership_complete: false`, stops dependency release for the affected subscription. Preserve the last facts as history, report the diagnostic, and follow explicit recovery requirements; do not infer completion from omitted tasks or automatically repair the board.
+
 - On receiving a `state-change`, the orchestrator runs `kander check <task-id>...` only on the changed card and the direct successor cards whose dependencies may be released by it entering `review`/`done`, reads those cards, and verifies dependencies. `review/` cards in the initial snapshot get the same delivery verification; do not skip steps because historical events were missed.
 - A card entering `review/` is first received per "Delivering a Task Branch to the Group Branch"; only after success decide whether successor cards are ready. This delivery verification is still required when review is disabled.
 - Newly ready cards are still started with `kander start` in the established order.

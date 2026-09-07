@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"os/signal"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -42,12 +41,26 @@ type livenessJSON struct {
 }
 
 type groupEvent struct {
-	Event    string                  `json:"event"`
-	GroupID  string                  `json:"group_id"`
-	Tasks    map[string]string       `json:"tasks"`
-	Changed  []changeEvent           `json:"changed,omitempty"`
-	Watched  []string                `json:"watched,omitempty"`
-	Liveness map[string]livenessJSON `json:"liveness,omitempty"`
+	SchemaVersion          int                     `json:"schema_version"`
+	SubscriptionID         string                  `json:"subscription_id"`
+	Seq                    uint64                  `json:"seq"`
+	ObservedAt             time.Time               `json:"observed_at"`
+	TaskRevisions          map[string]uint64       `json:"task_revisions"`
+	Updated                []string                `json:"updated,omitempty"`
+	WatchReferences        []string                `json:"watch_references,omitempty"`
+	MembershipVersions     map[string]string       `json:"membership_versions,omitempty"`
+	Memberships            map[string][]string     `json:"memberships,omitempty"`
+	MembershipComplete     bool                    `json:"membership_complete"`
+	ReconciliationRequired bool                    `json:"reconciliation_required"`
+	ReadStatus             string                  `json:"read_status"`
+	Detail                 string                  `json:"detail,omitempty"`
+	Removed                []string                `json:"removed,omitempty"`
+	Event                  string                  `json:"event"`
+	GroupID                string                  `json:"group_id"`
+	Tasks                  map[string]string       `json:"tasks"`
+	Changed                []changeEvent           `json:"changed,omitempty"`
+	Watched                []string                `json:"watched,omitempty"`
+	Liveness               map[string]livenessJSON `json:"liveness,omitempty"`
 }
 
 var nowFn = time.Now
@@ -139,112 +152,6 @@ func uniqueStrings(values []string) bool {
 	return true
 }
 
-func groupMembers(root string) (map[string][]string, error) {
-	scanned, err := board.Scan(root)
-	if err != nil {
-		return nil, err
-	}
-	return groupMembersFrom(scanned)
-}
-
-func groupMembersFrom(scanned board.Board) (map[string][]string, error) {
-	members := map[string][]string{}
-	for taskID := range scanned.Entries {
-		text, err := scanned.Document(taskID)
-		if err != nil {
-			return nil, err
-		}
-		if group := taskGroupFrom(text); group != "" {
-			members[group] = append(members[group], taskID)
-		}
-	}
-	for group, ids := range members {
-		sort.Strings(ids)
-		members[group] = ids
-	}
-	return members, nil
-}
-
-func watchedTaskIDs(root string, values, memberIDs []string) ([]string, error) {
-	if len(values) == 0 {
-		return nil, nil
-	}
-	memberSet := map[string]struct{}{}
-	for _, id := range memberIDs {
-		memberSet[id] = struct{}{}
-	}
-	var groups []string
-	for _, value := range values {
-		if taskGroupRe.MatchString(value) {
-			groups = append(groups, value)
-		}
-	}
-	var groupMap map[string][]string
-	if len(groups) > 0 {
-		var err error
-		groupMap, err = groupMembers(root)
-		if err != nil {
-			return nil, err
-		}
-	}
-	var watched []string
-	watchedSet := map[string]struct{}{}
-	for _, value := range values {
-		var expanded []string
-		if taskGroupRe.MatchString(value) {
-			expanded = groupMap[value]
-			if len(expanded) == 0 {
-				return nil, fmt.Errorf("%s", t(
-					"liveness.watched_task_group_has_no_members", value,
-				))
-			}
-		} else {
-			id, err := board.NormalizeTaskID(value)
-			if err != nil {
-				return nil, err
-			}
-			expanded = []string{id}
-		}
-		for _, taskID := range expanded {
-			if _, ok := memberSet[taskID]; ok {
-				return nil, fmt.Errorf("%s", t(
-					"liveness.watched_target_duplicates_a_member_task", taskID,
-				))
-			}
-			if _, ok := watchedSet[taskID]; ok {
-				return nil, fmt.Errorf("%s", t(
-					"liveness.watched_task_ids_must_not_be_repeated", taskID,
-				))
-			}
-			watched = append(watched, taskID)
-			watchedSet[taskID] = struct{}{}
-		}
-	}
-	scanned, err := board.ScanTargets(root, watched)
-	if err != nil {
-		return nil, err
-	}
-	if len(scanned.Problems) > 0 {
-		return nil, fmt.Errorf("%s", scanned.Problems[0].Message)
-	}
-	return watched, nil
-}
-
-func groupStateSnapshot(root string, taskIDs []string) (board.Board, map[string]string, error) {
-	scanned, err := board.ScanTargets(root, taskIDs)
-	if err != nil {
-		return board.Board{}, nil, err
-	}
-	if len(scanned.Problems) > 0 {
-		return board.Board{}, nil, fmt.Errorf("%s", scanned.Problems[0].Message)
-	}
-	states := map[string]string{}
-	for _, taskID := range taskIDs {
-		states[taskID] = scanned.Entries[taskID].State
-	}
-	return scanned, states, nil
-}
-
 func emitEvent(w io.Writer, payload groupEvent) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -276,66 +183,6 @@ func subscriptionLiveness(scanned board.Board, states map[string]string) map[str
 	return reports
 }
 
-func makeEvent(event, groupID string, tasks map[string]string, watched []string, changed []changeEvent, live map[string]livenessJSON) groupEvent {
-	payload := groupEvent{Event: event, GroupID: groupID, Tasks: tasks}
-	if changed != nil {
-		payload.Changed = changed
-	}
-	if len(watched) > 0 {
-		payload.Watched = watched
-	}
-	if len(live) > 0 {
-		payload.Liveness = live
-	}
-	return payload
-}
-
-func validateSubscribe(root string, opts subscribeOptions) ([]string, []string, error) {
-	if !taskGroupRe.MatchString(opts.Group) {
-		return nil, nil, fmt.Errorf("%s", t("liveness.invalid_task_group_id", opts.Group))
-	}
-	if !uniqueStrings(opts.Members) {
-		return nil, nil, fmt.Errorf("%s", t("liveness.member_task_ids_must_not_be_repeated"))
-	}
-	var members []string
-	for _, value := range opts.Members {
-		id, err := board.NormalizeTaskID(value)
-		if err != nil {
-			return nil, nil, err
-		}
-		members = append(members, id)
-	}
-	if !uniqueStrings(members) {
-		return nil, nil, fmt.Errorf("%s", t("liveness.member_task_ids_must_not_be_repeated"))
-	}
-	watched, err := watchedTaskIDs(root, opts.Watch, members)
-	if err != nil {
-		return nil, nil, err
-	}
-	monitored := append(append([]string{}, members...), watched...)
-	scanned, _, err := groupStateSnapshot(root, monitored)
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, taskID := range members {
-		text, err := scanned.Document(taskID)
-		if err != nil {
-			return nil, nil, err
-		}
-		actual := taskGroupFrom(text)
-		if actual != opts.Group {
-			shown := actual
-			if shown == "" {
-				shown = "N/A"
-			}
-			return nil, nil, fmt.Errorf("%s", t(
-				"liveness.task_does_not_belong_to_the_specified_group_actual", taskID, shown,
-			))
-		}
-	}
-	return members, watched, nil
-}
-
 // Subscribe writes JSON Lines to w until stop is closed.
 func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan struct{}) error {
 	refresh, valid := subscriptionInterval(opts.Refresh)
@@ -346,16 +193,15 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 	if !valid {
 		return fmt.Errorf("%s", t("liveness.heartbeat_interval_must_be_greater_than_0"))
 	}
-	members, watched, err := validateSubscribe(root, opts)
+	session, err := newSubscription(opts)
 	if err != nil {
 		return err
 	}
-	monitored := append(append([]string{}, members...), watched...)
-	_, snapshot, err := groupStateSnapshot(root, monitored)
+	snapshot, err := session.read(root)
 	if err != nil {
-		return err
+		return session.unavailable(w, snapshot, err)
 	}
-	if err := emitEvent(w, makeEvent("snapshot", opts.Group, snapshot, watched, nil, nil)); err != nil {
+	if err := session.emit(w, "snapshot", snapshot, nil, nil, nil); err != nil {
 		return err
 	}
 	heartbeatDue := nowFn().Add(heartbeat)
@@ -381,24 +227,43 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 			return nil
 		case <-timer.C:
 		}
-		currentBoard, current, err := groupStateSnapshot(root, monitored)
+		current, err := session.read(root)
 		if err != nil {
-			return err
+			return session.unavailable(w, current, err)
 		}
 		var changed []changeEvent
-		for _, taskID := range monitored {
-			if current[taskID] != snapshot[taskID] {
-				changed = append(changed, changeEvent{From: snapshot[taskID], TaskID: taskID, To: current[taskID]})
+		var updated []string
+		for _, taskID := range current.monitored {
+			if previous, ok := snapshot.states[taskID]; ok {
+				if current.states[taskID] != previous {
+					changed = append(changed, changeEvent{From: previous, TaskID: taskID, To: current.states[taskID]})
+				}
+				if current.revisions[taskID] != snapshot.revisions[taskID] {
+					updated = append(updated, taskID)
+				}
+			}
+		}
+		if membershipChanged(snapshot, current) {
+			removed := removedMembers(snapshot, current)
+			if len(removed) > 0 {
+				session.reconciliation = true
+			}
+			if err := session.emit(w, "membership-change", current, nil, nil, removed); err != nil {
+				return err
 			}
 		}
 		if len(changed) > 0 {
-			if err := emitEvent(w, makeEvent("state-change", opts.Group, current, watched, changed, nil)); err != nil {
+			if err := session.emit(w, "state-change", current, changed, updated, nil); err != nil {
 				return err
 			}
-			snapshot = current
+		} else if len(updated) > 0 {
+			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
+				return err
+			}
 		}
+		snapshot = current
 		if !nowFn().Before(heartbeatDue) {
-			if err := emitEvent(w, makeEvent("heartbeat", opts.Group, current, watched, nil, subscriptionLiveness(currentBoard, current))); err != nil {
+			if err := session.emit(w, "heartbeat", current, nil, nil, nil); err != nil {
 				return err
 			}
 			heartbeatDue = nowFn().Add(heartbeat)

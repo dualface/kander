@@ -1,4 +1,7 @@
 {
+  "board.membership_invalid": "Task group ownership is invalid or ambiguous: {{.V0}}",
+  "liveness.subscription_members_required": "Subscription requires at least one member task",
+  "liveness.subscription_facts_unavailable": "Subscription facts unavailable; stop dependency release and reconcile: {{.V0}}",
   "liveness.batch_not_observed": "Batch task not observed: {{.V0}}",
   "liveness.observation": "observed_at={{.V0}} valid={{.V1}} runtime_state={{.V2}}",
   "board.migration_structure": "init stopped; run kander check for structural problems:\n{{.V0}}",
