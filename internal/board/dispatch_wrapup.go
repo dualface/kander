@@ -19,6 +19,8 @@ type DispatchIntegration struct {
 	CWD          string    `json:"cwd"`
 	SourceCommit string    `json:"source_commit"`
 	ReviewTarget string    `json:"review_target"`
+	ReviewBase   string    `json:"review_base"`
+	RebasedBase  string    `json:"rebased_base,omitempty"`
 	TargetCommit string    `json:"target_commit"`
 	TargetRef    string    `json:"target_ref"`
 	Author       string    `json:"author"`
@@ -39,11 +41,11 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published bool) e
 	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
-	target, err := dispatchReviewTarget(tx, in.TaskID)
+	reviewRange, err := dispatchReviewRange(tx, in.TaskID)
 	if err != nil {
 		return err
 	}
-	if g.ReviewTarget != target {
+	if g.RebasedBase == "" && g.SourceCommit != g.ReviewTarget || g.ReviewTarget != reviewRange.Descendant || g.ReviewBase != reviewRange.Ancestor || g.RebasedBase != "" && !dispatchCommitPattern.MatchString(g.RebasedBase) {
 		return dispatchEvidenceError("integration does not bind final review target")
 	}
 	if published {
@@ -219,27 +221,27 @@ func (tx *Transaction) validateWrapUpUpdate(s Snapshot, o UpdateOptions) error {
 	return nil
 }
 
-func dispatchReviewTarget(tx *Transaction, task string) (string, error) {
+func dispatchReviewRange(tx *Transaction, task string) (ReviewGitEdge, error) {
 	if _, err := validateTaskReview(tx, task, true); err != nil {
-		return "", err
+		return ReviewGitEdge{}, err
 	}
 	plan, exists, err := readTaskPlan(tx, task)
 	if err != nil {
-		return "", err
+		return ReviewGitEdge{}, err
 	}
 	if !exists || len(plan.Batches) == 0 {
-		return "", dispatchEvidenceError("sealed review plan required")
+		return ReviewGitEdge{}, dispatchEvidenceError("sealed review plan required")
 	}
-	return plan.Batches[len(plan.Batches)-1].TargetCommit, nil
+	return ReviewGitEdge{Ancestor: plan.Batches[0].Base, Descendant: plan.Batches[len(plan.Batches)-1].TargetCommit}, nil
 }
 
-// DispatchReviewTarget identifies the closed plan target to bind into Git evidence.
-func DispatchReviewTarget(root, task string) (target string, err error) {
+// DispatchReviewRange identifies the closed plan range to bind into Git evidence.
+func DispatchReviewRange(root, task string) (reviewRange ReviewGitEdge, err error) {
 	scope, err := reviewGateScope(root, task, false)
 	if err != nil {
-		return "", err
+		return ReviewGitEdge{}, err
 	}
 	scope.ReadOnly = true
-	err = WithTransaction(root, scope, func(tx *Transaction) error { var e error; target, e = dispatchReviewTarget(tx, task); return e })
+	err = WithTransaction(root, scope, func(tx *Transaction) error { var e error; reviewRange, e = dispatchReviewRange(tx, task); return e })
 	return
 }

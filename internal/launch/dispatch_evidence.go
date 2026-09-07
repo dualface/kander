@@ -33,7 +33,7 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 	if !filepath.IsAbs(g.CWD) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
-	for _, commit := range []string{g.SourceCommit, g.TargetCommit, g.ReviewTarget} {
+	for _, commit := range []string{g.SourceCommit, g.TargetCommit, g.ReviewTarget, g.ReviewBase} {
 		if len(commit) != 40 || strings.Trim(commit, "0123456789abcdef") != "" {
 			return launchError("board.dispatch_evidence_invalid", "integration commit")
 		}
@@ -50,7 +50,22 @@ func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration)
 	if err != nil {
 		return err
 	}
-	for _, edge := range [][2]string{{g.ReviewTarget, g.SourceCommit}, {g.SourceCommit, g.TargetCommit}, {g.TargetCommit, head}} {
+	edges := [][2]string{{g.ReviewBase, g.ReviewTarget}, {g.SourceCommit, g.TargetCommit}, {g.TargetCommit, head}}
+	if g.RebasedBase == "" {
+		if g.SourceCommit != g.ReviewTarget {
+			return launchError("board.dispatch_evidence_invalid", "source must equal the closed target or provide an explicit rebase mapping")
+		}
+		edges = append(edges, [2]string{g.ReviewTarget, g.SourceCommit})
+	} else {
+		if len(g.RebasedBase) != 40 || strings.Trim(g.RebasedBase, "0123456789abcdef") != "" {
+			return launchError("board.dispatch_evidence_invalid", "rebased base")
+		}
+		edges = append(edges, [2]string{g.ReviewBase, g.RebasedBase}, [2]string{g.RebasedBase, g.SourceCommit})
+		if err := verifyDispatchRebase(ctx, g); err != nil {
+			return err
+		}
+	}
+	for _, edge := range edges {
 		if _, err = git("merge-base", "--is-ancestor", edge[0], edge[1]); err != nil {
 			return err
 		}
@@ -91,6 +106,9 @@ func PrepareBoundDispatch(root string, in board.DispatchInput) (board.Dispatch, 
 		}
 		previous, err := board.ReadDispatch(root, in.TaskID, in.ID)
 		if err == nil && previous.Input.Evidence.WrapUp != nil {
+			if w.Git.ReviewBase == "" {
+				w.Git.ReviewBase = previous.Input.Evidence.WrapUp.Git.ReviewBase
+			}
 			if w.Git.ReviewTarget == "" {
 				w.Git.ReviewTarget = previous.Input.Evidence.WrapUp.Git.ReviewTarget
 			}
@@ -101,12 +119,17 @@ func PrepareBoundDispatch(root string, in board.DispatchInput) (board.Dispatch, 
 		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return board.Dispatch{}, err
 		} else {
-			if w.Git.ReviewTarget == "" {
-				target, e := board.DispatchReviewTarget(root, in.TaskID)
+			if w.Git.ReviewTarget == "" || w.Git.ReviewBase == "" {
+				reviewRange, e := board.DispatchReviewRange(root, in.TaskID)
 				if e != nil {
 					return board.Dispatch{}, e
 				}
-				w.Git.ReviewTarget = target
+				if w.Git.ReviewTarget == "" {
+					w.Git.ReviewTarget = reviewRange.Descendant
+				}
+				if w.Git.ReviewBase == "" {
+					w.Git.ReviewBase = reviewRange.Ancestor
+				}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

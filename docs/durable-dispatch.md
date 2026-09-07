@@ -71,9 +71,9 @@ kander dispatch show <task-id> <id>
 }
 ```
 
-工具从本卡已封闭审核计划读取最后的 `review_target`，验证其为 source 的祖先、source 为 target 的祖先、target 包含在指定 develop 引用中，并在验证结束复读引用以拒绝并发变化。只接受 `refs/heads/develop` 或 `refs/remotes/origin/develop`；远端引用仅证明本地已获取的远端快照，编排端仍须先完成 fetch 和实际同步。不会自动 fetch、集成、删除工作区或确认用户授权。当前入口只接受上述直接祖先证据；重写历史导致祖先链不成立时明确拒绝，不能把 PR/squash/rebase 等价性假报为祖先验证。
+工具从本卡已封闭审核计划读取原始 `review_base` 和最终 `review_target`，验证审核范围、source 为 target 的祖先、target 包含在指定 develop 引用中，并在验证结束复读引用以拒绝并发变化。默认还要求 source 等于已封闭的 review_target，不接受混入未审核提交。只接受 `refs/heads/develop` 或 `refs/remotes/origin/develop`；远端引用仅证明本地已获取的远端快照，编排端仍须先完成 fetch 和实际同步。不会自动 fetch、集成、删除工作区或确认用户授权。合法 rebase 重写提交时，可明确提供 `rebased_base`（重放前的新 develop 基线）。工具验证原始基线在新基线之前、新基线在 source 之前，并比较原始审核范围与重放范围的完整 Git 补丁。只归一化 blob 哈希和 hunk 行号偏移；保留空白、上下文、文件模式及二进制变化。不使用会忽略空白的 patch-id。补丁不一致则拒绝，须走既有冲突验证/审核流程；不凭描述认定 PR 合并或等价性。
 
-`dispatch_id`、`task_id`、`verified_at`、`review_target` 及相对 `artifact` 由创建入口补全；显式提供的身份和审核目标仍须匹配。意图与 `dispatches/<id>/integration.json` 在同一事务中发布。board 只验证结构、审核目标和副本，不运行 Git；完整二进制的 launch 接入层验证真实 Git 关系。发送前再次验证；完成回执必须携带绑定的 source_commit，不允许替换为任意 SHA 或作者处置。绑定与卡片 move 无关。
+`dispatch_id`、`task_id`、`verified_at`、`review_base`、`review_target` 及相对 `artifact` 由创建入口补全；显式提供的身份和审核目标仍须匹配。意图与 `dispatches/<id>/integration.json` 在同一事务中发布。board 只验证结构、审核目标和副本，不运行 Git；完整二进制的 launch 接入层验证真实 Git 关系。发送前再次验证；完成回执必须携带绑定的 source_commit，不允许替换为任意 SHA 或作者处置。绑定与卡片 move 无关。
 
 原编排代收尾例外保留，但非零返回、无 SESSION、确认超时、期限届满都不能单独证明原执行者退出。先用同 ID 对账，再验证事实；只有已确认退出，或此前用户授权合法回收后再次确认 stopped，才能申请专用 epoch：
 

@@ -15,7 +15,7 @@ func bindWrapUpFixture(t *testing.T, root string, in *DispatchInput) {
 	exemptReviewFixture(t, root, in.TaskID)
 	in.Kind = "wrap-up"
 	in.Base = strings.Repeat("b", 40)
-	in.Evidence.WrapUp = &DispatchWrapUpBinding{Artifact: ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}, Git: DispatchIntegration{DispatchID: in.ID, TaskID: in.TaskID, CWD: t.TempDir(), SourceCommit: in.Base, ReviewTarget: in.Base, TargetCommit: in.Base, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "structural fixture; no Git verification claimed", VerifiedAt: time.Now().UTC()}}
+	in.Evidence.WrapUp = &DispatchWrapUpBinding{Artifact: ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}, Git: DispatchIntegration{DispatchID: in.ID, TaskID: in.TaskID, CWD: t.TempDir(), SourceCommit: in.Base, ReviewTarget: in.Base, ReviewBase: strings.Repeat("a", 40), TargetCommit: in.Base, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "structural fixture; no Git verification claimed", VerifiedAt: time.Now().UTC()}}
 }
 
 func fixBindingFixture(t *testing.T) (string, DispatchInput, ReviewRun, ReviewFinding) {

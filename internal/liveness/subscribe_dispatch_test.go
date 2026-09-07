@@ -21,7 +21,7 @@ func prepareSubscriptionDispatch(t *testing.T, root, id, kind string, deadline t
 		CreatedAt: now.Add(-time.Minute), ConfirmBy: now.Add(deadline)}
 	if kind == "wrap-up" {
 		in.Base = strings.Repeat("b", 40)
-		in.Evidence.WrapUp = &board.DispatchWrapUpBinding{Artifact: board.ArtifactReference{TaskID: id, Path: "dispatches/" + in.ID + "/integration.json"}, Git: board.DispatchIntegration{DispatchID: in.ID, TaskID: id, CWD: t.TempDir(), SourceCommit: in.Base, ReviewTarget: in.Base, TargetCommit: in.Base, TargetRef: "refs/heads/develop", Author: "fixture", Basis: "structural subscription fixture; no Git verification claimed", VerifiedAt: now}}
+		in.Evidence.WrapUp = &board.DispatchWrapUpBinding{Artifact: board.ArtifactReference{TaskID: id, Path: "dispatches/" + in.ID + "/integration.json"}, Git: board.DispatchIntegration{DispatchID: in.ID, TaskID: id, CWD: t.TempDir(), SourceCommit: in.Base, ReviewTarget: in.Base, ReviewBase: strings.Repeat("a", 40), TargetCommit: in.Base, TargetRef: "refs/heads/develop", Author: "fixture", Basis: "structural subscription fixture; no Git verification claimed", VerifiedAt: now}}
 	}
 	dispatch, err := board.PrepareDispatch(root, in)
 	if err != nil {

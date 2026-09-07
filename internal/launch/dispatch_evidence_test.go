@@ -33,7 +33,7 @@ func integrationGit(t *testing.T) (string, string) {
 
 func TestDispatchIntegrationUsesActualGitAncestry(t *testing.T) {
 	cwd, head := integrationGit(t)
-	g := board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, TargetCommit: head, TargetRef: "refs/heads/develop"}
+	g := board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, ReviewBase: head, TargetCommit: head, TargetRef: "refs/heads/develop"}
 	if err := verifyDispatchIntegration(context.Background(), g); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func launchWrapFixture(t *testing.T) (string, string, string, board.DispatchInpu
 	if _, err = board.CloseReviewBatch(root, request, board.ReviewGitEvidence{CWD: cwd, Head: head, Edges: edges, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
 		t.Fatal(err)
 	}
-	in := board.DispatchInput{ID: "launch-wrap", TaskID: task, Kind: "wrap-up", Message: "只清理和记录", Base: head, Evidence: board.DispatchEvidence{WrapUp: &board.DispatchWrapUpBinding{Git: board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, TargetCommit: head, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "本地 develop 实际祖先验证"}}}}
+	in := board.DispatchInput{ID: "launch-wrap", TaskID: task, Kind: "wrap-up", Message: "只清理和记录", Base: head, Evidence: board.DispatchEvidence{WrapUp: &board.DispatchWrapUpBinding{Git: board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, ReviewBase: head, TargetCommit: head, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "本地 develop 实际祖先验证"}}}}
 	return root, task, bin, in
 }
 
