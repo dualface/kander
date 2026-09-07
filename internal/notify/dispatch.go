@@ -21,6 +21,7 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 	if err != nil {
 		return err
 	}
+	task = s.Entry.TaskID
 	msg, err := launch.ReadMessage(message, messageSet, messageFile, "notify")
 	if err != nil {
 		return err

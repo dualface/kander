@@ -71,7 +71,7 @@ func TestDurableResumeExplicitTakeoverFencesOldEpoch(t *testing.T) {
 	root, task, d := resumeDispatchFixture(t)
 	agent := "claude"
 	out, _, err := capture(t, func() error {
-		return commandResume(root, &agent, "tmux", task, d.Input.Message, "", true, 61, DispatchOptions{ID: d.Input.ID})
+		return commandResume(root, &agent, "tmux", task+".md", d.Input.Message, "", true, 61, DispatchOptions{ID: d.Input.ID})
 	})
 	if err != nil {
 		t.Fatal(err)

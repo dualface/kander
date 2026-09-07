@@ -102,6 +102,7 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if err != nil {
 		return err
 	}
+	task = s.Entry.TaskID
 	msg, err := ReadMessage(message, messageSet, messageFile, "resume")
 	if err != nil {
 		return err
@@ -220,6 +221,15 @@ func ParseDispatchOptions(args []string) ([]string, DispatchOptions, error) {
 		field, ok := values[name]
 		if !ok {
 			rest = append(rest, args[i])
+			// Preserve the value boundary owned by the notify/resume parser.
+			// A message or path may itself look like a dispatch control option.
+			if !inline && i+1 < len(args) {
+				switch name {
+				case "--message", "--message-file", "--timeout", "--agent", "--launcher", "--pane":
+					i++
+					rest = append(rest, args[i])
+				}
+			}
 			continue
 		}
 		if seen[name] {

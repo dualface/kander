@@ -105,7 +105,7 @@ func TestDispatchReceiptBeforeNotifyReturnAndRetry(t *testing.T) {
 	result := make(chan error, 1)
 	go func() { result <- acceptDelivered(root, task, d, true) }()
 	out, _, err := capture(t, func() error {
-		return commandNotify(root, task, d.Input.Message, "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
+		return commandNotify(root, task+".md", d.Input.Message, "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestDispatchReceiptBeforeNotifyReturnAndRetry(t *testing.T) {
 	}
 	prompt, _ := os.ReadFile(filepath.Join(root, "herdr.log.order"))
 	out, _, err = capture(t, func() error {
-		return commandNotify(root, task, d.Input.Message, "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
+		return commandNotify(root, task+".md", d.Input.Message, "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
 	})
 	if err != nil || !strings.Contains(out, `"state":"completed"`) {
 		t.Fatalf("retry: %s %v", out, err)
