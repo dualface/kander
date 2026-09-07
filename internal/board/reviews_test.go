@@ -316,7 +316,11 @@ func TestReviewIndexBeforeOtherSections(t *testing.T) {
 	text := "# card\n\n## REVIEWS\n\n## SUMMARY\n\nretain\n"
 	for _, id := range []string{"a", "b"} {
 		b, _ := json.Marshal(ReviewIndex{RunID: id, BatchID: "batch", Role: "PM"})
-		text = appendReviewIndex(text, string(b))
+		var err error
+		text, err = appendReviewIndex(text, string(b))
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	indexes, err := ParseReviewIndexes(text)
 	if err != nil || len(indexes) != 2 || !strings.Contains(text, "## SUMMARY\n\nretain") {

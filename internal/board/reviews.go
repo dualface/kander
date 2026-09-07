@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -598,7 +601,13 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 				}
 			}
 			line, _ := json.Marshal(index)
-			text := appendReviewIndex(s.Text, string(line))
+			text, e := appendReviewIndex(s.Text, string(line))
+			if e != nil {
+				return e
+			}
+			if _, e = ParseReviewIndexes(text); e != nil {
+				return e
+			}
 			if e = tx.Put(id, "spec.md", text); e != nil {
 				return e
 			}
@@ -620,7 +629,8 @@ func verifyReviewHashes(files map[string][]byte, hashes map[string]string) error
 	if len(files) != len(hashes) {
 		return reviewError("original set mismatch")
 	}
-	for name, hash := range hashes {
+	for _, name := range slices.Sorted(maps.Keys(hashes)) {
+		hash := hashes[name]
 		data, ok := files[name]
 		if !ok || ReviewDigest(data) != hash {
 			return reviewError(name + ": hash mismatch")
@@ -648,31 +658,55 @@ func reviewIndex(run ReviewRun) ReviewIndex {
 	}
 	return ReviewIndex{run.RunID, run.BatchID, run.Role, run.ExecutionStatus, run.Base, run.Commit, run.PreviousRunID, report}
 }
-func appendReviewIndex(text, line string) string {
-	marker := "## REVIEWS"
-	at := strings.Index(text, "\n"+marker+"\n")
-	if at < 0 {
-		return strings.TrimRight(text, "\n") + "\n\n" + marker + "\n\n- " + line + "\n"
+
+var reviewSectionRe = regexp.MustCompile(`(?m)^## REVIEWS[ \t\r]*$`)
+
+// Both readers and writers accept the same heading and section boundaries.
+func reviewSectionBounds(text string) (start, end int, found bool, err error) {
+	matches := reviewSectionRe.FindAllStringIndex(text, -1)
+	if len(matches) > 1 {
+		return 0, 0, false, reviewError("duplicate REVIEWS section")
 	}
-	start := at + len(marker) + 2
-	end := strings.Index(text[start:], "\n## ")
-	if end < 0 {
-		return strings.TrimRight(text, "\n") + "\n- " + line + "\n"
+	if len(matches) == 0 {
+		return 0, 0, false, nil
 	}
-	at = start + end
-	return strings.TrimRight(text[:at], "\n") + "\n- " + line + "\n\n" + text[at+1:]
+	start, end = matches[0][1], len(text)
+	if next := headingRe.FindStringIndex(text[start:]); next != nil {
+		end = start + next[0]
+	}
+	return start, end, true, nil
+}
+
+func appendReviewIndex(text, line string) (string, error) {
+	start, end, found, err := reviewSectionBounds(text)
+	if err != nil {
+		return "", err
+	}
+	newline := "\n"
+	if found && start > 0 && text[start-1] == '\r' || !found && strings.Contains(text, "\r\n") {
+		newline = "\r\n"
+	}
+	if !found {
+		return strings.TrimRight(text, "\r\n") + newline + newline + "## REVIEWS" + newline + newline + "- " + line + newline, nil
+	}
+	result := strings.TrimRight(text[:end], "\r\n") + newline + "- " + line + newline
+	if end < len(text) {
+		result += newline + text[end:]
+	}
+	return result, nil
 }
 
 // ParseReviewIndexes is shared by board, review, and future disposition gates.
 // It reads only the machine-owned section, never reviewer prose.
 func ParseReviewIndexes(text string) ([]ReviewIndex, error) {
-	if len(regexp.MustCompile(`(?m)^## REVIEWS\s*$`).FindAllString(text, -1)) > 1 {
-		return nil, reviewError("duplicate REVIEWS section")
+	start, end, found, err := reviewSectionBounds(text)
+	if err != nil {
+		return nil, err
 	}
-	body, ok := SectionBody(text, "REVIEWS")
-	if !ok {
+	if !found {
 		return nil, nil
 	}
+	body := strings.TrimSpace(text[start:end])
 	var result []ReviewIndex
 	seen := map[string]bool{}
 	for _, line := range strings.Split(body, "\n") {
@@ -688,7 +722,13 @@ func ParseReviewIndexes(text string) ([]ReviewIndex, error) {
 	}
 	return result, nil
 }
-func verifyCardReview(tx *Transaction, id string, manifest ReviewManifest, sidecar []byte) error {
+func verifyCardReview(tx *Transaction, id string, manifest ReviewManifest, sidecar []byte) (err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%s: %w", manifest.Input.RunID, err)
+		}
+	}()
+
 	prefix := "reviews/" + manifest.Input.RunID + "/"
 	b, err := tx.Read(id, prefix+"manifest.json")
 	if err != nil {
@@ -705,7 +745,8 @@ func verifyCardReview(tx *Transaction, id string, manifest ReviewManifest, sidec
 	if b != string(sidecar) || ReviewDigest([]byte(b)) != manifest.SidecarHash {
 		return reviewError("sidecar hash mismatch")
 	}
-	for name, hash := range manifest.Hashes {
+	for _, name := range slices.Sorted(maps.Keys(manifest.Hashes)) {
+		hash := manifest.Hashes[name]
 		b, err = tx.Read(id, prefix+name)
 		if err != nil {
 			return err

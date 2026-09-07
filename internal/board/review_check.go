@@ -3,9 +3,13 @@ package board
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/dualface/kander/internal/fs"
@@ -17,6 +21,11 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 	if len(ids) == 0 {
 		return nil, nil
 	}
+	ids = append([]string(nil), ids...)
+	sort.Strings(ids)
+	add := func(id string, e error) {
+		problems = append(problems, Problem{Path: id, Message: id + ": " + e.Error()})
+	}
 	err = WithTransaction(root, reviewScope(ids, true), func(tx *Transaction) error {
 		runs := map[string]ReviewRun{}
 		entries, e := fs.ListDirectory(root, control(root, "groups", reviewControlGroup, "runs"))
@@ -25,23 +34,26 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 		}
 		for _, entry := range entries {
 			if !ValidReviewID(entry.Name) || entry.Kind != fs.KindDirectory {
-				return reviewError("invalid run entry: " + entry.Name)
+				add(entry.Name, reviewError("invalid run entry"))
+				continue
 			}
 			var run ReviewRun
 			ok, e := readReviewJSON(tx, reviewRunName(entry.Name), &run)
 			if e != nil {
-				return e
+				add(entry.Name, e)
+				continue
 			}
 			if !ok || run.Schema != 1 || run.RunID != entry.Name {
-				return reviewError("invalid intent: " + entry.Name)
+				add(entry.Name, reviewError("invalid intent"))
+				continue
 			}
 			runs[entry.Name] = run
 		}
-		add := func(id string, e error) { problems = append(problems, Problem{Path: id, Message: e.Error()}) }
 		for _, id := range ids {
 			s, e := tx.Snapshot(id)
 			if e != nil {
-				return e
+				add(id, e)
+				continue
 			}
 			indexes, e := ParseReviewIndexes(s.Text)
 			if e != nil {
@@ -67,7 +79,8 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 					add(id, reviewError(entry.Name+": unindexed archive"))
 				}
 			}
-			for runID, run := range runs {
+			for _, runID := range slices.Sorted(maps.Keys(runs)) {
+				run := runs[runID]
 				if !containsID(run.TaskIDs, id) {
 					continue
 				}
@@ -91,7 +104,7 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 				}
 				sidecar, ok, e := tx.ReadGroup(reviewControlGroup, "runs/"+runID+"/sidecar.json")
 				if e != nil {
-					add(id, e)
+					add(id, fmt.Errorf("%s: %w", runID, e))
 					continue
 				}
 				if !ok {
@@ -106,21 +119,33 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 		}
 		return nil
 	})
+	sort.Slice(problems, func(i, j int) bool {
+		if problems[i].Path != problems[j].Path {
+			return problems[i].Path < problems[j].Path
+		}
+		return problems[i].Message < problems[j].Message
+	})
 	return
 }
 
-func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun) error {
+func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun) (err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("%s: %w", run.RunID, err)
+		}
+	}()
+
 	if run.Schema != 1 || !reviewRole(run.Role) || run.SemanticStatus != "unassessed" || run.ReportLanguage == "" {
-		return reviewError(run.RunID + ": schema")
+		return reviewError("schema")
 	}
 	if run.ExecutionStatus != "ok" && run.ExecutionStatus != "failed" && run.ExecutionStatus != "interrupted" && run.ExecutionStatus != "not_started" {
-		return reviewError(run.RunID + ": execution_status")
+		return reviewError("execution_status")
 	}
 	if run.ExecutionStatus == "ok" && (run.ExitCode != 0 || run.LaunchStatus != "started" || run.Hashes["report.md"] == "") {
-		return reviewError(run.RunID + ": invalid ok")
+		return reviewError("invalid ok")
 	}
 	if run.ExecutionStatus != "ok" && run.FailureReason == "" {
-		return reviewError(run.RunID + ": missing failure reason")
+		return reviewError("missing failure reason")
 	}
 	var batch ReviewBatch
 	ok, e := readReviewJSON(tx, reviewBatchName(run.BatchID), &batch)
@@ -128,7 +153,7 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		return e
 	}
 	if !ok || batch.Schema != 1 || batch.TaskContextHash != run.InputHashes["task-context.md"] || batch.BatchID != run.BatchID || batch.Base != run.Base || !reflect.DeepEqual(batch.TaskIDs, run.TaskIDs) || batch.ReportLanguage != run.ReportLanguage || batch.Requirements[run.Role] != "required" {
-		return reviewError(run.RunID + ": batch mismatch")
+		return reviewError("batch mismatch")
 	}
 	for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
 		requirement := batch.Requirements[role]
@@ -162,20 +187,20 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		}
 	}
 	if !found {
-		return reviewError(run.RunID + ": target outside batch")
+		return reviewError("target outside batch")
 	}
 	previous := run
 	seen := map[string]bool{run.RunID: true}
 	for previous.PreviousRunID != "" {
 		p, ok := runs[previous.PreviousRunID]
 		if !ok || seen[p.RunID] || p.Commit != previous.ReviewedCommit || p.BatchID != run.BatchID || p.Base != run.Base || p.Role != run.Role || !allPublished(p) {
-			return reviewError(run.RunID + ": predecessor conflict")
+			return reviewError("predecessor conflict")
 		}
 		seen[p.RunID] = true
 		previous = p
 	}
 	if previous.ReviewedCommit != "" {
-		return reviewError(run.RunID + ": missing predecessor")
+		return reviewError("missing predecessor")
 	}
 	sidecar, ok, e := tx.ReadGroup(reviewControlGroup, "runs/"+run.RunID+"/sidecar.json")
 	if e != nil {

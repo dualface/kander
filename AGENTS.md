@@ -30,7 +30,7 @@
 | `internal/i18n`     | go-i18n 消息目录与模板渲染; 不依赖 config, 语言由调用方传入              |
 | `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/共享及独占锁                          |
 | `internal/process`  | Agent CLI 解析, UTF-8 任务文件, argv/env 调用构造                         |
-| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令                 |
+| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验                 |
 | `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚                               |
 | `internal/probe`    | herdr/tmux pane 事实采集                                                 |
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
