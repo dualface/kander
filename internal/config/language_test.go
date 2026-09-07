@@ -57,14 +57,15 @@ func TestJapaneseConfigAndMenuLabels(t *testing.T) {
 		"menu.effort_2":       "codex 推論強度",
 		"menu.large_task":     "大規模タスク",
 		"menu.review":         "レビュー",
-		"config.languageLabels.ja": "日本語",
+		"menu.models_and_reasoning_efforts": "モデルと推論強度",
+		"menu.reasoning_effort_for":         "codex の推論強度は?",
+		"menu.reasoning_effort_for_s":       "codexの推論強度は?",
+		"config.languageLabels.ja":          "日本語",
 	}
 	for id, expected := range want {
 		got := Text(id)
-		if id == "menu.model_2" {
-			got = Text(id, "codex")
-		}
-		if id == "menu.effort_2" {
+		switch id {
+		case "menu.model_2", "menu.effort_2", "menu.reasoning_effort_for", "menu.reasoning_effort_for_s":
 			got = Text(id, "codex")
 		}
 		if got != expected {
