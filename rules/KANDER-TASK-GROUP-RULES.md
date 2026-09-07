@@ -180,7 +180,7 @@ PREREQUISITES: N/A
 - A card that has been dispatched for wrap-up closes its wrap-up loop when it enters `done/`.
 - After a new member starts or a card is dispatched back via `notify`, restart the subscription with parameters naming the explicit set of members that still need monitoring, and continue judging from the new initial snapshot.
 
-- When the subscription sees no state change for 15 minutes, it emits a `heartbeat`.
+- The subscription emits a `heartbeat` every 15 minutes by default, independently of state changes. The interval restarts after each heartbeat is emitted; slow probes or blocked output can delay emission.
 
   The orchestrator reads the `liveness` carried by the event directly: `alive` keeps waiting, `stopped` or `drifted` is handled per "Failure Recovery", and `unknown` is reported as undeterminable together with the details.
 

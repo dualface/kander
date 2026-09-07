@@ -281,13 +281,14 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Heartbeats are `heartbeat`.
 - When monitored `working/` cards exist, the heartbeat carries a `liveness` map whose items contain `agent`, `status`, `channel`, `detail`, reusing the four-state classifier of `check`.
 - Probe failures count as `unknown` and do not end the subscription; fast refreshes do not probe.
+- Probing and output remain synchronous; the heartbeat deadline does not interrupt a slow probe or blocked writer.
 - Without `working/` cards, `liveness` is omitted.
 - With `--watch`, `tasks` contains the members and the expanded external tasks, and every event carries a `watched` array of external IDs.
 - Without it, `watched` is not printed.
-- External state changes also produce `state-change` and reset the heartbeat.
+- External state changes also produce `state-change`; neither member nor external state changes reset the heartbeat deadline.
 - `--refresh` is the scan interval in seconds, default 1.
-- `--heartbeat` is the heartbeat interval in seconds after no state change, default 900.
-- Both must be finite and greater than 0.
+- `--heartbeat` is the independent heartbeat interval in seconds, default 900. It starts after the snapshot and restarts after each heartbeat is emitted, including when no tasks are working.
+- Both must be finite, at least `1e-9` seconds (1 ns), and less than `9223372036.854776` seconds, so conversion to `time.Duration` stays positive without overflow. Fractional nanoseconds are truncated.
 
 **Board Display and Interaction**
 

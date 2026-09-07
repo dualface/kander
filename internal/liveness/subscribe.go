@@ -54,10 +54,20 @@ var nowFn = time.Now
 
 func parsePositiveFloat(raw, id string, args ...any) (float64, error) {
 	value, err := strconv.ParseFloat(raw, 64)
-	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 {
+	if _, valid := subscriptionInterval(value); err != nil || !valid {
 		return 0, fmt.Errorf("%s", t(id, args...))
 	}
 	return value, nil
+}
+
+// subscriptionInterval rejects values that would overflow or truncate to zero.
+func subscriptionInterval(seconds float64) (time.Duration, bool) {
+	nanoseconds := seconds * float64(time.Second)
+	// float64(MaxInt64) rounds up to 2^63, so the upper bound is exclusive.
+	if math.IsNaN(nanoseconds) || nanoseconds < 1 || nanoseconds >= float64(math.MaxInt64) {
+		return 0, false
+	}
+	return time.Duration(nanoseconds), true
 }
 
 func parseSubscribeArgs(args []string) (subscribeOptions, string) {
@@ -328,6 +338,14 @@ func validateSubscribe(root string, opts subscribeOptions) ([]string, []string, 
 
 // Subscribe writes JSON Lines to w until stop is closed.
 func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan struct{}) error {
+	refresh, valid := subscriptionInterval(opts.Refresh)
+	if !valid {
+		return fmt.Errorf("%s", t("liveness.refresh_interval_must_be_greater_than_0"))
+	}
+	heartbeat, valid := subscriptionInterval(opts.Heartbeat)
+	if !valid {
+		return fmt.Errorf("%s", t("liveness.heartbeat_interval_must_be_greater_than_0"))
+	}
 	members, watched, err := validateSubscribe(root, opts)
 	if err != nil {
 		return err
@@ -340,15 +358,15 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 	if err := emitEvent(w, makeEvent("snapshot", opts.Group, snapshot, watched, nil, nil)); err != nil {
 		return err
 	}
-	lastEvent := nowFn()
+	heartbeatDue := nowFn().Add(heartbeat)
 	for {
 		select {
 		case <-stop:
 			return nil
 		default:
 		}
-		heartbeatRemaining := opts.Heartbeat - nowFn().Sub(lastEvent).Seconds()
-		wait := opts.Refresh
+		heartbeatRemaining := heartbeatDue.Sub(nowFn())
+		wait := refresh
 		if heartbeatRemaining < wait {
 			if heartbeatRemaining < 0 {
 				wait = 0
@@ -356,7 +374,7 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 				wait = heartbeatRemaining
 			}
 		}
-		timer := time.NewTimer(time.Duration(wait * float64(time.Second)))
+		timer := time.NewTimer(wait)
 		select {
 		case <-stop:
 			timer.Stop()
@@ -378,14 +396,12 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 				return err
 			}
 			snapshot = current
-			lastEvent = nowFn()
-			continue
 		}
-		if nowFn().Sub(lastEvent).Seconds() >= opts.Heartbeat {
+		if !nowFn().Before(heartbeatDue) {
 			if err := emitEvent(w, makeEvent("heartbeat", opts.Group, current, watched, nil, subscriptionLiveness(currentBoard, current))); err != nil {
 				return err
 			}
-			lastEvent = nowFn()
+			heartbeatDue = nowFn().Add(heartbeat)
 		}
 	}
 }
