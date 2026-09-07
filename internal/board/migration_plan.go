@@ -130,6 +130,9 @@ func migrationMarkdownFiles(root, directory string) ([]string, error) {
 		path := filepath.Join(directory, item.Name)
 		switch item.Kind {
 		case fs.KindDirectory:
+			if managedDocumentPart(item.Name) {
+				continue
+			}
 			nested, err := migrationMarkdownFiles(root, path)
 			if err != nil {
 				return nil, err
@@ -161,6 +164,11 @@ func validateMigrationFiles(root string, r *OperationRecord) error {
 		}
 		seen[f.Path] = true
 		parts := strings.Split(filepath.ToSlash(f.Path), "/")
+		for _, part := range parts {
+			if managedDocumentPart(part) {
+				return kanbanError("board.transaction_managed", f.Path)
+			}
+		}
 		if len(parts) < 3 || !taskIDRe.MatchString(parts[1]) || !strings.EqualFold(filepath.Ext(f.Path), ".md") {
 			return kanbanError("board.transaction_invalid", f.Path)
 		}

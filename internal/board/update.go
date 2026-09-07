@@ -153,6 +153,15 @@ func validSpecUpdate(old, next, state, decision string) (string, error) {
 	return next, nil
 }
 
+// Producer-owned paths are excluded from ordinary updates and migration edits.
+func managedDocumentPart(part string) bool {
+	switch strings.ToLower(part) {
+	case "reviews", "dispatches", "manifest.json", "checkpoint.json", "index.json":
+		return true
+	}
+	return false
+}
+
 // UpdateDocument accepts only ordinary documents; lifecycle fields and producer
 // records require their dedicated APIs, including on backlog cards.
 func UpdateDocument(root, id string, o UpdateOptions) error {
@@ -172,7 +181,7 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			return err
 		}
 		for _, part := range strings.Split(strings.ToLower(o.Document), "/") {
-			if part == "reviews" || part == "dispatches" || part == "manifest.json" || part == "checkpoint.json" || part == "index.json" {
+			if managedDocumentPart(part) {
 				return kanbanError("board.transaction_managed", o.Document)
 			}
 		}

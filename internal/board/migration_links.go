@@ -40,12 +40,18 @@ func relocateURL(raw, from, to string, mapping map[string]string) (string, error
 	}
 	u, err := url.Parse(decoded)
 	if err != nil {
+		if !unsupportedTargetMoves(raw, from, to, mapping, false) {
+			return raw, nil
+		}
 		return "", fmt.Errorf("invalid URL: %w", err)
 	}
 	if u.IsAbs() || u.Host != "" {
 		return raw, nil
 	}
 	if strings.ContainsAny(u.Path, "\\\x00") {
+		if !unsupportedTargetMoves(raw, from, to, mapping, false) {
+			return raw, nil
+		}
 		return "", fmt.Errorf("non-portable relative path")
 	}
 	target := filepath.Clean(filepath.Join(filepath.Dir(from), filepath.FromSlash(u.Path)))
@@ -108,8 +114,10 @@ func relocateMarkdown(source, from, to string, mapping map[string]string) (strin
 				if attr.Key != "href" && attr.Key != "src" && attr.Key != "srcset" {
 					continue
 				}
-				if attr.Key == "srcset" && attr.Val != "" {
-					unsupported = fmt.Errorf("HTML srcset requires manual conversion to Markdown")
+				if attr.Key == "srcset" {
+					if srcsetNeedsRelocation(attr.Val, from, to, mapping) {
+						unsupported = fmt.Errorf("HTML srcset requires manual conversion to Markdown")
+					}
 					continue
 				}
 				next, err := relocateURL(attr.Val, from, to, mapping)
@@ -131,7 +139,7 @@ func relocateMarkdown(source, from, to string, mapping map[string]string) (strin
 						continue
 					}
 					tail := strings.SplitN(string(data[i+2:]), "\n", 2)[0]
-					if strings.Contains(tail, "]]") {
+					if end := strings.Index(tail, "]]"); end >= 0 && unsupportedTargetMoves(tail[:end], from, to, mapping, true) {
 						unsupported = fmt.Errorf("wiki link syntax requires manual conversion to Markdown")
 					}
 				}
