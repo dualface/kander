@@ -148,6 +148,13 @@ func TestIncrementalTaskReviewReadsFailingAuthorEvidenceAndRejectsWrongSources(t
 	if err != nil || !strings.Contains(string(prompt), f.Text) || !strings.Contains(string(prompt), d.Basis) || !strings.Contains(string(prompt), "PREVIOUS_RUN_ID: stable") || !strings.Contains(string(prompt), nextArgs[len(nextArgs)-1]) {
 		t.Fatalf("missing verbatim evidence %s %v", prompt, err)
 	}
+	if strings.Contains(string(prompt), "KANDER_AUTOMATIC_CONTEXT_BYTES:") || strings.Contains(string(prompt), "Caller supplemental context (verbatim;") {
+		t.Fatal("internal framing exposed in prompt")
+	}
+	frozen, err := board.ReadReviewOriginal(root, "next", "review-context.md")
+	if err != nil || !strings.HasPrefix(string(frozen), "KANDER_AUTOMATIC_CONTEXT_BYTES:") {
+		t.Fatal("frozen context framing changed")
+	}
 	// A retry uses the original context, even though the batch now contains next.
 	code, _, stderr = captureRun(t, nextArgs)
 	if code != 0 {

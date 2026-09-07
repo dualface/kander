@@ -498,7 +498,11 @@ func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, er
 			return reviewError("invalid ok finalization")
 		}
 		if run.ExecutionStatus == "ok" && run.FindingsSchema > 0 {
-			if _, e := ParseReviewFindings(report); e != nil {
+			findings, e := ParseReviewFindings(report)
+			if e == nil {
+				e = validateFindingLineage(tx, run, findings)
+			}
+			if e != nil {
 				run.ExecutionStatus = "failed"
 				run.ExitCode = 1
 				run.FailureReason = "invalid structured review report: " + e.Error()

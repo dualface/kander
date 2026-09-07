@@ -125,6 +125,9 @@ func MapLegacyReview(root string, m LegacyFindingMap) error {
 		if err = validateLegacyMap(m, data); err != nil {
 			return err
 		}
+		if err = validateFindingLineage(tx, run, m.Findings); err != nil {
+			return err
+		}
 		name := "runs/" + m.RunID + "/legacy-map.json"
 		var old LegacyFindingMap
 		exists, err := readReviewJSON(tx, name, &old)

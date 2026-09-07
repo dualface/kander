@@ -55,7 +55,11 @@ func runDispositionCommand(args []string) int {
 			var b board.ReviewBatch
 			b, err = board.ReadReviewBatch(root, x.BatchID)
 			if err == nil {
-				err = verifyPlanCWD(root, b.PlanID, cwd)
+				if b.PlanID == "" {
+					err = archiveError("batch has no review plan; create its plan before advancing")
+				} else {
+					err = verifyPlanCWD(root, b.PlanID, cwd)
+				}
 			}
 			if err == nil {
 				err = verifyClosureHead(cwd, x.Advance.Target)

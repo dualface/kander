@@ -330,6 +330,11 @@ func TestLegacyMappingRequiresOriginalLocations(t *testing.T) {
 		t.Fatal("false original location accepted")
 	}
 	m.Locations[0].Quote = "PASS"
+	m.Findings.NonBlocking[0].Lineage = &FindingRef{RunID: "absent", FindingID: "OLD-00"}
+	if err := MapLegacyReview(root, m); err == nil {
+		t.Fatal("invalid lineage mapping published")
+	}
+	m.Findings.NonBlocking[0].Lineage = nil
 	if err := MapLegacyReview(root, m); err != nil {
 		t.Fatal(err)
 	}

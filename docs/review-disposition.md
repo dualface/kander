@@ -100,11 +100,11 @@ kander review progress <absolute-CWD> <task-id>
 ```
 ````
 
-两个数组必须存在。FINDINGS 仅接受 blocking/high/medium；NON_BLOCKING 仅接受 low/recommend/suggest。ID 在两数组间唯一；报告正文随意提到的 ID 不构成条目。缺 ID、重复 ID、重复 JSON key、未知字段、缺数组、重复围栏及不合法结构都不能参与有效闭批。新运行 sidecar 的 findings_schema 为 1；finalize 校验结构，非法报告以 execution_status=failed、非零退出及解析原因归档，原始 report/raw 均保留。execution_status=ok 仍不代表语义 PASS。
+两个数组必须存在。FINDINGS 仅接受 blocking/high/medium；NON_BLOCKING 仅接受 low/recommend/suggest。ID 在两数组间唯一；报告正文随意提到的 ID 不构成条目。缺 ID、重复 ID、重复 JSON key、未知字段、缺数组、重复围栏及不合法结构都不能参与有效闭批。新运行 sidecar 的 findings_schema 为 1；finalize 在同一事务内校验解析结构和完整 lineage 关系，非法报告以 execution_status=failed、非零退出及具体原因归档，原始 report/raw 均保留。execution_status=ok 仍不代表语义 PASS。
 
-机械 finding 可附 `mechanical: documentation|dead-code|redundant-test`。增量中延续的 finding 用 `lineage: {"run_id":"上一轮 ID","finding_id":"上一轮条目 ID"}` 指向立即前驱，不能引用其他批次或正文提及的 ID。新 finding 不带 lineage。工具验证身份关系，不声称理解自然语言以自动识别重述。
+机械 finding 可附 `mechanical: documentation|dead-code|redundant-test`。增量中延续的 finding 用 `lineage: {"run_id":"上一轮 ID","finding_id":"上一轮条目 ID"}` 指向立即前驱，不能引用其他批次或正文提及的 ID。新 finding 不带 lineage。工具在 finalize、assignment 和聚合时共用身份关系校验：无前驱却带 lineage、重复指向前驱项、错前驱/错条目、复用前驱 ID 却遗漏 lineage 均拒绝。新报告在不可变归档前被标为 failed，不能当 PASS。工具不声称理解自然语言以自动识别重述。
 
-旧 findings_schema=0 无结构报告必须通过 `review map-legacy <CWD> <JSON-file>` 显式映射，保存原件不改写。映射含 run_id、report_hash、author、basis、complete=true、findings 两数组，以及每项 finding_id/start_line/end_line/quote；行号从 1 开始，quote 必须与该原文范围逐字一致。空映射不得自动放行；新格式报告不能借 legacy 映射修补缺失结构，应使用同 batch 的新 run ID 重新进行完整审核，不把非法报告作为 --previous-run-id，并在 close 的 resolved_failures 中把原失败 ID 显式指向成功替代 ID。同 ID 重试只恢复原失败证据，不重跑 Reviewer。
+旧 findings_schema=0 无结构报告必须通过 `review map-legacy <CWD> <JSON-file>` 显式映射，保存原件不改写。映射含 run_id、report_hash、author、basis、complete=true、findings 两数组，以及每项 finding_id/start_line/end_line/quote；行号从 1 开始，quote 必须与该原文范围逐字一致。人工映射在不可变发布前也校验 lineage，非法请求直接拒绝，尚未产生映射，可更正后再提交。空映射不得自动放行；新格式报告不能借 legacy 映射修补缺失结构，应使用同 batch 的新 run ID 重试。首轮失败时重新完整审核；增量失败时继续引用同一个最后有效前驱 --previous-run-id（以及它的 reviewed-commit），保留此前有效链，不引用失败运行，也不另建不相连的完整链。已被失败意图推进的 target 不重复 advance。在 close 的 resolved_failures 中把原失败 ID 显式指向有效链上的成功替代 ID。同 ID 重试只恢复原失败证据，不重跑 Reviewer。
 
 ## 归属与原作者记录
 
@@ -157,9 +157,9 @@ aggregate 读取整个批次所有去重 run、显式 assignment 与各作者记
 kander review advance <absolute-CWD> <absolute-advance-request.json>
 ```
 
-request 为 `{batch_id, expected_revision, advance}`，advance 沿用归档协议的 previous_target/target/reason/deliveries。advance、extend-plan 都要求调用 CWD 与计划 CWD 完全一致。review 验证干净 HEAD 和完整 Git 提交归属范围，board 在锁内 CAS；任何进行中、未完整发布的 run 或已闭批状态都拒绝推进。原 `--advance-file` 仍可与启动增量审核合并使用。
+request 为 `{batch_id, expected_revision, advance}`，advance 沿用归档协议的 previous_target/target/reason/deliveries。advance、extend-plan 都要求调用 CWD 与计划 CWD 完全一致。独立 advance 遇到未建计划的旧批次会明确要求先补建计划，再推进。review 验证干净 HEAD 和完整 Git 提交归属范围，board 在锁内 CAS；任何进行中、未完整发布的 run 或已闭批状态都拒绝推进。原 `--advance-file` 仍可与启动增量审核合并使用。
 
-带 `--task --previous-run-id` 的增量审核自动加载前驱原报告、不可覆盖作者记录及工具生成的批次视图。可省略手工 review-context/reviewed-commit；显式 reviewed-commit 必须匹配。手工 review-context 作为独立补充逐字保留，不替代原件。工具使用明确字节长度分隔自动原件与补充文本；意图提交前只对自动来源重新校验，整体输入仍按原始字节冻结。重试传入不同补充文本会明确拒绝。未达到语义 PASS 的前轮可以复审；副本缺失、作者记录缺失、错误批次/成员/提交/语言则在启动前拒绝。意图提交时再校验上下文快照；同 run 重试用冻结输入，避免把之后的状态混进旧调用。
+带 `--task --previous-run-id` 的增量审核自动加载前驱原报告、不可覆盖作者记录及工具生成的批次视图。可省略手工 review-context/reviewed-commit；显式 reviewed-commit 必须匹配。手工 review-context 作为独立补充逐字保留，不替代原件。工具使用明确字节长度分隔自动原件与补充文本；意图提交前只对自动来源重新校验，整体输入仍按原始字节冻结。重试传入不同补充文本会明确拒绝。Reviewer prompt 以可读标题分开显示自动原件和手工补充，补充为空时省略该段；冻结附件保留原字节长度封装，不把内部计数显示到 prompt。未达到语义 PASS 的前轮可以复审；副本缺失、作者记录缺失、错误批次/成员/提交/语言则在启动前拒绝。意图提交时再校验上下文快照；同 run 重试用冻结输入，避免把之后的状态混进旧调用。
 
 ```text
 kander review aggregate <CWD> <batch-id> > /tmp/batch-view.json

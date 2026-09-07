@@ -149,3 +149,19 @@ func TestMechanicalAssessmentRequiresActualGitScope(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestAdvanceWithoutPlanExplainsRecovery(t *testing.T) {
+	h, _, args := archiveHarness(t)
+	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
+	commandOK(t, args...)
+	next := commitFile(t, h.repo, "fix.txt", "fix", "fix")
+	x := board.ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: 1, Advance: board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "member fix", Deliveries: map[string]string{next: "20260907-archive-test-task"}}}
+	code, _, stderr := captureRun(t, []string{"advance", h.repo, dispositionJSON(t, h, "advance-unplanned", x)})
+	if code == 0 || !strings.Contains(stderr, "batch has no review plan; create its plan before advancing") {
+		t.Fatalf("%d %s", code, stderr)
+	}
+	id := "20260907-archive-test-task"
+	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "adopt", Author: "main", Basis: "adopt existing batch before advance", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}}}}
+	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "adopt", p))
+	commandOK(t, "advance", h.repo, dispositionJSON(t, h, "advance-planned", x))
+}
