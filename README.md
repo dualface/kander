@@ -43,10 +43,10 @@ make
 ./kander
 ```
 
-Windows:
+Windows (无需 make):
 
 ```powershell
-go build -o kander.exe ./cmd/kander
+.\make-windows.cmd
 .\kander.exe
 ```
 
