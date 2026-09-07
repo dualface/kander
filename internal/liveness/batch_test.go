@@ -85,6 +85,9 @@ func assertBatchPeakAndCleanup(t *testing.T, dir string, wantPeak, wantStarts in
 		if err != nil {
 			t.Fatal(err)
 		}
+		if value, err := strconv.Atoi(strings.TrimSpace(string(pid))); err != nil || value <= 0 {
+			t.Fatalf("invalid probe PID record %q: %v", pid, err)
+		}
 		if _, err := os.Stat(filepath.Join("/proc", strings.TrimSpace(string(pid)))); !os.IsNotExist(err) {
 			t.Fatalf("owned probe process %s remains: %v", pid, err)
 		}
@@ -134,7 +137,17 @@ func TestBatchDefaultConcurrencyCancellationJoinsWorkers(t *testing.T) {
 		files, _ := filepath.Glob(filepath.Join(dir, "w1:p*"))
 		if len(files) == DefaultBatchConcurrency {
 			ready = true
-			break
+			for _, file := range files {
+				data, err := os.ReadFile(file)
+				pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
+				if err != nil || parseErr != nil || pid <= 0 {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				break
+			}
 		}
 		time.Sleep(time.Millisecond)
 	}
