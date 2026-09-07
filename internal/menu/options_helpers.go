@@ -40,6 +40,36 @@ func languageChoices() []Choice {
 	return out
 }
 
+// agentLanguageFixedChoices is the options-panel list for agent_language.
+// Labels are endonyms and are not translated with the interface language.
+var agentLanguageFixedChoices = []Choice{
+	{Value: "en", Label: "English"},
+	{Value: "zh-CN", Label: "简体中文"},
+	{Value: "zh-TW", Label: "繁體中文"},
+	{Value: "ja", Label: "日本語"},
+	{Value: "ko", Label: "한국어"},
+	{Value: "es", Label: "Español"},
+	{Value: "fr", Label: "Français"},
+	{Value: "de", Label: "Deutsch"},
+}
+
+// agentLanguageChoices returns the fixed list, appending the current stored value
+// when it is outside the list so hand-edited codes are not silently replaced.
+func agentLanguageChoices(current string) []Choice {
+	out := make([]Choice, len(agentLanguageFixedChoices))
+	copy(out, agentLanguageFixedChoices)
+	current = strings.TrimSpace(current)
+	if current == "" {
+		return out
+	}
+	for _, item := range out {
+		if item.Value == current {
+			return out
+		}
+	}
+	return append(out, Choice{Value: current, Label: current})
+}
+
 func installTmux() bool {
 	managers := []struct {
 		name string

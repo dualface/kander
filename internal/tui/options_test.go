@@ -262,6 +262,50 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 	}
 }
 
+func TestAgentLanguageSelectUpdatesSession(t *testing.T) {
+	stored := config.DefaultConfig()
+	stored.WelcomeComplete = true
+	stored.Language = "en"
+	stored.AgentLanguage = "en"
+	_, panel := openPanel(t, stored)
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	if panel.bind.fieldIndex[interfaceFocusKey("language")] != 0 {
+		t.Fatal("language should be first")
+	}
+	if panel.bind.fieldIndex[interfaceFocusKey("agent_language")] != 1 {
+		t.Fatal("agent language should follow language")
+	}
+	if panel.bind.fieldIndex[interfaceFocusKey("theme")] != 2 {
+		t.Fatal("theme should follow agent language")
+	}
+	// language (0) -> agent language (1)
+	drivePanel(panel, keyMsg("down"))
+	if panel.form.GetFocusedField() != panel.bind.formFields[2] {
+		t.Fatal("focus should be on agent language (formFields[2] after language spacer)")
+	}
+	before := panel.session.Config.AgentLanguage
+	drivePanel(panel, keyMsg("right"))
+	after := panel.session.Config.AgentLanguage
+	if after == before || after == "" {
+		t.Fatalf("right arrow should change agent language: before=%q after=%q", before, after)
+	}
+	if !panel.dirty {
+		t.Fatal("agent language change must mark the panel dirty")
+	}
+	drivePanel(panel, keyMsg("enter"))
+	loaded, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.AgentLanguage != after {
+		t.Fatalf("disk agent_language=%q want %q", loaded.AgentLanguage, after)
+	}
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	if panel.bind.agentLanguage != after || panel.session.Config.AgentLanguage != after {
+		t.Fatalf("reopen lost agent language: bind=%q session=%q", panel.bind.agentLanguage, panel.session.Config.AgentLanguage)
+	}
+}
+
 func TestInterfaceWriteDoesNotCommitOtherSessionEdits(t *testing.T) {
 	stored := config.DefaultConfig()
 	stored.WelcomeComplete = true

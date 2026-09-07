@@ -274,6 +274,12 @@ func (s *Session) LanguageChoices() []Choice {
 	return languageChoices()
 }
 
+// AgentLanguageChoices returns the fixed agent communication languages, plus the
+// current stored value when it is not in that list.
+func (s *Session) AgentLanguageChoices() []Choice {
+	return agentLanguageChoices(s.Config.AgentLanguage)
+}
+
 // ModelFields builds the editable model fields for the execution agents and reviewers actually in use.
 func (s *Session) ModelFields() []ModelField {
 	return append(s.ExecutionModelFields(), s.ReviewModelFields()...)
