@@ -93,7 +93,10 @@ func runFindings(tx *Transaction, run ReviewRun) (findings ReviewFindings, err e
 	}
 	return mapping.Findings, nil
 }
-func reviewRunForMutation(tx *Transaction, runID string) (run ReviewRun, err error) {
+
+// reviewRunForConsumption validates the successful immutable run and every
+// publication without requiring its batch to remain open for new mutations.
+func reviewRunForConsumption(tx *Transaction, runID string) (run ReviewRun, err error) {
 	ok, err := readReviewJSON(tx, reviewRunName(runID), &run)
 	if err != nil {
 		return
@@ -101,11 +104,17 @@ func reviewRunForMutation(tx *Transaction, runID string) (run ReviewRun, err err
 	if !ok || run.RunID != runID || run.ExecutionStatus != "ok" {
 		return run, reviewError("successful run required")
 	}
-	if err = verifyPublishedReview(tx, run); err != nil {
+	err = verifyPublishedReview(tx, run)
+	return
+}
+
+func reviewRunForMutation(tx *Transaction, runID string) (run ReviewRun, err error) {
+	run, err = reviewRunForConsumption(tx, runID)
+	if err != nil {
 		return
 	}
 	var closed ReviewClosure
-	ok, err = readReviewJSON(tx, closureName(run.BatchID), &closed)
+	ok, err := readReviewJSON(tx, closureName(run.BatchID), &closed)
 	if err == nil && ok {
 		err = reviewError("batch already closed")
 	}

@@ -103,7 +103,11 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 			return dispatchEvidenceError("duplicate finding")
 		}
 		seen[ref.key()] = true
-		run, err := reviewRunForMutation(tx, ref.RunID)
+		readRun := reviewRunForMutation
+		if completed {
+			readRun = reviewRunForConsumption
+		}
+		run, err := readRun(tx, ref.RunID)
 		if err != nil {
 			return err
 		}

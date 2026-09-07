@@ -32,6 +32,7 @@
 - `TestCoordinatorWrapUpRequiresGitAndDedicatedGrant`：结构层不假装 Git 验证，不从无 SESSION/未知投递/活动会话授予代办；只消费专用隔离 epoch。
 - `TestCoordinatorRechecksActualGitAfterWrapUpRestart`：真实 Git、同轮 done、旧 worktree 删除后的恢复、实际 develop 改为不相关历史时拒绝。
 - `TestCoordinatorCompletedFixSurvivesBatchAdvance`：同批 target 推进后，已完成 fix 仍验证历史原件；旧派回不可再次发送，删除作者原件则对账失败。
+- `TestCoordinatorCompletedFixSurvivesClosedBatchRestart`：fix 完成、PM 增量复审及 QA 通过并真实调用闭批生产者后，尚无 wrap-up 时从旧检查点恢复；重复对账不新增事务。创建/发送仍拒绝闭批；作者、报告、闭批发布或 assignment 缺失时拒绝且不改游标。此用例验证 board 结构契约，Git 事实使用既有结构夹具，不宣称运行了真实审核 Agent 或 Git 集成。
 - `TestCoordinatorAdvancesOnlyFromPersistedRoundAndEpoch`：漏过旧轮完成后消费持久终结事实；执行 epoch 变更要求真实隔离原件，缺失则拒绝。
 - `TestCoordinatorFirstDeliveryRequiresActualTaskHead`：首次交付 SHA 必须匹配卡片记录的实际任务分支 HEAD，不能凭输入造交付。
 - `TestDispositionCLIClosesOnlyCompleteRolesAtActualHead`：PM/QA 原件闭批后，较晚 HEAD 仍能验证同一历史闭批，取消不通过。

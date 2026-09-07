@@ -83,7 +83,8 @@ func TestCoordinatorAllFailedRolesRemainPending(t *testing.T) {
 	}
 }
 
-func TestCoordinatorCompletedFixSurvivesBatchAdvance(t *testing.T) {
+func coordinatorAdvancedFix(t *testing.T) (string, CoordinatorCheckpoint, DispatchInput, ReviewRun, ReviewDisposition) {
+	t.Helper()
 	root := tempBoard(t)
 	s := coordinatorCard(t, root, "completed-fix")
 	text, _ := setMetadata(s.Text, FieldOwner, "codex")
@@ -130,20 +131,26 @@ func TestCoordinatorCompletedFixSurvivesBatchAdvance(t *testing.T) {
 	if e = AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: run.BatchID, ExpectedRevision: batch.Revision, Advance: ReviewAdvance{PreviousTarget: batch.TargetCommit, Target: commit, Reason: "接收同批修复", Deliveries: map[string]string{commit: in.TaskID}}}); e != nil {
 		t.Fatal(e)
 	}
+	return root, c, in, run, record
+}
+
+func TestCoordinatorCompletedFixSurvivesBatchAdvance(t *testing.T) {
+	root, c, in, _, record := coordinatorAdvancedFix(t)
+	commit := record.FixCommit
 	// The immutable completed fix is historical evidence, even though its base
 	// can no longer be used to send another fix against the advanced batch.
-	if e = ValidateDispatchEvidence(root, in.TaskID, in.ID); e == nil {
+	if e := ValidateDispatchEvidence(root, in.TaskID, in.ID); e == nil {
 		t.Fatal("old fix still sendable after target advance")
 	}
 	c = coordinatorReconcile(t, root, c)
 	if c.Members[in.TaskID].DeliveryCommit != commit || c.Members[in.TaskID].Dispatch.PendingDelivery {
 		t.Fatal("completed fix lost at new target")
 	}
-	s = transactionSnapshot(t, root, in.TaskID)
-	if e = os.Remove(filepath.Join(s.Entry.Path, dispositionPath(record))); e != nil {
+	s := transactionSnapshot(t, root, in.TaskID)
+	if e := os.Remove(filepath.Join(s.Entry.Path, dispositionPath(record))); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), nil); e == nil {
+	if _, e := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), nil); e == nil {
 		t.Fatal("lost author original accepted")
 	}
 }
