@@ -26,3 +26,18 @@ func TestCatalogTextFollowsLanguageChanges(t *testing.T) {
 		t.Fatalf("changed config: %q", got)
 	}
 }
+
+func TestResolveLanguageJapaneseLocale(t *testing.T) {
+	setupHome(t)
+	t.Cleanup(resetLanguageState)
+	ApplyLanguageArgument(nil)
+	BindConfigLanguage(nil)
+	t.Setenv(EnvLangCLI, "")
+	t.Setenv(EnvLang, "ja_JP.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	if got := ResolveLanguage(); got != "ja" {
+		t.Fatalf("ja_JP locale should resolve to ja, got %q", got)
+	}
+}

@@ -17,7 +17,7 @@ var localizers = loadLocalizers()
 
 func loadLocalizers() map[string]*goi18n.Localizer {
 	bundle := goi18n.NewBundle(language.SimplifiedChinese)
-	for _, file := range []string{"locales/en.json", "locales/zh-CN.json"} {
+	for _, file := range []string{"locales/en.json", "locales/zh-CN.json", "locales/ja.json"} {
 		if _, err := bundle.LoadMessageFileFS(catalogs, file); err != nil {
 			panic(fmt.Errorf("load embedded translations: %w", err))
 		}
@@ -25,6 +25,7 @@ func loadLocalizers() map[string]*goi18n.Localizer {
 	return map[string]*goi18n.Localizer{
 		"cn": goi18n.NewLocalizer(bundle, "zh-CN"),
 		"en": goi18n.NewLocalizer(bundle, "en"),
+		"ja": goi18n.NewLocalizer(bundle, "ja"),
 	}
 }
 

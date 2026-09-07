@@ -62,7 +62,7 @@ func TestHelpListsAllCommandsAndLang(t *testing.T) {
 		"install",
 		"list / ls", "show", "new", "move", "pick", "start", "resume",
 		"notify", "dismiss", "check", "subscribe",
-		"--lang {cn,en}",
+		"--lang {cn,en,ja}",
 	}
 	for _, item := range required {
 		if !strings.Contains(out, item) {
@@ -150,7 +150,7 @@ func TestInvalidLang(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("code=%d", code)
 	}
-	if !strings.Contains(err, "--lang 只接受 cn 或 en") && !strings.Contains(err, "--lang must be cn or en") {
+	if !strings.Contains(err, "--lang 只接受 cn、en 或 ja") && !strings.Contains(err, "--lang must be cn, en, or ja") {
 		t.Fatalf("stderr=%q", err)
 	}
 }

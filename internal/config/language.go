@@ -135,6 +135,9 @@ func ResolveLanguage() string {
 	if strings.HasPrefix(locale, "en") {
 		return "en"
 	}
+	if strings.HasPrefix(locale, "ja") {
+		return "ja"
+	}
 	return "cn"
 }
 

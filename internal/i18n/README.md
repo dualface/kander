@@ -5,7 +5,7 @@
 
 业务代码调用 `config.Text("message.id", args...)`; 包内的 `t` 和错误构造函数仅做转发.
 语言选择仍由 `config.ResolveLanguage` 管理: CLI > 配置 > 环境变量, 默认中文.
-公开配置值和 `--lang` 继续使用 `cn` / `en`; `cn` 在目录层映射为标准语言标签 `zh-CN`.
+公开配置值和 `--lang` 继续使用 `cn` / `en` / `ja`; `cn` 在目录层映射为标准语言标签 `zh-CN`, `ja` 映射为 `ja`.
 显式指定语言的场景调用 `i18n.Text(lang, id, args...)`, 不修改全局语言状态.
 
 ## 修改与新增

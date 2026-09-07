@@ -31,7 +31,7 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 		{"notify-resume", func() (string, error) { return resumePrompt("task-1", "继续", paths, "review") }},
 		{"takeover", func() (string, error) { return takeoverAgentPrompt("task-1", "继续", paths, "codex", "review") }},
 	}
-	for _, lang := range []string{"cn", "en"} {
+	for _, lang := range []string{"cn", "en", "ja"} {
 		for _, tc := range prompts {
 			t.Run(lang+"/"+tc.name, func(t *testing.T) {
 				t.Setenv(config.EnvLang, lang)
@@ -64,7 +64,7 @@ func TestLocalizedPromptsAndSessionLookup(t *testing.T) {
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Setenv(config.EnvLangCLI, "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
-	for _, lang := range []string{"cn", "en"} {
+	for _, lang := range []string{"cn", "en", "ja"} {
 		t.Run(lang, func(t *testing.T) {
 			t.Setenv(config.EnvLang, lang)
 			message := "user input {{.V0}} 100% <&>"
@@ -89,12 +89,17 @@ func TestLocalizedPromptsAndSessionLookup(t *testing.T) {
 			if lang == "cn" && !strings.HasPrefix(normal, "继续 Kanban 任务 task-1.") {
 				t.Fatalf("Chinese prompt: %s", normal)
 			}
-			// Both current languages and the old mixed-language file pointer remain searchable.
+			if lang == "ja" && !strings.HasPrefix(normal, "Kanban タスク task-1 を再開します.") {
+				t.Fatalf("Japanese prompt: %s", normal)
+			}
+			// Every interface language and the old mixed-language file pointer remain searchable.
 			for _, prefix := range []string{
 				"执行 Kanban 任务 task-1; full instructions are in the UTF-8 task file at /tmp/task.md",
 				"Resume Kanban task task-1; full instructions are in the UTF-8 task file at /tmp/task.md",
+				"Kanban タスク task-1 を実行します; full instructions are in the UTF-8 task file at /tmp/task.md",
 				"接管 Kanban 任务 task-1.",
 				"Take over Kanban task task-1.",
+				"Kanban タスク task-1 を引き継ぎます.",
 			} {
 				if !startsWithAny(prefix, codexPromptPrefixes("task-1")) {
 					t.Errorf("session not matched: %s", prefix)

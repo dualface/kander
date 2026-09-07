@@ -40,20 +40,21 @@ func arguments(message string) map[string]bool {
 
 // Catalog tests protect translation mechanics, not UI wording or appearance.
 func TestCatalogs(t *testing.T) {
-	en, cn := readCatalog(t, "en"), readCatalog(t, "zh-CN")
-	if len(en) != len(cn) {
-		t.Fatalf("catalog sizes differ: %d, %d", len(en), len(cn))
+	en, cn, ja := readCatalog(t, "en"), readCatalog(t, "zh-CN"), readCatalog(t, "ja")
+	catalogs := map[string]map[string]string{"en": en, "cn": cn, "ja": ja}
+	if len(en) != len(cn) || len(en) != len(ja) {
+		t.Fatalf("catalog sizes differ: en=%d cn=%d ja=%d", len(en), len(cn), len(ja))
 	}
 	for id, english := range en {
-		chinese, ok := cn[id]
-		if !ok {
-			t.Errorf("Chinese translation missing: %s", id)
-			continue
-		}
-		if !reflect.DeepEqual(arguments(english), arguments(chinese)) {
-			t.Errorf("argument mismatch: %s", id)
-		}
-		for lang, message := range map[string]string{"en": english, "cn": chinese} {
+		for lang, catalog := range catalogs {
+			message, ok := catalog[id]
+			if !ok {
+				t.Errorf("%s translation missing: %s", lang, id)
+				continue
+			}
+			if !reflect.DeepEqual(arguments(english), arguments(message)) {
+				t.Errorf("argument mismatch: %s/%s", lang, id)
+			}
 			if message == "" {
 				t.Errorf("empty translation: %s/%s", lang, id)
 			}
@@ -72,6 +73,7 @@ func TestText(t *testing.T) {
 	}{
 		{"en", "cli.subcommand_is_not_implemented", []any{"demo"}, "subcommand is not implemented: demo"},
 		{"cn", "cli.subcommand_is_not_implemented", []any{"demo"}, "子命令尚未实现: demo"},
+		{"ja", "cli.subcommand_is_not_implemented", []any{"demo"}, "サブコマンドは未実装です: demo"},
 		{"unknown", "cli.subcommand_is_not_implemented", []any{"demo"}, "子命令尚未实现: demo"},
 		{"en", "config.unknown_task_scale", []any{"a\"b"}, "unknown task scale: \"a\\\"b\""},
 		{"cn", "launch.prompt.resume_head", []any{"{{.V9}} <&>"}, "继续 Kanban 任务 {{.V9}} <&>."},

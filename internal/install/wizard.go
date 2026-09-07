@@ -29,12 +29,21 @@ func applyLanguage(lang string) {
 	config.ApplyLanguageArgument([]string{"kander", "--lang", lang})
 }
 
+func supportedLanguage(lang string) bool {
+	for _, item := range config.Languages {
+		if item == lang {
+			return true
+		}
+	}
+	return false
+}
+
 func runWizard() (Request, error) {
 	req := Request{
 		Language: config.ResolveLanguage(),
 		Mode:     config.ModeGlobal,
 	}
-	if req.Language != "cn" && req.Language != "en" {
+	if !supportedLanguage(req.Language) {
 		req.Language = "cn"
 	}
 	cwd, _ := os.Getwd()
@@ -47,6 +56,7 @@ func runWizard() (Request, error) {
 			Options(
 				huh.NewOption(config.Text("install.language_cn"), "cn"),
 				huh.NewOption(config.Text("install.language_en"), "en"),
+				huh.NewOption(config.Text("install.language_ja"), "ja"),
 			).
 			Value(&req.Language),
 	))

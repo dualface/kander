@@ -706,3 +706,28 @@ func envHasPostInstall(env []string) bool {
 	}
 	return false
 }
+
+func TestWizardDefaultKeepsJapanese(t *testing.T) {
+	setupInstallHome(t)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "ja_JP.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	lang := config.ResolveLanguage()
+	if lang != "ja" {
+		t.Fatalf("ResolveLanguage=%q", lang)
+	}
+	if !supportedLanguage(lang) {
+		t.Fatal("wizard must accept ja as a default language")
+	}
+	req := Request{Language: lang, Mode: config.ModeGlobal}
+	if !supportedLanguage(req.Language) {
+		req.Language = "cn"
+	}
+	if req.Language != "ja" {
+		t.Fatalf("wizard default should stay ja, got %q", req.Language)
+	}
+}

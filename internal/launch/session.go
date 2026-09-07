@@ -155,11 +155,11 @@ func codexSessionsRoot() string {
 	return filepath.Join(home, "sessions")
 }
 
-// Match both languages regardless of the current UI language. The Chinese heads
-// also match sessions created before prompts were localized.
+// Match every interface language regardless of the current UI language. The Chinese
+// heads also match sessions created before prompts were localized.
 func promptPrefixes(taskID string, kinds ...string) []string {
 	var out []string
-	for _, lang := range []string{"cn", "en"} {
+	for _, lang := range []string{"cn", "en", "ja"} {
 		for _, kind := range kinds {
 			head := strings.TrimSuffix(i18n.Text(lang, "launch.prompt."+kind+"_head", taskID), ".")
 			out = append(out, head+";", head+".")

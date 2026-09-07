@@ -53,6 +53,9 @@ func TestAgentLanguageDefaultsFollowInterfaceLanguage(t *testing.T) {
 	if DefaultAgentLanguage("nope") != "en" {
 		t.Fatal("unknown interface language must fall back to en")
 	}
+	if DefaultAgentLanguage("ja") != "ja" {
+		t.Fatal("ja interface language must derive agent_language ja")
+	}
 }
 
 func TestRepairDerivesAgentLanguageFromStoredLanguage(t *testing.T) {

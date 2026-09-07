@@ -34,7 +34,7 @@ var (
 	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
-	Languages        = []string{"cn", "en"}
+	Languages        = []string{"cn", "en", "ja"}
 	TUIThemes        = []string{"auto", "light", "dark"}
 )
 
@@ -105,6 +105,7 @@ var reviewModelDefaults = map[string]map[string]string{
 var languageLabels = map[string]string{
 	"cn": "config.languageLabels.cn",
 	"en": "config.languageLabels.en",
+	"ja": "config.languageLabels.ja",
 }
 
 // Error means the config is unreadable or violates the schema.
@@ -313,6 +314,7 @@ func DefaultConfig() *Config {
 var agentLanguageDefaults = map[string]string{
 	"cn": "zh-CN",
 	"en": "en",
+	"ja": "ja",
 }
 
 // DefaultAgentLanguage returns the agent communication language derived from an interface language.
