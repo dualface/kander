@@ -14,7 +14,11 @@ import (
 
 func archiveHarness(t *testing.T) (*reviewHarness, string, []string) {
 	t.Helper()
-	h := newCodexHarness(t)
+	return archiveHarnessFor(t, newCodexHarness(t), "codex")
+}
+
+func archiveHarnessFor(t *testing.T, h *reviewHarness, agent string) (*reviewHarness, string, []string) {
+	t.Helper()
 	root := filepath.Join(h.root, "board")
 	for _, state := range board.States {
 		if err := os.MkdirAll(filepath.Join(root, state), 0700); err != nil {
@@ -35,7 +39,7 @@ func archiveHarness(t *testing.T) (*reviewHarness, string, []string) {
 	if err := os.WriteFile(requirements, []byte("{\"PM\":\"required\",\"QA\":\"required\",\"CSA\":\"N/A: project\",\"Hacker\":\"N/A: project\"}"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"codex", "--task", id, "--task", id, "--run-id", "stable", "--batch-id", "batch", "--requirements-file", requirements, h.repo, h.base, h.head, "PM", "原始目标"}
+	args := []string{agent, "--task", id, "--task", id, "--run-id", "stable", "--batch-id", "batch", "--requirements-file", requirements, h.repo, h.base, h.head, "PM", "原始目标"}
 	return h, root, args
 }
 func TestArchiveCLIOutputRetryAndLanguage(t *testing.T) {
@@ -190,7 +194,7 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, err := validateContext(agent, rest)
+	ctx, err := validateContextMode(agent, rest, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,32 +224,70 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 	}
 }
 func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
-	h, _, args := archiveHarness(t)
-	_, _, _ = captureRun(t, args)
+	h, root, args := archiveHarness(t)
+	options, _, err := parseArchiveOptions(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := board.ReadSnapshot(root, options.tasks[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	args[len(args)-1] = snapshot.Entry.Document
+	code, _, stderr := captureRun(t, args)
+	if code != 0 {
+		t.Fatalf("%d %s", code, stderr)
+	}
 	next := commitFile(t, h.repo, "fix.txt", "fix", "fix")
 	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "member fix", Deliveries: map[string]string{next: "20260907-foreign-task"}}
 	path := filepath.Join(h.root, "advance.json")
-	data, _ := json.Marshal(advance)
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	options, remaining, err := parseArchiveOptions(args)
+	snapshot, err = board.ReadSnapshot(root, options.tasks[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, rest, _ := splitAgentArgs(remaining)
-	ctx, err := validateContext("codex", []string{h.repo, h.base, next, "PM", "goal"})
-	if err != nil {
+	if err = board.UpdateDocument(root, options.tasks[0], board.UpdateOptions{Document: "spec.md", Text: snapshot.Text + "\n## IMPLEMENTATION\n\nFix delivery recorded\n", ExpectedRevision: snapshot.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if err = validateReviewAdvance(ctx, advance, options.tasks); err == nil {
-		t.Fatal("foreign delivery accepted")
+	nextArgs := []string{"codex", "--task", options.tasks[0], "--batch-id", "batch", "--run-id", "fixed", "--previous-run-id", "stable", "--advance-file", path, h.repo, h.base, next, "PM", snapshot.Entry.Document, "fix context", h.head}
+	writeAdvance := func() {
+		t.Helper()
+		data, err := json.Marshal(advance)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeAdvance()
+	code, _, stderr = captureRun(t, nextArgs)
+	if code != 2 || !strings.Contains(stderr, "unattributed or foreign delivery: "+next) {
+		t.Fatalf("foreign delivery accepted: %d %s", code, stderr)
+	}
+	if _, exists, err := board.LookupReviewRun(root, "fixed"); err != nil || exists {
+		t.Fatalf("foreign delivery persisted: %v %v", exists, err)
 	}
 	advance.Deliveries[next] = options.tasks[0]
-	if err = validateReviewAdvance(ctx, advance, options.tasks); err != nil {
+	writeAdvance()
+	code, _, stderr = captureRun(t, nextArgs)
+	if code != 2 || !strings.Contains(stderr, "batch binding conflict") {
+		t.Fatalf("changed live spec accepted: %d %s", code, stderr)
+	}
+	if _, exists, err := board.LookupReviewRun(root, "fixed"); err != nil || exists {
+		t.Fatalf("changed spec persisted: %v %v", exists, err)
+	}
+	nextArgs[len(nextArgs)-3] = filepath.Join(snapshot.Entry.Path, "reviews", "stable", "task-context.md")
+	code, _, stderr = captureRun(t, nextArgs)
+	if code != 0 {
+		t.Fatalf("%d %s", code, stderr)
+	}
+	if err = board.ReviewPublicationComplete(root, "fixed"); err != nil {
 		t.Fatal(err)
 	}
-	_ = rest
+	run, err := board.ReadReviewRun(root, "fixed")
+	if err != nil || run.Commit != next || run.PreviousRunID != "stable" || run.ReviewedCommit != h.head {
+		t.Fatalf("%+v %v", run, err)
+	}
 }
 
 func TestArchiveLaunchFailureRecordsNotStarted(t *testing.T) {
@@ -364,5 +406,29 @@ func TestArchiveInvalidUTF8IsRawEvidenceNotValidReport(t *testing.T) {
 	}
 	if _, err = board.ReadReviewOriginal(root, "stable", "report.md"); err == nil {
 		t.Fatal("invalid UTF-8 report published")
+	}
+}
+
+func TestArchiveJSONReviewerReplayBytes(t *testing.T) {
+	for _, report := range []string{"original report", "original report\\n"} {
+		t.Run(report, func(t *testing.T) {
+			h, root, args := archiveHarnessFor(t, newClaudeHarness(t), "claude")
+			t.Setenv("FAKE_CLAUDE_REPORT", report)
+			code, first, stderr := captureRun(t, args)
+			if code != 0 {
+				t.Fatalf("%d %s", code, stderr)
+			}
+			saved, err := board.ReadReviewOriginal(root, "stable", "report.md")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Remove(h.fake); err != nil {
+				t.Fatal(err)
+			}
+			code, replay, stderr := captureRun(t, args)
+			if code != 0 || first != replay || first != string(saved) {
+				t.Fatalf("%d first=%q replay=%q saved=%q %s", code, first, replay, saved, stderr)
+			}
+		})
 	}
 }

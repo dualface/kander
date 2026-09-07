@@ -205,6 +205,9 @@ func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string
 	}
 	if ctx.archive != nil {
 		ctx.archive.report = []byte(text)
+		_, _ = os.Stdout.Write(ctx.archive.report)
+		syncStream(os.Stdout)
+		return nil
 	}
 	fmt.Println(text)
 	return nil

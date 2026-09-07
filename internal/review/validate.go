@@ -9,9 +9,6 @@ import (
 	"github.com/dualface/kander/internal/process"
 )
 
-func validateContext(agent string, arguments []string) (reviewContext, error) {
-	return validateContextMode(agent, arguments, false)
-}
 func validateContextMode(agent string, arguments []string, replay bool) (reviewContext, error) {
 	if len(arguments) < 5 || len(arguments) > 7 {
 		usage()
