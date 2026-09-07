@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/probe"
@@ -18,13 +19,14 @@ func report(entry board.Entry, session *TaskSession, status, channel, container,
 		container = "N/A"
 	}
 	return Report{
-		TaskID:    entry.TaskID,
-		Agent:     agent,
-		Status:    status,
-		Channel:   channel,
-		Container: container,
-		Detail:    strings.Join(strings.Fields(detail), " "),
-		NewWindow: newWindow,
+		TaskID:       entry.TaskID,
+		Agent:        agent,
+		Status:       status,
+		Channel:      channel,
+		Container:    container,
+		Detail:       strings.Join(strings.Fields(detail), " "),
+		NewWindow:    newWindow,
+		RuntimeState: Unknown,
 	}
 }
 
@@ -55,6 +57,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 		return report(entry, &sess, Stopped, channel, container, detail, "")
 	}
 	var newWindow string
+	runtimeState := Unknown
 	if channel == "herdr" {
 		tabID, paneID, err := HerdrReverseLookupContext(ctx, program, session)
 		if err != nil {
@@ -76,6 +79,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 			return report(entry, &sess, Stopped, channel, container, detail, "")
 		}
 		status, _ := pane["agent_status"].(string)
+		runtimeState = status
 		if status != "idle" && status != "working" && status != "blocked" && status != "done" {
 			if status == "" {
 				status = "N/A"
@@ -90,7 +94,9 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 		}
 		newWindow = RenderTmuxWindow(launcher, location)
 	}
-	return report(entry, &sess, Drifted, channel, container, detail, newWindow)
+	out := report(entry, &sess, Drifted, channel, container, detail, newWindow)
+	out.RuntimeState = runtimeState
+	return out
 }
 
 func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) Report {
@@ -150,11 +156,15 @@ func classifyHerdr(ctx context.Context, entry board.Entry, session TaskSession, 
 		), "")
 	}
 	if session.Reference != "" && actualSession == "" {
-		return report(entry, &session, Alive, "herdr", tabID, t(
+		out := report(entry, &session, Alive, "herdr", tabID, t(
 			"liveness.session_identity_was_not_reported_direct_delivery_is_unavailable",
 		), "")
+		out.RuntimeState = status
+		return out
 	}
-	return report(entry, &session, Alive, "herdr", tabID, t("liveness.agent_status", status), "")
+	out := report(entry, &session, Alive, "herdr", tabID, t("liveness.agent_status", status), "")
+	out.RuntimeState = status
+	return out
 }
 
 func classifyTmux(ctx context.Context, entry board.Entry, session TaskSession, launcher, tmuxContainer, windowID, paneID string, allowReverseLookup bool) Report {
@@ -225,6 +235,9 @@ func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text stri
 		if rec := recover(); rec != nil {
 			out = unknownFrom(entry, text, "panic")
 		}
+		out.Identity = identityFrom(entry, text)
+		out.ObservedAt = time.Now().UTC()
+		out.ObservationValid = out.Status != Unknown
 	}()
 	if err := ctx.Err(); err != nil {
 		return unknownFrom(entry, text, probe.FailureDetail(err))

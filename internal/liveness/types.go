@@ -3,6 +3,7 @@ package liveness
 import (
 	"os/exec"
 	"regexp"
+	"time"
 
 	"github.com/dualface/kander/internal/config"
 )
@@ -39,13 +40,17 @@ type TmuxPaneLocation struct {
 
 // Report is the read-only liveness classification of one card; it never writes to the card.
 type Report struct {
-	TaskID    string
-	Agent     string
-	Status    string
-	Channel   string
-	Container string
-	Detail    string
-	NewWindow string
+	TaskID           string
+	Agent            string
+	Status           string
+	Channel          string
+	Container        string
+	Detail           string
+	NewWindow        string
+	ObservedAt       time.Time           `json:"observed_at"`
+	Identity         ObservationIdentity `json:"identity"`
+	RuntimeState     string              `json:"runtime_state"`
+	ObservationValid bool                `json:"observation_valid"`
 }
 
 func t(id string, args ...any) string {

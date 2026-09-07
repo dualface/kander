@@ -1,4 +1,6 @@
 {
+  "liveness.batch_not_observed": "バッチ内のタスクは未観測です: {{.V0}}",
+  "liveness.observation": "観測時刻={{.V0}} 有効={{.V1}} 実行状態={{.V2}}",
   "board.migration_structure": "init を中止しました。kander check で構造の問題を確認してください：\n{{.V0}}",
   "board.migration_link_unsupported": "{{.V0}} の相対リンクを安全に移行できません：{{.V1}}。本文は保持されています。構文を修正して再実行してください",
   "board.guard_form_changed": "タスク {{.V0}} は {{.V1}} のディレクトリ形式に移行済みです。旧 .md パスへの書き込みは重複を作成します。kander show --json と kander update を使用してください。",

@@ -1,4 +1,6 @@
 {
+  "liveness.batch_not_observed": "批量任务未采集：{{.V0}}",
+  "liveness.observation": "观测时间={{.V0}} 有效={{.V1}} 运行状态={{.V2}}",
   "board.migration_structure": "init 已中止；请运行 kander check 检查结构问题：\n{{.V0}}",
   "board.migration_link_unsupported": "无法安全迁移相对链接（{{.V0}}）：{{.V1}}；正文已保留，请处理该语法后重试",
   "board.guard_form_changed": "任务 {{.V0}} 已改为目录卡，正文位于 {{.V1}}；旧 .md 拼写会产生同 ID 副本。请使用 kander show --json 和 kander update。",
