@@ -31,9 +31,9 @@
 本接口没有 dispatch 回执或事件回放日志。旧版未建立版本记录的卡片 revision 为 0，
 绕过事务直接编辑文件不保证推进 revision。
 
-心跳仍独立计时，默认 refresh=1 秒、heartbeat=900 秒。只有心跳探测当前监听集合
-中的 `working` 卡片；不探测全板其他卡片。探测与 writer 仍同步，本次读取期限不会
-中断慢探测或阻塞 writer。`observed_at` 表示卡片快照时间，不冒充探测完成时间。
+心跳独立计时，默认 refresh=1 秒、heartbeat=900 秒。仅采集当前监听集合中的
+`working` 卡片；扫描不等待探测或输出。事件 `observed_at` 表示卡片快照时间，
+不冒充探测完成时间。探测与输出的有界生命周期见下节。
 
 ## 动态组引用与不完整事实
 
@@ -74,3 +74,62 @@
 期限覆盖锁争用与各读取阶段之间的取消检查；文件打开、内核 I/O、关闭仍受操作系统
 控制，不承诺硬实时终止。POSIX 使用非阻塞 flock 尝试，Windows 使用
 LockFileEx 的 FAIL_IMMEDIATELY；已有阻塞写锁和安全路径入口不变。
+
+## 有界探测与输出生命周期
+
+扫描、探测和输出分别持有自己的运行资源。扫描不等待外部 Agent CLI；初始快照
+入队后启动第一批存活采集，后续心跳在上一批已结束时启动下一批。每次调用复用
+`ClassifyTasksContext` 的默认总预算 10 秒、并发 4。订阅最多持有一批在途采集、
+一个完成结果槽和一份缓存，不因 refresh 或心跳积压更多探测批次。
+
+心跳沿用 `agent/status/channel/detail`，增加以下字段：
+
+- `revision` 和 `identity`：本次卡片 revision 与请求身份；结果必须同时匹配才可消费。
+- `observed_at`、`age_seconds`：真实采集结束时间与生成心跳时的年龄；没有采集则省略时间。
+- `runtime_state`、`observation_valid`：复用批量采集事实，不从 alive 推导 ready 或业务进展。
+- `collection_state`：`pending` 表示当前 revision 没有结果，`complete` 表示已尝试采集，
+  `not-observed` 表示批量未实际采集；`collecting` 独立表示订阅是否有批次运行。
+- `stale`：缓存年龄超过 heartbeat 加 10 秒时为 true，此时 status/runtime_state 变为
+  unknown、observation_valid 为 false；保留原观测时间与年龄，不冒充新观测。
+- `new_window`：有反查地址建议时保留，不回写卡片。
+
+revision 或 SESSION/WINDOW/OWNER/STARTED_AT 改变时丢弃旧结果，输出 pending/unknown。
+即使其他卡持续变化，心跳仍按独立时钟报告当前缓存。慢批次未结束时允许 pending，
+不能把这种 unknown 当作 Agent 已停止。结果覆盖与输入集合均为 O(监听卡数)，
+不是无限历史队列；单批总预算耗尽后未出队项维持 unknown。
+
+输出只有一个 worker，最多排队 16 行，另有一行正在写出；每行最多 1 MiB（含换行）。
+每行的 2 秒期限从入队开始计算，包含排队时间。队列满、单行超限、短写、断管或
+写出超时均明确报错并结束订阅，不丢弃事件后继续伪装完整流。退出可能留下尚未写出的
+行或部分末行；消费者只解析完整 JSON 行，重连后重新核对 snapshot/revision。
+心跳间隔从快照/心跳入队后开始，不等待消费者读取；慢消费者在限额内保持 FIFO。
+全体 done 不自动退出，仍由消费者决定何时停止。错误诊断的 stderr 写入同样限 2 秒；
+即使 stdout/stderr 指向同一停读管道，也不会因诊断再次无限等待。无法写出诊断时
+以非零退出通知失败，最坏会比输出失败多等待一个诊断期限。
+
+`SubscribeContext` 接收调用方 context；旧 `Subscribe` 保留停止通道包装，关闭 stop
+返回成功。CLI 将 Ctrl+C 作为正常退出，POSIX 同时处理 SIGTERM/SIGHUP；Windows
+处理 Go 暴露的 console Ctrl+Break、关闭、注销、关机通知。强制 kill 不运行清理钩子。
+所有正常退出路径取消并等待探测 worker、输出 worker、停止通道适配器与平台取消回调，
+不遗弃阻塞 goroutine。读锁争用也复用调用方 context 与原 2 秒读取期限。
+
+自定义 `io.Writer` 必须实现 `ContextWriter.WriteContext`，在取消后返回且不遗留后台
+写入；普通无法取消的 Writer 在首次写入前拒绝。`bytes.Buffer`、`strings.Builder`、
+`io.Discard` 保持兼容。调用期间输出目标由订阅独占，调用方不得同时写入、关闭或
+修改描述符属性；违反 ContextWriter 契约的实现无法获得退出保证。
+
+平台适配的边界如下：
+
+- POSIX：对传入文件描述符启用 nonblocking，EAGAIN 时每 5ms 检查取消/期限；
+  不等待满管道，writer 汇合后恢复原文件状态标志，不关闭调用方文件。描述符副本
+  共享这些标志，因此调用方必须同时约束别名的使用。
+- Windows：支持 deadline 的 overlapped 文件使用 Go poller 和写期限；同步句柄在
+  固定 OS 线程写入，以 CancelSynchronousIo 取消，并等待取消线程汇合。取消请求
+  与进入写调用之间的竞争以 5ms 重试覆盖。控制台保留 Go 的 Unicode 写出。
+  [Microsoft 的取消契约](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelsynchronousio)
+  不保证每一种内核 I/O 都立即完成；实现保留并等待真实完成，不伪造已回收。
+
+文件打开、普通磁盘/网络文件系统 I/O、驱动响应、进程创建/回收及系统调度仍受 OS
+控制；上述期限不是不可取消内核操作的硬实时保证。JSON 编码在单行大小检查之前，
+仍需要与当前监听集合成比例的临时空间。自动测试使用临时看板和假 CLI，真实
+终端、真实 tmux/herdr/Agent、原生 Windows 与交叉编译结果必须分别记录。

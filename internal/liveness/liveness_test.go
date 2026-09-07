@@ -2,6 +2,7 @@ package liveness
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -475,6 +476,13 @@ func (b *subscriptionOutput) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.Write(p)
+}
+
+func (b *subscriptionOutput) WriteContext(ctx context.Context, p []byte) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return b.Write(p)
 }
 
 func (b *subscriptionOutput) String() string {

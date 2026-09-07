@@ -119,5 +119,5 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 - [目录卡与迁移](docs/directory-cards.md): SIZE、只读过渡、维护窗口和各阶段恢复.
 - [探测期限与取消](docs/probe-deadlines.md)：单卡与批量预算、并发上限、观测身份和有效性、context API、进程回收，以及系统 I/O 和平台验证边界。
 
-- [订阅事实与成员集合](docs/subscription-facts.md)：JSONL 版本、revision、动态组引用、完整性告警与协调读取期限。
+- [订阅事实与成员集合](docs/subscription-facts.md)：JSONL 版本、revision、动态组引用、完整性告警、协调读取期限，以及有界探测和输出生命周期。
 - [持久派回协议](docs/durable-dispatch.md)：稳定 ID、原子接受/完成回执、执行 epoch、投递对账与兼容边界。

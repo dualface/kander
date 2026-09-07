@@ -188,9 +188,9 @@ PREREQUISITES: N/A
 - A card that has been dispatched for wrap-up closes its wrap-up loop when it enters `done/`.
 - After a new member starts or a card is dispatched back via `notify`, restart the subscription with parameters naming the explicit set of members that still need monitoring, and continue judging from the new initial snapshot.
 
-- The subscription emits a `heartbeat` every 15 minutes by default, independently of state changes. The interval restarts after each heartbeat is emitted; slow probes or blocked output can delay emission.
+- The subscription emits a `heartbeat` every 15 minutes by default, independently of state changes. The interval restarts after each heartbeat is queued. Slow probes do not block scanning or heartbeat production; output backpressure beyond the bounded queue/write deadline terminates explicitly. Reconnect and reconcile the new snapshot after such an exit.
 
-  The orchestrator reads the `liveness` carried by the event directly: `alive` keeps waiting, `stopped` or `drifted` is handled per "Failure Recovery", and `unknown` is reported as undeterminable together with the details.
+  The orchestrator reads the `liveness` carried by the event directly, checking revision/identity, observation age, validity and collection state. Pending, uncollected and stale observations remain `unknown`; `alive` keeps waiting, `stopped` or `drifted` is handled per "Failure Recovery", and `unknown` is reported as undeterminable together with the details.
 
   Do not run a board-wide `kander check`, do not re-read unrelated cards, and do not patrol with capture-pane on your own.
 

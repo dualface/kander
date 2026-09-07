@@ -36,6 +36,11 @@ func factsUpdate(root, id string, change func(string) string) error {
 
 func factsEvents(t *testing.T, root string, opts subscribeOptions, onEvent func(groupEvent) error) ([]groupEvent, error) {
 	t.Helper()
+	// Mutations in the snapshot callback must finish within one scan interval.
+	// Output delivery is asynchronous; these facts tests intentionally use a
+	// slower scan to exercise changes between observations.
+	opts.Refresh = .25
+	opts.Heartbeat = .5
 	stop := make(chan struct{})
 	var once sync.Once
 	finish := func() { once.Do(func() { close(stop) }) }

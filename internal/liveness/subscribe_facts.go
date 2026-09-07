@@ -33,6 +33,8 @@ type subscription struct {
 	reconciliation bool
 	last           subscriptionFacts
 	hasGroups      bool
+	probes         *subscriptionProbes
+	heartbeat      time.Duration
 }
 
 func newSubscription(opts subscribeOptions) (*subscription, error) {
@@ -77,9 +79,9 @@ func newSubscription(opts subscribeOptions) (*subscription, error) {
 	return session, nil
 }
 
-func (s *subscription) read(root string) (facts subscriptionFacts, err error) {
+func (s *subscription) readContext(ctx context.Context, root string) (facts subscriptionFacts, err error) {
 	facts.observedAt = nowFn().UTC()
-	ctx, cancel := context.WithTimeout(context.Background(), subscriptionReadTimeout)
+	ctx, cancel := context.WithTimeout(ctx, subscriptionReadTimeout)
 	defer cancel()
 	if s.hasGroups {
 		facts.scanned, err = board.ScanContext(ctx, root)
@@ -207,7 +209,7 @@ func (s *subscription) emit(w io.Writer, event string, facts subscriptionFacts, 
 	payload.Updated = updated
 	payload.Removed = removed
 	if event == "heartbeat" {
-		payload.Liveness = subscriptionLiveness(facts.scanned, facts.states)
+		payload.Liveness = s.probes.liveness(facts, s.heartbeat)
 	}
 	if err := emitEvent(w, payload); err != nil {
 		return err

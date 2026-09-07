@@ -1,12 +1,13 @@
 package liveness
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
 	"time"
@@ -34,10 +35,20 @@ type changeEvent struct {
 }
 
 type livenessJSON struct {
-	Agent   string `json:"agent"`
-	Status  string `json:"status"`
-	Channel string `json:"channel"`
-	Detail  string `json:"detail"`
+	Agent            string              `json:"agent"`
+	Status           string              `json:"status"`
+	Channel          string              `json:"channel"`
+	Detail           string              `json:"detail"`
+	ObservedAt       *time.Time          `json:"observed_at,omitempty"`
+	AgeSeconds       float64             `json:"age_seconds"`
+	RuntimeState     string              `json:"runtime_state"`
+	ObservationValid bool                `json:"observation_valid"`
+	Identity         ObservationIdentity `json:"identity"`
+	Revision         uint64              `json:"revision"`
+	CollectionState  string              `json:"collection_state"`
+	Collecting       bool                `json:"collecting"`
+	Stale            bool                `json:"stale"`
+	NewWindow        string              `json:"new_window,omitempty"`
 }
 
 type groupEvent struct {
@@ -161,30 +172,34 @@ func emitEvent(w io.Writer, payload groupEvent) error {
 	return err
 }
 
-func subscriptionLiveness(scanned board.Board, states map[string]string) map[string]livenessJSON {
-	reports := map[string]livenessJSON{}
-	for taskID, state := range states {
-		if state != "working" {
-			continue
+// Subscribe preserves the stop-channel API; a closed stop is a successful exit.
+// Writer requirements and resource ownership follow SubscribeContext.
+func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan struct{}) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		select {
+		case <-stop:
+			cancel()
+		case <-ctx.Done():
 		}
-		entry := scanned.Entries[taskID]
-		text, err := scanned.Document(taskID)
-		var rep Report
-		if err != nil {
-			rep = Report{Agent: "N/A", Status: Unknown, Channel: "unknown", Detail: err.Error()}
-		} else {
-			rep = ClassifyTask(entry, text)
-		}
-		reports[taskID] = livenessJSON{Agent: rep.Agent, Status: rep.Status, Channel: rep.Channel, Detail: rep.Detail}
-	}
-	if len(reports) == 0 {
+	}()
+	err := SubscribeContext(ctx, root, opts, w)
+	stopped := ctx.Err() != nil
+	cancel()
+	<-joined
+	if stopped && err == context.Canceled {
 		return nil
 	}
-	return reports
+	return err
 }
 
-// Subscribe writes JSON Lines to w until stop is closed.
-func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan struct{}) error {
+// SubscribeContext owns one probe batch and one bounded output worker. It joins
+// both before returning. Custom writers must implement ContextWriter; files,
+// bytes.Buffer, strings.Builder and io.Discard are adapted internally.
+func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer) (result error) {
+
 	refresh, valid := subscriptionInterval(opts.Refresh)
 	if !valid {
 		return fmt.Errorf("%s", t("liveness.refresh_interval_must_be_greater_than_0"))
@@ -197,18 +212,36 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 	if err != nil {
 		return err
 	}
-	snapshot, err := session.read(root)
+	writer, cleanup, err := subscriptionWriter(w)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cleanupErr := cleanup(); cleanupErr != nil {
+			result = errors.Join(result, cleanupErr)
+		}
+	}()
+	output := newSubscriptionOutput(ctx, writer)
+	probes := newSubscriptionProbes(ctx)
+	defer func() { probes.finish(); result = subscriptionResult(ctx, result, output.finish()) }()
+	session.probes = probes
+	session.heartbeat = heartbeat
+	w = output
+	snapshot, err := session.readContext(ctx, root)
 	if err != nil {
 		return session.unavailable(w, snapshot, err)
 	}
 	if err := session.emit(w, "snapshot", snapshot, nil, nil, nil); err != nil {
 		return err
 	}
+	probes.start(snapshot)
 	heartbeatDue := nowFn().Add(heartbeat)
 	for {
 		select {
-		case <-stop:
-			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-output.done:
+			return output.err
 		default:
 		}
 		heartbeatRemaining := heartbeatDue.Sub(nowFn())
@@ -222,12 +255,19 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 		}
 		timer := time.NewTimer(wait)
 		select {
-		case <-stop:
+		case <-ctx.Done():
 			timer.Stop()
-			return nil
+			return ctx.Err()
+		case <-output.done:
+			timer.Stop()
+			return output.err
+		case batch := <-probes.results:
+			timer.Stop()
+			probes.accept(batch)
+			continue
 		case <-timer.C:
 		}
-		current, err := session.read(root)
+		current, err := session.readContext(ctx, root)
 		if err != nil {
 			return session.unavailable(w, current, err)
 		}
@@ -266,50 +306,70 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 			if err := session.emit(w, "heartbeat", current, nil, nil, nil); err != nil {
 				return err
 			}
+			probes.start(current)
 			heartbeatDue = nowFn().Add(heartbeat)
 		}
 	}
 }
 
-func usageSubscribe(w io.Writer) {
-	fmt.Fprintln(w, t(
-		"liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group",
-	))
+func usageSubscribe(w io.Writer) error {
+	return writeSubscriptionDiagnostic(w, t("liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group"))
+}
+
+// A merged stdout/stderr pipe must not turn an output failure into another
+// unbounded write. When diagnostics also fail, the nonzero exit is the signal.
+func writeSubscriptionDiagnostic(w io.Writer, message string) error {
+	writer, cleanup, err := subscriptionWriter(w)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), subscriptionWriteTimeout)
+	defer cancel()
+	data := []byte(message + "\n")
+	n, err := writer.WriteContext(ctx, data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	return errors.Join(err, cleanup())
 }
 
 // RunSubscribe implements kander subscribe.
 func RunSubscribe(args []string) int {
 	opts, parseErr := parseSubscribeArgs(args)
 	if parseErr == "usage" {
-		usageSubscribe(os.Stderr)
+		if err := usageSubscribe(os.Stderr); err != nil {
+			return 1
+		}
 		return 2
 	}
 	if parseErr != "" {
 		if strings.HasPrefix(parseErr, t("liveness.unknown_option")) || strings.HasPrefix(parseErr, t("liveness.missing_prefix")) {
-			usageSubscribe(os.Stderr)
-			fmt.Fprintln(os.Stderr, parseErr)
+			if err := usageSubscribe(os.Stderr); err != nil {
+				return 1
+			}
+			if err := writeSubscriptionDiagnostic(os.Stderr, parseErr); err != nil {
+				return 1
+			}
 			return 2
 		}
-		fmt.Fprintf(os.Stderr, "kander: %s\n", parseErr)
+		if err := writeSubscriptionDiagnostic(os.Stderr, "kander: "+parseErr); err != nil {
+			return 1
+		}
 		return 1
 	}
 	root, err := board.BoardRoot()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
+			return 1
+		}
 		return 1
 	}
-	stop := make(chan struct{})
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		select {
-		case <-sig:
-			close(stop)
-		case <-stop:
+	ctx, cancel := subscriptionSignalContext()
+	defer cancel()
+	if err := SubscribeContext(ctx, root, opts, os.Stdout); err != nil && err != context.Canceled {
+		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
+			return 1
 		}
-	}()
-	if err := Subscribe(root, opts, os.Stdout, stop); err != nil {
-		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
 		return 1
 	}
 	return 0

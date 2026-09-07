@@ -174,9 +174,9 @@ func TestBatchDefaultConcurrencyCancellationJoinsWorkers(t *testing.T) {
 func TestBatchEarlierCallerDeadlineWins(t *testing.T) {
 	resetLang(t)
 	dir := installBatchFake(t, false)
+	started := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	started := time.Now()
 	reports := ClassifyTasksContext(ctx, batchInputs(8), BatchOptions{Budget: time.Second, Concurrency: 2})
 	if elapsed := time.Since(started); elapsed < 200*time.Millisecond || elapsed > 500*time.Millisecond {
 		t.Fatalf("caller deadline ignored: %s", elapsed)
