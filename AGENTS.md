@@ -30,7 +30,7 @@
 | `internal/i18n`     | go-i18n 消息目录与模板渲染; 不依赖 config, 语言由调用方传入              |
 | `internal/fs`       | POSIX no-follow 与 Windows 句柄/reparse/DACL/共享及独占锁                          |
 | `internal/process`  | Agent CLI 解析, UTF-8 任务文件, argv/env 调用构造                         |
-| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验                 |
+| `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验，dispatch 意图、epoch 与原子回执                 |
 | `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚                               |
 | `internal/probe`    | herdr/tmux pane 事实采集                                                 |
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
@@ -69,7 +69,7 @@
 
 ## 子命令
 
-Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en,ja}`.
+Runner 注册表包含: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `subscribe`. `help` 是直接输出顶层帮助的特殊分支, 不进入 Runner 注册表. 裸 `kander` 打开终端看板; 全局 `--lang {cn,en,ja}`.
 
 ## TUI 测试
 
@@ -120,3 +120,4 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 - [探测期限与取消](docs/probe-deadlines.md)：单卡与批量预算、并发上限、观测身份和有效性、context API、进程回收，以及系统 I/O 和平台验证边界。
 
 - [订阅事实与成员集合](docs/subscription-facts.md)：JSONL 版本、revision、动态组引用、完整性告警与协调读取期限。
+- [持久派回协议](docs/durable-dispatch.md)：稳定 ID、原子接受/完成回执、执行 epoch、投递对账与兼容边界。

@@ -14,8 +14,9 @@ import (
 // Version is an operation-local cursor. Copies of an Entry share the cursor only
 // within that operation; a new snapshot always receives a separate cursor.
 type Version struct {
-	mu       sync.Mutex
-	revision uint64
+	mu            sync.Mutex
+	revision      uint64
+	authorization ExecutionAuthorization
 }
 
 // Snapshot is a committed, consistent task document and its optimistic version.
@@ -169,7 +170,7 @@ func (tx *Transaction) Snapshot(id string) (Snapshot, error) {
 			return Snapshot{}, err
 		}
 	}
-	e.Version = &Version{revision: v}
+	e.Version = &Version{revision: v, authorization: authFrom(text)}
 	last, err := readVersion(tx.root, id)
 	if err != nil {
 		return Snapshot{}, err

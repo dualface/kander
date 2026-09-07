@@ -11,7 +11,7 @@ import (
 	"github.com/dualface/kander/internal/window"
 )
 
-func commandNotify(root, taskID, message, messageFile, pane string, messageSet bool, timeout float64) error {
+func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messageSet bool, timeout float64) error {
 	loaded, err := board.LoadBoard(root)
 	if err != nil {
 		return err
@@ -136,6 +136,9 @@ func commandNotify(root, taskID, message, messageFile, pane string, messageSet b
 				)
 			}
 			messagePath = ""
+		}
+		if board.MetadataFrom(text, "DISPATCH_ID") != "" {
+			return notifyError("launch.dispatch_recovery_unproven", board.MetadataFrom(text, "DISPATCH_ID"), directError)
 		}
 		resumeLaunch, err = launch.NotifyViaResume(root, entry, text, msg, timeout)
 		if err != nil {

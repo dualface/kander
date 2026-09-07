@@ -83,6 +83,7 @@ type UpdateOptions struct {
 	Text             string
 	ExpectedRevision uint64
 	ContractDecision string
+	Authorization    ExecutionAuthorization
 }
 
 var managedFields = []string{FieldOwner, FieldSession, FieldWindow, FieldStartedAt, FieldFinishedAt, FieldResult, FieldLanguage, FieldCreatedAt, "REVISION", "OPERATION_ID", "EXECUTION_EPOCH", "DISPATCH_ID", "REVIEWS"}
@@ -177,6 +178,9 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		if err != nil {
 			return err
 		}
+		if err = tx.requireExecution(s, o.Authorization, true); err != nil {
+			return err
+		}
 		if _, err = documentPath(s.Entry, o.Document); err != nil {
 			return err
 		}
@@ -212,7 +216,7 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 // RunUpdate implements the versioned UTF-8 body and attachment update entrance.
 func RunUpdate(args []string) int {
 	values := map[string]string{}
-	for _, name := range []string{"--document", "--file", "--expect-revision", "--contract-decision-file"} {
+	for _, name := range []string{"--document", "--file", "--expect-revision", "--contract-decision-file", "--dispatch-id", "--execution-epoch"} {
 		var err error
 		args, values[name], _, err = takeValueFlag(args, name)
 		if err != nil {
@@ -245,7 +249,11 @@ func RunUpdate(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if err = UpdateDocument(root, args[0], UpdateOptions{values["--document"], string(data), rev, decision}); err != nil {
+	authorization, err := parseExecutionAuthorization(values)
+	if err != nil {
+		return fail(err)
+	}
+	if err = UpdateDocument(root, args[0], UpdateOptions{Document: values["--document"], Text: string(data), ExpectedRevision: rev, ContractDecision: decision, Authorization: authorization}); err != nil {
 		return fail(err)
 	}
 	return 0

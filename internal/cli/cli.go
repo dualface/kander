@@ -38,6 +38,7 @@ var commandNames = []string{
 	"check",
 	"guard-write",
 	"update",
+	"dispatch",
 	"subscribe",
 }
 

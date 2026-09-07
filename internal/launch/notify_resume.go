@@ -101,9 +101,14 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if plan.Launcher == "herdr" || plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
 		loc = recordWindowLocation(root, plan, entry)
 	}
-	outcome, err := launchAgent(plan, root, windowName(entry, originalText), inv, loc, paneCB, &session)
+	durable := board.MetadataFrom(originalText, "DISPATCH_ID") != ""
+	outcome, err := launchAgent(plan, root, windowName(entry, originalText), inv, loc, paneCB, &session, durable)
 	if err != nil {
 		failure := asLaunchFailure(err)
+		if failure.DeliveryUnknown {
+			taskFileHandedOff = true
+			return ResumeLaunch{}, err
+		}
 		rollback := window.RestoreWindowText(root, entry, originalText)
 		if msg := window.ResumeFailureMessage(failure.Err, errorString(failure.CloseError), rollback); msg != "" {
 			return ResumeLaunch{}, &Error{Message: msg}
@@ -111,7 +116,10 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 		return ResumeLaunch{}, err
 	}
 	taskFileHandedOff = true
-	if err := validateResumedAgent(plan, outcome, session, timeout); err != nil {
+	if err := validateResumedDispatch(root, entry, originalText, plan, outcome, session, timeout); err != nil {
+		if durable {
+			return ResumeLaunch{}, err
+		}
 		var cleanup error
 		if cErr := cleanupFailedResume(plan, outcome); cErr != nil {
 			cleanup = cErr

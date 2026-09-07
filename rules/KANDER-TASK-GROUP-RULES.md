@@ -217,6 +217,13 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
   Cross-card integration findings go to the card whose modification scope they hit; when none matches, the orchestrator creates a small fix card and adds it to this group (fill in `TASK_GROUP` and `PREREQUISITES`, then `pick` and `start`).
 
+**Durable Dispatch Identity**
+
+- Use `notify --kind fix` for findings, `--kind sync` for task-branch synchronization, and `--kind wrap-up` after integration. Record the printed dispatch ID, frozen baseline and original message; retries reuse the same ID and payload.
+- Read `kander dispatch show <task-id> <dispatch-id>` to reconcile uncertainty. State changes and terminal echo do not replace accepted/completed receipts. Before working, the executing owner uses the ID/epoch move command from the generated prompt; a replayed receipt does not authorize duplicate work. Completion carries the same grant and final delivery/evidence references.
+- When a notify returns nonzero, preserve the actual dispatch state. Do not invent a new round or separately invoke resume to escape uncertainty. Report the reason; a same-ID retry follows the command protocol's persisted deadline, readiness and stopped/unknown rules.
+- The legacy "exactly once" notify statements below mean one logical dispatch ID. They do not prohibit same-ID reconciliation, and do not promise exactly-once external side effects. Column transitions remain scheduling hints; verify the dispatch receipt before treating a bound round as accepted or complete.
+
 **Dispatching Findings Back**
 
 - A dispatch-back calls `kander notify <task-id> --message-file <findings>` exactly once and checks the exit code; channel selection, recovery, and window/document rollback are handled inside the command. A dispatch-back carries only gate findings (`blocking`, `high`, `medium`, including `[mechanical]`); `low`, `recommend` and `suggest` items go to the card's unresolved list and are never dispatched, and no dispatch asks the author to "triage" a non-blocking list.

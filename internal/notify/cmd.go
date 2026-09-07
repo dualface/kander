@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/internal/launch"
 )
 
 func init() {
@@ -49,6 +50,10 @@ func RunNotify(args []string) int {
 			usage(os.Stdout)
 			return 0
 		}
+	}
+	args, dispatchOptions, dispatchErr := launch.ParseDispatchOptions(args)
+	if dispatchErr != nil {
+		return fail(dispatchErr)
 	}
 	timeout := 120.0
 	var message, messageFile, pane string
@@ -111,7 +116,7 @@ func RunNotify(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if err := commandNotify(root, positional[0], message, messageFile, pane, messageSet, timeout); err != nil {
+	if err := commandNotify(root, positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions); err != nil {
 		return fail(err)
 	}
 	return 0

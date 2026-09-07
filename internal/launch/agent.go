@@ -20,9 +20,14 @@ func launchAgent(
 	location func(LaunchOutcome) error,
 	paneSession func() (AgentSession, error),
 	agentSession *AgentSession,
+	durable ...bool,
 ) (LaunchOutcome, error) {
 	var createdTab, createdWindow string
+	sendAttempted := false
 	fail := func(err error) error {
+		if sendAttempted && len(durable) > 0 && durable[0] {
+			return &LaunchFailure{Err: err, DeliveryUnknown: true}
+		}
 		var closeErr string
 		if createdTab != "" {
 			closeErr = herdrCloseTab(plan.HerdrBin, createdTab)
@@ -57,6 +62,7 @@ func launchAgent(
 				return LaunchOutcome{}, fail(err)
 			}
 		}
+		sendAttempted = true
 		if err := herdrPaneRun(plan.HerdrBin, pane, command); err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
@@ -97,6 +103,7 @@ func launchAgent(
 			return LaunchOutcome{}, fail(err)
 		}
 	}
+	sendAttempted = true
 	if err := tmuxStartPane(plan.Tmux, pane, command); err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
@@ -243,8 +250,21 @@ func validateLivenessTimeout(timeout float64, command string) error {
 }
 
 func validateResumedAgent(plan LaunchPlan, outcome LaunchOutcome, session AgentSession, timeout float64) error {
+	return validateResumedAgentReceipt(plan, outcome, session, timeout, nil)
+}
+
+func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session AgentSession, timeout float64, receipt func() (bool, error)) error {
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
 	for {
+		if receipt != nil {
+			consumed, err := receipt()
+			if err != nil {
+				return err
+			}
+			if consumed {
+				return nil
+			}
+		}
 		if plan.Launcher == "foreground" || plan.Launcher == "console" {
 			if outcome.Poll != nil {
 				if code := outcome.Poll(); code != nil {

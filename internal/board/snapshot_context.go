@@ -124,7 +124,7 @@ func scanContext(ctx context.Context, root string, ids []string) (b Board, err e
 			entry = attachSize(entry, text)
 		}
 		b.revisions[id] = version
-		entry.Version = &Version{revision: version}
+		entry.Version = &Version{revision: version, authorization: authFrom(text)}
 		b.Entries[id] = entry
 	}
 	return b, nil

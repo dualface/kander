@@ -82,3 +82,7 @@ schema 1 操作记录包含:
 ## 审核原件发布
 
 审核归档复用本协议。`Transaction.PutBytes` 允许专用生产者无损保存二进制附件；spec.md 仍要求 UTF-8。非法 UTF-8 的 FileChange 在 JSON 日志中采用 `binary: true`、`before_bytes`/`after_bytes`（base64）；文本记录保持既有格式。恢复解码后通过相同 fs 原子写入执行，创建与替换语义不变。运行、批次与逐卡清单见 [审核证据](review-evidence.md)。
+
+## 持久派回授权
+
+绑定 dispatch 的正文与附件 update 还须携带 `--dispatch-id` 和 `--execution-epoch`；当前 revision 不能替代执行授权。WINDOW/launch 回滚同时校验操作局部版本和授权，接受/完成回执与 state/revision 共用本文件的事务。意图和回执原件由 board producer 管理，普通 update 不得改写；命令及恢复见 [持久派回协议](durable-dispatch.md)。

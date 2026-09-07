@@ -51,6 +51,9 @@ kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--expect-revision <revision>]
+kander dispatch prepare <absolute-UTF8-intent.json>
+kander dispatch show <task-id> <dispatch-id>
+kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>]
 kander pick [task-id]
 kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
@@ -77,7 +80,7 @@ foreground/console are normalized to the launcher name.
 
 When start or liveness validation fails, restore the pre-call text only if the operation still owns the current revision; otherwise preserve the actual state and newer text and report a conflict.
 
-Neither `notify` nor `resume` moves the card: `review -> working` is performed by the notified or woken executing agent itself via `kander move <task-id> working` before handling the items; that state change is the "received and started" acknowledgement.
+Neither `notify` nor `resume` moves the card. In the unbound compatibility flow: `review -> working` is performed by the notified or woken executing agent itself via `kander move <task-id> working` before handling the items; that state change is the legacy "received and started" acknowledgement. Durable dispatch instead requires its atomic accepted receipt.
 
 When `notify` probes the recorded `WINDOW`, it handles three classes. This classification takes precedence over the recovery overview later in this file.
 
@@ -96,6 +99,20 @@ When `notify` probes the recorded `WINDOW`, it handles three classes. This class
   - Report both the reason the original address is stale and the reverse lookup reason.
 
 An explicit `--pane` override does no stale-address reverse lookup.
+
+**Durable Dispatch (takes precedence over legacy notification clauses)**
+
+- Group review cards use durable dispatch automatically. Explicit `--kind fix|sync|wrap-up`, `--dispatch-id`, or `--base <full-SHA>` selects it for working or non-group cards. Default kind is fix. Select wrap-up explicitly for post-integration completion. A new request without base uses the current working directory's Git HEAD.
+- `notify` and `resume` accept these flags. Print a generated ID before any send when it was omitted; record that ID and reuse it on retry. Same ID must retain task, message, kind, baseline and references. Preparation is idempotent; changed inputs conflict. Retry defaults reuse the original baseline and deadline.
+- An explicit UTF-8 intent for `dispatch prepare` contains `dispatch_id` (optional), `task_id`, `kind`, `message`, `base`, optional `references` (task ID plus card-relative `path`), `created_at` and `confirm_by`. Default acceptance deadline is 120 seconds after creation; new notify/resume requests use their timeout. It never resets on restart/retry and is not a work-completion deadline.
+- States are prepared, delivery-unknown, accepted, completed, failed and cancelled. Persist delivery-unknown before the send/launch boundary. Transport return values and marker echo never mean accepted. On an uncertain send failure, preserve the intent and payload; do not immediately launch another executor.
+- Query the same ID's receipt before retrying. Accepted/completed return without sending. Otherwise only a current, identity-valid stopped observation permits recovery; unknown or missing identity does not. A known ready session can receive the same ID again, because acceptance is idempotent. Busy waits share the persisted deadline. Expiry without a receipt is a nonzero pending result, not business completion.
+- The executing agent first runs `kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>`. Its JSON contains `dispatch` and `replayed`. Start work only for `replayed=false`; on replay or failure, report the receipt and do not repeat work. This remains true when the first round already returned to review before notify returned.
+- Every bound author update carries the same ID/epoch and current expected revision. Bound review disposition JSON also carries `authorization: {"dispatch_id":"...","epoch":1}`; legacy records remain unchanged. Complete fix/sync with `move review`, or wrap-up with `move done --result completed`, carrying `--dispatch-id`, `--execution-epoch`, `--delivery-commit <final-full-SHA>` and an applicable `--disposition <card-relative-artifact>`. Completion and its receipt commit atomically. Existing done/review evidence gates still apply; a recorded SHA is not Git integration verification.
+- Only one execution grant is active per card. A new intent replaces only a completed, failed or cancelled intent. Explicit `resume --agent` retains the existing user-authorization requirement and rotates the epoch for an unfinished same-ID dispatch, keeping its original payload and deadline. Old epochs cannot accept, update body/WINDOW or complete. No card lock spans an Agent session.
+- `dispatch fail|cancel` records an explicit intent decision with its expected dispatch revision and reason; it does not cancel or move the task, grant takeover, or discard originals. A changed/expired intent requires an explicit disposition before creating another ID; uncertainty alone is not cancellation authorization.
+- Ordinary unbound working messages and non-group legacy notifications retain their previous behavior and create no historical business receipt. The legacy delivery/marker clauses below apply only to those unbound messages. Bound card writes cannot omit the execution grant.
+- Dispatch originals and epoch receipts are producer-owned `dispatches/` attachments. Pending publications use the existing explicit init recovery and maintenance rules. Guarantees cover controlled card operations, never arbitrary external side effects exactly-once.
 
 **Start Parameters and Metadata**
 

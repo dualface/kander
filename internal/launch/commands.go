@@ -201,10 +201,7 @@ func lastSlash(p string) int {
 	return i
 }
 
-func commandResume(root string, agent *string, launcherOverride, taskID, message, messageFile string, messageSet bool, timeout float64) error {
-	if err := validateLivenessTimeout(timeout, "resume"); err != nil {
-		return err
-	}
+func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, message, messageFile string, messageSet bool, timeout float64, authorization ...resumeBinding) error {
 	loaded, err := loadBoardFn(root)
 	if err != nil {
 		return err
@@ -225,6 +222,14 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 	text, err := readDocumentFn(entry)
 	if err != nil {
 		return err
+	}
+	if len(authorization) > 0 {
+		bound, e := board.ReadExecutionSnapshot(root, taskID, authorization[0].Authorization)
+		if e != nil {
+			return e
+		}
+		entry = bound.Entry
+		text = bound.Text
 	}
 	oldSession, err := sessionFrom(text)
 	if err != nil {
@@ -379,12 +384,19 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
 	}
-	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session)
+	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, len(authorization) > 0)
 	if err != nil {
+		if asLaunchFailure(err).DeliveryUnknown {
+			taskFileHandedOff = true
+			return err
+		}
 		return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 	}
 	taskFileHandedOff = true
-	if err := validateResumedAgent(plan, outcome, effective, timeout); err != nil {
+	if err := validateResumedDispatch(root, moved, text, plan, outcome, effective, timeout); err != nil {
+		if len(authorization) > 0 {
+			return err
+		}
 		detail := resumedAgentFailureOutput(plan, outcome)
 		if detail != "" {
 			err = launchError("launch.agent_output", err.Error(), detail)
@@ -421,6 +433,12 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 	verb := t("launch.resumed")
 	if takeover {
 		verb = t("launch.taken_over")
+	}
+	if len(authorization) > 0 {
+		if authorization[0].Outcome != nil {
+			*authorization[0].Outcome = ResumeLaunch{Plan: plan, Outcome: outcome}
+		}
+		return nil
 	}
 	return reportLaunch(verb, moved, effective.Agent, plan, outcome)
 }

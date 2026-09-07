@@ -64,8 +64,9 @@ type LaunchOutcome struct {
 
 // LaunchFailure is a failed launch, together with the result of closing the container created by this attempt.
 type LaunchFailure struct {
-	Err        error
-	CloseError string
+	DeliveryUnknown bool
+	Err             error
+	CloseError      string
 }
 
 func (f *LaunchFailure) Error() string {

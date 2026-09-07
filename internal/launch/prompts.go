@@ -132,6 +132,9 @@ func resumePrompt(taskID, message string, paths config.InstallPaths, state, card
 		return "", err
 	}
 	status := cardStateStatus(paths, taskID, state)
+	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
+		status = t("launch.dispatch_bound")
+	}
 	return t("launch.prompt.resume", t("launch.prompt.resume_head", taskID), status, rules, commandName(paths), taskID, message, promptAgents(paths)), nil
 }
 
@@ -144,6 +147,9 @@ func takeoverAgentPrompt(taskID, message string, paths config.InstallPaths, prev
 		return "", err
 	}
 	status := cardStateStatus(paths, taskID, state)
+	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
+		status = t("launch.dispatch_bound")
+	}
 	return t("launch.prompt.takeover", t("launch.prompt.takeover_head", taskID), previous, status, rules, commandName(paths), taskID, message, promptAgents(paths)), nil
 }
 

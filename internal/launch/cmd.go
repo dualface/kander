@@ -132,6 +132,10 @@ func RunResume(args []string) int {
 			return 0
 		}
 	}
+	args, dispatchOptions, dispatchErr := ParseDispatchOptions(args)
+	if dispatchErr != nil {
+		return fail(dispatchErr)
+	}
 	timeout := notifyDefaultTimeout
 	var message, messageFile, agent, launcher string
 	var messageSet, agentSet bool
@@ -219,7 +223,7 @@ func RunResume(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if err := commandResume(root, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout); err != nil {
+	if err := commandResume(root, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions); err != nil {
 		return fail(err)
 	}
 	return 0

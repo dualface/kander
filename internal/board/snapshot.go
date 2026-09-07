@@ -51,6 +51,12 @@ func managedMutation(root string, entry Entry, text, state string) error {
 		if err != nil {
 			return err
 		}
+		if err = tx.requireExecution(s, entry.Version.authorization, false); err != nil {
+			return err
+		}
+		if authFrom(text) != authFrom(s.Text) {
+			return dispatchError(entry.TaskID)
+		}
 		if s.Entry.Path != entry.Path {
 			return kanbanError("board.transaction_conflict", entry.TaskID)
 		}
@@ -77,6 +83,10 @@ type MoveOptions struct {
 	Decision         string
 	DuplicateOf      string
 	ExpectedRevision *uint64
+	Authorization    ExecutionAuthorization
+	DeliveryCommit   string
+	Disposition      *ArtifactReference
+	Replayed         *bool
 }
 
 // MoveEntry preserves the existing API for callers already holding a snapshot.
@@ -108,7 +118,18 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if s.Entry.State != entry.State || s.Entry.Path != entry.Path || (entry.Version != nil && s.Revision != entry.Version.revision) || (options.ExpectedRevision != nil && s.Revision != *options.ExpectedRevision) {
 			return kanbanError("board.transaction_conflict", entry.TaskID)
 		}
-		if !allowedMove(entry.State, target) {
+		replayed, e := stageDispatchMove(tx, s, target, options)
+		if e != nil {
+			return e
+		}
+		if options.Replayed != nil {
+			*options.Replayed = replayed
+		}
+		if replayed {
+			moved = s.Entry
+			return nil
+		}
+		if !allowedMove(entry.State, target) && !(options.Authorization.DispatchID != "" && target == "working" && entry.State == "working") {
 			return kanbanError("board.move_not_allowed", entry.State, target)
 		}
 		updated, e := moveMetadata(s.Text, entry.State, target, options)
@@ -142,7 +163,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if moved.IsDirectory() {
 			moved.Document = joinBoard(moved.Path, "spec.md")
 		}
-		moved.Version = &Version{revision: s.Revision + 1}
+		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated)}
 		return nil
 	})
 	return moved, err

@@ -74,13 +74,15 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 常用按键: 方向键或 `hjkl` 移动, `Enter` 看任务卡, `/` 搜索, `y` 复制任务 ID, `-`/`=` 增减同屏栏目数, `a` 切换存档栏目, `t` 换主题, `o` 打开选项, `r` 刷新, `q` 退出. 按 `?` 调出完整按键说明.
 
-其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dismiss` 派发消息与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
+其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dispatch`/`dismiss` 派发消息、读取持久回执与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
 
 所有新卡使用 `<task-id>/spec.md`, `SIZE: small|large` 决定规模, 配置键不变. 默认 small 保留 IMPLEMENTATION/SUMMARY; `new --large` 使用 large 的 report.md 完成要求. 旧文件只读兼容, 变更前必须迁移.
 
 `kander init` 显式迁移七状态旧卡并恢复未完成事务. 先暂停 Agent、外部编辑器、通知与归档写入; 有 working/review 卡时默认拒绝迁移, 全部停写后用 `kander init --maintenance` 确认维护窗口. 不会自动停止 Agent. 二次执行迁移数为 0, 卡片内容与 mtime 不变. 详见 [目录卡与迁移](docs/directory-cards.md).
 
 `kander show --json <task-id>` 返回正文、当前位置、revision 和操作 ID. Agent 将修改稿写入独立 UTF-8 文件后, 用 `kander update <task-id> --document spec.md --file <input> --expect-revision <revision>` 提交; 小卡也使用逻辑文档名 `spec.md`. 冲突必须重新读取并合并. 完成用 `move <task-id> done --result completed`, 手工认领用 `move <task-id> working --owner <agent>`. 协议与恢复见 [卡片事务](docs/card-transactions.md); [guard-write](docs/kanban-write-guard.md) 仅为辅助检查, 不保证检查与外部写入原子性.
+
+任务组 review 派回使用持久 dispatch；普通 working 消息可用 `--kind fix|sync|wrap-up` 显式选择。发送前打印稳定 ID，重试带 `--dispatch-id`；只有执行端带 ID/epoch 的受控 move 才生成接受/完成回执。终端回显不代表开工，unknown 不自动启动第二执行者。命令、期限、兼容和恢复见 [持久派回协议](docs/durable-dispatch.md)。
 
 `kander check` 的存活段与 `subscribe` 心跳只报告观测结果. `alive` 表示 Agent 存在, 不代表已就绪或任务有进展; `notify` 仍独立检查能否接收消息. 旧地址失效后, 有效反查确认零匹配才据此报告 `stopped`, 唯一匹配报告 `drifted`; 反查失败、非法输出、超时或多匹配报告 `unknown`, 保留原地址失效原因及反查阶段和原因. 禁用反查或会话引用为空时保留原有直接探测语义, Codex 空引用不反查. 存活探测不写卡, 也不改变 `check` 的结构检查退出码.
 

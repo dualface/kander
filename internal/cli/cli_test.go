@@ -87,7 +87,7 @@ func TestUnimplementedCommands(t *testing.T) {
 	implemented := map[string]struct{}{
 		"init": {}, "list": {}, "ls": {}, "show": {},
 		"new": {}, "move": {}, "pick": {},
-		"guard-write": {}, "update": {},
+		"guard-write": {}, "update": {}, "dispatch": {},
 		"doctor": {}, "config": {},
 		"version": {}, "install": {},
 	}
