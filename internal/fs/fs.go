@@ -156,4 +156,7 @@ const (
 	kindAny objectKind = iota
 	kindFile
 	kindDirectory
+	// kindAnyWithReparse accepts a reparse-point leaf opened without following it.
+	// Only removal uses it; every other open keeps rejecting reparse points.
+	kindAnyWithReparse
 )

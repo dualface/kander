@@ -10,6 +10,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// symbolicLinkFlagAllowUnprivilegedCreate mirrors SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
+// which x/sys/windows does not export.
+const symbolicLinkFlagAllowUnprivilegedCreate = 0x2
+
 // IsBusyFile reports whether err means the target executable is occupied and cannot be replaced in place.
 func IsBusyFile(err error) bool {
 	if err == nil {
@@ -50,7 +54,7 @@ func CreateRelativeSymlink(root, path, target string) error {
 		closeHandle(existing)
 		return existError("symlink", candidate, "protected path already exists")
 	}
-	if err := windows.CreateSymbolicLink(windows.StringToUTF16Ptr(candidate), windows.StringToUTF16Ptr(target), windows.SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE); err != nil {
+	if err := windows.CreateSymbolicLink(windows.StringToUTF16Ptr(candidate), windows.StringToUTF16Ptr(target), symbolicLinkFlagAllowUnprivilegedCreate); err != nil {
 		return wrap("symlink", candidate, err)
 	}
 	return nil
@@ -111,7 +115,7 @@ func RemoveNonDirectoryIfExists(root, path string) (bool, error) {
 		return false, err
 	}
 	defer cleanup()
-	handle, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, windows.DELETE|windows.FILE_READ_ATTRIBUTES, kindAny, true, false)
+	handle, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, windows.DELETE|windows.FILE_READ_ATTRIBUTES, kindAnyWithReparse, true, false)
 	if err != nil {
 		if isMissingWin(err) || isNotExist(err) {
 			return false, nil

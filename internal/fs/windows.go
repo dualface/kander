@@ -130,6 +130,9 @@ func validateHandleKind(handle windows.Handle, path string, expected objectKind)
 		return err
 	}
 	if info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		if expected == kindAnyWithReparse {
+			return nil
+		}
 		return failClosed("stat", path, "reparse point is not allowed")
 	}
 	isDir := info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0
@@ -311,7 +314,11 @@ func tryOpenLeaf(
 	expected objectKind,
 	shareWrite, shareDelete bool,
 ) (windows.Handle, error) {
-	probe, err := openRelative(parent, name, path, windows.FILE_READ_ATTRIBUTES, false, kindAny, shareWrite, shareDelete || access&windows.DELETE != 0, kindAny)
+	probeKind := kindAny
+	if expected == kindAnyWithReparse {
+		probeKind = kindAnyWithReparse
+	}
+	probe, err := openRelative(parent, name, path, windows.FILE_READ_ATTRIBUTES, false, probeKind, shareWrite, shareDelete || access&windows.DELETE != 0, kindAny)
 	if err != nil {
 		if isMissingWin(err) || isNotExist(err) {
 			return 0, nil
