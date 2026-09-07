@@ -40,10 +40,12 @@
 快照、心跳及相关变化事件可携带 `dispatches`，以任务 ID 为键。每个摘要包含：
 
 - `dispatch_id`、`task_id`、`kind`、`epoch`、`state` 和 dispatch 自身的 `revision`。
-- 原始 `created_at`、`confirm_by`，以及快照时计算的 `age_seconds`。
+- `created_at` 保留原意图创建时间，`age_seconds` 按该时间在快照时计算。
+- `confirm_by` 是当前 epoch 的有效接受期限：普通授权取原意图期限；
+  wrap-up-only 专用 grant 取自身的独立期限，原意图期限不改写。
 - `accepted` / `completed` 原子回执，包含时间、卡片 revision、状态及适用的交付/处置引用。
 - `confirmation_pending`：仅 prepared/delivery-unknown 为 true；`confirmation_overdue`
-  表示这两种状态已达到原确认期限。accepted 后不是完成超时，不继续使用确认期限。
+  表示这两种状态已达到当前 epoch 的有效接受期限。accepted 后不是完成超时，不继续使用确认期限。
 
 这些字段与同一事件的卡片状态、正文、`task_revisions` 在同组共享锁内读取；
 摘要只报告当前执行授权，不暴露消息正文。未绑定的旧卡省略对应条目，不能补造历史回执。
@@ -52,8 +54,8 @@
 新 dispatch 取代当前授权后，旧 ID 仍通过 `kander dispatch show` 查询；摘要不是历史列表。
 完成回执证明受控完成操作，不能替代审核闭批或 Git 集成验证。
 
-每次扫描读取原 `confirm_by`，以该绝对期限独立唤醒；无关状态、正文、成员变化和心跳
-不续期。首次发现已过期也立即发 `dispatch-attention`，`attention` 列出超时任务 ID，
+每次扫描读取当前 epoch 的 `confirm_by`，以该绝对期限独立唤醒；同 epoch 重试、
+订阅重启以及无关状态、正文、成员变化和心跳均不续期。首次发现已过期也立即发 `dispatch-attention`，`attention` 列出超时任务 ID，
 `reconciliation_required=true` 要求消费者核对。事件附当前 dispatch 摘要及存活缓存，
 必要时启动有界探测；已有批次在途时保留一个合并请求，待其完成后调度，不卡住扫描。
 探测批次完成后，仍超时的派回再发注意事件，携带最新可用观测。后续心跳继续采集。
