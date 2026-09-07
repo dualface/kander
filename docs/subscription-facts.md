@@ -28,12 +28,42 @@
 `review -> working -> review` 即使最后状态相同，也会出现 `task-update`。
 重启重新发送当前 `snapshot`，消费者用保存的 revision 比较已发生的更新，不能用
 新进程的 `seq` 补历史事件。revision 只证明受控更新发生过，不证明某轮派发已完成；
-本接口没有 dispatch 回执或事件回放日志。旧版未建立版本记录的卡片 revision 为 0，
+当前 dispatch 的持久回执由下述 `dispatches` 提供，接口没有事件回放日志。旧版未建立版本记录的卡片 revision 为 0，
 绕过事务直接编辑文件不保证推进 revision。
 
 心跳独立计时，默认 refresh=1 秒、heartbeat=900 秒。仅采集当前监听集合中的
-`working` 卡片；扫描不等待探测或输出。事件 `observed_at` 表示卡片快照时间，
+`working` 卡片，以及持久派回尚待确认的 `review` 卡片；扫描不等待探测或输出。事件 `observed_at` 表示卡片快照时间，
 不冒充探测完成时间。探测与输出的有界生命周期见下节。
+
+## 派回事实与确认期限
+
+快照、心跳及相关变化事件可携带 `dispatches`，以任务 ID 为键。每个摘要包含：
+
+- `dispatch_id`、`task_id`、`kind`、`epoch`、`state` 和 dispatch 自身的 `revision`。
+- 原始 `created_at`、`confirm_by`，以及快照时计算的 `age_seconds`。
+- `accepted` / `completed` 原子回执，包含时间、卡片 revision、状态及适用的交付/处置引用。
+- `confirmation_pending`：仅 prepared/delivery-unknown 为 true；`confirmation_overdue`
+  表示这两种状态已达到原确认期限。accepted 后不是完成超时，不继续使用确认期限。
+
+这些字段与同一事件的卡片状态、正文、`task_revisions` 在同组共享锁内读取；
+摘要只报告当前执行授权，不暴露消息正文。未绑定的旧卡省略对应条目，不能补造历史回执。
+同 ID 的 `review -> working -> review/done` 在一个 refresh 内完成，即使 notify 尚未返回，
+下一事件或重启首个 snapshot 仍包含 accepted/completed，无需捕捉 working 边沿。
+新 dispatch 取代当前授权后，旧 ID 仍通过 `kander dispatch show` 查询；摘要不是历史列表。
+完成回执证明受控完成操作，不能替代审核闭批或 Git 集成验证。
+
+每次扫描读取原 `confirm_by`，以该绝对期限独立唤醒；无关状态、正文、成员变化和心跳
+不续期。首次发现已过期也立即发 `dispatch-attention`，`attention` 列出超时任务 ID，
+`reconciliation_required=true` 要求消费者核对。事件附当前 dispatch 摘要及存活缓存，
+必要时启动有界探测；已有批次在途时保留一个合并请求，待其完成后调度，不卡住扫描。
+探测批次完成后，仍超时的派回再发注意事件，携带最新可用观测。后续心跳继续采集。
+没有派回进展时即使 `liveness.status=alive`，仍保持 `confirmation_pending=true`；
+存活的观测年龄与派回年龄分别输出。unknown、不完整事实和期限到达均不自动恢复、
+重发、改写卡片或放行依赖。
+
+仅 working 和 pending review 参与探测；普通 review、已 completed 的 review 不探测。
+缺失/冲突的 dispatch 原件或回执使监听卡事实不可用，沿用终止错误事件，不能当作未绑定。
+任务组展开时不相关卡片的 dispatch 错误不冒充成员归属错误；监听集合中的错误仍失败关闭。
 
 ## 动态组引用与不完整事实
 
@@ -62,7 +92,8 @@
 
 `board.ScanContext` / `ScanTargetsContext` 将状态、正文和 revision 放在同一组共享锁
 下读取，`Board.Revision` 与 `Board.Document` 保留快照值。旧 `Scan` / `ScanTargets`
-接口仍可用，保持阻塞读取。`Board.GroupMembership` 返回成员、版本及完整性问题；
+接口仍可用，保持阻塞读取。`ScanDispatchesContext` 可选捕获当前派回，
+`Board.CurrentDispatch` 返回与正文、revision 一致的摘要；旧扫描入口不增加派回读取。`Board.GroupMembership` 返回成员、版本及完整性问题；
 存在组依赖时，`TaskDependenciesOf` 和 `check` 不接受部分展开结果。
 
 订阅每次读事实共用 2 秒期限。看板维护锁、任务写锁和 journal 锁争用都服从该期限；
@@ -78,7 +109,7 @@ LockFileEx 的 FAIL_IMMEDIATELY；已有阻塞写锁和安全路径入口不变�
 ## 有界探测与输出生命周期
 
 扫描、探测和输出分别持有自己的运行资源。扫描不等待外部 Agent CLI；初始快照
-入队后启动第一批存活采集，后续心跳在上一批已结束时启动下一批。每次调用复用
+入队后启动第一批存活采集，后续心跳或派回确认期限在上一批已结束时启动下一批。每次调用复用
 `ClassifyTasksContext` 的默认总预算 10 秒、并发 4。订阅最多持有一批在途采集、
 一个完成结果槽和一份缓存，不因 refresh 或心跳积压更多探测批次。
 

@@ -10,6 +10,7 @@
   "liveness.subscription_output_failed": "Subscription output failed",
   "liveness.subscription_line_too_large": "Subscription line exceeds {{.V0}} bytes",
   "liveness.subscription_queue_full": "Subscription output queue is full ({{.V0}} lines); reconnect and reconcile",
+  "liveness.subscription_dispatch_overdue": "Dispatch confirmation deadline elapsed; inspect durable receipts and liveness separately. No recovery or dependency release was performed.",
   "liveness.subscription_observation_pending": "No observation for the current revision yet",
   "liveness.subscription_observation_stale": "Cached observation has expired",
   "board.membership_invalid": "Task group ownership is invalid or ambiguous: {{.V0}}",

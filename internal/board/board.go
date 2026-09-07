@@ -94,6 +94,8 @@ type Entry struct {
 
 // Board is the result of one scan. Invalid entries go to Problems; violations bound to a task ID go to Blocked.
 type Board struct {
+	dispatches     map[string]*DispatchSummary
+	dispatchErrors map[string]error
 	revisions      map[string]uint64
 	documents      map[string]string
 	documentErrors map[string]error

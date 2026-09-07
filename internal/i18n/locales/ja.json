@@ -10,6 +10,7 @@
   "liveness.subscription_output_failed": "購読の出力に失敗しました",
   "liveness.subscription_line_too_large": "購読の行が {{.V0}} バイトを超えています",
   "liveness.subscription_queue_full": "購読の出力キューが満杯です（{{.V0}} 行）。再接続して再確認してください",
+  "liveness.subscription_dispatch_overdue": "派回の確認期限を過ぎました。永続レシートと生存観測を個別に確認してください。自動復旧や依存関係の解除は実行していません。",
   "liveness.subscription_observation_pending": "現在の revision の観測はまだありません",
   "liveness.subscription_observation_stale": "キャッシュされた観測は期限切れです",
   "board.membership_invalid": "タスクグループの所属が無効または不明確です：{{.V0}}",

@@ -52,6 +52,8 @@ type livenessJSON struct {
 }
 
 type groupEvent struct {
+	Dispatches             map[string]dispatchJSON `json:"dispatches,omitempty"`
+	Attention              []string                `json:"attention,omitempty"`
 	SchemaVersion          int                     `json:"schema_version"`
 	SubscriptionID         string                  `json:"subscription_id"`
 	Seq                    uint64                  `json:"seq"`
@@ -235,6 +237,9 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		return err
 	}
 	probes.start(snapshot)
+	if err := session.dispatchAttention(w, snapshot, false); err != nil {
+		return err
+	}
 	heartbeatDue := nowFn().Add(heartbeat)
 	for {
 		select {
@@ -253,6 +258,8 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 				wait = heartbeatRemaining
 			}
 		}
+		wait = session.dispatchWait(snapshot, nowFn(), wait)
+		probeCompleted := false
 		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
@@ -264,7 +271,10 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		case batch := <-probes.results:
 			timer.Stop()
 			probes.accept(batch)
-			continue
+			if len(session.attention) == 0 {
+				continue
+			}
+			probeCompleted = true
 		case <-timer.C:
 		}
 		current, err := session.readContext(ctx, root)
@@ -300,6 +310,9 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
 				return err
 			}
+		}
+		if err := session.dispatchAttention(w, current, probeCompleted); err != nil {
+			return err
 		}
 		snapshot = current
 		if !nowFn().Before(heartbeatDue) {

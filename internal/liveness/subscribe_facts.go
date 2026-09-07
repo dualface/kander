@@ -19,6 +19,7 @@ type subscriptionFacts struct {
 	scanned    board.Board
 	states     map[string]string
 	revisions  map[string]uint64
+	dispatches map[string]dispatchJSON
 	watched    []string
 	monitored  []string
 	groups     map[string][]string
@@ -27,14 +28,16 @@ type subscriptionFacts struct {
 }
 
 type subscription struct {
-	opts           subscribeOptions
-	id             string
-	seq            uint64
-	reconciliation bool
-	last           subscriptionFacts
-	hasGroups      bool
-	probes         *subscriptionProbes
-	heartbeat      time.Duration
+	opts                 subscribeOptions
+	id                   string
+	seq                  uint64
+	reconciliation       bool
+	last                 subscriptionFacts
+	hasGroups            bool
+	probes               *subscriptionProbes
+	heartbeat            time.Duration
+	attention            map[string]dispatchAttentionKey
+	dispatchProbePending bool
 }
 
 func newSubscription(opts subscribeOptions) (*subscription, error) {
@@ -56,7 +59,7 @@ func newSubscription(opts subscribeOptions) (*subscription, error) {
 	if !uniqueStrings(opts.Members) {
 		return nil, fmt.Errorf("%s", t("liveness.member_task_ids_must_not_be_repeated"))
 	}
-	session := &subscription{opts: opts}
+	session := &subscription{opts: opts, attention: map[string]dispatchAttentionKey{}}
 	for i, value := range opts.Watch {
 		if taskGroupRe.MatchString(value) {
 			session.hasGroups = true
@@ -84,13 +87,13 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 	ctx, cancel := context.WithTimeout(ctx, subscriptionReadTimeout)
 	defer cancel()
 	if s.hasGroups {
-		facts.scanned, err = board.ScanContext(ctx, root)
+		facts.scanned, err = board.ScanDispatchesContext(ctx, root, nil)
 	} else {
 		ids := append(append([]string{}, s.opts.Members...), s.opts.Watch...)
 		if !uniqueStrings(ids) {
 			return facts, fmt.Errorf("%s", t("liveness.watched_target_duplicates_a_member_task", "--watch"))
 		}
-		facts.scanned, err = board.ScanTargetsContext(ctx, root, ids)
+		facts.scanned, err = board.ScanDispatchesContext(ctx, root, ids)
 	}
 	facts.observedAt = nowFn().UTC()
 	if err != nil {
@@ -98,6 +101,7 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 	}
 	facts.states = map[string]string{}
 	facts.revisions = map[string]uint64{}
+	facts.dispatches = map[string]dispatchJSON{}
 	facts.groups = map[string][]string{}
 	facts.versions = map[string]string{}
 	var membership board.Membership
@@ -163,6 +167,13 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 			return facts, e
 		}
 		facts.revisions[id] = revision
+		dispatch, e := facts.scanned.CurrentDispatch(id)
+		if e != nil {
+			return facts, e
+		}
+		if dispatch != nil {
+			facts.dispatches[id] = summarizeDispatch(*dispatch, facts.observedAt)
+		}
 	}
 	return facts, nil
 }
@@ -196,7 +207,8 @@ func (s *subscription) payload(event string, facts subscriptionFacts) groupEvent
 	s.seq++
 	return groupEvent{
 		SchemaVersion: 1, SubscriptionID: s.id, Seq: s.seq, ObservedAt: facts.observedAt,
-		Event: event, GroupID: s.opts.Group, Tasks: facts.states, TaskRevisions: facts.revisions,
+		Dispatches: facts.dispatches,
+		Event:      event, GroupID: s.opts.Group, Tasks: facts.states, TaskRevisions: facts.revisions,
 		Watched: facts.watched, WatchReferences: s.opts.Watch, Memberships: facts.groups,
 		MembershipVersions: facts.versions, MembershipComplete: true,
 		ReconciliationRequired: s.reconciliation, ReadStatus: "committed",

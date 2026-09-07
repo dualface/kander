@@ -10,6 +10,7 @@
   "liveness.subscription_output_failed": "订阅输出失败",
   "liveness.subscription_line_too_large": "订阅单行超过 {{.V0}} 字节",
   "liveness.subscription_queue_full": "订阅输出队列已满（{{.V0}} 行）；请重连并重新核对",
+  "liveness.subscription_dispatch_overdue": "派回确认期限已到；请分别核对持久回执与存活观测。未自动恢复或放行依赖。",
   "liveness.subscription_observation_pending": "尚未获得当前 revision 的观测",
   "liveness.subscription_observation_stale": "缓存观测已过期",
   "board.membership_invalid": "任务组归属无效或不明确：{{.V0}}",

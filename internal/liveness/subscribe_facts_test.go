@@ -1,7 +1,6 @@
 package liveness
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -39,12 +38,12 @@ func factsEvents(t *testing.T, root string, opts subscribeOptions, onEvent func(
 	// Mutations in the snapshot callback must finish within one scan interval.
 	// Output delivery is asynchronous; these facts tests intentionally use a
 	// slower scan to exercise changes between observations.
-	opts.Refresh = .25
-	opts.Heartbeat = .5
+	opts.Refresh = max(opts.Refresh, .25)
+	opts.Heartbeat = max(opts.Heartbeat, .5)
 	stop := make(chan struct{})
 	var once sync.Once
 	finish := func() { once.Do(func() { close(stop) }) }
-	timer := time.AfterFunc(3*time.Second, finish)
+	timer := time.AfterFunc(5*time.Second, finish)
 	defer timer.Stop()
 	writer := &clockEvents{onEvent: func(event groupEvent) error {
 		if onEvent != nil {
@@ -74,20 +73,29 @@ func TestAuditRoundTripIsInvisible(t *testing.T) {
 	for _, roundTrip := range []bool{false, true} {
 		t.Run(map[bool]string{false: "same-state", true: "round-trip"}[roundTrip], func(t *testing.T) {
 			root, opts, id := factsMember(t)
+			opts.Refresh, opts.Heartbeat = 1, 1.5
+			var dispatch board.Dispatch
+			if roundTrip {
+				dispatch = prepareSubscriptionDispatch(t, root, id, "fix", time.Minute)
+			}
 			events, err := factsEvents(t, root, opts, func(event groupEvent) error {
 				if event.Event != "snapshot" {
 					return nil
 				}
 				if roundTrip {
-					if _, err := board.MoveEntry(currentEntry(t, root, id), root, "working"); err != nil {
+					if _, err := board.MoveWithOptions(currentEntry(t, root, id), root, "working", board.MoveOptions{Authorization: dispatch.Authorization}); err != nil {
 						return err
 					}
 				}
-				if err := factsUpdate(root, id, func(text string) string { return text + "\nDelivery updated.\n" }); err != nil {
+				snapshot, err := board.ReadSnapshot(root, id)
+				if err != nil {
+					return err
+				}
+				if err := board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", Text: snapshot.Text + "\nDelivery updated.\n", ExpectedRevision: snapshot.Revision, Authorization: dispatch.Authorization}); err != nil {
 					return err
 				}
 				if roundTrip {
-					_, err := board.MoveEntry(currentEntry(t, root, id), root, "review")
+					_, err := board.MoveWithOptions(currentEntry(t, root, id), root, "review", board.MoveOptions{Authorization: dispatch.Authorization, DeliveryCommit: strings.Repeat("b", 40)})
 					return err
 				}
 				return nil
@@ -105,12 +113,10 @@ func TestAuditRoundTripIsInvisible(t *testing.T) {
 			if events[1].TaskRevisions[id] != events[0].TaskRevisions[id]+delta || events[1].Tasks[id] != "review" {
 				t.Fatalf("revision facts: %+v", events)
 			}
-			var encoded bytes.Buffer
-			if err = emitEvent(&encoded, events[1]); err != nil {
-				t.Fatal(err)
-			}
-			if strings.Contains(encoded.String(), "dispatch") {
-				t.Fatal("revision cannot prove business completion")
+			if roundTrip {
+				assertSubscriptionReceipt(t, events[1], id, dispatch, "review")
+			} else if len(events[1].Dispatches) != 0 {
+				t.Fatal("legacy update fabricated business completion")
 			}
 		})
 	}

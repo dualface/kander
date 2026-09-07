@@ -37,7 +37,7 @@ func (p *subscriptionProbes) start(facts subscriptionFacts) {
 	var inputs []TaskInput
 	revisions := map[string]uint64{}
 	for _, id := range facts.monitored {
-		if facts.states[id] != "working" {
+		if !facts.needsProbe(id) {
 			continue
 		}
 		text, err := facts.scanned.Document(id)
@@ -65,6 +65,19 @@ func (p *subscriptionProbes) accept(batch subscriptionBatch) {
 	}
 }
 
+// poll joins only a batch whose result is already available.
+func (p *subscriptionProbes) poll() bool {
+	if p.running {
+		select {
+		case batch := <-p.results:
+			p.accept(batch)
+			return true
+		default:
+		}
+	}
+	return false
+}
+
 func (p *subscriptionProbes) finish() {
 	p.cancel()
 	if p.running {
@@ -73,17 +86,11 @@ func (p *subscriptionProbes) finish() {
 }
 
 func (p *subscriptionProbes) liveness(facts subscriptionFacts, heartbeat time.Duration) map[string]livenessJSON {
-	// Drain a completed batch before emitting, without ever waiting for probes.
-	if p.running {
-		select {
-		case batch := <-p.results:
-			p.accept(batch)
-		default:
-		}
-	}
+	// Never wait for a probe when formatting an event.
+	p.poll()
 	var out map[string]livenessJSON
 	for _, id := range facts.monitored {
-		if facts.states[id] != "working" {
+		if !facts.needsProbe(id) {
 			delete(p.cached, id)
 			continue
 		}

@@ -10,7 +10,7 @@ import (
 // ScanContext captures all states, documents and revisions under shared locks.
 // The context bounds lock contention, not OS file operations.
 func ScanContext(ctx context.Context, root string) (Board, error) {
-	return scanContext(ctx, root, nil)
+	return scanContext(ctx, root, nil, false)
 }
 
 // ScanTargetsContext captures selected identities without reading unrelated cards.
@@ -26,7 +26,7 @@ func ScanTargetsContext(ctx context.Context, root string, values []string) (Boar
 	if ids == nil {
 		ids = []string{}
 	}
-	return scanContext(ctx, root, ids)
+	return scanContext(ctx, root, ids, false)
 }
 
 func (locks *lockSet) takeSharedContext(ctx context.Context, root, path string) error {
@@ -45,7 +45,7 @@ func (locks *lockSet) takeSharedContext(ctx context.Context, root, path string) 
 	return nil
 }
 
-func scanContext(ctx context.Context, root string, ids []string) (b Board, err error) {
+func scanContext(ctx context.Context, root string, ids []string, dispatches bool) (b Board, err error) {
 	if err = ctx.Err(); err != nil {
 		return b, err
 	}
@@ -104,6 +104,10 @@ func scanContext(ctx context.Context, root string, ids []string) (b Board, err e
 	b.documents = make(map[string]string, len(b.Entries))
 	b.documentErrors = make(map[string]error)
 	b.revisions = make(map[string]uint64)
+	if dispatches {
+		b.dispatches = make(map[string]*DispatchSummary)
+		b.dispatchErrors = make(map[string]error)
+	}
 	for _, id := range selected {
 		if err = ctx.Err(); err != nil {
 			return b, err
@@ -126,6 +130,13 @@ func scanContext(ctx context.Context, root string, ids []string) (b Board, err e
 		b.revisions[id] = version
 		entry.Version = &Version{revision: version, authorization: authFrom(text)}
 		b.Entries[id] = entry
+		if dispatches && e == nil {
+			tx := &Transaction{root: root, scope: LockScope{Tasks: selected, ReadOnly: true}}
+			b.dispatches[id], b.dispatchErrors[id] = snapshotDispatch(tx, id, text, version)
+			if err = ctx.Err(); err != nil {
+				return b, err
+			}
+		}
 	}
 	return b, nil
 }

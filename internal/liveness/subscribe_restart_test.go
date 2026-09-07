@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 )
 
 // A new test process models subscriber restart without sharing memory or a cursor.
@@ -41,12 +42,12 @@ func TestSubscribeRestartProcess(t *testing.T) {
 		}
 		return event
 	}
+	dispatch := prepareSubscriptionDispatch(t, root, id, "fix", time.Minute)
 	before := readChild()
-	if err := factsUpdate(root, id, func(text string) string { return text + "\nDelivery between processes.\n" }); err != nil {
-		t.Fatal(err)
-	}
+	completeSubscriptionDispatch(t, root, id, dispatch, "review")
 	after := readChild()
-	if before.Seq != 1 || after.Seq != 1 || before.SubscriptionID == after.SubscriptionID || after.TaskRevisions[id] != before.TaskRevisions[id]+1 || before.Tasks[id] != after.Tasks[id] {
+	assertSubscriptionReceipt(t, after, id, dispatch, "review")
+	if before.Seq != 1 || after.Seq != 1 || before.SubscriptionID == after.SubscriptionID || after.TaskRevisions[id] != before.TaskRevisions[id]+2 || before.Tasks[id] != after.Tasks[id] {
 		t.Fatalf("restart lost revision or reused cursor: before=%+v after=%+v", before, after)
 	}
 }
