@@ -45,7 +45,7 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	}
 	path := created
 	id := strings.TrimSuffix(filepath.Base(path), ".md")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Join(path, "spec.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	)
 	branch := "- " + board.FieldTaskBranch + ":"
 	text = strings.Replace(text, branch+"\n", branch+" task/"+slug+"\n", 1)
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "spec.md"), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := board.ReadSnapshot(root, id)

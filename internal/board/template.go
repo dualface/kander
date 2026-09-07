@@ -19,8 +19,8 @@ var contractTemplates = template.Must(
 // templateFields and templateSections give the templates short handles for the
 // schema constants.
 type templateFields struct {
-	Type, TaskGroup, Language, CreatedAt, Owner, Session, Window string
-	StartedAt, FinishedAt, TaskBranch, Result                    string
+	Type, Size, TaskGroup, Language, CreatedAt, Owner, Session, Window string
+	StartedAt, FinishedAt, TaskBranch, Result                          string
 }
 
 type templateSections struct {
@@ -47,7 +47,7 @@ func newTemplateData(title, taskType, language, created string) templateData {
 		Created:     created,
 		Placeholder: Placeholder,
 		F: templateFields{
-			Type: FieldType, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
+			Type: FieldType, Size: FieldSize, TaskGroup: FieldTaskGroup, Language: FieldLanguage, CreatedAt: FieldCreatedAt,
 			Owner: FieldOwner, Session: FieldSession, Window: FieldWindow,
 			StartedAt: FieldStartedAt, FinishedAt: FieldFinishedAt,
 			TaskBranch: FieldTaskBranch, Result: FieldResult,

@@ -36,6 +36,9 @@ func commandNotify(root, taskID, message, messageFile, pane string, messageSet b
 	if err != nil {
 		return err
 	}
+	if err := board.ValidateMutable(entry, text); err != nil {
+		return err
+	}
 	cfg, err := config.Load(true)
 	if err != nil {
 		return err

@@ -46,10 +46,10 @@ func GuardWrite(root, path string) (GuardVerdict, error) {
 	}
 	taskID := strings.TrimSuffix(parts[1], ".md")
 	for _, other := range States {
-		if other == state {
-			continue
-		}
 		if _, err := os.Lstat(filepath.Join(root, other, taskID)); err == nil {
+			if other == state {
+				return GuardVerdict{Reason: t("board.guard_form_changed", taskID, filepath.Join(root, other, taskID, "spec.md"))}, nil
+			}
 			return GuardVerdict{Reason: t("board.guard_task_moved", taskID, other)}, nil
 		}
 		if _, err := os.Lstat(filepath.Join(root, other, taskID+".md")); err == nil {

@@ -16,7 +16,7 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <user-
 
 `show --json` 的对象包含 `entry` (TaskID/State/Path/Document/Kind)、`revision`、`operation_id`、`text`. 旧卡首次读取的 revision 为 0, 尚无操作 ID; 每次成功 mutation 增加 1, 新卡创建也计一次提交. 客户端不得以时间戳推导版本. 输入文件是独立的 UTF-8 文件, 不得直接编辑现存卡片后再调用 update.
 
-小文件卡的 `--document spec.md` 映射到当前现存 `.md` 正文; 附件要求目录卡. 普通附件支持相对目录, 不支持路径逃逸、隐藏控制目录、大小写正文别名、尾随点/空格、符号链接或 reparse. `reviews/`、`dispatches/`、manifest/index/checkpoint 等机器产物由专用生产者写入.
+新卡一律目录; small/large 都用 `--document spec.md`, 并可写普通附件. 旧文件卡只读, mutation 在副作用前要求先运行 init 迁移. 普通附件支持相对目录, 不支持路径逃逸、隐藏控制目录、大小写正文别名、尾随点/空格、符号链接或 reparse. `reviews/`、`dispatches/`、manifest/index/checkpoint 等机器产物由专用生产者写入.
 
 全文更新保留 LANGUAGE、受管身份/时间/结果字段及机器索引. TASK_BRANCH、IMPLEMENTATION、SUMMARY 可通过正文更新. todo 之后的契约、任务组、依赖及 SIZE 不得任意修改; 退回 backlog 也不会解除冻结. 显式用户决定可用 `--contract-decision-file <UTF8-decision>` 在同一 expected revision 下修订, 正文的受保护 CONTRACT_DECISIONS 保存时间、决定原文和修改前后字段. 工具只记录依据, 不推断或验证用户意图.
 
@@ -26,7 +26,7 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <user-
 
 控制文件位于 `kanban/.kander/`, 不随卡移动:
 
-- `locks/board.lock`: 普通读写共享; new、move 和恢复独占.
+- `locks/board.lock`: 普通读写共享; new、move、迁移和恢复独占.
 - `locks/<group-id>.lock`, `locks/<task-id>.lock`: 先排序组 ID, 再排序任务 ID. 读者共享, 写者独占. 锁文件是稳定 inode/句柄, 不替换、不删除.
 - `locks/journal.lock`: 在看板/组/任务锁之后短暂取得; 全局日志枚举和读取共享, prepared/committed 原子发布独占. 锁覆盖临时文件创建至所有读写句柄关闭; 持此锁时不再取得看板/组/任务锁.
 - `versions/<task-id>.json`: `{revision, operation_id, contract_frozen}`. 旧卡缺文件等价于 revision 0.
@@ -65,13 +65,13 @@ schema 1 操作记录包含:
 }
 ```
 
-`files.before` 缺失表示只创建; 有值表示必须存在且与旧内容匹配. 文件内容按字符串保存, JSON 对任意 UTF-8 文本转义. `entries` 的 from/to 为看板相对路径, kind 为 small/large; 无 from 表示 new, text 保存创建正文或移动后的预期正文. 所有路径必须属于记录列出的任务/组.
+`files.before` 缺失表示只创建; 有值表示必须存在且与旧内容匹配. 文件内容按字符串保存, JSON 对任意 UTF-8 文本转义. `entries` 的 from/to 为看板相对路径, kind 为旧 schema 1 的物理形态编码 (small 表示文件、large 表示目录), 不是 Entry.Kind 的任务规模; 无 from 表示 new, text 保存创建正文或移动后的预期正文. 所有路径必须属于记录列出的任务/组.
 
 提交顺序: prepared 记录持久化; 附件目录; 文件; 入口创建/迁移; versions; committed 标记. 文件和版本通过 internal/fs 原子替换, 创建通过只创建语义, 改名拒绝既有目标. 本阶段的恢复测试针对进程 kill/restart; 不宣称提供任意硬件掉电后的文件系统持久性保证.
 
-持锁读者不会见到正在发布的多文件中间态. 若进程中断并释放锁, prepared 记录让读命令报告明确的待恢复错误. 读者不自动修复. 订阅组成员展开遇到读取冲突必须显式失败, 不返回部分成员集. `kander init` 取得看板独占锁后按记录完成重做; 已完成的步骤用匹配的内容/版本确认, 未完成步骤继续, 恢复可重复执行. 未知版本、内容冲突、重复入口和 reparse 均失败关闭, 保留现场. 新 large 卡已建立目录但缺 spec 时, 仅在有效创建记录下补完正文.
+持锁读者不会见到正在发布的多文件中间态. 若进程中断并释放锁, prepared 记录让读命令报告明确的待恢复错误. 读者不自动修复. Scan/ScanTargets 在同一锁内捕获入口和正文; list/TUI/订阅/依赖检查通过 Board.Document 消费已提交快照, 不因随后发生的迁移混用新路径与旧正文, 不返回部分成员集. 新扫描仍对未完成事务显式失败. `kander init` 取得看板独占锁后按记录完成重做; 已完成的步骤用匹配的内容/版本确认, 未完成步骤继续, 恢复可重复执行. 未知版本、内容冲突、重复入口和 reparse 均失败关闭, 保留现场. 新卡已建立目录但缺 spec 时, 仅在有效创建记录下补完正文.
 
-此格式是后续目录形态迁移和产物发布的共同恢复协议. 文件转目录的具体步骤与维护窗口由目录卡任务实现, 本阶段不提供形态迁移命令.
+目录迁移在同一 schema 1 记录中增加 `purpose: "migration"` 及 `migrations: [{from,to,before,after}]`; 暂存目录为 `.kander/migrations/<operation-id>/<task-id>/`. 已提交记录及空的操作暂存父目录保留供核验; 未登记产物报错保留. 缺 SIZE 的旧目录使用普通 files 补写. 维护窗口、恢复顺序与边界见 [目录卡迁移](directory-cards.md).
 
 ## 验证与能力边界
 

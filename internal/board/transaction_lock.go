@@ -53,7 +53,7 @@ func control(root string, parts ...string) string {
 	return filepath.Join(append([]string{root, ".kander"}, parts...)...)
 }
 func ensureControl(root string) error {
-	for _, p := range []string{control(root), control(root, "locks"), control(root, "versions"), control(root, "operations"), control(root, "groups")} {
+	for _, p := range []string{control(root), control(root, "locks"), control(root, "versions"), control(root, "operations"), control(root, "groups"), control(root, "migrations")} {
 		if err := fs.EnsurePrivateDirectory(root, p, true); err != nil {
 			return err
 		}

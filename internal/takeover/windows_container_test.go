@@ -22,7 +22,10 @@ func portableBoard(t *testing.T, state, taskID, windowValue string) string {
 	}
 	t.Setenv(board.EnvBoardDir, root)
 	card := "# 冒烟\n\n- 类型: Chore\n- 会话: codex session-x\n- 窗口: " + windowValue + "\n"
-	if err := os.WriteFile(filepath.Join(root, state, taskID+".md"), []byte(card), 0o644); err != nil {
+	if err := os.Mkdir(filepath.Join(root, state, taskID), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, state, taskID, "spec.md"), []byte(card), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Empty PATH: herdr is unavailable, so the command must reach the herdr lookup before failing.

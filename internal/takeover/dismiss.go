@@ -43,6 +43,9 @@ func commandDismiss(root, taskID string, timeout float64) error {
 	if err != nil {
 		return err
 	}
+	if err := board.ValidateMutable(entry, text); err != nil {
+		return err
+	}
 	windowValue := board.MetadataFrom(text, window.WindowField)
 	herdrMatch := herdrWindowRe.FindStringSubmatch(windowValue)
 	tmuxMatch := tmuxWindowRe.FindStringSubmatch(windowValue)

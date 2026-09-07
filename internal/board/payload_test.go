@@ -62,7 +62,7 @@ func TestTaskPayloadTaskGroupLegacyAndCurrent(t *testing.T) {
 	root := tempBoard(t)
 	capture(t, func() int { return RunNew([]string{"chore", "web-task-group", "分组"}) })
 	taskID := todayID("web-task-group")
-	path := filepath.Join(root, "backlog", taskID+".md")
+	path := filepath.Join(root, "backlog", taskID, "spec.md")
 
 	setMeta(t, path, "- TASK_GROUP:\n", "")
 	payload, err := BoardPayload(root)

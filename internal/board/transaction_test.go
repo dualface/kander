@@ -140,8 +140,8 @@ func TestControlledTerminationAndProtectedFields(t *testing.T) {
 		s = transactionSnapshot(t, root, s.Entry.TaskID)
 	}
 	small := transactionCard(t, root, "no-small-attachment", false)
-	if err := UpdateDocument(root, small.Entry.TaskID, UpdateOptions{Document: "report.md", Text: "x", ExpectedRevision: small.Revision}); err == nil {
-		t.Fatal("small attachment accepted")
+	if err := UpdateDocument(root, small.Entry.TaskID, UpdateOptions{Document: "report.md", Text: "x", ExpectedRevision: small.Revision}); err != nil {
+		t.Fatal(err)
 	}
 }
 func TestConcurrentNewAndUpdateMove(t *testing.T) {
@@ -387,14 +387,14 @@ func TestCrashRestartRecoveryAndReadVisibility(t *testing.T) {
 					t.Fatal("scan exposed pending move")
 				}
 			}
-			if _, _, _, err := InitBoard(""); err != nil {
+			if _, _, _, _, err := InitBoardWithOptions("", InitOptions{Maintenance: true}); err != nil {
 				t.Fatal(err)
 			}
 			if err := RecoverTransactions(root); err != nil {
 				t.Fatal("recovery is not idempotent", err)
 			}
 			s := transactionSnapshot(t, root, id)
-			if s.Entry.State != "review" || s.Revision != 1 || s.Text != "after\n" {
+			if s.Entry.State != "review" || s.Revision != 2 || s.Text != "- SIZE: large\nafter\n" {
 				t.Fatalf("bad recovery %+v", s)
 			}
 			report, err := fs.ReadRegularFile(root, filepath.Join(root, "review", id, "reviews", "run-1", "report.md"))
@@ -553,7 +553,7 @@ func TestStaleRecoveryDoesNotOverwriteNewRevision(t *testing.T) {
 	root := tempBoard(t)
 	s := transactionCard(t, root, "stale-recovery", false)
 	before := s.Text
-	stale := OperationRecord{Schema: 1, ID: "stale-operation", Phase: "prepared", Revisions: map[string]uint64{s.Entry.TaskID: s.Revision + 1}, Files: []FileChange{{Path: filepath.Join("backlog", s.Entry.TaskID+".md"), Before: &before, After: "obsolete content"}}}
+	stale := OperationRecord{Schema: 1, ID: "stale-operation", Phase: "prepared", Revisions: map[string]uint64{s.Entry.TaskID: s.Revision + 1}, Files: []FileChange{{Path: filepath.Join("backlog", s.Entry.TaskID, "spec.md"), Before: &before, After: "obsolete content"}}}
 	updateSnapshot(t, root, s, s.Text+"\nnew record\n")
 	if err := writeJSON(root, control(root, "operations", "stale-operation.json"), stale, false); err != nil {
 		t.Fatal(err)
@@ -561,7 +561,7 @@ func TestStaleRecoveryDoesNotOverwriteNewRevision(t *testing.T) {
 	if err := RecoverTransactions(root); err == nil {
 		t.Fatal("stale operation took ownership of another commit")
 	}
-	body, err := os.ReadFile(s.Entry.Path)
+	body, err := os.ReadFile(s.Entry.Document)
 	if err != nil || string(body) != s.Text+"\nnew record\n" {
 		t.Fatalf("new data overwritten: %q %v", body, err)
 	}

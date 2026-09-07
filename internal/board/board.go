@@ -88,14 +88,16 @@ type Entry struct {
 	State    string
 	Path     string
 	Document string
-	Kind     string
+	Kind     string // Task size, independent of storage form.
 }
 
 // Board is the result of one scan. Invalid entries go to Problems; violations bound to a task ID go to Blocked.
 type Board struct {
-	Entries  map[string]Entry
-	Blocked  map[string]string
-	Problems []Problem
+	documents      map[string]string
+	documentErrors map[string]error
+	Entries        map[string]Entry
+	Blocked        map[string]string
+	Problems       []Problem
 }
 
 // Problem is a structural issue reported by check.

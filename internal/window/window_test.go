@@ -42,7 +42,10 @@ func TestRestoreWindowTextAndFailureMessage(t *testing.T) {
 		}
 	}
 	id := "20260907-window-task"
-	doc := filepath.Join(root, "working", id+".md")
+	doc := filepath.Join(root, "working", id, "spec.md")
+	if err := os.Mkdir(filepath.Dir(doc), 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(doc, []byte("original\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +113,10 @@ func TestRollbackNeverResurrectsMovedSmallCard(t *testing.T) {
 		}
 	}
 	id := "20260907-moved-window-task"
-	old := filepath.Join(root, "working", id+".md")
+	old := filepath.Join(root, "working", id, "spec.md")
+	if err := os.Mkdir(filepath.Dir(old), 0700); err != nil {
+		t.Fatal(err)
+	}
 	text := "# Card\n- OWNER: codex\n- SESSION: codex\n- WINDOW: old\n- TASK_BRANCH: task\n"
 	if err := os.WriteFile(old, []byte(text), 0600); err != nil {
 		t.Fatal(err)
@@ -155,7 +161,10 @@ func TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback(t *testing.T) {
 		}
 	}
 	id := "20260907-stale-window-task"
-	path := filepath.Join(root, "working", id+".md")
+	path := filepath.Join(root, "working", id, "spec.md")
+	if err := os.Mkdir(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte("original\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

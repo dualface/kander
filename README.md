@@ -74,6 +74,10 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dismiss` 派发消息与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
 
+所有新卡使用 `<task-id>/spec.md`, `SIZE: small|large` 决定规模, 配置键不变. 默认 small 保留 IMPLEMENTATION/SUMMARY; `new --large` 使用 large 的 report.md 完成要求. 旧文件只读兼容, 变更前必须迁移.
+
+`kander init` 显式迁移七状态旧卡并恢复未完成事务. 先暂停 Agent、外部编辑器、通知与归档写入; 有 working/review 卡时默认拒绝迁移, 全部停写后用 `kander init --maintenance` 确认维护窗口. 不会自动停止 Agent. 二次执行迁移数为 0, 卡片内容与 mtime 不变. 详见 [目录卡与迁移](docs/directory-cards.md).
+
 `kander show --json <task-id>` 返回正文、当前位置、revision 和操作 ID. Agent 将修改稿写入独立 UTF-8 文件后, 用 `kander update <task-id> --document spec.md --file <input> --expect-revision <revision>` 提交; 小卡也使用逻辑文档名 `spec.md`. 冲突必须重新读取并合并. 完成用 `move <task-id> done --result completed`, 手工认领用 `move <task-id> working --owner <agent>`. 协议与恢复见 [卡片事务](docs/card-transactions.md); [guard-write](docs/kanban-write-guard.md) 仅为辅助检查, 不保证检查与外部写入原子性.
 
 ## 4. 工作流程
@@ -82,7 +86,7 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 ### 4.1 建卡与自审
 
-Agent 建卡后必须自审任务契约, 在 `DISCUSSION` 留下 `SELF_REVIEW:` 结论行. 大任务目录卡和任务组成员卡还要由不共享建卡上下文的独立 Agent 审卡, 留下 `CARD_REVIEW:` 行.
+Agent 建卡后必须自审任务契约, 在 `DISCUSSION` 留下 `SELF_REVIEW:` 结论行. SIZE 为 large 的任务和任务组成员卡还要由不共享建卡上下文的独立 Agent 审卡, 留下 `CARD_REVIEW:` 行.
 
 卡片进入待处理栏前会做机器门禁: 必填章节完整、不残留 `<FILL_IN>` 占位符、验收条件至少有一条 `- [ ]` 可判定条目、上述记录行齐全. 工具只校验记录存在, 结论质量仍由建卡者负责.
 

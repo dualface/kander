@@ -31,6 +31,15 @@ func safeRecordPath(root, path string) (string, error) {
 	return filepath.Join(root, path), nil
 }
 func applyRecord(root, path string, r *OperationRecord) error {
+	return applyRecordWithCheckpoint(root, path, r, func(string) error { return nil })
+}
+
+// applyRecordWithCheckpoint exposes persisted boundaries for interruption tests;
+// the normal publisher uses a no-op checkpoint and the same filesystem steps.
+func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint func(string) error) error {
+	if err := checkpoint("prepared"); err != nil {
+		return err
+	}
 	if err := validateRecord(root, r); err != nil {
 		return err
 	}
@@ -183,6 +192,11 @@ func applyRecord(root, path string, r *OperationRecord) error {
 			return err
 		}
 	}
+	for _, migration := range r.Migrations {
+		if err := applyMigration(root, r, migration, checkpoint); err != nil {
+			return err
+		}
+	}
 	for id, v := range r.Revisions {
 		if !taskIDRe.MatchString(id) || v == 0 {
 			return kanbanError("board.transaction_invalid", id)
@@ -211,8 +225,14 @@ func applyRecord(root, path string, r *OperationRecord) error {
 			}
 		}
 	}
+	if err := checkpoint("revision"); err != nil {
+		return err
+	}
 	r.Phase = "committed"
-	return writeOperation(root, path, r, true)
+	if err := writeOperation(root, path, r, true); err != nil {
+		return err
+	}
+	return checkpoint("committed")
 }
 
 // RecoverTransactions is init's explicit, idempotent roll-forward recovery. It
@@ -227,6 +247,12 @@ func RecoverTransactions(root string) (err error) {
 	if err != nil {
 		return err
 	}
+	if err = requireMigrationWindow(root, records, false); err != nil {
+		return err
+	}
+	if err = validateMigrationStaging(root, records); err != nil {
+		return err
+	}
 	for _, r := range records {
 		if r.Phase == "prepared" {
 			if err = applyRecord(root, control(root, "operations", r.ID+".json"), &r); err != nil {
@@ -238,8 +264,22 @@ func RecoverTransactions(root string) (err error) {
 }
 
 func validateRecord(root string, r *OperationRecord) error {
+	if r.Purpose != "" && r.Purpose != "migration" {
+		return kanbanError("board.transaction_invalid", r.Purpose)
+	}
+	if len(r.Migrations) > 0 {
+		if len(r.Migrations) != 1 || len(r.Revisions) != 1 || len(r.Files) > 0 || len(r.Entries) > 0 || len(r.Directories) > 0 || len(r.Groups) > 0 {
+			return kanbanError("board.transaction_invalid", r.ID)
+		}
+	}
+
 	if r.Schema != 1 || r.ID == "" || len(r.Revisions) == 0 && len(r.Groups) == 0 {
 		return kanbanError("board.transaction_invalid", r.ID)
+	}
+	for _, migration := range r.Migrations {
+		if err := validateMigration(root, r, migration); err != nil {
+			return err
+		}
 	}
 	for id, v := range r.Revisions {
 		if !taskIDRe.MatchString(id) || v == 0 {

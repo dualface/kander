@@ -98,7 +98,7 @@ func makeWorking(t *testing.T, slug, title string) (string, string) {
 		t.Fatal(err)
 	}
 	root := os.Getenv(board.EnvBoardDir)
-	path := filepath.Join(root, "backlog", id+".md")
+	path := filepath.Join(root, "backlog", id, "spec.md")
 	makeReady(t, path)
 	setMeta(t, path, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/"+slug+"\n")
 	moved, err := board.MoveEntry(currentEntry(t, root, id), root, "todo")
@@ -109,7 +109,7 @@ func makeWorking(t *testing.T, slug, title string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id, moved.Path
+	return id, moved.Document
 }
 
 func setLocation(t *testing.T, path, session, window string) {
@@ -595,7 +595,7 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	secondID := todayID("event-second")
-	second := filepath.Join(root, "backlog", secondID+".md")
+	second := filepath.Join(root, "backlog", secondID, "spec.md")
 	makeReady(t, second)
 	setMeta(t, second, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/event-second\n")
 	setTaskGroup(t, first, groupID)
@@ -609,14 +609,14 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 		if _, err := board.NewTask(root, "chore", "watch-external", "外部", "en", false); err != nil {
 			t.Fatal(err)
 		}
-		path := filepath.Join(root, "backlog", id+".md")
+		path := filepath.Join(root, "backlog", id, "spec.md")
 		makeReady(t, path)
 		setMeta(t, path, "- TASK_BRANCH:\n", "- TASK_BRANCH: task/ext\n")
 		moved, err := board.MoveEntry(currentEntry(t, root, id), root, "todo")
 		if err != nil {
 			t.Fatal(err)
 		}
-		return id, moved.Path
+		return id, moved.Document
 	}()
 	_ = todo
 
@@ -641,8 +641,8 @@ func TestSubscribeSnapshotStateChangeAndWatch(t *testing.T) {
 	if len(watched) != 1 || watched[0] != externalID {
 		t.Fatalf("watched=%v", snapshot["watched"])
 	}
-	extPath := filepath.Join(root, "todo", externalID+".md")
-	if err := os.Rename(extPath, filepath.Join(root, "working", externalID+".md")); err != nil {
+	extPath := filepath.Join(root, "todo", externalID)
+	if err := os.Rename(extPath, filepath.Join(root, "working", externalID)); err != nil {
 		t.Fatal(err)
 	}
 	var changed map[string]any
@@ -772,4 +772,43 @@ func currentEntry(t *testing.T, root, id string) board.Entry {
 		t.Fatal(err)
 	}
 	return s.Entry
+}
+
+func TestSubscribeLegacyCardSurvivesDirectoryMigration(t *testing.T) {
+	root := tempBoard(t)
+	id := "20260907-subscribe-legacy-task"
+	group := "20260907-subscribe-migration-group"
+	legacy := filepath.Join(root, "backlog", id+".md")
+	text := "# Legacy\n- TYPE: Chore\n- TASK_GROUP: " + group + "\n"
+	if err := os.WriteFile(legacy, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	buf, done, finish := startTestSubscription(t, root, subscribeOptions{Group: group, Members: []string{id}, Refresh: 0.01, Heartbeat: 0.03})
+	deadline := time.Now().Add(2 * time.Second)
+	for firstJSONLine(buf.String()) == "" && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if firstJSONLine(buf.String()) == "" {
+		t.Fatal("missing legacy snapshot")
+	}
+	if n, err := board.MigrateCards(root, board.InitOptions{}); err != nil || n != 1 {
+		t.Fatalf("migration %d %v", n, err)
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	for !strings.Contains(buf.String(), `"heartbeat"`) && time.Now().Before(deadline) {
+		select {
+		case <-done:
+			t.Fatal("subscription exited during migration")
+		default:
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !strings.Contains(buf.String(), `"heartbeat"`) {
+		t.Fatal("subscription did not continue after migration")
+	}
+	finish()
+	s, err := board.ReadSnapshot(root, id)
+	if err != nil || !s.Entry.IsDirectory() || s.Entry.Kind != "small" {
+		t.Fatalf("snapshot %+v %v", s, err)
+	}
 }

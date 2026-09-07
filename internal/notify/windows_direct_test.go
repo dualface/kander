@@ -89,7 +89,10 @@ func TestNotifyDeliversThroughHerdrOnEveryPlatform(t *testing.T) {
 
 	taskID := "20260906-notify-gate-task"
 	card := "# 冒烟" + "\n" + "\n" + "- 类型: Chore" + "\n" + "- 会话: codex session-x" + "\n" + "- 窗口: herdr:w1:t1:w1:p1" + "\n"
-	if err := os.WriteFile(filepath.Join(root, "working", taskID+".md"), []byte(card), 0o644); err != nil {
+	if err := os.Mkdir(filepath.Join(root, "working", taskID), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "working", taskID, "spec.md"), []byte(card), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

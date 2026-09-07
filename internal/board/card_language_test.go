@@ -11,7 +11,7 @@ import (
 
 func readCard(t *testing.T, root, taskID string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(root, "backlog", taskID+".md"))
+	data, err := os.ReadFile(filepath.Join(root, "backlog", taskID, "spec.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

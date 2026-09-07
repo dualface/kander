@@ -11,6 +11,7 @@ import (
 // before the rename keep working without being rewritten.
 const (
 	FieldType       = "TYPE"
+	FieldSize       = "SIZE"
 	FieldTaskGroup  = "TASK_GROUP"
 	FieldLanguage   = "LANGUAGE"
 	FieldCreatedAt  = "CREATED_AT"

@@ -134,7 +134,7 @@ func TestSmallAndLargeLifecycle(t *testing.T) {
 	if code, _, err := capture(t, func() int { return RunNew([]string{"bug", "small-fix", "修复小问题"}) }); code != 0 {
 		t.Fatalf("new small: %s", err)
 	}
-	small := filepath.Join(root, "backlog", smallID+".md")
+	small := filepath.Join(root, "backlog", smallID, "spec.md")
 	if code, _, err := capture(t, func() int { return RunMove([]string{smallID, "todo"}) }); code == 0 {
 		t.Fatalf("expected todo reject: %s", err)
 	}
@@ -145,7 +145,7 @@ func TestSmallAndLargeLifecycle(t *testing.T) {
 	if code, _, err := capture(t, func() int { return RunMove([]string{smallID, "working"}) }); code != 0 {
 		t.Fatalf("working: %s", err)
 	}
-	small = filepath.Join(root, "working", smallID+".md")
+	small = filepath.Join(root, "working", smallID, "spec.md")
 	complete(t, small)
 	if code, _, err := capture(t, func() int { return RunMove([]string{smallID, "done"}) }); code != 0 {
 		t.Fatalf("done: %s", err)
@@ -179,7 +179,7 @@ func TestSmallAndLargeLifecycle(t *testing.T) {
 	if !regexp.MustCompile(`done\s+small\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}`).MatchString(out) {
 		t.Fatalf("timestamp: %s", out)
 	}
-	completed, _ := os.ReadFile(filepath.Join(root, "done", smallID+".md"))
+	completed, _ := os.ReadFile(filepath.Join(root, "done", smallID, "spec.md"))
 	if !regexp.MustCompile(`(?m)^- FINISHED_AT: \d{4}-\d{2}-\d{2} \d{2}:\d{2}$`).Match(completed) {
 		t.Fatalf("completion field: %s", completed)
 	}
@@ -198,7 +198,7 @@ func TestPickAndReviewTransitions(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("pick")
 	capture(t, func() int { return RunNew([]string{"chore", "pick", "挑选任务"}) })
-	task := filepath.Join(root, "backlog", taskID+".md")
+	task := filepath.Join(root, "backlog", taskID, "spec.md")
 	code, _, err := capture(t, func() int { return RunPick([]string{taskID}) })
 	if code == 0 || !strings.Contains(err, "任务未满足 todo 条件") {
 		t.Fatalf("pick unread: %s", err)
@@ -207,7 +207,7 @@ func TestPickAndReviewTransitions(t *testing.T) {
 	if code, _, err := capture(t, func() int { return RunPick([]string{taskID}) }); code != 0 {
 		t.Fatalf("pick: %s", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(root, "todo", taskID+".md")); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(root, "todo", taskID, "spec.md")); statErr != nil {
 		t.Fatal(statErr)
 	}
 	code, _, err = capture(t, func() int { return RunPick([]string{taskID}) })
@@ -217,7 +217,7 @@ func TestPickAndReviewTransitions(t *testing.T) {
 	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "backlog"}) }); code != 0 {
 		t.Fatalf("todo to backlog: %s", err)
 	}
-	if _, statErr := os.Stat(filepath.Join(root, "backlog", taskID+".md")); statErr != nil {
+	if _, statErr := os.Stat(filepath.Join(root, "backlog", taskID, "spec.md")); statErr != nil {
 		t.Fatal(statErr)
 	}
 	if code, _, err := capture(t, func() int { return RunPick([]string{taskID}) }); code != 0 {
@@ -229,7 +229,7 @@ func TestPickAndReviewTransitions(t *testing.T) {
 		t.Fatalf("skip review: %s", err)
 	}
 	capture(t, func() int { return RunMove([]string{taskID, "working"}) })
-	working := filepath.Join(root, "working", taskID+".md")
+	working := filepath.Join(root, "working", taskID, "spec.md")
 	code, _, err = capture(t, func() int { return RunMove([]string{taskID, "review"}) })
 	if code == 0 || !strings.Contains(err, "TASK_BRANCH") {
 		t.Fatalf("review branch: %s", err)
@@ -238,7 +238,7 @@ func TestPickAndReviewTransitions(t *testing.T) {
 	if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "review"}) }); code != 0 {
 		t.Fatalf("to review: %s", err)
 	}
-	review := filepath.Join(root, "review", taskID+".md")
+	review := filepath.Join(root, "review", taskID, "spec.md")
 	capture(t, func() int { return RunMove([]string{taskID, "working"}) })
 	capture(t, func() int { return RunMove([]string{taskID, "review"}) })
 	if code, _, _ := capture(t, func() int { return RunMove([]string{taskID, "done"}) }); code == 0 {
@@ -304,11 +304,11 @@ func TestCheckDependenciesAndScope(t *testing.T) {
 		id := todayID(slug)
 		ids[slug] = id
 		capture(t, func() int { return RunNew([]string{"chore", slug, "任务 " + slug}) })
-		path := filepath.Join(root, "backlog", id+".md")
+		path := filepath.Join(root, "backlog", id, "spec.md")
 		makeReady(t, path)
 		capture(t, func() int { return RunMove([]string{id, "todo"}) })
 	}
-	todo := func(slug string) string { return filepath.Join(root, "todo", ids[slug]+".md") }
+	todo := func(slug string) string { return filepath.Join(root, "todo", ids[slug], "spec.md") }
 	setMeta(t, todo("dependency-source"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-source-group\n")
 	setMeta(t, todo("dependency-internal"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-source-group\n")
 	setMeta(t, todo("dependency-external"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-external-group\n")
@@ -346,11 +346,11 @@ func TestCheckDependenciesAndScope(t *testing.T) {
 
 	missingID := todayID("dependency-missing")
 	capture(t, func() int { return RunNew([]string{"chore", "dependency-missing", "任务 dependency-missing"}) })
-	mp := filepath.Join(root, "backlog", missingID+".md")
+	mp := filepath.Join(root, "backlog", missingID, "spec.md")
 	makeReady(t, mp)
 	capture(t, func() int { return RunMove([]string{missingID, "todo"}) })
-	setMeta(t, filepath.Join(root, "todo", missingID+".md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-validation-group\n")
-	setMeta(t, filepath.Join(root, "todo", missingID+".md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: 20260901-does-not-exist-task\n```\n\n")
+	setMeta(t, filepath.Join(root, "todo", missingID, "spec.md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-validation-group\n")
+	setMeta(t, filepath.Join(root, "todo", missingID, "spec.md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: 20260901-does-not-exist-task\n```\n\n")
 	code, _, errb := capture(t, func() int { return RunCheck([]string{missingID}) })
 	if code == 0 || !strings.Contains(errb, "20260901-does-not-exist-task") {
 		t.Fatalf("missing prereq: %s", errb)
@@ -452,7 +452,7 @@ func TestInitLayoutAndArchive(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("retired")
 	capture(t, func() int { return RunNew([]string{"research", "retired", "终止研究"}) })
-	task := filepath.Join(root, "backlog", taskID+".md")
+	task := filepath.Join(root, "backlog", taskID, "spec.md")
 	if code, _, _ := capture(t, func() int { return RunMove([]string{taskID, "archived"}) }); code == 0 {
 		t.Fatal("archive without result")
 	}
@@ -462,7 +462,7 @@ func TestInitLayoutAndArchive(t *testing.T) {
 	}); code != 0 {
 		t.Fatalf("archive: %s", err)
 	}
-	task = filepath.Join(root, "archived", taskID+".md")
+	task = filepath.Join(root, "archived", taskID, "spec.md")
 	if code, _, _ := capture(t, func() int { return RunMove([]string{taskID, "trash"}) }); code == 0 {
 		t.Fatal("trash without result")
 	}
@@ -479,7 +479,7 @@ func TestLegacyReviewAutocreateAndReject(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("legacy-board")
 	capture(t, func() int { return RunNew([]string{"chore", "legacy-board", "任务 legacy-board"}) })
-	makeReady(t, filepath.Join(root, "backlog", taskID+".md"))
+	makeReady(t, filepath.Join(root, "backlog", taskID, "spec.md"))
 	capture(t, func() int { return RunMove([]string{taskID, "todo"}) })
 	if err := os.RemoveAll(filepath.Join(root, "review")); err != nil {
 		t.Fatal(err)
@@ -507,7 +507,7 @@ func TestLegacyReviewAutocreateAndReject(t *testing.T) {
 
 	root = tempBoard(t)
 	capture(t, func() int { return RunNew([]string{"chore", "occupied-review", "任务 occupied-review"}) })
-	makeReady(t, filepath.Join(root, "backlog", todayID("occupied-review")+".md"))
+	makeReady(t, filepath.Join(root, "backlog", todayID("occupied-review"), "spec.md"))
 	_ = os.RemoveAll(filepath.Join(root, "review"))
 	_ = os.WriteFile(filepath.Join(root, "review"), []byte(""), 0o644)
 	code, _, errb = capture(t, func() int { return RunList(nil) })
@@ -536,14 +536,14 @@ func TestDuplicateCycleAndSymlinkTargets(t *testing.T) {
 	second := todayID("dependency-cycle-second")
 	for _, slug := range []string{"dependency-cycle-first", "dependency-cycle-second"} {
 		capture(t, func() int { return RunNew([]string{"chore", slug, "任务 " + slug}) })
-		p := filepath.Join(root, "backlog", todayID(slug)+".md")
+		p := filepath.Join(root, "backlog", todayID(slug), "spec.md")
 		makeReady(t, p)
 		capture(t, func() int { return RunMove([]string{todayID(slug), "todo"}) })
 	}
-	setMeta(t, filepath.Join(root, "todo", first+".md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-cycle-first-group\n")
-	setMeta(t, filepath.Join(root, "todo", second+".md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-cycle-second-group\n")
-	setMeta(t, filepath.Join(root, "todo", first+".md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+second+"\n```\n\n")
-	setMeta(t, filepath.Join(root, "todo", second+".md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+first+"\n```\n\n")
+	setMeta(t, filepath.Join(root, "todo", first, "spec.md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-cycle-first-group\n")
+	setMeta(t, filepath.Join(root, "todo", second, "spec.md"), "- TASK_GROUP:\n", "- TASK_GROUP: 20260901-cycle-second-group\n")
+	setMeta(t, filepath.Join(root, "todo", first, "spec.md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+second+"\n```\n\n")
+	setMeta(t, filepath.Join(root, "todo", second, "spec.md"), "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: "+first+"\n```\n\n")
 	code, _, errb = capture(t, func() int { return RunCheck([]string{first}) })
 	if code == 0 || !strings.Contains(errb, "依赖成环") {
 		t.Fatalf("cycle: %s", errb)
@@ -578,8 +578,8 @@ func TestPickPromptAndShow(t *testing.T) {
 	second := todayID("beta-pick")
 	capture(t, func() int { return RunNew([]string{"chore", "alpha-pick", "第一个任务"}) })
 	capture(t, func() int { return RunNew([]string{"chore", "beta-pick", "第二个任务"}) })
-	makeReady(t, filepath.Join(root, "backlog", first+".md"))
-	makeReady(t, filepath.Join(root, "backlog", second+".md"))
+	makeReady(t, filepath.Join(root, "backlog", first, "spec.md"))
+	makeReady(t, filepath.Join(root, "backlog", second, "spec.md"))
 	code, out, err := captureIn(t, "2\n", func() int { return RunPick(nil) })
 	if code != 0 {
 		t.Fatalf("pick prompt: %s", err)
@@ -587,7 +587,7 @@ func TestPickPromptAndShow(t *testing.T) {
 	if !strings.Contains(out, "1. "+first) || !strings.Contains(out, "2. "+second) {
 		t.Fatalf("menu: %s", out)
 	}
-	if _, e := os.Stat(filepath.Join(root, "todo", second+".md")); e != nil {
+	if _, e := os.Stat(filepath.Join(root, "todo", second, "spec.md")); e != nil {
 		t.Fatal(e)
 	}
 	code, show, err := capture(t, func() int { return RunShow([]string{second}) })
@@ -615,11 +615,11 @@ func TestDoneMetadataKeepsWorking(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("bad-done-metadata")
 	capture(t, func() int { return RunNew([]string{"chore", "bad-done-metadata", "任务 bad-done-metadata"}) })
-	p := filepath.Join(root, "backlog", taskID+".md")
+	p := filepath.Join(root, "backlog", taskID, "spec.md")
 	makeReady(t, p)
 	capture(t, func() int { return RunMove([]string{taskID, "todo"}) })
 	capture(t, func() int { return RunMove([]string{taskID, "working"}) })
-	p = filepath.Join(root, "working", taskID+".md")
+	p = filepath.Join(root, "working", taskID, "spec.md")
 	complete(t, p)
 	data, _ := os.ReadFile(p)
 	_ = os.WriteFile(p, bytes.Replace(data, []byte("- FINISHED_AT:\n"), []byte("- FINISHED_AT:\n- FINISHED_AT:\n"), 1), 0o644)

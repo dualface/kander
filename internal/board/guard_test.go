@@ -12,7 +12,7 @@ func TestGuardWriteRejectsMissingDirectChildAndReportsMove(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("guard-card")
 	capture(t, func() int { return RunNew([]string{"chore", "guard-card", "护栏测试"}) })
-	existing := filepath.Join(root, "backlog", taskID+".md")
+	existing := filepath.Join(root, "backlog", taskID, "spec.md")
 
 	// Existing card: allowed.
 	if code, _, errOut := capture(t, func() int { return RunGuardWrite([]string{existing}) }); code != 0 {
@@ -84,7 +84,7 @@ func TestShowPrintsCurrentStateAndPath(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show: %d %s", code, errOut)
 	}
-	path := filepath.Join(root, "backlog", taskID+".md")
+	path := filepath.Join(root, "backlog", taskID)
 	if !strings.Contains(out, "状态: backlog") || !strings.Contains(out, "路径: "+path) {
 		t.Fatalf("missing location header: %s", out)
 	}

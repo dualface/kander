@@ -130,7 +130,7 @@ func taskTimestamp(entry Entry, text string) string {
 func collectRows(board Board, state string) ([]listRow, error) {
 	var rows []listRow
 	for _, entry := range selectedEntries(board.Entries, state) {
-		text, err := ReadDocument(entry)
+		text, err := board.Document(entry.TaskID)
 		if err != nil {
 			return nil, err
 		}

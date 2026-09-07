@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// NewTask creates a small task or a large directory card in backlog. language is written to the
+// newTask creates a directory card with an independent task size in backlog. language is written to the
 // card's LANGUAGE field and must already satisfy config.ValidateAgentLanguage.
 func newTask(tx *Transaction, root, kind, slug, title, language string, large bool) (string, error) {
 	if !slugRe.MatchString(slug) {
@@ -35,18 +35,22 @@ func newTask(tx *Transaction, root, kind, slug, title, language string, large bo
 	contract := renderContract(title, kind, language)
 
 	taskKind := "small"
-	target := filepath.Join(root, "backlog", taskID+".md")
+	target := filepath.Join(root, "backlog", taskID)
 	if large {
 		taskKind = "large"
 		target = filepath.Join(root, "backlog", taskID)
 	} else {
 		contract += smallTaskExtra()
 	}
+	contract, err = setMetadata(contract, FieldSize, taskKind)
+	if err != nil {
+		return "", err
+	}
 	if err := tx.touch(taskID); err != nil {
 		return "", err
 	}
 	rel, _ := filepath.Rel(root, target)
-	tx.record.Entries = append(tx.record.Entries, EntryChange{To: rel, Kind: taskKind, Text: contract})
+	tx.record.Entries = append(tx.record.Entries, EntryChange{To: rel, Kind: "large", Text: contract})
 	return target, nil
 }
 

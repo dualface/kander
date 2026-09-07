@@ -25,8 +25,8 @@ func TaskDependenciesOf(entry Entry, board Board, documents map[string]string) (
 	texts := documents
 	if texts == nil {
 		texts = map[string]string{}
-		for taskID, candidate := range board.Entries {
-			text, err := ReadDocument(candidate)
+		for taskID := range board.Entries {
+			text, err := board.Document(taskID)
 			if err != nil {
 				return TaskDependencies{}, err
 			}
@@ -120,7 +120,7 @@ func contractProblems(board Board) []Problem {
 		if _, ok := contractCheckStates[entry.State]; !ok {
 			continue
 		}
-		text, err := ReadDocument(entry)
+		text, err := board.Document(entry.TaskID)
 		if err != nil {
 			// An unreadable document is reported by the structural scan or the dependency check, so it is not repeated here.
 			continue
@@ -145,8 +145,8 @@ func contractProblems(board Board) []Problem {
 func dependencyProblems(board Board, selected map[string]struct{}, skipStates map[string]struct{}) []Problem {
 	documents := map[string]string{}
 	documentErrors := map[string]error{}
-	for taskID, entry := range board.Entries {
-		text, err := ReadDocument(entry)
+	for taskID := range board.Entries {
+		text, err := board.Document(taskID)
 		if err != nil {
 			documentErrors[taskID] = err
 			continue
@@ -291,6 +291,22 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 			if problemInCheckScope(root, problem, includeAll) {
 				allProblems = append(allProblems, problem)
 			}
+		}
+	}
+	for _, entry := range board.Entries {
+		if len(taskIDs) == 0 && !includeAll {
+			if _, skip := deferredCheckStates[entry.State]; skip {
+				continue
+			}
+		}
+		text, e := board.Document(entry.TaskID)
+		if e != nil {
+			return 1, "", nil, e
+		}
+		if _, e = taskSize(entry, text); e != nil {
+			allProblems = append(allProblems, Problem{Path: entry.Path, Message: e.Error()})
+		} else if entry.IsDirectory() && len(fieldLines(text, FieldSize)) == 0 {
+			allProblems = append(allProblems, Problem{Path: entry.Path, Message: t("board.size_missing", entry.TaskID)})
 		}
 	}
 	dependencyBoard := board

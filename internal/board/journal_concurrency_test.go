@@ -118,7 +118,7 @@ func TestJournalReadSerializesWithCommittedReplacement(t *testing.T) {
 	path := control(root, "operations", "overlap.json")
 	before := a.Text
 	after := a.Text + "\nwriter record\n"
-	record := OperationRecord{Schema: 1, ID: "overlap", Phase: "prepared", Revisions: map[string]uint64{a.Entry.TaskID: a.Revision + 1}, Files: []FileChange{{Path: filepath.Join("backlog", a.Entry.TaskID+".md"), Before: &before, After: after}}}
+	record := OperationRecord{Schema: 1, ID: "overlap", Phase: "prepared", Revisions: map[string]uint64{a.Entry.TaskID: a.Revision + 1}, Files: []FileChange{{Path: filepath.Join("backlog", a.Entry.TaskID, "spec.md"), Before: &before, After: after}}}
 	// Pause publication after data/version persistence, just before committed.
 	if err := writeOperation(root, path, record, false); err != nil {
 		t.Fatal(err)

@@ -75,6 +75,9 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 	if err != nil {
 		return err
 	}
+	if err := board.ValidateMutable(entry, original); err != nil {
+		return err
+	}
 	if err := cfg.Rules.CheckTaskGroup(taskGroupFrom(original)); err != nil {
 		return err
 	}
@@ -225,6 +228,9 @@ func commandResume(root string, agent *string, launcherOverride, taskID, message
 	}
 	oldSession, err := sessionFrom(text)
 	if err != nil {
+		return err
+	}
+	if err := board.ValidateMutable(entry, text); err != nil {
 		return err
 	}
 	oldWindow := metadataFrom(text, windowField)

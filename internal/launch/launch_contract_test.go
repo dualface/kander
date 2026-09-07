@@ -43,7 +43,7 @@ func startThenReview(t *testing.T, root, agent, taskID, path string) string {
 	if _, _, err := capture(t, func() error { return commandStart(root, agent, "", taskID) }); err != nil {
 		t.Fatal(err)
 	}
-	working := filepath.Join(root, "working", filepath.Base(path))
+	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
 	setBranch(t, working)
 	loaded, _ := board.LoadBoard(root)
 	entry, _ := board.Locate(loaded, taskID)
@@ -87,7 +87,7 @@ func TestAutoLauncherResolvesHerdrOverTmux(t *testing.T) {
 	if _, stat := os.Stat(filepath.Join(root, "tmux.log")); stat == nil {
 		t.Fatal("tmux should not have launched")
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(path))); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -110,7 +110,7 @@ func TestAutoLauncherUsesTmuxWhenNotInHerdr(t *testing.T) {
 	if !strings.Contains(args, "new-window") {
 		t.Fatalf("tmux=%s", args)
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(path))); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -139,7 +139,7 @@ func TestAutoLauncherWithoutHerdrOrTmuxDoesNotClaim(t *testing.T) {
 	if string(got) != string(original) {
 		t.Fatal("claimed")
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(path))); err == nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")); err == nil {
 		t.Fatal("should remain in todo")
 	}
 }
@@ -241,7 +241,7 @@ func TestHerdrReportWarnsWithoutRollback(t *testing.T) {
 	if strings.Count(errb, "警告: herdr 会话身份上报失败") != 1 {
 		t.Fatalf("stderr=%s", errb)
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(path))); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(log + ".close"); err == nil {
@@ -353,7 +353,7 @@ func TestResumeMessageFileCursorWorkingAndMissingSession(t *testing.T) {
 	if _, _, err := capture(t, func() error { return commandStart(root, "grok", "", workID) }); err != nil {
 		t.Fatal(err)
 	}
-	working := filepath.Join(root, "working", filepath.Base(workPath))
+	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(workPath)), "spec.md")
 	out, _, err = capture(t, func() error {
 		return commandResume(root, nil, "", workID, "进程已退出, 请继续", "", true, 61)
 	})
@@ -379,7 +379,7 @@ func TestResumeMessageFileCursorWorkingAndMissingSession(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "SESSION") {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(manualPath))); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(manualPath)), "spec.md")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -391,7 +391,7 @@ func TestResumeLaunchAndLivenessFailureRestoresReview(t *testing.T) {
 	root, _, fakeBin := setupBoard(t)
 	taskID, path := makeTodo(t, root, "resume-rollback")
 	working := startThenReview(t, root, "claude", taskID, path)
-	reviewPath := filepath.Join(root, "review", filepath.Base(path))
+	reviewPath := filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md")
 	before, _ := os.ReadFile(reviewPath)
 	t.Setenv("KANBAN_TMUX_FAIL", "1")
 	_, _, err := capture(t, func() error {
@@ -415,7 +415,7 @@ func TestResumeLaunchAndLivenessFailureRestoresReview(t *testing.T) {
 	t.Setenv("KANBAN_HERDR_STATUS", "done")
 	t.Setenv("KANBAN_HERDR_OUTPUT", "thread already has an active writer (code -32600)")
 	freezeClock(t)
-	reviewLive := filepath.Join(root, "review", filepath.Base(livePath))
+	reviewLive := filepath.Join(root, "review", filepath.Base(filepath.Dir(livePath)), "spec.md")
 	before, _ = os.ReadFile(reviewLive)
 	_, _, err = capture(t, func() error {
 		return commandResume(root, nil, "herdr", liveID, "x", "", true, 61)
@@ -423,7 +423,7 @@ func TestResumeLaunchAndLivenessFailureRestoresReview(t *testing.T) {
 	if err == nil || (!strings.Contains(err.Error(), "active writer") && !strings.Contains(err.Error(), "存活校验超时")) {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(livePath))); err == nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(livePath)), "spec.md")); err == nil {
 		t.Fatal("herdr liveness should restore review")
 	}
 	got, _ = os.ReadFile(reviewLive)
@@ -548,7 +548,7 @@ func TestWindowsRejectsTmuxAndRequiresHerdrEnvCreateRollback(t *testing.T) {
 	if string(got) != string(original) {
 		t.Fatal("console create should restore todo")
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(consolePath))); err == nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(consolePath)), "spec.md")); err == nil {
 		t.Fatal("should not remain in working")
 	}
 }

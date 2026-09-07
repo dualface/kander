@@ -30,6 +30,9 @@ func ResolvedSession(taskID, text string) (AgentSession, error) {
 // On failure it restores the pre-call text only while this operation still owns
 // the current revision; otherwise it preserves newer records and reports a conflict.
 func NotifyViaResume(root string, entry board.Entry, originalText, message string, timeout float64) (ResumeLaunch, error) {
+	if err := board.ValidateMutable(entry, originalText); err != nil {
+		return ResumeLaunch{}, err
+	}
 	session, err := resolvedTaskSession(entry.TaskID, originalText)
 	if err != nil {
 		return ResumeLaunch{}, err

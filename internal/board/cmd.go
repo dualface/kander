@@ -96,6 +96,7 @@ func requireRoot() (string, error) {
 
 // RunInit implements kander init.
 func RunInit(args []string) int {
+	args, maintenance := takeFlag(args, "--maintenance")
 	if len(args) > 1 {
 		return usageFail("init", "board.too_many_arguments")
 	}
@@ -106,11 +107,12 @@ func RunInit(args []string) int {
 		}
 		project = args[0]
 	}
-	root, exclude, rules, err := InitBoard(project)
+	root, exclude, rules, migrated, err := InitBoardWithOptions(project, InitOptions{Maintenance: maintenance})
 	if err != nil {
 		return fail(err)
 	}
 	fmt.Println(t("board.initialized", root))
+	fmt.Println(t("board.migrated", itoa(migrated)))
 	if exclude != "" {
 		fmt.Println(t("board.git_exclude", exclude))
 	}

@@ -46,7 +46,7 @@ KANBAN_DIR="$MAIN_WORKTREE/kanban"
 Creating entries, querying, and moving between states use only `kander`; replacing them with `mv`, `cp`, or a file manager is forbidden. Body editing and same-state form upgrades follow "Entries and Documents" and "Task Scale and Grouping".
 
 ```text
-kander init [project-path]
+kander init [--maintenance] [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
@@ -101,7 +101,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 
 - The agent, launcher, and model tier of `start` default to the Kander configuration; when initialization is incomplete, use the defaults.
 - `--agent` and `--launcher` override only this invocation.
-- Large tasks (directory cards containing `spec.md`) use `kanban_agents.large`; small tasks (single-file cards) use `kanban_agents.small`; both fall back to `kanban_agent`.
+- Tasks with `SIZE: large` use `kanban_agents.large`; tasks with `SIZE: small` use `kanban_agents.small`; both fall back to `kanban_agent`.
 - On success, print the scale and the actual agent.
 - `start` needs no confirmation by default and writes the session identifier into `SESSION`:
   - Claude/Grok: a UUID; Cursor: the chat id; Codex: only the agent name.
@@ -374,19 +374,19 @@ any state except trash -> trash                       only on explicit user requ
 
 ### Invariants
 
-- Every direct child of a state directory is a card: a small task is `YYYYMMDD-short-slug-task.md`, a large task is a directory of the same name that must contain a regular file `spec.md`.
+- Every new card is a directory `YYYYMMDD-short-slug-task/` containing a regular `spec.md`. `SIZE: small|large`, immediately after TYPE, determines task scale independently of directory form. Legacy `<task-id>.md` entries remain readable until explicit migration.
 
   `short-slug` contains only lowercase ASCII letters, digits, and hyphens.
 
   The entry name without extension is the task ID.
 
-- Task IDs are unique across the whole board; they must not repeat across states or exist as both file and directory at once. A move moves the whole entry; the entry name never changes after creation, is never copied then deleted, and leaves no copies. Large task directories use only relative links so they stay valid after a move.
+- Task IDs are unique across the whole board; they must not repeat across states or exist as both file and directory at once. A move moves the whole entry; the entry name never changes after creation, is never copied then deleted, and leaves no copies. Card directories use only relative links so they stay valid after a move.
 - The card path changes with state moves. Before editing, obtain `kander show --json <task-id>`, prepare the replacement in a separate UTF-8 input file, and publish with `kander update` using that revision. Do not write a cached card path directly. A revision conflict requires reading and reconciling the current document before retrying. New cards are created only through `kander new`; missing cards are never recreated by update or rollback.
 - Cards must not contain tokens, credentials, sensitive service addresses, or personal data that should not stay on this machine.
 
 ### Controlled Documents and Recovery
 
-- Use `update --document spec.md` for the body of either card form: for a small card it maps to the existing `.md` file, and for a directory card it maps to `spec.md`. Directory cards also accept `plan.md`, `report.md` and ordinary attachments, including relative subdirectories. Attachments require a directory card.
+- Use `update --document spec.md` for every migrated card body. Both small and large cards accept `plan.md`, `report.md` and ordinary attachments, including relative subdirectories. Legacy file cards are read-only: mutation commands fail before side effects and direct the caller to `kander init`. Do not bypass this requirement with an older binary or direct file editing.
 - Paths must be canonical, relative, and free of traversal, symlinks and reparse points. Never edit managed `reviews/`, `dispatches/`, manifests, indexes or control records through update. Dedicated producers own those records.
 - Full-body replacements must preserve `LANGUAGE`, `OWNER`, `SESSION`, `WINDOW`, creation/start/completion timestamps, `RESULT`, execution metadata and managed indexes. Keep `TASK_BRANCH` and ordinary implementation/summary records current through update.
 - Manual claiming uses `kander move <task-id> working --owner <agent>` to write `OWNER` and `STARTED_AT` with the state transition. `start` and `resume` own session/window metadata. Dispatch-back moves to working do not replace the existing owner.
@@ -397,12 +397,13 @@ any state except trash -> trash                       only on explicit user requ
 - A process interrupted during publication leaves a recoverable transaction. Readers report the unfinished operation without repairing it or treating its intermediate files as ordinary missing cards. Run `kander init` explicitly to finish prepared writes and moves. A recovery conflict preserves the evidence and both copies; do not guess a primary copy or delete one automatically.
 - Transactions protect commands and agents that follow this protocol. They do not prevent arbitrary local processes from bypassing the command and editing files directly. Coordinate maintenance with older agents or binaries before switching the board to this protocol.
 
-### Small Task Template
+### Small Task Template (`<task-id>/spec.md`)
 
 ```markdown
 # <task title>
 
 - TYPE: Feature | Bug | Chore | Research
+- SIZE: small
 - TASK_GROUP:
 - LANGUAGE: <agent communication language, e.g. en, zh-CN, ja>
 - CREATED_AT: YYYY-MM-DD HH:MM
@@ -453,7 +454,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ### Large Task Documents
 
-- `spec.md` is required and contains the small task's metadata and contract sections: `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`.
+- `SIZE: large` selects the large-task contract. `spec.md` is required and contains the small task's metadata and contract sections: `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`.
 - `plan.md` is created as needed to record implementation steps, affected modules, verification, release and rollback plans; it must not modify the `spec.md` contract.
 - `report.md` is created on completion to record actual changes, final commits, verification, deviations, unresolved issues, risks, and the acceptance conclusion; do not create it empty.
 
@@ -468,17 +469,26 @@ any state except trash -> trash                       only on explicit user requ
 
   The dedicated move options fill the result atomically when entering `done/`, `archived/`, or `trash/`.
 
-- Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, and task group relations are frozen. Changing any of them requires an explicit user decision first.
+- Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, and task group relations are frozen. Changing any of them requires an explicit user decision first.
 - `OUT_OF_SCOPE` defines the task boundary truthfully; unconfirmed extended goals are not written into `ACCEPTANCE_CRITERIA`. When the review module is enabled, refine the scope further per the review contract of `KANDER-REVIEW-RULES.md`.
 - During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps; do not copy the session transcript. Stable architecture, APIs, and long-term rules must still go into repository documentation or project rules.
 
 ## Task Scale and Grouping
 
-- New cards default to small tasks; complex tasks may use `new --large`. This release preserves both existing forms. Do not convert entries with direct file operations; a form migration requires dedicated migration support. Body updates and lifecycle commands remain available for small cards.
+- New cards always use directory form. `new` writes `SIZE: small` and includes IMPLEMENTATION/SUMMARY; `new --large` writes `SIZE: large` and requires a non-empty report.md for completion. A small card still requires its completed SUMMARY, even if it has a report.md. Both require SELF_REVIEW before todo; large tasks and all group members additionally require CARD_REVIEW. After todo, changing SIZE requires the existing explicit contract-decision update flow. Never infer scale from the presence of a directory or report.md.
 
 - Cards keep optional task group fields and dependency records. When task_groups is off, groups are not split automatically and independent single cards remain usable. When on, plan and execute per KANDER-TASK-GROUP-RULES.md; git must be on as well.
 - Intake guidance belongs to KANDER-TASK-INTAKE-RULES.md and is read only when rules.task_intake=true; a user operating the board directly does not require it to be on.
 - kander new creates the template in backlog; the caller fills in `GOAL`, `EXPECTED_OUTCOME`, and `ACCEPTANCE_CRITERIA` from confirmed content and does not write suggestions as user decisions. The card text is written in the card's `LANGUAGE`.
+
+### Explicit Migration and Maintenance
+
+- `init` migrates legacy files in all seven states to `<task-id>/spec.md`, adds `SIZE: small` to files without SIZE and `SIZE: large` to directories without SIZE, and preserves all other bytes, IDs, attachments and relative links. Existing valid SIZE is retained. Repeated init reports zero migrations and leaves unchanged card content and modification times untouched. Invalid or duplicate SIZE rejects mutations and migration; only exact `small`/`large` values are valid.
+- `list`, `show`, `check`, the TUI and `subscribe` keep reading legacy files without migrating them. Missing SIZE means small for a legacy file and large for a directory. `check` requests init for directories missing SIZE; its existing state scope is unchanged. Read commands never run a batch migration.
+- Before migration, pause all executing agents, external editors, notifications and archive writers, including older binaries that do not follow the transaction protocol. Keep this maintenance window open through recovery and migration. Kander acquires exclusive board access for cooperating readers and writers, but cannot verify that arbitrary external processes stopped.
+- When any working or review cards exist and migration is needed, init refuses by default and lists the affected IDs. Only after all writers are paused, use `init --maintenance` to acknowledge those preconditions. Recovery of an interrupted active-card migration requires the same acknowledgement. No agent is terminated automatically.
+- Migration first persists a redo record, moves a file into same-volume staging, adds SIZE there, publishes the directory, then commits the revision and journal. These are separate steps with an internal intermediate state, not a single atomic rename. Cooperating readers wait for the maintenance lock; after a process interruption they diagnose a managed pending transaction and require explicit init recovery. Directory SIZE supplementation uses the same journal. No reader repairs the board automatically.
+- A recovery conflict, unknown staging artifact, duplicate entry or reparse point preserves the evidence and fails explicitly. Never guess a primary copy, delete unknown artifacts, or hide an unfinished operation by renaming it with a dot prefix. `guard-write` recognizes both stale state paths and the same-state old `.md` spelling, but its check does not make an external write atomic; use update.
 
 ### Post-Creation Self-Review
 
@@ -614,5 +624,5 @@ kander move <task-id> working --owner <agent>
 
   A process exit does not change `working/` and does not move back to `todo/`.
 
-- On duplicate IDs, cross-state copies, a file and a directory with the same ID, a large task missing `spec.md`, conflicting targets, or missing or unwritable state directories, stop the affected operation and preserve the working state. Do not bypass the error by deleting, renaming, or moving.
+- On duplicate IDs, cross-state copies, a file and a directory with the same ID, a directory card missing `spec.md`, conflicting targets, or missing or unwritable state directories, stop the affected operation and preserve the working state. Do not bypass the error by deleting, renaming, or moving.
 - The board has no Git history; on accidental deletion, first check `trash/` and local backups; do not fabricate content.

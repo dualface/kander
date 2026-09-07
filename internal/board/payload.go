@@ -57,6 +57,9 @@ func TaskDisplayTime(entry Entry, text string) string {
 // TaskSummaryOf builds a digest from an entry and its document.
 func TaskSummaryOf(entry Entry, text string) TaskSummary {
 	kind := entry.Kind
+	if len(fieldLines(text, FieldSize)) > 0 {
+		kind = attachSize(entry, text).Kind
+	}
 	if kind == "" {
 		kind = "small"
 	}
@@ -100,7 +103,7 @@ func BoardPayload(root string) (BoardView, error) {
 	}
 	tasks := make([]TaskSummary, 0, len(scanned.Entries))
 	for _, entry := range scanned.Entries {
-		text, err := ReadDocument(entry)
+		text, err := scanned.Document(entry.TaskID)
 		if err != nil {
 			return BoardView{}, err
 		}
@@ -124,7 +127,7 @@ func TaskPayload(root, taskID string) (TaskSummary, error) {
 	if err != nil {
 		return TaskSummary{}, err
 	}
-	text, err := ReadDocument(entry)
+	text, err := scanned.Document(entry.TaskID)
 	if err != nil {
 		return TaskSummary{}, err
 	}

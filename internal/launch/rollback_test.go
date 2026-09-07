@@ -17,7 +17,7 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	working := moved.Path
+	working := moved.Document
 	mut := strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)
 	_ = os.WriteFile(working, []byte(mut), 0o644)
 	orig := string(original)
@@ -34,7 +34,7 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 	loaded, _ = board.LoadBoard(root)
 	entry, _ = board.Locate(loaded, taskID)
 	moved, _ = board.MoveEntry(entry, root, "working")
-	_ = os.WriteFile(moved.Path, []byte(strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)), 0o644)
+	_ = os.WriteFile(moved.Document, []byte(strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)), 0o644)
 
 	newer, readErr := board.ReadSnapshot(root, taskID)
 	if readErr != nil {

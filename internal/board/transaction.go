@@ -45,6 +45,7 @@ type EntryChange struct {
 // OperationRecord is the versioned recovery format. A prepared record always
 // rolls forward on init. Readers reject prepared records without repairing them.
 type OperationRecord struct {
+	Purpose     string            `json:"purpose,omitempty"`
 	Schema      int               `json:"schema"`
 	ID          string            `json:"operation_id"`
 	Phase       string            `json:"phase"`
@@ -53,6 +54,7 @@ type OperationRecord struct {
 	Directories []string          `json:"directories,omitempty"`
 	Files       []FileChange      `json:"files,omitempty"`
 	Entries     []EntryChange     `json:"entries,omitempty"`
+	Migrations  []FormMigration   `json:"migrations,omitempty"`
 }
 
 // Transaction stages multi-file publications under a fixed lock set. Callers
@@ -160,6 +162,12 @@ func (tx *Transaction) Snapshot(id string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
+	e = attachSize(e, text)
+	if !tx.scope.ReadOnly {
+		if err := ValidateMutable(e, text); err != nil {
+			return Snapshot{}, err
+		}
+	}
 	e.Version = &Version{revision: v}
 	last, err := readVersion(tx.root, id)
 	if err != nil {
@@ -191,7 +199,7 @@ func documentPath(e Entry, name string) (string, error) {
 	if strings.EqualFold(name, "spec.md") && name != "spec.md" {
 		return "", kanbanError("board.transaction_invalid", name)
 	}
-	if e.Kind == "small" {
+	if !e.IsDirectory() {
 		if name != "spec.md" {
 			return "", kanbanError("board.transaction_directory_required")
 		}
@@ -224,11 +232,16 @@ func (tx *Transaction) Put(id, name, text string) error {
 	if err != nil {
 		return err
 	}
+	if name == "spec.md" {
+		if _, err := taskSize(s.Entry, text); err != nil {
+			return err
+		}
+	}
 	p, err := documentPath(s.Entry, name)
 	if err != nil {
 		return err
 	}
-	if s.Entry.Kind == "large" {
+	if s.Entry.IsDirectory() {
 		if err = tx.stageParents(s.Entry.Path, filepath.Dir(p)); err != nil {
 			return err
 		}
@@ -294,7 +307,7 @@ func (tx *Transaction) Relocate(id, state string) error {
 				text = file.After
 			}
 		}
-		tx.record.Entries = append(tx.record.Entries, EntryChange{From: from, To: to, Kind: s.Entry.Kind, Text: text})
+		tx.record.Entries = append(tx.record.Entries, EntryChange{From: from, To: to, Kind: s.Entry.storageKind(), Text: text})
 	}
 	return nil
 }

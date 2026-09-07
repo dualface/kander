@@ -53,7 +53,7 @@ func TestTodoGateRequiresSelfReviewRecord(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("gate-self")
 	capture(t, func() int { return RunNew([]string{"chore", "gate-self", "自审门禁"}) })
-	path := filepath.Join(root, "backlog", taskID+".md")
+	path := filepath.Join(root, "backlog", taskID, "spec.md")
 	fillSections(t, path)
 
 	// Complete contract but no self-review record: rejected.
@@ -73,7 +73,7 @@ func TestTodoGateRequiresCardReviewForGroupAndLarge(t *testing.T) {
 
 	groupID := todayID("gate-group")
 	capture(t, func() int { return RunNew([]string{"chore", "gate-group", "组员卡门禁"}) })
-	groupPath := filepath.Join(root, "backlog", groupID+".md")
+	groupPath := filepath.Join(root, "backlog", groupID, "spec.md")
 	fillSections(t, groupPath)
 	setMeta(t, groupPath, "- TASK_GROUP:\n", "- TASK_GROUP: 20260906-demo-group\n")
 	appendDiscussion(t, groupPath, "SELF_REVIEW: 通过")
@@ -104,7 +104,7 @@ func TestTodoGateRequiresAcceptanceCheckbox(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("gate-accept")
 	capture(t, func() int { return RunNew([]string{"chore", "gate-accept", "验收条目门禁"}) })
-	path := filepath.Join(root, "backlog", taskID+".md")
+	path := filepath.Join(root, "backlog", taskID, "spec.md")
 	fillSections(t, path)
 	appendDiscussion(t, path, "SELF_REVIEW: 通过")
 	// Rewrite the acceptance criteria as plain text with no checklist item.
@@ -123,7 +123,7 @@ func TestTodoGateIgnoresEmptyCRLFGroupMetadata(t *testing.T) {
 	root := tempBoard(t)
 	taskID := todayID("gate-crlf")
 	capture(t, func() int { return RunNew([]string{"chore", "gate-crlf", "CRLF 门禁"}) })
-	path := filepath.Join(root, "backlog", taskID+".md")
+	path := filepath.Join(root, "backlog", taskID, "spec.md")
 	fillSections(t, path)
 	appendDiscussion(t, path, "SELF_REVIEW: 通过")
 	// Card saved with CRLF: an empty task-group field must not be treated as a group member needing card review.

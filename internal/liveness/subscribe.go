@@ -139,8 +139,8 @@ func groupMembers(root string) (map[string][]string, error) {
 
 func groupMembersFrom(scanned board.Board) (map[string][]string, error) {
 	members := map[string][]string{}
-	for taskID, entry := range scanned.Entries {
-		text, err := board.ReadDocument(entry)
+	for taskID := range scanned.Entries {
+		text, err := scanned.Document(taskID)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +251,7 @@ func subscriptionLiveness(scanned board.Board, states map[string]string) map[str
 			continue
 		}
 		entry := scanned.Entries[taskID]
-		text, err := board.ReadDocument(entry)
+		text, err := scanned.Document(taskID)
 		var rep Report
 		if err != nil {
 			rep = Report{Agent: "N/A", Status: Unknown, Channel: "unknown", Detail: err.Error()}
@@ -308,7 +308,7 @@ func validateSubscribe(root string, opts subscribeOptions) ([]string, []string, 
 		return nil, nil, err
 	}
 	for _, taskID := range members {
-		text, err := board.ReadDocument(scanned.Entries[taskID])
+		text, err := scanned.Document(taskID)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -92,7 +92,7 @@ func TestNewCardUsesCanonicalTokensOnly(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	capture(t, func() int { return RunNew([]string{"chore", "schema-tokens", "字段"}) })
-	data, err := os.ReadFile(filepath.Join(root, "backlog", todayID("schema-tokens")+".md"))
+	data, err := os.ReadFile(filepath.Join(root, "backlog", todayID("schema-tokens"), "spec.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,10 +164,13 @@ func TestGatesAcceptLegacyAndMixedCards(t *testing.T) {
 			updated := strings.Replace(string(data), "- 结果:", "- 结果: completed", 1)
 			updated = strings.Replace(updated, "- "+FieldResult+":", "- "+FieldResult+": completed", 1)
 			writeCard(t, root, "working", taskID, updated)
+			if _, err := MigrateCards(root, InitOptions{Maintenance: true}); err != nil {
+				t.Fatal(err)
+			}
 			if code, _, err := capture(t, func() int { return RunMove([]string{taskID, "done"}) }); code != 0 {
 				t.Fatalf("done: %s", err)
 			}
-			done, err := os.ReadFile(filepath.Join(root, "done", taskID+".md"))
+			done, err := os.ReadFile(filepath.Join(root, "done", taskID, "spec.md"))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -175,7 +175,7 @@ exit 0
 }
 
 func doneCard(title string) string {
-	return "# " + title + "\n\n- TYPE: Feature\n- TASK_GROUP:\n- CREATED_AT: 2026-09-04 02:19\n- OWNER: claude\n- SESSION: claude session-1\n- WINDOW: herdr:w1:t9:w1:p9\n- STARTED_AT: 2026-09-04 11:00\n- FINISHED_AT: 2026-09-04 12:00\n- TASK_BRANCH: task/demo\n- RESULT: completed\n\n## GOAL\n\n实现目标\n\n## USER_DECISIONS\n\nN/A\n\n## EXPECTED_OUTCOME\n\n产生可验证结果\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] 满足验收\n\n## THREAT_MODEL\n\nN/A\n\n## OUT_OF_SCOPE\n\n- 无额外范围\n\n## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n\n## IMPLEMENTATION\n\n## SUMMARY\n完成\n"
+	return "# " + title + "\n\n- TYPE: Feature\n- SIZE: small\n- TASK_GROUP:\n- CREATED_AT: 2026-09-04 02:19\n- OWNER: claude\n- SESSION: claude session-1\n- WINDOW: herdr:w1:t9:w1:p9\n- STARTED_AT: 2026-09-04 11:00\n- FINISHED_AT: 2026-09-04 12:00\n- TASK_BRANCH: task/demo\n- RESULT: completed\n\n## GOAL\n\n实现目标\n\n## USER_DECISIONS\n\nN/A\n\n## EXPECTED_OUTCOME\n\n产生可验证结果\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] 满足验收\n\n## THREAT_MODEL\n\nN/A\n\n## OUT_OF_SCOPE\n\n- 无额外范围\n\n## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n\n## IMPLEMENTATION\n\n## SUMMARY\n完成\n"
 }
 
 func makeDone(t *testing.T, root, slug, window string) (string, string) {
@@ -186,7 +186,7 @@ func makeDone(t *testing.T, root, slug, window string) (string, string) {
 	}
 	text := doneCard("任务 " + slug)
 	text = regexp.MustCompile(`(?m)^- WINDOW:.*$`).ReplaceAllLiteralString(text, "- WINDOW: "+window)
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "spec.md"), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := board.LoadBoard(root)
@@ -213,7 +213,7 @@ func makeDone(t *testing.T, root, slug, window string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return done.TaskID, done.Path
+	return done.TaskID, done.Document
 }
 
 func TestDismissStaleHerdrDoesNotRewriteWindow(t *testing.T) {

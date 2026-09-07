@@ -93,7 +93,14 @@ func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string
 	if err != nil {
 		return "", err
 	}
-	return RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " ", nil
+	size := board.MetadataFrom(cardText, board.FieldSize)
+	if size == "" {
+		size = "large"
+	}
+	if size != "small" && size != "large" {
+		return "", launchError("board.size_invalid", "prompt")
+	}
+	return RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " " + t("launch.prompt.size", size) + " ", nil
 }
 
 func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {

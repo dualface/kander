@@ -209,3 +209,13 @@ func TestPromptLanguageDirectiveFromCardAndConfig(t *testing.T) {
 		}
 	})
 }
+
+func TestPromptUsesSizeIndependentOfDirectoryForm(t *testing.T) {
+	for _, size := range []string{"small", "large"} {
+		text := "- LANGUAGE: en\n- SIZE: " + size + "\n"
+		instruction, err := RuleLoadingWithLanguage(config.InstallPaths{Mode: config.ModeGlobal, RulesDir: "/rules"}, text)
+		if err != nil || !strings.Contains(instruction, config.Text("launch.prompt.size", size)) {
+			t.Fatalf("size %s: %q %v", size, instruction, err)
+		}
+	}
+}

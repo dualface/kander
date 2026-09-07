@@ -304,7 +304,7 @@ func makeTodo(t *testing.T, root, slug string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeReady(t, path)
+	makeReady(t, filepath.Join(path, "spec.md"))
 	loaded, err := board.LoadBoard(root)
 	if err != nil {
 		t.Fatal(err)
@@ -320,7 +320,7 @@ func makeTodo(t *testing.T, root, slug string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return moved.TaskID, moved.Path
+	return moved.TaskID, moved.Document
 }
 
 func mustRead(t *testing.T, path string) string {
@@ -382,7 +382,7 @@ func TestStartSelectsAgentByScaleAndRecordsWindow(t *testing.T) {
 	if !strings.Contains(cmd, filepath.Join(fakeBin, "cursor-agent")) || !strings.Contains(cmd, "--resume chat-fake-0001") {
 		t.Fatalf("command=%s", cmd)
 	}
-	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(smallPath)))
+	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(filepath.Dir(smallPath)), "spec.md"))
 	if !strings.Contains(string(text), "- OWNER: cursor\n- SESSION: cursor chat-fake-0001\n- WINDOW: tmux:$42:@9:%9\n") {
 		t.Fatalf("card=%s", text)
 	}
@@ -429,7 +429,7 @@ func TestStartAgentOverrideAndClaudeSession(t *testing.T) {
 	if match == nil {
 		t.Fatalf("command=%s", cmd)
 	}
-	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
+	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md"))
 	if !strings.Contains(string(text), "- SESSION: claude "+match[1]+"\n") {
 		t.Fatalf("card=%s", text)
 	}
@@ -472,7 +472,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 	}
 	cmd := lastCommand(t, root)
 	session := regexp.MustCompile(`--session-id ([0-9a-f-]{36})`).FindStringSubmatch(cmd)[1]
-	working := filepath.Join(root, "working", filepath.Base(path))
+	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
 	setBranch(t, working)
 	loaded, _ := board.LoadBoard(root)
 	entry, _ := board.Locate(loaded, taskID)
@@ -489,7 +489,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 		t.Fatalf("stdout=%s", out)
 	}
 	// resume does not move the card: a review card stays put and the move is performed by the woken agent itself.
-	if _, err := os.Stat(filepath.Join(root, "review", filepath.Base(path))); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(working); err == nil {
@@ -552,7 +552,7 @@ func TestResumeRequiresMessageAndCodexRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	working := filepath.Join(root, "working", filepath.Base(path))
+	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
 	setBranch(t, working)
 	loaded, _ := board.LoadBoard(root)
 	entry, _ := board.Locate(loaded, taskID)
@@ -641,7 +641,7 @@ func TestStartFailureRestoresTodo(t *testing.T) {
 	if string(got) != string(original) {
 		t.Fatal("document changed")
 	}
-	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(path))); err == nil {
+	if _, err := os.Stat(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")); err == nil {
 		t.Fatal("should not remain in working")
 	}
 }
@@ -652,7 +652,7 @@ func TestTmuxPersistsWindowBeforeMutationAndPaneMarker(t *testing.T) {
 	}
 	root, _, _ := setupBoard(t)
 	taskID, path := makeTodo(t, root, "tmux-order")
-	working := filepath.Join(root, "working", filepath.Base(path))
+	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
 	t.Setenv("KANBAN_TMUX_MUTATE_CARD", working)
 	_, _, err := capture(t, func() error { return commandStart(root, "claude", "tmux", taskID) })
 	if err != nil {
@@ -747,7 +747,7 @@ func TestTakeoverHookReportsNA(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	working := filepath.Join(root, "working", filepath.Base(path))
+	working := filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md")
 	setBranch(t, working)
 	loaded, _ := board.LoadBoard(root)
 	entry, _ := board.Locate(loaded, taskID)
@@ -765,7 +765,7 @@ func TestTakeoverHookReportsNA(t *testing.T) {
 		t.Fatalf("stdout=%s", out)
 	}
 	// A takeover does not move the card: it stays in review and the metadata is rewritten in place.
-	text, _ := os.ReadFile(filepath.Join(root, "review", filepath.Base(path)))
+	text, _ := os.ReadFile(filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md"))
 	if !strings.Contains(string(text), "- OWNER: grok\n") {
 		t.Fatalf("card=%s", text)
 	}
@@ -810,7 +810,7 @@ func TestHerdrStartWritesWindow(t *testing.T) {
 	if !strings.Contains(out, "启动方式=herdr") || !strings.Contains(out, "tab=w1:t9") {
 		t.Fatalf("stdout=%s", out)
 	}
-	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
+	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md"))
 	if !strings.Contains(string(text), "- WINDOW: herdr:w1:t9:w1:p9\n") {
 		t.Fatalf("card=%s", text)
 	}
@@ -887,7 +887,7 @@ func testConsoleStart(t *testing.T) {
 	if !strings.Contains(out, "启动方式=console") || !strings.Contains(out, "PID=4242") {
 		t.Fatalf("stdout=%s", out)
 	}
-	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(path)))
+	text, _ := os.ReadFile(filepath.Join(root, "working", filepath.Base(filepath.Dir(path)), "spec.md"))
 	if !strings.Contains(string(text), "- WINDOW: console\n") {
 		t.Fatalf("card=%s", text)
 	}

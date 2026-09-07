@@ -208,7 +208,7 @@ exit 0
 }
 
 func cardTemplate(title string) string {
-	return "# " + title + "\n\n- TYPE: Feature\n- TASK_GROUP:\n- CREATED_AT: 2026-09-04 02:19\n- OWNER: claude\n- SESSION: claude session-1\n- WINDOW: herdr:w1:t9:w1:p9\n- STARTED_AT: 2026-09-04 11:00\n- FINISHED_AT:\n- TASK_BRANCH: task/demo\n- RESULT:\n\n## GOAL\n\n实现目标\n\n## USER_DECISIONS\n\nN/A\n\n## EXPECTED_OUTCOME\n\n产生可验证结果\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] 满足验收\n\n## THREAT_MODEL\n\nN/A\n\n## OUT_OF_SCOPE\n\n- 无额外范围\n\n## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n\n## IMPLEMENTATION\n\n## SUMMARY\n"
+	return "# " + title + "\n\n- TYPE: Feature\n- SIZE: small\n- TASK_GROUP:\n- CREATED_AT: 2026-09-04 02:19\n- OWNER: claude\n- SESSION: claude session-1\n- WINDOW: herdr:w1:t9:w1:p9\n- STARTED_AT: 2026-09-04 11:00\n- FINISHED_AT:\n- TASK_BRANCH: task/demo\n- RESULT:\n\n## GOAL\n\n实现目标\n\n## USER_DECISIONS\n\nN/A\n\n## EXPECTED_OUTCOME\n\n产生可验证结果\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] 满足验收\n\n## THREAT_MODEL\n\nN/A\n\n## OUT_OF_SCOPE\n\n- 无额外范围\n\n## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n\n## IMPLEMENTATION\n\n## SUMMARY\n"
 }
 
 func makeReview(t *testing.T, root, slug string) (string, string) {
@@ -217,7 +217,7 @@ func makeReview(t *testing.T, root, slug string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(cardTemplate("任务 "+slug)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "spec.md"), []byte(cardTemplate("任务 "+slug)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := board.LoadBoard(root)
@@ -240,7 +240,7 @@ func makeReview(t *testing.T, root, slug string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return review.TaskID, review.Path
+	return review.TaskID, review.Document
 }
 
 func setWindow(t *testing.T, path, window string) {

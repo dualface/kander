@@ -8,7 +8,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 )
 
-func TestGroupExpansionRejectsRevisionConflict(t *testing.T) {
+func TestGroupExpansionKeepsCommittedSnapshot(t *testing.T) {
 	root := tempBoard(t)
 	group := "20260907-member-race-group"
 	var ids []string
@@ -40,7 +40,7 @@ func TestGroupExpansionRejectsRevisionConflict(t *testing.T) {
 	}
 	// The update occurs after Scan and before the consumer reads its entries.
 	members, err := groupMembersFrom(scanned)
-	if err == nil || members != nil {
+	if err != nil || !reflect.DeepEqual(members[group], ids) {
 		t.Fatalf("partial expansion returned: %+v, %v", members, err)
 	}
 	members, err = groupMembers(root)

@@ -30,11 +30,22 @@ func Scan(root string) (b Board, err error) {
 	if err = pending(root, ids); err != nil {
 		return b, err
 	}
+	b.documents = make(map[string]string, len(b.Entries))
+	b.documentErrors = make(map[string]error)
 	for id, e := range b.Entries {
 		v, er := revision(root, id)
 		if er != nil {
 			return b, er
 		}
+		text, er := readDocument(e)
+		if er != nil {
+			b.documentErrors[id] = er
+			e.Version = &Version{revision: v}
+			b.Entries[id] = e
+			continue
+		}
+		b.documents[id] = text
+		e = attachSize(e, text)
 		e.Version = &Version{revision: v}
 		b.Entries[id] = e
 	}
@@ -44,7 +55,7 @@ func Scan(root string) (b Board, err error) {
 		return b, err
 	}
 	for _, rec := range records {
-		if rec.Phase == "prepared" && len(rec.Entries) > 0 {
+		if rec.Phase == "prepared" && (len(rec.Entries) > 0 || len(rec.Migrations) > 0) {
 			return b, kanbanError("board.transaction_pending", rec.ID)
 		}
 	}
@@ -66,11 +77,22 @@ func ScanTargets(root string, values []string) (b Board, err error) {
 		if e != nil {
 			return e
 		}
+		b.documents = make(map[string]string, len(b.Entries))
+		b.documentErrors = make(map[string]error)
 		for id, entry := range b.Entries {
 			v, er := revision(root, id)
 			if er != nil {
 				return er
 			}
+			text, er := readDocument(entry)
+			if er != nil {
+				b.documentErrors[id] = er
+				entry.Version = &Version{revision: v}
+				b.Entries[id] = entry
+				continue
+			}
+			b.documents[id] = text
+			entry = attachSize(entry, text)
 			entry.Version = &Version{revision: v}
 			b.Entries[id] = entry
 		}
@@ -196,11 +218,30 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		moved.State = target
 		moved.Path = joinBoard(root, target, baseEntryName(entry))
 		moved.Document = moved.Path
-		if moved.Kind == "large" {
+		if moved.IsDirectory() {
 			moved.Document = joinBoard(moved.Path, "spec.md")
 		}
 		moved.Version = &Version{revision: s.Revision + 1}
 		return nil
 	})
 	return moved, err
+}
+
+// Document returns the immutable body captured by Scan/ScanTargets under the
+// same shared locks as Entries. Display and subscription consumers can finish
+// reading that committed snapshot even if a later mutation moves the card.
+// Mutations still use ReadSnapshot/Expect and never treat this text as current.
+func (b Board) Document(id string) (string, error) {
+	entry, err := Locate(b, id)
+	if err != nil {
+		return "", err
+	}
+	if err := b.documentErrors[entry.TaskID]; err != nil {
+		return "", err
+	}
+	text, ok := b.documents[entry.TaskID]
+	if !ok {
+		return "", kanbanError("board.transaction_invalid", "missing document snapshot")
+	}
+	return text, nil
 }

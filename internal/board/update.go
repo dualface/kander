@@ -186,6 +186,9 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			if version.ContractFrozen && state == "backlog" {
 				state = "frozen"
 			}
+			if len(fieldLines(s.Text, FieldSize)) > 0 && len(fieldLines(text, FieldSize)) == 0 {
+				return kanbanError("board.size_invalid", id)
+			}
 			text, err = validSpecUpdate(s.Text, text, state, o.ContractDecision)
 			if err != nil {
 				return err

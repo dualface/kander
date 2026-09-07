@@ -340,74 +340,80 @@ func createStateDirectory(path string) error {
 }
 
 func InitBoard(project string) (root string, exclude string, rules string, err error) {
+	root, exclude, rules, _, err = InitBoardWithOptions(project, InitOptions{})
+	return
+}
+
+// InitBoardWithOptions initializes and explicitly migrates under maintenance access.
+func InitBoardWithOptions(project string, options InitOptions) (root string, exclude string, rules string, migrated int, err error) {
 	configured := os.Getenv(EnvBoardDir)
 	if project != "" && configured != "" {
-		return "", "", "", kanbanError("board.project_path_and_kanban_dir_cannot_be_used_together")
+		return "", "", "", migrated, kanbanError("board.project_path_and_kanban_dir_cannot_be_used_together")
 	}
 	if project != "" {
 		proj, e := absoluteUserPath(project)
 		if e != nil {
-			return "", "", "", e
+			return "", "", "", migrated, e
 		}
 		if e := ensureWindowsLexicalPathSafe(proj); e != nil {
-			return "", "", "", e
+			return "", "", "", migrated, e
 		}
 		info, e := os.Stat(proj)
 		if e != nil || !info.IsDir() {
-			return "", "", "", kanbanError("board.project_directory_does_not_exist", proj)
+			return "", "", "", migrated, kanbanError("board.project_directory_does_not_exist", proj)
 		}
 		root = filepath.Join(proj, "kanban")
 	} else if configured != "" {
 		root, err = absoluteUserPath(configured)
 		if err != nil {
-			return "", "", "", err
+			return "", "", "", migrated, err
 		}
 	} else {
 		cwd, e := os.Getwd()
 		if e != nil {
-			return "", "", "", kanbanError("board.project_directory_does_not_exist", cwd)
+			return "", "", "", migrated, kanbanError("board.project_directory_does_not_exist", cwd)
 		}
 		proj := gitMainWorktree(cwd)
 		if proj == "" {
 			proj, err = absoluteUserPath(cwd)
 			if err != nil {
-				return "", "", "", err
+				return "", "", "", migrated, err
 			}
 		}
 		root = filepath.Join(proj, "kanban")
 	}
 	if err := ensureWindowsLexicalPathSafe(root); err != nil {
-		return "", "", "", err
+		return "", "", "", migrated, err
 	}
 	if existsNoFollow(root) && !isDirNoFollow(root) {
-		return "", "", "", kanbanError("board.board_path_is_not_a_directory", root)
+		return "", "", "", migrated, kanbanError("board.board_path_is_not_a_directory", root)
 	}
 	if isWindows() {
 		if err := ensurePrivateBoardDirectory(root); err != nil {
-			return "", "", "", err
+			return "", "", "", migrated, err
 		}
 	} else {
 		if err := fs.EnsureInheritedDirectoryPath(root); err != nil {
-			return "", "", "", wrapFS(err, "board.board_path_is_not_a_directory", root)
+			return "", "", "", migrated, wrapFS(err, "board.board_path_is_not_a_directory", root)
 		}
 	}
 	for _, state := range States {
 		if err := createStateDirectory(filepath.Join(root, state)); err != nil {
-			return "", "", "", err
+			return "", "", "", migrated, err
 		}
 	}
-	if err = RecoverTransactions(root); err != nil {
-		return "", "", "", err
+	if migrated, err = MigrateCards(root, options); err != nil {
+		return "", "", "", migrated, err
 	}
 	exclude, err = addGitExclude(root)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", migrated, err
 	}
 	rules, err = rulesPath()
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", migrated, err
 	}
-	return root, exclude, rules, nil
+	return root, exclude, rules, migrated, nil
 }
 
 func ensureLayout(root string) error {
