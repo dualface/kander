@@ -63,19 +63,20 @@ func deliverDispatch(root, task, id, paneOverride string, resumed ...*launch.Res
 }
 
 func deliverDispatchContext(parent context.Context, root, task, id, paneOverride string, resumed ...*launch.ResumeLaunch) (deliveryErr error) {
+	d, err := board.ReadDispatch(root, task, id)
+	if err != nil {
+		return err
+	}
+	authorization := d.Authorization
 	defer func() {
 		if deliveryErr == nil {
 			return
 		}
 		current, err := board.ReadDispatch(root, task, id)
-		if err == nil && receiptExists(current) {
+		if err == nil && current.Authorization == authorization && receiptExists(current) {
 			deliveryErr = launch.PrintDispatchResult(current)
 		}
 	}()
-	d, err := board.ReadDispatch(root, task, id)
-	if err != nil {
-		return err
-	}
 	if receiptExists(d) {
 		return launch.PrintDispatchResult(d)
 	}
@@ -88,7 +89,7 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 	if err != nil {
 		return err
 	}
-	s, err := board.ReadSnapshot(root, task)
+	s, err := board.ReadExecutionSnapshot(root, task, authorization)
 	if err != nil {
 		return err
 	}
@@ -106,10 +107,13 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 		if err != nil {
 			return err
 		}
+		if d.Authorization != authorization {
+			return notifyError("board.dispatch_conflict", id)
+		}
 		if receiptExists(d) {
 			return launch.PrintDispatchResult(d)
 		}
-		s, err = board.ReadSnapshot(root, task)
+		s, err = board.ReadExecutionSnapshot(root, task, authorization)
 		if err != nil {
 			return err
 		}
