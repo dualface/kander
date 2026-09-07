@@ -102,19 +102,8 @@ func TestPerformGlobalInstall(t *testing.T) {
 			t.Fatalf("%s mismatch: %v", name, err)
 		}
 	}
-	link, err := os.Readlink(filepath.Join(home, ".agents", "AGENTS.md"))
-	if err != nil {
-		if runtime.GOOS == "windows" {
-			got, _ := os.ReadFile(filepath.Join(home, ".agents", "AGENTS.md"))
-			want, _ := os.ReadFile(filepath.Join(home, ".agents", "KANDER-AGENTS.md"))
-			if !bytes.Equal(got, want) {
-				t.Fatal("windows agents entry mismatch")
-			}
-		} else {
-			t.Fatal(err)
-		}
-	} else if link != "KANDER-AGENTS.md" {
-		t.Fatalf("link=%s", link)
+	if _, err := os.Lstat(filepath.Join(home, ".agents", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("AGENTS.md entry must not be created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".local", "share", "kander")); err != nil {
 		t.Fatal(err)
@@ -136,6 +125,66 @@ func TestPerformPreservesExistingAgentsEntry(t *testing.T) {
 	got, _ := os.ReadFile(agents)
 	if string(got) != "local-rules\n" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestPerformRemovesInstallerAgentsEntryCopy(t *testing.T) {
+	home := setupInstallHome(t)
+	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	official, err := rules.File("KANDER-AGENTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The Windows hard-link fallback of earlier installers is indistinguishable from a copy.
+	if err := os.MkdirAll(filepath.Dir(agents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agents, official, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(agents); !os.IsNotExist(err) {
+		t.Fatalf("official copy must be removed: %v", err)
+	}
+}
+
+func TestPerformRemovesPreviousOfficialAgentsEntryCopy(t *testing.T) {
+	home := setupInstallHome(t)
+	stale := []byte("# Stale official KANDER-AGENTS.md from an older release\n")
+	original := previousOfficialHashes["KANDER-AGENTS.md"]
+	previousOfficialHashes["KANDER-AGENTS.md"] = append(append([]string{}, original...), fileHash(stale))
+	t.Cleanup(func() { previousOfficialHashes["KANDER-AGENTS.md"] = original })
+	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(agents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agents, stale, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(agents); !os.IsNotExist(err) {
+		t.Fatalf("stale official copy must be removed: %v", err)
+	}
+}
+
+func TestPerformRemovesInstallerAgentsEntrySymlink(t *testing.T) {
+	home := setupInstallHome(t)
+	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(agents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("KANDER-AGENTS.md", agents); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(agents); !os.IsNotExist(err) {
+		t.Fatalf("installer symlink must be removed: %v", err)
 	}
 }
 

@@ -52,6 +52,8 @@ Windows (无需 make):
 
 Kander 有两种安装作用域, 共用同一套规则和程序.
 
+安装、`kander doctor` 修复与选项面板保存时, 会自动把规则入口接到 Agent 的规则文件: Claude 在 `CLAUDE.md` (全局为 `~/.claude/CLAUDE.md`, 项目为仓库根) 追加一行 `@` 引用; 其他 Agent 在对应的 `AGENTS.md` (全局为 `~/.codex/`、`~/.cursor/`、`~/.grok/` 下, 项目为仓库根) 追加一条读取 `KANDER-AGENTS.md` 的指令. 已存在任意形式的引用 (含符号链接或合并全文) 时不会重复追加; 全局安装只处理配置目录已存在的 Agent, 且永远只追加、不覆盖已有内容.
+
 ### 2.1 全局安装
 
 向导里选全局. 二进制落到 `~/.local/bin/kander` (Windows 为 `kander.exe`), 规则落到 `~/.agents/`. 命令不可用时, 先把用户主目录下的 `.local/bin` 加入 PATH.

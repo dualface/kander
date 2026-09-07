@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/install"
 	"strings"
 )
 
@@ -435,16 +436,26 @@ func (s *Session) finish() error {
 		return err
 	}
 	entry := rulesEntry(paths)
+	seen := map[string]struct{}{}
 	for _, selected := range config.ExecutionAgentsInUse(s.Config) {
-		integrated, detail := rulesIntegration(selected, paths)
-		if integrated {
-			success(config.Text("menu.is_connected_to_kander_rules", labels[selected], detail))
-		} else {
-			warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], detail))
+		target := install.AgentRulesTarget(selected, paths)
+		if _, ok := seen[target]; ok && target != "" {
+			continue
 		}
-		hint(config.Text(
-			"menu.follow_the_readme_integration_section_and_point_the_rules", entry,
-		))
+		seen[target] = struct{}{}
+		outcome, ensureErr := install.EnsureRulesIntegration(selected, paths)
+		if ensureErr != nil {
+			warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], ensureErr.Error()))
+			hint(config.Text(
+				"menu.follow_the_readme_integration_section_and_point_the_rules", entry,
+			))
+			continue
+		}
+		if outcome.Status == install.IntegrationPresent {
+			success(config.Text("menu.is_connected_to_kander_rules", labels[selected], outcome.Target))
+		} else {
+			success(config.Text("menu.added_kander_rules_reference", labels[selected], outcome.Target))
+		}
 	}
 	note(config.Text(
 		"menu.note_kanban_start_uses_the_agent_s_no_confirmation",

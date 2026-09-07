@@ -153,6 +153,53 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 			maybeHintLegacyOnevoke()
 		}
 		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
+		if loaded.WelcomeComplete {
+			healthy = reportRulesIntegration(loaded, paths, repair) && healthy
+		}
+	}
+	return healthy
+}
+
+// reportRulesIntegration reports whether every configured execution agent's rules file references
+// the Kander entry; in repair mode it writes the missing references instead of only warning.
+func reportRulesIntegration(cfg *config.Config, paths config.InstallPaths, repair bool) bool {
+	healthy := true
+	effective, err := config.Effective(cfg)
+	if err != nil {
+		return healthy
+	}
+	labels := agentLabels()
+	entry := rulesEntry(paths)
+	seen := map[string]struct{}{}
+	for _, selected := range config.ExecutionAgentsInUse(effective) {
+		target := install.AgentRulesTarget(selected, paths)
+		if _, ok := seen[target]; ok && target != "" {
+			continue
+		}
+		seen[target] = struct{}{}
+		if repair {
+			outcome, ensureErr := install.EnsureRulesIntegration(selected, paths)
+			if ensureErr != nil {
+				healthy = false
+				warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], ensureErr.Error()))
+				hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
+				continue
+			}
+			if outcome.Status == install.IntegrationPresent {
+				success(config.Text("menu.is_connected_to_kander_rules", labels[selected], outcome.Target))
+			} else {
+				success(config.Text("menu.added_kander_rules_reference", labels[selected], outcome.Target))
+			}
+			continue
+		}
+		integrated, detail := rulesIntegration(selected, paths)
+		if integrated {
+			success(config.Text("menu.is_connected_to_kander_rules", labels[selected], detail))
+			continue
+		}
+		healthy = false
+		warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], detail))
+		hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
 	}
 	return healthy
 }

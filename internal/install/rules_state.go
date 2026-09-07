@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
@@ -252,21 +251,37 @@ func RepairRules(paths config.InstallPaths) error {
 	return saveRulesState(paths, state)
 }
 
-func linkAgentsEntry(paths config.InstallPaths) error {
+// cleanupAgentsEntryLink removes the AGENTS.md entry earlier installers placed next to
+// KANDER-AGENTS.md: a symlink pointing at it, or a copy of an official KANDER-AGENTS.md
+// (the Windows hard-link fallback, which every rules upgrade left stale). Agents now reach
+// the entry through references in their own rules files, so the extra entry only risks
+// serving outdated content. User-authored files are kept. Best effort: never fails install.
+func cleanupAgentsEntryLink(paths config.InstallPaths) {
 	link := filepath.Join(paths.RulesDir, "AGENTS.md")
-	if _, err := os.Lstat(link); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	anchor, err := fileAnchor(link)
+	info, err := os.Lstat(link)
 	if err != nil {
-		return err
+		return
 	}
-	if err := fs.CreateRelativeSymlink(anchor, link, "KANDER-AGENTS.md"); err == nil {
-		return nil
-	} else if runtime.GOOS == "windows" {
-		return fs.CreateRelativeHardLink(anchor, link, "KANDER-AGENTS.md")
+	remove := false
+	if info.Mode()&os.ModeSymlink != 0 || fs.IsReparsePoint(link) {
+		if target, err := os.Readlink(link); err == nil && target == "KANDER-AGENTS.md" {
+			remove = true
+		}
+	} else if info.Mode().IsRegular() {
+		data, err := os.ReadFile(link)
+		if err != nil {
+			return
+		}
+		digest := fileHash(data)
+		current, err := rules.Hash("KANDER-AGENTS.md")
+		if err == nil && (digest == current || isPreviousOfficial("KANDER-AGENTS.md", digest)) {
+			remove = true
+		}
 	}
-	return err
+	if !remove {
+		return
+	}
+	if anchor, err := fileAnchor(link); err == nil {
+		_, _ = fs.RemoveNonDirectoryIfExists(anchor, link)
+	}
 }

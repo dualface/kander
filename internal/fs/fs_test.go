@@ -545,35 +545,35 @@ func TestWriteExecutableAtomicInherited(t *testing.T) {
 	}
 }
 
-func TestCreateRelativeSymlinkAndRemoveNonDirectory(t *testing.T) {
+func TestRemoveNonDirectoryIfExists(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "KANDER-AGENTS.md")
 	if err := WriteBytesAtomicInherited(root, target, []byte("# rules\n"), false); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(root, "AGENTS.md")
-	if err := CreateRelativeSymlink(root, link, "KANDER-AGENTS.md"); err != nil {
-		if runtime.GOOS == "windows" {
-			if err := CreateRelativeHardLink(root, link, "KANDER-AGENTS.md"); err != nil {
-				t.Skipf("symlink and hardlink unavailable: %v", err)
-			}
-		} else {
+	if err := os.Symlink("KANDER-AGENTS.md", link); err != nil {
+		// Symlink creation needs privileges on Windows; a regular file removes the same way.
+		if err := os.WriteFile(link, []byte("# rules\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-	}
-	data, err := os.ReadFile(link)
-	if err != nil || string(data) != "# rules\n" {
-		t.Fatalf("link data=%q err=%v", data, err)
-	}
-	if err := CreateRelativeSymlink(root, link, "KANDER-AGENTS.md"); err == nil {
-		t.Fatal("existing link must fail")
 	}
 	ok, err := RemoveNonDirectoryIfExists(root, link)
 	if err != nil || !ok {
 		t.Fatalf("remove link: ok=%v err=%v", ok, err)
 	}
+	if _, err := os.Lstat(target); err != nil {
+		t.Fatalf("link target removed: %v", err)
+	}
 	ok, err = RemoveNonDirectoryIfExists(root, filepath.Join(root, "missing"))
 	if err != nil || ok {
 		t.Fatalf("missing: ok=%v err=%v", ok, err)
+	}
+	dir := filepath.Join(root, "sub")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RemoveNonDirectoryIfExists(root, dir); err == nil {
+		t.Fatal("directory removal must be refused")
 	}
 }

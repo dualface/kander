@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/process"
 )
 
@@ -38,7 +39,7 @@ func currentPaths() (config.InstallPaths, error) {
 }
 
 func rulesEntry(paths config.InstallPaths) string {
-	return filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
+	return install.RulesEntry(paths)
 }
 
 func lookPath(name string) string {

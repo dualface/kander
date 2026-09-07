@@ -10,10 +10,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// symbolicLinkFlagAllowUnprivilegedCreate mirrors SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
-// which x/sys/windows does not export.
-const symbolicLinkFlagAllowUnprivilegedCreate = 0x2
-
 // IsBusyFile reports whether err means the target executable is occupied and cannot be replaced in place.
 func IsBusyFile(err error) bool {
 	if err == nil {
@@ -27,78 +23,6 @@ func IsBusyFile(err error) bool {
 		}
 	}
 	return false
-}
-
-// CreateRelativeSymlink creates a file symlink whose target is a single path component.
-func CreateRelativeSymlink(root, path, target string) error {
-	if err := validateLinkTarget(target); err != nil {
-		return err
-	}
-	rootAbs, candidate, parts, err := relativeParts(root, path)
-	if err != nil {
-		return err
-	}
-	if len(parts) == 0 {
-		return failClosed("symlink", candidate, "protected path cannot be the root")
-	}
-	_, parent, cleanup, err := openChain(rootAbs, filepath.Dir(candidate), windows.FILE_READ_ATTRIBUTES, kindDirectory)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	existing, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, windows.FILE_READ_ATTRIBUTES, kindAny, true, false)
-	if err != nil {
-		return err
-	}
-	if existing != 0 {
-		closeHandle(existing)
-		return existError("symlink", candidate, "protected path already exists")
-	}
-	if err := windows.CreateSymbolicLink(windows.StringToUTF16Ptr(candidate), windows.StringToUTF16Ptr(target), symbolicLinkFlagAllowUnprivilegedCreate); err != nil {
-		return wrap("symlink", candidate, err)
-	}
-	return nil
-}
-
-// CreateRelativeHardLink creates a hard link to an existing file in the same directory.
-func CreateRelativeHardLink(root, path, target string) error {
-	if err := validateLinkTarget(target); err != nil {
-		return err
-	}
-	rootAbs, candidate, parts, err := relativeParts(root, path)
-	if err != nil {
-		return err
-	}
-	if len(parts) == 0 {
-		return failClosed("link", candidate, "protected path cannot be the root")
-	}
-	parentPath := filepath.Dir(candidate)
-	_, parent, cleanup, err := openChain(rootAbs, parentPath, windows.FILE_READ_ATTRIBUTES, kindDirectory)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	existing, err := tryOpenLeaf(parent, filepath.Base(candidate), candidate, windows.FILE_READ_ATTRIBUTES, kindAny, true, false)
-	if err != nil {
-		return err
-	}
-	if existing != 0 {
-		closeHandle(existing)
-		return existError("link", candidate, "protected path already exists")
-	}
-	source := filepath.Join(parentPath, target)
-	sourceHandle, err := tryOpenLeaf(parent, target, source, windows.FILE_READ_ATTRIBUTES, kindFile, true, false)
-	if err != nil {
-		return err
-	}
-	if sourceHandle == 0 {
-		return notExistError("link", source, "protected path does not exist")
-	}
-	closeHandle(sourceHandle)
-	if err := windows.CreateHardLink(windows.StringToUTF16Ptr(candidate), windows.StringToUTF16Ptr(source), 0); err != nil {
-		return wrap("link", candidate, err)
-	}
-	return nil
 }
 
 // RemoveNonDirectoryIfExists unlinks a regular file or reparse point. Directories are rejected.
@@ -137,11 +61,4 @@ func RemoveNonDirectoryIfExists(root, path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func validateLinkTarget(target string) error {
-	if target == "" || target != filepath.Base(target) || target == "." || target == ".." {
-		return failClosed("link", target, "link target must be a single relative name")
-	}
-	return validateComponent(target, target)
 }

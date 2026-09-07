@@ -27,6 +27,13 @@ type Result struct {
 	Copied        bool
 	Legacy        []string
 	LegacyRemoved bool
+	Integrations  []AgentIntegration
+}
+
+// AgentIntegration records ensuring one agent rules file references the Kander entry.
+type AgentIntegration struct {
+	IntegrationOutcome
+	Err error
 }
 
 // Perform copies the current binary and extracts embedded rules into the requested scope.
@@ -98,9 +105,8 @@ func Perform(req Request) (Result, error) {
 	if err := config.SetLanguageIfPresent(paths.ConfigPath, lang); err != nil {
 		return result, err
 	}
-	if err := linkAgentsEntry(paths); err != nil {
-		return result, fmt.Errorf("%s", config.Text("install.failed_to_link_agents", err.Error()))
-	}
+	cleanupAgentsEntryLink(paths)
+	result.Integrations = integrateAgentRules(paths)
 	if req.DeleteLegacy && len(result.Legacy) > 0 {
 		if !destIsExecutable(dest) {
 			return result, fmt.Errorf("%s", config.Text("install.new_entry_not_executable", dest))

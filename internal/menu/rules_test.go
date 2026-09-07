@@ -103,6 +103,34 @@ func TestRulesIntegrationResolvesClaudeImportsFromRulesFile(t *testing.T) {
 	}
 }
 
+func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents")}
+	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if !reportRulesIntegration(cfg, paths, true) {
+		t.Fatal("repair must succeed")
+	}
+	target := filepath.Join(home, ".codex", "AGENTS.md")
+	got, err := os.ReadFile(target)
+	if err != nil || !strings.Contains(string(got), "KANDER-AGENTS.md") {
+		t.Fatalf("reference missing: %v %q", err, got)
+	}
+	if !reportRulesIntegration(cfg, paths, false) {
+		t.Fatal("report after repair must be healthy")
+	}
+	if !reportRulesIntegration(cfg, paths, true) {
+		t.Fatal("second repair must succeed")
+	}
+	again, _ := os.ReadFile(target)
+	if strings.Count(string(again), "KANDER-AGENTS.md") != 1 {
+		t.Fatalf("reference repeated: %q", again)
+	}
+}
+
 func TestRulesIntegrationRejectsMissingProjectRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
