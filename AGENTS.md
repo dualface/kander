@@ -111,6 +111,7 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 
 ## 文档索引
 
+- [审核证据与恢复](docs/review-evidence.md): run/batch 身份、原件、逐卡发布、索引及消费接口.
 - [卡片事务与恢复](docs/card-transactions.md): 锁顺序、revision、受控命令、多文件发布接口和恢复格式.
 - [写前辅助检查](docs/kanban-write-guard.md): guard-write 的接入与能力边界.
 

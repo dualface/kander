@@ -48,6 +48,7 @@ type agentSettings struct {
 }
 
 type reviewContext struct {
+	archive       *archiveExecution
 	agent         string
 	settings      agentSettings
 	root          string

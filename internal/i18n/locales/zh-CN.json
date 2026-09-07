@@ -624,7 +624,7 @@
   "review.task_goal_must_not_be_empty": "task goal 不能为空",
   "review.unsupported_reviewer_agent": "不支持的 reviewer agent: {{.V0}}",
   "review.unsupported_role": "不支持的角色: {{.V0}}",
-  "review.usage": "用法: kander review [agent] <CWD> <base-commit> <commit> <role> <task-goal|绝对 spec 路径> [review-context] [reviewed-commit]\nAgent: codex, claude, grok, cursor\n角色: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: 同一角色上一轮审过的 commit; 传入即为增量复审",
+  "review.usage": "用法: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|绝对 spec 路径> [review-context] [reviewed-commit]\nAgent: codex, claude, grok, cursor\n角色: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: 同一角色上一轮审过的 commit; 传入即为增量复审",
   "review.windows_reviewer_process_did_not_exit_after_its_job": "Windows Reviewer 主进程未在 Job Object 终止后退出",
   "review.worktree_has_uncommitted_or_untracked_changes": "worktree 有未提交或未跟踪文件: {{.V0}}",
   "review.worktree_head_does_not_match_commit": "worktree HEAD 与 commit 不一致",
@@ -803,5 +803,14 @@
   "board.transaction_directory_required": "附件需要目录卡。",
   "board.transaction_decision_required": "必须提供明确决定引用及终止原因，或契约修订决定。",
   "board.transaction_managed": "update 不得修改受管字段或文档：{{.V0}}",
-  "board.messages.update": "用法: kander update <id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <file>]"
+  "board.messages.update": "用法: kander update <id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <file>]",
+  "board.review_evidence_invalid": "审核证据无效：{{.V0}}",
+  "review.archive_invalid": "归档参数或绑定无效：{{.V0}}",
+  "review.archive_identity": "审核 run_id={{.V0}} batch_id={{.V1}}",
+  "review.archive_execution_failed": "Reviewer 执行失败（退出码 {{.V0}}）；不代表语义 PASS",
+  "review.archive_interrupted": "上次门禁进程在最终确认前中断；Reviewer 完成、进程回收及清理均未确认；保留输出仅为不完整证据",
+  "review.archive_publish_failed": "审核 {{.V0}} 发布失败：{{.V1}}；执行结论与发布结果独立；请使用相同 run_id 重试",
+  "review.archive_card_failed": "卡片 {{.V0}} 未发布：{{.V1}}",
+  "review.archive_card_published": "卡片 {{.V0}} 已发布运行 {{.V1}}（执行={{.V2}}；语义结论未判定）",
+  "review.archive_tree_incomplete": "Reviewer 进程回收未完成；结果已拒绝"
 }

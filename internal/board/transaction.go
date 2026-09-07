@@ -229,6 +229,18 @@ func (tx *Transaction) Put(id, name, text string) error {
 	if !utf8.ValidString(text) {
 		return kanbanError("board.task_document_is_not_valid_utf_8", name)
 	}
+	return tx.putBytes(id, name, []byte(text))
+}
+
+// PutBytes preserves arbitrary attachment bytes through the redo journal.
+func (tx *Transaction) PutBytes(id, name string, data []byte) error {
+	if name == "spec.md" {
+		return tx.Put(id, name, string(data))
+	}
+	return tx.putBytes(id, name, data)
+}
+func (tx *Transaction) putBytes(id, name string, data []byte) error {
+	text := string(data)
 	s, err := tx.Snapshot(id)
 	if err != nil {
 		return err
@@ -264,7 +276,7 @@ func (tx *Transaction) Put(id, name, text string) error {
 		}
 	}
 	var before *string
-	if exists && !utf8.Valid(b) {
+	if exists && name == "spec.md" && !utf8.Valid(b) {
 		return kanbanError("board.task_document_is_not_valid_utf_8", p)
 	}
 	if exists {
@@ -381,6 +393,10 @@ func (tx *Transaction) PutGroup(group, name, text string) error {
 	if !utf8.ValidString(text) {
 		return kanbanError("board.task_document_is_not_valid_utf_8", name)
 	}
+	return tx.putGroupBytes(group, name, []byte(text))
+}
+func (tx *Transaction) putGroupBytes(group, name string, data []byte) error {
+	text := string(data)
 	if tx.scope.ReadOnly {
 		return kanbanError("board.transaction_invalid", "read-only")
 	}
@@ -402,9 +418,6 @@ func (tx *Transaction) PutGroup(group, name, text string) error {
 		}
 	}
 	var before *string
-	if exists && !utf8.Valid(b) {
-		return kanbanError("board.task_document_is_not_valid_utf_8", p)
-	}
 	if exists {
 		v := string(b)
 		before = &v

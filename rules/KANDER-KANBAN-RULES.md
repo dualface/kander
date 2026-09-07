@@ -473,6 +473,14 @@ any state except trash -> trash                       only on explicit user requ
 - `OUT_OF_SCOPE` defines the task boundary truthfully; unconfirmed extended goals are not written into `ACCEPTANCE_CRITERIA`. When the review module is enabled, refine the scope further per the review contract of `KANDER-REVIEW-RULES.md`.
 - During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps; do not copy the session transcript. Stable architecture, APIs, and long-term rules must still go into repository documentation or project rules.
 
+## Archived Review Evidence
+
+- Task-bound `kander review` uses repeated `--task` flags before positional arguments. Its stable run/batch and retry protocol is in the minimal tool protocol; loading the optional review workflow is not needed merely to use this command.
+- Each directory card retains immutable `reviews/<run_id>/` originals, sidecar and manifest. REVIEWS is a machine-owned section with one JSON line per run, including run/batch/role/execution status/base/commit/predecessor and a relative report path (raw output for an incomplete or invalid report).
+- `update` cannot modify this section or its managed attachments. Reports move with the card; never reconstruct an old state path or replace originals with summaries.
+- `check` reports missing/conflicting intents, incomplete publication, index/manifest/hash mismatches, language/member conflicts and broken predecessor chains. It does not inspect prose to infer PASS. A failed run with complete evidence remains a recorded execution failure.
+- An interrupted board publication requires explicit init recovery under its maintenance rules, then a retry with the same run ID. That retry never reruns the reviewer; successful card receipts remain intact. Do not bypass transaction recovery through direct file edits.
+
 ## Task Scale and Grouping
 
 - New cards always use directory form. `new` writes `SIZE: small` and includes IMPLEMENTATION/SUMMARY; `new --large` writes `SIZE: large` and requires a non-empty report.md for completion. A small card still requires its completed SUMMARY, even if it has a report.md. Both require SELF_REVIEW before todo; large tasks and all group members additionally require CARD_REVIEW. After todo, changing SIZE requires the existing explicit contract-decision update flow. Never infer scale from the presence of a directory or report.md.

@@ -6,8 +6,13 @@
 
 **Single Review**
 
-- `kander review` is a single-review tool that can be invoked explicitly. Its arguments are `[agent] <CWD> <base-commit> <commit> <role> <task-goal|absolute spec path> [review-context] [reviewed-commit]`.
+- `kander review` is a single-review tool that can be invoked explicitly. Its arguments are `[agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute spec path> [review-context] [reviewed-commit]`.
 - The target must be a clean Git worktree, and base must be an ancestor of commit.
+- Without `--task`, review does not locate a board. With tasks, flags precede CWD, repeated task IDs are deduplicated, and the board is located from the target CWD. Cards must be working/review directory cards with one language and compatible task group membership.
+- Task-bound review requires an explicit batch ID. A new batch also requires a JSON requirements file naming all four roles as `required` or `N/A: <reason>`. Resolve these requirements from user/project rules and stage policies; the file records that decision, it does not grant approval.
+- A missing run ID is generated and printed to stderr. Reuse that ID only to recover or finish publication; it never launches another reviewer. Changed inputs conflict. Use distinct run IDs for PM and QA on the same target. A retry after a process crash records interrupted evidence, never PASS.
+- Raw output, logs, input snapshots, sidecar and manifest remain in each card's `reviews/<run_id>/`. The machine-owned REVIEWS section contains one JSON index line per run. Tool execution success is separate from semantic PASS. Do not edit or delete these artifacts as temporary reports.
+- Publication is atomic per card. Partial publication exits nonzero, preserves successful cards and reports each result. After an interrupted board transaction, run `kander init` under its maintenance requirements; then retry the identical review invocation with the same run ID. An incompletely published run cannot establish completion.
 - The command keeps the reviewer read-only and validates its output.
 - Invoking it does not enable the full review or Git flow and does not require the target branch to be `develop`.
 

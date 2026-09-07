@@ -139,6 +139,8 @@ PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进�
 
 ![Kander 审核流程](docs/review.svg)
 
+审核支持重复 `--task` 绑定卡片，将原报告、输入、运行事实和清单保存到 `reviews/<run_id>/`，正文只留机器索引。同 run ID 重试只恢复或补齐发布，不重跑 Reviewer；执行成功与语义 PASS 独立。调用、batch CAS 及恢复见 [审核证据归档](docs/review-evidence.md)。
+
 即使关掉「审核流程」模块, 仍可明确调用 `kander review` 跑单次审核, 不要求采用 Kander 的分支模型.
 
 ## 5. 配置

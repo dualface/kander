@@ -624,7 +624,7 @@
   "review.task_goal_must_not_be_empty": "task goal は空であってはなりません",
   "review.unsupported_reviewer_agent": "未対応の reviewer agent: {{.V0}}",
   "review.unsupported_role": "未対応のロール: {{.V0}}",
-  "review.usage": "用法: kander review [agent] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]\nAgents: codex, claude, grok, cursor\nRoles: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: このロールが前回レビューした commit; 渡すと増分再レビューになります",
+  "review.usage": "用法: kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]\nAgents: codex, claude, grok, cursor\nRoles: PM, QA, CSA, CodeSecurityAnalyst, Hacker\nreviewed-commit: このロールが前回レビューした commit; 渡すと増分再レビューになります",
   "review.windows_reviewer_process_did_not_exit_after_its_job": "Windows Reviewer プロセスが Job Object 終了後も終了しませんでした",
   "review.worktree_has_uncommitted_or_untracked_changes": "worktree に未コミットまたは未追跡の変更があります: {{.V0}}",
   "review.worktree_head_does_not_match_commit": "worktree HEAD が commit と一致しません",
@@ -803,5 +803,14 @@
   "board.transaction_directory_required": "添付にはディレクトリカードが必要です。",
   "board.transaction_decision_required": "明示的な決定の参照と終了理由、または契約変更の決定が必要です。",
   "board.transaction_managed": "update では管理対象を変更できません: {{.V0}}",
-  "board.messages.update": "使い方: kander update <id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <file>]"
+  "board.messages.update": "使い方: kander update <id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <file>]",
+  "board.review_evidence_invalid": "レビュー証拠が無効です: {{.V0}}",
+  "review.archive_invalid": "アーカイブ引数または関連付けが無効です: {{.V0}}",
+  "review.archive_identity": "レビュー run_id={{.V0}} batch_id={{.V1}}",
+  "review.archive_execution_failed": "Reviewer 実行に失敗しました（終了コード {{.V0}}）。意味上の PASS を示しません",
+  "review.archive_interrupted": "前回のゲート処理は確定前に中断しました。Reviewer の完了、プロセス回収、クリーンアップは未確認です。保存出力は不完全な証拠です",
+  "review.archive_publish_failed": "レビュー {{.V0}} の公開に失敗しました: {{.V1}}。実行結果と公開結果は別です。同じ run_id で再試行してください",
+  "review.archive_card_failed": "カード {{.V0}} は未公開です: {{.V1}}",
+  "review.archive_card_published": "カード {{.V0}} に実行 {{.V1}} を公開しました（実行={{.V2}}、意味上の結果は未判定）",
+  "review.archive_tree_incomplete": "Reviewer プロセスの回収が未完了です。結果を拒否しました"
 }

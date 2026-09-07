@@ -310,6 +310,22 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 			allProblems = append(allProblems, Problem{Path: entry.Path, Message: t("board.size_missing", entry.TaskID)})
 		}
 	}
+	reviewTasks := []string{}
+	for id, entry := range board.Entries {
+		if len(taskIDs) == 0 && !includeAll {
+			if _, skip := deferredCheckStates[entry.State]; skip {
+				continue
+			}
+		}
+		if _, e := board.Document(id); e == nil {
+			reviewTasks = append(reviewTasks, id)
+		}
+	}
+	reviewProblems, reviewErr := CheckReviewEvidence(root, reviewTasks)
+	if reviewErr != nil {
+		allProblems = append(allProblems, Problem{Path: root, Message: reviewErr.Error()})
+	}
+	allProblems = append(allProblems, reviewProblems...)
 	dependencyBoard := board
 	if len(taskIDs) > 0 {
 		dependencyBoard, err = Scan(root)

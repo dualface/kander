@@ -186,6 +186,15 @@ func isFileNoFollow(path string) bool {
 
 // BoardRoot locates the board in the order KANBAN_DIR -> the main worktree's kanban/ -> an upward search.
 func BoardRoot() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", boardNotFound()
+	}
+	return BoardRootAt(cwd)
+}
+
+// BoardRootAt locates a board from a target worktree without changing process cwd.
+func BoardRootAt(cwd string) (string, error) {
 	if configured := os.Getenv(EnvBoardDir); configured != "" {
 		root, err := absoluteUserPath(configured)
 		if err != nil {
@@ -195,10 +204,6 @@ func BoardRoot() (string, error) {
 			return "", err
 		}
 		return root, nil
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", boardNotFound()
 	}
 	if main := gitMainWorktree(cwd); main != "" {
 		abs, hit, err := inspectBoardCandidate(filepath.Join(main, "kanban"))

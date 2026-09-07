@@ -250,13 +250,21 @@ Incremental re-review: for the same role under the same base, the second round a
 - A rebase during integration caused by `develop` advancing carries conclusions forward per the one-time gate in `KANDER-GIT-RULES.md`; the pre-rewrite SHA is not required to remain an ancestor.
 - The task context is the authoritative requirement contract: a string for short tasks, a readable absolute spec path for long tasks.
 
-**Report Files**
+**Report Files and Stable Identity**
 
-- The stdout of every actually running role is saved as a separate report.
-- The report directory must be outside the target worktree, in a temporary directory accessible only to the current user (POSIX `0700`, Windows protected DACL exclusive to the current user); mixing in logs, specs or other files is forbidden.
-- Clean up that directory after this round's review passes, the user completes the stage two decision, or this round terminates; explain to the user first if diagnostics need to be kept.
-- The review entry runs the reviewer with the isolation arguments from the "Reviewer Selection" table and verifies at the end that the worktree was not modified.
-- Changing its sandbox, permission or tool arguments to bypass the gate is forbidden.
+- Without task binding, save each role's stdout in a separate report outside the target worktree, in a private temporary directory. Keep only reports there, and clean it after the round passes, terminates, or the stage-two decision finishes; explain first when retaining diagnostics.
+- For Kanban reviews, pass every reviewed card with repeated `--task <id>` flags before CWD, together with `--batch-id <id>`. Directory cards in working/review and a common report language are required; legacy file cards must first follow the init maintenance protocol.
+- For a new batch, pass an absolute `--requirements-file` JSON path. Name all roles (`PM`, `QA`, `CSA`, `Hacker`) with values `required` or `N/A: <reason>`, resolved through the existing precedence and stage rules. Requirements, members and base are fixed for the batch.
+- Use a distinct `--run-id` for each actual reviewer invocation. Omit it to generate a random ID printed to stderr, then record that ID. PM/QA on one commit share the batch ID and use different run IDs. Timestamps do not establish identity or predecessor order.
+- A same-ID retry with identical inputs does not launch the reviewer again. It verifies existing evidence and fills missing card publications. If the original gate process ended before finalization, recovery marks the run interrupted, preserves partial raw output, and does not invent a report or successful cleanup.
+- An incremental invocation includes `--previous-run-id` as well as the positional reviewed-commit. Its predecessor must be a fully published run for the same batch, base and role, whose commit equals reviewed-commit.
+- Keep the batch ID for fixes. To advance its target, pass an absolute `--advance-file` JSON path with `previous_target`, `target`, a nonempty `reason`, and `deliveries` mapping every commit in that exact Git range to a member task ID. The caller supplies truthful task attribution; the command verifies the range and membership and applies a compare-and-swap. Outstanding executions or incomplete publications must settle first. Do not include outside deliveries.
+- Each card retains complete immutable originals under `reviews/<run_id>/`: input context, raw output, logs, any valid report, sidecar and manifest. Failed launches after intent creation, timeout, invalid output, leftover processes and cleanup failure also retain evidence. Preflight failures do not invent an executed run. The report language freezes from card LANGUAGE, falling back to configuration only when absent.
+- The tool appends one JSON index line per run in REVIEWS. Do not derive this index from reviewer prose, paste reports into the body, edit originals through update, or remove archived evidence during temporary cleanup.
+- `execution_status=ok`, readable stdout and a zero command exit do not imply semantic PASS. Interpret the actual report through this review workflow. Failed/interrupted runs never establish a passing role.
+- Publication settles only after process collection, worktree verification and runtime cleanup. Each card publication is atomic; a cross-card failure preserves successful publications, reports each failed card and exits nonzero. Retry the same run ID after resolving the error; if init is required, obey its maintenance preconditions. An incomplete publication must not count toward batch completion.
+- `kander check` validates intents, manifests, indexes, original hashes, language, membership and predecessor relations. It does not infer semantic PASS or close a batch.
+- Reviewer isolation arguments and end-of-run worktree verification still apply; do not bypass the gate.
 
 ## Group-Level Review for Task Groups
 

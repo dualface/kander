@@ -78,3 +78,7 @@ schema 1 操作记录包含:
 测试覆盖同 ID 并发 new、update/move 竞争、反向批量锁、并发追加、跨文件与组控制发布、原文回滚与新 revision 竞争、旧路径小卡复活回归、受管字段与正文别名、生命周期和用户批准的契约修订. 子进程在 prepared、附件目录、首文件、全部文件、rename、revision、committed 边界被 kill, 重启后验证恢复与读者隔离.
 
 事务保护遵守命令协议的本机进程, 不隔离任意直接改文件的进程. 升级时协调旧 Agent/旧二进制停写, 再启用受控入口. `guard-write` 只在检查瞬间给出提示, 不能把外部编辑与检查变成一个事务. 发现真实重复时保留双方、显式报错; 工具不会猜主副本或自动删除.
+
+## 审核原件发布
+
+审核归档复用本协议。`Transaction.PutBytes` 允许专用生产者无损保存二进制附件；spec.md 仍要求 UTF-8。非法 UTF-8 的 FileChange 在 JSON 日志中采用 `binary: true`、`before_bytes`/`after_bytes`（base64）；文本记录保持既有格式。恢复解码后通过相同 fs 原子写入执行，创建与替换语义不变。运行、批次与逐卡清单见 [审核证据](review-evidence.md)。

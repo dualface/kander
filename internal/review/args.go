@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
@@ -154,9 +155,15 @@ func printErrorTail(runtime, path string) {
 func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string) error {
 	if ctx.agent == "codex" {
 		data, err := fs.ReadRegularFile(runtime, outputFile)
-		if err != nil || len(data) == 0 {
+		if err != nil || len(data) == 0 || ctx.archive != nil && !utf8.Valid(data) {
 			printFile(runtime, stdoutFile, os.Stdout)
+			if ctx.archive != nil {
+				printFile(runtime, outputFile, os.Stdout)
+			}
 			return newGate(1, "review.codex_review_did_not_complete_with_review_text")
+		}
+		if ctx.archive != nil {
+			ctx.archive.report = append([]byte(nil), data...)
 		}
 		_, _ = os.Stdout.Write(data)
 		syncStream(os.Stdout)
@@ -164,8 +171,10 @@ func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string
 	}
 	raw, err := fs.ReadRegularFile(runtime, outputFile)
 	var result any
-	if err == nil {
-		_ = json.Unmarshal(raw, &result)
+	if err == nil && (ctx.archive == nil || utf8.Valid(raw)) {
+		if decodeErr := json.Unmarshal(raw, &result); decodeErr != nil {
+			result = nil
+		}
 	}
 	var text string
 	var valid bool
@@ -193,6 +202,9 @@ func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string
 	if !valid {
 		printFile(runtime, outputFile, os.Stdout)
 		return newGateMsg(1, message)
+	}
+	if ctx.archive != nil {
+		ctx.archive.report = []byte(text)
 	}
 	fmt.Println(text)
 	return nil

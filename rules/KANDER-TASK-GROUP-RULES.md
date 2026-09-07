@@ -192,6 +192,9 @@ PREREQUISITES: N/A
 
 ### Review Batches and Dispatch-Back
 
+- Bind each role invocation to all batch members with repeated `--task` flags. Keep one batch ID across its fix rounds, distinct run IDs per role/invocation, and explicit predecessor run IDs for incremental re-review. Follow the minimal tool protocol for fixed requirements, CAS target advancement and same-run publication recovery.
+- Before treating a role report as available, confirm all its card publications are complete. Execution success alone is not semantic PASS; failed or interrupted evidence and incomplete publication cannot close a batch.
+
 This section runs only when review applies. A dispatch-back solely for task branch sync or integration conflicts is handled per "Group Integration Branch" and does not enable the review module.
 
 - The orchestrator batches `review/` cards by module, milestone, or dependency chain, receives the batch's deliveries per "Delivering a Task Branch to the Group Branch", and then reviews; neither whole-group nor one-card batches are mandated.

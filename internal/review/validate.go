@@ -10,6 +10,9 @@ import (
 )
 
 func validateContext(agent string, arguments []string) (reviewContext, error) {
+	return validateContextMode(agent, arguments, false)
+}
+func validateContextMode(agent string, arguments []string, replay bool) (reviewContext, error) {
 	if len(arguments) < 5 || len(arguments) > 7 {
 		usage()
 		return reviewContext{}, &gateError{code: 2}
@@ -104,7 +107,7 @@ func validateContext(agent string, arguments []string) (reviewContext, error) {
 	if _, statErr := os.Stat(home); os.IsNotExist(statErr) {
 		homeMissing = true
 	}
-	if agent == "cursor" && homeMissing {
+	if replay || agent == "cursor" && homeMissing {
 		stateRoot = ""
 	} else {
 		if !dirReadableWritable(home) {
@@ -190,19 +193,22 @@ func validateContext(agent string, arguments []string) (reviewContext, error) {
 	if headErr != nil {
 		return reviewContext{}, headErr
 	}
-	if headCode != 0 || strings.TrimSpace(headOut) != commit {
+	if !replay && (headCode != 0 || strings.TrimSpace(headOut) != commit) {
 		return reviewContext{}, newGate(2, "review.worktree_head_does_not_match_commit")
 	}
 	statusOK, status := gitStatus(root)
-	if !statusOK {
+	if !replay && !statusOK {
 		return reviewContext{}, newGate(2, "review.failed_to_inspect_worktree_status", root)
 	}
-	if status != "" {
+	if !replay && status != "" {
 		return reviewContext{}, newGate(2,
 			"review.worktree_has_uncommitted_or_untracked_changes", root,
 		)
 	}
 	program := process.ResolveAgentProgram(settings.executable)
+	if replay && program == nil {
+		program = &process.AgentProgram{}
+	}
 	if program == nil {
 		return reviewContext{}, newGate(127,
 			"review.cli_is_unavailable", settings.name, settings.executable,

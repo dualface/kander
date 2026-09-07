@@ -18,6 +18,10 @@ func executeReview(ctx reviewContext, abort <-chan os.Signal) int {
 		userError(config.Text(
 			"review.could_not_create_the_private_review_runtime", err.Error(),
 		))
+		if ctx.archive != nil {
+			ctx.archive.reason = err.Error()
+			return ctx.archive.finish(1)
+		}
 		return 1
 	}
 	code := executeInRuntime(ctx, runtimeDir.Path, abort)
@@ -25,15 +29,28 @@ func executeReview(ctx reviewContext, abort <-chan os.Signal) int {
 		userError(config.Text(
 			"review.could_not_safely_clean_the_private_review_runtime", cleanup.Error(),
 		))
+		if ctx.archive != nil {
+			ctx.archive.reason = cleanup.Error()
+			return ctx.archive.finish(2)
+		}
 		return 2
+	}
+	if ctx.archive != nil {
+		return ctx.archive.finish(code)
 	}
 	return code
 }
 
 func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal) (exitCode int) {
-	outputFile := filepath.Join(runtime, ctx.settings.outputName)
-	stdoutFile := filepath.Join(runtime, "stdout.log")
-	errorFile := filepath.Join(runtime, "error.log")
+	outputRoot := runtime
+	outputName := ctx.settings.outputName
+	if ctx.archive != nil {
+		outputRoot = ctx.archive.staging
+		outputName = "output.raw"
+	}
+	outputFile := filepath.Join(outputRoot, outputName)
+	stdoutFile := filepath.Join(outputRoot, "stdout.log")
+	errorFile := filepath.Join(outputRoot, "error.log")
 	evidenceFile := filepath.Join(runtime, "evidence.txt")
 	promptFile := filepath.Join(runtime, "prompt.txt")
 	stdinFile := filepath.Join(runtime, "stdin.txt")
@@ -44,6 +61,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	treeCollected := false
 	var failure *gateError
 	timedOut := false
+	outputPrinted := false
 
 	fail := func(err error) {
 		var ge *gateError
@@ -70,22 +88,43 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 			}
 		}
 		if failure != nil && failure.message != "" {
+			if ctx.archive != nil {
+				ctx.archive.reason = failure.message
+			}
 			userError(failure.message)
 		}
 		if reviewStarted && !treeCollected {
+			if ctx.archive != nil {
+				ctx.archive.reason = config.Text("review.archive_tree_incomplete")
+			}
 			exitCode = 2
 		} else if reviewStarted && !targetIsUnchanged(ctx) {
+			if ctx.archive != nil {
+				ctx.archive.reason = config.Text("review.review_modified_the_target_worktree", ctx.settings.name, ctx.root)
+			}
 			userError(config.Text(
 				"review.review_modified_the_target_worktree", ctx.settings.name, ctx.root,
 			))
 			exitCode = 2
 		}
+		if ctx.archive != nil && exitCode != 0 && !outputPrinted {
+			printFile(outputRoot, outputFile, os.Stdout)
+		}
 	}()
 
 	taskContext := ctx.taskContext
-	if (ctx.agent == "claude" || ctx.agent == "cursor") && ctx.taskSpec != "" {
+	if (ctx.archive != nil || ctx.agent == "claude" || ctx.agent == "cursor") && ctx.taskSpec != "" {
 		snapshot := filepath.Join(runtime, "task-spec.md")
-		if err := copySpecSnapshot(ctx.taskSpec, runtime, snapshot); err != nil {
+		var snapshotErr error
+		if ctx.archive != nil {
+			snapshotErr = fs.WriteTextAtomic(runtime, snapshot, string(ctx.archive.taskSnapshot), false)
+			if snapshotErr == nil {
+				snapshotErr = fs.MakeRegularFileReadOnly(runtime, snapshot)
+			}
+		} else {
+			snapshotErr = copySpecSnapshot(ctx.taskSpec, runtime, snapshot)
+		}
+		if snapshotErr != nil {
 			fail(newGate(2,
 				"review.could_not_snapshot_spec_file_for", ctx.settings.name, ctx.taskSpec,
 			))
@@ -107,7 +146,10 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		return exitCode
 	}
 	for _, path := range []string{outputFile, stdoutFile, errorFile} {
-		if err := fs.WriteTextAtomic(runtime, path, "", false); err != nil {
+		if ctx.archive != nil {
+			continue
+		}
+		if err := fs.WriteTextAtomic(outputRoot, path, "", false); err != nil {
 			fail(err)
 			return exitCode
 		}
@@ -124,13 +166,13 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		return exitCode
 	}
 	defer promptStream.Close()
-	stdoutStream, err := fs.OpenWritableRegularFile(runtime, stdoutFile)
+	stdoutStream, err := fs.OpenWritableRegularFile(outputRoot, stdoutFile)
 	if err != nil {
 		fail(err)
 		return exitCode
 	}
 	defer stdoutStream.Close()
-	errorStream, err := fs.OpenWritableRegularFile(runtime, errorFile)
+	errorStream, err := fs.OpenWritableRegularFile(outputRoot, errorFile)
 	if err != nil {
 		fail(err)
 		return exitCode
@@ -139,7 +181,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 
 	reviewerStdout := stdoutStream
 	if ctx.agent != "codex" {
-		out, openErr := fs.OpenWritableRegularFile(runtime, outputFile)
+		out, openErr := fs.OpenWritableRegularFile(outputRoot, outputFile)
 		if openErr != nil {
 			fail(openErr)
 			return exitCode
@@ -148,15 +190,34 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		reviewerStdout = out
 	}
 
+	if ctx.archive != nil {
+		if err = ctx.archive.snapshotRuntime(runtime); err != nil {
+			fail(err)
+			return exitCode
+		}
+		if err = ctx.archive.phase("launching", "unknown"); err != nil {
+			fail(err)
+			return exitCode
+		}
+	}
 	lp, err = launchProcess(inv, processCWD, promptStream, reviewerStdout, errorStream)
 	if err != nil {
+		if ctx.archive != nil {
+			ctx.archive.run.LaunchStatus = "not_started"
+		}
 		fail(newGate(127,
 			"review.could_not_start_cli", ctx.settings.name, err.Error(),
 		))
 		return exitCode
 	}
 	reviewStarted = true
-	exitCode, timedOut = monitorProcess(ctx, runtime, lp, errorFile, abort)
+	if ctx.archive != nil {
+		if err = ctx.archive.phase("running", "started"); err != nil {
+			fail(err)
+			return exitCode
+		}
+	}
+	exitCode, timedOut = monitorProcess(ctx, outputRoot, lp, errorFile, abort)
 	treeAttempted = true
 	lingering, stopErr := stopProcessTree(lp)
 	if stopErr != nil {
@@ -171,12 +232,13 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		return exitCode
 	}
 	if timedOut || exitCode != 0 {
-		printFile(runtime, errorFile, os.Stderr)
-		printFile(runtime, stdoutFile, os.Stdout)
-		printFile(runtime, outputFile, os.Stdout)
+		outputPrinted = true
+		printFile(outputRoot, errorFile, os.Stderr)
+		printFile(outputRoot, stdoutFile, os.Stdout)
+		printFile(outputRoot, outputFile, os.Stdout)
 		return exitCode
 	}
-	errorOutput, readErr := fs.ReadRegularFile(runtime, errorFile)
+	errorOutput, readErr := fs.ReadRegularFile(outputRoot, errorFile)
 	if readErr != nil {
 		fail(readErr)
 		return exitCode
@@ -185,7 +247,8 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		_, _ = os.Stderr.Write(errorOutput)
 		syncStream(os.Stderr)
 	}
-	if err := parseReviewOutput(ctx, runtime, outputFile, stdoutFile); err != nil {
+	outputPrinted = true
+	if err := parseReviewOutput(ctx, outputRoot, outputFile, stdoutFile); err != nil {
 		fail(err)
 		return exitCode
 	}

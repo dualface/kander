@@ -7,11 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 )
 
 // Run is the entry point of the `kander review` subcommand. args excludes the program name and the subcommand name.
-func Run(args []string) int {
+func Run(args []string) (exitCode int) {
 	if len(args) > 0 && args[0] == windowsJobBootstrap {
 		return windowsJobBootstrapMain(args[1:])
 	}
@@ -19,6 +20,11 @@ func Run(args []string) int {
 	config.BindEffectiveLanguage()
 	if len(args) == 0 {
 		usage()
+		return 2
+	}
+	options, args, err := parseArchiveOptions(args)
+	if err != nil {
+		userError(err.Error())
 		return 2
 	}
 	agent, rest, err := splitAgentArgs(args)
@@ -56,7 +62,37 @@ func Run(args []string) int {
 		}
 		agent = reviewerFromConfig(role)
 	}
-	ctx, err := validateContext(agent, rest)
+	archiveRoot := ""
+	replay := false
+	if len(options.tasks) > 0 {
+		archiveRoot, err = board.BoardRootAt(rest[0])
+		if err != nil {
+			userError(err.Error())
+			return 2
+		}
+		unlock, e := board.LockReviewRun(archiveRoot, options.runID)
+		if e != nil {
+			userError(e.Error())
+			return 2
+		}
+		defer func() {
+			if e := unlock(); e != nil {
+				exitCode = 2
+				userError(e.Error())
+			}
+		}()
+		old, exists, e := board.LookupReviewRun(archiveRoot, options.runID)
+		if e != nil {
+			userError(e.Error())
+			return 2
+		}
+		if exists && !sameReplayTarget(old, options) {
+			userError(config.Text("review.archive_invalid", "run identity conflict"))
+			return 2
+		}
+		replay = exists
+	}
+	ctx, err := validateContextMode(agent, rest, replay)
 	if err != nil {
 		var ge *gateError
 		if errors.As(err, &ge) {
@@ -67,6 +103,16 @@ func Run(args []string) int {
 		}
 		userError(err.Error())
 		return 2
+	}
+	if len(options.tasks) > 0 {
+		fresh, e := archiveInvocation(&ctx, options, rest, archiveRoot)
+		if e != nil {
+			userError(e.Error())
+			return 2
+		}
+		if !fresh {
+			return ctx.archive.recover()
+		}
 	}
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
