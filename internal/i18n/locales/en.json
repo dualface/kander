@@ -1,6 +1,8 @@
 {
+  "board.dispatch_evidence_invalid": "Invalid dispatch evidence: {{.V0}}",
+  "launch.dispatch_wrap_up_only": "Wrap-up-only authority for {{.V0}}: dispatch {{.V1}}, epoch {{.V2}}. Only cleanup and append-only records are allowed. No code changes, runtime takeover or author conclusions.",
   "board.dispatch_conflict": "Dispatch conflict, expired deadline or stale execution authorization: {{.V0}}",
-  "board.dispatch_usage": "Usage: kander dispatch prepare <intent.json> | show <task-id> <dispatch-id> | fail/cancel <task-id> <dispatch-id> <revision> <reason>",
+  "board.dispatch_usage": "Usage: kander dispatch prepare <intent.json> | authorize-wrap-up <request.json> | show <task-id> <dispatch-id> | fail/cancel <task-id> <dispatch-id> <revision> <reason>",
   "launch.dispatch_id": "Dispatch ID: {{.V0}}",
   "launch.dispatch_pending": "Dispatch {{.V0}} has no accepted receipt; delivery remains uncertain. Reconcile this same ID; do not start another executor.",
   "launch.dispatch_recovery_unproven": "Dispatch {{.V0}} recovery refused: no current, valid stopped observation ({{.V1}})",

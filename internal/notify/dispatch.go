@@ -117,6 +117,9 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 		if err != nil {
 			return err
 		}
+		if err = launch.ValidateActionEvidence(ctx, root, d); err != nil {
+			return err
+		}
 		target, stopped, busy, err := resolveDispatchTarget(ctx, s, paneOverride)
 		if err != nil {
 			return err

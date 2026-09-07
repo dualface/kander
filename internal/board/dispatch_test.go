@@ -27,7 +27,7 @@ func dispatchCard(t *testing.T, root, slug string) Snapshot {
 	return transactionSnapshot(t, root, s.Entry.TaskID)
 }
 func dispatchInput(s Snapshot, id string) DispatchInput {
-	return DispatchInput{ID: id, TaskID: s.Entry.TaskID, Kind: "fix", Message: "修复本轮问题", Base: strings.Repeat("a", 40)}
+	return DispatchInput{ID: id, TaskID: s.Entry.TaskID, Kind: "sync", Message: "修复本轮问题", Base: strings.Repeat("a", 40)}
 }
 func prepareTestDispatch(t *testing.T, root string, in DispatchInput) Dispatch {
 	t.Helper()
@@ -85,7 +85,7 @@ func TestDispatchIntentIdempotencyAndGlobalConflict(t *testing.T) {
 		t.Fatalf("duplicate advanced revision: %d -> %d", s.Revision, current.Revision)
 	}
 	other := dispatchCard(t, root, "other")
-	for _, change := range []func(*DispatchInput){func(i *DispatchInput) { i.Message += "wrong" }, func(i *DispatchInput) { i.Base = strings.Repeat("b", 40) }, func(i *DispatchInput) { i.TaskID = other.Entry.TaskID }, func(i *DispatchInput) { i.Kind = "sync" }, func(i *DispatchInput) { i.ConfirmBy = time.Now().Add(time.Hour) }} {
+	for _, change := range []func(*DispatchInput){func(i *DispatchInput) { i.Message += "wrong" }, func(i *DispatchInput) { i.Base = strings.Repeat("b", 40) }, func(i *DispatchInput) { i.TaskID = other.Entry.TaskID }, func(i *DispatchInput) { i.Kind = "fix" }, func(i *DispatchInput) { i.ConfirmBy = time.Now().Add(time.Hour) }} {
 		bad := in
 		change(&bad)
 		if _, err := PrepareDispatch(root, bad); err == nil {
@@ -198,7 +198,7 @@ func TestDispatchWrapUpTakeoverAndExpiry(t *testing.T) {
 	root := tempBoard(t)
 	s := dispatchCard(t, root, "wrap")
 	in := dispatchInput(s, "wrap-one")
-	in.Kind = "wrap-up"
+	bindWrapUpFixture(t, root, &in)
 	d := prepareTestDispatch(t, root, in)
 	if _, err := dispatchMove(t, root, d, "working"); err != nil {
 		t.Fatal(err)
@@ -219,7 +219,6 @@ func TestDispatchWrapUpTakeoverAndExpiry(t *testing.T) {
 	if _, err = dispatchMove(t, root, successor, "review"); err == nil {
 		t.Fatal("wrap-up completed into review")
 	}
-	exemptReviewFixture(t, root, s.Entry.TaskID)
 	if _, err = dispatchMove(t, root, successor, "done"); err != nil {
 		t.Fatal(err)
 	}

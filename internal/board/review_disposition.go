@@ -287,6 +287,9 @@ func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision 
 		if err = tx.requireExecution(s, authorization, true); err != nil {
 			return err
 		}
+		if err = tx.requireFullExecution(s); err != nil {
+			return err
+		}
 		if MetadataFrom(s.Text, FieldOwner) != d.Author {
 			return reviewError("only current executing owner may submit")
 		}

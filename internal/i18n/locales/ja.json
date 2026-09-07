@@ -1,6 +1,8 @@
 {
+  "board.dispatch_evidence_invalid": "派回事実が無効です: {{.V0}}",
+  "launch.dispatch_wrap_up_only": "{{.V0}} に収束専用権限を付与: dispatch {{.V1}}、epoch {{.V2}}。整理と追記記録のみ許可します。コード変更、ランタイム引継ぎ、元の作成者の判断は禁止します。",
   "board.dispatch_conflict": "派回の競合、期限切れ、または古い実行権限: {{.V0}}",
-  "board.dispatch_usage": "使用法: kander dispatch prepare <intent.json> | show <task-id> <dispatch-id> | fail/cancel <task-id> <dispatch-id> <revision> <reason>",
+  "board.dispatch_usage": "使用法: kander dispatch prepare <intent.json> | authorize-wrap-up <request.json> | show <task-id> <dispatch-id> | fail/cancel <task-id> <dispatch-id> <revision> <reason>",
   "launch.dispatch_id": "派回 ID: {{.V0}}",
   "launch.dispatch_pending": "派回 {{.V0}} の受領証がありません。配信は未確定です。同じ ID で照合し、別の実行者を起動しないでください。",
   "launch.dispatch_recovery_unproven": "派回 {{.V0}} の復旧を拒否: 現在の有効な stopped 観測がありません ({{.V1}})",

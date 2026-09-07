@@ -19,7 +19,7 @@ func (tx *Transaction) requireExecution(s Snapshot, a ExecutionAuthorization, au
 	if err != nil {
 		return err
 	}
-	if d.State != DispatchAccepted && !time.Now().Before(d.Input.ConfirmBy) {
+	if d.State != DispatchAccepted && !time.Now().Before(dispatchAcceptBefore(d)) {
 		return dispatchError(a.DispatchID)
 	}
 	if d.Authorization != a || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || author && d.State != DispatchAccepted {
@@ -64,7 +64,7 @@ func stageDispatchMove(tx *Transaction, s Snapshot, target string, o MoveOptions
 		if d.State == DispatchAccepted || d.State == DispatchCompleted {
 			return true, nil
 		}
-		if (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(d.Input.ConfirmBy) {
+		if (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(dispatchAcceptBefore(d)) {
 			return false, dispatchError(a.DispatchID)
 		}
 		d.State = DispatchAccepted
@@ -73,6 +73,14 @@ func stageDispatchMove(tx *Transaction, s Snapshot, target string, o MoveOptions
 	case "review", "done":
 		if (d.Input.Kind == "wrap-up") != (target == "done") || !dispatchCommitPattern.MatchString(o.DeliveryCommit) {
 			return false, dispatchError(a.DispatchID)
+		}
+		if d.Input.Evidence.WrapUp != nil {
+			if err := validateDispatchWrapUp(tx, d.Input, true); err != nil {
+				return false, err
+			}
+		}
+		if d.Input.Evidence.WrapUp != nil && (o.DeliveryCommit != d.Input.Evidence.WrapUp.Git.SourceCommit || o.Disposition != nil) {
+			return false, dispatchEvidenceError("wrap-up completion must bind original integration source")
 		}
 		if o.Disposition != nil {
 			if !validReference(*o.Disposition) || o.Disposition.TaskID != s.Entry.TaskID {

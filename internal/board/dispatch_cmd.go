@@ -46,8 +46,11 @@ func RunDispatch(args []string) int {
 			return fail(e)
 		}
 		var in DispatchInput
-		if e = json.Unmarshal(b, &in); e != nil {
+		if e = DecodeReviewJSON(b, &in); e != nil {
 			return fail(e)
+		}
+		if in.Kind == "wrap-up" {
+			return fail(dispatchEvidenceError("Git-aware dispatch entrance required"))
 		}
 		d, err = PrepareDispatch(root, in)
 	case "show":

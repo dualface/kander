@@ -54,6 +54,9 @@ func managedMutation(root string, entry Entry, text, state string) error {
 		if err = tx.requireExecution(s, entry.Version.authorization, false); err != nil {
 			return err
 		}
+		if err = tx.requireFullExecution(s); err != nil {
+			return err
+		}
 		if authFrom(text) != authFrom(s.Text) {
 			return dispatchError(entry.TaskID)
 		}

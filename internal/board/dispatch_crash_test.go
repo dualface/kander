@@ -23,7 +23,7 @@ func TestDispatchCrashChild(t *testing.T) {
 	id := os.Getenv("KANDER_DISPATCH_CRASH_TASK")
 	mode := os.Getenv("KANDER_DISPATCH_CRASH_MODE")
 	stage := os.Getenv("KANDER_DISPATCH_CRASH_STAGE")
-	scope := LockScope{Tasks: []string{id}, Groups: []string{dispatchRegistry}, ExclusiveBoard: true}
+	scope := LockScope{Tasks: []string{id}, Groups: []string{dispatchRegistry, reviewControlGroup}, ExclusiveBoard: true}
 	locks, err := acquire(root, scope)
 	if err != nil {
 		t.Fatal(err)
@@ -142,16 +142,13 @@ func TestDispatchKillRecovery(t *testing.T) {
 				in.ConfirmBy = in.CreatedAt.AddDate(10, 0, 0)
 				if mode != "create" {
 					if mode == "done" {
-						in.Kind = "wrap-up"
+						bindWrapUpFixture(t, root, &in)
 					}
 					d := prepareTestDispatch(t, root, in)
 					if mode == "complete" || mode == "done" {
 						if _, err := dispatchMove(t, root, d, "working"); err != nil {
 							t.Fatal(err)
 						}
-					}
-					if mode == "done" {
-						exemptReviewFixture(t, root, s.Entry.TaskID)
 					}
 				}
 				before := transactionSnapshot(t, root, s.Entry.TaskID)

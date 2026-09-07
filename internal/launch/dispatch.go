@@ -3,6 +3,7 @@ package launch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,14 +17,18 @@ import (
 
 // DispatchOptions opt working/generic messages into the durable protocol.
 // Group review dispatches opt in automatically, defaulting to fix.
-type DispatchOptions struct{ ID, Kind, Base string }
+type DispatchOptions struct{ ID, Kind, Base, EvidenceFile string }
 
 // PrepareAction resolves defaults once; a retry compares the original payload
 // and never derives a new baseline or confirmation deadline.
 func PrepareAction(root string, s board.Snapshot, message string, o DispatchOptions, timeout float64) (board.Dispatch, bool, error) {
-	active := o.ID != "" || o.Kind != "" || o.Base != "" || s.Entry.State == "review" && (board.TaskGroupFrom(s.Text) != "" || board.MetadataFrom(s.Text, "DISPATCH_ID") != "")
+	active := o.EvidenceFile != "" || o.ID != "" || o.Kind != "" || o.Base != "" || s.Entry.State == "review" && (board.TaskGroupFrom(s.Text) != "" || board.MetadataFrom(s.Text, "DISPATCH_ID") != "")
 	if !active {
 		return board.Dispatch{}, false, nil
+	}
+	evidence, err := readDispatchEvidence(o.EvidenceFile)
+	if err != nil {
+		return board.Dispatch{}, true, err
 	}
 	if o.ID != "" {
 		previous, err := board.ReadDispatch(root, s.Entry.TaskID, o.ID)
@@ -38,10 +43,13 @@ func PrepareAction(root string, s board.Snapshot, message string, o DispatchOpti
 			in.Message = message
 			in.Kind = o.Kind
 			in.Base = o.Base
-			d, e := board.PrepareDispatch(root, in)
+			if o.EvidenceFile != "" {
+				in.Evidence = evidence
+			}
+			d, e := PrepareBoundDispatch(root, in)
 			return d, true, e
 		}
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return board.Dispatch{}, true, err
 		}
 	}
@@ -66,18 +74,18 @@ func PrepareAction(root string, s board.Snapshot, message string, o DispatchOpti
 		}
 		o.Base = strings.TrimSpace(string(b))
 	}
-	in := board.DispatchInput{ID: o.ID, TaskID: s.Entry.TaskID, Kind: o.Kind, Message: message, Base: o.Base}
+	in := board.DispatchInput{ID: o.ID, TaskID: s.Entry.TaskID, Kind: o.Kind, Message: message, Base: o.Base, Evidence: evidence}
 	// Defaults are persisted by the board; only this new request supplies a deadline.
 	in.CreatedAt = time.Now().UTC()
 	in.ConfirmBy = in.CreatedAt.Add(time.Duration(timeout * float64(time.Second)))
-	d, err := board.PrepareDispatch(root, in)
+	d, err := PrepareBoundDispatch(root, in)
 	return d, true, err
 }
 
 // DispatchInstruction names the only business acknowledgement and completion
 // entrances. A repeated receipt must never start the external work twice.
 func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) string {
-	return t("launch.dispatch_prompt", commandName(paths), d.Input.TaskID, d.Input.ID, d.Authorization.Epoch, d.Input.Kind)
+	return t("launch.dispatch_prompt", commandName(paths), d.Input.TaskID, d.Input.ID, d.Authorization.Epoch, d.Input.Kind) + "\n" + board.DispatchEvidenceInstruction(d)
 }
 
 // DispatchObservation uses P3's shared deadline and identity-valid report. A
@@ -160,6 +168,9 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 	}
 	ctx, cancel := context.WithDeadline(parent, d.Input.ConfirmBy)
 	defer cancel()
+	if err := ValidateActionEvidence(ctx, root, d); err != nil {
+		return err
+	}
 	s, err := board.ReadSnapshot(root, task)
 	if err != nil {
 		return err
@@ -217,7 +228,7 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 func ParseDispatchOptions(args []string) ([]string, DispatchOptions, error) {
 	var o DispatchOptions
 	var rest []string
-	values := map[string]*string{"--dispatch-id": &o.ID, "--kind": &o.Kind, "--base": &o.Base}
+	values := map[string]*string{"--dispatch-id": &o.ID, "--kind": &o.Kind, "--base": &o.Base, "--evidence-file": &o.EvidenceFile}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		name, value, inline := strings.Cut(args[i], "=")

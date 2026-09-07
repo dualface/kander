@@ -15,6 +15,7 @@ import (
 func init() {
 	cli.Commands["start"] = RunStart
 	cli.Commands["resume"] = RunResume
+	cli.Commands["dispatch"] = RunDispatch
 }
 
 func fail(err error) int {

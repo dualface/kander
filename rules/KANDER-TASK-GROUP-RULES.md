@@ -219,7 +219,7 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
 **Durable Dispatch Identity**
 
-- Use `notify --kind fix` for findings, `--kind sync` for task-branch synchronization, and `--kind wrap-up` after integration. Record the printed dispatch ID, frozen baseline and original message; retries reuse the same ID and payload.
+- Use `notify --kind fix --evidence-file <JSON>` for findings, `--kind sync` for task-branch synchronization, and `--kind wrap-up --evidence-file <JSON>` after integration. Bind the actual review run/finding/assignment and existing author originals for fix, and verified develop integration for wrap-up, per the command protocol. Record the printed dispatch ID, frozen baseline and original message; retries reuse the same ID and payload.
 - Read `kander dispatch show <task-id> <dispatch-id>` to reconcile uncertainty. State changes and terminal echo do not replace accepted/completed receipts. Before working, the executing owner uses the ID/epoch move command from the generated prompt; a replayed receipt does not authorize duplicate work. Completion carries the same grant and final delivery/evidence references.
 - When a notify returns nonzero, preserve the actual dispatch state. Do not invent a new round or separately invoke resume to escape uncertainty. Report the reason; a same-ID retry follows the command protocol's persisted deadline, readiness and stopped/unknown rules.
 - The legacy "exactly once" notify statements below mean one logical dispatch ID. They do not prohibit same-ID reconciliation, and do not promise exactly-once external side effects. Column transitions remain scheduling hints; verify the dispatch receipt before treating a bound round as accepted or complete.
@@ -265,6 +265,10 @@ This section runs only when review applies. A dispatch-back solely for task bran
 - The orchestrator does not modify the delivery, acceptance, and verification records written before the card moved into `review/`.
 
 **Orchestrator Wrap-Up on Behalf**
+
+- The exception below is subject to the durable wrap-up authority gate. First reconcile the same dispatch; create a bound wrap-up intent when absent. Apply `kander dispatch authorize-wrap-up <request.json>` only after confirmed executor exit or an already-authorized reclaim followed by a valid stopped observation. A missing SESSION/WINDOW, a nonzero notify result, timeout or expired lease alone does not grant authority. Preserve the card and report when exit cannot be established.
+- Keep the original OWNER and author conclusions. Record the actual on-behalf author/reason in the dedicated grant, accept its new epoch, and use only its cleanup/append-only record scope. Do not send a wrap-up-only token to another executor or upgrade it to ordinary code authority. Complete with the same dispatch and verified integration source; original completion and review gates remain in force.
+
 
 - When dispatch is impossible or the wrap-up does not close, the orchestrator completes the full wrap-up of that card and reports as the one who finished it. Applicable conditions:
   - The card has no usable `WINDOW`/`SESSION` record.

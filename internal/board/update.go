@@ -181,6 +181,9 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		if err = tx.requireExecution(s, o.Authorization, true); err != nil {
 			return err
 		}
+		if err = tx.validateWrapUpUpdate(s, o); err != nil {
+			return err
+		}
 		if _, err = documentPath(s.Entry, o.Document); err != nil {
 			return err
 		}

@@ -19,7 +19,7 @@ func durableNotifyFixture(t *testing.T, duration time.Duration) (string, string,
 	task, path := makeReview(t, root, "durable")
 	setWindow(t, path, "herdr:w1:t9:w1:p9")
 	created := time.Now().UTC()
-	d, err := board.PrepareDispatch(root, board.DispatchInput{ID: "notify-one", TaskID: task, Kind: "fix", Message: "修复问题", Base: strings.Repeat("a", 40), CreatedAt: created, ConfirmBy: created.Add(duration)})
+	d, err := board.PrepareDispatch(root, board.DispatchInput{ID: "notify-one", TaskID: task, Kind: "sync", Message: "修复问题", Base: strings.Repeat("a", 40), CreatedAt: created, ConfirmBy: created.Add(duration)})
 	if err != nil {
 		t.Fatal(err)
 	}

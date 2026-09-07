@@ -38,6 +38,7 @@ type DispatchInput struct {
 	Kind       string              `json:"kind"`
 	Message    string              `json:"message"`
 	Base       string              `json:"base"`
+	Evidence   DispatchEvidence    `json:"evidence,omitempty"`
 	References []ArtifactReference `json:"references,omitempty"`
 	CreatedAt  time.Time           `json:"created_at"`
 	ConfirmBy  time.Time           `json:"confirm_by"`
@@ -61,16 +62,17 @@ type DispatchReceipt struct {
 
 // Dispatch is the committed protocol state. Transport never supplies Accepted.
 type Dispatch struct {
-	Schema        int                    `json:"schema"`
-	Input         DispatchInput          `json:"intent"`
-	MessageHash   string                 `json:"message_hash"`
-	Authorization ExecutionAuthorization `json:"authorization"`
-	Revision      uint64                 `json:"revision"`
-	State         DispatchState          `json:"state"`
-	Attempts      uint64                 `json:"attempts"`
-	Accepted      *DispatchReceipt       `json:"accepted,omitempty"`
-	Completed     *DispatchReceipt       `json:"completed,omitempty"`
-	Reason        string                 `json:"reason,omitempty"`
+	WrapUpAuthority *WrapUpAuthority       `json:"wrap_up_authority,omitempty"`
+	Schema          int                    `json:"schema"`
+	Input           DispatchInput          `json:"intent"`
+	MessageHash     string                 `json:"message_hash"`
+	Authorization   ExecutionAuthorization `json:"authorization"`
+	Revision        uint64                 `json:"revision"`
+	State           DispatchState          `json:"state"`
+	Attempts        uint64                 `json:"attempts"`
+	Accepted        *DispatchReceipt       `json:"accepted,omitempty"`
+	Completed       *DispatchReceipt       `json:"completed,omitempty"`
+	Reason          string                 `json:"reason,omitempty"`
 }
 
 const dispatchRegistry = "00000000-dispatch-group"
@@ -167,6 +169,9 @@ func readDispatch(tx *Transaction, task, id string) (Dispatch, error) {
 	if (d.State == DispatchAccepted || d.State == DispatchCompleted) && d.Accepted == nil || d.State == DispatchCompleted && d.Completed == nil {
 		return d, dispatchError(id)
 	}
+	if err := validateWrapUpAuthority(tx, d); err != nil {
+		return d, err
+	}
 	return d, nil
 }
 
@@ -193,7 +198,11 @@ func PrepareDispatch(root string, in DispatchInput) (d Dispatch, err error) {
 	if err = validateDispatchInput(in); err != nil {
 		return
 	}
-	err = WithTransaction(root, LockScope{Tasks: []string{in.TaskID}, Groups: []string{dispatchRegistry}}, func(tx *Transaction) error {
+	scope, e := dispatchEvidenceScope(root, in)
+	if e != nil {
+		return d, e
+	}
+	err = WithTransaction(root, scope, func(tx *Transaction) error {
 		return tx.prepareDispatch(in, &d)
 	})
 	return
@@ -210,6 +219,9 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 			return dispatchError(in.ID)
 		}
 		*d, e = readDispatch(tx, in.TaskID, in.ID)
+		return e
+	}
+	if e = validateDispatchEvidence(tx, in, true); e != nil {
 		return e
 	}
 	s, e := tx.Snapshot(in.TaskID)
@@ -254,6 +266,11 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 	if e = tx.PutGroup(dispatchRegistry, in.ID+".json", string(b)+"\n"); e != nil {
 		return e
 	}
+	if w := in.Evidence.WrapUp; w != nil {
+		if e = tx.Put(in.TaskID, w.Artifact.Path, reviewJSON(w.Git)); e != nil {
+			return e
+		}
+	}
 	original, _ := json.Marshal(d)
 	if e = tx.Put(in.TaskID, dispatchPath(in.ID, "intent"), string(original)+"\n"); e != nil {
 		return e
@@ -267,7 +284,15 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 // BeginDispatchAttempt CASes an uncertain send before invoking any external
 // transport. Retries require a new observation and the same intent revision.
 func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision ...uint64) (d Dispatch, err error) {
-	err = WithTransaction(root, LockScope{Tasks: []string{task}}, func(tx *Transaction) error {
+	d, err = ReadDispatch(root, task, id)
+	if err != nil {
+		return
+	}
+	scope, err := dispatchEvidenceScope(root, d.Input)
+	if err != nil {
+		return d, err
+	}
+	err = WithTransaction(root, scope, func(tx *Transaction) error {
 		var e error
 		d, e = readDispatch(tx, task, id)
 		if e != nil {
@@ -275,6 +300,12 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		}
 		s, e := tx.Snapshot(task)
 		if e != nil {
+			return e
+		}
+		if d.WrapUpAuthority != nil {
+			return dispatchEvidenceError("wrap-up-only grant cannot launch or deliver")
+		}
+		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
 			return e
 		}
 		if len(cardRevision) > 0 && s.Revision != cardRevision[0] {
@@ -330,7 +361,7 @@ func ReauthorizeDispatch(root, task, id string, expected uint64) (d Dispatch, er
 		if e != nil {
 			return e
 		}
-		if d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.Authorization.Epoch == ^uint64(0) || !time.Now().Before(d.Input.ConfirmBy) {
+		if d.WrapUpAuthority != nil || d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.Authorization.Epoch == ^uint64(0) || !time.Now().Before(d.Input.ConfirmBy) {
 			return dispatchError(id)
 		}
 		b, _ := json.Marshal(d)
