@@ -211,6 +211,7 @@ func TestCheckReportsAliveStoppedAndUnknown(t *testing.T) {
 	setLocation(t, unknown, "codex session-1", "foreground")
 	t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
 	t.Setenv("KANBAN_TMUX_STALE_PANE", "%2")
+	t.Setenv("KANBAN_TMUX_LIST_PANES", "%1\t$1\tone\t@1\tcodex\t0\tother")
 
 	code, out, _ := capture(t, func() int { return RunCheck(nil) })
 	if code != 0 {
@@ -279,6 +280,7 @@ func TestCheckLivenessDoesNotAffectExitCode(t *testing.T) {
 	_, path := makeWorking(t, "liveness-exit", "退出码")
 	setLocation(t, path, "codex session-3", "tmux:$1:@1:%1")
 	t.Setenv("KANBAN_TMUX_STALE_PANE", "%1")
+	t.Setenv("KANBAN_TMUX_LIST_PANES", "%9\t$9\tnine\t@9\tcodex\t0\tother")
 
 	code, out, _ := capture(t, func() int { return RunCheck(nil) })
 	if code != 0 || !strings.Contains(out, "状态=stopped") {

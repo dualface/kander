@@ -1,6 +1,7 @@
 package liveness
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
@@ -37,6 +38,15 @@ func herdrSessionValue(pane map[string]any) string {
 
 func staleReport(entry board.Entry, session TaskSession, channel, container, detail, program, launcher string, allowReverseLookup bool) Report {
 	sess := session
+	lookupFailure := func(err error) Report {
+		status := Unknown
+		var matchError *lookupMatchError
+		if errors.As(err, &matchError) && matchError.matches == 0 {
+			status = Stopped
+		}
+		return report(entry, &sess, status, channel, container,
+			t("liveness.stale_address_reverse_lookup", detail, err.Error()), "")
+	}
 	if !allowReverseLookup || session.Reference == "" {
 		if session.Agent == "codex" && session.Reference == "" {
 			detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
@@ -47,14 +57,13 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 	if channel == "herdr" {
 		tabID, paneID, err := HerdrReverseLookup(program, session)
 		if err != nil {
-			return report(entry, &sess, Stopped, channel, container, detail, "")
+			return lookupFailure(err)
 		}
 		newWindow = "herdr:" + tabID + ":" + paneID
 		paneProbe, err := probe.ProbeHerdrPane(program, paneID, 0)
 		if err != nil {
-			return report(entry, &sess, Unknown, channel, container, t(
-				"liveness.failed_to_probe_the_reverse_looked_up_pane", err.Error(),
-			), "")
+			return lookupFailure(&probe.Error{Message: t(
+				"liveness.failed_to_probe_the_reverse_looked_up_pane", err.Error())})
 		}
 		pane := paneProbe.Pane
 		agent, _ := pane["agent"].(string)
@@ -70,14 +79,13 @@ func staleReport(entry board.Entry, session TaskSession, channel, container, det
 			if status == "" {
 				status = "N/A"
 			}
-			return report(entry, &sess, Unknown, channel, container, t(
-				"liveness.the_reverse_looked_up_pane_agent_status_cannot_be", status,
-			), "")
+			return lookupFailure(&probe.Error{Message: t(
+				"liveness.the_reverse_looked_up_pane_agent_status_cannot_be", status)})
 		}
 	} else {
 		location, err := TmuxReverseLookup(program, session)
 		if err != nil {
-			return report(entry, &sess, Stopped, channel, container, detail, "")
+			return lookupFailure(err)
 		}
 		newWindow = RenderTmuxWindow(launcher, location)
 	}

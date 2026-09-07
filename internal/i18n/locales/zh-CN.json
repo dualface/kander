@@ -390,6 +390,8 @@
   "liveness.tmux_session_lookup_is_ambiguous_panes": "tmux 会话反查匹配不唯一: {{.V0}}: {{.V1}} 个 pane",
   "liveness.tmux_session_lookup_returned_invalid_output": "tmux 会话反查输出无效",
   "liveness.tmux_session_marker_mismatch": "tmux 会话标记不匹配",
+  "liveness.herdr_session_lookup_returned_invalid_output": "herdr 会话反查输出无效",
+  "liveness.stale_address_reverse_lookup": "原地址失效: {{.V0}}; 反查: {{.V1}}",
   "liveness.unknown_option": "未知选项",
   "liveness.usage_kander_check_all_task": "用法: kander check [--all] [任务...]",
   "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "用法: kander subscribe [--refresh 秒] [--heartbeat 秒] <任务组> <任务>... [--watch 外部任务或任务组...]",

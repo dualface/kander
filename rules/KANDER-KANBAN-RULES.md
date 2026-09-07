@@ -262,9 +262,10 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - No arguments and `--all` probe all `working/` cards.
 - Targeted checks probe only the specified `working/` cards, never `review/`.
 - Before the summary line, print a four-state liveness section: `alive` means the agent and available session identity match.
-- `stopped` means the pane is gone or the agent/process mismatches and reverse lookup found nothing.
+- `alive` is an observation of agent presence, not readiness to receive input or evidence of task progress; `notify` applies its own readiness checks.
+- `stopped` means the pane is gone or the agent/process mismatches and a valid reverse lookup confirms zero matches. When lookup is disabled or the session reference is empty, the existing direct-pane classification applies.
 - `drifted` means the session was uniquely reverse looked up to a new pane, with the new address attached.
-- `unknown` means an invalid session/window, foreground/console, program unavailable, state or probe failure.
+- `unknown` means an invalid session/window, foreground/console, program unavailable, state or probe failure. Reverse lookup errors, invalid output, timeouts, and multiple matches are `unknown`, preserving the stale-address reason and the reverse-lookup stage and reason; they do not prove the session stopped.
 - A herdr pane with missing identity but a valid agent and state is still `alive`, noted as not directly deliverable.
 - A Codex empty reference gets no reverse lookup.
 - Probe errors are counted as `unknown`; they do not write the card or affect the `check` exit code.

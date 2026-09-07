@@ -46,6 +46,16 @@ func markersMatch(kander, onevoke, reference string) bool {
 	return kander == reference || onevoke == reference
 }
 
+// lookupMatchError distinguishes a completed search from a collection failure.
+// Existing delivery callers still reject every non-unique result as an error.
+type lookupMatchError struct {
+	matches int
+	cause   error
+}
+
+func (e *lookupMatchError) Error() string { return e.cause.Error() }
+func (e *lookupMatchError) Unwrap() error { return e.cause }
+
 // HerdrReverseLookup uniquely locates a herdr pane by agent and session identity.
 func HerdrReverseLookup(herdr string, session TaskSession) (tabID, paneID string, err error) {
 	res, err := probe.Capture(herdr, []string{"pane", "list"}, 0)
@@ -64,31 +74,40 @@ func HerdrReverseLookup(herdr string, session TaskSession) (tabID, paneID string
 	for _, item := range panes {
 		pane, _ := item.(map[string]any)
 		if pane == nil {
-			continue
-		}
-		identity, _ := pane["agent_session"].(map[string]any)
-		var reference any
-		if identity != nil {
-			reference = identity["value"]
-		}
-		if pane["agent"] != session.Agent || reference != session.Reference {
-			continue
+			return "", "", &probe.Error{Message: t("liveness.herdr_session_lookup_returned_invalid_output")}
 		}
 		tab := probe.PublicID(pane["tab_id"])
 		id := probe.PublicID(pane["pane_id"])
-		if tab != "" && id != "" {
-			matches = append(matches, [2]string{tab, id})
+		agent, agentOK := pane["agent"].(string)
+		if tab == "" || id == "" || !herdrWindowRe.MatchString("herdr:"+tab+":"+id) || (pane["agent"] != nil && !agentOK) {
+			return "", "", &probe.Error{Message: t("liveness.herdr_session_lookup_returned_invalid_output")}
 		}
+		identity, _ := pane["agent_session"].(map[string]any)
+		if pane["agent_session"] != nil && identity == nil {
+			return "", "", &probe.Error{Message: t("liveness.herdr_session_lookup_returned_invalid_output")}
+		}
+		var reference string
+		if identity != nil {
+			var ok bool
+			reference, ok = identity["value"].(string)
+			if identity["value"] != nil && !ok {
+				return "", "", &probe.Error{Message: t("liveness.herdr_session_lookup_returned_invalid_output")}
+			}
+		}
+		if agent != session.Agent || reference != session.Reference {
+			continue
+		}
+		matches = append(matches, [2]string{tab, id})
 	}
 	if len(matches) == 0 {
-		return "", "", &probe.Error{Message: t(
+		return "", "", &lookupMatchError{matches: 0, cause: &probe.Error{Message: t(
 			"liveness.herdr_session_lookup_found_no_match", session.Reference,
-		)}
+		)}}
 	}
 	if len(matches) != 1 {
-		return "", "", &probe.Error{Message: t(
+		return "", "", &lookupMatchError{matches: len(matches), cause: &probe.Error{Message: t(
 			"liveness.herdr_session_lookup_is_ambiguous_panes", session.Reference, strconv.Itoa(len(matches)),
-		)}
+		)}}
 	}
 	return matches[0][0], matches[0][1], nil
 }
@@ -125,19 +144,24 @@ func TmuxReverseLookup(tmux string, session TaskSession) (TmuxPaneLocation, erro
 		default:
 			return TmuxPaneLocation{}, &probe.Error{Message: t("liveness.tmux_session_lookup_returned_invalid_output")}
 		}
+		if !tmuxWindowRe.MatchString("tmux:"+sessionID+":"+windowID+":"+paneID) ||
+			sessionName == "" ||
+			command == "" || (dead != "0" && dead != "1") || strings.ContainsRune(line, 0) {
+			return TmuxPaneLocation{}, &probe.Error{Message: t("liveness.tmux_session_lookup_returned_invalid_output")}
+		}
 		if markersMatch(kander, onevoke, session.Reference) && dead == "0" && command == expected {
 			matches = append(matches, TmuxPaneLocation{SessionID: sessionID, SessionName: sessionName, WindowID: windowID, PaneID: paneID})
 		}
 	}
 	if len(matches) == 0 {
-		return TmuxPaneLocation{}, &probe.Error{Message: t(
+		return TmuxPaneLocation{}, &lookupMatchError{matches: 0, cause: &probe.Error{Message: t(
 			"liveness.tmux_session_lookup_found_no_match_0_panes", session.Reference,
-		)}
+		)}}
 	}
 	if len(matches) != 1 {
-		return TmuxPaneLocation{}, &probe.Error{Message: t(
+		return TmuxPaneLocation{}, &lookupMatchError{matches: len(matches), cause: &probe.Error{Message: t(
 			"liveness.tmux_session_lookup_is_ambiguous_panes", session.Reference, strconv.Itoa(len(matches)),
-		)}
+		)}}
 	}
 	return matches[0], nil
 }

@@ -82,6 +82,8 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 `kander show --json <task-id>` 返回正文、当前位置、revision 和操作 ID. Agent 将修改稿写入独立 UTF-8 文件后, 用 `kander update <task-id> --document spec.md --file <input> --expect-revision <revision>` 提交; 小卡也使用逻辑文档名 `spec.md`. 冲突必须重新读取并合并. 完成用 `move <task-id> done --result completed`, 手工认领用 `move <task-id> working --owner <agent>`. 协议与恢复见 [卡片事务](docs/card-transactions.md); [guard-write](docs/kanban-write-guard.md) 仅为辅助检查, 不保证检查与外部写入原子性.
 
+`kander check` 的存活段与 `subscribe` 心跳只报告观测结果. `alive` 表示 Agent 存在, 不代表已就绪或任务有进展; `notify` 仍独立检查能否接收消息. 旧地址失效后, 有效反查确认零匹配才据此报告 `stopped`, 唯一匹配报告 `drifted`; 反查失败、非法输出、超时或多匹配报告 `unknown`, 保留原地址失效原因及反查阶段和原因. 禁用反查或会话引用为空时保留原有直接探测语义, Codex 空引用不反查. 存活探测不写卡, 也不改变 `check` 的结构检查退出码.
+
 ## 4. 工作流程
 
 每个任务都按下面的流程进行. Kander 的开发规则按模块启用, 新安装默认全开; 关掉对应模块就让单卡沿用你已有的 Git、审核和交付流程.

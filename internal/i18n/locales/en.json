@@ -390,6 +390,8 @@
   "liveness.tmux_session_lookup_is_ambiguous_panes": "tmux session lookup is ambiguous: {{.V0}}: {{.V1}} panes",
   "liveness.tmux_session_lookup_returned_invalid_output": "tmux session lookup returned invalid output",
   "liveness.tmux_session_marker_mismatch": "tmux session marker mismatch",
+  "liveness.herdr_session_lookup_returned_invalid_output": "herdr session lookup returned invalid output",
+  "liveness.stale_address_reverse_lookup": "stale address: {{.V0}}; reverse lookup: {{.V1}}",
   "liveness.unknown_option": "unknown option",
   "liveness.usage_kander_check_all_task": "usage: kander check [--all] [task...]",
   "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "usage: kander subscribe [--refresh seconds] [--heartbeat seconds] <task-group> <task>... [--watch external-task-or-group...]",
