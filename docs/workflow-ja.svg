@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="994" viewBox="0 0 800 994" role="img" aria-labelledby="wf-title wf-desc">
+  <title id="wf-title">Kander ワークフロー</title>
+  <desc id="wf-desc">新しい Agent セッションで要件を議論し、確認後はカンバンフローでタスクを完了し、すべての要件を繰り返し手配し、kander コマンドでビジュアルカンバンを開いて進捗を追います。</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfcfe"/>
+      <stop offset="1" stop-color="#f1f4f9"/>
+    </linearGradient>
+    <filter id="card" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0f172a" flood-opacity="0.06"/>
+    </filter>
+    <marker id="a-slate" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .s { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif; }
+      .h1 { font-size: 38px; font-weight: 700; fill: #0f172a; }
+      .h2 { font-size: 18px; fill: #64748b; }
+      .tag { font-size: 15px; fill: #94a3b8; }
+      .pt { font-size: 22px; font-weight: 700; fill: #0f172a; }
+      .pn { font-size: 15px; fill: #64748b; }
+      .bt { font-size: 16px; fill: #334155; }
+      .num { font-size: 20px; font-weight: 700; fill: #ffffff; }
+      .hl { font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace; font-size: 16px; font-weight: 700; fill: #6d28d9; }
+      .panel { fill: #ffffff; stroke: #e6eaf0; stroke-width: 1.5; }
+      .flow { fill: none; stroke: #94a3b8; stroke-width: 2.5; stroke-linecap: round; marker-end: url(#a-slate); }
+    </style>
+  </defs>
+
+  <rect width="800" height="994" fill="url(#bg)"/>
+
+  <text x="48" y="64" class="s h1">Kander ワークフロー</text>
+  <text x="48" y="100" class="s h2">セッションで議論 → カード作成と起動 → 繰り返し → TUI で追跡</text>
+  <text x="48" y="126" class="s tag">一人でカンバンを使って複数の AI Agent をスケジュール</text>
+  <line x1="48" y1="150" x2="752" y2="150" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- step 1 -->
+  <rect x="48" y="176" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="200" width="40" height="40" rx="12" fill="#4f46e5"/>
+  <text x="100" y="227" text-anchor="middle" class="s num">1</text>
+  <text x="136" y="222" class="s pt">新しいセッション</text>
+  <text x="136" y="248" class="s pn">要件を議論する</text>
+  <line x1="80" y1="272" x2="720" y2="272" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="296" r="4" fill="#a5b4fc"/>
+  <text x="106" y="301" class="s bt">目標と背景を明確に伝える</text>
+  <circle cx="90" cy="322" r="4" fill="#a5b4fc"/>
+  <text x="106" y="327" class="s bt">受け入れ条件とやらない範囲を決める</text>
+
+  <path d="M400 344 V368" class="flow"/>
+
+  <!-- step 2 -->
+  <rect x="48" y="368" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="392" width="40" height="40" rx="12" fill="#d97706"/>
+  <text x="100" y="419" text-anchor="middle" class="s num">2</text>
+  <text x="136" y="414" class="s pt">確認後にカード作成と起動</text>
+  <text x="136" y="440" class="s pn">カンバンフローで納品</text>
+  <line x1="80" y1="464" x2="720" y2="464" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="488" r="4" fill="#fbbf24"/>
+  <text x="106" y="493" class="s bt">要件が確定してからカードを作成</text>
+  <circle cx="90" cy="514" r="4" fill="#fbbf24"/>
+  <text x="106" y="519" class="s bt">作成後にタスク契約をセルフレビューし、実行を開始</text>
+  <circle cx="90" cy="540" r="4" fill="#fbbf24"/>
+  <text x="106" y="545" class="s bt">各カードは独立した Agent が実行</text>
+
+  <path d="M400 562 V586" class="flow"/>
+
+  <!-- step 3 -->
+  <rect x="48" y="586" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="610" width="40" height="40" rx="12" fill="#0d9488"/>
+  <text x="100" y="637" text-anchor="middle" class="s num">3</text>
+  <text x="136" y="632" class="s pt">繰り返し手配</text>
+  <text x="136" y="658" class="s pn">すべての要件を順に実現</text>
+  <line x1="80" y1="682" x2="720" y2="682" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="706" r="4" fill="#5eead4"/>
+  <text x="106" y="711" class="s bt">複数の要件はステップ 1-2 を繰り返す</text>
+  <circle cx="90" cy="732" r="4" fill="#5eead4"/>
+  <text x="106" y="737" class="s bt">一度に一つ手配し、並行して実行</text>
+
+  <path d="M400 754 V778" class="flow"/>
+
+  <!-- step 4 -->
+  <rect x="48" y="778" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="802" width="40" height="40" rx="12" fill="#7c3aed"/>
+  <text x="100" y="829" text-anchor="middle" class="s num">4</text>
+  <text x="136" y="824" class="s pt">TUI で追跡</text>
+  <text x="136" y="850" class="s pn">すべてのタスク状態を確認</text>
+  <line x1="80" y1="874" x2="720" y2="874" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="910" r="4" fill="#c4b5fd"/>
+  <text x="106" y="915" class="s bt">コマンド <tspan class="hl">kander</tspan> でビジュアルカンバンを開き、進捗を追う</text>
+</svg>

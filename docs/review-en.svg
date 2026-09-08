@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1620" viewBox="0 0 800 1620" role="img" aria-labelledby="rv-title rv-desc">
+  <title id="rv-title">Kander Review Flow</title>
+  <desc id="rv-desc">After a task hits the review allowlist, roles are resolved by review stage. PM and QA run the first round in parallel on the same commit, and CSA and Hacker enter the second stage after both pass. Fixes get incremental re-review only; only blocking, high, and medium findings verified by the main agent are must-fix. After passing, unhandled items are shown before integration.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfcfe"/>
+      <stop offset="1" stop-color="#f1f4f9"/>
+    </linearGradient>
+    <filter id="card" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0f172a" flood-opacity="0.06"/>
+    </filter>
+    <marker id="a-slate" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .s { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif; }
+      .h1 { font-size: 38px; font-weight: 700; fill: #0f172a; }
+      .h2 { font-size: 18px; fill: #64748b; }
+      .tag { font-size: 15px; fill: #94a3b8; }
+      .pt { font-size: 22px; font-weight: 700; fill: #0f172a; }
+      .pn { font-size: 15px; fill: #64748b; }
+      .bt { font-size: 16px; fill: #334155; }
+      .num { font-size: 20px; font-weight: 700; fill: #ffffff; }
+      .hl { font-family: "SFMono-Regular", "Cascadia Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace; font-size: 16px; font-weight: 700; fill: #6d28d9; }
+      .panel { fill: #ffffff; stroke: #e6eaf0; stroke-width: 1.5; }
+      .flow { fill: none; stroke: #94a3b8; stroke-width: 2.5; stroke-linecap: round; marker-end: url(#a-slate); }
+    </style>
+  </defs>
+
+  <rect width="800" height="1620" fill="url(#bg)"/>
+
+  <text x="48" y="64" class="s h1">Kander Review Flow</text>
+  <text x="48" y="100" class="s h2">Allowlist hit → PM ∥ QA first round → security roles → integrate</text>
+  <text x="48" y="126" class="s tag">Single entry point: kander review</text>
+  <line x1="48" y1="150" x2="752" y2="150" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <!-- trigger decision -->
+  <rect x="48" y="176" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="200" width="40" height="40" rx="12" fill="#d97706"/>
+  <text x="100" y="227" text-anchor="middle" class="s num">?</text>
+  <text x="136" y="222" class="s pt">Does It Hit the Review Allowlist</text>
+  <text x="136" y="248" class="s pn">Judged by the task's actual changes, not titles or labels</text>
+  <line x1="80" y1="272" x2="720" y2="272" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="296" r="4" fill="#fbbf24"/>
+  <text x="106" y="301" class="s bt">Hit → resolve the review stages and enter review</text>
+  <circle cx="90" cy="322" r="4" fill="#fbbf24"/>
+  <text x="106" y="327" class="s bt">Miss → state the change scope, then integrate; never skip silently</text>
+
+  <path d="M400 344 V368" class="flow"/>
+
+  <!-- 1 PM ∥ QA -->
+  <rect x="48" y="368" width="704" height="220" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="392" width="40" height="40" rx="12" fill="#4f46e5"/>
+  <text x="100" y="419" text-anchor="middle" class="s num">1</text>
+  <text x="136" y="414" class="s pt">PM ∥ QA First Round</text>
+  <text x="136" y="440" class="s pn">Parallel on the same commit; both must pass to advance</text>
+  <line x1="80" y1="464" x2="720" y2="464" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="488" r="4" fill="#a5b4fc"/>
+  <text x="106" y="493" class="s bt">PM: checks the task contract and that the goal is met</text>
+  <circle cx="90" cy="514" r="4" fill="#a5b4fc"/>
+  <text x="106" y="519" class="s bt">QA: architectural consistency, regressions, and code quality</text>
+  <circle cx="90" cy="540" r="4" fill="#a5b4fc"/>
+  <text x="106" y="545" class="s bt">Must-fix items merge into one fix; only roles that raised issues re-review</text>
+  <circle cx="90" cy="566" r="4" fill="#a5b4fc"/>
+  <text x="106" y="571" class="s bt">Roles skipped by stage policy are marked N/A</text>
+
+  <path d="M400 588 V612" class="flow"/>
+
+  <!-- 2 security roles -->
+  <rect x="48" y="612" width="704" height="220" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="636" width="40" height="40" rx="12" fill="#7c3aed"/>
+  <text x="100" y="663" text-anchor="middle" class="s num">2</text>
+  <text x="136" y="658" class="s pt">CSA / Hacker</text>
+  <text x="136" y="684" class="s pn">The second stage starts only after PM and QA both pass</text>
+  <line x1="80" y1="708" x2="720" y2="708" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="732" r="4" fill="#c4b5fd"/>
+  <text x="106" y="737" class="s bt">CSA checks intrinsic security; Hacker probes adversarially</text>
+  <circle cx="90" cy="758" r="4" fill="#c4b5fd"/>
+  <text x="106" y="763" class="s bt">Verified blocking / high / medium findings go to the user to decide</text>
+  <circle cx="90" cy="784" r="4" fill="#c4b5fd"/>
+  <text x="106" y="789" class="s bt">One of three: fix and re-review / accept the risk / stop integration</text>
+  <circle cx="90" cy="810" r="4" fill="#c4b5fd"/>
+  <text x="106" y="815" class="s bt">No decision in 15 min times out; each role re-reviews fixes incrementally</text>
+
+  <path d="M400 832 V856" class="flow"/>
+
+  <!-- 3 tiers -->
+  <rect x="48" y="856" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="880" width="40" height="40" rx="12" fill="#0d9488"/>
+  <text x="100" y="907" text-anchor="middle" class="s num">3</text>
+  <text x="136" y="902" class="s pt">Tiers and the Must-Fix Bar</text>
+  <text x="136" y="928" class="s pn">A missing tier is an invalid conclusion; the main agent fills it in</text>
+  <line x1="80" y1="952" x2="720" y2="952" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="976" r="4" fill="#5eead4"/>
+  <text x="106" y="981" class="s bt">blocking, high, medium → must fix</text>
+  <circle cx="90" cy="1002" r="4" fill="#5eead4"/>
+  <text x="106" y="1007" class="s bt">low, recommend, suggest → do not block integration</text>
+
+  <path d="M400 1024 V1048" class="flow"/>
+
+  <!-- 4 verification duty -->
+  <rect x="48" y="1048" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="1072" width="40" height="40" rx="12" fill="#d97706"/>
+  <text x="100" y="1099" text-anchor="middle" class="s num">4</text>
+  <text x="136" y="1094" class="s pt">The Main Agent's Verification Duty</text>
+  <text x="136" y="1120" class="s pn">Accepting or rejecting reviewer conclusions unverified is forbidden</text>
+  <line x1="80" y1="1144" x2="720" y2="1144" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="1168" r="4" fill="#fbbf24"/>
+  <text x="106" y="1173" class="s bt">Valid → handle by tier; fix and commit must-fix items</text>
+  <circle cx="90" cy="1194" r="4" fill="#fbbf24"/>
+  <text x="106" y="1199" class="s bt">Invalid → record the basis: files, line numbers, or command output</text>
+  <circle cx="90" cy="1220" r="4" fill="#fbbf24"/>
+  <text x="106" y="1225" class="s bt">Unverifiable → hand to the user; never treat as invalid</text>
+
+  <path d="M400 1242 V1266" class="flow"/>
+
+  <!-- 5 Reviewer -->
+  <rect x="48" y="1266" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="1290" width="40" height="40" rx="12" fill="#4f46e5"/>
+  <text x="100" y="1317" text-anchor="middle" class="s num">5</text>
+  <text x="136" y="1312" class="s pt">Reviewers and Isolation Boundaries</text>
+  <text x="136" y="1338" class="s pn">The four roles can each be assigned codex / claude / grok / cursor</text>
+  <line x1="80" y1="1362" x2="720" y2="1362" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="1386" r="4" fill="#a5b4fc"/>
+  <text x="106" y="1391" class="s bt">Codex / Claude / Grok use read-only isolation</text>
+  <circle cx="90" cy="1412" r="4" fill="#a5b4fc"/>
+  <text x="106" y="1417" class="s bt">Cursor uses prompts and post-hoc worktree checks, no upfront blocking</text>
+  <circle cx="90" cy="1438" r="4" fill="#a5b4fc"/>
+  <text x="106" y="1443" class="s bt">Reruns keep the same reviewer; bypassing <tspan class="hl">kander review</tspan> is forbidden</text>
+
+  <path d="M400 1460 V1484" class="flow"/>
+
+  <!-- passed -->
+  <rect x="48" y="1484" width="704" height="88" rx="16" fill="#eefaf5" stroke="#a7e0cd" stroke-width="1.5"/>
+  <circle cx="96" cy="1528" r="18" fill="#059669"/>
+  <path d="M88 1528 L94 1534 L105 1521" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="1522" class="s" font-size="18" font-weight="700" fill="#064e3b">Review Passed</text>
+  <text x="130" y="1550" class="s" font-size="15" fill="#3f6b5c">Show all unhandled items first, then proceed to integration and cleanup</text>
+</svg>
