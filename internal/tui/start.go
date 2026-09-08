@@ -30,12 +30,14 @@ func prepareTaskStart(id string) (startRequest, error) {
 	return startRequest{StartPreview: preview, root: root}, err
 }
 
-func runTaskStart(request startRequest) (launch.StartResult, error) {
+func runTaskStart(request startRequest) (result launch.StartResult, err error) {
+	var warnings board.WarningLog
+	defer func() { result.Warnings = append(warnings.Messages(), result.Warnings...) }()
 	if !backgroundStartLauncher(request.Launcher) {
 		return launch.StartResult{}, fmt.Errorf("%s", t("tui.start_use_cli", request.Launcher))
 	}
 	if request.State == "backlog" {
-		snapshot, err := board.ReadSnapshot(request.root, request.TaskID)
+		snapshot, err := board.ReadSnapshotWithWarnings(request.root, request.TaskID, &warnings)
 		if err != nil {
 			return launch.StartResult{}, err
 		}
@@ -65,7 +67,7 @@ func (a *App) confirmSelectedStart() {
 	}
 	request, err := a.PrepareStart(selected.TaskID)
 	if err != nil {
-		a.showFocusNotice(t("tui.start_failed", err.Error()))
+		a.showFocusNotice(strings.Join(append([]string{t("tui.start_failed", err.Error())}, request.Warnings...), " "))
 		return
 	}
 	if request.State != "backlog" && request.State != "todo" {
@@ -138,6 +140,7 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 	if request.State == "backlog" {
 		lines = append(lines, t("tui.start_backlog"))
 	}
+	lines = append(lines, request.Warnings...)
 	lines = append(lines, t("tui.start_confirm_keys"))
 	return a.renderStartPopup(lines)
 }

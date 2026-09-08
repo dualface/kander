@@ -17,9 +17,11 @@ type ReviewProgress struct {
 	RebindCycles map[string]string `json:"rebind_cycles,omitempty"`
 }
 
-func reviewGateScope(root, id string, exclusive bool) (LockScope, error) {
+func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (LockScope, error) {
 	ids := []string{id}
-	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+	readScope := reviewScope(nil, true)
+	readScope.warnings = journalWarningLog(warnings)
+	err := WithTransaction(root, readScope, func(tx *Transaction) error {
 		p, exists, e := readTaskPlan(tx, id)
 		if e != nil {
 			return e
@@ -31,6 +33,7 @@ func reviewGateScope(root, id string, exclusive bool) (LockScope, error) {
 	})
 	scope := reviewScope(ids, false)
 	scope.ExclusiveBoard = exclusive
+	scope.warnings = journalWarningLog(warnings)
 	return scope, err
 }
 

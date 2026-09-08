@@ -104,6 +104,7 @@ func Run(_ []string) int {
 	app := newApp(prefs.Single, prefs.Refresh, ctx, getBoard, getTask, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)
+	app.showJournalWarnings(initial.Warnings)
 	if postInstall || !configExists {
 		app.openOptionsAt(sectionInterface)
 	}

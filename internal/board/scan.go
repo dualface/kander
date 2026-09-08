@@ -225,15 +225,21 @@ func scanTargets(root string, values []string) (Board, error) {
 
 // LoadBoard scans and warns on stderr when invalid entries exist.
 func LoadBoard(root string) (Board, error) {
-	board, err := Scan(root)
+	return LoadBoardWithWarnings(root, nil)
+}
+
+// LoadBoardWithWarnings also collects invalid-entry advisories for callers that
+// own presentation. A nil log preserves the CLI's stderr output.
+func LoadBoardWithWarnings(root string, warnings *WarningLog) (Board, error) {
+	board, err := ScanWithWarnings(root, warnings)
 	if err != nil {
 		return Board{}, err
 	}
 	if len(board.Problems) > 0 {
 		n := len(board.Problems)
-		os.Stderr.WriteString(t(
+		journalWarning(strings.TrimSuffix(t(
 			"board.kander_warning_ignored_invalid_entries_run_kander_check_for", strconv.Itoa(n),
-		))
+		), "\n"), warnings)
 	}
 	return board, nil
 }

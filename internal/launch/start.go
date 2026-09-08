@@ -21,7 +21,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if taskID == "" {
 		return result, launchError("launch.task_id_is_required")
 	}
-	loaded, err := loadBoardFn(root)
+	var warnings board.WarningLog
+	defer func() { result.Warnings = append(warnings.Messages(), result.Warnings...) }()
+	loaded, err := board.LoadBoardWithWarnings(root, &warnings)
 	if err != nil {
 		return result, err
 	}
@@ -154,6 +156,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 
 // StartPreview contains read-only defaults for a start confirmation.
 type StartPreview struct {
+	Warnings []string
 	TaskID   string
 	State    string
 	Size     string
@@ -163,8 +166,10 @@ type StartPreview struct {
 
 // PreviewStart resolves task size, configured agent and launcher without claiming
 // a task, allocating a session or creating a terminal container.
-func PreviewStart(root, taskID string) (StartPreview, error) {
-	snapshot, err := board.ReadSnapshot(root, taskID)
+func PreviewStart(root, taskID string) (preview StartPreview, err error) {
+	var warnings board.WarningLog
+	defer func() { preview.Warnings = warnings.Messages() }()
+	snapshot, err := board.ReadSnapshotWithWarnings(root, taskID, &warnings)
 	if err != nil {
 		return StartPreview{}, err
 	}

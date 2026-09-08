@@ -35,6 +35,8 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <user-
 
 POSIX 以 flock 实现共享/独占; Windows 以 LockFileEx 实现, 新锁和控制文件通过 internal/fs 在创建时获得私有权限/DACL. 路径逐分量验证, 锁句柄持有到提交/读取结束. 异步 Agent/终端操作不长时间占用文件锁.
 
+`ScanWithWarnings` / `ReadSnapshotWithWarnings` 接受操作级 `WarningLog`，将日志提示收集为去重消息，不在持锁时执行外部回调。返回 Entry 的版本游标继续携带该日志，后续读取、启动迁移、元数据回写、成功原件和失败回滚使用同一收集器。默认入口保持 CLI stderr 提示；BoardPayload/TaskPayload 通过可选 `warnings` 字段、launch Start/PreviewStart 通过 Warnings 返回消息，由 TUI 通知栏、确认框及 pendingWork 的结果展示，后台调用不直接写终端。
+
 `board.ReadSnapshot(root,id)` 返回一致正文、位置、版本. `Scan`/`ScanTargets` 返回带操作局部版本游标的 Entry; `ReadDocument` 拒绝失效 Entry. `MoveEntry` 和 window 的兼容函数保留调用形式, 但写入要求有效 Entry 版本游标; 手工构造 Entry 不构成写入授权.
 
 `board.WithTransaction(root, LockScope, callback)` 是多文件生产者入口. LockScope 一次声明 Tasks、Groups、ExclusiveBoard、ReadOnly. callback 内只使用 Transaction 方法, 不嵌套调用会重新取得锁的 board API:

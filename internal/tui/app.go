@@ -191,6 +191,7 @@ func (a *App) refreshBoard() bool {
 		return a.Model.RefreshError != previous
 	}
 	changed := a.Model.SetBoard(payload)
+	a.showJournalWarnings(payload.Warnings)
 	a.LastRefresh = a.Now()
 	return changed || a.refreshOpenDetail()
 }
@@ -219,6 +220,7 @@ func (a *App) refreshOpenDetail() bool {
 		a.Detail.TaskGroup != next.TaskGroup ||
 		a.Detail.Type != next.Type
 	a.Detail = &next
+	a.showJournalWarnings(next.Warnings)
 	a.clampDetailCursor()
 	matches := a.detailMatches(nil)
 	if len(matches) > 0 && a.DetailMatchIndex > len(matches)-1 {
@@ -240,6 +242,7 @@ func (a *App) openDetail() {
 		return
 	}
 	a.Detail = &task
+	a.showJournalWarnings(task.Warnings)
 	a.DetailScroll = 0
 	a.DetailCursor = [2]int{0, 0}
 	a.resetDetailSearch()

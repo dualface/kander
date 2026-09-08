@@ -7,6 +7,12 @@ import (
 // Scan reads a coordinated committed view with blocking lock acquisition.
 func Scan(root string) (Board, error) { return ScanContext(context.Background(), root) }
 
+// ScanWithWarnings captures a board and routes journal advisories to the log.
+// Entries retain this operation-local log through their version cursors.
+func ScanWithWarnings(root string, warnings *WarningLog) (Board, error) {
+	return scanContext(context.Background(), root, nil, false, warnings)
+}
+
 // ScanTargets reads only selected identities with blocking lock acquisition.
 func ScanTargets(root string, values []string) (Board, error) {
 	return ScanTargetsContext(context.Background(), root, values)
@@ -19,7 +25,7 @@ func ReadDocument(entry Entry) (string, error) {
 		entry.Version.mu.Lock()
 		defer entry.Version.mu.Unlock()
 	}
-	s, err := ReadSnapshot(boardRootFromEntry(entry), entry.TaskID)
+	s, err := ReadSnapshotWithWarnings(boardRootFromEntry(entry), entry.TaskID, entryWarningLog(entry))
 	if err != nil {
 		return "", err
 	}
@@ -46,7 +52,7 @@ func managedMutation(root string, entry Entry, text, state string) error {
 	}
 	entry.Version.mu.Lock()
 	defer entry.Version.mu.Unlock()
-	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State}, func(tx *Transaction) error {
+	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
 		s, err := tx.Expect(entry.TaskID, entry.State, entry.Version.revision)
 		if err != nil {
 			return err
@@ -111,11 +117,12 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 	}
 	scope := LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: true}
 	if target == "done" {
-		scope, err = reviewGateScope(root, entry.TaskID, true)
+		scope, err = reviewGateScope(root, entry.TaskID, true, entryWarningLog(entry))
 		if err != nil {
 			return moved, err
 		}
 	}
+	scope.warnings = entryWarningLog(entry)
 	err = WithTransaction(root, scope, func(tx *Transaction) error {
 		s, e := tx.Snapshot(entry.TaskID)
 		if e != nil {
@@ -169,7 +176,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if moved.IsDirectory() {
 			moved.Document = joinBoard(moved.Path, "spec.md")
 		}
-		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated)}
+		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry)}
 		return nil
 	})
 	return moved, err

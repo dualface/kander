@@ -59,6 +59,7 @@ func acquireContext(ctx context.Context, root string, scope LockScope) (locks lo
 // is board, sorted groups, sorted tasks, then the short-lived journal lock.
 // Migration requires ExclusiveBoard.
 type LockScope struct {
+	warnings       *WarningLog
 	Groups         []string
 	Tasks          []string
 	ExclusiveBoard bool

@@ -66,7 +66,7 @@ func readJournalRecord(root string, file journalFile) (r OperationRecord, err er
 	return r, nil
 }
 
-func readPendingRecords(root string) ([]OperationRecord, error) {
+func readPendingRecords(root string, warnings ...*WarningLog) ([]OperationRecord, error) {
 	files, err := journalFiles(root)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func readPendingRecords(root string) ([]OperationRecord, error) {
 		}
 	}
 	if legacy {
-		_, _ = os.Stderr.WriteString(t("board.journal_legacy") + "\n")
+		journalWarning(t("board.journal_legacy"), warnings...)
 	}
 	for _, file := range files {
 		if file.partition == "committed" {
@@ -158,7 +158,7 @@ func partitionJournalWithCheckpoint(root string, records []OperationRecord, opti
 	return err
 }
 
-func commitOperation(root, path string, record *OperationRecord, checkpoint func(string) error) error {
+func commitOperation(root, path string, record *OperationRecord, checkpoint func(string) error, warnings ...*WarningLog) error {
 	return withJournalLock(root, false, func() error {
 		record.Phase = "committed"
 		if err := writeJSON(root, path, record, true); err != nil {
@@ -173,7 +173,7 @@ func commitOperation(root, path string, record *OperationRecord, checkpoint func
 				return err
 			}
 		}
-		warnJournalCleanup(pruneCommitted(root, checkpoint))
+		warnJournalCleanup(pruneCommitted(root, checkpoint), warnings...)
 		return nil
 	})
 }

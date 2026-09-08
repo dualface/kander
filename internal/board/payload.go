@@ -8,23 +8,25 @@ import (
 
 // TaskSummary is the task digest used by tui; its fields match the onevoke payload.
 type TaskSummary struct {
-	TaskID      string `json:"task_id"`
-	Title       string `json:"title"`
-	State       string `json:"state"`
-	Kind        string `json:"kind"`
-	Type        string `json:"type"`
-	TaskGroup   string `json:"task_group"`
-	Assignee    string `json:"assignee"`
-	CreatedAt   string `json:"created_at"`
-	StartedAt   string `json:"started_at"`
-	CompletedAt string `json:"completed_at"`
-	Time        string `json:"time"`
-	Result      string `json:"result"`
-	Document    string `json:"document,omitempty"`
+	Warnings    []string `json:"warnings,omitempty"`
+	TaskID      string   `json:"task_id"`
+	Title       string   `json:"title"`
+	State       string   `json:"state"`
+	Kind        string   `json:"kind"`
+	Type        string   `json:"type"`
+	TaskGroup   string   `json:"task_group"`
+	Assignee    string   `json:"assignee"`
+	CreatedAt   string   `json:"created_at"`
+	StartedAt   string   `json:"started_at"`
+	CompletedAt string   `json:"completed_at"`
+	Time        string   `json:"time"`
+	Result      string   `json:"result"`
+	Document    string   `json:"document,omitempty"`
 }
 
 // BoardView is the read-only board JSON consumed by tui.
 type BoardView struct {
+	Warnings    []string      `json:"warnings,omitempty"`
 	GeneratedAt string        `json:"generated_at"`
 	Root        string        `json:"root"`
 	Tasks       []TaskSummary `json:"tasks"`
@@ -95,9 +97,11 @@ func sortTaskSummaries(tasks []TaskSummary) {
 	})
 }
 
-// BoardPayload builds the payload from Scan, bypassing LoadBoard so no check warning is printed to the terminal.
+// BoardPayload returns journal advisories in the display payload; ordinary
+// invalid-entry check warnings stay suppressed, and nothing prints to the terminal.
 func BoardPayload(root string) (BoardView, error) {
-	scanned, err := Scan(root)
+	var warnings WarningLog
+	scanned, err := ScanWithWarnings(root, &warnings)
 	if err != nil {
 		return BoardView{}, err
 	}
@@ -111,6 +115,7 @@ func BoardPayload(root string) (BoardView, error) {
 	}
 	sortTaskSummaries(tasks)
 	return BoardView{
+		Warnings:    warnings.Messages(),
 		GeneratedAt: time.Now().Format("2006-01-02 15:04:05"),
 		Root:        root,
 		Tasks:       tasks,
@@ -119,7 +124,8 @@ func BoardPayload(root string) (BoardView, error) {
 
 // TaskPayload returns one card digest plus its body, also via Scan.
 func TaskPayload(root, taskID string) (TaskSummary, error) {
-	scanned, err := Scan(root)
+	var warnings WarningLog
+	scanned, err := ScanWithWarnings(root, &warnings)
 	if err != nil {
 		return TaskSummary{}, err
 	}
@@ -133,5 +139,6 @@ func TaskPayload(root, taskID string) (TaskSummary, error) {
 	}
 	summary := TaskSummaryOf(entry, text)
 	summary.Document = text
+	summary.Warnings = warnings.Messages()
 	return summary, nil
 }

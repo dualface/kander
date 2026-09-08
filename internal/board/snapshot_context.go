@@ -45,7 +45,7 @@ func (locks *lockSet) takeSharedContext(ctx context.Context, root, path string) 
 	return nil
 }
 
-func scanContext(ctx context.Context, root string, ids []string, dispatches bool) (b Board, err error) {
+func scanContext(ctx context.Context, root string, ids []string, dispatches bool, warnings ...*WarningLog) (b Board, err error) {
 	if err = ctx.Err(); err != nil {
 		return b, err
 	}
@@ -83,7 +83,7 @@ func scanContext(ctx context.Context, root string, ids []string, dispatches bool
 	if err = journal.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
 		return b, err
 	}
-	records, readErr := readPendingRecords(root)
+	records, readErr := readPendingRecords(root, warnings...)
 	if err = errors.Join(readErr, journal.close()); err != nil {
 		return b, err
 	}
@@ -128,7 +128,7 @@ func scanContext(ctx context.Context, root string, ids []string, dispatches bool
 			entry = attachSize(entry, text)
 		}
 		b.revisions[id] = version
-		entry.Version = &Version{revision: version, authorization: authFrom(text)}
+		entry.Version = &Version{revision: version, authorization: authFrom(text), warnings: journalWarningLog(warnings)}
 		b.Entries[id] = entry
 		if dispatches && e == nil {
 			tx := &Transaction{root: root, scope: LockScope{Tasks: selected, ReadOnly: true}}

@@ -30,13 +30,13 @@ func safeRecordPath(root, path string) (string, error) {
 	}
 	return filepath.Join(root, path), nil
 }
-func applyRecord(root, path string, r *OperationRecord) error {
-	return applyRecordWithCheckpoint(root, path, r, func(string) error { return nil })
+func applyRecord(root, path string, r *OperationRecord, warnings ...*WarningLog) error {
+	return applyRecordWithCheckpoint(root, path, r, func(string) error { return nil }, warnings...)
 }
 
 // applyRecordWithCheckpoint exposes persisted boundaries for interruption tests;
 // the normal publisher uses a no-op checkpoint and the same filesystem steps.
-func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint func(string) error) error {
+func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint func(string) error, warnings ...*WarningLog) error {
 	if err := checkpoint("prepared"); err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint
 	if err := checkpoint("revision"); err != nil {
 		return err
 	}
-	if err := commitOperation(root, path, r, checkpoint); err != nil {
+	if err := commitOperation(root, path, r, checkpoint, warnings...); err != nil {
 		return err
 	}
 	return checkpoint("committed")

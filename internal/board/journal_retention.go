@@ -2,7 +2,6 @@ package board
 
 import (
 	"errors"
-	"os"
 	"sort"
 	"time"
 
@@ -13,9 +12,9 @@ import (
 // storage and metadata scans. Migration staging evidence is retained separately.
 const committedJournalRetention = 100
 
-func warnJournalCleanup(err error) {
+func warnJournalCleanup(err error, warnings ...*WarningLog) {
 	if err != nil {
-		_, _ = os.Stderr.WriteString(t("board.journal_cleanup_warning", err.Error()) + "\n")
+		journalWarning(t("board.journal_cleanup_warning", err.Error()), warnings...)
 	}
 }
 

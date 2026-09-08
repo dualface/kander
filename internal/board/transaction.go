@@ -15,6 +15,7 @@ import (
 // Version is an operation-local cursor. Copies of an Entry share the cursor only
 // within that operation; a new snapshot always receives a separate cursor.
 type Version struct {
+	warnings      *WarningLog
 	mu            sync.Mutex
 	revision      uint64
 	authorization ExecutionAuthorization
@@ -95,7 +96,7 @@ func withTransaction(ctx context.Context, root string, scope LockScope, fn func(
 		return err
 	}
 	defer func() { err = errors.Join(err, locks.close()) }()
-	if err = pendingContext(ctx, root, append(append([]string(nil), scope.Tasks...), scope.Groups...)); err != nil {
+	if err = pendingContext(ctx, root, append(append([]string(nil), scope.Tasks...), scope.Groups...), scope.warnings); err != nil {
 		return err
 	}
 	id, err := operationID()
@@ -141,7 +142,7 @@ func withTransaction(ctx context.Context, root string, scope LockScope, fn func(
 	if err = writeOperation(root, path, tx.record, false); err != nil {
 		return err
 	}
-	return applyRecord(root, path, &tx.record)
+	return applyRecord(root, path, &tx.record, scope.warnings)
 }
 func (tx *Transaction) owns(id string) bool {
 	for _, v := range tx.scope.Tasks {
@@ -192,7 +193,7 @@ func (tx *Transaction) Snapshot(id string) (Snapshot, error) {
 			return Snapshot{}, err
 		}
 	}
-	e.Version = &Version{revision: v, authorization: authFrom(text)}
+	e.Version = &Version{revision: v, authorization: authFrom(text), warnings: tx.scope.warnings}
 	last, err := readVersion(tx.root, id)
 	if err != nil {
 		return Snapshot{}, err
@@ -349,12 +350,19 @@ func (tx *Transaction) Relocate(id, state string) error {
 }
 
 // ReadSnapshot provides show/update clients an atomic body, location and revision.
-func ReadSnapshot(root, id string) (s Snapshot, err error) {
+func ReadSnapshot(root, id string) (Snapshot, error) {
+	return ReadSnapshotWithWarnings(root, id, nil)
+}
+
+// ReadSnapshotWithWarnings routes journal advisories to the operation log.
+// The returned Entry retains the log for subsequent reads, moves and writes.
+// A nil log preserves the CLI's stderr presentation.
+func ReadSnapshotWithWarnings(root, id string, warnings *WarningLog) (s Snapshot, err error) {
 	id, err = NormalizeTaskID(id)
 	if err != nil {
 		return s, err
 	}
-	err = WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true}, func(tx *Transaction) error { var e error; s, e = tx.Snapshot(id); return e })
+	err = WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true, warnings: warnings}, func(tx *Transaction) error { var e error; s, e = tx.Snapshot(id); return e })
 	return s, err
 }
 

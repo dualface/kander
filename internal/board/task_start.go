@@ -129,7 +129,7 @@ func ConfirmTaskStart(root string, entry Entry) error {
 	}
 	entry.Version.mu.Lock()
 	defer entry.Version.mu.Unlock()
-	return WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}}, func(tx *Transaction) error {
+	return WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
 		a, exists, err := readTaskStart(tx, entry.TaskID, "")
 		if err != nil {
 			return err

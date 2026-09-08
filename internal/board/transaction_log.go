@@ -44,12 +44,12 @@ func pending(root string, ids []string) error {
 	return pendingContext(nil, root, ids)
 }
 
-func pendingContext(ctx context.Context, root string, ids []string) error {
+func pendingContext(ctx context.Context, root string, ids []string, warnings ...*WarningLog) error {
 	var records []OperationRecord
 	var err error
 	if ctx == nil {
 		err = withJournalLock(root, true, func() error {
-			records, err = readPendingRecords(root)
+			records, err = readPendingRecords(root, warnings...)
 			return err
 		})
 	} else {
@@ -57,7 +57,7 @@ func pendingContext(ctx context.Context, root string, ids []string) error {
 		if err = locks.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
 			return err
 		}
-		records, err = readPendingRecords(root)
+		records, err = readPendingRecords(root, warnings...)
 		err = errors.Join(err, locks.close())
 	}
 	if err != nil {
