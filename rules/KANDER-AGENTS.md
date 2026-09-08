@@ -6,14 +6,18 @@ This entry only locates and loads rules on demand; it does not take over the dev
 
 The directory containing this file is the "rules root". It determines the scope and the paths below:
 
-| Logical name  | Global install                 | Project install                     |
-| ------------- | ------------------------------ | ----------------------------------- |
-| Rules root    | `~/.agents`                    | `<main worktree>/.kander/rules`     |
-| Command root  | `~/.local/bin`                 | `<main worktree>/.kander/bin`       |
-| Config file   | `~/.config/kander/config.json` | `<main worktree>/.kander/config.json` |
-| Share dir     | `~/.local/share/kander`        | `<main worktree>/.kander/share`     |
+| Logical name    | Global install                 | Project install                     |
+| --------------- | ------------------------------ | ----------------------------------- |
+| Rules root      | `~/.agents`                    | `<main worktree>/.kander/rules`     |
+| Command root    | `~/.local/bin`                 | `<main worktree>/.kander/bin`       |
+| Config file     | `~/.config/kander/config.json` | `<main worktree>/.kander/config.json` |
+| Share dir       | `~/.local/share/kander`        | `<main worktree>/.kander/share`     |
+| Project overlay | `<main worktree>/.kander-config.json` (non-Git: first file found walking up from cwd) | same |
 
-- All settings live in the config file.
+- Scope settings live in the config file. An optional project overlay is merged on top at read time.
+- Runtime priority is project overlay > scope config (`KANDER_CONFIG` or the install-scope `config.json`) > defaults.
+- Writes (`Save`, `Update`, `kander doctor` repair, the options panel, and the installer) only update the scope `config.json`. Overlay values are never written back.
+- The overlay may set `agents` executable paths and argv templates. That is accepted at the same trust level as checking out and running the repository's own code.
 - A project install keeps its payload only in the main worktree's `.kander/`; task worktrees share it and create no copies, mirrors, or symlinks.
 - Below and in every rule file, `kander` means the entry of the current scope. A global install may use the absolute path under the command root or a `kander` already on PATH; a project install must use the absolute path `<command root>/kander` (`<command root>\kander` on Windows) and must not substitute a global command from PATH.
 

@@ -2,6 +2,8 @@
 
 The optional `agents` object in `config.json` is keyed by agent name. The built-in names are `codex`, `claude`, `grok`, and `cursor`. A new name starts with a lowercase letter, is at most 64 characters, and contains only lowercase letters, digits, `_`, and `-`. When this section is not configured, the existing parameters and configuration output remain unchanged.
 
+A project may also commit `.kander-config.json` at the Git main worktree root (or, outside Git, the first file of that name found walking up from the current directory). Its keys overlay the scope `config.json` at runtime, including `agents` executable paths and argv templates. That is accepted at the same trust level as checking out and running the repository. Writes still only update the scope config file.
+
 ## Executable Name and Process Name
 
 ```json

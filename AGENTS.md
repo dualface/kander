@@ -25,7 +25,7 @@ This file is the development contract for the Kander repository itself. The work
 | Package             | Responsibility                                                       |
 | ------------------- | -------------------------------------------------------------------- |
 | `internal/cli`      | Command-name and Runner registry, global `--lang`, argument parsing and dispatch |
-| `internal/config`   | Install scopes, `config.json` schema/repair, read access for language/agent language/launcher/agents/models/rules/TUI |
+| `internal/config`   | Install scopes, optional project `.kander-config.json` overlay merge, `config.json` schema/repair, read access for language/agent language/launcher/agents/models/rules/TUI |
 | `internal/version`  | Unified version number built from the build timestamp and Git hash    |
 | `internal/i18n`     | go-i18n message catalogs and template rendering; does not depend on config, the language is passed in by the caller |
 | `internal/fs`       | POSIX no-follow and Windows handle/reparse/DACL/shared and exclusive locks |
