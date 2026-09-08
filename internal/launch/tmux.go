@@ -243,6 +243,12 @@ func tmuxLaunch(tmux, session string, create bool, cwd, name string) cmdResult {
 }
 
 func tmuxStartPane(tmux, pane, command string) error {
+	if !runtimeWindows() {
+		// tmux may wrap the command in default-shell -c. Shells such as dash
+		// do not optimize the last command into exec, leaving the shell as
+		// pane_current_command and breaking agent liveness checks.
+		command = "exec " + command
+	}
 	res := tmuxCapture(tmux, "respawn-pane", "-k", "-t", pane, command)
 	if res.Code != 0 {
 		detail := strings.TrimSpace(res.Stderr)

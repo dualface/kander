@@ -104,8 +104,8 @@ func TestLaunchAgentSendsShellSpecificCommandToHerdr(t *testing.T) {
 	if _, err := launchAgent(plan, filepath.Join(t.TempDir(), "kanban"), "tab-label", invocation, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := readRunLog(t, log); strings.HasPrefix(got, "$env:") || strings.Contains(got, "& '") {
-		t.Fatalf("posix command must not use PowerShell syntax: %q", got)
+	if got, want := readRunLog(t, log), posixJoin(invocation.Argv); got != want {
+		t.Fatalf("posix herdr command\n got %q\nwant %q", got, want)
 	}
 }
 
