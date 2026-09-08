@@ -570,14 +570,15 @@ func TestExecutionModelInputSavesWhenAgentsMatch(t *testing.T) {
 func TestReviewModelInputSavesPMRole(t *testing.T) {
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReview))
-	if len(panel.bind.formFields) < 3 {
-		t.Fatal("review section should have reviewer, stage, and model fields")
+	if len(panel.bind.formFields) < 4 {
+		t.Fatal("review section should have reviewer, two scale stages, and model fields")
 	}
 	before := panel.session.Config.Models.ReviewRoles["PM"]["model"]
 	drivePanel(panel, keyMsg("down"))
 	drivePanel(panel, keyMsg("down"))
-	if panel.form.GetFocusedField() != panel.bind.formFields[2] {
-		t.Fatal("two downs should focus the PM model input")
+	drivePanel(panel, keyMsg("down"))
+	if panel.form.GetFocusedField() != panel.bind.formFields[3] {
+		t.Fatal("three downs should focus the PM model input after the two scale stages")
 	}
 	typeRune(panel, 'X')
 	want := before + "X"
@@ -595,6 +596,34 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
 	}
 	if got := loaded.Models.ReviewRoles["PM"]["model"]; got != want {
 		t.Fatalf("disk PM model=%q want %q", got, want)
+	}
+}
+
+func TestReviewStagePerScaleSaves(t *testing.T) {
+	_, panel := openPanel(t)
+	pumpPanel(panel, panel.dispatch(sectionReview))
+	before, err := config.ReviewStageFor(panel.session.Config, "large", "PM")
+	if err != nil {
+		t.Fatal(err)
+	}
+	drivePanel(panel, keyMsg("down"))
+	drivePanel(panel, keyMsg("right"))
+	after, err := config.ReviewStageFor(panel.session.Config, "large", "PM")
+	if err != nil || after == before {
+		t.Fatalf("large PM stage did not change: %s -> %s (%v)", before, after, err)
+	}
+	small, err := config.ReviewStageFor(panel.session.Config, "small", "PM")
+	if err != nil || small != before {
+		t.Fatalf("small PM stage changed unexpectedly: %s (%v)", small, err)
+	}
+	drivePanel(panel, keyMsg("enter"))
+	loaded, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := config.ReviewStageFor(loaded, "large", "PM")
+	if err != nil || got != after {
+		t.Fatalf("disk large PM=%s want %s (%v)", got, after, err)
 	}
 }
 

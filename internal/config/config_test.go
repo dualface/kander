@@ -649,9 +649,11 @@ func TestCursorRejectsUnknownModelFields(t *testing.T) {
 func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 	setupHome(t)
 	stages := DefaultReviewStages()
-	for _, role := range ReviewRoles {
-		if stages[role] != "auto" {
-			t.Fatalf("%s=%s", role, stages[role])
+	for _, scale := range TaskScales {
+		for _, role := range ReviewRoles {
+			if stages[scale][role] != "auto" {
+				t.Fatalf("%s.%s=%s", scale, role, stages[scale][role])
+			}
 		}
 	}
 	payload := map[string]any{
@@ -665,9 +667,11 @@ func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, role := range ReviewRoles {
-		if validated.ReviewStages[role] != "auto" {
-			t.Fatalf("%s=%s", role, validated.ReviewStages[role])
+	for _, scale := range TaskScales {
+		for _, role := range ReviewRoles {
+			if validated.ReviewStages[scale][role] != "auto" {
+				t.Fatalf("%s.%s=%s", scale, role, validated.ReviewStages[scale][role])
+			}
 		}
 	}
 	payload["review_stages"] = map[string]any{"PM": "required", "CSA": "skip", "Hacker": "skip", "QA": "auto"}
@@ -675,7 +679,7 @@ func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validated.ReviewStages["CSA"] != "skip" {
+	if validated.ReviewStages["large"]["CSA"] != "skip" || validated.ReviewStages["small"]["CSA"] != "skip" {
 		t.Fatal(validated.ReviewStages)
 	}
 	payload["review_stages"] = map[string]any{"PM": "always"}
@@ -918,13 +922,15 @@ func TestFormatConfigLinesAndReviewHelpers(t *testing.T) {
 	}
 	complete := DefaultConfig()
 	complete.WelcomeComplete = true
-	complete.ReviewStages["CSA"] = "skip"
-	complete.ReviewStages["PM"] = "required"
+	complete.ReviewStages["large"]["CSA"] = "skip"
+	complete.ReviewStages["large"]["PM"] = "required"
+	complete.ReviewStages["small"]["CSA"] = "skip"
+	complete.ReviewStages["small"]["PM"] = "required"
 	stageLines, err := ReviewStageLines(complete)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(stageLines, " ") != "required skip auto auto" {
+	if strings.Join(stageLines, " ") != "required skip auto auto required skip auto auto" {
 		t.Fatalf("%v", stageLines)
 	}
 	modelLines, err := ReviewModelLines(complete, "codex")

@@ -149,10 +149,7 @@ func (s *Session) prepare(configValid bool) error {
 	s.normalizeLauncher(cfg)
 	cfg.TUI = s.existing.TUI
 	cfg.Rules = s.existing.Rules.Clone()
-	cfg.ReviewStages = map[string]string{}
-	for k, v := range s.existing.ReviewStages {
-		cfg.ReviewStages[k] = v
-	}
+	cfg.ReviewStages = cloneReviewStages(s.existing.ReviewStages)
 	if configValid {
 		if stored := config.ConfiguredLanguage(); stored != "" {
 			cfg.Language = stored
@@ -225,9 +222,15 @@ func (s *Session) SetReviewer(role, agent string) {
 	s.Config.Reviewers[role] = agent
 }
 
-// SetReviewStage sets the default stage policy of one review role.
-func (s *Session) SetReviewStage(role, mode string) {
-	s.Config.ReviewStages[role] = mode
+// SetReviewStage sets the stage policy of one review role for one task scale.
+func (s *Session) SetReviewStage(scale, role, mode string) {
+	if s.Config.ReviewStages == nil {
+		s.Config.ReviewStages = map[string]map[string]string{}
+	}
+	if s.Config.ReviewStages[scale] == nil {
+		s.Config.ReviewStages[scale] = map[string]string{}
+	}
+	s.Config.ReviewStages[scale][role] = mode
 }
 
 // SetLanguage sets the default output language and applies it immediately.
@@ -562,7 +565,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.KanbanAgent = existing.KanbanAgent
 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)
 	cfg.Reviewers = cloneStrings(existing.Reviewers)
-	cfg.ReviewStages = cloneStrings(existing.ReviewStages)
+	cfg.ReviewStages = cloneReviewStages(existing.ReviewStages)
 	cfg.Rules = existing.Rules.Clone()
 	cfg.Launcher = existing.Launcher
 	cfg.TUI = existing.TUI
@@ -576,6 +579,14 @@ func cloneStrings(src map[string]string) map[string]string {
 	out := make(map[string]string, len(src))
 	for k, v := range src {
 		out[k] = v
+	}
+	return out
+}
+
+func cloneReviewStages(src map[string]map[string]string) map[string]map[string]string {
+	out := make(map[string]map[string]string, len(src))
+	for scale, roles := range src {
+		out[scale] = cloneStrings(roles)
 	}
 	return out
 }

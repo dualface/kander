@@ -138,8 +138,32 @@ func repairValues(raw any) (*Config, error) {
 		return nil, err
 	}
 	root, _ := asObject(decoded)
+	fillMissingReviewStageScales(provided)
 	recoverConfigFields(root, provided, root)
 	return Validate(root)
+}
+
+// fillMissingReviewStageScales copies the present scale onto a missing one so
+// doctor preserves a one-sided review_stages object instead of replacing the
+// gap with defaults. Both missing keeps the encoded defaults.
+func fillMissingReviewStageScales(provided map[string]any) {
+	raw, exists := provided["review_stages"]
+	if !exists {
+		return
+	}
+	normalized, err := NormalizeReviewStages(raw)
+	if err != nil {
+		return
+	}
+	large, hasLarge := asObject(normalized["large"])
+	small, hasSmall := asObject(normalized["small"])
+	switch {
+	case hasLarge && !hasSmall:
+		normalized["small"] = cloneRawObject(large)
+	case hasSmall && !hasLarge:
+		normalized["large"] = cloneRawObject(small)
+	}
+	provided["review_stages"] = normalized
 }
 
 // A wholly valid section is accepted as is; otherwise it is restored key by key from the default schema, and validation always goes through Validate.

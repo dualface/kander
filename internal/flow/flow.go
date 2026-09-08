@@ -38,25 +38,34 @@ func Build(cfg *config.Config) []Line {
 		return lines
 	}
 	active := false
-	for index, roles := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
-		stageAdded := false
-		for _, role := range roles {
-			mode := cfg.ReviewStages[role]
-			if mode == "skip" {
-				continue
-			}
-			if !stageAdded {
-				key := "stage_one"
-				if index == 1 {
-					key = "stage_two"
+	for _, scale := range config.TaskScales {
+		var scaleLines []Line
+		for index, roles := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
+			stageAdded := false
+			for _, role := range roles {
+				mode, err := config.ReviewStageFor(cfg, scale, role)
+				if err != nil || mode == "skip" {
+					continue
 				}
-				add(Note, key)
-				stageAdded, active = true, true
+				if !stageAdded {
+					key := "stage_one"
+					if index == 1 {
+						key = "stage_two"
+					}
+					scaleLines = append(scaleLines, Line{Kind: Note, Key: "flow." + key})
+					stageAdded = true
+				}
+				agent := cfg.Reviewers[role]
+				model, _ := config.ReviewModelFor(cfg, agent, role)
+				scaleLines = append(scaleLines, Line{Kind: Assignment, Key: "flow.role_" + mode, Args: []any{role, agent, model}})
 			}
-			agent := cfg.Reviewers[role]
-			model, _ := config.ReviewModelFor(cfg, agent, role)
-			add(Assignment, "role_"+mode, role, agent, model)
 		}
+		if len(scaleLines) == 0 {
+			continue
+		}
+		add(Note, "review_"+scale)
+		lines = append(lines, scaleLines...)
+		active = true
 	}
 	if !active {
 		add(Note, "review_none")

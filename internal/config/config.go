@@ -175,19 +175,19 @@ type TUI struct {
 
 // Config is the schema-validated configuration.
 type Config struct {
-	SchemaVersion   int                        `json:"schema_version"`
-	WelcomeComplete bool                       `json:"welcome_complete"`
-	KanbanAgent     string                     `json:"kanban_agent"`
-	KanbanAgents    map[string]string          `json:"kanban_agents"`
-	Launcher        string                     `json:"launcher"`
-	Reviewers       map[string]string          `json:"reviewers"`
-	ReviewStages    map[string]string          `json:"review_stages"`
-	Rules           Rules                      `json:"rules"`
-	Models          Models                     `json:"models"`
-	TUI             TUI                        `json:"tui"`
-	Language        string                     `json:"language"`
-	AgentLanguage   string                     `json:"agent_language"`
-	Agents          map[string]AgentDefinition `json:"agents,omitempty"`
+	SchemaVersion   int                          `json:"schema_version"`
+	WelcomeComplete bool                         `json:"welcome_complete"`
+	KanbanAgent     string                       `json:"kanban_agent"`
+	KanbanAgents    map[string]string            `json:"kanban_agents"`
+	Launcher        string                       `json:"launcher"`
+	Reviewers       map[string]string            `json:"reviewers"`
+	ReviewStages    map[string]map[string]string `json:"review_stages"`
+	Rules           Rules                        `json:"rules"`
+	Models          Models                       `json:"models"`
+	TUI             TUI                          `json:"tui"`
+	Language        string                       `json:"language"`
+	AgentLanguage   string                       `json:"agent_language"`
+	Agents          map[string]AgentDefinition   `json:"agents,omitempty"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -199,7 +199,7 @@ func Clone(src *Config) *Config {
 	out.Agents = CloneAgents(src.Agents)
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
 	out.Reviewers = cloneStringMap(src.Reviewers)
-	out.ReviewStages = cloneStringMap(src.ReviewStages)
+	out.ReviewStages = cloneNested(src.ReviewStages)
 	out.Rules = src.Rules.Clone()
 	out.Models = Models{
 		Kanban:      cloneNested(src.Models.Kanban),
@@ -269,14 +269,6 @@ func ReviewModelFor(cfg *Config, agent, role string) (model, effort string) {
 		effort = agentEntry["effort"]
 	}
 	return model, effort
-}
-
-func DefaultReviewStages() map[string]string {
-	out := make(map[string]string, len(ReviewRoles))
-	for _, role := range ReviewRoles {
-		out[role] = "auto"
-	}
-	return out
 }
 
 func DefaultLauncher() string {
@@ -479,40 +471,6 @@ func ExecutionAgentsInUse(cfg *Config) []string {
 		out = append(out, agent)
 	}
 	return out
-}
-
-func validateReviewStages(raw any) (map[string]string, error) {
-	obj, ok := raw.(map[string]any)
-	if !ok {
-		return nil, configErrorf("config.review_stages_must_be_a_json_object")
-	}
-	stages := DefaultReviewStages()
-	allowed := map[string]struct{}{}
-	for _, role := range ReviewRoles {
-		allowed[role] = struct{}{}
-	}
-	var unknown []string
-	for key := range obj {
-		if _, ok := allowed[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
-	if len(unknown) > 0 {
-		return nil, configErrorf(
-			"config.review_stages_has_unknown_roles", strings.Join(sorted(unknown), ", "),
-		)
-	}
-	for _, role := range ReviewRoles {
-		if _, exists := obj[role]; !exists {
-			continue
-		}
-		mode, err := validateChoice(obj[role], ReviewStageModes, "review_stages."+role)
-		if err != nil {
-			return nil, err
-		}
-		stages[role] = mode
-	}
-	return stages, nil
 }
 
 func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models, error) {
@@ -750,7 +708,7 @@ func Validate(raw any) (*Config, error) {
 		}
 		reviewers[role] = agent
 	}
-	var stages map[string]string
+	var stages map[string]map[string]string
 	if _, exists := obj["review_stages"]; exists {
 		stages, err = validateReviewStages(obj["review_stages"])
 		if err != nil {
