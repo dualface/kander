@@ -59,22 +59,20 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 func (a *App) renderStartDialog(paragraphs []string, hint string) (popupBox, string) {
 	h, w := a.size()
 	p := themePalette(a.Theme)
-	title := t("tui.start_confirm")
 	clean := func(s string) string { return printableText(ansi.Strip(s)) }
 	for i := range paragraphs {
 		paragraphs[i] = clean(paragraphs[i])
 	}
-	inner := max(1, min(w-8, max(40, blockWidth(strings.Join(paragraphs, "\n")+"\n"+hint))))
-	inner = max(1, centerOptionsPopup(w, h, inner+4, 5).Width-4)
-	title = ansi.Wrap(clean(title), inner, "")
+	frame := popup{TightFit: true}
+	inner := frame.inner(w, h, max(1, min(w-8, max(40, blockWidth(strings.Join(paragraphs, "\n")+"\n"+hint)))))
+	// The hint rides inside the body rather than in the frame: it moves up against the paragraphs
+	// when the dialog runs out of height, which the plain hint row cannot do.
+	frame.Title = ansi.Wrap(clean(t("tui.start_confirm")), inner, "")
 	hint = ansi.Wrap(clean(hint), inner, "")
-	available := max(1, h-blockHeight(title)-3)
+	available := max(1, h-blockHeight(frame.Title)-3)
 	body := fitStartDialog(paragraphs, hint, inner, available, p, &a.StartConfirmation.bodyView)
-	box := centerOptionsPopup(w, h, inner+4, blockHeight(title)+blockHeight(body)+3)
-	content := styleFor("popup-title", p).Render(title) + "\n" +
-		styleFor("popup-edge", p).Render(strings.Repeat("─", inner)) + "\n" +
-		padBlock(body, inner, blockHeight(body), p)
-	return box, withDefaultColors(popupFrame(p, inner+2).Render(content), p.ink(p.Base))
+	box, _, out := frame.render(p, w, h, inner, body)
+	return box, out
 }
 
 // fitStartDialog removes the footer gap before paragraph gaps or shrinking the body viewport.

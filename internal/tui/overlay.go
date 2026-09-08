@@ -20,13 +20,12 @@ type popupBox struct {
 }
 
 // centerPopup centers a popup on screen at the size its content needs.
-func centerPopup(screenWidth, screenHeight, wantWidth, wantHeight int) popupBox {
-	return centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, popupMaxWidth)
-}
-
-// centerPopupMax is centerPopup with a relaxed maximum width;
-// table-shaped content such as the key reference needs more width than the settings panel.
-func centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, maxWidth int) popupBox {
+// maxWidth of 0 takes the ordinary limit; table-shaped content such as the key reference asks for more.
+// tightFit keeps the ordinary vertical margin while the content fits and gives it up only on a height shortage.
+func centerPopup(screenWidth, screenHeight, wantWidth, wantHeight, maxWidth int, tightFit bool) popupBox {
+	if maxWidth <= 0 {
+		maxWidth = popupMaxWidth
+	}
 	width := wantWidth
 	if width > maxWidth {
 		width = maxWidth
@@ -50,6 +49,11 @@ func centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, maxWidth i
 	if height > screenHeight {
 		height = screenHeight
 	}
+	if tightFit {
+		if want := min(wantHeight, screenHeight); want > height {
+			height = want
+		}
+	}
 	x := (screenWidth - width) / 2
 	y := (screenHeight - height) / 2
 	if x < 0 {
@@ -59,6 +63,66 @@ func centerPopupMax(screenWidth, screenHeight, wantWidth, wantHeight, maxWidth i
 		y = 0
 	}
 	return popupBox{X: x, Y: y, Width: width, Height: height}
+}
+
+// popup is the shared shape of every overlay: a centered rounded frame holding an optional title
+// with a rule under it, the body, and an optional hint line under a blank row. It owns the geometry
+// and the painting so a single overlay cannot forget a step — notably withDefaultColors, without
+// which the terminal background shows through every space the body leaves unstyled.
+type popup struct {
+	// Title and Hint are plain text; the popup styles them. Both may be empty and Title may wrap.
+	Title    string
+	Hint     string
+	MaxWidth int
+	TightFit bool
+}
+
+// chrome is the number of rows the frame takes besides the body.
+func (c popup) chrome() int {
+	rows := 2
+	if c.Title != "" {
+		rows += blockHeight(c.Title) + 1
+	}
+	if c.Hint != "" {
+		rows += blockHeight(c.Hint) + 1
+	}
+	return rows
+}
+
+// inner resolves the writable width for a body that would like wantInner columns.
+// It is separate from render because a body has to be wrapped and measured before it can be framed.
+func (c popup) inner(screenWidth, screenHeight, wantInner int) int {
+	box := centerPopup(screenWidth, screenHeight, wantInner+4, 0, c.MaxWidth, c.TightFit)
+	return max(1, box.Width-4)
+}
+
+// render frames an already styled body. It returns the popup's geometry and the rectangle the body
+// occupies on screen, which mouse hit testing needs; both are in absolute screen coordinates.
+func (c popup) render(p palette, screenWidth, screenHeight, inner int, body string) (popupBox, popupBox, string) {
+	chrome := c.chrome()
+	box := centerPopup(screenWidth, screenHeight, inner+4, chrome+blockHeight(body), c.MaxWidth, c.TightFit)
+	inner = max(1, box.Width-4)
+	bodyHeight := max(1, box.Height-chrome)
+
+	rows := make([]string, 0, 5)
+	if c.Title != "" {
+		rows = append(rows,
+			padBlock(styleFor("popup-title", p).Render(c.Title), inner, blockHeight(c.Title), p),
+			styleFor("popup-edge", p).Render(strings.Repeat("─", inner)))
+	}
+	rows = append(rows, padBlock(body, inner, bodyHeight, p))
+	if c.Hint != "" {
+		rows = append(rows, p.fillLine(inner),
+			padBlock(styleFor("popup-dim", p).Render(c.Hint), inner, blockHeight(c.Hint), p))
+	}
+	// The body starts after the top border and the title block; on the left it gives up one column
+	// each to the border and the frame padding.
+	bodyBox := popupBox{X: box.X + 2, Y: box.Y + 1, Width: inner, Height: bodyHeight}
+	if c.Title != "" {
+		bodyBox.Y += blockHeight(c.Title) + 1
+	}
+	out := withDefaultColors(popupFrame(p, box.Width-2).Render(strings.Join(rows, "\n")), p.ink(p.Base))
+	return box, bodyBox, out
 }
 
 // popupFrame is the outer frame of a popup: a rounded border plus one column of padding on each side.

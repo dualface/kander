@@ -162,10 +162,10 @@ func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 	for i, line := range lines {
 		lines[i] = printableText(ansi.Strip(line))
 	}
-	inner := max(1, min(w-8, max(40, blockWidth(strings.Join(lines, "\n")))))
-	body := ansi.Wrap(strings.Join(lines, "\n"), inner, "")
-	box := centerPopupMax(w, h, inner+4, blockHeight(body)+2, max(1, w-4))
-	return box, popupFrame(p, box.Width-2).Render(padBlock(body, box.Width-4, box.Height-2, p))
+	frame := popup{MaxWidth: max(1, w-4)}
+	inner := frame.inner(w, h, max(1, min(w-8, max(40, blockWidth(strings.Join(lines, "\n"))))))
+	box, _, out := frame.render(p, w, h, inner, ansi.Wrap(strings.Join(lines, "\n"), inner, ""))
+	return box, out
 }
 
 func (a *App) requestQuit() {

@@ -99,32 +99,16 @@ func (a *App) renderHelp() (popupBox, string) {
 		body = joinBlocksVertical(p, blocks...)
 	}
 
-	lines := strings.Split(body, "\n")
+	frame := popup{Title: t("tui.key_bindings"), Hint: t("tui.press_any_key_to_close"), MaxWidth: available}
 	inner := blockWidth(body)
-	hint := styleFor("popup-dim", p).Render(t("tui.press_any_key_to_close"))
-	if width := ansi.StringWidth(hint); width > inner {
+	if width := displayWidth(frame.Hint); width > inner {
 		inner = width
 	}
-	title := t("tui.key_bindings")
-	if width := displayWidth(title); width > inner {
+	if width := displayWidth(frame.Title); width > inner {
 		inner = width
 	}
-
-	// 2 lines for the top and bottom borders, and 1 line each for the title, the separator, the blank line and the hint.
-	box := centerPopupMax(w, h, inner+4, len(lines)+6, available)
-	inner = box.Width - 4
-	bodyHeight := box.Height - 6
-	if bodyHeight < 1 {
-		bodyHeight = 1
-	}
-	content := strings.Join([]string{
-		styleFor("popup-title", p).Render(padLine(title, inner)),
-		styleFor("popup-edge", p).Render(strings.Repeat("─", inner)),
-		padBlock(body, inner, bodyHeight, p),
-		p.fillLine(inner),
-		padLineFill(hint, inner, p),
-	}, "\n")
-	return box, popupFrame(p, box.Width-2).Render(content)
+	box, _, out := frame.render(p, w, h, inner, body)
+	return box, out
 }
 
 // joinBlocksVertical stacks the blocks with one blank line between them, every line padded to the
