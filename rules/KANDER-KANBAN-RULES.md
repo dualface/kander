@@ -46,27 +46,34 @@ KANBAN_DIR="$MAIN_WORKTREE/kanban"
 Creating entries, querying, and moving between states use only `kander`; replacing them with `mv`, `cp`, or a file manager is forbidden. Body editing and same-state form upgrades follow "Entries and Documents" and "Task Scale and Grouping".
 
 ```text
+kander config [--json]
+kander install
+kander doctor
 kander init [--maintenance] [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
-kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--expect-revision <revision>]
+kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent>] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
+kander pick [task-id]
+kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
+kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
+kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
+kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander dispatch prepare <absolute-UTF8-intent.json>
+kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
 kander dispatch show <task-id> <dispatch-id>
 kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
-kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>]
-kander pick [task-id]
-kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
-kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] <task-id>
-kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) <task-id>
 kander dismiss [--timeout SECONDS] <task-id>
 kander check [--all] [task-id ...]
 kander guard-write <path>
 kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] <task-group> <task-id>... [--watch <task-id|task-group-id>...]
-kander            # open the terminal board
+kander coordinator show|claim|reconcile ...       # see "Coordinator Checkpoints"
+kander review ...                                 # single review entry: KANDER-BASE-RULES.md and "Review Evidence Completion Gate"
 ```
 
 `kander show` prints the current state and absolute path before the card body, so the card can be relocated before writing; `kander move` prints the new path after a successful move. `kander show --json` returns the committed `text`, `revision`, `operation_id` and `entry` location. `kander guard-write` is an advisory pre-write check: it exits 0 to allow and non-zero to reject, but the check and an external write are not atomic. It does not cover arbitrary shell commands, external tools, or internal writes. Agents must use `update` for card edits.
+
+`kander pick [task-id]` moves a `backlog/` card into `todo/` through the same gate as `kander move <task-id> todo`; the two are interchangeable. Without a task ID it lists the `backlog/` cards and asks which one to pick; automation passes the ID. The move options after the state name are described under "Entries and Documents" and "Durable Dispatch". After `kander review`, the words `plan`, `extend-plan`, `assign`, `disposition`, `map-legacy`, `aggregate`, `advance`, `close` and `progress` select an evidence subcommand; the optional reviewer argument accepts only the four reviewer names from `KANDER-REVIEW-RULES.md`.
 
 New writes use `@kander_session`, `@kander_project`, and `# kander-notify:`.
 
@@ -100,14 +107,14 @@ When `notify` probes the recorded `WINDOW`, it handles three classes. This class
 
 An explicit `--pane` override does no stale-address reverse lookup.
 
-**Durable Dispatch (takes precedence over legacy notification clauses)**
+**Durable Dispatch**
 
-- Group review cards use durable dispatch automatically. Explicit `--kind fix|sync|wrap-up`, `--dispatch-id`, or `--base <full-SHA>` selects it for working or non-group cards. Default kind is fix. Select wrap-up explicitly for post-integration completion. A new request without base uses the current working directory's Git HEAD.
+- This section takes precedence over the legacy notification clauses of this file. A card in `review/` that belongs to a task group or already carries a `DISPATCH_ID` uses durable dispatch automatically. Explicit `--kind fix|sync|wrap-up`, `--dispatch-id`, `--base <full-SHA>` or `--evidence-file` selects it for `working/` cards and for non-group cards; without any of these, a message to a `working/` card is an unbound legacy message. Default kind is fix. Select wrap-up explicitly for post-integration completion. A new request without base uses the current working directory's Git HEAD.
 - `notify` and `resume` accept these flags. Print a generated ID before any send when it was omitted; record that ID and reuse it on retry. Same ID must retain task, message, kind, baseline and references. Preparation is idempotent; changed inputs conflict. Retry defaults reuse the original baseline and deadline.
 - An explicit UTF-8 intent for `dispatch prepare` contains `dispatch_id` (optional), `task_id`, `kind`, `message`, `base`, optional `references` (task ID plus card-relative `path`), `created_at` and `confirm_by`. Default acceptance deadline is 120 seconds after creation; new notify/resume requests use their timeout. It never resets on restart/retry and is not a work-completion deadline.
 - New fix intents require `evidence.fix`: a batch ID, nonempty run/finding references with exact `previous_run_id`, and references to all existing author originals on those findings and their explicit lineage. Each author reference retains its original author, run/finding ID, record ID, task ID and card-relative artifact path. Do not require a disposition that has not yet been written. The current batch target must match base; assignment must include the task; all published originals and copies must verify. Superseded rounds, missing/foreign findings and incomplete publication reject before sending. Legacy prose uses only the review producer's explicit mapping, never inferred IDs.
 - Pass bindings with `--evidence-file <JSON>` to notify/resume, or as `evidence` in dispatch prepare. Same-ID retries retain the frozen binding; omit the evidence file when reusing it. Later author records never rewrite an earlier dispatch. Generic `references` do not substitute for semantic evidence. Historical unbound intents remain readable for reconciliation, but cannot be sent as new fix/wrap-up actions.
-- New wrap-up intents require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/develop` or `refs/remotes/origin/develop`), author and basis. The command binds the closed review base/target and verifies source and target ancestry into the selected develop reference, then rereads that ref. By default source must equal the closed reviewed target; do not include additional unreviewed commits. After an authorized rebase, explicitly supply rebased_base: the command verifies the base ancestry and compares complete reviewed/rebased patches, normalizing only blob hashes and hunk line offsets while preserving whitespace, context, modes and binary changes. A different patch rejects and requires the existing conflict verification/review flow. Fetch and integration authorization remain the orchestrator's duty. Do not substitute an asserted PR merge or equivalence for this evidence. Integration evidence is atomically stored at the same dispatch's card-relative `dispatches/<id>/integration.json`; complete with that source_commit. Board validates structure, while the Git-aware command verifies Git.
+- New wrap-up intents require `evidence.wrap_up.git` with absolute CWD, source_commit, target_commit, target_ref (`refs/heads/develop` or `refs/remotes/origin/develop`), author and basis. The command binds the base of the first planned batch and the target recorded in the plan for the last batch (its target when the batch was added; later fix advances are not reflected there, see "Review Evidence Completion Gate") and verifies source and target ancestry into the selected develop reference, then rereads that ref. `source_commit` must equal the dispatch base, so pass `--base <source_commit>` explicitly whenever it differs from the HEAD of the directory the command runs in. By default source must equal the target recorded in the plan for the last batch; do not include additional unreviewed commits. After an authorized rebase, explicitly supply rebased_base: the command verifies the base ancestry and compares the complete patch of the recorded range with the rebased range, normalizing only blob hashes and hunk line offsets while preserving whitespace, context, modes and binary changes. A different patch rejects; the orchestrator then stops and reports per `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions". Fetch and integration authorization remain the orchestrator's duty. Do not substitute an asserted PR merge or equivalence for this evidence. Integration evidence is atomically stored at the same dispatch's card-relative `dispatches/<id>/integration.json`; complete with that source_commit. Board validates structure, while the Git-aware command verifies Git.
 - On-behalf wrap-up requires `dispatch authorize-wrap-up <request.json>` with task_id, dispatch_id, expected_revision (dispatch revision), author and reason. When no intent exists, include a complete wrap-up `intent` with the same explicit task/dispatch IDs. The command creates it first, reconciles receipts under the delivery lease, then requires a fresh identity-valid stopped observation. Missing SESSION, ordinary nonzero returns, unknown delivery, active executors, confirmation timeout and lease expiry cannot prove exit. An optional reclaim_decision cites prior user authorization for a reclaim already completed; it neither performs a reclaim nor replaces the stopped observation.
 - The authority transaction CASes card/dispatch revisions, archives and fences the old epoch, then issues a wrap-up-only epoch with a separate 120-second acceptance deadline, preserving the original intent deadline. Reconcile an existing grant instead of issuing another. Accept through the ordinary atomic working receipt; permit only previously authorized cleanup and append-only wrap-up records. No code changes, launch/delivery, ordinary takeover upgrade, runtime identity writes or original-author conclusions. Preserve the entire spec before appending WRAP_UP_RECORDS, or create the immutable `wrap-up/<dispatch-id>-<epoch>.md` record. Old-epoch writes remain rejected. These fences cover controlled entrances, not arbitrary local filesystem or Git operations.
 - States are prepared, delivery-unknown, accepted, completed, failed and cancelled. Persist delivery-unknown before the send/launch boundary. Transport return values and marker echo never mean accepted. On an uncertain send failure, preserve the intent and payload; do not immediately launch another executor.
@@ -153,8 +160,8 @@ An explicit `--pane` override does no stale-address reverse lookup.
   - Fail when not found.
 - Only accepts cards in `review/` or `working/`; exactly one non-empty `--message` or `--message-file` must be given.
 - `--timeout` must be a finite number of seconds greater than 60 and defaults to 120 seconds.
-- `resume` does not move the card state: the prompt for a `review/` card asks the woken agent to run `kander move <task-id> working` itself before handling the items.
-- When start or liveness validation fails, restore the original document; when restoring the document fails, the error states the directory where the card actually is.
+- `resume` does not move the card state: the prompt for a `review/` card asks the woken agent to perform the `review -> working` move described under "Command Contract" (plain for an unbound message, ID/epoch-bound for a durable dispatch) before handling the items.
+- When start or liveness validation fails, restore the original document only while the operation still owns the current revision, otherwise report a conflict and preserve the newer text; when restoring the document fails, the error states the directory where the card actually is.
 - The launcher is the same as for `start`.
 - After launch, reuse the same liveness criteria as the `notify` recovery branch: herdr and tmux/tmux-session validate an addressable terminal; foreground and console require the process not to exit during the full timeout observation window.
 - herdr validates the pane directly returned by this invocation's `tab create`: `agent` must match and only the states `idle`, `working`, `blocked` are accepted.
@@ -214,7 +221,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - tmux keeps using `send-keys -l` followed by a separate `Enter`.
 - herdr uses `pane wait-output --match <marker> --source recent` for literal substring matching, allowing the TUI to add a rendering prefix before the marker.
 - tmux uses a bounded `capture-pane` and confirms the marker by literal substring, likewise allowing a rendering prefix.
-- A successful delivery action returns success; the command does not move the card. The message body for a `review/` card is prefixed with the requirement "run `kander move <task-id> working` first, then handle the items"; that state change is the start acknowledgement.
+- A successful delivery action returns success; the command does not move the card. The message body for a `review/` card is prefixed with the requirement to perform the `review -> working` move first (plain for an unbound message, ID/epoch-bound for a durable dispatch) and then handle the items; that move is the start acknowledgement, as described under "Command Contract".
 - A marker timeout only warns "delivered, not confirmed within timeout" and does not recover a second process.
 - Only foreground/console, no direct delivery channel, or a failed probe or delivery action make the command recover the original session internally.
 - A process-type recovery must stay alive during the full timeout observation window; after validation, foreground keeps occupying the current terminal until the agent exits.
@@ -259,13 +266,13 @@ An explicit `--pane` override does no stale-address reverse lookup.
   - The same project shares one session, with one background window per card.
   - Does not require `start` to run inside tmux; does not switch the client after launch.
   - Prints the session name, window id, and an attach hint.
-- `herdr` requires `HERDR_ENV=1` and herdr on PATH; it creates a new tab in the background of the current workspace (`--no-focus`, label reusing `window_name()`), first waits for the root pane to be ready, then runs the same agent command as tmux in that pane, without using `herdr agent start`.
+- `herdr` requires `HERDR_ENV=1`, `HERDR_WORKSPACE_ID`, and herdr on PATH; it creates a new tab in the background of the current workspace (`--no-focus`, label reusing `window_name()`), first waits for the root pane to be ready, then runs the same agent command as tmux in that pane, without using `herdr agent start`.
 - `foreground` runs in the foreground of the current terminal and waits for the agent to exit.
 - `console` is supported only on native Windows; it starts the agent in a separate console window and returns the PID immediately.
 - `console` has no session/window reuse, attach, or output capture capability and is not an equivalent implementation of tmux or `tmux-session`.
 - POSIX defaults to `auto`; Windows defaults to `console`.
-- Windows rejects `tmux` and `tmux-session`; herdr has a native Windows build, so `herdr` is available on Windows, and the options panel offers it when herdr is installed.
-- The configuration likewise accepts `auto` on Windows, but there it only resolves to herdr; the options panel does not offer `auto`.
+- Windows rejects `tmux` and `tmux-session`; herdr has a native Windows build, so `herdr` is available on Windows.
+- The configuration likewise accepts `auto` on Windows, but there it only resolves to herdr.
 - The agent command sent into a terminal container is parsed once more by that container's shell: POSIX joins per sh; Windows assumes the herdr pane is PowerShell, always encodes argv into `%VAR%` variables restored by `cmd.exe /d /s /v:off /c`, and does not rely on PowerShell to pass arguments to native programs.
 - When the agent command contains a newline or NUL, refuse to start; never send half a command to the container.
 
@@ -283,7 +290,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 **Check and Liveness Classification**
 
 - `check` by default checks invalid entries outside `done/` `archived/` and exits non-zero on errors.
-- For `todo/`, `working/`, `review/` cards, it also checks contract completeness: missing required sections, leftover `<FILL_IN>` placeholders, or acceptance criteria without `- [ ]` items all count as invalid.
+- For `todo/`, `working/`, `review/` cards, it also checks contract completeness with the same rule as the `todo/` entry gate: a missing or empty `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` or `OUT_OF_SCOPE`, a leftover `<FILL_IN>` placeholder in any of those four sections, or acceptance criteria without `- [ ]` items all count as invalid.
 - `--all` includes those two columns.
 - When task IDs are given, only the targets and cross-state/cross-form conflicts are checked; unrelated invalid entries do not affect the result, and targets in `done/` or `archived/` are checked too.
 - In all modes, parse the `PREREQUISITES` of applicable cards and confirm that references exist and dependencies are acyclic.
@@ -305,7 +312,6 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - `subscribe` requires an explicit group ID and non-empty member IDs, and validates member ownership.
 - `--watch` may be repeated with external card or group IDs; original group references are retained and expanded again on each observation through the shared board membership reader. External tasks need not belong to the subscribed group.
 - When an external target does not exist, expands to nothing, duplicates a member, or expansions duplicate each other, fail before subscribing.
-- Bare `kander` displays the board read-only; it does not create, move, or start agents.
 
 **Subscription Events**
 
@@ -328,55 +334,6 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - `--refresh` defaults to 1 second. `--heartbeat` defaults to 900 seconds, starts after the snapshot is queued, and restarts only after each heartbeat is queued, even when no tasks are working.
 - Both intervals must be finite, at least `1e-9` seconds (1 ns), and less than `9223372036.854776` seconds. Fractional nanoseconds are truncated.
 
-**Board Display and Interaction**
-
-- Bare `kander` starts the TUI on the alt-screen; loading and errors stay inside the alternate screen, and exiting restores the terminal.
-- Default 5 columns on screen; `-`/`=` decrease/increase and save.
-- Column widths split the terminal evenly; when "configured column count x minimum width" does not fit, reduce columns, keeping at least one, and keep the selected column visible when switching.
-- Columns are rounded panels with the name and task count embedded in the top border; arrows at both ends hint at more columns.
-- The selected column's border is highlighted in the column color; the others are low contrast.
-- Card titles use the column color; the selected card is fully inverted.
-- Preferences such as theme, refresh, and single column are read from the `tui` section of `config.json` and changed in the options panel.
-- The single-line top bar has the title and search box on the left, the column count and update time on the right, with one blank line below.
-- The bottom status bar has the column count and card count on the left and two common keys on the right; a temporary copy result or error takes the whole bar.
-- Arrow keys or `hjkl` switch columns/tasks.
-- Single click focuses or selects a card, double click opens details, drag-selected text is copied to the system clipboard automatically.
-- The mouse wheel scrolls cards or the body; PgUp/PgDn page.
-- `/` or clicking the top-bar search area searches, `y` copies the task ID, Enter opens details, `a` toggles the archived column, `t` cycles auto/light/dark, `o` opens options, `?` opens the key overlay (any key closes it), `r` refreshes, `q` quits.
-- Search covers title, task ID, task group, type, owner, and state.
-- Details use the same panel style with an embedded-border title, and the body is rendered as Markdown.
-- `hjkl`/arrow keys move the cursor, the wheel scrolls, Ctrl-d/u half page, Ctrl-f/b or PgUp/PgDn full page, `gg`/`G` to top/bottom, `/` searches the body, `n`/`N` jump between matches, `v`/`V` character/line selection then `y` copies, and drag selection also copies automatically.
-- By default refresh in place by task ID every 30 seconds, preserving the selection and scroll position where possible.
-- The scan ignores invalid entries and does not inject the CLI warning "run kander check to see".
-- The Go TUI supports Windows.
-- Library initialization failures must report the reason.
-
-**Options Panel**
-
-- `o` opens the options panel.
-- Sections: interface preferences (theme, maximum columns on screen, minimum column width, auto refresh, single column, all columns, default language).
-- Task execution and models (large/small task agent, model, reasoning effort, launcher).
-- Review and models (four role reviewers, stage policy, model, reasoning effort).
-- Rule modules (seven switches, individually, all on, all off; task groups depend on Git).
-- The environment can be checked in place.
-- Labels sit above or beside values; dim labels, bold values, and the focused value gets left/right arrows.
-- No blank line between fields of the same agent/role; one blank line between different agents/roles.
-- Model, reasoning effort, and review stages are indented one level; launcher stands alone at the end of the task execution screen.
-- Large and small tasks and the four roles each have independent model and reasoning effort; sharing an agent/reviewer does not merge them.
-- A role without a value gets the selected reviewer's default; changing the reviewer resets that role's default.
-- After changing the agent/reviewer, the model fields on the same screen update accordingly.
-- Configuration is written uniformly to `config.json`: `tui` preferences take effect and are saved immediately, without carrying other unsaved changes.
-- The other sections submit with Enter; the root menu "Save and apply" saves the current configuration.
-- The old `tui.json` is not read, migrated, or deleted.
-- `Up`/`Down` move between fields, `Left`/`Right` change values, `Enter` submits the section and returns.
-- Changed values are written to the in-memory session immediately; `Esc` returns and keeps the changed values.
-- Environment side effects such as installing tmux run only after the whole section is confirmed with `Enter`.
-- `q` or `o` again closes it.
-- With unsaved changes, choose "Save and close / Discard changes and close / Continue editing".
-- The title permanently shows an unsaved marker.
-- Mouse click focuses a row, clicking again or double clicking confirms, the wheel moves between rows.
-- The panel only reads and writes configuration; it does not create, move, or start task cards.
-
 - Commands only do structural and mechanical validation; authorization, dependencies, and termination reasons are judged by the agent per this file.
 
 ## State Model
@@ -386,7 +343,7 @@ The directory is the single source of truth for state; the card body has no `sta
 - `backlog/`: recorded but not yet committed to execution.
 - `todo/`: confirmed by the user, contract complete, not yet claimed.
 - `working/`: claimed and being implemented, verified, reviewed, or integrated; task group cards also return here during fix rounds and post-integration wrap-up.
-- `review/`: used only by task group cards. Development, verification, and the task branch delivery record are complete, waiting for the orchestrator to ff that delivery onto the group branch and then arrange applicable review and final integration. This state itself does not guarantee the delivery is on the group branch; the orchestrator must verify before releasing in-group dependencies. After moving in, the executing agent ends this round of response and keeps the interactive CLI session; fixes, syncs, or post-integration wrap-up are dispatched back by the orchestrator via `notify`, and the original executing agent first runs `kander move <task-id> working` itself, then handles them.
+- `review/`: used only by task group cards. Development, verification, and the task branch delivery record are complete, waiting for the orchestrator to ff that delivery onto the group branch and then arrange applicable review and final integration. This state itself does not guarantee the delivery is on the group branch; the orchestrator must verify before releasing in-group dependencies. After moving in, the executing agent ends this round of response and keeps the interactive CLI session; fixes, syncs, or post-integration wrap-up are dispatched back by the orchestrator via `notify`, and the original executing agent first runs the ID/epoch-bound `kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>` from the dispatch prompt itself, then handles them.
 - `done/`: recent tasks that have satisfied the completion gate.
 - `archived/`: completed, cancelled, duplicate, or wontfix records that no longer occupy the active board.
 - `trash/`: entries the user explicitly asked to delete but not yet permanently cleaned; not a task state.
@@ -394,15 +351,17 @@ The directory is the single source of truth for state; the card body has no `sta
 ```text
 backlog <-> todo -> working -> done -> archived        (single-card flow)
                       |  ^
-                      v  |  fix rounds and wrap-up move back to working
-                    review -> done                     (task group flow; direct move only for orchestrator wrap-up on behalf)
+                      v  |  fix rounds and wrap-up move back to working with the ID/epoch-bound move
+                    review -> working -> done         (task group flow; the orchestrator's wrap-up on behalf
+                                                       takes the same path under its fenced grant)
 
 todo -> backlog                                       withdraw commitment, back to scheduling
+review -> working (--owner)                           user-authorized reclaim of an unbound card, see "Claiming, Starting, and Coordination"
 backlog, todo, working, review -> archived            only user-authorized termination
 any state except trash -> trash                       only on explicit user request
 ```
 
-- Entering `todo/` requires complete `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` (at least one top-level `- [ ]` item with content that can be judged) and `OUT_OF_SCOPE`, with no `<FILL_IN>` placeholders left in these four sections, plus the `SELF_REVIEW:` record line of "Post-Creation Self-Review" (large tasks and task group member cards additionally the `CARD_REVIEW:` line); entering `review/` requires `TASK_BRANCH` to be filled in; the gate for entering `done/` is in "Execution and Completion", the rest in "Termination and Cleanup".
+- Entering `todo/` requires complete `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` (at least one top-level `- [ ]` item with content that can be judged) and `OUT_OF_SCOPE`, with no `<FILL_IN>` placeholders left in these four sections, plus the `SELF_REVIEW:` record line of "Post-Creation Self-Review" (large tasks and task group member cards additionally the `CARD_REVIEW:` line); entering `review/` requires `TASK_BRANCH` to be filled in; the gate for entering `done/` is in "Execution and Completion" together with "Review Evidence Completion Gate", the rest in "Termination and Cleanup".
 - Older boards have no `review/`: when the other 6 state directories are all present, the first time any `kander` command locates the board it creates `review/` automatically, without requiring the user to rerun `init`.
 
   When other state directories are missing, stop normal board operations; the initialization command above can create them.
@@ -500,17 +459,15 @@ any state except trash -> trash                       only on explicit user requ
 ### Contract and Records
 
 - `LANGUAGE` is the language for everything written for the user about this card: its title and body, records, reports, review reports, and the messages passed to `kander notify` and `kander resume`. `kander new` fills it from the configured `agent_language`, or from `--language <value>` when given; the value follows the `agent_language` format. It is fixed at creation and overrides the configuration; an old card without the field falls back to the current configuration per `KANDER-AGENTS.md` "Language".
-- After manual claiming, use `move working --owner <agent>` for `OWNER` and `STARTED_AT`; update `TASK_BRANCH` through the controlled body entrance, using `N/A` when there is no branch.
-
-  `start` also writes the adjacent `SESSION` and `WINDOW` fields, inserting them after `OWNER` when an old card lacks them; manually claimed cards leave them empty.
+- Manual claiming and `start` write `OWNER`, `STARTED_AT`, `SESSION` and `WINDOW` as described under "Controlled Documents and Recovery" and "Start Parameters and Metadata"; manually claimed cards leave `SESSION` and `WINDOW` empty. Update `TASK_BRANCH` through the controlled body entrance, using `N/A` when there is no branch.
 
   The command fills in `FINISHED_AT` when moving into `done/`.
 
   The dedicated move options fill the result atomically when entering `done/`, `archived/`, or `trash/`.
 
-- Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, and task group relations are frozen. Changing any of them requires an explicit user decision first.
+- Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, and task group relations are frozen. Changing any of them requires an explicit user decision first. `THREAT_MODEL` is part of the review task context but is not frozen by the tool; refine it through ordinary `update` and note the change in `DISCUSSION`.
 - `OUT_OF_SCOPE` defines the task boundary truthfully; unconfirmed extended goals are not written into `ACCEPTANCE_CRITERIA`. When the review module is enabled, refine the scope further per the review contract of `KANDER-REVIEW-RULES.md`.
-- During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps; do not copy the session transcript. Each round adds at most one dated entry; earlier rounds are compressed to one summary line each once they are superseded. Review reports, finding lists, and dispositions are referenced by `reviews/<run_id>/` and `dispatches/`, never pasted into the card body; a card body above roughly 30 KB signals that history is being duplicated instead of referenced. Stable architecture, APIs, and long-term rules must still go into repository documentation or project rules.
+- During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps; do not copy the session transcript. Each round adds at most one dated entry; earlier rounds are compressed to one summary line each once they are superseded. Review reports, finding lists, and dispositions are referenced by `reviews/<run_id>/` and `dispatches/`, never pasted into the card body; the unresolved items list in `SUMMARY` (or `report.md`) holds one line per item: a finding names role, tier, status and the card-relative path of its disposition record; a role not completed, a missing report section or a verification gap names the run's sidecar or error log instead, with tier and status `N/A`; when no run exists (a preflight failure, or a gap outside review) it names the actual command log or the `IMPLEMENTATION` verification record and says "no run produced", never an invented path. The full text stays in those artifacts and in the user report. A card body above roughly 30 KB signals that history is being duplicated instead of referenced. Stable architecture, APIs, and long-term rules must still go into repository documentation or project rules.
 
 ## Archived Review Evidence
 
@@ -523,6 +480,7 @@ any state except trash -> trash                       only on explicit user requ
 ## Task Scale and Grouping
 
 - New cards always use directory form. `new` writes `SIZE: small` and includes IMPLEMENTATION/SUMMARY; `new --large` writes `SIZE: large` and requires a non-empty report.md for completion. A small card still requires its completed SUMMARY, even if it has a report.md. Both require SELF_REVIEW before todo; large tasks and all group members additionally require CARD_REVIEW. After todo, changing SIZE requires the existing explicit contract-decision update flow. Never infer scale from the presence of a directory or report.md.
+- Choose `large` when the card needs `plan.md` to stay reviewable: it touches several modules or phases, needs a release or rollback plan, or its verification goes beyond a single targeted test run. A card whose whole change and verification fit one `IMPLEMENTATION` entry is `small`. `SIZE` also selects the execution agent tier per "Start Parameters and Metadata".
 
 - Cards keep optional task group fields and dependency records. When task_groups is off, groups are not split automatically and independent single cards remain usable. When on, plan and execute per KANDER-TASK-GROUP-RULES.md; git must be on as well.
 - Intake guidance belongs to KANDER-TASK-INTAKE-RULES.md and is read only when rules.task_intake=true; a user operating the board directly does not require it to be on.
@@ -532,7 +490,7 @@ any state except trash -> trash                       only on explicit user requ
 
 - `init` migrates legacy files in all seven states to `<task-id>/spec.md`, adds `SIZE: small` to files without SIZE and `SIZE: large` to directories without SIZE, and adjusts only relative Markdown destinations needed to preserve their targets. IDs, link labels/titles, attachments, and all other body bytes are preserved. Existing valid SIZE is retained. Repeated init reports zero migrations and leaves unchanged card content and modification times untouched. Invalid or duplicate SIZE rejects mutations and migration; only exact `small`/`large` values are valid.
 - Link relocation accounts for both the referring document and referenced legacy card moving. It preserves URL query/fragment semantics and handles inline links, images and reference definitions, including unused definitions. Code spans/blocks, web URLs, root-relative URLs and pure page anchors/query references remain unchanged. Only ordinary card Markdown documents inside the board are scanned; producer-owned reviews/dispatches subtrees are excluded and their historical originals remain immutable, including during journal replay; repository files outside the board are not rewritten. Unsupported wiki links, HTML href/src/srcset, invalid URLs and non-portable backslash paths fail preflight only when the referring document moves or a possible target is mapped. Stationary historical references with unchanged targets and srcset containing only absolute URLs remain byte-identical. Failures identify the document and reason, preserving content for correction rather than guessing a rewrite.
-- `list`, `show`, `check`, the TUI and `subscribe` keep reading legacy files without migrating them. Missing SIZE means small for a legacy file and large for a directory. `check` requests init for directories missing SIZE; its existing state scope is unchanged. Read commands never run a batch migration.
+- `list`, `show`, `check` and `subscribe` keep reading legacy files without migrating them. Missing SIZE means small for a legacy file and large for a directory. `check` requests init for directories missing SIZE; its existing state scope is unchanged. Read commands never run a batch migration.
 - Before migration, pause all executing agents, external editors, notifications and archive writers, including older binaries that do not follow the transaction protocol. Keep this maintenance window open through recovery and migration. Kander acquires exclusive board access for cooperating readers and writers, but cannot verify that arbitrary external processes stopped.
 - When any working or review cards exist and migration is needed, init refuses by default and lists the affected IDs. Only after all writers are paused, use `init --maintenance` to acknowledge those preconditions. Recovery of an interrupted active-card migration requires the same acknowledgement. No agent is terminated automatically.
 - Migration first persists one redo record containing the complete old-to-new path map and all affected card documents, moves each file into same-volume staging, writes the SIZE and link replacement through journal-bound scratch and original-backup files, publishes the directory, then commits the revision and journal. A partial replacement resumes only when it matches the recorded after-image prefix; unknown leftovers are retained as conflicts. These are separate steps with an internal intermediate state, not a single atomic rename. Cooperating readers wait for the maintenance lock; after a process interruption they diagnose a managed pending transaction and require explicit init recovery. Directory SIZE supplementation and links from existing directory cards (including Markdown attachments) use the same journal. Recovery validates the recorded after-images against SIZE insertion and the recorded path map; it never reconstructs that map from a partially migrated board. No reader repairs the board automatically. Valid pending operations replay before the ordinary structural scan. With no migration to plan, ordinary stray non-card files produce a check warning without blocking init; missing specs, real duplicate IDs, unknown migration artifacts and reparse points still fail and preserve evidence.
@@ -547,7 +505,7 @@ any state except trash -> trash                       only on explicit user requ
   - Constraints are accurate and actionable, consistent with user decisions, project rules, and the actual interfaces and environment, with no contradictory requirements.
   - `ACCEPTANCE_CRITERIA` cover the goal and outcome, are actionable and decidable, and neither miss key conditions nor introduce out-of-scope requirements.
 - Record the self-review conclusion and fixes in `DISCUSSION` as a separate line `SELF_REVIEW: <conclusion>` (ASCII colon, may be a list item); the gate for entering `todo/` checks that this line exists. Content that can be fixed from existing decisions is fixed directly; ambiguities that require new or changed user decisions are listed explicitly and wait for the user, not filled into the contract on one's own.
-- Large task directory cards and task group member cards additionally require an independent card review beyond the self-review: an independent agent that does not share the card-creation session context (a new session or a subagent) reads only the card and the user's original requirement and issues a conclusion against the four points above; after fixing, the creator records the conclusion and the reviewer in `DISCUSSION` as a `CARD_REVIEW: <conclusion>` line, which the gate checks likewise. The tool only checks that the record line exists; the reviewer's independence and the conclusion quality are still guaranteed truthfully by the creator, and the card-creating agent must not write the `CARD_REVIEW:` line itself to satisfy the gate perfunctorily.
+- Large task directory cards and task group member cards additionally require an independent card review beyond the self-review: an independent agent that does not share the card-creation session context (a new session or a subagent) reads only the card and the user's original requirement and issues a conclusion against the four points above; after fixing, the creator records the conclusion and the reviewer in `DISCUSSION` as a `CARD_REVIEW: <conclusion>` line, which the gate checks likewise. The tool only checks that the record line exists; the reviewer's independence and the conclusion quality are still guaranteed truthfully by the creator. The creator writes the `CARD_REVIEW:` line only to record a review that an independent agent actually performed; writing it without that review to satisfy the gate is forbidden.
 
 ## Claiming, Starting, and Coordination
 
@@ -564,7 +522,7 @@ kander move <task-id> working --owner <agent>
 
 - `kander move <task-id> working` applies only when the user explicitly asks the current agent to execute an existing task card.
 
-  Only when the enabled intake guidance is used, choosing "confirm the plan and go through the board" must use `start`.
+  Only when the enabled intake guidance is used, choosing either "Confirm the plan and use the kanban board" option must use `start` when the cards are started, unless the user explicitly asks the current agent to execute a card itself, which uses `kander move <task-id> working --owner <agent>` above.
 
   Do not `move ... working` first and then `start`.
 
@@ -574,10 +532,12 @@ kander move <task-id> working --owner <agent>
 
   After a failure, re-check; do not create a replacement card, and add no lock service, database, or ID allocator.
 
+- Reclaiming: when a `review/` card's executor has stopped and the user explicitly authorizes a new owner, that agent claims the card with `kander move <task-id> working --owner <agent>`. This is possible only for a card without a dispatch binding (no `DISPATCH_ID`/`EXECUTION_EPOCH` metadata): a bound card rejects `--owner`, and `dispatch fail|cancel` does not remove the binding, so a bound card changes hands only through the takeover paths in "Failure Recovery". The reclaim rewrites `OWNER` and `STARTED_AT`; because the execution cycle is derived from `STARTED_AT` at minute precision, treat the cycle as changed only when `review progress` reports `requirements-needed` (see "Review Evidence Completion Gate"). It is the reclaim referenced by the wrap-up authority and plan rebind rules. A `working/` card is never reclaimed this way: use the `resume --agent` takeover, which keeps `STARTED_AT`.
+
 **Start Checks and Rollback**
 
 - `start` checks the agent, launcher, and TTY before launching.
-- `auto` first resolves the current environment, then checks the actual launcher:
+- `auto` resolves only to `herdr` or `tmux` per "Launchers"; before launching, the preconditions of the actual launcher are checked:
   - `tmux`: already inside a tmux session.
   - `tmux-session`: tmux available; the project session name is chosen at start.
   - `herdr`: `HERDR_ENV=1`, herdr on PATH, and `HERDR_WORKSPACE_ID` present.
@@ -642,7 +602,7 @@ kander move <task-id> working --owner <agent>
 
 - Confirm the actual working directory from the card records; record implementation, verification, and unresolved issues.
 
-  After completing the task contract and all applicable delivery steps, write `SUMMARY` or report.md through update, then run `kander move <task-id> done --result completed` and `kander check`.
+  After completing the task contract and all applicable delivery steps, write `SUMMARY` or report.md through update, satisfy "Review Evidence Completion Gate" (a sealed plan with every batch closed, or the explicit N/A plan when no review applied), then run `kander move <task-id> done --result completed` and `kander check`. An in-group card completes per `KANDER-TASK-GROUP-RULES.md` "Executing Agent Wrap-Up" and runs the targeted `kander check <task-id>` instead of the untargeted check.
 
 - On failure or pause, keep the actual state and record the blocker and the condition to unblock. Write N/A for inapplicable Git or review steps; do not write unexecuted verification as passed.
 - Task group members run review, integration, and wrap-up per KANDER-TASK-GROUP-RULES.md only when task_groups and git are enabled. These gates cannot be applied to independent single cards.
@@ -664,11 +624,11 @@ kander move <task-id> working --owner <agent>
 
 ## Failure Recovery
 
-- When a `working/` card is interrupted, has no owner, or makes no progress for a long time, the coordinating agent first notifies the original executing agent with `kander notify <task-id> --message <status and requirements>`.
+- When a `working/` card is interrupted, has no owner, or makes no progress for a long time, the coordinating agent first notifies the original executing agent. For a card without a dispatch binding, use `kander notify <task-id> --message <status and requirements>`: an unbound message without `--kind`; any fix, sync or wrap-up round that follows is dispatched separately with its `--kind`. For a bound card (a `DISPATCH_ID` is recorded), a legacy message cannot recover the session: read `kander dispatch show` first. While the dispatch is still prepared or delivery-unknown and its acceptance deadline has not passed, retry it with the same ID and its original message (`notify --dispatch-id <id> --message-file <original>`) per "Durable Dispatch". Once the dispatch is accepted, a same-ID `notify` only returns the receipt and recovers nothing; when the executor is proven stopped, the user first disposes that round with `dispatch fail <task-id> <dispatch-id> <dispatch-revision> <reason>`, and only then is a new dispatch of the same kind created with a new ID: a `fix` rebinds its findings and every author original written so far, a `wrap-up` rebinds the integration evidence, and a `sync` carries no evidence and cites the existing disposition records in its message.
 
   The command chooses direct delivery or recovery on its own; on a non-zero exit, the user decides on handover or termination.
 
-  When the user decides to switch agents, use only `kander resume --agent <name> <task-id> --message <status and requirements>` to establish a takeover with a new session; do not migrate the session manually and do not `start` again.
+  When the user decides to switch agents, use only `resume --agent <name>` to establish a takeover with a new session: `kander resume --agent <name> <task-id> --message <status and requirements>` for an unbound card; `kander resume --agent <name> --dispatch-id <id> --message-file <original> <task-id>` for a bound card whose dispatch is not yet accepted and not past its deadline, which rotates the epoch; and, for an accepted round whose executor stopped, the new dispatch above created through `resume --agent` with its `--kind` and, for `fix` or `wrap-up`, its `--evidence-file`. Do not migrate the session manually and do not `start` again.
 
   Other agents must not take over, move, or archive on their own.
 
@@ -701,11 +661,29 @@ integration authorization. Confirmation comes from same-round receipts, includin
 
 ## Review Evidence Completion Gate
 
-Active execution cycles require an explicit review plan before `move done`, even when REVIEWS
-is empty or no reviewer ran. Record each role as required or N/A with an actual reason and rule
-basis. Review-disabled workflows record explicit N/A and close the plan; they do not load or
-execute the disabled review workflow module. Already completed historical cards without a plan
-remain readable as legacy-untracked, never as an invented historical PASS.
+An execution cycle is one claim of a card, identified by its task ID and `STARTED_AT` (minute
+precision): `start` and `move working --owner` write `STARTED_AT`, `resume --agent` keeps it.
+Active execution cycles require an explicit review plan before `move done`, even when REVIEWS is
+empty or no reviewer ran. Record each role as required or N/A with an actual reason and rule
+basis. When review is disabled or nothing triggered it, the minimal sequence is: `review plan`
+with one sealed batch from the review base to the final delivery commit naming all four roles
+`N/A: <reason and rule basis>`, `review aggregate` for that batch, `review close` binding its
+view hash, then `move done`; this loads no disabled review module. A plan has at least one batch,
+its members are fixed at creation, and a card belongs to at most one plan per cycle. A plan can
+be created only while every member is in `working/` or `review/`, so a group plan is created
+after the last member has started, and no review batch runs before the plan exists: the plan
+names the first batch before its first run, and every later batch is appended with `extend-plan`
+after its predecessor closed and before its own first run (`extend-plan` cannot adopt a batch
+that already ran). Closing a batch requires it to be planned and the worktree clean at the
+batch's final target, and `review advance` also requires a planned batch. Fix rounds advance the
+batch's runtime target while the plan keeps the target recorded when the batch was added; the
+wrap-up evidence binds the base of the first planned batch and that recorded target of the last
+batch as its `source_commit` when history was not rewritten, so the orchestrator separately
+verifies the closed final target's ancestry with `git merge-base --is-ancestor` per
+`KANDER-GIT-RULES.md` and states both commits in the wrap-up notice. When history was rewritten
+and the last batch advanced after it was recorded, the patch comparison covers only the recorded
+range and would omit the fixes: do not bind it; stop, keep the group state, and report. Already completed historical cards
+without a plan remain readable as legacy-untracked, never as an invented historical PASS.
 
 Controlled review evidence commands, all under the existing single review entry:
 
@@ -744,7 +722,7 @@ For a non-Git project with every role explicitly N/A, the plan may use `N/A` for
 and target_commit. Closure records Git as not applicable, with no claim of commit verification.
 Any required role still needs real commit targets.
 
-- Reclaiming a planned card with `move working --owner` may change its execution-cycle binding.
+- Reclaiming a planned card (see "Claiming, Starting, and Coordination") may change its execution cycle.
   `review progress` then reports `requirements-needed` and the complete `rebind_cycles` map.
   Use `review extend-plan` with the existing plan ID, expected revision, that map, author and
   basis to restore the same requirements for the whole plan. This operation cannot change

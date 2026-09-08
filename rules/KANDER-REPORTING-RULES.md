@@ -27,7 +27,7 @@ Loaded only when `rules.reporting=true`. See `KANDER-AGENTS.md` for precedence a
 ```markdown
 # Kanban Task Completion Report
 
-- Task: [<task-id> - <title>](<absolute path of the task entry under done>)
+- Task: [<task-id> - <title>](<absolute path of the task entry under its final state directory>)
 - Delivery: <user-observable outcome and key changes>
 - Acceptance: <completed>/<total>; <per-item self-check conclusion or user-accepted exceptions>
 - Verification: <actual commands and results; for failed or unexecuted items, the reason, impact, and substitute evidence>

@@ -46,7 +46,8 @@ The directory containing this file is the "rules root". It determines the scope 
 
 - Read `KANDER-KANBAN-RULES.md` whenever kanban commands are used.
 - `task_groups` depends on `git`.
-- With `task_intake` off, cards can still be created manually and run one at a time.
+- `review` reads the "Delivery Self-Check" of `KANDER-CODE-RULES.md` only when `code` is also on; with `code` off, `KANDER-REVIEW-RULES.md` "Preconditions and Execution" states what the author checks before review instead.
+- With `task_intake` off, no plan options are presented and cards are created manually; a task group is still possible when `task_groups` is on.
 - With `git` off, a single card follows the user's own working directory, branch, and delivery flow.
 - With `review` off, no review is requested automatically, but `kander review` may still be invoked explicitly.
 - With `reporting` off, filling in real card results and the necessary execution records is still required.

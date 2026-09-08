@@ -20,7 +20,7 @@
 
 - File-changing tasks use a separate task branch and a dedicated worktree at `<repo-root>/worktrees/<task-name>/`.
 
-  `<task-name>` is the same as the branch name, a short kebab-case string.
+  `<task-name>` is the same as the branch name, a short kebab-case string. The group worktree of a task group is the exception: it is named by the group ID while its branch carries the `group/` prefix, per `KANDER-TASK-GROUP-RULES.md`.
 
   Never carry a task on a stable branch, `develop`, or a detached `HEAD`.
 
@@ -59,8 +59,8 @@
 
 ## Integration and Cleanup
 
-- Before integrating, verify the authorization above along with any existing PR, acceptance, and pause requirements from the user or project. A user-authorized standalone card already has integration authority; the absence of a separate merge-back confirmation is not a blocker. Without applicable authorization or with an unmet gate, keep the branch and worktree and report the specific pending items; a kanban single card stays in `working/`, and a task group keeps its actual state per the group rules.
-- The source branch is the delivery target explicitly recorded when the task branch was created: `develop` for a single card, the corresponding group branch for an in-group task branch, and `develop` for a group branch. Integrate only into that target; the currently checked-out branch or a temporary rebase does not change the target.
+- Before integrating, verify the authorization above along with any existing PR, acceptance, and pause requirements from the user or project. Without applicable authorization or with an unmet gate, keep the branch and worktree and report the specific pending items; a kanban single card stays in `working/`, and a task group keeps its actual state per the group rules.
+- The source branch is the delivery target recorded when the task branch was created, in the card's `IMPLEMENTATION` for a kanban card and in the task's own delivery record otherwise: `develop` for a single card, the corresponding group branch for an in-group task branch, and `develop` for a group branch. Integrate only into that target; the currently checked-out branch or a temporary rebase does not change the target.
 
 - Before integrating, fetch the source branch on the remote path or read the local source branch on the local path, check whether the branch to deliver needs a rebase, and re-verify. If the fetch fails, stop and report.
 
@@ -71,7 +71,7 @@
 **One-Time Review Gate**
 
 - Review is triggered and executed per `KANDER-REVIEW-RULES.md` only when the review module is enabled or the user explicitly asks for a full review this time. Otherwise record N/A and do not load the disabled review module.
-- An applicable review is a one-time gate before integration; the base is frozen during the review. A rebase after the review completes because the source branch advanced only redoes verification; re-review only when the user explicitly asks or substantive code conflicts were resolved by hand. Do not re-review when there are no conflicts or the conflicts are only in Markdown documents. The base chain and fix rounds for task group batches follow the group-level review rules.
+- An applicable review is a one-time gate before integration; the base is frozen during the review. For a single card, a rebase after the review completes because the source branch advanced only redoes verification; re-review only when the user explicitly asks or substantive code conflicts were resolved by hand, and do not re-review when there are no conflicts or the conflicts are only in Markdown documents. For a task group, the bound wrap-up evidence accepts the rebased group line only when its complete patch equals the closed reviewed patch, so the integration rebase must apply cleanly and leave the patch unchanged; any conflict, Markdown included, or a changed patch is handled per `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions", and the base chain and fix rounds for group batches follow the group-level review rules.
 - For a task group, this gate constrains merging the group branch back into `develop`; delivering a task branch to the group branch is a preparation step for the group-level review and does not require the group-level review to complete first.
 
 **Direct Integration and PRs**
@@ -80,7 +80,7 @@
 - After a successful push, fetch and run `git merge --ff-only origin/<source branch>` in the worktree that owns the source branch. When the remote already contains the recorded final delivery commit, do only this sync; do not rebase again or re-integrate. If the local branch is missing, create it from that remote branch; if the sync fails due to local divergence, working tree, or other sync problems, preserve the working state and report "integrated on remote, local not synced", then handle only the sync problem afterward without resetting or discarding local commits.
 - When there is no `origin` or local-only is explicit, run `git merge --ff-only <final delivery commit>` in the worktree that owns the source branch. If it fails because the local source branch has advanced, rebase the branch to deliver onto the latest local source branch, re-verify, and retry; do not push.
 - Direct integration and local sync never generate merge commits. `main`, `develop`, and group branches must never have their remote history rewritten with `--force` or `--force-with-lease`. Save and restore user changes per "Local Change Protection" before and after operating on the main worktree.
-- When the user or project requires a PR, follow its review, CI, merge method, and authorization requirements; do not bypass it with direct integration. Integration counts as complete only when the PR is merged, its target is the recorded source branch, and the final delivery is actually contained in the merge result; confirm squash/rebase merges by this evidence and do not require the pre-merge commit to remain an ancestor of the target branch.
+- When the user or project requires a PR, follow its review, CI, merge method, and authorization requirements; do not bypass it with direct integration. Integration counts as complete only when the PR is merged, its target is the recorded source branch, and the final delivery is actually contained in the merge result; confirm squash/rebase merges by this evidence and do not require the pre-merge commit to remain an ancestor of the target branch. For a task group, the durable wrap-up evidence additionally needs the Git mapping described in `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions".
 
 **Cleanup Preconditions**
 

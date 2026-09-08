@@ -6,14 +6,18 @@ Task groups always use the `KANDER-GIT-RULES.md` rules; a custom group integrati
 
 - First read the enabled `KANDER-GIT-RULES.md` and the command protocol `KANDER-KANBAN-RULES.md`. If the configuration does not satisfy the dependencies, keep the cards and workspaces and report which switches need adjusting.
 - When there is no `origin` or the user explicitly asks for local-only, skip every push and remote branch cleanup in this file and report truthfully that the remote is not synced.
-- The orchestration plan must spell out the steps for delivering task branches to the group branch and for merging each group back into `develop` in dependency order. Integration authorization follows `KANDER-GIT-RULES.md` "Integration and Cleanup"; when a confirmed plan explicitly includes these steps, do not ask again, and merely starting cards does not count as integration authorization.
+- The orchestration plan must spell out the steps for delivering task branches to the group branch and for merging each group back into `develop` in dependency order. Integration authorization follows `KANDER-GIT-RULES.md` "Integration and Cleanup"; when a confirmed plan explicitly includes these steps, do not ask again, and merely starting cards does not count as integration authorization. A plan confirmed through `KANDER-TASK-INTAKE-RULES.md` that names the group and its merge-back step is such a confirmed plan, whether the user chose to start immediately or to create the cards first and start later.
+- The three clauses below apply to the whole file, whether or not review applies:
+  - Every `notify` that dispatches a round in this file carries the `--kind` of that round (`sync`, `fix`, `wrap-up`) and, for `fix` and `wrap-up`, the `--evidence-file`; a `--message-file` alone is the legacy spelling and is not sufficient. Status messages and takeovers for `working/` cards follow `KANDER-KANBAN-RULES.md` "Failure Recovery", which distinguishes unbound cards (a plain message without `--kind`) from bound cards (same-ID handling, or a disposed round and a new dispatch). "Once" or "exactly once" in this file means one logical dispatch ID: same-ID reconciliation is allowed, exactly-once external side effects are not promised. Column transitions remain scheduling hints; verify the dispatch receipt before treating a bound round as accepted or complete.
+  - Wherever this file requires a card to have entered `done/`, a card in `archived/` with `RESULT: completed` counts the same; wherever it requires a card to have reached `review/`, a card already in `done/` or in `archived/` with `RESULT: completed` counts the same.
+  - Whenever this file says the executing agent "moves back to `working/`", it means the ID/epoch-bound move command from the generated dispatch prompt (`KANDER-KANBAN-RULES.md` "Durable Dispatch"), not a plain `kander move <task-id> working`; a plain move accepts no dispatch and authorizes no work.
 
 - Review batches, dispatching findings back, and review gates apply only when `rules.review=true` or the user explicitly asks for a full review this time.
 
-  Otherwise do not load `KANDER-REVIEW-RULES.md`; after implementation and verification, enter the group integration flow, which must still satisfy integration authorization and the project's delivery gates; record review as N/A and do not build a review base chain.
+  Otherwise do not load `KANDER-REVIEW-RULES.md`; after implementation and verification, enter the group integration flow, which must still satisfy integration authorization and the project's delivery gates; record review as N/A, do not build a review base chain, and satisfy `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate" with the explicit N/A plan before any member completes.
 
 - The fixed user-facing report format is read from `KANDER-REPORTING-RULES.md` only when `rules.reporting=true`. When disabled, report progress, deliveries, and unresolved items truthfully; in-card records and state gates still apply.
-- After an external dependency reaches done, also confirm that its delivery is actually usable on the current group branch; a single card completed through the user's own Git flow does not guarantee its changes are in develop. When this cannot be confirmed, report the actual gap and do not merge it back on its behalf.
+- External dependencies are satisfied only per "Dependencies Between Task Cards", including its `develop` containment check. External deliveries enter a group only through the group branch's creation anchor: the group branch is created after all external dependencies of all members are satisfied, so it never needs a rebase to pick them up.
 
 ## Task IDs
 
@@ -29,13 +33,14 @@ Task groups always use the `KANDER-GIT-RULES.md` rules; a custom group integrati
   - These task cards form a task group.
   - A task group is generally recommended to have no more than 3 task cards.
   - If a task group exceeds 5 task cards, try to split it further into multiple task groups; the counts are suggestions and do not replace judgment about goals and dependencies.
+  - Precedence between the two guidelines above: independent acceptability decides how many cards exist; the counts only decide how the cards are grouped. Never merge two independently acceptable goals into one card to stay under 3, and never split one goal to reach a count. A group of 4 or 5 cards is acceptable when its dependency chain is linear or its members share one integration contract; record the reason in the `DISCUSSION` of the first card in dependency order.
   - A task group ID is `YYYYMMDD-short-slug-group`, unique across the whole board.
   - Each member card's `- TASK_GROUP:` metadata holds the ID of its group; non-members leave it empty. A task group is a relationship between cards and adds no board entry or state.
   - Member cards of one group share the same `LANGUAGE`; create them with the same `--language` or under the same configuration.
 
 - Prefer splitting into small cards; when no further independently acceptable small cards can be split out and a large card is truly needed, choose SIZE per `KANDER-KANBAN-RULES.md` "Task Scale and Grouping". Clarify shared interfaces or data contracts first; when they need separate delivery, create a contract card as a prerequisite.
-- When creating a group, list all members and the dependency graph, and rule out missing references, dependency cycles, and overlapping responsibilities; once in `todo/`, task group relationships are frozen per the kanban protocol. The `任务组: ...` line recorded in `DISCUSSION` on old cards remains compatible; no bulk rewrite is required.
-- After the member cards are created, complete `KANDER-KANBAN-RULES.md` "Post-Creation Self-Review" card by card (member cards belong to a group and must also obtain the `CARD_REVIEW:` record from an independent card review; the same independent agent may review the whole group at once), then check whether the whole group fully covers the user's goal, whether the boundaries between cards overlap or leave gaps, and whether the prerequisite deliveries satisfy the constraints and acceptance of the later cards. Fix any problem found and re-check first; only advance to `todo/` after it passes.
+- When creating a group, list all members and the dependency graph, and rule out missing references, dependency cycles, and overlapping responsibilities; once in `todo/`, task group relationships are frozen per the kanban protocol. The legacy Chinese `任务组: ...` line recorded in `DISCUSSION` on old cards remains compatible as a literal marker; no bulk rewrite is required.
+- After the member cards are created, complete `KANDER-KANBAN-RULES.md` "Post-Creation Self-Review" card by card (member cards belong to a group and must also obtain the `CARD_REVIEW:` record from an independent card review; the same independent agent may review all member cards in one session, reading only those cards and the user's original requirement), then check whether the whole group fully covers the user's goal, whether the boundaries between cards overlap or leave gaps, and whether the prerequisite deliveries satisfy the constraints and acceptance of the later cards. Fix any problem found and re-check first; only advance to `todo/` after it passes. `kander pick <task-id>` and `kander move <task-id> todo` are the same transition (`KANDER-KANBAN-RULES.md` "Command Contract"); the orchestrator performs it in "Starting and Subscribing", or the creator performs it right after the checks when the user asked to start immediately.
 
 ## Dependencies Between Task Cards
 
@@ -53,7 +58,8 @@ PREREQUISITES: N/A
 
 - An old card missing this line is treated as having no dependencies. A group reference expands to all current members of that group; referencing the card's own group or forming a cross-group dependency cycle is not allowed.
 - An in-group prerequisite card satisfies the dependency only when it has reached `review/` or `done/` and the orchestrator has confirmed that its latest delivery commit is contained in the current group branch; the `review/` state alone does not release it.
-- Out-of-group cards and all members expanded from group references must reach `done/`, and their deliveries must be confirmed usable on the current `develop`. Non-group cards do not enable the automatic dependency resolution contract above; their delivery preconditions are verified by the executing agent against the task contract.
+- Out-of-group cards and all members expanded from group references must reach `done/`, or `archived/` with `RESULT: completed`, and their deliveries must be confirmed contained in the current `develop`. An `archived/` card with any other result, or a `trash/` card, never satisfies a dependency; hand the decision to the user. Non-group cards do not enable the automatic dependency resolution contract above; their delivery preconditions are verified by the executing agent against the task contract.
+- Out-of-group references of any member block the whole group, not only the referencing card, because the group branch is created once from `develop` and is not rebased before final integration. When one late member would hold up the others for long, move that member into a successor group that depends on the external target instead of starting the group early. This regrouping is a planning decision made before the cards enter `todo/`; afterwards it is a frozen-relation change that needs an explicit user decision per `KANDER-KANBAN-RULES.md`.
 
 ## Running Task Cards in Parallel
 
@@ -80,20 +86,20 @@ PREREQUISITES: N/A
 
 - After implementing, verifying, and committing by concern, the executing agent rebases its card's task branch onto the latest group branch, re-verifies, and updates the task branch per the Git rule file. Record in `IMPLEMENTATION` the task branch's final full SHA, the group branch SHA it is based on, and the verification result, then `move review` and end the current response turn. The executing agent never updates the group branch.
 - On receiving the `review/` state, the orchestrator reads the delivery record and verifies integration authorization and that the task branch head matches the recorded final commit. On the remote path, fetch first and verify the remote branch; on the local path, verify the local branch. Deliver that commit to the group branch per the Git rule file "Direct Integration and PRs" and sync the group worktree; on the remote path, push the final commit first and only ff the local group branch after success. When the same delivery commit is already contained, only verify and sync; do not integrate again. Without authorization, keep `review/` and the working state, report, and do not release dependencies.
-- When the group branch has advanced earlier and the task branch cannot ff, the orchestrator calls `kander notify <task-id> --message-file <sync requirements>` exactly once to dispatch the original executing agent to rebase, resolve conflicts, and re-verify. The orchestrator does not modify that card's worktree or commits; if `notify` exits non-zero, stop and report. After the new delivery returns to `review/`, verify again; do not carry the old delivery's conclusion forward.
+- When the group branch has advanced earlier and the task branch cannot ff, the orchestrator calls `kander notify <task-id> --kind sync --message-file <sync requirements>` once per logical dispatch (see "Durable Dispatch Identity") to dispatch the original executing agent to rebase, resolve conflicts, and re-verify. The orchestrator does not modify that card's worktree or commits; if `notify` exits non-zero, stop and report. After the new delivery returns to `review/`, verify again; do not carry the old delivery's conclusion forward.
 - Only after the orchestrator confirms that the card's latest delivery commit is in the actual local or remote group branch and the group worktree is synced to that head does it add the card to the pending review set or release its direct successor cards. If the push, ff, or verification fails, keep `review/` and the working state and do not release dependencies. If the group branch shows unexpected changes or divergence, report; do not overwrite the remote or rewrite reviewed history.
-- Deliveries are received serially by the orchestrator without generating merge commits. When review applies, arrange the batch before receiving deliveries; each batch covers all unreviewed deliveries from its base to this batch's HEAD, and out-of-batch changes are not mixed into the group branch. Other `review/` cards queue until the current batch completes; in-batch fixes are received after the Reviewer exits and then re-reviewed, so that the review target matches the batch contract. When review does not apply, receive directly in dependency order.
+- Deliveries are received serially by the orchestrator without generating merge commits. When review applies, no batch opens before every member of the group has started, because closing a batch needs the review plan and the plan can be created only then; until that point deliveries are received freely in dependency order. Afterwards receive only while no batch is open; each batch, when opened, covers all deliveries received since the previous closed target up to this batch's HEAD, and no other change is mixed into the group branch while it runs, because closing it requires the worktree clean at its final target. Other `review/` cards queue until the current batch closes; in-batch fixes are received after the Reviewer exits and then re-reviewed, so that the review target matches the batch contract. When review does not apply, receive directly in dependency order.
 
 **Topology Freeze**
 
-- While any review batch of a group is open, the orchestrator does not re-split the group, move cards between groups, change a card's owner, or accept a contract change. A user request for any of these first closes the open batch (pass, or record the round as abandoned with its evidence), then applies the change, then starts a new batch. Applying such a change mid-batch invalidates the batch and must be reported as wasted rounds, not silently absorbed.
+- While any review batch of a group is open, the orchestrator does not re-split the group, add members, move cards between groups, change a card's owner, or accept a contract change. A user request for any of these first closes the open batch (its remaining required roles still run on the current target, and findings the pending change supersedes are disposed as `rejected` with the user's quoted decision and stay on the unresolved list; a batch in which a reviewer has run is never abandoned, because every planned batch must close before its members can complete), then applies the change, then starts a new batch in the same plan, which must still be unsealed and which reviews only the work after the closed target; re-reviewing the closed range under the new contract, a change that alters the base chain, or a change that arrives after the plan is sealed, continues as new cards per `KANDER-REVIEW-RULES.md` "Group-Level Review for Task Groups". Applying such a change mid-batch invalidates the batch and must be reported as wasted rounds, not silently absorbed. The review plan fixes the group's members and worktree when it is created: it cannot take a new member later, and it cannot follow a card into another group, so work discovered after that point becomes a successor group or an independent card, and a re-split after the plan exists means terminating the affected cards under the user's decision and creating new ones; report both as topology changes.
 
 **Merge-Back and Cleanup Preconditions**
 
-- Once all of a group's deliveries are in the group branch, all members have reached `review/`, and applicable reviews are complete, the orchestrator checks integration authorization per the Git rule file "Integration and Cleanup", rebases onto the latest `develop`, re-verifies, and merges back. Successor groups in the same orchestration are unlocked by this prerequisite group's `done/` and actual delivery; do not wait for all groups to finish before integrating.
-- The orchestrator records the group HEAD before and after integration and the mapping to each card's commit. When `develop` advances, the one-time review gate applies; substantive code conflicts are dispatched to the original executing agent via `notify`, the orchestrator does not fix them on its behalf, and the fixed result is re-reviewed per the applicable review.
-- Before cleanup, confirm the final group changes have entered the actual local or remote `develop`: for direct integration, verify with `git merge-base --is-ancestor` using the post-rebase group HEAD; when the user or project requires a PR, use the PR merged criteria from the Git rule file. If not satisfied, keep the group and task working state and report.
-- Once satisfied, dispatch the original executing agents to clean up their own card's working state per "Integration and Wrap-Up". After all of the group's cards enter `done/`, the orchestrator removes the group worktree, the local group branch, and the applicable remote group branch; on failure, keep only the working state that still remains and do not roll back completed cards.
+- Once all of a group's deliveries are in the group branch, all members have reached at least `review/`, and applicable reviews are complete, the orchestrator checks integration authorization per the Git rule file "Integration and Cleanup", rebases onto the latest `develop`, re-verifies, and merges back. Successor groups in the same orchestration are unlocked once every member of this prerequisite group has entered `done/` (or `archived/` with `RESULT: completed`) and its final group HEAD is confirmed in `develop`; do not wait for all groups to finish before integrating.
+- The orchestrator records the group HEAD before and after integration and the mapping to each card's commit. When `develop` advances, the one-time review gate applies. The bound wrap-up evidence accepts the rebased group line only when its complete patch equals the closed reviewed patch, so the integration rebase must apply cleanly. After a rebase that applied cleanly, compare the complete patch of the reviewed range with the rebased range before pushing, normalizing only index lines and hunk offsets (the same comparison the wrap-up evidence applies); a differing patch, for example from changed context lines upstream, is handled exactly like a conflict. When any commit conflicts or the patch differs, abort the rebase, keep the reviewed group HEAD and the whole group state, and report to the user with numbered options: `1. Integrate the reviewed group HEAD unchanged through a PR or a user-authorized merge into develop, which keeps the reviewed patch intact`, `2. Stop integration and keep the group state`. The orchestrator does not resolve group-branch conflicts itself and does not dispatch executing agents to rewrite delivered group history.
+- Before cleanup, confirm the final group changes have entered the actual local or remote `develop`: for direct integration, verify with `git merge-base --is-ancestor` using the post-rebase group HEAD; when the user or project requires a PR, use the PR merged criteria from the Git rule file. The wrap-up evidence still needs a Git mapping, and it binds the range from the first planned batch's base to the target recorded in the plan for the last batch (`KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate"), which equals the closed final target only when no fix advanced the last batch after it was recorded: when `develop` contains the group history unchanged (fast-forward without rebase, or a merge commit), `source_commit` is that recorded target and the orchestrator verifies the closed final target's ancestry separately; when history was rewritten (the integration rebase followed by fast-forward, or a squash or rebase merge), `source_commit` is the last replayed commit on `develop` and `rebased_base` is the parent of the first replayed commit, and the evidence passes only when the complete patch of the replayed range equals the recorded range's patch; because that comparison covers only the recorded range, when the last batch advanced after being recorded, stop and report instead of wrapping up. Choose the PR merge method with that in mind. If not satisfied, keep the group and task working state and report.
+- Once satisfied, dispatch the original executing agents to clean up their own card's working state per "Integration and Wrap-Up"; the group worktree and branches are removed per "Cleanup Failures" after all of the group's cards enter `done/`.
 
 ## Task Orchestration
 
@@ -148,18 +154,18 @@ PREREQUISITES: N/A
   - Verify IDs, dependencies, contracts, and modification scopes, parse every card's full `PREREQUISITES`, and classify the direct references into in-group cards, out-of-group cards, and out-of-group task groups.
   - Run `kander check <all member task-ids>...` as a targeted check of references and dependency cycles. Missing cards, missing group references, dependency cycles, or resource conflicts that cannot be isolated block the affected cards from starting; preserve the working state and report.
   - Existing environment problems that do not affect start conditions are only recorded and need not be fixed first. When the agent, launcher, configuration dependencies, board, or required Git workspace is unavailable, still block and do not bypass the `start` pre-checks.
-  - Use `kander move <task-id> todo` to move confirmed `backlog` cards into `todo/`; cards already in later states stay as they are.
+  - Use `kander move <task-id> todo` (or `kander pick`) to move confirmed `backlog` cards into `todo/`; the transition requires the `SELF_REVIEW:` and `CARD_REVIEW:` records from "Task Splitting and Task Groups". Cards already in later states stay as they are.
 
 **Waiting for External Dependencies**
 
 - While out-of-group dependencies are unmet, do not create the group branch or start cards; the whole not-yet-started group stays in `todo/`.
 - Cards in later states during recovery keep their state.
-- First tell the user the gap and the dependency targets, then wait with `kander subscribe <task-group> <all member task-ids>... --watch <out-of-group task-id|task-group-id>...`; `--watch` may be repeated per direct reference.
-- After an out-of-group card reaches `done/` or all members of a referenced group reach `done/`, re-check that the delivery is actually usable on `develop`.
-- When a watched card enters `archived/` or `trash/`, stop waiting and hand the decision to the user; do not judge the dependency satisfied on your own.
+- First tell the user the gap and the dependency targets, then wait with `kander subscribe <task-group> <all member task-ids>... --watch <out-of-group task-id|task-group-id>...`; `--watch` may be repeated per direct reference. `--watch` is used only for targets outside this orchestration; a prerequisite group owned by the same orchestrator releases its successor per "Merge-Back and Cleanup Preconditions" without a separate waiting subscription.
+- After an out-of-group card reaches `done/` or all members of a referenced group reach `done/`, apply the `develop` containment check of "Dependencies Between Task Cards".
+- When a watched card enters `archived/` with `RESULT: completed`, treat it as `done/` and run the same `develop` containment check. When it enters `archived/` with any other result, or `trash/`, stop waiting and hand the decision to the user; do not judge the dependency satisfied on your own.
 - State events trigger targeted re-checks of external dependencies. With no `working/` members of this group, the 15-minute heartbeat only confirms the subscription is alive; when resuming orchestration with `working/` members of this group still present, check those members' `liveness` per "Handling State Changes" and do not take over out-of-group agents.
-- Once all external dependencies are satisfied, stop this group's waiting subscription, create the group working state from the then-latest `develop` per "Creation and Reuse", record the creation anchor, and then start. When the same orchestrator also owns the prerequisite group, keep advancing the prerequisite group; do not stop its scheduling because of the successor group's waiting subscription.
-- With no external blocker, run this directly before starting the first card.
+- Once all external dependencies are satisfied, stop this group's waiting subscription, create the group working state from the then-latest `develop` per "Creation and Reuse", record the creation anchor, and then start. When the same orchestrator also owns the prerequisite group, keep advancing it; a successor's waiting subscription for its other external targets does not stop that scheduling.
+- With no external blocker, create the group working state per "Creation and Reuse" directly before starting the first card.
 
 **Starting Ready Cards**
 
@@ -171,13 +177,13 @@ PREREQUISITES: N/A
 - The executing agent learns that it follows the task group flow from the card's `TASK_GROUP` field and these rules.
 - Immediately after the first card starts successfully, tell the user: this session is the task group orchestrator and must be kept until all task groups in this orchestration have run in dependency order; do not end the current session; ending early loses dependency validation, ordered starts, applicable group-level reviews, and integration. The orchestrator session lasts until this orchestration succeeds or the user explicitly terminates it.
 
-- After starting the first batch, the orchestrator blocks reading the line-by-line JSON from `kander subscribe <task-group> <task-id>...`: first a `snapshot`, then a `state-change` per state change, containing the group ID, the states before and after the change, and a snapshot of the whole group.
+- After starting the first round of cards, the orchestrator blocks reading the line-by-line JSON from `kander subscribe <task-group> <task-id>...`: first a `snapshot`, then a `state-change` per state change, containing the group ID, the states before and after the change, and a snapshot of the whole group.
 
   Use the initial snapshot to catch up on moves made before subscribing; do not rely on historical events.
 
 **Handling State Changes**
 
-- Consume versioned subscription facts as observations. A `task-update` requires re-reading the affected delivery record even when its state is unchanged; revision is not a dispatch completion receipt. On restart, compare the new snapshot with saved task revisions and membership versions, not the process-local sequence number.
+- Consume versioned subscription facts as observations and feed each of them into the coordinator checkpoint per "Durable Coordinator Recovery". A `task-update` requires re-reading the affected delivery record even when its state is unchanged; revision is not a dispatch completion receipt. On restart, compare the new snapshot with saved task revisions and membership versions, not the process-local sequence number.
 - A `membership-change` requires re-checking the complete dependency set. A removed or regrouped member never automatically satisfies its former obligation. When `reconciliation_required` is true, reconcile the contract and delivery before releasing dependencies.
 - A terminal `membership-unknown` or `read-error`, or `membership_complete: false`, stops dependency release for the affected subscription. Preserve the last facts as history, report the diagnostic, and follow explicit recovery requirements; do not infer completion from omitted tasks or automatically repair the board.
 
@@ -190,9 +196,9 @@ PREREQUISITES: N/A
 
 - The subscription emits a `heartbeat` every 15 minutes by default, independently of state changes. The interval restarts after each heartbeat is queued. Slow probes do not block scanning or heartbeat production; output backpressure beyond the bounded queue/write deadline terminates explicitly. Reconnect and reconcile the new snapshot after such an exit.
 
-  The orchestrator reads the `liveness` carried by the event directly, checking revision/identity, observation age, validity and collection state. Pending, uncollected and stale observations remain `unknown`; `alive` proves presence only and does not extend confirmation deadlines or prove progress, `stopped` or `drifted` is handled per "Failure Recovery", and `unknown` is reported as undeterminable together with the details.
+  The orchestrator reads the `liveness` carried by the event directly, checking revision/identity, observation age, validity and collection state. Pending, uncollected and stale observations remain `unknown`; `alive` proves presence only and does not extend confirmation deadlines or prove progress, `stopped` or `drifted` is handled per `KANDER-KANBAN-RULES.md` "Failure Recovery" (unbound and bound cards differ there), and `unknown` is reported as undeterminable together with the details.
 
-  Do not run a board-wide `kander check`, do not re-read unrelated cards, and do not patrol with capture-pane on your own.
+  While handling heartbeats and state events, do not run a board-wide `kander check`, do not re-read unrelated cards, and do not patrol with capture-pane on your own; the single untargeted `kander check` in "Integration and Wrap-Up" runs only after every group has wrapped up.
 
   Agent messages or user input may trigger an extra liveness check of the same scope without changing the semantics of the next heartbeat.
 
@@ -217,35 +223,34 @@ PREREQUISITES: N/A
 
 This section runs only when review applies. A dispatch-back solely for task branch sync or integration conflicts is handled per "Group Integration Branch" and does not enable the review module.
 
-- The orchestrator batches `review/` cards by module, milestone, or dependency chain, receives the batch's deliveries per "Delivering a Task Branch to the Group Branch", and then reviews; neither whole-group nor one-card batches are mandated.
+- The orchestrator decides batch boundaries by choosing when to receive deliveries: a batch is opened at a point the orchestrator picks (a module, a milestone, or a dependency-chain step), never before every member has started (see "Group Integration Branch"), and it then covers every delivery received on the group branch since the previous closed target. Deliveries the orchestrator wants in a later batch stay queued in `review/` unreceived. Deferral never delays a successor: a delivery whose in-group successor is otherwise ready is received as soon as no batch is open, and it then belongs to the next batch. Neither whole-group nor one-card batches are mandated; the constraint is only that a received delivery is never left out of the batch that follows it.
 
   Determine the CWD, base, task context, and role flow per `KANDER-REVIEW-RULES.md` "Group-Level Review for Task Groups".
 
-  Each batch is independent; a later batch's base is the commit at which the previous batch completed review, and only in-batch fixes get incremental re-review.
+  Each batch is independent; a later batch's base is the closed target of the previous batch, and only in-batch fixes get incremental re-review. A batch in which a reviewer has run is never abandoned; it is closed per "Topology Freeze" before the next batch names it as predecessor.
 
-- Default batching: at batch time, every card already received on the group branch joins the same batch. One batch per card is used only when a dependency chain forces a later card to wait for an earlier card's review result. Serial per-card batches for independent cards are forbidden.
+- Default batching: at batch time, every delivery received on the group branch since the previous closed target joins the same batch. A batch with a single card arises only when that delivery was the only one received between the previous batch's closure and this batch's opening, for example when a dependency chain made the successor deliver only after that closure. Serial per-card batches for independent cards are forbidden; holding independent ready deliveries unreceived merely to review them one by one counts as such a serial batch.
 
 - Findings are attributed by the orchestrator according to the cards' modification scopes: whichever card's `GOAL`/`OUT_OF_SCOPE`/actual changes a finding hits, that card gets it.
 
-  Cross-card integration findings go to the card whose modification scope they hit; when none matches, the orchestrator creates a small fix card and adds it to this group (fill in `TASK_GROUP` and `PREREQUISITES`, then `pick` and `start`).
+  Cross-card integration findings are assigned through `review assign` to every card of the batch whose modification scope they hit; a card outside the batch cannot be assigned, so when a finding also hits a card reviewed in an earlier batch, report that membership gap and plan that card's part as a later batch or a successor card. When no batch member's scope matches, the finding is beyond every member's contract: attribute it to the in-batch card whose delivery introduced the interaction (the later delivery in dependency order, or the later-received delivery when they are independent). Its executing agent disposes it as `rejected` beyond contract with a follow-up card suggested, unless it reaches `blocking` or `high`, which goes to the user per `KANDER-REVIEW-RULES.md` "Main Agent Verification Duty". If the user decides to include it, that is a contract change of that member: close the open batch per "Topology Freeze", apply the contract decision, then open a new batch in the still unsealed plan. The orchestrator never adds a fix card to a running group, because the review plan cannot take a new member; such work becomes a successor group or an independent card.
 
 **Durable Dispatch Identity**
 
 - Use `notify --kind fix --evidence-file <JSON>` for findings, `--kind sync` for task-branch synchronization, and `--kind wrap-up --evidence-file <JSON>` after integration. Bind the actual review run/finding/assignment and existing author originals for fix, and verified develop integration for wrap-up, per the command protocol. Record the printed dispatch ID, frozen baseline and original message; retries reuse the same ID and payload.
 - Read `kander dispatch show <task-id> <dispatch-id>` to reconcile uncertainty. State changes and terminal echo do not replace accepted/completed receipts. Before working, the executing owner uses the ID/epoch move command from the generated prompt; a replayed receipt does not authorize duplicate work. Completion carries the same grant and final delivery/evidence references.
 - When a notify returns nonzero, preserve the actual dispatch state. Do not invent a new round or separately invoke resume to escape uncertainty. Report the reason; a same-ID retry follows the command protocol's persisted deadline, readiness and stopped/unknown rules.
-- The legacy "exactly once" notify statements below mean one logical dispatch ID. They do not prohibit same-ID reconciliation, and do not promise exactly-once external side effects. Column transitions remain scheduling hints; verify the dispatch receipt before treating a bound round as accepted or complete.
 
 **Dispatching Findings Back**
 
-- A dispatch-back calls `kander notify <task-id> --message-file <findings>` exactly once and checks the exit code; channel selection, recovery, and window/document rollback are handled inside the command. A dispatch-back carries only gate findings (`blocking`, `high`, `medium`, including `[mechanical]`); `low`, `recommend` and `suggest` items go to the card's unresolved list and are never dispatched, and no dispatch asks the author to "triage" a non-blocking list.
+- A dispatch-back calls `kander notify <task-id> --kind fix --evidence-file <JSON> --message-file <findings>` once per logical dispatch and checks the exit code; channel selection, recovery, and window/document rollback are handled inside the command. A dispatch-back carries the card's gate findings (`blocking`, `high`, `medium`, including `[mechanical]`) to fix, bound in the evidence, and its non-blocking findings (`low`, `recommend`, `suggest`) in the message for disposition only, each with role and tier, per `KANDER-REVIEW-RULES.md` "Preconditions and Execution"; a card with only non-blocking findings gets the `--kind sync` disposition-only dispatch described there. Non-blocking items never open a fix round, and a dispatch that lists no concrete items or asks the author to "triage" is forbidden.
 - A non-zero exit means stop and report to the user.
 - The file states the reviewer role, tier, the findings verbatim, and facts known to the orchestrator; it does not contain the orchestrator's own conclusions. It is written in the target card's `LANGUAGE`.
-- On receiving the notice, the original executing agent first runs `kander move <task-id> working` itself to move back to `working/`, then continues with context: verify each finding, fix, commit, rebase onto the group branch head and re-verify, update the task branch, write in `IMPLEMENTATION` the previous round's finding list, handling conclusions, and the latest delivery SHA, then `move review` and end the current response turn.
+- On receiving the notice, the original executing agent first moves back to `working/` with the ID/epoch-bound move command from the dispatch prompt, then continues with context: verify each finding, fix, commit, rebase onto the group branch head and re-verify, update the task branch, submit the dispositions through `review disposition`, write in `IMPLEMENTATION` one entry with the counts per status, the card-relative record paths and the latest delivery SHA (never the finding list itself), then `move review` and end the current response turn.
 - A dispatch remains pending confirmation until its immutable accepted or completed receipt is verified for the expected ID, epoch and base. The initial snapshot and every later event use the same reconciliation path. Missing a `review -> working` edge does not block a proven receipt; observing an edge or terminal echo does not prove it. Until the receipt exists, do not release dependencies, queue its fix delivery for review, or create another logical dispatch. Respect the original confirmation deadline and inspect attention/liveness facts without inferring exit from timeout.
 - After reconciling the same round's completed receipt and final delivery, receive and sync the fix delivery per "Delivering a Task Branch to the Group Branch", then consume the author originals and trigger applicable incremental re-review. An already-contained delivery is verified and synced only; duplicate, lost or reordered events never create a new fix round.
 - Findings the executing agent judges invalid or outside the contract return to the orchestrator together with the reasoning; the orchestrator must not rewrite them and includes them in the unresolved items for the user to re-check per `KANDER-REVIEW-RULES.md` "Main Agent Verification Duty".
-- When a card dispatched back via `notify` has not entered `review/` and the executing agent has exited, or the same finding fails to close in two rounds, apply the round cap in `KANDER-REVIEW-RULES.md` "Conclusions and Failure Handling": record the current state and report to the user with numbered options per "Failure Recovery"; do not reassign and do not let the orchestrator fix it on its behalf.
+- When a card dispatched back via `notify` has not entered `review/` and the executing agent has exited, or the same finding fails to close in two rounds, apply the round cap in `KANDER-REVIEW-RULES.md` "Conclusions and Failure Handling": record the current state and report to the user with numbered options per `KANDER-KANBAN-RULES.md` "Failure Recovery"; do not reassign on your own and do not let the orchestrator fix it on its behalf, and a user-decided takeover follows that section.
 
 ### Integration and Wrap-Up
 
@@ -259,21 +264,21 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
 - After successful integration, dispatch the original agents to wrap up in dependency order; in parallel when there is no conflict.
 
-  Use only `kander notify <task-id> --message-file <wrap-up notice>`.
+  Use only `kander notify <task-id> --kind wrap-up --evidence-file <JSON> --base <source_commit> --message-file <wrap-up notice>` for the normal wrap-up dispatch, passing the evidence's `source_commit` as `--base` because the default base is the HEAD of the current directory; the only other entrance that creates a wrap-up intent is `dispatch authorize-wrap-up` under "Orchestrator Wrap-Up on Behalf", and a same-ID `resume --agent` follows the command protocol's user-authorization rule.
 
   The file states how the group branch was integrated into `develop` and the full SHA, this card's final commit (with the before/after mapping when a rebase rewrote it), role conclusions or N/A, applicable batches and fix rounds, this card's unresolved items, and the "Executing Agent Wrap-Up" checklist. For PR integration, also give the PR identifier, merged status, and target branch evidence.
 
   The orchestrator does not modify card bodies or move cards by hand.
 
-  When dispatch is impossible, apply the on-behalf exception.
+  When dispatch is impossible, go through the gate in "Orchestrator Wrap-Up on Behalf"; impossibility alone grants nothing.
 
 **Executing Agent Wrap-Up**
 
-- An executing agent receiving a wrap-up notice first runs `kander move <task-id> working` itself to move back to `working/`, then wraps up.
+- An executing agent receiving a wrap-up notice first moves back to `working/` with the ID/epoch-bound move command from the dispatch prompt, then wraps up.
 - The executing agent confirms per `KANDER-GIT-RULES.md` "Integration and Cleanup" that its card's changes are in `develop`: for direct integration, verify `git merge-base --is-ancestor` with the final group HEAD and confirm from the notice that this card's changes are included.
-- Do not judge ancestry with the pre-rebase old SHA; for PRs, confirm with the merged criteria in the Git rule file "Integration and Cleanup".
+- Do not judge ancestry with the pre-rebase old SHA; for PRs, confirm with the merged criteria in the Git rule file "Integration and Cleanup" and the `source_commit`/`rebased_base` mapping given in the wrap-up notice.
 - If not satisfied, preserve the working state and report to the orchestrator.
-- Once satisfied, delete this card's worktree, local task branch, and applicable remote task branch, without deleting the group worktree or group branch; complete the summary's review and wrap-up parts (role conclusions or N/A, applicable rounds, final commit, group branch and `develop` integration results), publish records through the controlled update entrance, then run `kander move <task-id> done --result completed`, report per the applicable `KANDER-REPORTING-RULES.md` template or the user's format, end the current response turn, and keep the interactive agent CLI session waiting for the user to decide whether to dismiss.
+- Once satisfied, delete this card's worktree, local task branch, and applicable remote task branch, without deleting the group worktree or group branch; complete the summary's review and wrap-up parts (role conclusions or N/A, applicable rounds, final commit, group branch and `develop` integration results), publish records through the controlled update entrance, then run the completion command from the dispatch prompt, `kander move <task-id> done --result completed --dispatch-id <id> --execution-epoch <epoch> --delivery-commit <final-full-SHA>` with the applicable `--disposition`, and the targeted `kander check <task-id>`, report per the applicable `KANDER-REPORTING-RULES.md` template or the user's format, end the current response turn, and keep the interactive agent CLI session waiting for the user to decide whether to dismiss.
 - The orchestrator does not modify the delivery, acceptance, and verification records written before the card moved into `review/`.
 
 **Orchestrator Wrap-Up on Behalf**
@@ -282,10 +287,12 @@ This section runs only when review applies. A dispatch-back solely for task bran
 - Keep the original OWNER and author conclusions. Record the actual on-behalf author/reason in the dedicated grant, accept its new epoch, and use only its cleanup/append-only record scope. Do not send a wrap-up-only token to another executor or upgrade it to ordinary code authority. Complete with the same dispatch and verified integration source; original completion and review gates remain in force.
 
 
-- When dispatch is impossible or the wrap-up does not close, the orchestrator completes the full wrap-up of that card and reports as the one who finished it. Applicable conditions:
+- When the wrap-up does not close, the orchestrator may complete the full wrap-up of that card and report as the one who finished it, but only after the authority gate above has granted it. The situations that lead to the gate are:
   - The card has no usable `WINDOW`/`SESSION` record.
   - `notify` exited non-zero.
   - The executing agent exited after the dispatch-back and the card still has not entered `done/`.
+
+  None of these is sufficient on its own. Each is a trigger to reconcile the dispatch and establish the executor's exit; the grant comes only from `kander dispatch authorize-wrap-up` once exit is confirmed. When exit cannot be established, preserve the card in its actual state and report; do not wrap up on behalf.
 
   State "wrap-up done by the orchestrator on behalf" and the reason in the `Wrap-Up` part of the card's completion report and in the group-level summary.
 
@@ -303,7 +310,7 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
   Success counts only when the full check passes.
 
-  When any card enters `archived/` or `trash/`, wait for the user to change the group contract or terminate the whole group.
+  When any card enters `archived/` with a result other than `completed`, or `trash/`, wait for the user to change the group contract or terminate the whole group.
 
 - At the end of orchestration, summarize the execution order, parallelism, applicable review batches and rounds or N/A, and integration results, then list per card the known defects, verification gaps, and follow-up tasks. Only when review applies, additionally classify and record unresolved review items per `KANDER-REVIEW-RULES.md` "Conclusions and Failure Handling"; do not load the disabled review module for this.
 
@@ -327,11 +334,14 @@ This section runs only when review applies. A dispatch-back solely for task bran
 
 ## Machine Aggregation and Author Boundaries
 
-When review applies, the orchestrator establishes the group's execution review plan before
-closing a batch. Resolve role applicability through the existing rules, recording explicit N/A
-reasons and rule bases. Use an unsealed plan for progressive batching; append each later batch
-with the expected plan revision only after the previous closed target is known, then seal before
-wrap-up. Keep the fixed cycle membership and existing batch evidence.
+Whether or not review applies, the orchestrator establishes the group's execution review plan
+once every member is in `working/` or `review/` and before any batch runs, per
+`KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate"; without review it is the explicit
+N/A plan, created before any member wraps up. Resolve role applicability through the existing
+rules, recording explicit N/A reasons and rule bases. Use an unsealed plan for progressive
+batching; append each later batch with the expected plan revision after the previous batch has
+closed and before this batch's first run, then seal before wrap-up. Keep the fixed cycle
+membership and existing batch evidence.
 
 Attribute findings with the controlled assignment command. Shared findings name all affected
 cards. Dispatch actual findings to their original executing owners. Each owner submits its own
@@ -351,11 +361,6 @@ satisfied. Release the next batch only from that exact closed target. During wra
 sealed plan and all closures in addition to actual develop integration; preserve unresolved
 items and all original author records.
 
-- Reclaiming a planned card with `move working --owner` may change its execution-cycle binding.
-  `review progress` then reports `requirements-needed` and the complete `rebind_cycles` map.
-  Use `review extend-plan` with the existing plan ID, expected revision, that map, author and
-  basis to restore the same requirements for the whole plan. This operation cannot change
-  batches, sealing, role requirements, member states or earlier evidence. Old failures and
-  findings remain binding; creating another plan to discard them is forbidden. A successor
-  OWNER may append their own disposition to an assigned finding, preserving the old author's
-  immutable original and record lineage. Advance and extend-plan use the plan's exact CWD.
+- Reclaiming a planned card may change its execution cycle; when `review progress` reports
+  `requirements-needed`, rebind the plan per `KANDER-KANBAN-RULES.md` "Review Evidence Completion
+  Gate" before continuing.

@@ -3,7 +3,7 @@
 ## Communication and Formatting
 
 - Tables and diagrams are at most 100 ASCII characters wide; wrap inside cells when they exceed it.
-- Number user options from `1`, stating the action and the outcome clearly; replying with only the number is valid. Any other numbering must be clearly distinguishable from user options.
+- Number user options from `1`, stating the action and the outcome clearly; replying with only the number is valid. Present at most one numbered question per message, and any other numbering in the same message must be clearly distinguishable from user options.
 
 ## Working Principles
 
