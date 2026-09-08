@@ -1,0 +1,68 @@
+# Build and publish a GitHub release for every push to main.
+# Cross-compiles the pure-Go binary for all supported platforms on one runner.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build all platforms
+        run: |
+          set -euo pipefail
+          BUILD_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          GIT_HASH="$(git rev-parse --short=12 HEAD)"
+          VERSION="${BUILD_TIMESTAMP}-${GIT_HASH}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+          VERSION_PACKAGE=github.com/dualface/kander/internal/version
+          LDFLAGS="-s -w -X ${VERSION_PACKAGE}.BuildTimestamp=${BUILD_TIMESTAMP} -X ${VERSION_PACKAGE}.GitHash=${GIT_HASH}"
+
+          mkdir -p dist
+          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            bin=kander
+            [ "$GOOS" = windows ] && bin=kander.exe
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -trimpath -ldflags "$LDFLAGS" -o "dist/$bin" ./cmd/kander
+            name="kander-${GOOS}-${GOARCH}"
+            if [ "$GOOS" = windows ]; then
+              (cd dist && zip -q "${name}.zip" "$bin" && rm "$bin")
+            else
+              tar -czf "dist/${name}.tar.gz" -C dist "$bin"
+              rm "dist/$bin"
+            fi
+            echo "packaged ${name}"
+          done
+
+          (cd dist && sha256sum -- * > checksums.txt)
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: kander ${{ env.VERSION }}
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums.txt
