@@ -17,8 +17,9 @@ type startRequest struct {
 type startNotice struct{ full, compact string }
 
 type startResult struct {
-	result launch.StartResult
-	err    error
+	result   launch.StartResult
+	err      error
+	sequence uint64
 }
 
 func prepareTaskStart(id string) (startRequest, error) {
@@ -65,47 +66,68 @@ func (a *App) confirmSelectedStart() {
 		a.showFocusNotice(t("tui.start_invalid_state", selected.State))
 		return
 	}
-	request, err := a.PrepareStart(selected.TaskID)
-	if err != nil {
-		a.showFocusNotice(strings.Join(append([]string{t("tui.start_failed", err.Error())}, request.Warnings...), " "))
-		return
+	a.startSequence++
+	sequence, id, prepare := a.startSequence, selected.TaskID, a.PrepareStart
+	a.StartConfirmation = &startDialog{
+		startRequest: startRequest{StartPreview: launch.StartPreview{TaskID: id, State: selected.State}},
+		sequence:     sequence, phase: startLoading,
 	}
-	if request.State != "backlog" && request.State != "todo" {
-		a.showFocusNotice(t("tui.start_invalid_state", request.State))
-		return
+	a.pendingWork = func() any {
+		request, err := prepare(id)
+		return startPreviewResult{request: request, err: err, taskID: id, sequence: sequence}
 	}
-	if !backgroundStartLauncher(request.Launcher) {
-		a.showFocusNotice(t("tui.start_use_cli", request.Launcher))
-		return
-	}
-	a.StartConfirmation = &request
 	a.resetMouseSelection()
 }
 
-func (a *App) handleStartConfirmation(key string) {
-	request := *a.StartConfirmation
-	a.StartConfirmation = nil
-	if key != "y" {
+func (a *App) applyStartPreview(result startPreviewResult) {
+	dialog := a.StartConfirmation
+	if dialog == nil || dialog.phase != startLoading || dialog.sequence != result.sequence || dialog.TaskID != result.taskID {
 		return
 	}
-	run := a.StartTask
-	a.startsRunning++
+	selected := a.Model.SelectedTask()
+	if selected == nil || selected.TaskID != result.taskID {
+		a.StartConfirmation = nil
+		return
+	}
+	request, message := result.request, ""
+	switch {
+	case result.err != nil:
+		message = t("tui.start_failed", result.err.Error())
+	case request.State != "backlog" && request.State != "todo":
+		message = t("tui.start_invalid_state", request.State)
+	case !backgroundStartLauncher(request.Launcher):
+		message = t("tui.start_use_cli", request.Launcher)
+	}
+	if message != "" {
+		a.StartConfirmation = nil
+		a.showFocusNotice(strings.Join(append([]string{message}, request.Warnings...), " "))
+		return
+	}
+	dialog.startRequest, dialog.phase = request, startReady
+}
+
+func (a *App) handleStartConfirmation(key string) {
+	dialog := a.StartConfirmation
+	if dialog.phase == startRunning {
+		return
+	}
+	if dialog.phase == startFinished || key != "y" {
+		a.StartConfirmation = nil
+		return
+	}
+	if dialog.phase == startLoading {
+		a.showFocusNotice(t("tui.start_loading_keys"))
+		return
+	}
+	run, request, sequence := a.StartTask, dialog.startRequest, dialog.sequence
+	dialog.phase = startRunning
 	a.pendingWork = func() any {
 		result, err := run(request)
-		return startResult{result, err}
+		return startResult{result: result, err: err, sequence: sequence}
 	}
-	a.showFocusNotice(t("tui.start_starting", request.TaskID))
 }
 
 func (a *App) applyStartResult(result startResult) {
-	if a.startsRunning > 0 {
-		a.startsRunning--
-	}
-	defer func() {
-		if a.quitAfterStarts && a.startsRunning == 0 {
-			a.Running = false
-		}
-	}()
 	a.refreshBoard()
 	message := ""
 	compact := ""
@@ -124,25 +146,13 @@ func (a *App) applyStartResult(result startResult) {
 		message += " " + warning
 		compact += " " + warning
 	}
+	if dialog := a.StartConfirmation; dialog != nil && dialog.phase == startRunning && dialog.sequence == result.sequence {
+		dialog.phase, dialog.message = startFinished, message
+	}
 	a.showFocusNotice(message)
 	if result.err == nil {
 		a.startNotice = &startNotice{a.CopyNotice, strings.ReplaceAll(printableText(ansi.Strip(compact)), "\n", " ")}
 	}
-}
-
-func (a *App) renderStartConfirmation() (popupBox, string) {
-	request := a.StartConfirmation
-	lines := []string{
-		t("tui.start_confirm"),
-		request.TaskID,
-		t("tui.start_settings", request.Agent, request.Launcher),
-	}
-	if request.State == "backlog" {
-		lines = append(lines, t("tui.start_backlog"))
-	}
-	lines = append(lines, request.Warnings...)
-	lines = append(lines, t("tui.start_confirm_keys"))
-	return a.renderStartPopup(lines)
 }
 
 func (a *App) renderStartPopup(lines []string) (popupBox, string) {
@@ -157,15 +167,8 @@ func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 	return box, popupFrame(p, box.Width-2).Render(padBlock(body, box.Width-4, box.Height-2, p))
 }
 
-// requestQuit keeps the event loop alive until every queued start has settled,
-// so the launch layer can finish its existing confirmation or rollback protocol.
 func (a *App) requestQuit() {
-	if a.startsRunning == 0 {
-		a.Running = false
-		return
-	}
-	a.quitAfterStarts = true
-	a.showFocusNotice(t("tui.start_wait_exit", a.startsRunning))
+	a.Running = false
 }
 
 func (a *App) activeStartNotice() bool {

@@ -72,7 +72,7 @@ func TestJournalWarningsReachRefreshDetailAndBacklogStart(t *testing.T) {
 		if err == nil {
 			t.Fatal("missing expected launcher preflight error")
 		}
-		app.applyStartResult(startResult{result, err})
+		app.applyStartResult(startResult{result: result, err: err})
 		if !strings.Contains(app.CopyNotice, "cleanup-blocked") || !strings.Contains(app.CopyNotice, "kander init") {
 			t.Fatalf("start warnings not visible: %s", app.CopyNotice)
 		}

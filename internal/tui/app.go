@@ -45,9 +45,8 @@ type App struct {
 	FocusWindow       focusFn
 	PrepareStart      func(string) (startRequest, error)
 	StartTask         func(startRequest) (launch.StartResult, error)
-	StartConfirmation *startRequest
-	startsRunning     int
-	quitAfterStarts   bool
+	StartConfirmation *startDialog
+	startSequence     uint64
 	startNotice       *startNotice
 	focusRunning      bool
 	PersistColumns    persistFn

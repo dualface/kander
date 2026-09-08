@@ -67,7 +67,7 @@
 - 看板与详情的几何 (栏目 X/宽度, 卡片行) 由本包自己算, 鼠标命中, 拖选复制都依赖它; 不要改成由组件库托管布局.
 - 选区与光标一律在去掉 ANSI 之后的纯文本上计算 (`ansi.Strip`), 渲染时再按 span 重新着色.
 - 弹窗用 `overlay()` 按显示列合成到底层画面上, 不是整屏替换.
-- 棋盘视图 `s` 确认后启动 backlog/todo 卡；TUI 单向调用 `internal/launch` 的结构化入口，复用 board 受控迁移。后台启动及警告通过 pendingWork 回传，不直接写 stdout/stderr；foreground/console 只提示使用 CLI。退出请求等待已排队启动结束；窄屏压缩结果页脚，必要时用不接管输入的临时浮层展示完整结果。
+- 棋盘视图 `s` 确认后启动 backlog/todo 卡；TUI 单向调用 `internal/launch` 的结构化入口，复用 board 受控迁移。后台启动及警告通过 pendingWork 回传，不直接写 stdout/stderr；foreground/console 只提示使用 CLI。按 `s` 立即弹框并通过 pendingWork 只读目标卡预览，以任务 ID 和请求序号丢弃过期结果；确认后保留正在启动态，完成后框内显示成功/失败及警告，结果态任意键关闭；窄屏压缩结果页脚，必要时用不接管输入的临时浮层展示完整结果。
 - `internal/menu` 不得 import `internal/tui`; TUI 选项面板单向复用 `menu.Session` 配置逻辑.
 
 ## 子命令

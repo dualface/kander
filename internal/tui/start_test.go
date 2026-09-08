@@ -33,6 +33,7 @@ func TestStartKeyStatesAndCancellation(t *testing.T) {
 		t.Run(state, func(t *testing.T) {
 			app := startTestApp(state)
 			app.HandleKey("s")
+			finishStartPreview(app)
 			if state != "backlog" && state != "todo" {
 				if app.StartConfirmation != nil || app.pendingWork != nil || app.CopyNotice == "" {
 					t.Fatal("invalid state must only show notice")
@@ -57,12 +58,14 @@ func TestStartKeyStatesAndCancellation(t *testing.T) {
 					t.Fatalf("cancel %q produced side effect", key)
 				}
 				app.HandleKey("s")
+				finishStartPreview(app)
 			}
 		})
 	}
 	app := startTestApp("todo")
 	app.Model.SetBoard(BoardPayload{})
 	app.HandleKey("s")
+	finishStartPreview(app)
 	if app.StartConfirmation != nil || app.CopyNotice == "" {
 		t.Fatal("empty selection must show notice")
 	}
@@ -72,12 +75,14 @@ func TestStartKeyContextsAndHelp(t *testing.T) {
 	app := startTestApp("todo")
 	app.HandleKey("/")
 	app.HandleKey("s")
+	finishStartPreview(app)
 	if app.Model.Query != "s" || app.StartConfirmation != nil {
 		t.Fatal("s must remain search input")
 	}
 	app.HandleKey("esc")
 	app.HandleKey("enter")
 	app.HandleKey("s")
+	finishStartPreview(app)
 	if app.Detail == nil || app.StartConfirmation != nil {
 		t.Fatal("detail s must not start")
 	}
@@ -98,6 +103,7 @@ func TestStartConfirmationErrors(t *testing.T) {
 		prepare := app.PrepareStart
 		app.PrepareStart = func(id string) (startRequest, error) { r, e := prepare(id); r.Launcher = launcher; return r, e }
 		app.HandleKey("s")
+		finishStartPreview(app)
 		if app.StartConfirmation != nil || app.pendingWork != nil || !strings.Contains(app.CopyNotice, "kander start") {
 			t.Fatal("unsupported launcher must require CLI")
 		}
@@ -109,6 +115,7 @@ func TestStartConfirmationErrors(t *testing.T) {
 	app := startTestApp("todo")
 	app.PrepareStart = func(string) (startRequest, error) { return startRequest{}, errors.New("config unreadable") }
 	app.HandleKey("s")
+	finishStartPreview(app)
 	if app.StartConfirmation != nil || !strings.Contains(app.CopyNotice, "config unreadable") {
 		t.Fatal("missing preparation error")
 	}
@@ -137,17 +144,17 @@ func TestStartBackgroundCompletion(t *testing.T) {
 			}
 			p := program{app: app}
 			app.HandleKey("s")
+			finishStartPreview(app)
 			_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-			if cmd == nil || calls != 0 || refreshes != 0 || app.StartConfirmation != nil {
+			if cmd == nil || calls != 0 || refreshes != 0 || app.StartConfirmation == nil || app.StartConfirmation.phase != startRunning {
 				t.Fatal("start must be asynchronous")
 			}
 			app.HandleKey("/")
-			if !app.Searching {
-				t.Fatal("background start blocked input")
+			if app.Searching || app.StartConfirmation.phase != startRunning {
+				t.Fatal("starting dialog must retain input")
 			}
-			app.Options = &optionsPanel{app: app}
 			p.Update(cmd())
-			if calls != 1 || refreshes != 1 {
+			if calls != 1 || refreshes != 1 || app.StartConfirmation.phase != startFinished {
 				t.Fatalf("calls=%d refreshes=%d", calls, refreshes)
 			}
 			if failed {
@@ -243,6 +250,7 @@ func TestBacklogStartMovesToTodoBeforeLaunchPreflight(t *testing.T) {
 func TestStartConfirmationNarrowTerminalAndMouse(t *testing.T) {
 	app := startTestApp("todo")
 	app.HandleKey("s")
+	finishStartPreview(app)
 	for _, width := range []int{12, 40, 80} {
 		app.Width, app.Height = width, 24
 		view := app.View()
@@ -260,76 +268,6 @@ func TestStartConfirmationNarrowTerminalAndMouse(t *testing.T) {
 	app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	if app.StartConfirmation != nil || !app.Running {
 		t.Fatal("Ctrl+C must cancel confirmation")
-	}
-}
-
-func TestStartQuitWaitsForBackgroundCompletion(t *testing.T) {
-	for _, key := range []string{"q", "ctrl-c"} {
-		for _, failed := range []bool{false, true} {
-			app := startTestApp("todo")
-			entered, release := make(chan struct{}), make(chan struct{})
-			t.Cleanup(func() {
-				select {
-				case <-release:
-				default:
-					close(release)
-				}
-			})
-			app.StartTask = func(r startRequest) (launch.StartResult, error) {
-				close(entered)
-				<-release
-				if failed {
-					return launch.StartResult{}, errors.New("rolled back")
-				}
-				return launch.StartResult{TaskID: r.TaskID, Agent: r.Agent, Plan: launch.LaunchPlan{Launcher: r.Launcher}}, nil
-			}
-			p := program{app: app}
-			app.HandleKey("s")
-			_, start := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-			completed := make(chan tea.Msg, 1)
-			go func() { completed <- start() }()
-			<-entered
-			event := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
-			if key == "ctrl-c" {
-				event = tea.KeyMsg{Type: tea.KeyCtrlC}
-				app.Options = &optionsPanel{app: app}
-			}
-			_, quit := p.Update(event)
-			if quit != nil || !app.Running || !app.quitAfterStarts || app.startsRunning != 1 {
-				t.Fatal("quit interrupted active start")
-			}
-			app.Options = nil
-			p.Update(tea.WindowSizeMsg{Width: 85, Height: 25})
-			if app.Width != 85 {
-				t.Fatal("event loop stopped while draining start")
-			}
-			close(release)
-			_, quit = p.Update(<-completed)
-			if app.Running || app.startsRunning != 0 || quit == nil {
-				t.Fatal("quit was not completed after start settled")
-			}
-			if _, ok := quit().(tea.QuitMsg); !ok {
-				t.Fatal("missing terminal quit command")
-			}
-		}
-	}
-}
-
-func TestStartQuitWaitsForAllQueuedStarts(t *testing.T) {
-	app := startTestApp("todo")
-	for i := 0; i < 2; i++ {
-		app.HandleKey("s")
-		app.HandleKey("y")
-		app.takePending()
-	}
-	app.HandleKey("q")
-	app.applyStartResult(startResult{err: errors.New("first failed")})
-	if !app.Running || app.startsRunning != 1 {
-		t.Fatal("quit before every start settled")
-	}
-	app.applyStartResult(startResult{err: errors.New("second failed")})
-	if app.Running || app.startsRunning != 0 {
-		t.Fatal("pending quit lost")
 	}
 }
 
@@ -364,5 +302,11 @@ func TestStartResultRendersCompleteContainerAddress(t *testing.T) {
 	app.CopyNoticeUntil = app.Now()
 	if app.startNoticeOverflows(app.Width) {
 		t.Fatal("expired result overlay remained")
+	}
+}
+
+func finishStartPreview(app *App) {
+	if app.pendingWork != nil {
+		app.applyWork(app.takePending()().(workMsg).payload)
 	}
 }
