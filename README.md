@@ -28,6 +28,8 @@ kander
 
 需要 Go 1.25+, Git, 以及 Codex, Claude, Grok, Cursor 或 Kimi 中至少一个.
 
+Kimi 有两点与其它 Agent 不同. 其一, kimi-code 的提示词不能由命令行传入, 只能输入到面板, 因此 Kimi 任务必须用 `tmux`, `tmux-session` 或 `herdr` 启动; `console` 与 `foreground` 会被拒绝并说明原因. 其二, kimi-code 首次在一个仓库里启动时会先问是否信任该文件夹, 此时它还不接受输入, kander 会等待超时并提示你去面板里回答一次; 答过之后该仓库不再询问. 另外 Kimi 不接受推理档位: 它没有对应的命令行开关, 档位由 `~/.kimi-code/config.toml` 的 `[thinking] effort` 决定.
+
 拿到 kander 二进制后直接运行即可. 首次启动若尚未安装, 会进入交互向导: 选择界面语言 (`cn`/`en`/`ja`) 与安装位置, 再释出规则并把自身拷到目的地. 规则只有英文一份; Agent 与你沟通所用的语言由配置 `agent_language` 决定, 可在随后打开的选项面板里修改; 建卡时该值会写进任务卡的 `LANGUAGE` 字段, 之后这张卡一直用它. 之后自动进入环境检查和选项面板. 已安装用户可用 `kander install` 重跑向导 (升级规则或改安装位置). 命令也可直接用 `--lang ja` 切到日语界面.
 
 用 Go 从源码安装:
