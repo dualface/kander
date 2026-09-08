@@ -16,7 +16,7 @@ Four steps to get going:
 2. Once the task is confirmed, ask the agent in that session to complete it through the kanban flow:
 
 ```text
-Create a card with kander new, refine the task contract and self-review it, then launch with kander start
+Create a card with kander new, then launch it with kander start
 ```
 
 3. When you have multiple requirements, repeat steps 1-2 for each one, continuously scheduling and launching tasks.

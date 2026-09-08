@@ -16,7 +16,7 @@
 2. 任务确认后, 在该会话里要求 Agent 用看板流程完成任务:
 
 ```text
-用 kander new 建卡, 完善任务契约并自审后用 kander start 启动
+用 kander new 建卡, 再用 kander start 启动
 ```
 
 3. 有多个需求时, 对每个需求重复步骤 1-2, 不断安排并启动任务.
