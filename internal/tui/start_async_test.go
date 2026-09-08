@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -192,8 +193,13 @@ func TestStartDialogParagraphAndFooterLayout(test *testing.T) {
 		{4, "task\nsettings\nbacklog\nkeys"},
 		{3, "task\nsettings\nkeys"},
 	} {
-		got := fitStartDialog([]string{"task", "settings", "backlog"}, "keys", 40, tc.height, p)
-		if ansi.Strip(got) != tc.want {
+		view := viewport.New(40, tc.height)
+		got := fitStartDialog([]string{"task", "settings", "backlog"}, "keys", 40, tc.height, p, &view)
+		lines := strings.Split(ansi.Strip(got), "\n")
+		for i := range lines {
+			lines[i] = strings.TrimRight(lines[i], " ")
+		}
+		if strings.Join(lines, "\n") != tc.want {
 			test.Fatalf("height %d: %q", tc.height, got)
 		}
 		if !strings.HasSuffix(got, styleFor("popup-dim", p).Render("keys")) {

@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -20,6 +21,7 @@ type startDialog struct {
 	sequence uint64
 	phase    startPhase
 	message  string
+	bodyView viewport.Model
 }
 
 type startPreviewResult struct {
@@ -39,7 +41,7 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 		paragraphs = append(paragraphs, t("tui.start_settings", placeholder, placeholder))
 		hint = t("tui.start_loading_keys")
 	case startFinished:
-		paragraphs = append(paragraphs, dialog.message)
+		paragraphs = []string{dialog.message}
 		hint = t("tui.start_result_keys")
 	default:
 		paragraphs = append(paragraphs, t("tui.start_settings", dialog.Agent, dialog.Launcher))
@@ -67,7 +69,7 @@ func (a *App) renderStartDialog(paragraphs []string, hint string) (popupBox, str
 	title = ansi.Wrap(clean(title), inner, "")
 	hint = ansi.Wrap(clean(hint), inner, "")
 	available := max(1, h-blockHeight(title)-3)
-	body := fitStartDialog(paragraphs, hint, inner, available, p)
+	body := fitStartDialog(paragraphs, hint, inner, available, p, &a.StartConfirmation.bodyView)
 	box := centerOptionsPopup(w, h, inner+4, blockHeight(title)+blockHeight(body)+3)
 	content := styleFor("popup-title", p).Render(title) + "\n" +
 		styleFor("popup-edge", p).Render(strings.Repeat("─", inner)) + "\n" +
@@ -75,9 +77,9 @@ func (a *App) renderStartDialog(paragraphs []string, hint string) (popupBox, str
 	return box, withDefaultColors(popupFrame(p, inner+2).Render(content), p.ink(p.Base))
 }
 
-// fitStartDialog removes the footer gap before paragraph gaps or body rows.
+// fitStartDialog removes the footer gap before paragraph gaps or shrinking the body viewport.
 // Wrap before measuring so narrow terminals retain complete horizontal content.
-func fitStartDialog(paragraphs []string, hint string, width, available int, p palette) string {
+func fitStartDialog(paragraphs []string, hint string, width, available int, p palette, view *viewport.Model) string {
 	body := ansi.Wrap(strings.Join(paragraphs, "\n\n"), width, "")
 	gap := "\n\n"
 	if blockHeight(body)+blockHeight(hint)+1 > available {
@@ -86,14 +88,33 @@ func fitStartDialog(paragraphs []string, hint string, width, available int, p pa
 	if blockHeight(body)+blockHeight(hint) > available {
 		body = ansi.Wrap(strings.Join(paragraphs, "\n"), width, "")
 	}
-	lines := strings.Split(body, "\n")
-	limit := max(0, available-blockHeight(hint))
-	if len(lines) > limit {
-		lines = lines[:limit]
-	}
+	view.Width, view.Height = width, max(0, min(blockHeight(body), available-blockHeight(hint)))
+	view.SetContent(body)
+	view.SetYOffset(view.YOffset)
 	styledHint := styleFor("popup-dim", p).Render(hint)
-	if len(lines) == 0 {
+	if view.Height == 0 {
 		return styledHint
 	}
-	return strings.Join(lines, "\n") + gap + styledHint
+	return view.View() + gap + styledHint
+}
+
+func (a *App) handleStartMouse(x, y, buttons int) {
+	dialog := a.StartConfirmation
+	delta := mouseWheelDelta(buttons)
+	if delta == 0 {
+		return
+	}
+	if dialog.phase == startLoading {
+		a.handleBoardMouse(x, y, buttons)
+		selected := a.Model.SelectedTask()
+		if selected == nil || selected.TaskID != dialog.TaskID {
+			a.StartConfirmation = nil
+		}
+		return
+	}
+	if delta > 0 {
+		dialog.bodyView.ScrollDown(delta)
+	} else {
+		dialog.bodyView.ScrollUp(-delta)
+	}
 }

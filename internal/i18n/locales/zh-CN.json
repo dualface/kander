@@ -2,7 +2,7 @@
   "tui.start_loading": "读取中…",
   "tui.start_loading_keys": "正在读取任务… y：等待；其它键：取消",
   "tui.start_state": "状态：{{.V0}}（backlog/todo）",
-  "tui.start_result_keys": "按任意键关闭",
+  "tui.start_result_keys": "滚轮：滚动；任意键：关闭",
   "tui.start_success_compact": "已启动 | {{.V0}} | {{.V1}} | {{.V2}}",
   "tui.start_task": "启动任务（需确认）",
   "tui.start_no_selection": "请选择要启动的任务",

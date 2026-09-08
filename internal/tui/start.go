@@ -148,6 +148,7 @@ func (a *App) applyStartResult(result startResult) {
 	}
 	if dialog := a.StartConfirmation; dialog != nil && dialog.phase == startRunning && dialog.sequence == result.sequence {
 		dialog.phase, dialog.message = startFinished, message
+		dialog.bodyView.GotoTop()
 	}
 	a.showFocusNotice(message)
 	if result.err == nil {

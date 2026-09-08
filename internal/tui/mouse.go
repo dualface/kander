@@ -327,6 +327,7 @@ func (a *App) hitBoard(x, y int) *boardHit {
 
 func (a *App) HandleMouse(x, y, bstate int) {
 	if a.StartConfirmation != nil {
+		a.handleStartMouse(x, y, bstate)
 		return
 	}
 	if a.Help {

@@ -2,7 +2,7 @@
   "tui.start_loading": "読み込み中…",
   "tui.start_loading_keys": "タスクを読み込み中… y：待機；その他のキー：キャンセル",
   "tui.start_state": "状態：{{.V0}}（backlog/todo）",
-  "tui.start_result_keys": "何かキーを押すと閉じます",
+  "tui.start_result_keys": "ホイール：スクロール；何かキー：閉じる",
   "tui.start_success_compact": "開始済み | {{.V0}} | {{.V1}} | {{.V2}}",
   "tui.start_task": "タスクを開始（確認）",
   "tui.start_no_selection": "開始するタスクを選択してください",

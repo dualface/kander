@@ -74,7 +74,7 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 常用按键: 方向键或 `hjkl` 移动, `Enter` 看任务卡, `/` 搜索, `y` 复制任务 ID, `s` 确认后启动所选 backlog/todo 任务, `g` 跳转到所选任务 Agent 窗口 (herdr/tmux; tmux 需在客户端内), `-`/`=` 增减同屏栏目数, `a` 切换存档栏目, `t` 换主题, `o` 打开选项, `r` 刷新, `q` 退出. 按 `?` 调出完整按键说明.
 
-列表按 `s` 立即显示读取中对话框，后台只读取所选卡，再填入按 SIZE 解析的 Agent 和实际启动器；读取中不能确认，读取完成后 `y` 确认，其它键取消。backlog 卡先通过既有门禁迁到 todo。herdr/tmux/tmux-session 在后台启动，成功后刷新看板并显示容器地址；foreground/console 提示改用终端命令 `kander start <task-id>`。失败显示原因并保留既有启动回滚语义。确认后保留对话框并显示正在启动，启动中按键不关闭或重复启动；成功、失败和警告原地更新，结果态按任意键关闭。窄屏优先显示 Agent、启动器与完整地址，仍放不下时临时换行浮层展示完整结果。详情和搜索输入中的 `s` 不触发启动。
+列表按 `s` 立即显示读取中对话框，后台只读取所选卡，再填入按 SIZE 解析的 Agent 和实际启动器；读取中不能确认，滚轮可滚动看板（换选会关闭旧对话框），读取完成后 `y` 确认，其它键取消。backlog 卡先通过既有门禁迁到 todo。herdr/tmux/tmux-session 在后台启动，成功后刷新看板并显示容器地址；foreground/console 提示改用终端命令 `kander start <task-id>`。失败显示原因并保留既有启动回滚语义。确认后保留对话框并显示正在启动，启动中按键不关闭或重复启动；成功、失败和警告原地更新，结果态按任意键关闭，溢出内容可用滚轮在框内查看。窄屏优先显示 Agent、启动器与完整地址，仍放不下时临时换行浮层展示完整结果。详情和搜索输入中的 `s` 不触发启动。
 
 其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dispatch`/`dismiss` 派发消息、读取持久回执与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
 
