@@ -37,6 +37,8 @@ func TestDismissResolvesOverriddenProcessName(t *testing.T) {
 func TestConfiguredAgentDismissAndCleanup(t *testing.T) {
 	for _, test := range []struct{ name, dialect, mode string }{
 		{"my-claude", "claude", "generated"}, {"my-grok", "grok", "generated"}, {"claude", "claude", "none"},
+		// The kimi dialect refuses a caller-supplied session, so "none" is its only settable mode.
+		{"my-kimi", "kimi", "none"},
 	} {
 		for _, action := range []string{"dismiss", "cleanup"} {
 			t.Run(test.name+"-"+action, func(t *testing.T) {

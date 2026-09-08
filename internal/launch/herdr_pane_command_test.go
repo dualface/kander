@@ -87,7 +87,7 @@ func TestLaunchAgentSendsShellSpecificCommandToHerdr(t *testing.T) {
 	}
 
 	runtimeWindows = func() bool { return true }
-	outcome, err := launchAgent(plan, filepath.Join(t.TempDir(), "kanban"), "tab-label", invocation, nil, nil, nil)
+	outcome, err := launchAgent(plan, filepath.Join(t.TempDir(), "kanban"), "tab-label", invocation, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,10 +101,10 @@ func TestLaunchAgentSendsShellSpecificCommandToHerdr(t *testing.T) {
 	}
 
 	runtimeWindows = func() bool { return false }
-	if _, err := launchAgent(plan, filepath.Join(t.TempDir(), "kanban"), "tab-label", invocation, nil, nil, nil); err != nil {
+	if _, err := launchAgent(plan, filepath.Join(t.TempDir(), "kanban"), "tab-label", invocation, nil, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := readRunLog(t, log), posixJoin(invocation.Argv); got != want {
+	if got, want := readRunLog(t, log), posixJoin(invocation.Argv, invocation.ShellEnv); got != want {
 		t.Fatalf("posix herdr command\n got %q\nwant %q", got, want)
 	}
 }

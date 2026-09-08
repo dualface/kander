@@ -20,6 +20,9 @@ func launchAgent(
 	location func(LaunchOutcome) error,
 	paneSession func() (AgentSession, error),
 	agentSession *AgentSession,
+	// typePrompt delivers the opening instruction to dialects that cannot take it as an
+	// argument; it is nil for every other agent. Only pane launchers can carry one.
+	typePrompt func(pane string) error,
 	durable ...bool,
 ) (LaunchOutcome, error) {
 	var createdTab, createdWindow string
@@ -66,6 +69,11 @@ func launchAgent(
 		if err := herdrPaneRun(plan.HerdrBin, pane, command); err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
+		if typePrompt != nil {
+			if err := typePrompt(pane); err != nil {
+				return LaunchOutcome{}, fail(err)
+			}
+		}
 		if agentSession != nil {
 			warn := plan.warning
 			if warn == nil {
@@ -110,6 +118,11 @@ func launchAgent(
 	sendAttempted = true
 	if err := tmuxStartPane(plan.Tmux, pane, command); err != nil {
 		return LaunchOutcome{}, fail(err)
+	}
+	if typePrompt != nil {
+		if err := typePrompt(pane); err != nil {
+			return LaunchOutcome{}, fail(err)
+		}
 	}
 	if paneSession != nil {
 		sess, err := paneSession()

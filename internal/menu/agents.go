@@ -33,6 +33,7 @@ func agentLabels() map[string]string {
 		"claude": "Claude",
 		"grok":   "Grok",
 		"cursor": "Cursor",
+		"kimi":   "Kimi",
 	}
 }
 

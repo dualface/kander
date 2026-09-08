@@ -349,11 +349,48 @@ func paneLauncher(launcher string) bool {
 // launchInvocation picks the invocation form by launcher: a terminal container
 // only takes one line, so argv has to survive being parsed by a shell again;
 // foreground and console spawn directly and keep native argv.
-func launchInvocation(plan LaunchPlan, program process.AgentProgram, arguments []string) (process.ProcessInvocation, error) {
-	if paneLauncher(plan.Launcher) {
-		return newShellInvocation(program, arguments, nil)
+// launchInvocation builds the invocation for one agent start. agentEnv holds the variables
+// the agent's dialect needs minted for this run; they are layered over the inherited
+// environment and also recorded in ShellEnv so a pane launcher can reassign them in the pane.
+func launchInvocation(plan LaunchPlan, program process.AgentProgram, arguments []string, agentEnv map[string]string) (process.ProcessInvocation, error) {
+	var environment map[string]string
+	if len(agentEnv) > 0 {
+		environment = inheritedEnv()
+		for name, value := range agentEnv {
+			environment[name] = value
+		}
 	}
-	return newInvocation(program, arguments, nil)
+	var inv process.ProcessInvocation
+	var err error
+	if paneLauncher(plan.Launcher) {
+		inv, err = newShellInvocation(program, arguments, environment)
+	} else {
+		inv, err = newInvocation(program, arguments, environment)
+	}
+	if err != nil {
+		return process.ProcessInvocation{}, err
+	}
+	if len(agentEnv) > 0 {
+		if inv.ShellEnv == nil {
+			inv.ShellEnv = make(map[string]string, len(agentEnv))
+		}
+		for name, value := range agentEnv {
+			inv.ShellEnv[name] = value
+		}
+	}
+	return inv, nil
+}
+
+func inheritedEnv() map[string]string {
+	out := map[string]string{}
+	for _, kv := range os.Environ() {
+		name, value, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		out[name] = value
+	}
+	return out
 }
 
 // paneCommand renders one process invocation as a single line the terminal
@@ -378,7 +415,7 @@ func paneCommand(inv process.ProcessInvocation) (string, error) {
 		}
 	}
 	if !runtimeWindows() {
-		return posixJoin(inv.Argv), nil
+		return posixJoin(inv.Argv, inv.ShellEnv), nil
 	}
 	return powershellJoin(inv.Argv, inv.ShellEnv), nil
 }
@@ -419,10 +456,20 @@ func powershellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
-func posixJoin(argv []string) string {
-	parts := make([]string, len(argv))
-	for i, a := range argv {
-		parts[i] = posixQuote(a)
+// posixJoin renders argv preceded by any minted variables as a command prefix, so the
+// assignments apply to the agent alone and never leak into the pane's own shell.
+func posixJoin(argv []string, shellEnv map[string]string) string {
+	names := make([]string, 0, len(shellEnv))
+	for name := range shellEnv {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names)+len(argv))
+	for _, name := range names {
+		parts = append(parts, name+"="+posixQuote(shellEnv[name]))
+	}
+	for _, a := range argv {
+		parts = append(parts, posixQuote(a))
 	}
 	return strings.Join(parts, " ")
 }

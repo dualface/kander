@@ -92,11 +92,16 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	}()
 	prompt := taskInstruction(t("launch.prompt.resume_head", entry.TaskID), taskFile)
 	model := cfg.Models.Kanban[session.Agent]
-	args, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
+	args, agentEnv, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	dialect := config.AgentFor(cfg, session.Agent).Dialect
+	argv, typed, err := startArguments(plan, dialect, args, prompt)
+	if err != nil {
+		return ResumeLaunch{}, err
+	}
+	inv, err := launchInvocation(plan, *program, argv, agentEnv)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
@@ -122,7 +127,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 		loc = recordWindowLocation(root, plan, entry)
 	}
 	durable := board.MetadataFrom(originalText, "DISPATCH_ID") != ""
-	outcome, err := launchAgent(plan, root, windowName(entry, originalText), inv, loc, paneCB, &session, durable)
+	outcome, err := launchAgent(plan, root, windowName(entry, originalText), inv, loc, paneCB, &session, promptTyper(plan, dialect, typed), durable)
 	if err != nil {
 		failure := asLaunchFailure(err)
 		if failure.DeliveryUnknown {

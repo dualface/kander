@@ -172,8 +172,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		return err
 	}
 	previous := map[string]struct{}{}
+	dialect := config.AgentFor(cfg, session.Agent).Dialect
 	if takeover && config.AgentFor(cfg, session.Agent).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
+		if sessions, err := sessionsForTask(dialect, entry.TaskID); err == nil {
 			for _, id := range sessions {
 				previous[id] = struct{}{}
 			}
@@ -212,11 +213,15 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	prompt := taskInstruction(head, taskFile)
 	model := cfg.Models.Kanban[session.Agent]
-	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
+	args, agentEnv, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
 	if err != nil {
 		return err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	argv, typed, err := startArguments(plan, dialect, args, prompt)
+	if err != nil {
+		return err
+	}
+	inv, err := launchInvocation(plan, *program, argv, agentEnv)
 	if err != nil {
 		return err
 	}
@@ -229,7 +234,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if session.Reference != "" {
 				return session, nil
 			}
-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
+			ref, err := discoverNewSession(dialect, moved.TaskID, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}
@@ -283,7 +288,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
 	}
-	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, len(authorization) > 0)
+	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, promptTyper(plan, dialect, typed), len(authorization) > 0)
 	if err != nil {
 		if asLaunchFailure(err).DeliveryUnknown {
 			taskFileHandedOff = true

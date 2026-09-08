@@ -28,9 +28,9 @@ const (
 )
 
 var (
-	ExecutionAgents  = []string{"codex", "claude", "grok", "cursor"}
+	ExecutionAgents  = []string{"codex", "claude", "grok", "cursor", "kimi"}
 	TaskScales       = []string{"large", "small"}
-	ReviewAgents     = []string{"codex", "claude", "grok", "cursor"}
+	ReviewAgents     = []string{"codex", "claude", "grok", "cursor", "kimi"}
 	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
@@ -56,6 +56,7 @@ var AgentExecutables = map[string]string{
 	"claude": "claude",
 	"grok":   "grok",
 	"cursor": "cursor-agent",
+	"kimi":   "kimi",
 }
 
 var modelIDFields = map[string]struct{}{
@@ -93,6 +94,16 @@ var kanbanModelDefaults = map[string]map[string]string{
 		"large_model": "cursor-grok-4.6-xhigh",
 		"small_model": "cursor-grok-4.6-high",
 	},
+	// Kimi model ids are aliases declared in the user's own config.toml, so both scales stay
+	// empty and let the CLI fall back to its default_model. The effort travels in the
+	// KIMI_MODEL_THINKING_EFFORT environment variable because kimi-code has no --effort flag.
+	"kimi": {
+		"model":        "",
+		"large_model":  "",
+		"small_model":  "",
+		"large_effort": "max",
+		"small_effort": "max",
+	},
 }
 
 var reviewModelDefaults = map[string]map[string]string{
@@ -100,6 +111,7 @@ var reviewModelDefaults = map[string]map[string]string{
 	"claude": {"model": "opus", "effort": "high"},
 	"grok":   {"model": "", "effort": "high"},
 	"cursor": {"model": "cursor-grok-4.6-xhigh"},
+	"kimi":   {"model": "", "effort": "max"},
 }
 
 var languageLabels = map[string]string{

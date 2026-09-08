@@ -20,7 +20,9 @@ func writeRulesFile(t *testing.T, path, contents string) {
 }
 
 func TestRulesIntegrationUsesInstallScope(t *testing.T) {
-	for _, agent := range []string{"codex", "claude", "grok", "cursor"} {
+	// Kimi Code keeps its home in .kimi-code, so the directory is not always "."+agent.
+	agentDirs := map[string]string{"kimi": ".kimi-code"}
+	for _, agent := range []string{"codex", "claude", "grok", "cursor", "kimi"} {
 		t.Run(agent, func(t *testing.T) {
 			home, project := t.TempDir(), t.TempDir()
 			t.Setenv("HOME", home)
@@ -35,7 +37,11 @@ func TestRulesIntegrationUsesInstallScope(t *testing.T) {
 				name = "CLAUDE.md"
 				globalRules, projectRules = "@"+globalEntry+"\n", "@"+projectEntry+"\n"
 			}
-			globalTarget := filepath.Join(home, "."+agent, name)
+			dir, ok := agentDirs[agent]
+			if !ok {
+				dir = "." + agent
+			}
+			globalTarget := filepath.Join(home, dir, name)
 			projectTarget := filepath.Join(project, name)
 			globalPaths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Dir(globalEntry)}
 			projectPaths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: project, RulesDir: filepath.Dir(projectEntry)}

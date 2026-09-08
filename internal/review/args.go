@@ -105,6 +105,23 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 			"--prompt-file", promptFile,
 		)
 		cwd = ctx.root
+	case "kimi":
+		// kimi-code has no --cwd, so the project is entered by running there; the runtime holds
+		// the prompt and evidence files and has to be added as a second workspace directory.
+		private, err := prepareKimiHome(runtime, home)
+		if err != nil {
+			return process.ProcessInvocation{}, "", err
+		}
+		environment[kimiHomeEnv] = private
+		if settings.effort != "" {
+			environment[kimiEffortEnv] = settings.effort
+		}
+		arguments = append([]string{
+			"--prompt", process.TaskFileInstruction("Perform the "+ctx.role+" review.", promptFile),
+			"--output-format", "stream-json",
+			"--add-dir", runtime,
+		}, model...)
+		cwd = ctx.root
 	default:
 		return process.ProcessInvocation{}, "", newGate(2,
 			"review.unsupported_reviewer_agent", ctx.agent,
@@ -179,7 +196,12 @@ func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string
 	var text string
 	var valid bool
 	var message string
-	if ctx.agent == "grok" {
+	if ctx.agent == "kimi" {
+		// kimi-code emits newline-delimited messages rather than one envelope, and closes with
+		// no result object, so completion is judged by the report text it produced.
+		text, valid = kimiReviewText(raw)
+		message = kimiReviewMessage(ctx.settings.name)
+	} else if ctx.agent == "grok" {
 		obj, ok := result.(map[string]any)
 		if ok {
 			text, _ = obj["text"].(string)

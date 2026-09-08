@@ -519,6 +519,33 @@ func TestCursorIsAnExecutionAndReviewAgent(t *testing.T) {
 	}
 }
 
+func TestKimiIsAnExecutionAndReviewAgent(t *testing.T) {
+	setupHome(t)
+	if !contains(ExecutionAgents, "kimi") || !contains(ReviewAgents, "kimi") {
+		t.Fatal("kimi missing")
+	}
+	if AgentExecutableName("kimi") != "kimi" {
+		t.Fatal(AgentExecutableName("kimi"))
+	}
+}
+
+// Kimi carries an effort on both scales but no model id: -m names an alias from the user's
+// own config.toml, so an empty value lets the CLI keep its configured default_model.
+func TestKimiModelDefaultsAreEmptyWithMaxEffort(t *testing.T) {
+	setupHome(t)
+	models := DefaultModels()
+	kimi := models.Kanban["kimi"]
+	if kimi["large_model"] != "" || kimi["small_model"] != "" {
+		t.Fatalf("%v", kimi)
+	}
+	if kimi["large_effort"] != "max" || kimi["small_effort"] != "max" {
+		t.Fatalf("%v", kimi)
+	}
+	if models.Review["kimi"]["model"] != "" || models.Review["kimi"]["effort"] != "max" {
+		t.Fatalf("%v", models.Review["kimi"])
+	}
+}
+
 func TestCursorModelDefaultsUseFullIDs(t *testing.T) {
 	setupHome(t)
 	models := DefaultModels()

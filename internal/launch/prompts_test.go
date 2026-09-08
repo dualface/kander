@@ -110,10 +110,10 @@ func TestLocalizedPromptsAndSessionLookup(t *testing.T) {
 				"Take over Kanban task task-1.",
 				"Kanban タスク task-1 を引き継ぎます.",
 			} {
-				if !startsWithAny(prefix, codexPromptPrefixes("task-1")) {
+				if !startsWithAny(prefix, launchPromptPrefixes("task-1")) {
 					t.Errorf("session not matched: %s", prefix)
 				}
-				if startsWithAny(prefix, codexPromptPrefixes("task-10")) {
+				if startsWithAny(prefix, launchPromptPrefixes("task-10")) {
 					t.Errorf("wrong task matched: %s", prefix)
 				}
 			}

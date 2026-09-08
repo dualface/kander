@@ -155,6 +155,14 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
 			inspection: "Prefer read-only inspection. Do not modify the target worktree; the review gate fails if HEAD moves or the worktree is dirty.",
 			helpers:    true,
 		},
+		// Kimi has no model default: its -m argument names an alias declared in the user's own
+		// config.toml, so an empty value lets the CLI pick its configured default_model.
+		"kimi": {
+			name: "Kimi", prefix: "KIMI", executable: "kimi", defaultModel: "",
+			reviewHome: getenvDefault("KIMI_CODE_HOME", filepath.Join(home, ".kimi-code")),
+			homeError:  "KIMI_CODE_HOME", output: "output.jsonl",
+			inspection: "Use only the Read, Grep, and Glob tools to inspect code.",
+		},
 	}
 	definition, ok := definitions[agent]
 	if !ok {

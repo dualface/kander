@@ -15,7 +15,7 @@ func allocateAgentSession(definition *config.AgentSessionDefinition) (string, er
 	if program == nil {
 		return "", launchError("launch.agent_is_not_in_path", definition.Allocate[0])
 	}
-	inv, err := launchInvocation(LaunchPlan{Launcher: "foreground"}, *program, definition.Allocate[1:])
+	inv, err := launchInvocation(LaunchPlan{Launcher: "foreground"}, *program, definition.Allocate[1:], nil)
 	if err != nil {
 		return "", err
 	}
