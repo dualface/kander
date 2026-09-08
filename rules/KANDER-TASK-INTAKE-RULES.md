@@ -16,6 +16,8 @@ Number these options, but the numbers must not collide with those of other quest
 
 - Choosing `Confirm the plan and use the kanban board (create the card and start)` authorizes the plan, the development, and the kanban flow at once; do not ask again before starting work.
 
+  For a standalone card with `rules.git=true`, this execution authorization also includes automatic integration into `develop` and cleanup after verification and applicable review, subject to explicit pause, acceptance, PR, or branch-retention requirements. Do not request a separate merge-back confirmation. The completion flow is defined in `KANDER-KANBAN-RULES.md` "Execution and Completion".
+
   For a single card, run in order: `kander new`, fill in the complete contract according to the confirmed plan, complete the self-review and any applicable independent card review per `KANDER-KANBAN-RULES.md` "Post-Creation Self-Review" and fix the findings, `kander pick <task-id>`, `kander start <task-id>`. Start and tracking responsibilities follow `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination"; the discussing agent no longer implements a card that has been delegated.
 
   Only when `rules.task_groups=true` and `rules.git=true`, read `KANDER-TASK-GROUP-RULES.md` as needed for splitting and orchestration. When task groups are disabled, execute the confirmed standalone single-card contract; do not split into a group automatically or load the disabled module.

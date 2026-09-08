@@ -631,6 +631,8 @@ kander move <task-id> working --owner <agent>
 
   The user's own review, PR, or acceptance conditions must still be satisfied.
 
+- With `rules.git=true`, authorizing execution of a standalone card also authorizes its merge-back to `develop` and cleanup. After acceptance criteria, verification, and applicable review gates are satisfied, the executing agent continues automatically through integration, applicable push, local sync, branch/worktree cleanup, and the completion commands below. Follow `KANDER-GIT-RULES.md` for the Git operations; do not ask for a separate merge-back confirmation or stop merely because the code is committed or review has passed. Explicit pause, user acceptance, PR, or branch-retention requirements remain binding. A single card stays in `working/` through this flow; `review/` remains reserved for task groups. With the Git module disabled, this paragraph adds no Git requirements.
+
 - Confirm the actual working directory from the card records; record implementation, verification, and unresolved issues.
 
   After completing the task contract and all applicable delivery steps, write `SUMMARY` or report.md through update, then run `kander move <task-id> done --result completed` and `kander check`.
