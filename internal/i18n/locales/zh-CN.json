@@ -596,7 +596,7 @@
   "menu.usage_kander_doctor": "用法: kander doctor",
   "menu.usage_kander_welcome_reset": "用法: kander",
   "menu.version_check_failed": "版本检查失败",
-  "menu.version_failed_unavailable_as_a_new_choice": "{{.V0}} 的 --version 失败, 不可作为新选择: {{.V1}}",
+  "menu.version_failed_unavailable_as_a_new_choice": "{{.V0}} 的 --version 失败；可选中该 agent 修改可执行路径：{{.V1}}",
   "menu.welcome_is_complete": "初始化已完成: {{.V0}}",
   "menu.which_agent_should_execute_large_tasks_directory_cards_with": "大任务 (SIZE: large) 用哪个 Agent 执行?",
   "menu.which_agent_should_execute_small_tasks_single_file_cards": "小任务 (SIZE: small) 用哪个 Agent 执行?",

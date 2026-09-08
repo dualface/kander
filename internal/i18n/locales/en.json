@@ -596,7 +596,7 @@
   "menu.usage_kander_doctor": "usage: kander doctor",
   "menu.usage_kander_welcome_reset": "usage: kander",
   "menu.version_check_failed": "version check failed",
-  "menu.version_failed_unavailable_as_a_new_choice": "{{.V0}} --version failed; unavailable as a new choice: {{.V1}}",
+  "menu.version_failed_unavailable_as_a_new_choice": "{{.V0}} --version failed; select this agent to edit its executable path: {{.V1}}",
   "menu.welcome_is_complete": "initialization is complete: {{.V0}}",
   "menu.which_agent_should_execute_large_tasks_directory_cards_with": "Which Agent should execute large tasks (SIZE: large)?",
   "menu.which_agent_should_execute_small_tasks_single_file_cards": "Which Agent should execute small tasks (SIZE: small)?",

@@ -596,7 +596,7 @@
   "menu.usage_kander_doctor": "用法: kander doctor",
   "menu.usage_kander_welcome_reset": "用法: kander",
   "menu.version_check_failed": "バージョン確認に失敗しました",
-  "menu.version_failed_unavailable_as_a_new_choice": "{{.V0}} --version に失敗しました; 新しい選択肢として利用できません: {{.V1}}",
+  "menu.version_failed_unavailable_as_a_new_choice": "{{.V0}} --version に失敗しました。この agent を選択して実行ファイルのパスを編集できます: {{.V1}}",
   "menu.welcome_is_complete": "初期化が完了しています: {{.V0}}",
   "menu.which_agent_should_execute_large_tasks_directory_cards_with": "大規模タスク (SIZE: large) を実行する Agent は?",
   "menu.which_agent_should_execute_small_tasks_single_file_cards": "小規模タスク (SIZE: small) を実行する Agent は?",
