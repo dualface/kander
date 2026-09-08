@@ -10,25 +10,19 @@ func (p *optionsPanel) openFlow() {
 		return
 	}
 	var lines []menu.ReportLine
-	connected := false
 	for _, line := range flow.Build(p.session.Config) {
+		if line.Kind == flow.Assignment && line.Args[len(line.Args)-1] == "" {
+			line.Args[len(line.Args)-1] = t("flow.cli_default")
+		}
 		text := t(line.Key, line.Args...)
 		level := menu.LevelInfo
-		switch line.Kind {
-		case flow.Heading:
+		if line.Kind == flow.Heading {
 			if len(lines) > 0 {
 				lines = append(lines, menu.ReportLine{})
 			}
 			level = menu.LevelNote
-			connected = false
-		case flow.Step:
-			if connected {
-				lines = append(lines, menu.ReportLine{Text: "  │"})
-			}
-			text = "• " + text
-			connected = true
-		case flow.Detail:
-			text = "  └ " + text
+		} else {
+			text = "  " + text
 		}
 		lines = append(lines, menu.ReportLine{Level: level, Text: text})
 	}

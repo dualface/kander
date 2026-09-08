@@ -48,7 +48,7 @@ func TestFlowRootAndReadOnlySession(t *testing.T) {
 		t.Fatal("unsaved state must be retained and visible")
 	}
 	for _, line := range panel.report.lines {
-		if strings.Contains(line.Text, config.Text("flow.review_trigger")) {
+		if strings.Contains(line.Text, "PM:") || strings.Contains(line.Text, "QA:") {
 			t.Fatal("flow used saved config instead of the session")
 		}
 	}
@@ -64,7 +64,8 @@ func TestFlowNarrowReportScrolling(t *testing.T) {
 			config.ApplyLanguageArgument([]string{"--lang", lang})
 			defer config.ApplyLanguageArgument(nil)
 			app, panel := openPanel(t)
-			app.Width, app.Height = 72, 20
+			app.Width, app.Height = 72, 12
+			panel.session.Config.Models.Kanban["codex"]["large_model"] = strings.Repeat("model-", 18)
 			panel.dispatch(sectionFlow)
 			if panel.innerWidth() != 60 {
 				t.Fatalf("inner width %d", panel.innerWidth())
@@ -101,9 +102,27 @@ func TestFlowNarrowReportScrolling(t *testing.T) {
 					t.Fatalf("broken wrapped line: %q", line)
 				}
 			}
-			if !strings.Contains(text, i18n.Text(lang, "flow.group")) || !strings.Contains(text, "│") {
-				t.Fatal("missing localized group or vertical connector")
+			if !strings.Contains(text, i18n.Text(lang, "flow.execution")) || !strings.Contains(text, i18n.Text(lang, "flow.review")) {
+				t.Fatal("missing localized execution or review section")
 			}
 		})
+	}
+}
+
+func TestFlowShowsUnsavedModelsAndCLIDefault(t *testing.T) {
+	_, panel := openPanel(t)
+	panel.session.Config.Models.Kanban["codex"]["large_model"] = "unsaved-large"
+	panel.session.Config.Models.ReviewRoles["PM"]["model"] = "unsaved-pm"
+	panel.session.Config.Models.Kanban["codex"]["small_model"] = ""
+	panel.session.Config.Models.Kanban["codex"]["model"] = ""
+	panel.dispatch(sectionFlow)
+	var text string
+	for _, line := range panel.report.lines {
+		text += line.Text + "\n"
+	}
+	for _, want := range []string{"unsaved-large", "unsaved-pm", config.Text("flow.cli_default")} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q: %s", want, text)
+		}
 	}
 }

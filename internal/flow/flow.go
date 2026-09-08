@@ -1,162 +1,65 @@
-// Package flow describes configured workflows without performing workflow actions.
+// Package flow describes configured execution and review assignments without performing actions.
 package flow
 
 import "github.com/dualface/kander/internal/config"
 
-// Kind distinguishes headings, summary facts, steps and conditional step details.
+// Kind distinguishes section headings, agent/model assignments and short status notes.
 type Kind uint8
 
 const (
 	Heading Kind = iota
-	Summary
-	Step
-	Detail
+	Assignment
+	Note
 )
 
-// Line carries a catalog key and template arguments, independent of terminal layout.
+// Line carries a catalog key and template arguments independent of terminal layout.
+// An assignment's final argument is its model ID; empty means the agent CLI default.
 type Line struct {
 	Kind Kind
 	Key  string
 	Args []any
 }
 
-// Build reads a normalized options-session configuration without modifying it.
-// Project overrides and task-specific triggers are resolved by agents at execution time.
+// Build reads the normalized options-session configuration without modifying it.
+// Auto roles remain conditional because their applicability depends on the task.
 func Build(cfg *config.Config) []Line {
 	var lines []Line
 	add := func(kind Kind, key string, args ...any) {
 		lines = append(lines, Line{Kind: kind, Key: "flow." + key, Args: args})
 	}
-	add(Heading, "configuration")
-	add(Summary, "scope")
+	add(Heading, "execution")
 	for _, scale := range config.TaskScales {
-		add(Summary, "agent", scale, cfg.KanbanAgents[scale])
+		agent := cfg.KanbanAgents[scale]
+		add(Assignment, scale, agent, config.KanbanModelFor(cfg.Models.Kanban[agent], scale))
 	}
-	add(Summary, "launcher", cfg.Launcher)
-	for _, role := range config.ReviewRoles {
-		add(Summary, "reviewer", role, cfg.Reviewers[role], cfg.ReviewStages[role])
-	}
-	for _, module := range config.RuleModules {
-		key := "module_off"
-		if cfg.Rules[module] {
-			key = "module_on"
-		}
-		add(Summary, key, module)
-	}
-	start := func() {
-		add(Step, "start")
-		add(Detail, "launch_"+cfg.Launcher)
-		add(Detail, "launch_failure")
-		add(Step, "read")
-		if cfg.Rules[config.RuleCollaboration] {
-			add(Step, "collaboration")
-		}
-	}
-	implement := func() {
-		add(Step, "implement")
-		if cfg.Rules[config.RuleCode] {
-			add(Step, "self_check")
-		}
-	}
-	hasReviewRole := false
-	for _, role := range config.ReviewRoles {
-		hasReviewRole = hasReviewRole || cfg.ReviewStages[role] != "skip"
-	}
-	review := func(group bool) {
-		add(Step, "plan")
-		if !cfg.Rules[config.RuleReview] {
-			return
-		}
-		add(Step, "review_trigger")
-		if !hasReviewRole {
-			return
-		}
-		for _, stage := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
-			var roles []string
-			for _, role := range stage {
-				if cfg.ReviewStages[role] != "skip" {
-					roles = append(roles, role)
-				}
-			}
-			if len(roles) == 0 {
-				continue
-			}
-			key := "stage_one"
-			if stage[0] == "CSA" {
-				key = "stage_two"
-			}
-			add(Step, key)
-			for _, role := range roles {
-				add(Detail, "role_"+cfg.ReviewStages[role], role, cfg.Reviewers[role])
-			}
-		}
-		if group {
-			add(Step, "dispatch_fix")
-			add(Step, "member_fix")
-		} else {
-			add(Step, "single_fix")
-		}
-		add(Step, "review_finish")
-	}
-	report := func() {
-		if cfg.Rules[config.RuleReporting] {
-			add(Step, "report")
-		}
-	}
-	add(Heading, "single")
-	if cfg.Rules[config.RuleTaskIntake] {
-		add(Step, "intake")
-	}
-	add(Step, "card")
-	add(Step, "todo")
-	start()
-	if cfg.Rules[config.RuleGit] {
-		add(Step, "task_branch")
-	}
-	implement()
-	if cfg.Rules[config.RuleGit] {
-		add(Step, "commit")
-	}
-	review(false)
-	add(Step, "close_plan")
-	if cfg.Rules[config.RuleGit] {
-		add(Step, "single_authority")
-		add(Step, "integrate")
-		add(Step, "task_cleanup")
-	}
-	add(Step, "records")
-	report()
-	add(Step, "single_done")
-	add(Heading, "group")
-	if !cfg.Rules[config.RuleTaskGroups] || !cfg.Rules[config.RuleGit] {
-		add(Summary, "group_unavailable")
+	add(Heading, "review")
+	if !cfg.Rules[config.RuleReview] {
+		add(Note, "review_off")
 		return lines
 	}
-	add(Step, "group_plan")
-	add(Step, "group_cards")
-	add(Step, "dependencies")
-	add(Step, "group_branch")
-	add(Step, "schedule")
-	start()
-	add(Step, "subscribe")
-	add(Step, "member_branch")
-	implement()
-	add(Step, "member_delivery")
-	if cfg.Rules[config.RuleReview] && hasReviewRole {
-		add(Step, "batch")
+	active := false
+	for index, roles := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
+		stageAdded := false
+		for _, role := range roles {
+			mode := cfg.ReviewStages[role]
+			if mode == "skip" {
+				continue
+			}
+			if !stageAdded {
+				key := "stage_one"
+				if index == 1 {
+					key = "stage_two"
+				}
+				add(Note, key)
+				stageAdded, active = true, true
+			}
+			agent := cfg.Reviewers[role]
+			model, _ := config.ReviewModelFor(cfg, agent, role)
+			add(Assignment, "role_"+mode, role, agent, model)
+		}
 	}
-	add(Step, "receive")
-	add(Detail, "sync_dispatch")
-	review(true)
-	add(Step, "close_plan")
-	add(Step, "group_ready")
-	add(Step, "integrate")
-	add(Step, "wrap_dispatch")
-	add(Step, "task_cleanup")
-	add(Step, "records")
-	report()
-	add(Step, "member_done")
-	add(Step, "group_cleanup")
-	add(Detail, "dismiss")
+	if !active {
+		add(Note, "review_none")
+	}
 	return lines
 }

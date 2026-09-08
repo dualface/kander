@@ -39,7 +39,7 @@
 | `internal/takeover` | dismiss 及 resume 接管成功后的旧容器清理                                 |
 | `internal/window`   | 卡片 `WINDOW` 回写; 复用 board 事务, 过期回滚保留新记录                                     |
 | `internal/review`   | `kander review` 单一审核门禁与闭批历史 Git 校验                                             |
-| `internal/flow`     | 只读消费选项会话配置，生成单卡与任务组流程的结构化行；不依赖 TUI 或 menu |
+| `internal/flow`     | 只读消费选项会话配置，生成执行与审核阶段的 Agent/Model 结构化清单；不依赖 TUI 或 menu |
 | `internal/tui`      | 裸 `kander` 的终端看板与 Huh 选项面板                                    |
 | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |
 | `internal/install`  | 首次运行向导, `kander install`, 规则释出与 doctor 修复                     |
