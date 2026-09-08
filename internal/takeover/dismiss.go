@@ -54,7 +54,7 @@ func commandDismiss(root, taskID string, timeout float64) error {
 			"takeover.task_has_no_dismissible_terminal_container", windowValue,
 		)
 	}
-	session, err := launch.ResolvedSession(entry.TaskID, text)
+	session, err := launch.ResolvedSessionIdentity(entry.TaskID, text)
 	if err != nil {
 		return err
 	}

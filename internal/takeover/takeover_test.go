@@ -330,6 +330,7 @@ func TestCleanupForegroundIsNA(t *testing.T) {
 }
 
 func TestAgentExitCommands(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	exit, err := AgentExitCommand("claude")
 	if err != nil || exit != "/exit" {
 		t.Fatal(exit, err)

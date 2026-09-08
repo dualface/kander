@@ -14,6 +14,7 @@
   "focus.no_selection": "Select a task to switch windows",
   "focus.load_failed": "Cannot load task window: {{.V0}}",
   "tui.focus_agent_window": "Focus agent window",
+  "config.agent_session_dialect": "Dialect {{.V0}} cannot use session mode {{.V1}} without args templates; omit session to inherit the dialect or provide args.start and args.resume.",
   "config.agent_definition_invalid": "Invalid agents.{{.V0}}: {{.V1}}",
   "config.agent_object": "Use a JSON object; null is not allowed.",
   "config.agent_name": "Use a lowercase agent name starting with a letter, at most 64 characters (letters, digits, _ or -).",

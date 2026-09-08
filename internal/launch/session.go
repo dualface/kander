@@ -133,6 +133,10 @@ func sessionFrom(text string) (AgentSession, error) {
 }
 
 func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentSession, error) {
+	return resolveTaskIdentity(taskID, text, true, configs...)
+}
+
+func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*config.Config) (AgentSession, error) {
 	session, err := sessionFrom(text)
 	if err != nil {
 		return AgentSession{}, err
@@ -150,7 +154,7 @@ func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentS
 		return AgentSession{}, launchError("launch.unsupported_agent", session.Agent)
 	}
 	definition := config.AgentFor(cfg, session.Agent)
-	if definition.Session.Mode == "none" {
+	if requireResume && definition.Session.Mode == "none" {
 		return AgentSession{}, config.AgentResumeError(session.Agent)
 	}
 	if definition.Session.Mode == "discovered" && session.Reference == "" {
@@ -380,7 +384,11 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		if modelID != "" {
 			args = append(args, "--model", modelID)
 		}
-		return append(args, "--trust", "--force", "--resume", session.Reference), nil
+		args = append(args, "--trust", "--force")
+		if definition.Session.Mode != "none" {
+			args = append(args, "--resume", session.Reference)
+		}
+		return args, nil
 	}
 	effortKey := scale + "_effort"
 	effort := model[effortKey]
@@ -400,13 +408,21 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		if resume {
 			flag = "--resume"
 		}
-		return append(modelArgs, "--effort", effort, "--dangerously-skip-permissions", flag, session.Reference), nil
+		args := append(modelArgs, "--effort", effort, "--dangerously-skip-permissions")
+		if definition.Session.Mode != "none" {
+			args = append(args, flag, session.Reference)
+		}
+		return args, nil
 	case "grok":
 		flag := "--session-id"
 		if resume {
 			flag = "--resume"
 		}
-		return append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions", flag, session.Reference), nil
+		args := append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions")
+		if definition.Session.Mode != "none" {
+			args = append(args, flag, session.Reference)
+		}
+		return args, nil
 	default:
 		return nil, launchError("launch.unsupported_agent", agent)
 	}

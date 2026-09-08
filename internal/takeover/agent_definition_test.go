@@ -2,6 +2,7 @@ package takeover
 
 import (
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/launch"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,5 +31,53 @@ func TestDismissResolvesOverriddenProcessName(t *testing.T) {
 	after, _ := os.ReadFile(path)
 	if err != nil || !strings.Contains(out, "关闭容器=@8") || string(before) != string(after) {
 		t.Fatalf("%s %v", out, err)
+	}
+}
+
+func TestConfiguredAgentDismissAndCleanup(t *testing.T) {
+	for _, test := range []struct{ name, dialect, mode string }{
+		{"my-claude", "claude", "generated"}, {"my-grok", "grok", "generated"}, {"claude", "claude", "none"},
+	} {
+		for _, action := range []string{"dismiss", "cleanup"} {
+			t.Run(test.name+"-"+action, func(t *testing.T) {
+				root, _ := setupBoard(t)
+				t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+				cfg := config.DefaultConfig()
+				cfg.WelcomeComplete = true
+				cfg.Agents = map[string]config.AgentDefinition{test.name: {Dialect: test.dialect, ProcessName: "node", Session: &config.AgentSessionDefinition{Mode: test.mode}}}
+				if _, err := config.Save(cfg); err != nil {
+					t.Fatal(err)
+				}
+				t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
+				t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
+				t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$1")
+				t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@1")
+				if action == "cleanup" {
+					got := Cleanup("tmux:$1:@1:%9", launch.AgentSession{Agent: test.name, Reference: "session-1"}, "tmux:$2:@2:%10", 61)
+					if !got.Cleaned {
+						t.Fatal(got)
+					}
+				} else {
+					id, path := makeDone(t, root, "configured-dismiss", "tmux:$1:@1:%9")
+					data, _ := os.ReadFile(path)
+					data = []byte(strings.Replace(string(data), "SESSION: claude ", "SESSION: "+test.name+" ", 1))
+					if err := os.WriteFile(path, data, 0600); err != nil {
+						t.Fatal(err)
+					}
+					_, _, err := capture(t, func() error { return commandDismiss(root, id, 61) })
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				instruction, err := os.ReadFile(filepath.Join(root, "tmux.log.instruction"))
+				expected := "/exit"
+				if test.dialect == "grok" {
+					expected = "/quit"
+				}
+				if err != nil || !strings.Contains(string(instruction), expected) {
+					t.Fatalf("exit instruction=%s error=%v", instruction, err)
+				}
+			})
+		}
 	}
 }

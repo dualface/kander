@@ -47,9 +47,9 @@ prompt 不进入模板，始终由 Kander 追加在 argv 最后。分配命令�
 
 - `generated`：生成 UUID，保存到卡片 SESSION，供 `{session}` 与恢复使用。
 - `allocated`：先执行 `session.allocate` argv（首元素是程序），最多等待 10 秒；成功输出须为一个 ID，或通过 `session.json_field` 指定顶层 JSON 字符串字段。ID 仅接受 1–128 个字母、数字、`.`、`_`、`:`、`-`。程序失败、无效输出与超时均在领取任务前报告。
-- `none`：`resume` 明确拒绝；`notify` 不直投，通过恢复通道运行 start 模板，重新读取卡片上下文。卡片保留仅用于终端标记的 UUID，模板中的 `{session}` 为空。`kander config`、`config --json` 的 stderr、`kander check` 显示降级提示。持久派回仍须满足原有停止事实与回执门禁，不以 `none` 绕过防重复执行检查。
+- `none`：`resume` 明确拒绝；`notify` 不直投，通过恢复通道运行 start 模板，重新读取卡片上下文。卡片保留仅用于终端标记的 UUID，模板中的 `{session}` 为空，方言参数也省略会话创建/恢复选项，UUID 只供终端身份检查。`dismiss` 仍允许关闭已确认身份的终端。`kander config`、`config --json` 的 stderr、`kander check` 显示降级提示。持久派回仍须满足原有停止事实与回执门禁，不以 `none` 绕过防重复执行检查。
 
-模板自定义 agent 若无方言，必须显式声明 session。有方言时默认继承：Claude/Grok 生成 UUID；Cursor 调用配置后的程序执行 `create-chat`；Codex 保留扫描 CODEX_HOME rollout 的既有发现机制（自定义 Codex 方言同样适用）。`discovered` 不接受手工配置。
+模板自定义 agent 若无方言，必须显式声明 session。有方言时默认继承：Claude/Grok 生成 UUID；Cursor 调用配置后的程序执行 `create-chat`；Codex 保留扫描 CODEX_HOME rollout 的既有发现机制（自定义 Codex 方言同样适用）。`discovered` 不接受手工配置。无模板的 Codex 方言不接受 `generated`/`allocated` 覆盖，Cursor 不接受 `generated`，因为对应 start 参数无法兑现这种身份来源；请继承默认值或提供模板。所有方言都允许 `none`，启动时不传会话参数。
 
 分配示例：
 
@@ -65,6 +65,8 @@ prompt 不进入模板，始终由 Kander 追加在 argv 最后。分配命令�
 
 ## 面板与审核边界
 
-「任务执行与模型」可以选择自定义 agent。每个已选 agent 的模型字段后有「可执行名」「pane 进程名」输入；大小任务共用同一 agent 时只显示一次。留空删除覆盖，保存到 `agents`。方言、模板与会话策略只在 JSON 编辑。
+「任务执行与模型」可以选择自定义 agent。尚未探测成功的内置 agent 也可选择以填写改名程序路径；保存时仍校验显式路径。每个已选 agent 的模型字段后有「可执行名」「pane 进程名」输入；大小任务共用同一 agent 时只显示一次。留空删除覆盖，保存到 `agents`。方言、模板与会话策略只在 JSON 编辑。
 
 reviewer 名单仍只有四个内置 agent，固定使用其只读适配器。review 可执行名优先级为 `*_REVIEW_BIN` 环境变量、review 内置程序名；`agents.*.path` 和 `process_name` 完全不参与 review 选择。因此执行 agent 的包装器不会被自动用于审核。
+
+兼容方言的自定义名称在 `dismiss` 和接管清理时复用该方言的退出命令，仍要求身份及单 pane 容器检查通过。纯模板且未声明兼容方言的程序没有可推断的交互退出命令；`dismiss` 明确拒绝并保留容器。

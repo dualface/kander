@@ -14,6 +14,7 @@
   "focus.no_selection": "请先选择任务卡再跳转",
   "focus.load_failed": "无法读取任务窗口：{{.V0}}",
   "tui.focus_agent_window": "跳转到 Agent 窗口",
+  "config.agent_session_dialect": "方言 {{.V0}} 无法直接使用会话模式 {{.V1}}；请删除 session 以继承方言默认值，或提供 args.start 与 args.resume 模板。",
   "config.agent_definition_invalid": "agents.{{.V0}} 无效：{{.V1}}",
   "config.agent_object": "请使用 JSON 对象，不接受 null。",
   "config.agent_name": "agent 名须以小写字母开头，最多 64 字符，仅含小写字母、数字、_ 或 -。",

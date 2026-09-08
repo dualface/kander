@@ -88,19 +88,24 @@ func (s *Session) prepare(configValid bool) error {
 			))
 		}
 	}
+	firstExecution := ""
 	for _, name := range config.AgentNames(s.existing) {
 		state := s.agents[name]
-		if agentUsable(state) || s.existing.Agents[name].Dialect != "" || s.existing.Agents[name].Args != nil {
-			if labels[name] == "" {
-				labels[name] = name
-			}
-			s.exec = append(s.exec, Choice{Value: name, Label: labels[name] + " (" + state.Version + ")"})
+		if labels[name] == "" {
+			labels[name] = name
 		}
+		label := labels[name] + config.Text("menu.not_currently_installed")
+		if agentUsable(state) {
+			if firstExecution == "" {
+				firstExecution = name
+			}
+			label = labels[name] + " (" + state.Version + ")"
+		}
+		// Unavailable agents remain selectable so their executable can be configured.
+		s.exec = append(s.exec, Choice{Value: name, Label: label})
 	}
-	if len(s.exec) == 0 && !s.existing.WelcomeComplete {
-		return errors.New(config.Text(
-			"menu.no_usable_agent_found_version_must_succeed_install_codex",
-		))
+	if firstExecution == "" && !s.existing.WelcomeComplete {
+		return errors.New(config.Text("menu.no_usable_agent_found_version_must_succeed_install_codex"))
 	}
 	for _, name := range config.ReviewAgents {
 		if reviewerUsable(s.agents[name]) {
@@ -124,7 +129,7 @@ func (s *Session) prepare(configValid bool) error {
 	}
 	if !s.existing.WelcomeComplete {
 		if !agentUsable(s.agents[cfg.KanbanAgent]) {
-			cfg.KanbanAgent = s.exec[0].Value
+			cfg.KanbanAgent = firstExecution
 		}
 		for _, scale := range config.TaskScales {
 			if !agentUsable(s.agents[cfg.KanbanAgents[scale]]) {

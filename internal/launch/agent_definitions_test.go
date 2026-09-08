@@ -120,3 +120,21 @@ func TestTemplateStartAppendsPromptAndUsesConfiguredProgram(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+func TestNoneDialectArgumentsDoNotReuseTerminalIdentity(t *testing.T) {
+	for _, agent := range config.ExecutionAgents {
+		t.Run(agent, func(t *testing.T) {
+			cfg := config.DefaultConfig()
+			cfg.Agents = map[string]config.AgentDefinition{agent: {Session: &config.AgentSessionDefinition{Mode: "none"}}}
+			args, err := agentArguments(agent, nil, "small", AgentSession{Agent: agent, Reference: "terminal-marker"}, false, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, arg := range args {
+				if arg == "--resume" || arg == "--session-id" || arg == "terminal-marker" {
+					t.Fatalf("none passed session identity: %q", args)
+				}
+			}
+		})
+	}
+}

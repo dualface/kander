@@ -61,8 +61,8 @@ type ProcessInvocation struct {
 	ShellEnv map[string]string
 }
 
-// ResolveAgentProgram resolves the process entry point of the four current agents per platform.
-// name is the executable name, such as codex / claude / grok / cursor-agent.
+// ResolveAgentProgram resolves built-in and configured executable names per platform.
+// name may be a PATH name (with or without extension) or an explicit path.
 func ResolveAgentProgram(name string) *AgentProgram {
 	if !isWindows() {
 		found, err := exec.LookPath(name)
@@ -72,10 +72,28 @@ func ResolveAgentProgram(name string) *AgentProgram {
 		return &AgentProgram{Path: found}
 	}
 
-	if explicit := explicitProgram(name); explicit != nil {
-		return explicit
+	if strings.ContainsAny(name, `/\`) {
+		if explicit := explicitProgram(name); explicit != nil {
+			return explicit
+		}
+		if filepath.Ext(name) == "" {
+			for _, suffix := range []string{".exe", ".cmd", ".bat"} {
+				if explicit := explicitProgram(name + suffix); explicit != nil {
+					return explicit
+				}
+			}
+		}
+		return nil
 	}
-	if filepath.Ext(name) != "" {
+	if suffix := strings.ToLower(filepath.Ext(name)); suffix != "" {
+		if suffix != ".exe" && suffix != ".cmd" && suffix != ".bat" {
+			return nil
+		}
+		for _, candidate := range windowsPathCandidates(name, suffix) {
+			if usableFile(candidate, suffix == ".exe") {
+				return &AgentProgram{Path: candidate, Batch: suffix != ".exe"}
+			}
+		}
 		return nil
 	}
 

@@ -380,3 +380,43 @@ func TestShellInvocationUsesVariableFormForNonBatch(t *testing.T) {
 		t.Fatalf("直接 spawn 的 argv 被改写: %#v", direct.Argv)
 	}
 }
+
+func TestWindowsSuffixedNamesSearchPATH(t *testing.T) {
+	withWindows(t)
+	root := t.TempDir()
+	t.Chdir(t.TempDir())
+	t.Setenv("PATH", root)
+	for _, suffix := range []string{".exe", ".cmd", ".bat"} {
+		name := "kander-test-wrapper" + suffix
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got := ResolveAgentProgram(name)
+		if got == nil || got.Path != path || got.Batch != (suffix != ".exe") {
+			t.Fatalf("%s: %+v", name, got)
+		}
+		if err := os.WriteFile(name, []byte("cwd shadow"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if got := ResolveAgentProgram(name); got == nil || got.Path != path {
+			t.Fatalf("PATH name selected cwd: %+v", got)
+		}
+		if got := ResolveAgentProgram(path); got == nil || got.Path != path {
+			t.Fatalf("absolute path: %+v", got)
+		}
+	}
+}
+
+func TestWindowsAbsoluteExtensionlessProgram(t *testing.T) {
+	withWindows(t)
+	root := t.TempDir()
+	path := filepath.Join(root, "wrapper.exe")
+	if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if got := ResolveAgentProgram(strings.TrimSuffix(path, ".exe")); got == nil || got.Path != path {
+		t.Fatalf("%+v", got)
+	}
+}

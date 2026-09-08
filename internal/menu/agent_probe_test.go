@@ -40,3 +40,45 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
 		t.Fatalf("%s %s", out, diagnostic)
 	}
 }
+
+func TestPanelCanConfigureUnselectedRenamedBuiltin(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("PATH", h.fakeBin)
+	t.Setenv(config.EnvConfig, h.configPath)
+	wrapper := filepath.Join(h.fakeBin, "kander-codex")
+	for _, name := range []string{"claude", "kander-codex"} {
+		if err := os.WriteFile(filepath.Join(h.fakeBin, name), []byte("#!/bin/sh\necho fixture\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Launcher = "foreground"
+	cfg.KanbanAgent = "claude"
+	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewSession(cfg, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, choice := range s.ExecutionChoicesFor("claude") {
+		if choice.Value == "codex" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("unavailable Codex cannot be selected for path editing")
+	}
+	s.SetExecutionAgent("small", "codex")
+	s.AgentExecutableFields("small")[0].Set(wrapper)
+	if _, err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := config.Load(false)
+	if err != nil || config.AgentPath(got, "codex") != wrapper {
+		t.Fatalf("%+v %v", got, err)
+	}
+}

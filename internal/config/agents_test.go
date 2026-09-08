@@ -151,3 +151,28 @@ func TestExpandAgentArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestDialectSessionCompatibility(t *testing.T) {
+	for _, test := range []struct {
+		dialect, mode string
+		bad           bool
+	}{
+		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
+		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
+	} {
+		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
+			cfg := DefaultConfig()
+			exe, _ := os.Executable()
+			session := &AgentSessionDefinition{Mode: test.mode}
+			if test.mode == "allocated" {
+				session.Allocate = []string{exe}
+			}
+			cfg.Agents = map[string]AgentDefinition{"alias": {Dialect: test.dialect, Session: session}}
+			data, _ := json.Marshal(cfg)
+			_, err := ValidateJSON(data)
+			if (err != nil) != test.bad {
+				t.Fatalf("error=%v", err)
+			}
+		})
+	}
+}

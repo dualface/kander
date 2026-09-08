@@ -224,6 +224,10 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 			}
 		}
 		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
+		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
+			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
+			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
+		}
 		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_session_required"))
 		}

@@ -27,7 +27,12 @@ func ResolvedSession(taskID, text string) (AgentSession, error) {
 	return resolvedTaskSession(taskID, text)
 }
 
-// NotifyViaResume resumes the original session when recovery is permitted.
+// ResolvedSessionIdentity resolves terminal identity independently of resume support.
+func ResolvedSessionIdentity(taskID, text string) (AgentSession, error) {
+	return resolveTaskIdentity(taskID, text, false)
+}
+
+// NotifyViaResume resumes the original session, or starts fresh for session.mode=none.
 // Legacy failures and durable failures before a send attempt restore the pre-call
 // text only while this operation owns the current revision and authorization;
 // otherwise newer records are preserved and a conflict is reported. After an

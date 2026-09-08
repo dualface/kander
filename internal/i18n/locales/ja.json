@@ -14,6 +14,7 @@
   "focus.no_selection": "切り替えるタスクを選択してください",
   "focus.load_failed": "タスクのウィンドウを読み込めません：{{.V0}}",
   "tui.focus_agent_window": "エージェントのウィンドウへ移動",
+  "config.agent_session_dialect": "方言 {{.V0}} はテンプレートなしでセッション方式 {{.V1}} を使用できません。session を省略するか args.start と args.resume を指定してください。",
   "config.agent_definition_invalid": "agents.{{.V0}} が無効です: {{.V1}}",
   "config.agent_object": "JSON オブジェクトを指定してください。null は不可です。",
   "config.agent_name": "名前は小文字で始まる64文字以内の英小文字、数字、_、- にしてください。",

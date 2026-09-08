@@ -36,9 +36,13 @@ var agentExitCommands = map[string]string{
 	"cursor": "/quit",
 }
 
-// AgentExitCommand returns /exit for Claude/Codex or /quit for Grok/Cursor.
+// AgentExitCommand selects the exit command of the configured compatible dialect.
 func AgentExitCommand(agent string) (string, error) {
-	cmd, ok := agentExitCommands[agent]
+	definition, err := config.LoadAgent(agent)
+	if err != nil {
+		return "", err
+	}
+	cmd, ok := agentExitCommands[definition.Dialect]
 	if !ok {
 		return "", takeoverError("launch.unsupported_agent", agent)
 	}
