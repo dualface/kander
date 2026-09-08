@@ -1,5 +1,5 @@
 {
-  "flow.batch": "主控が受入済み未審査の納品をバッチ化。審査中はグループ対象を固定し、バッチ外の納品は待機。",
+  "flow.batch": "主控が ff 受入前に審査バッチを選定。このバッチだけを受け入れ、バッチ外は待機。審査中はグループ対象を固定。",
   "flow.sync_dispatch": "ff 不可の場合：notify で元メンバーに同期を依頼。本人が move working、rebase・再検証後 review に戻る。",
   "flow.title": "フロー図",
   "flow.configuration": "現在のセッション設定",

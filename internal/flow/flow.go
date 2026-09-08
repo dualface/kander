@@ -58,21 +58,18 @@ func Build(cfg *config.Config) []Line {
 			add(Step, "self_check")
 		}
 	}
+	hasReviewRole := false
+	for _, role := range config.ReviewRoles {
+		hasReviewRole = hasReviewRole || cfg.ReviewStages[role] != "skip"
+	}
 	review := func(group bool) {
 		add(Step, "plan")
 		if !cfg.Rules[config.RuleReview] {
 			return
 		}
 		add(Step, "review_trigger")
-		active := false
-		for _, role := range config.ReviewRoles {
-			active = active || cfg.ReviewStages[role] != "skip"
-		}
-		if !active {
+		if !hasReviewRole {
 			return
-		}
-		if group {
-			add(Step, "batch")
 		}
 		for _, stage := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
 			var roles []string
@@ -145,6 +142,9 @@ func Build(cfg *config.Config) []Line {
 	add(Step, "member_branch")
 	implement()
 	add(Step, "member_delivery")
+	if cfg.Rules[config.RuleReview] && hasReviewRole {
+		add(Step, "batch")
+	}
 	add(Step, "receive")
 	add(Detail, "sync_dispatch")
 	review(true)

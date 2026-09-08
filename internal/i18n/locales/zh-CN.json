@@ -1,5 +1,5 @@
 {
-  "flow.batch": "主控将已接收的未审核交付组成批次；审核时冻结组目标，批外交付排队。",
+  "flow.batch": "主控在 ff 接收前确定审核批次：仅接收本批交付，批外交付排队；审核时冻结组目标。",
   "flow.sync_dispatch": "无法 ff 时：notify 原成员自行 move working，同步 rebase 并复验后返回 review。",
   "flow.title": "流程图",
   "flow.configuration": "当前会话配置",

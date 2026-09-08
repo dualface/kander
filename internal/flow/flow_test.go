@@ -50,7 +50,7 @@ func TestModulePruning(t *testing.T) {
 				}
 			}
 			if !cfg.Rules[config.RuleReview] {
-				for _, key := range []string{"stage_one", "stage_two", "role_auto", "role_required", "dispatch_fix", "single_fix", "review_finish"} {
+				for _, key := range []string{"stage_one", "stage_two", "role_auto", "role_required", "dispatch_fix", "single_fix", "review_finish", "batch"} {
 					if got["flow."+key] {
 						t.Errorf("disabled review node: %s", key)
 					}
@@ -131,7 +131,7 @@ func TestWorkflowOrderAndTranslations(t *testing.T) {
 			steps++
 		}
 	}
-	for _, pair := range [][2]string{{"member_delivery", "receive"}, {"receive", "dispatch_fix"}, {"dispatch_fix", "member_fix"}, {"member_fix", "close_plan"}, {"close_plan", "group_ready"}, {"group_ready", "integrate"}, {"integrate", "wrap_dispatch"}, {"wrap_dispatch", "task_cleanup"}, {"task_cleanup", "member_done"}, {"member_done", "group_cleanup"}} {
+	for _, pair := range [][2]string{{"member_delivery", "batch"}, {"batch", "receive"}, {"receive", "dispatch_fix"}, {"dispatch_fix", "member_fix"}, {"member_fix", "close_plan"}, {"close_plan", "group_ready"}, {"group_ready", "integrate"}, {"integrate", "wrap_dispatch"}, {"wrap_dispatch", "task_cleanup"}, {"task_cleanup", "member_done"}, {"member_done", "group_cleanup"}} {
 		if positions["flow."+pair[0]] >= positions["flow."+pair[1]] {
 			t.Errorf("wrong order: %v", pair)
 		}

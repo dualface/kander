@@ -1,5 +1,5 @@
 {
-  "flow.batch": "Orchestrator batches all unreviewed received deliveries; freeze the group target during review, queue outside deliveries.",
+  "flow.batch": "Orchestrator selects the review batch before ff reception: receive only this batch, queue outside deliveries and freeze the group target during review.",
   "flow.sync_dispatch": "If ff is impossible: notify the original member to sync via move working, rebase and re-verify, then return move review.",
   "flow.title": "Workflow",
   "flow.configuration": "Current session configuration",
