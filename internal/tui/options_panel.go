@@ -19,6 +19,7 @@ const (
 	sectionExecution = "execution"
 	sectionReview    = "review"
 	sectionRules     = "rules"
+	sectionFlow      = "flow"
 	sectionDoctor    = "doctor"
 	sectionSave      = "save"
 	sectionClose     = "close"
@@ -469,6 +470,9 @@ func (p *optionsPanel) dispatch(section string) tea.Cmd {
 		return nil
 	case sectionClose:
 		p.close()
+		return nil
+	case sectionFlow:
+		p.openFlow()
 		return nil
 	case sectionDoctor:
 		p.status = t("tui.running_environment_check")

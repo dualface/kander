@@ -232,6 +232,7 @@ func (p *optionsPanel) openRoot() tea.Cmd {
 			huh.NewOption(p.rootLabel(t("tui.execution_and_models"), config.FormatKanbanAgentsSummary(cfg)+" · "+cfg.Launcher), sectionExecution),
 			huh.NewOption(p.rootLabel(t("tui.review_and_models"), p.reviewSummary()), sectionReview),
 			huh.NewOption(t("rules.modules"), sectionRules),
+			huh.NewOption(t("flow.title"), sectionFlow),
 		)
 	}
 	options = append(options,
