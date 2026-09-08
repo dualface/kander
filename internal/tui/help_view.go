@@ -75,23 +75,28 @@ func (a *App) renderHelp() (popupBox, string) {
 	left := renderHelpGroup(p, groups[0])
 	right := renderHelpGroup(p, groups[1])
 	if len(groups) > 2 {
-		right = lipgloss.JoinVertical(lipgloss.Left, right, "", renderHelpGroup(p, groups[2]))
+		right = joinBlocksVertical(p, right, renderHelpGroup(p, groups[2]))
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, p.fillColumn(3, blockHeight(left)), right)
+	height := blockHeight(left)
+	if got := blockHeight(right); got > height {
+		height = got
+	}
+	// Both sides are padded to their own rectangle first: lipgloss would otherwise pad the shorter
+	// lines and the missing rows with bare spaces, which leaves the terminal background showing through.
+	left = padBlock(left, blockWidth(left), height, p)
+	right = padBlock(right, blockWidth(right), height, p)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, p.fillColumn(3, height), right)
 
 	available := w - 8
 	if available > 108 {
 		available = 108
 	}
 	if blockWidth(body) > available-4 {
-		blocks := make([]string, 0, len(groups)*2)
-		for i, group := range groups {
-			if i > 0 {
-				blocks = append(blocks, "")
-			}
+		blocks := make([]string, 0, len(groups))
+		for _, group := range groups {
 			blocks = append(blocks, renderHelpGroup(p, group))
 		}
-		body = lipgloss.JoinVertical(lipgloss.Left, blocks...)
+		body = joinBlocksVertical(p, blocks...)
 	}
 
 	lines := strings.Split(body, "\n")
@@ -120,6 +125,25 @@ func (a *App) renderHelp() (popupBox, string) {
 		padLineFill(hint, inner, p),
 	}, "\n")
 	return box, popupFrame(p, box.Width-2).Render(content)
+}
+
+// joinBlocksVertical stacks the blocks with one blank line between them, every line padded to the
+// widest one so the filler carries the theme background instead of lipgloss' bare spaces.
+func joinBlocksVertical(p palette, blocks ...string) string {
+	width := 0
+	for _, block := range blocks {
+		if got := blockWidth(block); got > width {
+			width = got
+		}
+	}
+	lines := make([]string, 0, len(blocks))
+	for i, block := range blocks {
+		if i > 0 {
+			lines = append(lines, p.fillLine(width))
+		}
+		lines = append(lines, padBlock(block, width, blockHeight(block), p))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func blockWidth(block string) int {
