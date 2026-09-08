@@ -72,7 +72,7 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
 
 直接运行 `kander` 用命令行界面查看任务状态. 支持多栏浏览、搜索、任务详情、鼠标操作与剪贴板复制, 任务卡正文按 Markdown 渲染.
 
-![终端看板](docs/kander-tui-01.jpg)
+![终端看板](docs/kanban-screenshot-01.png)
 
 > 上图看板内容来自我的真实项目 [https://quicktui.ai](https://quicktui.ai). QuickTUI 是一个远程操作电脑上各种 Agent 的工具, 支持 iOS/Android/macOS/Linux/Windows, 免费使用.
 

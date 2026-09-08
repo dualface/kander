@@ -72,7 +72,7 @@ Directory-card migration also fills in SIZE and adjusts the relative link paths 
 
 Run `kander` directly to check task status in the command-line interface. It supports multi-column browsing, search, task details, mouse operation, and clipboard copy; card bodies are rendered as Markdown.
 
-![Terminal kanban](docs/kander-tui-01.jpg)
+![Terminal kanban](docs/kanban-screenshot-01.png)
 
 > The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
 

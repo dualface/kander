@@ -72,7 +72,7 @@ Kander には 2 つのインストールスコープがあり、同じルール�
 
 `kander` をそのまま実行すると、コマンドラインインターフェースでタスクの状態を確認できます。複数カラムのブラウズ、検索、タスク詳細、マウス操作、クリップボードへのコピーに対応し、タスクカード本文は Markdown としてレンダリングされます。
 
-![ターミナルカンバン](docs/kander-tui-01.jpg)
+![ターミナルカンバン](docs/kanban-screenshot-01.png)
 
 > 上図のカンバンの内容は私の実プロジェクト [https://quicktui.ai](https://quicktui.ai) のものです。QuickTUI はコンピュータ上のさまざまな Agent をリモート操作するツールで、iOS/Android/macOS/Linux/Windows に対応し、無料で使えます。
 
