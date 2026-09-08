@@ -1,181 +1,183 @@
 # Kander
 
-一个人用看板调度多个 AI Agent.
+**English** | [简体中文](README-CN.md) | [日本語](README-JA.md)
 
-![Kander 工作流](docs/workflow.svg)
+One person schedules multiple AI agents with a kanban board.
 
-## 1. 新手指引
+![Kander workflow](docs/workflow.svg)
 
-安装完成后即可使用.
+## 1. Getting Started
 
-4 步上手:
+Ready to use right after installation.
 
-1. 新建一个 Agent 会话, 在里面讨论需求或者任务, 说清楚目标和验收条件. 推荐使用 Agent 的 Plan 模式.
-2. 任务确认后, 在该会话里要求 Agent 用看板流程完成任务:
+Four steps to get going:
+
+1. Start an agent session and discuss the requirement or task there, making the goal and acceptance criteria clear. The agent's Plan mode is recommended.
+2. Once the task is confirmed, ask the agent in that session to complete it through the kanban flow:
 
 ```text
-用 kander new 建卡, 完善任务契约并自审后用 kander start 启动
+Create a card with kander new, refine the task contract and self-review it, then launch with kander start
 ```
 
-3. 有多个需求时, 对每个需求重复步骤 1-2, 不断安排并启动任务.
-4. 用命令行界面查看任务状态:
+3. When you have multiple requirements, repeat steps 1-2 for each one, continuously scheduling and launching tasks.
+4. Check task status with the command-line interface:
 
 ```sh
 kander
 ```
 
-## 2. 安装
+## 2. Installation
 
-需要 Go 1.25+, Git, 以及 Codex, Claude, Grok 或 Cursor 中至少一个.
+Requires Go 1.25+, Git, and at least one of Codex, Claude, Grok, or Cursor.
 
-拿到 kander 二进制后直接运行即可. 首次启动若尚未安装, 会进入交互向导: 选择界面语言 (`cn`/`en`/`ja`) 与安装位置, 再释出规则并把自身拷到目的地. 规则只有英文一份; Agent 与你沟通所用的语言由配置 `agent_language` 决定, 可在随后打开的选项面板里修改; 建卡时该值会写进任务卡的 `LANGUAGE` 字段, 之后这张卡一直用它. 之后自动进入环境检查和选项面板. 已安装用户可用 `kander install` 重跑向导 (升级规则或改安装位置). 命令也可直接用 `--lang ja` 切到日语界面.
+Get the kander binary and run it directly. On first launch, if not yet installed, an interactive wizard starts: choose the interface language (`cn`/`en`/`ja`) and the install location, then it extracts the rules and copies itself to the destination. There is only one English copy of the rules; the language the agent uses to talk to you is decided by the `agent_language` setting, which can be changed in the options panel that opens afterwards. When a card is created, this value is written into the card's `LANGUAGE` field, and that card keeps using it from then on. The environment check and the options panel follow automatically. Installed users can rerun the wizard with `kander install` (to upgrade rules or change the install location). Commands can also switch to the Japanese interface directly with `--lang ja`.
 
-用 Go 从源码安装:
+Install from source with Go:
 
 ```sh
 go install github.com/dualface/kander/cmd/kander@latest
 ```
 
-或在仓库根构建后运行:
+Or build at the repository root and run:
 
 ```sh
 make
 ./kander
 ```
 
-Windows (无需 make):
+Windows (no make required):
 
 ```powershell
 .\make-windows.cmd
 .\kander.exe
 ```
 
-Kander 有两种安装作用域, 共用同一套规则和程序.
+Kander has two install scopes, sharing the same rules and program.
 
-安装、`kander doctor` 修复与选项面板保存时, 会自动把规则入口接到 Agent 的规则文件: Claude 在 `CLAUDE.md` (全局为 `~/.claude/CLAUDE.md`, 项目为仓库根) 追加一行 `@` 引用; 其他 Agent 在对应的 `AGENTS.md` (全局为 `~/.codex/`、`~/.cursor/`、`~/.grok/` 下, 项目为仓库根) 追加一条读取 `KANDER-AGENTS.md` 的指令. 已存在任意形式的引用 (含符号链接或合并全文) 时不会重复追加; 全局安装只处理配置目录已存在的 Agent, 且永远只追加、不覆盖已有内容.
+During installation, `kander doctor` repairs, and options-panel saves, the rules entry is automatically wired into the agent's rules file: for Claude, an `@` reference line is appended to `CLAUDE.md` (`~/.claude/CLAUDE.md` for global installs, the repository root for project installs); for other agents, an instruction to read `KANDER-AGENTS.md` is appended to the corresponding `AGENTS.md` (under `~/.codex/`, `~/.cursor/`, `~/.grok/` for global installs, the repository root for project installs). If a reference already exists in any form (including symlinks or the full text merged in), nothing is appended again; a global install only touches agents whose config directories already exist, and it only ever appends, never overwriting existing content.
 
-### 2.1 全局安装
+### 2.1 Global Install
 
-向导里选全局. 二进制落到 `~/.local/bin/kander` (Windows 为 `kander.exe`), 规则落到 `~/.agents/`. 命令不可用时, 先把用户主目录下的 `.local/bin` 加入 PATH.
+Choose global in the wizard. The binary lands at `~/.local/bin/kander` (`kander.exe` on Windows) and the rules at `~/.agents/`. If the command is not available, first add `.local/bin` under your home directory to PATH.
 
-### 2.2 项目本地安装
+### 2.2 Project-Local Install
 
-向导里选项目并给出 Git 仓库目录. 安装位于该仓库主 worktree 的 `.kander/`, 全部 worktree 共用这份安装, 并向 `.git/info/exclude` 幂等追加 `/.kander/`. 用向导输出的绝对命令路径打开看板, 后文的 `kander` 命令也用这个入口. 项目配置独立于全局配置, 进入项目目录不会自动切换 PATH 中的命令.
+Choose project in the wizard and provide the Git repository directory. The installation lives in `.kander/` in the repository's main worktree; all worktrees share this installation, and `/.kander/` is idempotently appended to `.git/info/exclude`. Open the kanban with the absolute command path printed by the wizard; the `kander` commands below also use this entry. Project configuration is independent from global configuration, and entering a project directory does not automatically switch the command on PATH.
 
-目录卡迁移同时补写 SIZE 并调整保持目标所需的相对链接地址; 整批映射随事务持久化, 支持中断恢复. 语法范围、维护窗口与不支持语法的处理见 [目录卡迁移](docs/directory-cards.md).
+Directory-card migration also fills in SIZE and adjusts the relative link paths needed to keep targets valid; the whole mapping batch is persisted with the transaction and supports recovery after interruption. For the syntax scope, the maintenance window, and how unsupported syntax is handled, see [Directory cards](docs/directory-cards.md).
 
-## 3. 常用命令
+## 3. Common Commands
 
-直接运行 `kander` 用命令行界面查看任务状态. 支持多栏浏览、搜索、任务详情、鼠标操作与剪贴板复制, 任务卡正文按 Markdown 渲染.
+Run `kander` directly to check task status in the command-line interface. It supports multi-column browsing, search, task details, mouse operation, and clipboard copy; card bodies are rendered as Markdown.
 
-![终端看板](docs/kander-tui-01.jpg)
+![Terminal kanban](docs/kander-tui-01.jpg)
 
-> 上图看板内容来自我的真实项目 [https://quicktui.ai](https://quicktui.ai). QuickTUI 是一个远程操作电脑上各种 Agent 的工具, 支持 iOS/Android/macOS/Linux/Windows, 免费使用.
+> The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
 
-常用按键: 方向键或 `hjkl` 移动, `Enter` 看任务卡, `/` 搜索, `y` 复制任务 ID, `s` 确认后启动所选 backlog/todo 任务, `g` 跳转到所选任务 Agent 窗口 (herdr/tmux; tmux 需在客户端内), `-`/`=` 增减同屏栏目数, `a` 切换存档栏目, `t` 换主题, `o` 打开选项, `r` 刷新, `q` 退出. 按 `?` 调出完整按键说明.
+Common keys: arrow keys or `hjkl` to move, `Enter` to view a card, `/` to search, `y` to copy the task ID, `s` to launch the selected backlog/todo task after confirmation, `g` to jump to the selected task's agent window (herdr/tmux; tmux requires being inside a client), `-`/`=` to change the number of on-screen columns, `a` to toggle the archive column, `t` to switch themes, `o` to open options, `r` to refresh, `q` to quit. Press `?` for the full key reference.
 
-列表按 `s` 立即显示读取中对话框，后台只读取所选卡，再填入按 SIZE 解析的 Agent 和实际启动器；读取中不能确认，滚轮可滚动看板（换选会关闭旧对话框），读取完成后 `y` 确认，其它键取消。backlog 卡先通过既有门禁迁到 todo。herdr/tmux/tmux-session 在后台启动，成功后刷新看板并显示容器地址；foreground/console 提示改用终端命令 `kander start <task-id>`。失败显示原因并保留既有启动回滚语义。确认后保留对话框并显示正在启动，启动中按键不关闭或重复启动；成功、失败和警告原地更新，结果态按任意键关闭，溢出内容可用滚轮在框内查看。窄屏优先显示 Agent、启动器与完整地址，仍放不下时临时换行浮层展示完整结果。详情和搜索输入中的 `s` 不触发启动。
+Pressing `s` in the list immediately shows a loading dialog; only the selected card is read in the background, then the agent resolved by SIZE and the actual launcher are filled in. Confirmation is disabled while loading; the wheel can scroll the board (changing the selection closes the old dialog); once loading finishes, `y` confirms and any other key cancels. Backlog cards first move to todo through the existing gate. herdr/tmux/tmux-session launch in the background, refreshing the board and showing the container address on success; foreground/console prompt you to use the terminal command `kander start <task-id>` instead. Failures show the reason and keep the existing launch rollback semantics. After confirmation, the dialog stays and shows that launching is in progress; keypresses during launch neither close it nor launch twice. Success, failure, and warnings update in place, terminal states close on any key, and overflowing content can be scrolled inside the box with the wheel. On narrow screens the agent, launcher, and full address take priority; when they still do not fit, a temporary wrapped overlay shows the full result. `s` inside the detail view or the search input does not trigger a launch.
 
-其余命令主要给 Agent 使用: `kander new`/`pick`/`start`/`resume` 建卡与启动, `kander notify`/`dispatch`/`dismiss` 派发消息、读取持久回执与遣散会话, `kander check` 检查看板入口与任务契约, `kander review` 运行一次审核, `kander config`/`doctor` 查看与修复配置, `kander install` 重跑安装向导, `kander version` 查看版本号.
+The remaining commands are mainly for agents: `kander new`/`pick`/`start`/`resume` create cards and launch them, `kander notify`/`dispatch`/`dismiss` deliver messages, read durable receipts, and dismiss sessions, `kander check` checks board entries and task contracts, `kander review` runs one review, `kander config`/`doctor` view and repair configuration, `kander install` reruns the install wizard, `kander version` shows the version.
 
-所有新卡使用 `<task-id>/spec.md`, `SIZE: small|large` 决定规模, 配置键不变. 默认 small 保留 IMPLEMENTATION/SUMMARY; `new --large` 使用 large 的 report.md 完成要求. 旧文件只读兼容, 变更前必须迁移.
+All new cards use `<task-id>/spec.md`; `SIZE: small|large` decides the scale, and the config keys are unchanged. The default small keeps IMPLEMENTATION/SUMMARY; `new --large` uses large's report.md completion requirements. Old files are read-only compatible and must be migrated before changes.
 
-`kander init` 显式迁移七状态旧卡并恢复未完成事务. 先暂停 Agent、外部编辑器、通知与归档写入; 有 working/review 卡时默认拒绝迁移, 全部停写后用 `kander init --maintenance` 确认维护窗口. 不会自动停止 Agent. 二次执行迁移数为 0, 卡片内容与 mtime 不变. 详见 [目录卡与迁移](docs/directory-cards.md).
+`kander init` explicitly migrates seven-state legacy cards and recovers unfinished transactions. First pause agents, external editors, notifications, and archive writes; while working/review cards exist, migration is refused by default, and once all writes are stopped, confirm the maintenance window with `kander init --maintenance`. Agents are not stopped automatically. A second run migrates 0 cards, leaving card contents and mtimes unchanged. See [Directory cards and migration](docs/directory-cards.md).
 
-`kander show --json <task-id>` 返回正文、当前位置、revision 和操作 ID. Agent 将修改稿写入独立 UTF-8 文件后, 用 `kander update <task-id> --document spec.md --file <input> --expect-revision <revision>` 提交; 小卡也使用逻辑文档名 `spec.md`. 冲突必须重新读取并合并. 完成用 `move <task-id> done --result completed`, 手工认领用 `move <task-id> working --owner <agent>`. 协议与恢复见 [卡片事务](docs/card-transactions.md); [guard-write](docs/kanban-write-guard.md) 仅为辅助检查, 不保证检查与外部写入原子性.
+`kander show --json <task-id>` returns the body, current position, revision, and operation ID. The agent writes the revised draft to a separate UTF-8 file, then submits it with `kander update <task-id> --document spec.md --file <input> --expect-revision <revision>`; small cards also use the logical document name `spec.md`. On conflict, re-read and merge. Complete with `move <task-id> done --result completed`; claim manually with `move <task-id> working --owner <agent>`. See [Card transactions](docs/card-transactions.md) for the protocol and recovery; [guard-write](docs/kanban-write-guard.md) is only an auxiliary check and does not guarantee atomicity between the check and external writes.
 
-任务组 review 派回使用持久 dispatch；普通 working 消息可用 `--kind fix|sync|wrap-up` 显式选择。发送前打印稳定 ID，重试带 `--dispatch-id`；只有执行端带 ID/epoch 的受控 move 才生成接受/完成回执。终端回显不代表开工，unknown 不自动启动第二执行者。命令、期限、兼容和恢复见 [持久派回协议](docs/durable-dispatch.md)。
+Task-group review dispatch-back uses durable dispatch; ordinary working messages can pick a kind explicitly with `--kind fix|sync|wrap-up`. A stable ID is printed before sending; retries carry `--dispatch-id`; only controlled moves from the executor carrying the ID/epoch generate acceptance/completion receipts. Terminal echo does not mean work has started, and unknown does not auto-launch a second executor. For commands, deadlines, compatibility, and recovery, see [Durable dispatch protocol](docs/durable-dispatch.md).
 
-`kander coordinator show/claim/reconcile` 通过 CAS 和 coordinator epoch 保存编排检查点。初始快照与后续事件同样消费持久 dispatch、审核原件和实际 Git 证据；重启不必补见 working 边沿，也不自动通知或集成。详见 [编排检查点与恢复](docs/coordinator-recovery.md)。
+`kander coordinator show/claim/reconcile` saves orchestration checkpoints via CAS and coordinator epochs. The initial snapshot and subsequent events likewise consume durable dispatches, original review artifacts, and actual Git evidence; a restart does not need to re-observe the working edge, nor does it auto-notify or integrate. See [Orchestration checkpoints and recovery](docs/coordinator-recovery.md).
 
-`kander check` 的存活段与 `subscribe` 心跳只报告观测结果. `alive` 表示 Agent 存在, 不代表已就绪或任务有进展; `notify` 仍独立检查能否接收消息. 旧地址失效后, 有效反查确认零匹配才据此报告 `stopped`, 唯一匹配报告 `drifted`; 反查失败、非法输出、超时或多匹配报告 `unknown`, 保留原地址失效原因及反查阶段和原因. 禁用反查或会话引用为空时保留原有直接探测语义, Codex 空引用不反查. 存活探测不写卡, 也不改变 `check` 的结构检查退出码.
+The liveness section of `kander check` and `subscribe` heartbeats only report observations. `alive` means the agent exists, not that it is ready or that the task is progressing; `notify` still independently checks whether messages can be received. After the old address becomes invalid, `stopped` is reported only when a valid reverse lookup confirms zero matches; a unique match reports `drifted`; a failed reverse lookup, invalid output, timeout, or multiple matches report `unknown`, preserving the original address-failure reason plus the reverse-lookup stage and reason. With reverse lookup disabled or an empty session reference, the original direct-probe semantics are kept; Codex empty references are not reverse-looked-up. Liveness probing does not write cards, nor does it change `check`'s structural-check exit code.
 
-单卡存活探测的前向查询、session 反查、复查及进程回收共享 10 秒默认期限；context API 使用调用方期限和取消信号。耗尽预算后不再启动后续查询，结果为 `unknown`。取消时关闭输出管道并回收所属进程；平台边界及验证范围见 [探测期限与取消](docs/probe-deadlines.md)。
+Single-card liveness probing's forward query, session reverse lookup, re-check, and process reaping share a 10-second default deadline; the context API uses the caller's deadline and cancellation signal. Once the budget is exhausted, no further queries start and the result is `unknown`. On cancellation, output pipes are closed and owned processes reaped; for platform boundaries and verification scope, see [Probe deadlines and cancellation](docs/probe-deadlines.md).
 
-`check` 的多卡存活采集共用 10 秒总预算，最多同时探测 4 张卡；未采集项保留 `unknown` 原因，输出观测时间、有效性和独立运行状态。批量 API 的结果绑定任务/会话身份，`alive` 不代表 ready 或业务进展；订阅调度仍遵循现有单卡采集规则。
+`check`'s multi-card liveness collection shares a 10-second total budget, probing at most 4 cards concurrently; uncollected entries keep an `unknown` reason, and the output includes the observation time, validity, and independent running state. Batch API results are bound to task/session identity; `alive` does not mean ready or business progress; subscription scheduling still follows the existing single-card collection rules.
 
-## 4. 工作流程
+## 4. Workflow
 
-每个任务都按下面的流程进行. Kander 的开发规则按模块启用, 新安装默认全开; 关掉对应模块就让单卡沿用你已有的 Git、审核和交付流程.
+Every task follows the flow below. Kander's development rules are enabled per module, all on by default for new installs; turning a module off lets a single card follow your existing Git, review, and delivery flow.
 
-### 4.1 建卡与自审
+### 4.1 Card Creation and Self-Review
 
-Agent 建卡后必须自审任务契约, 在 `DISCUSSION` 留下 `SELF_REVIEW:` 结论行. SIZE 为 large 的任务和任务组成员卡还要由不共享建卡上下文的独立 Agent 审卡, 留下 `CARD_REVIEW:` 行.
+After creating a card, the agent must self-review the task contract, leaving a `SELF_REVIEW:` conclusion line in `DISCUSSION`. Tasks with SIZE large and task-group member cards also need a card review by an independent agent that does not share the creation context, leaving a `CARD_REVIEW:` line.
 
-卡片进入待处理栏前会做机器门禁: 必填章节完整、不残留 `<FILL_IN>` 占位符、验收条件至少有一条 `- [ ]` 可判定条目、上述记录行齐全. 工具只校验记录存在, 结论质量仍由建卡者负责.
+Before a card enters the pending column, a machine gate runs: required sections complete, no leftover `<FILL_IN>` placeholders, at least one decidable `- [ ]` acceptance item, and the record lines above present. The tool only verifies that the records exist; the quality of the conclusions remains the card creator's responsibility.
 
-### 4.2 任务拆分
+### 4.2 Task Splitting
 
-启用「任务组编排」后, Agent 会根据任务的复杂度和可拆分情况, 将任务拆分为尽可能独立的任务卡. 每个任务卡对应一个或多个 Markdown 文件.
+With "task-group orchestration" enabled, the agent splits a task into cards that are as independent as possible, based on its complexity and splittability. Each card corresponds to one or more Markdown files.
 
-如果一个任务拆分为多个任务卡, 则视为一个任务卡组. 关掉该模块就只跑单卡, 不强制拆组.
+If a task is split into multiple cards, they are treated as a task-card group. With the module off, only single cards run and grouping is not forced.
 
-### 4.3 单个任务卡独立完成
+### 4.3 A Single Card Completed Independently
 
-对于单个任务卡, 会启动一个独立的 Agent 完成任务. 这个 Agent 称为任务 Agent.
+For a single card, an independent agent is launched to complete the task. This agent is called the task agent.
 
-任务 Agent 的工作步骤:
+The task agent's steps:
 
-- 创建一个 git worktree, 避免和其他 Agent 的工作互相干扰.
-- 生成代码或文档.
-- 启动独立的审核 Agent 对成果进行审核.
-- 审核通过后, 按已获授权把任务分支集成到 develop, 同步本地并清理任务 worktree 与分支.
-- 输出任务总结, 结束.
+- Create a git worktree to avoid interfering with other agents' work.
+- Produce code or documents.
+- Launch an independent review agent to review the result.
+- After the review passes, integrate the task branch into develop as authorized, sync locally, and clean up the task worktree and branch.
+- Output a task summary and finish.
 
-关掉「Git 流程」就不要求 worktree、develop、自动提交和合回; 关掉「审核流程」就不自动起审核.
+With "Git flow" off, worktrees, develop, auto-commit, and merge-back are not required; with "review flow" off, reviews are not started automatically.
 
-### 4.4 多个任务卡组成的任务卡组
+### 4.4 A Task-Card Group of Multiple Cards
 
-启动任务卡组的 Agent 会转变为主控 Agent, 并负责编排任务和审核流程. 「任务组编排」需要同时启用「Git 流程」.
+The agent that launches a task-card group becomes the coordinator agent, responsible for orchestrating tasks and reviews. "Task-group orchestration" requires "Git flow" to be enabled as well.
 
-主控 Agent 会根据任务卡的依赖关系, 确保所有任务卡按照正确的顺序完成. 在可能的情况下, 也会同时启动多个任务卡, 提高效率.
+The coordinator ensures all cards complete in the correct order according to their dependencies. Where possible, it also launches multiple cards at once for efficiency.
 
-与单个任务卡的流程有所区别, 每个任务 Agent 现在只负责生成代码或文档, 完成后把任务卡移入 review 栏等待主控接收交付.
+Unlike the single-card flow, each task agent is now only responsible for producing code or documents; after finishing, it moves the card into the review column to await the coordinator's acceptance of the delivery.
 
-- 主控按模块、里程碑或依赖链分批接收和审核, 不必等整组做完; 审核批次完成前, 批外交付排队.
-- 收到审核结果后, 主控汇总并通过 `kander notify` 把修改意见发回对应的任务 Agent, 接收修复交付后做增量复审.
-- 重复整个过程, 直到整个任务卡组完成, 最后按已获授权集成到 develop.
-- 主控派原任务 Agent 清理任务分支和 worktree、补全记录并迁入 done, 再调度后继组.
-- 输出任务总结, 询问用户是否遣散任务 Agent, 结束.
+- The coordinator accepts and reviews in batches by module, milestone, or dependency chain, without waiting for the whole group to finish; deliveries outside the batch queue until the review batch completes.
+- After receiving review results, the coordinator consolidates them and sends fix feedback back to the corresponding task agents via `kander notify`, then performs an incremental re-review after receiving the fixed delivery.
+- The whole process repeats until the entire group is complete, then it is finally integrated into develop as authorized.
+- The coordinator dispatches the original task agents to clean up task branches and worktrees, complete the records, and move cards into done, then schedules successor groups.
+- Output a task summary, ask the user whether to dismiss the task agents, and finish.
 
-### 4.5 审核
+### 4.5 Review
 
-Kander 中定义了四种审核角色, 每个角色在审核时侧重点不同:
+Kander defines four review roles, each with a different focus:
 
-- PM: 产品经理只关注功能实现是否符合目标, 不会随意扩大功能范围.
-- QA: 关注功能实现是否符合项目整体架构要求, 以及代码质量和可维护性.
-- CSA: 关注代码内在安全性.
-- Hacker: 用对抗性视角从外部审查是否存在攻击弱点.
+- PM: the product manager only cares whether the implementation meets the goal, and does not casually expand the scope.
+- QA: cares whether the implementation fits the project's overall architecture, plus code quality and maintainability.
+- CSA: cares about intrinsic code security.
+- Hacker: adversarially reviews from the outside for attack weaknesses.
 
-PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进入第二阶段. 每个角色可以配成自动、跳过或必须三档, 大多数任务让 PM 和 QA 跑起来就够了.
+PM and QA run the first round in parallel on the same commit; only after both pass do CSA and Hacker enter the second stage. Each role can be configured as auto, skip, or required; for most tasks, having PM and QA run is enough.
 
-![Kander 审核流程](docs/review.svg)
+![Kander review flow](docs/review.svg)
 
-审核支持重复 `--task` 绑定卡片，将原报告、输入、运行事实和清单保存到 `reviews/<run_id>/`，正文只留机器索引。同 run ID 重试只恢复或补齐发布，不重跑 Reviewer；执行成功与语义 PASS 独立。调用、batch CAS 及恢复见 [审核证据归档](docs/review-evidence.md)。
+Reviews support repeated `--task` to bind cards, saving the original reports, inputs, run facts, and manifest to `reviews/<run_id>/`, leaving only a machine index in the body. Retrying the same run ID only recovers or completes publication without rerunning reviewers; execution success and semantic PASS are independent. For invocation, batch CAS, and recovery, see [Review evidence archive](docs/review-evidence.md).
 
-即使关掉「审核流程」模块, 仍可明确调用 `kander review` 跑单次审核, 不要求采用 Kander 的分支模型.
+Even with the "review flow" module off, `kander review` can still be invoked explicitly for a single review, without requiring Kander's branch model.
 
-## 5. 配置
+## 5. Configuration
 
-在看板里按 `o` 打开选项面板, 随时修改配置:
+Press `o` on the board to open the options panel and change configuration at any time:
 
-- 界面: 配色主题、同屏最大栏目数、栏目最小宽度、自动刷新间隔、只显示当前栏目、显示所有栏目、默认语言、Agent 沟通语言
-- 任务执行与模型: 大任务与小任务分别使用的 Agent、启动方式, 以及这些 Agent 的模型与推理档位
-- 审核与模型: 四个审核角色各自的 Reviewer、环节策略, 以及各自的模型与推理档位
-- 规则模块: 交流与协作、代码质量、Git 流程、审核流程、任务建卡引导、任务组编排、完成报告格式
-- 流程图: 简明列出大小任务的执行 Agent/Model，以及启用的审核阶段和各角色 Agent/Model；读取当前会话（含未保存改动），区分必跑与按条件审核，支持滚动和 Esc 返回，不修改配置
-- 环境检查: 就地运行 `kander doctor` 检查并修复配置
+- Interface: color theme, max columns on screen, min column width, auto-refresh interval, show only the current column, show all columns, default language, agent communication language
+- Task execution and models: the agents and launchers used for large and small tasks, plus those agents' models and reasoning effort
+- Review and models: each of the four review roles' reviewer and stage policy, plus each one's model and reasoning effort
+- Rule modules: communication and collaboration, code quality, Git flow, review flow, task-card intake, task-group orchestration, completion report format
+- Flow chart: concisely lists the execution agent/model for large and small tasks, plus the enabled review stages and each role's agent/model; reads the current session (including unsaved changes), distinguishes always-run from conditional reviews, supports scrolling and Esc to return, and does not modify configuration
+- Environment check: run `kander doctor` in place to check and repair configuration
 
-界面偏好即选即生效, 其余分页按 `Enter` 写入配置文件. 选项面板需要交互终端; 也可以用 `kander config` 查看配置, 用 `kander doctor` 检查并修复配置.
+Interface preferences take effect immediately on selection; the other pages write the config file on `Enter`. The options panel needs an interactive terminal; you can also view configuration with `kander config`, and check and repair it with `kander doctor`.
 
-配置保存在当前安装作用域的 `config.json`, 全局安装和项目安装各自保存, 互不继承. Agent 从当前作用域的 `KANDER-AGENTS.md` 入口读取配置, 再按需读取启用的规则模块.
+Configuration is saved in the current install scope's `config.json`; global and project installs each keep their own without inheriting from each other. Agents read configuration from the current scope's `KANDER-AGENTS.md` entry, then read enabled rule modules as needed.
 
-## 6. 许可
+## 6. License
 
-本项目使用 MIT License, 见 [LICENSE](LICENSE).
+This project is under the MIT License; see [LICENSE](LICENSE).
 
-审核归档后的计划、原作者处置、批次汇总和完成门禁见 [审核处置协议](docs/review-disposition.md)。
+For post-archive plans, original-author disposition, batch summaries, and completion gates, see [Review disposition protocol](docs/review-disposition.md).
 
-### 自定义执行 Agent
+### Custom Execution Agents
 
-可在 `config.json` 的 `agents` 节覆盖可执行名与 pane 进程名，或声明带方言、argv 模板及会话策略的新 agent；选项面板可选择并编辑其程序名。[完整配置与边界](docs/custom-agents.md)。审核继续独立使用 `*_REVIEW_BIN`。
+You can override executable names and pane process names in the `agents` section of `config.json`, or declare new agents with dialects, argv templates, and session policies; the options panel can select them and edit their program names. [Full configuration and boundaries](docs/custom-agents.md). Reviews continue to use `*_REVIEW_BIN` independently.
