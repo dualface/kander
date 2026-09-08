@@ -81,7 +81,8 @@ func explicitConfigLanguage(raw map[string]any) string {
 	return ""
 }
 
-// ConfiguredLanguage returns the language explicitly saved in a valid config.json, otherwise an empty string.
+// ConfiguredLanguage returns the language explicitly saved in a valid
+// config.json after applying the project overlay, otherwise an empty string.
 func ConfiguredLanguage() string {
 	path, err := ConfigPath()
 	if err != nil {
@@ -101,6 +102,20 @@ func ConfiguredLanguage() string {
 	}
 	if _, err := Validate(obj); err != nil {
 		return ""
+	}
+	_, overlayRaw, err := readOverlay("")
+	if err != nil {
+		return ""
+	}
+	if overlayRaw != nil {
+		merged, err := mergeOverlayRaw(cloneRawObjectDeep(obj), overlayRaw)
+		if err != nil {
+			return ""
+		}
+		if _, err := Validate(merged); err != nil {
+			return ""
+		}
+		obj = merged
 	}
 	return explicitConfigLanguage(obj)
 }

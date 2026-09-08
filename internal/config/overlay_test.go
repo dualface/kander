@@ -384,6 +384,34 @@ func TestRepairLeavesOverlayBytesAndValuesOutOfScope(t *testing.T) {
 	}
 }
 
+func TestConfiguredLanguageUsesOverlay(t *testing.T) {
+	setupHome(t)
+	root := t.TempDir()
+	main := initGitRepo(t, filepath.Join(root, "repo"))
+	t.Chdir(main)
+	scope := filepath.Join(root, "config.json")
+	t.Setenv(EnvConfig, scope)
+	payload := minimalPayload(map[string]any{
+		"welcome_complete": true,
+		"language":         "en",
+	})
+	writeJSONFile(t, scope, payload)
+	if ConfiguredLanguage() != "en" {
+		t.Fatalf("scope language=%q", ConfiguredLanguage())
+	}
+	writeJSONFile(t, filepath.Join(main, OverlayFilename), map[string]any{"language": "ja"})
+	if ConfiguredLanguage() != "ja" {
+		t.Fatalf("overlay language=%q", ConfiguredLanguage())
+	}
+	scopeCfg, err := LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.Language != "en" {
+		t.Fatalf("overlay language written back to scope: %s", scopeCfg.Language)
+	}
+}
+
 func TestFormatConfigLinesIncludesOverlayPath(t *testing.T) {
 	setupHome(t)
 	root := t.TempDir()

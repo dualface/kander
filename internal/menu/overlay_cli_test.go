@@ -78,6 +78,37 @@ func TestConfigJSONMergesOverlayAndHumanPrintsPath(t *testing.T) {
 	}
 }
 
+func TestConfigUsesOverlayLanguage(t *testing.T) {
+	h := newHarness(t)
+	h.writeConfig(defaultPayload(map[string]any{"kanban_agent": "codex", "language": "en"}))
+	repo := filepath.Join(h.root, "project")
+	initGitDir(t, repo)
+	writeOverlayFile(t, repo, map[string]any{"language": "ja"})
+
+	code, out, errOut := h.runIn(repo, "config", "--json")
+	if code != 0 {
+		t.Fatalf("json=%d %s", code, errOut)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["language"] != "ja" {
+		t.Fatalf("merged json language=%v", payload["language"])
+	}
+
+	code, out, errOut = h.runIn(repo, "config")
+	if code != 0 {
+		t.Fatalf("human=%d %s", code, errOut)
+	}
+	if !strings.Contains(out, "プロジェクト上書き") || !strings.Contains(out, "言語") {
+		t.Fatalf("human output did not use overlay language:\n%s", out)
+	}
+	if strings.Contains(out, "项目覆盖") || strings.Contains(out, "Language:") {
+		t.Fatalf("human output still used scope or English labels:\n%s", out)
+	}
+}
+
 func TestDoctorRepairDoesNotWriteOverlayValues(t *testing.T) {
 	h := newHarness(t)
 	h.fakeCommand("claude", "")
