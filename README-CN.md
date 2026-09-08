@@ -4,7 +4,7 @@
 
 一个人用看板调度多个 AI Agent.
 
-![Kander 工作流](docs/workflow.svg)
+![Kander 工作流](docs/workflow-cn.svg)
 
 ## 1. 新手指引
 
@@ -25,6 +25,8 @@
 ```sh
 kander
 ```
+
+进阶阅读: 幻灯片 [如何高效推进任务](docs/how-to-advance-tasks-efficiently-cn.pdf) (PDF).
 
 ## 2. 安装
 
@@ -151,7 +153,7 @@ Kander 中定义了四种审核角色, 每个角色在审核时侧重点不同:
 
 PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进入第二阶段. 每个角色可以配成自动、跳过或必须三档, 大多数任务让 PM 和 QA 跑起来就够了.
 
-![Kander 审核流程](docs/review.svg)
+![Kander 审核流程](docs/review-cn.svg)
 
 审核支持重复 `--task` 绑定卡片，将原报告、输入、运行事实和清单保存到 `reviews/<run_id>/`，正文只留机器索引。同 run ID 重试只恢复或补齐发布，不重跑 Reviewer；执行成功与语义 PASS 独立。调用、batch CAS 及恢复见 [审核证据归档](docs/review-evidence.md)。
 

@@ -4,7 +4,7 @@
 
 一人でカンバンを使って複数の AI Agent をスケジュールする。
 
-![Kander ワークフロー](docs/workflow.svg)
+![Kander ワークフロー](docs/workflow-ja.svg)
 
 ## 1. はじめに
 
@@ -25,6 +25,8 @@ kander new でカードを作成し、タスク契約を仕上げてセルフレ
 ```sh
 kander
 ```
+
+より詳しい進め方はスライド [タスクを効率的に進める方法](docs/how-to-advance-tasks-efficiently-ja.pdf) (PDF) を参照してください。
 
 ## 2. インストール
 
@@ -151,7 +153,7 @@ Kander には 4 つのレビューロールが定義されており、それぞ�
 
 PM と QA は同一コミットに基づいて第 1 ラウンドを並行実行し、両方が通過してから CSA と Hacker が第 2 ステージに入ります。各ロールは自動・スキップ・必須の 3 段階に設定でき、ほとんどのタスクでは PM と QA を走らせれば十分です。
 
-![Kander レビューフロー](docs/review.svg)
+![Kander レビューフロー](docs/review-ja.svg)
 
 レビューは `--task` の繰り返し指定によるカードの紐づけに対応し、レポート原本、入力、実行ファクト、マニフェストを `reviews/<run_id>/` に保存し、本文には機械インデックスのみを残します。同じ run ID でのリトライは公開の復旧または補完のみを行い、Reviewer を再実行しません。実行の成功と意味上の PASS は独立しています。呼び出し、バッチ CAS、復旧は [レビュー証跡アーカイブ](docs/review-evidence.md) を参照してください。
 

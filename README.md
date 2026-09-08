@@ -4,7 +4,7 @@
 
 One person schedules multiple AI agents with a kanban board.
 
-![Kander workflow](docs/workflow.svg)
+![Kander workflow](docs/workflow-en.svg)
 
 ## 1. Getting Started
 
@@ -25,6 +25,8 @@ Create a card with kander new, refine the task contract and self-review it, then
 ```sh
 kander
 ```
+
+For a deeper walkthrough, see the slides: [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
 
 ## 2. Installation
 
@@ -151,7 +153,7 @@ Kander defines four review roles, each with a different focus:
 
 PM and QA run the first round in parallel on the same commit; only after both pass do CSA and Hacker enter the second stage. Each role can be configured as auto, skip, or required; for most tasks, having PM and QA run is enough.
 
-![Kander review flow](docs/review.svg)
+![Kander review flow](docs/review-en.svg)
 
 Reviews support repeated `--task` to bind cards, saving the original reports, inputs, run facts, and manifest to `reviews/<run_id>/`, leaving only a machine index in the body. Retrying the same run ID only recovers or completes publication without rerunning reviewers; execution success and semantic PASS are independent. For invocation, batch CAS, and recovery, see [Review evidence archive](docs/review-evidence.md).
 
