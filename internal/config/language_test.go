@@ -27,6 +27,24 @@ func TestCatalogTextFollowsLanguageChanges(t *testing.T) {
 	}
 }
 
+func TestResolveScopeLanguageIgnoresBoundConfig(t *testing.T) {
+	setupHome(t)
+	t.Cleanup(resetLanguageState)
+	ApplyLanguageArgument(nil)
+	t.Setenv(EnvLangCLI, "")
+	t.Setenv(EnvLang, "en_US.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	BindConfigLanguage(&Config{Language: "ja"})
+	if got := ResolveLanguage(); got != "ja" {
+		t.Fatalf("ResolveLanguage should keep the bound value, got %q", got)
+	}
+	if got := ResolveScopeLanguage(); got != "en" {
+		t.Fatalf("ResolveScopeLanguage should ignore the bound value, got %q", got)
+	}
+}
+
 func TestResolveLanguageJapaneseLocale(t *testing.T) {
 	setupHome(t)
 	t.Cleanup(resetLanguageState)

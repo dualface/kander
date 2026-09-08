@@ -154,13 +154,14 @@ func (s *Session) prepare(configValid bool) error {
 		if stored := config.ConfiguredScopeLanguage(); stored != "" {
 			cfg.Language = stored
 		} else {
-			cfg.Language = config.ResolveLanguage()
+			cfg.Language = config.ResolveScopeLanguage()
 		}
 	} else {
-		cfg.Language = config.ResolveLanguage()
+		cfg.Language = config.ResolveScopeLanguage()
 	}
-	// Panel copy follows the merged overlay language; the session value stays
-	// the unmerged scope language so Save cannot write overlay-only language back.
+	// Session.Language is the unmerged explicit scope value, or a CLI/env
+	// fallback that does not see the bound overlay language. Panel copy
+	// follows BindEffectiveLanguage() (merged).
 	config.BindEffectiveLanguage()
 	s.Config = cfg
 	return nil

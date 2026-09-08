@@ -105,8 +105,9 @@ func configuredScopeObject() map[string]any {
 }
 
 // ConfiguredScopeLanguage returns the language explicitly saved in the
-// unmerged scope config.json. Write and edit paths use this so an overlay
-// language cannot be copied back into the scope file.
+// unmerged scope config.json. An empty result means the key is missing or
+// the file is not a valid welcomed config; write paths must not fall back
+// to ResolveLanguage(), which can still see a bound overlay language.
 func ConfiguredScopeLanguage() string {
 	obj := configuredScopeObject()
 	if obj == nil {
@@ -148,23 +149,7 @@ func effectiveLocale() string {
 	return ""
 }
 
-// ResolveLanguage resolves in order: --lang (KANDER_LANG_CLI) > config > environment; the default is en.
-func ResolveLanguage() string {
-	langMu.Lock()
-	cli := cliLanguageOverride
-	bound := configLanguage
-	langMu.Unlock()
-	if contains(Languages, cli) {
-		return cli
-	}
-	if os.Getenv(EnvLangCLI) != "" {
-		if lang := os.Getenv(EnvLang); contains(Languages, lang) {
-			return lang
-		}
-	}
-	if contains(Languages, bound) {
-		return bound
-	}
+func localeLanguage() string {
 	locale := strings.ToLower(effectiveLocale())
 	if strings.HasPrefix(locale, "cn") || strings.HasPrefix(locale, "zh") {
 		return "cn"
@@ -173,6 +158,30 @@ func ResolveLanguage() string {
 		return "ja"
 	}
 	return "en"
+}
+
+// ResolveScopeLanguage resolves --lang / KANDER_LANG_CLI then the
+// environment locale. It ignores the in-process bound config language so
+// write paths cannot copy an overlay-only language into the scope file.
+func ResolveScopeLanguage() string {
+	if lang := CLILanguage(); lang != "" {
+		return lang
+	}
+	return localeLanguage()
+}
+
+// ResolveLanguage resolves in order: --lang (KANDER_LANG_CLI) > config > environment; the default is en.
+func ResolveLanguage() string {
+	if lang := CLILanguage(); lang != "" {
+		return lang
+	}
+	langMu.Lock()
+	bound := configLanguage
+	langMu.Unlock()
+	if contains(Languages, bound) {
+		return bound
+	}
+	return localeLanguage()
 }
 
 // BindEffectiveLanguage binds the language from the on-disk config, clearing it when invalid.

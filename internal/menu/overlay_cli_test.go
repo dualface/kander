@@ -157,6 +157,68 @@ func TestSessionSaveLeavesOverlayLanguageIsolated(t *testing.T) {
 	}
 }
 
+func TestSessionSaveLeavesOverlayLanguageIsolatedWhenScopeOmitsKey(t *testing.T) {
+	h := newHarness(t)
+	h.installFake(false)
+	t.Cleanup(func() {
+		config.ApplyLanguageArgument(nil)
+		config.BindConfigLanguage(nil)
+	})
+	t.Setenv(config.EnvConfig, h.configPath)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "en_US.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	config.ApplyLanguageArgument(nil)
+	h.writeConfig(defaultPayload(map[string]any{"kanban_agent": "codex"}))
+	repo := filepath.Join(h.root, "project")
+	initGitDir(t, repo)
+	overlay, original := writeOverlayFile(t, repo, map[string]any{"language": "ja"})
+	t.Chdir(repo)
+	t.Setenv("PATH", h.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	config.BindEffectiveLanguage()
+	if config.ConfiguredLanguage() != "ja" {
+		t.Fatalf("effective language=%s", config.ConfiguredLanguage())
+	}
+	if config.ConfiguredScopeLanguage() != "" {
+		t.Fatalf("scope language should be unset, got %q", config.ConfiguredScopeLanguage())
+	}
+
+	scope, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSession(scope, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.Language == "ja" {
+		t.Fatal("session language fell back to the bound overlay language")
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(overlay)
+	if err != nil || !bytes.Equal(data, original) {
+		t.Fatalf("overlay bytes changed: %s", data)
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.Language == "ja" {
+		t.Fatal("TUI session save wrote overlay language into a scope file that omitted language")
+	}
+	merged, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.Language != "ja" {
+		t.Fatalf("runtime merge lost overlay language: %s", merged.Language)
+	}
+}
+
 func TestDoctorRepairDoesNotWriteOverlayValues(t *testing.T) {
 	h := newHarness(t)
 	h.fakeCommand("claude", "")
