@@ -50,25 +50,81 @@ func readConfigBytes(path string) ([]byte, error) {
 }
 
 func loadValidated(path string, missingOK bool) (*Config, error) {
+	cfg, _, err := loadScopeRawAt(path, missingOK)
+	return cfg, err
+}
+
+func loadScopeRawAt(path string, missingOK bool) (*Config, map[string]any, error) {
 	data, err := readConfigBytes(path)
 	if err != nil {
-		return nil, configErrorfWrap(err, "config.failed_to_read_config", path, err.Error())
+		return nil, nil, configErrorfWrap(err, "config.failed_to_read_config", path, err.Error())
 	}
 	if data == nil {
-		if missingOK {
-			return DefaultConfig(), nil
+		if !missingOK {
+			return nil, nil, configErrorf("config.config_does_not_exist", path)
 		}
-		return nil, configErrorf("config.config_does_not_exist", path)
+		cfg := DefaultConfig()
+		encoded, err := json.Marshal(cfg)
+		if err != nil {
+			return nil, nil, configErrorfWrap(err, "config.failed_to_read_config_2", err.Error())
+		}
+		raw, err := decodeJSON(encoded)
+		if err != nil {
+			return nil, nil, err
+		}
+		obj, ok := raw.(map[string]any)
+		if !ok {
+			return nil, nil, configErrorf("config.config_root_must_be_a_json_object")
+		}
+		return cfg, cloneRawObjectDeep(obj), nil
 	}
 	raw, err := decodeJSON(data)
 	if err != nil {
-		return nil, configErrorfWrap(err, "config.failed_to_read_config", path, err.Error())
+		return nil, nil, configErrorfWrap(err, "config.failed_to_read_config", path, err.Error())
 	}
-	return Validate(raw)
+	cfg, err := Validate(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj, ok := raw.(map[string]any)
+	if !ok {
+		return nil, nil, configErrorf("config.config_root_must_be_a_json_object")
+	}
+	return cfg, cloneRawObjectDeep(obj), nil
 }
 
-// Load reads and validates the config; with missingOK a missing file yields the default config.
+func loadEffective(missingOK bool) (*Config, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	cfg, raw, err := loadScopeRawAt(path, missingOK)
+	if err != nil {
+		return nil, err
+	}
+	_, overlayRaw, err := readOverlay("")
+	if err != nil {
+		return nil, err
+	}
+	if overlayRaw == nil {
+		return cfg, nil
+	}
+	merged, err := mergeOverlayRaw(raw, overlayRaw)
+	if err != nil {
+		return nil, err
+	}
+	return Validate(merged)
+}
+
+// Load reads the scope config, merges a project overlay when present, and validates the result.
+// A missing scope file yields the default config when missingOK is true.
 func Load(missingOK bool) (*Config, error) {
+	return loadEffective(missingOK)
+}
+
+// LoadScope reads only the current-scope config.json and never applies a project overlay.
+// Write and edit paths use this so overlay values cannot be written back into the scope file.
+func LoadScope(missingOK bool) (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
 		return nil, err

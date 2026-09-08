@@ -132,7 +132,13 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 		p.measureForm()
 	}
 	p.syncFormTheme(palette)
-	formHeight, footerGap := fitOptionsForm(p.formNatural, height)
+	notice := ""
+	noticeLines := 0
+	if p.overlayNotice != "" {
+		notice = styleFor("popup-dim", palette).Render(clipText(p.overlayNotice, width)) + "\n"
+		noticeLines = 1
+	}
+	formHeight, footerGap := fitOptionsForm(p.formNatural, height-noticeLines)
 	p.form.WithWidth(width)
 	// Keep Huh's natural height while the content fits. Even when given the same height, WithHeight switches the
 	// Group to a viewport layout, making a page that could be shown in full take part in scrolling.
@@ -154,7 +160,7 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	// An unconstrained Huh Group may carry the trailing blanks of an initialized viewport. Trim them before adding the hint,
 	// otherwise those blanks become interior whitespace and the popup cannot hug its actual content.
 	formView := strings.Join(trimTrailingBlank(strings.Split(p.form.View(), "\n")), "\n")
-	return title, formView + footerGap + hint
+	return title, notice + formView + footerGap + hint
 }
 
 // fitOptionsForm owns the vertical layout of every section: the blank line before the hint is preserved first,

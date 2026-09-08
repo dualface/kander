@@ -1,4 +1,4 @@
-// Package config resolves the Kander install scope and reads/writes the schema-validated config.json.
+// Package config resolves the Kander install scope, merges an optional project overlay, and reads/writes the schema-validated scope config.json.
 package config
 
 import (

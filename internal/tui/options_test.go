@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -649,5 +650,67 @@ func TestExecutableInputsDeduplicateAndPersist(t *testing.T) {
 	agent := loaded.KanbanAgents["large"]
 	if loaded.Agents[agent].ProcessName != "node" {
 		t.Fatal(loaded.Agents)
+	}
+}
+
+func writeTempOverlay(t *testing.T, dir string, payload map[string]any) (string, []byte) {
+	t.Helper()
+	path := filepath.Join(dir, config.OverlayFilename)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path, data
+}
+
+func TestOptionsPanelShowsOverlayNotice(t *testing.T) {
+	dir := t.TempDir()
+	writeTempOverlay(t, dir, map[string]any{"kanban_agent": "claude"})
+	t.Chdir(dir)
+	_, panel := openPanel(t)
+	panel.detectOverlayNotice()
+	_, view := panel.view()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, ".kander-config") {
+		t.Fatalf("missing overlay notice:\n%s", plain)
+	}
+}
+
+func TestOptionsSaveLeavesOverlayIsolated(t *testing.T) {
+	dir := t.TempDir()
+	_, original := writeTempOverlay(t, dir, map[string]any{"kanban_agent": "claude"})
+	t.Chdir(dir)
+	_, panel := openPanel(t)
+	pumpPanel(panel, panel.dispatch(sectionReview))
+	before := panel.session.Config.Reviewers["PM"]
+	drivePanel(panel, keyMsg("right"))
+	after := panel.session.Config.Reviewers["PM"]
+	if after == before {
+		t.Fatal("right arrow did not change the reviewer")
+	}
+	drivePanel(panel, keyMsg("enter"))
+	data, err := os.ReadFile(filepath.Join(dir, config.OverlayFilename))
+	if err != nil || string(data) != string(original) {
+		t.Fatalf("overlay bytes changed: %s", data)
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.KanbanAgent == "claude" {
+		t.Fatal("TUI save wrote overlay-only kanban_agent into the scope file")
+	}
+	if scopeCfg.Reviewers["PM"] != after {
+		t.Fatalf("scope PM=%s want %s", scopeCfg.Reviewers["PM"], after)
+	}
+	merged, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.KanbanAgent != "claude" {
+		t.Fatalf("runtime merge lost overlay: %s", merged.KanbanAgent)
 	}
 }

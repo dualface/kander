@@ -148,9 +148,16 @@ func (h *harness) installFake(tmux bool) {
 }
 
 func (h *harness) run(args ...string) (int, string, string) {
+	return h.runIn("", args...)
+}
+
+func (h *harness) runIn(dir string, args ...string) (int, string, string) {
 	h.t.Helper()
 	cmd := exec.Command(testKander, args...)
 	cmd.Env = h.env
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	cmd.Stdin = bytes.NewReader(nil)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

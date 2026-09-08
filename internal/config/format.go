@@ -109,6 +109,13 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 		status = Text("config.incomplete")
 	}
 	var lines []string
+	overlayPath, overlayErr := OverlayPath("")
+	if overlayErr != nil {
+		return nil, overlayErr
+	}
+	if overlayPath != "" {
+		lines = append(lines, Text("config.overlay_file")+": "+overlayPath)
+	}
 	lines = append(lines, Text("config.welcome")+": "+status)
 	lines = append(lines, AgentWarnings(effective)...)
 	lines = append(lines, Text("config.kanban_agent")+": "+FormatKanbanAgentsSummary(effective))

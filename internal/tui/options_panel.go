@@ -64,6 +64,8 @@ type optionsPanel struct {
 	installHerdr bool
 	dirty        bool
 	initial      string
+	// overlayNotice is shown at the top of the panel when a project overlay file exists.
+	overlayNotice string
 
 	// The geometry and body lines of the most recent render, for mouse hit testing.
 	box        popupBox
@@ -87,6 +89,7 @@ func (a *App) openOptionsAt(section string) {
 	spin.Spinner = spinner.Dot
 	spin.Style = lipgloss.NewStyle().Foreground(p.Accent).Background(p.Bg)
 	panel := &optionsPanel{app: a, spinner: spin, initial: section}
+	panel.detectOverlayNotice()
 	a.Options = panel
 	if a.Session != nil {
 		panel.session = a.Session
@@ -100,6 +103,15 @@ func (a *App) openOptionsAt(section string) {
 	panel.requestSession()
 }
 
+func (p *optionsPanel) detectOverlayNotice() {
+	path, err := config.OverlayPath("")
+	if err != nil || path == "" {
+		p.overlayNotice = ""
+		return
+	}
+	p.overlayNotice = t("tui.overlay_notice")
+}
+
 // Init returns the command to run when the panel starts (the loading spinner or the form initialization).
 func (p *optionsPanel) Init() tea.Cmd {
 	if p.form != nil {
@@ -110,7 +122,7 @@ func (p *optionsPanel) Init() tea.Cmd {
 
 func (p *optionsPanel) requestSession() {
 	p.app.pendingWork = func() any {
-		existing, err := config.Load(true)
+		existing, err := config.LoadScope(true)
 		valid := err == nil
 		if err != nil {
 			existing = config.DefaultConfig()

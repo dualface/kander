@@ -60,8 +60,8 @@ func (p *optionsPanel) continueDoctor() tea.Cmd {
 }
 
 func runDoctorReport(tools menu.TerminalTools) doctorResult {
-	before, _ := config.Load(true)
+	before, _ := config.LoadScope(true)
 	lines, healthy := menu.DoctorReport(tools)
-	after, _ := config.Load(false)
+	after, _ := config.LoadScope(false)
 	return doctorResult{lines: lines, healthy: healthy, before: before, after: after}
 }
