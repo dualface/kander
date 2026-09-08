@@ -1,48 +1,48 @@
-# 探测期限与取消
+# Probe Deadlines and Cancellation
 
-## 调用契约
+## Invocation Contract
 
-单卡存活探测的前向查询、session 反查、反查后的复查及进程回收共享一个 context。`ClassifyTaskContext` 与 `ClassifyTaskLookupContext` 接受调用方 context；未设置 deadline 时补充 10 秒默认期限。已设 deadline 保持不变，包括比默认值更长的显式期限。取消或期限耗尽后的观测为 `unknown`，保留阶段与原因，不启动后续外部查询，不写卡，不改变 `check` 的结构检查退出码。
+The forward query, session reverse lookup, post-reverse-lookup re-check, and process reaping of a single-card liveness probe share one context. `ClassifyTaskContext` and `ClassifyTaskLookupContext` accept the caller's context; when no deadline is set, a 10-second default deadline is supplied. An already-set deadline stays unchanged, including an explicit deadline longer than the default. After cancellation or deadline exhaustion the observation is `unknown`, the phase and reason are preserved, no subsequent external queries are started, no card is written, and the structural-check exit code of `check` is not changed.
 
-`probe.CaptureContext`、`ProbeHerdrPaneContext`、`ProbeTmuxPaneContext`、`ProbeTmuxContainerContext`，以及 `liveness.HerdrReverseLookupContext`、`TmuxReverseLookupContext` 供组合调用复用同一个期限。`probe.WithDefaultTimeout` 只在缺少 deadline 时补充默认值；调用方负责执行返回的 cancel。底层错误仍支持 `errors.Is(err, context.Canceled)` 和 `errors.Is(err, context.DeadlineExceeded)`；中文、英文、日文展示保留原始原因。
+`probe.CaptureContext`, `ProbeHerdrPaneContext`, `ProbeTmuxPaneContext`, `ProbeTmuxContainerContext`, as well as `liveness.HerdrReverseLookupContext` and `TmuxReverseLookupContext`, let composed calls reuse the same deadline. `probe.WithDefaultTimeout` only supplies the default value when a deadline is missing; the caller is responsible for executing the returned cancel. Underlying errors still support `errors.Is(err, context.Canceled)` and `errors.Is(err, context.DeadlineExceeded)`; the Chinese, English, and Japanese displays preserve the original reason.
 
-既有不带 context 的 API 及 `Within`/duration API 保留，非正 duration 使用 10 秒默认值。一次 tmux pane 查询包含事实与两个兼容 session marker 的读取，这些步骤也共享剩余预算。
+The existing context-less APIs and the `Within`/duration APIs are retained; a non-positive duration uses the 10-second default. A single tmux pane query includes reading the facts and two compatible session markers, and these steps also share the remaining budget.
 
-## 批量采集与观测身份
+## Batch Collection and Observation Identity
 
-`ClassifyTasksContext(ctx, []TaskInput, BatchOptions)` 返回与输入等长、同序的 `[]Report`，不写卡、不缓存。`TaskInput` 提供卡片 Entry 和不可变正文快照；正文读取失败可通过 `ReadError` 保留原因而不探测残缺身份。调用方不得在调用期间并发改写输入切片。
+`ClassifyTasksContext(ctx, []TaskInput, BatchOptions)` returns a `[]Report` equal in length to and in the same order as the input; it writes no cards and caches nothing. `TaskInput` provides the card Entry and an immutable body snapshot; a body read failure can preserve its reason via `ReadError` instead of probing an incomplete identity. The caller must not concurrently mutate the input slice during the call.
 
-`BatchOptions.Budget` 默认 10 秒，`Concurrency` 默认 4；非正值使用默认值，调用方更早的 deadline 优先。总预算从批量调用开始计时，覆盖排队、前向、反查、复查及回收；每个 worker 同时只执行一个单卡调用。worker 数不超过并发上限和输入数的较小值，不按卡数创建 goroutine。取消或耗尽后不启动外部查询，已完成结果保留，其余结果为 `unknown`，保留取消或超时原因。返回前等待所有 worker 及其采集器回收；预算不是硬实时返回保证，仍有下方系统 I/O 与 O(N) 结果构造边界。
+`BatchOptions.Budget` defaults to 10 seconds and `Concurrency` defaults to 4; non-positive values use the defaults, and an earlier deadline from the caller takes precedence. The total budget starts counting when the batch call begins and covers queuing, the forward query, the reverse lookup, the re-check, and reaping; each worker executes only one single-card call at a time. The number of workers does not exceed the smaller of the concurrency cap and the input count, and goroutines are not created per card. After cancellation or exhaustion no external queries are started, results already completed are preserved, and the remaining results are `unknown`, preserving the cancellation or timeout reason. The call waits for all workers and their collectors to be cleaned up before returning; the budget is not a hard real-time return guarantee, and the system I/O and O(N) result-construction bounds below still apply.
 
-`Report` 在原有字段（包括 `NewWindow`）之外增加：
+`Report` adds the following on top of its existing fields (including `NewWindow`):
 
-- `ObservedAt`（JSON `observed_at`）：单卡采集调用结束的 UTC 时间，包含失败尝试；未出队采集或正文读取失败为零值，不能当作新观测。
-- `Identity`（JSON `identity`）：请求快照的任务 ID、原始 SESSION、WINDOW、OWNER、STARTED_AT，表示被查询身份，不冒充外部验证过的身份。`NewWindow` 是反查建议的新地址，不改写这个原始身份。
-- `RuntimeState`（JSON `runtime_state`）：herdr 已确认的 `idle`、`working`、`blocked`、`done`；无法获知时为 `unknown`，tmux 的进程存活不推导 Agent 运行状态。
-- `ObservationValid`（JSON `observation_valid`）：本次能否得到有效的四态存活结论。`unknown` 为 false；不表示观测永久新鲜、可直投、身份已认证或业务有进展。
+- `ObservedAt` (JSON `observed_at`): the UTC time when the single-card collection call ended, including failed attempts; it is the zero value for a collection that was never dequeued or a body read failure, and cannot be treated as a new observation.
+- `Identity` (JSON `identity`): the task ID, original SESSION, WINDOW, OWNER, and STARTED_AT of the requested snapshot, representing the identity that was queried, not impersonating an externally verified identity. `NewWindow` is the new address suggested by the reverse lookup and does not rewrite this original identity.
+- `RuntimeState` (JSON `runtime_state`): herdr-confirmed `idle`, `working`, `blocked`, or `done`; `unknown` when it cannot be learned, and tmux process liveness does not derive an Agent runtime state.
+- `ObservationValid` (JSON `observation_valid`): whether this call could reach a valid four-state liveness conclusion. `unknown` is false; it does not mean the observation is permanently fresh, eligible for direct delivery, identity-authenticated, or that business progress has been made.
 
-消费旧结果前调用 `Report.ValidFor(entry, text)`：失败/未采集或身份任一字段变化均拒绝。调用方还须按自己的策略检查 `ObservedAt` 的年龄；本 API 不制定 TTL，不把旧身份结果重新标记为新身份事实。元数据完全相同的重启无法仅凭这些字段区分；无 session reference 或外部未报告 session 时，原有 `alive` 仍只表示当前地址的 Agent 存在，不能升级为会话认证。
+Call `Report.ValidFor(entry, text)` before consuming an old result: a failed/uncollected result or a change in any identity field is rejected. The caller must additionally check the age of `ObservedAt` under its own policy; this API sets no TTL and does not re-mark an old-identity result as a new-identity fact. A restart with completely identical metadata cannot be distinguished by these fields alone; without a session reference, or when the external side reports no session, the existing `alive` still only means an Agent exists at the current address and cannot be upgraded to session authentication.
 
-`alive` 与运行状态彼此独立；`idle`、`blocked`、`done` 都可能 `alive`。这些结果不提供 `ready` 或业务进展事实，也不能据此决定投递成功、任务完成或接管。直投继续遵守 notify 的独立身份和就绪检查。
+`alive` and the runtime state are independent of each other; `idle`, `blocked`, and `done` can all be `alive`. These results provide no `ready` or business-progress facts, and cannot be used to decide delivery success, task completion, or takeover. Direct delivery continues to obey notify's independent identity and readiness checks.
 
-`check` 的存活段使用默认批量入口，保留结构检查退出码与任务输出顺序，并显示观测时间、有效性和运行状态。预算只约束存活采集，不覆盖此前的看板扫描/正文读取或之后的输出阻塞。subscribe 复用同一批量入口，以单批调度解耦扫描，并按 revision/身份消费结果；写出期限与取消见 [订阅事实](subscription-facts.md#有界探测与输出生命周期)。
+The liveness section of `check` uses the default batch entry point, preserves the structural-check exit code and the task output order, and displays the observation time, validity, and runtime state. The budget only bounds liveness collection and does not cover the preceding kanban scan/body reads or the subsequent output blocking. subscribe reuses the same batch entry point, decoupling from the scan via single-batch scheduling, and consumes results by revision/identity; for write-out deadlines and cancellation see [Subscription facts](subscription-facts.md#bounded-probing-and-output-lifecycle).
 
-## 进程与管道所有权
+## Process and Pipe Ownership
 
-- POSIX：外部探测程序在独立进程组运行。取消时向该组发送 `SIGKILL`；直接子进程由 `Wait` 回收。正常父进程退出后也终止其遗留的组内后代。已重新设置 session/进程组的后代超出这一所有权边界，不能声称已被进程组终止；取消仍关闭本次采集的管道读端，避免它们持有输出写端拖住调用。非直接子进程的 zombie 由其新父进程回收，不能把 zombie 记录误当作仍可运行或持有管道的进程。
-- Windows：先创建带 `KILL_ON_JOB_CLOSE` 的 Job Object，再挂起创建外部探测进程，加入 Job 后才恢复线程，防止分配前抢跑并产生未归属的后代。不启用 breakaway。分配、线程恢复或其他准备失败直接报错并回收，不退回裸进程。正常结束及取消均终止 Job；关闭 Job 句柄作为最终回收保障。通过外部代理服务创建的进程不属于本 Job；普通继承进程和输出管道在本次取消范围内。Job 的继承规则参见 [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)。
-- 两个平台均由采集器持有 stdout/stderr 管道。取消回调关闭读端、终止所属进程，主调用等待直接进程、两个输出读取 goroutine 和已启动的取消回调全部退出后才返回。父进程已结束而脱离组的后代仍持有管道时，原 deadline 仍会关闭读端。不会重置一个新的回收期限，也不启动无人等待的 `Wait` goroutine 来伪装有界结束。正常输出全部读取，保留退出码与 stdout/stderr；取消时返回的输出可能是已采集的部分内容。
+- POSIX: the external probe program runs in its own process group. On cancellation, `SIGKILL` is sent to that group; the direct child process is reaped by `Wait`. After the parent process exits normally, its leftover in-group descendants are also terminated. Descendants that have re-set their session/process group are outside this ownership boundary and cannot be claimed as terminated by the process group; cancellation still closes the read ends of this collection's pipes, so that they cannot stall the call by holding the output write ends. Zombies of non-direct children are reaped by their new parent process; a zombie record must not be mistaken for a process that can still run or hold pipes.
+- Windows: a Job Object with `KILL_ON_JOB_CLOSE` is created first, then the external probe process is created suspended, and its thread is resumed only after joining the Job, preventing a pre-assignment head start that would produce unowned descendants. Breakaway is not enabled. If assignment, thread resumption, or any other preparation fails, the call reports an error and cleans up directly, without falling back to a bare process. Both normal completion and cancellation terminate the Job; closing the Job handle serves as the final reaping guarantee. Processes created through an external proxy service do not belong to this Job; ordinarily inherited processes and output pipes are within the scope of this cancellation. For the Job's inheritance rules see [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
+- On both platforms the collector holds the stdout/stderr pipes. The cancellation callback closes the read ends and terminates the owned process; the main call returns only after the direct process, the two output-reading goroutines, and any started cancellation callback have all exited. When a descendant that detached from the group after the parent ended still holds the pipes, the original deadline still closes the read ends. No new reaping deadline is reset, and no unwaited `Wait` goroutine is started to fake a bounded finish. Normal output is read in full, preserving the exit code and stdout/stderr; output returned on cancellation may be the partial content collected so far.
 
-## 期限的实际边界
+## Practical Bounds of the Deadline
 
-期限控制何时停止继续工作、关闭可取消管道及发出进程终止请求，不是硬实时返回保证。取消后的终止、调度、直接进程回收和 goroutine 汇合需要少量系统执行时间；回归测试明确断言 300ms 期限在 600ms 内返回、400ms 共享期限在 650ms 内返回，以及显式取消在 300ms 内返回。这个容差只属于测试，不是运行时追加的预算。
+The deadline controls when to stop further work, close cancellable pipes, and issue process-termination requests; it is not a hard real-time return guarantee. Termination, scheduling, direct-process reaping, and goroutine convergence after cancellation take a small amount of system execution time; the regression tests explicitly assert that a 300ms deadline returns within 600ms, that a 400ms shared deadline returns within 650ms, and that explicit cancellation returns within 300ms. This tolerance belongs only to the tests and is not extra budget added at runtime.
 
-路径查找、`exec.Start`/`CreateProcess`、线程/Job 系统调用、信号投递及内核进程回收本身没有 Go context 中断入口。不可中断的内核 I/O、失去响应的文件系统、内存分配/JSON 解码及系统调度暂停可能超过期限。实现不会为满足表面期限丢弃仍阻塞的 goroutine；这些操作恢复后继续完成资源回收，并报告真实取消或错误。输出大小限制与订阅调度不在本次变更范围内。
+Path lookup, `exec.Start`/`CreateProcess`, thread/Job system calls, signal delivery, and kernel process reaping itself have no Go context interruption entry point. Uninterruptible kernel I/O, an unresponsive filesystem, memory allocation/JSON decoding, and system scheduling pauses may exceed the deadline. The implementation does not abandon still-blocked goroutines to satisfy a cosmetic deadline; once these operations resume, they continue to finish resource cleanup and report the real cancellation or error. Output size limits and subscription scheduling are outside the scope of this change.
 
-## 验证范围
+## Verification Scope
 
-`internal/probe` 的真实测试子进程覆盖父子进程持有两路输出、取消、期限耗尽、父进程先退出、输出完整性及退出码；同一套测试可在 POSIX 与 Windows 运行，平台文件分别检查进程组及 Job 回收结果。POSIX 另测主动脱离进程组的后代，其管道等待仍受限，测试自行清理该后代。`internal/liveness` 以临时假 CLI 验证慢前向查询、慢反查、慢复查共用剩余预算，以及取消发生在反查期间的结果。
+The real test subprocesses of `internal/probe` cover parent and child processes holding both output streams, cancellation, deadline exhaustion, the parent exiting first, output integrity, and exit codes; the same test suite runs on both POSIX and Windows, with platform files checking the process-group and Job reaping results respectively. POSIX additionally tests a descendant that actively detaches from the process group, whose pipe wait remains bounded, with the test cleaning up that descendant itself. `internal/liveness` uses a temporary fake CLI to verify that a slow forward query, a slow reverse lookup, and a slow re-check share the remaining budget, as well as the result when cancellation occurs during the reverse lookup.
 
-Linux 实际执行与 Windows 交叉编译须在交付记录中分别列明。交叉编译不能证明 Windows Job、管道取消和句柄回收在原生 Windows 上通过；假 CLI 也不能证明真实 tmux/herdr/Agent 的兼容性。未执行的环境检查必须保留为验证缺口。
+Actual execution on Linux and cross-compilation for Windows must be listed separately in the delivery record. Cross-compilation cannot prove that the Windows Job, pipe cancellation, and handle reaping pass on native Windows; the fake CLI likewise cannot prove compatibility with real tmux/herdr/Agents. Environment checks that were not executed must be kept as verification gaps.
 
-批量回归以临时假 CLI 混合快慢任务，断言 12 张卡共用 400ms 预算、750ms 内返回、峰值并发 2，已完成的 blocked/alive 结果不会因整轮超时被抹去；另测默认并发 4、显式取消 300ms 内返回、排队任务无伪造观测时间、Linux 进程消失及 goroutine 收敛。身份变化、四种 herdr 运行状态、tmux 无运行状态、NewWindow 保留、读取失败及三语未采集原因均有覆盖。
+The batch regression mixes fast and slow tasks with a temporary fake CLI, asserting that 12 cards share a 400ms budget, return within 750ms, and peak at concurrency 2, and that completed blocked/alive results are not erased by a whole-round timeout; it additionally tests the default concurrency of 4, explicit cancellation returning within 300ms, queued tasks carrying no fabricated observation time, process disappearance on Linux, and goroutine convergence. Identity changes, the four herdr runtime states, tmux having no runtime state, NewWindow preservation, read failures, and the uncollected reasons in Chinese, English, and Japanese are all covered.

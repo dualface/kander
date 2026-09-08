@@ -1,39 +1,39 @@
-# 看板写入护栏 (kander guard-write)
+# Kanban Write Guard (kander guard-write)
 
-常见的看板重复卡来源是: 在状态目录 (`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`) 下新建直接子项. 合法的新建只有 `kander new` 一个入口; Agent 拿着已迁移卡片的旧路径写入时, 编辑工具会静默重建文件, 在原位置复活一份跨状态副本.
+A common source of duplicate cards on the kanban board is creating new direct children under the state directories (`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`). The only legitimate creation entry point is `kander new`; when an Agent writes using the old path of an already-migrated card, editing tools silently recreate the file, resurrecting a cross-state copy at the original location.
 
-`kander guard-write` 在检查时发现旧路径会显式报错, 供宿主项目的写入前 hook (PreToolUse 等) 调用. 检查与后续外部写入之间仍有竞态, 因此它只是辅助检查. Agent 必须通过 [受控 update 事务](card-transactions.md) 写卡; 不得把 hook 放行当作原子写入保证.
+`kander guard-write` errors out explicitly when it finds an old path at check time, for the host project's pre-write hooks (PreToolUse, etc.) to invoke. A race still exists between the check and the subsequent external write, so it is only an auxiliary check. Agents must write cards through the controlled update transactions of [Card transactions](card-transactions.md); a hook pass must not be treated as an atomic write guarantee.
 
-## 命令
+## Commands
 
 ```sh
 kander guard-write <path>
 ```
 
-- 退出码 `0`: 放行.
-- 退出码 `1`: 拒绝, stderr 说明原因; 同 ID 已在其他状态目录时会指出卡片当前状态.
-- 退出码 `2`: 用法错误.
+- Exit code `0`: pass.
+- Exit code `1`: reject, with the reason on stderr; when the same ID already exists in another state directory, the card's current state is pointed out.
+- Exit code `2`: usage error.
 
-判定规则:
+Decision rules:
 
-| 目标路径 | 结果 |
+| Target path | Result |
 | --- | --- |
-| 不在当前看板 `kanban/` 下 | 放行 |
-| 看板内但不是状态目录内容 | 放行 |
-| 状态目录直接子项, 文件或目录已存在 | 放行 (正常编辑) |
-| 同状态旧 `<task-id>.md` 拼写, 目录卡已存在 | 拒绝, 提示当前 spec.md 路径及 update 入口 |
-| 状态目录直接子项, 当前不存在 | 拒绝 (新卡只能经 `kander new`; 旧路径写入会复活副本) |
-| 目录卡内部文件 (`spec.md`, `plan.md`, `report.md` 等), 目录卡入口存在 | 放行 |
-| 目录卡内部文件, 该 ID 仍是同状态旧 `.md` | 拒绝, 提示暂停写入并先运行 `kander init` |
-| 目录卡内部文件, 目录卡入口不存在 | 拒绝 (写入会静默重建整个目录卡) |
+| Not under the current board's `kanban/` | Pass |
+| Inside the board but not state-directory content | Pass |
+| Direct child of a state directory, file or directory already exists | Pass (normal editing) |
+| Same-state legacy `<task-id>.md` spelling, directory card already exists | Reject, pointing to the current spec.md path and the update entry point |
+| Direct child of a state directory, currently nonexistent | Reject (new cards only through `kander new`; writing to an old path resurrects a copy) |
+| File inside a directory card (`spec.md`, `plan.md`, `report.md`, etc.), directory card entry exists | Pass |
+| File inside a directory card, that ID is still a same-state legacy `.md` | Reject, prompting to pause writes and run `kander init` first |
+| File inside a directory card, directory card entry does not exist | Reject (the write would silently recreate the whole directory card) |
 
-看板定位沿用 `KANBAN_DIR` -> 当前 Git 仓库主 worktree 的 `kanban/` -> 向上查找的既有顺序. 定位不到看板 (非 Git 项目且未设 `KANBAN_DIR`) 时放行, 不阻塞非看板项目; 其他定位错误仍然失败.
+Board location follows the existing order: `KANBAN_DIR` -> `kanban/` in the current Git repository's main worktree -> upward search. When no board can be located (a non-Git project with `KANBAN_DIR` unset), it passes and does not block non-kanban projects; other location errors still fail.
 
-护栏只防同用户 Agent 误写, 不是抵御恶意进程的安全边界.
+The guard only prevents accidental writes by same-user Agents; it is not a security boundary against malicious processes.
 
-## Claude Code 接入
+## Claude Code Integration
 
-仓库提供样例脚本 [`scripts/guard-kanban-write.sh`](../scripts/guard-kanban-write.sh) (依赖 `jq`; 缺 `jq` 或解析失败时放行). 在项目 `.claude/settings.json` 中注册 PreToolUse hook:
+The repository provides the sample script [`scripts/guard-kanban-write.sh`](../scripts/guard-kanban-write.sh) (depends on `jq`; passes when `jq` is missing or parsing fails). Register the PreToolUse hook in the project's `.claude/settings.json`:
 
 ```json
 {
@@ -50,14 +50,14 @@ kander guard-write <path>
 }
 ```
 
-脚本从 stdin 读取 hook JSON, 取 `tool_input.file_path` 交给 `kander guard-write`; 拒绝时以退出码 2 阻止本次工具调用并把原因回显给 Agent.
+The script reads the hook JSON from stdin and hands `tool_input.file_path` to `kander guard-write`; on rejection, it blocks the current tool call with exit code 2 and echoes the reason back to the Agent.
 
-`Bash` 里的重定向、heredoc、`sed -i` 等写入手段无法从工具参数可靠还原目标路径, hook 不覆盖; Kander 内部写入也不经过此 hook. 并发与恢复保证由按任务 ID 的受控写入事务承担.
+Write mechanisms in `Bash` such as redirection, heredocs, and `sed -i` cannot have their target paths reliably reconstructed from the tool arguments, so the hook does not cover them; Kander's internal writes also do not go through this hook. Concurrency and recovery guarantees are carried by the per-task-ID controlled write transactions.
 
-## Codex 接入
+## Codex Integration
 
-Codex 的 PreToolUse hook (`.codex/hooks.json`) 可用同一脚本, matcher 建议覆盖 `apply_patch|Edit|Write`. 传入 JSON 的字段名以所用 Codex 版本为准, 必要时在脚本里补充相应的路径提取逻辑.
+Codex's PreToolUse hook (`.codex/hooks.json`) can use the same script; the recommended matcher covers `apply_patch|Edit|Write`. The field names of the incoming JSON depend on the Codex version in use; add the corresponding path-extraction logic to the script when necessary.
 
 ## Windows
 
-`kander guard-write` 子命令本身跨平台可用. 样例 hook 脚本为 POSIX shell; 原生 Windows 环境需要按所用 Agent 的 hook 机制自行封装调用.
+The `kander guard-write` subcommand itself is available cross-platform. The sample hook script is POSIX shell; a native Windows environment needs to wrap the invocation itself according to the hook mechanism of the Agent in use.

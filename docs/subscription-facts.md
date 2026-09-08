@@ -1,168 +1,86 @@
-# 订阅的已提交事实与成员集合
+# Subscription Committed Facts and Member Sets
 
-`kander subscribe <task-group> <task-id>... [--watch <task-id|task-group-id>...]`
-输出版本化 JSON Lines。成员 ID 固定，`--watch` 的原始组引用保留，每次观察重新展开。
-订阅只报告事实，不执行依赖放行、业务确认、自动恢复或看板修复。
+`kander subscribe <task-group> <task-id>... [--watch <task-id|task-group-id>...]` outputs versioned JSON Lines. Member IDs are fixed, `--watch`'s original group references are preserved, and each observation re-expands them. Subscription only reports facts; it does not perform dependency release, business confirmation, automatic recovery, or kanban repair.
 
-## 事件与 revision
+## Events and revision
 
-所有行保留 `event`、`group_id`、`tasks`；状态变化保留 `changed` 的
-`task_id/from/to`。新增字段如下：
+All lines keep `event`, `group_id`, and `tasks`; state changes keep `changed` with `task_id/from/to`. The new fields are as follows:
 
-| 字段 | 含义 |
+| Field | Meaning |
 | --- | --- |
-| `schema_version` | 当前为 1 |
-| `subscription_id` | 每次订阅新建的随机标识 |
-| `seq` | 该订阅从 1 递增的序号；不是跨进程游标 |
-| `observed_at` | 协调快照读取完成时间，UTC RFC3339 |
-| `task_revisions` | 与 `tasks` 同一快照的已提交 revision |
-| `read_status` | `committed`、`recoverable`、`maintenance` 或 `invalid` |
-| `membership_complete` | 本次成员集合与被监听卡片是否完整可读 |
-| `reconciliation_required` | 消费者必须先重新核对，不能据此自动放行 |
+| `schema_version` | Currently 1 |
+| `subscription_id` | A random identifier newly created for each subscription |
+| `seq` | A sequence number for this subscription, incrementing from 1; not a cross-process cursor |
+| `observed_at` | The completion time of the coordinated snapshot read, UTC RFC3339 |
+| `task_revisions` | The committed revisions from the same snapshot as `tasks` |
+| `read_status` | `committed`, `recoverable`, `maintenance`, or `invalid` |
+| `membership_complete` | Whether this observation's member set and the watched cards were fully readable |
+| `reconciliation_required` | The consumer must re-verify first; this must not be used to auto-release |
 
-初始行为是 `snapshot`。状态不同发送 `state-change`；状态相同、revision 不同
-发送 `task-update`。两者的 `updated` 列出 revision 改变的已监听卡片。
-同一轮状态变化可同时携带 revision 变化，不再重复发送 `task-update`。
+The initial line is `snapshot`. A different state sends `state-change`; the same state with a different revision sends `task-update`. The `updated` of both lists the watched cards whose revision changed. A state change in the same round may carry revision changes at the same time, without sending a duplicate `task-update`.
 
-同状态正文或附件的受控更新会推进 revision；一次 refresh 内的
-`review -> working -> review` 即使最后状态相同，也会出现 `task-update`。
-重启重新发送当前 `snapshot`，消费者用保存的 revision 比较已发生的更新，不能用
-新进程的 `seq` 补历史事件。revision 只证明受控更新发生过，不证明某轮派发已完成；
-当前 dispatch 的持久回执由下述 `dispatches` 提供，接口没有事件回放日志。旧版未建立版本记录的卡片 revision 为 0，
-绕过事务直接编辑文件不保证推进 revision。
+A controlled update to the body or attachments in the same state advances the revision; a `review -> working -> review` within one refresh produces a `task-update` even though the final state is the same. A restart re-sends the current `snapshot`; consumers compare the updates that have happened using their saved revisions, and cannot use a new process's `seq` to backfill historical events. A revision only proves that a controlled update happened, not that some dispatch round has completed; the current dispatch's durable receipts are provided by `dispatches` described below, and the interface has no event replay log. Cards from old versions without an established version record have revision 0, and editing files directly while bypassing transactions is not guaranteed to advance the revision.
 
-心跳独立计时，默认 refresh=1 秒、heartbeat=900 秒。仅采集当前监听集合中的
-`working` 卡片，以及持久派回尚待确认的 `review` 卡片；扫描不等待探测或输出。事件 `observed_at` 表示卡片快照时间，
-不冒充探测完成时间。探测与输出的有界生命周期见下节。
+Heartbeats are timed independently, defaulting to refresh=1 second and heartbeat=900 seconds. Only `working` cards in the current watch set are collected, plus `review` cards whose durable dispatch is still awaiting confirmation; scanning does not wait for probing or output. An event's `observed_at` denotes the card snapshot time and does not masquerade as the probe completion time. For the bounded lifecycle of probing and output, see the section below.
 
-## 派回事实与确认期限
+## Dispatch Facts and Confirmation Deadlines
 
-快照、心跳及相关变化事件可携带 `dispatches`，以任务 ID 为键。每个摘要包含：
+Snapshots, heartbeats, and related change events may carry `dispatches`, keyed by task ID. Each summary contains:
 
-- `dispatch_id`、`task_id`、`kind`、`epoch`、`state` 和 dispatch 自身的 `revision`。
-- `created_at` 保留原意图创建时间，`age_seconds` 按该时间在快照时计算。
-- `confirm_by` 是当前 epoch 的有效接受期限：普通授权取原意图期限；
-  wrap-up-only 专用 grant 取自身的独立期限，原意图期限不改写。
-- `accepted` / `completed` 原子回执，包含时间、卡片 revision、状态及适用的交付/处置引用。
-- `confirmation_pending`：仅 prepared/delivery-unknown 为 true；`confirmation_overdue`
-  表示这两种状态已达到当前 epoch 的有效接受期限。accepted 后不是完成超时，不继续使用确认期限。
+- `dispatch_id`, `task_id`, `kind`, `epoch`, `state`, and the dispatch's own `revision`.
+- `created_at` preserves the original intent creation time; `age_seconds` is computed from that time at snapshot time.
+- `confirm_by` is the effective acceptance deadline of the current epoch: an ordinary authorization takes the original intent's deadline; a wrap-up-only dedicated grant takes its own independent deadline, and the original intent's deadline is not rewritten.
+- The `accepted` / `completed` atomic receipts, containing the time, card revision, state, and the applicable delivery/disposition references.
+- `confirmation_pending`: true only for prepared/delivery-unknown; `confirmation_overdue` means these two states have reached the current epoch's effective acceptance deadline. After accepted it is not a completion timeout, and the confirmation deadline is no longer used.
 
-这些字段与同一事件的卡片状态、正文、`task_revisions` 在同组共享锁内读取；
-摘要只报告当前执行授权，不暴露消息正文。未绑定的旧卡省略对应条目，不能补造历史回执。
-同 ID 的 `review -> working -> review/done` 在一个 refresh 内完成，即使 notify 尚未返回，
-下一事件或重启首个 snapshot 仍包含 accepted/completed，无需捕捉 working 边沿。
-新 dispatch 取代当前授权后，旧 ID 仍通过 `kander dispatch show` 查询；摘要不是历史列表。
-完成回执证明受控完成操作，不能替代审核闭批或 Git 集成验证。
+These fields are read within the same group-shared lock as the same event's card states, bodies, and `task_revisions`; the summary reports only the current execution authorization and does not expose message bodies. Unbound old cards omit the corresponding entries; historical receipts cannot be fabricated. When a same-ID `review -> working -> review/done` completes within one refresh, even if notify has not yet returned, the next event or the first snapshot after a restart still contains accepted/completed, with no need to catch the working edge. After a new dispatch replaces the current authorization, the old ID can still be queried via `kander dispatch show`; the summary is not a history list. A completion receipt proves the controlled completion operation and cannot substitute for review batch closure or Git integration verification.
 
-每次扫描读取当前 epoch 的 `confirm_by`，以该绝对期限独立唤醒；同 epoch 重试、
-订阅重启以及无关状态、正文、成员变化和心跳均不续期。首次发现已过期也立即发 `dispatch-attention`，`attention` 列出超时任务 ID，
-`reconciliation_required=true` 要求消费者核对。事件附当前 dispatch 摘要及存活缓存，
-必要时启动有界探测；已有批次在途时保留一个合并请求，待其完成后调度，不卡住扫描。
-探测批次完成后，仍超时的派回再发注意事件，携带最新可用观测。后续心跳继续采集。
-没有派回进展时即使 `liveness.status=alive`，仍保持 `confirmation_pending=true`；
-存活的观测年龄与派回年龄分别输出。unknown、不完整事实和期限到达均不自动恢复、
-重发、改写卡片或放行依赖。
+Each scan reads the current epoch's `confirm_by` and wakes independently on that absolute deadline; same-epoch retries, subscription restarts, and unrelated state, body, or membership changes and heartbeats do not extend it. Discovering an already-expired deadline for the first time also immediately sends `dispatch-attention`; `attention` lists the timed-out task IDs, and `reconciliation_required=true` requires the consumer to verify. The event attaches the current dispatch summaries and the liveness cache, and starts bounded probing when necessary; while a batch is already in flight, one merged request is retained and scheduled after it completes, without stalling the scan. After a probe batch completes, dispatches still overdue send another attention event, carrying the latest available observations. Subsequent heartbeats keep collecting. When there is no dispatch progress, `confirmation_pending=true` is kept even with `liveness.status=alive`; the liveness observation age and the dispatch age are output separately. unknown, incomplete facts, and deadline arrival do not automatically recover, re-send, rewrite cards, or release dependencies.
 
-仅 working 和 pending review 参与探测；普通 review、已 completed 的 review 不探测。
-缺失/冲突的 dispatch 原件或回执使监听卡事实不可用，沿用终止错误事件，不能当作未绑定。
-任务组展开时不相关卡片的 dispatch 错误不冒充成员归属错误；监听集合中的错误仍失败关闭。
+Only working and pending review participate in probing; ordinary review and already-completed review are not probed. Missing/conflicting dispatch artifacts or receipts make the watched card's facts unavailable, following the existing terminating error events; they cannot be treated as unbound. During task-group expansion, a dispatch error on an unrelated card does not masquerade as a membership error; errors within the watch set still fail closed.
 
-## 动态组引用与不完整事实
+## Dynamic Group References and Incomplete Facts
 
-有 `--watch` 时，每行的 `watch_references` 保留原始引用，`watched` 表示展开后的
-外部任务；外部集合为空时 `watched` 省略。`tasks` 与 `task_revisions` 包含本组显式
-成员和当前外部集合。组引用另带 `memberships` 与 `membership_versions`。
-成员版本是排序成员 ID 集合的确定性 SHA-256；空组在已启动订阅中使用 `empty`。
-版本不因无关正文或状态更新改变，也不是全局递增计数器。
+With `--watch`, each line's `watch_references` preserves the original references, and `watched` denotes the expanded external tasks; when the external set is empty, `watched` is omitted. `tasks` and `task_revisions` contain this group's explicit members and the current external set. Group references additionally carry `memberships` and `membership_versions`. A membership version is a deterministic SHA-256 of the sorted member-ID set; an empty group in an already-started subscription uses `empty`. The version does not change because of unrelated body or state updates, and it is not a globally incrementing counter.
 
-成员集合变化发送 `membership-change`，携带完整新集合及版本。新增成员立即进入
-监听。移除或改组导致离开原监听组时，`removed` 保留离开的 ID（即使仍属于另一监听组），
-`reconciliation_required=true` 在本次订阅后续事件中保持；不能把成员减少解释为
-依赖已经满足。消费者须重新核对契约、前后成员版本及实际交付。空组在初次订阅时
-拒绝；已有订阅中的组变空仍发成员变化，不把它当作成功完成。
+A member-set change sends `membership-change`, carrying the complete new set and version. Newly added members enter the watch immediately. When a removal or regrouping causes members to leave the originally watched group, `removed` preserves the departed IDs (even if they still belong to another watched group), and `reconciliation_required=true` persists across this subscription's subsequent events; a shrinking member set must not be interpreted as dependencies having been satisfied. Consumers must re-verify the contract, the before/after membership versions, and the actual deliveries. An empty group is refused at initial subscription; a group going empty within an existing subscription still sends the membership change, and it is not treated as successful completion.
 
-成员 ID、显式外部 ID、组展开之间有重复则拒绝。组成员解析与 `check` 的依赖展开
-复用 board 层结果，兼容旧讨论区的组字段。组引用需要全板成员归属信息：扫描问题、
-不可读正文等使归属无法确定时，发送终止事件 `membership-unknown`，
-`membership_complete=false`、`reconciliation_required=true`，随后非零退出。
-该行若带任务事实，只是上次成功快照，不能作为新的完整快照消费。初始失败使用空映射。
+Duplicates among member IDs, explicit external IDs, and group expansions are refused. Group member resolution and `check`'s dependency expansion reuse the board-layer results, compatible with the legacy discussion-area group fields. Group references require board-wide membership information: when scan problems, unreadable bodies, and the like make membership undeterminable, the terminating event `membership-unknown` is sent with `membership_complete=false` and `reconciliation_required=true`, followed by a non-zero exit. If that line carries task facts, they are only the last successful snapshot and cannot be consumed as a new complete snapshot. An initial failure uses an empty mapping.
 
-仅监听显式任务 ID 时使用定向扫描，无关已知问题不会触发额外读取或 Agent 探测。
-组展开必须检查所有可能成员；无法读取归属的条目不能假设属于无关组。
+When watching only explicit task IDs, a targeted scan is used, and unrelated known problems do not trigger extra reads or Agent probing. Group expansion must check all possible members; an entry whose membership cannot be read must not be assumed to belong to an unrelated group.
 
-## 协调读取与恢复
+## Coordinated Reads and Recovery
 
-`board.ScanContext` / `ScanTargetsContext` 将状态、正文和 revision 放在同一组共享锁
-下读取，`Board.Revision` 与 `Board.Document` 保留快照值。旧 `Scan` / `ScanTargets`
-接口仍可用，保持阻塞读取。`ScanDispatchesContext` 可选捕获当前派回，
-`Board.CurrentDispatch` 返回与正文、revision 一致的摘要；旧扫描入口不增加派回读取。`Board.GroupMembership` 返回成员、版本及完整性问题；
-存在组依赖时，`TaskDependenciesOf` 和 `check` 不接受部分展开结果。
+`board.ScanContext` / `ScanTargetsContext` read states, bodies, and revisions under the same group of shared locks; `Board.Revision` and `Board.Document` preserve the snapshot values. The old `Scan` / `ScanTargets` interfaces remain available, keeping blocking reads. `ScanDispatchesContext` optionally captures the current dispatches, and `Board.CurrentDispatch` returns a summary consistent with the body and revision; the old scan entry points do not gain dispatch reads. `Board.GroupMembership` returns members, versions, and completeness problems; when group dependencies exist, `TaskDependenciesOf` and `check` do not accept partial expansion results.
 
-订阅每次读事实共用 2 秒期限。看板维护锁、任务写锁和 journal 锁争用都服从该期限；
-无遗留后台锁等待 goroutine。耗尽后发送 `read-error`，`read_status=maintenance`，
-随后非零退出；该状态也可能表示正常写入争用，并不宣称已确认有人执行 init。
-识别到已准备但未提交事务时立即发送 `read-error`、`read_status=recoverable` 并退出，
-由操作者按事务维护契约显式恢复。重复卡、reparse 和持久损坏失败关闭，不自动修复。
+Each subscription fact read shares a 2-second deadline. Kanban maintenance-lock, task write-lock, and journal-lock contention all obey this deadline; no background lock-waiting goroutines are left behind. On exhaustion, `read-error` with `read_status=maintenance` is sent, followed by a non-zero exit; that status may also indicate normal write contention, and it does not claim it is confirmed that someone ran init. On recognizing a prepared but uncommitted transaction, `read-error` with `read_status=recoverable` is sent immediately and the process exits, leaving the operator to recover explicitly under the transaction maintenance contract. Duplicate cards, reparse, and persistent corruption fail closed and are not auto-repaired.
 
-期限覆盖锁争用与各读取阶段之间的取消检查；文件打开、内核 I/O、关闭仍受操作系统
-控制，不承诺硬实时终止。POSIX 使用非阻塞 flock 尝试，Windows 使用
-LockFileEx 的 FAIL_IMMEDIATELY；已有阻塞写锁和安全路径入口不变。
+The deadline covers lock contention and the cancellation checks between the read phases; file opens, kernel I/O, and closes remain under operating-system control, with no promise of hard real-time termination. POSIX uses non-blocking flock attempts, Windows uses LockFileEx with FAIL_IMMEDIATELY; the existing blocking write locks and safe-path entry points are unchanged.
 
-## 有界探测与输出生命周期
+## Bounded Probing and Output Lifecycle
 
-扫描、探测和输出分别持有自己的运行资源。扫描不等待外部 Agent CLI；初始快照
-入队后启动第一批存活采集，后续心跳或派回确认期限在上一批已结束时启动下一批。每次调用复用
-`ClassifyTasksContext` 的默认总预算 10 秒、并发 4。订阅最多持有一批在途采集、
-一个完成结果槽和一份缓存，不因 refresh 或心跳积压更多探测批次。
+Scanning, probing, and output each hold their own runtime resources. Scanning does not wait for the external Agent CLI; the first liveness collection batch starts after the initial snapshot is enqueued, and subsequent heartbeats or dispatch confirmation deadlines start the next batch once the previous one has ended. Each invocation reuses `ClassifyTasksContext`'s default total budget of 10 seconds and concurrency of 4. A subscription holds at most one in-flight collection batch, one completed-result slot, and one cache, and does not pile up more probe batches because of refresh or heartbeat backlog.
 
-心跳沿用 `agent/status/channel/detail`，增加以下字段：
+Heartbeats carry over `agent/status/channel/detail` and add the following fields:
 
-- `revision` 和 `identity`：本次卡片 revision 与请求身份；结果必须同时匹配才可消费。
-- `observed_at`、`age_seconds`：真实采集结束时间与生成心跳时的年龄；没有采集则省略时间。
-- `runtime_state`、`observation_valid`：复用批量采集事实，不从 alive 推导 ready 或业务进展。
-- `collection_state`：`pending` 表示当前 revision 没有结果，`complete` 表示已尝试采集，
-  `not-observed` 表示批量未实际采集；`collecting` 独立表示订阅是否有批次运行。
-- `stale`：缓存年龄超过 heartbeat 加 10 秒时为 true，此时 status/runtime_state 变为
-  unknown、observation_valid 为 false；保留原观测时间与年龄，不冒充新观测。
-- `new_window`：有反查地址建议时保留，不回写卡片。
+- `revision` and `identity`: this card revision and the request identity; a result is consumable only when both match.
+- `observed_at`, `age_seconds`: the real collection end time and the age at heartbeat generation; the time is omitted when there was no collection.
+- `runtime_state`, `observation_valid`: reuse the batch collection facts; ready and business progress are not derived from alive.
+- `collection_state`: `pending` means the current revision has no result, `complete` means a collection was attempted, `not-observed` means the batch did not actually collect; `collecting` independently indicates whether the subscription has a batch running.
+- `stale`: true when the cache age exceeds heartbeat plus 10 seconds, at which point status/runtime_state become unknown and observation_valid becomes false; the original observation time and age are preserved and do not masquerade as a fresh observation.
+- `new_window`: preserved when there is a reverse-lookup address suggestion; not written back to the card.
 
-revision 或 SESSION/WINDOW/OWNER/STARTED_AT 改变时丢弃旧结果，输出 pending/unknown。
-即使其他卡持续变化，心跳仍按独立时钟报告当前缓存。慢批次未结束时允许 pending，
-不能把这种 unknown 当作 Agent 已停止。结果覆盖与输入集合均为 O(监听卡数)，
-不是无限历史队列；单批总预算耗尽后未出队项维持 unknown。
+When the revision or SESSION/WINDOW/OWNER/STARTED_AT changes, old results are discarded and pending/unknown is output. Even while other cards keep changing, heartbeats still report the current cache on their independent clock. pending is allowed while a slow batch has not ended; that kind of unknown must not be treated as the Agent having stopped. Result coverage and the input set are both O(number of watched cards), not an unbounded history queue; after a single batch's total budget is exhausted, undequeued items stay unknown.
 
-输出只有一个 worker，最多排队 16 行，另有一行正在写出；每行最多 1 MiB（含换行）。
-每行的 2 秒期限从入队开始计算，包含排队时间。队列满、单行超限、短写、断管或
-写出超时均明确报错并结束订阅，不丢弃事件后继续伪装完整流。退出可能留下尚未写出的
-行或部分末行；消费者只解析完整 JSON 行，重连后重新核对 snapshot/revision。
-心跳间隔从快照/心跳入队后开始，不等待消费者读取；慢消费者在限额内保持 FIFO。
-全体 done 不自动退出，仍由消费者决定何时停止。错误诊断的 stderr 写入同样限 2 秒；
-即使 stdout/stderr 指向同一停读管道，也不会因诊断再次无限等待。无法写出诊断时
-以非零退出通知失败，最坏会比输出失败多等待一个诊断期限。
+Output has a single worker, with at most 16 lines queued plus one more line being written out; each line is at most 1 MiB (including the newline). Each line's 2-second deadline is counted from enqueue and includes queueing time. A full queue, an oversized single line, a short write, a broken pipe, or a write timeout each report an explicit error and end the subscription, rather than dropping events and continuing to fake a complete stream. Exit may leave lines not yet written out or a partial final line; consumers parse only complete JSON lines and re-verify snapshot/revision after reconnecting. The heartbeat interval starts after the snapshot/heartbeat is enqueued, without waiting for the consumer to read; slow consumers keep FIFO within the limits. All members being done does not auto-exit; the consumer still decides when to stop. stderr writes for error diagnostics are likewise limited to 2 seconds; even when stdout/stderr point at the same stopped-reading pipe, there is no second unbounded wait because of diagnostics. When the diagnostic cannot be written out, failure is signaled by a non-zero exit, waiting in the worst case one extra diagnostic deadline beyond the output failure.
 
-`SubscribeContext` 接收调用方 context；旧 `Subscribe` 保留停止通道包装，关闭 stop
-返回成功。CLI 将 Ctrl+C 作为正常退出，POSIX 同时处理 SIGTERM/SIGHUP；Windows
-处理 Go 暴露的 console Ctrl+Break、关闭、注销、关机通知。强制 kill 不运行清理钩子。
-所有正常退出路径取消并等待探测 worker、输出 worker、停止通道适配器与平台取消回调，
-不遗弃阻塞 goroutine。读锁争用也复用调用方 context 与原 2 秒读取期限。
+`SubscribeContext` accepts the caller's context; the old `Subscribe` keeps the stop-channel wrapper, and closing stop returns success. The CLI treats Ctrl+C as a normal exit, and POSIX also handles SIGTERM/SIGHUP; Windows handles the console Ctrl+Break, close, logoff, and shutdown notifications that Go exposes. A forced kill does not run cleanup hooks. All normal exit paths cancel and wait for the probe worker, the output worker, the stop-channel adapter, and the platform cancellation callbacks, abandoning no blocked goroutines. Read-lock contention also reuses the caller's context and the original 2-second read deadline.
 
-自定义 `io.Writer` 必须实现 `ContextWriter.WriteContext`，在取消后返回且不遗留后台
-写入；普通无法取消的 Writer 在首次写入前拒绝。`bytes.Buffer`、`strings.Builder`、
-`io.Discard` 保持兼容。调用期间输出目标由订阅独占，调用方不得同时写入、关闭或
-修改描述符属性；违反 ContextWriter 契约的实现无法获得退出保证。
+A custom `io.Writer` must implement `ContextWriter.WriteContext`, returning after cancellation and leaving no background writes behind; an ordinary non-cancelable Writer is refused before the first write. `bytes.Buffer`, `strings.Builder`, and `io.Discard` remain compatible. During the call, the output target is owned exclusively by the subscription; the caller must not concurrently write, close, or modify descriptor attributes. An implementation that violates the ContextWriter contract cannot obtain the exit guarantee.
 
-平台适配的边界如下：
+The platform adaptation boundaries are as follows:
 
-- POSIX：对传入文件描述符启用 nonblocking，EAGAIN 时每 5ms 检查取消/期限；
-  不等待满管道，writer 汇合后恢复原文件状态标志，不关闭调用方文件。描述符副本
-  共享这些标志，因此调用方必须同时约束别名的使用。
-- Windows：支持 deadline 的 overlapped 文件使用 Go poller 和写期限；同步句柄在
-  固定 OS 线程写入，以 CancelSynchronousIo 取消，并等待取消线程汇合。取消请求
-  与进入写调用之间的竞争以 5ms 重试覆盖。控制台保留 Go 的 Unicode 写出。
-  [Microsoft 的取消契约](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelsynchronousio)
-  不保证每一种内核 I/O 都立即完成；实现保留并等待真实完成，不伪造已回收。
+- POSIX: nonblocking is enabled on the passed-in file descriptor, checking cancellation/deadline every 5ms on EAGAIN; a full pipe is not waited on, the original file status flags are restored after the writer joins, and the caller's file is not closed. Descriptor duplicates share these flags, so the caller must also constrain the use of aliases.
+- Windows: deadline-capable overlapped files use the Go poller and write deadlines; synchronous handles write on a pinned OS thread, are canceled with CancelSynchronousIo, and the cancellation thread is waited on until it joins. The race between the cancellation request and entering the write call is covered by 5ms retries. The console keeps Go's Unicode write-out. [Microsoft's cancellation contract](https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelsynchronousio) does not guarantee that every kind of kernel I/O completes immediately; the implementation retains and waits for real completion and does not fake reclamation.
 
-文件打开、普通磁盘/网络文件系统 I/O、驱动响应、进程创建/回收及系统调度仍受 OS
-控制；上述期限不是不可取消内核操作的硬实时保证。JSON 编码在单行大小检查之前，
-仍需要与当前监听集合成比例的临时空间。自动测试使用临时看板和假 CLI，真实
-终端、真实 tmux/herdr/Agent、原生 Windows 与交叉编译结果必须分别记录。
+File opens, ordinary disk/network filesystem I/O, driver responses, process creation/reaping, and system scheduling remain under OS control; the deadlines above are not a hard real-time guarantee for uncancelable kernel operations. JSON encoding happens before the single-line size check and still requires temporary space proportional to the current watch set. Automated tests use a temporary kanban and a fake CLI; real terminals, real tmux/herdr/Agent, native Windows, and cross-compilation results must each be recorded separately.

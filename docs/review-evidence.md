@@ -1,6 +1,6 @@
-# 审核证据归档
+# Review Evidence Archive
 
-不带 `--task` 的独立 review 保持原行为，不定位看板。带该选项时从目标 CWD 定位主看板，`KANBAN_DIR` 显式覆盖仍优先；不修改进程 CWD。
+A standalone review without `--task` keeps its original behavior and does not locate a kanban board. With that option, the main kanban board is located from the target CWD, and an explicit `KANBAN_DIR` override still takes precedence; the process CWD is not modified.
 
 ```text
 kander review [agent] [--task <id>]...
@@ -12,13 +12,13 @@ kander review [agent] [--task <id>]...
   [review-context] [reviewed-commit]
 ```
 
-选项全部在 CWD 前。重复 task ID 归一、排序并去重；其他选项不允许重复。run/batch ID 为 1–64 位小写 ASCII 字母、数字或连字符，首位只能字母或数字。run ID 可省略，随机生成并输出到 stderr；batch ID 由调用方提供。时间戳不承担身份或因果顺序。
+All options come before the CWD. Repeated task IDs are normalized, sorted, and deduplicated; no other option may be repeated. run/batch IDs are 1–64 lowercase ASCII letters, digits, or hyphens, with the first character restricted to a letter or digit. The run ID may be omitted; it is then generated randomly and printed to stderr. The batch ID is supplied by the caller. Timestamps carry no identity and no causal ordering.
 
-创建意图及向未发布卡发布时均要求 working/review 目录卡；多卡属于同一非空任务组，语言相同。旧文件卡须按 init 维护协议迁移。长审核不占卡片锁，发布时按 ID 重定位。
+Both creating the intent and publishing to a not-yet-published card require a directory card in working/review; multiple cards must belong to the same non-empty task group and share the same language. Legacy file cards must be migrated per the init maintenance protocol. A long review does not hold the card lock; publication relocates cards by ID.
 
-## 批次与前驱
+## Batches and Predecessors
 
-新 batch 的 requirements 文件须列出全部角色，值为 required 或带理由的 N/A：
+The requirements file for a new batch must list all roles, each valued either required or N/A with a reason:
 
 ```json
 {
@@ -29,62 +29,62 @@ kander review [agent] [--task <id>]...
 }
 ```
 
-调用方依照用户、项目规则和配置解析角色要求；该文件不代表工具能证明用户授权。成员、base、要求、任务上下文哈希及语言固定。PM/QA 同目标使用同 batch、不同 run。后续可省略 requirements；提供时须与既有要求一致。
+The caller resolves role requirements according to the user, project rules, and configuration; this file does not mean the tool can prove user authorization. Membership, base, requirements, the task-context hash, and language are fixed. PM/QA against the same target use the same batch with different runs. Later invocations may omit requirements; when provided, it must match the existing requirements.
 
-修复不另开 batch。推进目标需要 advance 文件：
+Fixes do not open a new batch. Advancing the target requires an advance file:
 
 ```json
 {
   "previous_target": "<old-full-sha>",
   "target": "<new-full-sha>",
-  "reason": "本批任务修复交付",
+  "reason": "fix delivery for this batch's tasks",
   "deliveries": {
     "<every-new-full-sha>": "20260907-example-task"
   }
 }
 ```
 
-review 验证 old 是 new 的祖先，old..new 每个提交都在映射中且归属本批成员；board 在组控制锁内 CAS 当前 target，保存旧/新目标、依据及版本。归属是调用方提供的事实，不承诺从任意代码推导业务归属；不得伪称组外交付为本批修复。存在执行中或未完整发布的本批 run 时拒绝推进。
+review verifies that old is an ancestor of new and that every commit in old..new appears in the mapping and is assigned to a member of this batch; the board CASes the current target inside the group control lock, saving the old/new targets, the basis, and the version. Assignment is a fact supplied by the caller; there is no promise of deriving business assignment from arbitrary code, and deliveries from outside the group must not be misrepresented as fixes for this batch. Advancing is refused while any run of this batch is executing or not fully published.
 
-增量轮通过 previous-run-id 自动读取原报告与作者处置，调用方 review-context 逐字保留为独立补充；reviewed-commit 可省略，显式传入时必须匹配。前驱须同 batch/base/role/reviewer 且已完整发布。处置、计划与闭批见 [审核完成门禁](review-disposition.md)；本协议不根据报告中出现 PASS 自动放行。
+An incremental round automatically reads the original report and author dispositions via previous-run-id; the caller's review-context is preserved verbatim as a separate supplement. reviewed-commit may be omitted; when passed explicitly it must match. The predecessor must share the same batch/base/role/reviewer and be fully published. For disposition, plans, and batch close, see [Review completion gate](review-disposition.md); this protocol does not auto-pass based on the word PASS appearing in a report.
 
-## 原件与 schema
+## Original Artifacts and Schema
 
-每卡保存：
+Each card stores:
 
 ```text
 reviews/<run_id>/
   task-context.md
   review-context.md
-  prompt.txt          # 准备成功时存在
-  evidence.txt        # 准备成功时存在
+  prompt.txt          # present when preparation succeeded
+  evidence.txt        # present when preparation succeeded
   output.raw
   stdout.log
   error.log
-  report.md           # 输出解码有效时存在
+  report.md           # present when the output decoded validly
   sidecar.json
   manifest.json
 ```
 
-raw/log 原样保存，包括非法 UTF-8。report.md 保存有效结果文本，不改写换行或内容；JSON Reviewer 原 JSON 单独保存为 output.raw。无有效报告时不造 report.md，索引指向 output.raw。失败证据可能包含空文件，sidecar 明确未启动或失败，空文件不表示成功。
+raw/log files are stored as-is, including invalid UTF-8. report.md stores the valid result text without rewriting line endings or content; a JSON Reviewer's original JSON is stored separately as output.raw. When there is no valid report, no report.md is fabricated and the index points to output.raw. Failure evidence may contain empty files; the sidecar states explicitly that the run did not start or failed, and an empty file does not indicate success.
 
-sidecar schema 1 包含：
+sidecar schema 1 contains:
 
-- run_id、batch_id、previous_run_id、task_ids、task_group、role。
-- reviewer/model/effort、cwd/base/commit/reviewed_commit、适用的 advance。
-- report_language、输入及所有原件 SHA-256、kander_version。
-- phase、launch_status、execution_status、semantic_status、exit_code、failure_reason。
-- created_at、finished_at、duration_ms。
+- run_id, batch_id, previous_run_id, task_ids, task_group, role.
+- reviewer/model/effort, cwd/base/commit/reviewed_commit, the applicable advance.
+- report_language, SHA-256 of the inputs and all original artifacts, kander_version.
+- phase, launch_status, execution_status, semantic_status, exit_code, failure_reason.
+- created_at, finished_at, duration_ms.
 
-launch_status 为 not_started、unknown 或 started。启动前先持久化 launching/unknown，启动成功后写 running/started；启动失败则最终记录 not_started。execution_status 准备时为 incomplete，最终为 ok、failed、not_started 或 interrupted。semantic_status 始终 unassessed；ok 只代表工具执行验证成功，不等于语义 PASS。
+launch_status is not_started, unknown, or started. Before launching, launching/unknown is persisted first; on successful launch, running/started is written; on launch failure, not_started is recorded as final. execution_status is incomplete during preparation and finally ok, failed, not_started, or interrupted. semantic_status is always unassessed; ok only means the tool's execution verification succeeded and does not equal a semantic PASS.
 
-manifest schema 1 保存完整输入身份、sidecar 哈希和原件哈希。正文 `## REVIEWS` 每行是 `- {JSON}`，字段为 run_id、batch_id、role、execution_status、base、commit、previous_run_id、report。该区和 reviews 附件由专用发布器管理，不能通过 update 修改。清单和索引不从报告正文推导。
+manifest schema 1 stores the complete input identity, the sidecar hash, and the hashes of the original artifacts. In the body, each line of `## REVIEWS` is `- {JSON}`, with fields run_id, batch_id, role, execution_status, base, commit, previous_run_id, report. That section and the reviews attachments are managed by a dedicated publisher and cannot be modified via update. The manifest and index are not derived from the report body.
 
-卡片 LANGUAGE 只在意图创建时解析，缺失才回落当时配置。冻结语言不随之后配置漂移；有 LANGUAGE 的卡与冻结值不一致时报告冲突。
+A card's LANGUAGE is resolved only when the intent is created; only when missing does it fall back to the configuration at that time. The frozen language does not drift with later configuration changes; a card with a LANGUAGE that disagrees with the frozen value reports a conflict.
 
-## 持久化与恢复
+## Persistence and Recovery
 
-board 复用 S 的事务、revision、锁和恢复日志。稳定控制记录位于：
+The board reuses the transactions, revisions, locks, and recovery log of [Card transactions](card-transactions.md). The stable control records live at:
 
 ```text
 kanban/.kander/groups/00000000-review-archive-group/
@@ -97,27 +97,27 @@ kanban/.kander/groups/00000000-review-archive-group/
     sidecar.json
 ```
 
-这是工具保留命名空间，不是看板任务组，不创建组卡。run.json 保存逐卡发布回执；每张卡独立持有完整原件和不可覆盖清单。哈希用于完整性检测，不防御任意同用户篡改。
+This is a tool-reserved namespace, not a kanban task group, and no group card is created. run.json stores the per-card publication receipts; each card independently holds the complete original artifacts and a non-overwritable manifest. Hashes are for integrity detection and do not defend against arbitrary same-user tampering.
 
-按 run ID 的 OS 执行锁位于稳定 locks 目录，独立于卡片锁。持有期间只短暂进入 S 的看板、组、任务事务；没有代码反向取得执行锁，不形成循环。不同角色可并行，同一 run 的并发重试等待前次释放后读取结果。普通 update 及 working/review 之间的 move 可在长审核期间执行。done 现由审核计划和处置门禁检查，未完成归档不能合法进入 done。若外部旧程序提前将卡移入 done 等终态，原件仍在控制目录，发布失败且不重建旧路径；默认 check 跳过延后检查状态，须用 `kander check <task-id>` 或 `kander check --all` 定位未完成发布。done 卡不可移回复用，也不可绕过受控入口修补；后续处理须另行确认，不能以同 run 重试承诺自动修复终态。
+The per-run-ID OS execution lock lives in the stable locks directory, independent of the card lock. While held, it only briefly enters the board, group, and task transactions of card transactions; no code acquires the execution lock in the reverse direction, so no cycle forms. Different roles may run in parallel; a concurrent retry of the same run waits for the previous holder to release and then reads its result. Ordinary updates and moves between working and review may run during a long review. done is now checked by the review plan and disposition gate; an incomplete archive cannot legally enter done. If an external legacy program moves the card into done or another terminal state prematurely, the original artifacts remain in the control directory, publication fails, and the old path is not recreated; the default check skips deferred-check states, so `kander check <task-id>` or `kander check --all` must be used to locate incomplete publications. A done card cannot be moved back for reuse, nor patched around the controlled entry point; follow-up handling requires separate confirmation, and retrying with the same run must not promise to automatically repair the terminal state.
 
-输入与意图先事务落盘，输出写受控 staging。进程回收、worktree 检查、runtime 清理都有结论后，冻结 originals/sidecar；随后逐卡原子发布原件、清单、索引及回执。跨卡并非一个大事务，部分失败保留成功卡、逐卡报告、退出非零。重试验证成功卡且不重写，只补缺项。
+Inputs and the intent are committed to disk transactionally first; output is written to controlled staging. Only after process reaping, worktree checks, and runtime cleanup have all reached a conclusion are originals/sidecar frozen; then the original artifacts, manifest, index, and receipt are published atomically per card. Cross-card publication is not one big transaction: on partial failure, successful cards are kept, each card is reported individually, and the exit code is non-zero. A retry verifies successful cards without rewriting them and only fills in the missing ones.
 
-同 run ID 不同输入或哈希冲突。同输入重试不再启动 Reviewer；可在 CLI 已移除或工作树已有新修改时重放原报告。首次仍要求 HEAD/clean/祖先关系。恢复调用仍要求原 Git 对象、输入字节和卡片绑定可验证。若原 spec 路径随卡移动或正文后来变化，可改传已归档 task-context.md 的绝对路径；身份比较基于原件字节，不要求复用失效路径。零卡发布时原输入仍在控制目录 inputs 中。
+The same run ID with different inputs is a hash conflict. A retry with the same inputs does not launch the Reviewer again; it can replay the original report even when the CLI has been removed or the worktree has new modifications. The first run still requires HEAD/clean/ancestry checks. A recovery call still requires the original Git objects, input bytes, and card bindings to be verifiable. If the original spec path moved with the card or the body later changed, the absolute path of the archived task-context.md may be passed instead; identity comparison is based on original-artifact bytes and does not require reusing a stale path. On a zero-card publication, the original inputs remain in the control directory inputs.
 
-门禁被 kill 后 OS 执行锁释放；相同调用将尚未 finalized 的意图标记 interrupted，保留暂存输出，不伪造进程回收、清理或最终报告。恢复未确认遗留 Reviewer 是否仍在运行；不依据旧 PID 擅自杀进程，也不删除未知 runtime。异常 runtime 遗留应由操作者诊断处理。
+After the gate is killed, the OS execution lock is released; an identical invocation marks the not-yet-finalized intent as interrupted, keeps the staged output, and does not fabricate process reaping, cleanup, or a final report. Recovery does not confirm whether a leftover Reviewer is still running; it does not kill processes on its own based on an old PID, nor delete unknown runtimes. Abnormal runtime leftovers should be diagnosed and handled by the operator.
 
-S 多文件事务中断时读者先报告待恢复。暂停写入、满足维护条件后运行 init，再以同 run ID 重试。不得手工补索引、删除成功卡、重建旧路径或换 ID 绕过未完成发布。
+When an S multi-file transaction is interrupted, readers first report pending recovery. Pause writes, satisfy the maintenance conditions, run init, then retry with the same run ID. Do not manually patch the index, delete successful cards, recreate old paths, or switch IDs to bypass an incomplete publication.
 
-所有写入经过 internal/fs，沿用 POSIX 私有权限与 Windows 创建时保护 DACL/reparse 拒绝。二进制原件通过日志 base64 字节字段无损恢复，普通文本日志格式兼容。
+All writes go through internal/fs, keeping POSIX private permissions and Windows creation-time protections (DACL/reparse denial). Binary original artifacts are recovered losslessly via the log's base64 byte fields; ordinary text keeps a compatible log format.
 
-## 消费接口与检查
+## Consumption Interfaces and Checks
 
-- `board.PrepareReviewRun` / `UpdateReviewRun` / `FinalizeReviewRun`：意图与执行事实。
-- `board.PublishReviewRun`：逐卡发布并返回失败，不抹去成功回执。
-- `board.ParseReviewIndexes` 和 ReviewInput/ReviewRun/ReviewBatch/ReviewManifest：共用类型；board 不依赖 review。
-- `board.ReadReviewRun` / `ReadReviewOriginal`：读取已提交事实与校验原件。
-- `board.ReviewPublicationComplete`：验证跨卡原件、清单、索引及前驱；不判断语义 PASS。
-- `kander check`：同时检查意图和索引，零卡发布成功也不会消失。报告不完整发布、重复/缺失/冲突、哈希、语言、成员及前驱错误；保持原状态范围。
+- `board.PrepareReviewRun` / `UpdateReviewRun` / `FinalizeReviewRun`: intent and execution facts.
+- `board.PublishReviewRun`: publishes per card and returns failures without erasing successful receipts.
+- `board.ParseReviewIndexes` and ReviewInput/ReviewRun/ReviewBatch/ReviewManifest: shared types; board does not depend on review.
+- `board.ReadReviewRun` / `ReadReviewOriginal`: read committed facts and verify original artifacts.
+- `board.ReviewPublicationComplete`: verifies cross-card original artifacts, manifests, indexes, and predecessors; it does not judge semantic PASS.
+- `kander check`: checks both intents and indexes; a successful zero-card publication does not disappear either. It reports incomplete publications, duplicate/missing/conflicting entries, and hash, language, membership, and predecessor errors, while keeping its original state scope.
 
-证据位于本机 kanban，不进入 Git，也不随临时报告清理而删除。
+Evidence lives in the local kanban board; it does not enter Git and is not deleted when temporary reports are cleaned up.

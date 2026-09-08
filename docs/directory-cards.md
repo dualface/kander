@@ -1,47 +1,47 @@
-# 目录卡、SIZE 与显式迁移
+# Directory Cards, SIZE, and Explicit Migration
 
-所有新卡都保存在 `kanban/<state>/<task-id>/spec.md`. `new` 写 SIZE: small, `new --large` 写 SIZE: large, 该行紧随 TYPE. 规模与路径形态分离, 不改变 kanban_agents 或 models.kanban 配置键.
+All new cards are stored at `kanban/<state>/<task-id>/spec.md`. `new` writes SIZE: small, `new --large` writes SIZE: large, and the line immediately follows TYPE. Size is decoupled from path form and does not change the kanban_agents or models.kanban configuration keys.
 
-small 在 spec.md 内保留 IMPLEMENTATION/SUMMARY, done 要求完成 SUMMARY; large 使用非空 report.md. 两种规模都能保存普通附件. todo 均要求 SELF_REVIEW; large 或任务组成员另外要求 CARD_REVIEW. SIZE 与契约一起冻结, 从 todo 退回 backlog 也不解冻; 明确用户决定下复用受控 contract-decision 更新入口.
+small keeps IMPLEMENTATION/SUMMARY inside spec.md, and done requires a completed SUMMARY; large uses a non-empty report.md. Both sizes can store ordinary attachments. todo requires SELF_REVIEW for both; large or task-group members additionally require CARD_REVIEW. SIZE freezes together with the contract, and moving back from todo to backlog does not unfreeze it either; under an explicit user decision, reuse the controlled contract-decision update entry point.
 
-公开快照中的 Entry.Kind 和 TaskSummary.kind、list、TUI、启动/恢复/通知模型参数均表示 SIZE. Entry.IsDirectory() 只表示物理形态; 包内结构扫描的 Kind 留空, attachSize 后才填规模. 缺 SIZE 的文件按 small 读取, 缺 SIZE 的目录按 large 读取且 check 提示 init; 非法或重复 SIZE 阻止变更. check 的默认 done/archived 排除范围不变.
+Entry.Kind in public snapshots as well as TaskSummary.kind, list, the TUI, and the launch/resume/notify model parameters all denote SIZE. Entry.IsDirectory() denotes only the physical form; the in-package structure scan leaves Kind empty, and the size is filled in only after attachSize. A file missing SIZE reads as small; a directory missing SIZE reads as large, and check prompts for init; illegal or duplicate SIZE blocks mutation. check's default done/archived exclusion scope is unchanged.
 
-## 维护步骤
+## Maintenance Steps
 
-1. 暂停全部执行端、外部编辑器、在途通知和归档写入; 旧 Agent 和旧二进制也必须停写. 保留卡片与会话, 不必终止 Agent.
-2. 执行 `kander init`. 需要迁移且看板有 working/review 卡时默认拒绝并列出 ID. 确认上述停写条件后执行 `kander init --maintenance`.
-3. 命令取得排他看板锁, 恢复 prepared 事务, 校验卡片与未知暂存物, 然后迁移七状态. 受控 init/new/move/update/归档及读取均遵循同一锁; 不受控外部写进程无法由该锁约束.
-4. 成功后以 show --json 重新取得路径和 revision, 再恢复执行端. 不沿用迁移前快照. 变更继续通过 update/move 等专用入口.
+1. Pause all executors, external editors, in-flight notifications, and archive writes; old Agents and old binaries must stop writing too. Keep cards and sessions; there is no need to terminate Agents.
+2. Run `kander init`. When migration is needed and the board has working/review cards, it refuses by default and lists the IDs. After confirming the write-stop conditions above, run `kander init --maintenance`.
+3. The command acquires the exclusive board lock, recovers prepared transactions, validates cards and unknown staging artifacts, then migrates the seven states. Controlled init/new/move/update/archiving and reads all honor the same lock; uncontrolled external write processes cannot be constrained by this lock.
+4. After success, re-obtain paths and revisions with show --json, then resume the executors. Do not carry over pre-migration snapshots. Changes continue through the dedicated entry points such as update/move.
 
-`--maintenance` 只是操作方声明, 工具不推断存活状态, 不证明 Agent 已停止, 不自动退出或关闭会话. 保持停写直到迁移和恢复成功; 失败后保留现场排查. 不能用“最终打印新路径”替代维护窗口.
+`--maintenance` is only an operator declaration; the tool does not infer liveness, does not prove Agents have stopped, and does not exit or close sessions automatically. Keep the write stop until migration and recovery succeed; after a failure, preserve the scene for troubleshooting. "Printing the new paths at the end" cannot replace the maintenance window.
 
-## 事务与恢复
+## Transactions and Recovery
 
-init 通过 MigrateCards 进入恢复; 兼容入口 RecoverTransactions 与其共用同一恢复核心. 待恢复记录先于普通结构扫描处理. 无迁移时普通非卡片散落文件只警告并提示 check, 不阻断 init 的目录/exclude 初始化; 有迁移时结构问题明确阻断并提示 check. 缺 spec、真实重复、未知迁移产物及 reparse 仍报错保留, 不因迁移计数为零而放行.
+init enters recovery through MigrateCards; the compatibility entry point RecoverTransactions shares the same recovery core with it. Pending-recovery records are processed before the ordinary structure scan. Without a migration, ordinary stray non-card files only warn and prompt for check, and do not block init's directory/exclude initialization; with a migration, structural problems explicitly block and prompt for check. Missing specs, genuine duplicates, unknown migration artifacts, and reparse points still error out and are retained, and are not waved through because the migration count is zero.
 
-复用 [卡片事务](card-transactions.md) 的看板锁、revision、操作 ID 和 prepared/committed 日志. 文件转目录分阶段执行:
+The board lock, revision, operation ID, and prepared/committed journal of [Card transactions](card-transactions.md) are reused. File-to-directory conversion runs in phases:
 
-1. 预检全部卡片, 保存整批 from/to 映射及各文档原文/补 SIZE 与链接调整后正文到一个持久记录. 相互引用的卡片不会分成可独立提交的迁移.
-2. 建立同卷 `.kander/migrations/<operation-id>/<task-id>/` 暂存目录.
-3. 将源 `.md` 改名为暂存目录内的 spec.md. 此时状态目录中暂时没有该 ID 的入口.
-4. 在日志登记的 `spec.write-<operation-id>` 写入补 SIZE 与链接调整后正文; 中断后只接受 After 的精确前缀, 从已写位置继续并同步. 原 spec.md 先改名为登记的 `spec.original-<operation-id>`, 再发布完整替换; 仅在匹配原文时移除备份. 不依赖进程 defer 清理随机临时文件.
-5. 将完整目录发布到原状态的 `<task-id>/`.
-6. 提交 revision 和 committed 日志.
+1. Pre-check all cards; save the whole batch's from/to mapping and, for each document, the original text and the body after SIZE completion and link adjustment, into one durable record. Cards that reference each other are never split into independently committable migrations.
+2. Create the same-volume staging directory `.kander/migrations/<operation-id>/<task-id>/`.
+3. Rename the source `.md` to spec.md inside the staging directory. At this point the state directory temporarily has no entry for that ID.
+4. Write the body after SIZE completion and link adjustment into the journal-registered `spec.write-<operation-id>`; after an interruption, accept only an exact prefix of After, continuing from the written position and syncing. The original spec.md is first renamed to the registered `spec.original-<operation-id>`, then the complete replacement is published; the backup is removed only when it matches the original text. Do not rely on process defer cleanup of randomly named temporary files.
+5. Publish the complete directory to `<task-id>/` in the original state.
+6. Commit the revision and the committed journal record.
 
-这些操作不是一次原子 rename. 正常读者被排他锁隔离; 进程被终止后, 读者依据 prepared 记录诊断待恢复事务, 不把它当普通缺卡或自动修复. init 根据源、暂存、目标的存在性及准确正文匹配继续完成; 双入口、异常正文、无记录暂存物、symlink/junction/reparse 均报错并保留现场. 已提交记录和空暂存父目录保留作诊断, 不通过忽略状态目录点前缀隐藏半成品.
+These operations are not a single atomic rename. Normal readers are isolated by the exclusive lock; after the process is killed, readers diagnose the pending-recovery transaction from the prepared record, instead of treating it as an ordinary missing card or repairing it automatically. init resumes completion based on the existence of the source, staging, and target plus exact body matches; double entries, anomalous bodies, unrecorded staging artifacts, and symlink/junction/reparse all error out and preserve the scene. Committed records and empty staging parent directories are retained for diagnostics; half-finished work is not hidden by ignoring dot prefixes in state directories.
 
-既有目录缺 SIZE 时补 large; 其 spec.md 及目录内 Markdown 附件引用旧文件卡时同批调整地址. 二进制等普通附件不改写. reviews/dispatches 等专用生产者子树不参与普通链接扫描或迁移写入, 原审核/派发记录作为历史证据保持字节不变; 日志回放同样拒绝写入这些受管路径. 已有合法 SIZE 保留, 每张发生形态或正文变化的卡片增加一次 revision, 迁移计数包含只调整链接的卡片. 再次 init 返回迁移数 0, 不重写卡片内容和 mtime. 底层仍经过 internal/fs 的 POSIX no-follow 和 Windows 固定句柄/reparse/DACL 边界. 测试针对进程中断与重启, 不宣称任意硬件掉电保障.
+An existing directory missing SIZE gets large filled in; when its spec.md or in-directory Markdown attachments reference legacy file cards, the addresses are adjusted in the same batch. Binary and other ordinary attachments are not rewritten. Dedicated-producer subtrees such as reviews/dispatches take no part in the ordinary link scan or in migration writes; original review/dispatch records remain byte-identical as historical evidence, and journal replay likewise refuses to write these managed paths. Existing valid SIZE is preserved, each card whose form or body changes gains one revision, and the migration count includes cards with link-only adjustments. Running init again returns a migration count of 0 and does not rewrite card contents or mtimes. The lower layer still goes through internal/fs's POSIX no-follow and Windows fixed-handle/reparse/DACL boundaries. Testing targets process interruption and restart; it does not claim guarantees for arbitrary hardware power loss.
 
-## 相对链接
+## Relative Links
 
-按引用方原位置解析 URL 路径, 再使用整批旧文件至新 spec.md 的映射转换目标, 最后相对引用方新位置生成地址. 因此双方都迁移、既有目录卡引用旧文件、引用看板外 README 等场景均能保持目标; 不一律添加 ../. 源代码和恢复校验共用此算法, prepared 记录保留完整映射, 不从半迁移现场重新猜测.
+URL paths are resolved against the referrer's original location, the target is then converted using the whole batch's mapping from legacy files to new spec.md, and finally the address is generated relative to the referrer's new location. Scenarios such as both sides migrating, an existing directory card referencing a legacy file, or a reference to a README outside the board therefore all keep their targets; ../ is not added indiscriminately. The source code and recovery verification share this algorithm; the prepared record keeps the complete mapping and never re-guesses from a half-migrated scene.
 
-复用 Goldmark 的 CommonMark 解析, 只替换目标地址的源字节片段. 支持普通链接、图片、引用定义 (含未使用/重复定义)、角括号地址、转义/百分号编码、查询与片段. 链接文字、标题、CRLF、正文其他字节以及代码行内/围栏/缩进示例不变. 网页 URL、根路径 URL、纯锚点和纯查询引用保持原样. 仅扫描看板卡片内的 Markdown 文档, 不扫描或修改看板外仓库文件.
+Goldmark's CommonMark parsing is reused, replacing only the source byte span of the target address. Supported: ordinary links, images, reference definitions (including unused/duplicate definitions), angle-bracket addresses, escapes/percent-encoding, queries and fragments. Link text, titles, CRLF, other body bytes, and inline/fenced/indented code examples are unchanged. Web URLs, root-path URLs, pure-anchor and pure-query references stay as they are. Only Markdown documents inside board cards are scanned; repository files outside the board are neither scanned nor modified.
 
-不支持语法只在引用方移动或可能目标属于迁移映射时要求人工处理. 不移动且目标不变的历史文档中的 Wiki 散文、反斜线路径、无效旧 URL 保留; 全为绝对 URL 的 srcset 保留. 真正需要重定位的 Wiki/HTML href/src/srcset、无效 URL 和反斜线路径不猜测改写: 在发布前报错给出文档与原因, 保留原文, 由操作方先转换为支持的 Markdown 链接再重试. 本轮不声称能修复旧版本已经 committed 的损坏链接; 无 link_relocation 标记的旧日志按原 SIZE-only 计划恢复, 新迁移计划带该标记并校验完整映射.
+Unsupported syntax requires manual handling only when the referrer moves or a possible target belongs to the migration mapping. Wiki prose, backslash paths, and invalid old URLs in historical documents that do not move and whose targets are unchanged are preserved; srcset consisting entirely of absolute URLs is preserved. Wiki/HTML href/src/srcset, invalid URLs, and backslash paths that genuinely need relocation are not rewritten by guesswork: an error before publication gives the document and the reason, the original text is preserved, and the operator first converts them into supported Markdown links and then retries. This round does not claim to repair broken links already committed by older versions; legacy journals without the link_relocation flag recover under the original SIZE-only plan, while new migration plans carry the flag and verify the complete mapping.
 
-## 过渡读取
+## Transitional Reads
 
-list/show/check/TUI/subscribe 继续读取旧文件, 不触发批量迁移. new 始终创建目录. 对旧文件的 update/move/pick/start/resume/notify/dismiss 以及生命周期回写在副作用前要求 init, 不允许用旧二进制绕过限制. guard-write 对同状态旧 .md 拼写及跨状态旧路径给出提示; 它仍不是原子写入入口. 写目录内部文件而该 ID 仍为同状态旧 `.md` 时, 提示暂停写入并先运行 init.
+list/show/check/TUI/subscribe keep reading legacy files and do not trigger a bulk migration. new always creates a directory. update/move/pick/start/resume/notify/dismiss on legacy files, as well as lifecycle write-backs, require init before any side effects; bypassing the restriction with an old binary is not allowed. guard-write gives notices for same-state legacy .md spellings and cross-state legacy paths; it is still not an atomic write entry point. When writing a file inside a directory while that ID is still a same-state legacy `.md`, it prompts to pause writes and run init first.
 
-迁移失败注入及子进程 kill/restart 覆盖已有目录每份链接正文发布、全部链接正文发布、prepared、暂存目录、源移走、临时替换创建、同步、原文备份、替换发布、备份移除、SIZE 完成、目标发布、revision 和 committed. 未登记的旧原子写入残留及非前缀内容仍报冲突并保留, 不按文件名模式猜测归属. 并发测试验证维护锁阻塞 init、快照、update、归档/move, 释放后只产生串行提交或 revision 冲突. 原生 Windows 用例需在 Windows 执行; 交叉编译不能替代实机结果.
+Migration fault injection and child-process kill/restart cover the publication of each linked body for existing directories, publication of all linked bodies, prepared, the staging directory, source move-out, temporary-replacement creation, sync, original-text backup, replacement publication, backup removal, SIZE completion, target publication, revision, and committed. Unregistered residue from old atomic writes and non-prefix content still report conflicts and are retained; ownership is not guessed from file-name patterns. Concurrency tests verify that the maintenance lock blocks init, snapshots, update, and archive/move, and that after release only serialized commits or revision conflicts occur. Native Windows cases must be run on Windows; cross-compilation cannot substitute for real-machine results.

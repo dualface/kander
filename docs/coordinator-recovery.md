@@ -1,16 +1,16 @@
-# 编排检查点与恢复
+# Orchestration Checkpoints and Recovery
 
-`kander coordinator` 是单次受控读写入口。它保存编排恢复所需事实，既不运行订阅循环，也不发送通知、移动卡片、改变 Git 引用或删除工作区。
+`kander coordinator` is a single-shot controlled read/write entry point. It stores the facts needed for orchestration recovery; it neither runs the subscription loop, nor sends notifications, moves cards, changes Git refs, or deletes worktrees.
 
-## 存储、锁与授权
+## Storage, Locks, and Authorization
 
-当前记录位于 `kanban/.kander/groups/<group-id>/checkpoint.json`。每次实际更新同时发布不可覆盖的 `checkpoints/<revision>.json` 历史版本。两者使用 board 的同一 redo 事务，读者不暴露准备阶段的中间结果；崩溃后只有显式 `init` 完成事务。内容摘要发现意外损坏，不构成针对同用户恶意篡改的安全边界。
+The current record lives at `kanban/.kander/groups/<group-id>/checkpoint.json`. Each actual update simultaneously publishes a non-overwritable `checkpoints/<revision>.json` historical version. Both use board's same redo transaction, and readers are not exposed to the intermediate results of the preparation phase; after a crash, only an explicit `init` completes the transaction. The content digest detects accidental corruption; it is not a security boundary against malicious tampering by the same user.
 
-锁序为看板、排序 group_id、排序 task_id、短期 journal 锁。claim/reconcile 在看板排他锁内确认完整成员集合，避免发现成员与写入检查点之间出现拓扑变化；审核和派回控制组锁与成员锁一并声明。检查点 revision 独立于任务 revision，不因读取而递增，也不修改任务 revision。
+The lock order is board, sorted group_id, sorted task_id, then the short-lived journal lock. claim/reconcile confirms the complete member set inside the board's exclusive lock, avoiding topology changes between discovering members and writing the checkpoint; the review and dispatch control-group locks are declared together with the member locks. The checkpoint revision is independent of task revisions, does not increment because of reads, and does not modify task revisions.
 
-coordinator authority 包含 `owner`、`token`、`epoch`。新会话使用唯一 token 和既有编排授权依据，CAS 当前 checkpoint revision/epoch；只有一个竞争者成功。旧 epoch 即使拿到最新任务 revision 也不能写检查点。相同 claim JSON 重试不增加 epoch。该授权只覆盖检查点，不是任务接管、集成、通知或代收尾授权。
+The coordinator authority contains `owner`, `token`, and `epoch`. A new session uses a unique token and the existing orchestration authorization basis, and CASes the current checkpoint revision/epoch; only one contender succeeds. An old epoch cannot write the checkpoint even if it holds the latest task revision. Retrying with identical claim JSON does not increment the epoch. This authority covers only the checkpoint; it is not a task takeover, integration, notification, or wrap-up-on-behalf authorization.
 
-## 调用
+## Invocation
 
 ```text
 kander coordinator show 20260908-example-group
@@ -18,7 +18,7 @@ kander coordinator claim /absolute/claim.json
 kander coordinator reconcile /absolute/observations.json
 ```
 
-首次 claim 示例：
+First-claim example:
 
 ```json
 {
@@ -27,14 +27,14 @@ kander coordinator reconcile /absolute/observations.json
   "expected_epoch": 0,
   "owner": "coordinator-session",
   "token": "unique-session-token",
-  "basis": "用户已授权本组编排，记录对应决定",
+  "basis": "the user authorized orchestrating this group; the corresponding decision is recorded",
   "members": ["20260908-example-task"]
 }
 ```
 
-恢复会话先 show，填写实际 revision/epoch，并更换 token。不要通过不断 claim 抢占另一个活动编排者。成员集合固定；未知、遗漏或新增组内成员均明确拒绝，需要先处理实际契约变化。外部依赖组新增成员继续由 subscription 的动态展开协议处理，不冒充本组成员。
+A recovering session runs show first, fills in the actual revision/epoch, and switches to a new token. Do not preempt another active coordinator by claiming repeatedly. The member set is fixed; unknown, missing, or newly added in-group members are all explicitly refused, and the actual contract change must be handled first. New members of external dependency groups continue to be handled by subscription's dynamic-expansion protocol and do not masquerade as members of this group.
 
-reconcile 使用 show 返回的 authority，成员键必须完整，每个 revision 来自最新 `show --json`。下面的 SHA、revision、ID 仅示意，不能作为真实证据：
+reconcile uses the authority returned by show; the member keys must be complete, and each revision comes from the latest `show --json`. The SHAs, revisions, and IDs below are illustrative only and cannot serve as real evidence:
 
 ```json
 {
@@ -57,40 +57,40 @@ reconcile 使用 show 返回的 authority，成员键必须完整，每个 revis
 }
 ```
 
-未完成派回不传 delivery_commit；完成时必须与同 ID、同 epoch 的原子 completed 回执一致。输入不能凭卡态、事件时间或相似 SHA 推断通过。未绑定 dispatch 的首次交付允许单独提供 delivery_commit，但必须处于 review、卡片已记录任务分支，并提供绝对 `cwd` 核对实际本地任务分支 HEAD；这只记录交付，不证明组分支已接收。
+An unfinished dispatch does not pass delivery_commit; on completion it must match the atomic completed receipt of the same ID and same epoch. Input cannot be inferred as passing from card state, event times, or similar-looking SHAs. A first delivery without a bound dispatch may provide delivery_commit on its own, but the card must be in review, the card must already record the task branch, and an absolute `cwd` must be provided to check the actual local task-branch HEAD; this only records the delivery and does not prove the group branch has received it.
 
-## 同一事实对账
+## Reconciliation over the Same Facts
 
-初始 snapshot、task-update、state-change、heartbeat/attention 和订阅重启都使用同一入口。事件只触发重新读取；不持久化订阅进程的 sequence，不要求看到 review-working 边沿。
+The initial snapshot, task-update, state-change, heartbeat/attention, and subscription restarts all use the same entry point. Events only trigger re-reads; the subscription process's sequence is not persisted, and seeing a review-working edge is not required.
 
-每个成员保存已观察 revision、执行周期、卡态事实、交付 SHA、dispatch ID/epoch/base/revision 和 pending confirmation/delivery/wrap-up，以及相对 intent/integration/专用授权引用。审核部分保存 plan ID、batch ID、run 相对引用及既有验证器的结构进度。失败审核引用 output.raw，不补造 report.md。检查点不复制审核正文，不替作者写处置，不产生语义 PASS。
+Each member stores the observed revision, execution cycle, card-state facts, delivery SHA, dispatch ID/epoch/base/revision and pending confirmation/delivery/wrap-up, plus relative intent/integration/dedicated-authorization references. The review part stores the plan ID, batch ID, relative run references, and the existing validators' structural progress. A failed review references output.raw, without fabricating a report.md. The checkpoint does not copy review bodies, does not write dispositions on authors' behalf, and does not produce a semantic PASS.
 
-完整成员集合可包含尚未启动的 backlog/todo 卡；空 STARTED_AT 对应 `awaiting_start: true`。launcher 发布 working、OWNER/STARTED_AT 时只建立启动尝试，检查点保持未绑定周期及 `start_attempt` ID，直到受控成功原件存在。再次 claim 或错过 working/回滚快照均使用同一证据路径；结果确认可以发生在同一任务 revision 上，但仍受检查点 CAS、原件及任务事实校验。没有启动尝试原件的旧卡或显式 move --owner 继续按既有持久元数据核验；已有非空周期不能任意替换。旧 schema 1 中无等待标记的 backlog/todo 空周期、无审核/派回/交付游标仍可受控升级，旧历史不改写。
+The complete member set may include backlog/todo cards not yet started; an empty STARTED_AT corresponds to `awaiting_start: true`. When the launcher publishes working and OWNER/STARTED_AT, it only establishes a start attempt; the checkpoint keeps the cycle unbound along with the `start_attempt` ID until the controlled success artifact exists. Claiming again, and snapshots that missed working or the rollback, all use the same evidence path; result confirmation may happen at the same task revision, but is still subject to the checkpoint CAS and to artifact and task-fact validation. Old cards without a start-attempt artifact, and explicit move --owner, continue to be verified against the existing durable metadata; an existing non-empty cycle cannot be arbitrarily replaced. Old schema 1's backlog/todo empty cycles without the awaiting marker, and those without review/dispatch/delivery cursors, can still be upgraded under control; old history is not rewritten.
 
-启动原件由 board 的既有事务发布到 `.kander/groups/00000000-start-group/<task-id>/`：`current.json` 指向最新尝试，`<attempt-id>/pending.json` 保存不可变尝试，`result.json` 保存不可变 `succeeded` 或 `rolled-back` 结果。启动元数据与 pending 同事务；合法 launcher 回滚与 rolled-back 同事务。成功由 launch 在启动后调用 `board.ConfirmTaskStart`，只写结果原件，不改任务 revision/正文，允许执行者已经写新记录或进入 review。启动尝试 ID 与 revision 区分同一分钟内的重试，不能只比较 STARTED_AT。
+Start artifacts are published by board's existing transactions to `.kander/groups/00000000-start-group/<task-id>/`: `current.json` points to the latest attempt, `<attempt-id>/pending.json` stores the immutable attempt, and `result.json` stores the immutable `succeeded` or `rolled-back` result. The start metadata shares a transaction with pending; a legitimate launcher rollback shares a transaction with rolled-back. Success is recorded by launch calling `board.ConfirmTaskStart` after the launch: it writes only the result artifact, does not change the task revision/body, and allows the executor to have already written new records or entered review. The start-attempt ID and revision distinguish retries within the same minute; STARTED_AT alone must not be the only comparison.
 
-协调者遵守 board/group/task 锁序并消费这些原件；重试链每次必须有前次 rolled-back 结果。只看到元数据、缺成功结果或不确定退出时保持待启动，不推断交付或授权另一个执行者。受控回滚可撤销该尝试的临时观察；成功确认后拒绝回滚和任意周期替换。已确认事实或任务新记录不会因为失败的旧 launcher 被擦除。原件、current 指针或链缺失/损坏则显式停止；保留原件后删除指针不能降级成旧卡。成功结果写入中断时，沿既有事务恢复；如果尚未发布结果，保持未知，不能从外部窗口状态伪造成功。
+The coordinator follows the board/group/task lock order and consumes these artifacts; each step of a retry chain must have the previous attempt's rolled-back result. When only metadata is seen, the success result is missing, or the exit is uncertain, remain awaiting start; do not infer delivery or authorize another executor. A controlled rollback may retract that attempt's provisional observations; after success is confirmed, rollback and arbitrary cycle replacement are refused. Confirmed facts and new task records are not erased because of a failed old launcher. When the artifacts, the current pointer, or the chain are missing/corrupted, stop explicitly; deleting the pointer while keeping the artifacts cannot downgrade the card to an old card. When the success-result write is interrupted, recover along the existing transaction; if the result has not yet been published, remain unknown — success cannot be fabricated from external window state.
 
-accepted 或 completed 原件解除同轮待确认；只有 completed 及匹配交付才解除同轮待交付/收尾。执行端在 notify 返回前完成、同一扫描间隔内快速往返，或订阅/编排端重启后只见最终快照，均可恢复。重复相同观察会再次验证原件和实际 Git，保持 checkpoint revision 和事务数量不变。过期 revision、旧 epoch、错轮次、错交付保留原记录并报错。
+An accepted or completed artifact clears the same round's pending confirmation; only completed with a matching delivery clears the same round's pending delivery/wrap-up. Recovery works when the executor completes before notify returns, when a fast round trip happens within one scan interval, or when the subscription/orchestration side restarts and sees only the final snapshot. Repeating the same observation re-verifies the artifacts and the actual Git, keeping the checkpoint revision and transaction count unchanged. A stale revision, old epoch, wrong round, or wrong delivery keeps the original record and reports an error.
 
-确认期限来自 dispatch 原件，不能因其他事件或重启续期。heartbeat 表示订阅活着；alive 表示会话存在；任务 revision 与 dispatch receipt 才提供持久进展。无输出不触发重启，alive 不证明推进，超时不证明退出。入口不自动发送或恢复执行者。
+The confirmation deadline comes from the dispatch artifact and cannot be extended because of other events or restarts. heartbeat means the subscription is alive; alive means the session exists; only the task revision and the dispatch receipt provide durable progress. No output does not trigger a restart, alive does not prove progress, and a timeout does not prove exit. The entry point does not automatically send to or recover executors.
 
-## 收尾证据
+## Wrap-up Evidence
 
-board 复用 A/R 的原件、完整发布、角色要求、作者处置、批次前驱、机械修复、闭批与执行周期校验，再消费 dispatch 的 integration 绑定。launch 复用集成 Git 校验，并调用 review 的 `VerifyClosedReviewGit` 复核闭批中的实际祖先关系和机械变更摘要。依赖单向为 launch → review → board；board 不导入 review、launch 或 notify。
+board reuses the [Review disposition protocol](review-disposition.md)'s artifact, full-publication, role-requirement, author-disposition, batch-predecessor, mechanical-fix, batch-closure, and execution-cycle validation, then consumes the dispatch's integration binding. launch reuses the integration Git validation and calls review's `VerifyClosedReviewGit` to re-check the actual ancestry relationships and mechanical-change digests in the closed batch. The dependency is one-way: launch → review → board; board does not import review, launch, or notify.
 
-历史闭批不要求当前 HEAD 仍停留在该批提交。合法 rebase 仍由既有补丁对应证明校验；未声明的重写和不匹配的最终交付会失败。清理后原证据 CWD 不再存在时，可以传绝对 `cwd` 指向仍存在的仓库 worktree，重新证明原件中的同一组提交；不会改写原始路径或 SHA。
+A historical closed batch does not require the current HEAD to still sit on that batch's commits. A legitimate rebase is still validated by the existing patch-correspondence proof; undeclared rewrites and a mismatched final delivery fail. When the original evidence CWD no longer exists after cleanup, an absolute `cwd` pointing to a still-existing repository worktree may be passed to re-prove the same set of commits in the artifacts; the original paths and SHAs are not rewritten.
 
-completed fix 在批次 target 推进、增量复审闭批后仍可只读对账，包含尚未创建 wrap-up 的恢复窗口。历史路径核对成功 run、完整发布、前驱 lineage、assignment 和作者原件；不套用“闭批不可修改”的写入门禁。创建或发送 fix 仍要求开放批次和当前轮次，历史完成回执不恢复发送权限。重复对账重新核验所有原件，缺失或损坏时保留既有检查点并报错。
+A completed fix can still be reconciled read-only after the batch target advances and the incremental re-review batch closes, including the recovery window where the wrap-up has not yet been created. The historical path checks the successful run, full publication, predecessor lineage, assignment, and author artifacts; it does not apply the "closed batches are immutable" write gate. Creating or sending a fix still requires an open batch and the current round; a historical completion receipt does not restore send permission. Repeated reconciliation re-verifies all artifacts; when they are missing or corrupted, the existing checkpoint is kept and an error is reported.
 
-无 finding 成员只消费已发布原件，不为复制报告而派回。多卡部分归档时，按 task ID 在实际卡态定位相对附件；只有同轮 completed 且 `done` 或 `archived/RESULT: completed` 才完成该轮收尾。已完成卡不回退，集成不重做。
+Members with no findings only consume published artifacts; no dispatch is made just to copy reports. When some of multiple cards are archived, relative attachments are located by task ID under the actual card state; only a same-round completed together with `done` or `archived/RESULT: completed` finishes that round's wrap-up. Completed cards are not rolled back, and integration is not redone.
 
-代收尾只能消费 dispatch 专用 wrap-up-only 授权。对账本身不授予它。无 SESSION、投递未知、仍活动、非零返回、确认或租期超时均不独自证明退出；已确认退出也必须经原专用生产者隔离旧执行 epoch。原作者记录保持不变。
+Wrap-up on behalf can only consume the dispatch's dedicated wrap-up-only authorization. Reconciliation itself does not grant it. Missing SESSION, unknown delivery, still active, non-zero return, and confirmation or lease timeouts do not individually prove exit; even a confirmed exit must have the old execution epoch isolated by the original dedicated producer. The original author records remain unchanged.
 
-## 故障与平台边界
+## Failure and Platform Boundaries
 
-CLI 使用 30 秒 context，限制准备阶段的锁竞争、成员循环与 Git 验证。底层 OS 打开/读取及提交 redo 后的发布仍遵守已有事务边界，不能声称整个命令具有硬墙钟上界。取消不遗留等待锁的后台 worker；发布开始后保留可恢复原件，不做半途回滚猜测。
+The CLI uses a 30-second context, bounding the preparation phase's lock contention, member loop, and Git verification. Underlying OS opens/reads and the publish after the redo is committed still follow the existing transaction boundaries; the entire command cannot claim a hard wall-clock upper bound. Cancellation leaves no background workers waiting on locks; once publishing has begun, recoverable artifacts are kept, with no mid-way rollback guessing.
 
-EOF/输出错误后，对当前事实做一次重新对账；事实有效时只重建一次订阅。只有明确的 `board.transaction_pending` 才按维护前提显式 init 一次再读取；仍失败即报告。duplicate、reparse、真实损坏或未知产物立即保留证据；不能删除、改名或无限重试。锁期限耗尽是暂时无法观察，不是任务失败。
+After EOF/output errors, re-reconcile the current facts once; when the facts are valid, rebuild the subscription only once. Only an explicit `board.transaction_pending` warrants, under the maintenance premise, one explicit init followed by another read; if it still fails, report. duplicate, reparse, real corruption, or unknown products immediately preserve evidence; they must not be deleted, renamed, or retried indefinitely. Lock-deadline exhaustion is a temporary inability to observe, not a task failure.
 
-测试分别覆盖 board 结构/事务、真实本机 Git、隔离子进程 kill、假终端/Agent。原生 Windows 和真实 tmux/herdr/Agent 会话需单独实测；交叉构建及假 CLI 不替代实机通过。原始复现与回归映射见[复现验收映射](recovery-regressions.md)。
+Tests separately cover board structure/transactions, real local Git, isolated child-process kills, and fake terminals/Agents. Native Windows and real tmux/herdr/Agent sessions require separate on-machine testing; cross builds and the fake CLI do not substitute for real-machine passes. For the original reproductions and regression mapping, see the [Reproduction acceptance mapping](recovery-regressions.md).

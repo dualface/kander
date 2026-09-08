@@ -1,8 +1,8 @@
-# 卡片事务、受控更新与恢复
+# Card Transactions, Controlled Updates, and Recovery
 
-任务 ID 是身份; 路径只是本次定位结果. `board` 在持锁期间重定位, 不将缓存路径用于异步完成后的无条件写入. 状态仍只由七个状态目录决定, 控制目录不保存第二份状态真相.
+The task ID is the identity; a path is only the result of this lookup. `board` relocates while holding the lock and does not use cached paths for unconditional writes after asynchronous completion. State is still determined solely by the seven state directories; the control directory keeps no second source of state truth.
 
-## 命令
+## Commands
 
 ```sh
 kander show --json <task-id>
@@ -14,45 +14,45 @@ kander move <task-id> archived --result cancelled --reason <reason> --decision <
 kander move <task-id> trash --result trashed --reason <reason> --decision <user-decision-reference>
 ```
 
-`show --json` 的对象包含 `entry` (TaskID/State/Path/Document/Kind)、`revision`、`operation_id`、`text`. 旧卡首次读取的 revision 为 0, 尚无操作 ID; 每次成功 mutation 增加 1, 新卡创建也计一次提交. 客户端不得以时间戳推导版本. 输入文件是独立的 UTF-8 文件, 不得直接编辑现存卡片后再调用 update.
+The `show --json` object contains `entry` (TaskID/State/Path/Document/Kind), `revision`, `operation_id`, and `text`. A legacy card reads as revision 0 on first read and has no operation ID yet; each successful mutation increments it by 1, and creating a new card also counts as one commit. Clients must not derive versions from timestamps. The input file is a standalone UTF-8 file; do not edit the existing card directly and then call update.
 
-新卡一律目录; small/large 都用 `--document spec.md`, 并可写普通附件. 旧文件卡只读, mutation 在副作用前要求先运行 init 迁移. 普通附件支持相对目录, 不支持路径逃逸、隐藏控制目录、大小写正文别名、尾随点/空格、符号链接或 reparse. `reviews/`、`dispatches/`、manifest/index/checkpoint 等机器产物由专用生产者写入.
+New cards are always directories; both small and large use `--document spec.md` and may write ordinary attachments. Legacy file cards are read-only; mutations require running the init migration before any side effects. Ordinary attachments support relative directories, but not path escapes, the hidden control directory, case-variant body aliases, trailing dots/spaces, symbolic links, or reparse points. Machine artifacts such as `reviews/`, `dispatches/`, and manifest/index/checkpoint files are written by dedicated producers.
 
-全文更新保留 LANGUAGE、受管身份/时间/结果字段及机器索引. TASK_BRANCH、IMPLEMENTATION、SUMMARY 可通过正文更新. todo 之后的契约、任务组、依赖及 SIZE 不得任意修改; 退回 backlog 也不会解除冻结. 显式用户决定可用 `--contract-decision-file <UTF8-decision>` 在同一 expected revision 下修订, 正文的受保护 CONTRACT_DECISIONS 保存时间、决定原文和修改前后字段. 工具只记录依据, 不推断或验证用户意图.
+Full-text updates preserve LANGUAGE, the managed identity/time/result fields, and the machine index. TASK_BRANCH, IMPLEMENTATION, and SUMMARY may be updated through the body. After todo, the contract, task group, dependencies, and SIZE must not be modified arbitrarily; moving back to backlog does not lift the freeze either. An explicit user decision may revise them with `--contract-decision-file <UTF8-decision>` under the same expected revision; the protected CONTRACT_DECISIONS section of the body stores the time, the original decision text, and the fields before and after the change. The tool only records the basis; it does not infer or validate user intent.
 
-手工认领的 `--owner` 同时写 OWNER/STARTED_AT. 完成时先 update summary/report, 再 move done --result completed; RESULT/FINISHED_AT 和状态原子提交. 终止需要 result、reason、decision; duplicate 还需要 `--duplicate-of`. done 到 archived 的 completed 也需要用户决定引用. move 可加 `--expect-revision`.
+A manual claim's `--owner` writes OWNER/STARTED_AT together. On completion, first update the summary/report, then move done --result completed; RESULT/FINISHED_AT and the state commit atomically. Termination requires result, reason, and decision; duplicate additionally requires `--duplicate-of`. Moving completed from done to archived also requires a user decision reference. move accepts `--expect-revision`.
 
-## 锁与跨包 API
+## Locks and Cross-Package API
 
-控制文件位于 `kanban/.kander/`, 不随卡移动:
+Control files live in `kanban/.kander/` and do not move with cards:
 
-- `locks/board.lock`: 普通读写共享; new、move、迁移和恢复独占.
-- `locks/<group-id>.lock`, `locks/<task-id>.lock`: 先排序组 ID, 再排序任务 ID. 读者共享, 写者独占. 锁文件是稳定 inode/句柄, 不替换、不删除.
-- `locks/journal.lock`: 在看板/组/任务锁之后短暂取得; 全局日志枚举和读取共享, prepared/committed 原子发布、分区迁移与保留清理独占. 锁覆盖临时文件创建至所有读写句柄关闭; 持此锁时不再取得看板/组/任务锁.
-- `versions/<task-id>.json`: `{revision, operation_id, contract_frozen}`. 旧卡缺文件等价于 revision 0.
-- `operations/pending/<operation-id>.json`: 写前持久记录；提交完成后原子移入 `operations/committed/`，记录字段和前后镜像不变。正常读盘只解析 pending 和尚未分拣的旧根目录记录，不打开 committed 内容；仍枚举各分区，检查文件名、对象类型、重复 ID 和 reparse。
-- `groups/<group-id>/...`: 后续生产者的组控制文档; 不作为任务卡扫描.
+- `locks/board.lock`: shared for ordinary reads and writes; exclusive for new, move, migration, and recovery.
+- `locks/<group-id>.lock`, `locks/<task-id>.lock`: sort group IDs first, then task IDs. Readers share, writers are exclusive. Lock files are stable inodes/handles, never replaced or deleted.
+- `locks/journal.lock`: acquired briefly after the board/group/task locks; shared for global journal enumeration and reads, exclusive for atomic prepared/committed publication, partition migration, and retention cleanup. The lock covers from temporary-file creation until all read/write handles are closed; while holding this lock, no board/group/task locks are acquired.
+- `versions/<task-id>.json`: `{revision, operation_id, contract_frozen}`. A legacy card with the file missing is equivalent to revision 0.
+- `operations/pending/<operation-id>.json`: a durable record written before the writes; after the commit completes, it is atomically moved into `operations/committed/`, with the record fields and before/after images unchanged. Normal disk reads parse only pending records and legacy root-directory records not yet sorted into partitions, and do not open committed content; they still enumerate each partition, checking file names, object types, duplicate IDs, and reparse points.
+- `groups/<group-id>/...`: group control documents for later producers; not scanned as cards.
 
-POSIX 以 flock 实现共享/独占; Windows 以 LockFileEx 实现, 新锁和控制文件通过 internal/fs 在创建时获得私有权限/DACL. 路径逐分量验证, 锁句柄持有到提交/读取结束. 异步 Agent/终端操作不长时间占用文件锁.
+POSIX implements shared/exclusive locking with flock; Windows implements it with LockFileEx, and new locks and control files receive private permissions/DACLs at creation through internal/fs. Paths are validated component by component, and lock handles are held until the commit/read finishes. Asynchronous Agent/terminal operations do not hold file locks for long periods.
 
-`ScanWithWarnings` / `ReadSnapshotWithWarnings` 接受操作级 `WarningLog`，将日志提示收集为去重消息，不在持锁时执行外部回调。返回 Entry 的版本游标继续携带该日志，后续读取、启动迁移、元数据回写、成功原件和失败回滚使用同一收集器。默认入口保持 CLI stderr 提示；BoardPayload/TaskPayload 通过可选 `warnings` 字段、launch Start/PreviewStart 通过 Warnings 返回消息，由 TUI 通知栏、确认框及 pendingWork 的结果展示，后台调用不直接写终端。
+`ScanWithWarnings` / `ReadSnapshotWithWarnings` accept an operation-level `WarningLog`, collect log notices as deduplicated messages, and do not run external callbacks while holding locks. The version cursor of a returned Entry continues to carry that log; subsequent reads, launch migration, metadata write-back, successful original-artifact writes, and failure rollback use the same collector. Default entry points keep the CLI stderr notices; BoardPayload/TaskPayload return messages through the optional `warnings` field and launch Start/PreviewStart through Warnings, displayed by the TUI notification bar, confirmation dialogs, and pendingWork's result display; background calls do not write to the terminal directly.
 
-`board.ReadSnapshot(root,id)` 返回一致正文、位置、版本. `Scan`/`ScanTargets` 返回带操作局部版本游标的 Entry; `ReadDocument` 拒绝失效 Entry. `MoveEntry` 和 window 的兼容函数保留调用形式, 但写入要求有效 Entry 版本游标; 手工构造 Entry 不构成写入授权.
+`board.ReadSnapshot(root,id)` returns a consistent body, location, and version. `Scan`/`ScanTargets` return Entries carrying operation-local version cursors; `ReadDocument` rejects stale Entries. `MoveEntry` and window's compatibility functions keep their call forms, but writes require a valid Entry version cursor; a hand-constructed Entry does not constitute write authorization.
 
-`board.WithTransaction(root, LockScope, callback)` 是多文件生产者入口. LockScope 一次声明 Tasks、Groups、ExclusiveBoard、ReadOnly. callback 内只使用 Transaction 方法, 不嵌套调用会重新取得锁的 board API:
+`board.WithTransaction(root, LockScope, callback)` is the multi-file producer entry point. LockScope declares Tasks, Groups, ExclusiveBoard, and ReadOnly in one go. Inside the callback, use only Transaction methods; do not nest calls to board APIs that would re-acquire locks:
 
-- `Snapshot` / `Expect`: 持锁重定位, 校验状态与预期 revision.
-- `Read` / `Put`: 读取同一已提交快照, 暂存正文或附件. 同一个事务的每个文件只暂存一次, 每张卡的 revision 只增加一次.
-- `ReadGroup` / `PutGroup`: 受声明组锁保护的控制文件; 生产者验证自身 schema 和预期文档版本.
-- `Relocate`: 在 ExclusiveBoard 下暂存状态目录改名.
+- `Snapshot` / `Expect`: relocate while holding locks, validating the state and the expected revision.
+- `Read` / `Put`: read the same committed snapshot; stage a body or an attachment. Each file in one transaction is staged only once, and each card's revision increases only once.
+- `ReadGroup` / `PutGroup`: control files protected by the declared group locks; the producer validates its own schema and the expected document version.
+- `Relocate`: stage a state-directory rename under ExclusiveBoard.
 
-Put 可以创建附件的父目录, 但不创建现存任务的根目录. 专用生产者可写受管目录, update 命令则执行额外的正文/附件保护. callback 返回错误时尚未发布任何数据. 多任务锁排序避免反向批量写入死锁; 长期审核只在发布时短暂取得这些锁.
+Put may create an attachment's parent directories, but does not create the root directory of an existing task. Dedicated producers may write managed directories, while the update command applies additional body/attachment protection. When the callback returns an error, no data has been published yet. Multi-task lock ordering avoids reverse-order bulk-write deadlocks; long-running reviews acquire these locks only briefly at publication time.
 
-`window.WriteDocument` 委托 `board.WriteManagedDocument`; launch 失败时 `RollbackDocument` 在一个事务内恢复原文与原状态. 操作游标只随自身成功写入推进. 新执行记录、迁移或另一个命令使 revision 变化时, 旧回滚显式冲突, 不覆盖新内容、不复活旧路径. 后续执行轮次协议可在 Expect 基础上增加持久 epoch; 本层的当前并发令牌为 revision 和预期状态.
+`window.WriteDocument` delegates to `board.WriteManagedDocument`; on launch failure, `RollbackDocument` restores the original text and original state within a single transaction. The operation cursor advances only with its own successful writes. When a new execution record, a migration, or another command changes the revision, the old rollback conflicts explicitly; it does not overwrite the new content and does not resurrect old paths. A later execution-round protocol may add a durable epoch on top of Expect; this layer's current concurrency tokens are the revision and the expected state.
 
-## 恢复格式与可见性
+## Recovery Format and Visibility
 
-schema 1 操作记录包含:
+A schema 1 operation record contains:
 
 ```json
 {
@@ -67,30 +67,30 @@ schema 1 操作记录包含:
 }
 ```
 
-`files.before` 缺失表示只创建; 有值表示必须存在且与旧内容匹配. 文件内容按字符串保存, JSON 对任意 UTF-8 文本转义. `entries` 的 from/to 为看板相对路径, kind 为旧 schema 1 的物理形态编码 (small 表示文件、large 表示目录), 不是 Entry.Kind 的任务规模; 无 from 表示 new, text 保存创建正文或移动后的预期正文. 所有路径必须属于记录列出的任务/组.
+A missing `files.before` means create-only; a present value means the file must exist and match the old content. File contents are stored as strings, with JSON escaping arbitrary UTF-8 text. In `entries`, from/to are board-relative paths, and kind is the legacy schema 1 physical-form encoding (small means file, large means directory), not the task size of Entry.Kind; a missing from means new, and text stores the creation body or the expected body after the move. All paths must belong to the tasks/groups listed in the record.
 
-提交顺序: prepared 记录写入 pending 并持久化; 附件目录; 文件; 入口创建/迁移; versions; 在 journal 独占锁内原子改写 committed 标记，再原子移入 committed 分区。在改写 phase 后、改名之前中断时，pending 内的 committed 记录表示数据和版本已提交，init 只完成改名，不重新应用旧镜像。 文件和版本通过 internal/fs 原子替换, 创建通过只创建语义, 改名拒绝既有目标. 本阶段的恢复测试针对进程 kill/restart; 不宣称提供任意硬件掉电后的文件系统持久性保证.
+Commit order: the prepared record is written to pending and persisted; attachment directories; files; entry creation/migration; versions; the committed marker is atomically rewritten under the journal exclusive lock, then the record is atomically moved into the committed partition. When interrupted after the phase rewrite but before the rename, a committed record inside pending means the data and versions are already committed; init only completes the rename and does not re-apply the old images. Files and versions are atomically replaced through internal/fs, creation uses create-only semantics, and renames reject existing targets. Recovery testing at this stage targets process kill/restart; it does not claim to provide filesystem durability guarantees after arbitrary hardware power loss.
 
-持锁读者不会见到正在发布的多文件中间态. 若进程中断并释放锁, prepared 记录让读命令报告明确的待恢复错误. 读者不自动修复. Scan/ScanTargets 在同一锁内捕获入口和正文; list/TUI/订阅/依赖检查通过 Board.Document 消费已提交快照, 不因随后发生的迁移混用新路径与旧正文, 不返回部分成员集. 新扫描仍对未完成事务显式失败. `kander init` 取得看板独占锁后按记录完成重做; 已完成的步骤用匹配的内容/版本确认, 未完成步骤继续, 恢复可重复执行. 未知版本、内容冲突、重复入口和 reparse 均失败关闭, 保留现场. 新卡已建立目录但缺 spec 时, 仅在有效创建记录下补完正文.
+Readers holding locks never see the in-flight multi-file intermediate state. If the process is interrupted and releases its locks, the prepared record makes read commands report an explicit pending-recovery error. Readers do not repair automatically. Scan/ScanTargets capture entries and bodies within the same lock; list/TUI/subscription/dependency checks consume committed snapshots through Board.Document, do not mix new paths with old bodies because of a migration that happens afterwards, and do not return partial member sets. A new scan still fails explicitly on unfinished transactions. `kander init` acquires the board exclusive lock and then completes the redo according to the record; already-completed steps are confirmed by matching content/versions, unfinished steps continue, and recovery is repeatable. Unknown versions, content conflicts, duplicate entries, and reparse points all fail closed and preserve the scene. When a new card's directory has been created but the spec is missing, the body is completed only under a valid creation record.
 
-目录迁移在同一 schema 1 记录中增加 `purpose: "migration"` 及 `migrations: [{from,to,before,after,rewrite,original}]`; 暂存目录为 `.kander/migrations/<operation-id>/<task-id>/`. rewrite/original 是由操作 ID 绑定的明确临时替换与原文备份名称; 缺这两项的 schema 1 记录按相同固定命名协议解释. 恢复仅接受完整原文及 After 的精确前缀, 不采用随机命名的未知残留. 带有对应操作暂存目录（包括空父目录）的已提交记录始终保留供核验; 未登记产物报错保留. 新记录使用 `link_relocation: true`, 同一记录的 migrations 包含整批旧文件映射, files 包含已有目录 spec/Markdown 附件的 SIZE 与链接调整; 每张变化卡片登记一次 revision. 发布前及恢复前重新按原文与已登记映射核对 After, 禁止混入其他正文修改. 无该标记的旧 schema 1 记录保留原 SIZE-only 计划语义. 维护窗口、恢复顺序与边界见 [目录卡迁移](directory-cards.md).
+Directory migration adds `purpose: "migration"` and `migrations: [{from,to,before,after,rewrite,original}]` to the same schema 1 record; the staging directory is `.kander/migrations/<operation-id>/<task-id>/`. rewrite/original are the explicit temporary-replacement and original-text-backup names bound by the operation ID; schema 1 records missing these two fields are interpreted under the same fixed naming protocol. Recovery accepts only the complete original text and exact prefixes of After, and does not adopt randomly named unknown residue. Committed records that have a corresponding operation staging directory (including empty parent directories) are always retained for verification; unregistered artifacts error out and are retained. New records use `link_relocation: true`; the migrations of one such record contain the whole batch's legacy-file mapping, and files contain the SIZE and link adjustments for existing directories' spec/Markdown attachments; each changed card registers one revision. Before publication and before recovery, After is re-verified against the original text and the registered mapping; mixing in other body modifications is forbidden. Legacy schema 1 records without this flag keep the original SIZE-only plan semantics. For the maintenance window, recovery order, and boundaries, see [Directory cards](directory-cards.md).
 
-## 日志分区迁移与保留
+## Journal Partition Migration and Retention
 
-旧布局 `operations/<operation-id>.json` 仍按内容解析全部未分拣记录，绝不凭文件名假定已提交，并提示运行 `kander init`。init 在看板独占锁及既有维护窗口下先检查全量记录和迁移暂存证据，再按 phase 逐条改名分区，随后恢复 prepared 记录。存在旧布局记录且看板有 working/review 卡时，须先暂停所有写者，再用 `init --maintenance` 确认。改名不改记录字节或修改时间；中断后按实际分区继续，重复执行报告分拣 0 条。跨分区重复 ID、未知文件/目录、非法名称和 reparse 均失败关闭并保留现场。仅符合内部原子写入命名的普通临时文件被忽略并保留。旧二进制不认识分区目录，升级前须协调停写，不可混用新旧写者。
+Under the legacy layout `operations/<operation-id>.json`, all unsorted records are still parsed by content, never assumed committed based on the file name, and a prompt to run `kander init` is given. Under the board exclusive lock and the existing maintenance window, init first checks the full record set and the migration staging evidence, then renames records into partitions one by one according to phase, and afterwards recovers prepared records. When legacy-layout records exist and the board has working/review cards, all writers must be paused first, then confirmed with `init --maintenance`. Renaming does not change record bytes or modification times; after an interruption, it continues from the actual partitions, and repeated execution reports 0 records sorted. Duplicate IDs across partitions, unknown files/directories, illegal names, and reparse points all fail closed and preserve the scene. Only ordinary temporary files matching the internal atomic-write naming are ignored and retained. Old binaries do not recognize the partition directories; coordinate a write stop before upgrading, and do not mix old and new writers.
 
-每次提交成功后及 init 恢复完成后，持 journal 独占锁执行 best-effort 清理。常量 `committedJournalRetention = 100` 保留最近 100 条已提交记录，以限制常态存储与目录扫描成本，同时保留近期诊断历史。最近以文件修改时间降序确定，相同时间按文件名降序打破平局；旧记录分拣保留原时间。另保留 `.kander/migrations/<operation-id>` 仍存在的所有对应记录（包括带 Migrations 的恢复核验原件），因此有迁移暂存证据时总数可超过 100。清理只读取安全句柄的文件元数据，不解析 redo 镜像；删除仅作用于 committed，绝不删除 pending 或旧根目录记录。单文件删除可中断重试，无需新增恢复格式。清理失败仅警告，已提交结果与命令退出码不变；init 的记录完整性与恢复错误仍正常失败。
+After each successful commit and after init recovery completes, best-effort cleanup runs under the journal exclusive lock. The constant `committedJournalRetention = 100` keeps the most recent 100 committed records, to bound steady-state storage and directory-scan cost while retaining recent diagnostic history. Recency is determined by file modification time in descending order, with ties at the same time broken by file name in descending order; sorting legacy records preserves their original times. Additionally, all records whose `.kander/migrations/<operation-id>` still exists are retained (including recovery-verification original artifacts carrying Migrations), so the total can exceed 100 when migration staging evidence is present. Cleanup reads only file metadata through safe handles and does not parse redo images; deletion applies only to committed, never to pending or legacy root-directory records. Single-file deletion can be interrupted and retried, with no new recovery format needed. A cleanup failure only warns; the committed result and the command exit code are unchanged; init's record-integrity and recovery errors still fail as usual.
 
-## 验证与能力边界
+## Validation and Capability Boundaries
 
-测试覆盖同 ID 并发 new、update/move 竞争、反向批量锁、并发追加、跨文件与组控制发布、原文回滚与新 revision 竞争、旧路径小卡复活回归、受管字段与正文别名、生命周期和用户批准的契约修订. 子进程在 prepared、附件目录、首文件、全部文件、rename、revision、committed、phase 改写后归档前、日志分拣和清理边界被 kill, 重启后验证恢复与读者隔离.
+Tests cover concurrent new with the same ID, update/move races, reverse-order bulk locks, concurrent appends, cross-file and group-control publication, original-text rollback racing a new revision, regressions for resurrecting old-path small cards, managed fields and body aliases, lifecycle, and user-approved contract revisions. Child processes are killed at the prepared, attachment-directory, first-file, all-files, rename, revision, committed, after-phase-rewrite-before-archiving, journal-sorting, and cleanup boundaries, and recovery and reader isolation are verified after restart.
 
-事务保护遵守命令协议的本机进程, 不隔离任意直接改文件的进程. 升级时协调旧 Agent/旧二进制停写, 再启用受控入口. `guard-write` 只在检查瞬间给出提示, 不能把外部编辑与检查变成一个事务. 发现真实重复时保留双方、显式报错; 工具不会猜主副本或自动删除.
+Transactions protect local processes that follow the command protocol; they do not isolate arbitrary processes that modify files directly. When upgrading, coordinate a write stop for old Agents/old binaries before enabling the controlled entry points. `guard-write` only gives a notice at the instant of the check; it cannot turn an external edit plus the check into one transaction. When a genuine duplicate is found, both copies are kept and an explicit error is reported; the tool does not guess which is the primary copy or delete automatically.
 
-## 审核原件发布
+## Review Original-Artifact Publication
 
-审核归档复用本协议。`Transaction.PutBytes` 允许专用生产者无损保存二进制附件；spec.md 仍要求 UTF-8。非法 UTF-8 的 FileChange 在 JSON 日志中采用 `binary: true`、`before_bytes`/`after_bytes`（base64）；文本记录保持既有格式。恢复解码后通过相同 fs 原子写入执行，创建与替换语义不变。运行、批次与逐卡清单见 [审核证据](review-evidence.md)。
+Review archiving reuses this protocol. `Transaction.PutBytes` lets dedicated producers store binary attachments losslessly; spec.md still requires UTF-8. A FileChange with invalid UTF-8 uses `binary: true` and `before_bytes`/`after_bytes` (base64) in the JSON journal; text records keep the existing format. After decoding, recovery executes through the same fs atomic writes, with creation and replacement semantics unchanged. For runs, batches, and per-card manifests, see [Review evidence archive](review-evidence.md).
 
-## 持久派回授权
+## Durable Dispatch Authorization
 
-绑定 dispatch 的正文与附件 update 还须携带 `--dispatch-id` 和 `--execution-epoch`；当前 revision 不能替代执行授权。WINDOW/launch 回滚同时校验操作局部版本和授权，接受/完成回执与 state/revision 共用本文件的事务。意图和回执原件由 board producer 管理，普通 update 不得改写；命令及恢复见 [持久派回协议](durable-dispatch.md)。
+Body and attachment updates bound to a dispatch must additionally carry `--dispatch-id` and `--execution-epoch`; the current revision cannot substitute for execution authorization. WINDOW/launch rollback validates both the operation-local version and the authorization, and accept/complete receipts share this document's transactions with state/revision. Intent and receipt original artifacts are managed by the board producer and must not be rewritten by ordinary update; for commands and recovery, see [Durable dispatch protocol](durable-dispatch.md).

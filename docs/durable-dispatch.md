@@ -1,8 +1,8 @@
-# 持久派回协议
+# Durable Dispatch Protocol
 
-派回身份由 `dispatch_id` 决定，不由终端回显或栏目变化推断。`prepared` 仅证明意图已经落盘；发送前进入 `delivery-unknown`。只有执行端的受控 `move working` 才生成 `accepted`；`move review` 或 `move done` 将业务回执、卡片状态和 revision 在同一事务中提交。
+Dispatch identity is determined by `dispatch_id`, not inferred from terminal echo or column changes. `prepared` only proves the intent has been persisted to disk; before sending it enters `delivery-unknown`. Only the executor side's controlled `move working` produces `accepted`; `move review` or `move done` commits the business receipt, card state, and revision in the same transaction.
 
-## 创建、读取和重试
+## Creation, Reading, and Retry
 
 ```sh
 kander notify <task-id> --kind fix --base <40-character-SHA> \
@@ -12,19 +12,19 @@ kander resume <task-id> --dispatch-id <id> --message-file <same-UTF8-file>
 kander dispatch show <task-id> <id>
 ```
 
-`kind` 为 `fix`、`sync` 或 `wrap-up`。任务组的 review 卡自动使用持久模式，省略 kind 时为 fix；working 卡或无组卡通过显式 `--kind` / `--dispatch-id` / `--base` 选择持久模式。省略 ID 时，在任何发送前生成并输出。新意图缺 base 时使用当前工作目录的 Git HEAD；重试缺 base/kind 时使用原意图，不能使用新 HEAD 替换原基线。
+`kind` is `fix`, `sync`, or `wrap-up`. Review cards in a task group automatically use durable mode, defaulting to fix when kind is omitted; working cards or cards without a group opt into durable mode via an explicit `--kind` / `--dispatch-id` / `--base`. When the ID is omitted, it is generated and printed before any send. A new intent missing base uses the Git HEAD of the current working directory; a retry missing base/kind uses the original intent, and must not replace the original baseline with a new HEAD.
 
-调用方也可先准备 UTF-8 JSON，再执行 `kander dispatch prepare <intent.json>`。字段为 `dispatch_id`（可省略）、`task_id`、`kind`、`message`、`base`、可选 `references`、`created_at` 和 `confirm_by`。每个引用用 `{ "task_id": "...", "path": "reviews/run/report.md" }` 表达，不保存状态目录绝对路径。通用 `references` 仍只表示附件位置，不能代替下面必需的 `evidence.fix` / `evidence.wrap_up` 语义绑定。新 fix/wrap-up 在缺少绑定时拒绝创建及发送；sync 不接受这两类绑定。历史无绑定意图仍可读取、对账，不补造审核或集成证据，不能继续用作新的 fix/wrap-up 发送。
+The caller may also prepare UTF-8 JSON first, then run `kander dispatch prepare <intent.json>`. The fields are `dispatch_id` (optional), `task_id`, `kind`, `message`, `base`, optional `references`, `created_at`, and `confirm_by`. Each reference is expressed as `{ "task_id": "...", "path": "reviews/run/report.md" }`; absolute state-directory paths are not stored. The generic `references` still only indicates attachment locations and cannot substitute for the required `evidence.fix` / `evidence.wrap_up` semantic bindings below. A new fix/wrap-up without a binding is refused at creation and at send; sync does not accept either of these bindings. Historical unbound intents can still be read and reconciled, without fabricating review or integration evidence, and cannot continue to be sent as new fix/wrap-up dispatches.
 
-同 ID、同任务、同消息、同基线、同 kind/引用重复创建不会写第二份意图，也不增加卡片 revision。不同输入明确冲突。时间默认值仅在首次创建时应用；省略时间的重试保留原值。`confirm_by` 是接受期限，默认创建后 120 秒，notify/resume 的新意图使用本次 `--timeout`。它不是工作完成期限；已接受工作可以在该期限之后完成。
+Repeated creation with the same ID, same task, same message, same baseline, and same kind/references does not write a second intent and does not increment the card revision. Different inputs conflict explicitly. Time defaults are applied only at first creation; a retry omitting times keeps the original values. `confirm_by` is the acceptance deadline, defaulting to 120 seconds after creation; new intents from notify/resume use this invocation's `--timeout`. It is not a work-completion deadline; accepted work may complete after that deadline.
 
-读者先查看持久回执。已有 accepted/completed 时直接返回，不重复发送或启动。没有回执时，同 ID 重试重新采集事实：对当前唯一、可接收的同一会话可再次发送同 ID 指令；只有身份有效的 stopped 观测允许恢复原会话。unknown、失效观测、缺身份和 busy 不授权恢复。发送调用报错也可能已经送出，保留 delivery-unknown 和消息文件，不紧接着再启恢复实例。恢复启动一旦尝试把命令交给 Agent，后续启动、标记或存活校验失败也保留该窗口、WINDOW 和任务文件；它可能已经接受工作，不能盲目清理。创建占位容器但尚未尝试发送时仍可清理本次资源。期限到期返回非零，不重置期限、不声称 accepted。
+Readers check the durable receipt first. When accepted/completed already exists, return it directly without re-sending or re-launching. When there is no receipt, a same-ID retry re-collects the facts: the same-ID instruction may be re-sent to the currently unique, receivable same session; only a stopped observation with valid identity permits recovering the original session. unknown, invalidated observations, missing identity, and busy do not authorize recovery. A send call that reports an error may still have delivered; keep delivery-unknown and the message file, and do not launch a recovery instance right afterwards. Once a recovery launch has attempted to hand the command to the Agent, keep the window, WINDOW, and task files even if subsequent launch, marking, or liveness verification fails; it may have already accepted the work and must not be blindly cleaned up. When a placeholder container was created but no send has been attempted, this attempt's resources may still be cleaned up. Deadline expiry returns non-zero, does not reset the deadline, and does not claim accepted.
 
-显式 `resume --agent` 延用既有用户授权接管语义。对一个未终结 dispatch 接管时增加执行 epoch，保存上一 epoch 的原始状态和回执，原消息、基线、确认期限不变。不能以相同 ID 偷换接管消息；需要新消息或已经过期时，调用方先明确处置旧意图，再创建新 ID。取消/失败意图入口为 `kander dispatch cancel|fail <task-id> <dispatch-id> <dispatch-revision> <reason>`；它记录派回处置，不取消、归档或移动任务卡，不自动授权接管。
+An explicit `resume --agent` carries over the existing user-authorized takeover semantics. Taking over a non-terminal dispatch increments the execution epoch and preserves the previous epoch's original state and receipts; the original message, baseline, and confirmation deadline are unchanged. The takeover message cannot be swapped in under the same ID; when a new message is needed or the intent has already expired, the caller first explicitly disposes of the old intent, then creates a new ID. The entry point for canceling/failing an intent is `kander dispatch cancel|fail <task-id> <dispatch-id> <dispatch-revision> <reason>`; it records the dispatch disposition, does not cancel, archive, or move the task card, and does not automatically authorize takeover.
 
-## fix 审核原件绑定
+## fix Review Artifact Binding
 
-`notify` / `resume` 的 `--evidence-file` 读取严格 JSON。`dispatch prepare` 则将同一对象放在意图的 `evidence` 字段。示例中的 ID 和提交必须来自真实审核及 assignment；以下仅展示字段形状。
+The `--evidence-file` of `notify` / `resume` reads strict JSON. `dispatch prepare` instead places the same object in the intent's `evidence` field. The IDs and commits in the example must come from a real review and assignment; the following only shows the field shape.
 
 ```json
 {
@@ -48,13 +48,13 @@ kander dispatch show <task-id> <id>
 }
 ```
 
-创建时校验 batch 当前 target 等于派回 base、run 属于该 batch/任务且已完整发布、run 的前驱 ID 相同、finding 属于结构化 blocking/high/medium 条目且已显式 assignment 给本卡。前驱轮已被后继 run 替代时不能再派它。每次实际发送前重新读取原件，在创建发送尝试的事务中复核，不依赖过期卡片路径。跨卡副本、assignment、映射、作者处置及报告哈希沿用审核模块的结构校验。
+Creation validates that the batch's current target equals the dispatch base, that the run belongs to that batch/task and is fully published, that the run's predecessor ID matches, and that the finding is a structured blocking/high/medium item with an explicit assignment to this card. A predecessor round already superseded by a successor run can no longer be dispatched. Before each actual send, the original artifacts are re-read and re-checked within the transaction that creates the send attempt, without relying on stale card paths. Cross-card copies, assignments, mappings, author dispositions, and report hashes follow the review module's structural validation.
 
-`authors` 引用本条目及显式 finding lineage 上已经存在的所有本卡作者原件，保留各自作者、run/finding、record ID 和相对路径。尚未产生的本轮处置不要求提前提交；没有旧处置时可省略 authors。创建后出现的新处置不会改写原 dispatch 绑定。同 ID 重试建议省略 evidence-file，直接承接原绑定；提供不同绑定会冲突。缺原件、冒用作者、任意跨轮引用都拒绝。旧无结构报告只能先走审核的 `map-legacy` 显式映射，再 assignment；不会从正文提及的 ID 猜测 finding。
+`authors` references all of this card's author artifacts that already exist for this item and its explicit finding lineage, preserving each one's author, run/finding, record ID, and relative path. This round's dispositions that do not yet exist are not required to be submitted in advance; when there are no prior dispositions, authors may be omitted. New dispositions appearing after creation do not rewrite the original dispatch binding. A same-ID retry should omit the evidence-file and inherit the original binding directly; providing a different binding conflicts. Missing artifacts, impersonated authors, and arbitrary cross-round references are all refused. Legacy unstructured reports must first go through the review's `map-legacy` explicit mapping, then assignment; findings are not guessed from IDs mentioned in the body text.
 
-## wrap-up 集成绑定与专用授权
+## wrap-up Integration Binding and Dedicated Authorization
 
-普通 wrap-up 同样使用 evidence-file；字段为：
+An ordinary wrap-up likewise uses the evidence-file; the fields are:
 
 ```json
 {
@@ -65,17 +65,17 @@ kander dispatch show <task-id> <id>
       "target_commit": "<40-character-integrated-develop-SHA>",
       "target_ref": "refs/remotes/origin/develop",
       "author": "coordinator",
-      "basis": "用户已授权集成，正常推送及本地同步完成"
+      "basis": "the user authorized integration; the normal push and local sync are complete"
     }
   }
 }
 ```
 
-工具从本卡已封闭审核计划读取原始 `review_base` 和最终 `review_target`，验证审核范围、source 为 target 的祖先、target 包含在指定 develop 引用中，并在验证结束复读引用以拒绝并发变化。默认还要求 source 等于已封闭的 review_target，不接受混入未审核提交。只接受 `refs/heads/develop` 或 `refs/remotes/origin/develop`；远端引用仅证明本地已获取的远端快照，编排端仍须先完成 fetch 和实际同步。不会自动 fetch、集成、删除工作区或确认用户授权。合法 rebase 重写提交时，可明确提供 `rebased_base`（重放前的新 develop 基线）。工具验证原始基线在新基线之前、新基线在 source 之前，并比较原始审核范围与重放范围的完整 Git 补丁。只归一化 blob 哈希和 hunk 行号偏移；保留空白、上下文、文件模式及二进制变化。不使用会忽略空白的 patch-id。补丁不一致则拒绝，须走既有冲突验证/审核流程；不凭描述认定 PR 合并或等价性。
+The tool reads the original `review_base` and final `review_target` from this card's closed review plan, validates the review range, that source is an ancestor of target, and that target is contained in the specified develop ref, and re-reads the ref at the end of validation to reject concurrent changes. By default it also requires source to equal the closed review_target, and does not accept unreviewed commits being mixed in. Only `refs/heads/develop` or `refs/remotes/origin/develop` are accepted; a remote ref only proves the locally fetched remote snapshot, and the orchestration side must still complete the fetch and actual sync first. It does not automatically fetch, integrate, delete worktrees, or confirm user authorization. When a legitimate rebase rewrites commits, `rebased_base` (the new develop baseline before replay) may be provided explicitly. The tool validates that the original baseline precedes the new baseline and the new baseline precedes source, and compares the full Git patches of the original review range and the replayed range. Only blob hashes and hunk line-number offsets are normalized; whitespace, context, file modes, and binary changes are preserved. A patch-id that ignores whitespace is not used. Mismatched patches are refused and must go through the existing conflict validation/review flow; PR merges or equivalence are not accepted on the basis of descriptions.
 
-`dispatch_id`、`task_id`、`verified_at`、`review_base`、`review_target` 及相对 `artifact` 由创建入口补全；显式提供的身份和审核目标仍须匹配。意图与 `dispatches/<id>/integration.json` 在同一事务中发布。board 只验证结构、审核目标和副本，不运行 Git；完整二进制的 launch 接入层验证真实 Git 关系。发送前再次验证；完成回执必须携带绑定的 source_commit，不允许替换为任意 SHA 或作者处置。绑定与卡片 move 无关。
+`dispatch_id`, `task_id`, `verified_at`, `review_base`, `review_target`, and the relative `artifact` are filled in by the creation entry point; explicitly provided identities and review targets must still match. The intent and `dispatches/<id>/integration.json` are published in the same transaction. board validates only structure, review targets, and copies, and does not run Git; the full binary's launch integration layer validates the real Git relationships. Validation runs again before sending; the completion receipt must carry the bound source_commit, and it cannot be replaced with an arbitrary SHA or author disposition. The binding is independent of card moves.
 
-原编排代收尾例外保留，但非零返回、无 SESSION、确认超时、期限届满都不能单独证明原执行者退出。先用同 ID 对账，再验证事实；只有已确认退出，或此前用户授权合法回收后再次确认 stopped，才能申请专用 epoch：
+The original orchestration wrap-up-on-behalf exception is preserved, but a non-zero return, a missing SESSION, a confirmation timeout, or deadline expiry cannot on its own prove the original executor has exited. Reconcile with the same ID first, then verify the facts; only a confirmed exit, or a stopped re-confirmed after a previous legitimate user-authorized reclaim, may request a dedicated epoch:
 
 ```sh
 kander dispatch show <task-id> <dispatch-id>
@@ -88,19 +88,19 @@ kander dispatch authorize-wrap-up <request.json>
   "dispatch_id": "wrap-one",
   "expected_revision": 2,
   "author": "coordinator",
-  "reason": "原执行者已退出，按既有例外代收尾"
+  "reason": "the original executor has exited; wrapping up on behalf under the existing exception"
 }
 ```
 
-`expected_revision` 是 dispatch revision。没有派回记录时，给请求附加完整 `intent`（kind 必须为 wrap-up，显式 ID/任务与外层一致）；先创建意图，再观测，不凭空授予权限。此前合法回收可另填 `reclaim_decision`，引用已存在的用户授权；此字段不触发回收，不替代 stopped 观测。缺 SESSION、unknown、alive/drifted 均拒绝；必须先通过既有授权流程建立可核验退出事实。工具不扩大接管权限，不因等待够久就推断同意。
+`expected_revision` is the dispatch revision. When there is no dispatch record, attach a complete `intent` to the request (kind must be wrap-up, and the explicit ID/task must match the outer fields); the intent is created first, then observed — permission is not granted out of thin air. A previous legitimate reclaim may additionally fill in `reclaim_decision`, referencing an already existing user authorization; this field does not trigger a reclaim and does not substitute for the stopped observation. Missing SESSION, unknown, and alive/drifted are all refused; a verifiable exit fact must first be established through the existing authorization flow. The tool does not broaden takeover permissions and does not infer consent from having waited long enough.
 
-代收尾入口在投递锁内先读取当前回执：completed 或同作者/原因已有专用 grant 直接对账，不重复授予。否则采集新的、与当前卡片身份一致的 stopped 观测，携带 card revision 与 dispatch revision 做 CAS。delivery-unknown/accepted 均必须经过这套核验；若并发接受或 WINDOW 变化，CAS 拒绝旧事实。授权事务先保存 `execution-<old-epoch>.json`，提高 epoch，并发布 `wrap-up-authority-<epoch>.json`；旧执行者不能借最新 revision 更新正文、WINDOW、作者处置或完成回执。新专用 grant 有独立 120 秒接受期限，原意图期限不改写；订阅所用 board 快照的 confirm_by 则输出当前 epoch 的实际接受期限，避免将刚授予的收尾权限误报过期。这不是以期限届满证明退出。
+The wrap-up-on-behalf entry point first reads the current receipts inside the delivery lock: completed, or an existing dedicated grant with the same author/reason, reconciles directly without granting again. Otherwise it collects a fresh stopped observation consistent with the current card identity, carrying the card revision and dispatch revision for CAS. delivery-unknown/accepted must both go through this verification; if a concurrent acceptance or WINDOW change occurs, the CAS rejects the stale facts. The authorization transaction first saves `execution-<old-epoch>.json`, raises the epoch, and publishes `wrap-up-authority-<epoch>.json`; the old executor cannot use the latest revision to update the body, WINDOW, author dispositions, or completion receipts. The new dedicated grant has its own independent 120-second acceptance deadline; the original intent's deadline is not rewritten. The confirm_by in the board snapshot used by subscription outputs the actual acceptance deadline of the current epoch, avoiding misreporting a just-granted wrap-up authority as expired. This is not proving exit by deadline expiry.
 
-拿到专用 grant 后按原子回执入口 `move working`，仅在 replayed=false 时开始清理。只允许用户已授权的清理和追加记录，不允许代码修改、Agent 启动、通知投递、升级普通接管授权、重写原作者 disposition 或运行时身份。普通 update 仅接受保留原 spec 全文后追加 `## WRAP_UP_RECORDS`，或首次写入 `wrap-up/<dispatch-id>-<epoch>.md`（相同内容重试可读写，不同内容不能覆盖）。原 OWNER、SESSION、既有作者记录保持不变，实际代办作者记录在 grant 中。完成仍走 done 的原门禁；不得用伪作者结论凑通过。
+After obtaining the dedicated grant, go through the atomic receipt entry point `move working`, and start cleanup only when replayed=false. Only user-authorized cleanup and appended records are allowed; code changes, Agent launches, notification delivery, escalating to an ordinary takeover authorization, rewriting the original author's dispositions, or rewriting runtime identity are not. Ordinary update accepts only appending `## WRAP_UP_RECORDS` while preserving the full original spec text, or the first write of `wrap-up/<dispatch-id>-<epoch>.md` (a retry with identical content may read and write; different content cannot overwrite). The original OWNER, SESSION, and existing author records remain unchanged; the actual on-behalf author is recorded in the grant. Completion still goes through done's original gates; fabricated author conclusions must not be used to scrape a pass.
 
-工作区清理后，同 ID 的已存意图/授权/回执对账不需要原 Git CWD 继续存在；继续发送或新授予仍必须重新验证 Git。专用授权只约束遵守受控入口的进程，不能阻止绕过工具直接编辑代码、操作 Git 或文件系统的本机进程；执行者必须遵守仅清理及记录的授权范围。
+After the worktree is cleaned up, reconciling already-stored intents/authorizations/receipts under the same ID does not require the original Git CWD to still exist; continuing to send, or granting anew, must still re-validate Git. The dedicated authorization only constrains processes that respect the controlled entry points; it cannot stop local processes that bypass the tool to edit code or operate on Git or the filesystem directly. The executor must respect the cleanup-and-records-only scope of the authorization.
 
-## 执行端原子回执
+## Executor-Side Atomic Receipts
 
 ```sh
 kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>
@@ -112,31 +112,31 @@ kander move <task-id> done --result completed --dispatch-id <id> \
   --execution-epoch <epoch> --delivery-commit <final-40-character-SHA>
 ```
 
-接受命令返回 JSON，包含 `dispatch` 和 `replayed`。只有 `replayed=false` 才开始本轮工作。重复接受返回原回执和 `replayed=true`，不重跑工作、不增加 revision；即使第一次接受后已经快速回到 review，仍然能确认该次接受。旧 ID/epoch 不能接受新轮，也不能用重新读取到的新 revision 绕过授权检查。
+The acceptance command returns JSON containing `dispatch` and `replayed`. Only `replayed=false` starts this round's work. A repeated acceptance returns the original receipt with `replayed=true`, without re-running the work or incrementing the revision; even if the card quickly moved back to review after the first acceptance, that acceptance can still be confirmed. An old ID/epoch cannot accept a new round, nor can a freshly re-read newer revision be used to bypass the authorization check.
 
-fix/sync 完成目标为 review，wrap-up 为 done。完整交付 SHA 必填；适用时带 disposition 相对附件路径，附件必须存在于本卡。这里证明引用随完成原子提交，不把引用或任意 SHA 声称为 Git 集成验证。done 仍经过原有摘要/报告、审核计划和闭批门禁。完成重试只有同目标、同证据才返回原回执。
+The completion target for fix/sync is review; for wrap-up it is done. The full delivery SHA is required; where applicable, include the disposition's relative attachment path, and the attachment must exist on this card. This proves the references are committed atomically with the completion; it does not claim the references or an arbitrary SHA as Git integration verification. done still goes through the original summary/report, review plan, and batch-closure gates. A completion retry returns the original receipt only with the same target and same evidence.
 
-审核作者的 disposition JSON 同样携带 `authorization: { "dispatch_id": "...", "epoch": 1 }`，防止旧执行者使用新 revision 提交处置；历史未绑定记录不新增该字段。fix 发送前验证下述原件与轮次绑定；仅收尾授权不能提交作者 disposition。
+A review author's disposition JSON likewise carries `authorization: { "dispatch_id": "...", "epoch": 1 }`, preventing an old executor from submitting dispositions with a new revision; historical unbound records do not gain this field. The stated artifact and round bindings are validated before a fix is sent; a wrap-up-only authorization cannot submit author dispositions.
 
-每卡只保留一个有效执行授权。新意图只能替换已完成、失败或取消的意图；显式接管可以轮换未终结意图的 epoch。普通 update 在接受前、结束后、缺 ID/epoch 或旧 epoch 时拒绝。WINDOW 和 launch/notify 回滚携带操作开始时的版本游标与授权，不能借用新执行轮的游标，也不能把已消费的旧正文写回。不会为整个 Agent 会话持有看板或卡片锁。明确携带 reason/decision 的 archive/trash 生命周期决定仍可操作绑定卡；未结束的授权在同一事务中取消，不能借此继续执行工作。
+Each card keeps only one valid execution authorization. A new intent can only replace a completed, failed, or canceled intent; an explicit takeover can rotate the epoch of a non-terminal intent. Ordinary update is refused before acceptance, after the end, with a missing ID/epoch, or with an old epoch. WINDOW and launch/notify rollbacks carry the version cursor and authorization from when the operation started; they cannot borrow a new execution round's cursor, nor write consumed old body text back. No kanban or card lock is held for the duration of an entire Agent session. archive/trash lifecycle decisions that explicitly carry reason/decision may still operate on a bound card; the unfinished authorization is canceled in the same transaction, and cannot be used to keep executing work.
 
-## 存储与恢复
+## Storage and Recovery
 
-`internal/board` 定义纯类型和受控 API；notify/launch/window 通过公开入口消费，不存在 board 到 notify 的依赖。
+`internal/board` defines pure types and the controlled API; notify/launch/window consume it through public entry points, and no board-to-notify dependency exists.
 
-- `dispatches/<id>/intent.json` 保存创建原件；`state.json` 保存当前版本。
-- `accepted-<epoch>.json` / `completed-<epoch>.json` 保存逐 epoch 原子回执；接管另存 `execution-<epoch>.json`。
-- `.kander/groups/00000000-dispatch-group/<id>.json` 是保留的全看板 ID 注册表，防止同 ID 被另一个任务复用。创建按看板、组、任务、短期 journal 锁排序。
-- 原件、状态和回执由专用 producer 管理，普通 update 拒绝改写。所有发布复用 S 的 redo journal 和 `internal/fs`，卡片移动后原件跟随卡片。
-- 每个 dispatch 有独立、由操作系统管理的投递锁，先于看板锁获取。它只覆盖发送/恢复和本次确认等待；回执写入不获取此锁。发送进程被杀后锁释放，不占据执行会话生命周期。进程创建、内核 I/O、锁等待和进程回收仍受操作系统约束。
-- 发布中断时，读者报告 pending，不读取中间态、不自动修复。按维护条件运行 `kander init` 重做事务，再以原 ID 对账。保留未知文件和冲突，不删除证据以凑成功。
+- `dispatches/<id>/intent.json` stores the creation artifact; `state.json` stores the current version.
+- `accepted-<epoch>.json` / `completed-<epoch>.json` store the per-epoch atomic receipts; a takeover additionally stores `execution-<epoch>.json`.
+- `.kander/groups/00000000-dispatch-group/<id>.json` is the reserved board-wide ID registry, preventing the same ID from being reused by another task. Creation orders locks as board, group, task, then the short-lived journal lock.
+- Artifacts, state, and receipts are managed by dedicated producers; ordinary update refuses to rewrite them. All publishing reuses the redo journal and `internal/fs` of [Card transactions](card-transactions.md), and after a card moves, the artifacts follow the card.
+- Each dispatch has an independent, OS-managed delivery lock, acquired before the board lock. It covers only send/recovery and this confirmation wait; receipt writes do not acquire this lock. The lock is released when the sending process is killed, and does not occupy the execution session's lifetime. Process creation, kernel I/O, lock waits, and process reaping remain subject to the operating system.
+- When publishing is interrupted, readers report pending, do not read intermediate state, and do not auto-repair. Run `kander init` under the maintenance conditions to redo the transaction, then reconcile with the original ID. Unknown files and conflicts are preserved; evidence is not deleted to manufacture success.
 
-P3 的批量 context 入口提供探测总预算（默认 10 秒），接受期限作为父 deadline；身份有效性由 `ValidFor` 校验。投递前再检查同一会话的 readiness；alive 与 ready、accepted、completed 分开。发送和确认等待共用持久期限。真实终端 marker 仅作为传输诊断；屏幕上出现提示文字不构成开工证据。
+The context entry point for batched liveness probing (see [Probe deadlines and cancellation](probe-deadlines.md)) provides a total probing budget (default 10 seconds), with the acceptance deadline as the parent deadline; identity validity is checked by `ValidFor`. Readiness of the same session is checked again before delivery; alive is separate from ready, accepted, and completed. Sending and the confirmation wait share the durable deadline. Real terminal markers serve only as transport diagnostics; prompt text appearing on screen does not constitute evidence of work having started.
 
-## 兼容与能力边界
+## Compatibility and Capability Boundaries
 
-未绑定模式的 working 普通消息、无组卡继续使用既有消息流程，不补造历史 accepted/completed 回执。绑定 working 卡的普通 notify 只允许直投信息，不通过旧模式恢复进程；resume 必须显式携带 dispatch ID。恢复启动成功且确认预算尚未耗尽时，resume 可返回真实的 delivery-unknown（尚未接受）状态；调用方仍须读取业务回执。确认预算耗尽时，重新读取后仍没有接受/完成回执必须返回非零 pending；foreground/console 仅存活不满足接受条件，未知执行者及载荷继续保留。foreground 的进程等待在释放投递锁后继续，不能以会话时长锁住同 ID 对账。持久模式优先于旧规则中把 review-working 栏目变化或终端 marker 当作确认的表述。已绑定卡不得用无授权 update/move 回到旧协议。旧二进制不认识本协议，升级/恢复时仍须遵守现有维护窗口规则；不得与绕过协议的旧写入者并行运行。
+Unbound-mode ordinary messages to working cards, and cards without a group, continue to use the existing message flow, without fabricating historical accepted/completed receipts. An ordinary notify to a bound working card allows only direct-delivery information and does not recover processes through the old mode; resume must explicitly carry the dispatch ID. When a recovery launch succeeds and the confirmation budget is not yet exhausted, resume may return a genuine delivery-unknown (not yet accepted) status; the caller must still read the business receipt. When the confirmation budget is exhausted and a re-read still finds no acceptance/completion receipt, a non-zero pending must be returned; mere foreground/console liveness does not satisfy the acceptance condition, and the unknown executor and payload remain preserved. foreground's process wait continues after the delivery lock is released, and cannot lock out same-ID reconciliation for the duration of the session. Durable mode takes precedence over the old rules' wording that treated review-working column changes or terminal markers as confirmation. A bound card must not return to the old protocol via unauthorized update/move. Old binaries do not understand this protocol; upgrade/recovery must still follow the existing maintenance-window rules, and must not run in parallel with old writers that bypass the protocol.
 
-保证限于遵守受控入口的本机进程：重复接受不会生成第二份回执；新 epoch 拒绝旧受控写入。磁盘协议不可能让任意 Git、网络、文件编辑等外部副作用 exactly-once。若执行者在接受后、外部操作中途死亡，已有 accepted 也不会被误当 completed；后续决策须重建实际工作进度，不能盲重放。
+The guarantees are limited to local processes that respect the controlled entry points: a repeated acceptance does not produce a second receipt; a new epoch rejects old controlled writes. An on-disk protocol cannot make arbitrary external side effects — Git, network, file edits — exactly-once. If the executor dies after acceptance, midway through an external operation, an existing accepted is not mistaken for completed; subsequent decisions must reconstruct the actual work progress and cannot blindly replay.
 
-Linux 回归使用临时目录、假 CLI 与子进程 kill/restart，覆盖意图创建、接受、review/done 完成、发送前后中断、同 ID 对账和并发回滚。Windows 交叉编译仅验证构建；原生 Windows 的锁/DACL/reparse/进程回收及真实 tmux/herdr/Agent 行为需要各自的实机证据。
+Linux regressions use temporary directories, a fake CLI, and child-process kill/restart, covering intent creation, acceptance, review/done completion, interruption before and after sending, same-ID reconciliation, and concurrent rollback. Windows cross-compilation only verifies the build; native Windows lock/DACL/reparse/process-reaping behavior and real tmux/herdr/Agent behavior each require their own on-machine evidence.

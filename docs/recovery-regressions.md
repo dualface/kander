@@ -1,50 +1,50 @@
-# 原始复现验收映射
+# Original Reproduction Acceptance Mapping
 
-2026-09-07 的 13 个调查测试在旧基线上断言坏行为成立。它们保留于本机任务证据，不是当前实现通过的依据。下表把每个原始名称映射到当前反向断言；同名 Audit 测试已改为要求修复后的结果。所有验证使用临时看板和测试仓库。
+The 13 investigation tests of 2026-09-07 asserted, on the old baseline, that the bad behavior held. They are retained in the local task evidence and are not a basis for the current implementation passing. The table below maps each original name to the current reversed assertion; same-named Audit tests have been changed to require the fixed result. All verification uses a temporary kanban board and a test repository.
 
-| 原始复现 | 当前测试位置与修复断言 |
+| Original reproduction | Current test location and fixed assertion |
 | --- | --- |
-| TestAuditRoundTripIsInvisible | liveness/subscribe_facts_test.go 同名用例要求 revision 更新可见；board/协调快照测试验证快速往返的同轮 completed，不依赖 working 边沿。 |
-| TestAuditChangesSuppressLiveness | liveness/subscribe_clock_test.go 同名用例要求持续状态变化仍产生独立心跳。 |
-| TestAuditReverseLookupErrorBecomesStopped | liveness/lookup_test.go 的 TestAuditReverseLookupErrorBecomesUnknown：反查失败保留 unknown。 |
-| TestAuditReviewHasNoLiveness | liveness/subscribe_dispatch_test.go 同名用例要求待确认 review dispatch 纳入观察。 |
-| TestAuditWatchedGroupMembershipIsFrozen | liveness/subscribe_facts_test.go 同名用例要求外部增卡重新展开。 |
-| TestAuditBlockedWriterIgnoresStop | liveness/subscribe_pipe_test.go 同名用例要求停止能中断阻塞写出并回收 worker。 |
-| TestAuditRefreshDurationOverflow | liveness/subscribe_clock_test.go 同名用例要求不可表示 duration 在访问看板前被拒绝。 |
-| TestAuditProbeBlocksScanAndCancellation | liveness/subscribe_runtime_test.go 同名用例要求慢探测不阻塞扫描，取消可回收。 |
-| TestAuditWatchedGroupSilentlyOmitsUnreadableMember | liveness/subscribe_facts_test.go 同名用例要求不完整成员事实显式失败。 |
-| TestAuditDescendantOutputOutlivesProbeDeadline | probe/run_test.go 同名用例要求处理继承管道后代和有界取消。 |
-| TestAuditPromptEchoCountsAsAcknowledgement | notify/dispatch_test.go 的 TestPromptEchoDoesNotCountAsAcknowledgement：仅回显不能成为 accepted。 |
-| TestAuditRollbackRecreatesMovedCard | window/window_test.go 的 TestRollbackNeverResurrectsMovedSmallCard：旧路径不存在、单一入口；TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback 保留新作者正文。 |
-| TestAuditGuardCheckDoesNotCoverLaterMove | board/coordinator_regression_test.go 同名用例：guard 仍仅辅助；其后移动并写入新作者记录，旧 revision 的受控 update 必须失败，不能复活旧路径。 |
+| TestAuditRoundTripIsInvisible | The same-named case in liveness/subscribe_facts_test.go requires revision updates to be visible; the board/coordinator snapshot test verifies same-round completed for a fast round trip, without depending on the working edge. |
+| TestAuditChangesSuppressLiveness | The same-named case in liveness/subscribe_clock_test.go requires continuous state changes to still produce independent heartbeats. |
+| TestAuditReverseLookupErrorBecomesStopped | TestAuditReverseLookupErrorBecomesUnknown in liveness/lookup_test.go: a reverse-lookup failure keeps unknown. |
+| TestAuditReviewHasNoLiveness | The same-named case in liveness/subscribe_dispatch_test.go requires a pending-confirmation review dispatch to be brought under observation. |
+| TestAuditWatchedGroupMembershipIsFrozen | The same-named case in liveness/subscribe_facts_test.go requires re-expansion when a card is added externally. |
+| TestAuditBlockedWriterIgnoresStop | The same-named case in liveness/subscribe_pipe_test.go requires stop to interrupt a blocked write-out and reap the worker. |
+| TestAuditRefreshDurationOverflow | The same-named case in liveness/subscribe_clock_test.go requires an unrepresentable duration to be rejected before the kanban board is accessed. |
+| TestAuditProbeBlocksScanAndCancellation | The same-named case in liveness/subscribe_runtime_test.go requires a slow probe not to block the scan and cancellation to be reapable. |
+| TestAuditWatchedGroupSilentlyOmitsUnreadableMember | The same-named case in liveness/subscribe_facts_test.go requires incomplete member facts to fail explicitly. |
+| TestAuditDescendantOutputOutlivesProbeDeadline | The same-named case in probe/run_test.go requires handling pipe-inheriting descendants and bounded cancellation. |
+| TestAuditPromptEchoCountsAsAcknowledgement | TestPromptEchoDoesNotCountAsAcknowledgement in notify/dispatch_test.go: an echo alone cannot become accepted. |
+| TestAuditRollbackRecreatesMovedCard | TestRollbackNeverResurrectsMovedSmallCard in window/window_test.go: the old path does not exist, single entry point; TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback preserves the new author body. |
+| TestAuditGuardCheckDoesNotCoverLaterMove | The same-named case in board/coordinator_regression_test.go: guard remains advisory only; after a subsequent move and a new author record written, a controlled update at the old revision must fail and cannot resurrect the old path. |
 
-协调快照测试的完整名称为 `TestCoordinatorSnapshotCompletesLostRoundTripOnce`，位置 `internal/board/coordinator_test.go`。表中各包路径相对 `internal/`。guard 与写入之间仍非原子；修复是使用受控 update，不是把 guard 的辅助检查宣称为事务。
+The full name of the coordinator snapshot test is `TestCoordinatorSnapshotCompletesLostRoundTripOnce`, located at `internal/board/coordinator_test.go`. Package paths in the table are relative to `internal/`. guard and the write are still not atomic; the fix is to use controlled update, not to claim guard's advisory check is a transaction.
 
-## 跨模块验收
+## Cross-Module Acceptance
 
-- `TestCoordinatorConcurrentClaimAndFencing`：双写者竞争，单一有效 coordinator epoch，相同 claim 重试及旧会话拒写。
-- `TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot`、`TestCoordinatorFirstStartRequiresPersistentFactsAndCAS`、`TestCoordinatorLegacyWaitingCursorAndIncompleteLaunch`：双卡含 todo、编排重启、首次启动及漏过 working、重复观察、历史保留；缺持久事实、旧 revision/CAS 和已绑定周期替换均拒绝；兼容旧等待游标及启动元数据尚未发布的中间快照。`TestCoordinatorReconcilesSequentialCommandStart` 使用真实 start 生产路径与隔离的假 tmux/Agent 验证顺序启动，不能算真实终端冒烟。
-- `TestCoordinatorRecoversStartRollbackAndRetry`：在真实 commandStart 的元数据提交后确定性对账，注入 launcher 失败并完成真实回滚；编排重启、显式或漏过回滚快照后再次启动，按成功原件恢复，重复对账幂等。终端/Agent 为隔离假实现。
-- `TestStartResultsFenceRetryAndPreserveTaskRevision`、`TestStartOriginalDamageStopsRecovery`、`TestConfirmedStartCannotBeRolledBackOrSilentlyReplaced`、`TestStartRollbackProofRevokesPrematureCursorAndAllowsManualClaim`、`TestStartSuccessAndRollbackHaveOneWinner`：启动期间首次 claim、同分钟旧尝试隔离、快速作者新记录/review 保留、成功与回滚互斥、各原件/指针缺失拒绝、已确认周期不可任意改写。
-- `TestCoordinatorKillRestartPreservesCommittedEpoch`：在意图发布前、prepared、history、checkpoint、committed 五个真实子进程 kill 边界恢复；不丢已提交版本，不增重复事务。
-- `TestCoordinatorSnapshotCompletesLostRoundTripOnce`：执行端/订阅端/编排端状态重建，快速完成、重复及重排观察，dispatch/卡片不被重写。
-- `TestCoordinatorRejectsUnprovenFactsWithoutWrites`、`TestCoordinatorMembershipAndCorruptionStop`：错 ID/epoch/base/delivery/revision、未知/新增组员、损坏与 reparse 不更新检查点。
-- `TestCoordinatorWrapUpRestartsAfterPartialArchive`：PM/QA 发布、缺角色不能闭批、无 finding 成员不造作者记录、多卡部分归档和完整原件消费；归档后损坏报告停止对账。
-- `TestCoordinatorAllFailedRolesRemainPending`：全失败保持 pending，引用真实 output.raw，不产生收尾派回。
-- `TestCoordinatorWrapUpRequiresGitAndDedicatedGrant`：结构层不假装 Git 验证，不从无 SESSION/未知投递/活动会话授予代办；只消费专用隔离 epoch。
-- `TestCoordinatorRechecksActualGitAfterWrapUpRestart`：真实 Git、同轮 done、旧 worktree 删除后的恢复、实际 develop 改为不相关历史时拒绝。
-- `TestCoordinatorCompletedFixSurvivesBatchAdvance`：同批 target 推进后，已完成 fix 仍验证历史原件；旧派回不可再次发送，删除作者原件则对账失败。
-- `TestCoordinatorCompletedFixSurvivesClosedBatchRestart`：fix 完成、PM 增量复审及 QA 通过并真实调用闭批生产者后，尚无 wrap-up 时从旧检查点恢复；重复对账不新增事务。创建/发送仍拒绝闭批；作者、报告、闭批发布或 assignment 缺失时拒绝且不改游标。此用例验证 board 结构契约，Git 事实使用既有结构夹具，不宣称运行了真实审核 Agent 或 Git 集成。
-- `TestCoordinatorAdvancesOnlyFromPersistedRoundAndEpoch`：漏过旧轮完成后消费持久终结事实；执行 epoch 变更要求真实隔离原件，缺失则拒绝。
-- `TestCoordinatorFirstDeliveryRequiresActualTaskHead`：首次交付 SHA 必须匹配卡片记录的实际任务分支 HEAD，不能凭输入造交付。
-- `TestDispositionCLIClosesOnlyCompleteRolesAtActualHead`：PM/QA 原件闭批后，较晚 HEAD 仍能验证同一历史闭批，取消不通过。
+- `TestCoordinatorConcurrentClaimAndFencing`: two writers racing, a single valid coordinator epoch, identical claim retry, and stale-session write rejection.
+- `TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot`, `TestCoordinatorFirstStartRequiresPersistentFactsAndCAS`, `TestCoordinatorLegacyWaitingCursorAndIncompleteLaunch`: two cards including todo, orchestration restart, first start and skipped working, duplicate observations, history retention; missing persistent facts, stale revision/CAS, and replacement of an already-bound cycle are all refused; compatible with the legacy waiting cursor and intermediate snapshots where the launch metadata is not yet published. `TestCoordinatorReconcilesSequentialCommandStart` verifies sequential launch using the real start production path with isolated fake tmux/Agent, and cannot count as a real terminal smoke test.
+- `TestCoordinatorRecoversStartRollbackAndRetry`: deterministic reconciliation after the real commandStart's metadata commit, injecting launcher failures and completing a real rollback; after orchestration restart and an explicit or skipped rollback snapshot, launching again recovers from the successful original artifacts, and repeated reconciliation is idempotent. The terminal/Agent are isolated fake implementations.
+- `TestStartResultsFenceRetryAndPreserveTaskRevision`, `TestStartOriginalDamageStopsRecovery`, `TestConfirmedStartCannotBeRolledBackOrSilentlyReplaced`, `TestStartRollbackProofRevokesPrematureCursorAndAllowsManualClaim`, `TestStartSuccessAndRollbackHaveOneWinner`: first claim during launch, same-minute stale-attempt isolation, preservation of a fast author's new records/review, mutual exclusion of success and rollback, refusal on any missing original artifact/pointer, and no arbitrary rewriting of a confirmed cycle.
+- `TestCoordinatorKillRestartPreservesCommittedEpoch`: recovery across five real subprocess kill boundaries — before intent publication, prepared, history, checkpoint, committed; no committed version is lost and no duplicate transaction is added.
+- `TestCoordinatorSnapshotCompletesLostRoundTripOnce`: state rebuild on the execution side/subscription side/orchestration side, fast completion, duplicate and reordered observations, dispatch/cards not rewritten.
+- `TestCoordinatorRejectsUnprovenFactsWithoutWrites`, `TestCoordinatorMembershipAndCorruptionStop`: wrong ID/epoch/base/delivery/revision, unknown/newly added group members, corruption and reparse do not update the checkpoint.
+- `TestCoordinatorWrapUpRestartsAfterPartialArchive`: PM/QA publication, no batch close with a missing role, no author record fabricated for a no-finding member, multi-card partial archive and full original-artifact consumption; a report corrupted after archiving stops reconciliation.
+- `TestCoordinatorAllFailedRolesRemainPending`: all failures stay pending, referencing the real output.raw, producing no wrap-up dispatch.
+- `TestCoordinatorWrapUpRequiresGitAndDedicatedGrant`: the structural layer does not pretend Git verification, and does not grant delegation from no SESSION/unknown delivery/an active session; it consumes only the dedicated isolated epoch.
+- `TestCoordinatorRechecksActualGitAfterWrapUpRestart`: real Git, same-round done, recovery after the old worktree is deleted, refusal when the actual develop is changed to unrelated history.
+- `TestCoordinatorCompletedFixSurvivesBatchAdvance`: after the same batch's target advances, a completed fix still verifies the historical original artifacts; the old dispatch cannot be sent again, and deleting the author's original artifacts fails reconciliation.
+- `TestCoordinatorCompletedFixSurvivesClosedBatchRestart`: after the fix completes, PM's incremental re-review and QA pass, and the batch-close producer is really invoked, recovery from an old checkpoint while there is no wrap-up yet; repeated reconciliation adds no transactions. Create/send still refuses batch close; a missing author, report, close publication, or assignment is refused without moving the cursor. This case verifies the board structural contract; the Git facts use the existing structural fixtures, and it does not claim to have run a real review Agent or Git integration.
+- `TestCoordinatorAdvancesOnlyFromPersistedRoundAndEpoch`: consuming persisted finalization facts after a skipped old round completes; an execution epoch change requires real isolated original artifacts and is refused when they are missing.
+- `TestCoordinatorFirstDeliveryRequiresActualTaskHead`: the first delivery SHA must match the actual task branch HEAD recorded on the card; a delivery cannot be fabricated from input alone.
+- `TestDispositionCLIClosesOnlyCompleteRolesAtActualHead`: after the batch closes with PM/QA original artifacts, a later HEAD can still verify the same historical batch close, and cancellation does not pass.
 
-## 原件与迁移专项复跑
+## Dedicated Reruns for Original Artifacts and Migration
 
-底层行为保持其原有归属，不复制实现或为同一断言新增平行测试。全量与定向验收继续运行：
+Low-level behavior keeps its original ownership; the implementation is not duplicated and no parallel tests are added for the same assertions. Full and targeted acceptance keeps running:
 
-- S/D：`TestCrashRestartRecoveryAndReadVisibility`、`TestMigrationKillRestart`、`TestMigrationLinkKillRestart`、`TestMigrationRecoveryAfterSecondCardPublishes`、`TestStaleRecoveryDoesNotOverwriteNewRevision`，验证事务/迁移重放、单一入口及新版本不丢失。
-- A/R：`TestReviewPublishFollowsMoveAndPreservesConcurrentBody`、`TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord`、`TestIncrementalIDsRequireActualPredecessorLineage`、`TestPlanExtensionUsesClosedCommitNotArbitraryRolePass`、`TestLegacyMappingRequiresOriginalLocations`、`TestMechanicalFixAndNonMechanicalRerunGate`，验证移动与 PM/QA 发布、缺作者、错前驱/跨批假接续、旧报告显式映射、机械修复。
-- N：`TestDispatchKillRecovery`、`TestDispatchFixBindingRelocatesAndReplays`、`TestDispatchWrapUpPublicAuthorizationReconcilesAndObserves`、`TestDispatchWrapUpGrantFencesAndRestrictsWrites`，验证稳定 ID、原子回执、原作者记录及代办四类状态。
+- Transactions and migration: `TestCrashRestartRecoveryAndReadVisibility`, `TestMigrationKillRestart`, `TestMigrationLinkKillRestart`, `TestMigrationRecoveryAfterSecondCardPublishes`, `TestStaleRecoveryDoesNotOverwriteNewRevision`, verifying transaction/migration replay, the single entry point, and that new revisions are not lost.
+- Review disposition: `TestReviewPublishFollowsMoveAndPreservesConcurrentBody`, `TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord`, `TestIncrementalIDsRequireActualPredecessorLineage`, `TestPlanExtensionUsesClosedCommitNotArbitraryRolePass`, `TestLegacyMappingRequiresOriginalLocations`, `TestMechanicalFixAndNonMechanicalRerunGate`, verifying moves with PM/QA publication, missing authors, wrong predecessors/fake cross-batch continuation, explicit mapping of legacy reports, and mechanical fixes.
+- Durable dispatch: `TestDispatchKillRecovery`, `TestDispatchFixBindingRelocatesAndReplays`, `TestDispatchWrapUpPublicAuthorizationReconcilesAndObserves`, `TestDispatchWrapUpGrantFencesAndRestrictsWrites`, verifying stable IDs, atomic receipts, original author records, and the four delegation states.
 
-验证报告必须给出实际运行命令、最终提交与测试计数。此映射是验收说明，不是独立 PASS 声明。POSIX 原生测试、Windows 交叉构建、Windows 原生运行、假终端、真实 tmux/herdr/Agent 冒烟分开报告；缺少环境时保留缺口。
+A verification report must give the actual commands run, the final commit, and the test counts. This mapping is an acceptance description, not an independent PASS claim. Native POSIX tests, Windows cross builds, native Windows runs, fake terminals, and real tmux/herdr/Agent smoke tests are reported separately; a missing environment is recorded as a gap.
