@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/focus"
 	"github.com/dualface/kander/internal/menu"
 )
 
@@ -40,6 +41,8 @@ type App struct {
 	GetBoard       func() (BoardPayload, error)
 	GetTask        func(string) (Task, error)
 	CopyFn         copyFn
+	FocusWindow    focusFn
+	focusRunning   bool
 	PersistColumns persistFn
 	Now            func() time.Time
 
@@ -143,6 +146,7 @@ func newApp(single bool, refresh int, ctx pageContext, getBoard func() (BoardPay
 		GetBoard:       getBoard,
 		GetTask:        getTask,
 		CopyFn:         copy,
+		FocusWindow:    focus.Window,
 		PersistColumns: persist,
 		Now:            time.Now,
 		Running:        true,
@@ -551,6 +555,8 @@ func (a *App) handleBoardKey(key string) {
 		a.Help = true
 	case "y":
 		a.copySelectedTaskID()
+	case "g":
+		a.focusSelectedTask()
 	case "enter":
 		a.openDetail()
 	}

@@ -97,7 +97,7 @@ func (s *shellOut) Run() error {
 
 type shellDoneMsg struct{}
 
-// workMsg carries the result of a background task (environment probing, environment checks).
+// workMsg carries the result of a background task (environment checks or terminal focus).
 type workMsg struct{ payload any }
 
 // program is the Bubble Tea shell of App: it only translates events and holds no UI logic.

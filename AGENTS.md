@@ -32,6 +32,7 @@
 | `internal/process`  | Agent CLI 解析, UTF-8 任务文件, argv/env 调用构造                         |
 | `internal/board`    | 看板定位, revision/CAS/多文件事务恢复, 受控更新与生命周期命令, 审核 run/batch 身份、原件、逐卡发布索引与完整性校验，dispatch 意图、审核原件绑定、epoch、仅收尾授权与原子回执，启动尝试与成功/回滚原件                 |
 | `internal/launch`   | start/resume, 接管启动, 存活确认与基于版本的失败回滚；编排 Git 对账单向复用 review，dispatch 的 Git 集成与退出事实校验                               |
+| `internal/focus`    | 只读消费卡片 WINDOW，复用 probe 探测并切换 herdr/tmux 焦点；由 TUI 异步调用 |
 | `internal/probe`    | herdr/tmux pane 事实采集                                                 |
 | `internal/liveness` | check 存活段, 会话反查及 subscribe JSON Lines 事件流                      |
 | `internal/notify`   | notify 直投, 忙/过期判断, resume 恢复与版本冲突处理                           |

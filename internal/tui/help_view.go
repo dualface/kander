@@ -30,6 +30,7 @@ func boardHelpGroups() []helpGroup {
 				{"Enter", t("tui.task_detail")},
 				{"/", t("tui.search_2")},
 				{"y", t("tui.copy_task_id")},
+				{"g", t("tui.focus_agent_window")},
 				{"- =", t("tui.columns_on_screen")},
 				{"a", t("tui.archived_columns")},
 				{"t", t("tui.cycle_theme")},

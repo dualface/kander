@@ -133,6 +133,11 @@ type doctorResult struct {
 
 // applyWork consumes the result of a background task; the Bubble Tea shell calls it on a workMsg.
 func (a *App) applyWork(payload any) tea.Cmd {
+	if result, ok := payload.(focusResult); ok {
+		a.focusRunning = false
+		a.showFocusNotice(result.message)
+		return nil
+	}
 	panel := a.Options
 	if panel == nil {
 		return nil
