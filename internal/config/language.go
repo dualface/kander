@@ -81,26 +81,45 @@ func explicitConfigLanguage(raw map[string]any) string {
 	return ""
 }
 
-// ConfiguredLanguage returns the language explicitly saved in a valid
-// config.json after applying the project overlay, otherwise an empty string.
-func ConfiguredLanguage() string {
+func configuredScopeObject() map[string]any {
 	path, err := ConfigPath()
 	if err != nil {
-		return ""
+		return nil
 	}
 	data, err := readConfigBytes(path)
 	if err != nil || data == nil {
-		return ""
+		return nil
 	}
 	raw, err := decodeJSON(data)
 	if err != nil {
-		return ""
+		return nil
 	}
 	obj, ok := asObject(raw)
 	if !ok {
-		return ""
+		return nil
 	}
 	if _, err := Validate(obj); err != nil {
+		return nil
+	}
+	return obj
+}
+
+// ConfiguredScopeLanguage returns the language explicitly saved in the
+// unmerged scope config.json. Write and edit paths use this so an overlay
+// language cannot be copied back into the scope file.
+func ConfiguredScopeLanguage() string {
+	obj := configuredScopeObject()
+	if obj == nil {
+		return ""
+	}
+	return explicitConfigLanguage(obj)
+}
+
+// ConfiguredLanguage returns the language explicitly saved in a valid
+// config.json after applying the project overlay, otherwise an empty string.
+func ConfiguredLanguage() string {
+	obj := configuredScopeObject()
+	if obj == nil {
 		return ""
 	}
 	_, overlayRaw, err := readOverlay("")

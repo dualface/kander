@@ -151,7 +151,7 @@ func (s *Session) prepare(configValid bool) error {
 	cfg.Rules = s.existing.Rules.Clone()
 	cfg.ReviewStages = cloneReviewStages(s.existing.ReviewStages)
 	if configValid {
-		if stored := config.ConfiguredLanguage(); stored != "" {
+		if stored := config.ConfiguredScopeLanguage(); stored != "" {
 			cfg.Language = stored
 		} else {
 			cfg.Language = config.ResolveLanguage()
@@ -159,7 +159,9 @@ func (s *Session) prepare(configValid bool) error {
 	} else {
 		cfg.Language = config.ResolveLanguage()
 	}
-	config.BindConfigLanguage(cfg)
+	// Panel copy follows the merged overlay language; the session value stays
+	// the unmerged scope language so Save cannot write overlay-only language back.
+	config.BindEffectiveLanguage()
 	s.Config = cfg
 	return nil
 }

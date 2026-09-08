@@ -109,6 +109,54 @@ func TestConfigUsesOverlayLanguage(t *testing.T) {
 	}
 }
 
+func TestSessionSaveLeavesOverlayLanguageIsolated(t *testing.T) {
+	h := newHarness(t)
+	h.installFake(false)
+	t.Setenv(config.EnvConfig, h.configPath)
+	h.writeConfig(defaultPayload(map[string]any{"kanban_agent": "codex", "language": "en"}))
+	repo := filepath.Join(h.root, "project")
+	initGitDir(t, repo)
+	overlay, original := writeOverlayFile(t, repo, map[string]any{"language": "ja"})
+	t.Chdir(repo)
+	t.Setenv("PATH", h.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	scope, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSession(scope, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.Language != "en" {
+		t.Fatalf("session language=%s", session.Config.Language)
+	}
+	if config.ConfiguredLanguage() != "ja" {
+		t.Fatalf("effective language=%s", config.ConfiguredLanguage())
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(overlay)
+	if err != nil || !bytes.Equal(data, original) {
+		t.Fatalf("overlay bytes changed: %s", data)
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.Language != "en" {
+		t.Fatalf("TUI session save wrote overlay language into the scope file: %s", scopeCfg.Language)
+	}
+	merged, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.Language != "ja" {
+		t.Fatalf("runtime merge lost overlay language: %s", merged.Language)
+	}
+}
+
 func TestDoctorRepairDoesNotWriteOverlayValues(t *testing.T) {
 	h := newHarness(t)
 	h.fakeCommand("claude", "")

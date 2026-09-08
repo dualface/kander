@@ -825,6 +825,9 @@ func TestConfiguredLanguageRequiresWelcomeAndKey(t *testing.T) {
 	if ConfiguredLanguage() != "en" {
 		t.Fatalf("got %q", ConfiguredLanguage())
 	}
+	if ConfiguredScopeLanguage() != "en" {
+		t.Fatalf("scope got %q", ConfiguredScopeLanguage())
+	}
 	delete(payload, "language")
 	data, _ = json.Marshal(payload)
 	if err := os.WriteFile(path, data, 0o600); err != nil {

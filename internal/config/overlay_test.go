@@ -403,6 +403,9 @@ func TestConfiguredLanguageUsesOverlay(t *testing.T) {
 	if ConfiguredLanguage() != "ja" {
 		t.Fatalf("overlay language=%q", ConfiguredLanguage())
 	}
+	if ConfiguredScopeLanguage() != "en" {
+		t.Fatalf("scope language accessor=%q", ConfiguredScopeLanguage())
+	}
 	scopeCfg, err := LoadScope(true)
 	if err != nil {
 		t.Fatal(err)
