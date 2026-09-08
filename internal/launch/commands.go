@@ -59,132 +59,25 @@ func selectTodo(b board.Board, task string) (board.Entry, error) {
 }
 
 func commandStart(root, agentOverride, launcherOverride, taskID string) error {
-	loaded, err := loadBoardFn(root)
-	if err != nil {
-		return err
-	}
-	entry, err := selectTodo(loaded, taskID)
-	if err != nil {
-		return err
-	}
-	cfg, err := loadEffective()
-	if err != nil {
-		return err
-	}
-	original, err := readDocumentFn(entry)
-	if err != nil {
-		return err
-	}
-	if err := board.ValidateMutable(entry, original); err != nil {
-		return err
-	}
-	if err := cfg.Rules.CheckTaskGroup(taskGroupFrom(original)); err != nil {
-		return err
-	}
-	agentName := agentOverride
-	if agentName == "" {
-		agentName, err = config.KanbanAgentFor(cfg, entry.Kind)
+	if taskID == "" {
+		loaded, err := loadBoardFn(root)
 		if err != nil {
 			return err
 		}
-	}
-	if !config.HasAgent(cfg, agentName) {
-		return launchError("launch.unsupported_agent", agentName)
-	}
-	launcher := launcherOverride
-	if launcher == "" {
-		launcher = cfg.Launcher
-	}
-	plan, err := prepareLaunch(launcher, parentDir(root), "start")
-	if err != nil {
-		return err
-	}
-	program, err := requireAgentProgram(agentName, cfg)
-	if err != nil {
-		return err
-	}
-	session, err := newAgentSession(agentName, program, cfg)
-	if err != nil {
-		return err
-	}
-	previous := map[string]struct{}{}
-	if config.AgentFor(cfg, agentName).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
-			for _, id := range sessions {
-				previous[id] = struct{}{}
-			}
+		entry, err := selectTodo(loaded, "")
+		if err != nil {
+			return err
 		}
+		taskID = entry.TaskID
 	}
-	window := ""
-	if plan.Launcher == "foreground" || plan.Launcher == "console" {
-		window = plan.Launcher
+	result, err := Start(root, agentOverride, launcherOverride, taskID)
+	for _, warning := range result.Warnings {
+		fmt.Fprint(os.Stderr, warning)
 	}
-	updated, err := startMetadata(original, agentName, session, window)
 	if err != nil {
 		return err
 	}
-	paths, err := currentInstallPaths()
-	if err != nil {
-		return err
-	}
-	body, err := startAgentPrompt(entry.TaskID, paths, taskGroupFrom(original), original)
-	if err != nil {
-		return err
-	}
-	taskFile, err := createTaskFile(body, "kander-"+entry.TaskID+"-start-")
-	if err != nil {
-		return err
-	}
-	taskFileHandedOff := false
-	defer func() {
-		if !taskFileHandedOff {
-			_ = removeTaskFile(taskFile)
-		}
-	}()
-	prompt := taskInstruction(t("launch.prompt.start_head", entry.TaskID), taskFile)
-	model := cfg.Models.Kanban[agentName]
-	args, err := agentArguments(agentName, model, entry.Kind, session, false, cfg)
-	if err != nil {
-		return err
-	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
-	if err != nil {
-		return err
-	}
-	moved, err := moveEntryFn(entry, root, "working")
-	if err != nil {
-		return err
-	}
-	name := windowName(entry, original)
-	paneCB := (func() (AgentSession, error))(nil)
-	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
-		paneCB = func() (AgentSession, error) {
-			if session.Reference != "" {
-				return session, nil
-			}
-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
-			if err != nil {
-				return AgentSession{}, err
-			}
-			return AgentSession{Agent: session.Agent, Reference: ref}, nil
-		}
-	}
-	loc := (func(LaunchOutcome) error)(nil)
-	if plan.Launcher == "herdr" || plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
-		loc = recordWindowLocation(root, plan, moved)
-	}
-	if err := writeDocumentFn(root, moved, updated); err != nil {
-		return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
-	}
-	outcome, err := launchAgent(plan, root, name, inv, loc, paneCB, &session)
-	if err != nil {
-		return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
-	}
-	taskFileHandedOff = true
-	if err = board.ConfirmTaskStart(root, moved); err != nil {
-		return err
-	}
-	return reportLaunch(t("launch.started"), moved, agentName, plan, outcome)
+	return reportLaunch(t("launch.started"), board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome)
 }
 
 func parentDir(p string) string {

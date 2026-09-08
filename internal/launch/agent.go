@@ -67,7 +67,11 @@ func launchAgent(
 			return LaunchOutcome{}, fail(err)
 		}
 		if agentSession != nil {
-			reportHerdrAgentSession(plan.HerdrBin, pane, *agentSession)
+			warn := plan.warning
+			if warn == nil {
+				warn = func(message string) { fmt.Fprint(os.Stderr, message) }
+			}
+			reportHerdrAgentSession(plan.HerdrBin, pane, *agentSession, warn)
 		}
 		return outcome, nil
 	}

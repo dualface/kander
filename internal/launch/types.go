@@ -43,6 +43,7 @@ func (s AgentSession) Render() string {
 
 // LaunchPlan is the result of the launcher preflight checks run before claiming; a failed check does not claim the card.
 type LaunchPlan struct {
+	warning        func(string)
 	Launcher       string
 	Project        string
 	Tmux           string

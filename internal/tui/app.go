@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/menu"
 )
 
@@ -31,20 +32,23 @@ type boardHit struct {
 }
 
 type App struct {
-	Width, Height  int
-	Model          *BoardModel
-	RefreshSecs    int
-	Theme          string
-	Columns        int
-	MinColumnWidth int
-	Context        pageContext
-	GetBoard       func() (BoardPayload, error)
-	GetTask        func(string) (Task, error)
-	CopyFn         copyFn
-	FocusWindow    focusFn
-	focusRunning   bool
-	PersistColumns persistFn
-	Now            func() time.Time
+	Width, Height     int
+	Model             *BoardModel
+	RefreshSecs       int
+	Theme             string
+	Columns           int
+	MinColumnWidth    int
+	Context           pageContext
+	GetBoard          func() (BoardPayload, error)
+	GetTask           func(string) (Task, error)
+	CopyFn            copyFn
+	FocusWindow       focusFn
+	PrepareStart      func(string) (startRequest, error)
+	StartTask         func(startRequest) (launch.StartResult, error)
+	StartConfirmation *startRequest
+	focusRunning      bool
+	PersistColumns    persistFn
+	Now               func() time.Time
 
 	Searching        bool
 	Detail           *Task
@@ -86,7 +90,7 @@ type App struct {
 
 // Update is the message entry point of App: the options panel takes over while open, otherwise the board and detail view handle it.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
-	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" {
+	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil {
 		a.Running = false
 		return nil
 	}
@@ -122,6 +126,9 @@ func (a *App) View() string {
 	case a.Options != nil:
 		box, popup := a.Options.view()
 		base = overlay(base, popup, box.X, box.Y, p)
+	case a.StartConfirmation != nil:
+		box, popup := a.renderStartConfirmation()
+		base = overlay(base, popup, box.X, box.Y, p)
 	case a.Help:
 		box, popup := a.renderHelp()
 		base = overlay(base, popup, box.X, box.Y, p)
@@ -147,6 +154,8 @@ func newApp(single bool, refresh int, ctx pageContext, getBoard func() (BoardPay
 		GetTask:        getTask,
 		CopyFn:         copy,
 		FocusWindow:    focus.Window,
+		PrepareStart:   prepareTaskStart,
+		StartTask:      runTaskStart,
 		PersistColumns: persist,
 		Now:            time.Now,
 		Running:        true,
@@ -555,6 +564,8 @@ func (a *App) handleBoardKey(key string) {
 		a.Help = true
 	case "y":
 		a.copySelectedTaskID()
+	case "s":
+		a.confirmSelectedStart()
 	case "g":
 		a.focusSelectedTask()
 	case "enter":
@@ -789,6 +800,10 @@ func (a *App) handleDetailKey(key string) {
 }
 
 func (a *App) HandleKey(key string) {
+	if a.StartConfirmation != nil {
+		a.handleStartConfirmation(key)
+		return
+	}
 	if key == "ctrl-c" {
 		a.Running = false
 		return

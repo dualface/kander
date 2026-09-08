@@ -146,13 +146,13 @@ func herdrPaneInfo(herdr, paneID string, timeout time.Duration) (map[string]any,
 	return pane, nil
 }
 
-func reportHerdrAgentSession(herdr, paneID string, session AgentSession) {
+func reportHerdrAgentSession(herdr, paneID string, session AgentSession, warn func(string)) {
 	if session.Reference == "" {
 		return
 	}
 	socketPath := strings.TrimSpace(os.Getenv("HERDR_SOCKET_PATH"))
 	if socketPath == "" {
-		os.Stderr.WriteString(t(
+		warn(t(
 			"launch.warning_failed_to_report_the_herdr_session_identity_herdr",
 		))
 		return
@@ -174,7 +174,7 @@ func reportHerdrAgentSession(herdr, paneID string, session AgentSession) {
 			sleepFn(d)
 		}
 	}
-	os.Stderr.WriteString(t(
+	warn(t(
 		"launch.warning_failed_to_report_the_herdr_session_identity", last.Error(),
 	))
 }

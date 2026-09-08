@@ -326,6 +326,9 @@ func (a *App) hitBoard(x, y int) *boardHit {
 }
 
 func (a *App) HandleMouse(x, y, bstate int) {
+	if a.StartConfirmation != nil {
+		return
+	}
 	if a.Help {
 		if mouseLeftClicked(bstate) {
 			a.Help = false
