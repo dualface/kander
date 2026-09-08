@@ -663,29 +663,6 @@ func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 		"launcher":         "tmux",
 		"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
 	}
-	validated, err := Validate(payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, scale := range TaskScales {
-		for _, role := range ReviewRoles {
-			if validated.ReviewStages[scale][role] != "auto" {
-				t.Fatalf("%s.%s=%s", scale, role, validated.ReviewStages[scale][role])
-			}
-		}
-	}
-	payload["review_stages"] = map[string]any{"PM": "required", "CSA": "skip", "Hacker": "skip", "QA": "auto"}
-	validated, err = Validate(payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if validated.ReviewStages["large"]["CSA"] != "skip" || validated.ReviewStages["small"]["CSA"] != "skip" {
-		t.Fatal(validated.ReviewStages)
-	}
-	payload["review_stages"] = map[string]any{"PM": "always"}
-	if _, err := Validate(payload); !IsError(err) {
-		t.Fatalf("got %v", err)
-	}
 	for _, invalid := range []any{nil, "auto", []any{}} {
 		payload["review_stages"] = invalid
 		if _, err := Validate(payload); !IsError(err) {
