@@ -67,7 +67,7 @@ func MigrateCards(root string, options InitOptions) (count int, err error) {
 			return count, kanbanError("board.migration_maintenance", strings.Join(active, ", "))
 		}
 	}
-	path := control(root, "operations", record.ID+".json")
+	path := control(root, "operations", "pending", record.ID+".json")
 	if err = validateRecord(root, &record); err != nil {
 		return count, err
 	}

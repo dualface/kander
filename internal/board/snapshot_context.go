@@ -83,7 +83,7 @@ func scanContext(ctx context.Context, root string, ids []string, dispatches bool
 	if err = journal.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
 		return b, err
 	}
-	records, readErr := readOperationRecords(root)
+	records, readErr := readPendingRecords(root)
 	if err = errors.Join(readErr, journal.close()); err != nil {
 		return b, err
 	}

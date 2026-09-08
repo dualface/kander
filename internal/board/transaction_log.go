@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	"github.com/dualface/kander/internal/fs"
 )
@@ -49,13 +48,16 @@ func pendingContext(ctx context.Context, root string, ids []string) error {
 	var records []OperationRecord
 	var err error
 	if ctx == nil {
-		records, err = operationRecords(root)
+		err = withJournalLock(root, true, func() error {
+			records, err = readPendingRecords(root)
+			return err
+		})
 	} else {
 		var locks lockSet
 		if err = locks.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
 			return err
 		}
-		records, err = readOperationRecords(root)
+		records, err = readPendingRecords(root)
 		err = errors.Join(err, locks.close())
 	}
 	if err != nil {
@@ -84,28 +86,15 @@ func operationRecords(root string) (records []OperationRecord, err error) {
 	return records, err
 }
 func readOperationRecords(root string) ([]OperationRecord, error) {
-	files, err := fs.ListDirectory(root, control(root, "operations"))
+	files, err := journalFiles(root)
 	if err != nil {
 		return nil, err
 	}
 	var records []OperationRecord
-	for _, f := range files {
-		if strings.HasPrefix(f.Name, ".") {
-			continue
-		}
-		if f.Kind != fs.KindFile || !strings.HasSuffix(f.Name, ".json") {
-			return nil, kanbanError("board.transaction_invalid", f.Name)
-		}
-		data, err := fs.ReadRegularFile(root, control(root, "operations", f.Name))
+	for _, file := range files {
+		r, err := readJournalRecord(root, file)
 		if err != nil {
 			return nil, err
-		}
-		var r OperationRecord
-		if err = json.Unmarshal(data, &r); err != nil {
-			return nil, err
-		}
-		if r.Schema != 1 || r.ID+".json" != f.Name || (r.Phase != "prepared" && r.Phase != "committed") {
-			return nil, kanbanError("board.transaction_invalid", f.Name)
 		}
 		records = append(records, r)
 	}

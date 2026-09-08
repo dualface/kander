@@ -137,7 +137,7 @@ func withTransaction(ctx context.Context, root string, scope LockScope, fn func(
 	if err = validateRecord(root, &tx.record); err != nil {
 		return err
 	}
-	path := control(root, "operations", id+".json")
+	path := control(root, "operations", "pending", id+".json")
 	if err = writeOperation(root, path, tx.record, false); err != nil {
 		return err
 	}

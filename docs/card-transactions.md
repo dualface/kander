@@ -28,9 +28,9 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <user-
 
 - `locks/board.lock`: 普通读写共享; new、move、迁移和恢复独占.
 - `locks/<group-id>.lock`, `locks/<task-id>.lock`: 先排序组 ID, 再排序任务 ID. 读者共享, 写者独占. 锁文件是稳定 inode/句柄, 不替换、不删除.
-- `locks/journal.lock`: 在看板/组/任务锁之后短暂取得; 全局日志枚举和读取共享, prepared/committed 原子发布独占. 锁覆盖临时文件创建至所有读写句柄关闭; 持此锁时不再取得看板/组/任务锁.
+- `locks/journal.lock`: 在看板/组/任务锁之后短暂取得; 全局日志枚举和读取共享, prepared/committed 原子发布、分区迁移与保留清理独占. 锁覆盖临时文件创建至所有读写句柄关闭; 持此锁时不再取得看板/组/任务锁.
 - `versions/<task-id>.json`: `{revision, operation_id, contract_frozen}`. 旧卡缺文件等价于 revision 0.
-- `operations/<operation-id>.json`: 写前持久记录, 完成后保留 committed 记录供诊断与恢复核验.
+- `operations/pending/<operation-id>.json`: 写前持久记录；提交完成后原子移入 `operations/committed/`，记录字段和前后镜像不变。正常读盘只解析 pending 和尚未分拣的旧根目录记录，不打开 committed 内容；仍枚举各分区，检查文件名、对象类型、重复 ID 和 reparse。
 - `groups/<group-id>/...`: 后续生产者的组控制文档; 不作为任务卡扫描.
 
 POSIX 以 flock 实现共享/独占; Windows 以 LockFileEx 实现, 新锁和控制文件通过 internal/fs 在创建时获得私有权限/DACL. 路径逐分量验证, 锁句柄持有到提交/读取结束. 异步 Agent/终端操作不长时间占用文件锁.
@@ -67,15 +67,21 @@ schema 1 操作记录包含:
 
 `files.before` 缺失表示只创建; 有值表示必须存在且与旧内容匹配. 文件内容按字符串保存, JSON 对任意 UTF-8 文本转义. `entries` 的 from/to 为看板相对路径, kind 为旧 schema 1 的物理形态编码 (small 表示文件、large 表示目录), 不是 Entry.Kind 的任务规模; 无 from 表示 new, text 保存创建正文或移动后的预期正文. 所有路径必须属于记录列出的任务/组.
 
-提交顺序: prepared 记录持久化; 附件目录; 文件; 入口创建/迁移; versions; committed 标记. 文件和版本通过 internal/fs 原子替换, 创建通过只创建语义, 改名拒绝既有目标. 本阶段的恢复测试针对进程 kill/restart; 不宣称提供任意硬件掉电后的文件系统持久性保证.
+提交顺序: prepared 记录写入 pending 并持久化; 附件目录; 文件; 入口创建/迁移; versions; 在 journal 独占锁内原子改写 committed 标记，再原子移入 committed 分区。在改写 phase 后、改名之前中断时，pending 内的 committed 记录表示数据和版本已提交，init 只完成改名，不重新应用旧镜像。 文件和版本通过 internal/fs 原子替换, 创建通过只创建语义, 改名拒绝既有目标. 本阶段的恢复测试针对进程 kill/restart; 不宣称提供任意硬件掉电后的文件系统持久性保证.
 
 持锁读者不会见到正在发布的多文件中间态. 若进程中断并释放锁, prepared 记录让读命令报告明确的待恢复错误. 读者不自动修复. Scan/ScanTargets 在同一锁内捕获入口和正文; list/TUI/订阅/依赖检查通过 Board.Document 消费已提交快照, 不因随后发生的迁移混用新路径与旧正文, 不返回部分成员集. 新扫描仍对未完成事务显式失败. `kander init` 取得看板独占锁后按记录完成重做; 已完成的步骤用匹配的内容/版本确认, 未完成步骤继续, 恢复可重复执行. 未知版本、内容冲突、重复入口和 reparse 均失败关闭, 保留现场. 新卡已建立目录但缺 spec 时, 仅在有效创建记录下补完正文.
 
-目录迁移在同一 schema 1 记录中增加 `purpose: "migration"` 及 `migrations: [{from,to,before,after,rewrite,original}]`; 暂存目录为 `.kander/migrations/<operation-id>/<task-id>/`. rewrite/original 是由操作 ID 绑定的明确临时替换与原文备份名称; 缺这两项的 schema 1 记录按相同固定命名协议解释. 恢复仅接受完整原文及 After 的精确前缀, 不采用随机命名的未知残留. 已提交记录及空的操作暂存父目录保留供核验; 未登记产物报错保留. 新记录使用 `link_relocation: true`, 同一记录的 migrations 包含整批旧文件映射, files 包含已有目录 spec/Markdown 附件的 SIZE 与链接调整; 每张变化卡片登记一次 revision. 发布前及恢复前重新按原文与已登记映射核对 After, 禁止混入其他正文修改. 无该标记的旧 schema 1 记录保留原 SIZE-only 计划语义. 维护窗口、恢复顺序与边界见 [目录卡迁移](directory-cards.md).
+目录迁移在同一 schema 1 记录中增加 `purpose: "migration"` 及 `migrations: [{from,to,before,after,rewrite,original}]`; 暂存目录为 `.kander/migrations/<operation-id>/<task-id>/`. rewrite/original 是由操作 ID 绑定的明确临时替换与原文备份名称; 缺这两项的 schema 1 记录按相同固定命名协议解释. 恢复仅接受完整原文及 After 的精确前缀, 不采用随机命名的未知残留. 带有对应操作暂存目录（包括空父目录）的已提交记录始终保留供核验; 未登记产物报错保留. 新记录使用 `link_relocation: true`, 同一记录的 migrations 包含整批旧文件映射, files 包含已有目录 spec/Markdown 附件的 SIZE 与链接调整; 每张变化卡片登记一次 revision. 发布前及恢复前重新按原文与已登记映射核对 After, 禁止混入其他正文修改. 无该标记的旧 schema 1 记录保留原 SIZE-only 计划语义. 维护窗口、恢复顺序与边界见 [目录卡迁移](directory-cards.md).
+
+## 日志分区迁移与保留
+
+旧布局 `operations/<operation-id>.json` 仍按内容解析全部未分拣记录，绝不凭文件名假定已提交，并提示运行 `kander init`。init 在看板独占锁及既有维护窗口下先检查全量记录和迁移暂存证据，再按 phase 逐条改名分区，随后恢复 prepared 记录。存在旧布局记录且看板有 working/review 卡时，须先暂停所有写者，再用 `init --maintenance` 确认。改名不改记录字节或修改时间；中断后按实际分区继续，重复执行报告分拣 0 条。跨分区重复 ID、未知文件/目录、非法名称和 reparse 均失败关闭并保留现场。仅符合内部原子写入命名的普通临时文件被忽略并保留。旧二进制不认识分区目录，升级前须协调停写，不可混用新旧写者。
+
+每次提交成功后及 init 恢复完成后，持 journal 独占锁执行 best-effort 清理。常量 `committedJournalRetention = 100` 保留最近 100 条已提交记录，以限制常态存储与目录扫描成本，同时保留近期诊断历史。最近以文件修改时间降序确定，相同时间按文件名降序打破平局；旧记录分拣保留原时间。另保留 `.kander/migrations/<operation-id>` 仍存在的所有对应记录（包括带 Migrations 的恢复核验原件），因此有迁移暂存证据时总数可超过 100。清理只读取安全句柄的文件元数据，不解析 redo 镜像；删除仅作用于 committed，绝不删除 pending 或旧根目录记录。单文件删除可中断重试，无需新增恢复格式。清理失败仅警告，已提交结果与命令退出码不变；init 的记录完整性与恢复错误仍正常失败。
 
 ## 验证与能力边界
 
-测试覆盖同 ID 并发 new、update/move 竞争、反向批量锁、并发追加、跨文件与组控制发布、原文回滚与新 revision 竞争、旧路径小卡复活回归、受管字段与正文别名、生命周期和用户批准的契约修订. 子进程在 prepared、附件目录、首文件、全部文件、rename、revision、committed 边界被 kill, 重启后验证恢复与读者隔离.
+测试覆盖同 ID 并发 new、update/move 竞争、反向批量锁、并发追加、跨文件与组控制发布、原文回滚与新 revision 竞争、旧路径小卡复活回归、受管字段与正文别名、生命周期和用户批准的契约修订. 子进程在 prepared、附件目录、首文件、全部文件、rename、revision、committed、phase 改写后归档前、日志分拣和清理边界被 kill, 重启后验证恢复与读者隔离.
 
 事务保护遵守命令协议的本机进程, 不隔离任意直接改文件的进程. 升级时协调旧 Agent/旧二进制停写, 再启用受控入口. `guard-write` 只在检查瞬间给出提示, 不能把外部编辑与检查变成一个事务. 发现真实重复时保留双方、显式报错; 工具不会猜主副本或自动删除.
 
