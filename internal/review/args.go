@@ -64,13 +64,8 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 		environment["CLAUDE_CONFIG_DIR"] = home
 		arguments = append([]string{
 			"--print", "--output-format", "json",
-			"--permission-mode", "plan",
-			"--tools", "Read,Grep,Glob",
-			"--disallowedTools", "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Task,TaskOutput,TaskStop,EnterPlanMode,ExitPlanMode,AskUserQuestion",
-			"--add-dir", ctx.root,
-			"--safe-mode",
-			"--disable-slash-commands",
-			"--no-session-persistence",
+			"--permission-mode", "bypassPermissions",
+			"--disallowedTools", "Edit,Write",
 		}, model...)
 		arguments = append(arguments, "--effort", settings.effort)
 		cwd = runtime

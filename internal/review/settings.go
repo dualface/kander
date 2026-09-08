@@ -140,7 +140,7 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
 			name: "Claude", prefix: "CLAUDE", executable: "claude", defaultModel: "opus",
 			reviewHome: getenvDefault("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")),
 			homeError:  "CLAUDE_CONFIG_DIR", output: "output.json",
-			inspection: "Use only the Read, Grep, and Glob tools to inspect code.",
+			inspection: "Use only read-only inspection: read, search, and shell commands that do not write. Never create, modify, or delete any file; the review gate fails if HEAD moves or the worktree is dirty.",
 		},
 		"grok": {
 			name: "Grok", prefix: "GROK", executable: "grok", defaultModel: "",

@@ -205,10 +205,12 @@ func TestWindowsClaudeIsolationArgv(t *testing.T) {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
 	argv := h.argv()
-	assertArg(t, argv, "--permission-mode", "plan")
-	assertArg(t, argv, "--tools", "Read,Grep,Glob")
-	if !contains(argv, "--safe-mode") || !contains(argv, "--no-session-persistence") {
-		t.Fatalf("argv=%v", argv)
+	assertArg(t, argv, "--permission-mode", "bypassPermissions")
+	assertArg(t, argv, "--disallowedTools", "Edit,Write")
+	for _, flag := range []string{"--add-dir", "--safe-mode", "--disable-slash-commands", "--no-session-persistence", "--tools"} {
+		if contains(argv, flag) {
+			t.Fatalf("unexpected %s in %v", flag, argv)
+		}
 	}
 	cwd := strings.TrimSpace(readFile(t, h.cwdLog))
 	if cwd == h.repo {

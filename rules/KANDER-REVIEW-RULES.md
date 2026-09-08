@@ -38,14 +38,14 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 | reviewer | agent argument | CLI            | Isolation arguments of the entry                                                                                                            |
 | -------- | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Codex    | `codex`        | `codex`        | `--sandbox read-only`, `--ephemeral`                                                                                                        |
-| Claude   | `claude`       | `claude`       | `--permission-mode plan`, `--tools Read,Grep,Glob`, `--safe-mode`, `--no-session-persistence`                                               |
+| Claude   | `claude`       | `claude`       | `--permission-mode bypassPermissions`, `--disallowedTools Edit,Write`                                               |
 | Grok     | `grok`         | `grok`         | `--sandbox read-only`, `--no-memory`, `--no-subagents`                                                                                      |
 | Cursor   | `cursor`       | `cursor-agent` | `--print --output-format json --trust`; `CURSOR_CONFIG_DIR` and `CURSOR_DATA_DIR` point to this round's isolated runtime; no `--sandbox` / `--mode ask` |
 
 **Reviewer Isolation**
 
-- Codex, Claude and Grok use read-only isolation: Codex runs a read-only shell inside the target worktree.
-- Claude/Grok run in an out-of-tree runtime with only read and search tools exposed.
+- Codex and Grok use sandbox-enforced read-only isolation: Codex runs a read-only shell inside the target worktree.
+- Claude and Grok run in an out-of-tree runtime; Grok exposes only read and search tools, while Claude runs fully authorized with its full toolset minus `Edit` and `Write`, and relies on that plus the prompt for read-only. As with Cursor, the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected.
 - Cursor only isolates configuration and session into the runtime; read-only relies on the prompt and post-run worktree verification, with no upfront blocking and no detection of out-of-tree writes.
 - On all platforms the full prompt is written to a UTF-8 task file; the reviewer receives only a short instruction with the path.
 - Grok keeps `--prompt-file`.

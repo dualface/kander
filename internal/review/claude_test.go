@@ -95,12 +95,13 @@ func TestClaudeIsolationAndReport(t *testing.T) {
 		t.Fatalf("out=%q", out)
 	}
 	argv := strings.Split(strings.TrimRight(readFile(t, h.argvLog), "\n"), "\n")
-	assertArg(t, argv, "--permission-mode", "plan")
-	assertArg(t, argv, "--tools", "Read,Grep,Glob")
-	if !contains(argv, "--safe-mode") || !contains(argv, "--no-session-persistence") {
-		t.Fatalf("argv=%v", argv)
+	assertArg(t, argv, "--permission-mode", "bypassPermissions")
+	assertArg(t, argv, "--disallowedTools", "Edit,Write")
+	for _, flag := range []string{"--add-dir", "--safe-mode", "--disable-slash-commands", "--no-session-persistence", "--tools"} {
+		if contains(argv, flag) {
+			t.Fatalf("unexpected %s in %v", flag, argv)
+		}
 	}
-	assertArg(t, argv, "--add-dir", h.repoReal)
 	runtime := strings.TrimSpace(readFile(t, h.cwdLog))
 	if runtime == h.repoReal {
 		t.Fatal("claude must run outside worktree")
@@ -211,12 +212,6 @@ func TestClaudeSpecSnapshot(t *testing.T) {
 	}
 	if readFile(t, h.specLog) != "# 任务契约\n" {
 		t.Fatal("snapshot mismatch")
-	}
-	argv := strings.Split(strings.TrimRight(readFile(t, h.argvLog), "\n"), "\n")
-	for i, a := range argv {
-		if a == "--add-dir" && argv[i+1] != h.repoReal {
-			t.Fatalf("unexpected add-dir %s", argv[i+1])
-		}
 	}
 }
 
