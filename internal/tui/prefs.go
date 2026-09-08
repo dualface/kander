@@ -25,33 +25,16 @@ func loadPrefs() uiPrefs {
 	return prefsFromConfig(cfg.TUI)
 }
 
-// savePrefs writes only the UI fields that differ from the unmerged scope
-// config. Overlay-only TUI values must not be copied back into config.json.
+// savePrefs writes the caller-provided UI preferences into the scope
+// config.json as a whole TUI section. Callers must pass unmerged scope
+// values; this function does not filter overlay-only fields.
 func savePrefs(prefs uiPrefs) (config.TUI, error) {
-	desired := prefsConfig(prefs)
-	var written config.TUI
+	value := prefsConfig(prefs)
 	_, err := config.Update(func(cfg *config.Config) error {
-		next := cfg.TUI
-		if desired.Columns != next.Columns {
-			next.Columns = desired.Columns
-		}
-		if desired.MinColumnWidth != next.MinColumnWidth {
-			next.MinColumnWidth = desired.MinColumnWidth
-		}
-		if desired.Theme != next.Theme {
-			next.Theme = desired.Theme
-		}
-		if desired.Refresh != next.Refresh {
-			next.Refresh = desired.Refresh
-		}
-		if desired.Single != next.Single {
-			next.Single = desired.Single
-		}
-		cfg.TUI = next
-		written = next
+		cfg.TUI = value
 		return nil
 	})
-	return written, err
+	return value, err
 }
 
 func prefsFromConfig(value config.TUI) uiPrefs {
