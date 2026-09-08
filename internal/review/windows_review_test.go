@@ -79,6 +79,13 @@ func runWindowsFakeReviewer() int {
 		}
 	case "grok":
 		fmt.Printf("{\"stopReason\":\"end_turn\",\"text\":%q}\n", report)
+	case "kimi":
+		// stream-json: one OpenAI-shaped message per line, a tool call leaving content null,
+		// and a trailing meta line whose content is a resume hint rather than report text.
+		fmt.Printf("{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"type\":\"function\",\"id\":\"c1\",\"function\":{\"name\":\"Read\",\"arguments\":\"{}\"}}]}\n")
+		fmt.Printf("{\"role\":\"tool\",\"tool_call_id\":\"c1\",\"content\":\"file contents\"}\n")
+		fmt.Printf("{\"role\":\"assistant\",\"content\":%q}\n", report)
+		fmt.Printf("{\"role\":\"meta\",\"type\":\"session.resume_hint\",\"session_id\":\"session_x\",\"content\":\"To resume this session: kimi -r session_x\"}\n")
 	default:
 		fmt.Printf("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":%q}\n", report)
 	}
@@ -153,6 +160,8 @@ func newWindowsHarness(t *testing.T, agent string) *windowsHarness {
 		t.Setenv("CURSOR_CONFIG_DIR", h.home)
 		t.Setenv("FAKE_REVIEW_CURSOR_CONFIG", filepath.Join(root, "cursor-config.log"))
 		t.Setenv("FAKE_REVIEW_CURSOR_DATA", filepath.Join(root, "cursor-data.log"))
+	case "kimi":
+		t.Setenv("KIMI_CODE_HOME", h.home)
 	}
 	return h
 }
@@ -230,6 +239,31 @@ func TestWindowsGrokIsolationArgv(t *testing.T) {
 			t.Fatalf("missing %s in %v", flag, argv)
 		}
 	}
+}
+
+// kimi-code takes no isolation flags at all: the run is fenced by the private KIMI_CODE_HOME
+// the reviewer builds, and it must execute in the target worktree because there is no --cwd.
+func TestWindowsKimiIsolationArgv(t *testing.T) {
+	h := newWindowsHarness(t, "kimi")
+	code, _, err := h.review("kimi", "QA", "确认改动正确")
+	if code != 0 {
+		t.Fatalf("code=%d err=%s", code, err)
+	}
+	argv := h.argv()
+	assertArg(t, argv, "--output-format", "stream-json")
+	if !contains(argv, "--prompt") || !contains(argv, "--agent-file") {
+		t.Fatalf("argv=%v", argv)
+	}
+	for _, flag := range []string{"--plan", "--yolo", "--auto", "--cwd"} {
+		if contains(argv, flag) {
+			t.Fatalf("%s is not compatible with prompt mode: %v", flag, argv)
+		}
+	}
+	cwd := strings.TrimSpace(readFile(t, h.cwdLog))
+	if cwd != h.repoReal {
+		t.Fatalf("kimi must run in the worktree: cwd=%q repo=%q", cwd, h.repoReal)
+	}
+	leftoverRuntimes(t, h.tmp, "kimi-review.")
 }
 
 func TestWindowsCursorIsolationAndDirs(t *testing.T) {

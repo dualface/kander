@@ -113,7 +113,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	}()
 
 	taskContext := ctx.taskContext
-	if (ctx.archive != nil || ctx.agent == "claude" || ctx.agent == "cursor") && ctx.taskSpec != "" {
+	if (ctx.archive != nil || ctx.agent == "claude" || ctx.agent == "cursor" || ctx.agent == "kimi") && ctx.taskSpec != "" {
 		snapshot := filepath.Join(runtime, "task-spec.md")
 		var snapshotErr error
 		if ctx.archive != nil {

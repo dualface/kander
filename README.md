@@ -26,7 +26,9 @@ kander
 
 ## 2. 安装
 
-需要 Go 1.25+, Git, 以及 Codex, Claude, Grok 或 Cursor 中至少一个.
+需要 Go 1.25+, Git, 以及 Codex, Claude, Grok, Cursor 或 Kimi 中至少一个.
+
+Kimi 有两点与其它 Agent 不同. 其一, kimi-code 的提示词不能由命令行传入, 只能输入到面板, 因此 Kimi 任务必须用 `tmux`, `tmux-session` 或 `herdr` 启动; `console` 与 `foreground` 会被拒绝并说明原因. 其二, kimi-code 首次在一个仓库里启动时会先问是否信任该文件夹, 此时它还不接受输入, kander 会等待超时并提示你去面板里回答一次; 答过之后该仓库不再询问. 另外 Kimi 不接受推理档位: 它没有对应的命令行开关, 档位由 `~/.kimi-code/config.toml` 的 `[thinking] effort` 决定.
 
 拿到 kander 二进制后直接运行即可. 首次启动若尚未安装, 会进入交互向导: 选择界面语言 (`cn`/`en`/`ja`) 与安装位置, 再释出规则并把自身拷到目的地. 规则只有英文一份; Agent 与你沟通所用的语言由配置 `agent_language` 决定, 可在随后打开的选项面板里修改; 建卡时该值会写进任务卡的 `LANGUAGE` 字段, 之后这张卡一直用它. 之后自动进入环境检查和选项面板. 已安装用户可用 `kander install` 重跑向导 (升级规则或改安装位置). 命令也可直接用 `--lang ja` 切到日语界面.
 
@@ -52,7 +54,7 @@ Windows (无需 make):
 
 Kander 有两种安装作用域, 共用同一套规则和程序.
 
-安装、`kander doctor` 修复与选项面板保存时, 会自动把规则入口接到 Agent 的规则文件: Claude 在 `CLAUDE.md` (全局为 `~/.claude/CLAUDE.md`, 项目为仓库根) 追加一行 `@` 引用; 其他 Agent 在对应的 `AGENTS.md` (全局为 `~/.codex/`、`~/.cursor/`、`~/.grok/` 下, 项目为仓库根) 追加一条读取 `KANDER-AGENTS.md` 的指令. 已存在任意形式的引用 (含符号链接或合并全文) 时不会重复追加; 全局安装只处理配置目录已存在的 Agent, 且永远只追加、不覆盖已有内容.
+安装、`kander doctor` 修复与选项面板保存时, 会自动把规则入口接到 Agent 的规则文件: Claude 在 `CLAUDE.md` (全局为 `~/.claude/CLAUDE.md`, 项目为仓库根) 追加一行 `@` 引用; 其他 Agent 在对应的 `AGENTS.md` (全局为 `~/.codex/`、`~/.cursor/`、`~/.grok/`、`~/.kimi-code/` 下, 项目为仓库根) 追加一条读取 `KANDER-AGENTS.md` 的指令. 已存在任意形式的引用 (含符号链接或合并全文) 时不会重复追加; 全局安装只处理配置目录已存在的 Agent, 且永远只追加、不覆盖已有内容.
 
 ### 2.1 全局安装
 

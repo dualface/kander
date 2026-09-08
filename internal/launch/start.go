@@ -73,8 +73,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, err
 	}
 	previous := map[string]struct{}{}
+	dialect := config.AgentFor(cfg, agentName).Dialect
 	if config.AgentFor(cfg, agentName).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
+		if sessions, err := sessionsForTask(dialect, entry.TaskID); err == nil {
 			for _, id := range sessions {
 				previous[id] = struct{}{}
 			}
@@ -112,7 +113,11 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	argv, typed, err := startArguments(plan, dialect, args, prompt)
+	if err != nil {
+		return result, err
+	}
+	inv, err := launchInvocation(plan, *program, argv)
 	if err != nil {
 		return result, err
 	}
@@ -127,7 +132,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if session.Reference != "" {
 				return session, nil
 			}
-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
+			ref, err := discoverNewSession(dialect, moved.TaskID, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}
@@ -141,7 +146,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err := writeDocumentFn(root, moved, updated); err != nil {
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
-	outcome, err := launchAgent(plan, root, name, inv, loc, paneCB, &session)
+	outcome, err := launchAgent(plan, root, name, inv, loc, paneCB, &session, promptTyper(plan, dialect, typed))
 	if err != nil {
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}

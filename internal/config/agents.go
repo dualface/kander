@@ -73,7 +73,7 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 	if d.Session == nil {
 		mode := "generated"
 		switch d.Dialect {
-		case "codex":
+		case "codex", "kimi":
 			mode = "discovered"
 		case "cursor":
 			mode = "allocated"
@@ -225,7 +225,8 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		}
 		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
 		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
-			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
+			(resolved.Dialect == "codex" || resolved.Dialect == "kimi" ||
+				resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
 			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
 		}
 		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
@@ -278,10 +279,26 @@ func AgentWarnings(cfg *Config) []string {
 	return out
 }
 
+// AgentHasEffort reports whether a built-in agent's CLI takes a reasoning effort. The kanban
+// defaults are that agent's configuration schema, so the presence of the effort keys is the
+// single source of truth: cursor and kimi have no effort switch and therefore no keys.
+func AgentHasEffort(agent string) bool {
+	_, ok := kanbanModelDefaults[agent]["large_effort"]
+	return ok
+}
+
+// ReviewAgentHasEffort is the reviewer-side counterpart of AgentHasEffort.
+func ReviewAgentHasEffort(agent string) bool {
+	_, ok := reviewModelDefaults[agent]["effort"]
+	return ok
+}
+
 func customModelDefaults(definitions map[string]AgentDefinition, models *Models) {
 	for name, d := range definitions {
 		if contains(ExecutionAgents, name) {
-			if name == "cursor" && (d.Args != nil || d.Dialect != "" && d.Dialect != "cursor") {
+			// An effortless built-in regains the generic effort fields once it is driven by a
+			// template or another dialect, because it is no longer its own CLI that runs.
+			if !AgentHasEffort(name) && (d.Args != nil || d.Dialect != "" && d.Dialect != name) {
 				for _, key := range []string{"model", "large_effort", "small_effort"} {
 					value := ""
 					if key != "model" {

@@ -34,6 +34,7 @@ var agentExitCommands = map[string]string{
 	"codex":  "/exit",
 	"grok":   "/quit",
 	"cursor": "/quit",
+	"kimi":   "/exit",
 }
 
 // AgentExitCommand selects the exit command of the configured compatible dialect.

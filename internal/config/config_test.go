@@ -519,6 +519,45 @@ func TestCursorIsAnExecutionAndReviewAgent(t *testing.T) {
 	}
 }
 
+func TestKimiIsAnExecutionAndReviewAgent(t *testing.T) {
+	setupHome(t)
+	if !contains(ExecutionAgents, "kimi") || !contains(ReviewAgents, "kimi") {
+		t.Fatal("kimi missing")
+	}
+	if AgentExecutableName("kimi") != "kimi" {
+		t.Fatal(AgentExecutableName("kimi"))
+	}
+}
+
+// Kimi carries neither a model id nor an effort: -m names an alias from the user's own
+// config.toml, so an empty value keeps the CLI's default_model, and kimi-code has no effort
+// switch at all, so the effort keys are absent the way they are for cursor.
+func TestKimiModelDefaultsAreEmptyAndEffortless(t *testing.T) {
+	setupHome(t)
+	models := DefaultModels()
+	kimi := models.Kanban["kimi"]
+	if kimi["large_model"] != "" || kimi["small_model"] != "" {
+		t.Fatalf("%v", kimi)
+	}
+	for _, key := range []string{"model", "large_effort", "small_effort"} {
+		if _, ok := kimi[key]; ok {
+			t.Fatalf("%s should be absent: %v", key, kimi)
+		}
+	}
+	if models.Review["kimi"]["model"] != "" {
+		t.Fatalf("%v", models.Review["kimi"])
+	}
+	if _, ok := models.Review["kimi"]["effort"]; ok {
+		t.Fatalf("review effort should be absent: %v", models.Review["kimi"])
+	}
+	if AgentHasEffort("kimi") || ReviewAgentHasEffort("kimi") {
+		t.Fatal("kimi must report no effort")
+	}
+	if !AgentHasEffort("claude") || !ReviewAgentHasEffort("claude") {
+		t.Fatal("claude must report an effort")
+	}
+}
+
 func TestCursorModelDefaultsUseFullIDs(t *testing.T) {
 	setupHome(t)
 	models := DefaultModels()

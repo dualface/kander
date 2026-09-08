@@ -138,6 +138,31 @@ func TestEnsureRulesIntegrationProjectScope(t *testing.T) {
 	}
 }
 
+// Every agent names its own rules file. An unknown agent must return the empty string rather
+// than falling through to some other agent's path, which would make a newly registered agent
+// silently write into that agent's rules file.
+func TestAgentRulesTargetIsExplicitPerAgent(t *testing.T) {
+	home := setupInstallHome(t)
+	paths := globalIntegrationPaths(t, home)
+	for agent, want := range map[string]string{
+		"codex":  filepath.Join(home, ".codex", "AGENTS.md"),
+		"claude": filepath.Join(home, ".claude", "CLAUDE.md"),
+		"cursor": filepath.Join(home, ".cursor", "AGENTS.md"),
+		"grok":   filepath.Join(home, ".grok", "AGENTS.md"),
+		"kimi":   filepath.Join(home, ".kimi-code", "AGENTS.md"),
+		"nobody": "",
+	} {
+		if got := AgentRulesTarget(agent, paths); got != want {
+			t.Fatalf("%s: got %q want %q", agent, got, want)
+		}
+	}
+	for _, agent := range config.ExecutionAgents {
+		if AgentRulesTarget(agent, paths) == "" {
+			t.Fatalf("%s has no rules target", agent)
+		}
+	}
+}
+
 func TestEnsureRulesIntegrationNegationWordsDoNotRepeatAppend(t *testing.T) {
 	home := setupInstallHome(t)
 	paths := globalIntegrationPaths(t, home)

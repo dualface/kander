@@ -17,6 +17,7 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
 		{"claude", cfg.Agents["claude"].Path, "node", "claude", "generated"},
 		{"cursor", "renamed", "renamed", "cursor", "allocated"},
 		{"codex", "codex", "codex", "codex", "discovered"},
+		{"kimi", "kimi", "kimi", "kimi", "discovered"},
 		{"fresh", "fresh", "fresh", "claude", "generated"},
 		{"unregistered", "unregistered", "unregistered", "", "generated"},
 	} {
@@ -159,6 +160,8 @@ func TestDialectSessionCompatibility(t *testing.T) {
 	}{
 		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
 		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
+		// kimi-code never accepts a caller-supplied id, so only discovery or no session at all.
+		{"kimi", "generated", true}, {"kimi", "allocated", true}, {"kimi", "none", false},
 	} {
 		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
 			cfg := DefaultConfig()

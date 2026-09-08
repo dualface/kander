@@ -86,6 +86,9 @@ func AgentRulesTarget(agent string, paths config.InstallPaths) string {
 	if err != nil {
 		return ""
 	}
+	// Every agent is listed explicitly: an unknown name returns the empty string, which callers
+	// treat as "no rules file to integrate". Falling back to another agent's path would make a
+	// newly added agent silently write into that agent's rules file.
 	switch agent {
 	case "codex":
 		return filepath.Join(home, ".codex", "AGENTS.md")
@@ -93,8 +96,12 @@ func AgentRulesTarget(agent string, paths config.InstallPaths) string {
 		return filepath.Join(home, ".claude", "CLAUDE.md")
 	case "cursor":
 		return filepath.Join(home, ".cursor", "AGENTS.md")
-	default:
+	case "grok":
 		return filepath.Join(home, ".grok", "AGENTS.md")
+	case "kimi":
+		return filepath.Join(home, ".kimi-code", "AGENTS.md")
+	default:
+		return ""
 	}
 }
 

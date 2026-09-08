@@ -21,17 +21,17 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 
 ## Reviewer Selection
 
-- Four reviewers are supported: Codex, Claude, Grok and Cursor.
+- Five reviewers are supported: Codex, Claude, Grok, Cursor and Kimi.
 
   The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
 
   On Windows, prefer the reviewer `.exe`.
 
-  When only `.cmd`/`.bat` exists, launch through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of the four reviewer adapter layers.
+  When only `.cmd`/`.bat` exists, launch through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of the five reviewer adapter layers.
 
   This is not a general invocation contract for arbitrary batch scripts.
 
-  Apart from the CLI and isolation arguments in the table below, every rule in this file is identical for all four.
+  Apart from the CLI and isolation arguments in the table below, every rule in this file is identical for all five.
 
   Select the command entry per `KANDER-AGENTS.md` "Scope".
 
@@ -41,14 +41,16 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 | Claude   | `claude`       | `claude`       | `--permission-mode plan`, `--tools Read,Grep,Glob`, `--safe-mode`, `--no-session-persistence`                                               |
 | Grok     | `grok`         | `grok`         | `--sandbox read-only`, `--no-memory`, `--no-subagents`                                                                                      |
 | Cursor   | `cursor`       | `cursor-agent` | `--print --output-format json --trust`; `CURSOR_CONFIG_DIR` and `CURSOR_DATA_DIR` point to this round's isolated runtime; no `--sandbox` / `--mode ask` |
+| Kimi     | `kimi`         | `kimi`         | `--prompt --output-format stream-json --agent-file <round's definition>`, whose frontmatter allowlists `Read, Grep, Glob`; no isolation flags exist on the command line |
 
 **Reviewer Isolation**
 
-- Codex, Claude and Grok use read-only isolation: Codex runs a read-only shell inside the target worktree.
+- Codex, Claude, Grok and Kimi use read-only isolation: Codex runs a read-only shell inside the target worktree.
 - Claude/Grok run in an out-of-tree runtime with only read and search tools exposed.
 - Cursor only isolates configuration and session into the runtime; read-only relies on the prompt and post-run worktree verification, with no upfront blocking and no detection of out-of-tree writes.
 - On all platforms the full prompt is written to a UTF-8 task file; the reviewer receives only a short instruction with the path.
-- Grok keeps `--prompt-file`.
+- Grok keeps `--prompt-file`. Kimi has no prompt file and no stdin, so the same short instruction is passed inline to `--prompt`.
+- Kimi has no sandbox, permission or tool flags, and `--plan` cannot be combined with `--prompt`. Read-only therefore comes from the agent definition written for the round: its frontmatter tool allowlist is the whole surface the model is given, so the mutating and outbound tools are never exposed rather than merely refused. `KIMI_CODE_HOME` stays on the reviewer's real home, so stored credentials keep working without being copied. It runs in the target worktree because there is no `--cwd`, and reads the prompt, the evidence and its own definition through `--add-dir`.
 - The task file does not check or tighten POSIX permissions or Windows ACLs; when it lives in the review runtime it is still protected by that boundary.
 - After the reviewer exits, the process group must be forcibly reaped; failure to do so is a review failure.
 - Currently only Cursor ships helper processes that do not wait for wrap-up; for it, only detached descendants that left the parent chain count as leftovers and cause the result to be rejected; ordinary child processes do not cause rejection.

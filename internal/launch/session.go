@@ -158,7 +158,7 @@ func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*co
 		return AgentSession{}, config.AgentResumeError(session.Agent)
 	}
 	if definition.Session.Mode == "discovered" && session.Reference == "" {
-		id, err := findCodexSession(taskID)
+		id, err := findDiscoveredSession(definition.Dialect, taskID)
 		if err != nil {
 			return AgentSession{}, err
 		}
@@ -198,7 +198,9 @@ func takeoverPromptPrefixes(taskID string) []string {
 	return promptPrefixes(taskID, "takeover")
 }
 
-func codexPromptPrefixes(taskID string) []string {
+// launchPromptPrefixes covers every prompt head Kander can open a session with, so a
+// session store scan recognizes the task no matter which command started the agent.
+func launchPromptPrefixes(taskID string) []string {
 	return promptPrefixes(taskID, "start", "resume", "takeover")
 }
 
@@ -212,7 +214,7 @@ func startsWithAny(text string, prefixes []string) bool {
 }
 
 func codexRolloutMentionsTask(path, taskID string) string {
-	prefixes := codexPromptPrefixes(taskID)
+	prefixes := launchPromptPrefixes(taskID)
 	f, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -321,11 +323,27 @@ func findCodexSession(taskID string) (string, error) {
 	)
 }
 
-func discoverNewCodexSession(taskID string, previous map[string]struct{}) (string, error) {
+// sessionsForTask lists the sessions of a discovered-mode dialect that were opened from a
+// Kander prompt for taskID, most recent first.
+func sessionsForTask(dialect, taskID string) ([]string, error) {
+	if dialect == "kimi" {
+		return kimiSessionsForTask(taskID)
+	}
+	return codexSessionsForTask(taskID)
+}
+
+func findDiscoveredSession(dialect, taskID string) (string, error) {
+	if dialect == "kimi" {
+		return findKimiSession(taskID)
+	}
+	return findCodexSession(taskID)
+}
+
+func discoverNewSession(dialect, taskID string, previous map[string]struct{}) (string, error) {
 	deadline := nowFn().Add(sessionDiscoverWait)
 	var last error
 	for {
-		candidates, err := codexSessionsForTask(taskID)
+		candidates, err := sessionsForTask(dialect, taskID)
 		if err != nil {
 			last = err
 		} else {
@@ -339,11 +357,20 @@ func discoverNewCodexSession(taskID string, previous map[string]struct{}) (strin
 				return neu[0], nil
 			}
 			if len(neu) > 1 {
+				if dialect == "kimi" {
+					return "", launchError(
+						"launch.multiple_new_kimi_sessions_appeared_during_launch", strconv.Itoa(len(neu)),
+					)
+				}
 				return "", launchError(
 					"launch.multiple_new_codex_sessions_appeared_during_launch", strconv.Itoa(len(neu)),
 				)
 			}
-			last = launchError("launch.the_newly_started_codex_session_has_not_appeared_yet")
+			if dialect == "kimi" {
+				last = launchError("launch.the_newly_started_kimi_session_has_not_appeared_yet")
+			} else {
+				last = launchError("launch.the_newly_started_codex_session_has_not_appeared_yet")
+			}
 		}
 		if !nowFn().Before(deadline) {
 			return "", last
@@ -421,6 +448,15 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		args := append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions")
 		if definition.Session.Mode != "none" {
 			args = append(args, flag, session.Reference)
+		}
+		return args, nil
+	case "kimi":
+		// kimi-code mints its own session id, so a start carries no session argument and the
+		// reference is recovered afterwards by scanning the session store. There is no effort
+		// argument because kimi-code has no effort switch; it reads [thinking] from its own config.
+		args := append(modelArgs, "--auto")
+		if resume && definition.Session.Mode != "none" {
+			args = append(args, "--session", session.Reference)
 		}
 		return args, nil
 	default:

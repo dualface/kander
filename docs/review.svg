@@ -120,10 +120,10 @@
   <rect x="80" y="1290" width="40" height="40" rx="12" fill="#4f46e5"/>
   <text x="100" y="1317" text-anchor="middle" class="s num">5</text>
   <text x="136" y="1312" class="s pt">Reviewer 与隔离边界</text>
-  <text x="136" y="1338" class="s pn">四个角色可分别指定 codex / claude / grok / cursor</text>
+  <text x="136" y="1338" class="s pn">四个角色可分别指定 codex / claude / grok / cursor / kimi</text>
   <line x1="80" y1="1362" x2="720" y2="1362" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1386" r="4" fill="#a5b4fc"/>
-  <text x="106" y="1391" class="s bt">Codex / Claude / Grok 使用只读隔离</text>
+  <text x="106" y="1391" class="s bt">Codex / Claude / Grok / Kimi 使用只读隔离</text>
   <circle cx="90" cy="1412" r="4" fill="#a5b4fc"/>
   <text x="106" y="1417" class="s bt">Cursor 靠 prompt 与事后工作树校验, 不事前阻断</text>
   <circle cx="90" cy="1438" r="4" fill="#a5b4fc"/>

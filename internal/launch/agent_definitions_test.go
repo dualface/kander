@@ -21,6 +21,9 @@ func TestCustomDialectArguments(t *testing.T) {
 		{"claude", []string{"--model", "model", "--effort", "high", "--dangerously-skip-permissions", "--session-id", "session-id"}, []string{"--model", "model", "--effort", "high", "--dangerously-skip-permissions", "--resume", "session-id"}},
 		{"grok", []string{"--model", "model", "--effort", "high", "--permission-mode", "bypassPermissions", "--session-id", "session-id"}, []string{"--model", "model", "--effort", "high", "--permission-mode", "bypassPermissions", "--resume", "session-id"}},
 		{"cursor", []string{"--model", "model", "--trust", "--force", "--resume", "session-id"}, []string{"--model", "model", "--trust", "--force", "--resume", "session-id"}},
+		// kimi-code mints its own id, so a start carries no session argument. It takes no effort
+		// argument either: its CLI has no effort switch.
+		{"kimi", []string{"--model", "model", "--auto"}, []string{"--model", "model", "--auto", "--session", "session-id"}},
 	} {
 		t.Run(test.dialect, func(t *testing.T) {
 			cfg := config.DefaultConfig()
@@ -131,7 +134,7 @@ func TestNoneDialectArgumentsDoNotReuseTerminalIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, arg := range args {
-				if arg == "--resume" || arg == "--session-id" || arg == "terminal-marker" {
+				if arg == "--resume" || arg == "--session-id" || arg == "--session" || arg == "terminal-marker" {
 					t.Fatalf("none passed session identity: %q", args)
 				}
 			}

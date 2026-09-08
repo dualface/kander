@@ -61,7 +61,7 @@ func main() {
 			t.Run(name, func(t *testing.T) {
 				runtimeWindows = func() bool { return windows }
 				plan := LaunchPlan{Launcher: launcher, Tmux: binary, Session: "test"}
-				if _, err := launchAgent(plan, filepath.Join(dir, "kanban"), "task", invocation, nil, nil, nil); err != nil {
+				if _, err := launchAgent(plan, filepath.Join(dir, "kanban"), "task", invocation, nil, nil, nil, nil); err != nil {
 					t.Fatal(err)
 				}
 				var got []string
