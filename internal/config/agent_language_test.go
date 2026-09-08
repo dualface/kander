@@ -24,12 +24,12 @@ func TestAgentLanguageDefaultsFollowInterfaceLanguage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AgentLanguage != "zh-CN" {
-		t.Fatalf("missing language should derive zh-CN, got %q", cfg.AgentLanguage)
+	if cfg.AgentLanguage != "en" {
+		t.Fatalf("missing language should derive en, got %q", cfg.AgentLanguage)
 	}
-	payload["language"] = "en"
-	if cfg, err = Validate(payload); err != nil || cfg.AgentLanguage != "en" {
-		t.Fatalf("en config should derive en, got %q err=%v", cfg.AgentLanguage, err)
+	payload["language"] = "cn"
+	if cfg, err = Validate(payload); err != nil || cfg.AgentLanguage != "zh-CN" {
+		t.Fatalf("cn config should derive zh-CN, got %q err=%v", cfg.AgentLanguage, err)
 	}
 	payload["agent_language"] = " ja "
 	if cfg, err = Validate(payload); err != nil || cfg.AgentLanguage != "ja" {

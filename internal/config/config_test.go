@@ -949,7 +949,7 @@ func TestLanguageNullIsRejectedWhileMissingDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if missing.Language != "cn" {
+	if missing.Language != "en" {
 		t.Fatalf("missing language=%s", missing.Language)
 	}
 	payload["language"] = nil

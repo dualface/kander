@@ -114,7 +114,7 @@ func effectiveLocale() string {
 	return ""
 }
 
-// ResolveLanguage resolves in order: --lang (KANDER_LANG_CLI) > config > environment; the default is cn.
+// ResolveLanguage resolves in order: --lang (KANDER_LANG_CLI) > config > environment; the default is en.
 func ResolveLanguage() string {
 	langMu.Lock()
 	cli := cliLanguageOverride
@@ -132,13 +132,13 @@ func ResolveLanguage() string {
 		return bound
 	}
 	locale := strings.ToLower(effectiveLocale())
-	if strings.HasPrefix(locale, "en") {
-		return "en"
+	if strings.HasPrefix(locale, "cn") || strings.HasPrefix(locale, "zh") {
+		return "cn"
 	}
 	if strings.HasPrefix(locale, "ja") {
 		return "ja"
 	}
-	return "cn"
+	return "en"
 }
 
 // BindEffectiveLanguage binds the language from the on-disk config, clearing it when invalid.

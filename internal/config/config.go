@@ -306,8 +306,8 @@ func DefaultConfig() *Config {
 		Rules:           DefaultRules(true),
 		Models:          DefaultModels(),
 		TUI:             DefaultTUI(),
-		Language:        "cn",
-		AgentLanguage:   DefaultAgentLanguage("cn"),
+		Language:        "en",
+		AgentLanguage:   DefaultAgentLanguage("en"),
 	}
 }
 
@@ -785,7 +785,7 @@ func Validate(raw any) (*Config, error) {
 	}
 	languageRaw, hasLanguage := obj["language"]
 	if !hasLanguage {
-		languageRaw = "cn"
+		languageRaw = "en"
 	}
 	language, err := validateChoice(languageRaw, Languages, "language")
 	if err != nil {

@@ -44,7 +44,7 @@ func runWizard() (Request, error) {
 		Mode:     config.ModeGlobal,
 	}
 	if !supportedLanguage(req.Language) {
-		req.Language = "cn"
+		req.Language = "en"
 	}
 	cwd, _ := os.Getwd()
 	project := cwd
