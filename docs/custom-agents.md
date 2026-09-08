@@ -69,4 +69,15 @@ A brand-new templated agent is recommended to launch via tmux / tmux-session, pr
 
 The reviewer roster still contains only the four built-in agents, which always use their read-only adapters. The review executable-name precedence is the `*_REVIEW_BIN` environment variable, then the review built-in program name; `agents.*.path` and `process_name` play no part at all in review selection. An execution agent's wrapper is therefore never automatically used for review.
 
+`review_stages` is stored per task scale, matching `kanban_agents`:
+
+```json
+"review_stages": {
+  "large": {"PM": "required", "QA": "auto", "CSA": "skip", "Hacker": "skip"},
+  "small": {"PM": "auto", "QA": "auto", "CSA": "skip", "Hacker": "skip"}
+}
+```
+
+A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing scales or roles default to `auto`. The options panel's "Review and models" section edits large and small independently under each role. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
+
 A custom name with a compatible dialect reuses that dialect's exit command for `dismiss` and takeover cleanup, still requiring the identity and single-pane container checks to pass. A purely templated program with no compatible dialect declared has no inferable interactive exit command; `dismiss` refuses explicitly and keeps the container.

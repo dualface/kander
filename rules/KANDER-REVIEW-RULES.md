@@ -327,7 +327,7 @@ This section changes only the review unit and role split; stage policy, incremen
 
 Beyond "Review Profiles" and the whitelist trigger conditions, whether each role runs is also constrained by the default stage policy.
 
-The configuration file's `review_stages` specifies `auto`, `skip` or `required` for each of the four roles; the default is `auto`.
+The configuration file's `review_stages` specifies `auto`, `skip` or `required` for each of the four roles, stored per task scale as `review_stages.large` and `review_stages.small`. A legacy flat `{role: mode}` object is still accepted and applies to both scales; new writes use the two-scale form. The default for a missing scale or role is `auto`.
 
 View it with `kander config` under the command root.
 
@@ -335,7 +335,7 @@ When resolving each role, take the first explicitly specified source by preceden
 
 1. The user instruction for the current task.
 2. The project-level `AGENTS.md` or `CLAUDE.md` nearest to the target file; when unspecified, the user's own global rules.
-3. The role's `review_stages` value in the configuration file.
+3. The `review_stages` value for this card's `SIZE` scale; when a task-group batch contains mixed sizes, use the `large` scale.
 4. Review profiles and security role trigger conditions (effective only when tier 3 is `auto`).
 
 Semantics of each value:
