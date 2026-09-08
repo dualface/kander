@@ -69,7 +69,7 @@ func deepMerge(base, overlay map[string]any) map[string]any {
 	return out
 }
 
-func normalizeScopeReviewStages(raw map[string]any) error {
+func normalizeReviewStagesField(raw map[string]any) error {
 	stages, ok := raw["review_stages"]
 	if !ok {
 		return nil
@@ -203,8 +203,12 @@ func readOverlay(cwd string) (string, map[string]any, error) {
 }
 
 func mergeOverlayRaw(scope map[string]any, overlay map[string]any) (map[string]any, error) {
-	if err := normalizeScopeReviewStages(scope); err != nil {
+	if err := normalizeReviewStagesField(scope); err != nil {
 		return nil, err
 	}
-	return deepMerge(scope, overlay), nil
+	overlayCopy := cloneRawObjectDeep(overlay)
+	if err := normalizeReviewStagesField(overlayCopy); err != nil {
+		return nil, err
+	}
+	return deepMerge(scope, overlayCopy), nil
 }

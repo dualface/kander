@@ -188,6 +188,37 @@ func TestLoadMergesReviewStagesAfterNormalizingFlatScope(t *testing.T) {
 	}
 }
 
+func TestLoadMergesReviewStagesAfterNormalizingFlatOverlay(t *testing.T) {
+	setupHome(t)
+	root := t.TempDir()
+	main := initGitRepo(t, filepath.Join(root, "repo"))
+	t.Chdir(main)
+	scope := filepath.Join(root, "config.json")
+	writeScopeFile(t, scope)
+	writeJSONFile(t, filepath.Join(main, OverlayFilename), map[string]any{
+		"review_stages": map[string]any{"PM": "required"},
+	})
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ReviewStages["large"]["PM"] != "required" || cfg.ReviewStages["small"]["PM"] != "required" {
+		t.Fatalf("flat overlay PM should apply to both scales: %+v", cfg.ReviewStages)
+	}
+	for _, scale := range []string{"large", "small"} {
+		if cfg.ReviewStages[scale]["QA"] != "auto" {
+			t.Fatalf("%s.QA should stay the scope default: %+v", scale, cfg.ReviewStages)
+		}
+	}
+	scopeCfg, err := LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.ReviewStages["large"]["PM"] != "auto" || scopeCfg.ReviewStages["small"]["PM"] != "auto" {
+		t.Fatalf("flat overlay must not rewrite scope review_stages: %+v", scopeCfg.ReviewStages)
+	}
+}
+
 func TestOverlayRejectsForbiddenUnknownInvalidAndUnsafeFiles(t *testing.T) {
 	setupHome(t)
 	root := t.TempDir()
