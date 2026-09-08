@@ -681,8 +681,13 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 func (b *formBinding) applyInterface(p *optionsPanel) {
 	app := p.app
 	changed := false
+	var scopeTUI config.TUI
+	if p.session != nil && p.session.Config != nil {
+		scopeTUI = p.session.Config.TUI
+	}
 	if containsString(themes, b.theme) && app.Theme != b.theme {
 		app.Theme = b.theme
+		scopeTUI.Theme = b.theme
 		changed = true
 		// Huh caches the body during Update, and that cache still uses the old theme at this point.
 		// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
@@ -690,24 +695,31 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	}
 	if count := clampColumns(b.columns); app.Columns != count {
 		app.Columns = count
+		scopeTUI.Columns = count
 		changed = true
 	}
 	if width := clampMinColumnWidth(b.minWidth); app.MinColumnWidth != width {
 		app.MinColumnWidth = width
+		scopeTUI.MinColumnWidth = width
 		changed = true
 	}
 	if refresh := clampRefresh(b.refresh); app.RefreshSecs != refresh {
 		app.RefreshSecs = refresh
+		scopeTUI.Refresh = refresh
 		changed = true
 	}
 	if app.Model.Single != b.single {
 		app.Model.Single = b.single
+		scopeTUI.Single = b.single
 		changed = true
 		p.rebuildAt(interfaceFocusKey("single"))
 	}
 	if app.Model.ShowArchived != b.archived {
 		app.Model.ToggleArchived()
 		changed = true
+	}
+	if p.session != nil && p.session.Config != nil {
+		p.session.Config.TUI = scopeTUI
 	}
 	// UI preferences reach config.json as soon as they change, so returning with Esc loses nothing.
 	if changed {

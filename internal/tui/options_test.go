@@ -314,6 +314,7 @@ func TestInterfaceWriteDoesNotCommitOtherSessionEdits(t *testing.T) {
 	panel.session.SetReviewer("PM", "claude")
 	panel.markDirty()
 	app.Theme = "light"
+	panel.session.Config.TUI.Theme = "light"
 	panel.persistUI()
 	if app.PrefsError != "" {
 		t.Fatal(app.PrefsError)
@@ -681,7 +682,10 @@ func TestOptionsPanelShowsOverlayNotice(t *testing.T) {
 
 func TestOptionsSaveLeavesOverlayIsolated(t *testing.T) {
 	dir := t.TempDir()
-	_, original := writeTempOverlay(t, dir, map[string]any{"kanban_agent": "claude"})
+	_, original := writeTempOverlay(t, dir, map[string]any{
+		"kanban_agent": "claude",
+		"tui":          map[string]any{"theme": "dark", "columns": 2},
+	})
 	t.Chdir(dir)
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReview))
@@ -703,6 +707,9 @@ func TestOptionsSaveLeavesOverlayIsolated(t *testing.T) {
 	if scopeCfg.KanbanAgent == "claude" {
 		t.Fatal("TUI save wrote overlay-only kanban_agent into the scope file")
 	}
+	if scopeCfg.TUI.Theme == "dark" || scopeCfg.TUI.Columns == 2 {
+		t.Fatalf("TUI save wrote overlay-only tui values into the scope file: %+v", scopeCfg.TUI)
+	}
 	if scopeCfg.Reviewers["PM"] != after {
 		t.Fatalf("scope PM=%s want %s", scopeCfg.Reviewers["PM"], after)
 	}
@@ -712,5 +719,44 @@ func TestOptionsSaveLeavesOverlayIsolated(t *testing.T) {
 	}
 	if merged.KanbanAgent != "claude" {
 		t.Fatalf("runtime merge lost overlay: %s", merged.KanbanAgent)
+	}
+	if merged.TUI.Theme != "dark" || merged.TUI.Columns != 2 {
+		t.Fatalf("runtime merge lost overlay tui: %+v", merged.TUI)
+	}
+}
+
+func TestSaveColumnsLeavesOverlayTUIIsolated(t *testing.T) {
+	dir := t.TempDir()
+	_, original := writeTempOverlay(t, dir, map[string]any{
+		"tui": map[string]any{"theme": "dark", "columns": 6},
+	})
+	t.Chdir(dir)
+	_ = newTestSession(t)
+	if _, err := saveColumns(2); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, config.OverlayFilename))
+	if err != nil || string(data) != string(original) {
+		t.Fatalf("overlay bytes changed: %s", data)
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.TUI.Theme == "dark" {
+		t.Fatal("saveColumns wrote overlay-only theme into the scope file")
+	}
+	if scopeCfg.TUI.Columns != 2 {
+		t.Fatalf("scope columns=%d", scopeCfg.TUI.Columns)
+	}
+	merged, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.TUI.Theme != "dark" {
+		t.Fatalf("runtime merge lost overlay theme: %s", merged.TUI.Theme)
+	}
+	if merged.TUI.Columns != 6 {
+		t.Fatalf("runtime merge lost overlay columns: %d", merged.TUI.Columns)
 	}
 }

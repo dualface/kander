@@ -535,14 +535,11 @@ func (p *optionsPanel) save() {
 }
 
 func (p *optionsPanel) persistUI() {
-	prefs := uiPrefs{
-		Columns:        p.app.Columns,
-		MinColumnWidth: p.app.MinColumnWidth,
-		Theme:          p.app.Theme,
-		Refresh:        p.app.RefreshSecs,
-		Single:         p.app.Model.Single,
+	if p.session == nil {
+		return
 	}
-	written, err := savePrefs(prefs)
+	// Write the session's scope TUI, not the merged App display values.
+	written, err := savePrefs(prefsFromConfig(p.session.Config.TUI))
 	// When the write fails, only the edited value in the session is updated and the baseline is not advanced.
 	p.session.SyncTUI(written, err == nil)
 	if err != nil {
