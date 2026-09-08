@@ -1,4 +1,6 @@
 {
+  "tui.start_success_compact": "已启动 | {{.V0}} | {{.V1}} | {{.V2}}",
+  "tui.start_wait_exit": "等待 {{.V0}} 项启动结束后退出…",
   "tui.start_task": "启动任务（需确认）",
   "tui.start_no_selection": "请选择要启动的任务",
   "tui.start_invalid_state": "仅 backlog/todo 任务可启动（当前：{{.V0}}）",

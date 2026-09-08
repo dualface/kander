@@ -20,7 +20,7 @@ func (a *App) statusError() string {
 
 func (a *App) footerMessage(detail bool) string {
 	if a.Now().Before(a.CopyNoticeUntil) && a.CopyNotice != "" {
-		return a.CopyNotice
+		return a.displayNotice()
 	}
 	if status := a.statusError(); status != "" {
 		return a.Context.Error + ": " + status

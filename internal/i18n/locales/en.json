@@ -1,4 +1,6 @@
 {
+  "tui.start_success_compact": "Started | {{.V0}} | {{.V1}} | {{.V2}}",
+  "tui.start_wait_exit": "Waiting for {{.V0}} task start(s) before exit…",
   "tui.start_task": "Start task (confirm)",
   "tui.start_no_selection": "Select a task to start",
   "tui.start_invalid_state": "Only backlog/todo tasks can start (current: {{.V0}})",

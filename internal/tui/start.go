@@ -14,6 +14,8 @@ type startRequest struct {
 	root string
 }
 
+type startNotice struct{ full, compact string }
+
 type startResult struct {
 	result launch.StartResult
 	err    error
@@ -85,6 +87,7 @@ func (a *App) handleStartConfirmation(key string) {
 		return
 	}
 	run := a.StartTask
+	a.startsRunning++
 	a.pendingWork = func() any {
 		result, err := run(request)
 		return startResult{result, err}
@@ -93,8 +96,17 @@ func (a *App) handleStartConfirmation(key string) {
 }
 
 func (a *App) applyStartResult(result startResult) {
+	if a.startsRunning > 0 {
+		a.startsRunning--
+	}
+	defer func() {
+		if a.quitAfterStarts && a.startsRunning == 0 {
+			a.Running = false
+		}
+	}()
 	a.refreshBoard()
 	message := ""
+	compact := ""
 	if result.err != nil {
 		message = t("tui.start_failed", result.err.Error())
 	} else {
@@ -104,16 +116,19 @@ func (a *App) applyStartResult(result startResult) {
 			address = r.Plan.Session + ":" + r.Outcome.Window + ":" + r.Outcome.Pane
 		}
 		message = t("tui.start_success", r.TaskID, r.Agent, r.Plan.Launcher, address)
+		compact = t("tui.start_success_compact", r.Agent, r.Plan.Launcher, address)
 	}
 	for _, warning := range result.result.Warnings {
 		message += " " + warning
+		compact += " " + warning
 	}
 	a.showFocusNotice(message)
+	if result.err == nil {
+		a.startNotice = &startNotice{a.CopyNotice, strings.ReplaceAll(printableText(ansi.Strip(compact)), "\n", " ")}
+	}
 }
 
 func (a *App) renderStartConfirmation() (popupBox, string) {
-	h, w := a.size()
-	p := themePalette(a.Theme)
 	request := a.StartConfirmation
 	lines := []string{
 		t("tui.start_confirm"),
@@ -124,6 +139,12 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 		lines = append(lines, t("tui.start_backlog"))
 	}
 	lines = append(lines, t("tui.start_confirm_keys"))
+	return a.renderStartPopup(lines)
+}
+
+func (a *App) renderStartPopup(lines []string) (popupBox, string) {
+	h, w := a.size()
+	p := themePalette(a.Theme)
 	for i, line := range lines {
 		lines[i] = printableText(ansi.Strip(line))
 	}
@@ -131,4 +152,33 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 	body := ansi.Wrap(strings.Join(lines, "\n"), inner, "")
 	box := centerPopupMax(w, h, inner+4, blockHeight(body)+2, max(1, w-4))
 	return box, popupFrame(p, box.Width-2).Render(padBlock(body, box.Width-4, box.Height-2, p))
+}
+
+// requestQuit keeps the event loop alive until every queued start has settled,
+// so the launch layer can finish its existing confirmation or rollback protocol.
+func (a *App) requestQuit() {
+	if a.startsRunning == 0 {
+		a.Running = false
+		return
+	}
+	a.quitAfterStarts = true
+	a.showFocusNotice(t("tui.start_wait_exit", a.startsRunning))
+}
+
+func (a *App) activeStartNotice() bool {
+	return a.startNotice != nil && a.CopyNotice == a.startNotice.full && a.Now().Before(a.CopyNoticeUntil)
+}
+
+func (a *App) displayNotice() string {
+	if a.activeStartNotice() {
+		_, w := a.size()
+		if displayWidth(a.CopyNotice) > w-1 {
+			return a.startNotice.compact
+		}
+	}
+	return a.CopyNotice
+}
+
+func (a *App) startNoticeOverflows(width int) bool {
+	return a.activeStartNotice() && displayWidth(a.startNotice.compact) > width-1
 }

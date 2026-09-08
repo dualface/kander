@@ -46,6 +46,9 @@ type App struct {
 	PrepareStart      func(string) (startRequest, error)
 	StartTask         func(startRequest) (launch.StartResult, error)
 	StartConfirmation *startRequest
+	startsRunning     int
+	quitAfterStarts   bool
+	startNotice       *startNotice
 	focusRunning      bool
 	PersistColumns    persistFn
 	Now               func() time.Time
@@ -91,7 +94,7 @@ type App struct {
 // Update is the message entry point of App: the options panel takes over while open, otherwise the board and detail view handle it.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
 	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil {
-		a.Running = false
+		a.requestQuit()
 		return nil
 	}
 	if a.Options != nil {
@@ -131,6 +134,10 @@ func (a *App) View() string {
 		base = overlay(base, popup, box.X, box.Y, p)
 	case a.Help:
 		box, popup := a.renderHelp()
+		base = overlay(base, popup, box.X, box.Y, p)
+	}
+	if a.Options == nil && !a.Help && a.StartConfirmation == nil && a.startNoticeOverflows(w) {
+		box, popup := a.renderStartPopup([]string{a.startNotice.full})
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
 	return paintScreen(base, w, h, p)
@@ -528,7 +535,7 @@ func (a *App) adjustColumns(delta int) {
 func (a *App) handleBoardKey(key string) {
 	switch key {
 	case "q", "Q":
-		a.Running = false
+		a.requestQuit()
 	case "left", "h", "H":
 		a.Model.MoveColumn(-1)
 	case "right", "l", "L", "tab":
@@ -805,7 +812,7 @@ func (a *App) HandleKey(key string) {
 		return
 	}
 	if key == "ctrl-c" {
-		a.Running = false
+		a.requestQuit()
 		return
 	}
 	// The help overlay is read-only and any key closes it.

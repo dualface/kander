@@ -128,6 +128,9 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, p.app.takePending()
 	case workMsg:
 		cmd := p.app.applyWork(event.payload)
+		if !p.app.Running {
+			return p, tea.Quit
+		}
 		return p, tea.Batch(cmd, p.app.takePending())
 	}
 	cmd := p.app.Update(msg)

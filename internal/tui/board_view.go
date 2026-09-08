@@ -127,7 +127,7 @@ func (a *App) renderStatusBar(p palette, w, visible int) string {
 // transientNotice covers the whole status bar while showing temporary messages such as copy results and errors.
 func (a *App) transientNotice() string {
 	if a.Now().Before(a.CopyNoticeUntil) && a.CopyNotice != "" {
-		return a.CopyNotice
+		return a.displayNotice()
 	}
 	if status := a.statusError(); status != "" {
 		return a.Context.Error + ": " + status

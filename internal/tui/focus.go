@@ -36,6 +36,7 @@ func (a *App) focusSelectedTask() {
 }
 
 func (a *App) showFocusNotice(message string) {
+	a.startNotice = nil
 	a.CopyNotice = strings.ReplaceAll(printableText(ansi.Strip(message)), "\n", " ")
 	a.CopyNoticeUntil = a.Now().Add(5 * time.Second)
 }

@@ -1,4 +1,6 @@
 {
+  "tui.start_success_compact": "開始済み | {{.V0}} | {{.V1}} | {{.V2}}",
+  "tui.start_wait_exit": "{{.V0}} 件の開始処理が終了してから退出します…",
   "tui.start_task": "タスクを開始（確認）",
   "tui.start_no_selection": "開始するタスクを選択してください",
   "tui.start_invalid_state": "backlog/todo のタスクのみ開始できます（現在：{{.V0}}）",

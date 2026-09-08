@@ -262,3 +262,107 @@ func TestStartConfirmationNarrowTerminalAndMouse(t *testing.T) {
 		t.Fatal("Ctrl+C must cancel confirmation")
 	}
 }
+
+func TestStartQuitWaitsForBackgroundCompletion(t *testing.T) {
+	for _, key := range []string{"q", "ctrl-c"} {
+		for _, failed := range []bool{false, true} {
+			app := startTestApp("todo")
+			entered, release := make(chan struct{}), make(chan struct{})
+			t.Cleanup(func() {
+				select {
+				case <-release:
+				default:
+					close(release)
+				}
+			})
+			app.StartTask = func(r startRequest) (launch.StartResult, error) {
+				close(entered)
+				<-release
+				if failed {
+					return launch.StartResult{}, errors.New("rolled back")
+				}
+				return launch.StartResult{TaskID: r.TaskID, Agent: r.Agent, Plan: launch.LaunchPlan{Launcher: r.Launcher}}, nil
+			}
+			p := program{app: app}
+			app.HandleKey("s")
+			_, start := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+			completed := make(chan tea.Msg, 1)
+			go func() { completed <- start() }()
+			<-entered
+			event := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+			if key == "ctrl-c" {
+				event = tea.KeyMsg{Type: tea.KeyCtrlC}
+				app.Options = &optionsPanel{app: app}
+			}
+			_, quit := p.Update(event)
+			if quit != nil || !app.Running || !app.quitAfterStarts || app.startsRunning != 1 {
+				t.Fatal("quit interrupted active start")
+			}
+			app.Options = nil
+			p.Update(tea.WindowSizeMsg{Width: 85, Height: 25})
+			if app.Width != 85 {
+				t.Fatal("event loop stopped while draining start")
+			}
+			close(release)
+			_, quit = p.Update(<-completed)
+			if app.Running || app.startsRunning != 0 || quit == nil {
+				t.Fatal("quit was not completed after start settled")
+			}
+			if _, ok := quit().(tea.QuitMsg); !ok {
+				t.Fatal("missing terminal quit command")
+			}
+		}
+	}
+}
+
+func TestStartQuitWaitsForAllQueuedStarts(t *testing.T) {
+	app := startTestApp("todo")
+	for i := 0; i < 2; i++ {
+		app.HandleKey("s")
+		app.HandleKey("y")
+		app.takePending()
+	}
+	app.HandleKey("q")
+	app.applyStartResult(startResult{err: errors.New("first failed")})
+	if !app.Running || app.startsRunning != 1 {
+		t.Fatal("quit before every start settled")
+	}
+	app.applyStartResult(startResult{err: errors.New("second failed")})
+	if app.Running || app.startsRunning != 0 {
+		t.Fatal("pending quit lost")
+	}
+}
+
+func TestStartResultRendersCompleteContainerAddress(t *testing.T) {
+	app := startTestApp("todo")
+	app.Width = 80
+	const address = "kb-board-start-task-key-12345678:@9:%9"
+	app.applyStartResult(startResult{result: launch.StartResult{
+		TaskID: "20260908-options-workflow-flowchart-task", Agent: "claude",
+		Plan:    launch.LaunchPlan{Launcher: "tmux-session", Session: "kb-board-start-task-key-12345678"},
+		Outcome: launch.LaunchOutcome{Window: "@9", Pane: "%9"},
+	}})
+	lines := strings.Split(ansi.Strip(app.View()), "\n")
+	footer := lines[len(lines)-1]
+	for _, want := range []string{"claude", "tmux-session", address} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("missing %q in footer %q", want, footer)
+		}
+	}
+	app.Width = 40
+	lines = strings.Split(ansi.Strip(app.View()), "\n")
+	for i, line := range lines {
+		lines[i] = strings.Trim(line, " │")
+	}
+	if !strings.Contains(strings.Join(lines, ""), address) {
+		t.Fatal("narrow result must show complete wrapped address")
+	}
+	app.HandleKey("/")
+	if !app.Searching || app.StartConfirmation != nil {
+		t.Fatal("result overlay must not capture input")
+	}
+	app.CopyNoticeUntil = app.Now()
+	if app.startNoticeOverflows(app.Width) {
+		t.Fatal("expired result overlay remained")
+	}
+}
