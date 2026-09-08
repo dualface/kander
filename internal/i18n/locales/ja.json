@@ -333,7 +333,7 @@
   "launch.auto_cannot_be_resolved_not_in_herdr_on_windows": "auto を解決できません: 現在 herdr 内ではありません. herdr を起動するか、console 起動方式を使ってください.",
   "launch.agent_command_contains_a_control_character": "Agent コマンドに改行または NUL が含まれており、ターミナルコンテナに送れません",
   "launch.agent_prompt_could_not_be_typed_into_the_pane": "エージェントのプロンプトをペインに入力できませんでした: {{.V0}}",
-  "launch.agent_interface_did_not_come_up_in_the_pane": "エージェントの画面がペインで起動しませんでした; 待機した目印: {{.V0}}",
+  "launch.agent_interface_did_not_come_up_in_the_pane": "エージェントの画面がペインで起動しませんでした; 待機した目印: {{.V0}}. このフォルダーを信頼するかなど初回起動の確認が表示されている場合は, ペインで一度回答してから起動し直してください.",
   "launch.agent_requires_a_pane_launcher_for_its_prompt": "{{.V0}} はプロンプトを引数で受け取れずペインへの入力が必要ですが, {{.V1}} 起動方式にペインはありません. tmux, tmux-session または herdr を使用してください.",
   "launch.cannot_determine_the_current_session": "現在のセッションを特定できません",
   "launch.cleaned_old_container_channel_closed_container": "旧コンテナをクリーンアップしました: {{.V0}}\tchannel={{.V1}}\tclosed-container={{.V2}}",

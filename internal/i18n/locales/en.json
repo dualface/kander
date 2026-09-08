@@ -333,7 +333,7 @@
   "launch.auto_cannot_be_resolved_not_in_herdr_on_windows": "auto cannot be resolved: not currently in herdr. Start herdr, or use the console launcher.",
   "launch.agent_command_contains_a_control_character": "the agent command contains a line break or NUL and cannot be sent to a terminal container",
   "launch.agent_prompt_could_not_be_typed_into_the_pane": "The agent prompt could not be typed into the pane: {{.V0}}",
-  "launch.agent_interface_did_not_come_up_in_the_pane": "The agent interface did not come up in the pane; waited for: {{.V0}}",
+  "launch.agent_interface_did_not_come_up_in_the_pane": "The agent interface did not come up in the pane; waited for: {{.V0}}. If the agent is asking a first-run question, such as whether to trust this folder, answer it once in the pane and start again.",
   "launch.agent_requires_a_pane_launcher_for_its_prompt": "{{.V0}} cannot take its prompt as an argument and has to be typed into a pane; the {{.V1}} launcher has none. Use tmux, tmux-session or herdr.",
   "launch.cannot_determine_the_current_session": "cannot determine the current session",
   "launch.cleaned_old_container_channel_closed_container": "cleaned old container: {{.V0}}\tchannel={{.V1}}\tclosed-container={{.V2}}",

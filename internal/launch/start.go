@@ -109,7 +109,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}()
 	prompt := taskInstruction(t("launch.prompt.start_head", entry.TaskID), taskFile)
 	model := cfg.Models.Kanban[agentName]
-	args, agentEnv, err := agentArguments(agentName, model, entry.Kind, session, false, cfg)
+	args, err := agentArguments(agentName, model, entry.Kind, session, false, cfg)
 	if err != nil {
 		return result, err
 	}
@@ -117,7 +117,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	inv, err := launchInvocation(plan, *program, argv, agentEnv)
+	inv, err := launchInvocation(plan, *program, argv)
 	if err != nil {
 		return result, err
 	}

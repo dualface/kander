@@ -47,7 +47,9 @@ func FormatKanbanModelSummary(agent string, entry map[string]string) string {
 	if small == "" {
 		small = cliDefault
 	}
-	if agent == "cursor" {
+	// An agent whose CLI has no reasoning-effort control carries no effort keys at all, so the
+	// entry itself says whether there is an effort to report.
+	if _, ok := entry["large_effort"]; !ok {
 		return fmt.Sprintf("%s %s / %s %s",
 			Text("config.large"), large,
 			Text("config.small"), small,

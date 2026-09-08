@@ -333,7 +333,7 @@
   "launch.auto_cannot_be_resolved_not_in_herdr_on_windows": "auto 无法解析: 当前不在 herdr 中. 请先启动 herdr, 或改用 console 启动方式.",
   "launch.agent_command_contains_a_control_character": "Agent 命令含换行或 NUL, 无法交给终端容器执行",
   "launch.agent_prompt_could_not_be_typed_into_the_pane": "无法把 Agent 提示词输入到 pane: {{.V0}}",
-  "launch.agent_interface_did_not_come_up_in_the_pane": "Agent 界面未在 pane 中就绪; 等待的标记: {{.V0}}",
+  "launch.agent_interface_did_not_come_up_in_the_pane": "Agent 界面未在 pane 中就绪; 等待的标记: {{.V0}}. 如果 Agent 正在询问首次运行的问题, 例如是否信任当前文件夹, 请在 pane 中回答一次后重新启动.",
   "launch.agent_requires_a_pane_launcher_for_its_prompt": "{{.V0}} 不接受命令行形式的提示词, 必须输入到 pane; {{.V1}} 启动方式没有 pane. 请使用 tmux, tmux-session 或 herdr.",
   "launch.cannot_determine_the_current_session": "无法确定当前 session",
   "launch.cleaned_old_container_channel_closed_container": "已清理原容器: {{.V0}}\t通道={{.V1}}\t关闭容器={{.V2}}",

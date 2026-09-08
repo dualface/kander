@@ -12,11 +12,17 @@ import (
 // pane once its interface is up, which is exactly how a person would drive it.
 func dialectAcceptsPromptArgument(dialect string) bool { return dialect != "kimi" }
 
-// paneReadyMarker is the first text a dialect prints once it can accept typed input. Typing
-// before it appears would be swallowed by the still-booting interface.
+// paneReadyMarker is text a dialect only shows once it can accept typed input. Typing before it
+// appears would be swallowed by the still-booting interface.
+//
+// kimi-code is matched on its status bar rather than its start-up banner: the banner is
+// decorative and has already been reworded between releases, while the status bar is only drawn
+// once the input box is live. It is also not drawn while a first-run question is on screen —
+// kimi-code asks whether to trust a folder the first time it opens one — so a pane waiting on
+// that answer correctly reads as not ready.
 func paneReadyMarker(dialect string) string {
 	if dialect == "kimi" {
-		return "Welcome to Kimi Code"
+		return "context:"
 	}
 	return ""
 }

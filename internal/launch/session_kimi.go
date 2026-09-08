@@ -7,11 +7,6 @@ import (
 	"strings"
 )
 
-// kimiEffortEnv carries the reasoning effort into a kimi-code run. kimi-code has no
-// command-line switch for it; the variable is the only per-invocation channel that does
-// not require rewriting the user's own config.toml.
-const kimiEffortEnv = "KIMI_MODEL_THINKING_EFFORT"
-
 // kimi-code mints its own session id and never accepts one from the caller, so a session
 // is recovered the way a Codex rollout is: by finding the transcript whose first user
 // prompt is the Kander task prompt. The store is one directory per session,

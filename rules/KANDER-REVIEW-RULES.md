@@ -41,7 +41,7 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 | Claude   | `claude`       | `claude`       | `--permission-mode plan`, `--tools Read,Grep,Glob`, `--safe-mode`, `--no-session-persistence`                                               |
 | Grok     | `grok`         | `grok`         | `--sandbox read-only`, `--no-memory`, `--no-subagents`                                                                                      |
 | Cursor   | `cursor`       | `cursor-agent` | `--print --output-format json --trust`; `CURSOR_CONFIG_DIR` and `CURSOR_DATA_DIR` point to this round's isolated runtime; no `--sandbox` / `--mode ask` |
-| Kimi     | `kimi`         | `kimi`         | `--prompt --output-format stream-json`; `KIMI_CODE_HOME` points to a private copy of the user's home holding deny `[[permission.rules]]`; no isolation flags exist on the command line |
+| Kimi     | `kimi`         | `kimi`         | `--prompt --output-format stream-json --agent-file <round's definition>`, whose frontmatter allowlists `Read, Grep, Glob`; no isolation flags exist on the command line |
 
 **Reviewer Isolation**
 
@@ -50,7 +50,7 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 - Cursor only isolates configuration and session into the runtime; read-only relies on the prompt and post-run worktree verification, with no upfront blocking and no detection of out-of-tree writes.
 - On all platforms the full prompt is written to a UTF-8 task file; the reviewer receives only a short instruction with the path.
 - Grok keeps `--prompt-file`. Kimi has no prompt file and no stdin, so the same short instruction is passed inline to `--prompt`.
-- Kimi has no sandbox, permission or tool flags, and `--plan` cannot be combined with `--prompt`. Read-only therefore comes from a private `KIMI_CODE_HOME` built for the round: the user's `config.toml` plus deny rules for the mutating and outbound tools, with the stored credentials copied in so the reviewer can still authenticate. It runs in the target worktree because there is no `--cwd`, and reads the prompt through `--add-dir`.
+- Kimi has no sandbox, permission or tool flags, and `--plan` cannot be combined with `--prompt`. Read-only therefore comes from the agent definition written for the round: its frontmatter tool allowlist is the whole surface the model is given, so the mutating and outbound tools are never exposed rather than merely refused. `KIMI_CODE_HOME` stays on the reviewer's real home, so stored credentials keep working without being copied. It runs in the target worktree because there is no `--cwd`, and reads the prompt, the evidence and its own definition through `--add-dir`.
 - The task file does not check or tighten POSIX permissions or Windows ACLs; when it lives in the review runtime it is still protected by that boundary.
 - After the reviewer exits, the process group must be forcibly reaped; failure to do so is a review failure.
 - Currently only Cursor ships helper processes that do not wait for wrap-up; for it, only detached descendants that left the parent chain count as leftovers and cause the result to be rejected; ordinary child processes do not cause rejection.

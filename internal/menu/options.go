@@ -351,7 +351,7 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 		config.Text("menu.kanban_model", label, scaleLabel),
 		config.Text("menu.model", label, scaleLabel),
 		config.Text("menu.full_model_id_for_s", scaleLabel))}
-	if config.AgentFor(s.Config, agent).Dialect == "cursor" && config.AgentFor(s.Config, agent).Args == nil {
+	if !config.AgentHasEffort(config.AgentFor(s.Config, agent).Dialect) && config.AgentFor(s.Config, agent).Args == nil {
 		return fields
 	}
 	return append(fields, s.kanbanModelField(agent, scale+"_effort",
@@ -393,7 +393,7 @@ func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
 		entry:  entry,
 		field:  "model",
 	}}
-	if reviewer == "cursor" {
+	if !config.ReviewAgentHasEffort(reviewer) {
 		return fields
 	}
 	return append(fields, ModelField{

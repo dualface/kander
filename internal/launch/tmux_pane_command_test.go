@@ -53,7 +53,7 @@ func main() {
 	for _, launcher := range []string{"tmux", "tmux-session"} {
 		for _, windows := range []bool{false, true} {
 			name := launcher + "/posix"
-			want := "exec " + posixJoin(invocation.Argv, invocation.ShellEnv)
+			want := "exec " + posixJoin(invocation.Argv)
 			if windows {
 				name = launcher + "/windows"
 				want = powershellJoin(invocation.Argv, invocation.ShellEnv)

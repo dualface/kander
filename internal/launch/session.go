@@ -379,17 +379,14 @@ func discoverNewSession(dialect, taskID string, previous map[string]struct{}) (s
 	}
 }
 
-// agentArguments returns the argv for one agent plus the environment variables that agent
-// needs minted for this invocation. Only dialects without a command-line switch for a
-// setting use the environment; the map is nil for everyone else.
-func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool, configs ...*config.Config) ([]string, map[string]string, error) {
+func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool, configs ...*config.Config) ([]string, error) {
 	var cfg *config.Config
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
 	definition := config.AgentFor(cfg, agent)
 	if resume && definition.Session.Mode == "none" {
-		return nil, nil, config.AgentResumeError(agent)
+		return nil, config.AgentResumeError(agent)
 	}
 	scale := "small"
 	if kind == "large" {
@@ -406,7 +403,7 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		if definition.Session.Mode == "none" {
 			reference = ""
 		}
-		return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil, nil
+		return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
 	}
 	agent = definition.Dialect
 	if agent == "cursor" {
@@ -418,7 +415,7 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		if definition.Session.Mode != "none" {
 			args = append(args, "--resume", session.Reference)
 		}
-		return args, nil, nil
+		return args, nil
 	}
 	effortKey := scale + "_effort"
 	effort := model[effortKey]
@@ -430,9 +427,9 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 	case "codex":
 		options := append(append([]string{}, modelArgs...), "--config", `model_reasoning_effort="`+effort+`"`, "--dangerously-bypass-approvals-and-sandbox")
 		if resume {
-			return append(append([]string{"resume"}, options...), session.Reference), nil, nil
+			return append(append([]string{"resume"}, options...), session.Reference), nil
 		}
-		return options, nil, nil
+		return options, nil
 	case "claude":
 		flag := "--session-id"
 		if resume {
@@ -442,7 +439,7 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		if definition.Session.Mode != "none" {
 			args = append(args, flag, session.Reference)
 		}
-		return args, nil, nil
+		return args, nil
 	case "grok":
 		flag := "--session-id"
 		if resume {
@@ -452,18 +449,18 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		if definition.Session.Mode != "none" {
 			args = append(args, flag, session.Reference)
 		}
-		return args, nil, nil
+		return args, nil
 	case "kimi":
 		// kimi-code mints its own session id, so a start carries no session argument and the
-		// reference is recovered afterwards by scanning the session store. Reasoning effort has
-		// no command-line switch and travels in the environment instead.
+		// reference is recovered afterwards by scanning the session store. There is no effort
+		// argument because kimi-code has no effort switch; it reads [thinking] from its own config.
 		args := append(modelArgs, "--auto")
 		if resume && definition.Session.Mode != "none" {
 			args = append(args, "--session", session.Reference)
 		}
-		return args, map[string]string{kimiEffortEnv: effort}, nil
+		return args, nil
 	default:
-		return nil, nil, launchError("launch.unsupported_agent", agent)
+		return nil, launchError("launch.unsupported_agent", agent)
 	}
 }
 

@@ -213,7 +213,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	prompt := taskInstruction(head, taskFile)
 	model := cfg.Models.Kanban[session.Agent]
-	args, agentEnv, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
+	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if err != nil {
 		return err
 	}
-	inv, err := launchInvocation(plan, *program, argv, agentEnv)
+	inv, err := launchInvocation(plan, *program, argv)
 	if err != nil {
 		return err
 	}

@@ -68,69 +68,44 @@ func TestKimiReviewTextKeepsOnlyAssistantTurns(t *testing.T) {
 	}
 }
 
-// The private home must keep the user's providers and credentials so the reviewer can
-// authenticate, while appending the deny rules that make the run read-only.
-func TestPrepareKimiHomeCopiesCredentialsAndAppendsDenyRules(t *testing.T) {
-	runtime, source := t.TempDir(), t.TempDir()
-	userConfig := "default_model = \"kimi-code/k3\"\n\n[thinking]\neffort = \"max\"\n"
-	if err := os.WriteFile(filepath.Join(source, "config.toml"), []byte(userConfig), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(source, "credentials"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(source, "credentials", "kimi-code.json"), []byte(`{"token":"secret"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	home, err := prepareKimiHome(runtime, source)
+// Isolation comes from the agent definition's tool allowlist, not from flags: kimi-code has
+// none, and its read-only --plan mode cannot be combined with --prompt.
+func TestWriteKimiReviewerAgentAllowlistsReadOnlyTools(t *testing.T) {
+	runtime := t.TempDir()
+	path, err := writeKimiReviewerAgent(runtime, "Use only the Read, Grep, and Glob tools to inspect code.")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(home, runtime) {
-		t.Fatalf("private home escaped the runtime: %s", home)
+	if filepath.Dir(path) != runtime {
+		t.Fatalf("agent definition escaped the runtime: %s", path)
 	}
-	data, err := os.ReadFile(filepath.Join(home, "config.toml"))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if !strings.Contains(text, `default_model = "kimi-code/k3"`) {
-		t.Fatalf("user config not carried over:\n%s", text)
+	head, body, found := strings.Cut(strings.TrimPrefix(text, "---\n"), "\n---\n")
+	if !found {
+		t.Fatalf("no frontmatter:\n%s", text)
 	}
-	for _, want := range []string{`pattern = "Bash"`, `pattern = "Write"`, `pattern = "Edit"`, `decision = "deny"`} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("missing %s:\n%s", want, text)
+	if !strings.Contains(head, "tools: [Read, Grep, Glob]") {
+		t.Fatalf("tool allowlist missing:\n%s", head)
+	}
+	// description is required by kimi-code; a definition without it is rejected at load.
+	if !strings.Contains(head, "description:") || !strings.Contains(head, "name: kander-reviewer") {
+		t.Fatalf("incomplete frontmatter:\n%s", head)
+	}
+	// An allowlist is exhaustive, so naming a mutating tool anywhere in it would grant it.
+	for _, denied := range []string{"Bash", "Write", "Edit", "WebSearch", "FetchURL", "Agent"} {
+		if strings.Contains(head, denied) {
+			t.Fatalf("%s must not appear in the allowlist:\n%s", denied, head)
 		}
 	}
-	// A denial only holds if it precedes the allowances: rules are first-match-wins.
-	if strings.Index(text, `decision = "deny"`) > strings.Index(text, `pattern = "Read"`) {
-		t.Fatalf("deny rules must precede the allowances:\n%s", text)
+	// The body replaces the system prompt, so it has to carry the inspection rules.
+	if !strings.Contains(body, "Use only the Read, Grep, and Glob tools") {
+		t.Fatalf("inspection rules missing from the system prompt:\n%s", body)
 	}
-	credential, err := os.ReadFile(filepath.Join(home, "credentials", "kimi-code.json"))
-	if err != nil || string(credential) != `{"token":"secret"}` {
-		t.Fatalf("credential=%q err=%v", credential, err)
-	}
-
-	// The user's own home must be left untouched.
-	original, err := os.ReadFile(filepath.Join(source, "config.toml"))
-	if err != nil || string(original) != userConfig {
-		t.Fatalf("source config was modified: %q %v", original, err)
-	}
-}
-
-// Without a source config the run still has to be fenced by the deny rules.
-func TestPrepareKimiHomeWithoutSourceConfigStillDenies(t *testing.T) {
-	runtime, source := t.TempDir(), t.TempDir()
-	home, err := prepareKimiHome(runtime, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(filepath.Join(home, "config.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), `pattern = "Bash"`) {
-		t.Fatalf("missing deny rules:\n%s", data)
+	if !strings.Contains(body, "never change it") {
+		t.Fatalf("read-only role missing from the system prompt:\n%s", body)
 	}
 }

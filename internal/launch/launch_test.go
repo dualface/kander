@@ -974,12 +974,12 @@ func TestLaunchInvocationUsesShellFormForPaneLaunchers(t *testing.T) {
 		return process.ProcessInvocation{}, nil
 	}
 	for _, launcher := range []string{"herdr", "tmux", "tmux-session"} {
-		if _, err := launchInvocation(LaunchPlan{Launcher: launcher}, process.AgentProgram{}, nil, nil); err != nil {
+		if _, err := launchInvocation(LaunchPlan{Launcher: launcher}, process.AgentProgram{}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, launcher := range []string{"console", "foreground"} {
-		if _, err := launchInvocation(LaunchPlan{Launcher: launcher}, process.AgentProgram{}, nil, nil); err != nil {
+		if _, err := launchInvocation(LaunchPlan{Launcher: launcher}, process.AgentProgram{}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

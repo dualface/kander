@@ -37,7 +37,7 @@
 }
 ```
 
-自定义 agent 必须有 `dialect` 或 `args`。内置 agent 自动继承自身方言。`dialect` 接受五个内置名称，复用相同 model、effort、越权与会话参数。模型仍位于 `models.kanban.<agent>`，使用 `large_model`、`small_model`、相应 effort 字段；兼容旧共享 `model` 回退。自定义 Cursor 方言沿用 Cursor 无 effort 的模型字段。
+自定义 agent 必须有 `dialect` 或 `args`。内置 agent 自动继承自身方言。`dialect` 接受五个内置名称，复用相同 model、effort、越权与会话参数。模型仍位于 `models.kanban.<agent>`，使用 `large_model`、`small_model`、相应 effort 字段；兼容旧共享 `model` 回退。自定义 Cursor 或 Kimi 方言沿用它们无 effort 的模型字段。Kimi 的推理档位由用户自己的 `~/.kimi-code/config.toml` 的 `[thinking] effort` 决定，kander 不介入。
 
 同时声明时 `args` 优先，完整替换方言参数。必须有 `args.start`；支持恢复的模板还必须有 `args.resume`；允许空数组。每个元素独立替换 `{model}`、`{effort}`、`{session}`，替换值不递归解析。任一占位符为空时，丢弃该元素；其紧邻前一个原始元素若为独立 flag（以 `-` 开头、不含占位符或 `=`），同时丢弃该 flag。其他位置参数保留。未知占位符、控制字符与空元素被拒绝。
 

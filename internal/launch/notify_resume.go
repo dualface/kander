@@ -92,7 +92,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	}()
 	prompt := taskInstruction(t("launch.prompt.resume_head", entry.TaskID), taskFile)
 	model := cfg.Models.Kanban[session.Agent]
-	args, agentEnv, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
+	args, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
@@ -101,7 +101,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	inv, err := launchInvocation(plan, *program, argv, agentEnv)
+	inv, err := launchInvocation(plan, *program, argv)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}

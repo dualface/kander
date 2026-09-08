@@ -107,18 +107,19 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 		cwd = ctx.root
 	case "kimi":
 		// kimi-code has no --cwd, so the project is entered by running there; the runtime holds
-		// the prompt and evidence files and has to be added as a second workspace directory.
-		private, err := prepareKimiHome(runtime, home)
+		// the prompt, the evidence and the agent definition, and has to be added as a second
+		// workspace directory for them to be readable.
+		agentFile, err := writeKimiReviewerAgent(runtime, settings.inspectionRules)
 		if err != nil {
 			return process.ProcessInvocation{}, "", err
 		}
-		environment[kimiHomeEnv] = private
-		if settings.effort != "" {
-			environment[kimiEffortEnv] = settings.effort
-		}
+		// No effort argument: kimi-code has no effort switch, and the review inherits whatever
+		// [thinking] effort the reviewer's own config declares.
+		environment[kimiHomeEnv] = home
 		arguments = append([]string{
 			"--prompt", process.TaskFileInstruction("Perform the "+ctx.role+" review.", promptFile),
 			"--output-format", "stream-json",
+			"--agent-file", agentFile,
 			"--add-dir", runtime,
 		}, model...)
 		cwd = ctx.root

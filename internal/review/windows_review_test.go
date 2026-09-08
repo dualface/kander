@@ -251,7 +251,7 @@ func TestWindowsKimiIsolationArgv(t *testing.T) {
 	}
 	argv := h.argv()
 	assertArg(t, argv, "--output-format", "stream-json")
-	if !contains(argv, "--prompt") {
+	if !contains(argv, "--prompt") || !contains(argv, "--agent-file") {
 		t.Fatalf("argv=%v", argv)
 	}
 	for _, flag := range []string{"--plan", "--yolo", "--auto", "--cwd"} {

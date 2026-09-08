@@ -95,14 +95,12 @@ var kanbanModelDefaults = map[string]map[string]string{
 		"small_model": "cursor-grok-4.6-high",
 	},
 	// Kimi model ids are aliases declared in the user's own config.toml, so both scales stay
-	// empty and let the CLI fall back to its default_model. The effort travels in the
-	// KIMI_MODEL_THINKING_EFFORT environment variable because kimi-code has no --effort flag.
+	// empty and let the CLI fall back to its default_model. Kimi carries no effort keys either:
+	// kimi-code has no effort switch, and its per-invocation environment override stopped taking
+	// effect in 0.41, leaving [thinking] effort in the user's own config as the only setting.
 	"kimi": {
-		"model":        "",
-		"large_model":  "",
-		"small_model":  "",
-		"large_effort": "max",
-		"small_effort": "max",
+		"large_model": "",
+		"small_model": "",
 	},
 }
 
@@ -111,7 +109,7 @@ var reviewModelDefaults = map[string]map[string]string{
 	"claude": {"model": "opus", "effort": "high"},
 	"grok":   {"model": "", "effort": "high"},
 	"cursor": {"model": "cursor-grok-4.6-xhigh"},
-	"kimi":   {"model": "", "effort": "max"},
+	"kimi":   {"model": ""},
 }
 
 var languageLabels = map[string]string{
