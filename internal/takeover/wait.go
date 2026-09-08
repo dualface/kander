@@ -104,7 +104,10 @@ func herdrWaitAgentExit(herdr, tabID, paneID string, session launch.AgentSession
 
 func tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID string, session launch.AgentSession, timeout float64) (windowExists bool, err error) {
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
-	expected := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session.Agent)
+	if err != nil {
+		return false, err
+	}
 	for {
 		remaining := deadline.Sub(nowFn())
 		if remaining <= 0 {

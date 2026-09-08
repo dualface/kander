@@ -41,7 +41,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 	var changes []string
 	choose := func(names []string, review bool) string {
 		for _, name := range names {
-			if agentUsable(agents[name]) && (!review || agents[name].Review) {
+			if !review && agentUsable(agents[name]) || review && reviewerUsable(agents[name]) {
 				return name
 			}
 		}
@@ -54,7 +54,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		changes = append(changes, field+": "+*old+" -> "+replacement)
 		*old = replacement
 	}
-	execution := choose(config.ExecutionAgents, false)
+	execution := choose(config.AgentNames(cfg), false)
 	if !agentUsable(agents[cfg.KanbanAgent]) {
 		set("kanban_agent", &cfg.KanbanAgent, execution)
 	}
@@ -68,7 +68,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 	reviewer := choose(config.ReviewAgents, true)
 	for _, role := range config.ReviewRoles {
 		selected := cfg.Reviewers[role]
-		if (!agentUsable(agents[selected]) || !agents[selected].Review) && reviewer != "" {
+		if !reviewerUsable(agents[selected]) && reviewer != "" {
 			set("reviewers."+role, &selected, reviewer)
 			cfg.Reviewers[role] = selected
 			// Models are bound to the reviewer; picking a new one adopts that reviewer's model settings.

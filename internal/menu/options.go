@@ -23,10 +23,13 @@ type ModelField struct {
 	Short string
 	// Agent is the object this field belongs to (an agent on the execution side, a role on the review side),
 	// and together with field it forms the deduplication key.
-	Agent  string
-	Prompt string
-	entry  map[string]string
-	field  string
+	Agent       string
+	Prompt      string
+	entry       map[string]string
+	field       string
+	get         func() string
+	set         func(string)
+	Placeholder string
 }
 
 // Key uniquely identifies one config item. When two task scales or two review roles pick the same agent,
@@ -34,10 +37,21 @@ type ModelField struct {
 func (f ModelField) Key() string { return f.Agent + "." + f.field }
 
 // Value returns the current value of the field; an empty string means the CLI default is used.
-func (f ModelField) Value() string { return f.entry[f.field] }
+func (f ModelField) Value() string {
+	if f.get != nil {
+		return f.get()
+	}
+	return f.entry[f.field]
+}
 
 // Set writes the field.
-func (f ModelField) Set(value string) { f.entry[f.field] = value }
+func (f ModelField) Set(value string) {
+	if f.set != nil {
+		f.set(value)
+		return
+	}
+	f.entry[f.field] = value
+}
 
 // Session carries the editable config of the options panel plus the one-shot environment probe results.
 type Session struct {
@@ -65,7 +79,7 @@ func NewSession(existing *config.Config, configValid bool) (*Session, error) {
 }
 
 func (s *Session) prepare(configValid bool) error {
-	s.agents = findAgents()
+	s.agents = findAgents(s.existing)
 	labels := agentLabels()
 	for name, state := range s.agents {
 		if state.Path != "" && !agentUsable(state) {
@@ -74,9 +88,12 @@ func (s *Session) prepare(configValid bool) error {
 			))
 		}
 	}
-	for _, name := range config.ExecutionAgents {
+	for _, name := range config.AgentNames(s.existing) {
 		state := s.agents[name]
-		if agentUsable(state) {
+		if agentUsable(state) || s.existing.Agents[name].Dialect != "" || s.existing.Agents[name].Args != nil {
+			if labels[name] == "" {
+				labels[name] = name
+			}
 			s.exec = append(s.exec, Choice{Value: name, Label: labels[name] + " (" + state.Version + ")"})
 		}
 	}
@@ -86,8 +103,8 @@ func (s *Session) prepare(configValid bool) error {
 		))
 	}
 	for _, name := range config.ReviewAgents {
-		if agentUsable(s.agents[name]) {
-			s.review = append(s.review, Choice{Value: name, Label: labels[name] + " (" + s.agents[name].Version + ")"})
+		if reviewerUsable(s.agents[name]) {
+			s.review = append(s.review, Choice{Value: name, Label: labels[name] + " (" + reviewerState(s.agents[name]).Version + ")"})
 		}
 	}
 	if len(s.review) == 0 && !s.existing.WelcomeComplete {
@@ -97,6 +114,7 @@ func (s *Session) prepare(configValid bool) error {
 	}
 
 	cfg := config.DefaultConfig()
+	cfg.Agents = config.CloneAgents(s.existing.Agents)
 	cfg.Models = copyModels(s.existing.Models)
 	cfg.KanbanAgent = s.existing.KanbanAgent
 	cfg.AgentLanguage = s.existing.AgentLanguage
@@ -118,7 +136,7 @@ func (s *Session) prepare(configValid bool) error {
 	for _, role := range config.ReviewRoles {
 		previous := s.existing.Reviewers[role]
 		cfg.Reviewers[role] = previous
-		if !s.existing.WelcomeComplete && !agentUsable(s.agents[previous]) {
+		if !s.existing.WelcomeComplete && !reviewerUsable(s.agents[previous]) {
 			cfg.Reviewers[role] = s.review[0].Value
 		}
 	}
@@ -314,6 +332,12 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 		}
 	}
 	label := agentLabels()[agent]
+	if label == "" {
+		label = agent
+	}
+	if s.Config.Models.Kanban[agent] == nil {
+		s.Config.Models.Kanban[agent] = map[string]string{}
+	}
 	scaleLabel := config.Text("menu.large_task")
 	if scale == "small" {
 		scaleLabel = config.Text("menu.small_task")
@@ -322,7 +346,7 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 		config.Text("menu.kanban_model", label, scaleLabel),
 		config.Text("menu.model", label, scaleLabel),
 		config.Text("menu.full_model_id_for_s", scaleLabel))}
-	if agent == "cursor" {
+	if config.AgentFor(s.Config, agent).Dialect == "cursor" && config.AgentFor(s.Config, agent).Args == nil {
 		return fields
 	}
 	return append(fields, s.kanbanModelField(agent, scale+"_effort",
@@ -521,13 +545,14 @@ func indexLabel(index int) string {
 func NewSessionForTest(existing *config.Config) (*Session, error) {
 	session := &Session{existing: existing}
 	labels := agentLabels()
-	for _, name := range config.ExecutionAgents {
+	for _, name := range config.AgentNames(existing) {
 		session.exec = append(session.exec, Choice{Value: name, Label: labels[name]})
 	}
 	for _, name := range config.ReviewAgents {
 		session.review = append(session.review, Choice{Value: name, Label: labels[name]})
 	}
 	cfg := config.DefaultConfig()
+	cfg.Agents = config.CloneAgents(existing.Agents)
 	cfg.Models = copyModels(existing.Models)
 	cfg.KanbanAgent = existing.KanbanAgent
 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)

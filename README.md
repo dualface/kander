@@ -172,3 +172,7 @@ PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进�
 本项目使用 MIT License, 见 [LICENSE](LICENSE).
 
 审核归档后的计划、原作者处置、批次汇总和完成门禁见 [审核处置协议](docs/review-disposition.md)。
+
+### 自定义执行 Agent
+
+可在 `config.json` 的 `agents` 节覆盖可执行名与 pane 进程名，或声明带方言、argv 模板及会话策略的新 agent；选项面板可选择并编辑其程序名。[完整配置与边界](docs/custom-agents.md)。审核继续独立使用 `*_REVIEW_BIN`。

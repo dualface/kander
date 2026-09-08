@@ -194,6 +194,8 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
 			"review.must_be_an_absolute_path", definition.homeError, reviewHome,
 		)
 	}
+	// Review executables use *_REVIEW_BIN, then the built-in read-only adapter.
+	// Config.Agents applies only to task execution and never overrides this choice.
 	return agentSettings{
 		name:                  definition.name,
 		checkInterval:         checkInterval,

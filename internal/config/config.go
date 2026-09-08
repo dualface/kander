@@ -175,18 +175,19 @@ type TUI struct {
 
 // Config is the schema-validated configuration.
 type Config struct {
-	SchemaVersion   int               `json:"schema_version"`
-	WelcomeComplete bool              `json:"welcome_complete"`
-	KanbanAgent     string            `json:"kanban_agent"`
-	KanbanAgents    map[string]string `json:"kanban_agents"`
-	Launcher        string            `json:"launcher"`
-	Reviewers       map[string]string `json:"reviewers"`
-	ReviewStages    map[string]string `json:"review_stages"`
-	Rules           Rules             `json:"rules"`
-	Models          Models            `json:"models"`
-	TUI             TUI               `json:"tui"`
-	Language        string            `json:"language"`
-	AgentLanguage   string            `json:"agent_language"`
+	SchemaVersion   int                        `json:"schema_version"`
+	WelcomeComplete bool                       `json:"welcome_complete"`
+	KanbanAgent     string                     `json:"kanban_agent"`
+	KanbanAgents    map[string]string          `json:"kanban_agents"`
+	Launcher        string                     `json:"launcher"`
+	Reviewers       map[string]string          `json:"reviewers"`
+	ReviewStages    map[string]string          `json:"review_stages"`
+	Rules           Rules                      `json:"rules"`
+	Models          Models                     `json:"models"`
+	TUI             TUI                        `json:"tui"`
+	Language        string                     `json:"language"`
+	AgentLanguage   string                     `json:"agent_language"`
+	Agents          map[string]AgentDefinition `json:"agents,omitempty"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -195,6 +196,7 @@ func Clone(src *Config) *Config {
 		return nil
 	}
 	out := *src
+	out.Agents = CloneAgents(src.Agents)
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
 	out.Reviewers = cloneStringMap(src.Reviewers)
 	out.ReviewStages = cloneStringMap(src.ReviewStages)
@@ -412,7 +414,7 @@ func CheckLauncherPlatform(launcher string) error {
 	return nil
 }
 
-func validateKanbanAgents(raw any, defaultAgent string) (map[string]string, error) {
+func validateKanbanAgents(raw any, defaultAgent string, choices ...[]string) (map[string]string, error) {
 	obj, ok := raw.(map[string]any)
 	if !ok {
 		return nil, configErrorf("config.kanban_agents_must_be_a_json_object")
@@ -440,7 +442,11 @@ func validateKanbanAgents(raw any, defaultAgent string) (map[string]string, erro
 		if _, exists := obj[scale]; !exists {
 			continue
 		}
-		agent, err := validateChoice(obj[scale], ExecutionAgents, "kanban_agents."+scale)
+		names := ExecutionAgents
+		if len(choices) > 0 {
+			names = choices[0]
+		}
+		agent, err := validateChoice(obj[scale], names, "kanban_agents."+scale)
 		if err != nil {
 			return nil, err
 		}
@@ -509,8 +515,13 @@ func validateReviewStages(raw any) (map[string]string, error) {
 	return stages, nil
 }
 
-func validateModels(raw any) (Models, error) {
+func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models, error) {
 	models := DefaultModels()
+	names := ExecutionAgents
+	if len(definitions) > 0 {
+		customModelDefaults(definitions[0], &models)
+		names = AgentNames(&Config{Agents: definitions[0]})
+	}
 	obj, ok := raw.(map[string]any)
 	if !ok {
 		return Models{}, configErrorf("config.models_must_be_a_json_object")
@@ -534,7 +545,7 @@ func validateModels(raw any) (Models, error) {
 		// When allowEmpty is true the values of this section may be empty strings; review_roles uses an empty string to mean inherit.
 		allowEmpty bool
 	}{
-		{"kanban", ExecutionAgents, models.Kanban, false},
+		{"kanban", names, models.Kanban, false},
 		{"review", ReviewAgents, models.Review, false},
 		{"review_roles", ReviewRoles, models.ReviewRoles, true},
 	}
@@ -698,13 +709,22 @@ func Validate(raw any) (*Config, error) {
 	if !ok {
 		return nil, configErrorf("config.welcome_complete_must_be_a_boolean")
 	}
-	kanbanAgent, err := validateChoice(obj["kanban_agent"], ExecutionAgents, "kanban_agent")
+	var definitions map[string]AgentDefinition
+	var err error
+	if raw, exists := obj["agents"]; exists {
+		definitions, err = validateAgentDefinitions(raw)
+		if err != nil {
+			return nil, err
+		}
+	}
+	names := AgentNames(&Config{Agents: definitions})
+	kanbanAgent, err := validateChoice(obj["kanban_agent"], names, "kanban_agent")
 	if err != nil {
 		return nil, err
 	}
 	var kanbanAgents map[string]string
 	if _, exists := obj["kanban_agents"]; exists {
-		kanbanAgents, err = validateKanbanAgents(obj["kanban_agents"], kanbanAgent)
+		kanbanAgents, err = validateKanbanAgents(obj["kanban_agents"], kanbanAgent, names)
 		if err != nil {
 			return nil, err
 		}
@@ -748,12 +768,13 @@ func Validate(raw any) (*Config, error) {
 	}
 	var models Models
 	if _, exists := obj["models"]; exists {
-		models, err = validateModels(obj["models"])
+		models, err = validateModels(obj["models"], definitions)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		models = DefaultModels()
+		customModelDefaults(definitions, &models)
 	}
 	tui := DefaultTUI()
 	if _, exists := obj["tui"]; exists {
@@ -791,6 +812,7 @@ func Validate(raw any) (*Config, error) {
 		TUI:             tui,
 		Language:        language,
 		AgentLanguage:   agentLanguage,
+		Agents:          definitions,
 	}, nil
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
 )
 
@@ -19,6 +20,7 @@ type agentState struct {
 	Batch     bool
 	Execution bool
 	Review    bool
+	reviewer  *agentState
 }
 
 func versionFailedText() string {
@@ -105,18 +107,17 @@ func agentVersion(program *process.AgentProgram) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, inv.Argv[0], inv.Argv[1:]...)
+	var env []string
 	if inv.Env != nil {
-		env := make([]string, 0, len(inv.Env))
 		for k, v := range inv.Env {
 			env = append(env, k+"="+v)
 		}
-		cmd.Env = env
 	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
+	result, err := probe.CaptureWithEnv(ctx, inv.Argv[0], inv.Argv[1:], env)
+	if err != nil || result.Code != 0 {
 		return versionFailedText()
 	}
+	out := result.Stdout + result.Stderr
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) == 0 || lines[0] == "" {
 		return versionFailedText()
@@ -129,14 +130,18 @@ func agentUsable(state agentState) bool {
 	return state.Path != "" && state.Version != "" && state.Version != failed
 }
 
-func findAgents() map[string]agentState {
+func findAgents(configs ...*config.Config) map[string]agentState {
+	var cfg *config.Config
+	if len(configs) > 0 {
+		cfg = configs[0]
+	}
 	agents := map[string]agentState{}
 	reviewSet := map[string]struct{}{}
 	for _, name := range config.ReviewAgents {
 		reviewSet[name] = struct{}{}
 	}
-	for _, name := range config.ExecutionAgents {
-		executable := config.AgentExecutableName(name)
+	for _, name := range config.AgentNames(cfg) {
+		executable := config.AgentPath(cfg, name)
 		program := process.ResolveAgentProgram(executable)
 		state := agentState{
 			Execution: true,
@@ -149,6 +154,21 @@ func findAgents() map[string]agentState {
 			state.Path = program.Path
 			state.Version = agentVersion(program)
 			state.Batch = program.Batch
+		}
+		if state.Review {
+			reviewPath := config.AgentExecutableName(name)
+			if override := os.Getenv(strings.ToUpper(name) + "_REVIEW_BIN"); override != "" {
+				reviewPath = override
+			}
+			if reviewPath != executable {
+				reviewer := agentState{Review: true}
+				if program := process.ResolveAgentProgram(reviewPath); program != nil {
+					reviewer.Path = program.Path
+					reviewer.Version = agentVersion(program)
+					reviewer.Batch = program.Batch
+				}
+				state.reviewer = &reviewer
+			}
 		}
 		agents[name] = state
 	}
@@ -174,3 +194,12 @@ func reviewGatePresent(paths config.InstallPaths) (bool, string) {
 		"menu.kander_is_not_in_path_add_local_bin_to",
 	)
 }
+
+// reviewerState keeps execution wrappers out of reviewer availability decisions.
+func reviewerState(state agentState) agentState {
+	if state.reviewer != nil {
+		return *state.reviewer
+	}
+	return state
+}
+func reviewerUsable(state agentState) bool { return state.Review && agentUsable(reviewerState(state)) }

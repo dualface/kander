@@ -115,7 +115,15 @@ func repairValues(raw any) (*Config, error) {
 			defaults.Rules = legacyRules()
 		}
 	}
-	if agent, err := validateChoice(provided["kanban_agent"], ExecutionAgents, "kanban_agent"); err == nil {
+	if raw, ok := provided["agents"]; ok {
+		definitions, err := validateAgentDefinitions(raw)
+		if err != nil {
+			return nil, err
+		}
+		defaults.Agents = definitions
+		customModelDefaults(definitions, &defaults.Models)
+	}
+	if agent, err := validateChoice(provided["kanban_agent"], AgentNames(defaults), "kanban_agent"); err == nil {
 		defaults.KanbanAgent = agent
 		for _, scale := range TaskScales {
 			defaults.KanbanAgents[scale] = agent

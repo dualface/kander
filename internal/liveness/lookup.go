@@ -2,7 +2,6 @@ package liveness
 
 import (
 	"context"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -30,14 +29,15 @@ func ParseTaskSession(text string) *TaskSession {
 	if len(parts) > 1 {
 		reference = parts[1]
 	}
-	if !contains(config.ExecutionAgents, agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
+	if !config.ValidAgentName(agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
 		return nil
 	}
 	return &TaskSession{Agent: agent, Reference: reference}
 }
 
-func agentCommandName(agent string) string {
-	return filepath.Base(config.AgentExecutableName(agent))
+func agentCommandName(agent string) (string, error) {
+	definition, err := config.LoadAgent(agent)
+	return definition.ProcessName, err
 }
 
 func markersMatch(kander, onevoke, reference string) bool {
@@ -149,7 +149,10 @@ func TmuxReverseLookupContext(ctx context.Context, tmux string, session TaskSess
 		}
 		return TmuxPaneLocation{}, &probe.Error{Message: detail}
 	}
-	expected := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session.Agent)
+	if err != nil {
+		return TmuxPaneLocation{}, err
+	}
 	var matches []TmuxPaneLocation
 	for _, line := range strings.Split(res.Stdout, "\n") {
 		if err := ctx.Err(); err != nil {

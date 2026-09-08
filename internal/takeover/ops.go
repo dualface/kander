@@ -3,7 +3,6 @@ package takeover
 import (
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -218,8 +217,9 @@ func orNA(v string) string {
 	return v
 }
 
-func agentCommandName(agent string) string {
-	return filepath.Base(config.AgentExecutableName(agent))
+func agentCommandName(agent string) (string, error) {
+	definition, err := config.LoadAgent(agent)
+	return definition.ProcessName, err
 }
 
 func toLive(session launch.AgentSession) liveness.TaskSession {

@@ -305,7 +305,11 @@ func tmuxNotifyTarget(tmux, pane string, session AgentSession, timeout time.Dura
 	if facts.InMode != "0" {
 		return launchError("launch.tmux_pane_is_in_copy_mode", pane)
 	}
-	expected := filepathBase(configAgentExe(session.Agent))
+	definition, err := config.LoadAgent(session.Agent)
+	if err != nil {
+		return err
+	}
+	expected := definition.ProcessName
 	if facts.Command != expected {
 		return launchError(
 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),
@@ -334,14 +338,6 @@ func orNA(v string) string {
 		return "N/A"
 	}
 	return v
-}
-
-func configAgentExe(agent string) string {
-	return lookPathName(agent)
-}
-
-func lookPathName(agent string) string {
-	return config.AgentExecutableName(agent)
 }
 
 // paneLauncher reports whether this launcher hands the agent to a terminal

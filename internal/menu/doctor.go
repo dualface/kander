@@ -64,7 +64,12 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {
 		healthy = false
 	}
-	agents := findAgents()
+	agentConfig, agentConfigErr := config.Load(true)
+	if agentConfigErr != nil && !repair {
+		warning(agentConfigErr.Error())
+		healthy = false
+	}
+	agents := findAgents(agentConfig)
 	if repair {
 		if _, ok := repairDoctorConfig(agents, tools); !ok {
 			healthy = false
@@ -106,15 +111,21 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	hint(config.Text("menu.agent_capabilities"))
 	anyExec := false
 	anyReview := false
-	for _, name := range config.ExecutionAgents {
+	for _, name := range config.AgentNames(agentConfig) {
 		state := agents[name]
+		if labels[name] == "" {
+			labels[name] = name
+		}
+		if reviewerUsable(state) {
+			anyReview = true
+		}
 		if agentUsable(state) {
 			anyExec = true
-			if state.Review {
+			if reviewerUsable(state) {
 				anyReview = true
 			}
 			caps := []string{config.Text("menu.execution")}
-			if state.Review {
+			if reviewerUsable(state) {
 				caps = append(caps, config.Text("menu.review"))
 			}
 			joined := caps[0]
@@ -238,7 +249,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 	}
 	for _, role := range config.ReviewRoles {
 		reviewer := effective.Reviewers[role]
-		if !agentUsable(agents[reviewer]) {
+		if !reviewerUsable(agents[reviewer]) {
 			healthy = false
 			warning(config.Text(
 				"menu.configured_reviewer_is_unavailable_install_it_then_run_kander", role, reviewer,

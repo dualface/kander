@@ -2,6 +2,7 @@ package launch
 
 import (
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/window"
 )
 
@@ -36,11 +37,22 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err := board.ValidateMutable(entry, originalText); err != nil {
 		return ResumeLaunch{}, err
 	}
-	session, err := resolvedTaskSession(entry.TaskID, originalText)
+	cfg, err := loadEffective()
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	cfg, err := loadEffective()
+	originalSession, err := sessionFrom(originalText)
+	if err != nil {
+		return ResumeLaunch{}, err
+	}
+	definition := config.AgentFor(cfg, originalSession.Agent)
+	resume := definition.Session.Mode != "none"
+	var session AgentSession
+	if resume {
+		session, err = resolvedTaskSession(entry.TaskID, originalText, cfg)
+	} else {
+		session = originalSession
+	}
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
@@ -51,7 +63,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	program, err := requireAgentProgram(session.Agent)
+	program, err := requireAgentProgram(session.Agent, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
@@ -75,7 +87,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	}()
 	prompt := taskInstruction(t("launch.prompt.resume_head", entry.TaskID), taskFile)
 	model := cfg.Models.Kanban[session.Agent]
-	args, err := agentArguments(session.Agent, model, entry.Kind, session, true)
+	args, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}

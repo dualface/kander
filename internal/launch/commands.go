@@ -88,7 +88,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 			return err
 		}
 	}
-	if !contains(config.ExecutionAgents, agentName) {
+	if !config.HasAgent(cfg, agentName) {
 		return launchError("launch.unsupported_agent", agentName)
 	}
 	launcher := launcherOverride
@@ -99,16 +99,16 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 	if err != nil {
 		return err
 	}
-	program, err := requireAgentProgram(agentName)
+	program, err := requireAgentProgram(agentName, cfg)
 	if err != nil {
 		return err
 	}
-	session, err := newAgentSession(agentName, program)
+	session, err := newAgentSession(agentName, program, cfg)
 	if err != nil {
 		return err
 	}
 	previous := map[string]struct{}{}
-	if agentName == "codex" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
+	if config.AgentFor(cfg, agentName).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
 		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
 			for _, id := range sessions {
 				previous[id] = struct{}{}
@@ -143,7 +143,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 	}()
 	prompt := taskInstruction(t("launch.prompt.start_head", entry.TaskID), taskFile)
 	model := cfg.Models.Kanban[agentName]
-	args, err := agentArguments(agentName, model, entry.Kind, session, false)
+	args, err := agentArguments(agentName, model, entry.Kind, session, false, cfg)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 			if err != nil {
 				return AgentSession{}, err
 			}
-			return AgentSession{Agent: "codex", Reference: ref}, nil
+			return AgentSession{Agent: session.Agent, Reference: ref}, nil
 		}
 	}
 	loc := (func(LaunchOutcome) error)(nil)
@@ -262,21 +262,24 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if takeover {
 		agentName = *agent
 	}
-	program, err := requireAgentProgram(agentName)
+	if !config.HasAgent(cfg, agentName) {
+		return launchError("launch.unsupported_agent", agentName)
+	}
+	program, err := requireAgentProgram(agentName, cfg)
 	if err != nil {
 		return err
 	}
 	var session AgentSession
 	if takeover {
-		session, err = newAgentSession(agentName, program)
+		session, err = newAgentSession(agentName, program, cfg)
 	} else {
-		session, err = resolvedTaskSession(entry.TaskID, text)
+		session, err = resolvedTaskSession(entry.TaskID, text, cfg)
 	}
 	if err != nil {
 		return err
 	}
 	previous := map[string]struct{}{}
-	if takeover && session.Agent == "codex" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
+	if takeover && config.AgentFor(cfg, session.Agent).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
 		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
 			for _, id := range sessions {
 				previous[id] = struct{}{}
@@ -316,7 +319,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	prompt := taskInstruction(head, taskFile)
 	model := cfg.Models.Kanban[session.Agent]
-	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover)
+	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
 	if err != nil {
 		return err
 	}
@@ -337,7 +340,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if err != nil {
 				return AgentSession{}, err
 			}
-			effective = AgentSession{Agent: "codex", Reference: ref}
+			effective = AgentSession{Agent: session.Agent, Reference: ref}
 			if takeover {
 				current, err := readDocumentFn(moved)
 				if err != nil {

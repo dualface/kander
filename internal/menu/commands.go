@@ -75,6 +75,9 @@ func Config(args []string) int {
 		return 1
 	}
 	if jsonOut {
+		for _, warning := range config.AgentWarnings(cfg) {
+			fmt.Fprintln(os.Stderr, warning)
+		}
 		payload, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "kander:", err)

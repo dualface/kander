@@ -495,7 +495,7 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 			Value(values[scale]).
 			Inline(true))
 		// Model and reasoning effort follow immediately below the agent they belong to, with no blank line in between.
-		for _, field := range p.modelInputs(bind, session.ExecutionModelFieldsFor(scale)) {
+		for _, field := range p.modelInputs(bind, append(session.ExecutionModelFieldsFor(scale), session.AgentExecutableFields(scale)...)) {
 			bind.addField(field)
 		}
 	}
@@ -519,6 +519,10 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) 
 			continue
 		}
 		bind.modelSeen[field.Key()] = struct{}{}
+		placeholder := field.Placeholder
+		if placeholder == "" {
+			placeholder = t("tui.empty_means_cli_default")
+		}
 		index := len(bind.modelFields)
 		bind.modelFields = append(bind.modelFields, field)
 		value := field.Value()
@@ -528,7 +532,7 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) 
 			Title(modelIndent+field.Short+"  ").
 			Prompt("").
 			Inline(true).
-			Placeholder(t("tui.empty_means_cli_default")).
+			Placeholder(placeholder).
 			Value(bind.modelValues[index]))
 	}
 	return out

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 )
 
 func formatReport(rep Report) string {
@@ -105,6 +106,14 @@ func RunCheck(args []string) int {
 			return 2
 		}
 		tasks = append(tasks, arg)
+	}
+	cfg, err := config.Load(true)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	for _, warning := range config.AgentWarnings(cfg) {
+		fmt.Fprintln(os.Stderr, warning)
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

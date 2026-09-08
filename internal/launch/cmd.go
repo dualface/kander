@@ -60,13 +60,13 @@ func parseAgentLauncher(args []string) (rest []string, agent, launcher string, a
 			if !ok {
 				return nil, "", "", false, t("launch.missing_agent_value")
 			}
-			if !contains(config.ExecutionAgents, val) {
+			if !config.ValidAgentName(val) {
 				return nil, "", "", false, t("launch.unknown_agent", val)
 			}
 			agent, agentSet, i = val, true, next
 		case strings.HasPrefix(arg, "--agent="):
 			val := strings.TrimPrefix(arg, "--agent=")
-			if !contains(config.ExecutionAgents, val) {
+			if !config.ValidAgentName(val) {
 				return nil, "", "", false, t("launch.unknown_agent", val)
 			}
 			agent, agentSet = val, true
@@ -182,13 +182,13 @@ func RunResume(args []string) int {
 			if !ok {
 				return usageFail("resume", "launch.missing_agent_value")
 			}
-			if !contains(config.ExecutionAgents, val) {
+			if !config.ValidAgentName(val) {
 				return usageFail("resume", "launch.unknown_agent", val)
 			}
 			agent, agentSet, i = val, true, next
 		case strings.HasPrefix(arg, "--agent="):
 			val := strings.TrimPrefix(arg, "--agent=")
-			if !contains(config.ExecutionAgents, val) {
+			if !config.ValidAgentName(val) {
 				return usageFail("resume", "launch.unknown_agent", val)
 			}
 			agent, agentSet = val, true

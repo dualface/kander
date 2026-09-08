@@ -56,8 +56,8 @@ kander dispatch show <task-id> <dispatch-id>
 kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>]
 kander pick [task-id]
-kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
-kander resume [--agent codex|claude|grok|cursor] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] <task-id>
+kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
+kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] <task-id>
 kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) <task-id>
 kander dismiss [--timeout SECONDS] <task-id>
 kander check [--all] [task-id ...]
@@ -118,6 +118,13 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - `dispatch fail|cancel` records an explicit intent decision with its expected dispatch revision and reason; it does not cancel or move the task, grant takeover, or discard originals. A changed/expired intent requires an explicit disposition before creating another ID; uncertainty alone is not cancellation authorization.
 - Ordinary unbound working messages and non-group legacy notifications retain their previous behavior and create no historical business receipt. The legacy delivery/marker clauses below apply only to those unbound messages. Bound card writes cannot omit the execution grant.
 - Dispatch originals and epoch receipts are producer-owned `dispatches/` attachments. Pending publications use the existing explicit init recovery and maintenance rules. Guarantees cover controlled card operations, never arbitrary external side effects exactly-once.
+
+**Configured Execution Agents**
+
+- The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, and session modes. Custom agents are execution-only; reviewer isolation and `*_REVIEW_BIN` remain independent.
+- Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used.
+- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
+- tmux foreground checks use the configured process name, falling back to the executable basename. herdr still requires its own agent recognition.
 
 **Start Parameters and Metadata**
 
@@ -549,7 +556,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ```sh
 # Delegate to a new executing agent: start claims and launches atomically
-kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
+kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
 
 # The user explicitly asks the current agent to execute an existing card: claim and record ownership atomically
 kander move <task-id> working --owner <agent>

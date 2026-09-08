@@ -181,7 +181,10 @@ func classifyTmux(ctx context.Context, entry board.Entry, session TaskSession, l
 		return staleReport(ctx, entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), tmux, launcher, allowReverseLookup)
 	}
 	facts := paneProbe.Facts
-	expected := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session.Agent)
+	if err != nil {
+		return report(entry, &session, Unknown, "tmux", tmuxContainer, err.Error(), "")
+	}
 	if facts.Dead != "0" || facts.Command != expected {
 		actual := facts.Command
 		if actual == "" {

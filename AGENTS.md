@@ -125,3 +125,5 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
 
 - [编排检查点与恢复](docs/coordinator-recovery.md)：coordinator epoch、CAS、快照对账、原件与 Git 收尾证据、恢复边界。
 - [原始复现验收映射](docs/recovery-regressions.md)：13 个原始坏行为、所属回归和跨模块恢复验收。
+
+- [自定义执行 Agent](docs/custom-agents.md)：可执行名、进程名、方言/argv 模板、会话策略与审核边界。

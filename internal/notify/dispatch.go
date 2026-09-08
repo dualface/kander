@@ -255,7 +255,11 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 			return DirectTarget{}, false, err
 		}
 		f := found.Facts
-		if f == nil || f.Dead != "0" || f.Command != agentCommandName(session.Agent) || session.Reference == "" || f.SessionMarker != session.Reference {
+		expected, err := agentCommandName(session.Agent)
+		if err != nil {
+			return DirectTarget{}, false, err
+		}
+		if f == nil || f.Dead != "0" || f.Command != expected || session.Reference == "" || f.SessionMarker != session.Reference {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "identity")
 		}
 		return DirectTarget{Kind: "tmux", Program: program, PaneID: match[4], Window: value}, f.InMode != "0", nil

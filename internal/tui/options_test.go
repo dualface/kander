@@ -597,3 +597,28 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
 		t.Fatalf("disk PM model=%q want %q", got, want)
 	}
 }
+
+func TestExecutableInputsDeduplicateAndPersist(t *testing.T) {
+	_, panel := openPanel(t)
+	pumpPanel(panel, panel.dispatch(sectionExecution))
+	count := 0
+	for i, field := range panel.bind.modelFields {
+		if strings.HasSuffix(field.Key(), ".process_name") {
+			count++
+			*panel.bind.modelValues[i] = "node"
+		}
+	}
+	if count != 1 {
+		t.Fatalf("duplicate process inputs: %d", count)
+	}
+	panel.bind.apply(panel)
+	drivePanel(panel, keyMsg("enter"))
+	loaded, err := config.Load(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := loaded.KanbanAgents["large"]
+	if loaded.Agents[agent].ProcessName != "node" {
+		t.Fatal(loaded.Agents)
+	}
+}

@@ -77,16 +77,22 @@ func cursorCreateChat(program *process.AgentProgram) (string, error) {
 	return chatID, nil
 }
 
-func newAgentSession(agent string, program *process.AgentProgram) (AgentSession, error) {
-	switch agent {
-	case "claude", "grok":
+func newAgentSession(agent string, program *process.AgentProgram, configs ...*config.Config) (AgentSession, error) {
+	var cfg *config.Config
+	if len(configs) > 0 {
+		cfg = configs[0]
+	}
+	definition := config.AgentFor(cfg, agent)
+	switch definition.Session.Mode {
+	case "generated", "none":
 		return AgentSession{Agent: agent, Reference: newUUID()}, nil
-	case "cursor":
-		id, err := cursorCreateChat(program)
-		if err != nil {
-			return AgentSession{}, err
+	case "allocated":
+		if definition.Dialect == "cursor" && (cfg == nil || cfg.Agents[agent].Session == nil) {
+			id, err := cursorCreateChat(program)
+			return AgentSession{Agent: agent, Reference: id}, err
 		}
-		return AgentSession{Agent: agent, Reference: id}, nil
+		id, err := allocateAgentSession(definition.Session)
+		return AgentSession{Agent: agent, Reference: id}, err
 	default:
 		return AgentSession{Agent: agent}, nil
 	}
@@ -106,7 +112,7 @@ func parseTaskSession(text string) *AgentSession {
 	if len(parts) > 1 {
 		reference = parts[1]
 	}
-	if !contains(config.ExecutionAgents, agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
+	if !config.ValidAgentName(agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
 		return nil
 	}
 	return &AgentSession{Agent: agent, Reference: reference}
@@ -126,17 +132,33 @@ func sessionFrom(text string) (AgentSession, error) {
 	return *session, nil
 }
 
-func resolvedTaskSession(taskID, text string) (AgentSession, error) {
+func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentSession, error) {
 	session, err := sessionFrom(text)
 	if err != nil {
 		return AgentSession{}, err
 	}
-	if session.Agent == "codex" && session.Reference == "" {
+	var cfg *config.Config
+	if len(configs) > 0 {
+		cfg = configs[0]
+	} else {
+		cfg, err = loadEffective()
+		if err != nil {
+			return AgentSession{}, err
+		}
+	}
+	if !config.HasAgent(cfg, session.Agent) {
+		return AgentSession{}, launchError("launch.unsupported_agent", session.Agent)
+	}
+	definition := config.AgentFor(cfg, session.Agent)
+	if definition.Session.Mode == "none" {
+		return AgentSession{}, config.AgentResumeError(session.Agent)
+	}
+	if definition.Session.Mode == "discovered" && session.Reference == "" {
 		id, err := findCodexSession(taskID)
 		if err != nil {
 			return AgentSession{}, err
 		}
-		return AgentSession{Agent: "codex", Reference: id}, nil
+		return AgentSession{Agent: session.Agent, Reference: id}, nil
 	}
 	if session.Reference == "" {
 		return AgentSession{}, launchError(
@@ -326,13 +348,33 @@ func discoverNewCodexSession(taskID string, previous map[string]struct{}) (strin
 	}
 }
 
-func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool) ([]string, error) {
+func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool, configs ...*config.Config) ([]string, error) {
+	var cfg *config.Config
+	if len(configs) > 0 {
+		cfg = configs[0]
+	}
+	definition := config.AgentFor(cfg, agent)
+	if resume && definition.Session.Mode == "none" {
+		return nil, config.AgentResumeError(agent)
+	}
 	scale := "small"
 	if kind == "large" {
 		scale = "large"
 	}
 	// The model is picked per task scale; an empty scale model falls back to the shared "model" key of legacy configs.
 	modelID := config.KanbanModelFor(model, scale)
+	if definition.Args != nil {
+		template := definition.Args.Start
+		if resume {
+			template = definition.Args.Resume
+		}
+		reference := session.Reference
+		if definition.Session.Mode == "none" {
+			reference = ""
+		}
+		return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
+	}
+	agent = definition.Dialect
 	if agent == "cursor" {
 		var args []string
 		if modelID != "" {
@@ -370,8 +412,12 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 	}
 }
 
-func requireAgentProgram(agentName string) (*process.AgentProgram, error) {
-	executable := config.AgentExecutableName(agentName)
+func requireAgentProgram(agentName string, configs ...*config.Config) (*process.AgentProgram, error) {
+	var cfg *config.Config
+	if len(configs) > 0 {
+		cfg = configs[0]
+	}
+	executable := config.AgentPath(cfg, agentName)
 	program := resolveAgent(executable)
 	if program != nil {
 		return program, nil

@@ -133,7 +133,10 @@ func cleanupContainer(herdrMatch, tmuxMatch []string, oldWindow string, oldSessi
 	if err := ValidateTmuxContainer(tmux, paneID, launcher, sessionID, windowID); err != nil {
 		return launch.CleanupResult{}, err
 	}
-	expected := agentCommandName(oldSession.Agent)
+	expected, err := agentCommandName(oldSession.Agent)
+	if err != nil {
+		return launch.CleanupResult{}, err
+	}
 	if facts.Dead == "1" {
 		if err := tmuxCloseWindow(tmux, windowID); err != nil {
 			return launch.CleanupResult{}, err

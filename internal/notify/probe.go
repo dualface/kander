@@ -3,7 +3,6 @@ package notify
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"time"
 
 	"github.com/dualface/kander/internal/config"
@@ -121,8 +120,9 @@ func HerdrExplicitTarget(herdr, paneID string) (tabID, resolvedPane string, err 
 	return tabID, paneID, nil
 }
 
-func agentCommandName(agent string) string {
-	return filepath.Base(config.AgentExecutableName(agent))
+func agentCommandName(agent string) (string, error) {
+	definition, err := config.LoadAgent(agent)
+	return definition.ProcessName, err
 }
 
 // TmuxNotifyTarget validates that an existing tmux pane accepts direct delivery.
@@ -143,7 +143,10 @@ func TmuxNotifyTarget(tmux, paneID string, session liveness.TaskSession) error {
 	if facts.InMode != "0" {
 		return notifyError("launch.tmux_pane_is_in_copy_mode", paneID)
 	}
-	expected := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session.Agent)
+	if err != nil {
+		return err
+	}
 	if facts.Command != expected {
 		return notifyError(
 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),
@@ -178,7 +181,10 @@ func TmuxNotifyProbe(tmux, paneID string, session liveness.TaskSession, timeout 
 	if facts.Dead != "0" {
 		return TargetProbe{State: "stale", Detail: t("launch.tmux_pane_is_dead", paneID)}
 	}
-	expected := agentCommandName(session.Agent)
+	expected, err := agentCommandName(session.Agent)
+	if err != nil {
+		return TargetProbe{State: "fallback", Detail: err.Error()}
+	}
 	if facts.Command != expected {
 		return TargetProbe{State: "stale", Detail: t(
 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),

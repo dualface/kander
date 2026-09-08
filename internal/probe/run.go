@@ -43,11 +43,24 @@ func timeoutContext(timeout time.Duration) (context.Context, context.CancelFunc)
 	return context.WithTimeout(context.Background(), timeout)
 }
 
-func defaultRun(ctx context.Context, program string, args []string) (res Result, runErr error) {
+func defaultRun(ctx context.Context, program string, args []string) (Result, error) {
+	return captureWithEnv(ctx, program, args, nil)
+}
+
+// CaptureWithEnv runs an argv command with explicit environment and the same
+// deadline and process-tree ownership as probes. A nil environment inherits.
+func CaptureWithEnv(ctx context.Context, program string, args, env []string) (Result, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	return captureWithEnv(ctx, program, args, env)
+}
+
+func captureWithEnv(ctx context.Context, program string, args, env []string) (res Result, runErr error) {
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
 	cmd := exec.Command(program, args...)
+	cmd.Env = env
 	tree, err := newProcessTree(cmd)
 	if err != nil {
 		return res, err
