@@ -394,6 +394,29 @@ func TestOpenOptionsBindsCapturedOverlayLanguage(t *testing.T) {
 	}
 }
 
+func TestOpenOptionsIgnoresOverlayLanguageBeforeWelcome(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "en_US.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeTempOverlay(t, dir, map[string]any{"language": "ja"})
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = false
+	app := newPanelApp(t)
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	if config.ResolveLanguage() != "en" {
+		t.Fatalf("unwelcome overlay language bound %q", config.ResolveLanguage())
+	}
+}
+
 func TestOpenOptionsPersistsSingleWhenAppAlreadyMatches(t *testing.T) {
 	app := newPanelApp(t)
 	initial := config.DefaultConfig()
