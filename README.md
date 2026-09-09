@@ -12,9 +12,24 @@ One person schedules multiple AI agents with a kanban board.
 
 Running requires Git, plus at least one of Codex, Claude, Grok, or Cursor.
 
-Download the latest kander binary from [Releases](https://github.com/dualface/kander/releases) and run it directly. On first launch, if not yet installed, an interactive wizard starts.
+**macOS** — install with Homebrew:
 
-Once installation finishes, it is ready to use.
+```sh
+brew install dualface/tap/kander
+kander
+```
+
+**Linux** — download the binary directly:
+
+```sh
+ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
+curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-linux-${ARCH}.tar.gz" | tar xz
+./kander
+```
+
+**Windows** — download `kander-windows-amd64.zip` from [Releases](https://github.com/dualface/kander/releases), unzip it, and run `kander.exe`.
+
+On first launch, if not yet installed, an interactive wizard starts. Once installation finishes, it is ready to use.
 
 Four steps to get going:
 

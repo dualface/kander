@@ -12,9 +12,24 @@
 
 运行需要 Git, 以及 Codex, Claude, Grok 或 Cursor 中至少一个.
 
-从 [Releases](https://github.com/dualface/kander/releases) 下载 kander 最新二进制后直接运行即可. 首次启动若尚未安装, 会进入交互向导.
+**macOS** — 使用 Homebrew 安装:
 
-安装完成后即可使用.
+```sh
+brew install dualface/tap/kander
+kander
+```
+
+**Linux** — 直接下载二进制:
+
+```sh
+ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
+curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-linux-${ARCH}.tar.gz" | tar xz
+./kander
+```
+
+**Windows** — 从 [Releases](https://github.com/dualface/kander/releases) 下载 `kander-windows-amd64.zip`, 解压后运行 `kander.exe`.
+
+首次启动若尚未安装, 会进入交互向导. 安装完成后即可使用.
 
 4 步上手:
 

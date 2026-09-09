@@ -12,9 +12,24 @@
 
 実行には Git と、Codex、Claude、Grok、Cursor のうち少なくとも 1 つが必要です。
 
-[Releases](https://github.com/dualface/kander/releases) から最新の kander バイナリをダウンロードしてそのまま実行してください。初回起動時にまだインストールされていなければ対話ウィザードが始まります。
+**macOS** — Homebrew でインストールします：
 
-インストールが完了すればすぐに使えます。
+```sh
+brew install dualface/tap/kander
+kander
+```
+
+**Linux** — バイナリを直接ダウンロードします：
+
+```sh
+ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
+curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-linux-${ARCH}.tar.gz" | tar xz
+./kander
+```
+
+**Windows** — [Releases](https://github.com/dualface/kander/releases) から `kander-windows-amd64.zip` をダウンロードし、展開して `kander.exe` を実行してください。
+
+初回起動時にまだインストールされていなければ対話ウィザードが始まります。インストールが完了すればすぐに使えます。
 
 4 ステップで始められます:
 
