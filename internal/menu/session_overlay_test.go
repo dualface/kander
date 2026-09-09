@@ -471,3 +471,55 @@ func TestInvalidOverlayEditRemainsDirtyAndCannotSave(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestInvalidOverlayDraftRestoresFieldsAcrossTabs(t *testing.T) {
+	session, path := tempOverlaySession(t, config.ModeGlobal)
+	delete(session.scopeRaw, "tui")
+	data, _ := json.Marshal(session.scopeRaw)
+	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	inherited := session.Config.TUI
+	if err := session.SetTUIField("theme", "dark"); err == nil {
+		t.Fatal("expected incomplete section error")
+	}
+	if err := session.SetTUIField("refresh", 17); err == nil {
+		t.Fatal("expected second incomplete section error")
+	}
+	if err := session.SetTarget(config.TargetScope); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatalf("cannot reopen invalid draft: %v", err)
+	}
+	if session.Config.TUI.Refresh != 17 || session.Config.TUI.Theme != "dark" {
+		t.Fatal("tab switch discarded draft values")
+	}
+	if err := session.RestoreInherit("tui", "theme"); err != nil {
+		t.Fatal(err)
+	}
+	if session.FieldOverridden("tui", "theme") || session.Config.TUI.Theme != inherited.Theme {
+		t.Fatal("theme did not return to inheritance")
+	}
+	if !session.FieldOverridden("tui", "refresh") || session.Config.TUI.Refresh != 17 {
+		t.Fatal("restoring theme lost the other rejected edit")
+	}
+	if _, err := session.Save(); err == nil {
+		t.Fatal("partial restoration made invalid draft saveable")
+	}
+	if err := session.RestoreInherit("tui", "refresh"); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.TUI != inherited || session.overlayDraft != nil {
+		t.Fatal("final restoration did not return to the valid view")
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("restoring all draft edits created an overlay")
+	}
+}
