@@ -3,11 +3,12 @@ package version
 
 import "strings"
 
-// Version is injected by the build entry point as the semantic version.
-// The default is used for untagged local builds and checkouts outside git.
+// Version is injected by the build entry point.
+// Release builds inject the tag with the leading v stripped. Local make
+// injects `git describe --tags --always`, or "dev" when that is unavailable.
 var Version = "dev"
 
-// String returns the semantic version, or "dev" when Version is blank.
+// String returns the injected version, or "dev" when Version is blank.
 func String() string {
 	value := strings.TrimSpace(Version)
 	if value == "" {
