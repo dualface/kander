@@ -112,10 +112,6 @@ func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 				}
 			}
 			app.openOptions()
-			if app.Options == nil || app.pendingWork == nil {
-				t.Fatal("options should load config in the background")
-			}
-			app.applyWork(app.pendingWork())
 			if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil || app.Options.session != nil {
 				t.Fatal("Load failure must stay on the error frame without opening the form")
 			}
@@ -135,6 +131,30 @@ func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReopenOptionsRequiresCompleteConfig(t *testing.T) {
+	app := newPanelApp(t)
+	app.Session = newTestSession(t)
+	app.openOptions()
+	if app.Options == nil || app.Options.form == nil || app.Options.loadErr != "" {
+		t.Fatal("valid config should open the form")
+	}
+	app.Options.close()
+	if app.Options != nil || app.Session == nil {
+		t.Fatal("close should keep the cached session")
+	}
+	path := os.Getenv(config.EnvConfig)
+	if err := os.WriteFile(path, []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app.openOptions()
+	if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil {
+		t.Fatal("reopen after a broken config must stay on the error frame")
+	}
+	if !strings.Contains(strings.ReplaceAll(ansi.Strip(app.View()), "\n", ""), "读取配置失败") {
+		t.Fatalf("reopen error frame:\n%s", ansi.Strip(app.View()))
 	}
 }
 

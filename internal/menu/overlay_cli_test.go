@@ -50,6 +50,25 @@ func writeOverlayFile(t *testing.T, dir string, payload map[string]any) (string,
 	return path, data
 }
 
+func TestDoctorReloadsMergedAgentsAfterCreatingMissingConfig(t *testing.T) {
+	h := newHarness(t)
+	h.fakeCommand("codex", "")
+	h.fakeCommand("claude", "")
+	wrapper := filepath.Join(h.root, "broken-codex")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(h.root, "project")
+	initGitDir(t, repo)
+	writeOverlayFile(t, repo, map[string]any{
+		"agents": map[string]any{"codex": map[string]any{"path": wrapper}},
+	})
+	code, _, errOut := h.runIn(repo, "doctor")
+	if !strings.Contains(errOut, wrapper) {
+		t.Fatalf("doctor=%d should probe the overlay wrapper after repair:\n%s", code, errOut)
+	}
+}
+
 func TestConfigJSONMergesOverlayAndHumanPrintsPath(t *testing.T) {
 	h := newHarness(t)
 	h.writeConfig(defaultPayload(map[string]any{"kanban_agent": "codex", "language": "cn"}))

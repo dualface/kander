@@ -37,6 +37,14 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 		}
 	}
 	t.Setenv(board.EnvBoardDir, root)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "cn"
+	cfg.AgentLanguage = "zh-CN"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 
 	slug := "full-binary-check"
 	created, err := board.NewTask(root, "chore", slug, "binding", "en", false)

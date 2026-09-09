@@ -74,6 +74,13 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		if _, ok := repairDoctorConfig(agents, tools); !ok {
 			healthy = false
 		}
+		if loaded, loadErr := config.Load(false); loadErr != nil {
+			warning(loadErr.Error())
+			healthy = false
+		} else {
+			agentConfig = loaded
+			agents = findAgents(agentConfig)
+		}
 	}
 	var configuredLauncher string
 	if loaded, loadErr := config.Load(false); loadErr == nil {

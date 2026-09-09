@@ -91,6 +91,10 @@ func (a *App) openOptionsAt(section string) {
 	panel := &optionsPanel{app: a, spinner: spin, initial: section}
 	panel.detectOverlayNotice()
 	a.Options = panel
+	if _, err := config.Load(false); err != nil {
+		panel.loadErr = err.Error()
+		return
+	}
 	if a.Session != nil {
 		panel.session = a.Session
 		if section == "" {
