@@ -10,7 +10,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
@@ -221,6 +223,46 @@ func TestEnterSavesReviewSection(t *testing.T) {
 	}
 }
 
+func TestOptionsThemeSelectListsAllThemes(t *testing.T) {
+	app, panel := openPanel(t)
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
+	if strings.Join(themes, ",") != strings.Join(want, ",") {
+		t.Fatalf("themes=%v", themes)
+	}
+	drivePanel(panel, keyMsg("down"))
+	drivePanel(panel, keyMsg("down"))
+	for _, name := range want {
+		if app.Theme != name {
+			// Walk until this theme is selected so its label is visible.
+			for i := 0; i < len(want) && app.Theme != name; i++ {
+				drivePanel(panel, keyMsg("right"))
+			}
+		}
+		if app.Theme != name {
+			t.Fatalf("could not select %s, stuck at %s", name, app.Theme)
+		}
+		_, popup := panel.view()
+		if !strings.Contains(ansi.Strip(popup), app.Context.themeLabel(name)) {
+			t.Fatalf("dropdown missing %s label %q in %q", name, app.Context.themeLabel(name), ansi.Strip(popup))
+		}
+	}
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(previous)
+	for _, name := range want {
+		if name == "auto" {
+			continue
+		}
+		app.Theme = name
+		_, popup := panel.view()
+		bg := trueColorSeq(string(themePalette(name).Bg), false)
+		if !strings.Contains(popup, bg) {
+			t.Fatalf("options panel %s missing canvas %s", name, bg)
+		}
+	}
+}
+
 func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 	app, panel := openPanel(t)
 	app.Theme = "light"
@@ -240,7 +282,17 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 	refresh := app.RefreshSecs
 	drivePanel(panel, keyMsg("up"))
 	for _, step := range []struct{ key, theme string }{
-		{"right", "dark"}, {"left", "light"}, {"left", "auto"}, {"right", "light"},
+		{"right", "light-warm"},
+		{"right", "light-contrast"},
+		{"right", "dark"},
+		{"right", "dark-soft"},
+		{"right", "dark-contrast"},
+		{"right", "auto"},
+		{"right", "light"},
+		{"left", "auto"},
+		{"left", "dark-contrast"},
+		{"right", "auto"},
+		{"right", "light"},
 	} {
 		drivePanel(panel, keyMsg(step.key))
 		if app.Theme != step.theme || panel.bind.theme != step.theme {

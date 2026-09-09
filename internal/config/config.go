@@ -35,7 +35,7 @@ var (
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
 	Languages        = []string{"cn", "en", "ja"}
-	TUIThemes        = []string{"auto", "light", "dark"}
+	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
 )
 
 const (

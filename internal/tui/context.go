@@ -51,9 +51,13 @@ func tuiPageContext() pageContext {
 		StatusHelp:       t("tui.help_q_quit"),
 		DetailStatusHelp: t("tui.help_q_back"),
 		ThemeLabels: map[string]string{
-			"auto":  t("tui.auto"),
-			"light": t("tui.light"),
-			"dark":  t("tui.dark"),
+			"auto":           t("tui.auto"),
+			"light":          t("tui.light"),
+			"light-warm":     t("tui.light-warm"),
+			"light-contrast": t("tui.light-contrast"),
+			"dark":           t("tui.dark"),
+			"dark-soft":      t("tui.dark-soft"),
+			"dark-contrast":  t("tui.dark-contrast"),
 		},
 		Help: t(
 			"tui.arrows_hjkl_mouse_move_double_click_detail_drag_to",
