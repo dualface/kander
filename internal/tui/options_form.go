@@ -36,7 +36,10 @@ type formBinding struct {
 	rulePreset     string
 	prevRulePreset string
 
-	modelFields []menu.ModelField
+	modelFields  []menu.ModelField
+	modelInputs  map[string]modelInput
+	reuseInputs  map[string]modelInput
+	modelApplied []string
 	// modelValues holds one string pointer per input. Binding the address of a slice element is not allowed:
 	// a later append may reallocate the backing array and leave the pointers of already-built fields dangling.
 	modelValues []*string
@@ -67,6 +70,8 @@ func (b *formBinding) addSpacer() {
 func (b *formBinding) reset() {
 	b.modelFields = nil
 	b.modelValues = nil
+	b.modelApplied = nil
+	b.modelInputs = map[string]modelInput{}
 	b.modelSeen = map[string]struct{}{}
 	b.fieldIndex = map[string]int{}
 	b.formFields = nil
@@ -332,19 +337,30 @@ func (p *optionsPanel) openCloseConfirm() tea.Cmd {
 	return p.startForm(form)
 }
 
+// modelInput keeps the input cursor and accessor stable across chrome refreshes.
+type modelInput struct {
+	input *huh.Input
+	value *string
+}
+
 // openSection builds the form of one section.
 func (p *optionsPanel) openSection(section string) tea.Cmd {
+	return p.openSectionWithInputs(section, nil)
+}
+
+func (p *optionsPanel) openSectionWithInputs(section string, inputs map[string]modelInput) tea.Cmd {
 	p.current = section
 	tui := p.scopeTUI()
 	bind := &formBinding{
-		theme:     tui.Theme,
-		columns:   tui.Columns,
-		minWidth:  tui.MinColumnWidth,
-		refresh:   tui.Refresh,
-		single:    tui.Single,
-		archived:  p.app.Model.ShowArchived,
-		reviewers: map[string]*string{},
-		stages:    map[string]*string{},
+		reuseInputs: inputs,
+		theme:       tui.Theme,
+		columns:     tui.Columns,
+		minWidth:    tui.MinColumnWidth,
+		refresh:     tui.Refresh,
+		single:      tui.Single,
+		archived:    p.app.Model.ShowArchived,
+		reviewers:   map[string]*string{},
+		stages:      map[string]*string{},
 	}
 	p.bind = bind
 	var group *huh.Group
@@ -555,10 +571,8 @@ func (p *optionsPanel) addModelInputs(bind *formBinding, fields []menu.ModelFiel
 		if placeholder == "" {
 			placeholder = t("tui.empty_means_cli_default")
 		}
-		index := len(bind.modelFields)
 		bind.modelFields = append(bind.modelFields, field)
 		value := field.Value()
-		bind.modelValues = append(bind.modelValues, &value)
 		// Inline puts the title and the value on one line, compressing the block of one role/scale from 7 lines to 4.
 		path := modelOverlayPath(field)
 		title := modelIndent + field.Short + "  "
@@ -566,12 +580,14 @@ func (p *optionsPanel) addModelInputs(bind *formBinding, fields []menu.ModelFiel
 			title = p.inheritTitle(title, value, path...)
 		}
 		bind.fieldIndex[modelFocusKey(field)] = bind.focusable
-		bind.addField(huh.NewInput().
-			Title(title).
-			Prompt("").
-			Inline(true).
-			Placeholder(placeholder).
-			Value(bind.modelValues[index]))
+		input, ok := bind.reuseInputs[field.Key()]
+		if !ok || *input.value != value {
+			input = modelInput{input: huh.NewInput().Value(&value), value: &value}
+		}
+		bind.modelValues = append(bind.modelValues, input.value)
+		bind.modelApplied = append(bind.modelApplied, value)
+		bind.modelInputs[field.Key()] = input
+		bind.addField(input.input.Title(title).Prompt("").Inline(true).Placeholder(placeholder))
 		if len(path) > 0 {
 			bind.addRestore(p, value, path...)
 		}
@@ -735,12 +751,16 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 		if i >= len(b.modelValues) || b.modelValues[i] == nil {
 			continue
 		}
-		if field.Value() != *b.modelValues[i] {
+		if b.modelApplied[i] != *b.modelValues[i] {
+			path := modelOverlayPath(field)
+			before := p.overridePresence(path...)
 			field.Set(*b.modelValues[i])
 			if p.session != nil {
 				p.session.NoteModelOverride(field, *b.modelValues[i])
 			}
+			b.modelApplied[i] = *b.modelValues[i]
 			p.markDirty()
+			p.rebuildIfOverrideChanged(before, modelFocusKey(field), path...)
 		}
 	}
 }
@@ -762,7 +782,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		scopeTUI.Theme = b.theme
 		changed = true
 		if overlay {
-			p.session.SetTUIField("theme", b.theme)
+			p.setOverlayTUIField("theme", b.theme)
 		}
 		// Huh caches the body during Update, and that cache still uses the old theme at this point.
 		// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
@@ -774,7 +794,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		changed = true
 		if overlay {
 			before := p.overridePresence("tui", "columns")
-			p.session.SetTUIField("columns", count)
+			p.setOverlayTUIField("columns", count)
 			p.rebuildIfOverrideChanged(before, interfaceFocusKey("columns"), "tui", "columns")
 		}
 	}
@@ -784,7 +804,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		changed = true
 		if overlay {
 			before := p.overridePresence("tui", "min_column_width")
-			p.session.SetTUIField("min_column_width", width)
+			p.setOverlayTUIField("min_column_width", width)
 			p.rebuildIfOverrideChanged(before, interfaceFocusKey("min_column_width"), "tui", "min_column_width")
 		}
 	}
@@ -794,7 +814,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		changed = true
 		if overlay {
 			before := p.overridePresence("tui", "refresh")
-			p.session.SetTUIField("refresh", refresh)
+			p.setOverlayTUIField("refresh", refresh)
 			p.rebuildIfOverrideChanged(before, interfaceFocusKey("refresh"), "tui", "refresh")
 		}
 	}
@@ -803,7 +823,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		scopeTUI.Single = b.single
 		changed = true
 		if overlay {
-			p.session.SetTUIField("single", b.single)
+			p.setOverlayTUIField("single", b.single)
 		}
 		p.rebuildAt(interfaceFocusKey("single"))
 	}

@@ -211,13 +211,20 @@ func (s *Session) syncScopeRaw(path []string, value any) {
 	config.OverlaySet(s.scopeRaw, value, path...)
 }
 
-func (s *Session) noteOverride(path []string, value any) {
+func (s *Session) noteOverride(path []string, value any) error {
 	if !s.EditingOverlay() {
 		s.ScopeDirty = true
 		s.syncScopeRaw(path, value)
-		return
+		return nil
 	}
-	_ = s.applyOverlaySet(path, value)
+	err := s.applyOverlaySet(path, value)
+	if err != nil {
+		// Keep invalid edits visible and dirty. Save validates this same candidate
+		// and reports the error instead of silently publishing the old overlay.
+		config.OverlaySet(s.overlayRaw, value, path...)
+		s.OverlayDirty = true
+	}
+	return err
 }
 
 // RestoreInherit deletes an overlay key and refreshes the effective view.
@@ -243,9 +250,10 @@ func (s *Session) RestoreInherit(path ...string) error {
 }
 
 // SetTUIField updates one TUI key so a Project-tab edit cannot copy the whole section.
-func (s *Session) SetTUIField(field string, value any) {
+// An invalid overlay edit remains visible and dirty; the returned error also blocks Save.
+func (s *Session) SetTUIField(field string, value any) error {
 	if s.Config == nil {
-		return
+		return nil
 	}
 	switch field {
 	case "theme":
@@ -269,7 +277,7 @@ func (s *Session) SetTUIField(field string, value any) {
 			s.Config.TUI.Single = flag
 		}
 	}
-	s.noteOverride([]string{"tui", field}, value)
+	return s.noteOverride([]string{"tui", field}, value)
 }
 
 // NoteModelOverride records a model or executable field the user actually edited.

@@ -403,7 +403,11 @@ func (p *optionsPanel) rebuildSection() tea.Cmd {
 	if section == "" {
 		return nil
 	}
-	cmd := p.openSection(section)
+	var inputs map[string]modelInput
+	if p.bind != nil {
+		inputs = p.bind.modelInputs
+	}
+	cmd := p.openSectionWithInputs(section, inputs)
 	// openSection rebuilt bind, so only now is it known which position that selector holds in the new form.
 	index := 0
 	if p.bind != nil {

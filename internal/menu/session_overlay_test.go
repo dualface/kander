@@ -421,3 +421,53 @@ func TestResetReviewRoleOnOverlayDoesNotSeed(t *testing.T) {
 		t.Fatalf("reset seeded overlay: %#v", session.overlayRaw)
 	}
 }
+
+func TestGlobalTUISyncUpdatesProjectInheritance(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	value := session.Config.TUI
+	value.Theme = "dark"
+	session.SyncTUI(value, true)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.TUI.Theme != "dark" {
+		t.Fatal("project kept old global theme")
+	}
+	session.SetTUIField("theme", "light")
+	if err := session.RestoreInherit("tui", "theme"); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.TUI.Theme != "dark" {
+		t.Fatal("restore kept old global theme")
+	}
+}
+
+func TestInvalidOverlayEditRemainsDirtyAndCannotSave(t *testing.T) {
+	session, path := tempOverlaySession(t, config.ModeProject)
+	delete(session.scopeRaw, "tui")
+	data, _ := json.Marshal(session.scopeRaw)
+	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTUIField("theme", "dark"); err == nil {
+		t.Fatal("missing merge error")
+	}
+	if !session.OverlayDirty || session.Config.TUI.Theme != "dark" || !session.FieldOverridden("tui", "theme") {
+		t.Fatal("failed edit lost")
+	}
+	if _, err := session.Save(); err == nil {
+		t.Fatal("invalid edit reported saved")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("invalid edit created overlay")
+	}
+	if !session.OverlayDirty {
+		t.Fatal("failed save cleared dirty state")
+	}
+	if err := session.RestoreInherit("tui", "theme"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+}

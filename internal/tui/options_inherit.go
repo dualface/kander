@@ -115,3 +115,9 @@ func overlayBasePath(p *optionsPanel) string {
 	}
 	return path
 }
+
+func (p *optionsPanel) setOverlayTUIField(field string, value any) {
+	if err := p.session.SetTUIField(field, value); err != nil {
+		p.showReport(t("tui.save_failed"), nil, err.Error())
+	}
+}

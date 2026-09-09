@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"encoding/json"
+	"github.com/charmbracelet/huh"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -343,20 +346,47 @@ func TestProjectLauncherChangeRefreshesInherit(t *testing.T) {
 	}
 }
 
-func TestModelOverrideDoesNotRebuildInput(t *testing.T) {
+func TestModelOverrideRefreshKeepsCursorAndRestore(t *testing.T) {
 	_, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeGlobal)
 	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
 	pumpPanel(panel, panel.openSection(sectionExecution))
-	if panel.bind == nil || len(panel.bind.modelValues) == 0 || panel.bind.modelValues[0] == nil {
-		t.Fatal("expected a model input")
+	field := panel.bind.modelFields[0]
+	input := panel.bind.modelInputs[field.Key()]
+	before := *input.value
+	pumpPanel(panel, repeatCmd(panel.bind.fieldIndex[modelFocusKey(field)], huh.NextField))
+	drivePanel(panel, tea.KeyMsg{Type: tea.KeyHome})
+	drivePanel(panel, keyMsg("x"))
+	drivePanel(panel, keyMsg("y"))
+	if got := *panel.bind.modelValues[0]; got != "xy"+before {
+		t.Fatalf("cursor or text lost: %q", got)
 	}
-	*panel.bind.modelValues[0] = *panel.bind.modelValues[0] + "-x"
+	if got := panel.session.Config.Models.Kanban[field.Agent][field.FieldName()]; got != "xy"+before {
+		t.Fatalf("effective model did not follow input: %q", got)
+	}
+	if panel.bind.modelInputs[field.Key()].input != input.input {
+		t.Fatal("input replaced")
+	}
+	view := ansi.Strip(input.input.View())
+	if strings.Contains(view, panel.session.FormatInherited(before)) {
+		t.Fatalf("stale inheritance: %s", view)
+	}
+	found := false
+	for _, item := range panel.bind.restores {
+		if reflect.DeepEqual(item.path, modelOverlayPath(field)) {
+			found = true
+			*item.flag = true
+		}
+	}
+	if !found {
+		t.Fatal("restore control missing")
+	}
 	panel.bind.apply(panel)
-	if panel.rebuildFocus != "" {
-		t.Fatalf("model keystroke rebuilt the form: %q", panel.rebuildFocus)
+	pumpPanel(panel, panel.rebuildSection())
+	if panel.session.FieldOverridden(modelOverlayPath(field)...) {
+		t.Fatal("restore did not remove model override")
 	}
 }
 
@@ -402,5 +432,78 @@ func TestAppUpdateRoutesOptionsClick(t *testing.T) {
 	moved, _, ok := focusRange(panel.currentBodyLines())
 	if !ok || moved != target {
 		t.Fatalf("App.Update click should focus form row %d, focus is %d", target, moved)
+	}
+}
+
+func TestRulesRawMergeDoesNotReapplyStaleBindings(t *testing.T) {
+	_, panel := openPanel(t)
+	raw, err := config.LoadScopeDocument(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "rules")
+	data, _ := json.Marshal(raw)
+	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	session, err := menu.NewSessionForTest(panel.session.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	panel.session = session
+	_, path := attachTempOverlay(t, session, config.ModeProject)
+	pumpPanel(panel, panel.openSection(sectionRules))
+	*panel.bind.rules[config.RuleCode] = false
+	panel.bind.apply(panel)
+	// A second event must not restore the old sibling values, even before rebuild.
+	panel.bind.apply(panel)
+	pumpPanel(panel, panel.rebuildSection())
+	drivePanel(panel, tea.KeyMsg{Type: tea.KeyEnter})
+	overlay, err := config.ReadOverlayFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := overlay["rules"].(map[string]any)
+	if len(rules) != 1 || rules["code"] != false {
+		t.Fatalf("unexpected overrides: %#v", rules)
+	}
+}
+
+func TestInvalidProjectInterfaceEditReportsAndKeepsInput(t *testing.T) {
+	_, panel := openPanel(t)
+	raw, err := config.LoadScopeDocument(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "tui")
+	data, _ := json.Marshal(raw)
+	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	session, err := menu.NewSessionForTest(panel.session.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	panel.session = session
+	_, path := attachTempOverlay(t, session, config.ModeProject)
+	panel.syncAppFromSession()
+	pumpPanel(panel, panel.openSection(sectionInterface))
+	want := "dark"
+	if panel.bind.theme == want {
+		want = "light"
+	}
+	panel.bind.theme = want
+	panel.bind.apply(panel)
+	if panel.report == nil || panel.report.extra == "" {
+		t.Fatal("missing edit validation error")
+	}
+	if panel.bind.theme != want || !session.OverlayDirty {
+		t.Fatal("failed edit discarded")
+	}
+	if err := panel.persistNow(); err == nil {
+		t.Fatal("invalid candidate reported saved")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("invalid candidate created overlay")
 	}
 }

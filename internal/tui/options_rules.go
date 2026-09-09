@@ -115,9 +115,14 @@ func (b *formBinding) applyRules(p *optionsPanel) {
 			p.rebuildAt(focus)
 			return
 		}
+		// Raw merges may change inherited siblings as well as the edited rule.
+		for module, value := range b.rules {
+			*value = p.session.Config.Rules[module]
+		}
 		p.markDirty()
+		p.rebuildAt(focus)
 	}
-	if presetChanged || matchWorkflowPreset(rules) != b.rulePreset {
+	if presetChanged || matchWorkflowPreset(p.session.Config.Rules) != b.rulePreset {
 		p.rebuildAt(focus)
 	}
 }

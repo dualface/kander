@@ -78,6 +78,16 @@ func (s *Session) SyncTUI(value config.TUI, persisted bool) {
 	if !s.EditingOverlay() && s.Config != nil {
 		s.Config.TUI = value
 	}
+	if s.scopeRaw != nil {
+		// Sync the whole section, including legacy scopes without a tui object.
+		for key, field := range map[string]any{
+			"theme": value.Theme, "columns": value.Columns,
+			"min_column_width": value.MinColumnWidth,
+			"refresh":          value.Refresh, "single": value.Single,
+		} {
+			config.OverlaySet(s.scopeRaw, field, "tui", key)
+		}
+	}
 	if persisted && s.existing != nil {
 		s.existing.TUI = value
 	}
