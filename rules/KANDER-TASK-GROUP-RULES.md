@@ -103,6 +103,15 @@ PREREQUISITES: N/A
 
 ## Task Orchestration
 
+**Entering Through a Member Card**
+
+- A request to start a specific task card must first read that card's `TASK_GROUP` and `PREREQUISITES` before claiming it. When `TASK_GROUP` is non-empty, also read every member of that group and resolve the complete dependency graph; do not treat the requested card as a standalone card.
+- Before starting the requested member, verify each prerequisite using "Dependencies Between Task Cards". Completion for this check means the state and Git containment required there: an in-group predecessor must have its latest delivery accepted into the group branch, while an out-of-group card or group must be complete in `develop`. A column name by itself is not sufficient evidence.
+- Before assuming orchestration, inspect the durable coordinator record and any group working state. Reconcile an existing record under "Durable Coordinator Recovery". Another live coordinator remains the orchestrator; do not displace its claim, create a competing orchestration, or launch another copy of a member.
+- If any prerequisite is not yet satisfied, or the group has no recorded group working state from "Creation and Reuse", the current agent automatically becomes the orchestrator once the coordinator claim permits it. Treat the start request as an instruction to start or continue the group orchestration, not as permission to bypass a dependency. Do not ask the user to choose another member or to restate the request.
+- The new orchestrator follows "Starting and Subscribing": validate the whole group, wait for external dependencies, create or reuse the group working state, start ready predecessors first, then start their successors as deliveries release them. It continues through group review, authorized integration, wrap-up, and successor groups under the existing gates. It never starts the originally requested card before that card becomes ready.
+- If the group already has a recorded working state and the requested card's prerequisites are satisfied, use the reconciled coordinator state before starting the card. Do not create a second group branch or launch the same member twice.
+
 - For a task with only a single task card:
 
   - Starting, manual claiming, and the tracking responsibilities of different launchers follow `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination".

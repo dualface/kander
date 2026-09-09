@@ -509,7 +509,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ## Claiming, Starting, and Coordination
 
-- When no task is specified and `todo/` has multiple cards, list the candidates for the user to choose; task groups are ordered by confirmed dependencies, not asked card by card. When start conditions are not met, only report the gap; do not claim or move back to `backlog/`.
+- When no task is specified and `todo/` has multiple cards, list the candidates for the user to choose; task groups are ordered by confirmed dependencies, not asked card by card. When a specified card belongs to a task group, inspect the group and its prerequisites before claiming that card, and use the member-card start entry in `KANDER-TASK-GROUP-RULES.md` "Task Orchestration". If that entry makes the current agent the orchestrator, advance the group in dependency order instead of claiming the requested card early. For all other unmet start conditions, only report the gap; do not claim or move back to `backlog/`.
 - Before touching code, the unique entry in `working/` must be obtained first. The two claiming methods are mutually exclusive:
 
 ```sh
