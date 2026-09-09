@@ -44,6 +44,14 @@ func TestMinimalCursorFixtureJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Captured from minimalPayload(nil) at 8abdfe2e, before the migration.
+	want, err := os.ReadFile("testdata/minimal-cursor-config.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != strings.TrimSuffix(string(want), "\n") {
+		t.Fatalf("fixture JSON differs from the pre-migration output\ngot:\n%s\nwant:\n%s", data, want)
+	}
 	again, err := ValidateJSON(data)
 	if err != nil {
 		t.Fatal(err)
@@ -165,6 +173,44 @@ func TestEmbeddedUnknownSchemaRejected(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "demo.json") || !strings.Contains(err.Error(), "schema_version") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestEmbeddedInvalidStructureNamesFileAndField(t *testing.T) {
+	data, err := embeddedAgentFS.ReadFile("agents/codex.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		field string
+		value any
+		want  string
+	}{
+		{"path", "", "path"},
+		{"process_name", "bad\nname", "process_name"},
+		{"args", map[string]any{"resume": []string{}}, "args.start"},
+		{"session", map[string]any{"mode": "unknown"}, "session.mode"},
+		{"prompt_delivery", map[string]any{"mode": "pane"}, "prompt_delivery.ready"},
+		{"rules_integration", "shell", "rules_integration"},
+	} {
+		t.Run(test.field, func(t *testing.T) {
+			var definition map[string]any
+			if err := json.Unmarshal(data, &definition); err != nil {
+				t.Fatal(err)
+			}
+			definition[test.field] = test.value
+			invalid, err := json.Marshal(definition)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, err = loadEmbeddedAgentsFrom(fstest.MapFS{
+				"index.json": {Data: []byte(`["codex"]`)},
+				"codex.json": {Data: invalid},
+			})
+			if err == nil || !strings.Contains(err.Error(), "codex.json") || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("missing file or field: %v", err)
+			}
+		})
 	}
 }
 

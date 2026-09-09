@@ -98,7 +98,8 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
-	root, _, _ := setupBoard(t)
+	root, _, bin := setupBoard(t)
+	herdrLog := installHerdr(t, root, bin)
 	var captured []string
 	previous := newShellInvocation
 	newShellInvocation = func(p process.AgentProgram, args []string, env map[string]string) (process.ProcessInvocation, error) {
@@ -106,20 +107,25 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 		return previous(p, args, env)
 	}
 	t.Cleanup(func() { newShellInvocation = previous })
-	for _, agent := range config.ExecutionAgents {
-		t.Run(agent, func(t *testing.T) {
-			captured = nil
-			id, _ := makeTodo(t, root, "argv-"+agent)
-			_, _, err := capture(t, func() error { return commandStart(root, agent, "tmux", id) })
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(captured) == 0 || !strings.Contains(captured[len(captured)-1], "UTF-8") {
-				t.Fatalf("prompt not last argv element: %q", captured)
-			}
-			if _, err := os.Stat(filepath.Join(root, "tmux.log.send-keys")); err == nil {
-				t.Fatal("argv path sent keys")
-			}
-		})
+	for _, launcher := range []string{"tmux", "herdr"} {
+		for _, agent := range config.ExecutionAgents {
+			t.Run(launcher+"/"+agent, func(t *testing.T) {
+				captured = nil
+				id, _ := makeTodo(t, root, "argv-"+launcher+"-"+agent)
+				_, _, err := capture(t, func() error { return commandStart(root, agent, launcher, id) })
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(captured) == 0 || !strings.Contains(captured[len(captured)-1], "UTF-8") {
+					t.Fatalf("prompt not last argv element: %q", captured)
+				}
+				if _, err := os.Stat(filepath.Join(root, "tmux.log.send-keys")); err == nil {
+					t.Fatal("argv path sent keys")
+				}
+				if _, err := os.Stat(herdrLog + ".prompt"); !os.IsNotExist(err) {
+					t.Fatalf("argv path used agent prompt: %v", err)
+				}
+			})
+		}
 	}
 }

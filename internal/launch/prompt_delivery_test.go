@@ -72,6 +72,10 @@ func TestPaneDeliveryRejectedBeforeForegroundClaim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	before, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, _, startErr := capture(t, func() error { return commandStart(root, "panecli", "foreground", taskID) })
 	if startErr == nil || !strings.Contains(startErr.Error(), "tmux") || !strings.Contains(startErr.Error(), "herdr") {
 		t.Fatalf("err=%v", startErr)
@@ -82,6 +86,10 @@ func TestPaneDeliveryRejectedBeforeForegroundClaim(t *testing.T) {
 	}
 	if _, stat := os.Stat(path); stat != nil {
 		t.Fatal("card left todo")
+	}
+	after, err := board.ReadSnapshot(root, taskID)
+	if err != nil || after.Revision != before.Revision {
+		t.Fatalf("revision changed before claim: %d -> %d, %v", before.Revision, after.Revision, err)
 	}
 }
 
@@ -169,10 +177,25 @@ func TestPaneDeliveryTwoStageReady(t *testing.T) {
 	t.Setenv("KANBAN_HERDR_PRE_READY_OUTPUT", "starting")
 	t.Setenv("KANBAN_HERDR_AGENT_OUTPUT", "TUI_READY")
 	writeFakeHerdr(t, filepath.Join(bin, "herdr"), log)
+	freezeClock(t)
+	advance := sleepFn
+	waited := false
+	sleepFn = func(d time.Duration) {
+		if strings.TrimSpace(mustRead(t, log+".ready-count")) == "1" {
+			waited = true
+			if _, err := os.Stat(log + ".prompt"); !os.IsNotExist(err) {
+				t.Fatalf("prompt delivered before TUI readiness: %v", err)
+			}
+		}
+		advance(d)
+	}
 	id, _ := makeTodo(t, root, "pane-stage")
 	_, _, err := capture(t, func() error { return commandStart(root, "panecli", "herdr", id) })
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !waited {
+		t.Fatal("second-stage readiness was skipped")
 	}
 	order, _ := os.ReadFile(log + ".order")
 	if strings.Index(string(order), "pane run") > strings.Index(string(order), "agent prompt") {
@@ -210,6 +233,9 @@ func TestPaneDeliveryBlockedWinsBeforeTimeout(t *testing.T) {
 		t.Fatalf("blocked waited too long: %s", elapsed)
 	}
 	assertPaneStartRolledBack(t, root, path, original, log)
+	if _, err := os.Stat(log + ".prompt"); !os.IsNotExist(err) {
+		t.Fatalf("blocked dialog received prompt: %v", err)
+	}
 }
 
 func TestPaneDeliveryHerdrPromptRejected(t *testing.T) {

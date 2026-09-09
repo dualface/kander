@@ -9,6 +9,7 @@ func writeFakeTmux(t *testing.T, path, log string) {
 	t.Helper()
 	script := `#!/bin/sh
 log="${KANBAN_TMUX_LOG:-` + log + `}"
+printf '%s\n' "$1" >> "$log.order"
 if [ "$1" = "display-message" ]; then
   case "${5:-}" in
     *pane_current_command*pane_in_mode*pane_dead*)
