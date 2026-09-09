@@ -193,20 +193,15 @@ func namedThemeNames() []string {
 }
 
 func themePalette(name string) palette {
-	if def, ok := themeDefByName(resolveTheme(name)); ok {
-		return def.palette
-	}
-	def, _ := themeDefByName("dark")
+	def, _ := themeDefByName(resolveTheme(name))
 	return def.palette
 }
 
 // themeIsDark reports the light/dark family of a theme from the table.
 // auto and unknown names go through resolveTheme first.
 func themeIsDark(name string) bool {
-	if def, ok := themeDefByName(resolveTheme(name)); ok {
-		return def.dark
-	}
-	return resolveTheme(name) == "dark"
+	def, _ := themeDefByName(resolveTheme(name))
+	return def.dark
 }
 
 func (p palette) ink(color lipgloss.Color) lipgloss.Style {
