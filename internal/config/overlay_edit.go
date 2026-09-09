@@ -208,12 +208,14 @@ func ReadOverlayFile(path string) (map[string]any, error) {
 	return cloneRawObjectDeep(obj), nil
 }
 
-// MergeScopeAndOverlay validates the effective config of a scope document plus sparse overlay keys.
-func MergeScopeAndOverlay(scope *Config, overlay map[string]any) (*Config, error) {
-	if scope == nil {
-		scope = DefaultConfig()
+// DocumentFromConfig encodes a filled Config as a JSON object. In-memory
+// sessions use this when no original document exists. Overlay save and Load
+// must use LoadScopeDocument so missing optional sections stay missing.
+func DocumentFromConfig(cfg *Config) (map[string]any, error) {
+	if cfg == nil {
+		cfg = DefaultConfig()
 	}
-	encoded, err := json.Marshal(scope)
+	encoded, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, configErrorfWrap(err, "config.failed_to_read_config_2", err.Error())
 	}
@@ -225,14 +227,48 @@ func MergeScopeAndOverlay(scope *Config, overlay map[string]any) (*Config, error
 	if !ok {
 		return nil, configErrorf("config.config_root_must_be_a_json_object")
 	}
-	if len(overlay) == 0 {
-		return Validate(obj)
+	return obj, nil
+}
+
+// LoadScopeDocument returns the raw scope JSON object used by overlay merge.
+func LoadScopeDocument(missingOK bool) (map[string]any, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return nil, err
 	}
-	merged, err := mergeOverlayRaw(obj, overlay)
+	_, raw, err := loadScopeRawAt(path, missingOK)
+	if err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+// MergeOverlayOnRaw validates overlay keys against a raw scope JSON document,
+// matching Load. Do not pass a filled Config: missing optional sections would
+// be filled and then accept overlays that Load rejects.
+func MergeOverlayOnRaw(scopeRaw, overlay map[string]any) (*Config, error) {
+	if scopeRaw == nil {
+		scopeRaw = map[string]any{}
+	}
+	base := cloneRawObjectDeep(scopeRaw)
+	if len(overlay) == 0 {
+		return Validate(base)
+	}
+	merged, err := mergeOverlayRaw(base, overlay)
 	if err != nil {
 		return nil, err
 	}
 	return Validate(merged)
+}
+
+// MergeScopeAndOverlay validates a filled Config plus sparse overlay keys.
+// Overlay save and Project-tab preview use MergeOverlayOnRaw instead.
+func MergeScopeAndOverlay(scope *Config, overlay map[string]any) (*Config, error) {
+	raw, err := DocumentFromConfig(scope)
+	if err != nil {
+		return nil, err
+	}
+	return MergeOverlayOnRaw(raw, overlay)
 }
 
 func encodeOverlay(obj map[string]any) ([]byte, error) {
@@ -340,11 +376,11 @@ func SaveOverlayIfUnchanged(path string, overlay, baseline map[string]any) (stri
 	if err := validateOverlayKeys(path, overlay); err != nil {
 		return "", err
 	}
-	scope, err := LoadScope(true)
+	raw, err := LoadScopeDocument(true)
 	if err != nil {
 		return "", err
 	}
-	if _, err := MergeScopeAndOverlay(scope, overlay); err != nil {
+	if _, err := MergeOverlayOnRaw(raw, overlay); err != nil {
 		return "", err
 	}
 	abs, err := lexicalAbsolute(path)

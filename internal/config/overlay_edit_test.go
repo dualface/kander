@@ -278,3 +278,60 @@ func TestMergeScopeAndOverlayKeepsExplicitEqualOverride(t *testing.T) {
 		t.Fatal("explicit equal value must stay an override")
 	}
 }
+
+func TestSaveOverlayRejectsPartialTUIOnLegacyScope(t *testing.T) {
+	setupHome(t)
+	root := t.TempDir()
+	main := initGitRepo(t, filepath.Join(root, "repo"))
+	t.Chdir(main)
+	scope := filepath.Join(root, "config.json")
+	cfg := DefaultConfig()
+	cfg.WelcomeComplete = true
+	raw, err := DocumentFromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "tui")
+	writeJSONFile(t, scope, raw)
+	t.Setenv(EnvConfig, scope)
+
+	path := filepath.Join(main, OverlayFilename)
+	_, err = SaveOverlayIfUnchanged(path, map[string]any{"tui": map[string]any{"theme": "dark"}}, map[string]any{})
+	if err == nil {
+		t.Fatal("partial tui overlay must fail against a scope that omits tui")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("failed save created a file")
+	}
+	if _, err := LoadScope(true); err != nil {
+		t.Fatalf("legacy scope without tui should still load: %v", err)
+	}
+}
+
+func TestMergeOverlayOnRawMatchesLoadForMissingRules(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.WelcomeComplete = true
+	raw, err := DocumentFromConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "rules")
+	overlay := map[string]any{"rules": map[string]any{"code": false}}
+	merged, err := MergeOverlayOnRaw(raw, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.Rules["code"] {
+		t.Fatal("explicit code=false should win")
+	}
+	if merged.Rules[RuleGit] {
+		t.Fatal("raw merge must not keep filled default rules")
+	}
+	filled, err := MergeScopeAndOverlay(cfg, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filled.Rules[RuleGit] {
+		t.Fatal("filled-config merge is the rejected preview path")
+	}
+}
