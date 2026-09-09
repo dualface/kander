@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 )
 
 const (
@@ -366,6 +367,12 @@ func RunSubscribe(args []string) int {
 			return 2
 		}
 		if err := writeSubscriptionDiagnostic(os.Stderr, "kander: "+parseErr); err != nil {
+			return 1
+		}
+		return 1
+	}
+	if _, err := config.Load(false); err != nil {
+		if outputErr := writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error()); outputErr != nil {
 			return 1
 		}
 		return 1

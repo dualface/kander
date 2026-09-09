@@ -107,7 +107,7 @@ func RunCheck(args []string) int {
 		}
 		tasks = append(tasks, arg)
 	}
-	cfg, err := config.Load(true)
+	cfg, err := config.Load(false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

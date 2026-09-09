@@ -212,7 +212,7 @@ func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result 
 				return e
 			}
 		}
-		cfg, e := config.Load(true)
+		cfg, e := config.Load(false)
 		if e != nil {
 			return e
 		}
@@ -240,6 +240,9 @@ func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result 
 func RunDispatch(args []string) int {
 	if len(args) != 2 || (args[0] != "prepare" && args[0] != "authorize-wrap-up") {
 		return board.RunDispatch(args)
+	}
+	if _, err := config.Load(false); err != nil {
+		return fail(err)
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

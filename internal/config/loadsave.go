@@ -117,7 +117,9 @@ func loadEffective(missingOK bool) (*Config, error) {
 }
 
 // Load reads the scope config, merges a project overlay when present, and validates the result.
-// A missing scope file yields the default config when missingOK is true.
+// Operational commands pass missingOK=false so a missing or invalid file fails instead of
+// substituting DefaultConfig. A missing scope file yields the default config only when
+// missingOK is true, which remains for Effective, doctor repair, and write-path helpers.
 func Load(missingOK bool) (*Config, error) {
 	return loadEffective(missingOK)
 }

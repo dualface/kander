@@ -90,8 +90,9 @@ func AgentPath(cfg *Config, name string) string        { return AgentFor(cfg, na
 func AgentProcessName(cfg *Config, name string) string { return AgentFor(cfg, name).ProcessName }
 
 // LoadAgent resolves current runtime settings without caching machine-local state.
+// A missing or invalid config is an error; it does not fall back to Effective defaults.
 func LoadAgent(name string) (AgentDefinition, error) {
-	cfg, err := Effective(nil)
+	cfg, err := Load(false)
 	if err != nil {
 		return AgentDefinition{}, err
 	}

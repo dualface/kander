@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/notify"
@@ -23,6 +24,9 @@ func reverseLookupStale[T any](detail string, lookup func() (T, error)) (T, erro
 }
 
 func commandDismiss(root, taskID string, timeout float64) error {
+	if _, err := config.Load(false); err != nil {
+		return err
+	}
 	loaded, err := board.LoadBoard(root)
 	if err != nil {
 		return err

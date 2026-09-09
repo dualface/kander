@@ -48,6 +48,17 @@ func capture(t *testing.T, fn func() int) (int, string, string) {
 	return code, string(out), string(errb)
 }
 
+func writeCompleteConfig(t *testing.T) {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "cn"
+	cfg.AgentLanguage = "zh-CN"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func tempBoard(t *testing.T) string {
 	t.Helper()
 	resetLang(t)
@@ -58,6 +69,8 @@ func tempBoard(t *testing.T) string {
 		}
 	}
 	t.Setenv(board.EnvBoardDir, root)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	writeCompleteConfig(t)
 	return root
 }
 

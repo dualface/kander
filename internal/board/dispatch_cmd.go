@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 func parseExecutionAuthorization(values map[string]string) (ExecutionAuthorization, error) {
@@ -30,6 +32,9 @@ func RunDispatch(args []string) int {
 	}
 	if len(args) < 1 {
 		return fail(kanbanError("board.dispatch_usage"))
+	}
+	if _, err := config.Load(false); err != nil {
+		return fail(err)
 	}
 	root, err := requireRoot()
 	if err != nil {

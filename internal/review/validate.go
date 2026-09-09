@@ -211,6 +211,10 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 			"review.cli_is_unavailable", settings.name, settings.executable,
 		)
 	}
+	reportLanguage, err := reportLanguageFromConfig()
+	if err != nil {
+		return reviewContext{}, err
+	}
 	return reviewContext{
 		agent:          agent,
 		settings:       settings,
@@ -224,7 +228,7 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 		reviewed:       reviewed,
 		program:        *program,
 		tempRoot:       tempRoot,
-		reportLanguage: reportLanguageFromConfig(),
+		reportLanguage: reportLanguage,
 	}, nil
 }
 

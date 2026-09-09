@@ -60,23 +60,6 @@ func takeValueFlag(args []string, name string) (rest []string, value string, fou
 	return rest, value, found, nil
 }
 
-// defaultCardLanguage is the agent_language of the current scope's config; without a config file it is
-// derived from the effective interface language, and an invalid config is an error rather than a guess.
-func defaultCardLanguage() (string, error) {
-	exists, err := config.Exists()
-	if err != nil {
-		return "", err
-	}
-	if !exists {
-		return config.DefaultAgentLanguage(config.ResolveLanguage()), nil
-	}
-	cfg, err := config.Load(false)
-	if err != nil {
-		return "", err
-	}
-	return cfg.AgentLanguage, nil
-}
-
 func takeFlag(args []string, name string) ([]string, bool) {
 	out := make([]string, 0, len(args))
 	found := false
@@ -200,11 +183,12 @@ func RunNew(args []string) int {
 	}
 	kind, slug := args[0], args[1]
 	title := strings.Join(args[2:], " ")
+	cfg, err := config.Load(false)
+	if err != nil {
+		return fail(err)
+	}
 	if !languageGiven {
-		language, err = defaultCardLanguage()
-		if err != nil {
-			return fail(err)
-		}
+		language = cfg.AgentLanguage
 	}
 	language, err = config.ValidateAgentLanguage(language)
 	if err != nil {

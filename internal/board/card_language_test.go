@@ -24,12 +24,9 @@ func TestNewCardRecordsConfiguredAgentLanguage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv(config.EnvConfig, path)
 
-	// No config file: derive from the effective interface language (cn -> zh-CN).
-	if code, _, stderr := capture(t, func() int { return RunNew([]string{"chore", "lang-default", "默认语种"}) }); code != 0 {
-		t.Fatalf("code=%d %s", code, stderr)
-	}
-	if got := MetadataFrom(readCard(t, root, todayID("lang-default")), FieldLanguage); got != "zh-CN" {
-		t.Fatalf("derived language=%q", got)
+	// No config file: operational commands fail instead of deriving a language.
+	if code, _, stderr := capture(t, func() int { return RunNew([]string{"chore", "lang-default", "默认语种"}) }); code == 0 {
+		t.Fatalf("missing config must fail kander new, stderr=%s", stderr)
 	}
 
 	// Explicit config value wins, even before initialization completes.
@@ -84,6 +81,7 @@ func TestLargeCardRecordsAgentLanguage(t *testing.T) {
 	resetLang(t)
 	root := tempBoard(t)
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	writeCompleteConfig(t)
 	if code, _, stderr := capture(t, func() int {
 		return RunNew([]string{"--large", "--language", "de", "feature", "lang-large", "大卡语种"})
 	}); code != 0 {

@@ -51,7 +51,7 @@ func cardStateStatus(paths config.InstallPaths, taskID, state string) string {
 // resolvePromptLanguage returns the agent communication language for start/resume/takeover
 // prompts and notify direct delivery. Card LANGUAGE wins; when the field is absent it falls
 // back to agent_language from the process config scope (ConfigPath / KANDER_CONFIG), matching
-// kander new (no config file derives from the interface language; a corrupt config is an error).
+// kander new (a missing or invalid config is an error, not a derived default).
 // paths is the install scope used alongside this language for rule-loading paths in the same
 // prompt; config I/O intentionally follows ConfigPath rather than paths.ConfigPath so
 // KANDER_CONFIG overrides remain consistent with the rest of the tool.
@@ -60,13 +60,6 @@ func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, 
 		return lang, nil
 	}
 	_ = paths
-	exists, err := config.Exists()
-	if err != nil {
-		return "", err
-	}
-	if !exists {
-		return config.DefaultAgentLanguage(config.ResolveLanguage()), nil
-	}
 	cfg, err := config.Load(false)
 	if err != nil {
 		return "", err

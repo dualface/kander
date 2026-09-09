@@ -176,3 +176,36 @@ func TestDialectSessionCompatibility(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAgentRequiresCompleteConfig(t *testing.T) {
+	setupHome(t)
+	path := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv(EnvConfig, path)
+	if _, err := LoadAgent("codex"); err == nil {
+		t.Fatal("missing config must fail")
+	}
+	if err := os.WriteFile(path, []byte("{broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadAgent("codex"); err == nil {
+		t.Fatal("invalid JSON must fail")
+	}
+	if err := os.WriteFile(path, []byte(`{"language":"xx"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadAgent("codex"); err == nil {
+		t.Fatal("schema-invalid config must fail")
+	}
+	cfg := DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadAgent("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Dialect != "codex" {
+		t.Fatalf("%+v", got)
+	}
+}

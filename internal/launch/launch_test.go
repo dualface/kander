@@ -99,7 +99,13 @@ func setupBoard(t *testing.T) (root, home, fakeBin string) {
 	home = t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
-	t.Setenv("KANDER_CONFIG", filepath.Join(home, "missing-config.json"))
+	t.Setenv("KANDER_CONFIG", filepath.Join(home, "config.json"))
+	cfg := envConfig("codex", "tmux", nil)
+	cfg.Language = "cn"
+	cfg.AgentLanguage = "zh-CN"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	fakeBin = filepath.Join(root, "fake-bin")
 	if err := os.Mkdir(fakeBin, 0o755); err != nil {
 		t.Fatal(err)
@@ -118,7 +124,7 @@ func setupBoard(t *testing.T) (root, home, fakeBin string) {
 		return config.InstallPaths{Mode: config.ModeGlobal, BinDir: fakeBin}, nil
 	}
 	t.Cleanup(func() {
-		loadEffective = func() (*config.Config, error) { return config.Effective(nil) }
+		loadEffective = func() (*config.Config, error) { return config.Load(false) }
 		currentInstallPaths = config.CurrentInstallPaths
 	})
 	return root, home, fakeBin

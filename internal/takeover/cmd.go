@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 )
 
@@ -82,6 +83,9 @@ func RunDismiss(args []string) int {
 	}
 	if len(positional) != 1 {
 		return usageFail("launch.task_id_is_required")
+	}
+	if _, err := config.Load(false); err != nil {
+		return fail(err)
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

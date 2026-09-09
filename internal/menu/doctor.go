@@ -64,7 +64,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {
 		healthy = false
 	}
-	agentConfig, agentConfigErr := config.Load(true)
+	agentConfig, agentConfigErr := config.Load(false)
 	if agentConfigErr != nil && !repair {
 		warning(agentConfigErr.Error())
 		healthy = false
@@ -76,7 +76,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		}
 	}
 	var configuredLauncher string
-	if loaded, loadErr := config.Load(true); loadErr == nil {
+	if loaded, loadErr := config.Load(false); loadErr == nil {
 		if effective, effErr := config.Effective(loaded); effErr == nil {
 			configuredLauncher = effective.Launcher
 		}
@@ -151,7 +151,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		warning(config.Text("menu.no_reviewer_found_reviews_cannot_run"))
 	}
 
-	loaded, loadErr := config.Load(true)
+	loaded, loadErr := config.Load(false)
 	if loadErr != nil {
 		warning(loadErr.Error())
 		healthy = false

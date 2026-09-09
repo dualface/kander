@@ -52,6 +52,13 @@ func setupBoard(t *testing.T) (root, fakeBin string) {
 	}
 	root = t.TempDir()
 	t.Setenv(config.EnvConfig, filepath.Join(root, "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "cn"
+	cfg.AgentLanguage = "zh-CN"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	for _, state := range board.States {
 		if err := os.Mkdir(filepath.Join(root, state), 0o755); err != nil {
 			t.Fatal(err)

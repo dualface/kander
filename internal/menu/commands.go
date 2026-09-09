@@ -69,7 +69,7 @@ func Config(args []string) int {
 		fmt.Fprintln(os.Stderr, "kander:", err)
 		return 2
 	}
-	cfg, err := config.Load(true)
+	cfg, err := config.Load(false)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "kander:", err)
 		return 1

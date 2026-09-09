@@ -116,6 +116,9 @@ func RunStart(args []string) int {
 		}
 		task = arg
 	}
+	if _, err := config.Load(false); err != nil {
+		return fail(err)
+	}
 	root, err := boardRootFn()
 	if err != nil {
 		return fail(err)
@@ -216,6 +219,9 @@ func RunResume(args []string) int {
 	}
 	if len(positional) != 1 {
 		return usageFail("resume", "launch.task_id_is_required")
+	}
+	if _, err := config.Load(false); err != nil {
+		return fail(err)
 	}
 	var agentPtr *string
 	if agentSet {

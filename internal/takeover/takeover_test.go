@@ -58,6 +58,14 @@ func setupBoard(t *testing.T) (root, fakeBin string) {
 		}
 	}
 	t.Setenv(board.EnvBoardDir, root)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "cn"
+	cfg.AgentLanguage = "zh-CN"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	fakeBin = filepath.Join(root, "fake-bin")
 	if err := os.Mkdir(fakeBin, 0o755); err != nil {
 		t.Fatal(err)
@@ -331,6 +339,11 @@ func TestCleanupForegroundIsNA(t *testing.T) {
 
 func TestAgentExitCommands(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	exit, err := AgentExitCommand("claude")
 	if err != nil || exit != "/exit" {
 		t.Fatal(exit, err)

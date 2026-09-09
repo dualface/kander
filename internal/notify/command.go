@@ -39,7 +39,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 	if err := board.ValidateMutable(entry, text); err != nil {
 		return err
 	}
-	cfg, err := config.Load(true)
+	cfg, err := config.Load(false)
 	if err != nil {
 		return err
 	}

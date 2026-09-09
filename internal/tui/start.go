@@ -92,7 +92,14 @@ func (a *App) applyStartPreview(result startPreviewResult) {
 	request, message := result.request, ""
 	switch {
 	case result.err != nil:
-		message = t("tui.start_failed", result.err.Error())
+		dialog.phase = startFinished
+		dialog.failed = true
+		dialog.message = t("tui.start_failed", result.err.Error())
+		if len(request.Warnings) > 0 {
+			dialog.message = strings.Join(append([]string{dialog.message}, request.Warnings...), " ")
+		}
+		dialog.bodyView.GotoTop()
+		return
 	case request.State != "backlog" && request.State != "todo":
 		message = t("tui.start_invalid_state", request.State)
 	case !backgroundStartLauncher(request.Launcher):

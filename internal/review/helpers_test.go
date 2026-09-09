@@ -1,15 +1,16 @@
 package review
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/config"
-	"time"
 )
 
 func captureRun(t *testing.T, args []string) (int, string, string) {
@@ -71,6 +72,22 @@ func setupLang(t *testing.T, configPath string) {
 	t.Setenv("LANG", "")
 	config.ApplyLanguageArgument(nil)
 	config.BindConfigLanguage(nil)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"schema_version":   1,
+		"welcome_complete": true,
+		"kanban_agent":     "codex",
+		"launcher":         "tmux",
+		"reviewers":        map[string]string{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func readFile(t *testing.T, path string) string {

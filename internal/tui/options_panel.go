@@ -122,12 +122,14 @@ func (p *optionsPanel) Init() tea.Cmd {
 
 func (p *optionsPanel) requestSession() {
 	p.app.pendingWork = func() any {
-		existing, err := config.LoadScope(true)
-		valid := err == nil
-		if err != nil {
-			existing = config.DefaultConfig()
+		if _, err := config.Load(false); err != nil {
+			return sessionResult{err: err}
 		}
-		session, sessionErr := menu.NewSession(existing, valid)
+		existing, err := config.LoadScope(false)
+		if err != nil {
+			return sessionResult{err: err}
+		}
+		session, sessionErr := menu.NewSession(existing, true)
 		return sessionResult{session: session, err: sessionErr}
 	}
 }

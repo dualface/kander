@@ -26,7 +26,7 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(true)
+	cfg, err := config.Load(false)
 	if err != nil {
 		return err
 	}

@@ -62,7 +62,7 @@ func RunCoordinator(args []string) int {
 	if len(args) != 2 {
 		return fail(launchError("board.coordinator_usage"))
 	}
-	cfg, err := config.Load(true)
+	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 )
 
@@ -21,6 +22,12 @@ func portableBoard(t *testing.T, state, taskID, windowValue string) string {
 		}
 	}
 	t.Setenv(board.EnvBoardDir, root)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	card := "# 冒烟\n\n- 类型: Chore\n- 会话: codex session-x\n- 窗口: " + windowValue + "\n"
 	if err := os.Mkdir(filepath.Join(root, state, taskID), 0700); err != nil {
 		t.Fatal(err)

@@ -239,19 +239,17 @@ func TestModelConfigAndEnvOverride(t *testing.T) {
 	assertArg(t, argv, "--model", "env-model")
 }
 
-func TestMalformedModelConfigFallsBack(t *testing.T) {
+func TestMalformedModelConfigFails(t *testing.T) {
 	h := newCodexHarness(t)
 	if err := os.WriteFile(os.Getenv("KANDER_CONFIG"), []byte("{invalid"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	code, _, err := h.defaultReview()
-	if code != 0 {
-		t.Fatalf("code=%d err=%s", code, err)
+	if code == 0 {
+		t.Fatal("invalid config must fail review")
 	}
-	argv := strings.Split(strings.TrimRight(readFile(t, h.argvLog), "\n"), "\n")
-	assertArg(t, argv, "--model", "gpt-5.6-sol")
-	if !contains(argv, `model_reasoning_effort="high"`) {
-		t.Fatalf("argv=%v", argv)
+	if !strings.Contains(err, "failed to read config") {
+		t.Fatalf("code=%d err=%s", code, err)
 	}
 }
 

@@ -22,6 +22,10 @@ func Run(args []string) (exitCode int) {
 		usage()
 		return 2
 	}
+	if _, err := config.Load(false); err != nil {
+		userError(err.Error())
+		return 1
+	}
 	if dispositionCommand(args[0]) {
 		return runDispositionCommand(args)
 	}
@@ -63,7 +67,11 @@ func Run(args []string) (exitCode int) {
 			userError(config.Text("review.unsupported_role", roleInput))
 			return 2
 		}
-		agent = reviewerFromConfig(role)
+		agent, err = reviewerFromConfig(role)
+		if err != nil {
+			userError(err.Error())
+			return 1
+		}
 	}
 	archiveRoot := ""
 	replay := false

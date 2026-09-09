@@ -864,6 +864,18 @@ func TestLoadMissingOKAndInvalidJSON(t *testing.T) {
 	if _, err := Load(true); !IsError(err) {
 		t.Fatalf("expected read error, got %v", err)
 	}
+	if _, err := Load(false); !IsError(err) {
+		t.Fatalf("invalid JSON must fail Load(false), got %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"language":"xx"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(false); !IsError(err) {
+		t.Fatalf("schema-invalid config must fail Load(false), got %v", err)
+	}
+	if _, err := Load(true); !IsError(err) {
+		t.Fatalf("schema-invalid config must fail Load(true), got %v", err)
+	}
 }
 
 func TestEffectiveIgnoresIncompleteWelcome(t *testing.T) {

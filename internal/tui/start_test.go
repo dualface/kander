@@ -116,8 +116,18 @@ func TestStartConfirmationErrors(t *testing.T) {
 	app.PrepareStart = func(string) (startRequest, error) { return startRequest{}, errors.New("config unreadable") }
 	app.HandleKey("s")
 	finishStartPreview(app)
-	if app.StartConfirmation != nil || !strings.Contains(app.CopyNotice, "config unreadable") {
-		t.Fatal("missing preparation error")
+	if app.StartConfirmation == nil || !app.StartConfirmation.failed || !strings.Contains(app.StartConfirmation.message, "config unreadable") {
+		t.Fatal("config error must stay in the start dialog")
+	}
+	if app.pendingWork != nil {
+		t.Fatal("config error must not claim the task")
+	}
+	if !strings.Contains(ansi.Strip(app.View()), "config unreadable") {
+		t.Fatal("start dialog must show the config error")
+	}
+	app.HandleKey("esc")
+	if app.StartConfirmation != nil {
+		t.Fatal("closing the error dialog must not launch")
 	}
 }
 

@@ -187,6 +187,24 @@ func TestPromptLanguageDirectiveFromCardAndConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("missing config without LANGUAGE", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.json")
+		t.Setenv(config.EnvConfig, path)
+		for _, tc := range makeAll("- TYPE: Feature\n") {
+			if tc.err == nil {
+				t.Fatalf("%s: expected config error, got prompt %q", tc.name, tc.body)
+			}
+		}
+		for _, tc := range makeAll("- LANGUAGE: ko\n") {
+			if tc.err != nil {
+				t.Fatalf("%s: card LANGUAGE should skip config: %v", tc.name, tc.err)
+			}
+			if !strings.Contains(tc.body, `in "ko"`) {
+				t.Fatalf("%s missing ko directive: %s", tc.name, tc.body)
+			}
+		}
+	})
+
 	t.Run("corrupt config without LANGUAGE", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.json")
 		t.Setenv(config.EnvConfig, path)

@@ -94,6 +94,50 @@ func TestNewTestSessionForcesTemporaryConfig(t *testing.T) {
 	}
 }
 
+func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+	}{
+		{"missing", ""},
+		{"invalid-json", "{broken"},
+		{"invalid-schema", `{"language":"xx"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newPanelApp(t)
+			path := filepath.Join(t.TempDir(), "config.json")
+			t.Setenv(config.EnvConfig, path)
+			if tc.body != "" {
+				if err := os.WriteFile(path, []byte(tc.body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			app.openOptions()
+			if app.Options == nil || app.pendingWork == nil {
+				t.Fatal("options should load config in the background")
+			}
+			app.applyWork(app.pendingWork())
+			if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil || app.Options.session != nil {
+				t.Fatal("Load failure must stay on the error frame without opening the form")
+			}
+			plain := strings.ReplaceAll(ansi.Strip(app.View()), "\n", "")
+			switch tc.name {
+			case "missing":
+				if !strings.Contains(plain, "配置不存在") {
+					t.Fatalf("missing config frame:\n%s", ansi.Strip(app.View()))
+				}
+			case "invalid-json":
+				if !strings.Contains(plain, "读取配置失败") {
+					t.Fatalf("invalid JSON frame:\n%s", ansi.Strip(app.View()))
+				}
+			default:
+				if !strings.Contains(plain, "schema") && !strings.Contains(plain, "language") {
+					t.Fatalf("invalid schema frame:\n%s", ansi.Strip(app.View()))
+				}
+			}
+		})
+	}
+}
+
 func TestOpenOptionsFromBoardKey(t *testing.T) {
 	app := newPanelApp(t)
 	app.Session = newTestSession(t)

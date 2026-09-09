@@ -22,6 +22,17 @@ func resetLang(t *testing.T) {
 	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
 }
 
+func writeCompleteConfig(t *testing.T) {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "cn"
+	cfg.AgentLanguage = "zh-CN"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func tempBoard(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -31,6 +42,8 @@ func tempBoard(t *testing.T) string {
 		}
 	}
 	t.Setenv(EnvBoardDir, root)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	writeCompleteConfig(t)
 	rules := filepath.Join(t.TempDir(), "KANDER-KANBAN-RULES.md")
 	if err := os.WriteFile(rules, []byte("# 全局文件看板规则\n"), 0o644); err != nil {
 		t.Fatal(err)

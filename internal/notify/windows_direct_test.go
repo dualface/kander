@@ -79,6 +79,11 @@ func TestNotifyDeliversThroughHerdrOnEveryPlatform(t *testing.T) {
 	resetLang(t)
 	root := t.TempDir()
 	t.Setenv(config.EnvConfig, filepath.Join(root, "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	for _, state := range board.States {
 		if err := os.Mkdir(filepath.Join(root, state), 0o755); err != nil {
 			t.Fatal(err)

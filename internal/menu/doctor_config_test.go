@@ -48,6 +48,69 @@ func TestDoctorFailsWithoutAgents(t *testing.T) {
 	}
 }
 
+func TestOperationalCommandsRequireCompleteConfig(t *testing.T) {
+	commands := [][]string{
+		{"config"},
+		{"config", "--json"},
+		{"new", "chore", "cfg-missing", "title"},
+		{"new", "--language", "de", "chore", "cfg-lang", "title"},
+		{"start", "20260909-cfg-task"},
+		{"resume", "--message", "go", "20260909-cfg-task"},
+		{"notify", "--message", "go", "20260909-cfg-task"},
+		{"dismiss", "20260909-cfg-task"},
+		{"review", "/tmp", strings.Repeat("a", 40), strings.Repeat("a", 40), "PM", "goal"},
+		{"review", "progress", "/tmp", "20260909-cfg-task"},
+		{"check"},
+		{"subscribe", "20260909-cfg-group", "20260909-cfg-task"},
+		{"coordinator", "show", "20260909-cfg-group"},
+		{"dispatch", "show", "20260909-cfg-task", "disp-1"},
+		{"dispatch", "fail", "20260909-cfg-task", "disp-1", "1", "reason"},
+		{"dispatch", "cancel", "20260909-cfg-task", "disp-1", "1", "reason"},
+	}
+	for _, body := range []string{"", "{broken", `{"language":"xx"}`} {
+		name := "missing"
+		if body == "{broken" {
+			name = "invalid-json"
+		} else if body != "" {
+			name = "invalid-schema"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, args := range commands {
+				t.Run(strings.Join(args, "_"), func(t *testing.T) {
+					h := newHarness(t)
+					if body != "" {
+						if err := os.MkdirAll(filepath.Dir(h.configPath), 0o755); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(h.configPath, []byte(body), 0o600); err != nil {
+							t.Fatal(err)
+						}
+					}
+					code, out, err := h.run(args...)
+					if code == 0 {
+						t.Fatalf("code=0 out=%s err=%s", out, err)
+					}
+					combined := out + err
+					switch body {
+					case "":
+						if !strings.Contains(combined, "配置不存在") {
+							t.Fatalf("missing config: code=%d out=%q err=%q", code, out, err)
+						}
+					case "{broken":
+						if !strings.Contains(combined, "读取配置失败") {
+							t.Fatalf("invalid JSON: code=%d out=%q err=%q", code, out, err)
+						}
+					default:
+						if !strings.Contains(combined, "schema_version") && !strings.Contains(combined, "必须是") && !strings.Contains(combined, "language") {
+							t.Fatalf("invalid schema: code=%d out=%q err=%q", code, out, err)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestInvalidConfigReported(t *testing.T) {
 	h := newHarness(t)
 	if err := os.MkdirAll(filepath.Dir(h.configPath), 0o755); err != nil {
@@ -67,6 +130,7 @@ func TestInvalidConfigReported(t *testing.T) {
 
 func TestConfigHumanAndJSON(t *testing.T) {
 	h := newHarness(t)
+	h.writeConfig(defaultPayload(map[string]any{"welcome_complete": false}))
 	code, out, err := h.run("config")
 	if code != 0 {
 		t.Fatalf("%d %s", code, err)
@@ -235,12 +299,9 @@ func TestProjectConfigAndDoctor(t *testing.T) {
 		}
 		return code, stdout.String(), stderr.String()
 	}
-	code, out, err := runProject("config")
-	if code != 0 {
-		t.Fatalf("%d %s", code, err)
-	}
-	if !strings.Contains(out, "初始化: 未完成") || !strings.Contains(out, "看板 Agent: codex") {
-		t.Fatalf("%s", out)
+	code, _, err := runProject("config")
+	if code == 0 || !strings.Contains(err, "配置不存在") {
+		t.Fatalf("project config must fail when the project file is missing: %d %s", code, err)
 	}
 	projectCfg := filepath.Join(project, ".kander", "config.json")
 	data, _ := json.Marshal(defaultPayload(map[string]any{"kanban_agent": "claude"}))
@@ -249,6 +310,13 @@ func TestProjectConfigAndDoctor(t *testing.T) {
 	}
 	if e := os.WriteFile(projectCfg, data, 0o600); e != nil {
 		t.Fatal(e)
+	}
+	code, out, err := runProject("config")
+	if code != 0 {
+		t.Fatalf("%d %s", code, err)
+	}
+	if !strings.Contains(out, "看板 Agent: claude") {
+		t.Fatalf("%s", out)
 	}
 	h.fakeCommand("codex", "")
 	h.fakeCommand("claude", "")

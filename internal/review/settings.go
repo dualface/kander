@@ -87,7 +87,7 @@ func positiveInteger(value, variable string) (int, error) {
 // configuredModel returns the model and reasoning effort in force for a review role:
 // the role's own override first, falling back to the value of its selected reviewer when empty.
 func configuredModel(agent, role string) (string, string, bool) {
-	cfg, err := config.Effective(nil)
+	cfg, err := config.Load(false)
 	if err != nil || cfg == nil {
 		return "", "", false
 	}
@@ -255,23 +255,24 @@ func splitAgentArgs(args []string) (agent string, rest []string, err error) {
 var errUsage = errors.New("usage")
 
 // reportLanguageFromConfig returns the agent_language the review report should be written in.
-// It is empty when no config.json exists or the file does not validate; a config that has not
+// A missing or invalid config is an error rather than an empty language. A config that has not
 // finished initialization still counts, because its explicit agent_language is the user's choice.
-func reportLanguageFromConfig() string {
+func reportLanguageFromConfig() (string, error) {
 	cfg, err := config.Load(false)
-	if err != nil || cfg == nil {
-		return ""
+	if err != nil {
+		return "", err
 	}
-	return cfg.AgentLanguage
+	return cfg.AgentLanguage, nil
 }
 
-func reviewerFromConfig(role string) string {
-	cfg, err := config.Effective(nil)
-	if err != nil || cfg == nil {
-		return "codex"
+func reviewerFromConfig(role string) (string, error) {
+	cfg, err := config.Load(false)
+	if err != nil {
+		return "", err
 	}
-	if agent := cfg.Reviewers[role]; containsAgent(agent) {
-		return agent
+	agent := cfg.Reviewers[role]
+	if !containsAgent(agent) {
+		return "", newGate(1, "review.unsupported_reviewer_agent", agent)
 	}
-	return "codex"
+	return agent, nil
 }
