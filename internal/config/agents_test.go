@@ -184,6 +184,7 @@ func TestDialectSessionCompatibility(t *testing.T) {
 		bad           bool
 	}{
 		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
+		{"cursor", "allocated", false}, {"claude", "allocated", false},
 		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
 		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false},
 	} {

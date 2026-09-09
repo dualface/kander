@@ -156,7 +156,7 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 		}
 	}
 	if !validDeclaredSessionMode(agent.Session.Mode) {
-		return embeddedAgent{}, embedAgentError(fileName, "session.mode")
+		return embeddedAgent{}, embedAgentError(fileName, "session.mode: "+agent.Session.Mode)
 	}
 	if !validExitCommandText(agent.ExitCommand) {
 		return embeddedAgent{}, embedAgentError(fileName, "exit_command")

@@ -80,6 +80,18 @@ func TestEmbeddedDefinitionsLoadWithoutLookPath(t *testing.T) {
 	}
 }
 
+func TestEmbeddedUnknownSessionHookNamesAgentAndHook(t *testing.T) {
+	raw, err := embeddedAgentFS.ReadFile("agents/codex.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = []byte(strings.Replace(string(raw), "hook:codex-rollout", "hook:missing-hook", 1))
+	_, err = parseEmbeddedAgentFile("codex.json", raw)
+	if err == nil || !strings.Contains(err.Error(), "codex") || !strings.Contains(err.Error(), "missing-hook") {
+		t.Fatalf("error must name the agent and unknown hook: %v", err)
+	}
+}
+
 func TestUserDiscoveredStillRejectedAndMissingSchemaIsOne(t *testing.T) {
 	base, _ := json.Marshal(DefaultConfig())
 	var root map[string]any

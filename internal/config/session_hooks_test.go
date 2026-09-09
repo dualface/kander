@@ -14,11 +14,13 @@ func TestRegisteredSessionHooksDocumented(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(doc)
-	if !strings.Contains(body, "## 钩子清单") {
+	_, catalog, found := strings.Cut(body, "## Hook Catalog\n")
+	if !found {
 		t.Fatal("docs/custom-agents.md is missing the hook catalog heading")
 	}
+	catalog, _, _ = strings.Cut(catalog, "\n## ")
 	for _, hook := range RegisteredSessionHooks() {
-		if !strings.Contains(body, hook.Name) {
+		if !strings.Contains(catalog, "| `"+hook.Name+"` |") {
 			t.Fatalf("docs/custom-agents.md does not list hook %q", hook.Name)
 		}
 	}

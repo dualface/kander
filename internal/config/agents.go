@@ -303,7 +303,10 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 			if emb, ok := embeddedByName(resolved.Dialect); ok {
 				inherited = emb.Session.Mode
 			}
-			if inherited != "" && d.Session.Mode != inherited {
+			// An allocation hook and an explicit allocator both supply the ID
+			// consumed by the inherited resume arguments.
+			compatibleAllocator := d.Session.Mode == "allocated" && SessionAllocatesBeforeStart(inherited)
+			if inherited != "" && d.Session.Mode != inherited && !compatibleAllocator {
 				if _, isHook := LookupSessionHook(inherited); isHook {
 					return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
 				}
