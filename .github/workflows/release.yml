@@ -20,6 +20,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Validate release tag
+        run: |
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+
       - name: Test
         run: |
           go vet ./...
