@@ -263,10 +263,24 @@ func (p *optionsPanel) dirtyLabel() string {
 	return ""
 }
 
+func (p *optionsPanel) scopeTUI() config.TUI {
+	if p.session != nil && p.session.Config != nil {
+		return p.session.Config.TUI
+	}
+	return config.TUI{
+		Theme:          p.app.Theme,
+		Columns:        p.app.Columns,
+		MinColumnWidth: p.app.MinColumnWidth,
+		Refresh:        p.app.RefreshSecs,
+		Single:         p.app.Model.Single,
+	}
+}
+
 func (p *optionsPanel) interfaceSummary() string {
-	out := p.app.Context.themeLabel(p.app.Theme) + " · " +
-		strconv.Itoa(p.app.Columns) + t("tui.cols_2") + " · " +
-		strconv.Itoa(p.app.RefreshSecs) + t("tui.s")
+	tui := p.scopeTUI()
+	out := p.app.Context.themeLabel(tui.Theme) + " · " +
+		strconv.Itoa(tui.Columns) + t("tui.cols_2") + " · " +
+		strconv.Itoa(tui.Refresh) + t("tui.s")
 	if p.session != nil {
 		out += " · " + config.FormatLanguageSummary(p.session.Config.Language)
 	}
@@ -319,12 +333,13 @@ func (p *optionsPanel) openCloseConfirm() tea.Cmd {
 // openSection builds the form of one section.
 func (p *optionsPanel) openSection(section string) tea.Cmd {
 	p.current = section
+	tui := p.scopeTUI()
 	bind := &formBinding{
-		theme:     p.app.Theme,
-		columns:   p.app.Columns,
-		minWidth:  p.app.MinColumnWidth,
-		refresh:   p.app.RefreshSecs,
-		single:    p.app.Model.Single,
+		theme:     tui.Theme,
+		columns:   tui.Columns,
+		minWidth:  tui.MinColumnWidth,
+		refresh:   tui.Refresh,
+		single:    tui.Single,
 		archived:  p.app.Model.ShowArchived,
 		reviewers: map[string]*string{},
 		stages:    map[string]*string{},
@@ -680,46 +695,64 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 
 func (b *formBinding) applyInterface(p *optionsPanel) {
 	app := p.app
-	changed := false
 	var scopeTUI config.TUI
 	if p.session != nil && p.session.Config != nil {
 		scopeTUI = p.session.Config.TUI
 	}
-	if containsString(themes, b.theme) && app.Theme != b.theme {
-		app.Theme = b.theme
-		scopeTUI.Theme = b.theme
-		changed = true
-		// Huh caches the body during Update, and that cache still uses the old theme at this point.
-		// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
-		p.rebuildAt(interfaceFocusKey("theme"))
+	theme := b.theme
+	columns := clampColumns(b.columns)
+	minWidth := clampMinColumnWidth(b.minWidth)
+	refresh := clampRefresh(b.refresh)
+	single := b.single
+	if containsString(themes, theme) {
+		scopeTUI.Theme = theme
 	}
-	if count := clampColumns(b.columns); app.Columns != count {
-		app.Columns = count
-		scopeTUI.Columns = count
-		changed = true
-	}
-	if width := clampMinColumnWidth(b.minWidth); app.MinColumnWidth != width {
-		app.MinColumnWidth = width
-		scopeTUI.MinColumnWidth = width
-		changed = true
-	}
-	if refresh := clampRefresh(b.refresh); app.RefreshSecs != refresh {
-		app.RefreshSecs = refresh
-		scopeTUI.Refresh = refresh
-		changed = true
-	}
-	if app.Model.Single != b.single {
-		app.Model.Single = b.single
-		scopeTUI.Single = b.single
-		changed = true
-		p.rebuildAt(interfaceFocusKey("single"))
+	scopeTUI.Columns = columns
+	scopeTUI.MinColumnWidth = minWidth
+	scopeTUI.Refresh = refresh
+	scopeTUI.Single = single
+	if p.session != nil && p.session.Config != nil {
+		p.session.Config.TUI = scopeTUI
 	}
 	if app.Model.ShowArchived != b.archived {
 		app.Model.ToggleArchived()
+	}
+	edited := theme != p.loadedTUI.Theme ||
+		columns != p.loadedTUI.Columns ||
+		minWidth != p.loadedTUI.MinColumnWidth ||
+		refresh != p.loadedTUI.Refresh ||
+		single != p.loadedTUI.Single
+	if !edited {
+		return
+	}
+	changed := false
+	if containsString(themes, theme) && app.Theme != theme {
+		app.Theme = theme
+		changed = true
+		if theme != p.loadedTUI.Theme {
+			// Huh caches the body during Update, and that cache still uses the old theme at this point.
+			// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
+			p.rebuildAt(interfaceFocusKey("theme"))
+		}
+	}
+	if app.Columns != columns {
+		app.Columns = columns
 		changed = true
 	}
-	if p.session != nil && p.session.Config != nil {
-		p.session.Config.TUI = scopeTUI
+	if app.MinColumnWidth != minWidth {
+		app.MinColumnWidth = minWidth
+		changed = true
+	}
+	if app.RefreshSecs != refresh {
+		app.RefreshSecs = refresh
+		changed = true
+	}
+	if app.Model.Single != single {
+		app.Model.Single = single
+		changed = true
+		if single != p.loadedTUI.Single {
+			p.rebuildAt(interfaceFocusKey("single"))
+		}
 	}
 	// UI preferences reach config.json as soon as they change, so returning with Esc loses nothing.
 	if changed {

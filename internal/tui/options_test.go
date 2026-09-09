@@ -269,6 +269,7 @@ func openPanel(t *testing.T, initial ...*config.Config) (*App, *optionsPanel) {
 	panel := &optionsPanel{app: app, spinner: newPanelSpinner(app)}
 	app.Options = panel
 	panel.session = newTestSession(t, initial...)
+	panel.loadedTUI = panel.session.Config.TUI
 	pumpPanel(panel, panel.openRoot())
 	return app, panel
 }
@@ -334,6 +335,8 @@ func TestEnterSavesReviewSection(t *testing.T) {
 
 func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 	app, panel := openPanel(t)
+	panel.session.Config.TUI.Theme = "light"
+	panel.loadedTUI = panel.session.Config.TUI
 	app.Theme = "light"
 	pumpPanel(panel, panel.dispatch(sectionInterface))
 	if panel.bind == nil || panel.bind.theme != "light" {

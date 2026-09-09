@@ -41,6 +41,10 @@ type optionsPanel struct {
 	app     *App
 	session *menu.Session
 	loadErr string
+	loadSeq uint64
+	// loadedTUI is the scope TUI captured when the session was loaded, so interface
+	// preview and persist do not push disk values onto the board until the user edits.
+	loadedTUI config.TUI
 
 	form        *huh.Form
 	formTheme   *huh.Theme
@@ -88,7 +92,8 @@ func (a *App) openOptionsAt(section string) {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = lipgloss.NewStyle().Foreground(p.Accent).Background(p.Bg)
-	panel := &optionsPanel{app: a, spinner: spin, initial: section}
+	a.optionsLoadSeq++
+	panel := &optionsPanel{app: a, spinner: spin, initial: section, loadSeq: a.optionsLoadSeq}
 	a.Options = panel
 	panel.requestSession()
 }
@@ -105,8 +110,11 @@ func (p *optionsPanel) Init() tea.Cmd {
 var newOptionsSession = menu.NewSession
 
 func (p *optionsPanel) requestSession() {
+	seq := p.loadSeq
 	p.app.pendingWork = func() any {
-		return loadOptionsSession()
+		result := loadOptionsSession()
+		result.seq = seq
+		return result
 	}
 }
 
@@ -118,7 +126,7 @@ func loadOptionsSession() sessionResult {
 	if err != nil {
 		return sessionResult{err: err}
 	}
-	overlayPath, overlayRaw, err := config.ReadOverlay("")
+	overlayPath, _, err := config.ReadOverlay("")
 	if err != nil {
 		return sessionResult{err: err}
 	}
@@ -126,20 +134,13 @@ func loadOptionsSession() sessionResult {
 	if sessionErr != nil {
 		return sessionResult{err: sessionErr}
 	}
-	merged := existing
-	if overlayRaw != nil {
-		merged, err = config.ApplyOverlay(existing, overlayRaw)
-		if err != nil {
-			return sessionResult{err: err}
-		}
-	}
-	return sessionResult{session: session, overlayPath: overlayPath, merged: merged}
+	return sessionResult{session: session, overlayPath: overlayPath}
 }
 
 type sessionResult struct {
+	seq         uint64
 	session     *menu.Session
 	overlayPath string
-	merged      *config.Config
 	err         error
 }
 
@@ -171,6 +172,9 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	}
 	switch result := payload.(type) {
 	case sessionResult:
+		if result.seq != panel.loadSeq {
+			return nil
+		}
 		if result.err != nil {
 			panel.loadErr = result.err.Error()
 			a.Session = nil
@@ -180,9 +184,8 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		}
 		a.Session = result.session
 		panel.session = result.session
-		if result.merged != nil {
-			config.BindConfigLanguage(result.merged)
-		}
+		panel.loadedTUI = result.session.Config.TUI
+		config.BindEffectiveLanguage()
 		if result.overlayPath != "" {
 			panel.overlayNotice = t("tui.overlay_notice")
 		} else {

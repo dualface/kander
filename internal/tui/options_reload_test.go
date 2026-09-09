@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -215,5 +216,124 @@ func TestOpenOptionsAtDoesNotReloadWhileOpen(t *testing.T) {
 	app.openOptions()
 	if app.pendingWork != nil {
 		t.Fatal("open while the panel exists must not reload")
+	}
+}
+
+func TestOpenOptionsIgnoresStaleReload(t *testing.T) {
+	app := newPanelApp(t)
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.KanbanAgent = "codex"
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.openOptions()
+	stale := app.pendingWork
+	if stale == nil {
+		t.Fatal("first load")
+	}
+	app.pendingWork = nil
+	app.Options.close()
+	loaded, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded.KanbanAgent = "grok"
+	if _, err := config.Save(loaded); err != nil {
+		t.Fatal(err)
+	}
+	app.openOptions()
+	fresh := app.pendingWork
+	if fresh == nil {
+		t.Fatal("second load")
+	}
+	app.pendingWork = nil
+	cmd := app.applyWork(fresh())
+	if cmd != nil {
+		pumpPanel(app.Options, cmd)
+	}
+	if app.Session == nil || app.Session.Config.KanbanAgent != "grok" {
+		t.Fatalf("fresh agent=%v", app.Session)
+	}
+	app.applyWork(stale())
+	if app.Session.Config.KanbanAgent != "grok" {
+		t.Fatalf("stale result overwrote session agent=%s", app.Session.Config.KanbanAgent)
+	}
+}
+
+func TestOpenOptionsFormUsesScopeTUINotApp(t *testing.T) {
+	app := newPanelApp(t)
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.TUI.Theme = "light"
+	initial.TUI.Columns = 3
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.Theme = "dark"
+	app.Columns = 7
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	pumpPanel(app.Options, app.Options.dispatch(sectionInterface))
+	if app.Options.bind == nil || app.Options.bind.theme != "light" || app.Options.bind.columns != 3 {
+		t.Fatalf("form theme=%v columns=%v", app.Options.bind.theme, app.Options.bind.columns)
+	}
+	if app.Theme != "dark" || app.Columns != 7 {
+		t.Fatalf("board theme=%s columns=%d", app.Theme, app.Columns)
+	}
+}
+
+func TestOpenOptionsFormIgnoresOverlayTUI(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeTempOverlay(t, dir, map[string]any{"tui": map[string]any{"theme": "dark", "columns": 2}})
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.TUI.Theme = "light"
+	initial.TUI.Columns = 4
+	app := newPanelApp(t)
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	pumpPanel(app.Options, app.Options.dispatch(sectionInterface))
+	if app.Options.bind == nil || app.Options.bind.theme != "light" || app.Options.bind.columns != 4 {
+		t.Fatalf("overlay leaked into form: theme=%s columns=%d", app.Options.bind.theme, app.Options.bind.columns)
+	}
+}
+
+func TestOpenOptionsBindsExplicitLanguageNotSchemaDefault(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "ja_JP.UTF-8")
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "")
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	app := newPanelApp(t)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	session := newTestSession(t, cfg)
+	_ = session
+	path := os.Getenv(config.EnvConfig)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatal(err)
+	}
+	delete(obj, "language")
+	encoded, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	useTestOptionsSession(t)
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	if config.ResolveLanguage() != "ja" {
+		t.Fatalf("missing language bound %q, want ja locale fallback", config.ResolveLanguage())
 	}
 }

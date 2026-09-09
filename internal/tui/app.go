@@ -78,13 +78,15 @@ type App struct {
 
 	// While Options is non-nil the options popup covers the board and takes over input.
 	Options *optionsPanel
-	// Session is the config session, loaded on demand when the options are first opened.
+	// Session is the editable options config session, replaced from disk each time Options opens.
 	Session *menu.Session
 	// While Help is true the key reference overlay covers the board.
 	Help bool
 	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()
 	pendingWork  func() any
+	// optionsLoadSeq identifies the in-flight Options config reload so a stale result cannot land on a newer panel.
+	optionsLoadSeq uint64
 
 	detailView  viewport.Model
 	detailCache detailRender
