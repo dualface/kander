@@ -36,6 +36,9 @@ type ModelField struct {
 // they point at the very same config entry, which must appear only once in the UI.
 func (f ModelField) Key() string { return f.Agent + "." + f.field }
 
+// FieldName is the config key this field writes (model, effort, path, ...).
+func (f ModelField) FieldName() string { return f.field }
+
 // Value returns the current value of the field; an empty string means the CLI default is used.
 func (f ModelField) Value() string {
 	if f.get != nil {
@@ -59,11 +62,25 @@ type Session struct {
 	Config *config.Config
 	// Warnings are environment warnings raised while constructing the session; the caller decides how to display them.
 	Warnings []ReportLine
+	// Target is config.TargetScope (Global tab) or config.TargetOverlay (Project tab).
+	Target string
+	// InstallMode comes from config.CurrentInstallPaths and selects the visible tabs.
+	InstallMode config.Mode
+	// OverlayLocation is the Project-tab read/write target, including when the file does not exist.
+	OverlayLocation config.OverlayLocation
+	// BasePath is the actual scope file in force, including KANDER_CONFIG.
+	BasePath string
+	ScopeDirty   bool
+	OverlayDirty bool
 
-	existing *config.Config
-	agents   map[string]agentState
-	exec     []Choice
-	review   []Choice
+	existing       *config.Config
+	scopeConfig    *config.Config
+	scopeExisting  *config.Config
+	overlayRaw      map[string]any
+	overlayExisting map[string]any
+	agents          map[string]agentState
+	exec            []Choice
+	review          []Choice
 }
 
 // NewSession probes agents and launchers, and prepares the editable config from existing.
@@ -163,7 +180,8 @@ func (s *Session) prepare(configValid bool) error {
 	// fallback that does not see the bound overlay language. Callers bind
 	// the merged UI language after they accept this session.
 	s.Config = cfg
-	return nil
+	s.initOverlayState()
+	return s.loadOverlayContext()
 }
 
 // RefreshCopy re-translates cached agent labels after the UI language changes.
@@ -249,11 +267,13 @@ func (s *Session) ReviewerChoicesFor(current string) []Choice {
 func (s *Session) SetExecutionAgent(scale, agent string) {
 	s.Config.KanbanAgents[scale] = agent
 	s.Config.KanbanAgent = s.Config.KanbanAgents["large"]
+	s.noteOverride([]string{"kanban_agents", scale}, agent)
 }
 
 // SetReviewer sets the reviewer of one review role.
 func (s *Session) SetReviewer(role, agent string) {
 	s.Config.Reviewers[role] = agent
+	s.noteOverride([]string{"reviewers", role}, agent)
 }
 
 // SetReviewStage sets the stage policy of one review role for one task scale.
@@ -265,22 +285,29 @@ func (s *Session) SetReviewStage(scale, role, mode string) {
 		s.Config.ReviewStages[scale] = map[string]string{}
 	}
 	s.Config.ReviewStages[scale][role] = mode
+	if s.EditingOverlay() {
+		s.expandOverlayReviewStages()
+	}
+	s.noteOverride([]string{"review_stages", scale, role}, mode)
 }
 
 // SetLanguage sets the default output language and applies it immediately.
 func (s *Session) SetLanguage(language string) {
 	s.Config.Language = language
 	config.BindConfigLanguage(s.Config)
+	s.noteOverride([]string{"language"}, language)
 }
 
 // SetAgentLanguage sets the language the agent uses when talking to the user.
 func (s *Session) SetAgentLanguage(language string) {
 	s.Config.AgentLanguage = strings.TrimSpace(language)
+	s.noteOverride([]string{"agent_language"}, s.Config.AgentLanguage)
 }
 
 // SetLauncher sets the launcher.
 func (s *Session) SetLauncher(launcher string) {
 	s.Config.Launcher = launcher
+	s.noteOverride([]string{"launcher"}, launcher)
 }
 
 // LauncherInstallValue is the value of the "install tmux" item in the launcher list.
@@ -464,6 +491,11 @@ func (s *Session) seedReviewRole(role, reviewer string) map[string]string {
 // Call it when a role changes reviewer: the old values were configured for the old reviewer and would otherwise be misattributed.
 func (s *Session) ResetReviewRoleModel(role string) {
 	s.Config.Models.ReviewRoles[role] = map[string]string{}
+	if s.EditingOverlay() {
+		config.OverlayDelete(s.overlayRaw, "models", "review_roles", role)
+		s.seedReviewRole(role, s.Config.Reviewers[role])
+		return
+	}
 	s.seedReviewRole(role, s.Config.Reviewers[role])
 }
 
@@ -527,17 +559,18 @@ func (s *Session) finish() error {
 		"menu.note_kanban_start_uses_the_agent_s_no_confirmation",
 	))
 	note(RulesSessionNotice())
-	s.Config.WelcomeComplete = true
+	if !s.EditingOverlay() {
+		s.Config.WelcomeComplete = true
+	}
 	return nil
 }
 
-// Save writes the current config to disk and returns the config file path.
+// Save writes the active tab: scope config.json or the project overlay.
 func (s *Session) Save() (string, error) {
-	path, err := config.SaveIfUnchanged(s.Config, s.existing)
-	if err == nil {
-		s.existing = config.Clone(s.Config)
+	if s.EditingOverlay() {
+		return s.saveOverlay()
 	}
-	return path, err
+	return s.saveScope()
 }
 
 // Summary returns the "current configuration" overview shown in the menu title and at the top of the panel.
@@ -606,6 +639,10 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.Language = existing.Language
 	cfg.AgentLanguage = existing.AgentLanguage
 	session.Config = cfg
+	session.initOverlayState()
+	if path, err := config.ConfigPath(); err == nil {
+		session.BasePath = path
+	}
 	return session, nil
 }
 

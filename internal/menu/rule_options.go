@@ -7,7 +7,17 @@ func (s *Session) SetRules(rules config.Rules) error {
 	if err := config.ValidateRules(rules); err != nil {
 		return err
 	}
+	previous := s.Config.Rules.Clone()
 	s.Config.Rules = rules.Clone()
+	if s.EditingOverlay() {
+		for _, module := range config.RuleModules {
+			if previous[module] != rules[module] {
+				s.noteOverride([]string{"rules", module}, rules[module])
+			}
+		}
+		return nil
+	}
+	s.ScopeDirty = true
 	return nil
 }
 

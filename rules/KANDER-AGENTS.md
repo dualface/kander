@@ -16,7 +16,7 @@ The directory containing this file is the "rules root". It determines the scope 
 
 - Scope settings live in the config file. An optional project overlay is merged on top at read time.
 - Runtime priority is project overlay > scope config (`KANDER_CONFIG` or the install-scope `config.json`) > defaults.
-- Writes (`Save`, `Update`, `kander doctor` repair, the options panel, and the installer) only update the scope `config.json`. Overlay values are never written back.
+- Writes (`Save`, `Update`, `kander doctor` repair, the Global tab of the options panel, and the installer) only update the scope `config.json`. The Project tab writes only the project overlay `.kander-config.json` and never writes `.kander/config.json`. Overlay values are merged at read time by key presence; they are not copied wholesale into the scope file.
 - The overlay may set `agents` executable paths and argv templates. That is accepted at the same trust level as checking out and running the repository's own code.
 - A project install keeps its payload only in the main worktree's `.kander/`; task worktrees share it and create no copies, mirrors, or symlinks.
 - Below and in every rule file, `kander` means the entry of the current scope. A global install may use the absolute path under the command root or a `kander` already on PATH; a project install must use the absolute path `<command root>/kander` (`<command root>\kander` on Windows) and must not substitute a global command from PATH.

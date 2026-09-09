@@ -10,12 +10,17 @@ import (
 // ApplyDoctorConfig adopts the doctor repair result while keeping edits not yet saved in the panel.
 func (s *Session) ApplyDoctorConfig(before, after *config.Config, dirty bool) error {
 	merged := after
-	if dirty {
+	edited := s.scopeConfig
+	if edited == nil {
+		edited = s.Config
+	}
+	preserve := s.ScopeDirty || (dirty && !s.EditingOverlay())
+	if preserve {
 		if before == nil {
 			before = config.DefaultConfig()
 		}
 		objects := make([]map[string]any, 3)
-		for i, cfg := range []*config.Config{before, s.Config, after} {
+		for i, cfg := range []*config.Config{before, edited, after} {
 			data, err := json.Marshal(cfg)
 			if err != nil {
 				return err
@@ -36,6 +41,11 @@ func (s *Session) ApplyDoctorConfig(before, after *config.Config, dirty bool) er
 		}
 	}
 	s.existing = after
+	s.scopeExisting = config.Clone(after)
+	s.scopeConfig = merged
+	if s.EditingOverlay() {
+		return s.rebuildOverlayConfig()
+	}
 	s.Config = merged
 	return nil
 }
@@ -59,10 +69,19 @@ func (s *Session) SyncTUI(value config.TUI, persisted bool) {
 	if s == nil {
 		return
 	}
+	if s.EditingOverlay() {
+		return
+	}
 	if s.Config != nil {
 		s.Config.TUI = value
 	}
+	if s.scopeConfig != nil {
+		s.scopeConfig.TUI = value
+	}
 	if persisted && s.existing != nil {
 		s.existing.TUI = value
+	}
+	if persisted && s.scopeExisting != nil {
+		s.scopeExisting.TUI = value
 	}
 }

@@ -48,6 +48,7 @@ type formBinding struct {
 	formFields []huh.Field
 	// focusable is the number of focusable fields added so far; blank lines are excluded because NextField skips them.
 	focusable int
+	restores  []restoreField
 }
 
 // addField appends one focusable field.
@@ -70,6 +71,7 @@ func (b *formBinding) reset() {
 	b.fieldIndex = map[string]int{}
 	b.formFields = nil
 	b.focusable = 0
+	b.restores = nil
 }
 
 func huhTheme(p palette) *huh.Theme {
@@ -398,56 +400,63 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 		bind.language = p.session.Config.Language
 		bind.fieldIndex[interfaceFocusKey("language")] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
-			Title(t("menu.default_language")).
+			Title(p.inheritTitle(t("menu.default_language"), bind.language, "language")).
 			Description(t("tui.ui_and_command_output")).
 			Options(toOptions(p.session.LanguageChoices())...).
 			Value(&bind.language).
 			Inline(true))
+		bind.addRestore(p, bind.language, "language")
 		bind.addSpacer()
 		bind.agentLanguage = p.session.Config.AgentLanguage
 		bind.fieldIndex[interfaceFocusKey("agent_language")] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
-			Title(t("menu.agent_language")).
+			Title(p.inheritTitle(t("menu.agent_language"), bind.agentLanguage, "agent_language")).
 			Description(t("tui.agent_language_hint")).
 			Options(toOptions(p.session.AgentLanguageChoices())...).
 			Value(&bind.agentLanguage).
 			Inline(true))
+		bind.addRestore(p, bind.agentLanguage, "agent_language")
 		bind.addSpacer()
 	}
 	bind.fieldIndex[interfaceFocusKey("theme")] = bind.focusable
 	bind.addField(huh.NewSelect[string]().
-		Title(t("tui.color_theme")).
+		Title(p.inheritTitle(t("tui.color_theme"), bind.theme, "tui", "theme")).
 		Description(t("tui.follow_the_terminal_or_lock_light_dark")).
 		Options(themeOptions...).
 		Value(&bind.theme).
 		Inline(true))
+	bind.addRestore(p, bind.theme, "tui", "theme")
 	bind.addSpacer()
 	bind.addField(huh.NewSelect[int]().
-		Title(t("tui.auto_refresh_s")).
+		Title(p.inheritTitle(t("tui.auto_refresh_s"), formatInt(bind.refresh), "tui", "refresh")).
 		Description(t("tui.board_auto_reload_interval")).
 		Options(huh.NewOptions(refreshes...)...).
 		Value(&bind.refresh).
 		Inline(true))
+	bind.addRestore(p, formatInt(bind.refresh), "tui", "refresh")
 	bind.addSpacer()
 	bind.fieldIndex[interfaceFocusKey("single")] = bind.focusable
 	bind.addField(huh.NewConfirm().
-		Title(t("tui.show_only_the_current_column")).
+		Title(p.inheritTitle(t("tui.show_only_the_current_column"), formatBool(bind.single), "tui", "single")).
 		Value(&bind.single).
 		Inline(true))
+	bind.addRestore(p, formatBool(bind.single), "tui", "single")
 	if !bind.single {
 		bind.addSpacer()
 		bind.addField(huh.NewSelect[int]().
-			Title(t("tui.max_columns_on_screen")).
+			Title(p.inheritTitle(t("tui.max_columns_on_screen"), formatInt(bind.columns), "tui", "columns")).
 			Description(t("tui.narrow_terminals_show_fewer")).
 			Options(huh.NewOptions(counts...)...).
 			Value(&bind.columns).
 			Inline(true))
+		bind.addRestore(p, formatInt(bind.columns), "tui", "columns")
 		bind.addSpacer()
 		bind.addField(huh.NewSelect[int]().
-			Title(t("tui.minimum_column_width")).
+			Title(p.inheritTitle(t("tui.minimum_column_width"), formatInt(bind.minWidth), "tui", "min_column_width")).
 			Options(huh.NewOptions(widths...)...).
 			Value(&bind.minWidth).
 			Inline(true))
+		bind.addRestore(p, formatInt(bind.minWidth), "tui", "min_column_width")
 	}
 	bind.addSpacer()
 	bind.addField(huh.NewConfirm().
@@ -506,31 +515,29 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 		title, note := titles[scale], notes[scale]
 		bind.fieldIndex[scaleFocusKey(scale)] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
-			Title(t(title)).
+			Title(p.inheritTitle(t(title), *values[scale], "kanban_agents", scale)).
 			Description(t(note)).
 			Options(toOptions(session.ExecutionChoicesFor(*values[scale]))...).
 			Value(values[scale]).
 			Inline(true))
-		// Model and reasoning effort follow immediately below the agent they belong to, with no blank line in between.
-		for _, field := range p.modelInputs(bind, append(session.ExecutionModelFieldsFor(scale), session.AgentExecutableFields(scale)...)) {
-			bind.addField(field)
-		}
+		bind.addRestore(p, *values[scale], "kanban_agents", scale)
+		p.addModelInputs(bind, append(session.ExecutionModelFieldsFor(scale), session.AgentExecutableFields(scale)...))
 	}
 	// The launcher is independent of any particular agent, so it goes last, separated by a blank line.
 	bind.addSpacer()
 	bind.addField(huh.NewSelect[string]().
-		Title(t("menu.launcher")).
+		Title(p.inheritTitle(t("menu.launcher"), bind.launcher, "launcher")).
 		Description(t("tui.how_to_launch_the_agent_when_claiming_a_task")).
 		Options(toOptions(session.LauncherChoices())...).
 		Value(&bind.launcher).
 		Inline(true))
+	bind.addRestore(p, bind.launcher, "launcher")
 	return huh.NewGroup(bind.formFields...)
 }
 
 // modelInputs turns a set of model fields into indented text inputs.
 // When one agent is shared by two scales or two roles they point at the same config entry, which is shown only once.
-func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) []huh.Field {
-	out := make([]huh.Field, 0, len(fields))
+func (p *optionsPanel) addModelInputs(bind *formBinding, fields []menu.ModelField) {
 	for _, field := range fields {
 		if _, ok := bind.modelSeen[field.Key()]; ok {
 			continue
@@ -545,14 +552,35 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField) 
 		value := field.Value()
 		bind.modelValues = append(bind.modelValues, &value)
 		// Inline puts the title and the value on one line, compressing the block of one role/scale from 7 lines to 4.
-		out = append(out, huh.NewInput().
-			Title(modelIndent+field.Short+"  ").
+		path := modelOverlayPath(field)
+		title := modelIndent + field.Short + "  "
+		if len(path) > 0 {
+			title = p.inheritTitle(title, value, path...)
+		}
+		bind.addField(huh.NewInput().
+			Title(title).
 			Prompt("").
 			Inline(true).
 			Placeholder(placeholder).
 			Value(bind.modelValues[index]))
+		if len(path) > 0 {
+			bind.addRestore(p, value, path...)
+		}
 	}
-	return out
+}
+
+func modelOverlayPath(field menu.ModelField) []string {
+	if field.Agent == "" || field.FieldName() == "" {
+		return nil
+	}
+	switch field.FieldName() {
+	case "path", "process_name":
+		return []string{"agents", field.Agent, field.FieldName()}
+	case "model", "effort":
+		return []string{"models", "review_roles", field.Agent, field.FieldName()}
+	default:
+		return []string{"models", "kanban", field.Agent, field.FieldName()}
+	}
 }
 
 func (p *optionsPanel) reviewGroup(bind *formBinding) *huh.Group {
@@ -567,11 +595,12 @@ func (p *optionsPanel) reviewGroup(bind *formBinding) *huh.Group {
 		bind.reviewers[role] = &value
 		bind.fieldIndex[roleFocusKey(role)] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
-			Title(role + " Reviewer").
+			Title(p.inheritTitle(role+" Reviewer", value, "reviewers", role)).
 			Description(t("tui.which_agent_reviews_this_role")).
 			Options(toOptions(session.ReviewerChoicesFor(value))...).
 			Value(bind.reviewers[role]).
 			Inline(true))
+		bind.addRestore(p, value, "reviewers", role)
 		// Each role keeps a large and a small stage selector, matching kanban_agents.
 		for _, scale := range config.TaskScales {
 			stage, err := config.ReviewStageFor(cfg, scale, role)
@@ -582,15 +611,14 @@ func (p *optionsPanel) reviewGroup(bind *formBinding) *huh.Group {
 			bind.stages[key] = &stage
 			bind.fieldIndex[key] = bind.focusable
 			bind.addField(huh.NewSelect[string]().
-				Title(modelIndent + t("tui.review_stage", t("config."+scale))).
+				Title(p.inheritTitle(modelIndent+t("tui.review_stage", t("config."+scale)), stage, "review_stages", scale, role)).
 				// The value line is indented along with the title: a Select puts its value on its own line, so indenting the title alone would look ragged.
 				Options(reviewStageOptions()...).
 				Value(bind.stages[key]).
 				Inline(true))
+			bind.addRestore(p, stage, "review_stages", scale, role)
 		}
-		for _, field := range p.modelInputs(bind, session.ReviewModelFieldsFor(role)) {
-			bind.addField(field)
-		}
+		p.addModelInputs(bind, session.ReviewModelFieldsFor(role))
 	}
 	return huh.NewGroup(bind.formFields...)
 }
@@ -615,6 +643,9 @@ func reviewStageOptions() []huh.Option[string] {
 // returning with Esc loses nothing, because the changes already landed in the session.
 // Items with side effects (installing tmux) are not run here, see commitSideEffects.
 func (b *formBinding) apply(p *optionsPanel) {
+	if b.applyRestores(p) {
+		return
+	}
 	switch p.current {
 	case sectionRules:
 		b.applyRules(p)
@@ -688,6 +719,9 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 		}
 		if field.Value() != *b.modelValues[i] {
 			field.Set(*b.modelValues[i])
+			if p.session != nil {
+				p.session.NoteModelOverride(field, *b.modelValues[i])
+			}
 			p.markDirty()
 		}
 	}
@@ -695,71 +729,79 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 
 func (b *formBinding) applyInterface(p *optionsPanel) {
 	app := p.app
+	previous := p.loadedTUI
+	if p.appliedTUI != nil {
+		previous = *p.appliedTUI
+	}
+	changed := false
+	overlay := p.session != nil && p.session.EditingOverlay()
 	var scopeTUI config.TUI
 	if p.session != nil && p.session.Config != nil {
 		scopeTUI = p.session.Config.TUI
 	}
-	theme := b.theme
-	columns := clampColumns(b.columns)
-	minWidth := clampMinColumnWidth(b.minWidth)
-	refresh := clampRefresh(b.refresh)
-	single := b.single
-	if containsString(themes, theme) {
-		scopeTUI.Theme = theme
-	}
-	scopeTUI.Columns = columns
-	scopeTUI.MinColumnWidth = minWidth
-	scopeTUI.Refresh = refresh
-	scopeTUI.Single = single
-	if p.session != nil && p.session.Config != nil {
-		p.session.Config.TUI = scopeTUI
-	}
-	if app.Model.ShowArchived != b.archived {
-		app.Model.ToggleArchived()
-	}
-	current := config.TUI{
-		Theme:          scopeTUI.Theme,
-		Columns:        columns,
-		MinColumnWidth: minWidth,
-		Refresh:        refresh,
-		Single:         single,
-	}
-	previous := p.loadedTUI
-	if p.appliedTUI != nil {
-		previous = *p.appliedTUI
-		if current == previous {
-			return
+	if containsString(themes, b.theme) && previous.Theme != b.theme {
+		app.Theme = b.theme
+		scopeTUI.Theme = b.theme
+		changed = true
+		if overlay {
+			p.session.SetTUIField("theme", b.theme)
 		}
-	} else if current == p.loadedTUI {
-		return
-	}
-	themeChanged := current.Theme != previous.Theme
-	singleChanged := current.Single != previous.Single
-	if containsString(themes, theme) && app.Theme != theme {
-		app.Theme = theme
-	}
-	if themeChanged {
 		// Huh caches the body during Update, and that cache still uses the old theme at this point.
 		// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
 		p.rebuildAt(interfaceFocusKey("theme"))
 	}
-	if app.Columns != columns {
-		app.Columns = columns
+	if count := clampColumns(b.columns); previous.Columns != count {
+		app.Columns = count
+		scopeTUI.Columns = count
+		changed = true
+		if overlay {
+			p.session.SetTUIField("columns", count)
+		}
 	}
-	if app.MinColumnWidth != minWidth {
-		app.MinColumnWidth = minWidth
+	if width := clampMinColumnWidth(b.minWidth); previous.MinColumnWidth != width {
+		app.MinColumnWidth = width
+		scopeTUI.MinColumnWidth = width
+		changed = true
+		if overlay {
+			p.session.SetTUIField("min_column_width", width)
+		}
 	}
-	if app.RefreshSecs != refresh {
+	if refresh := clampRefresh(b.refresh); previous.Refresh != refresh {
 		app.RefreshSecs = refresh
+		scopeTUI.Refresh = refresh
+		changed = true
+		if overlay {
+			p.session.SetTUIField("refresh", refresh)
+		}
 	}
-	if app.Model.Single != single {
-		app.Model.Single = single
-	}
-	if singleChanged {
+	if previous.Single != b.single {
+		app.Model.Single = b.single
+		scopeTUI.Single = b.single
+		changed = true
+		if overlay {
+			p.session.SetTUIField("single", b.single)
+		}
 		p.rebuildAt(interfaceFocusKey("single"))
 	}
-	copied := current
-	p.appliedTUI = &copied
+	if app.Model.ShowArchived != b.archived {
+		app.Model.ToggleArchived()
+	}
+	if p.session != nil && p.session.Config != nil && !overlay {
+		p.session.Config.TUI = scopeTUI
+	}
+	if !changed {
+		return
+	}
+	app.Theme = scopeTUI.Theme
+	app.Columns = scopeTUI.Columns
+	app.MinColumnWidth = scopeTUI.MinColumnWidth
+	app.RefreshSecs = scopeTUI.Refresh
+	app.Model.Single = scopeTUI.Single
+	p.appliedTUI = &scopeTUI
+	if overlay {
+		p.markDirty()
+		return
+	}
 	// UI preferences reach config.json as soon as they change, so returning with Esc loses nothing.
 	p.persistUI()
 }

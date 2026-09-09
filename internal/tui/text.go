@@ -72,6 +72,33 @@ func clipText(text string, width int) string {
 	return b.String() + suffix
 }
 
+// clipPath keeps the leaf of a path visible when the line is too narrow.
+func clipPath(path string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if displayWidth(path) <= width {
+		return path
+	}
+	prefix := "..."
+	if width <= displayWidth(prefix) {
+		return clipText(path, width)
+	}
+	available := width - displayWidth(prefix)
+	runes := []rune(path)
+	start := len(runes)
+	used := 0
+	for start > 0 {
+		w := runeDisplayWidth(runes[start-1])
+		if used+w > available {
+			break
+		}
+		start--
+		used += w
+	}
+	return prefix + string(runes[start:])
+}
+
 func padText(text string, width int) string {
 	clipped := clipText(text, width)
 	pad := width - displayWidth(clipped)

@@ -1,0 +1,194 @@
+package tui
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/menu"
+)
+
+func uiText(id string) string {
+	return t(id)
+}
+
+func attachTempOverlay(t *testing.T, session *menu.Session, mode config.Mode) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.OverlayFilename)
+	if err := session.AttachOverlay(mode, config.OverlayLocation{ProjectRoot: dir, Path: path}, nil); err != nil {
+		t.Fatal(err)
+	}
+	return dir, path
+}
+
+func TestOptionsTabsFollowInstallMode(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	_, view := panel.view()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, uiText("tui.tab_global")) || !strings.Contains(plain, uiText("tui.tab_project")) {
+		t.Fatalf("global install should show both tabs:\n%s", plain)
+	}
+	if !strings.Contains(plain, config.OverlayFilename) && !strings.Contains(plain, ".kander-config") {
+		t.Fatalf("missing overlay path:\n%s", plain)
+	}
+
+	_, panel = openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeProject)
+	pumpPanel(panel, panel.openRoot())
+	_, view = panel.view()
+	plain = ansi.Strip(view)
+	if strings.Contains(plain, uiText("tui.tab_global")) && strings.Contains(plain, uiText("tui.tab_project")) {
+		t.Fatalf("project install should hide the tab bar:\n%s", plain)
+	}
+	if !strings.Contains(plain, uiText("tui.tab_project")) && !strings.Contains(plain, filepath.Base(config.OverlayFilename)) {
+		if !strings.Contains(plain, config.OverlayFilename) {
+			t.Fatalf("project tab should still show the overlay path:\n%s", plain)
+		}
+	}
+}
+
+func TestOptionsTabSwitchKeepsEditsAndDoesNotSave(t *testing.T) {
+	_, panel := openPanel(t)
+	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	panel.session.SetLauncher("foreground")
+	panel.markDirty()
+	drivePanel(panel, keyMsg("]"))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("target=%s", panel.session.Target)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("tab switch created an overlay")
+	}
+	panel.session.SetLauncher("herdr")
+	drivePanel(panel, keyMsg("["))
+	if panel.session.Target != config.TargetScope {
+		t.Fatalf("target=%s", panel.session.Target)
+	}
+	if panel.session.Config.Launcher != "foreground" {
+		t.Fatalf("scope edit lost: %s", panel.session.Config.Launcher)
+	}
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if panel.session.Config.Launcher != "herdr" {
+		t.Fatalf("overlay edit lost: %s", panel.session.Config.Launcher)
+	}
+	if !panel.session.FieldOverridden("launcher") {
+		t.Fatal("overlay key missing after tab switch")
+	}
+}
+
+func TestProjectTabSaveWritesOverlayOnly(t *testing.T) {
+	_, panel := openPanel(t)
+	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	panel.session.SetLauncher("foreground")
+	panel.markDirty()
+	if err := panel.persistNow(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := config.ReadOverlayFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw["launcher"] != "foreground" {
+		t.Fatalf("overlay %#v", raw)
+	}
+	if _, ok := raw["kanban_agent"]; ok {
+		t.Fatal("inherited key copied")
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.Launcher == "foreground" {
+		t.Fatal("project save wrote launcher into the scope file")
+	}
+}
+
+func TestProjectBrowseAndReviewDoesNotCreateOverlay(t *testing.T) {
+	_, panel := openPanel(t)
+	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	pumpPanel(panel, panel.dispatch(sectionReview))
+	drivePanel(panel, keyMsg("esc"))
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("opening review created an overlay")
+	}
+}
+
+func TestInheritedPrefixOnProjectTab(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	_, view := panel.view()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, uiText("tui.inherit_global")) {
+		t.Fatalf("missing inherit prefix:\n%s", plain)
+	}
+}
+
+func TestProjectInstallInheritPrefixUsesDefault(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeProject)
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	_, view := panel.view()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, uiText("tui.inherit_default")) {
+		t.Fatalf("missing default prefix:\n%s", plain)
+	}
+}
+
+func TestOverlaySaveFailureKeepsEdits(t *testing.T) {
+	_, panel := openPanel(t)
+	dir := t.TempDir()
+	blocked := filepath.Join(dir, "blocked")
+	if err := os.Mkdir(blocked, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(blocked, config.OverlayFilename)
+	if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	panel.session.SetLauncher("foreground")
+	panel.markDirty()
+	if err := panel.persistNow(); err == nil {
+		t.Fatal("expected save failure")
+	}
+	if panel.session.Config.Launcher != "foreground" {
+		t.Fatal("failed save dropped the edit")
+	}
+	if !panel.session.OverlayDirty {
+		t.Fatal("failed save cleared overlay dirty")
+	}
+}
+
+func TestScopeChromeFitsNarrowScreen(t *testing.T) {
+	app, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	app.Width, app.Height = 72, 12
+	pumpPanel(panel, panel.openRoot())
+	_, view := panel.view()
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, config.OverlayFilename) {
+		t.Fatalf("narrow view dropped overlay path:\n%s", plain)
+	}
+}

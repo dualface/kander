@@ -593,15 +593,15 @@ func assertRootFocus(t *testing.T, panel *optionsPanel, want string) {
 	if !strings.Contains(text, focusMarker) {
 		t.Fatalf("row %d missing focus marker: %q", lo, text)
 	}
-	labels := map[string][2]string{
-		sectionInterface: {"界面", "Interface"},
-		sectionExecution: {"任务执行与模型", "Execution and models"},
-		sectionReview:    {"审核与模型", "Review and models"},
-		sectionDoctor:    {"环境检查", "Environment check"},
-		sectionSave:      {"保存并应用", "Save and apply"},
-		sectionClose:     {"关闭", "Close"},
-	}[want]
-	if !strings.Contains(text, labels[0]) && !strings.Contains(text, labels[1]) {
+	labels := map[string]string{
+		sectionInterface: uiText("tui.interface"),
+		sectionExecution: uiText("tui.execution_and_models"),
+		sectionReview:    uiText("tui.review_and_models"),
+		sectionDoctor:    uiText("tui.environment_check"),
+		sectionSave:      uiText("tui.save_and_apply"),
+		sectionClose:     uiText("tui.close_2"),
+	}
+	if !strings.Contains(text, labels[want]) {
 		t.Fatalf("focus on %q, want section %s", text, want)
 	}
 }

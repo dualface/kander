@@ -70,8 +70,9 @@ type optionsPanel struct {
 	installHerdr bool
 	dirty        bool
 	initial      string
-	// overlayNotice is shown at the top of the panel when a project overlay file exists.
+	// overlayNotice is kept for tests that still call detectOverlayNotice.
 	overlayNotice string
+	tabHits       []tabHit
 
 	// The geometry and body lines of the most recent render, for mouse hit testing.
 	box        popupBox
@@ -98,6 +99,15 @@ func (a *App) openOptionsAt(section string) {
 	panel := &optionsPanel{app: a, spinner: spin, initial: section, loadSeq: a.optionsLoadSeq}
 	a.Options = panel
 	panel.requestSession()
+}
+
+func (p *optionsPanel) detectOverlayNotice() {
+	loc := overlayDisplayLocation(p)
+	if loc.Path == "" {
+		p.overlayNotice = ""
+		return
+	}
+	p.overlayNotice = t("tui.overlay_file", loc.Path)
 }
 
 // Init returns the command to run when the panel starts (the loading spinner or the form initialization).
@@ -335,6 +345,10 @@ func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
 		case "q", "Q", "o", "O":
 			// Consistent with the rest of the board: q closes, and pressing o again closes too.
 			return p.requestClose()
+		case "[":
+			return p.cycleTab(-1)
+		case "]":
+			return p.cycleTab(1)
 		}
 	}
 	if p.form == nil {
@@ -516,6 +530,13 @@ func (p *optionsPanel) savesOnSubmit() bool {
 
 // persistNow writes the current session to the config file, UI preferences included.
 func (p *optionsPanel) persistNow() error {
+	if p.session != nil && p.session.EditingOverlay() {
+		if _, err := p.session.Save(); err != nil {
+			return err
+		}
+		p.dirty = p.session.HasUnsaved()
+		return nil
+	}
 	p.persistUI()
 	if p.session == nil {
 		return nil
@@ -524,7 +545,7 @@ func (p *optionsPanel) persistNow() error {
 	if _, err := p.session.Save(); err != nil {
 		return err
 	}
-	p.dirty = false
+	p.dirty = p.session.HasUnsaved()
 	return nil
 }
 
@@ -584,7 +605,7 @@ func (p *optionsPanel) save() {
 		p.showReport(t("tui.save_failed"), finishLines, err.Error())
 		return
 	}
-	p.dirty = false
+	p.dirty = p.session.HasUnsaved()
 	p.app.Context = tuiPageContext()
 	p.showReport(
 		t("tui.configuration_saved"),
@@ -595,7 +616,7 @@ func (p *optionsPanel) save() {
 }
 
 func (p *optionsPanel) persistUI() {
-	if p.session == nil {
+	if p.session == nil || p.session.EditingOverlay() {
 		return
 	}
 	// Write the session's scope TUI, not the merged App display values.

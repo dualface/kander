@@ -132,9 +132,8 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 		p.measureForm()
 	}
 	p.syncFormTheme(palette)
-	notice := ""
-	noticeLines := 0
-	if p.overlayNotice != "" {
+	notice, noticeLines := p.renderScopeChrome(palette, width)
+	if notice == "" && p.overlayNotice != "" {
 		notice = styleFor("popup-dim", palette).Render(clipText(p.overlayNotice, width)) + "\n"
 		noticeLines = 1
 	}
@@ -190,6 +189,9 @@ func (p *optionsPanel) hintLine() string {
 	case p.confirming:
 		return t("tui.move_enter_confirm_esc_keep_editing")
 	case p.current == "":
+		if p.session != nil && len(p.session.AvailableTargets()) > 1 {
+			return t("tui.move_enter_open_esc_close") + " · " + t("tui.switch_scope_tabs")
+		}
 		return t("tui.move_enter_open_esc_close")
 	case p.current == sectionExecution || p.current == sectionReview:
 		return t("tui.field_change_type_model_ids_enter_save_esc_back")
@@ -294,6 +296,9 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 	}
 	if p.form == nil {
 		return nil
+	}
+	if cmd := p.handleTabMouse(x, y, bstate); cmd != nil {
+		return cmd
 	}
 	if delta := mouseWheelDelta(bstate); delta != 0 {
 		if delta > 0 {
