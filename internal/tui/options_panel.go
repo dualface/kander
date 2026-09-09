@@ -45,6 +45,8 @@ type optionsPanel struct {
 	// loadedTUI is the scope TUI captured when the session was loaded, so interface
 	// preview and persist do not push disk values onto the board until the user edits.
 	loadedTUI config.TUI
+	// appliedTUI is the last TUI actually pushed to the board; nil until the user edits a field.
+	appliedTUI *config.TUI
 
 	form        *huh.Form
 	formTheme   *huh.Theme
@@ -126,9 +128,14 @@ func loadOptionsSession() sessionResult {
 	if err != nil {
 		return sessionResult{err: err}
 	}
-	overlayPath, _, err := config.ReadOverlay("")
+	overlayPath, overlayRaw, err := config.ReadOverlay("")
 	if err != nil {
 		return sessionResult{err: err}
+	}
+	if overlayRaw != nil {
+		if _, err := config.ApplyOverlay(existing, overlayRaw); err != nil {
+			return sessionResult{err: err}
+		}
 	}
 	session, sessionErr := newOptionsSession(existing, true)
 	if sessionErr != nil {
@@ -185,6 +192,7 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		a.Session = result.session
 		panel.session = result.session
 		panel.loadedTUI = result.session.Config.TUI
+		panel.appliedTUI = nil
 		config.BindEffectiveLanguage()
 		if result.overlayPath != "" {
 			panel.overlayNotice = t("tui.overlay_notice")

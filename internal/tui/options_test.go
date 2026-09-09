@@ -270,6 +270,7 @@ func openPanel(t *testing.T, initial ...*config.Config) (*App, *optionsPanel) {
 	app.Options = panel
 	panel.session = newTestSession(t, initial...)
 	panel.loadedTUI = panel.session.Config.TUI
+	panel.appliedTUI = nil
 	pumpPanel(panel, panel.openRoot())
 	return app, panel
 }

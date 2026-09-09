@@ -717,19 +717,24 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	if app.Model.ShowArchived != b.archived {
 		app.Model.ToggleArchived()
 	}
-	edited := theme != p.loadedTUI.Theme ||
-		columns != p.loadedTUI.Columns ||
-		minWidth != p.loadedTUI.MinColumnWidth ||
-		refresh != p.loadedTUI.Refresh ||
-		single != p.loadedTUI.Single
-	if !edited {
+	current := config.TUI{
+		Theme:          scopeTUI.Theme,
+		Columns:        columns,
+		MinColumnWidth: minWidth,
+		Refresh:        refresh,
+		Single:         single,
+	}
+	previous := p.loadedTUI
+	if p.appliedTUI != nil {
+		previous = *p.appliedTUI
+	} else if current == p.loadedTUI {
 		return
 	}
 	changed := false
 	if containsString(themes, theme) && app.Theme != theme {
 		app.Theme = theme
 		changed = true
-		if theme != p.loadedTUI.Theme {
+		if theme != previous.Theme {
 			// Huh caches the body during Update, and that cache still uses the old theme at this point.
 			// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
 			p.rebuildAt(interfaceFocusKey("theme"))
@@ -750,10 +755,11 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	if app.Model.Single != single {
 		app.Model.Single = single
 		changed = true
-		if single != p.loadedTUI.Single {
+		if single != previous.Single {
 			p.rebuildAt(interfaceFocusKey("single"))
 		}
 	}
+	p.appliedTUI = &current
 	// UI preferences reach config.json as soon as they change, so returning with Esc loses nothing.
 	if changed {
 		p.persistUI()

@@ -227,11 +227,12 @@ func TestOpenOptionsIgnoresStaleReload(t *testing.T) {
 	_ = newTestSession(t, initial)
 	useTestOptionsSession(t)
 	app.openOptions()
-	stale := app.pendingWork
-	if stale == nil {
+	staleLoad := app.pendingWork
+	if staleLoad == nil {
 		t.Fatal("first load")
 	}
 	app.pendingWork = nil
+	staleResult := staleLoad()
 	app.Options.close()
 	loaded, err := config.LoadScope(true)
 	if err != nil {
@@ -242,20 +243,21 @@ func TestOpenOptionsIgnoresStaleReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.openOptions()
-	fresh := app.pendingWork
-	if fresh == nil {
+	freshLoad := app.pendingWork
+	if freshLoad == nil {
 		t.Fatal("second load")
 	}
 	app.pendingWork = nil
-	cmd := app.applyWork(fresh())
+	cmd := app.applyWork(freshLoad())
 	if cmd != nil {
 		pumpPanel(app.Options, cmd)
 	}
-	if app.Session == nil || app.Session.Config.KanbanAgent != "grok" {
+	freshSession := app.Session
+	if freshSession == nil || freshSession.Config.KanbanAgent != "grok" {
 		t.Fatalf("fresh agent=%v", app.Session)
 	}
-	app.applyWork(stale())
-	if app.Session.Config.KanbanAgent != "grok" {
+	app.applyWork(staleResult)
+	if app.Session != freshSession || app.Session.Config.KanbanAgent != "grok" {
 		t.Fatalf("stale result overwrote session agent=%s", app.Session.Config.KanbanAgent)
 	}
 }
@@ -335,5 +337,23 @@ func TestOpenOptionsBindsExplicitLanguageNotSchemaDefault(t *testing.T) {
 	finishOptionsLoad(t, app)
 	if config.ResolveLanguage() != "ja" {
 		t.Fatalf("missing language bound %q, want ja locale fallback", config.ResolveLanguage())
+	}
+}
+
+func TestOpenOptionsInvalidOverlayLanguageIsLoadError(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeTempOverlay(t, dir, map[string]any{"language": "invalid"})
+	app := newPanelApp(t)
+	stale := newTestSession(t)
+	app.Session = stale
+	useTestOptionsSession(t)
+	app.openOptions()
+	runOptionsLoad(t, app)
+	if app.Options.loadErr == "" {
+		t.Fatal("invalid overlay language should set loadErr")
+	}
+	if app.Session != nil || app.Options.session != nil {
+		t.Fatal("invalid overlay language kept the old session")
 	}
 }
