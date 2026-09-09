@@ -70,6 +70,18 @@ func TestExpandTemplateIsNotRecursive(t *testing.T) {
 	}
 }
 
+func TestExpandArgvOmitEmptyDropsFlagAndKeepsEscapes(t *testing.T) {
+	names := []string{"model", "effort"}
+	got, err := ExpandArgvOmitEmpty([]string{"--model", "{model}", "--config", `effort="{effort}"`, "--keep", "{{model}}"}, map[string]string{"model": "", "effort": "high"}, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--config", `effort="high"`, "--keep", "{model}"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}
+
 func TestExpandTemplateMissingValueIsEmpty(t *testing.T) {
 	got, err := ExpandTemplate("x{model}y", nil, []string{"model"})
 	if err != nil || got != "xy" {

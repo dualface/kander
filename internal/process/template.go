@@ -101,6 +101,71 @@ func expandTemplate(template string, values map[string]string, names []string, r
 	return out.String(), nil
 }
 
+// ExpandArgvOmitEmpty expands each argv element, then drops an element whose
+// placeholder value is empty together with its immediately preceding standalone flag.
+func ExpandArgvOmitEmpty(template []string, values map[string]string, names []string) ([]string, error) {
+	if err := ValidateArgv(template, names, TemplateArgv); err != nil {
+		return nil, err
+	}
+	var out []string
+	for i, arg := range template {
+		omit, err := argvElementOmits(arg, values, names)
+		if err != nil {
+			return nil, err
+		}
+		if omit {
+			if i > 0 && strings.HasPrefix(template[i-1], "-") && !strings.ContainsAny(template[i-1], "{}=") && len(out) > 0 && out[len(out)-1] == template[i-1] {
+				out = out[:len(out)-1]
+			}
+			continue
+		}
+		expanded, err := ExpandTemplate(arg, values, names)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, expanded)
+	}
+	return out, nil
+}
+
+func argvElementOmits(arg string, values map[string]string, names []string) (bool, error) {
+	allowed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		allowed[name] = struct{}{}
+	}
+	for i := 0; i < len(arg); {
+		switch arg[i] {
+		case '{':
+			if i+1 < len(arg) && arg[i+1] == '{' {
+				i += 2
+				continue
+			}
+			end := strings.IndexByte(arg[i+1:], '}')
+			if end < 0 {
+				return false, specErrorf("placeholder", arg[i:], "unclosed {")
+			}
+			end += i + 1
+			name := arg[i+1 : end]
+			if _, ok := allowed[name]; !ok {
+				return false, specErrorf("placeholder", name, "unknown placeholder %s", name)
+			}
+			if values[name] == "" {
+				return true, nil
+			}
+			i = end + 1
+		case '}':
+			if i+1 < len(arg) && arg[i+1] == '}' {
+				i += 2
+				continue
+			}
+			return false, specErrorf("placeholder", "}", "unescaped }")
+		default:
+			i++
+		}
+	}
+	return false, nil
+}
+
 func checkTemplateControls(template string, kind TemplateKind) error {
 	for _, r := range template {
 		if !unicode.IsControl(r) {
