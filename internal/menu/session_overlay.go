@@ -85,8 +85,7 @@ func (s *Session) loadOverlayContext() error {
 			return err
 		}
 		s.overlayRaw = raw
-		s.expandOverlayReviewStages()
-		s.overlayExisting = config.CloneOverlay(s.overlayRaw)
+		s.overlayExisting = config.CloneOverlay(raw)
 	}
 	if paths.Mode == config.ModeProject {
 		return s.SetTarget(config.TargetOverlay)
@@ -99,8 +98,7 @@ func (s *Session) AttachOverlay(mode config.Mode, loc config.OverlayLocation, ra
 	s.InstallMode = mode
 	s.OverlayLocation = loc
 	s.overlayRaw = config.CloneOverlay(raw)
-	s.expandOverlayReviewStages()
-	s.overlayExisting = config.CloneOverlay(s.overlayRaw)
+	s.overlayExisting = config.CloneOverlay(raw)
 	if mode == config.ModeProject {
 		return s.SetTarget(config.TargetOverlay)
 	}
@@ -252,6 +250,7 @@ func (s *Session) saveScope() (string, error) {
 	if cfg == nil {
 		return "", nil
 	}
+	cfg.WelcomeComplete = true
 	baseline := s.scopeExisting
 	if baseline == nil {
 		baseline = s.existing

@@ -205,37 +205,47 @@ func withConfigLock(path string, fn func() error) error {
 	if err != nil {
 		return err
 	}
-	anchor, err := volumeAnchor(abs)
+	return withConfigLockFile(abs, abs+".lock", fn)
+}
+
+func withConfigLockFile(dataPath, lockPath string, fn func() error) error {
+	absData, err := lexicalAbsolute(dataPath)
 	if err != nil {
 		return err
 	}
-	if err := fs.EnsureInheritedDirectoryPath(filepath.Dir(abs)); err != nil {
-		return wrapSaveError(path, err)
-	}
-	lockFile, err := fs.OpenAppendFile(anchor, abs+".lock")
+	absLock, err := lexicalAbsolute(lockPath)
 	if err != nil {
-		return wrapSaveError(path, err)
+		return err
+	}
+	for _, dir := range []string{filepath.Dir(absData), filepath.Dir(absLock)} {
+		if err := fs.EnsureInheritedDirectoryPath(dir); err != nil {
+			return wrapSaveError(dataPath, err)
+		}
+	}
+	anchor, err := volumeAnchor(absLock)
+	if err != nil {
+		return err
+	}
+	lockFile, err := fs.OpenAppendFile(anchor, absLock)
+	if err != nil {
+		return wrapSaveError(dataPath, err)
 	}
 	lock, err := fs.LockExclusive(lockFile.File)
 	if err != nil {
 		_ = lockFile.Close()
-		return wrapSaveError(path, err)
+		return wrapSaveError(dataPath, err)
 	}
 	operationErr := fn()
 	unlockErr := lock.Unlock()
 	closeErr := lockFile.Close()
-	removeErr := os.Remove(abs + ".lock")
 	if operationErr != nil {
 		return operationErr
 	}
 	if unlockErr != nil {
-		return wrapSaveError(path, unlockErr)
+		return wrapSaveError(dataPath, unlockErr)
 	}
 	if closeErr != nil {
-		return wrapSaveError(path, closeErr)
-	}
-	if removeErr != nil && !os.IsNotExist(removeErr) {
-		return wrapSaveError(path, removeErr)
+		return wrapSaveError(dataPath, closeErr)
 	}
 	return nil
 }

@@ -133,11 +133,11 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	}
 	p.syncFormTheme(palette)
 	notice, noticeLines := p.renderScopeChrome(palette, width)
-	p.chromeLines = noticeLines
-	if notice == "" && p.overlayNotice != "" {
+	if !p.confirming && notice == "" && p.overlayNotice != "" {
 		notice = styleFor("popup-dim", palette).Render(clipText(p.overlayNotice, width)) + "\n"
 		noticeLines = 1
 	}
+	p.chromeLines = noticeLines
 	formHeight, footerGap := fitOptionsForm(p.formNatural, height-noticeLines)
 	p.form.WithWidth(width)
 	// Keep Huh's natural height while the content fits. Even when given the same height, WithHeight switches the

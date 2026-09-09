@@ -254,3 +254,38 @@ func TestRestoreFlatReviewStageDeletesLegacyKey(t *testing.T) {
 		t.Fatalf("flat review stage remained: %#v", session.overlayRaw)
 	}
 }
+
+func TestFlatReviewStagesSaveDoesNotConflict(t *testing.T) {
+	session, path := tempOverlaySession(t, config.ModeGlobal)
+	flat := map[string]any{"review_stages": map[string]any{"PM": "skip"}}
+	if _, err := config.SaveOverlayIfUnchanged(path, flat, map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: filepath.Dir(path), Path: path, Exists: true}, flat); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	session.SetLauncher("foreground")
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSaveAllDirtySetsWelcomeComplete(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session.scopeConfig.WelcomeComplete = false
+	session.Config.WelcomeComplete = false
+	session.SetLanguage("ja")
+	if _, err := session.SaveAllDirty(); err != nil {
+		t.Fatal(err)
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scopeCfg.WelcomeComplete {
+		t.Fatal("scope save left welcome_complete false")
+	}
+}

@@ -70,7 +70,8 @@ type optionsPanel struct {
 	installHerdr bool
 	dirty        bool
 	initial      string
-	// overlayNotice is kept for tests that still call detectOverlayNotice.
+	// overlayNotice is a fallback path line for tests that call detectOverlayNotice
+	// when renderScopeChrome has no session location yet.
 	overlayNotice string
 	tabHits       []tabHit
 	chromeLines   int

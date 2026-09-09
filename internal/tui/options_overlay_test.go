@@ -271,3 +271,14 @@ func TestMouseClickAccountsForScopeChrome(t *testing.T) {
 		t.Fatalf("click through chrome should focus form row %d, focus is %d", target, moved)
 	}
 }
+
+func TestCloseConfirmDoesNotPaintFallbackNotice(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	panel.detectOverlayNotice()
+	panel.confirming = true
+	panel.view()
+	if panel.chromeLines != 0 {
+		t.Fatalf("confirm chromeLines=%d", panel.chromeLines)
+	}
+}

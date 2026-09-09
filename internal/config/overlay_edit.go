@@ -2,6 +2,8 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -349,7 +351,11 @@ func SaveOverlayIfUnchanged(path string, overlay, baseline map[string]any) (stri
 	if err != nil {
 		return "", err
 	}
-	err = withConfigLock(abs, func() error {
+	lockPath, err := overlayAdvisoryLock(abs)
+	if err != nil {
+		return "", err
+	}
+	err = withConfigLockFile(abs, lockPath, func() error {
 		current, _, readErr := readOverlayMapAt(abs)
 		if readErr != nil {
 			return readErr
@@ -366,4 +372,15 @@ func SaveOverlayIfUnchanged(path string, overlay, baseline map[string]any) (stri
 		return "", err
 	}
 	return abs, nil
+}
+
+// overlayAdvisoryLock keeps the exclusive lock out of the project tree so a
+// save cannot leave .kander-config.json.lock next to user sources.
+func overlayAdvisoryLock(overlay string) (string, error) {
+	cfgPath, err := ConfigPath()
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256([]byte(overlay))
+	return filepath.Join(filepath.Dir(cfgPath), "overlay-"+hex.EncodeToString(sum[:8])+".lock"), nil
 }
