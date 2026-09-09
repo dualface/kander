@@ -85,7 +85,11 @@ func renderMarkdown(doc string, width int, theme string) []string {
 // so the detail body does not punch a patch of the raw terminal color through the screen background.
 func markdownCanvasStyle(theme string) glamansi.StyleConfig {
 	name := resolveTheme(theme)
-	src, ok := glamstyles.DefaultStyles[name]
+	key := glamstyles.LightStyle
+	if themeIsDark(name) {
+		key = glamstyles.DarkStyle
+	}
+	src, ok := glamstyles.DefaultStyles[key]
 	if !ok || src == nil {
 		src = glamstyles.DefaultStyles[glamstyles.DarkStyle]
 	}
