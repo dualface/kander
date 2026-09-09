@@ -158,6 +158,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if !config.HasAgent(cfg, agentName) {
 		return launchError("launch.unsupported_agent", agentName)
 	}
+	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
+		return err
+	}
 	program, err := requireAgentProgram(agentName, cfg)
 	if err != nil {
 		return err
@@ -216,7 +219,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if err != nil {
 		return err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	inv, err := launchInvocation(plan, *program, attachPrompt(&plan, args, prompt))
 	if err != nil {
 		return err
 	}

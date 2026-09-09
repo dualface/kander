@@ -367,65 +367,19 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 	}
 	// The model is picked per task scale; an empty scale model falls back to the shared "model" key of legacy configs.
 	modelID := config.KanbanModelFor(model, scale)
-	if definition.Args != nil {
-		template := definition.Args.Start
-		if resume {
-			template = definition.Args.Resume
-		}
-		reference := session.Reference
-		if definition.Session.Mode == "none" {
-			reference = ""
-		}
-		return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
-	}
-	agent = definition.Dialect
-	if agent == "cursor" {
-		var args []string
-		if modelID != "" {
-			args = append(args, "--model", modelID)
-		}
-		args = append(args, "--trust", "--force")
-		if definition.Session.Mode != "none" {
-			args = append(args, "--resume", session.Reference)
-		}
-		return args, nil
-	}
-	effortKey := scale + "_effort"
-	effort := model[effortKey]
-	var modelArgs []string
-	if modelID != "" {
-		modelArgs = []string{"--model", modelID}
-	}
-	switch agent {
-	case "codex":
-		options := append(append([]string{}, modelArgs...), "--config", `model_reasoning_effort="`+effort+`"`, "--dangerously-bypass-approvals-and-sandbox")
-		if resume {
-			return append(append([]string{"resume"}, options...), session.Reference), nil
-		}
-		return options, nil
-	case "claude":
-		flag := "--session-id"
-		if resume {
-			flag = "--resume"
-		}
-		args := append(modelArgs, "--effort", effort, "--dangerously-skip-permissions")
-		if definition.Session.Mode != "none" {
-			args = append(args, flag, session.Reference)
-		}
-		return args, nil
-	case "grok":
-		flag := "--session-id"
-		if resume {
-			flag = "--resume"
-		}
-		args := append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions")
-		if definition.Session.Mode != "none" {
-			args = append(args, flag, session.Reference)
-		}
-		return args, nil
-	default:
+	if definition.Args == nil {
 		return nil, launchError("launch.unsupported_agent", agent)
 	}
+	template := definition.Args.Start
+	if resume {
+		template = definition.Args.Resume
+	}
+	reference := session.Reference
+	if definition.Session.Mode == "none" {
+		reference = ""
+		template = config.RewriteKeepSession(template, true)
+	}
+	return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
 }
 
 func requireAgentProgram(agentName string, configs ...*config.Config) (*process.AgentProgram, error) {

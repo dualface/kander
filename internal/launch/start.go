@@ -63,6 +63,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
+	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
+		return result, err
+	}
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 	program, err := requireAgentProgram(agentName, cfg)
 	if err != nil {
@@ -112,7 +115,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	inv, err := launchInvocation(plan, *program, attachPrompt(&plan, args, prompt))
 	if err != nil {
 		return result, err
 	}
