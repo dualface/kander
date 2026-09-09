@@ -736,16 +736,11 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 			continue
 		}
 		if field.Value() != *b.modelValues[i] {
-			path := modelOverlayPath(field)
-			before := p.overridePresence(path...)
 			field.Set(*b.modelValues[i])
 			if p.session != nil {
 				p.session.NoteModelOverride(field, *b.modelValues[i])
 			}
 			p.markDirty()
-			if len(path) > 0 {
-				p.rebuildIfOverrideChanged(before, modelFocusKey(field), path...)
-			}
 		}
 	}
 }

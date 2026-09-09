@@ -343,6 +343,23 @@ func TestProjectLauncherChangeRefreshesInherit(t *testing.T) {
 	}
 }
 
+func TestModelOverrideDoesNotRebuildInput(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	if panel.bind == nil || len(panel.bind.modelValues) == 0 || panel.bind.modelValues[0] == nil {
+		t.Fatal("expected a model input")
+	}
+	*panel.bind.modelValues[0] = *panel.bind.modelValues[0] + "-x"
+	panel.bind.apply(panel)
+	if panel.rebuildFocus != "" {
+		t.Fatalf("model keystroke rebuilt the form: %q", panel.rebuildFocus)
+	}
+}
+
 func TestSwitchTabSyncsAppFromSession(t *testing.T) {
 	app, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeGlobal)
