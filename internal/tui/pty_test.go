@@ -33,6 +33,11 @@ type ptySession struct {
 
 func startPTY(t *testing.T, bin string, env []string, args ...string) *ptySession {
 	t.Helper()
+	return startPTYReply(t, bin, env, "\x1b]11;rgb:0000/0000/0000\x1b\\", args...)
+}
+
+func startPTYReply(t *testing.T, bin string, env []string, osc11 string, args ...string) *ptySession {
+	t.Helper()
 	master, slave, err := openPTY()
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +62,7 @@ func startPTY(t *testing.T, bin string, env []string, args ...string) *ptySessio
 				session.out = append(session.out, chunk...)
 				session.mu.Unlock()
 				if bytes.Contains(chunk, []byte("\x1b]11;?")) {
-					_, _ = master.Write([]byte("\x1b]11;rgb:0000/0000/0000\x1b\\"))
+					_, _ = master.Write([]byte(osc11))
 				}
 				if bytes.Contains(chunk, []byte("\x1b[6n")) {
 					_, _ = master.Write([]byte("\x1b[1;1R"))
@@ -176,10 +181,18 @@ func configPathFromEnv(t *testing.T, env []string) string {
 
 func writeCompleteConfig(t *testing.T, env []string) {
 	t.Helper()
+	writeCompleteConfigTheme(t, env, "")
+}
+
+func writeCompleteConfigTheme(t *testing.T, env []string, theme string) {
+	t.Helper()
 	path := configPathFromEnv(t, env)
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.Language = "en"
+	if theme != "" {
+		cfg.TUI.Theme = theme
+	}
 	payload, err := json.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -249,6 +262,74 @@ func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
 	session.send("q")
 	if err := session.waitExit(8 * time.Second); err != nil {
 		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
+	}
+}
+
+// Solarized remaps ANSI 0/15. Truecolor hex canvases must stay on the designed
+// RGB even when OSC 11 reports those solarized backgrounds.
+func TestBoardTrueColorIgnoresSolarizedPaletteOnPTY(t *testing.T) {
+	bin := buildKander(t)
+	cases := []struct {
+		name  string
+		theme string
+		osc11 string
+		want  []string
+		avoid []string
+	}{
+		{
+			name:  "solarized-light/theme-light",
+			theme: "light",
+			osc11: "\x1b]11;rgb:fdfd/f6f6/e3e3\x1b\\",
+			want:  []string{"48;2;250;250;250", "38;2;22;24;29"},
+			avoid: []string{"48;2;253;246;227"},
+		},
+		{
+			name:  "solarized-light/theme-dark",
+			theme: "dark",
+			osc11: "\x1b]11;rgb:fdfd/f6f6/e3e3\x1b\\",
+			want:  []string{"48;2;22;24;29", "38;2;230;232;235"},
+			avoid: []string{"48;2;253;246;227"},
+		},
+		{
+			name:  "solarized-dark/theme-light",
+			theme: "light",
+			osc11: "\x1b]11;rgb:0000/2b2b/3636\x1b\\",
+			want:  []string{"48;2;250;250;250", "38;2;22;24;29"},
+			avoid: []string{"48;2;0;43;54"},
+		},
+		{
+			name:  "solarized-dark/theme-dark",
+			theme: "dark",
+			osc11: "\x1b]11;rgb:0000/2b2b/3636\x1b\\",
+			want:  []string{"48;2;22;24;29", "38;2;230;232;235"},
+			avoid: []string{"48;2;0;43;54"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, env := boardEnv(t)
+			env = append(env, "COLORTERM=truecolor")
+			writeCompleteConfigTheme(t, env, tc.theme)
+			session := startPTYReply(t, bin, env, tc.osc11)
+			if !session.waitFor("Task Board", 8*time.Second) {
+				t.Fatalf("board did not render\npty:\n%s", session.text())
+			}
+			out := session.text()
+			for _, seq := range tc.want {
+				if !strings.Contains(out, seq) {
+					t.Fatalf("missing %q\npty:\n%s", seq, out)
+				}
+			}
+			for _, seq := range tc.avoid {
+				if strings.Contains(out, seq) {
+					t.Fatalf("solarized canvas leaked %q\npty:\n%s", seq, out)
+				}
+			}
+			session.send("q")
+			if err := session.waitExit(8 * time.Second); err != nil {
+				t.Fatalf("exit: %v\npty:\n%s", err, session.text())
+			}
+		})
 	}
 }
 

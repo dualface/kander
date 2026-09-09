@@ -26,42 +26,58 @@ type palette struct {
 	Headings  map[string]lipgloss.Color
 }
 
-var headingColors = map[string]lipgloss.Color{
-	"backlog":  lipgloss.Color("6"),
-	"todo":     lipgloss.Color("3"),
-	"working":  lipgloss.Color("4"),
-	"review":   lipgloss.Color("5"),
-	"done":     lipgloss.Color("2"),
-	"archived": lipgloss.Color("5"),
-	"trash":    lipgloss.Color("1"),
-}
-
 func themePalette(name string) palette {
-	base := lipgloss.Color("15")
-	bg := lipgloss.Color("0")
-	dim := lipgloss.Color("8")
-	// The separator is only a helper line between columns, so it takes a shade closer to the background than Dim (ANSI 8, mid grey):
-	// 240 on a dark background and 250 on a light one, both clearly below body contrast yet still visible.
-	separator := lipgloss.Color("240")
+	// Hex values keep light and dark on their designed canvases. Indexed 0–15
+	// would follow the terminal palette and invert Solarized-style schemes.
+	// Each theme carries its own foregrounds: the dark set is bright-on-dark,
+	// the light set is dark-on-light, so they no longer share one ANSI family.
 	if resolveTheme(name) == "light" {
-		base = lipgloss.Color("0")
-		bg = lipgloss.Color("15")
-		separator = lipgloss.Color("250")
+		return palette{
+			Base:      lipgloss.Color("#16181d"),
+			Bg:        lipgloss.Color("#fafafa"),
+			Dim:       lipgloss.Color("#6b7280"),
+			Separator: lipgloss.Color("#828892"),
+			Accent:    lipgloss.Color("#9d2ec5"),
+			Bar:       lipgloss.Color("#1d4ed8"),
+			ChromeFg:  lipgloss.Color("#f7f7fb"),
+			ChromeBg:  lipgloss.Color("#6b21a8"),
+			PopupFg:   lipgloss.Color("#16181d"),
+			PopupEdge: lipgloss.Color("#9d2ec5"),
+			Warn:      lipgloss.Color("#c62828"),
+			OK:        lipgloss.Color("#2e7d32"),
+			Headings: map[string]lipgloss.Color{
+				"backlog":  lipgloss.Color("#0e7490"),
+				"todo":     lipgloss.Color("#a16207"),
+				"working":  lipgloss.Color("#1d4ed8"),
+				"review":   lipgloss.Color("#9d2ec5"),
+				"done":     lipgloss.Color("#15803d"),
+				"archived": lipgloss.Color("#7e22ce"),
+				"trash":    lipgloss.Color("#b91c1c"),
+			},
+		}
 	}
 	return palette{
-		Base:      base,
-		Bg:        bg,
-		Dim:       dim,
-		Separator: separator,
-		Accent:    lipgloss.Color("13"),
-		Bar:       lipgloss.Color("4"),
-		ChromeFg:  lipgloss.Color("15"),
-		ChromeBg:  lipgloss.Color("5"),
-		PopupFg:   base,
-		PopupEdge: lipgloss.Color("13"),
-		Warn:      lipgloss.Color("1"),
-		OK:        lipgloss.Color("2"),
-		Headings:  headingColors,
+		Base:      lipgloss.Color("#e6e8eb"),
+		Bg:        lipgloss.Color("#16181d"),
+		Dim:       lipgloss.Color("#8b919a"),
+		Separator: lipgloss.Color("#6a7078"),
+		Accent:    lipgloss.Color("#d670d6"),
+		Bar:       lipgloss.Color("#6ea8fe"),
+		ChromeFg:  lipgloss.Color("#f7f7fb"),
+		ChromeBg:  lipgloss.Color("#6b21a8"),
+		PopupFg:   lipgloss.Color("#e6e8eb"),
+		PopupEdge: lipgloss.Color("#d670d6"),
+		Warn:      lipgloss.Color("#f07178"),
+		OK:        lipgloss.Color("#7fd17f"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#4dd0e1"),
+			"todo":     lipgloss.Color("#e6c35c"),
+			"working":  lipgloss.Color("#6ea8fe"),
+			"review":   lipgloss.Color("#d670d6"),
+			"done":     lipgloss.Color("#7fd17f"),
+			"archived": lipgloss.Color("#c084d0"),
+			"trash":    lipgloss.Color("#f07178"),
+		},
 	}
 }
 

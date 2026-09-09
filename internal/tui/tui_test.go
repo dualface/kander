@@ -209,7 +209,7 @@ func TestThemePaletteFillsBackground(t *testing.T) {
 	if dark.Bg == light.Bg {
 		t.Fatal("light and dark should paint different canvas backgrounds")
 	}
-	if dark.Bg != "0" || light.Bg != "15" {
+	if dark.Bg != "#16181d" || light.Bg != "#fafafa" {
 		t.Fatalf("dark bg=%q light bg=%q", dark.Bg, light.Bg)
 	}
 	filled := paintScreen("", 8, 2, light)
