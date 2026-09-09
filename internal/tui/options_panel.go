@@ -124,7 +124,7 @@ func loadOptionsSession() sessionResult {
 	if _, err := config.Load(false); err != nil {
 		return sessionResult{err: err}
 	}
-	existing, err := config.LoadScope(true)
+	existing, scopeRaw, err := config.LoadScopeRaw(true)
 	if err != nil {
 		return sessionResult{err: err}
 	}
@@ -141,7 +141,7 @@ func loadOptionsSession() sessionResult {
 	if existing.WelcomeComplete {
 		language = overlayLanguage(overlayRaw)
 		if language == "" {
-			language = config.ConfiguredScopeLanguage()
+			language = config.ExplicitConfigLanguage(scopeRaw)
 		}
 	}
 	session, sessionErr := newOptionsSession(existing, true)

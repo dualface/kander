@@ -66,6 +66,12 @@ func CLILanguage() string {
 	return ""
 }
 
+// ExplicitConfigLanguage returns the language explicitly present on a decoded
+// welcomed config object, or empty when the key is missing or initialization is incomplete.
+func ExplicitConfigLanguage(raw map[string]any) string {
+	return explicitConfigLanguage(raw)
+}
+
 func explicitConfigLanguage(raw map[string]any) string {
 	welcome, _ := raw["welcome_complete"].(bool)
 	if !welcome {

@@ -127,11 +127,18 @@ func Load(missingOK bool) (*Config, error) {
 // LoadScope reads only the current-scope config.json and never applies a project overlay.
 // Write and edit paths use this so overlay values cannot be written back into the scope file.
 func LoadScope(missingOK bool) (*Config, error) {
+	cfg, _, err := LoadScopeRaw(missingOK)
+	return cfg, err
+}
+
+// LoadScopeRaw is LoadScope plus the decoded scope object, so callers can inspect
+// explicit keys without reading the file a second time.
+func LoadScopeRaw(missingOK bool) (*Config, map[string]any, error) {
 	path, err := ConfigPath()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return loadValidated(path, missingOK)
+	return loadScopeRawAt(path, missingOK)
 }
 
 // Exists reports whether config.json exists in the current scope, reusing the safety checks of config reads.
