@@ -393,6 +393,9 @@ func TestMarkdownCanvasStyleOwnBackgroundAndFamily(t *testing.T) {
 	}
 }
 
+// TestThemeSurfacesPaintOwnBackground checks that in-process TrueColor
+// frames contain each theme's canvas sequence. It does not close the
+// live-terminal walkthrough; that record is testdata/theme-live-walkthrough.md.
 func TestThemeSurfacesPaintOwnBackground(t *testing.T) {
 	previous := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
