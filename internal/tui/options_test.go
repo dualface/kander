@@ -801,7 +801,7 @@ func TestOptionsPanelShowsOverlayNotice(t *testing.T) {
 	}
 	_, view := app.Options.view()
 	plain := ansi.Strip(view)
-	if !strings.Contains(plain, "scope config") {
+	if !strings.Contains(plain, config.OverlayFilename) || !strings.Contains(plain, config.Text("tui.base_config", "")) {
 		t.Fatalf("overlay notice not rendered:\n%s", plain)
 	}
 }

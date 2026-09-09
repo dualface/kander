@@ -42,8 +42,8 @@ type optionsPanel struct {
 	session *menu.Session
 	loadErr string
 	loadSeq uint64
-	// loadedTUI is the scope TUI captured when the session was loaded, so interface
-	// preview and persist do not push disk values onto the board until the user edits.
+	// loadedTUI tracks accepted form values for the current edit target.
+	// Rebuilding or switching the form must not manufacture an interface edit.
 	loadedTUI config.TUI
 	// appliedTUI is the last TUI actually pushed to the board; nil until the user edits a field.
 	appliedTUI *config.TUI
@@ -70,8 +70,7 @@ type optionsPanel struct {
 	installHerdr bool
 	dirty        bool
 	initial      string
-	// overlayNotice is a fallback path line for tests that call detectOverlayNotice
-	// when renderScopeChrome has no session location yet.
+	// overlayNotice is the captured overlay path, used when scope chrome is unavailable.
 	overlayNotice string
 	tabHits       []tabHit
 	chromeLines   int
@@ -101,15 +100,6 @@ func (a *App) openOptionsAt(section string) {
 	panel := &optionsPanel{app: a, spinner: spin, initial: section, loadSeq: a.optionsLoadSeq}
 	a.Options = panel
 	panel.requestSession()
-}
-
-func (p *optionsPanel) detectOverlayNotice() {
-	loc := overlayDisplayLocation(p)
-	if loc.Path == "" {
-		p.overlayNotice = ""
-		return
-	}
-	p.overlayNotice = t("tui.overlay_file", loc.Path)
 }
 
 // Init returns the command to run when the panel starts (the loading spinner or the form initialization).
@@ -160,7 +150,7 @@ func loadOptionsSession() sessionResult {
 	if sessionErr != nil {
 		return sessionResult{err: sessionErr}
 	}
-	if existing.WelcomeComplete {
+	if existing.WelcomeComplete && !session.EditingOverlay() {
 		if stored := config.ExplicitConfigLanguage(scopeRaw); stored != "" {
 			session.Config.Language = stored
 		} else {
@@ -239,7 +229,7 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		a.Context = tuiPageContext()
 		panel.session.RefreshCopy()
 		if result.overlayPath != "" {
-			panel.overlayNotice = t("tui.overlay_notice")
+			panel.overlayNotice = t("tui.overlay_file", result.overlayPath)
 		} else {
 			panel.overlayNotice = ""
 		}

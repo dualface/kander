@@ -77,7 +77,7 @@ func TestOpenOptionsReloadsOverlayNoticeAndLanguage(t *testing.T) {
 	if !strings.Contains(app.Options.overlayNotice, ".kander-config") {
 		t.Fatalf("missing overlay notice: %q", app.Options.overlayNotice)
 	}
-	if app.Options.overlayNotice != config.Text("tui.overlay_notice") {
+	if app.Options.overlayNotice != config.Text("tui.overlay_file", filepath.Join(dir, config.OverlayFilename)) {
 		t.Fatalf("notice language=%q", app.Options.overlayNotice)
 	}
 	if config.ResolveLanguage() != "ja" {
@@ -91,7 +91,7 @@ func TestOpenOptionsReloadsOverlayNoticeAndLanguage(t *testing.T) {
 	if config.ResolveLanguage() != "cn" {
 		t.Fatalf("updated overlay language=%s", config.ResolveLanguage())
 	}
-	if app.Options.overlayNotice != config.Text("tui.overlay_notice") {
+	if app.Options.overlayNotice != config.Text("tui.overlay_file", filepath.Join(dir, config.OverlayFilename)) {
 		t.Fatalf("notice did not follow overlay language: %q", app.Options.overlayNotice)
 	}
 	app.Options.close()

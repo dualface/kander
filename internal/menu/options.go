@@ -178,9 +178,9 @@ func (s *Session) prepare(configValid bool) error {
 	} else {
 		cfg.Language = config.ResolveScopeLanguage()
 	}
-	// Session.Language is the unmerged explicit scope value, or a CLI/env
-	// fallback that does not see the bound overlay language. Callers bind
-	// the merged UI language after they accept this session.
+	// Build the scope buffer from its explicit language or CLI/env fallback.
+	// loadOverlayContext selects the merged buffer for a project install.
+	// Callers bind the UI language after they accept this session.
 	s.Config = cfg
 	s.initOverlayState()
 	return s.loadOverlayContext()

@@ -76,6 +76,8 @@ func (p *optionsPanel) syncAppFromSession() {
 		return
 	}
 	tui := p.session.Config.TUI
+	p.loadedTUI = tui
+	p.appliedTUI = nil
 	p.app.Theme = tui.Theme
 	p.app.Columns = tui.Columns
 	p.app.MinColumnWidth = tui.MinColumnWidth

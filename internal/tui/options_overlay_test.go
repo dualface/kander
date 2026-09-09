@@ -279,7 +279,7 @@ func TestMouseClickAccountsForScopeChrome(t *testing.T) {
 func TestCloseConfirmDoesNotPaintFallbackNotice(t *testing.T) {
 	_, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeGlobal)
-	panel.detectOverlayNotice()
+	panel.overlayNotice = config.Text("tui.overlay_file", panel.session.OverlayLocation.Path)
 	panel.confirming = true
 	panel.view()
 	if panel.chromeLines != 0 {
