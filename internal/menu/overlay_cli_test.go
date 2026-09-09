@@ -260,3 +260,29 @@ func TestDoctorRepairDoesNotWriteOverlayValues(t *testing.T) {
 		t.Fatalf("scope file absorbed overlay-only values: agent=%s language=%s", cfg.KanbanAgent, cfg.Language)
 	}
 }
+
+func TestNewSessionDoesNotBindEffectiveLanguage(t *testing.T) {
+	h := newHarness(t)
+	h.installFake(false)
+	t.Setenv("PATH", h.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv(config.EnvConfig, h.configPath)
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "en"
+	cfg.Launcher = "foreground"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	config.BindConfigLanguage(&config.Config{Language: "ja"})
+	session, err := NewSession(cfg, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ResolveLanguage() != "ja" {
+		t.Fatalf("NewSession bound %q", config.ResolveLanguage())
+	}
+	if session.Config.Language != "en" {
+		t.Fatalf("session language=%s", session.Config.Language)
+	}
+}

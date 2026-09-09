@@ -160,11 +160,42 @@ func (s *Session) prepare(configValid bool) error {
 		cfg.Language = config.ResolveScopeLanguage()
 	}
 	// Session.Language is the unmerged explicit scope value, or a CLI/env
-	// fallback that does not see the bound overlay language. Panel copy
-	// follows BindEffectiveLanguage() (merged).
-	config.BindEffectiveLanguage()
+	// fallback that does not see the bound overlay language. Callers bind
+	// the merged UI language after they accept this session.
 	s.Config = cfg
 	return nil
+}
+
+// RefreshCopy re-translates cached agent labels after the UI language changes.
+// Sessions built without a probe keep their existing labels.
+func (s *Session) RefreshCopy() {
+	if s == nil || s.agents == nil {
+		return
+	}
+	labels := agentLabels()
+	for i, choice := range s.exec {
+		name := choice.Value
+		label := labels[name]
+		if label == "" {
+			label = name
+		}
+		state := s.agents[name]
+		if agentUsable(state) {
+			s.exec[i].Label = label + " (" + state.Version + ")"
+			continue
+		}
+		s.exec[i].Label = label + config.Text("menu.not_currently_installed")
+	}
+	for i, choice := range s.review {
+		name := choice.Value
+		label := labels[name]
+		if label == "" {
+			label = name
+		}
+		if reviewerUsable(s.agents[name]) {
+			s.review[i].Label = label + " (" + reviewerState(s.agents[name]).Version + ")"
+		}
+	}
 }
 
 func (s *Session) normalizeLauncher(cfg *config.Config) {

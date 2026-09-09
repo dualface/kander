@@ -415,6 +415,31 @@ func TestConfiguredLanguageUsesOverlay(t *testing.T) {
 	}
 }
 
+func TestValidateOverlayMergeUsesRawRulesSemantics(t *testing.T) {
+	scope := DefaultConfig()
+	scope.WelcomeComplete = true
+	encoded, err := json.Marshal(scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := decodeJSON(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatal("scope object")
+	}
+	delete(obj, "rules")
+	overlay := map[string]any{"rules": map[string]any{"git": false}}
+	if err := ValidateOverlayMerge(obj, overlay); err != nil {
+		t.Fatalf("raw merge: %v", err)
+	}
+	if _, err := ApplyOverlay(scope, overlay); err == nil {
+		t.Fatal("filled ApplyOverlay should reject task_groups without git")
+	}
+}
+
 func TestApplyOverlayMergesLanguageWithoutMutatingScope(t *testing.T) {
 	scope := DefaultConfig()
 	scope.WelcomeComplete = true

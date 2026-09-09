@@ -443,6 +443,65 @@ func TestOpenOptionsIgnoresOverlayLanguageBeforeWelcome(t *testing.T) {
 	}
 }
 
+func TestOpenOptionsAcceptsLegacyRulesOverlay(t *testing.T) {
+	app := newPanelApp(t)
+	_ = newTestSession(t)
+	useTestOptionsSession(t)
+	path := os.Getenv(config.EnvConfig)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatal(err)
+	}
+	delete(obj, "rules")
+	encoded, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(encoded, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeTempOverlay(t, dir, map[string]any{"rules": map[string]any{"git": false}})
+	app.openOptions()
+	finishOptionsLoad(t, app)
+}
+
+func TestOpenOptionsRefreshesThemeLabelsAfterLanguageReload(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "en_US.UTF-8")
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.Language = "en"
+	app := newPanelApp(t)
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	if app.Context.themeLabel("auto") != "auto" {
+		t.Fatalf("english theme label=%q", app.Context.themeLabel("auto"))
+	}
+	app.Options.close()
+	writeTempOverlay(t, dir, map[string]any{"language": "ja"})
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	if app.Context.themeLabel("auto") != "自動" {
+		t.Fatalf("reloaded theme label=%q", app.Context.themeLabel("auto"))
+	}
+	pumpPanel(app.Options, app.Options.dispatch(sectionInterface))
+	if app.Options.bind == nil || app.Context.themeLabel("light") != "ライト" {
+		t.Fatalf("interface theme label=%q", app.Context.themeLabel("light"))
+	}
+}
+
 func TestOpenOptionsPersistsSingleWhenAppAlreadyMatches(t *testing.T) {
 	app := newPanelApp(t)
 	initial := config.DefaultConfig()

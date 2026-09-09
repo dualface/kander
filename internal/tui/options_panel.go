@@ -133,7 +133,7 @@ func loadOptionsSession() sessionResult {
 		return sessionResult{err: err}
 	}
 	if overlayRaw != nil {
-		if _, err := config.ApplyOverlay(existing, overlayRaw); err != nil {
+		if err := config.ValidateOverlayMerge(scopeRaw, overlayRaw); err != nil {
 			return sessionResult{err: err}
 		}
 	}
@@ -147,6 +147,13 @@ func loadOptionsSession() sessionResult {
 	session, sessionErr := newOptionsSession(existing, true)
 	if sessionErr != nil {
 		return sessionResult{err: sessionErr}
+	}
+	if existing.WelcomeComplete {
+		if stored := config.ExplicitConfigLanguage(scopeRaw); stored != "" {
+			session.Config.Language = stored
+		} else {
+			session.Config.Language = config.ResolveScopeLanguage()
+		}
 	}
 	return sessionResult{session: session, overlayPath: overlayPath, language: language}
 }
@@ -217,6 +224,8 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		} else {
 			config.BindConfigLanguage(nil)
 		}
+		a.Context = tuiPageContext()
+		panel.session.RefreshCopy()
 		if result.overlayPath != "" {
 			panel.overlayNotice = t("tui.overlay_notice")
 		} else {

@@ -183,6 +183,23 @@ func ReadOverlay(cwd string) (string, map[string]any, error) {
 	return readOverlay(cwd)
 }
 
+// ValidateOverlayMerge validates overlay against the unmerged scope object using
+// the same raw merge as Load. It must not serialize a default-filled Config.
+func ValidateOverlayMerge(scopeRaw map[string]any, overlay map[string]any) error {
+	if overlay == nil {
+		return nil
+	}
+	if scopeRaw == nil {
+		return configErrorf("config.config_root_must_be_a_json_object")
+	}
+	merged, err := mergeOverlayRaw(cloneRawObjectDeep(scopeRaw), overlay)
+	if err != nil {
+		return err
+	}
+	_, err = Validate(merged)
+	return err
+}
+
 // ApplyOverlay returns the validated config of scope with overlay merged on top.
 // A nil overlay leaves the scope values unchanged.
 func ApplyOverlay(scope *Config, overlay map[string]any) (*Config, error) {
