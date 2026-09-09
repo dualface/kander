@@ -96,8 +96,10 @@ func TestReviewAgentNamesFollowsDefinitions(t *testing.T) {
 	}
 	cfg := DefaultConfig()
 	cfg.Agents = map[string]AgentDefinition{
-		"plain":  {Args: &AgentArgs{Start: []string{}, Resume: []string{}}, Session: &AgentSessionDefinition{Mode: "none"}},
-		"helper": {Path: "/bin/helper", Dialect: "claude"},
+		"plain":    {Args: &AgentArgs{Start: []string{}, Resume: []string{}}, Session: &AgentSessionDefinition{Mode: "none"}},
+		"helper":   {Path: "/bin/helper", Dialect: "claude"},
+		"wrap":     {Dialect: "claude"},
+		"declared": {Dialect: "claude", Args: &AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}}},
 		"reviewer": {
 			Args:    &AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
 			Session: &AgentSessionDefinition{Mode: "none"},
@@ -111,10 +113,24 @@ func TestReviewAgentNamesFollowsDefinitions(t *testing.T) {
 	if HasReviewTemplate(cfg, "helper") || contains(ReviewAgentNames(cfg), "helper") {
 		t.Fatal("dialect wrapper")
 	}
+	if HasReviewTemplate(cfg, "wrap") || contains(ReviewAgentNames(cfg), "wrap") {
+		t.Fatal("undeclared custom reviewer")
+	}
+	if !HasReviewTemplate(cfg, "declared") || !contains(ReviewAgentNames(cfg), "declared") {
+		t.Fatal("declared overlay")
+	}
 	if !HasReviewTemplate(cfg, "reviewer") {
 		t.Fatal("declared review")
 	}
 	if !HasReviewTemplate(cfg, "claude") {
 		t.Fatal("builtin overlay")
+	}
+	resolved := AgentFor(cfg, "wrap")
+	if resolved.Args != nil && resolved.Args.Review != nil || resolved.Review != nil {
+		t.Fatal("dialect wrapper inherited review")
+	}
+	filled := AgentFor(cfg, "declared")
+	if filled.Args == nil || filled.Args.Review == nil || filled.Review == nil {
+		t.Fatal("declared overlay should inherit omitted review fields")
 	}
 }

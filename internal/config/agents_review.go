@@ -22,18 +22,18 @@ const (
 
 // AgentReview is the reviewer invocation declared next to args.review.
 type AgentReview struct {
-	Env           map[string]string     `json:"env,omitempty"`
-	CWD           string                `json:"cwd,omitempty"`
-	HomeEnv       string                `json:"home_env,omitempty"`
-	HomePolicy    string                `json:"home_policy,omitempty"`
-	OutputName    string                `json:"output_name,omitempty"`
-	Inspection    string                `json:"inspection,omitempty"`
-	SpawnsHelpers bool                  `json:"spawns_helpers,omitempty"`
-	SnapshotSpec  bool                  `json:"snapshot_spec,omitempty"`
-	Path          string                `json:"path,omitempty"`
-	Stdin         string                `json:"stdin,omitempty"`
-	PromptFiles   []ReviewPromptFile    `json:"prompt_files,omitempty"`
-	Output        *process.OutputSpec   `json:"output,omitempty"`
+	Env           map[string]string   `json:"env,omitempty"`
+	CWD           string              `json:"cwd,omitempty"`
+	HomeEnv       string              `json:"home_env,omitempty"`
+	HomePolicy    string              `json:"home_policy,omitempty"`
+	OutputName    string              `json:"output_name,omitempty"`
+	Inspection    string              `json:"inspection,omitempty"`
+	SpawnsHelpers bool                `json:"spawns_helpers,omitempty"`
+	SnapshotSpec  bool                `json:"snapshot_spec,omitempty"`
+	Path          string              `json:"path,omitempty"`
+	Stdin         string              `json:"stdin,omitempty"`
+	PromptFiles   []ReviewPromptFile  `json:"prompt_files,omitempty"`
+	Output        *process.OutputSpec `json:"output,omitempty"`
 }
 
 // ReviewPromptFile is one extra prompt rendered into the review runtime.
@@ -73,6 +73,10 @@ func validateReviewerChoice(value any, cfg *Config, field string, reviewNames []
 	return text, nil
 }
 
+func userDeclaredReviewTemplate(d AgentDefinition) bool {
+	return d.Review != nil || (d.Args != nil && d.Args.Review != nil)
+}
+
 // HasReviewTemplate reports whether the agent may be selected as a reviewer.
 // Built-in names keep the embedded args.review. A custom name must declare
 // args.review or review itself; dialect backfill is not a declaration.
@@ -84,11 +88,7 @@ func HasReviewTemplate(cfg *Config, name string) bool {
 	if cfg == nil {
 		return false
 	}
-	user, ok := cfg.Agents[name]
-	if !ok {
-		return false
-	}
-	return user.Review != nil || user.Args != nil && user.Args.Review != nil
+	return userDeclaredReviewTemplate(cfg.Agents[name])
 }
 
 // ReviewAgentNames lists agents that declare a review argv template.

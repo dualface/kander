@@ -76,16 +76,21 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 	if d.Dialect == "" && contains(ExecutionAgents, name) {
 		d.Dialect = name
 	}
+	overlay := d
+	allowReviewInherit := contains(ExecutionAgents, name) || userDeclaredReviewTemplate(overlay)
 	if d.Args == nil {
 		if emb, ok := embeddedByName(d.Dialect); ok {
 			d.Args = cloneArgs(&emb.Args)
+			if !allowReviewInherit && d.Args != nil {
+				d.Args.Review = nil
+			}
 		}
-	} else if d.Args.Review == nil {
+	} else if d.Args.Review == nil && allowReviewInherit {
 		if emb, ok := embeddedByName(d.Dialect); ok && emb.Args.Review != nil {
 			d.Args.Review = append([]string{}, emb.Args.Review...)
 		}
 	}
-	if d.Review == nil {
+	if d.Review == nil && allowReviewInherit {
 		if emb, ok := embeddedByName(d.Dialect); ok {
 			d.Review = cloneReview(&emb.Review)
 		}
