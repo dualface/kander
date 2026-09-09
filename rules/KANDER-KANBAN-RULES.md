@@ -129,7 +129,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 **Configured Execution Agents**
 
 - The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, and session modes. Custom agents are execution-only; reviewer isolation and `*_REVIEW_BIN` remain independent.
-- Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used.
+- Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used. `{session=}` keeps an empty session value instead of dropping the element. When `prompt_delivery.mode` is `pane`, the prompt is not appended to argv: after `pane run`, Kander waits for the agent TUI using the definition's `ready` / `blocked` marks (`blocked` is checked in parallel and wins immediately), then delivers the prompt with the same primitives as notify (herdr `agent prompt`, tmux `send-keys -l` plus a separate Enter).
 - `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
 - tmux foreground checks use the configured process name, falling back to the executable basename. herdr still requires its own agent recognition.
 
@@ -172,6 +172,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Cards without a `SESSION` record (not launched through `start`) cannot be `resume`d.
 - `start`, `resume`, and a `notify` that needs to recover a process write the full prompt to a UTF-8 temporary task file on all platforms, containing the task ID, fixed requirements, and the message body.
 - The agent command line receives only one instruction containing that absolute path.
+- When `prompt_delivery.mode` is `pane`, that instruction is not an argv element: it is delivered after the agent TUI is ready, as specified under Start Checks and Rollback.
 - The task file asks the agent to try to delete it when done; failure to delete or leftover files do not affect the result.
 - These files get no POSIX permission or Windows ACL check or tightening.
 - Native Windows prefers the agent `.exe`.
@@ -544,10 +545,13 @@ kander move <task-id> working --owner <agent>
   - `foreground`: all three standard streams are TTYs.
   - `console`: native Windows.
 - A failed precondition check does not claim.
+- An agent whose `prompt_delivery.mode` is `pane` is rejected before claiming when the resolved launcher is `foreground` or `console`; the card stays in `todo/`.
 - When process creation, tmux session, tmux window, herdr tab, herdr pane readiness wait, or `pane run` fails, restore the document and move back to `todo/`.
+- For `prompt_delivery.mode` `pane`, a second-stage TUI ready failure (`blocked` match, prompt-delivery rejection, or ready timeout) is the same class of failure: capture the pane output, close this invocation's tab/window, restore the document, and move back to `todo/`. Do not keep the container or write `WINDOW`/`SESSION` from that attempt. Failures that need a person to answer a dialog say to run that CLI once manually and then retry `kander start`; a pure ready timeout reports the captured pane output without that instruction.
 - A failed herdr readiness wait or `pane run` must also close the newly created tab; a failed Codex session discovery or pane session marker write on tmux/tmux-session must also close the newly created window.
 - Command text sent before the shell of a new tab takes over the terminal is discarded, so `pane run` must happen after the pane renders its first frame of output; the readiness wait has an upper bound, and a timeout is treated as failure.
 - tmux/tmux-session count as started only after session discovery and pane marker write succeed.
+- When `prompt_delivery.mode` is `pane`, tmux/tmux-session count as started only after prompt delivery succeeds and session discovery and pane marker write succeed.
 - The herdr success condition is in the best-effort clause later in this section.
 - foreground/console count as started once the process is created; a later exit does not roll back automatically.
 - On success, `console` prints the PID and returns immediately.
@@ -555,7 +559,9 @@ kander move <task-id> working --owner <agent>
 - `auto` must show the resolution result (`herdr` or `tmux`).
 
 - herdr counts as started once `pane run` succeeds; the subsequent session identity report and read-back are best-effort, failures only warn and do not enter the `LaunchFailure` tab close and card rollback path.
+- When `prompt_delivery.mode` is `pane`, herdr counts as started once `pane run` succeeds and prompt delivery succeeds.
 - The temporary task file of `start` contains only the task ID and fixed requirements; the agent command line receives only one instruction to read that file.
+- When `prompt_delivery.mode` is `pane`, that instruction is not an argv element: it is delivered after the agent TUI is ready.
 
   The executing agent first verifies the configuration through the entry, then reads this protocol, the card, and project rules, and prepares the actual working directory per the applicable flow.
 
