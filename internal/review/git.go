@@ -161,6 +161,22 @@ func incrementalScopeRules(ctx reviewContext) string {
 		"range is context only.\n"
 }
 
+// lastMessageOutputContract is appended for reviewers whose report is the last
+// assistant message (claude, cursor, grok). Those CLIs otherwise often emit a
+// short human summary after deleting the task file, so parseReviewOutput never
+// sees the kander-findings fence. Codex writes the report to a file and does
+// not use this paragraph.
+const lastMessageOutputContract = "Output contract: your final message is the complete report. It must already contain the analysis and the exact kander-findings fence. Write that one message and stop. Delete the task file before writing the final message; after that message, do not send any follow-up."
+
+func usesLastMessageReport(agent string) bool {
+	switch agent {
+	case "claude", "cursor", "grok":
+		return true
+	default:
+		return false
+	}
+}
+
 func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 	scopeRules := "Review the complete code state against the task context, not merely the " + ctx.base + ".." + ctx.commit + " diff, but\n" +
 		"report only issues introduced, worsened, or concealed by that range. Use unchanged surrounding code\n" +
@@ -177,7 +193,7 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 	if ctx.reviewed != "" {
 		scopeRules = incrementalScopeRules(ctx)
 	}
-	return "You are the " + ctx.role + " review agent. The tracked files in the clean worktree at " +
+	prompt := "You are the " + ctx.role + " review agent. The tracked files in the clean worktree at " +
 		ctx.root + " materialize commit\n" +
 		ctx.commit + " and are the primary source of implementation facts. The COMMIT TREE in " +
 		evidenceFile + " is\n" +
@@ -200,6 +216,10 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 		"worktree. Begin the report with Role, Commit, Task Context, and Reviewed Scope.\n" +
 		"Use role-prefixed stable IDs for findings and threats.\n" +
 		reportLanguageRule(ctx.reportLanguage)
+	if usesLastMessageReport(ctx.agent) {
+		prompt += "\n" + lastMessageOutputContract + "\n"
+	}
+	return prompt
 }
 
 // reportLanguageRule tells the reviewer which language to write prose in while keeping evidence verbatim.

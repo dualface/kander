@@ -67,7 +67,8 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 			"--permission-mode", "bypassPermissions",
 			"--disallowedTools", "Edit,Write",
 		}, model...)
-		arguments = append(arguments, "--effort", settings.effort)
+		arguments = append(arguments, "--effort", settings.effort,
+			"--append-system-prompt", lastMessageOutputContract)
 		cwd = runtime
 	case "cursor":
 		environment["CURSOR_CONFIG_DIR"] = runtime
