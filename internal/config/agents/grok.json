@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "path": "grok",
+  "process_name": "grok",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--permission-mode",
+      "bypassPermissions",
+      "--session-id",
+      "{session=}"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--permission-mode",
+      "bypassPermissions",
+      "--resume",
+      "{session=}"
+    ]
+  },
+  "session": {
+    "mode": "generated"
+  },
+  "display_name": "Grok",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "rules_target": {
+    "global": ".grok/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "",
+  "small_model": "",
+  "large_effort": "xhigh",
+  "small_effort": "high",
+  "model": "",
+  "effort": "high"
+}

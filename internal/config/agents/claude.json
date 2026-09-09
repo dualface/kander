@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "path": "claude",
+  "process_name": "claude",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--dangerously-skip-permissions",
+      "--session-id",
+      "{session=}"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--dangerously-skip-permissions",
+      "--resume",
+      "{session=}"
+    ]
+  },
+  "session": {
+    "mode": "generated"
+  },
+  "display_name": "Claude",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "rules_target": {
+    "global": ".claude/CLAUDE.md",
+    "project": "CLAUDE.md"
+  },
+  "rules_integration": "claude-import",
+  "large_model": "opus",
+  "small_model": "opus",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "opus",
+  "effort": "high"
+}

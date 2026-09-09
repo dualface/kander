@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "path": "codex",
+  "process_name": "codex",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--config",
+      "model_reasoning_effort=\"{effort}\"",
+      "--dangerously-bypass-approvals-and-sandbox"
+    ],
+    "resume": [
+      "resume",
+      "--model",
+      "{model}",
+      "--config",
+      "model_reasoning_effort=\"{effort}\"",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "{session=}"
+    ]
+  },
+  "session": {
+    "mode": "discovered"
+  },
+  "display_name": "Codex",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "rules_target": {
+    "global": ".codex/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "gpt-5.6-sol",
+  "small_model": "gpt-5.6-sol",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "gpt-5.6-sol",
+  "effort": "high"
+}

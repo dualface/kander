@@ -37,7 +37,7 @@ func KanbanModelFor(entry map[string]string, scale string) string {
 	return entry["model"]
 }
 
-func FormatKanbanModelSummary(agent string, entry map[string]string) string {
+func FormatKanbanModelSummary(cfg *Config, agent string, entry map[string]string) string {
 	cliDefault := Text("config.cli_default")
 	large := KanbanModelFor(entry, "large")
 	if large == "" {
@@ -47,7 +47,7 @@ func FormatKanbanModelSummary(agent string, entry map[string]string) string {
 	if small == "" {
 		small = cliDefault
 	}
-	if agent == "cursor" {
+	if !AgentSupportsEffort(cfg, agent) {
 		return fmt.Sprintf("%s %s / %s %s",
 			Text("config.large"), large,
 			Text("config.small"), small,
@@ -127,7 +127,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 		if len(inUse) > 1 {
 			label = " " + agent
 		}
-		lines = append(lines, Text("config.kanban_model")+label+": "+FormatKanbanModelSummary(agent, entry))
+		lines = append(lines, Text("config.kanban_model")+label+": "+FormatKanbanModelSummary(effective, agent, entry))
 	}
 	for _, role := range ReviewRoles {
 		reviewer := effective.Reviewers[role]

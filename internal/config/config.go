@@ -28,7 +28,6 @@ const (
 )
 
 var (
-	ExecutionAgents  = []string{"codex", "claude", "grok", "cursor"}
 	TaskScales       = []string{"large", "small"}
 	ReviewAgents     = []string{"codex", "claude", "grok", "cursor"}
 	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
@@ -50,56 +49,10 @@ const (
 	MaxTUIRefresh            = 3600
 )
 
-// AgentExecutables maps agent names used in the config and on the command line to executable names on PATH.
-var AgentExecutables = map[string]string{
-	"codex":  "codex",
-	"claude": "claude",
-	"grok":   "grok",
-	"cursor": "cursor-agent",
-}
-
 var modelIDFields = map[string]struct{}{
 	"model":       {},
 	"large_model": {},
 	"small_model": {},
-}
-
-// Every agent in kanbanModelDefaults carries one model per task scale:
-// large and small tasks can use different models and reasoning efforts even when they pick the same agent.
-// The retained "model" key is for legacy configs: a scale model falls back to it when empty, and new configs no longer write it.
-var kanbanModelDefaults = map[string]map[string]string{
-	"codex": {
-		"model":        "",
-		"large_model":  "gpt-5.6-sol",
-		"small_model":  "gpt-5.6-sol",
-		"large_effort": "high",
-		"small_effort": "medium",
-	},
-	"claude": {
-		"model":        "",
-		"large_model":  "opus",
-		"small_model":  "opus",
-		"large_effort": "high",
-		"small_effort": "medium",
-	},
-	"grok": {
-		"model":        "",
-		"large_model":  "",
-		"small_model":  "",
-		"large_effort": "xhigh",
-		"small_effort": "high",
-	},
-	"cursor": {
-		"large_model": "cursor-grok-4.6-xhigh",
-		"small_model": "cursor-grok-4.6-high",
-	},
-}
-
-var reviewModelDefaults = map[string]map[string]string{
-	"codex":  {"model": "gpt-5.6-sol", "effort": "high"},
-	"claude": {"model": "opus", "effort": "high"},
-	"grok":   {"model": "", "effort": "high"},
-	"cursor": {"model": "cursor-grok-4.6-xhigh"},
 }
 
 var languageLabels = map[string]string{
@@ -236,8 +189,8 @@ func defaultReviewRoles() map[string]map[string]string {
 
 func DefaultModels() Models {
 	return Models{
-		Kanban:      cloneNested(kanbanModelDefaults),
-		Review:      cloneNested(reviewModelDefaults),
+		Kanban:      cloneNested(kanbanModelDefaults()),
+		Review:      cloneNested(reviewModelDefaults()),
 		ReviewRoles: defaultReviewRoles(),
 	}
 }
@@ -279,18 +232,19 @@ func DefaultLauncher() string {
 }
 
 func DefaultConfig() *Config {
+	agent := defaultAgentName()
 	agents := make(map[string]string, len(TaskScales))
 	for _, scale := range TaskScales {
-		agents[scale] = "codex"
+		agents[scale] = agent
 	}
 	reviewers := make(map[string]string, len(ReviewRoles))
 	for _, role := range ReviewRoles {
-		reviewers[role] = "codex"
+		reviewers[role] = agent
 	}
 	return &Config{
 		SchemaVersion:   SchemaVersion,
 		WelcomeComplete: false,
-		KanbanAgent:     "codex",
+		KanbanAgent:     agent,
 		KanbanAgents:    agents,
 		Launcher:        DefaultLauncher(),
 		Reviewers:       reviewers,
@@ -346,13 +300,6 @@ func validateAgentLanguage(value any) (string, error) {
 		return "", configErrorf("config.agent_language_invalid")
 	}
 	return text, nil
-}
-
-func AgentExecutableName(agent string) string {
-	if name, ok := AgentExecutables[agent]; ok {
-		return name
-	}
-	return agent
 }
 
 func contains(list []string, value string) bool {

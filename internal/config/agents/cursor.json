@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "path": "cursor-agent",
+  "process_name": "cursor-agent",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--trust",
+      "--force",
+      "--resume",
+      "{session=}"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--trust",
+      "--force",
+      "--resume",
+      "{session=}"
+    ]
+  },
+  "session": {
+    "mode": "allocated"
+  },
+  "display_name": "Cursor",
+  "supports_effort": false,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "rules_target": {
+    "global": ".cursor/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "cursor-grok-4.6-xhigh",
+  "small_model": "cursor-grok-4.6-high",
+  "model": "cursor-grok-4.6-xhigh"
+}

@@ -14,11 +14,13 @@ import (
 // AgentDefinition overrides an execution agent only; reviewers retain their own read-only adapters.
 // The map key in Config.Agents is the stable agent name stored on task cards.
 type AgentDefinition struct {
-	Path        string                  `json:"path,omitempty"`
-	ProcessName string                  `json:"process_name,omitempty"`
-	Dialect     string                  `json:"dialect,omitempty"`
-	Args        *AgentArgs              `json:"args,omitempty"`
-	Session     *AgentSessionDefinition `json:"session,omitempty"`
+	SchemaVersion  int                     `json:"schema_version,omitempty"`
+	Path           string                  `json:"path,omitempty"`
+	ProcessName    string                  `json:"process_name,omitempty"`
+	Dialect        string                  `json:"dialect,omitempty"`
+	Args           *AgentArgs              `json:"args,omitempty"`
+	Session        *AgentSessionDefinition `json:"session,omitempty"`
+	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
 }
 
 type AgentArgs struct {
@@ -70,6 +72,19 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 	if d.Dialect == "" && contains(ExecutionAgents, name) {
 		d.Dialect = name
 	}
+	if d.Args == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.Args = cloneArgs(&emb.Args)
+		}
+	}
+	if d.PromptDelivery == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			pd := emb.PromptDelivery
+			d.PromptDelivery = clonePromptDelivery(&pd)
+		} else {
+			d.PromptDelivery = &PromptDelivery{Mode: "argv"}
+		}
+	}
 	if d.Session == nil {
 		mode := "generated"
 		switch d.Dialect {
@@ -113,6 +128,7 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 		s.Allocate = append([]string(nil), s.Allocate...)
 		d.Session = &s
 	}
+	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
 	return d
 }
 
@@ -174,12 +190,18 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				}
 			}
 		}
-		for _, key := range []string{"args", "session"} {
+		for _, key := range []string{"args", "session", "prompt_delivery"} {
 			if v, exists := fields[key]; exists {
 				if _, ok := asObject(v); !ok {
 					return nil, agentDefinitionError(name, Text("config.agent_object"))
 				}
 			}
+		}
+		if d.SchemaVersion != 0 && d.SchemaVersion != embeddedAgentSchemaVersion {
+			return nil, agentDefinitionError(name, Text("config.agent_schema_version"))
+		}
+		if err := validatePromptDelivery(name, d.PromptDelivery); err != nil {
+			return nil, err
 		}
 		if d.Path != "" && !validateAgentProgram(d.Path) {
 			return nil, agentDefinitionError(name, Text("config.agent_path", d.Path))
@@ -240,19 +262,25 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 }
 
 func invalidPlaceholder(arg string) bool {
-	rest := strings.NewReplacer("{model}", "", "{effort}", "", "{session}", "").Replace(arg)
+	rest := strings.NewReplacer("{model}", "", "{effort}", "", "{session=}", "", "{session}", "").Replace(arg)
 	return strings.ContainsAny(rest, "{}")
 }
 
 // ExpandAgentArgs replaces text within individual argv elements, never shell text.
-// An empty placeholder removes its element and its immediately preceding literal flag.
+// An empty {model}, {effort}, or {session} removes its element and its immediately
+// preceding literal flag. {session=} always substitutes, including an empty value,
+// so a session flag can stay present when the id is not yet known.
 func ExpandAgentArgs(template []string, model, effort, session string) []string {
 	values := map[string]string{"{model}": model, "{effort}": effort, "{session}": session}
 	var out []string
 	for i, arg := range template {
 		omit := false
+		keepEmptySession := strings.Contains(arg, "{session=}")
 		for key, value := range values {
 			if value == "" && strings.Contains(arg, key) {
+				if key == "{session}" && keepEmptySession {
+					continue
+				}
 				omit = true
 			}
 		}
@@ -262,7 +290,18 @@ func ExpandAgentArgs(template []string, model, effort, session string) []string 
 			}
 			continue
 		}
-		out = append(out, strings.NewReplacer("{model}", model, "{effort}", effort, "{session}", session).Replace(arg))
+		out = append(out, strings.NewReplacer("{session=}", session, "{model}", model, "{effort}", effort, "{session}", session).Replace(arg))
+	}
+	return out
+}
+
+func RewriteKeepSession(template []string, dropEmpty bool) []string {
+	if !dropEmpty {
+		return template
+	}
+	out := append([]string{}, template...)
+	for i, arg := range out {
+		out[i] = strings.ReplaceAll(arg, "{session=}", "{session}")
 	}
 	return out
 }
@@ -281,7 +320,7 @@ func AgentWarnings(cfg *Config) []string {
 func customModelDefaults(definitions map[string]AgentDefinition, models *Models) {
 	for name, d := range definitions {
 		if contains(ExecutionAgents, name) {
-			if name == "cursor" && (d.Args != nil || d.Dialect != "" && d.Dialect != "cursor") {
+			if !embeddedSupportsEffort(name) && (d.Args != nil || d.Dialect != "" && d.Dialect != name) {
 				for _, key := range []string{"model", "large_effort", "small_effort"} {
 					value := ""
 					if key != "model" {
@@ -293,8 +332,8 @@ func customModelDefaults(definitions map[string]AgentDefinition, models *Models)
 			continue
 		}
 		fields := map[string]string{"model": "", "large_model": "", "small_model": "", "large_effort": "medium", "small_effort": "medium"}
-		if defaults := kanbanModelDefaults[d.Dialect]; defaults != nil && d.Args == nil {
-			fields = cloneStringMap(defaults)
+		if emb, ok := embeddedByName(d.Dialect); ok && d.Args == nil {
+			fields = cloneStringMap(emb.kanbanFields())
 		}
 		models.Kanban[name] = fields
 	}
