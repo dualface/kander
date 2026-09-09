@@ -31,8 +31,9 @@
     ]
   },
   "session": {
-    "mode": "allocated"
+    "mode": "hook:cursor-create-chat"
   },
+  "exit_command": "/quit",
   "display_name": "Cursor",
   "supports_effort": false,
   "prompt_delivery": {

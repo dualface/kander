@@ -71,7 +71,7 @@ func TestEmbeddedDefinitionsLoadWithoutLookPath(t *testing.T) {
 		t.Fatal(AgentExecutableName("cursor"))
 	}
 	d := AgentFor(nil, "codex")
-	if d.Session.Mode != "discovered" || d.PromptDelivery.Mode != "argv" {
+	if d.Session.Mode != "hook:codex-rollout" || d.PromptDelivery.Mode != "argv" {
 		t.Fatalf("%+v", d)
 	}
 	data, err := json.MarshalIndent(DefaultConfig(), "", "  ")

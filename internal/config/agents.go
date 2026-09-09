@@ -24,6 +24,7 @@ type AgentDefinition struct {
 	Session        *AgentSessionDefinition `json:"session,omitempty"`
 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
 	Review         *AgentReview            `json:"review,omitempty"`
+	ExitCommand    *string                 `json:"exit_command,omitempty"`
 }
 
 type AgentArgs struct {
@@ -60,8 +61,9 @@ func AgentNames(cfg *Config) []string {
 
 func HasAgent(cfg *Config, name string) bool { return contains(AgentNames(cfg), name) }
 
-// AgentFor returns a detached definition with defaults resolved. The discovered
-// mode is internal to the Codex dialect and cannot be declared in JSON.
+// AgentFor returns a detached definition with defaults resolved. Session
+// mode and exit_command come from the named overlay, then the dialect's
+// embedded definition, then generated / unset.
 func AgentFor(cfg *Config, name string) AgentDefinition {
 	var d AgentDefinition
 	if cfg != nil {
@@ -104,16 +106,16 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 		}
 	}
 	if d.Session == nil {
-		mode := "generated"
-		switch d.Dialect {
-		case "codex":
-			mode = "discovered"
-		case "cursor":
-			mode = "allocated"
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.Session = cloneSession(&emb.Session)
+		} else {
+			d.Session = &AgentSessionDefinition{Mode: "generated"}
 		}
-		d.Session = &AgentSessionDefinition{Mode: mode}
-		if d.Dialect == "cursor" {
-			d.Session.Allocate = []string{d.Path, "create-chat"}
+	}
+	if d.ExitCommand == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			cmd := emb.ExitCommand
+			d.ExitCommand = &cmd
 		}
 	}
 	return d
@@ -145,12 +147,9 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 		d.Args = &a
 	}
 	d.Review = cloneReview(d.Review)
-	if d.Session != nil {
-		s := *d.Session
-		s.Allocate = append([]string(nil), s.Allocate...)
-		d.Session = &s
-	}
+	d.Session = cloneSession(d.Session)
 	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
+	d.ExitCommand = cloneExitCommand(d.ExitCommand)
 	return d
 }
 
@@ -170,6 +169,27 @@ func agentDefinitionError(name, detail string) error {
 }
 func validAgentText(s string) bool {
 	return strings.TrimSpace(s) != "" && strings.IndexFunc(s, unicode.IsControl) < 0
+}
+
+func validExitCommandText(s string) bool {
+	return strings.IndexFunc(s, unicode.IsControl) < 0
+}
+
+func cloneSession(src *AgentSessionDefinition) *AgentSessionDefinition {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	out.Allocate = append([]string(nil), src.Allocate...)
+	return &out
+}
+
+func cloneExitCommand(src *string) *string {
+	if src == nil {
+		return nil
+	}
+	v := *src
+	return &v
 }
 
 func validateAgentProgram(path string) bool {
@@ -246,9 +266,19 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				}
 			}
 		}
+		if v, exists := fields["exit_command"]; exists {
+			s, ok := v.(string)
+			if !ok || !validExitCommandText(s) {
+				return nil, agentDefinitionError(name, Text("config.agent_exit_command"))
+			}
+		}
 		if d.Session != nil {
 			s := d.Session
-			if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
+			if hookName, isHook := ParseSessionHook(s.Mode); isHook {
+				if _, ok := LookupSessionHook(s.Mode); !ok {
+					return nil, agentDefinitionError(name, Text("config.agent_session_hook", name, hookName))
+				}
+			} else if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
 				return nil, agentDefinitionError(name, Text("config.agent_session"))
 			}
 			if s.Mode == "allocated" {
@@ -268,9 +298,16 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 			}
 		}
 		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
-		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
-			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
-			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
+		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" {
+			inherited := ""
+			if emb, ok := embeddedByName(resolved.Dialect); ok {
+				inherited = emb.Session.Mode
+			}
+			if inherited != "" && d.Session.Mode != inherited {
+				if _, isHook := LookupSessionHook(inherited); isHook {
+					return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
+				}
+			}
 		}
 		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_session_required"))

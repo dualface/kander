@@ -40,8 +40,9 @@
     ]
   },
   "session": {
-    "mode": "discovered"
+    "mode": "hook:codex-rollout"
   },
+  "exit_command": "/exit",
   "display_name": "Codex",
   "supports_effort": true,
   "prompt_delivery": {

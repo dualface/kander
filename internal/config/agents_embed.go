@@ -59,6 +59,7 @@ type embeddedAgent struct {
 	DisplayName      string                 `json:"display_name"`
 	SupportsEffort   bool                   `json:"supports_effort"`
 	PromptDelivery   PromptDelivery         `json:"prompt_delivery"`
+	ExitCommand      string                 `json:"exit_command"`
 	Review           AgentReview            `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
 	RulesIntegration string                 `json:"rules_integration"`
@@ -154,8 +155,11 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 			}
 		}
 	}
-	if !contains([]string{"generated", "allocated", "none", "discovered"}, agent.Session.Mode) {
+	if !validDeclaredSessionMode(agent.Session.Mode) {
 		return embeddedAgent{}, embedAgentError(fileName, "session.mode")
+	}
+	if !validExitCommandText(agent.ExitCommand) {
+		return embeddedAgent{}, embedAgentError(fileName, "exit_command")
 	}
 	if !validAgentText(agent.DisplayName) {
 		return embeddedAgent{}, embedAgentError(fileName, "display_name")

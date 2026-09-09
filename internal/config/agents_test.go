@@ -15,8 +15,8 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
 	cfg.Agents = map[string]AgentDefinition{"claude": {Path: filepath.Join(string(filepath.Separator), "bin", "wrapper"), ProcessName: "node"}, "cursor": {Path: "renamed"}, "fresh": {Dialect: "claude"}}
 	for _, test := range []struct{ name, path, process, dialect, mode string }{
 		{"claude", cfg.Agents["claude"].Path, "node", "claude", "generated"},
-		{"cursor", "renamed", "renamed", "cursor", "allocated"},
-		{"codex", "codex", "codex", "codex", "discovered"},
+		{"cursor", "renamed", "renamed", "cursor", "hook:cursor-create-chat"},
+		{"codex", "codex", "codex", "codex", "hook:codex-rollout"},
 		{"fresh", "fresh", "fresh", "claude", "generated"},
 		{"unregistered", "unregistered", "unregistered", "", "generated"},
 	} {
@@ -69,6 +69,13 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"generated", map[string]any{"session": map[string]any{"mode": "generated"}}, false},
 		{"none", map[string]any{"session": map[string]any{"mode": "none"}, "args": map[string]any{"start": []string{}}}, false},
 		{"discovered", map[string]any{"session": map[string]any{"mode": "discovered"}}, true},
+		{"hook-codex", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:codex-rollout"}}, false},
+		{"hook-cursor", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:cursor-create-chat"}}, false},
+		{"hook-unknown", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:not-registered"}}, true},
+		{"exit-ok", map[string]any{"exit_command": "/bye"}, false},
+		{"exit-empty", map[string]any{"exit_command": ""}, false},
+		{"exit-multiline", map[string]any{"exit_command": "/bye\n/extra"}, true},
+		{"exit-control", map[string]any{"exit_command": "/bye\t"}, true},
 		{"unknown-session", map[string]any{"session": map[string]any{"mode": "generated", "typo": 1}}, true},
 		{"allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "allocate"}, "json_field": "id"}}, false},
 		{"bad-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "bad\narg"}}}, true},
@@ -156,6 +163,21 @@ func TestExpandAgentArgs(t *testing.T) {
 	}
 }
 
+func TestUnregisteredSessionHookNamesAgentAndHook(t *testing.T) {
+	base, _ := json.Marshal(DefaultConfig())
+	var root map[string]any
+	json.Unmarshal(base, &root)
+	root["agents"] = map[string]any{"helper": map[string]any{
+		"args":    map[string]any{"start": []string{}, "resume": []string{}},
+		"session": map[string]any{"mode": "hook:missing-hook"},
+	}}
+	data, _ := json.Marshal(root)
+	_, err := ValidateJSON(data)
+	if err == nil || !strings.Contains(err.Error(), "helper") || !strings.Contains(err.Error(), "missing-hook") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestDialectSessionCompatibility(t *testing.T) {
 	for _, test := range []struct {
 		dialect, mode string
@@ -163,6 +185,7 @@ func TestDialectSessionCompatibility(t *testing.T) {
 	}{
 		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
 		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
+		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false},
 	} {
 		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
 			cfg := DefaultConfig()

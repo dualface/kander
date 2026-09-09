@@ -175,12 +175,8 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		return err
 	}
 	previous := map[string]struct{}{}
-	if takeover && config.AgentFor(cfg, session.Agent).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
-			for _, id := range sessions {
-				previous[id] = struct{}{}
-			}
-		}
+	if takeover {
+		previous = sessionDiscoverSnapshot(config.AgentFor(cfg, session.Agent).Session.Mode, entry.TaskID, plan.Launcher)
 	}
 	paths, err := currentInstallPaths()
 	if err != nil {
@@ -228,11 +224,15 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	effective := session
 	paneCB := (func() (AgentSession, error))(nil)
 	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+		mode := config.AgentFor(cfg, session.Agent).Session.Mode
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
 				return session, nil
 			}
-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
+			if !config.SessionDiscoversAfterStart(mode) {
+				return session, nil
+			}
+			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}

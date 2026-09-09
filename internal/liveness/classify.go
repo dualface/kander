@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
 )
 
@@ -51,8 +52,10 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 			t("liveness.stale_address_reverse_lookup", detail, probe.FailureDetail(err)), "")
 	}
 	if !allowReverseLookup || session.Reference == "" {
-		if session.Agent == "codex" && session.Reference == "" {
-			detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
+		if session.Reference == "" {
+			if definition, err := config.LoadAgent(session.Agent); err == nil && config.SessionResolvesEmptyReference(definition.Session.Mode) {
+				detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
+			}
 		}
 		return report(entry, &sess, Stopped, channel, container, detail, "")
 	}

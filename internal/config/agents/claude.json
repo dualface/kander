@@ -38,6 +38,7 @@
   "session": {
     "mode": "generated"
   },
+  "exit_command": "/exit",
   "display_name": "Claude",
   "supports_effort": true,
   "prompt_delivery": {

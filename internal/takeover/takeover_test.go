@@ -161,7 +161,7 @@ if [ "$1" = "list-panes" ]; then
   exit 0
 fi
 if [ "$1" = "send-keys" ]; then
-  printf '%s\n' "$5" >> "$log.instruction"
+  printf '%s\n' "$*" >> "$log.instruction"
   exit 0
 fi
 if [ "$1" = "kill-window" ]; then

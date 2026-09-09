@@ -62,6 +62,7 @@
   "session": {
     "mode": "generated"
   },
+  "exit_command": "/quit",
   "display_name": "Grok",
   "supports_effort": true,
   "prompt_delivery": {

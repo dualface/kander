@@ -130,7 +130,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 
 - The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, session modes, and optional review templates. A custom agent may be a reviewer when it declares `args.review` and `review.*`. Built-in review executables still prefer `*_REVIEW_BIN` over the embedded `path`; a user `agents.<name>.path` overlay does not change built-in review. Custom reviewers use `review.path` and otherwise fall back to `path`. Built-in isolation stays on the definition; a custom reviewer's read-only posture is the author's responsibility.
 - Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used. `{session=}` keeps an empty session value instead of dropping the element. When `prompt_delivery.mode` is `pane`, the prompt is not appended to argv: after `pane run`, Kander waits for the agent TUI using the definition's `ready` / `blocked` marks (`blocked` is checked in parallel and wins immediately), then delivers the prompt with the same primitives as notify (herdr `agent prompt`, tmux `send-keys -l` plus a separate Enter).
-- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
+- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. `hook:<name>` names a registered Go hook that discovers or allocates a session when argv templates cannot express the CLI; the built-in names are listed in `docs/custom-agents.md`. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
 - tmux foreground checks use the configured process name, falling back to the executable basename. herdr still requires its own agent recognition.
 
 **Start Parameters and Metadata**
@@ -243,7 +243,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Before delivery, reuse the exact agent and session match of `notify`: herdr additionally requires `agent_status` to be `idle` or `done`; tmux additionally requires the pane to be alive, not in copy-mode, and with a matching foreground process.
 - The current tab or session/window of the validated pane must exactly equal the located container, and the container may contain only that pane.
 - When the pane has been moved or the container has other panes, reject before delivery; verify ownership again while waiting for exit and re-check the container topology before closing.
-- Claude/Codex receive `/exit`; Grok/Cursor receive `/quit`.
+- The pane receives the `exit_command` declared on the agent definition. An agent without that field is refused and the container is kept.
 - herdr uses `agent prompt`; tmux uses `send-keys -l` followed by a separate `Enter`.
 - Close the herdr tab or tmux window only after confirming the agent process has exited.
 - A tmux window that already disappeared with the agent counts as closed.
