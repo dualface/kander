@@ -54,3 +54,8 @@ background to Light `#fdf6e3` or Dark `#002b36`.
 
 The selected theme kept its own hex canvas. It did not follow the
 terminal 0/15 palette and did not invert with the host scheme.
+
+The palette card `20260909-tui-truecolor-palette-task` IMPLEMENTATION
+now cites this walkthrough for its Solarized four-combination
+acceptance item. PTY sequence tests remain auxiliary evidence. The
+six-theme five-surface matrix stays on the presets card.
