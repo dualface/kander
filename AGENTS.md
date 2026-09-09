@@ -38,7 +38,7 @@ This file is the development contract for the Kander repository itself. The work
 | `internal/notify`   | notify direct delivery, busy/expiry decisions, resume recovery and revision-conflict handling |
 | `internal/takeover` | dismiss, and old-container cleanup after a successful resume takeover |
 | `internal/window`   | Card `WINDOW` write-back; reuses board transactions, stale rollback preserves newer records |
-| `internal/review`   | The single review gate of `kander review` and closed-batch historical Git verification |
+| `internal/review`   | The single review gate of `kander review` (invocation and parsing from agent definitions) and closed-batch historical Git verification |
 | `internal/flow`     | Read-only consumption of the options-session configuration, producing structured agent/model listings for execution and review stages; does not depend on TUI or menu |
 | `internal/tui`      | The terminal kanban for bare `kander` and the Huh options panel       |
 | `internal/menu`     | doctor/config, environment probing and repair, `menu.Session` shared with the options panel |
