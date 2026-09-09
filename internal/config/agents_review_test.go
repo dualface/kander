@@ -129,8 +129,11 @@ func TestReviewAgentNamesFollowsDefinitions(t *testing.T) {
 	if resolved.Args != nil && resolved.Args.Review != nil || resolved.Review != nil {
 		t.Fatal("dialect wrapper inherited review")
 	}
-	filled := AgentFor(cfg, "declared")
-	if filled.Args == nil || filled.Args.Review == nil || filled.Review == nil {
-		t.Fatal("declared overlay should inherit omitted review fields")
+	pair := AgentFor(cfg, "reviewer")
+	if pair.Review == nil {
+		t.Fatal("declared pair")
+	}
+	if pair.Review.CWD != "" || pair.Review.Output != nil || pair.Review.OutputName != "" {
+		t.Fatal("declared pair should not inherit omitted review fields")
 	}
 }
