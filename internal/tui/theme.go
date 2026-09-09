@@ -26,43 +26,182 @@ type palette struct {
 	Headings  map[string]lipgloss.Color
 }
 
-var headingColors = map[string]lipgloss.Color{
-	"backlog":  lipgloss.Color("6"),
-	"todo":     lipgloss.Color("3"),
-	"working":  lipgloss.Color("4"),
-	"review":   lipgloss.Color("5"),
-	"done":     lipgloss.Color("2"),
-	"archived": lipgloss.Color("5"),
-	"trash":    lipgloss.Color("1"),
+// themeDef is one named theme. Adding a theme means adding a table row;
+// themePalette and the light/dark classifiers only look this table up.
+type themeDef struct {
+	name    string
+	dark    bool
+	palette palette
+}
+
+var themeTable = []themeDef{
+	{name: "light", dark: false, palette: palette{
+		Base:      lipgloss.Color("#16181d"),
+		Bg:        lipgloss.Color("#fafafa"),
+		Dim:       lipgloss.Color("#6b7280"),
+		Separator: lipgloss.Color("#828892"),
+		Accent:    lipgloss.Color("#9d2ec5"),
+		Bar:       lipgloss.Color("#1d4ed8"),
+		ChromeFg:  lipgloss.Color("#f7f7fb"),
+		ChromeBg:  lipgloss.Color("#6b21a8"),
+		PopupFg:   lipgloss.Color("#16181d"),
+		PopupEdge: lipgloss.Color("#9d2ec5"),
+		Warn:      lipgloss.Color("#c62828"),
+		OK:        lipgloss.Color("#2e7d32"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#0e7490"),
+			"todo":     lipgloss.Color("#a16207"),
+			"working":  lipgloss.Color("#1d4ed8"),
+			"review":   lipgloss.Color("#9d2ec5"),
+			"done":     lipgloss.Color("#15803d"),
+			"archived": lipgloss.Color("#7e22ce"),
+			"trash":    lipgloss.Color("#b91c1c"),
+		},
+	}},
+	{name: "light-warm", dark: false, palette: palette{
+		Base:      lipgloss.Color("#3d3428"),
+		Bg:        lipgloss.Color("#f3ead8"),
+		Dim:       lipgloss.Color("#7a6d5a"),
+		Separator: lipgloss.Color("#8a7d6a"),
+		Accent:    lipgloss.Color("#8b3d1f"),
+		Bar:       lipgloss.Color("#3a5278"),
+		ChromeFg:  lipgloss.Color("#f7f3ea"),
+		ChromeBg:  lipgloss.Color("#6b4423"),
+		PopupFg:   lipgloss.Color("#3d3428"),
+		PopupEdge: lipgloss.Color("#8b3d1f"),
+		Warn:      lipgloss.Color("#9b2c2c"),
+		OK:        lipgloss.Color("#3d6b38"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#0e5f73"),
+			"todo":     lipgloss.Color("#8a5500"),
+			"working":  lipgloss.Color("#3a5278"),
+			"review":   lipgloss.Color("#7a3d8a"),
+			"done":     lipgloss.Color("#2f6b38"),
+			"archived": lipgloss.Color("#6b3480"),
+			"trash":    lipgloss.Color("#9b2c2c"),
+		},
+	}},
+	{name: "light-contrast", dark: false, palette: palette{
+		Base:      lipgloss.Color("#000000"),
+		Bg:        lipgloss.Color("#ffffff"),
+		Dim:       lipgloss.Color("#5c5c5c"),
+		Separator: lipgloss.Color("#6e6e6e"),
+		Accent:    lipgloss.Color("#5a007a"),
+		Bar:       lipgloss.Color("#003399"),
+		ChromeFg:  lipgloss.Color("#ffffff"),
+		ChromeBg:  lipgloss.Color("#3d0066"),
+		PopupFg:   lipgloss.Color("#000000"),
+		PopupEdge: lipgloss.Color("#5a007a"),
+		Warn:      lipgloss.Color("#8b0000"),
+		OK:        lipgloss.Color("#004d00"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#005266"),
+			"todo":     lipgloss.Color("#6b4500"),
+			"working":  lipgloss.Color("#003399"),
+			"review":   lipgloss.Color("#5a007a"),
+			"done":     lipgloss.Color("#004d00"),
+			"archived": lipgloss.Color("#4a0066"),
+			"trash":    lipgloss.Color("#8b0000"),
+		},
+	}},
+	{name: "dark", dark: true, palette: palette{
+		Base:      lipgloss.Color("#e6e8eb"),
+		Bg:        lipgloss.Color("#16181d"),
+		Dim:       lipgloss.Color("#8b919a"),
+		Separator: lipgloss.Color("#6a7078"),
+		Accent:    lipgloss.Color("#d670d6"),
+		Bar:       lipgloss.Color("#6ea8fe"),
+		ChromeFg:  lipgloss.Color("#f7f7fb"),
+		ChromeBg:  lipgloss.Color("#6b21a8"),
+		PopupFg:   lipgloss.Color("#e6e8eb"),
+		PopupEdge: lipgloss.Color("#d670d6"),
+		Warn:      lipgloss.Color("#f07178"),
+		OK:        lipgloss.Color("#7fd17f"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#4dd0e1"),
+			"todo":     lipgloss.Color("#e6c35c"),
+			"working":  lipgloss.Color("#6ea8fe"),
+			"review":   lipgloss.Color("#d670d6"),
+			"done":     lipgloss.Color("#7fd17f"),
+			"archived": lipgloss.Color("#c084d0"),
+			"trash":    lipgloss.Color("#f07178"),
+		},
+	}},
+	{name: "dark-soft", dark: true, palette: palette{
+		Base:      lipgloss.Color("#c5ccd8"),
+		Bg:        lipgloss.Color("#1c2230"),
+		Dim:       lipgloss.Color("#8a929e"),
+		Separator: lipgloss.Color("#6e7684"),
+		Accent:    lipgloss.Color("#c090c8"),
+		Bar:       lipgloss.Color("#7aa3e0"),
+		ChromeFg:  lipgloss.Color("#e8eef6"),
+		ChromeBg:  lipgloss.Color("#4a3a6a"),
+		PopupFg:   lipgloss.Color("#c5ccd8"),
+		PopupEdge: lipgloss.Color("#c090c8"),
+		Warn:      lipgloss.Color("#e08080"),
+		OK:        lipgloss.Color("#80c080"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#6ec8d4"),
+			"todo":     lipgloss.Color("#d4b86a"),
+			"working":  lipgloss.Color("#7aa3e0"),
+			"review":   lipgloss.Color("#c090c8"),
+			"done":     lipgloss.Color("#80c080"),
+			"archived": lipgloss.Color("#b088c0"),
+			"trash":    lipgloss.Color("#e08080"),
+		},
+	}},
+	{name: "dark-contrast", dark: true, palette: palette{
+		Base:      lipgloss.Color("#ffffff"),
+		Bg:        lipgloss.Color("#000000"),
+		Dim:       lipgloss.Color("#a3a3a3"),
+		Separator: lipgloss.Color("#8a8a8a"),
+		Accent:    lipgloss.Color("#f0a0ff"),
+		Bar:       lipgloss.Color("#8cb4ff"),
+		ChromeFg:  lipgloss.Color("#ffffff"),
+		ChromeBg:  lipgloss.Color("#4a0080"),
+		PopupFg:   lipgloss.Color("#ffffff"),
+		PopupEdge: lipgloss.Color("#f0a0ff"),
+		Warn:      lipgloss.Color("#ff8080"),
+		OK:        lipgloss.Color("#66e066"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#5ce1f0"),
+			"todo":     lipgloss.Color("#ffd24d"),
+			"working":  lipgloss.Color("#8cb4ff"),
+			"review":   lipgloss.Color("#f0a0ff"),
+			"done":     lipgloss.Color("#66e066"),
+			"archived": lipgloss.Color("#e0a0ff"),
+			"trash":    lipgloss.Color("#ff8080"),
+		},
+	}},
+}
+
+func themeDefByName(name string) (themeDef, bool) {
+	for _, def := range themeTable {
+		if def.name == name {
+			return def, true
+		}
+	}
+	return themeDef{}, false
+}
+
+func namedThemeNames() []string {
+	out := make([]string, len(themeTable))
+	for i, def := range themeTable {
+		out[i] = def.name
+	}
+	return out
 }
 
 func themePalette(name string) palette {
-	base := lipgloss.Color("15")
-	bg := lipgloss.Color("0")
-	dim := lipgloss.Color("8")
-	// The separator is only a helper line between columns, so it takes a shade closer to the background than Dim (ANSI 8, mid grey):
-	// 240 on a dark background and 250 on a light one, both clearly below body contrast yet still visible.
-	separator := lipgloss.Color("240")
-	if resolveTheme(name) == "light" {
-		base = lipgloss.Color("0")
-		bg = lipgloss.Color("15")
-		separator = lipgloss.Color("250")
-	}
-	return palette{
-		Base:      base,
-		Bg:        bg,
-		Dim:       dim,
-		Separator: separator,
-		Accent:    lipgloss.Color("13"),
-		Bar:       lipgloss.Color("4"),
-		ChromeFg:  lipgloss.Color("15"),
-		ChromeBg:  lipgloss.Color("5"),
-		PopupFg:   base,
-		PopupEdge: lipgloss.Color("13"),
-		Warn:      lipgloss.Color("1"),
-		OK:        lipgloss.Color("2"),
-		Headings:  headingColors,
-	}
+	def, _ := themeDefByName(resolveTheme(name))
+	return def.palette
+}
+
+// themeIsDark reports the light/dark family of a theme from the table.
+// auto and unknown names go through resolveTheme first.
+func themeIsDark(name string) bool {
+	def, _ := themeDefByName(resolveTheme(name))
+	return def.dark
 }
 
 func (p palette) ink(color lipgloss.Color) lipgloss.Style {
@@ -221,10 +360,10 @@ func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
 	return p.ink(p.Dim).Reverse(true)
 }
 
-// resolveTheme resolves auto into light or dark; an explicit theme ignores the terminal probe.
-// Bubble Tea already had Lip Gloss probe and cache the background type before startup, so the result is simply reused here.
+// resolveTheme only normalizes auto: a named theme is returned as itself,
+// and auto (or any name not in the table) uses the cached terminal probe.
 func resolveTheme(name string) string {
-	if name == "light" || name == "dark" {
+	if _, ok := themeDefByName(name); ok {
 		return name
 	}
 	if detectDarkBackground() {

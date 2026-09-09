@@ -198,8 +198,87 @@ func TestThemeCycle(t *testing.T) {
 		app.handleBoardKey("t")
 		seen = append(seen, app.Theme)
 	}
-	if strings.Join(seen, ",") != "light,dark,auto" {
-		t.Fatalf("%v", seen)
+	want := append(append([]string{}, themes[1:]...), themes[0])
+	if strings.Join(seen, ",") != strings.Join(want, ",") {
+		t.Fatalf("got %v want %v", seen, want)
+	}
+	seenSet := map[string]int{}
+	for _, name := range seen {
+		seenSet[name]++
+	}
+	if len(seenSet) != len(themes) {
+		t.Fatalf("cycle missed or repeated themes: %v", seen)
+	}
+	for _, name := range themes {
+		if seenSet[name] != 1 {
+			t.Fatalf("theme %s count=%d in %v", name, seenSet[name], seen)
+		}
+	}
+}
+
+func TestPrefsConfigUnknownThemeFallsBackToAuto(t *testing.T) {
+	got := prefsConfig(uiPrefs{Columns: 3, MinColumnWidth: 32, Theme: "blue", Refresh: 15, Single: true})
+	if got.Theme != "auto" {
+		t.Fatalf("theme=%q", got.Theme)
+	}
+	if got.Columns != 3 || got.MinColumnWidth != 32 || got.Refresh != 15 || !got.Single {
+		t.Fatalf("other fields changed: %+v", got)
+	}
+}
+
+func TestLoadPrefsInvalidThemeResetsAllPrefs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	t.Setenv(config.EnvConfig, path)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.TUI.Columns = 2
+	cfg.TUI.MinColumnWidth = 32
+	cfg.TUI.Refresh = 15
+	cfg.TUI.Single = true
+	cfg.TUI.Theme = "dark"
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatal(err)
+	}
+	tui, ok := obj["tui"].(map[string]any)
+	if !ok {
+		t.Fatalf("tui type %T", obj["tui"])
+	}
+	tui["theme"] = "blue"
+	data, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prefs := loadPrefs()
+	want := defaultPrefs()
+	if prefs != want {
+		t.Fatalf("got %+v want %+v", prefs, want)
+	}
+}
+
+func TestThemeLabelsCoverAllThemes(t *testing.T) {
+	ctx := tuiPageContext()
+	if len(themes) != 7 {
+		t.Fatalf("themes=%v", themes)
+	}
+	for _, name := range themes {
+		if _, ok := ctx.ThemeLabels[name]; !ok {
+			t.Fatalf("missing label for %s", name)
+		}
+		if ctx.themeLabel(name) == "" {
+			t.Fatalf("empty label for %s", name)
+		}
 	}
 }
 
@@ -209,7 +288,7 @@ func TestThemePaletteFillsBackground(t *testing.T) {
 	if dark.Bg == light.Bg {
 		t.Fatal("light and dark should paint different canvas backgrounds")
 	}
-	if dark.Bg != "0" || light.Bg != "15" {
+	if dark.Bg != "#16181d" || light.Bg != "#fafafa" {
 		t.Fatalf("dark bg=%q light bg=%q", dark.Bg, light.Bg)
 	}
 	filled := paintScreen("", 8, 2, light)
