@@ -17,11 +17,11 @@ After finishing the analysis and implementation plan, present the options once:
 
 Number these options from `1` and make them the only numbered question in that message, so the numbers cannot collide with another question.
 
-- Choosing `Confirm the plan and use the kanban board (create the cards and start)` authorizes the plan, the development, and the kanban flow at once, including the merge-back steps the plan states; do not ask again before starting work or before integrating. This covers a standalone card and every task group named in the confirmed plan.
+- Choosing `Confirm the plan and use the kanban board (create the cards and start)` authorizes the plan, the development, and the kanban flow at once, including the merge-back steps the plan states; do not ask again before starting work or before integrating. This covers every standalone card and every task group named in the confirmed plan.
 
   For a standalone card with `rules.git=true`, this execution authorization also covers integration into `develop` and cleanup, with the conditions stated in `KANDER-GIT-RULES.md` "Commit and Push"; do not request a separate merge-back confirmation. The completion flow is defined in `KANDER-KANBAN-RULES.md` "Execution and Completion".
 
-  For a single card, run in order: `kander new`, fill in the complete contract according to the confirmed plan, complete the self-review and any applicable independent card review per `KANDER-KANBAN-RULES.md` "Post-Creation Self-Review" and fix the findings, `kander pick <task-id>` (defined in `KANDER-KANBAN-RULES.md` "Command Contract"), `kander start <task-id>`. Start and tracking responsibilities follow `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination"; the discussing agent no longer implements a card that has been delegated.
+  For a single card, and for each of several independent single cards, run in order: `kander new`, fill in the complete contract according to the confirmed plan, complete the self-review and any applicable independent card review per `KANDER-KANBAN-RULES.md` "Post-Creation Self-Review" and fix the findings, `kander pick <task-id>` (defined in `KANDER-KANBAN-RULES.md` "Command Contract"), `kander start <task-id>`. Start and tracking responsibilities follow `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination"; the discussing agent no longer implements a card that has been delegated.
 
   For a task group, create every member card the same way, complete the group-level checks in `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups", then orchestrate per that file. The confirmed plan is the orchestration plan; it already carries the integration authorization for each group it names.
 

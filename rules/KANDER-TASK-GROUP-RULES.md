@@ -32,7 +32,7 @@ Task groups always use the `KANDER-GIT-RULES.md` rules; a custom group integrati
 - When the request is split into multiple task cards:
   - Cards form a task group only when they are related: one depends on another, or they share an integration contract that must be verified together. Goals with no dependency between them and no shared contract are created as independent single cards, not as a group, even when they come from the same request; a group therefore never holds unrelated goals.
   - A task group is generally recommended to have no more than 3 task cards.
-  - If a task group exceeds 5 task cards, try to split it further into multiple task groups; the counts are suggestions and do not replace judgment about goals and dependencies.
+  - If a task group exceeds 5 task cards, split it further into multiple task groups; how to cut the group still follows the goals and dependencies, not the count alone.
   - Precedence between the two guidelines above: the goal count decides how many cards exist; the counts only decide how the cards are grouped. Never merge two independently acceptable goals into one card to stay under 3, and never split one goal to reach a count. A group of 4 or 5 cards is acceptable only when its dependency chain is linear or its members share one integration contract; record the reason in the `DISCUSSION` of the first card in dependency order. A group of 4 or 5 cards that meets neither condition is split into multiple groups the same way as a group of more than 5.
   - A task group ID is `YYYYMMDD-short-slug-group`, unique across the whole board.
   - Each member card's `- TASK_GROUP:` metadata holds the ID of its group; non-members leave it empty. A task group is a relationship between cards and adds no board entry or state.
