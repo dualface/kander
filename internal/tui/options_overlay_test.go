@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dualface/kander/internal/config"
@@ -280,5 +281,50 @@ func TestCloseConfirmDoesNotPaintFallbackNotice(t *testing.T) {
 	panel.view()
 	if panel.chromeLines != 0 {
 		t.Fatalf("confirm chromeLines=%d", panel.chromeLines)
+	}
+}
+
+func TestSwitchTabSyncsAppFromSession(t *testing.T) {
+	app, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	inherited := panel.session.Config.TUI.Theme
+	override := "light"
+	if inherited == "light" {
+		override = "dark"
+	}
+	pumpPanel(panel, panel.switchTab(config.TargetOverlay))
+	app.Theme = override
+	panel.session.SetTUIField("theme", override)
+	pumpPanel(panel, panel.switchTab(config.TargetScope))
+	if app.Theme != inherited {
+		t.Fatalf("global tab kept overlay theme %s, want %s", app.Theme, inherited)
+	}
+}
+
+func TestAppUpdateRoutesOptionsClick(t *testing.T) {
+	app, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	panel.view()
+	if panel.chromeLines < 1 {
+		t.Fatal("expected scope chrome")
+	}
+	formLines := panel.currentBodyLines()
+	lo, _, ok := focusRange(formLines)
+	if !ok {
+		t.Fatal("no focused row")
+	}
+	target := lo + 2
+	if target >= len(formLines) {
+		t.Skip("popup too short for this assertion")
+	}
+	x := panel.bodyX + 1
+	y := panel.bodyY + panel.chromeLines + target
+	_ = app.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	cmd := app.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	pumpPanel(panel, cmd)
+	moved, _, ok := focusRange(panel.currentBodyLines())
+	if !ok || moved != target {
+		t.Fatalf("App.Update click should focus form row %d, focus is %d", target, moved)
 	}
 }

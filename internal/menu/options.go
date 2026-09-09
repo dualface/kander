@@ -490,12 +490,13 @@ func (s *Session) seedReviewRole(role, reviewer string) map[string]string {
 // ResetReviewRoleModel resets the model and reasoning effort of one role to the defaults of its new reviewer.
 // Call it when a role changes reviewer: the old values were configured for the old reviewer and would otherwise be misattributed.
 func (s *Session) ResetReviewRoleModel(role string) {
-	s.Config.Models.ReviewRoles[role] = map[string]string{}
 	if s.EditingOverlay() {
 		config.OverlayDelete(s.overlayRaw, "models", "review_roles", role)
-		s.seedReviewRole(role, s.Config.Reviewers[role])
+		s.OverlayDirty = true
+		_ = s.rebuildOverlayConfig()
 		return
 	}
+	s.Config.Models.ReviewRoles[role] = map[string]string{}
 	s.seedReviewRole(role, s.Config.Reviewers[role])
 }
 

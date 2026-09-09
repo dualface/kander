@@ -283,6 +283,12 @@ func (p *optionsPanel) currentBodyLines() []string {
 	return trimTrailingBlank(strings.Split(p.form.View(), "\n"))
 }
 
+// optionsMouseActivate is true for a left click or a same-position release.
+// mapButtons never sets mouseBtn1Clicked; a real single click arrives as press then release.
+func optionsMouseActivate(bstate int) bool {
+	return mouseLeftClicked(bstate) || mouseButton1Released(bstate)
+}
+
 // HandleMouse gives the popup click-to-focus, double-click confirmation and wheel scrolling.
 // Every focus move is turned into a command handed back to Bubble Tea rather than driving the form synchronously here.
 func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
@@ -307,7 +313,7 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 		}
 		return keyCmd(tea.KeyUp)
 	}
-	if !mouseLeftClicked(bstate) {
+	if !optionsMouseActivate(bstate) {
 		return nil
 	}
 	if x < p.bodyX || x >= p.bodyX+p.bodyWidth || y < p.bodyY || y >= p.bodyY+p.bodyHeight {

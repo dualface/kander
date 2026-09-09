@@ -99,6 +99,9 @@ func (a *App) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 	if a.Options != nil {
+		if event, ok := msg.(tea.MouseMsg); ok {
+			return a.Options.HandleMouse(event.X, event.Y, a.mouse.mapButtons(event.X, event.Y, neutralButtons(event), time.Now()))
+		}
 		return a.Options.Update(msg)
 	}
 	switch event := msg.(type) {

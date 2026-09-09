@@ -53,6 +53,7 @@ func (p *optionsPanel) switchTab(target string) tea.Cmd {
 		p.showReport(t("tui.load_failed"), nil, err.Error())
 		return nil
 	}
+	p.syncAppFromSession()
 	p.dirty = p.session.HasUnsaved()
 	if p.current == "" {
 		return p.openRoot()
@@ -136,7 +137,7 @@ func (p *optionsPanel) hitTab(x, y int) string {
 }
 
 func (p *optionsPanel) handleTabMouse(x, y, bstate int) tea.Cmd {
-	if !mouseLeftClicked(bstate) || p.session == nil {
+	if !optionsMouseActivate(bstate) || p.session == nil {
 		return nil
 	}
 	localX := x - p.bodyX

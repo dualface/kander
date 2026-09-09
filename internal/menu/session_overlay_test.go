@@ -289,3 +289,15 @@ func TestSaveAllDirtySetsWelcomeComplete(t *testing.T) {
 		t.Fatal("scope save left welcome_complete false")
 	}
 }
+
+func TestResetReviewRoleOnOverlayDoesNotSeed(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	session.overlayRaw["models"] = map[string]any{"review_roles": map[string]any{"PM": map[string]any{"model": "old"}}}
+	session.ResetReviewRoleModel("PM")
+	if session.FieldOverridden("models", "review_roles", "PM") {
+		t.Fatalf("reset seeded overlay: %#v", session.overlayRaw)
+	}
+}
