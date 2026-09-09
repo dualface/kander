@@ -103,3 +103,19 @@ func TestReviewerChoicesFollowReviewTemplates(t *testing.T) {
 		t.Fatalf("reviewer choices=%v", s.ReviewerChoicesFor("codex"))
 	}
 }
+
+func TestReviewModelFieldsHideCursorEffortAfterArgsOverlay(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Agents = map[string]config.AgentDefinition{"cursor": {Args: &config.AgentArgs{Start: []string{"x"}, Resume: []string{}}}}
+	cfg.Reviewers["PM"] = "cursor"
+	s, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range s.ReviewModelFieldsFor("PM") {
+		if field.field == "effort" {
+			t.Fatal("review effort shown for cursor")
+		}
+	}
+}

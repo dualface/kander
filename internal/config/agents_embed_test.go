@@ -180,4 +180,10 @@ func TestAgentSupportsEffortUsesDefinition(t *testing.T) {
 	if !AgentSupportsEffort(cfg, "cursor") {
 		t.Fatal("custom cursor args should show effort")
 	}
+	if ReviewModelSupportsEffort(cfg, "cursor") {
+		t.Fatal("cursor review model has no effort key")
+	}
+	if !ReviewModelSupportsEffort(nil, "claude") || ReviewModelSupportsEffort(nil, "cursor") {
+		t.Fatal("embedded review effort keys")
+	}
 }

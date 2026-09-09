@@ -399,7 +399,7 @@ func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
 		entry:  entry,
 		field:  "model",
 	}}
-	if !config.AgentSupportsEffort(s.Config, reviewer) {
+	if !config.ReviewModelSupportsEffort(s.Config, reviewer) {
 		return fields
 	}
 	return append(fields, ModelField{

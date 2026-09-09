@@ -242,6 +242,22 @@ func AgentSupportsEffort(cfg *Config, name string) bool {
 	return true
 }
 
+// ReviewModelSupportsEffort reports whether models.review.<agent> stores an
+// effort key. User argv overlays must not invent a review effort field that
+// configuredModel would discard.
+func ReviewModelSupportsEffort(cfg *Config, name string) bool {
+	if cfg != nil {
+		if entry, ok := cfg.Models.Review[name]; ok {
+			_, has := entry["effort"]
+			return has
+		}
+	}
+	if emb, ok := embeddedByName(name); ok {
+		return emb.SupportsEffort
+	}
+	return false
+}
+
 func RulesSpec(name string) (AgentRulesSpec, bool) {
 	emb, ok := embeddedByName(name)
 	if !ok {
