@@ -133,6 +133,17 @@ func finishOptionsLoad(t *testing.T, app *App) {
 	}
 }
 
+func requireErrorFrame(t *testing.T, app *App, needles ...string) {
+	t.Helper()
+	plain := strings.ReplaceAll(ansi.Strip(app.View()), "\n", "")
+	for _, needle := range needles {
+		if strings.Contains(plain, needle) {
+			return
+		}
+	}
+	t.Fatalf("error frame missing %q:\n%s", needles, ansi.Strip(app.View()))
+}
+
 func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
@@ -155,17 +166,13 @@ func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 			if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil || app.Options.session != nil {
 				t.Fatal("Load failure must stay on the error frame without opening the form")
 			}
-			plain := strings.ReplaceAll(ansi.Strip(app.View()), "\n", "")
 			switch tc.name {
 			case "missing":
-				if !strings.Contains(plain, "配置不存在") {
-					t.Fatalf("missing config frame:\n%s", ansi.Strip(app.View()))
-				}
+				requireErrorFrame(t, app, "config does not exist", "配置不存在", "設定が存在しません")
 			case "invalid-json":
-				if !strings.Contains(plain, "读取配置失败") {
-					t.Fatalf("invalid JSON frame:\n%s", ansi.Strip(app.View()))
-				}
+				requireErrorFrame(t, app, "failed to read config", "读取配置失败", "設定の読み取りに失敗しました")
 			default:
+				plain := strings.ReplaceAll(ansi.Strip(app.View()), "\n", "")
 				if !strings.Contains(plain, "schema") && !strings.Contains(plain, "language") {
 					t.Fatalf("invalid schema frame:\n%s", ansi.Strip(app.View()))
 				}
@@ -196,9 +203,7 @@ func TestReopenOptionsRequiresCompleteConfig(t *testing.T) {
 	if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil {
 		t.Fatal("reopen after a broken config must stay on the error frame")
 	}
-	if !strings.Contains(strings.ReplaceAll(ansi.Strip(app.View()), "\n", ""), "读取配置失败") {
-		t.Fatalf("reopen error frame:\n%s", ansi.Strip(app.View()))
-	}
+	requireErrorFrame(t, app, "failed to read config", "读取配置失败", "設定の読み取りに失敗しました")
 }
 
 func TestOpenOptionsFromBoardKey(t *testing.T) {
