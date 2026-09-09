@@ -136,4 +136,13 @@ func TestReviewAgentNamesFollowsDefinitions(t *testing.T) {
 	if pair.Review.CWD != "" || pair.Review.Output != nil || pair.Review.OutputName != "" {
 		t.Fatal("declared pair should not inherit omitted review fields")
 	}
+	paired := AgentDefinition{
+		Dialect: "claude",
+		Args:    &AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
+		Review:  &AgentReview{CWD: ReviewCWDRoot, OutputName: "out.md"},
+	}
+	filled := AgentFor(&Config{Agents: map[string]AgentDefinition{"paired": paired}}, "paired")
+	if filled.Review == nil || filled.Review.Env != nil || filled.Review.Inspection != "" || filled.Review.HomeEnv != "" {
+		t.Fatal("declared pair must not fill omitted review fields")
+	}
 }
