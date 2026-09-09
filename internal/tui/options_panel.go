@@ -141,13 +141,29 @@ func loadOptionsSession() sessionResult {
 	if sessionErr != nil {
 		return sessionResult{err: sessionErr}
 	}
-	return sessionResult{session: session, overlayPath: overlayPath}
+	language := overlayLanguage(overlayRaw)
+	if language == "" {
+		language = config.ConfiguredScopeLanguage()
+	}
+	return sessionResult{session: session, overlayPath: overlayPath, language: language}
+}
+
+func overlayLanguage(overlay map[string]any) string {
+	if overlay == nil {
+		return ""
+	}
+	lang, _ := overlay["language"].(string)
+	if containsString(config.Languages, lang) {
+		return lang
+	}
+	return ""
 }
 
 type sessionResult struct {
 	seq         uint64
 	session     *menu.Session
 	overlayPath string
+	language    string
 	err         error
 }
 
@@ -193,7 +209,11 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		panel.session = result.session
 		panel.loadedTUI = result.session.Config.TUI
 		panel.appliedTUI = nil
-		config.BindEffectiveLanguage()
+		if result.language != "" {
+			config.BindConfigLanguage(&config.Config{Language: result.language})
+		} else {
+			config.BindConfigLanguage(nil)
+		}
 		if result.overlayPath != "" {
 			panel.overlayNotice = t("tui.overlay_notice")
 		} else {

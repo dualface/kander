@@ -727,43 +727,41 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	previous := p.loadedTUI
 	if p.appliedTUI != nil {
 		previous = *p.appliedTUI
+		if current == previous {
+			return
+		}
 	} else if current == p.loadedTUI {
 		return
 	}
-	changed := false
+	themeChanged := current.Theme != previous.Theme
+	singleChanged := current.Single != previous.Single
 	if containsString(themes, theme) && app.Theme != theme {
 		app.Theme = theme
-		changed = true
-		if theme != previous.Theme {
-			// Huh caches the body during Update, and that cache still uses the old theme at this point.
-			// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
-			p.rebuildAt(interfaceFocusKey("theme"))
-		}
+	}
+	if themeChanged {
+		// Huh caches the body during Update, and that cache still uses the old theme at this point.
+		// Reuse the section rebuild path so the current frame takes effect and focus stays on the theme selector.
+		p.rebuildAt(interfaceFocusKey("theme"))
 	}
 	if app.Columns != columns {
 		app.Columns = columns
-		changed = true
 	}
 	if app.MinColumnWidth != minWidth {
 		app.MinColumnWidth = minWidth
-		changed = true
 	}
 	if app.RefreshSecs != refresh {
 		app.RefreshSecs = refresh
-		changed = true
 	}
 	if app.Model.Single != single {
 		app.Model.Single = single
-		changed = true
-		if single != previous.Single {
-			p.rebuildAt(interfaceFocusKey("single"))
-		}
 	}
-	p.appliedTUI = &current
+	if singleChanged {
+		p.rebuildAt(interfaceFocusKey("single"))
+	}
+	copied := current
+	p.appliedTUI = &copied
 	// UI preferences reach config.json as soon as they change, so returning with Esc loses nothing.
-	if changed {
-		p.persistUI()
-	}
+	p.persistUI()
 }
 
 // commitSideEffects runs the actions that may only fire once the user confirms the whole section:

@@ -357,3 +357,64 @@ func TestOpenOptionsInvalidOverlayLanguageIsLoadError(t *testing.T) {
 		t.Fatal("invalid overlay language kept the old session")
 	}
 }
+
+func TestOpenOptionsBindsCapturedOverlayLanguage(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "en_US.UTF-8")
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeTempOverlay(t, dir, map[string]any{"language": "ja"})
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.Language = "en"
+	app := newPanelApp(t)
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.openOptions()
+	load := app.pendingWork
+	if load == nil {
+		t.Fatal("load")
+	}
+	app.pendingWork = nil
+	result := load()
+	if err := os.WriteFile(filepath.Join(dir, config.OverlayFilename), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := app.applyWork(result)
+	if cmd != nil {
+		pumpPanel(app.Options, cmd)
+	}
+	if app.Options.loadErr != "" {
+		t.Fatalf("captured load failed: %s", app.Options.loadErr)
+	}
+	if config.ResolveLanguage() != "ja" {
+		t.Fatalf("language=%s, want captured overlay ja", config.ResolveLanguage())
+	}
+}
+
+func TestOpenOptionsPersistsSingleWhenAppAlreadyMatches(t *testing.T) {
+	app := newPanelApp(t)
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.TUI.Single = true
+	_ = newTestSession(t, initial)
+	useTestOptionsSession(t)
+	app.Model.Single = false
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	pumpPanel(app.Options, app.Options.dispatch(sectionInterface))
+	if app.Options.bind == nil || !app.Options.bind.single {
+		t.Fatal("form should show scope single=true")
+	}
+	app.Options.bind.single = false
+	app.Options.bind.applyInterface(app.Options)
+	if app.Options.rebuildFocus != interfaceFocusKey("single") {
+		t.Fatalf("rebuildFocus=%q", app.Options.rebuildFocus)
+	}
+	prefs := loadPrefs()
+	if prefs.Single {
+		t.Fatal("scope TUI single should be persisted as false")
+	}
+}
