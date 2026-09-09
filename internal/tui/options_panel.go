@@ -137,16 +137,16 @@ func loadOptionsSession() sessionResult {
 			return sessionResult{err: err}
 		}
 	}
-	session, sessionErr := newOptionsSession(existing, true)
-	if sessionErr != nil {
-		return sessionResult{err: sessionErr}
-	}
 	language := ""
 	if existing.WelcomeComplete {
 		language = overlayLanguage(overlayRaw)
 		if language == "" {
 			language = config.ConfiguredScopeLanguage()
 		}
+	}
+	session, sessionErr := newOptionsSession(existing, true)
+	if sessionErr != nil {
+		return sessionResult{err: sessionErr}
 	}
 	return sessionResult{session: session, overlayPath: overlayPath, language: language}
 }

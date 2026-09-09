@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/menu"
 )
 
 func TestOpenOptionsReloadsScopeFromDisk(t *testing.T) {
@@ -391,6 +392,31 @@ func TestOpenOptionsBindsCapturedOverlayLanguage(t *testing.T) {
 	}
 	if config.ResolveLanguage() != "ja" {
 		t.Fatalf("language=%s, want captured overlay ja", config.ResolveLanguage())
+	}
+}
+
+func TestOpenOptionsBindsCapturedScopeLanguage(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvLang, "en_US.UTF-8")
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	initial := config.DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.Language = "ja"
+	app := newPanelApp(t)
+	_ = newTestSession(t, initial)
+	original := newOptionsSession
+	newOptionsSession = func(existing *config.Config, valid bool) (*menu.Session, error) {
+		if err := os.WriteFile(os.Getenv(config.EnvConfig), []byte("{"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return menu.NewSessionForTest(existing)
+	}
+	t.Cleanup(func() { newOptionsSession = original })
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	if config.ResolveLanguage() != "ja" {
+		t.Fatalf("language=%s, want captured scope ja", config.ResolveLanguage())
 	}
 }
 
