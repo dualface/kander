@@ -2,6 +2,7 @@ package review
 
 import (
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/process"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,13 +18,13 @@ func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.Agents = map[string]config.AgentDefinition{}
-	for _, agent := range config.ReviewAgents {
+	for _, agent := range config.ReviewAgentNames(nil) {
 		cfg.Agents[agent] = config.AgentDefinition{Path: exe, ProcessName: "wrapper"}
 	}
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	for _, agent := range config.ReviewAgents {
+	for _, agent := range config.ReviewAgentNames(nil) {
 		key := strings.ToUpper(agent) + "_REVIEW_BIN"
 		t.Setenv(key, "")
 		settings, err := agentSettingsFor(agent, "PM")
@@ -41,5 +42,21 @@ func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
 	}
 	if _, err := agentSettingsFor("custom", "PM"); err == nil {
 		t.Fatal("custom reviewer accepted")
+	}
+	cfg.Agents["helper"] = config.AgentDefinition{
+		Path: exe,
+		Args: &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--review"}},
+		Session: &config.AgentSessionDefinition{Mode: "none"},
+		Review: &config.AgentReview{
+			CWD: config.ReviewCWDRuntime, OutputName: "out.txt",
+			Output: &process.OutputSpec{Source: process.SourceFile, Parse: process.ParseRaw},
+		},
+	}
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := agentSettingsFor("helper", "PM")
+	if err != nil || settings.executable != exe {
+		t.Fatalf("custom path fallback %+v %v", settings, err)
 	}
 }

@@ -27,7 +27,7 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
 	if reviewerUsable(states["codex"]) {
 		t.Fatal("execution wrapper offered as reviewer")
 	}
-	if states["codex"].Path != path || states["helper"].Version != "renamed-version" || states["helper"].Review {
+	if states["codex"].Path != path || states["helper"].Version != "renamed-version" || !states["helper"].Review {
 		t.Fatal(states)
 	}
 	t.Setenv(config.EnvConfig, h.configPath)

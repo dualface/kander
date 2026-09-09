@@ -159,8 +159,8 @@ func ReviewModelLines(cfg *Config, agent string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !contains(ReviewAgents, agent) {
-		return nil, choiceError("agent", strings.Join(ReviewAgents, ", "))
+	if !HasReviewTemplate(effective, agent) {
+		return nil, choiceError("agent", strings.Join(ReviewAgentNames(effective), ", "))
 	}
 	entry := effective.Models.Review[agent]
 	return []string{entry["model"], entry["effort"]}, nil

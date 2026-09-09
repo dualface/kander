@@ -136,7 +136,7 @@ func findAgents(configs ...*config.Config) map[string]agentState {
 	}
 	agents := map[string]agentState{}
 	reviewSet := map[string]struct{}{}
-	for _, name := range config.ReviewAgents {
+	for _, name := range config.ReviewAgentNames(cfg) {
 		reviewSet[name] = struct{}{}
 	}
 	for _, name := range config.AgentNames(cfg) {
@@ -155,10 +155,7 @@ func findAgents(configs ...*config.Config) map[string]agentState {
 			state.Batch = program.Batch
 		}
 		if state.Review {
-			reviewPath := config.AgentExecutableName(name)
-			if override := os.Getenv(strings.ToUpper(name) + "_REVIEW_BIN"); override != "" {
-				reviewPath = override
-			}
+			reviewPath := config.ReviewExecutable(cfg, name)
 			if reviewPath != executable {
 				reviewer := agentState{Review: true}
 				if program := process.ResolveAgentProgram(reviewPath); program != nil {

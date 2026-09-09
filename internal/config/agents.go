@@ -11,8 +11,10 @@ import (
 	"unicode"
 )
 
-// AgentDefinition overrides an execution agent only; reviewers retain their own read-only adapters.
-// The map key in Config.Agents is the stable agent name stored on task cards.
+// AgentDefinition is the user overlay of an execution agent. Built-in review
+// isolation stays on the embedded path for built-in names; custom agents may
+// declare args.review and review.* to act as reviewers. The map key in
+// Config.Agents is the stable agent name stored on task cards.
 type AgentDefinition struct {
 	SchemaVersion  int                     `json:"schema_version,omitempty"`
 	Path           string                  `json:"path,omitempty"`
@@ -21,11 +23,13 @@ type AgentDefinition struct {
 	Args           *AgentArgs              `json:"args,omitempty"`
 	Session        *AgentSessionDefinition `json:"session,omitempty"`
 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
+	Review         *AgentReview            `json:"review,omitempty"`
 }
 
 type AgentArgs struct {
 	Start  []string `json:"start"`
 	Resume []string `json:"resume"`
+	Review []string `json:"review,omitempty"`
 }
 
 // Allocate is an argv array including the executable. Output is a plain ID or a
@@ -76,6 +80,15 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 		if emb, ok := embeddedByName(d.Dialect); ok {
 			d.Args = cloneArgs(&emb.Args)
 		}
+	} else if d.Args.Review == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok && emb.Args.Review != nil {
+			d.Args.Review = append([]string{}, emb.Args.Review...)
+		}
+	}
+	if d.Review == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.Review = cloneReview(&emb.Review)
+		}
 	}
 	if d.PromptDelivery == nil {
 		if emb, ok := embeddedByName(d.Dialect); ok {
@@ -121,8 +134,12 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 		a := *d.Args
 		a.Start = append([]string{}, a.Start...)
 		a.Resume = append([]string{}, a.Resume...)
+		if a.Review != nil {
+			a.Review = append([]string{}, a.Review...)
+		}
 		d.Args = &a
 	}
+	d.Review = cloneReview(d.Review)
 	if d.Session != nil {
 		s := *d.Session
 		s.Allocate = append([]string(nil), s.Allocate...)
@@ -190,7 +207,7 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				}
 			}
 		}
-		for _, key := range []string{"args", "session", "prompt_delivery"} {
+		for _, key := range []string{"args", "session", "prompt_delivery", "review"} {
 			if v, exists := fields[key]; exists {
 				if _, ok := asObject(v); !ok {
 					return nil, agentDefinitionError(name, Text("config.agent_object"))
@@ -255,6 +272,9 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		}
 		if d.Args != nil && resolved.Session.Mode != "none" && d.Args.Resume == nil {
 			return nil, agentDefinitionError(name, Text("config.agent_resume"))
+		}
+		if err := validateReviewDefinition(name, d); err != nil {
+			return nil, err
 		}
 		out[name] = d
 	}
@@ -336,6 +356,15 @@ func customModelDefaults(definitions map[string]AgentDefinition, models *Models)
 			fields = cloneStringMap(emb.kanbanFields())
 		}
 		models.Kanban[name] = fields
+		if HasReviewTemplate(&Config{Agents: definitions}, name) {
+			if _, ok := models.Review[name]; !ok {
+				reviewFields := map[string]string{"model": "", "effort": "high"}
+				if emb, ok := embeddedByName(d.Dialect); ok {
+					reviewFields = cloneStringMap(emb.reviewFields())
+				}
+				models.Review[name] = reviewFields
+			}
+		}
 	}
 }
 

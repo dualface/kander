@@ -1,7 +1,6 @@
 package review
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,10 +32,6 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 		environment[k] = v
 	}
 	environment["GIT_OPTIONAL_LOCKS"] = "0"
-	var model []string
-	if settings.model != "" {
-		model = []string{"--model", settings.model}
-	}
 	home, err := filepath.Abs(settings.reviewHome)
 	if err != nil {
 		home = settings.reviewHome
@@ -44,66 +39,33 @@ func reviewerArguments(ctx reviewContext, runtime, outputFile, promptFile string
 	if resolved, resErr := filepath.EvalSymlinks(home); resErr == nil {
 		home = resolved
 	}
-	var arguments []string
+	values := map[string]string{
+		"model":       settings.model,
+		"effort":      settings.effort,
+		"root":        ctx.root,
+		"runtime":     runtime,
+		"home":        home,
+		"output":      outputFile,
+		"prompt_file": promptFile,
+		"instruction": ctx.instruction,
+	}
+	for name, path := range ctx.promptFilePaths {
+		values["prompt_file:"+name] = path
+	}
+	arguments, err := process.ExpandArgvOmitEmpty(settings.reviewArgs, values, config.ReviewArgvPlaceholders(settings.promptFiles))
+	if err != nil {
+		return process.ProcessInvocation{}, "", newGateMsg(2, err.Error())
+	}
+	for key, tmpl := range settings.env {
+		expanded, expErr := process.ExpandTemplate(tmpl, values, config.ReviewEnvPlaceholders())
+		if expErr != nil {
+			return process.ProcessInvocation{}, "", newGateMsg(2, expErr.Error())
+		}
+		environment[key] = expanded
+	}
 	cwd := runtime
-	switch ctx.agent {
-	case "codex":
-		environment["CODEX_HOME"] = home
-		arguments = append([]string{"exec", "--cd", ctx.root}, model...)
-		arguments = append(arguments,
-			"--sandbox", "read-only",
-			"--ephemeral",
-			"--config", `model_reasoning_effort="`+settings.effort+`"`,
-			"--config", `web_search="live"`,
-			"--config", "allow_login_shell=false",
-			"--output-last-message", outputFile,
-			"-",
-		)
+	if settings.cwd == config.ReviewCWDRoot {
 		cwd = ctx.root
-	case "claude":
-		environment["CLAUDE_CONFIG_DIR"] = home
-		arguments = append([]string{
-			"--print", "--output-format", "json",
-			"--permission-mode", "bypassPermissions",
-			"--disallowedTools", "Edit,Write",
-		}, model...)
-		arguments = append(arguments, "--effort", settings.effort)
-		cwd = runtime
-	case "cursor":
-		environment["CURSOR_CONFIG_DIR"] = runtime
-		environment["CURSOR_DATA_DIR"] = runtime
-		arguments = append([]string{
-			"--print", "--output-format", "json", "--trust",
-			"--add-dir", ctx.root,
-		}, model...)
-		cwd = runtime
-	case "grok":
-		environment["GROK_HOME"] = home
-		arguments = append([]string{"--cwd", runtime}, model...)
-		arguments = append(arguments,
-			"--effort", settings.effort,
-			"--output-format", "json",
-			"--permission-mode", "dontAsk",
-			"--allow", "Read",
-			"--allow", "Grep",
-			"--tools", "read_file,grep,list_dir",
-			"--disallowed-tools", "Agent,run_terminal_command,search_tool,use_tool,web_search,web_fetch,search_replace,todo_write,scheduler_create,scheduler_delete,scheduler_list,monitor,workflow,enter_plan_mode,exit_plan_mode,ask_user_question,image_gen,image_edit,image_to_video,reference_to_video,write",
-			"--deny", "Edit",
-			"--deny", "Write",
-			"--deny", "MCPTool(*)",
-			"--sandbox", "read-only",
-			"--disable-web-search",
-			"--no-memory",
-			"--no-subagents",
-			"--no-plan",
-			"--verbatim",
-			"--prompt-file", promptFile,
-		)
-		cwd = ctx.root
-	default:
-		return process.ProcessInvocation{}, "", newGate(2,
-			"review.unsupported_reviewer_agent", ctx.agent,
-		)
 	}
 	inv, err := process.NewProcessInvocation(ctx.program, arguments, environment)
 	if err != nil {
@@ -148,55 +110,18 @@ func printErrorTail(runtime, path string) {
 }
 
 func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string) error {
-	if ctx.agent == "codex" {
-		data, err := fs.ReadRegularFile(runtime, outputFile)
-		if err != nil || len(data) == 0 || ctx.archive != nil && !utf8.Valid(data) {
-			printFile(runtime, stdoutFile, os.Stdout)
-			if ctx.archive != nil {
-				printFile(runtime, outputFile, os.Stdout)
-			}
-			return newGate(1, "review.codex_review_did_not_complete_with_review_text")
-		}
+	data, err := fs.ReadRegularFile(runtime, outputFile)
+	if err != nil || len(data) == 0 || ctx.archive != nil && !utf8.Valid(data) {
+		printFile(runtime, stdoutFile, os.Stdout)
 		if ctx.archive != nil {
-			ctx.archive.report = append([]byte(nil), data...)
+			printFile(runtime, outputFile, os.Stdout)
 		}
-		_, _ = os.Stdout.Write(data)
-		syncStream(os.Stdout)
-		return nil
+		return incompleteReviewError(ctx.settings)
 	}
-	raw, err := fs.ReadRegularFile(runtime, outputFile)
-	var result any
-	if err == nil && (ctx.archive == nil || utf8.Valid(raw)) {
-		if decodeErr := json.Unmarshal(raw, &result); decodeErr != nil {
-			result = nil
-		}
-	}
-	var text string
-	var valid bool
-	var message string
-	if ctx.agent == "grok" {
-		obj, ok := result.(map[string]any)
-		if ok {
-			text, _ = obj["text"].(string)
-			valid = obj["stopReason"] == "end_turn" && text != ""
-		}
-		message = config.Text("review.grok_review_did_not_complete_with_review_text")
-	} else if ctx.agent == "claude" || ctx.agent == "cursor" {
-		obj, ok := result.(map[string]any)
-		if ok {
-			text, _ = obj["result"].(string)
-			valid = obj["type"] == "result" && obj["subtype"] == "success" && obj["is_error"] == false && text != ""
-		}
-		message = config.Text(
-			"review.review_did_not_complete_with_review_text", ctx.settings.name,
-		)
-	} else {
+	text, err := process.ParseReviewOutput(ctx.settings.output, string(data))
+	if err != nil || strings.TrimSpace(text) == "" {
 		printFile(runtime, outputFile, os.Stdout)
-		return newGate(1, "review.unsupported_reviewer_agent", ctx.agent)
-	}
-	if !valid {
-		printFile(runtime, outputFile, os.Stdout)
-		return newGateMsg(1, message)
+		return incompleteReviewError(ctx.settings)
 	}
 	if ctx.archive != nil {
 		ctx.archive.report = []byte(text)
@@ -206,6 +131,10 @@ func parseReviewOutput(ctx reviewContext, runtime, outputFile, stdoutFile string
 	}
 	fmt.Println(text)
 	return nil
+}
+
+func incompleteReviewError(settings agentSettings) *gateError {
+	return newGate(1, "review.review_did_not_complete_with_review_text", settings.name)
 }
 
 func copySpecSnapshot(src, runtime, dest string) error {

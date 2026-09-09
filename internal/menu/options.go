@@ -107,7 +107,7 @@ func (s *Session) prepare(configValid bool) error {
 	if firstExecution == "" && !s.existing.WelcomeComplete {
 		return errors.New(config.Text("menu.no_usable_agent_found_version_must_succeed_install_codex"))
 	}
-	for _, name := range config.ReviewAgents {
+	for _, name := range config.ReviewAgentNames(s.existing) {
 		if reviewerUsable(s.agents[name]) {
 			s.review = append(s.review, Choice{Value: name, Label: labels[name] + " (" + reviewerState(s.agents[name]).Version + ")"})
 		}
@@ -562,7 +562,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	for _, name := range config.AgentNames(existing) {
 		session.exec = append(session.exec, Choice{Value: name, Label: labels[name]})
 	}
-	for _, name := range config.ReviewAgents {
+	for _, name := range config.ReviewAgentNames(existing) {
 		session.review = append(session.review, Choice{Value: name, Label: labels[name]})
 	}
 	cfg := config.DefaultConfig()

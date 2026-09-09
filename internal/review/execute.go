@@ -113,7 +113,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	}()
 
 	taskContext := ctx.taskContext
-	if (ctx.archive != nil || ctx.agent == "claude" || ctx.agent == "cursor") && ctx.taskSpec != "" {
+	if (ctx.archive != nil || ctx.settings.snapshotSpec) && ctx.taskSpec != "" {
 		snapshot := filepath.Join(runtime, "task-spec.md")
 		var snapshotErr error
 		if ctx.archive != nil {
@@ -136,14 +136,49 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		fail(err)
 		return exitCode
 	}
-	if err := process.WriteTaskFile(runtime, promptFile, buildPrompt(ctx, evidenceFile, taskContext)); err != nil {
+	promptBody := buildPrompt(ctx, evidenceFile, taskContext)
+	if err := process.WriteTaskFile(runtime, promptFile, promptBody); err != nil {
 		fail(err)
 		return exitCode
 	}
-	instruction := process.TaskFileInstruction("Perform the "+ctx.role+" review.", promptFile) + "\n"
-	if err := fs.WriteTextAtomic(runtime, stdinFile, instruction, false); err != nil {
-		fail(err)
+	promptOnDisk, readPromptErr := fs.ReadRegularFile(runtime, promptFile)
+	if readPromptErr != nil {
+		fail(readPromptErr)
 		return exitCode
+	}
+	ctx.instruction = process.TaskFileInstruction("Perform the "+ctx.role+" review.", promptFile)
+	if ctx.settings.stdin == config.ReviewStdinInstruction {
+		if err := fs.WriteTextAtomic(runtime, stdinFile, ctx.instruction+"\n", false); err != nil {
+			fail(err)
+			return exitCode
+		}
+	}
+	ctx.promptFilePaths = map[string]string{}
+	for _, file := range ctx.settings.promptFiles {
+		rendered, expErr := process.ExpandTemplate(file.Template, map[string]string{
+			"inspection":      ctx.settings.inspectionRules,
+			"prompt":          string(promptOnDisk),
+			"role":            ctx.role,
+			"report_language": ctx.reportLanguage,
+			"root":            ctx.root,
+			"runtime":         runtime,
+			"output":          outputFile,
+		}, config.ReviewPromptFilePlaceholders())
+		if expErr != nil {
+			fail(newGateMsg(2, expErr.Error()))
+			return exitCode
+		}
+		dest := filepath.Join(runtime, filepath.FromSlash(file.Path))
+		if err := fs.WriteTextAtomic(runtime, dest, rendered, false); err != nil {
+			fail(err)
+			return exitCode
+		}
+		abs, absErr := filepath.Abs(dest)
+		if absErr != nil {
+			fail(absErr)
+			return exitCode
+		}
+		ctx.promptFilePaths[file.Name] = abs
 	}
 	for _, path := range []string{outputFile, stdoutFile, errorFile} {
 		if ctx.archive != nil {
@@ -160,12 +195,22 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		return exitCode
 	}
 
-	promptStream, err := fs.OpenRegularFileIfExists(runtime, stdinFile)
-	if err != nil {
-		fail(err)
-		return exitCode
+	var promptStream *os.File
+	if ctx.settings.stdin == config.ReviewStdinInstruction {
+		promptStream, err = fs.OpenRegularFileIfExists(runtime, stdinFile)
+		if err != nil {
+			fail(err)
+			return exitCode
+		}
+		defer promptStream.Close()
+	} else {
+		promptStream, err = os.OpenFile(os.DevNull, os.O_RDONLY, 0)
+		if err != nil {
+			fail(err)
+			return exitCode
+		}
+		defer promptStream.Close()
 	}
-	defer promptStream.Close()
 	stdoutStream, err := fs.OpenWritableRegularFile(outputRoot, stdoutFile)
 	if err != nil {
 		fail(err)
@@ -180,7 +225,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	defer errorStream.Close()
 
 	reviewerStdout := stdoutStream
-	if ctx.agent != "codex" {
+	if ctx.settings.output.Source == process.SourceStdout {
 		out, openErr := fs.OpenWritableRegularFile(outputRoot, outputFile)
 		if openErr != nil {
 			fail(openErr)

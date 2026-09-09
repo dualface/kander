@@ -1,10 +1,12 @@
 package menu
 
 import (
-	"github.com/dualface/kander/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/process"
 )
 
 func TestAgentFieldsShareDefinitionsAndPreserveTemplates(t *testing.T) {
@@ -62,5 +64,42 @@ func TestAgentFieldsShareDefinitionsAndPreserveTemplates(t *testing.T) {
 	fields[0].Set("")
 	if _, ok := s.Config.Agents["codex"]; ok {
 		t.Fatal("blank built-in edit should remove override")
+	}
+}
+
+func TestReviewerChoicesFollowReviewTemplates(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Agents = map[string]config.AgentDefinition{
+		"helper": {
+			Path: exe,
+			Args: &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
+			Session: &config.AgentSessionDefinition{Mode: "none"},
+			Review: &config.AgentReview{
+				CWD: config.ReviewCWDRuntime, OutputName: "out.txt",
+				Output: &process.OutputSpec{Source: process.SourceFile, Parse: process.ParseRaw},
+			},
+		},
+		"plain": {Path: exe, Args: &config.AgentArgs{Start: []string{}, Resume: []string{}}, Session: &config.AgentSessionDefinition{Mode: "none"}},
+	}
+	s, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundHelper, foundPlain := false, false
+	for _, choice := range s.ReviewerChoicesFor("codex") {
+		if choice.Value == "helper" {
+			foundHelper = true
+		}
+		if choice.Value == "plain" {
+			foundPlain = true
+		}
+	}
+	if !foundHelper || foundPlain {
+		t.Fatalf("reviewer choices=%v", s.ReviewerChoicesFor("codex"))
 	}
 }

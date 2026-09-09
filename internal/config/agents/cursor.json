@@ -18,6 +18,16 @@
       "--force",
       "--resume",
       "{session=}"
+    ],
+    "review": [
+      "--print",
+      "--output-format",
+      "json",
+      "--trust",
+      "--add-dir",
+      "{root}",
+      "--model",
+      "{model}"
     ]
   },
   "session": {
@@ -27,6 +37,29 @@
   "supports_effort": false,
   "prompt_delivery": {
     "mode": "argv"
+  },
+  "review": {
+    "env": {
+      "CURSOR_CONFIG_DIR": "{runtime}",
+      "CURSOR_DATA_DIR": "{runtime}"
+    },
+    "cwd": "runtime",
+    "home_env": "CURSOR_CONFIG_DIR",
+    "home_policy": "optional",
+    "output_name": "output.json",
+    "inspection": "Prefer read-only inspection. Do not modify the target worktree; the review gate fails if HEAD moves or the worktree is dirty.",
+    "spawns_helpers": true,
+    "snapshot_spec": true,
+    "stdin": "instruction",
+    "output": {
+      "source": "stdout",
+      "parse": "json_field:result",
+      "success": [
+        {"json_field": "type", "equals": "result"},
+        {"json_field": "subtype", "equals": "success"},
+        {"json_field": "is_error", "equals": false}
+      ]
+    }
   },
   "rules_target": {
     "global": ".cursor/AGENTS.md",

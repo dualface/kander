@@ -59,6 +59,7 @@ type embeddedAgent struct {
 	DisplayName      string                 `json:"display_name"`
 	SupportsEffort   bool                   `json:"supports_effort"`
 	PromptDelivery   PromptDelivery         `json:"prompt_delivery"`
+	Review           AgentReview            `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
 	RulesIntegration string                 `json:"rules_integration"`
 	LargeModel       string                 `json:"large_model"`
@@ -173,6 +174,9 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 	}
 	if strings.ContainsAny(agent.LargeModel+agent.SmallModel+agent.LargeEffort+agent.SmallEffort+agent.Model+agent.Effort, "\n\r\x00") {
 		return embeddedAgent{}, embedAgentError(fileName, "model")
+	}
+	if err := validateReviewDefinition(fileName, AgentDefinition{Args: &agent.Args, Review: &agent.Review}); err != nil {
+		return embeddedAgent{}, err
 	}
 	return agent, nil
 }
@@ -300,6 +304,9 @@ func cloneArgs(src *AgentArgs) *AgentArgs {
 	out := *src
 	out.Start = append([]string{}, src.Start...)
 	out.Resume = append([]string{}, src.Resume...)
+	if src.Review != nil {
+		out.Review = append([]string{}, src.Review...)
+	}
 	return &out
 }
 

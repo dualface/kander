@@ -28,9 +28,8 @@ const (
 )
 
 var (
-	TaskScales       = []string{"large", "small"}
-	ReviewAgents     = []string{"codex", "claude", "grok", "cursor"}
-	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
+	TaskScales   = []string{"large", "small"}
+	ReviewRoles  = []string{"PM", "CSA", "Hacker", "QA"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
 	Languages        = []string{"cn", "en", "ja"}
@@ -423,9 +422,12 @@ func ExecutionAgentsInUse(cfg *Config) []string {
 func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models, error) {
 	models := DefaultModels()
 	names := ExecutionAgents
+	reviewNames := ReviewAgentNames(nil)
 	if len(definitions) > 0 {
 		customModelDefaults(definitions[0], &models)
-		names = AgentNames(&Config{Agents: definitions[0]})
+		probe := &Config{Agents: definitions[0]}
+		names = AgentNames(probe)
+		reviewNames = ReviewAgentNames(probe)
 	}
 	obj, ok := raw.(map[string]any)
 	if !ok {
@@ -451,7 +453,7 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 		allowEmpty bool
 	}{
 		{"kanban", names, models.Kanban, false},
-		{"review", ReviewAgents, models.Review, false},
+		{"review", reviewNames, models.Review, false},
 		{"review_roles", ReviewRoles, models.ReviewRoles, true},
 	}
 	for _, section := range sections {
@@ -648,8 +650,10 @@ func Validate(raw any) (*Config, error) {
 		return nil, configErrorf("config.reviewers_must_be_a_json_object")
 	}
 	reviewers := make(map[string]string, len(ReviewRoles))
+	reviewable := &Config{Agents: definitions}
+	reviewNames := ReviewAgentNames(reviewable)
 	for _, role := range ReviewRoles {
-		agent, err := validateChoice(reviewersRaw[role], ReviewAgents, "reviewers."+role)
+		agent, err := validateReviewerChoice(reviewersRaw[role], reviewable, "reviewers."+role, reviewNames)
 		if err != nil {
 			return nil, err
 		}

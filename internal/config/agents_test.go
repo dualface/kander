@@ -119,8 +119,12 @@ func TestCustomAgentsModelsAndRepair(t *testing.T) {
 	}
 	root := raw.(map[string]any)
 	root["reviewers"].(map[string]any)["PM"] = "helper"
+	if _, err := Validate(root); err != nil {
+		t.Fatal(err)
+	}
+	root["reviewers"].(map[string]any)["PM"] = "plain"
 	if _, err := Validate(root); err == nil {
-		t.Fatal("custom reviewer accepted")
+		t.Fatal("start-only reviewer accepted")
 	}
 	cfg.Agents["plain"] = AgentDefinition{}
 	data, _ = json.Marshal(cfg)
