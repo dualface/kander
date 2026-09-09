@@ -69,13 +69,14 @@ type Session struct {
 	// OverlayLocation is the Project-tab read/write target, including when the file does not exist.
 	OverlayLocation config.OverlayLocation
 	// BasePath is the actual scope file in force, including KANDER_CONFIG.
-	BasePath string
+	BasePath     string
 	ScopeDirty   bool
 	OverlayDirty bool
 
-	existing       *config.Config
-	scopeConfig    *config.Config
-	scopeExisting  *config.Config
+	existing        *config.Config
+	scopeConfig     *config.Config
+	scopeExisting   *config.Config
+	scopeRaw        map[string]any
 	overlayRaw      map[string]any
 	overlayExisting map[string]any
 	agents          map[string]agentState

@@ -241,7 +241,7 @@ func TestGlobalEmptyAgentPathDoesNotDeleteOverlay(t *testing.T) {
 	}
 }
 
-func TestRestoreFlatReviewStageDeletesLegacyKey(t *testing.T) {
+func TestRestoreFlatReviewStageKeepsOtherScale(t *testing.T) {
 	session, _ := tempOverlaySession(t, config.ModeGlobal)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
@@ -251,8 +251,75 @@ func TestRestoreFlatReviewStageDeletesLegacyKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	if session.FieldOverridden("review_stages", "large", "PM") {
-		t.Fatalf("flat review stage remained: %#v", session.overlayRaw)
+		t.Fatalf("large PM still overridden: %#v", session.overlayRaw)
 	}
+	if !session.FieldOverridden("review_stages", "small", "PM") {
+		t.Fatalf("small PM override lost: %#v", session.overlayRaw)
+	}
+	large, err := config.ReviewStageFor(session.Config, "large", "PM")
+	if err != nil {
+		t.Fatal(err)
+	}
+	small, err := config.ReviewStageFor(session.Config, "small", "PM")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if large != "auto" || small != "skip" {
+		t.Fatalf("large=%s small=%s", large, small)
+	}
+}
+
+func TestRestoreInheritRollsBackInvalidRules(t *testing.T) {
+	session, _ := gitOffOverlaySession(t)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	session.overlayRaw["rules"] = map[string]any{"git": true, "task_groups": true}
+	if err := session.rebuildOverlayConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.RestoreInherit("rules", "git"); err == nil {
+		t.Fatal("restoring git under task_groups should fail")
+	}
+	if !config.OverlayHas(session.overlayRaw, "rules", "git") {
+		t.Fatalf("failed restore deleted git: %#v", session.overlayRaw)
+	}
+	if !config.OverlayHas(session.overlayRaw, "rules", "task_groups") {
+		t.Fatal("failed restore dropped task_groups")
+	}
+}
+
+func TestSetTargetRollsBackWhenOverlayInvalid(t *testing.T) {
+	session, _ := gitOffOverlaySession(t)
+	session.overlayRaw["rules"] = map[string]any{"task_groups": true}
+	if err := session.SetTarget(config.TargetOverlay); err == nil {
+		t.Fatal("invalid overlay should keep the global tab")
+	}
+	if session.Target != config.TargetScope {
+		t.Fatalf("target=%s", session.Target)
+	}
+}
+
+func gitOffOverlaySession(t *testing.T) (*Session, string) {
+	t.Helper()
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Rules[config.RuleGit] = false
+	cfg.Rules[config.RuleTaskGroups] = false
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
+	if err := session.AttachOverlay(config.ModeGlobal, loc, nil); err != nil {
+		t.Fatal(err)
+	}
+	return session, loc.Path
 }
 
 func TestFlatReviewStagesSaveDoesNotConflict(t *testing.T) {

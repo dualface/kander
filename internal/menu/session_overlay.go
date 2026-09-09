@@ -87,6 +87,9 @@ func (s *Session) loadOverlayContext() error {
 		s.overlayRaw = raw
 		s.overlayExisting = config.CloneOverlay(raw)
 	}
+	if err := s.ensureScopeRaw(); err != nil {
+		return err
+	}
 	if paths.Mode == config.ModeProject {
 		return s.SetTarget(config.TargetOverlay)
 	}
@@ -99,6 +102,9 @@ func (s *Session) AttachOverlay(mode config.Mode, loc config.OverlayLocation, ra
 	s.OverlayLocation = loc
 	s.overlayRaw = config.CloneOverlay(raw)
 	s.overlayExisting = config.CloneOverlay(raw)
+	if err := s.ensureScopeRaw(); err != nil {
+		return err
+	}
 	if mode == config.ModeProject {
 		return s.SetTarget(config.TargetOverlay)
 	}
@@ -107,26 +113,56 @@ func (s *Session) AttachOverlay(mode config.Mode, loc config.OverlayLocation, ra
 
 // SetTarget switches the edit buffer. Unsaved edits on the other tab are kept.
 func (s *Session) SetTarget(target string) error {
-	if s.Target == config.TargetScope && s.Config != nil {
-		s.scopeConfig = s.Config
-	}
-	s.Target = target
 	if target == config.TargetOverlay {
-		return s.rebuildOverlayConfig()
+		merged, err := s.previewOverlay()
+		if err != nil {
+			return err
+		}
+		if s.Target == config.TargetScope && s.Config != nil {
+			s.scopeConfig = s.Config
+		}
+		s.Target = target
+		s.Config = merged
+		return nil
 	}
 	if s.scopeConfig == nil {
 		s.scopeConfig = s.Config
 	}
+	s.Target = target
 	s.Config = s.scopeConfig
 	return nil
 }
 
-func (s *Session) rebuildOverlayConfig() error {
-	base := s.scopeConfig
+func (s *Session) previewOverlay() (*config.Config, error) {
+	if err := s.ensureScopeRaw(); err != nil {
+		return nil, err
+	}
+	return config.MergeOverlayOnRaw(s.scopeRaw, s.overlayRaw)
+}
+
+func (s *Session) ensureScopeRaw() error {
+	if s.scopeRaw != nil {
+		return nil
+	}
+	raw, err := config.LoadScopeDocument(true)
+	if err == nil {
+		s.scopeRaw = raw
+		return nil
+	}
+	base := s.scopeBuffer()
 	if base == nil {
 		base = s.existing
 	}
-	merged, err := config.MergeScopeAndOverlay(base, s.overlayRaw)
+	encoded, encErr := config.DocumentFromConfig(base)
+	if encErr != nil {
+		return err
+	}
+	s.scopeRaw = encoded
+	return nil
+}
+
+func (s *Session) rebuildOverlayConfig() error {
+	merged, err := s.previewOverlay()
 	if err != nil {
 		return err
 	}
@@ -148,16 +184,22 @@ func (s *Session) noteOverride(path []string, value any) {
 
 // RestoreInherit deletes an overlay key and refreshes the effective view.
 func (s *Session) RestoreInherit(path ...string) error {
-	if s.overlayRaw == nil {
-		s.overlayRaw = map[string]any{}
+	if err := s.ensureScopeRaw(); err != nil {
+		return err
 	}
-	config.OverlayDelete(s.overlayRaw, path...)
+	candidate := config.CloneOverlay(s.overlayRaw)
 	if len(path) == 3 && path[0] == "review_stages" {
-		config.OverlayDelete(s.overlayRaw, "review_stages", path[2])
+		expandReviewStagesOverlay(candidate)
 	}
+	config.OverlayDelete(candidate, path...)
+	merged, err := config.MergeOverlayOnRaw(s.scopeRaw, candidate)
+	if err != nil {
+		return err
+	}
+	s.overlayRaw = candidate
 	s.OverlayDirty = true
 	if s.EditingOverlay() {
-		return s.rebuildOverlayConfig()
+		s.Config = merged
 	}
 	return nil
 }
@@ -216,10 +258,14 @@ func (s *Session) NoteModelOverride(field ModelField, value string) {
 }
 
 func (s *Session) expandOverlayReviewStages() {
-	if s.overlayRaw == nil {
+	expandReviewStagesOverlay(s.overlayRaw)
+}
+
+func expandReviewStagesOverlay(overlay map[string]any) {
+	if overlay == nil {
 		return
 	}
-	stages, ok := s.overlayRaw["review_stages"]
+	stages, ok := overlay["review_stages"]
 	if !ok {
 		return
 	}
@@ -235,7 +281,7 @@ func (s *Session) expandOverlayReviewStages() {
 	if err != nil {
 		return
 	}
-	s.overlayRaw["review_stages"] = normalized
+	overlay["review_stages"] = normalized
 }
 
 func (s *Session) scopeBuffer() *config.Config {
@@ -260,6 +306,9 @@ func (s *Session) saveScope() (string, error) {
 		s.existing = config.Clone(cfg)
 		s.scopeExisting = config.Clone(cfg)
 		s.scopeConfig = cfg
+		if raw, rawErr := config.DocumentFromConfig(cfg); rawErr == nil {
+			s.scopeRaw = raw
+		}
 		if !s.EditingOverlay() {
 			s.Config = cfg
 		}
