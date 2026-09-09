@@ -89,31 +89,8 @@ func (a *App) openOptionsAt(section string) {
 	spin.Spinner = spinner.Dot
 	spin.Style = lipgloss.NewStyle().Foreground(p.Accent).Background(p.Bg)
 	panel := &optionsPanel{app: a, spinner: spin, initial: section}
-	panel.detectOverlayNotice()
 	a.Options = panel
-	if _, err := config.Load(false); err != nil {
-		panel.loadErr = err.Error()
-		return
-	}
-	if a.Session != nil {
-		panel.session = a.Session
-		if section == "" {
-			panel.openRoot()
-		} else {
-			panel.dispatch(section)
-		}
-		return
-	}
 	panel.requestSession()
-}
-
-func (p *optionsPanel) detectOverlayNotice() {
-	path, err := config.OverlayPath("")
-	if err != nil || path == "" {
-		p.overlayNotice = ""
-		return
-	}
-	p.overlayNotice = t("tui.overlay_notice")
 }
 
 // Init returns the command to run when the panel starts (the loading spinner or the form initialization).
@@ -124,23 +101,46 @@ func (p *optionsPanel) Init() tea.Cmd {
 	return p.spinner.Tick
 }
 
+// newOptionsSession builds the editable options session. Tests replace this to skip agent probing.
+var newOptionsSession = menu.NewSession
+
 func (p *optionsPanel) requestSession() {
 	p.app.pendingWork = func() any {
-		if _, err := config.Load(false); err != nil {
-			return sessionResult{err: err}
-		}
-		existing, err := config.LoadScope(false)
-		if err != nil {
-			return sessionResult{err: err}
-		}
-		session, sessionErr := menu.NewSession(existing, true)
-		return sessionResult{session: session, err: sessionErr}
+		return loadOptionsSession()
 	}
 }
 
+func loadOptionsSession() sessionResult {
+	if _, err := config.Load(false); err != nil {
+		return sessionResult{err: err}
+	}
+	existing, err := config.LoadScope(true)
+	if err != nil {
+		return sessionResult{err: err}
+	}
+	overlayPath, overlayRaw, err := config.ReadOverlay("")
+	if err != nil {
+		return sessionResult{err: err}
+	}
+	session, sessionErr := newOptionsSession(existing, true)
+	if sessionErr != nil {
+		return sessionResult{err: sessionErr}
+	}
+	merged := existing
+	if overlayRaw != nil {
+		merged, err = config.ApplyOverlay(existing, overlayRaw)
+		if err != nil {
+			return sessionResult{err: err}
+		}
+	}
+	return sessionResult{session: session, overlayPath: overlayPath, merged: merged}
+}
+
 type sessionResult struct {
-	session *menu.Session
-	err     error
+	session     *menu.Session
+	overlayPath string
+	merged      *config.Config
+	err         error
 }
 
 type doctorResult struct {
@@ -173,10 +173,21 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	case sessionResult:
 		if result.err != nil {
 			panel.loadErr = result.err.Error()
+			a.Session = nil
+			panel.session = nil
+			panel.overlayNotice = ""
 			return nil
 		}
 		a.Session = result.session
 		panel.session = result.session
+		if result.merged != nil {
+			config.BindConfigLanguage(result.merged)
+		}
+		if result.overlayPath != "" {
+			panel.overlayNotice = t("tui.overlay_notice")
+		} else {
+			panel.overlayNotice = ""
+		}
 		if panel.initial != "" {
 			section := panel.initial
 			panel.initial = ""

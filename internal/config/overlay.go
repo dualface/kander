@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -174,6 +175,40 @@ func OverlayPath(cwd string) (string, error) {
 		return inspectOverlayCandidate(filepath.Join(main, OverlayFilename))
 	}
 	return walkOverlay(start)
+}
+
+// ReadOverlay returns the absolute project overlay path and decoded object for cwd.
+// The path is empty when no overlay file exists.
+func ReadOverlay(cwd string) (string, map[string]any, error) {
+	return readOverlay(cwd)
+}
+
+// ApplyOverlay returns the validated config of scope with overlay merged on top.
+// A nil overlay leaves the scope values unchanged.
+func ApplyOverlay(scope *Config, overlay map[string]any) (*Config, error) {
+	if scope == nil {
+		return nil, configErrorf("config.config_root_must_be_a_json_object")
+	}
+	if overlay == nil {
+		return Clone(scope), nil
+	}
+	encoded, err := json.Marshal(scope)
+	if err != nil {
+		return nil, configErrorfWrap(err, "config.failed_to_read_config_2", err.Error())
+	}
+	raw, err := decodeJSON(encoded)
+	if err != nil {
+		return nil, err
+	}
+	obj, ok := raw.(map[string]any)
+	if !ok {
+		return nil, configErrorf("config.config_root_must_be_a_json_object")
+	}
+	merged, err := mergeOverlayRaw(obj, overlay)
+	if err != nil {
+		return nil, err
+	}
+	return Validate(merged)
 }
 
 func readOverlay(cwd string) (string, map[string]any, error) {

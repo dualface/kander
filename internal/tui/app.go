@@ -530,7 +530,9 @@ func (a *App) adjustColumns(delta int) {
 		return
 	}
 	// The preference already reached disk, so the cached baseline of the options session is synced, otherwise the next save would blame another process for the change.
-	a.Session.SyncTUI(written, true)
+	if a.Session != nil {
+		a.Session.SyncTUI(written, true)
+	}
 	a.PrefsError = ""
 }
 

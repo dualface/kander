@@ -103,7 +103,6 @@ func TestScreensFillBackground(t *testing.T) {
 			expectFilled(t, "start notice", popup)
 
 			options := fillProbeApp(t, theme, width, height)
-			options.Session = newTestSession(t)
 			options.openOptions()
 			if options.Options != nil {
 				expectFilled(t, "options panel", options.View())

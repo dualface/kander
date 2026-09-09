@@ -94,6 +94,45 @@ func TestNewTestSessionForcesTemporaryConfig(t *testing.T) {
 	}
 }
 
+func useTestOptionsSession(t *testing.T) {
+	t.Helper()
+	original := newOptionsSession
+	newOptionsSession = func(existing *config.Config, _ bool) (*menu.Session, error) {
+		return menu.NewSessionForTest(existing)
+	}
+	t.Cleanup(func() { newOptionsSession = original })
+}
+
+func runOptionsLoad(t *testing.T, app *App) {
+	t.Helper()
+	if app.pendingWork == nil {
+		t.Fatal("openOptions should reload from disk")
+	}
+	work := app.pendingWork
+	app.pendingWork = nil
+	cmd := app.applyWork(work())
+	if app.Options == nil {
+		t.Fatal("options panel")
+	}
+	if app.Options.loadErr != "" {
+		return
+	}
+	if cmd != nil {
+		pumpPanel(app.Options, cmd)
+	}
+}
+
+func finishOptionsLoad(t *testing.T, app *App) {
+	t.Helper()
+	runOptionsLoad(t, app)
+	if app.Options.loadErr != "" {
+		t.Fatalf("load: %s", app.Options.loadErr)
+	}
+	if app.Options.session == nil {
+		t.Fatal("session")
+	}
+}
+
 func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string
@@ -112,6 +151,7 @@ func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 				}
 			}
 			app.openOptions()
+			runOptionsLoad(t, app)
 			if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil || app.Options.session != nil {
 				t.Fatal("Load failure must stay on the error frame without opening the form")
 			}
@@ -136,8 +176,10 @@ func TestOpenOptionsRequiresCompleteConfig(t *testing.T) {
 
 func TestReopenOptionsRequiresCompleteConfig(t *testing.T) {
 	app := newPanelApp(t)
-	app.Session = newTestSession(t)
+	_ = newTestSession(t)
+	useTestOptionsSession(t)
 	app.openOptions()
+	finishOptionsLoad(t, app)
 	if app.Options == nil || app.Options.form == nil || app.Options.loadErr != "" {
 		t.Fatal("valid config should open the form")
 	}
@@ -150,6 +192,7 @@ func TestReopenOptionsRequiresCompleteConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	app.openOptions()
+	runOptionsLoad(t, app)
 	if app.Options == nil || app.Options.loadErr == "" || app.Options.form != nil {
 		t.Fatal("reopen after a broken config must stay on the error frame")
 	}
@@ -160,8 +203,10 @@ func TestReopenOptionsRequiresCompleteConfig(t *testing.T) {
 
 func TestOpenOptionsFromBoardKey(t *testing.T) {
 	app := newPanelApp(t)
-	app.Session = newTestSession(t)
+	_ = newTestSession(t)
+	useTestOptionsSession(t)
 	app.HandleKey("o")
+	finishOptionsLoad(t, app)
 	if app.Options == nil {
 		t.Fatal("o should open the options panel")
 	}
@@ -172,8 +217,10 @@ func TestOpenOptionsFromBoardKey(t *testing.T) {
 
 func TestOpenOptionsAtInterface(t *testing.T) {
 	app := newPanelApp(t)
-	app.Session = newTestSession(t)
+	_ = newTestSession(t)
+	useTestOptionsSession(t)
 	app.openOptionsAt(sectionInterface)
+	finishOptionsLoad(t, app)
 	if app.Options == nil || app.Options.current != sectionInterface {
 		t.Fatal("panel should start in the interface section")
 	}
@@ -735,12 +782,18 @@ func TestOptionsPanelShowsOverlayNotice(t *testing.T) {
 	dir := t.TempDir()
 	writeTempOverlay(t, dir, map[string]any{"kanban_agent": "claude"})
 	t.Chdir(dir)
-	_, panel := openPanel(t)
-	panel.detectOverlayNotice()
-	_, view := panel.view()
+	app := newPanelApp(t)
+	_ = newTestSession(t)
+	useTestOptionsSession(t)
+	app.openOptions()
+	finishOptionsLoad(t, app)
+	if !strings.Contains(app.Options.overlayNotice, ".kander-config.json") {
+		t.Fatalf("missing overlay notice text: %q", app.Options.overlayNotice)
+	}
+	_, view := app.Options.view()
 	plain := ansi.Strip(view)
-	if !strings.Contains(plain, ".kander-config") {
-		t.Fatalf("missing overlay notice:\n%s", plain)
+	if !strings.Contains(plain, "scope config") {
+		t.Fatalf("overlay notice not rendered:\n%s", plain)
 	}
 }
 

@@ -10,10 +10,7 @@ import (
 )
 
 func TestDoctorSyncPreservesPendingSettings(t *testing.T) {
-	app := newPanelApp(t)
-	app.Session = newTestSession(t)
-	app.openOptions()
-	panel := app.Options
+	app, panel := openPanel(t)
 	panel.dirty = true
 	panel.session.Config.Language = "en"
 	panel.session.Config.Models.ReviewRoles["PM"]["model"] = "pending-model"
@@ -41,10 +38,7 @@ func TestDoctorInstallDecision(t *testing.T) {
 			t.Setenv("USERPROFILE", home)
 			t.Setenv("KANDER_CONFIG", filepath.Join(home, "config.json"))
 			t.Setenv("PATH", t.TempDir())
-			app := newPanelApp(t)
-			app.Session = newTestSession(t)
-			app.openOptions()
-			panel := app.Options
+			app, panel := openPanel(t)
 			tools := menu.TerminalTools{}
 			if action == "available" {
 				tools.Tmux.Path = "tmux"

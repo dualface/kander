@@ -415,6 +415,30 @@ func TestConfiguredLanguageUsesOverlay(t *testing.T) {
 	}
 }
 
+func TestApplyOverlayMergesLanguageWithoutMutatingScope(t *testing.T) {
+	scope := DefaultConfig()
+	scope.WelcomeComplete = true
+	scope.Language = "en"
+	scope.KanbanAgent = "codex"
+	merged, err := ApplyOverlay(scope, map[string]any{"language": "ja", "kanban_agent": "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merged.Language != "ja" || merged.KanbanAgent != "claude" {
+		t.Fatalf("merged lang=%s agent=%s", merged.Language, merged.KanbanAgent)
+	}
+	if scope.Language != "en" || scope.KanbanAgent != "codex" {
+		t.Fatalf("scope mutated: lang=%s agent=%s", scope.Language, scope.KanbanAgent)
+	}
+	cloned, err := ApplyOverlay(scope, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cloned.Language != "en" || cloned == scope {
+		t.Fatal("nil overlay should clone the scope")
+	}
+}
+
 func TestFormatConfigLinesIncludesOverlayPath(t *testing.T) {
 	setupHome(t)
 	root := t.TempDir()
