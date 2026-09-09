@@ -156,6 +156,9 @@ func TestSaveOverlayCreatesSparseFileAndDeletesWhenEmpty(t *testing.T) {
 	if _, err := SaveOverlayIfUnchanged(path, overlay, map[string]any{}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Fatal("overlay save left a lock sidecar in the project root")
+	}
 	raw, err := ReadOverlayFile(path)
 	if err != nil {
 		t.Fatal(err)

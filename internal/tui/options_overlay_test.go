@@ -192,3 +192,82 @@ func TestScopeChromeFitsNarrowScreen(t *testing.T) {
 		t.Fatalf("narrow view dropped overlay path:\n%s", plain)
 	}
 }
+
+func TestSaveAndApplyPersistsBothDirtyTabs(t *testing.T) {
+	_, panel := openPanel(t)
+	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	panel.session.SetLanguage("ja")
+	panel.markDirty()
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	panel.session.SetLauncher("foreground")
+	panel.markDirty()
+	panel.save()
+	if panel.session.HasUnsaved() {
+		t.Fatal("save-and-apply left a dirty tab")
+	}
+	raw, err := config.ReadOverlayFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw["launcher"] != "foreground" {
+		t.Fatalf("overlay %#v", raw)
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.Language != "ja" {
+		t.Fatalf("scope language=%s", scopeCfg.Language)
+	}
+}
+
+func TestRestoreTUIInheritRevertsAppTheme(t *testing.T) {
+	app, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	inherited := panel.session.Config.TUI.Theme
+	override := "light"
+	if inherited == "light" {
+		override = "dark"
+	}
+	app.Theme = override
+	panel.session.SetTUIField("theme", override)
+	if err := panel.session.RestoreInherit("tui", "theme"); err != nil {
+		t.Fatal(err)
+	}
+	panel.syncAppFromSession()
+	if panel.session.FieldOverridden("tui", "theme") {
+		t.Fatal("theme still overridden")
+	}
+	if app.Theme != inherited || panel.session.Config.TUI.Theme != inherited {
+		t.Fatalf("app theme=%s effective=%s inherited=%s", app.Theme, panel.session.Config.TUI.Theme, inherited)
+	}
+}
+
+func TestMouseClickAccountsForScopeChrome(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	panel.view()
+	if panel.chromeLines < 1 {
+		t.Fatal("expected scope chrome")
+	}
+	formLines := panel.currentBodyLines()
+	lo, _, ok := focusRange(formLines)
+	if !ok {
+		t.Fatal("no focused row")
+	}
+	target := lo + 2
+	if target >= len(formLines) {
+		t.Skip("popup too short for this assertion")
+	}
+	pumpPanel(panel, panel.HandleMouse(panel.bodyX+1, panel.bodyY+panel.chromeLines+target, mouseBtn1Clicked))
+	moved, _, ok := focusRange(panel.currentBodyLines())
+	if !ok || moved != target {
+		t.Fatalf("click through chrome should focus form row %d, focus is %d", target, moved)
+	}
+}

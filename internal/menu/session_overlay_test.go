@@ -186,3 +186,71 @@ func TestProjectInstallSaveDoesNotWriteScopeFile(t *testing.T) {
 		t.Fatalf("overlay %#v", raw)
 	}
 }
+
+func TestSaveAllDirtyWritesBothTabs(t *testing.T) {
+	session, overlay := tempOverlaySession(t, config.ModeGlobal)
+	session.SetLanguage("ja")
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	session.SetLauncher("foreground")
+	if _, err := session.SaveAllDirty(); err != nil {
+		t.Fatal(err)
+	}
+	if session.HasUnsaved() {
+		t.Fatal("explicit save left a dirty tab")
+	}
+	scopeCfg, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scopeCfg.Language != "ja" {
+		t.Fatalf("scope language=%s", scopeCfg.Language)
+	}
+	raw, err := config.ReadOverlayFile(overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if raw["launcher"] != "foreground" {
+		t.Fatalf("overlay %#v", raw)
+	}
+	if raw["language"] != nil {
+		t.Fatal("scope language copied into overlay")
+	}
+}
+
+func TestGlobalEmptyAgentPathDoesNotDeleteOverlay(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	config.OverlaySet(session.overlayRaw, "/bin/true", "agents", "codex", "path")
+	session.OverlayDirty = true
+	if !session.FieldOverridden("agents", "codex", "path") {
+		t.Fatal("overlay path missing")
+	}
+	if err := session.SetTarget(config.TargetScope); err != nil {
+		t.Fatal(err)
+	}
+	session.NoteModelOverride(ModelField{Agent: "codex", field: "path"}, "")
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if !session.FieldOverridden("agents", "codex", "path") {
+		t.Fatal("global empty path deleted the project overlay key")
+	}
+}
+
+func TestRestoreFlatReviewStageDeletesLegacyKey(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	session.overlayRaw["review_stages"] = map[string]any{"PM": "skip"}
+	if err := session.RestoreInherit("review_stages", "large", "PM"); err != nil {
+		t.Fatal(err)
+	}
+	if session.FieldOverridden("review_stages", "large", "PM") {
+		t.Fatalf("flat review stage remained: %#v", session.overlayRaw)
+	}
+}

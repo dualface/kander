@@ -51,10 +51,23 @@ func (b *formBinding) applyRestores(p *optionsPanel) bool {
 		changed = true
 	}
 	if changed {
+		p.syncAppFromSession()
 		p.dirty = p.session.HasUnsaved()
 		p.rebuildAt("restored")
 	}
 	return changed
+}
+
+func (p *optionsPanel) syncAppFromSession() {
+	if p == nil || p.app == nil || p.session == nil || p.session.Config == nil {
+		return
+	}
+	tui := p.session.Config.TUI
+	p.app.Theme = tui.Theme
+	p.app.Columns = tui.Columns
+	p.app.MinColumnWidth = tui.MinColumnWidth
+	p.app.RefreshSecs = tui.Refresh
+	p.app.Model.Single = tui.Single
 }
 
 func formatBool(flag bool) string {

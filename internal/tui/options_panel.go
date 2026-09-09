@@ -73,6 +73,7 @@ type optionsPanel struct {
 	// overlayNotice is kept for tests that still call detectOverlayNotice.
 	overlayNotice string
 	tabHits       []tabHit
+	chromeLines   int
 
 	// The geometry and body lines of the most recent render, for mouse hit testing.
 	box        popupBox
@@ -600,7 +601,7 @@ func (p *optionsPanel) save() {
 		p.showReport(t("tui.save_failed"), finishLines, err.Error())
 		return
 	}
-	path, err := p.session.Save()
+	path, err := p.session.SaveAllDirty()
 	if err != nil {
 		p.showReport(t("tui.save_failed"), finishLines, err.Error())
 		return

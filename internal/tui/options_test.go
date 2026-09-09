@@ -505,10 +505,10 @@ func TestMouseClickFocusesRow(t *testing.T) {
 		t.Fatal("no focused row")
 	}
 	target := lo + 2
-	if target >= len(panel.bodyLines) {
+	if target >= len(panel.currentBodyLines()) {
 		t.Skip("popup too short for this assertion")
 	}
-	pumpPanel(panel, panel.HandleMouse(panel.bodyX+1, panel.bodyY+target, mouseBtn1Clicked))
+	pumpPanel(panel, panel.HandleMouse(panel.bodyX+1, panel.bodyY+panel.chromeLines+target, mouseBtn1Clicked))
 	moved, _, ok := focusRange(panel.currentBodyLines())
 	if !ok || moved != target {
 		t.Fatalf("click should focus row %d, focus is %d", target, moved)

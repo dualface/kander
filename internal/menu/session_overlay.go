@@ -52,11 +52,6 @@ func (s *Session) FormatInherited(value string) string {
 	return config.Text("tui.inherited_value", s.InheritPrefix(), value)
 }
 
-// RestoreInheritLabel is the restore-inherit control copy for one field.
-func (s *Session) RestoreInheritLabel(value string) string {
-	return config.Text("tui.restore_inherit", s.InheritPrefix(), value)
-}
-
 func (s *Session) initOverlayState() {
 	s.Target = config.TargetScope
 	s.InstallMode = config.ModeGlobal
@@ -90,7 +85,8 @@ func (s *Session) loadOverlayContext() error {
 			return err
 		}
 		s.overlayRaw = raw
-		s.overlayExisting = config.CloneOverlay(raw)
+		s.expandOverlayReviewStages()
+		s.overlayExisting = config.CloneOverlay(s.overlayRaw)
 	}
 	if paths.Mode == config.ModeProject {
 		return s.SetTarget(config.TargetOverlay)
@@ -103,7 +99,8 @@ func (s *Session) AttachOverlay(mode config.Mode, loc config.OverlayLocation, ra
 	s.InstallMode = mode
 	s.OverlayLocation = loc
 	s.overlayRaw = config.CloneOverlay(raw)
-	s.overlayExisting = config.CloneOverlay(raw)
+	s.expandOverlayReviewStages()
+	s.overlayExisting = config.CloneOverlay(s.overlayRaw)
 	if mode == config.ModeProject {
 		return s.SetTarget(config.TargetOverlay)
 	}
@@ -157,6 +154,9 @@ func (s *Session) RestoreInherit(path ...string) error {
 		s.overlayRaw = map[string]any{}
 	}
 	config.OverlayDelete(s.overlayRaw, path...)
+	if len(path) == 3 && path[0] == "review_stages" {
+		config.OverlayDelete(s.overlayRaw, "review_stages", path[2])
+	}
 	s.OverlayDirty = true
 	if s.EditingOverlay() {
 		return s.rebuildOverlayConfig()
@@ -202,7 +202,11 @@ func (s *Session) NoteModelOverride(field ModelField, value string) {
 	switch field.field {
 	case "path", "process_name":
 		if value == "" {
-			_ = s.RestoreInherit("agents", field.Agent, field.field)
+			if s.EditingOverlay() {
+				_ = s.RestoreInherit("agents", field.Agent, field.field)
+			} else {
+				s.noteOverride([]string{"agents", field.Agent, field.field}, value)
+			}
 			return
 		}
 		s.noteOverride([]string{"agents", field.Agent, field.field}, value)
@@ -236,15 +240,60 @@ func (s *Session) expandOverlayReviewStages() {
 	s.overlayRaw["review_stages"] = normalized
 }
 
+func (s *Session) scopeBuffer() *config.Config {
+	if s != nil && s.scopeConfig != nil {
+		return s.scopeConfig
+	}
+	return s.Config
+}
+
 func (s *Session) saveScope() (string, error) {
-	path, err := config.SaveIfUnchanged(s.Config, s.existing)
+	cfg := s.scopeBuffer()
+	if cfg == nil {
+		return "", nil
+	}
+	baseline := s.scopeExisting
+	if baseline == nil {
+		baseline = s.existing
+	}
+	path, err := config.SaveIfUnchanged(cfg, baseline)
 	if err == nil {
-		s.existing = config.Clone(s.Config)
-		s.scopeExisting = config.Clone(s.Config)
-		s.scopeConfig = s.Config
+		s.existing = config.Clone(cfg)
+		s.scopeExisting = config.Clone(cfg)
+		s.scopeConfig = cfg
+		if !s.EditingOverlay() {
+			s.Config = cfg
+		}
 		s.ScopeDirty = false
 	}
 	return path, err
+}
+
+// SaveAllDirty writes every unpublished tab. Save still writes only the active tab
+// so a section submit on Project cannot copy merged values into the scope file.
+func (s *Session) SaveAllDirty() (string, error) {
+	if s == nil {
+		return "", nil
+	}
+	var last string
+	if s.ScopeDirty {
+		path, err := s.saveScope()
+		if err != nil {
+			return last, err
+		}
+		last = path
+	}
+	if s.OverlayDirty {
+		path, err := s.saveOverlay()
+		if err != nil {
+			return last, err
+		}
+		last = path
+	}
+	if last != "" {
+		return last, nil
+	}
+	return s.Save()
 }
 
 func (s *Session) saveOverlay() (string, error) {

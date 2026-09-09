@@ -69,14 +69,11 @@ func (s *Session) SyncTUI(value config.TUI, persisted bool) {
 	if s == nil {
 		return
 	}
-	if s.EditingOverlay() {
-		return
-	}
-	if s.Config != nil {
-		s.Config.TUI = value
-	}
 	if s.scopeConfig != nil {
 		s.scopeConfig.TUI = value
+	}
+	if !s.EditingOverlay() && s.Config != nil {
+		s.Config.TUI = value
 	}
 	if persisted && s.existing != nil {
 		s.existing.TUI = value

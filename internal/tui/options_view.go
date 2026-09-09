@@ -133,6 +133,7 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	}
 	p.syncFormTheme(palette)
 	notice, noticeLines := p.renderScopeChrome(palette, width)
+	p.chromeLines = noticeLines
 	if notice == "" && p.overlayNotice != "" {
 		notice = styleFor("popup-dim", palette).Render(clipText(p.overlayNotice, width)) + "\n"
 		noticeLines = 1
@@ -312,7 +313,7 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 	if x < p.bodyX || x >= p.bodyX+p.bodyWidth || y < p.bodyY || y >= p.bodyY+p.bodyHeight {
 		return nil
 	}
-	target := y - p.bodyY
+	target := y - p.bodyY - p.chromeLines
 	lines := p.currentBodyLines()
 	if target < 0 || target >= len(lines) {
 		return nil

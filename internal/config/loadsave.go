@@ -224,6 +224,7 @@ func withConfigLock(path string, fn func() error) error {
 	operationErr := fn()
 	unlockErr := lock.Unlock()
 	closeErr := lockFile.Close()
+	removeErr := os.Remove(abs + ".lock")
 	if operationErr != nil {
 		return operationErr
 	}
@@ -232,6 +233,9 @@ func withConfigLock(path string, fn func() error) error {
 	}
 	if closeErr != nil {
 		return wrapSaveError(path, closeErr)
+	}
+	if removeErr != nil && !os.IsNotExist(removeErr) {
+		return wrapSaveError(path, removeErr)
 	}
 	return nil
 }
