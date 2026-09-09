@@ -29,24 +29,18 @@ func takeoverError(id string, args ...any) error {
 	return &notify.Error{Message: config.Text(id, args...)}
 }
 
-var agentExitCommands = map[string]string{
-	"claude": "/exit",
-	"codex":  "/exit",
-	"grok":   "/quit",
-	"cursor": "/quit",
-}
-
-// AgentExitCommand selects the exit command of the configured compatible dialect.
+// AgentExitCommand reads exit_command from the resolved agent definition,
+// including dialect inheritance. An omitted or empty value is refused so
+// dismiss keeps the container.
 func AgentExitCommand(agent string) (string, error) {
 	definition, err := config.LoadAgent(agent)
 	if err != nil {
 		return "", err
 	}
-	cmd, ok := agentExitCommands[definition.Dialect]
-	if !ok {
-		return "", takeoverError("launch.unsupported_agent", agent)
+	if definition.ExitCommand == nil || *definition.ExitCommand == "" {
+		return "", takeoverError("takeover.agent_exit_command_missing", agent)
 	}
-	return cmd, nil
+	return *definition.ExitCommand, nil
 }
 
 func herdrFailureDetail(res probe.Result) string {

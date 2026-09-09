@@ -508,7 +508,7 @@ func TestProjectInstallPathsRejectsSymlinkTarget(t *testing.T) {
 
 func TestCursorIsAnExecutionAndReviewAgent(t *testing.T) {
 	setupHome(t)
-	if !contains(ExecutionAgents, "cursor") || !contains(ReviewAgents, "cursor") {
+	if !contains(ExecutionAgents, "cursor") || !HasReviewTemplate(nil, "cursor") {
 		t.Fatal("cursor missing")
 	}
 	if AgentExecutableName("cursor") != "cursor-agent" {

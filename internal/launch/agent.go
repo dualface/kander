@@ -25,7 +25,10 @@ func launchAgent(
 	var createdTab, createdWindow string
 	sendAttempted := false
 	fail := func(err error) error {
-		if sendAttempted && len(durable) > 0 && durable[0] {
+		// Pane delivery fails before the prompt is sent (blocked or ready
+		// timeout). That outcome is known, so close the container even on a
+		// durable dispatch instead of leaving a stuck tab and an unrolled card.
+		if sendAttempted && len(durable) > 0 && durable[0] && plan.PromptDelivery.Mode != "pane" {
 			return &LaunchFailure{Err: err, DeliveryUnknown: true}
 		}
 		var closeErr string
@@ -47,6 +50,11 @@ func launchAgent(
 	if err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
+	paneDelivery := plan.PromptDelivery.Mode == "pane"
+	locateNow := location
+	if paneDelivery {
+		locateNow = nil
+	}
 	if plan.Launcher == "herdr" {
 		tab, pane, err := herdrCreateTab(plan.HerdrBin, plan.HerdrWorkspace, filepath.Dir(root), name)
 		if err != nil {
@@ -57,14 +65,24 @@ func launchAgent(
 			return LaunchOutcome{}, fail(err)
 		}
 		outcome := LaunchOutcome{Tab: tab, Pane: pane}
-		if location != nil {
-			if err := location(outcome); err != nil {
+		if locateNow != nil {
+			if err := locateNow(outcome); err != nil {
 				return LaunchOutcome{}, fail(err)
 			}
 		}
 		sendAttempted = true
 		if err := herdrPaneRun(plan.HerdrBin, pane, command); err != nil {
 			return LaunchOutcome{}, fail(err)
+		}
+		if paneDelivery {
+			if err := completePaneDelivery(plan, outcome); err != nil {
+				return LaunchOutcome{}, fail(err)
+			}
+			if location != nil {
+				if err := location(outcome); err != nil {
+					return LaunchOutcome{}, fail(err)
+				}
+			}
 		}
 		if agentSession != nil {
 			warn := plan.warning
@@ -102,14 +120,24 @@ func launchAgent(
 		_ = tmuxCapture(plan.Tmux, "set-option", "-t", plan.Session, projectSessionOpt, plan.Project)
 	}
 	outcome := LaunchOutcome{Window: window, Pane: pane}
-	if location != nil {
-		if err := location(outcome); err != nil {
+	if locateNow != nil {
+		if err := locateNow(outcome); err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
 	}
 	sendAttempted = true
 	if err := tmuxStartPane(plan.Tmux, pane, command); err != nil {
 		return LaunchOutcome{}, fail(err)
+	}
+	if paneDelivery {
+		if err := completePaneDelivery(plan, outcome); err != nil {
+			return LaunchOutcome{}, fail(err)
+		}
+		if location != nil {
+			if err := location(outcome); err != nil {
+				return LaunchOutcome{}, fail(err)
+			}
+		}
 	}
 	if paneSession != nil {
 		sess, err := paneSession()

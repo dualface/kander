@@ -126,7 +126,7 @@ func (s *Session) prepare(configValid bool) error {
 	if firstExecution == "" && !s.existing.WelcomeComplete {
 		return errors.New(config.Text("menu.no_usable_agent_found_version_must_succeed_install_codex"))
 	}
-	for _, name := range config.ReviewAgents {
+	for _, name := range config.ReviewAgentNames(s.existing) {
 		if reviewerUsable(s.agents[name]) {
 			s.review = append(s.review, Choice{Value: name, Label: labels[name] + " (" + reviewerState(s.agents[name]).Version + ")"})
 		}
@@ -417,7 +417,7 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 		config.Text("menu.kanban_model", label, scaleLabel),
 		config.Text("menu.model", label, scaleLabel),
 		config.Text("menu.full_model_id_for_s", scaleLabel))}
-	if config.AgentFor(s.Config, agent).Dialect == "cursor" && config.AgentFor(s.Config, agent).Args == nil {
+	if !config.AgentSupportsEffort(s.Config, agent) {
 		return fields
 	}
 	return append(fields, s.kanbanModelField(agent, scale+"_effort",
@@ -459,7 +459,7 @@ func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
 		entry:  entry,
 		field:  "model",
 	}}
-	if reviewer == "cursor" {
+	if !config.ReviewModelSupportsEffort(s.Config, reviewer) {
 		return fields
 	}
 	return append(fields, ModelField{
@@ -545,6 +545,9 @@ func (s *Session) finish() error {
 	seen := map[string]struct{}{}
 	for _, selected := range config.ExecutionAgentsInUse(s.Config) {
 		target := install.AgentRulesTarget(selected, paths)
+		if target == "" {
+			continue
+		}
 		if _, ok := seen[target]; ok && target != "" {
 			continue
 		}
@@ -588,7 +591,7 @@ func (s *Session) Summary() []string {
 	lines = append(lines, config.Text("rules.modules")+": "+config.FormatRulesSummary(cfg.Rules))
 	for _, agent := range config.ExecutionAgentsInUse(cfg) {
 		entry := cfg.Models.Kanban[agent]
-		lines = append(lines, "  kanban "+agent+": "+config.FormatKanbanModelSummary(agent, entry))
+		lines = append(lines, "  kanban "+agent+": "+config.FormatKanbanModelSummary(s.Config, agent, entry))
 	}
 	seen := map[string]struct{}{}
 	for _, role := range config.ReviewRoles {
@@ -631,7 +634,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	for _, name := range config.AgentNames(existing) {
 		session.exec = append(session.exec, Choice{Value: name, Label: labels[name]})
 	}
-	for _, name := range config.ReviewAgents {
+	for _, name := range config.ReviewAgentNames(existing) {
 		session.review = append(session.review, Choice{Value: name, Label: labels[name]})
 	}
 	cfg := config.DefaultConfig()

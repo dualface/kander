@@ -65,7 +65,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 			cfg.KanbanAgents[scale] = selected
 		}
 	}
-	reviewer := choose(config.ReviewAgents, true)
+	reviewer := choose(config.ReviewAgentNames(cfg), true)
 	for _, role := range config.ReviewRoles {
 		selected := cfg.Reviewers[role]
 		if !reviewerUsable(agents[selected]) && reviewer != "" {

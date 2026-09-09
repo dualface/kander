@@ -73,7 +73,7 @@ kander review ...                                 # single review entry: KANDER-
 
 `kander config --json` prints the merged effective configuration. Without `--json` it prints the same summary, and when a project `.kander-config.json` exists it adds one line with that file's absolute path. `kander show` prints the current state and absolute path before the card body, so the card can be relocated before writing; `kander move` prints the new path after a successful move. `kander show --json` returns the committed `text`, `revision`, `operation_id` and `entry` location. `kander guard-write` is an advisory pre-write check: it exits 0 to allow and non-zero to reject, but the check and an external write are not atomic. It does not cover arbitrary shell commands, external tools, or internal writes. Agents must use `update` for card edits.
 
-`kander pick [task-id]` moves a `backlog/` card into `todo/` through the same gate as `kander move <task-id> todo`; the two are interchangeable. Without a task ID it lists the `backlog/` cards and asks which one to pick; automation passes the ID. The move options after the state name are described under "Entries and Documents" and "Durable Dispatch". After `kander review`, the words `plan`, `extend-plan`, `assign`, `disposition`, `map-legacy`, `aggregate`, `advance`, `close` and `progress` select an evidence subcommand; the optional reviewer argument accepts only the four reviewer names from `KANDER-REVIEW-RULES.md`.
+`kander pick [task-id]` moves a `backlog/` card into `todo/` through the same gate as `kander move <task-id> todo`; the two are interchangeable. Without a task ID it lists the `backlog/` cards and asks which one to pick; automation passes the ID. The move options after the state name are described under "Entries and Documents" and "Durable Dispatch". After `kander review`, the words `plan`, `extend-plan`, `assign`, `disposition`, `map-legacy`, `aggregate`, `advance`, `close` and `progress` select an evidence subcommand; the optional reviewer argument accepts any configured agent that defines a review template, as described in `KANDER-REVIEW-RULES.md` "Reviewer Selection".
 
 New writes use `@kander_session`, `@kander_project`, and `# kander-notify:`.
 
@@ -128,9 +128,9 @@ An explicit `--pane` override does no stale-address reverse lookup.
 
 **Configured Execution Agents**
 
-- The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, and session modes. Custom agents are execution-only; reviewer isolation and `*_REVIEW_BIN` remain independent.
-- Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used.
-- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
+- The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, session modes, and optional review templates. A custom agent may be a reviewer when it declares `args.review` and `review.*`. Built-in review executables still prefer `*_REVIEW_BIN` over the embedded `path`; a user `agents.<name>.path` overlay does not change built-in review. Custom reviewers use `review.path` and otherwise fall back to `path`. Built-in isolation stays on the definition; a custom reviewer's read-only posture is the author's responsibility.
+- Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used. `{session=}` keeps an empty session value instead of dropping the element. When `prompt_delivery.mode` is `pane`, the prompt is not appended to argv: after `pane run`, Kander waits for the agent TUI using the definition's `ready` / `blocked` marks (`blocked` is checked in parallel and wins immediately), then delivers the prompt with the same primitives as notify (herdr `agent prompt`, tmux `send-keys -l` plus a separate Enter).
+- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. `hook:<name>` names a registered Go hook that discovers or allocates a session when argv templates cannot express the CLI; the built-in names are listed in `docs/custom-agents.md`. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
 - tmux foreground checks use the configured process name, falling back to the executable basename. herdr still requires its own agent recognition.
 
 **Start Parameters and Metadata**
@@ -172,6 +172,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Cards without a `SESSION` record (not launched through `start`) cannot be `resume`d.
 - `start`, `resume`, and a `notify` that needs to recover a process write the full prompt to a UTF-8 temporary task file on all platforms, containing the task ID, fixed requirements, and the message body.
 - The agent command line receives only one instruction containing that absolute path.
+- When `prompt_delivery.mode` is `pane`, that instruction is not an argv element: it is delivered after the agent TUI is ready, as specified under Start Checks and Rollback.
 - The task file asks the agent to try to delete it when done; failure to delete or leftover files do not affect the result.
 - These files get no POSIX permission or Windows ACL check or tightening.
 - Native Windows prefers the agent `.exe`.
@@ -242,7 +243,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Before delivery, reuse the exact agent and session match of `notify`: herdr additionally requires `agent_status` to be `idle` or `done`; tmux additionally requires the pane to be alive, not in copy-mode, and with a matching foreground process.
 - The current tab or session/window of the validated pane must exactly equal the located container, and the container may contain only that pane.
 - When the pane has been moved or the container has other panes, reject before delivery; verify ownership again while waiting for exit and re-check the container topology before closing.
-- Claude/Codex receive `/exit`; Grok/Cursor receive `/quit`.
+- The pane receives the `exit_command` declared on the agent definition. An agent without that field is refused and the container is kept.
 - herdr uses `agent prompt`; tmux uses `send-keys -l` followed by a separate `Enter`.
 - Close the herdr tab or tmux window only after confirming the agent process has exited.
 - A tmux window that already disappeared with the agent counts as closed.
@@ -544,10 +545,13 @@ kander move <task-id> working --owner <agent>
   - `foreground`: all three standard streams are TTYs.
   - `console`: native Windows.
 - A failed precondition check does not claim.
+- An agent whose `prompt_delivery.mode` is `pane` is rejected before claiming when the resolved launcher is `foreground` or `console`; the card stays in `todo/`.
 - When process creation, tmux session, tmux window, herdr tab, herdr pane readiness wait, or `pane run` fails, restore the document and move back to `todo/`.
+- For `prompt_delivery.mode` `pane`, a second-stage TUI ready failure (`blocked` match, prompt-delivery rejection, or ready timeout) is the same class of failure: capture the pane output, close this invocation's tab/window, restore the document, and move back to `todo/`. Do not keep the container or write `WINDOW`/`SESSION` from that attempt. Failures that need a person to answer a dialog say to run that CLI once manually and then retry `kander start`; a pure ready timeout reports the captured pane output without that instruction.
 - A failed herdr readiness wait or `pane run` must also close the newly created tab; a failed Codex session discovery or pane session marker write on tmux/tmux-session must also close the newly created window.
 - Command text sent before the shell of a new tab takes over the terminal is discarded, so `pane run` must happen after the pane renders its first frame of output; the readiness wait has an upper bound, and a timeout is treated as failure.
 - tmux/tmux-session count as started only after session discovery and pane marker write succeed.
+- When `prompt_delivery.mode` is `pane`, tmux/tmux-session count as started only after prompt delivery succeeds and session discovery and pane marker write succeed.
 - The herdr success condition is in the best-effort clause later in this section.
 - foreground/console count as started once the process is created; a later exit does not roll back automatically.
 - On success, `console` prints the PID and returns immediately.
@@ -555,7 +559,9 @@ kander move <task-id> working --owner <agent>
 - `auto` must show the resolution result (`herdr` or `tmux`).
 
 - herdr counts as started once `pane run` succeeds; the subsequent session identity report and read-back are best-effort, failures only warn and do not enter the `LaunchFailure` tab close and card rollback path.
+- When `prompt_delivery.mode` is `pane`, herdr counts as started once `pane run` succeeds and prompt delivery succeeds.
 - The temporary task file of `start` contains only the task ID and fixed requirements; the agent command line receives only one instruction to read that file.
+- When `prompt_delivery.mode` is `pane`, that instruction is not an argv element: it is delivered after the agent TUI is ready.
 
   The executing agent first verifies the configuration through the entry, then reads this protocol, the card, and project rules, and prepares the actual working directory per the applicable flow.
 

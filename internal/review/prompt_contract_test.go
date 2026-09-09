@@ -1,10 +1,12 @@
 package review
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 )
 
@@ -111,11 +113,19 @@ func TestReviewerArgumentsNonClaudeOmitSystemPrompt(t *testing.T) {
 func mustReviewerArgs(t *testing.T, agent string) process.ProcessInvocation {
 	t.Helper()
 	runtime := t.TempDir()
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	settings, err := agentSettingsFor(agent, "PM")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.effort = "high"
+	settings.reviewHome = t.TempDir()
+	settings.model = "test-model"
 	ctx := reviewContext{
 		agent:    agent,
 		root:     t.TempDir(),
 		program:  process.AgentProgram{Path: agent},
-		settings: agentSettings{effort: "high", reviewHome: t.TempDir(), model: "test-model"},
+		settings: settings,
 	}
 	inv, _, err := reviewerArguments(ctx, runtime, runtime+"/output", runtime+"/prompt.txt")
 	if err != nil {

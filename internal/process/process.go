@@ -1,4 +1,5 @@
-// Package process resolves agent CLI entry points, writes UTF-8 task files, and builds executable process invocations.
+// Package process resolves agent CLI entry points, writes UTF-8 task files, builds executable process invocations,
+// and provides the declarative output parser and placeholder expander shared by review templates and terminal definitions.
 //
 // Task files get no POSIX permission or Windows ACL check; the agent is asked to delete one when it finishes, and a failed
 // deletion or a leftover file does not affect the result. Windows prefers the native .exe; when only .cmd/.bat exists it uses

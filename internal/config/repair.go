@@ -128,6 +128,15 @@ func repairValues(raw any) (*Config, error) {
 		defaults.Agents = definitions
 		customModelDefaults(definitions, &defaults.Models)
 	}
+	if rawReviewers, ok := asObject(provided["reviewers"]); ok {
+		probe := &Config{Agents: defaults.Agents}
+		for _, role := range ReviewRoles {
+			agent, _ := rawReviewers[role].(string)
+			if agent != "" && HasAgent(probe, agent) && !HasReviewTemplate(probe, agent) {
+				return nil, configErrorf("config.reviewer_missing_template", "reviewers."+role, agent)
+			}
+		}
+	}
 	if agent, err := validateChoice(provided["kanban_agent"], AgentNames(defaults), "kanban_agent"); err == nil {
 		defaults.KanbanAgent = agent
 		for _, scale := range TaskScales {

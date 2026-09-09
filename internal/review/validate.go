@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 )
 
@@ -104,7 +105,7 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 	if _, statErr := os.Stat(home); os.IsNotExist(statErr) {
 		homeMissing = true
 	}
-	if replay || agent == "cursor" && homeMissing {
+	if replay || settings.homePolicy == config.ReviewHomeOptional && homeMissing {
 		stateRoot = ""
 	} else {
 		if !dirReadableWritable(home) {

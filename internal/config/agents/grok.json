@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "path": "grok",
+  "process_name": "grok",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--permission-mode",
+      "bypassPermissions",
+      "--session-id",
+      "{session=}"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--permission-mode",
+      "bypassPermissions",
+      "--resume",
+      "{session=}"
+    ],
+    "review": [
+      "--cwd",
+      "{runtime}",
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--output-format",
+      "json",
+      "--permission-mode",
+      "dontAsk",
+      "--allow",
+      "Read",
+      "--allow",
+      "Grep",
+      "--tools",
+      "read_file,grep,list_dir",
+      "--disallowed-tools",
+      "Agent,run_terminal_command,search_tool,use_tool,web_search,web_fetch,search_replace,todo_write,scheduler_create,scheduler_delete,scheduler_list,monitor,workflow,enter_plan_mode,exit_plan_mode,ask_user_question,image_gen,image_edit,image_to_video,reference_to_video,write",
+      "--deny",
+      "Edit",
+      "--deny",
+      "Write",
+      "--deny",
+      "MCPTool(*)",
+      "--sandbox",
+      "read-only",
+      "--disable-web-search",
+      "--no-memory",
+      "--no-subagents",
+      "--no-plan",
+      "--verbatim",
+      "--prompt-file",
+      "{prompt_file}"
+    ]
+  },
+  "session": {
+    "mode": "generated"
+  },
+  "exit_command": "/quit",
+  "display_name": "Grok",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "review": {
+    "env": {
+      "GROK_HOME": "{home}"
+    },
+    "cwd": "root",
+    "home_env": "GROK_HOME",
+    "home_policy": "required",
+    "output_name": "output.json",
+    "inspection": "Use only read_file, grep, and list_dir to inspect code.",
+    "spawns_helpers": false,
+    "snapshot_spec": false,
+    "stdin": "instruction",
+    "output": {
+      "source": "stdout",
+      "parse": "json_field:text",
+      "success": [
+        {"json_field": "stopReason", "equals": "end_turn"}
+      ]
+    }
+  },
+  "rules_target": {
+    "global": ".grok/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "",
+  "small_model": "",
+  "large_effort": "xhigh",
+  "small_effort": "high",
+  "model": "",
+  "effort": "high"
+}

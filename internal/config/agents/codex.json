@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "path": "codex",
+  "process_name": "codex",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--config",
+      "model_reasoning_effort=\"{effort}\"",
+      "--dangerously-bypass-approvals-and-sandbox"
+    ],
+    "resume": [
+      "resume",
+      "--model",
+      "{model}",
+      "--config",
+      "model_reasoning_effort=\"{effort}\"",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "{session=}"
+    ],
+    "review": [
+      "exec",
+      "--cd",
+      "{root}",
+      "--model",
+      "{model}",
+      "--sandbox",
+      "read-only",
+      "--ephemeral",
+      "--config",
+      "model_reasoning_effort=\"{effort}\"",
+      "--config",
+      "web_search=\"live\"",
+      "--config",
+      "allow_login_shell=false",
+      "--output-last-message",
+      "{output}",
+      "-"
+    ]
+  },
+  "session": {
+    "mode": "hook:codex-rollout"
+  },
+  "exit_command": "/exit",
+  "display_name": "Codex",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "review": {
+    "env": {
+      "CODEX_HOME": "{home}"
+    },
+    "cwd": "root",
+    "home_env": "CODEX_HOME",
+    "home_policy": "required",
+    "output_name": "output.txt",
+    "inspection": "Use only read-only filesystem and shell operations needed to inspect code.",
+    "spawns_helpers": false,
+    "snapshot_spec": false,
+    "stdin": "instruction",
+    "output": {
+      "source": "file",
+      "parse": "raw"
+    }
+  },
+  "rules_target": {
+    "global": ".codex/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "gpt-5.6-sol",
+  "small_model": "gpt-5.6-sol",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "gpt-5.6-sol",
+  "effort": "high"
+}

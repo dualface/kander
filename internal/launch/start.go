@@ -63,6 +63,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
+	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
+		return result, err
+	}
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 	program, err := requireAgentProgram(agentName, cfg)
 	if err != nil {
@@ -72,14 +75,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	previous := map[string]struct{}{}
-	if config.AgentFor(cfg, agentName).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
-			for _, id := range sessions {
-				previous[id] = struct{}{}
-			}
-		}
-	}
+	previous := sessionDiscoverSnapshot(config.AgentFor(cfg, agentName).Session.Mode, entry.TaskID, plan.Launcher)
 	window := ""
 	if plan.Launcher == "foreground" || plan.Launcher == "console" {
 		window = plan.Launcher
@@ -112,7 +108,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	inv, err := launchInvocation(plan, *program, attachPrompt(&plan, args, prompt))
 	if err != nil {
 		return result, err
 	}
@@ -123,11 +119,15 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	name := windowName(entry, original)
 	paneCB := (func() (AgentSession, error))(nil)
 	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+		mode := config.AgentFor(cfg, agentName).Session.Mode
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
 				return session, nil
 			}
-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
+			if !config.SessionDiscoversAfterStart(mode) {
+				return session, nil
+			}
+			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous)
 			if err != nil {
 				return AgentSession{}, err
 			}

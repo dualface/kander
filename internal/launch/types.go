@@ -51,6 +51,8 @@ type LaunchPlan struct {
 	SessionExists  bool
 	HerdrBin       string
 	HerdrWorkspace string
+	PromptDelivery config.PromptDelivery
+	Prompt         string
 }
 
 // LaunchOutcome is the process or terminal address of one launch.

@@ -26,11 +26,11 @@ This file is the development contract for the Kander repository itself. The work
 | Package             | Responsibility                                                       |
 | ------------------- | -------------------------------------------------------------------- |
 | `internal/cli`      | Command-name and Runner registry, global `--lang`, argument parsing and dispatch |
-| `internal/config`   | Install scopes, optional project `.kander-config.json` overlay merge and sparse overlay writes, `config.json` schema/repair, read access for language/agent language/launcher/agents/models/rules/TUI |
+| `internal/config` | Install scopes, optional project `.kander-config.json` overlay merge and sparse overlay writes, `config.json` schema/repair, embedded execution-agent definitions under `internal/config/agents/` (`go:embed`, `schema_version` 1; user `agents.<name>` overlays them), read access for language/agent language/launcher/agents/models/rules/TUI |
 | `internal/version`  | Injected build version; String() returns it or `dev`                  |
 | `internal/i18n`     | go-i18n message catalogs and template rendering; does not depend on config, the language is passed in by the caller |
 | `internal/fs`       | POSIX no-follow and Windows handle/reparse/DACL/shared and exclusive locks |
-| `internal/process`  | Agent CLI resolution, UTF-8 task files, argv/env invocation construction |
+| `internal/process`  | Agent CLI resolution, UTF-8 task files, argv/env invocation construction, declarative output parsing and placeholder expansion |
 | `internal/board`    | Board location, revision/CAS/multi-file transaction recovery, journal pending/committed partitions and retention cleanup, controlled updates and lifecycle commands, review run/batch identity, originals, per-card publication indexes and integrity checks, dispatch intents, review-original bindings, epochs, wrap-up-only grants and atomic receipts, start attempts and success/rollback originals |
 | `internal/launch`   | start/resume, structured Start/PreviewStart entry points reused by CLI/TUI, takeover launches, liveness confirmation and version-based failure rollback; orchestration Git reconciliation one-way reuses review, dispatch's Git integration and exit-fact verification |
 | `internal/focus`    | Read-only consumption of card WINDOW, reusing probe to detect and switch herdr/tmux focus; called asynchronously by the TUI |
@@ -39,7 +39,7 @@ This file is the development contract for the Kander repository itself. The work
 | `internal/notify`   | notify direct delivery, busy/expiry decisions, resume recovery and revision-conflict handling |
 | `internal/takeover` | dismiss, and old-container cleanup after a successful resume takeover |
 | `internal/window`   | Card `WINDOW` write-back; reuses board transactions, stale rollback preserves newer records |
-| `internal/review`   | The single review gate of `kander review` and closed-batch historical Git verification |
+| `internal/review`   | The single review gate of `kander review` (invocation and parsing from agent definitions) and closed-batch historical Git verification |
 | `internal/flow`     | Read-only consumption of the options-session configuration, producing structured agent/model listings for execution and review stages; does not depend on TUI or menu |
 | `internal/tui`      | The terminal kanban for bare `kander` and the Huh options panel       |
 | `internal/menu`     | doctor/config, environment probing and repair, `menu.Session` shared with the options panel |
@@ -126,3 +126,4 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - [Orchestration checkpoints and recovery](docs/coordinator-recovery.md): coordinator epochs, CAS, snapshot reconciliation, originals and Git wrap-up evidence, recovery boundaries.
 - [Original reproduction acceptance mapping](docs/recovery-regressions.md): the 13 original bad behaviors, their owning regressions, and cross-module recovery acceptance.
 - [Custom execution agents](docs/custom-agents.md): executable names, process names, dialect/argv templates, session policies, and review boundaries.
+- [Output parsing](docs/output-parsing.md): declarative `source`/`format`/`select`/`parse`/`join`/`success`, line conditions, and `{name}` / `{{` `}}` placeholders.

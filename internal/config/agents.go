@@ -11,19 +11,26 @@ import (
 	"unicode"
 )
 
-// AgentDefinition overrides an execution agent only; reviewers retain their own read-only adapters.
-// The map key in Config.Agents is the stable agent name stored on task cards.
+// AgentDefinition is the user overlay of an execution agent. Built-in review
+// isolation stays on the embedded path for built-in names; custom agents may
+// declare args.review and review.* to act as reviewers. The map key in
+// Config.Agents is the stable agent name stored on task cards.
 type AgentDefinition struct {
-	Path        string                  `json:"path,omitempty"`
-	ProcessName string                  `json:"process_name,omitempty"`
-	Dialect     string                  `json:"dialect,omitempty"`
-	Args        *AgentArgs              `json:"args,omitempty"`
-	Session     *AgentSessionDefinition `json:"session,omitempty"`
+	SchemaVersion  int                     `json:"schema_version,omitempty"`
+	Path           string                  `json:"path,omitempty"`
+	ProcessName    string                  `json:"process_name,omitempty"`
+	Dialect        string                  `json:"dialect,omitempty"`
+	Args           *AgentArgs              `json:"args,omitempty"`
+	Session        *AgentSessionDefinition `json:"session,omitempty"`
+	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
+	Review         *AgentReview            `json:"review,omitempty"`
+	ExitCommand    *string                 `json:"exit_command,omitempty"`
 }
 
 type AgentArgs struct {
 	Start  []string `json:"start"`
 	Resume []string `json:"resume"`
+	Review []string `json:"review,omitempty"`
 }
 
 // Allocate is an argv array including the executable. Output is a plain ID or a
@@ -54,8 +61,9 @@ func AgentNames(cfg *Config) []string {
 
 func HasAgent(cfg *Config, name string) bool { return contains(AgentNames(cfg), name) }
 
-// AgentFor returns a detached definition with defaults resolved. The discovered
-// mode is internal to the Codex dialect and cannot be declared in JSON.
+// AgentFor returns a detached definition with defaults resolved. Session
+// mode and exit_command come from the named overlay, then the dialect's
+// embedded definition, then generated / unset.
 func AgentFor(cfg *Config, name string) AgentDefinition {
 	var d AgentDefinition
 	if cfg != nil {
@@ -70,17 +78,44 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 	if d.Dialect == "" && contains(ExecutionAgents, name) {
 		d.Dialect = name
 	}
-	if d.Session == nil {
-		mode := "generated"
-		switch d.Dialect {
-		case "codex":
-			mode = "discovered"
-		case "cursor":
-			mode = "allocated"
+	overlay := d
+	allowReviewInherit := contains(ExecutionAgents, name) || userDeclaredReviewTemplate(overlay)
+	if d.Args == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.Args = cloneArgs(&emb.Args)
+			if !allowReviewInherit && d.Args != nil {
+				d.Args.Review = nil
+			}
 		}
-		d.Session = &AgentSessionDefinition{Mode: mode}
-		if d.Dialect == "cursor" {
-			d.Session.Allocate = []string{d.Path, "create-chat"}
+	} else if d.Args.Review == nil && allowReviewInherit {
+		if emb, ok := embeddedByName(d.Dialect); ok && emb.Args.Review != nil {
+			d.Args.Review = append([]string{}, emb.Args.Review...)
+		}
+	}
+	if d.Review == nil && allowReviewInherit {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.Review = cloneReview(&emb.Review)
+		}
+	}
+	if d.PromptDelivery == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			pd := emb.PromptDelivery
+			d.PromptDelivery = clonePromptDelivery(&pd)
+		} else {
+			d.PromptDelivery = &PromptDelivery{Mode: "argv"}
+		}
+	}
+	if d.Session == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.Session = cloneSession(&emb.Session)
+		} else {
+			d.Session = &AgentSessionDefinition{Mode: "generated"}
+		}
+	}
+	if d.ExitCommand == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			cmd := emb.ExitCommand
+			d.ExitCommand = &cmd
 		}
 	}
 	return d
@@ -107,13 +142,15 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 		a := *d.Args
 		a.Start = append([]string{}, a.Start...)
 		a.Resume = append([]string{}, a.Resume...)
+		if a.Review != nil {
+			a.Review = append([]string{}, a.Review...)
+		}
 		d.Args = &a
 	}
-	if d.Session != nil {
-		s := *d.Session
-		s.Allocate = append([]string(nil), s.Allocate...)
-		d.Session = &s
-	}
+	d.Review = cloneReview(d.Review)
+	d.Session = cloneSession(d.Session)
+	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
+	d.ExitCommand = cloneExitCommand(d.ExitCommand)
 	return d
 }
 
@@ -133,6 +170,27 @@ func agentDefinitionError(name, detail string) error {
 }
 func validAgentText(s string) bool {
 	return strings.TrimSpace(s) != "" && strings.IndexFunc(s, unicode.IsControl) < 0
+}
+
+func validExitCommandText(s string) bool {
+	return strings.IndexFunc(s, unicode.IsControl) < 0
+}
+
+func cloneSession(src *AgentSessionDefinition) *AgentSessionDefinition {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	out.Allocate = append([]string(nil), src.Allocate...)
+	return &out
+}
+
+func cloneExitCommand(src *string) *string {
+	if src == nil {
+		return nil
+	}
+	v := *src
+	return &v
 }
 
 func validateAgentProgram(path string) bool {
@@ -175,12 +233,18 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				}
 			}
 		}
-		for _, key := range []string{"args", "session"} {
+		for _, key := range []string{"args", "session", "prompt_delivery", "review"} {
 			if v, exists := fields[key]; exists {
 				if _, ok := asObject(v); !ok {
 					return nil, agentDefinitionError(name, Text("config.agent_object"))
 				}
 			}
+		}
+		if d.SchemaVersion != 0 && d.SchemaVersion != embeddedAgentSchemaVersion {
+			return nil, agentDefinitionError(name, Text("config.agent_schema_version"))
+		}
+		if err := validatePromptDelivery(name, d.PromptDelivery); err != nil {
+			return nil, err
 		}
 		if d.Path != "" && !validateAgentProgram(d.Path) {
 			return nil, agentDefinitionError(name, Text("config.agent_path", d.Path))
@@ -203,9 +267,19 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				}
 			}
 		}
+		if v, exists := fields["exit_command"]; exists {
+			s, ok := v.(string)
+			if !ok || !validExitCommandText(s) {
+				return nil, agentDefinitionError(name, Text("config.agent_exit_command"))
+			}
+		}
 		if d.Session != nil {
 			s := d.Session
-			if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
+			if hookName, isHook := ParseSessionHook(s.Mode); isHook {
+				if _, ok := LookupSessionHook(s.Mode); !ok {
+					return nil, agentDefinitionError(name, Text("config.agent_session_hook", name, hookName))
+				}
+			} else if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
 				return nil, agentDefinitionError(name, Text("config.agent_session"))
 			}
 			if s.Mode == "allocated" {
@@ -225,9 +299,19 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 			}
 		}
 		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
-		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
-			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
-			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
+		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" {
+			inherited := ""
+			if emb, ok := embeddedByName(resolved.Dialect); ok {
+				inherited = emb.Session.Mode
+			}
+			// An allocation hook and an explicit allocator both supply the ID
+			// consumed by the inherited resume arguments.
+			compatibleAllocator := d.Session.Mode == "allocated" && SessionAllocatesBeforeStart(inherited)
+			if inherited != "" && d.Session.Mode != inherited && !compatibleAllocator {
+				if _, isHook := LookupSessionHook(inherited); isHook {
+					return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
+				}
+			}
 		}
 		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_session_required"))
@@ -235,25 +319,34 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		if d.Args != nil && resolved.Session.Mode != "none" && d.Args.Resume == nil {
 			return nil, agentDefinitionError(name, Text("config.agent_resume"))
 		}
+		if err := validateReviewDefinition(name, d); err != nil {
+			return nil, err
+		}
 		out[name] = d
 	}
 	return out, nil
 }
 
 func invalidPlaceholder(arg string) bool {
-	rest := strings.NewReplacer("{model}", "", "{effort}", "", "{session}", "").Replace(arg)
+	rest := strings.NewReplacer("{model}", "", "{effort}", "", "{session=}", "", "{session}", "").Replace(arg)
 	return strings.ContainsAny(rest, "{}")
 }
 
 // ExpandAgentArgs replaces text within individual argv elements, never shell text.
-// An empty placeholder removes its element and its immediately preceding literal flag.
+// An empty {model}, {effort}, or {session} removes its element and its immediately
+// preceding literal flag. {session=} always substitutes, including an empty value,
+// so a session flag can stay present when the id is not yet known.
 func ExpandAgentArgs(template []string, model, effort, session string) []string {
 	values := map[string]string{"{model}": model, "{effort}": effort, "{session}": session}
 	var out []string
 	for i, arg := range template {
 		omit := false
+		keepEmptySession := strings.Contains(arg, "{session=}")
 		for key, value := range values {
 			if value == "" && strings.Contains(arg, key) {
+				if key == "{session}" && keepEmptySession {
+					continue
+				}
 				omit = true
 			}
 		}
@@ -263,7 +356,18 @@ func ExpandAgentArgs(template []string, model, effort, session string) []string 
 			}
 			continue
 		}
-		out = append(out, strings.NewReplacer("{model}", model, "{effort}", effort, "{session}", session).Replace(arg))
+		out = append(out, strings.NewReplacer("{session=}", session, "{model}", model, "{effort}", effort, "{session}", session).Replace(arg))
+	}
+	return out
+}
+
+func RewriteKeepSession(template []string, dropEmpty bool) []string {
+	if !dropEmpty {
+		return template
+	}
+	out := append([]string{}, template...)
+	for i, arg := range out {
+		out[i] = strings.ReplaceAll(arg, "{session=}", "{session}")
 	}
 	return out
 }
@@ -282,7 +386,7 @@ func AgentWarnings(cfg *Config) []string {
 func customModelDefaults(definitions map[string]AgentDefinition, models *Models) {
 	for name, d := range definitions {
 		if contains(ExecutionAgents, name) {
-			if name == "cursor" && (d.Args != nil || d.Dialect != "" && d.Dialect != "cursor") {
+			if !embeddedSupportsEffort(name) && (d.Args != nil || d.Dialect != "" && d.Dialect != name) {
 				for _, key := range []string{"model", "large_effort", "small_effort"} {
 					value := ""
 					if key != "model" {
@@ -294,10 +398,19 @@ func customModelDefaults(definitions map[string]AgentDefinition, models *Models)
 			continue
 		}
 		fields := map[string]string{"model": "", "large_model": "", "small_model": "", "large_effort": "medium", "small_effort": "medium"}
-		if defaults := kanbanModelDefaults[d.Dialect]; defaults != nil && d.Args == nil {
-			fields = cloneStringMap(defaults)
+		if emb, ok := embeddedByName(d.Dialect); ok && d.Args == nil {
+			fields = cloneStringMap(emb.kanbanFields())
 		}
 		models.Kanban[name] = fields
+		if HasReviewTemplate(&Config{Agents: definitions}, name) {
+			if _, ok := models.Review[name]; !ok {
+				reviewFields := map[string]string{"model": "", "effort": "high"}
+				if emb, ok := embeddedByName(d.Dialect); ok {
+					reviewFields = cloneStringMap(emb.reviewFields())
+				}
+				models.Review[name] = reviewFields
+			}
+		}
 	}
 }
 

@@ -68,6 +68,9 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
+	if err := applyAgentDelivery(&plan, cfg, session.Agent); err != nil {
+		return ResumeLaunch{}, err
+	}
 	program, err := requireAgentProgram(session.Agent, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
@@ -96,7 +99,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	inv, err := launchInvocation(plan, *program, append(args, prompt))
+	inv, err := launchInvocation(plan, *program, attachPrompt(&plan, args, prompt))
 	if err != nil {
 		return ResumeLaunch{}, err
 	}

@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "path": "claude",
+  "process_name": "claude",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--dangerously-skip-permissions",
+      "--session-id",
+      "{session=}"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--dangerously-skip-permissions",
+      "--resume",
+      "{session=}"
+    ],
+    "review": [
+      "--print",
+      "--output-format",
+      "json",
+      "--permission-mode",
+      "bypassPermissions",
+      "--disallowedTools",
+      "Edit,Write",
+      "--model",
+      "{model}",
+      "--effort",
+      "{effort}",
+      "--append-system-prompt",
+      "Output contract: your final message is the complete report. It must already contain the analysis and the exact kander-findings fence. Write that one message and stop. Delete the task file before writing the final message; after that message, do not send any follow-up."
+    ]
+  },
+  "session": {
+    "mode": "generated"
+  },
+  "exit_command": "/exit",
+  "display_name": "Claude",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "review": {
+    "env": {
+      "CLAUDE_CONFIG_DIR": "{home}"
+    },
+    "cwd": "runtime",
+    "home_env": "CLAUDE_CONFIG_DIR",
+    "home_policy": "required",
+    "output_name": "output.json",
+    "inspection": "Use only read-only inspection: read, search, and shell commands that do not write. Never create, modify, or delete any file; the review gate fails if HEAD moves or the worktree is dirty.",
+    "spawns_helpers": false,
+    "snapshot_spec": true,
+    "stdin": "instruction",
+    "output": {
+      "source": "stdout",
+      "parse": "json_field:result",
+      "success": [
+        {"json_field": "type", "equals": "result"},
+        {"json_field": "subtype", "equals": "success"},
+        {"json_field": "is_error", "equals": false}
+      ]
+    }
+  },
+  "rules_target": {
+    "global": ".claude/CLAUDE.md",
+    "project": "CLAUDE.md"
+  },
+  "rules_integration": "claude-import",
+  "large_model": "opus",
+  "small_model": "opus",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "opus",
+  "effort": "high"
+}

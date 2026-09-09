@@ -83,14 +83,14 @@ func newAgentSession(agent string, program *process.AgentProgram, configs ...*co
 		cfg = configs[0]
 	}
 	definition := config.AgentFor(cfg, agent)
+	if config.SessionAllocatesBeforeStart(definition.Session.Mode) {
+		id, err := runSessionAllocateHook(definition.Session.Mode, program)
+		return AgentSession{Agent: agent, Reference: id}, err
+	}
 	switch definition.Session.Mode {
 	case "generated", "none":
 		return AgentSession{Agent: agent, Reference: newUUID()}, nil
 	case "allocated":
-		if definition.Dialect == "cursor" && (cfg == nil || cfg.Agents[agent].Session == nil) {
-			id, err := cursorCreateChat(program)
-			return AgentSession{Agent: agent, Reference: id}, err
-		}
 		id, err := allocateAgentSession(definition.Session)
 		return AgentSession{Agent: agent, Reference: id}, err
 	default:
@@ -157,8 +157,8 @@ func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*co
 	if requireResume && definition.Session.Mode == "none" {
 		return AgentSession{}, config.AgentResumeError(session.Agent)
 	}
-	if definition.Session.Mode == "discovered" && session.Reference == "" {
-		id, err := findCodexSession(taskID)
+	if config.SessionResolvesEmptyReference(definition.Session.Mode) && session.Reference == "" {
+		id, err := runSessionResolveHook(definition.Session.Mode, taskID)
 		if err != nil {
 			return AgentSession{}, err
 		}
@@ -307,6 +307,65 @@ func codexSessionsForTask(taskID string) ([]string, error) {
 	return sessions, nil
 }
 
+func runSessionAllocateHook(mode string, program *process.AgentProgram) (string, error) {
+	name, ok := config.ParseSessionHook(mode)
+	if !ok {
+		return "", launchError("launch.unsupported_agent", mode)
+	}
+	switch name {
+	case "cursor-create-chat":
+		return cursorCreateChat(program)
+	default:
+		return "", launchError("launch.unsupported_agent", name)
+	}
+}
+
+func runSessionResolveHook(mode, taskID string) (string, error) {
+	name, ok := config.ParseSessionHook(mode)
+	if !ok {
+		return "", launchError("launch.unsupported_agent", mode)
+	}
+	switch name {
+	case "codex-rollout":
+		return findCodexSession(taskID)
+	default:
+		return "", launchError("launch.unsupported_agent", name)
+	}
+}
+
+func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}) (string, error) {
+	name, ok := config.ParseSessionHook(mode)
+	if !ok {
+		return "", launchError("launch.unsupported_agent", mode)
+	}
+	switch name {
+	case "codex-rollout":
+		return discoverNewCodexSession(taskID, previous)
+	default:
+		return "", launchError("launch.unsupported_agent", name)
+	}
+}
+
+func sessionDiscoverSnapshot(mode, taskID, launcher string) map[string]struct{} {
+	previous := map[string]struct{}{}
+	if !config.SessionDiscoversAfterStart(mode) || (launcher != "tmux" && launcher != "tmux-session") {
+		return previous
+	}
+	name, ok := config.ParseSessionHook(mode)
+	if !ok {
+		return previous
+	}
+	switch name {
+	case "codex-rollout":
+		if sessions, err := codexSessionsForTask(taskID); err == nil {
+			for _, id := range sessions {
+				previous[id] = struct{}{}
+			}
+		}
+	}
+	return previous
+}
+
 func findCodexSession(taskID string) (string, error) {
 	sessions, err := codexSessionsForTask(taskID)
 	if err != nil {
@@ -367,65 +426,19 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 	}
 	// The model is picked per task scale; an empty scale model falls back to the shared "model" key of legacy configs.
 	modelID := config.KanbanModelFor(model, scale)
-	if definition.Args != nil {
-		template := definition.Args.Start
-		if resume {
-			template = definition.Args.Resume
-		}
-		reference := session.Reference
-		if definition.Session.Mode == "none" {
-			reference = ""
-		}
-		return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
-	}
-	agent = definition.Dialect
-	if agent == "cursor" {
-		var args []string
-		if modelID != "" {
-			args = append(args, "--model", modelID)
-		}
-		args = append(args, "--trust", "--force")
-		if definition.Session.Mode != "none" {
-			args = append(args, "--resume", session.Reference)
-		}
-		return args, nil
-	}
-	effortKey := scale + "_effort"
-	effort := model[effortKey]
-	var modelArgs []string
-	if modelID != "" {
-		modelArgs = []string{"--model", modelID}
-	}
-	switch agent {
-	case "codex":
-		options := append(append([]string{}, modelArgs...), "--config", `model_reasoning_effort="`+effort+`"`, "--dangerously-bypass-approvals-and-sandbox")
-		if resume {
-			return append(append([]string{"resume"}, options...), session.Reference), nil
-		}
-		return options, nil
-	case "claude":
-		flag := "--session-id"
-		if resume {
-			flag = "--resume"
-		}
-		args := append(modelArgs, "--effort", effort, "--dangerously-skip-permissions")
-		if definition.Session.Mode != "none" {
-			args = append(args, flag, session.Reference)
-		}
-		return args, nil
-	case "grok":
-		flag := "--session-id"
-		if resume {
-			flag = "--resume"
-		}
-		args := append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions")
-		if definition.Session.Mode != "none" {
-			args = append(args, flag, session.Reference)
-		}
-		return args, nil
-	default:
+	if definition.Args == nil {
 		return nil, launchError("launch.unsupported_agent", agent)
 	}
+	template := definition.Args.Start
+	if resume {
+		template = definition.Args.Resume
+	}
+	reference := session.Reference
+	if definition.Session.Mode == "none" {
+		reference = ""
+		template = config.RewriteKeepSession(template, true)
+	}
+	return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
 }
 
 func requireAgentProgram(agentName string, configs ...*config.Config) (*process.AgentProgram, error) {

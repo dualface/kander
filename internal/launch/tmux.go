@@ -305,11 +305,14 @@ func tmuxNotifyTarget(tmux, pane string, session AgentSession, timeout time.Dura
 	if facts.InMode != "0" {
 		return launchError("launch.tmux_pane_is_in_copy_mode", pane)
 	}
-	definition, err := config.LoadAgent(session.Agent)
+	cfg, err := loadEffective()
 	if err != nil {
 		return err
 	}
-	expected := definition.ProcessName
+	if !config.HasAgent(cfg, session.Agent) {
+		return launchError("launch.unsupported_agent", session.Agent)
+	}
+	expected := config.AgentFor(cfg, session.Agent).ProcessName
 	if facts.Command != expected {
 		return launchError(
 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),

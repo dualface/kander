@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
@@ -42,9 +43,17 @@ type agentSettings struct {
 	model                 string
 	effort                string
 	reviewHome            string
+	homePolicy            string
 	outputName            string
 	inspectionRules       string
 	spawnsHelperProcesses bool
+	snapshotSpec          bool
+	stdin                 string
+	cwd                   string
+	env                   map[string]string
+	reviewArgs            []string
+	output                process.OutputSpec
+	promptFiles           []config.ReviewPromptFile
 }
 
 type reviewContext struct {
@@ -59,8 +68,10 @@ type reviewContext struct {
 	taskSpec      string
 	reviewContext string
 	reviewed      string
-	program       process.AgentProgram
-	tempRoot      string
+	program         process.AgentProgram
+	tempRoot        string
+	instruction     string
+	promptFilePaths map[string]string
 	// reportLanguage is the config agent_language; the reviewer writes its report in it. Empty leaves the language unspecified.
 	reportLanguage string
 }
@@ -124,44 +135,21 @@ func userHome() string {
 }
 
 func agentSettingsFor(agent, role string) (agentSettings, error) {
-	home := userHome()
-	type def struct {
-		name, prefix, executable, defaultModel, reviewHome, homeError, output, inspection string
-		helpers                                                                           bool
+	cfg, err := config.Effective(nil)
+	if err != nil {
+		cfg = nil
 	}
-	definitions := map[string]def{
-		"codex": {
-			name: "Codex", prefix: "CODEX", executable: "codex", defaultModel: "gpt-5.6-sol",
-			reviewHome: getenvDefault("CODEX_HOME", filepath.Join(home, ".codex")),
-			homeError:  "CODEX_REVIEW_HOME", output: "output.txt",
-			inspection: "Use only read-only filesystem and shell operations needed to inspect code.",
-		},
-		"claude": {
-			name: "Claude", prefix: "CLAUDE", executable: "claude", defaultModel: "opus",
-			reviewHome: getenvDefault("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")),
-			homeError:  "CLAUDE_CONFIG_DIR", output: "output.json",
-			inspection: "Use only read-only inspection: read, search, and shell commands that do not write. Never create, modify, or delete any file; the review gate fails if HEAD moves or the worktree is dirty.",
-		},
-		"grok": {
-			name: "Grok", prefix: "GROK", executable: "grok", defaultModel: "",
-			reviewHome: getenvDefault("GROK_HOME", filepath.Join(home, ".grok")),
-			homeError:  "GROK_REVIEW_HOME", output: "output.json",
-			inspection: "Use only read_file, grep, and list_dir to inspect code.",
-		},
-		"cursor": {
-			name: "Cursor", prefix: "CURSOR", executable: "cursor-agent", defaultModel: "cursor-grok-4.6-xhigh",
-			reviewHome: getenvDefault("CURSOR_CONFIG_DIR", filepath.Join(home, ".cursor")),
-			homeError:  "CURSOR_CONFIG_DIR", output: "output.json",
-			inspection: "Prefer read-only inspection. Do not modify the target worktree; the review gate fails if HEAD moves or the worktree is dirty.",
-			helpers:    true,
-		},
-	}
-	definition, ok := definitions[agent]
-	if !ok {
+	if !config.HasReviewTemplate(cfg, agent) {
 		return agentSettings{}, newGate(2, "review.unsupported_reviewer_agent", agent)
 	}
-	checkName := definition.prefix + "_REVIEW_CHECK_INTERVAL_SECONDS"
-	runtimeName := definition.prefix + "_REVIEW_MAX_RUNTIME_SECONDS"
+	def := config.AgentFor(cfg, agent)
+	if def.Review == nil || def.Args == nil || def.Args.Review == nil {
+		return agentSettings{}, newGate(2, "review.unsupported_reviewer_agent", agent)
+	}
+	review := def.Review
+	prefix := strings.ToUpper(agent)
+	checkName := prefix + "_REVIEW_CHECK_INTERVAL_SECONDS"
+	runtimeName := prefix + "_REVIEW_MAX_RUNTIME_SECONDS"
 	checkInterval, err := positiveInteger(getenvDefault(checkName, "600"), checkName)
 	if err != nil {
 		return agentSettings{}, err
@@ -170,10 +158,13 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
 	if err != nil {
 		return agentSettings{}, err
 	}
-	modelOverride := os.Getenv(definition.prefix + "_REVIEW_MODEL")
-	effortOverride := os.Getenv(definition.prefix + "_REVIEW_REASONING_EFFORT")
+	modelOverride := os.Getenv(prefix + "_REVIEW_MODEL")
+	effortOverride := os.Getenv(prefix + "_REVIEW_REASONING_EFFORT")
 	cfgModel, cfgEffort, cfgOK := configuredModel(agent, role)
-	model := definition.defaultModel
+	model := ""
+	if defaults := config.DefaultModels().Review[agent]; defaults != nil {
+		model = defaults["model"]
+	}
 	if modelOverride != "" {
 		model = modelOverride
 	} else if cfgOK {
@@ -188,25 +179,54 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
 			effort = "high"
 		}
 	}
-	reviewHome := definition.reviewHome
+	homeDefault := filepath.Join(userHome(), "."+agent)
+	reviewHome := homeDefault
+	homeError := "HOME"
+	if review.HomeEnv != "" {
+		reviewHome = getenvDefault(review.HomeEnv, homeDefault)
+		homeError = review.HomeEnv
+	}
 	if !filepath.IsAbs(reviewHome) {
 		return agentSettings{}, newGate(2,
-			"review.must_be_an_absolute_path", definition.homeError, reviewHome,
+			"review.must_be_an_absolute_path", homeError, reviewHome,
 		)
 	}
-	// Review executables use *_REVIEW_BIN, then the built-in read-only adapter.
-	// Config.Agents applies only to task execution and never overrides this choice.
+	homePolicy := review.HomePolicy
+	if homePolicy == "" {
+		homePolicy = config.ReviewHomeRequired
+	}
+	stdin := review.Stdin
+	if stdin == "" {
+		stdin = config.ReviewStdinInstruction
+	}
+	output := process.OutputSpec{}
+	if review.Output != nil {
+		output = *review.Output
+	}
+	env := map[string]string{}
+	for key, value := range review.Env {
+		env[key] = value
+	}
+	// ReviewExecutable keeps built-in review off the execution path overlay.
 	return agentSettings{
-		name:                  definition.name,
+		name:                  config.AgentDisplayName(agent),
 		checkInterval:         checkInterval,
 		maxRuntime:            maxRuntime,
-		executable:            getenvDefault(definition.prefix+"_REVIEW_BIN", definition.executable),
+		executable:            config.ReviewExecutable(cfg, agent),
 		model:                 model,
 		effort:                effort,
 		reviewHome:            reviewHome,
-		outputName:            definition.output,
-		inspectionRules:       definition.inspection,
-		spawnsHelperProcesses: definition.helpers,
+		homePolicy:            homePolicy,
+		outputName:            review.OutputName,
+		inspectionRules:       review.Inspection,
+		spawnsHelperProcesses: review.SpawnsHelpers,
+		snapshotSpec:          review.SnapshotSpec,
+		stdin:                 stdin,
+		cwd:                   review.CWD,
+		env:                   env,
+		reviewArgs:            append([]string{}, def.Args.Review...),
+		output:                output,
+		promptFiles:           append([]config.ReviewPromptFile{}, review.PromptFiles...),
 	}, nil
 }
 
@@ -228,12 +248,11 @@ func looksLikeAbsolutePath(value string) bool {
 }
 
 func containsAgent(name string) bool {
-	for _, agent := range config.ReviewAgents {
-		if agent == name {
-			return true
-		}
+	cfg, err := config.Effective(nil)
+	if err != nil {
+		cfg = nil
 	}
-	return false
+	return config.HasReviewTemplate(cfg, name)
 }
 
 func splitAgentArgs(args []string) (agent string, rest []string, err error) {

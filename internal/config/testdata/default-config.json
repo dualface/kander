@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "welcome_complete": false,
+  "kanban_agent": "codex",
+  "kanban_agents": {
+    "large": "codex",
+    "small": "codex"
+  },
+  "launcher": "auto",
+  "reviewers": {
+    "CSA": "codex",
+    "Hacker": "codex",
+    "PM": "codex",
+    "QA": "codex"
+  },
+  "review_stages": {
+    "large": {
+      "CSA": "auto",
+      "Hacker": "auto",
+      "PM": "auto",
+      "QA": "auto"
+    },
+    "small": {
+      "CSA": "auto",
+      "Hacker": "auto",
+      "PM": "auto",
+      "QA": "auto"
+    }
+  },
+  "rules": {
+    "code": true,
+    "collaboration": true,
+    "git": true,
+    "reporting": true,
+    "review": true,
+    "task_groups": true,
+    "task_intake": true
+  },
+  "models": {
+    "kanban": {
+      "claude": {
+        "large_effort": "high",
+        "large_model": "opus",
+        "model": "",
+        "small_effort": "medium",
+        "small_model": "opus"
+      },
+      "codex": {
+        "large_effort": "high",
+        "large_model": "gpt-5.6-sol",
+        "model": "",
+        "small_effort": "medium",
+        "small_model": "gpt-5.6-sol"
+      },
+      "cursor": {
+        "large_model": "cursor-grok-4.6-xhigh",
+        "small_model": "cursor-grok-4.6-high"
+      },
+      "grok": {
+        "large_effort": "xhigh",
+        "large_model": "",
+        "model": "",
+        "small_effort": "high",
+        "small_model": ""
+      }
+    },
+    "review": {
+      "claude": {
+        "effort": "high",
+        "model": "opus"
+      },
+      "codex": {
+        "effort": "high",
+        "model": "gpt-5.6-sol"
+      },
+      "cursor": {
+        "model": "cursor-grok-4.6-xhigh"
+      },
+      "grok": {
+        "effort": "high",
+        "model": ""
+      }
+    },
+    "review_roles": {
+      "CSA": {
+        "effort": "",
+        "model": ""
+      },
+      "Hacker": {
+        "effort": "",
+        "model": ""
+      },
+      "PM": {
+        "effort": "",
+        "model": ""
+      },
+      "QA": {
+        "effort": "",
+        "model": ""
+      }
+    }
+  },
+  "tui": {
+    "columns": 5,
+    "min_column_width": 40,
+    "refresh": 30,
+    "single": false,
+    "theme": "auto"
+  },
+  "language": "en",
+  "agent_language": "en"
+}
