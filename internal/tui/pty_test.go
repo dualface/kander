@@ -103,6 +103,24 @@ func (s *ptySession) text() string {
 	return string(s.out)
 }
 
+func (s *ptySession) size() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.out)
+}
+
+func (s *ptySession) textFrom(offset int) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(s.out) {
+		offset = len(s.out)
+	}
+	return string(s.out[offset:])
+}
+
 // waitFor waits for some text to appear in the pseudo-terminal output.
 func (s *ptySession) waitFor(needle string, timeout time.Duration) bool {
 	s.t.Helper()
@@ -302,16 +320,21 @@ func TestOptionsProjectTabsAndNarrowPathsOnPTY(t *testing.T) {
 	if !session.waitFor("Global:", 6*time.Second) {
 		t.Fatalf("project tab did not show inherit prefix\npty:\n%s", session.text())
 	}
+	before := session.size()
 	session.resize(24, 48)
+	if session.cmd.Process != nil {
+		_ = session.cmd.Process.Signal(unix.SIGWINCH)
+	}
+	session.send("\x1b[B")
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
-		if strings.Contains(session.text(), config.OverlayFilename) {
+		if strings.Contains(session.textFrom(before), config.OverlayFilename) {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if !strings.Contains(session.text(), config.OverlayFilename) {
-		t.Fatalf("narrow resize dropped overlay leaf\npty:\n%s", session.text())
+	if !strings.Contains(session.textFrom(before), config.OverlayFilename) {
+		t.Fatalf("narrow resize dropped overlay leaf\npty:\n%q", session.textFrom(before))
 	}
 	session.send("\x1b")
 	time.Sleep(300 * time.Millisecond)
