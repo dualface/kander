@@ -350,4 +350,3 @@ func TestBuiltinHomePolicyClaudeVsCursor(t *testing.T) {
 		t.Fatalf("cursor optional home code=%d err=%s", code, err)
 	}
 }
-
