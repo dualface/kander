@@ -113,14 +113,13 @@ func TestUnimplementedCommands(t *testing.T) {
 
 func TestVersionCommand(t *testing.T) {
 	resetLang(t)
-	oldTimestamp, oldHash := version.BuildTimestamp, version.GitHash
+	old := version.Version
 	t.Cleanup(func() {
-		version.BuildTimestamp, version.GitHash = oldTimestamp, oldHash
+		version.Version = old
 	})
-	version.BuildTimestamp = "20260906T123456Z"
-	version.GitHash = "0123456789ab"
+	version.Version = "0.5.0"
 	code, out, err := captureRun(t, []string{"kander", "version"})
-	if code != 0 || out != "kander 20260906T123456Z-0123456789ab\n" || err != "" {
+	if code != 0 || out != "kander 0.5.0\n" || err != "" {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, err)
 	}
 	code, out, err = captureRun(t, []string{"kander", "version", "--help"})

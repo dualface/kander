@@ -4,10 +4,12 @@ GO ?= go
 PKG := ./cmd/kander
 GOFLAGS ?=
 LDFLAGS ?=
-BUILD_TIMESTAMP ?= $(shell date -u +%Y%m%dT%H%M%SZ)
-GIT_HASH ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+# Local default is git describe --tags --always. A checkout with no tags still
+# succeeds with --always (short hash only); treat that like "no tag" and use
+# dev, matching a non-git directory where describe fails.
+VERSION ?= $(shell if git describe --tags >/dev/null 2>&1; then git describe --tags --always; else echo dev; fi)
 VERSION_PACKAGE := github.com/dualface/kander/internal/version
-VERSION_LDFLAGS := -X $(VERSION_PACKAGE).BuildTimestamp=$(BUILD_TIMESTAMP) -X $(VERSION_PACKAGE).GitHash=$(GIT_HASH)
+VERSION_LDFLAGS := -X $(VERSION_PACKAGE).Version=$(VERSION)
 
 ifeq ($(OS),Windows_NT)
 BIN ?= kander.exe

@@ -3,22 +3,15 @@ package version
 
 import "strings"
 
-var (
-	// BuildTimestamp is injected by the build entry point in UTC YYYYMMDDTHHMMSSZ format.
-	BuildTimestamp = "dev"
-	// GitHash is injected by the build entry point as the short hash of the current commit.
-	GitHash = "unknown"
-)
+// Version is injected by the build entry point as the semantic version.
+// The default is used for untagged local builds and checkouts outside git.
+var Version = "dev"
 
-func component(value, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fallback
-	}
-	return strings.Join(strings.Fields(value), "_")
-}
-
-// String returns the stable <build-timestamp>-<git-hash> version.
+// String returns the semantic version, or "dev" when Version is blank.
 func String() string {
-	return component(BuildTimestamp, "dev") + "-" + component(GitHash, "unknown")
+	value := strings.TrimSpace(Version)
+	if value == "" {
+		return "dev"
+	}
+	return value
 }

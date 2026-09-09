@@ -2,26 +2,24 @@ package version
 
 import "testing"
 
-func TestStringUsesBuildTimestampAndGitHash(t *testing.T) {
-	oldTimestamp, oldHash := BuildTimestamp, GitHash
+func TestStringUsesVersion(t *testing.T) {
+	old := Version
 	t.Cleanup(func() {
-		BuildTimestamp, GitHash = oldTimestamp, oldHash
+		Version = old
 	})
-	BuildTimestamp = "20260906T123456Z"
-	GitHash = "0123456789ab"
-	if got := String(); got != "20260906T123456Z-0123456789ab" {
+	Version = "0.5.0"
+	if got := String(); got != "0.5.0" {
 		t.Fatalf("version=%q", got)
 	}
 }
 
-func TestStringFallsBackForEmptyComponents(t *testing.T) {
-	oldTimestamp, oldHash := BuildTimestamp, GitHash
+func TestStringFallsBackForEmptyVersion(t *testing.T) {
+	old := Version
 	t.Cleanup(func() {
-		BuildTimestamp, GitHash = oldTimestamp, oldHash
+		Version = old
 	})
-	BuildTimestamp = " "
-	GitHash = ""
-	if got := String(); got != "dev-unknown" {
+	Version = " "
+	if got := String(); got != "dev" {
 		t.Fatalf("version=%q", got)
 	}
 }
