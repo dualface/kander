@@ -28,6 +28,7 @@ func TestValidateOutputRejectsIllegalCombinations(t *testing.T) {
 		{"source", OutputSpec{Source: "pipe", Parse: ParseRaw}, "source", "pipe"},
 		{"format", OutputSpec{Source: SourceStdout, Format: "yaml", Parse: ParseRaw}, "format", "yaml"},
 		{"select-on-json", OutputSpec{Source: SourceStdout, Parse: "json_field:a", Select: []LineCondition{{JSONField: "a", Equals: json.RawMessage(`"x"`)}}}, "select", "present"},
+		{"empty-select-on-json", OutputSpec{Source: SourceStdout, Parse: ParseRaw, Select: []LineCondition{}}, "select", "present"},
 		{"join-on-json", OutputSpec{Source: SourceStdout, Parse: ParseRaw, Join: joinPtr("|")}, "join", "|"},
 		{"ndjson-raw", OutputSpec{Source: SourceStdout, Format: FormatNDJSON, Parse: ParseRaw}, "parse", "raw"},
 		{"bad-regex", OutputSpec{Source: SourceStdout, Parse: "regex:("}, "parse", "regex:("},
@@ -91,6 +92,51 @@ func TestValidateLineConditionStructure(t *testing.T) {
 		},
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateConditionEqualsJSONValues(t *testing.T) {
+	cases := []struct {
+		raw   string
+		valid bool
+	}{
+		{`null`, true}, {`true`, true}, {`1.5`, true}, {`"ok"`, true},
+		{`[1,null]`, true}, {`{"ok":true}`, true},
+		{`not-json`, false}, {`true false`, false}, {`{"ok":`, false},
+	}
+	for _, field := range []string{"select", "success"} {
+		for _, tt := range cases {
+			t.Run(field+"/"+tt.raw, func(t *testing.T) {
+				spec := OutputSpec{Source: SourceStdout, Format: FormatNDJSON, Parse: "json_field:content"}
+				conditions := []LineCondition{{JSONField: "value", Equals: json.RawMessage(tt.raw)}}
+				if field == "select" {
+					spec.Select = conditions
+				} else {
+					spec.Success = conditions
+				}
+				err := ValidateOutput(spec)
+				if tt.valid {
+					if err != nil {
+						t.Fatal(err)
+					}
+					return
+				}
+				var specErr *SpecError
+				if !errors.As(err, &specErr) || specErr.Field != field+"[0].equals" || specErr.Value != tt.raw {
+					t.Fatalf("invalid equals must identify its field and value: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestDecodeOutputSpecRejectsEmptySelectOnJSON(t *testing.T) {
+	_, err := DecodeOutputSpec([]byte(`{"source":"stdout","parse":"raw","select":[]}`))
+	if err == nil || !strings.Contains(err.Error(), "select") {
+		t.Fatalf("explicit empty select must be rejected on json: %v", err)
+	}
+	if _, err := DecodeOutputSpec([]byte(`{"source":"stdout","format":"ndjson","parse":"json_field:content","select":[]}`)); err != nil {
+		t.Fatalf("empty select remains valid on ndjson: %v", err)
 	}
 }
 
@@ -225,6 +271,16 @@ func TestNDJSONAbsentIsPerLine(t *testing.T) {
 	onlyPresent := `{"is_error":true,"content":"x"}` + "\n" + `{"is_error":false,"content":"y"}`
 	if _, err := ParseOutput(spec, onlyPresent); !errors.Is(err, ErrSuccess) {
 		t.Fatalf("absent must not be vacuously true: %v", err)
+	}
+
+	spec.Success = append(spec.Success, LineCondition{JSONField: "type", Equals: json.RawMessage(`"result"`)})
+	split := `{"type":"result","is_error":true,"content":"failed"}` + "\n" + `{"type":"progress","content":"not a result"}`
+	if _, err := ParseOutput(spec, split); !errors.Is(err, ErrSuccess) {
+		t.Fatalf("absent and equals on different rows must fail: %v", err)
+	}
+	got, err = ParseOutput(spec, `{"type":"result","content":"complete"}`)
+	if err != nil || got != "complete" {
+		t.Fatalf("same-row absent and equals must succeed: %q %v", got, err)
 	}
 }
 

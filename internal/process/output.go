@@ -96,7 +96,7 @@ func ValidateOutput(spec OutputSpec) error {
 	}
 
 	if format == FormatJSON {
-		if len(spec.Select) > 0 {
+		if spec.Select != nil {
 			return specErrorf("select", "present", "only valid when format is ndjson")
 		}
 		if spec.Join != nil {
@@ -213,6 +213,9 @@ func validateLineCondition(field string, index int, cond LineCondition) error {
 		return specErrorf(label, cond.JSONField, "must set equals or absent")
 	case hasAbsent && !*cond.Absent:
 		return specErrorf(label, "false", "absent must be true")
+	}
+	if hasEquals && !json.Valid(cond.Equals) {
+		return specErrorf(fmt.Sprintf("%s[%d].equals", field, index), string(cond.Equals), "must be a valid JSON value")
 	}
 	return nil
 }

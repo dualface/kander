@@ -26,7 +26,8 @@ is no shell interpolation.
   standard error, or a result file the caller read. This package does not
   start processes or open those files.
 - `format` defaults to `json`. `json` treats the whole buffer as one document
-  and evaluates `parse` once. `select` or `join` on `json` is rejected.
+  and evaluates `parse` once. `select` (including an empty array) or `join`
+  on `json` is rejected.
 - `parse` is one of three primitives: the raw buffer, a dotted JSON object
   path that must yield a string, or a regular expression with exactly one
   capturing group. The regex is compiled at validation time.
@@ -44,7 +45,9 @@ is no shell interpolation.
 ```
 
 A condition has `json_field` plus exactly one of `equals` or `absent: true`.
-`equals` may be any JSON value, including `null`. `absent: true` is true only
+`equals` may be any JSON value, including `null`. Invalid JSON in a Go
+`LineCondition.Equals` value is rejected by validation, before evaluation.
+`absent: true` is true only
 when that path is missing on the same document; a sibling line without the
 path does not make it vacuously true.
 
