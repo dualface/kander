@@ -2,6 +2,8 @@
 
 **English** | [简体中文](README-CN.md) | [日本語](README-JA.md)
 
+[![Kander - Kanban Orchestration for Multiple AI Agents](docs/star-please.png)](https://github.com/dualface/kander)
+
 One person schedules multiple AI agents with a kanban board.
 
 ![Kander workflow](docs/workflow-en.svg)

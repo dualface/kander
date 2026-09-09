@@ -2,6 +2,8 @@
 
 [English](README.md) | **简体中文** | [日本語](README-JA.md)
 
+[![Kander - 多 AI Agent 的看板调度](docs/star-please.png)](https://github.com/dualface/kander)
+
 一个人用看板调度多个 AI Agent.
 
 ![Kander 工作流](docs/workflow-cn.svg)

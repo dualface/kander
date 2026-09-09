@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README-CN.md) | **日本語**
 
+[![Kander - 複数 AI Agent のカンバン調整](docs/star-please.png)](https://github.com/dualface/kander)
+
 一人でカンバンを使って複数の AI Agent をスケジュールする。
 
 ![Kander ワークフロー](docs/workflow-ja.svg)
