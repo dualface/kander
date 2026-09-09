@@ -427,6 +427,7 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 		Inline(true))
 	bind.addRestore(p, bind.theme, "tui", "theme")
 	bind.addSpacer()
+	bind.fieldIndex[interfaceFocusKey("refresh")] = bind.focusable
 	bind.addField(huh.NewSelect[int]().
 		Title(p.inheritTitle(t("tui.auto_refresh_s"), formatInt(bind.refresh), "tui", "refresh")).
 		Description(t("tui.board_auto_reload_interval")).
@@ -443,6 +444,7 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 	bind.addRestore(p, formatBool(bind.single), "tui", "single")
 	if !bind.single {
 		bind.addSpacer()
+		bind.fieldIndex[interfaceFocusKey("columns")] = bind.focusable
 		bind.addField(huh.NewSelect[int]().
 			Title(p.inheritTitle(t("tui.max_columns_on_screen"), formatInt(bind.columns), "tui", "columns")).
 			Description(t("tui.narrow_terminals_show_fewer")).
@@ -451,6 +453,7 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 			Inline(true))
 		bind.addRestore(p, formatInt(bind.columns), "tui", "columns")
 		bind.addSpacer()
+		bind.fieldIndex[interfaceFocusKey("min_column_width")] = bind.focusable
 		bind.addField(huh.NewSelect[int]().
 			Title(p.inheritTitle(t("tui.minimum_column_width"), formatInt(bind.minWidth), "tui", "min_column_width")).
 			Options(huh.NewOptions(widths...)...).
@@ -488,6 +491,10 @@ func scaleFocusKey(scale string) string       { return "scale:" + scale }
 func roleFocusKey(role string) string         { return "role:" + role }
 func stageFocusKey(role, scale string) string { return "stage:" + role + ":" + scale }
 func interfaceFocusKey(name string) string    { return "ui:" + name }
+func launcherFocusKey() string                { return "launcher" }
+func modelFocusKey(field menu.ModelField) string {
+	return "model:" + field.Key()
+}
 
 func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 	session := p.session
@@ -525,6 +532,7 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 	}
 	// The launcher is independent of any particular agent, so it goes last, separated by a blank line.
 	bind.addSpacer()
+	bind.fieldIndex[launcherFocusKey()] = bind.focusable
 	bind.addField(huh.NewSelect[string]().
 		Title(p.inheritTitle(t("menu.launcher"), bind.launcher, "launcher")).
 		Description(t("tui.how_to_launch_the_agent_when_claiming_a_task")).
@@ -557,6 +565,7 @@ func (p *optionsPanel) addModelInputs(bind *formBinding, fields []menu.ModelFiel
 		if len(path) > 0 {
 			title = p.inheritTitle(title, value, path...)
 		}
+		bind.fieldIndex[modelFocusKey(field)] = bind.focusable
 		bind.addField(huh.NewInput().
 			Title(title).
 			Prompt("").
@@ -652,13 +661,17 @@ func (b *formBinding) apply(p *optionsPanel) {
 	case sectionInterface:
 		b.applyInterface(p)
 		if p.session != nil && b.language != "" && p.session.Config.Language != b.language {
+			before := p.overridePresence("language")
 			p.session.SetLanguage(b.language)
 			p.app.Context = tuiPageContext()
 			p.markDirty()
+			p.rebuildIfOverrideChanged(before, interfaceFocusKey("language"), "language")
 		}
 		if p.session != nil && b.agentLanguage != "" && p.session.Config.AgentLanguage != b.agentLanguage {
+			before := p.overridePresence("agent_language")
 			p.session.SetAgentLanguage(b.agentLanguage)
 			p.markDirty()
+			p.rebuildIfOverrideChanged(before, interfaceFocusKey("agent_language"), "agent_language")
 		}
 	case sectionExecution:
 		session := p.session
@@ -675,8 +688,10 @@ func (b *formBinding) apply(p *optionsPanel) {
 			p.rebuildAt(scaleFocusKey("small"))
 		}
 		if b.launcher != menu.LauncherInstallValue && session.Config.Launcher != b.launcher {
+			before := p.overridePresence("launcher")
 			session.SetLauncher(b.launcher)
 			p.markDirty()
+			p.rebuildIfOverrideChanged(before, launcherFocusKey(), "launcher")
 		}
 		b.applyModels(p)
 	case sectionReview:
@@ -702,8 +717,11 @@ func (b *formBinding) apply(p *optionsPanel) {
 					current = ""
 				}
 				if current != *value {
+					path := []string{"review_stages", scale, role}
+					before := p.overridePresence(path...)
 					session.SetReviewStage(scale, role, *value)
 					p.markDirty()
+					p.rebuildIfOverrideChanged(before, stageFocusKey(role, scale), path...)
 				}
 			}
 		}
@@ -718,11 +736,16 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 			continue
 		}
 		if field.Value() != *b.modelValues[i] {
+			path := modelOverlayPath(field)
+			before := p.overridePresence(path...)
 			field.Set(*b.modelValues[i])
 			if p.session != nil {
 				p.session.NoteModelOverride(field, *b.modelValues[i])
 			}
 			p.markDirty()
+			if len(path) > 0 {
+				p.rebuildIfOverrideChanged(before, modelFocusKey(field), path...)
+			}
 		}
 	}
 }
@@ -755,7 +778,9 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		scopeTUI.Columns = count
 		changed = true
 		if overlay {
+			before := p.overridePresence("tui", "columns")
 			p.session.SetTUIField("columns", count)
+			p.rebuildIfOverrideChanged(before, interfaceFocusKey("columns"), "tui", "columns")
 		}
 	}
 	if width := clampMinColumnWidth(b.minWidth); previous.MinColumnWidth != width {
@@ -763,7 +788,9 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		scopeTUI.MinColumnWidth = width
 		changed = true
 		if overlay {
+			before := p.overridePresence("tui", "min_column_width")
 			p.session.SetTUIField("min_column_width", width)
+			p.rebuildIfOverrideChanged(before, interfaceFocusKey("min_column_width"), "tui", "min_column_width")
 		}
 	}
 	if refresh := clampRefresh(b.refresh); previous.Refresh != refresh {
@@ -771,7 +798,9 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		scopeTUI.Refresh = refresh
 		changed = true
 		if overlay {
+			before := p.overridePresence("tui", "refresh")
 			p.session.SetTUIField("refresh", refresh)
+			p.rebuildIfOverrideChanged(before, interfaceFocusKey("refresh"), "tui", "refresh")
 		}
 	}
 	if previous.Single != b.single {

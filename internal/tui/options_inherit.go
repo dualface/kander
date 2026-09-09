@@ -20,6 +20,19 @@ func (p *optionsPanel) inheritTitle(title, display string, path ...string) strin
 	return title + "  " + p.session.FormatInherited(display)
 }
 
+func (p *optionsPanel) overridePresence(path ...string) bool {
+	return p.session != nil && p.session.FieldOverridden(path...)
+}
+
+func (p *optionsPanel) rebuildIfOverrideChanged(before bool, key string, path ...string) {
+	if p.session == nil || !p.session.EditingOverlay() {
+		return
+	}
+	if p.session.FieldOverridden(path...) != before {
+		p.rebuildAt(key)
+	}
+}
+
 func (b *formBinding) addRestore(p *optionsPanel, display string, path ...string) {
 	if p.session == nil || !p.session.EditingOverlay() || !p.session.FieldOverridden(path...) {
 		return

@@ -63,6 +63,7 @@ func (p *optionsPanel) switchTab(target string) tea.Cmd {
 
 func (p *optionsPanel) renderScopeChrome(palette palette, width int) (string, int) {
 	if p.confirming {
+		p.tabHits = nil
 		return "", 0
 	}
 	var lines []string
@@ -137,7 +138,7 @@ func (p *optionsPanel) hitTab(x, y int) string {
 }
 
 func (p *optionsPanel) handleTabMouse(x, y, bstate int) tea.Cmd {
-	if !optionsMouseActivate(bstate) || p.session == nil {
+	if p.confirming || p.report != nil || !optionsMouseActivate(bstate) || p.session == nil {
 		return nil
 	}
 	localX := x - p.bodyX

@@ -284,6 +284,65 @@ func TestCloseConfirmDoesNotPaintFallbackNotice(t *testing.T) {
 	}
 }
 
+func TestCloseConfirmClearsTabHits(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	panel.view()
+	if len(panel.tabHits) < 2 {
+		t.Fatalf("tabHits=%d", len(panel.tabHits))
+	}
+	hit := panel.tabHits[1]
+	x := panel.bodyX + (hit.x0+hit.x1)/2
+	y := panel.bodyY
+	panel.confirming = true
+	panel.closeChoice = closeSave
+	panel.view()
+	if len(panel.tabHits) != 0 {
+		t.Fatalf("confirm left tabHits=%d", len(panel.tabHits))
+	}
+	pumpPanel(panel, panel.HandleMouse(x, y, mouseBtn1Clicked))
+	if panel.session.Target != config.TargetScope {
+		t.Fatalf("confirm click switched tab to %s", panel.session.Target)
+	}
+}
+
+func TestProjectLauncherChangeRefreshesInherit(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	_, view := panel.view()
+	plain := ansi.Strip(view)
+	inherited := panel.session.FormatInherited(panel.session.Config.Launcher)
+	if !strings.Contains(plain, inherited) {
+		t.Fatalf("missing inherit prefix:\n%s", plain)
+	}
+	if panel.bind == nil {
+		t.Fatal("no bind")
+	}
+	next := "foreground"
+	if panel.bind.launcher == next {
+		next = "herdr"
+	}
+	panel.bind.launcher = next
+	panel.bind.apply(panel)
+	if panel.rebuildFocus != launcherFocusKey() {
+		t.Fatalf("rebuildFocus=%q", panel.rebuildFocus)
+	}
+	pumpPanel(panel, panel.rebuildSection())
+	_, view = panel.view()
+	plain = ansi.Strip(view)
+	if strings.Contains(plain, inherited) {
+		t.Fatalf("inherit prefix remained:\n%s", plain)
+	}
+	if !strings.Contains(plain, uiText("tui.restore_field_inherit")) {
+		t.Fatalf("missing restore control:\n%s", plain)
+	}
+}
+
 func TestSwitchTabSyncsAppFromSession(t *testing.T) {
 	app, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeGlobal)
