@@ -119,8 +119,8 @@ func TestCustomAgentsModelsAndRepair(t *testing.T) {
 	}
 	root := raw.(map[string]any)
 	root["reviewers"].(map[string]any)["PM"] = "helper"
-	if _, err := Validate(root); err != nil {
-		t.Fatal(err)
+	if _, err := Validate(root); err == nil {
+		t.Fatal("dialect wrapper accepted as reviewer")
 	}
 	root["reviewers"].(map[string]any)["PM"] = "plain"
 	if _, err := Validate(root); err == nil {

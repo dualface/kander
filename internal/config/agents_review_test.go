@@ -95,8 +95,26 @@ func TestReviewAgentNamesFollowsDefinitions(t *testing.T) {
 		t.Fatal(ReviewAgentNames(nil))
 	}
 	cfg := DefaultConfig()
-	cfg.Agents = map[string]AgentDefinition{"plain": {Args: &AgentArgs{Start: []string{}, Resume: []string{}}, Session: &AgentSessionDefinition{Mode: "none"}}}
+	cfg.Agents = map[string]AgentDefinition{
+		"plain":  {Args: &AgentArgs{Start: []string{}, Resume: []string{}}, Session: &AgentSessionDefinition{Mode: "none"}},
+		"helper": {Path: "/bin/helper", Dialect: "claude"},
+		"reviewer": {
+			Args:    &AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
+			Session: &AgentSessionDefinition{Mode: "none"},
+			Review:  &AgentReview{},
+		},
+		"claude": {Path: "/bin/wrapper"},
+	}
 	if HasReviewTemplate(cfg, "plain") {
 		t.Fatal("start-only")
+	}
+	if HasReviewTemplate(cfg, "helper") || contains(ReviewAgentNames(cfg), "helper") {
+		t.Fatal("dialect wrapper")
+	}
+	if !HasReviewTemplate(cfg, "reviewer") {
+		t.Fatal("declared review")
+	}
+	if !HasReviewTemplate(cfg, "claude") {
+		t.Fatal("builtin overlay")
 	}
 }

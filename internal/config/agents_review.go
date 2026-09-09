@@ -59,7 +59,6 @@ func ReviewPromptFilePlaceholders() []string {
 	return []string{"inspection", "prompt", "role", "report_language", "root", "runtime", "output"}
 }
 
-// HasReviewTemplate reports whether the resolved definition declares args.review.
 func validateReviewerChoice(value any, cfg *Config, field string, reviewNames []string) (string, error) {
 	text, ok := value.(string)
 	if !ok {
@@ -74,9 +73,22 @@ func validateReviewerChoice(value any, cfg *Config, field string, reviewNames []
 	return text, nil
 }
 
+// HasReviewTemplate reports whether the agent may be selected as a reviewer.
+// Built-in names keep the embedded args.review. A custom name must declare
+// args.review or review itself; dialect backfill is not a declaration.
 func HasReviewTemplate(cfg *Config, name string) bool {
-	d := AgentFor(cfg, name)
-	return d.Args != nil && d.Args.Review != nil
+	if contains(ExecutionAgents, name) {
+		emb, ok := embeddedByName(name)
+		return ok && emb.Args.Review != nil
+	}
+	if cfg == nil {
+		return false
+	}
+	user, ok := cfg.Agents[name]
+	if !ok {
+		return false
+	}
+	return user.Review != nil || user.Args != nil && user.Args.Review != nil
 }
 
 // ReviewAgentNames lists agents that declare a review argv template.
