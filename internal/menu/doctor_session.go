@@ -43,6 +43,9 @@ func (s *Session) ApplyDoctorConfig(before, after *config.Config, dirty bool) er
 	s.existing = after
 	s.scopeExisting = config.Clone(after)
 	s.scopeConfig = merged
+	if raw, err := config.DocumentFromConfig(merged); err == nil {
+		s.scopeRaw = raw
+	}
 	if s.EditingOverlay() {
 		return s.rebuildOverlayConfig()
 	}

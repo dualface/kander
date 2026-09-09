@@ -295,8 +295,8 @@ func (s *Session) SetReviewStage(scale, role, mode string) {
 // SetLanguage sets the default output language and applies it immediately.
 func (s *Session) SetLanguage(language string) {
 	s.Config.Language = language
-	config.BindConfigLanguage(s.Config)
 	s.noteOverride([]string{"language"}, language)
+	config.BindConfigLanguage(s.Config)
 }
 
 // SetAgentLanguage sets the language the agent uses when talking to the user.
@@ -492,9 +492,9 @@ func (s *Session) seedReviewRole(role, reviewer string) map[string]string {
 // Call it when a role changes reviewer: the old values were configured for the old reviewer and would otherwise be misattributed.
 func (s *Session) ResetReviewRoleModel(role string) {
 	if s.EditingOverlay() {
-		config.OverlayDelete(s.overlayRaw, "models", "review_roles", role)
-		s.OverlayDirty = true
-		_ = s.rebuildOverlayConfig()
+		_ = s.applyOverlayEdit(func(candidate map[string]any) {
+			config.OverlayDelete(candidate, "models", "review_roles", role)
+		})
 		return
 	}
 	s.Config.Models.ReviewRoles[role] = map[string]string{}

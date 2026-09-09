@@ -8,16 +8,22 @@ func (s *Session) SetRules(rules config.Rules) error {
 		return err
 	}
 	previous := s.Config.Rules.Clone()
-	s.Config.Rules = rules.Clone()
 	if s.EditingOverlay() {
-		for _, module := range config.RuleModules {
-			if previous[module] != rules[module] {
-				s.noteOverride([]string{"rules", module}, rules[module])
+		return s.applyOverlayEdit(func(candidate map[string]any) {
+			for _, module := range config.RuleModules {
+				if previous[module] != rules[module] {
+					config.OverlaySet(candidate, rules[module], "rules", module)
+				}
 			}
-		}
-		return nil
+		})
 	}
+	s.Config.Rules = rules.Clone()
 	s.ScopeDirty = true
+	for _, module := range config.RuleModules {
+		if previous[module] != rules[module] {
+			s.syncScopeRaw([]string{"rules", module}, rules[module])
+		}
+	}
 	return nil
 }
 

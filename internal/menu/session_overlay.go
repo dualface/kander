@@ -170,16 +170,54 @@ func (s *Session) rebuildOverlayConfig() error {
 	return nil
 }
 
+func (s *Session) applyOverlayEdit(mutate func(map[string]any)) error {
+	if err := s.ensureScopeRaw(); err != nil {
+		return err
+	}
+	candidate := config.CloneOverlay(s.overlayRaw)
+	mutate(candidate)
+	merged, err := config.MergeOverlayOnRaw(s.scopeRaw, candidate)
+	if err != nil {
+		return err
+	}
+	s.overlayRaw = candidate
+	s.OverlayDirty = true
+	s.Config = merged
+	return nil
+}
+
+func (s *Session) applyOverlaySet(path []string, value any) error {
+	return s.applyOverlayEdit(func(candidate map[string]any) {
+		if len(path) == 3 && path[0] == "review_stages" {
+			expandReviewStagesOverlay(candidate)
+		}
+		config.OverlaySet(candidate, value, path...)
+	})
+}
+
+func (s *Session) syncScopeRaw(path []string, value any) {
+	if s.scopeRaw == nil || len(path) == 0 {
+		return
+	}
+	if _, ok := s.scopeRaw[path[0]]; !ok {
+		filled, err := config.DocumentFromConfig(s.Config)
+		if err == nil {
+			if section, exists := filled[path[0]]; exists {
+				s.scopeRaw[path[0]] = section
+				return
+			}
+		}
+	}
+	config.OverlaySet(s.scopeRaw, value, path...)
+}
+
 func (s *Session) noteOverride(path []string, value any) {
 	if !s.EditingOverlay() {
 		s.ScopeDirty = true
+		s.syncScopeRaw(path, value)
 		return
 	}
-	if s.overlayRaw == nil {
-		s.overlayRaw = map[string]any{}
-	}
-	config.OverlaySet(s.overlayRaw, value, path...)
-	s.OverlayDirty = true
+	_ = s.applyOverlaySet(path, value)
 }
 
 // RestoreInherit deletes an overlay key and refreshes the effective view.
@@ -309,7 +347,9 @@ func (s *Session) saveScope() (string, error) {
 		if raw, rawErr := config.DocumentFromConfig(cfg); rawErr == nil {
 			s.scopeRaw = raw
 		}
-		if !s.EditingOverlay() {
+		if s.EditingOverlay() {
+			_ = s.rebuildOverlayConfig()
+		} else {
 			s.Config = cfg
 		}
 		s.ScopeDirty = false

@@ -1,6 +1,7 @@
 package menu
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -354,6 +355,58 @@ func TestSaveAllDirtySetsWelcomeComplete(t *testing.T) {
 	}
 	if !scopeCfg.WelcomeComplete {
 		t.Fatal("scope save left welcome_complete false")
+	}
+}
+
+func TestOverlayRuleEditSyncsEffectiveConfig(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeProject)
+	scopePath := os.Getenv(config.EnvConfig)
+	raw, err := config.LoadScopeDocument(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "rules")
+	data, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(scopePath, append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	session.scopeRaw = nil
+	if err := session.ensureScopeRaw(); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.rebuildOverlayConfig(); err != nil {
+		t.Fatal(err)
+	}
+	rules := session.Config.Rules.Clone()
+	rules[config.RuleCode] = false
+	if err := session.SetRules(rules); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.Rules[config.RuleGit] {
+		t.Fatal("effective git should follow raw merge, not the filled UI copy")
+	}
+	if !config.OverlayHas(session.overlayRaw, "rules", "code") {
+		t.Fatal("code override missing")
+	}
+	if config.OverlayHas(session.overlayRaw, "rules", "git") {
+		t.Fatal("inherited git copied into overlay")
+	}
+}
+
+func TestUnsavedGlobalLauncherUpdatesProjectInherit(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session.SetLauncher("foreground")
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.Launcher != "foreground" {
+		t.Fatalf("project inherit launcher=%s", session.Config.Launcher)
+	}
+	if config.OverlayHas(session.overlayRaw, "launcher") {
+		t.Fatal("unsaved global launcher copied into overlay")
 	}
 }
 
