@@ -25,12 +25,6 @@ const (
 	parsePrefixRegex     = "regex:"
 )
 
-// ReviewSources is the source subset for review templates.
-var ReviewSources = []string{SourceStdout, SourceFile}
-
-// TerminalSources is the source subset for terminal definitions.
-var TerminalSources = []string{SourceStdout, SourceStderr}
-
 // ErrSuccess means declared success conditions were not met.
 var ErrSuccess = errors.New("success conditions not met")
 
@@ -428,12 +422,8 @@ func extractText(parse, raw string, doc any, decodeErr error) (string, error) {
 		}
 		return text, nil
 	case strings.HasPrefix(parse, parsePrefixRegex):
-		input := raw
-		if input == "" && decodeErr == nil {
-			input, _ = jsonStringOrRaw(doc)
-		}
 		re := regexp.MustCompile(strings.TrimPrefix(parse, parsePrefixRegex))
-		match := re.FindStringSubmatch(input)
+		match := re.FindStringSubmatch(raw)
 		if len(match) != 2 {
 			return "", specErrorf("parse", parse, "regex did not match")
 		}
@@ -441,15 +431,4 @@ func extractText(parse, raw string, doc any, decodeErr error) (string, error) {
 	default:
 		return "", specErrorf("parse", parse, "unsupported parse")
 	}
-}
-
-func jsonStringOrRaw(doc any) (string, bool) {
-	if s, ok := doc.(string); ok {
-		return s, true
-	}
-	raw, err := json.Marshal(doc)
-	if err != nil {
-		return "", false
-	}
-	return string(raw), true
 }
