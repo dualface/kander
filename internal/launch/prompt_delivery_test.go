@@ -265,6 +265,54 @@ func TestPaneDeliveryReadyTimeout(t *testing.T) {
 	assertPaneStartRolledBack(t, root, path, original, log)
 }
 
+func TestPaneDeliveryDurableBlockedClosesTab(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX fakes")
+	}
+	root, _, bin := setupBoard(t)
+	cfg := usePaneAgent(t, root, bin, "herdr")
+	log := filepath.Join(root, "herdr-durable-block.log")
+	t.Setenv("KANBAN_HERDR_LOG", log)
+	t.Setenv("HERDR_ENV", "1")
+	t.Setenv("HERDR_WORKSPACE_ID", "w1")
+	t.Setenv("KANBAN_HERDR_BLOCKED_OUTPUT", "TRUST_DIALOG")
+	writeFakeHerdr(t, filepath.Join(bin, "herdr"), log)
+	plan, err := prepareLaunch("herdr", filepath.Dir(root), "start")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyAgentDelivery(&plan, cfg, "panecli"); err != nil {
+		t.Fatal(err)
+	}
+	program, err := requireAgentProgram("panecli", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := newAgentSession("panecli", program, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := agentArguments("panecli", nil, "small", session, false, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv, err := launchInvocation(plan, *program, attachPrompt(&plan, args, "prompt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = launchAgent(plan, root, "pane-durable", inv, nil, nil, &session, true)
+	failure := asLaunchFailure(err)
+	if err == nil || failure.DeliveryUnknown {
+		t.Fatalf("err=%v unknown=%v", err, failure.DeliveryUnknown)
+	}
+	if !strings.Contains(err.Error(), "手动跑一次该 CLI 回答对话框后重试") {
+		t.Fatalf("err=%v", err)
+	}
+	if _, statErr := os.Stat(log + ".close"); statErr != nil {
+		t.Fatal("tab not closed")
+	}
+}
+
 func TestPaneDeliveryResumeTakeover(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX fakes")

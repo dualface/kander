@@ -25,7 +25,10 @@ func launchAgent(
 	var createdTab, createdWindow string
 	sendAttempted := false
 	fail := func(err error) error {
-		if sendAttempted && len(durable) > 0 && durable[0] {
+		// Pane delivery fails before the prompt is sent (blocked or ready
+		// timeout). That outcome is known, so close the container even on a
+		// durable dispatch instead of leaving a stuck tab and an unrolled card.
+		if sendAttempted && len(durable) > 0 && durable[0] && plan.PromptDelivery.Mode != "pane" {
 			return &LaunchFailure{Err: err, DeliveryUnknown: true}
 		}
 		var closeErr string
