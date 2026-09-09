@@ -53,20 +53,29 @@ func integrateAgentRules(paths config.InstallPaths) []AgentIntegration {
 }
 
 func integrationAgents(paths config.InstallPaths) []string {
-	if paths.Mode == config.ModeProject {
-		return []string{"claude", "codex"}
-	}
-	var out []string
+	var importFirst, rest []string
 	for _, agent := range config.ExecutionAgents {
 		target := AgentRulesTarget(agent, paths)
 		if target == "" {
 			continue
 		}
+		if paths.Mode == config.ModeProject {
+			spec, _ := config.RulesSpec(agent)
+			if spec.Integration == "claude-import" {
+				importFirst = append(importFirst, agent)
+			} else {
+				rest = append(rest, agent)
+			}
+			continue
+		}
 		if info, err := os.Stat(filepath.Dir(target)); err == nil && info.IsDir() {
-			out = append(out, agent)
+			rest = append(rest, agent)
 		}
 	}
-	return out
+	if paths.Mode == config.ModeProject {
+		return append(importFirst, rest...)
+	}
+	return rest
 }
 
 // RulesEntry returns the Kander rules entry file of the given scope.
@@ -76,26 +85,28 @@ func RulesEntry(paths config.InstallPaths) string {
 
 // AgentRulesTarget returns the rules file one agent reads in the given scope.
 func AgentRulesTarget(agent string, paths config.InstallPaths) string {
+	spec, ok := config.RulesSpec(agent)
+	if !ok {
+		return ""
+	}
+	rel := spec.Global
 	if paths.Mode == config.ModeProject {
-		if agent == "claude" {
-			return filepath.Join(paths.ProjectRoot, "CLAUDE.md")
+		rel = spec.Project
+	}
+	if strings.TrimSpace(rel) == "" {
+		return ""
+	}
+	if paths.Mode == config.ModeProject {
+		if paths.ProjectRoot == "" {
+			return ""
 		}
-		return filepath.Join(paths.ProjectRoot, "AGENTS.md")
+		return filepath.Join(paths.ProjectRoot, filepath.FromSlash(rel))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	switch agent {
-	case "codex":
-		return filepath.Join(home, ".codex", "AGENTS.md")
-	case "claude":
-		return filepath.Join(home, ".claude", "CLAUDE.md")
-	case "cursor":
-		return filepath.Join(home, ".cursor", "AGENTS.md")
-	default:
-		return filepath.Join(home, ".grok", "AGENTS.md")
-	}
+	return filepath.Join(home, filepath.FromSlash(rel))
 }
 
 // RulesIntegration reports whether the agent rules file of the given scope references the Kander entry.
@@ -120,7 +131,8 @@ func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
 			if linked == expected {
 				return true, target
 			}
-			if paths.Mode == config.ModeProject && agent != "claude" {
+			spec, _ := config.RulesSpec(agent)
+			if paths.Mode == config.ModeProject && spec.Integration != "claude-import" {
 				return false, config.Text(
 					"menu.does_not_point_to_the_project_rules_entry", target, entry,
 				)
@@ -132,7 +144,8 @@ func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
 		return false, config.Text("menu.cannot_read", target)
 	}
 	var integrated bool
-	if agent == "claude" {
+	spec, _ := config.RulesSpec(agent)
+	if spec.Integration == "claude-import" {
 		integrated = claudeRulesImportPresent(string(text), entry, filepath.Dir(target))
 	} else {
 		integrated = mergedRulesPresent(string(text), entry) ||
@@ -242,7 +255,8 @@ func entrySpelling(paths config.InstallPaths) string {
 
 func referenceBlock(agent string, paths config.InstallPaths) string {
 	spelling := entrySpelling(paths)
-	if agent == "claude" {
+	spec, _ := config.RulesSpec(agent)
+	if spec.Integration == "claude-import" {
 		return "@" + spelling + "\n"
 	}
 	return "## Kander Rules Entry\n\n" +

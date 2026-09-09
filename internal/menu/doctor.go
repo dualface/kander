@@ -184,6 +184,9 @@ func reportRulesIntegration(cfg *config.Config, paths config.InstallPaths, repai
 	seen := map[string]struct{}{}
 	for _, selected := range config.ExecutionAgentsInUse(effective) {
 		target := install.AgentRulesTarget(selected, paths)
+		if target == "" {
+			continue
+		}
 		if _, ok := seen[target]; ok && target != "" {
 			continue
 		}

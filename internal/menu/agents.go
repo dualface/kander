@@ -28,12 +28,11 @@ func versionFailedText() string {
 }
 
 func agentLabels() map[string]string {
-	return map[string]string{
-		"codex":  "Codex",
-		"claude": "Claude",
-		"grok":   "Grok",
-		"cursor": "Cursor",
+	labels := make(map[string]string, len(config.ExecutionAgents))
+	for _, name := range config.ExecutionAgents {
+		labels[name] = config.AgentDisplayName(name)
 	}
+	return labels
 }
 
 func currentPaths() (config.InstallPaths, error) {

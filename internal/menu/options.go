@@ -357,7 +357,7 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 		config.Text("menu.kanban_model", label, scaleLabel),
 		config.Text("menu.model", label, scaleLabel),
 		config.Text("menu.full_model_id_for_s", scaleLabel))}
-	if config.AgentFor(s.Config, agent).Dialect == "cursor" && config.AgentFor(s.Config, agent).Args == nil {
+	if !config.AgentSupportsEffort(s.Config, agent) {
 		return fields
 	}
 	return append(fields, s.kanbanModelField(agent, scale+"_effort",
@@ -399,7 +399,7 @@ func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
 		entry:  entry,
 		field:  "model",
 	}}
-	if reviewer == "cursor" {
+	if !config.AgentSupportsEffort(s.Config, reviewer) {
 		return fields
 	}
 	return append(fields, ModelField{
@@ -474,6 +474,9 @@ func (s *Session) finish() error {
 	seen := map[string]struct{}{}
 	for _, selected := range config.ExecutionAgentsInUse(s.Config) {
 		target := install.AgentRulesTarget(selected, paths)
+		if target == "" {
+			continue
+		}
 		if _, ok := seen[target]; ok && target != "" {
 			continue
 		}
@@ -516,7 +519,7 @@ func (s *Session) Summary() []string {
 	lines = append(lines, config.Text("rules.modules")+": "+config.FormatRulesSummary(cfg.Rules))
 	for _, agent := range config.ExecutionAgentsInUse(cfg) {
 		entry := cfg.Models.Kanban[agent]
-		lines = append(lines, "  kanban "+agent+": "+config.FormatKanbanModelSummary(agent, entry))
+		lines = append(lines, "  kanban "+agent+": "+config.FormatKanbanModelSummary(s.Config, agent, entry))
 	}
 	seen := map[string]struct{}{}
 	for _, role := range config.ReviewRoles {
