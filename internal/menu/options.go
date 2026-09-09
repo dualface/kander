@@ -79,7 +79,7 @@ type Session struct {
 	scopeRaw        map[string]any
 	overlayRaw      map[string]any
 	overlayExisting map[string]any
-	overlayDraft    *config.Config
+	overlayDraft    bool
 	agents          map[string]agentState
 	exec            []Choice
 	review          []Choice

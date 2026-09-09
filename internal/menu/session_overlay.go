@@ -116,12 +116,15 @@ func (s *Session) SetTarget(target string) error {
 	if target == config.TargetOverlay {
 		merged, err := s.previewOverlay()
 		if err != nil {
-			if s.overlayDraft == nil {
+			if !s.overlayDraft {
 				return err
 			}
-			merged = config.Clone(s.overlayDraft)
+			merged, err = s.previewOverlayDraft(s.overlayRaw)
+			if err != nil {
+				return err
+			}
 		} else {
-			s.overlayDraft = nil
+			s.overlayDraft = false
 		}
 		if s.Target == config.TargetScope && s.Config != nil {
 			s.scopeConfig = s.Config
@@ -171,7 +174,7 @@ func (s *Session) rebuildOverlayConfig() error {
 	if err != nil {
 		return err
 	}
-	s.overlayDraft = nil
+	s.overlayDraft = false
 	s.Config = merged
 	return nil
 }
@@ -188,7 +191,7 @@ func (s *Session) applyOverlayEdit(mutate func(map[string]any)) error {
 	}
 	s.overlayRaw = candidate
 	s.OverlayDirty = true
-	s.overlayDraft = nil
+	s.overlayDraft = false
 	s.Config = merged
 	return nil
 }
@@ -230,7 +233,7 @@ func (s *Session) noteOverride(path []string, value any) error {
 		// and reports the error instead of silently publishing the old overlay.
 		config.OverlaySet(s.overlayRaw, value, path...)
 		s.OverlayDirty = true
-		s.overlayDraft = config.Clone(s.Config)
+		s.overlayDraft = true
 	}
 	return err
 }
@@ -250,16 +253,16 @@ func (s *Session) RestoreInherit(path ...string) error {
 	config.OverlayDelete(candidate, path...)
 	merged, err := config.MergeOverlayOnRaw(s.scopeRaw, candidate)
 	if err != nil {
-		if s.overlayDraft == nil {
+		if !s.overlayDraft {
 			return err
 		}
-		merged, err = s.restoreDraftField(candidate, path)
+		merged, err = s.previewOverlayDraft(candidate)
 		if err != nil {
 			return err
 		}
-		s.overlayDraft = config.Clone(merged)
+		s.overlayDraft = true
 	} else {
-		s.overlayDraft = nil
+		s.overlayDraft = false
 	}
 	s.overlayRaw = candidate
 	s.OverlayDirty = true
@@ -421,7 +424,7 @@ func (s *Session) saveOverlay() (string, error) {
 		s.overlayExisting = config.CloneOverlay(s.overlayRaw)
 		s.OverlayLocation.Exists = len(s.overlayRaw) > 0
 		s.OverlayDirty = false
-		s.overlayDraft = nil
+		s.overlayDraft = false
 	}
 	return path, err
 }

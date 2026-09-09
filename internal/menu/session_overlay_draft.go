@@ -2,47 +2,71 @@ package menu
 
 import (
 	"encoding/json"
+	"sort"
 
 	"github.com/dualface/kander/internal/config"
 )
 
-// restoreDraftField updates only the removed field's presentation while other
-// rejected inputs remain editable. This projection is never used for persistence:
-// saveOverlay always validates overlayRaw against the raw scope document.
-func (s *Session) restoreDraftField(candidate map[string]any, path []string) (*config.Config, error) {
-	section := map[string]any{}
-	if value, exists := candidate[path[0]]; exists {
-		section[path[0]] = value
-	}
-	inherited, err := config.MergeOverlayOnRaw(s.scopeRaw, section)
+// previewOverlayDraft rebuilds presentation from the current scope and explicit
+// edits. It never supplies persistence: saveOverlay validates the original raw
+// documents, including every rejected input retained in overlayRaw.
+func (s *Session) previewOverlayDraft(overlay map[string]any) (*config.Config, error) {
+	view, err := config.MergeOverlayOnRaw(s.scopeRaw, nil)
 	if err != nil {
-		// An incomplete section has no valid merged view yet. Its removed key
-		// inherits from the scope; the other rejected fields keep their inputs.
-		inherited, err = config.MergeOverlayOnRaw(s.scopeRaw, nil)
-		if err != nil {
-			return nil, err
+		return nil, err
+	}
+	accepted := map[string]any{}
+	pending := config.CloneOverlay(overlay)
+	// Keep schema defaults and coupled fields for every valid section. Retry
+	// remaining sections when another section supplies a needed definition.
+	for len(pending) > 0 {
+		keys := make([]string, 0, len(pending))
+		for key := range pending {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		progress := false
+		for _, key := range keys {
+			candidate := config.CloneOverlay(accepted)
+			candidate[key] = pending[key]
+			merged, mergeErr := config.MergeOverlayOnRaw(s.scopeRaw, candidate)
+			if mergeErr != nil {
+				continue
+			}
+			accepted = candidate
+			view = merged
+			delete(pending, key)
+			progress = true
+		}
+		if !progress {
+			break
 		}
 	}
-	defaults, err := config.DocumentFromConfig(inherited)
+	document, err := config.DocumentFromConfig(view)
 	if err != nil {
 		return nil, err
 	}
-	draft, err := config.DocumentFromConfig(s.overlayDraft)
+	// The remaining sections contain typed but rejected user inputs. Overlay
+	// only those explicit leaves onto the current inherited presentation.
+	applyDraftValues(document, pending, nil)
+	data, err := json.Marshal(document)
 	if err != nil {
 		return nil, err
 	}
-	if value, exists := config.OverlayGet(defaults, path...); exists {
-		config.OverlaySet(draft, value, path...)
-	} else {
-		config.OverlayDelete(draft, path...)
-	}
-	data, err := json.Marshal(draft)
-	if err != nil {
+	var draft config.Config
+	if err := json.Unmarshal(data, &draft); err != nil {
 		return nil, err
 	}
-	var view config.Config
-	if err := json.Unmarshal(data, &view); err != nil {
-		return nil, err
+	return &draft, nil
+}
+
+func applyDraftValues(document, values map[string]any, path []string) {
+	for key, value := range values {
+		childPath := append(append([]string{}, path...), key)
+		if object, ok := value.(map[string]any); ok {
+			applyDraftValues(document, object, childPath)
+		} else {
+			config.OverlaySet(document, value, childPath...)
+		}
 	}
-	return &view, nil
 }

@@ -492,8 +492,12 @@ func TestInvalidOverlayDraftRestoresFieldsAcrossTabs(t *testing.T) {
 	if err := session.SetTarget(config.TargetScope); err != nil {
 		t.Fatal(err)
 	}
+	session.SetLauncher("foreground")
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatalf("cannot reopen invalid draft: %v", err)
+	}
+	if session.Config.Launcher != "foreground" || session.FieldOverridden("launcher") {
+		t.Fatal("draft did not inherit the latest Global launcher")
 	}
 	if session.Config.TUI.Refresh != 17 || session.Config.TUI.Theme != "dark" {
 		t.Fatal("tab switch discarded draft values")
@@ -513,7 +517,7 @@ func TestInvalidOverlayDraftRestoresFieldsAcrossTabs(t *testing.T) {
 	if err := session.RestoreInherit("tui", "refresh"); err != nil {
 		t.Fatal(err)
 	}
-	if session.Config.TUI != inherited || session.overlayDraft != nil {
+	if session.Config.TUI != inherited || session.overlayDraft {
 		t.Fatal("final restoration did not return to the valid view")
 	}
 	if _, err := session.Save(); err != nil {
@@ -521,5 +525,49 @@ func TestInvalidOverlayDraftRestoresFieldsAcrossTabs(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("restoring all draft edits created an overlay")
+	}
+}
+
+func TestDraftProjectionPreservesRawRulesAndExplicitLanguage(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	delete(session.scopeRaw, "tui")
+	delete(session.scopeRaw, "rules")
+	data, _ := json.Marshal(session.scopeRaw)
+	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	rules := session.Config.Rules.Clone()
+	rules[config.RuleCode] = false
+	if err := session.SetRules(rules); err != nil {
+		t.Fatal(err)
+	}
+	session.SetLanguage("ja")
+	if err := session.SetTUIField("theme", "dark"); err == nil {
+		t.Fatal("expected invalid TUI draft")
+	}
+	if err := session.SetTarget(config.TargetScope); err != nil {
+		t.Fatal(err)
+	}
+	session.SetLauncher("foreground")
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.Rules[config.RuleGit] || session.FieldOverridden("rules", "git") {
+		t.Fatal("draft projection filled missing rule keys")
+	}
+	if session.Config.Language != "ja" || !session.FieldOverridden("language") {
+		t.Fatal("draft projection lost explicit language")
+	}
+	if session.Config.Launcher != "foreground" || session.FieldOverridden("launcher") {
+		t.Fatal("draft projection froze inherited launcher")
+	}
+	if session.Config.TUI.Theme != "dark" {
+		t.Fatal("draft projection lost rejected input")
+	}
+	if _, err := session.Save(); err == nil {
+		t.Fatal("presentation bypassed raw validation")
 	}
 }
