@@ -20,8 +20,25 @@ type startDialog struct {
 	startRequest
 	sequence uint64
 	phase    startPhase
+	failed   bool
 	message  string
 	bodyView viewport.Model
+}
+
+func startDialogTitle(dialog *startDialog) string {
+	switch dialog.phase {
+	case startLoading:
+		return t("tui.start_loading")
+	case startRunning:
+		return t("tui.start_title_starting")
+	case startFinished:
+		if dialog.failed {
+			return t("tui.start_title_failed")
+		}
+		return t("tui.start_title_started")
+	default:
+		return t("tui.start_confirm")
+	}
 }
 
 type startPreviewResult struct {
@@ -53,10 +70,10 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 			hint = t("tui.start_starting", dialog.TaskID)
 		}
 	}
-	return a.renderStartDialog(paragraphs, hint)
+	return a.renderStartDialog(paragraphs, hint, startDialogTitle(dialog))
 }
 
-func (a *App) renderStartDialog(paragraphs []string, hint string) (popupBox, string) {
+func (a *App) renderStartDialog(paragraphs []string, hint, title string) (popupBox, string) {
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	clean := func(s string) string { return printableText(ansi.Strip(s)) }
@@ -67,7 +84,7 @@ func (a *App) renderStartDialog(paragraphs []string, hint string) (popupBox, str
 	inner := frame.inner(w, h, max(1, min(w-8, max(40, blockWidth(strings.Join(paragraphs, "\n")+"\n"+hint)))))
 	// The hint rides inside the body rather than in the frame: it moves up against the paragraphs
 	// when the dialog runs out of height, which the plain hint row cannot do.
-	frame.Title = ansi.Wrap(clean(t("tui.start_confirm")), inner, "")
+	frame.Title = ansi.Wrap(clean(title), inner, "")
 	hint = ansi.Wrap(clean(hint), inner, "")
 	available := max(1, h-blockHeight(frame.Title)-3)
 	body := fitStartDialog(paragraphs, hint, inner, available, p, &a.StartConfirmation.bodyView)

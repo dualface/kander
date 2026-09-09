@@ -227,3 +227,64 @@ func TestStartDialogParagraphAndFooterLayout(test *testing.T) {
 		test.Fatal("horizontal content truncated")
 	}
 }
+
+func TestStartDialogTitleFollowsPhase(test *testing.T) {
+	app := startTestApp("todo")
+	app.HandleKey("s")
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_loading")) || strings.Contains(title, t("tui.start_confirm")) {
+		test.Fatalf("loading title: %q", title)
+	}
+	finishStartPreview(app)
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_confirm")) {
+		test.Fatalf("ready title: %q", title)
+	}
+	app.HandleKey("y")
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_title_starting")) || strings.Contains(title, "start-task") {
+		test.Fatalf("running title: %q", title)
+	}
+	app.applyStartResult(startResult{
+		sequence: app.StartConfirmation.sequence,
+		result:   launch.StartResult{TaskID: "start-task", Agent: "claude", Plan: launch.LaunchPlan{Launcher: "herdr"}},
+	})
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_title_started")) || strings.Contains(title, t("tui.start_confirm")) {
+		test.Fatalf("success title: %q", title)
+	}
+
+	app = startTestApp("todo")
+	app.HandleKey("s")
+	finishStartPreview(app)
+	app.HandleKey("y")
+	app.applyStartResult(startResult{sequence: app.StartConfirmation.sequence, err: errors.New("boom")})
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_title_failed")) || strings.Contains(title, t("tui.start_confirm")) {
+		test.Fatalf("failure title: %q", title)
+	}
+	app.StartConfirmation.message = t("tui.start_success", "start-task", "claude", "herdr", ":")
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_title_failed")) || strings.Contains(title, t("tui.start_title_started")) {
+		test.Fatalf("failed flag ignored: %q", title)
+	}
+	app.StartConfirmation.failed = false
+	app.StartConfirmation.message = t("tui.start_failed", "boom")
+	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_title_started")) || strings.Contains(title, t("tui.start_title_failed")) {
+		test.Fatalf("success flag ignored: %q", title)
+	}
+
+	app.Width, app.Height = 12, 24
+	for _, phase := range []startPhase{startLoading, startReady, startRunning, startFinished} {
+		app.StartConfirmation.phase = phase
+		_, popup := app.renderStartConfirmation()
+		for _, line := range strings.Split(ansi.Strip(popup), "\n") {
+			if ansi.StringWidth(line) > app.Width {
+				test.Fatalf("overflow phase %d: %q", phase, line)
+			}
+		}
+	}
+}
+
+func startDialogTitleText(app *App) string {
+	_, popup := app.renderStartConfirmation()
+	lines := strings.Split(ansi.Strip(popup), "\n")
+	if len(lines) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(strings.Trim(lines[1], " │"))
+}
