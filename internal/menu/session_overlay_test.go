@@ -571,3 +571,31 @@ func TestDraftProjectionPreservesRawRulesAndExplicitLanguage(t *testing.T) {
 		t.Fatal("presentation bypassed raw validation")
 	}
 }
+
+func TestGlobalReviewerResetUpdatesProjectModelInheritance(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	session.Config.Models.Review["claude"] = map[string]string{"model": "claude-model", "effort": "high"}
+	session.Config.Models.ReviewRoles["PM"] = map[string]string{"model": "old-codex", "effort": "low"}
+	session.scopeRaw, _ = config.DocumentFromConfig(session.Config)
+	session.SetReviewer("PM", "claude")
+	session.ResetReviewRoleModel("PM")
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	entry := session.Config.Models.ReviewRoles["PM"]
+	if entry["model"] != "claude-model" || entry["effort"] != "high" {
+		t.Fatalf("inherited stale role defaults: %#v", entry)
+	}
+	if session.FieldOverridden("models") {
+		t.Fatal("reset created project overrides")
+	}
+	fields := session.ReviewModelFieldsFor("PM")
+	fields[0].Set("project-model")
+	session.NoteModelOverride(fields[0], "project-model")
+	if err := session.RestoreInherit("models", "review_roles", "PM", "model"); err != nil {
+		t.Fatal(err)
+	}
+	if got := session.Config.Models.ReviewRoles["PM"]["model"]; got != "claude-model" {
+		t.Fatalf("restore used old reviewer defaults: %q", got)
+	}
+}

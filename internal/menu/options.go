@@ -499,7 +499,12 @@ func (s *Session) ResetReviewRoleModel(role string) {
 		return
 	}
 	s.Config.Models.ReviewRoles[role] = map[string]string{}
-	s.seedReviewRole(role, s.Config.Reviewers[role])
+	entry := s.seedReviewRole(role, s.Config.Reviewers[role])
+	rawEntry := map[string]any{}
+	for key, value := range entry {
+		rawEntry[key] = value
+	}
+	s.noteOverride([]string{"models", "review_roles", role}, rawEntry)
 }
 
 // ReviewModelFields is the flattened, order-preserving deduplication of the per-role fields, for the line-based menu.

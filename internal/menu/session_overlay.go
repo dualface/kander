@@ -234,6 +234,11 @@ func (s *Session) noteOverride(path []string, value any) error {
 		config.OverlaySet(s.overlayRaw, value, path...)
 		s.OverlayDirty = true
 		s.overlayDraft = true
+		// Model inputs may still reference a map replaced by a previous merge.
+		// Rebuild the visible draft from raw edits rather than that old map.
+		if draft, draftErr := s.previewOverlayDraft(s.overlayRaw); draftErr == nil {
+			s.Config = draft
+		}
 	}
 	return err
 }

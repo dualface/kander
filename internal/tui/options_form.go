@@ -675,19 +675,26 @@ func (b *formBinding) apply(p *optionsPanel) {
 	case sectionRules:
 		b.applyRules(p)
 	case sectionInterface:
+		// Capture edits before any setter rebuilds derived configuration values.
+		languageChanged := p.session != nil && b.language != "" && p.session.Config.Language != b.language
+		agentLanguageChanged := p.session != nil && b.agentLanguage != "" && p.session.Config.AgentLanguage != b.agentLanguage
 		b.applyInterface(p)
-		if p.session != nil && b.language != "" && p.session.Config.Language != b.language {
+		if languageChanged {
 			before := p.overridePresence("language")
 			p.session.SetLanguage(b.language)
 			p.app.Context = tuiPageContext()
 			p.markDirty()
 			p.rebuildIfOverrideChanged(before, interfaceFocusKey("language"), "language")
 		}
-		if p.session != nil && b.agentLanguage != "" && p.session.Config.AgentLanguage != b.agentLanguage {
+		if agentLanguageChanged {
 			before := p.overridePresence("agent_language")
 			p.session.SetAgentLanguage(b.agentLanguage)
 			p.markDirty()
 			p.rebuildIfOverrideChanged(before, interfaceFocusKey("agent_language"), "agent_language")
+		}
+		if p.session != nil && !agentLanguageChanged && b.agentLanguage != p.session.Config.AgentLanguage {
+			b.agentLanguage = p.session.Config.AgentLanguage
+			p.rebuildAt(interfaceFocusKey("language"))
 		}
 	case sectionExecution:
 		session := p.session
