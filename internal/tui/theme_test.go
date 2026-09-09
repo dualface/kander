@@ -216,6 +216,33 @@ func TestThemePaletteTrueColorSequences(t *testing.T) {
 	}
 }
 
+func TestMarkdownRenderFollowsColorProfile(t *testing.T) {
+	doc := "body text for the theme canvas"
+	cases := []struct {
+		profile termenv.Profile
+		theme   string
+	}{
+		{termenv.TrueColor, "light"},
+		{termenv.ANSI256, "light"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.profile.Name(), func(t *testing.T) {
+			previous := lipgloss.ColorProfile()
+			lipgloss.SetColorProfile(tc.profile)
+			defer lipgloss.SetColorProfile(previous)
+
+			joined := strings.Join(renderMarkdown(doc, 40, tc.theme), "\n")
+			wantBG := tc.profile.Color(string(themePalette(tc.theme).Bg)).Sequence(true)
+			if wantBG == "" || !strings.Contains(joined, wantBG) {
+				t.Fatalf("markdown missing profile bg %q: %q", wantBG, joined)
+			}
+			if tc.profile == termenv.ANSI256 && strings.Contains(joined, "48;2;250;250;250") {
+				t.Fatalf("ANSI256 markdown still emitted truecolor canvas: %q", joined)
+			}
+		})
+	}
+}
+
 func TestThemePaletteProfileDowngrade(t *testing.T) {
 	tags := []string{"", "title", "separator", "heading-backlog", "popup-warn"}
 	for _, name := range namedThemeNames() {

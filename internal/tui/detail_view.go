@@ -63,6 +63,7 @@ func renderMarkdown(doc string, width int, theme string) []string {
 		glamour.WithStyles(markdownCanvasStyle(theme)),
 		glamour.WithWordWrap(width),
 		glamour.WithEmoji(),
+		glamour.WithColorProfile(lipgloss.ColorProfile()),
 	)
 	if err != nil {
 		return wrapText(doc, width)
