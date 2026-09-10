@@ -207,9 +207,9 @@ func MarshalImportSnapshot(record ImportSnapshot) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// RenderImportMarkdown renders the readable attachment. The remote text stays
-// inside this attachment and is marked as untrusted data; it never reaches the
-// card structure or the agent instructions.
+// RenderImportMarkdown renders the readable attachment. The sanitized remote
+// text stays in this attachment and is marked as untrusted data; the card itself
+// carries only the single-line title as its heading.
 func RenderImportMarkdown(record ImportSnapshot) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "# Issue #%d: %s\n\n", record.Issue.Number, record.Issue.Title)
@@ -318,9 +318,11 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 	if err != nil {
 		return result, NewError(ErrorInvalidQuery, "language", Sanitize(options.Language))
 	}
-	taskType := strings.TrimSpace(options.Type)
-	if taskType != "" && !containsValue(board.TaskTypes(), taskType) {
-		return result, NewError(ErrorInvalidQuery, "type", Sanitize(taskType))
+	// requestedType keeps the caller's choice: an empty value hands the TYPE to
+	// the labels, and the contract reports which of the two happened.
+	requestedType := strings.TrimSpace(options.Type)
+	if requestedType != "" && !containsValue(board.TaskTypes(), requestedType) {
+		return result, NewError(ErrorInvalidQuery, "type", Sanitize(requestedType))
 	}
 	sourceKey, err := repository.IssueSourceKey(number)
 	if err != nil {
@@ -351,6 +353,7 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 	if err := validateImportIdentity(record, repository, number); err != nil {
 		return result, err
 	}
+	taskType := requestedType
 	if taskType == "" {
 		taskType = KindFromLabels(record.Issue.Labels)
 	}
@@ -365,7 +368,7 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 		Kind:      taskType,
 		Language:  language,
 		Large:     options.Large,
-		Contract:  BuildImportContract(record, options.Large),
+		Contract:  BuildImportContract(record, requestedType, options.Large),
 		Files: []board.ImportFile{
 			{Name: SourceFileName, Data: encoded},
 			{Name: SourceMarkdownName, Data: []byte(RenderImportMarkdown(record))},
@@ -386,16 +389,24 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 }
 
 // BuildImportContract authors the card sections from the confirmed identity and
-// the issue number. The remote title, body and comments never enter these
-// sections, so an issue cannot inject card structure or agent instructions.
-// large selects the SIZE the caller recorded on the card.
-func BuildImportContract(record ImportSnapshot, large bool) board.ImportContract {
-	labels := "The labels did not match a task type, so TYPE defaults to feature."
+// the issue number. The issue body and comments never enter these sections, and
+// the title reaches the card only as its single sanitized heading, so an issue
+// cannot inject card structure or agent instructions.
+//
+// requestedType is the type the caller chose with --type, or empty when the
+// labels decide. The DISCUSSION section reports which of the two happened so the
+// card never contradicts its own TYPE field. large selects the SIZE the caller
+// recorded on the card.
+func BuildImportContract(record ImportSnapshot, requestedType string, large bool) board.ImportContract {
+	typeNote := "The labels did not match a task type, so TYPE defaults to feature; correct it if that is wrong."
 	for _, label := range record.Issue.Labels {
 		if kind, ok := kindFromLabel(label); ok {
-			labels = fmt.Sprintf("The labels map to TYPE %s; correct it if that is wrong.", kind)
+			typeNote = fmt.Sprintf("The labels map to TYPE %s; correct it if that is wrong.", kind)
 			break
 		}
+	}
+	if requestedType != "" {
+		typeNote = fmt.Sprintf("TYPE was set with --type %s; the issue did not decide it, so correct it if that is wrong.", requestedType)
 	}
 	comments := "Comments were not imported; import again with comments if the discussion matters."
 	if record.CommentsLoaded {
@@ -437,7 +448,7 @@ func BuildImportContract(record ImportSnapshot, large bool) board.ImportContract
 			fmt.Sprintf("- Fetched at: %s", record.FetchedAt),
 			"- Snapshot: source/github-issue.json (machine-readable) and source/github-issue.md (readable).",
 			"- Imported by `kander issue import`; the import did not decide the acceptance criteria and did not record any review conclusion.",
-			fmt.Sprintf("- Items the issue cannot determine: task TYPE (%s), task SIZE (%s), whether the acceptance criteria are complete, and the resolution priority. Confirm or correct them before this card leaves backlog.", labels, size),
+			fmt.Sprintf("- Items the issue cannot determine: task TYPE (%s), task SIZE (%s), whether the acceptance criteria are complete, and the resolution priority. Confirm or correct them before this card leaves backlog.", typeNote, size),
 		}, "\n"),
 	}
 }

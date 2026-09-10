@@ -644,3 +644,58 @@ func TestIssueImportRejectsMismatchedProviderReply(t *testing.T) {
 		})
 	}
 }
+
+func TestIssueImportTypeNoteMatchesTheCard(t *testing.T) {
+	tests := []struct {
+		name     string
+		labels   []string
+		flags    []string
+		want     string
+		contains string
+		absent   string
+	}{
+		{
+			name: "flag decides without labels", flags: []string{"--type", "bug"},
+			want: "Bug", contains: "--type bug", absent: "defaults to feature",
+		},
+		{
+			name: "flag overrides a mapped label", labels: []string{"enhancement"}, flags: []string{"--type", "research"},
+			want: "Research", contains: "--type research", absent: "labels map to TYPE feature",
+		},
+		{
+			name: "labels decide", labels: []string{"type/bug"},
+			want: "Bug", contains: "labels map to TYPE bug", absent: "--type",
+		},
+		{
+			name: "default type", want: "Feature", contains: "defaults to feature", absent: "--type",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := importTestBoard(t)
+			repository := importTestRepository()
+			snapshot := importTestSnapshot(repository, 7)
+			snapshot.Labels = test.labels
+			stub := &stubResolver{repository: repository, snapshot: snapshot}
+			args := append([]string{"import", "7", "--json"}, test.flags...)
+			code, stdout, stderr := runIssue(t, stub, args...)
+			if code != 0 || stderr != "" {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			text := importCardText(t, root, decodeImportJSON(t, stdout).TaskID)
+			if got := board.MetadataFrom(text, board.FieldType); got != test.want {
+				t.Fatalf("TYPE=%q want %q:\n%s", got, test.want, text)
+			}
+			discussion, ok := board.SectionBody(text, board.SectionDiscussion)
+			if !ok {
+				t.Fatalf("no DISCUSSION section:\n%s", text)
+			}
+			if !strings.Contains(discussion, test.contains) {
+				t.Fatalf("DISCUSSION does not explain the type with %q:\n%s", test.contains, discussion)
+			}
+			if strings.Contains(discussion, test.absent) {
+				t.Fatalf("DISCUSSION still carries %q:\n%s", test.absent, discussion)
+			}
+		})
+	}
+}
