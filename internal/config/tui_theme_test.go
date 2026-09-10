@@ -7,7 +7,7 @@ import (
 )
 
 func TestValidateTUIAcceptsNamedThemes(t *testing.T) {
-	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
+	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
 	if strings.Join(TUIThemes, ",") != strings.Join(want, ",") {
 		t.Fatalf("TUIThemes=%v", TUIThemes)
 	}

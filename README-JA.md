@@ -44,6 +44,8 @@ kander
 
 ![ターミナルカンバン](docs/kanban-screenshot-01.png)
 
+`o` → インターフェース → テーマで **Tide**、**Dusk**、**Slate Dark**、**Slate Light** を選べます。Slate のダーク／ライトは herdr などのグレーブルーの端末に調和します。既存テーマと既定設定も引き続き利用できます。
+
 > 上図のカンバンの内容は私の実プロジェクト [https://quicktui.ai](https://quicktui.ai) のものです。QuickTUI はコンピュータ上のさまざまな Agent をリモート操作するツールで、iOS/Android/macOS/Linux/Windows に対応し、無料で使えます。
 
 さらに詳しく: スライド [タスクを効率的に進める方法](docs/how-to-advance-tasks-efficiently-ja.pdf) (PDF) を参照してください。

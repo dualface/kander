@@ -23,7 +23,10 @@ type palette struct {
 	PopupEdge lipgloss.Color
 	Warn      lipgloss.Color
 	OK        lipgloss.Color
-	Headings  map[string]lipgloss.Color
+	// Optional surface colors keep legacy themes using their inverted selection.
+	SelectionBg lipgloss.Color
+	PanelEdge   lipgloss.Color
+	Headings    map[string]lipgloss.Color
 }
 
 // themeDef is one named theme. Adding a theme means adding a table row;
@@ -173,6 +176,106 @@ var themeTable = []themeDef{
 			"trash":    lipgloss.Color("#ff8080"),
 		},
 	}},
+	{name: "tide", dark: true, palette: palette{
+		Base:        lipgloss.Color("#dce7e8"),
+		Bg:          lipgloss.Color("#101719"),
+		Dim:         lipgloss.Color("#8a9ea3"),
+		Separator:   lipgloss.Color("#74878d"),
+		Accent:      lipgloss.Color("#69c7b5"),
+		Bar:         lipgloss.Color("#83b2d0"),
+		ChromeFg:    lipgloss.Color("#dce7e8"),
+		ChromeBg:    lipgloss.Color("#19272b"),
+		PopupFg:     lipgloss.Color("#dce7e8"),
+		PopupEdge:   lipgloss.Color("#69c7b5"),
+		Warn:        lipgloss.Color("#e39797"),
+		OK:          lipgloss.Color("#9abd9f"),
+		SelectionBg: lipgloss.Color("#203b38"),
+		PanelEdge:   lipgloss.Color("#304349"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#8faebd"),
+			"todo":     lipgloss.Color("#c8aa70"),
+			"working":  lipgloss.Color("#83b2d0"),
+			"review":   lipgloss.Color("#69c7b5"),
+			"done":     lipgloss.Color("#9abd9f"),
+			"archived": lipgloss.Color("#a2aebb"),
+			"trash":    lipgloss.Color("#e39797"),
+		},
+	}},
+	{name: "dusk", dark: true, palette: palette{
+		Base:        lipgloss.Color("#dfe7f0"),
+		Bg:          lipgloss.Color("#101722"),
+		Dim:         lipgloss.Color("#93a5ba"),
+		Separator:   lipgloss.Color("#75869a"),
+		Accent:      lipgloss.Color("#8db8e5"),
+		Bar:         lipgloss.Color("#8db8e5"),
+		ChromeFg:    lipgloss.Color("#dfe7f0"),
+		ChromeBg:    lipgloss.Color("#1b293b"),
+		PopupFg:     lipgloss.Color("#dfe7f0"),
+		PopupEdge:   lipgloss.Color("#8db8e5"),
+		Warn:        lipgloss.Color("#df9b9b"),
+		OK:          lipgloss.Color("#a1c0a5"),
+		SelectionBg: lipgloss.Color("#233951"),
+		PanelEdge:   lipgloss.Color("#304157"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#a2b2cc"),
+			"todo":     lipgloss.Color("#c9ae7d"),
+			"working":  lipgloss.Color("#8db8e5"),
+			"review":   lipgloss.Color("#83bdaf"),
+			"done":     lipgloss.Color("#a1c0a5"),
+			"archived": lipgloss.Color("#a5afc0"),
+			"trash":    lipgloss.Color("#df9b9b"),
+		},
+	}},
+	{name: "slate-dark", dark: true, palette: palette{
+		Base:        lipgloss.Color("#cdd3de"),
+		Bg:          lipgloss.Color("#0d1117"),
+		Dim:         lipgloss.Color("#8790a1"),
+		Separator:   lipgloss.Color("#737f90"),
+		Accent:      lipgloss.Color("#86a9dd"),
+		Bar:         lipgloss.Color("#86a9dd"),
+		ChromeFg:    lipgloss.Color("#cdd3de"),
+		ChromeBg:    lipgloss.Color("#1b2029"),
+		PopupFg:     lipgloss.Color("#cdd3de"),
+		PopupEdge:   lipgloss.Color("#86a9dd"),
+		Warn:        lipgloss.Color("#d49393"),
+		OK:          lipgloss.Color("#a1b6a4"),
+		SelectionBg: lipgloss.Color("#202c3e"),
+		PanelEdge:   lipgloss.Color("#2b303b"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#98a5b8"),
+			"todo":     lipgloss.Color("#b9a273"),
+			"working":  lipgloss.Color("#86a9dd"),
+			"review":   lipgloss.Color("#99abc6"),
+			"done":     lipgloss.Color("#a1b6a4"),
+			"archived": lipgloss.Color("#98a5b8"),
+			"trash":    lipgloss.Color("#d49393"),
+		},
+	}},
+	{name: "slate-light", dark: false, palette: palette{
+		Base:        lipgloss.Color("#283345"),
+		Bg:          lipgloss.Color("#e6eaf0"),
+		Dim:         lipgloss.Color("#566579"),
+		Separator:   lipgloss.Color("#7a8696"),
+		Accent:      lipgloss.Color("#46688f"),
+		Bar:         lipgloss.Color("#46688f"),
+		ChromeFg:    lipgloss.Color("#34445a"),
+		ChromeBg:    lipgloss.Color("#cdd5e0"),
+		PopupFg:     lipgloss.Color("#283345"),
+		PopupEdge:   lipgloss.Color("#46688f"),
+		Warn:        lipgloss.Color("#9a4145"),
+		OK:          lipgloss.Color("#46684f"),
+		SelectionBg: lipgloss.Color("#d0dceb"),
+		PanelEdge:   lipgloss.Color("#bbc5d2"),
+		Headings: map[string]lipgloss.Color{
+			"backlog":  lipgloss.Color("#526782"),
+			"todo":     lipgloss.Color("#805e24"),
+			"working":  lipgloss.Color("#46688f"),
+			"review":   lipgloss.Color("#586a86"),
+			"done":     lipgloss.Color("#46684f"),
+			"archived": lipgloss.Color("#586a86"),
+			"trash":    lipgloss.Color("#9a4145"),
+		},
+	}},
 }
 
 func themeDefByName(name string) (themeDef, bool) {
@@ -260,7 +363,7 @@ func styleFor(tag string, p palette) lipgloss.Style {
 	case tag == "search":
 		return p.ink(p.Accent).Bold(true)
 	case tag == "selected" || tag == "select":
-		return p.ink(p.Base).Reverse(true).Bold(true)
+		return p.selection(p.Base).Bold(true)
 	case tag == "bar":
 		return p.ink(p.Bar).Bold(true)
 	case tag == "match" || tag == "caret":
@@ -276,7 +379,7 @@ func styleFor(tag string, p palette) lipgloss.Style {
 	case tag == "popup-edge":
 		return p.ink(p.PopupEdge)
 	case tag == "popup-sel":
-		return p.ink(p.PopupFg).Reverse(true).Bold(true)
+		return p.selection(p.PopupFg).Bold(true)
 	case tag == "popup-dim":
 		return p.ink(p.Dim)
 	case tag == "popup-group":
@@ -297,11 +400,23 @@ func styleFor(tag string, p palette) lipgloss.Style {
 	return style
 }
 
-// headingStyle is the style of a column title. The selected column is inverted,
-// so which column has focus is obvious at a glance even when no card is selected.
+// selection keeps text light on dark surface themes and dark on light ones.
+// An empty SelectionBg preserves the original inverted-color behavior.
+func (p palette) selection(legacyColor lipgloss.Color) lipgloss.Style {
+	if p.SelectionBg != "" {
+		return lipgloss.NewStyle().Foreground(p.Base).Background(p.SelectionBg)
+	}
+	return p.ink(legacyColor).Reverse(true)
+}
+
+// headingStyle marks focus even when the column has no selected card.
+// Surface themes use the shared accent; legacy themes invert their state color.
 func headingStyle(p palette, state string, focused bool) lipgloss.Style {
 	style := styleFor("heading-"+state, p)
 	if focused {
+		if p.SelectionBg != "" {
+			return p.ink(p.Accent).Reverse(true).Bold(true)
+		}
 		return style.Reverse(true)
 	}
 	return style
@@ -326,11 +441,11 @@ func stateColor(p palette, state string) lipgloss.Color {
 
 // cardStyle is the style of one line of a task card. Line 0 is the title and takes the color of its column,
 // staying in the same family as the column title; the remaining lines are the task ID and metadata and keep the base color.
-// A selected card is inverted in its column color as one block, so the selection and its column match up at a glance.
+// A selected card uses the theme selection surface, or the legacy inverted state color.
 func cardStyle(p palette, state string, line int, selected bool) lipgloss.Style {
 	color := stateColor(p, state)
 	if selected {
-		style := p.ink(color).Reverse(true)
+		style := p.selection(color)
 		if line == 0 {
 			return style.Bold(true)
 		}
@@ -342,20 +457,26 @@ func cardStyle(p palette, state string, line int, selected bool) lipgloss.Style 
 	return p.ink(p.Base)
 }
 
-// panelBorderStyle is the border of a column panel: the selected column outlines focus in its column color,
-// while the others take the low-contrast separator and do not compete with the card content.
+// panelBorderStyle uses quiet panel edges and a shared focus accent for surface
+// themes; legacy themes retain their separator and state colors.
 func panelBorderStyle(p palette, state string, focused bool) lipgloss.Style {
 	if focused {
+		if p.SelectionBg != "" {
+			return p.ink(p.Accent)
+		}
 		return p.ink(stateColor(p, state))
+	}
+	if p.PanelEdge != "" {
+		return p.ink(p.PanelEdge)
 	}
 	return styleFor("separator", p)
 }
 
 // badgeStyle is the task count badge after a column title. It is an inverted little block rather than a bare number:
-// the selected column uses its column color and joins the equally inverted title, while the others go dim and only hint.
+// the selected count joins its title; unfocused counts stay subdued.
 func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
 	if focused {
-		return p.ink(stateColor(p, state)).Reverse(true).Bold(true)
+		return headingStyle(p, state, true)
 	}
 	return p.ink(p.Dim).Reverse(true)
 }
