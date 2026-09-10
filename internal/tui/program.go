@@ -223,6 +223,8 @@ func mapKey(event tea.KeyMsg) string {
 		return "ctrl-u"
 	case tea.KeyCtrlD:
 		return "ctrl-d"
+	case tea.KeyCtrlS:
+		return "ctrl-s"
 	case tea.KeyCtrlC:
 		return "ctrl-c"
 	}

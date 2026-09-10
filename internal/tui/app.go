@@ -53,6 +53,17 @@ type App struct {
 	focusRunning      bool
 	PersistColumns    persistFn
 	Now               func() time.Time
+	// PrepareHandoff, SaveHandoff and StartHandoff drive the issue handoff form:
+	// read the backlog card, publish the confirmed contract, then move and start.
+	PrepareHandoff func(repository issue.Repository, number int, taskID string) (handoffCard, error)
+	SaveHandoff    func(request handoffSaveRequest) (uint64, error)
+	StartHandoff   handoffStartRunner
+	// While Handoff is non-nil it covers the issues overlay and owns the input.
+	Handoff    *handoffState
+	handoffSeq uint64
+	// handoffImportSeq identifies the last handoff import, so a late result
+	// cannot clear the importing flag of a newer request.
+	handoffImportSeq uint64
 
 	Searching        bool
 	Detail           *Task
@@ -150,6 +161,9 @@ func (a *App) View() string {
 	if a.Issues != nil {
 		a.ShowCursor = a.Issues.editing != ""
 	}
+	if a.Handoff != nil {
+		a.ShowCursor = a.Handoff.editing
+	}
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	switch {
@@ -159,6 +173,17 @@ func (a *App) View() string {
 	case a.StartConfirmation != nil:
 		box, popup := a.renderStartConfirmation()
 		base = overlay(base, popup, box.X, box.Y, p)
+	case a.Handoff != nil:
+		if a.Issues != nil {
+			issuesBox, issuesPopup := a.renderIssues()
+			base = overlay(base, issuesPopup, issuesBox.X, issuesBox.Y, p)
+		}
+		box, popup := a.renderHandoff()
+		base = overlay(base, popup, box.X, box.Y, p)
+		if a.Help {
+			helpBox, helpPopup := a.renderHelp()
+			base = overlay(base, helpPopup, helpBox.X, helpBox.Y, p)
+		}
 	case a.Issues != nil:
 		box, popup := a.renderIssues()
 		base = overlay(base, popup, box.X, box.Y, p)
@@ -859,6 +884,10 @@ func (a *App) HandleKey(key string) {
 	// The help overlay is read-only and any key closes it.
 	if a.Help {
 		a.Help = false
+		return
+	}
+	if a.Handoff != nil {
+		a.handleHandoffKey(key)
 		return
 	}
 	if a.Issues != nil {

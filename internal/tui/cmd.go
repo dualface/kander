@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/menu"
 )
 
@@ -128,6 +129,26 @@ func Run(_ []string) int {
 			return issue.Index{}, nil
 		}
 		return issue.LoadIndex(root)
+	}
+	app.PrepareHandoff = func(_ issue.Repository, _ int, taskID string) (handoffCard, error) {
+		return prepareHandoffCard(root, taskID)
+	}
+	app.SaveHandoff = func(request handoffSaveRequest) (uint64, error) {
+		if err := board.UpdateDocument(root, request.taskID, board.UpdateOptions{
+			Document: "spec.md", Text: request.text, ExpectedRevision: request.revision,
+		}); err != nil {
+			return 0, err
+		}
+		snapshot, err := board.ReadSnapshot(root, request.taskID)
+		if err != nil {
+			// The write succeeded; leaving the revision unknown makes the next
+			// save reconcile through the ordinary conflict path.
+			return 0, nil
+		}
+		return snapshot.Revision, nil
+	}
+	app.StartHandoff = func(request startRequest) (launch.StartResult, string, error) {
+		return runHandoffStart(root, request)
 	}
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)

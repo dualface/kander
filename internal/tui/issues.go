@@ -581,6 +581,8 @@ func (a *App) handleIssuesKey(key string) {
 		a.issuesImportOrJump(false)
 	case "I":
 		a.issuesImportOrJump(true)
+	case "s":
+		a.issuesHandoff()
 	case "up", "k", "K":
 		if a.issuesDetailPageActive() {
 			a.issuesScrollDetail(-1)

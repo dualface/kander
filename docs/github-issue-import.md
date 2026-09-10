@@ -146,6 +146,51 @@ The first matching label decides the TYPE, and `--type` overrides it:
 | `research`, `investigation`, `spike`, `question` | `research` |
 | anything else, or no label | `feature` |
 
+## Handoff to a running task
+
+On the terminal board the issues overlay's `s` key turns the selected issue into
+a running task. It first imports the issue when no card exists yet, or locates
+the existing backlog card; a card that already left `backlog` is only selected
+on the board and the form refuses to start it again.
+
+The form edits `TYPE`, `SIZE`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`,
+`ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, and `DISCUSSION`, and
+shows `LANGUAGE` as read-only: changing the language means cancelling and
+importing the issue again. Validation refuses empty sections, leftover
+placeholders, headings or metadata lines inside section bodies, an acceptance
+list without an item, and a `GOAL` that dropped the requirement to read
+`source/github-issue.md`. Nothing is written while the draft is invalid, so
+cancelling or fixing the draft leaves the backlog card and its source
+attachment untouched.
+
+After the contract passes validation the form shows the four post-creation
+self-review points from the Kanban rules, requires an explicit attestation of
+each point, and asks the creator to type the conclusion. One controlled update
+publishes the edited contract together with a `SELF_REVIEW: <conclusion>` line
+in `DISCUSSION`. The tool never fills that conclusion in, never claims to have
+verified the creator's judgement, and never writes a `CARD_REVIEW:` line; large
+cards and task-group members stay blocked at the `todo` gate until an
+independent agent has actually reviewed the card and its record was added.
+
+The update carries the revision the form read. If another write changed the
+card first, the save fails with a revision conflict and the form reloads the
+card so the user can reconcile the draft; nothing is overwritten.
+
+When the read-only gate check passes, a final confirmation shows the issue, the
+task ID, the agent, the launcher, and the `backlog → todo → working`
+transition. Only an explicit confirmation moves the card through the controlled
+`backlog → todo` step and then calls the same start path as the board's `s`
+key; the card is never moved to `working` first. The TUI starts only background
+launchers (`herdr`, `tmux`, `tmux-session`); `foreground` and `console` report
+that the CLI must be used instead. A failed start reports the card state that
+was actually observed and how to retry, and keeps the issue and the card.
+
+Card files stay the only trusted input. The agent still reads the source
+attachment through the card's `GOAL`; the generated task file keeps only the
+task ID, the fixed requirements, and the paths, so private issue text and
+dynamic attachment paths never enter the shell, `argv`, the environment, or the
+top-level task-file instructions.
+
 ## Failure and recovery
 
 Publication is one board operation: the card directory, both attachments, the
