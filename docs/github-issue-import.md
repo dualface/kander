@@ -102,15 +102,17 @@ The JSON snapshot has this shape (schema version 1):
 
 Fields are sanitized and bounded before they are written: terminal escape
 sequences, C0/C1 control characters, bidi overrides and invalid UTF-8 are
-removed from remote text, and no token, header, or provider URL is recorded.
-An issue that exceeds a bound is rejected with a remediation hint; the snapshot
-is never truncated.
+removed from remote text, and no token or sensitive response header is recorded.
+The issue link (`source_url`) is rebuilt from the confirmed identity; the
+snapshot also records the `repository.url` that `Repository.Validate` accepted
+for that identity, so it carries the same host and path. An issue that exceeds a
+bound is rejected with a remediation hint; the snapshot is never truncated.
 
 ## Limits
 
 | Bound | Value |
 | ----- | ----- |
-| Issue or comment body | 512 KiB |
+| Issue body | 512 KiB |
 | One comment | 64 KiB |
 | Comments | 50 |
 | Body plus comments per snapshot | 1 MiB |
@@ -124,12 +126,13 @@ import scope, the untrusted-data rule, and the items the issue cannot decide.
 Contracts that do not fit ask the reader to confirm them before the card leaves
 `backlog`.
 
-The remote title, body, and comments stay in the attachments. They are never
-spliced into the card structure: an issue cannot add a heading, rewrite a
-metadata field, or place `SELF_REVIEW`/`CARD_REVIEW` records, which would
-otherwise satisfy review gates. The imported card therefore never carries an
-auto-generated review record and always starts in `backlog`; the normal
-`backlog → todo` gate applies unchanged.
+The issue title reaches the card only as its `H1` heading, after the sanitizer
+reduced it to a single line. The body and comments stay in the attachments.
+Apart from that heading, remote text is never spliced into the card structure:
+an issue cannot add a section, rewrite a metadata field, or place
+`SELF_REVIEW`/`CARD_REVIEW` records, which would otherwise satisfy review gates.
+The imported card never carries an auto-generated review record and always
+starts in `backlog`; the normal `backlog → todo` gate applies unchanged.
 
 ## Label mapping
 
@@ -147,18 +150,22 @@ The first matching label decides the TYPE, and `--type` overrides it:
 
 Publication is one board operation: the card directory, both attachments, the
 `spec.md` entry, and the revision update are committed together. If the process
-stops in the middle, the pending operation stays invisible to `kander list`,
-`kander scan`, and the TUI, and `kander init` (or any board write) replays it.
-Replay is idempotent, so an interrupted import ends as one complete card and a
-repeat `kander issue import` then returns it as `existing`.
+stops in the middle, the journal keeps the operation as `prepared` and ordinary
+board commands refuse to run: `kander list`, `kander show`, `kander move`, and
+the TUI report `board.transaction_pending`, naming the pending operation, instead
+of showing or changing a half-published card. The replay happens in
+`kander init` (`MigrateCards` → `recoverMigrationRecords`), not in ordinary
+commands. Replay is idempotent, so an interrupted import ends as one complete
+card and a repeat `kander issue import` then returns it as `existing`.
 
 ## Threat model
 
 An issue can be written by anyone, so its title, body, comments, author names,
 and links are untrusted:
 
-- **Card-structure injection** — remote text cannot add headings, metadata, or
-  records; the contract bodies reject those shapes before publication.
+- **Card-structure injection** — the title is sanitized to a single line before
+  it becomes the card heading, and the contract bodies reject headings,
+  metadata and record markers before publication.
 - **Prompt injection** — the attachments carry an explicit untrusted-data
   banner and the card's `THREAT_MODEL` section requires treating them as
   evidence, never as instructions.

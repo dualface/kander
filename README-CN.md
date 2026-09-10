@@ -66,7 +66,7 @@ kander issue import 42 --comments                   # 导入为 backlog 卡片�
 
 `kander issue list` 按状态、标签和搜索词筛选，并限制获取的 Issue 数量；Pull Request 不会被混入结果。`kander issue show NUMBER` 渲染单个 Issue，`--comments` 会在明确的评论上限内加载评论，而不是静默截断。两个命令都支持 `--json` 供脚本使用，并给出可操作的错误（缺少 `gh`、host 未认证、限流、remote 歧义），而不是原始报错。
 
-`kander issue import NUMBER` 会创建一张与 Issue 绑定的普通 backlog 卡片：`--comments` 附带评论，`--type` 覆盖按标签推断的类型，`--large` 指定规模，`--language` 固定卡片语言，`--json` 输出可供脚本使用的结果。Issue 的标题、正文和评论会原样保存在 `spec.md` 旁边的 `source/github-issue.json` 与 `source/github-issue.md` 中，而卡片契约只根据已确认的仓库身份生成。重复导入同一个 Issue 会返回已有卡片，来源唯一性检查与卡片发布在同一个看板事务中完成，因此并发导入也不会产生重复卡片。超出上限的 Issue 会被拒绝并给出提示，而不是截断。快照格式与安全模型见 [docs/github-issue-import.md](docs/github-issue-import.md)。
+`kander issue import NUMBER` 会创建一张与 Issue 绑定的普通 backlog 卡片：`--comments` 附带评论，`--type` 覆盖按标签推断的类型，`--large` 指定规模，`--language` 固定卡片语言，`--json` 输出可供脚本使用的结果。Issue 的标题、正文和评论会保存在 `spec.md` 旁边的 `source/github-issue.json` 与 `source/github-issue.md` 中；清洗为单行后的标题同时作为卡片标题，而卡片契约只根据已确认的仓库身份生成。重复导入同一个 Issue 会返回已有卡片，来源唯一性检查与卡片发布在同一个看板事务中完成，因此并发导入也不会产生重复卡片。超出上限的 Issue 会被拒绝并给出提示，而不是截断。快照格式与安全模型见 [docs/github-issue-import.md](docs/github-issue-import.md)。
 
 在终端看板中按 `g` 会以弹窗形式打开同一份数据：`Enter` 打开选中 Issue 及其评论，`Tab` 切换状态，`/` 搜索，`l` 按标签筛选，`i` 将 Issue 导入为 backlog 卡片（已导入时跳转到对应卡片，`I` 则连评论一起导入），`r` 刷新，`o` 在浏览器中打开，`Esc`/`q` 关闭弹窗且不改变看板状态。已导入的 Issue 会显示对应任务 ID，远端有更新时只做标记，不会自动覆盖卡片。所有请求都在后台执行，看板不会阻塞。
 

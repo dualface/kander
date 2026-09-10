@@ -66,7 +66,7 @@ kander issue import 42 --comments                   # backlog カードとして
 
 `kander issue list` は状態・ラベル・検索語で絞り込み、取得する Issue 数を制限します。Pull Request は結果に混入しません。`kander issue show NUMBER` は 1 件の Issue を表示し、`--comments` は明示的な上限つきでコメントを読み込み、黙って切り捨てません。どちらのコマンドも `--json` に対応し、対処可能なエラー（`gh` がない、ホストが未認証、レート制限、リモートの曖昧さ）を報告します。
 
-`kander issue import NUMBER` は Issue に紐づく通常の backlog カードを作成します。`--comments` で議論も保存し、`--type` はラベル由来の種別を上書きし、`--large` は規模を指定し、`--language` はカードの言語を固定し、`--json` はスクリプト向けの結果を出力します。Issue のタイトル・本文・コメントは `spec.md` の隣の `source/github-issue.json` と `source/github-issue.md` にそのまま保存され、カードの契約は確認済みのリポジトリ識別情報だけから生成されます。同じ Issue を再取り込みすると既存のカードを返し、ソースキーの一意性確認とカードの公開は同じボードトランザクションで行われるため、並行取り込みでも重複は生じません。上限を超える Issue は切り捨てずにヒント付きで拒否します。スナップショット形式とセキュリティモデルは [docs/github-issue-import.md](docs/github-issue-import.md) を参照してください。
+`kander issue import NUMBER` は Issue に紐づく通常の backlog カードを作成します。`--comments` で議論も保存し、`--type` はラベル由来の種別を上書きし、`--large` は規模を指定し、`--language` はカードの言語を固定し、`--json` はスクリプト向けの結果を出力します。Issue のタイトル・本文・コメントは `spec.md` の隣の `source/github-issue.json` と `source/github-issue.md` に保存され、1 行にサニタイズされたタイトルはカードの見出しにもなります。カードの契約は確認済みのリポジトリ識別情報だけから生成されます。同じ Issue を再取り込みすると既存のカードを返し、ソースキーの一意性確認とカードの公開は同じボードトランザクションで行われるため、並行取り込みでも重複は生じません。上限を超える Issue は切り捨てずにヒント付きで拒否します。スナップショット形式とセキュリティモデルは [docs/github-issue-import.md](docs/github-issue-import.md) を参照してください。
 
 端末ボードでは `g` が同じデータをオーバーレイで開きます。`Enter` で選択中の Issue とコメントを開き、`Tab` で状態を切り替え、`/` で検索、`l` でラベル絞り込み、`i` で Issue を backlog カードとして取り込み（取り込み済みなら対応カードへ移動、`I` はコメント付きで取り込み）、`r` で更新、`o` でブラウザ表示、`Esc`/`q` でボードを変えずに閉じます。取り込み済みの Issue はタスク ID を表示し、リモートが更新されていてもマークするだけでカードを上書きしません。すべてのリクエストはバックグラウンドで実行され、ボードはブロックしません。
 
