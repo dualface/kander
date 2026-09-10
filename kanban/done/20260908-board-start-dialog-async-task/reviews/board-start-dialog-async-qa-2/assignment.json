@@ -1,9 +1,0 @@
-{
-  "run_id": "board-start-dialog-async-qa-2",
-  "batch_id": "board-start-dialog-async-batch",
-  "author": "codex",
-  "basis": "独立核对最终源码及全库/race回归，QA-001 已由完整结果 viewport 修复；增量报告无新增及非门禁问题",
-  "items": {},
-  "owners": {},
-  "recorded_at": "2026-09-08T05:46:31.591975383Z"
-}

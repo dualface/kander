@@ -1,9 +1,0 @@
-{
-  "run_id": "g2-qa-r3",
-  "batch_id": "g2-batch-one",
-  "author": "coordinator",
-  "basis": "增量复审报告结构化块 FINDINGS 与 NON_BLOCKING 均为空数组，无条目可归属；前轮 QA-001/QA-002 已由报告逐项判定 closed",
-  "items": {},
-  "owners": {},
-  "recorded_at": "2026-09-07T20:00:15.371853359Z"
-}

@@ -1,5 +1,0 @@
-1:  4a28eff = 1:  4254966 docs: add GitHub issue integration research
-2:  6613012 = 2:  4e726fe build(release): automate tagged releases
-3:  f8b50e9 = 3:  57e8cfe docs(readme): document platform installation
-4:  6d036e2 = 4:  59f8d24 docs(rules): orchestrate grouped card starts
-5:  5a5abc0 = 5:  78cf1c9 docs(agents): require English task card titles

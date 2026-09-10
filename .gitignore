@@ -1,5 +1,4 @@
 # Locally generated directories, not repository content
-.code-review-graph/
 .memsearch/
 
 # Build and system artifacts
@@ -15,5 +14,4 @@ Thumbs.db
 
 /worktrees/
 /tmp/
-
-/kanban/.kander/
+/kanban/

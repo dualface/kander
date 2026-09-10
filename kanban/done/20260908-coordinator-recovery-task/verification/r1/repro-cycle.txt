@@ -1,8 +1,0 @@
---- FAIL: TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot (0.35s)
-    --- FAIL: TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot/working (0.20s)
-        coordinator_cycle_test.go:56: first start blocked full group recovery 编排检查点冲突或事实无效：member revision or execution cycle changed: 20260908-waiting-task
-    --- FAIL: TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot/missed-working (0.16s)
-        coordinator_cycle_test.go:44: 移入 review 前必须填写: TASK_BRANCH
-FAIL
-FAIL	github.com/dualface/kander/internal/board	0.361s
-FAIL

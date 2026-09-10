@@ -1,1 +1,0 @@
-Review focus: (1) QA: 提示词差异、claude 参数、回归测试是否钉住契约; (2) 架构边界: 改动只在 internal/review 提示词与启动参数; (3) 确认未改 internal/board/review_findings.go 与已有测试。 Verification records: go test ./..., go vet ./..., gofmt -l . 于 ef9f64043854fb3c284567f602d48d627f9b7df3 通过, 21 个包 ok。

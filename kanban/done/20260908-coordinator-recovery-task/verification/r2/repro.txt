@@ -1,6 +1,0 @@
---- FAIL: TestCoordinatorRecoversStartRollbackAndRetry (0.49s)
-    --- FAIL: TestCoordinatorRecoversStartRollbackAndRetry/rollback-snapshot (0.20s)
-        coordinator_rollback_test.go:84: recovery blocked 编排检查点冲突或事实无效：member execution cycle changed without first-start facts: 20260908-retry-task
-FAIL
-FAIL	github.com/dualface/kander/internal/launch	0.496s
-FAIL

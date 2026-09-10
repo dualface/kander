@@ -1,1 +1,0 @@
-上一轮 tui-project-options-qa-1 因缺少 kander-findings 围栏失败。本轮必须输出恰好一个 kander-findings JSON 围栏，含 FINDINGS 与 NON_BLOCKING。已修复双 tab 保存、鼠标 chrome 偏移、Global 清空 path、TUI 恢复继承、扁平 review_stages 恢复、overlay lock 清理。

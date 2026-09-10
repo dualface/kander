@@ -1,9 +1,0 @@
-{
-  "run_id": "require-complete-config-qa-2",
-  "batch_id": "require-complete-config-1",
-  "author": "grok",
-  "basis": "incremental QA run has no findings",
-  "items": {},
-  "owners": {},
-  "recorded_at": "2026-09-09T08:34:17.001734112Z"
-}

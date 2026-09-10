@@ -1,9 +1,0 @@
-{
-  "run_id": "g3-pm-r2",
-  "batch_id": "g3-batch-one",
-  "author": "coordinator",
-  "basis": "增量复审报告结构化块 FINDINGS 与 NON_BLOCKING 均为空数组，无条目可归属",
-  "items": {},
-  "owners": {},
-  "recorded_at": "2026-09-07T22:14:31.605430176Z"
-}

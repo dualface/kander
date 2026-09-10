@@ -1,1 +1,0 @@
-本轮用户明确纠正原先完整流程过于复杂，只要求按实际配置列执行和审核 Agent+Model；原卡完整流程节点不再是本轮要求。最终提交 c4bbc2b81a0eb0baefe0489a9e4873d10b6258aa 已执行 go test -json ./...：1161通过、1 Windows平台跳过、21包；定向3包74通过；git diff --check无输出。

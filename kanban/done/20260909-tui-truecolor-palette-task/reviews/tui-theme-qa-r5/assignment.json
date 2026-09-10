@@ -1,9 +1,0 @@
-{
-  "run_id": "tui-theme-qa-r5",
-  "batch_id": "tui-theme-batch-one",
-  "author": "grok-orchestrator",
-  "basis": "QA r5 published empty FINDINGS and NON_BLOCKING; no author records required",
-  "items": {},
-  "owners": {},
-  "recorded_at": "2026-09-09T11:15:40.783519627Z"
-}

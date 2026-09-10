@@ -1,5 +1,0 @@
-kander check (after done):
-ok: 19 tasks
-
-kander check 20260909-tui-project-options-task:
-ok: 1 tasks

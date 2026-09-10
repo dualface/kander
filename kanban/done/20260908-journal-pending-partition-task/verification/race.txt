@@ -1,3 +1,0 @@
-ok  	github.com/dualface/kander/internal/board	(cached)
-ok  	github.com/dualface/kander/internal/launch	(cached)
-ok  	github.com/dualface/kander/internal/tui	(cached)

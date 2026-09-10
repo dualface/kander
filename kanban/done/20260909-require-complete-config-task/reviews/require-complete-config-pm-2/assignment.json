@@ -1,9 +1,0 @@
-{
-  "run_id": "require-complete-config-pm-2",
-  "batch_id": "require-complete-config-1",
-  "author": "grok",
-  "basis": "incremental PM run has no findings",
-  "items": {},
-  "owners": {},
-  "recorded_at": "2026-09-09T08:36:57.958196829Z"
-}
