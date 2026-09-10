@@ -269,7 +269,7 @@ func TestLoadPrefsInvalidThemeResetsAllPrefs(t *testing.T) {
 
 func TestThemeLabelsCoverAllThemes(t *testing.T) {
 	ctx := tuiPageContext()
-	if len(themes) != 7 {
+	if len(themes) != 11 {
 		t.Fatalf("themes=%v", themes)
 	}
 	for _, name := range themes {

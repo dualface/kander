@@ -344,7 +344,7 @@ func TestEnterSavesReviewSection(t *testing.T) {
 func TestOptionsThemeSelectListsAllThemes(t *testing.T) {
 	app, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionInterface))
-	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
+	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
 	if strings.Join(themes, ",") != strings.Join(want, ",") {
 		t.Fatalf("themes=%v", themes)
 	}
@@ -407,10 +407,14 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 		{"right", "dark"},
 		{"right", "dark-soft"},
 		{"right", "dark-contrast"},
+		{"right", "tide"},
+		{"right", "dusk"},
+		{"right", "slate-dark"},
+		{"right", "slate-light"},
 		{"right", "auto"},
 		{"right", "light"},
 		{"left", "auto"},
-		{"left", "dark-contrast"},
+		{"left", "slate-light"},
 		{"right", "auto"},
 		{"right", "light"},
 	} {

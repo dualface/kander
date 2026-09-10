@@ -44,6 +44,8 @@ kander
 
 ![终端看板](docs/kanban-screenshot-01.png)
 
+在 `o` → 界面 → 主题中选择 **Tide**、**Dusk**、**Slate Dark** 或 **Slate Light**。Slate 深浅两款搭配 herdr 等灰蓝色终端外层；原有主题和默认设置保持可用。
+
 > 上图看板内容来自我的真实项目 [https://quicktui.ai](https://quicktui.ai). QuickTUI 是一个远程操作电脑上各种 Agent 的工具, 支持 iOS/Android/macOS/Linux/Windows, 免费使用.
 
 进阶阅读: 幻灯片 [如何高效推进任务](docs/how-to-advance-tasks-efficiently-cn.pdf) (PDF).

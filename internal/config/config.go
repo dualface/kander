@@ -29,12 +29,12 @@ const (
 )
 
 var (
-	TaskScales   = []string{"large", "small"}
-	ReviewRoles  = []string{"PM", "CSA", "Hacker", "QA"}
+	TaskScales       = []string{"large", "small"}
+	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
 	Languages        = []string{"cn", "en", "ja"}
-	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
+	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
 )
 
 const (

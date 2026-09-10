@@ -358,12 +358,12 @@ func TestResolveThemeNamedAndAuto(t *testing.T) {
 }
 
 func TestThemeIsDarkClassifiesFamilies(t *testing.T) {
-	for _, name := range []string{"light", "light-warm", "light-contrast"} {
+	for _, name := range []string{"light", "light-warm", "light-contrast", "slate-light"} {
 		if themeIsDark(name) {
 			t.Fatalf("%s should be light", name)
 		}
 	}
-	for _, name := range []string{"dark", "dark-soft", "dark-contrast"} {
+	for _, name := range []string{"dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark"} {
 		if !themeIsDark(name) {
 			t.Fatalf("%s should be dark", name)
 		}
@@ -444,5 +444,41 @@ func TestThemeSurfacesPaintOwnBackground(t *testing.T) {
 				t.Fatalf("%s %s missing canvas %s", name, label, bg)
 			}
 		}
+	}
+}
+
+// The new themes separate selection surfaces from decorative panel outlines.
+func TestSurfaceThemeSelectionAndFocus(t *testing.T) {
+	for _, name := range []string{"tide", "dusk", "slate-dark", "slate-light"} {
+		t.Run(name, func(t *testing.T) {
+			p := themePalette(name)
+			assertHexColor(t, name+".SelectionBg", p.SelectionBg)
+			assertHexColor(t, name+".PanelEdge", p.PanelEdge)
+			if contrastRatio(string(p.Base), string(p.SelectionBg)) < 4.5 {
+				t.Fatal("selected text must remain readable")
+			}
+			for _, state := range allStates {
+				for line := 0; line < 3; line++ {
+					style := cardStyle(p, state, line, true)
+					if style.GetReverse() || style.GetBackground() != p.SelectionBg || style.GetForeground() != p.Base {
+						t.Fatalf("%s line %d lost the selection surface", state, line)
+					}
+				}
+				if panelBorderStyle(p, state, true).GetForeground() != p.Accent {
+					t.Fatalf("%s focus should use the theme accent", state)
+				}
+				if panelBorderStyle(p, state, false).GetForeground() != p.PanelEdge {
+					t.Fatalf("%s inactive border should use the quiet edge", state)
+				}
+				if headingStyle(p, state, true).GetForeground() != badgeStyle(p, state, true).GetForeground() {
+					t.Fatal("focused title and count must join")
+				}
+			}
+			for _, tag := range []string{"selected", "select", "popup-sel"} {
+				if styleFor(tag, p).GetBackground() != p.SelectionBg {
+					t.Fatalf("%s lost the selection surface", tag)
+				}
+			}
+		})
 	}
 }

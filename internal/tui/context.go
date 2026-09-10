@@ -51,6 +51,10 @@ func tuiPageContext() pageContext {
 		StatusHelp:       t("tui.help_q_quit"),
 		DetailStatusHelp: t("tui.help_q_back"),
 		ThemeLabels: map[string]string{
+			"tide":           t("tui.tide"),
+			"dusk":           t("tui.dusk"),
+			"slate-dark":     t("tui.slate-dark"),
+			"slate-light":    t("tui.slate-light"),
 			"auto":           t("tui.auto"),
 			"light":          t("tui.light"),
 			"light-warm":     t("tui.light-warm"),

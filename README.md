@@ -44,6 +44,8 @@ kander
 
 ![Terminal kanban](docs/kanban-screenshot-01.png)
 
+Choose **Tide**, **Dusk**, **Slate Dark**, or **Slate Light** in `o` → Interface → Theme. The Slate pair matches a gray-blue terminal host such as herdr; existing themes and the default remain available.
+
 > The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
 
 Further reading: the slides [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
