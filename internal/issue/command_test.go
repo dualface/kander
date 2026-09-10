@@ -141,8 +141,8 @@ func TestIssueUsageErrors(t *testing.T) {
 		{name: "no arguments", args: nil, code: 2, match: "kander issue"},
 		{name: "unknown subcommand", args: []string{"import"}, code: 2, match: "import"},
 		{name: "unknown option", args: []string{"repo", "--state", "open"}, code: 2, match: "--state"},
-		{name: "missing value", args: []string{"repo", "--repo"}, code: 2, match: "--repo"},
-		{name: "empty value", args: []string{"repo", "--repo="}, code: 2, match: "空"},
+		{name: "missing value", args: []string{"repo", "--repo"}, code: 2, match: "需要一个值"},
+		{name: "empty value", args: []string{"repo", "--repo="}, code: 2, match: "需要一个值"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

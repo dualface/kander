@@ -41,11 +41,7 @@ func runWith(factory func() RepositoryResolver, args []string, stdout, stderr io
 	case "repo":
 		return runRepo(factory, args[1:], stdout, stderr)
 	default:
-		if strings.HasPrefix(args[0], "-") {
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_option", args[0]))
-		} else {
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_subcommand", args[0]))
-		}
+		fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", args[0]))
 		fmt.Fprintln(stderr, config.Text("issue.usage"))
 		return 2
 	}
@@ -63,7 +59,7 @@ func runRepo(factory func() RepositoryResolver, args []string, stdout, stderr io
 		arg := args[index]
 		switch {
 		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, config.Text("issue.repo_usage"))
+			fmt.Fprintln(stdout, config.Text("issue.usage"))
 			return 0
 		case arg == "--json":
 			options.json = true
@@ -79,13 +75,13 @@ func runRepo(factory func() RepositoryResolver, args []string, stdout, stderr io
 			options.repository = strings.TrimPrefix(arg, "--repo=")
 			options.hasRepo = true
 		default:
-			fmt.Fprintln(stderr, config.Text("issue.error_unknown_option", arg))
-			fmt.Fprintln(stderr, config.Text("issue.repo_usage"))
+			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
+			fmt.Fprintln(stderr, config.Text("issue.usage"))
 			return 2
 		}
 	}
 	if options.hasRepo && strings.TrimSpace(options.repository) == "" {
-		fmt.Fprintln(stderr, config.Text("issue.error_empty_repository"))
+		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--repo"))
 		return 2
 	}
 	directory, err := os.Getwd()
@@ -142,18 +138,13 @@ func writeRepositoryJSON(w io.Writer, repository Repository) error {
 }
 
 func writeRepositoryText(w io.Writer, repository Repository) {
-	fmt.Fprintln(w, config.Text("issue.repo_host", repository.Host))
-	fmt.Fprintln(w, config.Text("issue.repo_owner", repository.Owner))
-	fmt.Fprintln(w, config.Text("issue.repo_name", repository.Name))
-	fmt.Fprintln(w, config.Text("issue.repo_url", repository.URL))
+	fmt.Fprintln(w, config.Text("issue.repo_identity", repository.Host, repository.Owner, repository.Name, repository.URL))
 	visibility := config.Text("issue.repo_visibility_public")
 	if repository.Private {
 		visibility = config.Text("issue.repo_visibility_private")
 	}
 	fmt.Fprintln(w, config.Text("issue.repo_visibility", visibility))
-	if repository.Remote == "" {
-		fmt.Fprintln(w, config.Text("issue.repo_remote_none"))
-	} else {
+	if repository.Remote != "" {
 		fmt.Fprintln(w, config.Text("issue.repo_remote", repository.Remote))
 	}
 }
@@ -161,16 +152,12 @@ func writeRepositoryText(w io.Writer, repository Repository) {
 func formatError(err error) string {
 	var structured *Error
 	if !errors.As(err, &structured) {
-		return "kander issue: " + config.Text("issue.error_generic", Sanitize(err.Error()))
+		return "kander issue: " + Sanitize(err.Error())
 	}
 	var message string
 	switch structured.Kind {
 	case ErrorInvalidReference:
-		if structured.Detail == "" {
-			message = config.Text("issue.error_empty_repository")
-		} else {
-			message = config.Text("issue.error_invalid_repository", structured.Detail)
-		}
+		message = config.Text("issue.error_invalid_repository", structured.Detail)
 	case ErrorNotRepository:
 		message = config.Text("issue.error_not_repository", structured.Detail)
 	case ErrorNoRemote:
