@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/menu"
 )
@@ -82,6 +83,18 @@ type App struct {
 	Session *menu.Session
 	// While Help is true the key reference overlay covers the board.
 	Help bool
+	// While Issues is non-nil the GitHub issues overlay covers the board; it
+	// owns its own filters, selection and scrolling and never touches the board
+	// model, so closing it leaves the board exactly as it was.
+	Issues *issuesState
+	// IssueProvider builds the read-only issue provider; cmd.go binds it from
+	// internal/cli, while tests inject a fake.
+	IssueProvider func() issue.IssueProvider
+	// OpenBrowser hands one validated issue URL to the platform opener.
+	OpenBrowser     func(string) error
+	issuesRepo      *issue.Repository
+	issuesListSeq   uint64
+	issuesDetailSeq uint64
 	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()
 	pendingWork  func() any
@@ -127,6 +140,9 @@ func (a *App) View() string {
 		a.ShowCursor = a.Searching
 		base = a.renderBoardView()
 	}
+	if a.Issues != nil {
+		a.ShowCursor = a.Issues.editing != ""
+	}
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	switch {
@@ -136,6 +152,13 @@ func (a *App) View() string {
 	case a.StartConfirmation != nil:
 		box, popup := a.renderStartConfirmation()
 		base = overlay(base, popup, box.X, box.Y, p)
+	case a.Issues != nil:
+		box, popup := a.renderIssues()
+		base = overlay(base, popup, box.X, box.Y, p)
+		if a.Help {
+			helpBox, helpPopup := a.renderHelp()
+			base = overlay(base, helpPopup, helpBox.X, helpBox.Y, p)
+		}
 	case a.Help:
 		box, popup := a.renderHelp()
 		base = overlay(base, popup, box.X, box.Y, p)
@@ -583,6 +606,8 @@ func (a *App) handleBoardKey(key string) {
 	case "s":
 		a.confirmSelectedStart()
 	case "g":
+		a.openIssues()
+	case "f", "F":
 		a.focusSelectedTask()
 	case "enter":
 		a.openDetail()
@@ -827,6 +852,10 @@ func (a *App) HandleKey(key string) {
 	// The help overlay is read-only and any key closes it.
 	if a.Help {
 		a.Help = false
+		return
+	}
+	if a.Issues != nil {
+		a.handleIssuesKey(key)
 		return
 	}
 	if a.Detail != nil {

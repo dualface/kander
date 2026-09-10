@@ -12,6 +12,7 @@ type ErrorKind string
 // Structured failure categories of repository resolution and provider access.
 const (
 	ErrorInvalidReference ErrorKind = "invalid-reference"
+	ErrorInvalidQuery     ErrorKind = "invalid-query"
 	ErrorNotRepository    ErrorKind = "not-repository"
 	ErrorNoRemote         ErrorKind = "no-remote"
 	ErrorAmbiguousRemotes ErrorKind = "ambiguous-remotes"
@@ -24,6 +25,8 @@ const (
 	ErrorUnauthorized     ErrorKind = "unauthorized"
 	ErrorSSORequired      ErrorKind = "sso-required"
 	ErrorNotFound         ErrorKind = "not-found"
+	ErrorNotAnIssue       ErrorKind = "not-an-issue"
+	ErrorLimitExceeded    ErrorKind = "limit-exceeded"
 	ErrorRateLimited      ErrorKind = "rate-limited"
 	ErrorTimeout          ErrorKind = "timeout"
 	ErrorOutputLimit      ErrorKind = "output-limit"

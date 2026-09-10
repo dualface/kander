@@ -19,6 +19,16 @@ type stubResolver struct {
 	calls      int
 	directory  string
 	explicit   string
+
+	page         IssuePage
+	listErr      error
+	listCalls    int
+	listQuery    IssueQuery
+	snapshot     IssueSnapshot
+	issueErr     error
+	issueCalls   int
+	issueNumber  int
+	withComments bool
 }
 
 func (s *stubResolver) ResolveRepository(_ context.Context, directory string, explicit string) (Repository, error) {
@@ -26,6 +36,25 @@ func (s *stubResolver) ResolveRepository(_ context.Context, directory string, ex
 	s.directory = directory
 	s.explicit = explicit
 	return s.repository, s.err
+}
+
+func (s *stubResolver) ListIssues(_ context.Context, repository Repository, query IssueQuery) (IssuePage, error) {
+	s.listCalls++
+	s.listQuery = query
+	if s.page.Repository == (Repository{}) {
+		s.page.Repository = repository
+	}
+	return s.page, s.listErr
+}
+
+func (s *stubResolver) GetIssue(_ context.Context, repository Repository, number int, withComments bool) (IssueSnapshot, error) {
+	s.issueCalls++
+	s.issueNumber = number
+	s.withComments = withComments
+	if s.snapshot.Repository == (Repository{}) {
+		s.snapshot.Repository = repository
+	}
+	return s.snapshot, s.issueErr
 }
 
 // useChinese pins the interface language so message assertions stay stable.
@@ -40,11 +69,11 @@ func useChinese(t *testing.T) {
 	config.BindConfigLanguage(nil)
 }
 
-func runIssue(t *testing.T, resolver RepositoryResolver, args ...string) (int, string, string) {
+func runIssue(t *testing.T, resolver IssueProvider, args ...string) (int, string, string) {
 	t.Helper()
 	useChinese(t)
 	var stdout, stderr bytes.Buffer
-	factory := func() RepositoryResolver {
+	factory := func() IssueProvider {
 		if resolver == nil {
 			return nil
 		}

@@ -57,9 +57,15 @@ Linking a project to a GitHub repository needs the [GitHub CLI](https://cli.gith
 ```sh
 kander issue repo                                   # resolve the repository of the current worktree
 kander issue repo --repo HOST/OWNER/REPO --json     # or pass a reference explicitly
+kander issue list --state open --label bug          # list issues: --state open|closed|all, repeated --label, --search, --limit, --json
+kander issue show 42 --comments                     # one issue with its comments
 ```
 
 `kander issue repo` confirms the canonical identity with GitHub instead of trusting a directory name. When a worktree has several distinct remotes it refuses to guess, and asks for `--repo` or for `gh repo set-default`. `kander doctor` reports the `gh` path, version, and per-host authentication state without touching credentials, remotes, or accounts.
+
+`kander issue list` filters by state, labels, and a search term and bounds how many issues it fetches; pull requests are never mixed into the result. `kander issue show NUMBER` renders one issue, and `--comments` loads its comments under an explicit bound instead of truncating silently. Both commands support `--json` for scripting and report actionable errors (missing `gh`, unauthenticated host, rate limit, ambiguous remotes) instead of a raw failure.
+
+On the terminal board, `g` opens the same data as an overlay: `Enter` opens the selected issue with its comments, `Tab` cycles the state, `/` searches, `l` filters by label, `r` refreshes, `o` opens it in the browser, and `Esc`/`q` closes the overlay without changing the board. Every request runs in the background, so the board never blocks.
 
 ## 3. License
 

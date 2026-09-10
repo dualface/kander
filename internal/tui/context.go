@@ -7,31 +7,45 @@ func t(id string, args ...any) string {
 }
 
 type pageContext struct {
-	Title            string
-	Search           string
-	Updated          string
-	Empty            string
-	Unassigned       string
-	Error            string
-	TooSmall         string
-	QuitHelp         string
-	SearchHelp       string
-	Columns          string
-	ColumnUnit       string
-	CardUnit         string
-	StatusHelp       string
-	DetailStatusHelp string
-	ThemeLabels      map[string]string
-	Help             string
-	DetailHelp       string
-	Copied           string
-	CopyFailed       string
-	ClipboardNA      string
-	NoMatch          string
-	TermInitFail     string
-	UnknownTheme     string
-	StateLabels      map[string]string
-	SizeLabels       map[string]string
+	Title               string
+	Search              string
+	Updated             string
+	Empty               string
+	Unassigned          string
+	Error               string
+	TooSmall            string
+	QuitHelp            string
+	SearchHelp          string
+	Columns             string
+	ColumnUnit          string
+	CardUnit            string
+	StatusHelp          string
+	DetailStatusHelp    string
+	ThemeLabels         map[string]string
+	Help                string
+	DetailHelp          string
+	Copied              string
+	CopyFailed          string
+	ClipboardNA         string
+	NoMatch             string
+	TermInitFail        string
+	UnknownTheme        string
+	IssuesTitle         string
+	IssuesHint          string
+	IssuesLoading       string
+	IssuesEmpty         string
+	IssuesMore          string
+	IssuesLoadFailed    string
+	IssuesSearchPrompt  string
+	IssuesLabelPrompt   string
+	IssuesDetailHint    string
+	IssuesNoTarget      string
+	IssuesBrowserOpened string
+	IssuesBrowserFailed string
+	IssuesNoBody        string
+	StateLabels         map[string]string
+	IssueStateLabels    map[string]string
+	SizeLabels          map[string]string
 }
 
 func tuiPageContext() pageContext {
@@ -69,12 +83,30 @@ func tuiPageContext() pageContext {
 		DetailHelp: t(
 			"tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u",
 		),
-		Copied:       t("tui.copied"),
-		CopyFailed:   t("tui.copy_failed"),
-		ClipboardNA:  t("tui.clipboard_unavailable"),
-		NoMatch:      t("tui.no_match"),
-		TermInitFail: t("tui.failed_to_initialize_terminal"),
-		UnknownTheme: t("tui.unknown_theme"),
+		Copied:              t("tui.copied"),
+		CopyFailed:          t("tui.copy_failed"),
+		ClipboardNA:         t("tui.clipboard_unavailable"),
+		NoMatch:             t("tui.no_match"),
+		TermInitFail:        t("tui.failed_to_initialize_terminal"),
+		UnknownTheme:        t("tui.unknown_theme"),
+		IssuesTitle:         t("tui.issues_title"),
+		IssuesHint:          t("tui.issues_hint"),
+		IssuesLoading:       t("tui.issues_loading"),
+		IssuesEmpty:         t("tui.issues_empty"),
+		IssuesMore:          t("tui.issues_more"),
+		IssuesLoadFailed:    t("tui.issues_load_failed"),
+		IssuesSearchPrompt:  t("tui.issues_search_prompt"),
+		IssuesLabelPrompt:   t("tui.issues_label_prompt"),
+		IssuesDetailHint:    t("tui.issues_detail_hint"),
+		IssuesNoTarget:      t("tui.issues_no_target"),
+		IssuesBrowserOpened: t("tui.issues_browser_opened"),
+		IssuesBrowserFailed: t("tui.issues_browser_failed"),
+		IssuesNoBody:        t("tui.issues_no_body"),
+		IssueStateLabels: map[string]string{
+			"open":   t("tui.issues_state_open"),
+			"closed": t("tui.issues_state_closed"),
+			"all":    t("tui.issues_state_all"),
+		},
 		StateLabels: map[string]string{
 			"backlog":  t("tui.backlog"),
 			"todo":     t("tui.todo"),
@@ -106,6 +138,13 @@ func (c pageContext) sizeLabel(kind string) string {
 		return "-"
 	}
 	return kind
+}
+
+func (c pageContext) issueStateLabel(state string) string {
+	if label, ok := c.IssueStateLabels[state]; ok {
+		return label
+	}
+	return state
 }
 
 func (c pageContext) themeLabel(name string) string {

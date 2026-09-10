@@ -315,6 +315,12 @@ func buildRepository(view repositoryView, ref issue.RepositoryRef, remote string
 // classifyRepositoryFailure maps a gh failure to a stable category. Only the
 // sanitized first meaningful line is kept as the detail.
 func classifyRepositoryFailure(stderr []byte, err error, ref issue.RepositoryRef) *issue.Error {
+	return classifyFailure(stderr, err, ref.Host, ref.String())
+}
+
+// classifyFailure is the shared category mapping for every gh interaction. The
+// caller supplies the host and the detail to show for an HTTP 404.
+func classifyFailure(stderr []byte, err error, host string, notFoundDetail string) *issue.Error {
 	detail := issue.Sanitize(string(stderr))
 	if detail == "" {
 		if structured, ok := err.(*issue.Error); ok {
@@ -324,7 +330,7 @@ func classifyRepositoryFailure(stderr []byte, err error, ref issue.RepositoryRef
 	lowered := strings.ToLower(detail)
 	failed := func(kind issue.ErrorKind) *issue.Error {
 		structured := issue.WrapError(err, kind, "gh", detail)
-		structured.Host = ref.Host
+		structured.Host = host
 		return structured
 	}
 	switch {
@@ -342,7 +348,7 @@ func classifyRepositoryFailure(stderr []byte, err error, ref issue.RepositoryRef
 		return failed(issue.ErrorUnauthorized)
 	case strings.Contains(lowered, "http 404") || strings.Contains(lowered, "could not resolve to a repository") || strings.Contains(lowered, "not found"):
 		structured := failed(issue.ErrorNotFound)
-		structured.Detail = ref.String()
+		structured.Detail = notFoundDetail
 		return structured
 	case strings.Contains(lowered, "no default repository has been set") || strings.Contains(lowered, "multiple remotes") || strings.Contains(lowered, "repo set-default"):
 		return failed(issue.ErrorAmbiguousRemotes)

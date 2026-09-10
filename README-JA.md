@@ -57,9 +57,15 @@ kander
 ```sh
 kander issue repo                                   # 現在のワークツリーのリポジトリを解決
 kander issue repo --repo HOST/OWNER/REPO --json     # 参照を明示的に指定
+kander issue list --state open --label bug          # Issue を一覧。--state open|closed|all、--label は複数指定可、--search、--limit、--json
+kander issue show 42 --comments                     # 1 件の Issue とそのコメントを表示
 ```
 
 `kander issue repo` はディレクトリ名を信用せず、GitHub に正規のリポジトリ識別情報を確認します。ワークツリーに複数の異なるリモートがある場合は推測せず、`--repo` または `gh repo set-default` を案内します。`kander doctor` は認証情報・リモート・アカウントを変更せずに、`gh` のパス、バージョン、ホストごとの認証状態を報告します。
+
+`kander issue list` は状態・ラベル・検索語で絞り込み、取得する Issue 数を制限します。Pull Request は結果に混入しません。`kander issue show NUMBER` は 1 件の Issue を表示し、`--comments` は明示的な上限つきでコメントを読み込み、黙って切り捨てません。どちらのコマンドも `--json` に対応し、対処可能なエラー（`gh` がない、ホストが未認証、レート制限、リモートの曖昧さ）を報告します。
+
+端末ボードでは `g` が同じデータをオーバーレイで開きます。`Enter` で選択中の Issue とコメントを開き、`Tab` で状態を切り替え、`/` で検索、`l` でラベル絞り込み、`r` で更新、`o` でブラウザ表示、`Esc`/`q` でボードを変えずに閉じます。すべてのリクエストはバックグラウンドで実行され、ボードはブロックしません。
 
 ## 3. ライセンス
 

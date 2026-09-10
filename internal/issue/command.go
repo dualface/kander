@@ -3,7 +3,6 @@ package issue
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,28 +22,42 @@ type RepositoryResolver interface {
 
 // Command returns the `kander issue` runner bound to a provider factory. The
 // factory runs once per invocation so every call re-reads the environment.
-func Command(factory func() RepositoryResolver) func(args []string) int {
+func Command(factory func() IssueProvider) func(args []string) int {
 	return func(args []string) int {
 		return runWith(factory, args, os.Stdout, os.Stderr)
 	}
 }
 
-func runWith(factory func() RepositoryResolver, args []string, stdout, stderr io.Writer) int {
+func runWith(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, config.Text("issue.usage"))
+		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
 	switch args[0] {
 	case "-h", "--help", "help":
-		fmt.Fprintln(stdout, config.Text("issue.usage"))
+		fmt.Fprintln(stdout, usageText())
 		return 0
 	case "repo":
 		return runRepo(factory, args[1:], stdout, stderr)
+	case "list":
+		return runList(factory, args[1:], stdout, stderr)
+	case "show":
+		return runShow(factory, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", args[0]))
-		fmt.Fprintln(stderr, config.Text("issue.usage"))
+		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
+}
+
+func usageText() string {
+	return config.Text("issue.usage")
+}
+
+// commandContext bounds one provider interaction the same way for every
+// subcommand.
+func commandContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 60*time.Second)
 }
 
 type repoOptions struct {
@@ -53,13 +66,13 @@ type repoOptions struct {
 	json       bool
 }
 
-func runRepo(factory func() RepositoryResolver, args []string, stdout, stderr io.Writer) int {
+func runRepo(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
 	var options repoOptions
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
 		switch {
 		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, config.Text("issue.usage"))
+			fmt.Fprintln(stdout, usageText())
 			return 0
 		case arg == "--json":
 			options.json = true
@@ -76,7 +89,7 @@ func runRepo(factory func() RepositoryResolver, args []string, stdout, stderr io
 			options.hasRepo = true
 		default:
 			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, config.Text("issue.usage"))
+			fmt.Fprintln(stderr, usageText())
 			return 2
 		}
 	}
@@ -84,22 +97,9 @@ func runRepo(factory func() RepositoryResolver, args []string, stdout, stderr io
 		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--repo"))
 		return 2
 	}
-	directory, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	resolver := factory()
-	if resolver == nil {
-		fmt.Fprintln(stderr, config.Text("issue.error_cli_unavailable", "no repository provider is registered"))
-		return 1
-	}
-	repository, err := resolver.ResolveRepository(ctx, directory, options.repository)
-	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
+	repository, code := resolveRepository(factory(), options.repository, options.hasRepo, stderr)
+	if code != 0 {
+		return code
 	}
 	if options.json {
 		if err := writeRepositoryJSON(stdout, repository); err != nil {
@@ -112,6 +112,33 @@ func runRepo(factory func() RepositoryResolver, args []string, stdout, stderr io
 	return 0
 }
 
+// resolveRepository resolves the working directory once and maps every failure
+// to the shared command error format. The caller passes the provider it built
+// so one invocation never constructs two providers.
+func resolveRepository(provider IssueProvider, explicit string, hasRepo bool, stderr io.Writer) (Repository, int) {
+	directory, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(stderr, formatError(err))
+		return Repository{}, 1
+	}
+	ctx, cancel := commandContext()
+	defer cancel()
+	if provider == nil {
+		fmt.Fprintln(stderr, config.Text("issue.error_cli_unavailable", "no repository provider is registered"))
+		return Repository{}, 1
+	}
+	value := explicit
+	if !hasRepo {
+		value = ""
+	}
+	repository, err := provider.ResolveRepository(ctx, directory, value)
+	if err != nil {
+		fmt.Fprintln(stderr, formatError(err))
+		return Repository{}, 1
+	}
+	return repository, 0
+}
+
 type repositoryJSON struct {
 	Host    string `json:"host"`
 	Owner   string `json:"owner"`
@@ -121,15 +148,19 @@ type repositoryJSON struct {
 	Remote  string `json:"remote"`
 }
 
-func writeRepositoryJSON(w io.Writer, repository Repository) error {
-	encoded, err := json.Marshal(repositoryJSON{
+func repositoryView(repository Repository) repositoryJSON {
+	return repositoryJSON{
 		Host:    repository.Host,
 		Owner:   repository.Owner,
 		Name:    repository.Name,
 		URL:     repository.URL,
 		Private: repository.Private,
 		Remote:  repository.Remote,
-	})
+	}
+}
+
+func writeRepositoryJSON(w io.Writer, repository Repository) error {
+	encoded, err := json.Marshal(repositoryView(repository))
 	if err != nil {
 		return err
 	}
@@ -150,67 +181,28 @@ func writeRepositoryText(w io.Writer, repository Repository) {
 }
 
 func formatError(err error) string {
-	var structured *Error
-	if !errors.As(err, &structured) {
-		return "kander issue: " + Sanitize(err.Error())
-	}
-	var message string
-	switch structured.Kind {
-	case ErrorInvalidReference:
-		message = config.Text("issue.error_invalid_repository", structured.Detail)
-	case ErrorNotRepository:
-		message = config.Text("issue.error_not_repository", structured.Detail)
-	case ErrorNoRemote:
-		message = config.Text("issue.error_no_remote")
-	case ErrorAmbiguousRemotes:
-		message = config.Text("issue.error_ambiguous_remotes", strings.Join(structured.Candidates, ", "))
-	case ErrorInsecureRemote:
-		message = config.Text("issue.error_insecure_remote", structured.Detail)
-	case ErrorGitUnavailable:
-		message = config.Text("issue.error_git_unavailable", structured.Detail)
-	case ErrorCLIUnavailable:
-		message = config.Text("issue.error_cli_unavailable", structured.Detail)
-	case ErrorCLIUnsupported:
-		message = config.Text("issue.error_cli_unsupported", structured.Detail)
-	case ErrorInvalidDirectory:
-		message = config.Text("issue.error_invalid_directory", structured.Detail)
-	case ErrorUnauthenticated:
-		message = config.Text("issue.error_unauthenticated", structured.Host)
-	case ErrorUnauthorized:
-		message = config.Text("issue.error_unauthorized", structured.Host)
-	case ErrorSSORequired:
-		message = config.Text("issue.error_sso_required", structured.Host)
-	case ErrorNotFound:
-		message = config.Text("issue.error_not_found", structured.Detail)
-	case ErrorRateLimited:
-		message = config.Text("issue.error_rate_limited", structured.Host)
-	case ErrorTimeout:
-		message = config.Text("issue.error_timeout")
-	case ErrorOutputLimit:
-		message = config.Text("issue.error_output_limit")
-	case ErrorInvalidResponse:
-		message = config.Text("issue.error_invalid_response", structured.Detail)
-	default:
-		message = config.Text("issue.error_command_failed", structured.Detail)
-	}
-	if hint := errorHint(structured); hint != "" {
-		message += " " + hint
-	}
-	return "kander issue: " + message
+	return "kander issue: " + Message(err)
 }
 
-func errorHint(structured *Error) string {
-	switch structured.Kind {
-	case ErrorNotRepository:
-		return config.Text("issue.remediation_repo_flag")
-	case ErrorNoRemote, ErrorAmbiguousRemotes:
-		return config.Text("issue.remediation_repo_flag") + " " + config.Text("issue.remediation_set_default")
-	case ErrorUnauthenticated:
-		if structured.Host != "" {
-			return config.Text("issue.remediation_auth_login_host", structured.Host)
-		}
-		return config.Text("issue.remediation_auth_login")
-	default:
-		return ""
+// splitLongOption recognizes --name=value and returns the inline value.
+func splitLongOption(arg, name string) (string, bool) {
+	prefix := name + "="
+	if !strings.HasPrefix(arg, prefix) {
+		return "", false
 	}
+	return strings.TrimPrefix(arg, prefix), true
+}
+
+// optionValue consumes the value of a long option that takes one argument.
+// It returns the value, the next index and whether parsing succeeded.
+func optionValue(args []string, index int, name string, stderr io.Writer) (string, int, bool) {
+	arg := args[index]
+	if inline, ok := splitLongOption(arg, name); ok {
+		return inline, index, true
+	}
+	if index+1 >= len(args) {
+		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", name))
+		return "", index, false
+	}
+	return args[index+1], index + 1, true
 }

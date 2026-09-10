@@ -40,11 +40,11 @@ func TestBoardFocusBackgroundResult(t *testing.T) {
 				return focus.Result{Success: tc.success, Message: "focus result"}
 			}
 			p := program{app: app}
-			_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+			_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 			if cmd == nil || reads != 0 || calls != 0 || !app.focusRunning {
 				t.Fatal("focus must be queued without blocking input")
 			}
-			_, duplicate := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
+			_, duplicate := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
 			if duplicate != nil {
 				t.Fatal("duplicate focus queued")
 			}
@@ -77,6 +77,15 @@ func TestFocusKeyContexts(t *testing.T) {
 		t.Fatal("search g must remain input")
 	}
 	app.HandleKey("esc")
+	app.HandleKey("g")
+	if app.Issues == nil || app.DetailPendingG {
+		t.Fatal("board g must open the issues overlay")
+	}
+	app.HandleKey("esc")
+	if app.Issues != nil {
+		t.Fatal("esc must close the issues overlay")
+	}
+	app.pendingWork = nil
 	app.HandleKey("enter")
 	app.HandleKey("g")
 	if !app.DetailPendingG || app.pendingWork != nil {
@@ -88,7 +97,7 @@ func TestFocusKeyContexts(t *testing.T) {
 	}
 	found := false
 	for _, entry := range boardHelpGroups()[0].Entries {
-		if entry.Keys == "g" {
+		if entry.Keys == "f" {
 			found = entry.Desc != ""
 		}
 	}
@@ -104,13 +113,13 @@ func TestFocusMissingTask(t *testing.T) {
 		t.Fatal("unreadable task must not focus")
 		return focus.Result{}
 	}
-	app.HandleKey("g")
+	app.HandleKey("f")
 	app.applyWork(app.takePending()().(workMsg).payload)
 	if app.focusRunning || !strings.Contains(app.CopyNotice, "task removed") {
 		t.Fatalf("notice=%q", app.CopyNotice)
 	}
 	app.Model.SetBoard(BoardPayload{})
-	app.HandleKey("g")
+	app.HandleKey("f")
 	if app.pendingWork != nil || app.CopyNotice == "" {
 		t.Fatal("empty selection must show notice")
 	}

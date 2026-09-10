@@ -30,7 +30,8 @@ func boardHelpGroups() []helpGroup {
 				{"Enter", t("tui.task_detail")},
 				{"/", t("tui.search_2")},
 				{"y", t("tui.copy_task_id")},
-				{"g", t("tui.focus_agent_window")},
+				{"f", t("tui.focus_agent_window")},
+				{"g", t("tui.browse_github_issues")},
 				{"s", t("tui.start_task")},
 				{"- =", t("tui.columns_on_screen")},
 				{"a", t("tui.archived_columns")},
@@ -38,6 +39,20 @@ func boardHelpGroups() []helpGroup {
 				{"o", t("tui.options")},
 				{"r", t("tui.refresh_now")},
 				{"? q", t("tui.help_quit")},
+			},
+		},
+		{
+			Title: t("tui.issues_overlay"),
+			Entries: []helpEntry{
+				{"↑↓ jk", t("tui.switch_issue")},
+				{"PgUp PgDn", t("tui.scroll_issue")},
+				{"Enter", t("tui.open_issue_detail")},
+				{"/", t("tui.search_issues")},
+				{"Tab", t("tui.cycle_issue_state")},
+				{"l", t("tui.filter_issues_by_label")},
+				{"r", t("tui.refresh_issues")},
+				{"o", t("tui.open_issue_in_browser")},
+				{"Esc q", t("tui.back_or_close")},
 			},
 		},
 		{
@@ -71,12 +86,13 @@ func (a *App) renderHelp() (popupBox, string) {
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	groups := boardHelpGroups()
-
-	left := renderHelpGroup(p, groups[0])
-	right := renderHelpGroup(p, groups[1])
-	if len(groups) > 2 {
-		right = joinBlocksVertical(p, right, renderHelpGroup(p, groups[2]))
+	rendered := make([]string, 0, len(groups))
+	for _, group := range groups {
+		rendered = append(rendered, renderHelpGroup(p, group))
 	}
+
+	left := joinBlocksVertical(p, rendered[0], rendered[1])
+	right := joinBlocksVertical(p, rendered[2], rendered[3])
 	height := blockHeight(left)
 	if got := blockHeight(right); got > height {
 		height = got
@@ -92,11 +108,7 @@ func (a *App) renderHelp() (popupBox, string) {
 		available = 108
 	}
 	if blockWidth(body) > available-4 {
-		blocks := make([]string, 0, len(groups))
-		for _, group := range groups {
-			blocks = append(blocks, renderHelpGroup(p, group))
-		}
-		body = joinBlocksVertical(p, blocks...)
+		body = joinBlocksVertical(p, rendered...)
 	}
 
 	frame := popup{Title: t("tui.key_bindings"), Hint: t("tui.press_any_key_to_close"), MaxWidth: available}

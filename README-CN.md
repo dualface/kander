@@ -57,9 +57,15 @@ kander
 ```sh
 kander issue repo                                   # 解析当前工作树对应的仓库
 kander issue repo --repo HOST/OWNER/REPO --json     # 或显式传入仓库引用
+kander issue list --state open --label bug          # 列出 Issue：--state open|closed|all、可重复 --label、--search、--limit、--json
+kander issue show 42 --comments                     # 查看单个 Issue 及其评论
 ```
 
 `kander issue repo` 会向 GitHub 确认仓库的规范身份，而不是相信目录名。当一个工作树存在多个不同 remote 时，它不会猜测，而是提示使用 `--repo` 或 `gh repo set-default`。`kander doctor` 会报告 `gh` 的路径、版本和各 host 的认证状态，且不修改凭据、remote 或账号。
+
+`kander issue list` 按状态、标签和搜索词筛选，并限制获取的 Issue 数量；Pull Request 不会被混入结果。`kander issue show NUMBER` 渲染单个 Issue，`--comments` 会在明确的评论上限内加载评论，而不是静默截断。两个命令都支持 `--json` 供脚本使用，并给出可操作的错误（缺少 `gh`、host 未认证、限流、remote 歧义），而不是原始报错。
+
+在终端看板中按 `g` 会以弹窗形式打开同一份数据：`Enter` 打开选中 Issue 及其评论，`Tab` 切换状态，`/` 搜索，`l` 按标签筛选，`r` 刷新，`o` 在浏览器中打开，`Esc`/`q` 关闭弹窗且不改变看板状态。所有请求都在后台执行，看板不会阻塞。
 
 ## 3. 许可
 

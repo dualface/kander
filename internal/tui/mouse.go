@@ -340,6 +340,10 @@ func (a *App) HandleMouse(x, y, bstate int) {
 		a.Options.HandleMouse(x, y, bstate)
 		return
 	}
+	if a.Issues != nil {
+		a.handleIssuesMouse(x, y, bstate)
+		return
+	}
 	if a.Detail != nil {
 		a.handleDetailMouse(x, y, bstate)
 		return

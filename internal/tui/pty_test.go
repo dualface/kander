@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/sys/unix"
 
 	"github.com/dualface/kander/internal/board"
@@ -129,6 +130,20 @@ func (s *ptySession) textFrom(offset int) string {
 		offset = len(s.out)
 	}
 	return string(s.out[offset:])
+}
+
+// waitForPlain waits for text to appear after every ANSI sequence is stripped,
+// which is what styled Markdown needs: escape codes can split a phrase.
+func (s *ptySession) waitForPlain(needle string, timeout time.Duration) bool {
+	s.t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if strings.Contains(ansi.Strip(s.text()), needle) {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return false
 }
 
 // waitFor waits for some text to appear in the pseudo-terminal output.
@@ -476,4 +491,91 @@ func openPTY() (master, slave *os.File, err error) {
 		return nil, nil, err
 	}
 	return master, slave, nil
+}
+
+// writeFakeIssueCommands installs a fake gh and git into the child PATH so the
+// issues smoke test never reaches the network. The git wrapper answers the
+// local-remote query and defers everything else to the real git.
+func writeFakeIssueCommands(t *testing.T, env []string) {
+	t.Helper()
+	fakeBin := ""
+	for _, item := range env {
+		if value, ok := strings.CutPrefix(item, "PATH="); ok {
+			fakeBin, _, _ = strings.Cut(value, string(os.PathListSeparator))
+		}
+	}
+	if fakeBin == "" {
+		t.Fatal("PATH missing from the child environment")
+	}
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gh := `#!/bin/sh
+if [ -n "$KANDER_GH_LOG" ]; then printf '%s\n' "$*" >> "$KANDER_GH_LOG"; fi
+case "$*" in
+  *"repo view"*)
+    printf '%s\n' '{"nameWithOwner":"dualface/kander","url":"https://github.com/dualface/kander","isPrivate":false}'
+    ;;
+  *"/issues/42/comments"*)
+    printf '%s\n' '[{"body":"PTY comment body","user":{"login":"carol"},"html_url":"https://github.com/dualface/kander/issues/42#issuecomment-1","created_at":"2026-09-11T02:10:00Z"}]'
+    ;;
+  *"/issues/42"*)
+    printf '%s\n' '{"number":42,"title":"PTY issue title","state":"open","html_url":"https://github.com/dualface/kander/issues/42","body":"PTY body marker","user":{"login":"alice"},"labels":[{"name":"bug"}],"assignees":[],"created_at":"2026-09-10T01:00:00Z","updated_at":"2026-09-11T02:03:00Z"}'
+    ;;
+  *"/issues"*)
+    printf '%s\n' '[{"number":42,"title":"PTY issue title","state":"open","html_url":"https://github.com/dualface/kander/issues/42","labels":[{"name":"bug"}],"updated_at":"2026-09-11T02:03:00Z"}]'
+    ;;
+  *)
+    printf '%s\n' '{}'
+    ;;
+esac
+`
+	git := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"config\" ] && [ \"$2\" = \"--local\" ] && [ \"$3\" = \"--list\" ]; then\n" +
+		"  printf '%s\\n' 'remote.origin.url=https://github.com/dualface/kander.git' 'remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*'\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"exec " + strconv.Quote(realGit) + " \"$@\"\n"
+	for name, content := range map[string]string{"gh": gh, "git": git} {
+		if err := os.WriteFile(filepath.Join(fakeBin, name), []byte(content), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// Pressing g opens the issues overlay, Enter loads the detail with comments,
+// and closing the overlay returns to the untouched board.
+func TestIssuesOverlayOnPTY(t *testing.T) {
+	bin := buildKander(t)
+	_, env := boardEnv(t)
+	writeCompleteConfig(t, env)
+	writeFakeIssueCommands(t, env)
+	logPath := filepath.Join(t.TempDir(), "gh.log")
+	env = append(env, "KANDER_GH_LOG="+logPath)
+	session := startPTY(t, bin, env)
+	if !session.waitFor("Task Board", 8*time.Second) {
+		t.Fatalf("board did not render\npty:\n%s", session.text())
+	}
+	session.send("g")
+	if !session.waitFor("GitHub Issue", 10*time.Second) {
+		t.Fatalf("issues overlay did not open\npty:\n%s", session.text())
+	}
+	if !session.waitForPlain("PTY issue title", 10*time.Second) {
+		t.Fatalf("issue list did not load\npty:\n%s", session.text())
+	}
+	session.send("\r")
+	if !session.waitForPlain("PTY body marker", 10*time.Second) {
+		logged, _ := os.ReadFile(logPath)
+		t.Fatalf("issue detail did not load\ngh:\n%s\npty:\n%s", logged, session.text())
+	}
+	if !session.waitForPlain("PTY comment body", 10*time.Second) {
+		t.Fatalf("issue comments did not load\npty:\n%s", session.text())
+	}
+	session.send("\x1b")
+	time.Sleep(300 * time.Millisecond)
+	session.send("q")
+	if err := session.waitExit(8 * time.Second); err != nil {
+		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
+	}
 }

@@ -201,6 +201,14 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		a.showFocusNotice(result.message)
 		return nil
 	}
+	if result, ok := payload.(issuesListResult); ok {
+		a.applyIssuesList(result)
+		return nil
+	}
+	if result, ok := payload.(issuesDetailResult); ok {
+		a.applyIssuesDetail(result)
+		return nil
+	}
 	panel := a.Options
 	if panel == nil {
 		return nil
