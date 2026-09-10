@@ -965,5 +965,18 @@
   "menu.github_cli_auth_failed": "GitHub CLI 認証 {{.V0}}: 未認証",
   "menu.github_cli_not_authenticated": "GitHub CLI: 認証済みのホストがありません。gh auth login を実行してください",
   "menu.github_cli_env_token": "GitHub CLI の認証情報は環境変数からも取得します: {{.V0}}",
-  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}"
+  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}",
+  "board.import_slug_is_too_long": "インポート slug が長すぎます: {{.V0}}",
+  "board.import_title_is_too_long": "インポートのタイトルが長すぎます",
+  "board.import_language_is_invalid": "インポートの言語が無効です",
+  "board.import_source_key_is_invalid": "インポートのソースキーが無効です",
+  "board.import_requires_at_least_one_source_attachment": "インポートカードには少なくとも 1 つのソース添付ファイルが必要です",
+  "board.import_attachment_is_not_valid_utf_8": "インポート添付ファイルが有効な UTF-8 ではありません: {{.V0}}",
+  "board.import_attachment_name_must_be_unique": "インポート添付ファイル名は一意でなければなりません: {{.V0}}",
+  "board.import_contract_section_must_not_be_empty": "インポート契約のセクションは空にできません: {{.V0}}",
+  "board.import_contract_section_must_not_contain_placeholders": "インポート契約のセクションに未記入のプレースホルダーを含めることはできません: {{.V0}}",
+  "board.import_contract_section_must_not_contain_headings": "インポート契約のセクションにレベル 2 見出しを含めることはできません: {{.V0}}",
+  "board.import_contract_section_must_not_rewrite_metadata": "インポート契約のセクションでカードのメタデータを書き換えることはできません: {{.V0}}",
+  "board.import_contract_section_must_not_carry_records": "インポート契約のセクションにレビューまたは前提タスクの記録を含めることはできません: {{.V0}}",
+  "board.import_acceptance_criteria_requires_items": "インポートの受け入れ条件には少なくとも 1 つのチェック項目が必要です"
 }

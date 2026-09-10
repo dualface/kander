@@ -57,6 +57,8 @@ func Message(err error) string {
 		message = config.Text("issue.error_output_limit")
 	case ErrorInvalidResponse:
 		message = config.Text("issue.error_invalid_response", structured.Detail)
+	case ErrorImportConflict:
+		message = config.Text("issue.error_import_conflict", structured.Detail)
 	default:
 		message = config.Text("issue.error_command_failed", structured.Detail)
 	}
@@ -79,6 +81,10 @@ func errorHint(structured *Error) string {
 		return config.Text("issue.remediation_auth_login")
 	case ErrorNotAnIssue:
 		return config.Text("issue.remediation_issue_number")
+	case ErrorLimitExceeded:
+		return config.Text("issue.remediation_reduce_scope")
+	case ErrorImportConflict:
+		return config.Text("issue.remediation_check_board")
 	default:
 		return ""
 	}

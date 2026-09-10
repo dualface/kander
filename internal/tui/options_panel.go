@@ -209,6 +209,10 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		a.applyIssuesDetail(result)
 		return nil
 	}
+	if result, ok := payload.(issuesImportResult); ok {
+		a.applyIssuesImport(result)
+		return nil
+	}
 	panel := a.Options
 	if panel == nil {
 		return nil

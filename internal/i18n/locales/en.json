@@ -965,5 +965,18 @@
   "menu.github_cli_auth_failed": "GitHub CLI auth {{.V0}}: not authenticated",
   "menu.github_cli_not_authenticated": "GitHub CLI: no authenticated host; run gh auth login",
   "menu.github_cli_env_token": "GitHub CLI credentials also come from the environment: {{.V0}}",
-  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}"
+  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}",
+  "board.import_slug_is_too_long": "import slug is too long: {{.V0}}",
+  "board.import_title_is_too_long": "import title is too long",
+  "board.import_language_is_invalid": "import language is invalid",
+  "board.import_source_key_is_invalid": "import source key is invalid",
+  "board.import_requires_at_least_one_source_attachment": "an imported card requires at least one source attachment",
+  "board.import_attachment_is_not_valid_utf_8": "import attachment is not valid UTF-8: {{.V0}}",
+  "board.import_attachment_name_must_be_unique": "import attachment names must be unique: {{.V0}}",
+  "board.import_contract_section_must_not_be_empty": "import contract section must not be empty: {{.V0}}",
+  "board.import_contract_section_must_not_contain_placeholders": "import contract section must not contain the unfilled placeholder: {{.V0}}",
+  "board.import_contract_section_must_not_contain_headings": "import contract section must not contain a level-two heading: {{.V0}}",
+  "board.import_contract_section_must_not_rewrite_metadata": "import contract section must not rewrite card metadata: {{.V0}}",
+  "board.import_contract_section_must_not_carry_records": "import contract section must not carry review or prerequisite records: {{.V0}}",
+  "board.import_acceptance_criteria_requires_items": "import acceptance criteria require at least one checklist item"
 }

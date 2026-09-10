@@ -29,14 +29,21 @@ type templateSections struct {
 	Implementation, Summary                                  string
 }
 
+type templateBodies struct {
+	Goal, UserDecisions, ExpectedOutcome, AcceptanceCriteria string
+	ThreatModel, OutOfScope, Discussion                      string
+}
+
 type templateData struct {
 	Title       string
 	Type        string
+	Size        string
 	Language    string
 	Created     string
 	Placeholder string
 	F           templateFields
 	S           templateSections
+	Bodies      templateBodies
 }
 
 func newTemplateData(title, taskType, language, created string) templateData {
@@ -79,4 +86,29 @@ func renderContract(title, taskType, language string) string {
 
 func smallTaskExtra() string {
 	return renderTemplate("small_extra.md.tmpl", newTemplateData("", "", "", ""))
+}
+
+// renderImportedContract renders the card of an imported source. The title and
+// the section bodies are the only caller input; the skeleton, metadata fields
+// and section headings always come from this template.
+func renderImportedContract(request ImportRequest, size string) string {
+	data := newTemplateData(request.Title, typeNames[request.Kind], request.Language, nowStamp())
+	data.Size = size
+	data.Bodies = templateBodies{
+		Goal:               request.Contract.Goal,
+		UserDecisions:      request.Contract.UserDecisions,
+		ExpectedOutcome:    request.Contract.ExpectedOutcome,
+		AcceptanceCriteria: request.Contract.AcceptanceCriteria,
+		ThreatModel:        request.Contract.ThreatModel,
+		OutOfScope:         request.Contract.OutOfScope,
+		Discussion:         request.Contract.Discussion,
+	}
+	template := renderTemplate("import.md.tmpl", data)
+	// The contract always ends on a blank line, like the skeleton template, so
+	// the optional small-task sections start after a separating empty line.
+	text := strings.TrimRight(template, "\n") + "\n\n"
+	if size == "small" {
+		text += smallTaskExtra()
+	}
+	return text
 }

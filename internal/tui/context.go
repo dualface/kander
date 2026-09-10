@@ -43,6 +43,9 @@ type pageContext struct {
 	IssuesBrowserOpened string
 	IssuesBrowserFailed string
 	IssuesNoBody        string
+	IssuesImporting     string
+	IssuesImportFailed  string
+	IssuesImportNoCard  string
 	StateLabels         map[string]string
 	IssueStateLabels    map[string]string
 	SizeLabels          map[string]string
@@ -102,6 +105,9 @@ func tuiPageContext() pageContext {
 		IssuesBrowserOpened: t("tui.issues_browser_opened"),
 		IssuesBrowserFailed: t("tui.issues_browser_failed"),
 		IssuesNoBody:        t("tui.issues_no_body"),
+		IssuesImporting:     t("tui.issues_importing"),
+		IssuesImportFailed:  t("tui.issues_import_failed"),
+		IssuesImportNoCard:  t("tui.issues_import_no_card"),
 		IssueStateLabels: map[string]string{
 			"open":   t("tui.issues_state_open"),
 			"closed": t("tui.issues_state_closed"),

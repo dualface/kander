@@ -1,0 +1,173 @@
+# GitHub issue import
+
+`kander issue import NUMBER` turns one GitHub issue into a normal Kander card in
+`backlog/`, with the untouched issue text stored beside it. The import is
+idempotent, bounded, and published in a single board transaction, so a card can
+never appear without its source.
+
+```
+kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
+                           [--type feature|bug|chore|research] [--large]
+                           [--language LANG] [--json]
+```
+
+- `--repo` accepts the same `[HOST/]OWNER/REPO` references as the other issue
+  commands and is resolved with the same canonical identity confirmation.
+- `--comments` also stores the issue discussion. Comments are never fetched
+  otherwise.
+- `--type` overrides the label mapping (see below); the default is derived from
+  the labels and falls back to `feature`.
+- `--large` sets `SIZE: large` only. An imported card is always a directory card,
+  so a large card can grow `plan.md` and `report.md` later.
+- `--language` sets the card's `LANGUAGE`; without it the configured
+  `agent_language` is frozen into the card.
+- `--json` prints one machine-readable line with `task_id`, `state`, `path`,
+  `existing`, `source_key`, `source_url`, and `comments_loaded`.
+
+On the terminal board the same import is available from the issues overlay:
+`i` imports the selected issue, or jumps to the local card when it is already
+imported, and `I` imports with comments. The overlay marks imported issues with
+their task ID and appends "update available" when the remote `updated_at` is
+newer than the fetched snapshot. It never overwrites the card on its own.
+
+## Identity and idempotency
+
+The binding key of an imported card is the canonical source key
+
+```
+github://HOST/OWNER/NAME/issues/NUMBER
+```
+
+built from the repository identity that `kander issue repo` confirmed. The
+`source_url` in the snapshot is rebuilt from the same identity; a URL supplied by
+the provider is never stored.
+
+The source-key check and the card publication run inside the same exclusive-board
+transaction. Repeating an import, importing the same issue from two processes at
+once, or importing an issue whose readable task ID is already taken all end with
+exactly one card:
+
+- an existing binding returns that card (`existing: true`) without fetching the
+  issue again;
+- a readable ID collision appends `-<8 hex digits of the source-key hash>`;
+- an unrecoverable card is refused instead of silently duplicated.
+
+A card whose import snapshot cannot be decoded stops the import with an error
+that points at `kander check`; the card must be repaired or removed first. The
+uniqueness check matches `source_key` regardless of the snapshot schema version,
+so a card written by a newer Kander still owns its issue and an older binary
+never publishes a second card for it.
+
+## Attachments
+
+Every imported card carries two attachments next to `spec.md`:
+
+| Path | Content |
+| ---- | ------- |
+| `source/github-issue.json` | The schema-versioned machine record of the issue |
+| `source/github-issue.md` | The same record rendered for reading |
+
+The JSON snapshot has this shape (schema version 1):
+
+```json
+{
+  "schema_version": 1,
+  "source_key": "github://github.com/owner/repo/issues/42",
+  "source_url": "https://github.com/owner/repo/issues/42",
+  "fetched_at": "2026-09-11T03:00:00Z",
+  "repository": {
+    "host": "github.com",
+    "owner": "owner",
+    "name": "repo",
+    "url": "https://github.com/owner/repo",
+    "private": false
+  },
+  "issue": {
+    "number": 42,
+    "title": "…",
+    "state": "open",
+    "author": "…",
+    "labels": ["bug"],
+    "assignees": ["…"],
+    "created_at": "2026-09-01T00:00:00Z",
+    "updated_at": "2026-09-10T00:00:00Z",
+    "body": "…"
+  },
+  "comments_loaded": true,
+  "comments": [
+    {"author": "…", "created_at": "2026-09-02T00:00:00Z", "body": "…"}
+  ]
+}
+```
+
+Fields are sanitized and bounded before they are written: terminal escape
+sequences, C0/C1 control characters, bidi overrides and invalid UTF-8 are
+removed from remote text, and no token, header, or provider URL is recorded.
+An issue that exceeds a bound is rejected with a remediation hint; the snapshot
+is never truncated.
+
+## Limits
+
+| Bound | Value |
+| ----- | ----- |
+| Issue or comment body | 512 KiB |
+| One comment | 64 KiB |
+| Comments | 50 |
+| Body plus comments per snapshot | 1 MiB |
+
+## Card contract
+
+The card sections are authored from the confirmed identity and the issue number,
+not from the remote text: `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`,
+`ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, and `DISCUSSION` state the
+import scope, the untrusted-data rule, and the items the issue cannot decide.
+Contracts that do not fit ask the reader to confirm them before the card leaves
+`backlog`.
+
+The remote title, body, and comments stay in the attachments. They are never
+spliced into the card structure: an issue cannot add a heading, rewrite a
+metadata field, or place `SELF_REVIEW`/`CARD_REVIEW` records, which would
+otherwise satisfy review gates. The imported card therefore never carries an
+auto-generated review record and always starts in `backlog`; the normal
+`backlog → todo` gate applies unchanged.
+
+## Label mapping
+
+The first matching label decides the TYPE, and `--type` overrides it:
+
+| Label (or `type/…`, `kind/…`, `type:…`, `kind:…` prefix) | TYPE |
+| -------------------------------------------------------- | ---- |
+| `bug`, `defect`, `regression` | `bug` |
+| `feature`, `enhancement`, `request` | `feature` |
+| `chore`, `docs`, `documentation`, `maintenance`, `cleanup` | `chore` |
+| `research`, `investigation`, `spike`, `question` | `research` |
+| anything else, or no label | `feature` |
+
+## Failure and recovery
+
+Publication is one board operation: the card directory, both attachments, the
+`spec.md` entry, and the revision update are committed together. If the process
+stops in the middle, the pending operation stays invisible to `kander list`,
+`kander scan`, and the TUI, and `kander init` (or any board write) replays it.
+Replay is idempotent, so an interrupted import ends as one complete card and a
+repeat `kander issue import` then returns it as `existing`.
+
+## Threat model
+
+An issue can be written by anyone, so its title, body, comments, author names,
+and links are untrusted:
+
+- **Card-structure injection** — remote text cannot add headings, metadata, or
+  records; the contract bodies reject those shapes before publication.
+- **Prompt injection** — the attachments carry an explicit untrusted-data
+  banner and the card's `THREAT_MODEL` section requires treating them as
+  evidence, never as instructions.
+- **Terminal control** — every rendered and stored remote string is sanitized
+  before it can reach the screen, the JSON, or the Markdown.
+- **Path traversal** — attachment names are validated card-relative paths; `..`,
+  absolute paths, and reparse points are rejected by the board layer.
+- **Resource exhaustion** — bodies, comment sizes, comment counts, and the total
+  snapshot are bounded, and an over-limit issue publishes nothing.
+
+Import never fetches a link, attachment, or referenced code, and never executes
+anything from the issue.

@@ -50,6 +50,8 @@ func boardHelpGroups() []helpGroup {
 				{"/", t("tui.search_issues")},
 				{"Tab", t("tui.cycle_issue_state")},
 				{"l", t("tui.filter_issues_by_label")},
+				{"i", t("tui.import_issue")},
+				{"I", t("tui.import_issue_with_comments")},
 				{"r", t("tui.refresh_issues")},
 				{"o", t("tui.open_issue_in_browser")},
 				{"Esc q", t("tui.back_or_close")},

@@ -83,6 +83,13 @@ func WithTransactionContext(ctx context.Context, root string, scope LockScope, f
 }
 
 func withTransaction(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error) (err error) {
+	return withTransactionCheckpoint(ctx, root, scope, nil, fn)
+}
+
+// withTransactionCheckpoint is withTransaction with an optional publication
+// checkpoint. A nil checkpoint is the production path; interruption tests use it
+// to stop between the journal write and the commit.
+func withTransactionCheckpoint(ctx context.Context, root string, scope LockScope, checkpoint func(string) error, fn func(*Transaction) error) (err error) {
 	if err = ensureLayout(root); err != nil {
 		return err
 	}
@@ -142,7 +149,10 @@ func withTransaction(ctx context.Context, root string, scope LockScope, fn func(
 	if err = writeOperation(root, path, tx.record, false); err != nil {
 		return err
 	}
-	return applyRecord(root, path, &tx.record, scope.warnings)
+	if checkpoint == nil {
+		return applyRecord(root, path, &tx.record, scope.warnings)
+	}
+	return applyRecordWithCheckpoint(root, path, &tx.record, checkpoint, scope.warnings)
 }
 func (tx *Transaction) owns(id string) bool {
 	for _, v := range tx.scope.Tasks {

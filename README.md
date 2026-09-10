@@ -59,13 +59,16 @@ kander issue repo                                   # resolve the repository of 
 kander issue repo --repo HOST/OWNER/REPO --json     # or pass a reference explicitly
 kander issue list --state open --label bug          # list issues: --state open|closed|all, repeated --label, --search, --limit, --json
 kander issue show 42 --comments                     # one issue with its comments
+kander issue import 42 --comments                   # import it as a backlog card, with the issue text and comments
 ```
 
 `kander issue repo` confirms the canonical identity with GitHub instead of trusting a directory name. When a worktree has several distinct remotes it refuses to guess, and asks for `--repo` or for `gh repo set-default`. `kander doctor` reports the `gh` path, version, and per-host authentication state without touching credentials, remotes, or accounts.
 
 `kander issue list` filters by state, labels, and a search term and bounds how many issues it fetches; pull requests are never mixed into the result. `kander issue show NUMBER` renders one issue, and `--comments` loads its comments under an explicit bound instead of truncating silently. Both commands support `--json` for scripting and report actionable errors (missing `gh`, unauthenticated host, rate limit, ambiguous remotes) instead of a raw failure.
 
-On the terminal board, `g` opens the same data as an overlay: `Enter` opens the selected issue with its comments, `Tab` cycles the state, `/` searches, `l` filters by label, `r` refreshes, `o` opens it in the browser, and `Esc`/`q` closes the overlay without changing the board. Every request runs in the background, so the board never blocks.
+`kander issue import NUMBER` creates a normal backlog card bound to the issue: `--comments` stores the discussion, `--type` overrides the label-derived type, `--large` sets the size, `--language` freezes the card language, and `--json` prints the result for scripting. The issue title, body, and comments are kept verbatim in `source/github-issue.json` and `source/github-issue.md` beside `spec.md`, while the card contract is authored from the confirmed repository identity. Importing the same issue twice returns the existing card, and the unique source key is checked in the same board transaction that publishes the card, so concurrent imports cannot produce duplicates. Over-limit issues are rejected with a hint instead of being truncated. See [docs/github-issue-import.md](docs/github-issue-import.md) for the snapshot format and the security model.
+
+On the terminal board, `g` opens the same data as an overlay: `Enter` opens the selected issue with its comments, `Tab` cycles the state, `/` searches, `l` filters by label, `i` imports the issue as a backlog card (or jumps to the card already bound to it, while `I` imports with comments), `r` refreshes, `o` opens it in the browser, and `Esc`/`q` closes the overlay without changing the board. Imported issues show their task ID, and a newer remote revision is marked as an update instead of overwriting the card. Every request runs in the background, so the board never blocks.
 
 ## 3. License
 

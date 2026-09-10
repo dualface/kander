@@ -32,6 +32,7 @@ const (
 	ErrorOutputLimit      ErrorKind = "output-limit"
 	ErrorInvalidResponse  ErrorKind = "invalid-response"
 	ErrorCommandFailed    ErrorKind = "command-failed"
+	ErrorImportConflict   ErrorKind = "import-conflict"
 )
 
 // Error is a structured failure from repository resolution. Detail and

@@ -129,6 +129,9 @@ func applyRecordWithCheckpoint(root, path string, r *OperationRecord, checkpoint
 			return err
 		}
 	}
+	if err := checkpoint("files"); err != nil {
+		return err
+	}
 	for _, e := range r.Entries {
 		to, err := safeRecordPath(root, e.To)
 		if err != nil {

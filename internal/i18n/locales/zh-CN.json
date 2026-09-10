@@ -965,5 +965,18 @@
   "menu.github_cli_auth_failed": "GitHub CLI 认证 {{.V0}}: 未认证",
   "menu.github_cli_not_authenticated": "GitHub CLI: 没有已认证的 host；请运行 gh auth login",
   "menu.github_cli_env_token": "GitHub CLI 凭据还来自环境变量: {{.V0}}",
-  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}"
+  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}",
+  "board.import_slug_is_too_long": "导入 slug 过长: {{.V0}}",
+  "board.import_title_is_too_long": "导入标题过长",
+  "board.import_language_is_invalid": "导入语言无效",
+  "board.import_source_key_is_invalid": "导入来源标识无效",
+  "board.import_requires_at_least_one_source_attachment": "导入卡片至少需要一个来源附件",
+  "board.import_attachment_is_not_valid_utf_8": "导入附件不是有效的 UTF-8: {{.V0}}",
+  "board.import_attachment_name_must_be_unique": "导入附件名必须唯一: {{.V0}}",
+  "board.import_contract_section_must_not_be_empty": "导入契约段落不能为空: {{.V0}}",
+  "board.import_contract_section_must_not_contain_placeholders": "导入契约段落不能包含未填写的占位符: {{.V0}}",
+  "board.import_contract_section_must_not_contain_headings": "导入契约段落不能包含二级标题: {{.V0}}",
+  "board.import_contract_section_must_not_rewrite_metadata": "导入契约段落不能重写卡片元数据: {{.V0}}",
+  "board.import_contract_section_must_not_carry_records": "导入契约段落不能携带审查或前置任务记录: {{.V0}}",
+  "board.import_acceptance_criteria_requires_items": "导入的验收条件至少需要一个检查项"
 }

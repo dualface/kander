@@ -42,6 +42,15 @@ type issuesState struct {
 	selected   int
 	listScroll int
 
+	// index maps a canonical source key to the local card already bound to it.
+	// It is read through pendingWork together with the list; a failed read only
+	// means the imported markers are missing, never that imports are refused.
+	index    issue.Index
+	indexErr string
+	// importing is true while an import request is in flight. It is a UI hint
+	// only: the board transaction remains the authority on duplicates.
+	importing bool
+
 	detailNumber  int
 	detail        *issue.IssueSnapshot
 	detailLoading bool
@@ -66,6 +75,8 @@ type issuesListResult struct {
 	seq        uint64
 	repository *issue.Repository
 	page       issue.IssuePage
+	index      issue.Index
+	indexErr   error
 	err        error
 }
 
@@ -74,6 +85,44 @@ type issuesDetailResult struct {
 	number   int
 	snapshot issue.IssueSnapshot
 	err      error
+}
+
+// issuesImportResult carries the request sequence and the exact issue identity
+// of one import; a result that no longer matches the current selection is
+// dropped without reporting anything for another issue.
+type issuesImportResult struct {
+	seq        uint64
+	repository issue.Repository
+	number     int
+	result     issue.ImportResult
+	index      issue.Index
+	indexErr   error
+	err        error
+}
+
+func (a *App) applyIssuesImport(result issuesImportResult) {
+	st := a.Issues
+	if st == nil || result.seq != a.issuesImportSeq {
+		return
+	}
+	st.importing = false
+	if result.index != nil {
+		st.index = result.index
+		st.indexErr = ""
+		a.LastRefresh = time.Time{}
+	}
+	if result.err != nil {
+		a.issuesSetNotice(a.Context.IssuesImportFailed + ": " + issue.Message(result.err))
+		return
+	}
+	if result.number != a.issuesSelectedNumber() {
+		return
+	}
+	key := "tui.issues_import_created"
+	if result.result.Existing {
+		key = "tui.issues_import_existing"
+	}
+	a.issuesSetNotice(t(key, result.result.TaskID))
 }
 
 func (a *App) openIssues() {
@@ -115,9 +164,13 @@ func (a *App) issuesReloadList() {
 		query.Labels = []string{st.label}
 	}
 	provider := a.IssueProvider
+	loader := a.ImportIndex
 	cached := a.issuesRepo
 	st.loading = true
 	st.listErr = ""
+	// A new list request supersedes the previous background task, so a lost
+	// import result must not leave the overlay unable to start another import.
+	st.importing = false
 	a.pendingWork = func() any {
 		if provider == nil {
 			return issuesListResult{seq: seq, err: issue.NewError(issue.ErrorCLIUnavailable, "tui", "no issue provider is registered")}
@@ -134,7 +187,11 @@ func (a *App) issuesReloadList() {
 			repository = &resolved
 		}
 		page, err := instance.ListIssues(ctx, *repository, query)
-		return issuesListResult{seq: seq, repository: repository, page: page, err: err}
+		result := issuesListResult{seq: seq, repository: repository, page: page, err: err}
+		if err == nil && loader != nil {
+			result.index, result.indexErr = loader()
+		}
+		return result
 	}
 }
 
@@ -189,6 +246,10 @@ func (a *App) applyIssuesList(result issuesListResult) {
 	st.limit = result.page.Limit
 	st.more = result.page.More
 	st.listErr = ""
+	if result.index != nil {
+		st.index = result.index
+		st.indexErr = ""
+	}
 	if st.selected > len(st.items)-1 {
 		st.selected = max(0, len(st.items)-1)
 	}
@@ -227,6 +288,114 @@ func (a *App) issuesRepository() *issue.Repository {
 		return a.Issues.repository
 	}
 	return a.issuesRepo
+}
+
+// issuesLocalCard reports the local card bound to one issue. A missing index or
+// an unresolved repository simply means "not known to be imported".
+func (a *App) issuesLocalCard(number int) (issue.LocalCard, bool) {
+	st := a.Issues
+	if st == nil || len(st.index) == 0 || number <= 0 {
+		return issue.LocalCard{}, false
+	}
+	repository := a.issuesRepository()
+	if repository == nil {
+		return issue.LocalCard{}, false
+	}
+	key, err := repository.IssueSourceKey(number)
+	if err != nil {
+		return issue.LocalCard{}, false
+	}
+	local, ok := st.index[key]
+	return local, ok
+}
+
+// issuesImportOrJump imports the selected issue, or focuses the card that
+// already carries it. The jump never fetches anything; the import runs in
+// pendingWork because it touches the network and writes the board.
+func (a *App) issuesImportOrJump(withComments bool) {
+	st := a.Issues
+	if st == nil {
+		return
+	}
+	number := a.issuesSelectedNumber()
+	if local, ok := a.issuesLocalCard(number); ok {
+		if a.issuesFocusLocalCard(local.TaskID) {
+			return
+		}
+		a.issuesSetNotice(a.Context.IssuesImportNoCard + ": " + local.TaskID)
+		return
+	}
+	a.issuesImport(withComments)
+}
+
+// issuesImport starts one import request. The request is bound to the resolved
+// repository and the issue number; the result is dropped when either moved on.
+func (a *App) issuesImport(withComments bool) {
+	st := a.Issues
+	if st == nil || st.importing {
+		return
+	}
+	number := a.issuesSelectedNumber()
+	repository := a.issuesRepository()
+	if number <= 0 || repository == nil {
+		a.issuesSetNotice(a.Context.IssuesNoTarget)
+		return
+	}
+	importer := a.ImportIssue
+	if importer == nil {
+		a.issuesSetNotice(a.Context.IssuesImportFailed)
+		return
+	}
+	loader := a.ImportIndex
+	resolved := *repository
+	a.issuesImportSeq++
+	seq := a.issuesImportSeq
+	st.importing = true
+	a.issuesSetNotice(a.Context.IssuesImporting)
+	a.pendingWork = func() any {
+		ctx, cancel := context.WithTimeout(context.Background(), issuesRequestTimeout)
+		defer cancel()
+		result, err := importer(ctx, resolved, number, issue.ImportOptions{Comments: withComments})
+		out := issuesImportResult{seq: seq, repository: resolved, number: number, result: result, err: err}
+		if err == nil && loader != nil {
+			out.index, out.indexErr = loader()
+		}
+		return out
+	}
+}
+
+// issuesFocusLocalCard moves the board selection onto one card and closes the
+// overlay. The archive column is opened when the card lives there.
+func (a *App) issuesFocusLocalCard(taskID string) bool {
+	if a.selectLocalCard(taskID) {
+		a.closeIssues()
+		return true
+	}
+	if !a.Model.ShowArchived {
+		a.Model.ToggleArchived()
+		if a.selectLocalCard(taskID) {
+			a.closeIssues()
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) selectLocalCard(taskID string) bool {
+	for _, state := range a.Model.States() {
+		for index, task := range a.Model.TasksFor(state) {
+			if task.TaskID == taskID {
+				a.Model.FocusState(state)
+				a.Model.SelectTaskIndex(state, index)
+				return true
+			}
+		}
+	}
+	if a.Model.Query != "" {
+		a.Model.Query = ""
+		return a.selectLocalCard(taskID)
+	}
+	return false
 }
 
 // issuesSelectedNumber returns the issue the user is acting on: the open detail
@@ -404,6 +573,10 @@ func (a *App) handleIssuesKey(key string) {
 		}
 	case "o", "O":
 		a.issuesOpenBrowser()
+	case "i":
+		a.issuesImportOrJump(false)
+	case "I":
+		a.issuesImportOrJump(true)
 	case "up", "k", "K":
 		if a.issuesDetailPageActive() {
 			a.issuesScrollDetail(-1)

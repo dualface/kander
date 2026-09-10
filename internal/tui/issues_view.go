@@ -204,10 +204,22 @@ func (a *App) issuesListPane(width, height int, p palette) string {
 
 func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width int, p palette) []string {
 	first := "#" + itoa(item.Number) + "  " + a.Context.issueStateLabel(item.State) + "  " + formatIssueTime(item.UpdatedAt)
+	labels := strings.Join(item.Labels, ", ")
 	content := []string{
 		issue.SanitizeRemoteText(first),
 		issue.SanitizeRemoteText(item.Title),
-		issue.SanitizeRemoteText(strings.Join(item.Labels, ", ")),
+		issue.SanitizeRemoteText(labels),
+	}
+	if local, ok := a.issuesLocalCard(item.Number); ok {
+		marker := t("tui.issues_imported", local.TaskID)
+		if item.UpdatedAt.After(local.IssueUpdatedAt) {
+			marker += " · " + t("tui.issues_import_update")
+		}
+		line := issue.SanitizeRemoteText(marker)
+		if strings.TrimSpace(content[2]) != "" {
+			content[2] += "  "
+		}
+		content[2] += line
 	}
 	out := make([]string, 0, issuesItemLines)
 	for index, text := range content {
@@ -266,6 +278,12 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 	meta := "@" + orDash(issue.SanitizeRemoteText(snapshot.Author)) + "  " + formatIssueTime(snapshot.UpdatedAt)
 	if len(snapshot.Labels) > 0 {
 		meta += "  " + issue.SanitizeRemoteText(strings.Join(snapshot.Labels, ", "))
+	}
+	if local, ok := a.issuesLocalCard(snapshot.Number); ok {
+		meta += "  " + issue.SanitizeRemoteText(t("tui.issues_imported", local.TaskID))
+		if snapshot.UpdatedAt.After(local.IssueUpdatedAt) {
+			meta += " · " + issue.SanitizeRemoteText(t("tui.issues_import_update"))
+		}
 	}
 	lines = append(lines, styleFor("popup-dim", p).Render(padLine(clipText(meta, width), width)))
 	scroll := st.detailScroll

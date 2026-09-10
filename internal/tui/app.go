@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"time"
 	"unicode"
@@ -90,11 +91,17 @@ type App struct {
 	// IssueProvider builds the read-only issue provider; cmd.go binds it from
 	// internal/cli, while tests inject a fake.
 	IssueProvider func() issue.IssueProvider
+	// ImportIssue runs one issue import through the shared service; cmd.go
+	// binds it from internal/cli and tests inject a fake.
+	ImportIssue func(ctx context.Context, repository issue.Repository, number int, options issue.ImportOptions) (issue.ImportResult, error)
+	// ImportIndex reads the board cards that already carry an imported source.
+	ImportIndex func() (issue.Index, error)
 	// OpenBrowser hands one validated issue URL to the platform opener.
 	OpenBrowser     func(string) error
 	issuesRepo      *issue.Repository
 	issuesListSeq   uint64
 	issuesDetailSeq uint64
+	issuesImportSeq uint64
 	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()
 	pendingWork  func() any

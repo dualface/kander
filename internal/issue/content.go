@@ -18,6 +18,11 @@ const (
 	MaxIssueLabels     = 100
 	MaxIssueStateRunes = 32
 	MaxIssueAuthorRune = 256
+
+	// MaxIssueSnapshotBytes bounds the body plus all comments of one snapshot.
+	// A snapshot that exceeds it is rejected instead of being truncated, so an
+	// imported card always carries the complete source.
+	MaxIssueSnapshotBytes = 1 << 20
 )
 
 // truncation marker appended when a small display field is trimmed.
@@ -202,6 +207,13 @@ func NormalizeSnapshot(snapshot IssueSnapshot) (IssueSnapshot, error) {
 		comments = append(comments, normalized)
 	}
 	snapshot.Comments = comments
+	total := len(snapshot.Body)
+	for _, comment := range snapshot.Comments {
+		total += len(comment.Body)
+	}
+	if total > MaxIssueSnapshotBytes {
+		return IssueSnapshot{}, &Error{Kind: ErrorLimitExceeded, Op: "snapshot", Detail: strconv.Itoa(total)}
+	}
 	return snapshot, nil
 }
 

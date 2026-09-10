@@ -1,14 +1,17 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/menu"
 )
 
@@ -20,6 +23,17 @@ func init() {
 func fail(err error) int {
 	fmt.Fprintf(os.Stderr, "kander: %s\n", err)
 	return 1
+}
+
+// configuredAgentLanguage returns the agent language the import freezes into a
+// new card when the caller does not pass one; the issue service validates the
+// value, so an empty result is reported as an invalid import option.
+func configuredAgentLanguage() string {
+	cfg, err := config.Load(false)
+	if err != nil {
+		return ""
+	}
+	return cfg.AgentLanguage
 }
 
 // runBoardTUI starts the interactive board; tests may override it to inspect the App without Bubble Tea.
@@ -103,6 +117,18 @@ func Run(_ []string) int {
 	}
 	app := newApp(prefs.Single, prefs.Refresh, ctx, getBoard, getTask, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.IssueProvider = cli.IssueProvider
+	app.ImportIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.ImportOptions) (issue.ImportResult, error) {
+		if strings.TrimSpace(options.Language) == "" {
+			options.Language = configuredAgentLanguage()
+		}
+		return issue.Import(ctx, cli.IssueProvider(), root, repository, number, options)
+	}
+	app.ImportIndex = func() (issue.Index, error) {
+		if emptyBoard {
+			return issue.Index{}, nil
+		}
+		return issue.LoadIndex(root)
+	}
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)
 	app.showJournalWarnings(initial.Warnings)

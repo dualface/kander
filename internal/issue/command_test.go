@@ -168,7 +168,7 @@ func TestIssueUsageErrors(t *testing.T) {
 		match string
 	}{
 		{name: "no arguments", args: nil, code: 2, match: "kander issue"},
-		{name: "unknown subcommand", args: []string{"import"}, code: 2, match: "import"},
+		{name: "unknown subcommand", args: []string{"close"}, code: 2, match: "close"},
 		{name: "unknown option", args: []string{"repo", "--state", "open"}, code: 2, match: "--state"},
 		{name: "missing value", args: []string{"repo", "--repo"}, code: 2, match: "需要一个值"},
 		{name: "empty value", args: []string{"repo", "--repo="}, code: 2, match: "需要一个值"},
