@@ -995,5 +995,13 @@
   "issue.repo_visibility_private": "private",
   "issue.repo_visibility_public": "public",
   "issue.repo_remote": "remote: {{.V0}}",
-  "issue.repo_remote_none": "remote: N/A"
+  "issue.repo_remote_none": "remote: N/A",
+  "menu.github_cli_not_installed": "GitHub CLI (gh): not installed (optional; required for GitHub issue integration)",
+  "menu.github_cli_path": "GitHub CLI (gh): {{.V0}}",
+  "menu.github_cli_version": "GitHub CLI version: {{.V0}}",
+  "menu.github_cli_authenticated": "GitHub CLI auth {{.V0}}: {{.V1}} ({{.V2}})",
+  "menu.github_cli_auth_failed": "GitHub CLI auth {{.V0}}: not authenticated",
+  "menu.github_cli_not_authenticated": "GitHub CLI: no authenticated host; run gh auth login",
+  "menu.github_cli_env_token": "GitHub CLI credentials also come from the environment: {{.V0}}",
+  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}"
 }

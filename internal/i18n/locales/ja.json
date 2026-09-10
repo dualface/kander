@@ -995,5 +995,13 @@
   "issue.repo_visibility_private": "プライベート",
   "issue.repo_visibility_public": "パブリック",
   "issue.repo_remote": "リモート: {{.V0}}",
-  "issue.repo_remote_none": "リモート: 該当なし"
+  "issue.repo_remote_none": "リモート: 該当なし",
+  "menu.github_cli_not_installed": "GitHub CLI (gh): 未インストール（任意。GitHub Issue 連携に必要）",
+  "menu.github_cli_path": "GitHub CLI (gh): {{.V0}}",
+  "menu.github_cli_version": "GitHub CLI バージョン: {{.V0}}",
+  "menu.github_cli_authenticated": "GitHub CLI 認証 {{.V0}}: {{.V1}}（{{.V2}}）",
+  "menu.github_cli_auth_failed": "GitHub CLI 認証 {{.V0}}: 未認証",
+  "menu.github_cli_not_authenticated": "GitHub CLI: 認証済みのホストがありません。gh auth login を実行してください",
+  "menu.github_cli_env_token": "GitHub CLI の認証情報は環境変数からも取得します: {{.V0}}",
+  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}"
 }

@@ -64,6 +64,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {
 		healthy = false
 	}
+	reportGitHubCLI()
 	agentConfig, agentConfigErr := config.Load(false)
 	if agentConfigErr != nil && !repair {
 		warning(agentConfigErr.Error())

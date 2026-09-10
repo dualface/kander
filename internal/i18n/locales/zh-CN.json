@@ -995,5 +995,13 @@
   "issue.repo_visibility_private": "私有",
   "issue.repo_visibility_public": "公开",
   "issue.repo_remote": "remote: {{.V0}}",
-  "issue.repo_remote_none": "remote: 不适用"
+  "issue.repo_remote_none": "remote: 不适用",
+  "menu.github_cli_not_installed": "GitHub CLI (gh): 未安装（可选；GitHub Issue 集成需要）",
+  "menu.github_cli_path": "GitHub CLI (gh): {{.V0}}",
+  "menu.github_cli_version": "GitHub CLI 版本: {{.V0}}",
+  "menu.github_cli_authenticated": "GitHub CLI 认证 {{.V0}}: {{.V1}}（{{.V2}}）",
+  "menu.github_cli_auth_failed": "GitHub CLI 认证 {{.V0}}: 未认证",
+  "menu.github_cli_not_authenticated": "GitHub CLI: 没有已认证的 host；请运行 gh auth login",
+  "menu.github_cli_env_token": "GitHub CLI 凭据还来自环境变量: {{.V0}}",
+  "menu.github_cli_probe_failed": "GitHub CLI (gh): {{.V0}}"
 }
