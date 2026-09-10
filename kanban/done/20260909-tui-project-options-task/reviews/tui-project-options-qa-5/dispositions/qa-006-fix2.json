@@ -1,0 +1,17 @@
+{
+  "submitted_revision": 47,
+  "record_id": "qa-006-fix2",
+  "previous_record_id": "qa-006-confirmed",
+  "run_id": "tui-project-options-qa-5",
+  "finding_id": "QA-006",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:20:56.525359849Z",
+  "report_hash": "7c75fde6b295c2458ab8d6680f2c09572ead4b0e28d00c5a58f52936bc6cc05a",
+  "original": "Inferred，置信度高，本轮新增。scopeRaw 缓存未随基础配置编辑更新。Global 修改 launcher、按 Esc 保留编辑后切 Project，未覆盖 launcher 仍显示旧值，恢复继承也恢复旧值；随后保存两份编辑，运行时使用新基础值，先前界面与最终结果不一致。违反继承值随基础变更更新要求。最小修复：保留原始键存在性，同时将基础编辑同步到预览文档；doctor 接纳持久化结果时刷新文档。增加跨 tab 基础编辑、恢复继承与保存重读的 Session 测试。",
+  "status": "fixed",
+  "basis": "Global noteOverride copies the edited field into scopeRaw; Project inherit sees unsaved launcher. TestUnsavedGlobalLauncherUpdatesProjectInherit pass. ApplyDoctorConfig refreshes scopeRaw.",
+  "fix_commit": "334142586e026b50b6e2c1c8d731a1547ed7e8de",
+  "verification": "Read cited paths on 35170cacf4ae68bf5f79bb6cf67e638524b37bee. TestOverlayRuleEditSyncsEffectiveConfig, TestUnsavedGlobalLauncherUpdatesProjectInherit, TestModelOverrideDoesNotRebuildInput pass. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit."
+}

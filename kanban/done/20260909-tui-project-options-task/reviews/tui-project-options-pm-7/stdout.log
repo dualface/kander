@@ -1,0 +1,54 @@
+Role: PM  
+Commit: `f4d4eaad922231bc161bfe565feeaa76fd978fa8`  
+Task Context: [task-spec.md](/tmp/codex-review.fa2ec7e2fcfc7d60205cbfe8ea8e2ed8/task-spec.md)，已完整读取。  
+Reviewed Scope: `35170ca..f4d4eaa`；旧 finding 核销及修复直接回归。
+
+**验收未通过：新增 1 项 medium。** 四项旧缺陷关闭。以下行为结论均为 **Inferred，高置信度**。
+
+旧 finding disposition：
+
+- **PM-001 / QA-001：关闭。** 合并后同步所有规则绑定，并刷新预设与展示，后续事件不再回灌旧值。证据：`internal/tui/options_rules.go:109–126`。
+- **PM-003 / QA-004：关闭。** 首次覆盖刷新标题及恢复入口；复用输入与 accessor，保留文本光标。证据：`internal/tui/options_form.go:568–577,739–748`、`internal/tui/options_panel.go:337–347`。
+- **PM-006 / QA-006：关闭。** `SyncTUI` 同步完整 `tui` 到基础预览文档；切换与恢复消费该文档。证据：`internal/menu/doctor_session.go:81–89`、`internal/menu/session_overlay.go:140,240`。
+- **PM-007 / QA-007：关闭。** 失败覆盖保留并标脏，错误传到界面；保存校验同一草稿，不再伪报成功。证据：`internal/menu/session_overlay.go:214–227,280,399–403`、`internal/tui/options_inherit.go:119–122`、`internal/config/overlay_edit.go:379–384`。
+- **PM-002 / QA-002：保持关闭。** 先展开旧格式，再删除指定规模键。证据：`internal/menu/session_overlay.go:235–239,310–330`。
+- **PM-004：保持关闭。** 确认期间清空 tab 命中区域并拒绝切换。证据：`internal/tui/options_tabs.go:65–67,140–142`。
+- **PM-005 / QA-005：保持关闭。** 窄屏断言仅检查 resize 后输出。证据：`internal/tui/pty_test.go:323–337`。
+- **QA-003：保持关闭。** 原有效配置的目标切换、恢复操作仍先验证候选再提交。证据：`internal/menu/session_overlay.go:115–125,235–247`。
+- **QA-008：仍开放。** 本轮独立核实，作为 PM-008 报告。
+
+验收表仅列状态变化：**Complete 4、Partial 1、Missing 0、Contradicted 0、Unverifiable 0**。
+
+| 要求 | 预期行为 | 代码证据 | Status |
+|---|---|---|---|
+| 第5条：仅覆盖实际编辑字段 | 规则绑定跟随有效值，避免额外覆盖 | `internal/tui/options_rules.go:118–126` | Complete |
+| USER_DECISIONS：覆盖来源展示 | 修改后移除继承前缀，提供恢复入口 | `internal/tui/options_form.go:568–577,739–748` | Complete |
+| 第5条：基础变更同步 | Global TUI 修改更新 Project 继承值 | `internal/menu/doctor_session.go:81–89` | Complete |
+| 第7条：失败处理 | 保留编辑、报告错误、拒绝无效保存 | `internal/menu/session_overlay.go:220–227`；`internal/config/overlay_edit.go:379–384` | Complete |
+| 第5条：恢复继承 | 逐字段删除覆盖并更新有效值 | `internal/menu/session_overlay.go:235–247` | Partial |
+
+**PM-008 · medium：多个失败覆盖无法逐项恢复继承。**
+
+合法基础配置缺少整个 `tui` 时，Project 连续修改主题、刷新间隔；关闭错误提示后，两项失败编辑均保留。恢复任一字段，剩余字段仍组成不完整 `tui`，校验失败，删除不提交。用户无法逐项撤销这两项覆盖，保存也持续失败。违反第5条及 USER_DECISIONS 的恢复继承要求。
+
+直接引入点：[session_overlay.go:220](/home/dualf/works/kander/worktrees/tui-project-options/internal/menu/session_overlay.go:220) 新增保留失败键；同文件 `235–247` 仍要求删除后的整份草稿有效。`internal/config/config.go:616–634,738–743` 证明缺失整个 `tui` 合法、部分对象非法；`internal/tui/options_inherit.go:56–64` 证明恢复逐项执行。
+
+最小修复：区分无效草稿与有效配置，允许已有无效草稿逐键撤销；保存继续严格校验，原有效配置的恢复失败仍保持原子性。补充两项失败编辑、逐项恢复及最终保存回归。
+
+`git diff --check` 通过；工作树干净。测试及 PTY 通过采用调用方记录，本轮只读审查，未复跑。任务文件删除已尝试，只读文件系统拒绝，文件保留。
+
+NON-BLOCKING: none
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "PM-008",
+      "tier": "medium",
+      "text": "Inferred，高置信度，本轮新增，与 QA-008 同根因。违反 task-spec.md ACCEPTANCE_CRITERIA 第5条及 USER_DECISIONS 的恢复继承删除对应覆盖键要求。合法基础配置缺少整个 tui 时，Project 连续修改主题和刷新间隔，两个校验失败的编辑均由本轮新增逻辑保留到 overlayRaw；恢复任一字段后，剩余字段仍组成不完整 tui，整份候选校验失败，删除不提交。因此用户无法通过逐项恢复继承撤销这些覆盖，保存也持续失败。最小修复：区分无效草稿与有效配置，允许已有无效草稿逐键撤销；保存继续严格校验，保留原有效配置下恢复失败的原子性。增加两个失败编辑、逐项恢复及最终保存回归。",
+      "evidence": "FIX RANGE 的 internal/menu/session_overlay.go:220-225 新增保留校验失败的覆盖键；同文件:235-247 仅在删除单键后的整份候选通过 MergeOverlayOnRaw 校验时提交删除。internal/config/config.go:738-743 允许整个 tui 缺失，:616-634 要求存在的 tui 包含完整字段。internal/tui/options_form.go:761-770,792-799 提供主题和刷新间隔编辑路径；internal/tui/options_inherit.go:56-64 逐项调用恢复，失败后不提交删除。internal/menu/session_overlay_test.go:445-472 仅覆盖单个失败字段的恢复，不能覆盖多个失败键互相阻止撤销的状态。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

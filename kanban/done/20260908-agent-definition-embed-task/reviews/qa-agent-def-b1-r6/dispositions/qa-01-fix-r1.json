@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "581024f8a26217c9493b9392dbbc2adc",
+    "epoch": 3
+  },
+  "submitted_revision": 51,
+  "record_id": "qa-01-fix-r1",
+  "run_id": "qa-agent-def-b1-r6",
+  "finding_id": "QA-01",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-definition-embed-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T05:50:38.307061148Z",
+  "report_hash": "37b8b55ad426db1771f2cc07b1f8d39bb3df643307c5c63e14642cd7bdeeadc8",
+  "original": "mode: pane 的第二段就绪失败（blocked / 投递原语拒绝 / 纯超时）发生在 sendAttempted=true 之后。launchAgent 在 herdr pane run、tmux respawn-pane 之前就把 sendAttempted 置位；这在 mode: argv 下合理（提示词已在 argv 里，pane run 即发送边界），但 pane 模式的提示词要等 completePaneDelivery。durable 路径（resume 带 authorization，或 notify 恢复通道且卡片有 DISPATCH_ID）因此把「尚未投递/投递被拒」当成 DeliveryUnknown：不关本次 tab/window，也不回滚卡片。这直接违反本卡对三种失败原因的统一处置（抓 pane、关容器、回滚、不留 WINDOW/SESSION）。start 不传 durable，三种失败单测都走 start，主启动路径是绿的；任务组接管/恢复是同一套 launchAgent。失败场景：任务组卡片带 DISPATCH_ID，对 pane 模式自定义 agent 做 resume --agent 接管（或 notify 走恢复通道建新容器），新 CLI 弹出信任对话框或 TUI 未起来。completePaneDelivery 失败时 fail() 因 sendAttempted \u0026\u0026 durable 返回 DeliveryUnknown，调用方跳过关窗与 rollbackLaunch。容器残留；接管路径还已提前写入新 SESSION。最小修复：pane 模式把 sendAttempted=true 挪到 deliverPromptToPane 成功之后（三种第二段失败都保持 false）；argv 模式维持现有 pane run 前边界。",
+  "status": "fixed",
+  "basis": "QA 审的是组分支 e1c0127，其上 fail() 在 sendAttempted \u0026\u0026 durable 时一律 DeliveryUnknown。本卡上一轮 PM-01 已在 be3f6c37399b09113b9e1d0b3baedd84b4eda086 把该短路改为仅 PromptDelivery.Mode != \"pane\" 生效；pane 的 blocked/投递拒绝/超时走关容器。该提交已包含在 delivery_commit 3be9cd8dc55a7bcc84eb770f9ade28d9d9537d24。notify_resume 与 commandResume 只在 DeliveryUnknown 时跳过回滚，pane 失败因此会 RestoreWindowText / rollbackLaunch，接管路径提前写入的 SESSION 随原文回滚。sendAttempted 仍在 pane run 前置位（argv 边界不变），但 pane 不再据此标未知投递，三种第二段失败的统一处置已成立。",
+  "fix_commit": "3be9cd8dc55a7bcc84eb770f9ade28d9d9537d24",
+  "verification": "在 3be9cd8dc55a7bcc84eb770f9ade28d9d9537d24 阅读 internal/launch/agent.go:27-40：DeliveryUnknown 条件含 Mode != \"pane\"。go test ./internal/launch -count=1 -run TestPaneDeliveryDurableBlockedClosesTab|TestPaneDeliveryBlockedWinsBeforeTimeout|TestPaneDeliveryHerdrPromptRejected|TestPaneDeliveryReadyTimeout 通过（0.950s）。Durable 用例 launchAgent(..., true) 在 blocked 时 DeliveryUnknown==false 且写出 herdr close。组分支仍为 e1c0127，无需再 rebase。"
+}

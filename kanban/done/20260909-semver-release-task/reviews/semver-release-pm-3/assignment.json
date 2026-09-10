@@ -1,0 +1,21 @@
+{
+  "run_id": "semver-release-pm-3",
+  "batch_id": "semver-release-batch",
+  "author": "cursor",
+  "basis": "single-card change scope is this task only",
+  "items": {
+    "PM-01": [
+      "20260909-semver-release-task"
+    ],
+    "PM-N1": [
+      "20260909-semver-release-task"
+    ],
+    "PM-N2": [
+      "20260909-semver-release-task"
+    ]
+  },
+  "owners": {
+    "20260909-semver-release-task": "cursor"
+  },
+  "recorded_at": "2026-09-09T05:28:30.363931617Z"
+}

@@ -1,0 +1,18 @@
+{
+  "run_id": "qa-agent-def-b1-r8",
+  "batch_id": "agent-def-batch-one",
+  "author": "codex-orchestrator",
+  "basis": "QA r8 无门禁 finding；QA-N1/QA-N2 通过 lineage 延续 r6，涉及 A2 审核提示词路径及选项候选过滤。主控逐项核实实现路径，仍归属原 A2；须由现 OWNER Codex 独立提交本轮作者处置。",
+  "items": {
+    "QA-N1": [
+      "20260908-agent-review-template-task"
+    ],
+    "QA-N2": [
+      "20260908-agent-review-template-task"
+    ]
+  },
+  "owners": {
+    "20260908-agent-review-template-task": "codex"
+  },
+  "recorded_at": "2026-09-09T13:06:52.966938891Z"
+}

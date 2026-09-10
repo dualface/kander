@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "dispatch_id": "e65206d1b04fca0d76d191122a1f18f7",
+    "epoch": 1
+  },
+  "submitted_revision": 29,
+  "record_id": "pm-04-fix-r1",
+  "run_id": "pm-agent-def-b1-r4",
+  "finding_id": "PM-04",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260909-process-output-parser-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T05:17:20.927178099Z",
+  "report_hash": "9a028fb50ced33e99f72130edee7e77431badd5fd6397814d6598ed3e3957343",
+  "original": "extractText 正则分支中的 jsonStringOrRaw 回退不可达。该分支的进入条件是 input == \"\" 且 decodeErr == nil，但 extractText 只有两个调用点：evaluateJSON 传入的 decodeErr 来自对同一份 data 的 json.Unmarshal，data 为空串时该调用必然返回 unexpected end of JSON input（decodeErr != nil）；evaluateNDJSON 传入的 row.raw 已被空行过滤（strings.TrimSpace(line) == \"\" 时 continue），恒非空。因此该 if 体永不执行，其唯一调用的 jsonStringOrRaw 函数也随之不可达。最小修复：删除该回退分支与 jsonStringOrRaw。",
+  "status": "fixed",
+  "basis": "已核对 extractText 的两个调用点：evaluateJSON 在 data 为空时 json.Unmarshal 必失败；evaluateNDJSON 的 row.raw 经空行过滤后恒非空。input==\"\" \u0026\u0026 decodeErr==nil 不可达，jsonStringOrRaw 仅被该分支调用。已删除该回退与 jsonStringOrRaw。",
+  "fix_commit": "f5dc7c31c665c347b63bb8fd389822197371118a",
+  "mechanical": "dead-code",
+  "verification": "git grep jsonStringOrRaw 在 f5dc7c31c665c347b63bb8fd389822197371118a 上零命中；go test ./internal/process -count=1 53 pass / 0 fail，含 TestJSONFieldAndRegexPrimitives 正则路径。"
+}

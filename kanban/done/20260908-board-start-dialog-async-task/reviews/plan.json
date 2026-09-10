@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "board-start-dialog-async-plan",
+  "author": "codex",
+  "basis": "用户确认任务及追加启动进度/结果对话框要求；本仓库 AGENTS.md",
+  "cwd": "/home/dualf/works/kander/worktrees/board-start-dialog-async",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-board-start-dialog-async-task"
+  ],
+  "cycles": {
+    "20260908-board-start-dialog-async-task": "3ab190769ed42544221ee45d6825271fc64bd7d68e85995228f1deb45e927ccf"
+  },
+  "batches": [
+    {
+      "batch_id": "board-start-dialog-async-batch",
+      "task_ids": [
+        "20260908-board-start-dialog-async-task"
+      ],
+      "base": "1e4886a30d2d047175bebb18f71947795f42304d",
+      "target_commit": "e0f75e3f30c9d92442fdae091cdd56b243a93a2a",
+      "requirements": {
+        "CSA": "N/A: 本仓库 AGENTS.md 安全角色例外",
+        "Hacker": "N/A: 本仓库 AGENTS.md 安全角色例外",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-08T05:29:14.973206018Z"
+}

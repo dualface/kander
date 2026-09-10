@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "sync-batch-one-r4-c1",
+    "epoch": 4
+  },
+  "submitted_revision": 47,
+  "record_id": "qa-104-deferred-r4",
+  "run_id": "qa-batch-one-r4",
+  "finding_id": "QA-104",
+  "batch_id": "batch-one",
+  "task_id": "20260909-review-stages-per-size-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T20:30:49.094607803Z",
+  "report_hash": "ee2397a79304a0b858fc7b9586931155013e1825f59648743e71fe7248270f62",
+  "original": "本轮未改动,现象未变。kander config 人类可读输出在两档相同时是「审核环节: PM=…」,两档不同时变成「审核环节 大: PM=…」——标签后缺冒号,冒号移到了档名后面,与 FormatConfigLines 中其余每一行统一的「标签 + \": \" + 值」格式不一致,按标签冒号前缀切分输出的脚本会漏掉分档形态。建议分档时也用 Text(\"config.review_stages\")+\": \"+summary,由 FormatReviewStagesSummary 返回的档名前缀承担区分。",
+  "status": "deferred",
+  "basis": "已在未改交付 9a2badc1bdb23dd946020aaaa950501081dbbd5c 上再次复现: FormatConfigLines 两档不同时输出「审核环节 大: PM=required CSA=auto Hacker=auto QA=auto」与「审核环节 小: PM=skip CSA=auto Hacker=auto QA=auto」。format.go:138-139 折叠用 \": \",141-143 分档用空格拼接,130/145/152 等其余行仍用 \": \"。与 reviews/qa-batch-one-r3/dispositions/qa-104-deferred-r3.json 同一现象,本 sync 轮不改代码,维持 deferred。"
+}

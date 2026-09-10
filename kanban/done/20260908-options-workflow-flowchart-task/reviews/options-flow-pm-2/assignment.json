@@ -1,0 +1,9 @@
+{
+  "run_id": "options-flow-pm-2",
+  "batch_id": "options-flow-batch",
+  "author": "codex",
+  "basis": "PM 增量原件无发现；PM-001 已确认修复，独立验证顺序及回归测试",
+  "items": {},
+  "owners": {},
+  "recorded_at": "2026-09-08T03:59:59.089625143Z"
+}

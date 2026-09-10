@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 21,
+  "record_id": "durable-r1-pm002",
+  "run_id": "g2-pm-r1",
+  "finding_id": "PM-002",
+  "batch_id": "g2-batch-one",
+  "task_id": "20260908-durable-dispatch-protocol-task",
+  "author": "codex",
+  "recorded_at": "2026-09-07T19:49:47.018132496Z",
+  "report_hash": "0ba3565e4c10bd1cde53ab9fb098127df894872e54d58d565ef66fd12cfab2b8",
+  "original": "Inferred，高置信度：新增 dispatch 预解析不识别其他选项的参数边界，将 --message 的正文当成 dispatch 选项。例如 notify \u003ctask-id\u003e --message '--kind=sync' 原本是合法普通消息，现在正文被删除并报缺少消息；resume 同样受影响。违反未绑定普通消息兼容要求。最小修复：使用统一参数解析，或在预解析中正确跳过已有选项的参数，保证消息正文不被解释为控制选项。",
+  "status": "fixed",
+  "basis": "confirmed → fixed。核实目标 ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe 的 ParseDispatchOptions 无条件扫描 token，RunNotify/RunResume 先调用该入口。修复前 TestDispatchOptionsPreserveOtherOptionValues 失败，--message 的 --kind=sync 被提取为控制参数，--dispatch-id 被误吞后续 token。现预解析保留既有选项及其下一个值，仍由原解析器验证值；测试覆盖六个既有带值选项及三种类似派回选项的字面值。最终 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：internal/launch/dispatch.go:217-254。",
+  "fix_commit": "e40a98570b49b55395c2d5d6b2d9e516f10ce664",
+  "verification": "TestDispatchOptionsPreserveOtherOptionValues；TestDispatchPromptTranslationsAndFlagParsing。 最终提交 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：go test -json -count=1 ./... 退出 0，19 包、922 个测试/子测试通过、1 跳过、0 失败；go test -race -json -count=1 ./internal/launch ./internal/notify ./internal/board ./internal/window 退出 0，4 包、400 个测试/子测试通过、1 跳过、0 失败；go build ./...、go vet ./... 退出 0。"
+}

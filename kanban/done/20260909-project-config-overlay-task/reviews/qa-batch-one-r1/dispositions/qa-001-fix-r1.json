@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r1-c2",
+    "epoch": 1
+  },
+  "submitted_revision": 21,
+  "record_id": "qa-001-fix-r1",
+  "run_id": "qa-batch-one-r1",
+  "finding_id": "QA-001",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:23:20.653271971Z",
+  "report_hash": "196fe0c79c9c6d2972380195d4cf8e01d6df6a5d6ce09447bae37b90b13d229b",
+  "original": "覆盖文件使用文档承诺仍然合法的旧平铺 review_stages 形态时,mergeOverlayRaw 只规范化作用域一侧,深合并产生「档名与角色同层」的混合形态,Validate 直接报错,导致该项目目录下所有经 config.Load 的命令(kander config / config --json / doctor / start / resume / notify / review)全部失败,且错误指向 review_stages 而非覆盖文件。触发条件几乎必然成立:作用域 config.json 由 Save/doctor/TUI 写出时必含两档结构,作用域文件缺失时 loadScopeRawAt 也会用 DefaultConfig() 编码出两档。最小修复:在 mergeOverlayRaw 中对 overlay 原始 JSON 同样调用 NormalizeReviewStages,并补「作用域两档 + 覆盖平铺」的合并用例。",
+  "status": "fixed",
+  "basis": "独立核实目标提交 5631b184af859cd726f07bfa119e5378a5e3ded3：mergeOverlayRaw 只调用 normalizeScopeReviewStages(scope)（当时 overlay.go:205-210），deepMerge 对同键 object 递归合并，两档作用域 + 平铺覆盖会得到 {large,small,PM}，NormalizeReviewStages 报 config.review_stages_mixes_scale_and_role_keys。与 PM-02 同根因。已在 mergeOverlayRaw 中对覆盖侧同样调用 NormalizeReviewStages。",
+  "fix_commit": "2e70155858c9a5240ed21ede0d7758a7e770ade9",
+  "verification": "go test -count=1 ./internal/config -run TestLoadMergesReviewStagesAfterNormalizingFlatOverlay 在 2e70155858c9a5240ed21ede0d7758a7e770ade9 通过；最终交付 f7b31bc529958ac268d2709ffd7fd99000c92bfb 上 go test -count=1 ./... 计 1265 passed，go vet ./... 通过。"
+}

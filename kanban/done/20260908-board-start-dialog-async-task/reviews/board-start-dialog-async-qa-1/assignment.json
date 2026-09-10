@@ -1,0 +1,15 @@
+{
+  "run_id": "board-start-dialog-async-qa-1",
+  "batch_id": "board-start-dialog-async-batch",
+  "author": "codex",
+  "basis": "已返回源码核实；PM-001 与 QA-001 为相同裁切根因，PM-002 为读取态滚轮拦截",
+  "items": {
+    "QA-001": [
+      "20260908-board-start-dialog-async-task"
+    ]
+  },
+  "owners": {
+    "20260908-board-start-dialog-async-task": "codex"
+  },
+  "recorded_at": "2026-09-08T05:33:55.327292231Z"
+}

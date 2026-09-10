@@ -1,0 +1,198 @@
+{
+  "delivery": "6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa",
+  "develop": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+  "checks": [
+    {
+      "command": [
+        "git",
+        "status",
+        "--porcelain",
+        "--untracked-files=all"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "status",
+        "--porcelain",
+        "--untracked-files=all"
+      ],
+      "cwd": "/home/dualf/works/kander/worktrees/subscription-dispatch-facts",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "ls-files",
+        "--others",
+        "--ignored",
+        "--exclude-standard"
+      ],
+      "cwd": "/home/dualf/works/kander/worktrees/subscription-dispatch-facts",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/home/dualf/works/kander/worktrees/subscription-dispatch-facts",
+      "exit_code": 0,
+      "stdout": "6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "rev-parse",
+        "develop"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "26edb64fcfb654a96afedc30bbaea27e5e918ec7\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa",
+        "develop"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+        "develop"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "rev-parse",
+        "origin/develop"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "26edb64fcfb654a96afedc30bbaea27e5e918ec7\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa",
+        "origin/develop"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+        "origin/develop"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "5845e6fd0f2b503313030349fa211a7791a50169",
+        "26edb64fcfb654a96afedc30bbaea27e5e918ec7"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "worktree",
+        "remove",
+        "/home/dualf/works/kander/worktrees/subscription-dispatch-facts"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "branch",
+        "-d",
+        "subscription-dispatch-facts"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "Deleted branch subscription-dispatch-facts (was 6c1cd63).\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "push",
+        "--force-with-lease=refs/heads/subscription-dispatch-facts:6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa",
+        "origin",
+        ":refs/heads/subscription-dispatch-facts"
+      ],
+      "cwd": "/home/dualf/works/kander",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "To https://github.com/dualface/kander.git\n - [deleted]         subscription-dispatch-facts\n"
+    }
+  ],
+  "plan_id": "g3-bindings-recovery",
+  "plan_sealed": true,
+  "batch_id": "g3-batch-one",
+  "role_statuses": {
+    "CSA": "N/A: 本仓库 AGENTS.md 第 7 条，第二阶段安全角色一律 N/A",
+    "Hacker": "N/A: 本仓库 AGENTS.md 第 7 条，第二阶段安全角色一律 N/A",
+    "PM": "PASS",
+    "QA": "PASS"
+  },
+  "resolved_failures": {
+    "g3-qa-r3": "g3-qa-r5",
+    "g3-qa-r4": "g3-qa-r5"
+  },
+  "assigned_findings": [],
+  "cleanup_verified": {
+    "task_worktree_absent": true,
+    "local_task_branch_absent": true,
+    "remote_task_branch_absent": true,
+    "group_resources_retained": true
+  }
+}

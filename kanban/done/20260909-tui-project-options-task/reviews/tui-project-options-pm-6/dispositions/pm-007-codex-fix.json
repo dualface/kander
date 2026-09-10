@@ -1,0 +1,17 @@
+{
+  "submitted_revision": 71,
+  "record_id": "pm-007-codex-fix",
+  "previous_record_id": "pm-007-confirmed",
+  "run_id": "tui-project-options-pm-6",
+  "finding_id": "PM-007",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T12:03:33.835348999Z",
+  "report_hash": "35ad3fe5d6c8ec53fe25b695ee7d3b0d0b7138510abb44d5398c020a9e60f2fe",
+  "original": "Inferred，高置信度，本轮新增，与当前 QA-007 同根因。违反 task-spec.md ACCEPTANCE_CRITERIA 第7条失败保留编辑并报告、不得伪报成功的要求。合法基础配置缺少 tui 时，Project 修改主题先改变 Config，再因部分 tui 覆盖缺少必填字段而合并失败；noteOverride 吞掉错误，覆盖候选被丢弃，界面仍显示新主题。随后 Save 保存旧覆盖并返回成功，用户编辑未落盘。最小修复：setter 返回错误，候选配置与覆盖统一处理；TUI 保留输入、报告错误并阻止错误状态成功提交。",
+  "status": "fixed",
+  "basis": "校验失败的覆盖候选保留在 overlayRaw 并标脏；SetTUIField 返回错误，TUI 显示错误，Save 校验同一候选且拒绝写入。Session 与 TUI 回归验证失败编辑不丢失、不伪报成功、不创建文件，恢复继承后可保存。",
+  "fix_commit": "f4d4eaad922231bc161bfe565feeaa76fd978fa8",
+  "verification": "go test ./internal/menu ./internal/tui -count=1 -timeout 240s 通过；五项定向回归通过；完整测试记录见 IMPLEMENTATION。"
+}

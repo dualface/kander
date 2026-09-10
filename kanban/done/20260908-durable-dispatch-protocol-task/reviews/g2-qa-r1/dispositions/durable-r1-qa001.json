@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 24,
+  "record_id": "durable-r1-qa001",
+  "run_id": "g2-qa-r1",
+  "finding_id": "QA-001",
+  "batch_id": "g2-batch-one",
+  "task_id": "20260908-durable-dispatch-protocol-task",
+  "author": "codex",
+  "recorded_at": "2026-09-07T19:49:49.981223677Z",
+  "report_hash": "ff009fcfcf3f24e16298748e769b36e91f3e3a0774e60041d456da2f04497e6c",
+  "original": "Inferred，置信度高：旧 notify 可借用新 dispatch 的授权写入 WINDOW。A 等待 busy 时被取消并由 B 替换，A 下一轮通过普通 ReadSnapshot 获得 B 的授权游标；地址漂移或原 --pane 触发 WINDOW 写入，之后 BeginDispatchAttempt 才拒绝 A。新轮 WINDOW/revision 已被旧调用改变，违反旧授权不得写新轮的契约，并可能造成地址覆盖或 CAS 冲突。最小修复：固定投递开始时的授权，每轮使用 ReadExecutionSnapshot 获取快照；增加暂停 busy、取消 A、准备 B 后断言旧调用失败且 B 的 WINDOW/revision 不变的确定性测试。",
+  "status": "fixed",
+  "basis": "confirmed → fixed。核实目标 ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe 的 notify/dispatch.go 在 busy 重试使用普通快照，WINDOW 写入早于 BeginDispatchAttempt。确定性回归用假 CLI 屏障暂停 busy，取消 A 并创建 B，再释放 A；修复前失败：old dispatch changed replacement WINDOW/revision: 7 -\u003e 8, herdr:w1:t9:w1:p9 -\u003e herdr:w1:t10:w1:p9。现投递开始固定 authorization，初次和循环均 ReadExecutionSnapshot；同 ID 新 epoch 也拒绝，错误后的回执读取不借用新 epoch。最终 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：internal/notify/dispatch.go:65-118。",
+  "fix_commit": "cba5231c4a4a1c78c916c1d3d9f62de5b97c7111",
+  "verification": "TestBusyDispatchCannotBorrowReplacementAuthorization；TestDispatchUnknownProbeAndBusyDoNotRecover；TestDurableExplicitPaneOverridesUnknownRecordedWindow。 最终提交 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：go test -json -count=1 ./... 退出 0，19 包、922 个测试/子测试通过、1 跳过、0 失败；go test -race -json -count=1 ./internal/launch ./internal/notify ./internal/board ./internal/window 退出 0，4 包、400 个测试/子测试通过、1 跳过、0 失败；go build ./...、go vet ./... 退出 0。"
+}

@@ -1,0 +1,718 @@
+KANDER_AUTOMATIC_CONTEXT_BYTES: 50119
+PREVIOUS_RUN_ID: tui-theme-qa-r3
+Prior report (verbatim):
+Role: QA  
+Commit: `1d10371b763cad83ebf0aba295b985151ef71c50`  
+Task Context: 两卡联合契约；评审范围 `aac6f2bf..1d10371b`。  
+Reviewed Scope: 已核对提交树、完整相关实现、配置读写、主题切换、五处渲染消费点及测试。只读沙箱阻止 Go 测试重跑；采信交付提交的全量测试、vet 通过记录。本轮 `make fmt-check`、`git diff --check` 通过。
+
+| 行为/质量 | 结论与证据 |
+|---|---|
+| 调色板、兼容接缝 | Observed：默认两套全部色值保持前置提交；六套对比度独立复算达标。`theme_test.go:20–183` |
+| 配置、切换、持久化 | Observed：七值校验、循环、即时预览与写回路径贯通；未知值回落有覆盖。`config/tui_theme_test.go:9`、`options_test.go:266` |
+| i18n、架构、文件规模 | Observed：三份语言包键集一致；沿用既有单向依赖；变更代码文件均未超过 1000 行。 |
+| Markdown | Observed：主题分类、自身背景正确；Inferred：256 色输出仍有降级缺口，见 QA-01。 |
+| 人工验收 | Observed：交付以序列断言替代人工检查；实际终端观感 Unverifiable，见 QA-02。 |
+
+**QA-01 — medium — Inferred，置信度高：详情正文绕过 256 色降级。**
+
+[detail_view.go:62](/home/dualf/works/kander/worktrees/20260909-tui-theme-group/internal/tui/detail_view.go:62) 未给 Glamour 传入 `ColorProfile`；锁定版本 Glamour v1.0.0 的 `glamour.go:83` 默认使用 `termenv.TrueColor`。本轮将背景从索引改为十六进制后，`markdownCanvasStyle` 在第 97–98 行直接传入该值。
+
+触发：仅支持 256 色的终端，选择 `light` 后打开普通 Markdown 详情。正文仍输出 `48;2;250;250;250`，看板及外围填充则已降级。终端无法正确处理正文背景，破坏“详情与看板背景一致”的契约。这是本轮新增十六进制背景造成的兼容退化。
+
+最小修复：传入 `glamour.WithColorProfile(lipgloss.ColorProfile())`；在 ANSI256 下直接测试普通 Markdown 正文的背景序列。现有 `theme_test.go:219–244` 只覆盖 Lip Gloss，未覆盖此路径。
+
+**QA-02 — medium — Observed，置信度高：明确要求的人工验收尚未完成。**
+
+[task-spec.md:39](/tmp/codex-review.c723bce6a40b0186bf5f1292a8c1b407/task-spec.md:39)、第 119 行分别要求 Solarized 四组合、六主题五界面的人工验证。[report.md:50](/home/dualf/works/kander/kanban/review/20260909-tui-theme-presets-task/report.md:50) 明确承认未进行真实交互检查；palette 的 `spec.md:94` 也仅记录 PTY 模拟。
+
+替代证据不足：`theme_test.go:412–415` 只检查输出是否出现背景序列，不能确认整幅画面、前景与实际切换效果；PTY 回答 OSC 11 也不等于真实 Solarized 终端显示验收。
+
+影响：两卡的显式验收条件未闭合。最小修复：在交付提交补做契约列出的人工检查并记录终端/profile、组合与结果；完成前保留未验收状态。
+
+NON-BLOCKING: none
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "QA-01",
+      "tier": "medium",
+      "text": "Inferred，置信度高：本轮将主题背景改为十六进制，但 renderMarkdown 未向 Glamour 传入当前 ColorProfile。仅支持 256 色的终端打开 light 主题普通 Markdown 详情时，正文仍输出 truecolor 背景序列 48;2;250;250;250，而看板及外围填充已经降级，导致正文背景无法按终端能力正确呈现，违反详情与看板背景一致及 256 色支持契约。最小修复：添加 glamour.WithColorProfile(lipgloss.ColorProfile())，并在 ANSI256 下对普通 Markdown 正文背景输出增加确定性断言。",
+      "evidence": "internal/tui/theme.go:40,109 将默认背景改为十六进制；internal/tui/detail_view.go:62-66 创建 renderer 时未设置 profile，97-98 将主题背景直接交给 Glamour；go.mod:8 锁定 Glamour v1.0.0；/home/dualf/go/pkg/mod/github.com/charmbracelet/glamour@v1.0.0/glamour.go:81-84 默认 ColorProfile 为 termenv.TrueColor，ansi/baseelement.go:56-57 按该 profile 转换背景。internal/tui/overlay.go:204-215 保留正文序列，仅追加填充。internal/tui/theme_test.go:219-244 的降级测试未调用 Markdown renderer。背景从原有 ANSI 索引变为 RGB，使此缺口在本轮影响普通正文。"
+    },
+    {
+      "id": "QA-02",
+      "tier": "medium",
+      "text": "Observed，置信度高：两卡明确要求的人工验收被 PTY 和渲染序列断言替代，尚未完成。该替代只能证明输出包含目标背景及调色板数值达标，不能证明真实终端中四种 Solarized 组合、六主题五界面的前景背景与切换效果符合设计。最小修复：在交付提交补做规定组合的人工验证并记录终端、profile 与结果；完成前保留未验收状态。",
+      "evidence": "/tmp/codex-review.c723bce6a40b0186bf5f1292a8c1b407/task-spec.md:39,119 明确要求人工验证；/home/dualf/works/kander/kanban/review/20260909-tui-theme-presets-task/report.md:35-50 用序列断言列为通过，并明确承认未在真实交互终端检查；/home/dualf/works/kander/kanban/review/20260909-tui-truecolor-palette-task/spec.md:94 仅记录 OSC 11 的 PTY 模拟。internal/tui/theme_test.go:412-415 仅断言背景序列存在；internal/tui/options_test.go:250-262 的表面检查同样仅检查背景序列。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```
+
+任务文件删除已尝试；只读文件系统拒绝，不影响评审结果。
+Author records (verbatim JSON):
+{
+  "assignment": {
+    "run_id": "tui-theme-qa-r3",
+    "batch_id": "tui-theme-batch-one",
+    "author": "cursor-orchestrator",
+    "basis": "assigned by each task's modification scope: QA-01 hits palette hex Bg change and presets detail_view.md renderer path; QA-02 hits both cards' human-verification acceptance criteria",
+    "items": {
+      "QA-01": [
+        "20260909-tui-theme-presets-task",
+        "20260909-tui-truecolor-palette-task"
+      ],
+      "QA-02": [
+        "20260909-tui-theme-presets-task",
+        "20260909-tui-truecolor-palette-task"
+      ]
+    },
+    "owners": {
+      "20260909-tui-theme-presets-task": "cursor",
+      "20260909-tui-truecolor-palette-task": "cursor"
+    },
+    "recorded_at": "2026-09-09T05:49:19.009821321Z"
+  },
+  "records": [
+    {
+      "authorization": {
+        "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+        "epoch": 1
+      },
+      "submitted_revision": 26,
+      "record_id": "qa01-author-fix1",
+      "run_id": "tui-theme-qa-r3",
+      "finding_id": "QA-01",
+      "batch_id": "tui-theme-batch-one",
+      "task_id": "20260909-tui-theme-presets-task",
+      "author": "cursor",
+      "recorded_at": "2026-09-09T06:06:47.539048548Z",
+      "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+      "original": "Inferred，置信度高：本轮将主题背景改为十六进制，但 renderMarkdown 未向 Glamour 传入当前 ColorProfile。仅支持 256 色的终端打开 light 主题普通 Markdown 详情时，正文仍输出 truecolor 背景序列 48;2;250;250;250，而看板及外围填充已经降级，导致正文背景无法按终端能力正确呈现，违反详情与看板背景一致及 256 色支持契约。最小修复：添加 glamour.WithColorProfile(lipgloss.ColorProfile())，并在 ANSI256 下对普通 Markdown 正文背景输出增加确定性断言。",
+      "status": "fixed",
+      "basis": "对照 Glamour v1.0.0 默认 ColorProfile=TrueColor 与 detail_view.go 创建 renderer 的调用，确认未传 profile。已加上 WithColorProfile(lipgloss.ColorProfile())。TestMarkdownRenderFollowsColorProfile 在 TrueColor 下断言正文含 48;2;250;250;250，在 ANSI256 下断言含 profile.Color(#fafafa).Sequence(true)=48;5;231 且不再含 48;2;250;250;250。",
+      "fix_commit": "c981028cbe83d927deedce52926613b616dfe592",
+      "verification": "go test ./internal/tui -count=1 -run TestMarkdownRenderFollowsColorProfile 通过；最终提交 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241 上 go test ./... -count=1 通过，757 个 Test*。"
+    },
+    {
+      "authorization": {
+        "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+        "epoch": 1
+      },
+      "submitted_revision": 27,
+      "record_id": "qa02-author-fix1",
+      "run_id": "tui-theme-qa-r3",
+      "finding_id": "QA-02",
+      "batch_id": "tui-theme-batch-one",
+      "task_id": "20260909-tui-theme-presets-task",
+      "author": "cursor",
+      "recorded_at": "2026-09-09T06:06:47.725195426Z",
+      "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+      "original": "Observed，置信度高：两卡明确要求的人工验收被 PTY 和渲染序列断言替代，尚未完成。该替代只能证明输出包含目标背景及调色板数值达标，不能证明真实终端中四种 Solarized 组合、六主题五界面的前景背景与切换效果符合设计。最小修复：在交付提交补做规定组合的人工验证并记录终端、profile 与结果；完成前保留未验收状态。",
+      "status": "fixed",
+      "basis": "与 PM-01 同一根因，本条单独结案。已按契约补做六主题×五界面以及 Solarized Light/Dark × light/dark 的视觉核验，并改写 report.md，不再把序列断言写成全部验收通过。环境与结果见 report.md。",
+      "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+      "verification": "在 TrueColor、120×32 下渲染 App.View() 的看板/详情/选项/帮助弹窗/启动对话框共 30 帧并栅格化后逐帧目视；画布中心像素与主题 Bg 黄金值一致（light #fafafa、light-warm #f3ead8、light-contrast #ffffff、dark #16181d、dark-soft #1c2230、dark-contrast #000000），画布占整帧 87%–92%。Solarized 四组合叠在 #fdf6e3/#002b36 终端底上，Solarized 像素数为 0。记录已写入 report.md。"
+    },
+    {
+      "authorization": {
+        "dispatch_id": "1bea461ddd97b7e67bb9627f1d0e399c",
+        "epoch": 3
+      },
+      "submitted_revision": 26,
+      "record_id": "qa01-author-sync1",
+      "run_id": "tui-theme-qa-r3",
+      "finding_id": "QA-01",
+      "batch_id": "tui-theme-batch-one",
+      "task_id": "20260909-tui-truecolor-palette-task",
+      "author": "grok",
+      "recorded_at": "2026-09-09T07:40:03.774352778Z",
+      "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+      "original": "Inferred，置信度高：本轮将主题背景改为十六进制，但 renderMarkdown 未向 Glamour 传入当前 ColorProfile。仅支持 256 色的终端打开 light 主题普通 Markdown 详情时，正文仍输出 truecolor 背景序列 48;2;250;250;250，而看板及外围填充已经降级，导致正文背景无法按终端能力正确呈现，违反详情与看板背景一致及 256 色支持契约。最小修复：添加 glamour.WithColorProfile(lipgloss.ColorProfile())，并在 ANSI256 下对普通 Markdown 正文背景输出增加确定性断言。",
+      "status": "fixed",
+      "basis": "对照组 HEAD 73afc16 的 detail_view.go:66，renderMarkdown 已传入 glamour.WithColorProfile(lipgloss.ColorProfile())。本卡把 Bg 改为十六进制后，未传 profile 会使 Glamour 默认 TrueColor；该缺口由组分支提交 c981028 覆盖，不重复实现。独立用 termenv 复算 light Bg #fafafa：TrueColor 为 48;2;250;250;250，ANSI256 为 48;5;231。",
+      "fix_commit": "c981028cbe83d927deedce52926613b616dfe592",
+      "verification": "组工作树 /home/dualf/works/kander/worktrees/20260909-tui-theme-group @ 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241。git show c981028 仅向 NewTermRenderer 增加 WithColorProfile。go test ./internal/tui -count=1 -run TestMarkdownRenderFollowsColorProfile 通过：TrueColor 子测与 ANSI256 子测均 PASS；theme_test.go 在 ANSI256 下断言正文含 profile.Color(#fafafa).Sequence(true) 且不再含 48;2;250;250;250。"
+    },
+    {
+      "authorization": {
+        "dispatch_id": "1bea461ddd97b7e67bb9627f1d0e399c",
+        "epoch": 3
+      },
+      "submitted_revision": 27,
+      "record_id": "qa02-author-sync1",
+      "run_id": "tui-theme-qa-r3",
+      "finding_id": "QA-02",
+      "batch_id": "tui-theme-batch-one",
+      "task_id": "20260909-tui-truecolor-palette-task",
+      "author": "grok",
+      "recorded_at": "2026-09-09T07:40:34.439012356Z",
+      "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+      "original": "Observed，置信度高：两卡明确要求的人工验收被 PTY 和渲染序列断言替代，尚未完成。该替代只能证明输出包含目标背景及调色板数值达标，不能证明真实终端中四种 Solarized 组合、六主题五界面的前景背景与切换效果符合设计。最小修复：在交付提交补做规定组合的人工验证并记录终端、profile 与结果；完成前保留未验收状态。",
+      "status": "fixed",
+      "basis": "确认：本卡原 IMPLEMENTATION 把 PTY 序列断言写成 8/8 验收通过，与 AC 第 8 条“人工验证”不符。本卡契约只要求 Solarized Light/Dark × light/dark 四组合；六主题×五界面属 presets 卡，已由其 disposition 结案，本卡不重复实现。组 HEAD 已覆盖四组合：TrueColor 下 light/dark 的看板/详情/帮助/启动对话框均含设计底色序列；PTY 四组合在 OSC 11 回报 Solarized 时仍输出设计底/前景且无 Solarized 画布 RGB。presets report.md 已改为记录 View() 栅格目视，不再把序列断言写成全部人工验收通过。本卡将同步改写交付结论，不再宣称交互终端人工走查已完成。",
+      "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+      "verification": "组工作树 @ 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241。go test ./internal/tui -count=1 -run TestThemeSurfacesPaintOwnBackground 通过（含 light/dark 的 board/detail/help/start）。go test ./internal/tui -count=1 -run TestBoardTrueColorIgnoresSolarizedPaletteOnPTY 四子测均 PASS：solarized-light/theme-light、solarized-light/theme-dark、solarized-dark/theme-light、solarized-dark/theme-dark；light 要 48;2;250;250;250 + 38;2;22;24;29，dark 要 48;2;22;24;29 + 38;2;230;232;235，且避免 48;2;253;246;227 与 48;2;0;43;54。已核验 presets report.md 人工验证节写明未按 t 键交互走查，结论改为视觉核验而非全部交互验收通过。"
+    }
+  ]
+}
+
+Current batch disposition (tool generated):
+{
+  "schema": 1,
+  "batch": {
+    "plan_id": "tui-theme-cycle",
+    "task_context_hash": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c",
+    "schema": 1,
+    "batch_id": "tui-theme-batch-one",
+    "task_ids": [
+      "20260909-tui-theme-presets-task",
+      "20260909-tui-truecolor-palette-task"
+    ],
+    "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+    "target_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+    "report_language": "zh-CN",
+    "requirements": {
+      "CSA": "N/A: repository AGENTS.md marks CSA always N/A and never run",
+      "Hacker": "N/A: repository AGENTS.md marks Hacker always N/A and never run",
+      "PM": "required",
+      "QA": "required"
+    },
+    "advances": [
+      {
+        "previous_target": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "target": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+        "reason": "receive presets fix delivery for assigned QA-01/QA-02/PM-01/PM-02",
+        "deliveries": {
+          "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241": "20260909-tui-theme-presets-task",
+          "c981028cbe83d927deedce52926613b616dfe592": "20260909-tui-theme-presets-task"
+        }
+      }
+    ],
+    "revision": 2
+  },
+  "runs": [
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260909-tui-theme-group",
+        "run_id": "tui-theme-pm-r1",
+        "batch_id": "tui-theme-batch-one",
+        "task_ids": [
+          "20260909-tui-theme-presets-task",
+          "20260909-tui-truecolor-palette-task"
+        ],
+        "role": "PM",
+        "reviewer": "claude",
+        "model": "opus",
+        "effort": "high",
+        "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+        "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "ec06125401101a32444d3a6fc67c29f3762f1d0c5d27f2fe1c8075fb7b861c31",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "kander_version": "20260909T034406Z-fe46c2f545a4",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "failed",
+        "semantic_status": "unassessed",
+        "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+        "exit_code": 1,
+        "created_at": "2026-09-09T05:13:54.066808946Z",
+        "finished_at": "2026-09-09T05:26:53.298467902Z",
+        "duration_ms": 779231,
+        "hashes": {
+          "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+          "output.raw": "3c72f8afcb99b62330b7e72ff92b0a850189fc2b37b088e4248c7d634624cac1",
+          "prompt.txt": "0a7c25e2ffd04a63036b07957ecfa6d77766c5b726d65a8866b27852f5c53f09",
+          "report.md": "5ae0c43337b4e28df14f574275830f9fa41f7e5693ecfe0526461f25dab8a89f",
+          "review-context.md": "ec06125401101a32444d3a6fc67c29f3762f1d0c5d27f2fe1c8075fb7b861c31",
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "published": {
+          "20260909-tui-theme-presets-task": true,
+          "20260909-tui-truecolor-palette-task": true
+        }
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260909-tui-theme-group",
+        "run_id": "tui-theme-pm-r2",
+        "batch_id": "tui-theme-batch-one",
+        "task_ids": [
+          "20260909-tui-theme-presets-task",
+          "20260909-tui-truecolor-palette-task"
+        ],
+        "role": "PM",
+        "reviewer": "claude",
+        "model": "opus",
+        "effort": "high",
+        "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+        "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "e99cea051c3f4be99548eb27cf8d17506c90530b585e0b7f9eaad683a6f4f07d",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "kander_version": "20260909T052428Z-f457271b9e9d",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "failed",
+        "semantic_status": "unassessed",
+        "failure_reason": "Reviewer 执行失败（退出码 1）；不代表语义 PASS",
+        "exit_code": 1,
+        "created_at": "2026-09-09T05:27:15.475386292Z",
+        "finished_at": "2026-09-09T05:28:52.663204011Z",
+        "duration_ms": 97187,
+        "hashes": {
+          "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+          "output.raw": "8823d807061a379006bf96394c81c1e1c7bbba975cb03843aeb96988c8e07df6",
+          "prompt.txt": "e5cf204fc8bfaf43ffb86d591e1716abdfe68d568130910e6d91f30f272149f2",
+          "review-context.md": "e99cea051c3f4be99548eb27cf8d17506c90530b585e0b7f9eaad683a6f4f07d",
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "published": {
+          "20260909-tui-theme-presets-task": true,
+          "20260909-tui-truecolor-palette-task": true
+        }
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260909-tui-theme-group",
+        "run_id": "tui-theme-pm-r3",
+        "batch_id": "tui-theme-batch-one",
+        "task_ids": [
+          "20260909-tui-theme-presets-task",
+          "20260909-tui-truecolor-palette-task"
+        ],
+        "role": "PM",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+        "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "e99cea051c3f4be99548eb27cf8d17506c90530b585e0b7f9eaad683a6f4f07d",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "kander_version": "20260909T052428Z-f457271b9e9d",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-09T05:42:23.677211694Z",
+        "finished_at": "2026-09-09T05:47:12.115425616Z",
+        "duration_ms": 288438,
+        "hashes": {
+          "error.log": "c30f96fe5d6fdbc716c8ef4f2cfc56e0b9794c623cd4ac3d5b0af4e85a645494",
+          "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+          "output.raw": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+          "prompt.txt": "2f102fe1d213650aa7031e03c6efc0b6bf27e027337395c0cc7f7fe07652c09c",
+          "report.md": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+          "review-context.md": "e99cea051c3f4be99548eb27cf8d17506c90530b585e0b7f9eaad683a6f4f07d",
+          "stdout.log": "07a69a483825f5c4ddc7e62f1f3f438f44dc045cd20318d686d323c02e1e816e",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "published": {
+          "20260909-tui-theme-presets-task": true,
+          "20260909-tui-truecolor-palette-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "PM-01",
+            "tier": "medium",
+            "text": "Observed，置信度高：两卡明确要求的人工视觉验收被 PTY/渲染序列断言替代，验收未闭合。序列存在与槽位对比度不能证明真实终端完整界面的前景、背景及切换观感；实际视觉结果仍为 Unverifiable，未宣称存在已观察到的显示故障。最小修复：补做 Solarized Light/Dark × light/dark 四组合，以及六主题 × 看板、详情页、选项面板、弹窗、启动对话框的人工核验，记录环境、操作、结果，并修正全部验收通过的交付结论。",
+            "evidence": "/tmp/codex-review.6fa60f526b84f6efc05d33f496368645/task-spec.md:39、119 明确要求人工验证；/home/dualf/works/kander/kanban/review/20260909-tui-truecolor-palette-task/spec.md:94 仅记录 PTY 序列测试，:105、109 声称全部通过；/home/dualf/works/kander/kanban/review/20260909-tui-theme-presets-task/report.md:37、48、50 说明以自动断言替代，明确没有真实终端人工观察，:54 仍称无契约偏差；internal/tui/theme_test.go:392、412-415 和 internal/tui/options_test.go:257-262 仅检查输出包含主题背景序列，不足以替代人工视觉验收。"
+          },
+          {
+            "id": "PM-02",
+            "tier": "medium",
+            "text": "Inferred，置信度高：medium [mechanical] 主题归一化后的查表失败回退不可达。resolveTheme 始终返回表内名称，主题表没有运行时写入路径，因此 themePalette 与 themeIsDark 的失败回退不会执行。无直接运行时影响，但增加无法触发、无法验证的错误处理路径。最小修复：删除两处不可达回退，按归一化后的查表结果直接返回 palette 或 dark 字段。",
+            "evidence": "internal/tui/theme.go:37-175 定义固定主题表，包含 light 与 dark；:370-377 对表内名称原样返回，其余只返回 dark 或 light；:178-184 执行同表查找。因此本轮新增的 :199-200 与 :209 不可达。全包 themeTable 引用仅有初始化、查表及名称枚举，没有运行时修改。",
+            "mechanical": "dead-code"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "tui-theme-pm-r3",
+        "batch_id": "tui-theme-batch-one",
+        "author": "cursor-orchestrator",
+        "basis": "assigned by each task's modification scope: PM-01 hits both cards' human-verification acceptance criteria; PM-02 is presets-only unreachable table fallback in theme.go",
+        "items": {
+          "PM-01": [
+            "20260909-tui-theme-presets-task",
+            "20260909-tui-truecolor-palette-task"
+          ],
+          "PM-02": [
+            "20260909-tui-theme-presets-task"
+          ]
+        },
+        "owners": {
+          "20260909-tui-theme-presets-task": "cursor",
+          "20260909-tui-truecolor-palette-task": "cursor"
+        },
+        "recorded_at": "2026-09-09T05:49:19.426885618Z"
+      },
+      "records": [
+        {
+          "authorization": {
+            "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+            "epoch": 1
+          },
+          "submitted_revision": 28,
+          "record_id": "pm01-author-fix1",
+          "run_id": "tui-theme-pm-r3",
+          "finding_id": "PM-01",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-theme-presets-task",
+          "author": "cursor",
+          "recorded_at": "2026-09-09T06:06:47.901881504Z",
+          "report_hash": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+          "original": "Observed，置信度高：两卡明确要求的人工视觉验收被 PTY/渲染序列断言替代，验收未闭合。序列存在与槽位对比度不能证明真实终端完整界面的前景、背景及切换观感；实际视觉结果仍为 Unverifiable，未宣称存在已观察到的显示故障。最小修复：补做 Solarized Light/Dark × light/dark 四组合，以及六主题 × 看板、详情页、选项面板、弹窗、启动对话框的人工核验，记录环境、操作、结果，并修正全部验收通过的交付结论。",
+          "status": "fixed",
+          "basis": "与 QA-02 同一根因，本条单独结案。已按最小修复完成四组合与 6×5 界面的视觉核验，并修正 report.md 中“全部通过”的表述，写明环境、操作、结果与未打印真实字体的局限。",
+          "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+          "verification": "同 QA-02：TrueColor View() 栅格帧目视 + 像素计数。六套主题画布互不相同；chrome/强调色随主题变化（如 light chrome #6b21a8、light-warm #6b4423）。Solarized 四组合无终端底穿孔。交付结论已改为“视觉核验已完成”，不再声称交互终端按 t 键点选。"
+        },
+        {
+          "authorization": {
+            "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+            "epoch": 1
+          },
+          "submitted_revision": 29,
+          "record_id": "pm02-author-fix1",
+          "run_id": "tui-theme-pm-r3",
+          "finding_id": "PM-02",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-theme-presets-task",
+          "author": "cursor",
+          "recorded_at": "2026-09-09T06:06:48.126846555Z",
+          "report_hash": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+          "original": "Inferred，置信度高：medium [mechanical] 主题归一化后的查表失败回退不可达。resolveTheme 始终返回表内名称，主题表没有运行时写入路径，因此 themePalette 与 themeIsDark 的失败回退不会执行。无直接运行时影响，但增加无法触发、无法验证的错误处理路径。最小修复：删除两处不可达回退，按归一化后的查表结果直接返回 palette 或 dark 字段。",
+          "status": "fixed",
+          "basis": "对照 theme.go：resolveTheme 对表内名原样返回，其余只返回 light/dark；themeTable 无运行时写入。已删除 themePalette 回落到 dark 与 themeIsDark 的字面比较回退，改为 resolveTheme 后直接返回查表的 palette/dark。",
+          "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+          "mechanical": "dead-code",
+          "verification": "git show 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241 -- internal/tui/theme.go：两处 if ok 回退已删除。go test ./internal/tui -count=1 -run 'TestThemePalette|TestResolveTheme|TestThemeIsDark|TestMarkdownCanvas|TestThemeSurfaces' 通过。"
+        },
+        {
+          "authorization": {
+            "dispatch_id": "1bea461ddd97b7e67bb9627f1d0e399c",
+            "epoch": 3
+          },
+          "submitted_revision": 28,
+          "record_id": "pm01-author-sync1",
+          "run_id": "tui-theme-pm-r3",
+          "finding_id": "PM-01",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-truecolor-palette-task",
+          "author": "grok",
+          "recorded_at": "2026-09-09T07:40:41.611006917Z",
+          "report_hash": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+          "original": "Observed，置信度高：两卡明确要求的人工视觉验收被 PTY/渲染序列断言替代，验收未闭合。序列存在与槽位对比度不能证明真实终端完整界面的前景、背景及切换观感；实际视觉结果仍为 Unverifiable，未宣称存在已观察到的显示故障。最小修复：补做 Solarized Light/Dark × light/dark 四组合，以及六主题 × 看板、详情页、选项面板、弹窗、启动对话框的人工核验，记录环境、操作、结果，并修正全部验收通过的交付结论。",
+          "status": "fixed",
+          "basis": "与 QA-02 同一根因，本条单独结案。对照本卡契约，须闭合的是 Solarized 四组合，不是 presets 的 6×5 界面矩阵。原交付把 PTY 写成 8/8 全部通过，过口成立。组 HEAD 73afc16 已覆盖四组合的设计底/前景，且 presets 已把其 report.md 从“全部通过”改为有局限的视觉核验记录。本卡同步修正 IMPLEMENTATION/SUMMARY，不再把序列断言写成全部人工验收通过。",
+          "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+          "verification": "同 QA-02：组 HEAD 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241 上 TestThemeSurfacesPaintOwnBackground 与 TestBoardTrueColorIgnoresSolarizedPaletteOnPTY 均通过；独立 termenv 复算 light Base/Bg 为 38;2;22;24;29 与 48;2;250;250;250，dark Base/Bg 为 38;2;230;232;235 与 48;2;22;24;29。本卡将改写交付结论，去掉“验收 8/8 通过”中对人工走查的宣称。"
+        }
+      ]
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260909-tui-theme-group",
+        "run_id": "tui-theme-qa-r1",
+        "batch_id": "tui-theme-batch-one",
+        "task_ids": [
+          "20260909-tui-theme-presets-task",
+          "20260909-tui-truecolor-palette-task"
+        ],
+        "role": "QA",
+        "reviewer": "claude",
+        "model": "opus",
+        "effort": "high",
+        "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+        "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "ec06125401101a32444d3a6fc67c29f3762f1d0c5d27f2fe1c8075fb7b861c31",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "kander_version": "20260909T034406Z-fe46c2f545a4",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "failed",
+        "semantic_status": "unassessed",
+        "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+        "exit_code": 1,
+        "created_at": "2026-09-09T05:13:55.495684746Z",
+        "finished_at": "2026-09-09T05:24:15.835948242Z",
+        "duration_ms": 620340,
+        "hashes": {
+          "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+          "output.raw": "ba58babb060295bee9173a812e4965ad8849806e451f07bb3476a88d05effd0e",
+          "prompt.txt": "f7615cacffca1e2bfbc6ff218d25b309d7f9a69f281d8bce4a04f78558cf972b",
+          "report.md": "2e43cca991525f8cac0a94ab4b16af1adef0d9cb3d4b2bbf594f25299c6f206b",
+          "review-context.md": "ec06125401101a32444d3a6fc67c29f3762f1d0c5d27f2fe1c8075fb7b861c31",
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "published": {
+          "20260909-tui-theme-presets-task": true,
+          "20260909-tui-truecolor-palette-task": true
+        }
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260909-tui-theme-group",
+        "run_id": "tui-theme-qa-r2",
+        "batch_id": "tui-theme-batch-one",
+        "task_ids": [
+          "20260909-tui-theme-presets-task",
+          "20260909-tui-truecolor-palette-task"
+        ],
+        "role": "QA",
+        "reviewer": "claude",
+        "model": "opus",
+        "effort": "high",
+        "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+        "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "f1aa286b1c785afc798d9d8750caa795b110eed3315fed931b2895ae737755c1",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "kander_version": "20260909T052428Z-f457271b9e9d",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "failed",
+        "semantic_status": "unassessed",
+        "failure_reason": "Reviewer 执行失败（退出码 1）；不代表语义 PASS",
+        "exit_code": 1,
+        "created_at": "2026-09-09T05:25:03.780953774Z",
+        "finished_at": "2026-09-09T05:28:52.031617666Z",
+        "duration_ms": 228250,
+        "hashes": {
+          "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+          "output.raw": "7d54fe2e85ed987b994415c91960f52f1cdafa75a966a7086596341100254cb5",
+          "prompt.txt": "a6564993920bac0198fc22cfbaddc7391fa417978226ad44d2992e086a1a0091",
+          "review-context.md": "f1aa286b1c785afc798d9d8750caa795b110eed3315fed931b2895ae737755c1",
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "published": {
+          "20260909-tui-theme-presets-task": true,
+          "20260909-tui-truecolor-palette-task": true
+        }
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260909-tui-theme-group",
+        "run_id": "tui-theme-qa-r3",
+        "batch_id": "tui-theme-batch-one",
+        "task_ids": [
+          "20260909-tui-theme-presets-task",
+          "20260909-tui-truecolor-palette-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+        "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "f1aa286b1c785afc798d9d8750caa795b110eed3315fed931b2895ae737755c1",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "kander_version": "20260909T052428Z-f457271b9e9d",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-09T05:42:21.779496753Z",
+        "finished_at": "2026-09-09T05:47:11.97846428Z",
+        "duration_ms": 290198,
+        "hashes": {
+          "error.log": "3d48b84cd43d652901a1f5c57553d962558b62ffdbff752fdf478f474efced3c",
+          "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+          "output.raw": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+          "prompt.txt": "e32546549f7d58baca610651fea94127307a8c55f7872413c2d51f7ce197387f",
+          "report.md": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+          "review-context.md": "f1aa286b1c785afc798d9d8750caa795b110eed3315fed931b2895ae737755c1",
+          "stdout.log": "a97cf80b06500671a3864a327c4f1c58be820bdedd69f3497fd0f66082f098dd",
+          "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+        },
+        "published": {
+          "20260909-tui-theme-presets-task": true,
+          "20260909-tui-truecolor-palette-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "QA-01",
+            "tier": "medium",
+            "text": "Inferred，置信度高：本轮将主题背景改为十六进制，但 renderMarkdown 未向 Glamour 传入当前 ColorProfile。仅支持 256 色的终端打开 light 主题普通 Markdown 详情时，正文仍输出 truecolor 背景序列 48;2;250;250;250，而看板及外围填充已经降级，导致正文背景无法按终端能力正确呈现，违反详情与看板背景一致及 256 色支持契约。最小修复：添加 glamour.WithColorProfile(lipgloss.ColorProfile())，并在 ANSI256 下对普通 Markdown 正文背景输出增加确定性断言。",
+            "evidence": "internal/tui/theme.go:40,109 将默认背景改为十六进制；internal/tui/detail_view.go:62-66 创建 renderer 时未设置 profile，97-98 将主题背景直接交给 Glamour；go.mod:8 锁定 Glamour v1.0.0；/home/dualf/go/pkg/mod/github.com/charmbracelet/glamour@v1.0.0/glamour.go:81-84 默认 ColorProfile 为 termenv.TrueColor，ansi/baseelement.go:56-57 按该 profile 转换背景。internal/tui/overlay.go:204-215 保留正文序列，仅追加填充。internal/tui/theme_test.go:219-244 的降级测试未调用 Markdown renderer。背景从原有 ANSI 索引变为 RGB，使此缺口在本轮影响普通正文。"
+          },
+          {
+            "id": "QA-02",
+            "tier": "medium",
+            "text": "Observed，置信度高：两卡明确要求的人工验收被 PTY 和渲染序列断言替代，尚未完成。该替代只能证明输出包含目标背景及调色板数值达标，不能证明真实终端中四种 Solarized 组合、六主题五界面的前景背景与切换效果符合设计。最小修复：在交付提交补做规定组合的人工验证并记录终端、profile 与结果；完成前保留未验收状态。",
+            "evidence": "/tmp/codex-review.c723bce6a40b0186bf5f1292a8c1b407/task-spec.md:39,119 明确要求人工验证；/home/dualf/works/kander/kanban/review/20260909-tui-theme-presets-task/report.md:35-50 用序列断言列为通过，并明确承认未在真实交互终端检查；/home/dualf/works/kander/kanban/review/20260909-tui-truecolor-palette-task/spec.md:94 仅记录 OSC 11 的 PTY 模拟。internal/tui/theme_test.go:412-415 仅断言背景序列存在；internal/tui/options_test.go:250-262 的表面检查同样仅检查背景序列。"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "tui-theme-qa-r3",
+        "batch_id": "tui-theme-batch-one",
+        "author": "cursor-orchestrator",
+        "basis": "assigned by each task's modification scope: QA-01 hits palette hex Bg change and presets detail_view.md renderer path; QA-02 hits both cards' human-verification acceptance criteria",
+        "items": {
+          "QA-01": [
+            "20260909-tui-theme-presets-task",
+            "20260909-tui-truecolor-palette-task"
+          ],
+          "QA-02": [
+            "20260909-tui-theme-presets-task",
+            "20260909-tui-truecolor-palette-task"
+          ]
+        },
+        "owners": {
+          "20260909-tui-theme-presets-task": "cursor",
+          "20260909-tui-truecolor-palette-task": "cursor"
+        },
+        "recorded_at": "2026-09-09T05:49:19.009821321Z"
+      },
+      "records": [
+        {
+          "authorization": {
+            "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+            "epoch": 1
+          },
+          "submitted_revision": 26,
+          "record_id": "qa01-author-fix1",
+          "run_id": "tui-theme-qa-r3",
+          "finding_id": "QA-01",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-theme-presets-task",
+          "author": "cursor",
+          "recorded_at": "2026-09-09T06:06:47.539048548Z",
+          "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+          "original": "Inferred，置信度高：本轮将主题背景改为十六进制，但 renderMarkdown 未向 Glamour 传入当前 ColorProfile。仅支持 256 色的终端打开 light 主题普通 Markdown 详情时，正文仍输出 truecolor 背景序列 48;2;250;250;250，而看板及外围填充已经降级，导致正文背景无法按终端能力正确呈现，违反详情与看板背景一致及 256 色支持契约。最小修复：添加 glamour.WithColorProfile(lipgloss.ColorProfile())，并在 ANSI256 下对普通 Markdown 正文背景输出增加确定性断言。",
+          "status": "fixed",
+          "basis": "对照 Glamour v1.0.0 默认 ColorProfile=TrueColor 与 detail_view.go 创建 renderer 的调用，确认未传 profile。已加上 WithColorProfile(lipgloss.ColorProfile())。TestMarkdownRenderFollowsColorProfile 在 TrueColor 下断言正文含 48;2;250;250;250，在 ANSI256 下断言含 profile.Color(#fafafa).Sequence(true)=48;5;231 且不再含 48;2;250;250;250。",
+          "fix_commit": "c981028cbe83d927deedce52926613b616dfe592",
+          "verification": "go test ./internal/tui -count=1 -run TestMarkdownRenderFollowsColorProfile 通过；最终提交 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241 上 go test ./... -count=1 通过，757 个 Test*。"
+        },
+        {
+          "authorization": {
+            "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+            "epoch": 1
+          },
+          "submitted_revision": 27,
+          "record_id": "qa02-author-fix1",
+          "run_id": "tui-theme-qa-r3",
+          "finding_id": "QA-02",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-theme-presets-task",
+          "author": "cursor",
+          "recorded_at": "2026-09-09T06:06:47.725195426Z",
+          "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+          "original": "Observed，置信度高：两卡明确要求的人工验收被 PTY 和渲染序列断言替代，尚未完成。该替代只能证明输出包含目标背景及调色板数值达标，不能证明真实终端中四种 Solarized 组合、六主题五界面的前景背景与切换效果符合设计。最小修复：在交付提交补做规定组合的人工验证并记录终端、profile 与结果；完成前保留未验收状态。",
+          "status": "fixed",
+          "basis": "与 PM-01 同一根因，本条单独结案。已按契约补做六主题×五界面以及 Solarized Light/Dark × light/dark 的视觉核验，并改写 report.md，不再把序列断言写成全部验收通过。环境与结果见 report.md。",
+          "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+          "verification": "在 TrueColor、120×32 下渲染 App.View() 的看板/详情/选项/帮助弹窗/启动对话框共 30 帧并栅格化后逐帧目视；画布中心像素与主题 Bg 黄金值一致（light #fafafa、light-warm #f3ead8、light-contrast #ffffff、dark #16181d、dark-soft #1c2230、dark-contrast #000000），画布占整帧 87%–92%。Solarized 四组合叠在 #fdf6e3/#002b36 终端底上，Solarized 像素数为 0。记录已写入 report.md。"
+        },
+        {
+          "authorization": {
+            "dispatch_id": "1bea461ddd97b7e67bb9627f1d0e399c",
+            "epoch": 3
+          },
+          "submitted_revision": 26,
+          "record_id": "qa01-author-sync1",
+          "run_id": "tui-theme-qa-r3",
+          "finding_id": "QA-01",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-truecolor-palette-task",
+          "author": "grok",
+          "recorded_at": "2026-09-09T07:40:03.774352778Z",
+          "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+          "original": "Inferred，置信度高：本轮将主题背景改为十六进制，但 renderMarkdown 未向 Glamour 传入当前 ColorProfile。仅支持 256 色的终端打开 light 主题普通 Markdown 详情时，正文仍输出 truecolor 背景序列 48;2;250;250;250，而看板及外围填充已经降级，导致正文背景无法按终端能力正确呈现，违反详情与看板背景一致及 256 色支持契约。最小修复：添加 glamour.WithColorProfile(lipgloss.ColorProfile())，并在 ANSI256 下对普通 Markdown 正文背景输出增加确定性断言。",
+          "status": "fixed",
+          "basis": "对照组 HEAD 73afc16 的 detail_view.go:66，renderMarkdown 已传入 glamour.WithColorProfile(lipgloss.ColorProfile())。本卡把 Bg 改为十六进制后，未传 profile 会使 Glamour 默认 TrueColor；该缺口由组分支提交 c981028 覆盖，不重复实现。独立用 termenv 复算 light Bg #fafafa：TrueColor 为 48;2;250;250;250，ANSI256 为 48;5;231。",
+          "fix_commit": "c981028cbe83d927deedce52926613b616dfe592",
+          "verification": "组工作树 /home/dualf/works/kander/worktrees/20260909-tui-theme-group @ 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241。git show c981028 仅向 NewTermRenderer 增加 WithColorProfile。go test ./internal/tui -count=1 -run TestMarkdownRenderFollowsColorProfile 通过：TrueColor 子测与 ANSI256 子测均 PASS；theme_test.go 在 ANSI256 下断言正文含 profile.Color(#fafafa).Sequence(true) 且不再含 48;2;250;250;250。"
+        },
+        {
+          "authorization": {
+            "dispatch_id": "1bea461ddd97b7e67bb9627f1d0e399c",
+            "epoch": 3
+          },
+          "submitted_revision": 27,
+          "record_id": "qa02-author-sync1",
+          "run_id": "tui-theme-qa-r3",
+          "finding_id": "QA-02",
+          "batch_id": "tui-theme-batch-one",
+          "task_id": "20260909-tui-truecolor-palette-task",
+          "author": "grok",
+          "recorded_at": "2026-09-09T07:40:34.439012356Z",
+          "report_hash": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+          "original": "Observed，置信度高：两卡明确要求的人工验收被 PTY 和渲染序列断言替代，尚未完成。该替代只能证明输出包含目标背景及调色板数值达标，不能证明真实终端中四种 Solarized 组合、六主题五界面的前景背景与切换效果符合设计。最小修复：在交付提交补做规定组合的人工验证并记录终端、profile 与结果；完成前保留未验收状态。",
+          "status": "fixed",
+          "basis": "确认：本卡原 IMPLEMENTATION 把 PTY 序列断言写成 8/8 验收通过，与 AC 第 8 条“人工验证”不符。本卡契约只要求 Solarized Light/Dark × light/dark 四组合；六主题×五界面属 presets 卡，已由其 disposition 结案，本卡不重复实现。组 HEAD 已覆盖四组合：TrueColor 下 light/dark 的看板/详情/帮助/启动对话框均含设计底色序列；PTY 四组合在 OSC 11 回报 Solarized 时仍输出设计底/前景且无 Solarized 画布 RGB。presets report.md 已改为记录 View() 栅格目视，不再把序列断言写成全部人工验收通过。本卡将同步改写交付结论，不再宣称交互终端人工走查已完成。",
+          "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+          "verification": "组工作树 @ 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241。go test ./internal/tui -count=1 -run TestThemeSurfacesPaintOwnBackground 通过（含 light/dark 的 board/detail/help/start）。go test ./internal/tui -count=1 -run TestBoardTrueColorIgnoresSolarizedPaletteOnPTY 四子测均 PASS：solarized-light/theme-light、solarized-light/theme-dark、solarized-dark/theme-light、solarized-dark/theme-dark；light 要 48;2;250;250;250 + 38;2;22;24;29，dark 要 48;2;22;24;29 + 38;2;230;232;235，且避免 48;2;253;246;227 与 48;2;0;43;54。已核验 presets report.md 人工验证节写明未按 t 键交互走查，结论改为视觉核验而非全部交互验收通过。"
+        }
+      ]
+    }
+  ]
+}
+
+
+Caller supplemental context (verbatim; does not replace originals):
+编排器补充：presets 的 fix 已在组 HEAD 73afc16；truecolor 已提交 QA-01/QA-02/PM-01 处置。请只审 1d10371..73afc16，并核验上一轮门禁项是否关闭。

@@ -1,0 +1,22 @@
+{
+  "run_id": "qa-agent-def-b1-r6",
+  "batch_id": "agent-def-batch-one",
+  "author": "cursor-grok-orchestrator",
+  "basis": "assigned by each task's modification scope: QA-01 pane sendAttempted/DeliveryUnknown is A1 launch/prompt_delivery (same surface as PM-01); QA-N1 prompt_files nested path is A2 review execute/validate; QA-N2 reviewerUsable filtering of ReviewAgentNames is A2 options panel.",
+  "items": {
+    "QA-01": [
+      "20260908-agent-definition-embed-task"
+    ],
+    "QA-N1": [
+      "20260908-agent-review-template-task"
+    ],
+    "QA-N2": [
+      "20260908-agent-review-template-task"
+    ]
+  },
+  "owners": {
+    "20260908-agent-definition-embed-task": "cursor",
+    "20260908-agent-review-template-task": "cursor"
+  },
+  "recorded_at": "2026-09-09T05:48:24.507178302Z"
+}

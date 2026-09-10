@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "",
+    "run_id": "agent-definitions-pm-1",
+    "batch_id": "agent-definitions-batch",
+    "task_ids": [
+      "20260908-agent-executable-override-task"
+    ],
+    "role": "PM",
+    "reviewer": "codex",
+    "model": "gpt-6-astra",
+    "effort": "medium",
+    "cwd": "/home/dualf/works/kander/worktrees/agent-executable-override",
+    "base": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+    "commit": "56ec24d4ca46285288cccf219d971a3a8d970523",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "task-context.md": "8f067842dd4f5d1155a9759abfe36608f69c1d0b37616ae2a49ce71f0d25920b"
+    }
+  },
+  "sidecar_hash": "f611c9518746bd90e0a6fcc52e21957ab2b02c5b2c2ca861ea954ac811052c05",
+  "hashes": {
+    "error.log": "cc8a6e9bbc520183221ca7e864f5a3d038cf2ce6b77e502b00a8d9839ac309da",
+    "evidence.txt": "b0cfdd854205494e379a3888d9410ace4a0eadaa94c3248d857457ef555344c0",
+    "output.raw": "3f0aa25a7ec27a0a882e9b5d14e7a2e9f48ec46571d279e740dd5029f37abee8",
+    "prompt.txt": "c441dbacc95d182fbbe09d61ca196f537d024182cd7aac75e803cfabdf02a082",
+    "report.md": "3f0aa25a7ec27a0a882e9b5d14e7a2e9f48ec46571d279e740dd5029f37abee8",
+    "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.log": "26f58674694af26378fd7161e402dded02dff28215f84dd4ad9165dac2c7a3e3",
+    "task-context.md": "8f067842dd4f5d1155a9759abfe36608f69c1d0b37616ae2a49ce71f0d25920b"
+  }
+}

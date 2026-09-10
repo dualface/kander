@@ -1,0 +1,26 @@
+Role: QA  
+Commit: `b208333dc128f4c8e72aae5308685bbaaaef417e`  
+Task Context: 自定义执行 agent，五项旧 finding 的增量复审。  
+Reviewed Scope: 完整读取任务文件及 spec；核查 `56ec24d..b208333` 全部 17 个变更文件，与 COMMIT TREE、提交内容一致。只读环境未重跑构建与测试；采用目标提交交付记录。独立检查 `gofmt`、`git diff --check` 通过；13 个 Go 文件最大 581 行。
+
+| 行为/质量 | 评估与旧 finding 处置 |
+|---|---|
+| 自定义方言退出、接管清理 | **QA-001 closed**。Observed：`internal/takeover/ops.go:40-49` 按有效方言选择退出命令；`cleanup.go:89,154` 共用入口。`agent_definition_test.go:37-83` 覆盖自定义 Claude/Grok 的 dismiss、cleanup，断言退出指令。 |
+| `none` 关闭与恢复边界 | **QA-002 closed**。Observed：`internal/launch/session.go:135-158` 分离身份解析与恢复能力检查；`internal/takeover/dismiss.go:57` 使用身份入口。上述收尾回归包含 Claude `none`；resume、通知直投仍保留能力限制。 |
+| `none` 方言启动与通知恢复 | **QA-003 closed**。Observed：`internal/launch/session.go:355-425` 省略会话参数并拒绝 resume；`notify_resume.go:53-59,95` 使用 start 参数。`agent_definitions_test.go:124-140` 覆盖四种方言；`internal/config/agents.go:226-230` 拒绝无法兑现的无模板会话组合。 |
+| Windows PATH 解析 | **QA-004 closed**。Observed：`internal/process/process.go:75-97` 分开处理显式路径与带扩展名 PATH 名，保留 Batch 标记。`process_test.go:384-422` 覆盖 `.exe/.cmd/.bat`、当前目录影子及绝对路径。 |
+| 改名内置 agent 面板入口 | **QA-005 closed**。Observed：`internal/menu/options.go:91-108` 保留不可用候选及初始化可用性门禁。`agent_probe_test.go:44-83` 经真实 `NewSession` 完成选择、路径编辑、保存和重读。 |
+| 架构、可维护性 | Observed：config 负责定义校验，process 负责程序解析，launch 负责会话，takeover 复用身份与方言，menu 负责编辑；未发现依赖方向漂移。新增回归使用隔离状态和具体断言。 |
+| 交付验证 | Observed（调用方记录）：19 包、1101 条测试通过，1 条平台跳过；build/vet、两项真实 tmux 替身验证、Windows 10 包交叉编译通过。未声明原生 Windows 执行。 |
+
+FINDINGS
+
+五项旧 finding 全部关闭，置信度高。修复增量未发现新增 gate finding。
+
+NON-BLOCKING: none
+
+任务文件已尝试删除；只读文件系统拒绝，遗留不影响审核结果。
+
+```kander-findings
+{"FINDINGS":[],"NON_BLOCKING":[]}
+```

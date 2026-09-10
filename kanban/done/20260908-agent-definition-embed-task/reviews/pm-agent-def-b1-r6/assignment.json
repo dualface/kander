@@ -1,0 +1,23 @@
+{
+  "run_id": "pm-agent-def-b1-r6",
+  "batch_id": "agent-def-batch-one",
+  "author": "grok-orchestrator",
+  "basis": "assigned by each task's modification scope: PM-10 docs/custom-agents.md:81 and agents_review_test.go inherit assertion were written by A1 commit 1f1924b and A2 commit ee8fab7; both cards' scopes are hit. PM-07 and PM-08 lineage from r4 remain A2 review-package leftovers.",
+  "items": {
+    "PM-07": [
+      "20260908-agent-review-template-task"
+    ],
+    "PM-08": [
+      "20260908-agent-review-template-task"
+    ],
+    "PM-10": [
+      "20260908-agent-definition-embed-task",
+      "20260908-agent-review-template-task"
+    ]
+  },
+  "owners": {
+    "20260908-agent-definition-embed-task": "cursor",
+    "20260908-agent-review-template-task": "cursor"
+  },
+  "recorded_at": "2026-09-09T07:20:57.010394665Z"
+}

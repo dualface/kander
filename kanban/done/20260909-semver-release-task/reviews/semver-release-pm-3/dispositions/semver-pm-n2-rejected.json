@@ -1,0 +1,14 @@
+{
+  "submitted_revision": 20,
+  "record_id": "semver-pm-n2-rejected",
+  "run_id": "semver-release-pm-3",
+  "finding_id": "PM-N2",
+  "batch_id": "semver-release-batch",
+  "task_id": "20260909-semver-release-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T05:29:25.802586034Z",
+  "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+  "original": "[out-of-contract] 本地与发布路径的版本串前导 v 不一致。本仓库实测 `git describe --tags` 输出 v20260908T154432Z-7466cd6acfd3-21-g96ddc88, Makefile:10 原样注入; release.yml:31 用 ${GITHUB_REF_NAME#v} 剥掉前导 v。结果是同一个 v0.5.0 提交, 本地 make 的二进制报 `kander v0.5.0`, release 二进制报 `kander 0.5.0`。EXPECTED_OUTCOME 只要求本地版本来自 `git describe --tags --always`, 因此实现合规, 仅是两侧展示不一致。最小改动: 在 Makefile:10 与 make-windows.cmd:13-19 的默认值上剥掉前导 v (如 VERSION := $(VERSION:v%=%))。",
+  "status": "rejected",
+  "basis": "Matches EXPECTED_OUTCOME: local make version comes from git describe --tags --always as-is; release strips the leading v via ${GITHUB_REF_NAME#v}. Stripping v in Makefile would change the stated local default. Observed describe output on this repo starts with v; not a defect in this card."
+}

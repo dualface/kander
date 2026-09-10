@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "20260908-agent-definition-group",
+    "run_id": "pm-agent-def-b2",
+    "batch_id": "agent-def-batch-two",
+    "task_ids": [
+      "20260908-agent-definition-embed-task",
+      "20260908-agent-exit-session-hook-task",
+      "20260908-agent-review-template-task",
+      "20260909-process-output-parser-task"
+    ],
+    "role": "PM",
+    "reviewer": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "cwd": "/home/dualf/works/kander/worktrees/20260908-agent-definition-group",
+    "base": "d97964c06adb942b94b25c7e5c5bfb04795172e4",
+    "commit": "64d0c2cf5fa2e8c8930f56967dced09a2187478d",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "0444b5dc7d27c61fab65979afe5cb8af6c276a7053bdc446e25bae3c95f15096",
+      "task-context.md": "7cbf4331de504a032f7aca4b5f73cc9021ec3c6e84b2cef75204131eeed9156f"
+    }
+  },
+  "sidecar_hash": "66b74ca694956cf0b659c0574be31fdb606a6ff040be2c65dcc191d32104c3ba",
+  "hashes": {
+    "error.log": "7ee3bb53a85d90fa0cf2ba6f690f6a841f74db4c52300a7a5c4d9e068f558ed0",
+    "evidence.txt": "80170b86faa7879efee4abbf977faee982af0082845bd7ba1e6f26fa28181ad9",
+    "output.raw": "202123e8e28071e51908b6f3b7007cb13bf0b9d5896c18d34d4b3926dd9b01c6",
+    "prompt.txt": "95262c6160d3c812d945d6e742c4c06b2f2c9a2b4aa827801adf022ad15d3b2b",
+    "report.md": "202123e8e28071e51908b6f3b7007cb13bf0b9d5896c18d34d4b3926dd9b01c6",
+    "review-context.md": "0444b5dc7d27c61fab65979afe5cb8af6c276a7053bdc446e25bae3c95f15096",
+    "stdout.log": "30c5db73c1fcf8ca8132ff27b10674e351c545b7445f1eb98c272af5b9c2df0b",
+    "task-context.md": "7cbf4331de504a032f7aca4b5f73cc9021ec3c6e84b2cef75204131eeed9156f"
+  }
+}

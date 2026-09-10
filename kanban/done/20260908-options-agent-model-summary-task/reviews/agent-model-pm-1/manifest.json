@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "",
+    "run_id": "agent-model-pm-1",
+    "batch_id": "agent-model-batch",
+    "task_ids": [
+      "20260908-options-agent-model-summary-task"
+    ],
+    "role": "PM",
+    "reviewer": "codex",
+    "model": "gpt-6-astra",
+    "effort": "medium",
+    "cwd": "/home/dualf/works/kander/worktrees/options-agent-model-summary",
+    "base": "265aa39bd0a4919451df1f726adca85d6204863b",
+    "commit": "c4bbc2b81a0eb0baefe0489a9e4873d10b6258aa",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "7785500b606993de61fac958a3c221d7a113c3ccadc88a67a3af2f21e83695f5",
+      "task-context.md": "a0e25933623bbdab2302db384ddb61347c3173234416eaa284ee3ebf6284328c"
+    }
+  },
+  "sidecar_hash": "4a416d73f55c5f41d86c1ee1a928a38cf4b178716083076420edf694e1f3a405",
+  "hashes": {
+    "error.log": "2fb1ab04a5da62b5a1bee2db749a91d35eff767712e455556d13be592c59205c",
+    "evidence.txt": "b3c39732aab248d4aa3596c9b01ebc89867821f91bb06756121c90801334c840",
+    "output.raw": "54d3e6675ed2b6df84c6aab5f752f9078ab3d51b6ddb85ba74ea60717c02e434",
+    "prompt.txt": "b0832cc25a038301e11f50329d31b3f23a42abe15c659ac13d8b85f4e063051a",
+    "report.md": "54d3e6675ed2b6df84c6aab5f752f9078ab3d51b6ddb85ba74ea60717c02e434",
+    "review-context.md": "7785500b606993de61fac958a3c221d7a113c3ccadc88a67a3af2f21e83695f5",
+    "stdout.log": "30d659dc5e549976d6099865c4cf958f3b8c7a9fe5644613894128289f77f658",
+    "task-context.md": "a0e25933623bbdab2302db384ddb61347c3173234416eaa284ee3ebf6284328c"
+  }
+}

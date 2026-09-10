@@ -1,0 +1,48 @@
+Role: PM  
+Commit: `e0f75e3f30c9d92442fdae091cdd56b243a93a2a`  
+Task Context: 异步目标卡预览、四态启动对话框、迟到结果隔离、窄屏排版。  
+Reviewed Scope: 指定范围全部改动，以及 TUI 输入、后台结果消费、targeted 读取、启动与回滚链路。
+
+按 12 项验收归并：Complete 10，Partial 2，Missing 0，Contradicted 0，Unverifiable 0。存在两项 medium，暂不通过。
+
+Observed：三语启动文案 17 个键一致且非空。全库与 race 通过数量依据调用方记录；本次只读审核未重跑，未验证 Windows 原生行为。
+
+### FINDINGS
+
+**PM-001 — medium — Inferred，高置信度：窄屏裁掉启动结果，无法查看完整原因与警告。**
+
+契约要求成功、失败原因及警告在框内显示，并保留至按键关闭。`internal/tui/start_dialog.go:34–43` 把结果放在任务 ID、状态之后；`:89–92` 空间不足直接丢弃尾部行。例如英文界面 40×8、37 字符任务 ID，前三行已占满正文预算，结果完全不显示。
+
+`internal/tui/app.go:138` 在对话框存在时禁用补充浮层；`internal/tui/start.go:114–116` 任意键直接关闭，鼠标也被拦截，无法浏览遗漏内容。
+
+最小修复：结果态优先压缩重复任务信息；溢出正文支持框内鼠标滚动，保留任意键关闭语义。
+
+**PM-002 — medium — Observed，高置信度：读取期间不响应滚动。**
+
+契约明确要求后台读取期间看板继续响应滚动。新增读取态由 `internal/tui/start.go:70–73` 设置 `StartConfirmation`；现有消费者 `internal/tui/mouse.go:328–330` 随即丢弃全部鼠标事件，包括滚轮。慢读取期间无法滚动看板，必须先按键取消。
+
+最小修复：读取态放行看板滚轮；滚动导致换选时关闭旧对话框、失效旧请求，保留确认态和启动态的输入限制。
+
+NON-BLOCKING: none
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "PM-001",
+      "tier": "medium",
+      "text": "Inferred，高置信度：窄屏结果态直接裁掉正文尾部，违反成功、失败原因及警告在框内显示并保留的要求。英文界面 40×8、37 字符任务 ID 可使正文预算全部被任务 ID 和状态占用，结果完全不可见；长错误和警告也会被截去。最小修复：压缩重复任务信息，并为溢出结果提供框内鼠标滚动，保持任意键关闭。",
+      "evidence": "internal/tui/start_dialog.go:34–43 将结果排在任务 ID 和状态之后；:65–70 计算正文预算；:89–92 直接截去超出预算的行。internal/tui/app.go:138 在对话框存在时禁止补充结果浮层。internal/tui/start.go:114–116 任意键关闭结果；internal/tui/mouse.go:328–330 拦截鼠标，遗漏内容无浏览入口。违反 task-spec.md EXPECTED_OUTCOME 的结果显示要求及 ACCEPTANCE_CRITERIA 第 10 项。"
+    },
+    {
+      "id": "PM-002",
+      "tier": "medium",
+      "text": "Observed，高置信度：读取态拦截全部鼠标事件，后台读取期间滚轮无法滚动看板，违反读取期间继续响应滚动的要求。最小修复：读取态放行看板滚轮；换选时关闭旧对话框并失效旧请求，保留确认态和启动态限制。",
+      "evidence": "internal/tui/start.go:70–73 新增读取态立即设置 StartConfirmation；internal/tui/mouse.go:328–330 只要该指针非空即返回，滚轮无法到达 :350 的 handleBoardMouse。违反 task-spec.md EXPECTED_OUTCOME 第 2 项明确列出的滚动要求；对应 ACCEPTANCE_CRITERIA 第 2 项响应性验收。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```
+
+任务文件未删除：当前环境仅允许只读操作。

@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 12,
+  "record_id": "qa-002-author-1",
+  "run_id": "c007591822d8d6fe7a05978d40a73f6b",
+  "finding_id": "QA-002",
+  "batch_id": "20260909-options-reload-rereview-batch-1",
+  "task_id": "20260909-options-reload-rereview-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T10:42:12.595911298Z",
+  "report_hash": "b8851272926f1c5b31e121acdd8ae5108e5b0ade62e3fd7e518f38ce06f1143d",
+  "original": "Inferred，高置信度：生产 NewSession 在探测后重新读取 scope 语言并修改全局语言，绕过 Options 捕获快照及结果序号保护。探测期间修改语言可使 session 表单与捕获的界面语言不一致；过期构建仍能在结果丢弃前覆盖当前语言。最小修复：提供基于捕获快照且无全局语言副作用的 session 构建路径，仅在接受当前结果后绑定语言。回归应保留生产构建逻辑，仅控制探测暂停，验证快照与过期完成后的语言。现有替身跳过了该生产行为。",
+  "status": "fixed",
+  "basis": "Verified on 98a0a77a61d8ad561566cb344d918f1db0d48637: NewSession no longer calls BindEffectiveLanguage. loadOptionsSession overwrites session.Config.Language from the first scopeRaw snapshot. applyWork binds only after seq check. TestNewSessionDoesNotBindEffectiveLanguage and TestOpenOptionsBindsCapturedScopeLanguage cover the side effect and snapshot.",
+  "fix_commit": "98a0a77a61d8ad561566cb344d918f1db0d48637",
+  "verification": "go test ./internal/tui ./internal/config ./internal/menu -count=1 at 98a0a77a61d8ad561566cb344d918f1db0d48637: ok"
+}

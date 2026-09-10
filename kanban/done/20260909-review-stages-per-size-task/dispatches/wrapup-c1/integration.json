@@ -1,0 +1,13 @@
+{
+  "dispatch_id": "wrapup-c1",
+  "task_id": "20260909-review-stages-per-size-task",
+  "cwd": "/home/dualf/works/kander/worktrees/20260909-config-layering-group",
+  "source_commit": "5631b184af859cd726f07bfa119e5378a5e3ded3",
+  "review_target": "5631b184af859cd726f07bfa119e5378a5e3ded3",
+  "review_base": "7466cd6acfd3077bdf311c0bb0ca163566d37ba6",
+  "target_commit": "4832ee9db7912db15d297a32ee8888fff757bf4a",
+  "target_ref": "refs/remotes/origin/develop",
+  "author": "claude-orchestrator",
+  "basis": "user confirmed intake plan option 1 (includes merge-back of the group into develop); batch-one closed at 4832ee9 with PM and QA passing; group HEAD 4832ee9 pushed to origin/develop as a fast-forward from 7466cd6 and local develop synced with merge --ff-only; no rebase, history unchanged",
+  "verified_at": "2026-09-08T20:46:08.465306925Z"
+}

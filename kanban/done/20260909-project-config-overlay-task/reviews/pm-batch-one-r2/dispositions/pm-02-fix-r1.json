@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r1-c2",
+    "epoch": 1
+  },
+  "submitted_revision": 28,
+  "record_id": "pm-02-fix-r1",
+  "run_id": "pm-batch-one-r2",
+  "finding_id": "PM-02",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:23:21.418904233Z",
+  "report_hash": "692a65d8fb3b259375d82fe4f79f4213216e7b6b7a10cedb16283ee30e3398bd",
+  "original": "覆盖文件里使用文档声明仍然合法的旧平铺 review_stages 时,合并结果变成档名与角色同层的混合形态,该项目下所有读配置的命令直接报错。internal/config/overlay.go:205-210 的 mergeOverlayRaw 只对作用域原始 JSON 调用 NormalizeReviewStages,覆盖侧原样进入 deepMerge(overlay.go:44-58 对同键 object 递归合并),而 internal/config/review_stages.go:79-85 对混合形态直接报错。作用域 config.json 一经 kander 写出必为两档(review_stages_test.go:174-211),因此这是常见组合。最小修复:mergeOverlayRaw 在 deepMerge 前对 overlay[\"review_stages\"] 同样调用 NormalizeReviewStages,并补一条「覆盖平铺 + 作用域两档」的合并测试。",
+  "status": "fixed",
+  "basis": "与 QA-001 同根因。独立核实 5631b18 mergeOverlayRaw 只规范化作用域；已对 overlay[\"review_stages\"] 同样调用 NormalizeReviewStages，并新增作用域两档+覆盖平铺用例。",
+  "fix_commit": "2e70155858c9a5240ed21ede0d7758a7e770ade9",
+  "verification": "同 QA-001：2e70155858c9a5240ed21ede0d7758a7e770ade9 上 TestLoadMergesReviewStagesAfterNormalizingFlatOverlay 通过；最终交付 f7b31bc529958ac268d2709ffd7fd99000c92bfb，go test -count=1 ./... 1265 passed。"
+}

@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "require-complete-config-pm-2",
+  "batch_id": "require-complete-config-1",
+  "previous_run_id": "require-complete-config-pm-1",
+  "task_ids": [
+    "20260909-require-complete-config-task"
+  ],
+  "role": "PM",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/require-complete-config",
+  "base": "211c104282f181d5fabe6cc49b03583b0bed269f",
+  "commit": "fdb68ffdef29749b56a4e7f6464b1206b0213501",
+  "reviewed_commit": "a8d5a6f86e8a53e7b10826e392c70903875835d9",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "85067096138ef5c6151896c89ebf9de3318aef940973c4cafd1f54fb1d7b4f4f",
+    "task-context.md": "d558d9de58392ad6e54e4d9045a73d63f8d72f43c419b040c4ae4f488475b35b"
+  },
+  "kander_version": "20260909T052428Z-f457271b9e9d",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-09T08:34:17.703579182Z",
+  "finished_at": "2026-09-09T08:36:26.882739097Z",
+  "duration_ms": 129179,
+  "hashes": {
+    "error.log": "0fa7a74eae316b4ddeadaf90ae5d06165839ddd6a3443f8bef4d60f29c2480ae",
+    "evidence.txt": "1df33519a065de85acf0540f3e57ff2f1ab7b78e3a55722289763db26240df1a",
+    "output.raw": "bc3fea03a8cbbfeaaace37d0ce8c82f271f6fbafb925bddaaa6037f2bec5c8bf",
+    "prompt.txt": "c2f7f2bbba0460b1e9cb621a8f6b72b2eaf8692a9fb05be69c5128f4a9b4d956",
+    "report.md": "bc3fea03a8cbbfeaaace37d0ce8c82f271f6fbafb925bddaaa6037f2bec5c8bf",
+    "review-context.md": "85067096138ef5c6151896c89ebf9de3318aef940973c4cafd1f54fb1d7b4f4f",
+    "stdout.log": "b8321554b0e15652d58228f8b3c308d5407a25bbd798c5420ffe24a87e969abb",
+    "task-context.md": "d558d9de58392ad6e54e4d9045a73d63f8d72f43c419b040c4ae4f488475b35b"
+  },
+  "published": null
+}

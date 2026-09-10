@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "",
+    "run_id": "semver-release-qa-1",
+    "batch_id": "semver-release-batch",
+    "task_ids": [
+      "20260909-semver-release-task"
+    ],
+    "role": "QA",
+    "reviewer": "claude",
+    "model": "opus",
+    "effort": "high",
+    "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+    "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+    "commit": "5172edad0c23c2f85265461d6238215f443849a9",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "e95b4aebf0d61ae4b44c3c0dfcdfc4aae20f8ef1c65217d44a0860a42de42c8e",
+      "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+    }
+  },
+  "sidecar_hash": "d93ee3ff85db5eddbf050f5d37ff8e74a670a17fe2fb7e731a54986c6225f9d9",
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "3aa1e5c74cd7a08b47bcc9bbf9574d422634b0a8a13c9928ed1de628db242c73",
+    "output.raw": "30f0a9676873628bfa9ef661646f9c76a70a034993949e6bc41ca5f72f092b39",
+    "prompt.txt": "5c520b8a78cca93a9ac7b22b833aecd8e90d2fd1247213a38518bbc1f73452f7",
+    "report.md": "c9fdacdfab313f103212e4bab369a085d1e70803655f90c57fe28a42756d9de8",
+    "review-context.md": "e95b4aebf0d61ae4b44c3c0dfcdfc4aae20f8ef1c65217d44a0860a42de42c8e",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+  }
+}

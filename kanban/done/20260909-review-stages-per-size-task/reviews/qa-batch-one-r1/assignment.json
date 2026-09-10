@@ -1,0 +1,37 @@
+{
+  "run_id": "qa-batch-one-r1",
+  "batch_id": "batch-one",
+  "author": "claude-orchestrator",
+  "basis": "assigned by each card's GOAL/OUT_OF_SCOPE and actual changed files: QA-004 and QA-104 hit card 1's doctor backfill and kander config summary; QA-001/002/003 and QA-101/102/103 hit card 2's overlay merge, write isolation and overlay allowed keys",
+  "items": {
+    "QA-001": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-002": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-003": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-004": [
+      "20260909-review-stages-per-size-task"
+    ],
+    "QA-101": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-102": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-103": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-104": [
+      "20260909-review-stages-per-size-task"
+    ]
+  },
+  "owners": {
+    "20260909-project-config-overlay-task": "cursor",
+    "20260909-review-stages-per-size-task": "cursor"
+  },
+  "recorded_at": "2026-09-08T18:57:26.645213743Z"
+}

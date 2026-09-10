@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 14,
+  "record_id": "qa-002-author-1",
+  "run_id": "0fa4f448e696b26cb0be85ad6fc21060",
+  "finding_id": "QA-002",
+  "batch_id": "20260909-options-reload-batch-1",
+  "task_id": "20260909-options-reload-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:05:51.142134343Z",
+  "report_hash": "6ef45b8ef279a7207e87982f7675cf4cd69ff7b9aa07c4a600af46c3d4d1d09f",
+  "original": "Inferred，置信度高：新加载路径无条件绑定验证后的 merged.Language，将缺失 language 时补出的 en 当成显式配置。有效旧配置省略 language、无语言 overlay、环境为 ja_JP.UTF-8 且未传 --lang 时，打开 Options 会从日语切成英语，而 session 的语言字段仍按环境选择日语，破坏既有回退契约。最小修复：保留同次读取的显式语言存在性及初始化状态，沿用 explicitConfigLanguage 规则；没有有效显式语言时清除绑定。以临时目录测试缺省 language 的环境回退及 --lang 优先级。",
+  "status": "fixed",
+  "basis": "Verified against 639cc1e6e5d10592d932cdc43fcd8ee9c77d7b4a: applyWork now calls BindEffectiveLanguage() after a successful disk read, which uses ConfiguredLanguage/explicitConfigLanguage instead of the schema default. TestOpenOptionsBindsExplicitLanguageNotSchemaDefault omits language with ja_JP.UTF-8 and asserts ResolveLanguage stays ja.",
+  "fix_commit": "639cc1e6e5d10592d932cdc43fcd8ee9c77d7b4a",
+  "verification": "go test ./internal/tui -count=1 at 639cc1e6e5d10592d932cdc43fcd8ee9c77d7b4a: ok"
+}

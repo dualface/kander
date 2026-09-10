@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "",
+    "run_id": "require-complete-config-qa-1",
+    "batch_id": "require-complete-config-1",
+    "task_ids": [
+      "20260909-require-complete-config-task"
+    ],
+    "role": "QA",
+    "reviewer": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "cwd": "/home/dualf/works/kander/worktrees/require-complete-config",
+    "base": "211c104282f181d5fabe6cc49b03583b0bed269f",
+    "commit": "a8d5a6f86e8a53e7b10826e392c70903875835d9",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "task-context.md": "d558d9de58392ad6e54e4d9045a73d63f8d72f43c419b040c4ae4f488475b35b"
+    }
+  },
+  "sidecar_hash": "ce25d944aa85d481e9ca97b4994b296fafec113f32a089254f3237b840ae3474",
+  "hashes": {
+    "error.log": "d35aba9202640c93d237eb7f3ffaf67360d5aad5d6bc2709942b580aa84eb6b4",
+    "evidence.txt": "95ee101990e9e4ac522618ced71bd4af938a92fba79a4f0ed628ba5bcee1072a",
+    "output.raw": "c336371785d1525a695728ddd0330fd71eb924b33309fd1af851955bed31f39b",
+    "prompt.txt": "cfc47196b2f88ba46d5ca3ce808798b2805dffc6f1179cacd79100c743a7d38f",
+    "report.md": "c336371785d1525a695728ddd0330fd71eb924b33309fd1af851955bed31f39b",
+    "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.log": "bcca014158e5377477ab65ea1865c9fb79ce064911c77322dfbe7dfde3f96d6b",
+    "task-context.md": "d558d9de58392ad6e54e4d9045a73d63f8d72f43c419b040c4ae4f488475b35b"
+  }
+}

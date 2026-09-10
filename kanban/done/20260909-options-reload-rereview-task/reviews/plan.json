@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "20260909-options-reload-rereview",
+  "author": "grok",
+  "basis": "user chose option 1: new small card to re-review fd24781..bce1ad3 after hand-resolved rebase conflicts; original card plan is sealed; this repository's AGENTS.md marks CSA and Hacker N/A; review_stages.small PM=required QA=auto",
+  "cwd": "/home/dualf/works/kander/worktrees/20260909-options-reload-config",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260909-options-reload-rereview-task"
+  ],
+  "cycles": {
+    "20260909-options-reload-rereview-task": "6e6c7b849aa3e91377a8dd168d589e82f870af1c9508567d4c46c4c236d39481"
+  },
+  "batches": [
+    {
+      "batch_id": "20260909-options-reload-rereview-batch-1",
+      "task_ids": [
+        "20260909-options-reload-rereview-task"
+      ],
+      "base": "fd24781ac0f6abf001e11422d926b566e56623f8",
+      "target_commit": "bce1ad374757cbf18db674d05e56974c6de68b81",
+      "requirements": {
+        "CSA": "N/A: second-stage security roles CSA and Hacker are always marked N/A in this repository's AGENTS.md; review_stages.small.CSA=skip",
+        "Hacker": "N/A: second-stage security roles CSA and Hacker are always marked N/A in this repository's AGENTS.md; review_stages.small.Hacker=skip",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-09T10:29:02.248291292Z"
+}

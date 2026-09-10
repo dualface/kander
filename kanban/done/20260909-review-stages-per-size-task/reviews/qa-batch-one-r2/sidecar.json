@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "20260909-config-layering-group",
+  "run_id": "qa-batch-one-r2",
+  "batch_id": "batch-one",
+  "previous_run_id": "qa-batch-one-r1",
+  "task_ids": [
+    "20260909-project-config-overlay-task",
+    "20260909-review-stages-per-size-task"
+  ],
+  "role": "QA",
+  "reviewer": "claude",
+  "model": "opus",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/20260909-config-layering-group",
+  "base": "7466cd6acfd3077bdf311c0bb0ca163566d37ba6",
+  "commit": "777b1f088985e3d11cec3bd9b4dde9271822119e",
+  "reviewed_commit": "5631b184af859cd726f07bfa119e5378a5e3ded3",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "50b3d4c9ec8c462e239e27d66c7d7c9714e2ce8e917707e3dad6ebab94f1b1ac",
+    "task-context.md": "27905b6fdfa87f264566eae7892fdeaeec6df5901498c7c7ffee01bc59b94493"
+  },
+  "kander_version": "20260908T155319Z-7466cd6acfd3",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "failed",
+  "semantic_status": "unassessed",
+  "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+  "exit_code": 1,
+  "created_at": "2026-09-08T19:47:50.65870062Z",
+  "finished_at": "2026-09-08T19:58:46.644586071Z",
+  "duration_ms": 655985,
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "88ae3239bceeec632e82b7337ecfdfc44e17a59f051c937043b3e106d13e26c1",
+    "output.raw": "fa437698493d4a6e11b4e0fb0da7247edc326799a4dedb33f6cb8985c134a2a2",
+    "prompt.txt": "9e3df36411e23efac72d04bf833563dabefd1401c02a7c1e5065d3d26f46bd38",
+    "report.md": "d9a4443c25534c571167303ea2bd1bec2fb3d2e519f13ce1987ba0d7a042e542",
+    "review-context.md": "50b3d4c9ec8c462e239e27d66c7d7c9714e2ce8e917707e3dad6ebab94f1b1ac",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "27905b6fdfa87f264566eae7892fdeaeec6df5901498c7c7ffee01bc59b94493"
+  },
+  "published": null
+}

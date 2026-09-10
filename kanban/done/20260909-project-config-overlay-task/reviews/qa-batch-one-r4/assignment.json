@@ -1,0 +1,28 @@
+{
+  "run_id": "qa-batch-one-r4",
+  "batch_id": "batch-one",
+  "author": "claude-orchestrator",
+  "basis": "carried non-blocking items keep their original attribution: QA-101/102/103/105 hit card 2 (overlay), QA-104 hits card 1 (kander config summary)",
+  "items": {
+    "QA-101": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-102": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-103": [
+      "20260909-project-config-overlay-task"
+    ],
+    "QA-104": [
+      "20260909-review-stages-per-size-task"
+    ],
+    "QA-105": [
+      "20260909-project-config-overlay-task"
+    ]
+  },
+  "owners": {
+    "20260909-project-config-overlay-task": "cursor",
+    "20260909-review-stages-per-size-task": "cursor"
+  },
+  "recorded_at": "2026-09-08T20:28:59.457725201Z"
+}

@@ -1,0 +1,95 @@
+Role: QA  
+Commit: `56ec24d4ca46285288cccf219d971a3a8d970523`  
+Task Context: 自定义执行 agent：程序路径、进程名、方言/模板、会话策略及面板配置。  
+Reviewed Scope: 完整读取任务文件与 spec；依据 COMMIT TREE 检查变更及相关消费者。追踪 config、process、launch、notify、liveness、takeover、menu/TUI 和 reviewer 边界。只读环境未重跑构建及测试；采用 IMPLEMENTATION 中该提交的成功记录。独立确认 `gofmt`、diff 空白检查通过；36 个改动 Go 文件最大 864 行。
+
+| 行为/质量 | 评估 |
+|---|---|
+| 配置校验、回退、深拷贝 | Observed：有确定性单元测试；Windows 解析存在不一致 |
+| 方言、模板、prompt | Observed：参数逐项断言、空值省略、字面替换及 prompt 末位有覆盖 |
+| 会话生成、分配、恢复 | Inferred：`none` 在方言路径及非恢复消费者中处理不完整 |
+| 存活、通知、收尾 | Observed：进程名查询已接线；Inferred：退出命令仍限制内置名称 |
+| 面板、保存、doctor | Observed：字段去重及保存有覆盖；Inferred：未选中的改名内置 agent 无编辑入口 |
+| 架构、reviewer 隔离 | Observed：职责方向保持；review 独立使用 `*_REVIEW_BIN`，有测试锁定 |
+| 构建与验收 | Observed（交付记录）：build/vet/test、Windows 交叉编译及两项真实 tmux 替身验证通过；Unverifiable：原生 Windows 运行 |
+
+FINDINGS
+
+**QA-001 — medium — 自定义方言无法正常退出及接管清理**  
+Inferred；置信度：高。
+
+`internal/takeover/ops.go:32-44` 仍按 agent 名查四项退出命令表。`dismiss.go:61`、`cleanup.go:89,154` 均传入原始名称。配置 `my-claude` 为 Claude 方言后，启动正常；完成后 `dismiss` 返回 unsupported，接管后旧进程也被保留。违反新增名称应贯通已接线收尾消费者的契约。
+
+最小修复：退出命令按解析后的方言选择，保留现有身份和容器检查。用自定义 Claude/Grok 名称覆盖 dismiss 与接管清理。
+
+**QA-002 — medium — `none` 的恢复限制误阻止 `dismiss`**  
+Inferred；置信度：高。
+
+`internal/launch/session.go:152-155` 在通用会话解析中拒绝 `none`；`internal/takeover/dismiss.go:57-59` 复用该解析。即使内置 Claude 配置 `session.mode=none`、卡片已有有效终端 UUID，任务完成后也在探测前被拒绝。禁止恢复不应禁止关闭已确认身份的终端。
+
+最小修复：分离会话身份解析与恢复能力校验；resume 和通知直投继续检查能力，dismiss 使用身份解析。增加内置名称加 `none` 的收尾回归。
+
+**QA-003 — medium — `none` 仅在模板路径生效，方言仍传恢复身份**  
+Inferred；置信度：高。
+
+`internal/launch/session.go:371-383` 仅为模板清空 session；Cursor 方言仍无条件追加 `--resume <Reference>`。`newAgentSession` 在 `none` 下生成标记 UUID（`:85-87`），却不分配 Cursor chat。因此合法配置 `cursor.session.mode=none` 会尝试恢复未分配的 UUID。Claude/Grok 路径也继续传 `--session-id`（`:398-409`）；通知恢复复用旧 Reference（`notify_resume.go:48-54`），并非独立的新会话。
+
+最小修复：方言路径也落实 `none`，启动时省略会话创建/恢复参数，仅将 UUID 用作终端标记。逐方言断言 start 与通知恢复 argv。
+
+**QA-004 — medium — Windows 接受的带扩展名 PATH 名无法启动**  
+Inferred；置信度：高。
+
+`internal/config/agents.go:137-145` 使用 `exec.LookPath` 校验，接受 PATH 中的 `wrapper.exe` 或 `wrapper.cmd`。启动却将原字符串传给 resolver（`internal/launch/session.go:420-421`）；`internal/process/process.go:75-79,97-105` 先按当前目录检查，遇到扩展名便返回 nil，不再搜索 PATH。程序位于 PATH 目录、项目目录无同名文件时，配置有效，start 和面板探测却报告不可用。分配程序同样受影响（`internal/launch/agent_allocate.go:14`）。
+
+最小修复：统一配置与运行时的程序解析契约，让带扩展名的裸名称也搜索 PATH，并保留 batch 编码通道。增加 Windows PATH 目录与工作目录分离的 `.exe`/`.cmd` 用例。
+
+**QA-005 — medium — 改名内置 agent 缺少面板配置入口**  
+Inferred；置信度：高。
+
+`internal/menu/options.go:91-98` 排除不可用且未显式声明方言/模板的内置 agent；`:203-204` 只补回当前选择。编辑字段又仅为已选 agent 生成（`internal/menu/agent_fields.go:10-19`、`internal/tui/options_form.go:496-500`）。
+
+现有大小任务均选 Claude，用户安装只有 `kander-codex` 的 Codex 包装器时，Codex 不在下拉中，无法选中并填写新路径。必须先手改 JSON，未满足内置程序名可直接在面板配置的要求。
+
+最小修复：面板允许选择待配置的内置 agent，并显示不可用状态；保存仍校验填写后的路径。通过真实 `NewSession` 测试该入口，避免仅用跳过探测的测试构造器。
+
+NON-BLOCKING: none
+
+任务文件已尝试删除；只读文件系统拒绝，文件遗留不影响审核结果。
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "QA-001",
+      "tier": "medium",
+      "text": "Inferred；置信度高。自定义 Claude/Grok 方言名称可以启动，但退出命令仍按四个内置名称查表，导致 dismiss 返回 unsupported，接管清理保留旧执行进程。最小修复：按解析后的方言选择退出命令，保留身份与容器门禁；增加自定义名称的 dismiss 和接管清理回归。",
+      "evidence": "internal/takeover/ops.go:32-44 硬编码名称查表；internal/takeover/dismiss.go:61、internal/takeover/cleanup.go:89,154 传入原始 agent 名；internal/config/agents.go:187-192 接受自定义方言名称。新增名称未贯通相关收尾消费者。"
+    },
+    {
+      "id": "QA-002",
+      "tier": "medium",
+      "text": "Inferred；置信度高。内置 Claude 设置 session.mode=none 后，即使卡片保留有效终端 UUID，dismiss 也因不支持恢复而在探测前失败。禁止恢复不应禁止关闭已确认身份的终端。最小修复：分离身份解析与恢复能力校验，让 dismiss 使用前者；保留 resume 与通知直投的能力限制，并增加 none 收尾回归。",
+      "evidence": "internal/launch/session.go:152-155 在通用 resolvedTaskSession 中拒绝 none；internal/launch/notify_resume.go:26-27 暴露该解析；internal/takeover/dismiss.go:57-59 直接调用并返回错误；internal/launch/session.go:85-87 已为 none 保存 UUID。"
+    },
+    {
+      "id": "QA-003",
+      "tier": "medium",
+      "text": "Inferred；置信度高。none 只在模板路径清空会话值，方言路径仍传会话参数。Cursor 的 none 启动携带 --resume 和未分配的标记 UUID；Claude/Grok 通知恢复继续用旧 UUID 创建会话，破坏 fresh-process 语义。最小修复：方言 none 启动省略会话创建/恢复参数，仅将 UUID 用于终端标记；逐方言测试 start 和通知恢复 argv。",
+      "evidence": "internal/config/agents.go:205-231 接受无模板的方言加 none；internal/launch/session.go:85-87 生成 UUID 而不分配 chat，:371-375 只处理模板 none，:378-383 无条件给 Cursor 加 --resume，:398-409 给 Claude/Grok 加 --session-id；internal/launch/notify_resume.go:48-54 在 none 恢复中复用原 Reference。"
+    },
+    {
+      "id": "QA-004",
+      "tier": "medium",
+      "text": "Inferred；置信度高。Windows 配置 path=wrapper.exe 或 wrapper.cmd，文件仅位于 PATH 目录时，配置校验通过，运行时却因带扩展名而只查当前目录后失败，影响启动、探测和会话分配。最小修复：统一程序解析，让带扩展名的裸名称搜索 PATH，保留 batch 编码通道；增加工作目录与 PATH 目录分离的 Windows 回归。",
+      "evidence": "internal/config/agents.go:137-145 使用 exec.LookPath 校验；internal/launch/session.go:420-421 将原字符串交给 resolver；internal/process/process.go:75-79,97-105 对带扩展名名称仅检查直接路径，失败后不搜索 PATH；internal/menu/agents.go:144-145 和 internal/launch/agent_allocate.go:14 使用同一 resolver。"
+    },
+    {
+      "id": "QA-005",
+      "tier": "medium",
+      "text": "Inferred；置信度高。大小任务当前均选 Claude，机器只有 kander-codex 包装器而没有 codex 时，Codex 被执行下拉过滤，程序路径字段仅为已选 agent 显示，用户无法通过面板配置该内置 agent，必须先手改 JSON。最小修复：允许选择待配置的内置 agent 并标注不可用，保存继续校验路径；通过真实 NewSession 覆盖此入口。",
+      "evidence": "internal/menu/options.go:91-98 过滤不可用且无显式方言/模板的内置名称，:203-204 只补当前选择；internal/menu/agent_fields.go:10-19 仅生成已选 agent 字段；internal/tui/options_form.go:491-500 将该过滤下拉与已选字段组合，阻断新增路径的面板编辑入口。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

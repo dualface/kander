@@ -1,0 +1,387 @@
+KANDER_AUTOMATIC_CONTEXT_BYTES: 25063
+PREVIOUS_RUN_ID: board-start-dialog-async-qa-1
+Prior report (verbatim):
+Role: QA  
+Commit: `e0f75e3f30c9d92442fdae091cdd56b243a93a2a`  
+Task Context: 异步目标卡预览、四态启动对话框、迟到结果隔离及窄屏排版。  
+Reviewed Scope: 审核 `1e4886a..e0f75e3`，追踪 TUI 输入、后台消息、渲染及 launch/board 边界。Observed：变更文件与提交一致，均属于证据树。只读环境未重跑测试；采纳交付记录：21 包、1230 测试/子测试通过，1 项平台跳过；定向 race 25 项通过。Windows 原生行为 Unverifiable。
+
+| 行为／质量 | 结论与证据 |
+|---|---|
+| 当帧读取态、异步预览 | Observed：`start.go:69–78` 先置状态再排后台工作；阻塞注入测试验证输入及刷新继续处理。 |
+| targeted 读取 | Observed：`launch/start.go` 复用单卡快照；`board/transaction.go:173–186` 仅读取目标正文。Linux 文件打开观测测试覆盖。 |
+| 取消、迟到及错误隔离 | Observed：`start.go:82–106` 校验阶段、请求序号、任务 ID 与当前选中卡；异常关闭并显示原因。 |
+| 启动与结果保留 | Observed：启动中屏蔽按键，完成后保留结果；调用参数、认领及回滚实现未变。 |
+| 窄屏结果完整性 | Inferred：存在裁切缺陷，见 QA-001。 |
+| 架构、文案及文件规模 | Observed：保持 TUI 单向复用 launch/board；三语启动键一致；8 个变更 Go 文件均未超过 1000 行。 |
+
+FINDINGS
+
+**QA-001 — medium — Inferred，置信度高：窄屏结果被裁切，完整地址或警告无法查看。**
+
+证据：`internal/tui/start_dialog.go:34–43` 在结果前保留任务 ID、旧状态；`:89–92` 按高度直接丢弃正文尾行。`internal/tui/app.go:138` 在对话框存在时禁止旧结果浮层；`internal/tui/mouse.go:329–330` 屏蔽滚动，`internal/tui/start.go:114–116` 任意键直接关闭。
+
+具体场景：英文界面、40×10 分屏，使用 `internal/tui/start_test.go:277–281` 已有的任务 ID 与 tmux-session 地址，经过完整启动流程。正文宽 32 列，可保留 5 行；任务 ID 与状态至少占 3 行，结果只剩 2 行，尾部地址必然被截掉。长错误或警告同样受影响。等待超过 5 秒后关闭，旧通知也已过期（`internal/tui/focus.go:38–41`）。
+
+最小持久修复：结果态先去掉重复任务信息，优先展示结果；溢出正文提供鼠标滚动，并保留至按键关闭。用现有 fixture 增加四态流程下 40×10 的地址、警告及通知过期断言。现有窄屏地址测试直接调用 `applyStartResult`，未创建对话框，未覆盖该路径。
+
+NON-BLOCKING: none
+
+任务文件删除已尝试；只读文件系统拒绝，文件遗留不影响审核结论。
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "QA-001",
+      "tier": "medium",
+      "text": "Inferred，置信度高：窄屏结果态直接裁掉正文尾行，违反成功、失败原因及警告完整展示并保留至按键关闭的要求。英文界面40×10分屏，使用现有测试的20260908-options-workflow-flowchart-task及kb-board-start-task-key-12345678:@9:%9，经过完整启动流程后，正文宽32列且仅保留5行；任务ID与状态至少占3行，结果只剩2行，完整地址不可见。长错误和警告同样可能被裁掉。鼠标无法滚动，任意键关闭；超过5秒后旧通知也无法补救。最小持久修复：结果态去掉重复任务信息、优先展示结果，为溢出正文提供鼠标滚动并保留至按键关闭；补充完整四态流程下40×10的地址、警告及通知过期断言。",
+      "evidence": "internal/tui/start_dialog.go:34-43在结果前保留任务ID及旧状态；:65-70计算宽度与高度预算；:89-92直接截断正文。internal/tui/app.go:138在对话框存在时禁止旧结果浮层。internal/tui/mouse.go:329-330屏蔽鼠标滚动；internal/tui/start.go:114-116结果态任意键关闭；internal/tui/focus.go:38-41通知5秒过期。internal/tui/start_test.go:274-304提供现有任务与地址fixture，但直接调用applyStartResult，未创建四态对话框，因此未覆盖实际结果裁切路径。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```
+Author records (verbatim JSON):
+{
+  "assignment": {
+    "run_id": "board-start-dialog-async-qa-1",
+    "batch_id": "board-start-dialog-async-batch",
+    "author": "codex",
+    "basis": "已返回源码核实；PM-001 与 QA-001 为相同裁切根因，PM-002 为读取态滚轮拦截",
+    "items": {
+      "QA-001": [
+        "20260908-board-start-dialog-async-task"
+      ]
+    },
+    "owners": {
+      "20260908-board-start-dialog-async-task": "codex"
+    },
+    "recorded_at": "2026-09-08T05:33:55.327292231Z"
+  },
+  "records": [
+    {
+      "submitted_revision": 16,
+      "record_id": "qa-001-fixed",
+      "run_id": "board-start-dialog-async-qa-1",
+      "finding_id": "QA-001",
+      "batch_id": "board-start-dialog-async-batch",
+      "task_id": "20260908-board-start-dialog-async-task",
+      "author": "codex",
+      "recorded_at": "2026-09-08T05:40:19.210633764Z",
+      "report_hash": "1821e3ad9c8c4dab0c05dd8154e6d284fb9cef5a98c31c64c9848086976675a9",
+      "original": "Inferred，置信度高：窄屏结果态直接裁掉正文尾行，违反成功、失败原因及警告完整展示并保留至按键关闭的要求。英文界面40×10分屏，使用现有测试的20260908-options-workflow-flowchart-task及kb-board-start-task-key-12345678:@9:%9，经过完整启动流程后，正文宽32列且仅保留5行；任务ID与状态至少占3行，结果只剩2行，完整地址不可见。长错误和警告同样可能被裁掉。鼠标无法滚动，任意键关闭；超过5秒后旧通知也无法补救。最小持久修复：结果态去掉重复任务信息、优先展示结果，为溢出正文提供鼠标滚动并保留至按键关闭；补充完整四态流程下40×10的地址、警告及通知过期断言。",
+      "status": "fixed",
+      "basis": "已核实 internal/tui/start_dialog.go 旧版按高度截去正文，PM-001 与 QA-001 为同一根因；修复为优先展示结果并通过 Bubbles viewport 保留完整正文，滚轮可浏览，任意键关闭，resize 夹紧偏移。",
+      "fix_commit": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+      "verification": "36f8f181c5d589bdf4323624120e3b7e62a4925d: go test -json ./... 退出0，21包、1232测试/子测试通过，1平台跳过；go test -race -json ./internal/tui -run TestStart|TestLoadingStart|TestBacklog|TestPrepareTaskStart -count=1 退出0，27项通过。TestStartResultViewportRetainsNarrowContent 覆盖英文40×8/40×10完整地址、长警告、通知过期、滚动、resize和关闭；TestLoadingStartWheelChangesSelectionAndDiscardsPreview 覆盖滚轮换选与旧结果隔离。"
+    }
+  ]
+}
+
+Current batch disposition (tool generated):
+{
+  "schema": 1,
+  "batch": {
+    "plan_id": "board-start-dialog-async-plan",
+    "task_context_hash": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535",
+    "schema": 1,
+    "batch_id": "board-start-dialog-async-batch",
+    "task_ids": [
+      "20260908-board-start-dialog-async-task"
+    ],
+    "base": "1e4886a30d2d047175bebb18f71947795f42304d",
+    "target_commit": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+    "report_language": "zh-CN",
+    "requirements": {
+      "CSA": "N/A: 本仓库 AGENTS.md 安全角色例外",
+      "Hacker": "N/A: 本仓库 AGENTS.md 安全角色例外",
+      "PM": "required",
+      "QA": "required"
+    },
+    "advances": [
+      {
+        "previous_target": "e0f75e3f30c9d92442fdae091cdd56b243a93a2a",
+        "target": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+        "reason": "修复已核实的 PM/QA 结果裁切及读取滚轮问题",
+        "deliveries": {
+          "36f8f181c5d589bdf4323624120e3b7e62a4925d": "20260908-board-start-dialog-async-task"
+        }
+      }
+    ],
+    "revision": 2
+  },
+  "runs": [
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "",
+        "run_id": "board-start-dialog-async-pm-1",
+        "batch_id": "board-start-dialog-async-batch",
+        "task_ids": [
+          "20260908-board-start-dialog-async-task"
+        ],
+        "role": "PM",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/board-start-dialog-async",
+        "base": "1e4886a30d2d047175bebb18f71947795f42304d",
+        "commit": "e0f75e3f30c9d92442fdae091cdd56b243a93a2a",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "c6fb374e8a9ca416ae41803e72a61ece676b996cca32030accefcb231dc1c47a",
+          "task-context.md": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535"
+        },
+        "kander_version": "20260908T042039Z-a70e939f5abd",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-08T05:29:34.763062026Z",
+        "finished_at": "2026-09-08T05:32:44.686418763Z",
+        "duration_ms": 189923,
+        "hashes": {
+          "error.log": "b15ebe35a0fb8604de40e12986c47d4879bebaca7d7b7c46215a52ac5c37fe17",
+          "evidence.txt": "f6eef377b9576c5103001f8af09f5cb76424186583ec7d75e7220a1aeee72979",
+          "output.raw": "2e99d721bba34c75be8a0e31484f6a1ffa498fe5e3521a402f9dc4c95e33b481",
+          "prompt.txt": "23d103deb118bfeed3186bd397e225f283f08b617069014dbc5174a67de313c7",
+          "report.md": "2e99d721bba34c75be8a0e31484f6a1ffa498fe5e3521a402f9dc4c95e33b481",
+          "review-context.md": "c6fb374e8a9ca416ae41803e72a61ece676b996cca32030accefcb231dc1c47a",
+          "stdout.log": "be0f525d3bb877cb10467770c876e72d7a5454b5399a92fdb3b097edf2f10bf7",
+          "task-context.md": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535"
+        },
+        "published": {
+          "20260908-board-start-dialog-async-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "PM-001",
+            "tier": "medium",
+            "text": "Inferred，高置信度：窄屏结果态直接裁掉正文尾部，违反成功、失败原因及警告在框内显示并保留的要求。英文界面 40×8、37 字符任务 ID 可使正文预算全部被任务 ID 和状态占用，结果完全不可见；长错误和警告也会被截去。最小修复：压缩重复任务信息，并为溢出结果提供框内鼠标滚动，保持任意键关闭。",
+            "evidence": "internal/tui/start_dialog.go:34–43 将结果排在任务 ID 和状态之后；:65–70 计算正文预算；:89–92 直接截去超出预算的行。internal/tui/app.go:138 在对话框存在时禁止补充结果浮层。internal/tui/start.go:114–116 任意键关闭结果；internal/tui/mouse.go:328–330 拦截鼠标，遗漏内容无浏览入口。违反 task-spec.md EXPECTED_OUTCOME 的结果显示要求及 ACCEPTANCE_CRITERIA 第 10 项。"
+          },
+          {
+            "id": "PM-002",
+            "tier": "medium",
+            "text": "Observed，高置信度：读取态拦截全部鼠标事件，后台读取期间滚轮无法滚动看板，违反读取期间继续响应滚动的要求。最小修复：读取态放行看板滚轮；换选时关闭旧对话框并失效旧请求，保留确认态和启动态限制。",
+            "evidence": "internal/tui/start.go:70–73 新增读取态立即设置 StartConfirmation；internal/tui/mouse.go:328–330 只要该指针非空即返回，滚轮无法到达 :350 的 handleBoardMouse。违反 task-spec.md EXPECTED_OUTCOME 第 2 项明确列出的滚动要求；对应 ACCEPTANCE_CRITERIA 第 2 项响应性验收。"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "board-start-dialog-async-pm-1",
+        "batch_id": "board-start-dialog-async-batch",
+        "author": "codex",
+        "basis": "已返回源码核实；PM-001 与 QA-001 为相同裁切根因，PM-002 为读取态滚轮拦截",
+        "items": {
+          "PM-001": [
+            "20260908-board-start-dialog-async-task"
+          ],
+          "PM-002": [
+            "20260908-board-start-dialog-async-task"
+          ]
+        },
+        "owners": {
+          "20260908-board-start-dialog-async-task": "codex"
+        },
+        "recorded_at": "2026-09-08T05:33:50.823607394Z"
+      },
+      "records": [
+        {
+          "submitted_revision": 14,
+          "record_id": "pm-001-fixed",
+          "run_id": "board-start-dialog-async-pm-1",
+          "finding_id": "PM-001",
+          "batch_id": "board-start-dialog-async-batch",
+          "task_id": "20260908-board-start-dialog-async-task",
+          "author": "codex",
+          "recorded_at": "2026-09-08T05:40:11.850260192Z",
+          "report_hash": "2e99d721bba34c75be8a0e31484f6a1ffa498fe5e3521a402f9dc4c95e33b481",
+          "original": "Inferred，高置信度：窄屏结果态直接裁掉正文尾部，违反成功、失败原因及警告在框内显示并保留的要求。英文界面 40×8、37 字符任务 ID 可使正文预算全部被任务 ID 和状态占用，结果完全不可见；长错误和警告也会被截去。最小修复：压缩重复任务信息，并为溢出结果提供框内鼠标滚动，保持任意键关闭。",
+          "status": "fixed",
+          "basis": "已核实 internal/tui/start_dialog.go 旧版按高度截去正文，PM-001 与 QA-001 为同一根因；修复为优先展示结果并通过 Bubbles viewport 保留完整正文，滚轮可浏览，任意键关闭，resize 夹紧偏移。",
+          "fix_commit": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+          "verification": "36f8f181c5d589bdf4323624120e3b7e62a4925d: go test -json ./... 退出0，21包、1232测试/子测试通过，1平台跳过；go test -race -json ./internal/tui -run TestStart|TestLoadingStart|TestBacklog|TestPrepareTaskStart -count=1 退出0，27项通过。TestStartResultViewportRetainsNarrowContent 覆盖英文40×8/40×10完整地址、长警告、通知过期、滚动、resize和关闭；TestLoadingStartWheelChangesSelectionAndDiscardsPreview 覆盖滚轮换选与旧结果隔离。"
+        },
+        {
+          "submitted_revision": 15,
+          "record_id": "pm-002-fixed",
+          "run_id": "board-start-dialog-async-pm-1",
+          "finding_id": "PM-002",
+          "batch_id": "board-start-dialog-async-batch",
+          "task_id": "20260908-board-start-dialog-async-task",
+          "author": "codex",
+          "recorded_at": "2026-09-08T05:40:15.502306268Z",
+          "report_hash": "2e99d721bba34c75be8a0e31484f6a1ffa498fe5e3521a402f9dc4c95e33b481",
+          "original": "Observed，高置信度：读取态拦截全部鼠标事件，后台读取期间滚轮无法滚动看板，违反读取期间继续响应滚动的要求。最小修复：读取态放行看板滚轮；换选时关闭旧对话框并失效旧请求，保留确认态和启动态限制。",
+          "status": "fixed",
+          "basis": "已核实 internal/tui/mouse.go 旧版在读取态直接返回；现在读取态滚轮复用 handleBoardMouse，选中任务变化时关闭旧框，后续旧请求结果按身份被丢弃。",
+          "fix_commit": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+          "verification": "36f8f181c5d589bdf4323624120e3b7e62a4925d: go test -json ./... 退出0，21包、1232测试/子测试通过，1平台跳过；go test -race -json ./internal/tui -run TestStart|TestLoadingStart|TestBacklog|TestPrepareTaskStart -count=1 退出0，27项通过。TestStartResultViewportRetainsNarrowContent 覆盖英文40×8/40×10完整地址、长警告、通知过期、滚动、resize和关闭；TestLoadingStartWheelChangesSelectionAndDiscardsPreview 覆盖滚轮换选与旧结果隔离。"
+        }
+      ]
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "",
+        "run_id": "board-start-dialog-async-pm-2",
+        "batch_id": "board-start-dialog-async-batch",
+        "previous_run_id": "board-start-dialog-async-pm-1",
+        "task_ids": [
+          "20260908-board-start-dialog-async-task"
+        ],
+        "role": "PM",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/board-start-dialog-async",
+        "base": "1e4886a30d2d047175bebb18f71947795f42304d",
+        "commit": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+        "reviewed_commit": "e0f75e3f30c9d92442fdae091cdd56b243a93a2a",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "693152efc0db01572248edb285e4ce0a3d7e30b066648d689430df747bf32137",
+          "task-context.md": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535"
+        },
+        "kander_version": "20260908T042039Z-a70e939f5abd",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-08T05:41:10.021969773Z",
+        "finished_at": "2026-09-08T05:42:54.560856139Z",
+        "duration_ms": 104538,
+        "hashes": {
+          "error.log": "3f028a4c6fa913358ffad596fdcbdca41c79bdd6854a242386bfec80553769b4",
+          "evidence.txt": "809be1d79197ad2ca559617ab6a31090f2c260775b66b7251b13ce625520fb05",
+          "output.raw": "2c3e0529d06ee02218f27c673f9e4453255e1a07703f877cc1bae32e899425fd",
+          "prompt.txt": "d2eaa6e2c61d5cb845b481f130c1f798a3c995003d37766f9484d9afaa0ad70b",
+          "report.md": "2c3e0529d06ee02218f27c673f9e4453255e1a07703f877cc1bae32e899425fd",
+          "review-context.md": "693152efc0db01572248edb285e4ce0a3d7e30b066648d689430df747bf32137",
+          "stdout.log": "010dc922e3d297b80bb62a6a4efe4f3bee2966dc5314a6d51064884647a2f599",
+          "task-context.md": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535"
+        },
+        "published": {
+          "20260908-board-start-dialog-async-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "board-start-dialog-async-pm-2",
+        "batch_id": "board-start-dialog-async-batch",
+        "author": "codex",
+        "basis": "已复核最终提交与 PM 增量报告；两项已修复，无新增或非门禁问题",
+        "items": {},
+        "owners": {},
+        "recorded_at": "2026-09-08T05:43:42.221761518Z"
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "",
+        "run_id": "board-start-dialog-async-qa-1",
+        "batch_id": "board-start-dialog-async-batch",
+        "task_ids": [
+          "20260908-board-start-dialog-async-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/board-start-dialog-async",
+        "base": "1e4886a30d2d047175bebb18f71947795f42304d",
+        "commit": "e0f75e3f30c9d92442fdae091cdd56b243a93a2a",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "c6fb374e8a9ca416ae41803e72a61ece676b996cca32030accefcb231dc1c47a",
+          "task-context.md": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535"
+        },
+        "kander_version": "20260908T042039Z-a70e939f5abd",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-08T05:29:35.964984264Z",
+        "finished_at": "2026-09-08T05:33:03.231282107Z",
+        "duration_ms": 207266,
+        "hashes": {
+          "error.log": "d772af9e23df7779d6c5e27cca49a190b150171c4ea42f6d8a9c57d10a6cf3bb",
+          "evidence.txt": "f6eef377b9576c5103001f8af09f5cb76424186583ec7d75e7220a1aeee72979",
+          "output.raw": "1821e3ad9c8c4dab0c05dd8154e6d284fb9cef5a98c31c64c9848086976675a9",
+          "prompt.txt": "0929363f5982e56f23d87dac23f2c2b39dd9ce5fb4a90d63352645a4909abd8c",
+          "report.md": "1821e3ad9c8c4dab0c05dd8154e6d284fb9cef5a98c31c64c9848086976675a9",
+          "review-context.md": "c6fb374e8a9ca416ae41803e72a61ece676b996cca32030accefcb231dc1c47a",
+          "stdout.log": "024d372916ca57b7498bbb5c54eaff223ea7b3467a0952546f7c66560e8bcf8f",
+          "task-context.md": "bfe0e4a12f165070ba21ffd03a608c5844b674520bb6175ea00021478d887535"
+        },
+        "published": {
+          "20260908-board-start-dialog-async-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "QA-001",
+            "tier": "medium",
+            "text": "Inferred，置信度高：窄屏结果态直接裁掉正文尾行，违反成功、失败原因及警告完整展示并保留至按键关闭的要求。英文界面40×10分屏，使用现有测试的20260908-options-workflow-flowchart-task及kb-board-start-task-key-12345678:@9:%9，经过完整启动流程后，正文宽32列且仅保留5行；任务ID与状态至少占3行，结果只剩2行，完整地址不可见。长错误和警告同样可能被裁掉。鼠标无法滚动，任意键关闭；超过5秒后旧通知也无法补救。最小持久修复：结果态去掉重复任务信息、优先展示结果，为溢出正文提供鼠标滚动并保留至按键关闭；补充完整四态流程下40×10的地址、警告及通知过期断言。",
+            "evidence": "internal/tui/start_dialog.go:34-43在结果前保留任务ID及旧状态；:65-70计算宽度与高度预算；:89-92直接截断正文。internal/tui/app.go:138在对话框存在时禁止旧结果浮层。internal/tui/mouse.go:329-330屏蔽鼠标滚动；internal/tui/start.go:114-116结果态任意键关闭；internal/tui/focus.go:38-41通知5秒过期。internal/tui/start_test.go:274-304提供现有任务与地址fixture，但直接调用applyStartResult，未创建四态对话框，因此未覆盖实际结果裁切路径。"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "board-start-dialog-async-qa-1",
+        "batch_id": "board-start-dialog-async-batch",
+        "author": "codex",
+        "basis": "已返回源码核实；PM-001 与 QA-001 为相同裁切根因，PM-002 为读取态滚轮拦截",
+        "items": {
+          "QA-001": [
+            "20260908-board-start-dialog-async-task"
+          ]
+        },
+        "owners": {
+          "20260908-board-start-dialog-async-task": "codex"
+        },
+        "recorded_at": "2026-09-08T05:33:55.327292231Z"
+      },
+      "records": [
+        {
+          "submitted_revision": 16,
+          "record_id": "qa-001-fixed",
+          "run_id": "board-start-dialog-async-qa-1",
+          "finding_id": "QA-001",
+          "batch_id": "board-start-dialog-async-batch",
+          "task_id": "20260908-board-start-dialog-async-task",
+          "author": "codex",
+          "recorded_at": "2026-09-08T05:40:19.210633764Z",
+          "report_hash": "1821e3ad9c8c4dab0c05dd8154e6d284fb9cef5a98c31c64c9848086976675a9",
+          "original": "Inferred，置信度高：窄屏结果态直接裁掉正文尾行，违反成功、失败原因及警告完整展示并保留至按键关闭的要求。英文界面40×10分屏，使用现有测试的20260908-options-workflow-flowchart-task及kb-board-start-task-key-12345678:@9:%9，经过完整启动流程后，正文宽32列且仅保留5行；任务ID与状态至少占3行，结果只剩2行，完整地址不可见。长错误和警告同样可能被裁掉。鼠标无法滚动，任意键关闭；超过5秒后旧通知也无法补救。最小持久修复：结果态去掉重复任务信息、优先展示结果，为溢出正文提供鼠标滚动并保留至按键关闭；补充完整四态流程下40×10的地址、警告及通知过期断言。",
+          "status": "fixed",
+          "basis": "已核实 internal/tui/start_dialog.go 旧版按高度截去正文，PM-001 与 QA-001 为同一根因；修复为优先展示结果并通过 Bubbles viewport 保留完整正文，滚轮可浏览，任意键关闭，resize 夹紧偏移。",
+          "fix_commit": "36f8f181c5d589bdf4323624120e3b7e62a4925d",
+          "verification": "36f8f181c5d589bdf4323624120e3b7e62a4925d: go test -json ./... 退出0，21包、1232测试/子测试通过，1平台跳过；go test -race -json ./internal/tui -run TestStart|TestLoadingStart|TestBacklog|TestPrepareTaskStart -count=1 退出0，27项通过。TestStartResultViewportRetainsNarrowContent 覆盖英文40×8/40×10完整地址、长警告、通知过期、滚动、resize和关闭；TestLoadingStartWheelChangesSelectionAndDiscardsPreview 覆盖滚轮换选与旧结果隔离。"
+        }
+      ]
+    }
+  ]
+}
+
+
+Caller supplemental context (verbatim; does not replace originals):
+本轮只增量复核：PM-001/QA-001 同一结果裁切根因由 Bubbles viewport 修复，优先显示结果，完整正文可滚轮查看，结果保持至任意键关闭；PM-002 由读取态滚轮复用看板处理且换选关闭旧框修复。作者 fixed 原件已发布并聚合。最终提交 go test -json ./...：21 包、1232 测试/子测试通过，1 项 Windows 平台跳过；定向 race 27 项通过。新增英文 40×8/40×10 完整四态流程验证地址、长警告、通知过期、滚动及 resize。

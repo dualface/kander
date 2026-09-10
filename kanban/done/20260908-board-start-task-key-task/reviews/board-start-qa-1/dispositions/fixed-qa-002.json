@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 15,
+  "record_id": "fixed-qa-002",
+  "run_id": "board-start-qa-1",
+  "finding_id": "QA-002",
+  "batch_id": "board-start-task-key-batch",
+  "task_id": "20260908-board-start-task-key-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T04:06:01.698105328Z",
+  "report_hash": "84db1e5f32fbe230be5b9d04c3a79aad9fc53130f631b21545871b1204200678",
+  "original": "Inferred；置信度高。成功提示把完整任务 ID、Agent、launcher 放在容器地址前，再由单行页脚截断。80 列窗口中，任务 20260908-board-start-task-key、Agent claude、launcher tmux-session、地址 kb-board-start-task-key-12345678:@9:%9 组成 102 列英文消息，实际显示止于 kb-board-sta...，window/pane 不可见，违反成功提示包含容器地址的要求。最小修复：按显示宽度保留 Agent、launcher 和完整地址，压缩任务 ID；空间仍不足时提供完整结果展示，并增加真实长度数据的渲染断言。",
+  "status": "fixed",
+  "basis": "已独立核对页脚 w-1 截断与末尾地址丢失。PM-001 与 QA-002 为同一根因；统一修复为窄屏精简任务 ID 信息、优先保留 Agent/launcher/完整地址，必要时以不接管输入的换行浮层展示完整结果。",
+  "fix_commit": "0eeb06bd84daf863d0817f5d1153f4b04b59f68a",
+  "verification": "在 0eeb06bd84daf863d0817f5d1153f4b04b59f68a 执行 go test -count=1 -json ./internal/launch ./internal/tui ./internal/i18n，通过 208 项（含子测试）、跳过 1 项；go test -json ./... 通过 1170 项（含子测试）、跳过 1 项。新增 80 列真实任务 ID/地址页脚断言，以及 40 列完整地址换行与输入不受阻断言。"
+}

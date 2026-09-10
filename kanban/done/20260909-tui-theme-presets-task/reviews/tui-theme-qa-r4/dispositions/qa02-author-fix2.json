@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "630e0448e5e19f581baffe6db7e41b0d",
+    "epoch": 3
+  },
+  "submitted_revision": 42,
+  "record_id": "qa02-author-fix2",
+  "run_id": "tui-theme-qa-r4",
+  "finding_id": "QA-02",
+  "batch_id": "tui-theme-batch-one",
+  "task_id": "20260909-tui-theme-presets-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:22:58.242155693Z",
+  "report_hash": "28c9aa94bedab680da90b3f9dac33331b4393315828dc9724520550293655fbc",
+  "original": "Observed，置信度高：QA-02 部分修复，人工验收仍未闭合。新增 View() 栅格目视记录，但以色块替代字形、以铺底合成模拟 Solarized，报告明确未在真实交互终端走查。用户实际在 Solarized 终端选择 light/dark，以及切换六主题查看五处界面时，终端输出解释和完整前景/背景显示仍未按契约人工确认。未观察到新的显示故障；剩余问题是明确验收条件未满足。最小修复：在真实 TrueColor 终端补做 Solarized 四组合和六主题五界面的人工验证，记录终端、配色、操作及结果；完成前保留未验收状态。",
+  "status": "fixed",
+  "basis": "已确认缺口：上一轮只用 App.View() 色块栅格和铺底模拟 Solarized，report.md 也写明未做真实交互走查。本轮在 Herdr 0.9.0 TrueColor pane（140×40，COLORTERM=truecolor）运行任务分支 kander，按 t 切换六套具名主题，并依次打开看板、帮助、启动对话框、选项面板、详情共 30 帧；再用 OSC 4/11 把该 pane 的 16 色与默认底设为 Solarized Light/Dark，分别启动 light/dark 共 8 帧。herdr pane read 保留 48;2 真彩。画布中心等于各主题 Bg 黄金值，Solarized #fdf6e3/#002b36 像素为 0，浅主题在 Solarized Dark 上仍是 #fafafa，深主题在 Solarized Light 上仍是 #16181d。记录见 report.md 与 internal/tui/testdata/theme-live-walkthrough.md。",
+  "fix_commit": "6d882fbbf8e086e695728c02594d0d4899bfae82",
+  "verification": "现场 ANSI：六主题看板背景分别为 48;2;250;250;250、243;234;216、255;255;255、22;24;29、28;34;48、0;0;0；五处界面同底。Solarized 四组合看板+详情中心像素仍为主题 Bg，Solarized 像素 0。DejaVu 栅格 PNG 目视确认 chrome/列框/KANDER/启动框/选项面板/帮助键位/详情 Markdown。go test ./... -count=1 @ 6d882fbbf8e086e695728c02594d0d4899bfae82 通过，757 个 Test*。"
+}

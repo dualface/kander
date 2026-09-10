@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "20260909-config-layering-group",
+  "run_id": "qa-batch-one-r1",
+  "batch_id": "batch-one",
+  "task_ids": [
+    "20260909-project-config-overlay-task",
+    "20260909-review-stages-per-size-task"
+  ],
+  "role": "QA",
+  "reviewer": "claude",
+  "model": "opus",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/20260909-config-layering-group",
+  "base": "7466cd6acfd3077bdf311c0bb0ca163566d37ba6",
+  "commit": "5631b184af859cd726f07bfa119e5378a5e3ded3",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "363d52e6e53385f7ad1ccfb81b60a3d4838d0d7eb1b1a0c3fe2c99087bea7493",
+    "task-context.md": "27905b6fdfa87f264566eae7892fdeaeec6df5901498c7c7ffee01bc59b94493"
+  },
+  "kander_version": "20260908T155319Z-7466cd6acfd3",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-08T18:44:24.74922159Z",
+  "finished_at": "2026-09-08T18:53:34.058131395Z",
+  "duration_ms": 549308,
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "100b658a6d867f9fe3e41e4d9b8755dfab44cb6b8216911974b3f3f445e8c528",
+    "output.raw": "0c2dc1ebff37e450e26bea0e052b961fa6d82ebd0485e975e9bc067a46735e11",
+    "prompt.txt": "30eabeb2808932fe5be48f1a7d80f7a741e90760c83614d9497f11526ff2f113",
+    "report.md": "196fe0c79c9c6d2972380195d4cf8e01d6df6a5d6ce09447bae37b90b13d229b",
+    "review-context.md": "363d52e6e53385f7ad1ccfb81b60a3d4838d0d7eb1b1a0c3fe2c99087bea7493",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "27905b6fdfa87f264566eae7892fdeaeec6df5901498c7c7ffee01bc59b94493"
+  },
+  "published": null
+}

@@ -1,0 +1,1363 @@
+Review range: 781aa0dcde99eefe0d7ccea84f5a138f414e831c..265aa39bd0a4919451df1f726adca85d6204863b
+Incremental re-review; fix range: 3dc625f9191d670f27da6879762fd638e52cf7c1..265aa39bd0a4919451df1f726adca85d6204863b
+
+=== COMMITS ===
+commit 265aa39bd0a4919451df1f726adca85d6204863b
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 11:56:14
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 11:56:14
+
+    fix: select workflow review batches before reception
+
+commit 3dc625f9191d670f27da6879762fd638e52cf7c1
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 11:49:08
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 11:49:08
+
+    feat: preview configured workflows in options
+
+=== FILE LEDGER ===
+M	AGENTS.md
+M	README.md
+A	internal/flow/flow.go
+A	internal/flow/flow_test.go
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+A	internal/tui/options_flow.go
+A	internal/tui/options_flow_test.go
+M	internal/tui/options_form.go
+M	internal/tui/options_panel.go
+
+=== PATCH ===
+diff --git a/AGENTS.md b/AGENTS.md
+index 354afd7..01121cf 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -39,6 +39,7 @@
+ | `internal/takeover` | dismiss 及 resume 接管成功后的旧容器清理                                 |
+ | `internal/window`   | 卡片 `WINDOW` 回写; 复用 board 事务, 过期回滚保留新记录                                     |
+ | `internal/review`   | `kander review` 单一审核门禁与闭批历史 Git 校验                                             |
++| `internal/flow`     | 只读消费选项会话配置，生成单卡与任务组流程的结构化行；不依赖 TUI 或 menu |
+ | `internal/tui`      | 裸 `kander` 的终端看板与 Huh 选项面板                                    |
+ | `internal/menu`     | doctor/config, 环境探测与修复, 选项面板共用的 `menu.Session`             |
+ | `internal/install`  | 首次运行向导, `kander install`, 规则释出与 doctor 修复                     |
+diff --git a/README.md b/README.md
+index a63a5d7..1cdb6f8 100644
+--- a/README.md
++++ b/README.md
+@@ -161,6 +161,7 @@ PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进
+ - 任务执行与模型: 大任务与小任务分别使用的 Agent、启动方式, 以及这些 Agent 的模型与推理档位
+ - 审核与模型: 四个审核角色各自的 Reviewer、环节策略, 以及各自的模型与推理档位
+ - 规则模块: 交流与协作、代码质量、Git 流程、审核流程、任务建卡引导、任务组编排、完成报告格式
++- 流程图: 按当前会话配置（含未保存改动）展示单卡与任务组的执行、审核、集成和收尾；只读竖排图，支持上下键、PgUp/PgDn 与鼠标滚轮，Esc 返回，不修改配置
+ - 环境检查: 就地运行 `kander doctor` 检查并修复配置
+ 
+ 界面偏好即选即生效, 其余分页按 `Enter` 写入配置文件. 选项面板需要交互终端; 也可以用 `kander config` 查看配置, 用 `kander doctor` 检查并修复配置.
+diff --git a/internal/flow/flow.go b/internal/flow/flow.go
+new file mode 100644
+index 0000000..fbee307
+--- /dev/null
++++ b/internal/flow/flow.go
+@@ -0,0 +1,162 @@
++// Package flow describes configured workflows without performing workflow actions.
++package flow
++
++import "github.com/dualface/kander/internal/config"
++
++// Kind distinguishes headings, summary facts, steps and conditional step details.
++type Kind uint8
++
++const (
++	Heading Kind = iota
++	Summary
++	Step
++	Detail
++)
++
++// Line carries a catalog key and template arguments, independent of terminal layout.
++type Line struct {
++	Kind Kind
++	Key  string
++	Args []any
++}
++
++// Build reads a normalized options-session configuration without modifying it.
++// Project overrides and task-specific triggers are resolved by agents at execution time.
++func Build(cfg *config.Config) []Line {
++	var lines []Line
++	add := func(kind Kind, key string, args ...any) {
++		lines = append(lines, Line{Kind: kind, Key: "flow." + key, Args: args})
++	}
++	add(Heading, "configuration")
++	add(Summary, "scope")
++	for _, scale := range config.TaskScales {
++		add(Summary, "agent", scale, cfg.KanbanAgents[scale])
++	}
++	add(Summary, "launcher", cfg.Launcher)
++	for _, role := range config.ReviewRoles {
++		add(Summary, "reviewer", role, cfg.Reviewers[role], cfg.ReviewStages[role])
++	}
++	for _, module := range config.RuleModules {
++		key := "module_off"
++		if cfg.Rules[module] {
++			key = "module_on"
++		}
++		add(Summary, key, module)
++	}
++	start := func() {
++		add(Step, "start")
++		add(Detail, "launch_"+cfg.Launcher)
++		add(Detail, "launch_failure")
++		add(Step, "read")
++		if cfg.Rules[config.RuleCollaboration] {
++			add(Step, "collaboration")
++		}
++	}
++	implement := func() {
++		add(Step, "implement")
++		if cfg.Rules[config.RuleCode] {
++			add(Step, "self_check")
++		}
++	}
++	hasReviewRole := false
++	for _, role := range config.ReviewRoles {
++		hasReviewRole = hasReviewRole || cfg.ReviewStages[role] != "skip"
++	}
++	review := func(group bool) {
++		add(Step, "plan")
++		if !cfg.Rules[config.RuleReview] {
++			return
++		}
++		add(Step, "review_trigger")
++		if !hasReviewRole {
++			return
++		}
++		for _, stage := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
++			var roles []string
++			for _, role := range stage {
++				if cfg.ReviewStages[role] != "skip" {
++					roles = append(roles, role)
++				}
++			}
++			if len(roles) == 0 {
++				continue
++			}
++			key := "stage_one"
++			if stage[0] == "CSA" {
++				key = "stage_two"
++			}
++			add(Step, key)
++			for _, role := range roles {
++				add(Detail, "role_"+cfg.ReviewStages[role], role, cfg.Reviewers[role])
++			}
++		}
++		if group {
++			add(Step, "dispatch_fix")
++			add(Step, "member_fix")
++		} else {
++			add(Step, "single_fix")
++		}
++		add(Step, "review_finish")
++	}
++	report := func() {
++		if cfg.Rules[config.RuleReporting] {
++			add(Step, "report")
++		}
++	}
++	add(Heading, "single")
++	if cfg.Rules[config.RuleTaskIntake] {
++		add(Step, "intake")
++	}
++	add(Step, "card")
++	add(Step, "todo")
++	start()
++	if cfg.Rules[config.RuleGit] {
++		add(Step, "task_branch")
++	}
++	implement()
++	if cfg.Rules[config.RuleGit] {
++		add(Step, "commit")
++	}
++	review(false)
++	add(Step, "close_plan")
++	if cfg.Rules[config.RuleGit] {
++		add(Step, "single_authority")
++		add(Step, "integrate")
++		add(Step, "task_cleanup")
++	}
++	add(Step, "records")
++	report()
++	add(Step, "single_done")
++	add(Heading, "group")
++	if !cfg.Rules[config.RuleTaskGroups] || !cfg.Rules[config.RuleGit] {
++		add(Summary, "group_unavailable")
++		return lines
++	}
++	add(Step, "group_plan")
++	add(Step, "group_cards")
++	add(Step, "dependencies")
++	add(Step, "group_branch")
++	add(Step, "schedule")
++	start()
++	add(Step, "subscribe")
++	add(Step, "member_branch")
++	implement()
++	add(Step, "member_delivery")
++	if cfg.Rules[config.RuleReview] && hasReviewRole {
++		add(Step, "batch")
++	}
++	add(Step, "receive")
++	add(Detail, "sync_dispatch")
++	review(true)
++	add(Step, "close_plan")
++	add(Step, "group_ready")
++	add(Step, "integrate")
++	add(Step, "wrap_dispatch")
++	add(Step, "task_cleanup")
++	add(Step, "records")
++	report()
++	add(Step, "member_done")
++	add(Step, "group_cleanup")
++	add(Detail, "dismiss")
++	return lines
++}
+diff --git a/internal/flow/flow_test.go b/internal/flow/flow_test.go
+new file mode 100644
+index 0000000..379d4b9
+--- /dev/null
++++ b/internal/flow/flow_test.go
+@@ -0,0 +1,188 @@
++package flow
++
++import (
++	"reflect"
++	"strings"
++	"testing"
++
++	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/i18n"
++)
++
++func keys(lines []Line) map[string]bool {
++	out := map[string]bool{}
++	for _, line := range lines {
++		out[line.Key] = true
++	}
++	return out
++}
++
++func TestModulePruning(t *testing.T) {
++	for _, disabled := range append([]string{"", "all"}, config.RuleModules...) {
++		t.Run(disabled, func(t *testing.T) {
++			cfg := config.DefaultConfig()
++			cfg.Rules = config.DefaultRules(disabled != "all")
++			if disabled != "" && disabled != "all" {
++				cfg.Rules[disabled] = false
++			}
++			before := config.Clone(cfg)
++			lines := Build(cfg)
++			got := keys(lines)
++			if !reflect.DeepEqual(cfg, before) {
++				t.Fatal("workflow mutated its input")
++			}
++			for module, key := range map[string]string{
++				config.RuleCode: "self_check", config.RuleCollaboration: "collaboration",
++				config.RuleTaskIntake: "intake", config.RuleReview: "review_trigger",
++				config.RuleGit: "integrate", config.RuleReporting: "report",
++			} {
++				if got["flow."+key] != cfg.Rules[module] {
++					t.Errorf("%s presence does not match %s", key, module)
++				}
++			}
++			group := cfg.Rules[config.RuleTaskGroups] && cfg.Rules[config.RuleGit]
++			if got["flow.group_branch"] != group || got["flow.group_unavailable"] == group {
++				t.Fatal("group dependency pruning failed")
++			}
++			for _, key := range []string{"card", "todo", "start", "read", "implement", "plan", "close_plan", "records", "single_done"} {
++				if !got["flow."+key] {
++					t.Errorf("missing mandatory command protocol: %s", key)
++				}
++			}
++			if !cfg.Rules[config.RuleReview] {
++				for _, key := range []string{"stage_one", "stage_two", "role_auto", "role_required", "dispatch_fix", "single_fix", "review_finish", "batch"} {
++					if got["flow."+key] {
++						t.Errorf("disabled review node: %s", key)
++					}
++				}
++			}
++			if !cfg.Rules[config.RuleGit] && (got["flow.task_branch"] || got["flow.task_cleanup"] || got["flow.commit"]) {
++				t.Fatal("disabled Git nodes remain")
++			}
++			modules := 0
++			for _, line := range lines {
++				if line.Key == "flow.module_on" || line.Key == "flow.module_off" {
++					modules++
++				}
++			}
++			if modules != 7 {
++				t.Fatalf("summary has %d modules", modules)
++			}
++		})
++	}
++}
++
++func TestReviewRolesAndStageOrder(t *testing.T) {
++	for shift := 0; shift < 3; shift++ {
++		cfg := config.DefaultConfig()
++		for i, role := range config.ReviewRoles {
++			cfg.ReviewStages[role] = []string{"required", "auto", "skip"}[(i+shift)%3]
++			cfg.Reviewers[role] = "reviewer-" + role
++		}
++		seen := map[string]int{}
++		stage := ""
++		for _, line := range Build(cfg) {
++			if line.Key == "flow.stage_one" || line.Key == "flow.stage_two" {
++				stage = line.Key
++			}
++			if line.Key != "flow.role_auto" && line.Key != "flow.role_required" {
++				continue
++			}
++			role := line.Args[0].(string)
++			seen[role]++
++			if line.Key != "flow.role_"+cfg.ReviewStages[role] || line.Args[1] != cfg.Reviewers[role] {
++				t.Fatalf("wrong policy/reviewer: %+v", line)
++			}
++			want := "flow.stage_one"
++			if role == "CSA" || role == "Hacker" {
++				want = "flow.stage_two"
++			}
++			if stage != want {
++				t.Fatalf("%s in %s", role, stage)
++			}
++		}
++		for _, role := range config.ReviewRoles {
++			want := 2
++			if cfg.ReviewStages[role] == "skip" {
++				want = 0
++			}
++			if seen[role] != want {
++				t.Errorf("%s/%s count %d, want %d", role, cfg.ReviewStages[role], seen[role], want)
++			}
++		}
++	}
++}
++
++func TestWorkflowOrderAndTranslations(t *testing.T) {
++	cfg := config.DefaultConfig()
++	cfg.ReviewStages["PM"] = "required"
++	lines := Build(cfg)
++	positions := map[string]int{}
++	steps := 0
++	for index, line := range lines {
++		positions[line.Key] = index
++		if line.Kind == Heading {
++			if steps > 40 {
++				t.Fatalf("workflow has %d steps", steps)
++			}
++			steps = 0
++		}
++		if line.Kind == Step {
++			steps++
++		}
++	}
++	for _, pair := range [][2]string{{"member_delivery", "batch"}, {"batch", "receive"}, {"receive", "dispatch_fix"}, {"dispatch_fix", "member_fix"}, {"member_fix", "close_plan"}, {"close_plan", "group_ready"}, {"group_ready", "integrate"}, {"integrate", "wrap_dispatch"}, {"wrap_dispatch", "task_cleanup"}, {"task_cleanup", "member_done"}, {"member_done", "group_cleanup"}} {
++		if positions["flow."+pair[0]] >= positions["flow."+pair[1]] {
++			t.Errorf("wrong order: %v", pair)
++		}
++	}
++	if steps > 40 {
++		t.Fatalf("group has %d steps", steps)
++	}
++	for _, launcher := range []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"} {
++		cfg.Launcher = launcher
++		for _, line := range Build(cfg) {
++			for _, lang := range []string{"en", "cn", "ja"} {
++				text := i18n.Text(lang, line.Key, line.Args...)
++				if text == line.Key || strings.Contains(text, "{{") {
++					t.Errorf("untranslated %s/%s", lang, line.Key)
++				}
++			}
++		}
++	}
++}
++
++func TestSkippedStagesAndConfiguredSummary(t *testing.T) {
++	cfg := config.DefaultConfig()
++	cfg.KanbanAgents["large"], cfg.KanbanAgents["small"] = "large-agent", "small-agent"
++	cfg.Launcher = "tmux-session"
++	for _, role := range config.ReviewRoles {
++		cfg.ReviewStages[role] = "skip"
++	}
++	lines := Build(cfg)
++	got := keys(lines)
++	for _, key := range []string{"stage_one", "stage_two", "single_fix", "dispatch_fix", "review_finish"} {
++		if got["flow."+key] {
++			t.Errorf("all-skip config contains %s", key)
++		}
++	}
++	agents, reviewers := 0, 0
++	for _, line := range lines {
++		switch line.Key {
++		case "flow.agent":
++			agents++
++			scale := line.Args[0].(string)
++			if line.Args[1] != cfg.KanbanAgents[scale] {
++				t.Fatal("summary lost scale agent")
++			}
++		case "flow.reviewer":
++			reviewers++
++			if line.Args[2] != "skip" {
++				t.Fatal("summary must retain skipped roles")
++			}
++		}
++	}
++	if agents != 2 || reviewers != 4 || !got["flow.launch_tmux-session"] {
++		t.Fatal("incomplete configured summary or launcher")
++	}
++}
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index 1ab90c1..00a1cc8 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -1,4 +1,65 @@
+ {
++  "flow.batch": "Orchestrator selects the review batch before ff reception: receive only this batch, queue outside deliveries and freeze the group target during review.",
++  "flow.sync_dispatch": "If ff is impossible: notify the original member to sync via move working, rebase and re-verify, then return move review.",
++  "flow.title": "Workflow",
++  "flow.configuration": "Current session configuration",
++  "flow.scope": "Configuration preview; task triggers and user/project overrides apply at execution.",
++  "flow.agent": "SIZE {{.V0}}: {{.V1}}",
++  "flow.launcher": "Launcher: {{.V0}}",
++  "flow.reviewer": "{{.V0}}: {{.V1}} / {{.V2}}",
++  "flow.module_on": "{{.V0}}: on",
++  "flow.module_off": "{{.V0}}: off",
++  "flow.single": "Single card — stays in working until completion",
++  "flow.group": "Task group",
++  "flow.intake": "Intake: analyze scope and confirm the execution plan with the user.",
++  "flow.card": "Create card and complete contract; self-review. Large cards also need independent card review.",
++  "flow.todo": "User-confirmed complete contract: move todo.",
++  "flow.start": "start: validate prerequisites, atomically claim working and launch the SIZE-selected agent.",
++  "flow.launch_auto": "auto: herdr first, otherwise current tmux; neither available means no claim.",
++  "flow.launch_herdr": "herdr: create a background tab, wait for pane readiness, then run the agent.",
++  "flow.launch_tmux": "tmux: create a background window in the current session; requires tmux.",
++  "flow.launch_tmux-session": "tmux-session: create or reuse the project session, with one background task window.",
++  "flow.launch_foreground": "foreground: run in the current terminal and wait; requires a TTY.",
++  "flow.launch_console": "console: native Windows console; return the new process PID.",
++  "flow.launch_failure": "Failed start rolls back to todo; later executor exit leaves working.",
++  "flow.read": "Executor reads configuration, enabled rules, card and project instructions.",
++  "flow.collaboration": "Collaboration: reuse existing boundaries, protect user changes and report blockers.",
++  "flow.task_branch": "Executor: dedicated task branch/worktree from latest develop.",
++  "flow.implement": "Executor implements the contract and verifies acceptance with actual evidence.",
++  "flow.self_check": "Delivery self-check: whitespace, file size, docs, dead code, tests; verify final commit.",
++  "flow.commit": "Commit by concern and push the task branch when remote delivery applies.",
++  "flow.plan": "Completion evidence: explicit role requirements or N/A with reasons in a sealed plan.",
++  "flow.review_trigger": "Review only when the whitelist triggers or the user explicitly requests it; freeze base and clean target.",
++  "flow.stage_one": "Stage 1: applicable roles run in parallel on the same commit.",
++  "flow.stage_two": "Stage 2: after stage 1 passes, run applicable security roles in parallel.",
++  "flow.role_required": "{{.V0}} / {{.V1}}: required once review triggers.",
++  "flow.role_auto": "{{.V0}} / {{.V1}}: auto, decide from the review profile and role triggers; otherwise N/A.",
++  "flow.single_fix": "Findings: executor verifies each item, fixes required items and commits; incremental review by affected roles.",
++  "flow.review_finish": "Repeat failed stages until valid conclusions; record every unresolved item. Security findings need user decisions; honor round limits.",
++  "flow.close_plan": "Close every batch at its verified target; all required conclusions and author records must be complete.",
++  "flow.single_authority": "Single-card execution authorizes develop integration and cleanup; honor explicit acceptance, pause or PR requirements.",
++  "flow.integrate": "Sync latest develop, rebase if needed and re-verify; push then local ff (local-only: ff). Honor required PRs; never auto-merge main.",
++  "flow.task_cleanup": "Verify final delivery is in develop and local sync succeeded; remove task worktree and local/applicable remote task branch.",
++  "flow.records": "Executor records actual delivery, verification, unresolved issues and summary.",
++  "flow.report": "Completion report: use the eight required fields and actual final card state.",
++  "flow.single_done": "move done --result completed; kander check. Report only after the actual transition.",
++  "flow.group_unavailable": "Task groups unavailable: both task_groups and git must be on.",
++  "flow.group_plan": "Orchestrator: agree on groups, dependency graph, isolated parallel work and group integration authorization.",
++  "flow.group_cards": "Member contracts: self-review plus independent card review; confirmed cards enter todo.",
++  "flow.dependencies": "Check all dependencies; external members must be done with usable delivery before creating the group branch.",
++  "flow.group_branch": "Orchestrator creates group/<id> and its worktree from latest develop.",
++  "flow.schedule": "Orchestrator starts ready, isolated members in parallel; keep one launcher for the group.",
++  "flow.subscribe": "Orchestrator subscribes to explicit members; reconcile snapshots, revisions and receipts. Liveness is not delivery.",
++  "flow.member_branch": "Each executor creates its own branch/worktree from the latest group branch.",
++  "flow.member_delivery": "Member commits, rebases onto group HEAD, re-verifies, pushes if applicable and records final SHA; move review, keep session.",
++  "flow.receive": "Orchestrator verifies delivery and serially ff-receives into group; only verified reception releases in-group dependencies.",
++  "flow.dispatch_fix": "Batch findings: orchestrator assigns originals and notify dispatches required fixes with stable ID/epoch.",
++  "flow.member_fix": "Original member accepts via move working with dispatch ID/epoch, verifies and fixes, returns move review; orchestrator verifies receipt and ff-receives before incremental review.",
++  "flow.group_ready": "All members in review, all deliveries received, applicable batches closed, plan sealed and group integration authorized.",
++  "flow.wrap_dispatch": "After verified develop integration: orchestrator notify wrap-up; original member accepts with move working and verifies final integration evidence.",
++  "flow.member_done": "Member: move done --result completed with the bound dispatch receipt; report actual completion.",
++  "flow.group_cleanup": "After all members are done: stop subscription, remove group worktree/branches, run kander check and summarize.",
++  "flow.dismiss": "Keep agent sessions; dismiss and close terminal containers only after explicit user confirmation.",
+   "focus.no_window": "Task has no recorded window",
+   "focus.unsupported": "This launcher does not support window focus",
+   "focus.invalid_window": "Invalid window address; cannot switch",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index 0e1ff70..2bec1c9 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -1,4 +1,65 @@
+ {
++  "flow.batch": "主控が ff 受入前に審査バッチを選定。このバッチだけを受け入れ、バッチ外は待機。審査中はグループ対象を固定。",
++  "flow.sync_dispatch": "ff 不可の場合：notify で元メンバーに同期を依頼。本人が move working、rebase・再検証後 review に戻る。",
++  "flow.title": "フロー図",
++  "flow.configuration": "現在のセッション設定",
++  "flow.scope": "設定のプレビューです。実行時はタスクの条件とユーザー・プロジェクトの規則を優先します。",
++  "flow.agent": "SIZE {{.V0}}: {{.V1}}",
++  "flow.launcher": "起動方式: {{.V0}}",
++  "flow.reviewer": "{{.V0}}: {{.V1}} / {{.V2}}",
++  "flow.module_on": "{{.V0}}: オン",
++  "flow.module_off": "{{.V0}}: オフ",
++  "flow.single": "単一カード — 完了まで working を維持",
++  "flow.group": "タスクグループ",
++  "flow.intake": "受付：範囲を分析し、実行計画をユーザーと確認。",
++  "flow.card": "カード作成・契約記入・自己確認。大規模カードは独立したカード審査も必要。",
++  "flow.todo": "ユーザー確認済みの完全な契約：move todo。",
++  "flow.start": "start：前提を確認し、working を原子的に取得、SIZE に応じた Agent を起動。",
++  "flow.launch_auto": "auto：herdr を優先、次に現在の tmux。どちらも使えなければ取得しない。",
++  "flow.launch_herdr": "herdr：バックグラウンドタブを作り、pane の準備後に起動。",
++  "flow.launch_tmux": "tmux：現在のセッションにバックグラウンドウィンドウを作成。tmux 内で実行。",
++  "flow.launch_tmux-session": "tmux-session：プロジェクトセッションを作成・再利用し、タスク用ウィンドウを作成。",
++  "flow.launch_foreground": "foreground：現在の端末で実行し終了を待機。TTY が必要。",
++  "flow.launch_console": "console：ネイティブ Windows コンソール。新しいプロセスの PID を返す。",
++  "flow.launch_failure": "起動失敗は todo に戻す。起動成功後の実行者終了では working を維持。",
++  "flow.read": "実行者が設定、有効な規則、カード、プロジェクト指示を読む。",
++  "flow.collaboration": "協作規則：既存の境界を再利用し、ユーザーの変更を保護、阻害要因を報告。",
++  "flow.task_branch": "実行者：最新の develop から専用タスクブランチと worktree を作成。",
++  "flow.implement": "実行者が契約を実装し、実際の証拠で受入条件を検証。",
++  "flow.self_check": "納品自己確認：空白、行数、文書、未使用コード、テスト。最終コミットで検証・記録。",
++  "flow.commit": "関心事ごとにコミット。リモート納品時はタスクブランチを push。",
++  "flow.plan": "完了証拠：計画に各役割の要否、または理由付き N/A を記録し封印。",
++  "flow.review_trigger": "許可リストに該当、またはユーザーの明示要求で審査。base を固定し、対象をクリーンにする。",
++  "flow.stage_one": "第1段階：適用する役割が同一コミットで並列審査。",
++  "flow.stage_two": "第2段階：第1段階の通過後、適用するセキュリティ役割が並列審査。",
++  "flow.role_required": "{{.V0}} / {{.V1}}：required、審査が発動すれば必須。",
++  "flow.role_auto": "{{.V0}} / {{.V1}}：auto、審査分類と役割の発動条件で判断。それ以外は N/A。",
++  "flow.single_fix": "指摘：実行者が各項目を検証し、必須項目を修正・コミット。該当役割が差分を再審査。",
++  "flow.review_finish": "未通過の段階を修正し有効な結論を得る。未解決項目を記録。セキュリティ指摘はユーザー判断、回数上限を守る。",
++  "flow.close_plan": "検証した対象で各バッチを閉じる。必要な結論と作成者の記録をすべて揃える。",
++  "flow.single_authority": "単一カードの実行許可は develop 統合・整理も含む。明示された受入・停止・PR 条件を守る。",
++  "flow.integrate": "最新 develop に同期し、必要なら rebase・再検証。push 後にローカル ff（ローカルのみなら ff）。PR 条件を守り main に自動統合しない。",
++  "flow.task_cleanup": "最終納品が develop に含まれローカル同期済みと確認。タスク worktree とローカル・対象リモートブランチを削除。",
++  "flow.records": "実行者が実際の納品、検証、未解決事項、要約を記録。",
++  "flow.report": "完了報告：必須の8項目と実際の最終状態を記載。",
++  "flow.single_done": "move done --result completed、kander check。実際の遷移後に完了を報告。",
++  "flow.group_unavailable": "タスクグループは利用不可：task_groups と git の両方が必要。",
++  "flow.group_plan": "主控：グループ、依存関係、分離した並列作業、グループ統合の許可を確認。",
++  "flow.group_cards": "メンバー契約：自己確認と独立したカード審査。ユーザー確認後 todo。",
++  "flow.dependencies": "全依存関係を確認。外部依存は done かつ納品が利用可能になってからグループブランチ作成。",
++  "flow.group_branch": "主控が最新 develop から group/<id> と専用 worktree を作成。",
++  "flow.schedule": "主控が準備済みで分離可能なメンバーを並列起動。グループ内の launcher は統一。",
++  "flow.subscribe": "主控が明示メンバーを subscribe。スナップショット・revision・受領記録を照合。生存は納品の証明ではない。",
++  "flow.member_branch": "各実行者が最新グループブランチから専用ブランチと worktree を作成。",
++  "flow.member_delivery": "メンバーがコミット、グループ HEAD に rebase、再検証、必要なら push、最終 SHA を記録。move review、セッション維持。",
++  "flow.receive": "主控が納品を検証し、順にグループへ ff 受入。検証済み受入後にのみグループ内依存を解除。",
++  "flow.dispatch_fix": "バッチ指摘：主控が原本を担当者に割当、notify で固定 ID/epoch 付き必須修正を差し戻す。",
++  "flow.member_fix": "元メンバーが派遣 ID/epoch 付き move working で受領、検証・修正後 move review。主控が受領記録を検証し ff 受入後に差分再審査。",
++  "flow.group_ready": "全員 review、全納品受入済み、対象バッチ終了、計画封印済み、グループ統合許可済み。",
++  "flow.wrap_dispatch": "develop 統合検証後、主控が notify で終了処理を依頼。元メンバーが move working で受領し最終統合証拠を検証。",
++  "flow.member_done": "メンバーが紐付く受領記録で move done --result completed。実際の完了を報告。",
++  "flow.group_cleanup": "全員 done 後：購読停止、グループ worktree・ブランチ削除、kander check、集計。",
++  "flow.dismiss": "Agent セッションを維持。ユーザーの明示確認後にのみ dismiss して端末を閉じる。",
+   "focus.no_window": "タスクのウィンドウが記録されていません",
+   "focus.unsupported": "この起動方式はウィンドウ切り替えに対応していません",
+   "focus.invalid_window": "ウィンドウアドレスが無効です。切り替えできません",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index f31d74a..b6db769 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -1,4 +1,65 @@
+ {
++  "flow.batch": "主控在 ff 接收前确定审核批次：仅接收本批交付，批外交付排队；审核时冻结组目标。",
++  "flow.sync_dispatch": "无法 ff 时：notify 原成员自行 move working，同步 rebase 并复验后返回 review。",
++  "flow.title": "流程图",
++  "flow.configuration": "当前会话配置",
++  "flow.scope": "配置预览；任务触发条件及用户/项目规则在执行时优先判定。",
++  "flow.agent": "SIZE {{.V0}}: {{.V1}}",
++  "flow.launcher": "启动方式: {{.V0}}",
++  "flow.reviewer": "{{.V0}}: {{.V1}} / {{.V2}}",
++  "flow.module_on": "{{.V0}}: 开",
++  "flow.module_off": "{{.V0}}: 关",
++  "flow.single": "单卡任务 — 完成前保持 working",
++  "flow.group": "任务组",
++  "flow.intake": "建卡引导：分析范围，与用户确认执行方案。",
++  "flow.card": "建卡、补全契约并自审；大卡另需独立卡片审核。",
++  "flow.todo": "用户确认且契约完整：move todo。",
++  "flow.start": "start：检查前提，原子认领 working，按 SIZE 选择 Agent 启动。",
++  "flow.launch_auto": "auto：优先 herdr，其次当前 tmux；均不满足则不认领。",
++  "flow.launch_herdr": "herdr：创建后台标签页，等待 pane 就绪后启动。",
++  "flow.launch_tmux": "tmux：在当前会话创建后台窗口；须处于 tmux 内。",
++  "flow.launch_tmux-session": "tmux-session：创建或复用项目会话，为任务创建后台窗口。",
++  "flow.launch_foreground": "foreground：在当前终端运行并等待；须有 TTY。",
++  "flow.launch_console": "console：原生 Windows 控制台；返回新进程 PID。",
++  "flow.launch_failure": "启动失败回滚 todo；启动成功后的执行者退出不改变 working。",
++  "flow.read": "执行者读取配置、已启用规则、卡片和项目约定。",
++  "flow.collaboration": "协作约定：复用现有边界，保护用户改动，报告阻塞。",
++  "flow.task_branch": "执行者：从最新 develop 创建专属任务分支和 worktree。",
++  "flow.implement": "执行者实现契约，以实际证据验证验收条件。",
++  "flow.self_check": "交付自检：空白、文件行数、文档、死代码、测试；在最终提交验证并记录。",
++  "flow.commit": "按关注点提交；远程交付路径推送任务分支。",
++  "flow.plan": "完成证据：计划明确逐角色要求或带理由的 N/A，最终封存计划。",
++  "flow.review_trigger": "命中审核白名单或用户明确要求才审核；冻结 base，目标提交须干净。",
++  "flow.stage_one": "第一阶段：适用角色在同一提交并行审核。",
++  "flow.stage_two": "第二阶段：第一阶段通过后，适用安全角色并行审核。",
++  "flow.role_required": "{{.V0}} / {{.V1}}：required，触发审核后必运行。",
++  "flow.role_auto": "{{.V0}} / {{.V1}}：auto，按审核类别及角色触发条件判定，否则 N/A。",
++  "flow.single_fix": "发现问题：执行者逐项核实、修复必改项并提交；受影响角色增量复审。",
++  "flow.review_finish": "未通过阶段进入修复轮，直到结论有效；记录全部未解决项。安全发现须用户处置，遵守轮次上限。",
++  "flow.close_plan": "逐批在已验证目标闭合；所有必需结论及作者记录须完整。",
++  "flow.single_authority": "单卡执行授权包含 develop 集成及清理；显式验收、暂停或 PR 要求仍须满足。",
++  "flow.integrate": "同步最新 develop，必要时 rebase 并复验；先推送再本地 ff（仅本地则 ff）。遵守 PR 要求，不自动合入 main。",
++  "flow.task_cleanup": "确认最终交付已入 develop 且本地同步成功；删除任务 worktree、本地及适用的远程任务分支。",
++  "flow.records": "执行者记录真实交付、验证、未解决项及总结。",
++  "flow.report": "完成报告：使用八字段格式，注明实际最终状态。",
++  "flow.single_done": "move done --result completed；kander check。实际转移后发送完成报告。",
++  "flow.group_unavailable": "任务组不可用：须同时开启 task_groups 与 git。",
++  "flow.group_plan": "主控：确认分组、依赖图、隔离并行方案及组集成授权。",
++  "flow.group_cards": "成员契约：自审加独立卡片审核；用户确认后进 todo。",
++  "flow.dependencies": "检查全部依赖；外部依赖须 done 且交付可用，才创建组分支。",
++  "flow.group_branch": "主控从最新 develop 创建 group/<id> 及组 worktree。",
++  "flow.schedule": "主控并行启动已就绪且可隔离的成员；全组使用同一 launcher。",
++  "flow.subscribe": "主控 subscribe 显式成员，核对快照、revision 和回执；存活不等于交付。",
++  "flow.member_branch": "每位执行者从最新组分支创建自己的任务分支和 worktree。",
++  "flow.member_delivery": "成员提交、rebase 到组 HEAD、复验、按需推送并记录最终 SHA；move review，保留会话。",
++  "flow.receive": "主控核验交付，串行 ff 接收到组分支；核验接收后才释放组内依赖。",
++  "flow.dispatch_fix": "批次发现：主控归属审核原件，用 notify 携稳定 ID/epoch 派回必改项。",
++  "flow.member_fix": "原成员携派回 ID/epoch 自行 move working 接受，核实修复后 move review；主控核对回执并 ff 接收后增量复审。",
++  "flow.group_ready": "全员 review、全部交付已接收、适用批次已闭合、计划封存且组集成已授权。",
++  "flow.wrap_dispatch": "develop 集成核验后，主控 notify 派回收尾；原成员 move working 接受并核实最终集成证据。",
++  "flow.member_done": "成员携绑定派回回执 move done --result completed；报告实际完成。",
++  "flow.group_cleanup": "全员 done 后：停止订阅，清理组 worktree/分支，运行 kander check 并汇总。",
++  "flow.dismiss": "保留 Agent 会话；仅用户明确确认后 dismiss 并关闭终端容器。",
+   "focus.no_window": "任务未记录窗口，无法跳转",
+   "focus.unsupported": "此启动方式不支持窗口跳转",
+   "focus.invalid_window": "窗口地址格式无效，无法跳转",
+diff --git a/internal/tui/options_flow.go b/internal/tui/options_flow.go
+new file mode 100644
+index 0000000..610a540
+--- /dev/null
++++ b/internal/tui/options_flow.go
+@@ -0,0 +1,41 @@
++package tui
++
++import (
++	"github.com/dualface/kander/internal/flow"
++	"github.com/dualface/kander/internal/menu"
++)
++
++func (p *optionsPanel) openFlow() {
++	if p.session == nil {
++		return
++	}
++	var lines []menu.ReportLine
++	connected := false
++	for _, line := range flow.Build(p.session.Config) {
++		text := t(line.Key, line.Args...)
++		level := menu.LevelInfo
++		switch line.Kind {
++		case flow.Heading:
++			if len(lines) > 0 {
++				lines = append(lines, menu.ReportLine{})
++			}
++			level = menu.LevelNote
++			connected = false
++		case flow.Step:
++			if connected {
++				lines = append(lines, menu.ReportLine{Text: "  │"})
++			}
++			text = "• " + text
++			connected = true
++		case flow.Detail:
++			text = "  └ " + text
++		}
++		lines = append(lines, menu.ReportLine{Level: level, Text: text})
++	}
++	title := t("flow.title")
++	if p.dirty {
++		title += t("tui.unsaved")
++	}
++	p.showReport(title, lines, "")
++	p.form = nil
++}
+diff --git a/internal/tui/options_flow_test.go b/internal/tui/options_flow_test.go
+new file mode 100644
+index 0000000..9cd3d5c
+--- /dev/null
++++ b/internal/tui/options_flow_test.go
+@@ -0,0 +1,109 @@
++package tui
++
++import (
++	"os"
++	"reflect"
++	"strings"
++	"testing"
++	"unicode/utf8"
++
++	tea "github.com/charmbracelet/bubbletea"
++	"github.com/charmbracelet/x/ansi"
++
++	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/i18n"
++)
++
++func TestFlowRootAndReadOnlySession(t *testing.T) {
++	app, panel := openPanel(t)
++	root := ansi.Strip(panel.form.View())
++	if a, b, c := strings.Index(root, config.Text("rules.modules")), strings.Index(root, config.Text("flow.title")), strings.Index(root, config.Text("tui.environment_check")); a < 0 || b <= a || c <= b {
++		t.Fatalf("wrong root order: %s", root)
++	}
++	before := config.Clone(panel.session.Config)
++	path := os.Getenv(config.EnvConfig)
++	disk, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	moveRootTo(t, panel, sectionFlow)
++	drivePanel(panel, keyMsg("enter"))
++	if panel.report == nil || panel.report.title != config.Text("flow.title") || panel.dirty || app.pendingWork != nil || app.pendingShell != nil {
++		t.Fatal("flow must open a synchronous, clean, read-only report")
++	}
++	drivePanel(panel, keyMsg("esc"))
++	if panel.report != nil || panel.form == nil || panel.section != sectionFlow || panel.current != "" {
++		t.Fatal("Escape must restore the root and selected flow entry")
++	}
++	if !reflect.DeepEqual(before, panel.session.Config) {
++		t.Fatal("viewing changed configuration")
++	}
++	// Make an unsaved change through the existing section binding, then reopen.
++	pumpPanel(panel, panel.dispatch(sectionRules))
++	*panel.bind.rules[config.RuleReview] = false
++	panel.bind.apply(panel)
++	drivePanel(panel, keyMsg("esc"))
++	panel.dispatch(sectionFlow)
++	if !panel.dirty || !strings.Contains(panel.report.title, config.Text("tui.unsaved")) {
++		t.Fatal("unsaved state must be retained and visible")
++	}
++	for _, line := range panel.report.lines {
++		if strings.Contains(line.Text, config.Text("flow.review_trigger")) {
++			t.Fatal("flow used saved config instead of the session")
++		}
++	}
++	after, err := os.ReadFile(path)
++	if err != nil || string(disk) != string(after) {
++		t.Fatal("read-only flow wrote disk configuration")
++	}
++}
++
++func TestFlowNarrowReportScrolling(t *testing.T) {
++	for _, lang := range []string{"en", "cn", "ja"} {
++		t.Run(lang, func(t *testing.T) {
++			config.ApplyLanguageArgument([]string{"--lang", lang})
++			defer config.ApplyLanguageArgument(nil)
++			app, panel := openPanel(t)
++			app.Width, app.Height = 72, 20
++			panel.dispatch(sectionFlow)
++			if panel.innerWidth() != 60 {
++				t.Fatalf("inner width %d", panel.innerWidth())
++			}
++			panel.view()
++			for _, line := range strings.Split(panel.report.view.View(), "\n") {
++				if !utf8.ValidString(line) || ansi.StringWidth(line) > 60 || strings.Contains(line, "�") {
++					t.Fatalf("broken narrow output: %q", line)
++				}
++			}
++			for _, msg := range []tea.Msg{tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyPgDown}} {
++				old := panel.report.view.YOffset
++				panel.Update(msg)
++				if panel.report.view.YOffset <= old {
++					t.Fatal("keyboard must scroll report")
++				}
++			}
++			old := panel.report.view.YOffset
++			panel.Update(tea.KeyMsg{Type: tea.KeyPgUp})
++			if panel.report.view.YOffset >= old {
++				t.Fatal("PgUp must scroll upward")
++			}
++			old = panel.report.view.YOffset
++			panel.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
++			if panel.report.view.YOffset <= old {
++				t.Fatal("wheel must scroll report")
++			}
++			// Inspect every wrapped line, including text below the first viewport.
++			panel.report.view.Height = panel.report.view.TotalLineCount()
++			panel.report.view.GotoTop()
++			text := ansi.Strip(panel.report.view.View())
++			for _, line := range strings.Split(text, "\n") {
++				if !utf8.ValidString(line) || ansi.StringWidth(line) > 60 {
++					t.Fatalf("broken wrapped line: %q", line)
++				}
++			}
++			if !strings.Contains(text, i18n.Text(lang, "flow.group")) || !strings.Contains(text, "│") {
++				t.Fatal("missing localized group or vertical connector")
++			}
++		})
++	}
++}
+diff --git a/internal/tui/options_form.go b/internal/tui/options_form.go
+index 59843f2..7defdbb 100644
+--- a/internal/tui/options_form.go
++++ b/internal/tui/options_form.go
+@@ -232,6 +232,7 @@ func (p *optionsPanel) openRoot() tea.Cmd {
+ 			huh.NewOption(p.rootLabel(t("tui.execution_and_models"), config.FormatKanbanAgentsSummary(cfg)+" · "+cfg.Launcher), sectionExecution),
+ 			huh.NewOption(p.rootLabel(t("tui.review_and_models"), p.reviewSummary()), sectionReview),
+ 			huh.NewOption(t("rules.modules"), sectionRules),
++			huh.NewOption(t("flow.title"), sectionFlow),
+ 		)
+ 	}
+ 	options = append(options,
+diff --git a/internal/tui/options_panel.go b/internal/tui/options_panel.go
+index f068409..50d4215 100644
+--- a/internal/tui/options_panel.go
++++ b/internal/tui/options_panel.go
+@@ -19,6 +19,7 @@ const (
+ 	sectionExecution = "execution"
+ 	sectionReview    = "review"
+ 	sectionRules     = "rules"
++	sectionFlow      = "flow"
+ 	sectionDoctor    = "doctor"
+ 	sectionSave      = "save"
+ 	sectionClose     = "close"
+@@ -470,6 +471,9 @@ func (p *optionsPanel) dispatch(section string) tea.Cmd {
+ 	case sectionClose:
+ 		p.close()
+ 		return nil
++	case sectionFlow:
++		p.openFlow()
++		return nil
+ 	case sectionDoctor:
+ 		p.status = t("tui.running_environment_check")
+ 		p.app.pendingWork = func() any {
+
+=== COMMIT TREE ===
+100644 blob 896586108e39cdd90da6b0ac1def87832ff4534a	.gitignore
+100644 blob 01121cfddd5a2c2b4821d7235b6a70e98def65e5	AGENTS.md
+100644 blob 637823c0af63838506d8b2a6b09c928561f1d484	LICENSE
+100644 blob 17cbcd3492b6d2fa047d116e5cf8a962096ce3b3	Makefile
+100644 blob 1cdb6f8b7081b0f1172c9e3596df3e11a83ede1c	README.md
+100644 blob 62be47dc373be2f09870788f79f5e0c1c66f5235	cmd/kander/check_bind_test.go
+100644 blob 8b5f828e446afb27792a790c5807bef26efbc008	cmd/kander/launch.go
+100644 blob 0dd12feeab4102bc3e148c025caa01f351f99b68	cmd/kander/liveness.go
+100644 blob 9ca579595fd83132607a1c0d46b2d78187a91681	cmd/kander/main.go
+100644 blob 460f84e9b55eb08c02b962dd8a1e23988ca552c7	cmd/kander/notify.go
+100644 blob 46275125e68460768cd60fa10e535bbf437a84be	cmd/kander/review.go
+100644 blob 69d1c77cc3d49da6ec85586da5f2fc9a6295e751	cmd/kander/takeover.go
+100644 blob 2e265ceef9af02c79bc21692049ad033e242a3d0	cmd/kander/tui.go
+100644 blob b7da74306d27dae73bc9c671d99656d3f9dfc4b4	docs/card-transactions.md
+100644 blob 47555067cddfdadefc7485b4827cf23555b21f74	docs/coordinator-recovery.md
+100644 blob 966b44e454b3ce8aa92c8ae3beac0d8345231c7b	docs/custom-agents.md
+100644 blob 9f5d483e55cc17a92d70f50960eb6ea76b398826	docs/directory-cards.md
+100644 blob b05cd4afc601cc9bdb07a9b7aeb798f261bc4bb7	docs/durable-dispatch.md
+100644 blob d9ae89ed26dc1d28ef8371501608d181b8e9affd	docs/kanban-write-guard.md
+100644 blob f8444b2fbbcab83adc78a2fa4d571a4d333450fa	docs/kander-tui-01.jpg
+100644 blob 5165377dcce5b5c1c321702497f85a68b6f7ceaf	docs/probe-deadlines.md
+100644 blob 0c57fe17b7f7c8a8adbed5ab9ebbfad8a9300f77	docs/recovery-regressions.md
+100644 blob 806660b09a2201dbe64bd1abccc8201e23d62841	docs/review-disposition.md
+100644 blob b1d0d865cde4c4ad87fd9c66e19cdee9e919fa4b	docs/review-evidence.md
+100644 blob 12a2e41d55374c9a7e155bf91feb95b64b940619	docs/review.svg
+100644 blob 5660cc01fc87afb3bf7f4b6bc3a1f659fbe678fc	docs/subscription-facts.md
+100644 blob 443da8d47268005a09cb550a04345f56f087bb6d	docs/workflow.svg
+100644 blob 4b20ee7ca10e22dfcf44531fbbfaeb8c53869afc	go.mod
+100644 blob fb6ca3e074b1eab0367e27e9be37bea04cfa53e4	go.sum
+100644 blob 4d5129f21fb2e8986bdaa702e5d971325e73f9f5	internal/board/board.go
+100644 blob c99719c813f9a5bb87d0023f72728b0e869ef74f	internal/board/board_test.go
+100644 blob d4e2f99cd67f6335e9d46b49c33a8a742eef59dd	internal/board/card_language_test.go
+100644 blob e6aee16466f702e3600fc6ea97e6d90cd9f78491	internal/board/cmd.go
+100644 blob e95545ff8f5197a4fe5a150223c5f7ad2c63d648	internal/board/contract_gate_test.go
+100644 blob 9f98a03f468bd7fcb4dd1d8e1f22f443715a5e05	internal/board/coordinator.go
+100644 blob b64e399bc852c85622a64748e73deb47850cd34e	internal/board/coordinator_closed_fix_test.go
+100644 blob 128dc60fc39853a68c57610a1832e9f3299ea5e2	internal/board/coordinator_crash_test.go
+100644 blob f652cfad57446ba280b0313df058e6966186b1cc	internal/board/coordinator_cycle.go
+100644 blob b968f686964502d8e2e2045328621e774df6103d	internal/board/coordinator_cycle_test.go
+100644 blob a8ad8144d8db18a31ac94f546c56f36b74329116	internal/board/coordinator_reconcile.go
+100644 blob 80afd97021e446fcceea0b9ef2db9407936f136f	internal/board/coordinator_regression_test.go
+100644 blob 6784e1ca44409ff012fac59f0f42a050ffd6c52a	internal/board/coordinator_start.go
+100644 blob 25f7c18f96d186e8322fd18e632975a08762a0b0	internal/board/coordinator_test.go
+100644 blob f3d08e6d1464d82edc1ad23aea84b641996019b0	internal/board/coordinator_wrapup_test.go
+100644 blob aa20be077b4a354c4cf521e6ae0f2f107bd67e2a	internal/board/deps.go
+100644 blob 90fecadfdf63e2a0890203b8597efec8b1d8c072	internal/board/dispatch.go
+100644 blob 94d9ddae02df615e008a23fb8114e0aab48bb2c1	internal/board/dispatch_cmd.go
+100644 blob 49d130586f13af948c384ea8ae00b710253ccde1	internal/board/dispatch_crash_test.go
+100644 blob 3c56b3c659aae5898e9b9328785b9a7cd974928c	internal/board/dispatch_delivery.go
+100644 blob 0134cf91f5ebc840ac0827ce101fcbd782824cb2	internal/board/dispatch_evidence.go
+100644 blob ff09171afaf927b43a51d4c4078e698c11719277	internal/board/dispatch_evidence_test.go
+100644 blob e9864c14959fb336e84e6657c372f502b9d86be6	internal/board/dispatch_receipt.go
+100644 blob af5d2b8fb8b234e2de9603c152c5275d670dad3e	internal/board/dispatch_snapshot.go
+100644 blob a5855c986723bb549af47c0c1765dcb1495f2a99	internal/board/dispatch_snapshot_test.go
+100644 blob 46e758b8ada4aab02a0aae1fc2a29b7cc742c319	internal/board/dispatch_test.go
+100644 blob 576166db168d54b7c4a2161c4ba2cf748e8de426	internal/board/dispatch_wrapup.go
+100644 blob 4430c8d21dcb24a50c2b2721ce6974f7c483406e	internal/board/dispatch_wrapup_test.go
+100644 blob bd471b07a05de4233e38f5b129d471ef8efd0e80	internal/board/document.go
+100644 blob acda57434c059eacea7c7f86c007788a3dc7bd3d	internal/board/guard.go
+100644 blob c2e6e12f886fdb1acc6cdb6176dbc8ef7ec5d68b	internal/board/guard_test.go
+100644 blob 2537faab16556da758d508992b45cbbc71caad9d	internal/board/journal_concurrency_test.go
+100644 blob 1a75f49eb2107392e56cabc115c4ac4f298ddfb9	internal/board/journal_temporary_unix_test.go
+100644 blob 6de479394301ad828a4e40fce42d63b986aa9d42	internal/board/journal_temporary_windows_test.go
+100644 blob f36a32298fe0d14dc37b2a9ea4ecf5a3a2019063	internal/board/legacy_schema_test.go
+100644 blob f8b1d65b0da430fa47072e1a6fe124810125b8ab	internal/board/list.go
+100644 blob f9a6cd62c14b9b808d84461d8c4ee7368fdc8112	internal/board/locate.go
+100644 blob ba147d7475daf93d1eb2670a6a8bae79ab983e0b	internal/board/locate_deleted_unix_test.go
+100644 blob e90b48c7336bda0d3b03a19da4f5a74e46418afb	internal/board/membership.go
+100644 blob 41129b566f307dc4ad5b47dc41147a8efa42e977	internal/board/migration.go
+100644 blob 6ea3a49bcde2a5d259034b216b125712be5514e0	internal/board/migration_link_scope.go
+100644 blob 35f9c38ec01a6db5a1cdb8be39252c74c89614dd	internal/board/migration_link_scope_test.go
+100644 blob 2e94555417a7eaf8bbb8c32b850f40419687f472	internal/board/migration_links.go
+100644 blob e9dbca2535d26a1347ad452b02c1264ace1f40a0	internal/board/migration_links_test.go
+100644 blob 965311c7a6b179c06d051e0409723ce038ee44b5	internal/board/migration_new_review_test.go
+100644 blob 01891674fbd630de182fdaef52034fa16bc9eb6a	internal/board/migration_plan.go
+100644 blob 92c2151b4cc0934f03e0ebdd53cce730c7a6f2e3	internal/board/migration_review_test.go
+100644 blob e7feaa0c9358e379a50c5e3186e1d70200ba837b	internal/board/migration_structure.go
+100644 blob ad3356304d25d1810aa2875c0624693e42fff39c	internal/board/migration_test.go
+100644 blob 96829b329f87eddfaac730ecbcd31941809fe7e0	internal/board/migration_windows_test.go
+100644 blob 1b58477358f31a03a27f7d42b7a400546909e4aa	internal/board/migration_write.go
+100644 blob a445963686dd664cc45ae2a171a20c01ba89f9a3	internal/board/move.go
+100644 blob 72af5544d371a368fa0a916e9627f01858b4bbd2	internal/board/payload.go
+100644 blob 12d19ae1d7f65d63b39f4d233a402784cba2e504	internal/board/payload_test.go
+100644 blob 821e6523d1825be9fc946a66cc49c8e65fec9bf5	internal/board/recovery.go
+100644 blob dd40ad3fa8bac26d4f06299b84e8cf84caf71553	internal/board/review_advance.go
+100644 blob bc0515e8dff381c22daeae1a3c75c89934e45321	internal/board/review_check.go
+100644 blob d09c258e3dda683266fc2e3ad8cd9989b54e9086	internal/board/review_closure.go
+100644 blob 1c41536b263a0aff58991a79bc2ff9e79dc59954	internal/board/review_context.go
+100644 blob 642e29e42f0936a40ddcaf79d8bf9b43aed3d008	internal/board/review_context_merge.go
+100644 blob 788afe3adc3f2a1d57854711075fbc8dc4ce2dba	internal/board/review_crash_test.go
+100644 blob 90e078a7ff6fb7e982385c4f143e3c04d91eeb86	internal/board/review_disposition.go
+100644 blob 88fa049e3412df5889c60f91c8e7a2ba9f43678e	internal/board/review_findings.go
+100644 blob 062042bf1a1aee3d202155b0981791e4c6f59b22	internal/board/review_gate.go
+100644 blob 37d4c04c487d42200987a810d2affc69bc7bc9a8	internal/board/review_gate_test.go
+100644 blob 7a702a5641b1a6982c2735112a43c6391e27b72b	internal/board/review_legacy_order_test.go
+100644 blob e2930b93f140c2e28aab7afdac8be3ac7bce9da0	internal/board/review_lineage_finalize_test.go
+100644 blob a6e9cb40ba1884ca661a083f3a1ba4a0c88bbbd5	internal/board/review_mechanical.go
+100644 blob 9fc7e77cfd09dc44e8fbfd0dc1a5fdf4f9a23834	internal/board/review_plan.go
+100644 blob 4dd5e3da570801cbccd8b105c10edafc72f8f1f9	internal/board/review_plan_extend.go
+100644 blob bcff174ccc06107b9e557cd7badbbd76d08d772d	internal/board/review_plan_read.go
+100644 blob 1bd82847b26c0ac84520953dedb6cc45030c3b70	internal/board/review_recovery_test.go
+100644 blob 8a08cfe0dba0d9f80898971f3fd107aff629d7a6	internal/board/review_revision_test.go
+100644 blob 5f4c888065c96900bbafbc778eb2b858a3020c0b	internal/board/reviews.go
+100644 blob 82bfc8181973308e6be312469b24cb2eb7190bd5	internal/board/reviews_test.go
+100644 blob d4877d3ac0feb2cc36f08dcf9a650b3746fc3651	internal/board/scan.go
+100644 blob bcdf3d81289a47d7b34757b02e9443c7f9a22136	internal/board/schema.go
+100644 blob cae64c7166642b4517576065826feec2568dbdaa	internal/board/size.go
+100644 blob c8a01f673b9d842086376cd4a9a4b9a4fa1ed40a	internal/board/snapshot.go
+100644 blob 9fbceebdb6133ce5db6949f729149f69aaa03a40	internal/board/snapshot_context.go
+100644 blob a69ba4ce5f5b395431b0f91cde8858480213f374	internal/board/snapshot_context_test.go
+100644 blob 91b5f04468468bd820921c3bafc2fdf20b344d94	internal/board/task_start.go
+100644 blob 22deec09e73dc39c8e2b88257c0f35c53166ae68	internal/board/task_start_test.go
+100644 blob c9cc4701e73c2dbfbd3a3d26d2d3cc2ab3a0b4a2	internal/board/template.go
+100644 blob 56b8719784540543d8f59207b1fa7affae51f967	internal/board/templates/contract.md.tmpl
+100644 blob 38fb5c5fa9690d57509278920fa3ee1101d243e8	internal/board/templates/small_extra.md.tmpl
+100644 blob a31ea5752e66ca8272dfb526b9f18872a0cb8d05	internal/board/transaction.go
+100644 blob c919d2214087e3432abde2ed4dca1231f1f95f2c	internal/board/transaction_bytes.go
+100644 blob 8eb3738455991198f52e946b23b76f5b92f20ceb	internal/board/transaction_lock.go
+100644 blob 17f9d7ccc128108fdc96f5254979be7be0ee29b8	internal/board/transaction_log.go
+100644 blob 64f88604cbeea0f09b1a290fd8b750b3cae065dd	internal/board/transaction_test.go
+100644 blob c449666aba89273346cb48645a096bc3f98179ff	internal/board/update.go
+100644 blob 99abe0766552d32154697d1e7d8e907f6768e4d9	internal/cli/cli.go
+100644 blob e9602adb4880810a41cf09efb594bc667902fbe6	internal/cli/cli_test.go
+100644 blob de1de64dd5780fd21a8940564784ad77136811c4	internal/cli/wire_board.go
+100644 blob 6219e75557c52d67c7e3312adbd854b3ad2f6d1a	internal/config/agent_language_test.go
+100644 blob 4c8c4344f73d44b76705d4bf6b392fcb5402e994	internal/config/agents.go
+100644 blob c29dd1684305b084e36a10cd2c769243268f3d0a	internal/config/agents_test.go
+100644 blob ef81b50ac083111492ea64af7f210174feb41940	internal/config/config.go
+100644 blob 3ab258a1e29332102770bdfe3371451752bfd28e	internal/config/config_test.go
+100644 blob 726901e2637de281f8c59d80b3105b9b89f532a0	internal/config/format.go
+100644 blob d40daab7a0a4d32dc2efa2448d41932d9b245f97	internal/config/language.go
+100644 blob 68ec17f553c0d1a10372af139eefd04898777b7a	internal/config/language_test.go
+100644 blob 7a55a0878546726821477375e523b492ab561aa2	internal/config/loadsave.go
+100644 blob fd602ba1be3b1f9f36bb8ebd1dbe8250ca94c088	internal/config/paths.go
+100644 blob a02ba446fd4b0d58c857baf0f6696c65ddf940a2	internal/config/repair.go
+100644 blob a6feee57c77932b4168477ac3a7c1dcdeadb426a	internal/config/repair_test.go
+100644 blob 7c64fa8f13a74f3286127cda38096208491c30b4	internal/config/rules.go
+100644 blob 63859d273fa0679b3a727f6c75fd3d8a79d4b7ec	internal/config/rules_test.go
+100644 blob 7aa31d99360c4b05d436bc5473f9f7173c771cad	internal/config/unknown_fields_test.go
+100644 blob fbee307270021a3f801e4782808fde17a144049f	internal/flow/flow.go
+100644 blob 379d4b90a3ae451c8cb09d653ae807d3cf9a7fde	internal/flow/flow_test.go
+100644 blob a2ea2110d34a013e7759b00f6f95901534e412bd	internal/focus/focus.go
+100644 blob 136cdb0d0bb7af616e0129f3ab0a8d2fb7f621ea	internal/focus/focus_test.go
+100644 blob ba8923596c567eede262dd394a68bea6282234ae	internal/focus/herdr.go
+100644 blob 88d246151ac142948ddf2ca950d376ca1d7f5ce8	internal/focus/herdr_test.go
+100644 blob 3ba743eb245b6d013ef1b7fe75e41ddb504d3729	internal/fs/append.go
+100644 blob a9ad1c03174db187ffe58f64bb96898cc0e19d5c	internal/fs/fs.go
+100644 blob 87640d87ee5940d82d4fcb9eaeeef644551dcaab	internal/fs/fs_test.go
+100644 blob de6c5570bfe081e1969e534ea63b1fe46405f7d1	internal/fs/path.go
+100644 blob ed9332b52d252dea2f2f98489775e359c71988c2	internal/fs/posix.go
+100644 blob d4ba0ca3ad49979ee78e4722d00d837d88cdb21c	internal/fs/posix_dir.go
+100644 blob 5da84dfaed8b238c97a22e65fb46e5915b46b73b	internal/fs/posix_link.go
+100644 blob 605014a1803b5c5f90769c131cbdf83fe09b90ac	internal/fs/posix_lock.go
+100644 blob 3a945764c58e4644e2116ddd8d1ab04c2feac93f	internal/fs/posix_publish_darwin.go
+100644 blob 95299f2c57c2cb008b2e8b6e617bbe2c789eed39	internal/fs/posix_publish_linux.go
+100644 blob 4dbe5ac91425f672c70de7243458ef515e4060a5	internal/fs/posix_publish_other.go
+100644 blob 5a434591d3d862c1544c4174ab0b253628eec582	internal/fs/posix_reparse.go
+100644 blob fef9ecad6bd762800efb0ab4899615602def1631	internal/fs/posix_temp.go
+100644 blob 4d6c3fb1176cdbd1386df8de80182668dea6ff0e	internal/fs/shared_lock_context.go
+100644 blob 95bea8faf4a6ae47c983ea21c37b0c25f5fdd430	internal/fs/shared_lock_context_unix.go
+100644 blob cb32559e3307128d4373826b51b69149fb781f0d	internal/fs/shared_lock_context_windows.go
+100644 blob ff0ac57dc6d058f626ab09bb4d544a8fb8824691	internal/fs/shared_lock_test.go
+100644 blob 2b271b2d9a4548bc98e568a21e559500a28cbd4a	internal/fs/umask_unix_test.go
+100644 blob 81ab4cbb838d09388d89a3498d2656414e1ed08a	internal/fs/umask_windows_test.go
+100644 blob e8f47904267536960999b7e6cb5ff80a86276719	internal/fs/windows.go
+100644 blob c44e4ed6320091ae970e5ae37dd1a6fb655f282f	internal/fs/windows_link.go
+100644 blob ff6620806affe869baa4a282a5103d4b855c2c40	internal/fs/windows_ops.go
+100644 blob 0b7b28273698c63225a2e4d2fb05c3708a62735c	internal/fs/windows_test.go
+100644 blob b5e6314668fe2b1c2c8b629c0fad19c5751c4c30	internal/i18n/README.md
+100644 blob 418e0178b453ca96b2b788ae47aae34233c46162	internal/i18n/i18n.go
+100644 blob 9903ecabfb54bd5b882c8106d856e47f21fb6eea	internal/i18n/i18n_test.go
+100644 blob 00a1cc83b15b1e877466b498edb18f0226db3d0a	internal/i18n/locales/en.json
+100644 blob 2bec1c931ff0bb876ec3bfb8ace206719f6683c0	internal/i18n/locales/ja.json
+100644 blob b6db7699a3049703baa1e5843680d0c37ed498e3	internal/i18n/locales/zh-CN.json
+100644 blob cb381e04f6d8a768762b2f309bf8a10a8c9b7f1d	internal/install/busy_windows_test.go
+100644 blob 7fed5d7a2f79a5268d704bd83bf2feb92d3ee765	internal/install/cmd.go
+100644 blob d3242ceee81cb7bef7a50ef43e806f36d8a86e75	internal/install/detect.go
+100644 blob 966f294711395687bbb2d08b3f55e828b606cb11	internal/install/handoff.go
+100644 blob 747cd172656e4b47b5b6515dfc08de4aca69df05	internal/install/handoff_unix.go
+100644 blob 036da30fef6bf7967bac993dd46fa04a6dd4a8a0	internal/install/handoff_windows.go
+100644 blob d999f865a6e23aecf132f19b205041e141e9729b	internal/install/install_test.go
+100644 blob 24c722203aa057dc8fd7bbeab78d08076ac9b7cc	internal/install/integrate.go
+100644 blob dcc42be4f4d4760d6363c13da18f88a895c5426f	internal/install/integrate_test.go
+100644 blob 7722cccd28215720cc782617a2b7ce79c25b8b8e	internal/install/leftover.go
+100644 blob 21f788493fa66c11f4b8e641f85c1261fce90c54	internal/install/legacy_hashes.go
+100644 blob 22fd5e3c1ec00ba7edbb51d2e53c7e7c1a4e7792	internal/install/perform.go
+100644 blob b0a1e67074f27977ab6fb4efa26f5c3f72aba6d5	internal/install/rules_state.go
+100644 blob a6a4a5c67719aba7cbc2ca55d9a24e8b5841e8f0	internal/install/testdata/hold.go
+100644 blob b4e86658f7775280424532b920f0223b0c590101	internal/install/testdata/legacy-KANDER-BASE-RULES.md
+100644 blob 46796ecb0f8ed09f3914c7e727f448641ffc323b	internal/install/wizard.go
+100644 blob 150aaf87c28ac72da161bac3d021bd4134d219fd	internal/launch/agent.go
+100644 blob 38199a8926f747a13f136f074294b57889ad328e	internal/launch/agent_allocate.go
+100644 blob debe2d7c4b9068bacfac461047124e5efd6d3433	internal/launch/agent_definitions_test.go
+100644 blob 796e94cce193953408b15e9e13e751f4ddd6f1b1	internal/launch/cmd.go
+100644 blob 17e21690520f690364b9a979d9c71c0117834903	internal/launch/commands.go
+100644 blob 1d125823ebe2007c344aab163672c97cd2739b1c	internal/launch/coordinator.go
+100644 blob 21f837000a4568d5f4ef7eb43ff9414cb83bccb6	internal/launch/coordinator_rollback_test.go
+100644 blob 2108673412276b8b503458d8b99e3a2085ecd331	internal/launch/coordinator_start_test.go
+100644 blob 133d50cb4c6105f1433eec7bb557cd91baf417d7	internal/launch/coordinator_test.go
+100644 blob f81d8118fbaaa4d9447f8f95bcecb55f18cb4045	internal/launch/dispatch.go
+100644 blob 94752d800e34bbd94e9f4530bb53a3f5e463ba07	internal/launch/dispatch_deadline_test.go
+100644 blob bb9b6042688ecea186567d4e90de8abca64462a4	internal/launch/dispatch_evidence.go
+100644 blob a6202a3e6d27c157afb50649dacdae8daafebb3d	internal/launch/dispatch_evidence_test.go
+100644 blob 59cc79a5e4e2c4c83f782cba6845f9c54f002139	internal/launch/dispatch_options_test.go
+100644 blob 23e72289172cba50c66ea49392aaa3e6e264a1f5	internal/launch/dispatch_rebase.go
+100644 blob b1a6bc25ab9931df1fc58798a14b8c908287f204	internal/launch/dispatch_rebase_test.go
+100644 blob 248771d2d82134c1be4dcead5427f4f6fcbfcfef	internal/launch/dispatch_test.go
+100644 blob 6f83a885376d092cdf28544cf077c27f6c31fc88	internal/launch/error.go
+100644 blob 42acc7bdc614643457f564285d8e9ead51eab906	internal/launch/exec.go
+100644 blob d819a144d6ced07dc7f5dca10f5586be88d88f93	internal/launch/exec_other.go
+100644 blob fa1d375438050ed463d595f8f77bc1a10b4d61c7	internal/launch/exec_windows.go
+100644 blob 6df7d6e3a6c020422d8b841854db62e6f2e3b2cf	internal/launch/exec_windows_test.go
+100644 blob d5e87741197738c749c87637b4f29e0da8072ad0	internal/launch/herdr.go
+100644 blob b34812f556d7a988641e0dba2512906c864a1cfb	internal/launch/herdr_pane_command_test.go
+100644 blob 1012377890c0c65f3b7ce539e1e08934d7f5d782	internal/launch/launch_contract_test.go
+100644 blob 3b6d3389c286fad51c11d002f9ae0824477232d4	internal/launch/launch_test.go
+100644 blob bc3e2c461c865a0135f815c3261cc9ff1b5f8afb	internal/launch/metadata.go
+100644 blob 8549004755f47bb81e206e2cf459a739f36af85c	internal/launch/metadata_test.go
+100644 blob 731f7a91c314c07f96167f4d0ea43d65042261df	internal/launch/notify_resume.go
+100644 blob 661ec0c102fdf6aeebc2779aa0e62e703bb118b7	internal/launch/prompts.go
+100644 blob 59bf7a16a115ff30eb111eb24ea53adb385953ee	internal/launch/prompts_test.go
+100644 blob 764cbadef9f3a09d3ca2d31762ea0e96ffc7cf2d	internal/launch/rollback_test.go
+100644 blob 86edb8414012d9957eb0bad31fa1f9f4885cdd98	internal/launch/rules_test.go
+100644 blob ad1da92eadb1ddf6c32d24f43d0bb3d5dec8bab5	internal/launch/session.go
+100644 blob 0f886b3e2eff6c991ce4ed014bce36cb44c50c4e	internal/launch/tmux.go
+100644 blob f58a1803987b8475d26f8d89fb029dd5d882aecb	internal/launch/tmux_pane_command_test.go
+100644 blob 6a499d04b41149fe7adce548168daed2c8e8ad90	internal/launch/types.go
+100644 blob 089510291eb09091059aba6fff56297c71fe437b	internal/liveness/agent_definition_test.go
+100644 blob f5c4cb49f73508a0105d5539699f469d5f252e2e	internal/liveness/batch.go
+100644 blob 99cb3e3c61927f28216cb0c5a3770cba347c503d	internal/liveness/batch_test.go
+100644 blob 4e2a644b52638d7b98e34926369dd2dc4efc4478	internal/liveness/bind.go
+100644 blob 059a43fa2072d7026a0ca307f64508ca221d52c6	internal/liveness/check.go
+100644 blob dab9c400df823bc7ce41ef0b04a6b7bf316273c8	internal/liveness/classify.go
+100644 blob f83382fe7001d9a23f98f8b6890bba12345bb0a7	internal/liveness/deadline_test.go
+100644 blob 131165db2fcd36354592a335db2700135d9c6019	internal/liveness/liveness_test.go
+100644 blob 2ed4d4909fb375855c347473800c3b3c82b6290a	internal/liveness/lookup.go
+100644 blob f4d592ef21828abd964e7a75d6299d16b13aa32e	internal/liveness/lookup_test.go
+100644 blob 25d14689925039da93974c1317e8b691622a1df1	internal/liveness/observation.go
+100644 blob 998f3485e5fd905ee398551fbf5c0efee3f8753a	internal/liveness/subscribe.go
+100644 blob 0e674e673afbc5bc495a6fabcf36724a1708e966	internal/liveness/subscribe_clock_test.go
+100644 blob db3f26ac485bd83d06a4175992e1639d277d5e6c	internal/liveness/subscribe_dispatch.go
+100644 blob 04c8fadc42ff971340d3280c092795aeb1cd22a5	internal/liveness/subscribe_dispatch_runtime_test.go
+100644 blob f16663ecc916516907d00345c4d428c5c2c8939a	internal/liveness/subscribe_dispatch_test.go
+100644 blob f022519d246e8eb08028257851db41e59c7b1f49	internal/liveness/subscribe_facts.go
+100644 blob 8642e3fdb22b770adf116fb556ed0beb1eeaa69c	internal/liveness/subscribe_facts_test.go
+100644 blob 50812a139a8c5e2c29d3bc63b1031956c60ddd69	internal/liveness/subscribe_members_test.go
+100644 blob d7f3e76ce7ba8a69c90a3d861309ee8f38b0aa8d	internal/liveness/subscribe_output.go
+100644 blob e0a01197a85c937de01e0dc119df17569c338bdb	internal/liveness/subscribe_output_posix.go
+100644 blob 07c066d247c3f279ad8fa744399c766a68839417	internal/liveness/subscribe_output_windows.go
+100644 blob 2ef0875bcd6f11ae8f2706967270c4c99828cd0f	internal/liveness/subscribe_pipe_test.go
+100644 blob 55f0e56255fb0a7af17a666ee9808c6e19af66b6	internal/liveness/subscribe_probe.go
+100644 blob 1cea381e6cef17c9ad5b102e0e04aad8f0ad77a9	internal/liveness/subscribe_read_test.go
+100644 blob cf82b3d4d3d429328cbaa285d55fe248ee335b55	internal/liveness/subscribe_restart_test.go
+100644 blob 57f48569c3270e5e71090226b39902861948a970	internal/liveness/subscribe_runtime_test.go
+100644 blob cea0f60d0dfd5b8b7661f5e45cf8a4d581a991da	internal/liveness/subscribe_signal_test.go
+100644 blob c00a21738d5e0cd99983ce1e74d0835b811e9d9d	internal/liveness/subscribe_signals_posix.go
+100644 blob 077b97e4de7667f0a2e6e5f2c2bf509fddb49cac	internal/liveness/subscribe_signals_windows.go
+100644 blob 32e3398d117edeeebaec4b090dde3808274c52af	internal/liveness/types.go
+100644 blob b09f5277b6329fc05bdd9413dba811772946fcdb	internal/menu/agent_fields.go
+100644 blob 084a45bdaa0be844bc5753e54bcdbfe6220ffdef	internal/menu/agent_fields_test.go
+100644 blob 6aa52bb0aedca8f7b3e898196ca85c97b921f81c	internal/menu/agent_language_test.go
+100644 blob 496025ba29bf60c64cfbe1efa11349717c0ae7dd	internal/menu/agent_probe_test.go
+100644 blob 80809402981087aedaedc88de65a7dfcb14e99d5	internal/menu/agents.go
+100644 blob f8cbe43c5a157906eb309fae300586ae249630df	internal/menu/agents_path_test.go
+100644 blob b2bcb51cc499a9215cf9dd5a4756d1b597c25c51	internal/menu/color.go
+100644 blob bf9b31836c0c26dc79e834915c81e08cd8b6d5ce	internal/menu/commands.go
+100644 blob 5ef3f0fd31cbd4f1f9c15f211db0774f13b050ed	internal/menu/doctor.go
+100644 blob 54cc2913212aacb6fe83f8d46053bc98ad7552f3	internal/menu/doctor_config_test.go
+100644 blob 47b5b9bcac7749e7698c3c3795176d28a0d64240	internal/menu/doctor_extra_test.go
+100644 blob b3b859955a90e1d04d32e57bac93102e6262a1bd	internal/menu/doctor_repair.go
+100644 blob 42c3e31a2a9e65350745db2f9a051be04e851c43	internal/menu/doctor_repair_test.go
+100644 blob 43628dc817d790401f674f727b231dc0c07f35bf	internal/menu/doctor_session.go
+100644 blob 0b2d456aa2296b3f2cf31ad466ccc7e6d86ffda3	internal/menu/launcher_windows_menu_test.go
+100644 blob b106a9075d912864cf643bf9a55b1a42665a45e6	internal/menu/menu_harness_test.go
+100644 blob a214ad90f1c1299a7a844dde03925e0a861ced05	internal/menu/options.go
+100644 blob eb22d6384ebf6e73f305429095cb408e5725d927	internal/menu/options_helpers.go
+100644 blob 102994353382c65fe66386a468a4b54c633e9081	internal/menu/os.go
+100644 blob 23a54a21ab8116f221844909bbc2c1de45269baf	internal/menu/report.go
+100644 blob daf6a188dd35973e44f520e29bd2620cb9b27521	internal/menu/restore_other.go
+100644 blob 99460505b208bf8c6d7fff8c40848c6a37378739	internal/menu/rule_options.go
+100644 blob 57f2b2e95022ce5b591f7b6a5b4df7c18696318d	internal/menu/rule_options_test.go
+100644 blob 4c2acbb39e658984114e87dbfc4acb6ad84761ca	internal/menu/rules.go
+100644 blob 1aa7d2685b3a0b79a9c424f45a876ba6f99a4aaa	internal/menu/rules_test.go
+100644 blob aefcb884f3f76849f214caa15cebbbd4372aaeb0	internal/menu/select.go
+100644 blob 89b682787314399e3207c4d8925eb14e2989cf93	internal/menu/select_unix.go
+100644 blob fa66b5af2a3cc111d46bb02b1022ec35fd54b1d7	internal/menu/select_windows.go
+100644 blob 5cb00bf58706c3c1ed95a4c64109a40da90aa306	internal/menu/terminal_tools.go
+100644 blob 6f70061150ca1f964ef5c63e90837b67047bf052	internal/menu/terminal_tools_test.go
+100644 blob 1dd76274fc32ba89c3b7bb4a87ca795df330248f	internal/menu/terminal_tools_windows_test.go
+100644 blob 323be4555ea1a143e4b9c4f0afa30518f395feac	internal/menu/termios_bsd.go
+100644 blob e139b12e72311f52a2c5e7a5748fedc9882c8e22	internal/menu/termios_linux.go
+100644 blob debf1b7ca50f72b56dde7a8a931d17a6dff3a25a	internal/menu/tty.go
+100644 blob b36b27a98289de63f440254b06f570873bbb6458	internal/menu/tty_unix.go
+100644 blob d3336a5b0ebd3c44ff8bf7d29e66875a4cea77b4	internal/menu/tty_windows.go
+100644 blob 59ae63f98eedfbddaef3b0b6a4d05875032e8968	internal/menu/uid_unix.go
+100644 blob 382f219e0a86a4ea793d783da1092405fb80c9ad	internal/menu/uid_windows.go
+100644 blob 80cf8ec19954c6381aa0bb2fa1dc564b92db322a	internal/notify/agent_definition_test.go
+100644 blob 1ef9b4e1807546768e5b948353e324e375f6d98d	internal/notify/cmd.go
+100644 blob 0cc7589f3424181a69915dd7256ec439e46e6783	internal/notify/command.go
+100644 blob 6b341553e969d444135826c8c40b1cc30f3e60ea	internal/notify/deliver.go
+100644 blob c3796f0add5bdf087f23cdef8fedd022c1fc2faa	internal/notify/dispatch.go
+100644 blob d812491d8eae6bd4d182427ebfaf55ddb0918d25	internal/notify/dispatch_crash_test.go
+100644 blob bb4c04b3e2474b5c01c5d5d13425def5ae9d7ffe	internal/notify/dispatch_fencing_test.go
+100644 blob c30395cb4915efc0f9adc5432bdcaa63a9e070bd	internal/notify/dispatch_test.go
+100644 blob 212863fb0ee670d25186aa08667fdacd7536db2a	internal/notify/error.go
+100644 blob 67648138b2e757c8e0939dbde8749aeeed8315a6	internal/notify/notify_test.go
+100644 blob 6ac5509f3ab5ae15285b8d972531095edea36bcf	internal/notify/payload.go
+100644 blob 3a392c5fe2c9105027fb8274b13b372ce6673ab3	internal/notify/probe.go
+100644 blob d222954be79bd6adb3fc1ac7aa9733d8214de06d	internal/notify/resolve.go
+100644 blob 990ead193c997c8f760a240434d4f69f31f417d5	internal/notify/rules_test.go
+100644 blob 9c70e58b42e1ee69ea067b57d6a5be36f7776807	internal/notify/temp_unix.go
+100644 blob 1cdca9a66a559d798535cc402b38cc54a0b06cc6	internal/notify/temp_windows.go
+100644 blob ce71600b75a24670b06d8293c5caf68994c2d1bc	internal/notify/windows_direct_test.go
+100644 blob 090de15335050f2063ea1872f277f81e93dbb325	internal/probe/error.go
+100644 blob 7351622a31841afd8e6101cc8521867e8cc9a599	internal/probe/herdr.go
+100644 blob 454ed8c9e5116699a7cdee98dfacafad209dfd26	internal/probe/probe_test.go
+100644 blob 57055d4900ab7f80f1393695b55901839a85d87d	internal/probe/run.go
+100644 blob 88f5c4de70cb8433815a550677438cc6a7b9c6cf	internal/probe/run_posix.go
+100644 blob 89b4c9cccae7253ae20a3af205b3cf64a562948f	internal/probe/run_posix_test.go
+100644 blob 2deb38f9483a41fb0fee6669793d8f2271ecbe15	internal/probe/run_test.go
+100644 blob 243ce25b09f3fb86408ed6a9b55cd17dbaba8cb1	internal/probe/run_windows.go
+100644 blob bf5c1c03a907ae71c2c87e8cfbfc4d557a81fa82	internal/probe/run_windows_test.go
+100644 blob d364a4c0d33411afbd500bee7571eaf357b3199d	internal/probe/tmux.go
+100644 blob 0ae5d61cac0c096d069fca3a110a0fd825261342	internal/process/process.go
+100644 blob 1993f47d7b45d159b1b4e98fadc888446c428bfc	internal/process/process_test.go
+100644 blob a6e25639302abf10e4e3494f8886a4c86497d84d	internal/review/access_unix.go
+100644 blob 43400543663b6da6b3817cfa618a6ff2878fa54f	internal/review/access_windows.go
+100644 blob 4eaa9f1f7de484b9a2883f404257cd880550739b	internal/review/agent_executable_test.go
+100644 blob be262ea587113ea09d89d79a7a3f9c72c1ecdc25	internal/review/archive.go
+100644 blob a37a0d20b9951bed591058c5d695aad66600bd13	internal/review/archive_test.go
+100644 blob 180bbaeff626cf4cf41d1f62076c104bd6c5a2f9	internal/review/args.go
+100644 blob 25b9d23646ac4f60381dc7c7a3a4542ace2fd10d	internal/review/bind.go
+100644 blob 4db9ed2784224d43c3f2e58d322efb1ad6e2089b	internal/review/claude_test.go
+100644 blob 368f1c973e44028d45e3b266c1b5e0c35f470f4f	internal/review/codex_test.go
+100644 blob 06a4e5700aadd9d7370978e7614145ef2a8a7262	internal/review/cursor_test.go
+100644 blob a77538070d653701671b49594dda3e8764fba3b0	internal/review/disposition.go
+100644 blob d4fcfb5e209cb827f1cd7d5aa0710236c561141d	internal/review/disposition_cycle_test.go
+100644 blob e08ce37a0966bd7a1a9e2b8636b40e86396bd03d	internal/review/disposition_regression_test.go
+100644 blob bec7ea33c3da746db3f0fc55bb3e7435c6ad3d61	internal/review/disposition_test.go
+100644 blob 5a288e6df1d799ff04d8af9ce909383e3057abfc	internal/review/execute.go
+100644 blob 9d2a0bb8dbb62450a94e444b5965629eb8c38711	internal/review/git.go
+100644 blob 5a6c813bca260efdd9e7d1ced17e642e4e6a6f08	internal/review/grok_test.go
+100644 blob c7011a199bbd2876e1157356e94b2c38cec0457c	internal/review/harness_test.go
+100644 blob 0f68a5db71ea8760d78223f03dbb60cc79ed9606	internal/review/helpers_test.go
+100644 blob b7ee856ac4b831f905f265dd07c718d025efe354	internal/review/launch_unix.go
+100644 blob def6aacc05623eaf5ee172d4c61adcfaf4132c76	internal/review/launch_windows.go
+100644 blob 561c865964c5f2973fbc8a64fde0940aee7c18ea	internal/review/lineage_recovery_test.go
+100644 blob 8e74e21547e1dc3e78e301a7a84a553aa55911aa	internal/review/mechanical.go
+100644 blob 52dec9505f8f4674b3185bd93fc040fa050a3d6d	internal/review/monitor_unix.go
+100644 blob 826ced6c07d3cf68a50e6d44905a3320b5b7e145	internal/review/monitor_windows.go
+100644 blob c7966edc7a718ecdb96c408007dd0f2bb764fadf	internal/review/platform_unix.go
+100644 blob d17d17631d739b031f7aa6dd064d9238c2818cfd	internal/review/platform_windows.go
+100644 blob 8567ba980bee2a008eb00312fb1fe62346d6ff44	internal/review/recovery.go
+100644 blob 9b392b943c04ddd5067daed5e1f9589b7ca1edf1	internal/review/report_language_test.go
+100644 blob 084d6ab3d045dddd8b224225243897908c4d0a46	internal/review/review.go
+100644 blob e3108339997c52154dee970352127ddf16da22cc	internal/review/roles.go
+100644 blob d8e47cb27614e75936853647c84bbb093b16d219	internal/review/settings.go
+100644 blob 6d8d7418fdd08849765e506fe7a8a20b84634373	internal/review/tree.go
+100644 blob 1b0a3d232081c2c48def96c6625e26000015bbc2	internal/review/validate.go
+100644 blob c4bb73c49ce97b005cc880c49ba86e5480dd68b8	internal/review/windows_review_test.go
+100644 blob 678a8d225689a29cfab1ece86110ec27e73018ad	internal/takeover/agent_definition_test.go
+100644 blob 0129d92f81925a3949e6444c26568f1dfe1ce6c9	internal/takeover/cleanup.go
+100644 blob 1c65123411fcaf098a3c16b3cc840b2bf1e38d01	internal/takeover/cmd.go
+100644 blob c4376d887f4c273255329063e4b96259b5fa6dc3	internal/takeover/dismiss.go
+100644 blob ba251ce9a2251c6e36bc30a85e0561b4e7c69ff1	internal/takeover/ops.go
+100644 blob 9f777ddac8d5231bcdd468789fda4846e35f0088	internal/takeover/takeover_test.go
+100644 blob 6cf357d270c5201b12c40cd951c0649380290b20	internal/takeover/wait.go
+100644 blob ddef07f8ed6cb606fcc9ff7739b50398427f8f9e	internal/takeover/windows_container_test.go
+100644 blob bc9274822740a197a7438adabf793defb254bcbf	internal/tui/app.go
+100644 blob f055337751e65c3fe0bfe39e5e4ac8c72757d579	internal/tui/board_view.go
+100644 blob 2f91c9b13be821143eb359e9bac2ddc3345f6579	internal/tui/clipboard.go
+100644 blob aba2e48eacf680086754ec6c46636834d13e8256	internal/tui/cmd.go
+100644 blob 64a5795abc574a8ced01bb6b07e5d2192415f594	internal/tui/cmd_test.go
+100644 blob 31cf1a3ffd5c724801a79db03b768d6efe15b400	internal/tui/context.go
+100644 blob d4626db4f59cd48032fe6cc8cc8da8129a0fe458	internal/tui/detail_view.go
+100644 blob 0feb2df48d6e6a4c247dec503cb79e7dc22bbb0d	internal/tui/focus.go
+100644 blob 40174c4dba2e9462b9a943a285c0d78f37e356e5	internal/tui/focus_test.go
+100644 blob d4119f954d2b64ddd430540647e626b00905cc17	internal/tui/help_view.go
+100644 blob 0e0f1875044f0dbdafc32d4aac49c0c0e14db73d	internal/tui/layout.go
+100644 blob fc6568611684d27b9a107254ba4bbaeeac124990	internal/tui/model.go
+100644 blob 58d9d6420769bbca87280366bee4ce9218fb58d0	internal/tui/mouse.go
+100644 blob c3079f3be289fb5205caf48f21eacb0de6e4439b	internal/tui/options_doctor.go
+100644 blob 4dbd590131eb0c6d0b668c209c4f113c479475b8	internal/tui/options_doctor_test.go
+100644 blob 610a54068d19b38a36a242cfbe7791626057a062	internal/tui/options_flow.go
+100644 blob 9cd3d5cba65504fa15be7f73f5befe3429f70fd0	internal/tui/options_flow_test.go
+100644 blob 7defdbb456a922394136613547cbf1ab30e45c66	internal/tui/options_form.go
+100644 blob 50d42156ee3611b77ff2d7752159ea09decdac82	internal/tui/options_panel.go
+100644 blob e74b8e437e29f9e51572aad935e5f617cea7c166	internal/tui/options_rules.go
+100644 blob 693d6b6ce3c18cdff021fab8c6ea973b2a73224d	internal/tui/options_rules_test.go
+100644 blob ca8989de5bc230282fc36dc3c766c34a0a4fbdb3	internal/tui/options_test.go
+100644 blob 52b0784d3397b5127f7af7aaa064f7b1bbad2ae3	internal/tui/options_view.go
+100644 blob c2650798613b7ae10201fe66802724c943ebc6da	internal/tui/overlay.go
+100644 blob 9b99be50175a3c773daa54fe168bb2e164ff7b14	internal/tui/payload.go
+100644 blob e547cbf43d46b25d525c0c3426b4850e3e042639	internal/tui/prefs.go
+100644 blob bbe835d283f88a1afbe131f14a5a6daa335cde15	internal/tui/program.go
+100644 blob feece68475e007aba48977210fa3993533a6d128	internal/tui/pty_test.go
+100644 blob 78edfc31333fbb96b4c761ac51b4442fe6edfa1e	internal/tui/selection.go
+100644 blob becce353d9565db6dbcbf5fa38351a979098faca	internal/tui/status.go
+100644 blob ef5b58d1e40fd6c6fa148557ff735419729da265	internal/tui/text.go
+100644 blob e1cf2e7586ffbf282d3c7d0fffa2217fd7a7f613	internal/tui/theme.go
+100644 blob 18bbcf26467dc533aebde9b60e231613245c2527	internal/tui/tui_test.go
+100644 blob b1452bed5782565ed44fbec0a2e337cf3e0fcffb	internal/tui/types.go
+100644 blob 49d83696cb7d3263084c6884fb0d41a1256b8462	internal/version/version.go
+100644 blob 94f343dcf7105c7d609a5a4e9257e4120956616a	internal/version/version_test.go
+100644 blob 2100e20e3dd461bedad832085c6db0d82ad0ac40	internal/window/window.go
+100644 blob 303bfab29226bc62fff6fc2d8f0ddbebda293cdf	internal/window/window_test.go
+100644 blob 12eb667eda1f0652129a362dc03b12811b901d67	make-windows.cmd
+100644 blob 84c57042f0af8e002a1d6ce859245b2da69aee63	rules/KANDER-AGENTS.md
+100644 blob 46e8832996b535527d13eabda5dbc78309c4ac77	rules/KANDER-BASE-RULES.md
+100644 blob 644850e3707646e14c8e40d021e6db051f8cf69c	rules/KANDER-CODE-RULES.md
+100644 blob ee9fa7e70924e8166cae7202fb1baee822aa9e6f	rules/KANDER-COLLABORATION-RULES.md
+100644 blob 0125d0a923f17e8ebe7db0972e2c1cb9dae9db28	rules/KANDER-GIT-RULES.md
+100644 blob 07557679997bcf5d7f6f9c80b64c8e9c96958ad6	rules/KANDER-KANBAN-RULES.md
+100644 blob ffbe65b9922dec8a19c1fee16eb2cddfc1da872a	rules/KANDER-REPORTING-RULES.md
+100644 blob b4c85e6e7cf6912946d24bc5477c46644f3ad8d7	rules/KANDER-REVIEW-RULES.md
+100644 blob 5be44348e97768751d71260ab47b534684361908	rules/KANDER-TASK-GROUP-RULES.md
+100644 blob c801b0aad585529fb1b21931f14fb3520cb50e06	rules/KANDER-TASK-INTAKE-RULES.md
+100644 blob 4650fb65647980cf787833a7c98ed2718cac2b48	rules/embed.go
+100644 blob c930439258d499a6a547e11b622e91261e5787b9	rules/embed_test.go
+100755 blob c7e77a84400af22bdf0f03cda5c1a96552a7435e	scripts/guard-kanban-write.sh
+
+=== FIX RANGE COMMITS ===
+commit 265aa39bd0a4919451df1f726adca85d6204863b
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 11:56:14
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 11:56:14
+
+    fix: select workflow review batches before reception
+
+=== FIX RANGE FILE LEDGER ===
+M	internal/flow/flow.go
+M	internal/flow/flow_test.go
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+
+=== FIX RANGE PATCH ===
+diff --git a/internal/flow/flow.go b/internal/flow/flow.go
+index fd6e599..fbee307 100644
+--- a/internal/flow/flow.go
++++ b/internal/flow/flow.go
+@@ -58,22 +58,19 @@ func Build(cfg *config.Config) []Line {
+ 			add(Step, "self_check")
+ 		}
+ 	}
++	hasReviewRole := false
++	for _, role := range config.ReviewRoles {
++		hasReviewRole = hasReviewRole || cfg.ReviewStages[role] != "skip"
++	}
+ 	review := func(group bool) {
+ 		add(Step, "plan")
+ 		if !cfg.Rules[config.RuleReview] {
+ 			return
+ 		}
+ 		add(Step, "review_trigger")
+-		active := false
+-		for _, role := range config.ReviewRoles {
+-			active = active || cfg.ReviewStages[role] != "skip"
+-		}
+-		if !active {
++		if !hasReviewRole {
+ 			return
+ 		}
+-		if group {
+-			add(Step, "batch")
+-		}
+ 		for _, stage := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
+ 			var roles []string
+ 			for _, role := range stage {
+@@ -145,6 +142,9 @@ func Build(cfg *config.Config) []Line {
+ 	add(Step, "member_branch")
+ 	implement()
+ 	add(Step, "member_delivery")
++	if cfg.Rules[config.RuleReview] && hasReviewRole {
++		add(Step, "batch")
++	}
+ 	add(Step, "receive")
+ 	add(Detail, "sync_dispatch")
+ 	review(true)
+diff --git a/internal/flow/flow_test.go b/internal/flow/flow_test.go
+index 43fe9ec..379d4b9 100644
+--- a/internal/flow/flow_test.go
++++ b/internal/flow/flow_test.go
+@@ -50,7 +50,7 @@ func TestModulePruning(t *testing.T) {
+ 				}
+ 			}
+ 			if !cfg.Rules[config.RuleReview] {
+-				for _, key := range []string{"stage_one", "stage_two", "role_auto", "role_required", "dispatch_fix", "single_fix", "review_finish"} {
++				for _, key := range []string{"stage_one", "stage_two", "role_auto", "role_required", "dispatch_fix", "single_fix", "review_finish", "batch"} {
+ 					if got["flow."+key] {
+ 						t.Errorf("disabled review node: %s", key)
+ 					}
+@@ -131,7 +131,7 @@ func TestWorkflowOrderAndTranslations(t *testing.T) {
+ 			steps++
+ 		}
+ 	}
+-	for _, pair := range [][2]string{{"member_delivery", "receive"}, {"receive", "dispatch_fix"}, {"dispatch_fix", "member_fix"}, {"member_fix", "close_plan"}, {"close_plan", "group_ready"}, {"group_ready", "integrate"}, {"integrate", "wrap_dispatch"}, {"wrap_dispatch", "task_cleanup"}, {"task_cleanup", "member_done"}, {"member_done", "group_cleanup"}} {
++	for _, pair := range [][2]string{{"member_delivery", "batch"}, {"batch", "receive"}, {"receive", "dispatch_fix"}, {"dispatch_fix", "member_fix"}, {"member_fix", "close_plan"}, {"close_plan", "group_ready"}, {"group_ready", "integrate"}, {"integrate", "wrap_dispatch"}, {"wrap_dispatch", "task_cleanup"}, {"task_cleanup", "member_done"}, {"member_done", "group_cleanup"}} {
+ 		if positions["flow."+pair[0]] >= positions["flow."+pair[1]] {
+ 			t.Errorf("wrong order: %v", pair)
+ 		}
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index fdc2b28..00a1cc8 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -1,5 +1,5 @@
+ {
+-  "flow.batch": "Orchestrator batches all unreviewed received deliveries; freeze the group target during review, queue outside deliveries.",
++  "flow.batch": "Orchestrator selects the review batch before ff reception: receive only this batch, queue outside deliveries and freeze the group target during review.",
+   "flow.sync_dispatch": "If ff is impossible: notify the original member to sync via move working, rebase and re-verify, then return move review.",
+   "flow.title": "Workflow",
+   "flow.configuration": "Current session configuration",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index 024f1e6..2bec1c9 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -1,5 +1,5 @@
+ {
+-  "flow.batch": "主控が受入済み未審査の納品をバッチ化。審査中はグループ対象を固定し、バッチ外の納品は待機。",
++  "flow.batch": "主控が ff 受入前に審査バッチを選定。このバッチだけを受け入れ、バッチ外は待機。審査中はグループ対象を固定。",
+   "flow.sync_dispatch": "ff 不可の場合：notify で元メンバーに同期を依頼。本人が move working、rebase・再検証後 review に戻る。",
+   "flow.title": "フロー図",
+   "flow.configuration": "現在のセッション設定",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index ceaa9e3..b6db769 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -1,5 +1,5 @@
+ {
+-  "flow.batch": "主控将已接收的未审核交付组成批次；审核时冻结组目标，批外交付排队。",
++  "flow.batch": "主控在 ff 接收前确定审核批次：仅接收本批交付，批外交付排队；审核时冻结组目标。",
+   "flow.sync_dispatch": "无法 ff 时：notify 原成员自行 move working，同步 rebase 并复验后返回 review。",
+   "flow.title": "流程图",
+   "flow.configuration": "当前会话配置",

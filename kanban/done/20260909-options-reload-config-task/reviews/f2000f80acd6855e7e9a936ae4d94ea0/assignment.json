@@ -1,0 +1,15 @@
+{
+  "run_id": "f2000f80acd6855e7e9a936ae4d94ea0",
+  "batch_id": "20260909-options-reload-batch-1",
+  "author": "grok",
+  "basis": "single-card PM finding assigned to the executing task by modification scope",
+  "items": {
+    "PM-001": [
+      "20260909-options-reload-config-task"
+    ]
+  },
+  "owners": {
+    "20260909-options-reload-config-task": "grok"
+  },
+  "recorded_at": "2026-09-09T07:51:31.164922742Z"
+}

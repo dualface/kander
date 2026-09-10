@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "20260908-bindings-recovery-group",
+  "run_id": "g3-qa-r1",
+  "batch_id": "g3-batch-one",
+  "task_ids": [
+    "20260907-subscription-dispatch-facts-task",
+    "20260908-coordinator-recovery-task",
+    "20260908-dispatch-evidence-binding-task"
+  ],
+  "role": "QA",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+  "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+  "commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "c50ab6c799b2dd85089c43824aaf9440cfb6341151648b496465613f138f99e5",
+    "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+  },
+  "kander_version": "20260907T173303Z-7e6fe2073ff0",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-07T21:42:34.109544878Z",
+  "finished_at": "2026-09-07T21:47:17.466621777Z",
+  "duration_ms": 283357,
+  "hashes": {
+    "error.log": "a055940e158dee59718b35eb8104eb918788436ca748b863237c418b4a04824b",
+    "evidence.txt": "e89b872a71d8f2975c93642490a3924c6a2f9833be3ae64be1234bba5ffad581",
+    "output.raw": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+    "prompt.txt": "b2aa4d655ef087661de649ff3742aeea35576c71c86d23e974eaea007eef99fc",
+    "report.md": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+    "review-context.md": "c50ab6c799b2dd85089c43824aaf9440cfb6341151648b496465613f138f99e5",
+    "stdout.log": "8167a8c695f351f95f9ef8265fc13c52ba84c49b4d1cad50d341feaa660fc981",
+    "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+  },
+  "published": null
+}

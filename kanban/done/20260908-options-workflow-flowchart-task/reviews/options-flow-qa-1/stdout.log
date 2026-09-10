@@ -1,0 +1,23 @@
+Role: QA  
+Commit: `3dc625f9191d670f27da6879762fd638e52cf7c1`  
+Task Context: 选项面板新增按当前配置生成的只读流程图。  
+Reviewed Scope: 完整读取任务说明；核对审核范围内全部改动、会话配置、reportView、相关规则与测试。已确认改动文件属于 COMMIT TREE，工作区内容与提交一致。只读沙箱未重跑 Go 测试；采信任务文件记录的交付提交测试证据。
+
+| 行为 / 质量 | 结论与证据 |
+|---|---|
+| 包边界与只读数据流 | Observed：`flow.Build` 只读配置；TUI 转换结构化行，复用 reportView，无反向依赖。 |
+| 入口、返回、未保存配置 | Observed：菜单位置正确；直接读取 `session.Config`，不保存、不新增 dirty。`options_flow_test.go:17` 覆盖。 |
+| 配置裁剪与审核角色 | Observed：七模块、任务组 Git 依赖、角色档位均有分支与断言。`flow_test.go:20`、`:75`、`:155`。 |
+| 单卡与任务组流程 | Inferred：节点、责任人、审核派回、集成及完成门禁与相关规则一致。审核关闭仍保留协议要求的 N/A 计划。 |
+| 三语与窄宽滚动 | Observed：三语各 61 个键且一致。`options_flow_test.go:61` 覆盖 60 列、UTF-8、翻页及滚轮。 |
+| 质量与验证 | Observed：改动 Go 文件均未超过 1000 行；`git diff --check` 通过；文档同步。交付记录：全量测试 1165 个通过、1 个跳过、0 失败，21 包通过。 |
+
+Gate Findings: 无。未发现本范围引入、加重或掩盖的确定缺陷。
+
+NON-BLOCKING: none
+
+任务文件已尝试删除；只读文件系统拒绝，文件保留，不影响审核结果。
+
+```kander-findings
+{"FINDINGS":[],"NON_BLOCKING":[]}
+```

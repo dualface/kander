@@ -1,0 +1,14 @@
+{
+  "submitted_revision": 91,
+  "record_id": "pm-009-confirmed",
+  "run_id": "tui-project-options-pm-8",
+  "finding_id": "PM-009",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T12:28:12.30367859Z",
+  "report_hash": "dd0e175c29851262031c5acede9a60721c512ab3c7c29d3ae470be9e2da01d9a",
+  "original": "Inferred，高置信度，本轮新增。违反 task-spec.md ACCEPTANCE_CRITERIA 第5条的继承值随基础配置变更更新要求。合法基础配置缺少整个 tui 时，Project 修改主题产生失败草稿；关闭错误提示，切 Global 将 launcher 从 auto 改为 foreground，按 Esc 保留编辑，再切 Project。部分 tui 仍使合并失败，新增 SetTarget 分支直接复制旧 overlayDraft，导致未覆盖 launcher 继续显示“全局：auto”，与当前 Global 编辑不一致。最小修复：返回无效草稿时按最新基础文档重建展示，保留显式覆盖及失败输入，保存继续严格校验原始覆盖。增加失败主题编辑、Global 修改 launcher、返回 Project 的回归，断言继承值刷新且不新增 launcher 覆盖。",
+  "status": "confirmed",
+  "basis": "独立核实：overlayDraft 整份快照在 SetTarget 的错误分支直接复制，Global launcher 更新不会进入该快照。改为以最新 scopeRaw 与显式 overlayRaw 重新构建仅供显示的无效草稿，保留原始规则缺键语义与失败输入。"
+}

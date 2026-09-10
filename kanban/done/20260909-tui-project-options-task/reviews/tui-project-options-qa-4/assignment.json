@@ -1,0 +1,27 @@
+{
+  "run_id": "tui-project-options-qa-4",
+  "batch_id": "tui-project-options-batch",
+  "author": "grok",
+  "basis": "assigned by this card's modification scope",
+  "items": {
+    "QA-001": [
+      "20260909-tui-project-options-task"
+    ],
+    "QA-002": [
+      "20260909-tui-project-options-task"
+    ],
+    "QA-003": [
+      "20260909-tui-project-options-task"
+    ],
+    "QA-004": [
+      "20260909-tui-project-options-task"
+    ],
+    "QA-005": [
+      "20260909-tui-project-options-task"
+    ]
+  },
+  "owners": {
+    "20260909-tui-project-options-task": "grok"
+  },
+  "recorded_at": "2026-09-09T07:48:23.240514258Z"
+}

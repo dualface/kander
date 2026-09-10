@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "dispatch_id": "187bcf576d52bf3e9fb689554f2211d7",
+    "epoch": 6
+  },
+  "submitted_revision": 69,
+  "record_id": "pm-10-fixed-r6",
+  "run_id": "pm-agent-def-b1-r6",
+  "finding_id": "PM-10",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-review-template-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T07:39:24.937620629Z",
+  "report_hash": "ec7662685ab9158edf6d770dff79af18aee23f2c1d6769f4dfb82f17860069ab",
+  "original": "docs/custom-agents.md:81 本区间新写入的一句「Dialect defaults may still fill omitted review fields after the overlay has declared the pair.」与实现不符：该行为在任何通过 Validate 的配置里都不存在。两种读法都不成立。(1) 按「review 块内字段」读：AgentFor 的回填是整块粒度——internal/config/agents.go:93-97 只在 d.Review == nil 时用 cloneReview 整块替换，:88-92 只在 d.Args.Review == nil 时整段拷贝 emb.Args.Review；一旦用户写了 review: {...}，review.env / review.inspection / review.home_env 等省略字段不会从 dialect 补齐，internal/review/settings.go:146-205 的 agentSettingsFor 也只读 def.Review 自身，没有第二层按字段回落。(2) 按「两项中省略的那一项」读：validateReviewDefinition（internal/config/agents_review.go:154-161）对用户原始声明做 hasArgs != hasReview 判定并报 config.agent_review_pair（文案「args.review 与 review 必须同时声明。」），调用点 internal/config/agents.go:281 传的是未经 AgentFor 解析的 overlay，因此「只声明其中一项、由 dialect 补另一项」在 kander config --json 阶段即被拒，到不了回填。于是对任何通过校验的自定义 agent：要么两项都未声明（allowReviewInherit 为假，agents.go:84-86 主动把继承来的 Args.Review 置空），要么两项都声明（两个 == nil 前置条件都不成立，什么都不补）；agents.go:80 中 allowReviewInherit 的 userDeclaredReviewTemplate(overlay) 析取项在通过校验的配置上永远改变不了结果。同一条不存在的行为还被本区间新增用例钉死：internal/config/agents_review_test.go:102 的 \"declared\" 条目只有 args.review 而无 review 块，:132-134 断言 AgentFor 为它补出 Review，失败文案为 declared overlay should inherit omitted review fields，而该形态正是 agent_review_pair 要拒绝的，用例靠直接构造 cfg 绕过 Validate 才成立。用户影响：读者按该句只写 args.review 省略 review 块（预期由 dialect: claude 补全 env/inspection/output）会撞上与文档相反的报错；按「review 块内未写字段会继承」理解的作者会得到 review.output 缺失（agents_review.go:212 拒绝）或 review.cwd 为空（:166-170 拒绝）的定义。A2 EXPECTED_OUTCOME 只承诺 reviewers.\u003crole\u003e 接受任何定义了 args.review 的 agent，从未承诺按字段继承。最小产品改动：把该句改为陈述实际契约——args.review 与 review 必须同时声明，dialect 只在两项都未声明时提供内置名默认，声明之后不再按字段补全；同时删除或改写 internal/config/agents_review_test.go:132-134 这段钉死不可达配置的断言（:110-123 对 helper / wrap / declared 的 HasReviewTemplate 断言是 PM-02 修复的有效覆盖，保留）。",
+  "status": "fixed",
+  "basis": "已独立核验：docs/custom-agents.md:81 原句声称声明成对后 dialect 仍会按字段补全省略的 review 字段。AgentFor（internal/config/agents.go:88-97）只在 Args.Review 或 Review 整块为 nil 时整块回填；validateReviewDefinition（agents_review.go:154-161）对未解析 overlay 要求 args.review 与 review 同时声明，调用点 agents.go:281。实测 TestPM10Probe：declared（仅 args.review）经 AgentFor 会补出 Review，但 validateReviewDefinition 报 config.agent_review_pair；声明成对的空 review 块 CWD/Output/OutputName 均为空，无按字段回填。已改文档陈述该契约，并将 agents_review_test.go 中钉死不可达形态的 AgentFor 断言改为断言已声明成对后不再补全省略字段。HasReviewTemplate 对 helper/wrap/declared 的覆盖保留。",
+  "fix_commit": "b653e810e748783979daba1b6a21f200c143722f",
+  "mechanical": "documentation",
+  "verification": "git show b653e810e748783979daba1b6a21f200c143722f:docs/custom-agents.md 第 81 行现为「args.review and review must be declared together. Dialect defaults supply the built-in pair only when neither is declared; after the pair is declared, omitted review fields are not filled from the dialect.」；rg 对「declared overlay should inherit omitted review fields」零命中。go test ./internal/config ./internal/review ./internal/menu ./internal/i18n ./internal/process -count=1 @ b653e810e748783979daba1b6a21f200c143722f：403 pass / 0 fail / 0 skip；go vet ./...、go build ./cmd/kander、GOOS=windows go build ./cmd/kander 通过。"
+}

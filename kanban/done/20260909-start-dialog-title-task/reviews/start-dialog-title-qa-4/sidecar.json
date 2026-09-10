@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "start-dialog-title-qa-4",
+  "batch_id": "start-dialog-title-batch",
+  "task_ids": [
+    "20260909-start-dialog-title-task"
+  ],
+  "role": "QA",
+  "reviewer": "claude",
+  "model": "opus",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/start-dialog-title",
+  "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+  "commit": "c54c6d95d3080c38bd57ab02bbd95b2fca63da98",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "cdce611dd1b353e80089a4b36cfa71e95ad025040ab5ab31185a6655b68733a0",
+    "task-context.md": "a9074b145de3ba54f5db96fb281bcaecdd5b27a6b9870bb8323e1e4f05df905b"
+  },
+  "kander_version": "20260909T021147Z-8abdfe2e6430",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "failed",
+  "semantic_status": "unassessed",
+  "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+  "exit_code": 1,
+  "created_at": "2026-09-09T03:08:15.389417493Z",
+  "finished_at": "2026-09-09T03:11:50.335206313Z",
+  "duration_ms": 214945,
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "1daed2f26c962dfc286609d90107d1983b7d5fd20238ceb342569c54ac347226",
+    "output.raw": "ee9223285ff6d4cccc25e26313f0ff763e2b0cd6141e5a15082204930ecf5bd4",
+    "prompt.txt": "b72fdaf016ef82cb64e02627e0eb7026cd2c0f8a0c737b8320a3214e88913f12",
+    "report.md": "b301444dce5c4be5d58411b5aff3b938f602fd14353f1be9d55e7bf12ff67335",
+    "review-context.md": "cdce611dd1b353e80089a4b36cfa71e95ad025040ab5ab31185a6655b68733a0",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "a9074b145de3ba54f5db96fb281bcaecdd5b27a6b9870bb8323e1e4f05df905b"
+  },
+  "published": null
+}

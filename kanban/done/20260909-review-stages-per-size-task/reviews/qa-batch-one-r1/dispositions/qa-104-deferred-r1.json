@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r1-c1",
+    "epoch": 1
+  },
+  "submitted_revision": 21,
+  "record_id": "qa-104-deferred-r1",
+  "run_id": "qa-batch-one-r1",
+  "finding_id": "QA-104",
+  "batch_id": "batch-one",
+  "task_id": "20260909-review-stages-per-size-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:19:38.754582363Z",
+  "report_hash": "196fe0c79c9c6d2972380195d4cf8e01d6df6a5d6ce09447bae37b90b13d229b",
+  "original": "kander config 人类可读输出在两档相同时是「审核环节: PM=…」,两档不同时变成「审核环节 大: PM=…」——标签后缺冒号,冒号移到了档名后面,与 FormatConfigLines 中其余每一行统一的「标签 + \": \" + 值」格式不一致,按标签冒号前缀切分输出的脚本会漏掉分档形态。建议分档时也用 Text(\"config.review_stages\")+\": \"+summary,由 FormatReviewStagesSummary 返回的档名前缀承担区分。",
+  "status": "deferred",
+  "basis": "已核实:rebase 到 5631b184 后 internal/config/format.go:137-144 在两档不同时仍拼接 Text(\"config.review_stages\")+\" \"+summary,标签后无冒号。现象属实,本修复轮按派发仅处置、不改摘要格式。"
+}

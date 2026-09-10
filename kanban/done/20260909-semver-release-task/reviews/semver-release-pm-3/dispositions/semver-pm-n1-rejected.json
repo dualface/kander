@@ -1,0 +1,14 @@
+{
+  "submitted_revision": 19,
+  "record_id": "semver-pm-n1-rejected",
+  "run_id": "semver-release-pm-3",
+  "finding_id": "PM-N1",
+  "batch_id": "semver-release-batch",
+  "task_id": "20260909-semver-release-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T05:29:25.485798877Z",
+  "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+  "original": "[out-of-contract] 分支推送侧不再有任何自动 vet/test。.github/workflows/ 下只有 release.yml 一个工作流; 触发由 branches: [main] 改为 tags: ['v*'] 之后, release.yml:23-26 的 `go vet ./...` 与 `go test ./...` 只在打 tag 时执行。发版产物安全性不变 (打包前仍先跑测试), 但缺陷要等到打 tag 才暴露, 修复需删 tag 重推。该后果源自用户明确决策的触发方式变更, 不构成本卡契约缺口。最小改动: 新增一个只跑 vet/test 的独立工作流 (on: push / pull_request), 不动 release.yml。是否值得由 owner 决定。",
+  "status": "rejected",
+  "basis": "Beyond contract. USER_DECISIONS and ACCEPTANCE_CRITERIA require on: push: tags: ['v*'] only; adding a separate push/PR CI workflow is an adjacent feature excluded by OUT_OF_SCOPE. ls .github/workflows/ at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1 shows only release.yml, confirming the observation, but the requested extra workflow is not in this card."
+}

@@ -1,0 +1,24 @@
+{
+  "run_id": "g2-pm-r1",
+  "batch_id": "g2-batch-one",
+  "author": "coordinator",
+  "basis": "按各卡修改范围归属：四项均落在 internal/launch/dispatch.go、internal/launch/agent.go、internal/launch/notify_resume.go、internal/notify、internal/board/dispatch* 等由 20260908-durable-dispatch-protocol-task 本轮引入的持久派回路径，未触及另两卡的 subscribe/board 扫描改动",
+  "items": {
+    "PM-001": [
+      "20260908-durable-dispatch-protocol-task"
+    ],
+    "PM-002": [
+      "20260908-durable-dispatch-protocol-task"
+    ],
+    "PM-003": [
+      "20260908-durable-dispatch-protocol-task"
+    ],
+    "PM-004": [
+      "20260908-durable-dispatch-protocol-task"
+    ]
+  },
+  "owners": {
+    "20260908-durable-dispatch-protocol-task": "codex"
+  },
+  "recorded_at": "2026-09-07T19:39:29.685980491Z"
+}

@@ -1,0 +1,23 @@
+Role: PM  
+Commit: b4f634edeb46daa695b73fbe433ce034c7d096ec  
+Task Context: `/tmp/codex-review.ee0bee792b1118fd672ca5b95c97bdc5/task-spec.md`  
+Reviewed Scope: 全部四个变更文件；启动、命令编码、探测、通知、存活分类及反查消费链。
+
+未发现本次变更新增、恶化或掩盖的门禁问题。
+
+需求核对：Complete 7，Partial 0，Missing 0，Contradicted 0，Unverifiable 2。
+
+- Observed：`internal/launch/tmux.go:245` 仅在 POSIX 添加 `exec `，原有编码不变；`:247` 注释说明 shell 包裹及 dash 原因。
+- Observed：`internal/launch/agent.go:46`、`:66`、`:107` 确认 herdr 保持原命令，两种 tmux launcher 共用修复入口；foreground/console 独立。
+- Observed：`internal/launch/tmux_pane_command_test.go:53` 覆盖两种 launcher × 两种平台的实际参数；`herdr_pane_command_test.go:98`、`:107` 精确检查 herdr 命令。
+- Inferred：修复消除包裹 shell 导致的名称失配，与启动校验 `tmux.go:308`、通知 `internal/notify/probe.go:146`、存活分类 `internal/liveness/classify.go:184` 的既有契约一致。
+- Observed：工作树干净，HEAD 匹配；`git diff --check`、变更文件 `gofmt -l` 均无输出。
+- Unverifiable：完整构建、vet、测试及 `kander check` 成功；真机启动和通知直投成功。`task-spec.md:83`、`:85–91` 已记录对应提交的命令与结果，本轮只读审核未独立复跑，不据此推定缺陷。
+
+任务文件删除已尝试；只读文件系统拒绝，不影响审核结果。
+
+NON-BLOCKING: none
+
+```kander-findings
+{"FINDINGS":[],"NON_BLOCKING":[]}
+```

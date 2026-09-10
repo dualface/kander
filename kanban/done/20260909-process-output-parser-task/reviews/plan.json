@@ -1,0 +1,59 @@
+{
+  "revision": 3,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "agent-def-embed-cycle",
+  "author": "cursor-grok-orchestrator",
+  "basis": "User 2026-09-09 asked to advance the backlog in order. All four members of 20260908-agent-definition-group have started. First batch covers every delivery already received on group/20260908-agent-definition-group from creation base 8abdfe2e6430a00e19383f84f23088a8ff743be0 to HEAD e1c01277075599cb0395bf62f16855cebf04b060 (parser, embed, review-template). CSA and Hacker are N/A per this repository's AGENTS.md. PM required and QA required because the aggregated diff is feature development plus contract change. Exit-session-hook remains unbatched until it delivers.",
+  "cwd": "/home/dualf/works/kander/worktrees/20260908-agent-definition-group",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-agent-definition-embed-task",
+    "20260908-agent-exit-session-hook-task",
+    "20260908-agent-review-template-task",
+    "20260909-process-output-parser-task"
+  ],
+  "cycles": {
+    "20260908-agent-definition-embed-task": "edab9f9ca6aff61a1dc173cb76c1043aecd1e736d76f5b092c2ec1b32ede67bf",
+    "20260908-agent-exit-session-hook-task": "0229f3b5b5eb4e7aeeeb8bfd6512312c943cfa5451677fe711e7a45f9355cfc6",
+    "20260908-agent-review-template-task": "230fd153f3da744c86667d82632cbdc05ab899495e711947b79064ca236f0f7b",
+    "20260909-process-output-parser-task": "4779dbc6ce6be69eb4a6255a5609897263c2a6cd88cb2821968ce93b8d977c0e"
+  },
+  "batches": [
+    {
+      "batch_id": "agent-def-batch-one",
+      "task_ids": [
+        "20260908-agent-definition-embed-task",
+        "20260908-agent-review-template-task",
+        "20260909-process-output-parser-task"
+      ],
+      "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+      "target_commit": "e1c01277075599cb0395bf62f16855cebf04b060",
+      "requirements": {
+        "CSA": "N/A: security-role exception in this repository's AGENTS.md",
+        "Hacker": "N/A: security-role exception in this repository's AGENTS.md",
+        "PM": "required",
+        "QA": "required"
+      }
+    },
+    {
+      "batch_id": "agent-def-batch-two",
+      "previous_batch_id": "agent-def-batch-one",
+      "task_ids": [
+        "20260908-agent-definition-embed-task",
+        "20260908-agent-exit-session-hook-task",
+        "20260908-agent-review-template-task",
+        "20260909-process-output-parser-task"
+      ],
+      "base": "d97964c06adb942b94b25c7e5c5bfb04795172e4",
+      "target_commit": "64d0c2cf5fa2e8c8930f56967dced09a2187478d",
+      "requirements": {
+        "CSA": "N/A: security-role exception in this repository's AGENTS.md",
+        "Hacker": "N/A: security-role exception in this repository's AGENTS.md",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-09T04:00:41.838954493Z"
+}

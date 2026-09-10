@@ -1,0 +1,102 @@
+我已完成核实。以下是完整报告。
+
+# QA 审核报告
+
+**Role**: QA
+**Commit**: `777b1f088985e3d11cec3bd9b4dde9271822119e`(增量复审;本角色上一轮审核的提交为 `5631b184af859cd726f07bfa119e5378a5e3ded3`,新增材料为修复范围 `5631b184..777b1f0`)
+**Task Context**: 任务组 `20260909-config-layering-group` batch-one 两张卡 —— `20260909-review-stages-per-size-task`(`review_stages` 按 large/small 分档)与 `20260909-project-config-overlay-task`(项目 `.kander-config.json` 覆盖作用域配置)。
+
+**Reviewed Scope**:
+- 修复范围共 7 个提交(`baa7b35`、`9a2badc`、`c1e3851`、`fa8ab21`、`5d632af`、`32ba6ee`、`777b1f0`),改动 12 个文件:`internal/config/{language,overlay,repair}.go` 及其测试、`internal/menu/options.go` 与 `overlay_cli_test.go`、`internal/tui/{options_form,options_panel,prefs}.go` 与 `options_test.go`、`internal/config/config_test.go`。
+- 逐条核实上一轮 QA-001/002/003/004 与 QA-101/102/103/104 在 `777b1f0` 上的实际状态;并沿写入链重走了全部「覆盖值反向写入作用域」的路径(`config.Update` / `SaveIfUnchanged` / `Repair` / `savePrefs` / `saveColumns` / `Session.prepare`+`Session.Save`)。
+- `5631b184` 以前未改动的代码按指示视为已接受,不重新审计;仅在判断修复影响时作为上下文引用。
+- 本次为只读审核,**未执行任何命令**(未运行构建与测试);编排者在 `777b1f0` 记录的 `go build ./...`、`go vet ./...`、`go test -count=1 ./...` 全通过(1267 passed)按指示作为证据采信,我未发现与之矛盾的代码事实。
+- 文件行数硬规则:修复范围内改动的非生成文件最大为 `internal/config/config_test.go` 969 行、`internal/tui/options_test.go` 762 行、`internal/tui/options_form.go` 753 行,均未越过 1000 行,且无「已超限文件净增行」的情形,不触发该规则。
+
+---
+
+## 一、上一轮发现的逐条核实
+
+| ID | 作者处置 | 本轮结论 | 关键证据(`777b1f0`) |
+| --- | --- | --- | --- |
+| QA-001 | fixed(`c1e3851`) | **已关闭** | `internal/config/overlay.go:205-214`:`mergeOverlayRaw` 现对两侧各调一次 `normalizeReviewStagesField`,覆盖侧先 `cloneRawObjectDeep` 再规范化,不改调用方的 map;`internal/config/overlay_test.go:191-220` 新增「作用域两档 + 覆盖平铺」用例并同时断言作用域未被改写 |
+| QA-002 | fixed(`fa8ab21`) | **已关闭** | `internal/tui/options_panel.go:537-549`:`persistUI` 改为 `savePrefs(prefsFromConfig(p.session.Config.TUI))`,基底是 `LoadScope` 会话值(`options_panel.go:125-130`、`internal/menu/options.go:150`);`internal/tui/prefs.go:66-74`:`saveColumns` 只在 `config.Update` 内补丁 `Columns`;`internal/tui/options_form.go:681-727`:`applyInterface` 以会话作用域 `TUI` 为基底、只补丁用户本次改动的字段;测试 `options_test.go:685-762` 覆盖 `tui` 覆盖键 |
+| QA-003 | fixed(`5d632af`) | **已关闭** | `internal/config/language.go:118-140`:`ConfiguredLanguage` 在取 `explicitConfigLanguage` 前套用与 `loadEffective` 相同的覆盖合并与 `Validate`;`internal/menu/overlay_cli_test.go:81-110` 断言 `kander config` 人类可读输出切换到覆盖语言 |
+| QA-004 | fixed(`baa7b35`) | **已关闭** | `internal/config/repair.go:100-105`:`provided` 取得后立即 `cloneRawObjectDeep`,`fillMissingReviewStageScales`(`repair.go:146,154-172`)不再触碰 `repairAt` 用于 `reflect.DeepEqual(raw, normalized)`(`repair.go:74`)的原始 map;`repair_test.go:173-229` 新增「仅缺 small 档」用例并断言 `result.Changed` 与磁盘内容 |
+| QA-101 | deferred | **仍开放**(现象未变) | `internal/config/overlay.go:19-31` 仍硬编码 11 个允许键;`internal/config/config.go:656` `Validate` 仍无顶层键白名单 |
+| QA-102 | deferred | **仍开放**(现象未变) | `internal/config/overlay.go:56-70` 仍对 `rules` 做键级合并;`internal/config/rules.go:69-82` 仍以 `DefaultRules(false)` 为底;`internal/config/config.go:720` 缺整节时用 `legacyRules()` |
+| QA-103 | deferred | **仍开放**(现象未变) | `internal/config/overlay.go:118` 的 `overlayPathSafe` → `internal/config/paths.go:39-50` 已做 `Lstat`+`IsReparsePoint`,`overlay.go:121-130` 仍重复一次 |
+| QA-104 | deferred | **仍开放**(现象未变) | `internal/config/format.go:138-142`:折叠时 `Text("config.review_stages")+": "`,分档时仍是 `Text("config.review_stages")+" "+summary`,标签后无冒号 |
+
+四条门禁项(QA-001/002/003/004)均已真实关闭,不是形式关闭:每条都能在 `777b1f0` 的实现里指到根因消除点,且各自带上了能触达原失败分支的新测试(QA-004 的新用例正是原报告指出的「其余字段完整、仅缺一档」形态,QA-002 的隔离测试补上了原来漏掉的 `tui` 键)。
+
+---
+
+## 二、修复范围新增改动的行为 / 质量核对
+
+| 需求 / 行为 | 证据 | 结论 |
+| --- | --- | --- |
+| 覆盖侧 `review_stages` 规范化不污染调用方原始 JSON | `overlay.go:209` 先 `cloneRawObjectDeep(overlay)` 再规范化 | 通过(Observed) |
+| 部分覆盖语义未被规范化破坏(只覆盖 `review_stages.large.PM` 仍是键级合并) | `review_stages.go:72-101`:`NormalizeReviewStages` 对两档形态只做深拷贝、不回填缺失角色;缺档回填仅发生在 `repair.go` | 通过(Observed) |
+| `repairValues` 克隆后 doctor 其余修复语义不变 | `repair.go:100-105,146-147`:`recoverConfigFields` 只读 `provided`、写 `root`,克隆仅改变身份不改变取值 | 通过(Observed) |
+| TUI 界面偏好写入以未合并作用域为基底 | `options_panel.go:541-542`、`options_form.go:684-686,718-720`、`prefs.go:66-74`;`config.Update` → `loadValidated`(`loadsave.go:281-291`)只读作用域 | 通过(Observed) |
+| `saveColumns` 返回值推进会话基线的语义正确 | `prefs.go:68-72` 返回补丁后的**作用域** `cfg.TUI`;`app.go:533` → `internal/menu/doctor_session.go:58-68` 同步 `Config`/`existing` | 通过(Observed) |
+| `savePrefs` 注释与实现一致(PM-10) | `prefs.go:28-38`:空判断已删除,注释明确「整节写入调用方快照、不过滤覆盖字段」,与 `cfg.TUI = prefsConfig(prefs)` 一致 | 通过(Observed) |
+| 选项面板保存不写回覆盖 `language`(PM-09) | `menu/options.go:153-158` 用 `ConfiguredScopeLanguage()`;`language.go:107-116` 只读未合并作用域 | **不完全**(见 QA-005) |
+| 面板文案跟随合并语言、会话值跟随作用域语言 | `menu/options.go:162-164` `BindEffectiveLanguage()`;`options_form.go:383` 语言选择器绑定 `session.Config.Language` | 通过(Observed);与面板顶部覆盖提示行(`options_panel.go:106-112`)语义自洽 |
+| `persistUI` 新增的 `p.session == nil` 提前返回 | `options_panel.go:538-540`;该状态下 `openRoot` 不会被调用(`options_panel.go:166-179`、`options_view.go:122-123`),`save()` 不可达 | 通过(防御性,无行为回归) |
+| 覆盖文件字节在所有新增写入路径后不变 | `options_test.go:733-742`、`overlay_cli_test.go:150-155` | 通过(Observed) |
+| PM-04 删除重复断言后覆盖未丢失 | 被删的三段行为仍由 `review_stages_test.go:12-42,44-67,69-93` 覆盖 | 通过(Observed) |
+
+---
+
+## 主要发现(Gate Findings)
+
+### QA-005 — medium — 作用域 `config.json` 未显式写 `language` 键时,选项面板保存仍会把覆盖文件的 `language` 写进作用域配置
+
+**声明类型**:Observed
+
+**证据**
+- `internal/menu/options.go:153-158`:`prepare` 只有在 `config.ConfiguredScopeLanguage()` 返回非空时才使用作用域显式语言;为空时回落到 `cfg.Language = config.ResolveLanguage()`(`options.go:157`)。
+- `internal/config/language.go:69-82` `explicitConfigLanguage`:`language` 键不存在时返回 `""`,因此 `ConfiguredScopeLanguage()`(`language.go:110-116`)对「有效但没有 `language` 键」的作用域配置返回 `""`,直接命中上面的 `else` 分支。
+- `internal/config/language.go:152-176` `ResolveLanguage`:在无 `--lang`/`KANDER_LANG_CLI` 时,第三优先级取进程内绑定值 `configLanguage`(`language.go:165-167`)。
+- 该绑定值在会话构造之前已经被设成**合并后的覆盖语言**:`internal/tui/cmd.go:67` `config.BindEffectiveLanguage()` → `language.go:179-186` → `language.go:120-140` `ConfiguredLanguage()`(合并覆盖)。`internal/menu/commands.go:13` 在每条 CLI 命令开头做同样的绑定。
+- 写盘:`internal/menu/options.go:504` `Session.Save()` → `internal/config/loadsave.go:346-377` `SaveIfUnchanged` 整份写出 `s.Config`;`configEditConflicts` 比较的是 `current` 与 `baseline`(两者都来自作用域),不会拦下这次写入。
+- 「无 `language` 键」是本仓库明确支持并有测试的作用域配置形态:`internal/config/config_test.go:831-838` 删除该键后断言 `ConfiguredLanguage()` 为 `""`(即「用户未选语言、跟随环境」)。
+- 与实现不符的注释与文档:`internal/config/language.go:107-109`「Write and edit paths use this so an overlay language cannot be copied back into the scope file」、`internal/menu/options.go:162-163`「the session value stays the unmerged scope language so Save cannot write overlay-only language back」、`rules/KANDER-AGENTS.md:19`「Overlay values are never written back」。
+
+**可达失败场景**
+用户的作用域 `config.json` 有效、`welcome_complete` 为 `true`,但没有 `language` 键(手工编辑过,或 `KANDER_CONFIG` 指向一份自己写的最小配置——即上述测试所描述的「跟随环境语言」状态)。项目主工作树提交 `.kander-config.json` 为 `{"language": "ja"}`。用户在该项目目录下运行 `kander tui`:`cmd.go:67` 把 `configLanguage` 绑定为 `ja`;打开选项面板 → `LoadScope` + `menu.NewSession` → `prepare` 中 `ConfiguredScopeLanguage()` 返回 `""` → `cfg.Language = ResolveLanguage()` = `ja`;用户在任一分区(界面/执行/审核/规则)按 Enter 提交 → `persistNow` → `Session.Save` → 作用域 `config.json` 被写成 `"language": "ja"`。删除覆盖文件后,该值仍留在用户全局配置里。
+
+**影响**
+违反卡 2 USER_DECISIONS「所有写入路径……以未合并的作用域配置为读-改-写基底,覆盖文件中的值不得反向写入作用域 `config.json`」与对应验收项,以及 THREAT_MODEL 的头号资产「用户作用域配置的完整性」。这是 PM-09 修复(`32ba6ee`)只覆盖了「作用域有显式 `language`」一条分支所留下的残口:`else` 分支的 `ResolveLanguage()` 恰好会读到刚被 `BindEffectiveLanguage()` 绑定的合并值。新增的 `internal/menu/overlay_cli_test.go:112-155` `TestSessionSaveLeavesOverlayLanguageIsolated` 在作用域中显式写了 `"language": "en"`(`overlay_cli_test.go:116`),只走 `stored != ""` 分支,因此测试全绿而该分支无人覆盖。触发条件比 PM-09 窄(需作用域缺 `language` 键),但后果相同且不可自动恢复。
+
+**最小修复**
+在 `internal/menu/options.go:156-158` 的 `else` 分支里让语言解析绕开进程内已绑定的合并值,例如先 `config.BindConfigLanguage(nil)` 再 `config.ResolveLanguage()`(紧随其后的 `options.go:164` `BindEffectiveLanguage()` 会立刻把合并语言重新绑回,面板文案不受影响),或在 `internal/config/language.go` 中新增一个只走 `--lang` / 环境的 `ResolveScopeLanguage()` 供写入路径使用;同时把 `language.go:107-109` 与 `options.go:162-163` 的注释改成与实际保证一致。测试上把 `TestSessionSaveLeavesOverlayLanguageIsolated` 扩展一例:作用域 payload 不含 `language` 键 + 覆盖 `{"language":"ja"}`,断言 `Session.Save()` 后 `LoadScope` 的 `Language` 不是 `ja`。
+
+---
+
+## NON-BLOCKING
+
+### QA-101 — recommend — `overlayAllowedKeys` 手工复制顶层 schema 键集,新增配置键时覆盖文件会误报未知键
+本轮未改动,现象未变。`internal/config/overlay.go:19-31` 仍硬编码 11 个允许键,而 `internal/config/config.go:656` 的 `Validate` 无顶层键白名单、对未知键静默忽略,两处没有共享来源。后续为 `config.json` 新增顶层键时若忘记同步这张表,覆盖文件里使用该键会被 `config.overlay_has_unknown_keys` 拒绝,错误方向具有误导性。改法:从 `Config` 结构体 json tag 反射生成允许键集合,或在 `config.go` 定义单一 `topLevelKeys` 常量供两处引用,禁止键仍单独维护。
+
+### QA-102 — low — 作用域无 `rules` 节时,覆盖文件写入 `rules` 任一子键会把其余六个模块变为关闭
+本轮未改动,现象未变。`internal/config/overlay.go:56-70` 的 `deepMerge` 对 `rules` 做键级合并;当作用域是「合法旧配置、整节缺失 `rules`」(该形态下 `internal/config/config.go:720` 用 `legacyRules()` 七开关全开)时,合并后 `rules` 节从「不存在」变为「只含覆盖写的那一个键」,`internal/config/rules.go:69-82` 的 `validateRules` 以 `DefaultRules(false)` 为底,其余六项落为 `false`;若覆盖写的是 `{"task_groups": true}`,还会因 task_groups⇒git 依赖让 `Load` 直接报错。改法:`mergeOverlayRaw` 中当 `scope` 无 `rules` 键而 `overlay` 有时,先把 `legacyRules()` 的完整值物化进 `scope` 再合并。
+
+### QA-103 — suggest — `inspectOverlayCandidate` 对同一路径做了两次 reparse 判定
+本轮未改动,现象未变。`internal/config/overlay.go:118` 调用的 `overlayPathSafe` → `internal/config/paths.go:39-50` `rejectLeafReparse` 内部已执行 `os.Lstat` + `fs.IsReparsePoint`,`internal/config/overlay.go:121-130` 又重复一次;第二次判定在非 Windows 分支上永远不会命中,读代码时容易误以为两者防的是不同东西。改法:去掉 `overlay.go:128-130`,只保留 `Lstat` 结果用于 `IsRegular` 判断。
+
+### QA-104 — suggest — 两档不同时的 `kander config` 摘要行缺少冒号,与其余各行格式不一致
+本轮未改动,现象未变。`internal/config/format.go:138-142`:折叠时输出 `审核环节: PM=…`,不折叠时输出 `审核环节 大: PM=…`(标签后无冒号)。`FormatConfigLines` 中其他每一行都是 `标签 + ": " + 值`,按 `标签:` 前缀切分输出的脚本会漏掉分档形态。改法:分档时也用 `Text("config.review_stages")+": "+summary`,由 `FormatReviewStagesSummary` 返回的档名前缀承担区分。
+
+### QA-105 — suggest — 覆盖侧 `review_stages` 规范化失败时,错误信息不指出是 `.kander-config.json` 的问题
+`internal/config/overlay.go:209-212` 新增的覆盖侧规范化直接把 `NormalizeReviewStages` 的错误原样上抛,而这些文案(`internal/config/review_stages.go:83-99` 的 `config.review_stages_mixes_scale_and_role_keys` / `config.review_stages_has_unknown_scales` / `config.review_stages_has_unknown_roles`)都只提到 `review_stages`,不含文件路径。项目提交的 `.kander-config.json` 写成 `{"review_stages": {"large": {...}, "PM": "auto"}}` 时,用户在该目录下运行任何命令都会看到一条像是在说自己作用域配置有问题的错误,而 `readOverlay`(`overlay.go:193-201`)对 JSON 非法与禁止/未知键都是带路径报错的,同一文件的两类错误诊断力不一致。改法:在 `mergeOverlayRaw` 中把覆盖侧的规范化错误包一层带覆盖文件绝对路径的文案(需把路径传进 `mergeOverlayRaw`,`loadEffective`/`ConfiguredLanguage` 两个调用点都已持有该路径)。
+
+(候选项无裁剪;共 5 条,未超过十条上限。)
+
+按只读约束,本次审核未修改、创建或删除任何文件,`/tmp/claude-review.9df60513a760fcf710e0edf25f490446/prompt.txt` 未删除,按其自述不影响结论。
+
+```kander-findings
+{"FINDINGS":[{"id":"QA-005","tier":"medium","text":"PM-09 的修复只覆盖了「作用域配置有显式 language 键」一条分支。internal/menu/options.go:153-158 中,ConfiguredScopeLanguage() 返回空时回落到 config.ResolveLanguage(),而 ResolveLanguage(internal/config/language.go:152-176)的第三优先级正是进程内绑定值 configLanguage,该值在会话构造之前已由 internal/tui/cmd.go:67 / internal/menu/commands.go:13 的 BindEffectiveLanguage() 设为合并覆盖后的语言(language.go:179-186 → 120-140)。explicitConfigLanguage(language.go:69-82)在缺 language 键时返回空,而「有效但无 language 键」是本仓库明确支持并有测试的作用域形态(internal/config/config_test.go:831-838)。于是:作用域 config.json 有效、welcome_complete 为 true、无 language 键,项目 .kander-config.json 为 {\"language\":\"ja\"} 时,用户在该目录下打开 TUI 选项面板并在任一分区提交,persistNow → Session.Save → SaveIfUnchanged(internal/config/loadsave.go:346-377)就会把 ja 整份写进作用域 config.json,删除覆盖文件后污染仍在。违反卡 2 USER_DECISIONS「所有写入路径以未合并的作用域配置为读-改-写基底,覆盖值不得反向写入」与对应验收项,也与 internal/config/language.go:107-109、internal/menu/options.go:162-163 的注释及 rules/KANDER-AGENTS.md:19 的承诺矛盾。新增测试 internal/menu/overlay_cli_test.go:112-155 在作用域中显式写了 language=en,只走 stored != \"\" 分支,覆盖不到该回落分支。最小修复:else 分支先 config.BindConfigLanguage(nil) 再 ResolveLanguage()(紧随的 options.go:164 BindEffectiveLanguage() 会立即重新绑回合并语言,面板文案不受影响),或新增只走 --lang/环境的 ResolveScopeLanguage() 供写入路径使用;同时修正两处过度承诺的注释,并把隔离测试扩展一例「作用域无 language 键 + 覆盖有 language」。","evidence":"internal/menu/options.go:153-158(ConfiguredScopeLanguage 为空时回落 ResolveLanguage);internal/config/language.go:69-82(缺 language 键即返回空);internal/config/language.go:110-116(ConfiguredScopeLanguage);internal/config/language.go:152-176(ResolveLanguage 第三优先级取绑定值);internal/config/language.go:179-186 与 120-140(BindEffectiveLanguage 绑定的是合并覆盖后的语言);internal/tui/cmd.go:67、internal/menu/commands.go:13(会话构造前已绑定);internal/menu/options.go:504 与 internal/config/loadsave.go:346-377(Session.Save → SaveIfUnchanged 整份写作用域文件);internal/config/config_test.go:831-838(无 language 键是受支持并有测试的作用域形态);测试盲区 internal/menu/overlay_cli_test.go:112-155(作用域显式 language=en);冲突注释与文档 internal/config/language.go:107-109、internal/menu/options.go:162-163、rules/KANDER-AGENTS.md:19"}],"NON_BLOCKING":[{"id":"QA-101","tier":"recommend","text":"本轮未改动,现象未变。overlayAllowedKeys 手工复制了 config.json 的 11 个顶层键,而 Validate 本身无键白名单、对未知键静默忽略,两处没有共享来源。后续新增顶层配置键时若忘记同步这张表,覆盖文件使用该键会被 config.overlay_has_unknown_keys 拒绝,错误提示方向具有误导性。建议把允许键集合改为从 Config 结构体的 json tag 反射生成,或在 config.go 定义单一 topLevelKeys 常量供两处引用,禁止键仍单独维护。","evidence":"internal/config/overlay.go:19-31(硬编码 overlayForbiddenKeys / overlayAllowedKeys);internal/config/config.go:656(Validate 无顶层键白名单,未知键被忽略)","lineage":{"run_id":"qa-batch-one-r1","finding_id":"QA-101"}},{"id":"QA-102","tier":"low","text":"本轮未改动,现象未变。deepMerge 对 rules 做键级合并:当作用域是「合法旧配置、整节缺失 rules」(该形态下七个开关全开)且覆盖文件写入 rules 的任一子键时,合并后 rules 节从「不存在」变为「只含该键」,validateRules 以 DefaultRules(false) 为底,其余六项落为 false;若覆盖写的是 {\"task_groups\": true},还会因 task_groups 依赖 git 的校验让 Load 直接报错。建议在 mergeOverlayRaw 中,当 scope 无 rules 键而 overlay 有时,先把 legacyRules() 的完整值物化进 scope 再合并。","evidence":"internal/config/overlay.go:56-70(deepMerge 键级合并);internal/config/rules.go:69-82(validateRules 以 DefaultRules(false) 为底并执行 ValidateRules 依赖检查);internal/config/config.go:720(缺 rules 节时用 legacyRules());AGENTS.md:49(旧配置缺整节时七开关全开)","lineage":{"run_id":"qa-batch-one-r1","finding_id":"QA-102"}},{"id":"QA-103","tier":"suggest","text":"本轮未改动,现象未变。inspectOverlayCandidate 对同一路径做了两次 reparse 判定:overlayPathSafe 调用的 rejectLeafReparse 内部已执行 os.Lstat + fs.IsReparsePoint,紧接着函数体又重复了一次,该第二次判定在非 Windows 分支上永远不会命中,读代码时容易误以为两者防护的是不同对象。建议删去重复段,只保留 Lstat 结果用于 IsRegular 判断,Windows 的逐段校验仍由 overlayPathSafe 承担。","evidence":"internal/config/overlay.go:118(overlayPathSafe);internal/config/paths.go:39-50(rejectLeafReparse 已做 Lstat + IsReparsePoint);internal/config/overlay.go:121-130(重复的 Lstat + IsReparsePoint)","lineage":{"run_id":"qa-batch-one-r1","finding_id":"QA-103"}},{"id":"QA-104","tier":"suggest","text":"本轮未改动,现象未变。kander config 人类可读输出在两档相同时是「审核环节: PM=…」,两档不同时变成「审核环节 大: PM=…」——标签后缺冒号,冒号移到了档名后面,与 FormatConfigLines 中其余每一行统一的「标签 + \": \" + 值」格式不一致,按标签冒号前缀切分输出的脚本会漏掉分档形态。建议分档时也用 Text(\"config.review_stages\")+\": \"+summary,由 FormatReviewStagesSummary 返回的档名前缀承担区分。","evidence":"internal/config/format.go:138-142(分档分支拼接为 Text(\"config.review_stages\")+\" \"+summary);internal/config/format.go:112-118,124-136(其余行统一使用 \": \")","lineage":{"run_id":"qa-batch-one-r1","finding_id":"QA-104"}},{"id":"QA-105","tier":"suggest","text":"修复范围新增的覆盖侧 review_stages 规范化把 NormalizeReviewStages 的错误原样上抛,而这些文案只提到 review_stages、不含文件路径。项目提交的 .kander-config.json 写成 {\"review_stages\": {\"large\": {...}, \"PM\": \"auto\"}} 时,用户在该目录下运行任何命令都会看到一条像是在说自己作用域配置有问题的错误;而同一文件的 JSON 非法与禁止/未知键两类错误都是带绝对路径报错的,诊断力不一致。建议在 mergeOverlayRaw 中把覆盖侧的规范化错误包一层带覆盖文件绝对路径的文案(需把路径传进 mergeOverlayRaw,loadEffective 与 ConfiguredLanguage 两个调用点都已持有该路径)。","evidence":"internal/config/overlay.go:209-212(覆盖侧 normalizeReviewStagesField 直接返回原错误);internal/config/review_stages.go:83-99(错误文案只含键名,不含文件路径);对照 internal/config/overlay.go:193-201(JSON 非法与根类型错误均带 path)、internal/config/overlay.go:85-103(禁止键/未知键均带 path)"}]}
+```

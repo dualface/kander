@@ -1,0 +1,27 @@
+{
+  "run_id": "agent-definitions-qa-1",
+  "batch_id": "agent-definitions-batch",
+  "author": "codex",
+  "basis": "逐项回到 56ec24d4ca46285288cccf219d971a3a8d970523 的源码验证，并以新增回归在未修改源码时复现；相同根因跨角色合并处理。",
+  "items": {
+    "QA-001": [
+      "20260908-agent-executable-override-task"
+    ],
+    "QA-002": [
+      "20260908-agent-executable-override-task"
+    ],
+    "QA-003": [
+      "20260908-agent-executable-override-task"
+    ],
+    "QA-004": [
+      "20260908-agent-executable-override-task"
+    ],
+    "QA-005": [
+      "20260908-agent-executable-override-task"
+    ]
+  },
+  "owners": {
+    "20260908-agent-executable-override-task": "codex"
+  },
+  "recorded_at": "2026-09-08T02:47:18.474384484Z"
+}

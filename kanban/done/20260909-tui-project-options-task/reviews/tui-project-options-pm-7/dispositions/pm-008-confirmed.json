@@ -1,0 +1,14 @@
+{
+  "submitted_revision": 84,
+  "record_id": "pm-008-confirmed",
+  "run_id": "tui-project-options-pm-7",
+  "finding_id": "PM-008",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T12:15:13.472945778Z",
+  "report_hash": "364576ce0194ef0afe0b11612736b0d0dfa1b69821e4c02d43d9044a777d4c88",
+  "original": "Inferred，高置信度，本轮新增，与 QA-008 同根因。违反 task-spec.md ACCEPTANCE_CRITERIA 第5条及 USER_DECISIONS 的恢复继承删除对应覆盖键要求。合法基础配置缺少整个 tui 时，Project 连续修改主题和刷新间隔，两个校验失败的编辑均由本轮新增逻辑保留到 overlayRaw；恢复任一字段后，剩余字段仍组成不完整 tui，整份候选校验失败，删除不提交。因此用户无法通过逐项恢复继承撤销这些覆盖，保存也持续失败。最小修复：区分无效草稿与有效配置，允许已有无效草稿逐键撤销；保存继续严格校验，保留原有效配置下恢复失败的原子性。增加两个失败编辑、逐项恢复及最终保存回归。",
+  "status": "confirmed",
+  "basis": "独立复核确认，与 QA-008 同根因。RestoreInherit 只允许有效候选提交，无法逐项撤销多个无效草稿键；补充无效草稿显示状态，保持保存严格校验。"
+}

@@ -1,0 +1,36 @@
+[
+  {
+    "command": [
+      "git",
+      "worktree",
+      "remove",
+      "/home/dualf/works/kander/worktrees/coordinator-recovery"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "branch",
+      "-d",
+      "coordinator-recovery"
+    ],
+    "exit_code": 0,
+    "stdout": "Deleted branch coordinator-recovery (was 26edb64).\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "push",
+      "origin",
+      "--delete",
+      "coordinator-recovery"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": "To https://github.com/dualface/kander.git\n - [deleted]         coordinator-recovery\n"
+  }
+]

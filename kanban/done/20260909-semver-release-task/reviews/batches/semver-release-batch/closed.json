@@ -1,0 +1,653 @@
+{
+  "schema": 1,
+  "plan_id": "semver-release-cycle",
+  "batch_id": "semver-release-batch",
+  "target_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+  "request": {
+    "mechanical": [
+      {
+        "record_id": "semver-pm-01-fixed-2",
+        "finding": {
+          "run_id": "semver-release-pm-3",
+          "finding_id": "PM-01"
+        },
+        "task_id": "20260909-semver-release-task",
+        "author": "cursor",
+        "category": "documentation",
+        "reported_category": "documentation",
+        "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+        "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "basis": "Comment-only change; no logic, tests, or build entry points were edited",
+        "facts": "Compared each changed sentence in internal/version/version.go:6-9 at 211c104282f181d5fabe6cc49b03583b0bed269f with Makefile:7-10. The new comment states describe is used when a tag is reachable and dev when there are no tags or the checkout is not git, matching the Makefile probe (`git describe --tags` without --always) and the make-windows.cmd gate.",
+        "paths": [
+          "internal/version/version.go"
+        ],
+        "diff_hash": "e02f0d530990a2d212990a8b9541790d82d4490e13d18be6686f81013fcf255b"
+      },
+      {
+        "record_id": "semver-qa-1-fixed-2",
+        "finding": {
+          "run_id": "semver-release-qa-3",
+          "finding_id": "QA-1"
+        },
+        "task_id": "20260909-semver-release-task",
+        "author": "cursor",
+        "category": "documentation",
+        "reported_category": "documentation",
+        "report_hash": "f212f66786e9365be9ad6f900ab92d6955ec68a504e1ca1faa8b967d53a8ea61",
+        "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "basis": "Same documentation mismatch as PM-01; one comment fix closes both",
+        "facts": "Same sentence-by-sentence comparison of version.go:6-9 with Makefile:7-10 after 211c104282f181d5fabe6cc49b03583b0bed269f. QA-1 and PM-01 share the no-tag versus --always wording gap; only the comment changed.",
+        "paths": [
+          "internal/version/version.go"
+        ],
+        "diff_hash": "e02f0d530990a2d212990a8b9541790d82d4490e13d18be6686f81013fcf255b"
+      }
+    ],
+    "batch_id": "semver-release-batch",
+    "expected_revision": 3,
+    "view_hash": "7d3868c4692b84023f83e5fd740e5a6a5824b217825f89ae6bc8f9e049108074",
+    "author": "cursor",
+    "roles": {
+      "PM": {
+        "run_id": "semver-release-pm-3",
+        "passed_at": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "basis": "Independent verification of PM-01 against Makefile:10 and version.go after the documentation fix; PM-N1 and PM-N2 rejected as beyond contract with factual basis"
+      },
+      "QA": {
+        "run_id": "semver-release-qa-3",
+        "passed_at": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "basis": "Independent verification of QA-1 (same documentation mismatch as PM-01) after the comment fix; QA-2 rejected as beyond contract"
+      }
+    },
+    "resolved_failures": {
+      "semver-release-pm-1": "semver-release-pm-3",
+      "semver-release-pm-2": "semver-release-pm-3",
+      "semver-release-qa-1": "semver-release-qa-3",
+      "semver-release-qa-2": "semver-release-qa-3"
+    },
+    "opinions": [
+      {
+        "author": "cursor",
+        "basis": "Main-agent verification of reports, dispositions, and the mechanical comment fix; not a substitute for author dispositions"
+      }
+    ]
+  },
+  "git": {
+    "mechanical": [
+      {
+        "record_id": "semver-pm-01-fixed-2",
+        "run_id": "semver-release-pm-3",
+        "task_id": "20260909-semver-release-task",
+        "from": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+        "to": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "paths": [
+          "internal/version/version.go"
+        ],
+        "diff_hash": "e02f0d530990a2d212990a8b9541790d82d4490e13d18be6686f81013fcf255b"
+      },
+      {
+        "record_id": "semver-qa-1-fixed-2",
+        "run_id": "semver-release-qa-3",
+        "task_id": "20260909-semver-release-task",
+        "from": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+        "to": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "paths": [
+          "internal/version/version.go"
+        ],
+        "diff_hash": "e02f0d530990a2d212990a8b9541790d82d4490e13d18be6686f81013fcf255b"
+      }
+    ],
+    "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+    "head": "211c104282f181d5fabe6cc49b03583b0bed269f",
+    "verified_at": "2026-09-09T05:31:14.002251168Z",
+    "edges": [
+      {
+        "ancestor": "211c104282f181d5fabe6cc49b03583b0bed269f",
+        "descendant": "211c104282f181d5fabe6cc49b03583b0bed269f"
+      },
+      {
+        "ancestor": "5172edad0c23c2f85265461d6238215f443849a9",
+        "descendant": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1"
+      },
+      {
+        "ancestor": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+        "descendant": "211c104282f181d5fabe6cc49b03583b0bed269f"
+      },
+      {
+        "ancestor": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+        "descendant": "211c104282f181d5fabe6cc49b03583b0bed269f"
+      }
+    ]
+  },
+  "role_statuses": {
+    "CSA": "N/A: this repository's AGENTS.md marks CSA as always N/A and never run",
+    "Hacker": "N/A: this repository's AGENTS.md marks Hacker as always N/A and never run",
+    "PM": "PASS",
+    "QA": "PASS"
+  },
+  "view": {
+    "schema": 1,
+    "batch": {
+      "plan_id": "semver-release-cycle",
+      "task_context_hash": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c",
+      "schema": 1,
+      "batch_id": "semver-release-batch",
+      "task_ids": [
+        "20260909-semver-release-task"
+      ],
+      "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+      "target_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+      "report_language": "zh-CN",
+      "requirements": {
+        "CSA": "N/A: this repository's AGENTS.md marks CSA as always N/A and never run",
+        "Hacker": "N/A: this repository's AGENTS.md marks Hacker as always N/A and never run",
+        "PM": "required",
+        "QA": "required"
+      },
+      "advances": [
+        {
+          "previous_target": "5172edad0c23c2f85265461d6238215f443849a9",
+          "target": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+          "reason": "mechanical documentation wording: describe injected version without calling it semver",
+          "deliveries": {
+            "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1": "20260909-semver-release-task"
+          }
+        },
+        {
+          "previous_target": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+          "target": "211c104282f181d5fabe6cc49b03583b0bed269f",
+          "reason": "mechanical documentation: Version comment now states no-tag fallback to dev",
+          "deliveries": {
+            "211c104282f181d5fabe6cc49b03583b0bed269f": "20260909-semver-release-task"
+          }
+        }
+      ],
+      "revision": 3
+    },
+    "runs": [
+      {
+        "run": {
+          "schema": 1,
+          "findings_schema": 1,
+          "task_group": "",
+          "run_id": "semver-release-pm-1",
+          "batch_id": "semver-release-batch",
+          "task_ids": [
+            "20260909-semver-release-task"
+          ],
+          "role": "PM",
+          "reviewer": "claude",
+          "model": "opus",
+          "effort": "high",
+          "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+          "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+          "commit": "5172edad0c23c2f85265461d6238215f443849a9",
+          "report_language": "zh-CN",
+          "input_hashes": {
+            "review-context.md": "e95b4aebf0d61ae4b44c3c0dfcdfc4aae20f8ef1c65217d44a0860a42de42c8e",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "kander_version": "20260909T034406Z-fe46c2f545a4",
+          "phase": "finalized",
+          "launch_status": "started",
+          "execution_status": "failed",
+          "semantic_status": "unassessed",
+          "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+          "exit_code": 1,
+          "created_at": "2026-09-09T05:07:32.817979838Z",
+          "finished_at": "2026-09-09T05:12:15.823453403Z",
+          "duration_ms": 283005,
+          "hashes": {
+            "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "evidence.txt": "3aa1e5c74cd7a08b47bcc9bbf9574d422634b0a8a13c9928ed1de628db242c73",
+            "output.raw": "8efbad4dbdeb6194a06ede582899dbf662f1bc4da448050f824428e31f98e51c",
+            "prompt.txt": "af5567d5e97ffe8f5b243d1c3b325e84053be1929bc5c83c85af39d72f96ff25",
+            "report.md": "f5980ff6e85a6695703206133c9a5b864b966ad169af96218fa5c5716cdb59b8",
+            "review-context.md": "e95b4aebf0d61ae4b44c3c0dfcdfc4aae20f8ef1c65217d44a0860a42de42c8e",
+            "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "published": {
+            "20260909-semver-release-task": true
+          }
+        },
+        "records": []
+      },
+      {
+        "run": {
+          "schema": 1,
+          "findings_schema": 1,
+          "task_group": "",
+          "run_id": "semver-release-pm-2",
+          "batch_id": "semver-release-batch",
+          "task_ids": [
+            "20260909-semver-release-task"
+          ],
+          "role": "PM",
+          "reviewer": "claude",
+          "model": "opus",
+          "effort": "high",
+          "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+          "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+          "commit": "5172edad0c23c2f85265461d6238215f443849a9",
+          "report_language": "zh-CN",
+          "input_hashes": {
+            "review-context.md": "358c4f966418d58ee8953efbdf4eaea94865e7772e18c5b45be9fd4dfeb6a954",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "kander_version": "20260909T034406Z-fe46c2f545a4",
+          "phase": "finalized",
+          "launch_status": "started",
+          "execution_status": "failed",
+          "semantic_status": "unassessed",
+          "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+          "exit_code": 1,
+          "created_at": "2026-09-09T05:15:09.461803673Z",
+          "finished_at": "2026-09-09T05:19:54.052588817Z",
+          "duration_ms": 284590,
+          "hashes": {
+            "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "evidence.txt": "3aa1e5c74cd7a08b47bcc9bbf9574d422634b0a8a13c9928ed1de628db242c73",
+            "output.raw": "612a5a1c6ebab3171878a7b61bfc25d17d714660dad11c814169da8fb4646294",
+            "prompt.txt": "aa7993dacc0b05de0a3b9160f476a27e4ba115bbd8ab50b0fc04acf4625f4d42",
+            "report.md": "ac15d9083953a0a9a32936af680325130801abde262fa440b487fa0a81c305aa",
+            "review-context.md": "358c4f966418d58ee8953efbdf4eaea94865e7772e18c5b45be9fd4dfeb6a954",
+            "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "published": {
+            "20260909-semver-release-task": true
+          }
+        },
+        "records": []
+      },
+      {
+        "run": {
+          "schema": 1,
+          "findings_schema": 1,
+          "task_group": "",
+          "run_id": "semver-release-pm-3",
+          "batch_id": "semver-release-batch",
+          "task_ids": [
+            "20260909-semver-release-task"
+          ],
+          "role": "PM",
+          "reviewer": "claude",
+          "model": "opus",
+          "effort": "high",
+          "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+          "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+          "commit": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+          "report_language": "zh-CN",
+          "input_hashes": {
+            "review-context.md": "0dfb220553ae34aa86899b2627e7360ffad818416afbc113ba1abe6c8c8b5827",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "kander_version": "20260909T034406Z-fe46c2f545a4",
+          "phase": "finalized",
+          "launch_status": "started",
+          "execution_status": "ok",
+          "semantic_status": "unassessed",
+          "exit_code": 0,
+          "created_at": "2026-09-09T05:22:27.5091918Z",
+          "finished_at": "2026-09-09T05:27:21.407787186Z",
+          "duration_ms": 293898,
+          "hashes": {
+            "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "evidence.txt": "37be469a3083716970140d55bcc340f11c8a45c27170e80f7cf4d520276113f4",
+            "output.raw": "4e3006da52a0af3f99e54a8a4216b0d2eed8b016b3fd18df90bbf8a6de91e617",
+            "prompt.txt": "ab32077b9490d1dab33be98f3e955aed9f2089aa2350efd84b3a48f0165cec5a",
+            "report.md": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+            "review-context.md": "0dfb220553ae34aa86899b2627e7360ffad818416afbc113ba1abe6c8c8b5827",
+            "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "published": {
+            "20260909-semver-release-task": true
+          }
+        },
+        "findings": {
+          "FINDINGS": [
+            {
+              "id": "PM-01",
+              "tier": "medium",
+              "text": "internal/version/version.go:6-8 的注释 \"Local make injects `git describe --tags --always`, or \\\"dev\\\" when that is unavailable.\" 与本地构建实现在「有提交但无 tag 的 git 仓库」这一情形上相反。Makefile:7-10 的实现是: 先执行不带 --always 的 `git describe --tags`, 只有它成功才注入 `git describe --tags --always` 的输出, 否则注入 dev; Makefile 同处注释自述 'A checkout with no tags still succeeds with --always (short hash only); treat that like \"no tag\" and use dev'。make-windows.cmd:13-19 是同构逻辑。因此在无 tag 的 git 仓库中, `git describe --tags --always` 可用并输出短 hash, 实现却注入 dev, 与 version.go 注释所述的行为相反。该注释文本由本评审范围的 96ddc888 引入。影响: 维护者按 version.go 注释预期无 tag 仓库构建出的二进制显示短 hash, 实际显示 dev, 会误判版本注入链路失效并去排查 ldflags。最小修改: 将该句条件改为按「无 tag 或非 git 目录」表述, 例如 'Local make injects `git describe --tags --always` when the checkout has a tag, and \"dev\" when it has no tags or is not a git repository.'",
+              "evidence": "internal/version/version.go:6-8 (注释原文); Makefile:7-10 (实现与其自述注释, VERSION ?= $(shell if git describe --tags \u003e/dev/null 2\u003e\u00261; then git describe --tags --always; else echo dev; fi)); make-windows.cmd:13-19 (同构的 Windows 实现)。claim: Observed。",
+              "mechanical": "documentation"
+            }
+          ],
+          "NON_BLOCKING": [
+            {
+              "id": "PM-N1",
+              "tier": "suggest",
+              "text": "[out-of-contract] 分支推送侧不再有任何自动 vet/test。.github/workflows/ 下只有 release.yml 一个工作流; 触发由 branches: [main] 改为 tags: ['v*'] 之后, release.yml:23-26 的 `go vet ./...` 与 `go test ./...` 只在打 tag 时执行。发版产物安全性不变 (打包前仍先跑测试), 但缺陷要等到打 tag 才暴露, 修复需删 tag 重推。该后果源自用户明确决策的触发方式变更, 不构成本卡契约缺口。最小改动: 新增一个只跑 vet/test 的独立工作流 (on: push / pull_request), 不动 release.yml。是否值得由 owner 决定。",
+              "evidence": ".github/workflows/release.yml:6-8 (on: push: tags: ['v*']); .github/workflows/release.yml:23-26 (Test 步骤); `ls .github/workflows/` 仅有 release.yml。claim: Observed。"
+            },
+            {
+              "id": "PM-N2",
+              "tier": "suggest",
+              "text": "[out-of-contract] 本地与发布路径的版本串前导 v 不一致。本仓库实测 `git describe --tags` 输出 v20260908T154432Z-7466cd6acfd3-21-g96ddc88, Makefile:10 原样注入; release.yml:31 用 ${GITHUB_REF_NAME#v} 剥掉前导 v。结果是同一个 v0.5.0 提交, 本地 make 的二进制报 `kander v0.5.0`, release 二进制报 `kander 0.5.0`。EXPECTED_OUTCOME 只要求本地版本来自 `git describe --tags --always`, 因此实现合规, 仅是两侧展示不一致。最小改动: 在 Makefile:10 与 make-windows.cmd:13-19 的默认值上剥掉前导 v (如 VERSION := $(VERSION:v%=%))。",
+              "evidence": "Makefile:10 (直接注入 git describe 输出); .github/workflows/release.yml:31 (VERSION=\"${GITHUB_REF_NAME#v}\"); 在 worktree 内执行 `git describe --tags` 得到 v20260908T154432Z-7466cd6acfd3-21-g96ddc88。claim: Observed。"
+            }
+          ]
+        },
+        "assignment": {
+          "run_id": "semver-release-pm-3",
+          "batch_id": "semver-release-batch",
+          "author": "cursor",
+          "basis": "single-card change scope is this task only",
+          "items": {
+            "PM-01": [
+              "20260909-semver-release-task"
+            ],
+            "PM-N1": [
+              "20260909-semver-release-task"
+            ],
+            "PM-N2": [
+              "20260909-semver-release-task"
+            ]
+          },
+          "owners": {
+            "20260909-semver-release-task": "cursor"
+          },
+          "recorded_at": "2026-09-09T05:28:30.363931617Z"
+        },
+        "records": [
+          {
+            "submitted_revision": 17,
+            "record_id": "semver-pm-01-fixed",
+            "run_id": "semver-release-pm-3",
+            "finding_id": "PM-01",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:29:25.147071523Z",
+            "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+            "original": "internal/version/version.go:6-8 的注释 \"Local make injects `git describe --tags --always`, or \\\"dev\\\" when that is unavailable.\" 与本地构建实现在「有提交但无 tag 的 git 仓库」这一情形上相反。Makefile:7-10 的实现是: 先执行不带 --always 的 `git describe --tags`, 只有它成功才注入 `git describe --tags --always` 的输出, 否则注入 dev; Makefile 同处注释自述 'A checkout with no tags still succeeds with --always (short hash only); treat that like \"no tag\" and use dev'。make-windows.cmd:13-19 是同构逻辑。因此在无 tag 的 git 仓库中, `git describe --tags --always` 可用并输出短 hash, 实现却注入 dev, 与 version.go 注释所述的行为相反。该注释文本由本评审范围的 96ddc888 引入。影响: 维护者按 version.go 注释预期无 tag 仓库构建出的二进制显示短 hash, 实际显示 dev, 会误判版本注入链路失效并去排查 ldflags。最小修改: 将该句条件改为按「无 tag 或非 git 目录」表述, 例如 'Local make injects `git describe --tags --always` when the checkout has a tag, and \"dev\" when it has no tags or is not a git repository.'",
+            "status": "fixed",
+            "basis": "Independently verified against Makefile:10 and make-windows.cmd:13-19 at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1: git describe --tags (no --always) is the no-tag gate, so an untagged git repo still has a working git describe --tags --always (short hash) but make injects dev. The comment claimed describe was unavailable.",
+            "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+            "verification": "Read internal/version/version.go:6-9 after 211c104282f181d5fabe6cc49b03583b0bed269f: it now says describe is used when a tag is reachable, and dev when there are no tags or the checkout is not a git repository. Sentence-by-sentence match with Makefile:7-10."
+          },
+          {
+            "submitted_revision": 19,
+            "record_id": "semver-pm-n1-rejected",
+            "run_id": "semver-release-pm-3",
+            "finding_id": "PM-N1",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:29:25.485798877Z",
+            "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+            "original": "[out-of-contract] 分支推送侧不再有任何自动 vet/test。.github/workflows/ 下只有 release.yml 一个工作流; 触发由 branches: [main] 改为 tags: ['v*'] 之后, release.yml:23-26 的 `go vet ./...` 与 `go test ./...` 只在打 tag 时执行。发版产物安全性不变 (打包前仍先跑测试), 但缺陷要等到打 tag 才暴露, 修复需删 tag 重推。该后果源自用户明确决策的触发方式变更, 不构成本卡契约缺口。最小改动: 新增一个只跑 vet/test 的独立工作流 (on: push / pull_request), 不动 release.yml。是否值得由 owner 决定。",
+            "status": "rejected",
+            "basis": "Beyond contract. USER_DECISIONS and ACCEPTANCE_CRITERIA require on: push: tags: ['v*'] only; adding a separate push/PR CI workflow is an adjacent feature excluded by OUT_OF_SCOPE. ls .github/workflows/ at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1 shows only release.yml, confirming the observation, but the requested extra workflow is not in this card."
+          },
+          {
+            "submitted_revision": 20,
+            "record_id": "semver-pm-n2-rejected",
+            "run_id": "semver-release-pm-3",
+            "finding_id": "PM-N2",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:29:25.802586034Z",
+            "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+            "original": "[out-of-contract] 本地与发布路径的版本串前导 v 不一致。本仓库实测 `git describe --tags` 输出 v20260908T154432Z-7466cd6acfd3-21-g96ddc88, Makefile:10 原样注入; release.yml:31 用 ${GITHUB_REF_NAME#v} 剥掉前导 v。结果是同一个 v0.5.0 提交, 本地 make 的二进制报 `kander v0.5.0`, release 二进制报 `kander 0.5.0`。EXPECTED_OUTCOME 只要求本地版本来自 `git describe --tags --always`, 因此实现合规, 仅是两侧展示不一致。最小改动: 在 Makefile:10 与 make-windows.cmd:13-19 的默认值上剥掉前导 v (如 VERSION := $(VERSION:v%=%))。",
+            "status": "rejected",
+            "basis": "Matches EXPECTED_OUTCOME: local make version comes from git describe --tags --always as-is; release strips the leading v via ${GITHUB_REF_NAME#v}. Stripping v in Makefile would change the stated local default. Observed describe output on this repo starts with v; not a defect in this card."
+          },
+          {
+            "submitted_revision": 24,
+            "record_id": "semver-pm-01-fixed-2",
+            "previous_record_id": "semver-pm-01-fixed",
+            "run_id": "semver-release-pm-3",
+            "finding_id": "PM-01",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:30:53.796936157Z",
+            "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+            "original": "internal/version/version.go:6-8 的注释 \"Local make injects `git describe --tags --always`, or \\\"dev\\\" when that is unavailable.\" 与本地构建实现在「有提交但无 tag 的 git 仓库」这一情形上相反。Makefile:7-10 的实现是: 先执行不带 --always 的 `git describe --tags`, 只有它成功才注入 `git describe --tags --always` 的输出, 否则注入 dev; Makefile 同处注释自述 'A checkout with no tags still succeeds with --always (short hash only); treat that like \"no tag\" and use dev'。make-windows.cmd:13-19 是同构逻辑。因此在无 tag 的 git 仓库中, `git describe --tags --always` 可用并输出短 hash, 实现却注入 dev, 与 version.go 注释所述的行为相反。该注释文本由本评审范围的 96ddc888 引入。影响: 维护者按 version.go 注释预期无 tag 仓库构建出的二进制显示短 hash, 实际显示 dev, 会误判版本注入链路失效并去排查 ldflags。最小修改: 将该句条件改为按「无 tag 或非 git 目录」表述, 例如 'Local make injects `git describe --tags --always` when the checkout has a tag, and \"dev\" when it has no tags or is not a git repository.'",
+            "status": "fixed",
+            "basis": "Independently verified against Makefile:10 and make-windows.cmd:13-19 at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1: git describe --tags (no --always) is the no-tag gate, so an untagged git repo still has a working git describe --tags --always (short hash) but make injects dev. The comment claimed describe was unavailable.",
+            "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+            "mechanical": "documentation",
+            "verification": "Read internal/version/version.go:6-9 after 211c104282f181d5fabe6cc49b03583b0bed269f: it now says describe is used when a tag is reachable, and dev when there are no tags or the checkout is not a git repository. Sentence-by-sentence match with Makefile:7-10."
+          }
+        ]
+      },
+      {
+        "run": {
+          "schema": 1,
+          "findings_schema": 1,
+          "task_group": "",
+          "run_id": "semver-release-qa-1",
+          "batch_id": "semver-release-batch",
+          "task_ids": [
+            "20260909-semver-release-task"
+          ],
+          "role": "QA",
+          "reviewer": "claude",
+          "model": "opus",
+          "effort": "high",
+          "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+          "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+          "commit": "5172edad0c23c2f85265461d6238215f443849a9",
+          "report_language": "zh-CN",
+          "input_hashes": {
+            "review-context.md": "e95b4aebf0d61ae4b44c3c0dfcdfc4aae20f8ef1c65217d44a0860a42de42c8e",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "kander_version": "20260909T034406Z-fe46c2f545a4",
+          "phase": "finalized",
+          "launch_status": "started",
+          "execution_status": "failed",
+          "semantic_status": "unassessed",
+          "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+          "exit_code": 1,
+          "created_at": "2026-09-09T05:07:33.844009023Z",
+          "finished_at": "2026-09-09T05:13:50.374340695Z",
+          "duration_ms": 376530,
+          "hashes": {
+            "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "evidence.txt": "3aa1e5c74cd7a08b47bcc9bbf9574d422634b0a8a13c9928ed1de628db242c73",
+            "output.raw": "30f0a9676873628bfa9ef661646f9c76a70a034993949e6bc41ca5f72f092b39",
+            "prompt.txt": "5c520b8a78cca93a9ac7b22b833aecd8e90d2fd1247213a38518bbc1f73452f7",
+            "report.md": "c9fdacdfab313f103212e4bab369a085d1e70803655f90c57fe28a42756d9de8",
+            "review-context.md": "e95b4aebf0d61ae4b44c3c0dfcdfc4aae20f8ef1c65217d44a0860a42de42c8e",
+            "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "published": {
+            "20260909-semver-release-task": true
+          }
+        },
+        "records": []
+      },
+      {
+        "run": {
+          "schema": 1,
+          "findings_schema": 1,
+          "task_group": "",
+          "run_id": "semver-release-qa-2",
+          "batch_id": "semver-release-batch",
+          "task_ids": [
+            "20260909-semver-release-task"
+          ],
+          "role": "QA",
+          "reviewer": "claude",
+          "model": "opus",
+          "effort": "high",
+          "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+          "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+          "commit": "5172edad0c23c2f85265461d6238215f443849a9",
+          "report_language": "zh-CN",
+          "input_hashes": {
+            "review-context.md": "358c4f966418d58ee8953efbdf4eaea94865e7772e18c5b45be9fd4dfeb6a954",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "kander_version": "20260909T034406Z-fe46c2f545a4",
+          "phase": "finalized",
+          "launch_status": "started",
+          "execution_status": "failed",
+          "semantic_status": "unassessed",
+          "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+          "exit_code": 1,
+          "created_at": "2026-09-09T05:15:09.943683964Z",
+          "finished_at": "2026-09-09T05:21:02.946976837Z",
+          "duration_ms": 353003,
+          "hashes": {
+            "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "evidence.txt": "3aa1e5c74cd7a08b47bcc9bbf9574d422634b0a8a13c9928ed1de628db242c73",
+            "output.raw": "27dc52eb3cd19f9e3f5ceb8b7f439b10e08b5817326d41027fea94656b5a3e6c",
+            "prompt.txt": "5cd29f633ca59e2951700a8f4ef2c2274af180b62fd07048d7571d2a72719f7e",
+            "report.md": "b6e33e75cd5d72729200a6520703c527a7407a111213cf779a3c04b79f3f86b0",
+            "review-context.md": "358c4f966418d58ee8953efbdf4eaea94865e7772e18c5b45be9fd4dfeb6a954",
+            "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "published": {
+            "20260909-semver-release-task": true
+          }
+        },
+        "records": []
+      },
+      {
+        "run": {
+          "schema": 1,
+          "findings_schema": 1,
+          "task_group": "",
+          "run_id": "semver-release-qa-3",
+          "batch_id": "semver-release-batch",
+          "task_ids": [
+            "20260909-semver-release-task"
+          ],
+          "role": "QA",
+          "reviewer": "claude",
+          "model": "opus",
+          "effort": "high",
+          "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+          "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+          "commit": "96ddc888e30a399ddbf23b19d4818cfe3ac49ed1",
+          "report_language": "zh-CN",
+          "input_hashes": {
+            "review-context.md": "0dfb220553ae34aa86899b2627e7360ffad818416afbc113ba1abe6c8c8b5827",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "kander_version": "20260909T034406Z-fe46c2f545a4",
+          "phase": "finalized",
+          "launch_status": "started",
+          "execution_status": "ok",
+          "semantic_status": "unassessed",
+          "exit_code": 0,
+          "created_at": "2026-09-09T05:22:29.9838903Z",
+          "finished_at": "2026-09-09T05:26:31.82156915Z",
+          "duration_ms": 241837,
+          "hashes": {
+            "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "evidence.txt": "37be469a3083716970140d55bcc340f11c8a45c27170e80f7cf4d520276113f4",
+            "output.raw": "8a7ce9ca03f245e0d353d0a9fd92070c43a38eac8a464173e1db41a72cc375a9",
+            "prompt.txt": "95b64509c663d8e8976d83ec88bb24b8fcb2ab4df4ba0b7c2e2e79cb6b7f954e",
+            "report.md": "f212f66786e9365be9ad6f900ab92d6955ec68a504e1ca1faa8b967d53a8ea61",
+            "review-context.md": "0dfb220553ae34aa86899b2627e7360ffad818416afbc113ba1abe6c8c8b5827",
+            "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+          },
+          "published": {
+            "20260909-semver-release-task": true
+          }
+        },
+        "findings": {
+          "FINDINGS": [
+            {
+              "id": "QA-1",
+              "tier": "medium",
+              "text": "internal/version/version.go:7-8 的注释称本地 make 注入 `git describe --tags --always`、\"or dev when that is unavailable\",与 Makefile:7-10 的实现不符:Makefile 先用不带 --always 的 `git describe --tags` 探测,仅在探测成功时才取 describe 结果,无可达 tag 时一律注入 dev。失败场景:在有提交但无可达 tag 的 checkout(fork、未同步 tag 的克隆)中执行 make,`git describe --tags --always` 完全可用并会输出短 hash,但二进制版本仍是 dev;按注释判断会误以为 describe 不可用而去排查 git 环境。影响:本轮改动的唯一目的就是让注释匹配实现(commit message: The comments must match that),该注释却与 Makefile 自身对同一分支的说明相互矛盾,后续定位版本号来源时会被误导。最小修复:将第 7-8 行第二句改为按「是否有可达 tag」表述,例如 `Local make injects the git describe --tags output when a tag is reachable, and \"dev\" otherwise (including a non-git directory).`",
+              "evidence": "internal/version/version.go:7-8(`// Release builds inject the tag with the leading v stripped. Local make` / `// injects `git describe --tags --always`, or \"dev\" when that is unavailable.`);Makefile:7-10(`VERSION ?= $(shell if git describe --tags \u003e/dev/null 2\u003e\u00261; then git describe --tags --always; else echo dev; fi)`,并附注释 `A checkout with no tags still succeeds with --always (short hash only); treat that like \"no tag\" and use dev`)。两处对「无 tag 的 git checkout」这一路径给出相反描述。",
+              "mechanical": "documentation"
+            }
+          ],
+          "NON_BLOCKING": [
+            {
+              "id": "QA-2",
+              "tier": "suggest",
+              "text": "改为 tag 触发后,仓库不再有针对日常推送/PR 的自动校验。release.yml 的 Test 步骤(go vet ./... 与 go test ./...)此前随每次 push main 运行,现在只在推送 v* tag 时运行,而 .github/workflows/ 下没有第二个 workflow。这符合验收条件(on: 只保留 tags: ['v*']),不是缺陷;副作用是 develop/main 的常规提交问题会推迟到发版当次才暴露(发版路径仍会因 Test 失败中止,不会产出坏 release,影响限于反馈延迟)。可选改动:新增一个独立 CI workflow(on: push 到 develop/main + pull_request)只跑 go vet ./... \u0026\u0026 go test ./...,不涉及打包与发布。是否值得由负责人决定。",
+              "evidence": ".github/workflows/release.yml:6-8(on: push: tags: ['v*'],基线为 branches: [main]);.github/workflows/release.yml:23-26(Test 步骤 go vet ./... / go test ./...);.github/workflows/ 目录下仅 release.yml 一个文件。"
+            }
+          ]
+        },
+        "assignment": {
+          "run_id": "semver-release-qa-3",
+          "batch_id": "semver-release-batch",
+          "author": "cursor",
+          "basis": "single-card change scope is this task only",
+          "items": {
+            "QA-1": [
+              "20260909-semver-release-task"
+            ],
+            "QA-2": [
+              "20260909-semver-release-task"
+            ]
+          },
+          "owners": {
+            "20260909-semver-release-task": "cursor"
+          },
+          "recorded_at": "2026-09-09T05:28:30.560724835Z"
+        },
+        "records": [
+          {
+            "submitted_revision": 18,
+            "record_id": "semver-qa-1-fixed",
+            "run_id": "semver-release-qa-3",
+            "finding_id": "QA-1",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:29:25.331931552Z",
+            "report_hash": "f212f66786e9365be9ad6f900ab92d6955ec68a504e1ca1faa8b967d53a8ea61",
+            "original": "internal/version/version.go:7-8 的注释称本地 make 注入 `git describe --tags --always`、\"or dev when that is unavailable\",与 Makefile:7-10 的实现不符:Makefile 先用不带 --always 的 `git describe --tags` 探测,仅在探测成功时才取 describe 结果,无可达 tag 时一律注入 dev。失败场景:在有提交但无可达 tag 的 checkout(fork、未同步 tag 的克隆)中执行 make,`git describe --tags --always` 完全可用并会输出短 hash,但二进制版本仍是 dev;按注释判断会误以为 describe 不可用而去排查 git 环境。影响:本轮改动的唯一目的就是让注释匹配实现(commit message: The comments must match that),该注释却与 Makefile 自身对同一分支的说明相互矛盾,后续定位版本号来源时会被误导。最小修复:将第 7-8 行第二句改为按「是否有可达 tag」表述,例如 `Local make injects the git describe --tags output when a tag is reachable, and \"dev\" otherwise (including a non-git directory).`",
+            "status": "fixed",
+            "basis": "Independently verified against Makefile:10 and make-windows.cmd:13-19 at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1: git describe --tags (no --always) is the no-tag gate, so an untagged git repo still has a working git describe --tags --always (short hash) but make injects dev. The comment claimed describe was unavailable.",
+            "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+            "verification": "Read internal/version/version.go:6-9 after 211c104282f181d5fabe6cc49b03583b0bed269f: it now says describe is used when a tag is reachable, and dev when there are no tags or the checkout is not a git repository. Sentence-by-sentence match with Makefile:7-10."
+          },
+          {
+            "submitted_revision": 21,
+            "record_id": "semver-qa-2-rejected",
+            "run_id": "semver-release-qa-3",
+            "finding_id": "QA-2",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:29:26.028892119Z",
+            "report_hash": "f212f66786e9365be9ad6f900ab92d6955ec68a504e1ca1faa8b967d53a8ea61",
+            "original": "改为 tag 触发后,仓库不再有针对日常推送/PR 的自动校验。release.yml 的 Test 步骤(go vet ./... 与 go test ./...)此前随每次 push main 运行,现在只在推送 v* tag 时运行,而 .github/workflows/ 下没有第二个 workflow。这符合验收条件(on: 只保留 tags: ['v*']),不是缺陷;副作用是 develop/main 的常规提交问题会推迟到发版当次才暴露(发版路径仍会因 Test 失败中止,不会产出坏 release,影响限于反馈延迟)。可选改动:新增一个独立 CI workflow(on: push 到 develop/main + pull_request)只跑 go vet ./... \u0026\u0026 go test ./...,不涉及打包与发布。是否值得由负责人决定。",
+            "status": "rejected",
+            "basis": "Same root as PM-N1. Beyond contract: the card requires tag-only release triggering. A new daily CI workflow is adjacent work excluded by OUT_OF_SCOPE. Observation that only release.yml exists is true at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1."
+          },
+          {
+            "submitted_revision": 23,
+            "record_id": "semver-qa-1-fixed-2",
+            "previous_record_id": "semver-qa-1-fixed",
+            "run_id": "semver-release-qa-3",
+            "finding_id": "QA-1",
+            "batch_id": "semver-release-batch",
+            "task_id": "20260909-semver-release-task",
+            "author": "cursor",
+            "recorded_at": "2026-09-09T05:30:48.31708853Z",
+            "report_hash": "f212f66786e9365be9ad6f900ab92d6955ec68a504e1ca1faa8b967d53a8ea61",
+            "original": "internal/version/version.go:7-8 的注释称本地 make 注入 `git describe --tags --always`、\"or dev when that is unavailable\",与 Makefile:7-10 的实现不符:Makefile 先用不带 --always 的 `git describe --tags` 探测,仅在探测成功时才取 describe 结果,无可达 tag 时一律注入 dev。失败场景:在有提交但无可达 tag 的 checkout(fork、未同步 tag 的克隆)中执行 make,`git describe --tags --always` 完全可用并会输出短 hash,但二进制版本仍是 dev;按注释判断会误以为 describe 不可用而去排查 git 环境。影响:本轮改动的唯一目的就是让注释匹配实现(commit message: The comments must match that),该注释却与 Makefile 自身对同一分支的说明相互矛盾,后续定位版本号来源时会被误导。最小修复:将第 7-8 行第二句改为按「是否有可达 tag」表述,例如 `Local make injects the git describe --tags output when a tag is reachable, and \"dev\" otherwise (including a non-git directory).`",
+            "status": "fixed",
+            "basis": "Independently verified against Makefile:10 and make-windows.cmd:13-19 at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1: git describe --tags (no --always) is the no-tag gate, so an untagged git repo still has a working git describe --tags --always (short hash) but make injects dev. The comment claimed describe was unavailable.",
+            "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+            "mechanical": "documentation",
+            "verification": "Read internal/version/version.go:6-9 after 211c104282f181d5fabe6cc49b03583b0bed269f: it now says describe is used when a tag is reachable, and dev when there are no tags or the checkout is not a git repository. Sentence-by-sentence match with Makefile:7-10."
+          }
+        ]
+      }
+    ]
+  },
+  "closed_at": "2026-09-09T05:31:14.140535854Z"
+}

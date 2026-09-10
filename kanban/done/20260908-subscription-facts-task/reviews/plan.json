@@ -1,0 +1,39 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "g2-subscription-dispatch",
+  "author": "coordinator",
+  "basis": "用户已确认推进 todo 任务组并授权集成；角色适用性按本仓库 AGENTS.md 第 7 条与 KANDER-REVIEW-RULES.md 解析",
+  "cwd": "/home/dualf/works/kander/worktrees/20260908-subscription-dispatch-group",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-durable-dispatch-protocol-task",
+    "20260908-subscription-bounded-runtime-task",
+    "20260908-subscription-facts-task"
+  ],
+  "cycles": {
+    "20260908-durable-dispatch-protocol-task": "5a46667729ed7f6010720d8f0c690db61004654d34c6a6c0d9456127664aeb87",
+    "20260908-subscription-bounded-runtime-task": "a14c220b1c9d71fa44d66b9a9b5169d54aaa2e25f21f406ec6ee801d52a31d14",
+    "20260908-subscription-facts-task": "254eeaa888cb87c63ae924cecee249218e1f7182e208367d435baf8103d5b71e"
+  },
+  "batches": [
+    {
+      "batch_id": "g2-batch-one",
+      "task_ids": [
+        "20260908-durable-dispatch-protocol-task",
+        "20260908-subscription-bounded-runtime-task",
+        "20260908-subscription-facts-task"
+      ],
+      "base": "021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5",
+      "target_commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "requirements": {
+        "CSA": "N/A: 本仓库 AGENTS.md 第 7 条，第二阶段安全角色一律 N/A",
+        "Hacker": "N/A: 本仓库 AGENTS.md 第 7 条，第二阶段安全角色一律 N/A",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-07T19:32:30.381882579Z"
+}

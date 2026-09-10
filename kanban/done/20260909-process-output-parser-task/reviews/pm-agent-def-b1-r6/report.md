@@ -1,0 +1,74 @@
+# PM 审核报告
+
+**Role**: PM（规格验收，增量轮）
+**Commit**: `8f8f0cd0627fca918e7383ea4c3ebd6962864652`（前驱已审 `e1c01277075599cb0395bf62f16855cebf04b060`；修复区间 6 提交 / 16 文件 / +168-52）
+**Task Context**: `/tmp/claude-review.41cd2497a9d29440e388e816612e4019/task-spec.md` 合并的三张卡（B1 解析器 / A1 嵌入定义 / A2 审核模板）。A3 不在本批。
+**Reviewed Scope**: 仅 `e1c0127..8f8f0cd` 的修复区间 —— `internal/process/output.go`、`internal/i18n/locales/*.json`、`internal/launch/agent.go` 与 `prompt_delivery_test.go`、`internal/config/{agents.go,agents_embed.go,agents_review.go}` 及其测试、`internal/menu/{options.go,agent_fields_test.go,agent_probe_test.go}`、`docs/custom-agents.md`，以及被这些修复触及的调用方（`internal/launch/{notify_resume.go,commands.go}`、`internal/review/{args.go,settings.go}`、`internal/config/config.go` 的 models/reviewers 校验）。实测（Observed）：`go build ./...`、`go vet ./...`、`go test ./...`、`GOOS=windows go build ./...` 全通过；`git status --porcelain` 空，HEAD 仍为 `8f8f0cd`。
+
+---
+
+## 前轮发现逐项复核
+
+| ID | 上轮结论 | 作者处置 | 本轮判定 | 证据 |
+|---|---|---|---|---|
+| PM-01 | medium | fixed (`77affdd`) | **已关闭** | `internal/launch/agent.go:31` 的 `DeliveryUnknown` 短路加上 `&& plan.PromptDelivery.Mode != "pane"`；`mode: pane` 的 `blocked`/超时因此走 `herdrCloseTab`/`tmuxCloseWindow`（`agent.go:34-40`），调用方 `notify_resume.go:131-138` 与 `commands.go:290-295` 在 `DeliveryUnknown==false` 时执行 `RestoreWindowText` / `rollbackLaunch`。新增 `internal/launch/prompt_delivery_test.go:268` `TestPaneDeliveryDurableBlockedClosesTab`：`launchAgent(..., true)` 下 `DeliveryUnknown==false`、错误含人工确认指引、`herdr` close 记录已写出。 |
+| PM-02 | medium | fixed (`1f1924b` + `ee8fab7`) | **已关闭** | `internal/config/agents_review.go:83-92`：内置名认嵌入 `args.review`，自定义名只认 `cfg.Agents[name]` 自身的 `args.review` 或 `review`；`internal/config/agents.go:79-96` 的 `allowReviewInherit` 阻止纯 `path`+`dialect` 包装器继承 `args.review`/`review`。`internal/config/agents_test.go:121-124` 断言 `reviewers.PM = "helper"` 被 `Validate` 拒绝；`internal/menu/agent_probe_test.go:30-32` 断言 `helper.Review == false`。 |
+| PM-03 | medium [mechanical] | fixed (`f5dc7c3`) | **已关闭** | `git grep ReviewSources\|TerminalSources` 在 `8f8f0cd` 零命中；子集入口 `ValidateReviewOutput`（`internal/process/output.go:124`）与 `ValidateTerminalOutput`（`:135`）及其用例（`output_test.go:99,113`）保留，B1 该条验收不受影响。 |
+| PM-04 | medium [mechanical] | fixed (`f5dc7c3`) | **已关闭** | `internal/process/output.go:424-429` 正则分支直接用 `raw`，不可达回退与 `jsonStringOrRaw` 已删；`git grep jsonStringOrRaw` 零命中。`decodeErr` / `doc` 参数仍被 `json_field` 分支使用（`:409-421`），未产生新的死参数。 |
+| PM-05 | medium [mechanical] | fixed (`8f8f0cd`) | **已关闭** | 三份 locale 各删两行（`en.json`/`ja.json`/`zh-CN.json` 原 `:709,724`）；`git grep codex_review_did_not_complete\|grok_review_did_not_complete` 零命中。 |
+| PM-06 | low（NON-BLOCKING） | rejected | **争议成立，本轮不再提出** | 作者依据 A1 EXPECTED_OUTCOME「`rules_target` 为空表示该模式不集成」与「`integrate.go` 不再按 agent 名分支」主张 `RulesSpec` 只查嵌入名即为契约本身，按 dialect 回落等于把执行包装器当成内置 agent 的规则入口。该读法与卡片正文一致，本轮无新事实，接受该处置。 |
+| PM-07 | recommend | deferred | **仍开放**（区间外，非门禁） | `internal/review/settings.go:286-295` 两处 `return "codex"` 未改动。 |
+| PM-08 | low | deferred | **仍开放**（区间外，非门禁） | `internal/review/args.go:134` 仍为 `fmt.Println(text)`；`:129-133` 的归档路径仍走 `os.Stdout.Write`。 |
+| PM-09 | low | fixed (`fbef4fa`) | **已关闭** | 新增 `config.ReviewModelSupportsEffort`（`internal/config/agents_embed.go:248-258`）按 `models.review.<agent>` 是否含 `effort` 键判定，`internal/menu/options.go:402` 改用它；与 `internal/review/settings.go:110-112` 丢弃无键 effort 的行为一致。`agents_embed_test.go:183-188` 与 `internal/menu/agent_fields_test.go:107` 各有断言。 |
+
+QA-01 与 PM-01 同根因，随 `77affdd` 一并关闭，不另开项。
+
+---
+
+## 需求追踪（仅列状态变化行与新增行）
+
+| 卡 | 需求 | 期望行为 | 代码证据 | 状态变化 |
+|---|---|---|---|---|
+| A1 | 三种失败原因「一种处置」：抓 pane 输出 → 关本次容器 → 回滚，不保留容器、不写 `WINDOW` | 所有入口一致，含 durable 派发 | `internal/launch/agent.go:27-40` | Partial → **Complete** |
+| A1 | `resume`/`notify` 恢复通道对 `mode: pane` 走统一处置 | 与 `start` 同，有用例 | `internal/launch/prompt_delivery_test.go:268` | Partial → **Complete** |
+| A2 | `reviewers.<role>` 只接受**定义了** `args.review` 的 agent；执行覆盖不进入审核 | 纯执行包装器不得成为 reviewer | `internal/config/agents_review.go:83-92`、`agents.go:79-96`、`agents_test.go:121-124` | Contradicted → **Complete** |
+| A2 | `docs/custom-agents.md` "面板与审核边界" 描述与实现一致 | 文档陈述可在实现中复现 | `docs/custom-agents.md:81` 与 `internal/config/agents_review.go:154-161` | 新增行 → **Contradicted** → PM-10 |
+
+**完成度统计**：Complete 37 / Partial 0 / Contradicted 1 / Missing 0 / Unverifiable 1（`plan.md` 纸面验证表仍因看板目录不入 Git 而不可核验，与上轮同）。
+
+---
+
+## 门禁发现
+
+### PM-10 — medium [mechanical] documentation — `docs/custom-agents.md` 声称「声明成对之后 dialect 仍会补全省略的 review 字段」，该行为在任何通过校验的配置里都不存在
+
+**Claim: Observed.** 本区间新写入的 `docs/custom-agents.md:81` 有一句：
+
+> Dialect defaults may still fill omitted review fields after the overlay has declared the pair.
+
+实现里不存在这条路径，两种读法都不成立：
+
+1. **按「review 块内的字段」读**：`AgentFor` 的回填是**整块粒度**——`internal/config/agents.go:93-97` 只在 `d.Review == nil` 时 `cloneReview(&emb.Review)` 整块替换，`:88-92` 只在 `d.Args.Review == nil` 时整段拷贝 `emb.Args.Review`。一旦用户写了 `review: {...}`，`review.env` / `review.inspection` / `review.home_env` 等被省略的字段**不会**从 dialect 补齐；`internal/review/settings.go:146-205` 的 `agentSettingsFor` 也只读 `def.Review` 自身，没有第二层按字段的 dialect 回落。
+2. **按「两项中省略的那一项」读**：`validateReviewDefinition`（`internal/config/agents_review.go:154-161`）对用户原始声明做 `hasArgs != hasReview` 判定并报 `config.agent_review_pair`（文案即「args.review 与 review 必须同时声明。」），调用点在 `internal/config/agents.go:281`，用的是未经 `AgentFor` 解析的 overlay。因此「只声明了其中一项、由 dialect 补另一项」的配置在 `kander config --json` 就被拒，根本到不了回填。
+
+于是对**任何通过 `Validate` 的自定义 agent**：要么两项都没声明（`allowReviewInherit` 为假，`agents.go:84-86` 主动把继承来的 `Args.Review` 置空），要么两项都声明（两个 `== nil` 前置条件都不成立，什么都不补）。`agents.go:80` 里 `allowReviewInherit` 的 `userDeclaredReviewTemplate(overlay)` 这一析取项，在通过校验的配置上永远改变不了任何结果。
+
+同一条不存在的行为还被新增用例钉死：`internal/config/agents_review_test.go:102` 的 `"declared": {Dialect: "claude", Args: {…, Review: ["--x"]}}` 没有 `review` 块，`:132-134` 断言 `AgentFor` 为它补出 `Review`，失败文案写作 `"declared overlay should inherit omitted review fields"`；而这份配置正是上面 `agent_review_pair` 要拒绝的形态，用例是直接构造 `cfg` 绕过 `Validate` 才成立的。
+
+**用户影响**：`docs/custom-agents.md` 是自定义 agent 的对外文档，读者按这句话只写 `args.review` 而省略 `review` 块（预期由 `dialect: claude` 补全 `env`/`inspection`/`output`），保存时会撞上 `args.review 与 review 必须同时声明。` 这条与文档相反的报错；反过来按文档预期「review 块里没写的字段会继承 Claude 的默认值」的作者，会得到一份 `review.output` 缺失（`agents_review.go:212` 直接拒绝）或 `review.cwd` 为空（`:166-170` 拒绝）的定义。A2 的 EXPECTED_OUTCOME 只承诺「`reviewers.<role>` 接受任何定义了 `args.review` 的 agent」，从未承诺按字段继承。
+
+**最小产品改动**：把 `docs/custom-agents.md:81` 的这一句改为陈述实际契约——`args.review` 与 `review` 必须同时声明，dialect 只在两项都未声明时提供内置名的默认，声明之后不再按字段补全；同时删除或改写 `internal/config/agents_review_test.go:132-134` 这段钉死不可达配置的断言（`:110-123` 对 `helper` / `wrap` / `declared` 的 `HasReviewTemplate` 断言是本轮 PM-02 修复的有效覆盖，保留）。
+
+---
+
+## NON-BLOCKING
+
+- **PM-07 — recommend [outside-fix-range]** — A2 EXPECTED_OUTCOME 写明「本卡结束时 review 包内不再有按内置名的业务分支」，`internal/review/settings.go:288,294` 的 `reviewerFromConfig` 仍以字面量 `"codex"` 兜底。本区间未改动该文件，作者已 deferred；维持非门禁。建议改为 config 侧默认 agent 名或 `ReviewAgentNames(cfg)` 的首项。
+
+- **PM-08 — low [outside-fix-range]** — Codex 审核在非归档路径下 `internal/review/args.go:134` 走 `fmt.Println(text)`，而 codex 定义为 `parse: raw`、`text` 本身已以换行结尾，stdout 尾部比基线（`git show 8abdfe2e:internal/review/args.go:165` 的 `os.Stdout.Write(data)`）多一个空行；判定结果与错误文案不变。本区间未改动，作者已 deferred。最小改动：`raw` 来源直接 `os.Stdout.Write`。
+
+（候选项未超过十条，无丢弃项。PM-06 已按作者处置接受，不再列为条目。）
+
+```kander-findings
+{"FINDINGS":[{"id":"PM-10","tier":"medium","mechanical":"documentation","text":"docs/custom-agents.md:81 本区间新写入的一句「Dialect defaults may still fill omitted review fields after the overlay has declared the pair.」与实现不符：该行为在任何通过 Validate 的配置里都不存在。两种读法都不成立。(1) 按「review 块内字段」读：AgentFor 的回填是整块粒度——internal/config/agents.go:93-97 只在 d.Review == nil 时用 cloneReview 整块替换，:88-92 只在 d.Args.Review == nil 时整段拷贝 emb.Args.Review；一旦用户写了 review: {...}，review.env / review.inspection / review.home_env 等省略字段不会从 dialect 补齐，internal/review/settings.go:146-205 的 agentSettingsFor 也只读 def.Review 自身，没有第二层按字段回落。(2) 按「两项中省略的那一项」读：validateReviewDefinition（internal/config/agents_review.go:154-161）对用户原始声明做 hasArgs != hasReview 判定并报 config.agent_review_pair（文案「args.review 与 review 必须同时声明。」），调用点 internal/config/agents.go:281 传的是未经 AgentFor 解析的 overlay，因此「只声明其中一项、由 dialect 补另一项」在 kander config --json 阶段即被拒，到不了回填。于是对任何通过校验的自定义 agent：要么两项都未声明（allowReviewInherit 为假，agents.go:84-86 主动把继承来的 Args.Review 置空），要么两项都声明（两个 == nil 前置条件都不成立，什么都不补）；agents.go:80 中 allowReviewInherit 的 userDeclaredReviewTemplate(overlay) 析取项在通过校验的配置上永远改变不了结果。同一条不存在的行为还被本区间新增用例钉死：internal/config/agents_review_test.go:102 的 \"declared\" 条目只有 args.review 而无 review 块，:132-134 断言 AgentFor 为它补出 Review，失败文案为 declared overlay should inherit omitted review fields，而该形态正是 agent_review_pair 要拒绝的，用例靠直接构造 cfg 绕过 Validate 才成立。用户影响：读者按该句只写 args.review 省略 review 块（预期由 dialect: claude 补全 env/inspection/output）会撞上与文档相反的报错；按「review 块内未写字段会继承」理解的作者会得到 review.output 缺失（agents_review.go:212 拒绝）或 review.cwd 为空（:166-170 拒绝）的定义。A2 EXPECTED_OUTCOME 只承诺 reviewers.<role> 接受任何定义了 args.review 的 agent，从未承诺按字段继承。最小产品改动：把该句改为陈述实际契约——args.review 与 review 必须同时声明，dialect 只在两项都未声明时提供内置名默认，声明之后不再按字段补全；同时删除或改写 internal/config/agents_review_test.go:132-134 这段钉死不可达配置的断言（:110-123 对 helper / wrap / declared 的 HasReviewTemplate 断言是 PM-02 修复的有效覆盖，保留）。","evidence":"docs/custom-agents.md:81（本区间由 1f1924b/ee8fab7 写入的该句）; internal/config/agents.go:79-96（overlay/allowReviewInherit 与整块回填，:84-86 置空、:88-92 与 :93-97 的 == nil 前置条件）; internal/config/agents_review.go:154-161（validateReviewDefinition 的 hasArgs != hasReview 与 config.agent_review_pair）与 internal/config/agents.go:281（用未解析 overlay 调用）; internal/i18n/locales/zh-CN.json:67（\"config.agent_review_pair\": \"args.review 与 review 必须同时声明。\"）; internal/review/settings.go:146-205（agentSettingsFor 只读 def.Review，无按字段 dialect 回落）; internal/config/agents_review.go:212 与 :166-170（review.output 缺失、review.cwd 取值集合的拒绝）; internal/config/agents_review_test.go:102 与 :132-134（钉死 Validate 会拒绝的配置形态）; 契约见 task-spec.md 卡 20260908-agent-review-template-task EXPECTED_OUTCOME 的 reviewers 开放条款与 ACCEPTANCE_CRITERIA 的 docs/custom-agents.md 条款"}],"NON_BLOCKING":[{"id":"PM-07","tier":"recommend","lineage":{"run_id":"pm-agent-def-b1-r4","finding_id":"PM-07"},"text":"[outside-fix-range] 卡片 A2 的 EXPECTED_OUTCOME 写明「本卡结束时 review 包内不再有按内置名的业务分支」，但 reviewerFromConfig 仍以字面量 \"codex\" 作为兜底返回值（配置加载失败，或 reviewers.<role> 指向的 agent 不再定义审核模板时）。该函数在本次修复区间 e1c0127..8f8f0cd 内未被改动，作者上一轮已 deferred，维持非门禁。建议改为 config 侧的默认 agent 名或 ReviewAgentNames(cfg) 的首项。","evidence":"internal/review/settings.go:286-295（reviewerFromConfig 的两处 return \"codex\"，在 8f8f0cd 上与 e1c0127 逐字相同）; 契约见 task-spec.md 卡 20260908-agent-review-template-task EXPECTED_OUTCOME 末段"},{"id":"PM-08","tier":"low","lineage":{"run_id":"pm-agent-def-b1-r4","finding_id":"PM-08"},"text":"[outside-fix-range] Codex 审核在非归档路径下的报告输出比改动前多一个换行：基线直接 os.Stdout.Write(data)，现在统一走 fmt.Println(text)，而 text 即原始文件内容（codex 定义为 parse: raw），本身已以换行结尾。判定结果与错误文案不受影响。该行在本次修复区间内未被改动，作者上一轮已 deferred，维持非门禁。最小改动：raw 来源的报告直接 os.Stdout.Write 而非 Println。","evidence":"internal/review/args.go:134（fmt.Println(text)），:129-133（归档路径仍走 os.Stdout.Write）; 基线 git show 8abdfe2e:internal/review/args.go:165; internal/config/agents/codex.json 的 review.output 为 {\"source\":\"file\",\"parse\":\"raw\"}"}]}
+```

@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 26,
+  "record_id": "fix-pm-005-1",
+  "run_id": "agent-definitions-pm-2",
+  "finding_id": "PM-005",
+  "batch_id": "agent-definitions-batch",
+  "task_id": "20260908-agent-executable-override-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T02:56:21.604437187Z",
+  "report_hash": "ab5474fb174e048e9b62a565f15d9701fa8e94381be6e80a6dd7689a9630c26c",
+  "original": "[outside-fix-range] Inferred，高置信度：面板候选修复使旧警告失真。程序存在但 --version 失败时，仍提示“不可作为新选择”，实际已允许选择并编辑路径。影响仅为配置提示误导。最小改动：将警告改为版本探测失败、可选择后修改可执行路径。",
+  "status": "fixed",
+  "basis": "对照 internal/menu/options.go 的候选保留逻辑和三份 locale 原文，确认提示矛盾。仅修改三语警告，说明可选中 agent 编辑路径；未改变选择或启动行为。",
+  "fix_commit": "b208333dc128f4c8e72aae5308685bbaaaef417e",
+  "verification": "提交 b208333dc128f4c8e72aae5308685bbaaaef417e；git diff 6dbed41ae20a5c930f47b209ea9dc4add2c1a771..HEAD 仅三个 locale 的警告各一行；原有菜单与 i18n 测试通过；最终提交全量复验另记 IMPLEMENTATION。"
+}

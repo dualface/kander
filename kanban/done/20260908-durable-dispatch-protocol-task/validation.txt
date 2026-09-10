@@ -1,0 +1,73 @@
+持久派回协议：最终交付验证记录
+任务：20260908-durable-dispatch-protocol-task
+最终提交：c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+组基线：003e5fecf4048d8da8151d0431ea1cd040912a36
+任务分支：durable-dispatch-protocol
+工作区：/home/dualf/works/kander/worktrees/durable-dispatch-protocol
+
+计数口径：Go JSON 中具有 Test 的 pass/skip/fail 事件，包含子测试；不等同于顶层测试函数数。所有以下最终验证均在代码最后修改并提交后执行。
+
+命令：go test -json -count=1 ./...
+提交：c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+结果：退出码 0；19 包通过，877 个测试/子测试通过，1 项跳过，0 失败。
+包结果：github.com/dualface/kander/internal/cli PASS (0.018s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/process PASS (0.022s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/cmd/kander PASS (0.102s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/i18n PASS (0.108s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/config PASS (0.314s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/fs PASS (0.505s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/takeover PASS (0.568s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/rules PASS (0.002s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/version PASS (0.002s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/probe PASS (0.741s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/window PASS (0.134s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/install PASS (0.974s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/notify PASS (5.396s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/tui PASS (5.888s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/liveness PASS (10.26s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/menu PASS (11.328s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/launch PASS (14.005s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/board PASS (30.285s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/review PASS (42.033s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+跳过：github.com/dualface/kander/internal/launch/TestWindowsConsoleLauncher；Linux 无原生 Windows 控制台环境。提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+
+命令：go test -race -json -count=1 ./internal/board ./internal/launch ./internal/notify ./internal/window ./internal/cli ./internal/i18n ./internal/liveness ./internal/probe ./internal/review
+提交：c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+结果：退出码 0；9 包通过，622 个测试/子测试通过，1 项跳过，0 失败。
+包结果：github.com/dualface/kander/internal/cli PASS (1.059s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/window PASS (1.266s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/i18n PASS (1.6280000000000001s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/probe PASS (2.247s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/notify PASS (7.471s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/liveness PASS (15.097s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/launch PASS (16.868s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/board PASS (56.555s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+包结果：github.com/dualface/kander/internal/review PASS (80.826s)，提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+跳过：github.com/dualface/kander/internal/launch/TestWindowsConsoleLauncher；Linux 无原生 Windows 控制台环境。提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc
+
+构建和静态检查（每条命令退出码均为 0；提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc）：
+go build ./...
+go vet ./...
+GOOS=windows GOARCH=amd64 go build ./...
+GOOS=windows GOARCH=amd64 go test -c -o /tmp/durable-dispatch-windows/board.test.exe ./internal/board
+GOOS=windows GOARCH=amd64 go test -c -o /tmp/durable-dispatch-windows/notify.test.exe ./internal/notify
+GOOS=windows GOARCH=amd64 go test -c -o /tmp/durable-dispatch-windows/launch.test.exe ./internal/launch
+
+格式与交付检查（提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc）：
+git diff --check 003e5fecf4048d8da8151d0431ea1cd040912a36 HEAD：无输出，退出码 0。
+对 git diff --name-only 003e5fecf4048d8da8151d0431ea1cd040912a36 HEAD 所列文件逐个扫描行首冲突标记：0 个。
+Python splitlines 统计上述列表中的非生成 Go 文件：28 个，最大 445 行，超过 1000 行 0 个。
+gofmt -l <上述 28 个 Go 文件>：无输出。
+git status --short：无输出。
+git merge-base --is-ancestor origin/group/20260908-subscription-dispatch-group HEAD：退出码 0。
+git rev-parse HEAD origin/durable-dispatch-protocol：两行均为 c5dcfbc401d5748da7eb0c89011ea422f51c33cc；推送成功。
+
+人工核对（提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc）：
+git diff --stat 003e5fecf4048d8da8151d0431ea1cd040912a36 HEAD 和相关文档/实现逐段阅读：37 个文件；README、AGENTS、卡片事务文档、新协议文档、英文发布规则与实现同步。
+rg -n '^func Test|^func [A-Z]|^type [A-Z]' internal/board/dispatch*.go internal/launch/dispatch*.go internal/notify/dispatch*.go，并按新增公开函数执行 rg -l 查询：存储、授权、投递 API 均有调用方；结合 go vet ./... 与差异检查，未发现新增不可达/未使用代码。
+测试逐项阅读：幂等冲突、授权/CAS、受控 CLI、正文/WINDOW/作者处置、生命周期取消、扫描游标、预算/探测、早到回执、投递失败以及 kill/restart 分别覆盖不同契约；未发现无关断言或重复行为用例。
+TestDispatchKillRecovery：4 类事务 × 7 个持久化边界，共 28 个 kill/restart 子场景通过；TestDispatchSendKillAndSameIDReconciliation：发送前/后 2 个中断子场景通过。上述结果来自最终提交的全量及 race 日志。
+
+中间失败和修复：rebase 组基线时一次冲突处理脚本正则范围过宽，JSON/Go 格式校验失败；按各版本 JSON 键重建消息资源、正确保留组分支的 context 扫描实现并补授权游标回归后修复。该中间坏提交只存在本地，未推送；最终提交 c5dcfbc401d5748da7eb0c89011ea422f51c33cc 已重新执行本记录全部验证。此前证据不作为最终交付证明。
+
+未执行：原生 Windows 锁/DACL/reparse/进程回收；真实 tmux/herdr/Agent 联调。当前替代证据为 Linux 临时目录、假 CLI、真实子进程 kill/restart 和 Windows 交叉编译，不代表实机通过。PM/QA 由主控安排，尚无本次实现审核 run ID；CSA/Hacker 按本仓库规则 N/A。

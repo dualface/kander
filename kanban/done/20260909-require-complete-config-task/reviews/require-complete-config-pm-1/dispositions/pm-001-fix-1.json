@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 16,
+  "record_id": "pm-001-fix-1",
+  "run_id": "require-complete-config-pm-1",
+  "finding_id": "PM-001",
+  "batch_id": "require-complete-config-1",
+  "task_id": "20260909-require-complete-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:30:01.099975846Z",
+  "report_hash": "4e42d623610d62e8764da3001626501834fa8ea6c2fd2c2f71a6b05f6409ca73",
+  "original": "Inferred，高置信度：选项面板首次成功打开后缓存 Session，关闭后再次打开会绕过本次新增的 Load(false)。若此时作用域配置已删除，或配置／overlay 已损坏，仍打开旧 Huh 表单，不显示 loadErr，违反任务要求的每次打开完整读取、失败不打开表单。最小修复：每次打开面板均先 Load(false)，成功后才复用会话，失败进入 loadErr；补充关闭后配置损坏再打开的回归测试。",
+  "status": "fixed",
+  "basis": "verified against the target source and the real trigger path at the fix commit",
+  "fix_commit": "fdb68ffdef29749b56a4e7f6464b1206b0213501",
+  "verification": "Verified openOptionsAt now Load(false)s before reusing App.Session; TestReopenOptionsRequiresCompleteConfig writes a broken config after close and asserts loadErr with no form. go test ./internal/tui at fdb68ffdef29749b56a4e7f6464b1206b0213501 passed."
+}

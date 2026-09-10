@@ -1,0 +1,18 @@
+{
+  "submitted_revision": 23,
+  "record_id": "semver-qa-1-fixed-2",
+  "previous_record_id": "semver-qa-1-fixed",
+  "run_id": "semver-release-qa-3",
+  "finding_id": "QA-1",
+  "batch_id": "semver-release-batch",
+  "task_id": "20260909-semver-release-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T05:30:48.31708853Z",
+  "report_hash": "f212f66786e9365be9ad6f900ab92d6955ec68a504e1ca1faa8b967d53a8ea61",
+  "original": "internal/version/version.go:7-8 的注释称本地 make 注入 `git describe --tags --always`、\"or dev when that is unavailable\",与 Makefile:7-10 的实现不符:Makefile 先用不带 --always 的 `git describe --tags` 探测,仅在探测成功时才取 describe 结果,无可达 tag 时一律注入 dev。失败场景:在有提交但无可达 tag 的 checkout(fork、未同步 tag 的克隆)中执行 make,`git describe --tags --always` 完全可用并会输出短 hash,但二进制版本仍是 dev;按注释判断会误以为 describe 不可用而去排查 git 环境。影响:本轮改动的唯一目的就是让注释匹配实现(commit message: The comments must match that),该注释却与 Makefile 自身对同一分支的说明相互矛盾,后续定位版本号来源时会被误导。最小修复:将第 7-8 行第二句改为按「是否有可达 tag」表述,例如 `Local make injects the git describe --tags output when a tag is reachable, and \"dev\" otherwise (including a non-git directory).`",
+  "status": "fixed",
+  "basis": "Independently verified against Makefile:10 and make-windows.cmd:13-19 at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1: git describe --tags (no --always) is the no-tag gate, so an untagged git repo still has a working git describe --tags --always (short hash) but make injects dev. The comment claimed describe was unavailable.",
+  "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+  "mechanical": "documentation",
+  "verification": "Read internal/version/version.go:6-9 after 211c104282f181d5fabe6cc49b03583b0bed269f: it now says describe is used when a tag is reachable, and dev when there are no tags or the checkout is not a git repository. Sentence-by-sentence match with Makefile:7-10."
+}

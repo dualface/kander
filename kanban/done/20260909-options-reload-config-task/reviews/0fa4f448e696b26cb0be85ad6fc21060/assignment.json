@@ -1,0 +1,18 @@
+{
+  "run_id": "0fa4f448e696b26cb0be85ad6fc21060",
+  "batch_id": "20260909-options-reload-batch-1",
+  "author": "grok",
+  "basis": "single-card QA findings assigned to the executing task by modification scope",
+  "items": {
+    "QA-001": [
+      "20260909-options-reload-config-task"
+    ],
+    "QA-002": [
+      "20260909-options-reload-config-task"
+    ]
+  },
+  "owners": {
+    "20260909-options-reload-config-task": "grok"
+  },
+  "recorded_at": "2026-09-09T07:51:31.286405806Z"
+}

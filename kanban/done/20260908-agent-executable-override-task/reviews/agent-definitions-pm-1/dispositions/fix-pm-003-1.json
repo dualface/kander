@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 15,
+  "record_id": "fix-pm-003-1",
+  "run_id": "agent-definitions-pm-1",
+  "finding_id": "PM-003",
+  "batch_id": "agent-definitions-batch",
+  "task_id": "20260908-agent-executable-override-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T02:49:55.88078939Z",
+  "report_hash": "3f0aa25a7ec27a0a882e9b5d14e7a2e9f48ec46571d279e740dd5029f37abee8",
+  "original": "Observed，高置信度：两个规模均选 Claude、PATH 只有 kander-codex 而无 codex、尚无覆盖定义时，面板过滤掉 Codex，且执行名输入只为已选 agent 创建。用户无法直接在面板配置改名 Codex，必须先手改 JSON。违反内置 agent 执行名和进程名可直接编辑的要求。最小修复：允许选择未探测成功的内置 agent 以编辑路径，保存时校验。",
+  "status": "fixed",
+  "basis": "合并根因面板入口：TestPanelCanConfigureUnselectedRenamedBuiltin 使用真实 NewSession 在原源码复现 Codex 不在候选；现所有声明及内置 agent 可进入下拉编辑，首次初始化仍要求实际可用 agent，显式路径保存继续校验。",
+  "fix_commit": "6dbed41ae20a5c930f47b209ea9dc4add2c1a771",
+  "verification": "提交 6dbed41ae20a5c930f47b209ea9dc4add2c1a771：go test ./internal/config ./internal/launch ./internal/process ./internal/menu ./internal/takeover -run Test(DialectSessionCompatibility|NoneDialectArgumentsDoNotReuseTerminalIdentity|WindowsSuffixedNamesSearchPATH|WindowsAbsoluteExtensionlessProgram|PanelCanConfigureUnselectedRenamedBuiltin|ConfiguredAgentDismissAndCleanup) -count=1 -json，退出 0；修复前相同回归已复现。Windows 为可注入平台解析测试，未声称原生执行。"
+}

@@ -1,0 +1,22 @@
+{
+  "run_id": "g3-qa-r1",
+  "batch_id": "g3-batch-one",
+  "author": "coordinator",
+  "basis": "与 g3-pm-r1 同一归属依据。QA-01 与 PM-02 同根因（coordinator 执行周期），QA-02 与 PM-01 同根因（闭批后历史对账），QA-03 与 PM-03 同根因（订阅文档 confirm_by 语义）；处置时按“一个根因一个 ID”合并并同时引用两个来源 ID。",
+  "items": {
+    "QA-01": [
+      "20260908-coordinator-recovery-task"
+    ],
+    "QA-02": [
+      "20260908-coordinator-recovery-task"
+    ],
+    "QA-03": [
+      "20260908-dispatch-evidence-binding-task"
+    ]
+  },
+  "owners": {
+    "20260908-coordinator-recovery-task": "codex",
+    "20260908-dispatch-evidence-binding-task": "codex"
+  },
+  "recorded_at": "2026-09-07T21:49:03.491391558Z"
+}

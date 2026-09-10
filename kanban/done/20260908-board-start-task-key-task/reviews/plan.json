@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "board-start-task-key-plan",
+  "author": "codex",
+  "basis": "用户授权执行独立功能卡；AGENTS.md 要求 PM/QA 审核，CSA/Hacker 不适用",
+  "cwd": "/home/dualf/works/kander/worktrees/board-start-task-key",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-board-start-task-key-task"
+  ],
+  "cycles": {
+    "20260908-board-start-task-key-task": "2dc3d863540444be168cffccc65f1968a347a8ab3c47410948fa5e7a2ff604bf"
+  },
+  "batches": [
+    {
+      "batch_id": "board-start-task-key-batch",
+      "task_ids": [
+        "20260908-board-start-task-key-task"
+      ],
+      "base": "781aa0dcde99eefe0d7ccea84f5a138f414e831c",
+      "target_commit": "c172eef3b1fe40331445bdea0b8b4025f61b9ce7",
+      "requirements": {
+        "CSA": "N/A: 本仓库 AGENTS.md 安全角色特例",
+        "Hacker": "N/A: 本仓库 AGENTS.md 安全角色特例",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-08T03:56:02.610703558Z"
+}

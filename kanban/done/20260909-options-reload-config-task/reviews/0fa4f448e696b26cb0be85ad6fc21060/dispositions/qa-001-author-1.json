@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 13,
+  "record_id": "qa-001-author-1",
+  "run_id": "0fa4f448e696b26cb0be85ad6fc21060",
+  "finding_id": "QA-001",
+  "batch_id": "20260909-options-reload-batch-1",
+  "task_id": "20260909-options-reload-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:05:51.026803235Z",
+  "report_hash": "6ef45b8ef279a7207e87982f7675cf4cd69ff7b9aa07c4a600af46c3d4d1d09f",
+  "original": "Inferred，置信度高：异步 sessionResult 没有绑定发起加载的面板。已有 session 后重开 Options，加载中关闭、修改磁盘配置并再次打开，新加载先完成而旧加载后完成时，旧结果会覆盖当前 session、语言和 overlay 提示，也可能替换正在编辑的内容，违反每次重开使用本次读盘结果的要求。本次每次重开均异步加载，使此前缓存 session 的重开路径也受到影响。最小修复：请求和结果携带面板身份或递增序号，丢弃非当前请求结果；以受控完成顺序验证旧结果不能覆盖新面板。",
+  "status": "fixed",
+  "basis": "Verified against 639cc1e6e5d10592d932cdc43fcd8ee9c77d7b4a: each open increments App.optionsLoadSeq, sessionResult.seq must match panel.loadSeq, stale results are dropped. TestOpenOptionsIgnoresStaleReload applies the old load after the new one and asserts the grok disk value remains.",
+  "fix_commit": "639cc1e6e5d10592d932cdc43fcd8ee9c77d7b4a",
+  "verification": "go test ./internal/tui -count=1 at 639cc1e6e5d10592d932cdc43fcd8ee9c77d7b4a: ok"
+}

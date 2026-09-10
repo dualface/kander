@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "20260908-agent-definition-group",
+  "run_id": "qa-agent-def-b1-r5",
+  "batch_id": "agent-def-batch-one",
+  "task_ids": [
+    "20260908-agent-definition-embed-task",
+    "20260908-agent-review-template-task",
+    "20260909-process-output-parser-task"
+  ],
+  "role": "QA",
+  "reviewer": "grok",
+  "model": "opus",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/20260908-agent-definition-group",
+  "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+  "commit": "e1c01277075599cb0395bf62f16855cebf04b060",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "25dd63876f33776ba7e45f2c4dadca0401cb4ef8fcb7d6942a6d560632e7c6bf",
+    "task-context.md": "ab359490efd6439b7192b27bd58ba2902dabae3784aa3a6e8f9c60794983dc87"
+  },
+  "kander_version": "20260909T052428Z-f457271b9e9d",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "failed",
+  "semantic_status": "unassessed",
+  "failure_reason": "Reviewer 执行失败（退出码 1）；不代表语义 PASS",
+  "exit_code": 1,
+  "created_at": "2026-09-09T05:29:33.728332538Z",
+  "finished_at": "2026-09-09T05:29:37.926689317Z",
+  "duration_ms": 4198,
+  "hashes": {
+    "error.log": "b23c68bc0fcdefb1e4a013782120c858887a7d960c21ecde0fc84f3f52045aad",
+    "evidence.txt": "3e81f7883a2850e19cd25b92afef45db1861f7a2c050844639882d087984abcf",
+    "output.raw": "bace42003a8bd396b30d0fd1d541b060044b58bf5f9bc112f6c30c0149ba9197",
+    "prompt.txt": "4caa00f39c24273ec773878031d398b557e6529ed3ed8bb41c37d237483ad3ca",
+    "review-context.md": "25dd63876f33776ba7e45f2c4dadca0401cb4ef8fcb7d6942a6d560632e7c6bf",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "ab359490efd6439b7192b27bd58ba2902dabae3784aa3a6e8f9c60794983dc87"
+  },
+  "published": null
+}

@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "agent-definitions-qa-1",
+  "batch_id": "agent-definitions-batch",
+  "task_ids": [
+    "20260908-agent-executable-override-task"
+  ],
+  "role": "QA",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "cwd": "/home/dualf/works/kander/worktrees/agent-executable-override",
+  "base": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+  "commit": "56ec24d4ca46285288cccf219d971a3a8d970523",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "8f067842dd4f5d1155a9759abfe36608f69c1d0b37616ae2a49ce71f0d25920b"
+  },
+  "kander_version": "20260907T173303Z-7e6fe2073ff0",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-08T02:37:20.45645563Z",
+  "finished_at": "2026-09-08T02:41:41.265787109Z",
+  "duration_ms": 260809,
+  "hashes": {
+    "error.log": "4c12331d7f55f20cad9f053d66be8b701aa871c94b9efa4388e6be97f360cb62",
+    "evidence.txt": "b0cfdd854205494e379a3888d9410ace4a0eadaa94c3248d857457ef555344c0",
+    "output.raw": "dc338f79e09a5015a473e8e1673dc7af92c9826d4e200b1ed728a41a80d524c3",
+    "prompt.txt": "0e431ff17205ff1f5aef649b5812778428b6ee314b8646cc56dd5766b825f95f",
+    "report.md": "dc338f79e09a5015a473e8e1673dc7af92c9826d4e200b1ed728a41a80d524c3",
+    "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.log": "f784ed7f894249e3bfb8255c9645abd709cb860cc286eb068f83aaea17f0c09d",
+    "task-context.md": "8f067842dd4f5d1155a9759abfe36608f69c1d0b37616ae2a49ce71f0d25920b"
+  },
+  "published": null
+}

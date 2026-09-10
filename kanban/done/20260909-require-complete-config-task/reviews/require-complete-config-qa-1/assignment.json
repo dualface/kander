@@ -1,0 +1,21 @@
+{
+  "run_id": "require-complete-config-qa-1",
+  "batch_id": "require-complete-config-1",
+  "author": "grok",
+  "basis": "single-card change scope; all findings land on this task",
+  "items": {
+    "QA-001": [
+      "20260909-require-complete-config-task"
+    ],
+    "QA-002": [
+      "20260909-require-complete-config-task"
+    ],
+    "QA-003": [
+      "20260909-require-complete-config-task"
+    ]
+  },
+  "owners": {
+    "20260909-require-complete-config-task": "grok"
+  },
+  "recorded_at": "2026-09-09T08:26:37.363249547Z"
+}

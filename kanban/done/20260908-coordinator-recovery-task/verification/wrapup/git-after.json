@@ -1,0 +1,71 @@
+[
+  {
+    "command": [
+      "git",
+      "worktree",
+      "list",
+      "--porcelain"
+    ],
+    "exit_code": 0,
+    "stdout": "worktree /home/dualf/works/kander\nHEAD 26edb64fcfb654a96afedc30bbaea27e5e918ec7\nbranch refs/heads/develop\n\nworktree /home/dualf/works/kander/worktrees/20260908-bindings-recovery-group\nHEAD 26edb64fcfb654a96afedc30bbaea27e5e918ec7\nbranch refs/heads/group/20260908-bindings-recovery-group\n\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/heads/coordinator-recovery"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "show-ref",
+      "--verify",
+      "--quiet",
+      "refs/remotes/origin/coordinator-recovery"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "ls-remote",
+      "origin",
+      "refs/heads/coordinator-recovery",
+      "refs/heads/develop"
+    ],
+    "exit_code": 0,
+    "stdout": "26edb64fcfb654a96afedc30bbaea27e5e918ec7\trefs/heads/develop\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "kander",
+      "review",
+      "progress",
+      "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+      "20260908-coordinator-recovery-task"
+    ],
+    "exit_code": 0,
+    "stdout": "{\n  \"task_id\": \"20260908-coordinator-recovery-task\",\n  \"plan_id\": \"g3-bindings-recovery\",\n  \"status\": \"closed\"\n}\n",
+    "stderr": ""
+  }
+]

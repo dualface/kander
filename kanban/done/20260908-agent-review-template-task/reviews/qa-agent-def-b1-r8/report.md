@@ -1,0 +1,45 @@
+先读 Kander 规则、任务规格和证据文件，再按增量 QA 口径核对本区间修复。证据文件后半段和修复区间路径还没读完，接着把规格相关实现对上。接下来核验 QA-01 的 durable 关容器路径，以及 QA-N1/N2 在当前 HEAD 上是否仍成立。核验已完成：QA-01 在组 HEAD 上已关闭，QA-N1/QA-N2 仍在且未改动，修复区间未引入新的门禁缺陷。任务文件无删除工具可用，按规则不影响结果。
+
+Role: QA  
+Commit: `d97964c06adb942b94b25c7e5c5bfb04795172e4`  
+Task Context: 组批次 `20260908-agent-definition-group` 三条交付（process 解析器、嵌入 agent 定义、审核模板）；不含 A3 退出命令/会话钩子。本轮为 QA r6 的增量复审，只核验 `e1c01277075599cb0395bf62f16855cebf04b060..d97964c06adb942b94b25c7e5c5bfb04795172e4`。  
+Reviewed Scope: 以 COMMIT TREE / FIX RANGE 与 task-spec 为边界。先验每条 r6 finding 在 `d97964c` 的开闭；再只读核验修复区间改动的 `internal/launch/agent.go`、`prompt_delivery.go`、`prompt_delivery_test.go`、`notify_resume.go`、`commands.go`，以及 `internal/config` 审核声明/effort、`docs/custom-agents.md`、`internal/process/output.go`。本环境按审核约定只用 read_file/grep/list_dir，未重跑测试；调用方已记录组 HEAD `go test -json -p 2 ./... -count=1`：21 包通过、1422 pass、0 fail、1 Windows skip。Windows 原生行为沿用该口径，标为 Unverifiable 一次。
+
+## 前轮 finding 处置
+
+| ID | 结论 | 证据 |
+| --- | --- | --- |
+| QA-01 | **已关闭**（Observed） | 组内提交 `77affddb46336b7b131c4d8ba9ac6f6c1e85d6f4` 把 `fail()` 的 DeliveryUnknown 短路改为 `sendAttempted && durable && plan.PromptDelivery.Mode != "pane"`（`internal/launch/agent.go:27-40`）。pane 的 blocked / 投递拒绝 / 超时仍走 `completePaneDelivery` → `fail()`，但不再标未知投递，随后 `herdrCloseTab` / `tmuxCloseWindow`。`notify_resume.go:127-138` 与 `commands.go:289-295` 只在 `DeliveryUnknown` 时跳过 `RestoreWindowText` / `rollbackLaunch`。`TestPaneDeliveryDurableBlockedClosesTab`（`prompt_delivery_test.go:268-313`）以 `launchAgent(..., true)` 覆盖 durable+blocked：`DeliveryUnknown==false` 且写出 `herdr` close。三种失败共用同一 `fail()`；argv 仍在 pane run 前保持原发送边界。作者未按「挪动 sendAttempted」改，但契约结果已成立。 |
+| QA-N1 | **仍开放**（Observed，作者 deferred） | `validReviewPromptPath` 仍接受规范相对路径（`agents_review.go:254-268`）；`execute.go:171-174` 只 `WriteTextAtomic`，不建中间目录；`posix.go:75-79` 对缺失父目录 `openat` 失败。e2e 仍用单段 `guide.md`（`definition_unix_test.go:199`）。修复区间未改这条写入路径。 |
+| QA-N2 | **仍开放**（Observed，作者 deferred） | `options.go:110-114` 仍对 `ReviewAgentNames` 套 `reviewerUsable`；`agents.go:201` 仍要求 `--version` 探测成功。执行侧 `options.go:104-105` 探测失败仍可选。修复区间只改了 effort 显隐，未改候选过滤。 |
+
+## 行为 / 质量对照（修复区间）
+
+| 主题 | 结论 | 证据 |
+| --- | --- | --- |
+| pane durable 三种失败统一关容器+回滚 | 满足。 | `agent.go:31-40`；调用方只认 `DeliveryUnknown` 才跳过回滚；durable 用例断言 close 文件 |
+| 自定义包装器不再自动成为 reviewer | 满足。 | `HasReviewTemplate` 对自定义名只认 overlay 自身声明（`agents_review.go:77-91`）；`AgentFor` 未声明者清空继承的 `Args.Review`（`agents.go:79-97`） |
+| 声明成对后不按字段回填 | 满足，与文档一致。 | `docs/custom-agents.md:81`；`agents_review_test.go:132-147` 断言已声明 pair 的省略字段不被填充；`validateReviewDefinition` 仍要求成对（`agents_review.go:154-161`） |
+| 审核 effort 显隐 | 满足。 | 面板改 `ReviewModelSupportsEffort`（`options.go:402`），与 `configuredModel` 按 `models.review` 是否含 effort 键丢弃（`settings.go:115-117`）一致 |
+| 解析器死代码 / 孤儿文案 | 满足。 | `ReviewSources`/`TerminalSources`/`jsonStringOrRaw` 已删；两枚 locale 键已删 |
+| 文件 1000 行规则 | 满足。 | 修复区间触及的非生成文件均远低于 1000 行（`output.go` 434；`agent.go` 405；`options.go` 598；`prompt_delivery_test.go` 372） |
+
+## Gate findings
+
+无。QA-01 已在 `d97964c` 关闭；修复区间未引入、加重或掩盖新的门禁缺陷，也未把原需求改坏。
+
+## NON-BLOCKING
+
+### QA-N1 — low — Observed
+
+`review.prompt_files[].path` 允许规范相对路径（含 `prompts/guide.md`），但 `execute.go` 只 `WriteTextAtomic`、不创建中间目录；`openPosixParent` 对缺失父目录返回 ENOENT。单测只用 `guide.md`。作者按「runtime 相对路径」写成子目录时，校验通过、审核启动 I/O 失败。最小改动：写入前在 runtime 内按隔离规则创建父目录，或校验改为只接受单段文件名。作者已 deferred，本轮核实现象仍在，修复区间未改。
+
+### QA-N2 — suggest — Observed
+
+选项面板 reviewer 列表来自 `ReviewAgentNames`，但再经过 `reviewerUsable`（要求 `--version` 探测成功）。执行侧自定义 agent 即使探测失败仍可选；审核侧脚本型 reviewer（本卡 e2e 用的假可执行通常没有 `--version`）不会出现在面板，只能改 JSON。若希望与「定义了审核模板即可入选」对齐，可让带审核模板的名字始终出现在候选里，探测失败只影响标签。作者已 deferred，本轮核实现象仍在，修复区间未改过滤逻辑。
+
+NON-BLOCKING 共 2 条，无丢弃。
+
+```kander-findings
+{"FINDINGS":[],"NON_BLOCKING":[{"id":"QA-N1","tier":"low","text":"review.prompt_files[].path 允许规范相对路径（含 prompts/guide.md），execute.go 只 WriteTextAtomic、不创建中间目录；openPosixParent 对缺失父目录返回 ENOENT。单测只用 guide.md。作者按 runtime 相对路径写成子目录时，校验通过、审核启动 I/O 失败。最小改动：写入前在 runtime 内按隔离规则创建父目录，或校验只接受单段文件名。","evidence":"internal/config/agents_review.go:254-268; internal/review/execute.go:171-174; internal/fs/posix.go:75-79; definition_unix_test.go:199 使用 path=guide.md。修复区间未改该写入路径。","lineage":{"run_id":"qa-agent-def-b1-r6","finding_id":"QA-N1"}},{"id":"QA-N2","tier":"suggest","text":"选项面板 reviewer 列表来自 ReviewAgentNames，但再经过 reviewerUsable（要求 --version 探测成功）。执行侧自定义 agent 即使探测失败仍可选；审核侧脚本型 reviewer（本卡 e2e 假可执行通常没有 --version）不会出现在面板，只能改 JSON。若希望与「定义了审核模板即可入选」对齐，可让带审核模板的名字始终出现在候选里，探测失败只影响标签。","evidence":"internal/menu/options.go:110-114 对比 104-105 执行侧「Unavailable agents remain selectable」；internal/menu/agents.go:99-125,195-201。修复区间只改 ReviewModelSupportsEffort，未改该过滤。","lineage":{"run_id":"qa-agent-def-b1-r6","finding_id":"QA-N2"}}]}
+```

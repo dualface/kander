@@ -1,0 +1,12 @@
+--- FAIL: TestCoordinatorCompletedFixSurvivesClosedBatchRestart (5.59s)
+    --- FAIL: TestCoordinatorCompletedFixSurvivesClosedBatchRestart/author (1.20s)
+        coordinator_closed_fix_test.go:39: closed batch blocked historical completion 审核证据无效：batch already closed
+    --- FAIL: TestCoordinatorCompletedFixSurvivesClosedBatchRestart/report (1.34s)
+        coordinator_closed_fix_test.go:39: closed batch blocked historical completion 审核证据无效：batch already closed
+    --- FAIL: TestCoordinatorCompletedFixSurvivesClosedBatchRestart/closure (1.54s)
+        coordinator_closed_fix_test.go:39: closed batch blocked historical completion 审核证据无效：batch already closed
+    --- FAIL: TestCoordinatorCompletedFixSurvivesClosedBatchRestart/assignment (1.51s)
+        coordinator_closed_fix_test.go:39: closed batch blocked historical completion 审核证据无效：batch already closed
+FAIL
+FAIL	github.com/dualface/kander/internal/board	5.603s
+FAIL

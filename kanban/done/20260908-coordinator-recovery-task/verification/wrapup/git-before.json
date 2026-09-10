@@ -1,0 +1,85 @@
+[
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD",
+      "develop",
+      "origin/develop",
+      "coordinator-recovery",
+      "group/20260908-bindings-recovery-group"
+    ],
+    "exit_code": 0,
+    "stdout": "26edb64fcfb654a96afedc30bbaea27e5e918ec7\n26edb64fcfb654a96afedc30bbaea27e5e918ec7\n26edb64fcfb654a96afedc30bbaea27e5e918ec7\n26edb64fcfb654a96afedc30bbaea27e5e918ec7\n26edb64fcfb654a96afedc30bbaea27e5e918ec7\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "merge-base",
+      "--is-ancestor",
+      "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+      "develop"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "merge-base",
+      "--is-ancestor",
+      "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+      "origin/develop"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-C",
+      "/home/dualf/works/kander/worktrees/coordinator-recovery",
+      "status",
+      "--porcelain"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "worktree",
+      "list",
+      "--porcelain"
+    ],
+    "exit_code": 0,
+    "stdout": "worktree /home/dualf/works/kander\nHEAD 26edb64fcfb654a96afedc30bbaea27e5e918ec7\nbranch refs/heads/develop\n\nworktree /home/dualf/works/kander/worktrees/20260908-bindings-recovery-group\nHEAD 26edb64fcfb654a96afedc30bbaea27e5e918ec7\nbranch refs/heads/group/20260908-bindings-recovery-group\n\nworktree /home/dualf/works/kander/worktrees/coordinator-recovery\nHEAD 26edb64fcfb654a96afedc30bbaea27e5e918ec7\nbranch refs/heads/coordinator-recovery\n\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "ls-remote",
+      "origin",
+      "refs/heads/develop",
+      "refs/heads/coordinator-recovery"
+    ],
+    "exit_code": 0,
+    "stdout": "26edb64fcfb654a96afedc30bbaea27e5e918ec7\trefs/heads/coordinator-recovery\n26edb64fcfb654a96afedc30bbaea27e5e918ec7\trefs/heads/develop\n",
+    "stderr": ""
+  }
+]

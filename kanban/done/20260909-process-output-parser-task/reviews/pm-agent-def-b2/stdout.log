@@ -1,0 +1,20 @@
+Role: PM  
+Commit: `64d0c2cf5fa2e8c8930f56967dced09a2187478d`  
+Task Context: [完整审核合同](/tmp/codex-review.4f7c57ec35bbdfdf338991e4311aadc7/task-spec.md)  
+Reviewed Scope: `d97964c..64d0c2c` 的 35 个变更文件及相关配置、启动、恢复、存活检测、退出清理、解析器消费链。
+
+**结论：Inferred，未发现本批引入、加重或掩盖的门禁问题。**
+
+本批相关验收检查共 35 项：Complete 34；Partial 0；Missing 0；Contradicted 0；Unverifiable 1。
+
+Observed：提交树与证据一致，受版本控制文件内容全部匹配目标提交，`git diff --check` 通过。退出命令继承与拒绝路径、会话钩子、Cursor 显式 `allocated` 兼容、解析器补漏及新增测试组合均有实现依据；原有测试断言覆盖保留。
+
+Unverifiable：本轮只读环境未独立执行构建和测试。调用方报告精确 HEAD 全量 1496 pass、0 fail、1 skip，并完成 build、vet、Windows 交叉编译；Windows 原生未执行。
+
+已尝试删除任务文件；只读文件系统拒绝，文件保留，不影响审核结果。
+
+NON-BLOCKING: none
+
+```kander-findings
+{"FINDINGS":[],"NON_BLOCKING":[]}
+```

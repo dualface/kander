@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "feaf13f03f428bdb87fd4f42759df469",
+  "batch_id": "20260909-options-reload-rereview-batch-1",
+  "previous_run_id": "c007591822d8d6fe7a05978d40a73f6b",
+  "task_ids": [
+    "20260909-options-reload-rereview-task"
+  ],
+  "role": "QA",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/20260909-options-reload-config",
+  "base": "fd24781ac0f6abf001e11422d926b566e56623f8",
+  "commit": "98a0a77a61d8ad561566cb344d918f1db0d48637",
+  "reviewed_commit": "bce1ad374757cbf18db674d05e56974c6de68b81",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "104f0c93fe8a143aaec169428f261c492893b0e1f0786fbd19d3cf60f8c87c69",
+    "task-context.md": "a7676a2c7cc931d46dac54c2ece2dcfdab2197dd74e6d13f60a026385343b242"
+  },
+  "kander_version": "20260909T052428Z-f457271b9e9d",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-09T10:44:18.832756442Z",
+  "finished_at": "2026-09-09T10:46:10.208900292Z",
+  "duration_ms": 111376,
+  "hashes": {
+    "error.log": "dd4e9c4cea81b10b925f5f064dd60867633e054dbde5d951f35a3ae2a25e9fe4",
+    "evidence.txt": "819db3ccc185d541a61531b63f5db387ec338ab313377eeaa4fa290dbf06bea4",
+    "output.raw": "a3d46d0314dc3879bc196a731b01b509b3466a071aa1b83566cf82eb4b32ab82",
+    "prompt.txt": "8261036a7c33794288f718d1622d443285a92c546ce8b869625180fecc984d4f",
+    "report.md": "a3d46d0314dc3879bc196a731b01b509b3466a071aa1b83566cf82eb4b32ab82",
+    "review-context.md": "104f0c93fe8a143aaec169428f261c492893b0e1f0786fbd19d3cf60f8c87c69",
+    "stdout.log": "459c55505fd7fbfc0d937111957d441c092d1119143a9f3433e9da25c25f2532",
+    "task-context.md": "a7676a2c7cc931d46dac54c2ece2dcfdab2197dd74e6d13f60a026385343b242"
+  },
+  "published": null
+}

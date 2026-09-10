@@ -1,0 +1,24 @@
+Role: QA  
+Commit: `78c8137fba6d8a6244c2f0eb6ce84a5ccf548851`  
+Task Context: 棋盘视图按 `g` 跳转到卡片 `WINDOW` 指定的 Agent 窗口。  
+Reviewed Scope: 依据 COMMIT TREE、完整任务说明及 `26edb64..78c8137`，追踪 TUI、focus、probe、卡片读取、地址写入契约、三语文案及相关测试。只读环境未重跑测试；采信交付提交的 `go test -json ./...`：20 包通过，1071 项通过、1 项跳过。
+
+| 行为／质量 | 审核结果与证据 |
+|---|---|
+| 包边界与数据来源 | Observed：TUI 单向调用 focus；只读卡片 `WINDOW`，无反查或回写。`internal/tui/focus.go:26`、`internal/focus/focus.go:35`。 |
+| 地址与失败分类 | Observed：覆盖三种地址、herdr workspace 前缀，以及缺地址、格式错误、不支持、缺命令、缺 TMUX。`internal/focus/focus.go:44`。 |
+| 探测与跳转 | Observed：复用 probe；gone 时返回，不切换。herdr 先切 tab，pane 失败保留成功；tmux 按指定顺序执行，失败截断。`internal/focus/focus.go:89`。 |
+| herdr 协议与取消 | Observed：校验响应 ID、`pane_info` 和目标 pane；设置期限并处理取消。与调用方指定的 herdr `handle_pane_focus` 返回一致。`internal/focus/herdr.go:26`。 |
+| 异步、页脚、视图隔离 | Observed：后台读取与执行，防止重复跳转；结果在选项面板分支前消费；搜索和详情优先处理按键。`internal/tui/focus.go:17`、`internal/tui/options_panel.go:135`、`internal/tui/app.go:791`。 |
+| 测试、文案与维护性 | Observed：执行器打桩、socket 隔离测试、TUI 回执测试覆盖验收路径；三语新增键一致，帮助与文档同步。变更代码文件最大 810 行；`git diff --check` 通过。 |
+| 真实窗口效果 | Unverifiable：未执行真实窗口切换冒烟；自动化证据不等同于真机验证。 |
+
+门禁发现：无。未发现本审核范围引入、加重或掩盖的可确认缺陷。
+
+NON-BLOCKING: none
+
+任务文件未删除：当前环境仅允许只读操作。
+
+```kander-findings
+{"FINDINGS":[],"NON_BLOCKING":[]}
+```

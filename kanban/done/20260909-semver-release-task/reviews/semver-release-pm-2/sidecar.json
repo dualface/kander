@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "semver-release-pm-2",
+  "batch_id": "semver-release-batch",
+  "task_ids": [
+    "20260909-semver-release-task"
+  ],
+  "role": "PM",
+  "reviewer": "claude",
+  "model": "opus",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/semver-release",
+  "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+  "commit": "5172edad0c23c2f85265461d6238215f443849a9",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "358c4f966418d58ee8953efbdf4eaea94865e7772e18c5b45be9fd4dfeb6a954",
+    "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+  },
+  "kander_version": "20260909T034406Z-fe46c2f545a4",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "failed",
+  "semantic_status": "unassessed",
+  "failure_reason": "invalid structured review report: 审核证据无效：structured findings required; legacy mapping required for old reports",
+  "exit_code": 1,
+  "created_at": "2026-09-09T05:15:09.461803673Z",
+  "finished_at": "2026-09-09T05:19:54.052588817Z",
+  "duration_ms": 284590,
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "3aa1e5c74cd7a08b47bcc9bbf9574d422634b0a8a13c9928ed1de628db242c73",
+    "output.raw": "612a5a1c6ebab3171878a7b61bfc25d17d714660dad11c814169da8fb4646294",
+    "prompt.txt": "aa7993dacc0b05de0a3b9160f476a27e4ba115bbd8ab50b0fc04acf4625f4d42",
+    "report.md": "ac15d9083953a0a9a32936af680325130801abde262fa440b487fa0a81c305aa",
+    "review-context.md": "358c4f966418d58ee8953efbdf4eaea94865e7772e18c5b45be9fd4dfeb6a954",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "6a896f2096c2667c92200d338a965d273c55e6a9d6f9a7ee56f3a6c570259b3c"
+  },
+  "published": null
+}

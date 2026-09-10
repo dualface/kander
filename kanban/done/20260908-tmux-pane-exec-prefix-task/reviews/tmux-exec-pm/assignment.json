@@ -1,0 +1,9 @@
+{
+  "run_id": "tmux-exec-pm",
+  "batch_id": "tmux-exec-batch",
+  "author": "codex",
+  "basis": "完整结构化报告的 FINDINGS 与 NON_BLOCKING 均为空；独立对照最终 diff 与实际验证记录确认",
+  "items": {},
+  "owners": {},
+  "recorded_at": "2026-09-08T02:23:43.479313082Z"
+}

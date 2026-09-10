@@ -1,0 +1,80 @@
+{
+  "author": "codex",
+  "dispatch_id": "codex-agentdef-wrap-review-20260909",
+  "epoch": 12,
+  "task_delivery": "6b7c132db76cc00a1245bc45fd992afe3109dcc6",
+  "reviewed_source": "64d0c2cf5fa2e8c8930f56967dced09a2187478d",
+  "integrated_commit": "a8b5afac5d79a09399ab12b097691d1f2212c1dd",
+  "verification_from_orchestrator": {
+    "tree": "5e9f52f03de08e89d1f0acf2badb9d3274ff69ab",
+    "command": "go test -json -p 2 ./... -count=1",
+    "exit_code": 0,
+    "counts": {
+      "pass": 1682,
+      "skip": 1
+    },
+    "packages_pass": 21,
+    "skips": [
+      "github.com/dualface/kander/internal/launch/TestWindowsConsoleLauncher"
+    ],
+    "log": "/tmp/agentdef-integration-tests.jsonl",
+    "sha256": "07fa9dee676fa6646de9cd9e530b753ec23a893d4a782dbefcee1651ceccb442",
+    "builds": [
+      {
+        "name": "build",
+        "args": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "environment": {},
+        "exit_code": 0,
+        "log": "/tmp/agentdef-integration-build.log"
+      },
+      {
+        "name": "vet",
+        "args": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "environment": {},
+        "exit_code": 0,
+        "log": "/tmp/agentdef-integration-vet.log"
+      },
+      {
+        "name": "windows-build",
+        "args": [
+          "go",
+          "build",
+          "./..."
+        ],
+        "environment": {
+          "GOOS": "windows"
+        },
+        "exit_code": 0,
+        "log": "/tmp/agentdef-integration-windows-build.log"
+      }
+    ],
+    "extra_review": "Skipped per explicit user instruction; existing two closed PM/QA batches preserved."
+  },
+  "verified_test_log_hash": "07fa9dee676fa6646de9cd9e530b753ec23a893d4a782dbefcee1651ceccb442",
+  "verified_tree": "5e9f52f03de08e89d1f0acf2badb9d3274ff69ab",
+  "task_worktree_removed": true,
+  "task_local_branch_removed": true,
+  "task_remote_branch_removed": true,
+  "retained_build_artifacts": [
+    {
+      "file": "kander",
+      "retained_at": "/tmp/kander-review-wrapup-builds-_1wmeu85/kander",
+      "sha256": "2e148d76a1bcd548859f6ecb5b99cfbf13527c25e35a086b742262e31c69bcab"
+    },
+    {
+      "file": "kander.exe",
+      "retained_at": "/tmp/kander-review-wrapup-builds-_1wmeu85/kander.exe",
+      "sha256": "9e3d464a5fdedebb40f593ef023cec17bf7dde3e75a8752fb1721f6c56fc65ac"
+    }
+  ],
+  "native_windows": "not executed",
+  "post_merge_review": "skipped by explicit user decision conveyed in the wrap-up dispatch"
+}

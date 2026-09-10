@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "0963bb1a6cb31a7bcc9ea24a9b7b7697",
+    "epoch": 5
+  },
+  "submitted_revision": 44,
+  "record_id": "pm01-author-r4-1",
+  "run_id": "tui-theme-pm-r4",
+  "finding_id": "PM-01",
+  "batch_id": "tui-theme-batch-one",
+  "task_id": "20260909-tui-truecolor-palette-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:56:35.047002871Z",
+  "report_hash": "202ccdaf13c1e00fc006f3d550a151ddf18e61ec2895389ef3a76462cf56d9cc",
+  "original": "Observed，置信度高：PM-01 部分修复。真实终端交互及目视记录已覆盖六主题五界面与 Solarized 四组合，无需重复走查。但 palette 卡契约明确要求将人工四组合结果记入 IMPLEMENTATION；该节仍只记录 PTY，并称其覆盖第八项验收，未引用新增人工结果。剩余影响是验收记录未闭合，不是已观察到的显示故障。最小修复：在 palette 卡 IMPLEMENTATION 补记人工四组合结果，引用现有走查记录和提交 6d882fb，明确 PTY 属辅助证据；不要求 palette 卡承担六主题五界面。",
+  "status": "fixed",
+  "basis": "确认：本卡 AC 第 8 条要求把 Solarized 四组合人工结果记入 IMPLEMENTATION，原节只记 PTY。已独立阅读组 HEAD 6d882fb 的 internal/tui/testdata/theme-live-walkthrough.md:43-56 与 presets report.md:59-68。Herdr TrueColor pane 上 OSC 4/11 写入 Solarized 后，四组合画布中心分别为 light `#fafafa`、dark `#16181d`，Solarized Light/Dark 像素均为 0，未随终端 0/15 翻转。73afc16..6d882fb 未改生产代码。本轮只补记 IMPLEMENTATION，引用该走查与提交，PTY 改为辅助证据；不承担六主题五界面。",
+  "fix_commit": "6d882fbbf8e086e695728c02594d0d4899bfae82",
+  "verification": "git -C 组工作树 show --stat 6d882fbbf8e086e695728c02594d0d4899bfae82：仅 testdata/theme-live-walkthrough.md 与 theme_test.go 注释。走查表四行：Solarized Light×light 中心 #fafafa；Solarized Light×dark 中心 #16181d；Solarized Dark×light 中心 #fafafa；Solarized Dark×dark 中心 #16181d；两列 Solarized 像素均为 0。本卡 IMPLEMENTATION 本轮补记上述四组合并引用该文件与 SHA；PTY TestBoardTrueColorIgnoresSolarizedPaletteOnPTY 保留为辅助。"
+}

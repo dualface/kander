@@ -1,0 +1,155 @@
+{
+  "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+  "base": "c5dcfbc401d5748da7eb0c89011ea422f51c33cc",
+  "commands": [
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "go test -json -count=1 ./...",
+      "exit_code": 0,
+      "elapsed_seconds": 36.618,
+      "packages_pass": 19,
+      "top_level_tests_pass": 584,
+      "tests_including_subtests_pass": 899,
+      "tests_skip": 1,
+      "failures": [],
+      "output": "PASS\nok  \tgithub.com/dualface/kander/cmd/kander\t0.056s\nPASS\nok  \tgithub.com/dualface/kander/internal/cli\t0.013s\nPASS\nok  \tgithub.com/dualface/kander/internal/process\t0.017s\nPASS\nok  \tgithub.com/dualface/kander/internal/i18n\t0.080s\nPASS\nok  \tgithub.com/dualface/kander/internal/version\t0.002s\nPASS\nok  \tgithub.com/dualface/kander/rules\t0.002s\nPASS\nok  \tgithub.com/dualface/kander/internal/window\t0.103s\nPASS\nok  \tgithub.com/dualface/kander/internal/config\t0.255s\nPASS\nok  \tgithub.com/dualface/kander/internal/takeover\t0.347s\nPASS\nok  \tgithub.com/dualface/kander/internal/fs\t0.486s\nPASS\nok  \tgithub.com/dualface/kander/internal/probe\t0.709s\n=== RUN   TestDurableLaunchErrorRetainsUnknownExecutorAndPayload/KANBAN_TMUX_RESPAWN_FAIL\nPASS\nok  \tgithub.com/dualface/kander/internal/install\t0.816s\n--- PASS: TestDurableLaunchErrorRetainsUnknownExecutorAndPayload/KANBAN_TMUX_RESPAWN_FAIL (0.24s)\n=== RUN   TestDurableLaunchErrorRetainsUnknownExecutorAndPayload/KANBAN_TMUX_PANE_SETOPT_FAIL\n--- PASS: TestDurableLaunchErrorRetainsUnknownExecutorAndPayload/KANBAN_TMUX_PANE_SETOPT_FAIL (0.25s)\nPASS\nok  \tgithub.com/dualface/kander/internal/notify\t4.402s\nPASS\nok  \tgithub.com/dualface/kander/internal/tui\t5.100s\n=== RUN   TestRelocateMarkdownDestinationsOnly/skip\n--- PASS: TestRelocateMarkdownDestinationsOnly/skip (0.00s)\n=== RUN   TestDoctorHerdrInstallConfirmation/default-skip\nPASS\nok  \tgithub.com/dualface/kander/internal/launch\t9.666s\n--- PASS: TestDoctorHerdrInstallConfirmation/default-skip (2.14s)\nPASS\nok  \tgithub.com/dualface/kander/internal/menu\t10.402s\n    subscribe_pipe_test.go:54: full pipe cancellation and writer join: 46.678µs\n    subscribe_signal_test.go:68: signal interrupt joined blocked writer and probe in 486.442µs\n    subscribe_signal_test.go:68: signal terminated joined blocked writer and probe in 438.01µs\n    subscribe_signal_test.go:68: signal hangup joined blocked writer and probe in 486.062µs\nPASS\nok  \tgithub.com/dualface/kander/internal/liveness\t18.318s\nPASS\nok  \tgithub.com/dualface/kander/internal/board\t23.757s\nPASS\nok  \tgithub.com/dualface/kander/internal/review\t34.698s\n",
+      "raw_log": "verification/sync-1/all-tests.jsonl"
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "go test -json -count=1 ./internal/liveness -run 'TestAuditProbe|TestAuditBlockedWriter|TestSubscribeChangesStillObserveAgentDeath|TestSubscription|TestSubscribeQueueOverflow'",
+      "exit_code": 0,
+      "elapsed_seconds": 6.274,
+      "packages_pass": 1,
+      "top_level_tests_pass": 12,
+      "tests_including_subtests_pass": 22,
+      "tests_skip": 0,
+      "failures": [],
+      "output": "    subscribe_pipe_test.go:54: full pipe cancellation and writer join: 462.066µs\n    subscribe_signal_test.go:68: signal interrupt joined blocked writer and probe in 570.853µs\n    subscribe_signal_test.go:68: signal terminated joined blocked writer and probe in 580.661µs\n    subscribe_signal_test.go:68: signal hangup joined blocked writer and probe in 670.02µs\nPASS\nok  \tgithub.com/dualface/kander/internal/liveness\t5.856s\n",
+      "raw_log": "verification/sync-1/targeted-tests.jsonl"
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "go test -json -race -count=1 ./internal/liveness ./internal/probe ./internal/i18n",
+      "exit_code": 0,
+      "elapsed_seconds": 25.541,
+      "packages_pass": 3,
+      "top_level_tests_pass": 81,
+      "tests_including_subtests_pass": 175,
+      "tests_skip": 0,
+      "failures": [],
+      "output": "PASS\nPASS\nok  \tgithub.com/dualface/kander/internal/i18n\t1.327s\nok  \tgithub.com/dualface/kander/internal/probe\t1.983s\n    subscribe_pipe_test.go:54: full pipe cancellation and writer join: 196.212µs\n    subscribe_signal_test.go:68: signal interrupt joined blocked writer and probe in 1.329932ms\n    subscribe_signal_test.go:68: signal terminated joined blocked writer and probe in 1.022369ms\n    subscribe_signal_test.go:68: signal hangup joined blocked writer and probe in 4.454427ms\nPASS\nok  \tgithub.com/dualface/kander/internal/liveness\t23.742s\n",
+      "raw_log": "verification/sync-1/race-tests.jsonl"
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "go build ./...",
+      "exit_code": 0,
+      "elapsed_seconds": 0.416,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "go vet ./...",
+      "exit_code": 0,
+      "elapsed_seconds": 0.385,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "go build -o /tmp/subscription-runtime-final ./cmd/kander",
+      "exit_code": 0,
+      "elapsed_seconds": 0.387,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "GOOS=windows GOARCH=amd64 go build -o /tmp/subscription-runtime-final.exe ./cmd/kander",
+      "exit_code": 0,
+      "elapsed_seconds": 1.305,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "GOOS=windows GOARCH=amd64 go test -c -o /tmp/subscription-runtime-final-windows.test.exe ./internal/liveness",
+      "exit_code": 0,
+      "elapsed_seconds": 0.512,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "RUNTIME_SMOKE_WINDOW=herdr:wX:t15:wX:p1Q python3 /tmp/subscription-runtime-pty-smoke.py /tmp/subscription-runtime-final",
+      "exit_code": 0,
+      "elapsed_seconds": 0.154,
+      "output": "{\"pty\": true, \"platform\": \"linux\", \"event_count\": 2, \"snapshot\": \"snapshot\", \"heartbeat\": \"heartbeat\", \"channel\": \"herdr\", \"status\": \"alive\", \"runtime_state\": \"working\", \"observation_valid\": true, \"ctrl_c_exit_code\": 0, \"ctrl_c_join_ms\": 3.19, \"real_herdr_agent_observation\": true}\n",
+      "reproduction_script": "verification/pty-smoke.py"
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "git diff --check c5dcfbc401d5748da7eb0c89011ea422f51c33cc..HEAD",
+      "exit_code": 0,
+      "elapsed_seconds": 0.008,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "gofmt -l internal/liveness/batch_test.go internal/liveness/liveness_test.go internal/liveness/subscribe.go internal/liveness/subscribe_clock_test.go internal/liveness/subscribe_facts.go internal/liveness/subscribe_facts_test.go internal/liveness/subscribe_output.go internal/liveness/subscribe_output_posix.go internal/liveness/subscribe_output_windows.go internal/liveness/subscribe_pipe_test.go internal/liveness/subscribe_probe.go internal/liveness/subscribe_runtime_test.go internal/liveness/subscribe_signal_test.go internal/liveness/subscribe_signals_posix.go internal/liveness/subscribe_signals_windows.go",
+      "exit_code": 0,
+      "elapsed_seconds": 0.006,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "rg -n '^(<<<<<<< |=======|>>>>>>> )' internal/liveness/batch_test.go internal/liveness/liveness_test.go internal/liveness/subscribe.go internal/liveness/subscribe_clock_test.go internal/liveness/subscribe_facts.go internal/liveness/subscribe_facts_test.go internal/liveness/subscribe_output.go internal/liveness/subscribe_output_posix.go internal/liveness/subscribe_output_windows.go internal/liveness/subscribe_pipe_test.go internal/liveness/subscribe_probe.go internal/liveness/subscribe_runtime_test.go internal/liveness/subscribe_signal_test.go internal/liveness/subscribe_signals_posix.go internal/liveness/subscribe_signals_windows.go",
+      "exit_code": 1,
+      "elapsed_seconds": 0.005,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "git merge-base --is-ancestor c5dcfbc401d5748da7eb0c89011ea422f51c33cc HEAD",
+      "exit_code": 0,
+      "elapsed_seconds": 0.002,
+      "output": ""
+    },
+    {
+      "commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+      "command": "git status --short",
+      "exit_code": 0,
+      "elapsed_seconds": 0.003,
+      "output": ""
+    }
+  ],
+  "code_file_lines": {
+    "internal/liveness/batch_test.go": 295,
+    "internal/liveness/liveness_test.go": 824,
+    "internal/liveness/subscribe.go": 376,
+    "internal/liveness/subscribe_clock_test.go": 224,
+    "internal/liveness/subscribe_facts.go": 245,
+    "internal/liveness/subscribe_facts_test.go": 353,
+    "internal/liveness/subscribe_output.go": 125,
+    "internal/liveness/subscribe_output_posix.go": 63,
+    "internal/liveness/subscribe_output_windows.go": 94,
+    "internal/liveness/subscribe_pipe_test.go": 163,
+    "internal/liveness/subscribe_probe.go": 128,
+    "internal/liveness/subscribe_runtime_test.go": 312,
+    "internal/liveness/subscribe_signal_test.go": 98,
+    "internal/liveness/subscribe_signals_posix.go": 14,
+    "internal/liveness/subscribe_signals_windows.go": 13
+  },
+  "synchronization": {
+    "previous_commit": "55aa8f00f408256583ed4261070beba3e437ccad",
+    "new_base": "c5dcfbc401d5748da7eb0c89011ea422f51c33cc",
+    "final_commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+    "conflict_files": [
+      "AGENTS.md",
+      "internal/i18n/locales/en.json",
+      "internal/i18n/locales/ja.json",
+      "internal/i18n/locales/zh-CN.json"
+    ],
+    "resolution": "仅处理冲突块：保留持久派回文档索引和本卡扩展的订阅索引；三语消息保持新组基线全量内容，加本卡原有六项消息。",
+    "implementation_comparison": "git diff --exit-code 55aa8f00f408256583ed4261070beba3e437ccad HEAD -- internal/liveness docs/subscription-facts.md docs/probe-deadlines.md：exit 0，无输出。",
+    "push": "git push --force-with-lease=refs/heads/subscription-bounded-runtime:55aa8f00f408256583ed4261070beba3e437ccad origin HEAD:refs/heads/subscription-bounded-runtime：成功；ls-remote 验证任务分支为最终提交，组分支仍为新基线。",
+    "diagnostic_note": "初次消息比较过度要求旧基线的全部字符串保持不变，因上游合法消息更新而触发脚本断言；已改为精确比较“新组基线 + 本卡相对原基线的六项增量”，三语均通过。未把该辅助脚本失败记作产品测试通过。"
+  }
+}

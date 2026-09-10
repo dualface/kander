@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "",
+    "run_id": "tui-project-options-pm-2",
+    "batch_id": "tui-project-options-batch",
+    "task_ids": [
+      "20260909-tui-project-options-task"
+    ],
+    "role": "PM",
+    "reviewer": "claude",
+    "model": "opus",
+    "effort": "high",
+    "cwd": "/home/dualf/works/kander/worktrees/tui-project-options",
+    "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+    "commit": "dc478b74db628bd95efb7bc784350d641b16c44e",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "46d3bc046394edf70967d26ed5b4ef3bf922e2bf6dc2cee666c38494a07f49f8",
+      "task-context.md": "c18da82844c54c7d64b7e0fb2bb40c537c23fa006a8ecf1f50c7261a6c004781"
+    }
+  },
+  "sidecar_hash": "1a8fcf12cb72a82d12c851f68a3661a77186e3d35d155353155afbbac4f03c83",
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "953645d96fa5ec577663e7162634865f52d39f30c179595acdb41b9404383e25",
+    "output.raw": "3c4651085a098966f28f3ee322c56b29be7f0810e51c3ecef2b19a519d792f6d",
+    "prompt.txt": "c8748b303df7a72924585bc482b45335ff630cae98018f62a38ed0bb2fe9374e",
+    "report.md": "30c1736c453b0f7404a181767e49c92a80048ce118d314abebca236895ed9975",
+    "review-context.md": "46d3bc046394edf70967d26ed5b4ef3bf922e2bf6dc2cee666c38494a07f49f8",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "c18da82844c54c7d64b7e0fb2bb40c537c23fa006a8ecf1f50c7261a6c004781"
+  }
+}

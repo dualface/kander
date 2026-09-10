@@ -1,0 +1,51 @@
+Role: QA  
+Commit: `5169b6a3c2c7d26710641c5bde46723aaab7a556`  
+Task Context: Options 每次重读作用域和 overlay，保持编辑、保存隔离。  
+Reviewed Scope: 完整读取任务说明与 spec；仅审查 `fb61f867..5169b6a3` 的 3 个文件及必要调用链。工作树干净；`git diff --check` 通过；文件分别 790、598、443 行。环境只读，未重跑测试；采纳交付提交 `go test ./internal/tui -count=1`、`go test ./...` 的通过记录。任务文件删除已尝试，因只读失败。
+
+以下路径均相对仓库根目录。
+
+| 行为／质量 | 结论与证据 |
+|---|---|
+| QA-001 旧结果覆盖新面板 | **closed — Observed**：`internal/tui/options_panel.go:114–119,198–200` 保留请求序号与接收校验。 |
+| QA-002 缺省语言回退 | **closed — Observed**：`internal/tui/options_panel.go:141–146,212–215` 保留空绑定；`internal/tui/options_reload_test.go:305–340` 覆盖缺省键环境回退。 |
+| QA-003 保存及字段重建遗漏 | **closed — Observed**：`internal/tui/options_form.go:727–764` 按最近表单值判断变化，独立触发重建、保存；回归见 `internal/tui/options_reload_test.go:420–442`。 |
+| QA-004 语言混用两次读取 | **partially fixed — Inferred，高置信度**：overlay 分支已捕获；作用域回退仍在 `internal/tui/options_panel.go:145` 重读文件，详见下方。 |
+| PM-001 表单取旧 App 值 | **closed — Observed**：`internal/tui/options_form.go:266–285,334–343` 仍从 session 初始化表单及摘要。 |
+| PM-002 改回初值失效 | **closed — Observed**：`internal/tui/options_form.go:727–735,761–764` 比较最近应用值；`internal/tui/options_test.go:289–304` 覆盖反复切换和持久化。 |
+| PM-003 无效 overlay 未报错 | **closed — Observed**：`internal/tui/options_panel.go:128–135,201–206` 保留校验、错误传播和旧 session 清除。 |
+| PM-004 旧结果测试无辨别力 | **closed — Observed**：`internal/tui/options_reload_test.go:235,241–260` 先捕获旧值，再改盘、逆序投递并检查 session 身份。 |
+| PM-005 初始化状态被绕过 | **closed — Observed**：`internal/tui/options_panel.go:142` 检查 `WelcomeComplete`；回归见 `internal/tui/options_reload_test.go:397–417`。 |
+| 架构、隔离与测试性 | **Observed**：依赖保持 TUI 单向调用 menu/config；保存仍走作用域路径 `internal/tui/options_panel.go:585–592`。新增测试使用临时配置及可替换加载函数；剩余问题可用受控单元测试验证。 |
+
+FINDINGS
+
+**QA-004 — medium — Inferred，高置信度：部分修复，作用域语言仍脱离首次读取结果。**
+
+[options_panel.go:145](/home/dualf/works/kander/worktrees/20260909-options-reload-config/internal/tui/options_panel.go:145) 在 `newOptionsSession` 返回后调用 `ConfiguredScopeLanguage()`。该函数经 `internal/config/language.go:84–104,111–116` 再读作用域文件，将读取、解码、校验错误转为空语言。
+
+具体触发：作用域已初始化、语言为 `ja`；无 overlay 语言覆盖；环境为英语。首次 `LoadScope` 成功后，代理探测期间外部编辑使作用域文件暂时成为无效 JSON。后续语言读取失败返回空值，加载仍成功；`options_panel.go:212–215` 清除绑定，面板使用英语且 `loadErr` 为空。这仍违反 `task-spec.md:25,37` 的读取失败可见和使用本次加载结果要求。
+
+overlay 分支已修复，但新增测试 `options_reload_test.go:361–394` 只覆盖加载完成后修改 overlay，未覆盖探测期间修改作用域。
+
+最小修复：作用域首次读取同时保留显式语言及初始化状态，与已读取 overlay 计算语言快照；删除此处再次读盘。利用 `newOptionsSession` 测试替身在首次读取后修改临时作用域，断言最终绑定仍来自首次快照。
+
+NON-BLOCKING: none
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "QA-004",
+      "tier": "medium",
+      "text": "Inferred，高置信度：部分修复。overlay 语言已捕获，但无 overlay 语言覆盖时，loadOptionsSession 在代理探测后仍调用 ConfiguredScopeLanguage 重读作用域，读取、解码和校验错误被吞为 empty language。作用域已初始化且语言为 ja、环境为英语时，首次 LoadScope 成功后外部编辑在探测期间使作用域暂时成为无效 JSON，加载仍成功，应用结果清除绑定并显示英语，loadErr 为空。违反 task-spec.md:25,37 的读取失败可见和语言使用本次加载结果要求。最小修复：首次作用域读取同时保留显式语言和初始化状态，与已读 overlay 计算语言快照，删除再次读盘；通过 newOptionsSession 替身在读取后修改临时作用域，断言绑定保持首次快照。",
+      "evidence": "internal/tui/options_panel.go:124 首次读取作用域，137 执行 session 构建，141–148 在探测后通过 ConfiguredScopeLanguage 取得回退语言；212–215 根据空结果清除绑定。internal/config/language.go:84–104,111–116 重新读取作用域并吞掉错误。internal/menu/options.go:81–82 表明 session 构建包含代理探测。internal/tui/options_reload_test.go:361–394 只覆盖加载完成后修改 overlay，未覆盖作用域回退分支。task-spec.md:25,37 要求读取失败可见并使用本次加载结果。",
+      "lineage": {
+        "run_id": "8815dae207a1a7a29bb9dfcdf5b01130",
+        "finding_id": "QA-004"
+      }
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

@@ -1,0 +1,15 @@
+{
+  "run_id": "9ddbab57eaa2047464df642bb744456b",
+  "batch_id": "20260909-options-reload-rereview-batch-1",
+  "author": "grok",
+  "basis": "single-card PM finding assigned to the executing rereview task by modification scope",
+  "items": {
+    "PM-001": [
+      "20260909-options-reload-rereview-task"
+    ]
+  },
+  "owners": {
+    "20260909-options-reload-rereview-task": "grok"
+  },
+  "recorded_at": "2026-09-09T10:37:02.491578277Z"
+}

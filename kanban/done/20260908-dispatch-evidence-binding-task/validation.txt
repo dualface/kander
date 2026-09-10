@@ -1,0 +1,205 @@
+最终验证提交：6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+来源组基线：6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa
+测试统计含子用例；skip 不计为通过。
+
+$ go test -json -count=1 ./...
+提交：6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+退出 0；19 包通过；974 测试项通过；1 跳过。
+github.com/dualface/kander/internal/cli: PASS (0.014s)
+github.com/dualface/kander/internal/process: PASS (0.025s)
+github.com/dualface/kander/internal/version: PASS (0.003s)
+github.com/dualface/kander/rules: PASS (0.003s)
+github.com/dualface/kander/cmd/kander: PASS (0.127s)
+github.com/dualface/kander/internal/i18n: PASS (0.132s)
+github.com/dualface/kander/internal/window: PASS (0.131s)
+github.com/dualface/kander/internal/config: PASS (0.3s)
+github.com/dualface/kander/internal/fs: PASS (0.503s)
+github.com/dualface/kander/internal/takeover: PASS (0.416s)
+github.com/dualface/kander/internal/probe: PASS (0.728s)
+github.com/dualface/kander/internal/install: PASS (0.891s)
+github.com/dualface/kander/internal/notify: PASS (5.081s)
+github.com/dualface/kander/internal/tui: PASS (5.349s)
+github.com/dualface/kander/internal/menu: PASS (10.955s)
+github.com/dualface/kander/internal/launch: PASS (16.7s)
+github.com/dualface/kander/internal/liveness: PASS (25.786s)
+github.com/dualface/kander/internal/board: PASS (33.838s)
+github.com/dualface/kander/internal/review: PASS (38.008s)
+SKIP github.com/dualface/kander/internal/launch TestWindowsConsoleLauncher
+本卡证据绑定及收尾用例：
+TestDispatchSendCrashChild: PASS
+TestDispatchSendKillAndSameIDReconciliation: PASS
+TestDispatchCrashChild: PASS
+TestDispatchReceiptBeforeNotifyReturnAndRetry: PASS
+TestDispatchUnknownProbeAndBusyDoNotRecover: PASS
+TestDispatchFailedSendKeepsConsumedNewBody: PASS
+TestDispatchRetryHonorsShorterInvocationDeadline: PASS
+TestDispatchIntegrationUsesActualGitAncestry: PASS
+TestDispatchKillRecovery: PASS
+TestDispatchWrapUpPublicAuthorizationReconcilesAndObserves: PASS
+TestDispatchEvidenceFlagsAndRejectedFixHaveNoIntent: PASS
+TestDispatchExplicitNewIDPreparesAndReusesIntent: PASS
+TestDispatchOptionsPreserveOtherOptionValues: PASS
+TestDispatchIntegrationVerifiesRebasedPatchWithoutIgnoringWhitespace: PASS
+TestDispatchPromptTranslationsAndFlagParsing: PASS
+TestDispatchFixBindingRejectsInvalidSources: PASS
+TestDispatchFixBindingRelocatesAndReplays: PASS
+TestDispatchFixExistingAuthorOriginals: PASS
+TestDispatchFixIncompleteOriginalRejectedBeforeAttempt: PASS
+TestDispatchInputRejectsUnknownEvidenceJSON: PASS
+TestDispatchFixLegacyRequiresExplicitMapping: PASS
+TestDispatchFixRejectsSupersededRoundAndCarriesLineageAuthors: PASS
+TestDispatchSnapshotRetainsAtomicReceipts: PASS
+TestDispatchSnapshotReadFailuresAndCompatibility: PASS
+TestDispatchIntentIdempotencyAndGlobalConflict: PASS
+TestDispatchReceiptsFenceUpdatesAndFastRounds: PASS
+TestDispatchWrapUpTakeoverAndExpiry: PASS
+TestDispatchCLIAndManagedArtifacts: PASS
+TestDispatchFencesReviewAuthorDisposition: PASS
+TestDispatchLifecycleCancellationPreservesReceipts: PASS
+TestDispatchWindowWritesFromCommittedScans: PASS
+TestDispatchWrapUpRejectsInsufficientExitFacts: PASS
+TestDispatchWrapUpGrantFencesAndRestrictsWrites: PASS
+TestDispatchWrapUpUnknownReconcilesBeforeFencing: PASS
+TestDispatchWrapUpIntegrationCannotBeSubstituted: PASS
+TestDispatchWrapUpRecordAndCompletionKeepOriginalEvidence: PASS
+TestDispatchWrapUpSnapshotUsesCurrentGrantDeadline: PASS
+
+$ go test -race -json -count=1 ./internal/board ./internal/launch ./internal/notify ./internal/liveness ./internal/review ./internal/window
+提交：6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+退出 0；6 包通过；684 测试项通过；1 跳过。
+github.com/dualface/kander/internal/window: PASS (1.143s)
+github.com/dualface/kander/internal/notify: PASS (7.006s)
+github.com/dualface/kander/internal/launch: PASS (27.142s)
+github.com/dualface/kander/internal/liveness: PASS (32.494s)
+github.com/dualface/kander/internal/board: PASS (63.396s)
+github.com/dualface/kander/internal/review: PASS (78.78s)
+SKIP github.com/dualface/kander/internal/launch TestWindowsConsoleLauncher
+
+提交: 6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+组基线: 6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa
+$ git diff --check 6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa HEAD
+exit=0
+
+
+$ go vet ./...
+exit=0
+
+
+$ go build ./...
+exit=0
+
+
+$ gofmt -l internal/board/dispatch.go internal/board/dispatch_cmd.go internal/board/dispatch_crash_test.go internal/board/dispatch_evidence.go internal/board/dispatch_evidence_test.go internal/board/dispatch_receipt.go internal/board/dispatch_snapshot.go internal/board/dispatch_test.go internal/board/dispatch_wrapup.go internal/board/dispatch_wrapup_test.go internal/board/review_disposition.go internal/board/snapshot.go internal/board/update.go internal/launch/cmd.go internal/launch/dispatch.go internal/launch/dispatch_evidence.go internal/launch/dispatch_evidence_test.go internal/launch/dispatch_rebase.go internal/launch/dispatch_rebase_test.go internal/liveness/subscribe_dispatch_runtime_test.go internal/liveness/subscribe_dispatch_test.go internal/liveness/subscribe_facts_test.go internal/liveness/subscribe_restart_test.go internal/notify/dispatch.go internal/notify/dispatch_test.go
+exit=0
+
+
+Go 文件数: 25
+{
+  "internal/board/dispatch.go": 387,
+  "internal/board/dispatch_cmd.go": 87,
+  "internal/board/dispatch_crash_test.go": 245,
+  "internal/board/dispatch_evidence.go": 228,
+  "internal/board/dispatch_evidence_test.go": 230,
+  "internal/board/dispatch_receipt.go": 138,
+  "internal/board/dispatch_snapshot.go": 102,
+  "internal/board/dispatch_test.go": 365,
+  "internal/board/dispatch_wrapup.go": 247,
+  "internal/board/dispatch_wrapup_test.go": 236,
+  "internal/board/review_disposition.go": 448,
+  "internal/board/snapshot.go": 192,
+  "internal/board/update.go": 276,
+  "internal/launch/cmd.go": 231,
+  "internal/launch/dispatch.go": 326,
+  "internal/launch/dispatch_evidence.go": 276,
+  "internal/launch/dispatch_evidence_test.go": 225,
+  "internal/launch/dispatch_rebase.go": 39,
+  "internal/launch/dispatch_rebase_test.go": 64,
+  "internal/liveness/subscribe_dispatch_runtime_test.go": 86,
+  "internal/liveness/subscribe_dispatch_test.go": 222,
+  "internal/liveness/subscribe_facts_test.go": 359,
+  "internal/liveness/subscribe_restart_test.go": 53,
+  "internal/notify/dispatch.go": 307,
+  "internal/notify/dispatch_test.go": 252
+}
+冲突标记: []
+$ GOOS=windows GOARCH=amd64 go build -o /tmp/kander-dispatch-binding-windows.exe ./cmd/kander
+exit=0
+
+
+提交 6f5ed32072275c3bb9d96c9e40bd606b949b9c17 的最终差异人工检查：文档/注释与行为同步；新增函数均接入受控入口；无死代码；通用回执夹具使用 sync，语义绑定用例独立覆盖 fix/wrap-up，无重复整屏快照或无关断言。
+$ kander check 20260908-dispatch-evidence-binding-task
+执行工作树提交：6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+存活: 20260908-dispatch-evidence-binding-task	Agent=codex	状态=alive	通道=herdr	容器=wX:t16	原因=Agent 状态=working
+通过: 1 个任务
+
+原生 Windows 及真实 tmux/herdr/Agent 流程未执行；Windows 交叉构建与假 CLI/临时 Git 测试不代替实机验收。
+
+提交：6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+$ git diff --stat 6c1cd63db5a13e7b4b98b4a1b364dfba9c12b6fa HEAD
+ AGENTS.md                                          |   6 +-
+ docs/durable-dispatch.md                           |  85 ++++++-
+ internal/board/dispatch.go                         |  57 ++++-
+ internal/board/dispatch_cmd.go                     |   5 +-
+ internal/board/dispatch_crash_test.go              |   7 +-
+ internal/board/dispatch_evidence.go                | 228 +++++++++++++++++
+ internal/board/dispatch_evidence_test.go           | 230 +++++++++++++++++
+ internal/board/dispatch_receipt.go                 |  12 +-
+ internal/board/dispatch_snapshot.go                |   2 +-
+ internal/board/dispatch_test.go                    |   7 +-
+ internal/board/dispatch_wrapup.go                  | 247 ++++++++++++++++++
+ internal/board/dispatch_wrapup_test.go             | 236 ++++++++++++++++++
+ internal/board/review_disposition.go               |   3 +
+ internal/board/snapshot.go                         |   3 +
+ internal/board/update.go                           |   3 +
+ internal/i18n/locales/en.json                      |   4 +-
+ internal/i18n/locales/ja.json                      |   4 +-
+ internal/i18n/locales/zh-CN.json                   |   4 +-
+ internal/launch/cmd.go                             |   1 +
+ internal/launch/dispatch.go                        |  27 +-
+ internal/launch/dispatch_evidence.go               | 276 +++++++++++++++++++++
+ internal/launch/dispatch_evidence_test.go          | 225 +++++++++++++++++
+ internal/launch/dispatch_rebase.go                 |  39 +++
+ internal/launch/dispatch_rebase_test.go            |  64 +++++
+ .../liveness/subscribe_dispatch_runtime_test.go    |   2 +-
+ internal/liveness/subscribe_dispatch_test.go       |  13 +-
+ internal/liveness/subscribe_facts_test.go          |   2 +-
+ internal/liveness/subscribe_restart_test.go        |   2 +-
+ internal/notify/dispatch.go                        |   3 +
+ internal/notify/dispatch_test.go                   |   2 +-
+ rules/KANDER-KANBAN-RULES.md                       |   5 +
+ rules/KANDER-TASK-GROUP-RULES.md                   |   6 +-
+ 32 files changed, 1758 insertions(+), 52 deletions(-)
+
+提交：6f5ed32072275c3bb9d96c9e40bd606b949b9c17
+$ rg -n PrepareBoundDispatch|ValidateActionEvidence|AuthorizeWrapUp|AuthorizeDispatchWrapUp|validateWrapUpUpdate|requireFullExecution|validateDispatchEvidence|verifyDispatchRebase internal --glob *.go --glob !*test.go
+internal/notify/dispatch.go:120:		if err = launch.ValidateActionEvidence(ctx, root, d); err != nil {
+internal/launch/dispatch_evidence.go:64:		if err := verifyDispatchRebase(ctx, g); err != nil {
+internal/launch/dispatch_evidence.go:83:// PrepareBoundDispatch verifies Git before the board's pure structural producer.
+internal/launch/dispatch_evidence.go:85:func PrepareBoundDispatch(root string, in board.DispatchInput) (board.Dispatch, error) {
+internal/launch/dispatch_evidence.go:145:// ValidateActionEvidence runs before observation, launch and transmission.
+internal/launch/dispatch_evidence.go:146:func ValidateActionEvidence(ctx context.Context, root string, d board.Dispatch) error {
+internal/launch/dispatch_evidence.go:169:// AuthorizeWrapUp never treats absent SESSION, nonzero transport or expiry as
+internal/launch/dispatch_evidence.go:171:func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result board.Dispatch, err error) {
+internal/launch/dispatch_evidence.go:179:		result, err = PrepareBoundDispatch(root, *r.Intent)
+internal/launch/dispatch_evidence.go:204:		if e = ValidateActionEvidence(ctx, root, d); e != nil {
+internal/launch/dispatch_evidence.go:232:		result, e = board.AuthorizeDispatchWrapUp(root, r.TaskID, r.DispatchID, d.Revision, r.Author, r.Reason, exit)
+internal/launch/dispatch_evidence.go:256:			d, err = PrepareBoundDispatch(root, in)
+internal/launch/dispatch_evidence.go:263:			d, err = AuthorizeWrapUp(ctx, root, r)
+internal/launch/dispatch.go:49:			d, e := PrepareBoundDispatch(root, in)
+internal/launch/dispatch.go:81:	d, err := PrepareBoundDispatch(root, in)
+internal/launch/dispatch.go:171:	if err := ValidateActionEvidence(ctx, root, d); err != nil {
+internal/launch/dispatch_rebase.go:17:func verifyDispatchRebase(ctx context.Context, g board.DispatchIntegration) error {
+internal/board/dispatch_evidence.go:61:func validateDispatchEvidence(tx *Transaction, in DispatchInput, initial bool) error {
+internal/board/dispatch_evidence.go:208:		return validateDispatchEvidence(tx, current.Input, false)
+internal/board/dispatch.go:224:	if e = validateDispatchEvidence(tx, in, true); e != nil {
+internal/board/dispatch.go:308:		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
+internal/board/update.go:184:		if err = tx.validateWrapUpUpdate(s, o); err != nil {
+internal/board/dispatch_wrapup.go:92:// AuthorizeDispatchWrapUp reconciles the same dispatch under CAS, archives its
+internal/board/dispatch_wrapup.go:95:func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, reason string, exit WrapUpExitEvidence) (d Dispatch, err error) {
+internal/board/dispatch_wrapup.go:120:		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
+internal/board/dispatch_wrapup.go:175:func (tx *Transaction) requireFullExecution(s Snapshot) error {
+internal/board/dispatch_wrapup.go:190:func (tx *Transaction) validateWrapUpUpdate(s Snapshot, o UpdateOptions) error {
+internal/board/snapshot.go:57:		if err = tx.requireFullExecution(s); err != nil {
+internal/board/review_disposition.go:290:		if err = tx.requireFullExecution(s); err != nil {
+
+作者人工检查：上述调用链均连接实际命令/受控写入入口；最终 diff 未发现不可达或未调用的新增逻辑。测试按原件语义、Git 映射、epoch/写入限制、订阅期限分工，未发现重复覆盖或无关断言。

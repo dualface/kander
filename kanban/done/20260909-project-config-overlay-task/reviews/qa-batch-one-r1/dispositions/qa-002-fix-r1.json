@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r1-c2",
+    "epoch": 1
+  },
+  "submitted_revision": 22,
+  "record_id": "qa-002-fix-r1",
+  "run_id": "qa-batch-one-r1",
+  "finding_id": "QA-002",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:23:20.772029266Z",
+  "report_hash": "196fe0c79c9c6d2972380195d4cf8e01d6df6a5d6ce09447bae37b90b13d229b",
+  "original": "TUI 的界面偏好写回路径没有改用 LoadScope:loadPrefs 用 config.Load(true) 读到的是合并后的值,App 以此初始化,persistUI 与 saveColumns 再把 p.app 现值整节写回 config.Update(cfg.TUI = value)。当项目 .kander-config.json 设置任一 tui.* 键(如 theme=dark)时,用户在该项目下调整列数或刷新间隔,就会把覆盖文件独有的 theme 永久写入作用域 config.json,删除覆盖文件后污染仍在。这违反卡 2 的 USER_DECISIONS「所有写入路径以未合并的作用域配置为读-改-写基底,覆盖值不得反向写入」与对应验收项,也与 rules/KANDER-AGENTS.md:19 的文字承诺矛盾。新增测试只断言 kanban_agent,覆盖不到该路径。最小修复:savePrefs 在 config.Update 回调内只写本次实际修改的字段,或让 loadPrefs 额外保留 LoadScope 基线供写回使用;并补覆盖文件含 tui 键时的隔离测试。",
+  "status": "fixed",
+  "basis": "独立核实目标提交 5631b18：loadPrefs 走 config.Load(true)；persistUI 用 App 合并值整节 savePrefs；saveColumns 先 loadPrefs 再整节写回。与 PM-01 同根因。已改为 persistUI 写会话作用域 TUI，saveColumns 只补丁 Columns，savePrefs 以作用域 cfg.TUI 为基底按字段写入。",
+  "fix_commit": "fe34100f9acd41b8a79f024ff4f73134700a670d",
+  "verification": "go test -count=1 ./internal/tui -run 'TestOptionsSaveLeavesOverlayIsolated|TestSaveColumnsLeavesOverlayTUIIsolated|TestInterfaceWriteDoesNotCommitOtherSessionEdits|TestThemeChangeKeepsInterfaceState' 在 fe34100f9acd41b8a79f024ff4f73134700a670d 通过；最终交付 f7b31bc529958ac268d2709ffd7fd99000c92bfb 上 go test -count=1 ./... 1265 passed。"
+}

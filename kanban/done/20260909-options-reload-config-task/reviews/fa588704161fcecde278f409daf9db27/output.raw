@@ -1,0 +1,53 @@
+Role: PM  
+Commit: `b70d56f45dd4037ae386bf04734e1cb2591d14b7`  
+Task Context: `/tmp/codex-review.0001e4e68db00f0dc0aa0fb4eafc67ca/task-spec.md`  
+Reviewed Scope: 仅复核 `639cc1e..b70d56f` 修复范围及直接影响。
+
+原 PM finding 均 closed；新增 1 项 medium 门禁问题。以下判断均为 Inferred，高置信度。
+
+| 原 finding | 状态 | 目标提交证据 |
+|---|---|---|
+| PM-001 | closed | `options_form.go:266–285、334–343` 仍从作用域 session 初始化摘要及表单。 |
+| PM-002 | closed | `options_form.go:727–764` 比较最近应用值；改回初始值仍更新看板、重建、保存。`options_test.go:289–304` 覆盖主题往返及磁盘值。 |
+| PM-003 | closed | `options_panel.go:128–135` 恢复合并校验；`:198–203` 将错误写入 `loadErr` 并清空 session。 |
+| PM-004 | closed | `options_reload_test.go:235` 改盘前捕获旧结果；`:251–260` 先应用新结果，再投递旧结果，检查 session 身份和值。 |
+
+上下文 QA finding 的原触发路径也已关闭：QA-001 由 `options_panel.go:195–197` 拦截旧结果；QA-002 缺省语言仍经 `:141–144`、`config/language.go:69–81、111–116` 回退；QA-003 由 `options_form.go:736–764` 独立按表单变化重建并保存；QA-004 的 overlay 复读路径由 `options_panel.go:141–145、209–213` 捕获后绑定取代。
+
+验收表仅列状态变化：
+
+| 要求 | 预期行为 | 代码证据 | 状态 |
+|---|---|---|---|
+| spec:27，界面项应用 | 修改及改回原值均应用、保存 | `options_form.go:727–764` | Partial → Complete |
+| spec:25，overlay 失败可见 | 合并校验失败进入 `loadErr` | `options_panel.go:128–135、198–203` | Partial → Complete |
+| spec:37、51，有效语言及既有语义 | 保留初始化状态的语言回退规则 | `options_panel.go:141–156、209–213` | Complete → Partial |
+
+沿用上轮统计口径：Complete 6，Partial 1，Unverifiable 1；Missing、Contradicted 均为 0。
+
+**PM-005 · medium · Inferred · 高置信度：overlay 语言绕过初始化状态。**
+
+触发：作用域配置有效但 `welcome_complete=false`，存在可用执行及审核代理，overlay 为 `{"language":"ja"}`，环境语言为英语且未传 `--lang`。
+
+新增的 `overlayLanguage` 只检查语言候选值，直接返回 `ja`；`applyWork` 随后绑定日语。此前 `BindEffectiveLanguage` 经 `explicitConfigLanguage` 检查 `welcome_complete`，此场景应清除绑定并使用环境语言。重开 Options 因本次修复错误切换语言，破坏 spec:37、51 所要求保留的有效语言语义。
+
+证据：`internal/tui/options_panel.go:141–156、209–213`；既有契约在 `internal/config/language.go:69–81、121–140、187–194`。`internal/menu/options.go:107–119` 表明代理可用时，未初始化配置仍可成功建立 session。
+
+最小修复：计算捕获语言时，先检查本次加载的 `existing.WelcomeComplete`；未完成则返回空绑定，保留 CLI／环境回退。
+
+NON-BLOCKING: none
+
+验证：Observed，`git diff --check` 通过。本轮受只读限制未运行测试；作者记录称目标提交的 TUI 及全量测试通过，独立执行结果仍为 Unverifiable。已尝试删除任务文件，因只读文件系统失败。
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "PM-005",
+      "tier": "medium",
+      "text": "Inferred，高置信度：捕获 overlay 语言的新路径绕过 welcome_complete。作用域配置有效但 welcome_complete=false、执行及审核代理可用、overlay 为 {\"language\":\"ja\"}、环境为英语且未传 --lang 时，Options 成功打开并绑定日语；此前 explicitConfigLanguage 会清除绑定，使用环境语言。违反 task-spec.md:37、51 的有效语言及既有语义契约。最小修复：计算捕获语言时检查本次加载的 existing.WelcomeComplete；未完成则返回空绑定，保留 CLI／环境回退。",
+      "evidence": "internal/tui/options_panel.go:141-156 直接提取 overlay language，未检查初始化状态；:209-213 将该值绑定。internal/config/language.go:69-81 明确要求 welcome_complete=true；:121-140、187-194 是修复前采用的合并后语言解析及绑定路径。internal/menu/options.go:107-119 表明执行及审核代理可用时，未初始化配置可继续建立 session。契约：/tmp/codex-review.0001e4e68db00f0dc0aa0fb4eafc67ca/task-spec.md:37、51。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

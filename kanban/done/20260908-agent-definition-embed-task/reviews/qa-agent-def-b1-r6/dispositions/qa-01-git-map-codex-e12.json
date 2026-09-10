@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "dispatch_id": "codex-agentdef-dispositions-embed-r2-20260909",
+    "epoch": 12
+  },
+  "submitted_revision": 105,
+  "record_id": "qa-01-git-map-codex-e12",
+  "previous_record_id": "qa-01-fix-r1",
+  "run_id": "qa-agent-def-b1-r6",
+  "finding_id": "QA-01",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-definition-embed-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T13:23:01.86561065Z",
+  "report_hash": "37b8b55ad426db1771f2cc07b1f8d39bb3df643307c5c63e14642cd7bdeeadc8",
+  "original": "mode: pane 的第二段就绪失败（blocked / 投递原语拒绝 / 纯超时）发生在 sendAttempted=true 之后。launchAgent 在 herdr pane run、tmux respawn-pane 之前就把 sendAttempted 置位；这在 mode: argv 下合理（提示词已在 argv 里，pane run 即发送边界），但 pane 模式的提示词要等 completePaneDelivery。durable 路径（resume 带 authorization，或 notify 恢复通道且卡片有 DISPATCH_ID）因此把「尚未投递/投递被拒」当成 DeliveryUnknown：不关本次 tab/window，也不回滚卡片。这直接违反本卡对三种失败原因的统一处置（抓 pane、关容器、回滚、不留 WINDOW/SESSION）。start 不传 durable，三种失败单测都走 start，主启动路径是绿的；任务组接管/恢复是同一套 launchAgent。失败场景：任务组卡片带 DISPATCH_ID，对 pane 模式自定义 agent 做 resume --agent 接管（或 notify 走恢复通道建新容器），新 CLI 弹出信任对话框或 TUI 未起来。completePaneDelivery 失败时 fail() 因 sendAttempted \u0026\u0026 durable 返回 DeliveryUnknown，调用方跳过关窗与 rollbackLaunch。容器残留；接管路径还已提前写入新 SESSION。最小修复：pane 模式把 sendAttempted=true 挪到 deliverPromptToPane 成功之后（三种第二段失败都保持 false）；argv 模式维持现有 pane run 前边界。",
+  "status": "fixed",
+  "basis": "QA-01 与 PM-01 同根因。旧 QA 记录绑定的是包含修复的交付末端 3be9cd8；本次绑定实际引入 pane durable fail 修复的组内 77affdd，其补丁与原 PM-01 be3f6c3 的 patch-id 一致。独立确认 agent.go 的 Mode != pane 条件及调用方恢复原文路径；sendAttempted 的 argv 时点保持，但 pane 不据此返回 DeliveryUnknown。不是采用审核建议挪动时点的另一种实现。 原记录中的 fix_commit 不是组目标祖先（git merge-base --is-ancestor 退出 1）；新 fix_commit 是组目标祖先（退出 0），并位于原审核提交之后。本次仅追加 Git 证据映射，原 status/original/report_hash/mechanical 与旧作者原件保留。",
+  "fix_commit": "77affddb46336b7b131c4d8ba9ac6f6c1e85d6f4",
+  "verification": "从 77affddb46336b7b131c4d8ba9ac6f6c1e85d6f4 的 git archive 解出未修改源码，执行 go test -json ./internal/launch -run ^(TestPaneDeliveryDurableBlockedClosesTab|TestPaneDeliveryBlockedWinsBeforeTimeout|TestPaneDeliveryHerdrPromptRejected|TestPaneDeliveryReadyTimeout)$ -count=1；退出 0，4 项测试/子测试通过，0 失败。日志见 verification/disposition-map-12.md 及其引用的历史提交日志。"
+}

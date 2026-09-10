@@ -1,0 +1,14 @@
+OpenAI Codex v0.153.4
+--------
+workdir: /home/dualf/works/kander/worktrees/20260908-bindings-recovery-group
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: none
+session id: 01a07e0b-3654-7d21-98bc-d2f8fe07419a
+--------
+user
+Perform the QA review; full instructions are in the UTF-8 task file at /tmp/codex-review.545aabffdf3eda02deab08959808149b/prompt.txt; read the complete file first and follow it exactly.
+

@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "20260908-subscription-dispatch-group",
+  "run_id": "g2-qa-r2",
+  "batch_id": "g2-batch-one",
+  "previous_run_id": "g2-qa-r1",
+  "task_ids": [
+    "20260908-durable-dispatch-protocol-task",
+    "20260908-subscription-bounded-runtime-task",
+    "20260908-subscription-facts-task"
+  ],
+  "role": "QA",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "cwd": "/home/dualf/works/kander/worktrees/20260908-subscription-dispatch-group",
+  "base": "021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5",
+  "commit": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+  "reviewed_commit": "ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "b0de5711800558d7c346eb4ff7b7fb5c4ebe28457e3932d521e1e0a3b7bf6ce5",
+    "task-context.md": "8e8cba8aac0d11fbe3a74cabf21761124bb3744d874e6d79bd4a0ea1109d5041"
+  },
+  "kander_version": "20260907T173303Z-7e6fe2073ff0",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "failed",
+  "semantic_status": "unassessed",
+  "failure_reason": "Reviewer 执行失败（退出码 143）；不代表语义 PASS",
+  "exit_code": 143,
+  "created_at": "2026-09-07T19:56:27.337896412Z",
+  "finished_at": "2026-09-07T19:56:31.448394712Z",
+  "duration_ms": 4110,
+  "hashes": {
+    "error.log": "819c8db763ba04f2624c46513a8be7bc0baf1596e232271755543eda11c060f8",
+    "evidence.txt": "56a658aed947764ff10f289b1dbdd40c592a7f19600aca17fa479472bbd95e6a",
+    "output.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "prompt.txt": "809f355e0a4cbbdf650ebe3b400a5a853c644cbffe8db3d19bccec00c653becc",
+    "review-context.md": "b0de5711800558d7c346eb4ff7b7fb5c4ebe28457e3932d521e1e0a3b7bf6ce5",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "8e8cba8aac0d11fbe3a74cabf21761124bb3744d874e6d79bd4a0ea1109d5041"
+  },
+  "published": null
+}

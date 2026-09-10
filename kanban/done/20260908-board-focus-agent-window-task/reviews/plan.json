@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "board-focus-cycle",
+  "author": "codex",
+  "basis": "用户指定执行此功能卡，依照任务契约及仓库 AGENTS.md",
+  "cwd": "/home/dualf/works/kander/worktrees/board-focus-agent-window",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-board-focus-agent-window-task"
+  ],
+  "cycles": {
+    "20260908-board-focus-agent-window-task": "18116437143f2dce767eee8e04facceb977200ba240db7bb7f7dc9fdb08bb4e2"
+  },
+  "batches": [
+    {
+      "batch_id": "board-focus-batch",
+      "task_ids": [
+        "20260908-board-focus-agent-window-task"
+      ],
+      "base": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+      "target_commit": "78c8137fba6d8a6244c2f0eb6ce84a5ccf548851",
+      "requirements": {
+        "CSA": "N/A: 本仓库 AGENTS.md 安全角色例外",
+        "Hacker": "N/A: 本仓库 AGENTS.md 安全角色例外",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-08T03:06:32.944594269Z"
+}

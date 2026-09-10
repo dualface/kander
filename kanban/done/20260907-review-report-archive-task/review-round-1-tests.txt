@@ -1,0 +1,57 @@
+go test ./...（修复后）
+exit=0
+ok  	github.com/dualface/kander/cmd/kander	0.056s
+ok  	github.com/dualface/kander/internal/board	10.773s
+ok  	github.com/dualface/kander/internal/cli	0.013s
+ok  	github.com/dualface/kander/internal/config	(cached)
+ok  	github.com/dualface/kander/internal/fs	(cached)
+ok  	github.com/dualface/kander/internal/i18n	0.067s
+ok  	github.com/dualface/kander/internal/install	0.766s
+ok  	github.com/dualface/kander/internal/launch	8.388s
+ok  	github.com/dualface/kander/internal/liveness	1.579s
+ok  	github.com/dualface/kander/internal/menu	(cached)
+ok  	github.com/dualface/kander/internal/notify	1.965s
+ok  	github.com/dualface/kander/internal/probe	(cached)
+ok  	github.com/dualface/kander/internal/process	(cached)
+ok  	github.com/dualface/kander/internal/review	12.103s
+ok  	github.com/dualface/kander/internal/takeover	0.191s
+ok  	github.com/dualface/kander/internal/tui	4.595s
+ok  	github.com/dualface/kander/internal/version	(cached)
+ok  	github.com/dualface/kander/internal/window	0.097s
+ok  	github.com/dualface/kander/rules	0.002s
+
+
+go test -race ./internal/board ./internal/review ./internal/fs
+exit=0
+ok  	github.com/dualface/kander/internal/board	21.157s
+ok  	github.com/dualface/kander/internal/review	14.836s
+ok  	github.com/dualface/kander/internal/fs	(cached)
+
+
+go test ./...（rebase 最新组 HEAD 后）
+exit=0
+ok  	github.com/dualface/kander/cmd/kander	(cached)
+ok  	github.com/dualface/kander/internal/board	(cached)
+ok  	github.com/dualface/kander/internal/cli	(cached)
+ok  	github.com/dualface/kander/internal/config	(cached)
+ok  	github.com/dualface/kander/internal/fs	(cached)
+ok  	github.com/dualface/kander/internal/i18n	0.064s
+ok  	github.com/dualface/kander/internal/install	(cached)
+ok  	github.com/dualface/kander/internal/launch	(cached)
+ok  	github.com/dualface/kander/internal/liveness	(cached)
+ok  	github.com/dualface/kander/internal/menu	(cached)
+ok  	github.com/dualface/kander/internal/notify	(cached)
+ok  	github.com/dualface/kander/internal/probe	(cached)
+ok  	github.com/dualface/kander/internal/process	(cached)
+ok  	github.com/dualface/kander/internal/review	11.730s
+ok  	github.com/dualface/kander/internal/takeover	(cached)
+ok  	github.com/dualface/kander/internal/tui	(cached)
+ok  	github.com/dualface/kander/internal/version	(cached)
+ok  	github.com/dualface/kander/internal/window	(cached)
+ok  	github.com/dualface/kander/rules	(cached)
+
+
+go build ./...；go vet ./...；git diff --check；gofmt -l 改动 Go 文件：exit=0，无输出。
+Windows amd64 board/review/fs 测试程序及 cmd/kander：交叉编译 exit=0，未原生执行。
+TestArchiveBatchAdvanceRangeAttribution 增强错误原因断言后专项：exit=0。
+安装作用域 kander check 指定本卡：通过，1 个任务。

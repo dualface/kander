@@ -1,0 +1,19 @@
+{
+  "authorization": {
+    "dispatch_id": "codex-agentdef-qa-r8-review-20260909",
+    "epoch": 10
+  },
+  "submitted_revision": 97,
+  "record_id": "qa-n1-codex-deferred-r8",
+  "run_id": "qa-agent-def-b1-r8",
+  "finding_id": "QA-N1",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-review-template-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T13:12:32.273971489Z",
+  "report_hash": "890fffd60298ac41962aed5f5144aaefef9a89b8e0b06354242adfcd50a34662",
+  "original": "review.prompt_files[].path 允许规范相对路径（含 prompts/guide.md），execute.go 只 WriteTextAtomic、不创建中间目录；openPosixParent 对缺失父目录返回 ENOENT。单测只用 guide.md。作者按 runtime 相对路径写成子目录时，校验通过、审核启动 I/O 失败。最小改动：写入前在 runtime 内按隔离规则创建父目录，或校验只接受单段文件名。",
+  "status": "deferred",
+  "basis": "独立核验组目标 d97964c06adb942b94b25c7e5c5bfb04795172e4 与任务 HEAD fa8da8a9923749a80d44c7fa8038e97a0f2e620a 的相关实现一致。validReviewPromptPath 只拒绝空值、控制字符、绝对/反斜线/穿越及非规范路径，prompts/guide.md 满足检查；execute.go 渲染后直接调用 WriteTextAtomic，没有创建父目录；posix.go 的 WriteTextAtomic 经 writeBytesAtomic 先调用 openPosixParent，逐层 openat(O_DIRECTORY)，缺失 prompts 目录会以 ENOENT 映射为 not-exist 错误。故用户声明子目录虽可通过定义校验，审核启动仍失败，需先使用 guide.md 之类单段名称。已读测试，其额外文件确为单段 guide.md。该写入路径在 r6 到 r8 修复区间未改变，本项延续 r6 QA-N1 的 low/deferred；本轮明确只处置不改代码，因此 deferred，不声明问题消失。",
+  "verification": "只读源码核验与 Git 对照；git diff --exit-code d97964c06adb942b94b25c7e5c5bfb04795172e4 HEAD -- internal/config/agents_review.go internal/review/execute.go internal/fs/posix.go internal/menu/options.go internal/menu/agents.go 返回 0；git diff --exit-code e1c01277075599cb0395bf62f16855cebf04b060 d97964c06adb942b94b25c7e5c5bfb04795172e4 -- internal/review/execute.go internal/fs/posix.go internal/menu/agents.go 返回 0；options.go 同区间 diff 只改 ReviewModelSupportsEffort。未运行新测试、未声称动态复现。本轮使用 r8 的原文和报告 SHA-256；r6 对应作者原件仍保留，跨 run lineage 由 r8 报告携带。"
+}

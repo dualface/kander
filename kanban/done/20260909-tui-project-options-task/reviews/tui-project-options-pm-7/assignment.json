@@ -1,0 +1,15 @@
+{
+  "run_id": "tui-project-options-pm-7",
+  "batch_id": "tui-project-options-batch",
+  "author": "codex",
+  "basis": "本卡 Options 覆盖草稿撤销路径",
+  "items": {
+    "PM-008": [
+      "20260909-tui-project-options-task"
+    ]
+  },
+  "owners": {
+    "20260909-tui-project-options-task": "codex"
+  },
+  "recorded_at": "2026-09-09T12:15:13.302409332Z"
+}

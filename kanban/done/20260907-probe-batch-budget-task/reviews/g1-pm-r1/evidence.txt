@@ -1,0 +1,1078 @@
+Review range: 7e6fe2073ff007a6639a2517f4c7874f8e420bd1..021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5
+
+=== COMMITS ===
+commit 021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 02:20:03
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 02:20:03
+
+    test(liveness): await complete probe PID records before cancellation
+
+commit b8ea5da7f3f8e64b891a4eb74a396d19860171ef
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 02:18:02
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 02:18:02
+
+    fix(liveness): bound batch probes and bind observation identity
+
+=== FILE LEDGER ===
+M	AGENTS.md
+M	README.md
+M	docs/probe-deadlines.md
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+A	internal/liveness/batch.go
+A	internal/liveness/batch_test.go
+M	internal/liveness/check.go
+M	internal/liveness/classify.go
+A	internal/liveness/observation.go
+M	internal/liveness/types.go
+M	rules/KANDER-KANBAN-RULES.md
+
+=== PATCH ===
+diff --git a/AGENTS.md b/AGENTS.md
+index 426c35a..574a9c0 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -117,4 +117,4 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
+ - [写前辅助检查](docs/kanban-write-guard.md): guard-write 的接入与能力边界.
+ 
+ - [目录卡与迁移](docs/directory-cards.md): SIZE、只读过渡、维护窗口和各阶段恢复.
+-- [探测期限与取消](docs/probe-deadlines.md)：单卡共享预算、context API、进程与输出回收，以及系统 I/O 和平台验证边界。
++- [探测期限与取消](docs/probe-deadlines.md)：单卡与批量预算、并发上限、观测身份和有效性、context API、进程回收，以及系统 I/O 和平台验证边界。
+diff --git a/README.md b/README.md
+index 1c9080a..60a30f9 100644
+--- a/README.md
++++ b/README.md
+@@ -86,6 +86,8 @@ Kander 有两种安装作用域, 共用同一套规则和程序.
+ 
+ 单卡存活探测的前向查询、session 反查、复查及进程回收共享 10 秒默认期限；context API 使用调用方期限和取消信号。耗尽预算后不再启动后续查询，结果为 `unknown`。取消时关闭输出管道并回收所属进程；平台边界及验证范围见 [探测期限与取消](docs/probe-deadlines.md)。
+ 
++`check` 的多卡存活采集共用 10 秒总预算，最多同时探测 4 张卡；未采集项保留 `unknown` 原因，输出观测时间、有效性和独立运行状态。批量 API 的结果绑定任务/会话身份，`alive` 不代表 ready 或业务进展；订阅调度仍遵循现有单卡采集规则。
++
+ ## 4. 工作流程
+ 
+ 每个任务都按下面的流程进行. Kander 的开发规则按模块启用, 新安装默认全开; 关掉对应模块就让单卡沿用你已有的 Git、审核和交付流程.
+diff --git a/docs/probe-deadlines.md b/docs/probe-deadlines.md
+index 28c510c..0de08e0 100644
+--- a/docs/probe-deadlines.md
++++ b/docs/probe-deadlines.md
+@@ -6,7 +6,26 @@
+ 
+ `probe.CaptureContext`、`ProbeHerdrPaneContext`、`ProbeTmuxPaneContext`、`ProbeTmuxContainerContext`，以及 `liveness.HerdrReverseLookupContext`、`TmuxReverseLookupContext` 供组合调用复用同一个期限。`probe.WithDefaultTimeout` 只在缺少 deadline 时补充默认值；调用方负责执行返回的 cancel。底层错误仍支持 `errors.Is(err, context.Canceled)` 和 `errors.Is(err, context.DeadlineExceeded)`；中文、英文、日文展示保留原始原因。
+ 
+-既有不带 context 的 API 及 `Within`/duration API 保留，非正 duration 使用 10 秒默认值。一次 tmux pane 查询包含事实与两个兼容 session marker 的读取，这些步骤也共享剩余预算。`check` 和现有订阅调用便捷 API，因此每张卡使用完整的单卡预算；整轮并发调度、订阅停止信号及写出取消不属于本契约。
++既有不带 context 的 API 及 `Within`/duration API 保留，非正 duration 使用 10 秒默认值。一次 tmux pane 查询包含事实与两个兼容 session marker 的读取，这些步骤也共享剩余预算。
++
++## 批量采集与观测身份
++
++`ClassifyTasksContext(ctx, []TaskInput, BatchOptions)` 返回与输入等长、同序的 `[]Report`，不写卡、不缓存。`TaskInput` 提供卡片 Entry 和不可变正文快照；正文读取失败可通过 `ReadError` 保留原因而不探测残缺身份。调用方不得在调用期间并发改写输入切片。
++
++`BatchOptions.Budget` 默认 10 秒，`Concurrency` 默认 4；非正值使用默认值，调用方更早的 deadline 优先。总预算从批量调用开始计时，覆盖排队、前向、反查、复查及回收；每个 worker 同时只执行一个单卡调用。worker 数不超过并发上限和输入数的较小值，不按卡数创建 goroutine。取消或耗尽后不启动外部查询，已完成结果保留，其余结果为 `unknown`，保留取消或超时原因。返回前等待所有 worker 及其采集器回收；预算不是硬实时返回保证，仍有下方系统 I/O 与 O(N) 结果构造边界。
++
++`Report` 在原有字段（包括 `NewWindow`）之外增加：
++
++- `ObservedAt`（JSON `observed_at`）：单卡采集调用结束的 UTC 时间，包含失败尝试；未出队采集或正文读取失败为零值，不能当作新观测。
++- `Identity`（JSON `identity`）：请求快照的任务 ID、原始 SESSION、WINDOW、OWNER、STARTED_AT，表示被查询身份，不冒充外部验证过的身份。`NewWindow` 是反查建议的新地址，不改写这个原始身份。
++- `RuntimeState`（JSON `runtime_state`）：herdr 已确认的 `idle`、`working`、`blocked`、`done`；无法获知时为 `unknown`，tmux 的进程存活不推导 Agent 运行状态。
++- `ObservationValid`（JSON `observation_valid`）：本次能否得到有效的四态存活结论。`unknown` 为 false；不表示观测永久新鲜、可直投、身份已认证或业务有进展。
++
++消费旧结果前调用 `Report.ValidFor(entry, text)`：失败/未采集或身份任一字段变化均拒绝。调用方还须按自己的策略检查 `ObservedAt` 的年龄；本 API 不制定 TTL，不把旧身份结果重新标记为新身份事实。元数据完全相同的重启无法仅凭这些字段区分；无 session reference 或外部未报告 session 时，原有 `alive` 仍只表示当前地址的 Agent 存在，不能升级为会话认证。
++
++`alive` 与运行状态彼此独立；`idle`、`blocked`、`done` 都可能 `alive`。这些结果不提供 `ready` 或业务进展事实，也不能据此决定投递成功、任务完成或接管。直投继续遵守 notify 的独立身份和就绪检查。
++
++`check` 的存活段使用默认批量入口，保留结构检查退出码与任务输出顺序，并显示观测时间、有效性和运行状态。预算只约束存活采集，不覆盖此前的看板扫描/正文读取或之后的输出阻塞。现有 subscribe 仍使用单卡入口；订阅计时、停止信号、批量结果消费和写出取消由后续任务处理，本变更不改订阅调度与事件 schema。
+ 
+ ## 进程与管道所有权
+ 
+@@ -18,10 +37,12 @@
+ 
+ 期限控制何时停止继续工作、关闭可取消管道及发出进程终止请求，不是硬实时返回保证。取消后的终止、调度、直接进程回收和 goroutine 汇合需要少量系统执行时间；回归测试明确断言 300ms 期限在 600ms 内返回、400ms 共享期限在 650ms 内返回，以及显式取消在 300ms 内返回。这个容差只属于测试，不是运行时追加的预算。
+ 
+-路径查找、`exec.Start`/`CreateProcess`、线程/Job 系统调用、信号投递及内核进程回收本身没有 Go context 中断入口。不可中断的内核 I/O、失去响应的文件系统、内存分配/JSON 解码及系统调度暂停可能超过期限。实现不会为满足表面期限丢弃仍阻塞的 goroutine；这些操作恢复后继续完成资源回收，并报告真实取消或错误。输出大小限制、整轮队列与调度不在本次变更范围内。
++路径查找、`exec.Start`/`CreateProcess`、线程/Job 系统调用、信号投递及内核进程回收本身没有 Go context 中断入口。不可中断的内核 I/O、失去响应的文件系统、内存分配/JSON 解码及系统调度暂停可能超过期限。实现不会为满足表面期限丢弃仍阻塞的 goroutine；这些操作恢复后继续完成资源回收，并报告真实取消或错误。输出大小限制与订阅调度不在本次变更范围内。
+ 
+ ## 验证范围
+ 
+ `internal/probe` 的真实测试子进程覆盖父子进程持有两路输出、取消、期限耗尽、父进程先退出、输出完整性及退出码；同一套测试可在 POSIX 与 Windows 运行，平台文件分别检查进程组及 Job 回收结果。POSIX 另测主动脱离进程组的后代，其管道等待仍受限，测试自行清理该后代。`internal/liveness` 以临时假 CLI 验证慢前向查询、慢反查、慢复查共用剩余预算，以及取消发生在反查期间的结果。
+ 
+ Linux 实际执行与 Windows 交叉编译须在交付记录中分别列明。交叉编译不能证明 Windows Job、管道取消和句柄回收在原生 Windows 上通过；假 CLI 也不能证明真实 tmux/herdr/Agent 的兼容性。未执行的环境检查必须保留为验证缺口。
++
++批量回归以临时假 CLI 混合快慢任务，断言 12 张卡共用 400ms 预算、750ms 内返回、峰值并发 2，已完成的 blocked/alive 结果不会因整轮超时被抹去；另测默认并发 4、显式取消 300ms 内返回、排队任务无伪造观测时间、Linux 进程消失及 goroutine 收敛。身份变化、四种 herdr 运行状态、tmux 无运行状态、NewWindow 保留、读取失败及三语未采集原因均有覆盖。
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index d734b26..f82395b 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -1,4 +1,6 @@
+ {
++  "liveness.batch_not_observed": "Batch task not observed: {{.V0}}",
++  "liveness.observation": "observed_at={{.V0}} valid={{.V1}} runtime_state={{.V2}}",
+   "board.migration_structure": "init stopped; run kander check for structural problems:\n{{.V0}}",
+   "board.migration_link_unsupported": "Cannot safely migrate relative links in {{.V0}}: {{.V1}}; content is preserved; resolve this syntax before retrying",
+   "board.guard_form_changed": "Task {{.V0}} now uses directory form at {{.V1}}; the old .md spelling would create a duplicate. Use kander show --json and kander update.",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index 075f03c..96692b7 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -1,4 +1,6 @@
+ {
++  "liveness.batch_not_observed": "バッチ内のタスクは未観測です: {{.V0}}",
++  "liveness.observation": "観測時刻={{.V0}} 有効={{.V1}} 実行状態={{.V2}}",
+   "board.migration_structure": "init を中止しました。kander check で構造の問題を確認してください：\n{{.V0}}",
+   "board.migration_link_unsupported": "{{.V0}} の相対リンクを安全に移行できません：{{.V1}}。本文は保持されています。構文を修正して再実行してください",
+   "board.guard_form_changed": "タスク {{.V0}} は {{.V1}} のディレクトリ形式に移行済みです。旧 .md パスへの書き込みは重複を作成します。kander show --json と kander update を使用してください。",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index a9c5630..e22fb6b 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -1,4 +1,6 @@
+ {
++  "liveness.batch_not_observed": "批量任务未采集：{{.V0}}",
++  "liveness.observation": "观测时间={{.V0}} 有效={{.V1}} 运行状态={{.V2}}",
+   "board.migration_structure": "init 已中止；请运行 kander check 检查结构问题：\n{{.V0}}",
+   "board.migration_link_unsupported": "无法安全迁移相对链接（{{.V0}}）：{{.V1}}；正文已保留，请处理该语法后重试",
+   "board.guard_form_changed": "任务 {{.V0}} 已改为目录卡，正文位于 {{.V1}}；旧 .md 拼写会产生同 ID 副本。请使用 kander show --json 和 kander update。",
+diff --git a/internal/liveness/batch.go b/internal/liveness/batch.go
+new file mode 100644
+index 0000000..f5c4cb4
+--- /dev/null
++++ b/internal/liveness/batch.go
+@@ -0,0 +1,80 @@
++package liveness
++
++import (
++	"context"
++	"sync"
++	"time"
++
++	"github.com/dualface/kander/internal/board"
++	"github.com/dualface/kander/internal/probe"
++)
++
++const (
++	DefaultBatchBudget      = 10 * time.Second
++	DefaultBatchConcurrency = 4
++)
++
++// TaskInput owns the immutable card snapshot used for one observation.
++// ReadError preserves a failed document read without probing incomplete metadata.
++type TaskInput struct {
++	Entry     board.Entry
++	Text      string
++	ReadError error
++}
++
++// BatchOptions bounds the entire collection, including queue time and cleanup.
++// Non-positive values select the defaults. An earlier caller deadline wins.
++type BatchOptions struct {
++	Budget      time.Duration
++	Concurrency int
++}
++
++// ClassifyTasksContext returns one report per input, in input order. A fixed
++// worker set owns every probe and is joined before returning; no work survives
++// the call. OS cleanup can exceed the deadline as documented for CaptureContext.
++func ClassifyTasksContext(ctx context.Context, tasks []TaskInput, options BatchOptions) []Report {
++	if options.Budget <= 0 {
++		options.Budget = DefaultBatchBudget
++	}
++	if options.Concurrency <= 0 {
++		options.Concurrency = DefaultBatchConcurrency
++	}
++	ctx, cancel := context.WithTimeout(ctx, options.Budget)
++	defer cancel()
++	inputs := append([]TaskInput(nil), tasks...)
++	reports := make([]Report, len(inputs))
++	jobs := make(chan int)
++	var workers sync.WaitGroup
++	for n := 0; n < min(options.Concurrency, len(inputs)); n++ {
++		workers.Add(1)
++		go func() {
++			defer workers.Done()
++			for i := range jobs {
++				input := inputs[i]
++				if ctx.Err() != nil {
++					reports[i] = uncollectedReport(input, ctx.Err())
++				} else if input.ReadError != nil {
++					reports[i] = uncollectedReport(input, input.ReadError)
++				} else {
++					reports[i] = ClassifyTaskContext(ctx, input.Entry, input.Text)
++				}
++			}
++		}()
++	}
++	for i, input := range inputs {
++		select {
++		case <-ctx.Done():
++			reports[i] = uncollectedReport(input, ctx.Err())
++		case jobs <- i:
++		}
++	}
++	close(jobs)
++	workers.Wait()
++	return reports
++}
++
++func uncollectedReport(input TaskInput, err error) Report {
++	out := unknownFrom(input.Entry, input.Text, t("liveness.batch_not_observed", probe.FailureDetail(err)))
++	out.Identity = identityFrom(input.Entry, input.Text)
++	return out
++}
+diff --git a/internal/liveness/batch_test.go b/internal/liveness/batch_test.go
+new file mode 100644
+index 0000000..7d172b6
+--- /dev/null
++++ b/internal/liveness/batch_test.go
+@@ -0,0 +1,295 @@
++package liveness
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"os"
++	"path/filepath"
++	"runtime"
++	"strconv"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/dualface/kander/internal/board"
++	"github.com/dualface/kander/internal/config"
++)
++
++func batchInputs(count int) []TaskInput {
++	inputs := make([]TaskInput, count)
++	for i := range inputs {
++		id := strconv.Itoa(i)
++		inputs[i] = TaskInput{Entry: board.Entry{TaskID: id}, Text: "- SESSION: codex wanted\n- WINDOW: herdr:w1:t1:w1:p" + id + "\n- OWNER: codex\n- STARTED_AT: 2026-09-08 02:07\n"}
++	}
++	return inputs
++}
++
++// The event log measures actual external command concurrency, including slow
++// commands that are terminated before they can append an end event.
++func installBatchFake(t *testing.T, fast bool) string {
++	t.Helper()
++	installPOSIXFakes(t, true)
++	dir := t.TempDir()
++	t.Setenv("BATCH_EVENTS", filepath.Join(dir, "events"))
++	t.Setenv("BATCH_PIDS", dir)
++	script := `#!/bin/sh
++printf 'start %s\n' "$3" >> "$BATCH_EVENTS"
++echo $$ > "$BATCH_PIDS/$3"
++`
++	if fast {
++		script += `if [ "$3" = w1:p0 ]; then
++ /bin/sleep 0.05
++ printf 'end %s\n' "$3" >> "$BATCH_EVENTS"
++ echo '{"result":{"pane":{"pane_id":"w1:p0","agent":"codex","agent_status":"blocked","agent_session":{"value":"wanted"}}}}'
++ exit 0
++fi
++`
++	}
++	script += "exec /bin/sleep 3\n"
++	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	return dir
++}
++
++func assertBatchPeakAndCleanup(t *testing.T, dir string, wantPeak, wantStarts int) {
++	t.Helper()
++	data, err := os.ReadFile(filepath.Join(dir, "events"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	active, peak, starts := 0, 0, 0
++	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
++		if strings.HasPrefix(line, "start ") {
++			active++
++			starts++
++			peak = max(peak, active)
++		} else {
++			active--
++		}
++	}
++	if peak != wantPeak || starts != wantStarts {
++		t.Fatalf("peak=%d starts=%d; want %d/%d; events=%s", peak, starts, wantPeak, wantStarts, data)
++	}
++	if runtime.GOOS != "linux" {
++		t.Log("process disappearance assertion requires Linux /proc; command concurrency was checked")
++		return
++	}
++	files, err := filepath.Glob(filepath.Join(dir, "w1:p*"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, file := range files {
++		pid, err := os.ReadFile(file)
++		if err != nil {
++			t.Fatal(err)
++		}
++		if value, err := strconv.Atoi(strings.TrimSpace(string(pid))); err != nil || value <= 0 {
++			t.Fatalf("invalid probe PID record %q: %v", pid, err)
++		}
++		if _, err := os.Stat(filepath.Join("/proc", strings.TrimSpace(string(pid)))); !os.IsNotExist(err) {
++			t.Fatalf("owned probe process %s remains: %v", pid, err)
++		}
++	}
++}
++
++func TestBatchMixedCommandsShareTotalBudget(t *testing.T) {
++	resetLang(t)
++	dir := installBatchFake(t, true)
++	inputs := batchInputs(12)
++	started := time.Now()
++	reports := ClassifyTasksContext(context.Background(), inputs, BatchOptions{Budget: 400 * time.Millisecond, Concurrency: 2})
++	if elapsed := time.Since(started); elapsed < 400*time.Millisecond || elapsed > 750*time.Millisecond {
++		t.Fatalf("batch elapsed=%s; 12 tasks share 400ms", elapsed)
++	}
++	if len(reports) != len(inputs) {
++		t.Fatalf("reports=%d", len(reports))
++	}
++	for i, rep := range reports {
++		if rep.TaskID != inputs[i].Entry.TaskID || rep.Identity != identityFrom(inputs[i].Entry, inputs[i].Text) {
++			t.Fatalf("input order/identity lost: %+v", rep)
++		}
++		if i == 0 {
++			if rep.Status != Alive || rep.RuntimeState != "blocked" || !rep.ValidFor(inputs[i].Entry, inputs[i].Text) || rep.ObservedAt.Before(started) || rep.ObservedAt.After(time.Now()) {
++				t.Fatalf("completed observation lost: %+v", rep)
++			}
++		} else if rep.Status != Unknown || rep.ObservationValid || rep.NewWindow != "" || !strings.Contains(rep.Detail, "探测期限已耗尽") {
++			t.Fatalf("expired observation=%+v", rep)
++		}
++		if i >= 3 && !rep.ObservedAt.IsZero() {
++			t.Fatalf("unstarted task has observation time: %+v", rep)
++		}
++	}
++	assertBatchPeakAndCleanup(t, dir, 2, 3)
++}
++
++func TestBatchDefaultConcurrencyCancellationJoinsWorkers(t *testing.T) {
++	resetLang(t)
++	dir := installBatchFake(t, false)
++	baseline := runtime.NumGoroutine()
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	done := make(chan []Report, 1)
++	go func() { done <- ClassifyTasksContext(ctx, batchInputs(30), BatchOptions{}) }()
++	ready := false
++	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
++		files, _ := filepath.Glob(filepath.Join(dir, "w1:p*"))
++		if len(files) == DefaultBatchConcurrency {
++			ready = true
++			for _, file := range files {
++				data, err := os.ReadFile(file)
++				pid, parseErr := strconv.Atoi(strings.TrimSpace(string(data)))
++				if err != nil || parseErr != nil || pid <= 0 {
++					ready = false
++					break
++				}
++			}
++			if ready {
++				break
++			}
++		}
++		time.Sleep(time.Millisecond)
++	}
++	started := time.Now()
++	cancel()
++	reports := <-done
++	if !ready || time.Since(started) > 300*time.Millisecond {
++		t.Fatalf("ready=%v cancellation took %s", ready, time.Since(started))
++	}
++	for _, rep := range reports {
++		if rep.Status != Unknown || rep.ObservationValid || !strings.Contains(rep.Detail, "探测已取消") {
++			t.Fatalf("report=%+v", rep)
++		}
++	}
++	assertBatchPeakAndCleanup(t, dir, DefaultBatchConcurrency, DefaultBatchConcurrency)
++	for deadline := time.Now().Add(300 * time.Millisecond); runtime.NumGoroutine() > baseline && time.Now().Before(deadline); {
++		time.Sleep(time.Millisecond)
++	}
++	if n := runtime.NumGoroutine(); n > baseline {
++		t.Fatalf("goroutines before=%d after=%d", baseline, n)
++	}
++}
++
++func TestBatchEarlierCallerDeadlineWins(t *testing.T) {
++	resetLang(t)
++	dir := installBatchFake(t, false)
++	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
++	defer cancel()
++	started := time.Now()
++	reports := ClassifyTasksContext(ctx, batchInputs(8), BatchOptions{Budget: time.Second, Concurrency: 2})
++	if elapsed := time.Since(started); elapsed < 200*time.Millisecond || elapsed > 500*time.Millisecond {
++		t.Fatalf("caller deadline ignored: %s", elapsed)
++	}
++	for _, rep := range reports {
++		if rep.Status != Unknown || rep.ObservationValid {
++			t.Fatalf("report=%+v", rep)
++		}
++	}
++	assertBatchPeakAndCleanup(t, dir, 2, 2)
++}
++
++func TestBatchUncollectedAndReadErrors(t *testing.T) {
++	resetLang(t)
++	if reports := ClassifyTasksContext(context.Background(), nil, BatchOptions{}); len(reports) != 0 {
++		t.Fatal(reports)
++	}
++	inputs := batchInputs(1)
++	inputs[0].ReadError = errors.New("document unavailable")
++	rep := ClassifyTasksContext(context.Background(), inputs, BatchOptions{Concurrency: 100})[0]
++	if rep.Status != Unknown || !rep.ObservedAt.IsZero() || rep.ValidFor(inputs[0].Entry, inputs[0].Text) || !strings.Contains(rep.Detail, "document unavailable") {
++		t.Fatalf("read failure=%+v", rep)
++	}
++	inputs[0].ReadError = nil
++	for lang, want := range map[string]string{"cn": "批量任务未采集", "en": "Batch task not observed", "ja": "バッチ内のタスクは未観測です"} {
++		config.ApplyLanguageArgument([]string{"kander", "--lang", lang})
++		ctx, cancel := context.WithCancel(context.Background())
++		cancel()
++		rep = ClassifyTasksContext(ctx, inputs, BatchOptions{})[0]
++		if rep.Status != Unknown || !rep.ObservedAt.IsZero() || !strings.Contains(rep.Detail, want) {
++			t.Fatalf("lang=%s report=%+v", lang, rep)
++		}
++		line := formatReport(rep)
++		if strings.Contains(line, "liveness.observation") || !strings.Contains(line, "false") || !strings.Contains(line, Unknown) {
++			t.Fatalf("lang=%s line=%s", lang, line)
++		}
++	}
++}
++
++func TestCheckCollectsBatchAndPreservesOutputOrder(t *testing.T) {
++	root := tempBoard(t)
++	installPOSIXFakes(t, true)
++	dir := t.TempDir()
++	t.Setenv("BATCH_EVENTS", filepath.Join(dir, "events"))
++	script := `#!/bin/sh
++printf 'start %s\n' "$3" >> "$BATCH_EVENTS"
++/bin/sleep 0.1
++printf 'end %s\n' "$3" >> "$BATCH_EVENTS"
++printf '{"result":{"pane":{"pane_id":"%s","agent":"codex","agent_status":"idle","agent_session":{"value":"wanted"}}}}\n' "$3"
++`
++	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	var ids []string
++	for i := 0; i < 4; i++ {
++		id, path := makeWorking(t, "batch-check-"+strconv.Itoa(i), "批量采集")
++		setLocation(t, path, "codex wanted", "herdr:w1:t1:w1:p"+strconv.Itoa(i))
++		ids = append(ids, id)
++	}
++	lines, err := livenessLines(root, nil)
++	if err != nil || len(lines) != len(ids) {
++		t.Fatalf("lines=%v err=%v", lines, err)
++	}
++	for i, line := range lines {
++		if !strings.Contains(line, ids[i]) || !strings.Contains(line, "alive") || !strings.Contains(line, "idle") || !strings.Contains(line, "true") {
++			t.Fatalf("line %d=%s", i, line)
++		}
++	}
++	assertBatchPeakAndCleanup(t, dir, 4, 4)
++}
++
++func TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate(t *testing.T) {
++	resetLang(t)
++	installPOSIXFakes(t, true)
++	input := batchInputs(1)[0]
++	for _, state := range []string{"idle", "working", "blocked", "done"} {
++		script := "#!/bin/sh\necho '{\"result\":{\"pane\":{\"pane_id\":\"w1:p0\",\"agent\":\"codex\",\"agent_status\":\"" + state + "\",\"agent_session\":{\"value\":\"wanted\"}}}}'\n"
++		if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0o755); err != nil {
++			t.Fatal(err)
++		}
++		rep := ClassifyTasksContext(context.Background(), []TaskInput{input}, BatchOptions{})[0]
++		if rep.Status != Alive || rep.RuntimeState != state || !rep.ValidFor(input.Entry, input.Text) {
++			t.Fatalf("state conflated with liveness: %+v", rep)
++		}
++		for _, replacement := range [][2]string{{"codex wanted", "codex replacement"}, {"codex wanted", "claude wanted"}, {"w1:p0", "w1:p9"}, {"OWNER: codex", "OWNER: claude"}, {"02:07", "02:08"}} {
++			if rep.ValidFor(input.Entry, strings.ReplaceAll(input.Text, replacement[0], replacement[1])) {
++				t.Fatalf("old observation accepted for changed %q", replacement[0])
++			}
++		}
++		if rep.ValidFor(board.Entry{TaskID: "other"}, input.Text) {
++			t.Fatal("old observation accepted for another task")
++		}
++		data, err := json.Marshal(rep)
++		if err != nil || !strings.Contains(string(data), `"observed_at":`) || !strings.Contains(string(data), `"runtime_state":"`+state+`"`) {
++			t.Fatalf("JSON=%s err=%v", data, err)
++		}
++	}
++}
++
++func TestBatchPreservesDriftAndTmuxRuntimeUnknown(t *testing.T) {
++	resetLang(t)
++	installPOSIXFakes(t, true)
++	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p0")
++	t.Setenv("KANBAN_HERDR_SESSION", "wanted")
++	t.Setenv("KANBAN_HERDR_STATUS", "done")
++	t.Setenv("KANBAN_TMUX_PANE_SESSION", "wanted")
++	inputs := batchInputs(2)
++	inputs[1].Text = "- SESSION: codex wanted\n- WINDOW: tmux:$1:@1:%1\n"
++	reports := ClassifyTasksContext(context.Background(), inputs, BatchOptions{})
++	if rep := reports[0]; rep.Status != Drifted || rep.NewWindow != "herdr:w1:t9:w1:p9" || rep.RuntimeState != "done" || !rep.ValidFor(inputs[0].Entry, inputs[0].Text) {
++		t.Fatalf("drift observation=%+v", rep)
++	}
++	if rep := reports[1]; rep.Status != Alive || rep.RuntimeState != Unknown || !rep.ObservationValid {
++		t.Fatalf("tmux presence is not an agent runtime state: %+v", rep)
++	}
++}
+diff --git a/internal/liveness/check.go b/internal/liveness/check.go
+index 0574ffb..80af49c 100644
+--- a/internal/liveness/check.go
++++ b/internal/liveness/check.go
+@@ -1,10 +1,12 @@
+ package liveness
+ 
+ import (
++	"context"
+ 	"fmt"
+ 	"os"
+ 	"sort"
+ 	"strings"
++	"time"
+ 
+ 	"github.com/dualface/kander/internal/board"
+ )
+@@ -16,6 +18,7 @@ func formatReport(rep Report) string {
+ 		t("liveness.status", rep.Status),
+ 		t("liveness.channel", rep.Channel),
+ 		t("liveness.container", rep.Container),
++		t("liveness.observation", rep.ObservedAt.Format(time.RFC3339Nano), rep.ObservationValid, rep.RuntimeState),
+ 	}
+ 	if rep.NewWindow != "" {
+ 		fields = append(fields, t("liveness.new_address", rep.NewWindow))
+@@ -62,15 +65,13 @@ func livenessLines(root string, taskIDs []string) ([]string, error) {
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	var lines []string
++	inputs := make([]TaskInput, 0, len(entries))
+ 	for _, entry := range entries {
+ 		text, err := board.ReadDocument(entry)
+-		var rep Report
+-		if err != nil {
+-			rep = Report{TaskID: entry.TaskID, Agent: "N/A", Status: Unknown, Channel: "unknown", Container: "N/A", Detail: err.Error()}
+-		} else {
+-			rep = ClassifyTask(entry, text)
+-		}
++		inputs = append(inputs, TaskInput{Entry: entry, Text: text, ReadError: err})
++	}
++	var lines []string
++	for _, rep := range ClassifyTasksContext(context.Background(), inputs, BatchOptions{}) {
+ 		lines = append(lines, formatReport(rep))
+ 	}
+ 	return lines, nil
+diff --git a/internal/liveness/classify.go b/internal/liveness/classify.go
+index bd81f04..04a46ca 100644
+--- a/internal/liveness/classify.go
++++ b/internal/liveness/classify.go
+@@ -4,6 +4,7 @@ import (
+ 	"context"
+ 	"errors"
+ 	"strings"
++	"time"
+ 
+ 	"github.com/dualface/kander/internal/board"
+ 	"github.com/dualface/kander/internal/probe"
+@@ -18,13 +19,14 @@ func report(entry board.Entry, session *TaskSession, status, channel, container,
+ 		container = "N/A"
+ 	}
+ 	return Report{
+-		TaskID:    entry.TaskID,
+-		Agent:     agent,
+-		Status:    status,
+-		Channel:   channel,
+-		Container: container,
+-		Detail:    strings.Join(strings.Fields(detail), " "),
+-		NewWindow: newWindow,
++		TaskID:       entry.TaskID,
++		Agent:        agent,
++		Status:       status,
++		Channel:      channel,
++		Container:    container,
++		Detail:       strings.Join(strings.Fields(detail), " "),
++		NewWindow:    newWindow,
++		RuntimeState: Unknown,
+ 	}
+ }
+ 
+@@ -55,6 +57,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
+ 		return report(entry, &sess, Stopped, channel, container, detail, "")
+ 	}
+ 	var newWindow string
++	runtimeState := Unknown
+ 	if channel == "herdr" {
+ 		tabID, paneID, err := HerdrReverseLookupContext(ctx, program, session)
+ 		if err != nil {
+@@ -76,6 +79,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
+ 			return report(entry, &sess, Stopped, channel, container, detail, "")
+ 		}
+ 		status, _ := pane["agent_status"].(string)
++		runtimeState = status
+ 		if status != "idle" && status != "working" && status != "blocked" && status != "done" {
+ 			if status == "" {
+ 				status = "N/A"
+@@ -90,7 +94,9 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
+ 		}
+ 		newWindow = RenderTmuxWindow(launcher, location)
+ 	}
+-	return report(entry, &sess, Drifted, channel, container, detail, newWindow)
++	out := report(entry, &sess, Drifted, channel, container, detail, newWindow)
++	out.RuntimeState = runtimeState
++	return out
+ }
+ 
+ func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) Report {
+@@ -150,11 +156,15 @@ func classifyHerdr(ctx context.Context, entry board.Entry, session TaskSession,
+ 		), "")
+ 	}
+ 	if session.Reference != "" && actualSession == "" {
+-		return report(entry, &session, Alive, "herdr", tabID, t(
++		out := report(entry, &session, Alive, "herdr", tabID, t(
+ 			"liveness.session_identity_was_not_reported_direct_delivery_is_unavailable",
+ 		), "")
++		out.RuntimeState = status
++		return out
+ 	}
+-	return report(entry, &session, Alive, "herdr", tabID, t("liveness.agent_status", status), "")
++	out := report(entry, &session, Alive, "herdr", tabID, t("liveness.agent_status", status), "")
++	out.RuntimeState = status
++	return out
+ }
+ 
+ func classifyTmux(ctx context.Context, entry board.Entry, session TaskSession, launcher, tmuxContainer, windowID, paneID string, allowReverseLookup bool) Report {
+@@ -225,6 +235,9 @@ func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text stri
+ 		if rec := recover(); rec != nil {
+ 			out = unknownFrom(entry, text, "panic")
+ 		}
++		out.Identity = identityFrom(entry, text)
++		out.ObservedAt = time.Now().UTC()
++		out.ObservationValid = out.Status != Unknown
+ 	}()
+ 	if err := ctx.Err(); err != nil {
+ 		return unknownFrom(entry, text, probe.FailureDetail(err))
+diff --git a/internal/liveness/observation.go b/internal/liveness/observation.go
+new file mode 100644
+index 0000000..25d1468
+--- /dev/null
++++ b/internal/liveness/observation.go
+@@ -0,0 +1,30 @@
++package liveness
++
++import "github.com/dualface/kander/internal/board"
++
++// ObservationIdentity binds a result to its input, not to a later card with the
++// same task ID. These fields are correlation evidence, not authentication.
++type ObservationIdentity struct {
++	TaskID    string `json:"task_id"`
++	Session   string `json:"session"`
++	Window    string `json:"window"`
++	Owner     string `json:"owner"`
++	StartedAt string `json:"started_at"`
++}
++
++func identityFrom(entry board.Entry, text string) ObservationIdentity {
++	return ObservationIdentity{
++		TaskID:    entry.TaskID,
++		Session:   board.MetadataFrom(text, "SESSION"),
++		Window:    board.MetadataFrom(text, "WINDOW"),
++		Owner:     board.MetadataFrom(text, "OWNER"),
++		StartedAt: board.MetadataFrom(text, "STARTED_AT"),
++	}
++}
++
++// ValidFor rejects failed, uncollected and superseded observations. Consumers
++// must additionally judge ObservedAt against their own freshness policy. It
++// proves neither delivery readiness nor business progress, even for Alive.
++func (r Report) ValidFor(entry board.Entry, text string) bool {
++	return r.ObservationValid && !r.ObservedAt.IsZero() && r.Identity == identityFrom(entry, text)
++}
+diff --git a/internal/liveness/types.go b/internal/liveness/types.go
+index 8c90504..32e3398 100644
+--- a/internal/liveness/types.go
++++ b/internal/liveness/types.go
+@@ -3,6 +3,7 @@ package liveness
+ import (
+ 	"os/exec"
+ 	"regexp"
++	"time"
+ 
+ 	"github.com/dualface/kander/internal/config"
+ )
+@@ -39,13 +40,17 @@ type TmuxPaneLocation struct {
+ 
+ // Report is the read-only liveness classification of one card; it never writes to the card.
+ type Report struct {
+-	TaskID    string
+-	Agent     string
+-	Status    string
+-	Channel   string
+-	Container string
+-	Detail    string
+-	NewWindow string
++	TaskID           string
++	Agent            string
++	Status           string
++	Channel          string
++	Container        string
++	Detail           string
++	NewWindow        string
++	ObservedAt       time.Time           `json:"observed_at"`
++	Identity         ObservationIdentity `json:"identity"`
++	RuntimeState     string              `json:"runtime_state"`
++	ObservationValid bool                `json:"observation_valid"`
+ }
+ 
+ func t(id string, args ...any) string {
+diff --git a/rules/KANDER-KANBAN-RULES.md b/rules/KANDER-KANBAN-RULES.md
+index 2adca15..a4c2d04 100644
+--- a/rules/KANDER-KANBAN-RULES.md
++++ b/rules/KANDER-KANBAN-RULES.md
+@@ -271,7 +271,8 @@ An explicit `--pane` override does no stale-address reverse lookup.
+ - A herdr pane with missing identity but a valid agent and state is still `alive`, noted as not directly deliverable.
+ - A Codex empty reference gets no reverse lookup.
+ - Probe errors are counted as `unknown`; they do not write the card or affect the `check` exit code.
+-- One card's forward probe, session reverse lookup, revalidation, and process cleanup share one deadline (10 seconds by default). Exhaustion or cancellation stops subsequent queries and reports `unknown`. Cancellation closes inherited output-pipe waits and terminates the owned process group/job; process creation, kernel I/O and reaping still depend on the operating system. This is a per-card budget, not a whole-board scheduling guarantee.
++- One card's forward probe, session reverse lookup, revalidation, and process cleanup share one deadline (10 seconds by default). Exhaustion or cancellation stops subsequent queries and reports `unknown`. Cancellation closes inherited output-pipe waits and terminates the owned process group/job; process creation, kernel I/O and reaping still depend on the operating system.
++- The `check` liveness section collects all selected working cards within one 10-second batch budget, with at most 4 concurrent card probes. Completed observations remain available; unfinished or unstarted cards retain an `unknown` reason. Output includes observation time, validity and a separate runtime state. These facts do not establish delivery readiness or business progress. The budget excludes board reads and output writes and is not a hard real-time return guarantee. Subscription scheduling remains unchanged.
+ - `subscribe` requires an explicit group ID and non-empty member IDs, and validates member ownership.
+ - `--watch` may be repeated with external card or group IDs; a group is expanded to all its current members through the dependency resolution reader, without validating external target ownership.
+ - When an external target does not exist, expands to nothing, duplicates a member, or expansions duplicate each other, fail before subscribing.
+
+=== COMMIT TREE ===
+100644 blob 896586108e39cdd90da6b0ac1def87832ff4534a	.gitignore
+100644 blob 574a9c020c86c53c6d96d8873f35fdc06b420dd5	AGENTS.md
+100644 blob 637823c0af63838506d8b2a6b09c928561f1d484	LICENSE
+100644 blob 17cbcd3492b6d2fa047d116e5cf8a962096ce3b3	Makefile
+100644 blob 60a30f909047734f17e7ada3f1de368b4bae40a3	README.md
+100644 blob 62be47dc373be2f09870788f79f5e0c1c66f5235	cmd/kander/check_bind_test.go
+100644 blob 8b5f828e446afb27792a790c5807bef26efbc008	cmd/kander/launch.go
+100644 blob 0dd12feeab4102bc3e148c025caa01f351f99b68	cmd/kander/liveness.go
+100644 blob 9ca579595fd83132607a1c0d46b2d78187a91681	cmd/kander/main.go
+100644 blob 460f84e9b55eb08c02b962dd8a1e23988ca552c7	cmd/kander/notify.go
+100644 blob 46275125e68460768cd60fa10e535bbf437a84be	cmd/kander/review.go
+100644 blob 69d1c77cc3d49da6ec85586da5f2fc9a6295e751	cmd/kander/takeover.go
+100644 blob 2e265ceef9af02c79bc21692049ad033e242a3d0	cmd/kander/tui.go
+100644 blob c3a4c615f6d896107cfea42303e5410f9e0dde37	docs/card-transactions.md
+100644 blob 9f5d483e55cc17a92d70f50960eb6ea76b398826	docs/directory-cards.md
+100644 blob d9ae89ed26dc1d28ef8371501608d181b8e9affd	docs/kanban-write-guard.md
+100644 blob f8444b2fbbcab83adc78a2fa4d571a4d333450fa	docs/kander-tui-01.jpg
+100644 blob 0de08e0fa0d288478129cae512db564c942a58fb	docs/probe-deadlines.md
+100644 blob 806660b09a2201dbe64bd1abccc8201e23d62841	docs/review-disposition.md
+100644 blob b1d0d865cde4c4ad87fd9c66e19cdee9e919fa4b	docs/review-evidence.md
+100644 blob 12a2e41d55374c9a7e155bf91feb95b64b940619	docs/review.svg
+100644 blob 443da8d47268005a09cb550a04345f56f087bb6d	docs/workflow.svg
+100644 blob 4b20ee7ca10e22dfcf44531fbbfaeb8c53869afc	go.mod
+100644 blob fb6ca3e074b1eab0367e27e9be37bea04cfa53e4	go.sum
+100644 blob 6b2eeba9c888362a94602c2dc1ce0d8ef1a91576	internal/board/board.go
+100644 blob c99719c813f9a5bb87d0023f72728b0e869ef74f	internal/board/board_test.go
+100644 blob d4e2f99cd67f6335e9d46b49c33a8a742eef59dd	internal/board/card_language_test.go
+100644 blob c403df9a174e991d8b44e2a2728b27bfe93b6b25	internal/board/cmd.go
+100644 blob e95545ff8f5197a4fe5a150223c5f7ad2c63d648	internal/board/contract_gate_test.go
+100644 blob be540b03c8158a1ff091014d6adac756ba804424	internal/board/deps.go
+100644 blob bd471b07a05de4233e38f5b129d471ef8efd0e80	internal/board/document.go
+100644 blob acda57434c059eacea7c7f86c007788a3dc7bd3d	internal/board/guard.go
+100644 blob c2e6e12f886fdb1acc6cdb6176dbc8ef7ec5d68b	internal/board/guard_test.go
+100644 blob 2537faab16556da758d508992b45cbbc71caad9d	internal/board/journal_concurrency_test.go
+100644 blob 1a75f49eb2107392e56cabc115c4ac4f298ddfb9	internal/board/journal_temporary_unix_test.go
+100644 blob 6de479394301ad828a4e40fce42d63b986aa9d42	internal/board/journal_temporary_windows_test.go
+100644 blob f36a32298fe0d14dc37b2a9ea4ecf5a3a2019063	internal/board/legacy_schema_test.go
+100644 blob f8b1d65b0da430fa47072e1a6fe124810125b8ab	internal/board/list.go
+100644 blob f9a6cd62c14b9b808d84461d8c4ee7368fdc8112	internal/board/locate.go
+100644 blob ba147d7475daf93d1eb2670a6a8bae79ab983e0b	internal/board/locate_deleted_unix_test.go
+100644 blob 41129b566f307dc4ad5b47dc41147a8efa42e977	internal/board/migration.go
+100644 blob 6ea3a49bcde2a5d259034b216b125712be5514e0	internal/board/migration_link_scope.go
+100644 blob 35f9c38ec01a6db5a1cdb8be39252c74c89614dd	internal/board/migration_link_scope_test.go
+100644 blob 2e94555417a7eaf8bbb8c32b850f40419687f472	internal/board/migration_links.go
+100644 blob e9dbca2535d26a1347ad452b02c1264ace1f40a0	internal/board/migration_links_test.go
+100644 blob 965311c7a6b179c06d051e0409723ce038ee44b5	internal/board/migration_new_review_test.go
+100644 blob 01891674fbd630de182fdaef52034fa16bc9eb6a	internal/board/migration_plan.go
+100644 blob 92c2151b4cc0934f03e0ebdd53cce730c7a6f2e3	internal/board/migration_review_test.go
+100644 blob e7feaa0c9358e379a50c5e3186e1d70200ba837b	internal/board/migration_structure.go
+100644 blob ad3356304d25d1810aa2875c0624693e42fff39c	internal/board/migration_test.go
+100644 blob 96829b329f87eddfaac730ecbcd31941809fe7e0	internal/board/migration_windows_test.go
+100644 blob 1b58477358f31a03a27f7d42b7a400546909e4aa	internal/board/migration_write.go
+100644 blob a445963686dd664cc45ae2a171a20c01ba89f9a3	internal/board/move.go
+100644 blob 72af5544d371a368fa0a916e9627f01858b4bbd2	internal/board/payload.go
+100644 blob 12d19ae1d7f65d63b39f4d233a402784cba2e504	internal/board/payload_test.go
+100644 blob 821e6523d1825be9fc946a66cc49c8e65fec9bf5	internal/board/recovery.go
+100644 blob dd40ad3fa8bac26d4f06299b84e8cf84caf71553	internal/board/review_advance.go
+100644 blob bc0515e8dff381c22daeae1a3c75c89934e45321	internal/board/review_check.go
+100644 blob d09c258e3dda683266fc2e3ad8cd9989b54e9086	internal/board/review_closure.go
+100644 blob 1c41536b263a0aff58991a79bc2ff9e79dc59954	internal/board/review_context.go
+100644 blob 642e29e42f0936a40ddcaf79d8bf9b43aed3d008	internal/board/review_context_merge.go
+100644 blob 788afe3adc3f2a1d57854711075fbc8dc4ce2dba	internal/board/review_crash_test.go
+100644 blob 34c755e2476c9b70e41b66ad4864d68cbfa97b3a	internal/board/review_disposition.go
+100644 blob 88fa049e3412df5889c60f91c8e7a2ba9f43678e	internal/board/review_findings.go
+100644 blob 062042bf1a1aee3d202155b0981791e4c6f59b22	internal/board/review_gate.go
+100644 blob 37d4c04c487d42200987a810d2affc69bc7bc9a8	internal/board/review_gate_test.go
+100644 blob 7a702a5641b1a6982c2735112a43c6391e27b72b	internal/board/review_legacy_order_test.go
+100644 blob e2930b93f140c2e28aab7afdac8be3ac7bce9da0	internal/board/review_lineage_finalize_test.go
+100644 blob a6e9cb40ba1884ca661a083f3a1ba4a0c88bbbd5	internal/board/review_mechanical.go
+100644 blob 9fc7e77cfd09dc44e8fbfd0dc1a5fdf4f9a23834	internal/board/review_plan.go
+100644 blob 4dd5e3da570801cbccd8b105c10edafc72f8f1f9	internal/board/review_plan_extend.go
+100644 blob bcff174ccc06107b9e557cd7badbbd76d08d772d	internal/board/review_plan_read.go
+100644 blob 1bd82847b26c0ac84520953dedb6cc45030c3b70	internal/board/review_recovery_test.go
+100644 blob 8a08cfe0dba0d9f80898971f3fd107aff629d7a6	internal/board/review_revision_test.go
+100644 blob 5f4c888065c96900bbafbc778eb2b858a3020c0b	internal/board/reviews.go
+100644 blob 82bfc8181973308e6be312469b24cb2eb7190bd5	internal/board/reviews_test.go
+100644 blob d4877d3ac0feb2cc36f08dcf9a650b3746fc3651	internal/board/scan.go
+100644 blob bcdf3d81289a47d7b34757b02e9443c7f9a22136	internal/board/schema.go
+100644 blob cae64c7166642b4517576065826feec2568dbdaa	internal/board/size.go
+100644 blob 67cb1859914be1efca9a5337d18b378c636e4148	internal/board/snapshot.go
+100644 blob c9cc4701e73c2dbfbd3a3d26d2d3cc2ab3a0b4a2	internal/board/template.go
+100644 blob 56b8719784540543d8f59207b1fa7affae51f967	internal/board/templates/contract.md.tmpl
+100644 blob 38fb5c5fa9690d57509278920fa3ee1101d243e8	internal/board/templates/small_extra.md.tmpl
+100644 blob 86f4549d6fb8cc25b33baf509d63ff49541cec03	internal/board/transaction.go
+100644 blob c919d2214087e3432abde2ed4dca1231f1f95f2c	internal/board/transaction_bytes.go
+100644 blob 1c85d4a89d7aa71eaefd4bbe0ad5296cab9988b6	internal/board/transaction_lock.go
+100644 blob 138d39d81fcd4b96a27944f52e1025460e1f18a0	internal/board/transaction_log.go
+100644 blob 64f88604cbeea0f09b1a290fd8b750b3cae065dd	internal/board/transaction_test.go
+100644 blob 5836ae63b41cfa8f109a437e8233c25b429e19f7	internal/board/update.go
+100644 blob ef683652fc224d7602300b0b191264bdcf02fc5e	internal/cli/cli.go
+100644 blob 0a8feb7a54dc27ba00bed5e36c84e83a93779f6d	internal/cli/cli_test.go
+100644 blob e6784c0ff32e25881967f8617a9987350c047ef8	internal/cli/wire_board.go
+100644 blob 6219e75557c52d67c7e3312adbd854b3ad2f6d1a	internal/config/agent_language_test.go
+100644 blob 4c98038b20b3ea240de98343abb977a53e2334ee	internal/config/config.go
+100644 blob 3ab258a1e29332102770bdfe3371451752bfd28e	internal/config/config_test.go
+100644 blob f8bb773defc0f7d3885ed31b6a1c6408e37d79cc	internal/config/format.go
+100644 blob d40daab7a0a4d32dc2efa2448d41932d9b245f97	internal/config/language.go
+100644 blob 68ec17f553c0d1a10372af139eefd04898777b7a	internal/config/language_test.go
+100644 blob 7a55a0878546726821477375e523b492ab561aa2	internal/config/loadsave.go
+100644 blob fd602ba1be3b1f9f36bb8ebd1dbe8250ca94c088	internal/config/paths.go
+100644 blob 531e74fbc9d9c2e7005bb0bc344ac60439c4be51	internal/config/repair.go
+100644 blob a6feee57c77932b4168477ac3a7c1dcdeadb426a	internal/config/repair_test.go
+100644 blob 7c64fa8f13a74f3286127cda38096208491c30b4	internal/config/rules.go
+100644 blob 63859d273fa0679b3a727f6c75fd3d8a79d4b7ec	internal/config/rules_test.go
+100644 blob 7aa31d99360c4b05d436bc5473f9f7173c771cad	internal/config/unknown_fields_test.go
+100644 blob 3ba743eb245b6d013ef1b7fe75e41ddb504d3729	internal/fs/append.go
+100644 blob a9ad1c03174db187ffe58f64bb96898cc0e19d5c	internal/fs/fs.go
+100644 blob 87640d87ee5940d82d4fcb9eaeeef644551dcaab	internal/fs/fs_test.go
+100644 blob de6c5570bfe081e1969e534ea63b1fe46405f7d1	internal/fs/path.go
+100644 blob ed9332b52d252dea2f2f98489775e359c71988c2	internal/fs/posix.go
+100644 blob d4ba0ca3ad49979ee78e4722d00d837d88cdb21c	internal/fs/posix_dir.go
+100644 blob 5da84dfaed8b238c97a22e65fb46e5915b46b73b	internal/fs/posix_link.go
+100644 blob 605014a1803b5c5f90769c131cbdf83fe09b90ac	internal/fs/posix_lock.go
+100644 blob 3a945764c58e4644e2116ddd8d1ab04c2feac93f	internal/fs/posix_publish_darwin.go
+100644 blob 95299f2c57c2cb008b2e8b6e617bbe2c789eed39	internal/fs/posix_publish_linux.go
+100644 blob 4dbe5ac91425f672c70de7243458ef515e4060a5	internal/fs/posix_publish_other.go
+100644 blob 5a434591d3d862c1544c4174ab0b253628eec582	internal/fs/posix_reparse.go
+100644 blob fef9ecad6bd762800efb0ab4899615602def1631	internal/fs/posix_temp.go
+100644 blob ff0ac57dc6d058f626ab09bb4d544a8fb8824691	internal/fs/shared_lock_test.go
+100644 blob 2b271b2d9a4548bc98e568a21e559500a28cbd4a	internal/fs/umask_unix_test.go
+100644 blob 81ab4cbb838d09388d89a3498d2656414e1ed08a	internal/fs/umask_windows_test.go
+100644 blob e8f47904267536960999b7e6cb5ff80a86276719	internal/fs/windows.go
+100644 blob c44e4ed6320091ae970e5ae37dd1a6fb655f282f	internal/fs/windows_link.go
+100644 blob ff6620806affe869baa4a282a5103d4b855c2c40	internal/fs/windows_ops.go
+100644 blob 0b7b28273698c63225a2e4d2fb05c3708a62735c	internal/fs/windows_test.go
+100644 blob b5e6314668fe2b1c2c8b629c0fad19c5751c4c30	internal/i18n/README.md
+100644 blob 418e0178b453ca96b2b788ae47aae34233c46162	internal/i18n/i18n.go
+100644 blob 9903ecabfb54bd5b882c8106d856e47f21fb6eea	internal/i18n/i18n_test.go
+100644 blob f82395beb2a2a7821319656edbf9584766eb01cd	internal/i18n/locales/en.json
+100644 blob 96692b7e556d943fa3f7576e4538fa018b440ffe	internal/i18n/locales/ja.json
+100644 blob e22fb6b5ca20abe938dfe17555a560ff0bfb4466	internal/i18n/locales/zh-CN.json
+100644 blob cb381e04f6d8a768762b2f309bf8a10a8c9b7f1d	internal/install/busy_windows_test.go
+100644 blob 7fed5d7a2f79a5268d704bd83bf2feb92d3ee765	internal/install/cmd.go
+100644 blob d3242ceee81cb7bef7a50ef43e806f36d8a86e75	internal/install/detect.go
+100644 blob 966f294711395687bbb2d08b3f55e828b606cb11	internal/install/handoff.go
+100644 blob 747cd172656e4b47b5b6515dfc08de4aca69df05	internal/install/handoff_unix.go
+100644 blob 036da30fef6bf7967bac993dd46fa04a6dd4a8a0	internal/install/handoff_windows.go
+100644 blob d999f865a6e23aecf132f19b205041e141e9729b	internal/install/install_test.go
+100644 blob 24c722203aa057dc8fd7bbeab78d08076ac9b7cc	internal/install/integrate.go
+100644 blob dcc42be4f4d4760d6363c13da18f88a895c5426f	internal/install/integrate_test.go
+100644 blob 7722cccd28215720cc782617a2b7ce79c25b8b8e	internal/install/leftover.go
+100644 blob 21f788493fa66c11f4b8e641f85c1261fce90c54	internal/install/legacy_hashes.go
+100644 blob 22fd5e3c1ec00ba7edbb51d2e53c7e7c1a4e7792	internal/install/perform.go
+100644 blob b0a1e67074f27977ab6fb4efa26f5c3f72aba6d5	internal/install/rules_state.go
+100644 blob a6a4a5c67719aba7cbc2ca55d9a24e8b5841e8f0	internal/install/testdata/hold.go
+100644 blob b4e86658f7775280424532b920f0223b0c590101	internal/install/testdata/legacy-KANDER-BASE-RULES.md
+100644 blob 46796ecb0f8ed09f3914c7e727f448641ffc323b	internal/install/wizard.go
+100644 blob be92bd7ae746652eb55fc21836755f15e4681bf5	internal/launch/agent.go
+100644 blob 777242078bd8e99f4b61dcb7e8b11502c83c98a0	internal/launch/cmd.go
+100644 blob 5fbcf8e4cf288482b5d989fca7fa1e559378f43b	internal/launch/commands.go
+100644 blob 6f83a885376d092cdf28544cf077c27f6c31fc88	internal/launch/error.go
+100644 blob 42acc7bdc614643457f564285d8e9ead51eab906	internal/launch/exec.go
+100644 blob d819a144d6ced07dc7f5dca10f5586be88d88f93	internal/launch/exec_other.go
+100644 blob fa1d375438050ed463d595f8f77bc1a10b4d61c7	internal/launch/exec_windows.go
+100644 blob 6df7d6e3a6c020422d8b841854db62e6f2e3b2cf	internal/launch/exec_windows_test.go
+100644 blob d5e87741197738c749c87637b4f29e0da8072ad0	internal/launch/herdr.go
+100644 blob 00a6e035870cee81e523a004d4c12d32eed9f2fa	internal/launch/herdr_pane_command_test.go
+100644 blob 1012377890c0c65f3b7ce539e1e08934d7f5d782	internal/launch/launch_contract_test.go
+100644 blob bdcdf4d92936993bdd9441f9ab9cf2a23d2c2f41	internal/launch/launch_test.go
+100644 blob bc3e2c461c865a0135f815c3261cc9ff1b5f8afb	internal/launch/metadata.go
+100644 blob 8549004755f47bb81e206e2cf459a739f36af85c	internal/launch/metadata_test.go
+100644 blob d16ccb38a13f89404d8d39d07758fefe20ed262b	internal/launch/notify_resume.go
+100644 blob 4203bedbc2df423cc70222ed917be99e0f8be5dc	internal/launch/prompts.go
+100644 blob 59bf7a16a115ff30eb111eb24ea53adb385953ee	internal/launch/prompts_test.go
+100644 blob 764cbadef9f3a09d3ca2d31762ea0e96ffc7cf2d	internal/launch/rollback_test.go
+100644 blob 86edb8414012d9957eb0bad31fa1f9f4885cdd98	internal/launch/rules_test.go
+100644 blob 6e12d98385ec8b72ef67852e9db28c499d5b26a2	internal/launch/session.go
+100644 blob 3706918ff67b91e010766b285bd714310d412969	internal/launch/tmux.go
+100644 blob 73e3cb6c11f9702a23914bc602ff658fc17c4a3b	internal/launch/types.go
+100644 blob f5c4cb49f73508a0105d5539699f469d5f252e2e	internal/liveness/batch.go
+100644 blob 7d172b636b6fef5f513f797db60fda1f62304e7d	internal/liveness/batch_test.go
+100644 blob 4e2a644b52638d7b98e34926369dd2dc4efc4478	internal/liveness/bind.go
+100644 blob 80af49c61da6086ee7576d69391170fa26eadc97	internal/liveness/check.go
+100644 blob 04a46ca468ace75de516cccaa872cb3050e0bef8	internal/liveness/classify.go
+100644 blob f83382fe7001d9a23f98f8b6890bba12345bb0a7	internal/liveness/deadline_test.go
+100644 blob 25a7bd23b4b0ed86aab4e1b08f75b358369d47c5	internal/liveness/liveness_test.go
+100644 blob 5d67ff917282fc5fc09406ce786413690259de0c	internal/liveness/lookup.go
+100644 blob f4d592ef21828abd964e7a75d6299d16b13aa32e	internal/liveness/lookup_test.go
+100644 blob 25d14689925039da93974c1317e8b691622a1df1	internal/liveness/observation.go
+100644 blob 388eabd55da171bd3363ea9919abc871b88bb44e	internal/liveness/subscribe.go
+100644 blob 1b067b5ce79da3778da799aaf479d892f4430c94	internal/liveness/subscribe_clock_test.go
+100644 blob 08c1aa69068a934c63380213c1f62a059e47f78b	internal/liveness/subscribe_members_test.go
+100644 blob 32e3398d117edeeebaec4b090dde3808274c52af	internal/liveness/types.go
+100644 blob 6aa52bb0aedca8f7b3e898196ca85c97b921f81c	internal/menu/agent_language_test.go
+100644 blob bdfbbeb7cfbfd45ddeac00deab8412da1dff7dac	internal/menu/agents.go
+100644 blob f8cbe43c5a157906eb309fae300586ae249630df	internal/menu/agents_path_test.go
+100644 blob b2bcb51cc499a9215cf9dd5a4756d1b597c25c51	internal/menu/color.go
+100644 blob afc03865e92ad4dcead92fa6d89e61b3149408b7	internal/menu/commands.go
+100644 blob 4523b1caf5c826211476d7608279164350a7026d	internal/menu/doctor.go
+100644 blob 54cc2913212aacb6fe83f8d46053bc98ad7552f3	internal/menu/doctor_config_test.go
+100644 blob 47b5b9bcac7749e7698c3c3795176d28a0d64240	internal/menu/doctor_extra_test.go
+100644 blob afdd6811ac7a2cf7d9ceeb83464f413f91b43325	internal/menu/doctor_repair.go
+100644 blob 42c3e31a2a9e65350745db2f9a051be04e851c43	internal/menu/doctor_repair_test.go
+100644 blob 43628dc817d790401f674f727b231dc0c07f35bf	internal/menu/doctor_session.go
+100644 blob 0b2d456aa2296b3f2cf31ad466ccc7e6d86ffda3	internal/menu/launcher_windows_menu_test.go
+100644 blob b106a9075d912864cf643bf9a55b1a42665a45e6	internal/menu/menu_harness_test.go
+100644 blob 7ad0ff8d582545a9231f550f273c2e48043be592	internal/menu/options.go
+100644 blob eb22d6384ebf6e73f305429095cb408e5725d927	internal/menu/options_helpers.go
+100644 blob 102994353382c65fe66386a468a4b54c633e9081	internal/menu/os.go
+100644 blob 23a54a21ab8116f221844909bbc2c1de45269baf	internal/menu/report.go
+100644 blob daf6a188dd35973e44f520e29bd2620cb9b27521	internal/menu/restore_other.go
+100644 blob 99460505b208bf8c6d7fff8c40848c6a37378739	internal/menu/rule_options.go
+100644 blob 57f2b2e95022ce5b591f7b6a5b4df7c18696318d	internal/menu/rule_options_test.go
+100644 blob 4c2acbb39e658984114e87dbfc4acb6ad84761ca	internal/menu/rules.go
+100644 blob 1aa7d2685b3a0b79a9c424f45a876ba6f99a4aaa	internal/menu/rules_test.go
+100644 blob aefcb884f3f76849f214caa15cebbbd4372aaeb0	internal/menu/select.go
+100644 blob 89b682787314399e3207c4d8925eb14e2989cf93	internal/menu/select_unix.go
+100644 blob fa66b5af2a3cc111d46bb02b1022ec35fd54b1d7	internal/menu/select_windows.go
+100644 blob 5cb00bf58706c3c1ed95a4c64109a40da90aa306	internal/menu/terminal_tools.go
+100644 blob 6f70061150ca1f964ef5c63e90837b67047bf052	internal/menu/terminal_tools_test.go
+100644 blob 1dd76274fc32ba89c3b7bb4a87ca795df330248f	internal/menu/terminal_tools_windows_test.go
+100644 blob 323be4555ea1a143e4b9c4f0afa30518f395feac	internal/menu/termios_bsd.go
+100644 blob e139b12e72311f52a2c5e7a5748fedc9882c8e22	internal/menu/termios_linux.go
+100644 blob debf1b7ca50f72b56dde7a8a931d17a6dff3a25a	internal/menu/tty.go
+100644 blob b36b27a98289de63f440254b06f570873bbb6458	internal/menu/tty_unix.go
+100644 blob d3336a5b0ebd3c44ff8bf7d29e66875a4cea77b4	internal/menu/tty_windows.go
+100644 blob 59ae63f98eedfbddaef3b0b6a4d05875032e8968	internal/menu/uid_unix.go
+100644 blob 382f219e0a86a4ea793d783da1092405fb80c9ad	internal/menu/uid_windows.go
+100644 blob 9a051b56cf924abb2aaa2793136fef0b1b011d8e	internal/notify/cmd.go
+100644 blob ddff768e711558df3af3ea17cb295c0e84090a16	internal/notify/command.go
+100644 blob 6b341553e969d444135826c8c40b1cc30f3e60ea	internal/notify/deliver.go
+100644 blob 212863fb0ee670d25186aa08667fdacd7536db2a	internal/notify/error.go
+100644 blob 67648138b2e757c8e0939dbde8749aeeed8315a6	internal/notify/notify_test.go
+100644 blob 6ac5509f3ab5ae15285b8d972531095edea36bcf	internal/notify/payload.go
+100644 blob f489d7203b4d8d8741237ce3ccb61c852d843d61	internal/notify/probe.go
+100644 blob d222954be79bd6adb3fc1ac7aa9733d8214de06d	internal/notify/resolve.go
+100644 blob 990ead193c997c8f760a240434d4f69f31f417d5	internal/notify/rules_test.go
+100644 blob 9c70e58b42e1ee69ea067b57d6a5be36f7776807	internal/notify/temp_unix.go
+100644 blob 1cdca9a66a559d798535cc402b38cc54a0b06cc6	internal/notify/temp_windows.go
+100644 blob ce71600b75a24670b06d8293c5caf68994c2d1bc	internal/notify/windows_direct_test.go
+100644 blob 090de15335050f2063ea1872f277f81e93dbb325	internal/probe/error.go
+100644 blob 7351622a31841afd8e6101cc8521867e8cc9a599	internal/probe/herdr.go
+100644 blob 454ed8c9e5116699a7cdee98dfacafad209dfd26	internal/probe/probe_test.go
+100644 blob b8e232035206810b6967daf4476d3767ea3b2e2a	internal/probe/run.go
+100644 blob 88f5c4de70cb8433815a550677438cc6a7b9c6cf	internal/probe/run_posix.go
+100644 blob 89b4c9cccae7253ae20a3af205b3cf64a562948f	internal/probe/run_posix_test.go
+100644 blob 2deb38f9483a41fb0fee6669793d8f2271ecbe15	internal/probe/run_test.go
+100644 blob 243ce25b09f3fb86408ed6a9b55cd17dbaba8cb1	internal/probe/run_windows.go
+100644 blob bf5c1c03a907ae71c2c87e8cfbfc4d557a81fa82	internal/probe/run_windows_test.go
+100644 blob d364a4c0d33411afbd500bee7571eaf357b3199d	internal/probe/tmux.go
+100644 blob 9be2a4dcc86e02c4319394e9e115227386a283a2	internal/process/process.go
+100644 blob 733bc0cd6fffd243ec893b9b195f4035c2338e43	internal/process/process_test.go
+100644 blob a6e25639302abf10e4e3494f8886a4c86497d84d	internal/review/access_unix.go
+100644 blob 43400543663b6da6b3817cfa618a6ff2878fa54f	internal/review/access_windows.go
+100644 blob be262ea587113ea09d89d79a7a3f9c72c1ecdc25	internal/review/archive.go
+100644 blob a37a0d20b9951bed591058c5d695aad66600bd13	internal/review/archive_test.go
+100644 blob 180bbaeff626cf4cf41d1f62076c104bd6c5a2f9	internal/review/args.go
+100644 blob 25b9d23646ac4f60381dc7c7a3a4542ace2fd10d	internal/review/bind.go
+100644 blob 4db9ed2784224d43c3f2e58d322efb1ad6e2089b	internal/review/claude_test.go
+100644 blob 368f1c973e44028d45e3b266c1b5e0c35f470f4f	internal/review/codex_test.go
+100644 blob 06a4e5700aadd9d7370978e7614145ef2a8a7262	internal/review/cursor_test.go
+100644 blob a870e1459a5d263f7cf4a3a54825c831a36118cd	internal/review/disposition.go
+100644 blob d4fcfb5e209cb827f1cd7d5aa0710236c561141d	internal/review/disposition_cycle_test.go
+100644 blob e08ce37a0966bd7a1a9e2b8636b40e86396bd03d	internal/review/disposition_regression_test.go
+100644 blob 48c358996102e94e5c4d60456d55a65108c69e97	internal/review/disposition_test.go
+100644 blob 5a288e6df1d799ff04d8af9ce909383e3057abfc	internal/review/execute.go
+100644 blob 7ea359d14da59087881b596991c4e8c911307846	internal/review/git.go
+100644 blob 5a6c813bca260efdd9e7d1ced17e642e4e6a6f08	internal/review/grok_test.go
+100644 blob c7011a199bbd2876e1157356e94b2c38cec0457c	internal/review/harness_test.go
+100644 blob 0f68a5db71ea8760d78223f03dbb60cc79ed9606	internal/review/helpers_test.go
+100644 blob b7ee856ac4b831f905f265dd07c718d025efe354	internal/review/launch_unix.go
+100644 blob def6aacc05623eaf5ee172d4c61adcfaf4132c76	internal/review/launch_windows.go
+100644 blob 561c865964c5f2973fbc8a64fde0940aee7c18ea	internal/review/lineage_recovery_test.go
+100644 blob 9fb72f1d3d2445ca062a3b7c640d13120c713f20	internal/review/mechanical.go
+100644 blob 52dec9505f8f4674b3185bd93fc040fa050a3d6d	internal/review/monitor_unix.go
+100644 blob 826ced6c07d3cf68a50e6d44905a3320b5b7e145	internal/review/monitor_windows.go
+100644 blob c7966edc7a718ecdb96c408007dd0f2bb764fadf	internal/review/platform_unix.go
+100644 blob d17d17631d739b031f7aa6dd064d9238c2818cfd	internal/review/platform_windows.go
+100644 blob 9b392b943c04ddd5067daed5e1f9589b7ca1edf1	internal/review/report_language_test.go
+100644 blob 084d6ab3d045dddd8b224225243897908c4d0a46	internal/review/review.go
+100644 blob e3108339997c52154dee970352127ddf16da22cc	internal/review/roles.go
+100644 blob 7e55e61f276508dd897e93b3e27947f7df79172c	internal/review/settings.go
+100644 blob 6d8d7418fdd08849765e506fe7a8a20b84634373	internal/review/tree.go
+100644 blob 1b0a3d232081c2c48def96c6625e26000015bbc2	internal/review/validate.go
+100644 blob c4bb73c49ce97b005cc880c49ba86e5480dd68b8	internal/review/windows_review_test.go
+100644 blob 19f6f1ad6cbd6087196c8ed171d97f3cb2156e3a	internal/takeover/cleanup.go
+100644 blob 1c65123411fcaf098a3c16b3cc840b2bf1e38d01	internal/takeover/cmd.go
+100644 blob 0259c19f69dba5bfac9362c8449224bb007ef830	internal/takeover/dismiss.go
+100644 blob 1780ba4675cda16cbfe8cfa6f089ccdc99ea6542	internal/takeover/ops.go
+100644 blob ca1c85e55f36d013064d0ac6bdab2e00760f9033	internal/takeover/takeover_test.go
+100644 blob e235b0c44490bbc8e8369979511339f9bf6f024a	internal/takeover/wait.go
+100644 blob ddef07f8ed6cb606fcc9ff7739b50398427f8f9e	internal/takeover/windows_container_test.go
+100644 blob 9728bac42ab12c9975daa0dd6a597d1549defbd7	internal/tui/app.go
+100644 blob f055337751e65c3fe0bfe39e5e4ac8c72757d579	internal/tui/board_view.go
+100644 blob 2f91c9b13be821143eb359e9bac2ddc3345f6579	internal/tui/clipboard.go
+100644 blob aba2e48eacf680086754ec6c46636834d13e8256	internal/tui/cmd.go
+100644 blob 64a5795abc574a8ced01bb6b07e5d2192415f594	internal/tui/cmd_test.go
+100644 blob 31cf1a3ffd5c724801a79db03b768d6efe15b400	internal/tui/context.go
+100644 blob d4626db4f59cd48032fe6cc8cc8da8129a0fe458	internal/tui/detail_view.go
+100644 blob 574e85eaf3d60306afe031c6faec28b62fe84e5e	internal/tui/help_view.go
+100644 blob 0e0f1875044f0dbdafc32d4aac49c0c0e14db73d	internal/tui/layout.go
+100644 blob fc6568611684d27b9a107254ba4bbaeeac124990	internal/tui/model.go
+100644 blob 58d9d6420769bbca87280366bee4ce9218fb58d0	internal/tui/mouse.go
+100644 blob c3079f3be289fb5205caf48f21eacb0de6e4439b	internal/tui/options_doctor.go
+100644 blob 4dbd590131eb0c6d0b668c209c4f113c479475b8	internal/tui/options_doctor_test.go
+100644 blob fdaa8091c11a67afa4416be15fe8e3fd7d972b31	internal/tui/options_form.go
+100644 blob cde0a85361591b9cc889ad847335ec1faa27d838	internal/tui/options_panel.go
+100644 blob e74b8e437e29f9e51572aad935e5f617cea7c166	internal/tui/options_rules.go
+100644 blob 693d6b6ce3c18cdff021fab8c6ea973b2a73224d	internal/tui/options_rules_test.go
+100644 blob 5403b3f67f0b0b06cbfed644118b251f6b31116f	internal/tui/options_test.go
+100644 blob 52b0784d3397b5127f7af7aaa064f7b1bbad2ae3	internal/tui/options_view.go
+100644 blob c2650798613b7ae10201fe66802724c943ebc6da	internal/tui/overlay.go
+100644 blob 9b99be50175a3c773daa54fe168bb2e164ff7b14	internal/tui/payload.go
+100644 blob e547cbf43d46b25d525c0c3426b4850e3e042639	internal/tui/prefs.go
+100644 blob 035b5647576e6c2ddffcb65ead1ca86f903f1fbe	internal/tui/program.go
+100644 blob feece68475e007aba48977210fa3993533a6d128	internal/tui/pty_test.go
+100644 blob 78edfc31333fbb96b4c761ac51b4442fe6edfa1e	internal/tui/selection.go
+100644 blob becce353d9565db6dbcbf5fa38351a979098faca	internal/tui/status.go
+100644 blob ef5b58d1e40fd6c6fa148557ff735419729da265	internal/tui/text.go
+100644 blob e1cf2e7586ffbf282d3c7d0fffa2217fd7a7f613	internal/tui/theme.go
+100644 blob 18bbcf26467dc533aebde9b60e231613245c2527	internal/tui/tui_test.go
+100644 blob b1452bed5782565ed44fbec0a2e337cf3e0fcffb	internal/tui/types.go
+100644 blob 49d83696cb7d3263084c6884fb0d41a1256b8462	internal/version/version.go
+100644 blob 94f343dcf7105c7d609a5a4e9257e4120956616a	internal/version/version_test.go
+100644 blob 2100e20e3dd461bedad832085c6db0d82ad0ac40	internal/window/window.go
+100644 blob 303bfab29226bc62fff6fc2d8f0ddbebda293cdf	internal/window/window_test.go
+100644 blob 12eb667eda1f0652129a362dc03b12811b901d67	make-windows.cmd
+100644 blob 84c57042f0af8e002a1d6ce859245b2da69aee63	rules/KANDER-AGENTS.md
+100644 blob 46e8832996b535527d13eabda5dbc78309c4ac77	rules/KANDER-BASE-RULES.md
+100644 blob 644850e3707646e14c8e40d021e6db051f8cf69c	rules/KANDER-CODE-RULES.md
+100644 blob ee9fa7e70924e8166cae7202fb1baee822aa9e6f	rules/KANDER-COLLABORATION-RULES.md
+100644 blob 194248bebe3f742b33ab0648a1f29ba06d16e795	rules/KANDER-GIT-RULES.md
+100644 blob a4c2d0435137fa90962ce3b018955f1dd2a335c6	rules/KANDER-KANBAN-RULES.md
+100644 blob ffbe65b9922dec8a19c1fee16eb2cddfc1da872a	rules/KANDER-REPORTING-RULES.md
+100644 blob b4c85e6e7cf6912946d24bc5477c46644f3ad8d7	rules/KANDER-REVIEW-RULES.md
+100644 blob 00a0242552ade40152621b5fc0a30cd0c519b81f	rules/KANDER-TASK-GROUP-RULES.md
+100644 blob dc75c77397378c9e5f7f62aca4319ad697094121	rules/KANDER-TASK-INTAKE-RULES.md
+100644 blob 4650fb65647980cf787833a7c98ed2718cac2b48	rules/embed.go
+100644 blob c930439258d499a6a547e11b622e91261e5787b9	rules/embed_test.go
+100755 blob c7e77a84400af22bdf0f03cda5c1a96552a7435e	scripts/guard-kanban-write.sh

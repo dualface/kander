@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "board-focus-pm-first",
+  "batch_id": "board-focus-batch",
+  "task_ids": [
+    "20260908-board-focus-agent-window-task"
+  ],
+  "role": "PM",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "cwd": "/home/dualf/works/kander/worktrees/board-focus-agent-window",
+  "base": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+  "commit": "78c8137fba6d8a6244c2f0eb6ce84a5ccf548851",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "3be6b0902a9df4491909e8b3443b45ad76acbabe809799f820d2287e43275d08",
+    "task-context.md": "771718e97ed730e696d45d1a5aa98ed780b08c0f385334b3f8f6a8e6925b3cd5"
+  },
+  "kander_version": "20260907T173303Z-7e6fe2073ff0",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-08T03:06:55.617748703Z",
+  "finished_at": "2026-09-08T03:09:03.462774139Z",
+  "duration_ms": 127845,
+  "hashes": {
+    "error.log": "0effdb8a544575b77fc08bc7814d57313fcef7bbe6f0523efa1b8b2a7d6dfa2c",
+    "evidence.txt": "e07018f5e0ae9bc69f7222d7baeea5e43f0e83a58805a13788e29d5b4c310e4b",
+    "output.raw": "ee6b2aa98e97997950e2c194aa1a411fb8d76d93486c76bc37e7baf6ae801768",
+    "prompt.txt": "784a281affa6d51d48b8a16fe67d30dae8c8cf2ad66bf0dfc5a8b5d6b4a55fff",
+    "report.md": "ee6b2aa98e97997950e2c194aa1a411fb8d76d93486c76bc37e7baf6ae801768",
+    "review-context.md": "3be6b0902a9df4491909e8b3443b45ad76acbabe809799f820d2287e43275d08",
+    "stdout.log": "b1f70abc948ae456207e50be42852b998058772769b7d5abb39bbe1b88ee90c5",
+    "task-context.md": "771718e97ed730e696d45d1a5aa98ed780b08c0f385334b3f8f6a8e6925b3cd5"
+  },
+  "published": null
+}

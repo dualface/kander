@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 35,
+  "record_id": "pm-004-fix",
+  "run_id": "tui-project-options-pm-4",
+  "finding_id": "PM-004",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:02:04.758218906Z",
+  "report_hash": "3e54b4814dde7be80ee7cfd4fe4ee9fc5859b97af7018eafbd85d6d4d1e37105",
+  "original": "Inferred，高置信度。违反 task-spec.md ACCEPTANCE_CRITERIA 第6条的清晰、一致关闭交互。全局安装显示过 tab 后进入未保存关闭确认，tab 被隐藏但命中区域仍保留。点击确认框首行对应另一 tab 的横向位置会切换作用域、打开根菜单，却保留 confirming=true；随后按 Enter 会执行旧 closeChoice，默认触发保存，而非打开所见菜单项。最小修复：确认期间拒绝 tab 鼠标切换，并在 tab 不显示时清空命中区域。",
+  "status": "fixed",
+  "basis": "confirming clears tabHits and handleTabMouse ignores confirm; TestCloseConfirmClearsTabHits pass.",
+  "fix_commit": "60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb",
+  "verification": "Read the cited paths on 60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit. Targeted tests named in basis pass."
+}

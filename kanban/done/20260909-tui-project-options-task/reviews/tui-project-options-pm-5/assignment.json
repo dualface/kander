@@ -1,0 +1,21 @@
+{
+  "run_id": "tui-project-options-pm-5",
+  "batch_id": "tui-project-options-batch",
+  "author": "grok",
+  "basis": "assigned by this card's modification scope",
+  "items": {
+    "PM-001": [
+      "20260909-tui-project-options-task"
+    ],
+    "PM-003": [
+      "20260909-tui-project-options-task"
+    ],
+    "PM-006": [
+      "20260909-tui-project-options-task"
+    ]
+  },
+  "owners": {
+    "20260909-tui-project-options-task": "grok"
+  },
+  "recorded_at": "2026-09-09T08:14:42.681333556Z"
+}

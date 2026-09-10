@@ -1,0 +1,674 @@
+{
+  "schema": 1,
+  "batch": {
+    "plan_id": "g3-bindings-recovery",
+    "task_context_hash": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace",
+    "schema": 1,
+    "batch_id": "g3-batch-one",
+    "task_ids": [
+      "20260907-subscription-dispatch-facts-task",
+      "20260908-coordinator-recovery-task",
+      "20260908-dispatch-evidence-binding-task"
+    ],
+    "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+    "target_commit": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+    "report_language": "zh-CN",
+    "requirements": {
+      "CSA": "N/A: 本仓库 AGENTS.md 第 7 条，第二阶段安全角色一律 N/A",
+      "Hacker": "N/A: 本仓库 AGENTS.md 第 7 条，第二阶段安全角色一律 N/A",
+      "PM": "required",
+      "QA": "required"
+    },
+    "advances": [
+      {
+        "previous_target": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+        "target": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "reason": "g3-batch-one 第 1 轮 6 个来源 finding（3 个根因）的作者修复交付已依次 ff 接收到组分支，推进批次目标以便 PM/QA 增量复审",
+        "deliveries": {
+          "287161673bf3f11a865f2e8a40a023a65bdc1f65": "20260908-dispatch-evidence-binding-task",
+          "4a55248377c8fa35edddd862acee3473d877b2e5": "20260908-coordinator-recovery-task",
+          "5845e6fd0f2b503313030349fa211a7791a50169": "20260908-coordinator-recovery-task"
+        }
+      },
+      {
+        "previous_target": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "target": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+        "reason": "g3-batch-one 第 2 轮 QA-04 的作者修复交付已 ff 接收到组分支，推进批次目标以便 QA 增量复审",
+        "deliveries": {
+          "26edb64fcfb654a96afedc30bbaea27e5e918ec7": "20260908-coordinator-recovery-task"
+        }
+      }
+    ],
+    "revision": 3
+  },
+  "runs": [
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-pm-r1",
+        "batch_id": "g3-batch-one",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "PM",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "c50ab6c799b2dd85089c43824aaf9440cfb6341151648b496465613f138f99e5",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-07T21:42:28.688508327Z",
+        "finished_at": "2026-09-07T21:47:27.58729152Z",
+        "duration_ms": 298898,
+        "hashes": {
+          "error.log": "19a31708346de544eb1f236e00f8415843f08d919e444c1ee37ff1905ca8f598",
+          "evidence.txt": "e89b872a71d8f2975c93642490a3924c6a2f9833be3ae64be1234bba5ffad581",
+          "output.raw": "17caf97692b9cd02007b1999905a5e2f4f5f678a18b00a5b7d8e0539c331e44c",
+          "prompt.txt": "6592780d51fbd3f0cb1ab732b944710d364b55cf3cf237d185f4941f160dc56c",
+          "report.md": "17caf97692b9cd02007b1999905a5e2f4f5f678a18b00a5b7d8e0539c331e44c",
+          "review-context.md": "c50ab6c799b2dd85089c43824aaf9440cfb6341151648b496465613f138f99e5",
+          "stdout.log": "9367f6726d2b8e9e4bb4736e015bff1ebf76e8f950bdf4e81b781c4707168d43",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "PM-01",
+            "tier": "high",
+            "text": "Inferred，置信度高。已完成 fix 所属批次闭合后、尚未创建 wrap-up 时，编排重启或重复 reconcile 会因 batch already closed 拒绝有效历史交付，违反 completed 与闭批原件恢复契约。最小修复：历史 completed 路径使用允许合法闭批的只读原件校验，保留身份、轮次、完整发布及作者原件检查；发送路径继续拒绝闭批。",
+            "evidence": "internal/board/coordinator_reconcile.go:86-90 对 completed fix 调用历史校验；internal/board/dispatch_evidence.go:106-108 仍无条件调用 reviewRunForMutation；internal/board/review_disposition.go:107-110 在存在 closure 时返回 batch already closed。historical 标志只绕过当前 target 和后继轮限制，未绕过该写入门禁。契约：coordinator-recovery ACCEPTANCE_CRITERIA 第4、6、7项。"
+          },
+          {
+            "id": "PM-02",
+            "tier": "high",
+            "text": "Inferred，置信度高。完整成员 claim 包含尚未启动的 todo 卡时，保存空 STARTED_AT 对应的 cycle；后续正常 start 改变 cycle，整组 reconcile 永久冲突。重新 claim 保留旧成员，没有受控推进入口，阻断按依赖顺序启动成员后的阶段恢复。最小修复：通过 CAS 支持未启动成员首次建立执行周期，验证持久启动事实并保留历史，继续拒绝未经授权的既有周期替换。",
+            "evidence": "internal/board/coordinator.go:220-228 首次保存 cycle，重新 claim 跳过已有成员；:293-295 要求完整成员；internal/board/coordinator_reconcile.go:15-18 拒绝所有 cycle 变化；internal/board/review_plan.go:52-53 以 task ID 和 STARTED_AT 计算 cycle；internal/launch/metadata.go:46-57 正常 start 填入 STARTED_AT。rules/KANDER-TASK-GROUP-RULES.md:186,203 同时要求顺序启动新就绪成员及完整成员 claim。契约：coordinator-recovery GOAL、ACCEPTANCE_CRITERIA 第2、4、6项。"
+          },
+          {
+            "id": "PM-03",
+            "tier": "medium",
+            "text": "Observed，置信度高。订阅中文文档和英文协议把摘要 confirm_by 描述为原意图期限，但 wrap-up-only 新 epoch 实际使用专用 grant 的新接受期限。消费者依文档比对 intent 与 snapshot 会误判合法恢复为续期。最小修复：统一描述当前 epoch 的实际接受期限，明确普通 intent 与专用 grant 的来源，以及同 epoch 重试不续期。",
+            "evidence": "docs/subscription-facts.md:43-46,55 和 rules/KANDER-KANBAN-RULES.md:312,314 声称使用原确认期限；internal/board/dispatch_snapshot.go:61 调用 dispatchAcceptBefore，internal/board/dispatch_wrapup.go:85-89 在专用授权存在时返回 WrapUpAuthority.ConfirmBy。docs/durable-dispatch.md:97 已正确说明此行为。契约要求中文文档、英文发布协议与实现一致。",
+            "mechanical": "documentation"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "g3-pm-r1",
+        "batch_id": "g3-batch-one",
+        "author": "coordinator",
+        "basis": "按各卡本轮实际改动归属。PM-01（闭批后历史 fix 对账被 reviewRunForMutation 拒绝）与 PM-02（todo 成员首次 start 后 planCycle 变化导致 reconcile 永久拒绝）的行为均由 0b304a8399cdbc8db2c005e390afd3f6127532af 新增的 coordinator 检查点与 historical 对账路径引入，归 20260908-coordinator-recovery-task；PM-01 的最小修复虽落在 dispatch_evidence.go，但该 historical 分支及其调用点由本轮 coordinator 卡新增，dispatch-evidence-binding 在自身交付 6f5ed32 时不存在该缺陷。PM-03 的文档与实现不符由 71a6571（属 20260908-dispatch-evidence-binding-task 交付）改变 confirm_by 语义而未同步订阅文档引入，归该卡。",
+        "items": {
+          "PM-01": [
+            "20260908-coordinator-recovery-task"
+          ],
+          "PM-02": [
+            "20260908-coordinator-recovery-task"
+          ],
+          "PM-03": [
+            "20260908-dispatch-evidence-binding-task"
+          ]
+        },
+        "owners": {
+          "20260908-coordinator-recovery-task": "codex",
+          "20260908-dispatch-evidence-binding-task": "codex"
+        },
+        "recorded_at": "2026-09-07T21:49:02.386275308Z"
+      },
+      "records": [
+        {
+          "submitted_revision": 18,
+          "record_id": "binding-r1-pm-03",
+          "run_id": "g3-pm-r1",
+          "finding_id": "PM-03",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-dispatch-evidence-binding-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T21:58:13.349500816Z",
+          "report_hash": "17caf97692b9cd02007b1999905a5e2f4f5f678a18b00a5b7d8e0539c331e44c",
+          "original": "Observed，置信度高。订阅中文文档和英文协议把摘要 confirm_by 描述为原意图期限，但 wrap-up-only 新 epoch 实际使用专用 grant 的新接受期限。消费者依文档比对 intent 与 snapshot 会误判合法恢复为续期。最小修复：统一描述当前 epoch 的实际接受期限，明确普通 intent 与专用 grant 的来源，以及同 epoch 重试不续期。",
+          "status": "fixed",
+          "basis": "合并根因 PM-03/QA-03，来源 (g3-pm-r1, PM-03) 与 (g3-qa-r1, QA-03)，分别保留原件绑定；独立核实后 confirmed，现 fixed。git show 0b304a8399cdbc8db2c005e390afd3f6127532af:\u003cpath\u003e 全部退出 0：internal/board/dispatch_snapshot.go:59-62 保留 Input.CreatedAt 并调用 dispatchAcceptBefore；internal/board/dispatch_wrapup.go:85-89 优先取 WrapUpAuthority.ConfirmBy；internal/liveness/subscribe_dispatch.go:22-38 按摘要期限计算 overdue/唤醒。该目标 docs/subscription-facts.md:43-46,55-56 及 rules/KANDER-KANBAN-RULES.md:312,314 却称原期限，原意图过期后授予新 epoch 即触发误导。修复统一当前 epoch 有效接受期限、普通意图/专用 grant 来源、created_at/age_seconds 来源与同 epoch 重试/订阅重启不续期。仅文档对齐既有行为，属 documentation；完整核实输出见 review-fix-r1-validation.txt。",
+          "fix_commit": "287161673bf3f11a865f2e8a40a023a65bdc1f65",
+          "mechanical": "documentation",
+          "verification": "最终提交 287161673bf3f11a865f2e8a40a023a65bdc1f65：go build ./...、go vet ./... 均退出 0；go test -json -count=1 ./...：19 包、1001 测试项通过，1 项跳过（TestWindowsConsoleLauncher）；go test -race -json -count=1 ./internal/board ./internal/liveness：2 包、491 测试项通过，0 项跳过；测试统计含子用例，两条测试命令均退出 0。TestDispatchWrapUpSnapshotUsesCurrentGrantDeadline 通过，覆盖原意图已过期、新 grant 期限仍有效且原期限不变。逐句对照 snapshotDispatch、dispatchAcceptBefore、summarizeDispatch、dispatchWait 和 docs/durable-dispatch.md:97；本轮仅 docs/subscription-facts.md 与 rules/KANDER-KANBAN-RULES.md，8 行增加、6 行删除。"
+        },
+        {
+          "submitted_revision": 29,
+          "record_id": "cr-r1-pm-01-fixed",
+          "run_id": "g3-pm-r1",
+          "finding_id": "PM-01",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-coordinator-recovery-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T22:07:22.826715673Z",
+          "report_hash": "17caf97692b9cd02007b1999905a5e2f4f5f678a18b00a5b7d8e0539c331e44c",
+          "original": "Inferred，置信度高。已完成 fix 所属批次闭合后、尚未创建 wrap-up 时，编排重启或重复 reconcile 会因 batch already closed 拒绝有效历史交付，违反 completed 与闭批原件恢复契约。最小修复：历史 completed 路径使用允许合法闭批的只读原件校验，保留身份、轮次、完整发布及作者原件检查；发送路径继续拒绝闭批。",
+          "status": "fixed",
+          "basis": "根因 CR-02，合并 g3-pm-r1/PM-01 与 g3-qa-r1/QA-02，两份绑定记录共同引用同一修复，不重复计数。独立核对被审提交 0b304a8399cdbc8db2c005e390afd3f6127532af 的 completed fix 历史路径，仍经 reviewRunForMutation 的闭批写入门禁。TestCoordinatorCompletedFixSurvivesClosedBatchRestart 在完成 fix、PM 增量复审及 QA、闭批生产者后实跑四个子用例均输出 closed batch blocked historical completion / batch already closed，确认缺陷。修复将成功 run 的只读原件校验提取复用，保持完整发布、身份、lineage、assignment 和作者校验；创建/发送与作者修改仍使用闭批拒绝门禁。",
+          "fix_commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+          "verification": "最终提交 5845e6fd0f2b503313030349fa211a7791a50169（包含 fix_commit；rebase 后重新实跑）：go test -json -count=1 ./... 退出0，19包1016 PASS/1 SKIP（顶层635 PASS/1 SKIP）；go test -race -json -count=1 ./internal/fs ./internal/board ./internal/launch ./internal/review ./internal/cli ./internal/liveness ./internal/notify ./internal/window 退出0，8包752 PASS/1 SKIP（顶层414 PASS/1 SKIP）；go build ./...、go vet ./...、gofmt 和 git diff --check 均通过。五个新增回归在全量与 race 中 PASS，覆盖本根因、重复/重启及拒绝路径；细节与原始输出见本卡 verification/r1/summary.json、all.jsonl、race.jsonl、checks.json。原生Windows和真实tmux/herdr/Agent未执行；假终端和交叉构建不算实机验证。"
+        },
+        {
+          "submitted_revision": 30,
+          "record_id": "cr-r1-pm-02-fixed",
+          "run_id": "g3-pm-r1",
+          "finding_id": "PM-02",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-coordinator-recovery-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T22:07:24.555913777Z",
+          "report_hash": "17caf97692b9cd02007b1999905a5e2f4f5f678a18b00a5b7d8e0539c331e44c",
+          "original": "Inferred，置信度高。完整成员 claim 包含尚未启动的 todo 卡时，保存空 STARTED_AT 对应的 cycle；后续正常 start 改变 cycle，整组 reconcile 永久冲突。重新 claim 保留旧成员，没有受控推进入口，阻断按依赖顺序启动成员后的阶段恢复。最小修复：通过 CAS 支持未启动成员首次建立执行周期，验证持久启动事实并保留历史，继续拒绝未经授权的既有周期替换。",
+          "status": "fixed",
+          "basis": "根因 CR-01，合并 g3-pm-r1/PM-02 与 g3-qa-r1/QA-01，两份绑定记录共同引用同一修复，不重复计数。独立核对被审提交 0b304a8399cdbc8db2c005e390afd3f6127532af 的 coordinator.go 成员初始化、coordinator_reconcile.go 周期拒绝及 launch/metadata.go 启动元数据路径；双卡含 todo 的 TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot/working 实跑输出 first start blocked full group recovery / member revision or execution cycle changed，确认缺陷。修复持久 awaiting_start；在任务与检查点 CAS 内凭更高 revision、OWNER/STARTED_AT 和已启动卡态绑定一次，保留历史，拒绝已绑定周期替换。源码与文档均核对。",
+          "fix_commit": "4a55248377c8fa35edddd862acee3473d877b2e5",
+          "verification": "最终提交 5845e6fd0f2b503313030349fa211a7791a50169（包含 fix_commit；rebase 后重新实跑）：go test -json -count=1 ./... 退出0，19包1016 PASS/1 SKIP（顶层635 PASS/1 SKIP）；go test -race -json -count=1 ./internal/fs ./internal/board ./internal/launch ./internal/review ./internal/cli ./internal/liveness ./internal/notify ./internal/window 退出0，8包752 PASS/1 SKIP（顶层414 PASS/1 SKIP）；go build ./...、go vet ./...、gofmt 和 git diff --check 均通过。五个新增回归在全量与 race 中 PASS，覆盖本根因、重复/重启及拒绝路径；细节与原始输出见本卡 verification/r1/summary.json、all.jsonl、race.jsonl、checks.json。原生Windows和真实tmux/herdr/Agent未执行；假终端和交叉构建不算实机验证。"
+        }
+      ]
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-pm-r2",
+        "batch_id": "g3-batch-one",
+        "previous_run_id": "g3-pm-r1",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "PM",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "reviewed_commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "7365acf01dce54a755b3c9dd7371964329df33c4ab61710d21cc794ed5ea5a24",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-07T22:11:50.858281447Z",
+        "finished_at": "2026-09-07T22:14:08.802992236Z",
+        "duration_ms": 137944,
+        "hashes": {
+          "error.log": "671f3563e2520076516c6a3be82cc7eddc7183f07289b5325b504dbd2c128930",
+          "evidence.txt": "47343881ca87688859ddad921dc62267f385931a92ade52717c20600c28952a1",
+          "output.raw": "aeee4c4203f8cd5d3ac5fc49ab86d442b06b7809367a6029f76e5d11558cf49a",
+          "prompt.txt": "ebe979b59e0a25a5a3fb0bc98c877c1a8e0bcb6454d53ff7be492f4b58b2eb61",
+          "report.md": "aeee4c4203f8cd5d3ac5fc49ab86d442b06b7809367a6029f76e5d11558cf49a",
+          "review-context.md": "7365acf01dce54a755b3c9dd7371964329df33c4ab61710d21cc794ed5ea5a24",
+          "stdout.log": "1a19fadffe9495476bdd67d1c8b2231208078000e16216ef361f86e5c796af7b",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "g3-pm-r2",
+        "batch_id": "g3-batch-one",
+        "author": "coordinator",
+        "basis": "增量复审报告结构化块 FINDINGS 与 NON_BLOCKING 均为空数组，无条目可归属",
+        "items": {},
+        "owners": {},
+        "recorded_at": "2026-09-07T22:14:31.605430176Z"
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-qa-r1",
+        "batch_id": "g3-batch-one",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "c50ab6c799b2dd85089c43824aaf9440cfb6341151648b496465613f138f99e5",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-07T21:42:34.109544878Z",
+        "finished_at": "2026-09-07T21:47:17.466621777Z",
+        "duration_ms": 283357,
+        "hashes": {
+          "error.log": "a055940e158dee59718b35eb8104eb918788436ca748b863237c418b4a04824b",
+          "evidence.txt": "e89b872a71d8f2975c93642490a3924c6a2f9833be3ae64be1234bba5ffad581",
+          "output.raw": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+          "prompt.txt": "b2aa4d655ef087661de649ff3742aeea35576c71c86d23e974eaea007eef99fc",
+          "report.md": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+          "review-context.md": "c50ab6c799b2dd85089c43824aaf9440cfb6341151648b496465613f138f99e5",
+          "stdout.log": "8167a8c695f351f95f9ef8265fc13c52ba84c49b4d1cad50d341feaa660fc981",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "QA-01",
+            "tier": "high",
+            "text": "Inferred；置信度高。完整成员集合中的 todo 卡首次 start 后，STARTED_AT 改变 planCycle，reconcile 永久拒绝该成员；再次 claim 保留旧 Cycle，导致串行启动后全组进度无法恢复。最小修复：明确保存未启动状态，在 CAS 下核验首次启动并绑定执行周期，继续拒绝已有周期的静默替换；补充含 todo 成员的双卡首次启动对账及非法周期变化测试。",
+            "evidence": "internal/board/coordinator.go:220-228 保存周期且再次 claim 跳过已有成员；internal/board/coordinator_reconcile.go:15-18 无条件拒绝周期变化；internal/board/review_plan.go:52-53 将 STARTED_AT 纳入周期；internal/launch/metadata.go:46-57 首次启动填写 STARTED_AT，internal/launch/commands.go:122,176 发布该元数据；rules/KANDER-TASK-GROUP-RULES.md:203-204 要求完整成员集合及持续对账。"
+          },
+          {
+            "id": "QA-02",
+            "tier": "high",
+            "text": "Inferred；置信度高。completed fix 的历史对账仍调用禁止闭批修改的 reviewRunForMutation。fix 完成且复审闭批后、创建 wrap-up 前重启，完整原件与同轮回执仍触发 batch already closed，阻断正常收尾恢复。最小修复：历史消费使用只读原件校验并保留身份、完整发布、lineage、assignment、作者验证，创建及发送继续拒绝闭批；补充闭批后重启、重复对账和原件损坏测试。",
+            "evidence": "internal/board/coordinator_reconcile.go:86-90 对 completed fix 调用历史模式；internal/board/dispatch_evidence.go:86-106 仅放宽 target 校验，仍无条件调用 reviewRunForMutation；internal/board/review_disposition.go:107-110 遇 closure 返回 batch already closed；internal/board/coordinator_regression_test.go:130-140 现有用例只推进 target，未覆盖闭批。"
+          },
+          {
+            "id": "QA-03",
+            "tier": "medium",
+            "text": "Observed；置信度高。订阅中文文档与英文协议将 confirm_by 定义为原始意图期限，但 wrap-up-only grant 实际输出新 epoch 的独立接受期限。原意图过期后取得新 grant，按文档实现的消费者会误判 overdue 或期限重置。最小修复：说明 created_at 保留原意图时间，confirm_by 为当前 epoch 的有效期限；专用 grant 使用自身期限，同 epoch 重试及重启不续期。",
+            "evidence": "docs/subscription-facts.md:43-46,55-56 与 rules/KANDER-KANBAN-RULES.md:312,314 声称原始确认期限；internal/board/dispatch_snapshot.go:59-62 使用 dispatchAcceptBefore；internal/board/dispatch_wrapup.go:85-89 优先返回 WrapUpAuthority.ConfirmBy；docs/durable-dispatch.md:97 已正确说明该例外，订阅文档尚未同步。",
+            "mechanical": "documentation"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "g3-qa-r1",
+        "batch_id": "g3-batch-one",
+        "author": "coordinator",
+        "basis": "与 g3-pm-r1 同一归属依据。QA-01 与 PM-02 同根因（coordinator 执行周期），QA-02 与 PM-01 同根因（闭批后历史对账），QA-03 与 PM-03 同根因（订阅文档 confirm_by 语义）；处置时按“一个根因一个 ID”合并并同时引用两个来源 ID。",
+        "items": {
+          "QA-01": [
+            "20260908-coordinator-recovery-task"
+          ],
+          "QA-02": [
+            "20260908-coordinator-recovery-task"
+          ],
+          "QA-03": [
+            "20260908-dispatch-evidence-binding-task"
+          ]
+        },
+        "owners": {
+          "20260908-coordinator-recovery-task": "codex",
+          "20260908-dispatch-evidence-binding-task": "codex"
+        },
+        "recorded_at": "2026-09-07T21:49:03.491391558Z"
+      },
+      "records": [
+        {
+          "submitted_revision": 19,
+          "record_id": "binding-r1-qa-03",
+          "run_id": "g3-qa-r1",
+          "finding_id": "QA-03",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-dispatch-evidence-binding-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T21:58:15.008986762Z",
+          "report_hash": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+          "original": "Observed；置信度高。订阅中文文档与英文协议将 confirm_by 定义为原始意图期限，但 wrap-up-only grant 实际输出新 epoch 的独立接受期限。原意图过期后取得新 grant，按文档实现的消费者会误判 overdue 或期限重置。最小修复：说明 created_at 保留原意图时间，confirm_by 为当前 epoch 的有效期限；专用 grant 使用自身期限，同 epoch 重试及重启不续期。",
+          "status": "fixed",
+          "basis": "合并根因 PM-03/QA-03，来源 (g3-pm-r1, PM-03) 与 (g3-qa-r1, QA-03)，分别保留原件绑定；独立核实后 confirmed，现 fixed。git show 0b304a8399cdbc8db2c005e390afd3f6127532af:\u003cpath\u003e 全部退出 0：internal/board/dispatch_snapshot.go:59-62 保留 Input.CreatedAt 并调用 dispatchAcceptBefore；internal/board/dispatch_wrapup.go:85-89 优先取 WrapUpAuthority.ConfirmBy；internal/liveness/subscribe_dispatch.go:22-38 按摘要期限计算 overdue/唤醒。该目标 docs/subscription-facts.md:43-46,55-56 及 rules/KANDER-KANBAN-RULES.md:312,314 却称原期限，原意图过期后授予新 epoch 即触发误导。修复统一当前 epoch 有效接受期限、普通意图/专用 grant 来源、created_at/age_seconds 来源与同 epoch 重试/订阅重启不续期。仅文档对齐既有行为，属 documentation；完整核实输出见 review-fix-r1-validation.txt。",
+          "fix_commit": "287161673bf3f11a865f2e8a40a023a65bdc1f65",
+          "mechanical": "documentation",
+          "verification": "最终提交 287161673bf3f11a865f2e8a40a023a65bdc1f65：go build ./...、go vet ./... 均退出 0；go test -json -count=1 ./...：19 包、1001 测试项通过，1 项跳过（TestWindowsConsoleLauncher）；go test -race -json -count=1 ./internal/board ./internal/liveness：2 包、491 测试项通过，0 项跳过；测试统计含子用例，两条测试命令均退出 0。TestDispatchWrapUpSnapshotUsesCurrentGrantDeadline 通过，覆盖原意图已过期、新 grant 期限仍有效且原期限不变。逐句对照 snapshotDispatch、dispatchAcceptBefore、summarizeDispatch、dispatchWait 和 docs/durable-dispatch.md:97；本轮仅 docs/subscription-facts.md 与 rules/KANDER-KANBAN-RULES.md，8 行增加、6 行删除。"
+        },
+        {
+          "submitted_revision": 31,
+          "record_id": "cr-r1-qa-01-fixed",
+          "run_id": "g3-qa-r1",
+          "finding_id": "QA-01",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-coordinator-recovery-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T22:07:26.339984149Z",
+          "report_hash": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+          "original": "Inferred；置信度高。完整成员集合中的 todo 卡首次 start 后，STARTED_AT 改变 planCycle，reconcile 永久拒绝该成员；再次 claim 保留旧 Cycle，导致串行启动后全组进度无法恢复。最小修复：明确保存未启动状态，在 CAS 下核验首次启动并绑定执行周期，继续拒绝已有周期的静默替换；补充含 todo 成员的双卡首次启动对账及非法周期变化测试。",
+          "status": "fixed",
+          "basis": "根因 CR-01，合并 g3-pm-r1/PM-02 与 g3-qa-r1/QA-01，两份绑定记录共同引用同一修复，不重复计数。独立核对被审提交 0b304a8399cdbc8db2c005e390afd3f6127532af 的 coordinator.go 成员初始化、coordinator_reconcile.go 周期拒绝及 launch/metadata.go 启动元数据路径；双卡含 todo 的 TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot/working 实跑输出 first start blocked full group recovery / member revision or execution cycle changed，确认缺陷。修复持久 awaiting_start；在任务与检查点 CAS 内凭更高 revision、OWNER/STARTED_AT 和已启动卡态绑定一次，保留历史，拒绝已绑定周期替换。源码与文档均核对。",
+          "fix_commit": "4a55248377c8fa35edddd862acee3473d877b2e5",
+          "verification": "最终提交 5845e6fd0f2b503313030349fa211a7791a50169（包含 fix_commit；rebase 后重新实跑）：go test -json -count=1 ./... 退出0，19包1016 PASS/1 SKIP（顶层635 PASS/1 SKIP）；go test -race -json -count=1 ./internal/fs ./internal/board ./internal/launch ./internal/review ./internal/cli ./internal/liveness ./internal/notify ./internal/window 退出0，8包752 PASS/1 SKIP（顶层414 PASS/1 SKIP）；go build ./...、go vet ./...、gofmt 和 git diff --check 均通过。五个新增回归在全量与 race 中 PASS，覆盖本根因、重复/重启及拒绝路径；细节与原始输出见本卡 verification/r1/summary.json、all.jsonl、race.jsonl、checks.json。原生Windows和真实tmux/herdr/Agent未执行；假终端和交叉构建不算实机验证。"
+        },
+        {
+          "submitted_revision": 32,
+          "record_id": "cr-r1-qa-02-fixed",
+          "run_id": "g3-qa-r1",
+          "finding_id": "QA-02",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-coordinator-recovery-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T22:07:28.091189567Z",
+          "report_hash": "eeb97adabf9023edf939e7aab588e63885f250d41e80a4af9e93221cf46c7c5c",
+          "original": "Inferred；置信度高。completed fix 的历史对账仍调用禁止闭批修改的 reviewRunForMutation。fix 完成且复审闭批后、创建 wrap-up 前重启，完整原件与同轮回执仍触发 batch already closed，阻断正常收尾恢复。最小修复：历史消费使用只读原件校验并保留身份、完整发布、lineage、assignment、作者验证，创建及发送继续拒绝闭批；补充闭批后重启、重复对账和原件损坏测试。",
+          "status": "fixed",
+          "basis": "根因 CR-02，合并 g3-pm-r1/PM-01 与 g3-qa-r1/QA-02，两份绑定记录共同引用同一修复，不重复计数。独立核对被审提交 0b304a8399cdbc8db2c005e390afd3f6127532af 的 completed fix 历史路径，仍经 reviewRunForMutation 的闭批写入门禁。TestCoordinatorCompletedFixSurvivesClosedBatchRestart 在完成 fix、PM 增量复审及 QA、闭批生产者后实跑四个子用例均输出 closed batch blocked historical completion / batch already closed，确认缺陷。修复将成功 run 的只读原件校验提取复用，保持完整发布、身份、lineage、assignment 和作者校验；创建/发送与作者修改仍使用闭批拒绝门禁。",
+          "fix_commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+          "verification": "最终提交 5845e6fd0f2b503313030349fa211a7791a50169（包含 fix_commit；rebase 后重新实跑）：go test -json -count=1 ./... 退出0，19包1016 PASS/1 SKIP（顶层635 PASS/1 SKIP）；go test -race -json -count=1 ./internal/fs ./internal/board ./internal/launch ./internal/review ./internal/cli ./internal/liveness ./internal/notify ./internal/window 退出0，8包752 PASS/1 SKIP（顶层414 PASS/1 SKIP）；go build ./...、go vet ./...、gofmt 和 git diff --check 均通过。五个新增回归在全量与 race 中 PASS，覆盖本根因、重复/重启及拒绝路径；细节与原始输出见本卡 verification/r1/summary.json、all.jsonl、race.jsonl、checks.json。原生Windows和真实tmux/herdr/Agent未执行；假终端和交叉构建不算实机验证。"
+        }
+      ]
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-qa-r2",
+        "batch_id": "g3-batch-one",
+        "previous_run_id": "g3-qa-r1",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "reviewed_commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "ab2288e44c937772d8489169587a586b84eb1a6d6720625aa01a30d843a43171",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-07T22:14:36.707193626Z",
+        "finished_at": "2026-09-07T22:18:07.960275414Z",
+        "duration_ms": 211253,
+        "hashes": {
+          "error.log": "e75ac53abd51c5c8a8be02766e3f4446719192e11f6475406d3431c41dd739e4",
+          "evidence.txt": "47343881ca87688859ddad921dc62267f385931a92ade52717c20600c28952a1",
+          "output.raw": "7b89a0a64860cde485fd0742050ef7e24c6adb946a20a4e39aa66477dd2769cb",
+          "prompt.txt": "8bf27f024a5c951769809991c3e5864d0efad17b1687090fc5f05f0986cbe82d",
+          "report.md": "7b89a0a64860cde485fd0742050ef7e24c6adb946a20a4e39aa66477dd2769cb",
+          "review-context.md": "ab2288e44c937772d8489169587a586b84eb1a6d6720625aa01a30d843a43171",
+          "stdout.log": "2a94e3525c0512b7e7b602eb79684086b2a71847c538ac0e8de1578069505c72",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [
+          {
+            "id": "QA-04",
+            "tier": "medium",
+            "text": "Inferred；置信度高。新增首次启动绑定会在 launcher 成功前永久绑定执行周期。完整 claim 包含 todo 成员，start 发布 working、OWNER、STARTED_AT 后，编排先 reconcile；随后 launcher 失败并合法回滚到 todo、空 STARTED_AT。检查点不修改任务 revision，回滚可以成功，但 AwaitingStart 已清除，下一次全组 reconcile 因周期变化失败，重新 claim 仍保留该游标。此前逻辑拒绝临时周期，不会产生此状态污染。最小修复：区分启动尝试和已确认周期，凭受控启动成功或回滚的持久证据在 CAS 下确认或撤销首次绑定，保留历史且继续拒绝任意周期替换；补充元数据发布后对账、launcher 失败回滚、再次启动及重启恢复的确定性交错测试。",
+            "evidence": "internal/board/coordinator_cycle.go:18-22 仅凭已启动卡态和非空元数据绑定并清除等待标记，之后拒绝周期变化；internal/launch/commands.go:176-181 在 launchAgent 前发布元数据，失败调用 rollbackLaunch；internal/launch/agent.go:50-57 存在等待 pane 就绪后失败的实际路径，:144-148 恢复原文和原状态；internal/board/snapshot.go:40-75 在任务 revision CAS 下恢复原文并迁回 todo；internal/board/coordinator.go:300-319 仅更新检查点，不使任务回滚 revision 失效，:221-223 重新 claim 保留已有成员。违反 coordinator-recovery 的持久事实恢复与失败后恢复契约。"
+          }
+        ],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "g3-qa-r2",
+        "batch_id": "g3-batch-one",
+        "author": "coordinator",
+        "basis": "QA-04 是本轮修复 4a55248377c8fa35edddd862acee3473d877b2e5（首次启动绑定）新引入的状态污染，落在 internal/board/coordinator_cycle.go 与 coordinator_reconcile.go，归 20260908-coordinator-recovery-task。前轮 QA-01/QA-02/QA-03 已由报告判定关闭，本 run 无其他条目。",
+        "items": {
+          "QA-04": [
+            "20260908-coordinator-recovery-task"
+          ]
+        },
+        "owners": {
+          "20260908-coordinator-recovery-task": "codex"
+        },
+        "recorded_at": "2026-09-07T22:18:54.038387372Z"
+      },
+      "records": [
+        {
+          "submitted_revision": 47,
+          "record_id": "cr-r2-qa-04-fixed",
+          "run_id": "g3-qa-r2",
+          "finding_id": "QA-04",
+          "batch_id": "g3-batch-one",
+          "task_id": "20260908-coordinator-recovery-task",
+          "author": "codex",
+          "recorded_at": "2026-09-07T22:42:45.008503317Z",
+          "report_hash": "7b89a0a64860cde485fd0742050ef7e24c6adb946a20a4e39aa66477dd2769cb",
+          "original": "Inferred；置信度高。新增首次启动绑定会在 launcher 成功前永久绑定执行周期。完整 claim 包含 todo 成员，start 发布 working、OWNER、STARTED_AT 后，编排先 reconcile；随后 launcher 失败并合法回滚到 todo、空 STARTED_AT。检查点不修改任务 revision，回滚可以成功，但 AwaitingStart 已清除，下一次全组 reconcile 因周期变化失败，重新 claim 仍保留该游标。此前逻辑拒绝临时周期，不会产生此状态污染。最小修复：区分启动尝试和已确认周期，凭受控启动成功或回滚的持久证据在 CAS 下确认或撤销首次绑定，保留历史且继续拒绝任意周期替换；补充元数据发布后对账、launcher 失败回滚、再次启动及重启恢复的确定性交错测试。",
+          "status": "fixed",
+          "basis": "独立核对被审提交 5845e6fd0f2b503313030349fa211a7791a50169：coordinator_cycle.go 在 metadata 可见时提前清除 AwaitingStart，launch/commands.go 随后才调用 launcher，snapshot.go 的合法回滚仍持有任务 revision。确定性 TestCoordinatorRecoversStartRollbackAndRetry 在真实 commandStart 元数据提交后的回调执行对账，注入 tmux 启动失败并走真实 rollbackLaunch；回滚快照子用例实跑 FAIL：member execution cycle changed without first-start facts，确认 QA-04。修复用同事务 pending/rollback 原件与独立成功原件区分尝试和确认；成功不改任务 revision，旧回调不能确认同分钟新尝试，重试链每次重验回滚原件，未知结果不放行交付。已确认周期仍拒绝回滚及任意替换。此为本批第2修复轮的新 finding；前轮三个根因的关闭记录不改写。",
+          "fix_commit": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+          "verification": "最终提交 26edb64fcfb654a96afedc30bbaea27e5e918ec7，rebase 最新组头 5845e6fd0f2b503313030349fa211a7791a50169 后重新实跑：go test -json -count=1 ./... 退出0，19包1030 PASS/1 SKIP（顶层641 PASS/1 SKIP）；go test -race -json -count=1 ./internal/fs ./internal/board ./internal/launch ./internal/review ./internal/cli ./internal/liveness ./internal/notify ./internal/window 退出0，8包766 PASS/1 SKIP（顶层420 PASS/1 SKIP）。6个新增顶层回归在全量和race均PASS，含确定性交错、同分钟重试、原件缺失、快速作者记录保留、成功/回滚互斥。go build ./...、go vet ./...、gofmt、git diff --check和Windows交叉构建均通过。原始证据见本卡verification/r2/summary.json、all.jsonl、race.jsonl、checks.json、repro.txt。原生Windows和真实终端/Agent未执行。"
+        }
+      ]
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-qa-r3",
+        "batch_id": "g3-batch-one",
+        "previous_run_id": "g3-qa-r2",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+        "reviewed_commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "e15ce3df3945e5478d5eeb90863fa2a8ad82610e7f5e956bf9af3f423f5ded84",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "failed",
+        "semantic_status": "unassessed",
+        "failure_reason": "Reviewer 执行失败（退出码 143）；不代表语义 PASS",
+        "exit_code": 143,
+        "created_at": "2026-09-07T22:44:16.647174131Z",
+        "finished_at": "2026-09-07T22:44:21.015537191Z",
+        "duration_ms": 4368,
+        "hashes": {
+          "error.log": "6750993895bb7b3cc6293de155e339216312a1329c6c00dcad3d9554c57ad4d5",
+          "evidence.txt": "796c95077d63dadbf256103a70e5df2ec46f85de086ebfc5955dadcdfb50aac4",
+          "output.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "prompt.txt": "e259d30065f8bd14282259c9909af593ddc8171e2cc0fb41d7ac7cb95afb7fb8",
+          "review-context.md": "e15ce3df3945e5478d5eeb90863fa2a8ad82610e7f5e956bf9af3f423f5ded84",
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-qa-r4",
+        "batch_id": "g3-batch-one",
+        "previous_run_id": "g3-qa-r2",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+        "reviewed_commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "d01445a46119c34550eae9a02c55fcfa4341207b00c708cce3c7b82890cfc0d7",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "interrupted",
+        "semantic_status": "unassessed",
+        "failure_reason": "上次门禁进程在最终确认前中断；Reviewer 完成、进程回收及清理均未确认；保留输出仅为不完整证据",
+        "exit_code": 2,
+        "created_at": "2026-09-07T22:45:11.385452344Z",
+        "finished_at": "2026-09-07T22:45:38.381358424Z",
+        "duration_ms": 26995,
+        "hashes": {
+          "error.log": "2204569a363a383b0c6f39694b4c46a1c66a01ad2d38cab6e19ba48942630f53",
+          "evidence.txt": "796c95077d63dadbf256103a70e5df2ec46f85de086ebfc5955dadcdfb50aac4",
+          "output.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "prompt.txt": "c85e7b2fb8a5e60270d6f68b0876c83a182a4a92778be41956daa0834127c5ce",
+          "review-context.md": "d01445a46119c34550eae9a02c55fcfa4341207b00c708cce3c7b82890cfc0d7",
+          "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "records": []
+    },
+    {
+      "run": {
+        "schema": 1,
+        "findings_schema": 1,
+        "task_group": "20260908-bindings-recovery-group",
+        "run_id": "g3-qa-r5",
+        "batch_id": "g3-batch-one",
+        "previous_run_id": "g3-qa-r2",
+        "task_ids": [
+          "20260907-subscription-dispatch-facts-task",
+          "20260908-coordinator-recovery-task",
+          "20260908-dispatch-evidence-binding-task"
+        ],
+        "role": "QA",
+        "reviewer": "codex",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "cwd": "/home/dualf/works/kander/worktrees/20260908-bindings-recovery-group",
+        "base": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+        "commit": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+        "reviewed_commit": "5845e6fd0f2b503313030349fa211a7791a50169",
+        "report_language": "zh-CN",
+        "input_hashes": {
+          "review-context.md": "22d87d2162ae7efb4665a3931c365b2256839358bfe2ffd43fbb2e6a3c796045",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "kander_version": "20260907T173303Z-7e6fe2073ff0",
+        "phase": "finalized",
+        "launch_status": "started",
+        "execution_status": "ok",
+        "semantic_status": "unassessed",
+        "exit_code": 0,
+        "created_at": "2026-09-07T22:46:05.214869774Z",
+        "finished_at": "2026-09-07T22:48:54.014928172Z",
+        "duration_ms": 168800,
+        "hashes": {
+          "error.log": "a3b8ba466516f1d7a7cb1faf2ddb3599660160e6fae2841836d83daa28e9eddc",
+          "evidence.txt": "796c95077d63dadbf256103a70e5df2ec46f85de086ebfc5955dadcdfb50aac4",
+          "output.raw": "bdd246f36ced3267309564cf5eb2c8d447fa04365bb991406445ae9e3af378cb",
+          "prompt.txt": "04ae9c9f8f90292d64321cb6ab723f08b7ae1a69777e8cdab304e864722f7a9e",
+          "report.md": "bdd246f36ced3267309564cf5eb2c8d447fa04365bb991406445ae9e3af378cb",
+          "review-context.md": "22d87d2162ae7efb4665a3931c365b2256839358bfe2ffd43fbb2e6a3c796045",
+          "stdout.log": "d67b73ca710a2a2b9ecdf074f711b11250ddac2d6daf689536622b7030bea092",
+          "task-context.md": "4b654491f5ecee80391dffd444b1eb3c9edea6ca56a4f0bf7e1bbc4b7ac06ace"
+        },
+        "published": {
+          "20260907-subscription-dispatch-facts-task": true,
+          "20260908-coordinator-recovery-task": true,
+          "20260908-dispatch-evidence-binding-task": true
+        }
+      },
+      "findings": {
+        "FINDINGS": [],
+        "NON_BLOCKING": []
+      },
+      "assignment": {
+        "run_id": "g3-qa-r5",
+        "batch_id": "g3-batch-one",
+        "author": "coordinator",
+        "basis": "增量复审报告结构化块 FINDINGS 与 NON_BLOCKING 均为空数组，无条目可归属；前轮 QA-04 已由报告判定关闭",
+        "items": {},
+        "owners": {},
+        "recorded_at": "2026-09-07T22:49:21.914571878Z"
+      },
+      "records": []
+    }
+  ]
+}

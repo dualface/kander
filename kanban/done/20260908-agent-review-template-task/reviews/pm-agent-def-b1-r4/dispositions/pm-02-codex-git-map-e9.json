@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "dispatch_id": "codex-agentdef-dispositions-review-20260909",
+    "epoch": 9
+  },
+  "submitted_revision": 87,
+  "record_id": "pm-02-codex-git-map-e9",
+  "previous_record_id": "pm-02-fix-r4",
+  "run_id": "pm-agent-def-b1-r4",
+  "finding_id": "PM-02",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-review-template-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T12:25:15.260088352Z",
+  "report_hash": "9a028fb50ced33e99f72130edee7e77431badd5fd6397814d6598ed3e3957343",
+  "original": "只声明 path + dialect 的执行包装器被自动列为 reviewer，且审核直接使用该包装器。AgentFor 在用户定义未声明审核字段时从 dialect 的嵌入定义回填 args.review 与整个 review 块，于是 HasReviewTemplate 对一个纯执行包装器返回 true：该名字进入 ReviewAgentNames、被 validateReviewerChoice 接受写入 reviewers.\u003crole\u003e、出现在选项面板候选列表；随后 ReviewExecutable 因该名字不在 ExecutionAgents 中而回落到用户声明的 path，执行包装器成为审核可执行文件。这与卡片 A2 的两条契约冲突：(1)「reviewers.\u003crole\u003e 与 kander review [agent] 接受任何定义了 args.review 的 agent」——继承而来的模板不是该 agent 定义的；(2) A2 保留的隔离「用户在 agents.\u003cname\u003e.path 对内置 agent 的覆盖只影响执行, 不进入审核」及其 DISCUSSION 理由「自定义 agent 本来就由用户声明可执行路径, 不存在『包装器被意外用于审核』的顾虑」——此处用户只声明了执行覆盖，从未编写审核定义，A2 THREAT_MODEL 里「只读性由定义作者负责」的责任转移前提因此不成立：kander 会用内置 reviewer 的只读 argv 去跑一个作者未按只读语义审阅过的包装器。最小修复：HasReviewTemplate / ReviewAgentNames 只认用户定义自身声明了 args.review（或 review）的自定义 agent，dialect 回填仍可供已声明者补全缺省字段。",
+  "status": "fixed",
+  "basis": "本轮仅修正 rebase 后 Git 证据绑定，保留 fixed。独立读取旧作者原件与对应提交：旧 64630c9e894a82a78c87cef475622d819d5afdd6 不为组 HEAD d97964c06adb942b94b25c7e5c5bfb04795172e4 祖先，而 ee8fab70b817faca93b5b3b0d900bb9ba93da2be 是真实祖先。旧/新提交 patch-id 不相等，因此没有用 patch-id 声称逐字等价；组内前序 1f1924b 已先加入声明资格判断及 config/menu 拒绝用例，ee8fab7 补齐 AgentFor 的 allowReviewInherit 与清除未声明自定义 agent 的审核模板。核对 ee8fab7 的 agents.go/agents_review.go 与组 HEAD 内容一致：HasReviewTemplate 只认自定义 overlay 自身审核声明；AgentFor 不让纯 path+dialect 或 dialect-only 包装器继承审核模板；内置名仍认嵌入定义。PM-10 后续文档/测试修正是既有独立 finding，本记录不撤销或重开它。",
+  "fix_commit": "ee8fab70b817faca93b5b3b0d900bb9ba93da2be",
+  "verification": "git merge-base --is-ancestor ee8fab70b817faca93b5b3b0d900bb9ba93da2be d97964c06adb942b94b25c7e5c5bfb04795172e4 返回 0；旧 SHA 同命令返回 1。git diff --exit-code ee8fab70b817faca93b5b3b0d900bb9ba93da2be d97964c06adb942b94b25c7e5c5bfb04795172e4 -- internal/config/agents.go internal/config/agents_review.go 返回 0。TestReviewAgentNamesFollowsDefinitions、TestCustomAgentsModelsAndRepair、TestDoctorAndPanelProbeAgentOverride 通过，分别确认未声明包装器不可作为 reviewer、reviewers.PM 拒绝和面板/doctor 无审核候选。go test -json ./internal/config ./internal/menu ./internal/i18n ./internal/review -count=1 在任务 HEAD fa8da8a9923749a80d44c7fa8038e97a0f2e620a 退出 0，4 包通过，350 pass / 0 fail / 0 skip（含子测试）；git diff --exit-code --ignore-blank-lines d97964c06adb942b94b25c7e5c5bfb04795172e4 HEAD -- internal/config internal/menu internal/i18n internal/review 返回 0（任务 HEAD 相比组 HEAD 只删一个末尾空行，没有行为差异）。"
+}

@@ -1,0 +1,15 @@
+{
+  "run_id": "agent-definitions-pm-2",
+  "batch_id": "agent-definitions-batch",
+  "author": "codex",
+  "basis": "核实候选已可选而旧警告仍称不可选，是本轮引入的提示误导。",
+  "items": {
+    "PM-005": [
+      "20260908-agent-executable-override-task"
+    ]
+  },
+  "owners": {
+    "20260908-agent-executable-override-task": "codex"
+  },
+  "recorded_at": "2026-09-08T02:56:17.623312104Z"
+}

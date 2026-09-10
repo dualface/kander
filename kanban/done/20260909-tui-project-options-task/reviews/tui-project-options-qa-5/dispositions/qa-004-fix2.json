@@ -1,0 +1,17 @@
+{
+  "submitted_revision": 46,
+  "record_id": "qa-004-fix2",
+  "previous_record_id": "qa-004-confirmed",
+  "run_id": "tui-project-options-qa-5",
+  "finding_id": "QA-004",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:20:56.372702819Z",
+  "report_hash": "7c75fde6b295c2458ab8d6680f2c09572ead4b0e28d00c5a58f52936bc6cc05a",
+  "original": "Inferred，置信度高，部分修复。继承标题与恢复入口会刷新，但首次修改继承模型时立即重建输入，只恢复字段焦点，丢失文本光标位置。在继承值 model-a 开头连续输入 new-，首个 n 后光标跳到末尾，后续字符写入错误位置。违反原修复要求中的输入位置保留，并改变用户实际录入值。最小修复：保留原输入组件，或恢复光标与输入状态；用 Home、连续字符事件断言最终文本。",
+  "status": "fixed",
+  "basis": "applyModels no longer rebuilds the form on the first overlay keystroke; TestModelOverrideDoesNotRebuildInput pass.",
+  "fix_commit": "35170cacf4ae68bf5f79bb6cf67e638524b37bee",
+  "verification": "Read cited paths on 35170cacf4ae68bf5f79bb6cf67e638524b37bee. TestOverlayRuleEditSyncsEffectiveConfig, TestUnsavedGlobalLauncherUpdatesProjectInherit, TestModelOverrideDoesNotRebuildInput pass. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit."
+}

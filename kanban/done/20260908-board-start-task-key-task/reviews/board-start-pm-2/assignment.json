@@ -1,0 +1,9 @@
+{
+  "run_id": "board-start-pm-2",
+  "batch_id": "board-start-task-key-batch",
+  "author": "codex",
+  "basis": "已独立复核 PM 增量报告，13 项验收完整，无新增条目；地址展示修复有实际渲染断言",
+  "items": {},
+  "owners": {},
+  "recorded_at": "2026-09-08T04:13:18.245593785Z"
+}

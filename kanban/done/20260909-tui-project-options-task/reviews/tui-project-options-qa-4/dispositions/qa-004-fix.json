@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 34,
+  "record_id": "qa-004-fix",
+  "run_id": "tui-project-options-qa-4",
+  "finding_id": "QA-004",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:02:04.641785418Z",
+  "report_hash": "fb444e092eb649723eb6c3b9b3aea7785851bc60fbff7898d561847640a2dad5",
+  "original": "Inferred，置信度高。Project 字段首次建立覆盖后，当前表单的继承标题和恢复控件没有同步。将继承的 launcher 改为其他值后，页面仍显示原来的“全局：值”，新覆盖的恢复入口也不出现，直到重新进入页面；模型和审核策略等路径同样受影响。违反修改字段后移除继承前缀的要求。最小修复：覆盖存在性变化时刷新标题及恢复控件，保留焦点和输入位置；用 TUI 事件测试检查编辑后的同一页面。",
+  "status": "fixed",
+  "basis": "Same as PM-003; inherit prefix and restore control refresh on the same page.",
+  "fix_commit": "60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb",
+  "verification": "Read the cited paths on 60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit. Targeted tests named in basis pass."
+}

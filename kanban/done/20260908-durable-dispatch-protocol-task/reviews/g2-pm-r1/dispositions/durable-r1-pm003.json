@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 22,
+  "record_id": "durable-r1-pm003",
+  "run_id": "g2-pm-r1",
+  "finding_id": "PM-003",
+  "batch_id": "g2-batch-one",
+  "task_id": "20260908-durable-dispatch-protocol-task",
+  "author": "codex",
+  "recorded_at": "2026-09-07T19:49:48.177058879Z",
+  "report_hash": "0ba3565e4c10bd1cde53ab9fb098127df894872e54d58d565ef66fd12cfab2b8",
+  "original": "Inferred，高置信度：notify/resume 的持久模式混用规范化任务 ID 与原始任务参数。使用已有入口支持的 \u003ctask-id\u003e.md 拼写时，意图按规范 ID 成功落盘，随后 ReadDispatch 按原始参数建立锁作用域并失败，造成已绑定但未发送的 prepared 意图，重试相同拼写仍失败。组 review 自动切入持久模式后出现该回归。最小修复：首次 ReadSnapshot 后使用 s.Entry.TaskID 贯穿发送、恢复及同 ID 对账。",
+  "status": "fixed",
+  "basis": "confirmed → fixed。核实目标 ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe 创建使用快照规范 ID，而投递/恢复继续传原始参数。修复前已有行为用例改用 .md 别名后，notify 与 resume 均失败，输出“事务输入无效：20260908-durable-task.md”及“事务输入无效：20260908-dispatch-resume-task.md”。现两入口第一次 ReadSnapshot 后将 task 固定为 s.Entry.TaskID，贯穿准备、投递、恢复及重试。最终 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：internal/launch/dispatch.go:102-106、internal/notify/dispatch.go:22-26。",
+  "fix_commit": "e40a98570b49b55395c2d5d6b2d9e516f10ce664",
+  "verification": "TestDurableResumeExplicitTakeoverFencesOldEpoch；TestDispatchReceiptBeforeNotifyReturnAndRetry（首次发送和同 ID 对账均使用 .md 别名）。 最终提交 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：go test -json -count=1 ./... 退出 0，19 包、922 个测试/子测试通过、1 跳过、0 失败；go test -race -json -count=1 ./internal/launch ./internal/notify ./internal/board ./internal/window 退出 0，4 包、400 个测试/子测试通过、1 跳过、0 失败；go build ./...、go vet ./... 退出 0。"
+}

@@ -1,0 +1,2227 @@
+Review range: d97964c06adb942b94b25c7e5c5bfb04795172e4..64d0c2cf5fa2e8c8930f56967dced09a2187478d
+
+=== COMMITS ===
+commit 64d0c2cf5fa2e8c8930f56967dced09a2187478d
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 20:02:04
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 21:50:39
+
+    fix: preserve session hook compatibility and diagnostics
+
+commit f8c9ce7313350ead5b3d5d6470acb4ff3a422881
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 12:10:11
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 21:50:39
+
+    feat: declare exit commands and session hooks on agent definitions
+    
+    The last hardcoded dismiss commands and Codex/Cursor session identity
+    paths now come from definition fields and a named hook registry, so
+    custom template agents can be dismissed and contributors can see which
+    behaviors still require Go.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+commit 6b7c132db76cc00a1245bc45fd992afe3109dcc6
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 19:59:11
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 21:43:31
+
+    style(review): remove trailing blank line from definition tests
+
+commit e756f7d672bb4cc2a488a476485f6821e7b43d2e
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 19:59:18
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 21:33:03
+
+    fix(process): validate output selection and condition values
+
+commit b216ca25cb328300b3a45c54bc00a5ca442a89d7
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 20:04:17
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 20:04:17
+
+    test(agents): complete embedded definition acceptance coverage
+
+=== FILE LEDGER ===
+M	docs/custom-agents.md
+M	docs/output-parsing.md
+M	internal/config/agents.go
+M	internal/config/agents/claude.json
+M	internal/config/agents/codex.json
+M	internal/config/agents/cursor.json
+M	internal/config/agents/grok.json
+M	internal/config/agents_embed.go
+M	internal/config/agents_embed_test.go
+M	internal/config/agents_test.go
+A	internal/config/session_hooks.go
+A	internal/config/session_hooks_test.go
+A	internal/config/testdata/minimal-cursor-config.json
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+A	internal/install/agent_compatibility_test.go
+M	internal/launch/builtin_argv_test.go
+M	internal/launch/commands.go
+M	internal/launch/launch_fakes_test.go
+A	internal/launch/pane_delivery_order_test.go
+A	internal/launch/pane_takeover_failure_test.go
+M	internal/launch/prompt_delivery_test.go
+M	internal/launch/session.go
+M	internal/launch/start.go
+M	internal/liveness/classify.go
+M	internal/notify/notify_test.go
+M	internal/notify/pane_ready_test.go
+M	internal/process/output.go
+M	internal/process/output_test.go
+M	internal/review/definition_unix_test.go
+M	internal/takeover/agent_definition_test.go
+M	internal/takeover/ops.go
+M	internal/takeover/takeover_test.go
+M	rules/KANDER-KANBAN-RULES.md
+
+=== PATCH ===
+diff --git a/docs/custom-agents.md b/docs/custom-agents.md
+index b923bad..ff202b6 100644
+--- a/docs/custom-agents.md
++++ b/docs/custom-agents.md
+@@ -58,9 +58,10 @@ Neither the allocate command nor the argument templates use shell interpolation;
+ 
+ - `generated`: generates a UUID and saves it to the card's SESSION, for use by `{session}` and resume.
+ - `allocated`: first executes the `session.allocate` argv (the first element is the program), waiting at most 10 seconds; successful output must be a single ID, or a top-level JSON string field designated via `session.json_field`. An ID accepts only 1–128 letters, digits, `.`, `_`, `:`, and `-`. Program failure, invalid output, and timeout are all reported before the task is claimed.
++- `hook:<name>`: names a registered Go hook when argv templates cannot express how the CLI creates or discovers a session. The built-in names are listed in the [Hook Catalog](#hook-catalog). An unregistered name is rejected at load time with the agent name and hook name. `discovered` is not accepted in hand-written configuration; Codex uses `hook:codex-rollout` instead.
+ - `none`: `resume` refuses explicitly; `notify` does not deliver directly and instead runs the start template through the recovery channel, re-reading the card context. The card keeps a UUID used only for terminal marking; `{session}` in the template is empty, the dialect parameters likewise omit session creation/resume options, and the UUID serves only terminal identity checks. `dismiss` still allows closing a terminal whose identity has been confirmed. `kander config`, the stderr of `config --json`, and `kander check` display a degradation notice. Persistent dispatch-back must still satisfy the existing stop facts and receipt gates, and does not use `none` to bypass the duplicate-execution guard.
+ 
+-A templated custom agent without a dialect must declare session explicitly. With a dialect, the default is inherited: Claude/Grok generate a UUID; Cursor invokes the configured program to run `create-chat`; Codex keeps the existing discovery mechanism of scanning CODEX_HOME rollouts (which likewise applies to a custom Codex dialect). `discovered` does not accept manual configuration. A template-less Codex dialect does not accept a `generated`/`allocated` override, and Cursor does not accept `generated`, because the corresponding start parameters cannot honor that identity source; inherit the default or provide a template. All dialects allow `none`, passing no session parameters at start.
++A templated custom agent without a dialect must declare session explicitly. With a dialect, the default is inherited from that dialect's embedded `session` field: Claude/Grok generate a UUID; Cursor uses `hook:cursor-create-chat`; Codex uses `hook:codex-rollout`. Without explicit argv templates, a dialect using a session hook accepts that hook or `none`; a dialect whose hook allocates an ID before start also accepts an explicit `allocated` session. Thus Cursor still accepts `allocated`, while Codex rejects `generated` and `allocated`, and Cursor rejects `generated`. Dialects whose default is `generated` retain their existing session overrides. All dialects allow `none`, passing no session parameters at start.
+ 
+ Allocation example:
+ 
+@@ -103,4 +104,19 @@ Read-only isolation for a custom reviewer is the definition author's responsibil
+ 
+ A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing scales or roles default to `auto`. The options panel's "Review and models" section edits large and small independently under each role. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
+ 
+-A custom name with a compatible dialect reuses that dialect's exit command for `dismiss` and takeover cleanup, still requiring the identity and single-pane container checks to pass. A purely templated program with no compatible dialect declared has no inferable interactive exit command; `dismiss` refuses explicitly and keeps the container.
++`exit_command` is a single-line string without control characters and may be empty. Built-in Codex/Claude use `/exit`; Grok/Cursor use `/quit`. A custom name with a dialect inherits that field. A purely templated program that declares `exit_command` can be dismissed and cleaned up the same way, still requiring the identity and single-pane container checks to pass. Without `exit_command`, `dismiss` refuses explicitly, names the missing field, and keeps the container.
++
++## Hook Catalog
++
++These hooks live in one Go registry (`internal/config/session_hooks.go`). A definition may only reference a registered name.
++
++| Name | Purpose | Built-in |
++| ---- | ------- | -------- |
++| `codex-rollout` | Scan CODEX_HOME rollouts; discover or wait for the id | `codex` |
++| `cursor-create-chat` | Run `create-chat`; last nonempty stdout line is the id | `cursor` |
++
++The following changes still require Go code:
++
++- A new session identity source that cannot be expressed as `generated`, `allocated`, or `none` (add a named hook and list it here).
++- A new interactive exit sequence that is not a single `exit_command` string.
++- Merging agent hooks with terminal-side hooks (herdr socket and similar) into one registry.
+diff --git a/docs/output-parsing.md b/docs/output-parsing.md
+index 57420f7..a068b89 100644
+--- a/docs/output-parsing.md
++++ b/docs/output-parsing.md
+@@ -26,7 +26,8 @@ is no shell interpolation.
+   standard error, or a result file the caller read. This package does not
+   start processes or open those files.
+ - `format` defaults to `json`. `json` treats the whole buffer as one document
+-  and evaluates `parse` once. `select` or `join` on `json` is rejected.
++  and evaluates `parse` once. `select` (including an empty array) or `join`
++  on `json` is rejected.
+ - `parse` is one of three primitives: the raw buffer, a dotted JSON object
+   path that must yield a string, or a regular expression with exactly one
+   capturing group. The regex is compiled at validation time.
+@@ -44,7 +45,9 @@ is no shell interpolation.
+ ```
+ 
+ A condition has `json_field` plus exactly one of `equals` or `absent: true`.
+-`equals` may be any JSON value, including `null`. `absent: true` is true only
++`equals` may be any JSON value, including `null`. Invalid JSON in a Go
++`LineCondition.Equals` value is rejected by validation, before evaluation.
++`absent: true` is true only
+ when that path is missing on the same document; a sibling line without the
+ path does not make it vacuously true.
+ 
+diff --git a/internal/config/agents.go b/internal/config/agents.go
+index 286ba03..b09fb9f 100644
+--- a/internal/config/agents.go
++++ b/internal/config/agents.go
+@@ -24,6 +24,7 @@ type AgentDefinition struct {
+ 	Session        *AgentSessionDefinition `json:"session,omitempty"`
+ 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
+ 	Review         *AgentReview            `json:"review,omitempty"`
++	ExitCommand    *string                 `json:"exit_command,omitempty"`
+ }
+ 
+ type AgentArgs struct {
+@@ -60,8 +61,9 @@ func AgentNames(cfg *Config) []string {
+ 
+ func HasAgent(cfg *Config, name string) bool { return contains(AgentNames(cfg), name) }
+ 
+-// AgentFor returns a detached definition with defaults resolved. The discovered
+-// mode is internal to the Codex dialect and cannot be declared in JSON.
++// AgentFor returns a detached definition with defaults resolved. Session
++// mode and exit_command come from the named overlay, then the dialect's
++// embedded definition, then generated / unset.
+ func AgentFor(cfg *Config, name string) AgentDefinition {
+ 	var d AgentDefinition
+ 	if cfg != nil {
+@@ -104,16 +106,16 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
+ 		}
+ 	}
+ 	if d.Session == nil {
+-		mode := "generated"
+-		switch d.Dialect {
+-		case "codex":
+-			mode = "discovered"
+-		case "cursor":
+-			mode = "allocated"
++		if emb, ok := embeddedByName(d.Dialect); ok {
++			d.Session = cloneSession(&emb.Session)
++		} else {
++			d.Session = &AgentSessionDefinition{Mode: "generated"}
+ 		}
+-		d.Session = &AgentSessionDefinition{Mode: mode}
+-		if d.Dialect == "cursor" {
+-			d.Session.Allocate = []string{d.Path, "create-chat"}
++	}
++	if d.ExitCommand == nil {
++		if emb, ok := embeddedByName(d.Dialect); ok {
++			cmd := emb.ExitCommand
++			d.ExitCommand = &cmd
+ 		}
+ 	}
+ 	return d
+@@ -145,12 +147,9 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
+ 		d.Args = &a
+ 	}
+ 	d.Review = cloneReview(d.Review)
+-	if d.Session != nil {
+-		s := *d.Session
+-		s.Allocate = append([]string(nil), s.Allocate...)
+-		d.Session = &s
+-	}
++	d.Session = cloneSession(d.Session)
+ 	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
++	d.ExitCommand = cloneExitCommand(d.ExitCommand)
+ 	return d
+ }
+ 
+@@ -172,6 +171,27 @@ func validAgentText(s string) bool {
+ 	return strings.TrimSpace(s) != "" && strings.IndexFunc(s, unicode.IsControl) < 0
+ }
+ 
++func validExitCommandText(s string) bool {
++	return strings.IndexFunc(s, unicode.IsControl) < 0
++}
++
++func cloneSession(src *AgentSessionDefinition) *AgentSessionDefinition {
++	if src == nil {
++		return nil
++	}
++	out := *src
++	out.Allocate = append([]string(nil), src.Allocate...)
++	return &out
++}
++
++func cloneExitCommand(src *string) *string {
++	if src == nil {
++		return nil
++	}
++	v := *src
++	return &v
++}
++
+ func validateAgentProgram(path string) bool {
+ 	if !validAgentText(path) {
+ 		return false
+@@ -246,9 +266,19 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
+ 				}
+ 			}
+ 		}
++		if v, exists := fields["exit_command"]; exists {
++			s, ok := v.(string)
++			if !ok || !validExitCommandText(s) {
++				return nil, agentDefinitionError(name, Text("config.agent_exit_command"))
++			}
++		}
+ 		if d.Session != nil {
+ 			s := d.Session
+-			if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
++			if hookName, isHook := ParseSessionHook(s.Mode); isHook {
++				if _, ok := LookupSessionHook(s.Mode); !ok {
++					return nil, agentDefinitionError(name, Text("config.agent_session_hook", name, hookName))
++				}
++			} else if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
+ 				return nil, agentDefinitionError(name, Text("config.agent_session"))
+ 			}
+ 			if s.Mode == "allocated" {
+@@ -268,9 +298,19 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
+ 			}
+ 		}
+ 		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
+-		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
+-			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
+-			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
++		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" {
++			inherited := ""
++			if emb, ok := embeddedByName(resolved.Dialect); ok {
++				inherited = emb.Session.Mode
++			}
++			// An allocation hook and an explicit allocator both supply the ID
++			// consumed by the inherited resume arguments.
++			compatibleAllocator := d.Session.Mode == "allocated" && SessionAllocatesBeforeStart(inherited)
++			if inherited != "" && d.Session.Mode != inherited && !compatibleAllocator {
++				if _, isHook := LookupSessionHook(inherited); isHook {
++					return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
++				}
++			}
+ 		}
+ 		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
+ 			return nil, agentDefinitionError(name, Text("config.agent_session_required"))
+diff --git a/internal/config/agents/claude.json b/internal/config/agents/claude.json
+index 7c9da97..4032988 100644
+--- a/internal/config/agents/claude.json
++++ b/internal/config/agents/claude.json
+@@ -38,6 +38,7 @@
+   "session": {
+     "mode": "generated"
+   },
++  "exit_command": "/exit",
+   "display_name": "Claude",
+   "supports_effort": true,
+   "prompt_delivery": {
+diff --git a/internal/config/agents/codex.json b/internal/config/agents/codex.json
+index 684de02..6c74175 100644
+--- a/internal/config/agents/codex.json
++++ b/internal/config/agents/codex.json
+@@ -40,8 +40,9 @@
+     ]
+   },
+   "session": {
+-    "mode": "discovered"
++    "mode": "hook:codex-rollout"
+   },
++  "exit_command": "/exit",
+   "display_name": "Codex",
+   "supports_effort": true,
+   "prompt_delivery": {
+diff --git a/internal/config/agents/cursor.json b/internal/config/agents/cursor.json
+index 6e1b444..a1ebc74 100644
+--- a/internal/config/agents/cursor.json
++++ b/internal/config/agents/cursor.json
+@@ -31,8 +31,9 @@
+     ]
+   },
+   "session": {
+-    "mode": "allocated"
++    "mode": "hook:cursor-create-chat"
+   },
++  "exit_command": "/quit",
+   "display_name": "Cursor",
+   "supports_effort": false,
+   "prompt_delivery": {
+diff --git a/internal/config/agents/grok.json b/internal/config/agents/grok.json
+index 041c782..69e1725 100644
+--- a/internal/config/agents/grok.json
++++ b/internal/config/agents/grok.json
+@@ -62,6 +62,7 @@
+   "session": {
+     "mode": "generated"
+   },
++  "exit_command": "/quit",
+   "display_name": "Grok",
+   "supports_effort": true,
+   "prompt_delivery": {
+diff --git a/internal/config/agents_embed.go b/internal/config/agents_embed.go
+index 5a49d82..ee3a0ae 100644
+--- a/internal/config/agents_embed.go
++++ b/internal/config/agents_embed.go
+@@ -59,6 +59,7 @@ type embeddedAgent struct {
+ 	DisplayName      string                 `json:"display_name"`
+ 	SupportsEffort   bool                   `json:"supports_effort"`
+ 	PromptDelivery   PromptDelivery         `json:"prompt_delivery"`
++	ExitCommand      string                 `json:"exit_command"`
+ 	Review           AgentReview            `json:"review"`
+ 	RulesTarget      agentRulesTarget       `json:"rules_target"`
+ 	RulesIntegration string                 `json:"rules_integration"`
+@@ -154,8 +155,11 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
+ 			}
+ 		}
+ 	}
+-	if !contains([]string{"generated", "allocated", "none", "discovered"}, agent.Session.Mode) {
+-		return embeddedAgent{}, embedAgentError(fileName, "session.mode")
++	if !validDeclaredSessionMode(agent.Session.Mode) {
++		return embeddedAgent{}, embedAgentError(fileName, "session.mode: "+agent.Session.Mode)
++	}
++	if !validExitCommandText(agent.ExitCommand) {
++		return embeddedAgent{}, embedAgentError(fileName, "exit_command")
+ 	}
+ 	if !validAgentText(agent.DisplayName) {
+ 		return embeddedAgent{}, embedAgentError(fileName, "display_name")
+diff --git a/internal/config/agents_embed_test.go b/internal/config/agents_embed_test.go
+index 486a463..7aaeb79 100644
+--- a/internal/config/agents_embed_test.go
++++ b/internal/config/agents_embed_test.go
+@@ -44,6 +44,14 @@ func TestMinimalCursorFixtureJSONRoundTrip(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
++	// Captured from minimalPayload(nil) at 8abdfe2e, before the migration.
++	want, err := os.ReadFile("testdata/minimal-cursor-config.json")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if string(data) != strings.TrimSuffix(string(want), "\n") {
++		t.Fatalf("fixture JSON differs from the pre-migration output\ngot:\n%s\nwant:\n%s", data, want)
++	}
+ 	again, err := ValidateJSON(data)
+ 	if err != nil {
+ 		t.Fatal(err)
+@@ -63,7 +71,7 @@ func TestEmbeddedDefinitionsLoadWithoutLookPath(t *testing.T) {
+ 		t.Fatal(AgentExecutableName("cursor"))
+ 	}
+ 	d := AgentFor(nil, "codex")
+-	if d.Session.Mode != "discovered" || d.PromptDelivery.Mode != "argv" {
++	if d.Session.Mode != "hook:codex-rollout" || d.PromptDelivery.Mode != "argv" {
+ 		t.Fatalf("%+v", d)
+ 	}
+ 	data, err := json.MarshalIndent(DefaultConfig(), "", "  ")
+@@ -72,6 +80,18 @@ func TestEmbeddedDefinitionsLoadWithoutLookPath(t *testing.T) {
+ 	}
+ }
+ 
++func TestEmbeddedUnknownSessionHookNamesAgentAndHook(t *testing.T) {
++	raw, err := embeddedAgentFS.ReadFile("agents/codex.json")
++	if err != nil {
++		t.Fatal(err)
++	}
++	raw = []byte(strings.Replace(string(raw), "hook:codex-rollout", "hook:missing-hook", 1))
++	_, err = parseEmbeddedAgentFile("codex.json", raw)
++	if err == nil || !strings.Contains(err.Error(), "codex") || !strings.Contains(err.Error(), "missing-hook") {
++		t.Fatalf("error must name the agent and unknown hook: %v", err)
++	}
++}
++
+ func TestUserDiscoveredStillRejectedAndMissingSchemaIsOne(t *testing.T) {
+ 	base, _ := json.Marshal(DefaultConfig())
+ 	var root map[string]any
+@@ -168,6 +188,44 @@ func TestEmbeddedUnknownSchemaRejected(t *testing.T) {
+ 	}
+ }
+ 
++func TestEmbeddedInvalidStructureNamesFileAndField(t *testing.T) {
++	data, err := embeddedAgentFS.ReadFile("agents/codex.json")
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, test := range []struct {
++		field string
++		value any
++		want  string
++	}{
++		{"path", "", "path"},
++		{"process_name", "bad\nname", "process_name"},
++		{"args", map[string]any{"resume": []string{}}, "args.start"},
++		{"session", map[string]any{"mode": "unknown"}, "session.mode"},
++		{"prompt_delivery", map[string]any{"mode": "pane"}, "prompt_delivery.ready"},
++		{"rules_integration", "shell", "rules_integration"},
++	} {
++		t.Run(test.field, func(t *testing.T) {
++			var definition map[string]any
++			if err := json.Unmarshal(data, &definition); err != nil {
++				t.Fatal(err)
++			}
++			definition[test.field] = test.value
++			invalid, err := json.Marshal(definition)
++			if err != nil {
++				t.Fatal(err)
++			}
++			_, _, err = loadEmbeddedAgentsFrom(fstest.MapFS{
++				"index.json": {Data: []byte(`["codex"]`)},
++				"codex.json": {Data: invalid},
++			})
++			if err == nil || !strings.Contains(err.Error(), "codex.json") || !strings.Contains(err.Error(), test.want) {
++				t.Fatalf("missing file or field: %v", err)
++			}
++		})
++	}
++}
++
+ func TestAgentSupportsEffortUsesDefinition(t *testing.T) {
+ 	if AgentSupportsEffort(nil, "cursor") {
+ 		t.Fatal("cursor should hide effort")
+diff --git a/internal/config/agents_test.go b/internal/config/agents_test.go
+index 99cd4e7..361bea6 100644
+--- a/internal/config/agents_test.go
++++ b/internal/config/agents_test.go
+@@ -15,8 +15,8 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
+ 	cfg.Agents = map[string]AgentDefinition{"claude": {Path: filepath.Join(string(filepath.Separator), "bin", "wrapper"), ProcessName: "node"}, "cursor": {Path: "renamed"}, "fresh": {Dialect: "claude"}}
+ 	for _, test := range []struct{ name, path, process, dialect, mode string }{
+ 		{"claude", cfg.Agents["claude"].Path, "node", "claude", "generated"},
+-		{"cursor", "renamed", "renamed", "cursor", "allocated"},
+-		{"codex", "codex", "codex", "codex", "discovered"},
++		{"cursor", "renamed", "renamed", "cursor", "hook:cursor-create-chat"},
++		{"codex", "codex", "codex", "codex", "hook:codex-rollout"},
+ 		{"fresh", "fresh", "fresh", "claude", "generated"},
+ 		{"unregistered", "unregistered", "unregistered", "", "generated"},
+ 	} {
+@@ -69,6 +69,13 @@ func TestAgentDefinitionValidation(t *testing.T) {
+ 		{"generated", map[string]any{"session": map[string]any{"mode": "generated"}}, false},
+ 		{"none", map[string]any{"session": map[string]any{"mode": "none"}, "args": map[string]any{"start": []string{}}}, false},
+ 		{"discovered", map[string]any{"session": map[string]any{"mode": "discovered"}}, true},
++		{"hook-codex", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:codex-rollout"}}, false},
++		{"hook-cursor", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:cursor-create-chat"}}, false},
++		{"hook-unknown", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:not-registered"}}, true},
++		{"exit-ok", map[string]any{"exit_command": "/bye"}, false},
++		{"exit-empty", map[string]any{"exit_command": ""}, false},
++		{"exit-multiline", map[string]any{"exit_command": "/bye\n/extra"}, true},
++		{"exit-control", map[string]any{"exit_command": "/bye\t"}, true},
+ 		{"unknown-session", map[string]any{"session": map[string]any{"mode": "generated", "typo": 1}}, true},
+ 		{"allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "allocate"}, "json_field": "id"}}, false},
+ 		{"bad-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "bad\narg"}}}, true},
+@@ -156,13 +163,30 @@ func TestExpandAgentArgs(t *testing.T) {
+ 	}
+ }
+ 
++func TestUnregisteredSessionHookNamesAgentAndHook(t *testing.T) {
++	base, _ := json.Marshal(DefaultConfig())
++	var root map[string]any
++	json.Unmarshal(base, &root)
++	root["agents"] = map[string]any{"helper": map[string]any{
++		"args":    map[string]any{"start": []string{}, "resume": []string{}},
++		"session": map[string]any{"mode": "hook:missing-hook"},
++	}}
++	data, _ := json.Marshal(root)
++	_, err := ValidateJSON(data)
++	if err == nil || !strings.Contains(err.Error(), "helper") || !strings.Contains(err.Error(), "missing-hook") {
++		t.Fatalf("err=%v", err)
++	}
++}
++
+ func TestDialectSessionCompatibility(t *testing.T) {
+ 	for _, test := range []struct {
+ 		dialect, mode string
+ 		bad           bool
+ 	}{
+ 		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
++		{"cursor", "allocated", false}, {"claude", "allocated", false},
+ 		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
++		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false},
+ 	} {
+ 		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
+ 			cfg := DefaultConfig()
+diff --git a/internal/config/session_hooks.go b/internal/config/session_hooks.go
+new file mode 100644
+index 0000000..d97993a
+--- /dev/null
++++ b/internal/config/session_hooks.go
+@@ -0,0 +1,75 @@
++package config
++
++import "strings"
++
++const sessionHookPrefix = "hook:"
++
++// SessionHook is a named Go capability that argv templates cannot express.
++type SessionHook struct {
++	Name string
++	// DiscoverAfterStart snapshots existing sessions and waits for a new id after tmux launch.
++	DiscoverAfterStart bool
++	// ResolveEmptyReference scans for an existing session when SESSION has no id.
++	ResolveEmptyReference bool
++	// AllocateBeforeStart obtains a session id before the agent process starts.
++	AllocateBeforeStart bool
++}
++
++var registeredSessionHooks = []SessionHook{
++	{Name: "codex-rollout", DiscoverAfterStart: true, ResolveEmptyReference: true},
++	{Name: "cursor-create-chat", AllocateBeforeStart: true},
++}
++
++// RegisteredSessionHooks returns the built-in hook list in registration order.
++func RegisteredSessionHooks() []SessionHook {
++	return append([]SessionHook(nil), registeredSessionHooks...)
++}
++
++// ParseSessionHook reports the hook name when mode is hook:<name>.
++func ParseSessionHook(mode string) (string, bool) {
++	if !strings.HasPrefix(mode, sessionHookPrefix) {
++		return "", false
++	}
++	name := mode[len(sessionHookPrefix):]
++	if name == "" || strings.Contains(name, ":") {
++		return "", false
++	}
++	return name, true
++}
++
++// LookupSessionHook resolves a registered hook from session.mode.
++func LookupSessionHook(mode string) (SessionHook, bool) {
++	name, ok := ParseSessionHook(mode)
++	if !ok {
++		return SessionHook{}, false
++	}
++	for _, hook := range registeredSessionHooks {
++		if hook.Name == name {
++			return hook, true
++		}
++	}
++	return SessionHook{}, false
++}
++
++func validDeclaredSessionMode(mode string) bool {
++	if contains([]string{"generated", "allocated", "none"}, mode) {
++		return true
++	}
++	_, ok := LookupSessionHook(mode)
++	return ok
++}
++
++func SessionDiscoversAfterStart(mode string) bool {
++	hook, ok := LookupSessionHook(mode)
++	return ok && hook.DiscoverAfterStart
++}
++
++func SessionResolvesEmptyReference(mode string) bool {
++	hook, ok := LookupSessionHook(mode)
++	return ok && hook.ResolveEmptyReference
++}
++
++func SessionAllocatesBeforeStart(mode string) bool {
++	hook, ok := LookupSessionHook(mode)
++	return ok && hook.AllocateBeforeStart
++}
+diff --git a/internal/config/session_hooks_test.go b/internal/config/session_hooks_test.go
+new file mode 100644
+index 0000000..7a20621
+--- /dev/null
++++ b/internal/config/session_hooks_test.go
+@@ -0,0 +1,45 @@
++package config
++
++import (
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestRegisteredSessionHooksDocumented(t *testing.T) {
++	root := repoRootForHooks(t)
++	doc, err := os.ReadFile(filepath.Join(root, "docs", "custom-agents.md"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	body := string(doc)
++	_, catalog, found := strings.Cut(body, "## Hook Catalog\n")
++	if !found {
++		t.Fatal("docs/custom-agents.md is missing the hook catalog heading")
++	}
++	catalog, _, _ = strings.Cut(catalog, "\n## ")
++	for _, hook := range RegisteredSessionHooks() {
++		if !strings.Contains(catalog, "| `"+hook.Name+"` |") {
++			t.Fatalf("docs/custom-agents.md does not list hook %q", hook.Name)
++		}
++	}
++}
++
++func repoRootForHooks(t *testing.T) string {
++	t.Helper()
++	dir, err := os.Getwd()
++	if err != nil {
++		t.Fatal(err)
++	}
++	for {
++		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
++			return dir
++		}
++		parent := filepath.Dir(dir)
++		if parent == dir {
++			t.Fatal("go.mod not found")
++		}
++		dir = parent
++	}
++}
+diff --git a/internal/config/testdata/minimal-cursor-config.json b/internal/config/testdata/minimal-cursor-config.json
+new file mode 100644
+index 0000000..68a3c18
+--- /dev/null
++++ b/internal/config/testdata/minimal-cursor-config.json
+@@ -0,0 +1,112 @@
++{
++  "schema_version": 1,
++  "welcome_complete": true,
++  "kanban_agent": "cursor",
++  "kanban_agents": {
++    "large": "cursor",
++    "small": "cursor"
++  },
++  "launcher": "tmux",
++  "reviewers": {
++    "CSA": "cursor",
++    "Hacker": "cursor",
++    "PM": "cursor",
++    "QA": "cursor"
++  },
++  "review_stages": {
++    "large": {
++      "CSA": "auto",
++      "Hacker": "auto",
++      "PM": "auto",
++      "QA": "auto"
++    },
++    "small": {
++      "CSA": "auto",
++      "Hacker": "auto",
++      "PM": "auto",
++      "QA": "auto"
++    }
++  },
++  "rules": {
++    "code": true,
++    "collaboration": true,
++    "git": true,
++    "reporting": true,
++    "review": true,
++    "task_groups": true,
++    "task_intake": true
++  },
++  "models": {
++    "kanban": {
++      "claude": {
++        "large_effort": "high",
++        "large_model": "opus",
++        "model": "",
++        "small_effort": "medium",
++        "small_model": "opus"
++      },
++      "codex": {
++        "large_effort": "high",
++        "large_model": "gpt-5.6-sol",
++        "model": "",
++        "small_effort": "medium",
++        "small_model": "gpt-5.6-sol"
++      },
++      "cursor": {
++        "large_model": "cursor-grok-4.6-xhigh",
++        "small_model": "cursor-grok-4.6-high"
++      },
++      "grok": {
++        "large_effort": "xhigh",
++        "large_model": "",
++        "model": "",
++        "small_effort": "high",
++        "small_model": ""
++      }
++    },
++    "review": {
++      "claude": {
++        "effort": "high",
++        "model": "opus"
++      },
++      "codex": {
++        "effort": "high",
++        "model": "gpt-5.6-sol"
++      },
++      "cursor": {
++        "model": "cursor-grok-4.6-xhigh"
++      },
++      "grok": {
++        "effort": "high",
++        "model": ""
++      }
++    },
++    "review_roles": {
++      "CSA": {
++        "effort": "",
++        "model": ""
++      },
++      "Hacker": {
++        "effort": "",
++        "model": ""
++      },
++      "PM": {
++        "effort": "",
++        "model": ""
++      },
++      "QA": {
++        "effort": "",
++        "model": ""
++      }
++    }
++  },
++  "tui": {
++    "columns": 5,
++    "min_column_width": 40,
++    "refresh": 30,
++    "single": false,
++    "theme": "auto"
++  },
++  "language": "en",
++  "agent_language": "en"
++}
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index c385d5f..63cb25b 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -58,7 +58,9 @@
+   "config.agent_prompt_delivery": "prompt_delivery.{{.V0}} is invalid.",
+   "config.agent_schema_version": "schema_version must be 1.",
+   "config.agent_embed_invalid": "Invalid embedded agent definition {{.V0}}: {{.V1}}",
+-  "config.agent_session": "session.mode must be generated, allocated or none.",
++  "config.agent_session": "session.mode must be generated, allocated, none, or hook:<registered-name>.",
++  "config.agent_session_hook": "Agent {{.V0}} references unregistered session hook {{.V1}}.",
++  "config.agent_exit_command": "exit_command must be a single line without control characters; an empty string is allowed.",
+   "config.agent_allocate": "allocated requires session.allocate argv with a resolvable executable; arguments and json_field must have no control characters.",
+   "config.agent_allocate_only": "allocate/json_field are only valid for allocated sessions.",
+   "config.agent_session_required": "Custom argv templates require an explicit session.mode.",
+@@ -746,6 +748,7 @@
+   "review.worktree_head_does_not_match_commit": "worktree HEAD does not match commit",
+   "review.worktree_overlaps_a_writable_directory": "worktree overlaps a {{.V0}}-writable directory: {{.V1}}",
+   "takeover.a_pane_in_the_herdr_pane_list_response_has": "A pane in the herdr pane list response has no valid id",
++  "takeover.agent_exit_command_missing": "Agent {{.V0}} has no exit_command; dismiss cannot send an interactive exit and the container is kept.",
+   "takeover.dismiss_timeout_must_be_a_finite_number_greater_than": "dismiss timeout must be a finite number greater than 60",
+   "takeover.dismissed_channel_closed_container": "dismissed: {{.V0}}\tchannel={{.V1}}\tclosed-container={{.V2}}",
+   "takeover.failed_to_probe_the_pane_while_waiting_for_the": "Failed to probe the pane while waiting for the Agent to exit: {{.V0}}",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index 7960111..150abc1 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -58,7 +58,9 @@
+   "config.agent_prompt_delivery": "prompt_delivery.{{.V0}} が無効です。",
+   "config.agent_schema_version": "schema_version は 1 である必要があります。",
+   "config.agent_embed_invalid": "埋め込み agent 定義 {{.V0}} が無効です: {{.V1}}",
+-  "config.agent_session": "session.mode は generated、allocated、none のいずれかです。",
++  "config.agent_session": "session.mode は generated、allocated、none、または hook:<登録名> です。",
++  "config.agent_session_hook": "Agent {{.V0}} は未登録のセッションフック {{.V1}} を参照しています。",
++  "config.agent_exit_command": "exit_command は制御文字を含まない単一行にしてください。空文字は可です。",
+   "config.agent_allocate": "allocated には実行可能な session.allocate argv が必要です。引数と json_field に制御文字は不可です。",
+   "config.agent_allocate_only": "allocate/json_field は allocated セッション専用です。",
+   "config.agent_session_required": "カスタム argv テンプレートには明示的な session.mode が必要です。",
+@@ -746,6 +748,7 @@
+   "review.worktree_head_does_not_match_commit": "worktree HEAD が commit と一致しません",
+   "review.worktree_overlaps_a_writable_directory": "worktree が {{.V0}} 書き込み可能なディレクトリと重なっています: {{.V1}}",
+   "takeover.a_pane_in_the_herdr_pane_list_response_has": "herdr pane list 応答内の pane に有効な id がありません",
++  "takeover.agent_exit_command_missing": "Agent {{.V0}} に exit_command がありません。dismiss は対話終了を送れず、コンテナは保持されます。",
+   "takeover.dismiss_timeout_must_be_a_finite_number_greater_than": "dismiss のタイムアウトは 60 より大きい有限数でなければなりません",
+   "takeover.dismissed_channel_closed_container": "dismiss 済み: {{.V0}}\tchannel={{.V1}}\tclosed-container={{.V2}}",
+   "takeover.failed_to_probe_the_pane_while_waiting_for_the": "Agent 終了待ち中に pane のプローブに失敗しました: {{.V0}}",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index 3d1a037..b51b2d6 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -58,7 +58,9 @@
+   "config.agent_prompt_delivery": "prompt_delivery.{{.V0}} 无效。",
+   "config.agent_schema_version": "schema_version 必须为 1。",
+   "config.agent_embed_invalid": "嵌入的 agent 定义 {{.V0}} 无效：{{.V1}}",
+-  "config.agent_session": "session.mode 仅接受 generated、allocated 或 none。",
++  "config.agent_session": "session.mode 仅接受 generated、allocated、none 或 hook:<已注册名>。",
++  "config.agent_session_hook": "Agent {{.V0}} 引用了未注册的会话钩子 {{.V1}}。",
++  "config.agent_exit_command": "exit_command 须为单行且不含控制字符；允许空字符串。",
+   "config.agent_allocate": "allocated 需要 session.allocate argv，首项为可解析的可执行名；参数与 json_field 不得含控制字符。",
+   "config.agent_allocate_only": "allocate/json_field 仅适用于 allocated 会话。",
+   "config.agent_session_required": "自定义 argv 模板必须显式设置 session.mode。",
+@@ -746,6 +748,7 @@
+   "review.worktree_head_does_not_match_commit": "worktree HEAD 与 commit 不一致",
+   "review.worktree_overlaps_a_writable_directory": "worktree 与 {{.V0}} 可写目录重叠: {{.V1}}",
+   "takeover.a_pane_in_the_herdr_pane_list_response_has": "herdr pane list 响应中的 pane 缺少有效 id",
++  "takeover.agent_exit_command_missing": "Agent {{.V0}} 未定义 exit_command；dismiss 无法发送交互退出指令，容器保持原样。",
+   "takeover.dismiss_timeout_must_be_a_finite_number_greater_than": "dismiss 超时必须是大于 60 的有限秒数",
+   "takeover.dismissed_channel_closed_container": "已遣散: {{.V0}}\t通道={{.V1}}\t关闭容器={{.V2}}",
+   "takeover.failed_to_probe_the_pane_while_waiting_for_the": "等待 Agent 退出时探查 pane 失败: {{.V0}}",
+diff --git a/internal/install/agent_compatibility_test.go b/internal/install/agent_compatibility_test.go
+new file mode 100644
+index 0000000..5464adf
+--- /dev/null
++++ b/internal/install/agent_compatibility_test.go
+@@ -0,0 +1,66 @@
++package install
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/dualface/kander/internal/config"
++)
++
++// Expectations are pinned to integrate.go at 8abdfe2e, before embedded definitions.
++func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
++	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
++		for _, agent := range []string{"codex", "claude", "grok", "cursor"} {
++			for _, existing := range []bool{false, true} {
++				name := string(mode) + "/" + agent + "/create"
++				if existing {
++					name = string(mode) + "/" + agent + "/append"
++				}
++				t.Run(name, func(t *testing.T) {
++					home := setupInstallHome(t)
++					paths := globalIntegrationPaths(t, home)
++					spelling := "~/.agents/KANDER-AGENTS.md"
++					target := filepath.Join(home, "."+agent, "AGENTS.md")
++					if agent == "claude" {
++						target = filepath.Join(home, ".claude", "CLAUDE.md")
++					}
++					if mode == config.ModeProject {
++						project := t.TempDir()
++						paths = config.InstallPaths{Mode: mode, ProjectRoot: project, RulesDir: filepath.Join(project, ".kander", "rules")}
++						writeIntegrateFile(t, RulesEntry(paths), "# Kander entry\n")
++						spelling = ".kander/rules/KANDER-AGENTS.md"
++						target = filepath.Join(project, "AGENTS.md")
++						if agent == "claude" {
++							target = filepath.Join(project, "CLAUDE.md")
++						}
++					}
++					want := "## Kander Rules Entry\n\nAt the start of every session, read `" + spelling + "` and follow it as the Kander workflow rules entry.\n"
++					if agent == "claude" {
++						want = "@" + spelling + "\n"
++					}
++					status := IntegrationCreated
++					if existing {
++						writeIntegrateFile(t, target, "# Personal rules\n")
++						want = "# Personal rules\n\n" + want
++						status = IntegrationUpdated
++					}
++					for attempt := 0; attempt < 3; attempt++ {
++						got, err := EnsureRulesIntegration(agent, paths)
++						if err != nil || got.Target != target || got.Status != status {
++							t.Fatalf("attempt %d: %+v, %v; target=%s status=%v", attempt, got, err, target, status)
++						}
++						data, err := os.ReadFile(target)
++						if err != nil || string(data) != want {
++							t.Fatalf("attempt %d: bytes=%q want=%q err=%v", attempt, data, want, err)
++						}
++						if ok, detail := RulesIntegration(agent, paths); !ok || detail != target {
++							t.Fatalf("reference not recognized: %v %s", ok, detail)
++						}
++						status = IntegrationPresent
++					}
++				})
++			}
++		}
++	}
++}
+diff --git a/internal/launch/builtin_argv_test.go b/internal/launch/builtin_argv_test.go
+index 0a220c8..a6fe445 100644
+--- a/internal/launch/builtin_argv_test.go
++++ b/internal/launch/builtin_argv_test.go
+@@ -98,7 +98,8 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
+ 	if runtime.GOOS == "windows" {
+ 		t.Skip("tmux fakes are POSIX")
+ 	}
+-	root, _, _ := setupBoard(t)
++	root, _, bin := setupBoard(t)
++	herdrLog := installHerdr(t, root, bin)
+ 	var captured []string
+ 	previous := newShellInvocation
+ 	newShellInvocation = func(p process.AgentProgram, args []string, env map[string]string) (process.ProcessInvocation, error) {
+@@ -106,20 +107,25 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
+ 		return previous(p, args, env)
+ 	}
+ 	t.Cleanup(func() { newShellInvocation = previous })
+-	for _, agent := range config.ExecutionAgents {
+-		t.Run(agent, func(t *testing.T) {
+-			captured = nil
+-			id, _ := makeTodo(t, root, "argv-"+agent)
+-			_, _, err := capture(t, func() error { return commandStart(root, agent, "tmux", id) })
+-			if err != nil {
+-				t.Fatal(err)
+-			}
+-			if len(captured) == 0 || !strings.Contains(captured[len(captured)-1], "UTF-8") {
+-				t.Fatalf("prompt not last argv element: %q", captured)
+-			}
+-			if _, err := os.Stat(filepath.Join(root, "tmux.log.send-keys")); err == nil {
+-				t.Fatal("argv path sent keys")
+-			}
+-		})
++	for _, launcher := range []string{"tmux", "herdr"} {
++		for _, agent := range config.ExecutionAgents {
++			t.Run(launcher+"/"+agent, func(t *testing.T) {
++				captured = nil
++				id, _ := makeTodo(t, root, "argv-"+launcher+"-"+agent)
++				_, _, err := capture(t, func() error { return commandStart(root, agent, launcher, id) })
++				if err != nil {
++					t.Fatal(err)
++				}
++				if len(captured) == 0 || !strings.Contains(captured[len(captured)-1], "UTF-8") {
++					t.Fatalf("prompt not last argv element: %q", captured)
++				}
++				if _, err := os.Stat(filepath.Join(root, "tmux.log.send-keys")); err == nil {
++					t.Fatal("argv path sent keys")
++				}
++				if _, err := os.Stat(herdrLog + ".prompt"); !os.IsNotExist(err) {
++					t.Fatalf("argv path used agent prompt: %v", err)
++				}
++			})
++		}
+ 	}
+ }
+diff --git a/internal/launch/commands.go b/internal/launch/commands.go
+index 12f5c67..d88bfdd 100644
+--- a/internal/launch/commands.go
++++ b/internal/launch/commands.go
+@@ -175,12 +175,8 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
+ 		return err
+ 	}
+ 	previous := map[string]struct{}{}
+-	if takeover && config.AgentFor(cfg, session.Agent).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
+-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
+-			for _, id := range sessions {
+-				previous[id] = struct{}{}
+-			}
+-		}
++	if takeover {
++		previous = sessionDiscoverSnapshot(config.AgentFor(cfg, session.Agent).Session.Mode, entry.TaskID, plan.Launcher)
+ 	}
+ 	paths, err := currentInstallPaths()
+ 	if err != nil {
+@@ -228,11 +224,15 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
+ 	effective := session
+ 	paneCB := (func() (AgentSession, error))(nil)
+ 	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
++		mode := config.AgentFor(cfg, session.Agent).Session.Mode
+ 		paneCB = func() (AgentSession, error) {
+ 			if session.Reference != "" {
+ 				return session, nil
+ 			}
+-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
++			if !config.SessionDiscoversAfterStart(mode) {
++				return session, nil
++			}
++			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous)
+ 			if err != nil {
+ 				return AgentSession{}, err
+ 			}
+diff --git a/internal/launch/launch_fakes_test.go b/internal/launch/launch_fakes_test.go
+index 54b8d80..ba6ae80 100644
+--- a/internal/launch/launch_fakes_test.go
++++ b/internal/launch/launch_fakes_test.go
+@@ -9,6 +9,7 @@ func writeFakeTmux(t *testing.T, path, log string) {
+ 	t.Helper()
+ 	script := `#!/bin/sh
+ log="${KANBAN_TMUX_LOG:-` + log + `}"
++printf '%s\n' "$1" >> "$log.order"
+ if [ "$1" = "display-message" ]; then
+   case "${5:-}" in
+     *pane_current_command*pane_in_mode*pane_dead*)
+diff --git a/internal/launch/pane_delivery_order_test.go b/internal/launch/pane_delivery_order_test.go
+new file mode 100644
+index 0000000..bd568c1
+--- /dev/null
++++ b/internal/launch/pane_delivery_order_test.go
+@@ -0,0 +1,68 @@
++package launch
++
++import (
++	"os"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestTmuxPaneDeliveryWaitsBeforeSessionDiscovery(t *testing.T) {
++	if runtime.GOOS == "windows" {
++		t.Skip("POSIX terminal fakes")
++	}
++	root, _, bin := setupBoard(t)
++	cfg := usePaneAgent(t, root, bin, "tmux")
++	t.Setenv("KANBAN_TMUX_READY_AFTER", "2")
++	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "TUI_READY")
++	log := filepath.Join(root, "tmux.log")
++	freezeClock(t)
++	advance := sleepFn
++	waited := false
++	sleepFn = func(d time.Duration) {
++		waited = true
++		if _, err := os.Stat(log + ".send-keys"); !os.IsNotExist(err) {
++			t.Fatalf("prompt sent before ready: %v", err)
++		}
++		advance(d)
++	}
++	plan, err := prepareLaunch("tmux", filepath.Dir(root), "start")
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := applyAgentDelivery(&plan, cfg, "panecli"); err != nil {
++		t.Fatal(err)
++	}
++	program, err := requireAgentProgram("panecli", cfg)
++	if err != nil {
++		t.Fatal(err)
++	}
++	inv, err := launchInvocation(plan, *program, attachPrompt(&plan, []string{"--interactive"}, "task prompt"))
++	if err != nil {
++		t.Fatal(err)
++	}
++	discovered := false
++	callback := func() (AgentSession, error) {
++		discovered = true
++		order := mustRead(t, log+".order")
++		if !strings.Contains(order, "respawn-pane\ncapture-pane\ncapture-pane\nsend-keys\nsend-keys\n") {
++			t.Fatalf("launch, readiness and delivery out of order: %s", order)
++		}
++		sent := mustRead(t, log+".send-keys")
++		if sent != "send-keys\n-t\n%9\n-l\ntask prompt\nsend-keys\n-t\n%9\nEnter\n" {
++			t.Fatalf("prompt and Enter must be separate calls before session discovery: %q", sent)
++		}
++		return AgentSession{Agent: "panecli", Reference: "discovered-session"}, nil
++	}
++	if _, err := launchAgent(plan, root, "pane-order", inv, nil, callback, nil); err != nil {
++		t.Fatal(err)
++	}
++	if !waited || !discovered {
++		t.Fatalf("waited=%v discovered=%v", waited, discovered)
++	}
++	if got := strings.TrimSpace(mustRead(t, log+".pane-session")); got != "discovered-session" {
++		t.Fatalf("session marker=%q", got)
++	}
++}
+diff --git a/internal/launch/pane_takeover_failure_test.go b/internal/launch/pane_takeover_failure_test.go
+new file mode 100644
+index 0000000..5d48b6a
+--- /dev/null
++++ b/internal/launch/pane_takeover_failure_test.go
+@@ -0,0 +1,81 @@
++package launch
++
++import (
++	"os"
++	"path/filepath"
++	"runtime"
++	"strings"
++	"testing"
++
++	"github.com/dualface/kander/internal/board"
++)
++
++func TestPaneTakeoverFailuresRestoreOriginalCard(t *testing.T) {
++	if runtime.GOOS == "windows" {
++		t.Skip("POSIX terminal fakes")
++	}
++	for _, launcher := range []string{"herdr", "tmux"} {
++		for _, cause := range []string{"blocked", "timeout", "rejected"} {
++			if launcher == "tmux" && cause == "rejected" {
++				continue // tmux has no approval-dialog rejection primitive.
++			}
++			t.Run(launcher+"/"+cause, func(t *testing.T) {
++				root, _, bin := setupBoard(t)
++				freezeClock(t)
++				id, path := makeTodo(t, root, "takeover-failure")
++				startThenReview(t, root, "claude", id, path)
++				original, err := board.ReadSnapshot(root, id)
++				if err != nil {
++					t.Fatal(err)
++				}
++				cfg := usePaneAgent(t, root, bin, launcher)
++				cfg.Agents["panecli"].PromptDelivery.Ready.TimeoutMS = 250
++				log := filepath.Join(root, "tmux.log")
++				closeLog, promptLog := log+".kill", log+".send-keys"
++				prefix := "KANBAN_TMUX_"
++				outputKey := prefix + "PANE_OUTPUT"
++				if launcher == "herdr" {
++					log = installHerdr(t, root, bin)
++					closeLog, promptLog = log+".close", log+".prompt"
++					prefix = "KANBAN_HERDR_"
++					outputKey = prefix + "AGENT_OUTPUT"
++				}
++				output := "TUI_READY TRUST_DIALOG"
++				switch cause {
++				case "blocked":
++					t.Setenv(prefix+"BLOCKED_OUTPUT", output)
++				case "timeout":
++					output = "still starting"
++					t.Setenv(outputKey, output)
++				case "rejected":
++					output = "TUI_READY"
++					t.Setenv(outputKey, output)
++					t.Setenv(prefix+"PROMPT_FAIL", "1")
++				}
++				agent := "panecli"
++				_, _, err = capture(t, func() error {
++					return commandResume(root, &agent, launcher, id, "take over", "", true, 61)
++				})
++				if err == nil || !strings.Contains(err.Error(), output) {
++					t.Fatalf("missing failure diagnostics: %v", err)
++				}
++				manual := strings.Contains(err.Error(), "手动跑一次该 CLI 回答对话框后重试 `kander start`")
++				if manual != (cause != "timeout") {
++					t.Fatalf("incorrect recovery guidance: %v", err)
++				}
++				got, err := board.ReadSnapshot(root, id)
++				if err != nil || got.Entry.State != original.Entry.State || got.Text != original.Text {
++					t.Fatalf("takeover did not restore original state, owner, session and window: %+v %v", got, err)
++				}
++				if _, err := os.Stat(closeLog); err != nil {
++					t.Fatalf("new container not closed: %v", err)
++				}
++				if cause != "rejected" {
++					if _, err := os.Stat(promptLog); !os.IsNotExist(err) {
++						t.Fatalf("prompt sent before readiness: %v", err)
++					}
++				}
++			})
++		}
++	}
++}
+diff --git a/internal/launch/prompt_delivery_test.go b/internal/launch/prompt_delivery_test.go
+index 2e035aa..48e2c25 100644
+--- a/internal/launch/prompt_delivery_test.go
++++ b/internal/launch/prompt_delivery_test.go
+@@ -72,6 +72,10 @@ func TestPaneDeliveryRejectedBeforeForegroundClaim(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
++	before, err := board.ReadSnapshot(root, taskID)
++	if err != nil {
++		t.Fatal(err)
++	}
+ 	_, _, startErr := capture(t, func() error { return commandStart(root, "panecli", "foreground", taskID) })
+ 	if startErr == nil || !strings.Contains(startErr.Error(), "tmux") || !strings.Contains(startErr.Error(), "herdr") {
+ 		t.Fatalf("err=%v", startErr)
+@@ -83,6 +87,10 @@ func TestPaneDeliveryRejectedBeforeForegroundClaim(t *testing.T) {
+ 	if _, stat := os.Stat(path); stat != nil {
+ 		t.Fatal("card left todo")
+ 	}
++	after, err := board.ReadSnapshot(root, taskID)
++	if err != nil || after.Revision != before.Revision {
++		t.Fatalf("revision changed before claim: %d -> %d, %v", before.Revision, after.Revision, err)
++	}
+ }
+ 
+ func TestPaneDeliveryHerdrAndTmux(t *testing.T) {
+@@ -169,11 +177,26 @@ func TestPaneDeliveryTwoStageReady(t *testing.T) {
+ 	t.Setenv("KANBAN_HERDR_PRE_READY_OUTPUT", "starting")
+ 	t.Setenv("KANBAN_HERDR_AGENT_OUTPUT", "TUI_READY")
+ 	writeFakeHerdr(t, filepath.Join(bin, "herdr"), log)
++	freezeClock(t)
++	advance := sleepFn
++	waited := false
++	sleepFn = func(d time.Duration) {
++		if strings.TrimSpace(mustRead(t, log+".ready-count")) == "1" {
++			waited = true
++			if _, err := os.Stat(log + ".prompt"); !os.IsNotExist(err) {
++				t.Fatalf("prompt delivered before TUI readiness: %v", err)
++			}
++		}
++		advance(d)
++	}
+ 	id, _ := makeTodo(t, root, "pane-stage")
+ 	_, _, err := capture(t, func() error { return commandStart(root, "panecli", "herdr", id) })
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
++	if !waited {
++		t.Fatal("second-stage readiness was skipped")
++	}
+ 	order, _ := os.ReadFile(log + ".order")
+ 	if strings.Index(string(order), "pane run") > strings.Index(string(order), "agent prompt") {
+ 		t.Fatalf("order=%s", order)
+@@ -210,6 +233,9 @@ func TestPaneDeliveryBlockedWinsBeforeTimeout(t *testing.T) {
+ 		t.Fatalf("blocked waited too long: %s", elapsed)
+ 	}
+ 	assertPaneStartRolledBack(t, root, path, original, log)
++	if _, err := os.Stat(log + ".prompt"); !os.IsNotExist(err) {
++		t.Fatalf("blocked dialog received prompt: %v", err)
++	}
+ }
+ 
+ func TestPaneDeliveryHerdrPromptRejected(t *testing.T) {
+diff --git a/internal/launch/session.go b/internal/launch/session.go
+index b611265..9248c88 100644
+--- a/internal/launch/session.go
++++ b/internal/launch/session.go
+@@ -83,14 +83,14 @@ func newAgentSession(agent string, program *process.AgentProgram, configs ...*co
+ 		cfg = configs[0]
+ 	}
+ 	definition := config.AgentFor(cfg, agent)
++	if config.SessionAllocatesBeforeStart(definition.Session.Mode) {
++		id, err := runSessionAllocateHook(definition.Session.Mode, program)
++		return AgentSession{Agent: agent, Reference: id}, err
++	}
+ 	switch definition.Session.Mode {
+ 	case "generated", "none":
+ 		return AgentSession{Agent: agent, Reference: newUUID()}, nil
+ 	case "allocated":
+-		if definition.Dialect == "cursor" && (cfg == nil || cfg.Agents[agent].Session == nil) {
+-			id, err := cursorCreateChat(program)
+-			return AgentSession{Agent: agent, Reference: id}, err
+-		}
+ 		id, err := allocateAgentSession(definition.Session)
+ 		return AgentSession{Agent: agent, Reference: id}, err
+ 	default:
+@@ -157,8 +157,8 @@ func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*co
+ 	if requireResume && definition.Session.Mode == "none" {
+ 		return AgentSession{}, config.AgentResumeError(session.Agent)
+ 	}
+-	if definition.Session.Mode == "discovered" && session.Reference == "" {
+-		id, err := findCodexSession(taskID)
++	if config.SessionResolvesEmptyReference(definition.Session.Mode) && session.Reference == "" {
++		id, err := runSessionResolveHook(definition.Session.Mode, taskID)
+ 		if err != nil {
+ 			return AgentSession{}, err
+ 		}
+@@ -307,6 +307,65 @@ func codexSessionsForTask(taskID string) ([]string, error) {
+ 	return sessions, nil
+ }
+ 
++func runSessionAllocateHook(mode string, program *process.AgentProgram) (string, error) {
++	name, ok := config.ParseSessionHook(mode)
++	if !ok {
++		return "", launchError("launch.unsupported_agent", mode)
++	}
++	switch name {
++	case "cursor-create-chat":
++		return cursorCreateChat(program)
++	default:
++		return "", launchError("launch.unsupported_agent", name)
++	}
++}
++
++func runSessionResolveHook(mode, taskID string) (string, error) {
++	name, ok := config.ParseSessionHook(mode)
++	if !ok {
++		return "", launchError("launch.unsupported_agent", mode)
++	}
++	switch name {
++	case "codex-rollout":
++		return findCodexSession(taskID)
++	default:
++		return "", launchError("launch.unsupported_agent", name)
++	}
++}
++
++func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}) (string, error) {
++	name, ok := config.ParseSessionHook(mode)
++	if !ok {
++		return "", launchError("launch.unsupported_agent", mode)
++	}
++	switch name {
++	case "codex-rollout":
++		return discoverNewCodexSession(taskID, previous)
++	default:
++		return "", launchError("launch.unsupported_agent", name)
++	}
++}
++
++func sessionDiscoverSnapshot(mode, taskID, launcher string) map[string]struct{} {
++	previous := map[string]struct{}{}
++	if !config.SessionDiscoversAfterStart(mode) || (launcher != "tmux" && launcher != "tmux-session") {
++		return previous
++	}
++	name, ok := config.ParseSessionHook(mode)
++	if !ok {
++		return previous
++	}
++	switch name {
++	case "codex-rollout":
++		if sessions, err := codexSessionsForTask(taskID); err == nil {
++			for _, id := range sessions {
++				previous[id] = struct{}{}
++			}
++		}
++	}
++	return previous
++}
++
+ func findCodexSession(taskID string) (string, error) {
+ 	sessions, err := codexSessionsForTask(taskID)
+ 	if err != nil {
+diff --git a/internal/launch/start.go b/internal/launch/start.go
+index 89c4ff2..80dd8d6 100644
+--- a/internal/launch/start.go
++++ b/internal/launch/start.go
+@@ -75,14 +75,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
+ 	if err != nil {
+ 		return result, err
+ 	}
+-	previous := map[string]struct{}{}
+-	if config.AgentFor(cfg, agentName).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
+-		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
+-			for _, id := range sessions {
+-				previous[id] = struct{}{}
+-			}
+-		}
+-	}
++	previous := sessionDiscoverSnapshot(config.AgentFor(cfg, agentName).Session.Mode, entry.TaskID, plan.Launcher)
+ 	window := ""
+ 	if plan.Launcher == "foreground" || plan.Launcher == "console" {
+ 		window = plan.Launcher
+@@ -126,11 +119,15 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
+ 	name := windowName(entry, original)
+ 	paneCB := (func() (AgentSession, error))(nil)
+ 	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
++		mode := config.AgentFor(cfg, agentName).Session.Mode
+ 		paneCB = func() (AgentSession, error) {
+ 			if session.Reference != "" {
+ 				return session, nil
+ 			}
+-			ref, err := discoverNewCodexSession(moved.TaskID, previous)
++			if !config.SessionDiscoversAfterStart(mode) {
++				return session, nil
++			}
++			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous)
+ 			if err != nil {
+ 				return AgentSession{}, err
+ 			}
+diff --git a/internal/liveness/classify.go b/internal/liveness/classify.go
+index dab9c40..8e7b162 100644
+--- a/internal/liveness/classify.go
++++ b/internal/liveness/classify.go
+@@ -7,6 +7,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/dualface/kander/internal/board"
++	"github.com/dualface/kander/internal/config"
+ 	"github.com/dualface/kander/internal/probe"
+ )
+ 
+@@ -51,8 +52,10 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
+ 			t("liveness.stale_address_reverse_lookup", detail, probe.FailureDetail(err)), "")
+ 	}
+ 	if !allowReverseLookup || session.Reference == "" {
+-		if session.Agent == "codex" && session.Reference == "" {
+-			detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
++		if session.Reference == "" {
++			if definition, err := config.LoadAgent(session.Agent); err == nil && config.SessionResolvesEmptyReference(definition.Session.Mode) {
++				detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
++			}
+ 		}
+ 		return report(entry, &sess, Stopped, channel, container, detail, "")
+ 	}
+diff --git a/internal/notify/notify_test.go b/internal/notify/notify_test.go
+index 6764813..d654be7 100644
+--- a/internal/notify/notify_test.go
++++ b/internal/notify/notify_test.go
+@@ -191,6 +191,9 @@ if [ "$1" = "send-keys" ]; then
+   exit 0
+ fi
+ if [ "$1" = "capture-pane" ]; then
++  if [ ! -f "$log.send" ]; then
++    printf '%s\n' "$@" >> "$log.capture-before-send"
++  fi
+   cat "$log.send" 2>/dev/null
+   printf '\n'
+   exit 0
+diff --git a/internal/notify/pane_ready_test.go b/internal/notify/pane_ready_test.go
+index 403bb6d..64986fd 100644
+--- a/internal/notify/pane_ready_test.go
++++ b/internal/notify/pane_ready_test.go
+@@ -11,23 +11,37 @@ import (
+ )
+ 
+ func TestNotifyDirectDeliveryDoesNotWaitForPaneReady(t *testing.T) {
+-	root, _ := setupBoard(t)
+-	writePaneClaudeConfig(t, filepath.Join(root, "config.json"))
+-	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
+-	taskID, path := makeReview(t, root, "notify-pane-ready")
+-	setWindow(t, path, "herdr:w1:t9:w1:p9")
+-	_, _, err := capture(t, func() error {
+-		return commandNotify(root, taskID, "x", "", "", true, 61)
+-	})
+-	if err != nil {
+-		t.Fatal(err)
+-	}
+-	if _, err := os.Stat(filepath.Join(root, "herdr.log.prompt")); err != nil {
+-		t.Fatal("direct notify did not prompt")
+-	}
+-	wait, _ := os.ReadFile(filepath.Join(root, "herdr.log.wait"))
+-	if strings.Contains(string(wait), "TUI_READY") {
+-		t.Fatalf("notify waited for pane ready: %s", wait)
++	for _, launcher := range []string{"herdr", "tmux"} {
++		t.Run(launcher, func(t *testing.T) {
++			root, _ := setupBoard(t)
++			writePaneClaudeConfig(t, filepath.Join(root, "config.json"))
++			t.Setenv("KANBAN_HERDR_SESSION", "session-1")
++			taskID, path := makeReview(t, root, "notify-pane-ready")
++			window, sentLog := "herdr:w1:t9:w1:p9", "herdr.log.prompt"
++			if launcher == "tmux" {
++				window, sentLog = "tmux:$1:@1:%1", "tmux.log.send"
++				t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "claude")
++				t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
++			}
++			setWindow(t, path, window)
++			_, _, err := capture(t, func() error {
++				return commandNotify(root, taskID, "x", "", "", true, 61)
++			})
++			if err != nil {
++				t.Fatal(err)
++			}
++			if _, err := os.Stat(filepath.Join(root, sentLog)); err != nil {
++				t.Fatal("direct notify did not prompt")
++			}
++			wait, _ := os.ReadFile(filepath.Join(root, "herdr.log.wait"))
++			if strings.Contains(string(wait), "TUI_READY") {
++				t.Fatalf("notify waited for pane ready: %s", wait)
++			}
++			// A capture after send is the existing transport-marker check, not readiness.
++			if _, err := os.Stat(filepath.Join(root, "tmux.log.capture-before-send")); !os.IsNotExist(err) {
++				t.Fatalf("direct notify waited for pane output before delivery: %v", err)
++			}
++		})
+ 	}
+ }
+ 
+diff --git a/internal/process/output.go b/internal/process/output.go
+index 7f77633..6bc78c0 100644
+--- a/internal/process/output.go
++++ b/internal/process/output.go
+@@ -96,7 +96,7 @@ func ValidateOutput(spec OutputSpec) error {
+ 	}
+ 
+ 	if format == FormatJSON {
+-		if len(spec.Select) > 0 {
++		if spec.Select != nil {
+ 			return specErrorf("select", "present", "only valid when format is ndjson")
+ 		}
+ 		if spec.Join != nil {
+@@ -214,6 +214,9 @@ func validateLineCondition(field string, index int, cond LineCondition) error {
+ 	case hasAbsent && !*cond.Absent:
+ 		return specErrorf(label, "false", "absent must be true")
+ 	}
++	if hasEquals && !json.Valid(cond.Equals) {
++		return specErrorf(fmt.Sprintf("%s[%d].equals", field, index), string(cond.Equals), "must be a valid JSON value")
++	}
+ 	return nil
+ }
+ 
+diff --git a/internal/process/output_test.go b/internal/process/output_test.go
+index 0e5b0be..4ca7e26 100644
+--- a/internal/process/output_test.go
++++ b/internal/process/output_test.go
+@@ -28,6 +28,7 @@ func TestValidateOutputRejectsIllegalCombinations(t *testing.T) {
+ 		{"source", OutputSpec{Source: "pipe", Parse: ParseRaw}, "source", "pipe"},
+ 		{"format", OutputSpec{Source: SourceStdout, Format: "yaml", Parse: ParseRaw}, "format", "yaml"},
+ 		{"select-on-json", OutputSpec{Source: SourceStdout, Parse: "json_field:a", Select: []LineCondition{{JSONField: "a", Equals: json.RawMessage(`"x"`)}}}, "select", "present"},
++		{"empty-select-on-json", OutputSpec{Source: SourceStdout, Parse: ParseRaw, Select: []LineCondition{}}, "select", "present"},
+ 		{"join-on-json", OutputSpec{Source: SourceStdout, Parse: ParseRaw, Join: joinPtr("|")}, "join", "|"},
+ 		{"ndjson-raw", OutputSpec{Source: SourceStdout, Format: FormatNDJSON, Parse: ParseRaw}, "parse", "raw"},
+ 		{"bad-regex", OutputSpec{Source: SourceStdout, Parse: "regex:("}, "parse", "regex:("},
+@@ -94,6 +95,51 @@ func TestValidateLineConditionStructure(t *testing.T) {
+ 	}
+ }
+ 
++func TestValidateConditionEqualsJSONValues(t *testing.T) {
++	cases := []struct {
++		raw   string
++		valid bool
++	}{
++		{`null`, true}, {`true`, true}, {`1.5`, true}, {`"ok"`, true},
++		{`[1,null]`, true}, {`{"ok":true}`, true},
++		{`not-json`, false}, {`true false`, false}, {`{"ok":`, false},
++	}
++	for _, field := range []string{"select", "success"} {
++		for _, tt := range cases {
++			t.Run(field+"/"+tt.raw, func(t *testing.T) {
++				spec := OutputSpec{Source: SourceStdout, Format: FormatNDJSON, Parse: "json_field:content"}
++				conditions := []LineCondition{{JSONField: "value", Equals: json.RawMessage(tt.raw)}}
++				if field == "select" {
++					spec.Select = conditions
++				} else {
++					spec.Success = conditions
++				}
++				err := ValidateOutput(spec)
++				if tt.valid {
++					if err != nil {
++						t.Fatal(err)
++					}
++					return
++				}
++				var specErr *SpecError
++				if !errors.As(err, &specErr) || specErr.Field != field+"[0].equals" || specErr.Value != tt.raw {
++					t.Fatalf("invalid equals must identify its field and value: %v", err)
++				}
++			})
++		}
++	}
++}
++
++func TestDecodeOutputSpecRejectsEmptySelectOnJSON(t *testing.T) {
++	_, err := DecodeOutputSpec([]byte(`{"source":"stdout","parse":"raw","select":[]}`))
++	if err == nil || !strings.Contains(err.Error(), "select") {
++		t.Fatalf("explicit empty select must be rejected on json: %v", err)
++	}
++	if _, err := DecodeOutputSpec([]byte(`{"source":"stdout","format":"ndjson","parse":"json_field:content","select":[]}`)); err != nil {
++		t.Fatalf("empty select remains valid on ndjson: %v", err)
++	}
++}
++
+ func TestReviewAndTerminalSourceSubsets(t *testing.T) {
+ 	reviewStderr := OutputSpec{Source: SourceStderr, Parse: ParseRaw}
+ 	if err := ValidateReviewOutput(reviewStderr); err == nil || !strings.Contains(err.Error(), "source") || !strings.Contains(err.Error(), "stderr") {
+@@ -226,6 +272,16 @@ func TestNDJSONAbsentIsPerLine(t *testing.T) {
+ 	if _, err := ParseOutput(spec, onlyPresent); !errors.Is(err, ErrSuccess) {
+ 		t.Fatalf("absent must not be vacuously true: %v", err)
+ 	}
++
++	spec.Success = append(spec.Success, LineCondition{JSONField: "type", Equals: json.RawMessage(`"result"`)})
++	split := `{"type":"result","is_error":true,"content":"failed"}` + "\n" + `{"type":"progress","content":"not a result"}`
++	if _, err := ParseOutput(spec, split); !errors.Is(err, ErrSuccess) {
++		t.Fatalf("absent and equals on different rows must fail: %v", err)
++	}
++	got, err = ParseOutput(spec, `{"type":"result","content":"complete"}`)
++	if err != nil || got != "complete" {
++		t.Fatalf("same-row absent and equals must succeed: %q %v", got, err)
++	}
+ }
+ 
+ func TestNDJSONSuccessIgnoresSelect(t *testing.T) {
+diff --git a/internal/review/definition_unix_test.go b/internal/review/definition_unix_test.go
+index 801c0d7..3318104 100644
+--- a/internal/review/definition_unix_test.go
++++ b/internal/review/definition_unix_test.go
+@@ -350,4 +350,3 @@ func TestBuiltinHomePolicyClaudeVsCursor(t *testing.T) {
+ 		t.Fatalf("cursor optional home code=%d err=%s", code, err)
+ 	}
+ }
+-
+diff --git a/internal/takeover/agent_definition_test.go b/internal/takeover/agent_definition_test.go
+index 678a8d2..bcd96d3 100644
+--- a/internal/takeover/agent_definition_test.go
++++ b/internal/takeover/agent_definition_test.go
+@@ -9,6 +9,79 @@ import (
+ 	"testing"
+ )
+ 
++func exitCommand(value string) *string { return &value }
++
++func TestTemplateAgentDismissUsesExitCommand(t *testing.T) {
++	root, _ := setupBoard(t)
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++	exe, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Agents = map[string]config.AgentDefinition{"helper": {
++		Path: exe, ProcessName: "node",
++		Args:        &config.AgentArgs{Start: []string{}, Resume: []string{}},
++		Session:     &config.AgentSessionDefinition{Mode: "generated"},
++		ExitCommand: exitCommand("/bye"),
++	}}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
++	t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
++	t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$1")
++	t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@1")
++	id, path := makeDone(t, root, "template-bye", "tmux:$1:@1:%9")
++	data, _ := os.ReadFile(path)
++	data = []byte(strings.Replace(string(data), "SESSION: claude ", "SESSION: helper ", 1))
++	if err := os.WriteFile(path, data, 0600); err != nil {
++		t.Fatal(err)
++	}
++	_, _, err = capture(t, func() error { return commandDismiss(root, id, 61) })
++	if err != nil {
++		t.Fatal(err)
++	}
++	instruction, err := os.ReadFile(filepath.Join(root, "tmux.log.instruction"))
++	if err != nil || !strings.Contains(string(instruction), "/bye") || !strings.Contains(string(instruction), "Enter") {
++		t.Fatalf("instruction=%s err=%v", instruction, err)
++	}
++}
++
++func TestTemplateAgentDismissRejectsMissingExitCommand(t *testing.T) {
++	root, _ := setupBoard(t)
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++	exe, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Agents = map[string]config.AgentDefinition{"helper": {
++		Path: exe, ProcessName: "node",
++		Args:    &config.AgentArgs{Start: []string{}, Resume: []string{}},
++		Session: &config.AgentSessionDefinition{Mode: "generated"},
++	}}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	id, path := makeDone(t, root, "template-missing-exit", "tmux:$1:@1:%9")
++	data, _ := os.ReadFile(path)
++	data = []byte(strings.Replace(string(data), "SESSION: claude ", "SESSION: helper ", 1))
++	if err := os.WriteFile(path, data, 0600); err != nil {
++		t.Fatal(err)
++	}
++	_, errb, err := capture(t, func() error { return commandDismiss(root, id, 61) })
++	if err == nil {
++		t.Fatal("missing exit_command accepted")
++	}
++	msg := err.Error() + errb
++	if !strings.Contains(msg, "exit_command") {
++		t.Fatalf("error should name exit_command: %s", msg)
++	}
++}
++
+ func TestDismissResolvesOverriddenProcessName(t *testing.T) {
+ 	root, _ := setupBoard(t)
+ 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+diff --git a/internal/takeover/ops.go b/internal/takeover/ops.go
+index ba251ce..00904a0 100644
+--- a/internal/takeover/ops.go
++++ b/internal/takeover/ops.go
+@@ -29,24 +29,18 @@ func takeoverError(id string, args ...any) error {
+ 	return &notify.Error{Message: config.Text(id, args...)}
+ }
+ 
+-var agentExitCommands = map[string]string{
+-	"claude": "/exit",
+-	"codex":  "/exit",
+-	"grok":   "/quit",
+-	"cursor": "/quit",
+-}
+-
+-// AgentExitCommand selects the exit command of the configured compatible dialect.
++// AgentExitCommand reads exit_command from the resolved agent definition,
++// including dialect inheritance. An omitted or empty value is refused so
++// dismiss keeps the container.
+ func AgentExitCommand(agent string) (string, error) {
+ 	definition, err := config.LoadAgent(agent)
+ 	if err != nil {
+ 		return "", err
+ 	}
+-	cmd, ok := agentExitCommands[definition.Dialect]
+-	if !ok {
+-		return "", takeoverError("launch.unsupported_agent", agent)
++	if definition.ExitCommand == nil || *definition.ExitCommand == "" {
++		return "", takeoverError("takeover.agent_exit_command_missing", agent)
+ 	}
+-	return cmd, nil
++	return *definition.ExitCommand, nil
+ }
+ 
+ func herdrFailureDetail(res probe.Result) string {
+diff --git a/internal/takeover/takeover_test.go b/internal/takeover/takeover_test.go
+index 9f777dd..c3cb3a3 100644
+--- a/internal/takeover/takeover_test.go
++++ b/internal/takeover/takeover_test.go
+@@ -161,7 +161,7 @@ if [ "$1" = "list-panes" ]; then
+   exit 0
+ fi
+ if [ "$1" = "send-keys" ]; then
+-  printf '%s\n' "$5" >> "$log.instruction"
++  printf '%s\n' "$*" >> "$log.instruction"
+   exit 0
+ fi
+ if [ "$1" = "kill-window" ]; then
+diff --git a/rules/KANDER-KANBAN-RULES.md b/rules/KANDER-KANBAN-RULES.md
+index 38878e0..df3e5db 100644
+--- a/rules/KANDER-KANBAN-RULES.md
++++ b/rules/KANDER-KANBAN-RULES.md
+@@ -130,7 +130,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
+ 
+ - The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, session modes, and optional review templates. A custom agent may be a reviewer when it declares `args.review` and `review.*`. Built-in review executables still prefer `*_REVIEW_BIN` over the embedded `path`; a user `agents.<name>.path` overlay does not change built-in review. Custom reviewers use `review.path` and otherwise fall back to `path`. Built-in isolation stays on the definition; a custom reviewer's read-only posture is the author's responsibility.
+ - Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used. `{session=}` keeps an empty session value instead of dropping the element. When `prompt_delivery.mode` is `pane`, the prompt is not appended to argv: after `pane run`, Kander waits for the agent TUI using the definition's `ready` / `blocked` marks (`blocked` is checked in parallel and wins immediately), then delivers the prompt with the same primitives as notify (herdr `agent prompt`, tmux `send-keys -l` plus a separate Enter).
+-- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
++- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. `hook:<name>` names a registered Go hook that discovers or allocates a session when argv templates cannot express the CLI; the built-in names are listed in `docs/custom-agents.md`. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
+ - tmux foreground checks use the configured process name, falling back to the executable basename. herdr still requires its own agent recognition.
+ 
+ **Start Parameters and Metadata**
+@@ -243,7 +243,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
+ - Before delivery, reuse the exact agent and session match of `notify`: herdr additionally requires `agent_status` to be `idle` or `done`; tmux additionally requires the pane to be alive, not in copy-mode, and with a matching foreground process.
+ - The current tab or session/window of the validated pane must exactly equal the located container, and the container may contain only that pane.
+ - When the pane has been moved or the container has other panes, reject before delivery; verify ownership again while waiting for exit and re-check the container topology before closing.
+-- Claude/Codex receive `/exit`; Grok/Cursor receive `/quit`.
++- The pane receives the `exit_command` declared on the agent definition. An agent without that field is refused and the container is kept.
+ - herdr uses `agent prompt`; tmux uses `send-keys -l` followed by a separate `Enter`.
+ - Close the herdr tab or tmux window only after confirming the agent process has exited.
+ - A tmux window that already disappeared with the agent counts as closed.
+
+=== COMMIT TREE ===
+100644 blob 9007b55f695e123f181489be36f43a87549db857	.github/workflows/release.yml
+100644 blob b4a23d61b70d066d5d88260943f507c70560bd3c	.gitignore
+100644 blob bb6b1ff37eb240a2df7f958a9ac5dc519f8682f3	AGENTS.md
+100644 blob 637823c0af63838506d8b2a6b09c928561f1d484	LICENSE
+100644 blob 17cbcd3492b6d2fa047d116e5cf8a962096ce3b3	Makefile
+100644 blob 1280e2cc1d533ccdcdd68ec40812857f92ca9678	README-CN.md
+100644 blob a35d9fd6a8915d1c40e80916a062e412fe8f6526	README-JA.md
+100644 blob 8b2e14af2a985c26233adc7c3c2682f275a123bb	README.md
+100644 blob 62be47dc373be2f09870788f79f5e0c1c66f5235	cmd/kander/check_bind_test.go
+100644 blob 8b5f828e446afb27792a790c5807bef26efbc008	cmd/kander/launch.go
+100644 blob 0dd12feeab4102bc3e148c025caa01f351f99b68	cmd/kander/liveness.go
+100644 blob 9ca579595fd83132607a1c0d46b2d78187a91681	cmd/kander/main.go
+100644 blob 460f84e9b55eb08c02b962dd8a1e23988ca552c7	cmd/kander/notify.go
+100644 blob 46275125e68460768cd60fa10e535bbf437a84be	cmd/kander/review.go
+100644 blob 69d1c77cc3d49da6ec85586da5f2fc9a6295e751	cmd/kander/takeover.go
+100644 blob 2e265ceef9af02c79bc21692049ad033e242a3d0	cmd/kander/tui.go
+100644 blob b4ecb84efdc99576e9d1fd49951ee30cca6e643f	docs/card-transactions.md
+100644 blob 4473e6129fad2ac77d2a7ca6ade6cf0b2e02c019	docs/coordinator-recovery.md
+100644 blob ff202b6cd3df697d111366ed4809c12ef2d4ad7e	docs/custom-agents.md
+100644 blob 7d8739857c299e79128494fcb80b08d04c32dc55	docs/directory-cards.md
+100644 blob abebe824a25330207d88305250b7fd497b84a66d	docs/durable-dispatch.md
+100644 blob bd89d9ddccea3c4a203fede59eb43fee980d9251	docs/how-to-advance-tasks-efficiently-cn.pdf
+100644 blob be927e7934d4965610f951bbaf8b86eae4b18335	docs/how-to-advance-tasks-efficiently-cn.pptx
+100644 blob 367460b4fdd163c68c61d40f3d8850ea4577ff23	docs/how-to-advance-tasks-efficiently-en.pdf
+100644 blob 0a4332ecb4795e5d57b42d0f005e6632c6df331d	docs/how-to-advance-tasks-efficiently-en.pptx
+100644 blob ab194fb33518332bf273bc34f901b961d6cb2e7f	docs/how-to-advance-tasks-efficiently-ja.pdf
+100644 blob ccdc6e00a88d411015e612127c15855641c8c522	docs/how-to-advance-tasks-efficiently-ja.pptx
+100644 blob d07f0e844d89eb9dd67893a7b1818bc19cc8064a	docs/kanban-screenshot-01.png
+100644 blob 2f73ae95b12ecce71946704a47013dd2e348a3a6	docs/kanban-write-guard.md
+100644 blob a068b891c0c8ee10c692b87530972d522cfbedfc	docs/output-parsing.md
+100644 blob 9bdad1f48cdbce56dfe63e9b1cd93e3e6f819116	docs/probe-deadlines.md
+100644 blob 9e80a6dc7aad4aa454a0571062ed4c1604f0d202	docs/recovery-regressions.md
+100644 blob 12a2e41d55374c9a7e155bf91feb95b64b940619	docs/review-cn.svg
+100644 blob c94fd5ce0561882f1a0653344b8ca897de5160b9	docs/review-disposition.md
+100644 blob dcc20406e68da5eecda5949b5504bdf9aee2459e	docs/review-en.svg
+100644 blob 6188d176791ae664030a7bc2fd2836d9ff0bb957	docs/review-evidence.md
+100644 blob 589a380fef8b1b9f0fe014333bebcdcee296aa5e	docs/review-ja.svg
+100644 blob 5dfab1eef68b87bc1d8b5991324e0604d22f50c7	docs/subscription-facts.md
+100644 blob 443da8d47268005a09cb550a04345f56f087bb6d	docs/workflow-cn.svg
+100644 blob 8096929b603ad161e3da43b3f1ee83551ece17bf	docs/workflow-en.svg
+100644 blob 10bb402f2e8e5eb56d1c426ee24811bacc4feea7	docs/workflow-ja.svg
+100644 blob 4b20ee7ca10e22dfcf44531fbbfaeb8c53869afc	go.mod
+100644 blob fb6ca3e074b1eab0367e27e9be37bea04cfa53e4	go.sum
+100644 blob 4d5129f21fb2e8986bdaa702e5d971325e73f9f5	internal/board/board.go
+100644 blob c99719c813f9a5bb87d0023f72728b0e869ef74f	internal/board/board_test.go
+100644 blob d4e2f99cd67f6335e9d46b49c33a8a742eef59dd	internal/board/card_language_test.go
+100644 blob e6aee16466f702e3600fc6ea97e6d90cd9f78491	internal/board/cmd.go
+100644 blob e95545ff8f5197a4fe5a150223c5f7ad2c63d648	internal/board/contract_gate_test.go
+100644 blob 9f98a03f468bd7fcb4dd1d8e1f22f443715a5e05	internal/board/coordinator.go
+100644 blob b64e399bc852c85622a64748e73deb47850cd34e	internal/board/coordinator_closed_fix_test.go
+100644 blob 128dc60fc39853a68c57610a1832e9f3299ea5e2	internal/board/coordinator_crash_test.go
+100644 blob f652cfad57446ba280b0313df058e6966186b1cc	internal/board/coordinator_cycle.go
+100644 blob b968f686964502d8e2e2045328621e774df6103d	internal/board/coordinator_cycle_test.go
+100644 blob a8ad8144d8db18a31ac94f546c56f36b74329116	internal/board/coordinator_reconcile.go
+100644 blob 80afd97021e446fcceea0b9ef2db9407936f136f	internal/board/coordinator_regression_test.go
+100644 blob 6784e1ca44409ff012fac59f0f42a050ffd6c52a	internal/board/coordinator_start.go
+100644 blob 25f7c18f96d186e8322fd18e632975a08762a0b0	internal/board/coordinator_test.go
+100644 blob f3d08e6d1464d82edc1ad23aea84b641996019b0	internal/board/coordinator_wrapup_test.go
+100644 blob aa20be077b4a354c4cf521e6ae0f2f107bd67e2a	internal/board/deps.go
+100644 blob 90fecadfdf63e2a0890203b8597efec8b1d8c072	internal/board/dispatch.go
+100644 blob 94d9ddae02df615e008a23fb8114e0aab48bb2c1	internal/board/dispatch_cmd.go
+100644 blob 49d130586f13af948c384ea8ae00b710253ccde1	internal/board/dispatch_crash_test.go
+100644 blob 3c56b3c659aae5898e9b9328785b9a7cd974928c	internal/board/dispatch_delivery.go
+100644 blob 0134cf91f5ebc840ac0827ce101fcbd782824cb2	internal/board/dispatch_evidence.go
+100644 blob ff09171afaf927b43a51d4c4078e698c11719277	internal/board/dispatch_evidence_test.go
+100644 blob e9864c14959fb336e84e6657c372f502b9d86be6	internal/board/dispatch_receipt.go
+100644 blob af5d2b8fb8b234e2de9603c152c5275d670dad3e	internal/board/dispatch_snapshot.go
+100644 blob a5855c986723bb549af47c0c1765dcb1495f2a99	internal/board/dispatch_snapshot_test.go
+100644 blob 46e758b8ada4aab02a0aae1fc2a29b7cc742c319	internal/board/dispatch_test.go
+100644 blob 576166db168d54b7c4a2161c4ba2cf748e8de426	internal/board/dispatch_wrapup.go
+100644 blob 4430c8d21dcb24a50c2b2721ce6974f7c483406e	internal/board/dispatch_wrapup_test.go
+100644 blob bd471b07a05de4233e38f5b129d471ef8efd0e80	internal/board/document.go
+100644 blob acda57434c059eacea7c7f86c007788a3dc7bd3d	internal/board/guard.go
+100644 blob c2e6e12f886fdb1acc6cdb6176dbc8ef7ec5d68b	internal/board/guard_test.go
+100644 blob b7bfe59ecbb15fd539f80b65726b1e2bbc00a3d3	internal/board/journal_benchmark_test.go
+100644 blob 2537faab16556da758d508992b45cbbc71caad9d	internal/board/journal_concurrency_test.go
+100644 blob 2386595b7c1733671604edf26a26c3de76f8d5ae	internal/board/journal_layout.go
+100644 blob d730f6602d5b03ccd755e736ef7e8e77c23cb699	internal/board/journal_partition_crash_test.go
+100644 blob 24ea7a9bd399103fcf3098a117cbe0aa85e340d2	internal/board/journal_partition_test.go
+100644 blob 3292df212988c6090c284f2e75ec62ac33108799	internal/board/journal_partition_windows_test.go
+100644 blob cec33a10c317146156f9472a9c73af7290d20d8f	internal/board/journal_retention.go
+100644 blob 1a75f49eb2107392e56cabc115c4ac4f298ddfb9	internal/board/journal_temporary_unix_test.go
+100644 blob 6de479394301ad828a4e40fce42d63b986aa9d42	internal/board/journal_temporary_windows_test.go
+100644 blob 5f98dbae318b27332fd925a176943ae3ba6f2294	internal/board/journal_warnings.go
+100644 blob f36a32298fe0d14dc37b2a9ea4ecf5a3a2019063	internal/board/legacy_schema_test.go
+100644 blob f8b1d65b0da430fa47072e1a6fe124810125b8ab	internal/board/list.go
+100644 blob f9a6cd62c14b9b808d84461d8c4ee7368fdc8112	internal/board/locate.go
+100644 blob ba147d7475daf93d1eb2670a6a8bae79ab983e0b	internal/board/locate_deleted_unix_test.go
+100644 blob e90b48c7336bda0d3b03a19da4f5a74e46418afb	internal/board/membership.go
+100644 blob 6885968a4ca2f4677fa078fe8a9ae1cd0abece8d	internal/board/migration.go
+100644 blob 6ea3a49bcde2a5d259034b216b125712be5514e0	internal/board/migration_link_scope.go
+100644 blob 35f9c38ec01a6db5a1cdb8be39252c74c89614dd	internal/board/migration_link_scope_test.go
+100644 blob 2e94555417a7eaf8bbb8c32b850f40419687f472	internal/board/migration_links.go
+100644 blob e9dbca2535d26a1347ad452b02c1264ace1f40a0	internal/board/migration_links_test.go
+100644 blob 965311c7a6b179c06d051e0409723ce038ee44b5	internal/board/migration_new_review_test.go
+100644 blob 01891674fbd630de182fdaef52034fa16bc9eb6a	internal/board/migration_plan.go
+100644 blob 92c2151b4cc0934f03e0ebdd53cce730c7a6f2e3	internal/board/migration_review_test.go
+100644 blob e7feaa0c9358e379a50c5e3186e1d70200ba837b	internal/board/migration_structure.go
+100644 blob ad3356304d25d1810aa2875c0624693e42fff39c	internal/board/migration_test.go
+100644 blob 96829b329f87eddfaac730ecbcd31941809fe7e0	internal/board/migration_windows_test.go
+100644 blob 1b58477358f31a03a27f7d42b7a400546909e4aa	internal/board/migration_write.go
+100644 blob a445963686dd664cc45ae2a171a20c01ba89f9a3	internal/board/move.go
+100644 blob ba3c898373430e6f8ff6099751dc24ea06aa5c0e	internal/board/payload.go
+100644 blob 12d19ae1d7f65d63b39f4d233a402784cba2e504	internal/board/payload_test.go
+100644 blob ab600903e515c7f8598d85b6c92d0a4df18aa8bc	internal/board/recovery.go
+100644 blob dd40ad3fa8bac26d4f06299b84e8cf84caf71553	internal/board/review_advance.go
+100644 blob bc0515e8dff381c22daeae1a3c75c89934e45321	internal/board/review_check.go
+100644 blob d09c258e3dda683266fc2e3ad8cd9989b54e9086	internal/board/review_closure.go
+100644 blob 1c41536b263a0aff58991a79bc2ff9e79dc59954	internal/board/review_context.go
+100644 blob 642e29e42f0936a40ddcaf79d8bf9b43aed3d008	internal/board/review_context_merge.go
+100644 blob 788afe3adc3f2a1d57854711075fbc8dc4ce2dba	internal/board/review_crash_test.go
+100644 blob 90e078a7ff6fb7e982385c4f143e3c04d91eeb86	internal/board/review_disposition.go
+100644 blob 88fa049e3412df5889c60f91c8e7a2ba9f43678e	internal/board/review_findings.go
+100644 blob b9ef6f4f5ac90667f0c6cc495ff52ea10fc48e7b	internal/board/review_gate.go
+100644 blob 37d4c04c487d42200987a810d2affc69bc7bc9a8	internal/board/review_gate_test.go
+100644 blob 7a702a5641b1a6982c2735112a43c6391e27b72b	internal/board/review_legacy_order_test.go
+100644 blob e2930b93f140c2e28aab7afdac8be3ac7bce9da0	internal/board/review_lineage_finalize_test.go
+100644 blob a6e9cb40ba1884ca661a083f3a1ba4a0c88bbbd5	internal/board/review_mechanical.go
+100644 blob 9fc7e77cfd09dc44e8fbfd0dc1a5fdf4f9a23834	internal/board/review_plan.go
+100644 blob 4dd5e3da570801cbccd8b105c10edafc72f8f1f9	internal/board/review_plan_extend.go
+100644 blob bcff174ccc06107b9e557cd7badbbd76d08d772d	internal/board/review_plan_read.go
+100644 blob 1bd82847b26c0ac84520953dedb6cc45030c3b70	internal/board/review_recovery_test.go
+100644 blob 8a08cfe0dba0d9f80898971f3fd107aff629d7a6	internal/board/review_revision_test.go
+100644 blob 5f4c888065c96900bbafbc778eb2b858a3020c0b	internal/board/reviews.go
+100644 blob 82bfc8181973308e6be312469b24cb2eb7190bd5	internal/board/reviews_test.go
+100644 blob b3ac1fd487f5507935fe1d46a34b97a3ef78463c	internal/board/scan.go
+100644 blob bcdf3d81289a47d7b34757b02e9443c7f9a22136	internal/board/schema.go
+100644 blob cae64c7166642b4517576065826feec2568dbdaa	internal/board/size.go
+100644 blob 282b569f0fdd11b167ac1da75e83dbc4431601f9	internal/board/snapshot.go
+100644 blob 17baa2760765ef3020da07340ed52576d6c9154b	internal/board/snapshot_context.go
+100644 blob a69ba4ce5f5b395431b0f91cde8858480213f374	internal/board/snapshot_context_test.go
+100644 blob 62e1e67dc83a2ef8b36fc1e66da7a5446e009690	internal/board/task_start.go
+100644 blob 22deec09e73dc39c8e2b88257c0f35c53166ae68	internal/board/task_start_test.go
+100644 blob c9cc4701e73c2dbfbd3a3d26d2d3cc2ab3a0b4a2	internal/board/template.go
+100644 blob 56b8719784540543d8f59207b1fa7affae51f967	internal/board/templates/contract.md.tmpl
+100644 blob 38fb5c5fa9690d57509278920fa3ee1101d243e8	internal/board/templates/small_extra.md.tmpl
+100644 blob b6881aebc6bb36c69f4d6b5cff04e4c6e0840a0a	internal/board/transaction.go
+100644 blob c919d2214087e3432abde2ed4dca1231f1f95f2c	internal/board/transaction_bytes.go
+100644 blob 92fa769b58fb867c4de26e09aa9091ba6c2fc79b	internal/board/transaction_lock.go
+100644 blob bb161b9dbae817ac58a72fe1f42f873bc63f0d23	internal/board/transaction_log.go
+100644 blob 64f88604cbeea0f09b1a290fd8b750b3cae065dd	internal/board/transaction_test.go
+100644 blob c449666aba89273346cb48645a096bc3f98179ff	internal/board/update.go
+100644 blob 99abe0766552d32154697d1e7d8e907f6768e4d9	internal/cli/cli.go
+100644 blob e9602adb4880810a41cf09efb594bc667902fbe6	internal/cli/cli_test.go
+100644 blob de1de64dd5780fd21a8940564784ad77136811c4	internal/cli/wire_board.go
+100644 blob f99c5f551354a04ee8ad4ec99e14bb31d83563f8	internal/config/agent_language_test.go
+100644 blob b09fb9f70626a11245a32922261e98820f1eff75	internal/config/agents.go
+100644 blob 4032988b450ad2e9e8265497610fbd5b47d61596	internal/config/agents/claude.json
+100644 blob 6c74175d163d69147cecd021ca3cc1ef60e43009	internal/config/agents/codex.json
+100644 blob a1ebc7462b26c42f1a2c59882be8181dc7ad6784	internal/config/agents/cursor.json
+100644 blob 69e1725979183b32ad1f29d3e0e038ad72915777	internal/config/agents/grok.json
+100644 blob ca226201ec7eb94af37f8ff54e799e43dd18267b	internal/config/agents/index.json
+100644 blob ee3a0ae440ebc7bf7052cfec00373c2f7d07149b	internal/config/agents_embed.go
+100644 blob 7aaeb79de0afa24a3e4d3e10afd9ba4a99086d49	internal/config/agents_embed_test.go
+100644 blob 992c222fa809b992e1a3e2b23eae8bae4519dbd1	internal/config/agents_review.go
+100644 blob 4ab0bb6db15bec646b2ee11c2b4201edaa364c71	internal/config/agents_review_test.go
+100644 blob 361bea68721bc246e18428e16f42061053fa539f	internal/config/agents_test.go
+100644 blob 4769918d6f49b709a27349f5e9bb67b4002bdf6d	internal/config/config.go
+100644 blob 69858f3319e96599a7829958189f0731527f5356	internal/config/config_test.go
+100644 blob 5e8054fd6c3f0a0a31cc2f57d9db31ab16533260	internal/config/format.go
+100644 blob de13419cd165ce4e925f7cc7fb24b1a061b66a94	internal/config/language.go
+100644 blob 1e0a4bce2ac700b165ffd305584d81d9a228b2c6	internal/config/language_test.go
+100644 blob 8522b4693f7c1f04cd3da3535495b301073f7f1a	internal/config/loadsave.go
+100644 blob 4db69c1a5236f2d6cba47a478ffdc42645543242	internal/config/overlay.go
+100644 blob 70e571977e08a3a87f6881543be9af8a34fc098e	internal/config/overlay_test.go
+100644 blob fd602ba1be3b1f9f36bb8ebd1dbe8250ca94c088	internal/config/paths.go
+100644 blob 295a393a8c1e0252cbcd9831e78b056675d66dcc	internal/config/repair.go
+100644 blob ba2f02e1b62bda12537f0aa9bc20a5440ca18d25	internal/config/repair_test.go
+100644 blob d2231e2b47c8421b19442392a1c682f461ca5752	internal/config/review_stages.go
+100644 blob 14d55300effa8186f0ef76bfd6a9ae013b3e2a52	internal/config/review_stages_test.go
+100644 blob 7c64fa8f13a74f3286127cda38096208491c30b4	internal/config/rules.go
+100644 blob 63859d273fa0679b3a727f6c75fd3d8a79d4b7ec	internal/config/rules_test.go
+100644 blob d97993ad2581e711a1b191c31c84a03374d6dd30	internal/config/session_hooks.go
+100644 blob 7a20621bc0cc041aacc31aecdd8faa937620de89	internal/config/session_hooks_test.go
+100644 blob 4877364474e8b6830ef1ea5e1ab3f65610025034	internal/config/testdata/default-config.json
+100644 blob 68a3c18d5d07922f070ae27f26af1b860c63845d	internal/config/testdata/minimal-cursor-config.json
+100644 blob 7aa31d99360c4b05d436bc5473f9f7173c771cad	internal/config/unknown_fields_test.go
+100644 blob f2003bed37df6a7401e3ae95f7a389466774a680	internal/flow/flow.go
+100644 blob 71c2d47146c7b5389de8c8d3ed3c394884f46150	internal/flow/flow_test.go
+100644 blob a2ea2110d34a013e7759b00f6f95901534e412bd	internal/focus/focus.go
+100644 blob 136cdb0d0bb7af616e0129f3ab0a8d2fb7f621ea	internal/focus/focus_test.go
+100644 blob ba8923596c567eede262dd394a68bea6282234ae	internal/focus/herdr.go
+100644 blob 88d246151ac142948ddf2ca950d376ca1d7f5ce8	internal/focus/herdr_test.go
+100644 blob 3ba743eb245b6d013ef1b7fe75e41ddb504d3729	internal/fs/append.go
+100644 blob a9ad1c03174db187ffe58f64bb96898cc0e19d5c	internal/fs/fs.go
+100644 blob 87640d87ee5940d82d4fcb9eaeeef644551dcaab	internal/fs/fs_test.go
+100644 blob de6c5570bfe081e1969e534ea63b1fe46405f7d1	internal/fs/path.go
+100644 blob ed9332b52d252dea2f2f98489775e359c71988c2	internal/fs/posix.go
+100644 blob d4ba0ca3ad49979ee78e4722d00d837d88cdb21c	internal/fs/posix_dir.go
+100644 blob 5da84dfaed8b238c97a22e65fb46e5915b46b73b	internal/fs/posix_link.go
+100644 blob 605014a1803b5c5f90769c131cbdf83fe09b90ac	internal/fs/posix_lock.go
+100644 blob 3a945764c58e4644e2116ddd8d1ab04c2feac93f	internal/fs/posix_publish_darwin.go
+100644 blob 95299f2c57c2cb008b2e8b6e617bbe2c789eed39	internal/fs/posix_publish_linux.go
+100644 blob 4dbe5ac91425f672c70de7243458ef515e4060a5	internal/fs/posix_publish_other.go
+100644 blob 5a434591d3d862c1544c4174ab0b253628eec582	internal/fs/posix_reparse.go
+100644 blob fef9ecad6bd762800efb0ab4899615602def1631	internal/fs/posix_temp.go
+100644 blob 4d6c3fb1176cdbd1386df8de80182668dea6ff0e	internal/fs/shared_lock_context.go
+100644 blob 95bea8faf4a6ae47c983ea21c37b0c25f5fdd430	internal/fs/shared_lock_context_unix.go
+100644 blob cb32559e3307128d4373826b51b69149fb781f0d	internal/fs/shared_lock_context_windows.go
+100644 blob ff0ac57dc6d058f626ab09bb4d544a8fb8824691	internal/fs/shared_lock_test.go
+100644 blob 2b271b2d9a4548bc98e568a21e559500a28cbd4a	internal/fs/umask_unix_test.go
+100644 blob 81ab4cbb838d09388d89a3498d2656414e1ed08a	internal/fs/umask_windows_test.go
+100644 blob e8f47904267536960999b7e6cb5ff80a86276719	internal/fs/windows.go
+100644 blob c44e4ed6320091ae970e5ae37dd1a6fb655f282f	internal/fs/windows_link.go
+100644 blob ff6620806affe869baa4a282a5103d4b855c2c40	internal/fs/windows_ops.go
+100644 blob 0b7b28273698c63225a2e4d2fb05c3708a62735c	internal/fs/windows_test.go
+100644 blob b5e6314668fe2b1c2c8b629c0fad19c5751c4c30	internal/i18n/README.md
+100644 blob 418e0178b453ca96b2b788ae47aae34233c46162	internal/i18n/i18n.go
+100644 blob 9903ecabfb54bd5b882c8106d856e47f21fb6eea	internal/i18n/i18n_test.go
+100644 blob 63cb25bf8060d4a5ee57ac08033b3ca9ad94fcd5	internal/i18n/locales/en.json
+100644 blob 150abc182809889dfacc54a1ce4b4fb0c1b80a53	internal/i18n/locales/ja.json
+100644 blob b51b2d6152038b946c34a60c0b1f600d83db4f58	internal/i18n/locales/zh-CN.json
+100644 blob 5464adfa9e25e8e9526566a343625d38b785b8b2	internal/install/agent_compatibility_test.go
+100644 blob cb381e04f6d8a768762b2f309bf8a10a8c9b7f1d	internal/install/busy_windows_test.go
+100644 blob 7fed5d7a2f79a5268d704bd83bf2feb92d3ee765	internal/install/cmd.go
+100644 blob d3242ceee81cb7bef7a50ef43e806f36d8a86e75	internal/install/detect.go
+100644 blob 966f294711395687bbb2d08b3f55e828b606cb11	internal/install/handoff.go
+100644 blob 747cd172656e4b47b5b6515dfc08de4aca69df05	internal/install/handoff_unix.go
+100644 blob 036da30fef6bf7967bac993dd46fa04a6dd4a8a0	internal/install/handoff_windows.go
+100644 blob d999f865a6e23aecf132f19b205041e141e9729b	internal/install/install_test.go
+100644 blob 00df928a90ee74187fe49e5363ae0bcb7ddd9784	internal/install/integrate.go
+100644 blob dcc42be4f4d4760d6363c13da18f88a895c5426f	internal/install/integrate_test.go
+100644 blob 7722cccd28215720cc782617a2b7ce79c25b8b8e	internal/install/leftover.go
+100644 blob 21f788493fa66c11f4b8e641f85c1261fce90c54	internal/install/legacy_hashes.go
+100644 blob 22fd5e3c1ec00ba7edbb51d2e53c7e7c1a4e7792	internal/install/perform.go
+100644 blob b0a1e67074f27977ab6fb4efa26f5c3f72aba6d5	internal/install/rules_state.go
+100644 blob a6a4a5c67719aba7cbc2ca55d9a24e8b5841e8f0	internal/install/testdata/hold.go
+100644 blob b4e86658f7775280424532b920f0223b0c590101	internal/install/testdata/legacy-KANDER-BASE-RULES.md
+100644 blob 2169b8b3d1cc761ebf0784e6bd8e2d26b9510b90	internal/install/wizard.go
+100644 blob 37c9bf793c6d6a3f4cd7dd28df494e31d318a5c7	internal/launch/agent.go
+100644 blob 38199a8926f747a13f136f074294b57889ad328e	internal/launch/agent_allocate.go
+100644 blob debe2d7c4b9068bacfac461047124e5efd6d3433	internal/launch/agent_definitions_test.go
+100644 blob a6fe445e1d257bf62aef210c91313f3f268fde67	internal/launch/builtin_argv_test.go
+100644 blob 796e94cce193953408b15e9e13e751f4ddd6f1b1	internal/launch/cmd.go
+100644 blob d88bfdd8b941a624d3a43eb1bc07d4a1c9d4fe6d	internal/launch/commands.go
+100644 blob 1d125823ebe2007c344aab163672c97cd2739b1c	internal/launch/coordinator.go
+100644 blob 21f837000a4568d5f4ef7eb43ff9414cb83bccb6	internal/launch/coordinator_rollback_test.go
+100644 blob 2108673412276b8b503458d8b99e3a2085ecd331	internal/launch/coordinator_start_test.go
+100644 blob 133d50cb4c6105f1433eec7bb557cd91baf417d7	internal/launch/coordinator_test.go
+100644 blob f81d8118fbaaa4d9447f8f95bcecb55f18cb4045	internal/launch/dispatch.go
+100644 blob 94752d800e34bbd94e9f4530bb53a3f5e463ba07	internal/launch/dispatch_deadline_test.go
+100644 blob bb9b6042688ecea186567d4e90de8abca64462a4	internal/launch/dispatch_evidence.go
+100644 blob a6202a3e6d27c157afb50649dacdae8daafebb3d	internal/launch/dispatch_evidence_test.go
+100644 blob 59cc79a5e4e2c4c83f782cba6845f9c54f002139	internal/launch/dispatch_options_test.go
+100644 blob 23e72289172cba50c66ea49392aaa3e6e264a1f5	internal/launch/dispatch_rebase.go
+100644 blob b1a6bc25ab9931df1fc58798a14b8c908287f204	internal/launch/dispatch_rebase_test.go
+100644 blob 248771d2d82134c1be4dcead5427f4f6fcbfcfef	internal/launch/dispatch_test.go
+100644 blob 6f83a885376d092cdf28544cf077c27f6c31fc88	internal/launch/error.go
+100644 blob 42acc7bdc614643457f564285d8e9ead51eab906	internal/launch/exec.go
+100644 blob d819a144d6ced07dc7f5dca10f5586be88d88f93	internal/launch/exec_other.go
+100644 blob fa1d375438050ed463d595f8f77bc1a10b4d61c7	internal/launch/exec_windows.go
+100644 blob 6df7d6e3a6c020422d8b841854db62e6f2e3b2cf	internal/launch/exec_windows_test.go
+100644 blob 6721236f6af00aff60e0c6747d1cf10e46a83ffe	internal/launch/herdr.go
+100644 blob b34812f556d7a988641e0dba2512906c864a1cfb	internal/launch/herdr_pane_command_test.go
+100644 blob 423a570e0e51860caca77d454acb5bfb7147cbeb	internal/launch/journal_warnings_test.go
+100644 blob 1012377890c0c65f3b7ce539e1e08934d7f5d782	internal/launch/launch_contract_test.go
+100644 blob ba6ae8045eaabfc2e25d02b82f56f3e01c92dfce	internal/launch/launch_fakes_test.go
+100644 blob 7f541030ec4e5780bb96969650ffd51e403f777f	internal/launch/launch_test.go
+100644 blob bc3e2c461c865a0135f815c3261cc9ff1b5f8afb	internal/launch/metadata.go
+100644 blob 8549004755f47bb81e206e2cf459a739f36af85c	internal/launch/metadata_test.go
+100644 blob 0947c5cc0a566aea4a88ee43f5b934eea957a434	internal/launch/notify_resume.go
+100644 blob bd568c1379e121a46d701cce1ed0fb6684f548f2	internal/launch/pane_delivery_order_test.go
+100644 blob 5d48b6a3b854887488f96b3db190f14d62e19490	internal/launch/pane_takeover_failure_test.go
+100644 blob 99f2190d2c8c0a212ade2ebee74be3b39bb9c12f	internal/launch/prompt_delivery.go
+100644 blob 48e2c252fa2bdae347d38c6769c36cf6f9db461c	internal/launch/prompt_delivery_test.go
+100644 blob 661ec0c102fdf6aeebc2779aa0e62e703bb118b7	internal/launch/prompts.go
+100644 blob 59bf7a16a115ff30eb111eb24ea53adb385953ee	internal/launch/prompts_test.go
+100644 blob 764cbadef9f3a09d3ca2d31762ea0e96ffc7cf2d	internal/launch/rollback_test.go
+100644 blob ab72da3a0e4d6615a23e9de20e1f47726fc9756c	internal/launch/rules_prompt_delivery_test.go
+100644 blob 86edb8414012d9957eb0bad31fa1f9f4885cdd98	internal/launch/rules_test.go
+100644 blob 9248c88f625c534f4ba4261057c02d52a06df388	internal/launch/session.go
+100644 blob 80dd8d685527099ffa5689be817a073309c7fe75	internal/launch/start.go
+100644 blob 8b9756e7710e8db4321a034ceaf78ccd79eb06ef	internal/launch/start_api_test.go
+100644 blob b05436b4a46deb38168dc506017f13e785f5de12	internal/launch/tmux.go
+100644 blob f58a1803987b8475d26f8d89fb029dd5d882aecb	internal/launch/tmux_pane_command_test.go
+100644 blob 5faf806392181f3bddfeed3a8852c33c54dcac1e	internal/launch/types.go
+100644 blob 089510291eb09091059aba6fff56297c71fe437b	internal/liveness/agent_definition_test.go
+100644 blob f5c4cb49f73508a0105d5539699f469d5f252e2e	internal/liveness/batch.go
+100644 blob 99cb3e3c61927f28216cb0c5a3770cba347c503d	internal/liveness/batch_test.go
+100644 blob 4e2a644b52638d7b98e34926369dd2dc4efc4478	internal/liveness/bind.go
+100644 blob 059a43fa2072d7026a0ca307f64508ca221d52c6	internal/liveness/check.go
+100644 blob 8e7b162ff0aa3c350b98719ee069b5aa4b496d23	internal/liveness/classify.go
+100644 blob f83382fe7001d9a23f98f8b6890bba12345bb0a7	internal/liveness/deadline_test.go
+100644 blob 131165db2fcd36354592a335db2700135d9c6019	internal/liveness/liveness_test.go
+100644 blob 2ed4d4909fb375855c347473800c3b3c82b6290a	internal/liveness/lookup.go
+100644 blob f4d592ef21828abd964e7a75d6299d16b13aa32e	internal/liveness/lookup_test.go
+100644 blob 25d14689925039da93974c1317e8b691622a1df1	internal/liveness/observation.go
+100644 blob 998f3485e5fd905ee398551fbf5c0efee3f8753a	internal/liveness/subscribe.go
+100644 blob 0e674e673afbc5bc495a6fabcf36724a1708e966	internal/liveness/subscribe_clock_test.go
+100644 blob db3f26ac485bd83d06a4175992e1639d277d5e6c	internal/liveness/subscribe_dispatch.go
+100644 blob 04c8fadc42ff971340d3280c092795aeb1cd22a5	internal/liveness/subscribe_dispatch_runtime_test.go
+100644 blob f16663ecc916516907d00345c4d428c5c2c8939a	internal/liveness/subscribe_dispatch_test.go
+100644 blob f022519d246e8eb08028257851db41e59c7b1f49	internal/liveness/subscribe_facts.go
+100644 blob 8642e3fdb22b770adf116fb556ed0beb1eeaa69c	internal/liveness/subscribe_facts_test.go
+100644 blob 50812a139a8c5e2c29d3bc63b1031956c60ddd69	internal/liveness/subscribe_members_test.go
+100644 blob d7f3e76ce7ba8a69c90a3d861309ee8f38b0aa8d	internal/liveness/subscribe_output.go
+100644 blob e0a01197a85c937de01e0dc119df17569c338bdb	internal/liveness/subscribe_output_posix.go
+100644 blob 07c066d247c3f279ad8fa744399c766a68839417	internal/liveness/subscribe_output_windows.go
+100644 blob 2ef0875bcd6f11ae8f2706967270c4c99828cd0f	internal/liveness/subscribe_pipe_test.go
+100644 blob 55f0e56255fb0a7af17a666ee9808c6e19af66b6	internal/liveness/subscribe_probe.go
+100644 blob 1cea381e6cef17c9ad5b102e0e04aad8f0ad77a9	internal/liveness/subscribe_read_test.go
+100644 blob cf82b3d4d3d429328cbaa285d55fe248ee335b55	internal/liveness/subscribe_restart_test.go
+100644 blob 57f48569c3270e5e71090226b39902861948a970	internal/liveness/subscribe_runtime_test.go
+100644 blob cea0f60d0dfd5b8b7661f5e45cf8a4d581a991da	internal/liveness/subscribe_signal_test.go
+100644 blob c00a21738d5e0cd99983ce1e74d0835b811e9d9d	internal/liveness/subscribe_signals_posix.go
+100644 blob 077b97e4de7667f0a2e6e5f2c2bf509fddb49cac	internal/liveness/subscribe_signals_windows.go
+100644 blob 32e3398d117edeeebaec4b090dde3808274c52af	internal/liveness/types.go
+100644 blob b09f5277b6329fc05bdd9413dba811772946fcdb	internal/menu/agent_fields.go
+100644 blob d73e4a632eb90672beb3846767b42704c2ca24b6	internal/menu/agent_fields_test.go
+100644 blob 6aa52bb0aedca8f7b3e898196ca85c97b921f81c	internal/menu/agent_language_test.go
+100644 blob 836e99b642c2ea79a6e7214493080914df292227	internal/menu/agent_probe_test.go
+100644 blob ad908a73f3864450480c4acd6648f51ba4866289	internal/menu/agents.go
+100644 blob f8cbe43c5a157906eb309fae300586ae249630df	internal/menu/agents_path_test.go
+100644 blob b2bcb51cc499a9215cf9dd5a4756d1b597c25c51	internal/menu/color.go
+100644 blob bf9b31836c0c26dc79e834915c81e08cd8b6d5ce	internal/menu/commands.go
+100644 blob a6cf9faaf4a1b6bb776d691589838de6ac67ba2c	internal/menu/doctor.go
+100644 blob 54cc2913212aacb6fe83f8d46053bc98ad7552f3	internal/menu/doctor_config_test.go
+100644 blob 47b5b9bcac7749e7698c3c3795176d28a0d64240	internal/menu/doctor_extra_test.go
+100644 blob 1826456d7fb8195b66e5e74fbec535a9e030b638	internal/menu/doctor_repair.go
+100644 blob 42c3e31a2a9e65350745db2f9a051be04e851c43	internal/menu/doctor_repair_test.go
+100644 blob 43628dc817d790401f674f727b231dc0c07f35bf	internal/menu/doctor_session.go
+100644 blob 0b2d456aa2296b3f2cf31ad466ccc7e6d86ffda3	internal/menu/launcher_windows_menu_test.go
+100644 blob 4ae0b7f433887a103fbd797e953539a86e7130ea	internal/menu/menu_harness_test.go
+100644 blob 5bd6e17f5a726fe037ba2271110e68dd3e6ed498	internal/menu/options.go
+100644 blob eb22d6384ebf6e73f305429095cb408e5725d927	internal/menu/options_helpers.go
+100644 blob 102994353382c65fe66386a468a4b54c633e9081	internal/menu/os.go
+100644 blob 718bb10b9c4e25f5f4c55822d133ab79e4c6fcd6	internal/menu/overlay_cli_test.go
+100644 blob 23a54a21ab8116f221844909bbc2c1de45269baf	internal/menu/report.go
+100644 blob daf6a188dd35973e44f520e29bd2620cb9b27521	internal/menu/restore_other.go
+100644 blob 99460505b208bf8c6d7fff8c40848c6a37378739	internal/menu/rule_options.go
+100644 blob 57f2b2e95022ce5b591f7b6a5b4df7c18696318d	internal/menu/rule_options_test.go
+100644 blob 4c2acbb39e658984114e87dbfc4acb6ad84761ca	internal/menu/rules.go
+100644 blob 1aa7d2685b3a0b79a9c424f45a876ba6f99a4aaa	internal/menu/rules_test.go
+100644 blob aefcb884f3f76849f214caa15cebbbd4372aaeb0	internal/menu/select.go
+100644 blob 89b682787314399e3207c4d8925eb14e2989cf93	internal/menu/select_unix.go
+100644 blob fa66b5af2a3cc111d46bb02b1022ec35fd54b1d7	internal/menu/select_windows.go
+100644 blob 5cb00bf58706c3c1ed95a4c64109a40da90aa306	internal/menu/terminal_tools.go
+100644 blob 6f70061150ca1f964ef5c63e90837b67047bf052	internal/menu/terminal_tools_test.go
+100644 blob 1dd76274fc32ba89c3b7bb4a87ca795df330248f	internal/menu/terminal_tools_windows_test.go
+100644 blob 323be4555ea1a143e4b9c4f0afa30518f395feac	internal/menu/termios_bsd.go
+100644 blob e139b12e72311f52a2c5e7a5748fedc9882c8e22	internal/menu/termios_linux.go
+100644 blob debf1b7ca50f72b56dde7a8a931d17a6dff3a25a	internal/menu/tty.go
+100644 blob b36b27a98289de63f440254b06f570873bbb6458	internal/menu/tty_unix.go
+100644 blob d3336a5b0ebd3c44ff8bf7d29e66875a4cea77b4	internal/menu/tty_windows.go
+100644 blob 59ae63f98eedfbddaef3b0b6a4d05875032e8968	internal/menu/uid_unix.go
+100644 blob 382f219e0a86a4ea793d783da1092405fb80c9ad	internal/menu/uid_windows.go
+100644 blob 80cf8ec19954c6381aa0bb2fa1dc564b92db322a	internal/notify/agent_definition_test.go
+100644 blob 1ef9b4e1807546768e5b948353e324e375f6d98d	internal/notify/cmd.go
+100644 blob 0cc7589f3424181a69915dd7256ec439e46e6783	internal/notify/command.go
+100644 blob 6b341553e969d444135826c8c40b1cc30f3e60ea	internal/notify/deliver.go
+100644 blob c3796f0add5bdf087f23cdef8fedd022c1fc2faa	internal/notify/dispatch.go
+100644 blob d812491d8eae6bd4d182427ebfaf55ddb0918d25	internal/notify/dispatch_crash_test.go
+100644 blob bb4c04b3e2474b5c01c5d5d13425def5ae9d7ffe	internal/notify/dispatch_fencing_test.go
+100644 blob c30395cb4915efc0f9adc5432bdcaa63a9e070bd	internal/notify/dispatch_test.go
+100644 blob 212863fb0ee670d25186aa08667fdacd7536db2a	internal/notify/error.go
+100644 blob d654be71857c543050d05fbd0aecca0d6fa98a51	internal/notify/notify_test.go
+100644 blob 64986fd5beeac4eb703627b44e2763df9660ac78	internal/notify/pane_ready_test.go
+100644 blob 6ac5509f3ab5ae15285b8d972531095edea36bcf	internal/notify/payload.go
+100644 blob 3a392c5fe2c9105027fb8274b13b372ce6673ab3	internal/notify/probe.go
+100644 blob d222954be79bd6adb3fc1ac7aa9733d8214de06d	internal/notify/resolve.go
+100644 blob 990ead193c997c8f760a240434d4f69f31f417d5	internal/notify/rules_test.go
+100644 blob 9c70e58b42e1ee69ea067b57d6a5be36f7776807	internal/notify/temp_unix.go
+100644 blob 1cdca9a66a559d798535cc402b38cc54a0b06cc6	internal/notify/temp_windows.go
+100644 blob ce71600b75a24670b06d8293c5caf68994c2d1bc	internal/notify/windows_direct_test.go
+100644 blob 090de15335050f2063ea1872f277f81e93dbb325	internal/probe/error.go
+100644 blob 7351622a31841afd8e6101cc8521867e8cc9a599	internal/probe/herdr.go
+100644 blob 454ed8c9e5116699a7cdee98dfacafad209dfd26	internal/probe/probe_test.go
+100644 blob 57055d4900ab7f80f1393695b55901839a85d87d	internal/probe/run.go
+100644 blob 88f5c4de70cb8433815a550677438cc6a7b9c6cf	internal/probe/run_posix.go
+100644 blob 89b4c9cccae7253ae20a3af205b3cf64a562948f	internal/probe/run_posix_test.go
+100644 blob 2deb38f9483a41fb0fee6669793d8f2271ecbe15	internal/probe/run_test.go
+100644 blob 243ce25b09f3fb86408ed6a9b55cd17dbaba8cb1	internal/probe/run_windows.go
+100644 blob bf5c1c03a907ae71c2c87e8cfbfc4d557a81fa82	internal/probe/run_windows_test.go
+100644 blob d364a4c0d33411afbd500bee7571eaf357b3199d	internal/probe/tmux.go
+100644 blob 6bc78c0abaf85f128cff5e903de7a8859c01c2a3	internal/process/output.go
+100644 blob 4ca7e26837ea4e769bf64f3ddd4bf2e26543c5f9	internal/process/output_test.go
+100644 blob d07d47de221eebf73cf994529a7df801e7a902a8	internal/process/process.go
+100644 blob 1993f47d7b45d159b1b4e98fadc888446c428bfc	internal/process/process_test.go
+100644 blob fe8d328feb370749982ea8e6191ebb89a4adf241	internal/process/template.go
+100644 blob 01c798cef93f5d5a274d82c7ad5ad4daa85241b8	internal/process/template_test.go
+100644 blob a6e25639302abf10e4e3494f8886a4c86497d84d	internal/review/access_unix.go
+100644 blob 43400543663b6da6b3817cfa618a6ff2878fa54f	internal/review/access_windows.go
+100644 blob 68250f5be141a159c9a81d0e6d0c06ba057096c6	internal/review/agent_executable_test.go
+100644 blob be262ea587113ea09d89d79a7a3f9c72c1ecdc25	internal/review/archive.go
+100644 blob a37a0d20b9951bed591058c5d695aad66600bd13	internal/review/archive_test.go
+100644 blob 06df45d73e9adf44bf884233c99adad13a2b8d5e	internal/review/args.go
+100644 blob 25b9d23646ac4f60381dc7c7a3a4542ace2fd10d	internal/review/bind.go
+100644 blob bc7212b308897be22bc7ba888a13b21893f5c271	internal/review/claude_test.go
+100644 blob de3483e356ff35ebc1981368299e519e8facd2b9	internal/review/codex_test.go
+100644 blob 06a4e5700aadd9d7370978e7614145ef2a8a7262	internal/review/cursor_test.go
+100644 blob 23cdb22d7b10bd39381b44739720d7f9b765b315	internal/review/definition_test.go
+100644 blob 33181040a78b6728c3a7f685e55e4b761b151129	internal/review/definition_unix_test.go
+100644 blob a77538070d653701671b49594dda3e8764fba3b0	internal/review/disposition.go
+100644 blob d4fcfb5e209cb827f1cd7d5aa0710236c561141d	internal/review/disposition_cycle_test.go
+100644 blob e08ce37a0966bd7a1a9e2b8636b40e86396bd03d	internal/review/disposition_regression_test.go
+100644 blob bec7ea33c3da746db3f0fc55bb3e7435c6ad3d61	internal/review/disposition_test.go
+100644 blob 98e139a4bd8df41d44f40991b2d9f0eab07b02a3	internal/review/execute.go
+100644 blob 9d2a0bb8dbb62450a94e444b5965629eb8c38711	internal/review/git.go
+100644 blob 5a6c813bca260efdd9e7d1ced17e642e4e6a6f08	internal/review/grok_test.go
+100644 blob c7011a199bbd2876e1157356e94b2c38cec0457c	internal/review/harness_test.go
+100644 blob 0f68a5db71ea8760d78223f03dbb60cc79ed9606	internal/review/helpers_test.go
+100644 blob b7ee856ac4b831f905f265dd07c718d025efe354	internal/review/launch_unix.go
+100644 blob def6aacc05623eaf5ee172d4c61adcfaf4132c76	internal/review/launch_windows.go
+100644 blob 561c865964c5f2973fbc8a64fde0940aee7c18ea	internal/review/lineage_recovery_test.go
+100644 blob 8e74e21547e1dc3e78e301a7a84a553aa55911aa	internal/review/mechanical.go
+100644 blob 52dec9505f8f4674b3185bd93fc040fa050a3d6d	internal/review/monitor_unix.go
+100644 blob 826ced6c07d3cf68a50e6d44905a3320b5b7e145	internal/review/monitor_windows.go
+100644 blob c7966edc7a718ecdb96c408007dd0f2bb764fadf	internal/review/platform_unix.go
+100644 blob d17d17631d739b031f7aa6dd064d9238c2818cfd	internal/review/platform_windows.go
+100644 blob 8567ba980bee2a008eb00312fb1fe62346d6ff44	internal/review/recovery.go
+100644 blob 9b392b943c04ddd5067daed5e1f9589b7ca1edf1	internal/review/report_language_test.go
+100644 blob 084d6ab3d045dddd8b224225243897908c4d0a46	internal/review/review.go
+100644 blob e3108339997c52154dee970352127ddf16da22cc	internal/review/roles.go
+100644 blob c72c099256ee066e5b341767831e96e4cbe60e14	internal/review/settings.go
+100644 blob 6d8d7418fdd08849765e506fe7a8a20b84634373	internal/review/tree.go
+100644 blob 8a5c9bb1774056daa703b15bce75ddc5919f4202	internal/review/validate.go
+100644 blob 93c3439efb0b1a54f30dff8c32342806a6e88aa7	internal/review/windows_review_test.go
+100644 blob bcd96d398f4abc9462f08dbd90adf973c801e2c0	internal/takeover/agent_definition_test.go
+100644 blob 0129d92f81925a3949e6444c26568f1dfe1ce6c9	internal/takeover/cleanup.go
+100644 blob 1c65123411fcaf098a3c16b3cc840b2bf1e38d01	internal/takeover/cmd.go
+100644 blob c4376d887f4c273255329063e4b96259b5fa6dc3	internal/takeover/dismiss.go
+100644 blob 00904a05c7ff890be5c7801b5e1b916875ce5d6a	internal/takeover/ops.go
+100644 blob c3cb3a367db82e6dfda0222bfbb2ad06d12055b4	internal/takeover/takeover_test.go
+100644 blob 6cf357d270c5201b12c40cd951c0649380290b20	internal/takeover/wait.go
+100644 blob ddef07f8ed6cb606fcc9ff7739b50398427f8f9e	internal/takeover/windows_container_test.go
+100644 blob 89b0fa5dc81e1d49ed60adf8ece3c37f465816cf	internal/tui/app.go
+100644 blob 79ccb759d12ca8da600cdf3a8d4c2a0609e75f0a	internal/tui/background_fill_test.go
+100644 blob 9bbf8678e293a5590ca89e50cae0aab7a3425d00	internal/tui/board_view.go
+100644 blob 2f91c9b13be821143eb359e9bac2ddc3345f6579	internal/tui/clipboard.go
+100644 blob 711adbba746928150552f7c8a5e855e78d2bf415	internal/tui/cmd.go
+100644 blob 64a5795abc574a8ced01bb6b07e5d2192415f594	internal/tui/cmd_test.go
+100644 blob 31cf1a3ffd5c724801a79db03b768d6efe15b400	internal/tui/context.go
+100644 blob 0bd25b116d2d86c479bf0460447363aa89d77bad	internal/tui/detail_view.go
+100644 blob 17b5fb99aa3c78e5709b2c40d7528dcd854abce6	internal/tui/focus.go
+100644 blob 40174c4dba2e9462b9a943a285c0d78f37e356e5	internal/tui/focus_test.go
+100644 blob 78306ee54eb80d915fec9ea0137b7319a0b843a0	internal/tui/help_view.go
+100644 blob af85b3120992d368443e0aa63b5281d1b49e295b	internal/tui/journal_warnings.go
+100644 blob 72f4e591142e2a62d37167d8ed2d8bfbc529b424	internal/tui/journal_warnings_test.go
+100644 blob 0e0f1875044f0dbdafc32d4aac49c0c0e14db73d	internal/tui/layout.go
+100644 blob fc6568611684d27b9a107254ba4bbaeeac124990	internal/tui/model.go
+100644 blob 95d323f432b86c9309f56bf44a81eb63696c2705	internal/tui/mouse.go
+100644 blob 8ba9e9371a270f29bdd3aa773847ef41b1dd96f4	internal/tui/options_doctor.go
+100644 blob 4dbd590131eb0c6d0b668c209c4f113c479475b8	internal/tui/options_doctor_test.go
+100644 blob b6752af087b73ac49a4d044408d4aeca63cf032c	internal/tui/options_flow.go
+100644 blob c05871b035b6f676ab7b627d50b8b46f6b4c993b	internal/tui/options_flow_test.go
+100644 blob 35b5da9a61b9f5a1bedcfc3ef1c12ee7c2145886	internal/tui/options_form.go
+100644 blob 3ef0598d57eb3be42f778c472954bb9d3ced742b	internal/tui/options_panel.go
+100644 blob e74b8e437e29f9e51572aad935e5f617cea7c166	internal/tui/options_rules.go
+100644 blob 693d6b6ce3c18cdff021fab8c6ea973b2a73224d	internal/tui/options_rules_test.go
+100644 blob 979a935ac3a1bc639cbce62ced640ee477895135	internal/tui/options_test.go
+100644 blob f24fee0983bfc13512249bd148636f9490ce1f18	internal/tui/options_view.go
+100644 blob 43b66f0d228e68c5c53c5c566a5b48bcfaefd520	internal/tui/overlay.go
+100644 blob 9b99be50175a3c773daa54fe168bb2e164ff7b14	internal/tui/payload.go
+100644 blob 63e8ab9bf1708d2a0bf28dd3d26f065c92aa34da	internal/tui/prefs.go
+100644 blob 55c037cea39d7a4a103457e98932c8ecdf2da306	internal/tui/program.go
+100644 blob feece68475e007aba48977210fa3993533a6d128	internal/tui/pty_test.go
+100644 blob 78edfc31333fbb96b4c761ac51b4442fe6edfa1e	internal/tui/selection.go
+100644 blob 73e450a8954f3e45477d84a78d1dad03049a8172	internal/tui/start.go
+100644 blob 39297ac0e254d7c83bbca506f637a42bb7602ddd	internal/tui/start_async_test.go
+100644 blob 3a42f0ef1edfc7b4f83532b6ef5b60c9bde92402	internal/tui/start_dialog.go
+100644 blob 535f7114d9726db91d9146251b40147dd8fad879	internal/tui/start_scroll_test.go
+100644 blob fc9571bb03733b30b9255f2f7c05234b577c2f33	internal/tui/start_target_linux_test.go
+100644 blob 6e4145961991a447f8a5e4fe40bcd3eb957fce6e	internal/tui/start_test.go
+100644 blob db0a7a8bdb217edd3f68562d7e317f9a9bf33f5e	internal/tui/status.go
+100644 blob ef5b58d1e40fd6c6fa148557ff735419729da265	internal/tui/text.go
+100644 blob e1cf2e7586ffbf282d3c7d0fffa2217fd7a7f613	internal/tui/theme.go
+100644 blob 18bbcf26467dc533aebde9b60e231613245c2527	internal/tui/tui_test.go
+100644 blob b1452bed5782565ed44fbec0a2e337cf3e0fcffb	internal/tui/types.go
+100644 blob 49d83696cb7d3263084c6884fb0d41a1256b8462	internal/version/version.go
+100644 blob 94f343dcf7105c7d609a5a4e9257e4120956616a	internal/version/version_test.go
+100644 blob 2100e20e3dd461bedad832085c6db0d82ad0ac40	internal/window/window.go
+100644 blob 303bfab29226bc62fff6fc2d8f0ddbebda293cdf	internal/window/window_test.go
+100644 blob 12eb667eda1f0652129a362dc03b12811b901d67	make-windows.cmd
+100644 blob a8eec83d2429fbfd55da4dea74d9500638fce4a1	rules/KANDER-AGENTS.md
+100644 blob d4e9714a6d2cbc95aa38c80a1d0e2d595ed7f61a	rules/KANDER-BASE-RULES.md
+100644 blob 9a89057dde49e5c7d6ea149ea89ffe38e941ee3e	rules/KANDER-CODE-RULES.md
+100644 blob 0cbf80394b952ad82751444955a47fdb30a3e437	rules/KANDER-COLLABORATION-RULES.md
+100644 blob 4410d42ce05064989180ca2653234129dde5d603	rules/KANDER-GIT-RULES.md
+100644 blob df3e5dbf84bed40cb46cfd644eac54ce1f52b4dc	rules/KANDER-KANBAN-RULES.md
+100644 blob de41d6c965980fbd9010f8a59542a67124531708	rules/KANDER-REPORTING-RULES.md
+100644 blob 645e889c40319fde345254d797aae9acd9b40046	rules/KANDER-REVIEW-RULES.md
+100644 blob 585410d1398266d14176d4346122cfe59b1e4a12	rules/KANDER-TASK-GROUP-RULES.md
+100644 blob 935190e20fa331076c87e859fd045155a8c7f83c	rules/KANDER-TASK-INTAKE-RULES.md
+100644 blob 4650fb65647980cf787833a7c98ed2718cac2b48	rules/embed.go
+100644 blob c930439258d499a6a547e11b622e91261e5787b9	rules/embed_test.go
+100755 blob c7e77a84400af22bdf0f03cda5c1a96552a7435e	scripts/guard-kanban-write.sh

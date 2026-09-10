@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 33,
+  "record_id": "pm-003-fix",
+  "run_id": "tui-project-options-pm-4",
+  "finding_id": "PM-003",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:02:04.511428697Z",
+  "report_hash": "3e54b4814dde7be80ee7cfd4fe4ee9fc5859b97af7018eafbd85d6d4d1e37105",
+  "original": "Inferred，高置信度。违反 task-spec.md USER_DECISIONS 中修改字段建立覆盖并移除继承前缀的要求。Project 页面中的继承标题和恢复控件只在建表单时计算；修改 launcher 或模型后虽已记录覆盖，却不刷新表单，仍显示旧继承来源且没有恢复入口，直至重新进入页面。最小修复：覆盖状态变化时同步刷新标题和恢复控件，同时保留字段焦点与文本输入位置。",
+  "status": "fixed",
+  "basis": "apply paths rebuild the form when overlay presence changes; TestProjectLauncherChangeRefreshesInherit pass.",
+  "fix_commit": "60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb",
+  "verification": "Read the cited paths on 60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit. Targeted tests named in basis pass."
+}

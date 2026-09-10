@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r2-c2",
+    "epoch": 3
+  },
+  "submitted_revision": 46,
+  "record_id": "pm-11-deferred-r2",
+  "run_id": "pm-batch-one-r3",
+  "finding_id": "PM-11",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:45:12.909046585Z",
+  "report_hash": "68e04a2a7dcd76ebb5ba8c2dd07d27ecf1b116405d02494884fb5cc97681c0c2",
+  "original": "ConfiguredLanguage 的两处提前返回让界面语言与 kander config --json 不一致。其一:覆盖文件非法(JSON 错误、禁止键、未知键、非常规文件)时 internal/config/language.go:106-109 返回 \"\",界面语言退回环境语言,于是「覆盖文件有问题」这条错误本身以非用户配置的语言显示。其二:作用域 config.json 不存在时 language.go:91-94 提前返回 \"\",覆盖文件的 language 对界面无效,而 config.Load(true) 以 DefaultConfig 为底合并覆盖,kander config --json 仍输出覆盖语言、同一条命令的「语言」行却是环境语言。两种触发都少见,后果仅为提示语言不一致。若要收紧:这两个分支在返回前仍尝试合并覆盖,或至少在作用域文件缺失时以默认配置为底做同样的合并。",
+  "status": "deferred",
+  "basis": "独立核实 5d632af 与本轮 language.go：configuredScopeObject 在作用域文件缺失或 Validate 失败时返回 nil，ConfiguredLanguage 随之返回 \"\"；readOverlay 出错仍提前返回，不回退到作用域语言。与 Load(true) 缺文件仍合并覆盖不一致。属低等级提示语言不一致，本轮 disposition-only 不改。"
+}

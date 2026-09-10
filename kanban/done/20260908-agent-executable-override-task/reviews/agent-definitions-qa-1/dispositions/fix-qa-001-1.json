@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 17,
+  "record_id": "fix-qa-001-1",
+  "run_id": "agent-definitions-qa-1",
+  "finding_id": "QA-001",
+  "batch_id": "agent-definitions-batch",
+  "task_id": "20260908-agent-executable-override-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T02:50:01.376722661Z",
+  "report_hash": "dc338f79e09a5015a473e8e1673dc7af92c9826d4e200b1ed728a41a80d524c3",
+  "original": "Inferred；置信度高。自定义 Claude/Grok 方言名称可以启动，但退出命令仍按四个内置名称查表，导致 dismiss 返回 unsupported，接管清理保留旧执行进程。最小修复：按解析后的方言选择退出命令，保留身份与容器门禁；增加自定义名称的 dismiss 和接管清理回归。",
+  "status": "fixed",
+  "basis": "合并根因退出方言：TestConfiguredAgentDismissAndCleanup 在原源码复现 my-claude/my-grok dismiss 和 cleanup 的 unsupported；现 AgentExitCommand 读取有效方言选择命令，回归核对 /exit 与 /quit，保留身份/容器门禁。",
+  "fix_commit": "6dbed41ae20a5c930f47b209ea9dc4add2c1a771",
+  "verification": "提交 6dbed41ae20a5c930f47b209ea9dc4add2c1a771：go test ./internal/config ./internal/launch ./internal/process ./internal/menu ./internal/takeover -run Test(DialectSessionCompatibility|NoneDialectArgumentsDoNotReuseTerminalIdentity|WindowsSuffixedNamesSearchPATH|WindowsAbsoluteExtensionlessProgram|PanelCanConfigureUnselectedRenamedBuiltin|ConfiguredAgentDismissAndCleanup) -count=1 -json，退出 0；修复前相同回归已复现。Windows 为可注入平台解析测试，未声称原生执行。"
+}

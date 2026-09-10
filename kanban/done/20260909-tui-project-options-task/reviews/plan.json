@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "tui-project-options-plan",
+  "author": "cursor",
+  "basis": "本轮任务契约、仓库 AGENTS.md 的 CSA/Hacker 例外，以及 review_stages.large",
+  "cwd": "/home/dualf/works/kander/worktrees/tui-project-options",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260909-tui-project-options-task"
+  ],
+  "cycles": {
+    "20260909-tui-project-options-task": "ac65b546d9c111b6fe7d70923b7a58654c0d4622d27fe3c75c53908fb74e7580"
+  },
+  "batches": [
+    {
+      "batch_id": "tui-project-options-batch",
+      "task_ids": [
+        "20260909-tui-project-options-task"
+      ],
+      "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+      "target_commit": "b2f3668049fc472d0dc3e7710b7638c8fca3c00d",
+      "requirements": {
+        "CSA": "N/A: security-role exception in this repository's AGENTS.md; review_stages.large.CSA=skip",
+        "Hacker": "N/A: security-role exception in this repository's AGENTS.md; review_stages.large.Hacker=skip",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-09T03:41:13.148671864Z"
+}

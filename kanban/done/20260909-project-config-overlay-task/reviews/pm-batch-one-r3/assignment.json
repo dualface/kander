@@ -1,0 +1,31 @@
+{
+  "run_id": "pm-batch-one-r3",
+  "batch_id": "batch-one",
+  "author": "claude-orchestrator",
+  "basis": "assigned by each card's GOAL/OUT_OF_SCOPE and the fix commits that introduced them: PM-09 (language write-back via ConfiguredLanguage, introduced by card 2 commit 5d632af), PM-10 (savePrefs comment vs implementation, card 2 commit fa8ab21), PM-11 (ConfiguredLanguage early returns, card 2) and carried PM-06/PM-07 hit card 2; carried PM-08 hits card 1's review_stages error text",
+  "items": {
+    "PM-06": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-07": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-08": [
+      "20260909-review-stages-per-size-task"
+    ],
+    "PM-09": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-10": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-11": [
+      "20260909-project-config-overlay-task"
+    ]
+  },
+  "owners": {
+    "20260909-project-config-overlay-task": "cursor",
+    "20260909-review-stages-per-size-task": "cursor"
+  },
+  "recorded_at": "2026-09-08T19:38:55.552411666Z"
+}

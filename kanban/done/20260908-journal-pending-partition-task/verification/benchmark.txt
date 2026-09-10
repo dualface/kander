@@ -1,0 +1,20 @@
+goos: linux
+goarch: amd64
+pkg: github.com/dualface/kander/internal/board
+cpu: AMD Ryzen AI 9 HX 470 w/ Radeon 890M           
+BenchmarkJournalHistory/empty/show-24    	       3	    516917 ns/op	 1148602 B/op	     648 allocs/op
+BenchmarkJournalHistory/empty/list-24    	       3	    467116 ns/op	 1131101 B/op	     464 allocs/op
+发现旧布局事务记录；运行 kander init 分拣日志。
+BenchmarkJournalHistory/legacy/show-24   	发现旧布局事务记录；运行 kander init 分拣日志。
+发现旧布局事务记录；运行 kander init 分拣日志。
+发现旧布局事务记录；运行 kander init 分拣日志。
+       3	 954243354 ns/op	1044448349 B/op	   37005 allocs/op
+发现旧布局事务记录；运行 kander init 分拣日志。
+BenchmarkJournalHistory/legacy/list-24   	发现旧布局事务记录；运行 kander init 分拣日志。
+发现旧布局事务记录；运行 kander init 分拣日志。
+发现旧布局事务记录；运行 kander init 分拣日志。
+       3	 935119999 ns/op	1044449157 B/op	   36824 allocs/op
+BenchmarkJournalHistory/partitioned/show-24         	       3	   2143936 ns/op	 1446642 B/op	    3159 allocs/op
+BenchmarkJournalHistory/partitioned/list-24         	       3	   2019944 ns/op	 1443336 B/op	    2976 allocs/op
+PASS
+ok  	github.com/dualface/kander/internal/board	11.708s

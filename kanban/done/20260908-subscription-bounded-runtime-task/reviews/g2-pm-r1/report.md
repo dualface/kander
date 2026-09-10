@@ -1,0 +1,57 @@
+Role: PM  
+Commit: `ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe`  
+Task Context: 三卡任务规格及调用方五项审核重点。  
+Reviewed Scope: 协调快照、成员展开、订阅调度与输出、dispatch 存储与回执、notify/resume、epoch 写入、相关测试、文档及三语合并块。
+
+验收拆分：Complete 36、Partial 4、Missing 0、Contradicted 0、Unverifiable 2。存在 4 项 medium，暂不通过。
+
+1. **PM-001 — medium，Inferred，高置信度：resume 接受期限耗尽仍可返回成功。**  
+   契约要求无回执到期返回非零（`rules/KANDER-KANBAN-RULES.md:109`）。但 foreground/console 存活校验到期返回 nil（`internal/launch/agent.go:268–277`），随后 `resumeDispatch` 输出未接受状态并返回 nil（`internal/launch/dispatch.go:198–209`）。console 直接成功退出；foreground 若随后退出 0，也报告成功。调用方无法通过退出码识别接受超时。最小修复：重新读取回执后，未接受且期限耗尽必须返回 pending 错误，保留未知执行者。
+
+2. **PM-002 — medium，Inferred，高置信度：dispatch 预解析吞掉消息正文。**  
+   `ParseDispatchOptions` 逐 token 提取选项，不跳过其他选项的参数（`internal/launch/dispatch.go:213–239`）。例如 `notify <task-id> --message '--kind=sync'`，正文被当成 dispatch 选项删除，后续报缺少消息。resume 同样受影响。违反未绑定普通消息兼容要求及发布协议第 114 行。最小修复：合并参数解析，或完整识别已有选项的参数边界；正文保持数据语义。
+
+3. **PM-003 — medium，Inferred，高置信度：任务别名在意图落盘后被拒绝。**  
+   已有入口接受 `<task-id>.md` 拼写（`internal/board/scan.go:251–262`）。新流程先通过规范化快照，用 `s.Entry.TaskID` 创建意图（`internal/launch/dispatch.go:69–73`），随后 notify/resume 却用原始 task 调用 `ReadDispatch`（`internal/notify/dispatch.go:49,74`；`internal/launch/dispatch.go:134`）。该 API 不规范化，锁作用域拒绝 `.md`（`internal/board/dispatch.go:174–175`；`internal/board/transaction_lock.go:67–73`）。组 review 自动持久模式因此回归：意图已绑定，却尚未发送便失败。最小修复：首次读取后统一使用 `s.Entry.TaskID` 进入整个投递与对账流程。
+
+4. **PM-004 — medium [mechanical]，Observed，高置信度：恢复失败注释与实现不符。**  
+   `internal/launch/notify_resume.go:29–31` 声称失败时按 revision 回滚；新增的 delivery-unknown 与 durable 校验失败路径直接返回，刻意保留正文、WINDOW 和任务文件（同文件 `108–110,119–121`）。注释会误导调用方理解失败后的资源状态。最小修复：说明发送前失败的回滚条件，以及持久发送尝试后的保留行为。
+
+三语新增 16 个消息键齐全，无重复键或占位符差异；AGENTS.md 两项新增索引均保留。`git diff --check` 通过。测试、race、build/vet 未在本次只读审查重跑；原生 Windows、真实终端验证保持 Unverifiable，不单独构成 finding。
+
+只读沙箱禁止删除，任务文件保留。
+
+NON-BLOCKING: none
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "PM-001",
+      "tier": "medium",
+      "text": "Inferred，高置信度：持久 resume 在 foreground/console 执行者持续存活但没有接受回执时，存活校验到期返回 nil，resumeDispatch 随后输出 delivery-unknown 并返回成功。console 可直接退出 0；foreground 后续退出 0 也使命令成功。违反接受期限耗尽且无回执必须返回非零 pending 的契约。最小修复：最终重新读取回执后，未接受且期限耗尽返回 pending 错误，继续保留未知执行者及持久意图。",
+      "evidence": "契约：rules/KANDER-KANBAN-RULES.md:109。路径：internal/launch/agent.go:268–277 在 foreground/console 到期时返回 nil；internal/launch/dispatch.go:198–209 未接受且启动返回 nil 时仍返回 PrintDispatchResult；internal/launch/dispatch.go:277–287 对 console 不等待，对退出 0 的 foreground 返回 nil。"
+    },
+    {
+      "id": "PM-002",
+      "tier": "medium",
+      "text": "Inferred，高置信度：新增 dispatch 预解析不识别其他选项的参数边界，将 --message 的正文当成 dispatch 选项。例如 notify <task-id> --message '--kind=sync' 原本是合法普通消息，现在正文被删除并报缺少消息；resume 同样受影响。违反未绑定普通消息兼容要求。最小修复：使用统一参数解析，或在预解析中正确跳过已有选项的参数，保证消息正文不被解释为控制选项。",
+      "evidence": "契约：durable-dispatch-protocol-task 的普通消息兼容验收；rules/KANDER-KANBAN-RULES.md:114。根因：internal/launch/dispatch.go:213–239 无条件检查每个 token。消费者：internal/notify/cmd.go 的 RunNotify、internal/launch/cmd.go 的 RunResume 均先调用 ParseDispatchOptions，再解析 --message；internal/notify/cmd.go:65–70 展示原有消息参数消费方式。"
+    },
+    {
+      "id": "PM-003",
+      "tier": "medium",
+      "text": "Inferred，高置信度：notify/resume 的持久模式混用规范化任务 ID 与原始任务参数。使用已有入口支持的 <task-id>.md 拼写时，意图按规范 ID 成功落盘，随后 ReadDispatch 按原始参数建立锁作用域并失败，造成已绑定但未发送的 prepared 意图，重试相同拼写仍失败。组 review 自动切入持久模式后出现该回归。最小修复：首次 ReadSnapshot 后使用 s.Entry.TaskID 贯穿发送、恢复及同 ID 对账。",
+      "evidence": "既有参数契约：internal/board/scan.go:251–262 的 NormalizeTaskID/Locate 接受 .md 拼写；internal/board/transaction.go:330–337 的 ReadSnapshot 同样规范化。创建使用规范 ID：internal/launch/dispatch.go:69–73。投递却使用原始 task：internal/notify/dispatch.go:49,74；internal/launch/dispatch.go:134。ReadDispatch 不规范化：internal/board/dispatch.go:174–175；internal/board/transaction_lock.go:67–73 拒绝带扩展名的锁任务 ID。"
+    },
+    {
+      "id": "PM-004",
+      "tier": "medium",
+      "mechanical": "documentation",
+      "text": "Observed，高置信度：[mechanical] NotifyViaResume 的注释仍承诺失败时按 revision 回滚，但新增持久投递路径在发送结果不确定或发送后的存活校验失败时直接返回，保留正文、WINDOW 和任务文件。注释误导调用方理解失败后的资源状态。最小修复：明确发送前失败的回滚条件，以及持久发送尝试后的保留行为。",
+      "evidence": "internal/launch/notify_resume.go:29–31 描述失败回滚；同文件 108–110 的 DeliveryUnknown 分支及 119–121 的 durable 校验失败分支均直接返回，不执行下方回滚。该差异由本审核范围新增的持久模式引入。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

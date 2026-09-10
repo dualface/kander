@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 17,
+  "record_id": "pm-002-author-1",
+  "run_id": "a00c77a9c5d75699770534c8ee1b1c1e",
+  "finding_id": "PM-002",
+  "batch_id": "20260909-options-reload-batch-1",
+  "task_id": "20260909-options-reload-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:14:29.988163607Z",
+  "report_hash": "f8d3bab70b93b9022dbe4dc8e422f34982103669bcd230e9571cd584ec85d023",
+  "original": "Inferred，高置信度：界面字段改回打开时的初始值会跳过应用。初始主题 light，改成 dark 再改回 light，loadedTUI 比较使 applyInterface 提前返回，看板仍为 dark；Enter 保存后看板仍不恢复，直接关闭则磁盘保留 dark。违反 task-spec.md:27 保持界面应用行为的要求。最小修复：区分首次绑定与实际编辑，以最近一次表单值识别变化；改回原值仍更新看板、重建相关字段并持久化。",
+  "status": "fixed",
+  "basis": "Verified at fb61f8672ea32ce8ab271a7420a16df2f3686a21: applyInterface tracks appliedTUI and still pushes a revert-to-loaded value onto the board. TestThemeChangeKeepsInterfaceState cycles dark back to light and asserts app.Theme.",
+  "fix_commit": "fb61f8672ea32ce8ab271a7420a16df2f3686a21",
+  "verification": "go test ./internal/tui ./internal/config -count=1 at fb61f8672ea32ce8ab271a7420a16df2f3686a21: ok; go test ./...: 21 packages ok"
+}

@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "20260909-tui-theme-group",
+  "run_id": "tui-theme-qa-r3",
+  "batch_id": "tui-theme-batch-one",
+  "task_ids": [
+    "20260909-tui-theme-presets-task",
+    "20260909-tui-truecolor-palette-task"
+  ],
+  "role": "QA",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/20260909-tui-theme-group",
+  "base": "aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78",
+  "commit": "1d10371b763cad83ebf0aba295b985151ef71c50",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "f1aa286b1c785afc798d9d8750caa795b110eed3315fed931b2895ae737755c1",
+    "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+  },
+  "kander_version": "20260909T052428Z-f457271b9e9d",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-09T05:42:21.779496753Z",
+  "finished_at": "2026-09-09T05:47:11.97846428Z",
+  "duration_ms": 290198,
+  "hashes": {
+    "error.log": "3d48b84cd43d652901a1f5c57553d962558b62ffdbff752fdf478f474efced3c",
+    "evidence.txt": "597d9d948ed1d2daef4397b8a0087aa70be0a09a14a76374522a8bd87f85f99c",
+    "output.raw": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+    "prompt.txt": "e32546549f7d58baca610651fea94127307a8c55f7872413c2d51f7ce197387f",
+    "report.md": "13b3047cd9d6a73560b0ee23cd134e29cd4a7c829170e5d4cb98e2a8b38af67d",
+    "review-context.md": "f1aa286b1c785afc798d9d8750caa795b110eed3315fed931b2895ae737755c1",
+    "stdout.log": "a97cf80b06500671a3864a327c4f1c58be820bdedd69f3497fd0f66082f098dd",
+    "task-context.md": "0784545ff27ce8c57f65fb1529724d5bf09f56504a492aa9dd68494e2ecd4c9c"
+  },
+  "published": null
+}

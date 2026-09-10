@@ -1,0 +1,18 @@
+{
+  "run_id": "board-start-qa-1",
+  "batch_id": "board-start-task-key-batch",
+  "author": "codex",
+  "basis": "已复核启动退出生命周期及页脚截断路径；QA-002 与 PM-001 同根因",
+  "items": {
+    "QA-001": [
+      "20260908-board-start-task-key-task"
+    ],
+    "QA-002": [
+      "20260908-board-start-task-key-task"
+    ]
+  },
+  "owners": {
+    "20260908-board-start-task-key-task": "codex"
+  },
+  "recorded_at": "2026-09-08T04:02:20.932966326Z"
+}

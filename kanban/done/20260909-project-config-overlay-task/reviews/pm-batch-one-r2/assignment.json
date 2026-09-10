@@ -1,0 +1,37 @@
+{
+  "run_id": "pm-batch-one-r2",
+  "batch_id": "batch-one",
+  "author": "claude-orchestrator",
+  "basis": "assigned by each card's GOAL/OUT_OF_SCOPE and actual changed files: PM-03 (doctor backfill), PM-04 (review_stages tests) and PM-08 (review_stages error text) hit card 1; PM-01 (TUI prefs write-back), PM-02 (overlay merge normalization), PM-05 (doctor agent availability on merged config), PM-06 (second raw clone helper introduced with overlay), PM-07 (OverlayPath git subprocess per Load) hit card 2",
+  "items": {
+    "PM-01": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-02": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-03": [
+      "20260909-review-stages-per-size-task"
+    ],
+    "PM-04": [
+      "20260909-review-stages-per-size-task"
+    ],
+    "PM-05": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-06": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-07": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-08": [
+      "20260909-review-stages-per-size-task"
+    ]
+  },
+  "owners": {
+    "20260909-project-config-overlay-task": "cursor",
+    "20260909-review-stages-per-size-task": "cursor"
+  },
+  "recorded_at": "2026-09-08T19:09:46.93281461Z"
+}

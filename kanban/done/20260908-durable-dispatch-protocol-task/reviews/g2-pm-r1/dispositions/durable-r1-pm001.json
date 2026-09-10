@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 20,
+  "record_id": "durable-r1-pm001",
+  "run_id": "g2-pm-r1",
+  "finding_id": "PM-001",
+  "batch_id": "g2-batch-one",
+  "task_id": "20260908-durable-dispatch-protocol-task",
+  "author": "codex",
+  "recorded_at": "2026-09-07T19:49:46.128838809Z",
+  "report_hash": "0ba3565e4c10bd1cde53ab9fb098127df894872e54d58d565ef66fd12cfab2b8",
+  "original": "Inferred，高置信度：持久 resume 在 foreground/console 执行者持续存活但没有接受回执时，存活校验到期返回 nil，resumeDispatch 随后输出 delivery-unknown 并返回成功。console 可直接退出 0；foreground 后续退出 0 也使命令成功。违反接受期限耗尽且无回执必须返回非零 pending 的契约。最小修复：最终重新读取回执后，未接受且期限耗尽返回 pending 错误，继续保留未知执行者及持久意图。",
+  "status": "fixed",
+  "basis": "confirmed → fixed。核实目标 ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe 的 internal/launch/agent.go:268-277 与 dispatch.go:198-209：进程存活到期限可返回 nil，且没有最终 pending 判定。TestDurableProcessLivenessRequiresReceiptAtDeadline 在修复前 foreground/console 两子例均失败：live executor without receipt reported success at deadline。现 validateResumedDispatch 在成功存活校验后重新读取同授权回执；预算耗尽仍未接受则 pending，resumeDispatch 同时检查父/持久期限。最终 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3 的 dispatch.go:199-213、257-293；未知意图及执行资源保留。",
+  "fix_commit": "58023dff85b89e0f5f37f185f78f0a33db11ddc3",
+  "verification": "TestDurableProcessLivenessRequiresReceiptAtDeadline；TestDurableRecoveryAcceptsQuickCompletionBeforeLiveness；TestDurableLaunchErrorRetainsUnknownExecutorAndPayload。 最终提交 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：go test -json -count=1 ./... 退出 0，19 包、922 个测试/子测试通过、1 跳过、0 失败；go test -race -json -count=1 ./internal/launch ./internal/notify ./internal/board ./internal/window 退出 0，4 包、400 个测试/子测试通过、1 跳过、0 失败；go build ./...、go vet ./... 退出 0。"
+}

@@ -1,0 +1,9 @@
+{
+  "run_id": "board-start-qa-2",
+  "batch_id": "board-start-task-key-batch",
+  "author": "codex",
+  "basis": "已独立复核 QA 增量报告，无新增条目；两项旧发现已由作者记录及回归关闭",
+  "items": {},
+  "owners": {},
+  "recorded_at": "2026-09-08T04:10:52.689441075Z"
+}

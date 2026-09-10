@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "dispatch_id": "codex-agentdef-dispositions-embed-r2-20260909",
+    "epoch": 12
+  },
+  "submitted_revision": 101,
+  "record_id": "pm-01-git-map-codex-e12",
+  "previous_record_id": "pm-01-fix-r1",
+  "run_id": "pm-agent-def-b1-r4",
+  "finding_id": "PM-01",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-definition-embed-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T13:23:01.186975995Z",
+  "report_hash": "9a028fb50ced33e99f72130edee7e77431badd5fd6397814d6598ed3e3957343",
+  "original": "durable 派发下 mode: pane 的投递失败不走「关容器 + 回滚」的统一处置。launchAgent 在 herdrPaneRun / tmuxStartPane 之前就把 sendAttempted 置真，而 mode: pane 的第二段就绪与提示词投递发生在其后；因此 durable 为真时 fail() 直接返回 \u0026LaunchFailure{DeliveryUnknown: true}，跳过 herdrCloseTab / tmuxCloseWindow，调用方 notify_resume.go 收到 DeliveryUnknown 后设 taskFileHandedOff = true 并直接返回，不执行 window.RestoreWindowText。触发路径：卡片带 DISPATCH_ID（任务组派发）或接管带授权，执行 agent 声明 prompt_delivery.mode: pane，随后 blocked 命中或 ready 超时。此时提示词确定未送出（blocked 在投递前短路，超时同理），却被当作「可能已投递」，留下一个停在信任确认对话框上的容器、未回滚的卡片文本与未清理的临时任务文件。卡片 A1 明文要求「三者的处置相同：先抓取 pane 输出留作诊断，再关闭本次创建的 tab/window 并把卡片回滚到 todo/。不保留容器，不写 WINDOW」，且专门论证过这种残留卡片三条恢复路都不通。最小修复：fail() 的 DeliveryUnknown 短路只对 PromptDelivery.Mode != \"pane\" 生效，mode: pane 下投递失败一律走关容器与回滚。",
+  "status": "fixed",
+  "basis": "独立逐行核验旧 be3f6c3 与现 77affdd 的 agent.go fail 条件和 durable blocked 测试；git patch-id --stable 均 cf44aaa9252e046a1d9569a84012a20c0031b4ef。pane 不再进入 DeliveryUnknown 短路，随后关闭容器；notify_resume.go/commands.go 的失败调用链恢复原文。相关生产文件由 77affdd 到组目标 d97964c 的 git diff 为空。 原记录中的 fix_commit 不是组目标祖先（git merge-base --is-ancestor 退出 1）；新 fix_commit 是组目标祖先（退出 0），并位于原审核提交之后。本次仅追加 Git 证据映射，原 status/original/report_hash/mechanical 与旧作者原件保留。",
+  "fix_commit": "77affddb46336b7b131c4d8ba9ac6f6c1e85d6f4",
+  "verification": "从 77affddb46336b7b131c4d8ba9ac6f6c1e85d6f4 的 git archive 解出未修改源码，执行 go test -json ./internal/launch -run ^(TestPaneDeliveryDurableBlockedClosesTab|TestPaneDeliveryBlockedWinsBeforeTimeout|TestPaneDeliveryHerdrPromptRejected|TestPaneDeliveryReadyTimeout)$ -count=1；退出 0，4 项测试/子测试通过，0 失败。日志见 verification/disposition-map-12.md 及其引用的历史提交日志。"
+}

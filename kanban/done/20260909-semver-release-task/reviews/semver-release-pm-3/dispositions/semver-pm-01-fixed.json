@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 17,
+  "record_id": "semver-pm-01-fixed",
+  "run_id": "semver-release-pm-3",
+  "finding_id": "PM-01",
+  "batch_id": "semver-release-batch",
+  "task_id": "20260909-semver-release-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T05:29:25.147071523Z",
+  "report_hash": "a57196ba11cdecf7b5ce77676a8a07dec76b5895ddb264208c93ea5a89968dce",
+  "original": "internal/version/version.go:6-8 的注释 \"Local make injects `git describe --tags --always`, or \\\"dev\\\" when that is unavailable.\" 与本地构建实现在「有提交但无 tag 的 git 仓库」这一情形上相反。Makefile:7-10 的实现是: 先执行不带 --always 的 `git describe --tags`, 只有它成功才注入 `git describe --tags --always` 的输出, 否则注入 dev; Makefile 同处注释自述 'A checkout with no tags still succeeds with --always (short hash only); treat that like \"no tag\" and use dev'。make-windows.cmd:13-19 是同构逻辑。因此在无 tag 的 git 仓库中, `git describe --tags --always` 可用并输出短 hash, 实现却注入 dev, 与 version.go 注释所述的行为相反。该注释文本由本评审范围的 96ddc888 引入。影响: 维护者按 version.go 注释预期无 tag 仓库构建出的二进制显示短 hash, 实际显示 dev, 会误判版本注入链路失效并去排查 ldflags。最小修改: 将该句条件改为按「无 tag 或非 git 目录」表述, 例如 'Local make injects `git describe --tags --always` when the checkout has a tag, and \"dev\" when it has no tags or is not a git repository.'",
+  "status": "fixed",
+  "basis": "Independently verified against Makefile:10 and make-windows.cmd:13-19 at 96ddc888e30a399ddbf23b19d4818cfe3ac49ed1: git describe --tags (no --always) is the no-tag gate, so an untagged git repo still has a working git describe --tags --always (short hash) but make injects dev. The comment claimed describe was unavailable.",
+  "fix_commit": "211c104282f181d5fabe6cc49b03583b0bed269f",
+  "verification": "Read internal/version/version.go:6-9 after 211c104282f181d5fabe6cc49b03583b0bed269f: it now says describe is used when a tag is reachable, and dev when there are no tags or the checkout is not a git repository. Sentence-by-sentence match with Makefile:7-10."
+}

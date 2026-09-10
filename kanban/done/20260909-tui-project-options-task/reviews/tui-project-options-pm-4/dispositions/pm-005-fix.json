@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 36,
+  "record_id": "pm-005-fix",
+  "run_id": "tui-project-options-pm-4",
+  "finding_id": "PM-005",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:02:04.90817808Z",
+  "report_hash": "3e54b4814dde7be80ee7cfd4fe4ee9fc5859b97af7018eafbd85d6d4d1e37105",
+  "original": "Observed，高置信度。新增 PTY 窄屏断言未验证 resize 后的行为，不能支持 task-spec.md ACCEPTANCE_CRITERIA 第10条的窄屏验收。resize 前已要求累计输出包含覆盖文件名，resize 后仍搜索同一累计输出，因此即使没有任何新绘制或窄屏路径已消失，检查也可立即通过。最小修复：记录 resize 前输出边界，等待 resize 后完成的新帧，并只验证新帧中的路径和屏幕边界。",
+  "status": "fixed",
+  "basis": "PTY resize waits for new output after SIGWINCH and searches only that frame; TestOptionsProjectTabsAndNarrowPathsOnPTY pass.",
+  "fix_commit": "60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb",
+  "verification": "Read the cited paths on 60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit. Targeted tests named in basis pass."
+}

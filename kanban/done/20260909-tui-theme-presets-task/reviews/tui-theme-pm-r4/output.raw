@@ -1,0 +1,45 @@
+Role: PM  
+Commit: `6d882fbbf8e086e695728c02594d0d4899bfae82`  
+Task Context: [/tmp/codex-review.bd4c52e7c8b16f86cdfeca00497410dc/task-spec.md](/tmp/codex-review.bd4c52e7c8b16f86cdfeca00497410dc/task-spec.md)  
+Reviewed Scope: `1d10371..6d882fb` 四个变更文件、PM-01/PM-02 修复证据及交付记录。
+
+结论：PM-02 关闭；PM-01 部分修复，仅剩验收记录缺口。无新增代码缺陷。
+
+沿用上轮已接受项，36 项状态：Complete 33、Partial 1、Missing 0、Contradicted 0、Unverifiable 2。仅列状态变化：
+
+| 要求 | 预期行为 | 证据 | 状态 |
+|---|---|---|---|
+| palette 人工验收，契约第 39 行 | Solarized 四组合人工核验，并记入 `IMPLEMENTATION` | [走查记录](/home/dualf/works/kander/worktrees/20260909-tui-theme-group/internal/tui/testdata/theme-live-walkthrough.md:43)已覆盖四组合；[IMPLEMENTATION](/home/dualf/works/kander/kanban/review/20260909-tui-truecolor-palette-task/spec.md:90)仍只记 PTY | Missing 改为 Partial |
+| presets 人工验收，契约第 119 行 | 六主题、五界面人工核验，并记入 `report.md` | [报告](/home/dualf/works/kander/kanban/review/20260909-tui-theme-presets-task/report.md:35)记录环境、按键、矩阵、前景观察及字体局限 | Missing 改为 Complete |
+
+**PM-02 — closed — Observed，置信度高。**  
+[theme.go:195](/home/dualf/works/kander/worktrees/20260909-tui-theme-group/internal/tui/theme.go:195) 与第 202 行均直接返回归一化后的查表字段，两处不可达回退已删除。[resolveTheme](/home/dualf/works/kander/worktrees/20260909-tui-theme-group/internal/tui/theme.go:365)仍保证返回表内名称。
+
+**PM-01 — medium — partially fixed — Observed，置信度高。**  
+新增真实终端交互及目视记录足以关闭原视觉验证缺口；无需重复走查。但[契约第 39 行](/tmp/codex-review.bd4c52e7c8b16f86cdfeca00497410dc/task-spec.md:39)明确要求记入 palette 卡 `IMPLEMENTATION`。该卡[第 92–96 行](/home/dualf/works/kander/kanban/review/20260909-tui-truecolor-palette-task/spec.md:92)仍仅记录 PTY，并称其覆盖第八项验收，没有引用新增人工四组合结果。验收记录尚未闭合，无已观察到的显示故障。
+
+最小修复：在该 `IMPLEMENTATION` 补记本轮人工四组合结果，引用现有走查记录及提交 `6d882fb`，明确 PTY 属辅助证据。六主题五界面仍仅归 presets 卡。
+
+`make fmt-check`、修复范围 `git diff --check` 通过。测试与 vet 有作者通过记录；本次只读环境未复跑，沿用 Unverifiable。
+
+NON-BLOCKING: none
+
+已尝试删除任务文件；只读文件系统拒绝，文件保留。
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "PM-01",
+      "tier": "medium",
+      "text": "Observed，置信度高：PM-01 部分修复。真实终端交互及目视记录已覆盖六主题五界面与 Solarized 四组合，无需重复走查。但 palette 卡契约明确要求将人工四组合结果记入 IMPLEMENTATION；该节仍只记录 PTY，并称其覆盖第八项验收，未引用新增人工结果。剩余影响是验收记录未闭合，不是已观察到的显示故障。最小修复：在 palette 卡 IMPLEMENTATION 补记人工四组合结果，引用现有走查记录和提交 6d882fb，明确 PTY 属辅助证据；不要求 palette 卡承担六主题五界面。",
+      "evidence": "/tmp/codex-review.bd4c52e7c8b16f86cdfeca00497410dc/task-spec.md:39 明确要求人工验证并在 IMPLEMENTATION 中记录。internal/tui/testdata/theme-live-walkthrough.md:9-20、27-41、43-56 已记录真实终端环境、操作、前景观察及四组合结果；73afc16..6d882fb 未改变生产代码，走查二进制适用于目标提交。/home/dualf/works/kander/kanban/review/20260909-tui-theme-presets-task/report.md:35-68 已补齐记录；/home/dualf/works/kander/kanban/review/20260909-tui-truecolor-palette-task/spec.md:90-96 的 IMPLEMENTATION 仍仅记 PTY，没有本轮人工结果或其引用。",
+      "lineage": {
+        "run_id": "tui-theme-pm-r3",
+        "finding_id": "PM-01"
+      }
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

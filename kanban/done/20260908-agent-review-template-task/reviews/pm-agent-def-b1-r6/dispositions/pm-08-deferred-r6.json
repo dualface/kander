@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "187bcf576d52bf3e9fb689554f2211d7",
+    "epoch": 6
+  },
+  "submitted_revision": 71,
+  "record_id": "pm-08-deferred-r6",
+  "run_id": "pm-agent-def-b1-r6",
+  "finding_id": "PM-08",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-review-template-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T07:39:31.692034481Z",
+  "report_hash": "ec7662685ab9158edf6d770dff79af18aee23f2c1d6769f4dfb82f17860069ab",
+  "original": "[outside-fix-range] Codex 审核在非归档路径下的报告输出比改动前多一个换行：基线直接 os.Stdout.Write(data)，现在统一走 fmt.Println(text)，而 text 即原始文件内容（codex 定义为 parse: raw），本身已以换行结尾。判定结果与错误文案不受影响。该行在本次修复区间内未被改动，作者上一轮已 deferred，维持非门禁。最小改动：raw 来源的报告直接 os.Stdout.Write 而非 Println。",
+  "status": "deferred",
+  "basis": "非门禁 low，且 [outside-fix-range]。已独立核验 internal/review/args.go:132 仍为 fmt.Println(text)，归档路径 :126-130 仍走 os.Stdout.Write；git log / git diff e1c01277075599cb0395bf62f16855cebf04b060..8f8f0cd0627fca918e7383ea4c3ebd6962864652 -- internal/review/args.go 为空。Codex review.output 为 parse: raw，判定与错误文案不受影响。本轮按规则只处置不改代码。"
+}

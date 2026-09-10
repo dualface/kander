@@ -1,0 +1,21 @@
+{
+  "run_id": "tui-theme-qa-r3",
+  "batch_id": "tui-theme-batch-one",
+  "author": "cursor-orchestrator",
+  "basis": "assigned by each task's modification scope: QA-01 hits palette hex Bg change and presets detail_view.md renderer path; QA-02 hits both cards' human-verification acceptance criteria",
+  "items": {
+    "QA-01": [
+      "20260909-tui-theme-presets-task",
+      "20260909-tui-truecolor-palette-task"
+    ],
+    "QA-02": [
+      "20260909-tui-theme-presets-task",
+      "20260909-tui-truecolor-palette-task"
+    ]
+  },
+  "owners": {
+    "20260909-tui-theme-presets-task": "cursor",
+    "20260909-tui-truecolor-palette-task": "cursor"
+  },
+  "recorded_at": "2026-09-09T05:49:19.009821321Z"
+}

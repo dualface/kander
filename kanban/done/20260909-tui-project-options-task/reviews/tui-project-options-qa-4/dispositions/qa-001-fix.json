@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 29,
+  "record_id": "qa-001-fix",
+  "run_id": "tui-project-options-qa-4",
+  "finding_id": "QA-001",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:02:03.945322655Z",
+  "report_hash": "fb444e092eb649723eb6c3b9b3aea7785851bc60fbff7898d561847640a2dad5",
+  "original": "Inferred，置信度高。Project 预览和保存使用补齐默认值后的 Config 合并覆盖，运行时使用原始基础 JSON，违反复用合并校验及保存后有效值一致的要求。合法旧配置缺少 tui 时，仅修改主题即可成功发布 {\"tui\":{\"theme\":\"dark\"}}，随后 config.Load 因缺少 tui.columns 等字段失败；缺少 rules 时，单字段编辑还可能使未编辑开关在运行时关闭。最小修复：保留基础原始键存在性，预览、保存、运行时共用合并校验，禁止发布运行时无法读取的覆盖。以缺少可选 section 的临时配置验证保存后重读。",
+  "status": "fixed",
+  "basis": "Same as PM-001: save/preview now merge onto raw scope JSON matching Load.",
+  "fix_commit": "60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb",
+  "verification": "Read the cited paths on 60bc11ad9b04eb987a6a117ca5ae0b0a33a735fb. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit. Targeted tests named in basis pass."
+}

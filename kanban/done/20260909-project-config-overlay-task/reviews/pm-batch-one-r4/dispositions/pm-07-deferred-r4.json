@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "sync-batch-one-r5-c2",
+    "epoch": 6
+  },
+  "submitted_revision": 81,
+  "record_id": "pm-07-deferred-r4",
+  "run_id": "pm-batch-one-r4",
+  "finding_id": "PM-07",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T20:40:49.57951192Z",
+  "report_hash": "013e863e2d8bd6287406b0d3becb9e1de07a0737702e93fd3eabbfd8568c8b0a",
+  "original": "覆盖文件定位仍每次新起 git worktree list --porcelain 子进程,且本轮再次加重:internal/menu/options.go:165 用 BindEffectiveLanguage() 取代了原先纯内存的 BindConfigLanguage(cfg),于是构造一次选项面板会话就要多一次 readOverlay(\"\") 定位,同一个 prepare 内 ConfiguredScopeLanguage() 与 ResolveScopeLanguage() 分支还会多读一次作用域文件。叠加 internal/menu/commands.go:12-14(每条命令开头)与 internal/config/format.go:146,单条 kander config 的定位次数仍为 4 次,而 TUI 打开选项面板由 1 次升至 2 次;TUI 定时刷新与 liveness/notify 等高频路径同样受影响。可在进程内按 cwd 缓存一次定位结果。",
+  "status": "deferred",
+  "basis": "延续 pm-batch-one-r3/PM-07（记录 reviews/pm-batch-one-r3/dispositions/pm-07-deferred-r2.json）。独立核实 4832ee9：options.go:165 仍调用 BindEffectiveLanguage → ConfiguredLanguage → readOverlay(\"\")；ConfiguredScopeLanguage（154）再读作用域文件；paths.go:125 仍每次 exec git worktree list --porcelain，无 cwd 缓存。commands.go:12-14 与 format.go:146 叠加。现象未变。本轮 sync 仅处置、无代码改动。"
+}

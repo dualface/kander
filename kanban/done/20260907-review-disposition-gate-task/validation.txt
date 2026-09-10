@@ -1,0 +1,50 @@
+全量测试
+ok  	github.com/dualface/kander/cmd/kander	0.095s
+ok  	github.com/dualface/kander/internal/board	18.973s
+ok  	github.com/dualface/kander/internal/cli	0.016s
+ok  	github.com/dualface/kander/internal/config	(cached)
+ok  	github.com/dualface/kander/internal/fs	(cached)
+ok  	github.com/dualface/kander/internal/i18n	0.080s
+ok  	github.com/dualface/kander/internal/install	0.837s
+ok  	github.com/dualface/kander/internal/launch	10.321s
+ok  	github.com/dualface/kander/internal/liveness	1.680s
+ok  	github.com/dualface/kander/internal/menu	(cached)
+ok  	github.com/dualface/kander/internal/notify	2.037s
+ok  	github.com/dualface/kander/internal/probe	(cached)
+ok  	github.com/dualface/kander/internal/process	(cached)
+ok  	github.com/dualface/kander/internal/review	17.024s
+ok  	github.com/dualface/kander/internal/takeover	0.414s
+ok  	github.com/dualface/kander/internal/tui	5.055s
+ok  	github.com/dualface/kander/internal/version	(cached)
+ok  	github.com/dualface/kander/internal/window	0.133s
+ok  	github.com/dualface/kander/rules	0.003s
+
+race
+ok  	github.com/dualface/kander/internal/board	33.093s
+ok  	github.com/dualface/kander/internal/review	20.284s
+ok  	github.com/dualface/kander/internal/fs	(cached)
+
+rebase 后全量复验
+ok  	github.com/dualface/kander/cmd/kander	(cached)
+ok  	github.com/dualface/kander/internal/board	(cached)
+ok  	github.com/dualface/kander/internal/cli	(cached)
+ok  	github.com/dualface/kander/internal/config	(cached)
+ok  	github.com/dualface/kander/internal/fs	(cached)
+ok  	github.com/dualface/kander/internal/i18n	0.063s
+ok  	github.com/dualface/kander/internal/install	(cached)
+ok  	github.com/dualface/kander/internal/launch	(cached)
+ok  	github.com/dualface/kander/internal/liveness	(cached)
+ok  	github.com/dualface/kander/internal/menu	(cached)
+ok  	github.com/dualface/kander/internal/notify	(cached)
+ok  	github.com/dualface/kander/internal/probe	(cached)
+ok  	github.com/dualface/kander/internal/process	(cached)
+ok  	github.com/dualface/kander/internal/review	(cached)
+ok  	github.com/dualface/kander/internal/takeover	(cached)
+ok  	github.com/dualface/kander/internal/tui	(cached)
+ok  	github.com/dualface/kander/internal/version	(cached)
+ok  	github.com/dualface/kander/internal/window	(cached)
+ok  	github.com/dualface/kander/rules	(cached)
+
+其余命令退出码均为 0：go vet ./...；go build ./...；Windows amd64 board/review/fs go test -c；Windows amd64 go build ./cmd/kander；git diff --check。
+gofmt 无输出，全部已改 Go 文件不超过 1000 行。
+Windows 未原生执行。

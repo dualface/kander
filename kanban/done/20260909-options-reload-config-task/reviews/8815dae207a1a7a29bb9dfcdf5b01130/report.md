@@ -1,0 +1,55 @@
+Role: QA  
+Commit: `fb61f8672ea32ce8ab271a7420a16df2f3686a21`  
+Task Context: Options 每次打开重读作用域及 overlay，保持编辑、保存隔离。  
+Reviewed Scope: 仅审查 `26b42cf..fb61f867` 的 5 个变更文件及必要调用链。工作树干净、提交一致；文件均未超过 1000 行，`git diff --check` 通过。环境只读，未重跑测试；采纳交付提交的 TUI/config 测试通过及全量 21 包通过记录。任务文件删除已尝试，因只读失败。
+
+| 行为／质量 | 结论与证据 |
+|---|---|
+| QA-001 旧加载覆盖新面板 | **closed — Observed**：`options_panel.go:97–99,114–119,179–180` 传递并检查序号；`options_reload_test.go:235–260` 捕获不同旧值、逆序投递并检查 session 身份。 |
+| QA-002 缺省语言破坏环境回退 | **closed — Observed**：`options_panel.go:193` 使用显式语言规则；`config/language.go:69–81,187–194` 保留缺省回退。回归见 `options_reload_test.go:305–340`。本次替换另引入 QA-004。 |
+| PM-001 表单仍取旧 App 值 | **closed — Observed**：`options_form.go:266–285,334–343` 从 session 取值；测试见 `options_reload_test.go:265–302`。 |
+| PM-002 改回初值不更新看板 | **closed — Observed**：`options_form.go:727–762` 记录最近应用值；`options_test.go:289–304` 检查反复切换及磁盘结果。 |
+| PM-003 无效 overlay 值未报错 | **closed — Observed**：`options_panel.go:132–135` 传播合并校验错误；`options_reload_test.go:343–358` 检查 `loadErr` 和 session 清除。 |
+| PM-004 旧结果测试无辨别力 | **closed — Observed**：`options_reload_test.go:235` 在改盘前取得旧结果，`:259–260` 验证晚到结果不能替换新 session。 |
+| 编辑、保存、表单重建 | **Inferred**：作用域缓冲保持隔离；编辑值恰好等于看板值时存在 QA-003。 |
+| 架构与测试性 | **Observed**：依赖仍为 TUI 单向调用 menu/config。新增测试使用临时配置；下述两处可用受控单元测试覆盖。 |
+
+FINDINGS
+
+**QA-003 — medium — Inferred，高置信度：以看板差异判断编辑，漏掉保存和表单重建。**
+
+[options_form.go:755](/home/dualf/works/kander/worktrees/20260909-options-reload-config/internal/tui/options_form.go:755) 仅在 `app.Model.Single != single` 时重建字段；`:733–765` 也仅因 App 值变化调用 `persistUI()`。但本次表单改从作用域取值，表单初值与 App 可以不同。
+
+触发：作用域 `single=true`，overlay `single=false`，其余 TUI 值一致。打开界面设置后关闭单列模式，编辑值恰好等于 App 的 `false`。代码更新 session，却跳过重建及保存：列数、列宽控件仍不出现；Esc 退出再打开，开关恢复为磁盘的 `true`。这破坏原有即时保存及控件联动行为。
+
+最小修复：按表单值相对最近表单值的变化决定保存、重建；App 比较仅决定看板赋值。增加上述场景测试，检查控件出现及 `LoadScope` 的磁盘值。
+
+**QA-004 — medium — Inferred，高置信度：语言绑定重新读盘，脱离本次加载结果。**
+
+[options_panel.go:132](/home/dualf/works/kander/worktrees/20260909-options-reload-config/internal/tui/options_panel.go:132) 校验后丢弃合并结果；`:193` 改用 `BindEffectiveLanguage()`。该函数通过 `config/language.go:84–104,121–140,187–194` 再读两份文件，且将读取、校验失败转为空绑定。
+
+触发：首次读取有效日语 overlay 后，代理探测期间外部编辑将其暂时写成无效 JSON。加载仍返回成功；应用结果时再次读取失败，只清除语言绑定。面板显示正常 overlay 提示并回退环境语言，`loadErr` 为空。语言与本次已验证的加载结果不一致，违反 `task-spec.md:25,37`。
+
+最小修复：随加载结果携带同次读取计算出的有效语言，保留显式键及初始化状态语义；接收当前序号结果时直接绑定。用受控加载间隔修改 overlay，验证语言、提示及错误处理不会混用两次读取。
+
+NON-BLOCKING: none
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "QA-003",
+      "tier": "medium",
+      "text": "Inferred，高置信度：表单改从作用域初始化后，applyInterface 仍以 App 是否变化决定即时保存及条件字段重建。作用域 single=true、overlay single=false、其余 TUI 值一致时，用户关闭单列模式，编辑值恰好等于 App 的 false，因而不重建列数/列宽控件，也不保存。Esc 退出后重开恢复磁盘的 true，破坏既有控件联动与即时保存行为。最小修复：按最近表单值识别实际编辑，独立决定保存与重建；App 比较仅控制看板赋值。增加该场景的控件和磁盘断言。",
+      "evidence": "internal/tui/options_form.go:334–343 从作用域初始化绑定，437–450 根据绑定 single 决定列数/列宽控件；714–715 更新 session；733–765 仅由 App 差异设置 changed，755–759 将 single 重建嵌套在 App 差异判断中，764–765 因 changed=false 跳过 persistUI。internal/tui/options_panel.go:562–569 是作用域 TUI 保存路径，496–508 的 Esc 路径不补保存。task-spec.md:27 要求保留既有实时界面行为。"
+    },
+    {
+      "id": "QA-004",
+      "tier": "medium",
+      "text": "Inferred，高置信度：修复语言回退时丢弃本次合并结果，改在 applyWork 调用 BindEffectiveLanguage 重新读盘。首次读到有效日语 overlay 后，代理探测期间外部编辑使 overlay 暂时成为无效 JSON，加载仍成功；后续语言读取吞掉错误并回退环境，面板继续显示正常 overlay 提示且 loadErr 为空。违反有效语言使用本次读取合并结果及读取失败可见的要求。最小修复：随 sessionResult 携带同次读取计算出的有效语言，保留显式语言键和初始化状态语义；序号验证通过后直接绑定。用受控加载间隔修改 overlay 验证结果一致性。",
+      "evidence": "internal/tui/options_panel.go:124–141 读取、校验后丢弃合并结果并执行 NewSession；189–195 接收 session 后调用 BindEffectiveLanguage，再使用先前 overlayPath 生成提示。internal/menu/options.go:81–82 的代理探测位于读取与应用之间。internal/config/language.go:84–104,121–140 再次读取文件并将失败转为空语言；187–194 据此清除绑定，不返回错误。task-spec.md:25,37 要求读取失败进入 loadErr、有效语言使用刚读取的合并结果。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

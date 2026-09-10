@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 50,
+  "record_id": "pm-006-fix2",
+  "run_id": "tui-project-options-pm-5",
+  "finding_id": "PM-006",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:20:57.014946294Z",
+  "report_hash": "1404be6167608f1533a4e2af42a75468460bac7f905f412069fc36d58d13b6fb",
+  "original": "Inferred，高置信度，本轮新增。违反 task-spec.md ACCEPTANCE_CRITERIA 第5条的继承值随基础配置变更更新要求。新增 scopeRaw 缓存未随基础编辑更新：Global 修改 launcher，按 Esc 保留编辑后切 Project，未覆盖字段仍显示旧值，恢复继承也恢复旧值；保存两份编辑后运行时采用新基础值，界面预览与实际结果不同。最小修复：保留基础原始键存在性，将未保存基础编辑同步至预览文档，并在接纳 doctor 持久化结果时刷新该文档。",
+  "status": "fixed",
+  "basis": "Same as QA-006: unsaved Global field edits update the overlay preview document.",
+  "fix_commit": "334142586e026b50b6e2c1c8d731a1547ed7e8de",
+  "verification": "Read cited paths on 35170cacf4ae68bf5f79bb6cf67e638524b37bee. TestOverlayRuleEditSyncsEffectiveConfig, TestUnsavedGlobalLauncherUpdatesProjectInherit, TestModelOverrideDoesNotRebuildInput pass. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit."
+}

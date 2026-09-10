@@ -1,0 +1,23 @@
+已删除本卡工作树、本地及远端任务分支；组工作树保留。
+已删除执行端临时副本与交叉编译产物：
+kander-archive-round1-board.test.exe
+kander-archive-round1-combined-tests.txt
+kander-archive-round1-disposition.md
+kander-archive-round1-fs.test.exe
+kander-archive-round1-race.log
+kander-archive-round1-rebase-tests.log
+kander-archive-round1-report.md
+kander-archive-round1-review.test.exe
+kander-archive-round1-spec.md
+kander-archive-round1-tests.log
+kander-archive-round1.exe
+kander-archive-round2-combined-tests.txt
+kander-archive-round2-disposition.md
+kander-archive-round2-probe-initial.log
+kander-archive-round2-probe-source.txt
+kander-archive-round2-probe.log
+kander-archive-round2-rebase-tests.log
+kander-archive-round2-report.md
+kander-archive-round2-spec.md
+kander-archive-round2-tests.log
+共享的 /tmp/kander-archive-record 受控写卡入口保留；编排端审核 runtime 与证据归编排端管理。

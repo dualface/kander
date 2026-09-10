@@ -1,0 +1,3771 @@
+Review range: 26edb64fcfb654a96afedc30bbaea27e5e918ec7..6dbed41ae20a5c930f47b209ea9dc4add2c1a771
+Incremental re-review; fix range: 56ec24d4ca46285288cccf219d971a3a8d970523..6dbed41ae20a5c930f47b209ea9dc4add2c1a771
+
+=== COMMITS ===
+commit 6dbed41ae20a5c930f47b209ea9dc4add2c1a771
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 10:48:13
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 10:48:13
+
+    fix: complete custom agent lifecycle and configuration
+
+commit 56ec24d4ca46285288cccf219d971a3a8d970523
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 10:34:25
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 10:34:25
+
+    feat: support configurable execution agents
+
+=== FILE LEDGER ===
+M	AGENTS.md
+M	README.md
+A	docs/custom-agents.md
+A	internal/config/agents.go
+A	internal/config/agents_test.go
+M	internal/config/config.go
+M	internal/config/format.go
+M	internal/config/repair.go
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+A	internal/launch/agent_allocate.go
+A	internal/launch/agent_definitions_test.go
+M	internal/launch/cmd.go
+M	internal/launch/commands.go
+M	internal/launch/notify_resume.go
+M	internal/launch/session.go
+M	internal/launch/tmux.go
+A	internal/liveness/agent_definition_test.go
+M	internal/liveness/check.go
+M	internal/liveness/classify.go
+M	internal/liveness/lookup.go
+A	internal/menu/agent_fields.go
+A	internal/menu/agent_fields_test.go
+A	internal/menu/agent_probe_test.go
+M	internal/menu/agents.go
+M	internal/menu/commands.go
+M	internal/menu/doctor.go
+M	internal/menu/doctor_repair.go
+M	internal/menu/options.go
+A	internal/notify/agent_definition_test.go
+M	internal/notify/dispatch.go
+M	internal/notify/probe.go
+M	internal/probe/run.go
+M	internal/process/process.go
+M	internal/process/process_test.go
+A	internal/review/agent_executable_test.go
+M	internal/review/settings.go
+A	internal/takeover/agent_definition_test.go
+M	internal/takeover/cleanup.go
+M	internal/takeover/dismiss.go
+M	internal/takeover/ops.go
+M	internal/takeover/takeover_test.go
+M	internal/takeover/wait.go
+M	internal/tui/options_form.go
+M	internal/tui/options_test.go
+M	rules/KANDER-KANBAN-RULES.md
+
+=== PATCH ===
+diff --git a/AGENTS.md b/AGENTS.md
+index ea5d834..be2680b 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -124,3 +124,5 @@ Go 运行时写入配置, 看板迁移, 审核 runtime, Git exclude 以及安装
+ 
+ - [编排检查点与恢复](docs/coordinator-recovery.md)：coordinator epoch、CAS、快照对账、原件与 Git 收尾证据、恢复边界。
+ - [原始复现验收映射](docs/recovery-regressions.md)：13 个原始坏行为、所属回归和跨模块恢复验收。
++
++- [自定义执行 Agent](docs/custom-agents.md)：可执行名、进程名、方言/argv 模板、会话策略与审核边界。
+diff --git a/README.md b/README.md
+index c3b81bc..b94b35a 100644
+--- a/README.md
++++ b/README.md
+@@ -172,3 +172,7 @@ PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 和 Hacker 才进
+ 本项目使用 MIT License, 见 [LICENSE](LICENSE).
+ 
+ 审核归档后的计划、原作者处置、批次汇总和完成门禁见 [审核处置协议](docs/review-disposition.md)。
++
++### 自定义执行 Agent
++
++可在 `config.json` 的 `agents` 节覆盖可执行名与 pane 进程名，或声明带方言、argv 模板及会话策略的新 agent；选项面板可选择并编辑其程序名。[完整配置与边界](docs/custom-agents.md)。审核继续独立使用 `*_REVIEW_BIN`。
+diff --git a/docs/custom-agents.md b/docs/custom-agents.md
+new file mode 100644
+index 0000000..966b44e
+--- /dev/null
++++ b/docs/custom-agents.md
+@@ -0,0 +1,72 @@
++# 自定义执行 Agent
++
++`config.json` 的可选 `agents` 对象以 agent 名为键。内置名称为 `codex`、`claude`、`grok`、`cursor`。新增名称以小写字母开头，最多 64 字符，仅含小写字母、数字、`_`、`-`。不配置本节时，原有参数与配置输出保持不变。
++
++## 可执行名与进程名
++
++```json
++{
++  "agents": {
++    "claude": {"process_name": "node"},
++    "codex": {"path": "kander-codex"}
++  }
++}
++```
++
++`path` 为 PATH 名或存在且可执行的绝对路径，含分隔符的相对路径不接受。显式指定时必须可以解析；缺省依次回退内置表、agent 名。`process_name` 用于 tmux 前台进程匹配，缺省为最终 path 的 basename。两者显式给出时须非空且无控制字符；恢复默认值请删字段。npm trampoline 可用 `process_name: "node"`，改名包装器可只设 `path`。
++
++启动、恢复、doctor、面板探测、tmux 存活检查、通知反查与接管清理均读取这组设置。保存和读取都会校验显式路径；删除包装器后，须修复配置或恢复可执行文件。doctor 遇到无法验证的 agent 定义时保留原文件并报告，避免丢失模板。
++
++## 方言或 argv 模板
++
++```json
++{
++  "agents": {
++    "my-claude": {"path": "my-claude", "dialect": "claude"},
++    "helper": {
++      "path": "helper",
++      "process_name": "helper",
++      "args": {
++        "start": ["--model", "{model}", "--effort", "{effort}", "--session-id", "{session}"],
++        "resume": ["--resume", "{session}", "--model", "{model}"]
++      },
++      "session": {"mode": "generated"}
++    }
++  },
++  "kanban_agents": {"large": "my-claude", "small": "helper"}
++}
++```
++
++自定义 agent 必须有 `dialect` 或 `args`。内置 agent 自动继承自身方言。`dialect` 接受四个内置名称，复用相同 model、effort、越权与会话参数。模型仍位于 `models.kanban.<agent>`，使用 `large_model`、`small_model`、相应 effort 字段；兼容旧共享 `model` 回退。自定义 Cursor 方言沿用 Cursor 无 effort 的模型字段。
++
++同时声明时 `args` 优先，完整替换方言参数。必须有 `args.start`；支持恢复的模板还必须有 `args.resume`；允许空数组。每个元素独立替换 `{model}`、`{effort}`、`{session}`，替换值不递归解析。任一占位符为空时，丢弃该元素；其紧邻前一个原始元素若为独立 flag（以 `-` 开头、不含占位符或 `=`），同时丢弃该 flag。其他位置参数保留。未知占位符、控制字符与空元素被拒绝。
++
++prompt 不进入模板，始终由 Kander 追加在 argv 最后。分配命令和参数模板均不用 shell 插值；终端启动仍经已有平台参数编码。配置可以执行本机用户声明的程序，不构成新的用户间权限边界。
++
++## 会话策略
++
++- `generated`：生成 UUID，保存到卡片 SESSION，供 `{session}` 与恢复使用。
++- `allocated`：先执行 `session.allocate` argv（首元素是程序），最多等待 10 秒；成功输出须为一个 ID，或通过 `session.json_field` 指定顶层 JSON 字符串字段。ID 仅接受 1–128 个字母、数字、`.`、`_`、`:`、`-`。程序失败、无效输出与超时均在领取任务前报告。
++- `none`：`resume` 明确拒绝；`notify` 不直投，通过恢复通道运行 start 模板，重新读取卡片上下文。卡片保留仅用于终端标记的 UUID，模板中的 `{session}` 为空，方言参数也省略会话创建/恢复选项，UUID 只供终端身份检查。`dismiss` 仍允许关闭已确认身份的终端。`kander config`、`config --json` 的 stderr、`kander check` 显示降级提示。持久派回仍须满足原有停止事实与回执门禁，不以 `none` 绕过防重复执行检查。
++
++模板自定义 agent 若无方言，必须显式声明 session。有方言时默认继承：Claude/Grok 生成 UUID；Cursor 调用配置后的程序执行 `create-chat`；Codex 保留扫描 CODEX_HOME rollout 的既有发现机制（自定义 Codex 方言同样适用）。`discovered` 不接受手工配置。无模板的 Codex 方言不接受 `generated`/`allocated` 覆盖，Cursor 不接受 `generated`，因为对应 start 参数无法兑现这种身份来源；请继承默认值或提供模板。所有方言都允许 `none`，启动时不传会话参数。
++
++分配示例：
++
++```json
++"session": {
++  "mode": "allocated",
++  "allocate": ["helper", "create-session", "--json"],
++  "json_field": "id"
++}
++```
++
++全新模板 agent 推荐通过 tmux / tmux-session 启动，以配置后的前台名与会话标记探测。herdr 仍依赖其自身对 agent 类型的识别；配置 path 不会为 herdr 安装识别器。foreground/console 没有可供 `check` 探测的终端地址，沿用 unknown 分类。
++
++## 面板与审核边界
++
++「任务执行与模型」可以选择自定义 agent。尚未探测成功的内置 agent 也可选择以填写改名程序路径；保存时仍校验显式路径。每个已选 agent 的模型字段后有「可执行名」「pane 进程名」输入；大小任务共用同一 agent 时只显示一次。留空删除覆盖，保存到 `agents`。方言、模板与会话策略只在 JSON 编辑。
++
++reviewer 名单仍只有四个内置 agent，固定使用其只读适配器。review 可执行名优先级为 `*_REVIEW_BIN` 环境变量、review 内置程序名；`agents.*.path` 和 `process_name` 完全不参与 review 选择。因此执行 agent 的包装器不会被自动用于审核。
++
++兼容方言的自定义名称在 `dismiss` 和接管清理时复用该方言的退出命令，仍要求身份及单 pane 容器检查通过。纯模板且未声明兼容方言的程序没有可推断的交互退出命令；`dismiss` 明确拒绝并保留容器。
+diff --git a/internal/config/agents.go b/internal/config/agents.go
+new file mode 100644
+index 0000000..4c8c434
+--- /dev/null
++++ b/internal/config/agents.go
+@@ -0,0 +1,304 @@
++package config
++
++import (
++	"bytes"
++	"encoding/json"
++	"os/exec"
++	"path/filepath"
++	"regexp"
++	"sort"
++	"strings"
++	"unicode"
++)
++
++// AgentDefinition overrides an execution agent only; reviewers retain their own read-only adapters.
++// The map key in Config.Agents is the stable agent name stored on task cards.
++type AgentDefinition struct {
++	Path        string                  `json:"path,omitempty"`
++	ProcessName string                  `json:"process_name,omitempty"`
++	Dialect     string                  `json:"dialect,omitempty"`
++	Args        *AgentArgs              `json:"args,omitempty"`
++	Session     *AgentSessionDefinition `json:"session,omitempty"`
++}
++
++type AgentArgs struct {
++	Start  []string `json:"start"`
++	Resume []string `json:"resume"`
++}
++
++// Allocate is an argv array including the executable. Output is a plain ID or a
++// JSON object with the named top-level field. Both forms validate the resulting ID.
++type AgentSessionDefinition struct {
++	Mode      string   `json:"mode"`
++	Allocate  []string `json:"allocate,omitempty"`
++	JSONField string   `json:"json_field,omitempty"`
++}
++
++var agentNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
++
++func ValidAgentName(name string) bool { return agentNamePattern.MatchString(name) }
++
++func AgentNames(cfg *Config) []string {
++	names := append([]string{}, ExecutionAgents...)
++	var custom []string
++	if cfg != nil {
++		for name := range cfg.Agents {
++			if !contains(names, name) {
++				custom = append(custom, name)
++			}
++		}
++	}
++	sort.Strings(custom)
++	return append(names, custom...)
++}
++
++func HasAgent(cfg *Config, name string) bool { return contains(AgentNames(cfg), name) }
++
++// AgentFor returns a detached definition with defaults resolved. The discovered
++// mode is internal to the Codex dialect and cannot be declared in JSON.
++func AgentFor(cfg *Config, name string) AgentDefinition {
++	var d AgentDefinition
++	if cfg != nil {
++		d = cloneAgent(cfg.Agents[name])
++	}
++	if d.Path == "" {
++		d.Path = AgentExecutableName(name)
++	}
++	if d.ProcessName == "" {
++		d.ProcessName = filepath.Base(d.Path)
++	}
++	if d.Dialect == "" && contains(ExecutionAgents, name) {
++		d.Dialect = name
++	}
++	if d.Session == nil {
++		mode := "generated"
++		switch d.Dialect {
++		case "codex":
++			mode = "discovered"
++		case "cursor":
++			mode = "allocated"
++		}
++		d.Session = &AgentSessionDefinition{Mode: mode}
++		if d.Dialect == "cursor" {
++			d.Session.Allocate = []string{d.Path, "create-chat"}
++		}
++	}
++	return d
++}
++
++func AgentPath(cfg *Config, name string) string        { return AgentFor(cfg, name).Path }
++func AgentProcessName(cfg *Config, name string) string { return AgentFor(cfg, name).ProcessName }
++
++// LoadAgent resolves current runtime settings without caching machine-local state.
++func LoadAgent(name string) (AgentDefinition, error) {
++	cfg, err := Effective(nil)
++	if err != nil {
++		return AgentDefinition{}, err
++	}
++	if !HasAgent(cfg, name) {
++		return AgentDefinition{}, choiceError("agent", strings.Join(AgentNames(cfg), ", "))
++	}
++	return AgentFor(cfg, name), nil
++}
++
++func cloneAgent(d AgentDefinition) AgentDefinition {
++	if d.Args != nil {
++		a := *d.Args
++		a.Start = append([]string{}, a.Start...)
++		a.Resume = append([]string{}, a.Resume...)
++		d.Args = &a
++	}
++	if d.Session != nil {
++		s := *d.Session
++		s.Allocate = append([]string(nil), s.Allocate...)
++		d.Session = &s
++	}
++	return d
++}
++
++func CloneAgents(src map[string]AgentDefinition) map[string]AgentDefinition {
++	if src == nil {
++		return nil
++	}
++	out := make(map[string]AgentDefinition, len(src))
++	for name, d := range src {
++		out[name] = cloneAgent(d)
++	}
++	return out
++}
++
++func agentDefinitionError(name, detail string) error {
++	return configErrorf("config.agent_definition_invalid", name, detail)
++}
++func validAgentText(s string) bool {
++	return strings.TrimSpace(s) != "" && strings.IndexFunc(s, unicode.IsControl) < 0
++}
++
++func validateAgentProgram(path string) bool {
++	if !validAgentText(path) {
++		return false
++	}
++	if strings.ContainsAny(path, `/\`) && !filepath.IsAbs(path) {
++		return false
++	}
++	_, err := exec.LookPath(path)
++	return err == nil
++}
++
++func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
++	obj, ok := asObject(raw)
++	if !ok {
++		return nil, agentDefinitionError("agents", Text("config.agent_object"))
++	}
++	out := map[string]AgentDefinition{}
++	for name, value := range obj {
++		if !ValidAgentName(name) {
++			return nil, agentDefinitionError(name, Text("config.agent_name"))
++		}
++		fields, ok := asObject(value)
++		if !ok {
++			return nil, agentDefinitionError(name, Text("config.agent_object"))
++		}
++		data, _ := json.Marshal(fields)
++		var d AgentDefinition
++		dec := json.NewDecoder(bytes.NewReader(data))
++		dec.DisallowUnknownFields()
++		if err := dec.Decode(&d); err != nil {
++			return nil, agentDefinitionError(name, err.Error())
++		}
++		for _, key := range []string{"path", "process_name", "dialect"} {
++			if v, exists := fields[key]; exists {
++				s, ok := v.(string)
++				if !ok || !validAgentText(s) {
++					return nil, agentDefinitionError(name, Text("config.agent_text", key))
++				}
++			}
++		}
++		for _, key := range []string{"args", "session"} {
++			if v, exists := fields[key]; exists {
++				if _, ok := asObject(v); !ok {
++					return nil, agentDefinitionError(name, Text("config.agent_object"))
++				}
++			}
++		}
++		if d.Path != "" && !validateAgentProgram(d.Path) {
++			return nil, agentDefinitionError(name, Text("config.agent_path", d.Path))
++		}
++		if d.Dialect != "" && !contains(ExecutionAgents, d.Dialect) {
++			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
++		}
++		if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
++			return nil, agentDefinitionError(name, Text("config.agent_adapter"))
++		}
++		if d.Args != nil {
++			if d.Args.Start == nil {
++				return nil, agentDefinitionError(name, Text("config.agent_start"))
++			}
++			for _, args := range [][]string{d.Args.Start, d.Args.Resume} {
++				for _, arg := range args {
++					if !validAgentText(arg) || invalidPlaceholder(arg) {
++						return nil, agentDefinitionError(name, Text("config.agent_template"))
++					}
++				}
++			}
++		}
++		if d.Session != nil {
++			s := d.Session
++			if !contains([]string{"generated", "allocated", "none"}, s.Mode) {
++				return nil, agentDefinitionError(name, Text("config.agent_session"))
++			}
++			if s.Mode == "allocated" {
++				if len(s.Allocate) == 0 || !validateAgentProgram(s.Allocate[0]) {
++					return nil, agentDefinitionError(name, Text("config.agent_allocate"))
++				}
++				for _, arg := range s.Allocate {
++					if !validAgentText(arg) {
++						return nil, agentDefinitionError(name, Text("config.agent_allocate"))
++					}
++				}
++				if s.JSONField != "" && !validAgentText(s.JSONField) {
++					return nil, agentDefinitionError(name, Text("config.agent_allocate"))
++				}
++			} else if len(s.Allocate) != 0 || s.JSONField != "" {
++				return nil, agentDefinitionError(name, Text("config.agent_allocate_only"))
++			}
++		}
++		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
++		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
++			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
++			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
++		}
++		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
++			return nil, agentDefinitionError(name, Text("config.agent_session_required"))
++		}
++		if d.Args != nil && resolved.Session.Mode != "none" && d.Args.Resume == nil {
++			return nil, agentDefinitionError(name, Text("config.agent_resume"))
++		}
++		out[name] = d
++	}
++	return out, nil
++}
++
++func invalidPlaceholder(arg string) bool {
++	rest := strings.NewReplacer("{model}", "", "{effort}", "", "{session}", "").Replace(arg)
++	return strings.ContainsAny(rest, "{}")
++}
++
++// ExpandAgentArgs replaces text within individual argv elements, never shell text.
++// An empty placeholder removes its element and its immediately preceding literal flag.
++func ExpandAgentArgs(template []string, model, effort, session string) []string {
++	values := map[string]string{"{model}": model, "{effort}": effort, "{session}": session}
++	var out []string
++	for i, arg := range template {
++		omit := false
++		for key, value := range values {
++			if value == "" && strings.Contains(arg, key) {
++				omit = true
++			}
++		}
++		if omit {
++			if i > 0 && strings.HasPrefix(template[i-1], "-") && !strings.ContainsAny(template[i-1], "{}=") && len(out) > 0 && out[len(out)-1] == template[i-1] {
++				out = out[:len(out)-1]
++			}
++			continue
++		}
++		out = append(out, strings.NewReplacer("{model}", model, "{effort}", effort, "{session}", session).Replace(arg))
++	}
++	return out
++}
++
++// AgentWarnings makes intentional loss of resume/direct-notify support visible.
++func AgentWarnings(cfg *Config) []string {
++	var out []string
++	for _, name := range AgentNames(cfg) {
++		if AgentFor(cfg, name).Session.Mode == "none" {
++			out = append(out, Text("config.agent_no_resume", name))
++		}
++	}
++	return out
++}
++
++func customModelDefaults(definitions map[string]AgentDefinition, models *Models) {
++	for name, d := range definitions {
++		if contains(ExecutionAgents, name) {
++			if name == "cursor" && (d.Args != nil || d.Dialect != "" && d.Dialect != "cursor") {
++				for _, key := range []string{"model", "large_effort", "small_effort"} {
++					value := ""
++					if key != "model" {
++						value = "medium"
++					}
++					models.Kanban[name][key] = value
++				}
++			}
++			continue
++		}
++		fields := map[string]string{"model": "", "large_model": "", "small_model": "", "large_effort": "medium", "small_effort": "medium"}
++		if defaults := kanbanModelDefaults[d.Dialect]; defaults != nil && d.Args == nil {
++			fields = cloneStringMap(defaults)
++		}
++		models.Kanban[name] = fields
++	}
++}
++
++// AgentResumeError explains why a non-resumable agent cannot accept resume.
++func AgentResumeError(name string) error { return configErrorf("config.agent_no_resume", name) }
+diff --git a/internal/config/agents_test.go b/internal/config/agents_test.go
+new file mode 100644
+index 0000000..c29dd16
+--- /dev/null
++++ b/internal/config/agents_test.go
+@@ -0,0 +1,178 @@
++package config
++
++import (
++	"encoding/json"
++	"os"
++	"path/filepath"
++	"reflect"
++	"runtime"
++	"strings"
++	"testing"
++)
++
++func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
++	cfg := DefaultConfig()
++	cfg.Agents = map[string]AgentDefinition{"claude": {Path: filepath.Join(string(filepath.Separator), "bin", "wrapper"), ProcessName: "node"}, "cursor": {Path: "renamed"}, "fresh": {Dialect: "claude"}}
++	for _, test := range []struct{ name, path, process, dialect, mode string }{
++		{"claude", cfg.Agents["claude"].Path, "node", "claude", "generated"},
++		{"cursor", "renamed", "renamed", "cursor", "allocated"},
++		{"codex", "codex", "codex", "codex", "discovered"},
++		{"fresh", "fresh", "fresh", "claude", "generated"},
++		{"unregistered", "unregistered", "unregistered", "", "generated"},
++	} {
++		d := AgentFor(cfg, test.name)
++		if d.Path != test.path || d.ProcessName != test.process || d.Dialect != test.dialect || d.Session.Mode != test.mode {
++			t.Fatalf("%s: %+v", test.name, d)
++		}
++	}
++	cfg.Agents["fresh"] = AgentDefinition{Args: &AgentArgs{Start: []string{"{model}"}, Resume: []string{}}, Session: &AgentSessionDefinition{Mode: "allocated", Allocate: []string{"allocator"}}}
++	clone := Clone(cfg)
++	d := clone.Agents["fresh"]
++	d.Args.Start[0] = "changed"
++	d.Session.Allocate[0] = "changed"
++	if cfg.Agents["fresh"].Args.Start[0] != "{model}" || cfg.Agents["fresh"].Session.Allocate[0] != "allocator" {
++		t.Fatal("shallow clone")
++	}
++	raw, _ := json.Marshal(DefaultConfig())
++	if strings.Contains(string(raw), `"agents"`) {
++		t.Fatal("changed legacy JSON")
++	}
++}
++
++func TestAgentDefinitionValidation(t *testing.T) {
++	executable, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	base, _ := json.Marshal(DefaultConfig())
++	for _, test := range []struct {
++		name       string
++		definition map[string]any
++		bad        bool
++	}{
++		{"path", map[string]any{"path": executable}, false},
++		{"trampoline", map[string]any{"process_name": "node"}, false},
++		{"empty-path", map[string]any{"path": ""}, true},
++		{"relative", map[string]any{"path": "./wrapper"}, true},
++		{"missing", map[string]any{"path": filepath.Join(t.TempDir(), "missing")}, true},
++		{"control", map[string]any{"path": "bad\tvalue"}, true},
++		{"process-control", map[string]any{"process_name": "node\x7f"}, true},
++		{"process-empty", map[string]any{"process_name": ""}, true},
++		{"unknown", map[string]any{"typo": "x"}, true},
++		{"dialect", map[string]any{"dialect": "other"}, true},
++		{"null-args", map[string]any{"args": nil}, true},
++		{"bad-args", map[string]any{"args": map[string]any{"start": []string{}, "typo": true}}, true},
++		{"missing-start", map[string]any{"args": map[string]any{"resume": []string{}}}, true},
++		{"missing-resume", map[string]any{"args": map[string]any{"start": []string{}}}, true},
++		{"empty-arrays", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}}, false},
++		{"placeholder", map[string]any{"args": map[string]any{"start": []string{"{prompt}"}, "resume": []string{}}}, true},
++		{"generated", map[string]any{"session": map[string]any{"mode": "generated"}}, false},
++		{"none", map[string]any{"session": map[string]any{"mode": "none"}, "args": map[string]any{"start": []string{}}}, false},
++		{"discovered", map[string]any{"session": map[string]any{"mode": "discovered"}}, true},
++		{"unknown-session", map[string]any{"session": map[string]any{"mode": "generated", "typo": 1}}, true},
++		{"allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "allocate"}, "json_field": "id"}}, false},
++		{"bad-allocate", map[string]any{"session": map[string]any{"mode": "allocated", "allocate": []string{executable, "bad\narg"}}}, true},
++		{"unneeded-allocate", map[string]any{"session": map[string]any{"mode": "generated", "allocate": []string{executable}}}, true},
++	} {
++		t.Run(test.name, func(t *testing.T) {
++			var root map[string]any
++			json.Unmarshal(base, &root)
++			root["agents"] = map[string]any{"claude": test.definition}
++			data, _ := json.Marshal(root)
++			got, err := ValidateJSON(data)
++			if (err != nil) != test.bad {
++				t.Fatalf("config=%+v err=%v", got, err)
++			}
++		})
++	}
++	if runtime.GOOS != "windows" {
++		p := filepath.Join(t.TempDir(), "file")
++		os.WriteFile(p, []byte("x"), 0600)
++		if validateAgentProgram(p) {
++			t.Fatal("non executable")
++		}
++	}
++}
++
++func TestCustomAgentsModelsAndRepair(t *testing.T) {
++	cfg := DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Agents = map[string]AgentDefinition{"helper": {Dialect: "claude"}, "plain": {Args: &AgentArgs{Start: []string{}}, Session: &AgentSessionDefinition{Mode: "none"}}}
++	cfg.KanbanAgent = "helper"
++	cfg.KanbanAgents["small"] = "plain"
++	cfg.KanbanAgents["large"] = "helper"
++	data, _ := json.Marshal(cfg)
++	got, err := ValidateJSON(data)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got.Models.Kanban["helper"]["large_model"] != "opus" || got.Models.Kanban["plain"] == nil {
++		t.Fatal(got.Models)
++	}
++	if len(AgentWarnings(got)) != 1 {
++		t.Fatal(AgentWarnings(got))
++	}
++	raw, _ := decodeJSON(data)
++	repaired, err := repairValues(raw)
++	if err != nil || !reflect.DeepEqual(repaired.Agents, got.Agents) || repaired.KanbanAgents["small"] != "plain" {
++		t.Fatalf("%+v %v", repaired, err)
++	}
++	root := raw.(map[string]any)
++	root["reviewers"].(map[string]any)["PM"] = "helper"
++	if _, err := Validate(root); err == nil {
++		t.Fatal("custom reviewer accepted")
++	}
++	cfg.Agents["plain"] = AgentDefinition{}
++	data, _ = json.Marshal(cfg)
++	if _, err := ValidateJSON(data); err == nil {
++		t.Fatal("missing adapter accepted")
++	}
++}
++
++func TestExpandAgentArgs(t *testing.T) {
++	for _, test := range []struct {
++		name                   string
++		args                   []string
++		model, effort, session string
++		want                   []string
++	}{
++		{"text", []string{"--model", "prefix-{model}", "--config", `effort="{effort}"`, "{session}"}, "model", "high", "id", []string{"--model", "prefix-model", "--config", `effort="high"`, "id"}},
++		{"empty", []string{"start", "--model", "{model}", "--effort", "{effort}", "--resume", "{session}"}, "", "", "", []string{"start"}},
++		{"adjacent-only", []string{"--flag", "literal", "{model}"}, "", "", "", []string{"--flag", "literal"}},
++		{"mixed", []string{"--both", "{model}/{effort}"}, "model", "", "", []string{}},
++		{"inline", []string{"--model={model}", "keep"}, "", "", "", []string{"keep"}},
++		{"literal-injection", []string{"--model", "{model}", "{effort}"}, "$(touch /tmp/no); ' \" {effort}", "high", "", []string{"--model", "$(touch /tmp/no); ' \" {effort}", "high"}},
++	} {
++		t.Run(test.name, func(t *testing.T) {
++			got := ExpandAgentArgs(test.args, test.model, test.effort, test.session)
++			if !reflect.DeepEqual(got, test.want) {
++				t.Fatalf("%q != %q", got, test.want)
++			}
++		})
++	}
++}
++
++func TestDialectSessionCompatibility(t *testing.T) {
++	for _, test := range []struct {
++		dialect, mode string
++		bad           bool
++	}{
++		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
++		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
++	} {
++		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
++			cfg := DefaultConfig()
++			exe, _ := os.Executable()
++			session := &AgentSessionDefinition{Mode: test.mode}
++			if test.mode == "allocated" {
++				session.Allocate = []string{exe}
++			}
++			cfg.Agents = map[string]AgentDefinition{"alias": {Dialect: test.dialect, Session: session}}
++			data, _ := json.Marshal(cfg)
++			_, err := ValidateJSON(data)
++			if (err != nil) != test.bad {
++				t.Fatalf("error=%v", err)
++			}
++		})
++	}
++}
+diff --git a/internal/config/config.go b/internal/config/config.go
+index 4c98038..ef81b50 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -175,18 +175,19 @@ type TUI struct {
+ 
+ // Config is the schema-validated configuration.
+ type Config struct {
+-	SchemaVersion   int               `json:"schema_version"`
+-	WelcomeComplete bool              `json:"welcome_complete"`
+-	KanbanAgent     string            `json:"kanban_agent"`
+-	KanbanAgents    map[string]string `json:"kanban_agents"`
+-	Launcher        string            `json:"launcher"`
+-	Reviewers       map[string]string `json:"reviewers"`
+-	ReviewStages    map[string]string `json:"review_stages"`
+-	Rules           Rules             `json:"rules"`
+-	Models          Models            `json:"models"`
+-	TUI             TUI               `json:"tui"`
+-	Language        string            `json:"language"`
+-	AgentLanguage   string            `json:"agent_language"`
++	SchemaVersion   int                        `json:"schema_version"`
++	WelcomeComplete bool                       `json:"welcome_complete"`
++	KanbanAgent     string                     `json:"kanban_agent"`
++	KanbanAgents    map[string]string          `json:"kanban_agents"`
++	Launcher        string                     `json:"launcher"`
++	Reviewers       map[string]string          `json:"reviewers"`
++	ReviewStages    map[string]string          `json:"review_stages"`
++	Rules           Rules                      `json:"rules"`
++	Models          Models                     `json:"models"`
++	TUI             TUI                        `json:"tui"`
++	Language        string                     `json:"language"`
++	AgentLanguage   string                     `json:"agent_language"`
++	Agents          map[string]AgentDefinition `json:"agents,omitempty"`
+ }
+ 
+ // Clone deep-copies the config so a long-lived editing session can keep its baseline.
+@@ -195,6 +196,7 @@ func Clone(src *Config) *Config {
+ 		return nil
+ 	}
+ 	out := *src
++	out.Agents = CloneAgents(src.Agents)
+ 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
+ 	out.Reviewers = cloneStringMap(src.Reviewers)
+ 	out.ReviewStages = cloneStringMap(src.ReviewStages)
+@@ -412,7 +414,7 @@ func CheckLauncherPlatform(launcher string) error {
+ 	return nil
+ }
+ 
+-func validateKanbanAgents(raw any, defaultAgent string) (map[string]string, error) {
++func validateKanbanAgents(raw any, defaultAgent string, choices ...[]string) (map[string]string, error) {
+ 	obj, ok := raw.(map[string]any)
+ 	if !ok {
+ 		return nil, configErrorf("config.kanban_agents_must_be_a_json_object")
+@@ -440,7 +442,11 @@ func validateKanbanAgents(raw any, defaultAgent string) (map[string]string, erro
+ 		if _, exists := obj[scale]; !exists {
+ 			continue
+ 		}
+-		agent, err := validateChoice(obj[scale], ExecutionAgents, "kanban_agents."+scale)
++		names := ExecutionAgents
++		if len(choices) > 0 {
++			names = choices[0]
++		}
++		agent, err := validateChoice(obj[scale], names, "kanban_agents."+scale)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+@@ -509,8 +515,13 @@ func validateReviewStages(raw any) (map[string]string, error) {
+ 	return stages, nil
+ }
+ 
+-func validateModels(raw any) (Models, error) {
++func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models, error) {
+ 	models := DefaultModels()
++	names := ExecutionAgents
++	if len(definitions) > 0 {
++		customModelDefaults(definitions[0], &models)
++		names = AgentNames(&Config{Agents: definitions[0]})
++	}
+ 	obj, ok := raw.(map[string]any)
+ 	if !ok {
+ 		return Models{}, configErrorf("config.models_must_be_a_json_object")
+@@ -534,7 +545,7 @@ func validateModels(raw any) (Models, error) {
+ 		// When allowEmpty is true the values of this section may be empty strings; review_roles uses an empty string to mean inherit.
+ 		allowEmpty bool
+ 	}{
+-		{"kanban", ExecutionAgents, models.Kanban, false},
++		{"kanban", names, models.Kanban, false},
+ 		{"review", ReviewAgents, models.Review, false},
+ 		{"review_roles", ReviewRoles, models.ReviewRoles, true},
+ 	}
+@@ -698,13 +709,22 @@ func Validate(raw any) (*Config, error) {
+ 	if !ok {
+ 		return nil, configErrorf("config.welcome_complete_must_be_a_boolean")
+ 	}
+-	kanbanAgent, err := validateChoice(obj["kanban_agent"], ExecutionAgents, "kanban_agent")
++	var definitions map[string]AgentDefinition
++	var err error
++	if raw, exists := obj["agents"]; exists {
++		definitions, err = validateAgentDefinitions(raw)
++		if err != nil {
++			return nil, err
++		}
++	}
++	names := AgentNames(&Config{Agents: definitions})
++	kanbanAgent, err := validateChoice(obj["kanban_agent"], names, "kanban_agent")
+ 	if err != nil {
+ 		return nil, err
+ 	}
+ 	var kanbanAgents map[string]string
+ 	if _, exists := obj["kanban_agents"]; exists {
+-		kanbanAgents, err = validateKanbanAgents(obj["kanban_agents"], kanbanAgent)
++		kanbanAgents, err = validateKanbanAgents(obj["kanban_agents"], kanbanAgent, names)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+@@ -748,12 +768,13 @@ func Validate(raw any) (*Config, error) {
+ 	}
+ 	var models Models
+ 	if _, exists := obj["models"]; exists {
+-		models, err = validateModels(obj["models"])
++		models, err = validateModels(obj["models"], definitions)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 	} else {
+ 		models = DefaultModels()
++		customModelDefaults(definitions, &models)
+ 	}
+ 	tui := DefaultTUI()
+ 	if _, exists := obj["tui"]; exists {
+@@ -791,6 +812,7 @@ func Validate(raw any) (*Config, error) {
+ 		TUI:             tui,
+ 		Language:        language,
+ 		AgentLanguage:   agentLanguage,
++		Agents:          definitions,
+ 	}, nil
+ }
+ 
+diff --git a/internal/config/format.go b/internal/config/format.go
+index f8bb773..726901e 100644
+--- a/internal/config/format.go
++++ b/internal/config/format.go
+@@ -96,6 +96,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
+ 	}
+ 	var lines []string
+ 	lines = append(lines, Text("config.welcome")+": "+status)
++	lines = append(lines, AgentWarnings(effective)...)
+ 	lines = append(lines, Text("config.kanban_agent")+": "+FormatKanbanAgentsSummary(effective))
+ 	lines = append(lines, Text("config.launcher")+": "+effective.Launcher)
+ 	inUse := ExecutionAgentsInUse(effective)
+diff --git a/internal/config/repair.go b/internal/config/repair.go
+index 531e74f..a02ba44 100644
+--- a/internal/config/repair.go
++++ b/internal/config/repair.go
+@@ -115,7 +115,15 @@ func repairValues(raw any) (*Config, error) {
+ 			defaults.Rules = legacyRules()
+ 		}
+ 	}
+-	if agent, err := validateChoice(provided["kanban_agent"], ExecutionAgents, "kanban_agent"); err == nil {
++	if raw, ok := provided["agents"]; ok {
++		definitions, err := validateAgentDefinitions(raw)
++		if err != nil {
++			return nil, err
++		}
++		defaults.Agents = definitions
++		customModelDefaults(definitions, &defaults.Models)
++	}
++	if agent, err := validateChoice(provided["kanban_agent"], AgentNames(defaults), "kanban_agent"); err == nil {
+ 		defaults.KanbanAgent = agent
+ 		for _, scale := range TaskScales {
+ 			defaults.KanbanAgents[scale] = agent
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index 33e978e..c6d1e63 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -1,4 +1,25 @@
+ {
++  "config.agent_session_dialect": "Dialect {{.V0}} cannot use session mode {{.V1}} without args templates; omit session to inherit the dialect or provide args.start and args.resume.",
++  "config.agent_definition_invalid": "Invalid agents.{{.V0}}: {{.V1}}",
++  "config.agent_object": "Use a JSON object; null is not allowed.",
++  "config.agent_name": "Use a lowercase agent name starting with a letter, at most 64 characters (letters, digits, _ or -).",
++  "config.agent_text": "{{.V0}} must be nonempty without control characters; omit it to use defaults.",
++  "config.agent_path": "{{.V0}} must resolve on PATH or be an existing executable absolute path.",
++  "config.agent_dialect": "dialect must be codex, claude, grok or cursor.",
++  "config.agent_adapter": "Set dialect or args.start/args.resume for the custom agent.",
++  "config.agent_start": "Provide args.start as an argv array (an empty array is allowed).",
++  "config.agent_template": "Use nonempty argv elements without control characters; only {model}, {effort}, {session} placeholders are supported.",
++  "config.agent_session": "session.mode must be generated, allocated or none.",
++  "config.agent_allocate": "allocated requires session.allocate argv with a resolvable executable; arguments and json_field must have no control characters.",
++  "config.agent_allocate_only": "allocate/json_field are only valid for allocated sessions.",
++  "config.agent_session_required": "Custom argv templates require an explicit session.mode.",
++  "config.agent_resume": "Provide args.resume or declare session.mode=none.",
++  "config.agent_no_resume": "Agent {{.V0}} uses session.mode=none: resume and direct notify are unavailable; notify starts a fresh process through recovery.",
++  "launch.agent_allocate_failed": "Session allocation failed (exit {{.V0}}).",
++  "launch.agent_allocate_invalid": "Session allocation returned an invalid ID or JSON field.",
++  "menu.agent_path": "Executable",
++  "menu.agent_process_name": "Pane process name",
++  "menu.agent_default": "Empty = built-in default",
+   "board.coordinator_conflict": "Coordinator checkpoint conflict or invalid facts: {{.V0}}",
+   "board.coordinator_usage": "Usage: kander coordinator show <group-id> | claim <claim.json> | reconcile <observations.json>",
+   "board.dispatch_evidence_invalid": "Invalid dispatch evidence: {{.V0}}",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index c957358..f2748d0 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -1,4 +1,25 @@
+ {
++  "config.agent_session_dialect": "方言 {{.V0}} はテンプレートなしでセッション方式 {{.V1}} を使用できません。session を省略するか args.start と args.resume を指定してください。",
++  "config.agent_definition_invalid": "agents.{{.V0}} が無効です: {{.V1}}",
++  "config.agent_object": "JSON オブジェクトを指定してください。null は不可です。",
++  "config.agent_name": "名前は小文字で始まる64文字以内の英小文字、数字、_、- にしてください。",
++  "config.agent_text": "{{.V0}} は制御文字を含まない空でない値にしてください。既定値にはフィールドを省略します。",
++  "config.agent_path": "{{.V0}} は PATH で解決できる名前か、存在する実行可能な絶対パスにしてください。",
++  "config.agent_dialect": "dialect は codex、claude、grok、cursor のいずれかです。",
++  "config.agent_adapter": "カスタム agent に dialect または args.start/args.resume を設定してください。",
++  "config.agent_start": "args.start に argv 配列を指定してください（空配列可）。",
++  "config.agent_template": "argv 要素は空や制御文字を含めず、置換は {model}、{effort}、{session} のみ使用してください。",
++  "config.agent_session": "session.mode は generated、allocated、none のいずれかです。",
++  "config.agent_allocate": "allocated には実行可能な session.allocate argv が必要です。引数と json_field に制御文字は不可です。",
++  "config.agent_allocate_only": "allocate/json_field は allocated セッション専用です。",
++  "config.agent_session_required": "カスタム argv テンプレートには明示的な session.mode が必要です。",
++  "config.agent_resume": "args.resume を指定するか session.mode=none を宣言してください。",
++  "config.agent_no_resume": "Agent {{.V0}} は session.mode=none です。resume と直接通知は不可。notify は復旧経路で新しいプロセスを起動します。",
++  "launch.agent_allocate_failed": "セッション割り当て失敗（終了コード {{.V0}}）。",
++  "launch.agent_allocate_invalid": "セッション割り当てが無効な ID または JSON フィールドを返しました。",
++  "menu.agent_path": "実行ファイル",
++  "menu.agent_process_name": "pane プロセス名",
++  "menu.agent_default": "空欄 = 組み込み既定値",
+   "board.coordinator_conflict": "コーディネーターのチェックポイント競合、または事実が無効です: {{.V0}}",
+   "board.coordinator_usage": "使い方: kander coordinator show <group-id> | claim <claim.json> | reconcile <observations.json>",
+   "board.dispatch_evidence_invalid": "派回事実が無効です: {{.V0}}",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index 24eea62..016dc78 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -1,4 +1,25 @@
+ {
++  "config.agent_session_dialect": "方言 {{.V0}} 无法直接使用会话模式 {{.V1}}；请删除 session 以继承方言默认值，或提供 args.start 与 args.resume 模板。",
++  "config.agent_definition_invalid": "agents.{{.V0}} 无效：{{.V1}}",
++  "config.agent_object": "请使用 JSON 对象，不接受 null。",
++  "config.agent_name": "agent 名须以小写字母开头，最多 64 字符，仅含小写字母、数字、_ 或 -。",
++  "config.agent_text": "{{.V0}} 须非空且不含控制字符；使用默认值请删除该字段。",
++  "config.agent_path": "{{.V0}} 须能从 PATH 解析，或为存在且可执行的绝对路径。",
++  "config.agent_dialect": "dialect 仅接受 codex、claude、grok 或 cursor。",
++  "config.agent_adapter": "自定义 agent 请设置 dialect 或 args.start/args.resume。",
++  "config.agent_start": "请提供 args.start argv 数组（允许空数组）。",
++  "config.agent_template": "argv 元素须非空且无控制字符；占位符只接受 {model}、{effort}、{session}。",
++  "config.agent_session": "session.mode 仅接受 generated、allocated 或 none。",
++  "config.agent_allocate": "allocated 需要 session.allocate argv，首项为可解析的可执行名；参数与 json_field 不得含控制字符。",
++  "config.agent_allocate_only": "allocate/json_field 仅适用于 allocated 会话。",
++  "config.agent_session_required": "自定义 argv 模板必须显式设置 session.mode。",
++  "config.agent_resume": "请提供 args.resume 或声明 session.mode=none。",
++  "config.agent_no_resume": "Agent {{.V0}} 使用 session.mode=none：不支持 resume 与 notify 直投；notify 将通过恢复通道启动新进程。",
++  "launch.agent_allocate_failed": "会话分配失败（退出码 {{.V0}}）。",
++  "launch.agent_allocate_invalid": "会话分配返回无效 ID 或 JSON 字段。",
++  "menu.agent_path": "可执行名",
++  "menu.agent_process_name": "pane 进程名",
++  "menu.agent_default": "留空 = 内置默认",
+   "board.coordinator_conflict": "编排检查点冲突或事实无效：{{.V0}}",
+   "board.coordinator_usage": "用法：kander coordinator show <group-id> | claim <claim.json> | reconcile <observations.json>",
+   "board.dispatch_evidence_invalid": "派回证据无效：{{.V0}}",
+diff --git a/internal/launch/agent_allocate.go b/internal/launch/agent_allocate.go
+new file mode 100644
+index 0000000..38199a8
+--- /dev/null
++++ b/internal/launch/agent_allocate.go
+@@ -0,0 +1,45 @@
++package launch
++
++import (
++	"context"
++	"encoding/json"
++	"strings"
++	"time"
++
++	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/probe"
++)
++
++func allocateAgentSession(definition *config.AgentSessionDefinition) (string, error) {
++	program := resolveAgent(definition.Allocate[0])
++	if program == nil {
++		return "", launchError("launch.agent_is_not_in_path", definition.Allocate[0])
++	}
++	inv, err := launchInvocation(LaunchPlan{Launcher: "foreground"}, *program, definition.Allocate[1:])
++	if err != nil {
++		return "", err
++	}
++	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
++	defer cancel()
++	result, err := probe.CaptureWithEnv(ctx, inv.Argv[0], inv.Argv[1:], envSlice(inv.Env))
++	if err != nil {
++		return "", err
++	}
++	if result.Code != 0 {
++		return "", launchError("launch.agent_allocate_failed", result.Code)
++	}
++	id := strings.TrimSpace(result.Stdout)
++	if definition.JSONField != "" {
++		var obj map[string]json.RawMessage
++		if err := json.Unmarshal([]byte(id), &obj); err != nil {
++			return "", launchError("launch.agent_allocate_invalid")
++		}
++		if err := json.Unmarshal(obj[definition.JSONField], &id); err != nil {
++			return "", launchError("launch.agent_allocate_invalid")
++		}
++	}
++	if !sessionReferenceRe.MatchString(id) {
++		return "", launchError("launch.agent_allocate_invalid")
++	}
++	return id, nil
++}
+diff --git a/internal/launch/agent_definitions_test.go b/internal/launch/agent_definitions_test.go
+new file mode 100644
+index 0000000..debe2d7
+--- /dev/null
++++ b/internal/launch/agent_definitions_test.go
+@@ -0,0 +1,140 @@
++package launch
++
++import (
++	"os"
++	"path/filepath"
++	"reflect"
++	"strings"
++	"testing"
++
++	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/process"
++)
++
++func TestCustomDialectArguments(t *testing.T) {
++	session := AgentSession{Agent: "alias", Reference: "session-id"}
++	for _, test := range []struct {
++		dialect       string
++		start, resume []string
++	}{
++		{"codex", []string{"--model", "model", "--config", `model_reasoning_effort="high"`, "--dangerously-bypass-approvals-and-sandbox"}, []string{"resume", "--model", "model", "--config", `model_reasoning_effort="high"`, "--dangerously-bypass-approvals-and-sandbox", "session-id"}},
++		{"claude", []string{"--model", "model", "--effort", "high", "--dangerously-skip-permissions", "--session-id", "session-id"}, []string{"--model", "model", "--effort", "high", "--dangerously-skip-permissions", "--resume", "session-id"}},
++		{"grok", []string{"--model", "model", "--effort", "high", "--permission-mode", "bypassPermissions", "--session-id", "session-id"}, []string{"--model", "model", "--effort", "high", "--permission-mode", "bypassPermissions", "--resume", "session-id"}},
++		{"cursor", []string{"--model", "model", "--trust", "--force", "--resume", "session-id"}, []string{"--model", "model", "--trust", "--force", "--resume", "session-id"}},
++	} {
++		t.Run(test.dialect, func(t *testing.T) {
++			cfg := config.DefaultConfig()
++			cfg.Agents = map[string]config.AgentDefinition{"alias": {Dialect: test.dialect}}
++			for _, resume := range []bool{false, true} {
++				want := test.start
++				if resume {
++					want = test.resume
++				}
++				got, err := agentArguments("alias", map[string]string{"small_model": "model", "small_effort": "high"}, "small", session, resume, cfg)
++				if err != nil || !reflect.DeepEqual(got, want) {
++					t.Fatalf("%q != %q: %v", got, want, err)
++				}
++				builtin, err := agentArguments(test.dialect, map[string]string{"small_model": "model", "small_effort": "high"}, "small", session, resume)
++				if err != nil || !reflect.DeepEqual(got, builtin) {
++					t.Fatalf("default drift %q %q", got, builtin)
++				}
++			}
++		})
++	}
++}
++
++func TestAgentTemplatePrecedenceAndSessions(t *testing.T) {
++	_, _, bin := setupBoard(t)
++	cfg := envConfig("custom", "tmux", nil)
++	cfg.Agents = map[string]config.AgentDefinition{"custom": {Path: filepath.Join(bin, "claude"), Dialect: "claude", Args: &config.AgentArgs{Start: []string{"start", "--model", "{model}", "--id", "{session}"}, Resume: []string{"again", "{session}"}}, Session: &config.AgentSessionDefinition{Mode: "generated"}}}
++	program, err := requireAgentProgram("custom", cfg)
++	if err != nil || program.Path != filepath.Join(bin, "claude") {
++		t.Fatalf("%+v %v", program, err)
++	}
++	session, err := newAgentSession("custom", program, cfg)
++	if err != nil || len(session.Reference) != 36 {
++		t.Fatalf("%+v %v", session, err)
++	}
++	args, err := agentArguments("custom", nil, "small", session, false, cfg)
++	if err != nil || !reflect.DeepEqual(args, []string{"start", "--id", session.Reference}) {
++		t.Fatalf("%q %v", args, err)
++	}
++	args, err = agentArguments("custom", nil, "small", session, true, cfg)
++	if err != nil || !reflect.DeepEqual(args, []string{"again", session.Reference}) {
++		t.Fatalf("%q %v", args, err)
++	}
++	d := cfg.Agents["custom"]
++	d.Session.Mode = "none"
++	cfg.Agents["custom"] = d
++	if _, err := resolvedTaskSession("task", "- SESSION: custom id\n", cfg); err == nil || !strings.Contains(err.Error(), "none") {
++		t.Fatal(err)
++	}
++	args, err = agentArguments("custom", nil, "small", session, false, cfg)
++	if err != nil || !reflect.DeepEqual(args, []string{"start"}) {
++		t.Fatalf("%q %v", args, err)
++	}
++	if _, err := agentArguments("custom", nil, "small", session, true, cfg); err == nil {
++		t.Fatal("none resumed")
++	}
++}
++
++func TestAllocatedAgentSession(t *testing.T) {
++	_, _, bin := setupBoard(t)
++	allocator := filepath.Join(bin, "allocator")
++	for _, test := range []struct {
++		output, field string
++		exit          int
++		bad           bool
++	}{
++		{"allocated-id", "", 0, false}, {`{"id":"json-id"}`, "id", 0, false}, {`{"id":42}`, "id", 0, true}, {"two\nlines", "", 0, true}, {"ok", "", 1, true},
++	} {
++		script := "#!/bin/sh\nprintf '%s' '" + test.output + "'\nexit " + itoa(test.exit) + "\n"
++		if err := os.WriteFile(allocator, []byte(script), 0700); err != nil {
++			t.Fatal(err)
++		}
++		id, err := allocateAgentSession(&config.AgentSessionDefinition{Mode: "allocated", Allocate: []string{allocator, "literal $(no-shell)"}, JSONField: test.field})
++		if (err != nil) != test.bad || (!test.bad && id == "") {
++			t.Fatalf("id=%q err=%v", id, err)
++		}
++	}
++}
++
++func TestTemplateStartAppendsPromptAndUsesConfiguredProgram(t *testing.T) {
++	root, _, bin := setupBoard(t)
++	cfg := envConfig("custom", "tmux", nil)
++	cfg.Agents = map[string]config.AgentDefinition{"custom": {Path: filepath.Join(bin, "claude"), ProcessName: "node", Args: &config.AgentArgs{Start: []string{"--model", "{model}", "--session-id", "{session}"}, Resume: []string{"--resume", "{session}"}}, Session: &config.AgentSessionDefinition{Mode: "generated"}}}
++	loadEffective = func() (*config.Config, error) { return cfg, nil }
++	var got []string
++	previous := newShellInvocation
++	newShellInvocation = func(p process.AgentProgram, args []string, env map[string]string) (process.ProcessInvocation, error) {
++		got = append([]string{p.Path}, args...)
++		return previous(p, args, env)
++	}
++	t.Cleanup(func() { newShellInvocation = previous })
++	id, _ := makeTodo(t, root, "custom-template")
++	_, _, err := capture(t, func() error { return commandStart(root, "custom", "tmux", id) })
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got[0] != filepath.Join(bin, "claude") || got[1] != "--session-id" || !strings.Contains(got[len(got)-1], "UTF-8") {
++		t.Fatalf("%q", got)
++	}
++}
++
++func TestNoneDialectArgumentsDoNotReuseTerminalIdentity(t *testing.T) {
++	for _, agent := range config.ExecutionAgents {
++		t.Run(agent, func(t *testing.T) {
++			cfg := config.DefaultConfig()
++			cfg.Agents = map[string]config.AgentDefinition{agent: {Session: &config.AgentSessionDefinition{Mode: "none"}}}
++			args, err := agentArguments(agent, nil, "small", AgentSession{Agent: agent, Reference: "terminal-marker"}, false, cfg)
++			if err != nil {
++				t.Fatal(err)
++			}
++			for _, arg := range args {
++				if arg == "--resume" || arg == "--session-id" || arg == "terminal-marker" {
++					t.Fatalf("none passed session identity: %q", args)
++				}
++			}
++		})
++	}
++}
+diff --git a/internal/launch/cmd.go b/internal/launch/cmd.go
+index bc80356..796e94c 100644
+--- a/internal/launch/cmd.go
++++ b/internal/launch/cmd.go
+@@ -60,13 +60,13 @@ func parseAgentLauncher(args []string) (rest []string, agent, launcher string, a
+ 			if !ok {
+ 				return nil, "", "", false, t("launch.missing_agent_value")
+ 			}
+-			if !contains(config.ExecutionAgents, val) {
++			if !config.ValidAgentName(val) {
+ 				return nil, "", "", false, t("launch.unknown_agent", val)
+ 			}
+ 			agent, agentSet, i = val, true, next
+ 		case strings.HasPrefix(arg, "--agent="):
+ 			val := strings.TrimPrefix(arg, "--agent=")
+-			if !contains(config.ExecutionAgents, val) {
++			if !config.ValidAgentName(val) {
+ 				return nil, "", "", false, t("launch.unknown_agent", val)
+ 			}
+ 			agent, agentSet = val, true
+@@ -182,13 +182,13 @@ func RunResume(args []string) int {
+ 			if !ok {
+ 				return usageFail("resume", "launch.missing_agent_value")
+ 			}
+-			if !contains(config.ExecutionAgents, val) {
++			if !config.ValidAgentName(val) {
+ 				return usageFail("resume", "launch.unknown_agent", val)
+ 			}
+ 			agent, agentSet, i = val, true, next
+ 		case strings.HasPrefix(arg, "--agent="):
+ 			val := strings.TrimPrefix(arg, "--agent=")
+-			if !contains(config.ExecutionAgents, val) {
++			if !config.ValidAgentName(val) {
+ 				return usageFail("resume", "launch.unknown_agent", val)
+ 			}
+ 			agent, agentSet = val, true
+diff --git a/internal/launch/commands.go b/internal/launch/commands.go
+index 0bf9221..17e2169 100644
+--- a/internal/launch/commands.go
++++ b/internal/launch/commands.go
+@@ -88,7 +88,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
+ 			return err
+ 		}
+ 	}
+-	if !contains(config.ExecutionAgents, agentName) {
++	if !config.HasAgent(cfg, agentName) {
+ 		return launchError("launch.unsupported_agent", agentName)
+ 	}
+ 	launcher := launcherOverride
+@@ -99,16 +99,16 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
+ 	if err != nil {
+ 		return err
+ 	}
+-	program, err := requireAgentProgram(agentName)
++	program, err := requireAgentProgram(agentName, cfg)
+ 	if err != nil {
+ 		return err
+ 	}
+-	session, err := newAgentSession(agentName, program)
++	session, err := newAgentSession(agentName, program, cfg)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	previous := map[string]struct{}{}
+-	if agentName == "codex" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
++	if config.AgentFor(cfg, agentName).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
+ 		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
+ 			for _, id := range sessions {
+ 				previous[id] = struct{}{}
+@@ -143,7 +143,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
+ 	}()
+ 	prompt := taskInstruction(t("launch.prompt.start_head", entry.TaskID), taskFile)
+ 	model := cfg.Models.Kanban[agentName]
+-	args, err := agentArguments(agentName, model, entry.Kind, session, false)
++	args, err := agentArguments(agentName, model, entry.Kind, session, false, cfg)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -166,7 +166,7 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
+ 			if err != nil {
+ 				return AgentSession{}, err
+ 			}
+-			return AgentSession{Agent: "codex", Reference: ref}, nil
++			return AgentSession{Agent: session.Agent, Reference: ref}, nil
+ 		}
+ 	}
+ 	loc := (func(LaunchOutcome) error)(nil)
+@@ -262,21 +262,24 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
+ 	if takeover {
+ 		agentName = *agent
+ 	}
+-	program, err := requireAgentProgram(agentName)
++	if !config.HasAgent(cfg, agentName) {
++		return launchError("launch.unsupported_agent", agentName)
++	}
++	program, err := requireAgentProgram(agentName, cfg)
+ 	if err != nil {
+ 		return err
+ 	}
+ 	var session AgentSession
+ 	if takeover {
+-		session, err = newAgentSession(agentName, program)
++		session, err = newAgentSession(agentName, program, cfg)
+ 	} else {
+-		session, err = resolvedTaskSession(entry.TaskID, text)
++		session, err = resolvedTaskSession(entry.TaskID, text, cfg)
+ 	}
+ 	if err != nil {
+ 		return err
+ 	}
+ 	previous := map[string]struct{}{}
+-	if takeover && session.Agent == "codex" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
++	if takeover && config.AgentFor(cfg, session.Agent).Session.Mode == "discovered" && (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") {
+ 		if sessions, err := codexSessionsForTask(entry.TaskID); err == nil {
+ 			for _, id := range sessions {
+ 				previous[id] = struct{}{}
+@@ -316,7 +319,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
+ 	}
+ 	prompt := taskInstruction(head, taskFile)
+ 	model := cfg.Models.Kanban[session.Agent]
+-	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover)
++	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -337,7 +340,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
+ 			if err != nil {
+ 				return AgentSession{}, err
+ 			}
+-			effective = AgentSession{Agent: "codex", Reference: ref}
++			effective = AgentSession{Agent: session.Agent, Reference: ref}
+ 			if takeover {
+ 				current, err := readDocumentFn(moved)
+ 				if err != nil {
+diff --git a/internal/launch/notify_resume.go b/internal/launch/notify_resume.go
+index 8873553..731f7a9 100644
+--- a/internal/launch/notify_resume.go
++++ b/internal/launch/notify_resume.go
+@@ -2,6 +2,7 @@ package launch
+ 
+ import (
+ 	"github.com/dualface/kander/internal/board"
++	"github.com/dualface/kander/internal/config"
+ 	"github.com/dualface/kander/internal/window"
+ )
+ 
+@@ -26,7 +27,12 @@ func ResolvedSession(taskID, text string) (AgentSession, error) {
+ 	return resolvedTaskSession(taskID, text)
+ }
+ 
+-// NotifyViaResume resumes the original session when recovery is permitted.
++// ResolvedSessionIdentity resolves terminal identity independently of resume support.
++func ResolvedSessionIdentity(taskID, text string) (AgentSession, error) {
++	return resolveTaskIdentity(taskID, text, false)
++}
++
++// NotifyViaResume resumes the original session, or starts fresh for session.mode=none.
+ // Legacy failures and durable failures before a send attempt restore the pre-call
+ // text only while this operation owns the current revision and authorization;
+ // otherwise newer records are preserved and a conflict is reported. After an
+@@ -36,11 +42,22 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
+ 	if err := board.ValidateMutable(entry, originalText); err != nil {
+ 		return ResumeLaunch{}, err
+ 	}
+-	session, err := resolvedTaskSession(entry.TaskID, originalText)
++	cfg, err := loadEffective()
+ 	if err != nil {
+ 		return ResumeLaunch{}, err
+ 	}
+-	cfg, err := loadEffective()
++	originalSession, err := sessionFrom(originalText)
++	if err != nil {
++		return ResumeLaunch{}, err
++	}
++	definition := config.AgentFor(cfg, originalSession.Agent)
++	resume := definition.Session.Mode != "none"
++	var session AgentSession
++	if resume {
++		session, err = resolvedTaskSession(entry.TaskID, originalText, cfg)
++	} else {
++		session = originalSession
++	}
+ 	if err != nil {
+ 		return ResumeLaunch{}, err
+ 	}
+@@ -51,7 +68,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
+ 	if err != nil {
+ 		return ResumeLaunch{}, err
+ 	}
+-	program, err := requireAgentProgram(session.Agent)
++	program, err := requireAgentProgram(session.Agent, cfg)
+ 	if err != nil {
+ 		return ResumeLaunch{}, err
+ 	}
+@@ -75,7 +92,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
+ 	}()
+ 	prompt := taskInstruction(t("launch.prompt.resume_head", entry.TaskID), taskFile)
+ 	model := cfg.Models.Kanban[session.Agent]
+-	args, err := agentArguments(session.Agent, model, entry.Kind, session, true)
++	args, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
+ 	if err != nil {
+ 		return ResumeLaunch{}, err
+ 	}
+diff --git a/internal/launch/session.go b/internal/launch/session.go
+index 6e12d98..ad1da92 100644
+--- a/internal/launch/session.go
++++ b/internal/launch/session.go
+@@ -77,16 +77,22 @@ func cursorCreateChat(program *process.AgentProgram) (string, error) {
+ 	return chatID, nil
+ }
+ 
+-func newAgentSession(agent string, program *process.AgentProgram) (AgentSession, error) {
+-	switch agent {
+-	case "claude", "grok":
++func newAgentSession(agent string, program *process.AgentProgram, configs ...*config.Config) (AgentSession, error) {
++	var cfg *config.Config
++	if len(configs) > 0 {
++		cfg = configs[0]
++	}
++	definition := config.AgentFor(cfg, agent)
++	switch definition.Session.Mode {
++	case "generated", "none":
+ 		return AgentSession{Agent: agent, Reference: newUUID()}, nil
+-	case "cursor":
+-		id, err := cursorCreateChat(program)
+-		if err != nil {
+-			return AgentSession{}, err
++	case "allocated":
++		if definition.Dialect == "cursor" && (cfg == nil || cfg.Agents[agent].Session == nil) {
++			id, err := cursorCreateChat(program)
++			return AgentSession{Agent: agent, Reference: id}, err
+ 		}
+-		return AgentSession{Agent: agent, Reference: id}, nil
++		id, err := allocateAgentSession(definition.Session)
++		return AgentSession{Agent: agent, Reference: id}, err
+ 	default:
+ 		return AgentSession{Agent: agent}, nil
+ 	}
+@@ -106,7 +112,7 @@ func parseTaskSession(text string) *AgentSession {
+ 	if len(parts) > 1 {
+ 		reference = parts[1]
+ 	}
+-	if !contains(config.ExecutionAgents, agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
++	if !config.ValidAgentName(agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
+ 		return nil
+ 	}
+ 	return &AgentSession{Agent: agent, Reference: reference}
+@@ -126,17 +132,37 @@ func sessionFrom(text string) (AgentSession, error) {
+ 	return *session, nil
+ }
+ 
+-func resolvedTaskSession(taskID, text string) (AgentSession, error) {
++func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentSession, error) {
++	return resolveTaskIdentity(taskID, text, true, configs...)
++}
++
++func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*config.Config) (AgentSession, error) {
+ 	session, err := sessionFrom(text)
+ 	if err != nil {
+ 		return AgentSession{}, err
+ 	}
+-	if session.Agent == "codex" && session.Reference == "" {
++	var cfg *config.Config
++	if len(configs) > 0 {
++		cfg = configs[0]
++	} else {
++		cfg, err = loadEffective()
++		if err != nil {
++			return AgentSession{}, err
++		}
++	}
++	if !config.HasAgent(cfg, session.Agent) {
++		return AgentSession{}, launchError("launch.unsupported_agent", session.Agent)
++	}
++	definition := config.AgentFor(cfg, session.Agent)
++	if requireResume && definition.Session.Mode == "none" {
++		return AgentSession{}, config.AgentResumeError(session.Agent)
++	}
++	if definition.Session.Mode == "discovered" && session.Reference == "" {
+ 		id, err := findCodexSession(taskID)
+ 		if err != nil {
+ 			return AgentSession{}, err
+ 		}
+-		return AgentSession{Agent: "codex", Reference: id}, nil
++		return AgentSession{Agent: session.Agent, Reference: id}, nil
+ 	}
+ 	if session.Reference == "" {
+ 		return AgentSession{}, launchError(
+@@ -326,19 +352,43 @@ func discoverNewCodexSession(taskID string, previous map[string]struct{}) (strin
+ 	}
+ }
+ 
+-func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool) ([]string, error) {
++func agentArguments(agent string, model map[string]string, kind string, session AgentSession, resume bool, configs ...*config.Config) ([]string, error) {
++	var cfg *config.Config
++	if len(configs) > 0 {
++		cfg = configs[0]
++	}
++	definition := config.AgentFor(cfg, agent)
++	if resume && definition.Session.Mode == "none" {
++		return nil, config.AgentResumeError(agent)
++	}
+ 	scale := "small"
+ 	if kind == "large" {
+ 		scale = "large"
+ 	}
+ 	// The model is picked per task scale; an empty scale model falls back to the shared "model" key of legacy configs.
+ 	modelID := config.KanbanModelFor(model, scale)
++	if definition.Args != nil {
++		template := definition.Args.Start
++		if resume {
++			template = definition.Args.Resume
++		}
++		reference := session.Reference
++		if definition.Session.Mode == "none" {
++			reference = ""
++		}
++		return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
++	}
++	agent = definition.Dialect
+ 	if agent == "cursor" {
+ 		var args []string
+ 		if modelID != "" {
+ 			args = append(args, "--model", modelID)
+ 		}
+-		return append(args, "--trust", "--force", "--resume", session.Reference), nil
++		args = append(args, "--trust", "--force")
++		if definition.Session.Mode != "none" {
++			args = append(args, "--resume", session.Reference)
++		}
++		return args, nil
+ 	}
+ 	effortKey := scale + "_effort"
+ 	effort := model[effortKey]
+@@ -358,20 +408,32 @@ func agentArguments(agent string, model map[string]string, kind string, session
+ 		if resume {
+ 			flag = "--resume"
+ 		}
+-		return append(modelArgs, "--effort", effort, "--dangerously-skip-permissions", flag, session.Reference), nil
++		args := append(modelArgs, "--effort", effort, "--dangerously-skip-permissions")
++		if definition.Session.Mode != "none" {
++			args = append(args, flag, session.Reference)
++		}
++		return args, nil
+ 	case "grok":
+ 		flag := "--session-id"
+ 		if resume {
+ 			flag = "--resume"
+ 		}
+-		return append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions", flag, session.Reference), nil
++		args := append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions")
++		if definition.Session.Mode != "none" {
++			args = append(args, flag, session.Reference)
++		}
++		return args, nil
+ 	default:
+ 		return nil, launchError("launch.unsupported_agent", agent)
+ 	}
+ }
+ 
+-func requireAgentProgram(agentName string) (*process.AgentProgram, error) {
+-	executable := config.AgentExecutableName(agentName)
++func requireAgentProgram(agentName string, configs ...*config.Config) (*process.AgentProgram, error) {
++	var cfg *config.Config
++	if len(configs) > 0 {
++		cfg = configs[0]
++	}
++	executable := config.AgentPath(cfg, agentName)
+ 	program := resolveAgent(executable)
+ 	if program != nil {
+ 		return program, nil
+diff --git a/internal/launch/tmux.go b/internal/launch/tmux.go
+index 3706918..1a8f41c 100644
+--- a/internal/launch/tmux.go
++++ b/internal/launch/tmux.go
+@@ -299,7 +299,11 @@ func tmuxNotifyTarget(tmux, pane string, session AgentSession, timeout time.Dura
+ 	if facts.InMode != "0" {
+ 		return launchError("launch.tmux_pane_is_in_copy_mode", pane)
+ 	}
+-	expected := filepathBase(configAgentExe(session.Agent))
++	definition, err := config.LoadAgent(session.Agent)
++	if err != nil {
++		return err
++	}
++	expected := definition.ProcessName
+ 	if facts.Command != expected {
+ 		return launchError(
+ 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),
+@@ -330,14 +334,6 @@ func orNA(v string) string {
+ 	return v
+ }
+ 
+-func configAgentExe(agent string) string {
+-	return lookPathName(agent)
+-}
+-
+-func lookPathName(agent string) string {
+-	return config.AgentExecutableName(agent)
+-}
+-
+ // paneLauncher reports whether this launcher hands the agent to a terminal
+ // container's shell, which parses the single-line command back into argv.
+ func paneLauncher(launcher string) bool {
+diff --git a/internal/liveness/agent_definition_test.go b/internal/liveness/agent_definition_test.go
+new file mode 100644
+index 0000000..0895102
+--- /dev/null
++++ b/internal/liveness/agent_definition_test.go
+@@ -0,0 +1,27 @@
++package liveness
++
++import (
++	"context"
++	"github.com/dualface/kander/internal/config"
++	"path/filepath"
++	"testing"
++)
++
++func TestConfiguredProcessNameReverseLookup(t *testing.T) {
++	installPOSIXFakes(t, true)
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Agents = map[string]config.AgentDefinition{"wrapped": {Dialect: "claude", ProcessName: "node"}}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("KANBAN_TMUX_LIST_PANES", "%9\t$9\tnine\t@9\tnode\t0\twanted\t")
++	got, err := TmuxReverseLookupContext(context.Background(), "tmux", TaskSession{Agent: "wrapped", Reference: "wanted"})
++	if err != nil || got.PaneID != "%9" {
++		t.Fatalf("%+v %v", got, err)
++	}
++	if ParseTaskSession("- SESSION: wrapped wanted\n") == nil {
++		t.Fatal("custom metadata rejected")
++	}
++}
+diff --git a/internal/liveness/check.go b/internal/liveness/check.go
+index 80af49c..059a43f 100644
+--- a/internal/liveness/check.go
++++ b/internal/liveness/check.go
+@@ -9,6 +9,7 @@ import (
+ 	"time"
+ 
+ 	"github.com/dualface/kander/internal/board"
++	"github.com/dualface/kander/internal/config"
+ )
+ 
+ func formatReport(rep Report) string {
+@@ -106,6 +107,14 @@ func RunCheck(args []string) int {
+ 		}
+ 		tasks = append(tasks, arg)
+ 	}
++	cfg, err := config.Load(true)
++	if err != nil {
++		fmt.Fprintln(os.Stderr, err)
++		return 1
++	}
++	for _, warning := range config.AgentWarnings(cfg) {
++		fmt.Fprintln(os.Stderr, warning)
++	}
+ 	root, err := board.BoardRoot()
+ 	if err != nil {
+ 		fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+diff --git a/internal/liveness/classify.go b/internal/liveness/classify.go
+index 04a46ca..dab9c40 100644
+--- a/internal/liveness/classify.go
++++ b/internal/liveness/classify.go
+@@ -181,7 +181,10 @@ func classifyTmux(ctx context.Context, entry board.Entry, session TaskSession, l
+ 		return staleReport(ctx, entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), tmux, launcher, allowReverseLookup)
+ 	}
+ 	facts := paneProbe.Facts
+-	expected := agentCommandName(session.Agent)
++	expected, err := agentCommandName(session.Agent)
++	if err != nil {
++		return report(entry, &session, Unknown, "tmux", tmuxContainer, err.Error(), "")
++	}
+ 	if facts.Dead != "0" || facts.Command != expected {
+ 		actual := facts.Command
+ 		if actual == "" {
+diff --git a/internal/liveness/lookup.go b/internal/liveness/lookup.go
+index 5d67ff9..2ed4d49 100644
+--- a/internal/liveness/lookup.go
++++ b/internal/liveness/lookup.go
+@@ -2,7 +2,6 @@ package liveness
+ 
+ import (
+ 	"context"
+-	"path/filepath"
+ 	"strconv"
+ 	"strings"
+ 
+@@ -30,14 +29,15 @@ func ParseTaskSession(text string) *TaskSession {
+ 	if len(parts) > 1 {
+ 		reference = parts[1]
+ 	}
+-	if !contains(config.ExecutionAgents, agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
++	if !config.ValidAgentName(agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
+ 		return nil
+ 	}
+ 	return &TaskSession{Agent: agent, Reference: reference}
+ }
+ 
+-func agentCommandName(agent string) string {
+-	return filepath.Base(config.AgentExecutableName(agent))
++func agentCommandName(agent string) (string, error) {
++	definition, err := config.LoadAgent(agent)
++	return definition.ProcessName, err
+ }
+ 
+ func markersMatch(kander, onevoke, reference string) bool {
+@@ -149,7 +149,10 @@ func TmuxReverseLookupContext(ctx context.Context, tmux string, session TaskSess
+ 		}
+ 		return TmuxPaneLocation{}, &probe.Error{Message: detail}
+ 	}
+-	expected := agentCommandName(session.Agent)
++	expected, err := agentCommandName(session.Agent)
++	if err != nil {
++		return TmuxPaneLocation{}, err
++	}
+ 	var matches []TmuxPaneLocation
+ 	for _, line := range strings.Split(res.Stdout, "\n") {
+ 		if err := ctx.Err(); err != nil {
+diff --git a/internal/menu/agent_fields.go b/internal/menu/agent_fields.go
+new file mode 100644
+index 0000000..b09f527
+--- /dev/null
++++ b/internal/menu/agent_fields.go
+@@ -0,0 +1,48 @@
++package menu
++
++import (
++	"github.com/dualface/kander/internal/config"
++	"strings"
++)
++
++// AgentExecutableFields shares one definition between both task scales.
++// Blank edits remove the override instead of persisting an invalid empty value.
++func (s *Session) AgentExecutableFields(scale string) []ModelField {
++	agent := s.Config.KanbanAgents[scale]
++	if agent == "" {
++		return nil
++	}
++	var out []ModelField
++	for _, key := range []string{"path", "process_name"} {
++		field := key
++		label := config.Text("menu.agent_" + field)
++		out = append(out, ModelField{Agent: agent, field: field, Label: agent + " " + label, Short: label, Prompt: label,
++			Placeholder: config.Text("menu.agent_default"),
++			get: func() string {
++				d := s.Config.Agents[agent]
++				if field == "path" {
++					return d.Path
++				}
++				return d.ProcessName
++			},
++			set: func(value string) {
++				if s.Config.Agents == nil {
++					s.Config.Agents = map[string]config.AgentDefinition{}
++				}
++				d := s.Config.Agents[agent]
++				value = strings.TrimSpace(value)
++				if field == "path" {
++					d.Path = value
++				} else {
++					d.ProcessName = value
++				}
++				if d.Path == "" && d.ProcessName == "" && d.Dialect == "" && d.Args == nil && d.Session == nil {
++					delete(s.Config.Agents, agent)
++				} else {
++					s.Config.Agents[agent] = d
++				}
++			},
++		})
++	}
++	return out
++}
+diff --git a/internal/menu/agent_fields_test.go b/internal/menu/agent_fields_test.go
+new file mode 100644
+index 0000000..084a45b
+--- /dev/null
++++ b/internal/menu/agent_fields_test.go
+@@ -0,0 +1,66 @@
++package menu
++
++import (
++	"github.com/dualface/kander/internal/config"
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++func TestAgentFieldsShareDefinitionsAndPreserveTemplates(t *testing.T) {
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	executable, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	cfg.Agents = map[string]config.AgentDefinition{"helper": {Path: executable, Args: &config.AgentArgs{Start: []string{}, Resume: []string{}}, Session: &config.AgentSessionDefinition{Mode: "generated"}}}
++	cfg.KanbanAgents["large"] = "helper"
++	cfg.KanbanAgents["small"] = "helper"
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	cfg, err = config.Load(false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	s, err := NewSessionForTest(cfg)
++	if err != nil {
++		t.Fatal(err)
++	}
++	found := false
++	for _, choice := range s.ExecutionChoices() {
++		if choice.Value == "helper" {
++			found = true
++		}
++	}
++	if !found {
++		t.Fatal("custom agent absent")
++	}
++	large, small := s.AgentExecutableFields("large"), s.AgentExecutableFields("small")
++	if len(large) != 2 || large[0].Key() != small[0].Key() {
++		t.Fatal("fields do not deduplicate")
++	}
++	large[1].Set("node")
++	if small[1].Value() != "node" || cfg.Agents["helper"].ProcessName != "" {
++		t.Fatal("editing does not isolate/share correctly")
++	}
++	if _, err := s.Save(); err != nil {
++		t.Fatal(err)
++	}
++	got, err := config.Load(false)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got.Agents["helper"].Args == nil || got.Agents["helper"].Session.Mode != "generated" || config.AgentProcessName(got, "helper") != "node" {
++		t.Fatal(got.Agents)
++	}
++	s.SetExecutionAgent("large", "codex")
++	fields := s.AgentExecutableFields("large")
++	fields[0].Set(executable)
++	fields[0].Set("")
++	if _, ok := s.Config.Agents["codex"]; ok {
++		t.Fatal("blank built-in edit should remove override")
++	}
++}
+diff --git a/internal/menu/agent_probe_test.go b/internal/menu/agent_probe_test.go
+new file mode 100644
+index 0000000..496025b
+--- /dev/null
++++ b/internal/menu/agent_probe_test.go
+@@ -0,0 +1,84 @@
++//go:build unix
++
++package menu
++
++import (
++	"github.com/dualface/kander/internal/config"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
++	h := newHarness(t)
++	path := filepath.Join(h.fakeBin, "renamed-agent")
++	if err := os.WriteFile(path, []byte("#!/bin/sh\necho renamed-version\n"), 0700); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("PATH", h.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Launcher = "foreground"
++	cfg.Agents = map[string]config.AgentDefinition{"codex": {Path: path}, "helper": {Path: path, Dialect: "claude"}}
++	states := findAgents(cfg)
++	t.Setenv("PATH", h.fakeBin)
++	states = findAgents(cfg)
++	if reviewerUsable(states["codex"]) {
++		t.Fatal("execution wrapper offered as reviewer")
++	}
++	if states["codex"].Path != path || states["helper"].Version != "renamed-version" || states["helper"].Review {
++		t.Fatal(states)
++	}
++	t.Setenv(config.EnvConfig, h.configPath)
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	_, out, diagnostic := h.run("doctor")
++	out += diagnostic
++	if !strings.Contains(out, "Codex: renamed-version") || !strings.Contains(out, "helper: renamed-version") {
++		t.Fatalf("%s %s", out, diagnostic)
++	}
++}
++
++func TestPanelCanConfigureUnselectedRenamedBuiltin(t *testing.T) {
++	h := newHarness(t)
++	t.Setenv("PATH", h.fakeBin)
++	t.Setenv(config.EnvConfig, h.configPath)
++	wrapper := filepath.Join(h.fakeBin, "kander-codex")
++	for _, name := range []string{"claude", "kander-codex"} {
++		if err := os.WriteFile(filepath.Join(h.fakeBin, name), []byte("#!/bin/sh\necho fixture\n"), 0700); err != nil {
++			t.Fatal(err)
++		}
++	}
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Launcher = "foreground"
++	cfg.KanbanAgent = "claude"
++	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	s, err := NewSession(cfg, true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	found := false
++	for _, choice := range s.ExecutionChoicesFor("claude") {
++		if choice.Value == "codex" {
++			found = true
++		}
++	}
++	if !found {
++		t.Fatal("unavailable Codex cannot be selected for path editing")
++	}
++	s.SetExecutionAgent("small", "codex")
++	s.AgentExecutableFields("small")[0].Set(wrapper)
++	if _, err := s.Save(); err != nil {
++		t.Fatal(err)
++	}
++	got, err := config.Load(false)
++	if err != nil || config.AgentPath(got, "codex") != wrapper {
++		t.Fatalf("%+v %v", got, err)
++	}
++}
+diff --git a/internal/menu/agents.go b/internal/menu/agents.go
+index bdfbbeb..8080940 100644
+--- a/internal/menu/agents.go
++++ b/internal/menu/agents.go
+@@ -10,6 +10,7 @@ import (
+ 
+ 	"github.com/dualface/kander/internal/config"
+ 	"github.com/dualface/kander/internal/install"
++	"github.com/dualface/kander/internal/probe"
+ 	"github.com/dualface/kander/internal/process"
+ )
+ 
+@@ -19,6 +20,7 @@ type agentState struct {
+ 	Batch     bool
+ 	Execution bool
+ 	Review    bool
++	reviewer  *agentState
+ }
+ 
+ func versionFailedText() string {
+@@ -105,18 +107,17 @@ func agentVersion(program *process.AgentProgram) string {
+ 	}
+ 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+ 	defer cancel()
+-	cmd := exec.CommandContext(ctx, inv.Argv[0], inv.Argv[1:]...)
++	var env []string
+ 	if inv.Env != nil {
+-		env := make([]string, 0, len(inv.Env))
+ 		for k, v := range inv.Env {
+ 			env = append(env, k+"="+v)
+ 		}
+-		cmd.Env = env
+ 	}
+-	out, err := cmd.CombinedOutput()
+-	if err != nil {
++	result, err := probe.CaptureWithEnv(ctx, inv.Argv[0], inv.Argv[1:], env)
++	if err != nil || result.Code != 0 {
+ 		return versionFailedText()
+ 	}
++	out := result.Stdout + result.Stderr
+ 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+ 	if len(lines) == 0 || lines[0] == "" {
+ 		return versionFailedText()
+@@ -129,14 +130,18 @@ func agentUsable(state agentState) bool {
+ 	return state.Path != "" && state.Version != "" && state.Version != failed
+ }
+ 
+-func findAgents() map[string]agentState {
++func findAgents(configs ...*config.Config) map[string]agentState {
++	var cfg *config.Config
++	if len(configs) > 0 {
++		cfg = configs[0]
++	}
+ 	agents := map[string]agentState{}
+ 	reviewSet := map[string]struct{}{}
+ 	for _, name := range config.ReviewAgents {
+ 		reviewSet[name] = struct{}{}
+ 	}
+-	for _, name := range config.ExecutionAgents {
+-		executable := config.AgentExecutableName(name)
++	for _, name := range config.AgentNames(cfg) {
++		executable := config.AgentPath(cfg, name)
+ 		program := process.ResolveAgentProgram(executable)
+ 		state := agentState{
+ 			Execution: true,
+@@ -150,6 +155,21 @@ func findAgents() map[string]agentState {
+ 			state.Version = agentVersion(program)
+ 			state.Batch = program.Batch
+ 		}
++		if state.Review {
++			reviewPath := config.AgentExecutableName(name)
++			if override := os.Getenv(strings.ToUpper(name) + "_REVIEW_BIN"); override != "" {
++				reviewPath = override
++			}
++			if reviewPath != executable {
++				reviewer := agentState{Review: true}
++				if program := process.ResolveAgentProgram(reviewPath); program != nil {
++					reviewer.Path = program.Path
++					reviewer.Version = agentVersion(program)
++					reviewer.Batch = program.Batch
++				}
++				state.reviewer = &reviewer
++			}
++		}
+ 		agents[name] = state
+ 	}
+ 	return agents
+@@ -174,3 +194,12 @@ func reviewGatePresent(paths config.InstallPaths) (bool, string) {
+ 		"menu.kander_is_not_in_path_add_local_bin_to",
+ 	)
+ }
++
++// reviewerState keeps execution wrappers out of reviewer availability decisions.
++func reviewerState(state agentState) agentState {
++	if state.reviewer != nil {
++		return *state.reviewer
++	}
++	return state
++}
++func reviewerUsable(state agentState) bool { return state.Review && agentUsable(reviewerState(state)) }
+diff --git a/internal/menu/commands.go b/internal/menu/commands.go
+index afc0386..bf9b318 100644
+--- a/internal/menu/commands.go
++++ b/internal/menu/commands.go
+@@ -75,6 +75,9 @@ func Config(args []string) int {
+ 		return 1
+ 	}
+ 	if jsonOut {
++		for _, warning := range config.AgentWarnings(cfg) {
++			fmt.Fprintln(os.Stderr, warning)
++		}
+ 		payload, err := json.MarshalIndent(cfg, "", "  ")
+ 		if err != nil {
+ 			fmt.Fprintln(os.Stderr, "kander:", err)
+diff --git a/internal/menu/doctor.go b/internal/menu/doctor.go
+index 4523b1c..5ef3f0f 100644
+--- a/internal/menu/doctor.go
++++ b/internal/menu/doctor.go
+@@ -64,7 +64,12 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
+ 	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {
+ 		healthy = false
+ 	}
+-	agents := findAgents()
++	agentConfig, agentConfigErr := config.Load(true)
++	if agentConfigErr != nil && !repair {
++		warning(agentConfigErr.Error())
++		healthy = false
++	}
++	agents := findAgents(agentConfig)
+ 	if repair {
+ 		if _, ok := repairDoctorConfig(agents, tools); !ok {
+ 			healthy = false
+@@ -106,15 +111,21 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
+ 	hint(config.Text("menu.agent_capabilities"))
+ 	anyExec := false
+ 	anyReview := false
+-	for _, name := range config.ExecutionAgents {
++	for _, name := range config.AgentNames(agentConfig) {
+ 		state := agents[name]
++		if labels[name] == "" {
++			labels[name] = name
++		}
++		if reviewerUsable(state) {
++			anyReview = true
++		}
+ 		if agentUsable(state) {
+ 			anyExec = true
+-			if state.Review {
++			if reviewerUsable(state) {
+ 				anyReview = true
+ 			}
+ 			caps := []string{config.Text("menu.execution")}
+-			if state.Review {
++			if reviewerUsable(state) {
+ 				caps = append(caps, config.Text("menu.review"))
+ 			}
+ 			joined := caps[0]
+@@ -238,7 +249,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
+ 	}
+ 	for _, role := range config.ReviewRoles {
+ 		reviewer := effective.Reviewers[role]
+-		if !agentUsable(agents[reviewer]) {
++		if !reviewerUsable(agents[reviewer]) {
+ 			healthy = false
+ 			warning(config.Text(
+ 				"menu.configured_reviewer_is_unavailable_install_it_then_run_kander", role, reviewer,
+diff --git a/internal/menu/doctor_repair.go b/internal/menu/doctor_repair.go
+index afdd681..b3b8599 100644
+--- a/internal/menu/doctor_repair.go
++++ b/internal/menu/doctor_repair.go
+@@ -41,7 +41,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
+ 	var changes []string
+ 	choose := func(names []string, review bool) string {
+ 		for _, name := range names {
+-			if agentUsable(agents[name]) && (!review || agents[name].Review) {
++			if !review && agentUsable(agents[name]) || review && reviewerUsable(agents[name]) {
+ 				return name
+ 			}
+ 		}
+@@ -54,7 +54,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
+ 		changes = append(changes, field+": "+*old+" -> "+replacement)
+ 		*old = replacement
+ 	}
+-	execution := choose(config.ExecutionAgents, false)
++	execution := choose(config.AgentNames(cfg), false)
+ 	if !agentUsable(agents[cfg.KanbanAgent]) {
+ 		set("kanban_agent", &cfg.KanbanAgent, execution)
+ 	}
+@@ -68,7 +68,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
+ 	reviewer := choose(config.ReviewAgents, true)
+ 	for _, role := range config.ReviewRoles {
+ 		selected := cfg.Reviewers[role]
+-		if (!agentUsable(agents[selected]) || !agents[selected].Review) && reviewer != "" {
++		if !reviewerUsable(agents[selected]) && reviewer != "" {
+ 			set("reviewers."+role, &selected, reviewer)
+ 			cfg.Reviewers[role] = selected
+ 			// Models are bound to the reviewer; picking a new one adopts that reviewer's model settings.
+diff --git a/internal/menu/options.go b/internal/menu/options.go
+index 7ad0ff8..a214ad9 100644
+--- a/internal/menu/options.go
++++ b/internal/menu/options.go
+@@ -23,10 +23,13 @@ type ModelField struct {
+ 	Short string
+ 	// Agent is the object this field belongs to (an agent on the execution side, a role on the review side),
+ 	// and together with field it forms the deduplication key.
+-	Agent  string
+-	Prompt string
+-	entry  map[string]string
+-	field  string
++	Agent       string
++	Prompt      string
++	entry       map[string]string
++	field       string
++	get         func() string
++	set         func(string)
++	Placeholder string
+ }
+ 
+ // Key uniquely identifies one config item. When two task scales or two review roles pick the same agent,
+@@ -34,10 +37,21 @@ type ModelField struct {
+ func (f ModelField) Key() string { return f.Agent + "." + f.field }
+ 
+ // Value returns the current value of the field; an empty string means the CLI default is used.
+-func (f ModelField) Value() string { return f.entry[f.field] }
++func (f ModelField) Value() string {
++	if f.get != nil {
++		return f.get()
++	}
++	return f.entry[f.field]
++}
+ 
+ // Set writes the field.
+-func (f ModelField) Set(value string) { f.entry[f.field] = value }
++func (f ModelField) Set(value string) {
++	if f.set != nil {
++		f.set(value)
++		return
++	}
++	f.entry[f.field] = value
++}
+ 
+ // Session carries the editable config of the options panel plus the one-shot environment probe results.
+ type Session struct {
+@@ -65,7 +79,7 @@ func NewSession(existing *config.Config, configValid bool) (*Session, error) {
+ }
+ 
+ func (s *Session) prepare(configValid bool) error {
+-	s.agents = findAgents()
++	s.agents = findAgents(s.existing)
+ 	labels := agentLabels()
+ 	for name, state := range s.agents {
+ 		if state.Path != "" && !agentUsable(state) {
+@@ -74,20 +88,28 @@ func (s *Session) prepare(configValid bool) error {
+ 			))
+ 		}
+ 	}
+-	for _, name := range config.ExecutionAgents {
++	firstExecution := ""
++	for _, name := range config.AgentNames(s.existing) {
+ 		state := s.agents[name]
++		if labels[name] == "" {
++			labels[name] = name
++		}
++		label := labels[name] + config.Text("menu.not_currently_installed")
+ 		if agentUsable(state) {
+-			s.exec = append(s.exec, Choice{Value: name, Label: labels[name] + " (" + state.Version + ")"})
++			if firstExecution == "" {
++				firstExecution = name
++			}
++			label = labels[name] + " (" + state.Version + ")"
+ 		}
++		// Unavailable agents remain selectable so their executable can be configured.
++		s.exec = append(s.exec, Choice{Value: name, Label: label})
+ 	}
+-	if len(s.exec) == 0 && !s.existing.WelcomeComplete {
+-		return errors.New(config.Text(
+-			"menu.no_usable_agent_found_version_must_succeed_install_codex",
+-		))
++	if firstExecution == "" && !s.existing.WelcomeComplete {
++		return errors.New(config.Text("menu.no_usable_agent_found_version_must_succeed_install_codex"))
+ 	}
+ 	for _, name := range config.ReviewAgents {
+-		if agentUsable(s.agents[name]) {
+-			s.review = append(s.review, Choice{Value: name, Label: labels[name] + " (" + s.agents[name].Version + ")"})
++		if reviewerUsable(s.agents[name]) {
++			s.review = append(s.review, Choice{Value: name, Label: labels[name] + " (" + reviewerState(s.agents[name]).Version + ")"})
+ 		}
+ 	}
+ 	if len(s.review) == 0 && !s.existing.WelcomeComplete {
+@@ -97,6 +119,7 @@ func (s *Session) prepare(configValid bool) error {
+ 	}
+ 
+ 	cfg := config.DefaultConfig()
++	cfg.Agents = config.CloneAgents(s.existing.Agents)
+ 	cfg.Models = copyModels(s.existing.Models)
+ 	cfg.KanbanAgent = s.existing.KanbanAgent
+ 	cfg.AgentLanguage = s.existing.AgentLanguage
+@@ -106,7 +129,7 @@ func (s *Session) prepare(configValid bool) error {
+ 	}
+ 	if !s.existing.WelcomeComplete {
+ 		if !agentUsable(s.agents[cfg.KanbanAgent]) {
+-			cfg.KanbanAgent = s.exec[0].Value
++			cfg.KanbanAgent = firstExecution
+ 		}
+ 		for _, scale := range config.TaskScales {
+ 			if !agentUsable(s.agents[cfg.KanbanAgents[scale]]) {
+@@ -118,7 +141,7 @@ func (s *Session) prepare(configValid bool) error {
+ 	for _, role := range config.ReviewRoles {
+ 		previous := s.existing.Reviewers[role]
+ 		cfg.Reviewers[role] = previous
+-		if !s.existing.WelcomeComplete && !agentUsable(s.agents[previous]) {
++		if !s.existing.WelcomeComplete && !reviewerUsable(s.agents[previous]) {
+ 			cfg.Reviewers[role] = s.review[0].Value
+ 		}
+ 	}
+@@ -314,6 +337,12 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
+ 		}
+ 	}
+ 	label := agentLabels()[agent]
++	if label == "" {
++		label = agent
++	}
++	if s.Config.Models.Kanban[agent] == nil {
++		s.Config.Models.Kanban[agent] = map[string]string{}
++	}
+ 	scaleLabel := config.Text("menu.large_task")
+ 	if scale == "small" {
+ 		scaleLabel = config.Text("menu.small_task")
+@@ -322,7 +351,7 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
+ 		config.Text("menu.kanban_model", label, scaleLabel),
+ 		config.Text("menu.model", label, scaleLabel),
+ 		config.Text("menu.full_model_id_for_s", scaleLabel))}
+-	if agent == "cursor" {
++	if config.AgentFor(s.Config, agent).Dialect == "cursor" && config.AgentFor(s.Config, agent).Args == nil {
+ 		return fields
+ 	}
+ 	return append(fields, s.kanbanModelField(agent, scale+"_effort",
+@@ -521,13 +550,14 @@ func indexLabel(index int) string {
+ func NewSessionForTest(existing *config.Config) (*Session, error) {
+ 	session := &Session{existing: existing}
+ 	labels := agentLabels()
+-	for _, name := range config.ExecutionAgents {
++	for _, name := range config.AgentNames(existing) {
+ 		session.exec = append(session.exec, Choice{Value: name, Label: labels[name]})
+ 	}
+ 	for _, name := range config.ReviewAgents {
+ 		session.review = append(session.review, Choice{Value: name, Label: labels[name]})
+ 	}
+ 	cfg := config.DefaultConfig()
++	cfg.Agents = config.CloneAgents(existing.Agents)
+ 	cfg.Models = copyModels(existing.Models)
+ 	cfg.KanbanAgent = existing.KanbanAgent
+ 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)
+diff --git a/internal/notify/agent_definition_test.go b/internal/notify/agent_definition_test.go
+new file mode 100644
+index 0000000..80cf8ec
+--- /dev/null
++++ b/internal/notify/agent_definition_test.go
+@@ -0,0 +1,58 @@
++package notify
++
++import (
++	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/liveness"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestNotifyConfiguredProcessName(t *testing.T) {
++	_, _ = setupBoard(t)
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Agents = map[string]config.AgentDefinition{"claude": {ProcessName: "node"}}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
++	t.Setenv("KANBAN_TMUX_SESSION", "session-1")
++	got := TmuxNotifyProbe("tmux", "%9", liveness.TaskSession{Agent: "claude", Reference: "session-1"}, 0)
++	if got.State != "ready" {
++		t.Fatalf("%+v", got)
++	}
++}
++
++func TestNotifyNoneUsesFreshRecovery(t *testing.T) {
++	root, bin := setupBoard(t)
++	executable := filepath.Join(bin, "claude")
++	if err := os.WriteFile(executable, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
++		t.Fatal(err)
++	}
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Launcher = "herdr"
++	cfg.Agents = map[string]config.AgentDefinition{"claude": {Path: executable, Args: &config.AgentArgs{Start: []string{"fresh-start"}}, Session: &config.AgentSessionDefinition{Mode: "none"}}}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("HERDR_ENV", "1")
++	t.Setenv("HERDR_WORKSPACE_ID", "w1")
++	t.Setenv("KANBAN_HERDR_AGENT", "claude")
++	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
++	id, path := makeReview(t, root, "no-session")
++	setWindow(t, path, "herdr:w1:t9:w1:p9")
++	_, _, err := capture(t, func() error { return commandNotify(root, id, "recover", "", "", true, 61) })
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, err := os.Stat(filepath.Join(root, "herdr.log.prompt")); !os.IsNotExist(err) {
++		t.Fatal("none sent direct prompt")
++	}
++	sent, err := os.ReadFile(filepath.Join(root, "herdr.log.run"))
++	if err != nil || !strings.Contains(string(sent), "fresh-start") || strings.Contains(string(sent), "--resume") {
++		t.Fatalf("%s %v", sent, err)
++	}
++}
+diff --git a/internal/notify/dispatch.go b/internal/notify/dispatch.go
+index 47fd130..c3796f0 100644
+--- a/internal/notify/dispatch.go
++++ b/internal/notify/dispatch.go
+@@ -255,7 +255,11 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
+ 			return DirectTarget{}, false, err
+ 		}
+ 		f := found.Facts
+-		if f == nil || f.Dead != "0" || f.Command != agentCommandName(session.Agent) || session.Reference == "" || f.SessionMarker != session.Reference {
++		expected, err := agentCommandName(session.Agent)
++		if err != nil {
++			return DirectTarget{}, false, err
++		}
++		if f == nil || f.Dead != "0" || f.Command != expected || session.Reference == "" || f.SessionMarker != session.Reference {
+ 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "identity")
+ 		}
+ 		return DirectTarget{Kind: "tmux", Program: program, PaneID: match[4], Window: value}, f.InMode != "0", nil
+diff --git a/internal/notify/probe.go b/internal/notify/probe.go
+index f489d72..3a392c5 100644
+--- a/internal/notify/probe.go
++++ b/internal/notify/probe.go
+@@ -3,7 +3,6 @@ package notify
+ import (
+ 	"context"
+ 	"errors"
+-	"path/filepath"
+ 	"time"
+ 
+ 	"github.com/dualface/kander/internal/config"
+@@ -121,8 +120,9 @@ func HerdrExplicitTarget(herdr, paneID string) (tabID, resolvedPane string, err
+ 	return tabID, paneID, nil
+ }
+ 
+-func agentCommandName(agent string) string {
+-	return filepath.Base(config.AgentExecutableName(agent))
++func agentCommandName(agent string) (string, error) {
++	definition, err := config.LoadAgent(agent)
++	return definition.ProcessName, err
+ }
+ 
+ // TmuxNotifyTarget validates that an existing tmux pane accepts direct delivery.
+@@ -143,7 +143,10 @@ func TmuxNotifyTarget(tmux, paneID string, session liveness.TaskSession) error {
+ 	if facts.InMode != "0" {
+ 		return notifyError("launch.tmux_pane_is_in_copy_mode", paneID)
+ 	}
+-	expected := agentCommandName(session.Agent)
++	expected, err := agentCommandName(session.Agent)
++	if err != nil {
++		return err
++	}
+ 	if facts.Command != expected {
+ 		return notifyError(
+ 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),
+@@ -178,7 +181,10 @@ func TmuxNotifyProbe(tmux, paneID string, session liveness.TaskSession, timeout
+ 	if facts.Dead != "0" {
+ 		return TargetProbe{State: "stale", Detail: t("launch.tmux_pane_is_dead", paneID)}
+ 	}
+-	expected := agentCommandName(session.Agent)
++	expected, err := agentCommandName(session.Agent)
++	if err != nil {
++		return TargetProbe{State: "fallback", Detail: err.Error()}
++	}
+ 	if facts.Command != expected {
+ 		return TargetProbe{State: "stale", Detail: t(
+ 			"launch.tmux_foreground_process_mismatch_expected_actual", expected, orNA(facts.Command),
+diff --git a/internal/probe/run.go b/internal/probe/run.go
+index b8e2320..57055d4 100644
+--- a/internal/probe/run.go
++++ b/internal/probe/run.go
+@@ -43,11 +43,24 @@ func timeoutContext(timeout time.Duration) (context.Context, context.CancelFunc)
+ 	return context.WithTimeout(context.Background(), timeout)
+ }
+ 
+-func defaultRun(ctx context.Context, program string, args []string) (res Result, runErr error) {
++func defaultRun(ctx context.Context, program string, args []string) (Result, error) {
++	return captureWithEnv(ctx, program, args, nil)
++}
++
++// CaptureWithEnv runs an argv command with explicit environment and the same
++// deadline and process-tree ownership as probes. A nil environment inherits.
++func CaptureWithEnv(ctx context.Context, program string, args, env []string) (Result, error) {
++	ctx, cancel := WithDefaultTimeout(ctx)
++	defer cancel()
++	return captureWithEnv(ctx, program, args, env)
++}
++
++func captureWithEnv(ctx context.Context, program string, args, env []string) (res Result, runErr error) {
+ 	if err := ctx.Err(); err != nil {
+ 		return res, err
+ 	}
+ 	cmd := exec.Command(program, args...)
++	cmd.Env = env
+ 	tree, err := newProcessTree(cmd)
+ 	if err != nil {
+ 		return res, err
+diff --git a/internal/process/process.go b/internal/process/process.go
+index 9be2a4d..0ae5d61 100644
+--- a/internal/process/process.go
++++ b/internal/process/process.go
+@@ -61,8 +61,8 @@ type ProcessInvocation struct {
+ 	ShellEnv map[string]string
+ }
+ 
+-// ResolveAgentProgram resolves the process entry point of the four current agents per platform.
+-// name is the executable name, such as codex / claude / grok / cursor-agent.
++// ResolveAgentProgram resolves built-in and configured executable names per platform.
++// name may be a PATH name (with or without extension) or an explicit path.
+ func ResolveAgentProgram(name string) *AgentProgram {
+ 	if !isWindows() {
+ 		found, err := exec.LookPath(name)
+@@ -72,10 +72,28 @@ func ResolveAgentProgram(name string) *AgentProgram {
+ 		return &AgentProgram{Path: found}
+ 	}
+ 
+-	if explicit := explicitProgram(name); explicit != nil {
+-		return explicit
++	if strings.ContainsAny(name, `/\`) {
++		if explicit := explicitProgram(name); explicit != nil {
++			return explicit
++		}
++		if filepath.Ext(name) == "" {
++			for _, suffix := range []string{".exe", ".cmd", ".bat"} {
++				if explicit := explicitProgram(name + suffix); explicit != nil {
++					return explicit
++				}
++			}
++		}
++		return nil
+ 	}
+-	if filepath.Ext(name) != "" {
++	if suffix := strings.ToLower(filepath.Ext(name)); suffix != "" {
++		if suffix != ".exe" && suffix != ".cmd" && suffix != ".bat" {
++			return nil
++		}
++		for _, candidate := range windowsPathCandidates(name, suffix) {
++			if usableFile(candidate, suffix == ".exe") {
++				return &AgentProgram{Path: candidate, Batch: suffix != ".exe"}
++			}
++		}
+ 		return nil
+ 	}
+ 
+diff --git a/internal/process/process_test.go b/internal/process/process_test.go
+index 733bc0c..1993f47 100644
+--- a/internal/process/process_test.go
++++ b/internal/process/process_test.go
+@@ -380,3 +380,43 @@ func TestShellInvocationUsesVariableFormForNonBatch(t *testing.T) {
+ 		t.Fatalf("直接 spawn 的 argv 被改写: %#v", direct.Argv)
+ 	}
+ }
++
++func TestWindowsSuffixedNamesSearchPATH(t *testing.T) {
++	withWindows(t)
++	root := t.TempDir()
++	t.Chdir(t.TempDir())
++	t.Setenv("PATH", root)
++	for _, suffix := range []string{".exe", ".cmd", ".bat"} {
++		name := "kander-test-wrapper" + suffix
++		path := filepath.Join(root, name)
++		if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
++			t.Fatal(err)
++		}
++		got := ResolveAgentProgram(name)
++		if got == nil || got.Path != path || got.Batch != (suffix != ".exe") {
++			t.Fatalf("%s: %+v", name, got)
++		}
++		if err := os.WriteFile(name, []byte("cwd shadow"), 0600); err != nil {
++			t.Fatal(err)
++		}
++		if got := ResolveAgentProgram(name); got == nil || got.Path != path {
++			t.Fatalf("PATH name selected cwd: %+v", got)
++		}
++		if got := ResolveAgentProgram(path); got == nil || got.Path != path {
++			t.Fatalf("absolute path: %+v", got)
++		}
++	}
++}
++
++func TestWindowsAbsoluteExtensionlessProgram(t *testing.T) {
++	withWindows(t)
++	root := t.TempDir()
++	path := filepath.Join(root, "wrapper.exe")
++	if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("PATH", t.TempDir())
++	if got := ResolveAgentProgram(strings.TrimSuffix(path, ".exe")); got == nil || got.Path != path {
++		t.Fatalf("%+v", got)
++	}
++}
+diff --git a/internal/review/agent_executable_test.go b/internal/review/agent_executable_test.go
+new file mode 100644
+index 0000000..4eaa9f1
+--- /dev/null
++++ b/internal/review/agent_executable_test.go
+@@ -0,0 +1,45 @@
++package review
++
++import (
++	"github.com/dualface/kander/internal/config"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	exe, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	cfg.Agents = map[string]config.AgentDefinition{}
++	for _, agent := range config.ReviewAgents {
++		cfg.Agents[agent] = config.AgentDefinition{Path: exe, ProcessName: "wrapper"}
++	}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	for _, agent := range config.ReviewAgents {
++		key := strings.ToUpper(agent) + "_REVIEW_BIN"
++		t.Setenv(key, "")
++		settings, err := agentSettingsFor(agent, "PM")
++		if err != nil {
++			t.Fatal(err)
++		}
++		if settings.executable != config.AgentExecutableName(agent) {
++			t.Fatal(settings.executable)
++		}
++		t.Setenv(key, "review-only-wrapper")
++		settings, err = agentSettingsFor(agent, "PM")
++		if err != nil || settings.executable != "review-only-wrapper" {
++			t.Fatalf("%+v %v", settings, err)
++		}
++	}
++	if _, err := agentSettingsFor("custom", "PM"); err == nil {
++		t.Fatal("custom reviewer accepted")
++	}
++}
+diff --git a/internal/review/settings.go b/internal/review/settings.go
+index 7e55e61..d8e47cb 100644
+--- a/internal/review/settings.go
++++ b/internal/review/settings.go
+@@ -194,6 +194,8 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
+ 			"review.must_be_an_absolute_path", definition.homeError, reviewHome,
+ 		)
+ 	}
++	// Review executables use *_REVIEW_BIN, then the built-in read-only adapter.
++	// Config.Agents applies only to task execution and never overrides this choice.
+ 	return agentSettings{
+ 		name:                  definition.name,
+ 		checkInterval:         checkInterval,
+diff --git a/internal/takeover/agent_definition_test.go b/internal/takeover/agent_definition_test.go
+new file mode 100644
+index 0000000..678a8d2
+--- /dev/null
++++ b/internal/takeover/agent_definition_test.go
+@@ -0,0 +1,83 @@
++package takeover
++
++import (
++	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/launch"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++)
++
++func TestDismissResolvesOverriddenProcessName(t *testing.T) {
++	root, _ := setupBoard(t)
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Agents = map[string]config.AgentDefinition{"claude": {ProcessName: "node"}}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("KANBAN_TMUX_STALE_PANE", "%9")
++	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
++	t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
++	t.Setenv("KANBAN_TMUX_LIST_PANES", "%8\t$88\trelocated\t@8\tnode\t0\tsession-1")
++	t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$88")
++	t.Setenv("KANBAN_TMUX_TARGET_SESSION_NAME", "relocated")
++	t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@8")
++	id, path := makeDone(t, root, "dismiss-wrapper", "tmux:$1:@1:%9")
++	before, _ := os.ReadFile(path)
++	out, _, err := capture(t, func() error { return commandDismiss(root, id, 61) })
++	after, _ := os.ReadFile(path)
++	if err != nil || !strings.Contains(out, "关闭容器=@8") || string(before) != string(after) {
++		t.Fatalf("%s %v", out, err)
++	}
++}
++
++func TestConfiguredAgentDismissAndCleanup(t *testing.T) {
++	for _, test := range []struct{ name, dialect, mode string }{
++		{"my-claude", "claude", "generated"}, {"my-grok", "grok", "generated"}, {"claude", "claude", "none"},
++	} {
++		for _, action := range []string{"dismiss", "cleanup"} {
++			t.Run(test.name+"-"+action, func(t *testing.T) {
++				root, _ := setupBoard(t)
++				t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++				cfg := config.DefaultConfig()
++				cfg.WelcomeComplete = true
++				cfg.Agents = map[string]config.AgentDefinition{test.name: {Dialect: test.dialect, ProcessName: "node", Session: &config.AgentSessionDefinition{Mode: test.mode}}}
++				if _, err := config.Save(cfg); err != nil {
++					t.Fatal(err)
++				}
++				t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
++				t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
++				t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$1")
++				t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@1")
++				if action == "cleanup" {
++					got := Cleanup("tmux:$1:@1:%9", launch.AgentSession{Agent: test.name, Reference: "session-1"}, "tmux:$2:@2:%10", 61)
++					if !got.Cleaned {
++						t.Fatal(got)
++					}
++				} else {
++					id, path := makeDone(t, root, "configured-dismiss", "tmux:$1:@1:%9")
++					data, _ := os.ReadFile(path)
++					data = []byte(strings.Replace(string(data), "SESSION: claude ", "SESSION: "+test.name+" ", 1))
++					if err := os.WriteFile(path, data, 0600); err != nil {
++						t.Fatal(err)
++					}
++					_, _, err := capture(t, func() error { return commandDismiss(root, id, 61) })
++					if err != nil {
++						t.Fatal(err)
++					}
++				}
++				instruction, err := os.ReadFile(filepath.Join(root, "tmux.log.instruction"))
++				expected := "/exit"
++				if test.dialect == "grok" {
++					expected = "/quit"
++				}
++				if err != nil || !strings.Contains(string(instruction), expected) {
++					t.Fatalf("exit instruction=%s error=%v", instruction, err)
++				}
++			})
++		}
++	}
++}
+diff --git a/internal/takeover/cleanup.go b/internal/takeover/cleanup.go
+index 19f6f1a..0129d92 100644
+--- a/internal/takeover/cleanup.go
++++ b/internal/takeover/cleanup.go
+@@ -133,7 +133,10 @@ func cleanupContainer(herdrMatch, tmuxMatch []string, oldWindow string, oldSessi
+ 	if err := ValidateTmuxContainer(tmux, paneID, launcher, sessionID, windowID); err != nil {
+ 		return launch.CleanupResult{}, err
+ 	}
+-	expected := agentCommandName(oldSession.Agent)
++	expected, err := agentCommandName(oldSession.Agent)
++	if err != nil {
++		return launch.CleanupResult{}, err
++	}
+ 	if facts.Dead == "1" {
+ 		if err := tmuxCloseWindow(tmux, windowID); err != nil {
+ 			return launch.CleanupResult{}, err
+diff --git a/internal/takeover/dismiss.go b/internal/takeover/dismiss.go
+index 0259c19..c4376d8 100644
+--- a/internal/takeover/dismiss.go
++++ b/internal/takeover/dismiss.go
+@@ -54,7 +54,7 @@ func commandDismiss(root, taskID string, timeout float64) error {
+ 			"takeover.task_has_no_dismissible_terminal_container", windowValue,
+ 		)
+ 	}
+-	session, err := launch.ResolvedSession(entry.TaskID, text)
++	session, err := launch.ResolvedSessionIdentity(entry.TaskID, text)
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/internal/takeover/ops.go b/internal/takeover/ops.go
+index 1780ba4..ba251ce 100644
+--- a/internal/takeover/ops.go
++++ b/internal/takeover/ops.go
+@@ -3,7 +3,6 @@ package takeover
+ import (
+ 	"fmt"
+ 	"os/exec"
+-	"path/filepath"
+ 	"strings"
+ 	"time"
+ 
+@@ -37,9 +36,13 @@ var agentExitCommands = map[string]string{
+ 	"cursor": "/quit",
+ }
+ 
+-// AgentExitCommand returns /exit for Claude/Codex or /quit for Grok/Cursor.
++// AgentExitCommand selects the exit command of the configured compatible dialect.
+ func AgentExitCommand(agent string) (string, error) {
+-	cmd, ok := agentExitCommands[agent]
++	definition, err := config.LoadAgent(agent)
++	if err != nil {
++		return "", err
++	}
++	cmd, ok := agentExitCommands[definition.Dialect]
+ 	if !ok {
+ 		return "", takeoverError("launch.unsupported_agent", agent)
+ 	}
+@@ -218,8 +221,9 @@ func orNA(v string) string {
+ 	return v
+ }
+ 
+-func agentCommandName(agent string) string {
+-	return filepath.Base(config.AgentExecutableName(agent))
++func agentCommandName(agent string) (string, error) {
++	definition, err := config.LoadAgent(agent)
++	return definition.ProcessName, err
+ }
+ 
+ func toLive(session launch.AgentSession) liveness.TaskSession {
+diff --git a/internal/takeover/takeover_test.go b/internal/takeover/takeover_test.go
+index ca1c85e..9f777dd 100644
+--- a/internal/takeover/takeover_test.go
++++ b/internal/takeover/takeover_test.go
+@@ -330,6 +330,7 @@ func TestCleanupForegroundIsNA(t *testing.T) {
+ }
+ 
+ func TestAgentExitCommands(t *testing.T) {
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+ 	exit, err := AgentExitCommand("claude")
+ 	if err != nil || exit != "/exit" {
+ 		t.Fatal(exit, err)
+diff --git a/internal/takeover/wait.go b/internal/takeover/wait.go
+index e235b0c..6cf357d 100644
+--- a/internal/takeover/wait.go
++++ b/internal/takeover/wait.go
+@@ -104,7 +104,10 @@ func herdrWaitAgentExit(herdr, tabID, paneID string, session launch.AgentSession
+ 
+ func tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID string, session launch.AgentSession, timeout float64) (windowExists bool, err error) {
+ 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
+-	expected := agentCommandName(session.Agent)
++	expected, err := agentCommandName(session.Agent)
++	if err != nil {
++		return false, err
++	}
+ 	for {
+ 		remaining := deadline.Sub(nowFn())
+ 		if remaining <= 0 {
+diff --git a/internal/tui/options_form.go b/internal/tui/options_form.go
+index fdaa809..59843f2 100644
+--- a/internal/tui/options_form.go
++++ b/internal/tui/options_form.go
+@@ -495,7 +495,7 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
+ 			Value(values[scale]).
+ 			Inline(true))
+ 		// Model and reasoning effort follow immediately below the agent they belong to, with no blank line in between.
+-		for _, field := range p.modelInputs(bind, session.ExecutionModelFieldsFor(scale)) {
++		for _, field := range p.modelInputs(bind, append(session.ExecutionModelFieldsFor(scale), session.AgentExecutableFields(scale)...)) {
+ 			bind.addField(field)
+ 		}
+ 	}
+@@ -519,6 +519,10 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField)
+ 			continue
+ 		}
+ 		bind.modelSeen[field.Key()] = struct{}{}
++		placeholder := field.Placeholder
++		if placeholder == "" {
++			placeholder = t("tui.empty_means_cli_default")
++		}
+ 		index := len(bind.modelFields)
+ 		bind.modelFields = append(bind.modelFields, field)
+ 		value := field.Value()
+@@ -528,7 +532,7 @@ func (p *optionsPanel) modelInputs(bind *formBinding, fields []menu.ModelField)
+ 			Title(modelIndent+field.Short+"  ").
+ 			Prompt("").
+ 			Inline(true).
+-			Placeholder(t("tui.empty_means_cli_default")).
++			Placeholder(placeholder).
+ 			Value(bind.modelValues[index]))
+ 	}
+ 	return out
+diff --git a/internal/tui/options_test.go b/internal/tui/options_test.go
+index 5403b3f..ca8989d 100644
+--- a/internal/tui/options_test.go
++++ b/internal/tui/options_test.go
+@@ -597,3 +597,28 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
+ 		t.Fatalf("disk PM model=%q want %q", got, want)
+ 	}
+ }
++
++func TestExecutableInputsDeduplicateAndPersist(t *testing.T) {
++	_, panel := openPanel(t)
++	pumpPanel(panel, panel.dispatch(sectionExecution))
++	count := 0
++	for i, field := range panel.bind.modelFields {
++		if strings.HasSuffix(field.Key(), ".process_name") {
++			count++
++			*panel.bind.modelValues[i] = "node"
++		}
++	}
++	if count != 1 {
++		t.Fatalf("duplicate process inputs: %d", count)
++	}
++	panel.bind.apply(panel)
++	drivePanel(panel, keyMsg("enter"))
++	loaded, err := config.Load(true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	agent := loaded.KanbanAgents["large"]
++	if loaded.Agents[agent].ProcessName != "node" {
++		t.Fatal(loaded.Agents)
++	}
++}
+diff --git a/rules/KANDER-KANBAN-RULES.md b/rules/KANDER-KANBAN-RULES.md
+index 7b0b061..e7b2989 100644
+--- a/rules/KANDER-KANBAN-RULES.md
++++ b/rules/KANDER-KANBAN-RULES.md
+@@ -56,8 +56,8 @@ kander dispatch show <task-id> <dispatch-id>
+ kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
+ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>]
+ kander pick [task-id]
+-kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
+-kander resume [--agent codex|claude|grok|cursor] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] <task-id>
++kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
++kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] <task-id>
+ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) <task-id>
+ kander dismiss [--timeout SECONDS] <task-id>
+ kander check [--all] [task-id ...]
+@@ -119,6 +119,13 @@ An explicit `--pane` override does no stale-address reverse lookup.
+ - Ordinary unbound working messages and non-group legacy notifications retain their previous behavior and create no historical business receipt. The legacy delivery/marker clauses below apply only to those unbound messages. Bound card writes cannot omit the execution grant.
+ - Dispatch originals and epoch receipts are producer-owned `dispatches/` attachments. Pending publications use the existing explicit init recovery and maintenance rules. Guarantees cover controlled card operations, never arbitrary external side effects exactly-once.
+ 
++**Configured Execution Agents**
++
++- The optional `agents` configuration declares execution names, executable paths, pane process names, CLI dialects or argv templates, and session modes. Custom agents are execution-only; reviewer isolation and `*_REVIEW_BIN` remain independent.
++- Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used.
++- `generated` sessions use UUIDs; `allocated` sessions obtain an ID from a configured argv command. With `none`, resume is rejected and notify uses fresh-process recovery without direct delivery; existing durable stopped-observation and receipt gates still apply. Configuration/check output warns about this limitation.
++- tmux foreground checks use the configured process name, falling back to the executable basename. herdr still requires its own agent recognition.
++
+ **Start Parameters and Metadata**
+ 
+ - The agent, launcher, and model tier of `start` default to the Kander configuration; when initialization is incomplete, use the defaults.
+@@ -549,7 +556,7 @@ any state except trash -> trash                       only on explicit user requ
+ 
+ ```sh
+ # Delegate to a new executing agent: start claims and launches atomically
+-kander start [--agent codex|claude|grok|cursor] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
++kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
+ 
+ # The user explicitly asks the current agent to execute an existing card: claim and record ownership atomically
+ kander move <task-id> working --owner <agent>
+
+=== COMMIT TREE ===
+100644 blob 896586108e39cdd90da6b0ac1def87832ff4534a	.gitignore
+100644 blob be2680b415a4f1d6672146d0206e3e08be48fdaf	AGENTS.md
+100644 blob 637823c0af63838506d8b2a6b09c928561f1d484	LICENSE
+100644 blob 17cbcd3492b6d2fa047d116e5cf8a962096ce3b3	Makefile
+100644 blob b94b35ae4941fd5a28e9f83f284e915ef84fefb2	README.md
+100644 blob 62be47dc373be2f09870788f79f5e0c1c66f5235	cmd/kander/check_bind_test.go
+100644 blob 8b5f828e446afb27792a790c5807bef26efbc008	cmd/kander/launch.go
+100644 blob 0dd12feeab4102bc3e148c025caa01f351f99b68	cmd/kander/liveness.go
+100644 blob 9ca579595fd83132607a1c0d46b2d78187a91681	cmd/kander/main.go
+100644 blob 460f84e9b55eb08c02b962dd8a1e23988ca552c7	cmd/kander/notify.go
+100644 blob 46275125e68460768cd60fa10e535bbf437a84be	cmd/kander/review.go
+100644 blob 69d1c77cc3d49da6ec85586da5f2fc9a6295e751	cmd/kander/takeover.go
+100644 blob 2e265ceef9af02c79bc21692049ad033e242a3d0	cmd/kander/tui.go
+100644 blob b7da74306d27dae73bc9c671d99656d3f9dfc4b4	docs/card-transactions.md
+100644 blob 47555067cddfdadefc7485b4827cf23555b21f74	docs/coordinator-recovery.md
+100644 blob 966b44e454b3ce8aa92c8ae3beac0d8345231c7b	docs/custom-agents.md
+100644 blob 9f5d483e55cc17a92d70f50960eb6ea76b398826	docs/directory-cards.md
+100644 blob b05cd4afc601cc9bdb07a9b7aeb798f261bc4bb7	docs/durable-dispatch.md
+100644 blob d9ae89ed26dc1d28ef8371501608d181b8e9affd	docs/kanban-write-guard.md
+100644 blob f8444b2fbbcab83adc78a2fa4d571a4d333450fa	docs/kander-tui-01.jpg
+100644 blob 5165377dcce5b5c1c321702497f85a68b6f7ceaf	docs/probe-deadlines.md
+100644 blob 0c57fe17b7f7c8a8adbed5ab9ebbfad8a9300f77	docs/recovery-regressions.md
+100644 blob 806660b09a2201dbe64bd1abccc8201e23d62841	docs/review-disposition.md
+100644 blob b1d0d865cde4c4ad87fd9c66e19cdee9e919fa4b	docs/review-evidence.md
+100644 blob 12a2e41d55374c9a7e155bf91feb95b64b940619	docs/review.svg
+100644 blob 5660cc01fc87afb3bf7f4b6bc3a1f659fbe678fc	docs/subscription-facts.md
+100644 blob 443da8d47268005a09cb550a04345f56f087bb6d	docs/workflow.svg
+100644 blob 4b20ee7ca10e22dfcf44531fbbfaeb8c53869afc	go.mod
+100644 blob fb6ca3e074b1eab0367e27e9be37bea04cfa53e4	go.sum
+100644 blob 4d5129f21fb2e8986bdaa702e5d971325e73f9f5	internal/board/board.go
+100644 blob c99719c813f9a5bb87d0023f72728b0e869ef74f	internal/board/board_test.go
+100644 blob d4e2f99cd67f6335e9d46b49c33a8a742eef59dd	internal/board/card_language_test.go
+100644 blob e6aee16466f702e3600fc6ea97e6d90cd9f78491	internal/board/cmd.go
+100644 blob e95545ff8f5197a4fe5a150223c5f7ad2c63d648	internal/board/contract_gate_test.go
+100644 blob 9f98a03f468bd7fcb4dd1d8e1f22f443715a5e05	internal/board/coordinator.go
+100644 blob b64e399bc852c85622a64748e73deb47850cd34e	internal/board/coordinator_closed_fix_test.go
+100644 blob 128dc60fc39853a68c57610a1832e9f3299ea5e2	internal/board/coordinator_crash_test.go
+100644 blob f652cfad57446ba280b0313df058e6966186b1cc	internal/board/coordinator_cycle.go
+100644 blob b968f686964502d8e2e2045328621e774df6103d	internal/board/coordinator_cycle_test.go
+100644 blob a8ad8144d8db18a31ac94f546c56f36b74329116	internal/board/coordinator_reconcile.go
+100644 blob 80afd97021e446fcceea0b9ef2db9407936f136f	internal/board/coordinator_regression_test.go
+100644 blob 6784e1ca44409ff012fac59f0f42a050ffd6c52a	internal/board/coordinator_start.go
+100644 blob 25f7c18f96d186e8322fd18e632975a08762a0b0	internal/board/coordinator_test.go
+100644 blob f3d08e6d1464d82edc1ad23aea84b641996019b0	internal/board/coordinator_wrapup_test.go
+100644 blob aa20be077b4a354c4cf521e6ae0f2f107bd67e2a	internal/board/deps.go
+100644 blob 90fecadfdf63e2a0890203b8597efec8b1d8c072	internal/board/dispatch.go
+100644 blob 94d9ddae02df615e008a23fb8114e0aab48bb2c1	internal/board/dispatch_cmd.go
+100644 blob 49d130586f13af948c384ea8ae00b710253ccde1	internal/board/dispatch_crash_test.go
+100644 blob 3c56b3c659aae5898e9b9328785b9a7cd974928c	internal/board/dispatch_delivery.go
+100644 blob 0134cf91f5ebc840ac0827ce101fcbd782824cb2	internal/board/dispatch_evidence.go
+100644 blob ff09171afaf927b43a51d4c4078e698c11719277	internal/board/dispatch_evidence_test.go
+100644 blob e9864c14959fb336e84e6657c372f502b9d86be6	internal/board/dispatch_receipt.go
+100644 blob af5d2b8fb8b234e2de9603c152c5275d670dad3e	internal/board/dispatch_snapshot.go
+100644 blob a5855c986723bb549af47c0c1765dcb1495f2a99	internal/board/dispatch_snapshot_test.go
+100644 blob 46e758b8ada4aab02a0aae1fc2a29b7cc742c319	internal/board/dispatch_test.go
+100644 blob 576166db168d54b7c4a2161c4ba2cf748e8de426	internal/board/dispatch_wrapup.go
+100644 blob 4430c8d21dcb24a50c2b2721ce6974f7c483406e	internal/board/dispatch_wrapup_test.go
+100644 blob bd471b07a05de4233e38f5b129d471ef8efd0e80	internal/board/document.go
+100644 blob acda57434c059eacea7c7f86c007788a3dc7bd3d	internal/board/guard.go
+100644 blob c2e6e12f886fdb1acc6cdb6176dbc8ef7ec5d68b	internal/board/guard_test.go
+100644 blob 2537faab16556da758d508992b45cbbc71caad9d	internal/board/journal_concurrency_test.go
+100644 blob 1a75f49eb2107392e56cabc115c4ac4f298ddfb9	internal/board/journal_temporary_unix_test.go
+100644 blob 6de479394301ad828a4e40fce42d63b986aa9d42	internal/board/journal_temporary_windows_test.go
+100644 blob f36a32298fe0d14dc37b2a9ea4ecf5a3a2019063	internal/board/legacy_schema_test.go
+100644 blob f8b1d65b0da430fa47072e1a6fe124810125b8ab	internal/board/list.go
+100644 blob f9a6cd62c14b9b808d84461d8c4ee7368fdc8112	internal/board/locate.go
+100644 blob ba147d7475daf93d1eb2670a6a8bae79ab983e0b	internal/board/locate_deleted_unix_test.go
+100644 blob e90b48c7336bda0d3b03a19da4f5a74e46418afb	internal/board/membership.go
+100644 blob 41129b566f307dc4ad5b47dc41147a8efa42e977	internal/board/migration.go
+100644 blob 6ea3a49bcde2a5d259034b216b125712be5514e0	internal/board/migration_link_scope.go
+100644 blob 35f9c38ec01a6db5a1cdb8be39252c74c89614dd	internal/board/migration_link_scope_test.go
+100644 blob 2e94555417a7eaf8bbb8c32b850f40419687f472	internal/board/migration_links.go
+100644 blob e9dbca2535d26a1347ad452b02c1264ace1f40a0	internal/board/migration_links_test.go
+100644 blob 965311c7a6b179c06d051e0409723ce038ee44b5	internal/board/migration_new_review_test.go
+100644 blob 01891674fbd630de182fdaef52034fa16bc9eb6a	internal/board/migration_plan.go
+100644 blob 92c2151b4cc0934f03e0ebdd53cce730c7a6f2e3	internal/board/migration_review_test.go
+100644 blob e7feaa0c9358e379a50c5e3186e1d70200ba837b	internal/board/migration_structure.go
+100644 blob ad3356304d25d1810aa2875c0624693e42fff39c	internal/board/migration_test.go
+100644 blob 96829b329f87eddfaac730ecbcd31941809fe7e0	internal/board/migration_windows_test.go
+100644 blob 1b58477358f31a03a27f7d42b7a400546909e4aa	internal/board/migration_write.go
+100644 blob a445963686dd664cc45ae2a171a20c01ba89f9a3	internal/board/move.go
+100644 blob 72af5544d371a368fa0a916e9627f01858b4bbd2	internal/board/payload.go
+100644 blob 12d19ae1d7f65d63b39f4d233a402784cba2e504	internal/board/payload_test.go
+100644 blob 821e6523d1825be9fc946a66cc49c8e65fec9bf5	internal/board/recovery.go
+100644 blob dd40ad3fa8bac26d4f06299b84e8cf84caf71553	internal/board/review_advance.go
+100644 blob bc0515e8dff381c22daeae1a3c75c89934e45321	internal/board/review_check.go
+100644 blob d09c258e3dda683266fc2e3ad8cd9989b54e9086	internal/board/review_closure.go
+100644 blob 1c41536b263a0aff58991a79bc2ff9e79dc59954	internal/board/review_context.go
+100644 blob 642e29e42f0936a40ddcaf79d8bf9b43aed3d008	internal/board/review_context_merge.go
+100644 blob 788afe3adc3f2a1d57854711075fbc8dc4ce2dba	internal/board/review_crash_test.go
+100644 blob 90e078a7ff6fb7e982385c4f143e3c04d91eeb86	internal/board/review_disposition.go
+100644 blob 88fa049e3412df5889c60f91c8e7a2ba9f43678e	internal/board/review_findings.go
+100644 blob 062042bf1a1aee3d202155b0981791e4c6f59b22	internal/board/review_gate.go
+100644 blob 37d4c04c487d42200987a810d2affc69bc7bc9a8	internal/board/review_gate_test.go
+100644 blob 7a702a5641b1a6982c2735112a43c6391e27b72b	internal/board/review_legacy_order_test.go
+100644 blob e2930b93f140c2e28aab7afdac8be3ac7bce9da0	internal/board/review_lineage_finalize_test.go
+100644 blob a6e9cb40ba1884ca661a083f3a1ba4a0c88bbbd5	internal/board/review_mechanical.go
+100644 blob 9fc7e77cfd09dc44e8fbfd0dc1a5fdf4f9a23834	internal/board/review_plan.go
+100644 blob 4dd5e3da570801cbccd8b105c10edafc72f8f1f9	internal/board/review_plan_extend.go
+100644 blob bcff174ccc06107b9e557cd7badbbd76d08d772d	internal/board/review_plan_read.go
+100644 blob 1bd82847b26c0ac84520953dedb6cc45030c3b70	internal/board/review_recovery_test.go
+100644 blob 8a08cfe0dba0d9f80898971f3fd107aff629d7a6	internal/board/review_revision_test.go
+100644 blob 5f4c888065c96900bbafbc778eb2b858a3020c0b	internal/board/reviews.go
+100644 blob 82bfc8181973308e6be312469b24cb2eb7190bd5	internal/board/reviews_test.go
+100644 blob d4877d3ac0feb2cc36f08dcf9a650b3746fc3651	internal/board/scan.go
+100644 blob bcdf3d81289a47d7b34757b02e9443c7f9a22136	internal/board/schema.go
+100644 blob cae64c7166642b4517576065826feec2568dbdaa	internal/board/size.go
+100644 blob c8a01f673b9d842086376cd4a9a4b9a4fa1ed40a	internal/board/snapshot.go
+100644 blob 9fbceebdb6133ce5db6949f729149f69aaa03a40	internal/board/snapshot_context.go
+100644 blob a69ba4ce5f5b395431b0f91cde8858480213f374	internal/board/snapshot_context_test.go
+100644 blob 91b5f04468468bd820921c3bafc2fdf20b344d94	internal/board/task_start.go
+100644 blob 22deec09e73dc39c8e2b88257c0f35c53166ae68	internal/board/task_start_test.go
+100644 blob c9cc4701e73c2dbfbd3a3d26d2d3cc2ab3a0b4a2	internal/board/template.go
+100644 blob 56b8719784540543d8f59207b1fa7affae51f967	internal/board/templates/contract.md.tmpl
+100644 blob 38fb5c5fa9690d57509278920fa3ee1101d243e8	internal/board/templates/small_extra.md.tmpl
+100644 blob a31ea5752e66ca8272dfb526b9f18872a0cb8d05	internal/board/transaction.go
+100644 blob c919d2214087e3432abde2ed4dca1231f1f95f2c	internal/board/transaction_bytes.go
+100644 blob 8eb3738455991198f52e946b23b76f5b92f20ceb	internal/board/transaction_lock.go
+100644 blob 17f9d7ccc128108fdc96f5254979be7be0ee29b8	internal/board/transaction_log.go
+100644 blob 64f88604cbeea0f09b1a290fd8b750b3cae065dd	internal/board/transaction_test.go
+100644 blob c449666aba89273346cb48645a096bc3f98179ff	internal/board/update.go
+100644 blob 99abe0766552d32154697d1e7d8e907f6768e4d9	internal/cli/cli.go
+100644 blob e9602adb4880810a41cf09efb594bc667902fbe6	internal/cli/cli_test.go
+100644 blob de1de64dd5780fd21a8940564784ad77136811c4	internal/cli/wire_board.go
+100644 blob 6219e75557c52d67c7e3312adbd854b3ad2f6d1a	internal/config/agent_language_test.go
+100644 blob 4c8c4344f73d44b76705d4bf6b392fcb5402e994	internal/config/agents.go
+100644 blob c29dd1684305b084e36a10cd2c769243268f3d0a	internal/config/agents_test.go
+100644 blob ef81b50ac083111492ea64af7f210174feb41940	internal/config/config.go
+100644 blob 3ab258a1e29332102770bdfe3371451752bfd28e	internal/config/config_test.go
+100644 blob 726901e2637de281f8c59d80b3105b9b89f532a0	internal/config/format.go
+100644 blob d40daab7a0a4d32dc2efa2448d41932d9b245f97	internal/config/language.go
+100644 blob 68ec17f553c0d1a10372af139eefd04898777b7a	internal/config/language_test.go
+100644 blob 7a55a0878546726821477375e523b492ab561aa2	internal/config/loadsave.go
+100644 blob fd602ba1be3b1f9f36bb8ebd1dbe8250ca94c088	internal/config/paths.go
+100644 blob a02ba446fd4b0d58c857baf0f6696c65ddf940a2	internal/config/repair.go
+100644 blob a6feee57c77932b4168477ac3a7c1dcdeadb426a	internal/config/repair_test.go
+100644 blob 7c64fa8f13a74f3286127cda38096208491c30b4	internal/config/rules.go
+100644 blob 63859d273fa0679b3a727f6c75fd3d8a79d4b7ec	internal/config/rules_test.go
+100644 blob 7aa31d99360c4b05d436bc5473f9f7173c771cad	internal/config/unknown_fields_test.go
+100644 blob 3ba743eb245b6d013ef1b7fe75e41ddb504d3729	internal/fs/append.go
+100644 blob a9ad1c03174db187ffe58f64bb96898cc0e19d5c	internal/fs/fs.go
+100644 blob 87640d87ee5940d82d4fcb9eaeeef644551dcaab	internal/fs/fs_test.go
+100644 blob de6c5570bfe081e1969e534ea63b1fe46405f7d1	internal/fs/path.go
+100644 blob ed9332b52d252dea2f2f98489775e359c71988c2	internal/fs/posix.go
+100644 blob d4ba0ca3ad49979ee78e4722d00d837d88cdb21c	internal/fs/posix_dir.go
+100644 blob 5da84dfaed8b238c97a22e65fb46e5915b46b73b	internal/fs/posix_link.go
+100644 blob 605014a1803b5c5f90769c131cbdf83fe09b90ac	internal/fs/posix_lock.go
+100644 blob 3a945764c58e4644e2116ddd8d1ab04c2feac93f	internal/fs/posix_publish_darwin.go
+100644 blob 95299f2c57c2cb008b2e8b6e617bbe2c789eed39	internal/fs/posix_publish_linux.go
+100644 blob 4dbe5ac91425f672c70de7243458ef515e4060a5	internal/fs/posix_publish_other.go
+100644 blob 5a434591d3d862c1544c4174ab0b253628eec582	internal/fs/posix_reparse.go
+100644 blob fef9ecad6bd762800efb0ab4899615602def1631	internal/fs/posix_temp.go
+100644 blob 4d6c3fb1176cdbd1386df8de80182668dea6ff0e	internal/fs/shared_lock_context.go
+100644 blob 95bea8faf4a6ae47c983ea21c37b0c25f5fdd430	internal/fs/shared_lock_context_unix.go
+100644 blob cb32559e3307128d4373826b51b69149fb781f0d	internal/fs/shared_lock_context_windows.go
+100644 blob ff0ac57dc6d058f626ab09bb4d544a8fb8824691	internal/fs/shared_lock_test.go
+100644 blob 2b271b2d9a4548bc98e568a21e559500a28cbd4a	internal/fs/umask_unix_test.go
+100644 blob 81ab4cbb838d09388d89a3498d2656414e1ed08a	internal/fs/umask_windows_test.go
+100644 blob e8f47904267536960999b7e6cb5ff80a86276719	internal/fs/windows.go
+100644 blob c44e4ed6320091ae970e5ae37dd1a6fb655f282f	internal/fs/windows_link.go
+100644 blob ff6620806affe869baa4a282a5103d4b855c2c40	internal/fs/windows_ops.go
+100644 blob 0b7b28273698c63225a2e4d2fb05c3708a62735c	internal/fs/windows_test.go
+100644 blob b5e6314668fe2b1c2c8b629c0fad19c5751c4c30	internal/i18n/README.md
+100644 blob 418e0178b453ca96b2b788ae47aae34233c46162	internal/i18n/i18n.go
+100644 blob 9903ecabfb54bd5b882c8106d856e47f21fb6eea	internal/i18n/i18n_test.go
+100644 blob c6d1e635f8b182f41d5f9d5a766c02a1d19d4f6d	internal/i18n/locales/en.json
+100644 blob f2748d0b4093c1e2ddfe323c188fe7d7bf026d57	internal/i18n/locales/ja.json
+100644 blob 016dc78bcbcad467d7d4b9a9bcf833c8eaad28dc	internal/i18n/locales/zh-CN.json
+100644 blob cb381e04f6d8a768762b2f309bf8a10a8c9b7f1d	internal/install/busy_windows_test.go
+100644 blob 7fed5d7a2f79a5268d704bd83bf2feb92d3ee765	internal/install/cmd.go
+100644 blob d3242ceee81cb7bef7a50ef43e806f36d8a86e75	internal/install/detect.go
+100644 blob 966f294711395687bbb2d08b3f55e828b606cb11	internal/install/handoff.go
+100644 blob 747cd172656e4b47b5b6515dfc08de4aca69df05	internal/install/handoff_unix.go
+100644 blob 036da30fef6bf7967bac993dd46fa04a6dd4a8a0	internal/install/handoff_windows.go
+100644 blob d999f865a6e23aecf132f19b205041e141e9729b	internal/install/install_test.go
+100644 blob 24c722203aa057dc8fd7bbeab78d08076ac9b7cc	internal/install/integrate.go
+100644 blob dcc42be4f4d4760d6363c13da18f88a895c5426f	internal/install/integrate_test.go
+100644 blob 7722cccd28215720cc782617a2b7ce79c25b8b8e	internal/install/leftover.go
+100644 blob 21f788493fa66c11f4b8e641f85c1261fce90c54	internal/install/legacy_hashes.go
+100644 blob 22fd5e3c1ec00ba7edbb51d2e53c7e7c1a4e7792	internal/install/perform.go
+100644 blob b0a1e67074f27977ab6fb4efa26f5c3f72aba6d5	internal/install/rules_state.go
+100644 blob a6a4a5c67719aba7cbc2ca55d9a24e8b5841e8f0	internal/install/testdata/hold.go
+100644 blob b4e86658f7775280424532b920f0223b0c590101	internal/install/testdata/legacy-KANDER-BASE-RULES.md
+100644 blob 46796ecb0f8ed09f3914c7e727f448641ffc323b	internal/install/wizard.go
+100644 blob 150aaf87c28ac72da161bac3d021bd4134d219fd	internal/launch/agent.go
+100644 blob 38199a8926f747a13f136f074294b57889ad328e	internal/launch/agent_allocate.go
+100644 blob debe2d7c4b9068bacfac461047124e5efd6d3433	internal/launch/agent_definitions_test.go
+100644 blob 796e94cce193953408b15e9e13e751f4ddd6f1b1	internal/launch/cmd.go
+100644 blob 17e21690520f690364b9a979d9c71c0117834903	internal/launch/commands.go
+100644 blob 1d125823ebe2007c344aab163672c97cd2739b1c	internal/launch/coordinator.go
+100644 blob 21f837000a4568d5f4ef7eb43ff9414cb83bccb6	internal/launch/coordinator_rollback_test.go
+100644 blob 2108673412276b8b503458d8b99e3a2085ecd331	internal/launch/coordinator_start_test.go
+100644 blob 133d50cb4c6105f1433eec7bb557cd91baf417d7	internal/launch/coordinator_test.go
+100644 blob f81d8118fbaaa4d9447f8f95bcecb55f18cb4045	internal/launch/dispatch.go
+100644 blob 94752d800e34bbd94e9f4530bb53a3f5e463ba07	internal/launch/dispatch_deadline_test.go
+100644 blob bb9b6042688ecea186567d4e90de8abca64462a4	internal/launch/dispatch_evidence.go
+100644 blob a6202a3e6d27c157afb50649dacdae8daafebb3d	internal/launch/dispatch_evidence_test.go
+100644 blob 59cc79a5e4e2c4c83f782cba6845f9c54f002139	internal/launch/dispatch_options_test.go
+100644 blob 23e72289172cba50c66ea49392aaa3e6e264a1f5	internal/launch/dispatch_rebase.go
+100644 blob b1a6bc25ab9931df1fc58798a14b8c908287f204	internal/launch/dispatch_rebase_test.go
+100644 blob 248771d2d82134c1be4dcead5427f4f6fcbfcfef	internal/launch/dispatch_test.go
+100644 blob 6f83a885376d092cdf28544cf077c27f6c31fc88	internal/launch/error.go
+100644 blob 42acc7bdc614643457f564285d8e9ead51eab906	internal/launch/exec.go
+100644 blob d819a144d6ced07dc7f5dca10f5586be88d88f93	internal/launch/exec_other.go
+100644 blob fa1d375438050ed463d595f8f77bc1a10b4d61c7	internal/launch/exec_windows.go
+100644 blob 6df7d6e3a6c020422d8b841854db62e6f2e3b2cf	internal/launch/exec_windows_test.go
+100644 blob d5e87741197738c749c87637b4f29e0da8072ad0	internal/launch/herdr.go
+100644 blob 00a6e035870cee81e523a004d4c12d32eed9f2fa	internal/launch/herdr_pane_command_test.go
+100644 blob 1012377890c0c65f3b7ce539e1e08934d7f5d782	internal/launch/launch_contract_test.go
+100644 blob bdcdf4d92936993bdd9441f9ab9cf2a23d2c2f41	internal/launch/launch_test.go
+100644 blob bc3e2c461c865a0135f815c3261cc9ff1b5f8afb	internal/launch/metadata.go
+100644 blob 8549004755f47bb81e206e2cf459a739f36af85c	internal/launch/metadata_test.go
+100644 blob 731f7a91c314c07f96167f4d0ea43d65042261df	internal/launch/notify_resume.go
+100644 blob 661ec0c102fdf6aeebc2779aa0e62e703bb118b7	internal/launch/prompts.go
+100644 blob 59bf7a16a115ff30eb111eb24ea53adb385953ee	internal/launch/prompts_test.go
+100644 blob 764cbadef9f3a09d3ca2d31762ea0e96ffc7cf2d	internal/launch/rollback_test.go
+100644 blob 86edb8414012d9957eb0bad31fa1f9f4885cdd98	internal/launch/rules_test.go
+100644 blob ad1da92eadb1ddf6c32d24f43d0bb3d5dec8bab5	internal/launch/session.go
+100644 blob 1a8f41ca05691cca71a17553d7a4e1e86b5c397c	internal/launch/tmux.go
+100644 blob 6a499d04b41149fe7adce548168daed2c8e8ad90	internal/launch/types.go
+100644 blob 089510291eb09091059aba6fff56297c71fe437b	internal/liveness/agent_definition_test.go
+100644 blob f5c4cb49f73508a0105d5539699f469d5f252e2e	internal/liveness/batch.go
+100644 blob 99cb3e3c61927f28216cb0c5a3770cba347c503d	internal/liveness/batch_test.go
+100644 blob 4e2a644b52638d7b98e34926369dd2dc4efc4478	internal/liveness/bind.go
+100644 blob 059a43fa2072d7026a0ca307f64508ca221d52c6	internal/liveness/check.go
+100644 blob dab9c400df823bc7ce41ef0b04a6b7bf316273c8	internal/liveness/classify.go
+100644 blob f83382fe7001d9a23f98f8b6890bba12345bb0a7	internal/liveness/deadline_test.go
+100644 blob 131165db2fcd36354592a335db2700135d9c6019	internal/liveness/liveness_test.go
+100644 blob 2ed4d4909fb375855c347473800c3b3c82b6290a	internal/liveness/lookup.go
+100644 blob f4d592ef21828abd964e7a75d6299d16b13aa32e	internal/liveness/lookup_test.go
+100644 blob 25d14689925039da93974c1317e8b691622a1df1	internal/liveness/observation.go
+100644 blob 998f3485e5fd905ee398551fbf5c0efee3f8753a	internal/liveness/subscribe.go
+100644 blob 0e674e673afbc5bc495a6fabcf36724a1708e966	internal/liveness/subscribe_clock_test.go
+100644 blob db3f26ac485bd83d06a4175992e1639d277d5e6c	internal/liveness/subscribe_dispatch.go
+100644 blob 04c8fadc42ff971340d3280c092795aeb1cd22a5	internal/liveness/subscribe_dispatch_runtime_test.go
+100644 blob f16663ecc916516907d00345c4d428c5c2c8939a	internal/liveness/subscribe_dispatch_test.go
+100644 blob f022519d246e8eb08028257851db41e59c7b1f49	internal/liveness/subscribe_facts.go
+100644 blob 8642e3fdb22b770adf116fb556ed0beb1eeaa69c	internal/liveness/subscribe_facts_test.go
+100644 blob 50812a139a8c5e2c29d3bc63b1031956c60ddd69	internal/liveness/subscribe_members_test.go
+100644 blob d7f3e76ce7ba8a69c90a3d861309ee8f38b0aa8d	internal/liveness/subscribe_output.go
+100644 blob e0a01197a85c937de01e0dc119df17569c338bdb	internal/liveness/subscribe_output_posix.go
+100644 blob 07c066d247c3f279ad8fa744399c766a68839417	internal/liveness/subscribe_output_windows.go
+100644 blob 2ef0875bcd6f11ae8f2706967270c4c99828cd0f	internal/liveness/subscribe_pipe_test.go
+100644 blob 55f0e56255fb0a7af17a666ee9808c6e19af66b6	internal/liveness/subscribe_probe.go
+100644 blob 1cea381e6cef17c9ad5b102e0e04aad8f0ad77a9	internal/liveness/subscribe_read_test.go
+100644 blob cf82b3d4d3d429328cbaa285d55fe248ee335b55	internal/liveness/subscribe_restart_test.go
+100644 blob 57f48569c3270e5e71090226b39902861948a970	internal/liveness/subscribe_runtime_test.go
+100644 blob cea0f60d0dfd5b8b7661f5e45cf8a4d581a991da	internal/liveness/subscribe_signal_test.go
+100644 blob c00a21738d5e0cd99983ce1e74d0835b811e9d9d	internal/liveness/subscribe_signals_posix.go
+100644 blob 077b97e4de7667f0a2e6e5f2c2bf509fddb49cac	internal/liveness/subscribe_signals_windows.go
+100644 blob 32e3398d117edeeebaec4b090dde3808274c52af	internal/liveness/types.go
+100644 blob b09f5277b6329fc05bdd9413dba811772946fcdb	internal/menu/agent_fields.go
+100644 blob 084a45bdaa0be844bc5753e54bcdbfe6220ffdef	internal/menu/agent_fields_test.go
+100644 blob 6aa52bb0aedca8f7b3e898196ca85c97b921f81c	internal/menu/agent_language_test.go
+100644 blob 496025ba29bf60c64cfbe1efa11349717c0ae7dd	internal/menu/agent_probe_test.go
+100644 blob 80809402981087aedaedc88de65a7dfcb14e99d5	internal/menu/agents.go
+100644 blob f8cbe43c5a157906eb309fae300586ae249630df	internal/menu/agents_path_test.go
+100644 blob b2bcb51cc499a9215cf9dd5a4756d1b597c25c51	internal/menu/color.go
+100644 blob bf9b31836c0c26dc79e834915c81e08cd8b6d5ce	internal/menu/commands.go
+100644 blob 5ef3f0fd31cbd4f1f9c15f211db0774f13b050ed	internal/menu/doctor.go
+100644 blob 54cc2913212aacb6fe83f8d46053bc98ad7552f3	internal/menu/doctor_config_test.go
+100644 blob 47b5b9bcac7749e7698c3c3795176d28a0d64240	internal/menu/doctor_extra_test.go
+100644 blob b3b859955a90e1d04d32e57bac93102e6262a1bd	internal/menu/doctor_repair.go
+100644 blob 42c3e31a2a9e65350745db2f9a051be04e851c43	internal/menu/doctor_repair_test.go
+100644 blob 43628dc817d790401f674f727b231dc0c07f35bf	internal/menu/doctor_session.go
+100644 blob 0b2d456aa2296b3f2cf31ad466ccc7e6d86ffda3	internal/menu/launcher_windows_menu_test.go
+100644 blob b106a9075d912864cf643bf9a55b1a42665a45e6	internal/menu/menu_harness_test.go
+100644 blob a214ad90f1c1299a7a844dde03925e0a861ced05	internal/menu/options.go
+100644 blob eb22d6384ebf6e73f305429095cb408e5725d927	internal/menu/options_helpers.go
+100644 blob 102994353382c65fe66386a468a4b54c633e9081	internal/menu/os.go
+100644 blob 23a54a21ab8116f221844909bbc2c1de45269baf	internal/menu/report.go
+100644 blob daf6a188dd35973e44f520e29bd2620cb9b27521	internal/menu/restore_other.go
+100644 blob 99460505b208bf8c6d7fff8c40848c6a37378739	internal/menu/rule_options.go
+100644 blob 57f2b2e95022ce5b591f7b6a5b4df7c18696318d	internal/menu/rule_options_test.go
+100644 blob 4c2acbb39e658984114e87dbfc4acb6ad84761ca	internal/menu/rules.go
+100644 blob 1aa7d2685b3a0b79a9c424f45a876ba6f99a4aaa	internal/menu/rules_test.go
+100644 blob aefcb884f3f76849f214caa15cebbbd4372aaeb0	internal/menu/select.go
+100644 blob 89b682787314399e3207c4d8925eb14e2989cf93	internal/menu/select_unix.go
+100644 blob fa66b5af2a3cc111d46bb02b1022ec35fd54b1d7	internal/menu/select_windows.go
+100644 blob 5cb00bf58706c3c1ed95a4c64109a40da90aa306	internal/menu/terminal_tools.go
+100644 blob 6f70061150ca1f964ef5c63e90837b67047bf052	internal/menu/terminal_tools_test.go
+100644 blob 1dd76274fc32ba89c3b7bb4a87ca795df330248f	internal/menu/terminal_tools_windows_test.go
+100644 blob 323be4555ea1a143e4b9c4f0afa30518f395feac	internal/menu/termios_bsd.go
+100644 blob e139b12e72311f52a2c5e7a5748fedc9882c8e22	internal/menu/termios_linux.go
+100644 blob debf1b7ca50f72b56dde7a8a931d17a6dff3a25a	internal/menu/tty.go
+100644 blob b36b27a98289de63f440254b06f570873bbb6458	internal/menu/tty_unix.go
+100644 blob d3336a5b0ebd3c44ff8bf7d29e66875a4cea77b4	internal/menu/tty_windows.go
+100644 blob 59ae63f98eedfbddaef3b0b6a4d05875032e8968	internal/menu/uid_unix.go
+100644 blob 382f219e0a86a4ea793d783da1092405fb80c9ad	internal/menu/uid_windows.go
+100644 blob 80cf8ec19954c6381aa0bb2fa1dc564b92db322a	internal/notify/agent_definition_test.go
+100644 blob 1ef9b4e1807546768e5b948353e324e375f6d98d	internal/notify/cmd.go
+100644 blob 0cc7589f3424181a69915dd7256ec439e46e6783	internal/notify/command.go
+100644 blob 6b341553e969d444135826c8c40b1cc30f3e60ea	internal/notify/deliver.go
+100644 blob c3796f0add5bdf087f23cdef8fedd022c1fc2faa	internal/notify/dispatch.go
+100644 blob d812491d8eae6bd4d182427ebfaf55ddb0918d25	internal/notify/dispatch_crash_test.go
+100644 blob bb4c04b3e2474b5c01c5d5d13425def5ae9d7ffe	internal/notify/dispatch_fencing_test.go
+100644 blob c30395cb4915efc0f9adc5432bdcaa63a9e070bd	internal/notify/dispatch_test.go
+100644 blob 212863fb0ee670d25186aa08667fdacd7536db2a	internal/notify/error.go
+100644 blob 67648138b2e757c8e0939dbde8749aeeed8315a6	internal/notify/notify_test.go
+100644 blob 6ac5509f3ab5ae15285b8d972531095edea36bcf	internal/notify/payload.go
+100644 blob 3a392c5fe2c9105027fb8274b13b372ce6673ab3	internal/notify/probe.go
+100644 blob d222954be79bd6adb3fc1ac7aa9733d8214de06d	internal/notify/resolve.go
+100644 blob 990ead193c997c8f760a240434d4f69f31f417d5	internal/notify/rules_test.go
+100644 blob 9c70e58b42e1ee69ea067b57d6a5be36f7776807	internal/notify/temp_unix.go
+100644 blob 1cdca9a66a559d798535cc402b38cc54a0b06cc6	internal/notify/temp_windows.go
+100644 blob ce71600b75a24670b06d8293c5caf68994c2d1bc	internal/notify/windows_direct_test.go
+100644 blob 090de15335050f2063ea1872f277f81e93dbb325	internal/probe/error.go
+100644 blob 7351622a31841afd8e6101cc8521867e8cc9a599	internal/probe/herdr.go
+100644 blob 454ed8c9e5116699a7cdee98dfacafad209dfd26	internal/probe/probe_test.go
+100644 blob 57055d4900ab7f80f1393695b55901839a85d87d	internal/probe/run.go
+100644 blob 88f5c4de70cb8433815a550677438cc6a7b9c6cf	internal/probe/run_posix.go
+100644 blob 89b4c9cccae7253ae20a3af205b3cf64a562948f	internal/probe/run_posix_test.go
+100644 blob 2deb38f9483a41fb0fee6669793d8f2271ecbe15	internal/probe/run_test.go
+100644 blob 243ce25b09f3fb86408ed6a9b55cd17dbaba8cb1	internal/probe/run_windows.go
+100644 blob bf5c1c03a907ae71c2c87e8cfbfc4d557a81fa82	internal/probe/run_windows_test.go
+100644 blob d364a4c0d33411afbd500bee7571eaf357b3199d	internal/probe/tmux.go
+100644 blob 0ae5d61cac0c096d069fca3a110a0fd825261342	internal/process/process.go
+100644 blob 1993f47d7b45d159b1b4e98fadc888446c428bfc	internal/process/process_test.go
+100644 blob a6e25639302abf10e4e3494f8886a4c86497d84d	internal/review/access_unix.go
+100644 blob 43400543663b6da6b3817cfa618a6ff2878fa54f	internal/review/access_windows.go
+100644 blob 4eaa9f1f7de484b9a2883f404257cd880550739b	internal/review/agent_executable_test.go
+100644 blob be262ea587113ea09d89d79a7a3f9c72c1ecdc25	internal/review/archive.go
+100644 blob a37a0d20b9951bed591058c5d695aad66600bd13	internal/review/archive_test.go
+100644 blob 180bbaeff626cf4cf41d1f62076c104bd6c5a2f9	internal/review/args.go
+100644 blob 25b9d23646ac4f60381dc7c7a3a4542ace2fd10d	internal/review/bind.go
+100644 blob 4db9ed2784224d43c3f2e58d322efb1ad6e2089b	internal/review/claude_test.go
+100644 blob 368f1c973e44028d45e3b266c1b5e0c35f470f4f	internal/review/codex_test.go
+100644 blob 06a4e5700aadd9d7370978e7614145ef2a8a7262	internal/review/cursor_test.go
+100644 blob a77538070d653701671b49594dda3e8764fba3b0	internal/review/disposition.go
+100644 blob d4fcfb5e209cb827f1cd7d5aa0710236c561141d	internal/review/disposition_cycle_test.go
+100644 blob e08ce37a0966bd7a1a9e2b8636b40e86396bd03d	internal/review/disposition_regression_test.go
+100644 blob bec7ea33c3da746db3f0fc55bb3e7435c6ad3d61	internal/review/disposition_test.go
+100644 blob 5a288e6df1d799ff04d8af9ce909383e3057abfc	internal/review/execute.go
+100644 blob 9d2a0bb8dbb62450a94e444b5965629eb8c38711	internal/review/git.go
+100644 blob 5a6c813bca260efdd9e7d1ced17e642e4e6a6f08	internal/review/grok_test.go
+100644 blob c7011a199bbd2876e1157356e94b2c38cec0457c	internal/review/harness_test.go
+100644 blob 0f68a5db71ea8760d78223f03dbb60cc79ed9606	internal/review/helpers_test.go
+100644 blob b7ee856ac4b831f905f265dd07c718d025efe354	internal/review/launch_unix.go
+100644 blob def6aacc05623eaf5ee172d4c61adcfaf4132c76	internal/review/launch_windows.go
+100644 blob 561c865964c5f2973fbc8a64fde0940aee7c18ea	internal/review/lineage_recovery_test.go
+100644 blob 8e74e21547e1dc3e78e301a7a84a553aa55911aa	internal/review/mechanical.go
+100644 blob 52dec9505f8f4674b3185bd93fc040fa050a3d6d	internal/review/monitor_unix.go
+100644 blob 826ced6c07d3cf68a50e6d44905a3320b5b7e145	internal/review/monitor_windows.go
+100644 blob c7966edc7a718ecdb96c408007dd0f2bb764fadf	internal/review/platform_unix.go
+100644 blob d17d17631d739b031f7aa6dd064d9238c2818cfd	internal/review/platform_windows.go
+100644 blob 8567ba980bee2a008eb00312fb1fe62346d6ff44	internal/review/recovery.go
+100644 blob 9b392b943c04ddd5067daed5e1f9589b7ca1edf1	internal/review/report_language_test.go
+100644 blob 084d6ab3d045dddd8b224225243897908c4d0a46	internal/review/review.go
+100644 blob e3108339997c52154dee970352127ddf16da22cc	internal/review/roles.go
+100644 blob d8e47cb27614e75936853647c84bbb093b16d219	internal/review/settings.go
+100644 blob 6d8d7418fdd08849765e506fe7a8a20b84634373	internal/review/tree.go
+100644 blob 1b0a3d232081c2c48def96c6625e26000015bbc2	internal/review/validate.go
+100644 blob c4bb73c49ce97b005cc880c49ba86e5480dd68b8	internal/review/windows_review_test.go
+100644 blob 678a8d225689a29cfab1ece86110ec27e73018ad	internal/takeover/agent_definition_test.go
+100644 blob 0129d92f81925a3949e6444c26568f1dfe1ce6c9	internal/takeover/cleanup.go
+100644 blob 1c65123411fcaf098a3c16b3cc840b2bf1e38d01	internal/takeover/cmd.go
+100644 blob c4376d887f4c273255329063e4b96259b5fa6dc3	internal/takeover/dismiss.go
+100644 blob ba251ce9a2251c6e36bc30a85e0561b4e7c69ff1	internal/takeover/ops.go
+100644 blob 9f777ddac8d5231bcdd468789fda4846e35f0088	internal/takeover/takeover_test.go
+100644 blob 6cf357d270c5201b12c40cd951c0649380290b20	internal/takeover/wait.go
+100644 blob ddef07f8ed6cb606fcc9ff7739b50398427f8f9e	internal/takeover/windows_container_test.go
+100644 blob 9728bac42ab12c9975daa0dd6a597d1549defbd7	internal/tui/app.go
+100644 blob f055337751e65c3fe0bfe39e5e4ac8c72757d579	internal/tui/board_view.go
+100644 blob 2f91c9b13be821143eb359e9bac2ddc3345f6579	internal/tui/clipboard.go
+100644 blob aba2e48eacf680086754ec6c46636834d13e8256	internal/tui/cmd.go
+100644 blob 64a5795abc574a8ced01bb6b07e5d2192415f594	internal/tui/cmd_test.go
+100644 blob 31cf1a3ffd5c724801a79db03b768d6efe15b400	internal/tui/context.go
+100644 blob d4626db4f59cd48032fe6cc8cc8da8129a0fe458	internal/tui/detail_view.go
+100644 blob 574e85eaf3d60306afe031c6faec28b62fe84e5e	internal/tui/help_view.go
+100644 blob 0e0f1875044f0dbdafc32d4aac49c0c0e14db73d	internal/tui/layout.go
+100644 blob fc6568611684d27b9a107254ba4bbaeeac124990	internal/tui/model.go
+100644 blob 58d9d6420769bbca87280366bee4ce9218fb58d0	internal/tui/mouse.go
+100644 blob c3079f3be289fb5205caf48f21eacb0de6e4439b	internal/tui/options_doctor.go
+100644 blob 4dbd590131eb0c6d0b668c209c4f113c479475b8	internal/tui/options_doctor_test.go
+100644 blob 59843f276feb6607cbe0059e61312b3c1983b6b3	internal/tui/options_form.go
+100644 blob cde0a85361591b9cc889ad847335ec1faa27d838	internal/tui/options_panel.go
+100644 blob e74b8e437e29f9e51572aad935e5f617cea7c166	internal/tui/options_rules.go
+100644 blob 693d6b6ce3c18cdff021fab8c6ea973b2a73224d	internal/tui/options_rules_test.go
+100644 blob ca8989de5bc230282fc36dc3c766c34a0a4fbdb3	internal/tui/options_test.go
+100644 blob 52b0784d3397b5127f7af7aaa064f7b1bbad2ae3	internal/tui/options_view.go
+100644 blob c2650798613b7ae10201fe66802724c943ebc6da	internal/tui/overlay.go
+100644 blob 9b99be50175a3c773daa54fe168bb2e164ff7b14	internal/tui/payload.go
+100644 blob e547cbf43d46b25d525c0c3426b4850e3e042639	internal/tui/prefs.go
+100644 blob 035b5647576e6c2ddffcb65ead1ca86f903f1fbe	internal/tui/program.go
+100644 blob feece68475e007aba48977210fa3993533a6d128	internal/tui/pty_test.go
+100644 blob 78edfc31333fbb96b4c761ac51b4442fe6edfa1e	internal/tui/selection.go
+100644 blob becce353d9565db6dbcbf5fa38351a979098faca	internal/tui/status.go
+100644 blob ef5b58d1e40fd6c6fa148557ff735419729da265	internal/tui/text.go
+100644 blob e1cf2e7586ffbf282d3c7d0fffa2217fd7a7f613	internal/tui/theme.go
+100644 blob 18bbcf26467dc533aebde9b60e231613245c2527	internal/tui/tui_test.go
+100644 blob b1452bed5782565ed44fbec0a2e337cf3e0fcffb	internal/tui/types.go
+100644 blob 49d83696cb7d3263084c6884fb0d41a1256b8462	internal/version/version.go
+100644 blob 94f343dcf7105c7d609a5a4e9257e4120956616a	internal/version/version_test.go
+100644 blob 2100e20e3dd461bedad832085c6db0d82ad0ac40	internal/window/window.go
+100644 blob 303bfab29226bc62fff6fc2d8f0ddbebda293cdf	internal/window/window_test.go
+100644 blob 12eb667eda1f0652129a362dc03b12811b901d67	make-windows.cmd
+100644 blob 84c57042f0af8e002a1d6ce859245b2da69aee63	rules/KANDER-AGENTS.md
+100644 blob 46e8832996b535527d13eabda5dbc78309c4ac77	rules/KANDER-BASE-RULES.md
+100644 blob 644850e3707646e14c8e40d021e6db051f8cf69c	rules/KANDER-CODE-RULES.md
+100644 blob ee9fa7e70924e8166cae7202fb1baee822aa9e6f	rules/KANDER-COLLABORATION-RULES.md
+100644 blob 194248bebe3f742b33ab0648a1f29ba06d16e795	rules/KANDER-GIT-RULES.md
+100644 blob e7b2989cc5189e5e0a2c98e93fd1761dd2b4b56f	rules/KANDER-KANBAN-RULES.md
+100644 blob ffbe65b9922dec8a19c1fee16eb2cddfc1da872a	rules/KANDER-REPORTING-RULES.md
+100644 blob b4c85e6e7cf6912946d24bc5477c46644f3ad8d7	rules/KANDER-REVIEW-RULES.md
+100644 blob 5be44348e97768751d71260ab47b534684361908	rules/KANDER-TASK-GROUP-RULES.md
+100644 blob dc75c77397378c9e5f7f62aca4319ad697094121	rules/KANDER-TASK-INTAKE-RULES.md
+100644 blob 4650fb65647980cf787833a7c98ed2718cac2b48	rules/embed.go
+100644 blob c930439258d499a6a547e11b622e91261e5787b9	rules/embed_test.go
+100755 blob c7e77a84400af22bdf0f03cda5c1a96552a7435e	scripts/guard-kanban-write.sh
+
+=== FIX RANGE COMMITS ===
+commit 6dbed41ae20a5c930f47b209ea9dc4add2c1a771
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-08 10:48:13
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-08 10:48:13
+
+    fix: complete custom agent lifecycle and configuration
+
+=== FIX RANGE FILE LEDGER ===
+M	docs/custom-agents.md
+M	internal/config/agents.go
+M	internal/config/agents_test.go
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+M	internal/launch/agent_definitions_test.go
+M	internal/launch/notify_resume.go
+M	internal/launch/session.go
+M	internal/menu/agent_probe_test.go
+M	internal/menu/options.go
+M	internal/process/process.go
+M	internal/process/process_test.go
+M	internal/takeover/agent_definition_test.go
+M	internal/takeover/dismiss.go
+M	internal/takeover/ops.go
+M	internal/takeover/takeover_test.go
+
+=== FIX RANGE PATCH ===
+diff --git a/docs/custom-agents.md b/docs/custom-agents.md
+index c8aedfe..966b44e 100644
+--- a/docs/custom-agents.md
++++ b/docs/custom-agents.md
+@@ -47,9 +47,9 @@ prompt 不进入模板，始终由 Kander 追加在 argv 最后。分配命令
+ 
+ - `generated`：生成 UUID，保存到卡片 SESSION，供 `{session}` 与恢复使用。
+ - `allocated`：先执行 `session.allocate` argv（首元素是程序），最多等待 10 秒；成功输出须为一个 ID，或通过 `session.json_field` 指定顶层 JSON 字符串字段。ID 仅接受 1–128 个字母、数字、`.`、`_`、`:`、`-`。程序失败、无效输出与超时均在领取任务前报告。
+-- `none`：`resume` 明确拒绝；`notify` 不直投，通过恢复通道运行 start 模板，重新读取卡片上下文。卡片保留仅用于终端标记的 UUID，模板中的 `{session}` 为空。`kander config`、`config --json` 的 stderr、`kander check` 显示降级提示。持久派回仍须满足原有停止事实与回执门禁，不以 `none` 绕过防重复执行检查。
++- `none`：`resume` 明确拒绝；`notify` 不直投，通过恢复通道运行 start 模板，重新读取卡片上下文。卡片保留仅用于终端标记的 UUID，模板中的 `{session}` 为空，方言参数也省略会话创建/恢复选项，UUID 只供终端身份检查。`dismiss` 仍允许关闭已确认身份的终端。`kander config`、`config --json` 的 stderr、`kander check` 显示降级提示。持久派回仍须满足原有停止事实与回执门禁，不以 `none` 绕过防重复执行检查。
+ 
+-模板自定义 agent 若无方言，必须显式声明 session。有方言时默认继承：Claude/Grok 生成 UUID；Cursor 调用配置后的程序执行 `create-chat`；Codex 保留扫描 CODEX_HOME rollout 的既有发现机制（自定义 Codex 方言同样适用）。`discovered` 不接受手工配置。
++模板自定义 agent 若无方言，必须显式声明 session。有方言时默认继承：Claude/Grok 生成 UUID；Cursor 调用配置后的程序执行 `create-chat`；Codex 保留扫描 CODEX_HOME rollout 的既有发现机制（自定义 Codex 方言同样适用）。`discovered` 不接受手工配置。无模板的 Codex 方言不接受 `generated`/`allocated` 覆盖，Cursor 不接受 `generated`，因为对应 start 参数无法兑现这种身份来源；请继承默认值或提供模板。所有方言都允许 `none`，启动时不传会话参数。
+ 
+ 分配示例：
+ 
+@@ -65,6 +65,8 @@ prompt 不进入模板，始终由 Kander 追加在 argv 最后。分配命令
+ 
+ ## 面板与审核边界
+ 
+-「任务执行与模型」可以选择自定义 agent。每个已选 agent 的模型字段后有「可执行名」「pane 进程名」输入；大小任务共用同一 agent 时只显示一次。留空删除覆盖，保存到 `agents`。方言、模板与会话策略只在 JSON 编辑。
++「任务执行与模型」可以选择自定义 agent。尚未探测成功的内置 agent 也可选择以填写改名程序路径；保存时仍校验显式路径。每个已选 agent 的模型字段后有「可执行名」「pane 进程名」输入；大小任务共用同一 agent 时只显示一次。留空删除覆盖，保存到 `agents`。方言、模板与会话策略只在 JSON 编辑。
+ 
+ reviewer 名单仍只有四个内置 agent，固定使用其只读适配器。review 可执行名优先级为 `*_REVIEW_BIN` 环境变量、review 内置程序名；`agents.*.path` 和 `process_name` 完全不参与 review 选择。因此执行 agent 的包装器不会被自动用于审核。
++
++兼容方言的自定义名称在 `dismiss` 和接管清理时复用该方言的退出命令，仍要求身份及单 pane 容器检查通过。纯模板且未声明兼容方言的程序没有可推断的交互退出命令；`dismiss` 明确拒绝并保留容器。
+diff --git a/internal/config/agents.go b/internal/config/agents.go
+index 260ed56..4c8c434 100644
+--- a/internal/config/agents.go
++++ b/internal/config/agents.go
+@@ -224,6 +224,10 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
+ 			}
+ 		}
+ 		resolved := AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name)
++		if d.Args == nil && d.Session != nil && d.Session.Mode != "none" &&
++			(resolved.Dialect == "codex" || resolved.Dialect == "cursor" && d.Session.Mode != "allocated") {
++			return nil, agentDefinitionError(name, Text("config.agent_session_dialect", resolved.Dialect, d.Session.Mode))
++		}
+ 		if d.Args != nil && d.Dialect == "" && d.Session == nil && !contains(ExecutionAgents, name) {
+ 			return nil, agentDefinitionError(name, Text("config.agent_session_required"))
+ 		}
+diff --git a/internal/config/agents_test.go b/internal/config/agents_test.go
+index 13d39af..c29dd16 100644
+--- a/internal/config/agents_test.go
++++ b/internal/config/agents_test.go
+@@ -151,3 +151,28 @@ func TestExpandAgentArgs(t *testing.T) {
+ 		})
+ 	}
+ }
++
++func TestDialectSessionCompatibility(t *testing.T) {
++	for _, test := range []struct {
++		dialect, mode string
++		bad           bool
++	}{
++		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
++		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
++	} {
++		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
++			cfg := DefaultConfig()
++			exe, _ := os.Executable()
++			session := &AgentSessionDefinition{Mode: test.mode}
++			if test.mode == "allocated" {
++				session.Allocate = []string{exe}
++			}
++			cfg.Agents = map[string]AgentDefinition{"alias": {Dialect: test.dialect, Session: session}}
++			data, _ := json.Marshal(cfg)
++			_, err := ValidateJSON(data)
++			if (err != nil) != test.bad {
++				t.Fatalf("error=%v", err)
++			}
++		})
++	}
++}
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index 318ccca..c6d1e63 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -1,4 +1,5 @@
+ {
++  "config.agent_session_dialect": "Dialect {{.V0}} cannot use session mode {{.V1}} without args templates; omit session to inherit the dialect or provide args.start and args.resume.",
+   "config.agent_definition_invalid": "Invalid agents.{{.V0}}: {{.V1}}",
+   "config.agent_object": "Use a JSON object; null is not allowed.",
+   "config.agent_name": "Use a lowercase agent name starting with a letter, at most 64 characters (letters, digits, _ or -).",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index 462af51..f2748d0 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -1,4 +1,5 @@
+ {
++  "config.agent_session_dialect": "方言 {{.V0}} はテンプレートなしでセッション方式 {{.V1}} を使用できません。session を省略するか args.start と args.resume を指定してください。",
+   "config.agent_definition_invalid": "agents.{{.V0}} が無効です: {{.V1}}",
+   "config.agent_object": "JSON オブジェクトを指定してください。null は不可です。",
+   "config.agent_name": "名前は小文字で始まる64文字以内の英小文字、数字、_、- にしてください。",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index 91579e0..016dc78 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -1,4 +1,5 @@
+ {
++  "config.agent_session_dialect": "方言 {{.V0}} 无法直接使用会话模式 {{.V1}}；请删除 session 以继承方言默认值，或提供 args.start 与 args.resume 模板。",
+   "config.agent_definition_invalid": "agents.{{.V0}} 无效：{{.V1}}",
+   "config.agent_object": "请使用 JSON 对象，不接受 null。",
+   "config.agent_name": "agent 名须以小写字母开头，最多 64 字符，仅含小写字母、数字、_ 或 -。",
+diff --git a/internal/launch/agent_definitions_test.go b/internal/launch/agent_definitions_test.go
+index 9a3b996..debe2d7 100644
+--- a/internal/launch/agent_definitions_test.go
++++ b/internal/launch/agent_definitions_test.go
+@@ -120,3 +120,21 @@ func TestTemplateStartAppendsPromptAndUsesConfiguredProgram(t *testing.T) {
+ 		t.Fatalf("%q", got)
+ 	}
+ }
++
++func TestNoneDialectArgumentsDoNotReuseTerminalIdentity(t *testing.T) {
++	for _, agent := range config.ExecutionAgents {
++		t.Run(agent, func(t *testing.T) {
++			cfg := config.DefaultConfig()
++			cfg.Agents = map[string]config.AgentDefinition{agent: {Session: &config.AgentSessionDefinition{Mode: "none"}}}
++			args, err := agentArguments(agent, nil, "small", AgentSession{Agent: agent, Reference: "terminal-marker"}, false, cfg)
++			if err != nil {
++				t.Fatal(err)
++			}
++			for _, arg := range args {
++				if arg == "--resume" || arg == "--session-id" || arg == "terminal-marker" {
++					t.Fatalf("none passed session identity: %q", args)
++				}
++			}
++		})
++	}
++}
+diff --git a/internal/launch/notify_resume.go b/internal/launch/notify_resume.go
+index 463c980..731f7a9 100644
+--- a/internal/launch/notify_resume.go
++++ b/internal/launch/notify_resume.go
+@@ -27,7 +27,12 @@ func ResolvedSession(taskID, text string) (AgentSession, error) {
+ 	return resolvedTaskSession(taskID, text)
+ }
+ 
+-// NotifyViaResume resumes the original session when recovery is permitted.
++// ResolvedSessionIdentity resolves terminal identity independently of resume support.
++func ResolvedSessionIdentity(taskID, text string) (AgentSession, error) {
++	return resolveTaskIdentity(taskID, text, false)
++}
++
++// NotifyViaResume resumes the original session, or starts fresh for session.mode=none.
+ // Legacy failures and durable failures before a send attempt restore the pre-call
+ // text only while this operation owns the current revision and authorization;
+ // otherwise newer records are preserved and a conflict is reported. After an
+diff --git a/internal/launch/session.go b/internal/launch/session.go
+index 478198d..ad1da92 100644
+--- a/internal/launch/session.go
++++ b/internal/launch/session.go
+@@ -133,6 +133,10 @@ func sessionFrom(text string) (AgentSession, error) {
+ }
+ 
+ func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentSession, error) {
++	return resolveTaskIdentity(taskID, text, true, configs...)
++}
++
++func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*config.Config) (AgentSession, error) {
+ 	session, err := sessionFrom(text)
+ 	if err != nil {
+ 		return AgentSession{}, err
+@@ -150,7 +154,7 @@ func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentS
+ 		return AgentSession{}, launchError("launch.unsupported_agent", session.Agent)
+ 	}
+ 	definition := config.AgentFor(cfg, session.Agent)
+-	if definition.Session.Mode == "none" {
++	if requireResume && definition.Session.Mode == "none" {
+ 		return AgentSession{}, config.AgentResumeError(session.Agent)
+ 	}
+ 	if definition.Session.Mode == "discovered" && session.Reference == "" {
+@@ -380,7 +384,11 @@ func agentArguments(agent string, model map[string]string, kind string, session
+ 		if modelID != "" {
+ 			args = append(args, "--model", modelID)
+ 		}
+-		return append(args, "--trust", "--force", "--resume", session.Reference), nil
++		args = append(args, "--trust", "--force")
++		if definition.Session.Mode != "none" {
++			args = append(args, "--resume", session.Reference)
++		}
++		return args, nil
+ 	}
+ 	effortKey := scale + "_effort"
+ 	effort := model[effortKey]
+@@ -400,13 +408,21 @@ func agentArguments(agent string, model map[string]string, kind string, session
+ 		if resume {
+ 			flag = "--resume"
+ 		}
+-		return append(modelArgs, "--effort", effort, "--dangerously-skip-permissions", flag, session.Reference), nil
++		args := append(modelArgs, "--effort", effort, "--dangerously-skip-permissions")
++		if definition.Session.Mode != "none" {
++			args = append(args, flag, session.Reference)
++		}
++		return args, nil
+ 	case "grok":
+ 		flag := "--session-id"
+ 		if resume {
+ 			flag = "--resume"
+ 		}
+-		return append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions", flag, session.Reference), nil
++		args := append(modelArgs, "--effort", effort, "--permission-mode", "bypassPermissions")
++		if definition.Session.Mode != "none" {
++			args = append(args, flag, session.Reference)
++		}
++		return args, nil
+ 	default:
+ 		return nil, launchError("launch.unsupported_agent", agent)
+ 	}
+diff --git a/internal/menu/agent_probe_test.go b/internal/menu/agent_probe_test.go
+index 61a9034..496025b 100644
+--- a/internal/menu/agent_probe_test.go
++++ b/internal/menu/agent_probe_test.go
+@@ -40,3 +40,45 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
+ 		t.Fatalf("%s %s", out, diagnostic)
+ 	}
+ }
++
++func TestPanelCanConfigureUnselectedRenamedBuiltin(t *testing.T) {
++	h := newHarness(t)
++	t.Setenv("PATH", h.fakeBin)
++	t.Setenv(config.EnvConfig, h.configPath)
++	wrapper := filepath.Join(h.fakeBin, "kander-codex")
++	for _, name := range []string{"claude", "kander-codex"} {
++		if err := os.WriteFile(filepath.Join(h.fakeBin, name), []byte("#!/bin/sh\necho fixture\n"), 0700); err != nil {
++			t.Fatal(err)
++		}
++	}
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.Launcher = "foreground"
++	cfg.KanbanAgent = "claude"
++	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	s, err := NewSession(cfg, true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	found := false
++	for _, choice := range s.ExecutionChoicesFor("claude") {
++		if choice.Value == "codex" {
++			found = true
++		}
++	}
++	if !found {
++		t.Fatal("unavailable Codex cannot be selected for path editing")
++	}
++	s.SetExecutionAgent("small", "codex")
++	s.AgentExecutableFields("small")[0].Set(wrapper)
++	if _, err := s.Save(); err != nil {
++		t.Fatal(err)
++	}
++	got, err := config.Load(false)
++	if err != nil || config.AgentPath(got, "codex") != wrapper {
++		t.Fatalf("%+v %v", got, err)
++	}
++}
+diff --git a/internal/menu/options.go b/internal/menu/options.go
+index 6a0a470..a214ad9 100644
+--- a/internal/menu/options.go
++++ b/internal/menu/options.go
+@@ -88,19 +88,24 @@ func (s *Session) prepare(configValid bool) error {
+ 			))
+ 		}
+ 	}
++	firstExecution := ""
+ 	for _, name := range config.AgentNames(s.existing) {
+ 		state := s.agents[name]
+-		if agentUsable(state) || s.existing.Agents[name].Dialect != "" || s.existing.Agents[name].Args != nil {
+-			if labels[name] == "" {
+-				labels[name] = name
++		if labels[name] == "" {
++			labels[name] = name
++		}
++		label := labels[name] + config.Text("menu.not_currently_installed")
++		if agentUsable(state) {
++			if firstExecution == "" {
++				firstExecution = name
+ 			}
+-			s.exec = append(s.exec, Choice{Value: name, Label: labels[name] + " (" + state.Version + ")"})
++			label = labels[name] + " (" + state.Version + ")"
+ 		}
++		// Unavailable agents remain selectable so their executable can be configured.
++		s.exec = append(s.exec, Choice{Value: name, Label: label})
+ 	}
+-	if len(s.exec) == 0 && !s.existing.WelcomeComplete {
+-		return errors.New(config.Text(
+-			"menu.no_usable_agent_found_version_must_succeed_install_codex",
+-		))
++	if firstExecution == "" && !s.existing.WelcomeComplete {
++		return errors.New(config.Text("menu.no_usable_agent_found_version_must_succeed_install_codex"))
+ 	}
+ 	for _, name := range config.ReviewAgents {
+ 		if reviewerUsable(s.agents[name]) {
+@@ -124,7 +129,7 @@ func (s *Session) prepare(configValid bool) error {
+ 	}
+ 	if !s.existing.WelcomeComplete {
+ 		if !agentUsable(s.agents[cfg.KanbanAgent]) {
+-			cfg.KanbanAgent = s.exec[0].Value
++			cfg.KanbanAgent = firstExecution
+ 		}
+ 		for _, scale := range config.TaskScales {
+ 			if !agentUsable(s.agents[cfg.KanbanAgents[scale]]) {
+diff --git a/internal/process/process.go b/internal/process/process.go
+index 9be2a4d..0ae5d61 100644
+--- a/internal/process/process.go
++++ b/internal/process/process.go
+@@ -61,8 +61,8 @@ type ProcessInvocation struct {
+ 	ShellEnv map[string]string
+ }
+ 
+-// ResolveAgentProgram resolves the process entry point of the four current agents per platform.
+-// name is the executable name, such as codex / claude / grok / cursor-agent.
++// ResolveAgentProgram resolves built-in and configured executable names per platform.
++// name may be a PATH name (with or without extension) or an explicit path.
+ func ResolveAgentProgram(name string) *AgentProgram {
+ 	if !isWindows() {
+ 		found, err := exec.LookPath(name)
+@@ -72,10 +72,28 @@ func ResolveAgentProgram(name string) *AgentProgram {
+ 		return &AgentProgram{Path: found}
+ 	}
+ 
+-	if explicit := explicitProgram(name); explicit != nil {
+-		return explicit
++	if strings.ContainsAny(name, `/\`) {
++		if explicit := explicitProgram(name); explicit != nil {
++			return explicit
++		}
++		if filepath.Ext(name) == "" {
++			for _, suffix := range []string{".exe", ".cmd", ".bat"} {
++				if explicit := explicitProgram(name + suffix); explicit != nil {
++					return explicit
++				}
++			}
++		}
++		return nil
+ 	}
+-	if filepath.Ext(name) != "" {
++	if suffix := strings.ToLower(filepath.Ext(name)); suffix != "" {
++		if suffix != ".exe" && suffix != ".cmd" && suffix != ".bat" {
++			return nil
++		}
++		for _, candidate := range windowsPathCandidates(name, suffix) {
++			if usableFile(candidate, suffix == ".exe") {
++				return &AgentProgram{Path: candidate, Batch: suffix != ".exe"}
++			}
++		}
+ 		return nil
+ 	}
+ 
+diff --git a/internal/process/process_test.go b/internal/process/process_test.go
+index 733bc0c..1993f47 100644
+--- a/internal/process/process_test.go
++++ b/internal/process/process_test.go
+@@ -380,3 +380,43 @@ func TestShellInvocationUsesVariableFormForNonBatch(t *testing.T) {
+ 		t.Fatalf("直接 spawn 的 argv 被改写: %#v", direct.Argv)
+ 	}
+ }
++
++func TestWindowsSuffixedNamesSearchPATH(t *testing.T) {
++	withWindows(t)
++	root := t.TempDir()
++	t.Chdir(t.TempDir())
++	t.Setenv("PATH", root)
++	for _, suffix := range []string{".exe", ".cmd", ".bat"} {
++		name := "kander-test-wrapper" + suffix
++		path := filepath.Join(root, name)
++		if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
++			t.Fatal(err)
++		}
++		got := ResolveAgentProgram(name)
++		if got == nil || got.Path != path || got.Batch != (suffix != ".exe") {
++			t.Fatalf("%s: %+v", name, got)
++		}
++		if err := os.WriteFile(name, []byte("cwd shadow"), 0600); err != nil {
++			t.Fatal(err)
++		}
++		if got := ResolveAgentProgram(name); got == nil || got.Path != path {
++			t.Fatalf("PATH name selected cwd: %+v", got)
++		}
++		if got := ResolveAgentProgram(path); got == nil || got.Path != path {
++			t.Fatalf("absolute path: %+v", got)
++		}
++	}
++}
++
++func TestWindowsAbsoluteExtensionlessProgram(t *testing.T) {
++	withWindows(t)
++	root := t.TempDir()
++	path := filepath.Join(root, "wrapper.exe")
++	if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	t.Setenv("PATH", t.TempDir())
++	if got := ResolveAgentProgram(strings.TrimSuffix(path, ".exe")); got == nil || got.Path != path {
++		t.Fatalf("%+v", got)
++	}
++}
+diff --git a/internal/takeover/agent_definition_test.go b/internal/takeover/agent_definition_test.go
+index fd1db25..678a8d2 100644
+--- a/internal/takeover/agent_definition_test.go
++++ b/internal/takeover/agent_definition_test.go
+@@ -2,6 +2,7 @@ package takeover
+ 
+ import (
+ 	"github.com/dualface/kander/internal/config"
++	"github.com/dualface/kander/internal/launch"
+ 	"os"
+ 	"path/filepath"
+ 	"strings"
+@@ -32,3 +33,51 @@ func TestDismissResolvesOverriddenProcessName(t *testing.T) {
+ 		t.Fatalf("%s %v", out, err)
+ 	}
+ }
++
++func TestConfiguredAgentDismissAndCleanup(t *testing.T) {
++	for _, test := range []struct{ name, dialect, mode string }{
++		{"my-claude", "claude", "generated"}, {"my-grok", "grok", "generated"}, {"claude", "claude", "none"},
++	} {
++		for _, action := range []string{"dismiss", "cleanup"} {
++			t.Run(test.name+"-"+action, func(t *testing.T) {
++				root, _ := setupBoard(t)
++				t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
++				cfg := config.DefaultConfig()
++				cfg.WelcomeComplete = true
++				cfg.Agents = map[string]config.AgentDefinition{test.name: {Dialect: test.dialect, ProcessName: "node", Session: &config.AgentSessionDefinition{Mode: test.mode}}}
++				if _, err := config.Save(cfg); err != nil {
++					t.Fatal(err)
++				}
++				t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
++				t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
++				t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$1")
++				t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@1")
++				if action == "cleanup" {
++					got := Cleanup("tmux:$1:@1:%9", launch.AgentSession{Agent: test.name, Reference: "session-1"}, "tmux:$2:@2:%10", 61)
++					if !got.Cleaned {
++						t.Fatal(got)
++					}
++				} else {
++					id, path := makeDone(t, root, "configured-dismiss", "tmux:$1:@1:%9")
++					data, _ := os.ReadFile(path)
++					data = []byte(strings.Replace(string(data), "SESSION: claude ", "SESSION: "+test.name+" ", 1))
++					if err := os.WriteFile(path, data, 0600); err != nil {
++						t.Fatal(err)
++					}
++					_, _, err := capture(t, func() error { return commandDismiss(root, id, 61) })
++					if err != nil {
++						t.Fatal(err)
++					}
++				}
++				instruction, err := os.ReadFile(filepath.Join(root, "tmux.log.instruction"))
++				expected := "/exit"
++				if test.dialect == "grok" {
++					expected = "/quit"
++				}
++				if err != nil || !strings.Contains(string(instruction), expected) {
++					t.Fatalf("exit instruction=%s error=%v", instruction, err)
++				}
++			})
++		}
++	}
++}
+diff --git a/internal/takeover/dismiss.go b/internal/takeover/dismiss.go
+index 0259c19..c4376d8 100644
+--- a/internal/takeover/dismiss.go
++++ b/internal/takeover/dismiss.go
+@@ -54,7 +54,7 @@ func commandDismiss(root, taskID string, timeout float64) error {
+ 			"takeover.task_has_no_dismissible_terminal_container", windowValue,
+ 		)
+ 	}
+-	session, err := launch.ResolvedSession(entry.TaskID, text)
++	session, err := launch.ResolvedSessionIdentity(entry.TaskID, text)
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/internal/takeover/ops.go b/internal/takeover/ops.go
+index 1b2fad4..ba251ce 100644
+--- a/internal/takeover/ops.go
++++ b/internal/takeover/ops.go
+@@ -36,9 +36,13 @@ var agentExitCommands = map[string]string{
+ 	"cursor": "/quit",
+ }
+ 
+-// AgentExitCommand returns /exit for Claude/Codex or /quit for Grok/Cursor.
++// AgentExitCommand selects the exit command of the configured compatible dialect.
+ func AgentExitCommand(agent string) (string, error) {
+-	cmd, ok := agentExitCommands[agent]
++	definition, err := config.LoadAgent(agent)
++	if err != nil {
++		return "", err
++	}
++	cmd, ok := agentExitCommands[definition.Dialect]
+ 	if !ok {
+ 		return "", takeoverError("launch.unsupported_agent", agent)
+ 	}
+diff --git a/internal/takeover/takeover_test.go b/internal/takeover/takeover_test.go
+index ca1c85e..9f777dd 100644
+--- a/internal/takeover/takeover_test.go
++++ b/internal/takeover/takeover_test.go
+@@ -330,6 +330,7 @@ func TestCleanupForegroundIsNA(t *testing.T) {
+ }
+ 
+ func TestAgentExitCommands(t *testing.T) {
++	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+ 	exit, err := AgentExitCommand("claude")
+ 	if err != nil || exit != "/exit" {
+ 		t.Fatal(exit, err)

@@ -1,0 +1,17 @@
+{
+  "submitted_revision": 18,
+  "record_id": "binding-r1-pm-03",
+  "run_id": "g3-pm-r1",
+  "finding_id": "PM-03",
+  "batch_id": "g3-batch-one",
+  "task_id": "20260908-dispatch-evidence-binding-task",
+  "author": "codex",
+  "recorded_at": "2026-09-07T21:58:13.349500816Z",
+  "report_hash": "17caf97692b9cd02007b1999905a5e2f4f5f678a18b00a5b7d8e0539c331e44c",
+  "original": "Observed，置信度高。订阅中文文档和英文协议把摘要 confirm_by 描述为原意图期限，但 wrap-up-only 新 epoch 实际使用专用 grant 的新接受期限。消费者依文档比对 intent 与 snapshot 会误判合法恢复为续期。最小修复：统一描述当前 epoch 的实际接受期限，明确普通 intent 与专用 grant 的来源，以及同 epoch 重试不续期。",
+  "status": "fixed",
+  "basis": "合并根因 PM-03/QA-03，来源 (g3-pm-r1, PM-03) 与 (g3-qa-r1, QA-03)，分别保留原件绑定；独立核实后 confirmed，现 fixed。git show 0b304a8399cdbc8db2c005e390afd3f6127532af:\u003cpath\u003e 全部退出 0：internal/board/dispatch_snapshot.go:59-62 保留 Input.CreatedAt 并调用 dispatchAcceptBefore；internal/board/dispatch_wrapup.go:85-89 优先取 WrapUpAuthority.ConfirmBy；internal/liveness/subscribe_dispatch.go:22-38 按摘要期限计算 overdue/唤醒。该目标 docs/subscription-facts.md:43-46,55-56 及 rules/KANDER-KANBAN-RULES.md:312,314 却称原期限，原意图过期后授予新 epoch 即触发误导。修复统一当前 epoch 有效接受期限、普通意图/专用 grant 来源、created_at/age_seconds 来源与同 epoch 重试/订阅重启不续期。仅文档对齐既有行为，属 documentation；完整核实输出见 review-fix-r1-validation.txt。",
+  "fix_commit": "287161673bf3f11a865f2e8a40a023a65bdc1f65",
+  "mechanical": "documentation",
+  "verification": "最终提交 287161673bf3f11a865f2e8a40a023a65bdc1f65：go build ./...、go vet ./... 均退出 0；go test -json -count=1 ./...：19 包、1001 测试项通过，1 项跳过（TestWindowsConsoleLauncher）；go test -race -json -count=1 ./internal/board ./internal/liveness：2 包、491 测试项通过，0 项跳过；测试统计含子用例，两条测试命令均退出 0。TestDispatchWrapUpSnapshotUsesCurrentGrantDeadline 通过，覆盖原意图已过期、新 grant 期限仍有效且原期限不变。逐句对照 snapshotDispatch、dispatchAcceptBefore、summarizeDispatch、dispatchWait 和 docs/durable-dispatch.md:97；本轮仅 docs/subscription-facts.md 与 rules/KANDER-KANBAN-RULES.md，8 行增加、6 行删除。"
+}

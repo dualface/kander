@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "",
+    "run_id": "start-dialog-title-qa-3",
+    "batch_id": "start-dialog-title-batch",
+    "task_ids": [
+      "20260909-start-dialog-title-task"
+    ],
+    "role": "QA",
+    "reviewer": "claude",
+    "model": "opus",
+    "effort": "high",
+    "cwd": "/home/dualf/works/kander/worktrees/start-dialog-title",
+    "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+    "commit": "c54c6d95d3080c38bd57ab02bbd95b2fca63da98",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "cdce611dd1b353e80089a4b36cfa71e95ad025040ab5ab31185a6655b68733a0",
+      "task-context.md": "a9074b145de3ba54f5db96fb281bcaecdd5b27a6b9870bb8323e1e4f05df905b"
+    }
+  },
+  "sidecar_hash": "e7ad2b252c94c7ff0adf4d163ac7f1f21fa6bdcbfbebcb5d7531244d96271ec8",
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "1daed2f26c962dfc286609d90107d1983b7d5fd20238ceb342569c54ac347226",
+    "output.raw": "24497e4903074f85abcaa027ba38018cb89c60100da95c441640147a4669ac49",
+    "prompt.txt": "f74ceb04864f7a56b24a4af046610a31390299f21a414a729bf7dca7ef1e5953",
+    "report.md": "163d41bfc3911d63889b1dd94a329eb2720737b1c46a30ec712d9c779a9190e3",
+    "review-context.md": "cdce611dd1b353e80089a4b36cfa71e95ad025040ab5ab31185a6655b68733a0",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "a9074b145de3ba54f5db96fb281bcaecdd5b27a6b9870bb8323e1e4f05df905b"
+  }
+}

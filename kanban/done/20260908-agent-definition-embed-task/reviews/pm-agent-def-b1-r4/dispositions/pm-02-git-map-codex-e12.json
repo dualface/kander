@@ -1,0 +1,21 @@
+{
+  "authorization": {
+    "dispatch_id": "codex-agentdef-dispositions-embed-r2-20260909",
+    "epoch": 12
+  },
+  "submitted_revision": 102,
+  "record_id": "pm-02-git-map-codex-e12",
+  "previous_record_id": "pm-02-fix-r1",
+  "run_id": "pm-agent-def-b1-r4",
+  "finding_id": "PM-02",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-definition-embed-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T13:23:01.322749859Z",
+  "report_hash": "9a028fb50ced33e99f72130edee7e77431badd5fd6397814d6598ed3e3957343",
+  "original": "只声明 path + dialect 的执行包装器被自动列为 reviewer，且审核直接使用该包装器。AgentFor 在用户定义未声明审核字段时从 dialect 的嵌入定义回填 args.review 与整个 review 块，于是 HasReviewTemplate 对一个纯执行包装器返回 true：该名字进入 ReviewAgentNames、被 validateReviewerChoice 接受写入 reviewers.\u003crole\u003e、出现在选项面板候选列表；随后 ReviewExecutable 因该名字不在 ExecutionAgents 中而回落到用户声明的 path，执行包装器成为审核可执行文件。这与卡片 A2 的两条契约冲突：(1)「reviewers.\u003crole\u003e 与 kander review [agent] 接受任何定义了 args.review 的 agent」——继承而来的模板不是该 agent 定义的；(2) A2 保留的隔离「用户在 agents.\u003cname\u003e.path 对内置 agent 的覆盖只影响执行, 不进入审核」及其 DISCUSSION 理由「自定义 agent 本来就由用户声明可执行路径, 不存在『包装器被意外用于审核』的顾虑」——此处用户只声明了执行覆盖，从未编写审核定义，A2 THREAT_MODEL 里「只读性由定义作者负责」的责任转移前提因此不成立：kander 会用内置 reviewer 的只读 argv 去跑一个作者未按只读语义审阅过的包装器。最小修复：HasReviewTemplate / ReviewAgentNames 只认用户定义自身声明了 args.review（或 review）的自定义 agent，dialect 回填仍可供已声明者补全缺省字段。",
+  "status": "fixed",
+  "basis": "独立核验 HasReviewTemplate 对内置名读取嵌入定义，对自定义名仅认可用户显式审核声明；path+dialect helper 从 ReviewAgentNames、Validate reviewer 及面板候选中排除。旧 eacc14c 与 1f1924b 的 git patch-id --stable 均 bf859c4d04dd1271543ddcbf33f04fc77d7ffd12，三处对应回归测试在该历史提交通过。组目标上的后续 allowReviewInherit 收紧保留此修复。 原记录中的 fix_commit 不是组目标祖先（git merge-base --is-ancestor 退出 1）；新 fix_commit 是组目标祖先（退出 0），并位于原审核提交之后。本次仅追加 Git 证据映射，原 status/original/report_hash/mechanical 与旧作者原件保留。",
+  "fix_commit": "1f1924b7c991cf94ee0bb0bd6a221c73031d45a5",
+  "verification": "从 1f1924b7c991cf94ee0bb0bd6a221c73031d45a5 的 git archive 解出未修改源码，执行 go test -json ./internal/config ./internal/menu -run ^(TestReviewAgentNamesFollowsDefinitions|TestCustomAgentsModelsAndRepair|TestDoctorAndPanelProbeAgentOverride)$ -count=1；退出 0，3 项测试/子测试通过，0 失败。日志见 verification/disposition-map-12.md 及其引用的历史提交日志。"
+}

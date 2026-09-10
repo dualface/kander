@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "options-flow-plan",
+  "author": "codex",
+  "basis": "用户授权执行本单卡；AGENTS.md 要求 PM/QA，安全角色 N/A",
+  "cwd": "/home/dualf/works/kander/worktrees/options-workflow-flowchart",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-options-workflow-flowchart-task"
+  ],
+  "cycles": {
+    "20260908-options-workflow-flowchart-task": "a7601a66958ece101742fd6380aa5ed9648a0a396713676c408dad7cd6d510e3"
+  },
+  "batches": [
+    {
+      "batch_id": "options-flow-batch",
+      "task_ids": [
+        "20260908-options-workflow-flowchart-task"
+      ],
+      "base": "781aa0dcde99eefe0d7ccea84f5a138f414e831c",
+      "target_commit": "3dc625f9191d670f27da6879762fd638e52cf7c1",
+      "requirements": {
+        "CSA": "N/A: 本仓库 AGENTS.md 明确安全角色不运行",
+        "Hacker": "N/A: 本仓库 AGENTS.md 明确安全角色不运行",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-08T03:50:19.951953087Z"
+}

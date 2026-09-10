@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 16,
+  "record_id": "journal-qa-001-fixed",
+  "run_id": "journal-qa-20260908-r1",
+  "finding_id": "QA-001",
+  "batch_id": "journal-partition-20260908",
+  "task_id": "20260908-journal-pending-partition-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T05:05:46.025621208Z",
+  "report_hash": "cefedc167a9ca0537c7759938e28e3b96828ac9ae7fe44369f68b15e20906bb4",
+  "original": "Inferred，高置信度：新增日志提示与清理告警在 board 内直接写 stderr。旧布局看板的 TUI 定时刷新反复触发提示；后台启动遇到清理失败也直接输出，绕过 Bubble Tea 与启动结果告警通道，可能扰乱终端画面。违反后台启动告警不得直接写 stdout/stderr 的既有契约。最小修复：通过结构化结果或调用级接收器传递告警，由 CLI 输出 stderr、TUI 经消息或 pendingWork 展示；补充无直接输出且告警可见、提交成功的集成断言。",
+  "status": "fixed",
+  "basis": "已独立沿 board payload、launch Start/PreviewStart、TUI runTaskStart 和回滚路径核对，确认原 stderr 绕行；现由操作级 WarningLog、版本游标和结构化 Warnings 传递，CLI 保留默认 stderr，TUI 通过现有展示通道消费。",
+  "fix_commit": "1e4886a30d2d047175bebb18f71947795f42304d",
+  "verification": "1e4886a30d2d047175bebb18f71947795f42304d: go test -json ./...；go test -race ./internal/board ./internal/launch ./internal/tui -run Journal|StartCollects 均退出 0；新增启动成功/回滚、预览、刷新、详情及 backlog 迁移集成断言，stdout/stderr 为空，告警可见，提交/回滚状态正确。Windows 三包交叉编译通过，原生未执行。"
+}

@@ -1,0 +1,22 @@
+$ git rev-parse develop
+26edb64fcfb654a96afedc30bbaea27e5e918ec7
+$ git rev-parse origin/develop
+26edb64fcfb654a96afedc30bbaea27e5e918ec7
+$ git rev-parse HEAD
+26edb64fcfb654a96afedc30bbaea27e5e918ec7
+$ git merge-base --is-ancestor 287161673bf3f11a865f2e8a40a023a65bdc1f65 develop
+exit=0
+$ git merge-base --is-ancestor 287161673bf3f11a865f2e8a40a023a65bdc1f65 origin/develop
+exit=0
+$ git merge-base --is-ancestor develop origin/develop
+exit=0
+$ git merge-base --is-ancestor origin/develop develop
+exit=0
+主工作树 git status --porcelain：无输出。
+fetch origin：exit=0。
+git worktree remove /home/dualf/works/kander/worktrees/dispatch-evidence-binding：exit=0。
+git branch -d dispatch-evidence-binding：exit=0。
+git push origin --delete dispatch-evidence-binding：exit=0。
+路径不存在；本地与远端跟踪分支 show-ref --verify --quiet 均 exit=1（不存在）。
+kander move 20260908-dispatch-evidence-binding-task done --result completed：exit=0，路径 kanban/done/20260908-dispatch-evidence-binding-task。
+kander check 20260908-dispatch-evidence-binding-task：exit=0，输出 ok: 1 tasks。

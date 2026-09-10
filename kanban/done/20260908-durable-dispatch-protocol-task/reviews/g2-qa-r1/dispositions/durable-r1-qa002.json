@@ -1,0 +1,17 @@
+{
+  "submitted_revision": 25,
+  "record_id": "durable-r1-qa002",
+  "run_id": "g2-qa-r1",
+  "finding_id": "QA-002",
+  "batch_id": "g2-batch-one",
+  "task_id": "20260908-durable-dispatch-protocol-task",
+  "author": "codex",
+  "recorded_at": "2026-09-07T19:49:50.949756458Z",
+  "report_hash": "ff009fcfcf3f24e16298748e769b36e91f3e3a0774e60041d456da2f04497e6c",
+  "original": "Observed，置信度高：NotifyViaResume 注释声称失败时只要仍持有当前 revision 就恢复原正文，但本范围新增的持久模式不确定投递及校验失败分支直接返回并保留资源，即使没有并发更新。注释误导调用者判断失败后的 WINDOW 和任务文件状态。最小修复：更新注释，明确普通回滚条件与持久模式发送后保留资源的例外；无需改运行逻辑。",
+  "status": "fixed",
+  "basis": "confirmed → fixed。合并根因：g2-pm-r1/PM-004 与 g2-qa-r1/QA-002 是同一条 NotifyViaResume 陈旧注释，计一个根因、同一修复；为保留两份来源身份分别提交绑定记录。逐段核实目标 ff04a3b1b2320f4e7ad234fb0ebf6745f70bb9fe 的 internal/launch/notify_resume.go:29-31 与 108-121：注释无条件承诺 revision 回滚，持久不确定投递/验证失败分支实际保留资源。最终 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3 的同文件:29-34 已说明发送前回滚受 revision/authorization 限制，持久发送不确定或启动后校验失败保留执行者、WINDOW、正文和任务文件；运行逻辑未因注释处置改动。",
+  "fix_commit": "ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3",
+  "mechanical": "documentation",
+  "verification": "人工逐段核对 NotifyViaResume 注释与实际错误分支；既有 TestDurableLaunchErrorRetainsUnknownExecutorAndPayload 和 TestDispatchFailedSendKeepsConsumedNewBody 通过，未为注释新增重复测试。 最终提交 ec6fdb4cebae1f33ba6241f11bd3b13f80535fe3：go test -json -count=1 ./... 退出 0，19 包、922 个测试/子测试通过、1 跳过、0 失败；go test -race -json -count=1 ./internal/launch ./internal/notify ./internal/board ./internal/window 退出 0，4 包、400 个测试/子测试通过、1 跳过、0 失败；go build ./...、go vet ./... 退出 0。"
+}

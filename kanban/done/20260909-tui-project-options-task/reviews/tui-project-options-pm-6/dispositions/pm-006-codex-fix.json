@@ -1,0 +1,17 @@
+{
+  "submitted_revision": 70,
+  "record_id": "pm-006-codex-fix",
+  "previous_record_id": "pm-006-confirmed",
+  "run_id": "tui-project-options-pm-6",
+  "finding_id": "PM-006",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T12:03:33.675484631Z",
+  "report_hash": "35ad3fe5d6c8ec53fe25b695ee7d3b0d0b7138510abb44d5398c020a9e60f2fe",
+  "original": "Inferred，高置信度，部分修复。违反 task-spec.md ACCEPTANCE_CRITERIA 第5条继承值随基础配置变更更新的要求。launcher 和 doctor 已同步 scopeRaw，但 Global TUI 偏好仍绕过同步。Global 修改主题并按 Esc 后切 Project，未覆盖主题及恢复继承仍采用旧值，尽管基础文件已保存新主题。最小修复：SyncTUI 同步预览文档的完整 tui section；验证 Global 主题编辑、切 tab、恢复继承与重读一致。",
+  "status": "fixed",
+  "basis": "SyncTUI 将完整 TUI 字段通过 OverlaySet 同步到 scopeRaw，保留 JSON 数值语义。切到 Project 以及恢复继承都获得新 Global 主题。TestGlobalTUISyncUpdatesProjectInheritance 通过。",
+  "fix_commit": "f4d4eaad922231bc161bfe565feeaa76fd978fa8",
+  "verification": "go test ./internal/menu ./internal/tui -count=1 -timeout 240s 通过；五项定向回归通过；完整测试记录见 IMPLEMENTATION。"
+}

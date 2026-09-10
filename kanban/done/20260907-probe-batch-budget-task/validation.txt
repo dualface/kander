@@ -1,0 +1,80 @@
+最终交付：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5
+基线：7e6fe2073ff007a6639a2517f4c7874f8e420bd1
+平台：Linux；以下测试以 -count=1 在最终交付提交实际运行。计数包含子测试。
+
+$ go test -json -count=1 ./...
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；测试事件：{'pass': 783, 'skip': 1, 'fail': 0}；通过包数：19
+github.com/dualface/kander/internal/cli: pass; 0.018s
+github.com/dualface/kander/internal/process: pass; 0.021s
+github.com/dualface/kander/internal/version: pass; 0.002s
+github.com/dualface/kander/rules: pass; 0.004s
+github.com/dualface/kander/internal/i18n: pass; 0.096s
+github.com/dualface/kander/cmd/kander: pass; 0.106s
+github.com/dualface/kander/internal/window: pass; 0.137s
+github.com/dualface/kander/internal/config: pass; 0.335s
+TestBatchMixedCommandsShareTotalBudget: pass; 0.41s
+TestBatchDefaultConcurrencyCancellationJoinsWorkers: pass; 0.02s
+github.com/dualface/kander/internal/fs: pass; 0.507s
+TestBatchEarlierCallerDeadlineWins: pass; 0.21s
+TestBatchUncollectedAndReadErrors: pass; 0s
+github.com/dualface/kander/internal/takeover: pass; 0.619s
+github.com/dualface/kander/internal/probe: pass; 0.779s
+TestCheckCollectsBatchAndPreservesOutputOrder: pass; 0.41s
+TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate: pass; 0.01s
+TestBatchPreservesDriftAndTmuxRuntimeUnknown: pass; 0s
+github.com/dualface/kander/internal/install: pass; 1.098s
+github.com/dualface/kander/internal/notify: pass; 2.297s
+github.com/dualface/kander/internal/liveness: pass; 5.214s
+github.com/dualface/kander/internal/tui: pass; 5.617s
+TestWindowsConsoleLauncher: skip; 0s
+github.com/dualface/kander/internal/launch: pass; 9.837s
+github.com/dualface/kander/internal/menu: pass; 10.975999999999999s
+github.com/dualface/kander/internal/board: pass; 19.229s
+github.com/dualface/kander/internal/review: pass; 35.41s
+
+$ go test -race -json -count=1 ./internal/liveness ./internal/probe ./internal/i18n ./internal/launch ./internal/notify ./internal/takeover
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；测试事件：{'pass': 211, 'skip': 1, 'fail': 0}；通过包数：6
+TestBatchMixedCommandsShareTotalBudget: pass; 0.41s
+TestBatchDefaultConcurrencyCancellationJoinsWorkers: pass; 0.02s
+TestBatchEarlierCallerDeadlineWins: pass; 0.2s
+TestBatchUncollectedAndReadErrors: pass; 0s
+TestCheckCollectsBatchAndPreservesOutputOrder: pass; 0.35s
+TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate: pass; 0.01s
+TestBatchPreservesDriftAndTmuxRuntimeUnknown: pass; 0s
+github.com/dualface/kander/internal/i18n: pass; 1.6600000000000001s
+github.com/dualface/kander/internal/takeover: pass; 1.796s
+github.com/dualface/kander/internal/probe: pass; 2.1s
+github.com/dualface/kander/internal/notify: pass; 3.7439999999999998s
+github.com/dualface/kander/internal/liveness: pass; 7.001s
+TestWindowsConsoleLauncher: skip; 0s
+github.com/dualface/kander/internal/launch: pass; 12.561s
+
+$ go build ./...
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+$ go vet ./...
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+$ git diff --check 7e6fe2073ff007a6639a2517f4c7874f8e420bd1 HEAD
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+$ gofmt -l internal/liveness/batch.go internal/liveness/batch_test.go internal/liveness/observation.go internal/liveness/check.go internal/liveness/classify.go internal/liveness/types.go
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+$ GOOS=windows GOARCH=amd64 go build ./...
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+$ GOOS=windows GOARCH=amd64 go test -c -o /tmp/probe-batch-liveness-windows.test.exe ./internal/liveness
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+$ git status --short
+提交：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5；exit=0；无输出。
+
+最终提交 021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5：wc -l 输出 batch.go 80、batch_test.go 295、observation.go 30、check.go 132、classify.go 250、types.go 67；全部低于 1000 行。
+最终提交 021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5：冲突标记 rg 检查无匹配（exit=1，表示未找到）。
+最终提交 021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5：人工逐项检查 git diff 7e6fe2073ff007a6639a2517f4c7874f8e420bd1 HEAD，文档/注释同步、无新增死代码、7 个新增测试行为不重复。ValidFor 是供消费方核验身份的公开 API，当前直接消费者为回归测试；订阅消费留给后续卡。
+
+历史失败：b8ea5da7f3f8e64b891a4eb74a396d19860171ef 的全量 -count=1 运行中，TestBatchDefaultConcurrencyCancellationJoinsWorkers 输出 `owned probe process  remains: <nil>`，exit=1。夹具仅凭 PID 文件存在便取消，可能读到尚未写入的空文件。最终提交等待所有 PID 有效再取消，并校验 PID 内容；没有放宽期限或删除进程消失断言。最终提交的全量和 race 复测均通过，以上为取代旧证据的最终结果。
+
+验证缺口：原生 Windows、真实 tmux/herdr/Agent 未执行。交叉构建与假 CLI 不代表这些平台实机通过。
+PM/QA：由主控组级审核，当前未执行；CSA/Hacker：按仓库 AGENTS.md 为 N/A。

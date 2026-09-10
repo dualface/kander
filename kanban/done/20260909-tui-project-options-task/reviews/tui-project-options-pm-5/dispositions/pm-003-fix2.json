@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 49,
+  "record_id": "pm-003-fix2",
+  "run_id": "tui-project-options-pm-5",
+  "finding_id": "PM-003",
+  "batch_id": "tui-project-options-batch",
+  "task_id": "20260909-tui-project-options-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:20:56.861013304Z",
+  "report_hash": "1404be6167608f1533a4e2af42a75468460bac7f905f412069fc36d58d13b6fb",
+  "original": "Inferred，高置信度，部分修复。继承标题与恢复入口已刷新，但修复破坏模型编辑的输入位置保留。Project 首次修改继承模型时重建整个输入，仅恢复字段焦点；在 model-a 开头逐字输入 new-，首个 n 后光标跳到末尾，后续字符写入错误位置。违反 USER_DECISIONS 的字段编辑要求及原修复要求中的输入位置保留。最小修复：保留原输入组件，或重建时恢复光标及输入状态，并以 Home 后连续字符事件验证最终文本。",
+  "status": "fixed",
+  "basis": "Same as QA-004: model inputs keep the live huh.Input so the cursor stays put.",
+  "fix_commit": "35170cacf4ae68bf5f79bb6cf67e638524b37bee",
+  "verification": "Read cited paths on 35170cacf4ae68bf5f79bb6cf67e638524b37bee. TestOverlayRuleEditSyncsEffectiveConfig, TestUnsavedGlobalLauncherUpdatesProjectInherit, TestModelOverrideDoesNotRebuildInput pass. go test ./internal/config ./internal/menu ./internal/tui -count=1 pass; go test ./... -count=1 -timeout 240s pass at that commit."
+}

@@ -1,0 +1,22 @@
+{
+  "authorization": {
+    "dispatch_id": "49805c2d6b05f193f404fbbded156234",
+    "epoch": 10
+  },
+  "submitted_revision": 70,
+  "record_id": "pm01-author-r4-3-codex",
+  "previous_record_id": "pm01-author-r4-2",
+  "run_id": "tui-theme-pm-r4",
+  "finding_id": "PM-01",
+  "batch_id": "tui-theme-batch-one",
+  "task_id": "20260909-tui-truecolor-palette-task",
+  "author": "codex",
+  "recorded_at": "2026-09-09T13:16:39.360382069Z",
+  "report_hash": "202ccdaf13c1e00fc006f3d550a151ddf18e61ec2895389ef3a76462cf56d9cc",
+  "original": "Observed，置信度高：PM-01 部分修复。真实终端交互及目视记录已覆盖六主题五界面与 Solarized 四组合，无需重复走查。但 palette 卡契约明确要求将人工四组合结果记入 IMPLEMENTATION；该节仍只记录 PTY，并称其覆盖第八项验收，未引用新增人工结果。剩余影响是验收记录未闭合，不是已观察到的显示故障。最小修复：在 palette 卡 IMPLEMENTATION 补记人工四组合结果，引用现有走查记录和提交 6d882fb，明确 PTY 属辅助证据；不要求 palette 卡承担六主题五界面。",
+  "status": "fixed",
+  "basis": "独立核对 PM-r4 的完整原文后确认：该轮已经接受真实终端视觉证据，剩余 PM-01 仅为 IMPLEMENTATION 未同步引用事实的文档不一致，不包含显示缺陷或尚未执行的人工验收。逐句核对当前 IMPLEMENTATION 与走查文档，已记录 Solarized 四组合、真实终端环境、既有走查提交，明确 PTY 只作辅助且六主题五界面归 presets 卡。461b8c3 在原审核提交 6d882fb 之后仅增加相应文档引用说明，符合 KANDER-REVIEW-RULES.md Fixed archiving 的 documentation 机械项。本记录仅补充作者机械分类，不代替主控独立 assessment、批次推进或闭合。",
+  "fix_commit": "461b8c3516f5864c67912a6293490851adb5d698",
+  "mechanical": "documentation",
+  "verification": "git status --short 输出为空。git diff 6d882fbbf8e086e695728c02594d0d4899bfae82 461b8c3516f5864c67912a6293490851adb5d698 完整输出只含 internal/tui/testdata/theme-live-walkthrough.md 增加 5 行：引用本卡 IMPLEMENTATION、明确 PTY 辅助证据及 presets 验收边界；git diff --check 同一范围退出 0。当前卡 IMPLEMENTATION 的四组合及人工验收引用与文档 Terminal、Solarized four combinations 两节逐项一致。PM-r4/report.md SHA-256 等于所绑定 report_hash，原文与结构化 PM-01 text 完全一致。任务 HEAD、本地组分支及远端跟踪组分支均指向同一交付 461b8c3516f5864c67912a6293490851adb5d698。此轮未更改代码，未重新执行测试或人工走查，沿用同 SHA 的已记录验证结果。"
+}

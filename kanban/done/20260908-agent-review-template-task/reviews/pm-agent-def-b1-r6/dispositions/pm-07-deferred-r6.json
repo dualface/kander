@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "187bcf576d52bf3e9fb689554f2211d7",
+    "epoch": 6
+  },
+  "submitted_revision": 70,
+  "record_id": "pm-07-deferred-r6",
+  "run_id": "pm-agent-def-b1-r6",
+  "finding_id": "PM-07",
+  "batch_id": "agent-def-batch-one",
+  "task_id": "20260908-agent-review-template-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T07:39:31.434366324Z",
+  "report_hash": "ec7662685ab9158edf6d770dff79af18aee23f2c1d6769f4dfb82f17860069ab",
+  "original": "[outside-fix-range] 卡片 A2 的 EXPECTED_OUTCOME 写明「本卡结束时 review 包内不再有按内置名的业务分支」，但 reviewerFromConfig 仍以字面量 \"codex\" 作为兜底返回值（配置加载失败，或 reviewers.\u003crole\u003e 指向的 agent 不再定义审核模板时）。该函数在本次修复区间 e1c0127..8f8f0cd 内未被改动，作者上一轮已 deferred，维持非门禁。建议改为 config 侧的默认 agent 名或 ReviewAgentNames(cfg) 的首项。",
+  "status": "deferred",
+  "basis": "非门禁 recommend，且 [outside-fix-range]。已独立核验 internal/review/settings.go:287-296 的 reviewerFromConfig 仍有两处 return \"codex\"；git log / git diff e1c01277075599cb0395bf62f16855cebf04b060..8f8f0cd0627fca918e7383ea4c3ebd6962864652 -- internal/review/settings.go 为空。本轮按规则只处置不改代码。"
+}

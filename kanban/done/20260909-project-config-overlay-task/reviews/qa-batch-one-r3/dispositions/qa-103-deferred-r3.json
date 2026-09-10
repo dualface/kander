@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r3-c2",
+    "epoch": 4
+  },
+  "submitted_revision": 61,
+  "record_id": "qa-103-deferred-r3",
+  "run_id": "qa-batch-one-r3",
+  "finding_id": "QA-103",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T20:19:22.781842839Z",
+  "report_hash": "bda947562e9303b98458d1ddc16fa7efc5af5d627130ed3d3e21600c19a532d8",
+  "original": "本轮未改动,现象未变。inspectOverlayCandidate 对同一路径做了两次 reparse 判定:overlayPathSafe 调用的 rejectLeafReparse 内部已执行 os.Lstat + fs.IsReparsePoint,紧接着函数体又重复了一次,该第二次判定在非 Windows 分支上永远不会命中,读代码时容易误以为两者防护的是不同对象。建议删去重复段,只保留 Lstat 结果用于 IsRegular 判断,Windows 的逐段校验仍由 overlayPathSafe 承担。",
+  "status": "deferred",
+  "basis": "延续 qa-batch-one-r1/QA-103（记录 reviews/qa-batch-one-r1/dispositions/qa-103-deferred-r1.json）。独立核实 4832ee9 overlay.go:118 overlayPathSafe 已 rejectLeafReparse（paths.go Lstat+IsReparsePoint），inspectOverlayCandidate 随后仍重复 Lstat + IsReparsePoint。非 Windows 第二次判定不增加防护。现象未变。本轮 disposition-only 不改。"
+}

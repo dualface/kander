@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 26,
+  "record_id": "pm-005-author-1",
+  "run_id": "fa588704161fcecde278f409daf9db27",
+  "finding_id": "PM-005",
+  "batch_id": "20260909-options-reload-batch-1",
+  "task_id": "20260909-options-reload-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:28:50.60464567Z",
+  "report_hash": "09bcded27dbccdbdfbf8eae2d293b05b91b348602ea1b6ca8085414e2d748ac8",
+  "original": "Inferred，高置信度：捕获 overlay 语言的新路径绕过 welcome_complete。作用域配置有效但 welcome_complete=false、执行及审核代理可用、overlay 为 {\"language\":\"ja\"}、环境为英语且未传 --lang 时，Options 成功打开并绑定日语；此前 explicitConfigLanguage 会清除绑定，使用环境语言。违反 task-spec.md:37、51 的有效语言及既有语义契约。最小修复：计算捕获语言时检查本次加载的 existing.WelcomeComplete；未完成则返回空绑定，保留 CLI／环境回退。",
+  "status": "fixed",
+  "basis": "Verified at 5169b6a3c2c7d26710641c5bde46723aaab7a556: loadOptionsSession only captures overlay/scope language when existing.WelcomeComplete is true. TestOpenOptionsIgnoresOverlayLanguageBeforeWelcome uses ja overlay with welcome_complete=false and English locale and asserts ResolveLanguage stays en.",
+  "fix_commit": "5169b6a3c2c7d26710641c5bde46723aaab7a556",
+  "verification": "go test ./internal/tui -count=1 and go test ./... at 5169b6a3c2c7d26710641c5bde46723aaab7a556: ok"
+}

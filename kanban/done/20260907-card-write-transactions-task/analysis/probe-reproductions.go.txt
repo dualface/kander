@@ -1,0 +1,25 @@
+package probe
+
+import (
+	"context"
+	"errors"
+	"runtime"
+	"testing"
+	"time"
+)
+
+func TestAuditDescendantOutputOutlivesProbeDeadline(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX child process fixture")
+	}
+	start := time.Now()
+	_, err := defaultRun("/bin/sh", []string{"-c", "/bin/sleep 0.25 & wait"}, 30*time.Millisecond)
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error: %v", err)
+	}
+	if elapsed < 150*time.Millisecond {
+		t.Fatalf("descendant did not hold output: %s", elapsed)
+	}
+	t.Logf("30ms probe deadline returned after %s because a descendant retained output pipes", elapsed)
+}

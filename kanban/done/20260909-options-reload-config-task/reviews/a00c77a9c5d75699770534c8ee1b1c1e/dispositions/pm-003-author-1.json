@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 18,
+  "record_id": "pm-003-author-1",
+  "run_id": "a00c77a9c5d75699770534c8ee1b1c1e",
+  "finding_id": "PM-003",
+  "batch_id": "20260909-options-reload-batch-1",
+  "task_id": "20260909-options-reload-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:14:30.149974997Z",
+  "report_hash": "f8d3bab70b93b9022dbe4dc8e422f34982103669bcd230e9571cd584ec85d023",
+  "original": "Inferred，高置信度：移除 ApplyOverlay 后，overlay 值校验失败不再进入 loadErr。有效作用域配上 {\"language\":\"invalid\"} 时，ReadOverlay 成功，后续语言绑定吞掉 Validate 错误并回退环境；Options 仍正常打开并显示 overlay 提示。违反 task-spec.md:25、37 的失败可见及有效语言要求。最小修复：校验本次读取的合并对象，将错误传入 sessionResult.err，并保留显式语言键和初始化状态语义。",
+  "status": "fixed",
+  "basis": "Verified at fb61f8672ea32ce8ab271a7420a16df2f3686a21: loadOptionsSession calls ApplyOverlay after ReadOverlay so invalid overlay values fail the open. TestOpenOptionsInvalidOverlayLanguageIsLoadError covers language=invalid.",
+  "fix_commit": "fb61f8672ea32ce8ab271a7420a16df2f3686a21",
+  "verification": "go test ./internal/tui ./internal/config -count=1 at fb61f8672ea32ce8ab271a7420a16df2f3686a21: ok; go test ./...: 21 packages ok"
+}

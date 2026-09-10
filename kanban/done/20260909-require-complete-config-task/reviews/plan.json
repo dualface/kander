@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "require-complete-config",
+  "author": "grok",
+  "basis": "Feature development hits the review whitelist; large-scale PM is required, QA is auto, CSA and Hacker are N/A per repository AGENTS.md and review_stages.large skip",
+  "cwd": "/home/dualf/works/kander/worktrees/require-complete-config",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260909-require-complete-config-task"
+  ],
+  "cycles": {
+    "20260909-require-complete-config-task": "6b9b6f75fae5369539d3ebf699f5d78c4d554ef18d12785c8982036fa65899d4"
+  },
+  "batches": [
+    {
+      "batch_id": "require-complete-config-1",
+      "task_ids": [
+        "20260909-require-complete-config-task"
+      ],
+      "base": "211c104282f181d5fabe6cc49b03583b0bed269f",
+      "target_commit": "a8d5a6f86e8a53e7b10826e392c70903875835d9",
+      "requirements": {
+        "CSA": "N/A: repository AGENTS.md marks CSA N/A; review_stages.large.CSA is skip",
+        "Hacker": "N/A: repository AGENTS.md marks Hacker N/A; review_stages.large.Hacker is skip",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-09T08:19:03.503705205Z"
+}

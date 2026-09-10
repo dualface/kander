@@ -1,0 +1,33 @@
+{
+  "revision": 1,
+  "sealed": true,
+  "schema": 1,
+  "plan_id": "journal-partition-20260908",
+  "author": "codex",
+  "basis": "用户授权执行独立卡；按根 AGENTS.md 与已启用审核规则，PM/QA 必须审核，CSA/Hacker 不适用。",
+  "cwd": "/home/dualf/works/kander/worktrees/journal-pending-partition",
+  "report_language": "zh-CN",
+  "task_ids": [
+    "20260908-journal-pending-partition-task"
+  ],
+  "cycles": {
+    "20260908-journal-pending-partition-task": "e7f57303938bf7348d2cc3ee983376ffcf3318931c63fa902906589781bfa8e9"
+  },
+  "batches": [
+    {
+      "batch_id": "journal-partition-20260908",
+      "task_ids": [
+        "20260908-journal-pending-partition-task"
+      ],
+      "base": "1e1d3a630333fd6c1cac43238addbfc8b5d8939f",
+      "target_commit": "c2e711896ad71946ab09b50ed05eb9ce01491113",
+      "requirements": {
+        "CSA": "N/A: 根 AGENTS.md 明确要求本仓库跳过 CSA",
+        "Hacker": "N/A: 根 AGENTS.md 明确要求本仓库跳过 Hacker",
+        "PM": "required",
+        "QA": "required"
+      }
+    }
+  ],
+  "recorded_at": "2026-09-08T04:51:49.117035344Z"
+}

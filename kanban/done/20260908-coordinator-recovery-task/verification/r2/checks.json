@@ -1,0 +1,191 @@
+{
+  "commit": "26edb64fcfb654a96afedc30bbaea27e5e918ec7",
+  "base": "5845e6fd0f2b503313030349fa211a7791a50169",
+  "whole_task_base": "6f5ed32072275c3bb9d96c9e40bd606b949b9c17",
+  "commands": [
+    {
+      "command": [
+        "go",
+        "build",
+        "./..."
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "gofmt",
+        "-l",
+        "internal/board/coordinator.go",
+        "internal/board/coordinator_closed_fix_test.go",
+        "internal/board/coordinator_crash_test.go",
+        "internal/board/coordinator_cycle.go",
+        "internal/board/coordinator_cycle_test.go",
+        "internal/board/coordinator_reconcile.go",
+        "internal/board/coordinator_regression_test.go",
+        "internal/board/coordinator_start.go",
+        "internal/board/coordinator_test.go",
+        "internal/board/coordinator_wrapup_test.go",
+        "internal/board/dispatch_evidence.go",
+        "internal/board/review_disposition.go",
+        "internal/board/snapshot.go",
+        "internal/board/task_start.go",
+        "internal/board/task_start_test.go",
+        "internal/board/transaction.go",
+        "internal/board/transaction_lock.go",
+        "internal/board/transaction_log.go",
+        "internal/cli/cli.go",
+        "internal/fs/shared_lock_context.go",
+        "internal/fs/shared_lock_context_unix.go",
+        "internal/fs/shared_lock_context_windows.go",
+        "internal/launch/cmd.go",
+        "internal/launch/commands.go",
+        "internal/launch/coordinator.go",
+        "internal/launch/coordinator_rollback_test.go",
+        "internal/launch/coordinator_start_test.go",
+        "internal/launch/coordinator_test.go",
+        "internal/review/disposition.go",
+        "internal/review/disposition_test.go",
+        "internal/review/git.go",
+        "internal/review/mechanical.go",
+        "internal/review/recovery.go"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "5845e6fd0f2b503313030349fa211a7791a50169",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "6f5ed32072275c3bb9d96c9e40bd606b949b9c17",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--stat",
+        "5845e6fd0f2b503313030349fa211a7791a50169",
+        "HEAD"
+      ],
+      "exit_code": 0,
+      "output": " AGENTS.md                                    |   2 +-\n docs/coordinator-recovery.md                 |   6 +-\n docs/recovery-regressions.md                 |   2 +\n internal/board/coordinator.go                |  16 +-\n internal/board/coordinator_cycle.go          |   4 +-\n internal/board/coordinator_cycle_test.go     |   7 +\n internal/board/coordinator_reconcile.go      |   7 +-\n internal/board/coordinator_start.go          |  98 ++++++++++++\n internal/board/snapshot.go                   |   5 +-\n internal/board/task_start.go                 | 150 ++++++++++++++++++\n internal/board/task_start_test.go            | 218 +++++++++++++++++++++++++++\n internal/launch/commands.go                  |   3 +\n internal/launch/coordinator_rollback_test.go | 108 +++++++++++++\n rules/KANDER-TASK-GROUP-RULES.md             |   2 +-\n 14 files changed, 617 insertions(+), 11 deletions(-)\n"
+    },
+    {
+      "command": [
+        "git",
+        "status",
+        "--short"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "5845e6fd0f2b503313030349fa211a7791a50169",
+        "26edb64fcfb654a96afedc30bbaea27e5e918ec7"
+      ],
+      "exit_code": 0,
+      "output": ""
+    },
+    {
+      "command": [
+        "rg",
+        "-n",
+        "ConfirmTaskStart|stageTaskStart|coordinatorStartCycle|coordinatorStartLineage",
+        "internal/board",
+        "internal/launch"
+      ],
+      "exit_code": 0,
+      "output": "internal/board/snapshot.go:66:\t\tif err = stageTaskStart(tx, s, text, state); err != nil {\ninternal/launch/commands.go:184:\tif err = board.ConfirmTaskStart(root, moved); err != nil {\ninternal/board/task_start.go:94:func stageTaskStart(tx *Transaction, s Snapshot, text, state string) error {\ninternal/board/task_start.go:124:// ConfirmTaskStart records launcher success without overwriting or revising task\ninternal/board/task_start.go:126:func ConfirmTaskStart(root string, entry Entry) error {\ninternal/board/coordinator_start.go:5:func coordinatorStartCycle(ctx context.Context, tx *Transaction, id string, old CoordinatorMember, s Snapshot) (string, bool, string, error) {\ninternal/board/coordinator_start.go:17:\tif err := coordinatorStartLineage(ctx, tx, id, old, a); err != nil {\ninternal/board/coordinator_start.go:65:func coordinatorStartLineage(ctx context.Context, tx *Transaction, id string, old CoordinatorMember, latest taskStart) error {\ninternal/board/task_start_test.go:47:\tif err := ConfirmTaskStart(root, first); err == nil {\ninternal/board/task_start_test.go:63:\tif err := ConfirmTaskStart(root, second); err != nil {\ninternal/board/task_start_test.go:74:\tif err := ConfirmTaskStart(root, second); err != nil {\ninternal/board/task_start_test.go:108:\t\t\t\tif err := ConfirmTaskStart(root, first); err != nil {\ninternal/board/task_start_test.go:134:\tif err := ConfirmTaskStart(root, moved); err != nil {\ninternal/board/task_start_test.go:201:\tgo func() { <-ready; results <- ConfirmTaskStart(root, moved) }()\ninternal/board/coordinator_reconcile.go:18:\tcycle, awaiting, attempt, err := coordinatorStartCycle(ctx, tx, id, old, s)\ninternal/board/coordinator_cycle_test.go:179:\tif err := ConfirmTaskStart(root, s.Entry); err != nil {\n"
+    },
+    {
+      "command": [
+        "GOOS=windows",
+        "GOARCH=amd64",
+        "go",
+        "build",
+        "-o",
+        "/tmp/coordinator-r2-validation/kander.exe",
+        "./cmd/kander"
+      ],
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "go_lines": {
+    "internal/board/coordinator.go": 332,
+    "internal/board/coordinator_closed_fix_test.go": 94,
+    "internal/board/coordinator_crash_test.go": 156,
+    "internal/board/coordinator_cycle.go": 23,
+    "internal/board/coordinator_cycle_test.go": 186,
+    "internal/board/coordinator_reconcile.go": 189,
+    "internal/board/coordinator_regression_test.go": 156,
+    "internal/board/coordinator_start.go": 98,
+    "internal/board/coordinator_test.go": 312,
+    "internal/board/coordinator_wrapup_test.go": 173,
+    "internal/board/dispatch_evidence.go": 236,
+    "internal/board/review_disposition.go": 457,
+    "internal/board/snapshot.go": 195,
+    "internal/board/task_start.go": 150,
+    "internal/board/task_start_test.go": 218,
+    "internal/board/transaction.go": 450,
+    "internal/board/transaction_lock.go": 154,
+    "internal/board/transaction_log.go": 136,
+    "internal/cli/cli.go": 257,
+    "internal/fs/shared_lock_context.go": 43,
+    "internal/fs/shared_lock_context_unix.go": 21,
+    "internal/fs/shared_lock_context_windows.go": 20,
+    "internal/launch/cmd.go": 232,
+    "internal/launch/commands.go": 447,
+    "internal/launch/coordinator.go": 109,
+    "internal/launch/coordinator_rollback_test.go": 108,
+    "internal/launch/coordinator_start_test.go": 62,
+    "internal/launch/coordinator_test.go": 169,
+    "internal/review/disposition.go": 266,
+    "internal/review/disposition_test.go": 229,
+    "internal/review/git.go": 230,
+    "internal/review/mechanical.go": 46,
+    "internal/review/recovery.go": 41
+  },
+  "round_go_files": [
+    "internal/board/coordinator.go",
+    "internal/board/coordinator_cycle.go",
+    "internal/board/coordinator_cycle_test.go",
+    "internal/board/coordinator_reconcile.go",
+    "internal/board/coordinator_start.go",
+    "internal/board/snapshot.go",
+    "internal/board/task_start.go",
+    "internal/board/task_start_test.go",
+    "internal/launch/commands.go",
+    "internal/launch/coordinator_rollback_test.go"
+  ],
+  "conflict_markers": {}
+}

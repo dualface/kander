@@ -1,0 +1,1 @@
+Error: Couldn't set model 'gpt-6-astra': Invalid params: "unknown model id". Run 'grok models' to see available models.

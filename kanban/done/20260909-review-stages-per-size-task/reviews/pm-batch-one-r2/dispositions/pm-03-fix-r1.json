@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r1-c1",
+    "epoch": 1
+  },
+  "submitted_revision": 19,
+  "record_id": "pm-03-fix-r1",
+  "run_id": "pm-batch-one-r2",
+  "finding_id": "PM-03",
+  "batch_id": "batch-one",
+  "task_id": "20260909-review-stages-per-size-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:19:38.615777101Z",
+  "report_hash": "692a65d8fb3b259375d82fe4f79f4213216e7b6b7a10cedb16283ee30e3398bd",
+  "original": "doctor 的 review_stages 缺档回填在「其余字段已规范」的配置上不落盘,并报告为「无变化」。internal/config/repair.go:141 的 fillMissingReviewStageScales(provided) 中,provided 来自 repair.go:100 的 asObject(raw),而 internal/config/config.go:638-641 的 asObject 只是类型断言、返回同一个 map,于是 repair.go:166 的 provided[\"review_stages\"] = normalized 就地改写了 raw;repair.go:74 随后用 reflect.DeepEqual(raw, normalized) 决定是否备份并写盘,基准已被污染。对一份规范 config.json(该等值判断在规范文件上必为真,见 repair_test.go:43-46)手工删掉 review_stages.small 后运行 doctor,会跳过写盘、result.Changed=false 并打印「config.json is unchanged」,磁盘上仍缺该档,下次 Load 时 small 全部退化为 auto,与 doctor 当场返回的 cfg 不一致,重复运行也修不好。最小修复:fillMissingReviewStageScales 先深拷贝再规范化(或只把结果写进 root),并补一条「除缺一档外其余均规范」的 doctor 测试断言 result.Changed 为真。",
+  "status": "fixed",
+  "basis": "与 qa-batch-one-r1/QA-004 同一根因:provided 与 raw 共享 map,缺档回填污染 DeepEqual,规范文件上 doctor 报告 unchanged 且不写盘。本条按独立 (run_id, finding_id) 提交。",
+  "fix_commit": "baa7b350eb3bf2f004864875e9b81d1d3e6c6eb4",
+  "verification": "同一复现与修复见 QA-004。fix_commit baa7b350eb3bf2f004864875e9b81d1d3e6c6eb4 克隆 provided 后补 TestRepairWritesWhenOnlyOneReviewStageScaleIsMissing,断言 result.Changed 与磁盘 small 从 large 回填。最终套件在 9a2badc1bdb23dd946020aaaa950501081dbbd5c 通过。"
+}

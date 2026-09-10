@@ -1,0 +1,316 @@
+package liveness
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/dualface/kander/internal/board"
+)
+
+// auditEvents exercises the existing event writer without changing production code.
+type auditEvents struct {
+	events  []groupEvent
+	onEvent func(groupEvent) error
+}
+
+func (w *auditEvents) Write(p []byte) (int, error) {
+	var event groupEvent
+	if err := json.Unmarshal(p, &event); err != nil {
+		return 0, err
+	}
+	w.events = append(w.events, event)
+	if w.onEvent != nil {
+		if err := w.onEvent(event); err != nil {
+			return 0, err
+		}
+	}
+	return len(p), nil
+}
+
+func auditMember(t *testing.T, slug string) (string, string, string, string) {
+	t.Helper()
+	root := tempBoard(t)
+	group := time.Now().Format("20060102") + "-audit-group"
+	id, path := makeWorking(t, slug, "Audit task")
+	setTaskGroup(t, path, group)
+	return root, group, id, path
+}
+
+func TestAuditRoundTripIsInvisible(t *testing.T) {
+	root, group, id, working := auditMember(t, "audit-roundtrip")
+	review := filepath.Join(root, "review", id+".md")
+	if err := os.Rename(working, review); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	writer := &auditEvents{}
+	writer.onEvent = func(event groupEvent) error {
+		switch event.Event {
+		case "snapshot":
+			if err := os.Rename(review, working); err != nil {
+				return err
+			}
+			data, err := os.ReadFile(working)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(working, append(data, []byte("\nNew delivery recorded.\n")...), 0600); err != nil {
+				return err
+			}
+			return os.Rename(working, review)
+		case "heartbeat":
+			close(stop)
+		}
+		return nil
+	}
+	if err := Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Refresh: .005, Heartbeat: .04}, writer, stop); err != nil {
+		t.Fatal(err)
+	}
+	if len(writer.events) != 2 || writer.events[1].Event != "heartbeat" {
+		t.Fatalf("events: %+v", writer.events)
+	}
+	t.Log("review -> working -> review with changed delivery text produced only snapshot and heartbeat")
+}
+
+func TestAuditChangesSuppressLiveness(t *testing.T) {
+	root, group, id, path := auditMember(t, "audit-active")
+	idleID, idlePath := makeWorking(t, "audit-unresponsive", "Unresponsive task")
+	setTaskGroup(t, idlePath, group)
+	state := "working"
+	stop := make(chan struct{})
+	writer := &auditEvents{}
+	changes := 0
+	writer.onEvent = func(event groupEvent) error {
+		if event.Event == "heartbeat" {
+			return fmt.Errorf("unexpected heartbeat during changes")
+		}
+		if event.Event == "state-change" {
+			changes++
+		}
+		if changes == 12 {
+			close(stop)
+			return nil
+		}
+		next := "review"
+		if state == "review" {
+			next = "working"
+		}
+		target := filepath.Join(root, next, id+".md")
+		if err := os.Rename(path, target); err != nil {
+			return err
+		}
+		state, path = next, target
+		return nil
+	}
+	start := time.Now()
+	if err := Subscribe(root, subscribeOptions{Group: group, Members: []string{id, idleID}, Refresh: .02, Heartbeat: .10}, writer, stop); err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) < 200*time.Millisecond {
+		t.Fatal("insufficient observation window")
+	}
+	t.Logf("%d state changes over %s; no heartbeat or liveness for unchanged working task", changes, time.Since(start))
+}
+
+func TestAuditReverseLookupErrorBecomesStopped(t *testing.T) {
+	root, _, id, path := auditMember(t, "audit-lookup")
+	installPOSIXFakes(t, false)
+	setLocation(t, path, "codex audit-session", "tmux:$1:@1:%1")
+	t.Setenv("KANBAN_TMUX_STALE_PANE", "%1")
+	t.Setenv("KANBAN_TMUX_LIST_PANES_FAIL", "1")
+	scanned, err := board.ScanTargets(root, []string{id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := board.ReadDocument(scanned.Entries[id])
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := ClassifyTask(scanned.Entries[id], text)
+	if report.Status != Stopped {
+		t.Fatalf("%+v", report)
+	}
+	if strings.Contains(report.Detail, "list-panes failure") {
+		t.Fatal("lookup error unexpectedly retained")
+	}
+	t.Logf("failed reverse lookup classified as %s; lookup error omitted from detail", report.Status)
+}
+
+func TestAuditReviewHasNoLiveness(t *testing.T) {
+	root, _, id, working := auditMember(t, "audit-review")
+	review := filepath.Join(root, "review", id+".md")
+	if err := os.Rename(working, review); err != nil {
+		t.Fatal(err)
+	}
+	scanned, states, err := groupStateSnapshot(root, []string{id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live := subscriptionLiveness(scanned, states); live != nil {
+		t.Fatalf("%+v", live)
+	}
+	t.Log("a review task awaiting notification acknowledgement has no subscription liveness")
+}
+
+func TestAuditWatchedGroupMembershipIsFrozen(t *testing.T) {
+	root, group, id, _ := auditMember(t, "audit-member")
+	watchedGroup := time.Now().Format("20060102") + "-external-group"
+	externalID, externalPath := makeWorking(t, "audit-external", "External task")
+	setTaskGroup(t, externalPath, watchedGroup)
+	stop := make(chan struct{})
+	writer := &auditEvents{}
+	var newID string
+	writer.onEvent = func(event groupEvent) error {
+		switch event.Event {
+		case "snapshot":
+			var newPath string
+			newID, newPath = makeWorking(t, "audit-added-later", "New external member")
+			setTaskGroup(t, newPath, watchedGroup)
+		case "heartbeat":
+			close(stop)
+		}
+		return nil
+	}
+	if err := Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Watch: []string{watchedGroup}, Refresh: .005, Heartbeat: .04}, writer, stop); err != nil {
+		t.Fatal(err)
+	}
+	last := writer.events[len(writer.events)-1]
+	if _, ok := last.Tasks[newID]; ok {
+		t.Fatal("new member unexpectedly monitored")
+	}
+	if len(last.Watched) != 1 || last.Watched[0] != externalID {
+		t.Fatalf("%+v", last)
+	}
+	t.Logf("new watched-group member %s absent from subsequent events", newID)
+}
+
+func TestAuditBlockedWriterIgnoresStop(t *testing.T) {
+	root, group, id, _ := auditMember(t, "audit-blocked-output")
+	reader, writer := io.Pipe()
+	defer reader.Close()
+	defer writer.Close()
+	stop := make(chan struct{})
+	entered := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Refresh: .005, Heartbeat: .04}, auditBlockingWriter{writer, entered}, stop)
+	}()
+	<-entered
+	close(stop)
+	select {
+	case err := <-done:
+		t.Fatalf("unexpected exit from blocked write: %v", err)
+	case <-time.After(60 * time.Millisecond):
+	}
+	reader.Close()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("failed to release blocked writer")
+	}
+	t.Log("stop did not interrupt a blocked event write; closing the output reader released it")
+}
+
+type auditBlockingWriter struct {
+	writer  io.Writer
+	entered chan struct{}
+}
+
+func (w auditBlockingWriter) Write(p []byte) (int, error) { close(w.entered); return w.writer.Write(p) }
+
+func TestAuditRefreshDurationOverflow(t *testing.T) {
+	opts, errText := parseSubscribeArgs([]string{"--refresh", "1e300", "--heartbeat", "1e300", "20260907-audit-group", "20260907-audit-task"})
+	if errText != "" {
+		t.Fatal(errText)
+	}
+	duration := time.Duration(opts.Refresh * float64(time.Second))
+	if duration > 0 {
+		t.Fatalf("unexpected duration: %s", duration)
+	}
+	t.Logf("accepted finite positive interval converts to nonpositive timer duration: %s", duration)
+}
+
+func TestAuditProbeBlocksScanAndCancellation(t *testing.T) {
+	root, group, id, working := auditMember(t, "audit-slow-probe")
+	installPOSIXFakes(t, false)
+	setLocation(t, working, "codex audit-session", "tmux:$1:@1:%1")
+	started := filepath.Join(t.TempDir(), "started")
+	t.Setenv("KANDER_AUDIT_PROBE_STARTED", started)
+	script := "#!/bin/sh\nif [ \"$1\" = \"display-message\" ]; then\n  : > \"$KANDER_AUDIT_PROBE_STARTED\"\n  /bin/sleep 0.25\n  printf 'codex\\t0\\t0\\n'\nelse\n  printf 'audit-session\\n'\nfi\n"
+	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "tmux"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	stop, done := make(chan struct{}), make(chan struct{})
+	buf := new(subscriptionOutput)
+	var runErr error
+	go func() {
+		runErr = Subscribe(root, subscribeOptions{Group: group, Members: []string{id}, Refresh: .005, Heartbeat: .03}, buf, stop)
+		close(done)
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-stop:
+		default:
+			close(stop)
+		}
+		<-done
+	})
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, err := os.Stat(started); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("probe never started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err := os.Rename(working, filepath.Join(root, "review", id+".md")); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	close(stop)
+	select {
+	case <-done:
+		t.Fatal("probe unexpectedly cancelled immediately")
+	case <-time.After(60 * time.Millisecond):
+	}
+	<-done
+	if runErr != nil {
+		t.Fatal(runErr)
+	}
+	if strings.Contains(buf.String(), "state-change") {
+		t.Fatal("scan unexpectedly continued during probe")
+	}
+	t.Logf("stop waited %s for probe; moved card still reported working in final heartbeat", time.Since(start))
+}
+
+func TestAuditWatchedGroupSilentlyOmitsUnreadableMember(t *testing.T) {
+	root, group, id, _ := auditMember(t, "audit-valid")
+	externalGroup := time.Now().Format("20060102") + "-unreadable-group"
+	goodID, goodPath := makeWorking(t, "audit-readable", "Readable member")
+	setTaskGroup(t, goodPath, externalGroup)
+	badID, badPath := makeWorking(t, "audit-invalid-text", "Invalid member")
+	setTaskGroup(t, badPath, externalGroup)
+	data, err := os.ReadFile(badPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(badPath, append(data, 0xff), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, watched, err := validateSubscribe(root, subscribeOptions{Group: group, Members: []string{id}, Watch: []string{externalGroup}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(watched) != 1 || watched[0] != goodID {
+		t.Fatalf("watched: %v", watched)
+	}
+	t.Logf("subscription accepted group while silently omitting unreadable member %s", badID)
+}

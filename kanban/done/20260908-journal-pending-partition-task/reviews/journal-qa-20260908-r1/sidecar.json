@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "journal-qa-20260908-r1",
+  "batch_id": "journal-partition-20260908",
+  "task_ids": [
+    "20260908-journal-pending-partition-task"
+  ],
+  "role": "QA",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "medium",
+  "cwd": "/home/dualf/works/kander/worktrees/journal-pending-partition",
+  "base": "1e1d3a630333fd6c1cac43238addbfc8b5d8939f",
+  "commit": "c2e711896ad71946ab09b50ed05eb9ce01491113",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "a962fba51a03ab2b63ff80ebc36745c1d321ae5cf8ad5fde1a659e36010afb18"
+  },
+  "kander_version": "20260908T042039Z-a70e939f5abd",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-08T04:52:06.848250719Z",
+  "finished_at": "2026-09-08T04:54:49.303985181Z",
+  "duration_ms": 162455,
+  "hashes": {
+    "error.log": "c365ee28ecab057fc37389cd7870c344ac861bddbaac6c7aa9513cf02d818ee4",
+    "evidence.txt": "88472c431cf53c34266aec42511180cd60962aa550cf04e1aeb540260e96c944",
+    "output.raw": "cefedc167a9ca0537c7759938e28e3b96828ac9ae7fe44369f68b15e20906bb4",
+    "prompt.txt": "cca1121156cf391e7c368cd4e11abc1b0e7d8306238dc851804dc0646b4b4592",
+    "report.md": "cefedc167a9ca0537c7759938e28e3b96828ac9ae7fe44369f68b15e20906bb4",
+    "review-context.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout.log": "81027d83af9c9d1fce27df7451ab76a9a2b69cf82b7e4611536faea976984418",
+    "task-context.md": "a962fba51a03ab2b63ff80ebc36745c1d321ae5cf8ad5fde1a659e36010afb18"
+  },
+  "published": null
+}

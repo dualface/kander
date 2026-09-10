@@ -1,0 +1,1 @@
+Review focus: (1) PM: 修复范围是否对准根因(提示词与最后一条消息错配), 有无越界改动; (2) QA: 提示词差异、claude 参数、回归测试是否钉住契约; (3) 确认未改 internal/board/review_findings.go 与已有测试。 Verification records: go test ./..., go vet ./..., gofmt -l . 于 ef9f64043854fb3c284567f602d48d627f9b7df3 通过, 21 个包 ok。

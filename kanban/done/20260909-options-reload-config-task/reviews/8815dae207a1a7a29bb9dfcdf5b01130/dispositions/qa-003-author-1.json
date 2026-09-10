@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 22,
+  "record_id": "qa-003-author-1",
+  "run_id": "8815dae207a1a7a29bb9dfcdf5b01130",
+  "finding_id": "QA-003",
+  "batch_id": "20260909-options-reload-batch-1",
+  "task_id": "20260909-options-reload-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:22:26.59857234Z",
+  "report_hash": "d3e9f9d822f178757a530d0a8dca2e0d5f386a36d5e0f81e4c8bc2a4e822caaa",
+  "original": "Inferred，高置信度：表单改从作用域初始化后，applyInterface 仍以 App 是否变化决定即时保存及条件字段重建。作用域 single=true、overlay single=false、其余 TUI 值一致时，用户关闭单列模式，编辑值恰好等于 App 的 false，因而不重建列数/列宽控件，也不保存。Esc 退出后重开恢复磁盘的 true，破坏既有控件联动与即时保存行为。最小修复：按最近表单值识别实际编辑，独立决定保存与重建；App 比较仅控制看板赋值。增加该场景的控件和磁盘断言。",
+  "status": "fixed",
+  "basis": "Verified at b70d56f45dd4037ae386bf04734e1cb2591d14b7: applyInterface persists and rebuilds from form-value changes versus appliedTUI/loadedTUI, not App equality. TestOpenOptionsPersistsSingleWhenAppAlreadyMatches toggles single to the current board value and asserts rebuildFocus plus persisted prefs.",
+  "fix_commit": "b70d56f45dd4037ae386bf04734e1cb2591d14b7",
+  "verification": "go test ./internal/tui -count=1 and go test ./... at b70d56f45dd4037ae386bf04734e1cb2591d14b7: ok"
+}

@@ -1,0 +1,1689 @@
+Review range: aac6f2bf2294fdaec863b9fa2ddfab5718ea2b78..1d10371b763cad83ebf0aba295b985151ef71c50
+
+=== COMMITS ===
+commit 1d10371b763cad83ebf0aba295b985151ef71c50
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 13:06:12
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 13:06:12
+
+    feat(tui): expose six named themes in config and the options panel
+    
+    Users need to pick the new palettes from the same t key and theme
+    dropdown, and old auto/light/dark values must keep validating.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+commit f74fa513ed76c417131016cf7b8e481830234767
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 13:05:56
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 13:05:56
+
+    feat(tui): look up palettes from a named theme table
+    
+    New themes should be data, not extra branches in resolveTheme or
+    markdownCanvasStyle. Keep the light/dark hex values frozen so old
+    configs keep the same look.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+commit dda44afe8cfb1ead2d3f43fb04baf40d59a1b86f
+Author:     dualface <dualface@gmail.com>
+AuthorDate: 2026-09-09 12:37:28
+Commit:     dualface <dualface@gmail.com>
+CommitDate: 2026-09-09 12:37:28
+
+    fix: pin TUI light and dark palettes to truecolor hex values
+    
+    Indexed ANSI 0-15 followed the terminal scheme, so Solarized and
+    custom palettes inverted the chosen theme. Each theme now has its
+    own foregrounds on the confirmed canvases.
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+=== FILE LEDGER ===
+M	internal/config/config.go
+A	internal/config/tui_theme_test.go
+M	internal/i18n/locales/en.json
+M	internal/i18n/locales/ja.json
+M	internal/i18n/locales/zh-CN.json
+M	internal/tui/context.go
+M	internal/tui/detail_view.go
+M	internal/tui/options_test.go
+M	internal/tui/pty_test.go
+M	internal/tui/theme.go
+A	internal/tui/theme_test.go
+M	internal/tui/tui_test.go
+
+=== PATCH ===
+diff --git a/internal/config/config.go b/internal/config/config.go
+index 545353a..cb020ba 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -35,7 +35,7 @@ var (
+ 	ReviewStageModes = []string{"auto", "skip", "required"}
+ 	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
+ 	Languages        = []string{"cn", "en", "ja"}
+-	TUIThemes        = []string{"auto", "light", "dark"}
++	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
+ )
+ 
+ const (
+diff --git a/internal/config/tui_theme_test.go b/internal/config/tui_theme_test.go
+new file mode 100644
+index 0000000..93f613c
+--- /dev/null
++++ b/internal/config/tui_theme_test.go
+@@ -0,0 +1,52 @@
++package config
++
++import (
++	"encoding/json"
++	"strings"
++	"testing"
++)
++
++func TestValidateTUIAcceptsNamedThemes(t *testing.T) {
++	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
++	if strings.Join(TUIThemes, ",") != strings.Join(want, ",") {
++		t.Fatalf("TUIThemes=%v", TUIThemes)
++	}
++	for _, theme := range TUIThemes {
++		t.Run("accept "+theme, func(t *testing.T) {
++			raw := minimalPayload(map[string]any{
++				"tui": map[string]any{
++					"columns": 3, "min_column_width": 40, "refresh": 30, "single": false, "theme": theme,
++				},
++			})
++			data, err := json.Marshal(raw)
++			if err != nil {
++				t.Fatal(err)
++			}
++			got, err := ValidateJSON(data)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if got.TUI.Theme != theme {
++				t.Fatalf("theme=%q", got.TUI.Theme)
++			}
++		})
++	}
++	t.Run("unknown theme locates tui.theme", func(t *testing.T) {
++		raw := minimalPayload(map[string]any{
++			"tui": map[string]any{
++				"columns": 3, "min_column_width": 40, "refresh": 30, "single": false, "theme": "blue",
++			},
++		})
++		data, err := json.Marshal(raw)
++		if err != nil {
++			t.Fatal(err)
++		}
++		_, err = ValidateJSON(data)
++		if !IsError(err) {
++			t.Fatalf("expected config error, got %v", err)
++		}
++		if !strings.Contains(err.Error(), "tui.theme") {
++			t.Fatalf("error %q should locate tui.theme", err)
++		}
++	})
++}
+diff --git a/internal/i18n/locales/en.json b/internal/i18n/locales/en.json
+index a0c96d2..dc663d2 100644
+--- a/internal/i18n/locales/en.json
++++ b/internal/i18n/locales/en.json
+@@ -803,6 +803,8 @@
+   "tui.copy_text": "copy text",
+   "tui.cycle_theme": "cycle theme",
+   "tui.dark": "dark",
++  "tui.dark-contrast": "high-contrast dark",
++  "tui.dark-soft": "soft dark",
+   "tui.detecting_environment": "Detecting environment...",
+   "tui.discard_and_close": "Discard and close",
+   "tui.done": "Done",
+@@ -818,7 +820,7 @@
+   "tui.field_change_enter_save_esc_back": "↑↓ field · ←→ change · Enter save · Esc back",
+   "tui.field_change_type_model_ids_enter_save_esc_back": "↑↓ field · ←→ change · type model ids · Enter save · Esc back",
+   "tui.focus_column_or_task": "focus column or task",
+-  "tui.follow_the_terminal_or_lock_light_dark": "follow the terminal, or lock light/dark",
++  "tui.follow_the_terminal_or_lock_light_dark": "follow the terminal, or pick a named theme",
+   "tui.full_page": "full page",
+   "tui.half_page": "half page",
+   "tui.help_q_back": "? help · q back",
+@@ -836,6 +838,8 @@
+   "tui.labels.skip": "skip",
+   "tui.large": "large",
+   "tui.light": "light",
++  "tui.light-contrast": "high-contrast light",
++  "tui.light-warm": "warm light",
+   "tui.load_failed": "Load failed",
+   "tui.max_columns_on_screen": "Max columns on screen",
+   "tui.minimum_column_width": "Minimum column width",
+diff --git a/internal/i18n/locales/ja.json b/internal/i18n/locales/ja.json
+index 5c8b389..7af76de 100644
+--- a/internal/i18n/locales/ja.json
++++ b/internal/i18n/locales/ja.json
+@@ -803,6 +803,8 @@
+   "tui.copy_text": "テキストをコピー",
+   "tui.cycle_theme": "テーマ切替",
+   "tui.dark": "ダーク",
++  "tui.dark-contrast": "ハイコントラストダーク",
++  "tui.dark-soft": "ソフトダーク",
+   "tui.detecting_environment": "環境を検出中...",
+   "tui.discard_and_close": "破棄して閉じる",
+   "tui.done": "完了",
+@@ -818,7 +820,7 @@
+   "tui.field_change_enter_save_esc_back": "↑↓ フィールド · ←→ 変更 · Enter 保存 · Esc 戻る",
+   "tui.field_change_type_model_ids_enter_save_esc_back": "↑↓ フィールド · ←→ 変更 · モデル ID を入力 · Enter 保存 · Esc 戻る",
+   "tui.focus_column_or_task": "カラムまたはタスクにフォーカス",
+-  "tui.follow_the_terminal_or_lock_light_dark": "ターミナルに従うか、ライト/ダークを固定",
++  "tui.follow_the_terminal_or_lock_light_dark": "ターミナルに従うか、名前付きテーマを選ぶ",
+   "tui.full_page": "1 ページ",
+   "tui.half_page": "半ページ",
+   "tui.help_q_back": "? ヘルプ · q 戻る",
+@@ -836,6 +838,8 @@
+   "tui.labels.skip": "スキップ",
+   "tui.large": "大規模タスク",
+   "tui.light": "ライト",
++  "tui.light-contrast": "ハイコントラストライト",
++  "tui.light-warm": "暖色ライト",
+   "tui.load_failed": "読み込みに失敗しました",
+   "tui.max_columns_on_screen": "画面上の最大カラム数",
+   "tui.minimum_column_width": "カラム最小幅",
+diff --git a/internal/i18n/locales/zh-CN.json b/internal/i18n/locales/zh-CN.json
+index 7e00794..28f72ea 100644
+--- a/internal/i18n/locales/zh-CN.json
++++ b/internal/i18n/locales/zh-CN.json
+@@ -803,6 +803,8 @@
+   "tui.copy_text": "复制文本",
+   "tui.cycle_theme": "切换主题",
+   "tui.dark": "深色",
++  "tui.dark-contrast": "深色高对比",
++  "tui.dark-soft": "深色柔和",
+   "tui.detecting_environment": "正在检测环境...",
+   "tui.discard_and_close": "放弃改动并关闭",
+   "tui.done": "已完成",
+@@ -818,7 +820,7 @@
+   "tui.field_change_enter_save_esc_back": "↑↓ 选字段 · ←→ 改值 · Enter 保存 · Esc 返回",
+   "tui.field_change_type_model_ids_enter_save_esc_back": "↑↓ 选字段 · ←→ 改值 · 模型直接输入 · Enter 保存 · Esc 返回",
+   "tui.focus_column_or_task": "聚焦栏目或任务",
+-  "tui.follow_the_terminal_or_lock_light_dark": "跟随终端, 或固定浅色/深色",
++  "tui.follow_the_terminal_or_lock_light_dark": "跟随终端, 或选择一套具名主题",
+   "tui.full_page": "整页滚动",
+   "tui.half_page": "半页滚动",
+   "tui.help_q_back": "? 帮助 · q 返回",
+@@ -836,6 +838,8 @@
+   "tui.labels.skip": "跳过",
+   "tui.large": "大任务",
+   "tui.light": "浅色",
++  "tui.light-contrast": "浅色高对比",
++  "tui.light-warm": "浅色暖调",
+   "tui.load_failed": "加载失败",
+   "tui.max_columns_on_screen": "同屏最大栏目数",
+   "tui.minimum_column_width": "栏目最小宽度",
+diff --git a/internal/tui/context.go b/internal/tui/context.go
+index 31cf1a3..0a0a0bc 100644
+--- a/internal/tui/context.go
++++ b/internal/tui/context.go
+@@ -51,9 +51,13 @@ func tuiPageContext() pageContext {
+ 		StatusHelp:       t("tui.help_q_quit"),
+ 		DetailStatusHelp: t("tui.help_q_back"),
+ 		ThemeLabels: map[string]string{
+-			"auto":  t("tui.auto"),
+-			"light": t("tui.light"),
+-			"dark":  t("tui.dark"),
++			"auto":           t("tui.auto"),
++			"light":          t("tui.light"),
++			"light-warm":     t("tui.light-warm"),
++			"light-contrast": t("tui.light-contrast"),
++			"dark":           t("tui.dark"),
++			"dark-soft":      t("tui.dark-soft"),
++			"dark-contrast":  t("tui.dark-contrast"),
+ 		},
+ 		Help: t(
+ 			"tui.arrows_hjkl_mouse_move_double_click_detail_drag_to",
+diff --git a/internal/tui/detail_view.go b/internal/tui/detail_view.go
+index 0bd25b1..672cf6a 100644
+--- a/internal/tui/detail_view.go
++++ b/internal/tui/detail_view.go
+@@ -85,7 +85,11 @@ func renderMarkdown(doc string, width int, theme string) []string {
+ // so the detail body does not punch a patch of the raw terminal color through the screen background.
+ func markdownCanvasStyle(theme string) glamansi.StyleConfig {
+ 	name := resolveTheme(theme)
+-	src, ok := glamstyles.DefaultStyles[name]
++	key := glamstyles.LightStyle
++	if themeIsDark(name) {
++		key = glamstyles.DarkStyle
++	}
++	src, ok := glamstyles.DefaultStyles[key]
+ 	if !ok || src == nil {
+ 		src = glamstyles.DefaultStyles[glamstyles.DarkStyle]
+ 	}
+diff --git a/internal/tui/options_test.go b/internal/tui/options_test.go
+index 979a935..464a205 100644
+--- a/internal/tui/options_test.go
++++ b/internal/tui/options_test.go
+@@ -10,7 +10,9 @@ import (
+ 
+ 	"github.com/charmbracelet/bubbles/spinner"
+ 	tea "github.com/charmbracelet/bubbletea"
++	"github.com/charmbracelet/lipgloss"
+ 	"github.com/charmbracelet/x/ansi"
++	"github.com/muesli/termenv"
+ 
+ 	"github.com/dualface/kander/internal/config"
+ 	"github.com/dualface/kander/internal/menu"
+@@ -221,6 +223,46 @@ func TestEnterSavesReviewSection(t *testing.T) {
+ 	}
+ }
+ 
++func TestOptionsThemeSelectListsAllThemes(t *testing.T) {
++	app, panel := openPanel(t)
++	pumpPanel(panel, panel.dispatch(sectionInterface))
++	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast"}
++	if strings.Join(themes, ",") != strings.Join(want, ",") {
++		t.Fatalf("themes=%v", themes)
++	}
++	drivePanel(panel, keyMsg("down"))
++	drivePanel(panel, keyMsg("down"))
++	for _, name := range want {
++		if app.Theme != name {
++			// Walk until this theme is selected so its label is visible.
++			for i := 0; i < len(want) && app.Theme != name; i++ {
++				drivePanel(panel, keyMsg("right"))
++			}
++		}
++		if app.Theme != name {
++			t.Fatalf("could not select %s, stuck at %s", name, app.Theme)
++		}
++		_, popup := panel.view()
++		if !strings.Contains(ansi.Strip(popup), app.Context.themeLabel(name)) {
++			t.Fatalf("dropdown missing %s label %q in %q", name, app.Context.themeLabel(name), ansi.Strip(popup))
++		}
++	}
++	previous := lipgloss.ColorProfile()
++	lipgloss.SetColorProfile(termenv.TrueColor)
++	defer lipgloss.SetColorProfile(previous)
++	for _, name := range want {
++		if name == "auto" {
++			continue
++		}
++		app.Theme = name
++		_, popup := panel.view()
++		bg := trueColorSeq(string(themePalette(name).Bg), false)
++		if !strings.Contains(popup, bg) {
++			t.Fatalf("options panel %s missing canvas %s", name, bg)
++		}
++	}
++}
++
+ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
+ 	app, panel := openPanel(t)
+ 	app.Theme = "light"
+@@ -240,7 +282,17 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
+ 	refresh := app.RefreshSecs
+ 	drivePanel(panel, keyMsg("up"))
+ 	for _, step := range []struct{ key, theme string }{
+-		{"right", "dark"}, {"left", "light"}, {"left", "auto"}, {"right", "light"},
++		{"right", "light-warm"},
++		{"right", "light-contrast"},
++		{"right", "dark"},
++		{"right", "dark-soft"},
++		{"right", "dark-contrast"},
++		{"right", "auto"},
++		{"right", "light"},
++		{"left", "auto"},
++		{"left", "dark-contrast"},
++		{"right", "auto"},
++		{"right", "light"},
+ 	} {
+ 		drivePanel(panel, keyMsg(step.key))
+ 		if app.Theme != step.theme || panel.bind.theme != step.theme {
+diff --git a/internal/tui/pty_test.go b/internal/tui/pty_test.go
+index feece68..393f689 100644
+--- a/internal/tui/pty_test.go
++++ b/internal/tui/pty_test.go
+@@ -32,6 +32,11 @@ type ptySession struct {
+ }
+ 
+ func startPTY(t *testing.T, bin string, env []string, args ...string) *ptySession {
++	t.Helper()
++	return startPTYReply(t, bin, env, "\x1b]11;rgb:0000/0000/0000\x1b\\", args...)
++}
++
++func startPTYReply(t *testing.T, bin string, env []string, osc11 string, args ...string) *ptySession {
+ 	t.Helper()
+ 	master, slave, err := openPTY()
+ 	if err != nil {
+@@ -57,7 +62,7 @@ func startPTY(t *testing.T, bin string, env []string, args ...string) *ptySessio
+ 				session.out = append(session.out, chunk...)
+ 				session.mu.Unlock()
+ 				if bytes.Contains(chunk, []byte("\x1b]11;?")) {
+-					_, _ = master.Write([]byte("\x1b]11;rgb:0000/0000/0000\x1b\\"))
++					_, _ = master.Write([]byte(osc11))
+ 				}
+ 				if bytes.Contains(chunk, []byte("\x1b[6n")) {
+ 					_, _ = master.Write([]byte("\x1b[1;1R"))
+@@ -175,11 +180,19 @@ func configPathFromEnv(t *testing.T, env []string) string {
+ }
+ 
+ func writeCompleteConfig(t *testing.T, env []string) {
++	t.Helper()
++	writeCompleteConfigTheme(t, env, "")
++}
++
++func writeCompleteConfigTheme(t *testing.T, env []string, theme string) {
+ 	t.Helper()
+ 	path := configPathFromEnv(t, env)
+ 	cfg := config.DefaultConfig()
+ 	cfg.WelcomeComplete = true
+ 	cfg.Language = "en"
++	if theme != "" {
++		cfg.TUI.Theme = theme
++	}
+ 	payload, err := json.Marshal(cfg)
+ 	if err != nil {
+ 		t.Fatal(err)
+@@ -252,6 +265,74 @@ func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
+ 	}
+ }
+ 
++// Solarized remaps ANSI 0/15. Truecolor hex canvases must stay on the designed
++// RGB even when OSC 11 reports those solarized backgrounds.
++func TestBoardTrueColorIgnoresSolarizedPaletteOnPTY(t *testing.T) {
++	bin := buildKander(t)
++	cases := []struct {
++		name  string
++		theme string
++		osc11 string
++		want  []string
++		avoid []string
++	}{
++		{
++			name:  "solarized-light/theme-light",
++			theme: "light",
++			osc11: "\x1b]11;rgb:fdfd/f6f6/e3e3\x1b\\",
++			want:  []string{"48;2;250;250;250", "38;2;22;24;29"},
++			avoid: []string{"48;2;253;246;227"},
++		},
++		{
++			name:  "solarized-light/theme-dark",
++			theme: "dark",
++			osc11: "\x1b]11;rgb:fdfd/f6f6/e3e3\x1b\\",
++			want:  []string{"48;2;22;24;29", "38;2;230;232;235"},
++			avoid: []string{"48;2;253;246;227"},
++		},
++		{
++			name:  "solarized-dark/theme-light",
++			theme: "light",
++			osc11: "\x1b]11;rgb:0000/2b2b/3636\x1b\\",
++			want:  []string{"48;2;250;250;250", "38;2;22;24;29"},
++			avoid: []string{"48;2;0;43;54"},
++		},
++		{
++			name:  "solarized-dark/theme-dark",
++			theme: "dark",
++			osc11: "\x1b]11;rgb:0000/2b2b/3636\x1b\\",
++			want:  []string{"48;2;22;24;29", "38;2;230;232;235"},
++			avoid: []string{"48;2;0;43;54"},
++		},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			_, env := boardEnv(t)
++			env = append(env, "COLORTERM=truecolor")
++			writeCompleteConfigTheme(t, env, tc.theme)
++			session := startPTYReply(t, bin, env, tc.osc11)
++			if !session.waitFor("Task Board", 8*time.Second) {
++				t.Fatalf("board did not render\npty:\n%s", session.text())
++			}
++			out := session.text()
++			for _, seq := range tc.want {
++				if !strings.Contains(out, seq) {
++					t.Fatalf("missing %q\npty:\n%s", seq, out)
++				}
++			}
++			for _, seq := range tc.avoid {
++				if strings.Contains(out, seq) {
++					t.Fatalf("solarized canvas leaked %q\npty:\n%s", seq, out)
++				}
++			}
++			session.send("q")
++			if err := session.waitExit(8 * time.Second); err != nil {
++				t.Fatalf("exit: %v\npty:\n%s", err, session.text())
++			}
++		})
++	}
++}
++
+ func moduleRoot(t *testing.T) string {
+ 	t.Helper()
+ 	wd, err := os.Getwd()
+diff --git a/internal/tui/theme.go b/internal/tui/theme.go
+index e1cf2e7..c232352 100644
+--- a/internal/tui/theme.go
++++ b/internal/tui/theme.go
+@@ -26,43 +26,187 @@ type palette struct {
+ 	Headings  map[string]lipgloss.Color
+ }
+ 
+-var headingColors = map[string]lipgloss.Color{
+-	"backlog":  lipgloss.Color("6"),
+-	"todo":     lipgloss.Color("3"),
+-	"working":  lipgloss.Color("4"),
+-	"review":   lipgloss.Color("5"),
+-	"done":     lipgloss.Color("2"),
+-	"archived": lipgloss.Color("5"),
+-	"trash":    lipgloss.Color("1"),
++// themeDef is one named theme. Adding a theme means adding a table row;
++// themePalette and the light/dark classifiers only look this table up.
++type themeDef struct {
++	name    string
++	dark    bool
++	palette palette
++}
++
++var themeTable = []themeDef{
++	{name: "light", dark: false, palette: palette{
++		Base:      lipgloss.Color("#16181d"),
++		Bg:        lipgloss.Color("#fafafa"),
++		Dim:       lipgloss.Color("#6b7280"),
++		Separator: lipgloss.Color("#828892"),
++		Accent:    lipgloss.Color("#9d2ec5"),
++		Bar:       lipgloss.Color("#1d4ed8"),
++		ChromeFg:  lipgloss.Color("#f7f7fb"),
++		ChromeBg:  lipgloss.Color("#6b21a8"),
++		PopupFg:   lipgloss.Color("#16181d"),
++		PopupEdge: lipgloss.Color("#9d2ec5"),
++		Warn:      lipgloss.Color("#c62828"),
++		OK:        lipgloss.Color("#2e7d32"),
++		Headings: map[string]lipgloss.Color{
++			"backlog":  lipgloss.Color("#0e7490"),
++			"todo":     lipgloss.Color("#a16207"),
++			"working":  lipgloss.Color("#1d4ed8"),
++			"review":   lipgloss.Color("#9d2ec5"),
++			"done":     lipgloss.Color("#15803d"),
++			"archived": lipgloss.Color("#7e22ce"),
++			"trash":    lipgloss.Color("#b91c1c"),
++		},
++	}},
++	{name: "light-warm", dark: false, palette: palette{
++		Base:      lipgloss.Color("#3d3428"),
++		Bg:        lipgloss.Color("#f3ead8"),
++		Dim:       lipgloss.Color("#7a6d5a"),
++		Separator: lipgloss.Color("#8a7d6a"),
++		Accent:    lipgloss.Color("#8b3d1f"),
++		Bar:       lipgloss.Color("#3a5278"),
++		ChromeFg:  lipgloss.Color("#f7f3ea"),
++		ChromeBg:  lipgloss.Color("#6b4423"),
++		PopupFg:   lipgloss.Color("#3d3428"),
++		PopupEdge: lipgloss.Color("#8b3d1f"),
++		Warn:      lipgloss.Color("#9b2c2c"),
++		OK:        lipgloss.Color("#3d6b38"),
++		Headings: map[string]lipgloss.Color{
++			"backlog":  lipgloss.Color("#0e5f73"),
++			"todo":     lipgloss.Color("#8a5500"),
++			"working":  lipgloss.Color("#3a5278"),
++			"review":   lipgloss.Color("#7a3d8a"),
++			"done":     lipgloss.Color("#2f6b38"),
++			"archived": lipgloss.Color("#6b3480"),
++			"trash":    lipgloss.Color("#9b2c2c"),
++		},
++	}},
++	{name: "light-contrast", dark: false, palette: palette{
++		Base:      lipgloss.Color("#000000"),
++		Bg:        lipgloss.Color("#ffffff"),
++		Dim:       lipgloss.Color("#5c5c5c"),
++		Separator: lipgloss.Color("#6e6e6e"),
++		Accent:    lipgloss.Color("#5a007a"),
++		Bar:       lipgloss.Color("#003399"),
++		ChromeFg:  lipgloss.Color("#ffffff"),
++		ChromeBg:  lipgloss.Color("#3d0066"),
++		PopupFg:   lipgloss.Color("#000000"),
++		PopupEdge: lipgloss.Color("#5a007a"),
++		Warn:      lipgloss.Color("#8b0000"),
++		OK:        lipgloss.Color("#004d00"),
++		Headings: map[string]lipgloss.Color{
++			"backlog":  lipgloss.Color("#005266"),
++			"todo":     lipgloss.Color("#6b4500"),
++			"working":  lipgloss.Color("#003399"),
++			"review":   lipgloss.Color("#5a007a"),
++			"done":     lipgloss.Color("#004d00"),
++			"archived": lipgloss.Color("#4a0066"),
++			"trash":    lipgloss.Color("#8b0000"),
++		},
++	}},
++	{name: "dark", dark: true, palette: palette{
++		Base:      lipgloss.Color("#e6e8eb"),
++		Bg:        lipgloss.Color("#16181d"),
++		Dim:       lipgloss.Color("#8b919a"),
++		Separator: lipgloss.Color("#6a7078"),
++		Accent:    lipgloss.Color("#d670d6"),
++		Bar:       lipgloss.Color("#6ea8fe"),
++		ChromeFg:  lipgloss.Color("#f7f7fb"),
++		ChromeBg:  lipgloss.Color("#6b21a8"),
++		PopupFg:   lipgloss.Color("#e6e8eb"),
++		PopupEdge: lipgloss.Color("#d670d6"),
++		Warn:      lipgloss.Color("#f07178"),
++		OK:        lipgloss.Color("#7fd17f"),
++		Headings: map[string]lipgloss.Color{
++			"backlog":  lipgloss.Color("#4dd0e1"),
++			"todo":     lipgloss.Color("#e6c35c"),
++			"working":  lipgloss.Color("#6ea8fe"),
++			"review":   lipgloss.Color("#d670d6"),
++			"done":     lipgloss.Color("#7fd17f"),
++			"archived": lipgloss.Color("#c084d0"),
++			"trash":    lipgloss.Color("#f07178"),
++		},
++	}},
++	{name: "dark-soft", dark: true, palette: palette{
++		Base:      lipgloss.Color("#c5ccd8"),
++		Bg:        lipgloss.Color("#1c2230"),
++		Dim:       lipgloss.Color("#8a929e"),
++		Separator: lipgloss.Color("#6e7684"),
++		Accent:    lipgloss.Color("#c090c8"),
++		Bar:       lipgloss.Color("#7aa3e0"),
++		ChromeFg:  lipgloss.Color("#e8eef6"),
++		ChromeBg:  lipgloss.Color("#4a3a6a"),
++		PopupFg:   lipgloss.Color("#c5ccd8"),
++		PopupEdge: lipgloss.Color("#c090c8"),
++		Warn:      lipgloss.Color("#e08080"),
++		OK:        lipgloss.Color("#80c080"),
++		Headings: map[string]lipgloss.Color{
++			"backlog":  lipgloss.Color("#6ec8d4"),
++			"todo":     lipgloss.Color("#d4b86a"),
++			"working":  lipgloss.Color("#7aa3e0"),
++			"review":   lipgloss.Color("#c090c8"),
++			"done":     lipgloss.Color("#80c080"),
++			"archived": lipgloss.Color("#b088c0"),
++			"trash":    lipgloss.Color("#e08080"),
++		},
++	}},
++	{name: "dark-contrast", dark: true, palette: palette{
++		Base:      lipgloss.Color("#ffffff"),
++		Bg:        lipgloss.Color("#000000"),
++		Dim:       lipgloss.Color("#a3a3a3"),
++		Separator: lipgloss.Color("#8a8a8a"),
++		Accent:    lipgloss.Color("#f0a0ff"),
++		Bar:       lipgloss.Color("#8cb4ff"),
++		ChromeFg:  lipgloss.Color("#ffffff"),
++		ChromeBg:  lipgloss.Color("#4a0080"),
++		PopupFg:   lipgloss.Color("#ffffff"),
++		PopupEdge: lipgloss.Color("#f0a0ff"),
++		Warn:      lipgloss.Color("#ff8080"),
++		OK:        lipgloss.Color("#66e066"),
++		Headings: map[string]lipgloss.Color{
++			"backlog":  lipgloss.Color("#5ce1f0"),
++			"todo":     lipgloss.Color("#ffd24d"),
++			"working":  lipgloss.Color("#8cb4ff"),
++			"review":   lipgloss.Color("#f0a0ff"),
++			"done":     lipgloss.Color("#66e066"),
++			"archived": lipgloss.Color("#e0a0ff"),
++			"trash":    lipgloss.Color("#ff8080"),
++		},
++	}},
++}
++
++func themeDefByName(name string) (themeDef, bool) {
++	for _, def := range themeTable {
++		if def.name == name {
++			return def, true
++		}
++	}
++	return themeDef{}, false
++}
++
++func namedThemeNames() []string {
++	out := make([]string, len(themeTable))
++	for i, def := range themeTable {
++		out[i] = def.name
++	}
++	return out
+ }
+ 
+ func themePalette(name string) palette {
+-	base := lipgloss.Color("15")
+-	bg := lipgloss.Color("0")
+-	dim := lipgloss.Color("8")
+-	// The separator is only a helper line between columns, so it takes a shade closer to the background than Dim (ANSI 8, mid grey):
+-	// 240 on a dark background and 250 on a light one, both clearly below body contrast yet still visible.
+-	separator := lipgloss.Color("240")
+-	if resolveTheme(name) == "light" {
+-		base = lipgloss.Color("0")
+-		bg = lipgloss.Color("15")
+-		separator = lipgloss.Color("250")
+-	}
+-	return palette{
+-		Base:      base,
+-		Bg:        bg,
+-		Dim:       dim,
+-		Separator: separator,
+-		Accent:    lipgloss.Color("13"),
+-		Bar:       lipgloss.Color("4"),
+-		ChromeFg:  lipgloss.Color("15"),
+-		ChromeBg:  lipgloss.Color("5"),
+-		PopupFg:   base,
+-		PopupEdge: lipgloss.Color("13"),
+-		Warn:      lipgloss.Color("1"),
+-		OK:        lipgloss.Color("2"),
+-		Headings:  headingColors,
++	if def, ok := themeDefByName(resolveTheme(name)); ok {
++		return def.palette
++	}
++	def, _ := themeDefByName("dark")
++	return def.palette
++}
++
++// themeIsDark reports the light/dark family of a theme from the table.
++// auto and unknown names go through resolveTheme first.
++func themeIsDark(name string) bool {
++	if def, ok := themeDefByName(resolveTheme(name)); ok {
++		return def.dark
+ 	}
++	return resolveTheme(name) == "dark"
+ }
+ 
+ func (p palette) ink(color lipgloss.Color) lipgloss.Style {
+@@ -221,10 +365,10 @@ func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
+ 	return p.ink(p.Dim).Reverse(true)
+ }
+ 
+-// resolveTheme resolves auto into light or dark; an explicit theme ignores the terminal probe.
+-// Bubble Tea already had Lip Gloss probe and cache the background type before startup, so the result is simply reused here.
++// resolveTheme only normalizes auto: a named theme is returned as itself,
++// and auto (or any name not in the table) uses the cached terminal probe.
+ func resolveTheme(name string) string {
+-	if name == "light" || name == "dark" {
++	if _, ok := themeDefByName(name); ok {
+ 		return name
+ 	}
+ 	if detectDarkBackground() {
+diff --git a/internal/tui/theme_test.go b/internal/tui/theme_test.go
+new file mode 100644
+index 0000000..8170bd1
+--- /dev/null
++++ b/internal/tui/theme_test.go
+@@ -0,0 +1,418 @@
++package tui
++
++import (
++	"fmt"
++	"math"
++	"reflect"
++	"regexp"
++	"strings"
++	"testing"
++
++	glamstyles "github.com/charmbracelet/glamour/styles"
++	"github.com/charmbracelet/lipgloss"
++	"github.com/muesli/termenv"
++
++	"github.com/dualface/kander/internal/launch"
++)
++
++var hexColorPattern = regexp.MustCompile(`^#[0-9a-f]{6}$`)
++
++func TestThemePaletteAnchorsAndHex(t *testing.T) {
++	dark := themePalette("dark")
++	light := themePalette("light")
++	if dark.Bg != "#16181d" {
++		t.Fatalf("dark Bg=%q", dark.Bg)
++	}
++	if light.Bg != "#fafafa" {
++		t.Fatalf("light Bg=%q", light.Bg)
++	}
++	for _, name := range namedThemeNames() {
++		p := themePalette(name)
++		assertHexColor(t, name+".Base", p.Base)
++		assertHexColor(t, name+".Bg", p.Bg)
++		assertHexColor(t, name+".Dim", p.Dim)
++		assertHexColor(t, name+".Separator", p.Separator)
++		assertHexColor(t, name+".Accent", p.Accent)
++		assertHexColor(t, name+".Bar", p.Bar)
++		assertHexColor(t, name+".ChromeFg", p.ChromeFg)
++		assertHexColor(t, name+".ChromeBg", p.ChromeBg)
++		assertHexColor(t, name+".PopupFg", p.PopupFg)
++		assertHexColor(t, name+".PopupEdge", p.PopupEdge)
++		assertHexColor(t, name+".Warn", p.Warn)
++		assertHexColor(t, name+".OK", p.OK)
++		if len(p.Headings) != len(allStates) {
++			t.Fatalf("%s headings=%d want %d", name, len(p.Headings), len(allStates))
++		}
++		for _, state := range allStates {
++			color, ok := p.Headings[state]
++			if !ok {
++				t.Fatalf("%s missing heading %s", name, state)
++			}
++			assertHexColor(t, name+".Headings."+state, color)
++		}
++	}
++	if dark.Base == light.Base || dark.Dim == light.Dim || dark.Accent == light.Accent {
++		t.Fatal("light and dark should not share one foreground set")
++	}
++}
++
++func TestThemePaletteGoldenLightAndDark(t *testing.T) {
++	wantLight := palette{
++		Base:      "#16181d",
++		Bg:        "#fafafa",
++		Dim:       "#6b7280",
++		Separator: "#828892",
++		Accent:    "#9d2ec5",
++		Bar:       "#1d4ed8",
++		ChromeFg:  "#f7f7fb",
++		ChromeBg:  "#6b21a8",
++		PopupFg:   "#16181d",
++		PopupEdge: "#9d2ec5",
++		Warn:      "#c62828",
++		OK:        "#2e7d32",
++		Headings: map[string]lipgloss.Color{
++			"backlog":  "#0e7490",
++			"todo":     "#a16207",
++			"working":  "#1d4ed8",
++			"review":   "#9d2ec5",
++			"done":     "#15803d",
++			"archived": "#7e22ce",
++			"trash":    "#b91c1c",
++		},
++	}
++	wantDark := palette{
++		Base:      "#e6e8eb",
++		Bg:        "#16181d",
++		Dim:       "#8b919a",
++		Separator: "#6a7078",
++		Accent:    "#d670d6",
++		Bar:       "#6ea8fe",
++		ChromeFg:  "#f7f7fb",
++		ChromeBg:  "#6b21a8",
++		PopupFg:   "#e6e8eb",
++		PopupEdge: "#d670d6",
++		Warn:      "#f07178",
++		OK:        "#7fd17f",
++		Headings: map[string]lipgloss.Color{
++			"backlog":  "#4dd0e1",
++			"todo":     "#e6c35c",
++			"working":  "#6ea8fe",
++			"review":   "#d670d6",
++			"done":     "#7fd17f",
++			"archived": "#c084d0",
++			"trash":    "#f07178",
++		},
++	}
++	assertPaletteEqual(t, "light", themePalette("light"), wantLight)
++	assertPaletteEqual(t, "dark", themePalette("dark"), wantDark)
++}
++
++func assertPaletteEqual(t *testing.T, name string, got, want palette) {
++	t.Helper()
++	if got.Base != want.Base || got.Bg != want.Bg || got.Dim != want.Dim || got.Separator != want.Separator {
++		t.Fatalf("%s canvas got %+v want %+v", name, got, want)
++	}
++	if got.Accent != want.Accent || got.Bar != want.Bar || got.ChromeFg != want.ChromeFg || got.ChromeBg != want.ChromeBg {
++		t.Fatalf("%s chrome got %+v want %+v", name, got, want)
++	}
++	if got.PopupFg != want.PopupFg || got.PopupEdge != want.PopupEdge || got.Warn != want.Warn || got.OK != want.OK {
++		t.Fatalf("%s popup got %+v want %+v", name, got, want)
++	}
++	for _, state := range allStates {
++		if got.Headings[state] != want.Headings[state] {
++			t.Fatalf("%s heading %s = %q want %q", name, state, got.Headings[state], want.Headings[state])
++		}
++	}
++}
++
++func themeBodyContrastMin(name string) float64 {
++	if strings.HasSuffix(name, "-contrast") {
++		return 7
++	}
++	return 4.5
++}
++
++func TestThemePaletteContrast(t *testing.T) {
++	for _, name := range namedThemeNames() {
++		p := themePalette(name)
++		bg := string(p.Bg)
++		minRatio := themeBodyContrastMin(name)
++		baseRatio := contrastRatio(string(p.Base), bg)
++		body := []struct {
++			label string
++			color lipgloss.Color
++		}{
++			{"Base", p.Base},
++			{"Accent", p.Accent},
++			{"Bar", p.Bar},
++			{"Warn", p.Warn},
++			{"OK", p.OK},
++			{"PopupFg", p.PopupFg},
++			{"PopupEdge", p.PopupEdge},
++		}
++		for _, item := range body {
++			ratio := contrastRatio(string(item.color), bg)
++			if ratio < minRatio {
++				t.Fatalf("%s %s on Bg = %.3f, want >= %.1f", name, item.label, ratio, minRatio)
++			}
++		}
++		for _, state := range allStates {
++			ratio := contrastRatio(string(p.Headings[state]), bg)
++			if ratio < minRatio {
++				t.Fatalf("%s heading %s on Bg = %.3f, want >= %.1f", name, state, ratio, minRatio)
++			}
++		}
++		dimRatio := contrastRatio(string(p.Dim), bg)
++		sepRatio := contrastRatio(string(p.Separator), bg)
++		if dimRatio < 3 {
++			t.Fatalf("%s Dim on Bg = %.3f, want >= 3", name, dimRatio)
++		}
++		if sepRatio < 3 {
++			t.Fatalf("%s Separator on Bg = %.3f, want >= 3", name, sepRatio)
++		}
++		if dimRatio >= baseRatio {
++			t.Fatalf("%s Dim contrast %.3f should be below Base %.3f", name, dimRatio, baseRatio)
++		}
++		if sepRatio >= baseRatio {
++			t.Fatalf("%s Separator contrast %.3f should be below Base %.3f", name, sepRatio, baseRatio)
++		}
++		chromeRatio := contrastRatio(string(p.ChromeFg), string(p.ChromeBg))
++		if chromeRatio < minRatio {
++			t.Fatalf("%s ChromeFg on ChromeBg = %.3f, want >= %.1f", name, chromeRatio, minRatio)
++		}
++	}
++}
++
++func TestThemePaletteTrueColorSequences(t *testing.T) {
++	previous := lipgloss.ColorProfile()
++	lipgloss.SetColorProfile(termenv.TrueColor)
++	defer lipgloss.SetColorProfile(previous)
++
++	light := themePalette("light")
++	dark := themePalette("dark")
++	if !strings.Contains(light.fillLine(2), "48;2;250;250;250") {
++		t.Fatalf("light canvas should paint #fafafa, got %q", light.fillLine(2))
++	}
++	if !strings.Contains(dark.fillLine(2), "48;2;22;24;29") {
++		t.Fatalf("dark canvas should paint #16181d, got %q", dark.fillLine(2))
++	}
++	if !strings.Contains(light.ink(light.Base).Render("x"), "38;2;22;24;29") {
++		t.Fatalf("light ink should paint #16181d, got %q", light.ink(light.Base).Render("x"))
++	}
++	if !strings.Contains(dark.ink(dark.Base).Render("x"), "38;2;230;232;235") {
++		t.Fatalf("dark ink should paint #e6e8eb, got %q", dark.ink(dark.Base).Render("x"))
++	}
++	seen := map[string]string{}
++	for _, name := range namedThemeNames() {
++		p := themePalette(name)
++		line := p.fillLine(2)
++		if !strings.Contains(line, "48;2;") {
++			t.Fatalf("%s canvas missing truecolor bg, got %q", name, line)
++		}
++		if prev, ok := seen[line]; ok {
++			t.Fatalf("%s and %s painted the same canvas %q", name, prev, line)
++		}
++		seen[line] = name
++	}
++}
++
++func TestThemePaletteProfileDowngrade(t *testing.T) {
++	tags := []string{"", "title", "separator", "heading-backlog", "popup-warn"}
++	for _, name := range namedThemeNames() {
++		p := themePalette(name)
++		for _, profile := range []termenv.Profile{termenv.ANSI256, termenv.ANSI} {
++			t.Run(name+"/"+profile.Name(), func(t *testing.T) {
++				previous := lipgloss.ColorProfile()
++				lipgloss.SetColorProfile(profile)
++				defer lipgloss.SetColorProfile(previous)
++
++				for _, tag := range tags {
++					_ = styleFor(tag, p).Render("x")
++				}
++				_ = p.fillLine(4)
++
++				fg := profile.Color(string(p.Base))
++				bg := profile.Color(string(p.Bg))
++				if fg == nil || bg == nil {
++					t.Fatal("resolved color is nil")
++				}
++				if fg.Sequence(false) == bg.Sequence(false) {
++					t.Fatalf("foreground and background collapsed to %q", fg.Sequence(false))
++				}
++			})
++		}
++	}
++}
++
++func assertHexColor(t *testing.T, label string, color lipgloss.Color) {
++	t.Helper()
++	value := string(color)
++	if !hexColorPattern.MatchString(value) {
++		t.Fatalf("%s = %q, want #rrggbb", label, value)
++	}
++}
++
++func contrastRatio(a, b string) float64 {
++	l1, l2 := relativeLuminance(a), relativeLuminance(b)
++	if l1 < l2 {
++		l1, l2 = l2, l1
++	}
++	return (l1 + 0.05) / (l2 + 0.05)
++}
++
++func relativeLuminance(hex string) float64 {
++	if len(hex) != 7 || hex[0] != '#' {
++		return 0
++	}
++	r := linearizeChannel(hexByte(hex[1], hex[2]))
++	g := linearizeChannel(hexByte(hex[3], hex[4]))
++	b := linearizeChannel(hexByte(hex[5], hex[6]))
++	return 0.2126*r + 0.7152*g + 0.0722*b
++}
++
++func linearizeChannel(value float64) float64 {
++	c := value / 255
++	if c <= 0.04045 {
++		return c / 12.92
++	}
++	return math.Pow((c+0.055)/1.055, 2.4)
++}
++
++func hexByte(hi, lo byte) float64 {
++	return float64(hexNibble(hi)<<4 | hexNibble(lo))
++}
++
++func hexNibble(b byte) int {
++	switch {
++	case b >= '0' && b <= '9':
++		return int(b - '0')
++	case b >= 'a' && b <= 'f':
++		return int(b-'a') + 10
++	case b >= 'A' && b <= 'F':
++		return int(b-'A') + 10
++	}
++	return 0
++}
++
++func trueColorSeq(hex string, foreground bool) string {
++	prefix := "48;2"
++	if foreground {
++		prefix = "38;2"
++	}
++	return fmt.Sprintf("%s;%.0f;%.0f;%.0f", prefix, hexByte(hex[1], hex[2]), hexByte(hex[3], hex[4]), hexByte(hex[5], hex[6]))
++}
++
++func TestResolveThemeNamedAndAuto(t *testing.T) {
++	originalDetector := detectDarkBackground
++	t.Cleanup(func() { detectDarkBackground = originalDetector })
++	detections := 0
++	detectDarkBackground = func() bool {
++		detections++
++		return true
++	}
++	for _, name := range namedThemeNames() {
++		if got := resolveTheme(name); got != name {
++			t.Fatalf("named %s: got %q", name, got)
++		}
++	}
++	if detections != 0 {
++		t.Fatalf("named themes should not probe, detections=%d", detections)
++	}
++	if got := resolveTheme("auto"); got != "dark" || detections != 1 {
++		t.Fatalf("auto dark: theme=%q detections=%d", got, detections)
++	}
++	detectDarkBackground = func() bool {
++		detections++
++		return false
++	}
++	if got := resolveTheme("auto"); got != "light" || detections != 2 {
++		t.Fatalf("auto light: theme=%q detections=%d", got, detections)
++	}
++}
++
++func TestThemeIsDarkClassifiesFamilies(t *testing.T) {
++	for _, name := range []string{"light", "light-warm", "light-contrast"} {
++		if themeIsDark(name) {
++			t.Fatalf("%s should be light", name)
++		}
++	}
++	for _, name := range []string{"dark", "dark-soft", "dark-contrast"} {
++		if !themeIsDark(name) {
++			t.Fatalf("%s should be dark", name)
++		}
++	}
++}
++
++func TestMarkdownCanvasStyleOwnBackgroundAndFamily(t *testing.T) {
++	for _, name := range namedThemeNames() {
++		got := markdownCanvasStyle(name)
++		wantBG := string(themePalette(name).Bg)
++		if got.Document.BackgroundColor == nil || *got.Document.BackgroundColor != wantBG {
++			t.Fatalf("%s document bg=%v want %s", name, got.Document.BackgroundColor, wantBG)
++		}
++		key := glamstyles.LightStyle
++		if themeIsDark(name) {
++			key = glamstyles.DarkStyle
++		}
++		src := glamstyles.DefaultStyles[key]
++		if src == nil {
++			t.Fatalf("missing glamour style %s", key)
++		}
++		want := *src
++		want.Document.BackgroundColor = &wantBG
++		if !reflect.DeepEqual(got, want) {
++			t.Fatalf("%s base style is not %s", name, key)
++		}
++	}
++}
++
++func TestThemeSurfacesPaintOwnBackground(t *testing.T) {
++	previous := lipgloss.ColorProfile()
++	lipgloss.SetColorProfile(termenv.TrueColor)
++	defer lipgloss.SetColorProfile(previous)
++
++	for _, name := range namedThemeNames() {
++		app := newApp(true, 30, tuiPageContext(),
++			func() (BoardPayload, error) {
++				return BoardPayload{Tasks: []Task{{
++					TaskID: "20260909-demo-task", Title: "Demo", State: "todo", Type: "Feature", Kind: "small",
++				}}}, nil
++			},
++			func(id string) (Task, error) {
++				return Task{TaskID: id, Title: "Demo", State: "todo", Document: "# Hi\nbody"}, nil
++			},
++			name, 40, nil, func(string) (bool, string) { return true, "" })
++		app.Width, app.Height = 120, 32
++		board, err := app.GetBoard()
++		if err != nil {
++			t.Fatal(err)
++		}
++		app.Model.SetBoard(board)
++
++		bg := trueColorSeq(string(themePalette(name).Bg), false)
++		surfaces := map[string]string{"board": app.renderBoardView()}
++		task, err := app.GetTask("20260909-demo-task")
++		if err != nil {
++			t.Fatal(err)
++		}
++		app.Detail = &task
++		surfaces["detail"] = app.renderDetailView()
++		app.Detail = nil
++		_, help := app.renderHelp()
++		surfaces["help"] = help
++		app.StartConfirmation = &startDialog{
++			startRequest: startRequest{StartPreview: launch.StartPreview{
++				TaskID: "20260909-demo-task", State: "todo", Agent: "cursor", Launcher: "herdr",
++			}},
++			phase: startReady,
++		}
++		_, start := app.renderStartConfirmation()
++		surfaces["start"] = start
++		app.StartConfirmation = nil
++		for label, out := range surfaces {
++			if !strings.Contains(out, bg) {
++				t.Fatalf("%s %s missing canvas %s", name, label, bg)
++			}
++		}
++	}
++}
+diff --git a/internal/tui/tui_test.go b/internal/tui/tui_test.go
+index 18bbcf2..8c5f326 100644
+--- a/internal/tui/tui_test.go
++++ b/internal/tui/tui_test.go
+@@ -198,8 +198,87 @@ func TestThemeCycle(t *testing.T) {
+ 		app.handleBoardKey("t")
+ 		seen = append(seen, app.Theme)
+ 	}
+-	if strings.Join(seen, ",") != "light,dark,auto" {
+-		t.Fatalf("%v", seen)
++	want := append(append([]string{}, themes[1:]...), themes[0])
++	if strings.Join(seen, ",") != strings.Join(want, ",") {
++		t.Fatalf("got %v want %v", seen, want)
++	}
++	seenSet := map[string]int{}
++	for _, name := range seen {
++		seenSet[name]++
++	}
++	if len(seenSet) != len(themes) {
++		t.Fatalf("cycle missed or repeated themes: %v", seen)
++	}
++	for _, name := range themes {
++		if seenSet[name] != 1 {
++			t.Fatalf("theme %s count=%d in %v", name, seenSet[name], seen)
++		}
++	}
++}
++
++func TestPrefsConfigUnknownThemeFallsBackToAuto(t *testing.T) {
++	got := prefsConfig(uiPrefs{Columns: 3, MinColumnWidth: 32, Theme: "blue", Refresh: 15, Single: true})
++	if got.Theme != "auto" {
++		t.Fatalf("theme=%q", got.Theme)
++	}
++	if got.Columns != 3 || got.MinColumnWidth != 32 || got.Refresh != 15 || !got.Single {
++		t.Fatalf("other fields changed: %+v", got)
++	}
++}
++
++func TestLoadPrefsInvalidThemeResetsAllPrefs(t *testing.T) {
++	dir := t.TempDir()
++	path := filepath.Join(dir, "config.json")
++	t.Setenv(config.EnvConfig, path)
++	cfg := config.DefaultConfig()
++	cfg.WelcomeComplete = true
++	cfg.TUI.Columns = 2
++	cfg.TUI.MinColumnWidth = 32
++	cfg.TUI.Refresh = 15
++	cfg.TUI.Single = true
++	cfg.TUI.Theme = "dark"
++	if _, err := config.Save(cfg); err != nil {
++		t.Fatal(err)
++	}
++	raw, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var obj map[string]any
++	if err := json.Unmarshal(raw, &obj); err != nil {
++		t.Fatal(err)
++	}
++	tui, ok := obj["tui"].(map[string]any)
++	if !ok {
++		t.Fatalf("tui type %T", obj["tui"])
++	}
++	tui["theme"] = "blue"
++	data, err := json.Marshal(obj)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := os.WriteFile(path, data, 0o600); err != nil {
++		t.Fatal(err)
++	}
++	prefs := loadPrefs()
++	want := defaultPrefs()
++	if prefs != want {
++		t.Fatalf("got %+v want %+v", prefs, want)
++	}
++}
++
++func TestThemeLabelsCoverAllThemes(t *testing.T) {
++	ctx := tuiPageContext()
++	if len(themes) != 7 {
++		t.Fatalf("themes=%v", themes)
++	}
++	for _, name := range themes {
++		if _, ok := ctx.ThemeLabels[name]; !ok {
++			t.Fatalf("missing label for %s", name)
++		}
++		if ctx.themeLabel(name) == "" {
++			t.Fatalf("empty label for %s", name)
++		}
+ 	}
+ }
+ 
+@@ -209,7 +288,7 @@ func TestThemePaletteFillsBackground(t *testing.T) {
+ 	if dark.Bg == light.Bg {
+ 		t.Fatal("light and dark should paint different canvas backgrounds")
+ 	}
+-	if dark.Bg != "0" || light.Bg != "15" {
++	if dark.Bg != "#16181d" || light.Bg != "#fafafa" {
+ 		t.Fatalf("dark bg=%q light bg=%q", dark.Bg, light.Bg)
+ 	}
+ 	filled := paintScreen("", 8, 2, light)
+
+=== COMMIT TREE ===
+100644 blob 9007b55f695e123f181489be36f43a87549db857	.github/workflows/release.yml
+100644 blob b4a23d61b70d066d5d88260943f507c70560bd3c	.gitignore
+100644 blob a6d1e263c4644f4ff540672b7a4601cce0dc49f9	AGENTS.md
+100644 blob 637823c0af63838506d8b2a6b09c928561f1d484	LICENSE
+100644 blob 17cbcd3492b6d2fa047d116e5cf8a962096ce3b3	Makefile
+100644 blob 5a5cdebe79b82be5c25cdd4ca43acef21fa810fd	README-CN.md
+100644 blob 537d335138ffe9f12d26835fad6d6b9a617dd573	README-JA.md
+100644 blob 0a18e78431bc9119f2fce4b637011c3407dbdd65	README.md
+100644 blob 62be47dc373be2f09870788f79f5e0c1c66f5235	cmd/kander/check_bind_test.go
+100644 blob 8b5f828e446afb27792a790c5807bef26efbc008	cmd/kander/launch.go
+100644 blob 0dd12feeab4102bc3e148c025caa01f351f99b68	cmd/kander/liveness.go
+100644 blob 9ca579595fd83132607a1c0d46b2d78187a91681	cmd/kander/main.go
+100644 blob 460f84e9b55eb08c02b962dd8a1e23988ca552c7	cmd/kander/notify.go
+100644 blob 46275125e68460768cd60fa10e535bbf437a84be	cmd/kander/review.go
+100644 blob 69d1c77cc3d49da6ec85586da5f2fc9a6295e751	cmd/kander/takeover.go
+100644 blob 2e265ceef9af02c79bc21692049ad033e242a3d0	cmd/kander/tui.go
+100644 blob b4ecb84efdc99576e9d1fd49951ee30cca6e643f	docs/card-transactions.md
+100644 blob 4473e6129fad2ac77d2a7ca6ade6cf0b2e02c019	docs/coordinator-recovery.md
+100644 blob b70f0289ed2b78a5d4cde1bce836fc24ec0fb742	docs/custom-agents.md
+100644 blob 7d8739857c299e79128494fcb80b08d04c32dc55	docs/directory-cards.md
+100644 blob abebe824a25330207d88305250b7fd497b84a66d	docs/durable-dispatch.md
+100644 blob bd89d9ddccea3c4a203fede59eb43fee980d9251	docs/how-to-advance-tasks-efficiently-cn.pdf
+100644 blob be927e7934d4965610f951bbaf8b86eae4b18335	docs/how-to-advance-tasks-efficiently-cn.pptx
+100644 blob 367460b4fdd163c68c61d40f3d8850ea4577ff23	docs/how-to-advance-tasks-efficiently-en.pdf
+100644 blob 0a4332ecb4795e5d57b42d0f005e6632c6df331d	docs/how-to-advance-tasks-efficiently-en.pptx
+100644 blob ab194fb33518332bf273bc34f901b961d6cb2e7f	docs/how-to-advance-tasks-efficiently-ja.pdf
+100644 blob ccdc6e00a88d411015e612127c15855641c8c522	docs/how-to-advance-tasks-efficiently-ja.pptx
+100644 blob d07f0e844d89eb9dd67893a7b1818bc19cc8064a	docs/kanban-screenshot-01.png
+100644 blob 2f73ae95b12ecce71946704a47013dd2e348a3a6	docs/kanban-write-guard.md
+100644 blob 9bdad1f48cdbce56dfe63e9b1cd93e3e6f819116	docs/probe-deadlines.md
+100644 blob 9e80a6dc7aad4aa454a0571062ed4c1604f0d202	docs/recovery-regressions.md
+100644 blob 12a2e41d55374c9a7e155bf91feb95b64b940619	docs/review-cn.svg
+100644 blob c94fd5ce0561882f1a0653344b8ca897de5160b9	docs/review-disposition.md
+100644 blob dcc20406e68da5eecda5949b5504bdf9aee2459e	docs/review-en.svg
+100644 blob 6188d176791ae664030a7bc2fd2836d9ff0bb957	docs/review-evidence.md
+100644 blob 589a380fef8b1b9f0fe014333bebcdcee296aa5e	docs/review-ja.svg
+100644 blob 9ce7809ac25a7fb7d3009f6ea342fb75e53cd375	docs/star-please.png
+100644 blob 5dfab1eef68b87bc1d8b5991324e0604d22f50c7	docs/subscription-facts.md
+100644 blob 443da8d47268005a09cb550a04345f56f087bb6d	docs/workflow-cn.svg
+100644 blob 8096929b603ad161e3da43b3f1ee83551ece17bf	docs/workflow-en.svg
+100644 blob 10bb402f2e8e5eb56d1c426ee24811bacc4feea7	docs/workflow-ja.svg
+100644 blob 4b20ee7ca10e22dfcf44531fbbfaeb8c53869afc	go.mod
+100644 blob fb6ca3e074b1eab0367e27e9be37bea04cfa53e4	go.sum
+100644 blob 4d5129f21fb2e8986bdaa702e5d971325e73f9f5	internal/board/board.go
+100644 blob c99719c813f9a5bb87d0023f72728b0e869ef74f	internal/board/board_test.go
+100644 blob d4e2f99cd67f6335e9d46b49c33a8a742eef59dd	internal/board/card_language_test.go
+100644 blob e6aee16466f702e3600fc6ea97e6d90cd9f78491	internal/board/cmd.go
+100644 blob e95545ff8f5197a4fe5a150223c5f7ad2c63d648	internal/board/contract_gate_test.go
+100644 blob 9f98a03f468bd7fcb4dd1d8e1f22f443715a5e05	internal/board/coordinator.go
+100644 blob b64e399bc852c85622a64748e73deb47850cd34e	internal/board/coordinator_closed_fix_test.go
+100644 blob 128dc60fc39853a68c57610a1832e9f3299ea5e2	internal/board/coordinator_crash_test.go
+100644 blob f652cfad57446ba280b0313df058e6966186b1cc	internal/board/coordinator_cycle.go
+100644 blob b968f686964502d8e2e2045328621e774df6103d	internal/board/coordinator_cycle_test.go
+100644 blob a8ad8144d8db18a31ac94f546c56f36b74329116	internal/board/coordinator_reconcile.go
+100644 blob 80afd97021e446fcceea0b9ef2db9407936f136f	internal/board/coordinator_regression_test.go
+100644 blob 6784e1ca44409ff012fac59f0f42a050ffd6c52a	internal/board/coordinator_start.go
+100644 blob 25f7c18f96d186e8322fd18e632975a08762a0b0	internal/board/coordinator_test.go
+100644 blob f3d08e6d1464d82edc1ad23aea84b641996019b0	internal/board/coordinator_wrapup_test.go
+100644 blob aa20be077b4a354c4cf521e6ae0f2f107bd67e2a	internal/board/deps.go
+100644 blob 90fecadfdf63e2a0890203b8597efec8b1d8c072	internal/board/dispatch.go
+100644 blob 94d9ddae02df615e008a23fb8114e0aab48bb2c1	internal/board/dispatch_cmd.go
+100644 blob 49d130586f13af948c384ea8ae00b710253ccde1	internal/board/dispatch_crash_test.go
+100644 blob 3c56b3c659aae5898e9b9328785b9a7cd974928c	internal/board/dispatch_delivery.go
+100644 blob 0134cf91f5ebc840ac0827ce101fcbd782824cb2	internal/board/dispatch_evidence.go
+100644 blob ff09171afaf927b43a51d4c4078e698c11719277	internal/board/dispatch_evidence_test.go
+100644 blob e9864c14959fb336e84e6657c372f502b9d86be6	internal/board/dispatch_receipt.go
+100644 blob af5d2b8fb8b234e2de9603c152c5275d670dad3e	internal/board/dispatch_snapshot.go
+100644 blob a5855c986723bb549af47c0c1765dcb1495f2a99	internal/board/dispatch_snapshot_test.go
+100644 blob 46e758b8ada4aab02a0aae1fc2a29b7cc742c319	internal/board/dispatch_test.go
+100644 blob 576166db168d54b7c4a2161c4ba2cf748e8de426	internal/board/dispatch_wrapup.go
+100644 blob 4430c8d21dcb24a50c2b2721ce6974f7c483406e	internal/board/dispatch_wrapup_test.go
+100644 blob bd471b07a05de4233e38f5b129d471ef8efd0e80	internal/board/document.go
+100644 blob acda57434c059eacea7c7f86c007788a3dc7bd3d	internal/board/guard.go
+100644 blob c2e6e12f886fdb1acc6cdb6176dbc8ef7ec5d68b	internal/board/guard_test.go
+100644 blob b7bfe59ecbb15fd539f80b65726b1e2bbc00a3d3	internal/board/journal_benchmark_test.go
+100644 blob 2537faab16556da758d508992b45cbbc71caad9d	internal/board/journal_concurrency_test.go
+100644 blob 2386595b7c1733671604edf26a26c3de76f8d5ae	internal/board/journal_layout.go
+100644 blob d730f6602d5b03ccd755e736ef7e8e77c23cb699	internal/board/journal_partition_crash_test.go
+100644 blob 24ea7a9bd399103fcf3098a117cbe0aa85e340d2	internal/board/journal_partition_test.go
+100644 blob 3292df212988c6090c284f2e75ec62ac33108799	internal/board/journal_partition_windows_test.go
+100644 blob cec33a10c317146156f9472a9c73af7290d20d8f	internal/board/journal_retention.go
+100644 blob 1a75f49eb2107392e56cabc115c4ac4f298ddfb9	internal/board/journal_temporary_unix_test.go
+100644 blob 6de479394301ad828a4e40fce42d63b986aa9d42	internal/board/journal_temporary_windows_test.go
+100644 blob 5f98dbae318b27332fd925a176943ae3ba6f2294	internal/board/journal_warnings.go
+100644 blob f36a32298fe0d14dc37b2a9ea4ecf5a3a2019063	internal/board/legacy_schema_test.go
+100644 blob f8b1d65b0da430fa47072e1a6fe124810125b8ab	internal/board/list.go
+100644 blob f9a6cd62c14b9b808d84461d8c4ee7368fdc8112	internal/board/locate.go
+100644 blob ba147d7475daf93d1eb2670a6a8bae79ab983e0b	internal/board/locate_deleted_unix_test.go
+100644 blob e90b48c7336bda0d3b03a19da4f5a74e46418afb	internal/board/membership.go
+100644 blob 6885968a4ca2f4677fa078fe8a9ae1cd0abece8d	internal/board/migration.go
+100644 blob 6ea3a49bcde2a5d259034b216b125712be5514e0	internal/board/migration_link_scope.go
+100644 blob 35f9c38ec01a6db5a1cdb8be39252c74c89614dd	internal/board/migration_link_scope_test.go
+100644 blob 2e94555417a7eaf8bbb8c32b850f40419687f472	internal/board/migration_links.go
+100644 blob e9dbca2535d26a1347ad452b02c1264ace1f40a0	internal/board/migration_links_test.go
+100644 blob 965311c7a6b179c06d051e0409723ce038ee44b5	internal/board/migration_new_review_test.go
+100644 blob 01891674fbd630de182fdaef52034fa16bc9eb6a	internal/board/migration_plan.go
+100644 blob 92c2151b4cc0934f03e0ebdd53cce730c7a6f2e3	internal/board/migration_review_test.go
+100644 blob e7feaa0c9358e379a50c5e3186e1d70200ba837b	internal/board/migration_structure.go
+100644 blob ad3356304d25d1810aa2875c0624693e42fff39c	internal/board/migration_test.go
+100644 blob 96829b329f87eddfaac730ecbcd31941809fe7e0	internal/board/migration_windows_test.go
+100644 blob 1b58477358f31a03a27f7d42b7a400546909e4aa	internal/board/migration_write.go
+100644 blob a445963686dd664cc45ae2a171a20c01ba89f9a3	internal/board/move.go
+100644 blob ba3c898373430e6f8ff6099751dc24ea06aa5c0e	internal/board/payload.go
+100644 blob 12d19ae1d7f65d63b39f4d233a402784cba2e504	internal/board/payload_test.go
+100644 blob ab600903e515c7f8598d85b6c92d0a4df18aa8bc	internal/board/recovery.go
+100644 blob dd40ad3fa8bac26d4f06299b84e8cf84caf71553	internal/board/review_advance.go
+100644 blob bc0515e8dff381c22daeae1a3c75c89934e45321	internal/board/review_check.go
+100644 blob d09c258e3dda683266fc2e3ad8cd9989b54e9086	internal/board/review_closure.go
+100644 blob 1c41536b263a0aff58991a79bc2ff9e79dc59954	internal/board/review_context.go
+100644 blob 642e29e42f0936a40ddcaf79d8bf9b43aed3d008	internal/board/review_context_merge.go
+100644 blob 788afe3adc3f2a1d57854711075fbc8dc4ce2dba	internal/board/review_crash_test.go
+100644 blob 90e078a7ff6fb7e982385c4f143e3c04d91eeb86	internal/board/review_disposition.go
+100644 blob 88fa049e3412df5889c60f91c8e7a2ba9f43678e	internal/board/review_findings.go
+100644 blob b9ef6f4f5ac90667f0c6cc495ff52ea10fc48e7b	internal/board/review_gate.go
+100644 blob 37d4c04c487d42200987a810d2affc69bc7bc9a8	internal/board/review_gate_test.go
+100644 blob 7a702a5641b1a6982c2735112a43c6391e27b72b	internal/board/review_legacy_order_test.go
+100644 blob e2930b93f140c2e28aab7afdac8be3ac7bce9da0	internal/board/review_lineage_finalize_test.go
+100644 blob a6e9cb40ba1884ca661a083f3a1ba4a0c88bbbd5	internal/board/review_mechanical.go
+100644 blob 9fc7e77cfd09dc44e8fbfd0dc1a5fdf4f9a23834	internal/board/review_plan.go
+100644 blob 4dd5e3da570801cbccd8b105c10edafc72f8f1f9	internal/board/review_plan_extend.go
+100644 blob bcff174ccc06107b9e557cd7badbbd76d08d772d	internal/board/review_plan_read.go
+100644 blob 1bd82847b26c0ac84520953dedb6cc45030c3b70	internal/board/review_recovery_test.go
+100644 blob 8a08cfe0dba0d9f80898971f3fd107aff629d7a6	internal/board/review_revision_test.go
+100644 blob 5f4c888065c96900bbafbc778eb2b858a3020c0b	internal/board/reviews.go
+100644 blob 82bfc8181973308e6be312469b24cb2eb7190bd5	internal/board/reviews_test.go
+100644 blob b3ac1fd487f5507935fe1d46a34b97a3ef78463c	internal/board/scan.go
+100644 blob bcdf3d81289a47d7b34757b02e9443c7f9a22136	internal/board/schema.go
+100644 blob cae64c7166642b4517576065826feec2568dbdaa	internal/board/size.go
+100644 blob 282b569f0fdd11b167ac1da75e83dbc4431601f9	internal/board/snapshot.go
+100644 blob 17baa2760765ef3020da07340ed52576d6c9154b	internal/board/snapshot_context.go
+100644 blob a69ba4ce5f5b395431b0f91cde8858480213f374	internal/board/snapshot_context_test.go
+100644 blob 62e1e67dc83a2ef8b36fc1e66da7a5446e009690	internal/board/task_start.go
+100644 blob 22deec09e73dc39c8e2b88257c0f35c53166ae68	internal/board/task_start_test.go
+100644 blob c9cc4701e73c2dbfbd3a3d26d2d3cc2ab3a0b4a2	internal/board/template.go
+100644 blob 56b8719784540543d8f59207b1fa7affae51f967	internal/board/templates/contract.md.tmpl
+100644 blob 38fb5c5fa9690d57509278920fa3ee1101d243e8	internal/board/templates/small_extra.md.tmpl
+100644 blob b6881aebc6bb36c69f4d6b5cff04e4c6e0840a0a	internal/board/transaction.go
+100644 blob c919d2214087e3432abde2ed4dca1231f1f95f2c	internal/board/transaction_bytes.go
+100644 blob 92fa769b58fb867c4de26e09aa9091ba6c2fc79b	internal/board/transaction_lock.go
+100644 blob bb161b9dbae817ac58a72fe1f42f873bc63f0d23	internal/board/transaction_log.go
+100644 blob 64f88604cbeea0f09b1a290fd8b750b3cae065dd	internal/board/transaction_test.go
+100644 blob c449666aba89273346cb48645a096bc3f98179ff	internal/board/update.go
+100644 blob 99abe0766552d32154697d1e7d8e907f6768e4d9	internal/cli/cli.go
+100644 blob e9602adb4880810a41cf09efb594bc667902fbe6	internal/cli/cli_test.go
+100644 blob de1de64dd5780fd21a8940564784ad77136811c4	internal/cli/wire_board.go
+100644 blob f99c5f551354a04ee8ad4ec99e14bb31d83563f8	internal/config/agent_language_test.go
+100644 blob 4c8c4344f73d44b76705d4bf6b392fcb5402e994	internal/config/agents.go
+100644 blob c29dd1684305b084e36a10cd2c769243268f3d0a	internal/config/agents_test.go
+100644 blob cb020ba30b383a6a239104a98d86b57391db174c	internal/config/config.go
+100644 blob 9a8999cb6caf1425b628dac36c690ab82bab77a8	internal/config/config_test.go
+100644 blob 96f717a41f1772c9432a54d6a9ff47cd4383c4b1	internal/config/format.go
+100644 blob de13419cd165ce4e925f7cc7fb24b1a061b66a94	internal/config/language.go
+100644 blob 1e0a4bce2ac700b165ffd305584d81d9a228b2c6	internal/config/language_test.go
+100644 blob 8522b4693f7c1f04cd3da3535495b301073f7f1a	internal/config/loadsave.go
+100644 blob 4db69c1a5236f2d6cba47a478ffdc42645543242	internal/config/overlay.go
+100644 blob 70e571977e08a3a87f6881543be9af8a34fc098e	internal/config/overlay_test.go
+100644 blob fd602ba1be3b1f9f36bb8ebd1dbe8250ca94c088	internal/config/paths.go
+100644 blob e88782a47f76647d6e36f2c6e1cacb62d1458772	internal/config/repair.go
+100644 blob ba2f02e1b62bda12537f0aa9bc20a5440ca18d25	internal/config/repair_test.go
+100644 blob d2231e2b47c8421b19442392a1c682f461ca5752	internal/config/review_stages.go
+100644 blob 14d55300effa8186f0ef76bfd6a9ae013b3e2a52	internal/config/review_stages_test.go
+100644 blob 7c64fa8f13a74f3286127cda38096208491c30b4	internal/config/rules.go
+100644 blob 63859d273fa0679b3a727f6c75fd3d8a79d4b7ec	internal/config/rules_test.go
+100644 blob 93f613cbe2463c2f13314dda3a4d310656259f54	internal/config/tui_theme_test.go
+100644 blob 7aa31d99360c4b05d436bc5473f9f7173c771cad	internal/config/unknown_fields_test.go
+100644 blob f2003bed37df6a7401e3ae95f7a389466774a680	internal/flow/flow.go
+100644 blob 71c2d47146c7b5389de8c8d3ed3c394884f46150	internal/flow/flow_test.go
+100644 blob a2ea2110d34a013e7759b00f6f95901534e412bd	internal/focus/focus.go
+100644 blob 136cdb0d0bb7af616e0129f3ab0a8d2fb7f621ea	internal/focus/focus_test.go
+100644 blob ba8923596c567eede262dd394a68bea6282234ae	internal/focus/herdr.go
+100644 blob 88d246151ac142948ddf2ca950d376ca1d7f5ce8	internal/focus/herdr_test.go
+100644 blob 3ba743eb245b6d013ef1b7fe75e41ddb504d3729	internal/fs/append.go
+100644 blob a9ad1c03174db187ffe58f64bb96898cc0e19d5c	internal/fs/fs.go
+100644 blob 87640d87ee5940d82d4fcb9eaeeef644551dcaab	internal/fs/fs_test.go
+100644 blob de6c5570bfe081e1969e534ea63b1fe46405f7d1	internal/fs/path.go
+100644 blob ed9332b52d252dea2f2f98489775e359c71988c2	internal/fs/posix.go
+100644 blob d4ba0ca3ad49979ee78e4722d00d837d88cdb21c	internal/fs/posix_dir.go
+100644 blob 5da84dfaed8b238c97a22e65fb46e5915b46b73b	internal/fs/posix_link.go
+100644 blob 605014a1803b5c5f90769c131cbdf83fe09b90ac	internal/fs/posix_lock.go
+100644 blob 3a945764c58e4644e2116ddd8d1ab04c2feac93f	internal/fs/posix_publish_darwin.go
+100644 blob 95299f2c57c2cb008b2e8b6e617bbe2c789eed39	internal/fs/posix_publish_linux.go
+100644 blob 4dbe5ac91425f672c70de7243458ef515e4060a5	internal/fs/posix_publish_other.go
+100644 blob 5a434591d3d862c1544c4174ab0b253628eec582	internal/fs/posix_reparse.go
+100644 blob fef9ecad6bd762800efb0ab4899615602def1631	internal/fs/posix_temp.go
+100644 blob 4d6c3fb1176cdbd1386df8de80182668dea6ff0e	internal/fs/shared_lock_context.go
+100644 blob 95bea8faf4a6ae47c983ea21c37b0c25f5fdd430	internal/fs/shared_lock_context_unix.go
+100644 blob cb32559e3307128d4373826b51b69149fb781f0d	internal/fs/shared_lock_context_windows.go
+100644 blob ff0ac57dc6d058f626ab09bb4d544a8fb8824691	internal/fs/shared_lock_test.go
+100644 blob 2b271b2d9a4548bc98e568a21e559500a28cbd4a	internal/fs/umask_unix_test.go
+100644 blob 81ab4cbb838d09388d89a3498d2656414e1ed08a	internal/fs/umask_windows_test.go
+100644 blob e8f47904267536960999b7e6cb5ff80a86276719	internal/fs/windows.go
+100644 blob c44e4ed6320091ae970e5ae37dd1a6fb655f282f	internal/fs/windows_link.go
+100644 blob ff6620806affe869baa4a282a5103d4b855c2c40	internal/fs/windows_ops.go
+100644 blob 0b7b28273698c63225a2e4d2fb05c3708a62735c	internal/fs/windows_test.go
+100644 blob b5e6314668fe2b1c2c8b629c0fad19c5751c4c30	internal/i18n/README.md
+100644 blob 418e0178b453ca96b2b788ae47aae34233c46162	internal/i18n/i18n.go
+100644 blob 9903ecabfb54bd5b882c8106d856e47f21fb6eea	internal/i18n/i18n_test.go
+100644 blob dc663d2806b47da51bcbc2159cbff9efea77eb56	internal/i18n/locales/en.json
+100644 blob 7af76de4c21d0fbe34f930bbf819015941999675	internal/i18n/locales/ja.json
+100644 blob 28f72ea5d2462adf22e3a72eac2ca148b4384e92	internal/i18n/locales/zh-CN.json
+100644 blob cb381e04f6d8a768762b2f309bf8a10a8c9b7f1d	internal/install/busy_windows_test.go
+100644 blob 7fed5d7a2f79a5268d704bd83bf2feb92d3ee765	internal/install/cmd.go
+100644 blob d3242ceee81cb7bef7a50ef43e806f36d8a86e75	internal/install/detect.go
+100644 blob 966f294711395687bbb2d08b3f55e828b606cb11	internal/install/handoff.go
+100644 blob 747cd172656e4b47b5b6515dfc08de4aca69df05	internal/install/handoff_unix.go
+100644 blob 036da30fef6bf7967bac993dd46fa04a6dd4a8a0	internal/install/handoff_windows.go
+100644 blob d999f865a6e23aecf132f19b205041e141e9729b	internal/install/install_test.go
+100644 blob 24c722203aa057dc8fd7bbeab78d08076ac9b7cc	internal/install/integrate.go
+100644 blob dcc42be4f4d4760d6363c13da18f88a895c5426f	internal/install/integrate_test.go
+100644 blob 7722cccd28215720cc782617a2b7ce79c25b8b8e	internal/install/leftover.go
+100644 blob 21f788493fa66c11f4b8e641f85c1261fce90c54	internal/install/legacy_hashes.go
+100644 blob 22fd5e3c1ec00ba7edbb51d2e53c7e7c1a4e7792	internal/install/perform.go
+100644 blob b0a1e67074f27977ab6fb4efa26f5c3f72aba6d5	internal/install/rules_state.go
+100644 blob a6a4a5c67719aba7cbc2ca55d9a24e8b5841e8f0	internal/install/testdata/hold.go
+100644 blob b4e86658f7775280424532b920f0223b0c590101	internal/install/testdata/legacy-KANDER-BASE-RULES.md
+100644 blob 2169b8b3d1cc761ebf0784e6bd8e2d26b9510b90	internal/install/wizard.go
+100644 blob a8e081c0c4ee3a8af348850f49a8689dc8ad5603	internal/launch/agent.go
+100644 blob 38199a8926f747a13f136f074294b57889ad328e	internal/launch/agent_allocate.go
+100644 blob debe2d7c4b9068bacfac461047124e5efd6d3433	internal/launch/agent_definitions_test.go
+100644 blob 796e94cce193953408b15e9e13e751f4ddd6f1b1	internal/launch/cmd.go
+100644 blob 7fc5de414beb4d7e7517eb03c8b623aa16ac4284	internal/launch/commands.go
+100644 blob 1d125823ebe2007c344aab163672c97cd2739b1c	internal/launch/coordinator.go
+100644 blob 21f837000a4568d5f4ef7eb43ff9414cb83bccb6	internal/launch/coordinator_rollback_test.go
+100644 blob 2108673412276b8b503458d8b99e3a2085ecd331	internal/launch/coordinator_start_test.go
+100644 blob 133d50cb4c6105f1433eec7bb557cd91baf417d7	internal/launch/coordinator_test.go
+100644 blob f81d8118fbaaa4d9447f8f95bcecb55f18cb4045	internal/launch/dispatch.go
+100644 blob 94752d800e34bbd94e9f4530bb53a3f5e463ba07	internal/launch/dispatch_deadline_test.go
+100644 blob bb9b6042688ecea186567d4e90de8abca64462a4	internal/launch/dispatch_evidence.go
+100644 blob a6202a3e6d27c157afb50649dacdae8daafebb3d	internal/launch/dispatch_evidence_test.go
+100644 blob 59cc79a5e4e2c4c83f782cba6845f9c54f002139	internal/launch/dispatch_options_test.go
+100644 blob 23e72289172cba50c66ea49392aaa3e6e264a1f5	internal/launch/dispatch_rebase.go
+100644 blob b1a6bc25ab9931df1fc58798a14b8c908287f204	internal/launch/dispatch_rebase_test.go
+100644 blob 248771d2d82134c1be4dcead5427f4f6fcbfcfef	internal/launch/dispatch_test.go
+100644 blob 6f83a885376d092cdf28544cf077c27f6c31fc88	internal/launch/error.go
+100644 blob 42acc7bdc614643457f564285d8e9ead51eab906	internal/launch/exec.go
+100644 blob d819a144d6ced07dc7f5dca10f5586be88d88f93	internal/launch/exec_other.go
+100644 blob fa1d375438050ed463d595f8f77bc1a10b4d61c7	internal/launch/exec_windows.go
+100644 blob 6df7d6e3a6c020422d8b841854db62e6f2e3b2cf	internal/launch/exec_windows_test.go
+100644 blob 6721236f6af00aff60e0c6747d1cf10e46a83ffe	internal/launch/herdr.go
+100644 blob b34812f556d7a988641e0dba2512906c864a1cfb	internal/launch/herdr_pane_command_test.go
+100644 blob 423a570e0e51860caca77d454acb5bfb7147cbeb	internal/launch/journal_warnings_test.go
+100644 blob 1012377890c0c65f3b7ce539e1e08934d7f5d782	internal/launch/launch_contract_test.go
+100644 blob 3b6d3389c286fad51c11d002f9ae0824477232d4	internal/launch/launch_test.go
+100644 blob bc3e2c461c865a0135f815c3261cc9ff1b5f8afb	internal/launch/metadata.go
+100644 blob 8549004755f47bb81e206e2cf459a739f36af85c	internal/launch/metadata_test.go
+100644 blob 731f7a91c314c07f96167f4d0ea43d65042261df	internal/launch/notify_resume.go
+100644 blob 661ec0c102fdf6aeebc2779aa0e62e703bb118b7	internal/launch/prompts.go
+100644 blob 59bf7a16a115ff30eb111eb24ea53adb385953ee	internal/launch/prompts_test.go
+100644 blob 764cbadef9f3a09d3ca2d31762ea0e96ffc7cf2d	internal/launch/rollback_test.go
+100644 blob 86edb8414012d9957eb0bad31fa1f9f4885cdd98	internal/launch/rules_test.go
+100644 blob ad1da92eadb1ddf6c32d24f43d0bb3d5dec8bab5	internal/launch/session.go
+100644 blob c9953ee2206a2e0700804d0ae02244216b97a9fe	internal/launch/start.go
+100644 blob 8b9756e7710e8db4321a034ceaf78ccd79eb06ef	internal/launch/start_api_test.go
+100644 blob 0f886b3e2eff6c991ce4ed014bce36cb44c50c4e	internal/launch/tmux.go
+100644 blob f58a1803987b8475d26f8d89fb029dd5d882aecb	internal/launch/tmux_pane_command_test.go
+100644 blob 125f2a640f611651a50139d21efba03630e334fa	internal/launch/types.go
+100644 blob 089510291eb09091059aba6fff56297c71fe437b	internal/liveness/agent_definition_test.go
+100644 blob f5c4cb49f73508a0105d5539699f469d5f252e2e	internal/liveness/batch.go
+100644 blob 99cb3e3c61927f28216cb0c5a3770cba347c503d	internal/liveness/batch_test.go
+100644 blob 4e2a644b52638d7b98e34926369dd2dc4efc4478	internal/liveness/bind.go
+100644 blob 059a43fa2072d7026a0ca307f64508ca221d52c6	internal/liveness/check.go
+100644 blob dab9c400df823bc7ce41ef0b04a6b7bf316273c8	internal/liveness/classify.go
+100644 blob f83382fe7001d9a23f98f8b6890bba12345bb0a7	internal/liveness/deadline_test.go
+100644 blob 131165db2fcd36354592a335db2700135d9c6019	internal/liveness/liveness_test.go
+100644 blob 2ed4d4909fb375855c347473800c3b3c82b6290a	internal/liveness/lookup.go
+100644 blob f4d592ef21828abd964e7a75d6299d16b13aa32e	internal/liveness/lookup_test.go
+100644 blob 25d14689925039da93974c1317e8b691622a1df1	internal/liveness/observation.go
+100644 blob 998f3485e5fd905ee398551fbf5c0efee3f8753a	internal/liveness/subscribe.go
+100644 blob 0e674e673afbc5bc495a6fabcf36724a1708e966	internal/liveness/subscribe_clock_test.go
+100644 blob db3f26ac485bd83d06a4175992e1639d277d5e6c	internal/liveness/subscribe_dispatch.go
+100644 blob 04c8fadc42ff971340d3280c092795aeb1cd22a5	internal/liveness/subscribe_dispatch_runtime_test.go
+100644 blob f16663ecc916516907d00345c4d428c5c2c8939a	internal/liveness/subscribe_dispatch_test.go
+100644 blob f022519d246e8eb08028257851db41e59c7b1f49	internal/liveness/subscribe_facts.go
+100644 blob 8642e3fdb22b770adf116fb556ed0beb1eeaa69c	internal/liveness/subscribe_facts_test.go
+100644 blob 50812a139a8c5e2c29d3bc63b1031956c60ddd69	internal/liveness/subscribe_members_test.go
+100644 blob d7f3e76ce7ba8a69c90a3d861309ee8f38b0aa8d	internal/liveness/subscribe_output.go
+100644 blob e0a01197a85c937de01e0dc119df17569c338bdb	internal/liveness/subscribe_output_posix.go
+100644 blob 07c066d247c3f279ad8fa744399c766a68839417	internal/liveness/subscribe_output_windows.go
+100644 blob 2ef0875bcd6f11ae8f2706967270c4c99828cd0f	internal/liveness/subscribe_pipe_test.go
+100644 blob 55f0e56255fb0a7af17a666ee9808c6e19af66b6	internal/liveness/subscribe_probe.go
+100644 blob 1cea381e6cef17c9ad5b102e0e04aad8f0ad77a9	internal/liveness/subscribe_read_test.go
+100644 blob cf82b3d4d3d429328cbaa285d55fe248ee335b55	internal/liveness/subscribe_restart_test.go
+100644 blob 57f48569c3270e5e71090226b39902861948a970	internal/liveness/subscribe_runtime_test.go
+100644 blob cea0f60d0dfd5b8b7661f5e45cf8a4d581a991da	internal/liveness/subscribe_signal_test.go
+100644 blob c00a21738d5e0cd99983ce1e74d0835b811e9d9d	internal/liveness/subscribe_signals_posix.go
+100644 blob 077b97e4de7667f0a2e6e5f2c2bf509fddb49cac	internal/liveness/subscribe_signals_windows.go
+100644 blob 32e3398d117edeeebaec4b090dde3808274c52af	internal/liveness/types.go
+100644 blob b09f5277b6329fc05bdd9413dba811772946fcdb	internal/menu/agent_fields.go
+100644 blob 084a45bdaa0be844bc5753e54bcdbfe6220ffdef	internal/menu/agent_fields_test.go
+100644 blob 6aa52bb0aedca8f7b3e898196ca85c97b921f81c	internal/menu/agent_language_test.go
+100644 blob 496025ba29bf60c64cfbe1efa11349717c0ae7dd	internal/menu/agent_probe_test.go
+100644 blob 80809402981087aedaedc88de65a7dfcb14e99d5	internal/menu/agents.go
+100644 blob f8cbe43c5a157906eb309fae300586ae249630df	internal/menu/agents_path_test.go
+100644 blob b2bcb51cc499a9215cf9dd5a4756d1b597c25c51	internal/menu/color.go
+100644 blob bf9b31836c0c26dc79e834915c81e08cd8b6d5ce	internal/menu/commands.go
+100644 blob 5ef3f0fd31cbd4f1f9c15f211db0774f13b050ed	internal/menu/doctor.go
+100644 blob 54cc2913212aacb6fe83f8d46053bc98ad7552f3	internal/menu/doctor_config_test.go
+100644 blob 47b5b9bcac7749e7698c3c3795176d28a0d64240	internal/menu/doctor_extra_test.go
+100644 blob b3b859955a90e1d04d32e57bac93102e6262a1bd	internal/menu/doctor_repair.go
+100644 blob 42c3e31a2a9e65350745db2f9a051be04e851c43	internal/menu/doctor_repair_test.go
+100644 blob 43628dc817d790401f674f727b231dc0c07f35bf	internal/menu/doctor_session.go
+100644 blob 0b2d456aa2296b3f2cf31ad466ccc7e6d86ffda3	internal/menu/launcher_windows_menu_test.go
+100644 blob 4ae0b7f433887a103fbd797e953539a86e7130ea	internal/menu/menu_harness_test.go
+100644 blob 42ac4f915271ca1e9e09a5e91e2d562b00cb4a1c	internal/menu/options.go
+100644 blob eb22d6384ebf6e73f305429095cb408e5725d927	internal/menu/options_helpers.go
+100644 blob 102994353382c65fe66386a468a4b54c633e9081	internal/menu/os.go
+100644 blob 718bb10b9c4e25f5f4c55822d133ab79e4c6fcd6	internal/menu/overlay_cli_test.go
+100644 blob 23a54a21ab8116f221844909bbc2c1de45269baf	internal/menu/report.go
+100644 blob daf6a188dd35973e44f520e29bd2620cb9b27521	internal/menu/restore_other.go
+100644 blob 99460505b208bf8c6d7fff8c40848c6a37378739	internal/menu/rule_options.go
+100644 blob 57f2b2e95022ce5b591f7b6a5b4df7c18696318d	internal/menu/rule_options_test.go
+100644 blob 4c2acbb39e658984114e87dbfc4acb6ad84761ca	internal/menu/rules.go
+100644 blob 1aa7d2685b3a0b79a9c424f45a876ba6f99a4aaa	internal/menu/rules_test.go
+100644 blob aefcb884f3f76849f214caa15cebbbd4372aaeb0	internal/menu/select.go
+100644 blob 89b682787314399e3207c4d8925eb14e2989cf93	internal/menu/select_unix.go
+100644 blob fa66b5af2a3cc111d46bb02b1022ec35fd54b1d7	internal/menu/select_windows.go
+100644 blob 5cb00bf58706c3c1ed95a4c64109a40da90aa306	internal/menu/terminal_tools.go
+100644 blob 6f70061150ca1f964ef5c63e90837b67047bf052	internal/menu/terminal_tools_test.go
+100644 blob 1dd76274fc32ba89c3b7bb4a87ca795df330248f	internal/menu/terminal_tools_windows_test.go
+100644 blob 323be4555ea1a143e4b9c4f0afa30518f395feac	internal/menu/termios_bsd.go
+100644 blob e139b12e72311f52a2c5e7a5748fedc9882c8e22	internal/menu/termios_linux.go
+100644 blob debf1b7ca50f72b56dde7a8a931d17a6dff3a25a	internal/menu/tty.go
+100644 blob b36b27a98289de63f440254b06f570873bbb6458	internal/menu/tty_unix.go
+100644 blob d3336a5b0ebd3c44ff8bf7d29e66875a4cea77b4	internal/menu/tty_windows.go
+100644 blob 59ae63f98eedfbddaef3b0b6a4d05875032e8968	internal/menu/uid_unix.go
+100644 blob 382f219e0a86a4ea793d783da1092405fb80c9ad	internal/menu/uid_windows.go
+100644 blob 80cf8ec19954c6381aa0bb2fa1dc564b92db322a	internal/notify/agent_definition_test.go
+100644 blob 1ef9b4e1807546768e5b948353e324e375f6d98d	internal/notify/cmd.go
+100644 blob 0cc7589f3424181a69915dd7256ec439e46e6783	internal/notify/command.go
+100644 blob 6b341553e969d444135826c8c40b1cc30f3e60ea	internal/notify/deliver.go
+100644 blob c3796f0add5bdf087f23cdef8fedd022c1fc2faa	internal/notify/dispatch.go
+100644 blob d812491d8eae6bd4d182427ebfaf55ddb0918d25	internal/notify/dispatch_crash_test.go
+100644 blob bb4c04b3e2474b5c01c5d5d13425def5ae9d7ffe	internal/notify/dispatch_fencing_test.go
+100644 blob c30395cb4915efc0f9adc5432bdcaa63a9e070bd	internal/notify/dispatch_test.go
+100644 blob 212863fb0ee670d25186aa08667fdacd7536db2a	internal/notify/error.go
+100644 blob 67648138b2e757c8e0939dbde8749aeeed8315a6	internal/notify/notify_test.go
+100644 blob 6ac5509f3ab5ae15285b8d972531095edea36bcf	internal/notify/payload.go
+100644 blob 3a392c5fe2c9105027fb8274b13b372ce6673ab3	internal/notify/probe.go
+100644 blob d222954be79bd6adb3fc1ac7aa9733d8214de06d	internal/notify/resolve.go
+100644 blob 990ead193c997c8f760a240434d4f69f31f417d5	internal/notify/rules_test.go
+100644 blob 9c70e58b42e1ee69ea067b57d6a5be36f7776807	internal/notify/temp_unix.go
+100644 blob 1cdca9a66a559d798535cc402b38cc54a0b06cc6	internal/notify/temp_windows.go
+100644 blob ce71600b75a24670b06d8293c5caf68994c2d1bc	internal/notify/windows_direct_test.go
+100644 blob 090de15335050f2063ea1872f277f81e93dbb325	internal/probe/error.go
+100644 blob 7351622a31841afd8e6101cc8521867e8cc9a599	internal/probe/herdr.go
+100644 blob 454ed8c9e5116699a7cdee98dfacafad209dfd26	internal/probe/probe_test.go
+100644 blob 57055d4900ab7f80f1393695b55901839a85d87d	internal/probe/run.go
+100644 blob 88f5c4de70cb8433815a550677438cc6a7b9c6cf	internal/probe/run_posix.go
+100644 blob 89b4c9cccae7253ae20a3af205b3cf64a562948f	internal/probe/run_posix_test.go
+100644 blob 2deb38f9483a41fb0fee6669793d8f2271ecbe15	internal/probe/run_test.go
+100644 blob 243ce25b09f3fb86408ed6a9b55cd17dbaba8cb1	internal/probe/run_windows.go
+100644 blob bf5c1c03a907ae71c2c87e8cfbfc4d557a81fa82	internal/probe/run_windows_test.go
+100644 blob d364a4c0d33411afbd500bee7571eaf357b3199d	internal/probe/tmux.go
+100644 blob 0ae5d61cac0c096d069fca3a110a0fd825261342	internal/process/process.go
+100644 blob 1993f47d7b45d159b1b4e98fadc888446c428bfc	internal/process/process_test.go
+100644 blob a6e25639302abf10e4e3494f8886a4c86497d84d	internal/review/access_unix.go
+100644 blob 43400543663b6da6b3817cfa618a6ff2878fa54f	internal/review/access_windows.go
+100644 blob 4eaa9f1f7de484b9a2883f404257cd880550739b	internal/review/agent_executable_test.go
+100644 blob be262ea587113ea09d89d79a7a3f9c72c1ecdc25	internal/review/archive.go
+100644 blob a37a0d20b9951bed591058c5d695aad66600bd13	internal/review/archive_test.go
+100644 blob b5ba1bf765fb8ced4224a194f15ee7c961507fe7	internal/review/args.go
+100644 blob 25b9d23646ac4f60381dc7c7a3a4542ace2fd10d	internal/review/bind.go
+100644 blob bc7212b308897be22bc7ba888a13b21893f5c271	internal/review/claude_test.go
+100644 blob de3483e356ff35ebc1981368299e519e8facd2b9	internal/review/codex_test.go
+100644 blob 06a4e5700aadd9d7370978e7614145ef2a8a7262	internal/review/cursor_test.go
+100644 blob a77538070d653701671b49594dda3e8764fba3b0	internal/review/disposition.go
+100644 blob d4fcfb5e209cb827f1cd7d5aa0710236c561141d	internal/review/disposition_cycle_test.go
+100644 blob e08ce37a0966bd7a1a9e2b8636b40e86396bd03d	internal/review/disposition_regression_test.go
+100644 blob bec7ea33c3da746db3f0fc55bb3e7435c6ad3d61	internal/review/disposition_test.go
+100644 blob 5a288e6df1d799ff04d8af9ce909383e3057abfc	internal/review/execute.go
+100644 blob 9d2a0bb8dbb62450a94e444b5965629eb8c38711	internal/review/git.go
+100644 blob 5a6c813bca260efdd9e7d1ced17e642e4e6a6f08	internal/review/grok_test.go
+100644 blob c7011a199bbd2876e1157356e94b2c38cec0457c	internal/review/harness_test.go
+100644 blob 0f68a5db71ea8760d78223f03dbb60cc79ed9606	internal/review/helpers_test.go
+100644 blob b7ee856ac4b831f905f265dd07c718d025efe354	internal/review/launch_unix.go
+100644 blob def6aacc05623eaf5ee172d4c61adcfaf4132c76	internal/review/launch_windows.go
+100644 blob 561c865964c5f2973fbc8a64fde0940aee7c18ea	internal/review/lineage_recovery_test.go
+100644 blob 8e74e21547e1dc3e78e301a7a84a553aa55911aa	internal/review/mechanical.go
+100644 blob 52dec9505f8f4674b3185bd93fc040fa050a3d6d	internal/review/monitor_unix.go
+100644 blob 826ced6c07d3cf68a50e6d44905a3320b5b7e145	internal/review/monitor_windows.go
+100644 blob c7966edc7a718ecdb96c408007dd0f2bb764fadf	internal/review/platform_unix.go
+100644 blob d17d17631d739b031f7aa6dd064d9238c2818cfd	internal/review/platform_windows.go
+100644 blob 8567ba980bee2a008eb00312fb1fe62346d6ff44	internal/review/recovery.go
+100644 blob 9b392b943c04ddd5067daed5e1f9589b7ca1edf1	internal/review/report_language_test.go
+100644 blob 084d6ab3d045dddd8b224225243897908c4d0a46	internal/review/review.go
+100644 blob e3108339997c52154dee970352127ddf16da22cc	internal/review/roles.go
+100644 blob e8e3e6cb6438ffc1613effff6f427bf5e0c9eb37	internal/review/settings.go
+100644 blob 6d8d7418fdd08849765e506fe7a8a20b84634373	internal/review/tree.go
+100644 blob 1b0a3d232081c2c48def96c6625e26000015bbc2	internal/review/validate.go
+100644 blob 93c3439efb0b1a54f30dff8c32342806a6e88aa7	internal/review/windows_review_test.go
+100644 blob 678a8d225689a29cfab1ece86110ec27e73018ad	internal/takeover/agent_definition_test.go
+100644 blob 0129d92f81925a3949e6444c26568f1dfe1ce6c9	internal/takeover/cleanup.go
+100644 blob 1c65123411fcaf098a3c16b3cc840b2bf1e38d01	internal/takeover/cmd.go
+100644 blob c4376d887f4c273255329063e4b96259b5fa6dc3	internal/takeover/dismiss.go
+100644 blob ba251ce9a2251c6e36bc30a85e0561b4e7c69ff1	internal/takeover/ops.go
+100644 blob 9f777ddac8d5231bcdd468789fda4846e35f0088	internal/takeover/takeover_test.go
+100644 blob 6cf357d270c5201b12c40cd951c0649380290b20	internal/takeover/wait.go
+100644 blob ddef07f8ed6cb606fcc9ff7739b50398427f8f9e	internal/takeover/windows_container_test.go
+100644 blob 89b0fa5dc81e1d49ed60adf8ece3c37f465816cf	internal/tui/app.go
+100644 blob 79ccb759d12ca8da600cdf3a8d4c2a0609e75f0a	internal/tui/background_fill_test.go
+100644 blob 9bbf8678e293a5590ca89e50cae0aab7a3425d00	internal/tui/board_view.go
+100644 blob 2f91c9b13be821143eb359e9bac2ddc3345f6579	internal/tui/clipboard.go
+100644 blob 711adbba746928150552f7c8a5e855e78d2bf415	internal/tui/cmd.go
+100644 blob 64a5795abc574a8ced01bb6b07e5d2192415f594	internal/tui/cmd_test.go
+100644 blob 0a0a0bcdeeb56e15f5f62b95984c65f940e60c6a	internal/tui/context.go
+100644 blob 672cf6a52621c1edc4765edea1f4a599026f22bb	internal/tui/detail_view.go
+100644 blob 17b5fb99aa3c78e5709b2c40d7528dcd854abce6	internal/tui/focus.go
+100644 blob 40174c4dba2e9462b9a943a285c0d78f37e356e5	internal/tui/focus_test.go
+100644 blob 78306ee54eb80d915fec9ea0137b7319a0b843a0	internal/tui/help_view.go
+100644 blob af85b3120992d368443e0aa63b5281d1b49e295b	internal/tui/journal_warnings.go
+100644 blob 72f4e591142e2a62d37167d8ed2d8bfbc529b424	internal/tui/journal_warnings_test.go
+100644 blob 0e0f1875044f0dbdafc32d4aac49c0c0e14db73d	internal/tui/layout.go
+100644 blob fc6568611684d27b9a107254ba4bbaeeac124990	internal/tui/model.go
+100644 blob 95d323f432b86c9309f56bf44a81eb63696c2705	internal/tui/mouse.go
+100644 blob 8ba9e9371a270f29bdd3aa773847ef41b1dd96f4	internal/tui/options_doctor.go
+100644 blob 4dbd590131eb0c6d0b668c209c4f113c479475b8	internal/tui/options_doctor_test.go
+100644 blob b6752af087b73ac49a4d044408d4aeca63cf032c	internal/tui/options_flow.go
+100644 blob c05871b035b6f676ab7b627d50b8b46f6b4c993b	internal/tui/options_flow_test.go
+100644 blob 35b5da9a61b9f5a1bedcfc3ef1c12ee7c2145886	internal/tui/options_form.go
+100644 blob 3ef0598d57eb3be42f778c472954bb9d3ced742b	internal/tui/options_panel.go
+100644 blob e74b8e437e29f9e51572aad935e5f617cea7c166	internal/tui/options_rules.go
+100644 blob 693d6b6ce3c18cdff021fab8c6ea973b2a73224d	internal/tui/options_rules_test.go
+100644 blob 464a2058c4b22423da41e4d51a2480fc2984e64f	internal/tui/options_test.go
+100644 blob f24fee0983bfc13512249bd148636f9490ce1f18	internal/tui/options_view.go
+100644 blob 43b66f0d228e68c5c53c5c566a5b48bcfaefd520	internal/tui/overlay.go
+100644 blob 9b99be50175a3c773daa54fe168bb2e164ff7b14	internal/tui/payload.go
+100644 blob 63e8ab9bf1708d2a0bf28dd3d26f065c92aa34da	internal/tui/prefs.go
+100644 blob 55c037cea39d7a4a103457e98932c8ecdf2da306	internal/tui/program.go
+100644 blob 393f689ee46e96155536bb55429532ce4828a922	internal/tui/pty_test.go
+100644 blob 78edfc31333fbb96b4c761ac51b4442fe6edfa1e	internal/tui/selection.go
+100644 blob b05b6a95ad5d82ceb2f5e5c2c1ee904ca1f1cb5b	internal/tui/start.go
+100644 blob 3f328c3f34a02fb19861f8af60148bc62aeb89de	internal/tui/start_async_test.go
+100644 blob 59f5f01b041e8081ab1c6d3c81299571382122c5	internal/tui/start_dialog.go
+100644 blob 535f7114d9726db91d9146251b40147dd8fad879	internal/tui/start_scroll_test.go
+100644 blob fc9571bb03733b30b9255f2f7c05234b577c2f33	internal/tui/start_target_linux_test.go
+100644 blob 6e4145961991a447f8a5e4fe40bcd3eb957fce6e	internal/tui/start_test.go
+100644 blob db0a7a8bdb217edd3f68562d7e317f9a9bf33f5e	internal/tui/status.go
+100644 blob ef5b58d1e40fd6c6fa148557ff735419729da265	internal/tui/text.go
+100644 blob c23235278bc9faeee93f4753390367df365615cc	internal/tui/theme.go
+100644 blob 8170bd1173406942972f4c3f1c64fd60f4343eff	internal/tui/theme_test.go
+100644 blob 8c5f326a3289d35f0556c8d9d9dd99c0af8434a9	internal/tui/tui_test.go
+100644 blob b1452bed5782565ed44fbec0a2e337cf3e0fcffb	internal/tui/types.go
+100644 blob 49d83696cb7d3263084c6884fb0d41a1256b8462	internal/version/version.go
+100644 blob 94f343dcf7105c7d609a5a4e9257e4120956616a	internal/version/version_test.go
+100644 blob 2100e20e3dd461bedad832085c6db0d82ad0ac40	internal/window/window.go
+100644 blob 303bfab29226bc62fff6fc2d8f0ddbebda293cdf	internal/window/window_test.go
+100644 blob 12eb667eda1f0652129a362dc03b12811b901d67	make-windows.cmd
+100644 blob a8eec83d2429fbfd55da4dea74d9500638fce4a1	rules/KANDER-AGENTS.md
+100644 blob e2f96a4bd261510b0ae6223fcac402391f4d887c	rules/KANDER-BASE-RULES.md
+100644 blob 9a89057dde49e5c7d6ea149ea89ffe38e941ee3e	rules/KANDER-CODE-RULES.md
+100644 blob 0cbf80394b952ad82751444955a47fdb30a3e437	rules/KANDER-COLLABORATION-RULES.md
+100644 blob 4410d42ce05064989180ca2653234129dde5d603	rules/KANDER-GIT-RULES.md
+100644 blob c99efbab09e14a40648ffc14392dbf8b29bed20a	rules/KANDER-KANBAN-RULES.md
+100644 blob de41d6c965980fbd9010f8a59542a67124531708	rules/KANDER-REPORTING-RULES.md
+100644 blob 992e9e4bff86155ac004acb23a73eb2a748ca541	rules/KANDER-REVIEW-RULES.md
+100644 blob cd59500ff989534f91f2ecb41a41cf7c6fdd0fad	rules/KANDER-TASK-GROUP-RULES.md
+100644 blob ad84267f10cae054f6e78e0c5cfd8bb3fda73ff4	rules/KANDER-TASK-INTAKE-RULES.md
+100644 blob 4650fb65647980cf787833a7c98ed2718cac2b48	rules/embed.go
+100644 blob c930439258d499a6a547e11b622e91261e5787b9	rules/embed_test.go
+100755 blob c7e77a84400af22bdf0f03cda5c1a96552a7435e	scripts/guard-kanban-write.sh

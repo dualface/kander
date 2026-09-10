@@ -1,0 +1,17 @@
+{
+  "run_id": "tui-theme-qa-r4",
+  "batch_id": "tui-theme-batch-one",
+  "author": "grok-orchestrator",
+  "basis": "QA-02 hits both cards' human-verification acceptance criteria, same scope as r3",
+  "items": {
+    "QA-02": [
+      "20260909-tui-theme-presets-task",
+      "20260909-tui-truecolor-palette-task"
+    ]
+  },
+  "owners": {
+    "20260909-tui-theme-presets-task": "cursor",
+    "20260909-tui-truecolor-palette-task": "grok"
+  },
+  "recorded_at": "2026-09-09T07:54:06.734207648Z"
+}

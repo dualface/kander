@@ -1,0 +1,25 @@
+{
+  "run_id": "pm-batch-one-r4",
+  "batch_id": "batch-one",
+  "author": "claude-orchestrator",
+  "basis": "carried non-blocking items keep their original attribution: PM-06/07/11 hit card 2 (overlay), PM-08 hits card 1 (review_stages error text)",
+  "items": {
+    "PM-06": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-07": [
+      "20260909-project-config-overlay-task"
+    ],
+    "PM-08": [
+      "20260909-review-stages-per-size-task"
+    ],
+    "PM-11": [
+      "20260909-project-config-overlay-task"
+    ]
+  },
+  "owners": {
+    "20260909-project-config-overlay-task": "cursor",
+    "20260909-review-stages-per-size-task": "cursor"
+  },
+  "recorded_at": "2026-09-08T20:39:37.452813607Z"
+}

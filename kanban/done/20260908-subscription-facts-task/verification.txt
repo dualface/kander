@@ -1,0 +1,2620 @@
+最终提交：003e5fecf4048d8da8151d0431ea1cd040912a36
+组基线：021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5
+
+提交：003e5fecf4048d8da8151d0431ea1cd040912a36
+命令：go test -json -count=1 ./...
+结果：exit 0；19 个包，550 个顶层测试通过，含子用例 821 项通过、1 项 skip、0 失败
+=== RUN   TestCheckCommandUsesLivenessInFullBinary
+--- PASS: TestCheckCommandUsesLivenessInFullBinary (0.05s)
+PASS
+ok  	github.com/dualface/kander/cmd/kander	0.077s
+=== RUN   TestExclusiveLockBlocksAnotherProcess
+=== RUN   TestStringUsesBuildTimestampAndGitHash
+--- PASS: TestStringUsesBuildTimestampAndGitHash (0.00s)
+=== RUN   TestStringFallsBackForEmptyComponents
+--- PASS: TestStringFallsBackForEmptyComponents (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/version	0.007s
+=== RUN   TestNamesAreMarkdownOnly
+--- PASS: TestNamesAreMarkdownOnly (0.00s)
+=== RUN   TestEntryDeclaresAgentLanguage
+--- PASS: TestEntryDeclaresAgentLanguage (0.00s)
+=== RUN   TestFileRejectsInvalidNames
+--- PASS: TestFileRejectsInvalidNames (0.00s)
+=== RUN   TestHashStable
+--- PASS: TestHashStable (0.00s)
+PASS
+ok  	github.com/dualface/kander/rules	0.007s
+=== RUN   TestHelpListsAllCommandsAndLang
+--- PASS: TestHelpListsAllCommandsAndLang (0.00s)
+=== RUN   TestHelpEnglish
+--- PASS: TestHelpEnglish (0.00s)
+=== RUN   TestUnimplementedCommands
+--- PASS: TestUnimplementedCommands (0.00s)
+=== RUN   TestVersionCommand
+--- PASS: TestVersionCommand (0.00s)
+=== RUN   TestUnimplementedEnglish
+--- PASS: TestUnimplementedEnglish (0.00s)
+=== RUN   TestInvalidLang
+--- PASS: TestInvalidLang (0.00s)
+=== RUN   TestUnknownCommand
+--- PASS: TestUnknownCommand (0.00s)
+=== RUN   TestSmallAndLargeLifecycle
+=== RUN   TestInstallRejectsNonInteractiveFlags
+--- PASS: TestInstallRejectsNonInteractiveFlags (0.00s)
+=== RUN   TestDefaultRunner
+--- PASS: TestDefaultRunner (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/cli	0.012s
+=== RUN   TestCatalogs
+=== RUN   TestAgentLanguageDefaultsFollowInterfaceLanguage
+--- PASS: TestAgentLanguageDefaultsFollowInterfaceLanguage (0.00s)
+=== RUN   TestRepairDerivesAgentLanguageFromStoredLanguage
+=== RUN   TestPosixProgramUsesNativeArgv
+--- PASS: TestPosixProgramUsesNativeArgv (0.00s)
+=== RUN   TestPosixResolveUsesLookPath
+=== RUN   TestPerformGlobalInstall
+--- PASS: TestPosixResolveUsesLookPath (0.00s)
+=== RUN   TestWindowsLookupSkipsEmptyExeAndAcceptsBatch
+=== RUN   TestTmuxDisplayGonePreservesDetail
+--- PASS: TestWindowsLookupSkipsEmptyExeAndAcceptsBatch (0.00s)
+=== RUN   TestWindowsLookupPrefersLaterNativeExe
+--- PASS: TestWindowsLookupPrefersLaterNativeExe (0.00s)
+=== RUN   TestBatchCommandContainsOnlyGeneratedReferences
+--- PASS: TestBatchCommandContainsOnlyGeneratedReferences (0.00s)
+=== RUN   TestBatchQuoteHandlesEmptyQuotesAndTrailingBackslash
+--- PASS: TestBatchQuoteHandlesEmptyQuotesAndTrailingBackslash (0.00s)
+=== RUN   TestBatchIgnoresRelativeComspec
+--- PASS: TestBatchIgnoresRelativeComspec (0.00s)
+=== RUN   TestTaskFileContainsBodyAndBestEffortDeleteInstruction
+=== RUN   TestLaunchAgentSendsShellSpecificCommandToHerdr
+--- PASS: TestTaskFileContainsBodyAndBestEffortDeleteInstruction (0.00s)
+=== RUN   TestWriteTaskFileUsesSamePayload
+--- PASS: TestTmuxDisplayGonePreservesDetail (0.00s)
+=== RUN   TestTmuxIdentityGonePreservesDetail
+--- PASS: TestTmuxIdentityGonePreservesDetail (0.00s)
+=== RUN   TestTmuxIdentityMissingAndFailureAreDistinct
+=== RUN   TestRenderWindowMetadataInsertAndReplace
+=== RUN   TestNotifyStaleHerdrRewritesAndDelivers
+=== RUN   TestBatchMixedCommandsShareTotalBudget
+--- PASS: TestTmuxIdentityMissingAndFailureAreDistinct (0.00s)
+=== RUN   TestTmuxDualReadPrefersKanderThenOnevoke
+--- PASS: TestRenderWindowMetadataInsertAndReplace (0.00s)
+--- PASS: TestTmuxDualReadPrefersKanderThenOnevoke (0.00s)
+=== RUN   TestHerdrGonePreservesDetail
+=== RUN   TestRestoreWindowTextAndFailureMessage
+--- PASS: TestHerdrGonePreservesDetail (0.00s)
+=== RUN   TestHerdrOtherFailureRaises
+--- PASS: TestHerdrOtherFailureRaises (0.00s)
+=== RUN   TestHerdrProbePreservesDeadline
+--- PASS: TestHerdrProbePreservesDeadline (0.00s)
+=== RUN   TestTmuxContainerProbe
+--- PASS: TestTmuxContainerProbe (0.00s)
+=== RUN   TestTmuxProbePropagatesCallerTimeout
+--- PASS: TestTmuxProbePropagatesCallerTimeout (0.00s)
+=== RUN   TestContextBudgetDefaultsAndInheritance
+--- PASS: TestContextBudgetDefaultsAndInheritance (0.00s)
+=== RUN   TestHerdrProbePreservesCancellation
+--- PASS: TestHerdrProbePreservesCancellation (0.00s)
+=== RUN   TestCancellationMessagesInAllLanguages
+=== RUN   TestCancellationMessagesInAllLanguages/cn
+--- PASS: TestCancellationMessagesInAllLanguages/cn (0.00s)
+=== RUN   TestCancellationMessagesInAllLanguages/en
+--- PASS: TestCancellationMessagesInAllLanguages/en (0.00s)
+=== RUN   TestCancellationMessagesInAllLanguages/ja
+--- PASS: TestCancellationMessagesInAllLanguages/ja (0.00s)
+--- PASS: TestCancellationMessagesInAllLanguages (0.00s)
+=== RUN   TestCaptureClosesPipesHeldOutsideProcessGroup
+=== RUN   TestArchiveCLIOutputRetryAndLanguage
+=== RUN   TestDismissStaleHerdrDoesNotRewriteWindow
+--- PASS: TestWriteTaskFileUsesSamePayload (0.01s)
+=== RUN   TestTaskFilePointerIsOneShortInstruction
+--- PASS: TestTaskFilePointerIsOneShortInstruction (0.00s)
+=== RUN   TestBatchQuoteRejectsNUL
+--- PASS: TestBatchQuoteRejectsNUL (0.00s)
+=== RUN   TestWindowsCommandInterpreterIgnoresEnvNameCase
+--- PASS: TestWindowsCommandInterpreterIgnoresEnvNameCase (0.00s)
+=== RUN   TestBatchInvocationExposesShellEnv
+--- PASS: TestBatchInvocationExposesShellEnv (0.00s)
+=== RUN   TestShellInvocationUsesVariableFormForNonBatch
+--- PASS: TestShellInvocationUsesVariableFormForNonBatch (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/process	0.024s
+--- PASS: TestCatalogs (0.02s)
+=== RUN   TestText
+--- PASS: TestText (0.00s)
+=== RUN   TestCatalogCallSites
+=== RUN   TestPostInstallOpensInterfaceWithoutBoard
+--- PASS: TestPostInstallOpensInterfaceWithoutBoard (0.01s)
+=== RUN   TestDoctorSyncPreservesPendingSettings
+--- PASS: TestRepairDerivesAgentLanguageFromStoredLanguage (0.03s)
+=== RUN   TestSourceTreeEntryKeepsGlobalHomePaths
+--- PASS: TestSourceTreeEntryKeepsGlobalHomePaths (0.00s)
+=== RUN   TestPosixUppercaseKanderDirIsNotProject
+--- PASS: TestPosixUppercaseKanderDirIsNotProject (0.00s)
+=== RUN   TestSourceLayoutWithCmdAndRulesIsNotProject
+--- PASS: TestSourceLayoutWithCmdAndRulesIsNotProject (0.00s)
+=== RUN   TestProjectEntryResolvesMainWorktreeLayout
+--- PASS: TestDoctorSyncPreservesPendingSettings (0.01s)
+=== RUN   TestDoctorInstallDecision
+=== RUN   TestDoctorInstallDecision/default
+--- PASS: TestPerformGlobalInstall (0.04s)
+=== RUN   TestPerformPreservesExistingAgentsEntry
+--- PASS: TestRestoreWindowTextAndFailureMessage (0.04s)
+=== RUN   TestRenderWindowMetadataUpdatesLegacyFieldsInPlace
+--- PASS: TestRenderWindowMetadataUpdatesLegacyFieldsInPlace (0.00s)
+=== RUN   TestRollbackNeverResurrectsMovedSmallCard
+--- PASS: TestProjectEntryResolvesMainWorktreeLayout (0.02s)
+=== RUN   TestProjectInstallPathsFromLinkedWorktreeUsesMain
+--- PASS: TestPerformPreservesExistingAgentsEntry (0.03s)
+=== RUN   TestPerformRemovesInstallerAgentsEntryCopy
+--- PASS: TestProjectInstallPathsFromLinkedWorktreeUsesMain (0.02s)
+=== RUN   TestConfigPathKeepsEnvOverride
+--- PASS: TestConfigPathKeepsEnvOverride (0.00s)
+=== RUN   TestConfigPathWithoutOverrideFollowsGlobalScope
+--- PASS: TestConfigPathWithoutOverrideFollowsGlobalScope (0.00s)
+=== RUN   TestValidateTUI
+=== RUN   TestValidateTUI/refresh_type
+--- PASS: TestValidateTUI/refresh_type (0.00s)
+=== RUN   TestValidateTUI/unknown_theme
+--- PASS: TestValidateTUI/unknown_theme (0.00s)
+=== RUN   TestValidateTUI/unknown_field
+--- PASS: TestValidateTUI/unknown_field (0.00s)
+=== RUN   TestValidateTUI/columns_range
+--- PASS: TestValidateTUI/columns_range (0.00s)
+--- PASS: TestValidateTUI (0.00s)
+=== RUN   TestGitDirEnvDoesNotDivertProjectPaths
+--- PASS: TestCatalogCallSites (0.06s)
+PASS
+ok  	github.com/dualface/kander/internal/i18n	0.100s
+--- PASS: TestRollbackNeverResurrectsMovedSmallCard (0.04s)
+=== RUN   TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback
+--- PASS: TestDoctorInstallDecision/default (0.06s)
+=== RUN   TestDoctorInstallDecision/escape
+--- PASS: TestPerformRemovesInstallerAgentsEntryCopy (0.04s)
+=== RUN   TestPerformRemovesPreviousOfficialAgentsEntryCopy
+--- PASS: TestNotifyStaleHerdrRewritesAndDelivers (0.11s)
+=== RUN   TestNotifyKeepsReviewAndRequiresSelfMove
+--- PASS: TestGitDirEnvDoesNotDivertProjectPaths (0.04s)
+=== RUN   TestInstallPathsRejectsProjectEntryWithoutGit
+--- PASS: TestInstallPathsRejectsProjectEntryWithoutGit (0.00s)
+=== RUN   TestProjectInstallPathsRejectsNonGit
+--- PASS: TestProjectInstallPathsRejectsNonGit (0.00s)
+=== RUN   TestProjectInstallPathsRejectsMissingDirectory
+--- PASS: TestProjectInstallPathsRejectsMissingDirectory (0.00s)
+=== RUN   TestGitExcludeIsIdempotentAndPreservesMode
+--- PASS: TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback (0.04s)
+PASS
+ok  	github.com/dualface/kander/internal/window	0.145s
+--- PASS: TestPerformRemovesPreviousOfficialAgentsEntryCopy (0.03s)
+=== RUN   TestPerformRemovesInstallerAgentsEntrySymlink
+--- PASS: TestGitExcludeIsIdempotentAndPreservesMode (0.03s)
+=== RUN   TestGitExcludeRejectsInfoSymlink
+--- PASS: TestDoctorInstallDecision/escape (0.06s)
+=== RUN   TestDoctorInstallDecision/confirm
+--- PASS: TestGitExcludeRejectsInfoSymlink (0.02s)
+=== RUN   TestInstallPathsRejectsKanderSymlink
+--- PASS: TestPerformRemovesInstallerAgentsEntrySymlink (0.04s)
+=== RUN   TestPerformKeepsLegacyByDefault
+--- PASS: TestInstallPathsRejectsKanderSymlink (0.02s)
+=== RUN   TestProjectInstallPathsRejectsSymlinkTarget
+--- PASS: TestNotifyKeepsReviewAndRequiresSelfMove (0.09s)
+=== RUN   TestNotifyDirectPayloadIncludesCardLanguage
+=== RUN   TestNotifyDirectPayloadIncludesCardLanguage/card_LANGUAGE
+--- PASS: TestProjectInstallPathsRejectsSymlinkTarget (0.01s)
+=== RUN   TestCursorIsAnExecutionAndReviewAgent
+--- PASS: TestCursorIsAnExecutionAndReviewAgent (0.00s)
+=== RUN   TestCursorModelDefaultsUseFullIDs
+--- PASS: TestCursorModelDefaultsUseFullIDs (0.00s)
+=== RUN   TestCursorModelIDsAcceptEmptyStrings
+--- PASS: TestCursorModelIDsAcceptEmptyStrings (0.00s)
+=== RUN   TestKanbanAgentsDefaultToTheSingleKanbanAgent
+--- PASS: TestKanbanAgentsDefaultToTheSingleKanbanAgent (0.00s)
+=== RUN   TestKanbanAgentsSelectTheAgentByScale
+--- PASS: TestKanbanAgentsSelectTheAgentByScale (0.00s)
+=== RUN   TestKanbanAgentsRejectUnknownScalesAndAgents
+--- PASS: TestKanbanAgentsRejectUnknownScalesAndAgents (0.00s)
+=== RUN   TestCursorRejectsUnknownModelFields
+--- PASS: TestCursorRejectsUnknownModelFields (0.00s)
+=== RUN   TestReviewStagesDefaultsAndValidation
+--- PASS: TestReviewStagesDefaultsAndValidation (0.00s)
+=== RUN   TestConfigRejectsInvalidModelsSection
+--- PASS: TestConfigRejectsInvalidModelsSection (0.00s)
+=== RUN   TestUpdateAndSaveIfUnchangedPreventLostUpdate
+--- PASS: TestDismissStaleHerdrDoesNotRewriteWindow (0.20s)
+=== RUN   TestDismissStaleTmuxRevalidatesContainer
+--- PASS: TestUpdateAndSaveIfUnchangedPreventLostUpdate (0.01s)
+=== RUN   TestDefaultLauncherMatchesPlatform
+--- PASS: TestDefaultLauncherMatchesPlatform (0.00s)
+=== RUN   TestLanguagePriorityCLIOverConfigOverEnv
+--- PASS: TestLanguagePriorityCLIOverConfigOverEnv (0.00s)
+=== RUN   TestConfiguredLanguageRequiresWelcomeAndKey
+--- PASS: TestConfiguredLanguageRequiresWelcomeAndKey (0.00s)
+=== RUN   TestLoadMissingOKAndInvalidJSON
+--- PASS: TestLoadMissingOKAndInvalidJSON (0.00s)
+=== RUN   TestEffectiveIgnoresIncompleteWelcome
+--- PASS: TestEffectiveIgnoresIncompleteWelcome (0.00s)
+=== RUN   TestFormatConfigLinesAndReviewHelpers
+--- PASS: TestDoctorInstallDecision/confirm (0.06s)
+--- PASS: TestPerformKeepsLegacyByDefault (0.04s)
+=== RUN   TestDoctorInstallDecision/available
+--- PASS: TestFormatConfigLinesAndReviewHelpers (0.00s)
+=== RUN   TestLanguageNullIsRejectedWhileMissingDefaults
+=== RUN   TestPerformRemovesLegacyAfterConfirm
+--- PASS: TestLanguageNullIsRejectedWhileMissingDefaults (0.00s)
+=== RUN   TestValidateJSONRejectsTrailingTokens
+--- PASS: TestValidateJSONRejectsTrailingTokens (0.00s)
+=== RUN   TestJSONRoundTripUsesNumberSchema
+--- PASS: TestJSONRoundTripUsesNumberSchema (0.00s)
+=== RUN   TestCatalogTextFollowsLanguageChanges
+--- PASS: TestCatalogTextFollowsLanguageChanges (0.00s)
+=== RUN   TestResolveLanguageJapaneseLocale
+--- PASS: TestResolveLanguageJapaneseLocale (0.00s)
+=== RUN   TestJapaneseConfigAndMenuLabels
+--- PASS: TestJapaneseConfigAndMenuLabels (0.00s)
+=== RUN   TestRepairPreservesValidSettingsAndBacksUpOriginal
+--- PASS: TestLaunchAgentSendsShellSpecificCommandToHerdr (0.22s)
+=== RUN   TestCommandStartUsesShellInvocationForHerdr
+--- PASS: TestDoctorInstallDecision/available (0.00s)
+--- PASS: TestDoctorInstallDecision (0.19s)
+=== RUN   TestRulePanelSelectionDependencyAndPersistence
+--- PASS: TestRepairPreservesValidSettingsAndBacksUpOriginal (0.01s)
+=== RUN   TestRepairDoesNotOverwriteUnreadableConfig
+--- PASS: TestRepairDoesNotOverwriteUnreadableConfig (0.00s)
+=== RUN   TestRepairHonorsCLILanguage
+--- PASS: TestExclusiveLockBlocksAnotherProcess (0.25s)
+=== RUN   TestPrivatePermissionHelpers
+--- PASS: TestPrivatePermissionHelpers (0.00s)
+=== RUN   TestPosixAtomicCreateIsPrivateAndRejectsSymlinkRoot
+--- PASS: TestPosixAtomicCreateIsPrivateAndRejectsSymlinkRoot (0.00s)
+=== RUN   TestOpenWritableRegularFileAndMakeReadOnly
+--- PASS: TestRepairHonorsCLILanguage (0.01s)
+=== RUN   TestSetLanguageIfPresent
+--- PASS: TestOpenWritableRegularFileAndMakeReadOnly (0.00s)
+=== RUN   TestRemoveRegularFileIfExists
+--- PASS: TestRemoveRegularFileIfExists (0.00s)
+=== RUN   TestPosixNeutralAppendAndInheritedDirectories
+--- PASS: TestPosixNeutralAppendAndInheritedDirectories (0.01s)
+=== RUN   TestPosixPrivateDirectoryCreateIsStrict
+--- PASS: TestSetLanguageIfPresent (0.01s)
+=== RUN   TestRuleDefaultsMigrationAndSave
+=== RUN   TestRuleDefaultsMigrationAndSave/legacy
+--- PASS: TestPosixPrivateDirectoryCreateIsStrict (0.00s)
+=== RUN   TestPosixPrivateRuntimeCleanupNeverFollowsSymlink
+--- PASS: TestPosixPrivateRuntimeCleanupNeverFollowsSymlink (0.00s)
+=== RUN   TestReadWriteRenameAndEscape
+--- PASS: TestPerformRemovesLegacyAfterConfirm (0.04s)
+=== RUN   TestPerformRejectsLegacyDirectory
+--- PASS: TestPerformRejectsLegacyDirectory (0.00s)
+=== RUN   TestPerformRejectsDirectoryTarget
+--- PASS: TestPerformRejectsDirectoryTarget (0.00s)
+=== RUN   TestPerformRejectsSourceSymlink
+--- PASS: TestPerformRejectsSourceSymlink (0.00s)
+=== RUN   TestPerformProjectSkipsGlobal
+--- PASS: TestReadWriteRenameAndEscape (0.00s)
+=== RUN   TestCreateDirectoryWithTextFileRollbackKeepsSibling
+--- PASS: TestCreateDirectoryWithTextFileRollbackKeepsSibling (0.00s)
+=== RUN   TestCreateDirectoryWithTextFile
+--- PASS: TestCreateDirectoryWithTextFile (0.00s)
+=== RUN   TestIsReparsePointSymlink
+--- PASS: TestIsReparsePointSymlink (0.00s)
+=== RUN   TestPrivateTempDirSupportsProtectedIO
+--- PASS: TestPrivateTempDirSupportsProtectedIO (0.00s)
+=== RUN   TestWriteExecutableAtomicInherited
+--- PASS: TestRuleDefaultsMigrationAndSave/legacy (0.01s)
+=== RUN   TestRuleDefaultsMigrationAndSave/empty
+--- PASS: TestRulePanelSelectionDependencyAndPersistence (0.04s)
+=== RUN   TestWorkflowPresetsPreserveIndependentRules
+--- PASS: TestWriteExecutableAtomicInherited (0.01s)
+=== RUN   TestRemoveNonDirectoryIfExists
+--- PASS: TestRemoveNonDirectoryIfExists (0.00s)
+=== RUN   TestSharedLockChild
+--- PASS: TestSharedLockChild (0.00s)
+=== RUN   TestSharedLocksExcludeWriterAcrossProcesses
+--- PASS: TestNotifyDirectPayloadIncludesCardLanguage/card_LANGUAGE (0.07s)
+=== RUN   TestNotifyDirectPayloadIncludesCardLanguage/fallback_to_agent_language
+--- PASS: TestRuleDefaultsMigrationAndSave/empty (0.01s)
+=== RUN   TestRuleDefaultsMigrationAndSave/partial
+--- PASS: TestRuleDefaultsMigrationAndSave/partial (0.01s)
+--- PASS: TestRuleDefaultsMigrationAndSave (0.04s)
+=== RUN   TestRulesRejectInvalidSelectionsWithoutOverwriting
+--- PASS: TestCaptureClosesPipesHeldOutsideProcessGroup (0.30s)
+=== RUN   TestProbeProcessHelper
+--- PASS: TestProbeProcessHelper (0.00s)
+=== RUN   TestAuditDescendantOutputOutlivesProbeDeadline
+--- PASS: TestRulesRejectInvalidSelectionsWithoutOverwriting (0.01s)
+=== RUN   TestDoctorRepairsOnlyInvalidRuleFields
+--- PASS: TestWorkflowPresetsPreserveIndependentRules (0.04s)
+=== RUN   TestWorkflowManualEditsMatchPresetsAndKeepFocus
+--- PASS: TestDoctorRepairsOnlyInvalidRuleFields (0.01s)
+=== RUN   TestLoadSaveDropsUnknownTopLevelFields
+--- PASS: TestLoadSaveDropsUnknownTopLevelFields (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/config	0.338s
+--- PASS: TestWorkflowManualEditsMatchPresetsAndKeepFocus (0.03s)
+=== RUN   TestRuleModuleCategoriesCoverConfig
+--- PASS: TestRuleModuleCategoriesCoverConfig (0.00s)
+=== RUN   TestNewTestSessionForcesTemporaryConfig
+--- PASS: TestNewTestSessionForcesTemporaryConfig (0.00s)
+=== RUN   TestOpenOptionsFromBoardKey
+--- PASS: TestOpenOptionsFromBoardKey (0.01s)
+=== RUN   TestOpenOptionsAtInterface
+--- PASS: TestNotifyDirectPayloadIncludesCardLanguage/fallback_to_agent_language (0.08s)
+--- PASS: TestNotifyDirectPayloadIncludesCardLanguage (0.15s)
+=== RUN   TestNotifyAmbiguousLookupDegradesToResumeReason
+--- PASS: TestOpenOptionsAtInterface (0.01s)
+=== RUN   TestEscapeKeepsSectionEdits
+--- PASS: TestPerformProjectSkipsGlobal (0.11s)
+=== RUN   TestPerformProjectFromLinkedWorktree
+--- PASS: TestEscapeKeepsSectionEdits (0.03s)
+=== RUN   TestEnterSavesReviewSection
+--- PASS: TestBatchMixedCommandsShareTotalBudget (0.40s)
+=== RUN   TestBatchDefaultConcurrencyCancellationJoinsWorkers
+--- PASS: TestBatchDefaultConcurrencyCancellationJoinsWorkers (0.01s)
+=== RUN   TestBatchEarlierCallerDeadlineWins
+--- PASS: TestEnterSavesReviewSection (0.03s)
+=== RUN   TestThemeChangeKeepsInterfaceState
+--- PASS: TestPerformProjectFromLinkedWorktree (0.07s)
+=== RUN   TestPerformProjectRejectsNonGitAndSymlink
+--- PASS: TestPerformProjectRejectsNonGitAndSymlink (0.02s)
+=== RUN   TestPerformProjectRejectsKanderSymlink
+--- PASS: TestDismissStaleTmuxRevalidatesContainer (0.25s)
+=== RUN   TestCleanupRetainsMismatchedHerdr
+--- PASS: TestCleanupRetainsMismatchedHerdr (0.00s)
+=== RUN   TestCleanupClosesMatchingHerdr
+--- PASS: TestPerformProjectRejectsKanderSymlink (0.02s)
+=== RUN   TestPerformSkipsSelfCopy
+--- PASS: TestCleanupClosesMatchingHerdr (0.01s)
+=== RUN   TestCleanupForegroundIsNA
+--- PASS: TestCleanupForegroundIsNA (0.00s)
+=== RUN   TestAgentExitCommands
+--- PASS: TestAgentExitCommands (0.00s)
+=== RUN   TestCleanupAttemptsHerdrContainerOnEveryPlatform
+--- PASS: TestCleanupAttemptsHerdrContainerOnEveryPlatform (0.00s)
+=== RUN   TestCleanupStillSkipsConsoleAndForeground
+--- PASS: TestCleanupStillSkipsConsoleAndForeground (0.00s)
+=== RUN   TestDismissReachesHerdrLookupOnEveryPlatform
+--- PASS: TestDismissReachesHerdrLookupOnEveryPlatform (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/takeover	0.490s
+--- PASS: TestThemeChangeKeepsInterfaceState (0.06s)
+=== RUN   TestAgentLanguageSelectUpdatesSession
+--- PASS: TestSharedLocksExcludeWriterAcrossProcesses (0.21s)
+PASS
+ok  	github.com/dualface/kander/internal/fs	0.499s
+--- PASS: TestAgentLanguageSelectUpdatesSession (0.02s)
+=== RUN   TestInterfaceWriteDoesNotCommitOtherSessionEdits
+--- PASS: TestPerformSkipsSelfCopy (0.04s)
+=== RUN   TestRepairRulesLeavesModifiedFile
+--- PASS: TestInterfaceWriteDoesNotCommitOtherSessionEdits (0.01s)
+=== RUN   TestArrowsMoveBetweenFields
+--- PASS: TestArrowsMoveBetweenFields (0.02s)
+=== RUN   TestUnsavedChangesGuardOnClose
+--- PASS: TestUnsavedChangesGuardOnClose (0.01s)
+=== RUN   TestMouseClickFocusesRow
+--- PASS: TestMouseClickFocusesRow (0.01s)
+=== RUN   TestMeasureFormDropsViewportPadding
+--- PASS: TestRepairRulesLeavesModifiedFile (0.04s)
+=== RUN   TestRepairRulesUpgradesUnstampedOfficial
+--- PASS: TestSmallAndLargeLifecycle (0.56s)
+=== RUN   TestPickAndReviewTransitions
+--- PASS: TestArchiveCLIOutputRetryAndLanguage (0.55s)
+=== RUN   TestArchiveCLIFailurePreservesEvidence
+--- PASS: TestMeasureFormDropsViewportPadding (0.01s)
+=== RUN   TestSelectorFieldIndexAccountsForNestedModels
+--- PASS: TestSelectorFieldIndexAccountsForNestedModels (0.01s)
+=== RUN   TestRootCursorRestoredAfterEscapeFromSection
+--- PASS: TestRootCursorRestoredAfterEscapeFromSection (0.01s)
+=== RUN   TestRootCursorRestoredAfterSubmitFromSection
+--- PASS: TestRepairRulesUpgradesUnstampedOfficial (0.04s)
+=== RUN   TestRepairRulesBootstrapsStampWhenCurrent
+--- PASS: TestRootCursorRestoredAfterSubmitFromSection (0.02s)
+=== RUN   TestRootCursorRestoredAfterCloseConfirmKeepEditing
+--- PASS: TestAuditDescendantOutputOutlivesProbeDeadline (0.30s)
+=== RUN   TestCaptureCancellationJoinsProcessesAndReaders
+--- PASS: TestRootCursorRestoredAfterCloseConfirmKeepEditing (0.01s)
+=== RUN   TestExecutionModelInputSavesWhenAgentsMatch
+--- PASS: TestBatchEarlierCallerDeadlineWins (0.20s)
+=== RUN   TestBatchUncollectedAndReadErrors
+--- PASS: TestBatchUncollectedAndReadErrors (0.00s)
+=== RUN   TestCheckCollectsBatchAndPreservesOutputOrder
+--- PASS: TestRepairRulesBootstrapsStampWhenCurrent (0.04s)
+=== RUN   TestPerformUpdatesExistingConfigLanguage
+--- PASS: TestPerformUpdatesExistingConfigLanguage (0.03s)
+=== RUN   TestPerformDoesNotCreateConfig
+--- PASS: TestCaptureCancellationJoinsProcessesAndReaders (0.06s)
+=== RUN   TestCaptureCleansDescendantsAfterParentExits
+=== RUN   TestSessionKeepsStoredAgentLanguage
+--- PASS: TestSessionKeepsStoredAgentLanguage (0.00s)
+=== RUN   TestAgentLanguageChoicesOrderAndPreserveOutOfList
+--- PASS: TestAgentLanguageChoicesOrderAndPreserveOutOfList (0.00s)
+=== RUN   TestProjectCommandPathPrefersNativeBinary
+--- PASS: TestProjectCommandPathPrefersNativeBinary (0.00s)
+=== RUN   TestReviewGatePresentProjectMissingDoesNotUsePATH
+--- PASS: TestReviewGatePresentProjectMissingDoesNotUsePATH (0.00s)
+=== RUN   TestCommandMissingMessageProjectRoot
+--- PASS: TestCommandMissingMessageProjectRoot (0.00s)
+=== RUN   TestDoctorRepairsSmallTaskAgentUnavailable
+--- PASS: TestPerformDoesNotCreateConfig (0.02s)
+=== RUN   TestGlobalSymlinkRuleIsNotFalseStamped
+--- PASS: TestCaptureCleansDescendantsAfterParentExits (0.02s)
+=== RUN   TestCapturePreservesOutputAndExitCode
+--- PASS: TestCapturePreservesOutputAndExitCode (0.01s)
+=== RUN   TestCaptureDoesNotStartWithExpiredBudget
+--- PASS: TestCaptureDoesNotStartWithExpiredBudget (0.00s)
+=== RUN   TestTmuxExpiredFactsDoNotStartMarkerProbe
+--- PASS: TestTmuxExpiredFactsDoNotStartMarkerProbe (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/probe	0.712s
+--- PASS: TestGlobalSymlinkRuleIsNotFalseStamped (0.05s)
+=== RUN   TestShouldRunWizardSkipsSourceTree
+--- PASS: TestShouldRunWizardSkipsSourceTree (0.00s)
+=== RUN   TestShouldRunWizardSkipsAlreadyInstalled
+--- PASS: TestDoctorRepairsSmallTaskAgentUnavailable (0.07s)
+=== RUN   TestDoctorFailsWithoutAgents
+--- PASS: TestShouldRunWizardSkipsAlreadyInstalled (0.03s)
+=== RUN   TestShouldRunWizard
+--- PASS: TestPickAndReviewTransitions (0.23s)
+=== RUN   TestListFormats
+--- PASS: TestShouldRunWizard (0.03s)
+=== RUN   TestWriteBinaryBusyRenameAside
+--- PASS: TestWriteBinaryBusyRenameAside (0.00s)
+=== RUN   TestFinishSuccessfulInstallAlwaysHandoffs
+--- PASS: TestListFormats (0.03s)
+=== RUN   TestCheckDependenciesAndScope
+--- PASS: TestDoctorFailsWithoutAgents (0.07s)
+=== RUN   TestInvalidConfigReported
+Kander 已安装
+--- PASS: TestArchiveCLIFailurePreservesEvidence (0.28s)
+=== RUN   TestArchiveCLITimeoutAndMalformedOutput
+=== RUN   TestArchiveCLITimeoutAndMalformedOutput/timeout
+--- PASS: TestInvalidConfigReported (0.02s)
+=== RUN   TestConfigHumanAndJSON
+Kander 已安装
+--- PASS: TestFinishSuccessfulInstallAlwaysHandoffs (0.05s)
+=== RUN   TestWizardDefaultKeepsJapanese
+--- PASS: TestWizardDefaultKeepsJapanese (0.00s)
+=== RUN   TestEnsureRulesIntegrationCreatesClaudeImport
+--- PASS: TestEnsureRulesIntegrationCreatesClaudeImport (0.00s)
+=== RUN   TestEnsureRulesIntegrationAppendsToExistingFile
+--- PASS: TestEnsureRulesIntegrationAppendsToExistingFile (0.00s)
+=== RUN   TestEnsureRulesIntegrationWritesAgentsInstruction
+--- PASS: TestEnsureRulesIntegrationWritesAgentsInstruction (0.00s)
+=== RUN   TestEnsureRulesIntegrationProjectScope
+--- PASS: TestEnsureRulesIntegrationProjectScope (0.00s)
+=== RUN   TestEnsureRulesIntegrationNegationWordsDoNotRepeatAppend
+--- PASS: TestEnsureRulesIntegrationNegationWordsDoNotRepeatAppend (0.00s)
+=== RUN   TestEnsureRulesIntegrationSurvivesMissingEntry
+--- PASS: TestEnsureRulesIntegrationSurvivesMissingEntry (0.00s)
+=== RUN   TestEnsureRulesIntegrationProjectSymlinks
+--- PASS: TestEnsureRulesIntegrationProjectSymlinks (0.00s)
+=== RUN   TestPerformGlobalIntegratesOnlyExistingAgentDirs
+--- PASS: TestPerformGlobalIntegratesOnlyExistingAgentDirs (0.02s)
+PASS
+ok  	github.com/dualface/kander/internal/install	0.883s
+--- PASS: TestConfigHumanAndJSON (0.04s)
+=== RUN   TestConfigLanguageFromFile
+--- PASS: TestCheckCollectsBatchAndPreservesOutputOrder (0.29s)
+=== RUN   TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate
+--- PASS: TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate (0.01s)
+=== RUN   TestBatchPreservesDriftAndTmuxRuntimeUnknown
+--- PASS: TestBatchPreservesDriftAndTmuxRuntimeUnknown (0.00s)
+=== RUN   TestClassifyTaskSharesForwardAndReverseDeadline
+=== RUN   TestClassifyTaskSharesForwardAndReverseDeadline/herdr
+--- PASS: TestConfigLanguageFromFile (0.03s)
+=== RUN   TestCLILangOverridesConfigLanguage
+--- PASS: TestCLILangOverridesConfigLanguage (0.03s)
+=== RUN   TestDoctorAutoLauncher
+--- PASS: TestDoctorAutoLauncher (0.05s)
+=== RUN   TestDoctorHerdrLauncher
+--- PASS: TestDoctorHerdrLauncher (0.09s)
+=== RUN   TestDoctorCursorAgent
+--- PASS: TestExecutionModelInputSavesWhenAgentsMatch (0.52s)
+=== RUN   TestReviewModelInputSavesPMRole
+--- PASS: TestCheckDependenciesAndScope (0.33s)
+=== RUN   TestInitLayoutAndArchive
+--- PASS: TestDoctorCursorAgent (0.06s)
+=== RUN   TestDoctorVersionFailure
+--- PASS: TestDoctorVersionFailure (0.05s)
+=== RUN   TestProjectConfigAndDoctor
+--- PASS: TestInitLayoutAndArchive (0.06s)
+=== RUN   TestLegacyReviewAutocreateAndReject
+--- PASS: TestLegacyReviewAutocreateAndReject (0.05s)
+=== RUN   TestDuplicateCycleAndSymlinkTargets
+--- PASS: TestDuplicateCycleAndSymlinkTargets (0.07s)
+=== RUN   TestPickPromptAndShow
+--- PASS: TestClassifyTaskSharesForwardAndReverseDeadline/herdr (0.40s)
+=== RUN   TestClassifyTaskSharesForwardAndReverseDeadline/tmux
+--- PASS: TestPickPromptAndShow (0.03s)
+=== RUN   TestDoneMetadataKeepsWorking
+--- PASS: TestDoneMetadataKeepsWorking (0.07s)
+=== RUN   TestEnglishCheck
+--- PASS: TestEnglishCheck (0.00s)
+=== RUN   TestBoardRootRejectsSymlinkKanbanWithoutWalkingPast
+--- PASS: TestBoardRootRejectsSymlinkKanbanWithoutWalkingPast (0.00s)
+=== RUN   TestInitBoardRejectsSymlinkAncestor
+--- PASS: TestInitBoardRejectsSymlinkAncestor (0.00s)
+=== RUN   TestNewCardRecordsConfiguredAgentLanguage
+--- PASS: TestNewCardRecordsConfiguredAgentLanguage (0.03s)
+=== RUN   TestLargeCardRecordsAgentLanguage
+--- PASS: TestLargeCardRecordsAgentLanguage (0.01s)
+=== RUN   TestTodoGateRequiresSelfReviewRecord
+--- PASS: TestTodoGateRequiresSelfReviewRecord (0.02s)
+=== RUN   TestTodoGateRequiresCardReviewForGroupAndLarge
+--- PASS: TestNotifyAmbiguousLookupDegradesToResumeReason (1.11s)
+=== RUN   TestNotifyBusyTimeoutDoesNotResumeOrWrite
+--- PASS: TestNotifyBusyTimeoutDoesNotResumeOrWrite (0.05s)
+=== RUN   TestNotifyBusyRetriesThenDelivers
+--- PASS: TestTodoGateRequiresCardReviewForGroupAndLarge (0.05s)
+=== RUN   TestTodoGateRequiresAcceptanceCheckbox
+--- PASS: TestTodoGateRequiresAcceptanceCheckbox (0.01s)
+=== RUN   TestTodoGateIgnoresEmptyCRLFGroupMetadata
+--- PASS: TestTodoGateIgnoresEmptyCRLFGroupMetadata (0.02s)
+=== RUN   TestCheckFlagsContractDefectsForCommittedCards
+--- PASS: TestCheckFlagsContractDefectsForCommittedCards (0.02s)
+=== RUN   TestGuardWriteRejectsMissingDirectChildAndReportsMove
+--- PASS: TestGuardWriteRejectsMissingDirectChildAndReportsMove (0.01s)
+=== RUN   TestGuardWriteAllowsWhenBoardIsNotLocatable
+--- PASS: TestGuardWriteAllowsWhenBoardIsNotLocatable (0.00s)
+=== RUN   TestShowPrintsCurrentStateAndPath
+--- PASS: TestShowPrintsCurrentStateAndPath (0.01s)
+=== RUN   TestJournalProcessChild
+--- PASS: TestJournalProcessChild (0.00s)
+=== RUN   TestJournalReadSerializesWithCommittedReplacement
+--- PASS: TestReviewModelInputSavesPMRole (0.52s)
+=== RUN   TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY
+--- PASS: TestNotifyBusyRetriesThenDelivers (0.16s)
+=== RUN   TestNotifyCopyModeIsBusyWithoutLookup
+--- PASS: TestClassifyTaskSharesForwardAndReverseDeadline/tmux (0.40s)
+--- PASS: TestClassifyTaskSharesForwardAndReverseDeadline (0.80s)
+=== RUN   TestHerdrRevalidationUsesRemainingBudget
+--- PASS: TestNotifyCopyModeIsBusyWithoutLookup (0.05s)
+=== RUN   TestNotifyStaleTmuxRewritesWindow
+--- PASS: TestJournalReadSerializesWithCommittedReplacement (0.21s)
+=== RUN   TestJournalScanWaitsForTemporaryPublicationHandle
+--- PASS: TestNotifyStaleTmuxRewritesWindow (0.08s)
+=== RUN   TestFlushStdoutDoesNotBlockOnPipe
+--- PASS: TestFlushStdoutDoesNotBlockOnPipe (0.00s)
+=== RUN   TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery
+=== RUN   TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery/disabled-group
+--- PASS: TestProjectConfigAndDoctor (0.64s)
+=== RUN   TestRulesIntegrationRejectsGlobalEntry
+--- PASS: TestRulesIntegrationRejectsGlobalEntry (0.01s)
+=== RUN   TestDoctorTmuxSessionOutsideTmux
+--- PASS: TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery/disabled-group (0.06s)
+=== RUN   TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery/invalid-config
+--- PASS: TestDoctorTmuxSessionOutsideTmux (0.07s)
+=== RUN   TestConfigPrintsAgentLanguage
+--- PASS: TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery/invalid-config (0.05s)
+--- PASS: TestNotifyRejectsDisabledGroupAndInvalidConfigBeforeDelivery (0.11s)
+=== RUN   TestNotifyPayloadLoadsRuleConfigurationWithAllModulesOff
+--- PASS: TestConfigPrintsAgentLanguage (0.03s)
+=== RUN   TestDoctorAutoLauncherWithOnlyHerdr
+--- PASS: TestNotifyPayloadLoadsRuleConfigurationWithAllModulesOff (0.05s)
+=== RUN   TestNotifyDeliversThroughHerdrOnEveryPlatform
+--- PASS: TestJournalScanWaitsForTemporaryPublicationHandle (0.19s)
+=== RUN   TestNewCardUsesCanonicalTokensOnly
+--- PASS: TestNewCardUsesCanonicalTokensOnly (0.01s)
+=== RUN   TestGatesAcceptLegacyAndMixedCards
+=== RUN   TestGatesAcceptLegacyAndMixedCards/legacy
+--- PASS: TestDoctorAutoLauncherWithOnlyHerdr (0.06s)
+=== RUN   TestDoctorRejectsHerdrWithoutWorkspaceID
+--- PASS: TestDoctorRejectsHerdrWithoutWorkspaceID (0.07s)
+=== RUN   TestDoctorCreatesAndRepairsConfig
+=== RUN   TestDoctorCreatesAndRepairsConfig/#00
+--- PASS: TestGatesAcceptLegacyAndMixedCards/legacy (0.10s)
+=== RUN   TestGatesAcceptLegacyAndMixedCards/mixed
+--- PASS: TestArchiveCLITimeoutAndMalformedOutput/timeout (1.28s)
+=== RUN   TestArchiveCLITimeoutAndMalformedOutput/empty
+--- PASS: TestHerdrRevalidationUsesRemainingBudget (0.40s)
+=== RUN   TestClassifyCanceledBeforeLookupDoesNotLaunch
+--- PASS: TestClassifyCanceledBeforeLookupDoesNotLaunch (0.00s)
+=== RUN   TestClassifyCancellationDuringReverseLookup
+=== RUN   TestClassifyCancellationDuringReverseLookup/herdr
+--- PASS: TestClassifyCancellationDuringReverseLookup/herdr (0.00s)
+=== RUN   TestClassifyCancellationDuringReverseLookup/tmux
+--- PASS: TestClassifyCancellationDuringReverseLookup/tmux (0.00s)
+--- PASS: TestClassifyCancellationDuringReverseLookup (0.01s)
+=== RUN   TestCheckReportsAliveStoppedAndUnknown
+--- PASS: TestNotifyDeliversThroughHerdrOnEveryPlatform (0.17s)
+PASS
+ok  	github.com/dualface/kander/internal/notify	2.151s
+--- PASS: TestDoctorCreatesAndRepairsConfig/#00 (0.11s)
+=== RUN   TestDoctorCreatesAndRepairsConfig/broken_JSON
+--- PASS: TestGatesAcceptLegacyAndMixedCards/mixed (0.10s)
+--- PASS: TestGatesAcceptLegacyAndMixedCards (0.20s)
+=== RUN   TestLegacyDiscussionMetadataStillParses
+--- PASS: TestLegacyDiscussionMetadataStillParses (0.00s)
+=== RUN   TestBoardRootOverrideAfterCWDDeletion
+--- PASS: TestBoardRootOverrideAfterCWDDeletion (0.01s)
+=== RUN   TestMigrationStationaryHistoricalUnsupportedLinks
+--- PASS: TestMigrationStationaryHistoricalUnsupportedLinks (0.04s)
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail/[old](..\20260907-link-b-task.md)
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail/[old](..\20260907-link-b-task.md) (0.00s)
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail/[[../20260907-link-b-task.md]]
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail/[[../20260907-link-b-task.md]] (0.00s)
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail/<img_srcset="https://example.com/a.png_1x,_../20260907-link-b-task.md_2x">
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail/<img_srcset="https://example.com/a.png_1x,_../20260907-link-b-task.md_2x"> (0.00s)
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail (0.01s)
+=== RUN   TestMigrationDoesNotRewriteProducerEvidence
+--- PASS: TestMigrationDoesNotRewriteProducerEvidence (0.04s)
+=== RUN   TestRelocateMarkdownDestinationsOnly
+=== RUN   TestRelocateMarkdownDestinationsOnly/inline
+--- PASS: TestRelocateMarkdownDestinationsOnly/inline (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/image
+--- PASS: TestRelocateMarkdownDestinationsOnly/image (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/escaped
+--- PASS: TestRelocateMarkdownDestinationsOnly/escaped (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/encoded
+--- PASS: TestRelocateMarkdownDestinationsOnly/encoded (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/entity
+--- PASS: TestRelocateMarkdownDestinationsOnly/entity (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/reference
+--- PASS: TestRelocateMarkdownDestinationsOnly/reference (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/unused_definitions
+--- PASS: TestRelocateMarkdownDestinationsOnly/unused_definitions (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/multiline
+--- PASS: TestRelocateMarkdownDestinationsOnly/multiline (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/nested
+--- PASS: TestRelocateMarkdownDestinationsOnly/nested (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/skip
+--- PASS: TestRelocateMarkdownDestinationsOnly/skip (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/same_spelling_in_code
+--- PASS: TestRelocateMarkdownDestinationsOnly/same_spelling_in_code (0.00s)
+--- PASS: TestRelocateMarkdownDestinationsOnly (0.00s)
+=== RUN   TestMigrationPreservesActualLinkTargets
+--- PASS: TestDoctorCreatesAndRepairsConfig/broken_JSON (0.12s)
+=== RUN   TestDoctorCreatesAndRepairsConfig/{"schema_version":1,"language":"en","kanban_agent":"grok"}
+--- PASS: TestCheckReportsAliveStoppedAndUnknown (0.19s)
+=== RUN   TestCheckReportsDriftedWithNewAddress
+--- PASS: TestMigrationPreservesActualLinkTargets (0.03s)
+=== RUN   TestMigrationLinkRecovery
+=== RUN   TestMigrationLinkRecovery/migration-link-file
+--- PASS: TestMigrationLinkRecovery/migration-link-file (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-links
+--- PASS: TestCheckReportsDriftedWithNewAddress (0.07s)
+=== RUN   TestCheckUnknownReverseLookedUpHerdrStatusIsNotDrifted
+--- PASS: TestMigrationLinkRecovery/migration-links (0.03s)
+=== RUN   TestMigrationLinkRecovery/prepared
+--- PASS: TestDoctorCreatesAndRepairsConfig/{"schema_version":1,"language":"en","kanban_agent":"grok"} (0.13s)
+=== RUN   TestDoctorCreatesAndRepairsConfig/{"language":"cn"}
+--- PASS: TestArchiveCLITimeoutAndMalformedOutput/empty (0.33s)
+--- PASS: TestArchiveCLITimeoutAndMalformedOutput (1.61s)
+=== RUN   TestArchiveRejectsBeforeReviewerAndNoIntent
+--- PASS: TestMigrationLinkRecovery/prepared (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-stage
+--- PASS: TestCheckUnknownReverseLookedUpHerdrStatusIsNotDrifted (0.07s)
+=== RUN   TestCheckLivenessDoesNotAffectExitCode
+--- PASS: TestMigrationLinkRecovery/migration-stage (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-source
+--- PASS: TestArchiveRejectsBeforeReviewerAndNoIntent (0.05s)
+=== RUN   TestArchiveOptionsAndRequirementsValidation
+--- PASS: TestMigrationLinkRecovery/migration-source (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-write-created
+--- PASS: TestCheckLivenessDoesNotAffectExitCode (0.06s)
+=== RUN   TestCheckSkipsReviewAndProbesOnlyWorking
+--- PASS: TestMigrationLinkRecovery/migration-write-created (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-write-synced
+--- PASS: TestDoctorCreatesAndRepairsConfig/{"language":"cn"} (0.11s)
+=== RUN   TestDoctorCreatesAndRepairsConfig/{}
+--- PASS: TestArchiveOptionsAndRequirementsValidation (0.06s)
+=== RUN   TestArchiveExplicitRecoveryDoesNotRerun
+--- PASS: TestMigrationLinkRecovery/migration-write-synced (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-original-saved
+--- PASS: TestMigrationLinkRecovery/migration-original-saved (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-write-published
+Review run_id=stable batch_id=batch
+--- PASS: TestCheckSkipsReviewAndProbesOnlyWorking (0.15s)
+=== RUN   TestCheckProbeFailuresDegradeToUnknown
+--- PASS: TestMigrationLinkRecovery/migration-write-published (0.05s)
+=== RUN   TestMigrationLinkRecovery/migration-original-removed
+--- PASS: TestDoctorCreatesAndRepairsConfig/{} (0.12s)
+--- PASS: TestDoctorCreatesAndRepairsConfig (0.59s)
+=== RUN   TestDoctorRepairsUnavailableLaunchers
+=== RUN   TestDoctorRepairsUnavailableLaunchers/tmux-foreground
+--- PASS: TestMigrationLinkRecovery/migration-original-removed (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-size
+--- PASS: TestCheckProbeFailuresDegradeToUnknown (0.07s)
+=== RUN   TestCheckUnreportedHerdrSessionIsAliveUndeliverable
+--- PASS: TestMigrationLinkRecovery/migration-size (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-publish
+--- PASS: TestDoctorRepairsUnavailableLaunchers/tmux-foreground (0.08s)
+=== RUN   TestDoctorRepairsUnavailableLaunchers/tmux-session-foreground
+--- PASS: TestMigrationLinkRecovery/migration-publish (0.03s)
+=== RUN   TestMigrationLinkRecovery/revision
+--- PASS: TestCheckUnreportedHerdrSessionIsAliveUndeliverable (0.06s)
+=== RUN   TestCheckCodexWithoutReferenceUsesAgentIdentity
+--- PASS: TestArchiveExplicitRecoveryDoesNotRerun (0.23s)
+=== RUN   TestArchiveBatchAdvanceRangeAttribution
+--- PASS: TestMigrationLinkRecovery/revision (0.04s)
+=== RUN   TestMigrationLinkRecovery/committed
+--- PASS: TestDoctorRepairsUnavailableLaunchers/tmux-session-foreground (0.08s)
+=== RUN   TestDoctorRepairsUnavailableLaunchers/auto-foreground
+--- PASS: TestCheckCodexWithoutReferenceUsesAgentIdentity (0.06s)
+=== RUN   TestCheckProbesHerdrOnEveryPlatform
+--- PASS: TestMigrationLinkRecovery/committed (0.03s)
+--- PASS: TestMigrationLinkRecovery (0.51s)
+=== RUN   TestMigrationLinkKillRestart
+=== RUN   TestMigrationLinkKillRestart/migration-link-file
+--- PASS: TestMigrationLinkKillRestart/migration-link-file (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-links
+--- PASS: TestDoctorRepairsUnavailableLaunchers/auto-foreground (0.07s)
+=== RUN   TestDoctorRepairsUnavailableLaunchers/herdr-tmux-session
+--- PASS: TestMigrationLinkKillRestart/migration-links (0.04s)
+=== RUN   TestMigrationLinkKillRestart/prepared
+--- PASS: TestMigrationLinkKillRestart/prepared (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-stage
+--- PASS: TestDoctorRepairsUnavailableLaunchers/herdr-tmux-session (0.07s)
+=== RUN   TestDoctorRepairsUnavailableLaunchers/console-auto
+--- PASS: TestMigrationLinkKillRestart/migration-stage (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-source
+--- PASS: TestMigrationLinkKillRestart/migration-source (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-write-created
+--- PASS: TestDoctorRepairsUnavailableLaunchers/console-auto (0.07s)
+=== RUN   TestDoctorRepairsUnavailableLaunchers/tmux-herdr
+--- PASS: TestCheckProbesHerdrOnEveryPlatform (0.23s)
+=== RUN   TestTmuxReverseLookupUniqueMarker
+--- PASS: TestTmuxReverseLookupUniqueMarker (0.00s)
+=== RUN   TestSubscribeHeartbeatIncludesWorkingLiveness
+--- PASS: TestMigrationLinkKillRestart/migration-write-created (0.05s)
+=== RUN   TestMigrationLinkKillRestart/migration-write-synced
+--- PASS: TestDoctorRepairsUnavailableLaunchers/tmux-herdr (0.07s)
+--- PASS: TestDoctorRepairsUnavailableLaunchers (0.44s)
+=== RUN   TestDoctorWindowsLauncherKeepsHerdrWhenInstalled
+--- PASS: TestDoctorWindowsLauncherKeepsHerdrWhenInstalled (0.00s)
+=== RUN   TestDoctorWindowsLauncherFallbackWithoutHerdr
+--- PASS: TestDoctorWindowsLauncherFallbackWithoutHerdr (0.00s)
+=== RUN   TestLauncherChoicesWindowsOffersHerdrWhenInstalled
+--- PASS: TestLauncherChoicesWindowsOffersHerdrWhenInstalled (0.00s)
+=== RUN   TestNormalizeLauncherWindowsOnlyDropsTmux
+[!] 原生 Windows 不支持 tmux, 当前使用 console.
+[!] 原生 Windows 不支持 tmux, 当前使用 console.
+[!] 未安装 herdr, 当前使用 console.
+[!] 未安装 herdr, 当前使用 console.
+--- PASS: TestNormalizeLauncherWindowsOnlyDropsTmux (0.00s)
+=== RUN   TestRuleSessionCopiesSelectionsAndRejectsInvalidChanges
+--- PASS: TestRuleSessionCopiesSelectionsAndRejectsInvalidChanges (0.00s)
+=== RUN   TestSessionPreservesReviewRoleModels
+--- PASS: TestSessionPreservesReviewRoleModels (0.00s)
+=== RUN   TestRulesIntegrationUsesInstallScope
+=== RUN   TestRulesIntegrationUsesInstallScope/codex
+--- PASS: TestRulesIntegrationUsesInstallScope/codex (0.00s)
+=== RUN   TestRulesIntegrationUsesInstallScope/claude
+--- PASS: TestRulesIntegrationUsesInstallScope/claude (0.00s)
+=== RUN   TestRulesIntegrationUsesInstallScope/grok
+--- PASS: TestRulesIntegrationUsesInstallScope/grok (0.00s)
+=== RUN   TestRulesIntegrationUsesInstallScope/cursor
+--- PASS: TestRulesIntegrationUsesInstallScope/cursor (0.00s)
+--- PASS: TestRulesIntegrationUsesInstallScope (0.01s)
+=== RUN   TestRulesIntegrationResolvesClaudeImportsFromRulesFile
+=== RUN   TestRulesIntegrationResolvesClaudeImportsFromRulesFile/global
+--- PASS: TestRulesIntegrationResolvesClaudeImportsFromRulesFile/global (0.00s)
+=== RUN   TestRulesIntegrationResolvesClaudeImportsFromRulesFile/project
+--- PASS: TestMigrationLinkKillRestart/migration-write-synced (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-original-saved
+--- PASS: TestRulesIntegrationResolvesClaudeImportsFromRulesFile/project (0.00s)
+--- PASS: TestRulesIntegrationResolvesClaudeImportsFromRulesFile (0.00s)
+=== RUN   TestReportRulesIntegrationRepairWritesReference
+[OK] Codex: 已把 Kander 规则引用写入 /tmp/TestReportRulesIntegrationRepairWritesReference3051243804/001/.codex/AGENTS.md
+[OK] Codex 已接入 Kander 规则: /tmp/TestReportRulesIntegrationRepairWritesReference3051243804/001/.codex/AGENTS.md
+[OK] Codex 已接入 Kander 规则: /tmp/TestReportRulesIntegrationRepairWritesReference3051243804/001/.codex/AGENTS.md
+--- PASS: TestReportRulesIntegrationRepairWritesReference (0.00s)
+=== RUN   TestRulesIntegrationRejectsMissingProjectRoot
+--- PASS: TestRulesIntegrationRejectsMissingProjectRoot (0.00s)
+=== RUN   TestTerminalToolsProbe
+=== RUN   TestTerminalToolsProbe/missing
+--- PASS: TestTerminalToolsProbe/missing (0.01s)
+=== RUN   TestTerminalToolsProbe/herdr
+--- PASS: TestTerminalToolsProbe/herdr (0.01s)
+=== RUN   TestTerminalToolsProbe/tmux
+--- PASS: TestTerminalToolsProbe/tmux (0.01s)
+=== RUN   TestTerminalToolsProbe/broken
+--- PASS: TestMigrationLinkKillRestart/migration-original-saved (0.03s)
+=== RUN   TestMigrationLinkKillRestart/migration-write-published
+--- PASS: TestTerminalToolsProbe/broken (0.01s)
+=== RUN   TestTerminalToolsProbe/empty
+--- PASS: TestTerminalToolsProbe/empty (0.01s)
+--- PASS: TestTerminalToolsProbe (0.04s)
+=== RUN   TestTerminalToolProbeTimeout
+--- PASS: TestMigrationLinkKillRestart/migration-write-published (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-original-removed
+--- PASS: TestMigrationLinkKillRestart/migration-original-removed (0.03s)
+=== RUN   TestMigrationLinkKillRestart/migration-size
+--- PASS: TestSubscribeHeartbeatIncludesWorkingLiveness (0.18s)
+=== RUN   TestSubscribeHeartbeatProbeFailureReportsUnknownWithoutExiting
+--- PASS: TestMigrationLinkKillRestart/migration-size (0.04s)
+=== RUN   TestMigrationLinkKillRestart/migration-publish
+--- PASS: TestMigrationLinkKillRestart/migration-publish (0.03s)
+=== RUN   TestMigrationLinkKillRestart/revision
+--- PASS: TestMigrationLinkKillRestart/revision (0.03s)
+=== RUN   TestMigrationLinkKillRestart/committed
+--- PASS: TestMigrationLinkKillRestart/committed (0.03s)
+--- PASS: TestMigrationLinkKillRestart (0.52s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_src="relative.png">
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_src="relative.png"> (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_srcset="https://example.com/a.png_1x,_local.png_2x">
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_srcset="https://example.com/a.png_1x,_local.png_2x"> (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](bad%ZZ.md)
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](bad%ZZ.md) (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](dir\file.md)
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](dir\file.md) (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/[[relative.md]]
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/[[relative.md]] (0.00s)
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting (0.01s)
+=== RUN   TestMigrationRejectsTamperedLinkAfterImage
+--- PASS: TestMigrationRejectsTamperedLinkAfterImage (0.01s)
+=== RUN   TestMigrationRecoveryAfterSecondCardPublishes
+--- PASS: TestMigrationRecoveryAfterSecondCardPublishes (0.03s)
+=== RUN   TestMigrationIdleStrayFileDoesNotBlockInit
+kander: 警告: 1 个无效入口已忽略, 运行 kander check 查看
+--- PASS: TestMigrationIdleStrayFileDoesNotBlockInit (0.00s)
+=== RUN   TestMigrationRecoveryPrecedesUnrelatedStructureFailure
+--- PASS: TestMigrationRecoveryPrecedesUnrelatedStructureFailure (0.01s)
+=== RUN   TestCheckAggregatesUnreadableDocuments
+--- PASS: TestCheckAggregatesUnreadableDocuments (0.00s)
+=== RUN   TestStructuralScanDoesNotMislabelSize
+--- PASS: TestStructuralScanDoesNotMislabelSize (0.00s)
+=== RUN   TestLegacyDirectoryGuard
+--- PASS: TestSubscribeHeartbeatProbeFailureReportsUnknownWithoutExiting (0.17s)
+=== RUN   TestSubscribeSnapshotStateChangeAndWatch
+--- PASS: TestLegacyDirectoryGuard (0.00s)
+=== RUN   TestMigrationUnknownArtifactsStillBlockIdleInit
+--- PASS: TestMigrationUnknownArtifactsStillBlockIdleInit (0.00s)
+=== RUN   TestMissingTypeSizeSkipsCodeAndKeepsExactPlacement
+--- PASS: TestMissingTypeSizeSkipsCodeAndKeepsExactPlacement (0.00s)
+=== RUN   TestMigrationPreservesUnregisteredAtomicTemporary
+    migration_review_test.go:47: Unregistered leftovers from older atomic writes remain conflicts; only journal-bound scratch files can be recovered
+--- PASS: TestMigrationPreservesUnregisteredAtomicTemporary (0.01s)
+=== RUN   TestMigrationResumesOnlyMatchingPartialRewrite
+--- PASS: TestMigrationResumesOnlyMatchingPartialRewrite (0.02s)
+=== RUN   TestMigrationLegacyRecordUsesOperationBoundScratchNames
+--- PASS: TestMigrationLegacyRecordUsesOperationBoundScratchNames (0.02s)
+=== RUN   TestDirectorySizeAndCompletionContract
+--- PASS: TestDirectorySizeAndCompletionContract (0.08s)
+=== RUN   TestMigrationAllStatesAndIdempotence
+--- PASS: TestSubscribeSnapshotStateChangeAndWatch (0.14s)
+=== RUN   TestSubscribeRejectsInvalidWatchAndMembership
+--- PASS: TestMigrationAllStatesAndIdempotence (0.06s)
+=== RUN   TestLegacyReadOnlyAndSizeDiagnostics
+--- PASS: TestSubscribeRejectsInvalidWatchAndMembership (0.07s)
+=== RUN   TestSubscribeExpandsWatchedTaskGroup
+--- PASS: TestLegacyReadOnlyAndSizeDiagnostics (0.01s)
+=== RUN   TestMigrationFailureRecovery
+=== RUN   TestMigrationFailureRecovery/prepared
+--- PASS: TestMigrationFailureRecovery/prepared (0.01s)
+=== RUN   TestMigrationFailureRecovery/migration-stage
+--- PASS: TestMigrationFailureRecovery/migration-stage (0.01s)
+=== RUN   TestMigrationFailureRecovery/migration-source
+--- PASS: TestCommandStartUsesShellInvocationForHerdr (3.44s)
+=== RUN   TestOnlyLaunchInvocationCallsNewInvocation
+--- PASS: TestOnlyLaunchInvocationCallsNewInvocation (0.00s)
+=== RUN   TestAutoLauncherResolvesHerdrOverTmux
+--- PASS: TestMigrationFailureRecovery/migration-source (0.01s)
+=== RUN   TestMigrationFailureRecovery/migration-write-created
+--- PASS: TestMigrationFailureRecovery/migration-write-created (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-write-synced
+--- PASS: TestMigrationFailureRecovery/migration-write-synced (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-original-saved
+--- PASS: TestMigrationFailureRecovery/migration-original-saved (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-write-published
+--- PASS: TestAutoLauncherResolvesHerdrOverTmux (0.07s)
+=== RUN   TestAutoLauncherUsesTmuxWhenNotInHerdr
+--- PASS: TestMigrationFailureRecovery/migration-write-published (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-original-removed
+--- PASS: TestSubscribeExpandsWatchedTaskGroup (0.13s)
+=== RUN   TestSubscribeLegacyCardSurvivesDirectoryMigration
+--- PASS: TestMigrationFailureRecovery/migration-original-removed (0.01s)
+=== RUN   TestMigrationFailureRecovery/migration-size
+--- PASS: TestArchiveBatchAdvanceRangeAttribution (0.98s)
+=== RUN   TestArchiveLaunchFailureRecordsNotStarted
+--- PASS: TestMigrationFailureRecovery/migration-size (0.01s)
+=== RUN   TestMigrationFailureRecovery/migration-publish
+--- PASS: TestMigrationFailureRecovery/migration-publish (0.01s)
+=== RUN   TestMigrationFailureRecovery/revision
+--- PASS: TestSubscribeLegacyCardSurvivesDirectoryMigration (0.03s)
+=== RUN   TestReverseLookupOutcomes
+=== RUN   TestReverseLookupOutcomes/herdr-zero
+--- PASS: TestReverseLookupOutcomes/herdr-zero (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-one
+--- PASS: TestReverseLookupOutcomes/herdr-one (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-many
+--- PASS: TestMigrationFailureRecovery/revision (0.01s)
+=== RUN   TestMigrationFailureRecovery/committed
+--- PASS: TestReverseLookupOutcomes/herdr-many (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-json
+--- PASS: TestReverseLookupOutcomes/herdr-json (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-missing-list
+--- PASS: TestReverseLookupOutcomes/herdr-missing-list (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-invalid-row
+--- PASS: TestReverseLookupOutcomes/herdr-invalid-row (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-invalid-id
+--- PASS: TestReverseLookupOutcomes/herdr-invalid-id (0.00s)
+--- PASS: TestAutoLauncherUsesTmuxWhenNotInHerdr (0.07s)
+=== RUN   TestReverseLookupOutcomes/herdr-invalid-session
+=== RUN   TestAutoLauncherWithoutHerdrOrTmuxDoesNotClaim
+--- PASS: TestReverseLookupOutcomes/herdr-invalid-session (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-partial-list
+--- PASS: TestMigrationFailureRecovery/committed (0.01s)
+--- PASS: TestMigrationFailureRecovery (0.18s)
+=== RUN   TestMigrationCrashChild
+--- PASS: TestMigrationCrashChild (0.00s)
+=== RUN   TestMigrationKillRestart
+=== RUN   TestMigrationKillRestart/prepared
+--- PASS: TestReverseLookupOutcomes/herdr-partial-list (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-zero
+--- PASS: TestReverseLookupOutcomes/tmux-zero (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-one
+--- PASS: TestReverseLookupOutcomes/tmux-one (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-session-one
+--- PASS: TestReverseLookupOutcomes/tmux-session-one (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-many
+--- PASS: TestReverseLookupOutcomes/tmux-many (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-empty
+--- PASS: TestReverseLookupOutcomes/tmux-empty (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-invalid-row
+--- PASS: TestReverseLookupOutcomes/tmux-invalid-row (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-invalid-id
+--- PASS: TestReverseLookupOutcomes/tmux-invalid-id (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-invalid-dead
+--- PASS: TestReverseLookupOutcomes/tmux-invalid-dead (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-partial-list
+--- PASS: TestMigrationKillRestart/prepared (0.02s)
+=== RUN   TestMigrationKillRestart/migration-stage
+--- PASS: TestReverseLookupOutcomes/tmux-partial-list (0.00s)
+--- PASS: TestReverseLookupOutcomes (0.04s)
+=== RUN   TestAuditReverseLookupErrorBecomesUnknown
+=== RUN   TestAuditReverseLookupErrorBecomesUnknown/herdr
+--- PASS: TestAutoLauncherWithoutHerdrOrTmuxDoesNotClaim (0.03s)
+=== RUN   TestTmuxSessionLauncherCreateReuseForeignAndRollback
+--- PASS: TestMigrationKillRestart/migration-stage (0.02s)
+=== RUN   TestMigrationKillRestart/migration-source
+--- PASS: TestMigrationKillRestart/migration-source (0.02s)
+=== RUN   TestMigrationKillRestart/migration-write-created
+--- PASS: TestAuditReverseLookupErrorBecomesUnknown/herdr (0.05s)
+=== RUN   TestAuditReverseLookupErrorBecomesUnknown/tmux
+--- PASS: TestMigrationKillRestart/migration-write-created (0.02s)
+=== RUN   TestMigrationKillRestart/migration-write-synced
+--- PASS: TestAuditReverseLookupErrorBecomesUnknown/tmux (0.04s)
+--- PASS: TestAuditReverseLookupErrorBecomesUnknown (0.09s)
+=== RUN   TestReverseLookupTimeoutIsUnknown
+=== RUN   TestReverseLookupTimeoutIsUnknown/herdr
+--- PASS: TestMigrationKillRestart/migration-write-synced (0.03s)
+=== RUN   TestMigrationKillRestart/migration-original-saved
+--- PASS: TestMigrationKillRestart/migration-original-saved (0.03s)
+=== RUN   TestMigrationKillRestart/migration-write-published
+--- PASS: TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY (2.31s)
+=== RUN   TestBoardOpensOptionsPanelOnPTY
+--- PASS: TestReverseLookupTimeoutIsUnknown/herdr (0.04s)
+=== RUN   TestReverseLookupTimeoutIsUnknown/tmux
+--- PASS: TestArchiveLaunchFailureRecordsNotStarted (0.20s)
+=== RUN   TestArchiveWorktreeRejectionKeepsReportWithoutPassing
+--- PASS: TestMigrationKillRestart/migration-write-published (0.03s)
+=== RUN   TestMigrationKillRestart/migration-original-removed
+--- PASS: TestMigrationKillRestart/migration-original-removed (0.02s)
+=== RUN   TestMigrationKillRestart/migration-size
+--- PASS: TestReverseLookupTimeoutIsUnknown/tmux (0.04s)
+--- PASS: TestReverseLookupTimeoutIsUnknown (0.08s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-agent-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-agent-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-session-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-session-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-working
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-working (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-blocked
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-blocked (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-codex-empty
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-codex-empty (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-no-lookup
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-no-lookup (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-process-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-process-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-session-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-session-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-copy-mode
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-copy-mode (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-codex-empty
+--- PASS: TestMigrationKillRestart/migration-size (0.02s)
+=== RUN   TestMigrationKillRestart/migration-publish
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-codex-empty (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-no-lookup
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-no-lookup (0.00s)
+--- PASS: TestLivenessIdentityAndReadinessSemantics (0.02s)
+=== RUN   TestAuditChangesSuppressLiveness
+=== RUN   TestAuditChangesSuppressLiveness/watched=false/working=false
+--- PASS: TestMigrationKillRestart/migration-publish (0.02s)
+=== RUN   TestMigrationKillRestart/revision
+--- PASS: TestMigrationKillRestart/revision (0.02s)
+=== RUN   TestMigrationKillRestart/committed
+--- PASS: TestMigrationKillRestart/committed (0.02s)
+--- PASS: TestMigrationKillRestart (0.29s)
+=== RUN   TestMigrationUnknownAndConflictingArtifactsPreserved
+--- PASS: TestMigrationUnknownAndConflictingArtifactsPreserved (0.00s)
+=== RUN   TestMigrationSerializesReadersAndWriters
+--- PASS: TestTmuxSessionLauncherCreateReuseForeignAndRollback (0.35s)
+=== RUN   TestHerdrReportWarnsWithoutRollback
+--- PASS: TestAuditChangesSuppressLiveness/watched=false/working=false (0.17s)
+--- PASS: TestMigrationSerializesReadersAndWriters (0.10s)
+=== RUN   TestMigrationStagingRejectsSymlink
+=== RUN   TestAuditChangesSuppressLiveness/watched=false/working=true
+--- PASS: TestMigrationStagingRejectsSymlink (0.01s)
+=== RUN   TestOldWindowSnapshotCannotResurrectAfterFormMigration
+--- PASS: TestOldWindowSnapshotCannotResurrectAfterFormMigration (0.02s)
+=== RUN   TestDisplaySnapshotRemainsReadableAcrossMigration
+--- PASS: TestDisplaySnapshotRemainsReadableAcrossMigration (0.01s)
+=== RUN   TestInitCommandMaintenanceAndMigrationCount
+--- PASS: TestArchiveWorktreeRejectionKeepsReportWithoutPassing (0.27s)
+=== RUN   TestArchiveCleanupFailureCannotPublishOK
+--- PASS: TestInitCommandMaintenanceAndMigrationCount (0.01s)
+=== RUN   TestSizeScanDoesNotExpandCheckScopeForUnreadableHistory
+--- PASS: TestSizeScanDoesNotExpandCheckScopeForUnreadableHistory (0.00s)
+=== RUN   TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning
+--- PASS: TestHerdrReportWarnsWithoutRollback (0.07s)
+=== RUN   TestHerdrTabAndPaneFailuresCloseAndRollback
+/tmp/TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning1551795339/001/backlog/20260908-web-payload-task
+--- PASS: TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning (0.01s)
+=== RUN   TestTaskPayloadTaskGroupLegacyAndCurrent
+--- PASS: TestTaskPayloadTaskGroupLegacyAndCurrent (0.01s)
+=== RUN   TestReviewCrashChild
+--- PASS: TestReviewCrashChild (0.00s)
+=== RUN   TestReviewKillRestartBoundaries
+=== RUN   TestReviewKillRestartBoundaries/intent
+--- PASS: TestAuditChangesSuppressLiveness/watched=false/working=true (0.17s)
+=== RUN   TestAuditChangesSuppressLiveness/watched=true/working=false
+--- PASS: TestHerdrTabAndPaneFailuresCloseAndRollback (0.28s)
+=== RUN   TestResumeMessageFileCursorWorkingAndMissingSession
+--- PASS: TestAuditChangesSuppressLiveness/watched=true/working=false (0.18s)
+=== RUN   TestAuditChangesSuppressLiveness/watched=true/working=true
+--- PASS: TestArchiveCleanupFailureCannotPublishOK (0.36s)
+=== RUN   TestStandaloneReviewIgnoresInvalidBoard
+--- PASS: TestReviewKillRestartBoundaries/intent (0.32s)
+=== RUN   TestReviewKillRestartBoundaries/prompt
+--- PASS: TestStandaloneReviewIgnoresInvalidBoard (0.09s)
+=== RUN   TestArchiveLeftoverProcessesRejectButKeepRawOutput
+--- PASS: TestAuditChangesSuppressLiveness/watched=true/working=true (0.15s)
+--- PASS: TestAuditChangesSuppressLiveness (0.67s)
+=== RUN   TestSubscribePureHeartbeatBeforeRefresh
+--- PASS: TestSubscribePureHeartbeatBeforeRefresh (0.05s)
+=== RUN   TestAuditRefreshDurationOverflow
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/1e300
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/1e300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/9223372036.854776
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/9223372036.854776 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/1e-300
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/1e-300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/0.0000000009
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/0.0000000009 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/0
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/0 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/-1
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/-1 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/NaN
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/NaN (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/Inf
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/-Inf
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/-Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/invalid
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/invalid (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/1e300
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/1e300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/9223372036.854776
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/9223372036.854776 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/1e-300
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/1e-300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/0.0000000009
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/0.0000000009 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/0
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/0 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/-1
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/-1 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/NaN
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/NaN (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/Inf
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/-Inf
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/-Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/invalid
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/invalid (0.00s)
+--- PASS: TestAuditRefreshDurationOverflow (0.00s)
+=== RUN   TestSubscribeIntervalBoundariesAndDefaults
+--- PASS: TestSubscribeIntervalBoundariesAndDefaults (0.00s)
+=== RUN   TestSubscribeRejectsInvalidIntervalsBeforeBoardAccess
+--- PASS: TestSubscribeRejectsInvalidIntervalsBeforeBoardAccess (0.00s)
+=== RUN   TestAuditRoundTripIsInvisible
+=== RUN   TestAuditRoundTripIsInvisible/same-state
+--- PASS: TestAuditRoundTripIsInvisible/same-state (0.09s)
+=== RUN   TestAuditRoundTripIsInvisible/round-trip
+--- PASS: TestReviewKillRestartBoundaries/prompt (0.32s)
+=== RUN   TestReviewKillRestartBoundaries/launching
+--- PASS: TestAuditRoundTripIsInvisible/round-trip (0.11s)
+--- PASS: TestAuditRoundTripIsInvisible (0.20s)
+=== RUN   TestAuditWatchedGroupMembershipIsFrozen
+--- PASS: TestArchiveLeftoverProcessesRejectButKeepRawOutput (0.28s)
+=== RUN   TestArchiveInvalidUTF8IsRawEvidenceNotValidReport
+--- PASS: TestResumeMessageFileCursorWorkingAndMissingSession (0.49s)
+=== RUN   TestResumeLaunchAndLivenessFailureRestoresReview
+--- PASS: TestAuditWatchedGroupMembershipIsFrozen (0.15s)
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation/removed
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation/removed (0.11s)
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation/regrouped
+--- PASS: TestArchiveInvalidUTF8IsRawEvidenceNotValidReport (0.25s)
+=== RUN   TestArchiveJSONReviewerReplayBytes
+=== RUN   TestArchiveJSONReviewerReplayBytes/original_report_```kander-findings_{"FINDINGS":[],"NON_BLOCKING":[]}_```
+--- PASS: TestReviewKillRestartBoundaries/launching (0.35s)
+=== RUN   TestReviewKillRestartBoundaries/output
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation/regrouped (0.12s)
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation (0.23s)
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember/startup
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember/startup (0.11s)
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember/refresh
+--- PASS: TestBoardOpensOptionsPanelOnPTY (1.52s)
+=== RUN   TestDisplayHelpers
+--- PASS: TestDisplayHelpers (0.00s)
+=== RUN   TestVisibleColumns
+--- PASS: TestVisibleColumns (0.00s)
+=== RUN   TestModelNavigationAndSearch
+--- PASS: TestModelNavigationAndSearch (0.00s)
+=== RUN   TestKeepSelectionOnRefresh
+--- PASS: TestKeepSelectionOnRefresh (0.00s)
+=== RUN   TestThemeCycle
+--- PASS: TestThemeCycle (0.00s)
+=== RUN   TestThemePaletteFillsBackground
+--- PASS: TestThemePaletteFillsBackground (0.00s)
+=== RUN   TestResolveThemeUsesCachedDetection
+--- PASS: TestResolveThemeUsesCachedDetection (0.00s)
+=== RUN   TestSelectionHelpers
+--- PASS: TestSelectionHelpers (0.00s)
+=== RUN   TestCopyAndDetailKeys
+--- PASS: TestCopyAndDetailKeys (0.00s)
+=== RUN   TestColumnCountPrefs
+--- PASS: TestColumnCountPrefs (0.01s)
+=== RUN   TestPageKeys
+--- PASS: TestPageKeys (0.00s)
+=== RUN   TestRenderKeepsFocusColumn
+--- PASS: TestRenderKeepsFocusColumn (0.00s)
+=== RUN   TestDefaultRunRejectsNonTTY
+--- PASS: TestDefaultRunRejectsNonTTY (0.00s)
+=== RUN   TestJSONContentKeyIgnoresGeneratedAt
+--- PASS: TestJSONContentKeyIgnoresGeneratedAt (0.00s)
+=== RUN   TestMouseSelectsTask
+--- PASS: TestMouseSelectsTask (0.00s)
+=== RUN   TestDetailRendersMarkdown
+--- PASS: TestDetailRendersMarkdown (0.00s)
+=== RUN   TestRefreshOpenDetailUpdatesState
+--- PASS: TestRefreshOpenDetailUpdatesState (0.00s)
+=== RUN   TestAutoRefreshInterval
+--- PASS: TestAutoRefreshInterval (0.00s)
+=== RUN   TestAdjustColumnsKeepsOptionsSessionInSync
+--- PASS: TestAdjustColumnsKeepsOptionsSessionInSync (0.01s)
+PASS
+ok  	github.com/dualface/kander/internal/tui	5.517s
+--- PASS: TestArchiveJSONReviewerReplayBytes/original_report_```kander-findings_{"FINDINGS":[],"NON_BLOCKING":[]}_``` (0.30s)
+=== RUN   TestArchiveJSONReviewerReplayBytes/original_report\n_```kander-findings_{"FINDINGS":[],"NON_BLOCKING":[]}_```_
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember/refresh (0.11s)
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember (0.22s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/member-alias
+--- PASS: TestReviewKillRestartBoundaries/output (0.33s)
+=== RUN   TestReviewKillRestartBoundaries/finalized
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/member-alias (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/watch-alias
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/watch-alias (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/overlap
+--- PASS: TestResumeLaunchAndLivenessFailureRestoresReview (0.70s)
+=== RUN   TestValidateResumedAgentHerdrIdentityPolicy
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/overlap (0.06s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/group-overlap
+--- PASS: TestArchiveJSONReviewerReplayBytes/original_report\n_```kander-findings_{"FINDINGS":[],"NON_BLOCKING":[]}_```_ (0.29s)
+--- PASS: TestArchiveJSONReviewerReplayBytes (0.59s)
+=== RUN   TestClaudeIsolationAndReport
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/group-overlap (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-card
+--- PASS: TestClaudeIsolationAndReport (0.08s)
+=== RUN   TestClaudeInterruptCollectsProcessGroup
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-card (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/missing-spec
+--- PASS: TestReviewKillRestartBoundaries/finalized (0.34s)
+=== RUN   TestReviewKillRestartBoundaries/first-card
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/missing-spec (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/unrelated-invalid
+--- PASS: TestClaudeInterruptCollectsProcessGroup (0.09s)
+=== RUN   TestClaudeTimeout
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/unrelated-invalid (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/own-regrouped
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/own-regrouped (0.06s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/invalid-group
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/invalid-group (0.06s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-group
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-group (0.07s)
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure (0.67s)
+=== RUN   TestSubscribeExplicitTargetsIgnoreUnrelatedKnownProblems
+--- PASS: TestSubscribeExplicitTargetsIgnoreUnrelatedKnownProblems (0.06s)
+=== RUN   TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation
+--- PASS: TestReviewKillRestartBoundaries/first-card (0.34s)
+=== RUN   TestReviewKillRestartBoundaries/published
+--- PASS: TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation (0.14s)
+=== RUN   TestGroupExpansionKeepsCommittedSnapshot
+--- PASS: TestGroupExpansionKeepsCommittedSnapshot (0.06s)
+=== RUN   TestSubscribeUnavailableCommittedFacts
+=== RUN   TestSubscribeUnavailableCommittedFacts/prepared
+--- PASS: TestSubscribeUnavailableCommittedFacts/prepared (0.04s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/maintenance
+--- PASS: TestReviewKillRestartBoundaries/published (0.37s)
+--- PASS: TestReviewKillRestartBoundaries (2.37s)
+=== RUN   TestReviewMissingPlanCannotComplete
+--- PASS: TestReviewMissingPlanCannotComplete (0.05s)
+=== RUN   TestReviewMissingAndFailedRequiredRoles
+=== RUN   TestReviewMissingAndFailedRequiredRoles/never-run
+--- PASS: TestReviewMissingAndFailedRequiredRoles/never-run (0.06s)
+=== RUN   TestReviewMissingAndFailedRequiredRoles/all-failed
+--- PASS: TestReviewMissingAndFailedRequiredRoles/all-failed (0.16s)
+--- PASS: TestReviewMissingAndFailedRequiredRoles (0.21s)
+=== RUN   TestStructuredFindingsRejectMissingDuplicateAndProseIDs
+--- PASS: TestStructuredFindingsRejectMissingDuplicateAndProseIDs (0.00s)
+=== RUN   TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord
+--- PASS: TestClaudeTimeout (1.08s)
+=== RUN   TestClaudeDelayedTamperRejected
+--- PASS: TestValidateResumedAgentHerdrIdentityPolicy (1.56s)
+=== RUN   TestWindowsRejectsTmuxAndRequiresHerdrEnvCreateRollback
+--- PASS: TestWindowsRejectsTmuxAndRequiresHerdrEnvCreateRollback (0.21s)
+=== RUN   TestStartHelpListsAuto
+--- PASS: TestStartHelpListsAuto (0.00s)
+=== RUN   TestLookPathTmux
+--- PASS: TestLookPathTmux (0.00s)
+=== RUN   TestStartSelectsAgentByScaleAndRecordsWindow
+--- PASS: TestStartSelectsAgentByScaleAndRecordsWindow (0.13s)
+=== RUN   TestStartAgentOverrideAndClaudeSession
+--- PASS: TestStartAgentOverrideAndClaudeSession (0.05s)
+=== RUN   TestStartCursorCreateChatFailureDoesNotClaim
+--- PASS: TestStartCursorCreateChatFailureDoesNotClaim (0.02s)
+=== RUN   TestResumeClaudeAndGroupPrompt
+--- PASS: TestResumeClaudeAndGroupPrompt (0.17s)
+=== RUN   TestResumeRequiresMessageAndCodexRollout
+--- PASS: TestResumeRequiresMessageAndCodexRollout (0.11s)
+=== RUN   TestStartFailureRestoresTodo
+--- PASS: TestStartFailureRestoresTodo (0.05s)
+=== RUN   TestTmuxPersistsWindowBeforeMutationAndPaneMarker
+--- PASS: TestTmuxPersistsWindowBeforeMutationAndPaneMarker (0.06s)
+=== RUN   TestTmuxPaneSessionWriteFailureRollsBack
+--- PASS: TestTmuxPaneSessionWriteFailureRollsBack (0.07s)
+=== RUN   TestWindowsRejectsTmuxBeforeClaim
+--- PASS: TestTerminalToolProbeTimeout (5.01s)
+=== RUN   TestDoctorHerdrInstallConfirmation
+=== RUN   TestDoctorHerdrInstallConfirmation/noninteractive
+--- PASS: TestWindowsRejectsTmuxBeforeClaim (0.02s)
+=== RUN   TestStartRemovesTaskFileWhenClaimFails
+--- PASS: TestStartRemovesTaskFileWhenClaimFails (0.03s)
+=== RUN   TestTakeoverHookReportsNA
+--- PASS: TestDoctorHerdrInstallConfirmation/noninteractive (0.06s)
+=== RUN   TestDoctorHerdrInstallConfirmation/decline
+--- PASS: TestClaudeDelayedTamperRejected (1.19s)
+=== RUN   TestClaudeIncompleteOutput
+--- PASS: TestDoctorHerdrInstallConfirmation/decline (0.08s)
+=== RUN   TestDoctorHerdrInstallConfirmation/default-skip
+--- PASS: TestClaudeIncompleteOutput (0.08s)
+=== RUN   TestClaudeSpecSnapshot
+--- PASS: TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord (1.43s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal
+--- PASS: TestTakeoverHookReportsNA (0.12s)
+=== RUN   TestForegroundRejectsNonTTY
+--- PASS: TestForegroundRejectsNonTTY (0.02s)
+=== RUN   TestHerdrStartWritesWindow
+--- PASS: TestClaudeSpecSnapshot (0.09s)
+=== RUN   TestClaudeIncremental
+--- PASS: TestClaudeIncremental (0.10s)
+=== RUN   TestMissingArgsReportsUsage
+--- PASS: TestMissingArgsReportsUsage (0.02s)
+=== RUN   TestUnsupportedAgentRejected
+--- PASS: TestSubscribeUnavailableCommittedFacts/maintenance (2.04s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/corrupt-journal
+--- PASS: TestUnsupportedAgentRejected (0.03s)
+=== RUN   TestUnsupportedRoleRejected
+--- PASS: TestUnsupportedRoleRejected (0.02s)
+=== RUN   TestRelativeCWDRejected
+--- PASS: TestSubscribeUnavailableCommittedFacts/corrupt-journal (0.04s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/reparse
+--- PASS: TestRelativeCWDRejected (0.03s)
+=== RUN   TestPathOutsideGitRejected
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/empty-basis
+--- PASS: TestSubscribeUnavailableCommittedFacts/reparse (0.04s)
+--- PASS: TestSubscribeUnavailableCommittedFacts (2.16s)
+=== RUN   TestSubscribeRestartProcess
+--- PASS: TestPathOutsideGitRejected (0.03s)
+=== RUN   TestEmptyTaskGoalRejected
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/empty-basis (0.04s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/delegated
+--- PASS: TestEmptyTaskGoalRejected (0.03s)
+=== RUN   TestUnreadableSpecRejected
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/delegated (0.04s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/pm-waiver
+--- PASS: TestUnreadableSpecRejected (0.03s)
+=== RUN   TestWindowsStyleAbsoluteIsTaskGoalOnPOSIX
+--- PASS: TestSubscribeRestartProcess (0.08s)
+PASS
+ok  	github.com/dualface/kander/internal/liveness	8.736s
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/pm-waiver (0.03s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/author
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/author (0.03s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/card
+--- PASS: TestWindowsStyleAbsoluteIsTaskGoalOnPOSIX (0.09s)
+=== RUN   TestAbbreviatedSHARejected
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/card (0.03s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/round
+--- PASS: TestAbbreviatedSHARejected (0.03s)
+=== RUN   TestBaseNotAncestorRejected
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/round (0.03s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/original
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/original (0.03s)
+--- PASS: TestBaseNotAncestorRejected (0.06s)
+=== RUN   TestHEADMismatchRejected
+--- PASS: TestHEADMismatchRejected (0.04s)
+=== RUN   TestUntrackedBlocksReview
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal (0.60s)
+=== RUN   TestMechanicalFixAndNonMechanicalRerunGate
+=== RUN   TestMechanicalFixAndNonMechanicalRerunGate/logic
+--- PASS: TestUntrackedBlocksReview (0.04s)
+=== RUN   TestGitStatusFailureRejected
+--- PASS: TestGitStatusFailureRejected (0.04s)
+=== RUN   TestWorktreeInsideCodexHomeRejected
+--- PASS: TestWorktreeInsideCodexHomeRejected (0.03s)
+=== RUN   TestMissingBinaryReports127
+--- PASS: TestMissingBinaryReports127 (0.04s)
+=== RUN   TestCodexFailurePropagated
+--- PASS: TestMechanicalFixAndNonMechanicalRerunGate/logic (0.21s)
+=== RUN   TestMechanicalFixAndNonMechanicalRerunGate/documentation
+--- PASS: TestCodexFailurePropagated (0.07s)
+=== RUN   TestWorktreeTamperingDetected
+--- PASS: TestWorktreeTamperingDetected (0.07s)
+=== RUN   TestCleanReviewReturnsReport
+--- PASS: TestCleanReviewReturnsReport (0.08s)
+=== RUN   TestCodexIsolationFlags
+--- PASS: TestCodexIsolationFlags (0.08s)
+=== RUN   TestModelConfigAndEnvOverride
+--- PASS: TestMechanicalFixAndNonMechanicalRerunGate/documentation (0.28s)
+--- PASS: TestMechanicalFixAndNonMechanicalRerunGate (0.49s)
+=== RUN   TestExplicitNAAndLegacyCompletedCard
+--- PASS: TestHerdrStartWritesWindow (1.06s)
+=== RUN   TestResumeWrongState
+--- PASS: TestResumeWrongState (0.02s)
+=== RUN   TestWindowsConsoleLauncher
+    launch_test.go:832: Windows console launcher only
+--- SKIP: TestWindowsConsoleLauncher (0.00s)
+=== RUN   TestConsoleRejectedOffWindows
+--- PASS: TestConsoleRejectedOffWindows (0.02s)
+=== RUN   TestConsoleStartRecordsWindow
+--- PASS: TestConsoleStartRecordsWindow (0.04s)
+=== RUN   TestPaneCommandQuotesForTheContainerShell
+--- PASS: TestPaneCommandQuotesForTheContainerShell (0.00s)
+=== RUN   TestPaneCommandRejectsControlCharacters
+--- PASS: TestPaneCommandRejectsControlCharacters (0.00s)
+=== RUN   TestLaunchInvocationUsesShellFormForPaneLaunchers
+--- PASS: TestLaunchInvocationUsesShellFormForPaneLaunchers (0.00s)
+=== RUN   TestStartAndTakeoverUpdateLegacyFieldsInPlace
+--- PASS: TestStartAndTakeoverUpdateLegacyFieldsInPlace (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/start
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/start (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/resume
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/resume (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/notify-resume
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/notify-resume (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/takeover
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/cn/takeover (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/en/start
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/en/start (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/en/resume
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/en/resume (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/en/notify-resume
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/en/notify-resume (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/en/takeover
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/en/takeover (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/start
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/start (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/resume
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/resume (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/notify-resume
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/notify-resume (0.00s)
+=== RUN   TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/takeover
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract/ja/takeover (0.00s)
+--- PASS: TestAgentPromptsLoadConfigurationBeforeCommandContract (0.00s)
+=== RUN   TestLocalizedPromptsAndSessionLookup
+=== RUN   TestLocalizedPromptsAndSessionLookup/cn
+--- PASS: TestLocalizedPromptsAndSessionLookup/cn (0.00s)
+=== RUN   TestLocalizedPromptsAndSessionLookup/en
+--- PASS: TestLocalizedPromptsAndSessionLookup/en (0.00s)
+=== RUN   TestLocalizedPromptsAndSessionLookup/ja
+--- PASS: TestLocalizedPromptsAndSessionLookup/ja (0.00s)
+--- PASS: TestLocalizedPromptsAndSessionLookup (0.00s)
+=== RUN   TestPromptLanguageDirectiveFromCardAndConfig
+=== RUN   TestPromptLanguageDirectiveFromCardAndConfig/card_LANGUAGE
+--- PASS: TestPromptLanguageDirectiveFromCardAndConfig/card_LANGUAGE (0.00s)
+=== RUN   TestPromptLanguageDirectiveFromCardAndConfig/fallback_to_agent_language
+--- PASS: TestPromptLanguageDirectiveFromCardAndConfig/fallback_to_agent_language (0.00s)
+=== RUN   TestPromptLanguageDirectiveFromCardAndConfig/corrupt_config_without_LANGUAGE
+--- PASS: TestPromptLanguageDirectiveFromCardAndConfig/corrupt_config_without_LANGUAGE (0.00s)
+--- PASS: TestPromptLanguageDirectiveFromCardAndConfig (0.00s)
+=== RUN   TestPromptUsesSizeIndependentOfDirectoryForm
+--- PASS: TestPromptUsesSizeIndependentOfDirectoryForm (0.00s)
+=== RUN   TestRollbackLaunchRestoresOrKeepsWorking
+--- PASS: TestModelConfigAndEnvOverride (0.14s)
+=== RUN   TestMalformedModelConfigFallsBack
+--- PASS: TestExplicitNAAndLegacyCompletedCard (0.15s)
+=== RUN   TestLegacyMappingRequiresOriginalLocations
+--- PASS: TestRollbackLaunchRestoresOrKeepsWorking (0.10s)
+=== RUN   TestDisabledGroupsDoNotClaimOrStart
+=== RUN   TestDisabledGroupsDoNotClaimOrStart/metadata
+--- PASS: TestMalformedModelConfigFallsBack (0.08s)
+=== RUN   TestEmptyConfigModelOmitsFlag
+--- PASS: TestDisabledGroupsDoNotClaimOrStart/metadata (0.02s)
+=== RUN   TestDisabledGroupsDoNotClaimOrStart/legacy
+--- PASS: TestDisabledGroupsDoNotClaimOrStart/legacy (0.02s)
+--- PASS: TestDisabledGroupsDoNotClaimOrStart (0.05s)
+=== RUN   TestDisabledGroupsDoNotResumeTakeoverOrRecover
+--- PASS: TestEmptyConfigModelOmitsFlag (0.09s)
+=== RUN   TestPromptCarriesRoleAndQARules
+--- PASS: TestDisabledGroupsDoNotResumeTakeoverOrRecover (0.09s)
+PASS
+ok  	github.com/dualface/kander/internal/launch	9.770s
+--- PASS: TestLegacyMappingRequiresOriginalLocations (0.21s)
+=== RUN   TestPlanExtensionUsesClosedCommitNotArbitraryRolePass
+--- PASS: TestPromptCarriesRoleAndQARules (0.10s)
+=== RUN   TestSpecFileAuthoritative
+--- PASS: TestSpecFileAuthoritative (0.09s)
+=== RUN   TestIncrementalReReview
+--- PASS: TestPlanExtensionUsesClosedCommitNotArbitraryRolePass (0.13s)
+=== RUN   TestReviewJSONRoundTrip
+--- PASS: TestReviewJSONRoundTrip (0.00s)
+=== RUN   TestDuplicateJSONKeysCannotEraseFindings
+--- PASS: TestDuplicateJSONKeysCannotEraseFindings (0.00s)
+=== RUN   TestPlanCannotHideUnplannedRunsOrDeletedPointer
+--- PASS: TestIncrementalReReview (0.10s)
+=== RUN   TestEmptyReviewedKeepsFullReview
+--- PASS: TestEmptyReviewedKeepsFullReview (0.07s)
+=== RUN   TestReviewedCommitMustSitBetween
+--- PASS: TestPlanCannotHideUnplannedRunsOrDeletedPointer (0.17s)
+=== RUN   TestConcurrentDispositionAppendUsesRevisionAndPreservesOriginals
+--- PASS: TestReviewedCommitMustSitBetween (0.09s)
+=== RUN   TestIncrementalRequiresLedger
+--- PASS: TestIncrementalRequiresLedger (0.03s)
+=== RUN   TestIgnoredFilesDoesNotBlock
+--- PASS: TestIgnoredFilesDoesNotBlock (0.09s)
+=== RUN   TestDefaultLocaleReportsChineseUsage
+--- PASS: TestDefaultLocaleReportsChineseUsage (0.02s)
+=== RUN   TestTooManyArgsUsage
+--- PASS: TestConcurrentDispositionAppendUsesRevisionAndPreservesOriginals (0.21s)
+=== RUN   TestFailedRunRequiresExplicitSuccessfulReplacement
+--- PASS: TestTooManyArgsUsage (0.02s)
+=== RUN   TestImplicitAgentFromConfig
+--- PASS: TestImplicitAgentFromConfig (0.07s)
+=== RUN   TestCursorOwnChildrenAllowedDetachedRejected
+--- PASS: TestDoctorHerdrInstallConfirmation/default-skip (2.14s)
+=== RUN   TestDoctorHerdrInstallConfirmation/tmux-available
+--- PASS: TestDoctorHerdrInstallConfirmation/tmux-available (0.05s)
+=== RUN   TestDoctorHerdrInstallConfirmation/download-fails
+--- PASS: TestFailedRunRequiresExplicitSuccessfulReplacement (0.25s)
+=== RUN   TestSecurityWaiverPreservesNonPassStatus
+--- PASS: TestDoctorHerdrInstallConfirmation/download-fails (0.08s)
+=== RUN   TestDoctorHerdrInstallConfirmation/installer-fails
+--- PASS: TestDoctorHerdrInstallConfirmation/installer-fails (0.08s)
+=== RUN   TestDoctorHerdrInstallConfirmation/installed-outside-path
+--- PASS: TestDoctorHerdrInstallConfirmation/installed-outside-path (0.08s)
+--- PASS: TestDoctorHerdrInstallConfirmation (2.57s)
+=== RUN   TestHerdrInstallRechecksAvailability
+--- PASS: TestHerdrInstallRechecksAvailability (0.01s)
+=== RUN   TestHerdrWindowsInstallerArguments
+--- PASS: TestHerdrWindowsInstallerArguments (0.01s)
+=== RUN   TestHerdrDetectedOutsidePathOnPOSIX
+--- PASS: TestSecurityWaiverPreservesNonPassStatus (0.22s)
+=== RUN   TestPartialRunPublicationCannotCloseEvenWithNoFindings
+--- PASS: TestHerdrDetectedOutsidePathOnPOSIX (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/menu	10.782s
+--- PASS: TestPartialRunPublicationCannotCloseEvenWithNoFindings (0.26s)
+=== RUN   TestIncrementalIDsRequireActualPredecessorLineage
+--- PASS: TestIncrementalIDsRequireActualPredecessorLineage (0.25s)
+=== RUN   TestLegacyMappingIdentifiesUnmappedPredecessor
+    review_legacy_order_test.go:28: successor-first diagnostic: legacy-first: 审核证据无效：structured findings required; legacy mapping required for old reports
+--- PASS: TestLegacyMappingIdentifiesUnmappedPredecessor (0.27s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/no-predecessor
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/no-predecessor (0.14s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/duplicate-reference
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/duplicate-reference (0.42s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/missing-item
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/missing-item (0.40s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/reused-id
+--- PASS: TestCursorOwnChildrenAllowedDetachedRejected (2.16s)
+=== RUN   TestCursorIsolationFlags
+--- PASS: TestCursorIsolationFlags (0.09s)
+=== RUN   TestCursorMissingHomeAndSpecSnapshot
+--- PASS: TestCursorMissingHomeAndSpecSnapshot (0.15s)
+=== RUN   TestCursorIncompleteOutput
+--- PASS: TestCursorIncompleteOutput (0.08s)
+=== RUN   TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/reused-id (0.40s)
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships (1.36s)
+=== RUN   TestIncrementalSupplementCannotReplaceAutomaticSource
+--- PASS: TestIncrementalSupplementCannotReplaceAutomaticSource (0.32s)
+=== RUN   TestRebindPreservesClosedEvidenceAndTerminalMember
+--- PASS: TestRebindPreservesClosedEvidenceAndTerminalMember (0.33s)
+=== RUN   TestTrackedCycleCorruptionCannotBeRebound
+--- PASS: TestTrackedCycleCorruptionCannotBeRebound (0.06s)
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate/spaces
+/tmp/TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI3880517777/001/board/review/20260907-archive-test-task
+/tmp/TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI3880517777/001/board/review/20260907-other-test-task
+/tmp/TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI3880517777/001/board/working/20260907-archive-test-task
+kander: Invalid review evidence: execution cycle changed; extend-plan with rebind_cycles retains all existing requirements and failures
+kander: Invalid review evidence: execution cycle changed; extend-plan with rebind_cycles retains all existing requirements and failures
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate/spaces (0.23s)
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate/header-crlf
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate/header-crlf (0.27s)
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate/crlf-card
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate/crlf-card (0.33s)
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate (0.83s)
+=== RUN   TestReviewCheckPublicDiagnosticsAndOrder
+/tmp/TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI3880517777/001/board/done/20260907-archive-test-task
+/tmp/TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI3880517777/001/board/done/20260907-other-test-task
+--- PASS: TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI (2.07s)
+=== RUN   TestMalformedReviewCanBeExplicitlyReplacedThroughCLI
+/tmp/TestMalformedReviewCanBeExplicitlyReplacedThroughCLI2473002287/001/board/review/20260907-archive-test-task
+/tmp/TestMalformedReviewCanBeExplicitlyReplacedThroughCLI2473002287/001/board/working/20260907-archive-test-task
+kander: Invalid review evidence: unclosed review batches: batch
+--- PASS: TestReviewCheckPublicDiagnosticsAndOrder (1.24s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/entry
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/entry (0.14s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/json
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/json (0.14s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/schema
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/schema (0.14s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/card
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/card (0.13s)
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords (0.54s)
+=== RUN   TestReviewPublicationRejectsTerminalMove
+--- PASS: TestReviewPublicationRejectsTerminalMove (0.12s)
+=== RUN   TestReviewPublishFollowsMoveAndPreservesConcurrentBody
+/tmp/TestMalformedReviewCanBeExplicitlyReplacedThroughCLI2473002287/001/board/done/20260907-archive-test-task
+--- PASS: TestMalformedReviewCanBeExplicitlyReplacedThroughCLI (1.50s)
+=== RUN   TestAdvanceAndExtensionRejectOtherWorktree
+--- PASS: TestAdvanceAndExtensionRejectOtherWorktree (0.08s)
+=== RUN   TestMechanicalAssessmentRequiresActualGitScope
+--- PASS: TestReviewPublishFollowsMoveAndPreservesConcurrentBody (0.17s)
+=== RUN   TestReviewRunIdentityAndFrozenLanguage
+--- PASS: TestMechanicalAssessmentRequiresActualGitScope (0.06s)
+=== RUN   TestAdvanceWithoutPlanExplainsRecovery
+--- PASS: TestReviewRunIdentityAndFrozenLanguage (0.12s)
+=== RUN   TestReviewParallelRolesAndSameRunPublication
+--- PASS: TestAdvanceWithoutPlanExplainsRecovery (0.26s)
+=== RUN   TestDispositionCLIClosesOnlyCompleteRolesAtActualHead
+--- PASS: TestReviewParallelRolesAndSameRunPublication (0.21s)
+=== RUN   TestReviewPartialPublicationAndRetry
+--- PASS: TestReviewPartialPublicationAndRetry (0.22s)
+=== RUN   TestReviewBinaryOriginalsSurviveJournal
+--- PASS: TestReviewBinaryOriginalsSurviveJournal (0.10s)
+=== RUN   TestReviewBatchCASAndExplicitPredecessor
+--- PASS: TestReviewBatchCASAndExplicitPredecessor (0.31s)
+=== RUN   TestReviewCheckDetectsTamperingAndIncompleteIntent
+--- PASS: TestReviewCheckDetectsTamperingAndIncompleteIntent (0.13s)
+=== RUN   TestReviewIndexBeforeOtherSections
+--- PASS: TestReviewIndexBeforeOtherSections (0.00s)
+=== RUN   TestReviewPublishRacesMoveAndControlledUpdate
+--- PASS: TestDispositionCLIClosesOnlyCompleteRolesAtActualHead (0.91s)
+=== RUN   TestIncrementalTaskReviewReadsFailingAuthorEvidenceAndRejectsWrongSources
+--- PASS: TestReviewPublishRacesMoveAndControlledUpdate (0.22s)
+=== RUN   TestReviewRefusesChangedMembershipLanguageAndRequirements
+--- PASS: TestReviewRefusesChangedMembershipLanguageAndRequirements (0.21s)
+=== RUN   TestReviewRunLeaseSerializesIndependentCallers
+--- PASS: TestReviewRunLeaseSerializesIndependentCallers (0.02s)
+=== RUN   TestReviewBatchFreezesFallbackAcrossLaterRoles
+--- PASS: TestReviewBatchFreezesFallbackAcrossLaterRoles (0.13s)
+=== RUN   TestSnapshotContextContentionReleasesLocks
+=== RUN   TestSnapshotContextContentionReleasesLocks/board
+--- PASS: TestSnapshotContextContentionReleasesLocks/board (0.06s)
+=== RUN   TestSnapshotContextContentionReleasesLocks/task
+--- PASS: TestSnapshotContextContentionReleasesLocks/task (0.05s)
+=== RUN   TestSnapshotContextContentionReleasesLocks/journal
+--- PASS: TestSnapshotContextContentionReleasesLocks/journal (0.06s)
+--- PASS: TestSnapshotContextContentionReleasesLocks (0.17s)
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery/document
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery/document (0.01s)
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery/creation
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery/creation (0.01s)
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery (0.03s)
+=== RUN   TestSnapshotRevisionSurvivesMutationCursor
+--- PASS: TestSnapshotRevisionSurvivesMutationCursor (0.02s)
+=== RUN   TestMembershipDependencyRejectsUnknownOwnership
+--- PASS: TestMembershipDependencyRejectsUnknownOwnership (0.06s)
+=== RUN   TestControlledSmallLifecycleAndContractDecisions
+--- PASS: TestControlledSmallLifecycleAndContractDecisions (0.17s)
+=== RUN   TestControlledTerminationAndProtectedFields
+--- PASS: TestIncrementalTaskReviewReadsFailingAuthorEvidenceAndRejectsWrongSources (0.91s)
+=== RUN   TestClosureRejectsUnrelatedGitFixCommit
+--- PASS: TestClosureRejectsUnrelatedGitFixCommit (0.05s)
+=== RUN   TestNonGitExplicitNAPlanCanCompleteReviewGate
+--- PASS: TestNonGitExplicitNAPlanCanCompleteReviewGate (0.07s)
+=== RUN   TestGrokIsolationFlags
+--- PASS: TestGrokIsolationFlags (0.09s)
+=== RUN   TestGrokIncompleteOutput
+--- PASS: TestControlledTerminationAndProtectedFields (0.28s)
+=== RUN   TestConcurrentNewAndUpdateMove
+--- PASS: TestGrokIncompleteOutput (0.08s)
+=== RUN   TestGrokTamperDetected
+--- PASS: TestGrokTamperDetected (0.09s)
+=== RUN   TestGrokIncremental
+--- PASS: TestGrokIncremental (0.11s)
+=== RUN   TestSyncStreamDoesNotBlockOnPipe
+--- PASS: TestSyncStreamDoesNotBlockOnPipe (0.00s)
+=== RUN   TestLineageFailuresRecoverThroughControlledCLI
+=== RUN   TestLineageFailuresRecoverThroughControlledCLI/no-predecessor
+--- PASS: TestConcurrentNewAndUpdateMove (0.52s)
+=== RUN   TestSortedBatchLocksAndConcurrentIndexAppend
+kander: Invalid review evidence: unclosed review batches: batch
+--- PASS: TestSortedBatchLocksAndConcurrentIndexAppend (0.33s)
+=== RUN   TestUpdateRejectsReparseAndMissingEntry
+kander: Invalid review evidence: unclosed review batches: batch
+--- PASS: TestUpdateRejectsReparseAndMissingEntry (0.01s)
+=== RUN   TestTransactionCrashChild
+--- PASS: TestTransactionCrashChild (0.00s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/prepared
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/prepared (0.03s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/directories
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/directories (0.03s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/first-file
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/first-file (0.03s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/files
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/files (0.05s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/rename
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/rename (0.04s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/revision
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/revision (0.03s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/committed
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/committed (0.03s)
+--- PASS: TestCrashRestartRecoveryAndReadVisibility (0.23s)
+=== RUN   TestRecoveryPreservesConflictingCopies
+--- PASS: TestRecoveryPreservesConflictingCopies (0.01s)
+=== RUN   TestShowJSONAndUpdateCommand
+--- PASS: TestShowJSONAndUpdateCommand (0.02s)
+=== RUN   TestContractStaysFrozenAfterWithdrawal
+--- PASS: TestContractStaysFrozenAfterWithdrawal (0.04s)
+=== RUN   TestNestedPublicationAndGroupControl
+--- PASS: TestNestedPublicationAndGroupControl (0.02s)
+=== RUN   TestSpecAliasesAndDuplicateContractRejected
+--- PASS: TestSpecAliasesAndDuplicateContractRejected (0.02s)
+=== RUN   TestIncompleteLargeCreationRecovers
+--- PASS: TestIncompleteLargeCreationRecovers (0.01s)
+=== RUN   TestStaleRecoveryDoesNotOverwriteNewRevision
+--- PASS: TestStaleRecoveryDoesNotOverwriteNewRevision (0.03s)
+=== RUN   TestReadAndUpdateRejectIncompleteLayout
+--- PASS: TestReadAndUpdateRejectIncompleteLayout (0.01s)
+=== RUN   TestTerminationHistoryRemainsOneProtectedSection
+--- PASS: TestTerminationHistoryRemainsOneProtectedSection (0.05s)
+PASS
+ok  	github.com/dualface/kander/internal/board	20.245s
+/tmp/TestLineageFailuresRecoverThroughControlledCLIno-predecessor1341648401/001/board/done/20260907-archive-test-task
+/tmp/TestLineageFailuresRecoverThroughControlledCLIno-predecessor1341648401/001/board/done/20260907-other-test-task
+--- PASS: TestLineageFailuresRecoverThroughControlledCLI/no-predecessor (1.70s)
+=== RUN   TestLineageFailuresRecoverThroughControlledCLI/duplicate-reference
+kander: Invalid review evidence: unclosed review batches: batch
+kander: Invalid review evidence: unclosed review batches: batch
+/tmp/TestLineageFailuresRecoverThroughControlledCLIduplicate-referen367563410/001/board/done/20260907-archive-test-task
+/tmp/TestLineageFailuresRecoverThroughControlledCLIduplicate-referen367563410/001/board/done/20260907-other-test-task
+--- PASS: TestLineageFailuresRecoverThroughControlledCLI/duplicate-reference (4.00s)
+=== RUN   TestLineageFailuresRecoverThroughControlledCLI/missing-item
+kander: Invalid review evidence: unclosed review batches: batch
+kander: Invalid review evidence: unclosed review batches: batch
+/tmp/TestLineageFailuresRecoverThroughControlledCLImissing-item3265755619/001/board/done/20260907-archive-test-task
+/tmp/TestLineageFailuresRecoverThroughControlledCLImissing-item3265755619/001/board/done/20260907-other-test-task
+--- PASS: TestLineageFailuresRecoverThroughControlledCLI/missing-item (3.68s)
+=== RUN   TestLineageFailuresRecoverThroughControlledCLI/reused-id
+kander: Invalid review evidence: unclosed review batches: batch
+kander: Invalid review evidence: unclosed review batches: batch
+/tmp/TestLineageFailuresRecoverThroughControlledCLIreused-id1769663713/001/board/done/20260907-archive-test-task
+/tmp/TestLineageFailuresRecoverThroughControlledCLIreused-id1769663713/001/board/done/20260907-other-test-task
+--- PASS: TestLineageFailuresRecoverThroughControlledCLI/reused-id (3.71s)
+=== RUN   TestLineageFailuresRecoverThroughControlledCLI/foreign-predecessor
+kander: Invalid review evidence: unclosed review batches: batch
+kander: Invalid review evidence: unclosed review batches: batch
+/tmp/TestLineageFailuresRecoverThroughControlledCLIforeign-predecess4034609330/001/board/done/20260907-archive-test-task
+/tmp/TestLineageFailuresRecoverThroughControlledCLIforeign-predecess4034609330/001/board/done/20260907-other-test-task
+--- PASS: TestLineageFailuresRecoverThroughControlledCLI/foreign-predecessor (3.88s)
+--- PASS: TestLineageFailuresRecoverThroughControlledCLI (16.97s)
+=== RUN   TestReportLanguageFromConfigNeedsReadableConfig
+--- PASS: TestReportLanguageFromConfigNeedsReadableConfig (0.01s)
+=== RUN   TestReportLanguageRuleOnlyWhenKnown
+--- PASS: TestReportLanguageRuleOnlyWhenKnown (0.00s)
+PASS
+ok  	github.com/dualface/kander/internal/review	36.115s
+
+提交：003e5fecf4048d8da8151d0431ea1cd040912a36
+命令：go test -json -race -count=1 ./internal/board ./internal/fs ./internal/liveness ./internal/i18n
+结果：exit 0；4 个包，190 个顶层测试通过，含子用例 385 项通过、0 项 skip、0 失败
+=== RUN   TestExclusiveLockBlocksAnotherProcess
+=== RUN   TestSmallAndLargeLifecycle
+=== RUN   TestCatalogs
+=== RUN   TestBatchMixedCommandsShareTotalBudget
+--- PASS: TestCatalogs (0.12s)
+=== RUN   TestText
+--- PASS: TestText (0.00s)
+=== RUN   TestCatalogCallSites
+--- PASS: TestBatchMixedCommandsShareTotalBudget (0.41s)
+=== RUN   TestBatchDefaultConcurrencyCancellationJoinsWorkers
+--- PASS: TestCatalogCallSites (0.31s)
+PASS
+--- PASS: TestBatchDefaultConcurrencyCancellationJoinsWorkers (0.02s)
+=== RUN   TestBatchEarlierCallerDeadlineWins
+--- PASS: TestBatchEarlierCallerDeadlineWins (0.20s)
+=== RUN   TestBatchUncollectedAndReadErrors
+--- PASS: TestBatchUncollectedAndReadErrors (0.00s)
+=== RUN   TestCheckCollectsBatchAndPreservesOutputOrder
+--- PASS: TestSmallAndLargeLifecycle (0.69s)
+=== RUN   TestPickAndReviewTransitions
+--- PASS: TestCheckCollectsBatchAndPreservesOutputOrder (0.46s)
+=== RUN   TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate
+--- PASS: TestPickAndReviewTransitions (0.42s)
+=== RUN   TestListFormats
+--- PASS: TestObservationRejectsNewIdentityAndKeepsRuntimeSeparate (0.01s)
+=== RUN   TestBatchPreservesDriftAndTmuxRuntimeUnknown
+--- PASS: TestBatchPreservesDriftAndTmuxRuntimeUnknown (0.01s)
+=== RUN   TestClassifyTaskSharesForwardAndReverseDeadline
+=== RUN   TestClassifyTaskSharesForwardAndReverseDeadline/herdr
+--- PASS: TestListFormats (0.04s)
+=== RUN   TestCheckDependenciesAndScope
+--- PASS: TestExclusiveLockBlocksAnotherProcess (1.25s)
+=== RUN   TestPrivatePermissionHelpers
+--- PASS: TestPrivatePermissionHelpers (0.00s)
+=== RUN   TestPosixAtomicCreateIsPrivateAndRejectsSymlinkRoot
+--- PASS: TestPosixAtomicCreateIsPrivateAndRejectsSymlinkRoot (0.00s)
+=== RUN   TestOpenWritableRegularFileAndMakeReadOnly
+--- PASS: TestOpenWritableRegularFileAndMakeReadOnly (0.00s)
+=== RUN   TestRemoveRegularFileIfExists
+--- PASS: TestRemoveRegularFileIfExists (0.00s)
+=== RUN   TestPosixNeutralAppendAndInheritedDirectories
+--- PASS: TestPosixNeutralAppendAndInheritedDirectories (0.01s)
+=== RUN   TestPosixPrivateDirectoryCreateIsStrict
+--- PASS: TestPosixPrivateDirectoryCreateIsStrict (0.00s)
+=== RUN   TestPosixPrivateRuntimeCleanupNeverFollowsSymlink
+--- PASS: TestPosixPrivateRuntimeCleanupNeverFollowsSymlink (0.00s)
+=== RUN   TestReadWriteRenameAndEscape
+--- PASS: TestReadWriteRenameAndEscape (0.00s)
+=== RUN   TestCreateDirectoryWithTextFileRollbackKeepsSibling
+--- PASS: TestCreateDirectoryWithTextFileRollbackKeepsSibling (0.00s)
+=== RUN   TestCreateDirectoryWithTextFile
+--- PASS: TestCreateDirectoryWithTextFile (0.00s)
+=== RUN   TestIsReparsePointSymlink
+--- PASS: TestIsReparsePointSymlink (0.00s)
+=== RUN   TestPrivateTempDirSupportsProtectedIO
+--- PASS: TestPrivateTempDirSupportsProtectedIO (0.00s)
+=== RUN   TestWriteExecutableAtomicInherited
+--- PASS: TestWriteExecutableAtomicInherited (0.00s)
+=== RUN   TestRemoveNonDirectoryIfExists
+--- PASS: TestRemoveNonDirectoryIfExists (0.00s)
+=== RUN   TestSharedLockChild
+--- PASS: TestSharedLockChild (0.00s)
+=== RUN   TestSharedLocksExcludeWriterAcrossProcesses
+ok  	github.com/dualface/kander/internal/i18n	1.475s
+--- PASS: TestClassifyTaskSharesForwardAndReverseDeadline/herdr (0.40s)
+=== RUN   TestClassifyTaskSharesForwardAndReverseDeadline/tmux
+--- PASS: TestCheckDependenciesAndScope (0.50s)
+=== RUN   TestInitLayoutAndArchive
+--- PASS: TestInitLayoutAndArchive (0.09s)
+=== RUN   TestLegacyReviewAutocreateAndReject
+--- PASS: TestLegacyReviewAutocreateAndReject (0.04s)
+=== RUN   TestDuplicateCycleAndSymlinkTargets
+--- PASS: TestDuplicateCycleAndSymlinkTargets (0.11s)
+=== RUN   TestPickPromptAndShow
+--- PASS: TestClassifyTaskSharesForwardAndReverseDeadline/tmux (0.40s)
+--- PASS: TestClassifyTaskSharesForwardAndReverseDeadline (0.80s)
+=== RUN   TestHerdrRevalidationUsesRemainingBudget
+--- PASS: TestPickPromptAndShow (0.05s)
+=== RUN   TestDoneMetadataKeepsWorking
+--- PASS: TestDoneMetadataKeepsWorking (0.14s)
+=== RUN   TestEnglishCheck
+--- PASS: TestEnglishCheck (0.00s)
+=== RUN   TestBoardRootRejectsSymlinkKanbanWithoutWalkingPast
+--- PASS: TestBoardRootRejectsSymlinkKanbanWithoutWalkingPast (0.00s)
+=== RUN   TestInitBoardRejectsSymlinkAncestor
+--- PASS: TestInitBoardRejectsSymlinkAncestor (0.00s)
+=== RUN   TestNewCardRecordsConfiguredAgentLanguage
+--- PASS: TestNewCardRecordsConfiguredAgentLanguage (0.03s)
+=== RUN   TestLargeCardRecordsAgentLanguage
+--- PASS: TestLargeCardRecordsAgentLanguage (0.01s)
+=== RUN   TestTodoGateRequiresSelfReviewRecord
+--- PASS: TestTodoGateRequiresSelfReviewRecord (0.03s)
+=== RUN   TestTodoGateRequiresCardReviewForGroupAndLarge
+--- PASS: TestTodoGateRequiresCardReviewForGroupAndLarge (0.07s)
+=== RUN   TestTodoGateRequiresAcceptanceCheckbox
+--- PASS: TestTodoGateRequiresAcceptanceCheckbox (0.02s)
+=== RUN   TestTodoGateIgnoresEmptyCRLFGroupMetadata
+--- PASS: TestTodoGateIgnoresEmptyCRLFGroupMetadata (0.03s)
+=== RUN   TestCheckFlagsContractDefectsForCommittedCards
+--- PASS: TestCheckFlagsContractDefectsForCommittedCards (0.03s)
+=== RUN   TestGuardWriteRejectsMissingDirectChildAndReportsMove
+--- PASS: TestGuardWriteRejectsMissingDirectChildAndReportsMove (0.01s)
+=== RUN   TestGuardWriteAllowsWhenBoardIsNotLocatable
+--- PASS: TestGuardWriteAllowsWhenBoardIsNotLocatable (0.00s)
+=== RUN   TestShowPrintsCurrentStateAndPath
+--- PASS: TestHerdrRevalidationUsesRemainingBudget (0.40s)
+=== RUN   TestClassifyCanceledBeforeLookupDoesNotLaunch
+--- PASS: TestClassifyCanceledBeforeLookupDoesNotLaunch (0.00s)
+=== RUN   TestClassifyCancellationDuringReverseLookup
+=== RUN   TestClassifyCancellationDuringReverseLookup/herdr
+--- PASS: TestClassifyCancellationDuringReverseLookup/herdr (0.00s)
+=== RUN   TestClassifyCancellationDuringReverseLookup/tmux
+--- PASS: TestShowPrintsCurrentStateAndPath (0.02s)
+=== RUN   TestJournalProcessChild
+--- PASS: TestJournalProcessChild (0.00s)
+=== RUN   TestJournalReadSerializesWithCommittedReplacement
+--- PASS: TestClassifyCancellationDuringReverseLookup/tmux (0.00s)
+--- PASS: TestClassifyCancellationDuringReverseLookup (0.01s)
+=== RUN   TestCheckReportsAliveStoppedAndUnknown
+--- PASS: TestCheckReportsAliveStoppedAndUnknown (0.23s)
+=== RUN   TestCheckReportsDriftedWithNewAddress
+--- PASS: TestCheckReportsDriftedWithNewAddress (0.07s)
+=== RUN   TestCheckUnknownReverseLookedUpHerdrStatusIsNotDrifted
+--- PASS: TestCheckUnknownReverseLookedUpHerdrStatusIsNotDrifted (0.09s)
+=== RUN   TestCheckLivenessDoesNotAffectExitCode
+--- PASS: TestCheckLivenessDoesNotAffectExitCode (0.07s)
+=== RUN   TestCheckSkipsReviewAndProbesOnlyWorking
+--- PASS: TestCheckSkipsReviewAndProbesOnlyWorking (0.16s)
+=== RUN   TestCheckProbeFailuresDegradeToUnknown
+--- PASS: TestCheckProbeFailuresDegradeToUnknown (0.07s)
+=== RUN   TestCheckUnreportedHerdrSessionIsAliveUndeliverable
+--- PASS: TestCheckUnreportedHerdrSessionIsAliveUndeliverable (0.08s)
+=== RUN   TestCheckCodexWithoutReferenceUsesAgentIdentity
+--- PASS: TestCheckCodexWithoutReferenceUsesAgentIdentity (0.07s)
+=== RUN   TestCheckProbesHerdrOnEveryPlatform
+--- PASS: TestCheckProbesHerdrOnEveryPlatform (0.23s)
+=== RUN   TestTmuxReverseLookupUniqueMarker
+--- PASS: TestTmuxReverseLookupUniqueMarker (0.00s)
+=== RUN   TestSubscribeHeartbeatIncludesWorkingLiveness
+--- PASS: TestSharedLocksExcludeWriterAcrossProcesses (2.22s)
+PASS
+--- PASS: TestJournalReadSerializesWithCommittedReplacement (1.23s)
+=== RUN   TestJournalScanWaitsForTemporaryPublicationHandle
+--- PASS: TestSubscribeHeartbeatIncludesWorkingLiveness (0.19s)
+=== RUN   TestSubscribeHeartbeatProbeFailureReportsUnknownWithoutExiting
+--- PASS: TestSubscribeHeartbeatProbeFailureReportsUnknownWithoutExiting (0.19s)
+=== RUN   TestSubscribeSnapshotStateChangeAndWatch
+--- PASS: TestSubscribeSnapshotStateChangeAndWatch (0.19s)
+=== RUN   TestSubscribeRejectsInvalidWatchAndMembership
+--- PASS: TestSubscribeRejectsInvalidWatchAndMembership (0.11s)
+=== RUN   TestSubscribeExpandsWatchedTaskGroup
+--- PASS: TestSubscribeExpandsWatchedTaskGroup (0.15s)
+=== RUN   TestSubscribeLegacyCardSurvivesDirectoryMigration
+--- PASS: TestSubscribeLegacyCardSurvivesDirectoryMigration (0.04s)
+=== RUN   TestReverseLookupOutcomes
+=== RUN   TestReverseLookupOutcomes/herdr-zero
+--- PASS: TestReverseLookupOutcomes/herdr-zero (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-one
+--- PASS: TestReverseLookupOutcomes/herdr-one (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-many
+--- PASS: TestReverseLookupOutcomes/herdr-many (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-json
+--- PASS: TestReverseLookupOutcomes/herdr-json (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-missing-list
+--- PASS: TestReverseLookupOutcomes/herdr-missing-list (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-invalid-row
+--- PASS: TestReverseLookupOutcomes/herdr-invalid-row (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-invalid-id
+--- PASS: TestReverseLookupOutcomes/herdr-invalid-id (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-invalid-session
+--- PASS: TestReverseLookupOutcomes/herdr-invalid-session (0.00s)
+=== RUN   TestReverseLookupOutcomes/herdr-partial-list
+--- PASS: TestReverseLookupOutcomes/herdr-partial-list (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-zero
+--- PASS: TestReverseLookupOutcomes/tmux-zero (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-one
+--- PASS: TestReverseLookupOutcomes/tmux-one (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-session-one
+--- PASS: TestReverseLookupOutcomes/tmux-session-one (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-many
+--- PASS: TestReverseLookupOutcomes/tmux-many (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-empty
+--- PASS: TestReverseLookupOutcomes/tmux-empty (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-invalid-row
+--- PASS: TestReverseLookupOutcomes/tmux-invalid-row (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-invalid-id
+--- PASS: TestReverseLookupOutcomes/tmux-invalid-id (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-invalid-dead
+--- PASS: TestReverseLookupOutcomes/tmux-invalid-dead (0.00s)
+=== RUN   TestReverseLookupOutcomes/tmux-partial-list
+--- PASS: TestReverseLookupOutcomes/tmux-partial-list (0.00s)
+--- PASS: TestReverseLookupOutcomes (0.06s)
+=== RUN   TestAuditReverseLookupErrorBecomesUnknown
+=== RUN   TestAuditReverseLookupErrorBecomesUnknown/herdr
+--- PASS: TestAuditReverseLookupErrorBecomesUnknown/herdr (0.06s)
+=== RUN   TestAuditReverseLookupErrorBecomesUnknown/tmux
+--- PASS: TestAuditReverseLookupErrorBecomesUnknown/tmux (0.07s)
+--- PASS: TestAuditReverseLookupErrorBecomesUnknown (0.12s)
+=== RUN   TestReverseLookupTimeoutIsUnknown
+=== RUN   TestReverseLookupTimeoutIsUnknown/herdr
+ok  	github.com/dualface/kander/internal/fs	4.522s
+--- PASS: TestReverseLookupTimeoutIsUnknown/herdr (0.04s)
+=== RUN   TestReverseLookupTimeoutIsUnknown/tmux
+--- PASS: TestReverseLookupTimeoutIsUnknown/tmux (0.04s)
+--- PASS: TestReverseLookupTimeoutIsUnknown (0.08s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-agent-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-agent-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-session-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-session-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-working
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-working (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-blocked
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-blocked (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-codex-empty
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-codex-empty (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/herdr-no-lookup
+--- PASS: TestLivenessIdentityAndReadinessSemantics/herdr-no-lookup (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-process-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-process-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-session-mismatch
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-session-mismatch (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-copy-mode
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-copy-mode (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-codex-empty
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-codex-empty (0.00s)
+=== RUN   TestLivenessIdentityAndReadinessSemantics/tmux-no-lookup
+--- PASS: TestLivenessIdentityAndReadinessSemantics/tmux-no-lookup (0.00s)
+--- PASS: TestLivenessIdentityAndReadinessSemantics (0.03s)
+=== RUN   TestAuditChangesSuppressLiveness
+=== RUN   TestAuditChangesSuppressLiveness/watched=false/working=false
+--- PASS: TestJournalScanWaitsForTemporaryPublicationHandle (1.22s)
+=== RUN   TestNewCardUsesCanonicalTokensOnly
+--- PASS: TestAuditChangesSuppressLiveness/watched=false/working=false (0.23s)
+=== RUN   TestAuditChangesSuppressLiveness/watched=false/working=true
+--- PASS: TestNewCardUsesCanonicalTokensOnly (0.01s)
+=== RUN   TestGatesAcceptLegacyAndMixedCards
+=== RUN   TestGatesAcceptLegacyAndMixedCards/legacy
+--- PASS: TestGatesAcceptLegacyAndMixedCards/legacy (0.13s)
+=== RUN   TestGatesAcceptLegacyAndMixedCards/mixed
+--- PASS: TestAuditChangesSuppressLiveness/watched=false/working=true (0.20s)
+=== RUN   TestAuditChangesSuppressLiveness/watched=true/working=false
+--- PASS: TestGatesAcceptLegacyAndMixedCards/mixed (0.13s)
+--- PASS: TestGatesAcceptLegacyAndMixedCards (0.26s)
+=== RUN   TestLegacyDiscussionMetadataStillParses
+--- PASS: TestLegacyDiscussionMetadataStillParses (0.00s)
+=== RUN   TestBoardRootOverrideAfterCWDDeletion
+--- PASS: TestAuditChangesSuppressLiveness/watched=true/working=false (0.21s)
+=== RUN   TestAuditChangesSuppressLiveness/watched=true/working=true
+--- PASS: TestAuditChangesSuppressLiveness/watched=true/working=true (0.19s)
+--- PASS: TestAuditChangesSuppressLiveness (0.83s)
+=== RUN   TestSubscribePureHeartbeatBeforeRefresh
+--- PASS: TestSubscribePureHeartbeatBeforeRefresh (0.06s)
+=== RUN   TestAuditRefreshDurationOverflow
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/1e300
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/1e300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/9223372036.854776
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/9223372036.854776 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/1e-300
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/1e-300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/0.0000000009
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/0.0000000009 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/0
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/0 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/-1
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/-1 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/NaN
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/NaN (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/Inf
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/-Inf
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/-Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--refresh/invalid
+--- PASS: TestAuditRefreshDurationOverflow/--refresh/invalid (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/1e300
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/1e300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/9223372036.854776
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/9223372036.854776 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/1e-300
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/1e-300 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/0.0000000009
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/0.0000000009 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/0
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/0 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/-1
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/-1 (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/NaN
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/NaN (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/Inf
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/-Inf
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/-Inf (0.00s)
+=== RUN   TestAuditRefreshDurationOverflow/--heartbeat/invalid
+--- PASS: TestAuditRefreshDurationOverflow/--heartbeat/invalid (0.00s)
+--- PASS: TestAuditRefreshDurationOverflow (0.00s)
+=== RUN   TestSubscribeIntervalBoundariesAndDefaults
+--- PASS: TestSubscribeIntervalBoundariesAndDefaults (0.00s)
+=== RUN   TestSubscribeRejectsInvalidIntervalsBeforeBoardAccess
+--- PASS: TestSubscribeRejectsInvalidIntervalsBeforeBoardAccess (0.00s)
+=== RUN   TestAuditRoundTripIsInvisible
+=== RUN   TestAuditRoundTripIsInvisible/same-state
+--- PASS: TestAuditRoundTripIsInvisible/same-state (0.11s)
+=== RUN   TestAuditRoundTripIsInvisible/round-trip
+--- PASS: TestAuditRoundTripIsInvisible/round-trip (0.17s)
+--- PASS: TestAuditRoundTripIsInvisible (0.28s)
+=== RUN   TestAuditWatchedGroupMembershipIsFrozen
+--- PASS: TestAuditWatchedGroupMembershipIsFrozen (0.20s)
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation/removed
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation/removed (0.13s)
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation/regrouped
+--- PASS: TestBoardRootOverrideAfterCWDDeletion (1.03s)
+=== RUN   TestMigrationStationaryHistoricalUnsupportedLinks
+--- PASS: TestMigrationStationaryHistoricalUnsupportedLinks (0.03s)
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail/[old](..\20260907-link-b-task.md)
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail/[old](..\20260907-link-b-task.md) (0.01s)
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail/[[../20260907-link-b-task.md]]
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail/[[../20260907-link-b-task.md]] (0.00s)
+=== RUN   TestMigrationAffectedUnsupportedReferencesStillFail/<img_srcset="https://example.com/a.png_1x,_../20260907-link-b-task.md_2x">
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail/<img_srcset="https://example.com/a.png_1x,_../20260907-link-b-task.md_2x"> (0.01s)
+--- PASS: TestMigrationAffectedUnsupportedReferencesStillFail (0.01s)
+=== RUN   TestMigrationDoesNotRewriteProducerEvidence
+--- PASS: TestMigrationDoesNotRewriteProducerEvidence (0.03s)
+=== RUN   TestRelocateMarkdownDestinationsOnly
+=== RUN   TestRelocateMarkdownDestinationsOnly/inline
+--- PASS: TestRelocateMarkdownDestinationsOnly/inline (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/image
+--- PASS: TestRelocateMarkdownDestinationsOnly/image (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/escaped
+--- PASS: TestRelocateMarkdownDestinationsOnly/escaped (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/encoded
+--- PASS: TestRelocateMarkdownDestinationsOnly/encoded (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/entity
+--- PASS: TestRelocateMarkdownDestinationsOnly/entity (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/reference
+--- PASS: TestRelocateMarkdownDestinationsOnly/reference (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/unused_definitions
+--- PASS: TestRelocateMarkdownDestinationsOnly/unused_definitions (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/multiline
+--- PASS: TestRelocateMarkdownDestinationsOnly/multiline (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/nested
+--- PASS: TestRelocateMarkdownDestinationsOnly/nested (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/skip
+--- PASS: TestRelocateMarkdownDestinationsOnly/skip (0.00s)
+=== RUN   TestRelocateMarkdownDestinationsOnly/same_spelling_in_code
+--- PASS: TestRelocateMarkdownDestinationsOnly/same_spelling_in_code (0.00s)
+--- PASS: TestRelocateMarkdownDestinationsOnly (0.00s)
+=== RUN   TestMigrationPreservesActualLinkTargets
+--- PASS: TestMigrationPreservesActualLinkTargets (0.03s)
+=== RUN   TestMigrationLinkRecovery
+=== RUN   TestMigrationLinkRecovery/migration-link-file
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation/regrouped (0.17s)
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation (0.30s)
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember/startup
+--- PASS: TestMigrationLinkRecovery/migration-link-file (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-links
+--- PASS: TestMigrationLinkRecovery/migration-links (0.04s)
+=== RUN   TestMigrationLinkRecovery/prepared
+--- PASS: TestMigrationLinkRecovery/prepared (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-stage
+--- PASS: TestMigrationLinkRecovery/migration-stage (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-source
+--- PASS: TestMigrationLinkRecovery/migration-source (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-write-created
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember/startup (0.17s)
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember/refresh
+--- PASS: TestMigrationLinkRecovery/migration-write-created (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-write-synced
+--- PASS: TestMigrationLinkRecovery/migration-write-synced (0.05s)
+=== RUN   TestMigrationLinkRecovery/migration-original-saved
+--- PASS: TestMigrationLinkRecovery/migration-original-saved (0.05s)
+=== RUN   TestMigrationLinkRecovery/migration-write-published
+--- PASS: TestMigrationLinkRecovery/migration-write-published (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-original-removed
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember/refresh (0.18s)
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember (0.35s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/member-alias
+--- PASS: TestMigrationLinkRecovery/migration-original-removed (0.03s)
+=== RUN   TestMigrationLinkRecovery/migration-size
+--- PASS: TestMigrationLinkRecovery/migration-size (0.04s)
+=== RUN   TestMigrationLinkRecovery/migration-publish
+--- PASS: TestMigrationLinkRecovery/migration-publish (0.03s)
+=== RUN   TestMigrationLinkRecovery/revision
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/member-alias (0.10s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/watch-alias
+--- PASS: TestMigrationLinkRecovery/revision (0.04s)
+=== RUN   TestMigrationLinkRecovery/committed
+--- PASS: TestMigrationLinkRecovery/committed (0.03s)
+--- PASS: TestMigrationLinkRecovery (0.53s)
+=== RUN   TestMigrationLinkKillRestart
+=== RUN   TestMigrationLinkKillRestart/migration-link-file
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/watch-alias (0.10s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/overlap
+--- PASS: TestMigrationLinkKillRestart/migration-link-file (0.08s)
+=== RUN   TestMigrationLinkKillRestart/migration-links
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/overlap (0.11s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/group-overlap
+--- PASS: TestMigrationLinkKillRestart/migration-links (0.08s)
+=== RUN   TestMigrationLinkKillRestart/prepared
+--- PASS: TestMigrationLinkKillRestart/prepared (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-stage
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/group-overlap (0.11s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-card
+--- PASS: TestMigrationLinkKillRestart/migration-stage (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-source
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-card (0.10s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/missing-spec
+--- PASS: TestMigrationLinkKillRestart/migration-source (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-write-created
+--- PASS: TestMigrationLinkKillRestart/migration-write-created (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-write-synced
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/missing-spec (0.11s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/unrelated-invalid
+--- PASS: TestMigrationLinkKillRestart/migration-write-synced (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-original-saved
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/unrelated-invalid (0.10s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/own-regrouped
+--- PASS: TestMigrationLinkKillRestart/migration-original-saved (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-write-published
+--- PASS: TestMigrationLinkKillRestart/migration-write-published (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-original-removed
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/own-regrouped (0.10s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/invalid-group
+--- PASS: TestMigrationLinkKillRestart/migration-original-removed (0.06s)
+=== RUN   TestMigrationLinkKillRestart/migration-size
+--- PASS: TestMigrationLinkKillRestart/migration-size (0.07s)
+=== RUN   TestMigrationLinkKillRestart/migration-publish
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/invalid-group (0.11s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-group
+--- PASS: TestMigrationLinkKillRestart/migration-publish (0.07s)
+=== RUN   TestMigrationLinkKillRestart/revision
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-group (0.10s)
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure (1.04s)
+=== RUN   TestSubscribeExplicitTargetsIgnoreUnrelatedKnownProblems
+--- PASS: TestMigrationLinkKillRestart/revision (0.07s)
+=== RUN   TestMigrationLinkKillRestart/committed
+--- PASS: TestSubscribeExplicitTargetsIgnoreUnrelatedKnownProblems (0.08s)
+=== RUN   TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation
+--- PASS: TestMigrationLinkKillRestart/committed (0.07s)
+--- PASS: TestMigrationLinkKillRestart (0.98s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_src="relative.png">
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_src="relative.png"> (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_srcset="https://example.com/a.png_1x,_local.png_2x">
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/<img_srcset="https://example.com/a.png_1x,_local.png_2x"> (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](bad%ZZ.md)
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](bad%ZZ.md) (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](dir\file.md)
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/[x](dir\file.md) (0.00s)
+=== RUN   TestMigrationRejectsUnsupportedLinksBeforeWriting/[[relative.md]]
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting/[[relative.md]] (0.00s)
+--- PASS: TestMigrationRejectsUnsupportedLinksBeforeWriting (0.01s)
+=== RUN   TestMigrationRejectsTamperedLinkAfterImage
+--- PASS: TestMigrationRejectsTamperedLinkAfterImage (0.02s)
+=== RUN   TestMigrationRecoveryAfterSecondCardPublishes
+--- PASS: TestMigrationRecoveryAfterSecondCardPublishes (0.04s)
+=== RUN   TestMigrationIdleStrayFileDoesNotBlockInit
+kander: 警告: 1 个无效入口已忽略, 运行 kander check 查看
+--- PASS: TestMigrationIdleStrayFileDoesNotBlockInit (0.00s)
+=== RUN   TestMigrationRecoveryPrecedesUnrelatedStructureFailure
+--- PASS: TestMigrationRecoveryPrecedesUnrelatedStructureFailure (0.01s)
+=== RUN   TestCheckAggregatesUnreadableDocuments
+--- PASS: TestCheckAggregatesUnreadableDocuments (0.00s)
+=== RUN   TestStructuralScanDoesNotMislabelSize
+--- PASS: TestStructuralScanDoesNotMislabelSize (0.00s)
+=== RUN   TestLegacyDirectoryGuard
+--- PASS: TestLegacyDirectoryGuard (0.00s)
+=== RUN   TestMigrationUnknownArtifactsStillBlockIdleInit
+--- PASS: TestMigrationUnknownArtifactsStillBlockIdleInit (0.00s)
+=== RUN   TestMissingTypeSizeSkipsCodeAndKeepsExactPlacement
+--- PASS: TestMissingTypeSizeSkipsCodeAndKeepsExactPlacement (0.00s)
+=== RUN   TestMigrationPreservesUnregisteredAtomicTemporary
+    migration_review_test.go:47: Unregistered leftovers from older atomic writes remain conflicts; only journal-bound scratch files can be recovered
+--- PASS: TestMigrationPreservesUnregisteredAtomicTemporary (0.01s)
+=== RUN   TestMigrationResumesOnlyMatchingPartialRewrite
+--- PASS: TestMigrationResumesOnlyMatchingPartialRewrite (0.03s)
+=== RUN   TestMigrationLegacyRecordUsesOperationBoundScratchNames
+--- PASS: TestMigrationLegacyRecordUsesOperationBoundScratchNames (0.02s)
+=== RUN   TestDirectorySizeAndCompletionContract
+--- PASS: TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation (0.21s)
+=== RUN   TestGroupExpansionKeepsCommittedSnapshot
+--- PASS: TestDirectorySizeAndCompletionContract (0.15s)
+=== RUN   TestMigrationAllStatesAndIdempotence
+--- PASS: TestGroupExpansionKeepsCommittedSnapshot (0.11s)
+=== RUN   TestSubscribeUnavailableCommittedFacts
+=== RUN   TestSubscribeUnavailableCommittedFacts/prepared
+--- PASS: TestSubscribeUnavailableCommittedFacts/prepared (0.06s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/maintenance
+--- PASS: TestMigrationAllStatesAndIdempotence (0.10s)
+=== RUN   TestLegacyReadOnlyAndSizeDiagnostics
+--- PASS: TestLegacyReadOnlyAndSizeDiagnostics (0.03s)
+=== RUN   TestMigrationFailureRecovery
+=== RUN   TestMigrationFailureRecovery/prepared
+--- PASS: TestMigrationFailureRecovery/prepared (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-stage
+--- PASS: TestMigrationFailureRecovery/migration-stage (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-source
+--- PASS: TestMigrationFailureRecovery/migration-source (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-write-created
+--- PASS: TestMigrationFailureRecovery/migration-write-created (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-write-synced
+--- PASS: TestMigrationFailureRecovery/migration-write-synced (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-original-saved
+--- PASS: TestMigrationFailureRecovery/migration-original-saved (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-write-published
+--- PASS: TestMigrationFailureRecovery/migration-write-published (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-original-removed
+--- PASS: TestMigrationFailureRecovery/migration-original-removed (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-size
+--- PASS: TestMigrationFailureRecovery/migration-size (0.02s)
+=== RUN   TestMigrationFailureRecovery/migration-publish
+--- PASS: TestMigrationFailureRecovery/migration-publish (0.02s)
+=== RUN   TestMigrationFailureRecovery/revision
+--- PASS: TestMigrationFailureRecovery/revision (0.02s)
+=== RUN   TestMigrationFailureRecovery/committed
+--- PASS: TestMigrationFailureRecovery/committed (0.01s)
+--- PASS: TestMigrationFailureRecovery (0.22s)
+=== RUN   TestMigrationCrashChild
+--- PASS: TestMigrationCrashChild (0.00s)
+=== RUN   TestMigrationKillRestart
+=== RUN   TestMigrationKillRestart/prepared
+--- PASS: TestMigrationKillRestart/prepared (0.04s)
+=== RUN   TestMigrationKillRestart/migration-stage
+--- PASS: TestMigrationKillRestart/migration-stage (0.05s)
+=== RUN   TestMigrationKillRestart/migration-source
+--- PASS: TestMigrationKillRestart/migration-source (0.05s)
+=== RUN   TestMigrationKillRestart/migration-write-created
+--- PASS: TestMigrationKillRestart/migration-write-created (0.04s)
+=== RUN   TestMigrationKillRestart/migration-write-synced
+--- PASS: TestMigrationKillRestart/migration-write-synced (0.04s)
+=== RUN   TestMigrationKillRestart/migration-original-saved
+--- PASS: TestMigrationKillRestart/migration-original-saved (0.05s)
+=== RUN   TestMigrationKillRestart/migration-write-published
+--- PASS: TestMigrationKillRestart/migration-write-published (0.05s)
+=== RUN   TestMigrationKillRestart/migration-original-removed
+--- PASS: TestMigrationKillRestart/migration-original-removed (0.05s)
+=== RUN   TestMigrationKillRestart/migration-size
+--- PASS: TestMigrationKillRestart/migration-size (0.05s)
+=== RUN   TestMigrationKillRestart/migration-publish
+--- PASS: TestMigrationKillRestart/migration-publish (0.04s)
+=== RUN   TestMigrationKillRestart/revision
+--- PASS: TestMigrationKillRestart/revision (0.04s)
+=== RUN   TestMigrationKillRestart/committed
+--- PASS: TestMigrationKillRestart/committed (0.05s)
+--- PASS: TestMigrationKillRestart (0.56s)
+=== RUN   TestMigrationUnknownAndConflictingArtifactsPreserved
+--- PASS: TestMigrationUnknownAndConflictingArtifactsPreserved (0.00s)
+=== RUN   TestMigrationSerializesReadersAndWriters
+--- PASS: TestMigrationSerializesReadersAndWriters (0.11s)
+=== RUN   TestMigrationStagingRejectsSymlink
+--- PASS: TestMigrationStagingRejectsSymlink (0.00s)
+=== RUN   TestOldWindowSnapshotCannotResurrectAfterFormMigration
+--- PASS: TestOldWindowSnapshotCannotResurrectAfterFormMigration (0.01s)
+=== RUN   TestDisplaySnapshotRemainsReadableAcrossMigration
+--- PASS: TestDisplaySnapshotRemainsReadableAcrossMigration (0.02s)
+=== RUN   TestInitCommandMaintenanceAndMigrationCount
+--- PASS: TestInitCommandMaintenanceAndMigrationCount (0.02s)
+=== RUN   TestSizeScanDoesNotExpandCheckScopeForUnreadableHistory
+--- PASS: TestSizeScanDoesNotExpandCheckScopeForUnreadableHistory (0.00s)
+=== RUN   TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning
+/tmp/TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning2296755374/001/backlog/20260908-web-payload-task
+--- PASS: TestBoardPayloadMatchesScanFieldsAndIgnoresInvalidWithoutWarning (0.02s)
+=== RUN   TestTaskPayloadTaskGroupLegacyAndCurrent
+--- PASS: TestTaskPayloadTaskGroupLegacyAndCurrent (0.02s)
+=== RUN   TestReviewCrashChild
+--- PASS: TestReviewCrashChild (0.00s)
+=== RUN   TestReviewKillRestartBoundaries
+=== RUN   TestReviewKillRestartBoundaries/intent
+--- PASS: TestReviewKillRestartBoundaries/intent (0.44s)
+=== RUN   TestReviewKillRestartBoundaries/prompt
+--- PASS: TestReviewKillRestartBoundaries/prompt (0.45s)
+=== RUN   TestReviewKillRestartBoundaries/launching
+--- PASS: TestSubscribeUnavailableCommittedFacts/maintenance (2.06s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/corrupt-journal
+--- PASS: TestSubscribeUnavailableCommittedFacts/corrupt-journal (0.07s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/reparse
+--- PASS: TestSubscribeUnavailableCommittedFacts/reparse (0.07s)
+--- PASS: TestSubscribeUnavailableCommittedFacts (2.26s)
+=== RUN   TestSubscribeRestartProcess
+--- PASS: TestReviewKillRestartBoundaries/launching (0.49s)
+=== RUN   TestReviewKillRestartBoundaries/output
+--- PASS: TestReviewKillRestartBoundaries/output (0.48s)
+=== RUN   TestReviewKillRestartBoundaries/finalized
+--- PASS: TestReviewKillRestartBoundaries/finalized (0.57s)
+=== RUN   TestReviewKillRestartBoundaries/first-card
+--- PASS: TestReviewKillRestartBoundaries/first-card (0.61s)
+=== RUN   TestReviewKillRestartBoundaries/published
+--- PASS: TestSubscribeRestartProcess (2.17s)
+PASS
+--- PASS: TestReviewKillRestartBoundaries/published (0.68s)
+--- PASS: TestReviewKillRestartBoundaries (3.73s)
+=== RUN   TestReviewMissingPlanCannotComplete
+--- PASS: TestReviewMissingPlanCannotComplete (0.09s)
+=== RUN   TestReviewMissingAndFailedRequiredRoles
+=== RUN   TestReviewMissingAndFailedRequiredRoles/never-run
+--- PASS: TestReviewMissingAndFailedRequiredRoles/never-run (0.10s)
+=== RUN   TestReviewMissingAndFailedRequiredRoles/all-failed
+--- PASS: TestReviewMissingAndFailedRequiredRoles/all-failed (0.27s)
+--- PASS: TestReviewMissingAndFailedRequiredRoles (0.37s)
+=== RUN   TestStructuredFindingsRejectMissingDuplicateAndProseIDs
+--- PASS: TestStructuredFindingsRejectMissingDuplicateAndProseIDs (0.00s)
+=== RUN   TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord
+ok  	github.com/dualface/kander/internal/liveness	13.491s
+--- PASS: TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord (3.12s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/round
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/round (0.07s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/original
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/original (0.09s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/empty-basis
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/empty-basis (0.07s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/delegated
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/delegated (0.07s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/pm-waiver
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/pm-waiver (0.07s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/author
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/author (0.07s)
+=== RUN   TestDispositionOwnershipIdentityAndImmutableOriginal/card
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal/card (0.07s)
+--- PASS: TestDispositionOwnershipIdentityAndImmutableOriginal (1.14s)
+=== RUN   TestMechanicalFixAndNonMechanicalRerunGate
+=== RUN   TestMechanicalFixAndNonMechanicalRerunGate/logic
+--- PASS: TestMechanicalFixAndNonMechanicalRerunGate/logic (0.38s)
+=== RUN   TestMechanicalFixAndNonMechanicalRerunGate/documentation
+--- PASS: TestMechanicalFixAndNonMechanicalRerunGate/documentation (0.52s)
+--- PASS: TestMechanicalFixAndNonMechanicalRerunGate (0.89s)
+=== RUN   TestExplicitNAAndLegacyCompletedCard
+--- PASS: TestExplicitNAAndLegacyCompletedCard (0.22s)
+=== RUN   TestLegacyMappingRequiresOriginalLocations
+--- PASS: TestLegacyMappingRequiresOriginalLocations (0.29s)
+=== RUN   TestPlanExtensionUsesClosedCommitNotArbitraryRolePass
+--- PASS: TestPlanExtensionUsesClosedCommitNotArbitraryRolePass (0.19s)
+=== RUN   TestReviewJSONRoundTrip
+--- PASS: TestReviewJSONRoundTrip (0.00s)
+=== RUN   TestDuplicateJSONKeysCannotEraseFindings
+--- PASS: TestDuplicateJSONKeysCannotEraseFindings (0.00s)
+=== RUN   TestPlanCannotHideUnplannedRunsOrDeletedPointer
+--- PASS: TestPlanCannotHideUnplannedRunsOrDeletedPointer (0.64s)
+=== RUN   TestConcurrentDispositionAppendUsesRevisionAndPreservesOriginals
+--- PASS: TestConcurrentDispositionAppendUsesRevisionAndPreservesOriginals (0.35s)
+=== RUN   TestFailedRunRequiresExplicitSuccessfulReplacement
+--- PASS: TestFailedRunRequiresExplicitSuccessfulReplacement (0.45s)
+=== RUN   TestSecurityWaiverPreservesNonPassStatus
+--- PASS: TestSecurityWaiverPreservesNonPassStatus (0.43s)
+=== RUN   TestPartialRunPublicationCannotCloseEvenWithNoFindings
+--- PASS: TestPartialRunPublicationCannotCloseEvenWithNoFindings (0.48s)
+=== RUN   TestIncrementalIDsRequireActualPredecessorLineage
+--- PASS: TestIncrementalIDsRequireActualPredecessorLineage (0.45s)
+=== RUN   TestLegacyMappingIdentifiesUnmappedPredecessor
+    review_legacy_order_test.go:28: successor-first diagnostic: legacy-first: 审核证据无效：structured findings required; legacy mapping required for old reports
+--- PASS: TestLegacyMappingIdentifiesUnmappedPredecessor (0.55s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/no-predecessor
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/no-predecessor (0.28s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/duplicate-reference
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/duplicate-reference (0.80s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/missing-item
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/missing-item (0.84s)
+=== RUN   TestFinalizeRejectsInvalidFindingRelationships/reused-id
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships/reused-id (0.82s)
+--- PASS: TestFinalizeRejectsInvalidFindingRelationships (2.73s)
+=== RUN   TestIncrementalSupplementCannotReplaceAutomaticSource
+--- PASS: TestIncrementalSupplementCannotReplaceAutomaticSource (0.51s)
+=== RUN   TestRebindPreservesClosedEvidenceAndTerminalMember
+--- PASS: TestRebindPreservesClosedEvidenceAndTerminalMember (0.58s)
+=== RUN   TestTrackedCycleCorruptionCannotBeRebound
+--- PASS: TestTrackedCycleCorruptionCannotBeRebound (0.10s)
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate/spaces
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate/spaces (0.51s)
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate/header-crlf
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate/header-crlf (0.52s)
+=== RUN   TestReviewPublicationAfterControlledHeaderUpdate/crlf-card
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate/crlf-card (0.57s)
+--- PASS: TestReviewPublicationAfterControlledHeaderUpdate (1.59s)
+=== RUN   TestReviewCheckPublicDiagnosticsAndOrder
+--- PASS: TestReviewCheckPublicDiagnosticsAndOrder (2.94s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/entry
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/entry (0.24s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/json
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/json (0.20s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/schema
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/schema (0.22s)
+=== RUN   TestReviewCheckContinuesAfterInvalidRecords/card
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords/card (0.22s)
+--- PASS: TestReviewCheckContinuesAfterInvalidRecords (0.88s)
+=== RUN   TestReviewPublicationRejectsTerminalMove
+--- PASS: TestReviewPublicationRejectsTerminalMove (0.22s)
+=== RUN   TestReviewPublishFollowsMoveAndPreservesConcurrentBody
+--- PASS: TestReviewPublishFollowsMoveAndPreservesConcurrentBody (0.27s)
+=== RUN   TestReviewRunIdentityAndFrozenLanguage
+--- PASS: TestReviewRunIdentityAndFrozenLanguage (0.24s)
+=== RUN   TestReviewParallelRolesAndSameRunPublication
+--- PASS: TestReviewParallelRolesAndSameRunPublication (0.35s)
+=== RUN   TestReviewPartialPublicationAndRetry
+--- PASS: TestReviewPartialPublicationAndRetry (0.39s)
+=== RUN   TestReviewBinaryOriginalsSurviveJournal
+--- PASS: TestReviewBinaryOriginalsSurviveJournal (0.15s)
+=== RUN   TestReviewBatchCASAndExplicitPredecessor
+--- PASS: TestReviewBatchCASAndExplicitPredecessor (0.50s)
+=== RUN   TestReviewCheckDetectsTamperingAndIncompleteIntent
+--- PASS: TestReviewCheckDetectsTamperingAndIncompleteIntent (0.19s)
+=== RUN   TestReviewIndexBeforeOtherSections
+--- PASS: TestReviewIndexBeforeOtherSections (0.00s)
+=== RUN   TestReviewPublishRacesMoveAndControlledUpdate
+--- PASS: TestReviewPublishRacesMoveAndControlledUpdate (0.31s)
+=== RUN   TestReviewRefusesChangedMembershipLanguageAndRequirements
+--- PASS: TestReviewRefusesChangedMembershipLanguageAndRequirements (0.30s)
+=== RUN   TestReviewRunLeaseSerializesIndependentCallers
+--- PASS: TestReviewRunLeaseSerializesIndependentCallers (0.02s)
+=== RUN   TestReviewBatchFreezesFallbackAcrossLaterRoles
+--- PASS: TestReviewBatchFreezesFallbackAcrossLaterRoles (0.18s)
+=== RUN   TestSnapshotContextContentionReleasesLocks
+=== RUN   TestSnapshotContextContentionReleasesLocks/board
+--- PASS: TestSnapshotContextContentionReleasesLocks/board (0.07s)
+=== RUN   TestSnapshotContextContentionReleasesLocks/task
+--- PASS: TestSnapshotContextContentionReleasesLocks/task (0.06s)
+=== RUN   TestSnapshotContextContentionReleasesLocks/journal
+--- PASS: TestSnapshotContextContentionReleasesLocks/journal (0.07s)
+--- PASS: TestSnapshotContextContentionReleasesLocks (0.20s)
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery/document
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery/document (0.01s)
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery/creation
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery/creation (0.02s)
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery (0.03s)
+=== RUN   TestSnapshotRevisionSurvivesMutationCursor
+--- PASS: TestSnapshotRevisionSurvivesMutationCursor (0.02s)
+=== RUN   TestMembershipDependencyRejectsUnknownOwnership
+--- PASS: TestMembershipDependencyRejectsUnknownOwnership (0.09s)
+=== RUN   TestControlledSmallLifecycleAndContractDecisions
+--- PASS: TestControlledSmallLifecycleAndContractDecisions (0.25s)
+=== RUN   TestControlledTerminationAndProtectedFields
+--- PASS: TestControlledTerminationAndProtectedFields (0.44s)
+=== RUN   TestConcurrentNewAndUpdateMove
+--- PASS: TestConcurrentNewAndUpdateMove (0.80s)
+=== RUN   TestSortedBatchLocksAndConcurrentIndexAppend
+--- PASS: TestSortedBatchLocksAndConcurrentIndexAppend (0.40s)
+=== RUN   TestUpdateRejectsReparseAndMissingEntry
+--- PASS: TestUpdateRejectsReparseAndMissingEntry (0.01s)
+=== RUN   TestTransactionCrashChild
+--- PASS: TestTransactionCrashChild (0.00s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/prepared
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/prepared (0.06s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/directories
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/directories (0.05s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/first-file
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/first-file (0.05s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/files
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/files (0.06s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/rename
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/rename (0.05s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/revision
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/revision (0.05s)
+=== RUN   TestCrashRestartRecoveryAndReadVisibility/committed
+--- PASS: TestCrashRestartRecoveryAndReadVisibility/committed (0.05s)
+--- PASS: TestCrashRestartRecoveryAndReadVisibility (0.36s)
+=== RUN   TestRecoveryPreservesConflictingCopies
+--- PASS: TestRecoveryPreservesConflictingCopies (0.01s)
+=== RUN   TestShowJSONAndUpdateCommand
+--- PASS: TestShowJSONAndUpdateCommand (0.04s)
+=== RUN   TestContractStaysFrozenAfterWithdrawal
+--- PASS: TestContractStaysFrozenAfterWithdrawal (0.06s)
+=== RUN   TestNestedPublicationAndGroupControl
+--- PASS: TestNestedPublicationAndGroupControl (0.02s)
+=== RUN   TestSpecAliasesAndDuplicateContractRejected
+--- PASS: TestSpecAliasesAndDuplicateContractRejected (0.02s)
+=== RUN   TestIncompleteLargeCreationRecovers
+--- PASS: TestIncompleteLargeCreationRecovers (0.01s)
+=== RUN   TestStaleRecoveryDoesNotOverwriteNewRevision
+--- PASS: TestStaleRecoveryDoesNotOverwriteNewRevision (0.03s)
+=== RUN   TestReadAndUpdateRejectIncompleteLayout
+--- PASS: TestReadAndUpdateRejectIncompleteLayout (0.01s)
+=== RUN   TestTerminationHistoryRemainsOneProtectedSection
+--- PASS: TestTerminationHistoryRemainsOneProtectedSection (0.07s)
+PASS
+ok  	github.com/dualface/kander/internal/board	38.862s
+
+提交：003e5fecf4048d8da8151d0431ea1cd040912a36
+命令：go test -json -count=1 ./internal/board ./internal/liveness -run 'TestSnapshotContext|TestSnapshotPending|TestSnapshotRevision|TestMembershipDependency|TestAuditRoundTrip|TestAuditWatchedGroup|TestSubscribeMembership|TestSubscribeRejects|TestSubscribeExplicit|TestSubscribeUnavailable|TestSubscribeRegroup|TestSubscribeRestartProcess'
+结果：exit 0；2 个包，15 个顶层测试通过，含子用例 40 项通过、0 项 skip、0 失败
+=== RUN   TestSnapshotContextContentionReleasesLocks
+=== RUN   TestSnapshotContextContentionReleasesLocks/board
+--- PASS: TestSnapshotContextContentionReleasesLocks/board (0.06s)
+=== RUN   TestSnapshotContextContentionReleasesLocks/task
+--- PASS: TestSnapshotContextContentionReleasesLocks/task (0.06s)
+=== RUN   TestSnapshotContextContentionReleasesLocks/journal
+--- PASS: TestSnapshotContextContentionReleasesLocks/journal (0.05s)
+--- PASS: TestSnapshotContextContentionReleasesLocks (0.17s)
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery/document
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery/document (0.01s)
+=== RUN   TestSnapshotPendingFactsFailWithoutRecovery/creation
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery/creation (0.01s)
+--- PASS: TestSnapshotPendingFactsFailWithoutRecovery (0.03s)
+=== RUN   TestSnapshotRevisionSurvivesMutationCursor
+--- PASS: TestSnapshotRevisionSurvivesMutationCursor (0.02s)
+=== RUN   TestMembershipDependencyRejectsUnknownOwnership
+=== RUN   TestSubscribeRejectsInvalidWatchAndMembership
+--- PASS: TestMembershipDependencyRejectsUnknownOwnership (0.07s)
+PASS
+ok  	github.com/dualface/kander/internal/board	0.304s
+--- PASS: TestSubscribeRejectsInvalidWatchAndMembership (0.07s)
+=== RUN   TestSubscribeRejectsInvalidIntervalsBeforeBoardAccess
+--- PASS: TestSubscribeRejectsInvalidIntervalsBeforeBoardAccess (0.00s)
+=== RUN   TestAuditRoundTripIsInvisible
+=== RUN   TestAuditRoundTripIsInvisible/same-state
+--- PASS: TestAuditRoundTripIsInvisible/same-state (0.08s)
+=== RUN   TestAuditRoundTripIsInvisible/round-trip
+--- PASS: TestAuditRoundTripIsInvisible/round-trip (0.10s)
+--- PASS: TestAuditRoundTripIsInvisible (0.18s)
+=== RUN   TestAuditWatchedGroupMembershipIsFrozen
+--- PASS: TestAuditWatchedGroupMembershipIsFrozen (0.13s)
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation/removed
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation/removed (0.08s)
+=== RUN   TestSubscribeMembershipRemovalRequiresReconciliation/regrouped
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation/regrouped (0.10s)
+--- PASS: TestSubscribeMembershipRemovalRequiresReconciliation (0.17s)
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember/startup
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember/startup (0.08s)
+=== RUN   TestAuditWatchedGroupSilentlyOmitsUnreadableMember/refresh
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember/refresh (0.08s)
+--- PASS: TestAuditWatchedGroupSilentlyOmitsUnreadableMember (0.16s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/member-alias
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/member-alias (0.05s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/watch-alias
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/watch-alias (0.05s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/overlap
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/overlap (0.06s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/group-overlap
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/group-overlap (0.05s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-card
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-card (0.05s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/missing-spec
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/missing-spec (0.05s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/unrelated-invalid
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/unrelated-invalid (0.08s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/own-regrouped
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/own-regrouped (0.14s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/invalid-group
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/invalid-group (0.07s)
+=== RUN   TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-group
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure/duplicate-group (0.05s)
+--- PASS: TestSubscribeRejectsDuplicateTargetsAndUnknownStructure (0.64s)
+=== RUN   TestSubscribeExplicitTargetsIgnoreUnrelatedKnownProblems
+--- PASS: TestSubscribeExplicitTargetsIgnoreUnrelatedKnownProblems (0.05s)
+=== RUN   TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation
+--- PASS: TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation (0.23s)
+=== RUN   TestSubscribeUnavailableCommittedFacts
+=== RUN   TestSubscribeUnavailableCommittedFacts/prepared
+--- PASS: TestSubscribeUnavailableCommittedFacts/prepared (0.04s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/maintenance
+--- PASS: TestSubscribeUnavailableCommittedFacts/maintenance (2.03s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/corrupt-journal
+--- PASS: TestSubscribeUnavailableCommittedFacts/corrupt-journal (0.04s)
+=== RUN   TestSubscribeUnavailableCommittedFacts/reparse
+--- PASS: TestSubscribeUnavailableCommittedFacts/reparse (0.04s)
+--- PASS: TestSubscribeUnavailableCommittedFacts (2.14s)
+=== RUN   TestSubscribeRestartProcess
+--- PASS: TestSubscribeRestartProcess (0.06s)
+PASS
+ok  	github.com/dualface/kander/internal/liveness	3.855s
+
+提交：003e5fecf4048d8da8151d0431ea1cd040912a36
+以下命令实际执行，均 exit 0、无错误输出：
+go build ./...
+go vet ./...
+GOOS=windows GOARCH=amd64 go build -o /tmp/subscription-facts-windows/kander.exe ./cmd/kander
+GOOS=windows GOARCH=amd64 go test -c -o /tmp/subscription-facts-windows/fs.test.exe ./internal/fs
+GOOS=windows GOARCH=amd64 go test -c -o /tmp/subscription-facts-windows/board.test.exe ./internal/board
+GOOS=windows GOARCH=amd64 go test -c -o /tmp/subscription-facts-windows/liveness.test.exe ./internal/liveness
+git diff --check 021ae63f8b8a9cdb4e1914a695bd4bf9d0d28ff5..HEAD
+
+原生 Windows、真实 tmux/herdr/Agent 未执行；交叉构建与假 CLI 不计实机验证。

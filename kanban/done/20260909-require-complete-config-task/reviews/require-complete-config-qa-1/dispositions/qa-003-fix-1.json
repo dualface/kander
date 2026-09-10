@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 19,
+  "record_id": "qa-003-fix-1",
+  "run_id": "require-complete-config-qa-1",
+  "finding_id": "QA-003",
+  "batch_id": "require-complete-config-1",
+  "task_id": "20260909-require-complete-config-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T08:30:01.550005176Z",
+  "report_hash": "c336371785d1525a695728ddd0330fd71eb924b33309fd1af851955bed31f39b",
+  "original": "Inferred，置信度高。完整二进制绑定测试未补合法配置夹具，新增 check 配置门禁使该现有测试在无 Kander 配置的开发环境或 CI 必然失败。交付记录中的全量测试通过不能消除其本机配置依赖。最小修复：在 TestCheckCommandUsesLivenessInFullBinary 中设置临时 KANDER_CONFIG 并保存合法配置，保留真实 liveness 输出断言；验证外部配置缺失时该单测仍通过。",
+  "status": "fixed",
+  "basis": "verified against the target source and the real trigger path at the fix commit",
+  "fix_commit": "fdb68ffdef29749b56a4e7f6464b1206b0213501",
+  "verification": "TestCheckCommandUsesLivenessInFullBinary now writes an isolated valid KANDER_CONFIG before invoking check. go test ./cmd/kander at fdb68ffdef29749b56a4e7f6464b1206b0213501 passed."
+}

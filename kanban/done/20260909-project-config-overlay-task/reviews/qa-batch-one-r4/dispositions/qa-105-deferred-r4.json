@@ -1,0 +1,18 @@
+{
+  "authorization": {
+    "dispatch_id": "sync-batch-one-r4-c2",
+    "epoch": 5
+  },
+  "submitted_revision": 72,
+  "record_id": "qa-105-deferred-r4",
+  "run_id": "qa-batch-one-r4",
+  "finding_id": "QA-105",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T20:30:50.559228158Z",
+  "report_hash": "ee2397a79304a0b858fc7b9586931155013e1825f59648743e71fe7248270f62",
+  "original": "本轮未改动,现象未变。mergeOverlayRaw 对覆盖副本调用 normalizeReviewStagesField 后把 NormalizeReviewStages 的错误原样上抛,而这些文案只提到 review_stages、不含文件路径。项目提交的 .kander-config.json 写成 {\"review_stages\": {\"large\": {...}, \"PM\": \"auto\"}} 时,用户在该目录下运行任何命令都会看到一条像是在说自己作用域配置有问题的错误;而同一文件的 JSON 非法与禁止/未知键两类错误都是带绝对路径报错的,诊断力不一致。建议在 mergeOverlayRaw 中把覆盖侧的规范化错误包一层带覆盖文件绝对路径的文案(需把路径传进 mergeOverlayRaw,loadEffective 与 ConfiguredLanguage 两个调用点都已持有该路径)。",
+  "status": "deferred",
+  "basis": "延续 qa-batch-one-r3/QA-105（记录 reviews/qa-batch-one-r3/dispositions/qa-105-deferred-r3.json）。独立核实 4832ee9 overlay.go:205-213：覆盖侧 normalizeReviewStagesField 仍原样返回 NormalizeReviewStages 错误；review_stages.go 文案只含键名不含覆盖文件路径；对照同文件 JSON 非法与禁止/未知键均带绝对路径。现象未变。本轮 sync 仅处置、无代码改动。"
+}

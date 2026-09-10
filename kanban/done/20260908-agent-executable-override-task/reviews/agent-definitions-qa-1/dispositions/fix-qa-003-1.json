@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 19,
+  "record_id": "fix-qa-003-1",
+  "run_id": "agent-definitions-qa-1",
+  "finding_id": "QA-003",
+  "batch_id": "agent-definitions-batch",
+  "task_id": "20260908-agent-executable-override-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T02:50:06.972831418Z",
+  "report_hash": "dc338f79e09a5015a473e8e1673dc7af92c9826d4e200b1ed728a41a80d524c3",
+  "original": "Inferred；置信度高。none 只在模板路径清空会话值，方言路径仍传会话参数。Cursor 的 none 启动携带 --resume 和未分配的标记 UUID；Claude/Grok 通知恢复继续用旧 UUID 创建会话，破坏 fresh-process 语义。最小修复：方言 none 启动省略会话创建/恢复参数，仅将 UUID 用于终端标记；逐方言测试 start 和通知恢复 argv。",
+  "status": "fixed",
+  "basis": "合并根因 session：在原源码 56ec24d4ca46285288cccf219d971a3a8d970523 上，TestDialectSessionCompatibility 复现 3 种被错误接受的组合；TestNoneDialectArgumentsDoNotReuseTerminalIdentity 复现 Claude/Grok/Cursor 携带标记身份。已校验不兼容的无模板模式，并让四种方言的 none 不传会话参数。",
+  "fix_commit": "6dbed41ae20a5c930f47b209ea9dc4add2c1a771",
+  "verification": "提交 6dbed41ae20a5c930f47b209ea9dc4add2c1a771：go test ./internal/config ./internal/launch ./internal/process ./internal/menu ./internal/takeover -run Test(DialectSessionCompatibility|NoneDialectArgumentsDoNotReuseTerminalIdentity|WindowsSuffixedNamesSearchPATH|WindowsAbsoluteExtensionlessProgram|PanelCanConfigureUnselectedRenamedBuiltin|ConfiguredAgentDismissAndCleanup) -count=1 -json，退出 0；修复前相同回归已复现。Windows 为可注入平台解析测试，未声称原生执行。"
+}

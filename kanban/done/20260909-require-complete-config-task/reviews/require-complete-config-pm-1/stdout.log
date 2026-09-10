@@ -1,0 +1,32 @@
+Role: PM  
+Commit: `a8d5a6f86e8a53e7b10826e392c70903875835d9`  
+Task Context: 操作命令完整配置校验、doctor 修复、TUI 错误弹层。  
+Reviewed Scope: 指定提交范围及相关配置、CLI、修复、TUI、测试调用链。
+
+验收条目：Complete 9，Partial 1；Missing、Contradicted、Unverifiable 均为 0。存在 1 项 medium，暂不通过。
+
+**PM-001 · medium · Inferred · 高置信度**
+
+**再次打开选项面板绕过完整配置校验。** 首次成功打开后，`Session` 被缓存；关闭仅清除 `Options`。此后删除作用域配置，或使配置／overlay 无效，再次按 `o`，仍直接打开旧 Huh 表单，不显示 `loadErr`。违反“打开选项面板必须完整读取，失败不打开表单”的要求。
+
+证据：[options_panel.go](/home/dualf/works/kander/worktrees/require-complete-config/internal/tui/options_panel.go:94) 第 94–101 行直接复用缓存；第 174 行缓存会话，第 197–198 行关闭时保留缓存。本次新增 `Load(false)` 仅在第 123–134 行创建会话路径执行。
+
+最小修复：每次打开面板都先执行 `Load(false)`，成功后才允许复用会话；失败设置 `loadErr`。补充“首次打开成功、关闭、配置损坏、重开”的回归测试。
+
+NON-BLOCKING: none
+
+只读核查确认工作树干净、`git diff --check` 通过。未重跑测试；21 包通过来自调用方记录。只读权限下保留任务文件。
+
+```kander-findings
+{
+  "FINDINGS": [
+    {
+      "id": "PM-001",
+      "tier": "medium",
+      "text": "Inferred，高置信度：选项面板首次成功打开后缓存 Session，关闭后再次打开会绕过本次新增的 Load(false)。若此时作用域配置已删除，或配置／overlay 已损坏，仍打开旧 Huh 表单，不显示 loadErr，违反任务要求的每次打开完整读取、失败不打开表单。最小修复：每次打开面板均先 Load(false)，成功后才复用会话，失败进入 loadErr；补充关闭后配置损坏再打开的回归测试。",
+      "evidence": "internal/tui/options_panel.go:94-101 在 Session 非空时直接打开表单并返回；:123-134 的新增 Load(false) 仅覆盖创建会话路径；:174 缓存 Session；:197-198 关闭仅清除 Options。因此首次成功打开、关闭、删除配置或破坏配置／overlay、再次打开的路径不会执行完整配置校验。契约：task-spec.md EXPECTED_OUTCOME 与 ACCEPTANCE_CRITERIA 要求打开选项面板时 Load(false) 失败必须显示 loadErr、不打开 Huh 表单。"
+    }
+  ],
+  "NON_BLOCKING": []
+}
+```

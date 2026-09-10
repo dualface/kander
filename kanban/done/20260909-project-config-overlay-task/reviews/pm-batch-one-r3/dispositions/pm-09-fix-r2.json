@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "fix-batch-one-r2-c2",
+    "epoch": 3
+  },
+  "submitted_revision": 44,
+  "record_id": "pm-09-fix-r2",
+  "run_id": "pm-batch-one-r3",
+  "finding_id": "PM-09",
+  "batch_id": "batch-one",
+  "task_id": "20260909-project-config-overlay-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-08T19:45:12.165413Z",
+  "report_hash": "68e04a2a7dcd76ebb5ba8c2dd07d27ecf1b116405d02494884fb5cc97681c0c2",
+  "original": "本轮 5d632af 让 ConfiguredLanguage 返回合并覆盖后的语言,于是 TUI 选项面板保存会把覆盖文件独有的 language 写进作用域 config.json,重新违反卡 2「所有写入路径以未合并的作用域配置为读-改-写基底、覆盖值不得反向写入」的用户决策与对应验收,也与 rules/KANDER-AGENTS.md:19「Overlay values are never written back」冲突。链路:internal/config/language.go:106-119 合并覆盖 → internal/menu/options.go:153-155 在 Session.prepare 中 cfg.Language = config.ConfiguredLanguage() → options.go:163 s.Config = cfg → options.go:501-507 Session.Save() 调 config.SaveIfUnchanged(s.Config, s.existing) → internal/config/loadsave.go:352-377 直接 saveConfigAt 整份写出作用域文件。会话由 internal/tui/options_panel.go:125,130 以 LoadScope(true)+menu.NewSession 构造,保存入口为 options_panel.go:464(persistNow,任一分区提交)与 options_panel.go:522(save)。失败场景:作用域 language=en,项目 .kander-config.json={\"language\":\"ja\"}(language 在 internal/config/overlay.go:27 允许键内),用户在该项目内保存一次选项面板,作用域 config.json 的 language 即被永久改成 ja 并对所有其他项目生效,删除覆盖文件也不恢复。与 PM-01 是同一条契约,键由 tui 换成 language,且由本轮修复引入。最小修复:Session.prepare 用不合并覆盖的作用域显式语言赋给 cfg.Language(新增 configuredScopeLanguage(),或取 s.existing 的显式值),面板文案单独用 config.BindEffectiveLanguage() 绑定合并值;并补「覆盖含 language、TUI 保存后作用域 language 不变」的测试。",
+  "status": "fixed",
+  "basis": "独立核实目标 5d632af67ee28a19769972298a11984ced5e76e6：ConfiguredLanguage 合并覆盖后，menu.Session.prepare 用其赋值 cfg.Language，SaveIfUnchanged 整份写作用域。已新增 ConfiguredScopeLanguage() 只读未合并作用域；prepare 用该值填会话，面板文案改 BindEffectiveLanguage()。",
+  "fix_commit": "32ba6ee3bb197acc504d6208fe521cb1d68d0bfc",
+  "verification": "go test -count=1 ./internal/config -run 'TestConfiguredLanguage|TestConfiguredLanguageUsesOverlay' 与 go test -count=1 ./internal/menu -run TestSessionSaveLeavesOverlayLanguageIsolated 在 32ba6ee3bb197acc504d6208fe521cb1d68d0bfc 通过；最终交付 777b1f088985e3d11cec3bd9b4dde9271822119e 上 go test -count=1 ./... 1267 passed。"
+}

@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "329865e6b504d8b6ea3043986387367c",
+    "epoch": 1
+  },
+  "submitted_revision": 28,
+  "record_id": "pm01-author-fix1",
+  "run_id": "tui-theme-pm-r3",
+  "finding_id": "PM-01",
+  "batch_id": "tui-theme-batch-one",
+  "task_id": "20260909-tui-theme-presets-task",
+  "author": "cursor",
+  "recorded_at": "2026-09-09T06:06:47.901881504Z",
+  "report_hash": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+  "original": "Observed，置信度高：两卡明确要求的人工视觉验收被 PTY/渲染序列断言替代，验收未闭合。序列存在与槽位对比度不能证明真实终端完整界面的前景、背景及切换观感；实际视觉结果仍为 Unverifiable，未宣称存在已观察到的显示故障。最小修复：补做 Solarized Light/Dark × light/dark 四组合，以及六主题 × 看板、详情页、选项面板、弹窗、启动对话框的人工核验，记录环境、操作、结果，并修正全部验收通过的交付结论。",
+  "status": "fixed",
+  "basis": "与 QA-02 同一根因，本条单独结案。已按最小修复完成四组合与 6×5 界面的视觉核验，并修正 report.md 中“全部通过”的表述，写明环境、操作、结果与未打印真实字体的局限。",
+  "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+  "verification": "同 QA-02：TrueColor View() 栅格帧目视 + 像素计数。六套主题画布互不相同；chrome/强调色随主题变化（如 light chrome #6b21a8、light-warm #6b4423）。Solarized 四组合无终端底穿孔。交付结论已改为“视觉核验已完成”，不再声称交互终端按 t 键点选。"
+}

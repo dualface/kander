@@ -1,0 +1,16 @@
+{
+  "submitted_revision": 14,
+  "record_id": "options-flow-pm001-fix",
+  "run_id": "options-flow-pm-1",
+  "finding_id": "PM-001",
+  "batch_id": "options-flow-batch",
+  "task_id": "20260908-options-workflow-flowchart-task",
+  "author": "codex",
+  "recorded_at": "2026-09-08T03:57:22.495784625Z",
+  "report_hash": "4954bd8602b8934d870420a3c5083c5e16b29bdee0ed76bbfe4b93290bd6b4ac",
+  "original": "Observed，高置信度：任务组图先 ff 接收交付，再安排审核批次，遗漏规则要求的接收前批次边界。开启 task_groups、git、review 且至少一个角色非 skip 时可见，误导用户以为可以先接收再确定审核范围，未完全满足任务组流程与发布规则一致的验收要求。最小修复：将适用的组批节点移至 receive 前，说明只接收本批交付、批外交付排队，同步三语文案并增加顺序断言。",
+  "status": "fixed",
+  "basis": "已独立比对 rules/KANDER-TASK-GROUP-RULES.md:85 与生成节点，确认接收前组批要求；已移到 member_delivery 后、receive 前，同步三语与顺序断言。",
+  "fix_commit": "265aa39bd0a4919451df1f726adca85d6204863b",
+  "verification": "提交 265aa39bd0a4919451df1f726adca85d6204863b：go test -json ./...，1165 通过、1 平台跳过、21 包通过；go test -json ./internal/flow ./internal/tui ./internal/i18n，78 通过；git diff --check 无输出。"
+}

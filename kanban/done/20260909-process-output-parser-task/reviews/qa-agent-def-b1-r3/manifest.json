@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "input": {
+    "findings_schema": 1,
+    "task_group": "20260908-agent-definition-group",
+    "run_id": "qa-agent-def-b1-r3",
+    "batch_id": "agent-def-batch-one",
+    "task_ids": [
+      "20260908-agent-definition-embed-task",
+      "20260908-agent-review-template-task",
+      "20260909-process-output-parser-task"
+    ],
+    "role": "QA",
+    "reviewer": "claude",
+    "model": "opus",
+    "effort": "high",
+    "cwd": "/home/dualf/works/kander/worktrees/20260908-agent-definition-group",
+    "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+    "commit": "e1c01277075599cb0395bf62f16855cebf04b060",
+    "report_language": "zh-CN",
+    "input_hashes": {
+      "review-context.md": "14ff130aefcf3aa89f4b8bac9f24832b3e0ff7d00ddc0d18bf9b055f62664058",
+      "task-context.md": "ab359490efd6439b7192b27bd58ba2902dabae3784aa3a6e8f9c60794983dc87"
+    }
+  },
+  "sidecar_hash": "d174c2737324f401dc235169c89b160187721da38052bbb9bbdbc8e6797b5ab8",
+  "hashes": {
+    "error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence.txt": "3e81f7883a2850e19cd25b92afef45db1861f7a2c050844639882d087984abcf",
+    "output.raw": "bc6d3552e3f4fcc9028c6e2830e3e06b17df975d7a6e7c67785ee08b190d6a42",
+    "prompt.txt": "c33de90892a5f9033667a8581513e7834792fda6078bc57d20e2b251540557a6",
+    "report.md": "da02b5cf98654bb76433b7dd0809b7a2f9ba3a2804ddf8a2e6f5186ebe54bba8",
+    "review-context.md": "14ff130aefcf3aa89f4b8bac9f24832b3e0ff7d00ddc0d18bf9b055f62664058",
+    "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "task-context.md": "ab359490efd6439b7192b27bd58ba2902dabae3784aa3a6e8f9c60794983dc87"
+  }
+}

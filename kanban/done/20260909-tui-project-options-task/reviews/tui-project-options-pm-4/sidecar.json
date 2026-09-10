@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "findings_schema": 1,
+  "task_group": "",
+  "run_id": "tui-project-options-pm-4",
+  "batch_id": "tui-project-options-batch",
+  "task_ids": [
+    "20260909-tui-project-options-task"
+  ],
+  "role": "PM",
+  "reviewer": "codex",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "cwd": "/home/dualf/works/kander/worktrees/tui-project-options",
+  "base": "8abdfe2e6430a00e19383f84f23088a8ff743be0",
+  "commit": "7c2e345c385be33087c3925ab4be18d11109a353",
+  "report_language": "zh-CN",
+  "input_hashes": {
+    "review-context.md": "9ff7842da496c4c1cd906e6e460a60c1b6a3ed4ebc10b4fb9ebcef456b85313a",
+    "task-context.md": "c18da82844c54c7d64b7e0fb2bb40c537c23fa006a8ecf1f50c7261a6c004781"
+  },
+  "kander_version": "20260909T052428Z-f457271b9e9d",
+  "phase": "finalized",
+  "launch_status": "started",
+  "execution_status": "ok",
+  "semantic_status": "unassessed",
+  "exit_code": 0,
+  "created_at": "2026-09-09T07:35:01.643206055Z",
+  "finished_at": "2026-09-09T07:40:29.391661092Z",
+  "duration_ms": 327748,
+  "hashes": {
+    "error.log": "07ca67c4336ee401a9a2c0a24e7abb6b5990135f32a656baedf9b2a9118487eb",
+    "evidence.txt": "d0d3dc7c6da97f54958a123efc8ce9114b65945924281e22a36f3aa9a91e2dbc",
+    "output.raw": "3e54b4814dde7be80ee7cfd4fe4ee9fc5859b97af7018eafbd85d6d4d1e37105",
+    "prompt.txt": "e084e72fd2938eb851deb1b62f2e9b0effb8601ad2766f742fcff64946c6e0e5",
+    "report.md": "3e54b4814dde7be80ee7cfd4fe4ee9fc5859b97af7018eafbd85d6d4d1e37105",
+    "review-context.md": "9ff7842da496c4c1cd906e6e460a60c1b6a3ed4ebc10b4fb9ebcef456b85313a",
+    "stdout.log": "bc1c51aaefb6f240dfadec3f2f9c6220ee1747e36abedb48e62d3e544f0621ae",
+    "task-context.md": "c18da82844c54c7d64b7e0fb2bb40c537c23fa006a8ecf1f50c7261a6c004781"
+  },
+  "published": null
+}

@@ -1,0 +1,20 @@
+{
+  "authorization": {
+    "dispatch_id": "1bea461ddd97b7e67bb9627f1d0e399c",
+    "epoch": 3
+  },
+  "submitted_revision": 28,
+  "record_id": "pm01-author-sync1",
+  "run_id": "tui-theme-pm-r3",
+  "finding_id": "PM-01",
+  "batch_id": "tui-theme-batch-one",
+  "task_id": "20260909-tui-truecolor-palette-task",
+  "author": "grok",
+  "recorded_at": "2026-09-09T07:40:41.611006917Z",
+  "report_hash": "f53689c1efe7185f03446770c82aaf2b874d4500ab32200b19a496a05e46a953",
+  "original": "Observed，置信度高：两卡明确要求的人工视觉验收被 PTY/渲染序列断言替代，验收未闭合。序列存在与槽位对比度不能证明真实终端完整界面的前景、背景及切换观感；实际视觉结果仍为 Unverifiable，未宣称存在已观察到的显示故障。最小修复：补做 Solarized Light/Dark × light/dark 四组合，以及六主题 × 看板、详情页、选项面板、弹窗、启动对话框的人工核验，记录环境、操作、结果，并修正全部验收通过的交付结论。",
+  "status": "fixed",
+  "basis": "与 QA-02 同一根因，本条单独结案。对照本卡契约，须闭合的是 Solarized 四组合，不是 presets 的 6×5 界面矩阵。原交付把 PTY 写成 8/8 全部通过，过口成立。组 HEAD 73afc16 已覆盖四组合的设计底/前景，且 presets 已把其 report.md 从“全部通过”改为有局限的视觉核验记录。本卡同步修正 IMPLEMENTATION/SUMMARY，不再把序列断言写成全部人工验收通过。",
+  "fix_commit": "73afc16b8d74fe1d46c6feffe36d8baeeb0d1241",
+  "verification": "同 QA-02：组 HEAD 73afc16b8d74fe1d46c6feffe36d8baeeb0d1241 上 TestThemeSurfacesPaintOwnBackground 与 TestBoardTrueColorIgnoresSolarizedPaletteOnPTY 均通过；独立 termenv 复算 light Base/Bg 为 38;2;22;24;29 与 48;2;250;250;250，dark Base/Bg 为 38;2;230;232;235 与 48;2;22;24;29。本卡将改写交付结论，去掉“验收 8/8 通过”中对人工走查的宣称。"
+}

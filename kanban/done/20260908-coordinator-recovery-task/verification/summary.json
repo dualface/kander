@@ -1,0 +1,64 @@
+{
+  "commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+  "group_base": "6f5ed32072275c3bb9d96c9e40bd606b949b9c17",
+  "commands": {
+    "all": {
+      "command": "go test -json -count=1 ./...",
+      "commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+      "exit": 0,
+      "counts": {
+        "pass_test": 1001,
+        "pass_top_level_test": 630,
+        "pass_package": 19,
+        "skip_test": 1,
+        "skip_top_level_test": 1
+      },
+      "skips": [
+        "github.com/dualface/kander/internal/launch/TestWindowsConsoleLauncher"
+      ]
+    },
+    "race": {
+      "command": "go test -race -json -count=1 ./internal/fs ./internal/board ./internal/launch ./internal/review ./internal/cli ./internal/liveness ./internal/notify ./internal/window",
+      "commit": "0b304a8399cdbc8db2c005e390afd3f6127532af",
+      "exit": 0,
+      "counts": {
+        "pass_test": 737,
+        "pass_top_level_test": 409,
+        "pass_package": 8,
+        "skip_test": 1,
+        "skip_top_level_test": 1
+      },
+      "skips": [
+        "github.com/dualface/kander/internal/launch/TestWindowsConsoleLauncher"
+      ]
+    }
+  },
+  "platform_gaps": [
+    "原生 Windows 未执行",
+    "真实 tmux/herdr/Agent 冒烟未执行；假终端不能替代实机"
+  ],
+  "original_reproductions": {
+    "verified": 13,
+    "tests": [
+      "TestAuditRoundTripIsInvisible",
+      "TestAuditChangesSuppressLiveness",
+      "TestAuditReverseLookupErrorBecomesUnknown",
+      "TestAuditReviewHasNoLiveness",
+      "TestAuditWatchedGroupMembershipIsFrozen",
+      "TestAuditBlockedWriterIgnoresStop",
+      "TestAuditRefreshDurationOverflow",
+      "TestAuditProbeBlocksScanAndCancellation",
+      "TestAuditWatchedGroupSilentlyOmitsUnreadableMember",
+      "TestAuditDescendantOutputOutlivesProbeDeadline",
+      "TestPromptEchoDoesNotCountAsAcknowledgement",
+      "TestRollbackNeverResurrectsMovedSmallCard",
+      "TestAuditGuardCheckDoesNotCoverLaterMove"
+    ],
+    "source": "docs/recovery-regressions.md"
+  },
+  "checks": {
+    "count": 16,
+    "failures": 0,
+    "file": "checks.json"
+  }
+}
