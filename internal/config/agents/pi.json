@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "path": "pi",
+  "process_name": "pi",
+  "args": {
+    "start": [
+      "--approve",
+      "--session-id",
+      "{session}",
+      "--model",
+      "{model}",
+      "--thinking",
+      "{effort}"
+    ],
+    "resume": [
+      "--approve",
+      "--session",
+      "{session}",
+      "--model",
+      "{model}",
+      "--thinking",
+      "{effort}"
+    ],
+    "review": [
+      "--print",
+      "--no-session",
+      "--model",
+      "{model}",
+      "--thinking",
+      "{effort}",
+      "--tools",
+      "read,bash,grep,find,ls",
+      "--no-extensions",
+      "--no-skills",
+      "--no-prompt-templates",
+      "--no-themes",
+      "--append-system-prompt",
+      "Output contract: your final message is the complete review report and must contain exactly one kander-findings JSON fence. Use read-only inspection only; never create, modify, or delete any file, and do not run commands that change the worktree."
+    ]
+  },
+  "session": {
+    "mode": "generated"
+  },
+  "exit_command": "/quit",
+  "display_name": "Pi",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "review": {
+    "cwd": "root",
+    "output_name": "output.txt",
+    "inspection": "Use read, bash, grep, find, and ls only for read-only inspection; never modify files.",
+    "spawns_helpers": false,
+    "snapshot_spec": false,
+    "output": {
+      "source": "stdout",
+      "parse": "raw"
+    }
+  },
+  "rules_target": {
+    "global": ".pi/agent/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "",
+  "small_model": "",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "",
+  "effort": "high"
+}

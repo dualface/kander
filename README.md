@@ -10,7 +10,7 @@ One person schedules multiple AI agents with a kanban board.
 
 ## 1. Quick Start
 
-Running requires Git, plus at least one of Codex, Claude, Grok, or Cursor.
+Running requires Git, plus at least one of Codex, Claude, Grok, Cursor, or Pi.
 
 **macOS** — install with Homebrew:
 

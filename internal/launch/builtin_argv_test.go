@@ -16,7 +16,7 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 	cfg := config.DefaultConfig()
 	models := cfg.Models.Kanban
 	const sid = "session-id"
-	for _, agent := range []string{"codex", "claude", "grok", "cursor"} {
+	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi"} {
 		for _, kind := range []string{"large", "small"} {
 			for _, resume := range []bool{false, true} {
 				for _, hasSession := range []bool{true, false} {
@@ -67,6 +67,19 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 							want = append(want, "--model", modelID)
 						}
 						want = append(want, "--trust", "--force", "--resume", ref)
+					case "pi":
+						flag := "--session-id"
+						if resume {
+							flag = "--session"
+						}
+						want = append(want, "--approve")
+						if ref != "" {
+							want = append(want, flag, ref)
+						}
+						if modelID != "" {
+							want = append(want, "--model", modelID)
+						}
+						want = append(want, "--thinking", effort)
 					}
 					name := agent + "/" + kind
 					if resume {

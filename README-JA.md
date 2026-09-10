@@ -10,7 +10,7 @@
 
 ## 1. クイックスタート
 
-実行には Git と、Codex、Claude、Grok、Cursor のうち少なくとも 1 つが必要です。
+実行には Git と、Codex、Claude、Grok、Cursor、Pi のうち少なくとも 1 つが必要です。
 
 **macOS** — Homebrew でインストールします：
 

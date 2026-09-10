@@ -112,7 +112,7 @@ func setupBoard(t *testing.T) (root, home, fakeBin string) {
 	}
 	tmuxLog := filepath.Join(root, "tmux.log")
 	writeFakeTmux(t, filepath.Join(fakeBin, "tmux"), tmuxLog)
-	for _, name := range []string{"codex", "claude", "grok", "cursor-agent"} {
+	for _, name := range []string{"codex", "claude", "grok", "cursor-agent", "pi"} {
 		writeFakeAgent(t, filepath.Join(fakeBin, name))
 	}
 	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))

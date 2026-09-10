@@ -32,7 +32,7 @@ func fail(err error) int {
 func usage(w io.Writer, cmd string) {
 	if cmd == "start" {
 		fmt.Fprintln(w, t(
-			"launch.usage_kander_start_agent_codex_claude_grok_cursor_launcher",
+			"launch.usage_kander_start",
 		))
 		return
 	}

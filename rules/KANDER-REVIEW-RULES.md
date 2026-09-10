@@ -21,7 +21,7 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 
 ## Reviewer Selection
 
-- Reviewers are the four built-in agents plus any configured agent that
+- Reviewers are the five built-in agents plus any configured agent that
   declares a review template (`args.review` together with `review.*`).
 
   The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
@@ -47,6 +47,7 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 | Claude | `claude` | `claude` | from the embedded definition |
 | Grok | `grok` | `grok` | from the embedded definition |
 | Cursor | `cursor` | `cursor-agent` | from the embedded definition |
+| Pi | `pi` | `pi` | from the embedded definition |
 | custom | the agent name | `review.path` or `path` | author's responsibility |
 
 **Reviewer Isolation**
@@ -54,6 +55,7 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 - Codex and Grok use sandbox-enforced read-only isolation: Codex runs a read-only shell inside the target worktree.
 - Claude and Grok run in an out-of-tree runtime; Grok exposes only read and search tools, while Claude runs fully authorized with its full toolset minus `Edit` and `Write`, and relies on that plus the prompt for read-only. As with Cursor, the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected.
 - Cursor only isolates configuration and session into the runtime; read-only relies on the prompt and post-run worktree verification, with no upfront blocking and no detection of out-of-tree writes.
+- Pi runs with an explicit `--tools read,bash,grep,find,ls` allowlist and no session persistence; it exposes no edit or write tool, and read-only relies on that allowlist plus the prompt. As with Cursor, the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected.
 - On all platforms the full prompt is written to a UTF-8 task file in the
   review runtime. Delivery follows the reviewer definition: `review.stdin`
   is `instruction` (default) or `none`. With `instruction`, the reviewer

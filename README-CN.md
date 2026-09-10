@@ -10,7 +10,7 @@
 
 ## 1. 快速开始
 
-运行需要 Git, 以及 Codex, Claude, Grok 或 Cursor 中至少一个.
+运行需要 Git, 以及 Codex, Claude, Grok, Cursor 或 Pi 中至少一个.
 
 **macOS** — 使用 Homebrew 安装:
 

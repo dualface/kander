@@ -70,6 +70,13 @@
         "model": "",
         "small_effort": "high",
         "small_model": ""
+      },
+      "pi": {
+        "large_effort": "high",
+        "large_model": "",
+        "model": "",
+        "small_effort": "medium",
+        "small_model": ""
       }
     },
     "review": {
@@ -85,6 +92,10 @@
         "model": "cursor-grok-4.6-xhigh"
       },
       "grok": {
+        "effort": "high",
+        "model": ""
+      },
+      "pi": {
         "effort": "high",
         "model": ""
       }

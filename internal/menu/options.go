@@ -133,7 +133,7 @@ func (s *Session) prepare(configValid bool) error {
 	}
 	if len(s.review) == 0 && !s.existing.WelcomeComplete {
 		return errors.New(config.Text(
-			"menu.no_usable_reviewer_found_install_codex_claude_grok_or",
+			"menu.no_usable_reviewer_found_install_a_built_in_agent",
 		))
 	}
 

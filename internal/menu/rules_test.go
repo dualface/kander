@@ -20,7 +20,7 @@ func writeRulesFile(t *testing.T, path, contents string) {
 }
 
 func TestRulesIntegrationUsesInstallScope(t *testing.T) {
-	for _, agent := range []string{"codex", "claude", "grok", "cursor"} {
+	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi"} {
 		t.Run(agent, func(t *testing.T) {
 			home, project := t.TempDir(), t.TempDir()
 			t.Setenv("HOME", home)
@@ -36,6 +36,9 @@ func TestRulesIntegrationUsesInstallScope(t *testing.T) {
 				globalRules, projectRules = "@"+globalEntry+"\n", "@"+projectEntry+"\n"
 			}
 			globalTarget := filepath.Join(home, "."+agent, name)
+			if agent == "pi" {
+				globalTarget = filepath.Join(home, ".pi", "agent", name)
+			}
 			projectTarget := filepath.Join(project, name)
 			globalPaths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Dir(globalEntry)}
 			projectPaths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: project, RulesDir: filepath.Dir(projectEntry)}

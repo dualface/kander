@@ -11,7 +11,7 @@ import (
 // Expectations are pinned to integrate.go at 8abdfe2e, before embedded definitions.
 func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
-		for _, agent := range []string{"codex", "claude", "grok", "cursor"} {
+		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi"} {
 			for _, existing := range []bool{false, true} {
 				name := string(mode) + "/" + agent + "/create"
 				if existing {
@@ -24,6 +24,9 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 					target := filepath.Join(home, "."+agent, "AGENTS.md")
 					if agent == "claude" {
 						target = filepath.Join(home, ".claude", "CLAUDE.md")
+					}
+					if agent == "pi" {
+						target = filepath.Join(home, ".pi", "agent", "AGENTS.md")
 					}
 					if mode == config.ModeProject {
 						project := t.TempDir()
