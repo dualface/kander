@@ -50,6 +50,17 @@ Choose **Tide**, **Dusk**, **Slate Dark**, or **Slate Light** in `o` → Interfa
 
 Further reading: the slides [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
 
-## 2. License
+## 2. GitHub Integration
+
+Linking a project to a GitHub repository needs the [GitHub CLI](https://cli.github.com/) (`gh`). Kander never asks for, reads, or stores a token; it reuses the credentials `gh` already manages.
+
+```sh
+kander issue repo                                   # resolve the repository of the current worktree
+kander issue repo --repo HOST/OWNER/REPO --json     # or pass a reference explicitly
+```
+
+`kander issue repo` confirms the canonical identity with GitHub instead of trusting a directory name. When a worktree has several distinct remotes it refuses to guess, and asks for `--repo` or for `gh repo set-default`. `kander doctor` reports the `gh` path, version, and per-host authentication state without touching credentials, remotes, or accounts.
+
+## 3. License
 
 This project is under the MIT License; see [LICENSE](LICENSE).

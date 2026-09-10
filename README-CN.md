@@ -50,6 +50,17 @@ kander
 
 进阶阅读: 幻灯片 [如何高效推进任务](docs/how-to-advance-tasks-efficiently-cn.pdf) (PDF).
 
-## 2. 许可
+## 2. GitHub 集成
+
+把项目关联到 GitHub 仓库需要 [GitHub CLI](https://cli.github.com/)（`gh`）。Kander 不会索要、读取或保存 token，只复用 `gh` 已管理的凭据。
+
+```sh
+kander issue repo                                   # 解析当前工作树对应的仓库
+kander issue repo --repo HOST/OWNER/REPO --json     # 或显式传入仓库引用
+```
+
+`kander issue repo` 会向 GitHub 确认仓库的规范身份，而不是相信目录名。当一个工作树存在多个不同 remote 时，它不会猜测，而是提示使用 `--repo` 或 `gh repo set-default`。`kander doctor` 会报告 `gh` 的路径、版本和各 host 的认证状态，且不修改凭据、remote 或账号。
+
+## 3. 许可
 
 本项目使用 MIT License, 见 [LICENSE](LICENSE).

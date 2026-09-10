@@ -42,6 +42,8 @@ This file is the development contract for the Kander repository itself. The work
 | `internal/review`   | The single review gate of `kander review` (invocation and parsing from agent definitions) and closed-batch historical Git verification |
 | `internal/flow`     | Read-only consumption of the options-session configuration, producing structured agent/model listings for execution and review stages; does not depend on TUI or menu |
 | `internal/tui`      | The terminal kanban for bare `kander` and the Huh options panel       |
+| `internal/issue`    | Provider-neutral GitHub repository identity, `[HOST/]OWNER/REPO` validation, structured errors, diagnostic sanitizing and redaction, and the `kander issue` command front end |
+| `internal/issue/ghcli` | The GitHub CLI provider: the `gh`/`git` process boundary (direct argv, validated cwd, deadline, bounded streams, strict UTF-8/JSON), remote enumeration and ambiguity detection, canonical identity confirmation, and the read-only doctor probe |
 | `internal/menu`     | doctor/config, environment probing and repair, `menu.Session` shared with the options panel |
 | `internal/install`  | First-run wizard, `kander install`, rules extraction and doctor repair |
 
@@ -70,10 +72,12 @@ The terminal interface uses the Charm libraries as one set, with no hand-rolled 
 - Popups are composited onto the underlying frame by display column via `overlay()`, not by full-screen replacement.
 - The board view launches backlog/todo cards after `s` confirmation; the TUI calls `internal/launch`'s structured entry points one way and reuses board's controlled migration. Background launches and warnings flow back through pendingWork rather than writing stdout/stderr directly; foreground/console only prompt to use the CLI. Pressing `s` pops the dialog immediately, with the frame title tracking loading, confirmation, starting, and the recorded success or failure; it previews only the target card through pendingWork, discarding stale results by task ID and request sequence; while loading, the wheel keeps operating the board and changing the selection closes the old dialog. After confirmation the launching state is kept, and on completion the dialog shows success/failure and warnings; the result body keeps full content in a viewport with wheel scrolling, and any key closes the terminal state. Narrow screens compress the result footer, and when necessary a temporary overlay that does not capture input shows the full result.
 - `internal/menu` must not import `internal/tui`; the TUI options panel reuses the `menu.Session` configuration logic one way.
+- `internal/issue` holds the provider-neutral identity, error, and command contract and never imports board, launch, or TUI; the GitHub CLI provider lives in `internal/issue/ghcli` and is bound by the `issue` command in `internal/cli`. Kander never calls or stores `gh auth token`: credentials stay inside `gh`, and Kander neither clears nor rewrites `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST`, or `GH_REPO`. Remote candidate enumeration and ambiguity detection are Kander's own because `gh repo view` silently picks a remote when several exist.
+- Cross-platform process-boundary tests inject a fake `gh`/`git` by copying the test binary under those names into a temporary directory and prepending it to `PATH` (`internal/issue/ghcli/ghclitest`); they must not depend on a scripting host.
 
 ## Subcommands
 
-The Runner registry contains: `doctor` `config` `version` `install` `review` `init` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `help` is a special branch that prints the top-level help directly and does not enter the Runner registry. Bare `kander` opens the terminal kanban; the global flag is `--lang {cn,en,ja}`.
+The Runner registry contains: `doctor` `config` `version` `install` `review` `init` `issue` `list`/`ls` `show` `update` `new` `move` `pick` `start` `resume` `notify` `dismiss` `check` `guard-write` `dispatch` `coordinator` `subscribe`. `help` is a special branch that prints the top-level help directly and does not enter the Runner registry. Bare `kander` opens the terminal kanban; the global flag is `--lang {cn,en,ja}`.
 
 ## TUI Tests
 

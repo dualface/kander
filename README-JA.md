@@ -50,6 +50,17 @@ kander
 
 さらに詳しく: スライド [タスクを効率的に進める方法](docs/how-to-advance-tasks-efficiently-ja.pdf) (PDF) を参照してください。
 
-## 2. ライセンス
+## 2. GitHub 連携
+
+プロジェクトを GitHub リポジトリに紐づけるには [GitHub CLI](https://cli.github.com/)（`gh`）が必要です。Kander はトークンを要求・読み取り・保存せず、`gh` が管理する認証情報をそのまま利用します。
+
+```sh
+kander issue repo                                   # 現在のワークツリーのリポジトリを解決
+kander issue repo --repo HOST/OWNER/REPO --json     # 参照を明示的に指定
+```
+
+`kander issue repo` はディレクトリ名を信用せず、GitHub に正規のリポジトリ識別情報を確認します。ワークツリーに複数の異なるリモートがある場合は推測せず、`--repo` または `gh repo set-default` を案内します。`kander doctor` は認証情報・リモート・アカウントを変更せずに、`gh` のパス、バージョン、ホストごとの認証状態を報告します。
+
+## 3. ライセンス
 
 本プロジェクトは MIT License を使用しています。[LICENSE](LICENSE) を参照してください。
