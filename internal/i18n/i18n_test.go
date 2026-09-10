@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -17,15 +18,32 @@ import (
 
 var argumentPattern = regexp.MustCompile(`\.V([0-9]+)`)
 
+// testCatalogFiles mirrors i18n.catalogFiles; every language is the concatenation
+// of its general catalog and its topic catalogs, and duplicates are rejected.
+var testCatalogFiles = []string{
+	"locales/%s.json",
+	"locales/issue/%s.json",
+}
+
 func readCatalog(t *testing.T, name string) map[string]string {
 	t.Helper()
-	data, err := catalogs.ReadFile("locales/" + name + ".json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var messages map[string]string
-	if err := json.Unmarshal(data, &messages); err != nil {
-		t.Fatal(err)
+	messages := map[string]string{}
+	for _, format := range testCatalogFiles {
+		path := fmt.Sprintf(format, name)
+		data, err := catalogs.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fileMessages map[string]string
+		if err := json.Unmarshal(data, &fileMessages); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		for id, message := range fileMessages {
+			if _, duplicate := messages[id]; duplicate {
+				t.Fatalf("duplicate message id %s in %s", id, path)
+			}
+			messages[id] = message
+		}
 	}
 	return messages
 }

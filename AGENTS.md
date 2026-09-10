@@ -28,7 +28,7 @@ This file is the development contract for the Kander repository itself. The work
 | `internal/cli`      | Command-name and Runner registry, global `--lang`, argument parsing and dispatch |
 | `internal/config` | Install scopes, optional project `.kander-config.json` overlay merge and sparse overlay writes, `config.json` schema/repair, embedded execution-agent definitions under `internal/config/agents/` (`go:embed`, `schema_version` 1; user `agents.<name>` overlays them), read access for language/agent language/launcher/agents/models/rules/TUI |
 | `internal/version`  | Injected build version; String() returns it or `dev`                  |
-| `internal/i18n`     | go-i18n message catalogs and template rendering; does not depend on config, the language is passed in by the caller |
+| `internal/i18n`     | go-i18n message catalogs and template rendering; one general catalog per language plus optional topic catalogs under `locales/<topic>/`, merged into one bundle so no shared catalog crosses the reviewable file ceiling; does not depend on config, the language is passed in by the caller |
 | `internal/fs`       | POSIX no-follow and Windows handle/reparse/DACL/shared and exclusive locks |
 | `internal/process`  | Agent CLI resolution, UTF-8 task files, argv/env invocation construction, declarative output parsing and placeholder expansion |
 | `internal/board`    | Board location, revision/CAS/multi-file transaction recovery, journal pending/committed partitions and retention cleanup, controlled updates and lifecycle commands, review run/batch identity, originals, per-card publication indexes and integrity checks, dispatch intents, review-original bindings, epochs, wrap-up-only grants and atomic receipts, start attempts and success/rollback originals |

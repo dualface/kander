@@ -1,5 +1,9 @@
 // Package i18n owns Kander's embedded message catalogs. Language selection stays
 // with config; this package has no dependency on application configuration.
+//
+// Every language has one general catalog plus optional topic catalogs under
+// locales/<topic>/<language>.json, so a feature can grow its own messages
+// without pushing a shared catalog past the reviewable file ceiling.
 package i18n
 
 import (
@@ -10,16 +14,22 @@ import (
 	"golang.org/x/text/language"
 )
 
-//go:embed locales/*.json
+//go:embed locales
 var catalogs embed.FS
+
+// catalogFiles are loaded into one bundle; the file's base name picks the language.
+var catalogFiles = []string{
+	"locales/en.json", "locales/zh-CN.json", "locales/ja.json",
+	"locales/issue/en.json", "locales/issue/zh-CN.json", "locales/issue/ja.json",
+}
 
 var localizers = loadLocalizers()
 
 func loadLocalizers() map[string]*goi18n.Localizer {
 	bundle := goi18n.NewBundle(language.SimplifiedChinese)
-	for _, file := range []string{"locales/en.json", "locales/zh-CN.json", "locales/ja.json"} {
+	for _, file := range catalogFiles {
 		if _, err := bundle.LoadMessageFileFS(catalogs, file); err != nil {
-			panic(fmt.Errorf("load embedded translations: %w", err))
+			panic(fmt.Errorf("load embedded translations %s: %w", file, err))
 		}
 	}
 	return map[string]*goi18n.Localizer{
