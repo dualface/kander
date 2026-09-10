@@ -115,15 +115,11 @@ func TestParseRemoteURLRejectsEmbeddedCredentials(t *testing.T) {
 	}
 }
 
-func TestRepositoryReference(t *testing.T) {
-	repository := Repository{Host: "github.com", Owner: "dualface", Name: "kander"}
-	if got, want := repository.FullName(), "dualface/kander"; got != want {
-		t.Fatalf("FullName=%q want %q", got, want)
+func TestRepositoryRefString(t *testing.T) {
+	if got, want := (RepositoryRef{Host: "github.com", Owner: "dualface", Name: "kander"}).String(), "github.com/dualface/kander"; got != want {
+		t.Fatalf("String=%q want %q", got, want)
 	}
-	if got, want := repository.Reference(), "github.com/dualface/kander"; got != want {
-		t.Fatalf("Reference=%q want %q", got, want)
-	}
-	if got, want := (Repository{Owner: "dualface", Name: "kander"}).Reference(), "dualface/kander"; got != want {
-		t.Fatalf("hostless Reference=%q want %q", got, want)
+	if got, want := (RepositoryRef{Owner: "dualface", Name: "kander"}).String(), "dualface/kander"; got != want {
+		t.Fatalf("hostless String=%q want %q", got, want)
 	}
 }

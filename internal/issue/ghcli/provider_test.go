@@ -101,7 +101,7 @@ func TestResolveRepositoryHonorsSetDefaultRemote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if repository.FullName() != "cli/cli" || repository.Remote != "upstream" {
+	if repository.Owner != "cli" || repository.Name != "cli" || repository.Remote != "upstream" {
 		t.Fatalf("repository=%+v", repository)
 	}
 }
@@ -117,7 +117,7 @@ func TestResolveRepositoryDeduplicatesEquivalentRemotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if repository.FullName() != "dualface/kander" {
+	if repository.Owner != "dualface" || repository.Name != "kander" {
 		t.Fatalf("repository=%+v", repository)
 	}
 }
@@ -132,7 +132,7 @@ func TestResolveRepositoryHonorsEnvironmentOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if repository.FullName() != "acme/tool" || repository.Remote != "" {
+	if repository.Owner != "acme" || repository.Name != "tool" || repository.Remote != "" {
 		t.Fatalf("repository=%+v", repository)
 	}
 	if len(gitRunner.calls) != 0 {
@@ -312,7 +312,7 @@ func TestProviderEndToEndEnvironmentOverrideOutsideWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if repository.Host != "ghe.example.com" || repository.FullName() != "acme/tool" {
+	if repository.Host != "ghe.example.com" || repository.Owner != "acme" || repository.Name != "tool" {
 		t.Fatalf("repository=%+v", repository)
 	}
 }

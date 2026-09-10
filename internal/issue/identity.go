@@ -28,19 +28,6 @@ type Repository struct {
 	Remote  string
 }
 
-// FullName returns OWNER/NAME.
-func (r Repository) FullName() string {
-	return r.Owner + "/" + r.Name
-}
-
-// Reference returns [HOST/]OWNER/REPO, omitting the host when it is unknown.
-func (r Repository) Reference() string {
-	if r.Host == "" {
-		return r.FullName()
-	}
-	return r.Host + "/" + r.Owner + "/" + r.Name
-}
-
 // RepositoryRef is a validated [HOST/]OWNER/REPO reference before a provider
 // confirms it. Host is empty when the reference relies on the provider default.
 type RepositoryRef struct {

@@ -36,15 +36,15 @@ func Sanitize(text string) string {
 		}
 	}
 	collapsed := strings.Join(strings.Fields(builder.String()), " ")
-	redacted := Redact(collapsed)
+	redacted := redact(collapsed)
 	if len(redacted) > sanitizeMaxLength {
 		redacted = redacted[:sanitizeMaxLength] + "..."
 	}
 	return redacted
 }
 
-// Redact replaces token-shaped substrings with a placeholder.
-func Redact(text string) string {
+// redact replaces token-shaped substrings with a placeholder.
+func redact(text string) string {
 	redacted := text
 	for _, pattern := range tokenPatterns {
 		redacted = pattern.ReplaceAllString(redacted, "[REDACTED]")
