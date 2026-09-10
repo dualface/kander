@@ -6,6 +6,12 @@
 # Pushing the tag is what triggers .github/workflows/release.yml; this script
 # then waits for the workflow's assets and rewrites Formula/kander.rb in
 # dualface/homebrew-tap from the published checksums.
+#
+# The workflow now runs the tap half itself (`--skip-tag --no-test`) when the
+# TAP_TOKEN secret is set, so a normal release only needs the tag. Run this
+# script by hand to cut a tag locally, or to repair a formula that drifted:
+#
+#   scripts/release.sh --skip-tag v0.5.0
 
 set -euo pipefail
 
@@ -252,7 +258,7 @@ class Kander < Formula
   end
 
   test do
-    assert_match(/\Akander \d{8}T\d{6}Z-[0-9a-f]{12}\n\z/, shell_output("#{bin}/kander version"))
+    assert_equal "kander ${bare_version}", shell_output("#{bin}/kander version").strip
   end
 end
 EOF
