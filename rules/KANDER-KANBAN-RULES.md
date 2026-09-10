@@ -140,20 +140,20 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Tasks with `SIZE: large` use `kanban_agents.large`; tasks with `SIZE: small` use `kanban_agents.small`; both fall back to `kanban_agent`.
 - On success, print the scale and the actual agent.
 - `start` needs no confirmation by default and writes the session identifier into `SESSION`:
-  - Claude/Grok: a UUID; Cursor: the chat id; Codex: only the agent name.
+  - Claude/Grok/Pi: a UUID; Cursor: the chat id; Codex: only the agent name.
 - The adjacent `WINDOW` field holds the delivery address:
   - herdr: `herdr:<tab-id>:<pane-id>`.
   - tmux/tmux-session: `<launcher>:<session-id>:<window-id>:<pane-id>`.
   - foreground/console: the launcher name.
 - tmux/tmux-session first create a placeholder window/pane, persist `WINDOW`, then start the agent with `respawn-pane`, and write the pane marker with `tmux set-option -p -t <pane-id> @kander_session <session-id>`.
-- Claude/Grok/Cursor use the card id; Codex reuses the `notify`/`resume` rollout resolution.
+- Claude/Grok/Cursor/Pi use the card id; Codex reuses the `notify`/`resume` rollout resolution.
 - Failure to write the address, start, or write the marker closes this invocation's window and rolls back the card.
 - When an old card lacks the two fields, insert them in order after `OWNER`; do not batch-rewrite unstarted old cards.
 
 **Resuming the Original Session**
 
 - `resume` wakes up the original agent by the card `SESSION`, preserving context:
-  - Claude/Grok use `--resume <uuid>`; Cursor uses `--resume <chat-id>`.
+  - Claude/Grok use `--resume <uuid>`; Cursor uses `--resume <chat-id>`; Pi uses `--session <uuid>`.
   - Codex uses `codex resume <session-id>`.
   - The Codex session id is looked up in the rollout records under `CODEX_HOME` (default `~/.codex`).
   - Only match user messages that begin with this task's start/resume prompt; do not match orchestrator sessions that merely mention the task ID.
@@ -176,7 +176,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - The task file asks the agent to try to delete it when done; failure to delete or leftover files do not affect the result.
 - These files get no POSIX permission or Windows ACL check or tightening.
 - Native Windows prefers the agent `.exe`.
-- When Codex, Claude, Grok, or Cursor only has a `.cmd`/`.bat`, launch through an explicit `cmd.exe /d /s /v:off /c` with the agent adapter layer's argument encoding.
+- When Codex, Claude, Grok, Cursor, or Pi only has a `.cmd`/`.bat`, launch through an explicit `cmd.exe /d /s /v:off /c` with the agent adapter layer's argument encoding.
 
 **Taking Over with a New Session**
 
@@ -202,7 +202,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - Like `resume`, it only accepts `review/` or `working/` cards, exactly one non-empty `--message` or `--message-file` must be given, and `--timeout` must be a finite number of seconds greater than 60, defaulting to 120 seconds.
 - Address priority: explicit `--pane` override, the card `WINDOW` fast path, and when no window is recorded, scanning `herdr pane list` by agent and session id.
 - Both the override and the reverse lookup keep using `pane get` to verify that the pane exists, the agent and `agent_session.value` match exactly, and the existing pane state is `idle` or `done`.
-- Claude/Grok/Cursor cards with a recorded id are compared directly; only old Codex cards without an id reuse the rollout lookup of `resume`.
+- Claude/Grok/Cursor/Pi cards with a recorded id are compared directly; only old Codex cards without an id reuse the rollout lookup of `resume`.
 - Kander has no agent whitelist; herdr reverse lookup coverage depends on the current version and on whether each `source: herdr:<agent>` integration actually reports session identity.
 - After a unique hit, write `herdr:<tab-id>:<pane-id>` back to `WINDOW`.
 - 0 or multiple hits do not deliver.

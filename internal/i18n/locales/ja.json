@@ -628,7 +628,7 @@
   "menu.no_interactive_terminal_is_available_welcome_is_incomplete": "対話型ターミナルがありません.",
   "menu.no_reviewer_found_reviews_cannot_run": "Reviewer が見つかりません; レビューを実行できません.",
   "menu.no_supported_package_manager_was_found_install_tmux_manually": "対応するパッケージマネージャが見つかりません; tmux を手動でインストールしてください.",
-  "menu.no_usable_agent_found_version_must_succeed_install_codex": "利用可能な Agent が見つかりません (--version が成功する必要があります). まず Codex、Claude、Grok、または Cursor をインストールしてください.",
+  "menu.no_usable_agent_found_install_a_built_in_agent": "利用可能な Agent が見つかりません (--version が成功する必要があります). Codex、Claude、Grok、Cursor、または Pi をインストールしてください.",
   "menu.no_usable_reviewer_found_install_a_built_in_agent": "利用可能な Reviewer が見つかりません. Codex、Claude、Grok、Cursor、または Pi をインストールしてください.",
   "menu.not_currently_installed": " (現在未インストール)",
   "menu.not_found": "見つかりません: {{.V0}}",

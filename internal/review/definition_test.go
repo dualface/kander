@@ -216,7 +216,7 @@ func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 	if !strings.Contains(want, "task file at "+promptFile) {
 		t.Fatalf("instruction %q", want)
 	}
-	for _, agent := range []string{"codex", "claude", "cursor", "grok"} {
+	for _, agent := range []string{"codex", "claude", "cursor", "grok", "pi"} {
 		settings, err := agentSettingsFor(agent, "QA", "large")
 		if err != nil {
 			t.Fatal(err)

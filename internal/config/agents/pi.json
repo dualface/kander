@@ -53,6 +53,7 @@
     "inspection": "Use read, bash, grep, find, and ls only for read-only inspection; never modify files.",
     "spawns_helpers": false,
     "snapshot_spec": false,
+    "home_policy": "optional",
     "output": {
       "source": "stdout",
       "parse": "raw"

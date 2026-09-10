@@ -164,8 +164,9 @@ func incrementalScopeRules(ctx reviewContext) string {
 // lastMessageOutputContract is appended for reviewers whose report is the last
 // assistant message (claude, cursor, grok). Those CLIs otherwise often emit a
 // short human summary after deleting the task file, so parseReviewOutput never
-// sees the kander-findings fence. Codex writes the report to a file and does
-// not use this paragraph.
+// sees the kander-findings fence. Pi carries the same contract in its embedded
+// definition instead. Codex writes the report to a file and does not use this
+// paragraph.
 const lastMessageOutputContract = "Output contract: your final message is the complete report. It must already contain the analysis and the exact kander-findings fence. Write that one message and stop. Delete the task file before writing the final message; after that message, do not send any follow-up."
 
 func usesLastMessageReport(agent string) bool {

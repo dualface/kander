@@ -45,13 +45,14 @@ func TestMinimalCursorFixtureJSONRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Captured from minimalPayload(nil) at 8abdfe2e, before the migration, then
-	// updated for the two-scale reviewers and per-scale review role model keys.
+	// updated for the two-scale reviewers, per-scale review role model keys, and
+	// the pi model block appended when pi became a built-in.
 	want, err := os.ReadFile("testdata/minimal-cursor-config.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(data) != strings.TrimSuffix(string(want), "\n") {
-		t.Fatalf("fixture JSON differs from the pre-migration output\ngot:\n%s\nwant:\n%s", data, want)
+		t.Fatalf("fixture JSON differs from the pinned output\ngot:\n%s\nwant:\n%s", data, want)
 	}
 	again, err := ValidateJSON(data)
 	if err != nil {

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPiIsAnExecutionAndReviewAgent(t *testing.T) {
 	setupHome(t)
@@ -23,5 +26,14 @@ func TestPiIsAnExecutionAndReviewAgent(t *testing.T) {
 	}
 	if d.Args == nil || len(d.Args.Review) == 0 || d.Review == nil {
 		t.Fatalf("review definition=%+v", d)
+	}
+	if d.Review.HomePolicy != "optional" {
+		t.Fatalf("review home policy=%q", d.Review.HomePolicy)
+	}
+	joined := strings.Join(d.Args.Review, " ")
+	for _, want := range []string{"--print", "--no-session", "--tools", "read,bash,grep,find,ls", "--append-system-prompt", "kander-findings"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("review args missing %q: %v", want, d.Args.Review)
+		}
 	}
 }

@@ -68,6 +68,8 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 						}
 						want = append(want, "--trust", "--force", "--resume", ref)
 					case "pi":
+						// pi became a built-in after the four original agents; this case
+						// pins its initial baseline rather than pre-change output.
 						flag := "--session-id"
 						if resume {
 							flag = "--session"

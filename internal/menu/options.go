@@ -124,7 +124,7 @@ func (s *Session) prepare(configValid bool) error {
 		s.exec = append(s.exec, Choice{Value: name, Label: label})
 	}
 	if firstExecution == "" && !s.existing.WelcomeComplete {
-		return errors.New(config.Text("menu.no_usable_agent_found_version_must_succeed_install_codex"))
+		return errors.New(config.Text("menu.no_usable_agent_found_install_a_built_in_agent"))
 	}
 	for _, name := range config.ReviewAgentNames(s.existing) {
 		if reviewerUsable(s.agents[name]) {
