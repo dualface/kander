@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
+
 	"github.com/dualface/kander/internal/issue"
 )
 
@@ -43,10 +45,11 @@ type issuesState struct {
 	listScroll int
 
 	// index maps a canonical source key to the local card already bound to it.
-	// It is read through pendingWork together with the list; a failed read only
-	// means the imported markers are missing, never that imports are refused.
-	index    issue.Index
-	indexErr string
+	// It is read through pendingWork together with the list; a failed read is
+	// dropped on purpose, because missing markers only hide an "already
+	// imported" hint and never make an import unsafe: the board transaction
+	// stays the authority on duplicates.
+	index issue.Index
 	// importing is true while an import request is in flight. It is a UI hint
 	// only: the board transaction remains the authority on duplicates.
 	importing bool
@@ -56,8 +59,13 @@ type issuesState struct {
 	detailLoading bool
 	detailErr     string
 	detailScroll  int
-	detailStamp   uint64
-	showDetail    bool
+	// detailView carries the Glamour-rendered detail body. The Bubbles
+	// viewport owns the visible window and clamps every scroll position to the
+	// content height, so the overlay shares the board detail's scrolling model
+	// instead of recomputing it by hand.
+	detailView  viewport.Model
+	detailStamp uint64
+	showDetail  bool
 	// detailReload carries a detail number that has to be fetched again after
 	// the list request finishes; pendingWork holds only one task at a time.
 	detailReload int
@@ -76,7 +84,6 @@ type issuesListResult struct {
 	repository *issue.Repository
 	page       issue.IssuePage
 	index      issue.Index
-	indexErr   error
 	err        error
 }
 
@@ -96,7 +103,6 @@ type issuesImportResult struct {
 	number     int
 	result     issue.ImportResult
 	index      issue.Index
-	indexErr   error
 	err        error
 }
 
@@ -108,7 +114,6 @@ func (a *App) applyIssuesImport(result issuesImportResult) {
 	st.importing = false
 	if result.index != nil {
 		st.index = result.index
-		st.indexErr = ""
 		a.LastRefresh = time.Time{}
 	}
 	if result.err != nil {
@@ -189,7 +194,7 @@ func (a *App) issuesReloadList() {
 		page, err := instance.ListIssues(ctx, *repository, query)
 		result := issuesListResult{seq: seq, repository: repository, page: page, err: err}
 		if err == nil && loader != nil {
-			result.index, result.indexErr = loader()
+			result.index, _ = loader()
 		}
 		return result
 	}
@@ -248,7 +253,6 @@ func (a *App) applyIssuesList(result issuesListResult) {
 	st.listErr = ""
 	if result.index != nil {
 		st.index = result.index
-		st.indexErr = ""
 	}
 	if st.selected > len(st.items)-1 {
 		st.selected = max(0, len(st.items)-1)
@@ -358,7 +362,7 @@ func (a *App) issuesImport(withComments bool) {
 		result, err := importer(ctx, resolved, number, issue.ImportOptions{Comments: withComments})
 		out := issuesImportResult{seq: seq, repository: resolved, number: number, result: result, err: err}
 		if err == nil && loader != nil {
-			out.index, out.indexErr = loader()
+			out.index, _ = loader()
 		}
 		return out
 	}

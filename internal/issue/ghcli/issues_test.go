@@ -62,7 +62,7 @@ func TestListIssuesFollowsPagesUntilLimit(t *testing.T) {
 		{"per_page", "3"}, {"page", "1"}, {"state", "all"},
 	}), " ")
 	second := strings.Join(apiArgs(repository.Host, "repos/dualface/kander/issues", [][2]string{
-		{"per_page", "1"}, {"page", "2"}, {"state", "all"},
+		{"per_page", "3"}, {"page", "2"}, {"state", "all"},
 	}), " ")
 	provider, ghRunner, _ := newTestProvider(t, map[string]fakeResponse{
 		first:  {stdout: "[" + issueJSON(1, "one", false) + "," + issueJSON(2, "pr", true) + "," + issueJSON(3, "three", false) + "]"},
@@ -81,10 +81,43 @@ func TestListIssuesFollowsPagesUntilLimit(t *testing.T) {
 	}
 }
 
+// Every page of one list call must request the same per_page: GitHub derives the
+// offset as (page-1)*per_page, so a size that shrinks while items are collected
+// re-reads items that were already seen and skips items that were never seen.
+func TestListIssuesKeepsPageSizeStableAcrossPages(t *testing.T) {
+	repository := testRepository()
+	query := issue.IssueQuery{State: issue.IssueStateOpen, Limit: 3}
+	first := strings.Join(apiArgs(repository.Host, "repos/dualface/kander/issues", [][2]string{
+		{"per_page", "4"}, {"page", "1"}, {"state", "open"},
+	}), " ")
+	second := strings.Join(apiArgs(repository.Host, "repos/dualface/kander/issues", [][2]string{
+		{"per_page", "4"}, {"page", "2"}, {"state", "open"},
+	}), " ")
+	provider, ghRunner, _ := newTestProvider(t, map[string]fakeResponse{
+		first:  {stdout: "[" + issueJSON(9, "pr", true) + "," + issueJSON(1, "one", false) + "," + issueJSON(9, "pr", true) + "," + issueJSON(2, "two", false) + "]"},
+		second: {stdout: "[" + issueJSON(5, "five", false) + "," + issueJSON(6, "six", false) + "]"},
+	}, nil, nil)
+
+	page, err := provider.ListIssues(context.Background(), repository, query)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(ghRunner.calls) != 2 {
+		t.Fatalf("calls=%v", ghRunner.calls)
+	}
+	numbers := make([]int, 0, len(page.Issues))
+	for _, item := range page.Issues {
+		numbers = append(numbers, item.Number)
+	}
+	if fmt.Sprint(numbers) != "[1 2 5]" || !page.More {
+		t.Fatalf("numbers=%v more=%v", numbers, page.More)
+	}
+}
+
 func TestListIssuesSearchUsesSearchEndpoint(t *testing.T) {
 	repository := testRepository()
 	query := issue.IssueQuery{State: issue.IssueStateClosed, Labels: []string{"help wanted"}, Search: "crash", Limit: 10}
-	perPage := (issue.IssueQuery{Limit: 10}).PageSize(0)
+	perPage := (issue.IssueQuery{Limit: 10}).PageSize()
 	key := strings.Join(apiArgs(repository.Host, "search/issues", [][2]string{
 		{"per_page", fmt.Sprint(perPage)}, {"page", "1"}, {"q", `repo:dualface/kander is:issue state:closed label:"help wanted" crash`},
 	}), " ")
@@ -163,7 +196,7 @@ func TestGetIssueWithComments(t *testing.T) {
 		{"per_page", "51"}, {"page", "1"},
 	}), " ")
 	hostile := `body \u001b[31mred\u001b[0m \u202eevil\u202c\ttab`
-	comments := fmt.Sprintf(`[{"body":%q,"html_url":"https://github.com/dualface/kander/issues/5#issuecomment-1","user":{"login":"carol"},"created_at":%s}]`, hostile, listTimestamp)
+	comments := fmt.Sprintf(`[{"id":11,"body":%q,"html_url":"https://evil.example/dualface/kander/issues/5#issuecomment-11","user":{"login":"carol"},"created_at":%s}]`, hostile, listTimestamp)
 	provider, _, _ := newTestProvider(t, map[string]fakeResponse{
 		issueKey:    {stdout: issueJSON(5, "hostile", false)},
 		commentsKey: {stdout: comments},
@@ -181,6 +214,38 @@ func TestGetIssueWithComments(t *testing.T) {
 	}
 	if snapshot.FetchedAt.IsZero() {
 		t.Fatal("snapshot has no fetch time")
+	}
+	if snapshot.Comments[0].URL != "https://github.com/dualface/kander/issues/5#issuecomment-11" {
+		t.Fatalf("comment url %q", snapshot.Comments[0].URL)
+	}
+}
+
+// Provider URLs are never surfaced: a printed link is rebuilt from the validated
+// identity, so a hostile gh cannot point a link at another repository.
+func TestListIssuesRebuildsCanonicalURLs(t *testing.T) {
+	repository := testRepository()
+	query := issue.IssueQuery{State: issue.IssueStateOpen, Limit: 1}
+	key := strings.Join(apiArgs(repository.Host, "repos/dualface/kander/issues", [][2]string{
+		{"per_page", "2"}, {"page", "1"}, {"state", "open"},
+	}), " ")
+	hostile := `{"number":7,"title":"hostile","state":"open","html_url":"https://evil.example/dualface/kander/issues/7","created_at":` + listTimestamp + `,"updated_at":` + listTimestamp + `}`
+	provider, _, _ := newTestProvider(t, map[string]fakeResponse{key: {stdout: "[" + hostile + "]"}}, nil, nil)
+
+	page, err := provider.ListIssues(context.Background(), repository, query)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(page.Issues) != 1 || page.Issues[0].URL != "https://github.com/dualface/kander/issues/7" {
+		t.Fatalf("urls=%+v", page.Issues)
+	}
+	snapshotKey := strings.Join(apiArgs(repository.Host, "repos/dualface/kander/issues/7", nil), " ")
+	provider, _, _ = newTestProvider(t, map[string]fakeResponse{snapshotKey: {stdout: hostile}}, nil, nil)
+	snapshot, err := provider.GetIssue(context.Background(), repository, 7, false)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if snapshot.URL != "https://github.com/dualface/kander/issues/7" {
+		t.Fatalf("url %q", snapshot.URL)
 	}
 }
 

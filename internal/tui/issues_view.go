@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/dualface/kander/internal/issue"
@@ -286,14 +287,15 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 		}
 	}
 	lines = append(lines, styleFor("popup-dim", p).Render(padLine(clipText(meta, width), width)))
-	scroll := st.detailScroll
-	bodyHeight := height - 3
-	if bodyHeight < 1 {
-		bodyHeight = 1
+	view := a.issuesDetailView()
+	bodyHeight := view.Height
+	scroll := view.YOffset
+	maxScroll := view.TotalLineCount() - bodyHeight
+	if maxScroll < 0 {
+		maxScroll = 0
 	}
-	body := a.issuesDetailBodyLines(width)
 	progress := ""
-	if maxScroll := len(body) - bodyHeight; maxScroll > 0 {
+	if maxScroll > 0 {
 		progress = " " + itoa(scroll+1) + "/" + itoa(maxScroll+1)
 	}
 	rule := strings.Repeat("─", width)
@@ -301,14 +303,11 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 		rule = strings.Repeat("─", max(0, width-displayWidth(progress))) + progress
 	}
 	lines = append(lines, styleFor("popup-edge", p).Render(rule))
-	if scroll > len(body)-bodyHeight {
-		scroll = max(0, len(body)-bodyHeight)
-	}
-	if scroll < 0 {
-		scroll = 0
-	}
-	for index := scroll; index < len(body) && len(lines) < height; index++ {
-		lines = append(lines, padLineFill(body[index], width, p))
+	for _, line := range strings.Split(view.View(), "\n") {
+		if len(lines) >= height {
+			break
+		}
+		lines = append(lines, padLineFill(withDefaultColors(strings.TrimRight(line, " "), p.ink(p.Base)), width, p))
 	}
 	for len(lines) < height {
 		lines = append(lines, p.fillLine(width))
@@ -317,6 +316,27 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 		lines = lines[:height]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// issuesDetailView prepares the detail viewport for the current layout and
+// content, then reads the scroll position back: the viewport clamps it against
+// the rendered body height, which is the only place that number is known.
+func (a *App) issuesDetailView() *viewport.Model {
+	st := a.Issues
+	if st == nil {
+		return &viewport.Model{}
+	}
+	layout := a.issuesLayout()
+	width := layout.inner
+	if layout.wide {
+		width = layout.detailWidth
+	}
+	view := &st.detailView
+	view.Width, view.Height = width, a.issuesDetailBodyHeight()
+	view.SetContent(strings.Join(a.issuesDetailBodyLines(width), "\n"))
+	view.SetYOffset(st.detailScroll)
+	st.detailScroll = view.YOffset
+	return view
 }
 
 func (a *App) issuesDetailBodyLines(width int) []string {
@@ -363,23 +383,6 @@ func (a *App) issuesDetailBodyHeight() int {
 	return height
 }
 
-func (a *App) issuesDetailMaxScroll() int {
-	st := a.Issues
-	if st == nil || st.detail == nil {
-		return 0
-	}
-	layout := a.issuesLayout()
-	width := layout.inner
-	if layout.wide {
-		width = layout.detailWidth
-	}
-	maxScroll := len(a.issuesDetailBodyLines(width)) - a.issuesDetailBodyHeight()
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	return maxScroll
-}
-
 func (a *App) issuesScrollDetail(delta int) {
 	st := a.Issues
 	if st == nil {
@@ -394,13 +397,7 @@ func (a *App) issuesClampDetailScroll() {
 	if st == nil {
 		return
 	}
-	maxScroll := a.issuesDetailMaxScroll()
-	if st.detailScroll > maxScroll {
-		st.detailScroll = maxScroll
-	}
-	if st.detailScroll < 0 {
-		st.detailScroll = 0
-	}
+	a.issuesDetailView()
 }
 
 func formatIssueTime(value time.Time) string {

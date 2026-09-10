@@ -583,3 +583,63 @@ func TestIssuesRendersInLightAndDarkThemes(t *testing.T) {
 		})
 	}
 }
+
+// The detail body scrolls through the Bubbles viewport, which clamps every
+// offset against the rendered content height.
+func TestIssuesDetailScrollsThroughViewport(t *testing.T) {
+	fake := newFakeIssues()
+	fake.listResult = defaultPage(issuesListLimit)
+	fake.getResult = func(int, int, bool) (issue.IssueSnapshot, error) {
+		snapshot := defaultSnapshot(t)
+		var body strings.Builder
+		body.WriteString("Steps to reproduce:\n\n")
+		for line := 1; line <= 80; line++ {
+			body.WriteString(itoa(line) + ". step " + itoa(line) + "\n\n")
+		}
+		body.WriteString("TAIL-MARKER")
+		snapshot.Body = body.String()
+		return snapshot, nil
+	}
+	app := issuesTestApp(t, fake, 120, 24)
+	app.HandleKey("g")
+	runPendingWork(t, app)
+	app.HandleKey("enter")
+	runPendingWork(t, app)
+	st := app.Issues
+	if st == nil || st.detail == nil {
+		t.Fatal("detail was not loaded")
+	}
+	view := app.issuesDetailView()
+	visible, total := view.Height, view.TotalLineCount()
+	if total <= visible {
+		t.Fatalf("body needs scrolling: %d lines, %d visible", total, visible)
+	}
+
+	app.HandleKey("pgdn")
+	app.View()
+	if st.detailScroll != visible {
+		t.Fatalf("one page moved to %d, want %d", st.detailScroll, visible)
+	}
+	if view = app.issuesDetailView(); view.YOffset != st.detailScroll {
+		t.Fatalf("viewport offset %d, state %d", view.YOffset, st.detailScroll)
+	}
+
+	app.HandleKey("end")
+	plain := ansi.Strip(app.View())
+	if st.detailScroll != total-visible {
+		t.Fatalf("end moved to %d, want %d", st.detailScroll, total-visible)
+	}
+	if !strings.Contains(plain, "TAIL-MARKER") {
+		t.Fatalf("tail not visible after end:\n%s", plain)
+	}
+
+	app.HandleKey("home")
+	app.HandleKey("up")
+	app.View()
+	if st.detailScroll != 0 {
+		t.Fatalf("home and up left scroll at %d", st.detailScroll)
+	}
+	if strings.Contains(ansi.Strip(app.View()), "TAIL-MARKER") {
+		t.Fatal("tail still visible after returning to the top")
+	}
+}

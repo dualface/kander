@@ -61,16 +61,20 @@ func TestIssueQueryNormalizeRejects(t *testing.T) {
 	}
 }
 
+// One list call keeps one page size for every page; a size that shrinks with
+// the collected count would move GitHub's (page-1)*per_page offset and return
+// duplicated and unreachable items.
 func TestIssueQueryPageSize(t *testing.T) {
 	query := IssueQuery{Limit: MaxIssueLimit}
-	if got := query.PageSize(0); got != MaxIssuePageSize {
+	if got := query.PageSize(); got != MaxIssuePageSize {
 		t.Fatalf("page size=%d", got)
 	}
 	small := IssueQuery{Limit: 30}
-	if got := small.PageSize(0); got != 31 {
+	if got := small.PageSize(); got != 31 {
 		t.Fatalf("page size=%d", got)
 	}
-	if got := small.PageSize(30); got != 1 {
+	empty := IssueQuery{}
+	if got := empty.PageSize(); got != 1 {
 		t.Fatalf("page size=%d", got)
 	}
 }

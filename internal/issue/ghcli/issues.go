@@ -100,8 +100,9 @@ func (p *Provider) ListIssues(ctx context.Context, repository issue.Repository, 
 	if searching {
 		endpoint = "search/issues"
 	}
+	// perPage is fixed for the whole pagination; see IssueQuery.PageSize.
+	perPage := normalized.PageSize()
 	for pageNumber := 1; ; pageNumber++ {
-		perPage := normalized.PageSize(len(page.Issues))
 		params := [][2]string{
 			{"per_page", strconv.Itoa(perPage)},
 			{"page", strconv.Itoa(pageNumber)},
@@ -126,7 +127,7 @@ func (p *Provider) ListIssues(ctx context.Context, repository issue.Repository, 
 			if isPullRequest(item.PullRequest) {
 				continue
 			}
-			summary, err := summaryFromREST(item)
+			summary, err := summaryFromREST(repository, item)
 			if err != nil {
 				return issue.IssuePage{}, err
 			}
@@ -193,7 +194,7 @@ func (p *Provider) GetIssue(ctx context.Context, repository issue.Repository, nu
 	snapshot.CommentsLoaded = true
 	snapshot.Comments = []issue.IssueComment{}
 	for _, comment := range comments {
-		normalized, err := commentFromREST(comment)
+		normalized, err := commentFromREST(repository, number, comment)
 		if err != nil {
 			return issue.IssueSnapshot{}, err
 		}
@@ -203,6 +204,7 @@ func (p *Provider) GetIssue(ctx context.Context, repository issue.Repository, nu
 }
 
 type restComment struct {
+	ID        int64     `json:"id"`
 	Body      string    `json:"body"`
 	HTMLURL   string    `json:"html_url"`
 	User      *restUser `json:"user"`
@@ -245,7 +247,18 @@ func isPullRequest(raw json.RawMessage) bool {
 	return value != "" && value != "null"
 }
 
-func summaryFromREST(item restIssue) (issue.IssueSummary, error) {
+// canonicalIssueURL rebuilds a link from the validated identity instead of
+// trusting a provider field, so a printed URL can never point at another
+// repository. An empty result means the identity could not produce one.
+func canonicalIssueURL(repository issue.Repository, number int) string {
+	url, err := repository.IssueURL(number)
+	if err != nil {
+		return ""
+	}
+	return url
+}
+
+func summaryFromREST(repository issue.Repository, item restIssue) (issue.IssueSummary, error) {
 	labels := make([]string, 0, len(item.Labels))
 	for _, label := range item.Labels {
 		labels = append(labels, label.Name)
@@ -254,7 +267,7 @@ func summaryFromREST(item restIssue) (issue.IssueSummary, error) {
 		Number:    item.Number,
 		Title:     item.Title,
 		State:     item.State,
-		URL:       item.HTMLURL,
+		URL:       canonicalIssueURL(repository, item.Number),
 		Labels:    labels,
 		UpdatedAt: item.UpdatedAt,
 	})
@@ -288,7 +301,7 @@ func snapshotFromREST(repository issue.Repository, item restIssue) (issue.IssueS
 		Body:       body,
 		State:      item.State,
 		Author:     author,
-		URL:        item.HTMLURL,
+		URL:        canonicalIssueURL(repository, item.Number),
 		Labels:     labels,
 		Assignees:  assignees,
 		CreatedAt:  item.CreatedAt,
@@ -301,16 +314,22 @@ func snapshotFromREST(repository issue.Repository, item restIssue) (issue.IssueS
 	return snapshot, nil
 }
 
-func commentFromREST(comment restComment) (issue.IssueComment, error) {
+func commentFromREST(repository issue.Repository, issueNumber int, comment restComment) (issue.IssueComment, error) {
 	author := ""
 	if comment.User != nil {
 		author = comment.User.Login
+	}
+	// GitHub anchors one comment as #issuecomment-<id> on the issue URL; the
+	// provider's own html_url is ignored like every other provider URL.
+	url := canonicalIssueURL(repository, issueNumber)
+	if url != "" && comment.ID > 0 {
+		url += "#issuecomment-" + strconv.FormatInt(comment.ID, 10)
 	}
 	normalized, err := issue.NormalizeComment(issue.IssueComment{
 		Author:    author,
 		Body:      comment.Body,
 		CreatedAt: comment.CreatedAt,
-		URL:       comment.HTMLURL,
+		URL:       url,
 	})
 	if err != nil {
 		return issue.IssueComment{}, err

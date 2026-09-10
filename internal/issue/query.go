@@ -86,10 +86,12 @@ func validateSearch(value string) error {
 	return nil
 }
 
-// PageSize returns the request size for the next page so the provider never
-// asks for much more than the caller still needs.
-func (q IssueQuery) PageSize(collected int) int {
-	remaining := q.Limit - collected + 1
+// PageSize returns the request size used for every page of one list call. It
+// must not depend on how much was already collected: GitHub derives the offset
+// of a page as (page-1)*per_page, so changing the size between pages would
+// re-read items that were already seen and skip items that were never seen.
+func (q IssueQuery) PageSize() int {
+	remaining := q.Limit + 1
 	if remaining < 1 {
 		remaining = 1
 	}
