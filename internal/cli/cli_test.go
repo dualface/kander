@@ -60,6 +60,7 @@ func TestHelpListsAllCommandsAndLang(t *testing.T) {
 		"doctor", "config", "review", "init",
 		"version",
 		"install",
+		"issue",
 		"list / ls", "show", "new", "move", "pick", "start", "resume",
 		"notify", "dismiss", "check", "subscribe",
 		"--lang {cn,en,ja}",
@@ -89,7 +90,7 @@ func TestUnimplementedCommands(t *testing.T) {
 		"new": {}, "move": {}, "pick": {},
 		"guard-write": {}, "update": {}, "dispatch": {},
 		"doctor": {}, "config": {},
-		"version": {}, "install": {},
+		"version": {}, "install": {}, "issue": {},
 	}
 	names := append([]string{"ls"}, commandNames...)
 	for _, name := range names {

@@ -26,6 +26,7 @@ var commandNames = []string{
 	"install",
 	"review",
 	"init",
+	"issue",
 	"list",
 	"show",
 	"new",
