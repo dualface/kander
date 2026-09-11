@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/issue"
 )
 
 func init() {
@@ -17,6 +18,10 @@ func init() {
 	cli.Commands["resume"] = RunResume
 	cli.Commands["dispatch"] = RunDispatch
 	cli.Commands["coordinator"] = RunCoordinator
+	// The issue command front end never imports this package; the takeover
+	// starter is wired here so every binary that can start agents also supports
+	// `kander issue triage` and the TUI's `s` confirmation.
+	issue.SetTriageStarter(StartTriage)
 }
 
 func fail(err error) int {
