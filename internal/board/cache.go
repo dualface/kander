@@ -22,7 +22,8 @@ func CacheRoot(root string) string {
 // absolute path. Every part is one path component; the leaf and any missing
 // parent are created through the shared no-follow file layer with private
 // permissions (0700 on POSIX, a protected DACL owned by the current user on
-// Windows). An existing directory only gets its leaf tightened.
+// Windows). Every component that already exists is tightened the same way, not
+// only the leaf.
 func EnsureCacheDir(root string, parts ...string) (string, error) {
 	path := CacheRoot(root)
 	for _, part := range parts {
