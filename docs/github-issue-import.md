@@ -177,13 +177,14 @@ record was added.
 
 The update carries the revision the form read. If another write changed the
 card first, the save fails with a revision conflict and the form reloads the
-card: the revision and the card text are refreshed and the creator's unsaved
-draft is kept, so the draft and the current revision can be compared before
-publishing again. A `CARD_REVIEW:` or `PREREQUISITES:` record an independent
-producer wrote into `DISCUSSION` in between is folded into the kept draft, so
-republishing cannot drop it; a draft that adds a record line the card did not
-carry, or that would drop one the card still holds, is refused before any
-write. Nothing is overwritten without that second confirmation.
+card: the contract fields the creator filled in are kept, while `DISCUSSION` is
+taken from the current card, together with the `CARD_REVIEW:` records and the
+fenced `PREREQUISITES:` block other producers own. That section is republished
+exactly as the card holds it, so the form can neither add, move nor drop a
+record and a concurrent review record survives the next save. A draft that
+mints a record line the card did not carry, or that would drop one the card
+still holds, is refused before any write. Nothing is overwritten without that
+second confirmation.
 
 When the read-only gate check passes, a final confirmation shows the issue, the
 task ID, the agent, the launcher, and the `backlog → todo → working`

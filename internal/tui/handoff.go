@@ -202,10 +202,10 @@ type handoffLoadResult struct {
 	number     int
 	taskID     string
 	card       handoffCard
-	// keepDraft preserves the creator's unsaved contract when a reload follows
-	// a write conflict; the initial load replaces it.
-	keepDraft bool
-	err       error
+	// conflictReload marks a reload that follows a write conflict: the creator's
+	// contract fields are kept while DISCUSSION is taken from the current card.
+	conflictReload bool
+	err            error
 }
 
 type handoffImportResult struct {
@@ -371,7 +371,7 @@ func (a *App) reloadHandoff(state *handoffState) {
 	repository, number, taskID := state.repository, state.number, state.taskID
 	a.pendingWork = func() any {
 		card, err := prepare(repository, number, taskID)
-		return handoffLoadResult{sequence: sequence, repository: repository, number: number, taskID: taskID, card: card, keepDraft: true, err: err}
+		return handoffLoadResult{sequence: sequence, repository: repository, number: number, taskID: taskID, card: card, conflictReload: true, err: err}
 	}
 }
 
@@ -457,18 +457,21 @@ func (a *App) applyHandoffLoad(result handoffLoadResult) {
 	state.revision = result.card.Revision
 	state.language = result.card.Language
 	state.source = result.card.Text
-	// A conflict reload keeps the creator's draft for reconciliation; every
+	// A conflict reload keeps the contract fields the creator filled in; every
 	// other load starts from what the card actually holds. The card's size is
 	// the size the board derived from that text, so it wins over the parsed
 	// draft value whenever the draft is not being kept.
-	kept := result.keepDraft && len(state.values) > 0
+	kept := result.conflictReload && len(state.values) > 0
 	if !kept {
 		state.values = values
 	} else {
-		// The card advanced while the form held the draft: a record an
-		// independent producer wrote in between has to survive the next
-		// publication, so it is folded into the draft here.
-		state.values[handoffDiscussion] = mergeHandoffRecords(state.values[handoffDiscussion], state.source)
+		// The card advanced while the form held the draft. DISCUSSION is taken
+		// from the current card instead of the draft: it carries records other
+		// producers own, including the fenced PREREQUISITES block whose
+		// position the board checks, so the form republishes that section
+		// exactly as the card holds it and can neither add, move nor drop a
+		// record.
+		state.values[handoffDiscussion] = values[handoffDiscussion]
 	}
 	state.size = result.card.Size
 	if kept || state.size == "" {

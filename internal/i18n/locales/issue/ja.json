@@ -138,7 +138,7 @@
   "tui.handoff_conclusion_structure": "結論に見出し・メタデータ・記録行は含められません。",
   "tui.handoff_save_failed": "契約を保存できませんでした: {{.V0}}",
   "tui.handoff_load_failed": "カードを読み込めませんでした: {{.V0}}",
-  "tui.handoff_conflict": "他の書き込みがカードを変更しました。草稿は保持され revision を更新しました。再度保存すると現在のカード内容を草稿で置き換えます。",
+  "tui.handoff_conflict": "他の書き込みがカードを変更しました。revision と DISCUSSION セクション（記録を含む）を再読み込みし、編集した契約フィールドは保持しています。再度保存すると現在のカード内容を上書きします。",
   "tui.handoff_preview_failed": "起動設定を解決できませんでした: {{.V0}}",
   "tui.handoff_preview_loading": "解決中…",
   "tui.handoff_issue_label": "Issue",

@@ -153,86 +153,47 @@ func handoffRecordLines(body string) []string {
 	return lines
 }
 
-// handoffPreservedRecord reports whether a record line belongs to a producer
-// the form only preserves. SELF_REVIEW is not one of them: the form rewrites
-// that line from the creator's typed conclusion on every save.
-func handoffPreservedRecord(value string) (string, bool) {
-	for _, marker := range []string{board.MarkerCardReview, board.MarkerPrerequisites} {
-		if board.HasMarkerPrefix(value, marker) {
-			return marker, true
+// handoffOwnedRecordLines lists the record lines the form only preserves:
+// CARD_REVIEW and PREREQUISITES come from their own producers, so the form
+// neither writes, rewrites nor moves them. SELF_REVIEW is excluded because the
+// form rewrites that line from the creator's typed conclusion on every save.
+func handoffOwnedRecordLines(body string) []string {
+	lines := []string{}
+	for _, line := range strings.Split(body, "\n") {
+		value := handoffRecordValue(line)
+		for _, marker := range []string{board.MarkerCardReview, board.MarkerPrerequisites} {
+			if board.HasMarkerPrefix(value, marker) {
+				lines = append(lines, value)
+				break
+			}
 		}
 	}
-	return "", false
+	return lines
 }
 
 // validateHandoffRecords ties the draft DISCUSSION to the card the form read:
-// the draft may not mint a record line the card did not carry, and it may not
-// silently drop a CARD_REVIEW or PREREQUISITES line the card still holds. The
-// form writes the SELF_REVIEW line itself from the creator's typed conclusion;
-// CARD_REVIEW and PREREQUISITES belong to their own producers, so the form must
-// neither mint the independent review record the todo gate looks for nor delete
-// review evidence a concurrent writer just added.
+// a draft may not mint a CARD_REVIEW or PREREQUISITES line the card did not
+// carry, and it may not drop one the card still holds, because the board reads
+// those records as completed human work and as task dependencies. SELF_REVIEW
+// is the form's own record and is not compared here.
 func validateHandoffRecords(discussion, source string) error {
-	sourceLines := handoffRecordLines(source)
-	existing := map[string]bool{}
-	for _, line := range sourceLines {
-		existing[line] = true
+	card := map[string]bool{}
+	for _, line := range handoffOwnedRecordLines(source) {
+		card[line] = true
 	}
 	draft := map[string]bool{}
-	for _, line := range handoffRecordLines(discussion) {
+	for _, line := range handoffOwnedRecordLines(discussion) {
 		draft[line] = true
-		if !existing[line] {
+		if !card[line] {
 			return handoffError(handoffDiscussion, t("tui.handoff_record_injected", line))
 		}
 	}
-	for _, line := range sourceLines {
-		if _, ok := handoffPreservedRecord(line); ok && !draft[line] {
+	for _, line := range handoffOwnedRecordLines(source) {
+		if !draft[line] {
 			return handoffError(handoffDiscussion, t("tui.handoff_record_dropped", line))
 		}
 	}
 	return nil
-}
-
-// mergeHandoffRecords folds the card's current managed records into a kept
-// draft. A conflict reload refreshes the card text but keeps the draft, so a
-// record an independent producer added in between has to survive the next
-// publication: draft lines of a marker the card now carries are replaced by the
-// card's current lines, while a marker the card does not carry is left alone so
-// the injection check can still refuse it.
-func mergeHandoffRecords(discussion, source string) string {
-	current := []string{}
-	markers := map[string]bool{}
-	for _, line := range handoffRecordLines(source) {
-		if marker, ok := handoffPreservedRecord(line); ok {
-			current = append(current, line)
-			markers[marker] = true
-		}
-	}
-	if len(current) == 0 {
-		return discussion
-	}
-	lines := []string{}
-	seen := map[string]bool{}
-	for _, line := range strings.Split(discussion, "\n") {
-		value := handoffRecordValue(line)
-		if marker, ok := handoffPreservedRecord(value); ok && markers[marker] {
-			continue
-		}
-		lines = append(lines, line)
-		seen[value] = true
-	}
-	for _, line := range current {
-		if !seen[line] {
-			lines = append(lines, "- "+line)
-		}
-	}
-	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
-		lines = lines[1:]
-	}
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return strings.Join(lines, "\n")
 }
 
 // validateHandoffSelfReview keeps the conclusion a single line of prose: the

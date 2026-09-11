@@ -138,7 +138,7 @@
   "tui.handoff_conclusion_structure": "The conclusion carries no heading, metadata or record line.",
   "tui.handoff_save_failed": "The contract was not saved: {{.V0}}",
   "tui.handoff_load_failed": "The card could not be read: {{.V0}}",
-  "tui.handoff_conflict": "Another write changed the card; your draft is kept and the revision was refreshed, so publishing again replaces the current card content.",
+  "tui.handoff_conflict": "Another write changed the card; its revision and DISCUSSION section, with the records it carries, were reloaded while your contract edits are kept. Publishing again writes your contract over the current card.",
   "tui.handoff_preview_failed": "The start settings could not be resolved: {{.V0}}",
   "tui.handoff_preview_loading": "resolving…",
   "tui.handoff_issue_label": "Issue",

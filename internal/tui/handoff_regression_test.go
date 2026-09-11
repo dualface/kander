@@ -201,13 +201,17 @@ func TestHandoffCancelKeepsTheInFlightImport(test *testing.T) {
 	}
 }
 
-// A CARD_REVIEW record an independent producer writes while the form is open
-// survives the conflict reload and the next publication.
+// The card can advance while the form holds it: the conflict reload keeps the
+// contract draft but takes DISCUSSION from the current card, so a record an
+// independent producer added in between survives the next publication.
 func TestHandoffConflictKeepsTheConcurrentReviewRecord(test *testing.T) {
 	card := handoffTestCard("large")
 	app, calls, _ := handoffApp(test, card, []Task{{TaskID: "task-1", Title: "Task", State: "backlog"}}, "backlog")
 	openHandoffForm(test, app)
 	state := app.Handoff
+	draft := "Draft marker: read source/github-issue.md and fix the parser."
+	state.values[handoffGoal] = draft
+	state.values[handoffDiscussion] += "\nDraft prose the card does not carry."
 	updated := handoffCardWithRecord("large")
 	updated.Revision = card.Revision + 1
 	app.PrepareHandoff = func(issue.Repository, int, string) (handoffCard, error) { return updated, nil }
@@ -222,7 +226,13 @@ func TestHandoffConflictKeepsTheConcurrentReviewRecord(test *testing.T) {
 		test.Fatalf("reload did not return to the form: phase %d notice %q", state.phase, state.notice)
 	}
 	if !strings.Contains(state.values[handoffDiscussion], "- CARD_REVIEW: PASS") {
-		test.Fatalf("the concurrent record was not folded into the draft: %q", state.values[handoffDiscussion])
+		test.Fatalf("the concurrent record was not reloaded: %q", state.values[handoffDiscussion])
+	}
+	if strings.Contains(state.values[handoffDiscussion], "Draft prose") {
+		test.Fatalf("the producer-owned DISCUSSION was not refreshed: %q", state.values[handoffDiscussion])
+	}
+	if state.values[handoffGoal] != draft {
+		test.Fatalf("the contract draft was lost: %q", state.values[handoffGoal])
 	}
 	calls.saveErr = nil
 	app.handoffValidateAndReview()
@@ -239,16 +249,27 @@ func TestHandoffConflictKeepsTheConcurrentReviewRecord(test *testing.T) {
 	}
 }
 
-// A record the producer rewrote in between replaces the stale draft line
-// instead of being duplicated or reported as an injected record.
-func TestHandoffConflictReplacesAStaleRecordLine(test *testing.T) {
-	card := handoffCardWithRecord("large")
+// handoffPrerequisiteSpec is a task-group member card whose DISCUSSION opens
+// with the fenced PREREQUISITES block the board scans.
+func handoffPrerequisiteSpec() string {
+	spec := handoffTestSpec("small")
+	spec = strings.Replace(spec, "- TASK_GROUP:\n", "- TASK_GROUP: 20260909-demo-group\n", 1)
+	return strings.Replace(spec, "## DISCUSSION\n\n", "## DISCUSSION\n\n```text\nPREREQUISITES: 20260909-demo-dep-task\n```\n\n", 1)
+}
+
+// The fenced PREREQUISITES block has to keep its exact position and shape
+// through a conflict reload: a bulleted line at the end of DISCUSSION is
+// invisible to the board's dependency scan, which would drop the dependency
+// without any error.
+func TestHandoffConflictKeepsTheFencedPrerequisiteBlock(test *testing.T) {
+	text := handoffPrerequisiteSpec()
+	card := handoffCard{TaskID: "task-1", State: "backlog", Size: "small", Language: "zh-CN", Revision: 3, Text: text}
 	app, calls, _ := handoffApp(test, card, []Task{{TaskID: "task-1", Title: "Task", State: "backlog"}}, "backlog")
 	openHandoffForm(test, app)
 	state := app.Handoff
-	updated := handoffCardWithRecord("large")
-	updated.Text = strings.Replace(updated.Text, "- CARD_REVIEW: PASS", "- CARD_REVIEW: the independent agent checked the final contract", 1)
+	updated := card
 	updated.Revision = card.Revision + 1
+	updated.Text = strings.Replace(card.Text, "Snapshot:", "- CARD_REVIEW: concurrent agent checked\nSnapshot:", 1)
 	app.PrepareHandoff = func(issue.Repository, int, string) (handoffCard, error) { return updated, nil }
 	calls.saveErr = &board.Error{Code: "board.transaction_conflict", Message: "stale revision"}
 	state.attest = true
@@ -257,11 +278,12 @@ func TestHandoffConflictReplacesAStaleRecordLine(test *testing.T) {
 	app.HandleKey("ctrl-s")
 	runPendingWork(test, app)
 	runPendingWork(test, app)
-	if !strings.Contains(state.values[handoffDiscussion], "- CARD_REVIEW: the independent agent checked the final contract") {
-		test.Fatalf("the rewritten record is missing from the draft: %q", state.values[handoffDiscussion])
+	discussion := state.values[handoffDiscussion]
+	if !strings.HasPrefix(discussion, "```text\nPREREQUISITES: 20260909-demo-dep-task\n```") {
+		test.Fatalf("the fenced prerequisite block changed shape: %q", discussion)
 	}
-	if strings.Contains(state.values[handoffDiscussion], "- CARD_REVIEW: PASS") {
-		test.Fatalf("the stale record line was kept: %q", state.values[handoffDiscussion])
+	if strings.Contains(discussion, "- PREREQUISITES:") {
+		test.Fatalf("the prerequisite line lost its position: %q", discussion)
 	}
 	calls.saveErr = nil
 	app.handoffValidateAndReview()
@@ -270,8 +292,23 @@ func TestHandoffConflictReplacesAStaleRecordLine(test *testing.T) {
 	if len(calls.save) != 2 {
 		test.Fatalf("republishing was refused: %q", state.notice)
 	}
-	if text := calls.save[1].text; strings.Count(text, "- CARD_REVIEW:") != 1 {
-		test.Fatalf("republishing duplicated or dropped the record:\n%s", text)
+	published := calls.save[1].text
+	if !strings.Contains(published, "## DISCUSSION\n\n```text\nPREREQUISITES: 20260909-demo-dep-task\n```") {
+		test.Fatalf("the published card lost the prerequisite block:\n%s", published)
+	}
+	// The board registers the dependency only while the marker keeps exactly
+	// that position, so the published card has to pass the real scan.
+	member := board.Entry{TaskID: "task-1", State: "backlog"}
+	depBoard := board.Board{Entries: map[string]board.Entry{
+		"task-1":                 member,
+		"20260909-demo-dep-task": {TaskID: "20260909-demo-dep-task", State: "backlog"},
+	}}
+	deps, err := board.TaskDependenciesOf(member, depBoard, map[string]string{"task-1": published, "20260909-demo-dep-task": handoffTestSpec("small")})
+	if err != nil {
+		test.Fatalf("the published card failed the board dependency scan: %v", err)
+	}
+	if len(deps.PrerequisiteIDs) != 1 || deps.PrerequisiteIDs[0] != "20260909-demo-dep-task" {
+		test.Fatalf("the board no longer sees the dependency: %+v", deps)
 	}
 }
 

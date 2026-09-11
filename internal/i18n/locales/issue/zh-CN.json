@@ -138,7 +138,7 @@
   "tui.handoff_conclusion_structure": "结论不能包含标题、元数据或记录行。",
   "tui.handoff_save_failed": "契约未保存：{{.V0}}",
   "tui.handoff_load_failed": "无法读取卡片：{{.V0}}",
-  "tui.handoff_conflict": "卡片已被其他写入修改；你的草稿已保留，revision 已刷新，再次保存会用草稿覆盖卡片当前内容。",
+  "tui.handoff_conflict": "卡片已被其他写入修改；已重新加载卡片 revision 与 DISCUSSION 段（含其中的记录），你编辑的契约字段保留。再次保存会用你的契约覆盖卡片当前内容。",
   "tui.handoff_preview_failed": "无法解析启动设置：{{.V0}}",
   "tui.handoff_preview_loading": "解析中…",
   "tui.handoff_issue_label": "Issue",
