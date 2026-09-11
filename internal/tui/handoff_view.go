@@ -301,7 +301,7 @@ func (a *App) handoffConfirmBody(layout handoffLayout, p palette) string {
 	} else {
 		add(t("tui.handoff_agent"), t("tui.handoff_preview_loading"), "popup-dim")
 	}
-	add(t("tui.handoff_transition"), "backlog → todo → working", "popup")
+	add(t("tui.handoff_transition"), a.Context.stateLabel("backlog")+" → "+a.Context.stateLabel("todo")+" → "+a.Context.stateLabel("working"), "popup")
 	lines = append(lines, "")
 	if state.gateErr != nil {
 		for _, line := range wrapText(t("tui.handoff_gate_blocked", state.gateErr.Error()), width) {
@@ -569,6 +569,12 @@ func (a *App) handleHandoffEditorKey(key string) {
 		}
 		a.handoffValidateAndReview()
 	case "enter":
+		if state.focus == handoffConclusion {
+			// The conclusion is published as one record line; accepting a newline
+			// here would let the editor write a second record into the card.
+			state.notice = t("tui.handoff_conclusion_single_line")
+			return
+		}
 		a.handoffInsert("\n")
 	case "backspace":
 		a.handoffBackspace()

@@ -168,19 +168,25 @@ self-review points from the Kanban rules, requires an explicit attestation of
 each point, and asks the creator to type the conclusion. One controlled update
 publishes the edited contract together with a `SELF_REVIEW: <conclusion>` line
 in `DISCUSSION`. The tool never fills that conclusion in, never claims to have
-verified the creator's judgement, and never writes a `CARD_REVIEW:` line; large
-cards and task-group members stay blocked at the `todo` gate until an
-independent agent has actually reviewed the card and its record was added.
+verified the creator's judgement, and never writes a `CARD_REVIEW:` line: the
+conclusion is a single line of prose, and the form refuses a draft that adds a
+record line the card did not already carry, so the handoff cannot mint the
+independent record. Large cards and task-group members stay blocked at the
+`todo` gate until an independent agent has actually reviewed the card and its
+record was added.
 
 The update carries the revision the form read. If another write changed the
 card first, the save fails with a revision conflict and the form reloads the
-card so the user can reconcile the draft; nothing is overwritten.
+card: the revision and the card text are refreshed and the creator's unsaved
+draft is kept, so the draft and the current revision can be compared before
+publishing again. Nothing is overwritten without that second confirmation.
 
 When the read-only gate check passes, a final confirmation shows the issue, the
 task ID, the agent, the launcher, and the `backlog → todo → working`
-transition. Only an explicit confirmation moves the card through the controlled
-`backlog → todo` step and then calls the same start path as the board's `s`
-key; the card is never moved to `working` first. The TUI starts only background
+transition, with the card size the controlled update just published. Only an
+explicit confirmation moves the card through the controlled `backlog → todo`
+step and then calls the same start path as the board's `s` key; the card is
+never moved to `working` first. The TUI starts only background
 launchers (`herdr`, `tmux`, `tmux-session`); `foreground` and `console` report
 that the CLI must be used instead. A failed start reports the card state that
 was actually observed and how to retry, and keeps the issue and the card.

@@ -114,6 +114,9 @@ func validateHandoffDraft(values map[handoffFieldID]string) error {
 		if handoffHeadingRe.MatchString(value) || handoffFieldLine.MatchString(value) {
 			return handoffError(field, t("tui.handoff_structure_field", label))
 		}
+		// DISCUSSION legitimately carries the records the card already has, so
+		// this check only rejects records the draft invented; see
+		// validateHandoffRecords, which compares the draft with the loaded card.
 		if spec.Section != board.SectionDiscussion && handoffRecordMarker(value) {
 			return handoffError(field, t("tui.handoff_structure_field", label))
 		}
@@ -127,17 +130,63 @@ func validateHandoffDraft(values map[handoffFieldID]string) error {
 	return nil
 }
 
-// handoffRecordMarker reports whether a body tries to carry a review or
-// dependency record outside DISCUSSION.
-func handoffRecordMarker(value string) bool {
-	for _, line := range strings.Split(value, "\n") {
-		if board.HasMarkerPrefix(line, board.MarkerSelfReview) ||
-			board.HasMarkerPrefix(line, board.MarkerCardReview) ||
-			board.HasMarkerPrefix(line, board.MarkerPrerequisites) {
-			return true
+// handoffRecordLines lists the record lines a body carries. Records belong to
+// their own producers, so the editor never mints one. The trimming matches the
+// board's import validator, which uses the same marker helper.
+func handoffRecordLines(body string) []string {
+	lines := []string{}
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+		for _, marker := range []string{board.MarkerSelfReview, board.MarkerCardReview, board.MarkerPrerequisites} {
+			if board.HasMarkerPrefix(value, marker) {
+				lines = append(lines, value)
+				break
+			}
 		}
 	}
-	return false
+	return lines
+}
+
+// validateHandoffRecords refuses a draft that adds a record line the card did
+// not already carry. The form writes the SELF_REVIEW line itself from the
+// creator's typed conclusion; CARD_REVIEW and PREREQUISITES belong to their own
+// producers, so the form must not be able to mint the independent review record
+// the todo gate looks for.
+func validateHandoffRecords(discussion, source string) error {
+	existing := map[string]bool{}
+	for _, line := range handoffRecordLines(source) {
+		existing[line] = true
+	}
+	for _, line := range handoffRecordLines(discussion) {
+		if !existing[line] {
+			return handoffError(handoffDiscussion, t("tui.handoff_record_injected", line))
+		}
+	}
+	return nil
+}
+
+// validateHandoffSelfReview keeps the conclusion a single line of prose: the
+// record is written as one line, and a multi-line or structured conclusion
+// could smuggle a second record into the card.
+func validateHandoffSelfReview(conclusion string) error {
+	text := strings.TrimSpace(conclusion)
+	if text == "" {
+		return handoffError(handoffConclusion, t("tui.handoff_conclusion_required"))
+	}
+	if strings.ContainsAny(text, "\r\n") {
+		return handoffError(handoffConclusion, t("tui.handoff_conclusion_single_line"))
+	}
+	if handoffHeadingRe.MatchString(text) || handoffFieldLine.MatchString(text) || handoffRecordMarker(text) {
+		return handoffError(handoffConclusion, t("tui.handoff_conclusion_structure"))
+	}
+	return nil
+}
+
+// handoffRecordMarker reports whether a body carries a review or dependency
+// record outside DISCUSSION.
+func handoffRecordMarker(value string) bool {
+	return len(handoffRecordLines(value)) > 0
 }
 
 // buildHandoffText writes the draft back over the committed card. Only the two

@@ -84,7 +84,7 @@ The Runner registry contains: `doctor` `config` `version` `install` `review` `in
 
 ## TUI Tests
 
-- The test cases for `internal/tui` stay in the package and cover stable rendering constraints and interactions: light/dark canvas backgrounds, screen filling, visible columns and focus, Markdown conversion, ANSI-stripped content, preference read/write, keys and mouse, the options panel, the GitHub Issues overlay (keys, stale-result dropping, wide/narrow layouts, sanitized remote text, mouse, import/jump), and PTY smoke tests for the board and the issues overlay.
+- The test cases for `internal/tui` stay in the package and cover stable rendering constraints and interactions: light/dark canvas backgrounds, screen filling, visible columns and focus, Markdown conversion, ANSI-stripped content, preference read/write, keys and mouse, the options panel, the GitHub Issues overlay (keys, stale-result dropping, wide/narrow layouts, sanitized remote text, mouse, import/jump), the issue handoff form (contract validation, the self-review record, size-driven gate, conflict reload, stale results, start success/failure), and PTY smoke tests for the board, the issues overlay, and the handoff form.
 - Do not build full-screen snapshots of frequently changing borders, logos, or status-bar text. Full visual results are still checked in a real terminal.
 
 ## Test Commands

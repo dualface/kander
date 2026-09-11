@@ -202,7 +202,10 @@ type handoffLoadResult struct {
 	number     int
 	taskID     string
 	card       handoffCard
-	err        error
+	// keepDraft preserves the creator's unsaved contract when a reload follows
+	// a write conflict; the initial load replaces it.
+	keepDraft bool
+	err       error
 }
 
 type handoffImportResult struct {
@@ -346,13 +349,13 @@ func (a *App) handoffImport(repository issue.Repository, number int, title strin
 func (a *App) closeHandoff() {
 	a.Handoff = nil
 	a.handoffSeq++
-	if a.Issues != nil {
-		a.Issues.importing = false
-	}
+	// An import started by this handoff may still be in flight, so the issues
+	// overlay keeps its importing flag until that request reports back: dropping
+	// it here would let the next `s` or `i` import the same issue twice at once.
 }
 
-// reloadHandoff re-reads the card after a write conflict so the creator can
-// reconcile the draft with what changed instead of retrying blindly.
+// reloadHandoff re-reads the card after a write conflict, keeping the draft so
+// the creator can compare it with the current revision before publishing again.
 func (a *App) reloadHandoff(state *handoffState) {
 	prepare := a.PrepareHandoff
 	if prepare == nil {
@@ -368,7 +371,7 @@ func (a *App) reloadHandoff(state *handoffState) {
 	repository, number, taskID := state.repository, state.number, state.taskID
 	a.pendingWork = func() any {
 		card, err := prepare(repository, number, taskID)
-		return handoffLoadResult{sequence: sequence, repository: repository, number: number, taskID: taskID, card: card, err: err}
+		return handoffLoadResult{sequence: sequence, repository: repository, number: number, taskID: taskID, card: card, keepDraft: true, err: err}
 	}
 }
 
@@ -452,10 +455,20 @@ func (a *App) applyHandoffLoad(result handoffLoadResult) {
 	}
 	state.taskID = result.card.TaskID
 	state.revision = result.card.Revision
-	state.size = values[handoffSize]
 	state.language = result.card.Language
 	state.source = result.card.Text
-	state.values = values
+	// A conflict reload keeps the creator's draft for reconciliation; every
+	// other load starts from what the card actually holds. The card's size is
+	// the size the board derived from that text, so it wins over the parsed
+	// draft value whenever the draft is not being kept.
+	kept := result.keepDraft && len(state.values) > 0
+	if !kept {
+		state.values = values
+	}
+	state.size = result.card.Size
+	if kept || state.size == "" {
+		state.size = state.values[handoffSize]
+	}
 	state.phase = handoffEdit
 	state.focus = handoffType
 	state.editing = false
@@ -501,11 +514,18 @@ func (a *App) handoffSubmitReview() {
 		state.focus = handoffAttest
 		return
 	}
-	if strings.TrimSpace(state.conclusion) == "" {
-		state.notice = t("tui.handoff_conclusion_required")
-		state.focus = handoffConclusion
+	if err := validateHandoffSelfReview(state.conclusion); err != nil {
+		state.notice = err.Error()
+		state.focus = handoffFieldForError(err)
 		state.editing = true
 		state.caret = runeCount(state.conclusion)
+		return
+	}
+	if err := validateHandoffRecords(state.values[handoffDiscussion], state.source); err != nil {
+		state.notice = err.Error()
+		state.focus = handoffFieldForError(err)
+		state.editing = false
+		state.scroll = 0
 		return
 	}
 	save := a.SaveHandoff
@@ -547,6 +567,16 @@ func (a *App) applyHandoffSave(result handoffSaveResult) {
 	state.source = result.text
 	if result.revision > 0 {
 		state.revision = result.revision
+	}
+	// The published text decides the size: the board derives the card's kind
+	// from it, so the confirmation, the review hint and the read-only gate have
+	// to follow the edited SIZE instead of the one the form loaded.
+	if size := board.MetadataFrom(result.text, board.FieldSize); size != "" {
+		state.size = size
+		if state.values == nil {
+			state.values = map[handoffFieldID]string{}
+		}
+		state.values[handoffSize] = size
 	}
 	state.gateErr = board.ValidateTodoContract(state.size, result.text)
 	state.phase = handoffConfirm
