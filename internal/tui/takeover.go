@@ -34,9 +34,14 @@ type takeoverState struct {
 	cardID   string
 	agent    string
 	launcher string
-	failed   bool
-	message  string
-	bodyView viewport.Model
+	// blockedReason explains why the contract-start exit cannot start from the
+	// TUI (failed preview or a launcher that needs the caller's terminal). The
+	// dialog and its jump exit stay usable; the reason is reported only when
+	// the start exit is actually used.
+	blockedReason string
+	failed        bool
+	message       string
+	bodyView      viewport.Model
 }
 
 // takeoverPreviewResult carries the resolved agent and launcher back to the
@@ -119,23 +124,39 @@ func (a *App) openTakeover(repository issue.Repository, number int, cardID strin
 	}
 }
 
-// applyTakeoverPreview fills the resolved settings in; launchers that need the
-// terminal of the caller are refused here, exactly like the board start dialog,
-// and point at the CLI instead.
+// applyTakeoverPreview fills the resolved settings in. A bound backlog card
+// keeps its dialog even when the preview fails or the launcher needs the
+// terminal of the caller: its default jump exit never depends on the preview,
+// and only the contract-start exit is disabled with the reason recorded. An
+// unbound issue has no jump exit, so it is refused here exactly like the board
+// start dialog and points at the CLI instead.
 func (a *App) applyTakeoverPreview(result takeoverPreviewResult) {
 	dialog := a.Takeover
 	if dialog == nil || dialog.sequence != result.sequence || dialog.phase != takeoverLoading {
 		return
 	}
+	bound := dialog.cardID != ""
 	if result.err != nil {
+		reason := t("tui.issues_takeover_preview_failed", issue.TriageError(result.err))
+		if bound {
+			dialog.blockedReason = reason
+			dialog.phase = takeoverReady
+			return
+		}
 		a.Takeover = nil
-		a.issuesSetNotice(t("tui.issues_takeover_preview_failed", issue.TriageError(result.err)))
+		a.issuesSetNotice(reason)
 		return
 	}
 	dialog.agent, dialog.launcher = result.preview.Agent, result.preview.Launcher
 	if !backgroundStartLauncher(result.preview.Launcher) {
+		reason := t("tui.start_use_cli", result.preview.Launcher)
+		if bound {
+			dialog.blockedReason = reason
+			dialog.phase = takeoverReady
+			return
+		}
 		a.Takeover = nil
-		a.issuesSetNotice(t("tui.start_use_cli", result.preview.Launcher))
+		a.issuesSetNotice(reason)
 		return
 	}
 	dialog.phase = takeoverReady
@@ -197,6 +218,14 @@ func (a *App) jumpToBoundCard(dialog *takeoverState) {
 // startTakeover runs the shared StartTriage path in the background; the TUI
 // never touches the board and never blocks on the network or the container.
 func (a *App) startTakeover(dialog *takeoverState) {
+	if dialog.blockedReason != "" {
+		// A bound card disabled its start exit instead of closing the dialog;
+		// report the reason only now, when the user actually asks to start.
+		dialog.phase = takeoverFinished
+		dialog.failed = true
+		dialog.message = dialog.blockedReason
+		return
+	}
 	runner := a.TriageIssue
 	if runner == nil {
 		dialog.phase = takeoverFinished
