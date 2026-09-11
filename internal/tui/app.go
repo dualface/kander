@@ -53,17 +53,15 @@ type App struct {
 	focusRunning      bool
 	PersistColumns    persistFn
 	Now               func() time.Time
-	// PrepareHandoff, SaveHandoff and StartHandoff drive the issue handoff form:
-	// read the backlog card, publish the confirmed contract, then move and start.
-	PrepareHandoff func(repository issue.Repository, number int, taskID string) (handoffCard, error)
-	SaveHandoff    func(request handoffSaveRequest) (uint64, error)
-	StartHandoff   handoffStartRunner
-	// While Handoff is non-nil it covers the issues overlay and owns the input.
-	Handoff    *handoffState
-	handoffSeq uint64
-	// handoffImportSeq identifies the last handoff import, so a late result
-	// cannot clear the importing flag of a newer request.
-	handoffImportSeq uint64
+	// PrepareTriage resolves the configured agent and launcher of an unstarted
+	// takeover session; TriageIssue prepares the evidence and starts it through
+	// the shared issue.StartTriage path, the same one `kander issue triage`
+	// uses. cmd.go binds both and tests inject fakes.
+	PrepareTriage func() (launch.TriagePreview, error)
+	TriageIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
+	// While Takeover is non-nil it covers the issues overlay and owns the input.
+	Takeover    *takeoverState
+	takeoverSeq uint64
 
 	Searching        bool
 	Detail           *Task
@@ -119,6 +117,7 @@ type App struct {
 	issuesListSeq   uint64
 	issuesDetailSeq uint64
 	issuesImportSeq uint64
+	issuesIndexSeq  uint64
 	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()
 	pendingWork  func() any
@@ -167,8 +166,8 @@ func (a *App) View() string {
 	if a.Issues != nil {
 		a.ShowCursor = a.Issues.editing != ""
 	}
-	if a.Handoff != nil {
-		a.ShowCursor = a.Handoff.editing
+	if a.Takeover != nil {
+		a.ShowCursor = false
 	}
 	h, w := a.size()
 	p := themePalette(a.Theme)
@@ -179,12 +178,12 @@ func (a *App) View() string {
 	case a.StartConfirmation != nil:
 		box, popup := a.renderStartConfirmation()
 		base = overlay(base, popup, box.X, box.Y, p)
-	case a.Handoff != nil:
+	case a.Takeover != nil:
 		if a.Issues != nil {
 			issuesBox, issuesPopup := a.renderIssues()
 			base = overlay(base, issuesPopup, issuesBox.X, issuesBox.Y, p)
 		}
-		box, popup := a.renderHandoff()
+		box, popup := a.renderTakeover()
 		base = overlay(base, popup, box.X, box.Y, p)
 		if a.Help {
 			helpBox, helpPopup := a.renderHelp()
@@ -892,8 +891,8 @@ func (a *App) HandleKey(key string) {
 		a.Help = false
 		return
 	}
-	if a.Handoff != nil {
-		a.handleHandoffKey(key)
+	if a.Takeover != nil {
+		a.handleTakeoverKey(key)
 		return
 	}
 	if a.Issues != nil {

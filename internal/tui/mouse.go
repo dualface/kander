@@ -340,8 +340,8 @@ func (a *App) HandleMouse(x, y, bstate int) {
 		a.Options.HandleMouse(x, y, bstate)
 		return
 	}
-	if a.Handoff != nil {
-		a.handleHandoffMouse(x, y, bstate)
+	if a.Takeover != nil {
+		a.handleTakeoverMouse(x, y, bstate)
 		return
 	}
 	if a.Issues != nil {

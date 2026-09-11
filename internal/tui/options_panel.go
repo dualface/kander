@@ -213,24 +213,16 @@ func (a *App) applyWork(payload any) tea.Cmd {
 		a.applyIssuesImport(result)
 		return nil
 	}
-	if result, ok := payload.(handoffImportResult); ok {
-		a.applyHandoffImport(result)
+	if result, ok := payload.(takeoverPreviewResult); ok {
+		a.applyTakeoverPreview(result)
 		return nil
 	}
-	if result, ok := payload.(handoffLoadResult); ok {
-		a.applyHandoffLoad(result)
+	if result, ok := payload.(takeoverResult); ok {
+		a.applyTakeoverResult(result)
 		return nil
 	}
-	if result, ok := payload.(handoffSaveResult); ok {
-		a.applyHandoffSave(result)
-		return nil
-	}
-	if result, ok := payload.(handoffPreviewResult); ok {
-		a.applyHandoffPreview(result)
-		return nil
-	}
-	if result, ok := payload.(handoffStartResult); ok {
-		a.applyHandoffStart(result)
+	if result, ok := payload.(issuesIndexResult); ok {
+		a.applyIssuesIndex(result)
 		return nil
 	}
 	panel := a.Options

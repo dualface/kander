@@ -19,6 +19,14 @@ const (
 	issuesMaxWidth     = 140
 	issuesItemLines    = 3
 	issuesListHeader   = 1
+	// issuesIndexInterval throttles the background index refresh of the open
+	// overlay; a takeover session imports its card in another process, so the
+	// list picks the new binding up without a manual refresh.
+	issuesIndexInterval = 5 * time.Second
+	// issuesTriageTimeout bounds one takeover request from the overlay. Starting
+	// a container waits for the agent TUI, so the budget is wider than a plain
+	// issue fetch.
+	issuesTriageTimeout = 120 * time.Second
 )
 
 // issuesState is the whole state of the issues overlay. The board model is
@@ -50,6 +58,11 @@ type issuesState struct {
 	// imported" hint and never make an import unsafe: the board transaction
 	// stays the authority on duplicates.
 	index issue.Index
+	// indexRefreshedAt is when the index on screen was read. While the overlay
+	// stays open the index is refreshed through the shared tick grid with a
+	// throttle, so a takeover session that imported a card in the background
+	// shows its binding without reopening the overlay.
+	indexRefreshedAt time.Time
 	// importing is true while an import request is in flight. It is a UI hint
 	// only: the board transaction remains the authority on duplicates.
 	importing bool
@@ -126,6 +139,14 @@ type issuesImportResult struct {
 	err        error
 }
 
+// issuesIndexResult carries one throttled index scan. The sequence drops a
+// result that a newer list reload or a newer scan already superseded.
+type issuesIndexResult struct {
+	seq   uint64
+	index issue.Index
+	err   error
+}
+
 func (a *App) applyIssuesImport(result issuesImportResult) {
 	st := a.Issues
 	if st == nil || result.seq != a.issuesImportSeq {
@@ -134,6 +155,7 @@ func (a *App) applyIssuesImport(result issuesImportResult) {
 	st.importing = false
 	if result.index != nil {
 		st.index = result.index
+		st.indexRefreshedAt = a.Now()
 		a.LastRefresh = time.Time{}
 	}
 	if result.err != nil {
@@ -275,18 +297,52 @@ func (a *App) issuesArmDetail(number int) {
 // import or a queued background task delays the start instead of stacking up.
 func (a *App) issuesTick() {
 	st := a.Issues
-	if st == nil || st.detailPending == 0 {
+	if st == nil {
 		return
 	}
-	if st.detailLoading || st.loading || st.importing || a.pendingWork != nil {
+	if st.detailPending != 0 && !st.detailLoading && !st.loading && !st.importing && a.pendingWork == nil &&
+		a.Now().Sub(st.detailPendingAt) >= uiTickInterval {
+		number := st.detailPending
+		st.detailPending = 0
+		a.issuesLoadDetail(number)
+	}
+	a.issuesQueueIndexRefresh()
+}
+
+// issuesQueueIndexRefresh keeps the issue-to-card bindings fresh while the
+// overlay is open. The scan runs on the shared tick grid, at most once per
+// throttle window, and only when no other background task occupies the single
+// slot; a failed scan keeps the index already on screen.
+func (a *App) issuesQueueIndexRefresh() {
+	st := a.Issues
+	loader := a.ImportIndex
+	if st == nil || loader == nil {
 		return
 	}
-	if a.Now().Sub(st.detailPendingAt) < uiTickInterval {
+	if st.loading || st.importing || st.detailLoading || st.detailPending != 0 || a.pendingWork != nil {
 		return
 	}
-	number := st.detailPending
-	st.detailPending = 0
-	a.issuesLoadDetail(number)
+	if !st.indexRefreshedAt.IsZero() && a.Now().Sub(st.indexRefreshedAt) < issuesIndexInterval {
+		return
+	}
+	a.issuesIndexSeq++
+	seq := a.issuesIndexSeq
+	st.indexRefreshedAt = a.Now()
+	a.pendingWork = func() any {
+		index, err := loader()
+		return issuesIndexResult{seq: seq, index: index, err: err}
+	}
+}
+
+func (a *App) applyIssuesIndex(result issuesIndexResult) {
+	st := a.Issues
+	if st == nil || result.seq != a.issuesIndexSeq {
+		return
+	}
+	if result.err != nil || result.index == nil {
+		return
+	}
+	st.index = result.index
 }
 
 // issuesLoadDetail starts the snapshot request of one issue. Comments are
@@ -368,6 +424,7 @@ func (a *App) applyIssuesList(result issuesListResult) {
 	st.listErr = ""
 	if result.index != nil {
 		st.index = result.index
+		st.indexRefreshedAt = a.Now()
 	}
 	if st.selected > len(st.items)-1 {
 		st.selected = max(0, len(st.items)-1)
@@ -714,7 +771,7 @@ func (a *App) handleIssuesKey(key string) {
 	case "I":
 		a.issuesImportOrJump(true)
 	case "s":
-		a.issuesHandoff()
+		a.issuesTakeover()
 	case "up", "k", "K":
 		if a.issuesDetailPageActive() {
 			a.issuesScrollDetail(-1)

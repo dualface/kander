@@ -240,7 +240,7 @@ func TestIssuesImportUpdateMarker(t *testing.T) {
 	app.HandleKey("g")
 	runPendingWork(t, app)
 	view := ansi.Strip(app.View())
-	if !strings.Contains(view, config.Text("tui.issues_imported", "task-1")) || !strings.Contains(view, config.Text("tui.issues_import_update")) {
+	if !strings.Contains(view, config.Text("tui.issues_imported", "task-1", config.Text("tui.backlog"))) || !strings.Contains(view, config.Text("tui.issues_import_update")) {
 		t.Fatalf("update marker missing:\n%s", view)
 	}
 	// Without a newer remote revision the marker stays quiet.

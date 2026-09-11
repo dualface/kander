@@ -580,14 +580,17 @@ func TestIssuesOverlayOnPTY(t *testing.T) {
 	}
 }
 
-// Pressing s on an issue imports it and opens the handoff form over the board;
-// cancelling the form keeps the imported backlog card and its source snapshot,
-// so the same entry can be reopened for another attempt.
-func TestIssueHandoffOnPTY(t *testing.T) {
+// Pressing s on an unbound issue opens the takeover confirmation dialog over
+// the overlay; cancelling it leaves the board untouched, without a card and
+// without a source attachment.
+func TestIssueTakeoverDialogOnPTY(t *testing.T) {
 	bin := buildKander(t)
 	root, env := boardEnv(t)
 	writeCompleteConfig(t, env)
 	writeFakeIssueCommands(t, env)
+	// The default launcher resolves through the environment; a tmux marker makes
+	// `auto` resolvable without starting anything.
+	env = append(env, "TMUX=/tmp/pty-tmux,1,0", "TMUX_PANE=%419")
 	session := startPTY(t, bin, env)
 	if !session.waitFor("Task Board", 8*time.Second) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
@@ -600,36 +603,29 @@ func TestIssueHandoffOnPTY(t *testing.T) {
 		t.Fatalf("issue list did not load\npty:\n%s", session.text())
 	}
 	session.send("s")
-	if !session.waitForPlain("LANGUAGE:", 20*time.Second) {
-		t.Fatalf("handoff form did not open\npty:\n%s", session.text())
+	if !session.waitForPlain("Take over issue #42", 20*time.Second) {
+		t.Fatalf("takeover dialog did not open\npty:\n%s", session.text())
 	}
-	if !session.waitForPlain("ACCEPTANCE_CRITERIA:", 10*time.Second) {
-		t.Fatalf("handoff form is missing contract sections\npty:\n%s", session.text())
+	if !session.waitForPlain("Agent:", 10*time.Second) {
+		t.Fatalf("takeover dialog is missing the resolved settings\npty:\n%s", session.text())
 	}
-	cards, err := os.ReadDir(filepath.Join(root, "backlog"))
-	if err != nil || len(cards) != 1 {
-		t.Fatalf("backlog cards %v: %v", cards, err)
-	}
-	source := filepath.Join(root, "backlog", cards[0].Name(), "source", "github-issue.md")
-	if _, err := os.Stat(source); err != nil {
-		t.Fatalf("source attachment missing: %v", err)
-	}
-	// Cancel the form, close the overlay and quit; a single Esc at a time keeps
+	// Cancel the dialog, close the overlay and quit; a single Esc at a time keeps
 	// the terminal from reading two rapid escapes as one Alt+Esc sequence.
 	session.send("\x1b")
 	time.Sleep(300 * time.Millisecond)
+	if !session.waitForPlain("GitHub Issues", 5*time.Second) {
+		t.Fatalf("cancelling the dialog must return to the overlay\npty:\n%s", session.text())
+	}
+	if cards, err := os.ReadDir(filepath.Join(root, "backlog")); err != nil || len(cards) != 0 {
+		t.Fatalf("cancelling the dialog touched the board: %v %v", cards, err)
+	}
 	session.send("\x1b")
 	time.Sleep(300 * time.Millisecond)
 	session.send("q")
 	if err := session.waitExit(8 * time.Second); err != nil {
 		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
 	}
-	cards, err = os.ReadDir(filepath.Join(root, "backlog"))
-	if err != nil || len(cards) != 1 {
-		t.Fatalf("cancel removed the backlog card: %v %v", cards, err)
-	}
-	source = filepath.Join(root, "backlog", cards[0].Name(), "source", "github-issue.md")
-	if _, err := os.Stat(source); err != nil {
-		t.Fatalf("cancel removed the source attachment: %v", err)
+	if cards, err := os.ReadDir(filepath.Join(root, "backlog")); err != nil || len(cards) != 0 {
+		t.Fatalf("the takeover dialog created a backlog card: %v %v", cards, err)
 	}
 }

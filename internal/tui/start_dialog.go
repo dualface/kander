@@ -70,10 +70,12 @@ func (a *App) renderStartConfirmation() (popupBox, string) {
 			hint = t("tui.start_starting", dialog.TaskID)
 		}
 	}
-	return a.renderStartDialog(paragraphs, hint, startDialogTitle(dialog))
+	return a.renderStartDialog(paragraphs, hint, startDialogTitle(dialog), &a.StartConfirmation.bodyView)
 }
 
-func (a *App) renderStartDialog(paragraphs []string, hint, title string) (popupBox, string) {
+// renderStartDialog draws one confirmation body; view scrolls the paragraphs
+// and belongs to the dialog that owns the body.
+func (a *App) renderStartDialog(paragraphs []string, hint, title string, view *viewport.Model) (popupBox, string) {
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	clean := func(s string) string { return printableText(ansi.Strip(s)) }
@@ -87,7 +89,7 @@ func (a *App) renderStartDialog(paragraphs []string, hint, title string) (popupB
 	frame.Title = ansi.Wrap(clean(title), inner, "")
 	hint = ansi.Wrap(clean(hint), inner, "")
 	available := max(1, h-blockHeight(frame.Title)-3)
-	body := fitStartDialog(paragraphs, hint, inner, available, p, &a.StartConfirmation.bodyView)
+	body := fitStartDialog(paragraphs, hint, inner, available, p, view)
 	box, _, out := frame.render(p, w, h, inner, body)
 	return box, out
 }

@@ -52,7 +52,7 @@ func boardHelpGroups() []helpGroup {
 				{"l", t("tui.filter_issues_by_label")},
 				{"i", t("tui.import_issue")},
 				{"I", t("tui.import_issue_with_comments")},
-				{"s", t("tui.handoff_issue")},
+				{"s", t("tui.issues_takeover_help")},
 				{"r", t("tui.refresh_issues")},
 				{"o", t("tui.open_issue_in_browser")},
 				{"Esc q", t("tui.back_or_close")},

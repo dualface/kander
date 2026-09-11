@@ -142,25 +142,14 @@ func Run(_ []string) int {
 		}
 		return issue.WriteCachedSnapshot(root, snapshot, issue.DefaultCacheBounds())
 	}
-	app.PrepareHandoff = func(_ issue.Repository, _ int, taskID string) (handoffCard, error) {
-		return prepareHandoffCard(root, taskID)
+	app.PrepareTriage = func() (launch.TriagePreview, error) {
+		return launch.PreviewTriage("", "")
 	}
-	app.SaveHandoff = func(request handoffSaveRequest) (uint64, error) {
-		if err := board.UpdateDocument(root, request.taskID, board.UpdateOptions{
-			Document: "spec.md", Text: request.text, ExpectedRevision: request.revision,
-		}); err != nil {
-			return 0, err
+	app.TriageIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
+		if emptyBoard {
+			return issue.TriageOutcome{}, errors.New(t("board.board_directory_not_found_run_inside_a_project_or"))
 		}
-		snapshot, err := board.ReadSnapshot(root, request.taskID)
-		if err != nil {
-			// The write succeeded; leaving the revision unknown makes the next
-			// save reconcile through the ordinary conflict path.
-			return 0, nil
-		}
-		return snapshot.Revision, nil
-	}
-	app.StartHandoff = func(request startRequest) (launch.StartResult, string, error) {
-		return runHandoffStart(root, request)
+		return issue.StartTriage(ctx, cli.IssueProvider(), root, repository, number, options)
 	}
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)

@@ -212,7 +212,7 @@ func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width 
 		issue.SanitizeRemoteText(labels),
 	}
 	if local, ok := a.issuesLocalCard(item.Number); ok {
-		marker := t("tui.issues_imported", local.TaskID)
+		marker := t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State))
 		if item.UpdatedAt.After(local.IssueUpdatedAt) {
 			marker += " · " + t("tui.issues_import_update")
 		}
@@ -281,7 +281,7 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 		meta += "  " + issue.SanitizeRemoteText(strings.Join(snapshot.Labels, ", "))
 	}
 	if local, ok := a.issuesLocalCard(snapshot.Number); ok {
-		meta += "  " + issue.SanitizeRemoteText(t("tui.issues_imported", local.TaskID))
+		meta += "  " + issue.SanitizeRemoteText(t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State)))
 		if snapshot.UpdatedAt.After(local.IssueUpdatedAt) {
 			meta += " · " + issue.SanitizeRemoteText(t("tui.issues_import_update"))
 		}
