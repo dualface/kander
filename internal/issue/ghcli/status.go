@@ -53,7 +53,7 @@ func (p *Provider) Status(ctx context.Context) Status {
 		return status
 	}
 	status.Available = true
-	status.Path = path
+	status.Path = issue.Sanitize(path)
 	for _, name := range environmentTokenNames {
 		if strings.TrimSpace(p.env(name)) != "" {
 			status.EnvTokens = append(status.EnvTokens, name)
@@ -76,15 +76,20 @@ func (p *Provider) Status(ctx context.Context) Status {
 	return status
 }
 
+// parseVersion extracts the version from `gh --version` output. Every field it
+// returns is sanitized: the same command output is attacker-influenced data.
 func parseVersion(stdout []byte) string {
 	line := strings.TrimSpace(strings.SplitN(string(stdout), "\n", 2)[0])
 	fields := strings.Fields(line)
 	if len(fields) >= 3 && fields[0] == "gh" && fields[2] != "" {
-		return fields[2]
+		return issue.Sanitize(fields[2])
 	}
 	return issue.Sanitize(line)
 }
 
+// parseAuthStatus extracts the per-host authentication state from `gh auth
+// status`. Host, account and source are attacker-influenced command output and
+// are sanitized before they can reach a terminal.
 func parseAuthStatus(output string) []HostStatus {
 	var hosts []HostStatus
 	seen := map[string]struct{}{}
@@ -96,10 +101,10 @@ func parseAuthStatus(output string) []HostStatus {
 			}
 			seen[key] = struct{}{}
 			hosts = append(hosts, HostStatus{
-				Host:          match[1],
+				Host:          issue.Sanitize(match[1]),
 				Authenticated: true,
-				Account:       match[2],
-				Source:        strings.TrimSpace(match[3]),
+				Account:       issue.Sanitize(match[2]),
+				Source:        issue.Sanitize(strings.TrimSpace(match[3])),
 			})
 			continue
 		}
@@ -109,7 +114,7 @@ func parseAuthStatus(output string) []HostStatus {
 				continue
 			}
 			seen[key] = struct{}{}
-			hosts = append(hosts, HostStatus{Host: match[1], Account: match[2]})
+			hosts = append(hosts, HostStatus{Host: issue.Sanitize(match[1]), Account: issue.Sanitize(match[2])})
 		}
 	}
 	return hosts

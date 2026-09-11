@@ -2,6 +2,9 @@ package ghcli
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -51,6 +54,62 @@ func TestStatusWithoutCLI(t *testing.T) {
 	}
 	if status.Error == "" {
 		t.Fatal("expected a diagnostic for a missing CLI")
+	}
+}
+
+func TestStatusSanitizesHostileProbeOutput(t *testing.T) {
+	ghclitest.Install(t)
+	ghclitest.SetRoutes(t, "gh", map[string]ghclitest.Options{
+		"--version":   {Stdout: "gh version \x1b]0;pwn\x07 1.0\n"},
+		"auth status": {Stdout: "Logged in to \x1b[2Jevil.example.com account \x1b[31mroot\x07 (key\x1b[2Jring)\n"},
+	})
+	status := NewProvider(Options{}).Status(context.Background())
+	if !status.Available {
+		t.Fatalf("status=%+v", status)
+	}
+	joined := status.Path + status.Version + status.Error
+	for _, host := range status.Hosts {
+		joined += host.Host + host.Account + host.Source
+	}
+	if strings.ContainsAny(joined, "\x1b\x07") {
+		t.Fatalf("probe output reached doctor unsanitized: %q", joined)
+	}
+	if !strings.Contains(joined, "evil.example.com") || !strings.Contains(joined, "root") {
+		t.Fatalf("sanitizing the probe dropped the real values: %q", joined)
+	}
+}
+
+func TestStatusSanitizesExecutablePath(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "bin\x1b[2J")
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "gh"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(directory, name), data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(ghclitest.ActivationEnv, "1")
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	ghclitest.SetRoutes(t, "gh", map[string]ghclitest.Options{
+		"--version": {Stdout: "gh version 2.46.0 (2025-12-13 Ubuntu 2.46.0-4)\n"},
+	})
+	status := NewProvider(Options{}).Status(context.Background())
+	if !status.Available {
+		t.Fatalf("status=%+v", status)
+	}
+	if strings.ContainsRune(status.Path, 0x1b) {
+		t.Fatalf("path=%q keeps a terminal escape", status.Path)
 	}
 }
 

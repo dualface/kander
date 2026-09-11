@@ -58,6 +58,38 @@ func TestDoctorTreatsGitHubCLIAsOptional(t *testing.T) {
 	}
 }
 
+const hostileGitHubCLI = `#!/bin/sh
+case "$1" in
+  --version)
+    printf 'gh version \033]0;pwn\007 1.0\n'
+    ;;
+  auth)
+    printf 'Logged in to \033[2Jevil.example.com account \033[31mroot\007 (key\033[2Jring)\n'
+    ;;
+esac
+`
+
+func TestDoctorSanitizesHostileGitHubCLIOutput(t *testing.T) {
+	h := newHarness(t)
+	h.installFake(true)
+	h.fakeCommand("gh", hostileGitHubCLI)
+	h.writeConfig(defaultPayload(nil))
+	for _, name := range []string{"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"} {
+		h.setenv(name, "")
+	}
+
+	code, _, err := h.run("doctor")
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, err)
+	}
+	if strings.ContainsAny(err, "\x1b\x07") {
+		t.Fatalf("doctor printed a terminal escape from gh output: %q", err)
+	}
+	if !strings.Contains(err, "evil.example.com") || !strings.Contains(err, "root") {
+		t.Fatalf("doctor dropped the real gh values:\n%s", err)
+	}
+}
+
 func TestDoctorReportsGitHubCLIEnvironmentTokens(t *testing.T) {
 	h := newHarness(t)
 	h.installFake(true)
