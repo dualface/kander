@@ -182,6 +182,26 @@ an issue cannot add a section, rewrite a metadata field, or place
 The imported card never carries an auto-generated review record and always
 starts in `backlog`; the normal `backlog → todo` gate applies unchanged.
 
+## Anchor card and sibling cards
+
+One issue maps to one anchor card: the card `kander issue import` publishes,
+which carries the `source/github-issue.json` and `source/github-issue.md`
+attachments and the source-key binding. When the agreed work splits across
+several cards, the anchor stays the only card holding the binding; every sibling
+card records a standalone line at the start of its `DISCUSSION`, next to
+`PREREQUISITES`:
+
+```
+SOURCE_ISSUE: github://HOST/OWNER/NAME/issues/NUMBER (anchor: <anchor-task-id>)
+```
+
+A sibling never repeats the import and never copies the source attachments, so
+the source-key uniqueness check inside one exclusive-board transaction keeps the
+one-binding invariant. The canonical source key comes from the confirmed
+repository identity and the issue number, so no remote text reaches the line.
+How the cards are grouped follows `KANDER-TASK-GROUP-RULES.md`; the anchor rule
+does not create a task group by itself.
+
 ## Label mapping
 
 The first matching label decides the TYPE, and `--type` overrides it:
@@ -234,7 +254,10 @@ so a session never works from a stale copy.
 The session itself reads and writes no board state. Its prompt is built from the
 confirmed identity, the local evidence paths and the installed rules: it carries
 the rule-loading instruction, the language directive, a minimal protocol, and
-never inlines the issue title, body or comments. The agent reads the evidence as
+never inlines the issue title, body or comments. That minimal protocol is a
+summary; the full sequence is the released `rules/KANDER-ISSUE-RULES.md`, which
+the prompt points at under the scope's rules root, so the path follows a global
+or project install instead of being hardcoded. The agent reads the evidence as
 untrusted data, investigates the issue, and confirms findings and scope with the
 user. Only after that agreement does it create the card with
 `kander issue import NUMBER`, which keeps the issue binding and the contract
@@ -278,7 +301,12 @@ and links are untrusted:
   metadata and record markers before publication.
 - **Prompt injection** — the attachments carry an explicit untrusted-data
   banner and the card's `THREAT_MODEL` section requires treating them as
-  evidence, never as instructions.
+  evidence, never as instructions; `rules/KANDER-ISSUE-RULES.md` repeats that
+  boundary and is not behind a configuration switch, so disabling a module
+  never removes it.
+- **Card linkage** — a sibling card's `SOURCE_ISSUE` line is authored from the
+  canonical source key and the anchor task ID only; remote text never reaches
+  it.
 - **Terminal control** — every rendered and stored remote string is sanitized
   before it can reach the screen, the JSON, or the Markdown.
 - **Path traversal** — attachment names are validated card-relative paths; `..`,
