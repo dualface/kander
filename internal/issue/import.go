@@ -272,11 +272,8 @@ func LoadIndex(root string) (Index, error) {
 		if err != nil || !ok {
 			continue
 		}
-		var record ImportSnapshot
-		if err := json.Unmarshal(data, &record); err != nil {
-			continue
-		}
-		if record.SchemaVersion != ImportSchema || record.SourceKey == "" {
+		record, err := UnmarshalImportSnapshot(data)
+		if err != nil {
 			continue
 		}
 		updatedAt, err := parseSnapshotTime(record.Issue.UpdatedAt)
