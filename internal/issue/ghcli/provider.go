@@ -119,17 +119,22 @@ func (p *Provider) selectReference(ctx context.Context, dir, explicit string) (i
 			return issue.RepositoryRef{}, "", err
 		}
 		if ref.Host == "" {
-			host, err := issue.NormalizeHost(strings.TrimSpace(p.env(EnvHost)))
-			if err == nil {
+			hostValue := strings.TrimSpace(p.env(EnvHost))
+			host, err := issue.NormalizeHost(hostValue)
+			switch {
+			case err == nil:
 				ref.Host = host
-			} else if strings.TrimSpace(p.env(EnvHost)) != "" {
-				return issue.RepositoryRef{}, "", issue.NewError(issue.ErrorInvalidReference, "host", issue.Sanitize(p.env(EnvHost)))
+			case hostValue != "":
+				if issue.KindOf(err) == issue.ErrorUnsupportedHost {
+					return issue.RepositoryRef{}, "", err
+				}
+				return issue.RepositoryRef{}, "", issue.NewError(issue.ErrorInvalidReference, "host", issue.Sanitize(hostValue))
 			}
 		}
 		return ref, "", nil
 	}
 
-	candidates, insecure, defaultRemote, err := p.remoteCandidates(ctx, dir)
+	candidates, blocked, defaultRemote, err := p.remoteCandidates(ctx, dir)
 	if err != nil {
 		return issue.RepositoryRef{}, "", err
 	}
@@ -144,21 +149,20 @@ func (p *Provider) selectReference(ctx context.Context, dir, explicit string) (i
 		distinct = append(distinct, candidate)
 	}
 	if len(distinct) == 0 {
-		if len(insecure) > 0 {
-			return issue.RepositoryRef{}, "", &issue.Error{
-				Kind:   issue.ErrorInsecureRemote,
-				Op:     "remote",
-				Detail: issue.Sanitize(insecure[0]),
-			}
+		if len(blocked) > 0 {
+			return issue.RepositoryRef{}, "", blocked[0]
 		}
 		return issue.RepositoryRef{}, "", &issue.Error{Kind: issue.ErrorNoRemote, Op: "remote", Detail: issue.Sanitize(dir)}
 	}
 	if len(distinct) == 1 {
 		return distinct[0].Ref, distinct[0].Name, nil
 	}
-	for _, candidate := range distinct {
-		if candidate.Name == defaultRemote {
-			return candidate.Ref, candidate.Name, nil
+	if defaultRemote != "" {
+		resolvedName := issue.Sanitize(defaultRemote)
+		for _, candidate := range distinct {
+			if candidate.Name == resolvedName {
+				return candidate.Ref, candidate.Name, nil
+			}
 		}
 	}
 	labels := make([]string, 0, len(distinct))
@@ -172,9 +176,10 @@ func (p *Provider) selectReference(ctx context.Context, dir, explicit string) (i
 // remoteCandidates reads the configured remotes through `git config --local`
 // with a direct argv array. `--local` both restricts the answer to this
 // worktree and turns "not a Git worktree" into a distinct failure, while an
-// empty repository configuration still exits zero. A credential-bearing remote
-// URL is reported as an insecure remote instead of being treated as absent.
-func (p *Provider) remoteCandidates(ctx context.Context, dir string) ([]remoteCandidate, []string, string, error) {
+// empty repository configuration still exits zero. A remote that cannot be
+// used is returned as its structured refusal (embedded credentials, or a host
+// with an explicit port) instead of being treated as absent.
+func (p *Provider) remoteCandidates(ctx context.Context, dir string) ([]remoteCandidate, []*issue.Error, string, error) {
 	stdout, stderr, err := p.git.Run(ctx, dir, []string{"config", "--local", "--list"}, DefaultStdoutLimit)
 	if err != nil {
 		if issue.KindOf(err) == issue.ErrorCommandFailed {
@@ -201,12 +206,18 @@ func (p *Provider) remoteCandidates(ctx context.Context, dir string) ([]remoteCa
 		switch {
 		case strings.HasSuffix(rest, ".url"):
 			name := strings.TrimSuffix(rest, ".url")
+			if name == "" {
+				continue
+			}
 			if _, seen := urls[name]; !seen {
 				names = append(names, name)
 			}
 			urls[name] = append(urls[name], value)
 		case strings.HasSuffix(rest, ".gh-resolved"):
 			name := strings.TrimSuffix(rest, ".gh-resolved")
+			if name == "" {
+				continue
+			}
 			resolved[name] = strings.TrimSpace(value)
 		}
 	}
@@ -218,21 +229,37 @@ func (p *Provider) remoteCandidates(ctx context.Context, dir string) ([]remoteCa
 		}
 	}
 	candidates := make([]remoteCandidate, 0, len(names))
-	var insecure []string
+	var blocked []*issue.Error
 	for _, name := range names {
 		for _, raw := range urls[name] {
 			ref, ok, parseErr := issue.ParseRemoteURL(raw)
 			if parseErr != nil {
-				insecure = append(insecure, name)
+				blocked = append(blocked, refusedRemote(parseErr, name))
 				continue
 			}
 			if !ok {
 				continue
 			}
-			candidates = append(candidates, remoteCandidate{Name: name, Ref: ref})
+			// The remote name is attacker-controlled configuration that reaches
+			// error labels and the `remote:` line, so it is sanitized here.
+			candidates = append(candidates, remoteCandidate{Name: issue.Sanitize(name), Ref: ref})
 		}
 	}
-	return candidates, insecure, defaultRemote, nil
+	return candidates, blocked, defaultRemote, nil
+}
+
+// refusedRemote keeps a refused remote's own category and names the remote in
+// the sanitized detail.
+func refusedRemote(err error, name string) *issue.Error {
+	structured, ok := err.(*issue.Error)
+	if !ok {
+		return &issue.Error{Kind: issue.ErrorInsecureRemote, Op: "remote", Detail: issue.Sanitize(name)}
+	}
+	detail := issue.Sanitize(name)
+	if structured.Kind == issue.ErrorUnsupportedHost && structured.Detail != "" {
+		detail = structured.Detail
+	}
+	return &issue.Error{Kind: structured.Kind, Op: "remote", Detail: detail}
 }
 
 type repositoryView struct {
@@ -278,10 +305,10 @@ func buildRepository(view repositoryView, ref issue.RepositoryRef, remote string
 		return issue.Repository{}, issue.NewError(issue.ErrorInvalidResponse, "decode", "missing isPrivate")
 	}
 	parsed, err := url.Parse(view.URL)
-	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
 		return issue.Repository{}, issue.NewError(issue.ErrorInvalidResponse, "decode", "invalid url")
 	}
-	host, err := issue.NormalizeHost(parsed.Hostname())
+	host, err := issue.NormalizeHost(parsed.Host)
 	if err != nil {
 		return issue.Repository{}, issue.NewError(issue.ErrorInvalidResponse, "decode", "invalid url host")
 	}

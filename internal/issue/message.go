@@ -29,6 +29,8 @@ func Message(err error) string {
 		message = config.Text("issue.error_ambiguous_remotes", strings.Join(structured.Candidates, ", "))
 	case ErrorInsecureRemote:
 		message = config.Text("issue.error_insecure_remote", structured.Detail)
+	case ErrorUnsupportedHost:
+		message = config.Text("issue.error_unsupported_host", structured.Detail)
 	case ErrorGitUnavailable:
 		message = config.Text("issue.error_git_unavailable", structured.Detail)
 	case ErrorCLIUnavailable:

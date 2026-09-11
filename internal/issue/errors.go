@@ -17,6 +17,7 @@ const (
 	ErrorNoRemote         ErrorKind = "no-remote"
 	ErrorAmbiguousRemotes ErrorKind = "ambiguous-remotes"
 	ErrorInsecureRemote   ErrorKind = "insecure-remote"
+	ErrorUnsupportedHost  ErrorKind = "unsupported-host"
 	ErrorInvalidDirectory ErrorKind = "invalid-directory"
 	ErrorGitUnavailable   ErrorKind = "git-unavailable"
 	ErrorCLIUnavailable   ErrorKind = "cli-unavailable"

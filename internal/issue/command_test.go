@@ -225,6 +225,12 @@ func TestFormatErrorMessagesAndHints(t *testing.T) {
 			want: []string{"无效的仓库引用", "not a reference"},
 		},
 		{
+			name:   "host with port",
+			err:    &Error{Kind: ErrorUnsupportedHost, Op: "host", Detail: "ghe.example.com:8443"},
+			want:   []string{"不支持带端口的 host", "ghe.example.com:8443"},
+			absent: []string{"无效的仓库引用"},
+		},
+		{
 			name: "not found",
 			err:  &Error{Kind: ErrorNotFound, Detail: "github.com/acme/tool"},
 			want: []string{"github.com/acme/tool"},

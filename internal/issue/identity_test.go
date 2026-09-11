@@ -13,12 +13,14 @@ func TestParseRepositoryRef(t *testing.T) {
 		owner   string
 		repo    string
 		wantErr bool
+		errKind ErrorKind
 	}{
 		{name: "owner and repository", input: "dualface/kander", owner: "dualface", repo: "kander"},
 		{name: "host owner repository", input: "github.com/dualface/kander", host: "github.com", owner: "dualface", repo: "kander"},
 		{name: "host lowercased", input: "GitHub.Example.COM/acme/tool", host: "github.example.com", owner: "acme", repo: "tool"},
 		{name: "trailing git suffix stripped", input: "dualface/kander.git", owner: "dualface", repo: "kander"},
-		{name: "enterprise host with port", input: "ghe.example.com:8443/acme/tool", host: "ghe.example.com:8443", owner: "acme", repo: "tool"},
+		{name: "enterprise host", input: "ghe.example.com/acme/tool", host: "ghe.example.com", owner: "acme", repo: "tool"},
+		{name: "enterprise host with port", input: "ghe.example.com:8443/acme/tool", wantErr: true, errKind: ErrorUnsupportedHost},
 		{name: "surrounding spaces trimmed", input: "  dualface/kander  ", owner: "dualface", repo: "kander"},
 		{name: "underscore and dot segments", input: "acme_labs/tool.fork", owner: "acme_labs", repo: "tool.fork"},
 		{name: "empty", input: "", wantErr: true},
@@ -38,8 +40,12 @@ func TestParseRepositoryRef(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error for %q", test.input)
 				}
-				if KindOf(err) != ErrorInvalidReference {
-					t.Fatalf("kind=%q want %q", KindOf(err), ErrorInvalidReference)
+				want := test.errKind
+				if want == "" {
+					want = ErrorInvalidReference
+				}
+				if KindOf(err) != want {
+					t.Fatalf("kind=%q want %q", KindOf(err), want)
 				}
 				return
 			}
@@ -90,6 +96,34 @@ func TestParseRemoteURL(t *testing.T) {
 				t.Fatalf("ref=%+v want host=%q owner=%q repo=%q", ref, test.host, test.owner, test.repo)
 			}
 		})
+	}
+}
+
+func TestParseRemoteURLRejectsExplicitPort(t *testing.T) {
+	const secret = "sup3rsecret"
+	for _, input := range []string{
+		"https://ghe.example.com:8443/acme/tool.git",
+		"ssh://git@ghe.example.com:8443/acme/tool.git",
+	} {
+		ref, ok, err := ParseRemoteURL(input)
+		if ok || ref.Host != "" {
+			t.Fatalf("ported remote accepted: %q", input)
+		}
+		if KindOf(err) != ErrorUnsupportedHost {
+			t.Fatalf("kind=%q want %q for %q", KindOf(err), ErrorUnsupportedHost, input)
+		}
+		if !strings.Contains(err.Error(), ":8443") {
+			t.Fatalf("error does not name the port: %v", err)
+		}
+	}
+	// Credentials are refused before the port, so an unsafe URL never turns
+	// into a port diagnostic and never echoes the secret.
+	_, _, err := ParseRemoteURL("https://user:" + secret + "@ghe.example.com:8443/acme/tool.git")
+	if KindOf(err) != ErrorInsecureRemote {
+		t.Fatalf("kind=%q want %q", KindOf(err), ErrorInsecureRemote)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("error leaks the credential: %v", err)
 	}
 }
 

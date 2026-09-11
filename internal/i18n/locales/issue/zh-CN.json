@@ -7,6 +7,7 @@
   "issue.error_no_remote": "在此仓库中未找到 GitHub remote",
   "issue.error_ambiguous_remotes": "存在多个候选仓库: {{.V0}}",
   "issue.error_insecure_remote": "remote {{.V0}} 内嵌了凭据；请先移除再使用 GitHub 集成",
+  "issue.error_unsupported_host": "不支持带端口的 host: {{.V0}}",
   "issue.error_git_unavailable": "Git 不可用: {{.V0}}",
   "issue.error_cli_unavailable": "GitHub CLI (gh) 不可用: {{.V0}}",
   "issue.error_cli_unsupported": "不支持的 GitHub CLI 安装方式: {{.V0}}",

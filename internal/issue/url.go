@@ -23,10 +23,12 @@ func (r Repository) Validate() error {
 		return NewError(ErrorInvalidReference, "repository", Sanitize(r.Name))
 	}
 	parsed, err := url.Parse(r.URL)
-	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Hostname() == "" {
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Host == "" {
 		return NewError(ErrorInvalidResponse, "url", Sanitize(r.URL))
 	}
-	if !strings.EqualFold(parsed.Hostname(), r.Host) {
+	// parsed.Host carries an explicit port, so a ported canonical URL never
+	// matches an identity whose host has none.
+	if !strings.EqualFold(parsed.Host, r.Host) {
 		return NewError(ErrorInvalidResponse, "url", Sanitize(r.URL))
 	}
 	if strings.Trim(parsed.Path, "/") != r.Owner+"/"+r.Name {

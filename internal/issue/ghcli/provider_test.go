@@ -167,6 +167,95 @@ func TestResolveRepositoryRejectsHostMismatch(t *testing.T) {
 	}
 }
 
+func TestResolveRepositoryRejectsPortedReference(t *testing.T) {
+	provider, ghRunner, gitRunner := newTestProvider(t, map[string]fakeResponse{}, map[string]fakeResponse{}, nil)
+	_, err := provider.ResolveRepository(context.Background(), t.TempDir(), "ghe.example.com:8443/acme/tool")
+	if issue.KindOf(err) != issue.ErrorUnsupportedHost {
+		t.Fatalf("kind=%q err=%v", issue.KindOf(err), err)
+	}
+	if !strings.Contains(err.Error(), "ghe.example.com:8443") {
+		t.Fatalf("error does not name the port: %v", err)
+	}
+	if len(ghRunner.calls) != 0 || len(gitRunner.calls) != 0 {
+		t.Fatalf("a ported reference must not reach a command: gh=%v git=%v", ghRunner.calls, gitRunner.calls)
+	}
+}
+
+func TestResolveRepositoryRejectsPortedEnvironmentHost(t *testing.T) {
+	provider, ghRunner, _ := newTestProvider(t, map[string]fakeResponse{}, map[string]fakeResponse{},
+		map[string]string{EnvRepo: "acme/tool", EnvHost: "ghe.example.com:8443"})
+	_, err := provider.ResolveRepository(context.Background(), t.TempDir(), "")
+	if issue.KindOf(err) != issue.ErrorUnsupportedHost {
+		t.Fatalf("kind=%q err=%v", issue.KindOf(err), err)
+	}
+	if len(ghRunner.calls) != 0 {
+		t.Fatalf("a ported host must not reach the provider: %v", ghRunner.calls)
+	}
+}
+
+func TestResolveRepositoryRejectsPortedRemote(t *testing.T) {
+	git := map[string]fakeResponse{gitConfigKey: {stdout: "remote.origin.url=https://ghe.example.com:8443/acme/tool.git\n"}}
+	provider, ghRunner, _ := newTestProvider(t, map[string]fakeResponse{}, git, nil)
+	_, err := provider.ResolveRepository(context.Background(), t.TempDir(), "")
+	if issue.KindOf(err) != issue.ErrorUnsupportedHost {
+		t.Fatalf("kind=%q err=%v", issue.KindOf(err), err)
+	}
+	if !strings.Contains(err.Error(), ":8443") {
+		t.Fatalf("error does not name the port: %v", err)
+	}
+	if len(ghRunner.calls) != 0 {
+		t.Fatalf("an unusable remote must not reach the provider: %v", ghRunner.calls)
+	}
+}
+
+func TestResolveRepositoryRejectsPortedResponseURL(t *testing.T) {
+	provider, _, _ := newTestProvider(t,
+		map[string]fakeResponse{repoViewKey: {stdout: `{"isPrivate":false,"nameWithOwner":"dualface/kander","url":"https://github.com:8443/dualface/kander"}`}},
+		map[string]fakeResponse{gitConfigKey: {stdout: remoteOriginOnly}},
+		nil,
+	)
+	_, err := provider.ResolveRepository(context.Background(), t.TempDir(), "")
+	if issue.KindOf(err) != issue.ErrorInvalidResponse {
+		t.Fatalf("kind=%q err=%v", issue.KindOf(err), err)
+	}
+}
+
+func TestResolveRepositorySanitizesRemoteName(t *testing.T) {
+	const hostile = "evil\x1b[2Jname"
+	git := map[string]fakeResponse{gitConfigKey: {stdout: "remote." + hostile + ".url=https://github.com/dualface/kander.git\n"}}
+	provider, _, _ := newTestProvider(t,
+		map[string]fakeResponse{repoViewKey: {stdout: defaultRepoJSON}},
+		git,
+		nil,
+	)
+	repository, err := provider.ResolveRepository(context.Background(), t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if strings.ContainsRune(repository.Remote, 0x1b) {
+		t.Fatalf("remote=%q keeps a terminal escape", repository.Remote)
+	}
+}
+
+func TestResolveRepositorySanitizesCandidateLabels(t *testing.T) {
+	const hostile = "evil\x1b[2Jname"
+	git := map[string]fakeResponse{gitConfigKey: {stdout: "remote." + hostile + ".url=https://github.com/dualface/kander.git\nremote.upstream.url=https://github.com/cli/cli.git\n"}}
+	provider, _, _ := newTestProvider(t, map[string]fakeResponse{}, git, nil)
+	_, err := provider.ResolveRepository(context.Background(), t.TempDir(), "")
+	if issue.KindOf(err) != issue.ErrorAmbiguousRemotes {
+		t.Fatalf("kind=%q err=%v", issue.KindOf(err), err)
+	}
+	structured := err.(*issue.Error)
+	if len(structured.Candidates) != 2 {
+		t.Fatalf("candidates=%v", structured.Candidates)
+	}
+	for _, label := range structured.Candidates {
+		if strings.ContainsRune(label, 0x1b) {
+			t.Fatalf("label=%q keeps a terminal escape", label)
+		}
+	}
+}
+
 func TestResolveRepositoryRejectsCredentialBearingRemote(t *testing.T) {
 	const secret = "sup3rsecret"
 	git := map[string]fakeResponse{gitConfigKey: {stdout: "remote.origin.url=https://user:" + secret + "@github.com/dualface/kander.git\n"}}

@@ -64,7 +64,7 @@ func ParseRepositoryRef(value string) (RepositoryRef, error) {
 	case 3:
 		host, err := NormalizeHost(parts[0])
 		if err != nil {
-			return RepositoryRef{}, NewError(ErrorInvalidReference, "repo", Sanitize(trimmed))
+			return RepositoryRef{}, referenceHostError(err, trimmed)
 		}
 		ref.Host = host
 		ref.Owner, ref.Name = parts[1], parts[2]
@@ -109,7 +109,9 @@ func ParseRemoteURL(raw string) (RepositoryRef, bool, error) {
 				return RepositoryRef{}, false, NewError(ErrorInsecureRemote, "remote", "")
 			}
 		}
-		return refFromHostPath(parsed.Hostname(), parsed.Path)
+		// parsed.Host keeps an explicit port so it can be refused instead of
+		// being silently dropped.
+		return refFromHostPath(parsed.Host, parsed.Path)
 	}
 	// SCP-like syntax: [user@]host:owner/repo.git
 	if at := strings.Index(value, "@"); at > 0 {
@@ -137,6 +139,9 @@ func refFromHostPath(host, path string) (RepositoryRef, bool, error) {
 	}
 	normalizedHost, err := NormalizeHost(host)
 	if err != nil {
+		if structured, ok := err.(*Error); ok && structured.Kind == ErrorUnsupportedHost {
+			return RepositoryRef{}, false, structured
+		}
 		return RepositoryRef{}, false, nil
 	}
 	if err := validateOwner(segments[0]); err != nil {
@@ -149,7 +154,10 @@ func refFromHostPath(host, path string) (RepositoryRef, bool, error) {
 	return RepositoryRef{Host: normalizedHost, Owner: segments[0], Name: name}, true, nil
 }
 
-// NormalizeHost validates one hostname with an optional port and lowercases it.
+// NormalizeHost validates one hostname and lowercases it. A host with an
+// explicit port is refused as ErrorUnsupportedHost instead of being accepted
+// here and dropped later: `gh` cannot address such a host consistently, so the
+// contract never half-accepts one.
 func NormalizeHost(host string) (string, error) {
 	value := strings.ToLower(strings.TrimSpace(host))
 	if value == "" || len(value) > maxHostLength {
@@ -158,18 +166,16 @@ func NormalizeHost(host string) (string, error) {
 	if strings.ContainsAny(value, " \t\r\n@/\\?#%") {
 		return "", NewError(ErrorInvalidReference, "host", "")
 	}
-	name := value
 	if index := strings.LastIndex(value, ":"); index >= 0 {
-		name = value[:index]
-		port := value[index+1:]
-		if port == "" || !digitsOnly(port) {
-			return "", NewError(ErrorInvalidReference, "host", "")
+		// A host written as host:port is refused instead of being accepted
+		// here and silently dropped later; any other colon usage (an IPv6
+		// literal, for example) is not a host Kander accepts.
+		if digitsOnly(value[index+1:]) {
+			return "", NewError(ErrorUnsupportedHost, "host", Sanitize(value))
 		}
-	}
-	if name == "" || strings.ContainsAny(name, "[]:") {
 		return "", NewError(ErrorInvalidReference, "host", "")
 	}
-	for _, label := range strings.Split(name, ".") {
+	for _, label := range strings.Split(value, ".") {
 		if label == "" || len(label) > 63 {
 			return "", NewError(ErrorInvalidReference, "host", "")
 		}
@@ -183,6 +189,15 @@ func NormalizeHost(host string) (string, error) {
 		}
 	}
 	return value, nil
+}
+
+// referenceHostError keeps an unsupported-host refusal distinct and reports
+// every other host problem as an invalid reference.
+func referenceHostError(err error, reference string) *Error {
+	if structured, ok := err.(*Error); ok && structured.Kind == ErrorUnsupportedHost {
+		return structured
+	}
+	return NewError(ErrorInvalidReference, "repo", Sanitize(reference))
 }
 
 func validateOwner(owner string) error {
