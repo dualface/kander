@@ -254,6 +254,7 @@ func TestIssueShowUsageErrors(t *testing.T) {
 		{"zero number", []string{"show", "0"}, "NUMBER"},
 		{"two numbers", []string{"show", "1", "2"}, "2"},
 		{"unknown flag", []string{"show", "1", "--nope"}, "--nope"},
+		{"empty repo", []string{"show", "1", "--repo="}, "--repo"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

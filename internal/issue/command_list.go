@@ -79,10 +79,6 @@ func runList(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 			return 2
 		}
 	}
-	if options.hasRepo && strings.TrimSpace(options.repository) == "" {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--repo"))
-		return 2
-	}
 	query, err := (IssueQuery{
 		State:  options.state,
 		Labels: options.labels,
