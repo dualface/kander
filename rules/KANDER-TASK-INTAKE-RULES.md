@@ -2,6 +2,8 @@
 
 ## Creation and Confirmation
 
+GitHub issues follow `KANDER-ISSUE-RULES.md` for the investigation, consent, and binding rules before this guidance applies.
+
 Provide guidance only for new bug or feature requests that have not yet chosen an execution mode. Tasks continued via `start`, `resume`, or `notify`, and existing cards named by the user, continue on the original card; do not ask again or create another card. When the user has already explicitly chosen the kanban board or direct execution, follow the chosen flow without asking again. Pure Q&A, read-only investigation, minor documentation or configuration tweaks, releases, and merges do not trigger intake guidance.
 
 When `rules.task_groups=true` and `rules.git=true`, read `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups" before presenting the options, and state in the plan whether the work is one card, several independent single cards, or one or more task groups, with the reason. For a group, also list the member card titles, their dependency order, and the step that merges each group branch back into `develop` in dependency order once its gates pass. Card bodies are written after confirmation; the split and the merge-back step are confirmed together with the plan. When task groups are disabled, always plan a single card, whatever the number of goals, and do not load the disabled module.

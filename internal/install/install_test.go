@@ -89,7 +89,7 @@ func TestPerformGlobalInstall(t *testing.T) {
 	if err != nil || (runtime.GOOS != "windows" && st.Mode()&0o111 == 0) {
 		t.Fatalf("not executable: %v", err)
 	}
-	if len(rules.Names()) != 10 {
+	if len(rules.Names()) != 11 {
 		t.Fatalf("names=%v", rules.Names())
 	}
 	for _, name := range rules.Names() {

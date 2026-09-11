@@ -7,7 +7,7 @@ import (
 
 func TestNamesAreMarkdownOnly(t *testing.T) {
 	names := Names()
-	if len(names) != 10 {
+	if len(names) != 11 {
 		t.Fatalf("names=%v", names)
 	}
 	seen := map[string]bool{}
@@ -20,7 +20,7 @@ func TestNamesAreMarkdownOnly(t *testing.T) {
 		}
 		seen[name] = true
 	}
-	if !seen["KANDER-AGENTS.md"] || !seen["KANDER-BASE-RULES.md"] {
+	if !seen["KANDER-AGENTS.md"] || !seen["KANDER-BASE-RULES.md"] || !seen["KANDER-ISSUE-RULES.md"] {
 		t.Fatalf("missing entry files: %v", names)
 	}
 }
@@ -32,6 +32,16 @@ func TestEntryDeclaresAgentLanguage(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "`agent_language`") {
 		t.Fatal("the rules entry must tell agents to honor agent_language")
+	}
+}
+
+func TestEntryDeclaresIssueRulesLoadTiming(t *testing.T) {
+	data, err := File("KANDER-AGENTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "KANDER-ISSUE-RULES.md") {
+		t.Fatal("the rules entry must name the issue rules file and its load timing")
 	}
 }
 

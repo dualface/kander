@@ -49,6 +49,7 @@ The directory containing this file is the "rules root". It determines the scope 
 | `rules.reporting`     | `KANDER-REPORTING-RULES.md`     | When enabled, when reporting at the end of a task     |
 
 - Read `KANDER-KANBAN-RULES.md` whenever kanban commands are used.
+- Read `KANDER-ISSUE-RULES.md` whenever a GitHub issue is imported, investigated, or taken over, including a session started by `kander issue triage` or the issues overlay. Its untrusted-data and binding clauses are security requirements and are not controlled by a configuration switch.
 - `task_groups` depends on `git`.
 - `review` reads the "Delivery Self-Check" of `KANDER-CODE-RULES.md` only when `code` is also on; with `code` off, `KANDER-REVIEW-RULES.md` "Preconditions and Execution" states what the author checks before review instead.
 - With `task_intake` off, no plan options are presented and cards are created manually; a task group is still possible when `task_groups` is on.
