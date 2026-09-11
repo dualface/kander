@@ -130,14 +130,19 @@ func validateHandoffDraft(values map[handoffFieldID]string) error {
 	return nil
 }
 
+// handoffRecordValue normalizes a line to the text a record marker is compared
+// against. The trimming matches the board's import validator.
+func handoffRecordValue(line string) string {
+	trimmed := strings.TrimSpace(line)
+	return strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+}
+
 // handoffRecordLines lists the record lines a body carries. Records belong to
-// their own producers, so the editor never mints one. The trimming matches the
-// board's import validator, which uses the same marker helper.
+// their own producers, so the editor never mints one.
 func handoffRecordLines(body string) []string {
 	lines := []string{}
 	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+		value := handoffRecordValue(line)
 		for _, marker := range []string{board.MarkerSelfReview, board.MarkerCardReview, board.MarkerPrerequisites} {
 			if board.HasMarkerPrefix(value, marker) {
 				lines = append(lines, value)
@@ -148,22 +153,86 @@ func handoffRecordLines(body string) []string {
 	return lines
 }
 
-// validateHandoffRecords refuses a draft that adds a record line the card did
-// not already carry. The form writes the SELF_REVIEW line itself from the
-// creator's typed conclusion; CARD_REVIEW and PREREQUISITES belong to their own
-// producers, so the form must not be able to mint the independent review record
-// the todo gate looks for.
+// handoffPreservedRecord reports whether a record line belongs to a producer
+// the form only preserves. SELF_REVIEW is not one of them: the form rewrites
+// that line from the creator's typed conclusion on every save.
+func handoffPreservedRecord(value string) (string, bool) {
+	for _, marker := range []string{board.MarkerCardReview, board.MarkerPrerequisites} {
+		if board.HasMarkerPrefix(value, marker) {
+			return marker, true
+		}
+	}
+	return "", false
+}
+
+// validateHandoffRecords ties the draft DISCUSSION to the card the form read:
+// the draft may not mint a record line the card did not carry, and it may not
+// silently drop a CARD_REVIEW or PREREQUISITES line the card still holds. The
+// form writes the SELF_REVIEW line itself from the creator's typed conclusion;
+// CARD_REVIEW and PREREQUISITES belong to their own producers, so the form must
+// neither mint the independent review record the todo gate looks for nor delete
+// review evidence a concurrent writer just added.
 func validateHandoffRecords(discussion, source string) error {
+	sourceLines := handoffRecordLines(source)
 	existing := map[string]bool{}
-	for _, line := range handoffRecordLines(source) {
+	for _, line := range sourceLines {
 		existing[line] = true
 	}
+	draft := map[string]bool{}
 	for _, line := range handoffRecordLines(discussion) {
+		draft[line] = true
 		if !existing[line] {
 			return handoffError(handoffDiscussion, t("tui.handoff_record_injected", line))
 		}
 	}
+	for _, line := range sourceLines {
+		if _, ok := handoffPreservedRecord(line); ok && !draft[line] {
+			return handoffError(handoffDiscussion, t("tui.handoff_record_dropped", line))
+		}
+	}
 	return nil
+}
+
+// mergeHandoffRecords folds the card's current managed records into a kept
+// draft. A conflict reload refreshes the card text but keeps the draft, so a
+// record an independent producer added in between has to survive the next
+// publication: draft lines of a marker the card now carries are replaced by the
+// card's current lines, while a marker the card does not carry is left alone so
+// the injection check can still refuse it.
+func mergeHandoffRecords(discussion, source string) string {
+	current := []string{}
+	markers := map[string]bool{}
+	for _, line := range handoffRecordLines(source) {
+		if marker, ok := handoffPreservedRecord(line); ok {
+			current = append(current, line)
+			markers[marker] = true
+		}
+	}
+	if len(current) == 0 {
+		return discussion
+	}
+	lines := []string{}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(discussion, "\n") {
+		value := handoffRecordValue(line)
+		if marker, ok := handoffPreservedRecord(value); ok && markers[marker] {
+			continue
+		}
+		lines = append(lines, line)
+		seen[value] = true
+	}
+	for _, line := range current {
+		if !seen[line] {
+			lines = append(lines, "- "+line)
+		}
+	}
+	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // validateHandoffSelfReview keeps the conclusion a single line of prose: the
@@ -190,8 +259,9 @@ func handoffRecordMarker(value string) bool {
 }
 
 // buildHandoffText writes the draft back over the committed card. Only the two
-// metadata lines and the seven section bodies change; every other byte,
-// including managed fields and the review records, is preserved.
+// metadata lines and the seven section bodies change; every other byte, and the
+// managed review records, are preserved. The SELF_REVIEW line is the one record
+// this form owns: it is rewritten from the creator's typed conclusion.
 func buildHandoffText(state *handoffState) (string, error) {
 	values := make(map[handoffFieldID]string, len(state.values)+1)
 	for id, value := range state.values {
@@ -244,7 +314,9 @@ func appendHandoffSelfReview(discussion, conclusion string) string {
 	lines := strings.Split(strings.ReplaceAll(discussion, "\r\n", "\n"), "\n")
 	kept := make([]string, 0, len(lines)+2)
 	for _, line := range lines {
-		if board.HasMarkerPrefix(line, board.MarkerSelfReview) {
+		// The record may carry a bullet; normalize before comparing so the
+		// previous self-review line is replaced instead of duplicated.
+		if board.HasMarkerPrefix(handoffRecordValue(line), board.MarkerSelfReview) {
 			continue
 		}
 		kept = append(kept, line)

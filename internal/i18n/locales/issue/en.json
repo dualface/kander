@@ -162,6 +162,7 @@
   "tui.handoff_empty_field": "{{.V0}} must not be empty.",
   "tui.handoff_placeholder_field": "{{.V0}} still contains a placeholder.",
   "tui.handoff_record_injected": "The draft cannot add a record line: {{.V0}} is written by its own producer, not by this form.",
+  "tui.handoff_record_dropped": "The draft cannot drop a record line the card holds: {{.V0}} is written by its own producer.",
   "tui.handoff_structure_field": "{{.V0}} must not contain a heading, metadata line or record marker.",
   "tui.handoff_acceptance_items": "ACCEPTANCE_CRITERIA needs at least one `- [ ]` item.",
   "tui.handoff_source_required": "GOAL must keep the requirement to read source/github-issue.md.",

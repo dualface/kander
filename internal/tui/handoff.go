@@ -464,6 +464,11 @@ func (a *App) applyHandoffLoad(result handoffLoadResult) {
 	kept := result.keepDraft && len(state.values) > 0
 	if !kept {
 		state.values = values
+	} else {
+		// The card advanced while the form held the draft: a record an
+		// independent producer wrote in between has to survive the next
+		// publication, so it is folded into the draft here.
+		state.values[handoffDiscussion] = mergeHandoffRecords(state.values[handoffDiscussion], state.source)
 	}
 	state.size = result.card.Size
 	if kept || state.size == "" {

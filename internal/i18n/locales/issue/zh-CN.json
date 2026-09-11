@@ -162,6 +162,7 @@
   "tui.handoff_empty_field": "{{.V0}} 不能为空。",
   "tui.handoff_placeholder_field": "{{.V0}} 仍有占位符。",
   "tui.handoff_record_injected": "草稿不能新增记录行：{{.V0}} 由对应流程自行写入，本表单不生成。",
+  "tui.handoff_record_dropped": "草稿不能删除卡片上已有的记录行：{{.V0}} 由对应流程自行写入。",
   "tui.handoff_structure_field": "{{.V0}} 不能包含标题、元数据行或记录标记。",
   "tui.handoff_acceptance_items": "ACCEPTANCE_CRITERIA 至少需要一个 `- [ ]` 条目。",
   "tui.handoff_source_required": "GOAL 必须保留读取 source/github-issue.md 的要求。",
