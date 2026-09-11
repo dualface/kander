@@ -29,8 +29,10 @@ On the terminal board the same import is available from the issues overlay:
 imported, and `I` imports with comments. Selecting a row also loads the issue
 content on its own; the "Issue snapshot cache" section describes that path. The
 overlay marks imported issues with
-their task ID and appends "update available" when the remote `updated_at` is
-newer than the fetched snapshot. It never overwrites the card on its own.
+their task ID and state, and appends "update available" when the remote
+`updated_at` is newer than the fetched snapshot. It never overwrites the card on
+its own. The `s` key starts a takeover session instead of opening a form; the
+"Takeover session" section describes that path.
 
 ## Identity and idempotency
 
@@ -192,61 +194,67 @@ The first matching label decides the TYPE, and `--type` overrides it:
 | `research`, `investigation`, `spike`, `question` | `research` |
 | anything else, or no label | `feature` |
 
-## Handoff to a running task
+## Takeover session
 
-On the terminal board the issues overlay's `s` key turns the selected issue into
-a running task. It first imports the issue when no card exists yet, or locates
-the existing backlog card; a card that already left `backlog` is only selected
-on the board and the form refuses to start it again.
+The overlay's `s` key no longer edits a card contract. It confirms one takeover
+session, started through the same path as the CLI, whose agent investigates the
+issue and agrees on the plan with the user before anything is written:
 
-The form edits `TYPE`, `SIZE`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`,
-`ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, and `DISCUSSION`, and
-shows `LANGUAGE` as read-only: changing the language means cancelling and
-importing the issue again. Validation refuses empty sections, leftover
-placeholders, headings or metadata lines inside section bodies, an acceptance
-list without an item, and a `GOAL` that dropped the requirement to read
-`source/github-issue.md`. Nothing is written while the draft is invalid, so
-cancelling or fixing the draft leaves the backlog card and its source
-attachment untouched.
+- An issue without a local card opens a confirmation dialog with the resolved
+  agent and launcher; `y`/`Enter` starts the session. The dialog is only a
+  confirmation: no card is created or moved.
+- An issue whose card is already bound jumps to that card on the board and
+  reports its state, because that card already carries the contract. A card
+  still in `backlog` first offers both exits: `y`/`Enter` jumps, `s` starts the
+  same session pointed at that card so its contract can be completed.
+- The TUI starts only background launchers (`herdr`, `tmux`, `tmux-session`);
+  `foreground` and `console` report that the CLI must be used instead. Every
+  request runs through the overlay's background slot and is dropped when its
+  dialog sequence or selected issue no longer matches.
 
-After the contract passes validation the form shows the four post-creation
-self-review points from the Kanban rules, requires an explicit attestation of
-each point, and asks the creator to type the conclusion. One controlled update
-publishes the edited contract together with a `SELF_REVIEW: <conclusion>` line
-in `DISCUSSION`. The tool never fills that conclusion in, never claims to have
-verified the creator's judgement, and never writes a `CARD_REVIEW:` line: the
-conclusion is a single line of prose, and the form refuses a draft that adds a
-record line the card did not already carry, so the handoff cannot mint the
-independent record. Large cards and task-group members stay blocked at the
-`todo` gate until an independent agent has actually reviewed the card and its
+```
+kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO]
+                           [--agent NAME] [--launcher NAME]
+```
+
+Each attempt fetches the issue again and rewrites its evidence below the private
+board cache:
+
+```
+kanban/.kander/caches/triage/<owner>-<repo>-<number>/issue.json
+kanban/.kander/caches/triage/<owner>-<repo>-<number>/issue.md
+```
+
+The JSON file is the same bounded, sanitized snapshot the card attachments use;
+the Markdown file renders that record for reading. An issue that exceeds the
+import bounds is rejected instead of truncated. The evidence is machine-local,
+never committed, and carries no credentials; re-running a takeover replaces it,
+so a session never works from a stale copy.
+
+The session itself reads and writes no board state. Its prompt is built from the
+confirmed identity, the local evidence paths and the installed rules: it carries
+the rule-loading instruction, the language directive, a minimal protocol, and
+never inlines the issue title, body or comments. The agent reads the evidence as
+untrusted data, investigates the issue, and confirms findings and scope with the
+user. Only after that agreement does it create the card with
+`kander issue import NUMBER`, which keeps the issue binding and the contract
+sections described above; a session started with `--card` continues the bound
+card instead and never imports a duplicate. The card `SIZE` and whether the work
+splits into several cards are the agent's judgement.
+
+A failed start closes the container it created and removes its task file, so it
+never leaves a half-started window or prompt behind; the evidence files stay for
+the next attempt. The tool never writes `CARD_REVIEW:` and never fills in a
+`SELF_REVIEW` conclusion, and an imported card never carries an auto-generated
+review record, so a takeover cannot mint the independent record: the normal
+`backlog → todo` gate applies unchanged, and large cards and task-group members
+stay blocked until an independent agent has actually reviewed the card and its
 record was added.
 
-The update carries the revision the form read. If another write changed the
-card first, the save fails with a revision conflict and the form reloads the
-card: the contract fields the creator filled in are kept, while `DISCUSSION` is
-taken from the current card, together with the `CARD_REVIEW:` records and the
-fenced `PREREQUISITES:` block other producers own. That section is republished
-exactly as the card holds it, so the form can neither add, move nor drop a
-record and a concurrent review record survives the next save. A draft that
-mints a record line the card did not carry, or that would drop one the card
-still holds, is refused before any write. Nothing is overwritten without that
-second confirmation.
-
-When the read-only gate check passes, a final confirmation shows the issue, the
-task ID, the agent, the launcher, and the `backlog → todo → working`
-transition, with the card size the controlled update just published. Only an
-explicit confirmation moves the card through the controlled `backlog → todo`
-step and then calls the same start path as the board's `s` key; the card is
-never moved to `working` first. The TUI starts only background
-launchers (`herdr`, `tmux`, `tmux-session`); `foreground` and `console` report
-that the CLI must be used instead. A failed start reports the card state that
-was actually observed and how to retry, and keeps the issue and the card.
-
-Card files stay the only trusted input. The agent still reads the source
-attachment through the card's `GOAL`; the generated task file keeps only the
-task ID, the fixed requirements, and the paths, so private issue text and
-dynamic attachment paths never enter the shell, `argv`, the environment, or the
-top-level task-file instructions.
+Card files stay the only trusted input for the agent; the generated task file
+keeps only the identity, the evidence paths and the fixed requirements, so
+private issue text and dynamic attachment paths never enter the shell, `argv`,
+the environment, or the top-level task-file instructions.
 
 ## Failure and recovery
 
