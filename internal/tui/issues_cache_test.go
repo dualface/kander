@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -205,6 +206,54 @@ func TestIssuesChangedRefreshUpdatesCacheAndNotice(t *testing.T) {
 	}
 	if st.detailScroll != 0 {
 		t.Fatalf("changed content left the scroll at %d", st.detailScroll)
+	}
+}
+
+// Leaving the issue whose request is in flight and coming back must drop the
+// abandoned target: the in-flight result owns the detail pane, so the next tick
+// may not fetch the issue the user already moved away from.
+func TestIssuesMoveAwayAndBackDropsTheAbandonedTarget(t *testing.T) {
+	fake := newFakeIssues()
+	fake.listResult = defaultPage(issuesListLimit)
+	fake.getResult = func(_ int, number int, _ bool) (issue.IssueSnapshot, error) {
+		snapshot := defaultSnapshot(t)
+		snapshot.Number = number
+		snapshot.Body = "BODY-" + strconv.Itoa(number)
+		return snapshot, nil
+	}
+	app := issuesTestApp(t, fake, 120, 30)
+	clock := freezeIssuesClock(t, app)
+	app.HandleKey("g")
+	runPendingWork(t, app)
+	clock.tick()
+	inFlight := app.takePending()
+	if inFlight == nil {
+		t.Fatal("no content request was queued")
+	}
+
+	app.HandleKey("down")
+	app.HandleKey("up")
+	if app.Issues.detailNumber != 42 {
+		t.Fatalf("selection=%d want 42", app.Issues.detailNumber)
+	}
+	if app.Issues.detailPending != 0 {
+		t.Fatalf("the abandoned target survived: %d", app.Issues.detailPending)
+	}
+
+	applyWorkCmd(t, app, inFlight)
+	if app.Issues.detail == nil || app.Issues.detail.Number != 42 {
+		t.Fatalf("the in-flight result did not land: %+v", app.Issues.detail)
+	}
+	clock.tick()
+	if app.pendingWork != nil {
+		t.Fatal("an abandoned target started a request")
+	}
+	if fake.getCalls != 1 || fake.numbers[0] != 42 {
+		t.Fatalf("calls=%d numbers=%v", fake.getCalls, fake.numbers)
+	}
+	displayed := ansi.Strip(app.View())
+	if !strings.Contains(displayed, "BODY-42") || strings.Contains(displayed, "BODY-41") {
+		t.Fatalf("the detail pane does not show the selected issue:\n%s", displayed)
 	}
 }
 

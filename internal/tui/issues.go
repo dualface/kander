@@ -278,13 +278,18 @@ func (a *App) loadIssueCache(number int) (issue.IssueSnapshot, bool) {
 
 // issuesArmDetail marks one issue as the debounced content target. A request
 // for the same issue that is still authoritative for the current list stays
-// authoritative; an invalidated request must not swallow the refresh.
+// authoritative; an invalidated request must not swallow the refresh, and a
+// target armed for another issue must not survive the move back, or the next
+// tick would overwrite the detail with that other issue.
 func (a *App) issuesArmDetail(number int) {
 	st := a.Issues
 	if st == nil || number <= 0 {
 		return
 	}
 	if st.detailLoading && st.detailFlightNumber == number && st.detailFlightSeq == a.issuesDetailSeq {
+		if st.detailPending != number {
+			st.detailPending = 0
+		}
 		return
 	}
 	st.detailPending = number
