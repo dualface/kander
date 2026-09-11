@@ -40,7 +40,7 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 			options.comments = true
 		case arg == "--large":
 			options.large = true
-		case arg == "--repo":
+		case matchesLongOption(arg, "--repo"):
 			value, next, ok := optionValue(args, index, "--repo", stderr)
 			if !ok {
 				return 2
@@ -48,14 +48,14 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 			index = next
 			options.repository = value
 			options.hasRepo = true
-		case arg == "--type":
+		case matchesLongOption(arg, "--type"):
 			value, next, ok := optionValue(args, index, "--type", stderr)
 			if !ok {
 				return 2
 			}
 			index = next
 			options.taskType = value
-		case arg == "--language":
+		case matchesLongOption(arg, "--language"):
 			value, next, ok := optionValue(args, index, "--language", stderr)
 			if !ok {
 				return 2
@@ -84,10 +84,6 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	if positional == 0 {
 		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "NUMBER"))
 		fmt.Fprintln(stderr, config.Text("issue.import_usage"))
-		return 2
-	}
-	if options.hasRepo && strings.TrimSpace(options.repository) == "" {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--repo"))
 		return 2
 	}
 	taskType := strings.TrimSpace(options.taskType)

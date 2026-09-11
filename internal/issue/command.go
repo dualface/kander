@@ -78,26 +78,19 @@ func runRepo(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 			return 0
 		case arg == "--json":
 			options.json = true
-		case arg == "--repo":
-			if index+1 >= len(args) {
-				fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--repo"))
+		case matchesLongOption(arg, "--repo"):
+			value, next, ok := optionValue(args, index, "--repo", stderr)
+			if !ok {
 				return 2
 			}
-			index++
-			options.repository = args[index]
-			options.hasRepo = true
-		case strings.HasPrefix(arg, "--repo="):
-			options.repository = strings.TrimPrefix(arg, "--repo=")
+			index = next
+			options.repository = value
 			options.hasRepo = true
 		default:
 			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
 			fmt.Fprintln(stderr, usageText())
 			return 2
 		}
-	}
-	if options.hasRepo && strings.TrimSpace(options.repository) == "" {
-		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "--repo"))
-		return 2
 	}
 	repository, code := resolveRepository(factory(), options.repository, options.hasRepo, stderr)
 	if code != 0 {
@@ -195,16 +188,32 @@ func splitLongOption(arg, name string) (string, bool) {
 	return strings.TrimPrefix(arg, prefix), true
 }
 
+// matchesLongOption reports whether arg is the long option name, in either the
+// `--name value` or the `--name=value` form. Every long option accepts both.
+func matchesLongOption(arg, name string) bool {
+	return arg == name || strings.HasPrefix(arg, name+"=")
+}
+
 // optionValue consumes the value of a long option that takes one argument.
+// The caller matches the option with matchesLongOption, so both the
+// `--name value` and the `--name=value` form arrive here; an empty value is a
+// usage error rather than an option that silently falls back to its default.
 // It returns the value, the next index and whether parsing succeeded.
 func optionValue(args []string, index int, name string, stderr io.Writer) (string, int, bool) {
-	arg := args[index]
-	if inline, ok := splitLongOption(arg, name); ok {
-		return inline, index, true
+	value := ""
+	next := index
+	if inline, ok := splitLongOption(args[index], name); ok {
+		value = inline
+	} else if index+1 >= len(args) {
+		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", name))
+		return "", index, false
+	} else {
+		value = args[index+1]
+		next = index + 1
 	}
-	if index+1 >= len(args) {
+	if strings.TrimSpace(value) == "" {
 		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", name))
 		return "", index, false
 	}
-	return args[index+1], index + 1, true
+	return value, next, true
 }

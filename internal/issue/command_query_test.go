@@ -84,6 +84,21 @@ func TestIssueListPassesFilters(t *testing.T) {
 	}
 }
 
+func TestIssueListAcceptsInlineOptionValues(t *testing.T) {
+	stub := listStub()
+	code, _, stderr := runIssue(t, stub, "list", "--repo=acme/tool", "--state=closed", "--label=bug", "--search=crash", "--limit=5")
+	if code != 0 || stderr != "" {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+	if stub.explicit != "acme/tool" {
+		t.Fatalf("explicit=%q", stub.explicit)
+	}
+	query := stub.listQuery
+	if query.State != IssueStateClosed || query.Search != "crash" || query.Limit != 5 || len(query.Labels) != 1 || query.Labels[0] != "bug" {
+		t.Fatalf("query=%+v", query)
+	}
+}
+
 func TestIssueListMoreSummary(t *testing.T) {
 	stub := listStub()
 	stub.page.More = true

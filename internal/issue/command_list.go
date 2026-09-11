@@ -32,28 +32,28 @@ func runList(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 			return 0
 		case arg == "--json":
 			options.json = true
-		case arg == "--state":
+		case matchesLongOption(arg, "--state"):
 			value, next, ok := optionValue(args, index, "--state", stderr)
 			if !ok {
 				return 2
 			}
 			index = next
 			options.state = value
-		case arg == "--label":
+		case matchesLongOption(arg, "--label"):
 			value, next, ok := optionValue(args, index, "--label", stderr)
 			if !ok {
 				return 2
 			}
 			index = next
 			options.labels = append(options.labels, value)
-		case arg == "--search":
+		case matchesLongOption(arg, "--search"):
 			value, next, ok := optionValue(args, index, "--search", stderr)
 			if !ok {
 				return 2
 			}
 			index = next
 			options.search = value
-		case arg == "--limit":
+		case matchesLongOption(arg, "--limit"):
 			value, next, ok := optionValue(args, index, "--limit", stderr)
 			if !ok {
 				return 2
@@ -65,7 +65,7 @@ func runList(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 				return 2
 			}
 			options.limit = limit
-		case arg == "--repo":
+		case matchesLongOption(arg, "--repo"):
 			value, next, ok := optionValue(args, index, "--repo", stderr)
 			if !ok {
 				return 2

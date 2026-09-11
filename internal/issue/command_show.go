@@ -33,7 +33,7 @@ func runShow(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 			options.json = true
 		case arg == "--comments":
 			options.comments = true
-		case arg == "--repo":
+		case matchesLongOption(arg, "--repo"):
 			value, next, ok := optionValue(args, index, "--repo", stderr)
 			if !ok {
 				return 2
