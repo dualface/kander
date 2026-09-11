@@ -38,6 +38,7 @@
   "tui.issues_empty": "Issue はありません",
   "tui.issues_more": "さらに結果があります",
   "tui.issues_load_failed": "Issue の取得に失敗",
+  "tui.issues_updated": "Issue の内容を更新しました",
   "tui.issues_search_prompt": "検索: ",
   "tui.issues_label_prompt": "ラベル: ",
   "tui.issues_query": "状態: {{.V0}}  ラベル: {{.V1}}  検索: {{.V2}}",

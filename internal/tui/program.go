@@ -123,7 +123,8 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if p.app.Now().Sub(p.app.LastRefresh) >= time.Duration(p.app.RefreshSecs)*time.Second {
 			p.app.refreshBoard()
 		}
-		return p, tickCmd()
+		p.app.issuesTick()
+		return p, tea.Batch(tickCmd(), p.app.takePending())
 	case shellDoneMsg:
 		return p, p.app.takePending()
 	case workMsg:

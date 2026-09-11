@@ -38,6 +38,7 @@
   "tui.issues_empty": "No issues",
   "tui.issues_more": "more results exist",
   "tui.issues_load_failed": "Issue query failed",
+  "tui.issues_updated": "Issue content updated",
   "tui.issues_search_prompt": "search: ",
   "tui.issues_label_prompt": "label: ",
   "tui.issues_query": "state: {{.V0}}  label: {{.V1}}  search: {{.V2}}",

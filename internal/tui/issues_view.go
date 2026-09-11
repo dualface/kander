@@ -258,7 +258,7 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 	}
 	if st.detail == nil {
 		switch {
-		case st.detailLoading:
+		case st.detailLoading || st.detailPending != 0:
 			lines = append(lines, a.issuesMessageLines(a.Context.IssuesLoading, width, "popup-dim", p)...)
 		case st.detailErr != "":
 			lines = append(lines, a.issuesMessageLines(st.detailErr, width, "popup-warn", p)...)

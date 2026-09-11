@@ -57,8 +57,22 @@ type issuesState struct {
 	detailNumber  int
 	detail        *issue.IssueSnapshot
 	detailLoading bool
-	detailErr     string
-	detailScroll  int
+	// detailFlightSeq is the request sequence of the content request currently
+	// in flight and detailFlightNumber its issue; both are zero while no content
+	// request runs. Only that request may clear the loading state, so the
+	// overlay never starts a second content request in parallel.
+	detailFlightSeq    uint64
+	detailFlightNumber int
+	// detailPending is the debounced content target and detailPendingAt when the
+	// selection was made. The request starts on the shared UI tick grid once the
+	// target stayed selected for a full tick.
+	detailPending   int
+	detailPendingAt time.Time
+	// detailDigest identifies the content currently on screen, from either the
+	// cache or the network; an unchanged refresh keeps it and the scroll offset.
+	detailDigest string
+	detailErr    string
+	detailScroll int
 	// detailView carries the Glamour-rendered detail body. The Bubbles
 	// viewport owns the visible window and clamps every scroll position to the
 	// content height, so the overlay shares the board detail's scrolling model
@@ -91,7 +105,13 @@ type issuesDetailResult struct {
 	seq      uint64
 	number   int
 	snapshot issue.IssueSnapshot
-	err      error
+	digest   string
+	// changed reports that the fetched content differs from what was on screen
+	// when the request started; updated additionally requires that something was
+	// on screen, so only a real refresh surfaces the visible notice.
+	changed bool
+	updated bool
+	err     error
 }
 
 // issuesImportResult carries the request sequence and the exact issue identity
@@ -200,11 +220,86 @@ func (a *App) issuesReloadList() {
 	}
 }
 
+// issuesSelectDetail paints whatever the cache holds for one issue right away
+// and arms the debounced refresh. A selection change calls it, so the content
+// appears without a key press; the request itself starts on the shared tick
+// grid via issuesTick. An in-flight request keeps its flight identity: only its
+// own result clears the loading state.
+func (a *App) issuesSelectDetail(number int) {
+	st := a.Issues
+	if st == nil || number <= 0 {
+		return
+	}
+	if st.detailNumber != number {
+		a.issuesClearDetail()
+		st.detailNumber = number
+		if snapshot, ok := a.loadIssueCache(number); ok {
+			cached := snapshot
+			st.detail = &cached
+			st.detailDigest = issue.SnapshotDigest(snapshot)
+			st.detailStamp++
+		}
+	}
+	a.issuesArmDetail(number)
+}
+
+// loadIssueCache reads the machine-local snapshot cache. A missing binding, an
+// unresolved repository and every cache miss report a miss, so the network
+// stays the fallback.
+func (a *App) loadIssueCache(number int) (issue.IssueSnapshot, bool) {
+	loader, repository := a.LoadIssueCache, a.issuesRepository()
+	if loader == nil || repository == nil {
+		return issue.IssueSnapshot{}, false
+	}
+	return loader(*repository, number)
+}
+
+// issuesArmDetail marks one issue as the debounced content target. A request
+// for the same issue that is still authoritative for the current list stays
+// authoritative; an invalidated request must not swallow the refresh.
+func (a *App) issuesArmDetail(number int) {
+	st := a.Issues
+	if st == nil || number <= 0 {
+		return
+	}
+	if st.detailLoading && st.detailFlightNumber == number && st.detailFlightSeq == a.issuesDetailSeq {
+		return
+	}
+	st.detailPending = number
+	st.detailPendingAt = a.Now()
+}
+
+// issuesTick is the debounce clock of the overlay. It runs on the same UI tick
+// as the board refresh and starts at most one content request: the target has
+// to stay selected for a full tick, and an in-flight request, a list request, an
+// import or a queued background task delays the start instead of stacking up.
+func (a *App) issuesTick() {
+	st := a.Issues
+	if st == nil || st.detailPending == 0 {
+		return
+	}
+	if st.detailLoading || st.loading || st.importing || a.pendingWork != nil {
+		return
+	}
+	if a.Now().Sub(st.detailPendingAt) < uiTickInterval {
+		return
+	}
+	number := st.detailPending
+	st.detailPending = 0
+	a.issuesLoadDetail(number)
+}
+
 // issuesLoadDetail starts the snapshot request of one issue. Comments are
-// requested only here, so the list never pays for them.
+// requested only here, so the list never pays for them. When another content
+// request is still in flight the target is armed for the tick grid instead of
+// starting a second request.
 func (a *App) issuesLoadDetail(number int) {
 	st := a.Issues
 	if st == nil || number <= 0 {
+		return
+	}
+	if st.detailLoading {
+		a.issuesArmDetail(number)
 		return
 	}
 	repository := a.issuesRepository()
@@ -212,15 +307,23 @@ func (a *App) issuesLoadDetail(number int) {
 		st.detailErr = a.Context.IssuesLoadFailed
 		return
 	}
+	previousDigest := ""
+	if st.detail != nil && st.detail.Number == number {
+		previousDigest = st.detailDigest
+	}
+	if st.detailNumber != number {
+		a.issuesClearDetail()
+		st.detailNumber = number
+	}
 	a.issuesDetailSeq++
 	seq := a.issuesDetailSeq
-	st.detailNumber = number
-	st.detail = nil
 	st.detailErr = ""
 	st.detailLoading = true
-	st.detailScroll = 0
-	st.detailStamp++
+	st.detailFlightSeq = seq
+	st.detailFlightNumber = number
+	st.detailPending = 0
 	provider := a.IssueProvider
+	store := a.SaveIssueCache
 	a.pendingWork = func() any {
 		if provider == nil {
 			return issuesDetailResult{seq: seq, number: number, err: issue.NewError(issue.ErrorCLIUnavailable, "tui", "no issue provider is registered")}
@@ -228,7 +331,19 @@ func (a *App) issuesLoadDetail(number int) {
 		ctx, cancel := context.WithTimeout(context.Background(), issuesRequestTimeout)
 		defer cancel()
 		snapshot, err := provider().GetIssue(ctx, *repository, number, true)
-		return issuesDetailResult{seq: seq, number: number, snapshot: snapshot, err: err}
+		if err != nil {
+			return issuesDetailResult{seq: seq, number: number, err: err}
+		}
+		digest := issue.SnapshotDigest(snapshot)
+		changed := digest != previousDigest
+		if changed && store != nil {
+			// The cache is best effort: a failed write never blocks the view.
+			_ = store(snapshot)
+		}
+		return issuesDetailResult{
+			seq: seq, number: number, snapshot: snapshot, digest: digest,
+			changed: changed, updated: changed && previousDigest != "",
+		}
 	}
 }
 
@@ -265,26 +380,48 @@ func (a *App) applyIssuesList(result issuesListResult) {
 		st.detailReload = 0
 		a.issuesLoadDetail(number)
 	}
+	if len(st.items) > 0 && st.selected >= 0 && st.selected < len(st.items) {
+		a.issuesSelectDetail(st.items[st.selected].Number)
+	}
 }
 
 func (a *App) applyIssuesDetail(result issuesDetailResult) {
 	st := a.Issues
-	if st == nil || result.seq != a.issuesDetailSeq {
+	if st == nil || result.seq != st.detailFlightSeq {
+		return
+	}
+	st.detailLoading = false
+	st.detailFlightSeq = 0
+	st.detailFlightNumber = 0
+	if result.seq != a.issuesDetailSeq {
+		// A list reload invalidated this request; the current selection owns the
+		// next fetch and the displayed content stays untouched.
+		return
+	}
+	if result.err != nil {
+		if st.detail != nil && st.detail.Number == result.number {
+			// The content on screen came from the cache; only the refresh failed.
+			a.issuesSetNotice(a.Context.IssuesLoadFailed + ": " + issue.Message(result.err))
+			return
+		}
+		st.detail = nil
+		st.detailErr = issue.Message(result.err)
 		return
 	}
 	if result.number != st.detailNumber {
 		return
 	}
-	st.detailLoading = false
-	if result.err != nil {
-		st.detail = nil
-		st.detailErr = issue.Message(result.err)
-		return
-	}
 	snapshot := result.snapshot
 	st.detail = &snapshot
 	st.detailErr = ""
-	st.detailScroll = 0
+	st.detailDigest = result.digest
+	st.detailStamp++
+	if result.changed {
+		st.detailScroll = 0
+	}
+	if result.updated {
+		a.issuesSetNotice(a.Context.IssuesUpdated)
+	}
 }
 
 func (a *App) issuesRepository() *issue.Repository {
@@ -434,17 +571,7 @@ func (a *App) issuesMoveSelection(delta int) {
 		return
 	}
 	st.selected = next
-	// A detail that belongs to another issue would otherwise sit next to a new
-	// selection.
-	if st.detailNumber > 0 && st.detailNumber != st.items[next].Number {
-		st.detail = nil
-		st.detailNumber = 0
-		st.detailErr = ""
-		st.detailLoading = false
-		st.detailScroll = 0
-		st.showDetail = false
-		st.detailReload = 0
-	}
+	a.issuesSelectDetail(st.items[next].Number)
 	a.issuesEnsureSelectionVisible()
 }
 
@@ -573,7 +700,12 @@ func (a *App) handleIssuesKey(key string) {
 		number := a.issuesSelectedNumber()
 		if number > 0 {
 			st.showDetail = true
-			a.issuesLoadDetail(number)
+			// Content the cache already supplied stays on screen; the armed
+			// refresh still runs on the next tick. Only a missing page starts a
+			// request right away.
+			if st.detail == nil || st.detail.Number != number {
+				a.issuesLoadDetail(number)
+			}
 		}
 	case "o", "O":
 		a.issuesOpenBrowser()
@@ -612,7 +744,10 @@ func (a *App) handleIssuesKey(key string) {
 			st.detailScroll = 0
 			return
 		}
-		st.selected = 0
+		if len(st.items) > 0 {
+			st.selected = 0
+			a.issuesSelectDetail(st.items[0].Number)
+		}
 		a.issuesEnsureSelectionVisible()
 	case "end":
 		if a.issuesScrollKeysActive() {
@@ -622,6 +757,7 @@ func (a *App) handleIssuesKey(key string) {
 		}
 		if len(st.items) > 0 {
 			st.selected = len(st.items) - 1
+			a.issuesSelectDetail(st.items[st.selected].Number)
 		}
 		a.issuesEnsureSelectionVisible()
 	case "?":
@@ -688,9 +824,10 @@ func (a *App) issuesRefresh() {
 	}
 }
 
-// issuesResetDetail drops the loaded snapshot; used when the result set the
-// snapshot belonged to is replaced.
-func (a *App) issuesResetDetail() {
+// issuesClearDetail drops the content of the previous selection. The in-flight
+// request and its flight identity stay untouched: only the request that started
+// the loading state may clear it.
+func (a *App) issuesClearDetail() {
 	st := a.Issues
 	if st == nil {
 		return
@@ -698,12 +835,24 @@ func (a *App) issuesResetDetail() {
 	st.detail = nil
 	st.detailNumber = 0
 	st.detailErr = ""
-	st.detailLoading = false
 	st.detailScroll = 0
-	st.showDetail = false
-	st.detailReload = 0
+	st.detailStamp++
+	st.detailDigest = ""
 	st.renderKey = ""
 	st.renderLines = nil
+}
+
+// issuesResetDetail drops the loaded snapshot; used when the result set the
+// snapshot belonged to is replaced.
+func (a *App) issuesResetDetail() {
+	a.issuesClearDetail()
+	st := a.Issues
+	if st == nil {
+		return
+	}
+	st.showDetail = false
+	st.detailReload = 0
+	st.detailPending = 0
 }
 
 func (a *App) handleIssuesMouse(x, y, bstate int) {
@@ -735,14 +884,7 @@ func (a *App) handleIssuesMouse(x, y, bstate int) {
 	}
 	if index != st.selected {
 		st.selected = index
-		if st.detailNumber > 0 && st.detailNumber != st.items[index].Number {
-			st.detail = nil
-			st.detailNumber = 0
-			st.detailErr = ""
-			st.detailLoading = false
-			st.detailScroll = 0
-			st.detailReload = 0
-		}
+		a.issuesSelectDetail(st.items[index].Number)
 	}
 	if mouseLeftDoubleClicked(bstate) {
 		st.showDetail = true

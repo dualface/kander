@@ -107,6 +107,12 @@ type App struct {
 	ImportIssue func(ctx context.Context, repository issue.Repository, number int, options issue.ImportOptions) (issue.ImportResult, error)
 	// ImportIndex reads the board cards that already carry an imported source.
 	ImportIndex func() (issue.Index, error)
+	// LoadIssueCache returns the cached snapshot of one issue; ok=false is a
+	// miss. cmd.go binds it to the machine-local cache below the board.
+	LoadIssueCache func(repository issue.Repository, number int) (issue.IssueSnapshot, bool)
+	// SaveIssueCache stores one fetched snapshot in the machine-local cache. The
+	// cache is best effort; a failed write never blocks the view.
+	SaveIssueCache func(snapshot issue.IssueSnapshot) error
 	// OpenBrowser hands one validated issue URL to the platform opener.
 	OpenBrowser     func(string) error
 	issuesRepo      *issue.Repository

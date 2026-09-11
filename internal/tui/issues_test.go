@@ -101,16 +101,7 @@ func defaultSnapshot(t *testing.T) issue.IssueSnapshot {
 // exactly like program.Update does for a workMsg.
 func runPendingWork(t *testing.T, app *App) {
 	t.Helper()
-	cmd := app.takePending()
-	if cmd == nil {
-		t.Fatal("no pending work was queued")
-	}
-	message := cmd()
-	work, ok := message.(workMsg)
-	if !ok {
-		t.Fatalf("unexpected message %T", message)
-	}
-	app.applyWork(work.payload)
+	applyWorkCmd(t, app, app.takePending())
 }
 
 func TestIssuesOpenLoadsListAndClosesCleanly(t *testing.T) {
@@ -308,21 +299,38 @@ func TestIssuesStaleDetailDropped(t *testing.T) {
 		return snapshot, nil
 	}
 	app := issuesTestApp(t, fake, 120, 30)
+	clock := freezeIssuesClock(t, app)
 	app.HandleKey("g")
 	runPendingWork(t, app)
-	app.HandleKey("enter")
-	stale := app.pendingWork
+	clock.tick()
+	stale := app.takePending()
+	if stale == nil {
+		t.Fatal("no content request was queued")
+	}
+	// The selection moves while the request is still in flight. Only one
+	// content request may run at a time, so the new target waits for a tick
+	// after the in-flight result lands.
 	app.HandleKey("down")
-	app.HandleKey("enter")
-	fresh := app.pendingWork
-	stalePayload := stale()
-	freshPayload := fresh()
-	// The stale detail belongs to issue 42; the fresh one to issue 41.
-	app.applyWork(stalePayload)
+	clock.tick()
+	if app.pendingWork != nil {
+		t.Fatal("a second content request started in parallel")
+	}
+	// The stale detail belongs to issue 42; it is dropped and only clears the
+	// loading state.
+	applyWorkCmd(t, app, stale)
 	if app.Issues.detail != nil {
 		t.Fatalf("stale detail landed: %+v", app.Issues.detail)
 	}
-	app.applyWork(freshPayload)
+	if app.Issues.detailLoading {
+		t.Fatal("the stale result left the loading state behind")
+	}
+	// The next tick starts the request of the current selection.
+	clock.tick()
+	fresh := app.takePending()
+	if fresh == nil {
+		t.Fatal("the current selection was never requested")
+	}
+	applyWorkCmd(t, app, fresh)
 	if app.Issues.detail == nil || app.Issues.detail.Number != 41 {
 		t.Fatalf("fresh detail missing: %+v", app.Issues.detail)
 	}

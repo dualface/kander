@@ -130,6 +130,18 @@ func Run(_ []string) int {
 		}
 		return issue.LoadIndex(root)
 	}
+	app.LoadIssueCache = func(repository issue.Repository, number int) (issue.IssueSnapshot, bool) {
+		if emptyBoard {
+			return issue.IssueSnapshot{}, false
+		}
+		return issue.ReadCachedSnapshot(root, repository, number)
+	}
+	app.SaveIssueCache = func(snapshot issue.IssueSnapshot) error {
+		if emptyBoard {
+			return nil
+		}
+		return issue.WriteCachedSnapshot(root, snapshot, issue.DefaultCacheBounds())
+	}
 	app.PrepareHandoff = func(_ issue.Repository, _ int, taskID string) (handoffCard, error) {
 		return prepareHandoffCard(root, taskID)
 	}

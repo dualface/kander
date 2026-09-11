@@ -36,6 +36,7 @@ type pageContext struct {
 	IssuesEmpty         string
 	IssuesMore          string
 	IssuesLoadFailed    string
+	IssuesUpdated       string
 	IssuesSearchPrompt  string
 	IssuesLabelPrompt   string
 	IssuesDetailHint    string
@@ -98,6 +99,7 @@ func tuiPageContext() pageContext {
 		IssuesEmpty:         t("tui.issues_empty"),
 		IssuesMore:          t("tui.issues_more"),
 		IssuesLoadFailed:    t("tui.issues_load_failed"),
+		IssuesUpdated:       t("tui.issues_updated"),
 		IssuesSearchPrompt:  t("tui.issues_search_prompt"),
 		IssuesLabelPrompt:   t("tui.issues_label_prompt"),
 		IssuesDetailHint:    t("tui.issues_detail_hint"),

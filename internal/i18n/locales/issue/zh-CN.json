@@ -38,6 +38,7 @@
   "tui.issues_empty": "没有 Issue",
   "tui.issues_more": "还有更多结果",
   "tui.issues_load_failed": "Issue 查询失败",
+  "tui.issues_updated": "Issue 内容已更新",
   "tui.issues_search_prompt": "搜索: ",
   "tui.issues_label_prompt": "标签: ",
   "tui.issues_query": "状态: {{.V0}}  标签: {{.V1}}  搜索: {{.V2}}",
