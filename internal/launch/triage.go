@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -183,6 +184,7 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		return "", err
 	}
 	rules := RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " "
+	issueRules := filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md")
 	cardLine := t("launch.prompt.triage_no_card")
 	if request.CardID != "" {
 		cardLine = t("launch.prompt.triage_with_card", request.CardID)
@@ -197,6 +199,7 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		cardLine,
 		promptAgents(paths),
 		strconv.Itoa(request.Number),
+		issueRules,
 	), nil
 }
 

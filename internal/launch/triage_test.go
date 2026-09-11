@@ -112,6 +112,9 @@ func TestStartTriageLaunchesBackgroundSessionWithoutBoardWrites(t *testing.T) {
 	if !strings.Contains(body, request.JSONPath) || !strings.Contains(body, request.MarkdownPath) {
 		t.Fatalf("prompt is missing the evidence paths:\n%s", body)
 	}
+	if !strings.Contains(body, "KANDER-ISSUE-RULES.md") {
+		t.Fatalf("prompt is missing the issue rules path:\n%s", body)
+	}
 	if !strings.Contains(body, "kander issue import 42") {
 		t.Fatalf("prompt is missing the import instruction:\n%s", body)
 	}
@@ -201,6 +204,39 @@ func TestTriageWindowNameIsBounded(t *testing.T) {
 	}
 	if !strings.HasPrefix(name, "issue-") || !strings.HasSuffix(name, "-1234567") {
 		t.Fatalf("name lost its identity: %s", name)
+	}
+}
+
+func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	t.Setenv(config.EnvLangCLI, "")
+	paths := config.InstallPaths{
+		Mode:        config.ModeProject,
+		ProjectRoot: filepath.Join(t.TempDir(), "project"),
+		BinDir:      filepath.Join(t.TempDir(), "bin"),
+		RulesDir:    filepath.Join(t.TempDir(), "rules"),
+	}
+	request := issue.TriageLaunch{
+		Root:         paths.ProjectRoot,
+		Repository:   triageRepository(),
+		Number:       42,
+		JSONPath:     filepath.Join(paths.ProjectRoot, "cache", "issue.json"),
+		MarkdownPath: filepath.Join(paths.ProjectRoot, "cache", "issue.md"),
+	}
+	for _, lang := range []string{"cn", "en", "ja"} {
+		t.Run(lang, func(t *testing.T) {
+			t.Setenv(config.EnvLang, lang)
+			body, err := triageAgentPrompt(request, paths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md")
+			if !strings.Contains(body, want) {
+				t.Fatalf("prompt is missing the scope-resolved issue rules path %q:\n%s", want, body)
+			}
+		})
 	}
 }
 
