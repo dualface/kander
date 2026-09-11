@@ -1,5 +1,5 @@
 {
-  "issue.usage": "usage: kander issue <command> [options]\n       kander issue repo [--repo HOST/OWNER/REPO] [--json]\n       kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N] [--json]\n       kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments] [--json]\n       kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]",
+  "issue.usage": "usage: kander issue <command> [options]\n       kander issue repo [--repo HOST/OWNER/REPO] [--json]\n       kander issue list [--repo HOST/OWNER/REPO] [--state open|closed|all] [--label NAME] [--search TEXT] [--limit N] [--json]\n       kander issue show NUMBER [--repo HOST/OWNER/REPO] [--comments] [--json]\n       kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]\n       kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME]",
   "issue.error_unknown_argument": "unexpected argument: {{.V0}}",
   "issue.error_missing_value": "option {{.V0}} requires a value",
   "issue.error_invalid_repository": "invalid repository reference \"{{.V0}}\": expected [HOST/]OWNER/REPO",
@@ -92,6 +92,9 @@
   "issue.error_import_conflict": "an existing card has an unreadable import snapshot: {{.V0}}",
   "issue.remediation_reduce_scope": "retry with a smaller scope: reduce --limit, drop --comments, or pick a smaller issue",
   "issue.remediation_check_board": "run `kander check` and repair that card, then retry",
+  "issue.triage_usage": "usage: kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME]",
+  "issue.triage_started": "takeover session started: {{.V0}} ({{.V1}}) on {{.V2}} at {{.V3}}",
+  "issue.triage_started_no_address": "takeover session started: {{.V0}} ({{.V1}}) on {{.V2}}",
   "tui.issues_imported": "imported: {{.V0}}",
   "tui.issues_import_update": "update available",
   "tui.issues_importing": "Importing…",

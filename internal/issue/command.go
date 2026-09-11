@@ -45,6 +45,8 @@ func runWith(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 		return runShow(factory, args[1:], stdout, stderr)
 	case "import":
 		return runImport(factory, args[1:], stdout, stderr)
+	case "triage":
+		return runTriage(factory, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", args[0]))
 		fmt.Fprintln(stderr, usageText())
