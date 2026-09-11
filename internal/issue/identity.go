@@ -2,9 +2,12 @@
 // resolution interface, and the structured errors of Kander's GitHub issue
 // integration.
 //
-// The package depends on neither board, launch, nor TUI so those layers never
-// bind to GitHub CLI concepts. Concrete providers such as internal/issue/ghcli
-// implement the resolution interface on top of this contract.
+// Identity, reference validation, issue queries, and the structured errors
+// depend on neither board, launch, nor TUI, so those layers never bind to
+// GitHub CLI concepts. Concrete providers such as internal/issue/ghcli
+// implement the resolution interface on top of this contract. The one
+// exception is the atomic issue import, which (as AGENTS.md records) depends
+// one way on internal/board; provider-neutral code must never import it back.
 package issue
 
 import (
