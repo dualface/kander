@@ -26,7 +26,9 @@ kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
 
 On the terminal board the same import is available from the issues overlay:
 `i` imports the selected issue, or jumps to the local card when it is already
-imported, and `I` imports with comments. The overlay marks imported issues with
+imported, and `I` imports with comments. Selecting a row also loads the issue
+content on its own; the "Issue snapshot cache" section describes that path. The
+overlay marks imported issues with
 their task ID and appends "update available" when the remote `updated_at` is
 newer than the fetched snapshot. It never overwrites the card on its own.
 
@@ -116,6 +118,50 @@ bound is rejected with a remediation hint; the snapshot is never truncated.
 | One comment | 64 KiB |
 | Comments | 50 |
 | Body plus comments per snapshot | 1 MiB |
+
+## Issue snapshot cache
+
+The issues overlay keeps a machine-local copy of every issue content it fetched,
+so a reopened overlay paints the last known body and comments before the network
+answers:
+
+```
+<board>/.kander/caches/issues/v1/<sha256(source_key)>.json
+```
+
+The file name is the hash of the canonical source key only; no remote text
+reaches the path. The record wraps the same schema-versioned `ImportSnapshot`
+the card attachments use and adds the cache version, the source key, the fetch
+time and a content digest over the issue update time plus body and comments:
+
+```json
+{
+  "schema_version": 1,
+  "source_key": "github://github.com/owner/repo/issues/42",
+  "fetched_at": "2026-09-11T03:00:00Z",
+  "digest": "…",
+  "snapshot": { }
+}
+```
+
+A read validates the cache version, the source key and the requested issue, then
+runs the stored record through the same sanitizer and bounds as a fresh provider
+reply. A missing file, a file above 1 MiB, a damaged record, a mismatched
+identity and content that fails a bound are all a miss: the cache never reports
+an error and never blocks the list, and the network stays the only authority.
+
+Writes are atomic and private (0600 in a private directory). The cache is
+bounded at 200 records and 16 MiB in total, flat across repositories like the
+file-name layout; a write prunes the oldest `fetched_at` records until both
+bounds hold, evicting a record it cannot read first. A snapshot whose record
+would exceed 1 MiB is not cached at all.
+
+Selecting a row requests the issue content in the background, debounced across
+one UI tick and limited to one request at a time; a cache hit paints
+immediately. When the refresh returns the same content, the scroll position is
+kept; when the content changed, the cache is rewritten, the pane repaints and a
+short notice reports the update. The cache lives below `kanban/`, is never
+committed, and carries no credentials.
 
 ## Card contract
 
