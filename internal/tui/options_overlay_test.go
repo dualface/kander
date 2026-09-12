@@ -621,10 +621,18 @@ func TestOptionsHintKeepsTabSwitchWhenNarrow(t *testing.T) {
 func TestOptionsTabDoesNotStealSingleTarget(t *testing.T) {
 	_, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeProject)
-	pumpPanel(panel, panel.openRoot())
-	before := panel.session.Target
+	pumpPanel(panel, panel.openSection(sectionInterface))
+	beforeTarget := panel.session.Target
+	before := panel.form.GetFocusedField()
+	if before == nil {
+		t.Fatal("interface section has no focused field")
+	}
 	drivePanel(panel, keyMsg("tab"))
-	if panel.session.Target != before {
-		t.Fatalf("single-tab Tab switched %s -> %s", before, panel.session.Target)
+	if panel.session.Target != beforeTarget {
+		t.Fatalf("single-tab Tab switched %s -> %s", beforeTarget, panel.session.Target)
+	}
+	after := panel.form.GetFocusedField()
+	if after == nil || after == before {
+		t.Fatal("single-tab Tab did not move field focus")
 	}
 }
