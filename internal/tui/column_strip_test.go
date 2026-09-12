@@ -91,24 +91,47 @@ func TestColumnStripClickSwitchesColumn(t *testing.T) {
 	if app.Model.CurrentState() != "backlog" {
 		t.Fatalf("start %s", app.Model.CurrentState())
 	}
-	layout := app.visibleColumnLayout()
-	if len(layout) != 1 {
-		t.Fatalf("visible columns %d", len(layout))
-	}
-	cells := evenCells(layout[0].Width, len(app.Model.States()))
+	cells := evenCells(64, len(app.Model.States()))
 	todo := cells[1]
-	x := layout[0].X + todo.X + todo.Width/2
-	app.HandleMouse(x, panelTopRow, mouseBtn1Clicked)
+	app.HandleMouse(todo.X+todo.Width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "todo" {
 		t.Fatalf("tab click %s", app.Model.CurrentState())
 	}
 	working := cells[2]
-	app.HandleMouse(layout[0].X+working.X+working.Width/2, panelTopRow, mouseBtn1Clicked)
+	app.HandleMouse(working.X+working.Width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "working" {
 		t.Fatalf("tab click %s", app.Model.CurrentState())
 	}
 	if app.visibleColumnLayout()[0].State != "working" {
 		t.Fatalf("visible %s", app.visibleColumnLayout()[0].State)
+	}
+}
+
+func TestColumnStripClickSecondPanelTab(t *testing.T) {
+	app := stripBoardApp(t, 64, 20)
+	app.MinColumnWidth = 28
+	app.Model.Single = false
+	layout := app.visibleColumnLayout()
+	if len(layout) < 2 {
+		t.Fatalf("want two columns, got %d", len(layout))
+	}
+	cells := evenCells(64, len(app.Model.States()))
+	done := cells[len(cells)-1]
+	if done.X < layout[1].X {
+		t.Fatalf("done tab x=%d still in first panel %d", done.X, layout[1].X)
+	}
+	app.HandleMouse(done.X+done.Width/2, panelTopRow, mouseBtn1Clicked)
+	if app.Model.CurrentState() != "done" {
+		t.Fatalf("second-panel tab click %s", app.Model.CurrentState())
+	}
+	visible := false
+	for _, col := range app.visibleColumnLayout() {
+		if col.State == "done" {
+			visible = true
+		}
+	}
+	if !visible {
+		t.Fatal("done not visible after tab click")
 	}
 }
 
@@ -150,8 +173,7 @@ func TestColumnStripClipsLongNames(t *testing.T) {
 	if strings.Contains(nameLine, "working") {
 		t.Fatalf("unclipped name in %q", nameLine)
 	}
-	layout := app.visibleColumnLayout()
-	cells := evenCells(layout[0].Width, len(app.Model.States()))
+	cells := evenCells(20, len(app.Model.States()))
 	inner := cells[2].Width - 1
 	if inner < 1 {
 		inner = cells[2].Width

@@ -59,11 +59,15 @@ func (a *App) renderBoardView() string {
 	}
 	bodyHeight := a.boardBodyHeight()
 	layout := a.visibleColumnLayout()
-	columnHeight := bodyHeight + 2
+	tabs := a.columnStripVisible()
+	columnHeight := bodyHeight + 1
+	if !tabs {
+		columnHeight++
+	}
 
 	blocks := make([]string, 0, len(layout)*2)
 	for i, col := range layout {
-		blocks = append(blocks, a.renderColumnPanel(p, col, bodyHeight,
+		blocks = append(blocks, a.renderColumnPanel(p, col, bodyHeight, tabs,
 			i == 0, i == len(layout)-1,
 			a.Model.ColumnOffset > 0,
 			a.Model.ColumnOffset+len(layout) < len(a.Model.States())))
@@ -72,13 +76,16 @@ func (a *App) renderBoardView() string {
 		}
 	}
 	board := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
-	return lipgloss.JoinVertical(lipgloss.Left,
+	parts := []string{
 		header,
 		// Leave one blank line between the header and the column panels so they are not cramped together.
 		p.fillLine(w),
-		padBlock(board, w, columnHeight, p),
-		a.renderStatusBar(p, w, len(layout)),
-	)
+	}
+	if tabs {
+		parts = append(parts, a.renderColumnTabs(p, w))
+	}
+	parts = append(parts, padBlock(board, w, columnHeight, p), a.renderStatusBar(p, w, len(layout)))
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // renderHeader is the single top line: title and search on the left, column count and update time on the right.
@@ -158,7 +165,7 @@ func (a *App) visibleTaskCount() int {
 }
 
 // renderColumnPanel draws one column as a rounded panel with a title.
-func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, first, last, moreLeft, moreRight bool) string {
+func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, skipTop, first, last, moreLeft, moreRight bool) string {
 	width := col.Width
 	focused := col.State == a.Model.CurrentState()
 	tasks, scroll, capacity := columnTaskWindow(a.Model, col.State, bodyHeight)
@@ -171,11 +178,10 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, firs
 		showLeft, showRight = true, true
 	}
 
-	top := a.panelTop(p, col.State, label, itoa(len(tasks)), width, focused, showLeft, showRight)
-	if a.columnStripVisible() {
-		top = a.renderColumnTabs(p, width)
+	var lines []string
+	if !skipTop {
+		lines = append(lines, a.panelTop(p, col.State, label, itoa(len(tasks)), width, focused, showLeft, showRight))
 	}
-	lines := []string{top}
 	contentWidth := width - panelChrome
 	if contentWidth < 1 {
 		contentWidth = 1
