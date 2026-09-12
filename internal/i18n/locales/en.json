@@ -894,7 +894,7 @@
   "tui.overlay_file": "Overlay: {{.V0}}",
   "tui.base_config": "Base: {{.V0}}",
   "tui.overlay_will_create": "Overlay file does not exist yet; the first saved override creates it.",
-  "tui.switch_scope_tabs": "[ ] switch Global / Project",
+  "tui.switch_scope_tabs": "Tab [ ] switch {{.V0}}",
   "tui.restore_field_inherit": "Restore inherit",
   "tui.page": "page",
   "tui.press_any_key_to_close": "press any key to close",

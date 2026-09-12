@@ -156,7 +156,7 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	if p.dirty {
 		title += t("tui.unsaved")
 	}
-	hint := styleFor("popup-dim", palette).Render(p.hintLine())
+	hint := styleFor("popup-dim", palette).Render(p.hintLine(width))
 	// An unconstrained Huh Group may carry the trailing blanks of an initialized viewport. Trim them before adding the hint,
 	// otherwise those blanks become interior whitespace and the popup cannot hug its actual content.
 	formView := strings.Join(trimTrailingBlank(strings.Split(p.form.View(), "\n")), "\n")
@@ -182,22 +182,38 @@ func fitOptionsForm(natural, available int) (height int, footerGap string) {
 	return height, footerGap
 }
 
-// hintLine is the key hint at the bottom of the popup, giving one accurate line for the current page.
-func (p *optionsPanel) hintLine() string {
+func (p *optionsPanel) pageHint() string {
 	switch {
 	case p.current == sectionDoctor:
 		return t("tui.choose_enter_confirm_esc_skip_installation")
 	case p.confirming:
 		return t("tui.move_enter_confirm_esc_keep_editing")
 	case p.current == "":
-		if p.session != nil && len(p.session.AvailableTargets()) > 1 {
-			return t("tui.move_enter_open_esc_close") + " · " + t("tui.switch_scope_tabs")
-		}
 		return t("tui.move_enter_open_esc_close")
 	case p.current == sectionExecution || p.current == sectionReview:
 		return t("tui.field_change_type_model_ids_enter_save_esc_back")
 	}
 	return t("tui.field_change_enter_save_esc_back")
+}
+
+// hintLine is the key hint at the bottom of the popup, giving one accurate line for the current page.
+// When Global/Project can be switched, that hint is preserved if the line must be clipped.
+func (p *optionsPanel) hintLine(width int) string {
+	page := p.pageHint()
+	scope := p.scopeTabHint()
+	if scope == "" {
+		return clipText(page, width)
+	}
+	const sep = " · "
+	joined := page + sep + scope
+	if width <= 0 || displayWidth(joined) <= width {
+		return joined
+	}
+	budget := width - displayWidth(scope) - displayWidth(sep)
+	if budget < 8 {
+		return clipText(scope, width)
+	}
+	return clipText(page, budget) + sep + scope
 }
 
 func sectionTitle(section string) string {

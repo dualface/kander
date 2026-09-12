@@ -356,15 +356,26 @@ func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
 	if p.report != nil {
 		return p.updateReport(msg)
 	}
-	if event, ok := msg.(tea.KeyMsg); ok && p.form != nil && !p.acceptsText() {
-		switch mapKey(event) {
-		case "q", "Q", "o", "O":
-			// Consistent with the rest of the board: q closes, and pressing o again closes too.
-			return p.requestClose()
-		case "[":
-			return p.cycleTab(-1)
-		case "]":
-			return p.cycleTab(1)
+	if event, ok := msg.(tea.KeyMsg); ok && p.form != nil {
+		key := mapKey(event)
+		if p.canCycleTabs() {
+			switch key {
+			case "tab":
+				return p.cycleTab(1)
+			case "shift-tab":
+				return p.cycleTab(-1)
+			}
+		}
+		if !p.acceptsText() {
+			switch key {
+			case "q", "Q", "o", "O":
+				// Consistent with the rest of the board: q closes, and pressing o again closes too.
+				return p.requestClose()
+			case "[":
+				return p.cycleTab(-1)
+			case "]":
+				return p.cycleTab(1)
+			}
 		}
 	}
 	if p.form == nil {

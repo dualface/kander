@@ -185,7 +185,8 @@ func sectionKeyMap() *huh.KeyMap {
 	keys.Quit = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", t("tui.back")))
 	disableFilter(keys)
 
-	// Enter always means "submit this section" instead of "jump to the next field"; fields are changed with ↑↓ or Tab.
+	// Enter always means "submit this section" instead of "jump to the next field"; fields move with ↑↓.
+	// Tab still moves to the next field when only one Options tab is available.
 	next := key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("↑↓", t("tui.move")))
 	prev := key.NewBinding(key.WithKeys("up", "shift+tab"))
 	submit := key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", t("tui.submit")))

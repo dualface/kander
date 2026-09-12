@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,27 +17,44 @@ type tabHit struct {
 	x1     int
 }
 
-func (p *optionsPanel) cycleTab(delta int) tea.Cmd {
-	if p.session == nil || p.confirming || p.report != nil {
-		return nil
+func (p *optionsPanel) canCycleTabs() bool {
+	return p.session != nil && !p.confirming && p.report == nil && len(p.session.AvailableTargets()) > 1
+}
+
+func tabLabel(target string) string {
+	if target == config.TargetOverlay {
+		return t("tui.tab_project")
+	}
+	return t("tui.tab_global")
+}
+
+func (p *optionsPanel) scopeTabHint() string {
+	if !p.canCycleTabs() {
+		return ""
 	}
 	targets := p.session.AvailableTargets()
-	if len(targets) < 2 {
+	names := make([]string, 0, len(targets))
+	for _, target := range targets {
+		names = append(names, tabLabel(target))
+	}
+	return t("tui.switch_scope_tabs", strings.Join(names, " / "))
+}
+
+func (p *optionsPanel) cycleTab(delta int) tea.Cmd {
+	if !p.canCycleTabs() {
 		return nil
 	}
 	if p.bind != nil {
 		p.bind.apply(p)
 	}
+	targets := p.session.AvailableTargets()
 	current := p.session.Target
 	if current == "" {
 		current = config.TargetScope
 	}
-	index := 0
-	for i, item := range targets {
-		if item == current {
-			index = i
-			break
-		}
+	index := slices.Index(targets, current)
+	if index < 0 {
+		index = 0
 	}
 	next := targets[(index+delta+len(targets))%len(targets)]
 	return p.switchTab(next)
@@ -99,11 +117,7 @@ func (p *optionsPanel) renderTabBar(palette palette, width int) string {
 	cursor := 0
 	var parts []string
 	for i, target := range targets {
-		label := t("tui.tab_global")
-		if target == config.TargetOverlay {
-			label = t("tui.tab_project")
-		}
-		text := " " + label + " "
+		text := " " + tabLabel(target) + " "
 		style := lipgloss.NewStyle().Foreground(palette.Dim).Background(palette.Bg)
 		if target == active {
 			style = lipgloss.NewStyle().Foreground(palette.ChromeFg).Background(palette.ChromeBg).Bold(true)

@@ -894,7 +894,7 @@
   "tui.overlay_file": "オーバーレイ: {{.V0}}",
   "tui.base_config": "ベース設定: {{.V0}}",
   "tui.overlay_will_create": "オーバーレイファイルはまだありません。最初の上書き保存で作成されます。",
-  "tui.switch_scope_tabs": "[ ] グローバル / プロジェクト切替",
+  "tui.switch_scope_tabs": "Tab [ ] {{.V0}}切替",
   "tui.restore_field_inherit": "継承を復元",
   "tui.page": "ページ",
   "tui.press_any_key_to_close": "何かキーを押して閉じる",

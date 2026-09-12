@@ -507,3 +507,124 @@ func TestInvalidProjectInterfaceEditReportsAndKeepsInput(t *testing.T) {
 		t.Fatal("invalid candidate created overlay")
 	}
 }
+
+func scopeSwitchHint() string {
+	return t("tui.switch_scope_tabs", t("tui.tab_global")+" / "+t("tui.tab_project"))
+}
+
+func TestOptionsTabKeyCyclesScope(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	drivePanel(panel, keyMsg("tab"))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("tab target=%s", panel.session.Target)
+	}
+	drivePanel(panel, keyMsg("shift-tab"))
+	if panel.session.Target != config.TargetScope {
+		t.Fatalf("shift-tab target=%s", panel.session.Target)
+	}
+	drivePanel(panel, keyMsg("]"))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("] target=%s", panel.session.Target)
+	}
+	drivePanel(panel, keyMsg("["))
+	if panel.session.Target != config.TargetScope {
+		t.Fatalf("[ target=%s", panel.session.Target)
+	}
+}
+
+func TestOptionsHintShowsAvailableTabsAndKeys(t *testing.T) {
+	want := scopeSwitchHint()
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	_, view := panel.view()
+	if !strings.Contains(ansi.Strip(view), want) {
+		t.Fatalf("root hint missing %q:\n%s", want, ansi.Strip(view))
+	}
+	pumpPanel(panel, panel.openSection(sectionInterface))
+	_, view = panel.view()
+	if !strings.Contains(ansi.Strip(view), want) {
+		t.Fatalf("section hint missing %q:\n%s", want, ansi.Strip(view))
+	}
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	_, view = panel.view()
+	if !strings.Contains(ansi.Strip(view), want) {
+		t.Fatalf("execution hint missing %q:\n%s", want, ansi.Strip(view))
+	}
+}
+
+func TestOptionsHintOmitsTabSwitchWhenUnavailable(t *testing.T) {
+	const keys = "Tab [ ]"
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeProject)
+	pumpPanel(panel, panel.openRoot())
+	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
+		t.Fatalf("project install showed tab switch:\n%s", ansi.Strip(panelView(panel)))
+	}
+
+	_, panel = openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	panel.markDirty()
+	pumpPanel(panel, panel.openCloseConfirm())
+	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
+		t.Fatalf("confirm showed tab switch:\n%s", ansi.Strip(panelView(panel)))
+	}
+	drivePanel(panel, keyMsg("tab"))
+	if panel.session.Target != config.TargetScope {
+		t.Fatalf("confirm tab switched to %s", panel.session.Target)
+	}
+
+	_, panel = openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	panel.showReport("title", nil, "body")
+	if strings.Contains(ansi.Strip(panelView(panel)), keys) {
+		t.Fatalf("report showed tab switch:\n%s", ansi.Strip(panelView(panel)))
+	}
+}
+
+func panelView(panel *optionsPanel) string {
+	_, view := panel.view()
+	return view
+}
+
+func TestOptionsTabKeyCyclesFromTextSection(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	if !panel.acceptsText() {
+		t.Fatal("execution should accept text")
+	}
+	drivePanel(panel, keyMsg("tab"))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("tab in execution target=%s", panel.session.Target)
+	}
+	drivePanel(panel, keyMsg("["))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("[ in execution switched to %s", panel.session.Target)
+	}
+}
+
+func TestOptionsHintKeepsTabSwitchWhenNarrow(t *testing.T) {
+	app, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	app.Width, app.Height = 48, 16
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	plain := ansi.Strip(panelView(panel))
+	if !strings.Contains(plain, "Tab") || !strings.Contains(plain, "[") {
+		t.Fatalf("narrow hint dropped tab keys:\n%s", plain)
+	}
+}
+
+func TestOptionsTabDoesNotStealSingleTarget(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeProject)
+	pumpPanel(panel, panel.openRoot())
+	before := panel.session.Target
+	drivePanel(panel, keyMsg("tab"))
+	if panel.session.Target != before {
+		t.Fatalf("single-tab Tab switched %s -> %s", before, panel.session.Target)
+	}
+}
