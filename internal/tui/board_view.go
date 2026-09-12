@@ -103,15 +103,25 @@ func (a *App) renderColumnStrip(p palette, w int) string {
 		}
 		state := states[i]
 		style := columnStripStyle(p, state, state == current)
-		label := clipText(a.Context.stateLabel(state), cell.Width)
-		blank := style.Render(strings.Repeat(" ", cell.Width))
-		name := style.Render(centerText(label, cell.Width))
-		blocks = append(blocks, strings.Join([]string{blank, name, blank}, "\n"))
+		name, bottom := columnStripTab(a.Context.stateLabel(state), cell.Width, style)
+		blocks = append(blocks, name+"\n"+bottom)
 	}
 	if len(blocks) == 0 {
-		return strings.Join([]string{p.fillLine(w), p.fillLine(w), p.fillLine(w)}, "\n")
+		return p.fillLine(w) + "\n" + p.fillLine(w)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
+}
+
+func columnStripTab(label string, width int, style lipgloss.Style) (name, bottom string) {
+	if width < 2 {
+		text := clipText(label, width)
+		return style.Render(padLine(text, width)), style.Render(strings.Repeat(borderHorizontal, width))
+	}
+	inner := width - 2
+	text := clipText(label, inner)
+	name = style.Render(borderVertical + centerText(text, inner) + borderVertical)
+	bottom = style.Render(borderBottomLeft + strings.Repeat(borderHorizontal, inner) + borderBottomRight)
+	return name, bottom
 }
 
 // renderHeader is the single top line: title and search on the left, column count and update time on the right.

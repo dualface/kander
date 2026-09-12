@@ -65,16 +65,19 @@ func TestColumnStripShowsOnNarrowBoard(t *testing.T) {
 		t.Fatal("width 64 should show the strip")
 	}
 	lines := strings.Split(ansi.Strip(app.View()), "\n")
-	if len(lines) < 4 {
+	if len(lines) < 3 {
 		t.Fatalf("lines=%d", len(lines))
 	}
-	top, mid, bot := lines[len(lines)-4], lines[len(lines)-3], lines[len(lines)-2]
-	if strings.TrimSpace(top) != "" || strings.TrimSpace(bot) != "" {
-		t.Fatalf("strip padding: top=%q bot=%q", top, bot)
+	names, bot := lines[len(lines)-3], lines[len(lines)-2]
+	if !strings.Contains(names, borderVertical) {
+		t.Fatalf("name row missing side border: %q", names)
+	}
+	if !strings.Contains(bot, borderBottomLeft) || !strings.Contains(bot, borderHorizontal) {
+		t.Fatalf("bottom row missing border: %q", bot)
 	}
 	for _, name := range []string{"backlog", "todo", "working", "review", "done"} {
-		if !strings.Contains(mid, name) {
-			t.Fatalf("middle %q missing %s", mid, name)
+		if !strings.Contains(names, name) {
+			t.Fatalf("name row %q missing %s", names, name)
 		}
 	}
 	wide := stripBoardApp(t, 65, 20)
@@ -98,12 +101,12 @@ func TestColumnStripClickSwitchesColumn(t *testing.T) {
 	top := 20 - 1 - columnStripHeight
 	app.HandleMouse(x, top, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "todo" {
-		t.Fatalf("empty row click %s", app.Model.CurrentState())
+		t.Fatalf("name row click %s", app.Model.CurrentState())
 	}
 	working := cells[2]
 	app.HandleMouse(working.X+working.Width/2, top+1, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "working" {
-		t.Fatalf("name row click %s", app.Model.CurrentState())
+		t.Fatalf("bottom border click %s", app.Model.CurrentState())
 	}
 	if got := len(app.visibleColumnLayout()); got != 1 {
 		t.Fatalf("visible columns %d", got)
@@ -150,10 +153,14 @@ func TestColumnStripClipsLongNames(t *testing.T) {
 		t.Fatalf("unclipped name in %q", nameLine)
 	}
 	cells := evenCells(20, len(app.Model.States()))
-	if cells[2].Width >= displayWidth("working") {
+	inner := cells[2].Width - 2
+	if inner < 1 {
+		inner = cells[2].Width
+	}
+	if inner >= displayWidth("working") {
 		t.Skip("cell wide enough for working")
 	}
-	got := clipText("working", cells[2].Width)
+	got := clipText("working", inner)
 	if !strings.Contains(nameLine, strings.TrimSpace(got)) && got != "" {
 		t.Fatalf("clipped %q not in %q", got, nameLine)
 	}
