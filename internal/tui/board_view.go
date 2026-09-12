@@ -32,19 +32,12 @@ const panelDetailChrome = 4
 
 func (a *App) columnStripVisible() bool {
 	h, w := a.size()
-	return w > 0 && w <= columnStripMaxWidth && h >= minBoardHeight+columnStripHeight
-}
-
-func (a *App) columnStripRows() int {
-	if a.columnStripVisible() {
-		return columnStripHeight
-	}
-	return 0
+	return w > 0 && w <= columnStripMaxWidth && h >= minBoardHeight
 }
 
 func (a *App) boardBodyHeight() int {
 	h, _ := a.size()
-	n := h - bodyTop - 2 - a.columnStripRows()
+	n := h - bodyTop - 2
 	if n < 1 {
 		return 1
 	}
@@ -79,49 +72,13 @@ func (a *App) renderBoardView() string {
 		}
 	}
 	board := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
-	parts := []string{
+	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
 		// Leave one blank line between the header and the column panels so they are not cramped together.
 		p.fillLine(w),
 		padBlock(board, w, columnHeight, p),
-	}
-	if a.columnStripVisible() {
-		parts = append(parts, a.renderColumnStrip(p, w))
-	}
-	parts = append(parts, a.renderStatusBar(p, w, len(layout)))
-	return lipgloss.JoinVertical(lipgloss.Left, parts...)
-}
-
-func (a *App) renderColumnStrip(p palette, w int) string {
-	states := a.Model.States()
-	cells := evenCells(w, len(states))
-	current := a.Model.CurrentState()
-	blocks := make([]string, 0, len(cells))
-	for i, cell := range cells {
-		if cell.Width < 1 {
-			continue
-		}
-		state := states[i]
-		style := columnStripStyle(p, state, state == current)
-		name, bottom := columnStripTab(a.Context.stateLabel(state), cell.Width, style)
-		blocks = append(blocks, name+"\n"+bottom)
-	}
-	if len(blocks) == 0 {
-		return p.fillLine(w) + "\n" + p.fillLine(w)
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
-}
-
-func columnStripTab(label string, width int, style lipgloss.Style) (name, bottom string) {
-	if width < 2 {
-		text := clipText(label, width)
-		return style.Render(padLine(text, width)), style.Render(strings.Repeat(borderHorizontal, width))
-	}
-	inner := width - 2
-	text := clipText(label, inner)
-	name = style.Render(borderVertical + centerText(text, inner) + borderVertical)
-	bottom = style.Render(borderBottomLeft + strings.Repeat(borderHorizontal, inner) + borderBottomRight)
-	return name, bottom
+		a.renderStatusBar(p, w, len(layout)),
+	)
 }
 
 // renderHeader is the single top line: title and search on the left, column count and update time on the right.
@@ -214,7 +171,11 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, firs
 		showLeft, showRight = true, true
 	}
 
-	lines := []string{a.panelTop(p, col.State, label, itoa(len(tasks)), width, focused, showLeft, showRight)}
+	top := a.panelTop(p, col.State, label, itoa(len(tasks)), width, focused, showLeft, showRight)
+	if a.columnStripVisible() {
+		top = a.renderColumnTabs(p, width)
+	}
+	lines := []string{top}
 	contentWidth := width - panelChrome
 	if contentWidth < 1 {
 		contentWidth = 1
@@ -241,6 +202,35 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, firs
 	}
 	lines = append(lines, a.panelBottom(p, col.State, width, focused))
 	return strings.Join(lines, "\n")
+}
+
+func (a *App) renderColumnTabs(p palette, width int) string {
+	states := a.Model.States()
+	cells := evenCells(width, len(states))
+	current := a.Model.CurrentState()
+	parts := make([]string, 0, len(cells))
+	last := len(cells) - 1
+	for i, cell := range cells {
+		if cell.Width < 1 {
+			continue
+		}
+		state := states[i]
+		style := columnStripStyle(p, state, state == current)
+		left, right := borderVertical, ""
+		if i == last {
+			right = borderVertical
+		}
+		inner := cell.Width - displayWidth(left) - displayWidth(right)
+		if inner < 0 {
+			inner = 0
+		}
+		label := clipText(a.Context.stateLabel(state), inner)
+		parts = append(parts, style.Render(left+centerText(label, inner)+right))
+	}
+	if len(parts) == 0 {
+		return p.fillLine(width)
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
 }
 
 // renderCard draws one task card. The card keeps one column of padding on each side and both take part in the coloring,

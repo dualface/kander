@@ -23,10 +23,8 @@ const (
 	spacerRow      = 1
 	panelTopRow    = 2
 	bodyTop        = 3
-	// A two-line column strip sits above the status bar on narrow screens:
-	// the name row with side borders, then the bottom border.
+	// On a narrow screen the column title row becomes a tab bar of every state.
 	columnStripMaxWidth = 64
-	columnStripHeight   = 2
 	// Detail panel: the top border, the metadata line, the separator, and only then the body.
 	detailPanelTopRow  = 2
 	detailMetaRow      = 3

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )
 
@@ -62,31 +61,28 @@ func TestEvenCellsFillWidth(t *testing.T) {
 func TestColumnStripShowsOnNarrowBoard(t *testing.T) {
 	app := stripBoardApp(t, 64, 20)
 	if !app.columnStripVisible() {
-		t.Fatal("width 64 should show the strip")
+		t.Fatal("width 64 should show tabs")
 	}
-	lines := strings.Split(ansi.Strip(app.View()), "\n")
-	if len(lines) < 3 {
-		t.Fatalf("lines=%d", len(lines))
-	}
-	names, bot := lines[len(lines)-3], lines[len(lines)-2]
+	names := viewLine(app, panelTopRow)
 	if !strings.Contains(names, borderVertical) {
-		t.Fatalf("name row missing side border: %q", names)
-	}
-	if !strings.Contains(bot, borderBottomLeft) || !strings.Contains(bot, borderHorizontal) {
-		t.Fatalf("bottom row missing border: %q", bot)
+		t.Fatalf("tab row missing side border: %q", names)
 	}
 	for _, name := range []string{"backlog", "todo", "working", "review", "done"} {
 		if !strings.Contains(names, name) {
-			t.Fatalf("name row %q missing %s", names, name)
+			t.Fatalf("tab row %q missing %s", names, name)
 		}
+	}
+	bottom := viewLine(app, 20-2)
+	if strings.Contains(bottom, "backlog") && strings.Contains(bottom, "done") {
+		t.Fatalf("bottom still a tab strip: %q", bottom)
 	}
 	wide := stripBoardApp(t, 65, 20)
 	if wide.columnStripVisible() {
-		t.Fatal("width 65 should hide the strip")
+		t.Fatal("width 65 should hide tabs")
 	}
-	wideLines := strings.Split(ansi.Strip(wide.View()), "\n")
-	if strings.Contains(wideLines[len(wideLines)-3], "backlog") && strings.Contains(wideLines[len(wideLines)-3], "done") {
-		t.Fatalf("wide board kept a strip: %q", wideLines[len(wideLines)-3])
+	wideNames := viewLine(wide, panelTopRow)
+	if strings.Contains(wideNames, "backlog") && strings.Contains(wideNames, "done") {
+		t.Fatalf("wide board kept tabs: %q", wideNames)
 	}
 }
 
@@ -95,38 +91,41 @@ func TestColumnStripClickSwitchesColumn(t *testing.T) {
 	if app.Model.CurrentState() != "backlog" {
 		t.Fatalf("start %s", app.Model.CurrentState())
 	}
-	cells := evenCells(64, len(app.Model.States()))
+	layout := app.visibleColumnLayout()
+	if len(layout) != 1 {
+		t.Fatalf("visible columns %d", len(layout))
+	}
+	cells := evenCells(layout[0].Width, len(app.Model.States()))
 	todo := cells[1]
-	x := todo.X + todo.Width/2
-	top := 20 - 1 - columnStripHeight
-	app.HandleMouse(x, top, mouseBtn1Clicked)
+	x := layout[0].X + todo.X + todo.Width/2
+	app.HandleMouse(x, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "todo" {
-		t.Fatalf("name row click %s", app.Model.CurrentState())
+		t.Fatalf("tab click %s", app.Model.CurrentState())
 	}
 	working := cells[2]
-	app.HandleMouse(working.X+working.Width/2, top+1, mouseBtn1Clicked)
+	app.HandleMouse(layout[0].X+working.X+working.Width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "working" {
-		t.Fatalf("bottom border click %s", app.Model.CurrentState())
-	}
-	if got := len(app.visibleColumnLayout()); got != 1 {
-		t.Fatalf("visible columns %d", got)
+		t.Fatalf("tab click %s", app.Model.CurrentState())
 	}
 	if app.visibleColumnLayout()[0].State != "working" {
 		t.Fatalf("visible %s", app.visibleColumnLayout()[0].State)
 	}
 }
 
-func TestColumnStripShrinksBoardBody(t *testing.T) {
+func TestColumnStripKeepsBoardBodyHeight(t *testing.T) {
 	narrow := stripBoardApp(t, 64, 20)
 	wide := stripBoardApp(t, 80, 20)
-	if narrow.boardBodyHeight() != wide.boardBodyHeight()-columnStripHeight {
+	if narrow.boardBodyHeight() != wide.boardBodyHeight() {
 		t.Fatalf("narrow body %d wide body %d", narrow.boardBodyHeight(), wide.boardBodyHeight())
 	}
-	if narrow.hitColumnStrip(1, 20-2) == "" {
-		t.Fatal("strip hit missed")
+	if narrow.hitColumnStrip(1, panelTopRow) == "" {
+		t.Fatal("tab hit missed")
 	}
-	if wide.hitColumnStrip(1, 20-2) != "" {
-		t.Fatal("wide board hit a strip")
+	if wide.hitColumnStrip(1, panelTopRow) != "" {
+		t.Fatal("wide board hit tabs")
+	}
+	if narrow.hitColumnStrip(1, 20-2) != "" {
+		t.Fatal("bottom still a strip")
 	}
 }
 
@@ -147,13 +146,13 @@ func TestColumnStripStyleUsesColumnColor(t *testing.T) {
 
 func TestColumnStripClipsLongNames(t *testing.T) {
 	app := stripBoardApp(t, 20, 20)
-	mid := strings.Split(ansi.Strip(app.View()), "\n")
-	nameLine := mid[len(mid)-3]
+	nameLine := viewLine(app, panelTopRow)
 	if strings.Contains(nameLine, "working") {
 		t.Fatalf("unclipped name in %q", nameLine)
 	}
-	cells := evenCells(20, len(app.Model.States()))
-	inner := cells[2].Width - 2
+	layout := app.visibleColumnLayout()
+	cells := evenCells(layout[0].Width, len(app.Model.States()))
+	inner := cells[2].Width - 1
 	if inner < 1 {
 		inner = cells[2].Width
 	}

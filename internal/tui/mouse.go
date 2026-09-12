@@ -289,17 +289,21 @@ func (a *App) hitColumnAt(x, y int) string {
 }
 
 func (a *App) hitColumnStrip(x, y int) string {
-	if !a.columnStripVisible() {
+	if !a.columnStripVisible() || y != panelTopRow {
 		return ""
 	}
-	h, w := a.size()
-	top := h - 1 - columnStripHeight
-	if y < top || y >= h-1 {
+	layout := a.visibleColumnLayout()
+	if len(layout) == 0 {
 		return ""
 	}
+	col := layout[0]
+	if x < col.X || x >= col.X+col.Width {
+		return ""
+	}
+	local := x - col.X
 	states := a.Model.States()
-	for i, cell := range evenCells(w, len(states)) {
-		if cell.Width > 0 && x >= cell.X && x < cell.X+cell.Width {
+	for i, cell := range evenCells(col.Width, len(states)) {
+		if cell.Width > 0 && local >= cell.X && local < cell.X+cell.Width {
 			return states[i]
 		}
 	}
@@ -320,7 +324,7 @@ func (a *App) hitBoard(x, y int) *boardHit {
 		first := index == 0
 		last := index == len(layout)-1
 		singleNav := a.Model.Single || (first && last && len(a.Model.States()) > 1)
-		if y == 2 && singleNav && len(a.Model.States()) > 1 {
+		if y == panelTopRow && !a.columnStripVisible() && singleNav && len(a.Model.States()) > 1 {
 			if localX <= 2 {
 				return &boardHit{Kind: "nav", Delta: -1}
 			}
