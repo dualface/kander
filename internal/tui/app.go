@@ -538,8 +538,7 @@ func (a *App) applyDetailSearch() {
 }
 
 func (a *App) pageSize() int {
-	h, _ := a.size()
-	n := (h - bodyTop) / cardHeight
+	n := a.boardBodyHeight() / cardHeight
 	if n < 1 {
 		return 1
 	}

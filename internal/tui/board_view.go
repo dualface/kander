@@ -30,6 +30,27 @@ const panelChrome = 4
 // panelDetailChrome equals panelChrome; the detail panel has to subtract it too when it spans the full screen width.
 const panelDetailChrome = 4
 
+func (a *App) columnStripVisible() bool {
+	h, w := a.size()
+	return w > 0 && w <= columnStripMaxWidth && h >= minBoardHeight+columnStripHeight
+}
+
+func (a *App) columnStripRows() int {
+	if a.columnStripVisible() {
+		return columnStripHeight
+	}
+	return 0
+}
+
+func (a *App) boardBodyHeight() int {
+	h, _ := a.size()
+	n := h - bodyTop - 2 - a.columnStripRows()
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
 // renderBoardView assembles the board with Lip Gloss: header, blank line, the column panels, and the bottom status bar.
 func (a *App) renderBoardView() string {
 	h, w := a.size()
@@ -43,10 +64,7 @@ func (a *App) renderBoardView() string {
 			styleFor("footer", p).Render(padLine(" "+a.Context.QuitHelp, w)),
 		)
 	}
-	bodyHeight := h - bodyTop - 2
-	if bodyHeight < 1 {
-		bodyHeight = 1
-	}
+	bodyHeight := a.boardBodyHeight()
 	layout := a.visibleColumnLayout()
 	columnHeight := bodyHeight + 2
 
@@ -61,13 +79,39 @@ func (a *App) renderBoardView() string {
 		}
 	}
 	board := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
-	return lipgloss.JoinVertical(lipgloss.Left,
+	parts := []string{
 		header,
 		// Leave one blank line between the header and the column panels so they are not cramped together.
 		p.fillLine(w),
 		padBlock(board, w, columnHeight, p),
-		a.renderStatusBar(p, w, len(layout)),
-	)
+	}
+	if a.columnStripVisible() {
+		parts = append(parts, a.renderColumnStrip(p, w))
+	}
+	parts = append(parts, a.renderStatusBar(p, w, len(layout)))
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+func (a *App) renderColumnStrip(p palette, w int) string {
+	states := a.Model.States()
+	cells := evenCells(w, len(states))
+	current := a.Model.CurrentState()
+	blocks := make([]string, 0, len(cells))
+	for i, cell := range cells {
+		if cell.Width < 1 {
+			continue
+		}
+		state := states[i]
+		style := columnStripStyle(p, state, state == current)
+		label := clipText(a.Context.stateLabel(state), cell.Width)
+		blank := style.Render(strings.Repeat(" ", cell.Width))
+		name := style.Render(centerText(label, cell.Width))
+		blocks = append(blocks, strings.Join([]string{blank, name, blank}, "\n"))
+	}
+	if len(blocks) == 0 {
+		return strings.Join([]string{p.fillLine(w), p.fillLine(w), p.fillLine(w)}, "\n")
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
 }
 
 // renderHeader is the single top line: title and search on the left, column count and update time on the right.

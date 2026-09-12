@@ -5,8 +5,7 @@ func (a *App) boardCardHit(x, y int) *mouseSel {
 	if hit == nil || hit.Kind != "task" {
 		return nil
 	}
-	h, _ := a.size()
-	bodyHeight := h - bodyTop - 2
+	bodyHeight := a.boardBodyHeight()
 	tasks, scroll, _ := columnTaskWindow(a.Model, hit.State, bodyHeight)
 	if hit.Index < scroll || hit.Index >= len(tasks) {
 		return nil
@@ -199,6 +198,10 @@ func (a *App) handleBoardClick(x, y, bstate int) {
 		a.ShowCursor = true
 		return
 	}
+	if state := a.hitColumnStrip(x, y); state != "" {
+		a.Model.FocusState(state)
+		return
+	}
 	if y >= h-1 {
 		return
 	}
@@ -246,6 +249,9 @@ func (a *App) handleBoardMouse(x, y, bstate int) {
 		return
 	}
 	if mouseLeftPressed(bstate) {
+		if a.hitColumnStrip(x, y) != "" {
+			return
+		}
 		if hit := a.boardCardHit(x, y); hit != nil {
 			a.MouseSelecting = true
 			a.MouseAnchor = hit
@@ -282,13 +288,30 @@ func (a *App) hitColumnAt(x, y int) string {
 	return ""
 }
 
+func (a *App) hitColumnStrip(x, y int) string {
+	if !a.columnStripVisible() {
+		return ""
+	}
+	h, w := a.size()
+	top := h - 1 - columnStripHeight
+	if y < top || y >= h-1 {
+		return ""
+	}
+	states := a.Model.States()
+	for i, cell := range evenCells(w, len(states)) {
+		if cell.Width > 0 && x >= cell.X && x < cell.X+cell.Width {
+			return states[i]
+		}
+	}
+	return ""
+}
+
 func (a *App) hitBoard(x, y int) *boardHit {
-	h, _ := a.size()
 	layout := a.visibleColumnLayout()
 	if len(layout) == 0 {
 		return nil
 	}
-	bodyHeight := h - bodyTop - 2
+	bodyHeight := a.boardBodyHeight()
 	for index, col := range layout {
 		if x < col.X || x >= col.X+col.Width {
 			continue

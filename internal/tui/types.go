@@ -23,6 +23,9 @@ const (
 	spacerRow      = 1
 	panelTopRow    = 2
 	bodyTop        = 3
+	// A three-line column strip sits above the status bar on narrow screens.
+	columnStripMaxWidth = 64
+	columnStripHeight   = 3
 	// Detail panel: the top border, the metadata line, the separator, and only then the body.
 	detailPanelTopRow  = 2
 	detailMetaRow      = 3

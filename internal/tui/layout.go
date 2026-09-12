@@ -54,6 +54,23 @@ func columnGeometry(width, count int) []columnGeom {
 	return layout
 }
 
+// evenCells splits width into count adjacent cells with no separators.
+func evenCells(width, count int) []columnGeom {
+	if count < 1 {
+		count = 1
+	}
+	if width < 0 {
+		width = 0
+	}
+	layout := make([]columnGeom, count)
+	for i := range count {
+		start := i * width / count
+		end := (i + 1) * width / count
+		layout[i] = columnGeom{X: start, Width: end - start}
+	}
+	return layout
+}
+
 func columnTaskWindow(model *BoardModel, state string, bodyHeight int) (tasks []Task, scroll, capacity int) {
 	tasks = model.TasksFor(state)
 	capacity = (bodyHeight + 1) / cardHeight
