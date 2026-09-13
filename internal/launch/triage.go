@@ -185,7 +185,10 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	}
 	rules := RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " "
 	issueRules := filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md")
-	cardLine := t("launch.prompt.triage_no_card")
+	// The import instruction belongs to the unbound branch only: a session
+	// started for a bound card continues that card and must never be told to
+	// import the issue again.
+	cardLine := t("launch.prompt.triage_no_card", commandName(paths), strconv.Itoa(request.Number))
 	if request.CardID != "" {
 		cardLine = t("launch.prompt.triage_with_card", request.CardID)
 	}
@@ -195,10 +198,8 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		rules,
 		request.JSONPath,
 		request.MarkdownPath,
-		commandName(paths),
 		cardLine,
 		promptAgents(paths),
-		strconv.Itoa(request.Number),
 		issueRules,
 	), nil
 }

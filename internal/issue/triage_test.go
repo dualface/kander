@@ -152,7 +152,7 @@ func TestStartTriageUsesStarterAndValidatesBoundCard(t *testing.T) {
 		captured.Agent != "claude" || captured.Launcher != "tmux" || captured.Root != root {
 		t.Fatalf("captured=%+v calls=%d", captured, calls)
 	}
-	if captured.JSONPath == "" || captured.MarkdownPath == "" || captured.EvidenceDir == "" {
+	if captured.JSONPath == "" || captured.MarkdownPath == "" {
 		t.Fatalf("evidence paths missing: %+v", captured)
 	}
 	if !strings.HasPrefix(captured.JSONPath, triageEvidenceDir(root)) {

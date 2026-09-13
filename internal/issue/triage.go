@@ -46,7 +46,6 @@ type TriageLaunch struct {
 	Repository   Repository
 	Number       int
 	CardID       string
-	EvidenceDir  string
 	JSONPath     string
 	MarkdownPath string
 	Agent        string
@@ -163,7 +162,6 @@ func StartTriage(ctx context.Context, provider IssueProvider, root string, repos
 		Repository:   repository,
 		Number:       number,
 		CardID:       cardID,
-		EvidenceDir:  evidence.Directory,
 		JSONPath:     evidence.JSONPath,
 		MarkdownPath: evidence.MarkdownPath,
 		Agent:        strings.TrimSpace(options.Agent),

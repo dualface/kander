@@ -226,9 +226,13 @@ issue and agrees on the plan with the user before anything is written:
 - An issue whose card is already bound jumps to that card on the board and
   reports its state, because that card already carries the contract. A card
   still in `backlog` first offers both exits: `y`/`Enter` jumps, `s` starts the
-  same session pointed at that card so its contract can be completed.
+  same session pointed at that card so its contract can be completed. When the
+  settings cannot be resolved or need the caller's terminal, that dialog keeps
+  the jump exit and shows the reason in place of the start settings.
 - The TUI starts only background launchers (`herdr`, `tmux`, `tmux-session`);
-  `foreground` and `console` report that the CLI must be used instead. Every
+  `foreground` and `console` report that the CLI must be used instead. A
+  confirmed start passes the agent and launcher the dialog showed, so a
+  configuration change after the preview cannot start a different pair. Every
   request runs through the overlay's background slot and is dropped when its
   dialog sequence or selected issue no longer matches.
 
@@ -262,7 +266,7 @@ untrusted data, investigates the issue, and confirms findings and scope with the
 user. Only after that agreement does it create the card with
 `kander issue import NUMBER`, which keeps the issue binding and the contract
 sections described above; a session started with `--card` continues the bound
-card instead and never imports a duplicate. The card `SIZE` and whether the work
+card instead, and its prompt carries no import instruction at all. The card `SIZE` and whether the work
 splits into several cards are the agent's judgement.
 
 A failed start closes the container it created and removes its task file, so it

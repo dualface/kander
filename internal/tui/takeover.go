@@ -36,8 +36,8 @@ type takeoverState struct {
 	launcher string
 	// blockedReason explains why the contract-start exit cannot start from the
 	// TUI (failed preview or a launcher that needs the caller's terminal). The
-	// dialog and its jump exit stay usable; the reason is reported only when
-	// the start exit is actually used.
+	// dialog and its jump exit stay usable; the dialog shows the reason, and the
+	// start exit reports it again as its result when it is used.
 	blockedReason string
 	failed        bool
 	message       string
@@ -220,7 +220,7 @@ func (a *App) jumpToBoundCard(dialog *takeoverState) {
 func (a *App) startTakeover(dialog *takeoverState) {
 	if dialog.blockedReason != "" {
 		// A bound card disabled its start exit instead of closing the dialog;
-		// report the reason only now, when the user actually asks to start.
+		// the start attempt ends with that reason as its result.
 		dialog.phase = takeoverFinished
 		dialog.failed = true
 		dialog.message = dialog.blockedReason
@@ -233,14 +233,18 @@ func (a *App) startTakeover(dialog *takeoverState) {
 		dialog.message = t("tui.issues_takeover_unavailable")
 		return
 	}
-	sequence, repository, number, cardID := dialog.sequence, dialog.repository, dialog.number, dialog.cardID
+	// The agent and launcher the dialog showed and validated are passed on, so a
+	// configuration change after the preview cannot start a different pair, and
+	// never a launcher that needs the caller's terminal.
+	options := issue.TriageOptions{CardID: dialog.cardID, Agent: dialog.agent, Launcher: dialog.launcher}
+	sequence, repository, number := dialog.sequence, dialog.repository, dialog.number
 	dialog.phase = takeoverRunning
 	dialog.failed = false
 	dialog.message = ""
 	a.pendingWork = func() any {
 		ctx, cancel := context.WithTimeout(context.Background(), issuesTriageTimeout)
 		defer cancel()
-		outcome, err := runner(ctx, repository, number, issue.TriageOptions{CardID: cardID})
+		outcome, err := runner(ctx, repository, number, options)
 		return takeoverResult{sequence: sequence, outcome: outcome, err: err}
 	}
 }
@@ -318,7 +322,14 @@ func (a *App) renderTakeover() (popupBox, string) {
 		} else {
 			paragraphs = append(paragraphs, t("tui.issues_takeover_body", identity))
 		}
-		paragraphs = append(paragraphs, t("tui.start_settings", dialog.agent, dialog.launcher))
+		// A failed preview leaves no settings to show; an empty settings line
+		// would read as an empty configuration, so only the reason is shown.
+		if dialog.agent != "" || dialog.launcher != "" {
+			paragraphs = append(paragraphs, t("tui.start_settings", dialog.agent, dialog.launcher))
+		}
+		if dialog.blockedReason != "" {
+			paragraphs = append(paragraphs, dialog.blockedReason)
+		}
 	}
 	return a.renderStartDialog(paragraphs, hint, takeoverTitle(dialog), &dialog.bodyView)
 }

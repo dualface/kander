@@ -66,7 +66,6 @@ func triageRequest(t *testing.T, root string) issue.TriageLaunch {
 		Root:         root,
 		Repository:   repository,
 		Number:       42,
-		EvidenceDir:  evidence.Directory,
 		JSONPath:     evidence.JSONPath,
 		MarkdownPath: evidence.MarkdownPath,
 	}
@@ -181,7 +180,7 @@ func TestStartTriageRequiresEvidence(t *testing.T) {
 	}
 	root, _, _ := setupBoard(t)
 	request := triageRequest(t, root)
-	request.MarkdownPath = filepath.Join(request.EvidenceDir, "missing.md")
+	request.MarkdownPath = filepath.Join(filepath.Dir(request.JSONPath), "missing.md")
 	if _, err := StartTriage(request); err == nil || !strings.Contains(err.Error(), "证据") {
 		t.Fatalf("err=%v", err)
 	}
@@ -235,6 +234,49 @@ func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
 			want := filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md")
 			if !strings.Contains(body, want) {
 				t.Fatalf("prompt is missing the scope-resolved issue rules path %q:\n%s", want, body)
+			}
+		})
+	}
+}
+
+func TestTriagePromptImportsOnlyWithoutABoundCard(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	t.Setenv(config.EnvLangCLI, "")
+	paths := config.InstallPaths{
+		Mode:     config.ModeGlobal,
+		BinDir:   filepath.Join(t.TempDir(), "bin"),
+		RulesDir: filepath.Join(t.TempDir(), "rules"),
+	}
+	unbound := issue.TriageLaunch{
+		Root:         t.TempDir(),
+		Repository:   triageRepository(),
+		Number:       42,
+		JSONPath:     filepath.Join(t.TempDir(), "issue.json"),
+		MarkdownPath: filepath.Join(t.TempDir(), "issue.md"),
+	}
+	bound := unbound
+	bound.CardID = "20260911-bound-issue-task"
+	for _, lang := range []string{"cn", "en", "ja"} {
+		t.Run(lang, func(t *testing.T) {
+			t.Setenv(config.EnvLang, lang)
+			body, err := triageAgentPrompt(unbound, paths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(body, "issue import 42") {
+				t.Fatalf("unbound prompt is missing the import instruction:\n%s", body)
+			}
+			body, err = triageAgentPrompt(bound, paths)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(body, "issue import") {
+				t.Fatalf("bound prompt still tells the agent to import:\n%s", body)
+			}
+			if !strings.Contains(body, bound.CardID) || !strings.Contains(body, bound.JSONPath) {
+				t.Fatalf("bound prompt is missing the card or the evidence path:\n%s", body)
 			}
 		})
 	}

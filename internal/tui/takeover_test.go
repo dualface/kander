@@ -107,7 +107,9 @@ func TestIssuesTakeoverUnboundStartsThroughTheSharedPath(t *testing.T) {
 		t.Fatalf("calls=%+v", *calls)
 	}
 	call := (*calls)[0]
-	if call.number != 42 || call.options.CardID != "" || call.repository.Name != fake.repository.Name {
+	// The start uses exactly the agent and launcher the dialog showed.
+	if call.number != 42 || call.options.CardID != "" || call.repository.Name != fake.repository.Name ||
+		call.options.Agent != "claude" || call.options.Launcher != "tmux" {
 		t.Fatalf("call=%+v", call)
 	}
 	app.HandleKey("x")
@@ -284,6 +286,20 @@ func TestIssuesTakeoverBoundBacklogKeepsJumpWhenThePreviewFails(t *testing.T) {
 	runPendingWork(t, app)
 	if dialog.phase != takeoverReady {
 		t.Fatalf("dialog=%+v", dialog)
+	}
+	// No settings were resolved: the dialog shows the reason, not an empty
+	// settings line.
+	view := ansi.Strip(app.View())
+	if strings.Contains(view, config.Text("tui.start_settings", "", "")) {
+		t.Fatalf("dialog rendered an empty settings line:\n%s", view)
+	}
+	for _, want := range []string{
+		config.Text("tui.issues_takeover_preview_failed", "no config"),
+		config.Text("tui.issues_contract_jump"),
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("dialog missing %q:\n%s", want, view)
+		}
 	}
 
 	// y/Enter is still the default exit and starts no session.
