@@ -68,8 +68,13 @@ func TestColumnStripShowsOnNarrowBoard(t *testing.T) {
 	if !strings.Contains(names, "backlog 1") {
 		t.Fatalf("selected tab missing count: %q", names)
 	}
-	if strings.Contains(names, " todo ") || strings.Contains(names, " working ") {
-		t.Fatalf("idle tab has padding: %q", names)
+	for _, want := range []string{"todo 1", "working 1"} {
+		if !strings.Contains(names, want) {
+			t.Fatalf("idle non-empty tab missing count %q in %q", want, names)
+		}
+	}
+	if strings.Contains(names, "review 0") || strings.Contains(names, "done 0") {
+		t.Fatalf("idle empty tab showed zero count: %q", names)
 	}
 	for _, name := range []string{"todo", "working", "review", "done"} {
 		if !strings.Contains(names, name) {

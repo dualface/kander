@@ -221,13 +221,19 @@ type columnTabCell struct {
 }
 
 func columnTabSegment(label string, selected bool, index int, prevSelected bool, count int) string {
+	text := label
+	// Selected tabs always keep the count (including zero). Idle tabs only
+	// show it when the column has cards, so empty states stay compact.
+	if selected || count > 0 {
+		text = label + " " + itoa(count)
+	}
 	if selected {
-		return borderVertical + label + " " + itoa(count) + borderVertical
+		return borderVertical + text + borderVertical
 	}
 	if index > 0 && !prevSelected {
-		return borderVertical + label
+		return borderVertical + text
 	}
-	return label
+	return text
 }
 
 func measureTabLabels(states, labels []string, current string, counts []int) int {
