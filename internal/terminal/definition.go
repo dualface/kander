@@ -159,11 +159,25 @@ type Step struct {
 }
 
 // StepMessages render a failed step: exec when the command could not run,
-// exit on a non-zero exit, invalid when the output does not satisfy expect.
+// exit on a non-zero exit, invalid when the output does not parse or satisfy
+// expect. not_json, not_object and missing_result refine invalid for a
+// json_field output and fall back to it.
 type StepMessages struct {
-	Exec    *Message `json:"exec,omitempty"`
-	Exit    *Message `json:"exit,omitempty"`
-	Invalid *Message `json:"invalid,omitempty"`
+	Exec          *Message `json:"exec,omitempty"`
+	Exit          *Message `json:"exit,omitempty"`
+	Invalid       *Message `json:"invalid,omitempty"`
+	NotJSON       *Message `json:"not_json,omitempty"`
+	NotObject     *Message `json:"not_object,omitempty"`
+	MissingResult *Message `json:"missing_result,omitempty"`
+}
+
+// forKind returns the message of an output failure kind.
+func (m StepMessages) forKind(kind ErrorKind) *Message {
+	refined := map[ErrorKind]*Message{KindNotJSON: m.NotJSON, KindNotObject: m.NotObject, KindMissingResult: m.MissingResult}[kind]
+	if refined != nil {
+		return refined
+	}
+	return m.Invalid
 }
 
 // Poll reruns a step until its output satisfies Until or Timeout elapses.

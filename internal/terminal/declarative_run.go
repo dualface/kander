@@ -54,31 +54,52 @@ func parseErrorRule(rule string) (errorRule, error) {
 	}
 }
 
-// matches classifies a non-zero exit. The stderr regex sees the trimmed
-// stderr; JSON rules decode the whole stream and compare a string field.
-func (r errorRule) matches(result probe.Result) bool {
-	switch {
-	case r.pattern != nil:
-		return r.pattern.MatchString(strings.TrimSpace(result.Stderr))
-	case r.jsonPath != "":
-		text := result.Stdout
-		if r.stream == process.SourceStderr {
-			text = result.Stderr
-		}
-		value, err := process.ParseTerminalOutput(process.OutputSpec{Source: r.stream, Parse: "json_field:" + r.jsonPath}, text)
-		return err == nil && value == r.value
-	default:
-		return result.Code == r.exitCode
-	}
-}
-
+// matchAny classifies a non-zero exit when any rule matches. The stderr regex
+// sees the trimmed stderr. JSON rules on the same dotted path share one
+// resolved code: the first stream, in the order the rules name the streams,
+// whose output holds a non-empty string there. A code in stderr therefore
+// decides even when stdout carries another one.
 func matchAny(rules []errorRule, result probe.Result) bool {
+	codes := map[string]string{}
 	for _, rule := range rules {
-		if rule.matches(result) {
-			return true
+		switch {
+		case rule.pattern != nil:
+			if rule.pattern.MatchString(strings.TrimSpace(result.Stderr)) {
+				return true
+			}
+		case rule.jsonPath != "":
+			code, resolved := codes[rule.jsonPath]
+			if !resolved {
+				code = resolveCode(rules, rule.jsonPath, result)
+				codes[rule.jsonPath] = code
+			}
+			if code != "" && code == rule.value {
+				return true
+			}
+		default:
+			if result.Code == rule.exitCode {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func resolveCode(rules []errorRule, path string, result probe.Result) string {
+	for _, rule := range rules {
+		if rule.jsonPath != path {
+			continue
+		}
+		text := result.Stdout
+		if rule.stream == process.SourceStderr {
+			text = result.Stderr
+		}
+		code, err := process.ParseTerminalOutput(process.OutputSpec{Source: rule.stream, Parse: "json_field:" + path}, text)
+		if err == nil && code != "" {
+			return code
+		}
+	}
+	return ""
 }
 
 // goneSignal ends a gone-aware operation with the gone fact.
@@ -341,10 +362,10 @@ func (e *execution) attempt(ctx context.Context, step *Step, argv []string) (pro
 			}
 			return result, "", nil, &stepFailure{kind: KindExit, result: result, detail: detail}
 		}
-		text, parseErr := extractOutput(step.Output, result)
+		text, parseKind, parseErr := extractOutput(step.Output, result)
 		if step.Poll == nil {
 			if parseErr != nil {
-				return result, "", nil, &stepFailure{kind: KindInvalidResponse, result: result, detail: parseErr.Error()}
+				return result, "", nil, &stepFailure{kind: parseKind, result: result, detail: parseErr.Error()}
 			}
 			return result, text, extractFields(step, text), nil
 		}
@@ -396,15 +417,49 @@ func (e *execution) pollSatisfied(poll *Poll, text string) bool {
 	}
 }
 
-func extractOutput(spec *process.OutputSpec, result probe.Result) (string, error) {
+// extractOutput applies the output spec through the shared parser. When a
+// json_field output fails, the failure is classified like a JSON API
+// response: not JSON, not an object, or the path missing; a path that holds
+// an object or array yields that sub-document as compact JSON with sorted keys.
+func extractOutput(spec *process.OutputSpec, result probe.Result) (string, ErrorKind, error) {
 	if spec == nil {
-		return result.Stdout, nil
+		return result.Stdout, 0, nil
 	}
 	data := result.Stdout
 	if spec.Source == process.SourceStderr {
 		data = result.Stderr
 	}
-	return process.ParseTerminalOutput(*spec, data)
+	text, err := process.ParseTerminalOutput(*spec, data)
+	path, isJSONField := strings.CutPrefix(spec.Parse, "json_field:")
+	if err == nil || !isJSONField || errors.Is(err, process.ErrSuccess) {
+		return text, KindInvalidResponse, err
+	}
+	var doc any
+	if decodeErr := json.Unmarshal([]byte(data), &doc); decodeErr != nil {
+		return "", KindNotJSON, decodeErr
+	}
+	if _, ok := doc.(map[string]any); !ok {
+		return "", KindNotObject, err
+	}
+	for _, key := range strings.Split(path, ".") {
+		object, ok := doc.(map[string]any)
+		if !ok {
+			return "", KindMissingResult, err
+		}
+		if doc, ok = object[key]; !ok {
+			return "", KindMissingResult, err
+		}
+	}
+	switch doc.(type) {
+	case map[string]any, []any:
+		encoded, encodeErr := json.Marshal(doc)
+		if encodeErr != nil {
+			return "", KindInvalidResponse, encodeErr
+		}
+		return string(encoded), 0, nil
+	default:
+		return "", KindMissingResult, err
+	}
 }
 
 // extractFields applies each field primitive to the output text; a field whose
@@ -431,7 +486,7 @@ func parseFields(fields map[string]string, source, text string) map[string]strin
 func (e *execution) stepFailed(step *Step, failure *stepFailure) error {
 	if failure.kind == KindExit && failure.result.Code != 0 {
 		if e.goneAware && matchAny(e.backend.gone, failure.result) {
-			return &goneSignal{detail: strings.TrimSpace(failure.result.Stderr)}
+			return &goneSignal{detail: failure.detail}
 		}
 	}
 	metaMissing := failure.kind == KindExit && failure.result.Code != 0 && matchAny(e.backend.metaMissing, failure.result)
@@ -448,8 +503,8 @@ func (e *execution) stepFailed(step *Step, failure *stepFailure) error {
 			message = e.stepMessage(step.Messages.Exec, failure)
 		}
 		return &CommandError{Kind: KindExec, Message: message, Cause: failure.cause, Code: failure.result.Code, Stderr: failure.result.Stderr}
-	case KindInvalidResponse:
-		return &CommandError{Kind: KindInvalidResponse, Message: e.stepMessage(step.Messages.Invalid, failure), Code: failure.result.Code, Stderr: failure.result.Stderr}
+	case KindInvalidResponse, KindNotJSON, KindNotObject, KindMissingResult:
+		return &CommandError{Kind: failure.kind, Message: e.stepMessage(step.Messages.forKind(failure.kind), failure), Cause: failure.cause, Code: failure.result.Code, Stderr: failure.result.Stderr}
 	default:
 		return &CommandError{Kind: KindExit, Message: e.stepMessage(step.Messages.Exit, failure), Code: failure.result.Code, Stderr: failure.result.Stderr}
 	}

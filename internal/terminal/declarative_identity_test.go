@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
@@ -128,5 +129,119 @@ func TestDeclarativeJSONArrayRows(t *testing.T) {
 	fake.SetReplies(t, reply(`{"result":{}}`, "pane", "list"))
 	if _, err := backend.Topology(context.Background(), fakeConn(fake), Address{Container: "w1:t1"}); err == nil || err.Error() != "pane list has no panes" {
 		t.Fatalf("missing array: %v", err)
+	}
+}
+
+// herdrStyleBackend declares herdr-like pane facts, error codes, native
+// marker waiting and a prefixed address.
+func herdrStyleBackend(t *testing.T) *DeclarativeBackend {
+	t.Helper()
+	return declarativeOp(t, OpPaneFacts, `{
+		"steps": [{
+			"store": "pane",
+			"argv": ["pane", "get", "{pane}"],
+			"output": {"source": "stdout", "parse": "json_field:result"},
+			"fields": {"id": "json_field:pane.pane_id", "agent": "json_field:pane.agent"},
+			"expect": "field:step.pane.id={pane}",
+			"messages": {"not_json": "not json: {detail}", "not_object": "not an object", "missing_result": "no result", "invalid": "wrong pane"}
+		}],
+		"result": {"agent": "{step.pane.agent}"}
+	}`, func(root map[string]any) {
+		root["address"] = []any{
+			map[string]any{"name": "container", "pattern": `[^:\s]+:[^:\s]+`},
+			map[string]any{"name": "pane", "pattern": `[^:\s]+:[^:\s]+`},
+		}
+		object(root, "errors")["gone"] = []any{"stderr_json:error.code=pane_not_found", "stdout_json:error.code=pane_not_found"}
+		object(root, "ops")["wait_output"] = mustJSON(t, `{"steps": [{"argv": ["pane", "wait-output", "{pane}", "--match", "{marker_literal}", "--regex", "{marker_regex}", "--source", "recent", "--timeout", "{timeout_ms}"]}]}`)
+	})
+}
+
+func TestDeclarativeErrorCodePrecedence(t *testing.T) {
+	resetLanguage(t)
+	backend := herdrStyleBackend(t)
+	for name, tc := range map[string]struct {
+		stdout, stderr string
+		gone           bool
+		detail         string
+	}{
+		"stderr code":                  {stderr: `{"error":{"code":"pane_not_found"}}`, gone: true, detail: `{"error":{"code":"pane_not_found"}}`},
+		"stdout code keeps exit":       {stdout: `{"error":{"code":"pane_not_found"}}`, gone: true, detail: "exit 1"},
+		"stderr code decides":          {stdout: `{"error":{"code":"pane_not_found"}}`, stderr: `{"error":{"code":"permission_denied"}}`},
+		"empty stderr code falls back": {stdout: `{"error":{"code":"pane_not_found"}}`, stderr: `{"error":{"code":""}}`, gone: true, detail: `{"error":{"code":""}}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn := Conn{Run: func(context.Context, string, []string) (probe.Result, error) {
+				return probe.Result{Code: 1, Stdout: tc.stdout, Stderr: tc.stderr}, nil
+			}}
+			facts, err := backend.PaneFacts(context.Background(), conn, "w1:p1")
+			if facts.Gone != tc.gone || facts.GoneDetail != tc.detail || (err == nil) != tc.gone {
+				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+	}
+}
+
+func TestDeclarativeJSONOutputKinds(t *testing.T) {
+	resetLanguage(t)
+	backend := herdrStyleBackend(t)
+	for output, want := range map[string]struct {
+		kind    ErrorKind
+		message string
+	}{
+		"not-json":          {KindNotJSON, "not json: invalid character 'o' in literal null (expecting 'u')"},
+		"[]":                {KindNotObject, "not an object"},
+		"{}":                {KindMissingResult, "no result"},
+		`{"result":"text"}`: {KindInvalidResponse, "wrong pane"},
+		`{"result":{"pane":{"pane_id":"w1:p2"}}}`: {KindInvalidResponse, "wrong pane"},
+	} {
+		conn := Conn{Run: func(context.Context, string, []string) (probe.Result, error) {
+			return probe.Result{Stdout: output}, nil
+		}}
+		_, err := backend.PaneFacts(context.Background(), conn, "w1:p1")
+		commandErr, ok := AsCommandError(err)
+		if !ok || commandErr.Kind != want.kind || commandErr.Error() != want.message {
+			t.Fatalf("output %q: err=%v kind=%v", output, err, commandErr)
+		}
+	}
+	conn := Conn{Run: func(context.Context, string, []string) (probe.Result, error) {
+		return probe.Result{Stdout: `{"result":{"pane":{"pane_id":"w1:p1","agent":"codex"}}}`}, nil
+	}}
+	if facts, err := backend.PaneFacts(context.Background(), conn, "w1:p1"); err != nil || facts.Agent != "codex" {
+		t.Fatalf("sub-document output: facts=%+v err=%v", facts, err)
+	}
+}
+
+func TestDeclarativeNativeMarkerFlags(t *testing.T) {
+	resetLanguage(t)
+	backend := herdrStyleBackend(t)
+	for marker, want := range map[string][]string{
+		"READY":             {"pane", "wait-output", "w1:p1", "--match", "READY", "--source", "recent", "--timeout", "15000"},
+		`regex:READY\s+NOW`: {"pane", "wait-output", "w1:p1", "--regex", `READY\s+NOW`, "--source", "recent", "--timeout", "15000"},
+	} {
+		var got []string
+		if err := backend.WaitOutput(context.Background(), recordingConn(&got), "w1:p1", marker, 15000); err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("marker %q: argv=%q err=%v", marker, got, err)
+		}
+	}
+}
+
+func TestDeclarativeFocusAddressAcceptsPlainSegments(t *testing.T) {
+	resetLanguage(t)
+	backend := herdrStyleBackend(t)
+	for window, want := range map[string]Address{
+		"faketerm:w1:t2:w1:p3": {Container: "w1:t2", Pane: "w1:p3"},
+		"faketerm:t2:p3":       {Container: "t2", Pane: "p3"},
+	} {
+		if got, ok := backend.ParseFocusAddress(strings.Split(window, ":")); !ok || got != want {
+			t.Fatalf("focus %s: %+v ok=%v", window, got, ok)
+		}
+	}
+	for _, window := range []string{"faketerm:w1:t2:p3", "other:t2:p3"} {
+		if _, ok := backend.ParseFocusAddress(strings.Split(window, ":")); ok {
+			t.Fatalf("focus %s accepted", window)
+		}
+	}
+	if _, ok := backend.ParseAddress("faketerm:t2:p3"); ok {
+		t.Fatal("WINDOW parsing stays strict")
 	}
 }

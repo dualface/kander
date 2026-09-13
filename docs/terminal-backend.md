@@ -40,7 +40,7 @@ Kander reaches a terminal (herdr, tmux, or a direct process launcher) only throu
 | terminal definition    | the definition's `address` fields joined by `:` | the named fields |
 | foreground / console   | none; WINDOW is the bare name  | not parseable                                     |
 
-`terminal.FormatAddress` renders the complete value; `Backend.OpaqueAddress` renders the part without the launcher prefix (used for start and takeover reports). `ParseFocusAddress` additionally accepts herdr ids without a workspace prefix for the read-only focus path.
+`terminal.FormatAddress` renders the complete value; `Backend.OpaqueAddress` renders the part without the launcher prefix (used for start and takeover reports). `ParseFocusAddress` additionally accepts herdr ids without a workspace prefix for the read-only focus path; a definition backend accepts each address field as a plain segment there.
 
 ## Capabilities
 

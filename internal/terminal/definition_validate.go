@@ -36,7 +36,7 @@ var opInputs = map[string][]string{
 	OpSetSessionMarker: {"pane", "value"},
 	OpPaneFacts:        {"pane"},
 	OpReadOutput:       {"pane"},
-	OpWaitOutput:       {"pane", "marker", "timeout_ms"},
+	OpWaitOutput:       {"pane", "marker", "marker_literal", "marker_regex", "timeout_ms"},
 	OpDeliverText:      {"pane", "text"},
 	OpTopology:         {"session", "container", "pane"},
 	OpContainerExists:  {"session", "container", "pane"},
@@ -566,7 +566,10 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 		return nil, err
 	}
 	messageNames := names.with(stepMessageNames...)
-	for label, message := range map[string]*Message{"exec": step.Messages.Exec, "exit": step.Messages.Exit, "invalid": step.Messages.Invalid} {
+	for label, message := range map[string]*Message{
+		"exec": step.Messages.Exec, "exit": step.Messages.Exit, "invalid": step.Messages.Invalid,
+		"not_json": step.Messages.NotJSON, "not_object": step.Messages.NotObject, "missing_result": step.Messages.MissingResult,
+	} {
 		if err := v.optionalMessage("messages."+label, message, messageNames); err != nil {
 			return nil, err
 		}

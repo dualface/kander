@@ -131,9 +131,35 @@ func (b *DeclarativeBackend) ParseAddress(value string) (Address, bool) {
 	return address, true
 }
 
+// ParseFocusAddress accepts a strict WINDOW value, or, for the read-only focus
+// path, the same number of fields as the address with every field a plain
+// colon-free segment (legacy IDs without a prefix such as a workspace).
 func (b *DeclarativeBackend) ParseFocusAddress(fields []string) (Address, bool) {
-	return b.ParseAddress(strings.Join(fields, ":"))
+	if address, ok := b.ParseAddress(strings.Join(fields, ":")); ok {
+		return address, true
+	}
+	if len(fields) != len(b.def.Address)+1 || fields[0] != b.launcher {
+		return Address{}, false
+	}
+	var address Address
+	for index, field := range b.def.Address {
+		value := fields[index+1]
+		if !plainSegment.MatchString(value) {
+			return Address{}, false
+		}
+		switch field.Name {
+		case "session":
+			address.Session = value
+		case "container":
+			address.Container = value
+		default:
+			address.Pane = value
+		}
+	}
+	return address, true
 }
+
+var plainSegment = regexp.MustCompile(`^[^:\s]+$`)
 
 // AutoDetect selects a launcher that runs inside an existing session when its
 // platform and environment requirements hold.
@@ -367,7 +393,16 @@ func (b *DeclarativeBackend) WaitOutput(ctx context.Context, conn Conn, pane, ma
 	if _, ok := b.op(OpWaitOutput); !ok {
 		return ErrUnsupported
 	}
-	_, err := b.probeOp(ctx, OpWaitOutput, conn, map[string]string{"pane": pane, "marker": match, "timeout_ms": strconv.Itoa(timeoutMS)}, false)
+	// marker_literal and marker_regex split the Backend match contract (a
+	// literal, or a "regex:"-prefixed expression) so a definition can pass
+	// each to its own flag; the empty one drops together with its flag.
+	literal, regex := match, ""
+	if pattern, ok := strings.CutPrefix(match, "regex:"); ok {
+		literal, regex = "", pattern
+	}
+	_, err := b.probeOp(ctx, OpWaitOutput, conn, map[string]string{
+		"pane": pane, "marker": match, "marker_literal": literal, "marker_regex": regex, "timeout_ms": strconv.Itoa(timeoutMS),
+	}, false)
 	return err
 }
 

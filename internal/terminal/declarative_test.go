@@ -304,15 +304,19 @@ func TestDeclarativeErrorClassification(t *testing.T) {
 	resetLanguage(t)
 	ctx := context.Background()
 	backend := fixtureBackend(t, noEnv)
-	for name, gone := range map[string]terminaltest.Reply{
-		"exit code":   {Args: []string{"facts"}, Code: 3, Stderr: "vanished"},
-		"stderr":      {Args: []string{"facts"}, Code: 1, Stderr: "No such pane: p1\n"},
-		"stdout json": {Args: []string{"facts"}, Code: 1, Stdout: `{"error":{"code":"pane_not_found"}}`},
+	// The gone detail is the step detail: trimmed stderr, or the exit status.
+	for name, tc := range map[string]struct {
+		reply  terminaltest.Reply
+		detail string
+	}{
+		"exit code":   {terminaltest.Reply{Args: []string{"facts"}, Code: 3, Stderr: "vanished"}, "vanished"},
+		"stderr":      {terminaltest.Reply{Args: []string{"facts"}, Code: 1, Stderr: "No such pane: p1\n"}, "No such pane: p1"},
+		"stdout json": {terminaltest.Reply{Args: []string{"facts"}, Code: 1, Stdout: `{"error":{"code":"pane_not_found"}}`}, "exit 1"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			fake := terminaltest.New(t, gone)
+			fake := terminaltest.New(t, tc.reply)
 			facts, err := backend.PaneFacts(ctx, fakeConn(fake), "p1")
-			if err != nil || !facts.Gone || facts.GoneDetail != strings.TrimSpace(gone.Stderr) {
+			if err != nil || !facts.Gone || facts.GoneDetail != tc.detail {
 				t.Fatalf("facts=%+v err=%v", facts, err)
 			}
 			exists, err := backend.ContainerExists(ctx, fakeConn(fake), Address{Container: "w1"})

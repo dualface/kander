@@ -45,6 +45,8 @@ These points are the contract and are not extended:
 
 A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session` and `container`, and `topology` lists pane IDs through `rows`).
 
+`ParseAddress` applies the `address` patterns strictly. The read-only focus path (`ParseFocusAddress`) also accepts the same number of fields when each is a plain colon-free segment, which keeps legacy IDs without a prefix focusable.
+
 ## Launchers
 
 ```text
@@ -80,7 +82,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `set_session_marker` | `pane`, `value`                                         | none |
 | `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `container` |
 | `read_output`        | `pane`                                                  | `text` |
-| `wait_output`        | `pane`, `marker` (literal or `regex:` prefixed), `timeout_ms` | none |
+| `wait_output`        | `pane`, `marker` (literal or `regex:` prefixed), `marker_literal` (the marker without a `regex:` prefix, else empty), `marker_regex` (the expression after `regex:`, else empty), `timeout_ms` | none |
 | `deliver_text`       | `pane`, `text`                                          | none |
 | `topology`           | `session`, `container`, `pane`                          | `session`, `container`, `pane_count`; optional `rows` whose matching rows' `pane` form the pane ID list |
 | `container_exists`   | `session`, `container`, `pane`                          | exists when the steps succeed |
@@ -120,13 +122,14 @@ An operation object is:
   "on_error": "fail" | "continue" | "meta_missing",
   "timeout": "<duration>",
   "stop_on_success": <bool>,
-  "messages": {"exec": <message>, "exit": <message>, "invalid": <message>}
+  "messages": {"exec": <message>, "exit": <message>, "invalid": <message>,
+               "not_json": <message>, "not_object": <message>, "missing_result": <message>}
 }
 ```
 
 - Steps run in order. A step whose `when` does not hold is skipped. A `fail` step ends the operation with its message.
 - `argv` elements are expanded one by one. An element whose placeholder value is empty is dropped together with an immediately preceding standalone flag, as in agent definitions. A runtime value containing CR, LF or NUL fails the step; TAB and braces are allowed in runtime values.
-- `output` extracts the step text (the raw stdout without it). `fields` apply one primitive each to that text; a primitive that does not match leaves the field absent. An `output` that does not parse fails the step as an invalid response.
+- `output` extracts the step text (the raw stdout without it). `fields` apply one primitive each to that text; a primitive that does not match leaves the field absent. An `output` that does not parse fails the step as an invalid response (`KindInvalidResponse`). A `json_field` output is classified like a JSON API response: output that is not JSON is `KindNotJSON`, a root that is not an object `KindNotObject`, and a missing path `KindMissingResult`, each with its own optional message falling back to `invalid`; a path holding an object or array yields that sub-document as compact JSON with sorted keys, so `fields` can read inside it.
 - `store` records the step under `step.<store>.*`: the declared fields plus `ok` (`true`/`false`), `detail` and `text`. A later step with the same store name replaces the record, which is how a legacy fallback read supersedes a missing primary field.
 - `expect` is checked after a successful command; when it does not hold the operation fails with the `invalid` message, whatever `on_error` says.
 - `on_error: continue` records a failed command (or an output that does not parse) as `ok=false` with its `detail` and goes on; `meta_missing` does so only when `errors.meta_missing` classifies a non-zero exit. `fail` (default) ends the operation.
@@ -184,9 +187,9 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 }
 ```
 
-- A non-zero exit matching `gone` makes `pane_facts` return the gone fact (with the trimmed stderr) and `container_exists` return false; in other operations it is an ordinary failure. `stderr` rules see the trimmed stderr; JSON rules read a string field of the whole stream.
+- A non-zero exit matching `gone` makes `pane_facts` return the gone fact, whose detail is the step detail (trimmed stderr, or `exit N`), and `container_exists` return false; in other operations it is an ordinary failure. `stderr` rules see the trimmed stderr. JSON rules on the same dotted path share one resolved code: the first stream, in the order the rules name the streams, whose whole output holds a non-empty string at that path; a rule matches when that code equals its value. With `stderr_json` listed before `stdout_json`, a code in stderr decides even when stdout carries another one.
 - `meta_missing` matters only for a step with `on_error: meta_missing`, which then continues with the field absent.
-- Everything else is a command failure: `terminal.CommandError` with `KindExec` (the command could not run; deadline and cancellation stay detectable with `errors.Is`), `KindExit`, or `KindInvalidResponse`. Liveness, notify and takeover rely on this split to roll back, degrade or report.
+- Everything else is a command failure: `terminal.CommandError` with `KindExec` (the command could not run; deadline and cancellation stay detectable with `errors.Is`), `KindExit`, `KindNotJSON`, `KindNotObject`, `KindMissingResult` or `KindInvalidResponse`. Liveness, notify and takeover rely on this split to roll back, degrade or report.
 
 ## Host Policies
 
