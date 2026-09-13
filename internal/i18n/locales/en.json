@@ -906,7 +906,7 @@
   "tui.base_config": "Base: {{.V0}}",
   "tui.overlay_missing": "not created yet",
   "tui.overlay_will_create": "Overlay file does not exist yet; the first saved override creates it.",
-  "tui.switch_scope_tabs": "Tab [ ]",
+  "tui.switch_scope_tabs": "Tab",
   "tui.restore_field_inherit": "Restore to global settings",
   "tui.restore_page_confirm": "Restore every setting on this page to the global value? Project overrides for this page are removed.",
   "tui.restore_page_confirm_yes": "Restore",

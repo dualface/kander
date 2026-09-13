@@ -387,10 +387,6 @@ func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
 			case "q", "Q", "o", "O":
 				// Consistent with the rest of the board: q closes, and pressing o again closes too.
 				return p.requestClose()
-			case "[":
-				return p.cycleTab(-1)
-			case "]":
-				return p.cycleTab(1)
 			}
 		}
 	}

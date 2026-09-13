@@ -124,7 +124,7 @@ func TestOptionsTabSwitchKeepsEditsAndDoesNotSave(t *testing.T) {
 	pumpPanel(panel, panel.openRoot())
 	panel.session.SetLauncher("foreground")
 	panel.markDirty()
-	drivePanel(panel, keyMsg("]"))
+	drivePanel(panel, keyMsg("tab"))
 	if panel.session.Target != config.TargetOverlay {
 		t.Fatalf("target=%s", panel.session.Target)
 	}
@@ -132,7 +132,7 @@ func TestOptionsTabSwitchKeepsEditsAndDoesNotSave(t *testing.T) {
 		t.Fatal("tab switch created an overlay")
 	}
 	panel.session.SetLauncher("herdr")
-	drivePanel(panel, keyMsg("["))
+	drivePanel(panel, keyMsg("shift-tab"))
 	if panel.session.Target != config.TargetScope {
 		t.Fatalf("target=%s", panel.session.Target)
 	}
@@ -674,13 +674,11 @@ func TestOptionsTabKeyCyclesScope(t *testing.T) {
 	if panel.session.Target != config.TargetScope {
 		t.Fatalf("shift-tab target=%s", panel.session.Target)
 	}
-	drivePanel(panel, keyMsg("]"))
-	if panel.session.Target != config.TargetOverlay {
-		t.Fatalf("] target=%s", panel.session.Target)
-	}
-	drivePanel(panel, keyMsg("["))
-	if panel.session.Target != config.TargetScope {
-		t.Fatalf("[ target=%s", panel.session.Target)
+	for _, key := range []string{"]", "["} {
+		drivePanel(panel, keyMsg(key))
+		if panel.session.Target != config.TargetScope {
+			t.Fatalf("%s must not switch scope, target=%s", key, panel.session.Target)
+		}
 	}
 }
 
@@ -706,7 +704,8 @@ func TestOptionsHintShowsAvailableTabsAndKeys(t *testing.T) {
 }
 
 func TestOptionsHintOmitsTabSwitchWhenUnavailable(t *testing.T) {
-	const keys = "Tab [ ]"
+	// The scope hint is appended after the page hint, so match it with its separator.
+	keys := " · " + scopeSwitchHint()
 	_, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeProject)
 	pumpPanel(panel, panel.openRoot())
@@ -763,8 +762,8 @@ func TestOptionsHintKeepsTabSwitchWhenNarrow(t *testing.T) {
 	app.Width, app.Height = 48, 16
 	pumpPanel(panel, panel.openSection(sectionExecution))
 	plain := ansi.Strip(panelView(panel))
-	if !strings.Contains(plain, "Tab") || !strings.Contains(plain, "[") {
-		t.Fatalf("narrow hint dropped tab keys:\n%s", plain)
+	if !strings.Contains(plain, "Tab") || strings.Contains(plain, "Tab [") {
+		t.Fatalf("narrow hint must show only the Tab key:\n%s", plain)
 	}
 }
 

@@ -906,7 +906,7 @@
   "tui.base_config": "基础配置：{{.V0}}",
   "tui.overlay_missing": "尚未创建",
   "tui.overlay_will_create": "覆盖文件尚不存在；首次保存实际覆盖时创建。",
-  "tui.switch_scope_tabs": "Tab [ ]",
+  "tui.switch_scope_tabs": "Tab",
   "tui.restore_field_inherit": "还原为全局设置",
   "tui.restore_page_confirm": "将本页所有设置还原为全局值？本页的项目覆盖项会被移除。",
   "tui.restore_page_confirm_yes": "还原",

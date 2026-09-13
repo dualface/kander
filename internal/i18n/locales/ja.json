@@ -906,7 +906,7 @@
   "tui.base_config": "ベース設定: {{.V0}}",
   "tui.overlay_missing": "未作成",
   "tui.overlay_will_create": "オーバーレイファイルはまだありません。最初の上書き保存で作成されます。",
-  "tui.switch_scope_tabs": "Tab [ ]",
+  "tui.switch_scope_tabs": "Tab",
   "tui.restore_field_inherit": "グローバル設定に戻す",
   "tui.restore_page_confirm": "このページのすべての設定をグローバル値に戻しますか？このページのプロジェクト上書きは削除されます。",
   "tui.restore_page_confirm_yes": "戻す",

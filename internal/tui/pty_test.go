@@ -336,8 +336,8 @@ func TestOptionsProjectTabsAndNarrowPathsOnPTY(t *testing.T) {
 	if !strings.Contains(plain, "Global") || !strings.Contains(plain, "Project") {
 		t.Fatalf("global install should show both tabs\npty:\n%s", plain)
 	}
-	if !strings.Contains(plain, "Tab") || !strings.Contains(plain, "[ ]") {
-		t.Fatalf("options hint missing Tab/[ ]\npty:\n%s", plain)
+	if !strings.Contains(plain, "· Tab") || strings.Contains(plain, "Tab [ ]") {
+		t.Fatalf("options hint must show only the Tab key\npty:\n%s", plain)
 	}
 	if !strings.Contains(plain, project) {
 		t.Fatalf("missing project path\npty:\n%s", plain)
