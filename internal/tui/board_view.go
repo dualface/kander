@@ -239,9 +239,14 @@ func measureTabLabels(states, labels []string, current string, counts []int) int
 }
 
 func longestIdleLabel(states, labels []string, current string) int {
-	best, bestWidth := -1, 1
+	best, bestWidth := -1, 0
 	for i, state := range states {
 		if state == current {
+			continue
+		}
+		// CJK single-rune names still have display width 2, but trimLastRune
+		// cannot shorten them. Skip any label that would not actually shrink.
+		if displayWidth(trimLastRune(labels[i])) >= displayWidth(labels[i]) {
 			continue
 		}
 		if w := displayWidth(labels[i]); w > bestWidth {

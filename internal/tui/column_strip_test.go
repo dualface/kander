@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -184,5 +186,68 @@ func TestColumnStripKeepsSelectedCountWhenNarrow(t *testing.T) {
 	app.HandleMouse(done.x+done.width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "done" {
 		t.Fatalf("selected tab click %s", app.Model.CurrentState())
+	}
+}
+
+func TestLongestIdleLabelSkipsUnshortenableCJK(t *testing.T) {
+	states := []string{"backlog", "todo", "working"}
+	labels := []string{"待办池", "待", "进"}
+	if got := longestIdleLabel(states, labels, "backlog"); got != -1 {
+		t.Fatalf("unshortenable idle picked %d label %q", got, labels[got])
+	}
+	labels = []string{"待办池", "待处理", "进"}
+	if got := longestIdleLabel(states, labels, "backlog"); got != 1 {
+		t.Fatalf("shortenable idle got %d, want 1", got)
+	}
+}
+
+func TestColumnTabCellsCJKIdleShrinkTerminates(t *testing.T) {
+	cases := []struct {
+		lang    string
+		width   int
+		current string
+		labels  map[string]string
+	}{
+		{
+			lang: "zh-CN", width: 20, current: "backlog",
+			labels: map[string]string{
+				"backlog": "待办池", "todo": "待处理", "working": "进行中",
+				"review": "审核中", "done": "已完成",
+			},
+		},
+		{
+			lang: "ja", width: 24, current: "backlog",
+			labels: map[string]string{
+				"backlog": "バックログ", "todo": "未着手", "working": "作業中",
+				"review": "レビュー", "done": "完了",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.lang, func(t *testing.T) {
+			app := stripBoardApp(t, tc.width, 20)
+			app.Context.StateLabels = tc.labels
+			app.Model.SetBoard(BoardPayload{GeneratedAt: "t"})
+			app.Model.FocusState(tc.current)
+			result := make(chan []columnTabCell, 1)
+			go func() {
+				result <- app.columnTabCells(tc.width)
+			}()
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+			defer cancel()
+			select {
+			case cells := <-result:
+				used := 0
+				for _, cell := range cells {
+					used += cell.width
+				}
+				if used > tc.width {
+					t.Fatalf("%s width %d current %s used %d labels %v cells %+v", tc.lang, tc.width, tc.current, used, tc.labels, cells)
+				}
+				tabCellByState(t, cells, tc.current)
+			case <-ctx.Done():
+				t.Fatalf("%s width %d current %s labels %v hung", tc.lang, tc.width, tc.current, tc.labels)
+			}
+		})
 	}
 }
