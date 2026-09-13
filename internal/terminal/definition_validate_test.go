@@ -111,6 +111,9 @@ func TestDefinitionValidationRejects(t *testing.T) {
 			step := firstStep(r, "read_output")
 			step["gone_when"] = "field_missing:step.out.text"
 		}, []string{"op read_output", "field gone_when", "only pane_facts and container_exists"}},
+		{"gone message without gone_when", func(r map[string]any) {
+			firstStep(r, "read_output")["messages"] = map[string]any{"gone": "closed"}
+		}, []string{"field messages.gone", "only used with gone_when"}},
 		{"version args placeholder", func(r map[string]any) { r["version_args"] = []any{"{env.HOME}"} }, []string{"field version_args[0]", "take no placeholders"}},
 		{"requires env message", func(r map[string]any) {
 			object(r, "launchers", "faketerm", "requires")["env"] = []any{map[string]any{"name": "FAKETERM", "message": "{window}"}}

@@ -22,8 +22,9 @@ const (
 // DefinitionsDirName is the share subdirectory holding user definitions.
 const DefinitionsDirName = "terminals"
 
-// DefinitionReport is the load outcome of one user definition file (or of a
-// definitions directory that could not be listed).
+// DefinitionReport is the outcome of one terminal definition source: an
+// embedded definition, a user definition file, or a user definitions
+// directory that could not be listed.
 type DefinitionReport struct {
 	Source    string
 	Path      string

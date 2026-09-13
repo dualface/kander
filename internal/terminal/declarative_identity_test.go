@@ -181,6 +181,31 @@ func TestDeclarativeErrorCodePrecedence(t *testing.T) {
 	}
 }
 
+func TestDeclarativeGoneWhenDetail(t *testing.T) {
+	resetLanguage(t)
+	for name, tc := range map[string]struct {
+		message string
+		detail  string
+	}{
+		"neutral default":  {"", "the terminal reported the target as gone"},
+		"declared message": {`, "messages": {"gone": "pane {pane} closed"}`, "pane p1 closed"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			backend := declarativeOp(t, OpPaneFacts, `{
+				"steps": [{"store": "facts", "argv": ["facts", "{pane}"], "fields": {"state": "json_field:state"}, "gone_when": "field:step.facts.state=closed"`+tc.message+`}],
+				"result": {"command": "{step.facts.state}"}
+			}`, nil)
+			conn := Conn{Run: func(context.Context, string, []string) (probe.Result, error) {
+				return probe.Result{Stdout: `{"state":"closed"}`}, nil
+			}}
+			facts, err := backend.PaneFacts(context.Background(), conn, "p1")
+			if err != nil || !facts.Gone || facts.GoneDetail != tc.detail {
+				t.Fatalf("facts=%+v err=%v", facts, err)
+			}
+		})
+	}
+}
+
 func TestDeclarativeJSONOutputKinds(t *testing.T) {
 	resetLanguage(t)
 	backend := herdrStyleBackend(t)

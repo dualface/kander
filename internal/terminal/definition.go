@@ -183,6 +183,8 @@ type StepMessages struct {
 	NotJSON       *Message `json:"not_json,omitempty"`
 	NotObject     *Message `json:"not_object,omitempty"`
 	MissingResult *Message `json:"missing_result,omitempty"`
+	// Gone is the gone detail when gone_when holds.
+	Gone *Message `json:"gone,omitempty"`
 }
 
 // forKind returns the message of an output failure kind.

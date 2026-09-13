@@ -125,7 +125,8 @@ An operation object is:
   "timeout": "<duration>",
   "stop_on_success": <bool>,
   "messages": {"exec": <message>, "exit": <message>, "invalid": <message>,
-               "not_json": <message>, "not_object": <message>, "missing_result": <message>}
+               "not_json": <message>, "not_object": <message>, "missing_result": <message>,
+               "gone": <message, with gone_when>}
 }
 ```
 
@@ -190,7 +191,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 }
 ```
 
-- A successful command whose output satisfies the step's `gone_when` (checked after `store`, before `expect`) is gone as well, with the detail `the terminal answered the target with an empty response`; tmux 3.6 answers `display-message` for a closed pane or window with exit 0 and empty fields, so the embedded tmux definition declares `gone_when` on an empty answer.
+- A successful command whose output satisfies the step's `gone_when` (checked after `store`, before `expect`) is gone as well. Its detail is the step's optional `messages.gone`, or the neutral `the terminal reported the target as gone` without one. tmux 3.6 answers `display-message` for a closed pane or window with exit 0 and empty fields, so the embedded tmux definition declares `gone_when` on an empty answer with the gone message `the terminal answered the target with an empty response`.
 - A non-zero exit matching `gone` makes `pane_facts` return the gone fact, whose detail is the step detail (trimmed stderr, or `exit N`), and `container_exists` return false; in other operations it is an ordinary failure. `stderr` rules see the trimmed stderr. JSON rules on the same dotted path share one resolved code: the first stream, in the order the rules name the streams, whose whole output holds a non-empty string at that path; a rule matches when that code equals its value. With `stderr_json` listed before `stdout_json`, a code in stderr decides even when stdout carries another one.
 - `meta_missing` matters only for a step with `on_error: meta_missing`, which then continues with the field absent.
 - Everything else is a command failure: `terminal.CommandError` with `KindExec` (the command could not run; deadline and cancellation stay detectable with `errors.Is`), `KindExit`, `KindNotJSON`, `KindNotObject`, `KindMissingResult` or `KindInvalidResponse`. Liveness, notify and takeover rely on this split to roll back, degrade or report.
@@ -276,8 +277,11 @@ kander terminal test <name>
 
 Attach the **complete output**, terminal version, operating system and definition
 file to the contribution. `<name>` can identify a definition or one of its
-launchers. A same-name launcher is preferred; otherwise the definition's first
-launcher in sorted order is used. For tmux, run `terminal test tmux` inside tmux;
+launchers. Definitions are tried in inventory order (embedded, then global,
+then project); within each definition a matching launcher name is tried before
+the definition name, and a definition-name match uses its first launcher in
+sorted order. The first match wins, so an earlier definition named `<name>` is
+selected before a later definition that provides a launcher `<name>`. For tmux, run `terminal test tmux` inside tmux;
 `terminal test tmux-session` can create its own session outside tmux. The normal
 launcher prerequisites still apply. Any definition load error aborts the check before creating a container. This
 includes malformed files whose names cannot be decoded; the check never silently

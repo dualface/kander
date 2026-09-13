@@ -33,5 +33,6 @@
   "terminal.test_no_identity": "no writable identity capability; zero-match result verified",
   "terminal.test_focus_skip": "--skip-focus",
   "terminal.test_no_client": "no attached terminal client; focus skipped",
-  "terminal.test_unknown": "No loaded terminal definition or launcher: {{.V0}}"
+  "terminal.test_unknown": "No loaded terminal definition or launcher: {{.V0}}",
+  "terminal.target_reported_gone": "the terminal reported the target as gone"
 }

@@ -342,7 +342,7 @@ func (e *execution) runStep(step *Step) (bool, error) {
 	}
 	e.store(step.Store, stored)
 	if e.goneAware && step.GoneWhen != nil && e.holds(step.GoneWhen) {
-		return false, &goneSignal{detail: config.Text("terminal.target_answered_empty")}
+		return false, &goneSignal{detail: e.renderOr(step.Messages.Gone, nil, "terminal.target_reported_gone")}
 	}
 	if !e.holds(step.Expect) {
 		failure := &stepFailure{kind: KindInvalidResponse, result: result, detail: config.Text("terminal.output_does_not_match")}

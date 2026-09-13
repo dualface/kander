@@ -578,6 +578,7 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	for label, message := range map[string]*Message{
 		"exec": step.Messages.Exec, "exit": step.Messages.Exit, "invalid": step.Messages.Invalid,
 		"not_json": step.Messages.NotJSON, "not_object": step.Messages.NotObject, "missing_result": step.Messages.MissingResult,
+		"gone": step.Messages.Gone,
 	} {
 		if err := v.optionalMessage("messages."+label, message, messageNames); err != nil {
 			return nil, err
@@ -588,6 +589,9 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	}
 	if step.GoneWhen != nil && op != OpPaneFacts && op != OpContainerExists {
 		return nil, v.fieldErr("gone_when", "only pane_facts and container_exists steps declare gone_when")
+	}
+	if step.Messages.Gone != nil && step.GoneWhen == nil {
+		return nil, v.fieldErr("messages.gone", "is only used with gone_when")
 	}
 	if step.Store == "" {
 		return names, nil

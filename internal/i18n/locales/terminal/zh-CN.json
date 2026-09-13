@@ -33,5 +33,6 @@
   "terminal.test_no_identity": "无可写身份能力；已验证零匹配结果",
   "terminal.test_focus_skip": "--skip-focus",
   "terminal.test_no_client": "没有已附着的终端客户端；跳过聚焦",
-  "terminal.test_unknown": "没有已加载的终端定义或启动器: {{.V0}}"
+  "terminal.test_unknown": "没有已加载的终端定义或启动器: {{.V0}}",
+  "terminal.target_reported_gone": "终端报告该目标已不存在"
 }

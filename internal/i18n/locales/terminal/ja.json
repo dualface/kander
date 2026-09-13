@@ -33,5 +33,6 @@
   "terminal.test_no_identity": "書き込み可能な識別機能なし。検索結果がゼロ件であることを確認",
   "terminal.test_focus_skip": "--skip-focus",
   "terminal.test_no_client": "接続済みの端末クライアントがないためフォーカスをスキップ",
-  "terminal.test_unknown": "読み込まれた端末定義またはランチャーがありません: {{.V0}}"
+  "terminal.test_unknown": "読み込まれた端末定義またはランチャーがありません: {{.V0}}",
+  "terminal.target_reported_gone": "ターミナルが対象を存在しないと報告しました"
 }

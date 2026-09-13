@@ -325,6 +325,7 @@
           "gone_when": "field_missing:step.pane.text",
           "expect": "!field_missing:step.pane.shape",
           "messages": {
+            "gone": {"id": "terminal.target_answered_empty"},
             "exit": {"id": "launch.tmux_pane_does_not_exist", "args": ["{pane}", "{detail}"]},
             "invalid": {"id": "launch.tmux_pane_probe_returned_an_invalid_response"}
           }
@@ -410,6 +411,7 @@
           "gone_when": "field_missing:step.window.text",
           "expect": "field:step.window.text={container}",
           "messages": {
+            "gone": {"id": "terminal.target_answered_empty"},
             "exit": {"id": "takeover.failed_to_probe_the_tmux_window", "args": ["{detail}"]},
             "invalid": {"id": "takeover.tmux_window_probe_returned_an_invalid_response", "args": [{"or": ["{output}", "N/A"]}]}
           }
