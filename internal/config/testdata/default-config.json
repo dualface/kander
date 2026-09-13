@@ -8,10 +8,18 @@
   },
   "launcher": "auto",
   "reviewers": {
-    "CSA": "codex",
-    "Hacker": "codex",
-    "PM": "codex",
-    "QA": "codex"
+    "large": {
+      "CSA": "codex",
+      "Hacker": "codex",
+      "PM": "codex",
+      "QA": "codex"
+    },
+    "small": {
+      "CSA": "codex",
+      "Hacker": "codex",
+      "PM": "codex",
+      "QA": "codex"
+    }
   },
   "review_stages": {
     "large": {
@@ -84,19 +92,35 @@
     "review_roles": {
       "CSA": {
         "effort": "",
-        "model": ""
+        "large_effort": "",
+        "large_model": "",
+        "model": "",
+        "small_effort": "",
+        "small_model": ""
       },
       "Hacker": {
         "effort": "",
-        "model": ""
+        "large_effort": "",
+        "large_model": "",
+        "model": "",
+        "small_effort": "",
+        "small_model": ""
       },
       "PM": {
         "effort": "",
-        "model": ""
+        "large_effort": "",
+        "large_model": "",
+        "model": "",
+        "small_effort": "",
+        "small_model": ""
       },
       "QA": {
         "effort": "",
-        "model": ""
+        "large_effort": "",
+        "large_model": "",
+        "model": "",
+        "small_effort": "",
+        "small_model": ""
       }
     }
   },

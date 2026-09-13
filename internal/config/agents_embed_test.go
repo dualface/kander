@@ -44,7 +44,8 @@ func TestMinimalCursorFixtureJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Captured from minimalPayload(nil) at 8abdfe2e, before the migration.
+	// Captured from minimalPayload(nil) at 8abdfe2e, before the migration, then
+	// updated for the two-scale reviewers and per-scale review role model keys.
 	want, err := os.ReadFile("testdata/minimal-cursor-config.json")
 	if err != nil {
 		t.Fatal(err)
