@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/window"
 )
 
@@ -156,10 +157,7 @@ func taskGroupFrom(text string) string {
 }
 
 func locationOf(plan LaunchPlan, outcome LaunchOutcome) string {
-	if plan.Launcher == "herdr" {
-		return "herdr:" + outcome.Tab + ":" + outcome.Pane
-	}
-	return plan.Launcher + ":" + plan.Session + ":" + outcome.Window + ":" + outcome.Pane
+	return terminal.FormatAddress(plan.backend(), plan.address(outcome))
 }
 
 func recordWindowLocation(root string, plan LaunchPlan, entry board.Entry) func(LaunchOutcome) error {

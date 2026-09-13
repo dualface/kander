@@ -9,7 +9,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/window"
 )
 
@@ -222,68 +222,55 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 	if err != nil {
 		return DirectTarget{}, false, err
 	}
-	if match := herdrWindowRe.FindStringSubmatch(value); match != nil || override != "" {
-		program, err := lookPath("herdr")
-		if err != nil {
-			return DirectTarget{}, false, err
+	backend, address, parsed := terminal.ParseWindow(value)
+	if override != "" {
+		agent, ok := agentBackend()
+		if !ok {
+			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, value)
 		}
-		pane := override
-		if pane == "" {
-			pane = match[2]
-		}
-		found, err := probe.ProbeHerdrPaneContext(ctx, program, pane)
-		if err != nil {
-			return DirectTarget{}, false, err
-		}
-		if found.Pane == nil || session.Reference == "" || herdrSessionReference(found.Pane) != session.Reference || found.Pane["agent"] != session.Agent {
+		backend, address, parsed = agent, terminal.Address{Launcher: agent.Name(), Pane: override}, true
+	}
+	if !parsed {
+		return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, value)
+	}
+	program, err := lookPath(backend.Executable())
+	if err != nil {
+		return DirectTarget{}, false, err
+	}
+	pane := address.Pane
+	found, err := backend.PaneFacts(ctx, probeConn(program), pane)
+	if err != nil {
+		return DirectTarget{}, false, err
+	}
+	if backend.Capabilities().AgentIdentity {
+		if found.Gone || session.Reference == "" || found.AgentSession != session.Reference || found.Agent != session.Agent {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "identity")
 		}
-		status, _ := found.Pane["agent_status"].(string)
-		tab := probe.PublicID(found.Pane["tab_id"])
-		if tab == "" {
+		if found.Container == "" {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "tab")
 		}
-		return DirectTarget{Kind: "herdr", Program: program, PaneID: pane, Window: "herdr:" + tab + ":" + pane}, status != "idle" && status != "done", nil
+		window := terminal.FormatAddress(backend, terminal.Address{Launcher: backend.Name(), Container: found.Container, Pane: pane})
+		return DirectTarget{Backend: backend, Program: program, PaneID: pane, Window: window}, found.AgentStatus != "idle" && found.AgentStatus != "done", nil
 	}
-	if match := tmuxWindowRe.FindStringSubmatch(value); match != nil {
-		program, err := lookPath("tmux")
-		if err != nil {
-			return DirectTarget{}, false, err
-		}
-		found, err := probe.ProbeTmuxPaneContext(ctx, program, match[4])
-		if err != nil {
-			return DirectTarget{}, false, err
-		}
-		f := found.Facts
-		expected, err := agentCommandName(session.Agent)
-		if err != nil {
-			return DirectTarget{}, false, err
-		}
-		if f == nil || f.Dead != "0" || f.Command != expected || session.Reference == "" || f.SessionMarker != session.Reference {
-			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "identity")
-		}
-		return DirectTarget{Kind: "tmux", Program: program, PaneID: match[4], Window: value}, f.InMode != "0", nil
+	expected, err := agentCommandName(session.Agent)
+	if err != nil {
+		return DirectTarget{}, false, err
 	}
-	return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, value)
+	if found.Gone || found.Dead != "0" || found.Command != expected || session.Reference == "" || found.SessionMarker != session.Reference {
+		return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "identity")
+	}
+	return DirectTarget{Backend: backend, Program: program, PaneID: pane, Window: value}, found.InMode != "0", nil
 }
 
 func sendDispatch(ctx context.Context, target DirectTarget, instruction string) error {
-	var commands [][]string
-	if target.Kind == "herdr" {
-		commands = [][]string{{"agent", "prompt", target.PaneID, instruction}}
-	} else {
-		commands = [][]string{{"send-keys", "-t", target.PaneID, "-l", instruction}, {"send-keys", "-t", target.PaneID, "Enter"}}
-	}
-	for _, args := range commands {
-		result, e := probe.CaptureContext(ctx, target.Program, args)
-		if e != nil {
-			return e
+	err := target.Backend.DeliverText(ctx, probeConn(target.Program), target.PaneID, instruction)
+	if commandErr, ok := terminal.AsCommandError(err); ok {
+		if commandErr.Kind == terminal.KindExec {
+			return commandErr.Cause
 		}
-		if result.Code != 0 {
-			return fmt.Errorf("%s", herdrFailureDetail(result))
-		}
+		return fmt.Errorf("%s", commandErr.Detail())
 	}
-	return nil
+	return err
 }
 
 // One P3 budget covers forward/reverse observation and final readiness checks.

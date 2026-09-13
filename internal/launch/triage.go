@@ -115,7 +115,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 		return result, err
 	}
 	handedOff = true
-	if plan.Launcher == "foreground" {
+	if plan.OccupiesTerminal() {
 		code, waitErr := outcome.Wait()
 		if waitErr != nil {
 			return result, launchError("launch.failed_to_start_agent", waitErr.Error())
@@ -125,7 +125,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 		}
 	}
 	result.Agent, result.Launcher = agent, plan.Launcher
-	result.Address = triageAddress(plan, outcome)
+	result.Address = OpaqueAddress(plan, outcome)
 	return result, nil
 }
 
@@ -147,7 +147,7 @@ func triageDefaults(cfg *config.Config, agentOverride, launcherOverride string) 
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}
-	if !contains(config.Launchers, launcher) {
+	if !config.ValidLauncherName(launcher) {
 		return "", "", launchError("launch.unknown_launcher", launcher)
 	}
 	resolved, err := resolveStartLauncher(launcher)
@@ -228,17 +228,4 @@ func triageWindowName(repository issue.Repository, number int) string {
 	}
 	head = strings.TrimRight(string(runes), "-")
 	return "issue-" + head + suffix
-}
-
-// triageAddress renders the container address of one started takeover session.
-// Foreground and console sessions have no container address.
-func triageAddress(plan LaunchPlan, outcome LaunchOutcome) string {
-	switch plan.Launcher {
-	case "herdr":
-		return outcome.Tab + ":" + outcome.Pane
-	case "tmux", "tmux-session":
-		return plan.Session + ":" + outcome.Window + ":" + outcome.Pane
-	default:
-		return ""
-	}
 }

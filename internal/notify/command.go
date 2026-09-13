@@ -98,13 +98,8 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 		messagePath = path
 		instruction := notifyInstruction(entry, messagePath, marker)
 		var confirmed bool
-		if target.Kind == "herdr" {
-			confirmed, acknowledgementDetail, err = herdrDirectNotify(target.Program, target.PaneID, instruction, marker, target.Timeout)
-			directChannel = "herdr-direct"
-		} else {
-			confirmed, acknowledgementDetail, err = tmuxDirectNotify(target.Program, target.PaneID, instruction, marker, target.Timeout)
-			directChannel = "tmux-direct"
-		}
+		confirmed, acknowledgementDetail, err = directNotify(target, instruction, marker, target.Timeout)
+		directChannel = target.Backend.Executable() + "-direct"
 		if err != nil {
 			directChannel = ""
 			return err
@@ -169,7 +164,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 		"notify.notified_channel_acknowledgement_message_file", entry.TaskID, channel, acknowledgement, outputPath, channelDetail,
 	))
 	flushStdout()
-	if channel == "resume" && resumeLaunch.Plan.Launcher == "foreground" && resumeLaunch.Outcome.Wait != nil {
+	if channel == "resume" && resumeLaunch.Plan.OccupiesTerminal() && resumeLaunch.Outcome.Wait != nil {
 		code, waitErr := resumeLaunch.Outcome.Wait()
 		if waitErr != nil {
 			return waitErr

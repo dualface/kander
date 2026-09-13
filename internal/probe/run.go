@@ -20,10 +20,6 @@ type Result struct {
 	Stderr string
 }
 
-type runFunc func(context.Context, string, []string) (Result, error)
-
-var runCommand runFunc = defaultRun
-
 // DefaultCommandTimeout bounds probes without a caller-owned deadline.
 const DefaultCommandTimeout = 10 * time.Second
 
@@ -36,15 +32,28 @@ func WithDefaultTimeout(ctx context.Context) (context.Context, context.CancelFun
 	return context.WithTimeout(ctx, DefaultCommandTimeout)
 }
 
-func timeoutContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+// TimeoutContext bounds a probe by timeout, or by the default budget when the
+// timeout is not positive.
+func TimeoutContext(timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		timeout = DefaultCommandTimeout
 	}
 	return context.WithTimeout(context.Background(), timeout)
 }
 
-func defaultRun(ctx context.Context, program string, args []string) (Result, error) {
-	return captureWithEnv(ctx, program, args, nil)
+// CaptureContext runs an external program within the caller deadline, or the
+// default budget, and joins an expired deadline into the result error.
+func CaptureContext(ctx context.Context, program string, args []string) (Result, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	res, err := captureWithEnv(ctx, program, args, nil)
+	if contextErr := ctx.Err(); contextErr != nil && !errors.Is(err, contextErr) {
+		return res, errors.Join(contextErr, err)
+	}
+	return res, err
 }
 
 // CaptureWithEnv runs an argv command with explicit environment and the same

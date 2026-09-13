@@ -1,12 +1,12 @@
 package launch
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/probe"
 )
 
 func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) error {
@@ -38,7 +38,7 @@ func rejectPaneDirectLauncher(plan LaunchPlan) error {
 	if plan.PromptDelivery.Mode != "pane" {
 		return nil
 	}
-	if plan.Launcher == "foreground" || plan.Launcher == "console" {
+	if !plan.capabilities().Container {
 		return launchError("launch.pane_delivery_requires_tmux_or_herdr")
 	}
 	return nil
@@ -108,12 +108,12 @@ func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) error {
 		if remaining < slice {
 			slice = remaining
 		}
-		if plan.Launcher == "herdr" {
+		if plan.capabilities().WaitOutput {
 			ms := int(slice / time.Millisecond)
 			if ms < 1 {
 				ms = 1
 			}
-			_ = herdrWaitRecent(plan.HerdrBin, outcome.Pane, delivery.Ready.Match, ms)
+			_ = plan.backend().WaitOutput(context.Background(), spawnConn(plan), outcome.Pane, delivery.Ready.Match, ms)
 		}
 		sleepFn(slice)
 	}
@@ -131,80 +131,22 @@ func compileDeliveryMatch(match string) (func(string) bool, error) {
 }
 
 func readPaneOutput(plan LaunchPlan, outcome LaunchOutcome) (string, error) {
-	if plan.Launcher == "herdr" && outcome.Pane != "" {
-		res, err := herdrCapture(plan.HerdrBin, []string{"pane", "read", outcome.Pane}, probe.DefaultCommandTimeout)
-		if err != nil {
-			return "", err
-		}
-		if res.Code != 0 {
-			return "", launchError("launch.herdr_failed", "pane read", herdrFailureDetail(res))
-		}
-		return trimNL(res.Stdout), nil
+	if !plan.capabilities().Container || outcome.Pane == "" {
+		return "", launchError("launch.pane_delivery_requires_tmux_or_herdr")
 	}
-	if (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") && outcome.Pane != "" {
-		res, err := runCaptured(plan.Tmux, []string{"capture-pane", "-p", "-t", outcome.Pane}, probe.DefaultCommandTimeout)
-		if err != nil {
-			return "", err
-		}
-		if res.Code != 0 {
-			return "", launchError("launch.tmux_failed", "capture-pane", orExit(trimNL(res.Stderr), res.Code))
-		}
-		return trimNL(res.Stdout), nil
-	}
-	return "", launchError("launch.pane_delivery_requires_tmux_or_herdr")
-}
-
-func herdrWaitRecent(herdr, pane, match string, timeoutMS int) error {
-	args := []string{"pane", "wait-output", pane}
-	if strings.HasPrefix(match, "regex:") {
-		args = append(args, "--regex", strings.TrimPrefix(match, "regex:"), "--source", "recent", "--timeout", itoa(timeoutMS))
-	} else {
-		args = append(args, "--match", match, "--source", "recent", "--timeout", itoa(timeoutMS))
-	}
-	res, err := herdrCapture(herdr, args, 0)
+	output, err := plan.backend().ReadOutput(context.Background(), boundedSpawnConn(plan), outcome.Pane)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if res.Code != 0 {
-		return launchError("launch.herdr_pane_is_not_ready", herdrFailureDetail(res))
-	}
-	return nil
+	return trimNL(output), nil
 }
 
 func deliverPromptToPane(plan LaunchPlan, outcome LaunchOutcome) error {
-	if plan.Launcher == "herdr" {
-		return herdrAgentPrompt(plan.HerdrBin, outcome.Pane, plan.Prompt)
+	// A backend that waits on the agent TUI itself runs unbounded; typed keys
+	// are bounded per command.
+	conn := boundedSpawnConn(plan)
+	if plan.capabilities().WaitOutput {
+		conn = spawnConn(plan)
 	}
-	return tmuxSendPrompt(plan.Tmux, outcome.Pane, plan.Prompt)
-}
-
-func herdrAgentPrompt(herdr, pane, text string) error {
-	res, err := herdrCapture(herdr, []string{"agent", "prompt", pane, text}, 0)
-	if err != nil {
-		return err
-	}
-	if res.Code != 0 {
-		return launchError("launch.herdr_agent_prompt_failed", herdrFailureDetail(res))
-	}
-	return nil
-}
-
-func tmuxSendPrompt(tmux, pane, text string) error {
-	for _, args := range [][]string{
-		{"send-keys", "-t", pane, "-l", text},
-		{"send-keys", "-t", pane, "Enter"},
-	} {
-		res, err := runCaptured(tmux, args, probe.DefaultCommandTimeout)
-		if err != nil {
-			return launchError("launch.tmux_send_keys_failed", err.Error())
-		}
-		if res.Code != 0 {
-			detail := strings.TrimSpace(res.Stderr)
-			if detail == "" {
-				detail = "exit " + itoa(res.Code)
-			}
-			return launchError("launch.tmux_send_keys_failed", detail)
-		}
-	}
-	return nil
+	return plan.backend().DeliverText(context.Background(), conn, outcome.Pane, plan.Prompt)
 }

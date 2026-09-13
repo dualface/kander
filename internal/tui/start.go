@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 type startRequest struct {
@@ -52,8 +53,10 @@ func runTaskStart(request startRequest) (result launch.StartResult, err error) {
 	return launch.Start(request.root, request.Agent, request.Launcher, request.TaskID)
 }
 
+// backgroundStartLauncher reports whether the launcher starts the agent in a
+// terminal container, leaving the board in control of this terminal.
 func backgroundStartLauncher(launcher string) bool {
-	return launcher == "herdr" || launcher == "tmux" || launcher == "tmux-session"
+	return terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.Container })
 }
 
 func (a *App) confirmSelectedStart() {
@@ -142,10 +145,7 @@ func (a *App) applyStartResult(result startResult) {
 		message = t("tui.start_failed", result.err.Error())
 	} else {
 		r := result.result
-		address := r.Outcome.Tab + ":" + r.Outcome.Pane
-		if r.Plan.Launcher != "herdr" {
-			address = r.Plan.Session + ":" + r.Outcome.Window + ":" + r.Outcome.Pane
-		}
+		address := launch.OpaqueAddress(r.Plan, r.Outcome)
 		message = t("tui.start_success", r.TaskID, r.Agent, r.Plan.Launcher, address)
 		compact = t("tui.start_success_compact", r.Agent, r.Plan.Launcher, address)
 	}

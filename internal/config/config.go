@@ -32,7 +32,6 @@ var (
 	TaskScales       = []string{"large", "small"}
 	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
-	Launchers        = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
 	Languages        = []string{"cn", "en", "ja"}
 	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
 )
@@ -341,7 +340,7 @@ func launcherPlatformError() *Error {
 }
 
 func validateLauncher(value any) (string, error) {
-	launcher, err := validateChoice(value, Launchers, "launcher")
+	launcher, err := validateChoice(value, LauncherNames(), "launcher")
 	if err != nil {
 		return "", err
 	}

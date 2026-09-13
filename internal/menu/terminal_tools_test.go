@@ -45,7 +45,7 @@ func TestTerminalToolProbeTimeout(t *testing.T) {
 	t.Setenv("PATH", h.fakeBin)
 	h.fakeCommand("herdr", "#!/bin/sh\nexec /bin/sleep 30\n")
 	started := time.Now()
-	result := probeTerminalTool("herdr", "--version")
+	result := probeTerminalTool(herdrBackend())
 	if result.Available() || result.Error == "" || time.Since(started) > 10*time.Second {
 		t.Fatalf("probe must time out: %+v, elapsed=%v", result, time.Since(started))
 	}

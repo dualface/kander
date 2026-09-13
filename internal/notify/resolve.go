@@ -1,17 +1,15 @@
 package notify
 
 import (
+	"context"
 	"os/exec"
-	"regexp"
 	"time"
 
 	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 var (
-	herdrWindowRe = regexp.MustCompile(`^herdr:([^:\s]+:[^:\s]+):([^:\s]+:[^:\s]+)$`)
-	tmuxWindowRe  = regexp.MustCompile(`^(tmux|tmux-session):([^:\s]+):([^:\s]+):([^:\s]+)$`)
-
 	lookPath = exec.LookPath
 	sleepFn  = time.Sleep
 	nowFn    = time.Now
@@ -19,7 +17,7 @@ var (
 
 // DirectTarget is a fully validated direct-delivery address that may receive a payload.
 type DirectTarget struct {
-	Kind    string
+	Backend terminal.Backend
 	Program string
 	PaneID  string
 	Window  string
@@ -79,21 +77,38 @@ func staleLookup(detail string, lookup func() (DirectTarget, error)) (DirectTarg
 	return target, nil
 }
 
+func notInPath(backend terminal.Backend) error {
+	if backend.Capabilities().AgentIdentity {
+		return notifyError("liveness.herdr_is_not_in_path")
+	}
+	return notifyError("liveness.tmux_is_not_in_path")
+}
+
+// agentBackend is the backend that can locate a session without a recorded
+// address: it reports agent identity, so a pane override or a reverse lookup
+// needs no launcher-specific coordinates.
+func agentBackend() (terminal.Backend, bool) {
+	return terminal.FindBackend(func(c terminal.Capabilities) bool { return c.AgentIdentity })
+}
+
 // ResolveTarget resolves and fully validates the direct-delivery target before any payload is created.
 func ResolveTarget(window, paneOverride string, session liveness.TaskSession, timeout float64) (DirectTarget, error) {
-	herdrMatch := herdrWindowRe.FindStringSubmatch(window)
-	tmuxMatch := tmuxWindowRe.FindStringSubmatch(window)
+	backend, address, parsed := terminal.ParseWindow(window)
 	if paneOverride != "" {
-		herdr, err := lookPath("herdr")
-		if err != nil {
+		agent, ok := agentBackend()
+		if !ok {
 			return DirectTarget{}, notifyError("liveness.herdr_is_not_in_path")
 		}
-		tabID, paneID, err := HerdrExplicitTarget(herdr, paneOverride)
+		program, err := lookPath(agent.Executable())
+		if err != nil {
+			return DirectTarget{}, notInPath(agent)
+		}
+		container, paneID, err := ExplicitPaneTarget(agent, program, paneOverride)
 		if err != nil {
 			return DirectTarget{}, err
 		}
 		probe, remaining, err := waitForTarget(func(remaining time.Duration) TargetProbe {
-			return HerdrNotifyProbe(herdr, paneID, session, remaining)
+			return AgentNotifyProbe(agent, program, paneID, session, remaining)
 		}, timeout)
 		if err != nil {
 			return DirectTarget{}, err
@@ -101,16 +116,17 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 		if err := requireReady(probe); err != nil {
 			return DirectTarget{}, err
 		}
-		return DirectTarget{Kind: "herdr", Program: herdr, PaneID: paneID, Window: "herdr:" + tabID + ":" + paneID, Timeout: remaining}, nil
+		window := terminal.FormatAddress(agent, terminal.Address{Launcher: agent.Name(), Container: container, Pane: paneID})
+		return DirectTarget{Backend: agent, Program: program, PaneID: paneID, Window: window, Timeout: remaining}, nil
 	}
-	if herdrMatch != nil {
-		paneID := herdrMatch[2]
-		herdr, err := lookPath("herdr")
+	if parsed {
+		paneID := address.Pane
+		program, err := lookPath(backend.Executable())
 		if err != nil {
-			return DirectTarget{}, notifyError("liveness.herdr_is_not_in_path")
+			return DirectTarget{}, notInPath(backend)
 		}
 		probe, remaining, err := waitForTarget(func(remaining time.Duration) TargetProbe {
-			return HerdrNotifyProbe(herdr, paneID, session, remaining)
+			return notifyProbe(backend, program, paneID, session, remaining)
 		}, timeout)
 		if err != nil {
 			return DirectTarget{}, err
@@ -119,15 +135,15 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 			if err := requireReady(probe); err != nil {
 				return DirectTarget{}, err
 			}
-			return DirectTarget{Kind: "herdr", Program: herdr, PaneID: paneID, Timeout: remaining}, nil
+			return DirectTarget{Backend: backend, Program: program, PaneID: paneID, Timeout: remaining}, nil
 		}
 		return staleLookup(probe.Detail, func() (DirectTarget, error) {
-			tabID, discovered, err := liveness.HerdrReverseLookup(herdr, session)
+			discovered, err := liveness.ReverseLookup(context.Background(), backend, program, session)
 			if err != nil {
 				return DirectTarget{}, err
 			}
 			found, finalTimeout, err := waitForTarget(func(remaining time.Duration) TargetProbe {
-				return HerdrNotifyProbe(herdr, discovered, session, remaining)
+				return notifyProbe(backend, program, discovered.Pane, session, remaining)
 			}, remaining)
 			if err != nil {
 				return DirectTarget{}, err
@@ -136,62 +152,28 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 				return DirectTarget{}, err
 			}
 			return DirectTarget{
-				Kind: "herdr", Program: herdr, PaneID: discovered,
-				Window: "herdr:" + tabID + ":" + discovered, Timeout: finalTimeout,
-			}, nil
-		})
-	}
-	if tmuxMatch != nil {
-		launcher, paneID := tmuxMatch[1], tmuxMatch[4]
-		tmux, err := lookPath("tmux")
-		if err != nil {
-			return DirectTarget{}, notifyError("liveness.tmux_is_not_in_path")
-		}
-		probe, remaining, err := waitForTarget(func(remaining time.Duration) TargetProbe {
-			return TmuxNotifyProbe(tmux, paneID, session, remaining)
-		}, timeout)
-		if err != nil {
-			return DirectTarget{}, err
-		}
-		if probe.State != "stale" {
-			if err := requireReady(probe); err != nil {
-				return DirectTarget{}, err
-			}
-			return DirectTarget{Kind: "tmux", Program: tmux, PaneID: paneID, Timeout: remaining}, nil
-		}
-		return staleLookup(probe.Detail, func() (DirectTarget, error) {
-			location, err := liveness.TmuxReverseLookup(tmux, session)
-			if err != nil {
-				return DirectTarget{}, err
-			}
-			found, finalTimeout, err := waitForTarget(func(remaining time.Duration) TargetProbe {
-				return TmuxNotifyProbe(tmux, location.PaneID, session, remaining)
-			}, remaining)
-			if err != nil {
-				return DirectTarget{}, err
-			}
-			if err := requireReady(found); err != nil {
-				return DirectTarget{}, err
-			}
-			return DirectTarget{
-				Kind: "tmux", Program: tmux, PaneID: location.PaneID,
-				Window: liveness.RenderTmuxWindow(launcher, location), Timeout: finalTimeout,
+				Backend: backend, Program: program, PaneID: discovered.Pane,
+				Window: terminal.FormatAddress(backend, discovered), Timeout: finalTimeout,
 			}, nil
 		})
 	}
 	if window == "" {
-		herdr, err := lookPath("herdr")
+		agent, ok := agentBackend()
+		if !ok {
+			return DirectTarget{}, notifyError("notify.herdr_is_not_in_path_cannot_look_up_a")
+		}
+		program, err := lookPath(agent.Executable())
 		if err != nil {
 			return DirectTarget{}, notifyError(
 				"notify.herdr_is_not_in_path_cannot_look_up_a",
 			)
 		}
-		tabID, paneID, err := liveness.HerdrReverseLookup(herdr, session)
+		discovered, err := liveness.ReverseLookup(context.Background(), agent, program, session)
 		if err != nil {
 			return DirectTarget{}, err
 		}
 		probe, remaining, err := waitForTarget(func(remaining time.Duration) TargetProbe {
-			return HerdrNotifyProbe(herdr, paneID, session, remaining)
+			return AgentNotifyProbe(agent, program, discovered.Pane, session, remaining)
 		}, timeout)
 		if err != nil {
 			return DirectTarget{}, err
@@ -200,8 +182,8 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 			return DirectTarget{}, err
 		}
 		return DirectTarget{
-			Kind: "herdr", Program: herdr, PaneID: paneID,
-			Window: "herdr:" + tabID + ":" + paneID, Timeout: remaining,
+			Backend: agent, Program: program, PaneID: discovered.Pane,
+			Window: terminal.FormatAddress(agent, discovered), Timeout: remaining,
 		}, nil
 	}
 	return DirectTarget{}, notifyError(

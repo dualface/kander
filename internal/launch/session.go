@@ -346,9 +346,11 @@ func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}) (
 	}
 }
 
-func sessionDiscoverSnapshot(mode, taskID, launcher string) map[string]struct{} {
+// sessionDiscoverSnapshot records the sessions that exist before a launch whose
+// backend can record a session discovered after start in pane metadata.
+func sessionDiscoverSnapshot(mode, taskID string, paneMetadata bool) map[string]struct{} {
 	previous := map[string]struct{}{}
-	if !config.SessionDiscoversAfterStart(mode) || (launcher != "tmux" && launcher != "tmux-session") {
+	if !config.SessionDiscoversAfterStart(mode) || !paneMetadata {
 		return previous
 	}
 	name, ok := config.ParseSessionHook(mode)

@@ -312,7 +312,7 @@ type resumeBinding struct {
 // WaitForResumedForeground preserves foreground ownership after the bounded
 // dispatch phase. Call only after releasing the transport lease.
 func WaitForResumedForeground(result ResumeLaunch) error {
-	if result.Plan.Launcher != "foreground" || result.Outcome.Wait == nil {
+	if !result.Plan.OccupiesTerminal() || result.Outcome.Wait == nil {
 		return nil
 	}
 	code, err := result.Outcome.Wait()

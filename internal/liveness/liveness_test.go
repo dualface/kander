@@ -16,6 +16,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func resetLang(t *testing.T) {
@@ -454,21 +455,27 @@ func TestTmuxReverseLookupUniqueMarker(t *testing.T) {
 		"%3\t$3\tthree\t@3\tclaude\t1\twanted",
 		"%4\t$4\tfour\t@4\tclaude\t0\twanted",
 	}, "\n"))
-	loc, err := TmuxReverseLookup("tmux", TaskSession{Agent: "claude", Reference: "wanted"})
+	tmuxBackend := backendFor(t, "tmux")
+	loc, err := ReverseLookup(context.Background(), tmuxBackend, "tmux", TaskSession{Agent: "claude", Reference: "wanted"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loc != (TmuxPaneLocation{SessionID: "$4", SessionName: "four", WindowID: "@4", PaneID: "%4"}) {
+	if loc != (terminal.Address{Launcher: "tmux", Session: "$4", Container: "@4", Pane: "%4"}) {
 		t.Fatalf("%+v", loc)
 	}
-	if RenderTmuxWindow("tmux", loc) != "tmux:$4:@4:%4" {
-		t.Fatal(RenderTmuxWindow("tmux", loc))
+	if terminal.FormatAddress(tmuxBackend, loc) != "tmux:$4:@4:%4" {
+		t.Fatal(terminal.FormatAddress(tmuxBackend, loc))
 	}
-	if RenderTmuxWindow("tmux-session", loc) != "tmux-session:four:@4:%4" {
-		t.Fatal(RenderTmuxWindow("tmux-session", loc))
+	sessionBackend := backendFor(t, "tmux-session")
+	sessionLoc, err := ReverseLookup(context.Background(), sessionBackend, "tmux", TaskSession{Agent: "claude", Reference: "wanted"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if terminal.FormatAddress(sessionBackend, sessionLoc) != "tmux-session:four:@4:%4" {
+		t.Fatal(terminal.FormatAddress(sessionBackend, sessionLoc))
 	}
 	t.Setenv("KANBAN_TMUX_LIST_PANES", os.Getenv("KANBAN_TMUX_LIST_PANES")+"\n%5\t$5\tfive\t@5\tclaude\t0\twanted")
-	_, err = TmuxReverseLookup("tmux", TaskSession{Agent: "claude", Reference: "wanted"})
+	_, err = ReverseLookup(context.Background(), tmuxBackend, "tmux", TaskSession{Agent: "claude", Reference: "wanted"})
 	if err == nil || !strings.Contains(err.Error(), "匹配不唯一") {
 		t.Fatalf("err=%v", err)
 	}

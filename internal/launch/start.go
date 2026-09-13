@@ -75,9 +75,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	previous := sessionDiscoverSnapshot(config.AgentFor(cfg, agentName).Session.Mode, entry.TaskID, plan.Launcher)
+	previous := sessionDiscoverSnapshot(config.AgentFor(cfg, agentName).Session.Mode, entry.TaskID, plan.capabilities().PaneMetadata)
 	window := ""
-	if plan.Launcher == "foreground" || plan.Launcher == "console" {
+	if !plan.capabilities().Container {
 		window = plan.Launcher
 	}
 	updated, err := startMetadata(original, agentName, session, window)
@@ -118,7 +118,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	name := windowName(entry, original)
 	paneCB := (func() (AgentSession, error))(nil)
-	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+	if plan.capabilities().PaneMetadata {
 		mode := config.AgentFor(cfg, agentName).Session.Mode
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
@@ -135,7 +135,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		}
 	}
 	loc := (func(LaunchOutcome) error)(nil)
-	if plan.Launcher == "herdr" || plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+	if plan.capabilities().Container {
 		loc = recordWindowLocation(root, plan, moved)
 	}
 	if err := writeDocumentFn(root, moved, updated); err != nil {

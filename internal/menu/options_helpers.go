@@ -6,6 +6,9 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/internal/terminal/herdr"
+	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func choicesWithCurrent(choices []Choice, current string) []Choice {
@@ -75,11 +78,11 @@ func installTmux() bool {
 		name string
 		argv []string
 	}{
-		{"brew", []string{"brew", "install", "tmux"}},
-		{"apt-get", []string{"apt-get", "install", "-y", "tmux"}},
-		{"dnf", []string{"dnf", "install", "-y", "tmux"}},
-		{"pacman", []string{"pacman", "-S", "--needed", "--noconfirm", "tmux"}},
-		{"apk", []string{"apk", "add", "tmux"}},
+		{"brew", []string{"brew", "install", tmux.Executable}},
+		{"apt-get", []string{"apt-get", "install", "-y", tmux.Executable}},
+		{"dnf", []string{"dnf", "install", "-y", tmux.Executable}},
+		{"pacman", []string{"pacman", "-S", "--needed", "--noconfirm", tmux.Executable}},
+		{"apk", []string{"apk", "add", tmux.Executable}},
 	}
 	var selected []string
 	for _, manager := range managers {
@@ -105,7 +108,7 @@ func installTmux() bool {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil || lookPath("tmux") == "" {
+	if err := cmd.Run(); err != nil || lookPath(tmux.Executable) == "" {
 		warning(config.Text("menu.tmux_installation_failed_or_tmux_is_still_not_in"))
 		return false
 	}
@@ -122,30 +125,30 @@ func autoLauncherChoice() Choice {
 
 func tmuxLauncherChoices() []Choice {
 	return []Choice{
-		{Value: "tmux", Label: config.Text("menu.new_window_in_the_current_tmux_session")},
-		{Value: "tmux-session", Label: config.Text("menu.new_window_in_a_per_project_tmux_session")},
+		{Value: tmux.Name, Label: config.Text("menu.new_window_in_the_current_tmux_session")},
+		{Value: tmux.SessionName, Label: config.Text("menu.new_window_in_a_per_project_tmux_session")},
 	}
 }
 
 func herdrLauncherChoices(cfg *config.Config) []Choice {
-	installed := lookPath("herdr") != ""
-	if !installed && cfg.Launcher != "herdr" {
+	installed := lookPath(herdr.Executable) != ""
+	if !installed && cfg.Launcher != herdr.Name {
 		return nil
 	}
 	label := config.Text("menu.new_tab_in_the_current_herdr_workspace")
 	if !installed {
 		label += config.Text("menu.not_currently_installed")
 	}
-	return []Choice{{Value: "herdr", Label: label}}
+	return []Choice{{Value: herdr.Name, Label: label}}
 }
 
 // windowsLauncherChoices leaves out tmux: native Windows has none.
 // herdr has a native Windows build, so it is offered once installed.
 func windowsLauncherChoices(cfg *config.Config) []Choice {
-	choices := []Choice{{Value: "console", Label: config.Text("menu.separate_windows_console")}}
+	choices := []Choice{{Value: direct.Console, Label: config.Text("menu.separate_windows_console")}}
 	choices = append(choices, herdrLauncherChoices(cfg)...)
 	return append(choices, Choice{
-		Value: "foreground", Label: config.Text("menu.foreground_in_this_terminal"),
+		Value: direct.Foreground, Label: config.Text("menu.foreground_in_this_terminal"),
 	})
 }
 

@@ -1,4 +1,4 @@
-package focus
+package herdr
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/dualface/kander/internal/probe"
 )
 
-func focusHerdrPane(ctx context.Context, socket, pane string) error {
+func focusPane(ctx context.Context, socket, pane string) error {
 	if socket == "" {
 		return errors.New(config.Text("focus.socket_missing"))
 	}

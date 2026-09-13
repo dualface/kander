@@ -1,4 +1,4 @@
-package focus
+package herdr
 
 import (
 	"context"
@@ -58,7 +58,7 @@ func TestPaneFocusCancellation(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("socket did not cancel")
 	}
-	if err := focusHerdrPane(context.Background(), "", "p3"); err == nil {
+	if err := focusPane(context.Background(), "", "p3"); err == nil {
 		t.Fatal("missing socket succeeded")
 	}
 }

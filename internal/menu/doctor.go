@@ -7,9 +7,10 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/internal/terminal/herdr"
+	"github.com/dualface/kander/internal/terminal/tmux"
 )
-
-const tmuxSessionHint = "tmux new -A -s kander"
 
 func printDoctor() bool {
 	return printDoctorWithTools(CheckTerminalTools(), false)
@@ -92,9 +93,9 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if isWindowsOS() {
 		success(config.Text("menu.windows_console_launcher_available"))
 	} else if tools.Tmux.Available() {
-		if os.Getenv("TMUX") == "" && configuredLauncher != "tmux-session" && configuredLauncher != "auto" && configuredLauncher != "herdr" {
+		if os.Getenv("TMUX") == "" && configuredLauncher != tmux.SessionName && configuredLauncher != "auto" && configuredLauncher != herdr.Name {
 			hint(config.Text(
-				"menu.tmux_installed_but_not_in_a_session_start_one", tmuxSessionHint,
+				"menu.tmux_installed_but_not_in_a_session_start_one", tmux.SessionHint,
 			))
 		}
 	} else {
@@ -104,12 +105,12 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	}
 	// herdr works on Windows too, so these hints are not platform-specific.
 	if tools.Herdr.Available() {
-		if os.Getenv("HERDR_ENV") != "1" && configuredLauncher == "herdr" {
+		if os.Getenv("HERDR_ENV") != "1" && configuredLauncher == herdr.Name {
 			hint(config.Text(
 				"menu.herdr_installed_but_not_currently_in_herdr_the_herdr",
 			))
 		}
-	} else if configuredLauncher == "herdr" {
+	} else if configuredLauncher == herdr.Name {
 		hint(config.Text(
 			"menu.herdr_unavailable_welcome_can_select_another_launcher",
 		))
@@ -277,7 +278,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 	}
 	launcher := effective.Launcher
 	switch launcher {
-	case "tmux", "tmux-session":
+	case tmux.Name, tmux.SessionName:
 		if isWindowsOS() {
 			healthy = false
 			warning(config.Text(
@@ -290,7 +291,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			))
 		} else if !cfg.WelcomeComplete {
 			break
-		} else if launcher == "tmux-session" {
+		} else if launcher == tmux.SessionName {
 			hint(config.Text(
 				"menu.launcher_tmux_session_creates_or_reuses_a_per_project",
 			))
@@ -299,7 +300,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				"menu.launcher_tmux_requires_entering_the_tmux_session_shown_above",
 			))
 		}
-	case "console":
+	case direct.Console:
 		if !isWindowsOS() {
 			healthy = false
 			warning(config.Text(
@@ -310,7 +311,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				"menu.launcher_console_starts_the_agent_in_a_separate_windows",
 			))
 		}
-	case "herdr":
+	case herdr.Name:
 		if !tools.Herdr.Available() {
 			healthy = false
 			warning(config.Text(
@@ -346,9 +347,9 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				"menu.launcher_auto_chooses_at_start_a_herdr_tab_if",
 			))
 		}
-	case "foreground":
+	case direct.Foreground:
 		if cfg.WelcomeComplete {
-			launcherHint := "tmux"
+			launcherHint := tmux.Name
 			if isWindowsOS() {
 				launcherHint = config.Text("menu.console")
 			}

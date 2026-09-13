@@ -33,10 +33,10 @@ func TestStartReturnsResultWithoutTerminalOutput(t *testing.T) {
 			if result.TaskID != id || result.Size != "small" || result.Agent != "claude" || result.Plan.Launcher != launcher || result.Outcome.Pane == "" {
 				t.Fatalf("result=%+v", result)
 			}
-			if launcher == "herdr" && (result.Outcome.Tab == "" || len(result.Warnings) != 1) {
+			if launcher == "herdr" && (result.Outcome.Container == "" || len(result.Warnings) != 1) {
 				t.Fatalf("missing address/warning: %+v", result)
 			}
-			if launcher != "herdr" && (result.Plan.Session == "" || result.Outcome.Window == "") {
+			if launcher != "herdr" && (result.Plan.Target.Session == "" || result.Outcome.Container == "") {
 				t.Fatalf("missing address: %+v", result)
 			}
 			snapshot, e := board.ReadSnapshot(root, id)

@@ -1,94 +1,81 @@
 package takeover
 
 import (
-	"encoding/json"
+	"context"
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal"
 )
 
-func herdrJSONErrorCode(res probe.Result) string {
-	for _, output := range []string{res.Stderr, res.Stdout} {
-		var payload any
-		if err := json.Unmarshal([]byte(output), &payload); err != nil {
-			continue
-		}
-		obj, _ := payload.(map[string]any)
-		if obj == nil {
-			continue
-		}
-		errObj, _ := obj["error"].(map[string]any)
-		if errObj == nil {
-			continue
-		}
-		code, _ := errObj["code"].(string)
-		if code != "" {
-			return code
-		}
+// waitProbeError renders a failed pane probe while waiting for the agent to
+// exit: a run failure keeps its original error, a response failure keeps the
+// diagnostics of the wait loop.
+func waitProbeError(err error) error {
+	commandErr, ok := terminal.AsCommandError(err)
+	if !ok {
+		return err
 	}
-	return ""
+	switch commandErr.Kind {
+	case terminal.KindExec:
+		return commandErr.Cause
+	case terminal.KindExit:
+		return takeoverError("takeover.failed_to_probe_the_pane_while_waiting_for_the", commandErr.Detail())
+	case terminal.KindNotJSON:
+		return &probe.Error{Message: config.Text(commandErr.Cause.Error(), commandErr.Cause.Error())}
+	case terminal.KindNotObject, terminal.KindMissingResult:
+		return &probe.Error{Message: config.Text("probe.herdr_response_is_missing_result")}
+	default:
+		return takeoverError("takeover.herdr_pane_get_returned_an_invalid_response")
+	}
 }
 
-func herdrWaitAgentExit(herdr, tabID, paneID string, session launch.AgentSession, timeout float64) (paneExists bool, err error) {
+func agentWaitExit(backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, timeout float64) (paneExists bool, err error) {
+	tabID, paneID := address.Container, address.Pane
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
 	for {
 		remaining := deadline.Sub(nowFn())
 		if remaining <= 0 {
 			return false, takeoverError("takeover.timed_out_waiting_for_the_agent_to_exit", paneID)
 		}
-		res, capErr := probe.Capture(herdr, []string{"pane", "get", paneID}, remaining)
-		if capErr != nil {
-			return false, capErr
+		pane, probeErr := paneFacts(backend, program, paneID, remaining)
+		if probeErr != nil {
+			return false, waitProbeError(probeErr)
 		}
-		if res.Code != 0 {
-			if herdrJSONErrorCode(res) == "pane_not_found" {
-				panes, listErr := herdrTabPanes(herdr, tabID)
-				if listErr != nil {
-					return false, listErr
-				}
-				if len(panes) > 0 {
-					return false, takeoverError(
-						"takeover.the_target_herdr_pane_disappeared_while_its_tab_still", tabID, strings.Join(panes, ","),
-					)
-				}
-				return false, nil
+		if pane.Gone {
+			topology, listErr := backend.Topology(context.Background(), probeConn(program), address)
+			if listErr != nil {
+				return false, listErr
 			}
+			if len(topology.Panes) > 0 {
+				return false, takeoverError(
+					"takeover.the_target_herdr_pane_disappeared_while_its_tab_still", tabID, strings.Join(topology.Panes, ","),
+				)
+			}
+			return false, nil
+		}
+		if pane.Container != tabID {
 			return false, takeoverError(
-				"takeover.failed_to_probe_the_pane_while_waiting_for_the", herdrFailureDetail(res),
+				"takeover.the_herdr_pane_moved_to_another_tab_while_waiting", tabID, orNA(pane.Container),
 			)
 		}
-		data, jsonErr := probe.HerdrResult(res)
-		if jsonErr != nil {
-			return false, jsonErr
-		}
-		pane, _ := data["pane"].(map[string]any)
-		if pane == nil || probe.PublicID(pane["pane_id"]) != paneID {
-			return false, takeoverError("takeover.herdr_pane_get_returned_an_invalid_response")
-		}
-		actualTab := probe.PublicID(pane["tab_id"])
-		if actualTab != tabID {
-			return false, takeoverError(
-				"takeover.the_herdr_pane_moved_to_another_tab_while_waiting", tabID, orNA(actualTab),
-			)
-		}
-		actualAgent, _ := pane["agent"].(string)
-		if actualAgent == "" {
-			if err := ValidateHerdrContainer(herdr, tabID, paneID, pane); err != nil {
+		if pane.Agent == "" {
+			if err := validateAgentContainer(backend, program, address, pane); err != nil {
 				return false, err
 			}
 			return true, nil
 		}
-		if actualAgent != session.Agent {
+		if pane.Agent != session.Agent {
 			return false, takeoverError(
-				"takeover.the_pane_changed_to_another_agent_while_waiting_for", session.Agent, actualAgent,
+				"takeover.the_pane_changed_to_another_agent_while_waiting_for", session.Agent, pane.Agent,
 			)
 		}
-		actualSession := herdrSessionReference(pane)
-		if session.Reference == "" || actualSession != session.Reference {
+		if session.Reference == "" || pane.AgentSession != session.Reference {
 			return false, takeoverError(
-				"takeover.the_pane_session_changed_while_waiting_for_exit_task", orNA(session.Reference), orNA(actualSession),
+				"takeover.the_pane_session_changed_while_waiting_for_exit_task", orNA(session.Reference), orNA(pane.AgentSession),
 			)
 		}
 		remaining = deadline.Sub(nowFn())
@@ -102,7 +89,8 @@ func herdrWaitAgentExit(herdr, tabID, paneID string, session launch.AgentSession
 	}
 }
 
-func tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID string, session launch.AgentSession, timeout float64) (windowExists bool, err error) {
+func processWaitExit(backend terminal.Backend, program string, address terminal.Address, session launch.AgentSession, timeout float64) (windowExists bool, err error) {
+	paneID, windowID := address.Pane, address.Container
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
 	expected, err := agentCommandName(session.Agent)
 	if err != nil {
@@ -113,12 +101,12 @@ func tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID string, sessi
 		if remaining <= 0 {
 			return false, takeoverError("takeover.timed_out_waiting_for_the_agent_to_exit", paneID)
 		}
-		paneProbe, probeErr := probe.ProbeTmuxPaneWithin(tmux, paneID, remaining)
+		facts, probeErr := paneFacts(backend, program, paneID, remaining)
 		if probeErr != nil {
 			return false, probeErr
 		}
-		if paneProbe.Facts == nil {
-			exists, existsErr := tmuxWindowExists(tmux, windowID)
+		if facts.Gone {
+			exists, existsErr := backend.ContainerExists(context.Background(), probeConn(program), address)
 			if existsErr != nil {
 				return false, existsErr
 			}
@@ -129,12 +117,11 @@ func tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID string, sessi
 				"takeover.the_target_tmux_pane_disappeared_while_its_window_still", paneID, windowID,
 			)
 		}
-		facts := paneProbe.Facts
 		if facts.Dead == "1" {
-			if err := ValidateTmuxContainer(tmux, paneID, launcher, sessionID, windowID); err != nil {
+			if err := validateProcessContainer(backend, program, address); err != nil {
 				return false, err
 			}
-			return tmuxWindowExists(tmux, windowID)
+			return backend.ContainerExists(context.Background(), probeConn(program), address)
 		}
 		if facts.Dead != "0" {
 			return false, takeoverError(
@@ -151,7 +138,7 @@ func tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID string, sessi
 				"takeover.the_tmux_pane_session_changed_while_waiting_for_exit", orNA(session.Reference), orNA(facts.SessionMarker),
 			)
 		}
-		if err := ValidateTmuxContainer(tmux, paneID, launcher, sessionID, windowID); err != nil {
+		if err := validateProcessContainer(backend, program, address); err != nil {
 			return false, err
 		}
 		remaining = deadline.Sub(nowFn())

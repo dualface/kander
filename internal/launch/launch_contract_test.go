@@ -10,6 +10,8 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func freezeClock(t *testing.T) {
@@ -152,7 +154,7 @@ func TestTmuxSessionLauncherCreateReuseForeignAndRollback(t *testing.T) {
 	t.Setenv("TMUX", "")
 	t.Setenv("TMUX_PANE", "")
 	project := filepath.Dir(root)
-	session := projectSessionName(project)
+	session := tmux.ProjectSessionName(project)
 
 	taskID, _ := makeTodo(t, root, "session-create")
 	out, _, err := capture(t, func() error { return commandStart(root, "", "tmux-session", taskID) })
@@ -198,7 +200,7 @@ func TestTmuxSessionLauncherCreateReuseForeignAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	alt := projectSessionName(project) + "-2"
+	alt := tmux.ProjectSessionName(project) + "-2"
 	args = mustRead(t, filepath.Join(root, "tmux.log"))
 	if !strings.HasPrefix(args, "new-session\n") || !strings.Contains(args, alt) {
 		t.Fatalf("conflict tmux=%s", args)
@@ -441,8 +443,8 @@ func TestValidateResumedAgentHerdrIdentityPolicy(t *testing.T) {
 	}
 	root, _, fakeBin := setupBoard(t)
 	log := installHerdr(t, root, fakeBin)
-	plan := LaunchPlan{Launcher: "herdr", HerdrBin: filepath.Join(fakeBin, "herdr")}
-	outcome := LaunchOutcome{Tab: "w1:t9", Pane: "w1:p9"}
+	plan := LaunchPlan{Launcher: "herdr", Target: terminal.Target{Program: filepath.Join(fakeBin, "herdr")}}
+	outcome := LaunchOutcome{Container: "w1:t9", Pane: "w1:p9"}
 	session := AgentSession{Agent: "cursor", Reference: "expected-session"}
 	t.Setenv("KANBAN_HERDR_LOG", log)
 

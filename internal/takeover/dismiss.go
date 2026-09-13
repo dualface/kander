@@ -1,6 +1,7 @@
 package takeover
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dualface/kander/internal/board"
@@ -9,6 +10,7 @@ import (
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/notify"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/window"
 )
 
@@ -51,9 +53,8 @@ func commandDismiss(root, taskID string, timeout float64) error {
 		return err
 	}
 	windowValue := board.MetadataFrom(text, window.WindowField)
-	herdrMatch := herdrWindowRe.FindStringSubmatch(windowValue)
-	tmuxMatch := tmuxWindowRe.FindStringSubmatch(windowValue)
-	if windowValue != "" && herdrMatch == nil && tmuxMatch == nil {
+	backend, address, parsed := terminal.ParseWindow(windowValue)
+	if windowValue != "" && !parsed {
 		return takeoverError(
 			"takeover.task_has_no_dismissible_terminal_container", windowValue,
 		)
@@ -68,106 +69,119 @@ func commandDismiss(root, taskID string, timeout float64) error {
 	}
 	live := toLive(session)
 	var channel, container string
-	if herdrMatch != nil || windowValue == "" {
-		herdr, err := lookPath("herdr")
-		if err != nil {
-			return takeoverError("liveness.herdr_is_not_in_path")
+	if !parsed {
+		agent, ok := agentBackend()
+		if !ok {
+			return takeoverError("takeover.task_has_no_dismissible_terminal_container", windowValue)
 		}
-		var tabID, paneID string
-		if herdrMatch != nil {
-			tabID, paneID = herdrMatch[1], herdrMatch[2]
-			probeResult := notify.HerdrNotifyProbe(herdr, paneID, live, probe.DefaultCommandTimeout)
-			if probeResult.State == "stale" {
-				discovered, err := reverseLookupStale(probeResult.Detail, func() (struct{ Tab, Pane string }, error) {
-					tab, pane, err := liveness.HerdrReverseLookup(herdr, live)
-					return struct{ Tab, Pane string }{tab, pane}, err
-				})
-				if err != nil {
-					return err
-				}
-				tabID, paneID, err = notify.HerdrExplicitTarget(herdr, discovered.Pane)
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			_, pane, err := liveness.HerdrReverseLookup(herdr, live)
-			if err != nil {
-				return err
-			}
-			tabID, paneID, err = notify.HerdrExplicitTarget(herdr, pane)
-			if err != nil {
-				return err
-			}
-		}
-		pane, err := notify.HerdrNotifyTarget(herdr, paneID, live)
-		if err != nil {
-			return err
-		}
-		if err := ValidateHerdrContainer(herdr, tabID, paneID, pane); err != nil {
-			return err
-		}
-		if err := notify.HerdrAgentPrompt(herdr, paneID, command); err != nil {
-			return err
-		}
-		paneExists, err := herdrWaitAgentExit(herdr, tabID, paneID, session, timeout)
-		if err != nil {
-			return err
-		}
-		if paneExists {
-			if err := herdrCloseTab(herdr, tabID); err != nil {
-				return err
-			}
-		}
-		channel, container = "herdr", tabID
+		backend = agent
+	}
+	if backend.Capabilities().AgentIdentity {
+		channel, container, err = dismissAgentPane(backend, address, parsed, live, session, command, timeout)
 	} else {
-		launcher, tmuxSession, windowID, paneID := tmuxMatch[1], tmuxMatch[2], tmuxMatch[3], tmuxMatch[4]
-		tmux, err := lookPath("tmux")
-		if err != nil {
-			return takeoverError("liveness.tmux_is_not_in_path")
-		}
-		probeResult := notify.TmuxNotifyProbe(tmux, paneID, live, probe.DefaultCommandTimeout)
-		if probeResult.State == "stale" {
-			location, err := reverseLookupStale(probeResult.Detail, func() (liveness.TmuxPaneLocation, error) {
-				return liveness.TmuxReverseLookup(tmux, live)
-			})
-			if err != nil {
-				return err
-			}
-			paneID = location.PaneID
-			facts, err := probe.ProbeTmuxContainer(tmux, paneID)
-			if err != nil {
-				return err
-			}
-			if launcher == "tmux" {
-				tmuxSession = facts.SessionID
-			} else {
-				tmuxSession = facts.SessionName
-			}
-			windowID = facts.WindowID
-		}
-		if err := notify.TmuxNotifyTarget(tmux, paneID, live); err != nil {
-			return err
-		}
-		if err := ValidateTmuxContainer(tmux, paneID, launcher, tmuxSession, windowID); err != nil {
-			return err
-		}
-		if err := tmuxSendAgentExit(tmux, paneID, command); err != nil {
-			return err
-		}
-		windowExists, err := tmuxWaitAgentExit(tmux, launcher, tmuxSession, windowID, paneID, session, timeout)
-		if err != nil {
-			return err
-		}
-		if windowExists {
-			if err := tmuxCloseWindow(tmux, windowID); err != nil {
-				return err
-			}
-		}
-		channel, container = launcher, windowID
+		channel, container, err = dismissProcessPane(backend, address, live, session, command, timeout)
+	}
+	if err != nil {
+		return err
 	}
 	fmt.Println(t(
 		"takeover.dismissed_channel_closed_container", entry.TaskID, channel, container,
 	))
 	return nil
+}
+
+func dismissAgentPane(backend terminal.Backend, address terminal.Address, parsed bool, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64) (string, string, error) {
+	program, err := lookPath(backend.Executable())
+	if err != nil {
+		return "", "", notInPath(backend)
+	}
+	var tabID, paneID string
+	if parsed {
+		tabID, paneID = address.Container, address.Pane
+		probeResult := notify.AgentNotifyProbe(backend, program, paneID, live, probe.DefaultCommandTimeout)
+		if probeResult.State == "stale" {
+			discovered, err := reverseLookupStale(probeResult.Detail, func() (terminal.Address, error) {
+				return liveness.ReverseLookup(context.Background(), backend, program, live)
+			})
+			if err != nil {
+				return "", "", err
+			}
+			tabID, paneID, err = notify.ExplicitPaneTarget(backend, program, discovered.Pane)
+			if err != nil {
+				return "", "", err
+			}
+		}
+	} else {
+		discovered, err := liveness.ReverseLookup(context.Background(), backend, program, live)
+		if err != nil {
+			return "", "", err
+		}
+		tabID, paneID, err = notify.ExplicitPaneTarget(backend, program, discovered.Pane)
+		if err != nil {
+			return "", "", err
+		}
+	}
+	pane, err := notify.AgentNotifyTarget(backend, program, paneID, live)
+	if err != nil {
+		return "", "", err
+	}
+	target := terminal.Address{Launcher: backend.Name(), Container: tabID, Pane: paneID}
+	if err := validateAgentContainer(backend, program, target, pane); err != nil {
+		return "", "", err
+	}
+	if err := notify.AgentPrompt(backend, program, paneID, command); err != nil {
+		return "", "", err
+	}
+	paneExists, err := agentWaitExit(backend, program, target, session, timeout)
+	if err != nil {
+		return "", "", err
+	}
+	if paneExists {
+		if err := closeContainer(backend, program, target); err != nil {
+			return "", "", err
+		}
+	}
+	return backend.Name(), tabID, nil
+}
+
+func dismissProcessPane(backend terminal.Backend, address terminal.Address, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64) (string, string, error) {
+	target := address
+	program, err := lookPath(backend.Executable())
+	if err != nil {
+		return "", "", notInPath(backend)
+	}
+	probeResult := notify.ProcessNotifyProbe(backend, program, target.Pane, live, probe.DefaultCommandTimeout)
+	if probeResult.State == "stale" {
+		location, err := reverseLookupStale(probeResult.Detail, func() (terminal.Address, error) {
+			return liveness.ReverseLookup(context.Background(), backend, program, live)
+		})
+		if err != nil {
+			return "", "", err
+		}
+		target.Pane = location.Pane
+		topology, err := backend.Topology(context.Background(), probeConn(program), target)
+		if err != nil {
+			return "", "", err
+		}
+		target.Session, target.Container = topology.Session, topology.Container
+	}
+	if err := notify.ProcessNotifyTarget(backend, program, target.Pane, live); err != nil {
+		return "", "", err
+	}
+	if err := validateProcessContainer(backend, program, target); err != nil {
+		return "", "", err
+	}
+	if err := sendAgentExit(backend, program, target.Pane, command); err != nil {
+		return "", "", err
+	}
+	windowExists, err := processWaitExit(backend, program, target, session, timeout)
+	if err != nil {
+		return "", "", err
+	}
+	if windowExists {
+		if err := closeContainer(backend, program, target); err != nil {
+			return "", "", err
+		}
+	}
+	return backend.Name(), target.Container, nil
 }

@@ -8,116 +8,109 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 // TargetProbe is the probe of a direct-delivery target: ready / busy / stale / fallback.
 type TargetProbe struct {
 	State  string
 	Detail string
-	Pane   map[string]any
 }
 
-func herdrSessionReference(pane map[string]any) string {
-	identity, _ := pane["agent_session"].(map[string]any)
-	if identity == nil {
-		return ""
-	}
-	ref, _ := identity["value"].(string)
-	if ref == "" {
-		return ""
-	}
-	return ref
+func probeConn(program string) terminal.Conn {
+	return terminal.Conn{Program: program, Run: terminal.ProbeRunner}
 }
 
-func herdrPane(herdr, paneID string) (map[string]any, error) {
-	probeResult, err := probe.ProbeHerdrPane(herdr, paneID, 0)
+func paneFactsWithin(backend terminal.Backend, program, paneID string, timeout time.Duration) (terminal.PaneFacts, error) {
+	ctx, cancel := probe.TimeoutContext(timeout)
+	defer cancel()
+	return backend.PaneFacts(ctx, probeConn(program), paneID)
+}
+
+func agentPane(backend terminal.Backend, program, paneID string) (terminal.PaneFacts, error) {
+	facts, err := paneFactsWithin(backend, program, paneID, 0)
 	if err != nil {
-		return nil, err
+		return terminal.PaneFacts{}, err
 	}
-	if probeResult.Pane == nil {
-		return nil, notifyError(
-			"launch.pane_does_not_exist", paneID, probeResult.GoneDetail,
+	if facts.Gone {
+		return terminal.PaneFacts{}, notifyError(
+			"launch.pane_does_not_exist", paneID, facts.GoneDetail,
 		)
 	}
-	return probeResult.Pane, nil
+	return facts, nil
 }
 
-// HerdrNotifyTarget validates that an existing herdr pane accepts direct delivery (idle/done + matching identity).
-func HerdrNotifyTarget(herdr, paneID string, session liveness.TaskSession) (map[string]any, error) {
-	pane, err := herdrPane(herdr, paneID)
+// AgentNotifyTarget validates that an existing pane of an agent-aware backend
+// accepts direct delivery (idle/done + matching identity).
+func AgentNotifyTarget(backend terminal.Backend, program, paneID string, session liveness.TaskSession) (terminal.PaneFacts, error) {
+	pane, err := agentPane(backend, program, paneID)
 	if err != nil {
-		return nil, err
+		return terminal.PaneFacts{}, err
 	}
-	actualAgent, _ := pane["agent"].(string)
-	if actualAgent != session.Agent {
-		return nil, notifyError(
-			"notify.agent_mismatch_task_pane", session.Agent, orNA(actualAgent),
+	if pane.Agent != session.Agent {
+		return terminal.PaneFacts{}, notifyError(
+			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.Agent),
 		)
 	}
-	status, _ := pane["agent_status"].(string)
-	if status != "idle" && status != "done" {
-		return nil, notifyError(
-			"notify.pane_status_does_not_accept_delivery", paneID, orNA(status),
+	if pane.AgentStatus != "idle" && pane.AgentStatus != "done" {
+		return terminal.PaneFacts{}, notifyError(
+			"notify.pane_status_does_not_accept_delivery", paneID, orNA(pane.AgentStatus),
 		)
 	}
-	actualSession := herdrSessionReference(pane)
-	if actualSession != session.Reference {
-		return nil, notifyError(
-			"notify.session_mismatch_task_pane", session.Reference, orNA(actualSession),
+	if pane.AgentSession != session.Reference {
+		return terminal.PaneFacts{}, notifyError(
+			"notify.session_mismatch_task_pane", session.Reference, orNA(pane.AgentSession),
 		)
 	}
 	return pane, nil
 }
 
-// HerdrNotifyProbe classifies a herdr target: stale / busy / ready. A mismatched identity is stale; only a busy status is retried.
-func HerdrNotifyProbe(herdr, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
-	paneProbe, err := probe.ProbeHerdrPane(herdr, paneID, timeout)
+// AgentNotifyProbe classifies an agent-aware target: stale / busy / ready. A
+// mismatched identity is stale; only a busy status is retried.
+func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
+	pane, err := paneFactsWithin(backend, program, paneID, timeout)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return TargetProbe{State: "busy", Detail: t("notify.target_probe_timed_out")}
 		}
 		return TargetProbe{State: "stale", Detail: err.Error()}
 	}
-	if paneProbe.Pane == nil {
+	if pane.Gone {
 		return TargetProbe{State: "stale", Detail: t(
-			"launch.pane_does_not_exist", paneID, paneProbe.GoneDetail,
+			"launch.pane_does_not_exist", paneID, pane.GoneDetail,
 		)}
 	}
-	pane := paneProbe.Pane
-	actualAgent, _ := pane["agent"].(string)
-	if actualAgent != session.Agent {
+	if pane.Agent != session.Agent {
 		return TargetProbe{State: "stale", Detail: t(
-			"notify.agent_mismatch_task_pane", session.Agent, orNA(actualAgent),
+			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.Agent),
 		)}
 	}
-	actualSession := herdrSessionReference(pane)
-	if actualSession != session.Reference {
+	if pane.AgentSession != session.Reference {
 		return TargetProbe{State: "stale", Detail: t(
-			"notify.session_mismatch_task_pane", session.Reference, orNA(actualSession),
+			"notify.session_mismatch_task_pane", session.Reference, orNA(pane.AgentSession),
 		)}
 	}
-	status, _ := pane["agent_status"].(string)
-	if status != "idle" && status != "done" {
+	if pane.AgentStatus != "idle" && pane.AgentStatus != "done" {
 		return TargetProbe{State: "busy", Detail: t(
-			"notify.pane_status_does_not_accept_delivery", paneID, orNA(status),
-		), Pane: pane}
+			"notify.pane_status_does_not_accept_delivery", paneID, orNA(pane.AgentStatus),
+		)}
 	}
-	return TargetProbe{State: "ready", Pane: pane}
+	return TargetProbe{State: "ready"}
 }
 
-// HerdrExplicitTarget resolves the tab/pane of a --pane override, without stale-address reverse lookup.
-func HerdrExplicitTarget(herdr, paneID string) (tabID, resolvedPane string, err error) {
-	pane, err := herdrPane(herdr, paneID)
+// ExplicitPaneTarget resolves the container of a --pane override, without
+// stale-address reverse lookup.
+func ExplicitPaneTarget(backend terminal.Backend, program, paneID string) (container, resolvedPane string, err error) {
+	pane, err := agentPane(backend, program, paneID)
 	if err != nil {
 		return "", "", err
 	}
-	tabID = probe.PublicID(pane["tab_id"])
-	if tabID == "" {
+	if pane.Container == "" {
 		return "", "", notifyError(
 			"notify.pane_has_no_usable_tab_id", paneID,
 		)
 	}
-	return tabID, paneID, nil
+	return pane.Container, paneID, nil
 }
 
 func agentCommandName(agent string) (string, error) {
@@ -125,18 +118,18 @@ func agentCommandName(agent string) (string, error) {
 	return definition.ProcessName, err
 }
 
-// TmuxNotifyTarget validates that an existing tmux pane accepts direct delivery.
-func TmuxNotifyTarget(tmux, paneID string, session liveness.TaskSession) error {
-	paneProbe, err := probe.ProbeTmuxPane(tmux, paneID)
+// ProcessNotifyTarget validates that an existing pane identified by its
+// foreground process and session marker accepts direct delivery.
+func ProcessNotifyTarget(backend terminal.Backend, program, paneID string, session liveness.TaskSession) error {
+	facts, err := paneFactsWithin(backend, program, paneID, 0)
 	if err != nil {
 		return err
 	}
-	if paneProbe.Facts == nil {
+	if facts.Gone {
 		return notifyError(
-			"launch.tmux_pane_does_not_exist", paneID, paneProbe.GoneDetail,
+			"launch.tmux_pane_does_not_exist", paneID, facts.GoneDetail,
 		)
 	}
-	facts := paneProbe.Facts
 	if facts.Dead != "0" {
 		return notifyError("launch.tmux_pane_is_dead", paneID)
 	}
@@ -163,21 +156,21 @@ func TmuxNotifyTarget(tmux, paneID string, session liveness.TaskSession) error {
 	return nil
 }
 
-// TmuxNotifyProbe classifies a tmux target. A missing marker is fallback (no direct-delivery channel), a mismatched one is stale.
-func TmuxNotifyProbe(tmux, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
-	paneProbe, err := probe.ProbeTmuxPaneWithin(tmux, paneID, timeout)
+// ProcessNotifyProbe classifies a process-identified target. A missing marker
+// is fallback (no direct-delivery channel), a mismatched one is stale.
+func ProcessNotifyProbe(backend terminal.Backend, program, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
+	facts, err := paneFactsWithin(backend, program, paneID, timeout)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return TargetProbe{State: "busy", Detail: t("notify.target_probe_timed_out")}
 		}
 		return TargetProbe{State: "stale", Detail: err.Error()}
 	}
-	if paneProbe.Facts == nil {
+	if facts.Gone {
 		return TargetProbe{State: "stale", Detail: t(
-			"launch.tmux_pane_does_not_exist", paneID, paneProbe.GoneDetail,
+			"launch.tmux_pane_does_not_exist", paneID, facts.GoneDetail,
 		)}
 	}
-	facts := paneProbe.Facts
 	if facts.Dead != "0" {
 		return TargetProbe{State: "stale", Detail: t("launch.tmux_pane_is_dead", paneID)}
 	}
@@ -206,6 +199,14 @@ func TmuxNotifyProbe(tmux, paneID string, session liveness.TaskSession, timeout 
 		)}
 	}
 	return TargetProbe{State: "ready"}
+}
+
+// notifyProbe dispatches to the probe matching the backend capabilities.
+func notifyProbe(backend terminal.Backend, program, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
+	if backend.Capabilities().AgentIdentity {
+		return AgentNotifyProbe(backend, program, paneID, session, timeout)
+	}
+	return ProcessNotifyProbe(backend, program, paneID, session, timeout)
 }
 
 func orNA(v string) string {

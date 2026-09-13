@@ -38,7 +38,7 @@ func TestCaptureClosesPipesHeldOutsideProcessGroup(t *testing.T) {
 	configureProbeHelpers(t)
 	dir := t.TempDir()
 	started := time.Now()
-	_, err := Capture(os.Args[0], helperArgs("parent-escape", dir), 300*time.Millisecond)
+	_, err := captureWithin(os.Args[0], helperArgs("parent-escape", dir), 300*time.Millisecond)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err=%v", err)
 	}

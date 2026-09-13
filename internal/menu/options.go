@@ -6,6 +6,9 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/internal/terminal/direct"
+	"github.com/dualface/kander/internal/terminal/herdr"
+	"github.com/dualface/kander/internal/terminal/tmux"
 	"strings"
 )
 
@@ -227,26 +230,26 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 		return
 	}
 	switch {
-	case isWindowsOS() && (cfg.Launcher == "tmux" || cfg.Launcher == "tmux-session"):
-		cfg.Launcher = "console"
+	case isWindowsOS() && (cfg.Launcher == tmux.Name || cfg.Launcher == tmux.SessionName):
+		cfg.Launcher = direct.Console
 		warning(config.Text(
 			"menu.windows_does_not_support_tmux_using_console",
 		))
-	case (cfg.Launcher == "tmux" || cfg.Launcher == "tmux-session") && lookPath("tmux") == "":
-		cfg.Launcher = "foreground"
+	case (cfg.Launcher == tmux.Name || cfg.Launcher == tmux.SessionName) && lookPath(tmux.Executable) == "":
+		cfg.Launcher = direct.Foreground
 		warning(config.Text(
 			"menu.tmux_is_not_installed_using_foreground_the_launcher_menu",
 		))
 	// On POSIX auto holds as long as tmux exists, so a missing herdr must not
 	// rewrite it; on Windows auto can only land on herdr, so a missing herdr does.
-	case (cfg.Launcher == "herdr" || (cfg.Launcher == "auto" && isWindowsOS())) && lookPath("herdr") == "":
+	case (cfg.Launcher == herdr.Name || (cfg.Launcher == "auto" && isWindowsOS())) && lookPath(herdr.Executable) == "":
 		switch {
 		case isWindowsOS():
-			cfg.Launcher = "console"
-		case lookPath("tmux") != "":
-			cfg.Launcher = "tmux"
+			cfg.Launcher = direct.Console
+		case lookPath(tmux.Executable) != "":
+			cfg.Launcher = tmux.Name
 		default:
-			cfg.Launcher = "foreground"
+			cfg.Launcher = direct.Foreground
 		}
 		warning(config.Text(
 			"menu.herdr_is_not_installed_using", cfg.Launcher,
@@ -351,9 +354,9 @@ func (s *Session) LauncherChoices() []Choice {
 	if isWindowsOS() {
 		return windowsLauncherChoices(s.Config)
 	}
-	foreground := Choice{Value: "foreground", Label: config.Text("menu.foreground_in_this_terminal")}
+	foreground := Choice{Value: direct.Foreground, Label: config.Text("menu.foreground_in_this_terminal")}
 	choices := []Choice{autoLauncherChoice()}
-	if lookPath("tmux") != "" {
+	if lookPath(tmux.Executable) != "" {
 		choices = append(choices, tmuxLauncherChoices()...)
 		choices = append(choices, herdrLauncherChoices(s.Config)...)
 		return append(choices, foreground)

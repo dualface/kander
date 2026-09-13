@@ -42,7 +42,7 @@ func TestDispatchSendCrashChild(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if err = sendDispatch(context.Background(), DirectTarget{Kind: "herdr", Program: program, PaneID: "w1:p9"}, notifyInstruction(s.Entry, path, ackMarker())); err != nil {
+			if err = sendDispatch(context.Background(), DirectTarget{Backend: backendFor(t, "herdr"), Program: program, PaneID: "w1:p9"}, notifyInstruction(s.Entry, path, ackMarker())); err != nil {
 				return err
 			}
 		}

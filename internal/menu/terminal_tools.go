@@ -1,15 +1,16 @@
 package menu
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
+	_ "github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/internal/terminal/herdr"
+	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 // TerminalTool is the result of one command availability probe with a timeout.
@@ -40,28 +41,11 @@ func (t TerminalTools) NeedsHerdrInstall() bool {
 	return !t.Herdr.Available() && t.Herdr.OffPath == "" && !t.Tmux.Available()
 }
 
-// herdrDefaultBinaries lists where the official herdr installer puts the
-// binary, most preferred first.
-func herdrDefaultBinaries() []string {
-	if isWindowsOS() {
-		local := os.Getenv("LOCALAPPDATA")
-		if local == "" {
-			return nil
-		}
-		return []string{filepath.Join(local, "Programs", "Herdr", "bin", "herdr.exe")}
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	return []string{filepath.Join(home, ".local", "bin", "herdr")}
-}
-
 func defaultToolBinary(name string) string {
-	if name != "herdr" {
+	if name != herdr.Executable {
 		return ""
 	}
-	for _, candidate := range herdrDefaultBinaries() {
+	for _, candidate := range herdr.DefaultBinaries(isWindowsOS()) {
 		if fileExists(candidate) {
 			return candidate
 		}
@@ -69,20 +53,20 @@ func defaultToolBinary(name string) string {
 	return ""
 }
 
-func probeTerminalTool(name, flag string) TerminalTool {
+// probeTerminalTool locates a terminal backend's executable and checks that
+// its version command prints a version.
+func probeTerminalTool(backend terminal.Backend) TerminalTool {
+	name := backend.Executable()
 	result := TerminalTool{Path: lookPath(name)}
 	if result.Path == "" {
 		result.OffPath = defaultToolBinary(name)
 		return result
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, result.Path, flag)
-	cmd.WaitDelay = time.Second
-	out, err := cmd.CombinedOutput()
+	args := backend.VersionArgs()
+	out, err := terminal.VersionOutput(result.Path, args)
 	if err != nil {
-		result.Error = flag + ": " + err.Error()
-	} else if strings.TrimSpace(string(out)) == "" {
+		result.Error = strings.Join(args, " ") + ": " + err.Error()
+	} else if strings.TrimSpace(out) == "" {
 		result.Error = config.Text("menu.empty_version_output")
 	}
 	return result
@@ -91,11 +75,21 @@ func probeTerminalTool(name, flag string) TerminalTool {
 // CheckTerminalTools only probes commands: it starts no session/window/tab and installs no software.
 // Native Windows has no tmux, so it is neither probed nor reported there.
 func CheckTerminalTools() TerminalTools {
-	tools := TerminalTools{Herdr: probeTerminalTool("herdr", "--version")}
+	tools := TerminalTools{Herdr: probeTerminalTool(herdrBackend())}
 	if !isWindowsOS() {
-		tools.Tmux = probeTerminalTool("tmux", "-V")
+		tools.Tmux = probeTerminalTool(tmuxBackend())
 	}
 	return tools
+}
+
+func herdrBackend() terminal.Backend {
+	backend, _ := terminal.Lookup(herdr.Name)
+	return backend
+}
+
+func tmuxBackend() terminal.Backend {
+	backend, _ := terminal.Lookup(tmux.Name)
+	return backend
 }
 
 func HerdrInstallPrompt() string {
@@ -127,7 +121,7 @@ func (s *Session) InstallHerdr() ([]ReportLine, bool) {
 		// The installer edits PATH in the registry or a shell rc, which the current
 		// process cannot see. When the default directory has it, report the exact
 		// path instead of a vague "still unavailable".
-		if probed := probeTerminalTool("herdr", "--version"); !probed.Available() {
+		if probed := probeTerminalTool(herdrBackend()); !probed.Available() {
 			if probed.OffPath != "" {
 				hint(config.Text("menu.herdr_installed_at_reopen_terminal", probed.OffPath))
 			} else {
@@ -199,9 +193,9 @@ func reportTerminalTools(tools TerminalTools) {
 			hint(config.Text("menu.not_installed", name))
 		}
 	}
-	report("herdr", tools.Herdr)
+	report(herdr.Executable, tools.Herdr)
 	if !isWindowsOS() {
-		report("tmux", tools.Tmux)
+		report(tmux.Executable, tools.Tmux)
 	}
 	if tools.NeedsHerdrInstall() {
 		if isWindowsOS() {

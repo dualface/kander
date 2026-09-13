@@ -80,13 +80,13 @@ func parseAgentLauncher(args []string) (rest []string, agent, launcher string, a
 			if !ok {
 				return nil, "", "", false, t("launch.missing_launcher_value")
 			}
-			if !contains(config.Launchers, val) {
+			if !config.ValidLauncherName(val) {
 				return nil, "", "", false, t("launch.unknown_launcher", val)
 			}
 			launcher, i = val, next
 		case strings.HasPrefix(arg, "--launcher="):
 			val := strings.TrimPrefix(arg, "--launcher=")
-			if !contains(config.Launchers, val) {
+			if !config.ValidLauncherName(val) {
 				return nil, "", "", false, t("launch.unknown_launcher", val)
 			}
 			launcher = val
@@ -205,13 +205,13 @@ func RunResume(args []string) int {
 			if !ok {
 				return usageFail("resume", "launch.missing_launcher_value")
 			}
-			if !contains(config.Launchers, val) {
+			if !config.ValidLauncherName(val) {
 				return usageFail("resume", "launch.unknown_launcher", val)
 			}
 			launcher, i = val, next
 		case strings.HasPrefix(arg, "--launcher="):
 			val := strings.TrimPrefix(arg, "--launcher=")
-			if !contains(config.Launchers, val) {
+			if !config.ValidLauncherName(val) {
 				return usageFail("resume", "launch.unknown_launcher", val)
 			}
 			launcher = val

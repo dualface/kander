@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func TestLoadingStartWheelChangesSelectionAndDiscardsPreview(t *testing.T) {
@@ -49,8 +50,8 @@ func TestStartResultViewportRetainsNarrowContent(t *testing.T) {
 			app.Model.SetBoard(BoardPayload{Tasks: []Task{{TaskID: id, State: "todo"}}})
 			app.StartTask = func(r startRequest) (launch.StartResult, error) {
 				result := launch.StartResult{TaskID: r.TaskID, Agent: r.Agent,
-					Plan:    launch.LaunchPlan{Launcher: "tmux-session", Session: "kb-board-start-task-key-12345678"},
-					Outcome: launch.LaunchOutcome{Window: "@9", Pane: "%9"}, Warnings: []string{strings.Repeat("warning-prefix-", 4) + warning}}
+					Plan:    launch.LaunchPlan{Launcher: "tmux-session", Target: terminal.Target{Session: "kb-board-start-task-key-12345678"}},
+					Outcome: launch.LaunchOutcome{Container: "@9", Pane: "%9"}, Warnings: []string{strings.Repeat("warning-prefix-", 4) + warning}}
 				if failed {
 					return result, errors.New("launch-rolled-back-for-" + address)
 				}

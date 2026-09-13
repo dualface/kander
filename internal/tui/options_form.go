@@ -11,6 +11,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 // formBinding holds the mutable values bound to a Huh form. Huh needs stable pointers,
@@ -976,7 +977,7 @@ func (b *formBinding) commitLauncher(p *optionsPanel) {
 		lines, installed := session.InstallTmux()
 		menu.FlushReport(lines)
 		if installed {
-			session.SetLauncher("tmux")
+			session.SetLauncher(tmux.Name)
 			p.markDirty()
 		}
 	}
