@@ -1,23 +1,23 @@
 # Terminal Backends
 
-Kander reaches a terminal (herdr, tmux, or a direct process launcher) only through the `internal/terminal` package. This document describes the operation set, the address contract, the capability flags, and the rule that keeps callers off terminal command lines.
+Kander reaches a terminal (herdr, tmux, or a direct process launcher) only through the `internal/terminal` package. This document describes the operation set, the address contract, the capability flags, and the rule that keeps callers off terminal command lines. tmux is implemented declaratively: the embedded definition `internal/terminal/builtin/definitions/tmux.json` runs through `terminal.DeclarativeBackend`, the same path as user terminal definitions (see [Terminal definitions](terminal-definitions.md)).
 
 ## The Rule
 
 - Callers (`internal/launch`, `internal/liveness`, `internal/notify`, `internal/takeover`, `internal/focus`, `internal/menu`, `internal/tui`) never build a herdr or tmux argv and never execute those binaries. They look a backend up by launcher name (`terminal.Lookup`, `terminal.ParseWindow`, `terminal.ResolveAuto`, `terminal.FindBackend`) and call `terminal.Backend` methods.
 - Callers degrade on `terminal.Capabilities`, not on launcher names. For example, "has a container" replaces `launcher == "herdr" || launcher == "tmux" || launcher == "tmux-session"`, and "reports agent identity" selects the herdr-style liveness and delivery policy.
-- `internal/menu` still names specific launchers where the product UI is about one tool (install tmux, herdr installer, doctor hints). It uses the constants exported by the backend packages (`tmux.Name`, `herdr.Name`, `direct.Foreground`) instead of string literals.
+- `internal/menu` still names specific launchers where the product UI is about one tool (install tmux, herdr installer, doctor hints). It uses exported constants (`builtin.Tmux`, `builtin.TmuxSession`, `herdr.Name`, `direct.Foreground`) instead of string literals, and lists launchers of loaded user definitions as extra choices.
 - `internal/terminal` and its subpackages never import the callers above. `internal/board`, `internal/config`, `internal/fs`, `internal/process` and `internal/i18n` never import `internal/terminal`. `internal/terminal/imports_test.go` enforces both directions.
 
 ## Packages
 
 | Package                      | Responsibility                                                                 |
 | ---------------------------- | ------------------------------------------------------------------------------ |
-| `internal/terminal`          | `Backend` interface, `Address`/`Target`/`PaneFacts`/`Topology` types, `CommandError` classification, runners, registry, auto resolution |
-| `internal/terminal/tmux`     | The `tmux` and `tmux-session` launchers; one implementation, `tmux-session` addresses a per-project session by name |
+| `internal/terminal`          | `Backend` interface, `Address`/`Target`/`PaneFacts`/`Topology` types, `CommandError` classification, runners, registry, auto resolution; the terminal definition format, its validation, `DeclarativeBackend`, the hook registry, and loading of user definitions from share directories |
 | `internal/terminal/herdr`    | The `herdr` launcher, including the herdr socket session report and pane focus |
 | `internal/terminal/direct`   | `foreground` and `console`: no container; every container operation returns `terminal.ErrUnsupported` |
-| `internal/terminal/builtin`  | Registers the built-in backends; import it for its side effect                |
+| `internal/terminal/builtin`  | Registers the built-in Go backends and the embedded definitions (`definitions/tmux.json` provides `tmux` and `tmux-session`); import it for its side effect |
+| `internal/terminal/terminaltest` | Fake terminal executable (the test binary itself) for declarative backend tests |
 
 `internal/probe` keeps only generic process execution (`CaptureContext`, `CaptureWithEnv`), probe budgets (`WithDefaultTimeout`, `TimeoutContext`) and failure localization (`FailureDetail`).
 
@@ -25,8 +25,8 @@ Kander reaches a terminal (herdr, tmux, or a direct process launcher) only throu
 
 - `terminal.Register` records a backend and calls `config.RegisterLauncherNames` with its name; `internal/terminal` itself registers `auto`. Registration is idempotent.
 - `internal/config` keeps the six built-in names as the default set, so configuration validation works when `config` is used alone. Registered names are appended after the defaults (`config.LauncherNames`, `config.ValidLauncherName`). `config` never imports `terminal`.
-- In the full binary the command packages import `internal/terminal/builtin`, so every backend is registered during package initialization, before `main` loads or validates configuration (`cmd/kander/launcher_registration_test.go`).
-- Auto resolution follows registration order (`herdr` first, then `tmux`) and skips POSIX-only backends on Windows.
+- In the full binary the command packages import `internal/terminal/builtin`, so every Go backend and embedded definition is registered during package initialization, before `main` loads or validates configuration (`cmd/kander/launcher_registration_test.go`). Launchers of user definitions reach validation through `config.RegisterLauncherNameSource`, which loads the share directories on first use.
+- Auto resolution tries the Go backends in registration order (`herdr` first), then definition launchers by descending `auto_priority` (`tmux`), and skips POSIX-only backends on Windows.
 
 ## Address Contract
 
@@ -37,6 +37,7 @@ Kander reaches a terminal (herdr, tmux, or a direct process launcher) only throu
 | herdr                  | `<tab-id>:<pane-id>` (both `w<n>:...`) | `Container`=tab, `Pane`=pane                |
 | tmux                   | `<session-id>:<window-id>:<pane-id>`   | `Session`=session id, `Container`=window, `Pane` |
 | tmux-session           | `<session-name>:<window-id>:<pane-id>` | `Session`=session name, `Container`=window, `Pane` |
+| terminal definition    | the definition's `address` fields joined by `:` | the named fields |
 | foreground / console   | none; WINDOW is the bare name  | not parseable                                     |
 
 `terminal.FormatAddress` renders the complete value; `Backend.OpaqueAddress` renders the part without the launcher prefix (used for start and takeover reports). `ParseFocusAddress` additionally accepts herdr ids without a workspace prefix for the read-only focus path.
@@ -78,7 +79,7 @@ Every operation takes a `terminal.Conn` (resolved executable plus runner) so the
 | `CloseContainer`   | address                             | closed or error                 |
 | `StartedLines`     | report head, target, address        | launch report lines             |
 
-Polling and multi-step operations: `CreateContainer` on tmux-session retries once as a new window when a concurrent start created the session; `PaneFacts` on tmux reads `@kander_session` and falls back to `@onevoke_session`; `ReportSession` is one attempt, and the caller retries within its budget; tmux has no native `WaitOutput`, so callers poll `ReadOutput`; `Focus` on tmux is three commands, and on herdr a tab focus plus a best-effort socket pane focus.
+Polling and multi-step operations: `CreateContainer` on tmux-session retries once as a new window when a concurrent start created the session; `PaneFacts` on tmux reads `@kander_session` and falls back to `@onevoke_session`; `ReportSession` is one attempt, and the caller retries within its budget; tmux has no native `WaitOutput`, so callers poll `ReadOutput`; `Focus` on tmux is three commands, and on herdr a tab focus plus a best-effort socket pane focus. For tmux these compositions are steps, candidates and conditions of its definition rather than Go code.
 
 ## Error Classification
 
