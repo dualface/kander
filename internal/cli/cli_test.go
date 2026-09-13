@@ -61,7 +61,7 @@ func TestHelpListsAllCommandsAndLang(t *testing.T) {
 		"version",
 		"install",
 		"issue",
-		"list / ls", "show", "new", "move", "pick", "start", "resume",
+		"list / ls", "show", "new", "move", "pick", "start", "orchestrate", "resume",
 		"notify", "dismiss", "check", "subscribe",
 		"--lang {cn,en,ja}",
 	}

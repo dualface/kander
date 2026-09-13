@@ -1,0 +1,14 @@
+{
+  "orchestrate.usage": "用法: kander orchestrate [--agent codex|claude|grok|cursor|pi] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message 文本 | --message-file 路径) <任务|任务组>...",
+  "orchestrate.requires_more_than_one_task": "orchestrate 需要多于一张任务卡; 单张卡请用 kander start",
+  "orchestrate.task_group_has_no_members": "任务组 {{.V0}} 没有成员卡",
+  "orchestrate.task_repeated": "任务 {{.V0}} 被重复指定 (直接指定或经由其任务组)",
+  "orchestrate.task_already_started": "任务 {{.V0}} 位于 {{.V1}}; orchestrate 只接受 backlog 或 todo 中的卡",
+  "orchestrate.task_not_ready": "任务 {{.V0}} 尚不能进入 todo: {{.V1}}",
+  "orchestrate.agent_exited_with_status": "主控 Agent 以状态 {{.V0}} 退出; 它已推进的卡保持当前状态, 重试前先检查看板",
+  "orchestrate.no_task_group": "无任务组",
+  "orchestrate.started": "主控会话已启动: {{.V0}} ({{.V1}}), 共 {{.V2}} 张任务卡, 位置 {{.V3}}",
+  "orchestrate.started_no_address": "主控会话已启动: {{.V0}} ({{.V1}}), 共 {{.V2}} 张任务卡",
+  "orchestrate.prompt_head": "作为计划主控推进 {{.V0}} 张看板任务卡.",
+  "orchestrate.prompt": "{{.V0}}你是一份已确认计划的主控. 创建这些卡的会话已把计划交给你, 之后不再跟进进度. 交接的任务卡 (按计划顺序):\n\n{{.V1}}\n\n创建会话留下的计划说明, 其中是用户确认过的计划:\n\n{{.V2}}\n\n遵守命令协议中的 \"Orchestrator Sessions\": 按计划顺序和依赖顺序推进任务, backlog 中的卡先 pick 再用 {{.V3}} start 启动, 只有计划写明可以并行时才同时启动多张卡, 任务组按已启用的任务组规则编排, 每次心跳检查并解除执行 Agent 的阻断. 不要自己实现或修改任何卡. 已确认的计划已经授权这里列出的每张卡的开发与集成, 不要再次询问; 但规则留给用户决定的事项, 一律在本会话里交回用户. 保持本会话直到所有任务完成或用户结束编排, 然后汇报.\n\n遵守 {{.V4}}、命令协议和已启用的规则模块."
+}

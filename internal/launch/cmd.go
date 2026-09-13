@@ -18,6 +18,7 @@ func init() {
 	cli.Commands["resume"] = RunResume
 	cli.Commands["dispatch"] = RunDispatch
 	cli.Commands["coordinator"] = RunCoordinator
+	cli.Commands["orchestrate"] = RunOrchestrate
 	// The issue command front end never imports this package; the takeover
 	// starter is wired here so every binary that can start agents also supports
 	// `kander issue triage` and the TUI's `s` confirmation.

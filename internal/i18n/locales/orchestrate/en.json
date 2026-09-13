@@ -1,0 +1,14 @@
+{
+  "orchestrate.usage": "usage: kander orchestrate [--agent codex|claude|grok|cursor|pi] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message text | --message-file path) <task-id|task-group-id>...",
+  "orchestrate.requires_more_than_one_task": "orchestrate requires more than one task card; start a single card with kander start",
+  "orchestrate.task_group_has_no_members": "task group {{.V0}} has no member cards",
+  "orchestrate.task_repeated": "task {{.V0}} is named more than once, directly or through its task group",
+  "orchestrate.task_already_started": "task {{.V0}} is in {{.V1}}; orchestrate only accepts cards in backlog or todo",
+  "orchestrate.task_not_ready": "task {{.V0}} cannot enter todo yet: {{.V1}}",
+  "orchestrate.agent_exited_with_status": "the orchestrator agent exited with status {{.V0}}; cards it already advanced keep their state, so check the board before retrying",
+  "orchestrate.no_task_group": "no task group",
+  "orchestrate.started": "orchestrator session started: {{.V0}} ({{.V1}}) for {{.V2}} tasks at {{.V3}}",
+  "orchestrate.started_no_address": "orchestrator session started: {{.V0}} ({{.V1}}) for {{.V2}} tasks",
+  "orchestrate.prompt_head": "Orchestrate {{.V0}} Kanban tasks as the plan orchestrator.",
+  "orchestrate.prompt": "{{.V0}}You are the orchestrator of a confirmed plan. The session that created these cards handed the plan to you and no longer follows its progress. The handed-over tasks, in plan order:\n\n{{.V1}}\n\nPlan notes from the creating session, which carry the user's confirmed plan:\n\n{{.V2}}\n\nFollow \"Orchestrator Sessions\" in the command contract: advance the tasks in plan order and dependency order, pick backlog cards before starting them with {{.V3}} start, start several cards at once only when the plan says they can run in parallel, orchestrate task groups under the enabled task group rules, and inspect and unblock executing agents at every heartbeat. Do not implement or modify any card yourself. The confirmed plan already authorizes the development and integration of every task listed here; do not ask for that again, but bring every decision the rules reserve for the user back to the user in this session. Keep this session until every task is done or the user ends the orchestration, then report.\n\nFollow {{.V4}}, the command contract and the enabled rules modules."
+}

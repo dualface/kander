@@ -33,6 +33,7 @@ var commandNames = []string{
 	"move",
 	"pick",
 	"start",
+	"orchestrate",
 	"resume",
 	"notify",
 	"dismiss",

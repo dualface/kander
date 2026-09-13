@@ -28,7 +28,7 @@ func PreviewTriage(agentOverride, launcherOverride string) (TriagePreview, error
 	if err != nil {
 		return TriagePreview{}, err
 	}
-	agent, launcher, err := triageDefaults(cfg, agentOverride, launcherOverride)
+	agent, launcher, err := sessionDefaults(cfg, "small", agentOverride, launcherOverride)
 	if err != nil {
 		return TriagePreview{}, err
 	}
@@ -60,7 +60,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
-	agent, launcher, err := triageDefaults(cfg, request.Agent, request.Launcher)
+	agent, launcher, err := sessionDefaults(cfg, "small", request.Agent, request.Launcher)
 	if err != nil {
 		return result, err
 	}
@@ -125,17 +125,18 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 		}
 	}
 	result.Agent, result.Launcher = agent, plan.Launcher
-	result.Address = triageAddress(plan, outcome)
+	result.Address = sessionAddress(plan, outcome)
 	return result, nil
 }
 
-// triageDefaults resolves the takeover agent and launcher. Overrides win over
-// the configuration; the small tier is the default because no card exists yet.
-func triageDefaults(cfg *config.Config, agentOverride, launcherOverride string) (string, string, error) {
+// sessionDefaults resolves the agent and launcher of a session that owns no
+// card. Overrides win over the configuration; the caller names the agent tier:
+// a takeover uses small because no card exists yet.
+func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride string) (string, string, error) {
 	agent := strings.TrimSpace(agentOverride)
 	if agent == "" {
 		var err error
-		agent, err = config.KanbanAgentFor(cfg, "small")
+		agent, err = config.KanbanAgentFor(cfg, scale)
 		if err != nil {
 			return "", "", err
 		}
@@ -230,9 +231,9 @@ func triageWindowName(repository issue.Repository, number int) string {
 	return "issue-" + head + suffix
 }
 
-// triageAddress renders the container address of one started takeover session.
-// Foreground and console sessions have no container address.
-func triageAddress(plan LaunchPlan, outcome LaunchOutcome) string {
+// sessionAddress renders the container address of one started session that
+// owns no card. Foreground and console sessions have no container address.
+func sessionAddress(plan LaunchPlan, outcome LaunchOutcome) string {
 	switch plan.Launcher {
 	case "herdr":
 		return outcome.Tab + ":" + outcome.Pane
