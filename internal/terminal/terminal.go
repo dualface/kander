@@ -263,6 +263,9 @@ func AsCommandError(err error) (*CommandError, bool) {
 // RunStep runs one focus or control step and renders its failure as
 // "<subcommand>: <detail>", preferring stderr, then stdout, then the exit code.
 func RunStep(ctx context.Context, conn Conn, args []string) error {
+	if len(args) == 0 {
+		return errors.New("terminal: step has no arguments")
+	}
 	result, err := conn.Run(ctx, conn.Program, args)
 	if err != nil {
 		return fmt.Errorf("%s: %s", args[0], probe.FailureDetail(err))

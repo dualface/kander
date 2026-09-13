@@ -35,7 +35,7 @@ These points are the contract and are not extended:
 | `schema_version` | `1` |
 | `name`         | Definition name, `^[a-z][a-z0-9-]{0,31}$`, equal to the file name |
 | `binary`       | Command on `PATH` or an absolute path; `Backend.Executable` |
-| `version_args` | argv printing the version (doctor, options panel); no placeholders |
+| `version_args` | argv printing the version (doctor, options panel); literal elements only, a placeholder is rejected |
 | `capabilities` | `container` (must be `true`), `focus`, `pane_metadata`, `foreground_process`, `agent_identity`, `wait_output`, `session_report`; `POSIXOnly` follows each launcher's `requires.platform` |
 | `address`      | Ordered `WINDOW` fields after `<launcher>:`, each `{"name": "session" | "container" | "pane", "pattern": <regex without capturing groups>}`; `container` and `pane` are required; the default pattern is `[^:\s]+` |
 | `launchers`    | Launcher name to launcher object (below); one definition may provide several launchers |
@@ -57,7 +57,8 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
       "platform": "posix" | "windows" | "any",
       "binary": <bool>,
       "inside_session": <bool>,
-      "env": [{"name": "<VAR>", "value": "<optional exact value>"}],
+      "env": [{"name": "<VAR>", "value": "<optional exact value>", "trim": <bool>,
+               "before_binary": <bool>, "skip_auto": <bool>, "message": <message>}],
       "messages": {"platform": <message>, "binary": <message>, "env": <message>}
     },
     "started_lines": [{"when": <conditions>, "message": <message>}],
@@ -66,8 +67,8 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 }
 ```
 
-- `requires` is checked by `Prepare` before any container exists, in the order platform, binary on `PATH`, environment; a failure names what is missing. The optional messages replace the generic diagnostics and may use `launcher`, `binary`, `platform` and `name` (the missing variable).
-- `auto` selects only launchers with `auto_priority > 0` and `inside_session: true` whose environment requirements hold, highest priority first, after the Go backends. The host policy stays in `internal/terminal`: `auto` resolves only among container launchers and never falls back to `foreground` or `console`, whose own preconditions (three TTY streams, native Windows) are Go code.
+- `requires` is checked by `Prepare` before any container exists, in the order platform, the variables marked `before_binary`, binary on `PATH`, the remaining variables (each group in declaration order); a failure names what is missing. A variable with `trim` is compared without surrounding whitespace, and `{env.<VAR>}` expands to that trimmed value. A variable's own `message` replaces `messages.env` for it. The messages replace the generic diagnostics and may use `launcher`, `binary`, `platform` and `name` (the missing variable). `inside_session` is not a `Prepare` check.
+- `auto` selects only launchers with `auto_priority > 0` and `inside_session: true` whose environment requirements hold, ignoring variables marked `skip_auto` (which `Prepare` still requires and reports), highest priority first, after the Go backends. The host policy stays in `internal/terminal`: `auto` resolves only among container launchers and never falls back to `foreground` or `console`, whose own preconditions (three TTY streams, native Windows) are Go code.
 - `started_lines` render the launch report; the placeholders are `head`, `session`, `session_exists`, `workspace`, `project`, `container`, `pane` and `env.<VAR>`.
 - `ops` replaces whole operations for this launcher; `tmux` and `tmux-session` share one definition this way.
 
@@ -127,7 +128,7 @@ An operation object is:
 }
 ```
 
-- Steps run in order. A step whose `when` does not hold is skipped. A `fail` step ends the operation with its message.
+- Steps run in order. A step whose `when` does not hold is skipped. A `fail` step ends the operation with its message. A runtime value rejected during argv expansion is a failure of that step, so `on_error` applies to it.
 - `argv` elements are expanded one by one. An element whose placeholder value is empty is dropped together with an immediately preceding standalone flag, as in agent definitions. A runtime value containing CR, LF or NUL fails the step; TAB and braces are allowed in runtime values.
 - `output` extracts the step text (the raw stdout without it). `fields` apply one primitive each to that text; a primitive that does not match leaves the field absent. An `output` that does not parse fails the step as an invalid response (`KindInvalidResponse`). A `json_field` output is classified like a JSON API response: output that is not JSON is `KindNotJSON`, a root that is not an object `KindNotObject`, and a missing path `KindMissingResult`, each with its own optional message falling back to `invalid`; a path holding an object or array yields that sub-document as compact JSON with sorted keys, so `fields` can read inside it.
 - `store` records the step under `step.<store>.*`: the declared fields plus `ok` (`true`/`false`), `detail` and `text`. A later step with the same store name replaces the record, which is how a legacy fallback read supersedes a missing primary field.
@@ -143,7 +144,7 @@ A condition set is one string or an array of string arrays: it holds when every 
 
 ### Messages
 
-A message is a text template, `{"id": "<catalog id>", "args": [<message>, ...]}` rendered in the interface language, or `{"or": [<message>, ...]}` taking the first non-empty alternative. Unknown catalog IDs are rejected. Step messages may use `detail` (run error, trimmed stderr, or `exit N`), `error` (run error or trimmed stderr) and `output` (trimmed stdout). Without a message, a run failure keeps the raw error text, and an exit or invalid-output failure its detail.
+A message is a text template, `{"id": "<catalog id>", "args": [<message>, ...]}` rendered in the interface language, or `{"or": [<message>, ...]}` taking the first non-empty alternative. Unknown catalog IDs are rejected. Step messages may use `detail`, `error` and `output`. `detail` is the run error (including a rejected runtime value), the trimmed stderr or `exit N` for a non-zero exit, the parse error for an output that does not parse, `output does not match the definition` for a failed `expect`, and `timed out waiting until <until>` for an expired poll. `error` is the run error or the trimmed stderr, and `output` the trimmed stdout. Without a message, a run failure keeps the raw error text, and an exit or invalid-output failure its detail.
 
 ## Candidates
 
@@ -168,6 +169,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
   "split": "lines" | "json_array:<dotted.path>",
   "fields": {"<field>": "<primitive>"},
   "expect": <conditions over row.*>,
+  "checks": [{"when": <conditions over row.*>, "message": <message>}],
   "match": <conditions>,
   "result": {"session": "...", "container": "...", "pane": "..."},
   "messages": {"missing": <message>, "invalid": <message>, "none": <message>, "ambiguous": <message using count>}
@@ -175,7 +177,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 ```
 
 - `split` defaults to `lines`, where blank lines are skipped. `json_array:<path>` takes the array at that path of the JSON output (a missing or non-array value fails with `missing`); each element becomes one row re-encoded as compact JSON with sorted keys, so `json_field` reads its members and a `regex` can check the encoded form (for example that `"agent":` is followed by a string or `null`).
-- Every row must satisfy `expect`, otherwise the operation fails with `invalid`.
+- Every row must satisfy `expect`, otherwise the operation fails with `invalid`; then each of `checks`, in order, whose own message ends the operation when its condition does not hold.
 - `reverse_lookup` maps `session`, `container` and `pane`; exactly one matching row is the result, while zero or several matches return `terminal.MatchError` with the count. `topology` maps only `pane` and collects the matching rows in order into `Topology.Panes`. `process_name` is resolved only after the collection steps succeed, so a collection failure is reported before an agent definition error.
 
 ## Error Classification
@@ -193,7 +195,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 
 ## Host Policies
 
-These stay in Go and are the same for every definition: `pane_facts`, `topology` and `reverse_lookup` run within the default probe budget when the caller has no deadline; launch-time operations run without a deadline; focus probes the pane first (probe failure, gone or `closed_when` end it), runs its steps (the container-level switch) with the focus step diagnostics, then an optional `focus_pane` hook.
+These stay in Go and are the same for every definition: `pane_facts`, `topology` and `reverse_lookup` run within the default probe budget when the caller has no deadline; launch-time operations run without a deadline; focus probes the pane first (probe failure, gone or `closed_when` end it), runs its steps (the container-level switch) through the same step machinery as other operations, then an optional `focus_pane` hook. A failed focus step, or a `fail` step, ends focus with `focus.switch_failed`; without a declared message its notice is `<subcommand>: <run error, stderr, stdout or exit status>`. A step failure that `on_error` continues past makes the result a switch with the `focus.tab_only` notice.
 
 ## Hooks
 

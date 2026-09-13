@@ -367,7 +367,9 @@ func TestTmuxDefinitionStartedLinesAndAddress(t *testing.T) {
 	if !caps.Container || !caps.Focus || !caps.PaneMetadata || !caps.ForegroundProcess || !caps.POSIXOnly || caps.AgentIdentity || caps.WaitOutput {
 		t.Fatalf("capabilities=%+v", caps)
 	}
-	if plain.AutoDetect(envOf(map[string]string{"TMUX": "x", "TMUX_PANE": "%1"})) != true || session.AutoDetect(envOf(map[string]string{"TMUX": "x", "TMUX_PANE": "%1"})) {
+	// Like the removed Go backend, auto looks only at TMUX; Prepare still
+	// requires TMUX_PANE and names it.
+	if !plain.AutoDetect(envOf(map[string]string{"TMUX": "x"})) || session.AutoDetect(envOf(map[string]string{"TMUX": "x", "TMUX_PANE": "%1"})) {
 		t.Fatal("only plain tmux takes part in auto resolution")
 	}
 }

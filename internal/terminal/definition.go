@@ -111,6 +111,16 @@ type Requires struct {
 type EnvRequirement struct {
 	Name  string  `json:"name"`
 	Value *string `json:"value,omitempty"`
+	// Trim compares the value without surrounding whitespace, and
+	// {env.<NAME>} expands to the trimmed value.
+	Trim bool `json:"trim,omitempty"`
+	// BeforeBinary checks this variable before the binary lookup.
+	BeforeBinary bool `json:"before_binary,omitempty"`
+	// SkipAuto leaves this variable out of auto detection; Prepare still
+	// requires it, so auto selects the launcher and reports what is missing.
+	SkipAuto bool `json:"skip_auto,omitempty"`
+	// Message replaces requires.messages.env for this variable.
+	Message *Message `json:"message,omitempty"`
 }
 
 // RequireMessages override the generic precondition diagnostics.
@@ -210,12 +220,21 @@ type Rows struct {
 	From string `json:"from"`
 	// Split is lines (default) or json_array:<dotted.path>; each array
 	// element becomes one row re-encoded as compact JSON with sorted keys.
-	Split    string            `json:"split,omitempty"`
-	Fields   map[string]string `json:"fields"`
-	Expect   Conditions        `json:"expect,omitempty"`
+	Split  string            `json:"split,omitempty"`
+	Fields map[string]string `json:"fields"`
+	Expect Conditions        `json:"expect,omitempty"`
+	// Checks run after expect, in order; the first that does not hold fails
+	// the operation with its own message.
+	Checks   []RowCheck        `json:"checks,omitempty"`
 	Match    Conditions        `json:"match"`
 	Result   map[string]string `json:"result"`
 	Messages RowMessages       `json:"messages"`
+}
+
+// RowCheck is one ordered row validation with its own message.
+type RowCheck struct {
+	When    Conditions `json:"when"`
+	Message Message    `json:"message"`
 }
 
 // RowMessages render a missing JSON array, an invalid row, no match, and

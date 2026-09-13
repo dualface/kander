@@ -84,7 +84,7 @@ Polling and multi-step operations: `CreateContainer` on tmux-session retries onc
 ## Error Classification
 
 - A gone pane is a fact (`PaneFacts.Gone` with the tool's diagnostic), not an error. Missing tmux user options are treated as an empty marker.
-- A failed command returns `*terminal.CommandError`. `Kind` is `KindExec` (the command could not run, `Cause` holds the error), `KindExit` (non-zero exit, raw `Code`/`Stderr`), or one of the response kinds `KindNotJSON`, `KindNotObject`, `KindMissingResult`, `KindInvalidResponse`.
-- `Message` is the diagnostic of the operation's primary caller. Other callers render their own existing diagnostic from `Kind`, `Cause` and `Detail()`, so user-visible messages stay the same at every call site.
-- Deadline and cancellation errors are returned unchanged, so `probe.FailureDetail` still localizes them.
+- A failed command returns `*terminal.CommandError`. `Kind` is `KindExec` (the command could not run, `Cause` holds the error), `KindExit` (non-zero exit, raw `Code`/`Stderr`; for a definition step also an expired poll, whose `Code` is 0), or one of the response kinds `KindNotJSON`, `KindNotObject`, `KindMissingResult`, `KindInvalidResponse`.
+- `Message` is the diagnostic of the operation's primary caller. Other callers render their own diagnostic from `Kind`, `Cause` and `Detail()`. For definition backends the messages are what the definition declares (see [Terminal definitions](terminal-definitions.md)).
+- Deadline and cancellation errors stay detectable with `errors.Is`, so `probe.FailureDetail` still localizes them: Go backends return them unchanged, and a definition step wraps them in a `CommandError` of kind `KindExec` whose `Cause` is the context error.
 - `terminal.ErrUnsupported` marks an operation the backend does not provide.

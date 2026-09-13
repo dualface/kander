@@ -84,6 +84,11 @@ func ValidateDefinition(source string, def *Definition) error {
 	if err := validateBinary(def.Binary); err != nil {
 		return v.fieldErr("binary", "%s", err.Error())
 	}
+	for index, element := range def.VersionArgs {
+		if placeholders, err := process.TemplatePlaceholders(element); err != nil || len(placeholders) > 0 {
+			return v.fieldErr("version_args["+strconv.Itoa(index)+"]", "must be literal: version arguments take no placeholders")
+		}
+	}
 	if err := v.argv("version_args", def.VersionArgs, newScope()); err != nil {
 		return err
 	}
@@ -383,12 +388,16 @@ func (v validator) launcher(def *Definition, name string, launcher LauncherDefin
 	if launcher.AutoPriority > 0 && !launcher.Requires.InsideSession {
 		return v.fieldErr(field+".auto_priority", "auto resolution needs requires.inside_session")
 	}
+	messageNames := newScope("launcher", "binary", "platform", "name")
 	for index, env := range launcher.Requires.Env {
+		label := field + ".requires.env[" + strconv.Itoa(index) + "]"
 		if !envNamePattern.MatchString(env.Name) {
-			return v.fieldErr(field+".requires.env["+strconv.Itoa(index)+"].name", "invalid environment variable name")
+			return v.fieldErr(label+".name", "invalid environment variable name")
+		}
+		if err := v.optionalMessage(label+".message", env.Message, messageNames); err != nil {
+			return err
 		}
 	}
-	messageNames := newScope("launcher", "binary", "platform", "name")
 	messages := launcher.Requires.Messages
 	for label, message := range map[string]*Message{"platform": messages.Platform, "binary": messages.Binary, "env": messages.Env} {
 		if err := v.optionalMessage(field+".requires.messages."+label, message, messageNames); err != nil {
@@ -710,6 +719,19 @@ func (v validator) rows(op string, rows *Rows, names scope) error {
 	}
 	if err := v.conditions("rows.expect", rows.Expect, rowNames); err != nil {
 		return err
+	}
+	for index := range rows.Checks {
+		check := &rows.Checks[index]
+		label := "rows.checks[" + strconv.Itoa(index) + "]"
+		if len(check.When) == 0 {
+			return v.fieldErr(label+".when", "must not be empty")
+		}
+		if err := v.conditions(label+".when", check.When, rowNames); err != nil {
+			return err
+		}
+		if err := v.message(label+".message", &check.Message, rowNames); err != nil {
+			return err
+		}
 	}
 	if len(rows.Match) == 0 {
 		return v.fieldErr("rows.match", "must not be empty")

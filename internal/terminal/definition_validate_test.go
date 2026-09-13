@@ -107,6 +107,13 @@ func TestDefinitionValidationRejects(t *testing.T) {
 			r["address"] = []any{map[string]any{"name": "container", "pattern": "(w\\d+)"}, map[string]any{"name": "pane"}}
 		}, []string{"field address[0].pattern", "capturing groups"}},
 		{"container capability", func(r map[string]any) { object(r, "capabilities")["container"] = false }, []string{"field capabilities.container"}},
+		{"version args placeholder", func(r map[string]any) { r["version_args"] = []any{"{env.HOME}"} }, []string{"field version_args[0]", "take no placeholders"}},
+		{"requires env message", func(r map[string]any) {
+			object(r, "launchers", "faketerm", "requires")["env"] = []any{map[string]any{"name": "FAKETERM", "message": "{window}"}}
+		}, []string{"field launchers.faketerm.requires.env[0].message", "unknown placeholder {window}"}},
+		{"row check without condition", func(r map[string]any) {
+			object(r, "ops", "reverse_lookup", "rows")["checks"] = []any{map[string]any{"message": "bad"}}
+		}, []string{"field rows.checks[0].when", "must not be empty"}},
 		{"binary relative path", func(r map[string]any) { r["binary"] = "bin/faketerm" }, []string{"field binary"}},
 		{"rows outside reverse lookup", func(r map[string]any) {
 			object(r, "ops", "read_output")["rows"] = object(r, "ops", "reverse_lookup")["rows"]

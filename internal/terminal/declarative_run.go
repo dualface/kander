@@ -118,6 +118,10 @@ type execution struct {
 	executed  int
 	prevRan   bool
 	prevOK    bool
+	// focus renders unmessaged step failures as focus step diagnostics and
+	// records failures that on_error continued past.
+	focus     bool
+	continued []string
 }
 
 func (b *DeclarativeBackend) newExecution(ctx context.Context, conn Conn, getenv func(string) string, inputs map[string]string) *execution {
@@ -296,6 +300,7 @@ type stepFailure struct {
 	cause  error
 	result probe.Result
 	detail string
+	argv   []string
 }
 
 func (e *execution) failureNames(failure *stepFailure) map[string]string {
@@ -315,7 +320,9 @@ func (e *execution) runStep(step *Step) (bool, error) {
 	e.executed++
 	argv, err := e.expandArgv(step.Argv)
 	if err != nil {
-		return false, err
+		// A rejected runtime value is a failure of this step, so on_error
+		// still decides whether the operation goes on.
+		return false, e.stepFailed(step, &stepFailure{kind: KindExec, cause: err, detail: err.Error()})
 	}
 	ctx := e.ctx
 	if step.Timeout != "" {
@@ -326,6 +333,7 @@ func (e *execution) runStep(step *Step) (bool, error) {
 	}
 	result, text, fields, failure := e.attempt(ctx, step, argv)
 	if failure != nil {
+		failure.argv = argv
 		return false, e.stepFailed(step, failure)
 	}
 	stored := map[string]string{"ok": "true", "text": text}
@@ -494,7 +502,13 @@ func (e *execution) stepFailed(step *Step, failure *stepFailure) error {
 	case step.OnError == OnErrorContinue, step.OnError == OnErrorMetaMissing && metaMissing:
 		e.store(step.Store, map[string]string{"ok": "false", "detail": failure.detail})
 		e.prevRan, e.prevOK = true, false
+		if e.focus {
+			e.continued = append(e.continued, e.focusDetail(failure))
+		}
 		return nil
+	}
+	if e.focus && step.Messages == (StepMessages{}) {
+		return &CommandError{Kind: failure.kind, Message: e.focusDetail(failure), Cause: failure.cause, Code: failure.result.Code, Stderr: failure.result.Stderr}
 	}
 	switch failure.kind {
 	case KindExec:
@@ -508,6 +522,29 @@ func (e *execution) stepFailed(step *Step, failure *stepFailure) error {
 	default:
 		return &CommandError{Kind: KindExit, Message: e.stepMessage(step.Messages.Exit, failure), Code: failure.result.Code, Stderr: failure.result.Stderr}
 	}
+}
+
+// focusDetail renders a failed focus step as "<subcommand>: <detail>",
+// preferring the run error, then stderr, then stdout, then the exit status.
+func (e *execution) focusDetail(failure *stepFailure) string {
+	subcommand := ""
+	if len(failure.argv) > 0 {
+		subcommand = failure.argv[0] + ": "
+	}
+	if failure.kind == KindExec && failure.cause != nil {
+		return subcommand + probe.FailureDetail(failure.cause)
+	}
+	if failure.kind != KindExit || failure.result.Code == 0 {
+		return subcommand + failure.detail
+	}
+	detail := strings.TrimSpace(failure.result.Stderr)
+	if detail == "" {
+		detail = strings.TrimSpace(failure.result.Stdout)
+	}
+	if detail == "" {
+		detail = failure.detail
+	}
+	return subcommand + detail
 }
 
 // stepMessage renders a step message, or the raw detail without one.
@@ -619,6 +656,11 @@ func (e *execution) matchRows(rows *Rows) ([]map[string]string, error) {
 		}
 		if !e.holds(rows.Expect) {
 			return nil, &probe.Error{Message: e.renderOr(rows.Messages.Invalid, nil, "terminal.rows_invalid")}
+		}
+		for index := range rows.Checks {
+			if check := &rows.Checks[index]; !e.holds(check.When) {
+				return nil, &probe.Error{Message: e.render(&check.Message, nil)}
+			}
 		}
 		if !e.holds(rows.Match) {
 			continue

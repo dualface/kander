@@ -37,7 +37,8 @@ func NewDeclarativeBackend(def *Definition, launcher string, getenv func(string)
 	if !ok {
 		return nil, fmt.Errorf("terminal: definition %s does not provide launcher %s", def.Name, launcher)
 	}
-	backend := &DeclarativeBackend{def: def, launcher: launcher, spec: spec, getenv: getenv}
+	backend := &DeclarativeBackend{def: def, launcher: launcher, spec: spec}
+	backend.getenv = backend.launcherGetenv(getenv)
 	parts := make([]string, len(def.Address))
 	for index, field := range def.Address {
 		pattern := field.Pattern
@@ -171,18 +172,40 @@ func (b *DeclarativeBackend) AutoDetect(getenv func(string) string) bool {
 	if requires.Platform == "windows" && runtime.GOOS != "windows" {
 		return false
 	}
-	_, missing := missingEnv(requires.Env, getenv)
-	return !missing
-}
-
-func missingEnv(env []EnvRequirement, getenv func(string) string) (string, bool) {
-	for _, requirement := range env {
-		value := getenv(requirement.Name)
-		if value == "" || (requirement.Value != nil && value != *requirement.Value) {
-			return requirement.Name, true
+	for _, requirement := range requires.Env {
+		if !requirement.SkipAuto && !requirement.satisfied(getenv) {
+			return false
 		}
 	}
-	return "", false
+	return true
+}
+
+func (r EnvRequirement) satisfied(getenv func(string) string) bool {
+	value := getenv(r.Name)
+	if r.Trim {
+		value = strings.TrimSpace(value)
+	}
+	return value != "" && (r.Value == nil || value == *r.Value)
+}
+
+// launcherGetenv trims the variables the launcher requires with trim, so
+// {env.<NAME>} sees the same value the precondition accepted.
+func (b *DeclarativeBackend) launcherGetenv(getenv func(string) string) func(string) string {
+	trimmed := map[string]bool{}
+	for _, requirement := range b.spec.Requires.Env {
+		if requirement.Trim {
+			trimmed[requirement.Name] = true
+		}
+	}
+	if len(trimmed) == 0 {
+		return getenv
+	}
+	return func(name string) string {
+		if trimmed[name] {
+			return strings.TrimSpace(getenv(name))
+		}
+		return getenv(name)
+	}
 }
 
 // ProjectKey derives the stable project token of a project path: a printable
@@ -232,6 +255,24 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 	if (requires.Platform == "posix" && request.Windows) || (requires.Platform == "windows" && !request.Windows) {
 		return Target{}, b.requireMessage(requires.Messages.Platform, names, "terminal.platform_unsupported_"+requires.Platform, b.launcher)
 	}
+	getenv := b.launcherGetenv(request.Getenv)
+	checkEnv := func(beforeBinary bool) error {
+		for _, requirement := range requires.Env {
+			if requirement.BeforeBinary != beforeBinary || requirement.satisfied(request.Getenv) {
+				continue
+			}
+			names["name"] = requirement.Name
+			message := requirement.Message
+			if message == nil {
+				message = requires.Messages.Env
+			}
+			return b.requireMessage(message, names, "terminal.env_missing", requirement.Name, b.launcher)
+		}
+		return nil
+	}
+	if err := checkEnv(true); err != nil {
+		return Target{}, err
+	}
 	program := b.def.Binary
 	if requires.Binary {
 		path, err := request.LookPath(b.def.Binary)
@@ -240,9 +281,8 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 		}
 		program = path
 	}
-	if name, missing := missingEnv(requires.Env, request.Getenv); missing {
-		names["name"] = name
-		return Target{}, b.requireMessage(requires.Messages.Env, names, "terminal.env_missing", name, b.launcher)
+	if err := checkEnv(false); err != nil {
+		return Target{}, err
 	}
 	target := Target{Program: program, Project: request.Project}
 	op, ok := b.op(OpPrepare)
@@ -250,7 +290,7 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 		return target, nil
 	}
 	conn := Conn{Program: program, Run: SpawnRunner}
-	e := b.newExecution(context.Background(), conn, request.Getenv, map[string]string{
+	e := b.newExecution(context.Background(), conn, getenv, map[string]string{
 		"project": request.Project, "project_key": ProjectKey(request.Project), "command": request.Command,
 	})
 	result, err := e.runOp(op)
@@ -264,7 +304,7 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 }
 
 func (b *DeclarativeBackend) StartedLines(head string, target Target, address Address, getenv func(string) string) []string {
-	e := b.newExecution(context.Background(), Conn{}, getenv, map[string]string{
+	e := b.newExecution(context.Background(), Conn{}, b.launcherGetenv(getenv), map[string]string{
 		"head": head, "session": target.Session, "session_exists": strconv.FormatBool(target.SessionExists),
 		"workspace": target.Workspace, "project": target.Project, "container": address.Container, "pane": address.Pane,
 	})
@@ -456,7 +496,9 @@ func (b *DeclarativeBackend) ReverseLookup(ctx context.Context, conn Conn, ident
 	if err := e.runSteps(op.Steps); err != nil {
 		return Address{}, err
 	}
-	if identity.ProcessName != nil {
+	// The expected process name loads the agent definition; resolve it only
+	// when the rows reference it.
+	if identity.ProcessName != nil && rowsReference(op.Rows, "process_name") {
 		name, err := identity.ProcessName()
 		if err != nil {
 			return Address{}, err
@@ -493,18 +535,19 @@ func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Addre
 	if facts.Gone || (op.ClosedWhen != nil && e.holds(op.ClosedWhen)) {
 		return FocusResult{ID: "focus.closed"}
 	}
-	for index := range op.Steps {
-		step := &op.Steps[index]
-		if !e.holds(step.When) {
-			continue
+	// The switch steps run with the full step machinery; a failure without
+	// its own message keeps the focus step diagnostic, and a failure an
+	// on_error policy continued past degrades the result.
+	e.focus = true
+	if err := e.runSteps(op.Steps); err != nil {
+		detail := probe.FailureDetail(err)
+		if commandErr, ok := AsCommandError(err); ok {
+			detail = commandErr.Message
 		}
-		argv, err := e.expandArgv(step.Argv)
-		if err == nil {
-			err = RunStep(ctx, conn, argv)
-		}
-		if err != nil {
-			return FocusResult{ID: "focus.switch_failed", Args: []any{err.Error()}}
-		}
+		return FocusResult{ID: "focus.switch_failed", Args: []any{detail}}
+	}
+	if len(e.continued) > 0 {
+		return FocusResult{Success: true, ID: "focus.tab_only", Args: []any{e.continued[0]}}
 	}
 	if hook, ok := b.hook(HookPointFocusPane); ok {
 		result := runHook(ctx, hook, HookCall{Launcher: b.launcher, Point: HookPointFocusPane, Conn: conn, Getenv: b.getenv, Values: addressInputs(address)})
@@ -535,4 +578,32 @@ func textResult(success bool, message Message, e *execution) FocusResult {
 func (b *DeclarativeBackend) CloseContainer(ctx context.Context, conn Conn, address Address) error {
 	_, err := b.probeOp(ctx, OpCloseContainer, conn, addressInputs(address), false)
 	return err
+}
+
+// rowsReference reports whether the row conditions or results use a name.
+func rowsReference(rows *Rows, name string) bool {
+	uses := func(set Conditions) bool {
+		for _, group := range set {
+			for _, condition := range group {
+				if strings.Contains(condition, name) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if uses(rows.Expect) || uses(rows.Match) {
+		return true
+	}
+	for _, check := range rows.Checks {
+		if uses(check.When) {
+			return true
+		}
+	}
+	for _, template := range rows.Result {
+		if strings.Contains(template, "{"+name+"}") {
+			return true
+		}
+	}
+	return false
 }

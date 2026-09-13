@@ -262,7 +262,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 **Launchers**
 
 - Six built-in launchers, plus the launchers provided by loaded terminal definitions (JSON files in the global or project share directory `terminals/`; the project copy replaces the global one, which replaces an embedded one of the same name). `auto` is resolved at start time and the result is not written back to the configuration.
-- auto resolves only among container launchers and never falls back to `foreground` or `console`: herdr (inside herdr, `HERDR_ENV=1`) first, then the definition launchers that run inside an existing session and whose required environment holds, by descending priority (the built-in `tmux` definition: inside tmux). When inside both herdr and tmux, herdr wins; when inside none, fail without claiming, and do not fall back to `tmux-session`, `foreground`, or `console`.
+- auto resolves only among container launchers and never falls back to `foreground` or `console`: it takes the launcher with the highest `auto_priority` among the definition launchers that run inside an existing session and whose required environment for auto holds. The built-in values: `herdr` has priority 200 and needs `HERDR_ENV=1` and `HERDR_WORKSPACE_ID`; `tmux` has priority 100 and needs `TMUX` (its `TMUX_PANE` is checked when preparing the launch). So inside both herdr and tmux, herdr wins unless a loaded definition declares a higher priority; when none applies, fail without claiming, and do not fall back to `tmux-session`, `foreground`, or `console`.
 - `tmux` creates the task window in the background of the starter's current session and requires `start` itself to run inside tmux.
 - `tmux-session` determines a dedicated session by the main worktree path (`kb-<dir-name>-<path-digest>`):
   - Create it when absent; reuse it when it exists and `@kander_project` or `@onevoke_project` matches this project.
@@ -517,7 +517,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ```sh
 # Delegate to a new executing agent: start claims and launches atomically
-kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
+kander start [--agent <configured-agent>] [--launcher <launcher>] <task-id>
 
 # The user explicitly asks the current agent to execute an existing card: claim and record ownership atomically
 kander move <task-id> working --owner <agent>
@@ -541,7 +541,7 @@ kander move <task-id> working --owner <agent>
 
 - `start` checks the agent, launcher, and TTY before launching.
 - `auto` resolves only among container launchers per "Launchers"; before launching, the preconditions of the actual launcher are checked:
-  - A launcher provided by a terminal definition: the `requires` of its definition (required environment variables, platform, whether it must run inside an existing session of that terminal, and its program on PATH). For example, the built-in `tmux` requires `TMUX` and `TMUX_PANE` (already inside a tmux session); `tmux-session` requires tmux available, and the project session name is chosen at start.
+  - A launcher provided by a terminal definition: the `requires` of its definition (platform, required environment variables and its program on PATH, in the order the definition declares); whether it must run inside an existing session only decides whether `auto` may select it. For example, the built-in `tmux` requires `TMUX` and `TMUX_PANE` (already inside a tmux session); `tmux-session` requires tmux available, and the project session name is chosen at start.
   - `herdr`: `HERDR_ENV=1`, herdr on PATH, and `HERDR_WORKSPACE_ID` present.
   - `foreground`: all three standard streams are TTYs.
   - `console`: native Windows.
@@ -557,7 +557,7 @@ kander move <task-id> working --owner <agent>
 - foreground/console count as started once the process is created; a later exit does not roll back automatically.
 - On success, `console` prints the PID and returns immediately.
 - On success, print the actual launcher.
-- `auto` must show the resolution result (`herdr` or `tmux`).
+- `auto` must show the resolved launcher.
 
 - herdr counts as started once `pane run` succeeds; the subsequent session identity report and read-back are best-effort, failures only warn and do not enter the `LaunchFailure` tab close and card rollback path.
 - When `prompt_delivery.mode` is `pane`, herdr counts as started once `pane run` succeeds and prompt delivery succeeds.
