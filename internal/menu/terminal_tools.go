@@ -9,8 +9,6 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
-	_ "github.com/dualface/kander/internal/terminal/builtin"
-	"github.com/dualface/kander/internal/terminal/herdr"
 )
 
 // TerminalTool is the result of one command availability probe with a timeout.
@@ -42,10 +40,10 @@ func (t TerminalTools) NeedsHerdrInstall() bool {
 }
 
 func defaultToolBinary(name string) string {
-	if name != herdr.Executable {
+	if name != builtin.HerdrExecutable {
 		return ""
 	}
-	for _, candidate := range herdr.DefaultBinaries(isWindowsOS()) {
+	for _, candidate := range herdrDefaultBinaries(isWindowsOS()) {
 		if fileExists(candidate) {
 			return candidate
 		}
@@ -83,7 +81,7 @@ func CheckTerminalTools() TerminalTools {
 }
 
 func herdrBackend() terminal.Backend {
-	backend, _ := terminal.Lookup(herdr.Name)
+	backend, _ := terminal.Lookup(builtin.Herdr)
 	return backend
 }
 
@@ -193,7 +191,7 @@ func reportTerminalTools(tools TerminalTools) {
 			hint(config.Text("menu.not_installed", name))
 		}
 	}
-	report(herdr.Executable, tools.Herdr)
+	report(builtin.HerdrExecutable, tools.Herdr)
 	if !isWindowsOS() {
 		report(builtin.TmuxExecutable, tools.Tmux)
 	}

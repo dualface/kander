@@ -8,7 +8,6 @@ import (
 	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
-	"github.com/dualface/kander/internal/terminal/herdr"
 	"strings"
 )
 
@@ -242,7 +241,7 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 		))
 	// On POSIX auto holds as long as tmux exists, so a missing herdr must not
 	// rewrite it; on Windows auto can only land on herdr, so a missing herdr does.
-	case (cfg.Launcher == herdr.Name || (cfg.Launcher == "auto" && isWindowsOS())) && lookPath(herdr.Executable) == "":
+	case (cfg.Launcher == builtin.Herdr || (cfg.Launcher == "auto" && isWindowsOS())) && lookPath(builtin.HerdrExecutable) == "":
 		switch {
 		case isWindowsOS():
 			cfg.Launcher = direct.Console

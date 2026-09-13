@@ -5,7 +5,6 @@ import (
 	"github.com/dualface/kander/internal/i18n"
 	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
-	"github.com/dualface/kander/internal/terminal/herdr"
 )
 
 func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*config.Config, bool) {
@@ -96,7 +95,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		case isWindowsOS():
 			replacement = direct.Console
 		case tools.Herdr.Available():
-			replacement = herdr.Name
+			replacement = builtin.Herdr
 		case tools.Tmux.Available():
 			replacement = builtin.TmuxSession
 		}
@@ -128,7 +127,7 @@ func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 	switch launcher {
 	case "auto":
 		return tools.Herdr.Installed() || tools.Tmux.Available()
-	case herdr.Name:
+	case builtin.Herdr:
 		return tools.Herdr.Installed()
 	case builtin.Tmux, builtin.TmuxSession:
 		return tools.Tmux.Available()

@@ -8,7 +8,6 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
-	"github.com/dualface/kander/internal/terminal/herdr"
 )
 
 func choicesWithCurrent(choices []Choice, current string) []Choice {
@@ -131,15 +130,15 @@ func tmuxLauncherChoices() []Choice {
 }
 
 func herdrLauncherChoices(cfg *config.Config) []Choice {
-	installed := lookPath(herdr.Executable) != ""
-	if !installed && cfg.Launcher != herdr.Name {
+	installed := lookPath(builtin.HerdrExecutable) != ""
+	if !installed && cfg.Launcher != builtin.Herdr {
 		return nil
 	}
 	label := config.Text("menu.new_tab_in_the_current_herdr_workspace")
 	if !installed {
 		label += config.Text("menu.not_currently_installed")
 	}
-	return []Choice{{Value: herdr.Name, Label: label}}
+	return []Choice{{Value: builtin.Herdr, Label: label}}
 }
 
 // windowsLauncherChoices leaves out tmux: native Windows has none.

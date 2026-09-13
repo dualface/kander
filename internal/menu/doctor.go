@@ -9,7 +9,6 @@ import (
 	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
-	"github.com/dualface/kander/internal/terminal/herdr"
 )
 
 func printDoctor() bool {
@@ -96,7 +95,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if isWindowsOS() {
 		success(config.Text("menu.windows_console_launcher_available"))
 	} else if tools.Tmux.Available() {
-		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != herdr.Name {
+		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != builtin.Herdr {
 			hint(config.Text(
 				"menu.tmux_installed_but_not_in_a_session_start_one", builtin.TmuxSessionHint,
 			))
@@ -108,12 +107,12 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	}
 	// herdr works on Windows too, so these hints are not platform-specific.
 	if tools.Herdr.Available() {
-		if os.Getenv("HERDR_ENV") != "1" && configuredLauncher == herdr.Name {
+		if os.Getenv("HERDR_ENV") != "1" && configuredLauncher == builtin.Herdr {
 			hint(config.Text(
 				"menu.herdr_installed_but_not_currently_in_herdr_the_herdr",
 			))
 		}
-	} else if configuredLauncher == herdr.Name {
+	} else if configuredLauncher == builtin.Herdr {
 		hint(config.Text(
 			"menu.herdr_unavailable_welcome_can_select_another_launcher",
 		))
@@ -314,7 +313,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				"menu.launcher_console_starts_the_agent_in_a_separate_windows",
 			))
 		}
-	case herdr.Name:
+	case builtin.Herdr:
 		if !tools.Herdr.Available() {
 			healthy = false
 			warning(config.Text(

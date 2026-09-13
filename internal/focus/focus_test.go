@@ -12,7 +12,6 @@ import (
 	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
-	"github.com/dualface/kander/internal/terminal/herdr"
 )
 
 func TestWindowFocus(t *testing.T) {
@@ -102,7 +101,7 @@ func TestWindowFocus(t *testing.T) {
 				return nil
 			}
 			backends := map[string]terminal.Backend{
-				"herdr":        herdr.New(getenv, paneFocus),
+				"herdr":        herdrBackend(t, getenv, paneFocus),
 				"tmux":         tmuxBackend(t, builtin.Tmux, getenv),
 				"tmux-session": tmuxBackend(t, builtin.TmuxSession, getenv),
 				"foreground":   direct.New(direct.Foreground),
@@ -137,6 +136,27 @@ func TestWindowFocus(t *testing.T) {
 func tmuxBackend(t *testing.T, launcher string, getenv func(string) string) terminal.Backend {
 	t.Helper()
 	backend, err := builtin.DefinitionBackend("tmux", launcher, getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return backend
+}
+
+func herdrBackend(t *testing.T, getenv func(string) string, paneFocus func(context.Context, string, string) error) terminal.Backend {
+	t.Helper()
+	def, err := builtin.Definition("herdr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := "focus-test-" + t.TempDir()
+	terminal.RegisterHook(hook, func(ctx context.Context, call terminal.HookCall) terminal.HookResult {
+		if err := paneFocus(ctx, call.Getenv("HERDR_SOCKET_PATH"), call.Values["pane"]); err != nil {
+			return terminal.HookResult{Status: terminal.HookDegraded, Note: err.Error()}
+		}
+		return terminal.HookResult{Status: terminal.HookOK}
+	})
+	def.Hooks[terminal.HookPointFocusPane] = hook
+	backend, err := terminal.NewDeclarativeBackend(def, "herdr", getenv)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 # Terminal Definitions
 
-A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `tmux` and `tmux-session` launchers are an embedded definition ([`internal/terminal/builtin/definitions/tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
+A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `herdr`, `tmux` and `tmux-session` launchers are embedded definitions ([`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
 
 ## Fixed Boundaries
 
@@ -20,7 +20,7 @@ These points are the contract and are not extended:
 
 - Precedence is embedded < global < project. A file replaces the same-name definition of a lower source as a whole; fields are never merged, so a user copy cannot run half old and half new.
 - The file name without `.json` must equal `name`. Files are read without following symbolic links or reparse points; a link, a non-regular file, invalid JSON or a failed validation is reported and ignored, and the lower-precedence definition (or the built-in launcher) stays in force.
-- A launcher name must be unique: it may not be `auto`, a Go launcher (`herdr`, `foreground`, `console`), or a launcher of another definition.
+- A launcher name must be unique: it may not be `auto`, a Go launcher (`foreground`, `console`), or a launcher of another definition.
 - User definitions are loaded on first use and their launcher names join configuration validation, so `launcher` in `config.json` and `kander start --launcher` accept them. `kander doctor` lists every user definition file with its launchers, a replaced file, or the validation error with the file path.
 - A definition runs its programs as the current user, at the same trust level as `agents.<name>.path` and the project `.kander-config.json`. It holds no credentials.
 
@@ -204,7 +204,24 @@ These stay in Go and are the same for every definition: `pane_facts`, `topology`
 | `report_session` | reported            | `ErrNoReportChannel` with the note (launch warns) | the hook error |
 | `focus_pane` (after the `focus` steps) | switched | switched with the `focus.tab_only` notice | `focus.switch_failed` |
 
-The hooks of specific terminals (for example the herdr socket) belong to those terminals, not to this format.
+The `report_session` hook owns the session socket handshake, then reads the identity back through the selected backend's `pane_facts` operation. Missing socket access is degraded (launch warns); a handshake or read-back failure is failed. Launch's existing retry and best-effort policy remain unchanged.
+
+The `focus_pane` hook runs only after the `focus` argv steps have switched the container. `ok` completes focus, `degraded` preserves successful container focus with a warning, and `failed` reports an error. The herdr implementation degrades on a socket failure, preserving the existing tab-only result.
+
+### Hook Inventory
+
+All shipped hook registrations live in `internal/terminal/builtin/hooks.go`; their implementations live in `internal/terminal/herdr`. The inventory test checks every registered built-in name against this table.
+
+| Hook name | Mount point | Purpose | Built-in definition |
+| --------- | ----------- | ------- | ------------------- |
+| `herdr-socket-session` | `report_session` | Report and read back the agent session | `herdr.json` |
+| `herdr-socket-focus` | `focus_pane` | Focus the pane after tab focus | `herdr.json` |
+
+Go code is still required for socket or other non-command-line protocols, and for platform-specific process-tree handling. Definitions do not gain scripts to implement these operations.
+
+The herdr definition uses `pane get` for identity facts and checks the returned pane ID. `pane read` belongs only to `read_output`, which callers use for output diagnostics and agent readiness. Text and exit commands use `agent prompt`. Literal and regular-expression waits use the native `pane wait-output` command and its recent-output source; new-shell readiness uses the visible source. Tab creation reads the workspace from the launcher's required environment. The Go herdr backend is removed; installation-path hints belong to the menu.
+
+For a malformed response with a string-valued `result`, the definition rejects the pane as `KindInvalidResponse`; the former Go backend used `KindMissingResult`. Both stop takeover's exit wait before container close, with different diagnostics. A valid pane response and the normal missing-result, not-object and not-JSON classifications are unchanged.
 
 ## Example
 
