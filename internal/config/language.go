@@ -50,6 +50,14 @@ func BindConfigLanguage(cfg *Config) {
 	configLanguage = cfg.Language
 }
 
+// BoundConfigLanguage returns the config language bound by BindConfigLanguage, or empty when none is bound.
+// It ignores --lang and the environment, so a caller can restore exactly the binding it replaced.
+func BoundConfigLanguage() string {
+	langMu.Lock()
+	defer langMu.Unlock()
+	return configLanguage
+}
+
 // CLILanguage returns the language selected by --lang / KANDER_LANG_CLI, or empty when none was set.
 func CLILanguage() string {
 	langMu.Lock()

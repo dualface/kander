@@ -69,6 +69,8 @@ type optionsPanel struct {
 	// It records the selector's identifier rather than a line number: a rebuild may change the field count (different agents have
 	// different numbers of model fields), so the line number has to be looked up again in the new form.
 	rebuildFocus string
+	// languageBase is the interface language restored when edits are cancelled; nil while nothing is unsaved.
+	languageBase *languageBaseline
 	bind         *formBinding
 	report       *reportView
 	// flowScale is "large" or "small" while the workflow report is open; empty otherwise.
@@ -294,7 +296,12 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	return nil
 }
 
+// close leaves the panel without saving, so unsaved interface language edits are cancelled first.
 func (p *optionsPanel) close() {
+	if err := p.restoreLanguage(); err != nil {
+		p.showReport(t("tui.load_failed"), nil, err.Error())
+		return
+	}
 	p.app.Options = nil
 }
 
@@ -605,7 +612,9 @@ func (p *optionsPanel) finishSection() tea.Cmd {
 		p.bind.commitSideEffects(p)
 	}
 	if p.savesOnSubmit() {
-		if err := p.persistNow(); err != nil {
+		err := p.persistNow()
+		p.advanceLanguageBaseline()
+		if err != nil {
 			p.showReport(t("tui.save_failed"), nil, err.Error())
 			return nil
 		}
@@ -641,6 +650,7 @@ func (p *optionsPanel) persistNow() error {
 
 // abortSection handles Esc: a section returns to the root menu, the root menu closes the panel.
 // Changed values are kept (apply wrote them back long ago); only side effects that need confirmation are skipped.
+// The interface language is the exception: leaving the interface page with Esc cancels its unsaved change.
 func (p *optionsPanel) abortSection() tea.Cmd {
 	if p.current == sectionDoctor {
 		p.installHerdr = false
@@ -649,6 +659,11 @@ func (p *optionsPanel) abortSection() tea.Cmd {
 	if p.current == "" {
 		p.close()
 		return nil
+	}
+	if p.current == sectionInterface {
+		if err := p.restoreLanguage(); err != nil {
+			p.showReport(t("tui.load_failed"), nil, err.Error())
+		}
 	}
 	p.current = ""
 	return p.openRoot()
@@ -691,6 +706,7 @@ func (p *optionsPanel) save() {
 		return
 	}
 	path, err := p.session.SaveAllDirty()
+	p.advanceLanguageBaseline()
 	if err != nil {
 		p.showReport(t("tui.save_failed"), finishLines, err.Error())
 		return

@@ -731,6 +731,7 @@ func reviewStageOptions() []huh.Option[string] {
 // apply writes the values changed in the form back to App and the config session immediately.
 // Huh updates its bound pointers as the cursor moves, which is what makes changes take effect while selecting;
 // returning with Esc loses nothing, because the changes already landed in the session.
+// The interface language is the exception: Esc on the interface page restores it, see restoreLanguage.
 // Items with side effects (installing tmux) are not run here, see commitSideEffects.
 func (b *formBinding) apply(p *optionsPanel) {
 	if b.applyRestores(p) {
@@ -745,11 +746,7 @@ func (b *formBinding) apply(p *optionsPanel) {
 		agentLanguageChanged := p.session != nil && b.agentLanguage != "" && p.session.Config.AgentLanguage != b.agentLanguage
 		b.applyInterface(p)
 		if languageChanged {
-			before := p.overridePresence("language")
-			p.session.SetLanguage(b.language)
-			p.app.Context = tuiPageContext()
-			p.markDirty()
-			p.rebuildIfOverrideChanged(before, interfaceFocusKey("language"), "language")
+			p.applyLanguage(b.language)
 		}
 		if agentLanguageChanged {
 			before := p.overridePresence("agent_language")
