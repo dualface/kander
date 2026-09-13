@@ -172,6 +172,9 @@ func TestColumnStripKeepsSelectedCountWhenNarrow(t *testing.T) {
 	if !strings.Contains(names, "done 0") {
 		t.Fatalf("selected count clipped: %q", names)
 	}
+	if got := len(app.columnTabCells(32)); got != 5 {
+		t.Fatalf("shortened tabs=%d, want 5 in %q", got, names)
+	}
 	app.Width = 26
 	names = viewLine(app, panelTopRow)
 	if !strings.Contains(names, "done 0") {

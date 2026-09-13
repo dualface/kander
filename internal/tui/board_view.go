@@ -217,10 +217,9 @@ type columnTabCell struct {
 	selected bool
 }
 
-func (a *App) columnTabSegment(state string, index int, prevSelected bool) string {
-	label := a.Context.stateLabel(state)
-	if state == a.Model.CurrentState() {
-		return borderVertical + label + " " + itoa(len(a.Model.TasksFor(state))) + borderVertical
+func columnTabSegment(label string, selected bool, index int, prevSelected bool, count int) string {
+	if selected {
+		return borderVertical + label + " " + itoa(count) + borderVertical
 	}
 	if index > 0 && !prevSelected {
 		return borderVertical + label
@@ -228,14 +227,36 @@ func (a *App) columnTabSegment(state string, index int, prevSelected bool) strin
 	return label
 }
 
-func (a *App) measureTabRange(states []string, lo, hi int) int {
+func measureTabLabels(states, labels []string, current string, counts []int) int {
 	width := 0
 	prevSelected := false
-	for i := lo; i <= hi; i++ {
-		width += displayWidth(a.columnTabSegment(states[i], i-lo, prevSelected))
-		prevSelected = states[i] == a.Model.CurrentState()
+	for i, state := range states {
+		selected := state == current
+		width += displayWidth(columnTabSegment(labels[i], selected, i, prevSelected, counts[i]))
+		prevSelected = selected
 	}
 	return width
+}
+
+func longestIdleLabel(states, labels []string, current string) int {
+	best, bestWidth := -1, 1
+	for i, state := range states {
+		if state == current {
+			continue
+		}
+		if w := displayWidth(labels[i]); w > bestWidth {
+			best, bestWidth = i, w
+		}
+	}
+	return best
+}
+
+func trimLastRune(value string) string {
+	runes := []rune(value)
+	if len(runes) <= 1 {
+		return value
+	}
+	return string(runes[:len(runes)-1])
 }
 
 func (a *App) columnTabCells(width int) []columnTabCell {
@@ -247,35 +268,25 @@ func (a *App) columnTabCells(width int) []columnTabCell {
 		return nil
 	}
 	current := a.Model.CurrentState()
-	sel := 0
+	labels := make([]string, len(states))
+	counts := make([]int, len(states))
 	for i, state := range states {
-		if state == current {
-			sel = i
+		labels[i] = a.Context.stateLabel(state)
+		counts[i] = len(a.Model.TasksFor(state))
+	}
+	for measureTabLabels(states, labels, current, counts) > width {
+		idle := longestIdleLabel(states, labels, current)
+		if idle < 0 {
 			break
 		}
+		labels[idle] = trimLastRune(labels[idle])
 	}
-	lo, hi := sel, sel
-	for {
-		grew := false
-		if lo > 0 && a.measureTabRange(states, lo-1, hi) <= width {
-			lo--
-			grew = true
-		}
-		if hi+1 < len(states) && a.measureTabRange(states, lo, hi+1) <= width {
-			hi++
-			grew = true
-		}
-		if !grew {
-			break
-		}
-	}
-	shown := states[lo : hi+1]
-	cells := make([]columnTabCell, 0, len(shown))
+	cells := make([]columnTabCell, 0, len(states))
 	x := 0
 	prevSelected := false
-	for i, state := range shown {
+	for i, state := range states {
 		selected := state == current
-		text := a.columnTabSegment(state, i, prevSelected)
+		text := columnTabSegment(labels[i], selected, i, prevSelected, counts[i])
 		w := displayWidth(text)
 		if x+w > width {
 			remain := width - x
