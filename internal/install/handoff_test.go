@@ -1,7 +1,6 @@
 package install
 
 import (
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -34,8 +33,8 @@ func assertHandoffInvocation(t *testing.T, dest, lang string, argv, env []string
 }
 
 // TestHandoffLanguageLetsConfigLanguageWin replays the handed-off process from
-// the argv and environment launchInstalled passes, so a reintroduced --lang or
-// CLI marker would pin the install language again.
+// the argv and environment launchInstalled passes, so a reintroduced --lang
+// would pin the install language above the config language again.
 func TestHandoffLanguageLetsConfigLanguageWin(t *testing.T) {
 	setupInstallHome(t)
 	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
@@ -57,11 +56,7 @@ func TestHandoffLanguageLetsConfigLanguageWin(t *testing.T) {
 		name, value, _ := strings.Cut(entry, "=")
 		t.Setenv(name, value)
 	}
-	if !slices.ContainsFunc(gotEnv, func(entry string) bool { return strings.HasPrefix(entry, config.EnvLangCLI+"=") }) {
-		if err := os.Unsetenv(config.EnvLangCLI); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// Startup applies argv the same way cli.Run does.
 	config.ApplyLanguageArgument(gotArgv)
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 
