@@ -8,12 +8,12 @@ import (
 func resetLauncherRegistry(t *testing.T) {
 	t.Helper()
 	launcherRegistry.Lock()
-	saved := launcherRegistry.names
-	launcherRegistry.names = nil
+	saved, savedSources := launcherRegistry.names, launcherRegistry.sources
+	launcherRegistry.names, launcherRegistry.sources = nil, nil
 	launcherRegistry.Unlock()
 	t.Cleanup(func() {
 		launcherRegistry.Lock()
-		launcherRegistry.names = saved
+		launcherRegistry.names, launcherRegistry.sources = saved, savedSources
 		launcherRegistry.Unlock()
 	})
 }
@@ -65,5 +65,27 @@ func TestRegisterLauncherNamesIsIdempotent(t *testing.T) {
 	want := []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console", "wezterm"}
 	if got := LauncherNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("LauncherNames()=%q, want %q", got, want)
+	}
+}
+
+func TestLauncherNameSourceSuppliesNamesLazily(t *testing.T) {
+	resetLauncherRegistry(t)
+	calls := 0
+	RegisterLauncherNameSource(func() []string {
+		calls++
+		return []string{"zellij", "tmux", ""}
+	})
+	if calls != 0 {
+		t.Fatalf("source called at registration: %d", calls)
+	}
+	want := []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console", "zellij"}
+	if got := LauncherNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("LauncherNames()=%q, want %q", got, want)
+	}
+	if _, err := validateLauncher("zellij"); err != nil {
+		t.Fatalf("source launcher rejected by config validation: %v", err)
+	}
+	if got := RegisteredLauncherNames(); len(got) != 0 {
+		t.Fatalf("RegisteredLauncherNames()=%q, want only pushed names", got)
 	}
 }

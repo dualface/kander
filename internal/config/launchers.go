@@ -9,7 +9,13 @@ var defaultLauncherNames = []string{"auto", "tmux", "tmux-session", "herdr", "fo
 
 var launcherRegistry struct {
 	sync.Mutex
-	names []string
+	names   []string
+	sources []func() []string
+}
+
+// DefaultLauncherNames returns the built-in launcher set.
+func DefaultLauncherNames() []string {
+	return append([]string{}, defaultLauncherNames...)
 }
 
 // RegisterLauncherNames adds launcher names that configuration validation
@@ -27,6 +33,16 @@ func RegisterLauncherNames(names ...string) {
 	}
 }
 
+// RegisterLauncherNameSource adds a function that supplies launcher names when
+// they are needed. The terminal layer uses it for definitions loaded lazily
+// from share directories, which cannot be known at package init. A source must
+// not call back into launcher name validation.
+func RegisterLauncherNameSource(source func() []string) {
+	launcherRegistry.Lock()
+	defer launcherRegistry.Unlock()
+	launcherRegistry.sources = append(launcherRegistry.sources, source)
+}
+
 // RegisteredLauncherNames returns only the explicitly registered names, in
 // registration order.
 func RegisteredLauncherNames() []string {
@@ -36,13 +52,20 @@ func RegisteredLauncherNames() []string {
 }
 
 // LauncherNames returns every valid launcher name: the built-in defaults in
-// their fixed order, followed by registered names that are not defaults.
+// their fixed order, followed by registered names and then source-supplied
+// names that are not already listed.
 func LauncherNames() []string {
 	launcherRegistry.Lock()
-	defer launcherRegistry.Unlock()
 	out := append([]string{}, defaultLauncherNames...)
-	for _, name := range launcherRegistry.names {
-		if !contains(out, name) {
+	registered := append([]string{}, launcherRegistry.names...)
+	sources := append([]func() []string{}, launcherRegistry.sources...)
+	launcherRegistry.Unlock()
+	// Sources run outside the lock: they may read files and configuration paths.
+	for _, source := range sources {
+		registered = append(registered, source()...)
+	}
+	for _, name := range registered {
+		if name != "" && !contains(out, name) {
 			out = append(out, name)
 		}
 	}

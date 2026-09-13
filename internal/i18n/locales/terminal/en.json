@@ -1,0 +1,19 @@
+{
+  "terminal.text": "{{.V0}}",
+  "terminal.value_contains_line_break": "the value of placeholder {{.V0}} contains a line break or NUL",
+  "terminal.output_does_not_match": "output does not match the definition",
+  "terminal.poll_timed_out": "timed out waiting until {{.V0}}",
+  "terminal.rows_invalid": "lookup returned invalid output",
+  "terminal.no_match": "lookup found no match",
+  "terminal.ambiguous_match": "lookup is ambiguous: {{.V0}} matches",
+  "terminal.platform_unsupported_posix": "launcher {{.V0}} is not available on native Windows",
+  "terminal.platform_unsupported_windows": "launcher {{.V0}} is available only on native Windows",
+  "terminal.binary_not_found": "{{.V0}} is not on PATH; launcher {{.V1}} cannot start",
+  "terminal.env_missing": "launcher {{.V1}} requires the environment variable {{.V0}}",
+  "terminal.container_address_missing": "launcher {{.V0}} did not return a container and pane",
+  "terminal.launcher_choice": "{{.V0}} (terminal definition)",
+  "terminal.definition_invalid": "Terminal definition rejected: {{.V0}}",
+  "terminal.definition_loaded": "Terminal definition {{.V0}}: launchers {{.V1}}",
+  "terminal.definition_overridden": "Terminal definition {{.V0}} is replaced by a higher-precedence {{.V1}}",
+  "terminal.configured_launcher_binary_missing": "The configured launcher is {{.V0}}, but its terminal program {{.V1}} is not in PATH"
+}

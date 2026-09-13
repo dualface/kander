@@ -1,0 +1,19 @@
+{
+  "terminal.text": "{{.V0}}",
+  "terminal.value_contains_line_break": "プレースホルダー {{.V0}} の値に改行または NUL が含まれています",
+  "terminal.output_does_not_match": "出力が定義と一致しません",
+  "terminal.poll_timed_out": "{{.V0}} の待機がタイムアウトしました",
+  "terminal.rows_invalid": "逆引きの出力が無効です",
+  "terminal.no_match": "逆引きで一致がありません",
+  "terminal.ambiguous_match": "逆引きの結果が一意ではありません: {{.V0}} 件一致",
+  "terminal.platform_unsupported_posix": "起動方式 {{.V0}} はネイティブ Windows では使用できません",
+  "terminal.platform_unsupported_windows": "起動方式 {{.V0}} はネイティブ Windows でのみ使用できます",
+  "terminal.binary_not_found": "{{.V0}} が PATH にないため、起動方式 {{.V1}} を開始できません",
+  "terminal.env_missing": "起動方式 {{.V1}} には環境変数 {{.V0}} が必要です",
+  "terminal.container_address_missing": "起動方式 {{.V0}} がコンテナーと pane を返しませんでした",
+  "terminal.launcher_choice": "{{.V0}} (ターミナル定義)",
+  "terminal.definition_invalid": "ターミナル定義が拒否されました: {{.V0}}",
+  "terminal.definition_loaded": "ターミナル定義 {{.V0}}: 起動方式 {{.V1}}",
+  "terminal.definition_overridden": "ターミナル定義 {{.V0}} は優先度の高い同名定義 {{.V1}} に置き換えられています",
+  "terminal.configured_launcher_binary_missing": "設定された起動方式は {{.V0}} ですが、ターミナルプログラム {{.V1}} が PATH にありません"
+}

@@ -21,6 +21,7 @@ var catalogs embed.FS
 var catalogFiles = []string{
 	"locales/en.json", "locales/zh-CN.json", "locales/ja.json",
 	"locales/issue/en.json", "locales/issue/zh-CN.json", "locales/issue/ja.json",
+	"locales/terminal/en.json", "locales/terminal/zh-CN.json", "locales/terminal/ja.json",
 }
 
 var localizers = loadLocalizers()
@@ -62,4 +63,14 @@ func Text(lang, id string, args ...any) string {
 		return id
 	}
 	return text
+}
+
+// Has reports whether the catalog defines a message ID, so declarative
+// definitions can reject a message ID that would render verbatim.
+func Has(id string) bool {
+	if id == "" {
+		return false
+	}
+	_, err := localizers["en"].Localize(&goi18n.LocalizeConfig{MessageID: id})
+	return err == nil
 }

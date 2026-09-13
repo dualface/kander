@@ -30,7 +30,7 @@ func TestFoundationPackagesDoNotImportTerminal(t *testing.T) {
 
 func TestTerminalDoesNotImportCallers(t *testing.T) {
 	callers := []string{"launch", "liveness", "notify", "takeover", "focus", "menu", "tui"}
-	for _, pkg := range []string{"internal/terminal", "internal/terminal/builtin", "internal/terminal/direct", "internal/terminal/herdr", "internal/terminal/tmux"} {
+	for _, pkg := range []string{"internal/terminal", "internal/terminal/builtin", "internal/terminal/direct", "internal/terminal/herdr", "internal/terminal/terminaltest"} {
 		for _, dep := range deps(t, pkg) {
 			for _, caller := range callers {
 				if dep == module+"internal/"+caller {

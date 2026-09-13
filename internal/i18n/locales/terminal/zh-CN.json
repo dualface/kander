@@ -1,0 +1,19 @@
+{
+  "terminal.text": "{{.V0}}",
+  "terminal.value_contains_line_break": "占位符 {{.V0}} 的值包含换行或 NUL",
+  "terminal.output_does_not_match": "输出不符合定义",
+  "terminal.poll_timed_out": "等待 {{.V0}} 超时",
+  "terminal.rows_invalid": "反查返回的输出无效",
+  "terminal.no_match": "反查没有匹配",
+  "terminal.ambiguous_match": "反查结果不唯一: {{.V0}} 个匹配",
+  "terminal.platform_unsupported_posix": "启动方式 {{.V0}} 在原生 Windows 上不可用",
+  "terminal.platform_unsupported_windows": "启动方式 {{.V0}} 仅在原生 Windows 上可用",
+  "terminal.binary_not_found": "{{.V0}} 不在 PATH 中, 启动方式 {{.V1}} 无法启动",
+  "terminal.env_missing": "启动方式 {{.V1}} 需要环境变量 {{.V0}}",
+  "terminal.container_address_missing": "启动方式 {{.V0}} 没有返回容器与 pane",
+  "terminal.launcher_choice": "{{.V0}} (终端定义)",
+  "terminal.definition_invalid": "终端定义被拒绝: {{.V0}}",
+  "terminal.definition_loaded": "终端定义 {{.V0}}: 启动方式 {{.V1}}",
+  "terminal.definition_overridden": "终端定义 {{.V0}} 被更高优先级的同名定义 {{.V1}} 覆盖",
+  "terminal.configured_launcher_binary_missing": "配置的启动方式是 {{.V0}}, 但其终端程序 {{.V1}} 不在 PATH 中"
+}
