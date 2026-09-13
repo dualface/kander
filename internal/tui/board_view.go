@@ -217,24 +217,65 @@ type columnTabCell struct {
 	selected bool
 }
 
+func (a *App) columnTabSegment(state string, index int, prevSelected bool) string {
+	label := a.Context.stateLabel(state)
+	if state == a.Model.CurrentState() {
+		return borderVertical + label + " " + itoa(len(a.Model.TasksFor(state))) + borderVertical
+	}
+	if index > 0 && !prevSelected {
+		return borderVertical + label
+	}
+	return label
+}
+
+func (a *App) measureTabRange(states []string, lo, hi int) int {
+	width := 0
+	prevSelected := false
+	for i := lo; i <= hi; i++ {
+		width += displayWidth(a.columnTabSegment(states[i], i-lo, prevSelected))
+		prevSelected = states[i] == a.Model.CurrentState()
+	}
+	return width
+}
+
 func (a *App) columnTabCells(width int) []columnTabCell {
 	if width < 1 {
 		return nil
 	}
 	states := a.Model.States()
+	if len(states) == 0 {
+		return nil
+	}
 	current := a.Model.CurrentState()
-	cells := make([]columnTabCell, 0, len(states))
+	sel := 0
+	for i, state := range states {
+		if state == current {
+			sel = i
+			break
+		}
+	}
+	lo, hi := sel, sel
+	for {
+		grew := false
+		if lo > 0 && a.measureTabRange(states, lo-1, hi) <= width {
+			lo--
+			grew = true
+		}
+		if hi+1 < len(states) && a.measureTabRange(states, lo, hi+1) <= width {
+			hi++
+			grew = true
+		}
+		if !grew {
+			break
+		}
+	}
+	shown := states[lo : hi+1]
+	cells := make([]columnTabCell, 0, len(shown))
 	x := 0
 	prevSelected := false
-	for i, state := range states {
+	for i, state := range shown {
 		selected := state == current
-		label := a.Context.stateLabel(state)
-		text := label
-		if selected {
-			text = borderVertical + label + " " + itoa(len(a.Model.TasksFor(state))) + borderVertical
-		} else if i > 0 && !prevSelected {
-			text = borderVertical + label
-		}
+		text := a.columnTabSegment(state, i, prevSelected)
 		w := displayWidth(text)
 		if x+w > width {
 			remain := width - x

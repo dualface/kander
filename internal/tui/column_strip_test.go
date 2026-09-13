@@ -164,3 +164,22 @@ func TestColumnStripClipsLongNames(t *testing.T) {
 		t.Fatal("no tab cells")
 	}
 }
+
+func TestColumnStripKeepsSelectedCountWhenNarrow(t *testing.T) {
+	app := stripBoardApp(t, 32, 20)
+	app.Model.FocusState("done")
+	names := viewLine(app, panelTopRow)
+	if !strings.Contains(names, "done 0") {
+		t.Fatalf("selected count clipped: %q", names)
+	}
+	app.Width = 26
+	names = viewLine(app, panelTopRow)
+	if !strings.Contains(names, "done 0") {
+		t.Fatalf("selected count dropped: %q", names)
+	}
+	done := tabCellByState(t, app.columnTabCells(26), "done")
+	app.HandleMouse(done.x+done.width/2, panelTopRow, mouseBtn1Clicked)
+	if app.Model.CurrentState() != "done" {
+		t.Fatalf("selected tab click %s", app.Model.CurrentState())
+	}
+}
