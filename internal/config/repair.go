@@ -130,10 +130,28 @@ func repairValues(raw any) (*Config, error) {
 	}
 	if rawReviewers, ok := asObject(provided["reviewers"]); ok {
 		probe := &Config{Agents: defaults.Agents}
-		for _, role := range ReviewRoles {
-			agent, _ := rawReviewers[role].(string)
-			if agent != "" && HasAgent(probe, agent) && !HasReviewTemplate(probe, agent) {
-				return nil, configErrorf("config.reviewer_missing_template", "reviewers."+role, agent)
+		normalized, normErr := NormalizeReviewers(rawReviewers)
+		if normErr != nil {
+			// Fall back to the raw object so a flat legacy map is still scanned.
+			normalized = rawReviewers
+		}
+		for _, scale := range TaskScales {
+			roles, _ := asObject(normalized[scale])
+			for _, role := range ReviewRoles {
+				agent := ""
+				if roles != nil {
+					agent, _ = roles[role].(string)
+				}
+				if agent == "" {
+					agent, _ = rawReviewers[role].(string)
+				}
+				if agent != "" && HasAgent(probe, agent) && !HasReviewTemplate(probe, agent) {
+					path := "reviewers." + role
+					if roles != nil {
+						path = "reviewers." + scale + "." + role
+					}
+					return nil, configErrorf("config.reviewer_missing_template", path, agent)
+				}
 			}
 		}
 	}
@@ -153,8 +171,32 @@ func repairValues(raw any) (*Config, error) {
 	}
 	root, _ := asObject(decoded)
 	fillMissingReviewStageScales(provided)
+	fillMissingReviewerScales(provided)
 	recoverConfigFields(root, provided, root)
 	return Validate(root)
+}
+
+// fillMissingReviewerScales copies the present scale onto a missing one so
+// doctor preserves a one-sided reviewers object instead of replacing the gap
+// with defaults. Both missing keeps the encoded defaults.
+func fillMissingReviewerScales(provided map[string]any) {
+	raw, exists := provided["reviewers"]
+	if !exists {
+		return
+	}
+	normalized, err := NormalizeReviewers(raw)
+	if err != nil {
+		return
+	}
+	large, hasLarge := asObject(normalized["large"])
+	small, hasSmall := asObject(normalized["small"])
+	switch {
+	case hasLarge && !hasSmall:
+		normalized["small"] = cloneRawObject(large)
+	case hasSmall && !hasLarge:
+		normalized["large"] = cloneRawObject(small)
+	}
+	provided["reviewers"] = normalized
 }
 
 // fillMissingReviewStageScales copies the present scale onto a missing one so

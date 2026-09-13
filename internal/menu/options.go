@@ -156,12 +156,16 @@ func (s *Session) prepare(configValid bool) error {
 			}
 		}
 	}
-	cfg.Reviewers = map[string]string{}
-	for _, role := range config.ReviewRoles {
-		previous := s.existing.Reviewers[role]
-		cfg.Reviewers[role] = previous
-		if !s.existing.WelcomeComplete && !reviewerUsable(s.agents[previous]) {
-			cfg.Reviewers[role] = s.review[0].Value
+	cfg.Reviewers = cloneReviewStages(s.existing.Reviewers)
+	for _, scale := range config.TaskScales {
+		if cfg.Reviewers[scale] == nil {
+			cfg.Reviewers[scale] = map[string]string{}
+		}
+		for _, role := range config.ReviewRoles {
+			previous := cfg.Reviewers[scale][role]
+			if !s.existing.WelcomeComplete && !reviewerUsable(s.agents[previous]) {
+				cfg.Reviewers[scale][role] = s.review[0].Value
+			}
 		}
 	}
 	cfg.Launcher = s.existing.Launcher
@@ -266,16 +270,43 @@ func (s *Session) ReviewerChoicesFor(current string) []Choice {
 }
 
 // SetExecutionAgent sets the execution agent of one task scale (large/small).
+// On the Project tab the choice is written as an override and that scale's model
+// fields are copied into the overlay so they stop showing as inherited globals.
 func (s *Session) SetExecutionAgent(scale, agent string) {
+	prev := ""
+	if s.Config != nil && s.Config.KanbanAgents != nil {
+		prev = s.Config.KanbanAgents[scale]
+	}
 	s.Config.KanbanAgents[scale] = agent
 	s.Config.KanbanAgent = s.Config.KanbanAgents["large"]
-	s.noteOverride([]string{"kanban_agents", scale}, agent)
+	if !s.EditingOverlay() {
+		s.noteOverride([]string{"kanban_agents", scale}, agent)
+		return
+	}
+	_ = s.applyOverlayEdit(func(candidate map[string]any) {
+		if prev != "" && prev != agent {
+			deleteKanbanScaleModelKeys(candidate, prev, scale)
+		}
+		config.OverlaySet(candidate, agent, "kanban_agents", scale)
+	})
+	for _, field := range s.ExecutionModelFieldsFor(scale) {
+		s.NoteModelOverride(field, field.Value())
+	}
 }
 
-// SetReviewer sets the reviewer of one review role.
-func (s *Session) SetReviewer(role, agent string) {
-	s.Config.Reviewers[role] = agent
-	s.noteOverride([]string{"reviewers", role}, agent)
+// SetReviewer sets the reviewer of one review role for one task scale.
+func (s *Session) SetReviewer(scale, role, agent string) {
+	if s.Config.Reviewers == nil {
+		s.Config.Reviewers = map[string]map[string]string{}
+	}
+	if s.Config.Reviewers[scale] == nil {
+		s.Config.Reviewers[scale] = map[string]string{}
+	}
+	s.Config.Reviewers[scale][role] = agent
+	if s.EditingOverlay() {
+		s.expandOverlayReviewers()
+	}
+	s.noteOverride([]string{"reviewers", scale, role}, agent)
 }
 
 // SetReviewStage sets the stage policy of one review role for one task scale.
@@ -415,14 +446,14 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 	}
 	fields := []ModelField{s.kanbanModelField(agent, scale+"_model",
 		config.Text("menu.kanban_model", label, scaleLabel),
-		config.Text("menu.model", label, scaleLabel),
+		config.Text("menu.field_model"),
 		config.Text("menu.full_model_id_for_s", scaleLabel))}
 	if !config.AgentSupportsEffort(s.Config, agent) {
 		return fields
 	}
 	return append(fields, s.kanbanModelField(agent, scale+"_effort",
 		config.Text("menu.kanban_reasoning_effort", label, scaleLabel),
-		config.Text("menu.effort", label, scaleLabel),
+		config.Text("menu.field_effort"),
 		config.Text("menu.reasoning_effort_for_s", scaleLabel)))
 }
 
@@ -442,64 +473,96 @@ func (s *Session) ExecutionModelFields() []ModelField {
 	return out
 }
 
-// ReviewModelFieldsFor returns the model fields of one review role.
+// ReviewModelFieldsFor returns the model fields of one review role at one task scale.
 // Every role stores its own concrete values, so what the UI shows is what is used, with no hidden inheritance layer;
 // while a role has no value yet, it is filled in from the default of its selected reviewer.
-func (s *Session) ReviewModelFieldsFor(role string) []ModelField {
-	reviewer := s.Config.Reviewers[role]
+func (s *Session) ReviewModelFieldsFor(role, scale string) []ModelField {
+	reviewer := config.ReviewerFor(s.Config, scale, role)
 	if reviewer == "" {
 		return nil
 	}
-	entry := s.seedReviewRole(role, reviewer)
+	entry := s.seedReviewRole(role, scale, reviewer)
+	scaleLabel := config.Text("menu.large_task")
+	if scale == "small" {
+		scaleLabel = config.Text("menu.small_task")
+	}
 	fields := []ModelField{{
-		Label:  config.Text("menu.review_model", role),
-		Short:  config.Text("menu.model_2", role),
+		Label:  config.Text("menu.review_model", role) + " (" + scaleLabel + ")",
+		Short:  config.Text("menu.field_model"),
 		Agent:  role,
 		Prompt: config.Text("menu.which_model_should_use", role),
 		entry:  entry,
-		field:  "model",
+		field:  scale + "_model",
 	}}
 	if !config.ReviewModelSupportsEffort(s.Config, reviewer) {
 		return fields
 	}
 	return append(fields, ModelField{
-		Label:  config.Text("menu.review_reasoning_effort", role),
-		Short:  config.Text("menu.effort_2", role),
+		Label:  config.Text("menu.review_reasoning_effort", role) + " (" + scaleLabel + ")",
+		Short:  config.Text("menu.field_effort"),
 		Agent:  role,
 		Prompt: config.Text("menu.reasoning_effort_for", role),
 		entry:  entry,
-		field:  "effort",
+		field:  scale + "_effort",
 	})
 }
 
-// seedReviewRole makes sure the role owns its values: whichever item is missing is filled in from that reviewer's default.
-func (s *Session) seedReviewRole(role, reviewer string) map[string]string {
+// seedReviewRole makes sure the role owns its values for one scale: whichever
+// item is missing is filled in from that reviewer's default (or the shared
+// model/effort keys of a legacy role entry).
+func (s *Session) seedReviewRole(role, scale, reviewer string) map[string]string {
 	entry := s.Config.Models.ReviewRoles[role]
 	if entry == nil {
 		entry = map[string]string{}
 		s.Config.Models.ReviewRoles[role] = entry
 	}
 	agentEntry := s.Config.Models.Review[reviewer]
-	if entry["model"] == "" {
-		entry["model"] = agentEntry["model"]
+	modelKey := scale + "_model"
+	effortKey := scale + "_effort"
+	if entry[modelKey] == "" {
+		if entry["model"] != "" {
+			entry[modelKey] = entry["model"]
+		} else {
+			entry[modelKey] = agentEntry["model"]
+		}
 	}
-	if _, ok := agentEntry["effort"]; ok && entry["effort"] == "" {
-		entry["effort"] = agentEntry["effort"]
+	if _, ok := agentEntry["effort"]; ok && entry[effortKey] == "" {
+		if entry["effort"] != "" {
+			entry[effortKey] = entry["effort"]
+		} else {
+			entry[effortKey] = agentEntry["effort"]
+		}
 	}
 	return entry
 }
 
-// ResetReviewRoleModel resets the model and reasoning effort of one role to the defaults of its new reviewer.
-// Call it when a role changes reviewer: the old values were configured for the old reviewer and would otherwise be misattributed.
-func (s *Session) ResetReviewRoleModel(role string) {
+// ResetReviewRoleModel resets the model and reasoning effort of one role at one
+// scale to the defaults of its new reviewer. Call it when a role changes
+// reviewer: the old values were configured for the old reviewer and would
+// otherwise be misattributed.
+func (s *Session) ResetReviewRoleModel(role, scale string) {
+	modelKey := scale + "_model"
+	effortKey := scale + "_effort"
+	reviewer := config.ReviewerFor(s.Config, scale, role)
 	if s.EditingOverlay() {
 		_ = s.applyOverlayEdit(func(candidate map[string]any) {
-			config.OverlayDelete(candidate, "models", "review_roles", role)
+			config.OverlayDelete(candidate, "models", "review_roles", role, modelKey)
+			config.OverlayDelete(candidate, "models", "review_roles", role, effortKey)
 		})
 		return
 	}
-	s.Config.Models.ReviewRoles[role] = map[string]string{}
-	entry := s.seedReviewRole(role, s.Config.Reviewers[role])
+	entry := s.Config.Models.ReviewRoles[role]
+	if entry == nil {
+		entry = map[string]string{}
+		s.Config.Models.ReviewRoles[role] = entry
+	}
+	agentEntry := s.Config.Models.Review[reviewer]
+	entry[modelKey] = agentEntry["model"]
+	if _, ok := agentEntry["effort"]; ok {
+		entry[effortKey] = agentEntry["effort"]
+	} else {
+		delete(entry, effortKey)
+	}
 	rawEntry := map[string]any{}
 	for key, value := range entry {
 		rawEntry[key] = value
@@ -512,12 +575,14 @@ func (s *Session) ReviewModelFields() []ModelField {
 	var out []ModelField
 	seen := map[string]struct{}{}
 	for _, role := range config.ReviewRoles {
-		for _, field := range s.ReviewModelFieldsFor(role) {
-			if _, ok := seen[field.Key()]; ok {
-				continue
+		for _, scale := range config.TaskScales {
+			for _, field := range s.ReviewModelFieldsFor(role, scale) {
+				if _, ok := seen[field.Key()]; ok {
+					continue
+				}
+				seen[field.Key()] = struct{}{}
+				out = append(out, field)
 			}
-			seen[field.Key()] = struct{}{}
-			out = append(out, field)
 		}
 	}
 	return out
@@ -594,14 +659,16 @@ func (s *Session) Summary() []string {
 		lines = append(lines, "  kanban "+agent+": "+config.FormatKanbanModelSummary(s.Config, agent, entry))
 	}
 	seen := map[string]struct{}{}
-	for _, role := range config.ReviewRoles {
-		reviewer := cfg.Reviewers[role]
-		if _, ok := seen[reviewer]; ok {
-			continue
+	for _, scale := range config.TaskScales {
+		for _, role := range config.ReviewRoles {
+			reviewer := config.ReviewerFor(cfg, scale, role)
+			if _, ok := seen[reviewer]; ok {
+				continue
+			}
+			seen[reviewer] = struct{}{}
+			entry := cfg.Models.Review[reviewer]
+			lines = append(lines, "  review "+reviewer+": "+config.FormatReviewModelSummary(entry))
 		}
-		seen[reviewer] = struct{}{}
-		entry := cfg.Models.Review[reviewer]
-		lines = append(lines, "  review "+reviewer+": "+config.FormatReviewModelSummary(entry))
 	}
 	return lines
 }
@@ -642,7 +709,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.Models = copyModels(existing.Models)
 	cfg.KanbanAgent = existing.KanbanAgent
 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)
-	cfg.Reviewers = cloneStrings(existing.Reviewers)
+	cfg.Reviewers = cloneReviewStages(existing.Reviewers)
 	cfg.ReviewStages = cloneReviewStages(existing.ReviewStages)
 	cfg.Rules = existing.Rules.Clone()
 	cfg.Launcher = existing.Launcher

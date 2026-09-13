@@ -9,7 +9,7 @@ import (
 	"github.com/dualface/kander/internal/process"
 )
 
-func TestAgentFieldsShareDefinitionsAndPreserveTemplates(t *testing.T) {
+func TestCustomAgentChoicesAndSavePreserveTemplates(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
@@ -40,15 +40,13 @@ func TestAgentFieldsShareDefinitionsAndPreserveTemplates(t *testing.T) {
 	if !found {
 		t.Fatal("custom agent absent")
 	}
-	large, small := s.AgentExecutableFields("large"), s.AgentExecutableFields("small")
-	if len(large) != 2 || large[0].Key() != small[0].Key() {
-		t.Fatal("fields do not deduplicate")
-	}
-	large[1].Set("node")
-	if small[1].Value() != "node" || cfg.Agents["helper"].ProcessName != "" {
-		t.Fatal("editing does not isolate/share correctly")
-	}
-	if _, err := s.Save(); err != nil {
+	d := s.Config.Agents["helper"]
+	d.ProcessName = "node"
+	s.Config.Agents["helper"] = d
+	if _, err := config.Update(func(cfg *config.Config) error {
+		cfg.Agents = config.CloneAgents(s.Config.Agents)
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := config.Load(false)
@@ -57,13 +55,6 @@ func TestAgentFieldsShareDefinitionsAndPreserveTemplates(t *testing.T) {
 	}
 	if got.Agents["helper"].Args == nil || got.Agents["helper"].Session.Mode != "generated" || config.AgentProcessName(got, "helper") != "node" {
 		t.Fatal(got.Agents)
-	}
-	s.SetExecutionAgent("large", "codex")
-	fields := s.AgentExecutableFields("large")
-	fields[0].Set(executable)
-	fields[0].Set("")
-	if _, ok := s.Config.Agents["codex"]; ok {
-		t.Fatal("blank built-in edit should remove override")
 	}
 }
 
@@ -108,13 +99,15 @@ func TestReviewModelFieldsHideCursorEffortAfterArgsOverlay(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.Agents = map[string]config.AgentDefinition{"cursor": {Args: &config.AgentArgs{Start: []string{"x"}, Resume: []string{}}}}
-	cfg.Reviewers["PM"] = "cursor"
+	for _, scale := range config.TaskScales {
+		cfg.Reviewers[scale]["PM"] = "cursor"
+	}
 	s, err := NewSessionForTest(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range s.ReviewModelFieldsFor("PM") {
-		if field.field == "effort" {
+	for _, field := range s.ReviewModelFieldsFor("PM", "large") {
+		if field.field == "large_effort" || field.field == "effort" {
 			t.Fatal("review effort shown for cursor")
 		}
 	}

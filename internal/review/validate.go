@@ -41,8 +41,10 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 	if !ok {
 		return reviewContext{}, newGate(2, "review.unsupported_role", roleInput)
 	}
-	// Model and reasoning effort can be configured per role, so the role must be settled before the settings are read.
-	settings, err := agentSettingsFor(agent, role)
+	// Model and reasoning effort can be configured per role and scale, so both
+	// must be settled before the settings are read.
+	scale := reviewScaleFromTask(taskInput)
+	settings, err := agentSettingsFor(agent, role, scale)
 	if err != nil {
 		return reviewContext{}, err
 	}

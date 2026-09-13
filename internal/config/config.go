@@ -109,8 +109,9 @@ type InstallPaths struct {
 }
 
 // Models matches the models section of the onevoke schema.
-// ReviewRoles holds per-role overrides: an empty value means the role inherits the value of its selected reviewer,
-// so all four roles can use different models and reasoning efforts even when they select the same reviewer.
+// ReviewRoles holds per-role overrides. Empty values inherit the selected reviewer's
+// models.review entry. Prefer large_*/small_* when set; otherwise fall back to the
+// shared model/effort keys so a legacy flat role entry still applies to both scales.
 type Models struct {
 	Kanban      map[string]map[string]string `json:"kanban"`
 	Review      map[string]map[string]string `json:"review"`
@@ -133,7 +134,7 @@ type Config struct {
 	KanbanAgent     string                       `json:"kanban_agent"`
 	KanbanAgents    map[string]string            `json:"kanban_agents"`
 	Launcher        string                       `json:"launcher"`
-	Reviewers       map[string]string            `json:"reviewers"`
+	Reviewers       map[string]map[string]string `json:"reviewers"`
 	ReviewStages    map[string]map[string]string `json:"review_stages"`
 	Rules           Rules                        `json:"rules"`
 	Models          Models                       `json:"models"`
@@ -151,7 +152,7 @@ func Clone(src *Config) *Config {
 	out := *src
 	out.Agents = CloneAgents(src.Agents)
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
-	out.Reviewers = cloneStringMap(src.Reviewers)
+	out.Reviewers = cloneNested(src.Reviewers)
 	out.ReviewStages = cloneNested(src.ReviewStages)
 	out.Rules = src.Rules.Clone()
 	out.Models = Models{
@@ -182,7 +183,11 @@ func defaultReviewRoles() map[string]map[string]string {
 	out := make(map[string]map[string]string, len(ReviewRoles))
 	for _, role := range ReviewRoles {
 		// Empty by default: the role inherits the value of its reviewer.
-		out[role] = map[string]string{"model": "", "effort": ""}
+		out[role] = map[string]string{
+			"model": "", "effort": "",
+			"large_model": "", "small_model": "",
+			"large_effort": "", "small_effort": "",
+		}
 	}
 	return out
 }
@@ -204,20 +209,27 @@ func DefaultTUI() TUI {
 	}
 }
 
-// ReviewModelFor returns the model and reasoning effort actually in force for a review role.
-// An empty role override falls back to the agent's own value; the agent comes from the caller because
-// kander review may name a reviewer explicitly, which need not match the reviewer configured for that role.
-func ReviewModelFor(cfg *Config, agent, role string) (model, effort string) {
+// ReviewModelFor returns the model and reasoning effort in force for a review role at one
+// task scale. Scale-specific keys win; empty values fall back to the shared model/effort
+// keys, then to the agent's models.review entry. The agent comes from the caller because
+// kander review may name a reviewer explicitly, which need not match the configured one.
+func ReviewModelFor(cfg *Config, agent, role, scale string) (model, effort string) {
 	if cfg == nil {
 		return "", ""
 	}
 	agentEntry := cfg.Models.Review[agent]
 	roleEntry := cfg.Models.ReviewRoles[role]
-	model = roleEntry["model"]
+	model = roleEntry[scale+"_model"]
+	if model == "" {
+		model = roleEntry["model"]
+	}
 	if model == "" {
 		model = agentEntry["model"]
 	}
-	effort = roleEntry["effort"]
+	effort = roleEntry[scale+"_effort"]
+	if effort == "" {
+		effort = roleEntry["effort"]
+	}
 	if effort == "" {
 		effort = agentEntry["effort"]
 	}
@@ -237,17 +249,13 @@ func DefaultConfig() *Config {
 	for _, scale := range TaskScales {
 		agents[scale] = agent
 	}
-	reviewers := make(map[string]string, len(ReviewRoles))
-	for _, role := range ReviewRoles {
-		reviewers[role] = agent
-	}
 	return &Config{
 		SchemaVersion:   SchemaVersion,
 		WelcomeComplete: false,
 		KanbanAgent:     agent,
 		KanbanAgents:    agents,
 		Launcher:        DefaultLauncher(),
-		Reviewers:       reviewers,
+		Reviewers:       DefaultReviewers(),
 		ReviewStages:    DefaultReviewStages(),
 		Rules:           DefaultRules(true),
 		Models:          DefaultModels(),
@@ -650,15 +658,11 @@ func Validate(raw any) (*Config, error) {
 	if !ok {
 		return nil, configErrorf("config.reviewers_must_be_a_json_object")
 	}
-	reviewers := make(map[string]string, len(ReviewRoles))
 	reviewable := &Config{Agents: definitions}
 	reviewNames := ReviewAgentNames(reviewable)
-	for _, role := range ReviewRoles {
-		agent, err := validateReviewerChoice(reviewersRaw[role], reviewable, "reviewers."+role, reviewNames)
-		if err != nil {
-			return nil, err
-		}
-		reviewers[role] = agent
+	reviewers, err := validateReviewers(reviewersRaw, reviewable, reviewNames)
+	if err != nil {
+		return nil, err
 	}
 	var stages map[string]map[string]string
 	if _, exists := obj["review_stages"]; exists {

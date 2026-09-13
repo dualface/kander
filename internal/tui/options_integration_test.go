@@ -4,12 +4,28 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
 )
+
+func TestOptionTitleAppendsColon(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"Color theme", "Color theme:"},
+		{"Color theme:", "Color theme:"},
+		{"Color theme：", "Color theme:"},
+		{"  Model  ", "  Model:"},
+		{"review stage: ", "review stage:"},
+	}
+	for _, tc := range cases {
+		if got := optionTitle(tc.in); got != tc.want {
+			t.Fatalf("optionTitle(%q)=%q want %q", tc.in, got, tc.want)
+		}
+	}
+}
 
 func TestOptionsRestoreAndTabSwitchResetPreviewBaseline(t *testing.T) {
 	initial := config.DefaultConfig()
@@ -21,13 +37,7 @@ func TestOptionsRestoreAndTabSwitchResetPreviewBaseline(t *testing.T) {
 	panel.bind.theme = "dark"
 	panel.bind.apply(panel)
 	pumpPanel(panel, panel.rebuildSection())
-	for _, item := range panel.bind.restores {
-		if reflect.DeepEqual(item.path, []string{"tui", "theme"}) {
-			*item.flag = true
-		}
-	}
-	panel.bind.apply(panel)
-	pumpPanel(panel, panel.rebuildSection())
+	confirmPageRestore(t, panel)
 	if panel.session.FieldOverridden("tui", "theme") || panel.bind.theme != "light" {
 		t.Fatal("restored inheritance was copied back by the preview baseline")
 	}
@@ -143,6 +153,11 @@ func TestModelDraftSurvivesConfigReplacementAndFormRebuild(t *testing.T) {
 	}
 	*panel.bind.modelValues[find(model.Key())] = "second-model"
 	panel.bind.modelInputs[model.Key()].input.Value(panel.bind.modelValues[find(model.Key())])
+	panel.bind.apply(panel)
+	// Inherited effort inputs show "(inherited …)"; set a concrete override first so clearing
+	// to empty is a real edit that must stay visible and block Save.
+	*panel.bind.modelValues[find(effort.Key())] = "high"
+	panel.bind.modelInputs[effort.Key()].input.Value(panel.bind.modelValues[find(effort.Key())])
 	panel.bind.apply(panel)
 	*panel.bind.modelValues[find(effort.Key())] = ""
 	panel.bind.modelInputs[effort.Key()].input.Value(panel.bind.modelValues[find(effort.Key())])

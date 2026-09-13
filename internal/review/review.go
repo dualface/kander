@@ -67,7 +67,11 @@ func Run(args []string) (exitCode int) {
 			userError(config.Text("review.unsupported_role", roleInput))
 			return 2
 		}
-		agent, err = reviewerFromConfig(role)
+		scale := "large"
+		if len(rest) >= 5 {
+			scale = reviewScaleFromTask(rest[4])
+		}
+		agent, err = reviewerFromConfig(role, scale)
 		if err != nil {
 			userError(err.Error())
 			return 1

@@ -31,6 +31,152 @@ func tempOverlaySession(t *testing.T, mode config.Mode) (*Session, string) {
 	return session, loc.Path
 }
 
+func TestNoteModelOverridePinsExecutionAgent(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	fields := session.ExecutionModelFieldsFor("large")
+	if len(fields) == 0 {
+		t.Fatal("expected model fields")
+	}
+	if session.FieldOverridden("kanban_agents", "large") {
+		t.Fatal("agent already overridden")
+	}
+	agent := fields[0].Agent
+	session.NoteModelOverride(fields[0], "project-model")
+	if !session.FieldOverridden("models", "kanban", agent, fields[0].FieldName()) {
+		t.Fatal("model override missing")
+	}
+	if !session.FieldOverridden("kanban_agents", "large") {
+		t.Fatal("editing a model should pin the Agent into the project overlay")
+	}
+	if session.Config.KanbanAgents["large"] != agent {
+		t.Fatalf("agent=%s want %s", session.Config.KanbanAgents["large"], agent)
+	}
+}
+
+func TestSetExecutionAgentMaterializesScaleModels(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	current := session.Config.KanbanAgents["large"]
+	next := "claude"
+	if current == next {
+		next = "codex"
+	}
+	session.SetExecutionAgent("large", next)
+	if !session.FieldOverridden("kanban_agents", "large") {
+		t.Fatal("agent was not written to the overlay")
+	}
+	fields := session.ExecutionModelFieldsFor("large")
+	if len(fields) == 0 {
+		t.Fatal("expected model fields")
+	}
+	for _, field := range fields {
+		path := []string{"models", "kanban", field.Agent, field.FieldName()}
+		if !session.FieldOverridden(path...) {
+			t.Fatalf("expected materialized override for %v", path)
+		}
+		if got := field.Value(); got == "" && field.FieldName() != "large_model" && field.FieldName() != "small_model" {
+			t.Fatalf("empty effort after materialize: %s", field.FieldName())
+		}
+	}
+}
+
+func TestRestoreExecutionAgentClearsScaleModels(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	current := session.Config.KanbanAgents["large"]
+	next := "claude"
+	if current == next {
+		next = "codex"
+	}
+	session.SetExecutionAgent("large", next)
+	fields := session.ExecutionModelFieldsFor("large")
+	agent := fields[0].Agent
+	session.NoteModelOverride(fields[0], "project-model")
+	if err := session.RestoreInherit("kanban_agents", "large"); err != nil {
+		t.Fatal(err)
+	}
+	if session.FieldOverridden("kanban_agents", "large") {
+		t.Fatal("agent override remained")
+	}
+	for _, field := range fields {
+		path := []string{"models", "kanban", agent, field.FieldName()}
+		if session.FieldOverridden(path...) {
+			t.Fatalf("model override remained for %v", path)
+		}
+	}
+	if session.Config.KanbanAgents["large"] != current {
+		t.Fatalf("effective agent=%s want %s", session.Config.KanbanAgents["large"], current)
+	}
+}
+
+func TestPreferProjectTabIfPresent(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
+	if err := session.AttachOverlay(config.ModeGlobal, loc, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.PreferProjectTabIfPresent(); err != nil {
+		t.Fatal(err)
+	}
+	if session.Target != config.TargetScope {
+		t.Fatalf("empty overlay opened %s", session.Target)
+	}
+	if err := session.AttachOverlay(config.ModeGlobal, loc, map[string]any{"language": "ja"}); err != nil {
+		t.Fatal(err)
+	}
+	if session.Target != config.TargetScope {
+		t.Fatalf("AttachOverlay should leave Global selected, got %s", session.Target)
+	}
+	if err := session.PreferProjectTabIfPresent(); err != nil {
+		t.Fatal(err)
+	}
+	if session.Target != config.TargetOverlay {
+		t.Fatalf("populated overlay opened %s", session.Target)
+	}
+	if session.Config.Language != "ja" {
+		t.Fatalf("language=%s", session.Config.Language)
+	}
+}
+
+func TestRestoreSectionClearsPageOverrides(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	session.SetLanguage("ja")
+	session.SetTUIField("theme", "dark")
+	session.SetLauncher("foreground")
+	if !session.SectionHasOverrides("interface") || !session.SectionHasOverrides("execution") {
+		t.Fatal("expected section overrides")
+	}
+	if err := session.RestoreSection("interface"); err != nil {
+		t.Fatal(err)
+	}
+	if session.SectionHasOverrides("interface") || session.FieldOverridden("language") || session.FieldOverridden("tui") {
+		t.Fatal("interface overrides remained")
+	}
+	if !session.FieldOverridden("launcher") {
+		t.Fatal("execution override was cleared by interface restore")
+	}
+}
+
 func TestSessionOverlaySaveIsSparseAndIsolated(t *testing.T) {
 	session, path := tempOverlaySession(t, config.ModeGlobal)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
@@ -101,7 +247,7 @@ func TestSessionSeedReviewDoesNotCreateOverlay(t *testing.T) {
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	_ = session.ReviewModelFieldsFor("PM")
+	_ = session.ReviewModelFieldsFor("PM", "large")
 	if len(session.overlayRaw) != 0 {
 		t.Fatalf("seed wrote overlay: %#v", session.overlayRaw)
 	}
@@ -220,7 +366,7 @@ func TestSaveAllDirtyWritesBothTabs(t *testing.T) {
 	}
 }
 
-func TestGlobalEmptyAgentPathDoesNotDeleteOverlay(t *testing.T) {
+func TestGlobalAgentPathOverrideDoesNotTouchOverlay(t *testing.T) {
 	session, _ := tempOverlaySession(t, config.ModeGlobal)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
@@ -234,11 +380,57 @@ func TestGlobalEmptyAgentPathDoesNotDeleteOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 	session.NoteModelOverride(ModelField{Agent: "codex", field: "path"}, "")
+	session.Config.Agents = nil
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
 	if !session.FieldOverridden("agents", "codex", "path") {
-		t.Fatal("global empty path deleted the project overlay key")
+		t.Fatal("scope save cleared the project overlay agents path")
+	}
+}
+
+func TestSaveScopePreservesCustomAgents(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Launcher = "herdr"
+	cfg.Agents = map[string]config.AgentDefinition{
+		"codex": {Path: exe, ProcessName: "node"},
+	}
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := NewSessionForTest(loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.SetLauncher("tmux")
+	session.Config.Agents = map[string]config.AgentDefinition{
+		"codex": {Path: "should-not-persist"},
+	}
+	if _, err := session.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Launcher != "tmux" {
+		t.Fatalf("launcher=%s", got.Launcher)
+	}
+	if got.Agents["codex"].Path != exe || got.Agents["codex"].ProcessName != "node" {
+		t.Fatalf("agents clobbered: %+v", got.Agents)
 	}
 }
 
@@ -415,10 +607,15 @@ func TestResetReviewRoleOnOverlayDoesNotSeed(t *testing.T) {
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	session.overlayRaw["models"] = map[string]any{"review_roles": map[string]any{"PM": map[string]any{"model": "old"}}}
-	session.ResetReviewRoleModel("PM")
-	if session.FieldOverridden("models", "review_roles", "PM") {
-		t.Fatalf("reset seeded overlay: %#v", session.overlayRaw)
+	session.overlayRaw["models"] = map[string]any{"review_roles": map[string]any{"PM": map[string]any{
+		"model": "old", "large_model": "old-large",
+	}}}
+	session.ResetReviewRoleModel("PM", "large")
+	if session.FieldOverridden("models", "review_roles", "PM", "large_model") {
+		t.Fatalf("reset left or seeded large_model: %#v", session.overlayRaw)
+	}
+	if !session.FieldOverridden("models", "review_roles", "PM", "model") {
+		t.Fatal("reset must not clear unrelated shared model override")
 	}
 }
 
@@ -577,25 +774,25 @@ func TestGlobalReviewerResetUpdatesProjectModelInheritance(t *testing.T) {
 	session.Config.Models.Review["claude"] = map[string]string{"model": "claude-model", "effort": "high"}
 	session.Config.Models.ReviewRoles["PM"] = map[string]string{"model": "old-codex", "effort": "low"}
 	session.scopeRaw, _ = config.DocumentFromConfig(session.Config)
-	session.SetReviewer("PM", "claude")
-	session.ResetReviewRoleModel("PM")
+	session.SetReviewer("large", "PM", "claude")
+	session.ResetReviewRoleModel("PM", "large")
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
 	entry := session.Config.Models.ReviewRoles["PM"]
-	if entry["model"] != "claude-model" || entry["effort"] != "high" {
+	if entry["large_model"] != "claude-model" || entry["large_effort"] != "high" {
 		t.Fatalf("inherited stale role defaults: %#v", entry)
 	}
 	if session.FieldOverridden("models") {
 		t.Fatal("reset created project overrides")
 	}
-	fields := session.ReviewModelFieldsFor("PM")
+	fields := session.ReviewModelFieldsFor("PM", "large")
 	fields[0].Set("project-model")
 	session.NoteModelOverride(fields[0], "project-model")
-	if err := session.RestoreInherit("models", "review_roles", "PM", "model"); err != nil {
+	if err := session.RestoreInherit("models", "review_roles", "PM", "large_model"); err != nil {
 		t.Fatal(err)
 	}
-	if got := session.Config.Models.ReviewRoles["PM"]["model"]; got != "claude-model" {
+	if got := session.Config.Models.ReviewRoles["PM"]["large_model"]; got != "claude-model" {
 		t.Fatalf("restore used old reviewer defaults: %q", got)
 	}
 }

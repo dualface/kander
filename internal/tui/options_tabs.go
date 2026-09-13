@@ -1,14 +1,16 @@
 package tui
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/version"
 )
 
 type tabHit struct {
@@ -18,7 +20,7 @@ type tabHit struct {
 }
 
 func (p *optionsPanel) canCycleTabs() bool {
-	return p.session != nil && !p.confirming && p.report == nil && len(p.session.AvailableTargets()) > 1
+	return p.session != nil && !p.confirming && !p.restoreConfirming && p.report == nil && len(p.session.AvailableTargets()) > 1
 }
 
 func tabLabel(target string) string {
@@ -32,12 +34,7 @@ func (p *optionsPanel) scopeTabHint() string {
 	if !p.canCycleTabs() {
 		return ""
 	}
-	targets := p.session.AvailableTargets()
-	names := make([]string, 0, len(targets))
-	for _, target := range targets {
-		names = append(names, tabLabel(target))
-	}
-	return t("tui.switch_scope_tabs", strings.Join(names, " / "))
+	return t("tui.switch_scope_tabs")
 }
 
 func (p *optionsPanel) cycleTab(delta int) tea.Cmd {
@@ -67,6 +64,7 @@ func (p *optionsPanel) switchTab(target string) tea.Cmd {
 	if p.bind != nil {
 		p.bind.apply(p)
 	}
+	focusKey, focusIndex := p.currentFocus()
 	if err := p.session.SetTarget(target); err != nil {
 		p.showReport(t("tui.load_failed"), nil, err.Error())
 		return nil
@@ -76,71 +74,257 @@ func (p *optionsPanel) switchTab(target string) tea.Cmd {
 	if p.current == "" {
 		return p.openRoot()
 	}
-	return p.openSection(p.current)
+	cmd := p.openSection(p.current)
+	return tea.Batch(cmd, p.restoreFocus(focusKey, focusIndex))
+}
+
+// currentFocus returns the focused field's stable key (when registered) and its
+// focusable index, so a Global/Project rebuild can put the cursor back.
+func (p *optionsPanel) currentFocus() (key string, index int) {
+	if p.bind == nil || p.form == nil {
+		return "", 0
+	}
+	focused := p.form.GetFocusedField()
+	i := 0
+	for _, field := range p.bind.formFields {
+		if field.Skip() {
+			continue
+		}
+		if field == focused {
+			for name, pos := range p.bind.fieldIndex {
+				if pos == i {
+					return name, i
+				}
+			}
+			return "", i
+		}
+		i++
+	}
+	return "", 0
+}
+
+// restoreFocus moves to the field named by key after a rebuild, falling back to
+// the previous focusable index and clamping when the new page is shorter.
+func (p *optionsPanel) restoreFocus(key string, fallback int) tea.Cmd {
+	index := fallback
+	if p.bind != nil {
+		if key != "" {
+			if pos, ok := p.bind.fieldIndex[key]; ok {
+				index = pos
+			}
+		}
+		if p.bind.focusable > 0 && index >= p.bind.focusable {
+			index = p.bind.focusable - 1
+		}
+	}
+	if index < 0 {
+		index = 0
+	}
+	return repeatCmd(index, huh.NextField)
+}
+
+const scopeChromeIndent = 2
+
+// tabFrameHeaderRows is the dialog chrome above the body when Global/Project tabs are shown:
+// top border, label row, and the joiner into the content pane.
+const tabFrameHeaderRows = 3
+
+func (p *optionsPanel) showScopeTabs() bool {
+	return p.canCycleTabs()
 }
 
 func (p *optionsPanel) renderScopeChrome(palette palette, width int) (string, int) {
-	if p.confirming {
-		p.tabHits = nil
+	if p.confirming || p.restoreConfirming {
 		return "", 0
 	}
-	var lines []string
-	if p.session != nil && len(p.session.AvailableTargets()) > 1 {
-		lines = append(lines, p.renderTabBar(palette, width))
+	indent := scopeChromeIndent
+	innerWidth := width - indent
+	if innerWidth < 1 {
+		indent = 0
+		innerWidth = width
 	}
+	pad := strings.Repeat(" ", indent)
+	dim := styleFor("popup-dim", palette)
+	var lines []string
 	loc := overlayDisplayLocation(p)
 	if loc.ProjectRoot != "" {
-		lines = append(lines, styleFor("popup-dim", palette).Render(clipPath(t("tui.project_path", loc.ProjectRoot), width)))
+		lines = append(lines, pad+dim.Render(clipPath(t("tui.project_path", homePath(loc.ProjectRoot)), innerWidth)))
 	}
-	if loc.Path != "" {
-		lines = append(lines, styleFor("popup-dim", palette).Render(clipPath(t("tui.overlay_file", loc.Path), width)))
-	}
-	if base := overlayBasePath(p); base != "" {
-		lines = append(lines, styleFor("popup-dim", palette).Render(clipPath(t("tui.base_config", base), width)))
-	}
-	if p.session != nil && p.session.EditingOverlay() && loc.Path != "" && !loc.Exists {
-		lines = append(lines, styleFor("popup-dim", palette).Render(clipText(t("tui.overlay_will_create"), width)))
+	editingOverlay := p.session != nil && p.session.EditingOverlay()
+	if editingOverlay {
+		if value := overlayChromeValue(loc); value != "" {
+			lines = append(lines, pad+dim.Render(clipPath(t("tui.overlay_file", value), innerWidth)))
+		}
+	} else if base := overlayBasePath(p); base != "" {
+		lines = append(lines, pad+dim.Render(clipPath(t("tui.base_config", homePath(base)), innerWidth)))
 	}
 	if len(lines) == 0 {
 		return "", 0
 	}
+	lines = append(lines, "")
 	return strings.Join(lines, "\n") + "\n", len(lines)
 }
 
-func (p *optionsPanel) renderTabBar(palette palette, width int) string {
+// overlayChromeValue is the path shown on the Project tab: a project-relative
+// path when the overlay exists, otherwise a short missing placeholder.
+func overlayChromeValue(loc config.OverlayLocation) string {
+	if loc.Path == "" {
+		return ""
+	}
+	if !loc.Exists {
+		return t("tui.overlay_missing")
+	}
+	if loc.ProjectRoot != "" {
+		if rel, err := filepath.Rel(loc.ProjectRoot, loc.Path); err == nil && rel != "" && !strings.HasPrefix(rel, "..") {
+			return rel
+		}
+	}
+	return filepath.Base(loc.Path)
+}
+
+func padTabLabel(label string, width int) string {
+	text := " " + label + " "
+	for displayWidth(text) < width {
+		text += " "
+	}
+	if displayWidth(text) > width {
+		return clipText(text, width)
+	}
+	return text
+}
+
+type tabHeaderMetrics struct {
+	targets []string
+	labels  []string
+	widths  []int
+	active  string
+	restW   int
+	inner   int
+}
+
+func (p *optionsPanel) tabHeaderMetrics(inner int, pageName string) tabHeaderMetrics {
 	targets := p.session.AvailableTargets()
 	active := p.session.Target
 	if active == "" {
 		active = config.TargetScope
 	}
-	p.tabHits = nil
-	cursor := 0
-	var parts []string
+	labels := make([]string, len(targets))
+	widths := make([]int, len(targets))
 	for i, target := range targets {
-		text := " " + tabLabel(target) + " "
+		label := tabLabel(target)
+		if target == active && pageName != "" {
+			label = label + " - " + pageName
+		}
+		labels[i] = label
+		widths[i] = displayWidth(label) + 2
+		if widths[i] < 3 {
+			widths[i] = 3
+		}
+	}
+	n := len(labels)
+	ver := version.String()
+	if ver == "" {
+		ver = "dev"
+	}
+	minRest := displayWidth(ver) + 2
+	if minRest < 5 {
+		minRest = 5
+	}
+	used := n // one join after each tab cell before the version cell
+	for _, w := range widths {
+		used += w
+	}
+	restW := inner - used
+	if restW < minRest {
+		// Shrink the active tab first so the version cell still fits.
+		need := minRest - restW
+		for i, target := range targets {
+			if target != active || need <= 0 {
+				continue
+			}
+			minW := displayWidth(tabLabel(target)) + 2
+			if minW < 3 {
+				minW = 3
+			}
+			shrink := min(need, max(0, widths[i]-minW))
+			widths[i] -= shrink
+			need -= shrink
+			labels[i] = clipText(labels[i], max(1, widths[i]-2))
+		}
+		used = n
+		for _, w := range widths {
+			used += w
+		}
+		restW = inner - used
+		if restW < 1 {
+			restW = 1
+		}
+	}
+	return tabHeaderMetrics{
+		targets: targets,
+		labels:  labels,
+		widths:  widths,
+		active:  active,
+		restW:   restW,
+		inner:   inner,
+	}
+}
+
+// renderTabFrameHeader draws the dialog's own top chrome (not an inset box):
+//
+//	╭──────────────────┬─────────┬─────╮
+//	│ Global - Interface│ Project │ ver │
+//	├──────────────────┴─────────┴─────┤
+//
+// The page name is shown only on the active Global/Project tab; the trailing
+// cell is the build version alone.
+func (p *optionsPanel) renderTabFrameHeader(palette palette, m tabHeaderMetrics) (top, mid, join string) {
+	edge := styleFor("popup-edge", palette)
+	n := len(m.labels)
+	hline := func(first, midJoin, last string) string {
+		var b strings.Builder
+		b.WriteString(first)
+		for i := 0; i < n; i++ {
+			if i > 0 {
+				b.WriteString(midJoin)
+			}
+			b.WriteString(strings.Repeat("─", m.widths[i]))
+		}
+		b.WriteString(midJoin)
+		b.WriteString(strings.Repeat("─", m.restW))
+		b.WriteString(last)
+		return edge.Render(b.String())
+	}
+	top = hline(borderTopLeft, "┬", borderTopRight)
+	join = hline("├", "┴", "┤")
+
+	p.tabHits = nil
+	p.tabLabelRow = 1 // relative to the dialog top content row (under the top border)
+	var midB strings.Builder
+	x := 0
+	for i, label := range m.labels {
+		midB.WriteString(edge.Render("│"))
+		x++
+		cell := padTabLabel(label, m.widths[i])
 		style := lipgloss.NewStyle().Foreground(palette.Dim).Background(palette.Bg)
-		if target == active {
+		if m.targets[i] == m.active {
 			style = lipgloss.NewStyle().Foreground(palette.ChromeFg).Background(palette.ChromeBg).Bold(true)
 		}
-		rendered := style.Render(text)
-		p.tabHits = append(p.tabHits, tabHit{target: target, x0: cursor, x1: cursor + displayWidth(text)})
-		parts = append(parts, rendered)
-		cursor += displayWidth(text)
-		if i+1 < len(targets) {
-			gap := "  "
-			parts = append(parts, styleFor("popup-dim", palette).Render(gap))
-			cursor += displayWidth(gap)
-		}
+		midB.WriteString(style.Render(cell))
+		p.tabHits = append(p.tabHits, tabHit{target: m.targets[i], x0: x, x1: x + m.widths[i]})
+		x += m.widths[i]
 	}
-	line := strings.Join(parts, "")
-	if displayWidth(ansi.Strip(line)) > width {
-		return clipText(ansi.Strip(line), width)
-	}
-	return line
+	midB.WriteString(edge.Render("│"))
+	ver := clipText(version.String(), m.restW)
+	rest := styleFor("popup-dim", palette).Render(padTabLabel(ver, m.restW))
+	midB.WriteString(padLineFill(rest, m.restW, palette))
+	midB.WriteString(edge.Render("│"))
+	mid = midB.String()
+	return top, mid, join
 }
 
 func (p *optionsPanel) hitTab(x, y int) string {
-	if y != 0 || len(p.tabHits) == 0 {
+	if y != p.tabLabelRow || len(p.tabHits) == 0 {
 		return ""
 	}
 	for _, hit := range p.tabHits {
@@ -152,11 +336,12 @@ func (p *optionsPanel) hitTab(x, y int) string {
 }
 
 func (p *optionsPanel) handleTabMouse(x, y, bstate int) tea.Cmd {
-	if p.confirming || p.report != nil || !optionsMouseActivate(bstate) || p.session == nil {
+	if p.confirming || p.restoreConfirming || p.report != nil || !optionsMouseActivate(bstate) || p.session == nil {
 		return nil
 	}
-	localX := x - p.bodyX
-	localY := y - p.bodyY
+	// Tabs live in the dialog header, not the body.
+	localX := x - p.headerX
+	localY := y - p.headerY
 	target := p.hitTab(localX, localY)
 	if target == "" {
 		return nil

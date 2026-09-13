@@ -29,7 +29,7 @@ func TestRepairPreservesValidSettingsAndBacksUpOriginal(t *testing.T) {
 	if !result.Changed || result.Created || result.BackupPath == "" {
 		t.Fatalf("result=%+v", result)
 	}
-	if cfg.Language != "en" || cfg.KanbanAgent != "claude" || cfg.KanbanAgents["small"] != "claude" || cfg.Reviewers["PM"] != "claude" || cfg.Reviewers["QA"] != "codex" {
+	if cfg.Language != "en" || cfg.KanbanAgent != "claude" || cfg.KanbanAgents["small"] != "claude" || cfg.Reviewers["large"]["PM"] != "claude" || cfg.Reviewers["large"]["QA"] != "codex" {
 		t.Fatalf("valid selections lost: %+v", cfg)
 	}
 	if cfg.TUI.Theme != "dark" || cfg.TUI.Refresh != 15 || cfg.TUI.Columns != DefaultTUIColumns || cfg.Models.Kanban["claude"]["large_model"] != "my-model" || cfg.Models.Review["codex"]["model"] != "custom-review" {

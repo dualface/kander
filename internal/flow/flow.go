@@ -3,72 +3,92 @@ package flow
 
 import "github.com/dualface/kander/internal/config"
 
-// Kind distinguishes section headings, agent/model assignments and short status notes.
-type Kind uint8
-
+// Review stage names, in the order the review rules run them.
 const (
-	Heading Kind = iota
-	Assignment
-	Note
+	StagePrimary  = "primary"  // PM and QA in parallel
+	StageSecurity = "security" // CSA and Hacker after stage one passes
 )
 
-// Line carries a catalog key and template arguments independent of terminal layout.
-// An assignment's final argument is its model ID; empty means the agent CLI default.
-type Line struct {
-	Kind Kind
-	Key  string
-	Args []any
+// Node is one process block. Role and Mode are empty for the execution node;
+// Mode is the review stage policy ("required" or "auto") for review roles.
+type Node struct {
+	Role   string
+	Mode   string
+	Model  string
+	Effort string
 }
 
-// Build reads the normalized options-session configuration without modifying it.
-// Auto roles remain conditional because their applicability depends on the task.
-func Build(cfg *config.Config) []Line {
-	var lines []Line
-	add := func(kind Kind, key string, args ...any) {
-		lines = append(lines, Line{Kind: kind, Key: "flow." + key, Args: args})
+// Stage is one review stage and its non-skipped roles, which run in parallel.
+// An empty Nodes slice means every role of the stage is skipped (N/A).
+type Stage struct {
+	Name  string
+	Nodes []Node
+}
+
+// Chart is the flowchart for one task scale (large or small).
+type Chart struct {
+	Scale          string
+	Execution      Node
+	ReviewDisabled bool
+	// Stages holds both review stages in order (primary, then security) when
+	// review is enabled, and is empty when review is off.
+	Stages []Stage
+}
+
+// BuildChart reads the options-session configuration for one task scale.
+func BuildChart(cfg *config.Config, scale string) Chart {
+	chart := Chart{
+		Scale:     scale,
+		Execution: executionNode(cfg, scale),
 	}
-	add(Heading, "execution")
-	for _, scale := range config.TaskScales {
-		agent := cfg.KanbanAgents[scale]
-		add(Assignment, scale, agent, config.KanbanModelFor(cfg.Models.Kanban[agent], scale))
-	}
-	add(Heading, "review")
 	if !cfg.Rules[config.RuleReview] {
-		add(Note, "review_off")
-		return lines
+		chart.ReviewDisabled = true
+		return chart
 	}
-	active := false
-	for _, scale := range config.TaskScales {
-		var scaleLines []Line
-		for index, roles := range [][]string{{"PM", "QA"}, {"CSA", "Hacker"}} {
-			stageAdded := false
-			for _, role := range roles {
-				mode, err := config.ReviewStageFor(cfg, scale, role)
-				if err != nil || mode == "skip" {
-					continue
-				}
-				if !stageAdded {
-					key := "stage_one"
-					if index == 1 {
-						key = "stage_two"
-					}
-					scaleLines = append(scaleLines, Line{Kind: Note, Key: "flow." + key})
-					stageAdded = true
-				}
-				agent := cfg.Reviewers[role]
-				model, _ := config.ReviewModelFor(cfg, agent, role)
-				scaleLines = append(scaleLines, Line{Kind: Assignment, Key: "flow.role_" + mode, Args: []any{role, agent, model}})
+	for _, stage := range []struct {
+		name  string
+		roles []string
+	}{{StagePrimary, []string{"PM", "QA"}}, {StageSecurity, []string{"CSA", "Hacker"}}} {
+		built := Stage{Name: stage.name}
+		for _, role := range stage.roles {
+			mode, err := config.ReviewStageFor(cfg, scale, role)
+			if err != nil || mode == "skip" {
+				continue
 			}
+			node := reviewNode(cfg, scale, role)
+			node.Mode = mode
+			built.Nodes = append(built.Nodes, node)
 		}
-		if len(scaleLines) == 0 {
-			continue
-		}
-		add(Note, "review_"+scale)
-		lines = append(lines, scaleLines...)
-		active = true
+		chart.Stages = append(chart.Stages, built)
 	}
-	if !active {
-		add(Note, "review_none")
+	return chart
+}
+
+// BuildCharts returns large then small charts.
+func BuildCharts(cfg *config.Config) []Chart {
+	out := make([]Chart, 0, len(config.TaskScales))
+	for _, scale := range config.TaskScales {
+		out = append(out, BuildChart(cfg, scale))
 	}
-	return lines
+	return out
+}
+
+func executionNode(cfg *config.Config, scale string) Node {
+	agent := cfg.KanbanAgents[scale]
+	entry := cfg.Models.Kanban[agent]
+	model := config.KanbanModelFor(entry, scale)
+	effort := ""
+	if config.AgentSupportsEffort(cfg, agent) {
+		effort = entry[scale+"_effort"]
+	}
+	return Node{Model: model, Effort: effort}
+}
+
+func reviewNode(cfg *config.Config, scale, role string) Node {
+	agent := config.ReviewerFor(cfg, scale, role)
+	model, effort := config.ReviewModelFor(cfg, agent, role, scale)
+	if !config.AgentSupportsEffort(cfg, agent) {
+		effort = ""
+	}
+	return Node{Role: role, Model: model, Effort: effort}
 }

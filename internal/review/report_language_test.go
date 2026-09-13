@@ -10,6 +10,7 @@ import (
 )
 
 func TestReportLanguageFromConfigNeedsReadableConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
 	path := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv(config.EnvConfig, path)
 	if _, err := reportLanguageFromConfig(); err == nil {
@@ -41,21 +42,22 @@ func TestReportLanguageFromConfigNeedsReadableConfig(t *testing.T) {
 }
 
 func TestReviewerFromConfigRequiresCompleteConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
 	path := filepath.Join(t.TempDir(), "config.json")
 	t.Setenv(config.EnvConfig, path)
-	if _, err := reviewerFromConfig("PM"); err == nil {
+	if _, err := reviewerFromConfig("PM", "large"); err == nil {
 		t.Fatal("missing config must fail")
 	}
 	if err := os.WriteFile(path, []byte("{broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reviewerFromConfig("PM"); err == nil {
+	if _, err := reviewerFromConfig("PM", "large"); err == nil {
 		t.Fatal("invalid JSON must fail")
 	}
 	if err := os.WriteFile(path, []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","reviewers":{"PM":"grok","CSA":"codex","Hacker":"codex","QA":"codex"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := reviewerFromConfig("PM")
+	got, err := reviewerFromConfig("PM", "large")
 	if err != nil {
 		t.Fatal(err)
 	}

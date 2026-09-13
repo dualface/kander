@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 )
@@ -95,9 +96,10 @@ func positiveInteger(value, variable string) (int, error) {
 	return n, nil
 }
 
-// configuredModel returns the model and reasoning effort in force for a review role:
-// the role's own override first, falling back to the value of its selected reviewer when empty.
-func configuredModel(agent, role string) (string, string, bool) {
+// configuredModel returns the model and reasoning effort in force for a review role
+// at one task scale: the role's own override first, falling back to the value of
+// its selected reviewer when empty.
+func configuredModel(agent, role, scale string) (string, string, bool) {
 	cfg, err := config.Load(false)
 	if err != nil || cfg == nil {
 		return "", "", false
@@ -106,7 +108,10 @@ func configuredModel(agent, role string) (string, string, bool) {
 	if !ok {
 		return "", "", false
 	}
-	model, effort := config.ReviewModelFor(cfg, agent, role)
+	if scale == "" {
+		scale = "large"
+	}
+	model, effort := config.ReviewModelFor(cfg, agent, role, scale)
 	if model == "" {
 		if _, has := entry["model"]; !has {
 			return "", "", false
@@ -134,7 +139,7 @@ func userHome() string {
 	return home
 }
 
-func agentSettingsFor(agent, role string) (agentSettings, error) {
+func agentSettingsFor(agent, role, scale string) (agentSettings, error) {
 	cfg, err := config.Effective(nil)
 	if err != nil {
 		cfg = nil
@@ -160,7 +165,10 @@ func agentSettingsFor(agent, role string) (agentSettings, error) {
 	}
 	modelOverride := os.Getenv(prefix + "_REVIEW_MODEL")
 	effortOverride := os.Getenv(prefix + "_REVIEW_REASONING_EFFORT")
-	cfgModel, cfgEffort, cfgOK := configuredModel(agent, role)
+	if scale == "" {
+		scale = "large"
+	}
+	cfgModel, cfgEffort, cfgOK := configuredModel(agent, role, scale)
 	model := ""
 	if defaults := config.DefaultModels().Review[agent]; defaults != nil {
 		model = defaults["model"]
@@ -284,14 +292,34 @@ func reportLanguageFromConfig() (string, error) {
 	return cfg.AgentLanguage, nil
 }
 
-func reviewerFromConfig(role string) (string, error) {
+func reviewerFromConfig(role, scale string) (string, error) {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return "", err
 	}
-	agent := cfg.Reviewers[role]
+	if scale == "" {
+		scale = "large"
+	}
+	agent := config.ReviewerFor(cfg, scale, role)
 	if !containsAgent(agent) {
 		return "", newGate(1, "review.unsupported_reviewer_agent", agent)
 	}
 	return agent, nil
+}
+
+// reviewScaleFromTask reads SIZE from a card spec path when possible; otherwise
+// falls back to large so an explicit reviewer or goal-only invocation still works.
+func reviewScaleFromTask(taskInput string) string {
+	if !looksLikeAbsolutePath(taskInput) {
+		return "large"
+	}
+	data, err := os.ReadFile(taskInput)
+	if err != nil {
+		return "large"
+	}
+	size := board.MetadataFrom(string(data), board.FieldSize)
+	if size == "small" || size == "large" {
+		return size
+	}
+	return "large"
 }

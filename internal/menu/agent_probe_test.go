@@ -73,11 +73,16 @@ func TestPanelCanConfigureUnselectedRenamedBuiltin(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("unavailable Codex cannot be selected for path editing")
+		t.Fatal("unavailable Codex cannot be selected")
 	}
 	s.SetExecutionAgent("small", "codex")
-	s.AgentExecutableFields("small")[0].Set(wrapper)
-	if _, err := s.Save(); err != nil {
+	if _, err := config.Update(func(cfg *config.Config) error {
+		if cfg.Agents == nil {
+			cfg.Agents = map[string]config.AgentDefinition{}
+		}
+		cfg.Agents["codex"] = config.AgentDefinition{Path: wrapper}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := config.Load(false)

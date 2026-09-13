@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -97,6 +99,28 @@ func clipPath(path string, width int) string {
 		used += w
 	}
 	return prefix + string(runes[start:])
+}
+
+// homePath rewrites a path under the current user's home directory as "~/…".
+// Paths outside $HOME are returned unchanged.
+func homePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return path
+	}
+	clean := filepath.Clean(path)
+	home = filepath.Clean(home)
+	if clean == home {
+		return "~"
+	}
+	rel, err := filepath.Rel(home, clean)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return "~/" + filepath.ToSlash(rel)
 }
 
 func padText(text string, width int) string {

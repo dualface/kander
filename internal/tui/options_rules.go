@@ -59,7 +59,7 @@ func (p *optionsPanel) rulesGroup(bind *formBinding) *huh.Group {
 		options = append(options, huh.NewOption(t(preset.label), preset.id))
 	}
 	options = append(options, huh.NewOption(t("rules.custom"), customRulePreset))
-	bind.addField(huh.NewSelect[string]().Title(t("rules.selection")).
+	bind.addField(huh.NewSelect[string]().Title(optionTitle(t("rules.selection"))).
 		Options(options...).
 		Inline(true).Value(&bind.rulePreset))
 	bind.addRuleFields(p, p.session.Config.Rules, workflowRuleModules)
@@ -67,6 +67,7 @@ func (p *optionsPanel) rulesGroup(bind *formBinding) *huh.Group {
 	bind.formFields = append(bind.formFields, huh.NewNote().Title(t("rules.independent")))
 	bind.addRuleFields(p, p.session.Config.Rules, independentRuleModules)
 	bind.formFields = append(bind.formFields, huh.NewNote().Description(t("rules.contract_notice")))
+	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
 }
 
@@ -75,10 +76,9 @@ func (bind *formBinding) addRuleFields(p *optionsPanel, rules config.Rules, modu
 		enabled := rules[module]
 		bind.rules[module] = &enabled
 		bind.fieldIndex["rules:"+module] = bind.focusable
-		bind.addField(huh.NewConfirm().Title(p.inheritTitle(config.RuleLabel(module), formatBool(enabled), "rules", module)).
+		bind.addField(inlineConfirm().Title(p.inheritTitle(config.RuleLabel(module), formatBool(enabled), "rules", module)).
 			Affirmative(t("rules.on")).Negative(t("rules.off")).
-			Inline(true).Value(&enabled))
-		bind.addRestore(p, formatBool(enabled), "rules", module)
+			Value(&enabled))
 	}
 }
 

@@ -265,7 +265,7 @@ func TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY(t *testing.T) {
 	if !session.waitFor("Task Board", 8*time.Second) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
 	}
-	if !session.waitFor("Default language", 10*time.Second) {
+	if !session.waitFor("Interface and prompt language", 10*time.Second) {
 		t.Fatalf("interface options did not open\npty:\n%s", session.text())
 	}
 	configPath := configPathFromEnv(t, env)
@@ -342,19 +342,22 @@ func TestOptionsProjectTabsAndNarrowPathsOnPTY(t *testing.T) {
 	if !strings.Contains(plain, project) {
 		t.Fatalf("missing project path\npty:\n%s", plain)
 	}
-	if !strings.Contains(plain, overlay) && !strings.Contains(plain, config.OverlayFilename) {
-		t.Fatalf("missing overlay path\npty:\n%s", plain)
-	}
 	if !strings.Contains(plain, configPath) && !strings.Contains(plain, filepath.Base(configPath)) {
 		t.Fatalf("missing base config path\npty:\n%s", plain)
 	}
+	if strings.Contains(plain, overlay) || strings.Contains(plain, config.OverlayFilename) {
+		t.Fatalf("global tab should hide overlay path\npty:\n%s", plain)
+	}
 	session.send("\t")
-	if !session.waitFor("Overlay file does not exist yet", 6*time.Second) {
-		t.Fatalf("project tab did not show create hint\npty:\n%s", session.text())
+	if !session.waitFor("not created yet", 6*time.Second) {
+		t.Fatalf("project tab did not show missing overlay placeholder\npty:\n%s", session.text())
+	}
+	if plain = session.text(); strings.Contains(plain, overlay) || strings.Contains(plain, config.OverlayFilename) {
+		t.Fatalf("missing overlay should not show a path\npty:\n%s", plain)
 	}
 	session.send("\r")
-	if !session.waitFor("Global:", 6*time.Second) {
-		t.Fatalf("project tab did not show inherit prefix\npty:\n%s", session.text())
+	if !session.waitForPlain("(inherited ", 15*time.Second) {
+		t.Fatalf("project tab did not show inherited marker\npty:\n%s", session.text())
 	}
 	before := session.size()
 	session.resize(24, 48)
@@ -364,13 +367,13 @@ func TestOptionsProjectTabsAndNarrowPathsOnPTY(t *testing.T) {
 	session.send("\x1b[B")
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
-		if strings.Contains(session.textFrom(before), config.OverlayFilename) {
+		if strings.Contains(session.textFrom(before), "not created yet") {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if !strings.Contains(session.textFrom(before), config.OverlayFilename) {
-		t.Fatalf("narrow resize dropped overlay leaf\npty:\n%q", session.textFrom(before))
+	if !strings.Contains(session.textFrom(before), "not created yet") {
+		t.Fatalf("narrow resize dropped overlay placeholder\npty:\n%q", session.textFrom(before))
 	}
 	session.send("\x1b")
 	time.Sleep(300 * time.Millisecond)

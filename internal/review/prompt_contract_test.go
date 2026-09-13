@@ -114,7 +114,7 @@ func mustReviewerArgs(t *testing.T, agent string) process.ProcessInvocation {
 	t.Helper()
 	runtime := t.TempDir()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
-	settings, err := agentSettingsFor(agent, "PM")
+	settings, err := agentSettingsFor(agent, "PM", "large")
 	if err != nil {
 		t.Fatal(err)
 	}

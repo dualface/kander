@@ -258,13 +258,21 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 		healthy = false
 		warning(msg)
 	}
-	for _, role := range config.ReviewRoles {
-		reviewer := effective.Reviewers[role]
-		if !reviewerUsable(agents[reviewer]) {
-			healthy = false
-			warning(config.Text(
-				"menu.configured_reviewer_is_unavailable_install_it_then_run_kander", role, reviewer,
-			))
+	seenReviewers := map[string]struct{}{}
+	for _, scale := range config.TaskScales {
+		for _, role := range config.ReviewRoles {
+			reviewer := config.ReviewerFor(effective, scale, role)
+			key := role + "\x00" + reviewer
+			if _, ok := seenReviewers[key]; ok {
+				continue
+			}
+			seenReviewers[key] = struct{}{}
+			if !reviewerUsable(agents[reviewer]) {
+				healthy = false
+				warning(config.Text(
+					"menu.configured_reviewer_is_unavailable_install_it_then_run_kander", role, reviewer,
+				))
+			}
 		}
 	}
 	launcher := effective.Launcher

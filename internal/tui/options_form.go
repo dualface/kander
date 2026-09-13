@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -51,7 +52,8 @@ type formBinding struct {
 	formFields []huh.Field
 	// focusable is the number of focusable fields added so far; blank lines are excluded because NextField skips them.
 	focusable int
-	restores  []restoreField
+	// restoreFlag is the page-level "restore inherit" Confirm; nil when the page has no project overrides.
+	restoreFlag *bool
 }
 
 // addField appends one focusable field.
@@ -76,7 +78,7 @@ func (b *formBinding) reset() {
 	b.fieldIndex = map[string]int{}
 	b.formFields = nil
 	b.focusable = 0
-	b.restores = nil
+	b.restoreFlag = nil
 }
 
 func huhTheme(p palette) *huh.Theme {
@@ -106,10 +108,12 @@ func applyHuhPalette(theme *huh.Theme, p palette) {
 	theme.Blurred.Option = p.paint(fresh.Blurred.Option.Foreground(p.Base))
 	theme.Focused.UnselectedOption = p.paint(fresh.Focused.UnselectedOption.Foreground(p.Base))
 	theme.Blurred.UnselectedOption = p.paint(fresh.Blurred.UnselectedOption.Foreground(p.Base))
-	// The left/right arrows are reserved for the focused field: they are drawn at the very left of the field and stick out past the indentation,
-	// so adding them to every line only makes it busier. Unfocused lines are told apart by "dim label, bold value".
+	// Inline Selects draw "← value →" only while focused. Blurred must keep the
+	// same left inset ("←" + margin) as two spaces so the value column does not jump.
 	theme.Focused.PrevIndicator = p.paint(fresh.Focused.PrevIndicator.Foreground(p.Accent))
 	theme.Focused.NextIndicator = p.paint(fresh.Focused.NextIndicator.Foreground(p.Accent))
+	theme.Blurred.PrevIndicator = lipgloss.NewStyle().SetString("  ")
+	theme.Blurred.NextIndicator = lipgloss.NewStyle()
 	theme.Focused.TextInput.Text = p.paint(fresh.Focused.TextInput.Text.Foreground(p.Accent).Bold(true))
 	theme.Blurred.TextInput.Text = p.paint(fresh.Blurred.TextInput.Text.Foreground(p.Base).Bold(true))
 	theme.Focused.TextInput.Placeholder = p.paint(fresh.Focused.TextInput.Placeholder.Foreground(p.Dim))
@@ -145,6 +149,13 @@ func (p *optionsPanel) syncFormTheme(palette palette) {
 // a half block needs both a font that has the glyph and a terminal that paints its color, and missing either shows nothing at all;
 // square brackets show which one is selected in any font, any color scheme, even with no color at all.
 var pillBorder = lipgloss.Border{Left: "[", Right: "]"}
+
+// inlineConfirm is an options-row Confirm: title and Yes/No on one line, buttons left-aligned
+// so Huh does not center them in a title-width box (which left a large gap after long labels
+// such as "(inherited …)"). MarginLeft(1) on the buttons keeps a single space after the title.
+func inlineConfirm() *huh.Confirm {
+	return huh.NewConfirm().Inline(true).WithButtonAlignment(lipgloss.Left)
+}
 
 // confirmButtonStyles returns the selected and unselected styles of a confirm button.
 // The selected state has the bracket outline plus a fill, the unselected one holds the same width with a hidden border, so toggling does not jitter.
@@ -206,6 +217,9 @@ func sectionKeyMap() *huh.KeyMap {
 	keys.Confirm.Prev = prev
 	keys.Confirm.Submit = submit
 	keys.Confirm.Toggle = key.NewBinding(key.WithKeys("left", "right", "h", "l"), key.WithHelp("←→", t("tui.toggle")))
+	// y/n would emit NextField and, on the last field, complete the whole section.
+	keys.Confirm.Accept = key.NewBinding(key.WithDisabled())
+	keys.Confirm.Reject = key.NewBinding(key.WithDisabled())
 
 	// Inside a text input ←→ still moves the cursor, and only the up/down keys are given to field navigation.
 	keys.Input.Next = next
@@ -235,10 +249,10 @@ func (p *optionsPanel) openRoot() tea.Cmd {
 		huh.NewOption(p.rootLabel(t("tui.interface"), p.interfaceSummary()), sectionInterface),
 	}
 	if p.session != nil {
-		cfg := p.session.Config
 		options = append(options,
-			huh.NewOption(p.rootLabel(t("tui.execution_and_models"), config.FormatKanbanAgentsSummary(cfg)+" · "+cfg.Launcher), sectionExecution),
+			huh.NewOption(p.rootLabel(t("tui.execution_and_models"), p.executionSummary()), sectionExecution),
 			huh.NewOption(p.rootLabel(t("tui.review_and_models"), p.reviewSummary()), sectionReview),
+			huh.NewOption(p.rootLabel(t("tui.review_stages"), p.reviewStagesSummary()), sectionReviewStages),
 			huh.NewOption(t("rules.modules"), sectionRules),
 			huh.NewOption(t("flow.title"), sectionFlow),
 		)
@@ -295,19 +309,54 @@ func (p *optionsPanel) interfaceSummary() string {
 	return out
 }
 
-func (p *optionsPanel) reviewSummary() string {
-	if p.session == nil {
+func (p *optionsPanel) executionSummary() string {
+	if p.session == nil || p.session.Config == nil {
 		return ""
 	}
 	cfg := p.session.Config
-	out := ""
-	for i, role := range config.ReviewRoles {
-		if i > 0 {
-			out += ", "
-		}
-		out += role + " " + cfg.Reviewers[role]
+	return scaleValuePreview(cfg.KanbanAgents["large"], cfg.KanbanAgents["small"]) + " · " + cfg.Launcher
+}
+
+func (p *optionsPanel) reviewSummary() string {
+	if p.session == nil || p.session.Config == nil {
+		return ""
 	}
-	return out
+	cfg := p.session.Config
+	return roleScalePreview(config.ReviewRoles, func(scale, role string) string {
+		return config.ReviewerFor(cfg, scale, role)
+	})
+}
+
+func (p *optionsPanel) reviewStagesSummary() string {
+	if p.session == nil || p.session.Config == nil {
+		return ""
+	}
+	cfg := p.session.Config
+	return roleScalePreview(config.ReviewRoles, func(scale, role string) string {
+		stage, err := config.ReviewStageFor(cfg, scale, role)
+		if err != nil {
+			return "auto"
+		}
+		return stage
+	})
+}
+
+// scaleValuePreview folds identical large/small values, otherwise large/small.
+func scaleValuePreview(large, small string) string {
+	if large == small {
+		return large
+	}
+	return large + "/" + small
+}
+
+// roleScalePreview joins "ROLE value" entries with " · ", using valueLarge/valueSmall
+// when the two scales differ for that role.
+func roleScalePreview(roles []string, value func(scale, role string) string) string {
+	parts := make([]string, 0, len(roles))
+	for _, role := range roles {
+		parts = append(parts, role+" "+scaleValuePreview(value("large", role), value("small", role)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // The three values of the confirm-before-closing prompt.
@@ -372,6 +421,8 @@ func (p *optionsPanel) openSectionWithInputs(section string, inputs map[string]m
 		group = p.executionGroup(bind)
 	case sectionReview:
 		group = p.reviewGroup(bind)
+	case sectionReviewStages:
+		group = p.reviewStagesGroup(bind)
 	case sectionRules:
 		group = p.rulesGroup(bind)
 	default:
@@ -418,57 +469,45 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 		bind.fieldIndex[interfaceFocusKey("language")] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
 			Title(p.inheritTitle(t("menu.default_language"), bind.language, "language")).
-			Description(t("tui.ui_and_command_output")).
 			Options(toOptions(p.session.LanguageChoices())...).
 			Value(&bind.language).
 			Inline(true))
-		bind.addRestore(p, bind.language, "language")
 		bind.addSpacer()
 		bind.agentLanguage = p.session.Config.AgentLanguage
 		bind.fieldIndex[interfaceFocusKey("agent_language")] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
 			Title(p.inheritTitle(t("menu.agent_language"), bind.agentLanguage, "agent_language")).
-			Description(t("tui.agent_language_hint")).
 			Options(toOptions(p.session.AgentLanguageChoices())...).
 			Value(&bind.agentLanguage).
 			Inline(true))
-		bind.addRestore(p, bind.agentLanguage, "agent_language")
 		bind.addSpacer()
 	}
 	bind.fieldIndex[interfaceFocusKey("theme")] = bind.focusable
 	bind.addField(huh.NewSelect[string]().
 		Title(p.inheritTitle(t("tui.color_theme"), bind.theme, "tui", "theme")).
-		Description(t("tui.follow_the_terminal_or_lock_light_dark")).
 		Options(themeOptions...).
 		Value(&bind.theme).
 		Inline(true))
-	bind.addRestore(p, bind.theme, "tui", "theme")
 	bind.addSpacer()
 	bind.fieldIndex[interfaceFocusKey("refresh")] = bind.focusable
 	bind.addField(huh.NewSelect[int]().
 		Title(p.inheritTitle(t("tui.auto_refresh_s"), formatInt(bind.refresh), "tui", "refresh")).
-		Description(t("tui.board_auto_reload_interval")).
 		Options(huh.NewOptions(refreshes...)...).
 		Value(&bind.refresh).
 		Inline(true))
-	bind.addRestore(p, formatInt(bind.refresh), "tui", "refresh")
 	bind.addSpacer()
 	bind.fieldIndex[interfaceFocusKey("single")] = bind.focusable
-	bind.addField(huh.NewConfirm().
+	bind.addField(inlineConfirm().
 		Title(p.inheritTitle(t("tui.show_only_the_current_column"), formatBool(bind.single), "tui", "single")).
-		Value(&bind.single).
-		Inline(true))
-	bind.addRestore(p, formatBool(bind.single), "tui", "single")
+		Value(&bind.single))
 	if !bind.single {
 		bind.addSpacer()
 		bind.fieldIndex[interfaceFocusKey("columns")] = bind.focusable
 		bind.addField(huh.NewSelect[int]().
 			Title(p.inheritTitle(t("tui.max_columns_on_screen"), formatInt(bind.columns), "tui", "columns")).
-			Description(t("tui.narrow_terminals_show_fewer")).
 			Options(huh.NewOptions(counts...)...).
 			Value(&bind.columns).
 			Inline(true))
-		bind.addRestore(p, formatInt(bind.columns), "tui", "columns")
 		bind.addSpacer()
 		bind.fieldIndex[interfaceFocusKey("min_column_width")] = bind.focusable
 		bind.addField(huh.NewSelect[int]().
@@ -476,13 +515,12 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 			Options(huh.NewOptions(widths...)...).
 			Value(&bind.minWidth).
 			Inline(true))
-		bind.addRestore(p, formatInt(bind.minWidth), "tui", "min_column_width")
 	}
 	bind.addSpacer()
-	bind.addField(huh.NewConfirm().
-		Title(t("tui.show_all_columns")).
-		Value(&bind.archived).
-		Inline(true))
+	bind.addField(inlineConfirm().
+		Title(optionTitle(t("tui.show_all_columns"))).
+		Value(&bind.archived))
+	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
 }
 
@@ -504,11 +542,12 @@ func minColumnWidthChoices(current int) []int {
 const modelIndent = "  "
 
 // Keys used to locate a selector after a section rebuild.
-func scaleFocusKey(scale string) string       { return "scale:" + scale }
-func roleFocusKey(role string) string         { return "role:" + role }
-func stageFocusKey(role, scale string) string { return "stage:" + role + ":" + scale }
-func interfaceFocusKey(name string) string    { return "ui:" + name }
-func launcherFocusKey() string                { return "launcher" }
+func scaleFocusKey(scale string) string                 { return "scale:" + scale }
+func roleFocusKey(role string) string                   { return "role:" + role }
+func reviewerFocusKey(role, scale string) string        { return "reviewer:" + role + ":" + scale }
+func stageFocusKey(role, scale string) string           { return "stage:" + role + ":" + scale }
+func interfaceFocusKey(name string) string              { return "ui:" + name }
+func launcherFocusKey() string                          { return "launcher" }
 func modelFocusKey(field menu.ModelField) string {
 	return "model:" + field.Key()
 }
@@ -526,26 +565,21 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 		"large": "tui.titles.large",
 		"small": "tui.titles.small",
 	}
-	notes := map[string]string{
-		"large": "tui.notes.large",
-		"small": "tui.notes.small",
-	}
 	values := map[string]*string{"large": &bind.large, "small": &bind.small}
 
 	for _, scale := range config.TaskScales {
 		if len(bind.formFields) > 0 {
 			bind.addSpacer()
 		}
-		title, note := titles[scale], notes[scale]
+		title := titles[scale]
 		bind.fieldIndex[scaleFocusKey(scale)] = bind.focusable
 		bind.addField(huh.NewSelect[string]().
 			Title(p.inheritTitle(t(title), *values[scale], "kanban_agents", scale)).
-			Description(t(note)).
 			Options(toOptions(session.ExecutionChoicesFor(*values[scale]))...).
 			Value(values[scale]).
 			Inline(true))
-		bind.addRestore(p, *values[scale], "kanban_agents", scale)
-		p.addModelInputs(bind, append(session.ExecutionModelFieldsFor(scale), session.AgentExecutableFields(scale)...))
+		p.addModelInputs(bind, session.ExecutionModelFieldsFor(scale))
+		// Agent restore is page-level; selecting an agent already materializes its settings.
 	}
 	// The launcher is independent of any particular agent, so it goes last, separated by a blank line.
 	bind.addSpacer()
@@ -556,7 +590,7 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 		Options(toOptions(session.LauncherChoices())...).
 		Value(&bind.launcher).
 		Inline(true))
-	bind.addRestore(p, bind.launcher, "launcher")
+	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
 }
 
@@ -568,30 +602,32 @@ func (p *optionsPanel) addModelInputs(bind *formBinding, fields []menu.ModelFiel
 			continue
 		}
 		bind.modelSeen[field.Key()] = struct{}{}
+		bind.modelFields = append(bind.modelFields, field)
+		value := field.Value()
 		placeholder := field.Placeholder
 		if placeholder == "" {
 			placeholder = t("tui.empty_means_cli_default")
 		}
-		bind.modelFields = append(bind.modelFields, field)
-		value := field.Value()
 		// Inline puts the title and the value on one line, compressing the block of one role/scale from 7 lines to 4.
 		path := modelOverlayPath(field)
-		title := modelIndent + field.Short + "  "
-		if len(path) > 0 {
-			title = p.inheritTitle(title, value, path...)
+		title := optionTitle(modelIndent + field.Short)
+		display := value
+		if len(path) > 0 && p.session != nil && p.session.EditingOverlay() && !p.session.FieldOverridden(path...) {
+			// Selects annotate inheritance on the label; Inputs keep a plain label and
+			// put "(inherited …)" inside the field so the control itself shows the source.
+			display = p.session.FormatInherited(value)
+			placeholder = ""
 		}
 		bind.fieldIndex[modelFocusKey(field)] = bind.focusable
 		input, ok := bind.reuseInputs[field.Key()]
-		if !ok || *input.value != value {
-			input = modelInput{input: huh.NewInput().Value(&value), value: &value}
+		if !ok || *input.value != display {
+			displayCopy := display
+			input = modelInput{input: huh.NewInput().Value(&displayCopy), value: &displayCopy}
 		}
 		bind.modelValues = append(bind.modelValues, input.value)
-		bind.modelApplied = append(bind.modelApplied, value)
+		bind.modelApplied = append(bind.modelApplied, display)
 		bind.modelInputs[field.Key()] = input
 		bind.addField(input.input.Title(title).Prompt("").Inline(true).Placeholder(placeholder))
-		if len(path) > 0 {
-			bind.addRestore(p, value, path...)
-		}
 	}
 }
 
@@ -599,13 +635,17 @@ func modelOverlayPath(field menu.ModelField) []string {
 	if field.Agent == "" || field.FieldName() == "" {
 		return nil
 	}
-	switch field.FieldName() {
-	case "path", "process_name":
-		return []string{"agents", field.Agent, field.FieldName()}
+	name := field.FieldName()
+	switch name {
 	case "model", "effort":
-		return []string{"models", "review_roles", field.Agent, field.FieldName()}
+		return []string{"models", "review_roles", field.Agent, name}
 	default:
-		return []string{"models", "kanban", field.Agent, field.FieldName()}
+		for _, role := range config.ReviewRoles {
+			if field.Agent == role {
+				return []string{"models", "review_roles", field.Agent, name}
+			}
+		}
+		return []string{"models", "kanban", field.Agent, name}
 	}
 }
 
@@ -613,43 +653,67 @@ func (p *optionsPanel) reviewGroup(bind *formBinding) *huh.Group {
 	session := p.session
 	cfg := session.Config
 	bind.reset()
-	for _, role := range config.ReviewRoles {
-		if len(bind.formFields) > 0 {
+	scaleTitles := map[string]string{
+		"large": "tui.review_group_large",
+		"small": "tui.review_group_small",
+	}
+	for i, scale := range config.TaskScales {
+		if i > 0 {
 			bind.addSpacer()
 		}
-		value := cfg.Reviewers[role]
-		bind.reviewers[role] = &value
-		bind.fieldIndex[roleFocusKey(role)] = bind.focusable
-		bind.addField(huh.NewSelect[string]().
-			Title(p.inheritTitle(role+" Reviewer", value, "reviewers", role)).
-			Description(t("tui.which_agent_reviews_this_role")).
-			Options(toOptions(session.ReviewerChoicesFor(value))...).
-			Value(bind.reviewers[role]).
-			Inline(true))
-		bind.addRestore(p, value, "reviewers", role)
-		// Each role keeps a large and a small stage selector, matching kanban_agents.
-		for _, scale := range config.TaskScales {
+		bind.formFields = append(bind.formFields, huh.NewNote().Title(t(scaleTitles[scale])))
+		for _, role := range config.ReviewRoles {
+			value := config.ReviewerFor(cfg, scale, role)
+			focus := reviewerFocusKey(role, scale)
+			bind.reviewers[focus] = &value
+			bind.fieldIndex[focus] = bind.focusable
+			bind.addField(huh.NewSelect[string]().
+				Title(p.inheritTitle(role, value, "reviewers", scale, role)).
+				Options(toOptions(session.ReviewerChoicesFor(value))...).
+				Value(bind.reviewers[focus]).
+				Inline(true))
+
+			p.addModelInputs(bind, session.ReviewModelFieldsFor(role, scale))
+		}
+	}
+	bind.addPageRestore(p)
+	return huh.NewGroup(bind.formFields...)
+}
+
+func (p *optionsPanel) reviewStagesGroup(bind *formBinding) *huh.Group {
+	session := p.session
+	cfg := session.Config
+	bind.reset()
+	scaleTitles := map[string]string{
+		"large": "tui.review_group_large",
+		"small": "tui.review_group_small",
+	}
+	for i, scale := range config.TaskScales {
+		if i > 0 {
+			bind.addSpacer()
+		}
+		bind.formFields = append(bind.formFields, huh.NewNote().Title(t(scaleTitles[scale])))
+		for _, role := range config.ReviewRoles {
 			stage, err := config.ReviewStageFor(cfg, scale, role)
 			if err != nil {
 				stage = "auto"
 			}
-			key := stageFocusKey(role, scale)
-			bind.stages[key] = &stage
-			bind.fieldIndex[key] = bind.focusable
+			stageKey := stageFocusKey(role, scale)
+			bind.stages[stageKey] = &stage
+			bind.fieldIndex[stageKey] = bind.focusable
 			bind.addField(huh.NewSelect[string]().
-				Title(p.inheritTitle(modelIndent+t("tui.review_stage", t("config."+scale)), stage, "review_stages", scale, role)).
-				// The value line is indented along with the title: a Select puts its value on its own line, so indenting the title alone would look ragged.
+				Title(p.inheritTitle(role, stage, "review_stages", scale, role)).
 				Options(reviewStageOptions()...).
-				Value(bind.stages[key]).
+				Value(bind.stages[stageKey]).
 				Inline(true))
-			bind.addRestore(p, stage, "review_stages", scale, role)
 		}
-		p.addModelInputs(bind, session.ReviewModelFieldsFor(role))
 	}
+	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
 }
 
 // reviewStageOptions is the UI wording of the three review stage policies; the config values remain auto/skip/required.
+// Labels stay indented via the field title; option text is flush so ←→ values are not double-indented.
 func reviewStageOptions() []huh.Option[string] {
 	labels := map[string]string{
 		"auto":     "tui.labels.auto",
@@ -659,7 +723,7 @@ func reviewStageOptions() []huh.Option[string] {
 	out := make([]huh.Option[string], 0, len(config.ReviewStageModes))
 	for _, mode := range config.ReviewStageModes {
 		pair := labels[mode]
-		out = append(out, huh.NewOption(modelIndent+t(pair), mode))
+		out = append(out, huh.NewOption(t(pair), mode))
 	}
 	return out
 }
@@ -721,15 +785,23 @@ func (b *formBinding) apply(p *optionsPanel) {
 	case sectionReview:
 		session := p.session
 		for _, role := range config.ReviewRoles {
-			value := b.reviewers[role]
-			if value != nil && session.Config.Reviewers[role] != *value {
-				session.SetReviewer(role, *value)
-				// The old values were configured for the old reviewer, so after the switch they are reset to the new reviewer's defaults.
-				session.ResetReviewRoleModel(role)
-				p.markDirty()
-				p.rebuildAt(roleFocusKey(role))
+			for _, scale := range config.TaskScales {
+				focus := reviewerFocusKey(role, scale)
+				value := b.reviewers[focus]
+				if value == nil {
+					continue
+				}
+				if config.ReviewerFor(session.Config, scale, role) != *value {
+					session.SetReviewer(scale, role, *value)
+					session.ResetReviewRoleModel(role, scale)
+					p.markDirty()
+					p.rebuildAt(focus)
+				}
 			}
 		}
+		b.applyModels(p)
+	case sectionReviewStages:
+		session := p.session
 		for _, role := range config.ReviewRoles {
 			for _, scale := range config.TaskScales {
 				value := b.stages[stageFocusKey(role, scale)]
@@ -749,7 +821,6 @@ func (b *formBinding) apply(p *optionsPanel) {
 				}
 			}
 		}
-		b.applyModels(p)
 	}
 }
 
@@ -759,16 +830,44 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 		if i >= len(b.modelValues) || b.modelValues[i] == nil {
 			continue
 		}
-		if b.modelApplied[i] != *b.modelValues[i] {
-			path := modelOverlayPath(field)
-			before := p.overridePresence(path...)
-			field.Set(*b.modelValues[i])
-			if p.session != nil {
-				p.session.NoteModelOverride(field, *b.modelValues[i])
+		next := *b.modelValues[i]
+		if b.modelApplied[i] == next {
+			continue
+		}
+		path := modelOverlayPath(field)
+		// Inherited Project-tab inputs show "(inherited …)"; an untouched marker or empty is not an edit.
+		if len(path) > 0 && p.session != nil && p.session.EditingOverlay() &&
+			!p.session.FieldOverridden(path...) {
+			if next == "" || next == p.session.FormatInherited(field.Value()) {
+				continue
 			}
-			b.modelApplied[i] = *b.modelValues[i]
-			p.markDirty()
-			p.rebuildIfOverrideChanged(before, modelFocusKey(field), path...)
+		}
+		before := p.overridePresence(path...)
+		agentScale := ""
+		agentBefore := false
+		if len(path) >= 4 && path[0] == "models" && path[1] == "kanban" {
+			for _, scale := range config.TaskScales {
+				if field.FieldName() == scale+"_model" || field.FieldName() == scale+"_effort" {
+					agentScale = scale
+					agentBefore = p.overridePresence("kanban_agents", scale)
+					break
+				}
+			}
+		}
+		field.Set(next)
+		if p.session != nil {
+			p.session.NoteModelOverride(field, next)
+		}
+		b.modelApplied[i] = next
+		p.markDirty()
+		// Keep focus on the model being typed. Pinning the Agent must not move
+		// rebuild focus onto the Agent selector mid-keystroke.
+		needRebuild := before != p.overridePresence(path...)
+		if agentScale != "" && agentBefore != p.overridePresence("kanban_agents", agentScale) {
+			needRebuild = true
+		}
+		if needRebuild {
+			p.rebuildAt(modelFocusKey(field))
 		}
 	}
 }

@@ -66,14 +66,25 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		}
 	}
 	reviewer := choose(config.ReviewAgentNames(cfg), true)
-	for _, role := range config.ReviewRoles {
-		selected := cfg.Reviewers[role]
-		if !reviewerUsable(agents[selected]) && reviewer != "" {
-			set("reviewers."+role, &selected, reviewer)
-			cfg.Reviewers[role] = selected
-			// Models are bound to the reviewer; picking a new one adopts that reviewer's model settings.
-			entry := cfg.Models.Review[selected]
-			cfg.Models.ReviewRoles[role] = map[string]string{"model": entry["model"], "effort": entry["effort"]}
+	for _, scale := range config.TaskScales {
+		if cfg.Reviewers[scale] == nil {
+			cfg.Reviewers[scale] = map[string]string{}
+		}
+		for _, role := range config.ReviewRoles {
+			selected := cfg.Reviewers[scale][role]
+			if !reviewerUsable(agents[selected]) && reviewer != "" {
+				set("reviewers."+scale+"."+role, &selected, reviewer)
+				cfg.Reviewers[scale][role] = selected
+				// Models are bound to the reviewer; picking a new one adopts that reviewer's model settings.
+				entry := cfg.Models.Review[selected]
+				roleEntry := cfg.Models.ReviewRoles[role]
+				if roleEntry == nil {
+					roleEntry = map[string]string{}
+					cfg.Models.ReviewRoles[role] = roleEntry
+				}
+				roleEntry[scale+"_model"] = entry["model"]
+				roleEntry[scale+"_effort"] = entry["effort"]
+			}
 		}
 	}
 	if !doctorLauncherAvailable(cfg.Launcher, tools) {

@@ -17,14 +17,16 @@ func TestDoctorSyncPreservesPendingSettings(t *testing.T) {
 	before := config.DefaultConfig()
 	after := config.DefaultConfig()
 	after.WelcomeComplete = true
-	after.Reviewers["QA"] = "claude"
+	for _, scale := range config.TaskScales {
+		after.Reviewers[scale]["QA"] = "claude"
+	}
 	after.Models.ReviewRoles["QA"]["model"] = "opus"
 	app.applyWork(doctorResult{before: before, after: after})
 	got := panel.session.Config
 	if got.Language != "en" || got.Models.ReviewRoles["PM"]["model"] != "pending-model" {
 		t.Fatal("doctor discarded pending edits")
 	}
-	if got.Reviewers["QA"] != "claude" || got.Models.ReviewRoles["QA"]["model"] != "opus" || !got.WelcomeComplete {
+	if got.Reviewers["large"]["QA"] != "claude" || got.Models.ReviewRoles["QA"]["model"] != "opus" || !got.WelcomeComplete {
 		t.Fatal("settings still contain stale values after repair")
 	}
 }

@@ -50,7 +50,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 	}
 	for agent, want := range cases {
 		t.Run(agent, func(t *testing.T) {
-			settings, err := agentSettingsFor(agent, "PM")
+			settings, err := agentSettingsFor(agent, "PM", "large")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +186,7 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
-			settings, err := agentSettingsFor(item.agent, "QA")
+			settings, err := agentSettingsFor(item.agent, "QA", "large")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -217,7 +217,7 @@ func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 		t.Fatalf("instruction %q", want)
 	}
 	for _, agent := range []string{"codex", "claude", "cursor", "grok"} {
-		settings, err := agentSettingsFor(agent, "QA")
+		settings, err := agentSettingsFor(agent, "QA", "large")
 		if err != nil {
 			t.Fatal(err)
 		}

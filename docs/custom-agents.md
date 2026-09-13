@@ -77,7 +77,7 @@ A brand-new templated agent is recommended to launch via tmux / tmux-session, pr
 
 ## Panel and Review Boundaries
 
-"Task Execution and Models" can select a custom agent. Built-in agents that have not yet been probed successfully can also be selected in order to fill in the path of a renamed program; explicit paths are still validated on save. After each selected agent's model fields there are "Executable name" and "pane process name" inputs; when large and small tasks share the same agent, they are shown only once. Leaving them empty deletes the override; they are saved to `agents`. Dialects, templates, session policies, and review templates are edited only in JSON.
+"Task Execution and Models" can select a custom agent and edit its model fields. Built-in agents that have not yet been probed successfully remain selectable so they can still be chosen for work. Executable `path`, `process_name`, dialects, argv templates, session policies, and review templates are edited only in JSON (`config.json` or the project overlay). Options saves never rewrite the `agents` section, so a TUI save cannot clobber hand-edited agent definitions.
 
 A reviewer is any configured agent that declares `args.review` together with `review.*`. The four built-in names keep that pair in their embedded definitions. A custom name becomes a reviewer only by declaring that pair; inheriting `args.review` / `review.*` from a dialect does not make a path+dialect execution wrapper a reviewer. `args.review` and `review` must be declared together. Dialect defaults supply the built-in pair only when neither is declared; after the pair is declared, omitted review fields are not filled from the dialect. An agent that only has start/resume templates, or only `path` plus `dialect`, cannot be stored in `reviewers.<role>`; `kander config --json` reports the missing review template and `kander doctor` leaves that value unchanged.
 
@@ -102,7 +102,7 @@ Read-only isolation for a custom reviewer is the definition author's responsibil
 }
 ```
 
-A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing scales or roles default to `auto`. The options panel's "Review and models" section edits large and small independently under each role. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
+A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing scales or roles default to `auto`. The options panel's "Review stages" section edits large and small independently under each role; "Review and models" edits the reviewer agent and model/effort only. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
 
 `exit_command` is a single-line string without control characters and may be empty. Built-in Codex/Claude use `/exit`; Grok/Cursor use `/quit`. A custom name with a dialect inherits that field. A purely templated program that declares `exit_command` can be dismissed and cleaned up the same way, still requiring the identity and single-pane container checks to pass. Without `exit_command`, `dismiss` refuses explicitly, names the missing field, and keeps the container.
 

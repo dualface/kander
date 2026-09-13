@@ -68,8 +68,15 @@ func TestDoctorCreatesAndRepairsConfig(t *testing.T) {
 				t.Fatalf("unusable result: %+v", cfg)
 			}
 			for _, role := range config.ReviewRoles {
-				if cfg.Reviewers[role] != "claude" || cfg.Models.ReviewRoles[role]["model"] != cfg.Models.Review["claude"]["model"] {
-					t.Fatalf("role %s not repaired: %+v", role, cfg)
+				for _, scale := range config.TaskScales {
+					if cfg.Reviewers[scale][role] != "claude" {
+						t.Fatalf("role %s scale %s not repaired: %+v", role, scale, cfg)
+					}
+				}
+				roleEntry := cfg.Models.ReviewRoles[role]
+				wantModel := cfg.Models.Review["claude"]["model"]
+				if roleEntry["large_model"] != wantModel && roleEntry["model"] != wantModel {
+					t.Fatalf("role %s model not repaired: %+v", role, roleEntry)
 				}
 			}
 			backups, err := filepath.Glob(h.configPath + ".bak.*")
