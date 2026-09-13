@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -232,4 +233,58 @@ func TestCloseDiscardRestoresLanguage(t *testing.T) {
 		t.Fatalf("session language=%s want en", panel.session.Config.Language)
 	}
 	assertLanguageCopy(t, app, "en")
+}
+
+func TestLanguageCancelIgnoresBindingFromPartialSave(t *testing.T) {
+	t.Run("project submit leaves the unsaved global language cancellable", func(t *testing.T) {
+		useInterfaceLanguage(t, "en")
+		app, panel := openPanel(t, englishConfig())
+		attachTempOverlay(t, panel.session, config.ModeGlobal)
+		openLanguageField(t, panel)
+		pumpPanel(panel, panel.switchTab(config.TargetOverlay))
+		drivePanel(panel, keyMsg("enter"))
+		if !panel.session.ScopeDirty || panel.session.OverlayDirty {
+			t.Fatalf("setup: scope dirty=%v overlay dirty=%v", panel.session.ScopeDirty, panel.session.OverlayDirty)
+		}
+		pumpPanel(panel, panel.requestClose())
+		panel.closeChoice = closeDiscard
+		pumpPanel(panel, panel.finishCloseConfirm())
+		if app.Options != nil {
+			t.Fatal("discard should close the panel")
+		}
+		assertLanguageCopy(t, app, "en")
+		scope, err := config.LoadScope(true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if scope.Language != "en" {
+			t.Fatalf("disk language=%s want en", scope.Language)
+		}
+	})
+
+	t.Run("failed submit keeps the load baseline", func(t *testing.T) {
+		useInterfaceLanguage(t, "en")
+		app, panel := openPanel(t, englishConfig())
+		openLanguageField(t, panel)
+		path, err := config.ConfigPath()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		drivePanel(panel, keyMsg("enter"))
+		if panel.report == nil || panel.current != sectionInterface {
+			t.Fatal("setup: submit did not fail on the interface page")
+		}
+		drivePanel(panel, keyMsg("esc"))
+		drivePanel(panel, keyMsg("esc"))
+		if panel.current != "" {
+			t.Fatalf("esc should return to the root menu, got %q", panel.current)
+		}
+		if panel.session.Config.Language != "en" {
+			t.Fatalf("session language=%s want en", panel.session.Config.Language)
+		}
+		assertLanguageCopy(t, app, "en")
+	})
 }

@@ -8,16 +8,17 @@ import (
 // languageBaseline is the interface language as of the last load or save,
 // restored when the edit is cancelled. It is captured lazily before the first
 // unsaved language edit, so a nil baseline means there is nothing to restore.
+// The bound language is not stored: an unsaved edit on another tab may have set it,
+// so restore derives it from the restored buffers instead.
 type languageBaseline struct {
 	session menu.LanguageState
-	bound   string
 }
 
 // applyLanguage switches the interface language and redraws every surface that
 // caches translated text: the page context, agent labels and the current form.
 func (p *optionsPanel) applyLanguage(language string) {
 	if p.languageBase == nil {
-		p.languageBase = &languageBaseline{session: p.session.CaptureLanguage(), bound: config.BoundConfigLanguage()}
+		p.languageBase = &languageBaseline{session: p.session.CaptureLanguage()}
 	}
 	p.session.SetLanguage(language)
 	p.refreshLanguageCopy()
@@ -37,10 +38,7 @@ func (p *optionsPanel) advanceLanguageBaseline() {
 		return
 	}
 	p.languageBase.session = p.session.AdvanceLanguage(p.languageBase.session)
-	if !p.session.ScopeDirty || !p.session.OverlayDirty {
-		p.languageBase.bound = config.BoundConfigLanguage()
-	}
-	if p.languageBase.session.Equal(p.session.CaptureLanguage()) && p.languageBase.bound == config.BoundConfigLanguage() {
+	if p.languageBase.session.Equal(p.session.CaptureLanguage()) {
 		p.languageBase = nil
 	}
 }
@@ -48,6 +46,7 @@ func (p *optionsPanel) advanceLanguageBaseline() {
 // restoreLanguage cancels unsaved interface language edits: the session values,
 // the overlay key presence and the bound language return to the baseline, and
 // the translated copy is rebuilt. Other unsaved fields are left as they are.
+// Restoring an unchanged session still rebinds, which drops a binding left by an edit that was changed back.
 func (p *optionsPanel) restoreLanguage() error {
 	base := p.languageBase
 	if base == nil || p.session == nil {
@@ -57,7 +56,7 @@ func (p *optionsPanel) restoreLanguage() error {
 		return err
 	}
 	p.languageBase = nil
-	config.BindConfigLanguage(&config.Config{Language: base.bound})
+	config.BindConfigLanguage(&config.Config{Language: p.session.EffectiveLanguage()})
 	p.refreshLanguageCopy()
 	return nil
 }
