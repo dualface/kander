@@ -188,6 +188,9 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, skip
 	}
 	body := make([]string, 0, bodyHeight)
 	if len(tasks) == 0 {
+		if bodyHeight > 1 {
+			body = append(body, "")
+		}
 		body = append(body, styleFor("dim", p).Render(centerText(a.Context.Empty, width-2)))
 	} else {
 		end := scroll + capacity

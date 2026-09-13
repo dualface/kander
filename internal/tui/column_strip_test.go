@@ -36,6 +36,29 @@ func stripBoardApp(t *testing.T, width, height int) *App {
 	return app
 }
 
+func TestEmptyColumnHintHasBlankLineAbove(t *testing.T) {
+	for _, width := range []int{64, 80} {
+		app := stripBoardApp(t, width, 20)
+		app.Model.FocusState("review")
+		blank := viewLine(app, bodyTop)
+		hint := viewLine(app, bodyTop+1)
+		if strings.Contains(blank, "empty") {
+			t.Fatalf("width %d first body has hint: %q", width, blank)
+		}
+		if !strings.Contains(hint, "empty") {
+			t.Fatalf("width %d second body missing hint: %q", width, hint)
+		}
+		app.Model.FocusState("backlog")
+		card := viewLine(app, bodyTop)
+		if !strings.Contains(card, "one") {
+			t.Fatalf("width %d occupied first body %q", width, card)
+		}
+		if strings.Contains(card, "empty") {
+			t.Fatalf("width %d occupied showed empty hint: %q", width, card)
+		}
+	}
+}
+
 func TestColumnStripShowsOnNarrowBoard(t *testing.T) {
 	app := stripBoardApp(t, 64, 20)
 	if !app.columnStripVisible() {
