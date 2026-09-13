@@ -206,7 +206,7 @@ These stay in Go and are the same for every definition: `pane_facts`, `topology`
 | `report_session` | reported            | `ErrNoReportChannel` with the note (launch warns) | the hook error |
 | `focus_pane` (after the `focus` steps) | switched | switched with the `focus.tab_only` notice | `focus.switch_failed` |
 
-The `report_session` hook owns the session socket handshake, then reads the identity back through the selected backend's `pane_facts` operation. Missing socket access is degraded (launch warns); a handshake or read-back failure is failed. Launch's existing retry and best-effort policy remain unchanged.
+The `report_session` hook owns the session socket handshake, then reads the identity back through the selected backend's `pane_facts` operation. An unset `HERDR_SOCKET_PATH` is degraded (launch warns); a socket dial, handshake or read-back failure is failed. Launch's existing retry and best-effort policy remain unchanged.
 
 The `focus_pane` hook runs only after the `focus` argv steps have switched the container. `ok` completes focus, `degraded` preserves successful container focus with a warning, and `failed` reports an error. The herdr implementation degrades on a socket failure, preserving the existing tab-only result.
 

@@ -6,7 +6,7 @@ The forward query, session reverse lookup, post-reverse-lookup re-check, and pro
 
 `probe.CaptureContext`, the context-taking `terminal.Backend` operations (`PaneFacts`, `Topology`, `ReverseLookup`), and `liveness.ReverseLookup`, let composed calls reuse the same deadline. `probe.WithDefaultTimeout` only supplies the default value when a deadline is missing; the caller is responsible for executing the returned cancel. Underlying errors still support `errors.Is(err, context.Canceled)` and `errors.Is(err, context.DeadlineExceeded)`; the Chinese, English, and Japanese displays preserve the original reason.
 
-The existing context-less APIs and the `Within`/duration APIs are retained; a non-positive duration uses the 10-second default. A single tmux pane query includes reading the facts and two compatible session markers, and these steps also share the remaining budget.
+The context-less and `Within`/duration probe APIs were removed with the move to `terminal.Backend`; a caller with only a duration builds its context with `probe.TimeoutContext`, where a non-positive duration uses the 10-second default. A single tmux pane query includes reading the facts and two compatible session markers, and these steps also share the remaining budget.
 
 ## Batch Collection and Observation Identity
 
