@@ -3,7 +3,6 @@ package menu
 import (
 	"maps"
 	"reflect"
-	"slices"
 
 	"github.com/dualface/kander/internal/config"
 )
@@ -45,21 +44,6 @@ func (s *Session) CaptureLanguage() LanguageState {
 	state.scopeRaw, state.scopeRawPresent = s.scopeRaw["language"]
 	state.overlayRaw, state.overlayPresent = s.overlayRaw["language"]
 	return state
-}
-
-// EffectiveLanguage is the interface language the edit buffers bind at load time:
-// a valid overlay language wins over the scope language, and nothing is bound before welcome completes.
-func (s *Session) EffectiveLanguage() string {
-	if s == nil || s.existing == nil || !s.existing.WelcomeComplete {
-		return ""
-	}
-	if language, ok := s.overlayRaw["language"].(string); ok && slices.Contains(config.Languages, language) {
-		return language
-	}
-	if scope := s.scopeLanguageBuffer(); scope != nil {
-		return scope.Language
-	}
-	return ""
 }
 
 // RestoreLanguage puts both tabs' interface language back to a snapshot and

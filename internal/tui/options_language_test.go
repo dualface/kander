@@ -288,3 +288,27 @@ func TestLanguageCancelIgnoresBindingFromPartialSave(t *testing.T) {
 		assertLanguageCopy(t, app, "en")
 	})
 }
+
+func TestLanguageCancelAfterSubmitRestoresSubmittedBinding(t *testing.T) {
+	useInterfaceLanguage(t, "cn")
+	app, panel := openPanel(t, englishConfig())
+	dir := t.TempDir()
+	loc := config.OverlayLocation{ProjectRoot: dir, Path: filepath.Join(dir, config.OverlayFilename)}
+	if err := panel.session.AttachOverlay(config.ModeGlobal, loc, map[string]any{"language": "cn"}); err != nil {
+		t.Fatal(err)
+	}
+	openLanguageField(t, panel)
+	drivePanel(panel, keyMsg("enter"))
+	assertLanguageCopy(t, app, "ja")
+
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	drivePanel(panel, keyMsg("left"))
+	if panel.session.Config.Language == "ja" {
+		t.Fatal("setup: second edit did not change the language")
+	}
+	drivePanel(panel, keyMsg("esc"))
+	if panel.session.Config.Language != "ja" {
+		t.Fatalf("session language=%s want submitted ja", panel.session.Config.Language)
+	}
+	assertLanguageCopy(t, app, "ja")
+}
