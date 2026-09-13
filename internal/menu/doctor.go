@@ -7,9 +7,9 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
 	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func printDoctor() bool {
@@ -93,9 +93,9 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if isWindowsOS() {
 		success(config.Text("menu.windows_console_launcher_available"))
 	} else if tools.Tmux.Available() {
-		if os.Getenv("TMUX") == "" && configuredLauncher != tmux.SessionName && configuredLauncher != "auto" && configuredLauncher != herdr.Name {
+		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != herdr.Name {
 			hint(config.Text(
-				"menu.tmux_installed_but_not_in_a_session_start_one", tmux.SessionHint,
+				"menu.tmux_installed_but_not_in_a_session_start_one", builtin.TmuxSessionHint,
 			))
 		}
 	} else {
@@ -278,7 +278,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 	}
 	launcher := effective.Launcher
 	switch launcher {
-	case tmux.Name, tmux.SessionName:
+	case builtin.Tmux, builtin.TmuxSession:
 		if isWindowsOS() {
 			healthy = false
 			warning(config.Text(
@@ -291,7 +291,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			))
 		} else if !cfg.WelcomeComplete {
 			break
-		} else if launcher == tmux.SessionName {
+		} else if launcher == builtin.TmuxSession {
 			hint(config.Text(
 				"menu.launcher_tmux_session_creates_or_reuses_a_per_project",
 			))
@@ -349,7 +349,7 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 		}
 	case direct.Foreground:
 		if cfg.WelcomeComplete {
-			launcherHint := tmux.Name
+			launcherHint := builtin.Tmux
 			if isWindowsOS() {
 				launcherHint = config.Text("menu.console")
 			}

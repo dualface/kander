@@ -3,9 +3,9 @@ package menu
 import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
 	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*config.Config, bool) {
@@ -98,7 +98,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		case tools.Herdr.Available():
 			replacement = herdr.Name
 		case tools.Tmux.Available():
-			replacement = tmux.SessionName
+			replacement = builtin.TmuxSession
 		}
 		set("launcher", &cfg.Launcher, replacement)
 	}
@@ -119,7 +119,7 @@ func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 	if launcher == direct.Foreground {
 		return true
 	}
-	if isWindowsOS() && (launcher == tmux.Name || launcher == tmux.SessionName) {
+	if isWindowsOS() && (launcher == builtin.Tmux || launcher == builtin.TmuxSession) {
 		return false
 	}
 	if launcher == direct.Console {
@@ -130,7 +130,7 @@ func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 		return tools.Herdr.Installed() || tools.Tmux.Available()
 	case herdr.Name:
 		return tools.Herdr.Installed()
-	case tmux.Name, tmux.SessionName:
+	case builtin.Tmux, builtin.TmuxSession:
 		return tools.Tmux.Available()
 	}
 	return false

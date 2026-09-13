@@ -10,9 +10,9 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
 	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func TestWindowFocus(t *testing.T) {
@@ -103,8 +103,8 @@ func TestWindowFocus(t *testing.T) {
 			}
 			backends := map[string]terminal.Backend{
 				"herdr":        herdr.New(getenv, paneFocus),
-				"tmux":         tmux.New(tmux.Name, getenv),
-				"tmux-session": tmux.New(tmux.SessionName, getenv),
+				"tmux":         tmuxBackend(t, builtin.Tmux, getenv),
+				"tmux-session": tmuxBackend(t, builtin.TmuxSession, getenv),
 				"foreground":   direct.New(direct.Foreground),
 				"console":      direct.New(direct.Console),
 			}
@@ -132,4 +132,13 @@ func TestWindowFocus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func tmuxBackend(t *testing.T, launcher string, getenv func(string) string) terminal.Backend {
+	t.Helper()
+	backend, err := builtin.DefinitionBackend("tmux", launcher, getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return backend
 }

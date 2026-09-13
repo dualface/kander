@@ -11,7 +11,6 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func freezeClock(t *testing.T) {
@@ -154,7 +153,7 @@ func TestTmuxSessionLauncherCreateReuseForeignAndRollback(t *testing.T) {
 	t.Setenv("TMUX", "")
 	t.Setenv("TMUX_PANE", "")
 	project := filepath.Dir(root)
-	session := tmux.ProjectSessionName(project)
+	session := "kb-" + terminal.ProjectKey(project)
 
 	taskID, _ := makeTodo(t, root, "session-create")
 	out, _, err := capture(t, func() error { return commandStart(root, "", "tmux-session", taskID) })
@@ -200,7 +199,7 @@ func TestTmuxSessionLauncherCreateReuseForeignAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	alt := tmux.ProjectSessionName(project) + "-2"
+	alt := "kb-" + terminal.ProjectKey(project) + "-2"
 	args = mustRead(t, filepath.Join(root, "tmux.log"))
 	if !strings.HasPrefix(args, "new-session\n") || !strings.Contains(args, alt) {
 		t.Fatalf("conflict tmux=%s", args)

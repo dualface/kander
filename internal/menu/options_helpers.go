@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
 	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 func choicesWithCurrent(choices []Choice, current string) []Choice {
@@ -78,11 +78,11 @@ func installTmux() bool {
 		name string
 		argv []string
 	}{
-		{"brew", []string{"brew", "install", tmux.Executable}},
-		{"apt-get", []string{"apt-get", "install", "-y", tmux.Executable}},
-		{"dnf", []string{"dnf", "install", "-y", tmux.Executable}},
-		{"pacman", []string{"pacman", "-S", "--needed", "--noconfirm", tmux.Executable}},
-		{"apk", []string{"apk", "add", tmux.Executable}},
+		{"brew", []string{"brew", "install", builtin.TmuxExecutable}},
+		{"apt-get", []string{"apt-get", "install", "-y", builtin.TmuxExecutable}},
+		{"dnf", []string{"dnf", "install", "-y", builtin.TmuxExecutable}},
+		{"pacman", []string{"pacman", "-S", "--needed", "--noconfirm", builtin.TmuxExecutable}},
+		{"apk", []string{"apk", "add", builtin.TmuxExecutable}},
 	}
 	var selected []string
 	for _, manager := range managers {
@@ -108,7 +108,7 @@ func installTmux() bool {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil || lookPath(tmux.Executable) == "" {
+	if err := cmd.Run(); err != nil || lookPath(builtin.TmuxExecutable) == "" {
 		warning(config.Text("menu.tmux_installation_failed_or_tmux_is_still_not_in"))
 		return false
 	}
@@ -125,8 +125,8 @@ func autoLauncherChoice() Choice {
 
 func tmuxLauncherChoices() []Choice {
 	return []Choice{
-		{Value: tmux.Name, Label: config.Text("menu.new_window_in_the_current_tmux_session")},
-		{Value: tmux.SessionName, Label: config.Text("menu.new_window_in_a_per_project_tmux_session")},
+		{Value: builtin.Tmux, Label: config.Text("menu.new_window_in_the_current_tmux_session")},
+		{Value: builtin.TmuxSession, Label: config.Text("menu.new_window_in_a_per_project_tmux_session")},
 	}
 }
 

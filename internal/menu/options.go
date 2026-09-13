@@ -6,9 +6,9 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
+	"github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
 	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/tmux"
 	"strings"
 )
 
@@ -230,12 +230,12 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 		return
 	}
 	switch {
-	case isWindowsOS() && (cfg.Launcher == tmux.Name || cfg.Launcher == tmux.SessionName):
+	case isWindowsOS() && (cfg.Launcher == builtin.Tmux || cfg.Launcher == builtin.TmuxSession):
 		cfg.Launcher = direct.Console
 		warning(config.Text(
 			"menu.windows_does_not_support_tmux_using_console",
 		))
-	case (cfg.Launcher == tmux.Name || cfg.Launcher == tmux.SessionName) && lookPath(tmux.Executable) == "":
+	case (cfg.Launcher == builtin.Tmux || cfg.Launcher == builtin.TmuxSession) && lookPath(builtin.TmuxExecutable) == "":
 		cfg.Launcher = direct.Foreground
 		warning(config.Text(
 			"menu.tmux_is_not_installed_using_foreground_the_launcher_menu",
@@ -246,8 +246,8 @@ func (s *Session) normalizeLauncher(cfg *config.Config) {
 		switch {
 		case isWindowsOS():
 			cfg.Launcher = direct.Console
-		case lookPath(tmux.Executable) != "":
-			cfg.Launcher = tmux.Name
+		case lookPath(builtin.TmuxExecutable) != "":
+			cfg.Launcher = builtin.Tmux
 		default:
 			cfg.Launcher = direct.Foreground
 		}
@@ -356,7 +356,7 @@ func (s *Session) LauncherChoices() []Choice {
 	}
 	foreground := Choice{Value: direct.Foreground, Label: config.Text("menu.foreground_in_this_terminal")}
 	choices := []Choice{autoLauncherChoice()}
-	if lookPath(tmux.Executable) != "" {
+	if lookPath(builtin.TmuxExecutable) != "" {
 		choices = append(choices, tmuxLauncherChoices()...)
 		choices = append(choices, herdrLauncherChoices(s.Config)...)
 		return append(choices, foreground)

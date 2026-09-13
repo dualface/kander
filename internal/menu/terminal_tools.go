@@ -8,9 +8,9 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/builtin"
 	_ "github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/herdr"
-	"github.com/dualface/kander/internal/terminal/tmux"
 )
 
 // TerminalTool is the result of one command availability probe with a timeout.
@@ -88,7 +88,7 @@ func herdrBackend() terminal.Backend {
 }
 
 func tmuxBackend() terminal.Backend {
-	backend, _ := terminal.Lookup(tmux.Name)
+	backend, _ := terminal.Lookup(builtin.Tmux)
 	return backend
 }
 
@@ -195,7 +195,7 @@ func reportTerminalTools(tools TerminalTools) {
 	}
 	report(herdr.Executable, tools.Herdr)
 	if !isWindowsOS() {
-		report(tmux.Executable, tools.Tmux)
+		report(builtin.TmuxExecutable, tools.Tmux)
 	}
 	if tools.NeedsHerdrInstall() {
 		if isWindowsOS() {

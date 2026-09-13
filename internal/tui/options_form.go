@@ -11,7 +11,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
-	"github.com/dualface/kander/internal/terminal/tmux"
+	"github.com/dualface/kander/internal/terminal/builtin"
 )
 
 // formBinding holds the mutable values bound to a Huh form. Huh needs stable pointers,
@@ -543,12 +543,12 @@ func minColumnWidthChoices(current int) []int {
 const modelIndent = "  "
 
 // Keys used to locate a selector after a section rebuild.
-func scaleFocusKey(scale string) string                 { return "scale:" + scale }
-func roleFocusKey(role string) string                   { return "role:" + role }
-func reviewerFocusKey(role, scale string) string        { return "reviewer:" + role + ":" + scale }
-func stageFocusKey(role, scale string) string           { return "stage:" + role + ":" + scale }
-func interfaceFocusKey(name string) string              { return "ui:" + name }
-func launcherFocusKey() string                          { return "launcher" }
+func scaleFocusKey(scale string) string          { return "scale:" + scale }
+func roleFocusKey(role string) string            { return "role:" + role }
+func reviewerFocusKey(role, scale string) string { return "reviewer:" + role + ":" + scale }
+func stageFocusKey(role, scale string) string    { return "stage:" + role + ":" + scale }
+func interfaceFocusKey(name string) string       { return "ui:" + name }
+func launcherFocusKey() string                   { return "launcher" }
 func modelFocusKey(field menu.ModelField) string {
 	return "model:" + field.Key()
 }
@@ -977,7 +977,7 @@ func (b *formBinding) commitLauncher(p *optionsPanel) {
 		lines, installed := session.InstallTmux()
 		menu.FlushReport(lines)
 		if installed {
-			session.SetLauncher(tmux.Name)
+			session.SetLauncher(builtin.Tmux)
 			p.markDirty()
 		}
 	}

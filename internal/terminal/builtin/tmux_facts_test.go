@@ -1,4 +1,4 @@
-package tmux
+package builtin
 
 import (
 	"context"
@@ -24,10 +24,19 @@ func fakeConn(run terminal.Runner) terminal.Conn {
 	return terminal.Conn{Program: "tmux", Run: run}
 }
 
-func paneFactsWithin(conn terminal.Conn, pane string, timeout time.Duration) (terminal.PaneFacts, error) {
+func tmuxBackend(t *testing.T, launcher string, getenv func(string) string) terminal.Backend {
+	t.Helper()
+	backend, err := DefinitionBackend("tmux", launcher, getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return backend
+}
+
+func paneFactsWithin(t *testing.T, conn terminal.Conn, pane string, timeout time.Duration) (terminal.PaneFacts, error) {
 	ctx, cancel := probe.TimeoutContext(timeout)
 	defer cancel()
-	return New(Name, os.Getenv).PaneFacts(ctx, conn, pane)
+	return tmuxBackend(t, Tmux, os.Getenv).PaneFacts(ctx, conn, pane)
 }
 
 func TestTmuxDisplayGonePreservesDetail(t *testing.T) {
@@ -35,7 +44,7 @@ func TestTmuxDisplayGonePreservesDetail(t *testing.T) {
 	conn := fakeConn(func(ctx context.Context, program string, args []string) (probe.Result, error) {
 		return probe.Result{Code: 1, Stderr: "can't find pane: %9"}, nil
 	})
-	facts, err := paneFactsWithin(conn, "%9", 0)
+	facts, err := paneFactsWithin(t, conn, "%9", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +66,7 @@ func TestTmuxIdentityGonePreservesDetail(t *testing.T) {
 		}
 		return probe.Result{Code: 1, Stderr: "no server running"}, nil
 	})
-	facts, err := paneFactsWithin(conn, "%9", 0)
+	facts, err := paneFactsWithin(t, conn, "%9", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +84,7 @@ func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 		option := args[len(args)-1]
 		return probe.Result{Code: 1, Stderr: "invalid option: " + option}, nil
 	})
-	facts, err := paneFactsWithin(conn, "%9", 0)
+	facts, err := paneFactsWithin(t, conn, "%9", 0)
 	if err != nil || facts.Gone || facts.SessionMarker != "" {
 		t.Fatalf("facts=%+v err=%v", facts, err)
 	}
@@ -86,7 +95,7 @@ func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 		}
 		return probe.Result{Code: 1, Stderr: "transport failed"}, nil
 	})
-	_, err = paneFactsWithin(conn, "%9", 0)
+	_, err = paneFactsWithin(t, conn, "%9", 0)
 	if err == nil || !strings.Contains(err.Error(), "transport failed") {
 		t.Fatalf("err=%v", err)
 	}
@@ -98,7 +107,7 @@ func TestTmuxIdentityMissingAndFailureAreDistinct(t *testing.T) {
 			}
 			return probe.Result{Code: 1, Stderr: detail}, nil
 		})
-		_, err = paneFactsWithin(conn, "%9", 0)
+		_, err = paneFactsWithin(t, conn, "%9", 0)
 		if err == nil || !strings.Contains(err.Error(), detail) {
 			t.Fatalf("detail %s err=%v", detail, err)
 		}
@@ -112,12 +121,12 @@ func TestTmuxDualReadPrefersKanderThenOnevoke(t *testing.T) {
 			return probe.Result{Stdout: "codex\t0\t0\n"}, nil
 		}
 		option := args[len(args)-1]
-		if option == paneSessionOption {
-			return probe.Result{Code: 1, Stderr: "invalid option: " + paneSessionOption}, nil
+		if option == "@kander_session" {
+			return probe.Result{Code: 1, Stderr: "invalid option: " + "@kander_session"}, nil
 		}
 		return probe.Result{Stdout: "legacy-session\n"}, nil
 	})
-	facts, err := paneFactsWithin(conn, "%9", 0)
+	facts, err := paneFactsWithin(t, conn, "%9", 0)
 	if err != nil || facts.SessionMarker != "legacy-session" {
 		t.Fatalf("facts=%+v err=%v", facts, err)
 	}
@@ -127,13 +136,13 @@ func TestTmuxDualReadPrefersKanderThenOnevoke(t *testing.T) {
 			return probe.Result{Stdout: "codex\t0\t0\n"}, nil
 		}
 		option := args[len(args)-1]
-		if option == paneSessionOption {
+		if option == "@kander_session" {
 			return probe.Result{Stdout: "kander-session\n"}, nil
 		}
 		t.Fatal("should not read legacy when kander exists")
 		return probe.Result{}, nil
 	})
-	facts, err = paneFactsWithin(conn, "%9", 0)
+	facts, err = paneFactsWithin(t, conn, "%9", 0)
 	if err != nil || facts.SessionMarker != "kander-session" {
 		t.Fatalf("facts=%+v err=%v", facts, err)
 	}
@@ -141,7 +150,7 @@ func TestTmuxDualReadPrefersKanderThenOnevoke(t *testing.T) {
 
 func TestTmuxContainerProbe(t *testing.T) {
 	resetLang(t)
-	backend := New(Name, os.Getenv)
+	backend := tmuxBackend(t, Tmux, os.Getenv)
 	conn := fakeConn(func(ctx context.Context, program string, args []string) (probe.Result, error) {
 		return probe.Result{Stdout: "$1\tsess\t@1\t1\n"}, nil
 	})
@@ -175,7 +184,7 @@ func TestTmuxProbePropagatesCallerTimeout(t *testing.T) {
 		}
 		return probe.Result{Stdout: "session\n"}, nil
 	})
-	if _, err := paneFactsWithin(conn, "%9", want); err != nil {
+	if _, err := paneFactsWithin(t, conn, "%9", want); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -189,7 +198,7 @@ func TestTmuxExpiredFactsDoNotStartMarkerProbe(t *testing.T) {
 		cancel()
 		return probe.Result{Stdout: "codex\t0\t0\n"}, nil
 	})
-	_, err := New(Name, os.Getenv).PaneFacts(ctx, conn, "%1")
+	_, err := tmuxBackend(t, Tmux, os.Getenv).PaneFacts(ctx, conn, "%1")
 	if calls != 1 || !errors.Is(err, context.Canceled) {
 		t.Fatalf("calls=%d err=%v", calls, err)
 	}
