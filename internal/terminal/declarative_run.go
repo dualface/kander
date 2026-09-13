@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -508,18 +509,56 @@ func (e *execution) runCandidates(candidates *Candidates) (map[string]string, er
 	return nil, e.runSteps(candidates.Fallback)
 }
 
-// runRows scans the stored output lines of a reverse lookup and returns the
-// unique matching row's result.
-func (e *execution) runRows(rows *Rows) (map[string]string, error) {
+// rowTexts splits the stored output into rows: non-blank lines, or the
+// elements of a JSON array re-encoded as compact JSON with sorted keys, so
+// field primitives see one deterministic text per row.
+func (e *execution) rowTexts(rows *Rows) ([]string, error) {
+	text := e.values["step."+rows.From+".text"]
+	path, isArray := strings.CutPrefix(rows.Split, "json_array:")
+	if !isArray {
+		var out []string
+		for _, line := range strings.Split(text, "\n") {
+			if strings.TrimSpace(line) != "" {
+				out = append(out, line)
+			}
+		}
+		return out, nil
+	}
+	var doc any
+	if err := json.Unmarshal([]byte(text), &doc); err != nil {
+		return nil, &probe.Error{Message: e.renderOr(rows.Messages.Missing, nil, "terminal.rows_missing")}
+	}
+	for _, key := range strings.Split(path, ".") {
+		object, _ := doc.(map[string]any)
+		doc = object[key]
+	}
+	elements, ok := doc.([]any)
+	if !ok {
+		return nil, &probe.Error{Message: e.renderOr(rows.Messages.Missing, nil, "terminal.rows_missing")}
+	}
+	out := make([]string, len(elements))
+	for index, element := range elements {
+		encoded, err := json.Marshal(element)
+		if err != nil {
+			return nil, err
+		}
+		out[index] = string(encoded)
+	}
+	return out, nil
+}
+
+// matchRows validates every row and returns the results of the matching rows.
+func (e *execution) matchRows(rows *Rows) ([]map[string]string, error) {
+	texts, err := e.rowTexts(rows)
+	if err != nil {
+		return nil, err
+	}
 	var matches []map[string]string
-	for _, line := range strings.Split(e.values["step."+rows.From+".text"], "\n") {
+	for _, text := range texts {
 		if err := e.ctx.Err(); err != nil {
 			return nil, err
 		}
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		fields := parseFields(rows.Fields, process.SourceStdout, line)
+		fields := parseFields(rows.Fields, process.SourceStdout, text)
 		for name := range rows.Fields {
 			e.values["row."+name] = fields[name]
 		}
@@ -536,6 +575,15 @@ func (e *execution) runRows(rows *Rows) (map[string]string, error) {
 		matches = append(matches, result)
 	}
 	if err := e.ctx.Err(); err != nil {
+		return nil, err
+	}
+	return matches, nil
+}
+
+// uniqueRow requires exactly one matching row (reverse lookup).
+func (e *execution) uniqueRow(rows *Rows) (map[string]string, error) {
+	matches, err := e.matchRows(rows)
+	if err != nil {
 		return nil, err
 	}
 	switch len(matches) {

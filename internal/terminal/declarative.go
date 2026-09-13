@@ -80,6 +80,7 @@ func (b *DeclarativeBackend) Capabilities() Capabilities {
 		ForegroundProcess: c.ForegroundProcess,
 		SessionReport:     c.SessionReport,
 		WaitOutput:        c.WaitOutput,
+		AgentIdentity:     c.AgentIdentity,
 		POSIXOnly:         b.spec.Requires.Platform == "posix",
 	}
 }
@@ -348,7 +349,10 @@ func (b *DeclarativeBackend) PaneFacts(ctx context.Context, conn Conn, pane stri
 	if err != nil {
 		return PaneFacts{}, err
 	}
-	return PaneFacts{Command: result["command"], InMode: result["in_mode"], Dead: result["dead"], SessionMarker: result["session_marker"]}, nil
+	return PaneFacts{
+		Command: result["command"], InMode: result["in_mode"], Dead: result["dead"], SessionMarker: result["session_marker"],
+		Agent: result["agent"], AgentStatus: result["agent_status"], AgentSession: result["agent_session"], Container: result["container"],
+	}, nil
 }
 
 func (b *DeclarativeBackend) ReadOutput(ctx context.Context, conn Conn, pane string) (string, error) {
@@ -379,11 +383,23 @@ func addressInputs(address Address) map[string]string {
 func (b *DeclarativeBackend) Topology(ctx context.Context, conn Conn, address Address) (Topology, error) {
 	ctx, cancel := probe.WithDefaultTimeout(ctx)
 	defer cancel()
-	result, err := b.probeOp(ctx, OpTopology, conn, addressInputs(address), false)
+	op, _ := b.op(OpTopology)
+	e := b.newExecution(ctx, conn, b.getenv, addressInputs(address))
+	result, err := e.runOp(op)
 	if err != nil {
 		return Topology{}, err
 	}
-	return Topology{Session: result["session"], Container: result["container"], PaneCount: result["pane_count"]}, nil
+	topology := Topology{Session: result["session"], Container: result["container"], PaneCount: result["pane_count"]}
+	if op.Rows != nil {
+		rows, err := e.matchRows(op.Rows)
+		if err != nil {
+			return Topology{}, err
+		}
+		for _, row := range rows {
+			topology.Panes = append(topology.Panes, row["pane"])
+		}
+	}
+	return topology, nil
 }
 
 // ContainerExists reports false when the probe failure is classified as gone.
@@ -412,15 +428,16 @@ func (b *DeclarativeBackend) ReverseLookup(ctx context.Context, conn Conn, ident
 		}
 		e.values["process_name"] = name
 	}
-	result, err := e.runRows(op.Rows)
+	result, err := e.uniqueRow(op.Rows)
 	if err != nil {
 		return Address{}, err
 	}
 	return Address{Session: result["session"], Container: result["container"], Pane: result["pane"]}, nil
 }
 
-// Focus checks availability, probes the pane, runs the switch steps and an
-// optional focus hook whose degraded result still counts as switched.
+// Focus checks availability, probes the pane, runs the container switch steps
+// and then an optional focus_pane hook whose degraded result still counts as
+// switched.
 func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Address) FocusResult {
 	op, _ := b.op(OpFocus)
 	e := b.newExecution(ctx, conn, b.getenv, addressInputs(address))
@@ -436,6 +453,8 @@ func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Addre
 	}
 	e.values["facts.command"], e.values["facts.in_mode"] = facts.Command, facts.InMode
 	e.values["facts.dead"], e.values["facts.session_marker"] = facts.Dead, facts.SessionMarker
+	e.values["facts.agent"], e.values["facts.agent_status"] = facts.Agent, facts.AgentStatus
+	e.values["facts.agent_session"], e.values["facts.container"] = facts.AgentSession, facts.Container
 	if facts.Gone || (op.ClosedWhen != nil && e.holds(op.ClosedWhen)) {
 		return FocusResult{ID: "focus.closed"}
 	}
@@ -452,8 +471,8 @@ func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Addre
 			return FocusResult{ID: "focus.switch_failed", Args: []any{err.Error()}}
 		}
 	}
-	if hook, ok := b.hook(HookPointFocus); ok {
-		result := runHook(ctx, hook, HookCall{Launcher: b.launcher, Point: HookPointFocus, Conn: conn, Getenv: b.getenv, Values: addressInputs(address)})
+	if hook, ok := b.hook(HookPointFocusPane); ok {
+		result := runHook(ctx, hook, HookCall{Launcher: b.launcher, Point: HookPointFocusPane, Conn: conn, Getenv: b.getenv, Values: addressInputs(address)})
 		switch result.Status {
 		case HookDegraded:
 			return FocusResult{Success: true, ID: "focus.tab_only", Args: []any{result.Note}}

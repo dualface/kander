@@ -49,7 +49,7 @@ var opInputs = map[string][]string{
 var opResults = map[string][]string{
 	OpPrepare:         {"session", "session_exists", "workspace"},
 	OpCreateContainer: {"session", "container", "pane"},
-	OpPaneFacts:       {"command", "in_mode", "dead", "session_marker"},
+	OpPaneFacts:       {"command", "in_mode", "dead", "session_marker", "agent", "agent_status", "agent_session", "container"},
 	OpReadOutput:      {"text"},
 	OpTopology:        {"session", "container", "pane_count"},
 	OpReverseLookup:   {"session", "container", "pane"},
@@ -57,7 +57,16 @@ var opResults = map[string][]string{
 
 var startedLineNames = []string{"head", "session", "session_exists", "workspace", "project", "container", "pane"}
 
-var paneFactNames = []string{"facts.command", "facts.in_mode", "facts.dead", "facts.session_marker"}
+var paneFactNames = []string{
+	"facts.command", "facts.in_mode", "facts.dead", "facts.session_marker",
+	"facts.agent", "facts.agent_status", "facts.agent_session", "facts.container",
+}
+
+// rowResults are the per-row result fields of the operations that scan rows.
+var rowResults = map[string][]string{
+	OpReverseLookup: {"session", "container", "pane"},
+	OpTopology:      {"pane"},
+}
 
 // ValidateDefinition checks a decoded definition. Hooks named by the
 // definition must already be registered.
@@ -341,9 +350,9 @@ func (v validator) errorRules(rules ErrorRules) error {
 func (v validator) hooks(def *Definition) error {
 	for point, name := range def.Hooks {
 		switch point {
-		case HookPointReportSession, HookPointFocus:
+		case HookPointReportSession, HookPointFocusPane:
 		default:
-			return v.fieldErr("hooks."+point, "unknown mount point (report_session, focus)")
+			return v.fieldErr("hooks."+point, "unknown mount point (report_session, focus_pane)")
 		}
 		if _, ok := LookupHook(name); !ok {
 			return v.fieldErr("hooks."+point, "hook %q is not registered", name)
@@ -352,8 +361,8 @@ func (v validator) hooks(def *Definition) error {
 	if def.Capabilities.SessionReport != (def.Hooks[HookPointReportSession] != "") {
 		return v.fieldErr("hooks.report_session", "is required exactly when capabilities.session_report is true")
 	}
-	if def.Hooks[HookPointFocus] != "" && !def.Capabilities.Focus {
-		return v.fieldErr("hooks.focus", "requires capabilities.focus")
+	if def.Hooks[HookPointFocusPane] != "" && !def.Capabilities.Focus {
+		return v.fieldErr("hooks.focus_pane", "requires capabilities.focus")
 	}
 	return nil
 }
@@ -482,11 +491,11 @@ func (v validator) op(label, name string, op Op) error {
 			return err
 		}
 	}
-	if (op.Rows != nil) != (name == OpReverseLookup) {
-		return v.fieldErr("rows", "reverse_lookup requires rows, and only reverse_lookup declares them")
+	if (op.Rows == nil && name == OpReverseLookup) || (op.Rows != nil && rowResults[name] == nil) {
+		return v.fieldErr("rows", "reverse_lookup requires rows, and only reverse_lookup and topology declare them")
 	}
 	if op.Rows != nil {
-		if err := v.rows(op.Rows, names); err != nil {
+		if err := v.rows(name, op.Rows, names); err != nil {
 			return err
 		}
 	}
@@ -674,9 +683,16 @@ func (v validator) candidates(op string, candidates *Candidates, names scope, re
 	return v.steps("candidates.fallback", op, candidates.Fallback, names)
 }
 
-func (v validator) rows(rows *Rows, names scope) error {
+func (v validator) rows(op string, rows *Rows, names scope) error {
 	if !names["step."+rows.From+".text"] {
 		return v.fieldErr("rows.from", "must name a store of an earlier step")
+	}
+	if rows.Split != "" && rows.Split != "lines" {
+		path, ok := strings.CutPrefix(rows.Split, "json_array:")
+		spec := process.OutputSpec{Source: process.SourceStdout, Parse: "json_field:" + path}
+		if !ok || process.ValidateTerminalOutput(spec) != nil {
+			return v.fieldErr("rows.split", "must be lines or json_array:<dotted.path>")
+		}
 	}
 	if len(rows.Fields) == 0 {
 		return v.fieldErr("rows.fields", "must not be empty")
@@ -698,17 +714,20 @@ func (v validator) rows(rows *Rows, names scope) error {
 	if err := v.conditions("rows.match", rows.Match, rowNames); err != nil {
 		return err
 	}
-	results := newScope(opResults[OpReverseLookup]...)
+	results := newScope(rowResults[op]...)
 	for _, key := range sortedKeys(rows.Result) {
 		if !results[key] {
-			return v.fieldErr("rows.result."+key, "is not a result field of reverse_lookup")
+			return v.fieldErr("rows.result."+key, "is not a row result field of %s", op)
 		}
 		if err := v.template("rows.result."+key, rows.Result[key], rowNames, process.TemplateText); err != nil {
 			return err
 		}
 	}
-	if rows.Result["container"] == "" || rows.Result["pane"] == "" {
-		return v.fieldErr("rows.result", "must map container and pane")
+	if rows.Result["pane"] == "" || (op == OpReverseLookup && rows.Result["container"] == "") {
+		return v.fieldErr("rows.result", "must map the pane (and the container for reverse_lookup)")
+	}
+	if err := v.optionalMessage("rows.messages.missing", rows.Messages.Missing, names); err != nil {
+		return err
 	}
 	if err := v.optionalMessage("rows.messages.invalid", rows.Messages.Invalid, names); err != nil {
 		return err

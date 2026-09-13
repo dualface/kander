@@ -36,14 +36,14 @@ These points are the contract and are not extended:
 | `name`         | Definition name, `^[a-z][a-z0-9-]{0,31}$`, equal to the file name |
 | `binary`       | Command on `PATH` or an absolute path; `Backend.Executable` |
 | `version_args` | argv printing the version (doctor, options panel); no placeholders |
-| `capabilities` | `container` (must be `true`), `focus`, `pane_metadata`, `foreground_process`, `wait_output`, `session_report`; `POSIXOnly` follows each launcher's `requires.platform` |
+| `capabilities` | `container` (must be `true`), `focus`, `pane_metadata`, `foreground_process`, `agent_identity`, `wait_output`, `session_report`; `POSIXOnly` follows each launcher's `requires.platform` |
 | `address`      | Ordered `WINDOW` fields after `<launcher>:`, each `{"name": "session" | "container" | "pane", "pattern": <regex without capturing groups>}`; `container` and `pane` are required; the default pattern is `[^:\s]+` |
 | `launchers`    | Launcher name to launcher object (below); one definition may provide several launchers |
 | `errors`       | Error classification rules (below) |
 | `hooks`        | Mount point to registered hook name (below) |
 | `ops`          | Operation name to operation object (below) |
 
-A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`.
+A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session` and `container`, and `topology` lists pane IDs through `rows`).
 
 ## Launchers
 
@@ -78,11 +78,11 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `wait_ready` (optional; absent means ready) | `pane`                           | none |
 | `run_command`        | `pane`, `command`, `posix` (`true`/`false`)             | none |
 | `set_session_marker` | `pane`, `value`                                         | none |
-| `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker` |
+| `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `container` |
 | `read_output`        | `pane`                                                  | `text` |
 | `wait_output`        | `pane`, `marker` (literal or `regex:` prefixed), `timeout_ms` | none |
 | `deliver_text`       | `pane`, `text`                                          | none |
-| `topology`           | `session`, `container`, `pane`                          | `session`, `container`, `pane_count` |
+| `topology`           | `session`, `container`, `pane`                          | `session`, `container`, `pane_count`; optional `rows` whose matching rows' `pane` form the pane ID list |
 | `container_exists`   | `session`, `container`, `pane`                          | exists when the steps succeed |
 | `reverse_lookup`     | `agent`, `reference`, `process_name`                    | from `rows.result`: `session`, `container`, `pane` |
 | `focus`              | `session`, `container`, `pane`                          | focus notice |
@@ -96,7 +96,7 @@ An operation object is:
 {
   "steps": [<step>, ...],
   "candidates": <candidates, prepare and create_container only>,
-  "rows": <rows, reverse_lookup only>,
+  "rows": <rows, reverse_lookup (required) and topology (optional)>,
   "result": {"<result field>": "<template>"},
   "unavailable": [{"when": <conditions>, "message": <message>}],   // focus only
   "closed_when": <conditions over facts.*>                         // focus only
@@ -157,20 +157,23 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 
 ## Rows
 
-`reverse_lookup` collects its candidates from one stored step output, one line per row:
+`reverse_lookup` and `topology` scan one stored step output row by row:
 
 ```text
 "rows": {
   "from": "<store>",
+  "split": "lines" | "json_array:<dotted.path>",
   "fields": {"<field>": "<primitive>"},
   "expect": <conditions over row.*>,
   "match": <conditions>,
   "result": {"session": "...", "container": "...", "pane": "..."},
-  "messages": {"invalid": <message>, "none": <message>, "ambiguous": <message using count>}
+  "messages": {"missing": <message>, "invalid": <message>, "none": <message>, "ambiguous": <message using count>}
 }
 ```
 
-Blank lines are skipped; a row failing `expect` fails the lookup; exactly one matching row is the result, while zero or several matches return `terminal.MatchError` with the count. `process_name` is resolved only after the collection steps succeed, so a collection failure is reported before an agent definition error.
+- `split` defaults to `lines`, where blank lines are skipped. `json_array:<path>` takes the array at that path of the JSON output (a missing or non-array value fails with `missing`); each element becomes one row re-encoded as compact JSON with sorted keys, so `json_field` reads its members and a `regex` can check the encoded form (for example that `"agent":` is followed by a string or `null`).
+- Every row must satisfy `expect`, otherwise the operation fails with `invalid`.
+- `reverse_lookup` maps `session`, `container` and `pane`; exactly one matching row is the result, while zero or several matches return `terminal.MatchError` with the count. `topology` maps only `pane` and collects the matching rows in order into `Topology.Panes`. `process_name` is resolved only after the collection steps succeed, so a collection failure is reported before an agent definition error.
 
 ## Error Classification
 
@@ -187,7 +190,7 @@ Blank lines are skipped; a row failing `expect` fails the lookup; exactly one ma
 
 ## Host Policies
 
-These stay in Go and are the same for every definition: `pane_facts`, `topology` and `reverse_lookup` run within the default probe budget when the caller has no deadline; launch-time operations run without a deadline; focus probes the pane first (probe failure, gone or `closed_when` end it), runs its steps with the focus step diagnostics, then an optional `focus` hook.
+These stay in Go and are the same for every definition: `pane_facts`, `topology` and `reverse_lookup` run within the default probe budget when the caller has no deadline; launch-time operations run without a deadline; focus probes the pane first (probe failure, gone or `closed_when` end it), runs its steps (the container-level switch) with the focus step diagnostics, then an optional `focus_pane` hook.
 
 ## Hooks
 
@@ -196,7 +199,7 @@ These stay in Go and are the same for every definition: `pane_facts`, `topology`
 | Mount point      | ok                  | degraded                                   | failed |
 | ---------------- | ------------------- | ------------------------------------------ | ------ |
 | `report_session` | reported            | `ErrNoReportChannel` with the note (launch warns) | the hook error |
-| `focus`          | switched            | switched with the `focus.tab_only` notice  | `focus.switch_failed` |
+| `focus_pane` (after the `focus` steps) | switched | switched with the `focus.tab_only` notice | `focus.switch_failed` |
 
 The hooks of specific terminals (for example the herdr socket) belong to those terminals, not to this format.
 

@@ -34,7 +34,9 @@ const (
 // Hook mount points a definition may bind to a registered hook.
 const (
 	HookPointReportSession = "report_session"
-	HookPointFocus         = "focus"
+	// HookPointFocusPane runs after the focus steps switched the container,
+	// to focus the pane itself.
+	HookPointFocusPane = "focus_pane"
 )
 
 // Step failure policies.
@@ -68,6 +70,7 @@ type DefinitionCapabilities struct {
 	ForegroundProcess bool `json:"foreground_process"`
 	WaitOutput        bool `json:"wait_output"`
 	SessionReport     bool `json:"session_report"`
+	AgentIdentity     bool `json:"agent_identity"`
 }
 
 // AddressField is one colon-separated field of the opaque WINDOW part.
@@ -187,9 +190,13 @@ type CandidateSelect struct {
 	Result map[string]string `json:"result"`
 }
 
-// Rows scan the lines of a stored step output (reverse lookup only).
+// Rows scan one stored step output row by row: lines, or the elements of a
+// JSON array (reverse_lookup and topology only).
 type Rows struct {
-	From     string            `json:"from"`
+	From string `json:"from"`
+	// Split is lines (default) or json_array:<dotted.path>; each array
+	// element becomes one row re-encoded as compact JSON with sorted keys.
+	Split    string            `json:"split,omitempty"`
 	Fields   map[string]string `json:"fields"`
 	Expect   Conditions        `json:"expect,omitempty"`
 	Match    Conditions        `json:"match"`
@@ -197,8 +204,10 @@ type Rows struct {
 	Messages RowMessages       `json:"messages"`
 }
 
-// RowMessages render an invalid row, no match, and several matches.
+// RowMessages render a missing JSON array, an invalid row, no match, and
+// several matches.
 type RowMessages struct {
+	Missing   *Message `json:"missing,omitempty"`
 	Invalid   *Message `json:"invalid,omitempty"`
 	None      *Message `json:"none,omitempty"`
 	Ambiguous *Message `json:"ambiguous,omitempty"`

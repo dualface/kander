@@ -15,5 +15,6 @@
   "terminal.definition_invalid": "Terminal definition rejected: {{.V0}}",
   "terminal.definition_loaded": "Terminal definition {{.V0}}: launchers {{.V1}}",
   "terminal.definition_overridden": "Terminal definition {{.V0}} is replaced by a higher-precedence {{.V1}}",
-  "terminal.configured_launcher_binary_missing": "The configured launcher is {{.V0}}, but its terminal program {{.V1}} is not in PATH"
+  "terminal.configured_launcher_binary_missing": "The configured launcher is {{.V0}}, but its terminal program {{.V1}} is not in PATH",
+  "terminal.rows_missing": "lookup output has no row array"
 }

@@ -391,7 +391,7 @@ func TestDeclarativeHooks(t *testing.T) {
 	})
 	data := mutateFixture(t, func(root map[string]any) {
 		object(root, "capabilities")["session_report"] = true
-		root["hooks"] = map[string]any{"report_session": "test-report-hook", "focus": "test-focus-hook"}
+		root["hooks"] = map[string]any{"report_session": "test-report-hook", "focus_pane": "test-focus-hook"}
 	})
 	def, err := DecodeDefinition("faketerm.json", data)
 	if err != nil {

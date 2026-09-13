@@ -88,8 +88,13 @@ func TestDefinitionValidationRejects(t *testing.T) {
 			launchers["Fake:Term"] = launchers["faketerm"]
 			delete(launchers, "faketerm")
 		}, []string{"field launchers.Fake:Term", "launcher name must match"}},
-		{"unregistered hook", func(r map[string]any) { r["hooks"] = map[string]any{"focus": "no-such-hook"} }, []string{"field hooks.focus", `hook "no-such-hook" is not registered`}},
+		{"unregistered hook", func(r map[string]any) { r["hooks"] = map[string]any{"focus_pane": "no-such-hook"} }, []string{"field hooks.focus_pane", `hook "no-such-hook" is not registered`}},
 		{"unknown hook point", func(r map[string]any) { r["hooks"] = map[string]any{"attach": "validate-test-hook"} }, []string{"field hooks.attach", "unknown mount point"}},
+		{"focus operation is not a mount point", func(r map[string]any) { r["hooks"] = map[string]any{"focus": "validate-test-hook"} }, []string{"field hooks.focus", "unknown mount point (report_session, focus_pane)"}},
+		{"rows split", func(r map[string]any) { object(r, "ops", "reverse_lookup", "rows")["split"] = "json" }, []string{"field rows.split", "json_array:<dotted.path>"}},
+		{"topology row result field", func(r map[string]any) {
+			object(r, "ops", "topology")["rows"] = map[string]any{"from": "topo", "fields": map[string]any{"pane": "raw"}, "match": "prev_ok", "result": map[string]any{"session": "{row.pane}", "pane": "{row.pane}"}}
+		}, []string{"op topology", "field rows.result.session", "is not a row result field of topology"}},
 		{"session report without hook", func(r map[string]any) { object(r, "capabilities")["session_report"] = true }, []string{"field hooks.report_session"}},
 		{"error rule kind", func(r map[string]any) { object(r, "errors")["gone"] = []any{"signal:9"} }, []string{"field errors.gone[0]", "unknown kind"}},
 		{"error rule regex", func(r map[string]any) { object(r, "errors")["meta_missing"] = []any{"stderr:(unclosed"} }, []string{"field errors.meta_missing[0]", "does not compile"}},
