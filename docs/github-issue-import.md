@@ -226,9 +226,11 @@ issue and agrees on the plan with the user before anything is written:
 - An issue whose card is already bound jumps to that card on the board and
   reports its state, because that card already carries the contract. A card
   still in `backlog` first offers both exits: `y`/`Enter` jumps, `s` starts the
-  same session pointed at that card so its contract can be completed. When the
-  settings cannot be resolved or need the caller's terminal, that dialog keeps
-  the jump exit and shows the reason in place of the start settings.
+  same session pointed at that card so its contract can be completed. That
+  dialog keeps the jump exit even when the start is unavailable: a failed
+  preview shows its reason in place of the empty start settings, and a launcher
+  that needs the caller's terminal keeps the resolved settings and adds the
+  reason below them.
 - The TUI starts only background launchers (`herdr`, `tmux`, `tmux-session`);
   `foreground` and `console` report that the CLI must be used instead. A
   confirmed start passes the agent and launcher the dialog showed, so a
