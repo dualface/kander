@@ -50,12 +50,12 @@ func definitionLauncherAvailable(name string) bool {
 	return lookPath(backend.Executable()) != ""
 }
 
-// reportTerminalDefinitions prints the load result of every user terminal
+// reportTerminalDefinitions prints the load result of every terminal
 // definition; an invalid file is unhealthy but leaves the built-in launchers
 // untouched.
 func reportTerminalDefinitions() bool {
 	healthy := true
-	for _, report := range terminal.DefinitionReports() {
+	for _, report := range terminal.DefinitionInventory() {
 		switch {
 		case report.Err != nil:
 			healthy = false

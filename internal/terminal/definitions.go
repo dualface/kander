@@ -163,6 +163,26 @@ func DefinitionReports() []DefinitionReport {
 	return append([]DefinitionReport{}, definitionRegistry.reports...)
 }
 
+// DefinitionInventory includes embedded and user load outcomes in precedence
+// order. Invalid overrides remain visible alongside the active fallback.
+func DefinitionInventory() []DefinitionReport {
+	definitionRegistry.Lock()
+	defer definitionRegistry.Unlock()
+	ensureDefinitionsLocked()
+	var reports []DefinitionReport
+	for _, embedded := range definitionRegistry.embedded {
+		active := false
+		for _, current := range definitionRegistry.active {
+			if current == embedded {
+				active = true
+			}
+		}
+		reports = append(reports, DefinitionReport{Source: embedded.source, Path: embedded.path,
+			Name: embedded.def.Name, Launchers: embedded.def.LauncherNames(), Active: active})
+	}
+	return append(reports, definitionRegistry.reports...)
+}
+
 func activeDefinitions() []*loadedDefinition {
 	definitionRegistry.Lock()
 	defer definitionRegistry.Unlock()

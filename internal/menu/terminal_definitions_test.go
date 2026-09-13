@@ -82,3 +82,43 @@ func TestDefinitionLauncherChoicesAndRepair(t *testing.T) {
 		t.Fatal("the built-in tmux definition keeps its tool-specific choices")
 	}
 }
+
+// Doctor consumes the same load errors and sources as terminal list; it does
+// not decode an invalid override differently or hide the embedded fallback.
+func TestDoctorTerminalInventoryMatchesLoadErrors(t *testing.T) {
+	share := t.TempDir()
+	dir := filepath.Join(share, terminal.DefinitionsDirName)
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "broken.json")
+	if err := os.WriteFile(path, []byte("broken definition"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	saved := terminal.DefinitionDirs
+	terminal.DefinitionDirs = func() []terminal.DefinitionDir {
+		return []terminal.DefinitionDir{{Source: terminal.SourceProject, Root: share, Path: dir}}
+	}
+	terminal.ReloadDefinitions()
+	t.Cleanup(func() { terminal.DefinitionDirs = saved; terminal.ReloadDefinitions() })
+	var diagnostic string
+	for _, report := range terminal.DefinitionInventory() {
+		if report.Path == path && report.Err != nil {
+			diagnostic = config.Text("terminal.definition_invalid", report.Err.Error())
+		}
+	}
+	if diagnostic == "" {
+		t.Fatal("missing inventory error")
+	}
+	healthy := true
+	lines := CaptureReport(func() { healthy = reportTerminalDefinitions() })
+	if healthy {
+		t.Fatal("doctor accepted the invalid definition")
+	}
+	for _, line := range lines {
+		if line.Text == diagnostic {
+			return
+		}
+	}
+	t.Fatalf("doctor lost inventory diagnostic: %q, lines=%+v", diagnostic, lines)
+}

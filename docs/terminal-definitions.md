@@ -259,3 +259,86 @@ A fragment of a two-field address definition:
 ```
 
 A complete third-party definition with a fake terminal runs the full start, check, notify, takeover, focus and dismiss lifecycle in `cmd/kander/terminal_definition_e2e_test.go`.
+
+## Submitting a new terminal definition
+
+Run `kander terminal list` to inspect the embedded, global and project sources,
+active launchers, overridden definitions and validation errors. `doctor` consumes
+this same inventory and reports the same rejection diagnostic. List exits nonzero
+when any definition is invalid. An invalid override is still visible even when
+its lower-precedence definition remains active.
+
+Before submitting a definition, run:
+
+```sh
+kander terminal test <name>
+```
+
+Attach the **complete output**, terminal version, operating system and definition
+file to the contribution. `<name>` can identify a definition or one of its
+launchers. A same-name launcher is preferred; otherwise the definition's first
+launcher in sorted order is used. For tmux, run `terminal test tmux` inside tmux;
+`terminal test tmux-session` can create its own session outside tmux. The normal
+launcher prerequisites still apply. Any definition load error aborts the check before creating a container. This
+includes malformed files whose names cannot be decoded; the check never silently
+tests a fallback. Normal runtime fallback remains unchanged.
+
+The checker creates a unique labelled container with a temporary working
+directory. It invokes the Backend methods below through the same declarative
+engine used by launch, liveness and delivery. Each operation emits `pass`, `fail`
+or `skip`; command traces contain actual argv, exit code and JSON-escaped
+stdout/stderr summaries (at most 1024 characters per stream). Hook operations use
+their declared socket channels; only their CLI read-back has an argv trace.
+
+| Backend methods | Check |
+| --- | --- |
+| Name, Capabilities, Executable, VersionArgs | Identity, capabilities, binary and version output |
+| AutoDetect, Prepare | Environment selection and launch preflight |
+| CreateContainer | Unique label, nonempty container and pane |
+| OpaqueAddress, ParseAddress, ParseFocusAddress | Address round trip; invalid address rejected |
+| StartedLines | Render the launch report |
+| WaitReady, RunCommand | Wait for readiness; start a known `sh` foreground reader |
+| WaitOutput, ReadOutput | Confirm a unique output marker assembled inside the pane |
+| SetSessionMarker | Write a unique marker and compare the PaneFacts read-back |
+| ReportSession | Report an isolated test identity and compare its read-back |
+| PaneFacts | Live pane; foreground command, dead and copy-mode fields |
+| Topology, ContainerExists | Owning container and exactly one pane; existence |
+| ReverseLookup | Resolve the unique identity back to the created address |
+| Focus | Focus the created pane with an attached client |
+| DeliverText | Literal special characters plus Enter, confirmed by reader acknowledgement |
+| CloseContainer | Close only the created container |
+| PaneFacts, ContainerExists after close | Gone classification and false existence, without an ordinary error |
+
+A reflection test requires every Backend method to have a check. Supplemental
+metadata and post-close checks reuse the corresponding method. Capability flags
+control the assertions, not whether failures count: absent pane metadata, native
+output waiting or session reporting must produce `ErrUnsupported`. Without
+`foreground_process`, PaneFacts must still succeed for a live pane, with empty
+foreground fields; there is no separate foreground-query method to return
+`ErrUnsupported`. Without a writable identity, reverse lookup must complete with
+a zero-match `MatchError`. Unsupported Focus uses `focus.unsupported`. A normal
+command failure is never accepted as an unsupported result.
+
+`--skip-focus` skips supported focus checks. Without an attached tmux client,
+the explicit outside-tmux/no-client result also produces a skip, not a failure.
+Other focus failures fail the check. `--keep` skips CloseContainer and the
+post-close checks, even after an earlier failure; it prints the retained address
+and working directory. Remove the directory after manually closing that test
+container. The default failure path attempts bounded cleanup and reports cleanup
+errors; when cleanup fails it also prints the retained address. A failure always
+exits nonzero. Steps following a failure are marked unexecuted.
+
+The checker needs POSIX `sh`; native Windows can list and validate definitions
+but testing reports that no usable terminal is available. The helper shell only
+reads text and prints acknowledgements; submitted text is never executed as a
+shell command. It does not launch a real coding agent. Session reporting uses a
+unique test reference on the newly created pane only; a terminal that requires
+actual agent recognition may reject that check and must report the failure.
+
+`go test ./internal/terminalcheck -run TestEmbedded -v` tests the final embedded
+definitions. When tmux exists, it uses an independent socket, an isolated HOME,
+and a seed session, then attaches a PTY client on Linux when available. It checks
+both full focus and no-client skip without touching existing sessions. Herdr is
+opt-in: only `KANDER_E2E_HERDR=1` with an available `HERDR_SOCKET_PATH` runs the
+real lifecycle. Otherwise its test reports the precise skip reason. Preserve
+that skip in contribution evidence rather than claiming a real herdr pass.

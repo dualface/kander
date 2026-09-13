@@ -49,6 +49,8 @@ Creating entries, querying, and moving between states use only `kander`; replaci
 kander config [--json]
 kander install
 kander doctor
+kander terminal list
+kander terminal test <name> [--keep] [--skip-focus]
 kander init [--maintenance] [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] <task-id>

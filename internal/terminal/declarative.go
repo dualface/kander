@@ -250,6 +250,12 @@ func (b *DeclarativeBackend) requireMessage(message *Message, names map[string]s
 }
 
 func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
+	return b.PrepareWithRunner(request, SpawnRunner)
+}
+
+// PrepareWithRunner keeps preflight commands observable and bounded for the
+// conformance checker. Ordinary launch preparation retains SpawnRunner.
+func (b *DeclarativeBackend) PrepareWithRunner(request PrepareRequest, runner Runner) (Target, error) {
 	requires := b.spec.Requires
 	names := map[string]string{"launcher": b.launcher, "binary": b.def.Binary, "platform": requires.Platform}
 	if (requires.Platform == "posix" && request.Windows) || (requires.Platform == "windows" && !request.Windows) {
@@ -289,7 +295,7 @@ func (b *DeclarativeBackend) Prepare(request PrepareRequest) (Target, error) {
 	if !ok {
 		return target, nil
 	}
-	conn := Conn{Program: program, Run: SpawnRunner}
+	conn := Conn{Program: program, Run: runner}
 	e := b.newExecution(context.Background(), conn, getenv, map[string]string{
 		"project": request.Project, "project_key": ProjectKey(request.Project), "command": request.Command,
 	})
