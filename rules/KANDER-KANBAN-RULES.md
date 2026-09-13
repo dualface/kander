@@ -593,6 +593,7 @@ kander move <task-id> working --owner <agent>
 
     When the user explicitly asks the starter to track, coordinate as a foreground single card instead.
 
+  - orchestrator session (`kander orchestrate`): cards it starts are monitored per "Orchestrator Sessions" whatever their launcher; the single-card clauses above that say the starter does not patrol or that the session can end do not apply to it.
   - task group: only when the module is enabled and dependencies are satisfied, orchestrate per `KANDER-TASK-GROUP-RULES.md`, performing applicable review, integration, and wrap-up; a successful start does not release that responsibility.
 
 ## Orchestrator Sessions

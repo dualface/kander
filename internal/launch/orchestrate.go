@@ -144,9 +144,10 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	return result, nil
 }
 
-// resolveOrchestrateTasks expands group references in plan order and rejects
-// unknown, repeated, or already started cards. Group expansion requires a
-// complete membership view, so a hidden member can never be skipped.
+// resolveOrchestrateTasks expands references in plan order, with a group's
+// members in the board's task ID order, and rejects unknown, repeated, or
+// already started cards. Group expansion requires a complete membership view,
+// so a hidden member can never be skipped.
 func resolveOrchestrateTasks(loaded board.Board, references []string) ([]OrchestrateTask, []string, error) {
 	var membership board.Membership
 	for _, reference := range references {
