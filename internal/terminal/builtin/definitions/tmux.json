@@ -322,6 +322,7 @@
             "in_mode": "regex:^[^\\t]*\\t([^\\t]*)\\t[^\\t]*$",
             "dead": "regex:^[^\\t]*\\t[^\\t]*\\t([^\\t]*)$"
           },
+          "gone_when": "field_missing:step.pane.text",
           "expect": "!field_missing:step.pane.shape",
           "messages": {
             "exit": {"id": "launch.tmux_pane_does_not_exist", "args": ["{pane}", "{detail}"]},
@@ -406,6 +407,7 @@
           "store": "window",
           "argv": ["display-message", "-p", "-t", "{container}", "#{{window_id}}"],
           "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+          "gone_when": "field_missing:step.window.text",
           "expect": "field:step.window.text={container}",
           "messages": {
             "exit": {"id": "takeover.failed_to_probe_the_tmux_window", "args": ["{detail}"]},

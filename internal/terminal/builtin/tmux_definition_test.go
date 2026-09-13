@@ -340,6 +340,40 @@ func TestTmuxDefinitionProjectSessionCreateAndRetry(t *testing.T) {
 	}
 }
 
+// An empty answer is gone, while a non-empty answer that does not have the
+// expected shape stays an invalid response with its original diagnostic.
+func TestTmuxDefinitionEmptyAnswerIsGone(t *testing.T) {
+	resetLang(t)
+	backend := tmuxBackend(t, Tmux, envOf(nil))
+	ctx := context.Background()
+	for stdout, gone := range map[string]bool{"\t\t\n": true, "\n": true, "codex\n": false} {
+		rec := &recorder{reply: func([]string) probe.Result { return probe.Result{Stdout: stdout} }}
+		facts, err := backend.PaneFacts(ctx, rec.conn(), "%9")
+		if gone {
+			if err != nil || !facts.Gone || facts.GoneDetail != config.Text("terminal.target_answered_empty") || len(rec.calls) != 1 {
+				t.Fatalf("stdout %q: facts=%+v err=%v calls=%q", stdout, facts, err, rec.calls)
+			}
+			continue
+		}
+		if err == nil || facts.Gone || err.Error() != config.Text("launch.tmux_pane_probe_returned_an_invalid_response") {
+			t.Fatalf("stdout %q: facts=%+v err=%v", stdout, facts, err)
+		}
+	}
+	address := terminal.Address{Container: "@9"}
+	rec := &recorder{reply: func([]string) probe.Result { return probe.Result{Stdout: "\n"} }}
+	if exists, err := backend.ContainerExists(ctx, rec.conn(), address); err != nil || exists {
+		t.Fatalf("empty window answer: exists=%v err=%v", exists, err)
+	}
+	rec = &recorder{reply: func([]string) probe.Result { return probe.Result{Stdout: "@8\n"} }}
+	if _, err := backend.ContainerExists(ctx, rec.conn(), address); err == nil || err.Error() != config.Text("takeover.tmux_window_probe_returned_an_invalid_response", "@8") {
+		t.Fatalf("other window answer: %v", err)
+	}
+	rec = &recorder{reply: func([]string) probe.Result { return probe.Result{Code: 1, Stderr: "permission denied"} }}
+	if _, err := backend.PaneFacts(ctx, rec.conn(), "%9"); err == nil || err.Error() != config.Text("launch.tmux_pane_does_not_exist", "%9", "permission denied") {
+		t.Fatalf("exit failure: %v", err)
+	}
+}
+
 func TestTmuxDefinitionStartedLinesAndAddress(t *testing.T) {
 	resetLang(t)
 	target := terminal.Target{Session: "kb-demo"}

@@ -16,5 +16,6 @@
   "terminal.definition_loaded": "终端定义 {{.V0}}: 启动方式 {{.V1}}",
   "terminal.definition_overridden": "终端定义 {{.V0}} 被更高优先级的同名定义 {{.V1}} 覆盖",
   "terminal.configured_launcher_binary_missing": "配置的启动方式是 {{.V0}}, 但其终端程序 {{.V1}} 不在 PATH 中",
-  "terminal.rows_missing": "反查输出缺少行数组"
+  "terminal.rows_missing": "反查输出缺少行数组",
+  "terminal.target_answered_empty": "终端对该目标返回了空响应"
 }

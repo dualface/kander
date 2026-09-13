@@ -16,5 +16,6 @@
   "terminal.definition_loaded": "ターミナル定義 {{.V0}}: 起動方式 {{.V1}}",
   "terminal.definition_overridden": "ターミナル定義 {{.V0}} は優先度の高い同名定義 {{.V1}} に置き換えられています",
   "terminal.configured_launcher_binary_missing": "設定された起動方式は {{.V0}} ですが、ターミナルプログラム {{.V1}} が PATH にありません",
-  "terminal.rows_missing": "逆引きの出力に行の配列がありません"
+  "terminal.rows_missing": "逆引きの出力に行の配列がありません",
+  "terminal.target_answered_empty": "ターミナルが対象に対して空の応答を返しました"
 }

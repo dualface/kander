@@ -107,6 +107,10 @@ func TestDefinitionValidationRejects(t *testing.T) {
 			r["address"] = []any{map[string]any{"name": "container", "pattern": "(w\\d+)"}, map[string]any{"name": "pane"}}
 		}, []string{"field address[0].pattern", "capturing groups"}},
 		{"container capability", func(r map[string]any) { object(r, "capabilities")["container"] = false }, []string{"field capabilities.container"}},
+		{"gone_when outside facts", func(r map[string]any) {
+			step := firstStep(r, "read_output")
+			step["gone_when"] = "field_missing:step.out.text"
+		}, []string{"op read_output", "field gone_when", "only pane_facts and container_exists"}},
 		{"version args placeholder", func(r map[string]any) { r["version_args"] = []any{"{env.HOME}"} }, []string{"field version_args[0]", "take no placeholders"}},
 		{"requires env message", func(r map[string]any) {
 			object(r, "launchers", "faketerm", "requires")["env"] = []any{map[string]any{"name": "FAKETERM", "message": "{window}"}}

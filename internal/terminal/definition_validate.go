@@ -583,8 +583,11 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 			return nil, err
 		}
 	}
-	if (step.Fields != nil || step.Expect != nil) && step.Store == "" {
-		return nil, v.fieldErr("store", "fields and expect need a store name")
+	if (step.Fields != nil || step.Expect != nil || step.GoneWhen != nil) && step.Store == "" {
+		return nil, v.fieldErr("store", "fields, expect and gone_when need a store name")
+	}
+	if step.GoneWhen != nil && op != OpPaneFacts && op != OpContainerExists {
+		return nil, v.fieldErr("gone_when", "only pane_facts and container_exists steps declare gone_when")
 	}
 	if step.Store == "" {
 		return names, nil
@@ -598,6 +601,9 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	}
 	names = names.withStore(step.Store, fields)
 	if err := v.conditions("expect", step.Expect, names); err != nil {
+		return nil, err
+	}
+	if err := v.conditions("gone_when", step.GoneWhen, names); err != nil {
 		return nil, err
 	}
 	return names, nil

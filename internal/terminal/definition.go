@@ -154,18 +154,22 @@ type Op struct {
 
 // Step runs one argv command, or fails the operation with a message.
 type Step struct {
-	Store         string              `json:"store,omitempty"`
-	When          Conditions          `json:"when,omitempty"`
-	Argv          []string            `json:"argv,omitempty"`
-	Fail          *Message            `json:"fail,omitempty"`
-	Output        *process.OutputSpec `json:"output,omitempty"`
-	Fields        map[string]string   `json:"fields,omitempty"`
-	Expect        Conditions          `json:"expect,omitempty"`
-	Poll          *Poll               `json:"poll,omitempty"`
-	OnError       string              `json:"on_error,omitempty"`
-	Timeout       string              `json:"timeout,omitempty"`
-	StopOnSuccess bool                `json:"stop_on_success,omitempty"`
-	Messages      StepMessages        `json:"messages,omitempty"`
+	Store  string              `json:"store,omitempty"`
+	When   Conditions          `json:"when,omitempty"`
+	Argv   []string            `json:"argv,omitempty"`
+	Fail   *Message            `json:"fail,omitempty"`
+	Output *process.OutputSpec `json:"output,omitempty"`
+	Fields map[string]string   `json:"fields,omitempty"`
+	Expect Conditions          `json:"expect,omitempty"`
+	// GoneWhen (pane_facts and container_exists only) reports the target as
+	// gone when a successful command's output satisfies it, for terminals
+	// that answer a closed target with exit 0 and empty fields.
+	GoneWhen      Conditions   `json:"gone_when,omitempty"`
+	Poll          *Poll        `json:"poll,omitempty"`
+	OnError       string       `json:"on_error,omitempty"`
+	Timeout       string       `json:"timeout,omitempty"`
+	StopOnSuccess bool         `json:"stop_on_success,omitempty"`
+	Messages      StepMessages `json:"messages,omitempty"`
 }
 
 // StepMessages render a failed step: exec when the command could not run,
