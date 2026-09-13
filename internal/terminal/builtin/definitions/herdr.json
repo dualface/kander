@@ -266,7 +266,12 @@
             "reference": "json_field:pane.agent_session.value",
             "tab": "json_field:pane.tab_id"
           },
-          "expect": "field:step.pane.id={pane}"
+          "expect": [
+            [
+              "!field_missing:step.pane.id",
+              "field:step.pane.id={pane}"
+            ]
+          ]
         }
       ],
       "result": {
@@ -476,7 +481,7 @@
           "agent": "json_field:agent",
           "reference": "json_field:agent_session.value",
           "bad_agent": "regex:\"agent\":([^\"n])",
-          "bad_session": "regex:\"agent_session\":([^{{n])",
+          "bad_session": "regex:\"agent_session\":([^{n])",
           "bad_reference": "regex:\"value\":([^\"n])",
           "valid_tab": "regex:\"tab_id\":\"([^:\\s\"\\\\]+:[^:\\s\"\\\\]+)\"",
           "valid_pane": "regex:\"pane_id\":\"([^:\\s\"\\\\]+:[^:\\s\"\\\\]+)\""

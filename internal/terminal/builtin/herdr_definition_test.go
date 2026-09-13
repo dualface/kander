@@ -208,3 +208,42 @@ func TestHerdrDefinitionUnknownHooksAndInventory(t *testing.T) {
 		}
 	}
 }
+
+func TestHerdrDefinitionAddressAndLookupPatterns(t *testing.T) {
+	backend := herdrBackendForTest()
+	for _, tc := range []struct {
+		address string
+		valid   bool
+	}{
+		{"herdr:w1:t1:w1:p1", true},
+		{"herdr:workspace:tabs:workspace:panes", true},
+		{"herdr:w1:t1:w1:p ", false},
+		{"herdr:w1:t1:w1:p\t", false},
+		{"herdr:w1:t1:w1:p\n", false},
+		{"herdr:t1:p1", false},
+	} {
+		if _, valid := backend.ParseAddress(tc.address); valid != tc.valid {
+			t.Errorf("address=%q valid=%v; want=%v", tc.address, valid, tc.valid)
+		}
+	}
+	for _, tc := range []struct {
+		panes string
+		valid bool
+	}{
+		{"[{\"tab_id\":\"workspace:tabs\",\"pane_id\":\"workspace:panes\",\"agent\":\"codex\",\"agent_session\":{\"value\":\"s1\"}}]", true},
+		{"[{\"tab_id\":\"w1:t1\",\"pane_id\":\"w1:p \",\"agent\":\"codex\",\"agent_session\":{\"value\":\"s1\"}}]", false},
+		{"[{\"tab_id\":\"w1:t1\",\"pane_id\":\"w1:p1\",\"agent\":\"codex\",\"agent_session\":42}]", false},
+	} {
+		r := &recorder{reply: func([]string) probe.Result {
+			return probe.Result{Stdout: "{\"result\":{\"panes\":" + tc.panes + "}}"}
+		}}
+		got, err := backend.ReverseLookup(context.Background(), r.conn(), terminal.Identity{Agent: "codex", Reference: "s1"})
+		if (err == nil) != tc.valid {
+			t.Fatalf("panes=%s address=%+v error=%v", tc.panes, got, err)
+		}
+	}
+	r := &recorder{reply: func([]string) probe.Result { return probe.Result{Stdout: "{\"result\":{\"pane\":{}}}"} }}
+	if _, err := backend.PaneFacts(context.Background(), r.conn(), ""); err == nil {
+		t.Fatal("empty requested and returned identities accepted")
+	}
+}
