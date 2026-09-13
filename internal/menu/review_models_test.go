@@ -146,3 +146,30 @@ func TestRestoreReviewerRetiresLegacySharedProjectModel(t *testing.T) {
 		t.Fatalf("other scale lost legacy model: %s", model)
 	}
 }
+
+func TestReviewFieldsPreserveAnotherOwnersStoredValues(t *testing.T) {
+	s, _ := tempOverlaySession(t, config.ModeGlobal)
+	entry := s.Config.Models.ReviewRoles["PM"]
+	entry["large_agent"], entry["large_model"], entry["large_effort"] = "claude", "claude-custom", "low"
+	fields := s.ReviewModelFieldsFor("PM", "large")
+	if fields[0].Value() != s.Config.Models.Review["codex"]["model"] {
+		t.Fatal("field did not display selected reviewer's value")
+	}
+	if _, err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := config.LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry = stored.Models.ReviewRoles["PM"]
+	if entry["large_agent"] != "claude" || entry["large_model"] != "claude-custom" || entry["large_effort"] != "low" {
+		t.Fatalf("opening fields corrupted stored overrides: %+v", entry)
+	}
+	fields[0].Set("codex-custom")
+	s.NoteModelOverride(fields[0], "codex-custom")
+	model, _ := config.ReviewModelFor(s.Config, "codex", "PM", "large")
+	if model != "codex-custom" || s.Config.Models.ReviewRoles["PM"]["large_agent"] != "codex" {
+		t.Fatal("explicit edit did not bind the selected reviewer")
+	}
+}

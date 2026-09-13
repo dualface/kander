@@ -28,15 +28,21 @@ func mergeReviewModelOwners(scope, overlay, merged map[string]any) {
 				}
 			}
 			if owner == baseOwner && owner == rawReviewer(merged, scale, role) {
-				// A new binding may still inherit compatible legacy Global fields.
-				// Resolve that fallback before the binding disables shared keys.
-				if rawReviewModelString(overlay, role, ownerKey) != "" && rawReviewModelString(scope, role, ownerKey) == "" {
-					for _, field := range []string{"model", "effort"} {
-						key := scale + "_" + field
-						if !OverlayHas(overlay, append(path, key)...) && rawReviewModelString(merged, role, key) == "" {
-							if value, ok := OverlayGet(merged, append(path, field)...); ok {
-								OverlaySet(merged, value, append(path, key)...)
-							}
+				// Preserve compatible legacy fallback in either direction without
+				// replacing a nonempty scale value or an explicit Project scale key.
+				var legacy map[string]any
+				projectBound := rawReviewModelString(overlay, role, ownerKey) != ""
+				scopeBound := rawReviewModelString(scope, role, ownerKey) != ""
+				if projectBound && !scopeBound {
+					legacy = merged
+				} else if !projectBound && scopeBound {
+					legacy = overlay
+				}
+				for _, field := range []string{"model", "effort"} {
+					key := scale + "_" + field
+					if !OverlayHas(overlay, append(path, key)...) && rawReviewModelString(merged, role, key) == "" {
+						if value, ok := OverlayGet(legacy, append(path, field)...); ok {
+							OverlaySet(merged, value, append(path, key)...)
 						}
 					}
 				}

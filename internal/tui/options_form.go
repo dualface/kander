@@ -840,17 +840,7 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 			}
 		}
 		before := p.overridePresence(path...)
-		agentScale := ""
-		agentBefore := false
-		if len(path) >= 4 && path[0] == "models" && path[1] == "kanban" {
-			for _, scale := range config.TaskScales {
-				if field.FieldName() == scale+"_model" || field.FieldName() == scale+"_effort" {
-					agentScale = scale
-					agentBefore = p.overridePresence("kanban_agents", scale)
-					break
-				}
-			}
-		}
+		selectionBefore := p.modelSelectionOverrides(field)
 		field.Set(next)
 		if p.session != nil {
 			p.session.NoteModelOverride(field, next)
@@ -859,10 +849,7 @@ func (b *formBinding) applyModels(p *optionsPanel) {
 		p.markDirty()
 		// Keep focus on the model being typed. Pinning the Agent must not move
 		// rebuild focus onto the Agent selector mid-keystroke.
-		needRebuild := before != p.overridePresence(path...)
-		if agentScale != "" && agentBefore != p.overridePresence("kanban_agents", agentScale) {
-			needRebuild = true
-		}
+		needRebuild := before != p.overridePresence(path...) || selectionBefore != p.modelSelectionOverrides(field)
 		if needRebuild {
 			p.rebuildAt(modelFocusKey(field))
 		}

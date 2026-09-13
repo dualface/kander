@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
@@ -63,5 +64,51 @@ func TestOptionsAgentSwitchDoesNotReplayOldModelDraft(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestReviewModelEditRefreshesCoupledInheritance(t *testing.T) {
+	for _, pinned := range []bool{false, true} {
+		name := "inherited-reviewer"
+		if pinned {
+			name = "pinned-reviewer"
+		}
+		t.Run(name, func(t *testing.T) {
+			_, panel := openPanel(t)
+			dir, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+			overlay := map[string]any{}
+			config.OverlaySet(overlay, "existing-model", "models", "review_roles", "PM", "large_model")
+			if pinned {
+				config.OverlaySet(overlay, "codex", "reviewers", "large", "PM")
+			}
+			if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, overlay); err != nil {
+				t.Fatal(err)
+			}
+			if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+				t.Fatal(err)
+			}
+			pumpPanel(panel, panel.openSection(sectionReview))
+			key := ""
+			for i, field := range panel.bind.modelFields {
+				if field.Agent == "PM" && field.FieldName() == "large_model" {
+					*panel.bind.modelValues[i] = "edited-model"
+					key = modelFocusKey(field)
+					break
+				}
+			}
+			panel.bind.apply(panel)
+			if key == "" || panel.rebuildFocus != key {
+				t.Fatal("coupled override did not request rebuild at the edited model")
+			}
+			pumpPanel(panel, panel.rebuildSection())
+			if !panel.session.FieldOverridden("reviewers", "large", "PM") {
+				t.Fatal("reviewer remains inherited")
+			}
+			for i, field := range panel.bind.modelFields {
+				if field.Agent == "PM" && field.FieldName() == "large_effort" && strings.HasPrefix(*panel.bind.modelValues[i], "(") {
+					t.Fatal("paired effort still shows an inherited marker")
+				}
+			}
+		})
 	}
 }

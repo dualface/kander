@@ -36,10 +36,6 @@ func (s *Session) setReviewRoleSelection(role, scale, reviewer, model, effort st
 
 func (s *Session) noteReviewModelOverride(field ModelField, value string) {
 	scale := kanbanScaleForField(field.field)
-	if scale == "" {
-		s.noteOverride([]string{"models", "review_roles", field.Agent, field.field}, value)
-		return
-	}
 	reviewer := config.ReviewerFor(s.Config, scale, field.Agent)
 	model, effort := config.ReviewModelFor(s.Config, reviewer, field.Agent, scale)
 	if field.field == scale+"_model" {

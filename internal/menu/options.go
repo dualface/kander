@@ -482,8 +482,8 @@ func (s *Session) ExecutionModelFields() []ModelField {
 }
 
 // ReviewModelFieldsFor returns the model fields of one review role at one task scale.
-// Every role stores its own concrete values, so what the UI shows is what is used, with no hidden inheritance layer;
-// while a role has no value yet, it is filled in from the default of its selected reviewer.
+// Fields display the runtime values for the selected reviewer. Stored overrides
+// owned by another agent remain unchanged until the selection is edited.
 func (s *Session) ReviewModelFieldsFor(role, scale string) []ModelField {
 	reviewer := config.ReviewerFor(s.Config, scale, role)
 	if reviewer == "" {
@@ -523,6 +523,10 @@ func (s *Session) seedReviewRole(role, scale, reviewer string) map[string]string
 		s.Config.Models.ReviewRoles[role] = entry
 	}
 	model, effort := config.ReviewModelFor(s.Config, reviewer, role, scale)
+	if owner := entry[scale+"_agent"]; owner != "" && owner != reviewer {
+		// Presentation must not relabel another agent's stored values on Save.
+		return map[string]string{scale + "_model": model, scale + "_effort": effort}
+	}
 	entry[scale+"_model"] = model
 	entry[scale+"_effort"] = effort
 	return entry

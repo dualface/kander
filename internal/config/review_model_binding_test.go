@@ -115,3 +115,31 @@ func TestBoundProjectFieldInheritsCompatibleLegacyGlobal(t *testing.T) {
 		t.Fatalf("compatible inheritance lost: %s/%s", model, effort)
 	}
 }
+
+func TestLegacyProjectSharedValuesSurviveGlobalBinding(t *testing.T) {
+	for _, field := range []string{"model", "effort"} {
+		for _, global := range []string{"", "global-specific"} {
+			t.Run(field+"/"+global, func(t *testing.T) {
+				cfg := DefaultConfig()
+				cfg.Reviewers["large"]["PM"] = "grok"
+				cfg.Models.ReviewRoles["PM"]["large_"+field] = global
+				overlay := map[string]any{}
+				OverlaySet(overlay, "project-shared", "models", "review_roles", "PM", field)
+				before, err := ApplyOverlay(cfg, overlay)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantModel, wantEffort := ReviewModelFor(before, "grok", "PM", "large")
+				cfg.Models.ReviewRoles["PM"]["large_agent"] = "grok"
+				after, err := ApplyOverlay(cfg, overlay)
+				if err != nil {
+					t.Fatal(err)
+				}
+				model, effort := ReviewModelFor(after, "grok", "PM", "large")
+				if model != wantModel || effort != wantEffort {
+					t.Fatalf("binding changed %s/%s to %s/%s", wantModel, wantEffort, model, effort)
+				}
+			})
+		}
+	}
+}
