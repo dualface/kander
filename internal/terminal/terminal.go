@@ -59,7 +59,6 @@ type Capabilities struct {
 // Address is a parsed WINDOW address. WINDOW is "<launcher>:<opaque>", where
 // only the backend encodes and decodes the opaque part.
 type Address struct {
-	Launcher string
 	// Session is the tmux session id or name; empty for backends without one.
 	Session string
 	// Container is the herdr tab id or the tmux window id.

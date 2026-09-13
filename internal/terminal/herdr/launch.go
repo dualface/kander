@@ -70,13 +70,13 @@ func (b *Backend) CreateContainer(conn terminal.Conn, target terminal.Target, cw
 		if tabID != "" {
 			ctx, cancel := context.WithTimeout(context.Background(), probe.DefaultCommandTimeout)
 			defer cancel()
-			if closeErr := b.CloseContainer(ctx, conn, terminal.Address{Launcher: Name, Container: tabID}); closeErr != nil {
+			if closeErr := b.CloseContainer(ctx, conn, terminal.Address{Container: tabID}); closeErr != nil {
 				return terminal.Address{}, textError("launch.herdr_tab_create_failed_response_is_missing_tab_or", closeErr.Error())
 			}
 		}
 		return terminal.Address{}, textError("launch.herdr_tab_create_failed_response_is_missing_tab_or_2")
 	}
-	return terminal.Address{Launcher: Name, Container: tabID, Pane: paneID}, nil
+	return terminal.Address{Container: tabID, Pane: paneID}, nil
 }
 
 // WaitReady waits for the new pane to render its first output: text sent

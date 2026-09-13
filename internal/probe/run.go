@@ -7,8 +7,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -143,11 +141,4 @@ func captureWithEnv(ctx context.Context, program string, args, env []string) (re
 		return res, waitErr
 	}
 	return res, nil
-}
-
-func failureDetail(res Result) string {
-	if s := strings.TrimSpace(res.Stderr); s != "" {
-		return s
-	}
-	return "exit " + strconv.Itoa(res.Code)
 }

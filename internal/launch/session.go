@@ -456,13 +456,4 @@ func requireAgentProgram(agentName string, configs ...*config.Config) (*process.
 	return nil, launchError("launch.agent_is_not_in_path", executable)
 }
 
-func contains(list []string, value string) bool {
-	for _, item := range list {
-		if item == value {
-			return true
-		}
-	}
-	return false
-}
-
 func itoa(n int) string { return strconv.Itoa(n) }

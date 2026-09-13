@@ -41,7 +41,16 @@ func agentWaitExit(backend terminal.Backend, program string, address terminal.Ad
 		if remaining <= 0 {
 			return false, takeoverError("takeover.timed_out_waiting_for_the_agent_to_exit", paneID)
 		}
-		pane, probeErr := paneFacts(backend, program, paneID, remaining)
+		// Only the pane get command is bounded by the remaining budget: a
+		// response that arrived in time is classified even if the budget
+		// expires while it is parsed.
+		budget := remaining
+		conn := terminal.Conn{Program: program, Run: func(_ context.Context, name string, args []string) (probe.Result, error) {
+			ctx, cancel := probe.TimeoutContext(budget)
+			defer cancel()
+			return probe.CaptureContext(ctx, name, args)
+		}}
+		pane, probeErr := backend.PaneFacts(context.Background(), conn, paneID)
 		if probeErr != nil {
 			return false, waitProbeError(probeErr)
 		}

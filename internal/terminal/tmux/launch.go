@@ -169,7 +169,7 @@ func (b *Backend) CreateContainer(conn terminal.Conn, target terminal.Target, cw
 	if create {
 		_ = capture(conn, "set-option", "-t", target.Session, projectSessionOpt, target.Project)
 	}
-	return terminal.Address{Launcher: b.name, Session: target.Session, Container: parts[0], Pane: parts[1]}, nil
+	return terminal.Address{Session: target.Session, Container: parts[0], Pane: parts[1]}, nil
 }
 
 // WaitReady is immediate: respawn-pane replaces the placeholder pane process.

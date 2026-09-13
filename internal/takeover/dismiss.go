@@ -125,7 +125,7 @@ func dismissAgentPane(backend terminal.Backend, address terminal.Address, parsed
 	if err != nil {
 		return "", "", err
 	}
-	target := terminal.Address{Launcher: backend.Name(), Container: tabID, Pane: paneID}
+	target := terminal.Address{Container: tabID, Pane: paneID}
 	if err := validateAgentContainer(backend, program, target, pane); err != nil {
 		return "", "", err
 	}

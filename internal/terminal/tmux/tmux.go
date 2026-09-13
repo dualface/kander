@@ -69,14 +69,14 @@ func (b *Backend) ParseAddress(value string) (terminal.Address, bool) {
 	if match == nil || match[1] != b.name {
 		return terminal.Address{}, false
 	}
-	return terminal.Address{Launcher: b.name, Session: match[2], Container: match[3], Pane: match[4]}, true
+	return terminal.Address{Session: match[2], Container: match[3], Pane: match[4]}, true
 }
 
 func (b *Backend) ParseFocusAddress(fields []string) (terminal.Address, bool) {
 	if len(fields) != 4 || fields[0] != b.name {
 		return terminal.Address{}, false
 	}
-	return terminal.Address{Launcher: b.name, Session: fields[1], Container: fields[2], Pane: fields[3]}, true
+	return terminal.Address{Session: fields[1], Container: fields[2], Pane: fields[3]}, true
 }
 
 // AutoDetect selects plain tmux when kander runs inside a tmux client.

@@ -159,7 +159,7 @@ func (b *Backend) ReverseLookup(ctx context.Context, conn terminal.Conn, identit
 		if agent != identity.Agent || reference != identity.Reference {
 			continue
 		}
-		matches = append(matches, terminal.Address{Launcher: Name, Container: tab, Pane: id})
+		matches = append(matches, terminal.Address{Container: tab, Pane: id})
 	}
 	if err := ctx.Err(); err != nil {
 		return terminal.Address{}, err

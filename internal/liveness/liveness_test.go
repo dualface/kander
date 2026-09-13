@@ -460,7 +460,7 @@ func TestTmuxReverseLookupUniqueMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loc != (terminal.Address{Launcher: "tmux", Session: "$4", Container: "@4", Pane: "%4"}) {
+	if loc != (terminal.Address{Session: "$4", Container: "@4", Pane: "%4"}) {
 		t.Fatalf("%+v", loc)
 	}
 	if terminal.FormatAddress(tmuxBackend, loc) != "tmux:$4:@4:%4" {

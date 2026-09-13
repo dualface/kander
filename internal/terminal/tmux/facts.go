@@ -205,7 +205,7 @@ func (b *Backend) ReverseLookup(ctx context.Context, conn terminal.Conn, identit
 			if b.projectSession {
 				session = sessionName
 			}
-			matches = append(matches, terminal.Address{Launcher: b.name, Session: session, Container: windowID, Pane: paneID})
+			matches = append(matches, terminal.Address{Session: session, Container: windowID, Pane: paneID})
 		}
 	}
 	if err := ctx.Err(); err != nil {

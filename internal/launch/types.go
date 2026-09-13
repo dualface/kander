@@ -70,7 +70,7 @@ func (p LaunchPlan) OccupiesTerminal() bool {
 
 // address is the terminal address of a launch outcome.
 func (p LaunchPlan) address(outcome LaunchOutcome) terminal.Address {
-	return terminal.Address{Launcher: p.Launcher, Session: p.Target.Session, Container: outcome.Container, Pane: outcome.Pane}
+	return terminal.Address{Session: p.Target.Session, Container: outcome.Container, Pane: outcome.Pane}
 }
 
 // OpaqueAddress renders the backend part of the container address of a

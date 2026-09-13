@@ -116,7 +116,7 @@ func ResolveTarget(window, paneOverride string, session liveness.TaskSession, ti
 		if err := requireReady(probe); err != nil {
 			return DirectTarget{}, err
 		}
-		window := terminal.FormatAddress(agent, terminal.Address{Launcher: agent.Name(), Container: container, Pane: paneID})
+		window := terminal.FormatAddress(agent, terminal.Address{Container: container, Pane: paneID})
 		return DirectTarget{Backend: agent, Program: program, PaneID: paneID, Window: window, Timeout: remaining}, nil
 	}
 	if parsed {

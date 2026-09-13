@@ -85,7 +85,7 @@ func (b *Backend) ParseAddress(value string) (terminal.Address, bool) {
 	if match == nil {
 		return terminal.Address{}, false
 	}
-	return terminal.Address{Launcher: Name, Container: match[1], Pane: match[2]}, true
+	return terminal.Address{Container: match[1], Pane: match[2]}, true
 }
 
 func (b *Backend) ParseFocusAddress(fields []string) (terminal.Address, bool) {
@@ -94,10 +94,10 @@ func (b *Backend) ParseFocusAddress(fields []string) (terminal.Address, bool) {
 	}
 	switch len(fields) {
 	case 3:
-		return terminal.Address{Launcher: Name, Container: fields[1], Pane: fields[2]}, true
+		return terminal.Address{Container: fields[1], Pane: fields[2]}, true
 	case 5:
 		// Public herdr IDs include their workspace prefix, for example w1:t2 and w1:p3.
-		return terminal.Address{Launcher: Name, Container: strings.Join(fields[1:3], ":"), Pane: strings.Join(fields[3:5], ":")}, true
+		return terminal.Address{Container: strings.Join(fields[1:3], ":"), Pane: strings.Join(fields[3:5], ":")}, true
 	}
 	return terminal.Address{}, false
 }

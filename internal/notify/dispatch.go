@@ -228,7 +228,7 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 		if !ok {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, value)
 		}
-		backend, address, parsed = agent, terminal.Address{Launcher: agent.Name(), Pane: override}, true
+		backend, address, parsed = agent, terminal.Address{Pane: override}, true
 	}
 	if !parsed {
 		return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, value)
@@ -249,7 +249,7 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 		if found.Container == "" {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "tab")
 		}
-		window := terminal.FormatAddress(backend, terminal.Address{Launcher: backend.Name(), Container: found.Container, Pane: pane})
+		window := terminal.FormatAddress(backend, terminal.Address{Container: found.Container, Pane: pane})
 		return DirectTarget{Backend: backend, Program: program, PaneID: pane, Window: window}, found.AgentStatus != "idle" && found.AgentStatus != "done", nil
 	}
 	expected, err := agentCommandName(session.Agent)
