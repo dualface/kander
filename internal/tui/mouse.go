@@ -293,10 +293,9 @@ func (a *App) hitColumnStrip(x, y int) string {
 		return ""
 	}
 	_, w := a.size()
-	states := a.Model.States()
-	for i, cell := range evenCells(w, len(states)) {
-		if cell.Width > 0 && x >= cell.X && x < cell.X+cell.Width {
-			return states[i]
+	for _, cell := range a.columnTabCells(w) {
+		if cell.width > 0 && x >= cell.x && x < cell.x+cell.width {
+			return cell.state
 		}
 	}
 	return ""

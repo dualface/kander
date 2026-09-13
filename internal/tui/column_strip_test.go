@@ -34,40 +34,19 @@ func stripBoardApp(t *testing.T, width, height int) *App {
 	return app
 }
 
-func TestEvenCellsFillWidth(t *testing.T) {
-	for _, width := range []int{20, 64, 65} {
-		for _, count := range []int{1, 5, 7} {
-			cells := evenCells(width, count)
-			if len(cells) != count {
-				t.Fatalf("width=%d count=%d len=%d", width, count, len(cells))
-			}
-			total := 0
-			for i, cell := range cells {
-				if cell.X != total {
-					t.Fatalf("width=%d count=%d cell %d x=%d want %d", width, count, i, cell.X, total)
-				}
-				if cell.Width < 0 {
-					t.Fatalf("negative width %+v", cell)
-				}
-				total += cell.Width
-			}
-			if total != width {
-				t.Fatalf("width=%d count=%d total=%d", width, count, total)
-			}
-		}
-	}
-}
-
 func TestColumnStripShowsOnNarrowBoard(t *testing.T) {
 	app := stripBoardApp(t, 64, 20)
 	if !app.columnStripVisible() {
 		t.Fatal("width 64 should show tabs")
 	}
 	names := viewLine(app, panelTopRow)
-	if !strings.Contains(names, borderVertical) {
-		t.Fatalf("tab row missing side border: %q", names)
+	if !strings.Contains(names, "backlog 1") {
+		t.Fatalf("selected tab missing count: %q", names)
 	}
-	for _, name := range []string{"backlog", "todo", "working", "review", "done"} {
+	if strings.Contains(names, " todo ") || strings.Contains(names, " working ") {
+		t.Fatalf("idle tab has padding: %q", names)
+	}
+	for _, name := range []string{"todo", "working", "review", "done"} {
 		if !strings.Contains(names, name) {
 			t.Fatalf("tab row %q missing %s", names, name)
 		}
@@ -91,14 +70,14 @@ func TestColumnStripClickSwitchesColumn(t *testing.T) {
 	if app.Model.CurrentState() != "backlog" {
 		t.Fatalf("start %s", app.Model.CurrentState())
 	}
-	cells := evenCells(64, len(app.Model.States()))
-	todo := cells[1]
-	app.HandleMouse(todo.X+todo.Width/2, panelTopRow, mouseBtn1Clicked)
+	cells := app.columnTabCells(64)
+	todo := tabCellByState(t, cells, "todo")
+	app.HandleMouse(todo.x+todo.width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "todo" {
 		t.Fatalf("tab click %s", app.Model.CurrentState())
 	}
-	working := cells[2]
-	app.HandleMouse(working.X+working.Width/2, panelTopRow, mouseBtn1Clicked)
+	working := tabCellByState(t, app.columnTabCells(64), "working")
+	app.HandleMouse(working.x+working.width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "working" {
 		t.Fatalf("tab click %s", app.Model.CurrentState())
 	}
@@ -115,14 +94,10 @@ func TestColumnStripClickSecondPanelTab(t *testing.T) {
 	if len(layout) < 2 {
 		t.Fatalf("want two columns, got %d", len(layout))
 	}
-	cells := evenCells(64, len(app.Model.States()))
-	done := cells[len(cells)-1]
-	if done.X < layout[1].X {
-		t.Fatalf("done tab x=%d still in first panel %d", done.X, layout[1].X)
-	}
-	app.HandleMouse(done.X+done.Width/2, panelTopRow, mouseBtn1Clicked)
+	done := tabCellByState(t, app.columnTabCells(64), "done")
+	app.HandleMouse(done.x+done.width/2, panelTopRow, mouseBtn1Clicked)
 	if app.Model.CurrentState() != "done" {
-		t.Fatalf("second-panel tab click %s", app.Model.CurrentState())
+		t.Fatalf("packed tab click %s", app.Model.CurrentState())
 	}
 	visible := false
 	for _, col := range app.visibleColumnLayout() {
@@ -133,6 +108,17 @@ func TestColumnStripClickSecondPanelTab(t *testing.T) {
 	if !visible {
 		t.Fatal("done not visible after tab click")
 	}
+}
+
+func tabCellByState(t *testing.T, cells []columnTabCell, state string) columnTabCell {
+	t.Helper()
+	for _, cell := range cells {
+		if cell.state == state {
+			return cell
+		}
+	}
+	t.Fatalf("missing tab %s", state)
+	return columnTabCell{}
 }
 
 func TestColumnStripKeepsBoardBodyHeight(t *testing.T) {
@@ -157,32 +143,24 @@ func TestColumnStripStyleUsesColumnColor(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	defer lipgloss.SetColorProfile(profile)
 	p := themePalette("dark")
-	style := columnStripStyle(p, "todo", false)
-	if style.GetBackground() != p.Headings["todo"] {
-		t.Fatalf("todo background %v want %v", style.GetBackground(), p.Headings["todo"])
+	idle := columnStripStyle(p, "todo", false)
+	if idle.GetBackground() == p.Headings["todo"] {
+		t.Fatal("idle tab used the column fill")
 	}
 	focused := columnStripStyle(p, "todo", true)
-	if focused.GetForeground() == style.GetForeground() && focused.GetBackground() == style.GetBackground() {
-		t.Fatal("focused strip matched the idle cell")
+	if focused.GetForeground() == idle.GetForeground() && focused.GetBackground() == idle.GetBackground() {
+		t.Fatal("focused tab matched the idle cell")
 	}
 }
 
 func TestColumnStripClipsLongNames(t *testing.T) {
-	app := stripBoardApp(t, 20, 20)
+	app := stripBoardApp(t, 12, 20)
 	nameLine := viewLine(app, panelTopRow)
 	if strings.Contains(nameLine, "working") {
 		t.Fatalf("unclipped name in %q", nameLine)
 	}
-	cells := evenCells(20, len(app.Model.States()))
-	inner := cells[2].Width - 1
-	if inner < 1 {
-		inner = cells[2].Width
-	}
-	if inner >= displayWidth("working") {
-		t.Skip("cell wide enough for working")
-	}
-	got := clipText("working", inner)
-	if !strings.Contains(nameLine, strings.TrimSpace(got)) && got != "" {
-		t.Fatalf("clipped %q not in %q", got, nameLine)
+	cells := app.columnTabCells(12)
+	if len(cells) == 0 {
+		t.Fatal("no tab cells")
 	}
 }

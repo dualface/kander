@@ -422,12 +422,12 @@ func headingStyle(p palette, state string, focused bool) lipgloss.Style {
 	return style
 }
 
-// columnStripStyle paints one tap cell in the column's color. Focus matches the board heading.
+// columnStripStyle paints the selected tab in the column's color. Idle tabs stay unfilled.
 func columnStripStyle(p palette, state string, focused bool) lipgloss.Style {
 	if focused {
 		return headingStyle(p, state, true)
 	}
-	return lipgloss.NewStyle().Foreground(p.Bg).Background(stateColor(p, state))
+	return styleFor("dim", p)
 }
 
 // headingRuleStyle is the rule below the title. The selected column uses its column color as a focus hint,

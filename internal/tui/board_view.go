@@ -210,33 +210,67 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, skip
 	return strings.Join(lines, "\n")
 }
 
-func (a *App) renderColumnTabs(p palette, width int) string {
+type columnTabCell struct {
+	state    string
+	x, width int
+	text     string
+	selected bool
+}
+
+func (a *App) columnTabCells(width int) []columnTabCell {
+	if width < 1 {
+		return nil
+	}
 	states := a.Model.States()
-	cells := evenCells(width, len(states))
 	current := a.Model.CurrentState()
+	cells := make([]columnTabCell, 0, len(states))
+	x := 0
+	prevSelected := false
+	for i, state := range states {
+		selected := state == current
+		label := a.Context.stateLabel(state)
+		text := label
+		if selected {
+			text = borderVertical + label + " " + itoa(len(a.Model.TasksFor(state))) + borderVertical
+		} else if i > 0 && !prevSelected {
+			text = borderVertical + label
+		}
+		w := displayWidth(text)
+		if x+w > width {
+			remain := width - x
+			if remain < 1 {
+				break
+			}
+			text = clipText(text, remain)
+			w = displayWidth(text)
+			if w < 1 {
+				break
+			}
+		}
+		cells = append(cells, columnTabCell{state: state, x: x, width: w, text: text, selected: selected})
+		x += w
+		prevSelected = selected
+		if x >= width {
+			break
+		}
+	}
+	return cells
+}
+
+func (a *App) renderColumnTabs(p palette, width int) string {
+	cells := a.columnTabCells(width)
 	parts := make([]string, 0, len(cells))
-	last := len(cells) - 1
-	for i, cell := range cells {
-		if cell.Width < 1 {
+	for _, cell := range cells {
+		if cell.selected {
+			parts = append(parts, columnStripStyle(p, cell.state, true).Render(cell.text))
 			continue
 		}
-		state := states[i]
-		style := columnStripStyle(p, state, state == current)
-		left, right := borderVertical, ""
-		if i == last {
-			right = borderVertical
-		}
-		inner := cell.Width - displayWidth(left) - displayWidth(right)
-		if inner < 0 {
-			inner = 0
-		}
-		label := clipText(a.Context.stateLabel(state), inner)
-		parts = append(parts, style.Render(left+centerText(label, inner)+right))
+		parts = append(parts, styleFor("dim", p).Render(cell.text))
 	}
 	if len(parts) == 0 {
 		return p.fillLine(width)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, parts...)
+	return padLineFill(strings.Join(parts, ""), width, p)
 }
 
 // renderCard draws one task card. The card keeps one column of padding on each side and both take part in the coloring,
