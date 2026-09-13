@@ -65,6 +65,9 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {
 		healthy = false
 	}
+	if !reportTerminalDefinitions() {
+		healthy = false
+	}
 	reportGitHubCLI()
 	agentConfig, agentConfigErr := config.Load(false)
 	if agentConfigErr != nil && !repair {
@@ -346,6 +349,10 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 			hint(config.Text(
 				"menu.launcher_auto_chooses_at_start_a_herdr_tab_if",
 			))
+		}
+	default:
+		if !checkDefinitionLauncher(launcher) {
+			healthy = false
 		}
 	case direct.Foreground:
 		if cfg.WelcomeComplete {

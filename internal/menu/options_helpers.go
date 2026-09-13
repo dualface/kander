@@ -147,6 +147,7 @@ func herdrLauncherChoices(cfg *config.Config) []Choice {
 func windowsLauncherChoices(cfg *config.Config) []Choice {
 	choices := []Choice{{Value: direct.Console, Label: config.Text("menu.separate_windows_console")}}
 	choices = append(choices, herdrLauncherChoices(cfg)...)
+	choices = append(choices, definitionLauncherChoices()...)
 	return append(choices, Choice{
 		Value: direct.Foreground, Label: config.Text("menu.foreground_in_this_terminal"),
 	})

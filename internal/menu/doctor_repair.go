@@ -133,5 +133,5 @@ func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 	case builtin.Tmux, builtin.TmuxSession:
 		return tools.Tmux.Available()
 	}
-	return false
+	return definitionLauncherAvailable(launcher)
 }

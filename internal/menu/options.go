@@ -359,6 +359,7 @@ func (s *Session) LauncherChoices() []Choice {
 	if lookPath(builtin.TmuxExecutable) != "" {
 		choices = append(choices, tmuxLauncherChoices()...)
 		choices = append(choices, herdrLauncherChoices(s.Config)...)
+		choices = append(choices, definitionLauncherChoices()...)
 		return append(choices, foreground)
 	}
 	unavailable := config.Text("menu.not_currently_installed")
@@ -368,6 +369,7 @@ func (s *Session) LauncherChoices() []Choice {
 		}
 	}
 	choices = append(choices, herdrLauncherChoices(s.Config)...)
+	choices = append(choices, definitionLauncherChoices()...)
 	return append(choices, foreground, Choice{
 		Value: LauncherInstallValue,
 		Label: config.Text("menu.install_tmux_and_use_a_new_window"),
