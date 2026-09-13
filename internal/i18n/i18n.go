@@ -21,6 +21,7 @@ var catalogs embed.FS
 var catalogFiles = []string{
 	"locales/en.json", "locales/zh-CN.json", "locales/ja.json",
 	"locales/issue/en.json", "locales/issue/zh-CN.json", "locales/issue/ja.json",
+	"locales/agentlanguage/en.json", "locales/agentlanguage/zh-CN.json", "locales/agentlanguage/ja.json",
 }
 
 var localizers = loadLocalizers()

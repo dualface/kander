@@ -1,0 +1,10 @@
+{
+  "menu.agent_language_choice.en": "英語",
+  "menu.agent_language_choice.zh_cn": "簡体字中国語",
+  "menu.agent_language_choice.zh_tw": "繁体字中国語",
+  "menu.agent_language_choice.ja": "日本語",
+  "menu.agent_language_choice.ko": "韓国語",
+  "menu.agent_language_choice.es": "スペイン語",
+  "menu.agent_language_choice.fr": "フランス語",
+  "menu.agent_language_choice.de": "ドイツ語"
+}

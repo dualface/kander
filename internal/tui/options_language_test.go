@@ -126,6 +126,26 @@ func TestLanguageChangeRefreshesAgentChoiceCopy(t *testing.T) {
 	}
 }
 
+func TestLanguageChangeTranslatesAgentLanguageValue(t *testing.T) {
+	useInterfaceLanguage(t, "en")
+	stored := englishConfig()
+	stored.AgentLanguage = "zh-CN"
+	_, panel := openPanel(t, stored)
+	pumpPanel(panel, panel.dispatch(sectionInterface))
+	if form := ansi.Strip(panel.form.View()); !strings.Contains(form, "Simplified Chinese") {
+		t.Fatalf("setup: agent language value is not in English:\n%s", form)
+	}
+
+	openLanguageField(t, panel)
+	form := ansi.Strip(panel.form.View())
+	if !strings.Contains(form, "簡体字中国語") || strings.Contains(form, "Simplified Chinese") {
+		t.Fatalf("agent language value kept the old interface language:\n%s", form)
+	}
+	if panel.bind.agentLanguage != "zh-CN" || panel.session.Config.AgentLanguage != "zh-CN" {
+		t.Fatalf("stored agent language changed: bind=%q session=%q", panel.bind.agentLanguage, panel.session.Config.AgentLanguage)
+	}
+}
+
 func TestLanguageEscapeRestoresGlobalLanguage(t *testing.T) {
 	useInterfaceLanguage(t, "en")
 	app, panel := openPanel(t, englishConfig())

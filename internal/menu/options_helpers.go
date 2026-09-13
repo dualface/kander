@@ -40,24 +40,27 @@ func languageChoices() []Choice {
 	return out
 }
 
-// agentLanguageFixedChoices is the options-panel list for agent_language.
-// Labels are endonyms and are not translated with the interface language.
-var agentLanguageFixedChoices = []Choice{
-	{Value: "en", Label: "English"},
-	{Value: "zh-CN", Label: "简体中文"},
-	{Value: "zh-TW", Label: "繁體中文"},
-	{Value: "ja", Label: "日本語"},
-	{Value: "ko", Label: "한국어"},
-	{Value: "es", Label: "Español"},
-	{Value: "fr", Label: "Français"},
-	{Value: "de", Label: "Deutsch"},
+// agentLanguageFixedChoices is the options-panel list for agent_language: each
+// stored code with the catalog ID of its label.
+var agentLanguageFixedChoices = []struct{ value, labelID string }{
+	{"en", "menu.agent_language_choice.en"},
+	{"zh-CN", "menu.agent_language_choice.zh_cn"},
+	{"zh-TW", "menu.agent_language_choice.zh_tw"},
+	{"ja", "menu.agent_language_choice.ja"},
+	{"ko", "menu.agent_language_choice.ko"},
+	{"es", "menu.agent_language_choice.es"},
+	{"fr", "menu.agent_language_choice.fr"},
+	{"de", "menu.agent_language_choice.de"},
 }
 
-// agentLanguageChoices returns the fixed list, appending the current stored value
-// when it is outside the list so hand-edited codes are not silently replaced.
+// agentLanguageChoices returns the fixed list with labels in the current interface
+// language, appending the current stored value when it is outside the list so
+// hand-edited codes are not silently replaced; that value is labeled by its code.
 func agentLanguageChoices(current string) []Choice {
-	out := make([]Choice, len(agentLanguageFixedChoices))
-	copy(out, agentLanguageFixedChoices)
+	out := make([]Choice, 0, len(agentLanguageFixedChoices)+1)
+	for _, item := range agentLanguageFixedChoices {
+		out = append(out, Choice{Value: item.value, Label: config.Text(item.labelID)})
+	}
 	current = strings.TrimSpace(current)
 	if current == "" {
 		return out
