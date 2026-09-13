@@ -9,6 +9,9 @@
 .DS_Store
 Thumbs.db
 
+# Backup files, such as config backups left by kander doctor or manual edits
+*.bak
+
 # kanban/ is not listed here: `kander init` adds it to .git/info/exclude,
 # and rules/KANDER-KANBAN-RULES.md forbids propagating the local board via the project .gitignore.
 
