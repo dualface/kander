@@ -42,22 +42,24 @@
         "env": [
           {
             "name": "HERDR_ENV",
-            "value": "1"
+            "value": "1",
+            "before_binary": true,
+            "message": {
+              "id": "launch.not_currently_in_herdr_the_herdr_launcher_requires_herdr"
+            }
           },
           {
-            "name": "HERDR_WORKSPACE_ID"
+            "name": "HERDR_WORKSPACE_ID",
+            "trim": true,
+            "skip_auto": true,
+            "message": {
+              "id": "launch.herdr_workspace_id_is_missing_cannot_create_a_tab"
+            }
           }
         ],
         "messages": {
           "binary": {
             "id": "launch.herdr_is_not_in_path_run_kander_welcome_to"
-          },
-          "env": {
-            "id": "terminal.env_missing",
-            "args": [
-              "{name}",
-              "{launcher}"
-            ]
           }
         }
       },
@@ -76,6 +78,19 @@
     }
   },
   "ops": {
+    "prepare": {
+      "steps": [
+        {
+          "when": "field_missing:env.HERDR_WORKSPACE_ID",
+          "fail": {
+            "id": "launch.herdr_workspace_id_is_missing_cannot_create_a_tab"
+          }
+        }
+      ],
+      "result": {
+        "workspace": "{env.HERDR_WORKSPACE_ID}"
+      }
+    },
     "create_container": {
       "steps": [
         {
@@ -475,14 +490,9 @@
         "split": "json_array:panes",
         "fields": {
           "tab": "json_field:tab_id",
-          "pane": "json_field:pane_id"
+          "pane": "json_field:pane_id",
+          "object": "regex:^(\\{)"
         },
-        "expect": [
-          [
-            "!field_missing:row.tab",
-            "!field_missing:row.pane"
-          ]
-        ],
         "match": "field:row.tab={container}",
         "result": {
           "pane": "{row.pane}"
@@ -490,11 +500,27 @@
         "messages": {
           "missing": {
             "id": "liveness.herdr_pane_list_response_has_no_panes"
-          },
-          "invalid": {
-            "id": "takeover.a_pane_in_the_herdr_pane_list_response_has"
           }
-        }
+        },
+        "checks": [
+          {
+            "when": "!field_missing:row.object",
+            "message": {
+              "id": "takeover.herdr_pane_list_response_contains_an_invalid_pane"
+            }
+          },
+          {
+            "when": [
+              [
+                "!field_missing:row.tab",
+                "!field_missing:row.pane"
+              ]
+            ],
+            "message": {
+              "id": "takeover.a_pane_in_the_herdr_pane_list_response_has"
+            }
+          }
+        ]
       },
       "result": {
         "container": "{container}"
