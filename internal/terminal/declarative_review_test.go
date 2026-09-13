@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal/terminaltest"
 )
 
@@ -87,6 +86,8 @@ func TestDeclarativeFocusStepsUseStepMachinery(t *testing.T) {
 			FocusResult{ID: "focus.switch_failed", Args: []any{"cannot focus w1"}}, 2},
 		{"default diagnostic", `[{"argv": ["tab", "{container}"]}]`, []terminaltest.Reply{{Args: []string{"tab"}, Code: 1, Stdout: "rejected"}},
 			FocusResult{ID: "focus.switch_failed", Args: []any{"tab: rejected"}}, 3},
+		{"default diagnostic exit status", `[{"argv": ["tab", "{container}"]}]`, []terminaltest.Reply{{Args: []string{"tab"}, Code: 7}},
+			FocusResult{ID: "focus.switch_failed", Args: []any{"tab: exit 7"}}, 3},
 		{"declared message", `[{"argv": ["tab", "{container}"], "messages": {"exit": "tab {container} failed: {detail}"}}]`, []terminaltest.Reply{{Args: []string{"tab"}, Code: 2}},
 			FocusResult{ID: "focus.switch_failed", Args: []any{"tab w1 failed: exit 2"}}, 3},
 		{"degraded by on_error", `[{"argv": ["tab", "{container}"]}, {"argv": ["pane", "{pane}"], "on_error": "continue"}, {"when": "prev_failed", "argv": ["fallback"]}]`,
@@ -107,12 +108,6 @@ func TestDeclarativeFocusStepsUseStepMachinery(t *testing.T) {
 				t.Fatalf("calls=%q", calls)
 			}
 		})
-	}
-	if err := RunStep(context.Background(), Conn{Run: func(context.Context, string, []string) (probe.Result, error) {
-		t.Fatal("empty step executed")
-		return probe.Result{}, nil
-	}}, nil); err == nil {
-		t.Fatal("empty step accepted")
 	}
 }
 
@@ -141,6 +136,22 @@ func TestDeclarativeRowChecksAndLazyProcessName(t *testing.T) {
 	fake := terminaltest.New(t, reply(`{"pane":"p1"}`+"\n", "list"))
 	if found, err := backend.ReverseLookup(context.Background(), fakeConn(fake), identity); err != nil || found.Pane != "p1" {
 		t.Fatalf("unreferenced process name must not load: %+v %v", found, err)
+	}
+
+	// A process name used only by a row message is still resolved.
+	messaged := declarativeOp(t, OpReverseLookup, `{
+		"steps": [{"store": "list", "argv": ["list"]}],
+		"rows": {
+			"from": "list",
+			"fields": {"pane": "regex:\"pane\":\"([^\"]+)\""},
+			"match": "field:row.pane={reference}",
+			"result": {"container": "{row.pane}", "pane": "{row.pane}"},
+			"messages": {"none": {"or": ["no {process_name} pane"]}}
+		}
+	}`, nil)
+	named := Identity{Reference: "p9", ProcessName: func() (string, error) { return "codex", nil }}
+	if _, err := messaged.ReverseLookup(context.Background(), fakeConn(fake), named); err == nil || err.Error() != "no codex pane" {
+		t.Fatalf("message process name: %v", err)
 	}
 }
 

@@ -596,12 +596,36 @@ func rowsReference(rows *Rows, name string) bool {
 		return true
 	}
 	for _, check := range rows.Checks {
-		if uses(check.When) {
+		if uses(check.When) || messageUses(&check.Message, name) {
 			return true
 		}
 	}
 	for _, template := range rows.Result {
 		if strings.Contains(template, "{"+name+"}") {
+			return true
+		}
+	}
+	for _, message := range []*Message{rows.Messages.Missing, rows.Messages.Invalid, rows.Messages.None, rows.Messages.Ambiguous} {
+		if message != nil && messageUses(message, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// messageUses reports whether a message template, argument or alternative
+// uses a placeholder name.
+func messageUses(message *Message, name string) bool {
+	if strings.Contains(message.Template, "{"+name+"}") {
+		return true
+	}
+	for index := range message.Args {
+		if messageUses(&message.Args[index], name) {
+			return true
+		}
+	}
+	for index := range message.Or {
+		if messageUses(&message.Or[index], name) {
 			return true
 		}
 	}

@@ -7,7 +7,6 @@ package terminal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -258,27 +257,4 @@ func AsCommandError(err error) (*CommandError, bool) {
 	var commandErr *CommandError
 	ok := errors.As(err, &commandErr)
 	return commandErr, ok
-}
-
-// RunStep runs one focus or control step and renders its failure as
-// "<subcommand>: <detail>", preferring stderr, then stdout, then the exit code.
-func RunStep(ctx context.Context, conn Conn, args []string) error {
-	if len(args) == 0 {
-		return errors.New("terminal: step has no arguments")
-	}
-	result, err := conn.Run(ctx, conn.Program, args)
-	if err != nil {
-		return fmt.Errorf("%s: %s", args[0], probe.FailureDetail(err))
-	}
-	if result.Code != 0 {
-		detail := strings.TrimSpace(result.Stderr)
-		if detail == "" {
-			detail = strings.TrimSpace(result.Stdout)
-		}
-		if detail == "" {
-			detail = fmt.Sprintf("exit %d", result.Code)
-		}
-		return fmt.Errorf("%s: %s", args[0], detail)
-	}
-	return nil
 }
