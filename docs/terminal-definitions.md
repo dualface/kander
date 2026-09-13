@@ -317,8 +317,13 @@ A reflection test requires every Backend method to have a check. Supplemental
 metadata and post-close checks reuse the corresponding method. The inventory
 evaluates capability requirements at runtime (`|` means OR, `&` means AND);
 reverse lookup requires `PaneMetadata` or both `AgentIdentity` and `SessionReport`.
-These requirements select success or unsupported assertions: absent pane metadata, native
-output waiting or session reporting must produce `ErrUnsupported`. Without
+The optional requirements for WaitOutput, SetSessionMarker, ReportSession,
+PaneFacts, ReverseLookup and Focus select success or unsupported assertions.
+`Container` instead marks a prerequisite enforced by the Capabilities step:
+when absent, that step fails and later steps are not executed. Checks labelled
+`Container` therefore ignore the evaluated boolean; an empty expression imposes
+no capability requirement. Absent pane metadata, native output waiting or
+session reporting must produce `ErrUnsupported`. Without
 `foreground_process`, PaneFacts must still succeed for a live pane, with empty
 foreground fields; there is no separate foreground-query method to return
 `ErrUnsupported`. Without a writable identity, reverse lookup must complete with

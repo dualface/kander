@@ -51,9 +51,13 @@ type step struct {
 
 // methodSteps is also checked against the Backend interface by reflection.
 // Checks with the same method (metadata/foreground and post-close facts) are
-// supplemental assertions, rather than a second interface inventory. Each
-// capability expression selects success versus unsupported assertions in its
-// check; metadata readback belongs to SetSessionMarker, not the PaneFacts step.
+// supplemental assertions, rather than a second interface inventory. Optional
+// capability expressions select success versus unsupported assertions in wait,
+// metadata, report, facts, reverse and focus. Container is instead a prerequisite
+// enforced by the Capabilities step: if absent, that step fails and later steps
+// are not executed. Container checks therefore ignore their evaluated boolean;
+// empty expressions impose no capability requirement. Metadata readback belongs
+// to SetSessionMarker, not the PaneFacts step.
 var methodSteps = []step{
 	{"Name", "", (*checker).name},
 	{"Capabilities", "", (*checker).capabilities},
