@@ -66,3 +66,53 @@ func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 		t.Fatalf("want interface section, initial=%q current=%q", captured.Options.initial, captured.Options.current)
 	}
 }
+
+// TestPostInstallFirstLaunchCreatesConfigInInstallLanguage covers a fresh install:
+// the handoff carries the wizard language only as KANDER_LANG, and the config
+// doctor creates must still use it without leaving a CLI override behind.
+func TestPostInstallFirstLaunchCreatesConfigInInstallLanguage(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	// An empty PATH makes every probed agent unavailable without running any CLI.
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv(config.EnvLang, "ja")
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(install.EnvSkipInstall, "1")
+	_ = os.Unsetenv(board.EnvBoardDir)
+	cfgPath := filepath.Join(home, ".config", "kander", "config.json")
+	t.Setenv(config.EnvConfig, cfgPath)
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	t.Chdir(t.TempDir())
+
+	t.Setenv(install.EnvPostInstall, "1")
+	origTTY := isInteractiveTerminal
+	isInteractiveTerminal = func() bool { return true }
+	t.Cleanup(func() { isInteractiveTerminal = origTTY })
+	origRun := runBoardTUI
+	runBoardTUI = func(*App) error { return nil }
+	t.Cleanup(func() { runBoardTUI = origRun })
+
+	if code := Run(nil); code != 0 {
+		t.Fatalf("Run exit=%d", code)
+	}
+	created, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Language != "ja" || created.AgentLanguage != "ja" {
+		t.Fatalf("created config language=%q agent_language=%q want ja", created.Language, created.AgentLanguage)
+	}
+	if lang := config.CLILanguage(); lang != "" || os.Getenv(config.EnvLangCLI) != "" {
+		t.Fatalf("CLI language override left behind: %q", lang)
+	}
+	if got := config.ResolveLanguage(); got != "ja" {
+		t.Fatalf("first screen language=%q want ja", got)
+	}
+	config.BindConfigLanguage(&config.Config{Language: "en"})
+	if got := config.ResolveLanguage(); got != "en" {
+		t.Fatalf("a later config language change resolved %q want en", got)
+	}
+}

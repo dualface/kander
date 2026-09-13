@@ -77,7 +77,7 @@ func Run(_ []string) int {
 	}
 	if !configExists {
 		// The first launch probes the environment with doctor and produces a usable config; a failed health check does not stop the user from fixing the options.
-		_ = menu.Doctor(nil)
+		firstLaunchDoctor(postInstall)
 	}
 	config.BindEffectiveLanguage()
 	ctx := tuiPageContext()
@@ -161,4 +161,16 @@ func Run(_ []string) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// firstLaunchDoctor creates the missing config through doctor. doctor names a new
+// config's language only from a CLI override, so after an install handoff the
+// wizard language, carried as the KANDER_LANG default, acts as that override for
+// this creation only; the bound config language decides everything afterwards.
+func firstLaunchDoctor(postInstall bool) {
+	if postInstall && config.CLILanguage() == "" {
+		config.ApplyLanguageArgument([]string{"kander", "--lang", config.ResolveScopeLanguage()})
+		defer config.ApplyLanguageArgument(nil)
+	}
+	_ = menu.Doctor(nil)
 }
