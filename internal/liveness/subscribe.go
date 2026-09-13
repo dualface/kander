@@ -147,6 +147,11 @@ func parseSubscribeArgs(args []string) (subscribeOptions, string) {
 			positionals = append(positionals, arg)
 		}
 	}
+	// Cards outside any task group are monitored through --watch alone, so a
+	// subscription may name no group and no members when it watches something.
+	if len(positionals) == 0 && len(opts.Watch) > 0 {
+		return opts, ""
+	}
 	if len(positionals) < 2 {
 		return opts, "usage"
 	}

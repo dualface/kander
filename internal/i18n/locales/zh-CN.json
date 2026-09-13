@@ -527,7 +527,7 @@
   "liveness.stale_address_reverse_lookup": "原地址失效: {{.V0}}; 反查: {{.V1}}",
   "liveness.unknown_option": "未知选项",
   "liveness.usage_kander_check_all_task": "用法: kander check [--all] [任务...]",
-  "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "用法: kander subscribe [--refresh 秒] [--heartbeat 秒] <任务组> <任务>... [--watch 外部任务或任务组...]",
+  "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "用法: kander subscribe [--refresh 秒] [--heartbeat 秒] (<任务组> <任务>... [--watch 外部任务或任务组...] | --watch 任务或任务组...)",
   "liveness.use_notify_directly_for_this_codex_task_the_command": "; codex 卡直接用 notify, 命令内自动反查",
   "liveness.watched_target_duplicates_a_member_task": "外部监控目标与成员任务重复: {{.V0}}",
   "liveness.watched_task_group_has_no_members": "外部监控任务组没有成员: {{.V0}}",

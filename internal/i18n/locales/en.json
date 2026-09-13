@@ -527,7 +527,7 @@
   "liveness.stale_address_reverse_lookup": "stale address: {{.V0}}; reverse lookup: {{.V1}}",
   "liveness.unknown_option": "unknown option",
   "liveness.usage_kander_check_all_task": "usage: kander check [--all] [task...]",
-  "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "usage: kander subscribe [--refresh seconds] [--heartbeat seconds] <task-group> <task>... [--watch external-task-or-group...]",
+  "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "usage: kander subscribe [--refresh seconds] [--heartbeat seconds] (<task-group> <task>... [--watch external-task-or-group...] | --watch task-or-group...)",
   "liveness.use_notify_directly_for_this_codex_task_the_command": "; use notify directly for this Codex task; the command performs lookup",
   "liveness.watched_target_duplicates_a_member_task": "Watched target duplicates a member task: {{.V0}}",
   "liveness.watched_task_group_has_no_members": "Watched task group has no members: {{.V0}}",

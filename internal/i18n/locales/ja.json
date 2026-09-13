@@ -527,7 +527,7 @@
   "liveness.stale_address_reverse_lookup": "元のアドレスが無効: {{.V0}}; 逆引き: {{.V1}}",
   "liveness.unknown_option": "未知のオプション",
   "liveness.usage_kander_check_all_task": "用法: kander check [--all] [task...]",
-  "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "用法: kander subscribe [--refresh seconds] [--heartbeat seconds] <task-group> <task>... [--watch external-task-or-group...]",
+  "liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group": "用法: kander subscribe [--refresh seconds] [--heartbeat seconds] (<task-group> <task>... [--watch external-task-or-group...] | --watch task-or-group...)",
   "liveness.use_notify_directly_for_this_codex_task_the_command": "; この Codex タスクには notify を直接使ってください; コマンドが検索を行います",
   "liveness.watched_target_duplicates_a_member_task": "監視対象がメンバータスクと重複しています: {{.V0}}",
   "liveness.watched_task_group_has_no_members": "監視対象のタスクグループにメンバーがいません: {{.V0}}",

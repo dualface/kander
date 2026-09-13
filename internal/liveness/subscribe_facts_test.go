@@ -357,3 +357,36 @@ func TestSubscribeRegroupWithinWatchedUnionRequiresReconciliation(t *testing.T) 
 		t.Fatal("missing ownership change")
 	}
 }
+
+func TestSubscribeWatchOnlyMonitorsCardsOutsideTaskGroups(t *testing.T) {
+	if opts, errText := parseSubscribeArgs([]string{"--heartbeat", "600", "--watch", "a-task", "b-task"}); errText != "" || opts.Group != "" || len(opts.Members) != 0 || len(opts.Watch) != 2 {
+		t.Fatalf("watch-only args: opts=%+v err=%q", opts, errText)
+	}
+	for _, args := range [][]string{{}, {"20260913-only-group"}, {"--refresh", "1"}} {
+		if _, errText := parseSubscribeArgs(args); errText != "usage" {
+			t.Fatalf("args %v: err=%q", args, errText)
+		}
+	}
+	root := tempBoard(t)
+	firstID, _ := makeWorking(t, "watch-only-first", "独立一")
+	secondID, _ := makeWorking(t, "watch-only-second", "独立二")
+	buf, _, finish := startTestSubscription(t, root, subscribeOptions{
+		Watch: []string{firstID, secondID}, Refresh: 0.05, Heartbeat: 2,
+	})
+	deadline := time.Now().Add(2 * time.Second)
+	var snapshot map[string]any
+	for time.Now().Before(deadline) && snapshot["event"] != "snapshot" {
+		if line := firstJSONLine(buf.String()); line != "" {
+			_ = json.Unmarshal([]byte(line), &snapshot)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	finish()
+	if snapshot["event"] != "snapshot" || snapshot["group_id"] != "" {
+		t.Fatalf("snapshot=%s", buf.String())
+	}
+	tasks, _ := snapshot["tasks"].(map[string]any)
+	if tasks[firstID] != "working" || tasks[secondID] != "working" {
+		t.Fatalf("tasks=%v", snapshot["tasks"])
+	}
+}

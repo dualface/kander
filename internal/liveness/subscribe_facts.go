@@ -41,10 +41,11 @@ type subscription struct {
 }
 
 func newSubscription(opts subscribeOptions) (*subscription, error) {
-	if !taskGroupRe.MatchString(opts.Group) {
+	watchOnly := opts.Group == "" && len(opts.Members) == 0 && len(opts.Watch) > 0
+	if !watchOnly && !taskGroupRe.MatchString(opts.Group) {
 		return nil, fmt.Errorf("%s", t("liveness.invalid_task_group_id", opts.Group))
 	}
-	if len(opts.Members) == 0 {
+	if !watchOnly && len(opts.Members) == 0 {
 		return nil, fmt.Errorf("%s", t("liveness.subscription_members_required"))
 	}
 	opts.Members = append([]string(nil), opts.Members...)

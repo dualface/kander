@@ -1,6 +1,6 @@
 # Subscription Committed Facts and Member Sets
 
-`kander subscribe <task-group> <task-id>... [--watch <task-id|task-group-id>...]` outputs versioned JSON Lines. Member IDs are fixed, `--watch`'s original group references are preserved, and each observation re-expands them. Subscription only reports facts; it does not perform dependency release, business confirmation, automatic recovery, or kanban repair.
+`kander subscribe <task-group> <task-id>... [--watch <task-id|task-group-id>...]` outputs versioned JSON Lines. Member IDs are fixed, `--watch`'s original group references are preserved, and each observation re-expands them. Cards outside any task group are monitored with `kander subscribe --watch <task-id|task-group-id>...` alone: such a subscription has no members and its events carry an empty `group_id`. Subscription only reports facts; it does not perform dependency release, business confirmation, automatic recovery, or kanban repair.
 
 ## Events and revision
 
