@@ -314,8 +314,10 @@ their declared socket channels; only their CLI read-back has an argv trace.
 | PaneFacts, ContainerExists after close | Gone classification and false existence, without an ordinary error |
 
 A reflection test requires every Backend method to have a check. Supplemental
-metadata and post-close checks reuse the corresponding method. Capability flags
-control the assertions, not whether failures count: absent pane metadata, native
+metadata and post-close checks reuse the corresponding method. The inventory
+evaluates capability requirements at runtime (`|` means OR, `&` means AND);
+reverse lookup requires `PaneMetadata` or both `AgentIdentity` and `SessionReport`.
+These requirements select success or unsupported assertions: absent pane metadata, native
 output waiting or session reporting must produce `ErrUnsupported`. Without
 `foreground_process`, PaneFacts must still succeed for a live pane, with empty
 foreground fields; there is no separate foreground-query method to return
@@ -332,17 +334,22 @@ container. The default failure path attempts bounded cleanup and reports cleanup
 errors; when cleanup fails it also prints the retained address. A failure always
 exits nonzero. Steps following a failure are marked unexecuted.
 
-The checker needs POSIX `sh`; native Windows can list and validate definitions
-but testing reports that no usable terminal is available. The helper shell only
-reads text and prints acknowledgements; submitted text is never executed as a
-shell command. It does not launch a real coding agent. Session reporting uses a
+The checker needs POSIX `sh` and `ps`; native Windows can list and validate
+definitions but testing reports that no usable terminal is available. Before
+waiting for literal input, the pane script reports its actual executable name
+through `ps -p "$$" -o comm=`. PaneFacts and ReverseLookup compare against that
+independent process marker, including platforms where `sh` execs another shell
+image. The helper then reads text and prints acknowledgements; submitted text
+is never executed as a shell command. It does not launch a real coding agent. Session reporting uses a
 unique test reference on the newly created pane only; a terminal that requires
 actual agent recognition may reject that check and must report the failure.
 
 `go test ./internal/terminalcheck -run TestEmbedded -v` tests the final embedded
 definitions. When tmux exists, it uses an independent socket, an isolated HOME,
 and a seed session, then attaches a PTY client on Linux when available. It checks
-both full focus and no-client skip without touching existing sessions. Herdr is
+both full focus and no-client skip without touching existing sessions. When
+`bash` is installed, it also repeats the lifecycle with a `sh` trampoline that
+execs `bash`, exercising a different foreground executable name. Herdr is
 opt-in: only `KANDER_E2E_HERDR=1` with an available `HERDR_SOCKET_PATH` runs the
 real lifecycle. Otherwise its test reports the precise skip reason. Preserve
 that skip in contribution evidence rather than claiming a real herdr pass.

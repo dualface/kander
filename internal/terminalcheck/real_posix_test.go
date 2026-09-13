@@ -18,6 +18,17 @@ import (
 )
 
 func TestEmbeddedTmuxConformance(t *testing.T) {
+	t.Run("native shell", func(t *testing.T) { embeddedTmuxConformance(t, "") })
+	t.Run("sh trampoline", func(t *testing.T) {
+		bash, err := exec.LookPath("bash")
+		if err != nil {
+			t.Skip("bash is not installed for the sh trampoline regression")
+		}
+		embeddedTmuxConformance(t, bash)
+	})
+}
+
+func embeddedTmuxConformance(t *testing.T, shellTarget string) {
 	tmux, err := exec.LookPath("tmux")
 	if err != nil {
 		t.Skip("tmux is not installed")
@@ -48,6 +59,13 @@ func TestEmbeddedTmuxConformance(t *testing.T) {
 		_ = exec.CommandContext(ctx, tmux, "-S", socket, "kill-server").Run()
 	})
 	pane := command("-f", "/dev/null", "new-session", "-d", "-s", "conformance", "-P", "-F", "#{pane_id}", "/bin/sh")
+	// Emulate platforms where sh execs another executable image. The terminal
+	// must report bash, while the checker still launches a path named sh.
+	if shellTarget != "" {
+		if err := os.WriteFile(filepath.Join(root, "sh"), []byte("#!/bin/sh\nexec "+quote(shellTarget)+" \"$@\"\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Every Backend invocation, including Prepare, uses this private socket.
 	wrapper := filepath.Join(root, "tmux")
 	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nexec "+quote(tmux)+" -S "+quote(socket)+" \"$@\"\n"), 0700); err != nil {
@@ -75,6 +93,9 @@ func TestEmbeddedTmuxConformance(t *testing.T) {
 	t.Log("embedded tmux definition:\n" + output.String())
 	if err != nil {
 		t.Error(err)
+	}
+	if shellTarget != "" && !strings.Contains(output.String(), ":bash") {
+		t.Fatalf("missing actual bash process marker\n%s", output.String())
 	}
 	want := "skip Focus"
 	if attached {

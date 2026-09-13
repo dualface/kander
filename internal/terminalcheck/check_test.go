@@ -24,12 +24,15 @@ func TestEveryBackendMethodHasCheck(t *testing.T) {
 		if _, ok := methods.MethodByName(s.method); !ok {
 			t.Fatalf("stale method: %s", s.method)
 		}
-		for _, name := range strings.Split(s.capability, "|") {
+		for _, name := range strings.FieldsFunc(s.capability, func(r rune) bool { return r == '|' || r == '&' }) {
 			if name != "" {
 				if _, ok := capabilities.FieldByName(name); !ok {
 					t.Fatalf("unknown capability: %s", name)
 				}
 			}
+		}
+		if _, err := supports(terminal.Capabilities{}, s.capability); err != nil {
+			t.Fatalf("invalid runtime requirement for %s: %v", s.method, err)
 		}
 		found[s.method] = true
 	}
@@ -120,7 +123,7 @@ func (b brokenMetadata) SetSessionMarker(terminal.Conn, string, string) error {
 func TestUnsupportedMustNotBeOrdinaryFailure(t *testing.T) {
 	backend, _ := fixture(t, "pane_metadata")
 	c := &checker{backend: brokenMetadata{backend}}
-	if _, err := c.metadata(); err == nil || !strings.Contains(err.Error(), "ordinary failure") {
+	if _, err := c.metadata(false); err == nil || !strings.Contains(err.Error(), "ordinary failure") {
 		t.Fatalf("error=%v", err)
 	}
 }

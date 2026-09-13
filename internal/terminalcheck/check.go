@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -34,6 +33,7 @@ type checker struct {
 	options    Options
 	out        io.Writer
 	cwd        string
+	process    string
 	nonce      string
 	address    terminal.Address
 	target     terminal.Target
@@ -46,12 +46,14 @@ type checker struct {
 type step struct {
 	method     string
 	capability string
-	check      func(*checker) (string, error)
+	check      func(*checker, bool) (string, error)
 }
 
 // methodSteps is also checked against the Backend interface by reflection.
 // Checks with the same method (metadata/foreground and post-close facts) are
-// supplemental assertions, rather than a second interface inventory.
+// supplemental assertions, rather than a second interface inventory. Each
+// capability expression selects success versus unsupported assertions in its
+// check; metadata readback belongs to SetSessionMarker, not the PaneFacts step.
 var methodSteps = []step{
 	{"Name", "", (*checker).name},
 	{"Capabilities", "", (*checker).capabilities},
@@ -73,7 +75,7 @@ var methodSteps = []step{
 	{"PaneFacts", "ForegroundProcess", (*checker).facts},
 	{"Topology", "Container", (*checker).topology},
 	{"ContainerExists", "Container", (*checker).exists},
-	{"ReverseLookup", "PaneMetadata|AgentIdentity", (*checker).reverse},
+	{"ReverseLookup", "PaneMetadata|AgentIdentity&SessionReport", (*checker).reverse},
 	{"Focus", "Focus", (*checker).focus},
 	{"DeliverText", "Container", (*checker).deliver},
 	{"CloseContainer", "Container", (*checker).close},
@@ -117,7 +119,7 @@ func Check(backend terminal.Backend, options Options, out io.Writer) (result err
 			c.status(s.method, config.Text("terminal.test_after_failure"), nil)
 			continue
 		}
-		note, err := s.check(c)
+		note, err := s.execute(c)
 		c.status(s.method, note, err)
 		if err != nil {
 			result = fmt.Errorf("%s: %w", s.method, err)
@@ -187,14 +189,14 @@ func (c *checker) unsupported(err error) (string, error) {
 	return config.Text("terminal.test_unsupported"), nil
 }
 
-func (c *checker) name() (string, error) {
+func (c *checker) name(_ bool) (string, error) {
 	if c.backend.Name() == "" {
 		return "", c.mismatch("name", "")
 	}
 	c.print(c.backend.Name())
 	return "", nil
 }
-func (c *checker) capabilities() (string, error) {
+func (c *checker) capabilities(_ bool) (string, error) {
 	data, _ := json.Marshal(c.backend.Capabilities())
 	c.print(string(data))
 	if !c.backend.Capabilities().Container {
@@ -202,7 +204,7 @@ func (c *checker) capabilities() (string, error) {
 	}
 	return "", nil
 }
-func (c *checker) executable() (string, error) {
+func (c *checker) executable(_ bool) (string, error) {
 	if runtime.GOOS == "windows" {
 		return "", fmt.Errorf("%s", config.Text("terminal.test_unavailable"))
 	}
@@ -213,7 +215,7 @@ func (c *checker) executable() (string, error) {
 	c.conn.Program = path
 	return "", nil
 }
-func (c *checker) version() (string, error) {
+func (c *checker) version(_ bool) (string, error) {
 	args := c.backend.VersionArgs()
 	if len(args) == 0 {
 		return config.Text("terminal.test_no_version"), nil
@@ -224,11 +226,11 @@ func (c *checker) version() (string, error) {
 	}
 	return "", err
 }
-func (c *checker) autoDetect() (string, error) {
+func (c *checker) autoDetect(_ bool) (string, error) {
 	c.print(fmt.Sprintf("auto=%t", c.backend.AutoDetect(os.Getenv)))
 	return "", nil
 }
-func (c *checker) prepare() (string, error) {
+func (c *checker) prepare(_ bool) (string, error) {
 	request := terminal.PrepareRequest{Project: c.cwd, Command: "sh", Windows: runtime.GOOS == "windows", LookPath: exec.LookPath, Getenv: os.Getenv, TTY: func() bool { return true }}
 	var err error
 	if backend, ok := c.backend.(*terminal.DeclarativeBackend); ok {
@@ -241,7 +243,7 @@ func (c *checker) prepare() (string, error) {
 	}
 	return "", err
 }
-func (c *checker) create() (string, error) {
+func (c *checker) create(_ bool) (string, error) {
 	var err error
 	c.address, err = c.backend.CreateContainer(c.conn, c.target, c.cwd, "kander-test-"+c.nonce)
 	c.created = c.address.Container != ""
@@ -250,13 +252,13 @@ func (c *checker) create() (string, error) {
 	}
 	return "", err
 }
-func (c *checker) opaque() (string, error) {
+func (c *checker) opaque(_ bool) (string, error) {
 	if c.backend.OpaqueAddress(c.address) == "" {
 		return "", c.mismatch("address", "")
 	}
 	return "", nil
 }
-func (c *checker) parse() (string, error) {
+func (c *checker) parse(_ bool) (string, error) {
 	address, ok := c.backend.ParseAddress(terminal.FormatAddress(c.backend, c.address))
 	if !ok || address != c.address {
 		return "", c.mismatch(c.address, address)
@@ -266,41 +268,64 @@ func (c *checker) parse() (string, error) {
 	}
 	return "", nil
 }
-func (c *checker) parseFocus() (string, error) {
+func (c *checker) parseFocus(_ bool) (string, error) {
 	address, ok := c.backend.ParseFocusAddress(strings.Split(terminal.FormatAddress(c.backend, c.address), ":"))
 	if !ok || address != c.address {
 		return "", c.mismatch(c.address, address)
 	}
 	return "", nil
 }
-func (c *checker) started() (string, error) {
+func (c *checker) started(_ bool) (string, error) {
 	for _, line := range c.backend.StartedLines("kander-test", c.target, c.address, os.Getenv) {
 		c.print(line)
 	}
 	return "", nil
 }
-func (c *checker) ready() (string, error) { return "", c.backend.WaitReady(c.conn, c.address.Pane) }
+func (c *checker) ready(_ bool) (string, error) {
+	return "", c.backend.WaitReady(c.conn, c.address.Pane)
+}
 
 // The marker is assembled inside the pane so a shell echo of RunCommand
 // cannot satisfy the output check. The shell stays alive to acknowledge input.
-func (c *checker) run() (string, error) {
+func (c *checker) run(_ bool) (string, error) {
 	shell, err := exec.LookPath("sh")
 	if err != nil {
 		return "", err
 	}
-	script := `printf '%s%s\n' 'kander-ready-' '` + c.nonce + `'; while IFS= read -r line; do printf '%s%s\n' 'kander-ack-' "$line"; done`
+	script := `process=$(ps -p "$$" -o comm=) || exit; process=${process##*/}; printf '%s%s:%s\n' 'kander-process-' '` + c.nonce + `' "$process"; printf '%s%s\n' 'kander-ready-' '` + c.nonce + `'; while IFS= read -r line; do printf '%s%s\n' 'kander-ack-' "$line"; done`
 	command := quote(shell) + " -c " + quote(script)
 	return "", c.backend.RunCommand(c.conn, c.address.Pane, command, true)
 }
 func quote(value string) string { return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'" }
-func (c *checker) wait() (string, error) {
+func (c *checker) wait(supported bool) (string, error) {
 	err := c.backend.WaitOutput(context.Background(), c.conn, c.address.Pane, "kander-ready-"+c.nonce, 5000)
-	if !c.backend.Capabilities().WaitOutput {
+	if !supported {
 		return c.unsupported(err)
 	}
 	return "", err
 }
-func (c *checker) read() (string, error) { return "", c.awaitOutput("kander-ready-" + c.nonce) }
+func (c *checker) read(_ bool) (string, error) {
+	err := c.poll(func(ctx context.Context) (bool, error) {
+		output, err := c.backend.ReadOutput(ctx, c.conn, c.address.Pane)
+		if err != nil {
+			return false, err
+		}
+		if !strings.Contains(output, "kander-ready-"+c.nonce) {
+			return false, nil
+		}
+		marker := "kander-process-" + c.nonce + ":"
+		for _, line := range strings.Split(output, "\n") {
+			if process, ok := strings.CutPrefix(strings.TrimSpace(line), marker); ok {
+				c.process = strings.TrimSpace(process)
+				if c.process != "" {
+					return true, nil
+				}
+			}
+		}
+		return false, c.mismatch("shell process marker", output)
+	})
+	return "", err
+}
 func (c *checker) awaitOutput(marker string) error {
 	return c.poll(func(ctx context.Context) (bool, error) {
 		output, err := c.backend.ReadOutput(ctx, c.conn, c.address.Pane)
@@ -328,9 +353,9 @@ func (c *checker) poll(check func(context.Context) (bool, error)) error {
 		}
 	}
 }
-func (c *checker) metadata() (string, error) {
+func (c *checker) metadata(supported bool) (string, error) {
 	err := c.backend.SetSessionMarker(c.conn, c.address.Pane, c.nonce)
-	if !c.backend.Capabilities().PaneMetadata {
+	if !supported {
 		note, err := c.unsupported(err)
 		if err != nil {
 			return "", err
@@ -350,9 +375,9 @@ func (c *checker) metadata() (string, error) {
 	}
 	return "", err
 }
-func (c *checker) report() (string, error) {
+func (c *checker) report(supported bool) (string, error) {
 	err := c.backend.ReportSession(terminal.SessionReport{Conn: c.conn, Pane: c.address.Pane, Agent: "codex", Reference: c.nonce, Deadline: time.Now().Add(5 * time.Second), Now: time.Now})
-	if !c.backend.Capabilities().SessionReport {
+	if !supported {
 		return c.unsupported(err)
 	}
 	if err != nil {
@@ -364,20 +389,15 @@ func (c *checker) report() (string, error) {
 	}
 	return "", err
 }
-func (c *checker) facts() (string, error) {
-	caps := c.backend.Capabilities()
-	if !caps.ForegroundProcess {
+func (c *checker) facts(supported bool) (string, error) {
+	if !supported {
 		facts, err := c.backend.PaneFacts(context.Background(), c.conn, c.address.Pane)
 		if err == nil && (facts.Gone || facts.Command != "" || facts.Dead != "" || facts.InMode != "") {
 			err = c.mismatch("no foreground fields on a live pane", facts)
 		}
 		return config.Text("terminal.test_no_foreground"), err
 	}
-	shell, err := exec.LookPath("sh")
-	if err != nil {
-		return "", err
-	}
-	err = c.poll(func(ctx context.Context) (bool, error) {
+	err := c.poll(func(ctx context.Context) (bool, error) {
 		facts, err := c.backend.PaneFacts(ctx, c.conn, c.address.Pane)
 		if err != nil {
 			return false, err
@@ -385,28 +405,27 @@ func (c *checker) facts() (string, error) {
 		if facts.Gone {
 			return false, c.mismatch("live pane", facts)
 		}
-		return facts.Command == filepath.Base(shell) && facts.Dead == "0" && facts.InMode == "0", nil
+		return facts.Command == c.process && facts.Dead == "0" && facts.InMode == "0", nil
 	})
 	return "", err
 }
-func (c *checker) topology() (string, error) {
+func (c *checker) topology(_ bool) (string, error) {
 	topology, err := c.backend.Topology(context.Background(), c.conn, c.address)
 	if err == nil && (topology.Container != c.address.Container || (topology.PaneCount != "1" && !(len(topology.Panes) == 1 && topology.Panes[0] == c.address.Pane))) {
 		err = c.mismatch(c.address, topology)
 	}
 	return "", err
 }
-func (c *checker) exists() (string, error) {
+func (c *checker) exists(_ bool) (string, error) {
 	exists, err := c.backend.ContainerExists(context.Background(), c.conn, c.address)
 	if err == nil && !exists {
 		err = c.mismatch(true, exists)
 	}
 	return "", err
 }
-func (c *checker) reverse() (string, error) {
-	caps := c.backend.Capabilities()
-	address, err := c.backend.ReverseLookup(context.Background(), c.conn, terminal.Identity{Agent: "codex", Reference: c.nonce, ProcessName: func() (string, error) { return "sh", nil }})
-	if !caps.PaneMetadata && !(caps.AgentIdentity && caps.SessionReport) {
+func (c *checker) reverse(supported bool) (string, error) {
+	address, err := c.backend.ReverseLookup(context.Background(), c.conn, terminal.Identity{Agent: "codex", Reference: c.nonce, ProcessName: func() (string, error) { return c.process, nil }})
+	if !supported {
 		// Without a writable identity the lookup must complete with zero matches.
 		var match *terminal.MatchError
 		if !errors.As(err, &match) || match.Matches != 0 {
@@ -419,13 +438,13 @@ func (c *checker) reverse() (string, error) {
 	}
 	return "", err
 }
-func (c *checker) focus() (string, error) {
-	if c.options.SkipFocus && c.backend.Capabilities().Focus {
+func (c *checker) focus(supported bool) (string, error) {
+	if c.options.SkipFocus && supported {
 		return config.Text("terminal.test_focus_skip"), nil
 	}
 	c.lastStderr = ""
 	result := c.backend.Focus(context.Background(), c.conn, c.address)
-	if !c.backend.Capabilities().Focus {
+	if !supported {
 		if result.Success || result.ID != "focus.unsupported" {
 			return "", c.mismatch("unsupported focus", result)
 		}
@@ -441,14 +460,14 @@ func (c *checker) focus() (string, error) {
 	}
 	return "", fmt.Errorf("%s", config.Text(result.ID, result.Args...))
 }
-func (c *checker) deliver() (string, error) {
+func (c *checker) deliver(_ bool) (string, error) {
 	text := "literal-" + c.nonce + ` $HOME; ' " \\`
 	if err := c.backend.DeliverText(context.Background(), c.conn, c.address.Pane, text); err != nil {
 		return "", err
 	}
 	return "", c.awaitOutput("kander-ack-" + text)
 }
-func (c *checker) close() (string, error) {
+func (c *checker) close(_ bool) (string, error) {
 	if c.options.Keep {
 		return config.Text("terminal.test_keep_skip"), nil
 	}

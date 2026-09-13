@@ -56,7 +56,7 @@ func serveFake(root string, args []string) int {
 	case "run":
 		nonce := regexp.MustCompile(`[0-9a-f]{24}`).FindString(args[2])
 		write("nonce", nonce)
-		write("output", "kander-ready-"+nonce)
+		write("output", "kander-process-"+nonce+":sh\nkander-ready-"+nonce)
 	case "meta-set":
 		write("marker", args[2])
 	case "meta-get":
