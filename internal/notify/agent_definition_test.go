@@ -56,3 +56,22 @@ func TestNotifyNoneUsesFreshRecovery(t *testing.T) {
 		t.Fatalf("%s %v", sent, err)
 	}
 }
+
+func TestNotifyBuiltinPiProcessName(t *testing.T) {
+	_, _ = setupBoard(t)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_TMUX_SESSION", "session-1")
+	session := liveness.TaskSession{Agent: "pi", Reference: "session-1"}
+	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "pi")
+	if got := TmuxNotifyProbe("tmux", "%9", session, 0); got.State != "ready" {
+		t.Fatalf("pi foreground process rejected: %+v", got)
+	}
+	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "node")
+	if got := TmuxNotifyProbe("tmux", "%9", session, 0); got.State == "ready" {
+		t.Fatalf("non-pi foreground process accepted: %+v", got)
+	}
+}

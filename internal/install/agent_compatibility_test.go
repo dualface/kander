@@ -8,7 +8,8 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// Expectations are pinned to integrate.go at 8abdfe2e, before embedded definitions.
+// Expectations for codex/claude/grok/cursor are pinned to integrate.go at 8abdfe2e,
+// before embedded definitions; pi was added later and pins its own ~/.pi/agent target.
 func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
 		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi"} {

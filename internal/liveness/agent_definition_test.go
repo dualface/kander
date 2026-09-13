@@ -25,3 +25,18 @@ func TestConfiguredProcessNameReverseLookup(t *testing.T) {
 		t.Fatal("custom metadata rejected")
 	}
 }
+
+func TestBuiltinPiProcessNameReverseLookup(t *testing.T) {
+	installPOSIXFakes(t, true)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_TMUX_LIST_PANES", "%8\t$8\teight\t@8\tnode\t0\twanted\t\n%9\t$9\tnine\t@9\tpi\t0\twanted\t")
+	got, err := TmuxReverseLookupContext(context.Background(), "tmux", TaskSession{Agent: "pi", Reference: "wanted"})
+	if err != nil || got.PaneID != "%9" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}

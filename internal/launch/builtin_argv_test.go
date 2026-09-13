@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -142,5 +143,23 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestPiStartUsesAGeneratedUUIDSession(t *testing.T) {
+	cfg := config.DefaultConfig()
+	session, err := newAgentSession("pi", nil, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Agent != "pi" || !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(session.Reference) {
+		t.Fatalf("pi session %+v is not a generated UUID", session)
+	}
+	got, err := agentArguments("pi", cfg.Models.Kanban["pi"], "small", session, false, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got[:3], []string{"--approve", "--session-id", session.Reference}) {
+		t.Fatalf("start argv %q does not carry the generated session", got)
 	}
 }
