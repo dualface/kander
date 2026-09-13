@@ -705,28 +705,27 @@ func TestFinishSuccessfulInstallAlwaysHandoffs(t *testing.T) {
 	}
 
 	var calls int
-	var gotDest, gotLangFlag, gotLang string
-	var gotEnv []string
+	var gotDest string
+	var gotArgv, gotEnv []string
 	handoff = func(path string, argv, env []string) error {
 		calls++
 		gotDest = path
+		gotArgv = append([]string(nil), argv...)
 		gotEnv = append([]string(nil), env...)
-		if len(argv) >= 3 {
-			gotLangFlag, gotLang = argv[1], argv[2]
-		}
 		return nil
 	}
 	t.Cleanup(func() { handoff = defaultHandoff })
+	// The wizard marks the installer's own environment as a CLI language override.
+	t.Setenv(config.EnvLangCLI, "1")
+	t.Setenv(config.EnvLang, "ja")
 
 	if code := finishSuccessfulInstall(result, "cn"); code != 0 {
 		t.Fatalf("code=%d", code)
 	}
-	if calls != 1 || gotDest != dest || gotLangFlag != "--lang" || gotLang != "cn" {
-		t.Fatalf("first handoff: calls=%d dest=%q argv=%q %q", calls, gotDest, gotLangFlag, gotLang)
+	if calls != 1 || gotDest != dest {
+		t.Fatalf("first handoff: calls=%d dest=%q", calls, gotDest)
 	}
-	if !envHasPostInstall(gotEnv) {
-		t.Fatalf("missing %s in env: %v", EnvPostInstall, gotEnv)
-	}
+	assertHandoffInvocation(t, dest, "cn", gotArgv, gotEnv)
 
 	// Re-install from the destination itself (same file); handoff must still run.
 	same, err := Perform(Request{Language: "en", Source: dest})
@@ -734,26 +733,14 @@ func TestFinishSuccessfulInstallAlwaysHandoffs(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls = 0
-	gotEnv = nil
+	gotArgv, gotEnv = nil, nil
 	if code := finishSuccessfulInstall(same, "en"); code != 0 {
 		t.Fatalf("same-file code=%d", code)
 	}
-	if calls != 1 || gotDest != dest || gotLang != "en" {
-		t.Fatalf("same-file handoff: calls=%d dest=%q lang=%q", calls, gotDest, gotLang)
+	if calls != 1 || gotDest != dest {
+		t.Fatalf("same-file handoff: calls=%d dest=%q", calls, gotDest)
 	}
-	if !envHasPostInstall(gotEnv) {
-		t.Fatalf("same-file missing %s in env: %v", EnvPostInstall, gotEnv)
-	}
-}
-
-func envHasPostInstall(env []string) bool {
-	want := EnvPostInstall + "=1"
-	for _, e := range env {
-		if e == want {
-			return true
-		}
-	}
-	return false
+	assertHandoffInvocation(t, dest, "en", gotArgv, gotEnv)
 }
 
 func TestWizardDefaultKeepsJapanese(t *testing.T) {
