@@ -109,6 +109,25 @@
               "args": [
                 "tab create"
               ]
+            },
+            "not_json": {
+              "id": "launch.herdr_failed_response_is_not_json",
+              "args": [
+                "tab create",
+                "{detail}"
+              ]
+            },
+            "not_object": {
+              "id": "launch.herdr_failed_response_is_not_a_json_object",
+              "args": [
+                "tab create"
+              ]
+            },
+            "missing_result": {
+              "id": "launch.herdr_failed_response_is_missing_result",
+              "args": [
+                "tab create"
+              ]
             }
           },
           "store": "new",
@@ -129,15 +148,32 @@
           ],
           "messages": {
             "exec": {
-              "id": "launch.herdr_invocation_failed",
+              "id": "launch.herdr_tab_create_failed_response_is_missing_tab_or",
               "args": [
-                "{detail}"
+                {
+                  "id": "launch.failed_to_close_tab",
+                  "args": [
+                    "{step.new.tab}",
+                    {
+                      "id": "launch.herdr_invocation_failed",
+                      "args": [
+                        "{detail}"
+                      ]
+                    }
+                  ]
+                }
               ]
             },
             "exit": {
               "id": "launch.herdr_tab_create_failed_response_is_missing_tab_or",
               "args": [
-                "{detail}"
+                {
+                  "id": "launch.failed_to_close_tab",
+                  "args": [
+                    "{step.new.tab}",
+                    "{detail}"
+                  ]
+                }
               ]
             }
           },
@@ -252,6 +288,18 @@
               "args": [
                 "{pane}"
               ]
+            },
+            "not_json": {
+              "id": "probe.herdr_pane_get_failed_response_is_not_json",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "not_object": {
+              "id": "probe.herdr_pane_get_failed_response_is_not_a_json"
+            },
+            "missing_result": {
+              "id": "probe.herdr_pane_get_failed_response_is_missing_result"
             }
           },
           "store": "pane",
@@ -378,19 +426,35 @@
             "list"
           ],
           "messages": {
-            "exec": {
-              "id": "launch.herdr_invocation_failed",
-              "args": [
-                "{detail}"
-              ]
-            },
             "exit": {
               "id": "takeover.herdr_pane_list_failed",
               "args": [
                 "{detail}"
               ]
             },
+            "not_json": {
+              "id": "takeover.herdr_pane_list_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
             "invalid": {
+              "id": "takeover.herdr_pane_list_failed",
+              "args": [
+                {
+                  "id": "probe.herdr_response_is_missing_result"
+                }
+              ]
+            },
+            "not_object": {
+              "id": "takeover.herdr_pane_list_failed",
+              "args": [
+                {
+                  "id": "probe.herdr_response_is_missing_result"
+                }
+              ]
+            },
+            "missing_result": {
               "id": "takeover.herdr_pane_list_failed",
               "args": [
                 {
@@ -444,26 +508,16 @@
             "list"
           ],
           "messages": {
-            "exec": {
-              "id": "launch.herdr_invocation_failed",
-              "args": [
-                "{detail}"
-              ]
-            },
-            "exit": {
-              "id": "takeover.herdr_pane_list_failed",
-              "args": [
-                "{detail}"
-              ]
-            },
             "invalid": {
-              "id": "takeover.herdr_pane_list_failed",
-              "args": [
-                {
-                  "id": "probe.herdr_response_is_missing_result"
-                }
-              ]
-            }
+              "id": "probe.herdr_response_is_missing_result"
+            },
+            "not_object": {
+              "id": "probe.herdr_response_is_missing_result"
+            },
+            "missing_result": {
+              "id": "probe.herdr_response_is_missing_result"
+            },
+            "not_json": "{detail}"
           },
           "store": "list",
           "output": {
@@ -549,9 +603,15 @@
           ],
           "messages": {
             "exec": {
-              "id": "launch.herdr_invocation_failed",
+              "id": "launch.failed_to_close_tab",
               "args": [
-                "{detail}"
+                "{container}",
+                {
+                  "id": "launch.herdr_invocation_failed",
+                  "args": [
+                    "{detail}"
+                  ]
+                }
               ]
             },
             "exit": {

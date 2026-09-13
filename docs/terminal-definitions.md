@@ -223,7 +223,15 @@ Go code is still required for socket or other non-command-line protocols, and fo
 
 The herdr definition uses `pane get` for identity facts and checks the returned pane ID. `pane read` belongs only to `read_output`, which callers use for output diagnostics and agent readiness. Text and exit commands use `agent prompt`. Literal and regular-expression waits use the native `pane wait-output` command and its recent-output source; new-shell readiness uses the visible source. Tab creation reads the workspace from the launcher's required environment. The Go herdr backend is removed; installation-path hints belong to the menu.
 
+### Herdr Compatibility Limits
+
+The herdr definition uses the original catalog messages for JSON failures, command failures and tab-close cleanup. Topology wraps list-response failures, while reverse lookup preserves their unwrapped detail; runner failures on either list path retain their original detail.
+
 For a malformed response with a string-valued `result`, the definition rejects the pane as `KindInvalidResponse`; the former Go backend used `KindMissingResult`. Both stop takeover's exit wait before container close, with different diagnostics. A valid pane response and the normal missing-result, not-object and not-JSON classifications are unchanged.
+
+Two migration gaps still need format support: launch requirements check the binary before environment variables, share one environment diagnostic and accept a whitespace-only workspace; topology reports a non-object array element with the same invalid-ID diagnostic as an object missing its IDs. The old backend checked `HERDR_ENV`, then PATH, then a trimmed workspace, with separate messages, and distinguished the two invalid topology rows. These gaps remain unresolved; documenting them does not establish behavioral parity.
+
+Reverse lookup's validity expressions scan the complete row. An unrelated nested `agent` or `value` with a non-string value can therefore reject an otherwise matching pane. The former backend checked only the top-level `agent` and `agent_session.value`; a path-aware type check would be needed to remove this stricter rejection.
 
 ## Example
 
