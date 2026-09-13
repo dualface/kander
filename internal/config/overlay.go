@@ -268,5 +268,7 @@ func mergeOverlayRaw(scope map[string]any, overlay map[string]any) (map[string]a
 	if err := normalizeReviewersField(overlayCopy); err != nil {
 		return nil, err
 	}
-	return deepMerge(scope, overlayCopy), nil
+	merged := deepMerge(scope, overlayCopy)
+	mergeReviewModelOwners(scope, overlayCopy, merged)
+	return merged, nil
 }

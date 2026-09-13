@@ -343,6 +343,10 @@ func (s *Session) RestoreInherit(path ...string) error {
 	}
 	if len(path) == 3 && path[0] == "reviewers" {
 		expandReviewersOverlay(candidate)
+		s.preserveOtherReviewScale(candidate, path[2], path[1])
+		for _, suffix := range []string{"_model", "_effort", "_agent"} {
+			config.OverlayDelete(candidate, "models", "review_roles", path[2], path[1]+suffix)
+		}
 	}
 	if len(path) == 2 && path[0] == "kanban_agents" {
 		agent, _ := overlayStringAt(candidate, path...)
@@ -444,7 +448,7 @@ func (s *Session) NoteModelOverride(field ModelField, value string) {
 		s.noteOverride([]string{"models", "review_roles", field.Agent, field.field}, value)
 	default:
 		if isReviewRoleName(field.Agent) {
-			s.noteOverride([]string{"models", "review_roles", field.Agent, field.field}, value)
+			s.noteReviewModelOverride(field, value)
 			return
 		}
 		s.noteOverride([]string{"models", "kanban", field.Agent, field.field}, value)

@@ -296,8 +296,11 @@ func (s *Session) SetExecutionAgent(scale, agent string) {
 	}
 }
 
-// SetReviewer sets the reviewer of one review role for one task scale.
+// SetReviewer changes a role's reviewer and adopts that agent's model settings.
 func (s *Session) SetReviewer(scale, role, agent string) {
+	if config.ReviewerFor(s.Config, scale, role) == agent {
+		return
+	}
 	if s.Config.Reviewers == nil {
 		s.Config.Reviewers = map[string]map[string]string{}
 	}
@@ -309,6 +312,7 @@ func (s *Session) SetReviewer(scale, role, agent string) {
 		s.expandOverlayReviewers()
 	}
 	s.noteOverride([]string{"reviewers", scale, role}, agent)
+	s.ResetReviewRoleModel(role, scale)
 }
 
 // SetReviewStage sets the stage policy of one review role for one task scale.
@@ -511,32 +515,16 @@ func (s *Session) ReviewModelFieldsFor(role, scale string) []ModelField {
 	})
 }
 
-// seedReviewRole makes sure the role owns its values for one scale: whichever
-// item is missing is filled in from that reviewer's default (or the shared
-// model/effort keys of a legacy role entry).
+// seedReviewRole presents the same effective values used by the review runner.
 func (s *Session) seedReviewRole(role, scale, reviewer string) map[string]string {
 	entry := s.Config.Models.ReviewRoles[role]
 	if entry == nil {
 		entry = map[string]string{}
 		s.Config.Models.ReviewRoles[role] = entry
 	}
-	agentEntry := s.Config.Models.Review[reviewer]
-	modelKey := scale + "_model"
-	effortKey := scale + "_effort"
-	if entry[modelKey] == "" {
-		if entry["model"] != "" {
-			entry[modelKey] = entry["model"]
-		} else {
-			entry[modelKey] = agentEntry["model"]
-		}
-	}
-	if _, ok := agentEntry["effort"]; ok && entry[effortKey] == "" {
-		if entry["effort"] != "" {
-			entry[effortKey] = entry["effort"]
-		} else {
-			entry[effortKey] = agentEntry["effort"]
-		}
-	}
+	model, effort := config.ReviewModelFor(s.Config, reviewer, role, scale)
+	entry[scale+"_model"] = model
+	entry[scale+"_effort"] = effort
 	return entry
 }
 
@@ -545,33 +533,9 @@ func (s *Session) seedReviewRole(role, scale, reviewer string) map[string]string
 // reviewer: the old values were configured for the old reviewer and would
 // otherwise be misattributed.
 func (s *Session) ResetReviewRoleModel(role, scale string) {
-	modelKey := scale + "_model"
-	effortKey := scale + "_effort"
 	reviewer := config.ReviewerFor(s.Config, scale, role)
-	if s.EditingOverlay() {
-		_ = s.applyOverlayEdit(func(candidate map[string]any) {
-			config.OverlayDelete(candidate, "models", "review_roles", role, modelKey)
-			config.OverlayDelete(candidate, "models", "review_roles", role, effortKey)
-		})
-		return
-	}
-	entry := s.Config.Models.ReviewRoles[role]
-	if entry == nil {
-		entry = map[string]string{}
-		s.Config.Models.ReviewRoles[role] = entry
-	}
 	agentEntry := s.Config.Models.Review[reviewer]
-	entry[modelKey] = agentEntry["model"]
-	if _, ok := agentEntry["effort"]; ok {
-		entry[effortKey] = agentEntry["effort"]
-	} else {
-		delete(entry, effortKey)
-	}
-	rawEntry := map[string]any{}
-	for key, value := range entry {
-		rawEntry[key] = value
-	}
-	s.noteOverride([]string{"models", "review_roles", role}, rawEntry)
+	s.setReviewRoleSelection(role, scale, reviewer, agentEntry["model"], agentEntry["effort"])
 }
 
 // ReviewModelFields is the flattened, order-preserving deduplication of the per-role fields, for the line-based menu.

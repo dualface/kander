@@ -761,6 +761,7 @@ func (b *formBinding) apply(p *optionsPanel) {
 		}
 	case sectionExecution:
 		session := p.session
+		b.applyModels(p)
 		// The agent changed, so the model fields below it belong to a different object and this screen must be rebuilt;
 		// focus returns to the line just edited so the interaction is not interrupted.
 		if session.Config.KanbanAgents["large"] != b.large {
@@ -779,9 +780,9 @@ func (b *formBinding) apply(p *optionsPanel) {
 			p.markDirty()
 			p.rebuildIfOverrideChanged(before, launcherFocusKey(), "launcher")
 		}
-		b.applyModels(p)
 	case sectionReview:
 		session := p.session
+		b.applyModels(p)
 		for _, role := range config.ReviewRoles {
 			for _, scale := range config.TaskScales {
 				focus := reviewerFocusKey(role, scale)
@@ -791,13 +792,11 @@ func (b *formBinding) apply(p *optionsPanel) {
 				}
 				if config.ReviewerFor(session.Config, scale, role) != *value {
 					session.SetReviewer(scale, role, *value)
-					session.ResetReviewRoleModel(role, scale)
 					p.markDirty()
 					p.rebuildAt(focus)
 				}
 			}
 		}
-		b.applyModels(p)
 	case sectionReviewStages:
 		session := p.session
 		for _, role := range config.ReviewRoles {

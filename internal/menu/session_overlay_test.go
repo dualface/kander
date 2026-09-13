@@ -602,7 +602,7 @@ func TestUnsavedGlobalLauncherUpdatesProjectInherit(t *testing.T) {
 	}
 }
 
-func TestResetReviewRoleOnOverlayDoesNotSeed(t *testing.T) {
+func TestResetReviewRoleOnOverlayBindsAgentDefaults(t *testing.T) {
 	session, _ := tempOverlaySession(t, config.ModeGlobal)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
@@ -611,8 +611,14 @@ func TestResetReviewRoleOnOverlayDoesNotSeed(t *testing.T) {
 		"model": "old", "large_model": "old-large",
 	}}}
 	session.ResetReviewRoleModel("PM", "large")
-	if session.FieldOverridden("models", "review_roles", "PM", "large_model") {
-		t.Fatalf("reset left or seeded large_model: %#v", session.overlayRaw)
+	if !session.FieldOverridden("models", "review_roles", "PM", "large_model") {
+		t.Fatalf("reset did not replace large_model: %#v", session.overlayRaw)
+	}
+	reviewer := config.ReviewerFor(session.Config, "large", "PM")
+	model, effort := config.ReviewModelFor(session.Config, reviewer, "PM", "large")
+	defaults := session.Config.Models.Review[reviewer]
+	if model != defaults["model"] || effort != defaults["effort"] || session.Config.Models.ReviewRoles["PM"]["large_agent"] != reviewer {
+		t.Fatalf("reset kept old role values: %s/%s", model, effort)
 	}
 	if !session.FieldOverridden("models", "review_roles", "PM", "model") {
 		t.Fatal("reset must not clear unrelated shared model override")

@@ -86,6 +86,7 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 				}
 				roleEntry[scale+"_model"] = entry["model"]
 				roleEntry[scale+"_effort"] = entry["effort"]
+				roleEntry[scale+"_agent"] = selected
 			}
 		}
 	}

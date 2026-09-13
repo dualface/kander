@@ -110,7 +110,8 @@ type InstallPaths struct {
 // Models matches the models section of the onevoke schema.
 // ReviewRoles holds per-role overrides. Empty values inherit the selected reviewer's
 // models.review entry. Prefer large_*/small_* when set; otherwise fall back to the
-// shared model/effort keys so a legacy flat role entry still applies to both scales.
+// shared model/effort keys for legacy entries. A large_agent/small_agent binding
+// restricts that scale's overrides to its reviewer and disables legacy fallback.
 type Models struct {
 	Kanban      map[string]map[string]string `json:"kanban"`
 	Review      map[string]map[string]string `json:"review"`
@@ -186,6 +187,7 @@ func defaultReviewRoles() map[string]map[string]string {
 			"model": "", "effort": "",
 			"large_model": "", "small_model": "",
 			"large_effort": "", "small_effort": "",
+			"large_agent": "", "small_agent": "",
 		}
 	}
 	return out
@@ -208,25 +210,28 @@ func DefaultTUI() TUI {
 	}
 }
 
-// ReviewModelFor returns the model and reasoning effort in force for a review role at one
-// task scale. Scale-specific keys win; empty values fall back to the shared model/effort
-// keys, then to the agent's models.review entry. The agent comes from the caller because
-// kander review may name a reviewer explicitly, which need not match the configured one.
+// ReviewModelFor resolves overrides only for their owning reviewer. Bound entries
+// inherit empty values directly from that agent, never from legacy role keys.
+// Unbound legacy entries belong to the configured reviewer at the requested scale.
 func ReviewModelFor(cfg *Config, agent, role, scale string) (model, effort string) {
 	if cfg == nil {
 		return "", ""
 	}
 	agentEntry := cfg.Models.Review[agent]
 	roleEntry := cfg.Models.ReviewRoles[role]
+	owner := roleEntry[scale+"_agent"]
+	if owner != "" && owner != agent || owner == "" && ReviewerFor(cfg, scale, role) != agent {
+		return agentEntry["model"], agentEntry["effort"]
+	}
 	model = roleEntry[scale+"_model"]
-	if model == "" {
+	if model == "" && owner == "" {
 		model = roleEntry["model"]
 	}
 	if model == "" {
 		model = agentEntry["model"]
 	}
 	effort = roleEntry[scale+"_effort"]
-	if effort == "" {
+	if effort == "" && owner == "" {
 		effort = roleEntry["effort"]
 	}
 	if effort == "" {
@@ -528,6 +533,9 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 					return Models{}, configErrorf(
 						"config.models_must_not_contain_line_breaks_or_nul", section.name, agent, field,
 					)
+				}
+				if section.name == "review_roles" && strings.HasSuffix(field, "_agent") && text != "" && !ValidAgentName(text) {
+					return Models{}, agentDefinitionError("models.review_roles."+agent+"."+field, Text("config.agent_name"))
 				}
 				fields[field] = text
 			}
