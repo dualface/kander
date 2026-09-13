@@ -22,7 +22,6 @@ const (
 // TriageEvidence describes the refreshed local evidence of one issue. The
 // launcher only needs the paths; the files themselves are the evidence.
 type TriageEvidence struct {
-	Directory    string
 	JSONPath     string
 	MarkdownPath string
 }
@@ -134,7 +133,6 @@ func PrepareTriage(ctx context.Context, provider IssueProvider, root string, rep
 		return TriageEvidence{}, err
 	}
 	return TriageEvidence{
-		Directory:    directory,
 		JSONPath:     jsonPath,
 		MarkdownPath: markdownPath,
 	}, nil

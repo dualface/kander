@@ -29,11 +29,8 @@ func TestPrepareTriageWritesRefreshedEvidence(t *testing.T) {
 	if stub.issueCalls != 1 || stub.issueNumber != 42 || !stub.withComments {
 		t.Fatalf("provider calls=%d number=%d comments=%v", stub.issueCalls, stub.issueNumber, stub.withComments)
 	}
-	if evidence.Directory != triageEvidenceDir(root) {
-		t.Fatalf("directory=%s", evidence.Directory)
-	}
-	if evidence.JSONPath != filepath.Join(evidence.Directory, TriageJSONName) ||
-		evidence.MarkdownPath != filepath.Join(evidence.Directory, TriageMarkdownName) {
+	if evidence.JSONPath != filepath.Join(triageEvidenceDir(root), TriageJSONName) ||
+		evidence.MarkdownPath != filepath.Join(triageEvidenceDir(root), TriageMarkdownName) {
 		t.Fatalf("paths=%+v", evidence)
 	}
 	data, err := os.ReadFile(evidence.JSONPath)
