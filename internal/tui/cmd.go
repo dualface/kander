@@ -64,21 +64,16 @@ func Run(_ []string) int {
 	if err := requireTerminal(); err != nil {
 		return fail(err)
 	}
-	if !postInstall {
-		runWizard, err := install.ShouldRunWizard()
-		if err != nil {
-			return fail(err)
-		}
-		if runWizard {
-			return install.RunInteractive()
-		}
-		if handled, code := checkStartupCopy(); handled {
-			return code
-		}
-	}
+	// Missing config always opens the board + interface options; the install
+	// wizard is only reached through `kander install`, never bare `kander`.
 	configExists, err := config.Exists()
 	if err != nil {
 		return fail(err)
+	}
+	if !postInstall && configExists {
+		if handled, code := checkStartupCopy(); handled {
+			return code
+		}
 	}
 	if !configExists {
 		// The first launch probes the environment with doctor and produces a usable config; a failed health check does not stop the user from fixing the options.
