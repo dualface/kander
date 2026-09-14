@@ -7,13 +7,17 @@ This file is the development contract for the Kander repository itself. The work
 - In this repository the second-stage security roles `CSA` and `Hacker` are always marked N/A and never run; `PM` and `QA` remain applicable.
 - When every change since the review base is Markdown rules or documentation, skip the review. As soon as any script, code, or other non-Markdown file is included, run `PM` and `QA` per the applicable rules; `CSA` and `Hacker` stay N/A per the previous bullet.
 
+## README Editing
+
+- README series files (`README.md` and `README-*.md`) are reserved for manual editing by the user. Agents must not edit, translate, synchronize, or regenerate them, including during feature work, releases, or documentation maintenance. Describe any proposed README changes to the user instead of applying them.
+
 ## Language Conventions
 
 - Commit messages are English only: title, body, and trailers all in English, with no Chinese left. History is already unified to English; later commits must not regress.
 - Code comments are English only: line, block, and doc comments in `.go`, plus comments in `.sh` / `.ps1` and other scripts.
 - Task card titles are English only: every card created for this repository (`kander new`, cards under `kanban/`, and cards created by hand) gets an English title, no matter what the card's `LANGUAGE` field or the configured `agent_language` says. That field still governs the card body, execution records, reports, and conversation with the user; it does not exempt the title.
 - The released rules `rules/*.md` are English only and kept as the single copy; no per-language translations are maintained. The language the agent uses with the user is decided by the `agent_language` setting, and the "Language" section of the rules entry `KANDER-AGENTS.md` requires agents to honor it; keep that section in place when changing the rules.
-- Repository documentation (`AGENTS.md`, `docs/`) is written in English. The README defaults to the English `README.md`, with the Chinese and Japanese translations in `README-CN.md` and `README-JA.md`; keep the three versions in sync. User-facing strings still go through the `internal/i18n` message catalog and are not rewritten because of this bullet.
+- Repository documentation (`AGENTS.md`, `docs/`) is written in English. The README defaults to the English `README.md`, with the Chinese and Japanese translations in `README-CN.md` and `README-JA.md`. The user maintains consistency across these versions. User-facing strings still go through the `internal/i18n` message catalog and are not rewritten because of this bullet.
 
 ## Go Module and Package Map
 
