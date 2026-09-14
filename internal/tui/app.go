@@ -65,10 +65,20 @@ type App struct {
 	TriageIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
 	// PrepareChat resolves the agent and launcher of the chat box; StartChat
 	// starts one card-less session for a typed message. cmd.go binds StartChat
-	// only when a board exists, so a nil StartChat means the chat box is
-	// unavailable.
+	// when a board exists. A missing board offers kander init instead of
+	// leaving StartChat nil for the whole process.
 	PrepareChat func() (launch.ChatPreview, error)
 	StartChat   func(message string) (launch.ChatResult, error)
+	// missingBoard is set when startup could not locate kanban/. Board-requiring
+	// actions then confirm creating it through InitBoard, the same path as
+	// kander init. AttachBoard rebinds board-backed operations after success.
+	missingBoard     bool
+	boardRoot        string
+	BoardInit        *boardInitState
+	boardInitSeq     uint64
+	PreviewBoardInit func() (string, error)
+	InitBoard        func() (string, error)
+	AttachBoard      func(root string)
 	// While Chat is non-nil the chat box covers the board and owns the input;
 	// chatDraft keeps the text of a closed chat box for the next open.
 	Chat      *chatBox
@@ -147,7 +157,7 @@ type App struct {
 
 // Update routes messages to the active popup, board, or detail view.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
-	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil && (a.TaskActions == nil || !a.TaskActions.running) && (a.Chat == nil || a.Chat.phase != chatRunning) {
+	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil && a.BoardInit == nil && (a.TaskActions == nil || !a.TaskActions.running) && (a.Chat == nil || a.Chat.phase != chatRunning) {
 		a.requestQuit()
 		return nil
 	}
@@ -209,6 +219,13 @@ func (a *App) View() string {
 	case a.StartConfirmation != nil:
 		box, popup := a.renderStartConfirmation()
 		base = overlay(base, popup, box.X, box.Y, p)
+	case a.BoardInit != nil:
+		if a.Issues != nil {
+			issuesBox, issuesPopup := a.renderIssues()
+			base = overlay(base, issuesPopup, issuesBox.X, issuesBox.Y, p)
+		}
+		box, popup := a.renderBoardInit()
+		base = overlay(base, popup, box.X, box.Y, p)
 	case a.Takeover != nil:
 		if a.Issues != nil {
 			issuesBox, issuesPopup := a.renderIssues()
@@ -234,7 +251,7 @@ func (a *App) View() string {
 		box, popup := a.renderWelcome()
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
-	if a.TaskActions == nil && a.Chat == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && !a.shouldShowWelcome() && a.startNoticeOverflows(w) {
+	if a.TaskActions == nil && a.Chat == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && a.BoardInit == nil && !a.shouldShowWelcome() && a.startNoticeOverflows(w) {
 		box, popup := a.renderStartPopup([]string{a.startNotice.full})
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
@@ -917,6 +934,10 @@ func (a *App) handleDetailKey(key string) {
 func (a *App) HandleKey(key string) {
 	if a.StartConfirmation != nil {
 		a.handleStartConfirmation(key)
+		return
+	}
+	if a.BoardInit != nil {
+		a.handleBoardInitKey(key)
 		return
 	}
 	if key == "ctrl-c" {

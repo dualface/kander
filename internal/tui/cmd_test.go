@@ -250,6 +250,13 @@ func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
 	if !captured.shouldShowWelcome() {
 		t.Fatal("missing board with an existing config should show welcome")
 	}
+	if !captured.missingBoard || captured.StartChat != nil {
+		t.Fatal("a missing board must stay unbound until init")
+	}
+	captured.HandleKey("c")
+	if captured.BoardInit == nil || captured.Chat != nil {
+		t.Fatal("c must offer to initialize kanban/ instead of opening chat")
+	}
 	if _, err := captured.GetTask("any"); err == nil {
 		t.Fatal("detail lookup must refuse without a board")
 	}

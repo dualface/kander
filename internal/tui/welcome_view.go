@@ -14,7 +14,7 @@ func (a *App) shouldShowWelcome() bool {
 		return false
 	}
 	return a.TaskActions == nil && a.Chat == nil && a.Options == nil &&
-		a.StartConfirmation == nil && a.Takeover == nil && a.Issues == nil &&
+		a.StartConfirmation == nil && a.BoardInit == nil && a.Takeover == nil && a.Issues == nil &&
 		a.Detail == nil && !a.Help && !a.Searching
 }
 

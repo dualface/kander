@@ -7,5 +7,11 @@
   "tui.welcome_item_options": "4. `o` でオプションを開く",
   "tui.welcome_tip_title": "ヒント",
   "tui.welcome_tip": "初めて使う前に、利用する Agent を設定することをおすすめします",
-  "tui.welcome_hint": "Esc またはクリックで閉じる"
+  "tui.welcome_hint": "Esc またはクリックで閉じる",
+  "tui.board_init_title": "ボードを初期化しますか？",
+  "tui.board_init_body": "まだ kanban/ ディレクトリがありません。タスクカードのファイルはすべてこのディレクトリに保存されます：\n\n{{.V0}}\n\n今すぐ作成しますか？",
+  "tui.board_init_keys": "y または Enter：ディレクトリを作成；その他のキー：キャンセル",
+  "tui.board_init_running": "ボードディレクトリを作成しています…",
+  "tui.board_init_failed": "ボードを初期化できませんでした: {{.V0}}",
+  "tui.board_init_preview_failed": "kanban/ の作成先を決定できません: {{.V0}}"
 }

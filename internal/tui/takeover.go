@@ -71,6 +71,9 @@ func (a *App) issuesTakeover() {
 		a.issuesSetNotice(a.Context.IssuesNoTarget)
 		return
 	}
+	if a.offerBoardInit(boardInitTakeover) {
+		return
+	}
 	if card, ok := a.issuesLocalCard(number); ok {
 		if card.State != "done" {
 			return

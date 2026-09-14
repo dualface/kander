@@ -89,81 +89,20 @@ func Run(_ []string) int {
 		return fail(fmt.Errorf("%s: %s", ctx.UnknownTheme, prefs.Theme))
 	}
 	root, err := board.BoardRoot()
-	emptyBoard := false
 	if err != nil {
 		// A missing board still opens the TUI so first-run and out-of-project
 		// launches can show the empty-board welcome instead of exiting.
 		if !board.IsBoardNotFound(err) {
 			return fail(err)
 		}
-		emptyBoard = true
+		root = ""
 	}
-	getBoard := func() (BoardPayload, error) {
-		if emptyBoard {
-			return BoardPayload{}, nil
-		}
-		return loadBoardPayload(root)
-	}
-	getTask := func(id string) (Task, error) {
-		if emptyBoard {
-			return Task{}, fmt.Errorf("%s", t("board.board_directory_not_found_run_inside_a_project_or"))
-		}
-		return loadTaskPayload(root, id)
-	}
-	initial := BoardPayload{}
-	if !emptyBoard {
-		initial, err = getBoard()
-		if err != nil {
-			return fail(err)
-		}
-	}
-	app := newApp(prefs.Single, prefs.Refresh, ctx, getBoard, getTask, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
+	app := newApp(prefs.Single, prefs.Refresh, ctx, nil, nil, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.IssueProvider = cli.IssueProvider
-	app.ImportIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.ImportOptions) (issue.ImportResult, error) {
-		if strings.TrimSpace(options.Language) == "" {
-			options.Language = configuredAgentLanguage()
-		}
-		return issue.Import(ctx, cli.IssueProvider(), root, repository, number, options)
-	}
-	app.ImportIndex = func() (issue.Index, error) {
-		if emptyBoard {
-			return issue.Index{}, nil
-		}
-		return issue.LoadIndex(root)
-	}
-	app.LoadIssueCache = func(repository issue.Repository, number int) (issue.IssueSnapshot, bool) {
-		if emptyBoard {
-			return issue.IssueSnapshot{}, false
-		}
-		return issue.ReadCachedSnapshot(root, repository, number)
-	}
-	app.SaveIssueCache = func(snapshot issue.IssueSnapshot) error {
-		if emptyBoard {
-			return nil
-		}
-		return issue.WriteCachedSnapshot(root, snapshot, issue.DefaultCacheBounds())
-	}
-	app.PrepareTriage = func() (launch.TriagePreview, error) {
-		return launch.PreviewTriage("", "")
-	}
-	app.TriageIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
-		if emptyBoard {
-			return issue.TriageOutcome{}, errors.New(t("board.board_directory_not_found_run_inside_a_project_or"))
-		}
-		return issue.StartTriage(ctx, cli.IssueProvider(), root, repository, number, options)
-	}
-	app.ResultIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
-		provider, ok := cli.IssueProvider().(issue.ResultProvider)
-		if !ok {
-			return issue.TriageOutcome{}, errors.New(t("tui.issues_takeover_unavailable"))
-		}
-		return issue.StartResult(ctx, provider, root, repository, number, options)
-	}
-	if !emptyBoard {
-		app.PrepareChat = launch.PreviewChat
-		app.StartChat = func(message string) (launch.ChatResult, error) {
-			return launch.StartChat(launch.ChatRequest{Root: root, Message: message})
-		}
+	attachBoard(app, root)
+	initial, err := app.GetBoard()
+	if err != nil {
+		return fail(err)
 	}
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)
@@ -175,6 +114,81 @@ func Run(_ []string) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// attachBoard binds every board-backed TUI operation to root. An empty root
+// keeps the empty-board welcome and offers kander init from chat, import, and
+// takeover. A successful init calls this again with the created path.
+func attachBoard(app *App, root string) {
+	app.boardRoot = strings.TrimSpace(root)
+	app.missingBoard = app.boardRoot == ""
+	app.GetBoard = func() (BoardPayload, error) {
+		if app.boardRoot == "" {
+			return BoardPayload{}, nil
+		}
+		return loadBoardPayload(app.boardRoot)
+	}
+	app.GetTask = func(id string) (Task, error) {
+		if app.boardRoot == "" {
+			return Task{}, fmt.Errorf("%s", t("board.board_directory_not_found_run_inside_a_project_or"))
+		}
+		return loadTaskPayload(app.boardRoot, id)
+	}
+	app.ImportIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.ImportOptions) (issue.ImportResult, error) {
+		if strings.TrimSpace(options.Language) == "" {
+			options.Language = configuredAgentLanguage()
+		}
+		return issue.Import(ctx, cli.IssueProvider(), app.boardRoot, repository, number, options)
+	}
+	app.ImportIndex = func() (issue.Index, error) {
+		if app.boardRoot == "" {
+			return issue.Index{}, nil
+		}
+		return issue.LoadIndex(app.boardRoot)
+	}
+	app.LoadIssueCache = func(repository issue.Repository, number int) (issue.IssueSnapshot, bool) {
+		if app.boardRoot == "" {
+			return issue.IssueSnapshot{}, false
+		}
+		return issue.ReadCachedSnapshot(app.boardRoot, repository, number)
+	}
+	app.SaveIssueCache = func(snapshot issue.IssueSnapshot) error {
+		if app.boardRoot == "" {
+			return nil
+		}
+		return issue.WriteCachedSnapshot(app.boardRoot, snapshot, issue.DefaultCacheBounds())
+	}
+	app.PrepareTriage = func() (launch.TriagePreview, error) {
+		return launch.PreviewTriage("", "")
+	}
+	app.TriageIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
+		if app.boardRoot == "" {
+			return issue.TriageOutcome{}, errors.New(t("board.board_directory_not_found_run_inside_a_project_or"))
+		}
+		return issue.StartTriage(ctx, cli.IssueProvider(), app.boardRoot, repository, number, options)
+	}
+	app.ResultIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
+		provider, ok := cli.IssueProvider().(issue.ResultProvider)
+		if !ok {
+			return issue.TriageOutcome{}, errors.New(t("tui.issues_takeover_unavailable"))
+		}
+		return issue.StartResult(ctx, provider, app.boardRoot, repository, number, options)
+	}
+	if app.boardRoot == "" {
+		app.PrepareChat = nil
+		app.StartChat = nil
+	} else {
+		app.PrepareChat = launch.PreviewChat
+		app.StartChat = func(message string) (launch.ChatResult, error) {
+			return launch.StartChat(launch.ChatRequest{Root: app.boardRoot, Message: message})
+		}
+	}
+	app.PreviewBoardInit = func() (string, error) { return board.PlannedInitRoot("") }
+	app.InitBoard = func() (string, error) {
+		created, _, _, err := board.InitBoard("")
+		return created, err
+	}
+	app.AttachBoard = func(created string) { attachBoard(app, created) }
 }
 
 // firstLaunchDoctor creates the missing config through doctor. doctor names a new

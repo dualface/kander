@@ -352,45 +352,62 @@ func InitBoard(project string) (root string, exclude string, rules string, err e
 	return
 }
 
-// InitBoardWithOptions initializes and explicitly migrates under maintenance access.
-func InitBoardWithOptions(project string, options InitOptions) (root string, exclude string, rules string, migrated int, err error) {
+// PlannedInitRoot returns the board path InitBoard would create for project.
+// An empty project uses KANBAN_DIR, the Git main worktree, or the current directory.
+func PlannedInitRoot(project string) (string, error) {
+	return resolveInitRoot(project)
+}
+
+func resolveInitRoot(project string) (string, error) {
 	configured := os.Getenv(EnvBoardDir)
 	if project != "" && configured != "" {
-		return "", "", "", migrated, kanbanError("board.project_path_and_kanban_dir_cannot_be_used_together")
+		return "", kanbanError("board.project_path_and_kanban_dir_cannot_be_used_together")
 	}
+	var root string
 	if project != "" {
-		proj, e := absoluteUserPath(project)
-		if e != nil {
-			return "", "", "", migrated, e
+		proj, err := absoluteUserPath(project)
+		if err != nil {
+			return "", err
 		}
-		if e := ensureWindowsLexicalPathSafe(proj); e != nil {
-			return "", "", "", migrated, e
+		if err := ensureWindowsLexicalPathSafe(proj); err != nil {
+			return "", err
 		}
-		info, e := os.Stat(proj)
-		if e != nil || !info.IsDir() {
-			return "", "", "", migrated, kanbanError("board.project_directory_does_not_exist", proj)
+		info, err := os.Stat(proj)
+		if err != nil || !info.IsDir() {
+			return "", kanbanError("board.project_directory_does_not_exist", proj)
 		}
 		root = filepath.Join(proj, "kanban")
 	} else if configured != "" {
+		var err error
 		root, err = absoluteUserPath(configured)
 		if err != nil {
-			return "", "", "", migrated, err
+			return "", err
 		}
 	} else {
-		cwd, e := os.Getwd()
-		if e != nil {
-			return "", "", "", migrated, kanbanError("board.project_directory_does_not_exist", cwd)
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", kanbanError("board.project_directory_does_not_exist", cwd)
 		}
 		proj := gitMainWorktree(cwd)
 		if proj == "" {
-			proj, err = absoluteUserPath(cwd)
-			if err != nil {
-				return "", "", "", migrated, err
+			var e error
+			proj, e = absoluteUserPath(cwd)
+			if e != nil {
+				return "", e
 			}
 		}
 		root = filepath.Join(proj, "kanban")
 	}
 	if err := ensureWindowsLexicalPathSafe(root); err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+// InitBoardWithOptions initializes and explicitly migrates under maintenance access.
+func InitBoardWithOptions(project string, options InitOptions) (root string, exclude string, rules string, migrated int, err error) {
+	root, err = resolveInitRoot(project)
+	if err != nil {
 		return "", "", "", migrated, err
 	}
 	if existsNoFollow(root) && !isDirNoFollow(root) {

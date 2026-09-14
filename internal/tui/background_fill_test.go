@@ -98,6 +98,17 @@ func TestScreensFillBackground(t *testing.T) {
 				expectFilled(t, "start dialog", dialog.View())
 			}
 
+			for _, phase := range []boardInitPhase{boardInitLoading, boardInitReady, boardInitRunning, boardInitFinished} {
+				dialog := fillProbeApp(t, theme, width, height)
+				dialog.BoardInit = &boardInitState{
+					phase:   phase,
+					path:    "/tmp/project/kanban",
+					message: "could not initialize\n" + strings.Repeat("error line\n", 6),
+					failed:  phase == boardInitFinished,
+				}
+				expectFilled(t, "board init dialog", dialog.View())
+			}
+
 			actions := fillProbeApp(t, theme, width, height)
 			source := actionTestSource(t, "backlog", true)
 			actions.TaskActions = &taskActions{id: source.snapshot.Entry.TaskID, source: source, items: availableTaskActions("backlog", "window")}

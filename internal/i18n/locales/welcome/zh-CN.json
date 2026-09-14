@@ -7,5 +7,11 @@
   "tui.welcome_item_options": "4. 按 `o` 打开选项对话框",
   "tui.welcome_tip_title": "提示",
   "tui.welcome_tip": "首次使用前建议先配置要使用的 Agent",
-  "tui.welcome_hint": "Esc 或单击关闭"
+  "tui.welcome_hint": "Esc 或单击关闭",
+  "tui.board_init_title": "初始化看板？",
+  "tui.board_init_body": "当前还没有 kanban/ 目录。所有任务卡文件都会保存在这个目录中：\n\n{{.V0}}\n\n要现在创建吗？",
+  "tui.board_init_keys": "y 或 Enter：创建目录；其它键：取消",
+  "tui.board_init_running": "正在创建看板目录…",
+  "tui.board_init_failed": "无法初始化看板：{{.V0}}",
+  "tui.board_init_preview_failed": "无法确定 kanban/ 的创建位置：{{.V0}}"
 }

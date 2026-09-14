@@ -348,6 +348,10 @@ func (a *App) HandleMouse(x, y, bstate int) {
 		a.handleStartMouse(x, y, bstate)
 		return
 	}
+	if a.BoardInit != nil {
+		a.handleBoardInitMouse(x, y, bstate)
+		return
+	}
 	if a.Help {
 		if mouseLeftClicked(bstate) {
 			a.Help = false

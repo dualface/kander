@@ -554,6 +554,13 @@ func (a *App) issuesImport(withComments bool) {
 		a.issuesSetNotice(a.Context.IssuesNoTarget)
 		return
 	}
+	next := boardInitImport
+	if withComments {
+		next = boardInitImportComments
+	}
+	if a.offerBoardInit(next) {
+		return
+	}
 	importer := a.ImportIssue
 	if importer == nil {
 		a.issuesSetNotice(a.Context.IssuesImportFailed)

@@ -59,6 +59,9 @@ type chatStartResult struct {
 // openChat shows the chat box with the kept draft and resolves the agent and
 // launcher in the background, so a slow configuration read never blocks the key.
 func (a *App) openChat() {
+	if a.offerBoardInit(boardInitChat) {
+		return
+	}
 	if a.StartChat == nil {
 		a.showFocusNotice(t("tui.chat_no_board"))
 		return
