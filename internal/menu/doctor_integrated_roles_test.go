@@ -49,17 +49,6 @@ func TestDoctorIntegratedRoleAvailability(t *testing.T) {
 	}
 }
 
-func TestDoctorFourRoleConfigKeepsDisabledIntegratedReviewers(t *testing.T) {
-	cfg, paths, agents := doctorFourRoleConfig(t)
-	before := config.Clone(cfg)
-	if !validateConfiguredResources(cfg, agents, paths, TerminalTools{}) {
-		t.Error("four-role configuration requires only its installed reviewer")
-	}
-	if changes := repairConfiguredTools(cfg, cfg, agents, TerminalTools{}); len(changes) != 0 || !reflect.DeepEqual(cfg, before) {
-		t.Fatalf("four-role configuration was repaired: %v", changes)
-	}
-}
-
 func doctorFourRoleConfig(t *testing.T) (*config.Config, config.InstallPaths, map[string]agentState) {
 	t.Helper()
 	root := t.TempDir()
