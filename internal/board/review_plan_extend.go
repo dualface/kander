@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -38,9 +39,6 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 	}
 	if exclusiveOps > 1 {
 		return reviewError("cycle rebind and target sync cannot change batches or sealing")
-	}
-	if len(x.RebindCycles) > 0 && (x.Batch != nil || x.Seal) {
-		return reviewError("cycle rebind cannot change batches or sealing")
 	}
 	var p ReviewPlan
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
@@ -95,6 +93,7 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				return reviewError("target sync requires current execution cycles")
 			}
 			previous = p
+			previous.Batches = slices.Clone(p.Batches)
 			synced := map[string]reviewPlanTargetSyncRequest{}
 			for batchID, expected := range x.SyncTargets {
 				var b ReviewBatch

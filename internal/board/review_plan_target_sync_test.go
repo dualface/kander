@@ -2,6 +2,7 @@ package board
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,25 @@ func TestAdvanceReviewBatchSyncsPlanTarget(t *testing.T) {
 	plan := readPlanCopy(t, root, id)
 	if plan.Batches[0].TargetCommit != final || plan.Revision != 2 {
 		t.Fatalf("plan not synced: %+v", plan)
+	}
+	var history struct {
+		Previous ReviewPlan `json:"previous"`
+	}
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+		raw, ok, e := tx.ReadGroup(reviewControlGroup, fmt.Sprintf("plan-history/%s/%d.json", plan.PlanID, plan.Revision))
+		if e != nil {
+			return e
+		}
+		if !ok {
+			return reviewError("missing plan history")
+		}
+		return json.Unmarshal(raw, &history)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if history.Previous.Batches[0].TargetCommit != registered {
+		t.Fatalf("history lost old target: %+v", history.Previous.Batches[0])
 	}
 	progress, err := ReviewTaskProgress(root, id)
 	if err != nil || progress.Status != "pending" {
@@ -187,6 +207,10 @@ func TestPlanTargetMismatchProgressCheckAndExtendSync(t *testing.T) {
 	if _, err = MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed"}); err == nil || !strings.Contains(err.Error(), registered) {
 		t.Fatalf("move done ignored drift: %v", err)
 	}
+	next := strings.Repeat("d", 40)
+	if err = AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: 2, Advance: ReviewAdvance{PreviousTarget: final, Target: next, Reason: "silent repair attempt", Deliveries: map[string]string{next: id}}}); err == nil || !strings.Contains(err.Error(), registered) {
+		t.Fatalf("drifted advance silently repaired plan: %v", err)
+	}
 	plan := readPlanCopy(t, root, id)
 	if err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: plan.PlanID, ExpectedRevision: plan.Revision, SyncTargets: map[string]string{"batch": final}, Author: "coordinator", Basis: "align legacy plan target to runtime batch"}); err != nil {
 		t.Fatal(err)
@@ -194,6 +218,25 @@ func TestPlanTargetMismatchProgressCheckAndExtendSync(t *testing.T) {
 	plan = readPlanCopy(t, root, id)
 	if plan.Batches[0].TargetCommit != final {
 		t.Fatalf("%+v", plan)
+	}
+	var history struct {
+		Previous ReviewPlan `json:"previous"`
+	}
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+		raw, ok, e := tx.ReadGroup(reviewControlGroup, fmt.Sprintf("plan-history/%s/%d.json", plan.PlanID, plan.Revision))
+		if e != nil {
+			return e
+		}
+		if !ok {
+			return reviewError("missing plan history")
+		}
+		return json.Unmarshal(raw, &history)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if history.Previous.Batches[0].TargetCommit != registered {
+		t.Fatalf("history lost old target: %+v", history.Previous.Batches[0])
 	}
 	progress, err = ReviewTaskProgress(root, id)
 	if err != nil || progress.Status != "pending" {

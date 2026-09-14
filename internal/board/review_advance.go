@@ -2,6 +2,7 @@ package board
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -94,16 +95,19 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 			return err
 		}
 		return syncPlannedBatchTarget(tx, b, reviewPlanTargetSyncRequest{
-			Kind:    "advance",
-			BatchID: b.BatchID,
-			Target:  a.Target,
+			Kind:           "advance",
+			BatchID:        b.BatchID,
+			PreviousTarget: a.PreviousTarget,
+			Target:         a.Target,
 		})
 	})
 }
 
 // syncPlannedBatchTarget rewrites one plan batch's recorded target to match the
 // runtime batch. Unplanned batches are left unchanged. History keeps the prior
-// plan so an old recorded target remains auditable.
+// plan so an old recorded target remains auditable. Callers must pass the
+// pre-advance batch target as PreviousTarget so drifted legacy plans are refused
+// instead of silently repaired.
 func syncPlannedBatchTarget(tx *Transaction, batch ReviewBatch, request reviewPlanTargetSyncRequest) error {
 	if batch.PlanID == "" {
 		return nil
@@ -130,18 +134,18 @@ func syncPlannedBatchTarget(tx *Transaction, batch ReviewBatch, request reviewPl
 	if previousTarget == batch.TargetCommit {
 		return nil
 	}
-	if request.Target == "" {
-		request.Target = batch.TargetCommit
+	if request.PreviousTarget == "" || request.Target == "" {
+		return reviewError("plan target sync provenance")
 	}
 	if request.Target != batch.TargetCommit {
 		return reviewError("plan target sync CAS conflict")
 	}
-	if request.PreviousTarget != "" && request.PreviousTarget != previousTarget {
-		return reviewError("plan target sync CAS conflict")
+	if request.PreviousTarget != previousTarget {
+		return planBatchTargetMismatch(previousTarget, request.PreviousTarget, batch.BatchID)
 	}
-	request.PreviousTarget = previousTarget
 	request.BatchID = batch.BatchID
 	previous := p
+	previous.Batches = slices.Clone(p.Batches)
 	p.Batches[index].TargetCommit = batch.TargetCommit
 	p.Revision++
 	for _, id := range p.TaskIDs {

@@ -358,9 +358,10 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				batch.TargetCommit = input.Commit
 				batch.Revision++
 				if e = syncPlannedBatchTarget(tx, batch, reviewPlanTargetSyncRequest{
-					Kind:    "advance-file",
-					BatchID: batch.BatchID,
-					Target:  input.Commit,
+					Kind:           "advance-file",
+					BatchID:        batch.BatchID,
+					PreviousTarget: advance.PreviousTarget,
+					Target:         input.Commit,
 				}); e != nil {
 					return e
 				}
@@ -373,16 +374,6 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			return e
 		} else if ok {
 			return reviewError("batch already closed")
-		}
-		if !exists && batch.PlanID != "" {
-			if p, e := batchPlan(tx, batch); e != nil {
-				return e
-			} else if p.CWD != input.CWD {
-				return reviewError("run/plan worktree mismatch")
-			}
-			if e := validatePreviousClosure(tx, batch); e != nil {
-				return e
-			}
 		}
 		if batch.Requirements[input.Role] != "required" {
 			return reviewError("role is not required")
