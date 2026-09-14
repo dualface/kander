@@ -180,8 +180,24 @@ func decodeResultComment(raw []byte) (issue.ResultComment, error) {
 	return issue.ResultComment{ID: comment.ID, AuthorID: comment.User.ID, Body: comment.Body}, nil
 }
 
-// Only gh's explicit final HTTP status establishes a definite rejection.
-var resultRejectionStatus = regexp.MustCompile(`\(HTTP (400|401|403|404|410|413|422|429)\)\s*$`)
+// Accept gh's HTTP rejection line and its known scope/SSO suggestions only.
+// Extra unknown diagnostics cannot turn an ambiguous failure into retry consent.
+var resultRejectionStatus = regexp.MustCompile(`^gh: (?:[^\r\n]*\(HTTP (?:400|401|403|404|410|413|422|429)\)|HTTP (?:400|401|403|404|410|413|422|429))[ \t]*$`)
+var resultRejectionHint = regexp.MustCompile(`^(?:gh: This API operation needs the "[^"\r\n]+" scope\. To request it, run:[ \t]+gh auth refresh -h \S+ -s \S+|Authorize in your web browser:[ \t]+https?://\S+)$`)
+
+func definiteResultRejection(stderr []byte) bool {
+	lines := strings.Split(strings.TrimSpace(string(stderr)), "\n")
+	if !resultRejectionStatus.MatchString(strings.TrimSpace(lines[0])) {
+		return false
+	}
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line != "" && !resultRejectionHint.MatchString(line) {
+			return false
+		}
+	}
+	return true
+}
 
 func (p *Provider) resultWrite(ctx context.Context, repository issue.Repository, endpoint, method string, fields [][2]string) ([]byte, error) {
 	args := apiArgs(repository.Host, endpoint, fields)
@@ -195,7 +211,7 @@ func (p *Provider) resultWrite(ctx context.Context, repository issue.Repository,
 	if err != nil {
 		failure := classifyFailure(stderr, err, repository.Host, repository.Owner+"/"+repository.Name)
 		kind := issue.KindOf(err)
-		if (kind == "" || kind == issue.ErrorCommandFailed) && resultRejectionStatus.Match(stderr) {
+		if (kind == "" || kind == issue.ErrorCommandFailed) && definiteResultRejection(stderr) {
 			return nil, &issue.ResultWriteRejection{Err: failure}
 		}
 		return nil, failure

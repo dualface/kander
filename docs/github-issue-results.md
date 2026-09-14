@@ -42,8 +42,9 @@ not hash the comment's wording, session, timestamps or execution logs. No delive
 SHA is required for non-code work; criterion outcomes and full-resolution status still
 identify its result. Semantic assessment belongs to the trusted agent, including
 selecting relevant checks and avoiding invented conclusions. An existing equivalent
-comment is recorded by numeric ID without posting. A known result never posts again,
+comment is recorded by numeric ID without posting. A published or equivalent result never posts again,
 including after its remote comment is edited or deleted; deletion is not retry consent.
+Only a definite `rejected` attempt may be retried after inspection.
 
 Decide checks current card evidence and the exact observation shown when asking,
 plus the selected result's full-resolution evidence. Yes/no decisions carry the

@@ -109,17 +109,40 @@ func TestResultProviderRejectsIncompleteUnreadableAndForeignReplies(t *testing.T
 
 func TestResultWriteDistinguishesDefiniteRejectionFromUncertainty(t *testing.T) {
 	ghclitest.Install(t)
-	for _, code := range []int{400, 401, 403, 404, 422, 429, 408, 500, 503} {
-		t.Run(fmt.Sprint(code), func(t *testing.T) {
-			ghclitest.Set(t, "gh", ghclitest.Options{Stderr: fmt.Sprintf("gh: request failed (HTTP %d)\n", code), Exit: 1})
+	cases := []struct {
+		name   string
+		stderr string
+		want   bool
+	}{}
+	for _, code := range []int{400, 401, 403, 404, 410, 413, 422, 429, 408, 500, 503} {
+		cases = append(cases, struct {
+			name   string
+			stderr string
+			want   bool
+		}{fmt.Sprint(code), fmt.Sprintf("gh: request failed (HTTP %d)\n", code), code < 500 && code != 408})
+	}
+	cases = append(cases, []struct {
+		name   string
+		stderr string
+		want   bool
+	}{
+		{"scope", "gh: Not Found (HTTP 404)\ngh: This API operation needs the \"repo\" scope. To request it, run:  gh auth refresh -h github.com -s repo\n", true},
+		{"SSO", "gh: Resource protected by organization SAML enforcement (HTTP 403)\nAuthorize in your web browser: https://github.com/orgs/example/sso\n", true},
+		{"plain status", "gh: HTTP 403\n", true},
+		{"unknown trailing failure", "gh: request failed (HTTP 403)\nunexpected transport failure\n", false},
+		{"server error with embedded status", "gh: upstream reported (HTTP 403) (HTTP 503)\n", false},
+		{"server error with later status", "gh: failed (HTTP 503)\ngh: request failed (HTTP 403)\n", false},
+	}...)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ghclitest.Set(t, "gh", ghclitest.Options{Stderr: tc.stderr, Exit: 1})
 			_, err := NewProvider(Options{}).PostResult(context.Background(), testRepository(), 42, "result")
 			if err == nil {
 				t.Fatal("failure reported success")
 			}
 			var rejected *issue.ResultWriteRejection
-			want := code < 500 && code != 408
-			if errors.As(err, &rejected) != want {
-				t.Fatalf("classification for %d: %v", code, err)
+			if errors.As(err, &rejected) != tc.want {
+				t.Fatalf("classification for %s: %v", tc.name, err)
 			}
 		})
 	}
