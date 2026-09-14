@@ -111,7 +111,16 @@ func runDispositionCommand(args []string) int {
 	case "aggregate":
 		result, err = board.PublishReviewDisposition(root, input)
 	case "progress":
-		result, err = board.ReviewTaskProgress(root, input)
+		var progress board.ReviewProgress
+		progress, err = board.ReviewTaskProgress(root, input)
+		result = progress
+		if err != nil && (progress.PlanTarget != "" || progress.BatchTarget != "") {
+			data, marshalErr := json.MarshalIndent(progress, "", "  ")
+			if marshalErr == nil {
+				fmt.Println(string(data))
+			}
+			return dispositionFailure(err)
+		}
 	case "close":
 		var r board.ReviewCloseRequest
 		if err = readArchiveJSON(input, &r); err == nil {

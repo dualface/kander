@@ -46,7 +46,7 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published bool) e
 		return err
 	}
 	if g.RebasedBase == "" && g.SourceCommit != g.ReviewTarget || g.ReviewTarget != reviewRange.Descendant || g.ReviewBase != reviewRange.Ancestor || g.RebasedBase != "" && !dispatchCommitPattern.MatchString(g.RebasedBase) {
-		return dispatchEvidenceError("integration does not bind final review target")
+		return dispatchEvidenceError("integration does not bind final review target " + reviewRange.Descendant)
 	}
 	if published {
 		raw, err := tx.Read(in.TaskID, w.Artifact.Path)

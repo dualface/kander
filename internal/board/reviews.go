@@ -244,9 +244,13 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			return e
 		}
 		if ok && batch.PlanID != "" {
-			p, e := batchPlan(tx, batch)
+			var p ReviewPlan
+			found, e := readReviewJSON(tx, planName(batch.PlanID), &p)
 			if e != nil {
 				return e
+			}
+			if !found || p.PlanID != batch.PlanID {
+				return reviewError("batch review plan required")
 			}
 			scopeIDs = p.TaskIDs
 		}
@@ -328,6 +332,16 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if batch.Schema != 1 || batch.TaskContextHash != input.InputHashes["task-context.md"] || batch.Base != input.Base || !reflect.DeepEqual(batch.TaskIDs, input.TaskIDs) || batch.ReportLanguage != language || len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
 				return reviewError("batch binding conflict")
 			}
+			if batch.PlanID != "" {
+				if p, e := batchPlan(tx, batch); e != nil {
+					return e
+				} else if p.CWD != input.CWD {
+					return reviewError("run/plan worktree mismatch")
+				}
+				if e := validatePreviousClosure(tx, batch); e != nil {
+					return e
+				}
+			}
 			if batch.TargetCommit != input.Commit {
 				if advance == nil || advance.PreviousTarget != batch.TargetCommit || advance.Target != input.Commit || strings.TrimSpace(advance.Reason) == "" || len(advance.Deliveries) == 0 {
 					return reviewError("batch target CAS conflict")
@@ -343,6 +357,13 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				batch.Advances = append(batch.Advances, *advance)
 				batch.TargetCommit = input.Commit
 				batch.Revision++
+				if e = syncPlannedBatchTarget(tx, batch, reviewPlanTargetSyncRequest{
+					Kind:    "advance-file",
+					BatchID: batch.BatchID,
+					Target:  input.Commit,
+				}); e != nil {
+					return e
+				}
 			} else if advance != nil {
 				return reviewError("redundant batch advance")
 			}
@@ -353,7 +374,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 		} else if ok {
 			return reviewError("batch already closed")
 		}
-		if batch.PlanID != "" {
+		if !exists && batch.PlanID != "" {
 			if p, e := batchPlan(tx, batch); e != nil {
 				return e
 			} else if p.CWD != input.CWD {

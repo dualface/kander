@@ -1,0 +1,205 @@
+package board
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+)
+
+func readPlanCopy(t *testing.T, root, id string) ReviewPlan {
+	t.Helper()
+	var p ReviewPlan
+	err := WithTransaction(root, reviewScope([]string{id}, true), func(tx *Transaction) error {
+		text, e := tx.Read(id, "reviews/plan.json")
+		if e != nil {
+			return e
+		}
+		return json.Unmarshal([]byte(text), &p)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func driftBatchTarget(t *testing.T, root, batchID, target string) {
+	t.Helper()
+	err := WithTransaction(root, reviewScope(nil, false), func(tx *Transaction) error {
+		var b ReviewBatch
+		ok, e := readReviewJSON(tx, reviewBatchName(batchID), &b)
+		if e != nil {
+			return e
+		}
+		if !ok {
+			return reviewError("missing batch")
+		}
+		b.TargetCommit = target
+		b.Revision++
+		return tx.PutGroup(reviewControlGroup, reviewBatchName(batchID), reviewJSON(b))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAdvanceReviewBatchSyncsPlanTarget(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "advance-sync")
+	gatePlan(t, root, []string{id}, noReviewRequirements())
+	registered := strings.Repeat("b", 40)
+	final := strings.Repeat("c", 40)
+	if err := AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: 1, Advance: ReviewAdvance{PreviousTarget: registered, Target: final, Reason: "member fix", Deliveries: map[string]string{final: id}}}); err != nil {
+		t.Fatal(err)
+	}
+	batch, err := ReadReviewBatch(root, "batch")
+	if err != nil || batch.TargetCommit != final {
+		t.Fatalf("%+v %v", batch, err)
+	}
+	plan := readPlanCopy(t, root, id)
+	if plan.Batches[0].TargetCommit != final || plan.Revision != 2 {
+		t.Fatalf("plan not synced: %+v", plan)
+	}
+	progress, err := ReviewTaskProgress(root, id)
+	if err != nil || progress.Status != "pending" {
+		t.Fatalf("%+v %v", progress, err)
+	}
+	if problems := CheckReviewGate(root, []string{id}); len(problems) > 0 {
+		t.Fatalf("%v", problems)
+	}
+}
+
+func TestAdvanceFileSyncsPlannedBatchAndLeavesUnplannedAlone(t *testing.T) {
+	t.Run("planned", func(t *testing.T) {
+		root := tempBoard(t)
+		id := gateCard(t, root, "advance-file-planned")
+		gatePlan(t, root, []string{id}, archiveRequirements())
+		first := gateRun(t, root, archiveInput([]string{id}, "first", "PM"), emptyFindings())
+		next := archiveInput([]string{id}, "second", "PM")
+		next.Commit = strings.Repeat("c", 40)
+		next.ReviewedCommit = first.Commit
+		next.PreviousRunID = first.RunID
+		advance := &ReviewAdvance{PreviousTarget: first.Commit, Target: next.Commit, Reason: "member fix", Deliveries: map[string]string{next.Commit: id}}
+		if _, _, err := PrepareReviewRun(root, next, nil, advance, archiveOriginals(), "test"); err != nil {
+			t.Fatal(err)
+		}
+		plan := readPlanCopy(t, root, id)
+		if plan.Batches[0].TargetCommit != next.Commit || plan.Revision < 2 {
+			t.Fatalf("planned advance-file did not sync: %+v", plan)
+		}
+		if _, err := ReviewTaskProgress(root, id); err != nil {
+			t.Fatal(err)
+		}
+		if problems := CheckReviewGate(root, []string{id}); len(problems) > 0 {
+			t.Fatalf("%v", problems)
+		}
+	})
+	t.Run("unplanned", func(t *testing.T) {
+		root := tempBoard(t)
+		id := archiveCard(t, root, "advance-file-unplanned")
+		first := finalizedRun(t, root, archiveInput([]string{id}, "u1", "PM"))
+		publishRun(t, root, first.RunID)
+		next := archiveInput([]string{id}, "u2", "PM")
+		next.Commit = strings.Repeat("c", 40)
+		next.ReviewedCommit = first.Commit
+		next.PreviousRunID = first.RunID
+		advance := &ReviewAdvance{PreviousTarget: first.Commit, Target: next.Commit, Reason: "member fix", Deliveries: map[string]string{next.Commit: id}}
+		if _, _, err := PrepareReviewRun(root, next, nil, advance, archiveOriginals(), "test"); err != nil {
+			t.Fatal(err)
+		}
+		batch, err := ReadReviewBatch(root, "batch")
+		if err != nil || batch.PlanID != "" || batch.TargetCommit != next.Commit {
+			t.Fatalf("%+v %v", batch, err)
+		}
+	})
+}
+
+func TestDispatchReviewRangeUsesAdvancedPlanTarget(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "range-final")
+	base := strings.Repeat("a", 40)
+	registered := strings.Repeat("b", 40)
+	final := strings.Repeat("c", 40)
+	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-" + id, Author: "coordinator", Basis: "range fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: base, TargetCommit: registered, Requirements: noReviewRequirements()}}}
+	if err := CreateReviewPlan(root, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: 1, Advance: ReviewAdvance{PreviousTarget: registered, Target: final, Reason: "fix delivery", Deliveries: map[string]string{final: id}}}); err != nil {
+		t.Fatal(err)
+	}
+	v, err := ReadReviewBatchView(root, "batch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "fixture", Roles: map[string]ReviewRoleConclusion{}}
+	edges, _, err := ReviewClosureEdges(v, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = CloseReviewBatch(root, r, ReviewGitEvidence{CWD: "/repo", Head: final, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}); err != nil {
+		t.Fatal(err)
+	}
+	reviewRange, err := DispatchReviewRange(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reviewRange.Ancestor != base || reviewRange.Descendant != final {
+		t.Fatalf("%+v", reviewRange)
+	}
+	s := transactionSnapshot(t, root, id)
+	in := dispatchInput(s, "wrap-final")
+	in.Kind = "wrap-up"
+	in.Base = final
+	in.Evidence.WrapUp = &DispatchWrapUpBinding{Artifact: ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}, Git: DispatchIntegration{DispatchID: in.ID, TaskID: in.TaskID, CWD: t.TempDir(), SourceCommit: final, ReviewTarget: final, ReviewBase: base, TargetCommit: final, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "binds closed final target", VerifiedAt: time.Now().UTC()}}
+	if _, err = PrepareDispatch(root, in); err != nil {
+		t.Fatal(err)
+	}
+	in.ID = "wrap-stale"
+	in.Base = registered
+	in.Evidence.WrapUp = &DispatchWrapUpBinding{Artifact: ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}, Git: DispatchIntegration{DispatchID: in.ID, TaskID: in.TaskID, CWD: t.TempDir(), SourceCommit: registered, ReviewTarget: registered, ReviewBase: base, TargetCommit: registered, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "stale registered target", VerifiedAt: time.Now().UTC()}}
+	if _, err = PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), final) {
+		t.Fatalf("stale registered target accepted: %v", err)
+	}
+}
+
+func TestPlanTargetMismatchProgressCheckAndExtendSync(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "target-drift")
+	gatePlan(t, root, []string{id}, noReviewRequirements())
+	registered := strings.Repeat("b", 40)
+	final := strings.Repeat("c", 40)
+	driftBatchTarget(t, root, "batch", final)
+	progress, err := ReviewTaskProgress(root, id)
+	if err == nil || progress.PlanTarget != registered || progress.BatchTarget != final {
+		t.Fatalf("%+v %v", progress, err)
+	}
+	if !strings.Contains(err.Error(), registered) || !strings.Contains(err.Error(), final) {
+		t.Fatal(err)
+	}
+	problems := CheckReviewGate(root, []string{id})
+	if len(problems) != 1 || !strings.Contains(problems[0].Message, registered) || !strings.Contains(problems[0].Message, final) {
+		t.Fatalf("%v", problems)
+	}
+	s := transactionSnapshot(t, root, id)
+	summary := strings.Replace(s.Text, "## SUMMARY\n\n<FILL_IN>", "## SUMMARY\n\n完成", 1)
+	updateSnapshot(t, root, s, summary)
+	s = transactionSnapshot(t, root, id)
+	if _, err = MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed"}); err == nil || !strings.Contains(err.Error(), registered) {
+		t.Fatalf("move done ignored drift: %v", err)
+	}
+	plan := readPlanCopy(t, root, id)
+	if err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: plan.PlanID, ExpectedRevision: plan.Revision, SyncTargets: map[string]string{"batch": final}, Author: "coordinator", Basis: "align legacy plan target to runtime batch"}); err != nil {
+		t.Fatal(err)
+	}
+	plan = readPlanCopy(t, root, id)
+	if plan.Batches[0].TargetCommit != final {
+		t.Fatalf("%+v", plan)
+	}
+	progress, err = ReviewTaskProgress(root, id)
+	if err != nil || progress.Status != "pending" {
+		t.Fatalf("%+v %v", progress, err)
+	}
+	if problems = CheckReviewGate(root, []string{id}); len(problems) > 0 {
+		t.Fatalf("%v", problems)
+	}
+}

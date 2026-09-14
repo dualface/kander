@@ -260,6 +260,9 @@ func batchPlan(tx *Transaction, b ReviewBatch) (ReviewPlan, error) {
 			if pb.Base != b.Base || !slices.Equal(pb.TaskIDs, b.TaskIDs) || !reflect.DeepEqual(pb.Requirements, b.Requirements) || pb.PreviousBatchID != b.PreviousBatchID || p.ReportLanguage != b.ReportLanguage {
 				return p, reviewError("batch plan binding")
 			}
+			if pb.TargetCommit != b.TargetCommit {
+				return p, planBatchTargetMismatch(pb.TargetCommit, b.TargetCommit, b.BatchID)
+			}
 			return p, nil
 		}
 	}

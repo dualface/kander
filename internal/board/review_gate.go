@@ -15,6 +15,9 @@ type ReviewProgress struct {
 	Status       string            `json:"status"`
 	Pending      []string          `json:"pending,omitempty"`
 	RebindCycles map[string]string `json:"rebind_cycles,omitempty"`
+	PlanTarget   string            `json:"plan_target,omitempty"`
+	BatchTarget  string            `json:"batch_target,omitempty"`
+	BatchID      string            `json:"batch_id,omitempty"`
 }
 
 func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (LockScope, error) {
@@ -114,6 +117,13 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		}
 		if !ok {
 			return progress, reviewError("planned batch missing")
+		}
+		if pb.TargetCommit != b.TargetCommit {
+			progress.PlanTarget = pb.TargetCommit
+			progress.BatchTarget = b.TargetCommit
+			progress.BatchID = b.BatchID
+			progress.Status = "plan-target-mismatch"
+			return progress, planBatchTargetMismatch(pb.TargetCommit, b.TargetCommit, b.BatchID)
 		}
 		if _, e = batchPlan(tx, b); e != nil {
 			return progress, e
