@@ -72,7 +72,7 @@ func TestStartConfirmationStatesAndCancellation(t *testing.T) {
 	}
 }
 
-func TestStartKeyContextsAndHelp(t *testing.T) {
+func TestStartKeyContexts(t *testing.T) {
 	app := startTestApp("todo")
 	app.HandleKey("/")
 	app.HandleKey("s")
@@ -86,15 +86,6 @@ func TestStartKeyContextsAndHelp(t *testing.T) {
 	finishStartPreview(app)
 	if app.Detail == nil || app.StartConfirmation != nil {
 		t.Fatal("detail s must not start")
-	}
-	found := false
-	for _, entry := range boardHelpGroups()[0].Entries {
-		if entry.Keys == "g" {
-			found = entry.Desc != ""
-		}
-	}
-	if !found {
-		t.Fatal("missing board help")
 	}
 }
 

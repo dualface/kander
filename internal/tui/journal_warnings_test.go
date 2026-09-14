@@ -83,3 +83,47 @@ func TestJournalWarningsReachRefreshDetailAndBacklogStart(t *testing.T) {
 		}
 	})
 }
+
+func TestTaskActionJournalWarningsUseNotice(t *testing.T) {
+	for _, action := range []taskAction{actionPick, actionBacklog, actionArchive, actionTrash} {
+		t.Run(string(action), func(t *testing.T) {
+			state := "backlog"
+			if action == actionBacklog {
+				state = "todo"
+			}
+			source := actionTestSource(t, state, true)
+			for _, dir := range []string{"operations", "migrations"} {
+				if err := os.MkdirAll(filepath.Join(source.root, ".kander", dir), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(source.root, ".kander", "operations", "legacy.json"), []byte(`{"schema":1,"operation_id":"legacy","phase":"committed"}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(source.root, ".kander", "migrations", "cleanup-blocked"), []byte("preserve"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(board.EnvBoardDir, source.root)
+			app := actionTestApp(t, source)
+			app.LoadTaskActions = loadTaskActionSource
+			withoutJournalOutput(t, func() {
+				chooseTaskAction(t, app, action)
+				if !strings.Contains(app.CopyNotice, "kander init") {
+					t.Fatal("load warning hidden")
+				}
+				if action == actionArchive || action == actionTrash {
+					result := "cancelled"
+					if action == actionTrash {
+						result = "trashed"
+					}
+					app.TaskActions.options = board.MoveOptions{Result: result, Reason: "User reason", Decision: "User reference"}
+					app.queueTaskAction()
+				}
+				runPendingWork(t, app)
+				if !strings.Contains(app.CopyNotice, "cleanup-blocked") || !strings.Contains(app.CopyNotice, "kander init") {
+					t.Fatalf("move warning hidden: %s", app.CopyNotice)
+				}
+			})
+		})
+	}
+}

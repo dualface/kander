@@ -889,10 +889,6 @@ func (a *App) handleDetailKey(key string) {
 }
 
 func (a *App) HandleKey(key string) {
-	if a.TaskActions != nil {
-		a.handleTaskActionKey(key)
-		return
-	}
 	if a.StartConfirmation != nil {
 		a.handleStartConfirmation(key)
 		return

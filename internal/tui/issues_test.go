@@ -522,6 +522,11 @@ func TestIssuesBoardKeysAndHelp(t *testing.T) {
 	if _, ok := entries["g"]; !ok {
 		t.Fatal("board help must document g for task actions")
 	}
+	for _, old := range []string{"s", "f", "F"} {
+		if _, ok := entries[old]; ok {
+			t.Fatalf("obsolete board help key %s", old)
+		}
+	}
 	groups := boardHelpGroups()
 	foundIssues := false
 	for _, group := range groups {

@@ -96,15 +96,6 @@ func TestFocusKeyContexts(t *testing.T) {
 	if app.DetailPendingG || app.DetailScroll != 0 {
 		t.Fatal("detail gg changed")
 	}
-	found := false
-	for _, entry := range boardHelpGroups()[0].Entries {
-		if entry.Keys == "g" {
-			found = entry.Desc != ""
-		}
-	}
-	if !found {
-		t.Fatal("board help missing task actions key")
-	}
 }
 
 func TestFocusMissingTask(t *testing.T) {

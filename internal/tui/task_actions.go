@@ -24,6 +24,7 @@ const (
 type taskActionSource struct {
 	root     string
 	snapshot board.Snapshot
+	warnings *board.WarningLog
 }
 
 type taskActions struct {
@@ -51,6 +52,7 @@ type taskActionResult struct {
 	target          string
 	payload         BoardPayload
 	err, refreshErr error
+	warnings        []string
 }
 
 func availableTaskActions(state, window string) []taskAction {
@@ -74,8 +76,9 @@ func loadTaskActionSource(id string) (taskActionSource, error) {
 	if err != nil {
 		return taskActionSource{}, err
 	}
-	snapshot, err := board.ReadSnapshot(root, id)
-	return taskActionSource{root, snapshot}, err
+	warnings := &board.WarningLog{}
+	snapshot, err := board.ReadSnapshotWithWarnings(root, id, warnings)
+	return taskActionSource{root: root, snapshot: snapshot, warnings: warnings}, err
 }
 
 func (a *App) openTaskActions() {
@@ -104,14 +107,17 @@ func (a *App) applyTaskActionsLoaded(result taskActionsLoaded) {
 	}
 	if result.err != nil {
 		a.TaskActions = nil
-		a.showFocusNotice(result.err.Error())
+		a.showFocusNotice(strings.Join(append([]string{result.err.Error()}, result.source.warningMessages()...), "\n"))
 		return
 	}
 	dialog.source, dialog.loading = result.source, false
+	if warnings := result.source.warningMessages(); len(warnings) > 0 {
+		a.showFocusNotice(strings.Join(warnings, "\n"))
+	}
 	dialog.items = availableTaskActions(result.source.snapshot.Entry.State, board.MetadataFrom(result.source.snapshot.Text, board.FieldWindow))
 	if len(dialog.items) == 0 {
 		a.TaskActions = nil
-		a.showFocusNotice(t("actions.none"))
+		a.showFocusNotice(strings.Join(append([]string{t("actions.none")}, result.source.warningMessages()...), "\n"))
 	}
 }
 
@@ -186,7 +192,7 @@ func (a *App) queueTaskAction() {
 	a.pendingWork = func() any {
 		target, err := runTaskAction(source, action, options)
 		payload, refreshErr := getBoard()
-		return taskActionResult{id, sequence, target, payload, err, refreshErr}
+		return taskActionResult{id: id, sequence: sequence, target: target, payload: payload, err: err, refreshErr: refreshErr, warnings: source.warningMessages()}
 	}
 }
 
@@ -200,7 +206,6 @@ func (a *App) applyTaskActionResult(result taskActionResult) {
 		a.Model.RefreshError = result.refreshErr.Error()
 	} else {
 		a.Model.SetBoard(result.payload)
-		a.showJournalWarnings(result.payload.Warnings)
 	}
 	a.LastRefresh = a.Now()
 	message := t("actions.moved", result.id, result.target)
@@ -209,6 +214,12 @@ func (a *App) applyTaskActionResult(result taskActionResult) {
 	}
 	if result.refreshErr != nil {
 		message += "\n" + result.refreshErr.Error()
+	}
+	warnings := append(result.warnings, result.payload.Warnings...)
+	for _, warning := range warnings {
+		if !strings.Contains(message, warning) {
+			message += "\n" + warning
+		}
 	}
 	a.showFocusNotice(message)
 }
@@ -245,4 +256,12 @@ func (a *App) renderTaskActions() (popupBox, string) {
 	}
 	box, _, out := frame.render(p, w, h, inner, ansi.Wrap(body, inner, ""))
 	return box, out
+}
+
+// warningMessages is safe for injected sources without a collector.
+func (source taskActionSource) warningMessages() []string {
+	if source.warnings == nil {
+		return nil
+	}
+	return source.warnings.Messages()
 }

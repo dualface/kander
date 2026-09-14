@@ -74,13 +74,6 @@ func (a *App) updateTaskActions(msg tea.Msg) tea.Cmd {
 		if dialog.options.Result != "duplicate" {
 			dialog.options.DuplicateOf = ""
 		}
-		// Keep submission validation at the boundary even when forms are rebuilt.
-		for _, value := range []string{dialog.options.Reason, dialog.options.Decision} {
-			if err := requireActionValue(value); err != nil {
-				a.showFocusNotice(err.Error())
-				return nil
-			}
-		}
 		a.queueTaskAction()
 	} else if dialog.form.State == huh.StateAborted {
 		a.TaskActions = nil
