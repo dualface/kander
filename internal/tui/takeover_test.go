@@ -57,12 +57,24 @@ func TestIssuesTakeoverUnboundStartsThroughTheSharedPath(t *testing.T) {
 		return issue.TriageOutcome{Agent: "claude", Launcher: "tmux", Address: "session:win:pane"}, nil
 	})
 
+	view := ansi.Strip(app.View())
+	if !strings.Contains(view, "i import") {
+		t.Fatalf("unbound hint missing:\n%s", view)
+	}
+	if strings.Contains(view, "g jump to card") {
+		t.Fatalf("bound hint shown for an unbound issue:\n%s", view)
+	}
+	app.HandleKey("g")
+	if app.Issues == nil {
+		t.Fatal("g must not jump when the issue is unbound")
+	}
+
 	app.HandleKey("s")
 	dialog := app.Takeover
 	if dialog == nil || dialog.phase != takeoverLoading {
 		t.Fatalf("dialog=%+v", dialog)
 	}
-	if dialog.number != 42 || dialog.cardID != "" {
+	if dialog.number != 42 {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 	if !strings.Contains(ansi.Strip(app.View()), config.Text("tui.issues_takeover_loading")) {
@@ -76,7 +88,7 @@ func TestIssuesTakeoverUnboundStartsThroughTheSharedPath(t *testing.T) {
 	if dialog.phase != takeoverReady || dialog.agent != "claude" || dialog.launcher != "tmux" {
 		t.Fatalf("dialog=%+v", dialog)
 	}
-	view := ansi.Strip(app.View())
+	view = ansi.Strip(app.View())
 	for _, want := range []string{
 		config.Text("tui.issues_takeover_title", "42"),
 		"dualface/kander#42",
@@ -133,209 +145,59 @@ func TestIssuesTakeoverCancelKeepsTheBoard(t *testing.T) {
 	}
 }
 
-func TestIssuesTakeoverBoundBacklogOffersJumpAndContract(t *testing.T) {
+func TestIssuesBoundSelectionUsesJumpKeyOnly(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	task := Task{TaskID: "task-1", Title: "Task", State: "backlog", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
 	index := importTestIndex(fake.repository, 42, "task-1",
 		time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC))
 	app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
-		return issue.TriageOutcome{Agent: "claude", Launcher: "tmux", Address: "session:win:pane"}, nil
+		t.Fatal("bound issues must not start takeover from the overlay")
+		return issue.TriageOutcome{}, nil
 	})
 	app.HandleKey("g")
 	runPendingWork(t, app)
 
-	app.HandleKey("s")
-	dialog := app.Takeover
-	if dialog == nil || dialog.cardID != "task-1" {
-		t.Fatalf("dialog=%+v", dialog)
+	keys := map[string]string{}
+	for _, entry := range app.issuesHelpEntries() {
+		keys[entry.Keys] = entry.Desc
 	}
-	runPendingWork(t, app)
-	view := ansi.Strip(app.View())
-	for _, want := range []string{
-		config.Text("tui.issues_contract_title", "42", "task-1"),
-		config.Text("tui.issues_contract_jump"),
-		config.Text("tui.issues_contract_start"),
-	} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("dialog missing %q:\n%s", want, view)
+	if keys["g"] != config.Text("tui.jump_to_local_card") {
+		t.Fatalf("help missing jump key: %+v", keys)
+	}
+	for _, unexpected := range []string{"i", "I", "s"} {
+		if _, ok := keys[unexpected]; ok {
+			t.Fatalf("help still shows %s: %+v", unexpected, keys)
 		}
 	}
+	if !strings.Contains(ansi.Strip(app.View()), "g jump to card") {
+		t.Fatalf("bound footer hint missing:\n%s", ansi.Strip(app.View()))
+	}
 
-	// y/Enter is the default exit of a bound card: jump to it.
-	app.HandleKey("y")
-	if app.Takeover != nil || app.Issues != nil {
-		t.Fatalf("jump must close the dialog and the overlay: %+v", app.Takeover)
+	for _, key := range []string{"i", "I", "s"} {
+		app.HandleKey(key)
+		if app.Takeover != nil {
+			t.Fatalf("%s opened takeover: %+v", key, app.Takeover)
+		}
+		if app.Issues == nil {
+			t.Fatalf("%s closed the overlay", key)
+		}
 	}
 	if len(*calls) != 0 {
-		t.Fatalf("jump started a session: %+v", *calls)
+		t.Fatalf("calls=%+v", *calls)
+	}
+
+	app.HandleKey("g")
+	if app.Takeover != nil || app.Issues != nil {
+		t.Fatalf("g must jump and close the overlay: takeover=%+v issues=%v", app.Takeover, app.Issues != nil)
 	}
 	selected := app.Model.SelectedTask()
 	if selected == nil || selected.TaskID != "task-1" {
 		t.Fatalf("board selection=%+v", selected)
 	}
-	if !strings.Contains(app.CopyNotice, config.Text("tui.issues_bound_state", "task-1", config.Text("tui.backlog"))) {
-		t.Fatalf("notice=%q", app.CopyNotice)
-	}
-
-	// s starts the contract session for that card.
-	app.HandleKey("g")
-	runPendingWork(t, app)
-	app.HandleKey("s")
-	runPendingWork(t, app)
-	app.HandleKey("s")
-	result := app.Takeover
-	if result == nil || result.phase != takeoverRunning {
-		t.Fatalf("dialog=%+v", result)
-	}
-	runPendingWork(t, app)
-	if len(*calls) != 1 || (*calls)[0].options.CardID != "task-1" {
-		t.Fatalf("calls=%+v", *calls)
-	}
-	if result.phase != takeoverFinished || result.failed {
-		t.Fatalf("dialog=%+v", result)
-	}
 }
 
-func TestIssuesTakeoverBoundBacklogKeepsJumpWithoutABackgroundLauncher(t *testing.T) {
-	for _, launcher := range []string{"foreground", "console"} {
-		t.Run(launcher, func(t *testing.T) {
-			fake := newFakeIssues()
-			fake.listResult = defaultPage(issuesListLimit)
-			task := Task{TaskID: "task-1", Title: "Task", State: "backlog", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
-			index := importTestIndex(fake.repository, 42, "task-1",
-				time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC))
-			app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
-				return issue.TriageOutcome{Agent: "claude", Launcher: launcher, Address: "session:win:pane"}, nil
-			})
-			app.PrepareTriage = func() (launch.TriagePreview, error) {
-				return launch.TriagePreview{Agent: "claude", Launcher: launcher}, nil
-			}
-			app.HandleKey("g")
-			runPendingWork(t, app)
-
-			// A launcher that needs the caller's terminal must not close the
-			// dialog of a bound card: the jump exit never depends on it.
-			app.HandleKey("s")
-			dialog := app.Takeover
-			if dialog == nil || dialog.cardID != "task-1" {
-				t.Fatalf("dialog=%+v", dialog)
-			}
-			runPendingWork(t, app)
-			if dialog.phase != takeoverReady {
-				t.Fatalf("dialog=%+v", dialog)
-			}
-			if !strings.Contains(ansi.Strip(app.View()), config.Text("tui.issues_contract_jump")) {
-				t.Fatalf("jump exit missing:\n%s", ansi.Strip(app.View()))
-			}
-
-			// y/Enter remains the default exit and starts no session.
-			app.HandleKey("y")
-			if app.Takeover != nil || app.Issues != nil {
-				t.Fatalf("jump must close the dialog and the overlay: %+v", app.Takeover)
-			}
-			selected := app.Model.SelectedTask()
-			if selected == nil || selected.TaskID != "task-1" {
-				t.Fatalf("board selection=%+v", selected)
-			}
-			if len(*calls) != 0 {
-				t.Fatalf("jump started a session: %+v", *calls)
-			}
-
-			// The contract exit reports the CLI hint only when it is used.
-			app.HandleKey("g")
-			runPendingWork(t, app)
-			app.HandleKey("s")
-			runPendingWork(t, app)
-			app.HandleKey("s")
-			result := app.Takeover
-			if result == nil || result.phase != takeoverFinished || !result.failed {
-				t.Fatalf("dialog=%+v", result)
-			}
-			if want := config.Text("tui.start_use_cli", launcher); result.message != want {
-				t.Fatalf("message=%q want=%q", result.message, want)
-			}
-			if len(*calls) != 0 {
-				t.Fatalf("the blocked exit started a session: %+v", *calls)
-			}
-		})
-	}
-}
-
-func TestIssuesTakeoverBoundBacklogKeepsJumpWhenThePreviewFails(t *testing.T) {
-	fake := newFakeIssues()
-	fake.listResult = defaultPage(issuesListLimit)
-	task := Task{TaskID: "task-1", Title: "Task", State: "backlog", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
-	index := importTestIndex(fake.repository, 42, "task-1",
-		time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC))
-	app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
-		return issue.TriageOutcome{Agent: "claude", Launcher: "tmux", Address: "session:win:pane"}, nil
-	})
-	app.PrepareTriage = func() (launch.TriagePreview, error) {
-		return launch.TriagePreview{}, errors.New("no config")
-	}
-	app.HandleKey("g")
-	runPendingWork(t, app)
-
-	// A failed preview keeps the bound-card dialog: the jump stays available.
-	app.HandleKey("s")
-	dialog := app.Takeover
-	if dialog == nil || dialog.cardID != "task-1" {
-		t.Fatalf("dialog=%+v", dialog)
-	}
-	runPendingWork(t, app)
-	if dialog.phase != takeoverReady {
-		t.Fatalf("dialog=%+v", dialog)
-	}
-	// No settings were resolved: the dialog shows the reason, not an empty
-	// settings line.
-	view := ansi.Strip(app.View())
-	if strings.Contains(view, config.Text("tui.start_settings", "", "")) {
-		t.Fatalf("dialog rendered an empty settings line:\n%s", view)
-	}
-	for _, want := range []string{
-		config.Text("tui.issues_takeover_preview_failed", "no config"),
-		config.Text("tui.issues_contract_jump"),
-	} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("dialog missing %q:\n%s", want, view)
-		}
-	}
-
-	// y/Enter is still the default exit and starts no session.
-	app.HandleKey("y")
-	if app.Takeover != nil || app.Issues != nil {
-		t.Fatalf("jump must close the dialog and the overlay: %+v", app.Takeover)
-	}
-	if selected := app.Model.SelectedTask(); selected == nil || selected.TaskID != "task-1" {
-		t.Fatalf("board selection=%+v", selected)
-	}
-	if !strings.Contains(app.CopyNotice, config.Text("tui.issues_bound_state", "task-1", config.Text("tui.backlog"))) {
-		t.Fatalf("notice=%q", app.CopyNotice)
-	}
-	if len(*calls) != 0 {
-		t.Fatalf("jump started a session: %+v", *calls)
-	}
-
-	// The contract exit reports the preview failure only when it is used.
-	app.HandleKey("g")
-	runPendingWork(t, app)
-	app.HandleKey("s")
-	runPendingWork(t, app)
-	app.HandleKey("s")
-	result := app.Takeover
-	if result == nil || result.phase != takeoverFinished || !result.failed {
-		t.Fatalf("dialog=%+v", result)
-	}
-	if want := config.Text("tui.issues_takeover_preview_failed", "no config"); result.message != want {
-		t.Fatalf("message=%q want=%q", result.message, want)
-	}
-	if len(*calls) != 0 {
-		t.Fatalf("the blocked exit started a session: %+v", *calls)
-	}
-}
-
-func TestIssuesTakeoverBoundOtherStateJumpsDirectly(t *testing.T) {
+func TestIssuesTakeoverBoundOtherStateIgnoresTakeoverKey(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	task := Task{TaskID: "task-1", Title: "Task", State: "working", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
@@ -355,16 +217,51 @@ func TestIssuesTakeoverBoundOtherStateJumpsDirectly(t *testing.T) {
 	runPendingWork(t, app)
 	app.HandleKey("s")
 	if app.Takeover != nil {
-		t.Fatalf("a non-backlog card must not open the dialog: %+v", app.Takeover)
+		t.Fatalf("a bound card must not open the dialog: %+v", app.Takeover)
 	}
-	if app.Issues != nil {
-		t.Fatal("the overlay should close on the jump")
-	}
-	if !strings.Contains(app.CopyNotice, config.Text("tui.issues_bound_state", "task-1", config.Text("tui.working"))) {
-		t.Fatalf("notice=%q", app.CopyNotice)
+	if app.Issues == nil {
+		t.Fatal("s must leave the overlay open on a bound issue")
 	}
 	if len(*calls) != 0 {
 		t.Fatalf("calls=%+v", *calls)
+	}
+	app.HandleKey("g")
+	if app.Issues != nil {
+		t.Fatal("g must close the overlay on the jump")
+	}
+	if selected := app.Model.SelectedTask(); selected == nil || selected.TaskID != "task-1" {
+		t.Fatalf("selection %+v", selected)
+	}
+}
+
+func TestIssuesHintFollowsSelectionAndImport(t *testing.T) {
+	fake := newFakeIssues()
+	fake.listResult = func(_ int, query issue.IssueQuery) (issue.IssuePage, error) {
+		return issue.IssuePage{Limit: query.Limit, Issues: []issue.IssueSummary{
+			{Number: 41, Title: "Unbound", State: "open", UpdatedAt: time.Now()},
+			{Number: 42, Title: "Bound", State: "open", UpdatedAt: time.Now()},
+		}}, nil
+	}
+	task := Task{TaskID: "task-1", Title: "Task", State: "working"}
+	index := importTestIndex(fake.repository, 42, "task-1",
+		time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC))
+	app, _ := issuesImportApp(t, fake, []Task{task}, index, nil)
+	app.HandleKey("g")
+	runPendingWork(t, app)
+
+	view := ansi.Strip(app.View())
+	if !strings.Contains(view, "i import") {
+		t.Fatalf("first unbound row should show import keys:\n%s", view)
+	}
+	app.HandleKey("j")
+	view = ansi.Strip(app.View())
+	if !strings.Contains(view, "g jump to card") {
+		t.Fatalf("bound row should show jump key:\n%s", view)
+	}
+	app.HandleKey("k")
+	view = ansi.Strip(app.View())
+	if !strings.Contains(view, "i import") {
+		t.Fatalf("returning to unbound should restore import keys:\n%s", view)
 	}
 }
 

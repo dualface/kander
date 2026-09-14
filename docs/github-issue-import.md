@@ -25,14 +25,16 @@ kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
   `existing`, `source_key`, `source_url`, and `comments_loaded`.
 
 On the terminal board the same import is available from the issues overlay:
-`i` imports the selected issue, or jumps to the local card when it is already
-imported, and `I` imports with comments. Selecting a row also loads the issue
-content on its own; the "Issue snapshot cache" section describes that path. The
-overlay marks imported issues with
-their task ID and state, and appends "update available" when the remote
-`updated_at` is newer than the fetched snapshot. It never overwrites the card on
-its own. The `s` key starts a takeover session instead of opening a form; the
-"Takeover session" section describes that path.
+for an unbound issue, `i` imports the selected issue and `I` imports with
+comments; for an issue that already has a local card those keys are hidden and
+disabled, and `g` jumps to that card instead. Selecting a row also loads the
+issue content on its own; the "Issue snapshot cache" section describes that
+path. The overlay marks imported issues with their task ID and state, and
+appends "update available" when the remote `updated_at` is newer than the
+fetched snapshot. It never overwrites the card on its own. The `s` key starts a
+takeover session for an unbound issue only; the "Takeover session" section
+describes that path. The footer hint and the Issues help entries follow the
+same bound/unbound judgment as the keys.
 
 ## Identity and idempotency
 
@@ -216,21 +218,19 @@ The first matching label decides the TYPE, and `--type` overrides it:
 
 ## Takeover session
 
-The overlay's `s` key no longer edits a card contract. It confirms one takeover
-session, started through the same path as the CLI, whose agent investigates the
-issue and agrees on the plan with the user before anything is written:
+The overlay's `s` key confirms one takeover session for an unbound issue,
+started through the same path as the CLI, whose agent investigates the issue
+and agrees on the plan with the user before anything is written:
 
 - An issue without a local card opens a confirmation dialog with the resolved
   agent and launcher; `y`/`Enter` starts the session. The dialog is only a
   confirmation: no card is created or moved.
-- An issue whose card is already bound jumps to that card on the board and
-  reports its state, because that card already carries the contract. A card
-  still in `backlog` first offers both exits: `y`/`Enter` jumps, `s` starts the
-  same session pointed at that card so its contract can be completed. That
-  dialog keeps the jump exit even when the start is unavailable: a failed
-  preview shows its reason in place of the empty start settings, and a launcher
-  that needs the caller's terminal keeps the resolved settings and adds the
-  reason below them.
+- An issue whose card is already bound hides and disables `s` (and `i` / `I`).
+  Press `g` instead to close the overlay and select that card on the board,
+  reusing the existing filter-clear and archived-column expansion behavior; a
+  missing card keeps a clear notice. Completing a bound card's contract from
+  the overlay is not offered; use `kander issue triage --card` from the CLI
+  when that path is needed.
 - The TUI starts only background launchers (`herdr`, `tmux`, `tmux-session`);
   `foreground` and `console` report that the CLI must be used instead. A
   confirmed start passes the agent and launcher the dialog showed, so a

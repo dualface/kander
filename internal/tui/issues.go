@@ -512,23 +512,33 @@ func (a *App) issuesLocalCard(number int) (issue.LocalCard, bool) {
 	return local, ok
 }
 
-// issuesImportOrJump imports the selected issue, or focuses the card that
-// already carries it. The jump never fetches anything; the import runs in
-// pendingWork because it touches the network and writes the board.
-func (a *App) issuesImportOrJump(withComments bool) {
-	st := a.Issues
-	if st == nil {
-		return
-	}
-	number := a.issuesSelectedNumber()
-	if local, ok := a.issuesLocalCard(number); ok {
-		if a.issuesFocusLocalCard(local.TaskID) {
-			return
-		}
-		a.issuesSetNotice(a.Context.IssuesImportNoCard + ": " + local.TaskID)
+// issuesSelectedBound reports whether the issue the user is acting on already
+// has a local card. With no usable selection the answer is false.
+func (a *App) issuesSelectedBound() (issue.LocalCard, bool) {
+	return a.issuesLocalCard(a.issuesSelectedNumber())
+}
+
+// issuesImportSelected imports the selected unbound issue. A bound selection
+// ignores the key so import cannot be mistaken for a silent jump.
+func (a *App) issuesImportSelected(withComments bool) {
+	if _, ok := a.issuesSelectedBound(); ok {
 		return
 	}
 	a.issuesImport(withComments)
+}
+
+// issuesJumpToBoundCard closes the overlay and selects the card bound to the
+// current issue. An unbound selection ignores the key; a missing card keeps
+// the overlay and shows the same notice as the old jump path.
+func (a *App) issuesJumpToBoundCard() {
+	local, ok := a.issuesSelectedBound()
+	if !ok {
+		return
+	}
+	if a.issuesFocusLocalCard(local.TaskID) {
+		return
+	}
+	a.issuesSetNotice(a.Context.IssuesImportNoCard + ": " + local.TaskID)
 }
 
 // issuesImport starts one import request. The request is bound to the resolved
@@ -772,11 +782,13 @@ func (a *App) handleIssuesKey(key string) {
 	case "o", "O":
 		a.issuesOpenBrowser()
 	case "i":
-		a.issuesImportOrJump(false)
+		a.issuesImportSelected(false)
 	case "I":
-		a.issuesImportOrJump(true)
+		a.issuesImportSelected(true)
 	case "s":
 		a.issuesTakeover()
+	case "g":
+		a.issuesJumpToBoundCard()
 	case "up", "k", "K":
 		if a.issuesDetailPageActive() {
 			a.issuesScrollDetail(-1)

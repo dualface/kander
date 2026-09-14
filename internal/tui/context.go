@@ -31,7 +31,6 @@ type pageContext struct {
 	TermInitFail        string
 	UnknownTheme        string
 	IssuesTitle         string
-	IssuesHint          string
 	IssuesLoading       string
 	IssuesEmpty         string
 	IssuesMore          string
@@ -94,7 +93,6 @@ func tuiPageContext() pageContext {
 		TermInitFail:        t("tui.failed_to_initialize_terminal"),
 		UnknownTheme:        t("tui.unknown_theme"),
 		IssuesTitle:         t("tui.issues_title"),
-		IssuesHint:          t("tui.issues_hint"),
 		IssuesLoading:       t("tui.issues_loading"),
 		IssuesEmpty:         t("tui.issues_empty"),
 		IssuesMore:          t("tui.issues_more"),

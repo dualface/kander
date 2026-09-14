@@ -57,6 +57,43 @@ func issuesImportApp(t *testing.T, fake *fakeIssues, tasks []Task, index issue.I
 	return app, calls
 }
 
+func TestIssuesImportSwitchesHintsToBound(t *testing.T) {
+	fake := newFakeIssues()
+	fake.listResult = defaultPage(issuesListLimit)
+	bound := false
+	app, _ := issuesImportApp(t, fake, nil, nil, func(context.Context, issue.Repository, int, issue.ImportOptions) (issue.ImportResult, error) {
+		bound = true
+		return issue.ImportResult{TaskID: "task-42", State: "backlog", Existing: false}, nil
+	})
+	app.ImportIndex = func() (issue.Index, error) {
+		if !bound {
+			return issue.Index{}, nil
+		}
+		return importTestIndex(fake.repository, 42, "task-42",
+			time.Date(2026, 9, 11, 2, 3, 0, 0, time.UTC), time.Date(2026, 9, 11, 3, 0, 0, 0, time.UTC)), nil
+	}
+	app.HandleKey("g")
+	runPendingWork(t, app)
+	if got := app.issuesActionHint(); got != config.Text("tui.issues_hint") {
+		t.Fatalf("before import hint=%q", got)
+	}
+	app.HandleKey("i")
+	runPendingWork(t, app)
+	if got := app.issuesActionHint(); got != config.Text("tui.issues_hint_bound") {
+		t.Fatalf("after import hint=%q", got)
+	}
+	keys := map[string]string{}
+	for _, entry := range app.issuesHelpEntries() {
+		keys[entry.Keys] = entry.Desc
+	}
+	if keys["g"] != config.Text("tui.jump_to_local_card") {
+		t.Fatalf("help entries after import: %+v", keys)
+	}
+	if _, ok := keys["i"]; ok {
+		t.Fatalf("import key still advertised after binding: %+v", keys)
+	}
+}
+
 func TestIssuesImportJumpsToTheBoundCard(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
@@ -73,7 +110,25 @@ func TestIssuesImportJumpsToTheBoundCard(t *testing.T) {
 	if !strings.Contains(view, "task-1") {
 		t.Fatalf("list does not mark the imported card:\n%s", view)
 	}
-	app.HandleKey("i")
+	if !strings.Contains(view, config.Text("tui.issues_hint_bound")) && !strings.Contains(view, "g jump to card") {
+		t.Fatalf("bound hint missing:\n%s", view)
+	}
+	if strings.Contains(view, " i import ") || strings.Contains(view, "i import  I") {
+		t.Fatalf("unbound import keys still shown for a bound issue:\n%s", view)
+	}
+	for _, key := range []string{"i", "I", "s"} {
+		app.HandleKey(key)
+		if app.Issues == nil {
+			t.Fatalf("%s closed the overlay on a bound issue", key)
+		}
+		if app.Takeover != nil {
+			t.Fatalf("%s opened takeover on a bound issue", key)
+		}
+		if len(*calls) != 0 {
+			t.Fatalf("%s imported: %+v", key, *calls)
+		}
+	}
+	app.HandleKey("g")
 	if app.Issues != nil {
 		t.Fatal("jump did not close the overlay")
 	}
@@ -100,7 +155,7 @@ func TestIssuesImportJumpsIntoTheArchivedColumn(t *testing.T) {
 	app, _ := issuesImportApp(t, fake, tasks, index, nil)
 	app.HandleKey("g")
 	runPendingWork(t, app)
-	app.HandleKey("i")
+	app.HandleKey("g")
 	if app.Issues != nil {
 		t.Fatal("jump did not close the overlay")
 	}
@@ -120,7 +175,7 @@ func TestIssuesImportReportsMissingCard(t *testing.T) {
 	app, _ := issuesImportApp(t, fake, []Task{{TaskID: "task-1", Title: "Task", State: "working"}}, index, nil)
 	app.HandleKey("g")
 	runPendingWork(t, app)
-	app.HandleKey("i")
+	app.HandleKey("g")
 	if app.Issues == nil || !strings.Contains(app.Issues.notice, "task-gone") {
 		t.Fatalf("notice %q", app.Issues.notice)
 	}

@@ -513,7 +513,7 @@ func TestIssuesHostileRemoteTextIsSanitized(t *testing.T) {
 
 func TestIssuesBoardKeysAndHelp(t *testing.T) {
 	entries := map[string]string{}
-	for _, entry := range boardHelpGroups()[0].Entries {
+	for _, entry := range (&App{}).boardHelpGroups()[0].Entries {
 		entries[entry.Keys] = entry.Desc
 	}
 	if entries["g"] != config.Text("tui.browse_github_issues") {
@@ -527,11 +527,16 @@ func TestIssuesBoardKeysAndHelp(t *testing.T) {
 			t.Fatalf("obsolete board help key %s", old)
 		}
 	}
-	groups := boardHelpGroups()
+	groups := (&App{}).boardHelpGroups()
 	foundIssues := false
 	for _, group := range groups {
 		if group.Title == config.Text("tui.issues_overlay") {
 			foundIssues = true
+			for _, entry := range group.Entries {
+				if entry.Keys == "i" || entry.Keys == "I" || entry.Keys == "s" || entry.Keys == "g" {
+					t.Fatalf("board-only help must not advertise card actions without a selection: %s", entry.Keys)
+				}
+			}
 		}
 	}
 	if !foundIssues {
@@ -539,10 +544,22 @@ func TestIssuesBoardKeysAndHelp(t *testing.T) {
 	}
 
 	fake := newFakeIssues()
+	fake.listResult = defaultPage(issuesListLimit)
 	app := issuesTestApp(t, fake, 120, 30)
 	app.HandleKey("g")
 	if app.Issues == nil {
 		t.Fatal("g must open the issues overlay")
+	}
+	runPendingWork(t, app)
+	keys := map[string]string{}
+	for _, entry := range app.issuesHelpEntries() {
+		keys[entry.Keys] = entry.Desc
+	}
+	if keys["i"] != config.Text("tui.import_issue") {
+		t.Fatalf("unbound selection help must document import: %+v", keys)
+	}
+	if _, ok := keys["g"]; ok {
+		t.Fatalf("unbound selection help must not document jump: %+v", keys)
 	}
 	app.HandleKey("?")
 	if !app.Help || app.Issues == nil {

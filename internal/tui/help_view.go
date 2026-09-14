@@ -19,7 +19,7 @@ type helpGroup struct {
 	Entries []helpEntry
 }
 
-func boardHelpGroups() []helpGroup {
+func (a *App) boardHelpGroups() []helpGroup {
 	return []helpGroup{
 		{
 			Title: t("tui.board"),
@@ -41,21 +41,8 @@ func boardHelpGroups() []helpGroup {
 			},
 		},
 		{
-			Title: t("tui.issues_overlay"),
-			Entries: []helpEntry{
-				{"↑↓ jk", t("tui.switch_issue")},
-				{"PgUp PgDn", t("tui.scroll_issue")},
-				{"Enter", t("tui.open_issue_detail")},
-				{"/", t("tui.search_issues")},
-				{"Tab", t("tui.cycle_issue_state")},
-				{"l", t("tui.filter_issues_by_label")},
-				{"i", t("tui.import_issue")},
-				{"I", t("tui.import_issue_with_comments")},
-				{"s", t("tui.issues_takeover_help")},
-				{"r", t("tui.refresh_issues")},
-				{"o", t("tui.open_issue_in_browser")},
-				{"Esc q", t("tui.back_or_close")},
-			},
+			Title:   t("tui.issues_overlay"),
+			Entries: a.issuesHelpEntries(),
 		},
 		{
 			Title: t("tui.task_detail_2"),
@@ -82,12 +69,42 @@ func boardHelpGroups() []helpGroup {
 	}
 }
 
+// issuesHelpEntries mirrors the overlay footer: unbound selections advertise
+// import and takeover, bound selections advertise the jump, and an empty
+// selection omits both.
+func (a *App) issuesHelpEntries() []helpEntry {
+	entries := []helpEntry{
+		{"↑↓ jk", t("tui.switch_issue")},
+		{"PgUp PgDn", t("tui.scroll_issue")},
+		{"Enter", t("tui.open_issue_detail")},
+		{"/", t("tui.search_issues")},
+		{"Tab", t("tui.cycle_issue_state")},
+		{"l", t("tui.filter_issues_by_label")},
+	}
+	if a != nil && a.Issues != nil && a.issuesSelectedNumber() > 0 {
+		if _, ok := a.issuesSelectedBound(); ok {
+			entries = append(entries, helpEntry{"g", t("tui.jump_to_local_card")})
+		} else {
+			entries = append(entries,
+				helpEntry{"i", t("tui.import_issue")},
+				helpEntry{"I", t("tui.import_issue_with_comments")},
+				helpEntry{"s", t("tui.issues_takeover_help")},
+			)
+		}
+	}
+	return append(entries,
+		helpEntry{"r", t("tui.refresh_issues")},
+		helpEntry{"o", t("tui.open_issue_in_browser")},
+		helpEntry{"Esc q", t("tui.back_or_close")},
+	)
+}
+
 // renderHelp draws the help overlay. The keys are laid out in two columns: the board on the left, the detail view and the mouse on the right;
 // on a narrow terminal it falls back to a single vertical column so nothing is truncated by the popup width.
 func (a *App) renderHelp() (popupBox, string) {
 	h, w := a.size()
 	p := themePalette(a.Theme)
-	groups := boardHelpGroups()
+	groups := a.boardHelpGroups()
 	rendered := make([]string, 0, len(groups))
 	for _, group := range groups {
 		rendered = append(rendered, renderHelpGroup(p, group))

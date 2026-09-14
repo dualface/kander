@@ -51,7 +51,7 @@ func (a *App) issuesFrame() popup {
 	if repository := a.issuesRepository(); repository != nil {
 		title += " - " + repository.Owner + "/" + repository.Name
 	}
-	hint := a.Context.IssuesHint
+	hint := a.issuesActionHint()
 	if notice := a.issuesNotice(); notice != "" {
 		hint = notice
 	}
@@ -60,6 +60,19 @@ func (a *App) issuesFrame() popup {
 		Hint:     hint,
 		MaxWidth: issuesMaxWidth,
 	}
+}
+
+// issuesActionHint is the overlay footer for the current selection. Bound and
+// unbound issues advertise different keys so a jump cannot look like a failed
+// import; with no selection the card-action keys stay hidden.
+func (a *App) issuesActionHint() string {
+	if a.issuesSelectedNumber() <= 0 {
+		return t("tui.issues_hint_none")
+	}
+	if _, ok := a.issuesSelectedBound(); ok {
+		return t("tui.issues_hint_bound")
+	}
+	return t("tui.issues_hint")
 }
 
 func (a *App) issuesLayout() issuesLayout {
