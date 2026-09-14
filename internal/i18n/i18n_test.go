@@ -26,6 +26,7 @@ var testCatalogFiles = []string{
 	"locales/issue/%s.json",
 	"locales/agentlanguage/%s.json",
 	"locales/orchestrate/%s.json",
+	"locales/chat/%s.json",
 	"locales/terminal/%s.json",
 	"locales/actions/%s.json",
 	"locales/result/%s.json",

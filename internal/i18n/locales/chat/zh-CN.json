@@ -1,0 +1,16 @@
+{
+  "launch.prompt.chat_head": "回复用户在 Kander 对话框中输入的消息",
+  "launch.chat_requires_container_launcher": "对话框需要在终端容器中启动 agent 的启动器, 例如 herdr 或 tmux; 启动器 {{.V0}} 会占用看板所在的终端",
+  "tui.chat_title": "与 agent 对话",
+  "tui.chat_placeholder": "输入要交给 agent 的内容",
+  "tui.chat_keys": "Enter 换行 | Ctrl+S 发送 | Esc 关闭(保留草稿)",
+  "tui.chat_running_keys": "正在启动 agent, 完成前忽略按键",
+  "tui.chat_empty": "请先输入内容再发送",
+  "tui.chat_loading_keys": "仍在解析 agent, 请稍后再发送",
+  "tui.chat_unavailable": "对话不可用: {{.V0}}",
+  "tui.chat_start_failed": "启动失败: {{.V0}}. 内容已保留, 按 Ctrl+S 重试.",
+  "tui.chat_started": "已启动 {{.V0}} ({{.V1}}), 地址 {{.V2}}",
+  "tui.chat_focus_failed": "无法切换到 agent: {{.V0}}",
+  "tui.chat_no_board": "对话框需要看板; 请在项目内运行 kander",
+  "tui.chat_help": "与 agent 对话"
+}

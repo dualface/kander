@@ -1,0 +1,16 @@
+{
+  "launch.prompt.chat_head": "Kander のチャットボックスにユーザーが入力したメッセージに返信してください",
+  "launch.chat_requires_container_launcher": "チャットボックスには herdr や tmux など、ターミナルコンテナで agent を起動するランチャーが必要です。ランチャー {{.V0}} はボードのターミナルを占有します",
+  "tui.chat_title": "Agent とチャット",
+  "tui.chat_placeholder": "Agent に渡す内容を入力",
+  "tui.chat_keys": "Enter 改行 | Ctrl+S 送信 | Esc 閉じる(下書きを保持)",
+  "tui.chat_running_keys": "Agent を起動中です。完了までキー入力は無視されます",
+  "tui.chat_empty": "送信する前に内容を入力してください",
+  "tui.chat_loading_keys": "Agent を解決中です。しばらくしてから送信してください",
+  "tui.chat_unavailable": "チャットを利用できません: {{.V0}}",
+  "tui.chat_start_failed": "起動に失敗しました: {{.V0}}。内容は保持されています。Ctrl+S で再試行してください。",
+  "tui.chat_started": "{{.V0}} ({{.V1}}) を起動しました: {{.V2}}",
+  "tui.chat_focus_failed": "Agent に切り替えられませんでした: {{.V0}}",
+  "tui.chat_no_board": "チャットボックスにはボードが必要です。プロジェクト内で kander を実行してください",
+  "tui.chat_help": "Agent とチャット"
+}

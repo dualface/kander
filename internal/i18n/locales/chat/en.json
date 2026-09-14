@@ -1,0 +1,16 @@
+{
+  "launch.prompt.chat_head": "Reply to the message the user typed into the Kander chat box",
+  "launch.chat_requires_container_launcher": "the chat box needs a launcher that starts the agent in a terminal container such as herdr or tmux; launcher {{.V0}} would take over the board's terminal",
+  "tui.chat_title": "Chat with an agent",
+  "tui.chat_placeholder": "Type a message for the agent",
+  "tui.chat_keys": "Enter newline | Ctrl+S send | Esc close (draft kept)",
+  "tui.chat_running_keys": "Starting the agent; keys are ignored until it finishes",
+  "tui.chat_empty": "Type a message before sending",
+  "tui.chat_loading_keys": "Still resolving the agent; send again in a moment",
+  "tui.chat_unavailable": "Chat is unavailable: {{.V0}}",
+  "tui.chat_start_failed": "Start failed: {{.V0}}. The message is kept; press Ctrl+S to retry.",
+  "tui.chat_started": "Started {{.V0}} ({{.V1}}) at {{.V2}}",
+  "tui.chat_focus_failed": "Could not switch to the agent: {{.V0}}",
+  "tui.chat_no_board": "The chat box needs a board; run kander inside a project",
+  "tui.chat_help": "Chat with an agent"
+}
