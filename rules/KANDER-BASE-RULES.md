@@ -21,6 +21,8 @@
 **Installation and Task Files**
 
 - Installation is done by the binary itself: the first run of an uninstalled `kander` enters the interactive wizard, or run `kander install` to rerun it.
+- Global initialization installs configuration and rules without copying the executable. Interactive bare `kander` and `kander install` offer a copy only when the first `kander` on PATH does not identify the running executable, or its identity cannot be verified. The default is no; declining continues this launch and does not persist a skip. Project installs still copy into the main worktree's `.kander/bin`.
+- Copying is explicit, may replace the destination binary, and never changes shell configuration. If PATH still selects another entry or omits the destination directory, follow the displayed instructions. Existing global copies are not automatically deleted.
 - Windows does not modify `PATH` automatically.
 - Automation involving special characters must invoke the command root's `kander` through a process API argv array; do not assemble PowerShell/cmd command strings.
 - On every platform the executing agent and the reviewer read the complete task from a UTF-8 temporary file; the launch arguments contain only the CLI's required control options and a one-line instruction with the file path.

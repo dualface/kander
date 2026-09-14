@@ -31,6 +31,10 @@ curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-l
 
 On first launch, if not yet installed, an interactive wizard starts. Once installation finishes, it is ready to use.
 
+Global initialization keeps the executable in its current location and installs only configuration and agent rules. Interactive `kander` and `kander install` compare the first `kander` on `PATH` with the running executable. If they differ or no entry is found, Kander offers to copy the binary to `~/.local/bin`; the default is No. Declining continues this launch and checks again next time. Copying may replace an existing file there, but never changes your shell configuration; follow the displayed PATH guidance when needed. Package-manager upgrades therefore update the executable you keep using. Project installation still copies the binary into the main worktree’s `.kander/bin`.
+
+If an older `~/.local/bin/kander` shadows a package-manager installation, run the desired executable by its absolute path and adjust PATH ordering or move the old copy yourself. Kander does not remove old copies automatically.
+
 Four steps to get going:
 
 1. Start an agent session and discuss the requirement or task there, making the goal and acceptance criteria clear. The agent's Plan mode is recommended.

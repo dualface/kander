@@ -31,6 +31,10 @@ curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-l
 
 首次启动若尚未安装, 会进入交互向导. 安装完成后即可使用.
 
+全局初始化保留当前可执行文件的位置，只安装配置和 Agent 规则。交互式 `kander` 与 `kander install` 会比较 PATH 中首个 `kander` 与当前运行程序；不一致或找不到时，询问是否复制到 `~/.local/bin`，默认不复制。拒绝后继续本次启动，下次重新检查。同意复制可能替换该位置的旧文件，但不会修改 shell 配置；必要时按提示调整 PATH。这样可继续使用包管理器升级后的程序。项目安装仍会复制二进制到主工作树的 `.kander/bin`。
+
+若旧的 `~/.local/bin/kander` 遮挡包管理器安装的版本，请使用目标程序的绝对路径启动，并自行调整 PATH 顺序或移走旧副本。Kander 不会自动删除旧副本。
+
 4 步上手:
 
 1. 新建一个 Agent 会话, 在里面讨论需求或者任务, 说清楚目标和验收条件. 推荐使用 Agent 的 Plan 模式.
