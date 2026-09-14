@@ -193,6 +193,22 @@ func padTabLabel(label string, width int) string {
 	return text
 }
 
+// padTabLabelRight is the version cell: one space of padding on each side, extra
+// space on the left so the version sits against the right border.
+func padTabLabelRight(label string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if width < 3 {
+		return clipText(label, width)
+	}
+	text := " " + clipText(label, width-2) + " "
+	for displayWidth(text) < width {
+		text = " " + text
+	}
+	return text
+}
+
 type tabHeaderMetrics struct {
 	targets []string
 	labels  []string
@@ -272,12 +288,12 @@ func (p *optionsPanel) tabHeaderMetrics(inner int, pageName string) tabHeaderMet
 
 // renderTabFrameHeader draws the dialog's own top chrome (not an inset box):
 //
-//	╭──────────────────┬─────────┬─────╮
-//	│ Global - Interface│ Project │ ver │
-//	├──────────────────┴─────────┴─────┤
+//	╭──────────────────┬─────────┬──────────╮
+//	│ Global - Interface│ Project │      ver │
+//	├──────────────────┴─────────┴──────────┤
 //
 // The page name is shown only on the active Global/Project tab; the trailing
-// cell is the build version alone.
+// cell is the build version, right-aligned.
 func (p *optionsPanel) renderTabFrameHeader(palette palette, m tabHeaderMetrics) (top, mid, join string) {
 	edge := styleFor("popup-edge", palette)
 	n := len(m.labels)
@@ -315,8 +331,8 @@ func (p *optionsPanel) renderTabFrameHeader(palette palette, m tabHeaderMetrics)
 		x += m.widths[i]
 	}
 	midB.WriteString(edge.Render("│"))
-	ver := clipText(version.String(), m.restW)
-	rest := styleFor("popup-dim", palette).Render(padTabLabel(ver, m.restW))
+	ver := padTabLabelRight(version.String(), m.restW)
+	rest := styleFor("popup-dim", palette).Render(ver)
 	midB.WriteString(padLineFill(rest, m.restW, palette))
 	midB.WriteString(edge.Render("│"))
 	mid = midB.String()

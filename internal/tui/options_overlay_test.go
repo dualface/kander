@@ -13,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/internal/version"
 )
 
 func uiText(id string) string {
@@ -50,6 +51,39 @@ func attachTempOverlay(t *testing.T, session *menu.Session, mode config.Mode) (s
 		t.Fatal(err)
 	}
 	return dir, path
+}
+
+func TestPadTabLabelRight(t *testing.T) {
+	if got := padTabLabelRight("dev", 10); got != "      dev " {
+		t.Fatalf("wide=%q", got)
+	}
+	if got := padTabLabelRight("dev", 5); got != " dev " {
+		t.Fatalf("tight=%q", got)
+	}
+	if got := padTabLabelRight("dev", 2); displayWidth(got) != 2 {
+		t.Fatalf("narrow=%q width=%d", got, displayWidth(got))
+	}
+}
+
+func TestOptionsTabHeaderVersionIsRightAligned(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	pumpPanel(panel, panel.openRoot())
+	_, view := panel.view()
+	lines := strings.Split(ansi.Strip(view), "\n")
+	if len(lines) < 2 {
+		t.Fatal("missing header row")
+	}
+	row := lines[1]
+	ver := version.String()
+	idx := strings.LastIndex(row, ver)
+	if idx < 0 {
+		t.Fatalf("missing version %q in %q", ver, row)
+	}
+	after := strings.TrimSpace(row[idx+len(ver):])
+	if after != "│" {
+		t.Fatalf("version not right-aligned in header: %q", row)
+	}
 }
 
 func TestOptionsTabsFollowInstallMode(t *testing.T) {
