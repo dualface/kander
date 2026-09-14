@@ -126,7 +126,7 @@ func (a *App) handleTaskActionKey(key string) tea.Cmd {
 	if dialog.running {
 		return nil
 	}
-	if key == "esc" || (dialog.form == nil && (key == "q" || key == "g")) {
+	if key == "esc" || (dialog.form == nil && (key == "q" || key == "m")) {
 		a.TaskActions = nil
 		return nil
 	}

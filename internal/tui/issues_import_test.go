@@ -67,7 +67,7 @@ func TestIssuesImportJumpsToTheBoundCard(t *testing.T) {
 		t.Fatal("a bound issue must not be imported again")
 		return issue.ImportResult{}, nil
 	})
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	view := ansi.Strip(app.View())
 	if !strings.Contains(view, "task-1") {
@@ -98,7 +98,7 @@ func TestIssuesImportJumpsIntoTheArchivedColumn(t *testing.T) {
 	index := importTestIndex(fake.repository, 42, "task-9",
 		time.Date(2026, 9, 11, 2, 3, 0, 0, time.UTC), time.Date(2026, 9, 11, 3, 0, 0, 0, time.UTC))
 	app, _ := issuesImportApp(t, fake, tasks, index, nil)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	if app.Issues != nil {
@@ -118,7 +118,7 @@ func TestIssuesImportReportsMissingCard(t *testing.T) {
 	index := importTestIndex(fake.repository, 42, "task-gone",
 		time.Date(2026, 9, 11, 2, 3, 0, 0, time.UTC), time.Date(2026, 9, 11, 3, 0, 0, 0, time.UTC))
 	app, _ := issuesImportApp(t, fake, []Task{{TaskID: "task-1", Title: "Task", State: "working"}}, index, nil)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	if app.Issues == nil || !strings.Contains(app.Issues.notice, "task-gone") {
@@ -138,7 +138,7 @@ func TestIssuesImportCreatesTheCardThroughPendingWork(t *testing.T) {
 				SourceURL: "https://github.com/dualface/kander/issues/42",
 			}, nil
 		})
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	if len(*calls) != 0 {
@@ -176,7 +176,7 @@ func TestIssuesImportWithCommentsAndFailure(t *testing.T) {
 			}
 			return issue.ImportResult{}, errors.New("gh: rate limited\x1b[2J")
 		})
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("I")
 	runPendingWork(t, app)
@@ -205,7 +205,7 @@ func TestIssuesImportStaleResultIsDropped(t *testing.T) {
 		func(_ context.Context, _ issue.Repository, _ int, _ issue.ImportOptions) (issue.ImportResult, error) {
 			return issue.ImportResult{TaskID: "task-42", State: "backlog"}, nil
 		})
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	stale := app.pendingWork
@@ -237,7 +237,7 @@ func TestIssuesImportUpdateMarker(t *testing.T) {
 	index := importTestIndex(fake.repository, 42, "task-1",
 		time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC))
 	app, _ := issuesImportApp(t, fake, []Task{{TaskID: "task-1", Title: "Task", State: "working"}}, index, nil)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	view := ansi.Strip(app.View())
 	if !strings.Contains(view, config.Text("tui.issues_imported", "task-1", config.Text("tui.backlog"))) || !strings.Contains(view, config.Text("tui.issues_import_update")) {
@@ -249,7 +249,7 @@ func TestIssuesImportUpdateMarker(t *testing.T) {
 	freshIndex := importTestIndex(fresh.repository, 42, "task-1",
 		time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 11, 3, 0, 0, 0, time.UTC))
 	freshApp, _ := issuesImportApp(t, fresh, []Task{{TaskID: "task-1", Title: "Task", State: "working"}}, freshIndex, nil)
-	freshApp.HandleKey("G")
+	freshApp.HandleKey("g")
 	runPendingWork(t, freshApp)
 	freshView := ansi.Strip(freshApp.View())
 	if strings.Contains(freshView, config.Text("tui.issues_import_update")) {
@@ -264,7 +264,7 @@ func TestIssuesImportWritesNothingToTheTerminal(t *testing.T) {
 		func(_ context.Context, _ issue.Repository, _ int, _ issue.ImportOptions) (issue.ImportResult, error) {
 			return issue.ImportResult{TaskID: "task-42", State: "backlog"}, nil
 		})
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	cmd := app.takePending()
@@ -302,7 +302,7 @@ func TestIssuesImportWithoutImporterReportsFailure(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	app, _ := issuesImportApp(t, fake, []Task{{TaskID: "task-1", Title: "Task", State: "working"}}, issue.Index{}, nil)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	if app.Issues == nil || !strings.Contains(app.Issues.notice, config.Text("tui.issues_import_failed")) {
@@ -357,7 +357,7 @@ func TestIssuesImportSharesTheCLIService(t *testing.T) {
 	}
 	app.refreshBoard()
 
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("i")
 	runPendingWork(t, app)

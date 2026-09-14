@@ -60,7 +60,7 @@ func actionTestApp(t *testing.T, source taskActionSource) *App {
 
 func chooseTaskAction(t *testing.T, app *App, action taskAction) tea.Cmd {
 	t.Helper()
-	app.Update(keyMsg("g"))
+	app.Update(keyMsg("m"))
 	if app.TaskActions == nil {
 		t.Fatal("menu did not open")
 	}
@@ -115,10 +115,28 @@ func TestTaskActionsAvailability(t *testing.T) {
 	}
 }
 
+func TestTaskActionsShortcutContexts(t *testing.T) {
+	app := actionTestApp(t, actionTestSource(t, "backlog", false))
+	app.Update(keyMsg("m"))
+	runPendingWork(t, app)
+	if app.TaskActions == nil || app.TaskActions.loading {
+		t.Fatal("m must open the loaded task actions menu")
+	}
+	app.Update(keyMsg("m"))
+	if app.TaskActions != nil || app.pendingWork != nil {
+		t.Fatal("m must close the task actions menu")
+	}
+	app.Update(keyMsg("/"))
+	app.Update(keyMsg("m"))
+	if app.Model.Query != "m" || app.TaskActions != nil || app.pendingWork != nil {
+		t.Fatal("search m must remain input")
+	}
+}
+
 func TestTaskActionsEmptyAndStaleLoads(t *testing.T) {
 	app := startTestApp("working")
 	app.Model.SetBoard(BoardPayload{})
-	app.Update(keyMsg("g"))
+	app.Update(keyMsg("m"))
 	if app.TaskActions != nil || app.pendingWork != nil || app.CopyNotice != tuiText("actions.no_selection") {
 		t.Fatal("empty selection opened menu")
 	}
@@ -126,15 +144,15 @@ func TestTaskActionsEmptyAndStaleLoads(t *testing.T) {
 	app.LoadTaskActions = func(string) (taskActionSource, error) {
 		return taskActionSource{snapshot: board.Snapshot{Entry: board.Entry{State: "archived"}}}, nil
 	}
-	app.Update(keyMsg("g"))
+	app.Update(keyMsg("m"))
 	runPendingWork(t, app)
 	if app.TaskActions != nil || app.CopyNotice != tuiText("actions.none") {
 		t.Fatal("empty menu remained open")
 	}
-	app.Update(keyMsg("g"))
+	app.Update(keyMsg("m"))
 	stale := app.takePending()
 	app.Update(keyMsg("esc"))
-	app.Update(keyMsg("g"))
+	app.Update(keyMsg("m"))
 	current := app.TaskActions
 	app.applyWork(stale().(workMsg).payload)
 	if app.TaskActions != current || !current.loading {
@@ -143,7 +161,7 @@ func TestTaskActionsEmptyAndStaleLoads(t *testing.T) {
 	app.LoadTaskActions = func(string) (taskActionSource, error) { return taskActionSource{}, errors.New("read failed") }
 	app.Update(keyMsg("esc"))
 	runPendingWork(t, app)
-	app.Update(keyMsg("g"))
+	app.Update(keyMsg("m"))
 	runPendingWork(t, app)
 	if app.TaskActions != nil || app.CopyNotice != "read failed" {
 		t.Fatal("load failure hidden")
@@ -352,7 +370,7 @@ func TestTaskActionRunningIgnoresInputAndRefresh(t *testing.T) {
 	if app.refreshBoard() || calls != 0 {
 		t.Fatal("UI refresh can block behind write transaction")
 	}
-	for _, key := range []string{"enter", "g", "q", "esc"} {
+	for _, key := range []string{"enter", "m", "q", "esc"} {
 		app.Update(keyMsg(key))
 	}
 	app.Update(tea.MouseMsg{X: 10, Y: 10, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})

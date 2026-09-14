@@ -111,7 +111,7 @@ func TestIssuesOpenLoadsListAndClosesCleanly(t *testing.T) {
 	app.Model.SelectTaskIndex("working", 0)
 	selected, scroll := app.Model.SelectedIndexes["working"], app.Model.Scrolls["working"]
 
-	app.HandleKey("G")
+	app.HandleKey("g")
 	if app.Issues == nil || !app.Issues.loading || app.Issues.state != issue.IssueStateOpen {
 		t.Fatalf("overlay did not open for loading: %+v", app.Issues)
 	}
@@ -151,7 +151,7 @@ func TestIssuesStateCycleAndFilters(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 
 	app.HandleKey("tab")
@@ -216,7 +216,7 @@ func TestIssuesRefreshKeepsFilters(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("r")
 	runPendingWork(t, app)
@@ -235,7 +235,7 @@ func TestIssuesEnterLoadsDetailWithComments(t *testing.T) {
 		return defaultSnapshot(t), nil
 	}
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("enter")
 	if fake.getCalls != 0 {
@@ -265,7 +265,7 @@ func TestIssuesStaleResultsAreDropped(t *testing.T) {
 		}}, nil
 	}
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	stale := app.pendingWork
 	app.HandleKey("tab")
 	fresh := app.pendingWork
@@ -300,7 +300,7 @@ func TestIssuesStaleDetailDropped(t *testing.T) {
 	}
 	app := issuesTestApp(t, fake, 120, 30)
 	clock := freezeIssuesClock(t, app)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	clock.tick()
 	stale := app.takePending()
@@ -347,7 +347,7 @@ func TestIssuesDetailErrorThenRefresh(t *testing.T) {
 		return defaultSnapshot(t), nil
 	}
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("enter")
 	runPendingWork(t, app)
@@ -372,7 +372,7 @@ func TestIssuesLayoutWideAndNarrow(t *testing.T) {
 	fake.getResult = func(int, int, bool) (issue.IssueSnapshot, error) { return defaultSnapshot(t), nil }
 
 	wide := issuesTestApp(t, fake, 160, 34)
-	wide.HandleKey("G")
+	wide.HandleKey("g")
 	runPendingWork(t, wide)
 	if !wide.issuesLayout().wide {
 		t.Fatal("wide terminal must use two columns")
@@ -390,7 +390,7 @@ func TestIssuesLayoutWideAndNarrow(t *testing.T) {
 	}
 
 	narrow := issuesTestApp(t, fake, 80, 34)
-	narrow.HandleKey("G")
+	narrow.HandleKey("g")
 	runPendingWork(t, narrow)
 	if narrow.issuesLayout().wide {
 		t.Fatal("narrow terminal must use pages")
@@ -420,7 +420,7 @@ func TestIssuesMouseSelectsAndOpens(t *testing.T) {
 	fake.listResult = defaultPage(issuesListLimit)
 	fake.getResult = func(int, int, bool) (issue.IssueSnapshot, error) { return defaultSnapshot(t), nil }
 	app := issuesTestApp(t, fake, 160, 34)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	layout := app.issuesLayout()
 	secondRow := layout.body.Y + issuesListHeader + issuesItemLines
@@ -452,7 +452,7 @@ func TestIssuesBrowserUsesCanonicalURL(t *testing.T) {
 		opened = target
 		return nil
 	}
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("o")
 	if opened != "https://github.com/dualface/kander/issues/42" {
@@ -470,7 +470,7 @@ func TestIssuesBrowserUsesCanonicalURL(t *testing.T) {
 	opened = ""
 	app2 := issuesTestApp(t, fake, 120, 30)
 	app2.OpenBrowser = func(target string) error { opened = target; return nil }
-	app2.HandleKey("G")
+	app2.HandleKey("g")
 	runPendingWork(t, app2)
 	app2.HandleKey("o")
 	if opened != "" {
@@ -486,7 +486,7 @@ func TestIssuesBrowserFailureIsReported(t *testing.T) {
 	fake.listResult = defaultPage(issuesListLimit)
 	app := issuesTestApp(t, fake, 120, 30)
 	app.OpenBrowser = func(string) error { return errors.New("no opener") }
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("o")
 	if !strings.Contains(app.Issues.notice, "no opener") {
@@ -503,7 +503,7 @@ func TestIssuesHostileRemoteTextIsSanitized(t *testing.T) {
 		}}, nil
 	}
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	view := ansi.Strip(app.View())
 	if strings.Contains(view, "evil.example") || strings.ContainsRune(view, '\u202e') {
@@ -516,11 +516,11 @@ func TestIssuesBoardKeysAndHelp(t *testing.T) {
 	for _, entry := range boardHelpGroups()[0].Entries {
 		entries[entry.Keys] = entry.Desc
 	}
-	if _, ok := entries["G"]; !ok {
-		t.Fatal("board help must document G for issues")
+	if entries["g"] != config.Text("tui.browse_github_issues") {
+		t.Fatal("board help must document g for issues")
 	}
-	if _, ok := entries["g"]; !ok {
-		t.Fatal("board help must document g for task actions")
+	if entries["m"] != config.Text("actions.menu") {
+		t.Fatal("board help must document m for task actions")
 	}
 	for _, old := range []string{"s", "f", "F"} {
 		if _, ok := entries[old]; ok {
@@ -540,9 +540,9 @@ func TestIssuesBoardKeysAndHelp(t *testing.T) {
 
 	fake := newFakeIssues()
 	app := issuesTestApp(t, fake, 120, 30)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	if app.Issues == nil {
-		t.Fatal("G must open the issues overlay")
+		t.Fatal("g must open the issues overlay")
 	}
 	app.HandleKey("?")
 	if !app.Help || app.Issues == nil {
@@ -560,7 +560,7 @@ func TestIssuesBoardKeysAndHelp(t *testing.T) {
 func TestIssuesUsesNoProviderWhenUnbound(t *testing.T) {
 	app := issuesTestApp(t, nil, 120, 30)
 	app.IssueProvider = nil
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	if app.Issues == nil || app.Issues.listErr == "" {
 		t.Fatalf("missing provider must be reported: %+v", app.Issues)
@@ -579,7 +579,7 @@ func TestIssuesRendersInLightAndDarkThemes(t *testing.T) {
 		t.Run(theme, func(t *testing.T) {
 			app := issuesTestApp(t, fake, 120, 30)
 			app.Theme = theme
-			app.HandleKey("G")
+			app.HandleKey("g")
 			runPendingWork(t, app)
 			app.HandleKey("enter")
 			runPendingWork(t, app)
@@ -614,7 +614,7 @@ func TestIssuesDetailScrollsThroughViewport(t *testing.T) {
 		return snapshot, nil
 	}
 	app := issuesTestApp(t, fake, 120, 24)
-	app.HandleKey("G")
+	app.HandleKey("g")
 	runPendingWork(t, app)
 	app.HandleKey("enter")
 	runPendingWork(t, app)

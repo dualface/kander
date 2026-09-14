@@ -78,9 +78,9 @@ func TestFocusKeyContexts(t *testing.T) {
 		t.Fatal("search g must remain input")
 	}
 	app.HandleKey("esc")
-	app.HandleKey("G")
+	app.HandleKey("g")
 	if app.Issues == nil || app.DetailPendingG {
-		t.Fatal("board G must open the issues overlay")
+		t.Fatal("board g must open the issues overlay")
 	}
 	app.HandleKey("esc")
 	if app.Issues != nil {

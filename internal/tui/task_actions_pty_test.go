@@ -22,7 +22,7 @@ func TestTaskActionsLifecycleOnPTY(t *testing.T) {
 	if !session.waitFor("Action menu", 8*time.Second) {
 		t.Fatalf("board: %s", session.text())
 	}
-	session.send("g")
+	session.send("m")
 	if !session.waitFor("Move task to trash", 8*time.Second) {
 		t.Fatalf("menu: %s", session.text())
 	}

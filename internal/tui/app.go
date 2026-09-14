@@ -653,9 +653,9 @@ func (a *App) handleBoardKey(key string) {
 		a.Help = true
 	case "y":
 		a.copySelectedTaskID()
-	case "g":
+	case "m":
 		a.openTaskActions()
-	case "G":
+	case "g":
 		a.openIssues()
 	case "enter":
 		a.openDetail()
