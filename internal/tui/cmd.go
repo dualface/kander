@@ -163,6 +163,12 @@ func Run(_ []string) int {
 		}
 		return issue.StartResult(ctx, provider, root, repository, number, options)
 	}
+	if !emptyBoard {
+		app.PrepareChat = launch.PreviewChat
+		app.StartChat = func(message string) (launch.ChatResult, error) {
+			return launch.StartChat(launch.ChatRequest{Root: root, Message: message})
+		}
+	}
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)
 	app.showJournalWarnings(initial.Warnings)

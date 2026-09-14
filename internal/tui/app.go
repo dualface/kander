@@ -63,6 +63,17 @@ type App struct {
 	PrepareTriage func() (launch.TriagePreview, error)
 	ResultIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
 	TriageIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
+	// PrepareChat resolves the agent and launcher of the chat box; StartChat
+	// starts one card-less session for a typed message. cmd.go binds StartChat
+	// only when a board exists, so a nil StartChat means the chat box is
+	// unavailable.
+	PrepareChat func() (launch.ChatPreview, error)
+	StartChat   func(message string) (launch.ChatResult, error)
+	// While Chat is non-nil the chat box covers the board and owns the input;
+	// chatDraft keeps the text of a closed chat box for the next open.
+	Chat      *chatBox
+	chatSeq   uint64
+	chatDraft string
 	// While Takeover is non-nil it covers the issues overlay and owns the input.
 	Takeover    *takeoverState
 	takeoverSeq uint64
@@ -134,12 +145,15 @@ type App struct {
 
 // Update routes messages to the active popup, board, or detail view.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
-	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil && (a.TaskActions == nil || !a.TaskActions.running) {
+	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil && (a.TaskActions == nil || !a.TaskActions.running) && (a.Chat == nil || a.Chat.phase != chatRunning) {
 		a.requestQuit()
 		return nil
 	}
 	if a.TaskActions != nil {
 		return a.updateTaskActions(msg)
+	}
+	if a.Chat != nil {
+		return a.updateChat(msg)
 	}
 	if a.Options != nil {
 		if event, ok := msg.(tea.MouseMsg); ok {
@@ -183,6 +197,10 @@ func (a *App) View() string {
 		a.ShowCursor = false
 		box, popup := a.renderTaskActions()
 		base = overlay(base, popup, box.X, box.Y, p)
+	case a.Chat != nil:
+		a.ShowCursor = false
+		box, popup := a.renderChat()
+		base = overlay(base, popup, box.X, box.Y, p)
 	case a.Options != nil:
 		box, popup := a.Options.view()
 		base = overlay(base, popup, box.X, box.Y, p)
@@ -211,7 +229,7 @@ func (a *App) View() string {
 		box, popup := a.renderHelp()
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
-	if a.TaskActions == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && a.startNoticeOverflows(w) {
+	if a.TaskActions == nil && a.Chat == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && a.startNoticeOverflows(w) {
 		box, popup := a.renderStartPopup([]string{a.startNotice.full})
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
@@ -658,6 +676,8 @@ func (a *App) handleBoardKey(key string) {
 		a.openTaskActions()
 	case "g":
 		a.openIssues()
+	case "c":
+		a.openChat()
 	case "enter":
 		a.openDetail()
 	}

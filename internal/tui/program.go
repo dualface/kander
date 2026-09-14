@@ -116,6 +116,7 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.app.Width, p.app.Height = event.Width, event.Height
 		p.app.clampDetailCursor()
 		p.app.resizeTaskActionForm()
+		p.app.resizeChat()
 		if p.app.Options != nil && (oldWidth != event.Width || oldHeight != event.Height) {
 			return p, p.app.Options.resizeForm()
 		}

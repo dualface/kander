@@ -32,6 +32,7 @@ func (a *App) boardHelpGroups() []helpGroup {
 				{"y", t("tui.copy_task_id")},
 				{"m", t("actions.menu")},
 				{"g", t("tui.browse_github_issues")},
+				{"c", t("tui.chat_help")},
 				{"- =", t("tui.columns_on_screen")},
 				{"a", t("tui.archived_columns")},
 				{"t", t("tui.cycle_theme")},

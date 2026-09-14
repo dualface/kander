@@ -211,6 +211,12 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	case taskActionResult:
 		a.applyTaskActionResult(result)
 		return nil
+	case chatPreviewResult:
+		a.applyChatPreview(result)
+		return nil
+	case chatStartResult:
+		a.applyChatStart(result)
+		return nil
 	}
 	if result, ok := payload.(startPreviewResult); ok {
 		a.applyStartPreview(result)
