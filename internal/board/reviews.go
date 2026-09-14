@@ -359,9 +359,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				batch.Revision++
 				if e = syncPlannedBatchTarget(tx, batch, reviewPlanTargetSyncRequest{
 					Kind:           "advance-file",
-					BatchID:        batch.BatchID,
 					PreviousTarget: advance.PreviousTarget,
-					Target:         input.Commit,
 				}); e != nil {
 					return e
 				}

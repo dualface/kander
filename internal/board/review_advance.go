@@ -96,9 +96,7 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 		}
 		return syncPlannedBatchTarget(tx, b, reviewPlanTargetSyncRequest{
 			Kind:           "advance",
-			BatchID:        b.BatchID,
 			PreviousTarget: a.PreviousTarget,
-			Target:         a.Target,
 		})
 	})
 }

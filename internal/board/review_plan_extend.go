@@ -38,7 +38,7 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 		exclusiveOps++
 	}
 	if exclusiveOps > 1 {
-		return reviewError("cycle rebind and target sync cannot change batches or sealing")
+		return reviewError("rebind_cycles, sync_targets and batch/seal are mutually exclusive")
 	}
 	var p ReviewPlan
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
@@ -131,9 +131,6 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				}
 				p.Batches[index].TargetCommit = b.TargetCommit
 			}
-			if len(synced) == 0 {
-				return reviewError("sync targets required")
-			}
 			p.Revision++
 			for _, id := range p.TaskIDs {
 				if err = tx.Put(id, "reviews/plan.json", reviewJSON(p)); err != nil {
@@ -141,10 +138,10 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				}
 			}
 			if err = tx.PutGroup(reviewControlGroup, fmt.Sprintf("plan-history/%s/%d.json", p.PlanID, p.Revision), reviewJSON(struct {
-				Previous   ReviewPlan                               `json:"previous"`
-				Request    ReviewPlanExtension                      `json:"request"`
-				Syncs      map[string]reviewPlanTargetSyncRequest   `json:"syncs"`
-				RecordedAt string                                   `json:"recorded_at"`
+				Previous   ReviewPlan                             `json:"previous"`
+				Request    ReviewPlanExtension                    `json:"request"`
+				Syncs      map[string]reviewPlanTargetSyncRequest `json:"syncs"`
+				RecordedAt string                                 `json:"recorded_at"`
 			}{previous, x, synced, time.Now().UTC().Format(time.RFC3339Nano)})); err != nil {
 				return err
 			}

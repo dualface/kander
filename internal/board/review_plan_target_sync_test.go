@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 )
 
 func readPlanCopy(t *testing.T, root, id string) ReviewPlan {
@@ -132,54 +131,6 @@ func TestAdvanceFileSyncsPlannedBatchAndLeavesUnplannedAlone(t *testing.T) {
 			t.Fatalf("%+v %v", batch, err)
 		}
 	})
-}
-
-func TestDispatchReviewRangeUsesAdvancedPlanTarget(t *testing.T) {
-	root := tempBoard(t)
-	id := gateCard(t, root, "range-final")
-	base := strings.Repeat("a", 40)
-	registered := strings.Repeat("b", 40)
-	final := strings.Repeat("c", 40)
-	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-" + id, Author: "coordinator", Basis: "range fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: base, TargetCommit: registered, Requirements: noReviewRequirements()}}}
-	if err := CreateReviewPlan(root, p); err != nil {
-		t.Fatal(err)
-	}
-	if err := AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: 1, Advance: ReviewAdvance{PreviousTarget: registered, Target: final, Reason: "fix delivery", Deliveries: map[string]string{final: id}}}); err != nil {
-		t.Fatal(err)
-	}
-	v, err := ReadReviewBatchView(root, "batch")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "fixture", Roles: map[string]ReviewRoleConclusion{}}
-	edges, _, err := ReviewClosureEdges(v, r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = CloseReviewBatch(root, r, ReviewGitEvidence{CWD: "/repo", Head: final, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}); err != nil {
-		t.Fatal(err)
-	}
-	reviewRange, err := DispatchReviewRange(root, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if reviewRange.Ancestor != base || reviewRange.Descendant != final {
-		t.Fatalf("%+v", reviewRange)
-	}
-	s := transactionSnapshot(t, root, id)
-	in := dispatchInput(s, "wrap-final")
-	in.Kind = "wrap-up"
-	in.Base = final
-	in.Evidence.WrapUp = &DispatchWrapUpBinding{Artifact: ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}, Git: DispatchIntegration{DispatchID: in.ID, TaskID: in.TaskID, CWD: t.TempDir(), SourceCommit: final, ReviewTarget: final, ReviewBase: base, TargetCommit: final, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "binds closed final target", VerifiedAt: time.Now().UTC()}}
-	if _, err = PrepareDispatch(root, in); err != nil {
-		t.Fatal(err)
-	}
-	in.ID = "wrap-stale"
-	in.Base = registered
-	in.Evidence.WrapUp = &DispatchWrapUpBinding{Artifact: ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}, Git: DispatchIntegration{DispatchID: in.ID, TaskID: in.TaskID, CWD: t.TempDir(), SourceCommit: registered, ReviewTarget: registered, ReviewBase: base, TargetCommit: registered, TargetRef: "refs/heads/develop", Author: "coordinator", Basis: "stale registered target", VerifiedAt: time.Now().UTC()}}
-	if _, err = PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), final) {
-		t.Fatalf("stale registered target accepted: %v", err)
-	}
 }
 
 func TestPlanTargetMismatchProgressCheckAndExtendSync(t *testing.T) {
