@@ -16,7 +16,7 @@ func TestDoctorRepairsOverlayEnabledIntegratedRoles(t *testing.T) {
 		for _, scale := range config.TaskScales {
 			for _, stage := range []string{"auto", "required"} {
 				t.Run(role+"/"+scale+"/"+stage, func(t *testing.T) {
-					checkDoctorIntegratedOverlay(t, role, scale, stage, "valid", "skip", "")
+					checkDoctorIntegratedOverlay(t, role, scale, stage, "valid", "auto", "")
 				})
 			}
 		}
@@ -26,14 +26,14 @@ func TestDoctorRepairsOverlayEnabledIntegratedRoles(t *testing.T) {
 func TestDoctorIntegratedOverlayRepairBoundaries(t *testing.T) {
 	for _, scope := range []string{"missing", "broken"} {
 		t.Run(scope, func(t *testing.T) {
-			checkDoctorIntegratedOverlay(t, "PMQA", "large", "required", scope, "skip", "")
+			checkDoctorIntegratedOverlay(t, "PMQA", "large", "required", scope, "auto", "")
 		})
 	}
 	t.Run("overlay-cannot-disable-scope-repair", func(t *testing.T) {
 		checkDoctorIntegratedOverlay(t, "Security", "small", "skip", "valid", "auto", "")
 	})
 	t.Run("overlay-reviewer-remains-project-owned", func(t *testing.T) {
-		checkDoctorIntegratedOverlay(t, "PMQA", "large", "auto", "valid", "skip", "grok")
+		checkDoctorIntegratedOverlay(t, "PMQA", "large", "auto", "valid", "auto", "grok")
 	})
 }
 
@@ -55,7 +55,7 @@ func TestDoctorIntegratedOverlayErrorsPreserveScopeRepair(t *testing.T) {
 				t.Fatalf("invalid overlay must remain unhealthy: %d %s", code, output)
 			}
 			cfg := readDoctorConfig(t, h)
-			if cfg.KanbanAgent != "claude" || cfg.Reviewers["large"]["PM"] != "claude" || cfg.Reviewers["large"]["PMQA"] != "codex" {
+			if cfg.KanbanAgent != "claude" || cfg.Reviewers["large"]["PMQA"] != "claude" {
 				t.Fatalf("invalid overlay prevented scope repair: %+v", cfg)
 			}
 			after, err := os.ReadFile(overlay)
@@ -124,7 +124,7 @@ func checkDoctorIntegratedOverlay(t *testing.T, role, scale, stage, scopeState, 
 		t.Fatalf("scope repair ignored active role or absorbed overlay: %+v", cfg)
 	}
 	for _, otherScale := range config.TaskScales {
-		if otherScale != scale && (cfg.Reviewers[otherScale][role] != "codex" || cfg.ReviewStages[otherScale][role] != "skip") {
+		if otherScale != scale && (cfg.Reviewers[otherScale][role] != "claude" || cfg.ReviewStages[otherScale][role] != "auto") {
 			t.Fatalf("unrelated scale changed: %+v", cfg)
 		}
 	}

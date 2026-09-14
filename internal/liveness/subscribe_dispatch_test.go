@@ -50,7 +50,7 @@ func closeSubscriptionFixture(t *testing.T, root, id string) {
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "subscription-plan", Author: "fixture", Basis: "lifecycle-only test",
 		CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "subscription-batch", TaskIDs: []string{id},
 			Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: map[string]string{
-				"PM": "N/A: lifecycle fixture", "QA": "N/A: lifecycle fixture", "CSA": "N/A: lifecycle fixture", "Hacker": "N/A: lifecycle fixture"}}}}
+				"PMQA": "N/A: lifecycle fixture", "Security": "N/A: lifecycle fixture"}}}}
 	if err := board.CreateReviewPlan(root, p); err != nil {
 		t.Fatal(err)
 	}

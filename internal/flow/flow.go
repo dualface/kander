@@ -5,8 +5,8 @@ import "github.com/dualface/kander/internal/config"
 
 // Review stage names, in the order the review rules run them.
 const (
-	StagePrimary  = "primary"  // Selected PM, QA and PMQA roles
-	StageSecurity = "security" // Selected CSA, Hacker and Security roles after stage one
+	StagePrimary  = "primary"  // PMQA
+	StageSecurity = "security" // Security, after stage one
 )
 
 // Node is one process block. Role and Mode are empty for the execution node;
@@ -48,7 +48,7 @@ func BuildChart(cfg *config.Config, scale string) Chart {
 	for _, stage := range []struct {
 		name  string
 		roles []string
-	}{{StagePrimary, []string{"PM", "QA", "PMQA"}}, {StageSecurity, []string{"CSA", "Hacker", "Security"}}} {
+	}{{StagePrimary, []string{"PMQA"}}, {StageSecurity, []string{"Security"}}} {
 		built := Stage{Name: stage.name}
 		for _, role := range stage.roles {
 			mode, err := config.ReviewStageFor(cfg, scale, role)

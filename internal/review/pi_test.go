@@ -39,7 +39,7 @@ func TestPiReviewRunsWithoutPiHome(t *testing.T) {
 	t.Setenv("PI_REVIEW_MAX_RUNTIME_SECONDS", "30")
 	t.Setenv("FAKE_PI_STDIN", h.stdinLog)
 
-	code, out, err := h.review("pi", "QA", "confirm the change")
+	code, out, err := h.review("pi", "PMQA", "confirm the change")
 	if code != 0 {
 		t.Fatalf("pi review without ~/.pi code=%d err=%s", code, err)
 	}

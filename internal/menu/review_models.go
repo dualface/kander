@@ -49,8 +49,8 @@ func (s *Session) noteReviewModelOverride(field ModelField, value string) {
 // Restoring one reviewer also retires legacy shared project overrides for that
 // scale. Materialize their other scale first so its effective selection survives.
 func (s *Session) preserveOtherReviewScale(candidate map[string]any, role, restoredScale string) {
-	if !config.OverlayHas(candidate, "models", "review_roles", role, "model") &&
-		!config.OverlayHas(candidate, "models", "review_roles", role, "effort") {
+	if !config.OverlayHasReviewPath(candidate, "models", "review_roles", role, "model") &&
+		!config.OverlayHasReviewPath(candidate, "models", "review_roles", role, "effort") {
 		return
 	}
 	for _, scale := range config.TaskScales {
@@ -64,6 +64,6 @@ func (s *Session) preserveOtherReviewScale(candidate map[string]any, role, resto
 		config.OverlaySet(candidate, model, "models", "review_roles", role, scale+"_model")
 		config.OverlaySet(candidate, effort, "models", "review_roles", role, scale+"_effort")
 	}
-	config.OverlayDelete(candidate, "models", "review_roles", role, "model")
-	config.OverlayDelete(candidate, "models", "review_roles", role, "effort")
+	config.OverlayDeleteReviewRoleModel(candidate, role, "model")
+	config.OverlayDeleteReviewRoleModel(candidate, role, "effort")
 }

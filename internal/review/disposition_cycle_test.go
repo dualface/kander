@@ -27,14 +27,14 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 			t.Fatal(err)
 		}
 	}
-	requirements := map[string]string{"PM": "required", "QA": "N/A: fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}
+	requirements := map[string]string{"PMQA": "required", "Security": "N/A: fixture"}
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "group-cycle", Author: "coordinator", Basis: "both cards share every review obligation", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: ids, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: ids, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
 	oldPlan, err := board.ReadReviewPlan(root, p.PlanID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"codex", "--task", ids[0], "--task", ids[1], "--batch-id", "batch", "--run-id", "bad", h.repo, h.base, h.head, "PM", "group goal"}
+	args := []string{"codex", "--task", ids[0], "--task", ids[1], "--batch-id", "batch", "--run-id", "bad", h.repo, h.base, h.head, "PMQA", "group goal"}
 	t.Setenv("FAKE_CODEX_REPORT", "invalid report")
 	if code, _, _ := captureRun(t, args); code == 0 {
 		t.Fatal("invalid report passed")
@@ -87,7 +87,7 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 	}
 	reset := p
 	reset.PlanID = "discard-failures"
-	reset.Batches = []board.ReviewPlanBatch{{BatchID: "empty", TaskIDs: ids, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"PM": "N/A: reset", "QA": "N/A: reset", "CSA": "N/A: reset", "Hacker": "N/A: reset"}}}
+	reset.Batches = []board.ReviewPlanBatch{{BatchID: "empty", TaskIDs: ids, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"PMQA": "N/A: reset", "Security": "N/A: reset"}}}
 	if code, _, _ := captureRun(t, []string{"plan", h.repo, dispositionJSON(t, h, "reset", reset)}); code == 0 {
 		t.Fatal("new plan dropped unresolved earlier cycle")
 	}
@@ -126,7 +126,7 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "pm", PassedAt: h.head, Basis: "author evidence independently verified"}}}
+	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "pm", PassedAt: h.head, Basis: "author evidence independently verified"}}}
 	if code, _, _ := captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)}); code == 0 {
 		t.Fatal("rebind discarded old failed run")
 	}

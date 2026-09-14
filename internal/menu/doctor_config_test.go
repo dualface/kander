@@ -286,6 +286,7 @@ func TestProjectConfigAndDoctor(t *testing.T) {
 	runProject := func(args ...string) (int, string, string) {
 		cmd := exec.Command(projectBin, args...)
 		cmd.Env = env
+		cmd.Dir = project
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()

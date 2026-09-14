@@ -27,16 +27,7 @@ func (s *Session) FieldOverridden(path ...string) bool {
 	if s == nil || !s.EditingOverlay() {
 		return false
 	}
-	if config.OverlayHas(s.overlayRaw, path...) {
-		return true
-	}
-	if len(path) == 3 && path[0] == "review_stages" {
-		return config.OverlayHas(s.overlayRaw, "review_stages", path[2])
-	}
-	if len(path) == 3 && path[0] == "reviewers" {
-		return config.OverlayHas(s.overlayRaw, "reviewers", path[2])
-	}
-	return false
+	return config.OverlayHasReviewPath(s.overlayRaw, path...)
 }
 
 // FormatInherited renders an uncovered Project-tab value as "(inherited value)".
@@ -340,13 +331,22 @@ func (s *Session) RestoreInherit(path ...string) error {
 	candidate := config.CloneOverlay(s.overlayRaw)
 	if len(path) == 3 && path[0] == "review_stages" {
 		expandReviewStagesOverlay(candidate)
+		config.OverlayDeleteReviewRole(candidate, "review_stages", path[1], path[2])
 	}
 	if len(path) == 3 && path[0] == "reviewers" {
 		expandReviewersOverlay(candidate)
 		s.preserveOtherReviewScale(candidate, path[2], path[1])
 		for _, suffix := range []string{"_model", "_effort", "_agent"} {
-			config.OverlayDelete(candidate, "models", "review_roles", path[2], path[1]+suffix)
+			config.OverlayDeleteReviewRoleModel(candidate, path[2], path[1]+suffix)
 		}
+		config.OverlayDeleteReviewRole(candidate, "reviewers", path[1], path[2])
+	}
+	if len(path) >= 3 && path[0] == "models" && path[1] == "review_roles" {
+		field := ""
+		if len(path) >= 4 {
+			field = path[3]
+		}
+		config.OverlayDeleteReviewRoleModel(candidate, path[2], field)
 	}
 	if len(path) == 2 && path[0] == "kanban_agents" {
 		agent, _ := overlayStringAt(candidate, path...)
@@ -354,7 +354,7 @@ func (s *Session) RestoreInherit(path ...string) error {
 		if agent != "" {
 			deleteKanbanScaleModelKeys(candidate, agent, path[1])
 		}
-	} else {
+	} else if !(len(path) == 3 && (path[0] == "review_stages" || path[0] == "reviewers") || len(path) >= 3 && path[0] == "models" && path[1] == "review_roles") {
 		config.OverlayDelete(candidate, path...)
 	}
 	merged, err := config.MergeOverlayOnRaw(s.scopeRaw, candidate)

@@ -2,11 +2,7 @@ package config
 
 import "strings"
 
-// Integrated roles are opt-in so old configurations do not add reviewer runs.
 func defaultReviewStage(role string) string {
-	if role == "PMQA" || role == "Security" {
-		return "skip"
-	}
 	return "auto"
 }
 
@@ -27,11 +23,7 @@ func DefaultReviewStages() map[string]map[string]string {
 }
 
 func reviewRoleSet() map[string]struct{} {
-	allowed := make(map[string]struct{}, len(ReviewRoles))
-	for _, role := range ReviewRoles {
-		allowed[role] = struct{}{}
-	}
-	return allowed
+	return historicalReviewRoleSet()
 }
 
 func reviewScaleSet() map[string]struct{} {
@@ -129,27 +121,22 @@ func validateReviewStageRoles(raw any, path string) (map[string]string, error) {
 	if !ok {
 		return nil, configErrorf("config.review_stages_scale_must_be_a_json_object", path)
 	}
-	allowed := reviewRoleSet()
-	var unknown []string
-	for key := range obj {
-		if _, ok := allowed[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
+	unknown := unknownHistoricalRoles(obj)
 	if len(unknown) > 0 {
 		return nil, configErrorf(
-			"config.review_stages_has_unknown_roles", strings.Join(sorted(unknown), ", "),
+			"config.review_stages_has_unknown_roles", strings.Join(unknown, ", "),
 		)
 	}
-	stages := defaultReviewStageRoles()
-	for _, role := range ReviewRoles {
-		if _, exists := obj[role]; !exists {
-			continue
-		}
-		mode, err := validateChoice(obj[role], ReviewStageModes, path+"."+role)
+	modes := map[string]string{}
+	for key := range obj {
+		mode, err := validateChoice(obj[key], ReviewStageModes, path+"."+key)
 		if err != nil {
 			return nil, err
 		}
+		modes[key] = mode
+	}
+	stages := defaultReviewStageRoles()
+	for role, mode := range foldReviewStageModes(modes) {
 		stages[role] = mode
 	}
 	return stages, nil
@@ -183,7 +170,7 @@ func ReviewStageFor(cfg *Config, scale, role string) (string, error) {
 	if !contains(TaskScales, scale) {
 		return "", configErrorf("config.unknown_task_scale", scale)
 	}
-	if !contains(ReviewRoles, role) {
+	if _, ok := currentReviewRoleSet()[role]; !ok {
 		return "", configErrorf("config.review_stages_has_unknown_roles", role)
 	}
 	if cfg.ReviewStages[scale] == nil {

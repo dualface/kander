@@ -19,10 +19,10 @@ func TestValidateReviewStagesScaledAndFlat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validated.ReviewStages["large"]["PM"] != "required" || validated.ReviewStages["large"]["CSA"] != "auto" {
+	if validated.ReviewStages["large"]["PMQA"] != "required" || validated.ReviewStages["large"]["Security"] != "auto" {
 		t.Fatalf("large=%v", validated.ReviewStages["large"])
 	}
-	if validated.ReviewStages["small"]["PM"] != "skip" || validated.ReviewStages["small"]["QA"] != "auto" {
+	if validated.ReviewStages["small"]["PMQA"] != "auto" || validated.ReviewStages["small"]["Security"] != "skip" {
 		t.Fatalf("small=%v", validated.ReviewStages["small"])
 	}
 
@@ -32,11 +32,8 @@ func TestValidateReviewStagesScaledAndFlat(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, scale := range TaskScales {
-		if validated.ReviewStages[scale]["PM"] != "required" || validated.ReviewStages[scale]["CSA"] != "skip" {
+		if validated.ReviewStages[scale]["PMQA"] != "required" || validated.ReviewStages[scale]["Security"] != "skip" {
 			t.Fatalf("%s=%v", scale, validated.ReviewStages[scale])
-		}
-		if validated.ReviewStages[scale]["QA"] != "auto" || validated.ReviewStages[scale]["Hacker"] != "auto" {
-			t.Fatalf("missing roles on %s: %v", scale, validated.ReviewStages[scale])
 		}
 	}
 }
@@ -74,11 +71,7 @@ func TestValidateReviewStagesFillsMissingWithRoleDefaults(t *testing.T) {
 	}
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			want := "auto"
-			if role == "PMQA" || role == "Security" {
-				want = "skip"
-			}
-			if missingSection.ReviewStages[scale][role] != want {
+			if missingSection.ReviewStages[scale][role] != "auto" {
 				t.Fatalf("missing section %s.%s=%s", scale, role, missingSection.ReviewStages[scale][role])
 			}
 		}
@@ -90,10 +83,10 @@ func TestValidateReviewStagesFillsMissingWithRoleDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oneScale.ReviewStages["large"]["PM"] != "required" {
+	if oneScale.ReviewStages["large"]["PMQA"] != "required" {
 		t.Fatal(oneScale.ReviewStages)
 	}
-	if oneScale.ReviewStages["small"]["PM"] != "auto" {
+	if oneScale.ReviewStages["small"]["PMQA"] != "auto" {
 		t.Fatalf("missing scale must default to auto, got %v", oneScale.ReviewStages["small"])
 	}
 
@@ -106,7 +99,7 @@ func TestValidateReviewStagesFillsMissingWithRoleDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oneRole.ReviewStages["large"]["QA"] != "auto" || oneRole.ReviewStages["small"]["PM"] != "auto" {
+	if oneRole.ReviewStages["large"]["PMQA"] != "skip" || oneRole.ReviewStages["small"]["PMQA"] != "required" {
 		t.Fatal(oneRole.ReviewStages)
 	}
 }
@@ -150,27 +143,27 @@ func TestNormalizeReviewStages(t *testing.T) {
 func TestReviewStageFor(t *testing.T) {
 	setupHome(t)
 	cfg := DefaultConfig()
-	cfg.ReviewStages["large"]["PM"] = "required"
-	cfg.ReviewStages["small"]["QA"] = "skip"
-	got, err := ReviewStageFor(cfg, "large", "PM")
+	cfg.ReviewStages["large"]["PMQA"] = "required"
+	cfg.ReviewStages["small"]["PMQA"] = "skip"
+	got, err := ReviewStageFor(cfg, "large", "PMQA")
 	if err != nil || got != "required" {
 		t.Fatal(got, err)
 	}
-	got, err = ReviewStageFor(cfg, "small", "QA")
+	got, err = ReviewStageFor(cfg, "small", "PMQA")
 	if err != nil || got != "skip" {
 		t.Fatal(got, err)
 	}
-	got, err = ReviewStageFor(cfg, "small", "PM")
+	got, err = ReviewStageFor(cfg, "small", "Security")
 	if err != nil || got != "auto" {
 		t.Fatal(got, err)
 	}
-	if _, err := ReviewStageFor(cfg, "medium", "PM"); !IsError(err) {
+	if _, err := ReviewStageFor(cfg, "medium", "PMQA"); !IsError(err) {
 		t.Fatalf("unknown scale: %v", err)
 	}
 	if _, err := ReviewStageFor(cfg, "large", "Owner"); !IsError(err) {
 		t.Fatalf("unknown role: %v", err)
 	}
-	if _, err := ReviewStageFor(nil, "large", "PM"); !IsError(err) {
+	if _, err := ReviewStageFor(nil, "large", "PMQA"); !IsError(err) {
 		t.Fatalf("nil config: %v", err)
 	}
 }
@@ -208,7 +201,7 @@ func TestSaveRewritesFlatReviewStages(t *testing.T) {
 	if !reflect.DeepEqual(large, small) {
 		t.Fatalf("large=%v small=%v", large, small)
 	}
-	if large["PM"] != "required" || large["CSA"] != "skip" {
+	if large["PMQA"] != "required" || large["Security"] != "skip" {
 		t.Fatalf("saved roles=%v", large)
 	}
 }
@@ -216,10 +209,10 @@ func TestSaveRewritesFlatReviewStages(t *testing.T) {
 func TestFormatReviewStagesSummaryFoldsIdenticalScales(t *testing.T) {
 	setupHome(t)
 	same := DefaultReviewStages()
-	same["large"]["PM"] = "required"
-	same["small"]["PM"] = "required"
+	same["large"]["PMQA"] = "required"
+	same["small"]["PMQA"] = "required"
 	folded := FormatReviewStagesSummary(same)
-	if len(folded) != 1 || !strings.Contains(folded[0], "PM=required") {
+	if len(folded) != 1 || !strings.Contains(folded[0], "PMQA=required") {
 		t.Fatalf("%v", folded)
 	}
 	cfg := DefaultConfig()
@@ -235,8 +228,8 @@ func TestFormatReviewStagesSummaryFoldsIdenticalScales(t *testing.T) {
 	}
 
 	different := DefaultReviewStages()
-	different["large"]["PM"] = "required"
-	different["small"]["PM"] = "skip"
+	different["large"]["PMQA"] = "required"
+	different["small"]["PMQA"] = "skip"
 	split := FormatReviewStagesSummary(different)
 	if len(split) != 2 {
 		t.Fatalf("%v", split)

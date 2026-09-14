@@ -26,7 +26,7 @@ func TestReviewPublicationAfterControlledHeaderUpdate(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			first := finalizedRun(t, root, archiveInput([]string{id}, "first", "PM"))
+			first := finalizedRun(t, root, archiveInput([]string{id}, "first", "PMQA"))
 			publishRun(t, root, first.RunID)
 			s := transactionSnapshot(t, root, id)
 			text := strings.Replace(s.Text, "## REVIEWS\r\n", tc.header, 1)
@@ -35,7 +35,7 @@ func TestReviewPublicationAfterControlledHeaderUpdate(t *testing.T) {
 			}
 			text += tc.newline + "## OWNER_NOTE" + tc.newline + "preserve me" + tc.newline
 			updateSnapshot(t, root, s, text)
-			second := finalizedRun(t, root, archiveInput([]string{id}, "second", "QA"))
+			second := finalizedRun(t, root, archiveInput([]string{id}, "second", "PMQA"))
 			publishRun(t, root, second.RunID)
 			publishRun(t, root, second.RunID)
 			for _, run := range []ReviewRun{first, second} {
@@ -60,7 +60,7 @@ func TestReviewCheckPublicDiagnosticsAndOrder(t *testing.T) {
 	root := tempBoard(t)
 	ids := []string{archiveCard(t, root, "diagnostic-a"), archiveCard(t, root, "diagnostic-b")}
 	for _, runID := range []string{"pm-z", "pm-a"} {
-		run := finalizedRun(t, root, archiveInput(ids, runID, "PM"))
+		run := finalizedRun(t, root, archiveInput(ids, runID, "PMQA"))
 		publishRun(t, root, run.RunID)
 	}
 	for i, id := range ids {
@@ -99,7 +99,7 @@ func TestReviewCheckContinuesAfterInvalidRecords(t *testing.T) {
 			root := tempBoard(t)
 			bad := archiveCard(t, root, "bad-record")
 			good := archiveCard(t, root, "other-record")
-			run := finalizedRun(t, root, archiveInput([]string{good}, "other-run", "PM"))
+			run := finalizedRun(t, root, archiveInput([]string{good}, "other-run", "PMQA"))
 			publishRun(t, root, run.RunID)
 			s := transactionSnapshot(t, root, good)
 			if err := os.WriteFile(filepath.Join(s.Entry.Path, "reviews", run.RunID, "report.md"), []byte("tamper"), 0600); err != nil {
@@ -148,7 +148,7 @@ func TestReviewCheckContinuesAfterInvalidRecords(t *testing.T) {
 func TestReviewPublicationRejectsTerminalMove(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "terminal")
-	run := finalizedRun(t, root, archiveInput([]string{id}, "pending", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{id}, "pending", "PMQA"))
 	s := transactionSnapshot(t, root, id)
 	if err := UpdateDocument(root, id, UpdateOptions{Document: "report.md", Text: "Completed fixture", ExpectedRevision: s.Revision}); err != nil {
 		t.Fatal(err)

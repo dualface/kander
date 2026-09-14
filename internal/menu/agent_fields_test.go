@@ -100,13 +100,13 @@ func TestReviewModelFieldsHideCursorEffortAfterArgsOverlay(t *testing.T) {
 	cfg.WelcomeComplete = true
 	cfg.Agents = map[string]config.AgentDefinition{"cursor": {Args: &config.AgentArgs{Start: []string{"x"}, Resume: []string{}}}}
 	for _, scale := range config.TaskScales {
-		cfg.Reviewers[scale]["PM"] = "cursor"
+		cfg.Reviewers[scale]["PMQA"] = "cursor"
 	}
 	s, err := NewSessionForTest(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range s.ReviewModelFieldsFor("PM", "large") {
+	for _, field := range s.ReviewModelFieldsFor("PMQA", "large") {
 		if field.field == "large_effort" || field.field == "effort" {
 			t.Fatal("review effort shown for cursor")
 		}

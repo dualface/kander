@@ -26,7 +26,7 @@ func fixBindingFixture(t *testing.T) (string, DispatchInput, ReviewRun, ReviewFi
 	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm-binding", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm-binding", "PMQA"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	s := transactionSnapshot(t, root, id)
 	if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
@@ -191,7 +191,7 @@ func TestDispatchInputRejectsUnknownEvidenceJSON(t *testing.T) {
 func TestDispatchFixLegacyRequiresExplicitMapping(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "legacy-dispatch")
-	run := finalizedRun(t, root, archiveInput([]string{id}, "legacy-fix", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{id}, "legacy-fix", "PMQA"))
 	run = publishRun(t, root, run.RunID)
 	in := DispatchInput{ID: "legacy-dispatch", TaskID: id, Kind: "fix", Message: "修复映射问题", Base: run.Commit, Evidence: DispatchEvidence{Fix: &DispatchFixBinding{BatchID: run.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run.RunID, "PM-01"}}}}}}
 	if _, err := PrepareDispatch(root, in); err == nil {
@@ -221,7 +221,7 @@ func TestDispatchFixRejectsSupersededRoundAndCarriesLineageAuthors(t *testing.T)
 	if err := SubmitReviewDisposition(root, record, s.Revision); err != nil {
 		t.Fatal(err)
 	}
-	nextInput := archiveInput([]string{in.TaskID}, "pm-next", "PM")
+	nextInput := archiveInput([]string{in.TaskID}, "pm-next", "PMQA")
 	nextInput.PreviousRunID = run.RunID
 	nextInput.ReviewedCommit = run.Commit
 	nextFindings := emptyFindings()
@@ -252,14 +252,12 @@ func nonBlockingFixFixture(t *testing.T, blocking bool) (string, DispatchInput, 
 		blockingFinding = ReviewFinding{ID: "PM-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
 		findings.Findings = []ReviewFinding{blockingFinding}
 	}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm-nb", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm-nb", "PMQA"), findings)
 	items := map[string][]string{nb.ID: {id}}
 	if blocking {
 		items[blockingFinding.ID] = []string{id}
 	}
 	assignGate(t, root, run, items)
-	qa := gateRun(t, root, archiveInput([]string{id}, "qa-nb", "QA"), emptyFindings())
-	assignGate(t, root, qa, map[string][]string{})
 	s := transactionSnapshot(t, root, id)
 	if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
 		t.Fatal(err)
@@ -316,7 +314,7 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 		if err := SubmitReviewDisposition(root, record, s.Revision); err != nil {
 			t.Fatal(err)
 		}
-		nextInput := archiveInput([]string{in.TaskID}, "pm-nb-next", "PM")
+		nextInput := archiveInput([]string{in.TaskID}, "pm-nb-next", "PMQA")
 		nextInput.PreviousRunID = run.RunID
 		nextInput.ReviewedCommit = run.Commit
 		nextFindings := emptyFindings()
@@ -346,7 +344,7 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 		gatePlan(t, root2, []string{id, other}, archiveRequirements())
 		findings := emptyFindings()
 		findings.NonBlocking = []ReviewFinding{{ID: "PM-UA", Tier: "recommend", Text: "可延后", Evidence: "a:1"}}
-		run2 := gateRun(t, root2, archiveInput([]string{id, other}, "pm-ua", "PM"), findings)
+		run2 := gateRun(t, root2, archiveInput([]string{id, other}, "pm-ua", "PMQA"), findings)
 		assignGate(t, root2, run2, map[string][]string{"PM-UA": {other}})
 		s := transactionSnapshot(t, root2, id)
 		if _, err := MoveEntry(s.Entry, root2, "review"); err != nil {
@@ -364,10 +362,6 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 
 func TestDispatchFixNonBlockingDispositionOnlyRound(t *testing.T) {
 	root, in, run, nb, _ := nonBlockingFixFixture(t, false)
-	qa, err := ReadReviewRun(root, "qa-nb")
-	if err != nil {
-		t.Fatal(err)
-	}
 	d := prepareTestDispatch(t, root, in)
 	if _, err := dispatchMove(t, root, d, "working"); err != nil {
 		t.Fatal(err)
@@ -389,11 +383,11 @@ func TestDispatchFixNonBlockingDispositionOnlyRound(t *testing.T) {
 	if err != nil || completed.State != DispatchCompleted || completed.Completed.DeliveryCommit != run.Commit {
 		t.Fatalf("%+v %v", completed, err)
 	}
-	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(run), "QA": passRole(qa)})
+	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": passRole(run)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if closed.RoleStatuses["PM"] != "PASS" || closed.TargetCommit != run.Commit {
+	if closed.RoleStatuses["PMQA"] != "PASS" || closed.TargetCommit != run.Commit {
 		t.Fatalf("%+v", closed)
 	}
 }

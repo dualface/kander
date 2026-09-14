@@ -179,7 +179,11 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			if e != nil {
 				return e
 			}
-			if exists && !reflect.DeepEqual(actual, old) {
+			if !exists {
+				if err = validateNewRequirements(b.Requirements); err != nil {
+					return err
+				}
+			} else if !reflect.DeepEqual(actual, old) {
 				return reviewError("extension batch already exists")
 			}
 			if err = tx.PutGroup(reviewControlGroup, reviewBatchName(b.BatchID), reviewJSON(actual)); err != nil {

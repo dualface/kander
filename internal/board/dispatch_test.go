@@ -297,7 +297,7 @@ func TestDispatchFencesReviewAuthorDisposition(t *testing.T) {
 	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "原文", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm", "PMQA"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	s := transactionSnapshot(t, root, id)
 	text, _ := setMetadata(s.Text, FieldSession, "codex disposition-session")

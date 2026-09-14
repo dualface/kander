@@ -14,12 +14,10 @@ func TestCoordinatorCompletedFixSurvivesClosedBatchRestart(t *testing.T) {
 		t.Run(damage, func(t *testing.T) {
 			root, c, in, run, record := coordinatorAdvancedFix(t)
 			roles := map[string]ReviewRoleConclusion{}
-			for _, role := range []string{"PM", "QA"} {
+			for _, role := range []string{"PMQA"} {
 				input := archiveInput([]string{in.TaskID}, "passing-"+strings.ToLower(role), role)
 				input.Commit = record.FixCommit
-				if role == "PM" {
-					input.PreviousRunID, input.ReviewedCommit = run.RunID, run.Commit
-				}
+				input.PreviousRunID, input.ReviewedCommit = run.RunID, run.Commit
 				passing := gateRun(t, root, input, emptyFindings())
 				assignGate(t, root, passing, map[string][]string{})
 				roles[role] = passRole(passing)

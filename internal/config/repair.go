@@ -137,7 +137,7 @@ func repairValues(raw any) (*Config, error) {
 		}
 		for _, scale := range TaskScales {
 			roles, _ := asObject(normalized[scale])
-			for _, role := range ReviewRoles {
+			for _, role := range historicalReviewRoles {
 				agent := ""
 				if roles != nil {
 					agent, _ = roles[role].(string)
@@ -172,6 +172,7 @@ func repairValues(raw any) (*Config, error) {
 	root, _ := asObject(decoded)
 	fillMissingReviewStageScales(provided)
 	fillMissingReviewerScales(provided)
+	FoldLegacyReviewRoleKeys(provided)
 	recoverConfigFields(root, provided, root)
 	return Validate(root)
 }

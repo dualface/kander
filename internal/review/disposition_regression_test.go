@@ -34,7 +34,7 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 	if board.RunMove([]string{id, "review"}) != 0 || board.RunMove([]string{id, "working", "--owner", "codex"}) != 0 {
 		t.Fatal("claim fixture")
 	}
-	requirements := map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}
+	requirements := map[string]string{"PMQA": "required", "Security": "N/A: project"}
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "cycle", Author: "coordinator", Basis: "failure recovery", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
 	t.Setenv("FAKE_CODEX_REPORT", "```kander-findings\n{\"FINDINGS\":[]}\n```")
@@ -61,29 +61,27 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 		t.Fatal("all-failed batch completed")
 	}
 	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
-	for _, role := range []string{"PM", "QA"} {
-		next := append([]string(nil), args...)
-		for i := range next {
-			if next[i] == "stable" {
-				next[i] = strings.ToLower(role)
-			}
-			if next[i] == "PM" {
-				next[i] = role
-			}
+	next := append([]string(nil), args...)
+	for i := range next {
+		if next[i] == "stable" {
+			next[i] = "pmqa"
 		}
-		commandOK(t, next...)
-		a := board.ReviewAssignment{RunID: strings.ToLower(role), BatchID: "batch", Author: "coordinator", Basis: "all parsed findings assigned", Items: map[string][]string{}}
-		commandOK(t, "assign", h.repo, dispositionJSON(t, h, role+"-assignment", a))
+		if next[i] == "PMQA" {
+			next[i] = "PMQA"
+		}
 	}
+	commandOK(t, next...)
+	a := board.ReviewAssignment{RunID: "pmqa", BatchID: "batch", Author: "coordinator", Basis: "all parsed findings assigned", Items: map[string][]string{}}
+	commandOK(t, "assign", h.repo, dispositionJSON(t, h, "PMQA-assignment", a))
 	v, err := board.ReadReviewBatchView(root, "batch")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "pm", PassedAt: h.head, Basis: "verified"}, "QA": {RunID: "qa", PassedAt: h.head, Basis: "verified"}}}
+	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "pmqa", PassedAt: h.head, Basis: "verified"}}}
 	if code, _, _ = captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)}); code == 0 {
 		t.Fatal("failed run silently ignored")
 	}
-	r.ResolvedFailures = map[string]string{"stable": "pm"}
+	r.ResolvedFailures = map[string]string{"stable": "pmqa"}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
 	if code := board.RunMove([]string{id, "done", "--result", "completed"}); code != 0 {
 		t.Fatal("recovered complete batch cannot finish")
@@ -101,7 +99,7 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 func TestAdvanceAndExtensionRejectOtherWorktree(t *testing.T) {
 	h, _, _ := archiveHarness(t)
 	id := "20260907-archive-test-task"
-	requirements := map[string]string{"PM": "N/A: fixture", "QA": "N/A: fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}
+	requirements := map[string]string{"PMQA": "N/A: fixture", "Security": "N/A: fixture"}
 	p := board.ReviewPlan{Schema: 1, PlanID: "cycle", Author: "coordinator", Basis: "CWD binding", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
 	other := filepath.Join(h.root, "other-worktree")
@@ -161,7 +159,7 @@ func TestAdvanceWithoutPlanExplainsRecovery(t *testing.T) {
 		t.Fatalf("%d %s", code, stderr)
 	}
 	id := "20260907-archive-test-task"
-	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "adopt", Author: "main", Basis: "adopt existing batch before advance", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}}}}
+	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "adopt", Author: "main", Basis: "adopt existing batch before advance", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"PMQA": "required", "Security": "N/A: project"}}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "adopt", p))
 	commandOK(t, "advance", h.repo, dispositionJSON(t, h, "advance-planned", x))
 }

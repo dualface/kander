@@ -90,9 +90,6 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 			cfg.Reviewers[scale] = map[string]string{}
 		}
 		for _, role := range config.ReviewRoles {
-			if skipIntegratedReviewer(cfg, scale, role) && skipIntegratedReviewer(policy, scale, role) {
-				continue
-			}
 			selected := cfg.Reviewers[scale][role]
 			if !reviewerUsable(agents[selected]) && reviewer != "" {
 				set("reviewers."+scale+"."+role, &selected, reviewer)
@@ -127,17 +124,6 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 		cfg.WelcomeComplete = true
 	}
 	return changes
-}
-
-// Integrated roles are opt-in. Their unused defaults must not add availability
-// warnings or repairs to existing configurations; the original four roles keep
-// their existing checks even when skipped.
-func skipIntegratedReviewer(cfg *config.Config, scale, role string) bool {
-	if role != "PMQA" && role != "Security" {
-		return false
-	}
-	stage, err := config.ReviewStageFor(cfg, scale, role)
-	return err == nil && stage == "skip"
 }
 
 // doctorLauncherAvailable only serves the "should we rewrite the user's

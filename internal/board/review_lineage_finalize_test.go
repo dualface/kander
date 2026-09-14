@@ -11,7 +11,7 @@ func TestFinalizeRejectsInvalidFindingRelationships(t *testing.T) {
 			root := tempBoard(t)
 			id := gateCard(t, root, "lineage")
 			gatePlan(t, root, []string{id}, archiveRequirements())
-			input := archiveInput([]string{id}, "bad", "PM")
+			input := archiveInput([]string{id}, "bad", "PMQA")
 			input.FindingsSchema = 1
 			originals := archiveOriginals()
 			var advance *ReviewAdvance
@@ -58,7 +58,7 @@ func TestFinalizeRejectsInvalidFindingRelationships(t *testing.T) {
 			if _, err = ReadReviewBatchView(root, "batch"); err != nil {
 				t.Fatalf("failed relation poisoned aggregate: %v", err)
 			}
-			if _, err = gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(run)}); err == nil {
+			if _, err = gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": passRole(run)}); err == nil {
 				t.Fatal("invalid relation established PASS")
 			}
 			bytes, err := ReadReviewOriginal(root, run.RunID, "report.md")

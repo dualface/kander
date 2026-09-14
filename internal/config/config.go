@@ -30,7 +30,7 @@ const (
 
 var (
 	TaskScales       = []string{"large", "small"}
-	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA", "PMQA", "Security"}
+	ReviewRoles      = []string{"PMQA", "Security"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Languages        = []string{"cn", "en", "ja"}
 	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
@@ -479,6 +479,19 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 			return Models{}, configErrorf(
 				"config.models_must_be_a_json_object_2", section.name,
 			)
+		}
+		if section.name == "review_roles" {
+			folded, err := validateAndFoldReviewRoleModels(provided)
+			if err != nil {
+				return Models{}, err
+			}
+			for role, entry := range folded {
+				fields := section.dest[role]
+				for field, text := range entry {
+					fields[field] = text
+				}
+			}
+			continue
 		}
 		allowed := map[string]struct{}{}
 		for _, agent := range section.agents {

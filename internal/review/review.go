@@ -58,13 +58,8 @@ func Run(args []string) (exitCode int) {
 	}
 	if agent == "" {
 		roleInput := rest[3]
-		roles := map[string]string{
-			"pm": "PM", "qa": "QA", "csa": "CSA",
-			"codesecurityanalyst": "CSA", "hacker": "Hacker",
-			"pmqa": "PMQA", "security": "Security",
-		}
-		role := roles[toLower(roleInput)]
-		if role == "" {
+		role, ok := canonicalizeReviewRole(roleInput)
+		if !ok {
 			userError(config.Text("review.unsupported_role", roleInput))
 			return 2
 		}

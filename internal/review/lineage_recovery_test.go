@@ -28,7 +28,7 @@ func TestLineageFailuresRecoverThroughControlledCLI(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			requirements := map[string]string{"PM": "required", "QA": "N/A: fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}
+			requirements := map[string]string{"PMQA": "required", "Security": "N/A: fixture"}
 			p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan", Author: "main", Basis: "lineage recovery", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: ids, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: ids, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 			commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
 			first := board.ReviewFinding{ID: "PM-01", Tier: "medium", Text: "Original finding", Evidence: "a.txt:1"}
@@ -46,7 +46,7 @@ func TestLineageFailuresRecoverThroughControlledCLI(t *testing.T) {
 				if previous != "" {
 					a = append(a, "--previous-run-id", previous)
 				}
-				return append(a, h.repo, h.base, commit, "PM", "Frozen lineage goal")
+				return append(a, h.repo, h.base, commit, "PMQA", "Frozen lineage goal")
 			}
 			assign := func(id string, finding *board.ReviewFinding) {
 				t.Helper()
@@ -144,7 +144,7 @@ func TestLineageFailuresRecoverThroughControlledCLI(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "main", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "replacement", PassedAt: target, Basis: "verified valid report and original author conclusions"}}}
+			r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "main", Roles: map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "replacement", PassedAt: target, Basis: "verified valid report and original author conclusions"}}}
 			if code, _, _ := captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)}); code == 0 {
 				t.Fatal("failed attempt implicitly discarded")
 			}

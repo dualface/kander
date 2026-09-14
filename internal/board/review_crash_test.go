@@ -31,7 +31,7 @@ func TestReviewCrashChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer unlock()
-	run, _, err := PrepareReviewRun(root, archiveInput(ids, "crash", "PM"), archiveRequirements(), nil, archiveOriginals(), "test")
+	run, _, err := PrepareReviewRun(root, archiveInput(ids, "crash", "PMQA"), archiveRequirements(), nil, archiveOriginals(), "test")
 	if err != nil {
 		t.Fatal(err)
 	}

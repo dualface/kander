@@ -148,7 +148,7 @@ func (h *harness) installFake(tmux bool) {
 }
 
 func (h *harness) run(args ...string) (int, string, string) {
-	return h.runIn("", args...)
+	return h.runIn(h.root, args...)
 }
 
 func (h *harness) runIn(dir string, args ...string) (int, string, string) {
@@ -273,6 +273,7 @@ func (h *harness) runBinOnTTY(bin, answers string, args ...string) (int, string)
 	h.t.Helper()
 	master, slave := openPTY(h.t)
 	cmd := exec.Command(bin, args...)
+	cmd.Dir = h.root
 	cmd.Env = append(append([]string{}, h.env...), "TERM=xterm-256color")
 	cmd.Stdin = slave
 	cmd.Stdout = slave

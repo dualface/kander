@@ -51,25 +51,22 @@ func TestValidateReviewersRewritesFlatOnLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ReviewerFor(cfg, "large", "PM") != "claude" || ReviewerFor(cfg, "small", "PM") != "claude" {
+	if ReviewerFor(cfg, "large", "PMQA") != "claude" || ReviewerFor(cfg, "small", "PMQA") != "claude" {
 		t.Fatalf("flat reviewers not expanded: %#v", cfg.Reviewers)
-	}
-	if ReviewerFor(cfg, "large", "QA") != "codex" {
-		t.Fatalf("QA=%s", ReviewerFor(cfg, "large", "QA"))
 	}
 }
 
 func TestReviewModelForPrefersScaleKeys(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.Models.ReviewRoles["PM"] = map[string]string{
+	cfg.Models.ReviewRoles["PMQA"] = map[string]string{
 		"model": "shared", "effort": "low",
 		"large_model": "large-only", "large_effort": "high",
 	}
-	model, effort := ReviewModelFor(cfg, "codex", "PM", "large")
+	model, effort := ReviewModelFor(cfg, "codex", "PMQA", "large")
 	if model != "large-only" || effort != "high" {
 		t.Fatalf("large=%s/%s", model, effort)
 	}
-	model, effort = ReviewModelFor(cfg, "codex", "PM", "small")
+	model, effort = ReviewModelFor(cfg, "codex", "PMQA", "small")
 	if model != "shared" || effort != "low" {
 		t.Fatalf("small fallback=%s/%s", model, effort)
 	}

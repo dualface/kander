@@ -10,7 +10,7 @@ func TestIncrementalSupplementCannotReplaceAutomaticSource(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "source")
 	gatePlan(t, root, []string{id}, archiveRequirements())
-	input := archiveInput([]string{id}, "pm", "PM")
+	input := archiveInput([]string{id}, "pm", "PMQA")
 	input.FindingsSchema = 1
 	run := gateRun(t, root, input, emptyFindings())
 	assignGate(t, root, run, map[string][]string{})

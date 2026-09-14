@@ -112,7 +112,7 @@ func (h *reviewHarness) review(agent string, extra ...string) (int, string, stri
 func (h *reviewHarness) defaultReview(roleTask ...string) (int, string, string) {
 	h.t.Helper()
 	if len(roleTask) == 0 {
-		roleTask = []string{"QA", "确认改动正确"}
+		roleTask = []string{"PMQA", "确认改动正确"}
 	}
 	return h.review("codex", roleTask...)
 }

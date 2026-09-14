@@ -317,6 +317,9 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if err := validateRequirements(requirements); err != nil {
 				return err
 			}
+			if err := validateNewRequirements(requirements); err != nil {
+				return err
+			}
 			batch = ReviewBatch{TaskContextHash: input.InputHashes["task-context.md"], Schema: 1, BatchID: input.BatchID, TaskIDs: input.TaskIDs, Base: input.Base, TargetCommit: input.Commit, ReportLanguage: language, Requirements: requirements, Revision: 1}
 		} else {
 			if batch.TaskContextHash == "" {

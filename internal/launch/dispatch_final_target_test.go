@@ -38,7 +38,7 @@ func TestPrepareBoundDispatchUsesAdvancedClosedFinalTarget(t *testing.T) {
 		git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "registered")
 		return git("rev-parse", "HEAD")
 	}()
-	roles := map[string]string{"PM": "N/A: lifecycle fixture", "QA": "N/A: lifecycle fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}
+	roles := map[string]string{"PMQA": "N/A: lifecycle fixture", "Security": "N/A: fixture"}
 	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "final-plan", Author: "fixture", Basis: "lifecycle fixture", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{task}, Batches: []board.ReviewPlanBatch{{BatchID: "final-batch", TaskIDs: []string{task}, Base: base, TargetCommit: registered, Requirements: roles}}}
 	if err := board.CreateReviewPlan(root, plan); err != nil {
 		t.Fatal(err)

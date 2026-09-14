@@ -21,7 +21,7 @@ func TestDoctorIntegratedRoleAvailability(t *testing.T) {
 					cfg.Models.ReviewRoles[role][scale+"_effort"] = "high"
 					cfg.Models.ReviewRoles[role][scale+"_agent"] = "codex"
 					before := config.Clone(cfg)
-					wantHealthy := stage == "skip" && (role == "PMQA" || role == "Security")
+					wantHealthy := false
 					if healthy := validateConfiguredResources(cfg, agents, paths, TerminalTools{}); healthy != wantHealthy {
 						t.Errorf("healthy=%v want %v", healthy, wantHealthy)
 					}

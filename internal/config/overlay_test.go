@@ -177,14 +177,11 @@ func TestLoadMergesReviewStagesAfterNormalizingFlatScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ReviewStages["large"]["PM"] != "required" {
-		t.Fatalf("overlay large.PM=%s", cfg.ReviewStages["large"]["PM"])
+	if cfg.ReviewStages["large"]["PMQA"] != "required" {
+		t.Fatalf("overlay large.PMQA=%s", cfg.ReviewStages["large"]["PMQA"])
 	}
-	if cfg.ReviewStages["large"]["QA"] != "skip" || cfg.ReviewStages["small"]["QA"] != "skip" {
-		t.Fatalf("flat scope QA should apply to both scales: %+v", cfg.ReviewStages)
-	}
-	if cfg.ReviewStages["small"]["PM"] != "auto" {
-		t.Fatalf("small.PM should stay the normalized scope value: %s", cfg.ReviewStages["small"]["PM"])
+	if cfg.ReviewStages["small"]["PMQA"] != "auto" {
+		t.Fatalf("small.PMQA should stay the normalized scope value: %s", cfg.ReviewStages["small"]["PMQA"])
 	}
 }
 
@@ -202,19 +199,19 @@ func TestLoadMergesReviewStagesAfterNormalizingFlatOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ReviewStages["large"]["PM"] != "required" || cfg.ReviewStages["small"]["PM"] != "required" {
+	if cfg.ReviewStages["large"]["PMQA"] != "required" || cfg.ReviewStages["small"]["PMQA"] != "required" {
 		t.Fatalf("flat overlay PM should apply to both scales: %+v", cfg.ReviewStages)
 	}
 	for _, scale := range []string{"large", "small"} {
-		if cfg.ReviewStages[scale]["QA"] != "auto" {
-			t.Fatalf("%s.QA should stay the scope default: %+v", scale, cfg.ReviewStages)
+		if cfg.ReviewStages[scale]["Security"] != "auto" {
+			t.Fatalf("%s.Security should stay the scope default: %+v", scale, cfg.ReviewStages)
 		}
 	}
 	scopeCfg, err := LoadScope(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scopeCfg.ReviewStages["large"]["PM"] != "auto" || scopeCfg.ReviewStages["small"]["PM"] != "auto" {
+	if scopeCfg.ReviewStages["large"]["PMQA"] != "auto" || scopeCfg.ReviewStages["small"]["PMQA"] != "auto" {
 		t.Fatalf("flat overlay must not rewrite scope review_stages: %+v", scopeCfg.ReviewStages)
 	}
 }

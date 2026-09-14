@@ -8,9 +8,9 @@ import (
 func TestLegacyMappingIdentifiesUnmappedPredecessor(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "legacy-order")
-	first := finalizedRun(t, root, archiveInput([]string{id}, "legacy-first", "PM"))
+	first := finalizedRun(t, root, archiveInput([]string{id}, "legacy-first", "PMQA"))
 	publishRun(t, root, first.RunID)
-	input := archiveInput([]string{id}, "legacy-second", "PM")
+	input := archiveInput([]string{id}, "legacy-second", "PMQA")
 	input.PreviousRunID, input.ReviewedCommit = first.RunID, first.Commit
 	second := finalizedRun(t, root, input)
 	publishRun(t, root, second.RunID)

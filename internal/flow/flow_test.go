@@ -16,14 +16,14 @@ func TestBuildChartPerScale(t *testing.T) {
 	cfg.Models.Kanban["codex"] = map[string]string{
 		"small_model": "small-model", "small_effort": "medium", "model": "legacy-small",
 	}
-	cfg.Reviewers["large"]["PM"], cfg.Reviewers["large"]["QA"] = "claude", "codex"
-	cfg.Reviewers["small"]["PM"], cfg.Reviewers["small"]["QA"] = "claude", "codex"
-	cfg.Models.ReviewRoles["PM"] = map[string]string{"large_model": "pm-large", "large_effort": "xhigh", "model": "pm-model"}
-	cfg.Models.ReviewRoles["QA"] = map[string]string{}
+	cfg.Reviewers["large"]["PMQA"], cfg.Reviewers["large"]["Security"] = "claude", "codex"
+	cfg.Reviewers["small"]["PMQA"], cfg.Reviewers["small"]["Security"] = "claude", "codex"
+	cfg.Models.ReviewRoles["PMQA"] = map[string]string{"large_model": "pm-large", "large_effort": "xhigh", "model": "pm-model"}
+	cfg.Models.ReviewRoles["Security"] = map[string]string{}
 	cfg.Models.Review["codex"] = map[string]string{"model": "qa-fallback", "effort": "low"}
 	cfg.ReviewStages = map[string]map[string]string{
-		"large": {"PM": "required", "QA": "auto", "CSA": "skip", "Hacker": "skip"},
-		"small": {"PM": "required", "QA": "auto", "CSA": "skip", "Hacker": "skip"},
+		"large": {"PMQA": "required", "Security": "skip"},
+		"small": {"PMQA": "required", "Security": "skip"},
 	}
 	before := config.Clone(cfg)
 
@@ -34,15 +34,12 @@ func TestBuildChartPerScale(t *testing.T) {
 	if large.Execution != (Node{Model: "large-model", Effort: "high"}) {
 		t.Fatalf("large execution=%+v", large.Execution)
 	}
-	if len(large.Stages) != 2 || large.Stages[0].Name != StagePrimary || len(large.Stages[0].Nodes) != 2 ||
+	if len(large.Stages) != 2 || large.Stages[0].Name != StagePrimary || len(large.Stages[0].Nodes) != 1 ||
 		large.Stages[1].Name != StageSecurity || len(large.Stages[1].Nodes) != 0 {
 		t.Fatalf("large stages=%+v", large.Stages)
 	}
-	if large.Stages[0].Nodes[0] != (Node{Role: "PM", Mode: "required", Model: "pm-large", Effort: "xhigh"}) {
-		t.Fatalf("PM=%+v", large.Stages[0].Nodes[0])
-	}
-	if large.Stages[0].Nodes[1] != (Node{Role: "QA", Mode: "auto", Model: "qa-fallback", Effort: "low"}) {
-		t.Fatalf("QA=%+v", large.Stages[0].Nodes[1])
+	if large.Stages[0].Nodes[0] != (Node{Role: "PMQA", Mode: "required", Model: "pm-large", Effort: "xhigh"}) {
+		t.Fatalf("PMQA=%+v", large.Stages[0].Nodes[0])
 	}
 
 	small := BuildChart(cfg, "small")
@@ -50,7 +47,7 @@ func TestBuildChartPerScale(t *testing.T) {
 		t.Fatalf("small execution=%+v", small.Execution)
 	}
 	if small.Stages[0].Nodes[0].Model != "pm-model" {
-		t.Fatalf("small PM falls back to shared model: %+v", small.Stages[0].Nodes[0])
+		t.Fatalf("small PMQA falls back to shared model: %+v", small.Stages[0].Nodes[0])
 	}
 
 	if !reflect.DeepEqual(cfg, before) {
@@ -74,9 +71,9 @@ func TestBuildChartReviewModes(t *testing.T) {
 		roles    [2][]string
 	}{
 		{"disabled", false, config.DefaultReviewStages(), true, [2][]string{}},
-		{"all skipped", true, same(map[string]string{"PM": "skip", "QA": "skip", "CSA": "skip", "Hacker": "skip"}), false, [2][]string{nil, nil}},
-		{"both stages", true, same(map[string]string{"PM": "skip", "QA": "auto", "CSA": "required", "Hacker": "skip"}), false, [2][]string{{"QA"}, {"CSA"}}},
-		{"second only", true, same(map[string]string{"PM": "skip", "QA": "skip", "CSA": "auto", "Hacker": "required"}), false, [2][]string{nil, {"CSA", "Hacker"}}},
+		{"all skipped", true, same(map[string]string{"PMQA": "skip", "Security": "skip"}), false, [2][]string{nil, nil}},
+		{"both stages", true, same(map[string]string{"PMQA": "auto", "Security": "required"}), false, [2][]string{{"PMQA"}, {"Security"}}},
+		{"second only", true, same(map[string]string{"PMQA": "skip", "Security": "required"}), false, [2][]string{nil, {"Security"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := config.DefaultConfig()
@@ -126,10 +123,8 @@ func TestEmptyModelsRetainCLIDefaultSemantics(t *testing.T) {
 	cfg.Models.Kanban = map[string]map[string]string{}
 	cfg.Models.Review = map[string]map[string]string{}
 	cfg.Models.ReviewRoles = map[string]map[string]string{}
-	cfg.ReviewStages["large"]["PM"] = "required"
-	cfg.ReviewStages["large"]["QA"] = "skip"
-	cfg.ReviewStages["large"]["CSA"] = "skip"
-	cfg.ReviewStages["large"]["Hacker"] = "skip"
+	cfg.ReviewStages["large"]["PMQA"] = "required"
+	cfg.ReviewStages["large"]["Security"] = "skip"
 	got := BuildChart(cfg, "large")
 	if got.Execution.Model != "" || got.Execution.Effort != "" {
 		t.Fatalf("execution=%+v", got.Execution)

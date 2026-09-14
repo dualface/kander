@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestIntegratedRolesAreOptInAndPreserveOriginalConfiguration(t *testing.T) {
+func TestLegacyFourRoleConfigFoldsWithoutUnknownRoleErrors(t *testing.T) {
 	setupHome(t)
 	raw := minimalPayload(map[string]any{
 		"reviewers":     map[string]any{"PM": "claude", "QA": "codex", "CSA": "cursor", "Hacker": "codex"},
@@ -19,43 +19,43 @@ func TestIntegratedRolesAreOptInAndPreserveOriginalConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, scale := range TaskScales {
-		for role, want := range map[string]string{"PM": "required", "QA": "skip", "CSA": "auto", "Hacker": "required", "PMQA": "skip", "Security": "skip"} {
-			if got, err := ReviewStageFor(cfg, scale, role); err != nil || got != want {
-				t.Fatalf("%s.%s=%s, want %s: %v", scale, role, got, want, err)
-			}
+		if got, err := ReviewStageFor(cfg, scale, "PMQA"); err != nil || got != "required" {
+			t.Fatalf("%s.PMQA=%s %v", scale, got, err)
 		}
-		if ReviewerFor(cfg, scale, "PM") != "claude" || ReviewerFor(cfg, scale, "CSA") != "cursor" {
-			t.Fatal("original reviewers changed", cfg.Reviewers)
+		if got, err := ReviewStageFor(cfg, scale, "Security"); err != nil || got != "required" {
+			t.Fatalf("%s.Security=%s %v", scale, got, err)
+		}
+		if ReviewerFor(cfg, scale, "PMQA") != "claude" || ReviewerFor(cfg, scale, "Security") != "cursor" {
+			t.Fatal("folded reviewers", cfg.Reviewers)
 		}
 	}
-	if cfg.Models.ReviewRoles["PM"]["model"] != "original-pm" || cfg.Models.ReviewRoles["CSA"]["model"] != "original-csa" {
-		t.Fatal("original models changed", cfg.Models.ReviewRoles)
+	if cfg.Models.ReviewRoles["PMQA"]["model"] != "original-pm" || cfg.Models.ReviewRoles["Security"]["model"] != "original-csa" {
+		t.Fatal("folded models", cfg.Models.ReviewRoles)
 	}
 	before := cloneRawObject(raw)
 	overlay := map[string]any{
-		"reviewers":     map[string]any{"large": map[string]any{"PMQA": "claude", "Security": "cursor"}},
-		"review_stages": map[string]any{"large": map[string]any{"PMQA": "required", "Security": "auto"}},
+		"reviewers":     map[string]any{"large": map[string]any{"PMQA": "grok", "Security": "pi"}},
+		"review_stages": map[string]any{"large": map[string]any{"PMQA": "auto", "Security": "skip"}},
 		"models":        map[string]any{"review_roles": map[string]any{"PMQA": map[string]any{"large_model": "integrated-model", "large_effort": "high"}}},
 	}
 	merged, err := MergeOverlayOnRaw(raw, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(raw, before) || merged.ReviewStages["large"]["PM"] != "required" || merged.ReviewStages["large"]["Hacker"] != "required" {
-		t.Fatal("integrated selection rewrote original policies")
+	if !reflect.DeepEqual(raw, before) {
+		t.Fatal("overlay merge mutated the scope document")
 	}
-	if ReviewerFor(merged, "large", "PMQA") != "claude" || ReviewerFor(merged, "large", "Security") != "cursor" || merged.ReviewStages["large"]["PMQA"] != "required" || merged.ReviewStages["small"]["PMQA"] != "skip" {
-		t.Fatal("integrated overlay lost role or scale", merged)
+	if ReviewerFor(merged, "large", "PMQA") != "grok" || ReviewerFor(merged, "large", "Security") != "pi" {
+		t.Fatal("overlay reviewers", merged.Reviewers)
 	}
-	model, effort := ReviewModelFor(merged, "claude", "PMQA", "large")
+	if merged.ReviewStages["large"]["PMQA"] != "auto" || merged.ReviewStages["large"]["Security"] != "skip" {
+		t.Fatal("overlay stages", merged.ReviewStages["large"])
+	}
+	if merged.ReviewStages["small"]["PMQA"] != "required" {
+		t.Fatal("small scale lost folded scope", merged.ReviewStages["small"])
+	}
+	model, effort := ReviewModelFor(merged, "grok", "PMQA", "large")
 	if model != "integrated-model" || effort != "high" {
 		t.Fatalf("integrated model=%s/%s", model, effort)
-	}
-	// Runtime lookup also handles callers with sparse, already-decoded maps.
-	merged.ReviewStages = map[string]map[string]string{}
-	for role, want := range map[string]string{"PM": "auto", "PMQA": "skip", "Security": "skip"} {
-		if got, err := ReviewStageFor(merged, "small", role); err != nil || got != want {
-			t.Fatalf("sparse %s=%s: %v", role, got, err)
-		}
 	}
 }

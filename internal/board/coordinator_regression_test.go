@@ -46,7 +46,7 @@ func TestCoordinatorAllFailedRolesRemainPending(t *testing.T) {
 	s := coordinatorCard(t, root, "failed-roles")
 	c := coordinatorClaim(t, root, s.Entry.TaskID)
 	gatePlan(t, root, []string{s.Entry.TaskID}, archiveRequirements())
-	for _, role := range []string{"PM", "QA"} {
+	for _, role := range []string{"PMQA"} {
 		in := archiveInput([]string{s.Entry.TaskID}, "failed-"+strings.ToLower(role), role)
 		run, _, e := PrepareReviewRun(root, in, nil, nil, archiveOriginals(), "test")
 		if e != nil {
@@ -64,7 +64,7 @@ func TestCoordinatorAllFailedRolesRemainPending(t *testing.T) {
 	}
 	c = coordinatorReconcile(t, root, c)
 	m := c.Members[s.Entry.TaskID]
-	if m.Review.Status != "pending" || len(m.Review.Runs) != 2 {
+	if m.Review.Status != "pending" || len(m.Review.Runs) != 1 {
 		t.Fatal(m)
 	}
 	for _, ref := range m.Review.Runs {
@@ -99,7 +99,7 @@ func coordinatorAdvancedFix(t *testing.T) (string, CoordinatorCheckpoint, Dispat
 	finding := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{finding}
-	run := gateRun(t, root, archiveInput([]string{s.Entry.TaskID}, "completed-fix-pm", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{s.Entry.TaskID}, "completed-fix-pm", "PMQA"), findings)
 	assignGate(t, root, run, map[string][]string{finding.ID: {s.Entry.TaskID}})
 	s = transactionSnapshot(t, root, s.Entry.TaskID)
 	if _, e := MoveEntry(s.Entry, root, "review"); e != nil {

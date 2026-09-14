@@ -34,7 +34,7 @@ func archiveInput(ids []string, run, role string) ReviewInput {
 	return ReviewInput{RunID: run, BatchID: "batch", TaskIDs: ids, Role: role, Reviewer: "codex", Model: "model", Effort: "high", CWD: "/repo", Base: strings.Repeat("a", 40), Commit: strings.Repeat("b", 40), ReportLanguage: "en"}
 }
 func archiveRequirements() map[string]string {
-	return map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}
+	return map[string]string{"PMQA": "required", "Security": "N/A: project"}
 }
 func archiveOriginals() map[string][]byte {
 	return map[string][]byte{"task-context.md": []byte("原任务\r\n"), "review-context.md": []byte("前轮原文\n")}
@@ -65,7 +65,7 @@ func publishRun(t *testing.T, root, id string) ReviewRun {
 func TestReviewPublishFollowsMoveAndPreservesConcurrentBody(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-move")
-	run := finalizedRun(t, root, archiveInput([]string{id}, "pm-run", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{id}, "pm-run", "PMQA"))
 	s := transactionSnapshot(t, root, id)
 	if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
 		t.Fatal(err)
@@ -95,7 +95,7 @@ func TestReviewPublishFollowsMoveAndPreservesConcurrentBody(t *testing.T) {
 func TestReviewRunIdentityAndFrozenLanguage(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-identity")
-	input := archiveInput([]string{id, id}, "stable-run", "PM")
+	input := archiveInput([]string{id, id}, "stable-run", "PMQA")
 	run := finalizedRun(t, root, input)
 	publishRun(t, root, run.RunID)
 	if run.ReportLanguage != "zh-CN" {
@@ -126,8 +126,8 @@ func TestReviewRunIdentityAndFrozenLanguage(t *testing.T) {
 func TestReviewParallelRolesAndSameRunPublication(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-parallel")
-	pm := finalizedRun(t, root, archiveInput([]string{id}, "pm", "PM"))
-	qa := finalizedRun(t, root, archiveInput([]string{id}, "qa", "QA"))
+	pm := finalizedRun(t, root, archiveInput([]string{id}, "pm", "PMQA"))
+	qa := finalizedRun(t, root, archiveInput([]string{id}, "qa", "PMQA"))
 	var wg sync.WaitGroup
 	errs := make(chan error, 4)
 	for _, runID := range []string{pm.RunID, qa.RunID, pm.RunID, qa.RunID} {
@@ -158,7 +158,7 @@ func TestReviewPartialPublicationAndRetry(t *testing.T) {
 	root := tempBoard(t)
 	a := archiveCard(t, root, "archive-a")
 	b := archiveCard(t, root, "archive-b")
-	run := finalizedRun(t, root, archiveInput([]string{a, b}, "partial", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{a, b}, "partial", "PMQA"))
 	s := transactionSnapshot(t, root, b)
 	if err := os.WriteFile(filepath.Join(s.Entry.Path, "reviews"), []byte("obstruction"), 0600); err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestReviewPartialPublicationAndRetry(t *testing.T) {
 func TestReviewBinaryOriginalsSurviveJournal(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-binary")
-	input := archiveInput([]string{id}, "binary", "QA")
+	input := archiveInput([]string{id}, "binary", "PMQA")
 	run, _, err := PrepareReviewRun(root, input, archiveRequirements(), nil, archiveOriginals(), "test")
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +232,7 @@ func TestReviewBinaryOriginalsSurviveJournal(t *testing.T) {
 func TestReviewBatchCASAndExplicitPredecessor(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-lineage")
-	original := archiveInput([]string{id}, "first", "PM")
+	original := archiveInput([]string{id}, "first", "PMQA")
 	run := finalizedRun(t, root, original)
 	publishRun(t, root, run.RunID)
 	next := original
@@ -282,7 +282,7 @@ func TestReviewBatchCASAndExplicitPredecessor(t *testing.T) {
 func TestReviewCheckDetectsTamperingAndIncompleteIntent(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-check")
-	input := archiveInput([]string{id}, "check-run", "PM")
+	input := archiveInput([]string{id}, "check-run", "PMQA")
 	run, _, err := PrepareReviewRun(root, input, archiveRequirements(), nil, archiveOriginals(), "test")
 	if err != nil {
 		t.Fatal(err)
@@ -315,7 +315,7 @@ func TestReviewCheckDetectsTamperingAndIncompleteIntent(t *testing.T) {
 func TestReviewIndexBeforeOtherSections(t *testing.T) {
 	text := "# card\n\n## REVIEWS\n\n## SUMMARY\n\nretain\n"
 	for _, id := range []string{"a", "b"} {
-		b, _ := json.Marshal(ReviewIndex{RunID: id, BatchID: "batch", Role: "PM"})
+		b, _ := json.Marshal(ReviewIndex{RunID: id, BatchID: "batch", Role: "PMQA"})
 		var err error
 		text, err = appendReviewIndex(text, string(b))
 		if err != nil {
@@ -331,8 +331,8 @@ func TestReviewIndexBeforeOtherSections(t *testing.T) {
 func TestReviewPublishRacesMoveAndControlledUpdate(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "race-move-update")
-	finalizedRun(t, root, archiveInput([]string{id}, "race-pm", "PM"))
-	finalizedRun(t, root, archiveInput([]string{id}, "race-qa", "QA"))
+	finalizedRun(t, root, archiveInput([]string{id}, "race-pm", "PMQA"))
+	finalizedRun(t, root, archiveInput([]string{id}, "race-qa", "PMQA"))
 	start := make(chan struct{})
 	errs := make(chan error, 4)
 	var wg sync.WaitGroup
@@ -409,7 +409,7 @@ func TestReviewRefusesChangedMembershipLanguageAndRequirements(t *testing.T) {
 	root := tempBoard(t)
 	a := archiveCard(t, root, "binding-a")
 	b := archiveCard(t, root, "binding-b")
-	original := archiveInput([]string{a, b}, "binding", "PM")
+	original := archiveInput([]string{a, b}, "binding", "PMQA")
 	run := finalizedRun(t, root, original)
 	publishRun(t, root, run.RunID)
 	changed := original
@@ -421,7 +421,7 @@ func TestReviewRefusesChangedMembershipLanguageAndRequirements(t *testing.T) {
 	changed = original
 	changed.RunID = "wrong-requirements"
 	requirements := archiveRequirements()
-	requirements["QA"] = "N/A: changed"
+	requirements["Security"] = "N/A: changed"
 	if _, _, err := PrepareReviewRun(root, changed, requirements, nil, archiveOriginals(), "test"); err == nil {
 		t.Fatal("changed requirements")
 	}
@@ -490,13 +490,13 @@ func TestReviewBatchFreezesFallbackAcrossLaterRoles(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	first := archiveInput([]string{id}, "fallback-pm", "PM")
+	first := archiveInput([]string{id}, "fallback-pm", "PMQA")
 	run := finalizedRun(t, root, first)
 	publishRun(t, root, run.RunID)
 	if run.ReportLanguage != "en" {
 		t.Fatal(run.ReportLanguage)
 	}
-	next := archiveInput([]string{id}, "fallback-qa", "QA")
+	next := archiveInput([]string{id}, "fallback-qa", "PMQA")
 	next.ReportLanguage = "ja"
 	run, _, err := PrepareReviewRun(root, next, nil, nil, archiveOriginals(), "test")
 	if err != nil || run.ReportLanguage != "en" {

@@ -183,7 +183,7 @@ func leftoverRuntimes(t *testing.T, tmp, prefix string) {
 
 func TestWindowsCodexIsolationAndRuntimeLease(t *testing.T) {
 	h := newWindowsHarness(t, "codex")
-	code, out, err := h.review("codex", "QA", "确认改动正确")
+	code, out, err := h.review("codex", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -200,7 +200,7 @@ func TestWindowsCodexIsolationAndRuntimeLease(t *testing.T) {
 
 func TestWindowsClaudeIsolationArgv(t *testing.T) {
 	h := newWindowsHarness(t, "claude")
-	code, _, err := h.review("claude", "QA", "确认改动正确")
+	code, _, err := h.review("claude", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -221,7 +221,7 @@ func TestWindowsClaudeIsolationArgv(t *testing.T) {
 
 func TestWindowsGrokIsolationArgv(t *testing.T) {
 	h := newWindowsHarness(t, "grok")
-	code, _, err := h.review("grok", "QA", "确认改动正确")
+	code, _, err := h.review("grok", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -236,7 +236,7 @@ func TestWindowsGrokIsolationArgv(t *testing.T) {
 
 func TestWindowsCursorIsolationAndDirs(t *testing.T) {
 	h := newWindowsHarness(t, "cursor")
-	code, _, err := h.review("cursor", "QA", "确认改动正确")
+	code, _, err := h.review("cursor", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -258,7 +258,7 @@ func TestWindowsTimeoutKillsJob(t *testing.T) {
 	h := newWindowsHarness(t, "claude")
 	t.Setenv("FAKE_REVIEW_SLEEP", "1")
 	t.Setenv("CLAUDE_REVIEW_MAX_RUNTIME_SECONDS", "1")
-	code, _, err := h.review("claude", "QA", "确认改动正确")
+	code, _, err := h.review("claude", "PMQA", "确认改动正确")
 	if code != 124 || !strings.Contains(err, "Claude review exceeded 1 seconds") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -269,7 +269,7 @@ func TestWindowsDelayedTamperCollected(t *testing.T) {
 	h := newWindowsHarness(t, "claude")
 	target := filepath.Join(h.repo, "escaped.txt")
 	t.Setenv("FAKE_DELAYED_TAMPER", target)
-	code, _, err := h.review("claude", "QA", "确认改动正确")
+	code, _, err := h.review("claude", "PMQA", "确认改动正确")
 	if code != 2 || !strings.Contains(err, "left background child processes") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -291,7 +291,7 @@ func TestWindowsUserProfileReviewHome(t *testing.T) {
 	t.Setenv("USERPROFILE", profile)
 	t.Setenv("HOME", "")
 	t.Setenv("CODEX_HOME", "")
-	code, _, err := h.review("codex", "QA", "确认改动正确")
+	code, _, err := h.review("codex", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -305,7 +305,7 @@ func TestWindowsUserProfileReviewHome(t *testing.T) {
 func TestWindowsArgvMetacharactersThroughBootstrap(t *testing.T) {
 	h := newWindowsHarness(t, "codex")
 	t.Setenv("CODEX_REVIEW_MODEL", "gpt-5.6-sol&whoami")
-	code, _, err := h.review("codex", "QA", "确认改动正确")
+	code, _, err := h.review("codex", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}

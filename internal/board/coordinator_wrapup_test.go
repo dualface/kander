@@ -24,20 +24,21 @@ func TestCoordinatorWrapUpRestartsAfterPartialArchive(t *testing.T) {
 	b := coordinatorCard(t, root, "second")
 	ids := []string{a.Entry.TaskID, b.Entry.TaskID}
 	c := coordinatorClaim(t, root, ids...)
-	gatePlan(t, root, ids, archiveRequirements())
-	pm := gateRun(t, root, archiveInput(ids, "coordinator-pm", "PM"), emptyFindings())
-	assignGate(t, root, pm, map[string][]string{})
-	// A successful PM alone cannot manufacture QA or close the batch.
-	if _, e := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(pm)}); e == nil {
-		t.Fatal("missing QA closed")
+	reqs := map[string]string{"PMQA": "required", "Security": "required"}
+	gatePlan(t, root, ids, reqs)
+	pmqa := gateRun(t, root, archiveInput(ids, "coordinator-pmqa", "PMQA"), emptyFindings())
+	assignGate(t, root, pmqa, map[string][]string{})
+	// A successful PMQA alone cannot manufacture Security or close the batch.
+	if _, e := gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": passRole(pmqa)}); e == nil {
+		t.Fatal("missing Security closed")
 	}
 	pending := coordinatorReconcile(t, root, c)
 	if pending.Members[ids[0]].Review.Status != "pending" {
 		t.Fatal("missing role reported closed")
 	}
-	qa := gateRun(t, root, archiveInput(ids, "coordinator-qa", "QA"), emptyFindings())
-	assignGate(t, root, qa, map[string][]string{})
-	closure, e := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(pm), "QA": passRole(qa)})
+	sec := gateRun(t, root, archiveInput(ids, "coordinator-security", "Security"), emptyFindings())
+	assignGate(t, root, sec, map[string][]string{})
+	closure, e := gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": passRole(pmqa), "Security": passRole(sec)})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -92,7 +93,7 @@ func TestCoordinatorWrapUpRestartsAfterPartialArchive(t *testing.T) {
 			t.Fatal(m)
 		}
 		// No-finding members did not acquire artificial author records.
-		for _, run := range []ReviewRun{pm, qa} {
+		for _, run := range []ReviewRun{pmqa, sec} {
 			v, e := ReadReviewBatchView(root, run.BatchID)
 			if e != nil {
 				t.Fatal(e)
@@ -106,7 +107,7 @@ func TestCoordinatorWrapUpRestartsAfterPartialArchive(t *testing.T) {
 	}
 	before := c
 	s := transactionSnapshot(t, root, ids[0])
-	if e = os.WriteFile(filepath.Join(s.Entry.Path, "reviews", pm.RunID, "report.md"), []byte("damaged"), 0600); e != nil {
+	if e = os.WriteFile(filepath.Join(s.Entry.Path, "reviews", pmqa.RunID, "report.md"), []byte("damaged"), 0600); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), verify); e == nil {

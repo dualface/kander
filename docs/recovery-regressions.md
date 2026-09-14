@@ -22,6 +22,8 @@ The full name of the coordinator snapshot test is `TestCoordinatorSnapshotComple
 
 ## Cross-Module Acceptance
 
+Current review roles are PMQA and Security. Test and fixture names below that still say PM/QA or CSA/Hacker are historical identities and are not renamed.
+
 - `TestCoordinatorConcurrentClaimAndFencing`: two writers racing, a single valid coordinator epoch, identical claim retry, and stale-session write rejection.
 - `TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot`, `TestCoordinatorFirstStartRequiresPersistentFactsAndCAS`, `TestCoordinatorLegacyWaitingCursorAndIncompleteLaunch`: two cards including todo, orchestration restart, first start and skipped working, duplicate observations, history retention; missing persistent facts, stale revision/CAS, and replacement of an already-bound cycle are all refused; compatible with the legacy waiting cursor and intermediate snapshots where the launch metadata is not yet published. `TestCoordinatorReconcilesSequentialCommandStart` verifies sequential launch using the real start production path with isolated fake tmux/Agent, and cannot count as a real terminal smoke test.
 - `TestCoordinatorRecoversStartRollbackAndRetry`: deterministic reconciliation after the real commandStart's metadata commit, injecting launcher failures and completing a real rollback; after orchestration restart and an explicit or skipped rollback snapshot, launching again recovers from the successful original artifacts, and repeated reconciliation is idempotent. The terminal/Agent are isolated fake implementations.

@@ -30,7 +30,7 @@ func dispositionJSON(t *testing.T, h *reviewHarness, name string, value any) str
 func TestDispositionCLIClosesOnlyCompleteRolesAtActualHead(t *testing.T) {
 	h, root, args := archiveHarness(t)
 	id := "20260907-archive-test-task"
-	requirements := map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}
+	requirements := map[string]string{"PMQA": "required", "Security": "N/A: project"}
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "cycle", Author: "coordinator", Basis: "本轮任务契约与仓库规则", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	code, _, stderr := captureRun(t, []string{"plan", h.repo, dispositionJSON(t, h, "plan", p)})
 	if code != 0 {
@@ -57,27 +57,9 @@ func TestDispositionCLIClosesOnlyCompleteRolesAtActualHead(t *testing.T) {
 	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "stable", PassedAt: h.head, Basis: "已独立验证"}}}
 	code, _, stderr = captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)})
 	if code == 0 {
-		t.Fatal("missing QA closed")
+		t.Fatal("historical role closed a two-key batch")
 	}
-	for i := range args {
-		if args[i] == "stable" {
-			args[i] = "qa"
-		}
-		if args[i] == "PM" {
-			args[i] = "QA"
-		}
-	}
-	code, _, stderr = captureRun(t, args)
-	if code != 0 {
-		t.Fatalf("QA %d %s", code, stderr)
-	}
-	assign("qa")
-	v, err = board.ReadReviewBatchView(root, "batch")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.ViewHash = board.ReviewViewDigest(v)
-	r.Roles["QA"] = board.ReviewRoleConclusion{RunID: "qa", PassedAt: h.head, Basis: "已核查架构、行为与验证"}
+	r.Roles = map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "stable", PassedAt: h.head, Basis: "已独立验证"}}
 	file := dispositionJSON(t, h, "close", r)
 	if err = os.WriteFile(filepath.Join(h.repo, "uncommitted"), []byte("user change"), 0600); err != nil {
 		t.Fatal(err)
@@ -90,7 +72,7 @@ func TestDispositionCLIClosesOnlyCompleteRolesAtActualHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, stderr := captureRun(t, []string{"close", h.repo, file})
-	if code != 0 || !strings.Contains(out, `"PM": "PASS"`) {
+	if code != 0 || !strings.Contains(out, `"PMQA": "PASS"`) {
 		t.Fatalf("close %d %s %s", code, out, stderr)
 	}
 	var closure board.ReviewClosure
@@ -153,7 +135,7 @@ func TestIncrementalTaskReviewReadsFailingAuthorEvidenceAndRejectsWrongSources(t
 	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "本批任务修复", Deliveries: map[string]string{next: id}}
 	advanceFile := dispositionJSON(t, h, "advance", advance)
 	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
-	nextArgs := []string{"codex", "--task", id, "--batch-id", "batch", "--run-id", "next", "--previous-run-id", "stable", "--advance-file", advanceFile, h.repo, h.base, next, "PM", "原始目标", "实现由其他 Agent 完成。\n独立核对补充材料。"}
+	nextArgs := []string{"codex", "--task", id, "--batch-id", "batch", "--run-id", "next", "--previous-run-id", "stable", "--advance-file", advanceFile, h.repo, h.base, next, "PMQA", "原始目标", "实现由其他 Agent 完成。\n独立核对补充材料。"}
 	code, _, stderr = captureRun(t, nextArgs)
 	if code != 0 {
 		t.Fatalf("automatic incremental %d %s", code, stderr)
@@ -212,7 +194,7 @@ func TestNonGitExplicitNAPlanCanCompleteReviewGate(t *testing.T) {
 	if err := os.Mkdir(cwd, 0700); err != nil {
 		t.Fatal(err)
 	}
-	requirements := map[string]string{"PM": "N/A: review disabled by user", "QA": "N/A: review disabled by user", "CSA": "N/A: review disabled by user", "Hacker": "N/A: review disabled by user"}
+	requirements := map[string]string{"PMQA": "N/A: review disabled by user", "Security": "N/A: review disabled by user"}
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "non-git", Author: "owner", Basis: "用户关闭审核，非 Git 项目", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "non-git", TaskIDs: []string{id}, Base: "N/A", TargetCommit: "N/A", Requirements: requirements}}}
 	if code, _, stderr := captureRun(t, []string{"plan", cwd, dispositionJSON(t, h, "non-git-plan", p)}); code != 0 {
 		t.Fatalf("plan %d %s", code, stderr)

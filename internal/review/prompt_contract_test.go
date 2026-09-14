@@ -13,7 +13,7 @@ import (
 func promptContractContext(agent string) reviewContext {
 	return reviewContext{
 		agent:          agent,
-		role:           "QA",
+		role:           "PMQA",
 		root:           "/worktree",
 		base:           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		commit:         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -114,7 +114,7 @@ func mustReviewerArgs(t *testing.T, agent string) process.ProcessInvocation {
 	t.Helper()
 	runtime := t.TempDir()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
-	settings, err := agentSettingsFor(agent, "PM", "large")
+	settings, err := agentSettingsFor(agent, "PMQA", "large")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -145,7 +145,7 @@ func TestCustomReviewerOutputSources(t *testing.T) {
 					"home_policy": "optional", "output": item.output,
 				},
 			})
-			code, out, err := h.review("helper", "QA", "确认改动正确")
+			code, out, err := h.review("helper", "PMQA", "确认改动正确")
 			if code != 0 {
 				t.Fatalf("code=%d err=%s out=%s", code, err, out)
 			}
@@ -169,7 +169,7 @@ func TestCustomReviewerInspectionInPrompt(t *testing.T) {
 			"home_policy": "optional", "output": map[string]any{"source": "file", "parse": "raw"},
 		},
 	})
-	code, _, err := h.review("helper", "QA", "确认改动正确")
+	code, _, err := h.review("helper", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -199,7 +199,7 @@ func TestCustomReviewerStdinNonePromptFiles(t *testing.T) {
 			"prompt_files": []any{map[string]any{"name": "guide", "path": "guide.md", "template": template}},
 		},
 	})
-	code, out, err := h.review("helper", "QA", "确认改动正确")
+	code, out, err := h.review("helper", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s out=%s", code, err, out)
 	}
@@ -207,7 +207,7 @@ func TestCustomReviewerStdinNonePromptFiles(t *testing.T) {
 	if !strings.HasPrefix(rendered, "INSPECT=NO-WRITE\nPROMPT=") {
 		t.Fatalf("rendered=%q", rendered)
 	}
-	if !strings.Contains(rendered, "You are the QA review agent") {
+	if !strings.Contains(rendered, "You are the PMQA review agent") {
 		t.Fatalf("prompt missing body: %s", rendered)
 	}
 	mode := strings.TrimSpace(readFile(t, filepath.Join(h.root, "prompt.mode")))
@@ -238,7 +238,7 @@ func TestCustomAndBuiltinHomePolicy(t *testing.T) {
 			"home_policy": "optional", "output": map[string]any{"source": "file", "parse": "raw"},
 		},
 	})
-	code, _, err := h.review("helper", "QA", "确认改动正确")
+	code, _, err := h.review("helper", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("optional code=%d err=%s", code, err)
 	}
@@ -251,7 +251,7 @@ func TestCustomAndBuiltinHomePolicy(t *testing.T) {
 			"home_policy": "required", "output": map[string]any{"source": "file", "parse": "raw"},
 		},
 	})
-	code, _, err = h.review("helper", "QA", "确认改动正确")
+	code, _, err = h.review("helper", "PMQA", "确认改动正确")
 	if code != 2 || !strings.Contains(err, "not readable and writable") {
 		t.Fatalf("required code=%d err=%q", code, err)
 	}
@@ -301,12 +301,12 @@ func TestBuiltinReviewStdinAndPromptBytes(t *testing.T) {
 				h = newGrokHarness(t)
 				promptPath = h.promptLog
 			}
-			code, _, err := h.review(agent, "QA", "确认改动正确")
+			code, _, err := h.review(agent, "PMQA", "确认改动正确")
 			if code != 0 {
 				t.Fatalf("code=%d err=%s", code, err)
 			}
 			prompt := readFile(t, promptPath)
-			if !strings.Contains(prompt, "You are the QA review agent") {
+			if !strings.Contains(prompt, "You are the PMQA review agent") {
 				t.Fatalf("prompt missing body: %s", prompt)
 			}
 			wantInspection := map[string]string{
@@ -338,14 +338,14 @@ func TestBuiltinHomePolicyClaudeVsCursor(t *testing.T) {
 	claude := newClaudeHarness(t)
 	missing := filepath.Join(claude.root, "absent-claude")
 	t.Setenv("CLAUDE_CONFIG_DIR", missing)
-	code, _, err := claude.review("claude", "QA", "确认改动正确")
+	code, _, err := claude.review("claude", "PMQA", "确认改动正确")
 	if code != 2 || !strings.Contains(err, "not readable and writable") {
 		t.Fatalf("claude missing home code=%d err=%q", code, err)
 	}
 	cursor := newCursorHarness(t)
 	absent := filepath.Join(cursor.root, "absent-cursor-home")
 	t.Setenv("CURSOR_CONFIG_DIR", absent)
-	code, _, err = cursor.review("cursor", "QA", "确认改动正确")
+	code, _, err = cursor.review("cursor", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("cursor optional home code=%d err=%s", code, err)
 	}

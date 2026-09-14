@@ -61,27 +61,22 @@ func validateReviewerRoles(raw any, path string, reviewable *Config, reviewNames
 	if !ok {
 		return nil, configErrorf("config.reviewers_scale_must_be_a_json_object", path)
 	}
-	allowed := reviewRoleSet()
-	var unknown []string
-	for key := range obj {
-		if _, ok := allowed[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
+	unknown := unknownHistoricalRoles(obj)
 	if len(unknown) > 0 {
 		return nil, configErrorf(
 			"config.reviewers_has_unknown_roles", strings.Join(unknown, ", "),
 		)
 	}
-	reviewers := defaultReviewerRoles(defaultAgentName())
-	for _, role := range ReviewRoles {
-		if _, exists := obj[role]; !exists {
-			continue
-		}
-		agent, err := validateReviewerChoice(obj[role], reviewable, path+"."+role, reviewNames)
+	values := map[string]string{}
+	for key := range obj {
+		agent, err := validateReviewerChoice(obj[key], reviewable, path+"."+key, reviewNames)
 		if err != nil {
 			return nil, err
 		}
+		values[key] = agent
+	}
+	reviewers := defaultReviewerRoles(defaultAgentName())
+	for role, agent := range foldReviewerAgents(values) {
 		reviewers[role] = agent
 	}
 	return reviewers, nil

@@ -698,6 +698,7 @@ func viewLine(app *App, index int) string {
 // otherwise a later save would wrongly claim "the config was modified by another process".
 func TestAdjustColumnsKeepsOptionsSessionInSync(t *testing.T) {
 	dir := t.TempDir()
+	t.Chdir(dir)
 	t.Setenv(config.EnvConfig, filepath.Join(dir, "config.json"))
 	if _, err := config.Update(func(cfg *config.Config) error {
 		cfg.WelcomeComplete = true

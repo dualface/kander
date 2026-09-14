@@ -44,9 +44,7 @@ func TestMinimalCursorFixtureJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Captured from minimalPayload(nil) at 8abdfe2e, before the migration, then
-	// updated for the two-scale reviewers, per-scale review role model keys, and
-	// the pi model block appended when pi became a built-in, and reviewer bindings.
+	// Captured from minimalPayload(nil), then updated for two review roles.
 	want, err := os.ReadFile("testdata/minimal-cursor-config.json")
 	if err != nil {
 		t.Fatal(err)

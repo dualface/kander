@@ -4,7 +4,7 @@ This protocol builds on the run/batch of the [Review evidence archive](review-ev
 
 ## Execution Cycles and Plans
 
-An active card must have an explicit review plan before entering done. Even when there is no REVIEWS index, no role has run, or the review rules are disabled, an empty index must not be taken to imply a pass. When review truly does not apply, each role in the selected exact four-key or six-key requirements set is written as `N/A: <reason and rule basis>`, followed by an explicit batch close. The tool records the caller's applicability judgment; it does not substitute for user authorization or project-rule judgment.
+An active card must have an explicit review plan before entering done. Even when there is no REVIEWS index, no role has run, or the review rules are disabled, an empty index must not be taken to imply a pass. When review truly does not apply, each role in the two-key requirements set is written as `N/A: <reason and rule basis>`, followed by an explicit batch close. The tool records the caller's applicability judgment; it does not substitute for user authorization or project-rule judgment.
 
 ```text
 kander review plan <absolute-CWD> <absolute-plan.json>
@@ -30,16 +30,14 @@ Single-batch plan example; every SHA must be replaced with a real full commit:
     "base": "<full-base-sha>",
     "target_commit": "<full-target-sha>",
     "requirements": {
-      "PM": "required",
-      "QA": "required",
-      "CSA": "N/A: security-role exception in this repository's AGENTS.md",
-      "Hacker": "N/A: security-role exception in this repository's AGENTS.md"
+      "PMQA": "required",
+      "Security": "N/A: security-role exception in this repository's AGENTS.md"
     }
   }]
 }
 ```
 
-For a composite plan, replace the example requirements with the complete [six-key requirements example](review-evidence.md#optional-composites-and-compatibility). Both forms support new plans; do not change an existing batch's role set. Six-key plans explicitly mark skipped constituent roles N/A. Closure roles name the actual required runs (for example PMQA and Security), never renamed PM/QA or CSA/Hacker evidence.
+New plans use the two-key requirements shown above. Historical four-key and six-key plans remain readable and closable; do not change an existing batch's role set. Closure roles name the actual required runs (for example PMQA, or historically PM and QA), never renamed evidence.
 
 In a non-Git project where every role in the selected set is explicitly N/A, both base and target_commit may be written as `N/A`. In that case close stores a `git.not_applicable` basis, does not invoke Git, and does not claim that commits or ancestry have been verified. As soon as any role is required, real full SHAs must be used.
 
@@ -73,8 +71,8 @@ For batch-by-batch scheduling, first use `sealed: false`, listing the fixed memb
     "base": "<previous-closed-target-sha>",
     "target_commit": "<next-target-sha>",
     "requirements": {
-      "PM": "required", "QA": "required",
-      "CSA": "N/A: project rule", "Hacker": "N/A: project rule"
+      "PMQA": "required",
+      "Security": "N/A: project rule"
     }
   }
 }
@@ -145,7 +143,7 @@ Records are submitted by the working card's current OWNER and only for the autho
 
 must-fix statuses are confirmed/fixed/rejected/unverifiable/waived. confirmed and unverifiable block batch close; rejected must state a factual basis and enters the unresolved list. fixed must have a fix SHA and a verification record; that commit should be strictly later than the finding's target commit. NON_BLOCKING accepts only fixed/deferred/rejected and must also record a basis.
 
-waived is valid only for CSA/Hacker/Security must-fix items. A waiver contains policy=accepted-risk with an explicit decision, or policy=timed-out with a fully documented notification basis decision, sent_at, and timeout_at; the two instants must be at least 15 minutes apart and timeout_at must not be in the future. It does not equal PASS. PM/QA/PMQA, unverified items, and ordinary acceptance confirmations cannot use this exception. The actual notification, the user's decision, and the applicable rules must still be carried out and cited truthfully by the Agent; the presence of the fields grants no authorization.
+waived is valid only for Security must-fix items, and for historical CSA/Hacker records that used the same rules. A waiver contains policy=accepted-risk with an explicit decision, or policy=timed-out with a fully documented notification basis decision, sent_at, and timeout_at; the two instants must be at least 15 minutes apart and timeout_at must not be in the future. It does not equal PASS. PMQA, historical PM/QA, unverified items, and ordinary acceptance confirmations cannot use this exception. The actual notification, the user's decision, and the applicable rules must still be carried out and cited truthfully by the Agent; the presence of the fields grants no authorization.
 
 Each author record is published only to its own `reviews/<run_id>/dispositions/<record_id>.json`; the tool-controlled ledger binds the original text and preserves the full chain. The orchestrator's verification opinions are separately marked with author/basis in the close request's opinions and may cite finding references, but cannot rewrite or submit a disposition on the author's behalf.
 
@@ -177,8 +175,7 @@ close request example:
   "view_hash": "<SHA-256 of aggregate's raw output bytes>",
   "author": "coordinator",
   "roles": {
-    "PM": {"run_id":"pm-fixed", "passed_at":"<full-sha>", "basis":"item-by-item verification and cross-role impact check"},
-    "QA": {"run_id":"qa-first", "passed_at":"<full-sha>", "basis":"verified structural and functional conclusions"}
+    "PMQA": {"run_id":"pmqa-fixed", "passed_at":"<full-sha>", "basis":"item-by-item verification of contract and quality conclusions"}
   },
   "resolved_failures": {},
   "opinions": [{"author":"coordinator", "basis":"independent delivery verification, not a substitute for author dispositions"}]

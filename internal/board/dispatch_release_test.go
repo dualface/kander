@@ -320,7 +320,7 @@ func TestReleasedEpochCannotSubmitDisposition(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "released-author")
 	gatePlan(t, root, []string{id}, archiveRequirements())
-	input := archiveInput([]string{id}, "pm-release", "PM")
+	input := archiveInput([]string{id}, "pm-release", "PMQA")
 	input.FindingsSchema = 1
 	finding := ReviewFinding{ID: "PM-1", Tier: "medium", Text: "fixture finding", Evidence: "fixture"}
 	run := gateRun(t, root, input, ReviewFindings{Findings: []ReviewFinding{finding}, NonBlocking: []ReviewFinding{}})

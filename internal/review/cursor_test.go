@@ -81,7 +81,7 @@ func newCursorHarness(t *testing.T) *reviewHarness {
 func TestCursorOwnChildrenAllowedDetachedRejected(t *testing.T) {
 	h := newCursorHarness(t)
 	t.Setenv("FAKE_CURSOR_OWN_CHILD", "1")
-	code, out, err := h.review("cursor", "QA", "确认改动正确")
+	code, out, err := h.review("cursor", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("own child code=%d err=%s", code, err)
 	}
@@ -90,7 +90,7 @@ func TestCursorOwnChildrenAllowedDetachedRejected(t *testing.T) {
 	}
 	t.Setenv("FAKE_CURSOR_OWN_CHILD", "")
 	t.Setenv("FAKE_CURSOR_DETACHED_CHILD", "1")
-	code, out, err = h.review("cursor", "QA", "确认改动正确")
+	code, out, err = h.review("cursor", "PMQA", "确认改动正确")
 	if code != 2 || !strings.Contains(err, "background child processes") {
 		t.Fatalf("detached code=%d err=%q", code, err)
 	}
@@ -101,7 +101,7 @@ func TestCursorOwnChildrenAllowedDetachedRejected(t *testing.T) {
 
 func TestCursorIsolationFlags(t *testing.T) {
 	h := newCursorHarness(t)
-	code, _, err := h.review("cursor", "QA", "确认改动正确")
+	code, _, err := h.review("cursor", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -131,7 +131,7 @@ func TestCursorMissingHomeAndSpecSnapshot(t *testing.T) {
 	h := newCursorHarness(t)
 	missing := filepath.Join(h.root, "absent-cursor-home")
 	t.Setenv("CURSOR_CONFIG_DIR", missing)
-	code, _, err := h.review("cursor", "QA", "确认改动正确")
+	code, _, err := h.review("cursor", "PMQA", "确认改动正确")
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -142,7 +142,7 @@ func TestCursorMissingHomeAndSpecSnapshot(t *testing.T) {
 	if err := os.WriteFile(spec, []byte("# 任务契约\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, _, err = h.review("cursor", "PM", spec)
+	code, _, err = h.review("cursor", "PMQA", spec)
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -155,7 +155,7 @@ func TestCursorMissingHomeAndSpecSnapshot(t *testing.T) {
 func TestCursorIncompleteOutput(t *testing.T) {
 	h := newCursorHarness(t)
 	t.Setenv("FAKE_CURSOR_BAD_OUTPUT", "1")
-	code, out, err := h.review("cursor", "QA", "确认改动正确")
+	code, out, err := h.review("cursor", "PMQA", "确认改动正确")
 	if code != 1 || !strings.Contains(err, "did not complete with review text") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}

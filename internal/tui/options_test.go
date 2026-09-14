@@ -293,10 +293,10 @@ func TestEscapeKeepsSectionEdits(t *testing.T) {
 	if panel.current != sectionReview {
 		t.Fatalf("section=%q", panel.current)
 	}
-	before := panel.session.Config.Reviewers["large"]["PM"]
+	before := panel.session.Config.Reviewers["large"]["PMQA"]
 	// ←→ edits in place, with no need to Enter through the whole section.
 	drivePanel(panel, keyMsg("right"))
-	after := panel.session.Config.Reviewers["large"]["PM"]
+	after := panel.session.Config.Reviewers["large"]["PMQA"]
 	if after == before {
 		t.Fatalf("right arrow did not change the reviewer (%s)", after)
 	}
@@ -305,8 +305,8 @@ func TestEscapeKeepsSectionEdits(t *testing.T) {
 	if panel.current != "" {
 		t.Fatalf("esc should return to the root menu, got %q", panel.current)
 	}
-	if panel.session.Config.Reviewers["large"]["PM"] != after {
-		t.Fatalf("esc discarded the edit: %s", panel.session.Config.Reviewers["large"]["PM"])
+	if panel.session.Config.Reviewers["large"]["PMQA"] != after {
+		t.Fatalf("esc discarded the edit: %s", panel.session.Config.Reviewers["large"]["PMQA"])
 	}
 	if !panel.dirty {
 		t.Fatal("changed config must be marked unsaved")
@@ -320,9 +320,9 @@ func TestEnterSavesReviewSection(t *testing.T) {
 	_, panel := openPanel(t)
 	configPath := os.Getenv(config.EnvConfig)
 	pumpPanel(panel, panel.dispatch(sectionReview))
-	before := panel.session.Config.Reviewers["large"]["PM"]
+	before := panel.session.Config.Reviewers["large"]["PMQA"]
 	drivePanel(panel, keyMsg("right"))
-	after := panel.session.Config.Reviewers["large"]["PM"]
+	after := panel.session.Config.Reviewers["large"]["PMQA"]
 	if after == before {
 		t.Fatal("right arrow did not change the reviewer")
 	}
@@ -337,8 +337,8 @@ func TestEnterSavesReviewSection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Reviewers["large"]["PM"] != after {
-		t.Fatalf("disk PM=%s want %s", loaded.Reviewers["large"]["PM"], after)
+	if loaded.Reviewers["large"]["PMQA"] != after {
+		t.Fatalf("disk PMQA=%s want %s", loaded.Reviewers["large"]["PMQA"], after)
 	}
 	_, err = os.Stat(configPath)
 	if err != nil {
@@ -504,8 +504,8 @@ func TestInterfaceWriteDoesNotCommitOtherSessionEdits(t *testing.T) {
 	stored := config.DefaultConfig()
 	stored.WelcomeComplete = true
 	app, panel := openPanel(t, stored)
-	panel.session.SetReviewer("large", "PM", "claude")
-	panel.session.SetReviewer("small", "PM", "claude")
+	panel.session.SetReviewer("large", "PMQA", "claude")
+	panel.session.SetReviewer("small", "PMQA", "claude")
 	panel.markDirty()
 	app.Theme = "light"
 	panel.session.Config.TUI.Theme = "light"
@@ -517,13 +517,13 @@ func TestInterfaceWriteDoesNotCommitOtherSessionEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Reviewers["large"]["PM"] != stored.Reviewers["large"]["PM"] {
-		t.Fatalf("interface write committed reviewer=%s", loaded.Reviewers["large"]["PM"])
+	if loaded.Reviewers["large"]["PMQA"] != stored.Reviewers["large"]["PMQA"] {
+		t.Fatalf("interface write committed reviewer=%s", loaded.Reviewers["large"]["PMQA"])
 	}
 	if loaded.TUI.Theme != "light" {
 		t.Fatalf("stored theme=%s", loaded.TUI.Theme)
 	}
-	if panel.session.Config.Reviewers["large"]["PM"] != "claude" || panel.session.Config.TUI.Theme != "light" {
+	if panel.session.Config.Reviewers["large"]["PMQA"] != "claude" || panel.session.Config.TUI.Theme != "light" {
 		t.Fatalf("session lost edits: %+v", panel.session.Config)
 	}
 }
@@ -787,7 +787,7 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
 	if len(panel.bind.formFields) < 2 {
 		t.Fatal("review section should have reviewer and model fields per scale")
 	}
-	before := panel.session.Config.Models.ReviewRoles["PM"]["large_model"]
+	before := panel.session.Config.Models.ReviewRoles["PMQA"]["large_model"]
 	drivePanel(panel, keyMsg("down"))
 	modelIndex := panel.bind.fieldIndex[modelFocusKey(panel.bind.modelFields[0])]
 	if panel.form.GetFocusedField() != focusableFieldAt(panel.bind, modelIndex) {
@@ -796,7 +796,7 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
 	typeRune(panel, 'X')
 	want := before + "X"
 	assertTypedIntoView(t, panel, want)
-	if got := panel.session.Config.Models.ReviewRoles["PM"]["large_model"]; got != want {
+	if got := panel.session.Config.Models.ReviewRoles["PMQA"]["large_model"]; got != want {
 		t.Fatalf("session PM large_model=%q want %q", got, want)
 	}
 	if !panel.dirty {
@@ -807,7 +807,7 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := loaded.Models.ReviewRoles["PM"]["large_model"]; got != want {
+	if got := loaded.Models.ReviewRoles["PMQA"]["large_model"]; got != want {
 		t.Fatalf("disk PM large_model=%q want %q", got, want)
 	}
 }
@@ -815,40 +815,40 @@ func TestReviewModelInputSavesPMRole(t *testing.T) {
 func TestReviewStagePerScaleSaves(t *testing.T) {
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReviewStages))
-	before, err := config.ReviewStageFor(panel.session.Config, "large", "PM")
+	before, err := config.ReviewStageFor(panel.session.Config, "large", "PMQA")
 	if err != nil {
 		t.Fatal(err)
 	}
 	drivePanel(panel, keyMsg("right"))
-	after, err := config.ReviewStageFor(panel.session.Config, "large", "PM")
+	after, err := config.ReviewStageFor(panel.session.Config, "large", "PMQA")
 	if err != nil || after == before {
-		t.Fatalf("large PM stage did not change: %s -> %s (%v)", before, after, err)
+		t.Fatalf("large PMQA stage did not change: %s -> %s (%v)", before, after, err)
 	}
-	small, err := config.ReviewStageFor(panel.session.Config, "small", "PM")
+	small, err := config.ReviewStageFor(panel.session.Config, "small", "PMQA")
 	if err != nil || small != before {
-		t.Fatalf("small PM stage changed unexpectedly: %s (%v)", small, err)
+		t.Fatalf("small PMQA stage changed unexpectedly: %s (%v)", small, err)
 	}
 	drivePanel(panel, keyMsg("enter"))
-	loaded, err := config.Load(true)
+	loaded, err := config.LoadScope(true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := config.ReviewStageFor(loaded, "large", "PM")
+	got, err := config.ReviewStageFor(loaded, "large", "PMQA")
 	if err != nil || got != after {
-		t.Fatalf("disk large PM=%s want %s (%v)", got, after, err)
+		t.Fatalf("disk large PMQA=%s want %s (%v)", got, after, err)
 	}
 }
 
 func TestReviewerAgentPerScaleIndependent(t *testing.T) {
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReview))
-	beforeLarge := config.ReviewerFor(panel.session.Config, "large", "PM")
-	beforeSmall := config.ReviewerFor(panel.session.Config, "small", "PM")
+	beforeLarge := config.ReviewerFor(panel.session.Config, "large", "PMQA")
+	beforeSmall := config.ReviewerFor(panel.session.Config, "small", "PMQA")
 	drivePanel(panel, keyMsg("right"))
-	afterLarge := config.ReviewerFor(panel.session.Config, "large", "PM")
-	afterSmall := config.ReviewerFor(panel.session.Config, "small", "PM")
+	afterLarge := config.ReviewerFor(panel.session.Config, "large", "PMQA")
+	afterSmall := config.ReviewerFor(panel.session.Config, "small", "PMQA")
 	if afterLarge == beforeLarge {
-		t.Fatal("large PM reviewer did not change")
+		t.Fatal("large PMQA reviewer did not change")
 	}
 	if afterSmall != beforeSmall {
 		t.Fatalf("small PM reviewer changed unexpectedly: %s -> %s", beforeSmall, afterSmall)
@@ -903,9 +903,9 @@ func TestOptionsSaveLeavesOverlayIsolated(t *testing.T) {
 	t.Chdir(dir)
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReview))
-	before := panel.session.Config.Reviewers["large"]["PM"]
+	before := panel.session.Config.Reviewers["large"]["PMQA"]
 	drivePanel(panel, keyMsg("right"))
-	after := panel.session.Config.Reviewers["large"]["PM"]
+	after := panel.session.Config.Reviewers["large"]["PMQA"]
 	if after == before {
 		t.Fatal("right arrow did not change the reviewer")
 	}
@@ -924,8 +924,8 @@ func TestOptionsSaveLeavesOverlayIsolated(t *testing.T) {
 	if scopeCfg.TUI.Theme == "dark" || scopeCfg.TUI.Columns == 2 {
 		t.Fatalf("TUI save wrote overlay-only tui values into the scope file: %+v", scopeCfg.TUI)
 	}
-	if scopeCfg.Reviewers["large"]["PM"] != after {
-		t.Fatalf("scope PM=%s want %s", scopeCfg.Reviewers["large"]["PM"], after)
+	if scopeCfg.Reviewers["large"]["PMQA"] != after {
+		t.Fatalf("scope PMQA=%s want %s", scopeCfg.Reviewers["large"]["PMQA"], after)
 	}
 	merged, err := config.Load(true)
 	if err != nil {

@@ -373,6 +373,7 @@ func SaveOverlayIfUnchanged(path string, overlay, baseline map[string]any) (stri
 	if overlay == nil {
 		overlay = map[string]any{}
 	}
+	FoldLegacyReviewRoleKeys(overlay)
 	if err := validateOverlayKeys(path, overlay); err != nil {
 		return "", err
 	}
