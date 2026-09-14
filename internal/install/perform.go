@@ -46,6 +46,15 @@ func Perform(req Request) (Result, error) {
 		if err != nil {
 			return result, fmt.Errorf("%s", config.Text("install.cannot_resolve_executable"))
 		}
+		// POSIX package managers may launch the running binary through symlinks.
+		// Resolve only this implicit source; explicit sources and Windows reparse
+		// points keep their existing rejection rules. Reads still use internal/fs.
+		if runtime.GOOS != "windows" {
+			source, err = filepath.EvalSymlinks(source)
+			if err != nil {
+				return result, err
+			}
+		}
 	}
 	source, err := filepath.Abs(source)
 	if err != nil {
