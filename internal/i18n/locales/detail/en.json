@@ -1,0 +1,7 @@
+{
+  "tui.word_motions": "word / WORD forward, back, end",
+  "tui.line_start_end": "line start / first non-blank / line end",
+  "tui.para_match": "paragraph / matching bracket",
+  "tui.find_char": "find / till character; repeat",
+  "tui.text_objects": "text objects after v or y; counts"
+}

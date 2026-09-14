@@ -1,0 +1,7 @@
+{
+  "tui.word_motions": "word / WORD の前方・後方・末尾",
+  "tui.line_start_end": "行頭 / 最初の非空白 / 行末",
+  "tui.para_match": "段落 / 対応する括弧",
+  "tui.find_char": "行内検索 / 直前まで；繰り返し",
+  "tui.text_objects": "v または y のあとのテキストオブジェクト；回数"
+}

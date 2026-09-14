@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -95,6 +94,13 @@ type App struct {
 	DetailQuery      string
 	DetailMatchIndex int
 	DetailPendingG   bool
+	DetailCount      int
+	DetailCountOn    bool
+	DetailOp         string
+	DetailFindWait   string
+	DetailObjWait    string
+	DetailLastFind   string
+	DetailLastChar   rune
 	DetailSelectMode string
 	DetailAnchor     *[2]int
 	DetailCursor     [2]int
@@ -385,7 +391,7 @@ func (a *App) resetDetailSearch() {
 	a.DetailSearching = false
 	a.DetailQuery = ""
 	a.DetailMatchIndex = 0
-	a.DetailPendingG = false
+	a.resetDetailPending()
 	a.resetDetailSelection()
 	a.ShowCursor = false
 }
@@ -731,208 +737,6 @@ func (a *App) handleSearchKey(key string) {
 			a.Model.Query += key
 			a.Model.Normalize()
 		}
-	}
-}
-
-func (a *App) handleDetailSearchKey(key string) {
-	switch key {
-	case "enter":
-		a.applyDetailSearch()
-	case "esc":
-		a.DetailQuery = ""
-		a.DetailMatchIndex = 0
-		a.DetailSearching = false
-		a.ShowCursor = false
-	case "backspace":
-		if a.DetailQuery != "" {
-			runes := []rune(a.DetailQuery)
-			a.DetailQuery = string(runes[:len(runes)-1])
-		}
-	default:
-		if isPrintableKey(key) {
-			a.DetailQuery += key
-		}
-	}
-}
-
-func isPrintableKey(key string) bool {
-	if key == "" || len([]rune(key)) != 1 {
-		return false
-	}
-	r := []rune(key)[0]
-	return unicode.IsPrint(r)
-}
-
-func (a *App) detailSelectionActive() bool {
-	return a.DetailSelectMode != "" && a.DetailAnchor != nil
-}
-
-func (a *App) detailToggleSelect(mode string) {
-	if a.DetailSelectMode == mode {
-		a.resetDetailSelection()
-		return
-	}
-	a.DetailSelectMode = mode
-	a.resetMouseSelection()
-	line, col := a.DetailCursor[0], a.DetailCursor[1]
-	lines := a.detailLines()
-	if mode == "line" {
-		if len(lines) == 0 {
-			a.DetailAnchor = &[2]int{0, 0}
-			a.DetailCursor = [2]int{0, 0}
-			return
-		}
-		if line > len(lines)-1 {
-			line = len(lines) - 1
-		}
-		if line < 0 {
-			line = 0
-		}
-		a.DetailAnchor = &[2]int{line, 0}
-		a.DetailCursor = [2]int{line, runeCount(lines[line])}
-		return
-	}
-	a.DetailAnchor = &[2]int{line, col}
-}
-
-func (a *App) detailYank() {
-	if a.DetailSelectMode == "" || a.DetailAnchor == nil {
-		return
-	}
-	lines := a.detailLines()
-	var text string
-	if a.DetailSelectMode == "line" {
-		text = extractLineSelection(lines, *a.DetailAnchor, a.DetailCursor)
-	} else {
-		text = extractCharSelection(lines, *a.DetailAnchor, a.DetailCursor)
-	}
-	if text != "" {
-		a.copyText(text)
-	}
-	a.resetDetailSelection()
-}
-
-func (a *App) detailMoveCursor(deltaLine, deltaCol int) {
-	lines := a.detailLines()
-	if len(lines) == 0 {
-		return
-	}
-	line, col := a.DetailCursor[0], a.DetailCursor[1]
-	line += deltaLine
-	if line < 0 {
-		line = 0
-	}
-	if line > len(lines)-1 {
-		line = len(lines) - 1
-	}
-	lineText := lines[line]
-	if deltaCol != 0 {
-		col += deltaCol
-		n := runeCount(lineText)
-		if col < 0 {
-			col = 0
-		}
-		if col > n {
-			col = n
-		}
-	} else if deltaLine != 0 {
-		n := runeCount(lineText)
-		if col > n {
-			col = n
-		}
-	}
-	a.DetailCursor = [2]int{line, col}
-	a.ensureDetailCursorVisible(lines)
-}
-
-func (a *App) handleDetailKey(key string) {
-	if a.DetailSearching {
-		a.handleDetailSearchKey(key)
-		return
-	}
-	if a.DetailPendingG {
-		a.DetailPendingG = false
-		if key == "g" {
-			a.DetailScroll = 0
-			a.DetailCursor = [2]int{0, 0}
-			return
-		}
-	}
-	switch key {
-	case "up", "k", "K":
-		a.detailMoveCursor(-1, 0)
-		return
-	case "down", "j", "J":
-		a.detailMoveCursor(1, 0)
-		return
-	case "left", "h", "H":
-		a.detailMoveCursor(0, -1)
-		return
-	case "right", "l", "L":
-		a.detailMoveCursor(0, 1)
-		return
-	}
-	if a.detailSelectionActive() {
-		switch key {
-		case "y":
-			a.detailYank()
-			return
-		case "v":
-			a.detailToggleSelect("char")
-			return
-		case "V":
-			a.detailToggleSelect("line")
-			return
-		case "q", "Q", "esc", "backspace":
-			a.resetDetailSelection()
-			return
-		}
-	}
-	pageHeight := a.detailBodyHeight()
-	half := pageHeight / 2
-	if half < 1 {
-		half = 1
-	}
-	switch key {
-	case "q", "Q", "esc", "backspace":
-		a.closeDetail()
-	case "pgup", "ctrl-b":
-		a.scrollDetailBy(-pageHeight)
-	case "pgdn", "ctrl-f":
-		a.scrollDetailBy(pageHeight)
-	case "ctrl-u":
-		a.scrollDetailBy(-half)
-	case "ctrl-d":
-		a.scrollDetailBy(half)
-	case "g":
-		a.DetailPendingG = true
-	case "G", "end":
-		lines := a.detailLines()
-		if len(lines) > 0 {
-			last := len(lines) - 1
-			a.DetailCursor = [2]int{last, runeCount(lines[last])}
-		}
-		a.DetailScroll = 1 << 30
-		a.ensureDetailCursorVisible(a.detailLines())
-	case "home":
-		a.DetailCursor = [2]int{0, 0}
-		a.DetailScroll = 0
-	case "/":
-		a.DetailSearching = true
-		a.DetailPendingG = false
-		a.ShowCursor = true
-	case "?":
-		a.Help = true
-	case "n":
-		a.jumpDetailMatch(1)
-	case "N":
-		a.jumpDetailMatch(-1)
-	case "v":
-		a.detailToggleSelect("char")
-	case "V":
-		a.detailToggleSelect("line")
-	case "y":
-		a.detailYank()
 	}
 }
 

@@ -1,0 +1,7 @@
+{
+  "tui.word_motions": "按词 / WORD 前进、后退、词尾",
+  "tui.line_start_end": "行首 / 第一个非空白 / 行尾",
+  "tui.para_match": "段落 / 配对括号",
+  "tui.find_char": "行内查找 / 跳近字符；重复",
+  "tui.text_objects": "v 或 y 后的文本对象；数字前缀"
+}
