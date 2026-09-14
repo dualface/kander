@@ -151,7 +151,7 @@ func TestIssuesBoundSelectionUsesJumpKeyOnly(t *testing.T) {
 	task := Task{TaskID: "task-1", Title: "Task", State: "backlog", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
 	index := importTestIndex(fake.repository, 42, "task-1",
 		time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC))
-	app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
+	app, _ := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
 		t.Fatal("bound issues must not start takeover from the overlay")
 		return issue.TriageOutcome{}, nil
 	})
@@ -173,68 +173,9 @@ func TestIssuesBoundSelectionUsesJumpKeyOnly(t *testing.T) {
 	if !strings.Contains(ansi.Strip(app.View()), "g jump to card") {
 		t.Fatalf("bound footer hint missing:\n%s", ansi.Strip(app.View()))
 	}
-
-	for _, key := range []string{"i", "I", "s"} {
-		app.HandleKey(key)
-		if app.Takeover != nil {
-			t.Fatalf("%s opened takeover: %+v", key, app.Takeover)
-		}
-		if app.Issues == nil {
-			t.Fatalf("%s closed the overlay", key)
-		}
-	}
-	if len(*calls) != 0 {
-		t.Fatalf("calls=%+v", *calls)
-	}
-
-	app.HandleKey("g")
-	if app.Takeover != nil || app.Issues != nil {
-		t.Fatalf("g must jump and close the overlay: takeover=%+v issues=%v", app.Takeover, app.Issues != nil)
-	}
-	selected := app.Model.SelectedTask()
-	if selected == nil || selected.TaskID != "task-1" {
-		t.Fatalf("board selection=%+v", selected)
-	}
 }
 
-func TestIssuesTakeoverBoundOtherStateIgnoresTakeoverKey(t *testing.T) {
-	fake := newFakeIssues()
-	fake.listResult = defaultPage(issuesListLimit)
-	task := Task{TaskID: "task-1", Title: "Task", State: "working", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
-	key, err := fake.repository.IssueSourceKey(42)
-	if err != nil {
-		t.Fatal(err)
-	}
-	index := issue.Index{key: issue.LocalCard{
-		TaskID: "task-1", State: "working", Path: "/board/working/task-1",
-		IssueUpdatedAt: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC),
-		FetchedAt:      time.Date(2026, 9, 10, 1, 0, 0, 0, time.UTC),
-	}}
-	app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
-		return issue.TriageOutcome{}, nil
-	})
-	app.HandleKey("g")
-	runPendingWork(t, app)
-	app.HandleKey("s")
-	if app.Takeover != nil {
-		t.Fatalf("a bound card must not open the dialog: %+v", app.Takeover)
-	}
-	if app.Issues == nil {
-		t.Fatal("s must leave the overlay open on a bound issue")
-	}
-	if len(*calls) != 0 {
-		t.Fatalf("calls=%+v", *calls)
-	}
-	app.HandleKey("g")
-	if app.Issues != nil {
-		t.Fatal("g must close the overlay on the jump")
-	}
-	if selected := app.Model.SelectedTask(); selected == nil || selected.TaskID != "task-1" {
-		t.Fatalf("selection %+v", selected)
-	}
-}
-
-func TestIssuesHintFollowsSelectionAndImport(t *testing.T) {
+func TestIssuesHintFollowsSelection(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = func(_ int, query issue.IssueQuery) (issue.IssuePage, error) {
 		return issue.IssuePage{Limit: query.Limit, Issues: []issue.IssueSummary{

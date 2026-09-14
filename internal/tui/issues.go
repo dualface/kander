@@ -529,7 +529,7 @@ func (a *App) issuesImportSelected(withComments bool) {
 
 // issuesJumpToBoundCard closes the overlay and selects the card bound to the
 // current issue. An unbound selection ignores the key; a missing card keeps
-// the overlay and shows the same notice as the old jump path.
+// the overlay and shows the IssuesImportNoCard notice.
 func (a *App) issuesJumpToBoundCard() {
 	local, ok := a.issuesSelectedBound()
 	if !ok {
