@@ -243,10 +243,10 @@ Incremental re-review: for the same role under the same base, the second round a
 
 - Invocation: with no reviewer specified, use the current scope's `kander review <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`, dispatched by configuration.
 - With a reviewer specified, use `kander review <reviewer> <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`.
-- Example of manual plain arguments for a Windows global install: PowerShell `& "$env:USERPROFILE\.local\bin\kander" review ...`.
+- For a global install, use `kander` on PATH or the absolute path of the selected executable. For example, in PowerShell: `& "C:\path\to\kander.exe" review ...`, replacing the example path with the selected executable.
 - Batch files and Windows PowerShell 5 cannot guarantee lossless arbitrary argv.
 - Data containing `&|<>^%!`, quotes or boundary backslashes must not be passed by programmatically invoking `.cmd` or by concatenating shell strings.
-- Automation must launch the command root `kander` directly through a process API argv array (globally `Path.home() / ".local/bin/kander"`), passing `review` and each argument separately.
+- Automation must launch the selected `kander` executable directly through a process API argv array, passing `review` and each argument separately. Globally, use the absolute executable path resolved from PATH or the selected executable's absolute path; never assume a copy exists in `~/.local/bin`. Project installations still use the absolute entry under their command root.
 - Bypassing Kander to call the reviewer CLI directly is forbidden.
 - `CWD` is the absolute path of the target worktree.
 - All commit arguments are full SHAs.
