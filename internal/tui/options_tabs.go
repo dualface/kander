@@ -173,11 +173,21 @@ func (p *optionsPanel) renderScopeChrome(palette palette, width int) (string, in
 	} else if base := overlayBasePath(p); base != "" {
 		lines = append(lines, pad+dim.Render(clipPath(t("tui.base_config", homePath(base)), innerWidth)))
 	}
+	if hint := p.legacyReviewHint(); hint != "" {
+		lines = append(lines, pad+styleFor("popup-warn", palette).Render(clipText(hint, innerWidth)))
+	}
 	if len(lines) == 0 {
 		return "", 0
 	}
 	lines = append(lines, "")
 	return strings.Join(lines, "\n") + "\n", len(lines)
+}
+
+func (p *optionsPanel) legacyReviewHint() string {
+	if p == nil || p.session == nil {
+		return ""
+	}
+	return p.session.LegacyReviewHint()
 }
 
 // overlayChromeValue is the path shown on the Project tab: a project-relative

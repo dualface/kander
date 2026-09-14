@@ -781,7 +781,7 @@ func TestExecutionModelInputSavesWhenAgentsMatch(t *testing.T) {
 	}
 }
 
-func TestReviewModelInputSavesPMRole(t *testing.T) {
+func TestReviewModelInputSavesQARole(t *testing.T) {
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionReview))
 	if len(panel.bind.formFields) < 2 {
