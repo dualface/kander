@@ -258,7 +258,7 @@ func MergeOverlayOnRaw(scopeRaw, overlay map[string]any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Validate(merged)
+	return validateMergedReviewKeys(merged, scopeRaw, overlay)
 }
 
 // MergeScopeAndOverlay validates a filled Config plus sparse overlay keys.

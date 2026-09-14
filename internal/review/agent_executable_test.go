@@ -27,7 +27,7 @@ func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
 	for _, agent := range config.ReviewAgentNames(nil) {
 		key := strings.ToUpper(agent) + "_REVIEW_BIN"
 		t.Setenv(key, "")
-		settings, err := agentSettingsFor(agent, "PM", "large")
+		settings, err := agentSettingsFor(agent, "QA", "large")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,17 +35,17 @@ func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
 			t.Fatal(settings.executable)
 		}
 		t.Setenv(key, "review-only-wrapper")
-		settings, err = agentSettingsFor(agent, "PM", "large")
+		settings, err = agentSettingsFor(agent, "QA", "large")
 		if err != nil || settings.executable != "review-only-wrapper" {
 			t.Fatalf("%+v %v", settings, err)
 		}
 	}
-	if _, err := agentSettingsFor("custom", "PM", "large"); err == nil {
+	if _, err := agentSettingsFor("custom", "QA", "large"); err == nil {
 		t.Fatal("custom reviewer accepted")
 	}
 	cfg.Agents["helper"] = config.AgentDefinition{
-		Path: exe,
-		Args: &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--review"}},
+		Path:    exe,
+		Args:    &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--review"}},
 		Session: &config.AgentSessionDefinition{Mode: "none"},
 		Review: &config.AgentReview{
 			CWD: config.ReviewCWDRuntime, OutputName: "out.txt",
@@ -55,7 +55,7 @@ func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	settings, err := agentSettingsFor("helper", "PM", "large")
+	settings, err := agentSettingsFor("helper", "QA", "large")
 	if err != nil || settings.executable != exe {
 		t.Fatalf("custom path fallback %+v %v", settings, err)
 	}

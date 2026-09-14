@@ -34,7 +34,7 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 	if board.RunMove([]string{id, "review"}) != 0 || board.RunMove([]string{id, "working", "--owner", "codex"}) != 0 {
 		t.Fatal("claim fixture")
 	}
-	requirements := map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}
+	requirements := map[string]string{"QA": "required", "Security": "required"}
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "cycle", Author: "coordinator", Basis: "failure recovery", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
 	t.Setenv("FAKE_CODEX_REPORT", "```kander-findings\n{\"FINDINGS\":[]}\n```")
@@ -61,13 +61,13 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 		t.Fatal("all-failed batch completed")
 	}
 	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
-	for _, role := range []string{"PM", "QA"} {
+	for _, role := range []string{"QA", "Security"} {
 		next := append([]string(nil), args...)
 		for i := range next {
 			if next[i] == "stable" {
 				next[i] = strings.ToLower(role)
 			}
-			if next[i] == "PM" {
+			if next[i] == "QA" {
 				next[i] = role
 			}
 		}
@@ -79,11 +79,11 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "pm", PassedAt: h.head, Basis: "verified"}, "QA": {RunID: "qa", PassedAt: h.head, Basis: "verified"}}}
+	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"QA": {RunID: "qa", PassedAt: h.head, Basis: "verified"}, "Security": {RunID: "security", PassedAt: h.head, Basis: "verified"}}}
 	if code, _, _ = captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)}); code == 0 {
 		t.Fatal("failed run silently ignored")
 	}
-	r.ResolvedFailures = map[string]string{"stable": "pm"}
+	r.ResolvedFailures = map[string]string{"stable": "qa"}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
 	if code := board.RunMove([]string{id, "done", "--result", "completed"}); code != 0 {
 		t.Fatal("recovered complete batch cannot finish")
@@ -101,7 +101,7 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 func TestAdvanceAndExtensionRejectOtherWorktree(t *testing.T) {
 	h, _, _ := archiveHarness(t)
 	id := "20260907-archive-test-task"
-	requirements := map[string]string{"PM": "N/A: fixture", "QA": "N/A: fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}
+	requirements := map[string]string{"QA": "N/A: fixture", "Security": "N/A: fixture"}
 	p := board.ReviewPlan{Schema: 1, PlanID: "cycle", Author: "coordinator", Basis: "CWD binding", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
 	other := filepath.Join(h.root, "other-worktree")
@@ -121,10 +121,10 @@ func TestAdvanceAndExtensionRejectOtherWorktree(t *testing.T) {
 func TestMechanicalAssessmentRequiresActualGitScope(t *testing.T) {
 	h := newCodexHarness(t)
 	next := commitFile(t, h.repo, "README.md", "Document the actual behavior.\n", "docs")
-	item := board.ReviewFinding{ID: "PM-01", Tier: "medium", Text: "Documentation mismatch"}
-	d := board.ReviewDisposition{RecordID: "fix", RunID: "pm", FindingID: item.ID, TaskID: "20260907-mechanical-task", Status: "fixed", Mechanical: "documentation", ReportHash: strings.Repeat("a", 64), FixCommit: next}
-	v := board.ReviewBatchView{Runs: []board.ReviewRunView{{Run: board.ReviewRun{ReviewInput: board.ReviewInput{RunID: "pm", Commit: h.head, Role: "PM"}}, Findings: &board.ReviewFindings{Findings: []board.ReviewFinding{item}}, Records: []board.ReviewDisposition{d}}}}
-	r := board.ReviewCloseRequest{Author: "main", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "pm"}}}
+	item := board.ReviewFinding{ID: "QA-01", Tier: "medium", Text: "Documentation mismatch"}
+	d := board.ReviewDisposition{RecordID: "fix", RunID: "qa", FindingID: item.ID, TaskID: "20260907-mechanical-task", Status: "fixed", Mechanical: "documentation", ReportHash: strings.Repeat("a", 64), FixCommit: next}
+	v := board.ReviewBatchView{Runs: []board.ReviewRunView{{Run: board.ReviewRun{ReviewInput: board.ReviewInput{RunID: "qa", Commit: h.head, Role: "QA"}}, Findings: &board.ReviewFindings{Findings: []board.ReviewFinding{item}}, Records: []board.ReviewDisposition{d}}}}
+	r := board.ReviewCloseRequest{Author: "main", Roles: map[string]board.ReviewRoleConclusion{"QA": {RunID: "qa"}}}
 	if _, err := verifyMechanicalGit(h.repo, v, r); err == nil {
 		t.Fatal("author tag alone bypassed re-review")
 	}
@@ -132,7 +132,7 @@ func TestMechanicalAssessmentRequiresActualGitScope(t *testing.T) {
 	if err != nil || code != 0 {
 		t.Fatal(err)
 	}
-	a := board.ReviewMechanicalAssessment{RecordID: d.RecordID, Finding: board.FindingRef{RunID: "pm", FindingID: item.ID}, TaskID: d.TaskID, Author: "main", Category: "documentation", ReportedCategory: "", ReportHash: d.ReportHash, FixCommit: next, Basis: "Main agent confirms definition despite absent reviewer label", Facts: "Compared changed sentence with actual behavior; no logic change", Paths: []string{"README.md"}, DiffHash: board.ReviewDigest([]byte(patch))}
+	a := board.ReviewMechanicalAssessment{RecordID: d.RecordID, Finding: board.FindingRef{RunID: "qa", FindingID: item.ID}, TaskID: d.TaskID, Author: "main", Category: "documentation", ReportedCategory: "", ReportHash: d.ReportHash, FixCommit: next, Basis: "Main agent confirms definition despite absent reviewer label", Facts: "Compared changed sentence with actual behavior; no logic change", Paths: []string{"README.md"}, DiffHash: board.ReviewDigest([]byte(patch))}
 	r.Mechanical = []board.ReviewMechanicalAssessment{a}
 	if _, err = verifyMechanicalGit(h.repo, v, r); err != nil {
 		t.Fatal(err)
@@ -161,7 +161,7 @@ func TestAdvanceWithoutPlanExplainsRecovery(t *testing.T) {
 		t.Fatalf("%d %s", code, stderr)
 	}
 	id := "20260907-archive-test-task"
-	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "adopt", Author: "main", Basis: "adopt existing batch before advance", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"PM": "required", "QA": "required", "CSA": "N/A: project", "Hacker": "N/A: project"}}}}
+	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "adopt", Author: "main", Basis: "adopt existing batch before advance", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: map[string]string{"QA": "required", "Security": "required"}}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "adopt", p))
 	commandOK(t, "advance", h.repo, dispositionJSON(t, h, "advance-planned", x))
 }

@@ -661,7 +661,7 @@ func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 		"welcome_complete": true,
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
-		"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers":        map[string]any{"QA": "codex", "Security": "codex"},
 	}
 	for _, invalid := range []any{nil, "auto", []any{}} {
 		payload["review_stages"] = invalid
@@ -683,7 +683,7 @@ func TestConfigRejectsInvalidModelsSection(t *testing.T) {
 		"welcome_complete": true,
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
-		"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers":        map[string]any{"QA": "codex", "Security": "codex"},
 	}
 	cases := []struct {
 		models   any
@@ -781,7 +781,7 @@ func TestLanguagePriorityCLIOverConfigOverEnv(t *testing.T) {
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
 		"language":         "en",
-		"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers":        map[string]any{"QA": "codex", "Security": "codex"},
 	}
 	data, _ := json.Marshal(payload)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -816,7 +816,7 @@ func TestConfiguredLanguageRequiresWelcomeAndKey(t *testing.T) {
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
 		"language":         "en",
-		"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers":        map[string]any{"QA": "codex", "Security": "codex"},
 	}
 	data, _ := json.Marshal(payload)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -885,7 +885,7 @@ func TestEffectiveIgnoresIncompleteWelcome(t *testing.T) {
 		"welcome_complete": false,
 		"kanban_agent":     "cursor",
 		"launcher":         "tmux",
-		"reviewers":        map[string]any{"PM": "cursor", "CSA": "cursor", "Hacker": "cursor", "QA": "cursor"},
+		"reviewers":        map[string]any{"QA": "cursor", "Security": "cursor"},
 	}
 	cfg, err := Validate(payload)
 	if err != nil {
@@ -914,15 +914,15 @@ func TestFormatConfigLinesAndReviewHelpers(t *testing.T) {
 	}
 	complete := DefaultConfig()
 	complete.WelcomeComplete = true
-	complete.ReviewStages["large"]["CSA"] = "skip"
-	complete.ReviewStages["large"]["PM"] = "required"
-	complete.ReviewStages["small"]["CSA"] = "skip"
-	complete.ReviewStages["small"]["PM"] = "required"
+	complete.ReviewStages["large"]["Security"] = "skip"
+	complete.ReviewStages["large"]["QA"] = "required"
+	complete.ReviewStages["small"]["Security"] = "skip"
+	complete.ReviewStages["small"]["QA"] = "required"
 	stageLines, err := ReviewStageLines(complete)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(stageLines, " ") != "required skip auto auto required skip auto auto" {
+	if strings.Join(stageLines, " ") != "required skip required skip" {
 		t.Fatalf("%v", stageLines)
 	}
 	modelLines, err := ReviewModelLines(complete, "codex")
@@ -941,7 +941,7 @@ func TestLanguageNullIsRejectedWhileMissingDefaults(t *testing.T) {
 		"welcome_complete": true,
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
-		"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers":        map[string]any{"QA": "codex", "Security": "codex"},
 	}
 	missing, err := Validate(payload)
 	if err != nil {
@@ -954,7 +954,7 @@ func TestLanguageNullIsRejectedWhileMissingDefaults(t *testing.T) {
 	if _, err := Validate(payload); !IsError(err) {
 		t.Fatalf("expected error for language null, got %v", err)
 	}
-	raw := []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":null,"reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`)
+	raw := []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":null,"reviewers":{"QA":"codex","Security":"codex"}}`)
 	if _, err := ValidateJSON(raw); !IsError(err) {
 		t.Fatalf("expected JSON null language error, got %v", err)
 	}
@@ -962,7 +962,7 @@ func TestLanguageNullIsRejectedWhileMissingDefaults(t *testing.T) {
 
 func TestValidateJSONRejectsTrailingTokens(t *testing.T) {
 	setupHome(t)
-	raw := []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}{"extra":true}`)
+	raw := []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","reviewers":{"QA":"codex","Security":"codex"}}{"extra":true}`)
 	if _, err := ValidateJSON(raw); !IsError(err) {
 		t.Fatalf("expected trailing JSON error, got %v", err)
 	}
@@ -970,7 +970,7 @@ func TestValidateJSONRejectsTrailingTokens(t *testing.T) {
 
 func TestJSONRoundTripUsesNumberSchema(t *testing.T) {
 	setupHome(t)
-	raw := []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`)
+	raw := []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","reviewers":{"QA":"codex","Security":"codex"}}`)
 	cfg, err := ValidateJSON(raw)
 	if err != nil {
 		t.Fatal(err)

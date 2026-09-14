@@ -1,6 +1,8 @@
 package menu
 
 import (
+	"strings"
+
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/i18n"
 	"github.com/dualface/kander/internal/terminal/builtin"
@@ -15,6 +17,9 @@ func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*con
 		return i18n.Text(language, id, args...)
 	}
 
+	// This optional diagnostic read may fail for a broken config; Repair below
+	// owns validation, recovery and reporting that failure.
+	before, _ := config.LoadScope(false)
 	cfg, result, err := config.Repair(func(cfg *config.Config) {
 		language = cfg.Language
 		changes = repairConfiguredTools(cfg, agents, tools)
@@ -32,6 +37,9 @@ func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*con
 		success(text("menu.updated_and_saved_config_json") + result.Path)
 	} else {
 		success(text("menu.config_json_is_unchanged") + result.Path)
+	}
+	if keys := before.LegacyReviewKeys(); result.Changed && len(keys) > 0 {
+		hint(text("config.legacy_review_keys_repaired", strings.Join(keys, ", ")))
 	}
 	for _, change := range changes {
 		hint(change)

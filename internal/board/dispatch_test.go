@@ -294,10 +294,10 @@ func TestDispatchFencesReviewAuthorDisposition(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "dispatch-author")
 	gatePlan(t, root, []string{id}, archiveRequirements())
-	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "原文", Evidence: "x:1"}
+	f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "原文", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm", "QA"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	s := transactionSnapshot(t, root, id)
 	text, _ := setMetadata(s.Text, FieldSession, "codex disposition-session")

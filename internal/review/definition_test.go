@@ -50,7 +50,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 	}
 	for agent, want := range cases {
 		t.Run(agent, func(t *testing.T) {
-			settings, err := agentSettingsFor(agent, "PM", "large")
+			settings, err := agentSettingsFor(agent, "QA", "large")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -74,7 +74,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 			ctx := reviewContext{
 				agent: agent, settings: settings, root: "/work",
 				program:     process.AgentProgram{Path: "/bin/reviewer"},
-				instruction: process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+				instruction: process.TaskFileInstruction("Perform the QA review.", "/rt/prompt.txt"),
 			}
 			inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 			if err != nil {
@@ -186,7 +186,7 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
-			settings, err := agentSettingsFor(item.agent, "QA", "large")
+			settings, err := agentSettingsFor(item.agent, "Security", "large")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -212,19 +212,19 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
 	promptFile := "/rt/prompt.txt"
-	want := process.TaskFileInstruction("Perform the QA review.", promptFile)
+	want := process.TaskFileInstruction("Perform the Security review.", promptFile)
 	if !strings.Contains(want, "task file at "+promptFile) {
 		t.Fatalf("instruction %q", want)
 	}
 	for _, agent := range []string{"codex", "claude", "cursor", "grok", "pi"} {
-		settings, err := agentSettingsFor(agent, "QA", "large")
+		settings, err := agentSettingsFor(agent, "Security", "large")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if settings.stdin != config.ReviewStdinInstruction || len(settings.promptFiles) != 0 {
 			t.Fatalf("%s stdin=%q files=%v", agent, settings.stdin, settings.promptFiles)
 		}
-		got := process.TaskFileInstruction("Perform the QA review.", promptFile)
+		got := process.TaskFileInstruction("Perform the Security review.", promptFile)
 		if got != want {
 			t.Fatalf("%s instruction %q", agent, got)
 		}

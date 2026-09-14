@@ -69,7 +69,7 @@ func TestStartOnlyReviewerRejectedAndDoctorLeavesIt(t *testing.T) {
 		"plain": {Path: exe, Args: &AgentArgs{Start: []string{"--go"}, Resume: []string{}}, Session: &AgentSessionDefinition{Mode: "generated"}},
 	}
 	for _, scale := range TaskScales {
-		cfg.Reviewers[scale]["PM"] = "plain"
+		cfg.Reviewers[scale]["QA"] = "plain"
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {

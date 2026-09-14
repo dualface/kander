@@ -23,10 +23,10 @@ func fixBindingFixture(t *testing.T) (string, DispatchInput, ReviewRun, ReviewFi
 	root := tempBoard(t)
 	id := gateCard(t, root, "binding")
 	gatePlan(t, root, []string{id}, archiveRequirements())
-	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
+	f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm-binding", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm-binding", "QA"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	s := transactionSnapshot(t, root, id)
 	if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
@@ -46,7 +46,7 @@ func TestDispatchFixBindingRejectsInvalidSources(t *testing.T) {
 	}{
 		{"missing binding", func(in *DispatchInput) { in.Evidence.Fix = nil }},
 		{"missing run", func(in *DispatchInput) { in.Evidence.Fix.Findings[0].RunID = "missing" }},
-		{"missing finding", func(in *DispatchInput) { in.Evidence.Fix.Findings[0].FindingID = "PM-404" }},
+		{"missing finding", func(in *DispatchInput) { in.Evidence.Fix.Findings[0].FindingID = "QA-404" }},
 		{"wrong predecessor", func(in *DispatchInput) { in.Evidence.Fix.Findings[0].PreviousRunID = "other" }},
 		{"wrong batch", func(in *DispatchInput) { in.Evidence.Fix.BatchID = "other" }},
 		{"wrong target", func(in *DispatchInput) { in.Base = strings.Repeat("c", 40) }},
@@ -191,19 +191,19 @@ func TestDispatchInputRejectsUnknownEvidenceJSON(t *testing.T) {
 func TestDispatchFixLegacyRequiresExplicitMapping(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "legacy-dispatch")
-	run := finalizedRun(t, root, archiveInput([]string{id}, "legacy-fix", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{id}, "legacy-fix", "QA"))
 	run = publishRun(t, root, run.RunID)
-	in := DispatchInput{ID: "legacy-dispatch", TaskID: id, Kind: "fix", Message: "修复映射问题", Base: run.Commit, Evidence: DispatchEvidence{Fix: &DispatchFixBinding{BatchID: run.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run.RunID, "PM-01"}}}}}}
+	in := DispatchInput{ID: "legacy-dispatch", TaskID: id, Kind: "fix", Message: "修复映射问题", Base: run.Commit, Evidence: DispatchEvidence{Fix: &DispatchFixBinding{BatchID: run.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run.RunID, "QA-01"}}}}}}
 	if _, err := PrepareDispatch(root, in); err == nil {
 		t.Fatal("legacy prose inferred findings")
 	}
 	findings := emptyFindings()
-	findings.Findings = []ReviewFinding{{ID: "PM-01", Tier: "medium", Text: "人工映射条目", Evidence: "report.md:1"}}
-	mapping := LegacyFindingMap{RunID: run.RunID, ReportHash: run.Hashes["report.md"], Author: "human", Basis: "显式完整映射", Complete: true, Findings: findings, Locations: []LegacyFindingLocation{{FindingID: "PM-01", StartLine: 1, EndLine: 1, Quote: "PASS"}}}
+	findings.Findings = []ReviewFinding{{ID: "QA-01", Tier: "medium", Text: "人工映射条目", Evidence: "report.md:1"}}
+	mapping := LegacyFindingMap{RunID: run.RunID, ReportHash: run.Hashes["report.md"], Author: "human", Basis: "显式完整映射", Complete: true, Findings: findings, Locations: []LegacyFindingLocation{{FindingID: "QA-01", StartLine: 1, EndLine: 1, Quote: "PASS"}}}
 	if err := MapLegacyReview(root, mapping); err != nil {
 		t.Fatal(err)
 	}
-	assignGate(t, root, run, map[string][]string{"PM-01": {id}})
+	assignGate(t, root, run, map[string][]string{"QA-01": {id}})
 	d := prepareTestDispatch(t, root, in)
 	if _, err := BeginDispatchAttempt(root, id, d.Input.ID, d.Revision); err != nil {
 		t.Fatal(err)
@@ -221,17 +221,17 @@ func TestDispatchFixRejectsSupersededRoundAndCarriesLineageAuthors(t *testing.T)
 	if err := SubmitReviewDisposition(root, record, s.Revision); err != nil {
 		t.Fatal(err)
 	}
-	nextInput := archiveInput([]string{in.TaskID}, "pm-next", "PM")
+	nextInput := archiveInput([]string{in.TaskID}, "pm-next", "QA")
 	nextInput.PreviousRunID = run.RunID
 	nextInput.ReviewedCommit = run.Commit
 	nextFindings := emptyFindings()
-	nextFindings.Findings = []ReviewFinding{{ID: "PM-02", Tier: "medium", Text: "前轮仍未关闭", Evidence: "file.go:2", Lineage: &FindingRef{run.RunID, f.ID}}}
+	nextFindings.Findings = []ReviewFinding{{ID: "QA-02", Tier: "medium", Text: "前轮仍未关闭", Evidence: "file.go:2", Lineage: &FindingRef{run.RunID, f.ID}}}
 	next := gateRun(t, root, nextInput, nextFindings)
-	assignGate(t, root, next, map[string][]string{"PM-02": {in.TaskID}})
+	assignGate(t, root, next, map[string][]string{"QA-02": {in.TaskID}})
 	if _, err := PrepareDispatch(root, in); err == nil {
 		t.Fatal("superseded run dispatched")
 	}
-	in.Evidence.Fix.Findings = []DispatchFindingReference{{FindingRef: FindingRef{next.RunID, "PM-02"}, PreviousRunID: run.RunID}}
+	in.Evidence.Fix.Findings = []DispatchFindingReference{{FindingRef: FindingRef{next.RunID, "QA-02"}, PreviousRunID: run.RunID}}
 	if _, err := PrepareDispatch(root, in); err == nil {
 		t.Fatal("prior author omitted from lineage")
 	}
@@ -245,20 +245,20 @@ func nonBlockingFixFixture(t *testing.T, blocking bool) (string, DispatchInput, 
 	id := gateCard(t, root, "nonblock")
 	gatePlan(t, root, []string{id}, archiveRequirements())
 	findings := emptyFindings()
-	nb := ReviewFinding{ID: "PM-NB", Tier: "low", Text: "建议整理命名", Evidence: "file.go:3"}
+	nb := ReviewFinding{ID: "QA-NB", Tier: "low", Text: "建议整理命名", Evidence: "file.go:3"}
 	findings.NonBlocking = []ReviewFinding{nb}
 	var blockingFinding ReviewFinding
 	if blocking {
-		blockingFinding = ReviewFinding{ID: "PM-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
+		blockingFinding = ReviewFinding{ID: "QA-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
 		findings.Findings = []ReviewFinding{blockingFinding}
 	}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm-nb", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm-nb", "QA"), findings)
 	items := map[string][]string{nb.ID: {id}}
 	if blocking {
 		items[blockingFinding.ID] = []string{id}
 	}
 	assignGate(t, root, run, items)
-	qa := gateRun(t, root, archiveInput([]string{id}, "qa-nb", "QA"), emptyFindings())
+	qa := gateRun(t, root, archiveInput([]string{id}, "qa-nb", "Security"), emptyFindings())
 	assignGate(t, root, qa, map[string][]string{})
 	s := transactionSnapshot(t, root, id)
 	if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
@@ -316,14 +316,14 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 		if err := SubmitReviewDisposition(root, record, s.Revision); err != nil {
 			t.Fatal(err)
 		}
-		nextInput := archiveInput([]string{in.TaskID}, "pm-nb-next", "PM")
+		nextInput := archiveInput([]string{in.TaskID}, "pm-nb-next", "QA")
 		nextInput.PreviousRunID = run.RunID
 		nextInput.ReviewedCommit = run.Commit
 		nextFindings := emptyFindings()
-		nextFindings.NonBlocking = []ReviewFinding{{ID: "PM-NB2", Tier: "suggest", Text: "命名仍待整理", Evidence: "file.go:4", Lineage: &FindingRef{run.RunID, nb.ID}}}
+		nextFindings.NonBlocking = []ReviewFinding{{ID: "QA-NB2", Tier: "suggest", Text: "命名仍待整理", Evidence: "file.go:4", Lineage: &FindingRef{run.RunID, nb.ID}}}
 		next := gateRun(t, root, nextInput, nextFindings)
-		assignGate(t, root, next, map[string][]string{"PM-NB2": {in.TaskID}})
-		in.Evidence.Fix.Findings = []DispatchFindingReference{{FindingRef: FindingRef{next.RunID, "PM-NB2"}, PreviousRunID: run.RunID}}
+		assignGate(t, root, next, map[string][]string{"QA-NB2": {in.TaskID}})
+		in.Evidence.Fix.Findings = []DispatchFindingReference{{FindingRef: FindingRef{next.RunID, "QA-NB2"}, PreviousRunID: run.RunID}}
 		if _, err := PrepareDispatch(root, in); err == nil {
 			t.Fatal("prior non-blocking author omitted")
 		}
@@ -335,7 +335,7 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 	})
 	t.Run("missing versus unassigned errors", func(t *testing.T) {
 		root, in, _, nb, _ := nonBlockingFixFixture(t, false)
-		in.Evidence.Fix.Findings[0].FindingID = "PM-404"
+		in.Evidence.Fix.Findings[0].FindingID = "QA-404"
 		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), "missing finding") {
 			t.Fatalf("missing: %v", err)
 		}
@@ -345,9 +345,9 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 		other := gateCard(t, root2, "other-owner")
 		gatePlan(t, root2, []string{id, other}, archiveRequirements())
 		findings := emptyFindings()
-		findings.NonBlocking = []ReviewFinding{{ID: "PM-UA", Tier: "recommend", Text: "可延后", Evidence: "a:1"}}
-		run2 := gateRun(t, root2, archiveInput([]string{id, other}, "pm-ua", "PM"), findings)
-		assignGate(t, root2, run2, map[string][]string{"PM-UA": {other}})
+		findings.NonBlocking = []ReviewFinding{{ID: "QA-UA", Tier: "recommend", Text: "可延后", Evidence: "a:1"}}
+		run2 := gateRun(t, root2, archiveInput([]string{id, other}, "pm-ua", "QA"), findings)
+		assignGate(t, root2, run2, map[string][]string{"QA-UA": {other}})
 		s := transactionSnapshot(t, root2, id)
 		if _, err := MoveEntry(s.Entry, root2, "review"); err != nil {
 			t.Fatal(err)
@@ -355,7 +355,7 @@ func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
 		s = transactionSnapshot(t, root2, id)
 		bad := dispatchInput(s, "fix-ua")
 		bad.Kind, bad.Base = "fix", run2.Commit
-		bad.Evidence.Fix = &DispatchFixBinding{BatchID: run2.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run2.RunID, "PM-UA"}}}}
+		bad.Evidence.Fix = &DispatchFixBinding{BatchID: run2.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run2.RunID, "QA-UA"}}}}
 		if _, err := PrepareDispatch(root2, bad); err == nil || !strings.Contains(err.Error(), "finding not assigned to task") {
 			t.Fatalf("unassigned: %v", err)
 		}
@@ -389,11 +389,11 @@ func TestDispatchFixNonBlockingDispositionOnlyRound(t *testing.T) {
 	if err != nil || completed.State != DispatchCompleted || completed.Completed.DeliveryCommit != run.Commit {
 		t.Fatalf("%+v %v", completed, err)
 	}
-	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(run), "QA": passRole(qa)})
+	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"QA": passRole(run), "Security": passRole(qa)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if closed.RoleStatuses["PM"] != "PASS" || closed.TargetCommit != run.Commit {
+	if closed.RoleStatuses["QA"] != "PASS" || closed.TargetCommit != run.Commit {
 		t.Fatalf("%+v", closed)
 	}
 }

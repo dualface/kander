@@ -225,7 +225,7 @@ func ApplyOverlay(scope *Config, overlay map[string]any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Validate(merged)
+	return validateMergedReviewKeys(merged, obj, overlay)
 }
 
 func readOverlay(cwd string) (string, map[string]any, error) {
@@ -255,13 +255,14 @@ func readOverlay(cwd string) (string, map[string]any, error) {
 }
 
 func mergeOverlayRaw(scope map[string]any, overlay map[string]any) (map[string]any, error) {
+	scope, _ = NormalizeLegacyReviewKeys(scope)
 	if err := normalizeReviewStagesField(scope); err != nil {
 		return nil, err
 	}
 	if err := normalizeReviewersField(scope); err != nil {
 		return nil, err
 	}
-	overlayCopy := cloneRawObjectDeep(overlay)
+	overlayCopy, _ := NormalizeLegacyReviewKeys(overlay)
 	if err := normalizeReviewStagesField(overlayCopy); err != nil {
 		return nil, err
 	}

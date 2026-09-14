@@ -72,7 +72,7 @@ func launchWrapFixture(t *testing.T) (string, string, string, board.DispatchInpu
 	task, path := makeTodo(t, root, "wrap-binding")
 	startThenReview(t, root, "claude", task, path)
 	cwd, head := integrationGit(t)
-	roles := map[string]string{"PM": "N/A: lifecycle fixture", "QA": "N/A: lifecycle fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}
+	roles := map[string]string{"QA": "N/A: lifecycle fixture", "Security": "N/A: lifecycle fixture"}
 	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "wrap-plan", Author: "fixture", Basis: "lifecycle fixture", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{task}, Batches: []board.ReviewPlanBatch{{BatchID: "wrap-batch", TaskIDs: []string{task}, Base: head, TargetCommit: head, Requirements: roles}}}
 	if err := board.CreateReviewPlan(root, plan); err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestDispatchEvidenceFlagsAndRejectedFixHaveNoIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	file := filepath.Join(t.TempDir(), "evidence.json")
-	data, _ := json.Marshal(board.DispatchEvidence{Fix: &board.DispatchFixBinding{BatchID: "missing", Findings: []board.DispatchFindingReference{{FindingRef: board.FindingRef{RunID: "missing", FindingID: "PM-01"}}}}})
+	data, _ := json.Marshal(board.DispatchEvidence{Fix: &board.DispatchFixBinding{BatchID: "missing", Findings: []board.DispatchFindingReference{{FindingRef: board.FindingRef{RunID: "missing", FindingID: "QA-01"}}}}})
 	if err = os.WriteFile(file, data, 0600); err != nil {
 		t.Fatal(err)
 	}

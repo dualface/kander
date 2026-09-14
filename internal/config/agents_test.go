@@ -125,11 +125,11 @@ func TestCustomAgentsModelsAndRepair(t *testing.T) {
 		t.Fatalf("%+v %v", repaired, err)
 	}
 	root := raw.(map[string]any)
-	root["reviewers"].(map[string]any)["PM"] = "helper"
+	root["reviewers"].(map[string]any)["QA"] = "helper"
 	if _, err := Validate(root); err == nil {
 		t.Fatal("dialect wrapper accepted as reviewer")
 	}
-	root["reviewers"].(map[string]any)["PM"] = "plain"
+	root["reviewers"].(map[string]any)["QA"] = "plain"
 	if _, err := Validate(root); err == nil {
 		t.Fatal("start-only reviewer accepted")
 	}

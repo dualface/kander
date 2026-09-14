@@ -27,7 +27,7 @@ func TestMissingArgsReportsUsage(t *testing.T) {
 
 func TestUnsupportedAgentRejected(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := captureRun(t, []string{"other", h.repo, h.base, h.head, "QA", "目标"})
+	code, _, err := captureRun(t, []string{"other", h.repo, h.base, h.head, "Security", "目标"})
 	if code != 2 || !strings.Contains(err, "unsupported reviewer agent") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -43,7 +43,7 @@ func TestUnsupportedRoleRejected(t *testing.T) {
 
 func TestRelativeCWDRejected(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := captureRun(t, []string{"codex", "repo", h.base, h.head, "QA", "目标"})
+	code, _, err := captureRun(t, []string{"codex", "repo", h.base, h.head, "Security", "目标"})
 	if code != 2 || !strings.Contains(err, "CWD must be an absolute path") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -55,7 +55,7 @@ func TestPathOutsideGitRejected(t *testing.T) {
 	if err := os.Mkdir(outside, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	code, _, err := captureRun(t, []string{"codex", outside, h.base, h.head, "QA", "目标"})
+	code, _, err := captureRun(t, []string{"codex", outside, h.base, h.head, "Security", "目标"})
 	if code != 2 || !strings.Contains(err, "not inside a Git worktree") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -63,7 +63,7 @@ func TestPathOutsideGitRejected(t *testing.T) {
 
 func TestEmptyTaskGoalRejected(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := h.review("codex", "QA", "")
+	code, _, err := h.review("codex", "Security", "")
 	if code != 2 || !strings.Contains(err, "task goal must not be empty") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -71,7 +71,7 @@ func TestEmptyTaskGoalRejected(t *testing.T) {
 
 func TestUnreadableSpecRejected(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := h.review("codex", "PM", filepath.Join(h.root, "missing.md"))
+	code, _, err := h.review("codex", "QA", filepath.Join(h.root, "missing.md"))
 	if code != 2 || !strings.Contains(err, "spec path is not a readable file") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -83,7 +83,7 @@ func TestWindowsStyleAbsoluteIsTaskGoalOnPOSIX(t *testing.T) {
 	}
 	h := newCodexHarness(t)
 	goal := `C:\release`
-	code, _, err := h.review("codex", "PM", goal)
+	code, _, err := h.review("codex", "QA", goal)
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -95,7 +95,7 @@ func TestWindowsStyleAbsoluteIsTaskGoalOnPOSIX(t *testing.T) {
 
 func TestAbbreviatedSHARejected(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := captureRun(t, []string{"codex", h.repo, h.base[:8], h.head, "QA", "目标"})
+	code, _, err := captureRun(t, []string{"codex", h.repo, h.base[:8], h.head, "Security", "目标"})
 	if code != 2 || !strings.Contains(err, "must be a full commit SHA") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -106,7 +106,7 @@ func TestBaseNotAncestorRejected(t *testing.T) {
 	gitRepo(t, h.repo, "checkout", "-q", "-b", "side", h.base)
 	sibling := commitFile(t, h.repo, "c.txt", "side\n", "旁支")
 	gitRepo(t, h.repo, "checkout", "-q", "main")
-	code, _, err := captureRun(t, []string{"codex", h.repo, sibling, h.head, "QA", "目标"})
+	code, _, err := captureRun(t, []string{"codex", h.repo, sibling, h.head, "Security", "目标"})
 	if code != 2 || !strings.Contains(err, "not an ancestor") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -114,7 +114,7 @@ func TestBaseNotAncestorRejected(t *testing.T) {
 
 func TestHEADMismatchRejected(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := captureRun(t, []string{"codex", h.repo, h.base, h.base, "QA", "目标"})
+	code, _, err := captureRun(t, []string{"codex", h.repo, h.base, h.base, "Security", "目标"})
 	if code != 2 || !strings.Contains(err, "HEAD does not match commit") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
@@ -181,12 +181,12 @@ func TestWorktreeTamperingDetected(t *testing.T) {
 
 func TestCleanReviewReturnsReport(t *testing.T) {
 	h := newCodexHarness(t)
-	t.Setenv("FAKE_CODEX_REPORT", "QA-1 没有发现问题")
+	t.Setenv("FAKE_CODEX_REPORT", "Security-1 没有发现问题")
 	code, out, err := h.defaultReview()
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
-	if !strings.Contains(out, "QA-1 没有发现问题") {
+	if !strings.Contains(out, "Security-1 没有发现问题") {
 		t.Fatalf("out=%q", out)
 	}
 }
@@ -215,7 +215,7 @@ func TestModelConfigAndEnvOverride(t *testing.T) {
 	h := newCodexHarness(t)
 	payload, _ := json.Marshal(map[string]any{
 		"schema_version": 1, "welcome_complete": true, "kanban_agent": "codex", "launcher": "tmux",
-		"reviewers": map[string]string{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers": map[string]string{"QA": "codex", "Security": "codex"},
 		"models":    map[string]any{"review": map[string]any{"codex": map[string]string{"model": "config-model", "effort": "medium"}}},
 	})
 	if err := os.WriteFile(os.Getenv("KANDER_CONFIG"), payload, 0o600); err != nil {
@@ -257,7 +257,7 @@ func TestEmptyConfigModelOmitsFlag(t *testing.T) {
 	h := newCodexHarness(t)
 	payload, _ := json.Marshal(map[string]any{
 		"schema_version": 1, "welcome_complete": true, "kanban_agent": "codex", "launcher": "tmux",
-		"reviewers": map[string]string{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers": map[string]string{"QA": "codex", "Security": "codex"},
 		"models":    map[string]any{"review": map[string]any{"codex": map[string]string{"model": ""}}},
 	})
 	if err := os.WriteFile(os.Getenv("KANDER_CONFIG"), payload, 0o600); err != nil {
@@ -308,7 +308,7 @@ func TestSpecFileAuthoritative(t *testing.T) {
 	}
 	resolved, _ := filepath.EvalSymlinks(spec)
 	abs, _ := filepath.Abs(resolved)
-	code, _, err := h.review("codex", "PM", spec)
+	code, _, err := h.review("codex", "QA", spec)
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -316,7 +316,7 @@ func TestSpecFileAuthoritative(t *testing.T) {
 	if !strings.Contains(prompt, "Authoritative spec file: "+abs) {
 		t.Fatalf("prompt=%s", prompt)
 	}
-	if !strings.Contains(prompt, "suggest tagged [out-of-contract]") {
+	if !strings.Contains(prompt, "Do not invent requirements or expand OUT_OF_SCOPE") {
 		t.Fatal("missing out-of-contract rule")
 	}
 }
@@ -325,8 +325,8 @@ func TestIncrementalReReview(t *testing.T) {
 	h := newCodexHarness(t)
 	fixed := commitFile(t, h.repo, "c.txt", "fix\n", "修复")
 	code, _, err := captureRun(t, []string{
-		"codex", h.repo, h.base, fixed, "PM", "确认改动正确",
-		"Prior findings: PM-001 closed by c.txt", h.head,
+		"codex", h.repo, h.base, fixed, "QA", "确认改动正确",
+		"Prior findings: QA-001 closed by c.txt", h.head,
 	})
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
@@ -338,7 +338,7 @@ func TestIncrementalReReview(t *testing.T) {
 	if !strings.Contains(prompt, "fix range "+h.head+".."+fixed) {
 		t.Fatal(prompt)
 	}
-	if !strings.Contains(prompt, "Prior findings: PM-001 closed by c.txt") {
+	if !strings.Contains(prompt, "Prior findings: QA-001 closed by c.txt") {
 		t.Fatal(prompt)
 	}
 	if strings.Contains(prompt, "Review the complete code state") {
@@ -348,7 +348,7 @@ func TestIncrementalReReview(t *testing.T) {
 
 func TestEmptyReviewedKeepsFullReview(t *testing.T) {
 	h := newCodexHarness(t)
-	code, _, err := captureRun(t, []string{"codex", h.repo, h.base, h.head, "PM", "确认改动正确", "", ""})
+	code, _, err := captureRun(t, []string{"codex", h.repo, h.base, h.head, "QA", "确认改动正确", "", ""})
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -381,8 +381,8 @@ func TestReviewedCommitMustSitBetween(t *testing.T) {
 	for _, tc := range cases {
 		_ = os.Remove(h.argvLog)
 		code, _, err := captureRun(t, []string{
-			"codex", h.repo, h.base, fixed, "PM", "确认改动正确",
-			"Prior findings: PM-001 open", tc.reviewed,
+			"codex", h.repo, h.base, fixed, "QA", "确认改动正确",
+			"Prior findings: QA-001 open", tc.reviewed,
 		})
 		if code != 2 || !strings.Contains(err, tc.msg) {
 			t.Fatalf("reviewed=%s code=%d err=%q want %q", tc.reviewed, code, err, tc.msg)
@@ -399,7 +399,7 @@ func TestIncrementalRequiresLedger(t *testing.T) {
 	for _, ctx := range []string{"", "   ", "\n\t"} {
 		_ = os.Remove(h.argvLog)
 		code, _, err := captureRun(t, []string{
-			"codex", h.repo, h.base, fixed, "PM", "确认改动正确", ctx, h.head,
+			"codex", h.repo, h.base, fixed, "QA", "确认改动正确", ctx, h.head,
 		})
 		if code != 2 || !strings.Contains(err, "requires the prior-finding ledger") {
 			t.Fatalf("ctx=%q code=%d err=%q", ctx, code, err)
@@ -421,7 +421,7 @@ func TestIgnoredFilesDoesNotBlock(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(h.repo, ".cache", "note.md"), []byte("cache\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	code, _, err := captureRun(t, []string{"codex", h.repo, h.base, h.head, "QA", "确认改动正确"})
+	code, _, err := captureRun(t, []string{"codex", h.repo, h.base, h.head, "Security", "确认改动正确"})
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
@@ -460,7 +460,7 @@ func TestChineseLocaleReportsChineseUsage(t *testing.T) {
 func TestTooManyArgsUsage(t *testing.T) {
 	h := newCodexHarness(t)
 	code, _, err := captureRun(t, []string{
-		"codex", h.repo, h.base, h.head, "PM", "确认改动正确", "", h.base, "extra",
+		"codex", h.repo, h.base, h.head, "QA", "确认改动正确", "", h.base, "extra",
 	})
 	if code != 2 || !strings.Contains(err, "[reviewed-commit]") {
 		t.Fatalf("code=%d err=%q", code, err)
@@ -471,12 +471,12 @@ func TestImplicitAgentFromConfig(t *testing.T) {
 	h := newCodexHarness(t)
 	payload, _ := json.Marshal(map[string]any{
 		"schema_version": 1, "welcome_complete": true, "kanban_agent": "codex", "launcher": "tmux",
-		"reviewers": map[string]string{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers": map[string]string{"QA": "codex", "Security": "codex"},
 	})
 	if err := os.WriteFile(os.Getenv("KANDER_CONFIG"), payload, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, out, err := captureRun(t, []string{h.repo, h.base, h.head, "QA", "确认改动正确"})
+	code, out, err := captureRun(t, []string{h.repo, h.base, h.head, "Security", "确认改动正确"})
 	if code != 0 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}

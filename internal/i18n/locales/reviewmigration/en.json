@@ -1,0 +1,4 @@
+{
+  "config.legacy_review_keys": "Legacy review keys mapped to Security or ignored (PM): {{.V0}}. Run kander doctor to save the new keys.",
+  "config.legacy_review_keys_repaired": "Saved new review keys; removed legacy keys: {{.V0}}."
+}

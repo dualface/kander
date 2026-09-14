@@ -37,17 +37,33 @@ type ReviewPlan struct {
 func planName(id string) string     { return "plans/" + id + ".json" }
 func taskPlanName(id string) string { return "task-plans/" + id + ".json" }
 func closureName(id string) string  { return "closures/" + id + ".json" }
+
+// validateRequirements accepts immutable historical four-role evidence as well as
+// the current two-role contract. Creation uses validateNewRequirements instead.
 func validateRequirements(r map[string]string) error {
-	if len(r) != 4 {
-		return reviewError("all four role requirements required")
+	roles := reviewRequirementRoles(r)
+	if len(r) != len(roles) {
+		return reviewError("requirements must name QA and Security (historical four-role evidence is read-only)")
 	}
-	for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
+	for _, role := range roles {
 		value := r[role]
 		if value != "required" && (!strings.HasPrefix(value, "N/A: ") || strings.TrimSpace(strings.TrimPrefix(value, "N/A: ")) == "") {
 			return reviewError("requirement reason and rule basis: " + role)
 		}
 	}
 	return nil
+}
+func reviewRequirementRoles(r map[string]string) []string {
+	if len(r) == 4 {
+		return []string{"PM", "QA", "CSA", "Hacker"}
+	}
+	return []string{"QA", "Security"}
+}
+func validateNewRequirements(r map[string]string) error {
+	if len(r) != 2 {
+		return reviewError("new requirements must contain exactly QA and Security")
+	}
+	return validateRequirements(r)
 }
 func planCycle(s Snapshot) string {
 	identity := s.Entry.TaskID + "\n" + MetadataFrom(s.Text, FieldStartedAt)
@@ -118,6 +134,11 @@ func CreateReviewPlan(root string, p ReviewPlan) error {
 				return reviewError("immutable review plan conflict")
 			}
 			return verifyPlanCopies(tx, p)
+		}
+		for _, b := range p.Batches {
+			if err := validateNewRequirements(b.Requirements); err != nil {
+				return err
+			}
 		}
 		p.Revision = 1
 		p.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)

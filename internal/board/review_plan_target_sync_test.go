@@ -93,8 +93,8 @@ func TestAdvanceFileSyncsPlannedBatchAndLeavesUnplannedAlone(t *testing.T) {
 		root := tempBoard(t)
 		id := gateCard(t, root, "advance-file-planned")
 		gatePlan(t, root, []string{id}, archiveRequirements())
-		first := gateRun(t, root, archiveInput([]string{id}, "first", "PM"), emptyFindings())
-		next := archiveInput([]string{id}, "second", "PM")
+		first := gateRun(t, root, archiveInput([]string{id}, "first", "QA"), emptyFindings())
+		next := archiveInput([]string{id}, "second", "QA")
 		next.Commit = strings.Repeat("c", 40)
 		next.ReviewedCommit = first.Commit
 		next.PreviousRunID = first.RunID
@@ -116,9 +116,9 @@ func TestAdvanceFileSyncsPlannedBatchAndLeavesUnplannedAlone(t *testing.T) {
 	t.Run("unplanned", func(t *testing.T) {
 		root := tempBoard(t)
 		id := archiveCard(t, root, "advance-file-unplanned")
-		first := finalizedRun(t, root, archiveInput([]string{id}, "u1", "PM"))
+		first := finalizedRun(t, root, archiveInput([]string{id}, "u1", "QA"))
 		publishRun(t, root, first.RunID)
-		next := archiveInput([]string{id}, "u2", "PM")
+		next := archiveInput([]string{id}, "u2", "QA")
 		next.Commit = strings.Repeat("c", 40)
 		next.ReviewedCommit = first.Commit
 		next.PreviousRunID = first.RunID

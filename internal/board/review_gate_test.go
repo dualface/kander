@@ -19,7 +19,7 @@ func gatePlan(t *testing.T, root string, ids []string, requirements map[string]s
 	return p
 }
 func noReviewRequirements() map[string]string {
-	return map[string]string{"PM": "N/A: fixture; lifecycle-only contract", "QA": "N/A: fixture; lifecycle-only contract", "CSA": "N/A: fixture; no security review", "Hacker": "N/A: fixture; no external surface"}
+	return map[string]string{"QA": "N/A: fixture; lifecycle-only contract", "Security": "N/A: fixture; lifecycle-only contract"}
 }
 func gateClose(t *testing.T, root string, roles map[string]ReviewRoleConclusion) (ReviewClosure, error) {
 	t.Helper()
@@ -71,7 +71,7 @@ func gateCard(t *testing.T, root, slug string) string {
 	return id
 }
 func structuredReport(f ReviewFindings) []byte {
-	return []byte("分析中的 QA-999 不是条目。\n```kander-findings\n" + reviewJSON(f) + "```\n")
+	return []byte("分析中的 Security-999 不是条目。\n```kander-findings\n" + reviewJSON(f) + "```\n")
 }
 func gateRun(t *testing.T, root string, input ReviewInput, f ReviewFindings) ReviewRun {
 	t.Helper()
@@ -129,7 +129,7 @@ func TestReviewMissingAndFailedRequiredRoles(t *testing.T) {
 			id := gateCard(t, root, "required")
 			gatePlan(t, root, []string{id}, archiveRequirements())
 			if failed {
-				input := archiveInput([]string{id}, "failed-pm", "PM")
+				input := archiveInput([]string{id}, "failed-pm", "QA")
 				run, _, err := PrepareReviewRun(root, input, nil, nil, archiveOriginals(), "test")
 				if err != nil {
 					t.Fatal(err)
@@ -159,12 +159,12 @@ func TestStructuredFindingsRejectMissingDuplicateAndProseIDs(t *testing.T) {
 	if err != nil || len(f.all()) != 0 {
 		t.Fatalf("prose ID inferred: %+v %v", f, err)
 	}
-	for _, report := range []string{"PASS QA-01", "```kander-findings\n{}\n```", "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":null}\n```", "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":[],\"extra\":1}\n```"} {
+	for _, report := range []string{"PASS Security-01", "```kander-findings\n{}\n```", "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":null}\n```", "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":[],\"extra\":1}\n```"} {
 		if _, err = ParseReviewFindings([]byte(report)); err == nil {
 			t.Fatalf("invalid passed: %s", report)
 		}
 	}
-	item := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "缺陷", Evidence: "x.go:1"}
+	item := ReviewFinding{ID: "Security-01", Tier: "medium", Text: "缺陷", Evidence: "x.go:1"}
 	good.Findings = []ReviewFinding{item, item}
 	if _, err = ParseReviewFindings(structuredReport(good)); err == nil {
 		t.Fatal("duplicate ID passed")
@@ -177,11 +177,11 @@ func TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord(t *testi
 	c := gateCard(t, root, "no-findings")
 	ids := []string{a, b, c}
 	gatePlan(t, root, ids, archiveRequirements())
-	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "共同问题", Evidence: "x.go:10"}
+	f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "共同问题", Evidence: "x.go:10"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	pm := gateRun(t, root, archiveInput(ids, "pm", "PM"), findings)
-	qa := gateRun(t, root, archiveInput(ids, "qa", "QA"), emptyFindings())
+	pm := gateRun(t, root, archiveInput(ids, "pm", "QA"), findings)
+	qa := gateRun(t, root, archiveInput(ids, "qa", "Security"), emptyFindings())
 	assignGate(t, root, pm, map[string][]string{f.ID: {a, b}})
 	assignGate(t, root, qa, map[string][]string{})
 	gateRecord(t, root, pm, a, f, "rejected")
@@ -190,12 +190,12 @@ func TestSharedFindingRequiresEachAuthorAndNoFindingMemberNeedsNoRecord(t *testi
 	}
 	gateRecord(t, root, pm, b, f, "rejected")
 	before := transactionSnapshot(t, root, c)
-	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(pm), "QA": passRole(qa)})
+	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"QA": passRole(pm), "Security": passRole(qa)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	after := transactionSnapshot(t, root, c)
-	if after.Entry.State != before.Entry.State || closed.RoleStatuses["PM"] != "PASS" {
+	if after.Entry.State != before.Entry.State || closed.RoleStatuses["QA"] != "PASS" {
 		t.Fatalf("no-finding card dispatched or wrong result: %+v", closed)
 	}
 	for _, id := range ids {
@@ -218,13 +218,13 @@ func TestDispositionOwnershipIdentityAndImmutableOriginal(t *testing.T) {
 	other := gateCard(t, root, "other")
 	ids := []string{id, other}
 	gatePlan(t, root, ids, archiveRequirements())
-	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "原文", Evidence: "x:1"}
+	f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "原文", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput(ids, "pm", "PM"), findings)
+	run := gateRun(t, root, archiveInput(ids, "pm", "QA"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	d := ReviewDisposition{RecordID: "one", RunID: run.RunID, FindingID: f.ID, BatchID: run.BatchID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "rejected", Basis: "具体代码与契约证据"}
-	for name, mutate := range map[string]func(*ReviewDisposition){"author": func(d *ReviewDisposition) { d.Author = "coordinator" }, "card": func(d *ReviewDisposition) { d.TaskID = other }, "round": func(d *ReviewDisposition) { d.FindingID = "PM-OLD" }, "original": func(d *ReviewDisposition) { d.Original = "改写" }, "empty-basis": func(d *ReviewDisposition) { d.Basis = "" }, "delegated": func(d *ReviewDisposition) { d.Status = "delegated" }, "pm-waiver": func(d *ReviewDisposition) {
+	for name, mutate := range map[string]func(*ReviewDisposition){"author": func(d *ReviewDisposition) { d.Author = "coordinator" }, "card": func(d *ReviewDisposition) { d.TaskID = other }, "round": func(d *ReviewDisposition) { d.FindingID = "QA-OLD" }, "original": func(d *ReviewDisposition) { d.Original = "改写" }, "empty-basis": func(d *ReviewDisposition) { d.Basis = "" }, "delegated": func(d *ReviewDisposition) { d.Status = "delegated" }, "pm-waiver": func(d *ReviewDisposition) {
 		d.Status = "waived"
 		d.Waiver = &ReviewWaiver{Policy: "accepted-risk", Decision: "用户决定"}
 	}} {
@@ -253,12 +253,12 @@ func TestMechanicalFixAndNonMechanicalRerunGate(t *testing.T) {
 			root := tempBoard(t)
 			id := gateCard(t, root, "mechanical")
 			requirements := archiveRequirements()
-			requirements["QA"] = "N/A: fixture role-only"
+			requirements["Security"] = "N/A: fixture role-only"
 			gatePlan(t, root, []string{id}, requirements)
-			f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "缺陷", Evidence: "x:1"}
+			f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "缺陷", Evidence: "x:1"}
 			findings := emptyFindings()
 			findings.Findings = []ReviewFinding{f}
-			run := gateRun(t, root, archiveInput([]string{id}, "pm", "PM"), findings)
+			run := gateRun(t, root, archiveInput([]string{id}, "pm", "QA"), findings)
 			assignGate(t, root, run, map[string][]string{f.ID: {id}})
 			d := ReviewDisposition{RecordID: "fix", RunID: run.RunID, FindingID: f.ID, BatchID: run.BatchID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "fixed", Basis: "实际修复", FixCommit: strings.Repeat("c", 40), Verification: "逐句核对与引用检索"}
 			if mechanical {
@@ -273,7 +273,7 @@ func TestMechanicalFixAndNonMechanicalRerunGate(t *testing.T) {
 			}
 			conclusion := passRole(run)
 			conclusion.PassedAt = d.FixCommit
-			_, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": conclusion})
+			_, err := gateClose(t, root, map[string]ReviewRoleConclusion{"QA": conclusion})
 			if err == nil {
 				t.Fatal("bare mechanical tag bypassed rerun")
 			}
@@ -282,7 +282,7 @@ func TestMechanicalFixAndNonMechanicalRerunGate(t *testing.T) {
 				if e != nil {
 					t.Fatal(e)
 				}
-				r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "coordinator", Roles: map[string]ReviewRoleConclusion{"PM": conclusion}, Mechanical: []ReviewMechanicalAssessment{{RecordID: d.RecordID, Finding: FindingRef{RunID: d.RunID, FindingID: d.FindingID}, TaskID: id, Author: "coordinator", Category: "documentation", ReportedCategory: "", ReportHash: d.ReportHash, FixCommit: d.FixCommit, Basis: "Main agent independently classifies missing reviewer label", Facts: "Compared each changed sentence against implementation", Paths: []string{"README.md"}, DiffHash: strings.Repeat("d", 64)}}}
+				r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "coordinator", Roles: map[string]ReviewRoleConclusion{"QA": conclusion}, Mechanical: []ReviewMechanicalAssessment{{RecordID: d.RecordID, Finding: FindingRef{RunID: d.RunID, FindingID: d.FindingID}, TaskID: id, Author: "coordinator", Category: "documentation", ReportedCategory: "", ReportHash: d.ReportHash, FixCommit: d.FixCommit, Basis: "Main agent independently classifies missing reviewer label", Facts: "Compared each changed sentence against implementation", Paths: []string{"README.md"}, DiffHash: strings.Repeat("d", 64)}}}
 				edges, _, e := ReviewClosureEdges(v, r)
 				if e != nil {
 					t.Fatal(e)
@@ -318,7 +318,7 @@ func TestExplicitNAAndLegacyCompletedCard(t *testing.T) {
 func TestLegacyMappingRequiresOriginalLocations(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "legacy-map")
-	run := finalizedRun(t, root, archiveInput([]string{id}, "old", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{id}, "old", "QA"))
 	publishRun(t, root, run.RunID)
 	m := LegacyFindingMap{RunID: run.RunID, ReportHash: run.Hashes["report.md"], Author: "human", Basis: "完整逐行人工映射", Complete: true, Findings: emptyFindings()}
 	if err := MapLegacyReview(root, m); err == nil {
@@ -385,7 +385,7 @@ func TestReviewJSONRoundTrip(t *testing.T) {
 }
 
 func TestDuplicateJSONKeysCannotEraseFindings(t *testing.T) {
-	report := []byte("```kander-findings\n{\"FINDINGS\":[{\"id\":\"PM-01\",\"tier\":\"medium\",\"text\":\"bug\",\"evidence\":\"x:1\"}],\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```")
+	report := []byte("```kander-findings\n{\"FINDINGS\":[{\"id\":\"QA-01\",\"tier\":\"medium\",\"text\":\"bug\",\"evidence\":\"x:1\"}],\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```")
 	if _, err := ParseReviewFindings(report); err == nil {
 		t.Fatal("duplicate key erased a finding")
 	}
@@ -393,7 +393,7 @@ func TestDuplicateJSONKeysCannotEraseFindings(t *testing.T) {
 func TestPlanCannotHideUnplannedRunsOrDeletedPointer(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "unplanned")
-	run := finalizedRun(t, root, archiveInput([]string{id}, "unplanned", "PM"))
+	run := finalizedRun(t, root, archiveInput([]string{id}, "unplanned", "QA"))
 	publishRun(t, root, run.RunID)
 	exemptReviewFixture(t, root, id)
 	if _, err := ReviewTaskProgress(root, id); err == nil {
@@ -410,10 +410,10 @@ func TestConcurrentDispositionAppendUsesRevisionAndPreservesOriginals(t *testing
 	root := tempBoard(t)
 	id := gateCard(t, root, "concurrent-disposition")
 	gatePlan(t, root, []string{id}, archiveRequirements())
-	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "原始发现", Evidence: "x:1"}
+	f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "原始发现", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput([]string{id}, "pm", "PM"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "pm", "QA"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	s := transactionSnapshot(t, root, id)
 	d := ReviewDisposition{RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "rejected", Basis: "具体触发条件经复核不成立"}
@@ -447,9 +447,9 @@ func TestFailedRunRequiresExplicitSuccessfulReplacement(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "failed-replaced")
 	requirements := archiveRequirements()
-	requirements["QA"] = "N/A: fixture"
+	requirements["Security"] = "N/A: fixture"
 	gatePlan(t, root, []string{id}, requirements)
-	input := archiveInput([]string{id}, "failed", "PM")
+	input := archiveInput([]string{id}, "failed", "QA")
 	run, _, err := PrepareReviewRun(root, input, nil, nil, archiveOriginals(), "test")
 	if err != nil {
 		t.Fatal(err)
@@ -462,13 +462,13 @@ func TestFailedRunRequiresExplicitSuccessfulReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	publishRun(t, root, run.RunID)
-	success := gateRun(t, root, archiveInput([]string{id}, "replacement", "PM"), emptyFindings())
+	success := gateRun(t, root, archiveInput([]string{id}, "replacement", "QA"), emptyFindings())
 	assignGate(t, root, success, map[string][]string{})
 	view, err := ReadReviewBatchView(root, "batch")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: view.Batch.Revision, ViewHash: ReviewViewDigest(view), Author: "coordinator", Roles: map[string]ReviewRoleConclusion{"PM": passRole(success)}}
+	r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: view.Batch.Revision, ViewHash: ReviewViewDigest(view), Author: "coordinator", Roles: map[string]ReviewRoleConclusion{"QA": passRole(success)}}
 	if _, _, err = ReviewClosureEdges(view, r); err == nil {
 		t.Fatal("failed run silently ignored")
 	}
@@ -481,20 +481,20 @@ func TestSecurityWaiverPreservesNonPassStatus(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "security-waiver")
 	requirements := noReviewRequirements()
-	requirements["CSA"] = "required"
+	requirements["Security"] = "required"
 	gatePlan(t, root, []string{id}, requirements)
-	f := ReviewFinding{ID: "CSA-01", Tier: "high", Text: "已证实的安全问题", Evidence: "x:1"}
+	f := ReviewFinding{ID: "Security-01", Tier: "high", Text: "已证实的安全问题", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	run := gateRun(t, root, archiveInput([]string{id}, "csa", "CSA"), findings)
+	run := gateRun(t, root, archiveInput([]string{id}, "csa", "Security"), findings)
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	d := ReviewDisposition{RecordID: "accepted-risk", RunID: run.RunID, BatchID: run.BatchID, FindingID: f.ID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: f.Text, Status: "waived", Basis: "已独立确认触发及影响", Waiver: &ReviewWaiver{Policy: "accepted-risk", Decision: "用户针对本项明确接受风险的记录"}}
 	s := transactionSnapshot(t, root, id)
 	if err := SubmitReviewDisposition(root, d, s.Revision); err != nil {
 		t.Fatal(err)
 	}
-	c, err := gateClose(t, root, map[string]ReviewRoleConclusion{"CSA": passRole(run)})
-	if err != nil || c.RoleStatuses["CSA"] != "accepted-risk" {
+	c, err := gateClose(t, root, map[string]ReviewRoleConclusion{"Security": passRole(run)})
+	if err != nil || c.RoleStatuses["Security"] != "accepted-risk" {
 		t.Fatalf("waiver became PASS %+v %v", c.RoleStatuses, err)
 	}
 }
@@ -503,7 +503,7 @@ func TestPartialRunPublicationCannotCloseEvenWithNoFindings(t *testing.T) {
 	a := gateCard(t, root, "partial-a")
 	b := gateCard(t, root, "partial-b")
 	gatePlan(t, root, []string{a, b}, archiveRequirements())
-	run := gateRun(t, root, archiveInput([]string{a, b}, "pm", "PM"), emptyFindings())
+	run := gateRun(t, root, archiveInput([]string{a, b}, "pm", "QA"), emptyFindings())
 	assignGate(t, root, run, map[string][]string{})
 	s := transactionSnapshot(t, root, b)
 	if err := os.Remove(filepath.Join(s.Entry.Path, "reviews", run.RunID, "manifest.json")); err != nil {
@@ -518,11 +518,11 @@ func TestIncrementalIDsRequireActualPredecessorLineage(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "lineage")
 	gatePlan(t, root, []string{id}, archiveRequirements())
-	f := ReviewFinding{ID: "PM-01", Tier: "medium", Text: "原始 finding", Evidence: "x:1"}
+	f := ReviewFinding{ID: "QA-01", Tier: "medium", Text: "原始 finding", Evidence: "x:1"}
 	findings := emptyFindings()
 	findings.Findings = []ReviewFinding{f}
-	first := gateRun(t, root, archiveInput([]string{id}, "first", "PM"), findings)
-	input := archiveInput([]string{id}, "next", "PM")
+	first := gateRun(t, root, archiveInput([]string{id}, "first", "QA"), findings)
+	input := archiveInput([]string{id}, "next", "QA")
 	input.PreviousRunID = first.RunID
 	input.ReviewedCommit = first.Commit
 	input.Commit = strings.Repeat("c", 40)
@@ -534,17 +534,17 @@ func TestIncrementalIDsRequireActualPredecessorLineage(t *testing.T) {
 		t.Fatal("reused unlinked ID accepted")
 	}
 	if err := WithTransaction(root, reviewScope([]string{id}, true), func(tx *Transaction) error {
-		f.Lineage = &FindingRef{RunID: "foreign", FindingID: "PM-01"}
+		f.Lineage = &FindingRef{RunID: "foreign", FindingID: "QA-01"}
 		findings.Findings = []ReviewFinding{f}
 		if validateFindingLineage(tx, next, findings) == nil {
 			t.Fatal("cross-run lineage accepted")
 		}
-		f.Lineage = &FindingRef{RunID: first.RunID, FindingID: "PM-missing"}
+		f.Lineage = &FindingRef{RunID: first.RunID, FindingID: "QA-missing"}
 		findings.Findings = []ReviewFinding{f}
 		if validateFindingLineage(tx, next, findings) == nil {
 			t.Fatal("prose/missing ID lineage accepted")
 		}
-		f.Lineage = &FindingRef{RunID: first.RunID, FindingID: "PM-01"}
+		f.Lineage = &FindingRef{RunID: first.RunID, FindingID: "QA-01"}
 		findings.Findings = []ReviewFinding{f}
 		return validateFindingLineage(tx, next, findings)
 	}); err != nil {

@@ -247,7 +247,7 @@ func TestSessionSeedReviewDoesNotCreateOverlay(t *testing.T) {
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	_ = session.ReviewModelFieldsFor("PM", "large")
+	_ = session.ReviewModelFieldsFor("QA", "large")
 	if len(session.overlayRaw) != 0 {
 		t.Fatalf("seed wrote overlay: %#v", session.overlayRaw)
 	}
@@ -439,21 +439,21 @@ func TestRestoreFlatReviewStageKeepsOtherScale(t *testing.T) {
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	session.overlayRaw["review_stages"] = map[string]any{"PM": "skip"}
-	if err := session.RestoreInherit("review_stages", "large", "PM"); err != nil {
+	session.overlayRaw["review_stages"] = map[string]any{"QA": "skip"}
+	if err := session.RestoreInherit("review_stages", "large", "QA"); err != nil {
 		t.Fatal(err)
 	}
-	if session.FieldOverridden("review_stages", "large", "PM") {
-		t.Fatalf("large PM still overridden: %#v", session.overlayRaw)
+	if session.FieldOverridden("review_stages", "large", "QA") {
+		t.Fatalf("large QA still overridden: %#v", session.overlayRaw)
 	}
-	if !session.FieldOverridden("review_stages", "small", "PM") {
-		t.Fatalf("small PM override lost: %#v", session.overlayRaw)
+	if !session.FieldOverridden("review_stages", "small", "QA") {
+		t.Fatalf("small QA override lost: %#v", session.overlayRaw)
 	}
-	large, err := config.ReviewStageFor(session.Config, "large", "PM")
+	large, err := config.ReviewStageFor(session.Config, "large", "QA")
 	if err != nil {
 		t.Fatal(err)
 	}
-	small, err := config.ReviewStageFor(session.Config, "small", "PM")
+	small, err := config.ReviewStageFor(session.Config, "small", "QA")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +517,7 @@ func gitOffOverlaySession(t *testing.T) (*Session, string) {
 
 func TestFlatReviewStagesSaveDoesNotConflict(t *testing.T) {
 	session, path := tempOverlaySession(t, config.ModeGlobal)
-	flat := map[string]any{"review_stages": map[string]any{"PM": "skip"}}
+	flat := map[string]any{"review_stages": map[string]any{"QA": "skip"}}
 	if _, err := config.SaveOverlayIfUnchanged(path, flat, map[string]any{}); err != nil {
 		t.Fatal(err)
 	}
@@ -607,20 +607,20 @@ func TestResetReviewRoleOnOverlayBindsAgentDefaults(t *testing.T) {
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	session.overlayRaw["models"] = map[string]any{"review_roles": map[string]any{"PM": map[string]any{
+	session.overlayRaw["models"] = map[string]any{"review_roles": map[string]any{"QA": map[string]any{
 		"model": "old", "large_model": "old-large",
 	}}}
-	session.ResetReviewRoleModel("PM", "large")
-	if !session.FieldOverridden("models", "review_roles", "PM", "large_model") {
+	session.ResetReviewRoleModel("QA", "large")
+	if !session.FieldOverridden("models", "review_roles", "QA", "large_model") {
 		t.Fatalf("reset did not replace large_model: %#v", session.overlayRaw)
 	}
-	reviewer := config.ReviewerFor(session.Config, "large", "PM")
-	model, effort := config.ReviewModelFor(session.Config, reviewer, "PM", "large")
+	reviewer := config.ReviewerFor(session.Config, "large", "QA")
+	model, effort := config.ReviewModelFor(session.Config, reviewer, "QA", "large")
 	defaults := session.Config.Models.Review[reviewer]
-	if model != defaults["model"] || effort != defaults["effort"] || session.Config.Models.ReviewRoles["PM"]["large_agent"] != reviewer {
+	if model != defaults["model"] || effort != defaults["effort"] || session.Config.Models.ReviewRoles["QA"]["large_agent"] != reviewer {
 		t.Fatalf("reset kept old role values: %s/%s", model, effort)
 	}
-	if !session.FieldOverridden("models", "review_roles", "PM", "model") {
+	if !session.FieldOverridden("models", "review_roles", "QA", "model") {
 		t.Fatal("reset must not clear unrelated shared model override")
 	}
 }
@@ -778,27 +778,27 @@ func TestDraftProjectionPreservesRawRulesAndExplicitLanguage(t *testing.T) {
 func TestGlobalReviewerResetUpdatesProjectModelInheritance(t *testing.T) {
 	session, _ := tempOverlaySession(t, config.ModeGlobal)
 	session.Config.Models.Review["claude"] = map[string]string{"model": "claude-model", "effort": "high"}
-	session.Config.Models.ReviewRoles["PM"] = map[string]string{"model": "old-codex", "effort": "low"}
+	session.Config.Models.ReviewRoles["QA"] = map[string]string{"model": "old-codex", "effort": "low"}
 	session.scopeRaw, _ = config.DocumentFromConfig(session.Config)
-	session.SetReviewer("large", "PM", "claude")
-	session.ResetReviewRoleModel("PM", "large")
+	session.SetReviewer("large", "QA", "claude")
+	session.ResetReviewRoleModel("QA", "large")
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	entry := session.Config.Models.ReviewRoles["PM"]
+	entry := session.Config.Models.ReviewRoles["QA"]
 	if entry["large_model"] != "claude-model" || entry["large_effort"] != "high" {
 		t.Fatalf("inherited stale role defaults: %#v", entry)
 	}
 	if session.FieldOverridden("models") {
 		t.Fatal("reset created project overrides")
 	}
-	fields := session.ReviewModelFieldsFor("PM", "large")
+	fields := session.ReviewModelFieldsFor("QA", "large")
 	fields[0].Set("project-model")
 	session.NoteModelOverride(fields[0], "project-model")
-	if err := session.RestoreInherit("models", "review_roles", "PM", "large_model"); err != nil {
+	if err := session.RestoreInherit("models", "review_roles", "QA", "large_model"); err != nil {
 		t.Fatal(err)
 	}
-	if got := session.Config.Models.ReviewRoles["PM"]["large_model"]; got != "claude-model" {
+	if got := session.Config.Models.ReviewRoles["QA"]["large_model"]; got != "claude-model" {
 		t.Fatalf("restore used old reviewer defaults: %q", got)
 	}
 }

@@ -59,8 +59,7 @@ func Run(args []string) (exitCode int) {
 	if agent == "" {
 		roleInput := rest[3]
 		roles := map[string]string{
-			"pm": "PM", "qa": "QA", "csa": "CSA",
-			"codesecurityanalyst": "CSA", "hacker": "Hacker",
+			"qa": "QA", "security": "Security",
 		}
 		role := roles[toLower(roleInput)]
 		if role == "" {

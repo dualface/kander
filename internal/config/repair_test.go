@@ -14,7 +14,7 @@ func TestRepairPreservesValidSettingsAndBacksUpOriginal(t *testing.T) {
 	original := []byte(`{
 		"schema_version": 999, "welcome_complete": true, "kanban_agent": "claude",
 		"launcher": "foreground", "language": "en", "retired_feature": true,
-		"reviewers": {"PM":"claude","QA":"bad"},
+		"reviewers": {"QA":"claude","Security":"bad"},
 		"tui": {"columns":999,"theme":"dark","refresh":15},
 		"models": {"kanban":{"claude":{"large_model":"my-model","small_effort":42}},
 		"review":{"codex":{"model":"custom-review","effort":"high"}}}
@@ -29,7 +29,7 @@ func TestRepairPreservesValidSettingsAndBacksUpOriginal(t *testing.T) {
 	if !result.Changed || result.Created || result.BackupPath == "" {
 		t.Fatalf("result=%+v", result)
 	}
-	if cfg.Language != "en" || cfg.KanbanAgent != "claude" || cfg.KanbanAgents["small"] != "claude" || cfg.Reviewers["large"]["PM"] != "claude" || cfg.Reviewers["large"]["QA"] != "codex" {
+	if cfg.Language != "en" || cfg.KanbanAgent != "claude" || cfg.KanbanAgents["small"] != "claude" || cfg.Reviewers["large"]["QA"] != "claude" || cfg.Reviewers["large"]["Security"] != "codex" {
 		t.Fatalf("valid selections lost: %+v", cfg)
 	}
 	if cfg.TUI.Theme != "dark" || cfg.TUI.Refresh != 15 || cfg.TUI.Columns != DefaultTUIColumns || cfg.Models.Kanban["claude"]["large_model"] != "my-model" || cfg.Models.Review["codex"]["model"] != "custom-review" {
@@ -129,8 +129,8 @@ func TestRepairFillsMissingReviewStageScaleFromTheOther(t *testing.T) {
 	original := []byte(`{
 		"schema_version": 1, "welcome_complete": true, "kanban_agent": "codex",
 		"launcher": "foreground",
-		"reviewers": {"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"},
-		"review_stages": {"large": {"PM":"required","CSA":"skip","Hacker":"skip","QA":"auto"}}
+		"reviewers": {"QA":"codex","Security":"codex"},
+		"review_stages": {"large": {"QA":"required","Security":"auto"}}
 	}`)
 	if err := os.WriteFile(path, original, 0o644); err != nil {
 		t.Fatal(err)
@@ -142,10 +142,10 @@ func TestRepairFillsMissingReviewStageScaleFromTheOther(t *testing.T) {
 	if !result.Changed {
 		t.Fatal("missing small scale must be rewritten")
 	}
-	if cfg.ReviewStages["large"]["PM"] != "required" || cfg.ReviewStages["small"]["PM"] != "required" {
+	if cfg.ReviewStages["large"]["QA"] != "required" || cfg.ReviewStages["small"]["QA"] != "required" {
 		t.Fatalf("missing scale not copied: %+v", cfg.ReviewStages)
 	}
-	if cfg.ReviewStages["small"]["CSA"] != "skip" {
+	if cfg.ReviewStages["small"]["Security"] != "auto" {
 		t.Fatalf("copied scale incomplete: %+v", cfg.ReviewStages["small"])
 	}
 
@@ -154,7 +154,7 @@ func TestRepairFillsMissingReviewStageScaleFromTheOther(t *testing.T) {
 	if err := os.WriteFile(emptyPath, []byte(`{
 		"schema_version": 1, "welcome_complete": true, "kanban_agent": "codex",
 		"launcher": "foreground",
-		"reviewers": {"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}
+		"reviewers": {"QA":"codex","Security":"codex"}
 	}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -176,8 +176,8 @@ func TestRepairWritesWhenOnlyOneReviewStageScaleIsMissing(t *testing.T) {
 	t.Setenv(EnvConfig, path)
 	complete := DefaultConfig()
 	complete.WelcomeComplete = true
-	complete.ReviewStages["large"]["PM"] = "required"
-	complete.ReviewStages["small"]["PM"] = "required"
+	complete.ReviewStages["large"]["QA"] = "required"
+	complete.ReviewStages["small"]["QA"] = "required"
 	if _, err := Save(complete); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestRepairWritesWhenOnlyOneReviewStageScaleIsMissing(t *testing.T) {
 	if !result.Changed {
 		t.Fatal("a normalized config missing only small must be rewritten")
 	}
-	if repaired.ReviewStages["small"]["PM"] != "required" {
+	if repaired.ReviewStages["small"]["QA"] != "required" {
 		t.Fatalf("in-memory small=%v", repaired.ReviewStages["small"])
 	}
 	onDisk, err := os.ReadFile(path)
@@ -223,7 +223,7 @@ func TestRepairWritesWhenOnlyOneReviewStageScaleIsMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.ReviewStages["small"]["PM"] != "required" {
+	if loaded.ReviewStages["small"]["QA"] != "required" {
 		t.Fatalf("disk small=%v", loaded.ReviewStages["small"])
 	}
 }

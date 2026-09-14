@@ -266,7 +266,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 		add(b.Base, b.TargetCommit)
 	}
 	required := 0
-	for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
+	for _, role := range reviewRequirementRoles(b.Requirements) {
 		if b.Requirements[role] != "required" {
 			statuses[role] = b.Requirements[role]
 			if _, ok := r.Roles[role]; ok {

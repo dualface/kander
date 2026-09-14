@@ -219,7 +219,7 @@ func defaultPayload(overrides map[string]any) map[string]any {
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
 		"reviewers": map[string]any{
-			"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex",
+			"QA": "codex", "Security": "codex",
 		},
 	}
 	for k, v := range overrides {

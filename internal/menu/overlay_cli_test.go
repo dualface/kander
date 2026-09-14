@@ -244,7 +244,7 @@ func TestDoctorRepairDoesNotWriteOverlayValues(t *testing.T) {
 	h.writeConfig(defaultPayload(map[string]any{
 		"kanban_agent": "grok",
 		"language":     "en",
-		"reviewers":    map[string]any{"PM": "grok", "CSA": "grok", "Hacker": "grok", "QA": "grok"},
+		"reviewers":    map[string]any{"QA": "grok", "Security": "grok"},
 	}))
 	repo := filepath.Join(h.root, "project")
 	initGitDir(t, repo)

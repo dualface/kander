@@ -21,7 +21,7 @@ func acceptedWrapUpFixture(t *testing.T, onBehalf bool) (string, string, board.D
 	setWindow(t, path, "herdr:w1:t9:w1:p9")
 	cwd := filepath.Join(root, "removed-worktree")
 	base, head := strings.Repeat("a", 40), strings.Repeat("b", 40)
-	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "wrap-plan", Author: "fixture", Basis: "structural receipt fixture", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{task}, Batches: []board.ReviewPlanBatch{{BatchID: "wrap-batch", TaskIDs: []string{task}, Base: base, TargetCommit: head, Requirements: map[string]string{"PM": "N/A: fixture", "QA": "N/A: fixture", "CSA": "N/A: fixture", "Hacker": "N/A: fixture"}}}}
+	plan := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "wrap-plan", Author: "fixture", Basis: "structural receipt fixture", CWD: cwd, ReportLanguage: "zh-CN", TaskIDs: []string{task}, Batches: []board.ReviewPlanBatch{{BatchID: "wrap-batch", TaskIDs: []string{task}, Base: base, TargetCommit: head, Requirements: map[string]string{"QA": "N/A: fixture", "Security": "N/A: fixture"}}}}
 	if err := board.CreateReviewPlan(root, plan); err != nil {
 		t.Fatal(err)
 	}

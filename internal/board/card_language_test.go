@@ -30,7 +30,7 @@ func TestNewCardRecordsConfiguredAgentLanguage(t *testing.T) {
 	}
 
 	// Explicit config value wins, even before initialization completes.
-	if err := os.WriteFile(path, []byte(`{"schema_version":1,"welcome_complete":false,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"ja","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"schema_version":1,"welcome_complete":false,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"ja","reviewers":{"QA":"codex","Security":"codex"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if code, _, stderr := capture(t, func() int { return RunNew([]string{"chore", "lang-config", "配置语种"}) }); code != 0 {

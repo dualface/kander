@@ -113,7 +113,7 @@ func loadEffective(missingOK bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Validate(merged)
+	return validateMergedReviewKeys(merged, raw, overlayRaw)
 }
 
 // Load reads the scope config, merges a project overlay when present, and validates the result.
@@ -361,6 +361,9 @@ func configEditConflicts(current, baseline, target *Config) bool {
 	baselineValue := reflect.ValueOf(*baseline)
 	targetValue := reflect.ValueOf(*target)
 	for i := 0; i < currentValue.NumField(); i++ {
+		if !currentValue.Field(i).CanInterface() {
+			continue
+		}
 		currentField := currentValue.Field(i).Interface()
 		baselineField := baselineValue.Field(i).Interface()
 		targetField := targetValue.Field(i).Interface()

@@ -30,7 +30,7 @@ const (
 
 var (
 	TaskScales       = []string{"large", "small"}
-	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
+	ReviewRoles      = []string{"QA", "Security"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Languages        = []string{"cn", "en", "ja"}
 	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
@@ -142,6 +142,8 @@ type Config struct {
 	Language        string                       `json:"language"`
 	AgentLanguage   string                       `json:"agent_language"`
 	Agents          map[string]AgentDefinition   `json:"agents,omitempty"`
+
+	legacyReviewKeys []string
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -150,6 +152,7 @@ func Clone(src *Config) *Config {
 		return nil
 	}
 	out := *src
+	out.legacyReviewKeys = src.LegacyReviewKeys()
 	out.Agents = CloneAgents(src.Agents)
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
 	out.Reviewers = cloneNested(src.Reviewers)
@@ -623,6 +626,7 @@ func Validate(raw any) (*Config, error) {
 	if !ok {
 		return nil, configErrorf("config.config_root_must_be_a_json_object")
 	}
+	obj, legacyKeys := NormalizeLegacyReviewKeys(obj)
 	if schemaVersionOf(obj["schema_version"]) != SchemaVersion {
 		return nil, configErrorf(
 			"config.unsupported_schema_version_only_is_supported", obj["schema_version"], SchemaVersion,
@@ -734,6 +738,8 @@ func Validate(raw any) (*Config, error) {
 		Language:        language,
 		AgentLanguage:   agentLanguage,
 		Agents:          definitions,
+
+		legacyReviewKeys: legacyKeys,
 	}, nil
 }
 

@@ -16,7 +16,7 @@ func TestAgentLanguageDefaultsFollowInterfaceLanguage(t *testing.T) {
 			"welcome_complete": true,
 			"kanban_agent":     "codex",
 			"launcher":         "tmux",
-			"reviewers":        map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+			"reviewers":        map[string]any{"QA": "codex", "Security": "codex"},
 		}
 	}
 	payload := base()
@@ -36,7 +36,7 @@ func TestAgentLanguageDefaultsFollowInterfaceLanguage(t *testing.T) {
 		t.Fatalf("explicit value should be kept trimmed, got %q err=%v", cfg.AgentLanguage, err)
 	}
 	if cfg, err = Validate(map[string]any{"schema_version": 1, "welcome_complete": true, "kanban_agent": "codex", "launcher": "tmux",
-		"reviewers":      map[string]any{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
+		"reviewers":      map[string]any{"QA": "codex", "Security": "codex"},
 		"agent_language": strings.Repeat("语", 64)}); err != nil || utf8.RuneCountInString(cfg.AgentLanguage) != 64 {
 		t.Fatalf("64 multibyte characters must be accepted: %q err=%v", cfg.AgentLanguage, err)
 	}

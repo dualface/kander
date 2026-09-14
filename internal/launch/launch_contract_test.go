@@ -315,7 +315,7 @@ func TestResumeMessageFileCursorWorkingAndMissingSession(t *testing.T) {
 	fileID, filePath := makeTodo(t, root, "resume-file")
 	startThenReview(t, root, "grok", fileID, filePath)
 	findings := filepath.Join(root, "findings.md")
-	if err := os.WriteFile(findings, []byte("- [QA][high] 越界读取\n- [PM][medium] 缺少验收 3\n"), 0o644); err != nil {
+	if err := os.WriteFile(findings, []byte("- [Security][high] 越界读取\n- [QA][medium] 缺少验收 3\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, _, err := capture(t, func() error {
@@ -334,7 +334,7 @@ func TestResumeMessageFileCursorWorkingAndMissingSession(t *testing.T) {
 	startThenReview(t, root, "cursor", cursorID, cursorPath)
 	t.Setenv("KANBAN_CURSOR_CHAT_FAIL", "1")
 	out, _, err := capture(t, func() error {
-		return commandResume(root, nil, "", cursorID, "QA finding: 修复空指针", "", true, 61)
+		return commandResume(root, nil, "", cursorID, "Security finding: 修复空指针", "", true, 61)
 	})
 	if err != nil {
 		t.Fatal(err)

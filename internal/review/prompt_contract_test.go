@@ -13,7 +13,7 @@ import (
 func promptContractContext(agent string) reviewContext {
 	return reviewContext{
 		agent:          agent,
-		role:           "QA",
+		role:           "Security",
 		root:           "/worktree",
 		base:           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		commit:         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -114,7 +114,7 @@ func mustReviewerArgs(t *testing.T, agent string) process.ProcessInvocation {
 	t.Helper()
 	runtime := t.TempDir()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
-	settings, err := agentSettingsFor(agent, "PM", "large")
+	settings, err := agentSettingsFor(agent, "QA", "large")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,4 +132,21 @@ func mustReviewerArgs(t *testing.T, agent string) process.ProcessInvocation {
 		t.Fatal(err)
 	}
 	return inv
+}
+
+func TestTwoRolePromptContract(t *testing.T) {
+	if len(roleRules) != 2 || !strings.HasPrefix(roleRules["QA"], "Contract check:") {
+		t.Fatal("QA must begin with contract assessment; only two prompts allowed")
+	}
+	qa := roleRules["QA"]
+	for _, text := range []string{"ACCEPTANCE_CRITERIA", "satisfied or unsatisfied", "blocking finding", "existing module responsibilities", "performance acceptance criteria are QA"} {
+		if !strings.Contains(qa, text) {
+			t.Fatal("QA missing", text)
+		}
+	}
+	security := roleRules["Security"]
+	boundary, exploit := strings.Index(security, "Trace untrusted inputs"), strings.Index(security, "Then trace end-to-end exploit chains")
+	if boundary < 0 || exploit <= boundary || !strings.Contains(security, "each root cause only once") || !strings.Contains(security, "no qualifying exploit chain exists") {
+		t.Fatal("Security must trace boundaries before exploit chains and deduplicate roots")
+	}
 }

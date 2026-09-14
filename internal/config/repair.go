@@ -101,7 +101,7 @@ func repairValues(raw any) (*Config, error) {
 	if ok {
 		// Clone so later review_stages backfill cannot alias the raw map that
 		// repairAt compares against the encoded result to decide whether to write.
-		provided = cloneRawObjectDeep(provided)
+		provided, _ = NormalizeLegacyReviewKeys(provided)
 	}
 	// A missing agent_language follows the interface language the config will end up with, so a Chinese
 	// config repaired by doctor keeps talking Chinese instead of picking up doctor's English default.

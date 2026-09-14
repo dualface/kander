@@ -312,7 +312,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, _, err := capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "QA finding: 补齐空输入校验", "", true, 61)
+		return commandResume(root, nil, "", taskID, "Security finding: 补齐空输入校验", "", true, 61)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -331,7 +331,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 	if !strings.Contains(cmd, filepath.Join(fakeBin, "claude")) || !strings.Contains(cmd, "--resume "+session) || strings.Contains(cmd, "--session-id") {
 		t.Fatalf("command=%s", cmd)
 	}
-	if strings.Contains(cmd, "QA finding") {
+	if strings.Contains(cmd, "Security finding") {
 		t.Fatalf("message leaked onto argv: %s", cmd)
 	}
 	idx := strings.Index(cmd, "UTF-8 task file at ")
@@ -342,7 +342,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 	pathEnd := strings.IndexByte(rest, ';')
 	resumeFile := strings.TrimSpace(rest[:pathEnd])
 	resumeBody, _ := os.ReadFile(resumeFile)
-	if !strings.Contains(string(resumeBody), "QA finding: 补齐空输入校验") {
+	if !strings.Contains(string(resumeBody), "Security finding: 补齐空输入校验") {
 		t.Fatalf("resume prompt=%s", resumeBody)
 	}
 
@@ -443,7 +443,7 @@ func TestResumeRequiresMessageAndCodexRollout(t *testing.T) {
 		"执行 Kanban 任务 "+taskID+"; full instructions are in the UTF-8 task file at /tmp/kander-task.md; read the complete file first and follow it exactly.")
 	_ = os.Chtimes(target, time.Unix(1_700_000_000, 0), time.Unix(1_700_000_000, 0))
 	_, _, err = capture(t, func() error {
-		return commandResume(root, nil, "", taskID, "PM finding", "", true, 61)
+		return commandResume(root, nil, "", taskID, "QA finding", "", true, 61)
 	})
 	if err != nil {
 		t.Fatal(err)
