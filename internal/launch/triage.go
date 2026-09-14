@@ -99,7 +99,11 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskInstruction(t("launch.prompt.triage_head", triageTarget(request.Repository, request.Number)), taskFile)
+	head := t("launch.prompt.triage_head", triageTarget(request.Repository, request.Number))
+	if request.ResultSync {
+		head = t("launch.prompt.result_head", triageTarget(request.Repository, request.Number))
+	}
+	prompt := taskInstruction(head, taskFile)
 	args, err := agentArguments(agent, cfg.Models.Kanban[agent], "small", session, false, cfg)
 	if err != nil {
 		return result, err
@@ -177,6 +181,9 @@ func validateTriageEvidence(request issue.TriageLaunch) error {
 // confirmed identity only. The remote title, body and comments never enter the
 // prompt; the agent reads them from the evidence files as untrusted data.
 func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, error) {
+	if request.ResultSync {
+		return resultAgentPrompt(request, paths)
+	}
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}

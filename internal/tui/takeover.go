@@ -20,13 +20,11 @@ const (
 	takeoverFinished
 )
 
-// takeoverState is the confirmation dialog of the issues overlay `s` key for an
-// unbound issue. The TUI starts the same takeover session the
-// `kander issue triage` command starts; card creation happens only inside that
-// session after the user agrees. Bound issues use `g` to jump instead, so this
-// dialog never carries a card ID.
+// takeoverState confirms investigation or completed-result reconciliation.
+// cardID selects only the result protocol; the original completed card stays read-only.
 type takeoverState struct {
 	sequence   uint64
+	cardID     string
 	phase      takeoverPhase
 	repository issue.Repository
 	number     int
@@ -61,8 +59,7 @@ func takeoverIdentity(repository issue.Repository, number int) string {
 	return repository.Owner + "/" + repository.Name + "#" + strconv.Itoa(number)
 }
 
-// issuesTakeover is the `s` key of the overlay. Only an unbound issue opens the
-// confirmation dialog; a bound selection ignores the key so jump stays on `g`.
+// issuesTakeover opens investigation for unbound issues or result sync for done cards.
 func (a *App) issuesTakeover() {
 	st := a.Issues
 	if st == nil || st.importing || a.Takeover != nil {
@@ -74,7 +71,12 @@ func (a *App) issuesTakeover() {
 		a.issuesSetNotice(a.Context.IssuesNoTarget)
 		return
 	}
-	if _, ok := a.issuesLocalCard(number); ok {
+	if card, ok := a.issuesLocalCard(number); ok {
+		if card.State != "done" {
+			return
+		}
+		a.openTakeover(*repository, number)
+		a.Takeover.cardID = card.TaskID
 		return
 	}
 	a.openTakeover(*repository, number)
@@ -112,6 +114,11 @@ func (a *App) openTakeover(repository issue.Repository, number int) {
 func (a *App) applyTakeoverPreview(result takeoverPreviewResult) {
 	dialog := a.Takeover
 	if dialog == nil || dialog.sequence != result.sequence || dialog.phase != takeoverLoading {
+		return
+	}
+	if !a.takeoverTargetCurrent(dialog) {
+		a.Takeover = nil
+		a.issuesSetNotice(t("tui.issues_result_stale"))
 		return
 	}
 	if result.err != nil {
@@ -158,7 +165,15 @@ func (a *App) handleTakeoverKey(key string) {
 // startTakeover runs the shared StartTriage path in the background; the TUI
 // never touches the board and never blocks on the network or the container.
 func (a *App) startTakeover(dialog *takeoverState) {
+	if !a.takeoverTargetCurrent(dialog) {
+		a.Takeover = nil
+		a.issuesSetNotice(t("tui.issues_result_stale"))
+		return
+	}
 	runner := a.TriageIssue
+	if dialog.cardID != "" {
+		runner = a.ResultIssue
+	}
 	if runner == nil {
 		dialog.phase = takeoverFinished
 		dialog.failed = true
@@ -168,7 +183,7 @@ func (a *App) startTakeover(dialog *takeoverState) {
 	// The agent and launcher the dialog showed and validated are passed on, so a
 	// configuration change after the preview cannot start a different pair, and
 	// never a launcher that needs the caller's terminal.
-	options := issue.TriageOptions{Agent: dialog.agent, Launcher: dialog.launcher}
+	options := issue.TriageOptions{Agent: dialog.agent, Launcher: dialog.launcher, CardID: dialog.cardID}
 	sequence, repository, number := dialog.sequence, dialog.repository, dialog.number
 	dialog.phase = takeoverRunning
 	dialog.failed = false
@@ -217,6 +232,9 @@ func takeoverTitle(dialog *takeoverState) string {
 		}
 		return t("tui.start_title_started")
 	}
+	if dialog.cardID != "" {
+		return t("tui.issues_result_title", itoa(dialog.number))
+	}
 	return t("tui.issues_takeover_title", itoa(dialog.number))
 }
 
@@ -237,7 +255,11 @@ func (a *App) renderTakeover() (popupBox, string) {
 		paragraphs = []string{dialog.message}
 		hint = t("tui.start_result_keys")
 	default:
-		paragraphs = append(paragraphs, t("tui.issues_takeover_body", identity))
+		body := t("tui.issues_takeover_body", identity)
+		if dialog.cardID != "" {
+			body = t("tui.issues_result_body", identity, dialog.cardID)
+		}
+		paragraphs = append(paragraphs, body)
 		if dialog.agent != "" || dialog.launcher != "" {
 			paragraphs = append(paragraphs, t("tui.start_settings", dialog.agent, dialog.launcher))
 		}
@@ -266,4 +288,16 @@ func (a *App) handleTakeoverMouse(x, y, buttons int) {
 	} else {
 		dialog.bodyView.ScrollUp(-delta)
 	}
+}
+
+func (a *App) takeoverTargetCurrent(dialog *takeoverState) bool {
+	repository := a.issuesRepository()
+	if repository == nil || *repository != dialog.repository || a.issuesSelectedNumber() != dialog.number {
+		return false
+	}
+	card, bound := a.issuesLocalCard(dialog.number)
+	if dialog.cardID == "" {
+		return !bound
+	}
+	return bound && card.State == "done" && card.TaskID == dialog.cardID
 }

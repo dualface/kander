@@ -1,0 +1,9 @@
+{
+  "issue.result_usage": "用法: kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]",
+  "tui.issues_hint_done": "↑↓ 选择 · Enter 详情 · g 任务卡 · s 核对结果 · ? 帮助 · Esc 关闭",
+  "tui.issues_result_help": "核对已完成处理结果",
+  "tui.issues_result_title": "核对 Issue #{{.V0}} 处理结果",
+  "tui.issues_result_body": "启动 {{.V0}} 的结果核对（done 卡片 {{.V1}}）？Agent 可能追加缺少的处理结果评论。关闭 Issue 必须另行明确确认。原卡片保持不变。",
+  "tui.issues_result_stale": "选中的 Issue、绑定或卡片状态已变化，请重新选择。",
+  "launch.prompt.result_head": "核对已完成 Issue 处理结果 {{.V0}}"
+}

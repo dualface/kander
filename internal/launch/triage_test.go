@@ -306,3 +306,83 @@ func TestPreviewTriageResolvesConfiguredDefaults(t *testing.T) {
 		t.Fatal("unknown launcher must fail")
 	}
 }
+
+func TestResultSessionPromptAndLaunchCleanup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fixture is POSIX")
+	}
+	for _, fail := range []bool{false, true} {
+		t.Run(itoaBool(fail), func(t *testing.T) {
+			root, _, _ := setupBoard(t)
+			request := triageRequest(t, root)
+			data, err := os.ReadFile(request.JSONPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			record, err := issue.UnmarshalImportSnapshot(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id := "20260914-result-task"
+			dir := filepath.Join(root, "done", id)
+			if err := os.MkdirAll(filepath.Join(dir, "source"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, issue.SourceFileName), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			spec := "# Completed\n\n- SIZE: small\n- LANGUAGE: ja\n\n## SUMMARY\n\nResolved.\n"
+			if err := os.WriteFile(filepath.Join(dir, "spec.md"), []byte(spec), 0600); err != nil {
+				t.Fatal(err)
+			}
+			request.CardID = id
+			request.ResultSync = true
+			request.Agent = "claude"
+			request.Launcher = "tmux"
+			old := createTaskFile
+			var taskFile, body string
+			createTaskFile = func(text, prefix string) (string, error) {
+				body = text
+				p, e := old(text, prefix)
+				taskFile = p
+				return p, e
+			}
+			t.Cleanup(func() {
+				createTaskFile = old
+				if taskFile != "" {
+					_ = os.Remove(taskFile)
+				}
+			})
+			if fail {
+				t.Setenv("KANBAN_TMUX_RESPAWN_FAIL", "1")
+			}
+			_, err = StartTriage(request)
+			if fail && err == nil || !fail && err != nil {
+				t.Fatalf("launch err=%v", err)
+			}
+			for _, want := range []string{"Reconcile the completed result", "NEVER authorizes closing", "--action apply", "KANDER-ISSUE-RULES.md", `"ja"`} {
+				if !strings.Contains(body, want) {
+					t.Fatalf("missing %q: %s", want, body)
+				}
+			}
+			if strings.Contains(body, "issue import") || strings.Contains(body, record.Issue.Title) {
+				t.Fatal("intake or remote text leaked into result prompt")
+			}
+			if fail {
+				if _, err := os.Stat(taskFile); !os.IsNotExist(err) {
+					t.Fatal("failed start retained task file")
+				}
+			}
+			after, _ := os.ReadFile(filepath.Join(dir, "spec.md"))
+			if string(after) != spec {
+				t.Fatal("completed card changed")
+			}
+		})
+	}
+}
+func itoaBool(value bool) string {
+	if value {
+		return "failure"
+	}
+	return "success"
+}

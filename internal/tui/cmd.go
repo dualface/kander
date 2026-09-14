@@ -151,6 +151,13 @@ func Run(_ []string) int {
 		}
 		return issue.StartTriage(ctx, cli.IssueProvider(), root, repository, number, options)
 	}
+	app.ResultIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
+		provider, ok := cli.IssueProvider().(issue.ResultProvider)
+		if !ok {
+			return issue.TriageOutcome{}, errors.New(t("tui.issues_takeover_unavailable"))
+		}
+		return issue.StartResult(ctx, provider, root, repository, number, options)
+	}
 	app.MinColumnWidth = clampMinColumnWidth(prefs.MinColumnWidth)
 	app.Model.SetBoard(initial)
 	app.showJournalWarnings(initial.Warnings)

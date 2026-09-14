@@ -1,0 +1,9 @@
+{
+  "issue.result_usage": "使い方: kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]",
+  "tui.issues_hint_done": "↑↓ 選択 · Enter 詳細 · g カード · s 結果確認 · ? ヘルプ · Esc 閉じる",
+  "tui.issues_result_help": "完了した処理結果を確認",
+  "tui.issues_result_title": "Issue #{{.V0}} の処理結果を確認",
+  "tui.issues_result_body": "{{.V0}} の結果確認を開始しますか（done カード {{.V1}}）？不足する結果コメントを Agent が追加する場合があります。Issue を閉じるには別途明示的な確認が必要です。元のカードは変更しません。",
+  "tui.issues_result_stale": "選択した Issue、紐付け、カードの状態が変わりました。選択し直してください。",
+  "launch.prompt.result_head": "完了した Issue の処理結果を確認 {{.V0}}"
+}

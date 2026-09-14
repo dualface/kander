@@ -82,7 +82,10 @@ func (a *App) issuesHelpEntries() []helpEntry {
 		{"l", t("tui.filter_issues_by_label")},
 	}
 	if a != nil && a.Issues != nil && a.issuesSelectedNumber() > 0 {
-		if _, ok := a.issuesSelectedBound(); ok {
+		if card, ok := a.issuesSelectedBound(); ok {
+			if card.State == "done" {
+				entries = append(entries, helpEntry{"s", t("tui.issues_result_help")})
+			}
 			entries = append(entries, helpEntry{"g", t("tui.jump_to_local_card")})
 		} else {
 			entries = append(entries,

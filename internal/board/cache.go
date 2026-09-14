@@ -25,7 +25,13 @@ func CacheRoot(root string) string {
 // Windows). Every component that already exists is tightened the same way, not
 // only the leaf.
 func EnsureCacheDir(root string, parts ...string) (string, error) {
-	path := CacheRoot(root)
+	return EnsurePrivateDataDir(root, append([]string{"caches"}, parts...)...)
+}
+
+// EnsurePrivateDataDir creates feature-owned durable private storage below the
+// board control root. Unlike caches, recovery evidence must not be pruned.
+func EnsurePrivateDataDir(root string, parts ...string) (string, error) {
+	path := control(root)
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." || part != filepath.Base(part) || strings.ContainsAny(part, `/\`) {
 			return "", kanbanError("board.invalid_board_path", path)

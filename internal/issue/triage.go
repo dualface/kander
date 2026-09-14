@@ -41,6 +41,8 @@ type TriageOptions struct {
 // confirmed identity, the local evidence paths and the caller overrides; remote
 // text never enters it, so the launcher can build its prompt from paths only.
 type TriageLaunch struct {
+	// ResultSync selects the independent completed-result protocol.
+	ResultSync   bool
 	Root         string
 	Repository   Repository
 	Number       int

@@ -33,7 +33,8 @@ path. The overlay marks imported issues with their task ID and state, and
 appends "update available" when the remote `updated_at` is newer than the
 fetched snapshot. It never overwrites the card on its own. The `s` key starts a
 takeover session for an unbound issue only; the "Takeover session" section
-describes that path. The footer hint and the Issues help entries follow the
+describes that path. For a done card, `s` instead starts
+[result reconciliation](github-issue-results.md). The footer hint and the Issues help entries follow the
 same bound/unbound judgment as the keys.
 
 ## Identity and idempotency
@@ -225,7 +226,8 @@ and agrees on the plan with the user before anything is written:
 - An issue without a local card opens a confirmation dialog with the resolved
   agent and launcher; `y`/`Enter` starts the session. The dialog is only a
   confirmation: no card is created or moved.
-- An issue whose card is already bound hides and disables `s` (and `i` / `I`).
+- A bound issue hides and disables `i` / `I`. Non-done cards also disable `s`;
+  done cards use `s` for [result reconciliation](github-issue-results.md).
   Press `g` instead to close the overlay and select that card on the board,
   reusing the existing filter-clear and archived-column expansion behavior; a
   missing card keeps a clear notice. Completing a bound card's contract from
@@ -322,3 +324,10 @@ and links are untrusted:
 
 Import never fetches a link, attachment, or referenced code, and never executes
 anything from the issue.
+
+## Completed results
+
+A done anchor card exposes a distinct result reconciliation session through `s` or
+`kander issue result`. See [GitHub issue results](github-issue-results.md) for the
+controlled publication/decision protocol and durable recovery boundaries. It never
+continues implementation or intake on the completed card.

@@ -61,6 +61,7 @@ type App struct {
 	// the shared issue.StartTriage path, the same one `kander issue triage`
 	// uses. cmd.go binds both and tests inject fakes.
 	PrepareTriage func() (launch.TriagePreview, error)
+	ResultIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
 	TriageIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
 	// While Takeover is non-nil it covers the issues overlay and owns the input.
 	Takeover    *takeoverState

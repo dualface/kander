@@ -69,7 +69,10 @@ func (a *App) issuesActionHint() string {
 	if a.issuesSelectedNumber() <= 0 {
 		return t("tui.issues_hint_none")
 	}
-	if _, ok := a.issuesSelectedBound(); ok {
+	if card, ok := a.issuesSelectedBound(); ok {
+		if card.State == "done" {
+			return t("tui.issues_hint_done")
+		}
 		return t("tui.issues_hint_bound")
 	}
 	return t("tui.issues_hint")
