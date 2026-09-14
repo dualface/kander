@@ -196,7 +196,7 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 		return err
 	}
 	if agent == nil {
-		if _, err := observedDispatchExit(ctx, s); err != nil {
+		if _, err := observedDispatchExit(ctx, s, d.Input.ID); err != nil {
 			return err
 		}
 	}

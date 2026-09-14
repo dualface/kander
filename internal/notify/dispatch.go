@@ -67,14 +67,6 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 	if err != nil {
 		return err
 	}
-	// Accepted retries may recover the same payload only after a fresh stopped
-	// observation. An explicit pane override cannot prove the old executor exited.
-	if d.State == board.DispatchAccepted && paneOverride == "" {
-		d, _, err = launch.RecoverAcceptedDispatch(parent, root, d)
-		if err != nil {
-			return err
-		}
-	}
 	authorization := d.Authorization
 	defer func() {
 		if deliveryErr == nil {
@@ -85,6 +77,15 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			deliveryErr = launch.PrintDispatchResult(current)
 		}
 	}()
+	// Accepted retries may recover the same payload only after a fresh stopped
+	// observation. An explicit pane override cannot prove the old executor exited.
+	if d.State == board.DispatchAccepted && paneOverride == "" {
+		d, _, err = launch.RecoverAcceptedDispatch(parent, root, d)
+		if err != nil {
+			return err
+		}
+	}
+	authorization = d.Authorization
 	if receiptExists(d) {
 		return launch.PrintDispatchResult(d)
 	}

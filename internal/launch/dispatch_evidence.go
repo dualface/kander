@@ -218,7 +218,7 @@ func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result 
 		if e = cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(s.Text)); e != nil {
 			return e
 		}
-		exit, e := observedDispatchExit(ctx, s)
+		exit, e := observedDispatchExit(ctx, s, r.DispatchID)
 		if e != nil {
 			return e
 		}

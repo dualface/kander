@@ -82,7 +82,7 @@ fi
 				t.Fatal(readErr)
 			}
 			if !stopped {
-				if err == nil || current.Authorization != d.Authorization {
+				if err == nil || current.Authorization != d.Authorization || !strings.Contains(err.Error(), d.Input.ID) || strings.Contains(err.Error(), "fresh confirmed exit required") {
 					t.Fatalf("unknown takeover: %+v %v", current, err)
 				}
 				return
