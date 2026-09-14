@@ -1,10 +1,10 @@
 {
   "tui.welcome_title": "Kander へようこそ",
   "tui.welcome_intro": "カンバンで複数の AI Agent をまとめて進めます。まだタスクカードはありません。次の方法で始められます：",
-  "tui.welcome_item_chat": "1. c でチャットを開き、Agent とこれから扱うタスクを相談する",
-  "tui.welcome_item_issues": "2. g で GitHub Issue を閲覧し、対応が必要な Issue を確認する",
-  "tui.welcome_item_help": "3. ? で利用可能なショートカットを表示する",
-  "tui.welcome_item_options": "4. o でオプションを開く",
+  "tui.welcome_item_chat": "1. `c` でチャットを開き、Agent とこれから扱うタスクを相談する",
+  "tui.welcome_item_issues": "2. `g` で GitHub Issue を閲覧し、対応が必要な Issue を確認する",
+  "tui.welcome_item_help": "3. `?` で利用可能なショートカットを表示する",
+  "tui.welcome_item_options": "4. `o` でオプションを開く",
   "tui.welcome_tip_title": "ヒント",
   "tui.welcome_tip": "初めて使う前に、利用する Agent を設定することをおすすめします",
   "tui.welcome_hint": "Esc またはクリックで閉じる"

@@ -1,10 +1,10 @@
 {
   "tui.welcome_title": "欢迎使用 Kander",
   "tui.welcome_intro": "用看板调度多个 AI Agent。当前还没有任务卡，用以下方式开始：",
-  "tui.welcome_item_chat": "1. 按 c 打开对话：开始与 Agent 讨论要处理的任务",
-  "tui.welcome_item_issues": "2. 按 g 浏览 GitHub Issue, 查看需要处理的 Issue",
-  "tui.welcome_item_help": "3. 按 ? 查看可用的快捷键",
-  "tui.welcome_item_options": "4. 按 o 打开选项对话框",
+  "tui.welcome_item_chat": "1. 按 `c` 打开对话：开始与 Agent 讨论要处理的任务",
+  "tui.welcome_item_issues": "2. 按 `g` 浏览 GitHub Issue，查看需要处理的 Issue",
+  "tui.welcome_item_help": "3. 按 `?` 查看可用的快捷键",
+  "tui.welcome_item_options": "4. 按 `o` 打开选项对话框",
   "tui.welcome_tip_title": "提示",
   "tui.welcome_tip": "首次使用前建议先配置要使用的 Agent",
   "tui.welcome_hint": "Esc 或单击关闭"

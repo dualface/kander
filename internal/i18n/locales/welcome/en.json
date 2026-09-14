@@ -1,10 +1,10 @@
 {
   "tui.welcome_title": "Welcome to Kander",
   "tui.welcome_intro": "Coordinate multiple AI agents on one board. There are no task cards yet. Start here:",
-  "tui.welcome_item_chat": "1. Press c to open chat and discuss the work with an agent",
-  "tui.welcome_item_issues": "2. Press g to browse GitHub issues and see what needs attention",
-  "tui.welcome_item_help": "3. Press ? to view available shortcuts",
-  "tui.welcome_item_options": "4. Press o to open the options panel",
+  "tui.welcome_item_chat": "1. Press `c` to open chat and discuss the work with an agent",
+  "tui.welcome_item_issues": "2. Press `g` to browse GitHub issues and see what needs attention",
+  "tui.welcome_item_help": "3. Press `?` to view available shortcuts",
+  "tui.welcome_item_options": "4. Press `o` to open the options panel",
   "tui.welcome_tip_title": "Tip",
   "tui.welcome_tip": "Before your first run, configure the agent you want to use",
   "tui.welcome_hint": "Esc or click to close"

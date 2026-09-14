@@ -10,6 +10,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/i18n"
 	"github.com/dualface/kander/internal/launch"
 )
 
@@ -172,6 +173,48 @@ func TestWelcomeFollowsUILanguageNotAgentLanguage(t *testing.T) {
 	config.BindConfigLanguage(&config.Config{Language: "ja", AgentLanguage: "en"})
 	if view := welcomeView(app); !strings.Contains(view, "Kander へようこそ") {
 		t.Fatalf("UI language ja missing:\n%s", view)
+	}
+}
+
+func TestWelcomeCopyMatchesLockedCopy(t *testing.T) {
+	want := map[string]map[string]string{
+		"cn": {
+			"tui.welcome_title":        "欢迎使用 Kander",
+			"tui.welcome_intro":        "用看板调度多个 AI Agent。当前还没有任务卡，用以下方式开始：",
+			"tui.welcome_item_chat":    "1. 按 `c` 打开对话：开始与 Agent 讨论要处理的任务",
+			"tui.welcome_item_issues":  "2. 按 `g` 浏览 GitHub Issue，查看需要处理的 Issue",
+			"tui.welcome_item_help":    "3. 按 `?` 查看可用的快捷键",
+			"tui.welcome_item_options": "4. 按 `o` 打开选项对话框",
+			"tui.welcome_tip_title":    "提示",
+			"tui.welcome_tip":          "首次使用前建议先配置要使用的 Agent",
+		},
+		"en": {
+			"tui.welcome_title":        "Welcome to Kander",
+			"tui.welcome_intro":        "Coordinate multiple AI agents on one board. There are no task cards yet. Start here:",
+			"tui.welcome_item_chat":    "1. Press `c` to open chat and discuss the work with an agent",
+			"tui.welcome_item_issues":  "2. Press `g` to browse GitHub issues and see what needs attention",
+			"tui.welcome_item_help":    "3. Press `?` to view available shortcuts",
+			"tui.welcome_item_options": "4. Press `o` to open the options panel",
+			"tui.welcome_tip_title":    "Tip",
+			"tui.welcome_tip":          "Before your first run, configure the agent you want to use",
+		},
+		"ja": {
+			"tui.welcome_title":        "Kander へようこそ",
+			"tui.welcome_intro":        "カンバンで複数の AI Agent をまとめて進めます。まだタスクカードはありません。次の方法で始められます：",
+			"tui.welcome_item_chat":    "1. `c` でチャットを開き、Agent とこれから扱うタスクを相談する",
+			"tui.welcome_item_issues":  "2. `g` で GitHub Issue を閲覧し、対応が必要な Issue を確認する",
+			"tui.welcome_item_help":    "3. `?` で利用可能なショートカットを表示する",
+			"tui.welcome_item_options": "4. `o` でオプションを開く",
+			"tui.welcome_tip_title":    "ヒント",
+			"tui.welcome_tip":          "初めて使う前に、利用する Agent を設定することをおすすめします",
+		},
+	}
+	for lang, keys := range want {
+		for id, text := range keys {
+			if got := i18n.Text(lang, id); got != text {
+				t.Errorf("%s %s = %q, want %q", lang, id, got, text)
+			}
+		}
 	}
 }
 
