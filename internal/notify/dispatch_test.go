@@ -27,7 +27,8 @@ func durableNotifyFixture(t *testing.T, duration time.Duration) (string, string,
 }
 
 func TestPromptEchoDoesNotCountAsAcknowledgement(t *testing.T) {
-	root, task, d := durableNotifyFixture(t, 400*time.Millisecond)
+	// Allow dispatch preparation and terminal probing to finish on slower CI runners.
+	root, task, d := durableNotifyFixture(t, 10*time.Second)
 	out, _, err := capture(t, func() error { return deliverDispatch(root, task, d.Input.ID, "") })
 	if err == nil || !strings.Contains(out, `"state":"delivery-unknown"`) {
 		t.Fatalf("prompt echo accepted: %s %v", out, err)

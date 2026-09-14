@@ -206,6 +206,8 @@ func installPOSIXFakes(t *testing.T, herdr bool) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux/herdr fakes are POSIX")
 	}
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	writeCompleteConfig(t)
 	bin := t.TempDir()
 	writeFakeTmux(t, filepath.Join(bin, "tmux"))
 	if herdr {

@@ -207,6 +207,7 @@ func TestTriageWindowNameIsBounded(t *testing.T) {
 }
 
 func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
+	setupBoard(t)
 	config.ApplyLanguageArgument(nil)
 	config.BindConfigLanguage(nil)
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
@@ -240,6 +241,7 @@ func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
 }
 
 func TestTriagePromptImportsOnlyWithoutABoundCard(t *testing.T) {
+	setupBoard(t)
 	config.ApplyLanguageArgument(nil)
 	config.BindConfigLanguage(nil)
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
