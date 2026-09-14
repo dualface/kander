@@ -3,11 +3,13 @@ package ghcli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/issue/ghcli/ghclitest"
 )
 
@@ -100,6 +102,24 @@ func TestResultProviderRejectsIncompleteUnreadableAndForeignReplies(t *testing.T
 			ghclitest.SetRoutes(t, "gh", routes)
 			if _, err := NewProvider(Options{}).ReadResult(context.Background(), testRepository(), 42); err == nil {
 				t.Fatal("unsafe result observation accepted")
+			}
+		})
+	}
+}
+
+func TestResultWriteDistinguishesDefiniteRejectionFromUncertainty(t *testing.T) {
+	ghclitest.Install(t)
+	for _, code := range []int{400, 401, 403, 404, 422, 429, 408, 500, 503} {
+		t.Run(fmt.Sprint(code), func(t *testing.T) {
+			ghclitest.Set(t, "gh", ghclitest.Options{Stderr: fmt.Sprintf("gh: request failed (HTTP %d)\n", code), Exit: 1})
+			_, err := NewProvider(Options{}).PostResult(context.Background(), testRepository(), 42, "result")
+			if err == nil {
+				t.Fatal("failure reported success")
+			}
+			var rejected *issue.ResultWriteRejection
+			want := code < 500 && code != 408
+			if errors.As(err, &rejected) != want {
+				t.Fatalf("classification for %d: %v", code, err)
 			}
 		})
 	}

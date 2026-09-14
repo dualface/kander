@@ -227,8 +227,8 @@ func TestResultCloseConsentRefusalAndReopening(t *testing.T) {
 		t.Fatal(err)
 	}
 	d.Decision = "yes"
-	if _, err := DecideResult(ctx, fake, root, repo, 42, id, d); err != nil || fake.closes != 0 {
-		t.Fatal("refusal was bypassed")
+	if _, err := DecideResult(ctx, fake, root, repo, 42, id, d); err == nil || fake.closes != 0 {
+		t.Fatal("refusal must explicitly reject an unconfirmed override")
 	}
 	d.Reconsider = true
 	d.UserReference = "User explicitly reconsidered and confirmed closing this issue."
@@ -321,5 +321,96 @@ func TestResultRejectsChangedBindingStateAndPrivateText(t *testing.T) {
 	}
 	if fake.posts != 0 {
 		t.Fatal("invalid target wrote")
+	}
+}
+
+func TestResultPublicationAllowsLongMarkdownAndHTTPS(t *testing.T) {
+	root, repo, id, fake := resultFixture(t)
+	inspection := inspectFixture(t, root, repo, id, fake)
+	proposal := fixtureProposal(inspection)
+	proposal.Body = "## Delivery\n\n[Commit](https://github.com/dualface/kander/commit/" + strings.Repeat("a", 40) + ")\n\n## Verification\n\n- `go test ./...`: passed.\n\n## Remaining work\n\n" + strings.Repeat("The documented requirement is satisfied. ", 15)
+	if len(proposal.Body) <= 300 {
+		t.Fatal("fixture must exceed diagnostic bound")
+	}
+	if _, err := ApplyResult(context.Background(), fake, root, repo, 42, id, proposal); err != nil {
+		t.Fatal(err)
+	}
+	if fake.posts != 1 || !strings.HasPrefix(fake.remote.Comments[0].Body, proposal.Body) {
+		t.Fatal("publication text altered")
+	}
+}
+
+func TestResultUnchangedEvidenceBlocksDifferentAssessments(t *testing.T) {
+	root, repo, id, fake := resultFixture(t)
+	ctx := context.Background()
+	inspection := inspectFixture(t, root, repo, id, fake)
+	first, err := ApplyResult(ctx, fake, root, repo, 42, id, fixtureProposal(inspection))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspection = inspectFixture(t, root, repo, id, fake)
+	proposal := fixtureProposal(inspection)
+	proposal.Checks = nil
+	second, err := ApplyResult(ctx, fake, root, repo, 42, id, proposal)
+	if err != nil || second.Version != first.Version || fake.posts != 1 {
+		t.Fatalf("check selection duplicated: %v", err)
+	}
+	proposal.Outcomes[0] = "unknown"
+	proposal.FullyResolved = false
+	if _, err := ApplyResult(ctx, fake, root, repo, 42, id, proposal); err == nil {
+		t.Fatal("changed assessment bypassed unchanged evidence")
+	}
+	// A reassessment can reference existing coverage without publishing again.
+	proposal.EquivalentCommentID = first.CommentID
+	if _, err := ApplyResult(ctx, fake, root, repo, 42, id, proposal); err != nil {
+		t.Fatal(err)
+	}
+	if fake.posts != 1 {
+		t.Fatal("equivalent reassessment posted")
+	}
+}
+
+func TestResultDefiniteWriteRejectionsCanRecover(t *testing.T) {
+	root, repo, id, fake := resultFixture(t)
+	ctx := context.Background()
+	inspection := inspectFixture(t, root, repo, id, fake)
+	fake.postErr = &ResultWriteRejection{Err: errors.New("HTTP 403 rejected")}
+	if _, err := ApplyResult(ctx, fake, root, repo, 42, id, fixtureProposal(inspection)); err == nil {
+		t.Fatal("rejection reported success")
+	}
+	inspection = inspectFixture(t, root, repo, id, fake)
+	for _, record := range inspection.Records {
+		if record.Status != "rejected" || len(record.Failures) != 1 {
+			t.Fatalf("rejection missing: %+v", record)
+		}
+	}
+	fake.postErr = nil
+	record, err := ApplyResult(ctx, fake, root, repo, 42, id, fixtureProposal(inspection))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.posts != 2 || len(fake.remote.Comments) != 1 || len(record.Failures) != 1 {
+		t.Fatal("failed attempt lost or duplicate comment")
+	}
+	inspection = inspectFixture(t, root, repo, id, fake)
+	decision := ResultDecision{Token: inspection.Token, Version: record.Version, Decision: "yes", UserReference: "User confirms this target."}
+	fake.closeErr = &ResultWriteRejection{Err: errors.New("HTTP 403 rejected")}
+	if _, err := DecideResult(ctx, fake, root, repo, 42, id, decision); err == nil {
+		t.Fatal("close rejection reported success")
+	}
+	inspection = inspectFixture(t, root, repo, id, fake)
+	decision.Token = inspection.Token
+	fake.closeErr = nil
+	if _, err := DecideResult(ctx, fake, root, repo, 42, id, decision); err == nil {
+		t.Fatal("old failed consent reused without reconsideration")
+	}
+	decision.Reconsider = true
+	decision.UserReference = "User explicitly confirms again after permission repair."
+	record, err = DecideResult(ctx, fake, root, repo, 42, id, decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.closes != 2 || len(record.Failures) != 2 || record.Decisions[len(record.Decisions)-1].Status != "closed" {
+		t.Fatal("close retry or failure history missing")
 	}
 }

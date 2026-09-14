@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -179,6 +180,9 @@ func decodeResultComment(raw []byte) (issue.ResultComment, error) {
 	return issue.ResultComment{ID: comment.ID, AuthorID: comment.User.ID, Body: comment.Body}, nil
 }
 
+// Only gh's explicit final HTTP status establishes a definite rejection.
+var resultRejectionStatus = regexp.MustCompile(`\(HTTP (400|401|403|404|410|413|422|429)\)\s*$`)
+
 func (p *Provider) resultWrite(ctx context.Context, repository issue.Repository, endpoint, method string, fields [][2]string) ([]byte, error) {
 	args := apiArgs(repository.Host, endpoint, fields)
 	for i := range args {
@@ -189,7 +193,12 @@ func (p *Provider) resultWrite(ctx context.Context, repository issue.Repository,
 	}
 	raw, stderr, err := p.gh.Run(ctx, ".", args, DefaultStdoutLimit)
 	if err != nil {
-		return nil, classifyFailure(stderr, err, repository.Host, repository.Owner+"/"+repository.Name)
+		failure := classifyFailure(stderr, err, repository.Host, repository.Owner+"/"+repository.Name)
+		kind := issue.KindOf(err)
+		if (kind == "" || kind == issue.ErrorCommandFailed) && resultRejectionStatus.Match(stderr) {
+			return nil, &issue.ResultWriteRejection{Err: failure}
+		}
+		return nil, failure
 	}
 	if !utf8.Valid(raw) {
 		return nil, resultResponseError("write response is not UTF-8")

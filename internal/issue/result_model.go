@@ -35,11 +35,12 @@ type ResultProvider interface {
 
 // ResultCard exposes current local evidence without modifying the completed card.
 type ResultCard struct {
-	TaskID  string   `json:"task_id"`
-	Spec    string   `json:"spec"`
-	Report  string   `json:"report"`
-	Digest  string   `json:"digest"`
-	Commits []string `json:"commits"`
+	TaskID          string   `json:"task_id"`
+	Spec            string   `json:"spec"`
+	Report          string   `json:"report"`
+	Digest          string   `json:"digest"`
+	EvidenceVersion string   `json:"evidence_version"`
+	Commits         []string `json:"commits"`
 }
 
 type ResultInspection struct {
@@ -80,6 +81,8 @@ type ResultDecision struct {
 
 // ResultRecord is durable recovery evidence; never prune it as a cache.
 type ResultRecord struct {
+	EvidenceVersion    string              `json:"evidence_version"`
+	Failures           []ResultFailure     `json:"failures,omitempty"`
 	Commits            []string            `json:"commits"`
 	Outcomes           []string            `json:"outcomes"`
 	Checks             []ResultCheck       `json:"checks"`
@@ -99,4 +102,16 @@ type ResultCloseRecord struct {
 	Decision      string `json:"decision"`
 	UserReference string `json:"user_reference"`
 	Status        string `json:"status"`
+}
+
+// ResultWriteRejection means the provider received a definite no-effect response.
+// Transport failures, deadlines and ambiguous responses must never use it.
+type ResultWriteRejection struct{ Err error }
+
+func (e *ResultWriteRejection) Error() string { return e.Err.Error() }
+func (e *ResultWriteRejection) Unwrap() error { return e.Err }
+
+type ResultFailure struct {
+	Action string `json:"action"`
+	Detail string `json:"detail"`
 }

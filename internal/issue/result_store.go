@@ -69,11 +69,11 @@ func withResultStore(ctx context.Context, root string, repository Repository, nu
 			return resultError("inconsistent result recovery record")
 		}
 		for version, record := range store.Records {
-			if record == nil || record.Version != version || resultVersion(cardID, record.Commits, record.Outcomes, record.Checks, record.FullyResolved) != version {
+			if record == nil || record.Version != version || resultVersion(cardID, record.Commits, record.Outcomes, record.FullyResolved) != version {
 				return resultError("invalid result record")
 			}
 			switch record.Status {
-			case "uncertain", "published", "equivalent":
+			case "uncertain", "published", "equivalent", "rejected":
 			default:
 				return resultError("invalid result status")
 			}
@@ -125,6 +125,7 @@ func ReadResultCard(root string, repository Repository, number int, cardID strin
 		return ResultCard{}, resultError("large card has no completion report")
 	}
 	summary, _ := board.SectionBody(snapshot.Text, "SUMMARY")
+	acceptance, _ := board.SectionBody(snapshot.Text, "ACCEPTANCE_CRITERIA")
 	// Completion documentation determines delivery identity. Implementation is
 	// still provided for verification, but unrelated execution logs add no key.
 	commits := resultSHA.FindAllString(summary+"\n"+string(report), -1)
@@ -136,7 +137,8 @@ func ReadResultCard(root string, repository Repository, number int, cardID strin
 		}
 	}
 	return ResultCard{TaskID: cardID, Spec: snapshot.Text, Report: string(report), Commits: unique,
-		Digest: resultHash([]string{binding.SourceKey, cardID, snapshot.Text, string(report)})}, nil
+		EvidenceVersion: resultHash([]string{summary, acceptance, string(report)}),
+		Digest:          resultHash([]string{binding.SourceKey, cardID, snapshot.Text, string(report)})}, nil
 }
 
 func resultToken(card ResultCard, remote ResultRemote) string {

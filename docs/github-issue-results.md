@@ -32,9 +32,14 @@ explicitly referenced by the card must also be checked when relevant.
 
 Apply checks a digest of the observation before accepting an assessment. The
 result key hashes card identity, sorted completion-document SHAs, ordered criterion
-outcomes, sorted verification commands/statuses and full-resolution status. It does
+outcomes and full-resolution status. Verification commands/statuses are retained
+as assessment evidence but selecting a different subset never makes another key.
+An additional completion-document fingerprint (SUMMARY/acceptance/report, excluding
+implementation logs) blocks a second publication for unchanged evidence and SHAs
+even when the agent changes its outcomes. An existing comment can cover a new
+assessment without another publication. It does
 not hash the comment's wording, session, timestamps or execution logs. No delivery
-SHA is required for non-code work; criterion and verification assessments still
+SHA is required for non-code work; criterion outcomes and full-resolution status still
 identify its result. Semantic assessment belongs to the trusted agent, including
 selecting relevant checks and avoiding invented conclusions. An existing equivalent
 comment is recorded by numeric ID without posting. A known result never posts again,
@@ -43,7 +48,8 @@ including after its remote comment is edited or deleted; deletion is not retry c
 Decide checks current card evidence and the exact observation shown when asking,
 plus the selected result's full-resolution evidence. Yes/no decisions carry the
 actual user reference and are retained with the result and remote state version.
-An unchanged refusal suppresses asking again; explicit user reconsideration may
+An unchanged refusal suppresses asking again; a conflicting yes without explicit
+reconsideration fails instead of silently returning success; explicit user reconsideration may
 record another decision. A later close/reopen event invalidates earlier decisions.
 A response that arrives after the target changes requires another inspection and
 new consent, never a silently refreshed token. An already closed issue needs no write.
@@ -67,6 +73,11 @@ before POST. Recovery requires all three to match a complete fetched comment. A
 marker alone, especially from another author, is insufficient. If no match is found,
 further publication remains blocked: a lost response is not proof of a failed write.
 A failed save after success leaves the earlier uncertain intent for recovery.
+A definite gh HTTP rejection (400/401/403/404/410/413/422/429) is recorded as
+`rejected` with its diagnostic retained. Comment retries require another complete
+inspection; rejected close retries require fresh explicit user reconsideration.
+Transport/deadline/5xx/response-mismatch failures stay uncertain. An open read alone
+cannot prove that an earlier request will not complete later.
 Close requests likewise persist the decision before PATCH; an uncertain open-state
 outcome is never blindly retried. Observing closed records that fact, without
 claiming which concurrent actor closed it.
@@ -83,7 +94,8 @@ cannot provide it cannot publish through this workflow.
 GitHub's [comment creation endpoint](https://docs.github.com/en/rest/issues/comments#create-an-issue-comment)
 has no documented idempotency key. The [issue update endpoint](https://docs.github.com/en/rest/issues/issues#update-an-issue)
 has no atomic read/decision/write transaction for this workflow. Local coordination
-provides at most one attempted comment for a result per shared board; uncertain
+allows one pending or accepted comment attempt per result per shared board;
+explicit no-effect rejections can be retried after inspection, while uncertain
 attempts remain blocked even if they might have failed before reaching GitHub.
 Independent machines/boards can race and duplicate. Remote changes between the final
 check and POST/PATCH remain an API race, including reopening at that boundary.
@@ -92,3 +104,8 @@ report those uncertainties honestly and never bypass the controlled commands.
 
 Tests use temporary boards/configuration, fake providers, copied gh/git test binaries,
 fake terminals and a PTY confirmation. No test writes to live GitHub.
+
+Publication bodies allow multiline Markdown and HTTPS links, with a 16000-byte UTF-8
+limit. The publication validator rejects unsafe controls (except newline/tab),
+recognizable credentials and local paths without the diagnostic sanitizer's 300-byte
+truncation. Semantic summaries and deliberate privacy review remain agent duties.

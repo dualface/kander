@@ -143,7 +143,10 @@ closing always needs separate explicit consent for the current issue and result.
    criteria from evidence, never from checkbox markup alone. Include all relevant
    verification commands in `checks` with canonical statuses `pass`, `fail`,
    `not-run` or `N/A`; an empty list means no verification was recorded. Commands
-   must occur in the card/report. Preserve unchanged checks across runs. The summary states
+   must occur in the card/report. Preserve unchanged checks across runs.
+   Multiline Markdown and HTTPS links are allowed, up to 16000 UTF-8 bytes.
+   Controls (except newline/tab), recognizable credentials and local paths are
+   rejected without diagnostic truncation. The summary states
    actual delivery, actual verification and remaining work. Exclude local absolute
    paths, session identifiers, credentials and unrelated card records. The input
    is the agent's trusted assessment, not copied remote instructions. `fully_resolved`
@@ -170,20 +173,31 @@ or `gh issue close`. Private durable records under `kanban/.kander/issue-results
 coordinate local sessions and survive restarts. Do not delete, edit, prune, or clear
 these records to unblock a retry. A comment result uses card identity, sorted
 completion-document delivery SHAs, ordered criterion outcomes, full-resolution
-status and sorted verification commands/statuses; language rewrites,
+status. Verification selections are recorded but do not alter the key; language
+rewrites,
 execution logs and timestamps do not create new result versions. Review old records
-when assessing, and preserve unchanged criterion outcomes.
+when assessing, and preserve unchanged criterion outcomes. Unchanged completion
+documents (SUMMARY, acceptance and report) plus unchanged SHAs prohibit another
+publication even if the agent changes its assessment. Reference an existing
+comment for such a reassessment; implementation logs cannot bypass this guard.
 
 Sending first persists an uncertain intent with exact body, random marker and numeric
 authenticated author identity. Recovery matches all three against complete remote
 comments. A forged marker alone cannot confirm publication. If a matching comment
 cannot be found after an interrupted/failed send, the intent stays uncertain and
-blocks further publication. Report the uncertainty; absence is not proof of failure.
+blocks further publication. An explicit provider HTTP rejection is instead recorded
+as `rejected`, with its diagnostic retained; after fixing the cause, inspect again
+and retry the comment. A rejected close requires fresh explicit user reconsideration
+(`reconsider:true`). A new yes that tries to override a prior no without that flag
+is an error, never a successful no-op. Transport errors, 5xx, timeouts and response
+mismatches remain uncertain even when a subsequent read still shows open.
+Report the uncertainty; absence is not proof of failure.
 Authentication, identity, pagination, size or consistency failures prohibit writes.
 A successful post followed by a failed local receipt save likewise requires inspection.
 
-This provides coordinated at-most-one attempts per result on one board, with remote
-recovery of accepted writes. GitHub offers no comment idempotency key or atomic
+This coordinates one pending or accepted attempt per result on one board, allowing
+retries only after definite no-effect rejections, with remote recovery of accepted
+writes. GitHub offers no comment idempotency key or atomic
 read-and-write transaction. Independent machines/boards do not share locks or intents;
 simultaneous cross-machine writes can duplicate. A remote change between final checking
 and mutation remains an API race; do not claim global exactly-once or atomic conditional

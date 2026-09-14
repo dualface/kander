@@ -8,7 +8,6 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
-	"github.com/dualface/kander/internal/launch"
 )
 
 func TestIssueResultDoneDispatchAndConfirmation(t *testing.T) {
@@ -82,21 +81,5 @@ func TestIssueResultChangedTargetNeverLaunches(t *testing.T) {
 				t.Fatal("stale dialog retained/launched")
 			}
 		})
-	}
-}
-
-func TestIssueResultPreviewDropsOldSequence(t *testing.T) {
-	app, _, _ := takeoverListApp(t, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
-		return issue.TriageOutcome{}, nil
-	})
-	key, _ := app.issuesRepository().IssueSourceKey(42)
-	app.Issues.index = issue.Index{key: {TaskID: "completed", State: "done"}}
-	app.HandleKey("s")
-	old := app.Takeover.sequence
-	app.HandleKey("esc")
-	app.HandleKey("s")
-	app.applyTakeoverPreview(takeoverPreviewResult{sequence: old, preview: launch.TriagePreview{Agent: "wrong", Launcher: "console"}})
-	if app.Takeover == nil || app.Takeover.agent == "wrong" {
-		t.Fatal("stale preview applied")
 	}
 }

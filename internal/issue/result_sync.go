@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"regexp"
 	"sort"
 	"strings"
@@ -89,28 +90,28 @@ func proposalVersion(card ResultCard, proposal ResultProposal) (string, error) {
 			return "", resultError("duplicate verification command")
 		}
 	}
-	return resultVersion(card.TaskID, card.Commits, proposal.Outcomes, checks, proposal.FullyResolved), nil
+	return resultVersion(card.TaskID, card.Commits, proposal.Outcomes, proposal.FullyResolved), nil
 }
 
-func resultVersion(task string, commits, outcomes []string, checks []ResultCheck, resolved bool) string {
+func resultVersion(task string, commits, outcomes []string, resolved bool) string {
 	return resultHash(struct {
 		Task              string
 		Commits, Outcomes []string
-		Checks            []ResultCheck
 		Resolved          bool
-	}{task, commits, outcomes, checks, resolved})
+	}{task, commits, outcomes, resolved})
 }
 
-var resultPrivateText = regexp.MustCompile(`(?i)(?:[a-z]:[\\/]|(?:^|[\s(\[<:=\x60"\x27])/(?:[^/\s])|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?:herdr|tmux):|\\\\|<!--\s*kander-result:)`)
+var resultPrivateText = regexp.MustCompile(`(?i)(?:(?:^|[^a-z0-9])[a-z]:[\\/](?:[^/\\]|$)|(?:^|[\s(\[<:=\x60"\x27])/(?:[^/\s])|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?:herdr|tmux):|\\\\|<!--\s*kander-result:)`)
 
 func validateResultBody(body string) error {
-	if strings.TrimSpace(body) == "" || len(body) > 16000 || !utf8.ValidString(body) || Sanitize(body) != body || resultPrivateText.MatchString(body) {
+	if strings.TrimSpace(body) == "" || len(body) > 16000 || !utf8.ValidString(body) || SanitizeRemoteText(body) != body || redact(body) != body || resultPrivateText.MatchString(body) {
 		return resultError("result text is empty, oversized, or contains private/control data")
 	}
 	return nil
 }
 
-// ApplyResult publishes at most one attempt per result version on this board.
+// ApplyResult permits one pending or accepted publication per result version.
+// A definite provider rejection may be retried after fresh inspection.
 // Semantic equivalence is assessed by the agent against the inspected comments;
 // a stale observation cannot be used to publish or assert equivalence.
 func ApplyResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string, proposal ResultProposal) (out ResultRecord, err error) {
@@ -131,10 +132,11 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 				return resultError("publication uncertain; inspect remote before any further write")
 			}
 		}
-		if record := store.Records[version]; record != nil {
+		if record := store.Records[version]; record != nil && record.Status != "rejected" {
 			// Reassessing current evidence may allow a close, without republishing
 			// a language rewrite or new run log as another result comment.
 			record.CardDigest = card.Digest
+			record.EvidenceVersion = card.EvidenceVersion
 			record.FullyResolved = proposal.FullyResolved
 			record.ResolutionEvidence = proposal.ResolutionEvidence
 			out = *record
@@ -142,7 +144,10 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		}
 		checks := append([]ResultCheck{}, proposal.Checks...)
 		sort.Slice(checks, func(i, j int) bool { return checks[i].Command < checks[j].Command })
-		record := &ResultRecord{Commits: card.Commits, Outcomes: proposal.Outcomes, Checks: checks, Version: version, CardDigest: card.Digest, ActorID: remote.ActorID, FullyResolved: proposal.FullyResolved, ResolutionEvidence: proposal.ResolutionEvidence}
+		record := &ResultRecord{EvidenceVersion: card.EvidenceVersion, Commits: card.Commits, Outcomes: proposal.Outcomes, Checks: checks, Version: version, CardDigest: card.Digest, ActorID: remote.ActorID, FullyResolved: proposal.FullyResolved, ResolutionEvidence: proposal.ResolutionEvidence}
+		if previous := store.Records[version]; previous != nil {
+			record.Failures = previous.Failures
+		}
 		if proposal.EquivalentCommentID > 0 {
 			for _, comment := range remote.Comments {
 				if comment.ID == proposal.EquivalentCommentID {
@@ -156,6 +161,11 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 				}
 			}
 			return resultError("equivalent comment absent from current complete observation")
+		}
+		for _, previous := range store.Records {
+			if (previous.Status == "published" || previous.Status == "equivalent") && previous.EvidenceVersion == card.EvidenceVersion && resultHash(previous.Commits) == resultHash(card.Commits) {
+				return resultError("completion evidence unchanged; reference the existing result comment instead of publishing another assessment")
+			}
 		}
 		if err := validateResultBody(proposal.Body); err != nil {
 			return err
@@ -172,6 +182,12 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		}
 		comment, err := provider.PostResult(ctx, repository, number, record.Body)
 		if err != nil {
+			var rejected *ResultWriteRejection
+			if errors.As(err, &rejected) {
+				record.Status = "rejected"
+				record.Failures = append(record.Failures, ResultFailure{Action: "comment", Detail: Sanitize(err.Error())})
+				return errors.Join(err, save())
+			}
 			return err
 		}
 		if comment.ID <= 0 || comment.AuthorID != record.ActorID || comment.Body != record.Body {
@@ -198,7 +214,7 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 			return resultError("close target changed; inspect and request a new decision")
 		}
 		record := store.Records[decision.Version]
-		if record == nil || record.Status == "uncertain" || record.CardDigest != card.Digest || !record.FullyResolved {
+		if record == nil || (record.Status != "published" && record.Status != "equivalent") || record.CardDigest != card.Digest || !record.FullyResolved {
 			return resultError("no current fully resolved assessment")
 		}
 		if remote.State == "closed" {
@@ -213,10 +229,13 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 				return resultError("close outcome uncertain; inspect remote, never retry blindly")
 			}
 			if d.Decision == "no" && !decision.Reconsider {
+				if decision.Decision != "no" {
+					return resultError("refusal recorded; explicit user reconsideration is required")
+				}
 				out = *record
 				return nil
 			}
-			if d.Decision == "yes" {
+			if d.Decision == "yes" && !(d.Status == "rejected" && decision.Reconsider) {
 				return resultError("old close consent cannot be reused")
 			}
 		}
@@ -236,6 +255,12 @@ func DecideResult(ctx context.Context, provider ResultProvider, root string, rep
 			return nil
 		}
 		if err := provider.CloseResult(ctx, repository, number); err != nil {
+			var rejected *ResultWriteRejection
+			if errors.As(err, &rejected) {
+				record.Decisions[len(record.Decisions)-1].Status = "rejected"
+				record.Failures = append(record.Failures, ResultFailure{Action: "close", Detail: Sanitize(err.Error())})
+				return errors.Join(err, save())
+			}
 			return err
 		}
 		record.Decisions[len(record.Decisions)-1].Status = "closed"
