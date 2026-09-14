@@ -19,7 +19,7 @@ import (
 // b8aef0e68e430b23d55496858ce11bede14a8bb8. It is a historical test fixture, not
 // another installed rules copy. Keeping real old bytes exercises the hash lookup
 // without replacing the registry or depending on a checkout's Git history.
-func TestUpgradeUnstampedTwoRoleRules(t *testing.T) {
+func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 	archive, err := zip.OpenReader(filepath.Join("..", "testdata", "rules", "pre-two-role-rules.zip"))
 	if err != nil {
 		t.Fatal(err)

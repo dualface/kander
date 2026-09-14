@@ -103,12 +103,12 @@ Read-only isolation for a custom reviewer is the definition author's responsibil
 
 ```json
 "review_stages": {
-  "large": {"QA": "auto", "Security": "skip"},
-  "small": {"QA": "auto", "Security": "skip"}
+  "large": {"PM": "required", "QA": "auto", "CSA": "skip", "Hacker": "skip"},
+  "small": {"PM": "auto", "QA": "auto", "CSA": "skip", "Hacker": "skip"}
 }
 ```
 
-A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing scales or roles default to `auto`. The options panel's "Review stages" section edits large and small independently under each role; "Review and models" edits the reviewer agent and model/effort only. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
+A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing original roles (PM, QA, CSA, Hacker) default to `auto`; missing PMQA and Security default to `skip`, including when the scale or whole section is absent. The options panel's "Review stages" section edits large and small independently under each role; "Review and models" edits the reviewer agent and model/effort only. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
 
 `exit_command` is a single-line string without control characters and may be empty. Built-in Codex/Claude use `/exit`; Grok/Cursor/Pi use `/quit`. A custom name with a dialect inherits that field. A purely templated program that declares `exit_command` can be dismissed and cleaned up the same way, still requiring the identity and single-pane container checks to pass. Without `exit_command`, `dismiss` refuses explicitly, names the missing field, and keeps the container.
 
@@ -126,3 +126,18 @@ The following changes still require Go code:
 - A new session identity source that cannot be expressed as `generated`, `allocated`, or `none` (add a named hook and list it here).
 - A new interactive exit sequence that is not a single `exit_command` string.
 - Merging agent hooks with terminal-side hooks (herdr socket and similar) into one registry.
+
+## Optional Integrated Review Roles
+
+PM, QA, CSA and Hacker remain independently configurable. PMQA combines PM's contract checks with QA's quality checks in stage one; Security combines CSA's trust-boundary analysis with Hacker's exploit-chain checks in stage two. Both new roles default to `skip`; omitted original roles remain `auto`. Four-role configurations continue working without migration warnings.
+
+To select a composite, set its constituent roles to `skip` at the same scale. Reviewer and model settings use the same per-role, per-scale and overlay mechanisms; the options flow reflects actual policies and does not silently override them. This fragment selects PMQA while keeping security roles skipped:
+
+```json
+"review_stages": {
+  "large": {"PM": "skip", "QA": "skip", "CSA": "skip", "Hacker": "skip", "PMQA": "required", "Security": "skip"},
+  "small": {"PM": "skip", "QA": "skip", "CSA": "skip", "Hacker": "skip", "PMQA": "auto", "Security": "skip"}
+}
+```
+
+To select Security instead of CSA/Hacker, keep both originals `skip` and set Security to `auto` or `required`, subject to higher-precedence project/user rules. Batch requirements use an exact four-key or six-key set, as shown in [review evidence](review-evidence.md#optional-composites-and-compatibility).

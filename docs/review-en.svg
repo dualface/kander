@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1672" viewBox="0 0 800 1672" role="img" aria-labelledby="rv-title rv-desc">
   <title id="rv-title">Kander Review Flow</title>
-  <desc id="rv-desc">After a task hits the review allowlist, QA checks the contract and code in stage one; Security traces trust boundaries and exploit chains in stage two. Fixes get incremental re-review. When QA ran in the batch, QA checks Security fixes; Security checks subsequent QA fixes that substantively change security code. Verified security findings go to the user to fix, accept the risk or stop integration; kanban findings time out after 15 minutes without implying PASS or accepted risk.</desc>
+  <desc id="rv-desc">Two stages preserve the four original roles and add optional composites. Stage one runs PM and QA, or PMQA (PM contract checks followed by QA quality checks). Stage two runs CSA/Hacker, or Security (CSA trust boundaries followed by Hacker exploit chains, deduplicated by root cause). Composites default to skip; enabling one requires its constituent roles to be skip. After security fixes, enabled QA or PMQA incrementally re-reviews; enabled PM also checks functional changes. Subsequent first-stage fixes that substantively change security code are incrementally checked by enabled security roles. Verified security findings require a user decision: fix, accept risk or stop. Only kanban security findings may time out after 15 minutes; timeout means neither PASS nor accepted risk.</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -31,8 +31,8 @@
   <rect width="800" height="1672" fill="url(#bg)"/>
 
   <text x="48" y="64" class="s h1">Kander Review Flow</text>
-  <text x="48" y="100" class="s h2">Allowlist hit → QA → Security → integrate</text>
-  <text x="48" y="126" class="s tag">Single entry point: kander review</text>
+  <text x="48" y="100" class="s h2">Allowlist hit → stage one → security stage → integrate</text>
+  <text x="48" y="126" class="s tag">Single entry: kander review · Security selection sets CSA/Hacker to skip</text>
   <line x1="48" y1="150" x2="752" y2="150" stroke="#e2e8f0" stroke-width="1.5"/>
 
   <!-- trigger decision -->
@@ -49,21 +49,21 @@
 
   <path d="M400 344  V368" class="flow"/>
 
-  <!-- 1 QA -->
+  <!-- 1 original or integrated primary roles -->
   <rect x="48" y="368" width="704" height="220" rx="16" class="panel" filter="url(#card)"/>
   <rect x="80" y="392" width="40" height="40" rx="12" fill="#4f46e5"/>
   <text x="100" y="419" text-anchor="middle" class="s num">1</text>
-  <text x="136" y="414" class="s pt">QA</text>
-  <text x="136" y="440" class="s pn">Contract acceptance, correctness, regressions, tests and quality</text>
+  <text x="136" y="414" class="s pt">PM ∥ QA, or PMQA</text>
+  <text x="136" y="440" class="s pn">PM: contract acceptance; QA: correctness, regressions and quality</text>
   <line x1="80" y1="464" x2="720" y2="464" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="488" r="4" fill="#a5b4fc"/>
-  <text x="106" y="493" class="s bt">Check each acceptance criterion; unmet criteria are blocking</text>
+  <text x="106" y="493" class="s bt">PMQA checks the PM contract first, then performs QA checks</text>
   <circle cx="90" cy="514" r="4" fill="#a5b4fc"/>
-  <text x="106" y="519" class="s bt">Check architecture, regressions, tests and code quality</text>
+  <text x="106" y="519" class="s bt">Selecting PMQA requires PM and QA policies to be skip</text>
   <circle cx="90" cy="540" r="4" fill="#a5b4fc"/>
-  <text x="106" y="545" class="s bt">Fix must-fix items, then QA reviews the changes incrementally</text>
+  <text x="106" y="545" class="s bt">Fix must-fix items; affected roles review changes incrementally</text>
   <circle cx="90" cy="566" r="4" fill="#a5b4fc"/>
-  <text x="106" y="571" class="s bt">A stage skipped by policy is N/A; mechanical fixes use evidence</text>
+  <text x="106" y="571" class="s bt">PMQA and Security default to skip; skipped roles are N/A</text>
 
   <path d="M400 588  V612" class="flow"/>
 
@@ -71,11 +71,11 @@
   <rect x="48" y="612" width="704" height="272" rx="16" class="panel" filter="url(#card)"/>
   <rect x="80" y="636" width="40" height="40" rx="12" fill="#7c3aed"/>
   <text x="100" y="663" text-anchor="middle" class="s num">2</text>
-  <text x="136" y="658" class="s pt">Security</text>
-  <text x="136" y="684" class="s pn">Starts after QA passes or is marked N/A; policy and triggers apply</text>
+  <text x="136" y="658" class="s pt">CSA / Hacker, or Security</text>
+  <text x="136" y="684" class="s pn">After stage one passes or is N/A; policies and triggers still apply</text>
   <line x1="80" y1="708" x2="720" y2="708" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="732" r="4" fill="#c4b5fd"/>
-  <text x="106" y="737" class="s bt">Trace trust boundaries and exploit chains; one root cause, one item</text>
+  <text x="106" y="737" class="s bt">Security: trust boundaries, then exploit chains; one item per root cause</text>
   <circle cx="90" cy="758" r="4" fill="#c4b5fd"/>
   <text x="106" y="763" class="s bt">Verified blocking / high / medium findings go to the user to decide</text>
   <circle cx="90" cy="784" r="4" fill="#c4b5fd"/>
@@ -83,8 +83,8 @@
   <circle cx="90" cy="810" r="4" fill="#c4b5fd"/>
   <text x="106" y="815" class="s bt">Kanban only: no decision for 15 min is ignored, not PASS</text>
 
-  <text x="106" y="841" class="s bt">QA checks Security fixes incrementally if QA ran in this batch.</text>
-  <text x="106" y="867" class="s bt">Security re-checks QA fixes that substantively change security code.</text>
+  <text x="106" y="841" class="s bt">Enabled QA/PMQA checks fixes; PM checks behavior changes.</text>
+  <text x="106" y="867" class="s bt">Enabled security roles re-check substantive security changes.</text>
 
   <path d="M400 884  V908" class="flow"/>
 
@@ -123,7 +123,7 @@
   <rect x="80" y="1342" width="40" height="40" rx="12" fill="#4f46e5"/>
   <text x="100" y="1369" text-anchor="middle" class="s num">5</text>
   <text x="136" y="1364" class="s pt">Reviewers and Isolation Boundaries</text>
-  <text x="136" y="1390" class="s pn">Both roles can use codex / claude / grok / cursor / pi</text>
+  <text x="136" y="1390" class="s pn">Each role can use codex / claude / grok / cursor / pi</text>
   <line x1="80" y1="1414" x2="720" y2="1414" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1438" r="4" fill="#a5b4fc"/>
   <text x="106" y="1443" class="s bt">Codex / Claude / Grok use read-only isolation</text>
