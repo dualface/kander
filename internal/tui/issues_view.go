@@ -252,15 +252,18 @@ func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width 
 	return out
 }
 
-// issuesBoundMarkerStyle emphasizes the local-card marker with the theme accent.
-// Selected rows keep the shared selection background so the whole line stays
-// cohesive while the marker remains distinct from dim labels.
+// issuesBoundMarkerStyle emphasizes the local-card marker. Unselected rows use
+// the theme accent; selected rows keep the same selection surface as the rest
+// of the line (Accent on SelectionBg, or an underline on legacy reverse rows)
+// so the marker stays distinct without splitting the selection background.
 func issuesBoundMarkerStyle(p palette, selected bool) lipgloss.Style {
 	if selected {
 		if p.SelectionBg != "" {
 			return lipgloss.NewStyle().Foreground(p.Accent).Background(p.SelectionBg).Bold(true)
 		}
-		return lipgloss.NewStyle().Foreground(p.Accent).Background(p.Bg).Reverse(true).Bold(true)
+		// Legacy themes reverse PopupFg for selection; Accent-on-reversed-PopupFg
+		// contrast is too low, and Reverse(Accent) would paint an Accent chip.
+		return styleFor("popup-sel", p).Underline(true)
 	}
 	return styleFor("popup-group", p)
 }
@@ -282,7 +285,10 @@ func paintIssuesBoundLabelsLine(labels, marker string, selected bool, width int,
 	}
 	accent := issuesBoundMarkerStyle(p, selected)
 
-	markerStart := runeCount(prefix)
+	// Count against the same printable text clipText uses so tabs do not shift
+	// the colored marker window.
+	normalizedPrefix := printableText(strings.ReplaceAll(strings.ReplaceAll(prefix, "\t", "    "), "\n", " "))
+	markerStart := runeCount(normalizedPrefix)
 	keptEnd := runeCount(clipped)
 	const ellipsis = "..."
 	if displayWidth(full) > width {

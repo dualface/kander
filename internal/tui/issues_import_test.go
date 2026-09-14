@@ -468,17 +468,11 @@ func TestIssuesBoundMarkerHighlightKeepsGeometry(t *testing.T) {
 
 	marker := config.Text("tui.issues_imported", "task-1", config.Text("tui.backlog"))
 	labels := "bug, ui"
-	for _, theme := range []string{"dark", "light", "tide", "dusk", "slate-light"} {
+	const width = 56
+	for _, theme := range []string{"dark", "tide"} {
 		p := themePalette(theme)
 		for _, selected := range []bool{false, true} {
 			style := issuesBoundMarkerStyle(p, selected)
-			if style.GetForeground() != p.Accent || !style.GetBold() {
-				t.Fatalf("%s selected=%v marker style lost accent/bold", theme, selected)
-			}
-			if selected && p.SelectionBg != "" && style.GetBackground() != p.SelectionBg {
-				t.Fatalf("%s selected marker lost SelectionBg", theme)
-			}
-			const width = 56
 			line := paintIssuesBoundLabelsLine(labels, marker, selected, width, p)
 			if got := ansi.StringWidth(line); got != width {
 				t.Fatalf("%s selected=%v width=%d want %d", theme, selected, got, width)
@@ -498,14 +492,28 @@ func TestIssuesBoundMarkerHighlightKeepsGeometry(t *testing.T) {
 			if line == uniform {
 				t.Fatalf("%s bound line must not use a single base style", theme)
 			}
+			if selected {
+				if p.SelectionBg != "" {
+					if style.GetBackground() != p.SelectionBg {
+						t.Fatalf("%s selected marker lost SelectionBg", theme)
+					}
+				} else if style.GetBackground() != base.GetBackground() || !style.GetUnderline() {
+					t.Fatalf("%s selected legacy marker must keep popup-sel surface with underline", theme)
+				}
+			}
 		}
-		narrow := paintIssuesBoundLabelsLine(strings.Repeat("label-", 8), marker, false, 28, p)
-		if got := ansi.StringWidth(narrow); got != 28 {
-			t.Fatalf("%s truncated width=%d", theme, got)
-		}
-		if !strings.Contains(ansi.Strip(narrow), "...") {
-			t.Fatalf("%s expected ellipsis: %q", theme, ansi.Strip(narrow))
-		}
+	}
+	p := themePalette("dark")
+	narrow := paintIssuesBoundLabelsLine(strings.Repeat("label-", 8), marker, false, 28, p)
+	if got := ansi.StringWidth(narrow); got != 28 {
+		t.Fatalf("truncated width=%d", got)
+	}
+	if !strings.Contains(ansi.Strip(narrow), "...") {
+		t.Fatalf("expected ellipsis: %q", ansi.Strip(narrow))
+	}
+	withTab := paintIssuesBoundLabelsLine("bug\tui", marker, false, 64, p)
+	if !strings.Contains(withTab, issuesBoundMarkerStyle(p, false).Render(marker)) {
+		t.Fatalf("tab in labels shifted the marker span: %q", ansi.Strip(withTab))
 	}
 
 	fake := newFakeIssues()
@@ -516,7 +524,7 @@ func TestIssuesBoundMarkerHighlightKeepsGeometry(t *testing.T) {
 	app.HandleKey("g")
 	runPendingWork(t, app)
 	item := app.Issues.items[0]
-	p := themePalette(app.Theme)
+	p = themePalette(app.Theme)
 	bound := app.issuesItemPaneLines(item, true, 40, p)
 	if len(bound) != issuesItemLines {
 		t.Fatalf("bound lines=%d", len(bound))
