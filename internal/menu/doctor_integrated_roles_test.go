@@ -25,7 +25,7 @@ func TestDoctorIntegratedRoleAvailability(t *testing.T) {
 					if healthy := validateConfiguredResources(cfg, agents, paths, TerminalTools{}); healthy != wantHealthy {
 						t.Errorf("healthy=%v want %v", healthy, wantHealthy)
 					}
-					changes := repairConfiguredTools(cfg, agents, TerminalTools{})
+					changes := repairConfiguredTools(cfg, cfg, agents, TerminalTools{})
 					if wantHealthy {
 						if len(changes) != 0 || !reflect.DeepEqual(cfg, before) {
 							t.Fatalf("disabled integrated role was repaired: %v", changes)
@@ -55,7 +55,7 @@ func TestDoctorFourRoleConfigKeepsDisabledIntegratedReviewers(t *testing.T) {
 	if !validateConfiguredResources(cfg, agents, paths, TerminalTools{}) {
 		t.Error("four-role configuration requires only its installed reviewer")
 	}
-	if changes := repairConfiguredTools(cfg, agents, TerminalTools{}); len(changes) != 0 || !reflect.DeepEqual(cfg, before) {
+	if changes := repairConfiguredTools(cfg, cfg, agents, TerminalTools{}); len(changes) != 0 || !reflect.DeepEqual(cfg, before) {
 		t.Fatalf("four-role configuration was repaired: %v", changes)
 	}
 }
