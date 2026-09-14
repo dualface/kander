@@ -459,8 +459,9 @@ func TestIssuesImportSharesTheCLIService(t *testing.T) {
 	}
 }
 
-// Bound markers must stay accent-bold after plain-text clip/pad, without
-// changing row width or unbound label styling.
+// Bound markers keep an emphasized style after plain-text clip/pad, without
+// changing row width or unbound label styling. Legacy selected rows use the
+// selection surface plus underline rather than an Accent chip.
 func TestIssuesBoundMarkerHighlightKeepsGeometry(t *testing.T) {
 	previous := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
@@ -482,7 +483,7 @@ func TestIssuesBoundMarkerHighlightKeepsGeometry(t *testing.T) {
 				t.Fatalf("%s plain=%q", theme, plain)
 			}
 			if !strings.Contains(line, style.Render(marker)) {
-				t.Fatalf("%s missing accent-styled marker fragment", theme)
+				t.Fatalf("%s missing marker-styled fragment", theme)
 			}
 			base := styleFor("popup-dim", p)
 			if selected {
