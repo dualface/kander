@@ -115,6 +115,26 @@ func TestStartChatFailureClosesTheContainerAndTaskFile(t *testing.T) {
 	}
 }
 
+func TestStartChatReportsAContainerItCouldNotClose(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
+	root, _, fakeBin := setupBoard(t)
+	useChatConfig(t, "claude", "tmux")
+	t.Setenv("KANBAN_TMUX_RESPAWN_FAIL", "1")
+	wrapper := t.TempDir()
+	script := "#!/bin/sh\nif [ \"$1\" = kill-window ]; then echo kill-window refused >&2; exit 1; fi\nexec " + filepath.Join(fakeBin, "tmux") + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(wrapper, "tmux"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", wrapper+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, err := StartChat(ChatRequest{Root: root, Message: "hello"})
+	if err == nil || !strings.Contains(err.Error(), "kill-window refused") {
+		t.Fatalf("the close failure must be reported: %v", err)
+	}
+}
+
 func TestStartChatRejectsBeforeCreatingAnything(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")

@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
@@ -103,6 +104,12 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	// reports no Herdr agent session; those identities belong to card launches.
 	outcome, err := launchAgent(plan, request.Root, chatWindowName(), inv, nil, nil, nil)
 	if err != nil {
+		// A container that could not be closed is left behind, so its close
+		// error is reported next to the start error.
+		var failure *LaunchFailure
+		if errors.As(err, &failure) && failure.CloseError != "" {
+			return result, launchError("launch.value", failure.Err.Error(), failure.CloseError)
+		}
 		return result, err
 	}
 	handedOff = true
