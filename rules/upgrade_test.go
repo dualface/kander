@@ -20,7 +20,7 @@ import (
 // another installed rules copy. Keeping real old bytes exercises the hash lookup
 // without replacing the registry or depending on a checkout's Git history.
 func TestUpgradeUnstampedTwoRoleRules(t *testing.T) {
-	archive, err := zip.OpenReader("testdata/pre-two-role-rules.zip")
+	archive, err := zip.OpenReader(filepath.Join("..", "testdata", "rules", "pre-two-role-rules.zip"))
 	if err != nil {
 		t.Fatal(err)
 	}
