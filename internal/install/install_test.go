@@ -69,7 +69,7 @@ func runGit(t *testing.T, dir string, args ...string) {
 func TestPerformGlobalInstall(t *testing.T) {
 	home := setupInstallHome(t)
 	src := stubBinary(t)
-	result, err := Perform(Request{Language: "cn", Source: src})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: src})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestPerformPreservesExistingAgentsEntry(t *testing.T) {
 	if err := os.WriteFile(agents, []byte("local-rules\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(agents)
@@ -142,7 +142,7 @@ func TestPerformRemovesInstallerAgentsEntryCopy(t *testing.T) {
 	if err := os.WriteFile(agents, official, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(agents); !os.IsNotExist(err) {
@@ -163,7 +163,7 @@ func TestPerformRemovesPreviousOfficialAgentsEntryCopy(t *testing.T) {
 	if err := os.WriteFile(agents, stale, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(agents); !os.IsNotExist(err) {
@@ -180,7 +180,7 @@ func TestPerformRemovesInstallerAgentsEntrySymlink(t *testing.T) {
 	if err := os.Symlink("KANDER-AGENTS.md", agents); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(agents); !os.IsNotExist(err) {
@@ -199,7 +199,7 @@ func TestPerformKeepsLegacyByDefault(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	result, err := Perform(Request{Language: "cn", Source: stubBinary(t)})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestPerformRemovesLegacyAfterConfirm(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, "onevoke"), []byte("legacy\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	result, err := Perform(Request{Language: "cn", Source: stubBinary(t), DeleteLegacy: true})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t), DeleteLegacy: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestPerformRejectsLegacyDirectory(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".local", "bin", "onevoke"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Perform(Request{Language: "cn", Source: stubBinary(t)})
+	_, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
 	if err == nil || !strings.Contains(err.Error(), "onevoke") {
 		t.Fatalf("err=%v", err)
 	}
@@ -252,7 +252,7 @@ func TestPerformRejectsDirectoryTarget(t *testing.T) {
 	if err := os.MkdirAll(blocked, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Perform(Request{Language: "cn", Source: stubBinary(t)})
+	_, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
 	if err == nil || !strings.Contains(err.Error(), blocked) {
 		t.Fatalf("err=%v", err)
 	}
@@ -268,7 +268,7 @@ func TestPerformRejectsSourceSymlink(t *testing.T) {
 	if err := os.Symlink(real, link); err != nil {
 		t.Skipf("symlink: %v", err)
 	}
-	_, err := Perform(Request{Language: "cn", Source: link})
+	_, err := Perform(Request{CopyBinary: true, Language: "cn", Source: link})
 	if err == nil {
 		t.Fatal("expected symlink reject")
 	}
@@ -282,7 +282,7 @@ func TestPerformProjectSkipsGlobal(t *testing.T) {
 	}
 	project := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
 	src := stubBinary(t)
-	result, err := Perform(Request{Language: "cn", Mode: config.ModeProject, Project: project, Source: src})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: project, Source: src})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +300,7 @@ func TestPerformProjectSkipsGlobal(t *testing.T) {
 	if !strings.Contains(string(exclude), "/.kander/") {
 		t.Fatalf("exclude=%q", exclude)
 	}
-	if _, err := Perform(Request{Language: "cn", Mode: config.ModeProject, Project: project, Source: src}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: project, Source: src}); err != nil {
 		t.Fatal(err)
 	}
 	exclude2, _ := os.ReadFile(filepath.Join(project, ".git", "info", "exclude"))
@@ -324,7 +324,7 @@ func TestPerformProjectFromLinkedWorktree(t *testing.T) {
 	main := initGitRepo(t, filepath.Join(t.TempDir(), "app"))
 	linked := filepath.Join(t.TempDir(), "app-linked")
 	runGit(t, main, "-C", main, "worktree", "add", "-q", linked, "HEAD")
-	result, err := Perform(Request{Language: "cn", Mode: config.ModeProject, Project: linked, Source: stubBinary(t)})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: linked, Source: stubBinary(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestPerformProjectFromLinkedWorktree(t *testing.T) {
 
 func TestPerformProjectRejectsNonGitAndSymlink(t *testing.T) {
 	setupInstallHome(t)
-	_, err := Perform(Request{Language: "cn", Mode: config.ModeProject, Project: t.TempDir(), Source: stubBinary(t)})
+	_, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: t.TempDir(), Source: stubBinary(t)})
 	if err == nil {
 		t.Fatal("expected non-git reject")
 	}
@@ -347,7 +347,7 @@ func TestPerformProjectRejectsNonGitAndSymlink(t *testing.T) {
 	if err := os.Symlink(project, link); err != nil {
 		t.Fatal(err)
 	}
-	_, err = Perform(Request{Language: "cn", Mode: config.ModeProject, Project: link, Source: stubBinary(t)})
+	_, err = Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: link, Source: stubBinary(t)})
 	if err == nil {
 		t.Fatal("expected symlink reject")
 	}
@@ -366,7 +366,7 @@ func TestPerformProjectRejectsKanderSymlink(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(project, ".kander")); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Perform(Request{Language: "cn", Mode: config.ModeProject, Project: project, Source: stubBinary(t)})
+	_, err := Perform(Request{CopyBinary: true, Language: "cn", Mode: config.ModeProject, Project: project, Source: stubBinary(t)})
 	if err == nil {
 		t.Fatal("expected .kander symlink reject")
 	}
@@ -379,11 +379,11 @@ func TestPerformProjectRejectsKanderSymlink(t *testing.T) {
 func TestPerformSkipsSelfCopy(t *testing.T) {
 	home := setupInstallHome(t)
 	src := stubBinary(t)
-	if _, err := Perform(Request{Language: "cn", Source: src}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: src}); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(home, ".local", "bin", binaryName())
-	result, err := Perform(Request{Language: "cn", Source: dest})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: dest})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +394,7 @@ func TestPerformSkipsSelfCopy(t *testing.T) {
 
 func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	home := setupInstallHome(t)
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	edited := filepath.Join(home, ".agents", "KANDER-CODE-RULES.md")
@@ -429,7 +429,7 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 
 func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
 	home := setupInstallHome(t)
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	agents := filepath.Join(home, ".agents")
@@ -479,7 +479,7 @@ func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
 
 func TestRepairRulesBootstrapsStampWhenCurrent(t *testing.T) {
 	home := setupInstallHome(t)
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(home, ".agents", stateFileName)); err != nil {
@@ -517,7 +517,7 @@ func TestPerformUpdatesExistingConfigLanguage(t *testing.T) {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := config.Load(false)
@@ -534,7 +534,7 @@ func TestPerformUpdatesExistingConfigLanguage(t *testing.T) {
 
 func TestPerformDoesNotCreateConfig(t *testing.T) {
 	setupInstallHome(t)
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	exists, err := config.Exists()
@@ -545,7 +545,7 @@ func TestPerformDoesNotCreateConfig(t *testing.T) {
 
 func TestGlobalSymlinkRuleIsNotFalseStamped(t *testing.T) {
 	home := setupInstallHome(t)
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(home, ".agents", "KANDER-CODE-RULES.md")
@@ -562,7 +562,7 @@ func TestGlobalSymlinkRuleIsNotFalseStamped(t *testing.T) {
 	if err := os.Symlink(target, dest); err != nil {
 		t.Skip(err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(dest)
@@ -609,7 +609,7 @@ func TestShouldRunWizardSkipsSourceTree(t *testing.T) {
 func TestShouldRunWizardSkipsAlreadyInstalled(t *testing.T) {
 	home := setupInstallHome(t)
 	src := stubBinary(t)
-	if _, err := Perform(Request{Language: "cn", Source: src}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: src}); err != nil {
 		t.Fatal(err)
 	}
 	dest := filepath.Join(home, ".local", "bin", binaryName())
@@ -637,7 +637,7 @@ func TestShouldRunWizard(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("downloaded: ok=%v err=%v", ok, err)
 	}
-	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
 	cfgDir := filepath.Join(home, ".config", "kander")
@@ -695,7 +695,7 @@ func TestWriteBinaryBusyRenameAside(t *testing.T) {
 func TestFinishSuccessfulInstallAlwaysHandoffs(t *testing.T) {
 	home := setupInstallHome(t)
 	src := stubBinary(t)
-	result, err := Perform(Request{Language: "cn", Source: src})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: src})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,7 +728,7 @@ func TestFinishSuccessfulInstallAlwaysHandoffs(t *testing.T) {
 	assertHandoffInvocation(t, dest, "cn", gotArgv, gotEnv)
 
 	// Re-install from the destination itself (same file); handoff must still run.
-	same, err := Perform(Request{Language: "en", Source: dest})
+	same, err := Perform(Request{CopyBinary: true, Language: "en", Source: dest})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -759,7 +759,7 @@ func TestWizardDefaultKeepsJapanese(t *testing.T) {
 	if !supportedLanguage(lang) {
 		t.Fatal("wizard must accept ja as a default language")
 	}
-	req := Request{Language: lang, Mode: config.ModeGlobal}
+	req := Request{CopyBinary: true, Language: lang, Mode: config.ModeGlobal}
 	if !supportedLanguage(req.Language) {
 		req.Language = "cn"
 	}

@@ -42,7 +42,7 @@ func TestPerformResolvesRunningBinaryLinks(t *testing.T) {
 			previous := lookupExecutable
 			lookupExecutable = func() (string, error) { return executable, nil }
 			t.Cleanup(func() { lookupExecutable = previous })
-			result, err := Perform(Request{Language: "en"})
+			result, err := Perform(Request{CopyBinary: true, Language: "en"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -80,7 +80,7 @@ func TestPerformRejectsInvalidRunningBinaryLinks(t *testing.T) {
 			previous := lookupExecutable
 			lookupExecutable = func() (string, error) { return link, nil }
 			t.Cleanup(func() { lookupExecutable = previous })
-			if _, err := Perform(Request{Language: "en"}); err == nil {
+			if _, err := Perform(Request{CopyBinary: true, Language: "en"}); err == nil {
 				t.Fatal("invalid executable source was accepted")
 			}
 			if _, err := os.Lstat(filepath.Join(home, ".local")); !os.IsNotExist(err) {

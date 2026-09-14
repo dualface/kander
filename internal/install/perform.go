@@ -18,12 +18,15 @@ type Request struct {
 	Project      string
 	Source       string
 	DeleteLegacy bool
+	// CopyBinary opts into a global binary copy. Project installs always copy.
+	CopyBinary bool
 }
 
 // Result records what Perform wrote.
 type Result struct {
 	Paths         config.InstallPaths
 	DestBinary    string
+	RunBinary     string
 	Copied        bool
 	Legacy        []string
 	LegacyRemoved bool
@@ -36,33 +39,16 @@ type AgentIntegration struct {
 	Err error
 }
 
-// Perform copies the current binary and extracts embedded rules into the requested scope.
+// Perform initializes the requested scope and copies the binary only when requested
+// globally or required by project mode. RunBinary is the entry used afterward.
 func Perform(req Request) (Result, error) {
 	var result Result
-	source := req.Source
-	if source == "" {
-		var err error
-		source, err = lookupExecutable()
-		if err != nil {
-			return result, fmt.Errorf("%s", config.Text("install.cannot_resolve_executable"))
-		}
-		// POSIX package managers may launch the running binary through symlinks.
-		// Resolve only this implicit source; explicit sources and Windows reparse
-		// points keep their existing rejection rules. Reads still use internal/fs.
-		if runtime.GOOS != "windows" {
-			source, err = filepath.EvalSymlinks(source)
-			if err != nil {
-				return result, err
-			}
-		}
-	}
-	source, err := filepath.Abs(source)
+	copyBinary := req.Mode == config.ModeProject || req.CopyBinary
+	source, err := resolveSource(req.Source, copyBinary)
 	if err != nil {
 		return result, err
 	}
-	if err := rejectSource(source); err != nil {
-		return result, err
-	}
+	result.RunBinary = source
 	paths, err := resolvePaths(req)
 	if err != nil {
 		return result, err
@@ -73,9 +59,11 @@ func Perform(req Request) (Result, error) {
 		return result, err
 	}
 	dest := filepath.Join(paths.BinDir, binaryName())
-	result.DestBinary = dest
-	if err := rejectDest(dest, project); err != nil {
-		return result, err
+	if copyBinary {
+		result.DestBinary = dest
+		if err := rejectDest(dest, project); err != nil {
+			return result, err
+		}
 	}
 	for _, name := range rules.Names() {
 		if err := rejectDest(filepath.Join(paths.RulesDir, name), project); err != nil {
@@ -89,7 +77,11 @@ func Perform(req Request) (Result, error) {
 		}
 		result.Legacy = legacy
 	}
-	for _, dir := range []string{paths.BinDir, paths.RulesDir, paths.ShareDir} {
+	dirs := []string{paths.RulesDir, paths.ShareDir}
+	if copyBinary {
+		dirs = append([]string{paths.BinDir}, dirs...)
+	}
+	for _, dir := range dirs {
 		if err := fs.EnsureInheritedDirectoryPath(dir); err != nil {
 			return result, err
 		}
@@ -99,11 +91,13 @@ func Perform(req Request) (Result, error) {
 			return result, err
 		}
 	}
-	copied, err := installBinary(source, dest)
-	if err != nil {
-		return result, fmt.Errorf("%s", config.Text("install.failed_to_write_binary", err.Error()))
+	if copyBinary {
+		result.Copied, err = installBinary(source, dest)
+		if err != nil {
+			return result, fmt.Errorf("%s", config.Text("install.failed_to_write_binary", err.Error()))
+		}
+		result.RunBinary = dest
 	}
-	result.Copied = copied
 	lang := req.Language
 	if lang == "" {
 		lang = config.ResolveLanguage()
@@ -117,15 +111,17 @@ func Perform(req Request) (Result, error) {
 	cleanupAgentsEntryLink(paths)
 	result.Integrations = integrateAgentRules(paths)
 	if req.DeleteLegacy && len(result.Legacy) > 0 {
-		if !destIsExecutable(dest) {
-			return result, fmt.Errorf("%s", config.Text("install.new_entry_not_executable", dest))
+		if !destIsExecutable(result.RunBinary) {
+			return result, fmt.Errorf("%s", config.Text("install.new_entry_not_executable", result.RunBinary))
 		}
 		if err := removeLegacy(paths.BinDir, result.Legacy); err != nil {
 			return result, err
 		}
 		result.LegacyRemoved = true
 	}
-	CleanupStaleBinary(paths)
+	if copyBinary {
+		CleanupStaleBinary(paths)
+	}
 	return result, nil
 }
 

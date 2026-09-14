@@ -133,6 +133,9 @@ func mapWizardErr(err error) error {
 
 func printResult(result Result) {
 	fmt.Println(config.Text("install.installed"))
+	if result.DestBinary == "" {
+		fmt.Println(config.Text("install.existing_entry", result.RunBinary))
+	}
 	if result.Paths.Mode == config.ModeProject {
 		fmt.Println(result.DestBinary)
 		fmt.Fprintln(os.Stderr, config.Text("install.project_finished"))
@@ -157,7 +160,7 @@ func printResult(result Result) {
 	}
 }
 
-// RunInteractive runs the install wizard, performs the install, and always hands off to the dest binary.
+// RunInteractive initializes the chosen scope and hands off to its selected entry.
 func RunInteractive() int {
 	if err := requireInteractive(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -170,6 +173,11 @@ func RunInteractive() int {
 	}
 	if req.Mode != config.ModeProject {
 		paths, err := config.GlobalInstallPaths()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		req.CopyBinary, err = offerCopy(paths)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
@@ -196,10 +204,13 @@ func RunInteractive() int {
 	return finishSuccessfulInstall(result, req.Language)
 }
 
-// finishSuccessfulInstall prints the install result and always hands off to the installed binary.
+// finishSuccessfulInstall continues with the existing or explicitly installed binary.
 func finishSuccessfulInstall(result Result, lang string) int {
 	printResult(result)
-	if err := launchInstalled(result.DestBinary, lang); err != nil {
+	if result.Paths.Mode != config.ModeProject && result.DestBinary != "" {
+		warnPath(result.RunBinary)
+	}
+	if err := launchInstalled(result.RunBinary, lang); err != nil {
 		fmt.Fprintln(os.Stderr, config.Text("install.failed_handoff", err.Error()))
 		return 1
 	}

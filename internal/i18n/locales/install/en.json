@@ -1,0 +1,12 @@
+{
+  "install.source_not_regular": "Installation source is not a regular file: {{.V0}}",
+  "install.copy_current": "Current executable: {{.V0}}",
+  "install.path_unknown": "Cannot verify the executable on PATH: {{.V0}}",
+  "install.path_missing": "No kander executable was found on PATH.",
+  "install.path_conflict": "The kander command on PATH currently selects: {{.V0}}",
+  "install.copy_destination": "Copy to {{.V0}}? An existing file at this destination will be replaced. Your shell configuration will not be changed.",
+  "install.copy_question": "Copy this executable for global use?",
+  "install.path_adjust": "The copied executable is not the first kander on PATH. Add {{.V0}} to PATH before other kander directories, then reopen your terminal.",
+  "install.copy_failed": "Failed to install or start the selected executable: {{.V0}}",
+  "install.existing_entry": "Using the existing executable: {{.V0}}"
+}

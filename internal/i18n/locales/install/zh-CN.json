@@ -1,0 +1,12 @@
+{
+  "install.source_not_regular": "安装源不是普通文件：{{.V0}}",
+  "install.copy_current": "当前可执行文件：{{.V0}}",
+  "install.path_unknown": "无法确认 PATH 中的可执行文件：{{.V0}}",
+  "install.path_missing": "PATH 中未找到 kander 可执行文件。",
+  "install.path_conflict": "PATH 中的 kander 命令当前指向：{{.V0}}",
+  "install.copy_destination": "复制到 {{.V0}}？该位置已有的文件将被替换，不会修改 shell 配置。",
+  "install.copy_question": "是否复制当前程序以供全局使用？",
+  "install.path_adjust": "复制后的程序尚未成为 PATH 中首个 kander。请将 {{.V0}} 加入 PATH 并置于其他 kander 目录之前，然后重新打开终端。",
+  "install.copy_failed": "安装或启动所选程序失败：{{.V0}}",
+  "install.existing_entry": "继续使用现有程序：{{.V0}}"
+}

@@ -229,7 +229,7 @@ func TestPerformGlobalIntegratesOnlyExistingAgentDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	result, err := Perform(Request{Language: "cn", Source: stubBinary(t)})
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

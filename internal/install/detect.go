@@ -1,4 +1,5 @@
-// Package install copies the running kander binary, extracts embedded rules, and runs the first-run wizard.
+// Package install initializes rules and agent integrations, offers optional global
+// binary installation, and runs the first-run wizard.
 package install
 
 import (

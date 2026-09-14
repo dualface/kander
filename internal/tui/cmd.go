@@ -54,6 +54,8 @@ func requireTerminal() error {
 	))
 }
 
+var checkStartupCopy = install.CheckStartupCopy
+
 // Run is the default TUI entry point used when no subcommand is given.
 func Run(_ []string) int {
 	postInstall := os.Getenv(install.EnvPostInstall) != ""
@@ -69,6 +71,9 @@ func Run(_ []string) int {
 		}
 		if runWizard {
 			return install.RunInteractive()
+		}
+		if handled, code := checkStartupCopy(); handled {
+			return code
 		}
 	}
 	configExists, err := config.Exists()

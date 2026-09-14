@@ -1,0 +1,12 @@
+{
+  "install.source_not_regular": "インストール元が通常ファイルではありません：{{.V0}}",
+  "install.copy_current": "現在の実行ファイル：{{.V0}}",
+  "install.path_unknown": "PATH 上の実行ファイルを確認できません：{{.V0}}",
+  "install.path_missing": "PATH 上に kander の実行ファイルが見つかりません。",
+  "install.path_conflict": "PATH 上の kander コマンドは現在こちらを選択します：{{.V0}}",
+  "install.copy_destination": "{{.V0}} にコピーしますか？コピー先の既存ファイルは置き換えられます。シェル設定は変更しません。",
+  "install.copy_question": "現在のプログラムをグローバル利用向けにコピーしますか？",
+  "install.path_adjust": "コピー先が PATH 上の最初の kander になっていません。{{.V0}} をほかの kander ディレクトリより前に PATH へ追加し、ターミナルを開き直してください。",
+  "install.copy_failed": "選択したプログラムのインストールまたは起動に失敗しました：{{.V0}}",
+  "install.existing_entry": "既存の実行ファイルを使用します：{{.V0}}"
+}

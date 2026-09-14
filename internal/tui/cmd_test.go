@@ -12,6 +12,9 @@ import (
 )
 
 func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
+	previousCheck := checkStartupCopy
+	checkStartupCopy = func() (bool, int) { t.Fatal("post-install startup repeated PATH confirmation"); return true, 1 }
+	t.Cleanup(func() { checkStartupCopy = previousCheck })
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
