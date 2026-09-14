@@ -190,6 +190,71 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	}
 }
 
+// TestExistingConfigWithoutBoardShowsWelcome covers a normal launch with a
+// scope config already present but no kanban/ in the CWD: the TUI must still
+// start and show the empty-board welcome instead of exiting.
+func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
+	previousCheck := checkStartupCopy
+	checkStartupCopy = func() (bool, int) { return false, 0 }
+	t.Cleanup(func() { checkStartupCopy = previousCheck })
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(config.EnvLang, "cn")
+	t.Setenv(install.EnvSkipInstall, "1")
+	_ = os.Unsetenv(install.EnvPostInstall)
+	_ = os.Unsetenv(board.EnvBoardDir)
+
+	cfgPath := filepath.Join(home, ".config", "kander", "config.json")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(config.EnvConfig, cfgPath)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Language = "cn"
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+
+	t.Chdir(t.TempDir())
+
+	origTTY := isInteractiveTerminal
+	isInteractiveTerminal = func() bool { return true }
+	t.Cleanup(func() { isInteractiveTerminal = origTTY })
+
+	var captured *App
+	origRun := runBoardTUI
+	runBoardTUI = func(app *App) error {
+		captured = app
+		return nil
+	}
+	t.Cleanup(func() { runBoardTUI = origRun })
+
+	if code := Run(nil); code != 0 {
+		t.Fatalf("Run exit=%d", code)
+	}
+	if captured == nil {
+		t.Fatal("expected board app")
+	}
+	if captured.Options != nil {
+		t.Fatal("existing config must not auto-open options")
+	}
+	if !captured.shouldShowWelcome() {
+		t.Fatal("missing board with an existing config should show welcome")
+	}
+	if _, err := captured.GetTask("any"); err == nil {
+		t.Fatal("detail lookup must refuse without a board")
+	}
+}
+
 // TestExistingConfigDoesNotOpenOptions keeps the normal board entry when a scope
 // config already exists and this is not a post-install handoff.
 func TestExistingConfigDoesNotOpenOptions(t *testing.T) {

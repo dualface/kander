@@ -91,8 +91,9 @@ func Run(_ []string) int {
 	root, err := board.BoardRoot()
 	emptyBoard := false
 	if err != nil {
-		tolerateMissing := postInstall || !configExists
-		if !tolerateMissing || !board.IsBoardNotFound(err) {
+		// A missing board still opens the TUI so first-run and out-of-project
+		// launches can show the empty-board welcome instead of exiting.
+		if !board.IsBoardNotFound(err) {
 			return fail(err)
 		}
 		emptyBoard = true
