@@ -62,6 +62,7 @@ type DispatchReceipt struct {
 
 // Dispatch is the committed protocol state. Transport never supplies Accepted.
 type Dispatch struct {
+	Execution       *DispatchExecution     `json:"execution,omitempty"`
 	WrapUpAuthority *WrapUpAuthority       `json:"wrap_up_authority,omitempty"`
 	Schema          int                    `json:"schema"`
 	Input           DispatchInput          `json:"intent"`
@@ -184,6 +185,9 @@ func readDispatch(tx *Transaction, task, id string) (Dispatch, error) {
 	}
 	if (d.State == DispatchAccepted || d.State == DispatchCompleted) && d.Accepted == nil || d.State == DispatchCompleted && d.Completed == nil {
 		return d, dispatchError(id)
+	}
+	if err := validateDispatchExecution(tx, d); err != nil {
+		return d, err
 	}
 	if err := validateWrapUpAuthority(tx, d); err != nil {
 		return d, err
@@ -337,7 +341,7 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		if len(cardRevision) > 0 && s.Revision != cardRevision[0] {
 			return dispatchError(id)
 		}
-		if d.Revision != expected || authFrom(s.Text) != d.Authorization || (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(d.Input.ConfirmBy) {
+		if d.Revision != expected || authFrom(s.Text) != d.Authorization || (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(d.AcceptBefore()) {
 			return dispatchError(id)
 		}
 		d.State = DispatchUnknown
@@ -350,8 +354,9 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 
 // ReauthorizeDispatch fences the previous executor on an explicitly authorized
 // takeover. Old receipts remain immutable in their epoch-specific paths.
-// The original confirmation deadline is deliberately not extended.
-func ReauthorizeDispatch(root, task, id string, expected uint64) (d Dispatch, err error) {
+// Accepted work needs fresh stopped evidence and gets a new acceptance deadline.
+// Pending work retains its current deadline.
+func ReauthorizeDispatch(root, task, id string, expected uint64, stopped ...WrapUpExitEvidence) (d Dispatch, err error) {
 	err = WithTransaction(root, LockScope{Tasks: []string{task}}, func(tx *Transaction) error {
 		var e error
 		d, e = readDispatch(tx, task, id)
@@ -362,13 +367,25 @@ func ReauthorizeDispatch(root, task, id string, expected uint64) (d Dispatch, er
 		if e != nil {
 			return e
 		}
-		if d.WrapUpAuthority != nil || d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.Authorization.Epoch == ^uint64(0) || !time.Now().Before(d.Input.ConfirmBy) {
+		if d.WrapUpAuthority != nil || d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.Authorization.Epoch == ^uint64(0) {
+			return dispatchError(id)
+		}
+		now := time.Now().UTC()
+		execution := DispatchExecution{Epoch: d.Authorization.Epoch + 1, IssuedAt: now, ConfirmBy: d.AcceptBefore()}
+		if d.State == DispatchAccepted {
+			if len(stopped) != 1 || stopped[0].Outcome != "stopped" || !validDispatchExit(s, stopped[0], now) {
+				return dispatchEvidenceError("fresh confirmed exit required")
+			}
+			execution.Exit = &stopped[0]
+			execution.ConfirmBy = now.Add(120 * time.Second)
+		} else if !now.Before(execution.ConfirmBy) {
 			return dispatchError(id)
 		}
 		b, _ := json.Marshal(d)
 		if e = tx.Put(task, dispatchPath(id, "execution-"+strconv.FormatUint(d.Authorization.Epoch, 10)), string(b)+"\n"); e != nil {
 			return e
 		}
+		d.Execution = &execution
 		d.Authorization.Epoch++
 		d.Revision++
 		d.State = DispatchPrepared
@@ -380,6 +397,9 @@ func ReauthorizeDispatch(root, task, id string, expected uint64) (d Dispatch, er
 			return e
 		}
 		if e = tx.Put(task, "spec.md", text); e != nil {
+			return e
+		}
+		if e = tx.Put(task, dispatchPath(id, "execution-"+strconv.FormatUint(d.Authorization.Epoch, 10)), reviewJSON(d)); e != nil {
 			return e
 		}
 		return putDispatch(tx, d)

@@ -13,7 +13,6 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 )
 
 func readDispatchEvidence(path string) (board.DispatchEvidence, error) {
@@ -219,16 +218,14 @@ func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result 
 		if e = cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(s.Text)); e != nil {
 			return e
 		}
-		start := time.Now()
-		observed := DispatchObservation(ctx, s)
-		if board.MetadataFrom(s.Text, board.FieldSession) == "" || !observed.ValidFor(s.Entry, s.Text) || observed.Status != liveness.Stopped || observed.ObservedAt.Before(start) {
-			return launchError("launch.dispatch_recovery_unproven", r.DispatchID, observed.Detail)
+		exit, e := observedDispatchExit(ctx, s)
+		if e != nil {
+			return e
 		}
-		outcome := "stopped"
 		if r.ReclaimDecision != "" {
-			outcome = "reclaimed"
+			exit.Outcome = "reclaimed"
+			exit.Decision = r.ReclaimDecision
 		}
-		exit := board.WrapUpExitEvidence{Outcome: outcome, Decision: r.ReclaimDecision, CardRevision: s.Revision, Session: observed.Identity.Session, Window: observed.Identity.Window, Owner: observed.Identity.Owner, StartedAt: observed.Identity.StartedAt, ObservedAt: observed.ObservedAt}
 		result, e = board.AuthorizeDispatchWrapUp(root, r.TaskID, r.DispatchID, d.Revision, r.Author, r.Reason, exit)
 		return e
 	})

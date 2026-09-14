@@ -82,13 +82,6 @@ type WrapUpAuthority struct {
 	ConfirmBy time.Time              `json:"confirm_by"`
 }
 
-func dispatchAcceptBefore(d Dispatch) time.Time {
-	if d.WrapUpAuthority != nil {
-		return d.WrapUpAuthority.ConfirmBy
-	}
-	return d.Input.ConfirmBy
-}
-
 // AuthorizeDispatchWrapUp reconciles the same dispatch under CAS, archives its
 // old epoch, and fences it before issuing a cleanup-and-records-only grant.
 // The caller owns the delivery lease and verifies the exit observation first.
@@ -114,7 +107,7 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 		if d.Input.Kind != "wrap-up" || d.Revision != expected || d.Authorization != authFrom(s.Text) || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.WrapUpAuthority != nil || d.Authorization.Epoch == ^uint64(0) || (s.Entry.State != "review" && s.Entry.State != "working") || strings.TrimSpace(author) == "" || strings.TrimSpace(reason) == "" {
 			return dispatchEvidenceError("wrap-up authority conflict")
 		}
-		if (exit.Outcome != "stopped" && exit.Outcome != "reclaimed") || exit.Outcome == "reclaimed" && strings.TrimSpace(exit.Decision) == "" || exit.Session == "" || exit.Session != MetadataFrom(s.Text, FieldSession) || exit.Window != MetadataFrom(s.Text, FieldWindow) || exit.Owner != MetadataFrom(s.Text, FieldOwner) || exit.StartedAt != MetadataFrom(s.Text, FieldStartedAt) || exit.ObservedAt.IsZero() || exit.ObservedAt.After(time.Now()) || time.Since(exit.ObservedAt) > 30*time.Second {
+		if (exit.Outcome != "stopped" && exit.Outcome != "reclaimed") || exit.Outcome == "reclaimed" && strings.TrimSpace(exit.Decision) == "" || !validDispatchExit(s, exit, time.Now()) {
 			return dispatchEvidenceError("fresh confirmed exit required")
 		}
 		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
@@ -131,6 +124,7 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 		d.Accepted, d.Completed = nil, nil
 		d.Attempts = 0
 		d.WrapUpAuthority = &grant
+		d.Execution = nil
 		text, e := setMetadata(s.Text, "EXECUTION_EPOCH", strconv.FormatUint(d.Authorization.Epoch, 10))
 		if e != nil {
 			return e

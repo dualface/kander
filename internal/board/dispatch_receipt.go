@@ -19,7 +19,7 @@ func (tx *Transaction) requireExecution(s Snapshot, a ExecutionAuthorization, au
 	if err != nil {
 		return err
 	}
-	if d.State != DispatchAccepted && !time.Now().Before(dispatchAcceptBefore(d)) {
+	if d.State != DispatchAccepted && !time.Now().Before(d.AcceptBefore()) {
 		return dispatchError(a.DispatchID)
 	}
 	if d.Authorization != a || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || author && d.State != DispatchAccepted {
@@ -64,7 +64,7 @@ func stageDispatchMove(tx *Transaction, s Snapshot, target string, o MoveOptions
 		if d.State == DispatchAccepted || d.State == DispatchCompleted {
 			return true, nil
 		}
-		if (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(dispatchAcceptBefore(d)) {
+		if (d.State != DispatchPrepared && d.State != DispatchUnknown) || !time.Now().Before(d.AcceptBefore()) {
 			return false, dispatchError(a.DispatchID)
 		}
 		d.State = DispatchAccepted

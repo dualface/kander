@@ -163,31 +163,40 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 }
 
 func resumeDispatch(parent context.Context, root string, agent *string, launcher, task string, d board.Dispatch, launched *ResumeLaunch) error {
-	if dispatchFinished(d) && agent == nil {
+	if d.State == board.DispatchCompleted || d.State == board.DispatchAccepted && agent == nil {
 		return PrintDispatchResult(d)
 	}
-	ctx, cancel := context.WithDeadline(parent, d.Input.ConfirmBy)
-	defer cancel()
-	if err := ValidateActionEvidence(ctx, root, d); err != nil {
-		return err
-	}
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		return err
-	}
-	if agent == nil {
-		observation := DispatchObservation(ctx, s)
-		if !observation.ValidFor(s.Entry, s.Text) || observation.Status != liveness.Stopped {
-			return launchError("launch.dispatch_recovery_unproven", d.Input.ID, observation.Detail)
+	if d.State != board.DispatchAccepted {
+		if err := ValidateActionEvidence(parent, root, d); err != nil {
+			return err
 		}
-	} else {
-		// An explicit --agent is the existing user-authorized takeover entrance.
+	}
+	// Accepted work may outlive the original deadline. Observe and fence it
+	// before attaching the new epoch's budget to delivery and launch validation.
+	if d.State == board.DispatchAccepted {
+		next, recovered, err := RecoverAcceptedDispatch(parent, root, d)
+		if err != nil {
+			return err
+		}
+		if !recovered {
+			return launchError("launch.dispatch_recovery_unproven", d.Input.ID, "fresh confirmed exit required")
+		}
+		d = next
+	} else if agent != nil {
+		var err error
 		d, err = board.ReauthorizeDispatch(root, task, d.Input.ID, d.Revision)
 		if err != nil {
 			return err
 		}
-		s, err = board.ReadExecutionSnapshot(root, task, d.Authorization)
-		if err != nil {
+	}
+	ctx, cancel := context.WithDeadline(parent, d.AcceptBefore())
+	defer cancel()
+	s, err := board.ReadExecutionSnapshot(root, task, d.Authorization)
+	if err != nil {
+		return err
+	}
+	if agent == nil {
+		if _, err := observedDispatchExit(ctx, s); err != nil {
 			return err
 		}
 	}
@@ -274,7 +283,7 @@ func validateResumedDispatch(root string, entry board.Entry, text string, plan L
 	if err != nil {
 		return err
 	}
-	remaining := time.Until(d.Input.ConfirmBy).Seconds()
+	remaining := time.Until(d.AcceptBefore()).Seconds()
 	if remaining < timeout {
 		timeout = remaining
 	}

@@ -67,6 +67,14 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 	if err != nil {
 		return err
 	}
+	// Accepted retries may recover the same payload only after a fresh stopped
+	// observation. An explicit pane override cannot prove the old executor exited.
+	if d.State == board.DispatchAccepted && paneOverride == "" {
+		d, _, err = launch.RecoverAcceptedDispatch(parent, root, d)
+		if err != nil {
+			return err
+		}
+	}
 	authorization := d.Authorization
 	defer func() {
 		if deliveryErr == nil {
@@ -83,7 +91,7 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 	if d.State != board.DispatchPrepared && d.State != board.DispatchUnknown {
 		return notifyError("launch.dispatch_pending", id)
 	}
-	ctx, cancel := context.WithDeadline(parent, d.Input.ConfirmBy)
+	ctx, cancel := context.WithDeadline(parent, d.AcceptBefore())
 	defer cancel()
 	paths, err := config.CurrentInstallPaths()
 	if err != nil {

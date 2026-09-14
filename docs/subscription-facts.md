@@ -29,7 +29,7 @@ Snapshots, heartbeats, and related change events may carry `dispatches`, keyed b
 
 - `dispatch_id`, `task_id`, `kind`, `epoch`, `state`, and the dispatch's own `revision`.
 - `created_at` preserves the original intent creation time; `age_seconds` is computed from that time at snapshot time.
-- `confirm_by` is the effective acceptance deadline of the current epoch: an ordinary authorization takes the original intent's deadline; a wrap-up-only dedicated grant takes its own independent deadline, and the original intent's deadline is not rewritten.
+- `confirm_by` is the effective acceptance deadline of the current epoch: a recovered accepted execution takes its separately persisted epoch deadline, while a legacy execution without that field takes the original intent's deadline; a wrap-up-only dedicated grant takes its own independent deadline, and the original intent's deadline is not rewritten.
 - The `accepted` / `completed` atomic receipts, containing the time, card revision, state, and the applicable delivery/disposition references.
 - `confirmation_pending`: true only for prepared/delivery-unknown; `confirmation_overdue` means these two states have reached the current epoch's effective acceptance deadline. After accepted it is not a completion timeout, and the confirmation deadline is no longer used.
 
