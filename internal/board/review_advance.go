@@ -134,15 +134,10 @@ func syncPlannedBatchTarget(tx *Transaction, batch ReviewBatch, request reviewPl
 	if previousTarget == batch.TargetCommit {
 		return nil
 	}
-	if request.PreviousTarget == "" || request.Target == "" {
-		return reviewError("plan target sync provenance")
-	}
-	if request.Target != batch.TargetCommit {
-		return reviewError("plan target sync CAS conflict")
-	}
 	if request.PreviousTarget != previousTarget {
 		return planBatchTargetMismatch(previousTarget, request.PreviousTarget, batch.BatchID)
 	}
+	request.Target = batch.TargetCommit
 	request.BatchID = batch.BatchID
 	previous := p
 	previous.Batches = slices.Clone(p.Batches)
