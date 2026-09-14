@@ -14,10 +14,27 @@ func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*con
 	text := func(id string, args ...any) string {
 		return i18n.Text(language, id, args...)
 	}
+	_, overlay, overlayErr := config.ReadOverlay("")
+	if overlayErr != nil {
+		warning(overlayErr.Error())
+	}
 
 	cfg, result, err := config.Repair(func(cfg *config.Config) {
 		language = cfg.Language
-		changes = repairConfiguredTools(cfg, agents, tools)
+		// Derive policy from the repaired scope so missing or malformed scope
+		// files can still honor project activation. Never save this merged view.
+		policy := cfg
+		if overlayErr == nil && overlay != nil {
+			merged, mergeErr := config.ApplyOverlay(cfg, overlay)
+			if mergeErr != nil {
+				// Keep scope repair available; doctor's final Load reports the
+				// invalid overlay as unhealthy after repairing the scope file.
+				warning(mergeErr.Error())
+			} else {
+				policy = merged
+			}
+		}
+		changes = repairConfiguredTools(cfg, policy, agents, tools)
 	})
 	if result.BackupPath != "" {
 		hint(text("menu.original_config_backed_up") + result.BackupPath)
@@ -39,7 +56,7 @@ func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*con
 	return cfg, true
 }
 
-func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, tools TerminalTools) []string {
+func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentState, tools TerminalTools) []string {
 	var changes []string
 	choose := func(names []string, review bool) string {
 		for _, name := range names {
@@ -73,6 +90,9 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 			cfg.Reviewers[scale] = map[string]string{}
 		}
 		for _, role := range config.ReviewRoles {
+			if skipIntegratedReviewer(cfg, scale, role) && skipIntegratedReviewer(policy, scale, role) {
+				continue
+			}
 			selected := cfg.Reviewers[scale][role]
 			if !reviewerUsable(agents[selected]) && reviewer != "" {
 				set("reviewers."+scale+"."+role, &selected, reviewer)
@@ -107,6 +127,17 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		cfg.WelcomeComplete = true
 	}
 	return changes
+}
+
+// Integrated roles are opt-in. Their unused defaults must not add availability
+// warnings or repairs to existing configurations; the original four roles keep
+// their existing checks even when skipped.
+func skipIntegratedReviewer(cfg *config.Config, scale, role string) bool {
+	if role != "PMQA" && role != "Security" {
+		return false
+	}
+	stage, err := config.ReviewStageFor(cfg, scale, role)
+	return err == nil && stage == "skip"
 }
 
 // doctorLauncherAvailable only serves the "should we rewrite the user's

@@ -709,10 +709,11 @@ producer-owned unique claim identity in `LIFECYCLE_DECISION`. Manual `move worki
 and `start` each create a fresh identity, including a retry after start rollback. Rollback
 restores the previous document; `resume --agent` preserves the identity and timestamp. Cards
 without a claim identity keep the legacy task-ID plus `STARTED_AT` digest unchanged.
+New batch requirements contain exactly the four keys `PM`, `QA`, `CSA`, `Hacker`, or exactly those four plus `PMQA` and `Security`. Both sets remain valid for creation and exact retries; incomplete or unknown role sets are rejected. Existing originals, role order, hashes, runs and closure evidence retain their identities; schema_version stays 1.
 Active execution cycles require an explicit review plan before `move done`, even when REVIEWS is
 empty or no reviewer ran. Record each role as required or N/A with an actual reason and rule
 basis. When review is disabled or nothing triggered it, the minimal sequence is: `review plan`
-with one sealed batch from the review base to the final delivery commit naming all four roles
+with one sealed batch from the review base to the final delivery commit naming every role in its selected four-key or six-key set
 `N/A: <reason and rule basis>`, `review aggregate` for that batch, `review close` binding its
 view hash, then `move done`; this loads no disabled review module. A plan has at least one batch,
 its members are fixed at creation, and a card belongs to at most one plan per cycle. A plan can

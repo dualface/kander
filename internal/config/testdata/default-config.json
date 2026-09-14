@@ -12,13 +12,17 @@
       "CSA": "codex",
       "Hacker": "codex",
       "PM": "codex",
-      "QA": "codex"
+      "PMQA": "codex",
+      "QA": "codex",
+      "Security": "codex"
     },
     "small": {
       "CSA": "codex",
       "Hacker": "codex",
       "PM": "codex",
-      "QA": "codex"
+      "PMQA": "codex",
+      "QA": "codex",
+      "Security": "codex"
     }
   },
   "review_stages": {
@@ -26,13 +30,17 @@
       "CSA": "auto",
       "Hacker": "auto",
       "PM": "auto",
-      "QA": "auto"
+      "PMQA": "skip",
+      "QA": "auto",
+      "Security": "skip"
     },
     "small": {
       "CSA": "auto",
       "Hacker": "auto",
       "PM": "auto",
-      "QA": "auto"
+      "PMQA": "skip",
+      "QA": "auto",
+      "Security": "skip"
     }
   },
   "rules": {
@@ -131,7 +139,27 @@
         "small_effort": "",
         "small_model": ""
       },
+      "PMQA": {
+        "effort": "",
+        "large_agent": "",
+        "large_effort": "",
+        "large_model": "",
+        "model": "",
+        "small_agent": "",
+        "small_effort": "",
+        "small_model": ""
+      },
       "QA": {
+        "effort": "",
+        "large_agent": "",
+        "large_effort": "",
+        "large_model": "",
+        "model": "",
+        "small_agent": "",
+        "small_effort": "",
+        "small_model": ""
+      },
+      "Security": {
         "effort": "",
         "large_agent": "",
         "large_effort": "",

@@ -66,7 +66,7 @@ func TestValidateReviewStagesRejectsUnknownAndMixed(t *testing.T) {
 	}
 }
 
-func TestValidateReviewStagesFillsMissingWithAuto(t *testing.T) {
+func TestValidateReviewStagesFillsMissingWithRoleDefaults(t *testing.T) {
 	setupHome(t)
 	missingSection, err := Validate(minimalPayload(nil))
 	if err != nil {
@@ -74,7 +74,11 @@ func TestValidateReviewStagesFillsMissingWithAuto(t *testing.T) {
 	}
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			if missingSection.ReviewStages[scale][role] != "auto" {
+			want := "auto"
+			if role == "PMQA" || role == "Security" {
+				want = "skip"
+			}
+			if missingSection.ReviewStages[scale][role] != want {
 				t.Fatalf("missing section %s.%s=%s", scale, role, missingSection.ReviewStages[scale][role])
 			}
 		}

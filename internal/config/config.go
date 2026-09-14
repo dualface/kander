@@ -30,7 +30,7 @@ const (
 
 var (
 	TaskScales       = []string{"large", "small"}
-	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA"}
+	ReviewRoles      = []string{"PM", "CSA", "Hacker", "QA", "PMQA", "Security"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Languages        = []string{"cn", "en", "ja"}
 	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}

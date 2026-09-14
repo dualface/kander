@@ -61,6 +61,7 @@ func Run(args []string) (exitCode int) {
 		roles := map[string]string{
 			"pm": "PM", "qa": "QA", "csa": "CSA",
 			"codesecurityanalyst": "CSA", "hacker": "Hacker",
+			"pmqa": "PMQA", "security": "Security",
 		}
 		role := roles[toLower(roleInput)]
 		if role == "" {

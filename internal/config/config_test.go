@@ -651,7 +651,11 @@ func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 	stages := DefaultReviewStages()
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			if stages[scale][role] != "auto" {
+			want := "auto"
+			if role == "PMQA" || role == "Security" {
+				want = "skip"
+			}
+			if stages[scale][role] != want {
 				t.Fatalf("%s.%s=%s", scale, role, stages[scale][role])
 			}
 		}
@@ -922,7 +926,7 @@ func TestFormatConfigLinesAndReviewHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(stageLines, " ") != "required skip auto auto required skip auto auto" {
+	if strings.Join(stageLines, " ") != "required skip auto auto skip skip required skip auto auto skip skip" {
 		t.Fatalf("%v", stageLines)
 	}
 	modelLines, err := ReviewModelLines(complete, "codex")

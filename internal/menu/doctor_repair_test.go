@@ -68,6 +68,14 @@ func TestDoctorCreatesAndRepairsConfig(t *testing.T) {
 				t.Fatalf("unusable result: %+v", cfg)
 			}
 			for _, role := range config.ReviewRoles {
+				if role == "PMQA" || role == "Security" {
+					for _, scale := range config.TaskScales {
+						if cfg.Reviewers[scale][role] != "codex" || cfg.ReviewStages[scale][role] != "skip" {
+							t.Fatalf("disabled role %s.%s changed: %+v", scale, role, cfg)
+						}
+					}
+					continue
+				}
 				for _, scale := range config.TaskScales {
 					if cfg.Reviewers[scale][role] != "claude" {
 						t.Fatalf("role %s scale %s not repaired: %+v", role, scale, cfg)
@@ -137,7 +145,7 @@ func TestDoctorWindowsLauncherKeepsHerdrWhenInstalled(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Launcher = "herdr"
 	agents := map[string]agentState{"codex": {Path: "codex.exe", Version: "1", Review: true}}
-	repairConfiguredTools(cfg, agents, TerminalTools{Herdr: TerminalTool{Path: "herdr.exe"}})
+	repairConfiguredTools(cfg, cfg, agents, TerminalTools{Herdr: TerminalTool{Path: "herdr.exe"}})
 	if cfg.Launcher != "herdr" {
 		t.Fatalf("launcher=%s", cfg.Launcher)
 	}
@@ -150,7 +158,7 @@ func TestDoctorWindowsLauncherFallbackWithoutHerdr(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Launcher = "herdr"
 	agents := map[string]agentState{"codex": {Path: "codex.exe", Version: "1", Review: true}}
-	repairConfiguredTools(cfg, agents, TerminalTools{})
+	repairConfiguredTools(cfg, cfg, agents, TerminalTools{})
 	if cfg.Launcher != "console" {
 		t.Fatalf("launcher=%s", cfg.Launcher)
 	}

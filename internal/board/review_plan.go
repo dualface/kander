@@ -38,10 +38,10 @@ func planName(id string) string     { return "plans/" + id + ".json" }
 func taskPlanName(id string) string { return "task-plans/" + id + ".json" }
 func closureName(id string) string  { return "closures/" + id + ".json" }
 func validateRequirements(r map[string]string) error {
-	if len(r) != 4 {
-		return reviewError("all four role requirements required")
+	if len(r) != 4 && len(r) != 6 {
+		return reviewError("requirements must contain PM, QA, CSA, Hacker, optionally with both PMQA and Security")
 	}
-	for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
+	for _, role := range reviewRequirementRoles(r) {
 		value := r[role]
 		if value != "required" && (!strings.HasPrefix(value, "N/A: ") || strings.TrimSpace(strings.TrimPrefix(value, "N/A: ")) == "") {
 			return reviewError("requirement reason and rule basis: " + role)
@@ -49,6 +49,16 @@ func validateRequirements(r map[string]string) error {
 	}
 	return nil
 }
+
+// Keep the historical four-role order so old closure hashes remain stable.
+func reviewRequirementRoles(requirements map[string]string) []string {
+	roles := []string{"PM", "QA", "CSA", "Hacker"}
+	if len(requirements) == 6 {
+		roles = append(roles, "PMQA", "Security")
+	}
+	return roles
+}
+
 func planCycle(s Snapshot) string {
 	identity := s.Entry.TaskID + "\n" + MetadataFrom(s.Text, FieldStartedAt)
 	if claim := claimIdentity(s.Text); claim != "" {

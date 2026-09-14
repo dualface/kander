@@ -125,11 +125,26 @@ candidates, keep the ten with the highest concrete impact and say how many were 
 `
 )
 
+// Integrated prompts reuse the original roles, preserving their independent contracts.
+const roleRulePMQA = `Perform one integrated product acceptance and quality review. Start with the PM contract
+check and its requirement table, then perform the QA behavior and quality assessment.
+The PM component owns explicit performance acceptance; the QA component does not duplicate it.
+Report each root cause once across both components, with PMQA-prefixed finding IDs.
+
+` + roleRulePM + "\n" + roleRuleQA
+
+const roleRuleSecurity = roleRuleCSA + `
+Then trace end-to-end exploit chains. Report each root cause only once across both analyses,
+with Security-prefixed finding IDs.
+` + roleRuleHacker
+
 var roleRules = map[string]string{
-	"PM":     roleRulePM,
-	"QA":     roleRuleQA,
-	"CSA":    roleRuleCSA,
-	"Hacker": roleRuleHacker,
+	"PM":       roleRulePM,
+	"QA":       roleRuleQA,
+	"CSA":      roleRuleCSA,
+	"Hacker":   roleRuleHacker,
+	"PMQA":     roleRulePMQA,
+	"Security": roleRuleSecurity,
 }
 
 const structuredFindingRules = `After the human-readable analysis, emit exactly one fenced block named

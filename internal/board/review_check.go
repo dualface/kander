@@ -172,11 +172,8 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 			return reviewError("run/plan worktree mismatch")
 		}
 	}
-	for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
-		requirement := batch.Requirements[role]
-		if requirement != "required" && (!strings.HasPrefix(requirement, "N/A: ") || strings.TrimSpace(strings.TrimPrefix(requirement, "N/A: ")) == "") {
-			return reviewError("batch requirements")
-		}
+	if err := validateRequirements(batch.Requirements); err != nil {
+		return err
 	}
 	if len(run.InputHashes) != 2 || run.InputHashes["task-context.md"] == "" || run.InputHashes["review-context.md"] == "" {
 		return reviewError("input hash set")

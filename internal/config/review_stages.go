@@ -2,10 +2,18 @@ package config
 
 import "strings"
 
+// Integrated roles are opt-in so old configurations do not add reviewer runs.
+func defaultReviewStage(role string) string {
+	if role == "PMQA" || role == "Security" {
+		return "skip"
+	}
+	return "auto"
+}
+
 func defaultReviewStageRoles() map[string]string {
 	out := make(map[string]string, len(ReviewRoles))
 	for _, role := range ReviewRoles {
-		out[role] = "auto"
+		out[role] = defaultReviewStage(role)
 	}
 	return out
 }
@@ -179,11 +187,11 @@ func ReviewStageFor(cfg *Config, scale, role string) (string, error) {
 		return "", configErrorf("config.review_stages_has_unknown_roles", role)
 	}
 	if cfg.ReviewStages[scale] == nil {
-		return "auto", nil
+		return defaultReviewStage(role), nil
 	}
 	mode := cfg.ReviewStages[scale][role]
 	if mode == "" {
-		return "auto", nil
+		return defaultReviewStage(role), nil
 	}
 	return mode, nil
 }

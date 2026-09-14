@@ -18,7 +18,7 @@ Both creating the intent and publishing to a not-yet-published card require a di
 
 ## Batches and Predecessors
 
-The requirements file for a new batch must list all roles, each valued either required or N/A with a reason:
+The requirements file for a new batch must list exactly the four original roles, or all six roles including the optional composites. Each value is required or N/A with a reason. This four-key example remains valid for new batches:
 
 ```json
 {
@@ -47,6 +47,27 @@ Fixes do not open a new batch. Advancing the target requires an advance file:
 review verifies that old is an ancestor of new and that every commit in old..new appears in the mapping and is assigned to a member of this batch; the board CASes the current target inside the group control lock, saving the old/new targets, the basis, and the version. Assignment is a fact supplied by the caller; there is no promise of deriving business assignment from arbitrary code, and deliveries from outside the group must not be misrepresented as fixes for this batch. Advancing is refused while any run of this batch is executing or not fully published.
 
 An incremental round automatically reads the original report and author dispositions via previous-run-id; the caller's review-context is preserved verbatim as a separate supplement. reviewed-commit may be omitted; when passed explicitly it must match. The predecessor must share the same batch/base/role/reviewer and be fully published. For disposition, plans, and batch close, see [Review completion gate](review-disposition.md); this protocol does not auto-pass based on the word PASS appearing in a report.
+
+## Optional Composites and Compatibility
+
+All six roles (`PM`, `QA`, `CSA`, `Hacker`, `PMQA`, `Security`) can start new runs. Existing case-insensitive names and aliases, including `CodeSecurityAnalyst`, remain accepted. PMQA checks PM's contract first, then QA's quality criteria; Security performs CSA's trust-boundary analysis before Hacker's exploit-chain analysis, reporting each root cause once.
+
+The two composites default to `skip`; original four-role stage defaults stay `auto`. Selecting PMQA requires PM/QA to be `skip`; selecting Security requires CSA/Hacker to be `skip`. Reviewer/model/scale/overlay settings keep their existing behavior. Old configuration is neither merged into composites nor deprecated, and produces no migration warning.
+
+A composite batch uses the exact six-key requirements form:
+
+```json
+{
+  "PM": "N/A: PMQA selected; PM policy is skip",
+  "QA": "N/A: PMQA selected; QA policy is skip",
+  "CSA": "N/A: Security selected; CSA policy is skip",
+  "Hacker": "N/A: Security selected; Hacker policy is skip",
+  "PMQA": "required",
+  "Security": "required"
+}
+```
+
+Both exact four-key and six-key sets can be created and retried unchanged; unknown keys and incomplete sets (including a two-key composite object) are rejected. Every batch keeps its frozen role set. Four-role batches can continue running their original roles; no conversion or prior closure is required on upgrade. Historical requirements, role order, run IDs, indexes, manifests, closures, dispositions, waivers, recovery artifacts and their hashes retain their identities. schema_version remains 1. CSA, Hacker and Security support the existing verified-finding waiver rules; PM, QA and PMQA do not. See the [completion gate](review-disposition.md) for user decisions, timeout and closure requirements.
 
 ## Original Artifacts and Schema
 
@@ -99,7 +120,7 @@ kanban/.kander/groups/00000000-review-archive-group/
 
 This is a tool-reserved namespace, not a kanban task group, and no group card is created. run.json stores the per-card publication receipts; each card independently holds the complete original artifacts and a non-overwritable manifest. Hashes are for integrity detection and do not defend against arbitrary same-user tampering.
 
-The per-run-ID OS execution lock lives in the stable locks directory, independent of the card lock. While held, it only briefly enters the board, group, and task transactions of card transactions; no code acquires the execution lock in the reverse direction, so no cycle forms. Different roles may run in parallel; a concurrent retry of the same run waits for the previous holder to release and then reads its result. Ordinary updates and moves between working and review may run during a long review. done is now checked by the review plan and disposition gate; an incomplete archive cannot legally enter done. If an external legacy program moves the card into done or another terminal state prematurely, the original artifacts remain in the control directory, publication fails, and the old path is not recreated; the default check skips deferred-check states, so `kander check <task-id>` or `kander check --all` must be used to locate incomplete publications. A done card cannot be moved back for reuse, nor patched around the controlled entry point; follow-up handling requires separate confirmation, and retrying with the same run must not promise to automatically repair the terminal state.
+The per-run-ID OS execution lock lives in the stable locks directory, independent of the card lock. While held, it only briefly enters the board, group, and task transactions of card transactions; no code acquires the execution lock in the reverse direction, so no cycle forms. Different roles within a stage may run in parallel; stage one (PM/QA or PMQA) precedes stage two (CSA/Hacker or Security); a concurrent retry of the same run waits for the previous holder to release and then reads its result. Ordinary updates and moves between working and review may run during a long review. done is now checked by the review plan and disposition gate; an incomplete archive cannot legally enter done. If an external legacy program moves the card into done or another terminal state prematurely, the original artifacts remain in the control directory, publication fails, and the old path is not recreated; the default check skips deferred-check states, so `kander check <task-id>` or `kander check --all` must be used to locate incomplete publications. A done card cannot be moved back for reuse, nor patched around the controlled entry point; follow-up handling requires separate confirmation, and retrying with the same run must not promise to automatically repair the terminal state.
 
 Inputs and the intent are committed to disk transactionally first; output is written to controlled staging. Only after process reaping, worktree checks, and runtime cleanup have all reached a conclusion are originals/sidecar frozen; then the original artifacts, manifest, index, and receipt are published atomically per card. Cross-card publication is not one big transaction: on partial failure, successful cards are kept, each card is reported individually, and the exit code is non-zero. A retry verifies successful cards without rewriting them and only fills in the missing ones.
 

@@ -257,7 +257,7 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 		return reviewError("mechanical category")
 	}
 	if d.Status == "waived" {
-		if run.Role != "CSA" && run.Role != "Hacker" || d.Waiver == nil || strings.TrimSpace(d.Waiver.Decision) == "" {
+		if run.Role != "CSA" && run.Role != "Hacker" && run.Role != "Security" || d.Waiver == nil || strings.TrimSpace(d.Waiver.Decision) == "" {
 			return reviewError("waiver only for applicable security role decisions")
 		}
 		if d.Waiver.Policy != "accepted-risk" && d.Waiver.Policy != "timed-out" {

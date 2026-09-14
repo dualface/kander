@@ -314,15 +314,8 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if advance != nil || len(requirements) == 0 {
 				return reviewError("new batch requires requirements; no advance")
 			}
-			for role, requirement := range requirements {
-				if !reviewRole(role) || requirement != "required" && (!strings.HasPrefix(requirement, "N/A: ") || strings.TrimSpace(strings.TrimPrefix(requirement, "N/A: ")) == "") {
-					return reviewError("requirements")
-				}
-			}
-			for _, role := range []string{"PM", "QA", "CSA", "Hacker"} {
-				if strings.TrimSpace(requirements[role]) == "" {
-					return reviewError("missing requirement: " + role)
-				}
+			if err := validateRequirements(requirements); err != nil {
+				return err
 			}
 			batch = ReviewBatch{TaskContextHash: input.InputHashes["task-context.md"], Schema: 1, BatchID: input.BatchID, TaskIDs: input.TaskIDs, Base: input.Base, TargetCommit: input.Commit, ReportLanguage: language, Requirements: requirements, Revision: 1}
 		} else {
@@ -425,7 +418,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 	return
 }
 func reviewRole(role string) bool {
-	return role == "PM" || role == "QA" || role == "CSA" || role == "Hacker"
+	return role == "PM" || role == "QA" || role == "CSA" || role == "Hacker" || role == "PMQA" || role == "Security"
 }
 func allPublished(run ReviewRun) bool {
 	for _, id := range run.TaskIDs {

@@ -4,7 +4,7 @@ This protocol builds on the run/batch of the [Review evidence archive](review-ev
 
 ## Execution Cycles and Plans
 
-An active card must have an explicit review plan before entering done. Even when there is no REVIEWS index, no role has run, or the review rules are disabled, an empty index must not be taken to imply a pass. When review truly does not apply, each of the four roles is written as `N/A: <reason and rule basis>`, followed by an explicit batch close. The tool records the caller's applicability judgment; it does not substitute for user authorization or project-rule judgment.
+An active card must have an explicit review plan before entering done. Even when there is no REVIEWS index, no role has run, or the review rules are disabled, an empty index must not be taken to imply a pass. When review truly does not apply, each role in the selected exact four-key or six-key requirements set is written as `N/A: <reason and rule basis>`, followed by an explicit batch close. The tool records the caller's applicability judgment; it does not substitute for user authorization or project-rule judgment.
 
 ```text
 kander review plan <absolute-CWD> <absolute-plan.json>
@@ -39,7 +39,9 @@ Single-batch plan example; every SHA must be replaced with a real full commit:
 }
 ```
 
-In a non-Git project where all four roles are explicitly N/A, both base and target_commit may be written as `N/A`. In that case close stores a `git.not_applicable` basis, does not invoke Git, and does not claim that commits or ancestry have been verified. As soon as any role is required, real full SHAs must be used.
+For a composite plan, replace the example requirements with the complete [six-key requirements example](review-evidence.md#optional-composites-and-compatibility). Both forms support new plans; do not change an existing batch's role set. Six-key plans explicitly mark skipped constituent roles N/A. Closure roles name the actual required runs (for example PMQA and Security), never renamed PM/QA or CSA/Hacker evidence.
+
+In a non-Git project where every role in the selected set is explicitly N/A, both base and target_commit may be written as `N/A`. In that case close stores a `git.not_applicable` basis, does not invoke Git, and does not claim that commits or ancestry have been verified. As soon as any role is required, real full SHAs must be used.
 
 The tool generates revision, recorded_at, and each member's execution-cycle binding; the latter binds the task ID and STARTED_AT. The task plan pointer and tracked-cycles live in the stable control directory; the card stores the complete `reviews/plan.json`. A plan cannot be overwritten by a new plan, nor can a changed plan ID be used to discard a failed round. tracked-cycles must be consistent with the cycles stored in the plan; missing or inconsistent entries are structural errors.
 
@@ -143,7 +145,7 @@ Records are submitted by the working card's current OWNER and only for the autho
 
 must-fix statuses are confirmed/fixed/rejected/unverifiable/waived. confirmed and unverifiable block batch close; rejected must state a factual basis and enters the unresolved list. fixed must have a fix SHA and a verification record; that commit should be strictly later than the finding's target commit. NON_BLOCKING accepts only fixed/deferred/rejected and must also record a basis.
 
-waived is valid only for CSA/Hacker must-fix items. A waiver contains policy=accepted-risk with an explicit decision, or policy=timed-out with a fully documented notification basis decision, sent_at, and timeout_at; the two instants must be at least 15 minutes apart and timeout_at must not be in the future. It does not equal PASS. PM/QA, unverified items, and ordinary acceptance confirmations cannot use this exception. The actual notification, the user's decision, and the applicable rules must still be carried out and cited truthfully by the Agent; the presence of the fields grants no authorization.
+waived is valid only for CSA/Hacker/Security must-fix items. A waiver contains policy=accepted-risk with an explicit decision, or policy=timed-out with a fully documented notification basis decision, sent_at, and timeout_at; the two instants must be at least 15 minutes apart and timeout_at must not be in the future. It does not equal PASS. PM/QA/PMQA, unverified items, and ordinary acceptance confirmations cannot use this exception. The actual notification, the user's decision, and the applicable rules must still be carried out and cited truthfully by the Agent; the presence of the fields grants no authorization.
 
 Each author record is published only to its own `reviews/<run_id>/dispositions/<record_id>.json`; the tool-controlled ledger binds the original text and preserves the full chain. The orchestrator's verification opinions are separately marked with author/basis in the close request's opinions and may cite finding references, but cannot rewrite or submit a disposition on the author's behalf.
 
