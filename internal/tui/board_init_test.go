@@ -41,11 +41,11 @@ func missingBoardApp(t *testing.T) *App {
 
 func readyBoardInit(t *testing.T, app *App) {
 	t.Helper()
-	if app.BoardInit == nil || app.BoardInit.phase != boardInitLoading {
+	if app.BoardInit == nil || app.BoardInit.phase != confirmLoading {
 		t.Fatalf("expected loading init dialog: %+v", app.BoardInit)
 	}
 	runPendingWork(t, app)
-	if app.BoardInit == nil || app.BoardInit.phase != boardInitReady || app.BoardInit.path != "/tmp/project/kanban" {
+	if app.BoardInit == nil || app.BoardInit.phase != confirmReady || app.BoardInit.path != "/tmp/project/kanban" {
 		t.Fatalf("preview not applied: %+v", app.BoardInit)
 	}
 }
@@ -54,17 +54,17 @@ func TestBoardInitCopyMatchesLockedCopy(t *testing.T) {
 	want := map[string]map[string]string{
 		"cn": {
 			"tui.board_init_title": "初始化看板？",
-			"tui.board_init_keys":  "y 或 Enter：创建目录；其它键：取消",
+			"dialog.keys":          "y：确认；n / Esc：取消",
 			"tui.board_init_body":  "当前还没有 kanban/ 目录。所有任务卡文件都会保存在这个目录中：\n\nPATH\n\n要现在创建吗？",
 		},
 		"en": {
 			"tui.board_init_title": "Initialize the board?",
-			"tui.board_init_keys":  "y or Enter: create the directory; any other key: cancel",
+			"dialog.keys":          "y: confirm; n / Esc: cancel",
 			"tui.board_init_body":  "There is no kanban/ directory yet. All task card files will be stored in this directory:\n\nPATH\n\nCreate it now?",
 		},
 		"ja": {
 			"tui.board_init_title": "ボードを初期化しますか？",
-			"tui.board_init_keys":  "y または Enter：ディレクトリを作成；その他のキー：キャンセル",
+			"dialog.keys":          "y：確認；n / Esc：キャンセル",
 			"tui.board_init_body":  "まだ kanban/ ディレクトリがありません。タスクカードのファイルはすべてこのディレクトリに保存されます：\n\nPATH\n\n今すぐ作成しますか？",
 		},
 	}
@@ -87,7 +87,7 @@ func TestChatWithoutBoardOffersInitThenOpensChat(t *testing.T) {
 	if app.Chat != nil {
 		t.Fatal("chat must wait for board init")
 	}
-	if !strings.Contains(ansi.Strip(app.View()), config.Text("tui.start_loading")) {
+	if !strings.Contains(ansi.Strip(app.View()), config.Text("dialog.loading")) {
 		t.Fatal("init dialog must cover welcome while the path loads")
 	}
 	readyBoardInit(t, app)
@@ -95,7 +95,7 @@ func TestChatWithoutBoardOffersInitThenOpensChat(t *testing.T) {
 	for _, want := range []string{
 		config.Text("tui.board_init_title"),
 		"/tmp/project/kanban",
-		config.Text("tui.board_init_keys"),
+		config.Text("dialog.keys"),
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("init dialog missing %q\n%s", want, view)
@@ -106,7 +106,7 @@ func TestChatWithoutBoardOffersInitThenOpensChat(t *testing.T) {
 	}
 
 	app.HandleKey("y")
-	if app.BoardInit == nil || app.BoardInit.phase != boardInitRunning {
+	if app.BoardInit == nil || app.BoardInit.phase != confirmRunning {
 		t.Fatalf("y must start init: %+v", app.BoardInit)
 	}
 	runPendingWork(t, app)
@@ -125,7 +125,7 @@ func TestChatWithoutBoardOffersInitThenOpensChat(t *testing.T) {
 	}
 }
 
-func TestBoardInitEnterConfirmsAndEscCancels(t *testing.T) {
+func TestBoardInitEnterIsIgnoredAndEscCancels(t *testing.T) {
 	app := missingBoardApp(t)
 	app.HandleKey("c")
 	readyBoardInit(t, app)
@@ -137,8 +137,8 @@ func TestBoardInitEnterConfirmsAndEscCancels(t *testing.T) {
 	app.HandleKey("c")
 	readyBoardInit(t, app)
 	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if app.BoardInit == nil || app.BoardInit.phase != boardInitRunning {
-		t.Fatalf("enter must confirm: %+v", app.BoardInit)
+	if app.BoardInit == nil || app.BoardInit.phase != confirmReady {
+		t.Fatalf("enter must be ignored: %+v", app.BoardInit)
 	}
 }
 

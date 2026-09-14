@@ -1,0 +1,11 @@
+{
+  "dialog.loading": "読み込み中…",
+  "dialog.keys": "y：確認；n / Esc：キャンセル",
+  "dialog.loading_keys": "読み込み中… y：待機；n / Esc：キャンセル",
+  "dialog.running_keys": "実行中…",
+  "dialog.result_keys": "ホイール：スクロール；何かキー：閉じる",
+  "dialog.title_starting": "開始中…",
+  "dialog.title_done": "完了",
+  "dialog.title_failed": "失敗",
+  "dialog.settings": "Agent：{{.V0}} | ランチャー：{{.V1}}"
+}

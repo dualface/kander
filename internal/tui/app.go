@@ -216,6 +216,11 @@ func (a *App) View() string {
 	case a.Options != nil:
 		box, popup := a.Options.view()
 		base = overlay(base, popup, box.X, box.Y, p)
+		if a.Options.confirm != nil {
+			a.ShowCursor = false
+			cbox, cpopup := a.Options.renderConfirm()
+			base = overlay(base, cpopup, cbox.X, cbox.Y, p)
+		}
 	case a.StartConfirmation != nil:
 		box, popup := a.renderStartConfirmation()
 		base = overlay(base, popup, box.X, box.Y, p)

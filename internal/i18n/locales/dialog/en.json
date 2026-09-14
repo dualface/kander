@@ -1,0 +1,11 @@
+{
+  "dialog.loading": "Loading…",
+  "dialog.keys": "y: confirm; n / Esc: cancel",
+  "dialog.loading_keys": "Loading… y: wait; n / Esc: cancel",
+  "dialog.running_keys": "Working…",
+  "dialog.result_keys": "Mouse wheel: scroll; any key: close",
+  "dialog.title_starting": "Starting…",
+  "dialog.title_done": "Done",
+  "dialog.title_failed": "Failed",
+  "dialog.settings": "Agent: {{.V0}} | Launcher: {{.V1}}"
+}

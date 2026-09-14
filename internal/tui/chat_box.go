@@ -232,7 +232,7 @@ func (a *App) renderChat() (popupBox, string) {
 		agent, launcher = t("tui.start_loading"), t("tui.start_loading")
 	}
 	rows := []string{
-		styleFor("popup-dim", p).Render(ansi.Truncate(t("tui.start_settings", agent, launcher), inner, "…")),
+		styleFor("popup-dim", p).Render(ansi.Truncate(t("dialog.settings", agent, launcher), inner, "…")),
 		"",
 		dialog.input.View(),
 	}

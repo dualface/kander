@@ -31,6 +31,7 @@ var testCatalogFiles = []string{
 	"locales/terminal/%s.json",
 	"locales/actions/%s.json",
 	"locales/result/%s.json",
+	"locales/dialog/%s.json",
 }
 
 func readCatalog(t *testing.T, name string) map[string]string {
@@ -88,6 +89,28 @@ func TestCatalogs(t *testing.T) {
 				t.Errorf("%s/%s: %v", lang, id, err)
 			}
 		}
+	}
+}
+
+func TestDialogTopicKeysMatch(t *testing.T) {
+	keys := func(lang string) map[string]struct{} {
+		data, err := catalogs.ReadFile("locales/dialog/" + lang + ".json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var messages map[string]string
+		if err := json.Unmarshal(data, &messages); err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]struct{}{}
+		for id := range messages {
+			out[id] = struct{}{}
+		}
+		return out
+	}
+	en, cn, ja := keys("en"), keys("zh-CN"), keys("ja")
+	if !reflect.DeepEqual(en, cn) || !reflect.DeepEqual(en, ja) {
+		t.Fatalf("dialog topic keys differ: en=%d cn=%d ja=%d", len(en), len(cn), len(ja))
 	}
 }
 

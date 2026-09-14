@@ -10,7 +10,6 @@
   "tui.welcome_hint": "Esc or click to close",
   "tui.board_init_title": "Initialize the board?",
   "tui.board_init_body": "There is no kanban/ directory yet. All task card files will be stored in this directory:\n\n{{.V0}}\n\nCreate it now?",
-  "tui.board_init_keys": "y or Enter: create the directory; any other key: cancel",
   "tui.board_init_running": "Creating the board directory…",
   "tui.board_init_failed": "Could not initialize the board: {{.V0}}",
   "tui.board_init_preview_failed": "Could not decide where to create kanban/: {{.V0}}"

@@ -26,11 +26,11 @@ func TestLoadingStartWheelChangesSelectionAndDiscardsPreview(t *testing.T) {
 	app.confirmSelectedStart()
 	dialog := app.StartConfirmation
 	app.applyWork(old().(workMsg).payload)
-	if app.StartConfirmation != dialog || dialog.phase != startLoading {
+	if app.StartConfirmation != dialog || dialog.phase != confirmLoading {
 		t.Fatal("old wheel selection overwrote new preview")
 	}
 	finishStartPreview(app)
-	if dialog.phase != startReady || dialog.TaskID != app.Model.SelectedTask().TaskID {
+	if dialog.phase != confirmReady || dialog.TaskID != app.Model.SelectedTask().TaskID {
 		t.Fatal("new selection preview lost")
 	}
 }

@@ -1,0 +1,11 @@
+{
+  "dialog.loading": "读取中…",
+  "dialog.keys": "y：确认；n / Esc：取消",
+  "dialog.loading_keys": "正在读取… y：等待；n / Esc：取消",
+  "dialog.running_keys": "正在执行…",
+  "dialog.result_keys": "滚轮：滚动；任意键：关闭",
+  "dialog.title_starting": "正在启动…",
+  "dialog.title_done": "已完成",
+  "dialog.title_failed": "失败",
+  "dialog.settings": "Agent：{{.V0}} | 启动器：{{.V1}}"
+}

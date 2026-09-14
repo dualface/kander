@@ -10,7 +10,25 @@ import (
 	"github.com/dualface/kander/internal/fs"
 )
 
-var confirmCopy = runCopyConfirmation
+type copyConfirm func(check pathCheck, dest string) (bool, error)
+
+var confirmCopy copyConfirm = runCopyConfirmation
+
+// ConfirmCopy presents the optional binary-copy question. The TUI registers a
+// shared confirmation dialog at init; while unset, the Huh form remains so
+// this package can be used without the board.
+type ConfirmCopy func(title, body string) (bool, error)
+
+// SetConfirmCopy wires the copy prompt. A nil function restores the Huh form.
+func SetConfirmCopy(fn ConfirmCopy) {
+	if fn == nil {
+		confirmCopy = runCopyConfirmation
+		return
+	}
+	confirmCopy = func(check pathCheck, dest string) (bool, error) {
+		return fn(config.Text("install.copy_question"), copyDescription(check, dest))
+	}
+}
 
 func copyDescription(check pathCheck, dest string) string {
 	description := config.Text("install.copy_current", check.Current)

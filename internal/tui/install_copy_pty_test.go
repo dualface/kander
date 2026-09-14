@@ -40,8 +40,9 @@ func TestStartupOptionalCopyOnPTY(t *testing.T) {
 				}
 				if choice == "accept" {
 					session.send("y")
+				} else {
+					session.send("n")
 				}
-				session.send("\r")
 			}
 			if !session.waitFor("Task Board", 12*time.Second) {
 				t.Fatalf("board did not open: %s", session.text())

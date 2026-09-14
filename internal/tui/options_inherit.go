@@ -6,9 +6,9 @@ import (
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/menu"
 )
 
 // optionTitle appends ":" after a field name. Existing trailing colons or spaces are trimmed first.
@@ -43,6 +43,9 @@ func (p *optionsPanel) rebuildIfOverrideChanged(before bool, key string, path ..
 const (
 	restoreChoiceYes = "yes"
 	restoreChoiceNo  = "no"
+
+	optionsConfirmRestore = 1
+	optionsConfirmHerdr   = 2
 )
 
 // addPageRestore appends one page-level restore control when the Project tab has
@@ -74,18 +77,52 @@ func (p *optionsPanel) openRestoreConfirm() tea.Cmd {
 		return nil
 	}
 	p.restoreConfirming = true
-	p.restoreChoice = restoreChoiceNo
-	p.bind = nil
-	form := p.newForm(rootKeyMap(), huh.NewGroup(
-		huh.NewSelect[string]().
-			Description(t("tui.restore_page_confirm")).
-			Options(
-				huh.NewOption(t("tui.restore_page_confirm_yes"), restoreChoiceYes),
-				huh.NewOption(t("tui.restore_page_confirm_no"), restoreChoiceNo),
-			).
-			Value(&p.restoreChoice),
-	))
-	return p.startForm(form)
+	p.confirmKind = optionsConfirmRestore
+	p.confirm = &confirmDialog{phase: confirmReady}
+	return nil
+}
+
+func (p *optionsPanel) updateConfirm(msg tea.Msg) tea.Cmd {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return nil
+	}
+	switch p.confirm.handleKey(mapKey(key)) {
+	case confirmAccept:
+		return p.finishOptionsConfirm(true)
+	case confirmCancel, confirmClose:
+		return p.finishOptionsConfirm(false)
+	}
+	return nil
+}
+
+func (p *optionsPanel) finishOptionsConfirm(accepted bool) tea.Cmd {
+	kind := p.confirmKind
+	p.confirm = nil
+	p.confirmKind = 0
+	p.restoreConfirming = false
+	switch kind {
+	case optionsConfirmRestore:
+		p.restoreChoice = restoreChoiceNo
+		if accepted {
+			p.restoreChoice = restoreChoiceYes
+		}
+		return p.finishRestoreConfirm()
+	case optionsConfirmHerdr:
+		p.installHerdr = accepted
+		return p.finishHerdrInstall()
+	}
+	return nil
+}
+
+func (p *optionsPanel) renderConfirm() (popupBox, string) {
+	title := t("tui.restore_field_inherit")
+	paragraphs := []string{t("tui.restore_page_confirm")}
+	if p.confirmKind == optionsConfirmHerdr {
+		title = menu.HerdrInstallPrompt()
+		paragraphs = []string{menu.HerdrInstallCommand()}
+	}
+	return p.app.renderConfirm(paragraphs, confirmHint(confirmReady), title, &p.confirm.bodyView)
 }
 
 func (p *optionsPanel) finishRestoreConfirm() tea.Cmd {

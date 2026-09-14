@@ -65,6 +65,8 @@ type optionsPanel struct {
 	restoreConfirming  bool
 	restoreChoice      string
 	wantRestoreConfirm bool
+	confirm            *confirmDialog
+	confirmKind        int
 	// A non-empty rebuildFocus means the current section must be rebuilt after this update, with focus landing back on that selector.
 	// It records the selector's identifier rather than a line number: a rebuild may change the field count (different agents have
 	// different numbers of model fields), so the line number has to be looked up again in the new form.
@@ -217,19 +219,8 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	case chatStartResult:
 		a.applyChatStart(result)
 		return nil
-	case boardInitPreviewResult:
-		a.applyBoardInitPreview(result)
-		return nil
-	case boardInitResult:
-		a.applyBoardInitResult(result)
-		return nil
-	}
-	if result, ok := payload.(startPreviewResult); ok {
-		a.applyStartPreview(result)
-		return nil
-	}
-	if result, ok := payload.(startResult); ok {
-		a.applyStartResult(result)
+	case confirmWork:
+		a.applyConfirmWork(result)
 		return nil
 	}
 	if result, ok := payload.(focusResult); ok {
@@ -247,14 +238,6 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	}
 	if result, ok := payload.(issuesImportResult); ok {
 		a.applyIssuesImport(result)
-		return nil
-	}
-	if result, ok := payload.(takeoverPreviewResult); ok {
-		a.applyTakeoverPreview(result)
-		return nil
-	}
-	if result, ok := payload.(takeoverResult); ok {
-		a.applyTakeoverResult(result)
 		return nil
 	}
 	if result, ok := payload.(issuesIndexResult); ok {
@@ -389,6 +372,9 @@ func reportTag(level string) string {
 
 // Update is the input entry point of the panel: the report first, then the current Huh form.
 func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
+	if p.confirm != nil {
+		return p.updateConfirm(msg)
+	}
 	if tick, ok := msg.(spinner.TickMsg); ok {
 		if p.form != nil || p.loadErr != "" {
 			return nil
@@ -509,9 +495,6 @@ func (p *optionsPanel) resizeForm() tea.Cmd {
 	if p.confirming {
 		return p.openCloseConfirm()
 	}
-	if p.restoreConfirming {
-		return p.openRestoreConfirm()
-	}
 	if p.current == "" {
 		return p.openRoot()
 	}
@@ -556,9 +539,6 @@ func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
 		if p.confirming {
 			return p.finishCloseConfirm()
 		}
-		if p.restoreConfirming {
-			return p.finishRestoreConfirm()
-		}
 		return p.finishSection()
 	}
 	model, cmd := p.form.Update(msg)
@@ -587,9 +567,6 @@ func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
 		if p.confirming {
 			return p.finishCloseConfirm()
 		}
-		if p.restoreConfirming {
-			return p.finishRestoreConfirm()
-		}
 		// Settings pages submit only through the Enter interceptor above. Huh also
 		// completes when NextField moves past the last field (Down into a trailing
 		// skipped note, focus-restore overshoot, etc.); keep the user on this page.
@@ -601,13 +578,6 @@ func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
 		if p.confirming {
 			p.confirming = false
 			return p.openRoot()
-		}
-		if p.restoreConfirming {
-			p.restoreConfirming = false
-			if p.current == "" {
-				return p.openRoot()
-			}
-			return p.openSection(p.current)
 		}
 		return p.abortSection()
 	}

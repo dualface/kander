@@ -71,7 +71,7 @@ func TestIssuesTakeoverUnboundStartsThroughTheSharedPath(t *testing.T) {
 
 	app.HandleKey("s")
 	dialog := app.Takeover
-	if dialog == nil || dialog.phase != takeoverLoading {
+	if dialog == nil || dialog.phase != confirmLoading {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 	if dialog.number != 42 {
@@ -85,15 +85,15 @@ func TestIssuesTakeoverUnboundStartsThroughTheSharedPath(t *testing.T) {
 	}
 
 	runPendingWork(t, app)
-	if dialog.phase != takeoverReady || dialog.agent != "claude" || dialog.launcher != "tmux" {
+	if dialog.phase != confirmReady || dialog.agent != "claude" || dialog.launcher != "tmux" {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 	view = ansi.Strip(app.View())
 	for _, want := range []string{
 		config.Text("tui.issues_takeover_title", "42"),
 		"dualface/kander#42",
-		config.Text("tui.start_settings", "claude", "tmux"),
-		config.Text("tui.issues_takeover_keys"),
+		config.Text("dialog.settings", "claude", "tmux"),
+		config.Text("dialog.keys"),
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("dialog missing %q:\n%s", want, view)
@@ -101,18 +101,18 @@ func TestIssuesTakeoverUnboundStartsThroughTheSharedPath(t *testing.T) {
 	}
 
 	app.HandleKey("y")
-	if dialog.phase != takeoverRunning {
+	if dialog.phase != confirmRunning {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 	runPendingWork(t, app)
-	if dialog.phase != takeoverFinished || dialog.failed {
+	if dialog.phase != confirmFinished || dialog.failed {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 	want := config.Text("tui.issues_takeover_started", "claude", "tmux", "session:win:pane")
 	if dialog.message != want {
 		t.Fatalf("message=%q want=%q", dialog.message, want)
 	}
-	if !strings.Contains(ansi.Strip(app.View()), config.Text("tui.start_title_started")) {
+	if !strings.Contains(ansi.Strip(app.View()), config.Text("dialog.title_done")) {
 		t.Fatalf("result dialog missing:\n%s", ansi.Strip(app.View()))
 	}
 	if len(*calls) != 1 {
@@ -247,7 +247,7 @@ func TestIssuesTakeoverReportsPreviewAndStartFailures(t *testing.T) {
 	app.HandleKey("y")
 	runPendingWork(t, app)
 	dialog := app.Takeover
-	if dialog == nil || dialog.phase != takeoverFinished || !dialog.failed {
+	if dialog == nil || dialog.phase != confirmFinished || !dialog.failed {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 	if want := config.Text("tui.issues_takeover_failed", "launch boom"); dialog.message != want {
@@ -264,7 +264,7 @@ func TestIssuesTakeoverWithoutRunnerExplainsItself(t *testing.T) {
 	runPendingWork(t, app)
 	app.HandleKey("y")
 	dialog := app.Takeover
-	if dialog == nil || dialog.phase != takeoverFinished || dialog.message != config.Text("tui.issues_takeover_unavailable") {
+	if dialog == nil || dialog.phase != confirmFinished || dialog.message != config.Text("tui.issues_takeover_unavailable") {
 		t.Fatalf("dialog=%+v", dialog)
 	}
 }
@@ -281,12 +281,12 @@ func TestIssuesTakeoverDropsStaleResults(t *testing.T) {
 	if dialog.sequence == stalePreview {
 		t.Fatal("the second dialog reused the sequence")
 	}
-	app.applyTakeoverPreview(takeoverPreviewResult{sequence: stalePreview, preview: launch.TriagePreview{Agent: "old", Launcher: "old"}})
+	app.applyTakeoverPreview(confirmWork{sequence: stalePreview, payload: launch.TriagePreview{Agent: "old", Launcher: "old"}})
 	if dialog.agent != "" || dialog.launcher != "" {
 		t.Fatalf("stale preview landed: %+v", dialog)
 	}
 	runPendingWork(t, app)
-	app.applyTakeoverResult(takeoverResult{sequence: stalePreview, outcome: issue.TriageOutcome{Agent: "old"}})
+	app.applyTakeoverResult(confirmWork{sequence: stalePreview, payload: issue.TriageOutcome{Agent: "old"}})
 	if dialog.failed || dialog.message != "" {
 		t.Fatalf("stale result landed: %+v", dialog)
 	}

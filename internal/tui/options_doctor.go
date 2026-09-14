@@ -2,7 +2,6 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
 )
@@ -18,15 +17,11 @@ func (p *optionsPanel) beginDoctor(tools menu.TerminalTools) tea.Cmd {
 	p.status = ""
 	p.current = sectionDoctor
 	p.bind = nil
+	p.form = nil
 	p.installHerdr = false
-	return p.startForm(p.newForm(sectionKeyMap(), huh.NewGroup(
-		huh.NewConfirm().
-			Title(menu.HerdrInstallPrompt()).
-			Description(menu.HerdrInstallCommand()).
-			Affirmative(t("menu.install_herdr")).
-			Negative(t("tui.skip_and_continue")).
-			Value(&p.installHerdr),
-	)))
+	p.confirmKind = optionsConfirmHerdr
+	p.confirm = &confirmDialog{phase: confirmReady}
+	return nil
 }
 
 func (p *optionsPanel) finishHerdrInstall() tea.Cmd {

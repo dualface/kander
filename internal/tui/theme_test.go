@@ -431,10 +431,10 @@ func TestThemeSurfacesPaintOwnBackground(t *testing.T) {
 		_, help := app.renderHelp()
 		surfaces["help"] = help
 		app.StartConfirmation = &startDialog{
+			confirmDialog: confirmDialog{phase: confirmReady},
 			startRequest: startRequest{StartPreview: launch.StartPreview{
 				TaskID: "20260909-demo-task", State: "todo", Agent: "cursor", Launcher: "herdr",
 			}},
-			phase: startReady,
 		}
 		_, start := app.renderStartConfirmation()
 		surfaces["start"] = start

@@ -59,10 +59,9 @@ func TestDoctorInstallDecision(t *testing.T) {
 			case "escape":
 				drivePanel(panel, keyMsg("esc"))
 			case "confirm":
-				drivePanel(panel, keyMsg("left"))
-				drivePanel(panel, keyMsg("enter"))
+				drivePanel(panel, keyMsg("y"))
 			default:
-				drivePanel(panel, keyMsg("enter"))
+				drivePanel(panel, keyMsg("n"))
 			}
 			if action == "confirm" {
 				if app.pendingShell == nil || app.pendingWork != nil {

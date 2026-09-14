@@ -205,8 +205,6 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 	switch {
 	case p.confirming:
 		title = t("tui.close_options")
-	case p.restoreConfirming:
-		title = t("tui.restore_field_inherit")
 	case p.current != "":
 		title = sectionTitle(p.current)
 	}
@@ -215,7 +213,7 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 		title += t("tui.unsaved")
 	}
 	notice, noticeLines := p.renderScopeChrome(palette, width)
-	if !p.confirming && !p.restoreConfirming && notice == "" && p.overlayNotice != "" {
+	if !p.confirming && p.confirm == nil && notice == "" && p.overlayNotice != "" {
 		indent := scopeChromeIndent
 		innerWidth := width - indent
 		if innerWidth < 1 {
@@ -284,9 +282,9 @@ func (p *optionsPanel) reportHintLine(width int) string {
 
 func (p *optionsPanel) pageHint() string {
 	switch {
-	case p.current == sectionDoctor:
+	case p.current == sectionDoctor && p.confirm == nil:
 		return t("tui.choose_enter_confirm_esc_skip_installation")
-	case p.confirming, p.restoreConfirming:
+	case p.confirming:
 		return t("tui.move_enter_confirm_esc_keep_editing")
 	case p.current == "":
 		return t("tui.move_enter_open_esc_close")
@@ -396,6 +394,10 @@ func optionsMouseActivate(bstate int) bool {
 // HandleMouse gives the popup click-to-focus, double-click confirmation and wheel scrolling.
 // Every focus move is turned into a command handed back to Bubble Tea rather than driving the form synchronously here.
 func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
+	if p.confirm != nil {
+		p.confirm.handleWheel(x, y, bstate, nil, nil)
+		return nil
+	}
 	if p.report != nil {
 		if cmd := p.handleTabMouse(x, y, bstate); cmd != nil {
 			return cmd

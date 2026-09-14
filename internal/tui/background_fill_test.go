@@ -86,7 +86,7 @@ func TestScreensFillBackground(t *testing.T) {
 			expectFilled(t, "detail with an empty document", app.View())
 			app.Detail = nil
 
-			for _, phase := range []startPhase{startLoading, startReady, startRunning, startFinished} {
+			for _, phase := range []confirmPhase{confirmLoading, confirmReady, confirmRunning, confirmFinished} {
 				dialog := fillProbeApp(t, theme, width, height)
 				dialog.confirmSelectedStart()
 				if dialog.StartConfirmation == nil {
@@ -98,13 +98,15 @@ func TestScreensFillBackground(t *testing.T) {
 				expectFilled(t, "start dialog", dialog.View())
 			}
 
-			for _, phase := range []boardInitPhase{boardInitLoading, boardInitReady, boardInitRunning, boardInitFinished} {
+			for _, phase := range []confirmPhase{confirmLoading, confirmReady, confirmRunning, confirmFinished} {
 				dialog := fillProbeApp(t, theme, width, height)
 				dialog.BoardInit = &boardInitState{
-					phase:   phase,
-					path:    "/tmp/project/kanban",
-					message: "could not initialize\n" + strings.Repeat("error line\n", 6),
-					failed:  phase == boardInitFinished,
+					confirmDialog: confirmDialog{
+						phase:   phase,
+						message: "could not initialize\n" + strings.Repeat("error line\n", 6),
+						failed:  phase == confirmFinished,
+					},
+					path: "/tmp/project/kanban",
 				}
 				expectFilled(t, "board init dialog", dialog.View())
 			}

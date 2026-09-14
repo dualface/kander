@@ -24,7 +24,7 @@ func (p *optionsPanel) viewingFlow() bool {
 }
 
 func (p *optionsPanel) canCycleTabs() bool {
-	if p.session == nil || p.confirming || p.restoreConfirming {
+	if p.session == nil || p.confirming || p.restoreConfirming || p.confirm != nil {
 		return false
 	}
 	if p.report != nil && !p.viewingFlow() {
@@ -149,7 +149,7 @@ func (p *optionsPanel) showScopeTabs() bool {
 }
 
 func (p *optionsPanel) renderScopeChrome(palette palette, width int) (string, int) {
-	if p.confirming || p.restoreConfirming {
+	if p.confirming {
 		return "", 0
 	}
 	indent := scopeChromeIndent
@@ -367,7 +367,7 @@ func (p *optionsPanel) hitTab(x, y int) string {
 }
 
 func (p *optionsPanel) handleTabMouse(x, y, bstate int) tea.Cmd {
-	if p.confirming || p.restoreConfirming || !optionsMouseActivate(bstate) || p.session == nil {
+	if p.confirming || p.restoreConfirming || p.confirm != nil || !optionsMouseActivate(bstate) || p.session == nil {
 		return nil
 	}
 	if p.report != nil && !p.viewingFlow() {

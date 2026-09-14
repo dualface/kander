@@ -1,18 +1,7 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/viewport"
-
 	"github.com/dualface/kander/internal/board"
-)
-
-type boardInitPhase int
-
-const (
-	boardInitLoading boardInitPhase = iota
-	boardInitReady
-	boardInitRunning
-	boardInitFinished
 )
 
 // boardInitAction is the operation that needed a board and should continue
@@ -28,25 +17,9 @@ const (
 
 // boardInitState confirms creating kanban/ through the same path as kander init.
 type boardInitState struct {
-	sequence uint64
-	phase    boardInitPhase
-	next     boardInitAction
-	path     string
-	failed   bool
-	message  string
-	bodyView viewport.Model
-}
-
-type boardInitPreviewResult struct {
-	sequence uint64
-	path     string
-	err      error
-}
-
-type boardInitResult struct {
-	sequence uint64
-	root     string
-	err      error
+	confirmDialog
+	next boardInitAction
+	path string
 }
 
 func (a *App) needsBoardInit() bool {
@@ -68,7 +41,7 @@ func (a *App) openBoardInit(next boardInitAction) {
 		return
 	}
 	a.boardInitSeq++
-	dialog := &boardInitState{sequence: a.boardInitSeq, phase: boardInitLoading, next: next}
+	dialog := &boardInitState{confirmDialog: confirmDialog{sequence: a.boardInitSeq, phase: confirmLoading}, next: next}
 	a.BoardInit = dialog
 	preview := a.PreviewBoardInit
 	if preview == nil {
@@ -77,21 +50,22 @@ func (a *App) openBoardInit(next boardInitAction) {
 	sequence := dialog.sequence
 	a.pendingWork = func() any {
 		path, err := preview()
-		return boardInitPreviewResult{sequence: sequence, path: path, err: err}
+		return confirmWork{kind: workBoardInitPreview, sequence: sequence, payload: path, err: err}
 	}
 }
 
-func (a *App) applyBoardInitPreview(result boardInitPreviewResult) {
+func (a *App) applyBoardInitPreview(work confirmWork) {
 	dialog := a.BoardInit
-	if dialog == nil || dialog.sequence != result.sequence || dialog.phase != boardInitLoading {
+	if dialog == nil || !dialog.matches(work.sequence, confirmLoading) {
 		return
 	}
-	if result.err != nil {
+	if work.err != nil {
 		a.BoardInit = nil
-		a.showFocusNotice(t("tui.board_init_preview_failed", result.err.Error()))
+		a.showFocusNotice(t("tui.board_init_preview_failed", work.err.Error()))
 		return
 	}
-	dialog.path, dialog.phase = result.path, boardInitReady
+	path, _ := work.payload.(string)
+	dialog.path, dialog.phase = path, confirmReady
 }
 
 func (a *App) handleBoardInitKey(key string) {
@@ -99,22 +73,14 @@ func (a *App) handleBoardInitKey(key string) {
 	if dialog == nil {
 		return
 	}
-	if dialog.phase == boardInitRunning {
-		return
-	}
-	if dialog.phase == boardInitFinished {
+	switch dialog.handleKey(key) {
+	case confirmWait:
+		a.showFocusNotice(t("dialog.loading_keys"))
+	case confirmCancel, confirmClose:
 		a.BoardInit = nil
-		return
+	case confirmAccept:
+		a.startBoardInit(dialog)
 	}
-	if key != "y" && key != "enter" {
-		a.BoardInit = nil
-		return
-	}
-	if dialog.phase == boardInitLoading {
-		a.showFocusNotice(t("tui.start_loading_keys"))
-		return
-	}
-	a.startBoardInit(dialog)
 }
 
 func (a *App) startBoardInit(dialog *boardInitState) {
@@ -126,33 +92,29 @@ func (a *App) startBoardInit(dialog *boardInitState) {
 		}
 	}
 	sequence := dialog.sequence
-	dialog.phase = boardInitRunning
-	dialog.failed = false
-	dialog.message = ""
+	dialog.run()
 	a.pendingWork = func() any {
 		root, err := run()
-		return boardInitResult{sequence: sequence, root: root, err: err}
+		return confirmWork{kind: workBoardInitResult, sequence: sequence, payload: root, err: err}
 	}
 }
 
-func (a *App) applyBoardInitResult(result boardInitResult) {
+func (a *App) applyBoardInitResult(work confirmWork) {
 	dialog := a.BoardInit
-	if dialog == nil || dialog.sequence != result.sequence || dialog.phase != boardInitRunning {
+	if dialog == nil || !dialog.matches(work.sequence, confirmRunning) {
 		return
 	}
-	if result.err != nil {
-		dialog.phase = boardInitFinished
-		dialog.failed = true
-		dialog.message = t("tui.board_init_failed", result.err.Error())
-		dialog.bodyView.GotoTop()
+	if work.err != nil {
+		dialog.finish(t("tui.board_init_failed", work.err.Error()), true)
 		return
 	}
+	root, _ := work.payload.(string)
 	next := dialog.next
 	a.BoardInit = nil
 	if a.AttachBoard != nil {
-		a.AttachBoard(result.root)
+		a.AttachBoard(root)
 	} else {
-		a.boardRoot = result.root
+		a.boardRoot = root
 		a.missingBoard = false
 	}
 	a.refreshBoard()
@@ -174,12 +136,10 @@ func (a *App) continueBoardInit(next boardInitAction) {
 
 func boardInitTitle(dialog *boardInitState) string {
 	switch dialog.phase {
-	case boardInitLoading:
-		return t("tui.start_loading")
-	case boardInitRunning:
+	case confirmRunning:
 		return t("tui.board_init_running")
-	case boardInitFinished:
-		return t("tui.start_title_failed")
+	case confirmLoading, confirmFinished:
+		return confirmSharedTitle(dialog.phase, dialog.failed)
 	default:
 		return t("tui.board_init_title")
 	}
@@ -188,36 +148,20 @@ func boardInitTitle(dialog *boardInitState) string {
 func (a *App) renderBoardInit() (popupBox, string) {
 	dialog := a.BoardInit
 	paragraphs := []string{}
-	hint := t("tui.board_init_keys")
+	hint := confirmHint(dialog.phase)
 	switch dialog.phase {
-	case boardInitLoading:
-		placeholder := t("tui.start_loading")
-		paragraphs = append(paragraphs, t("tui.board_init_body", placeholder))
-		hint = t("tui.start_loading_keys")
-	case boardInitRunning:
+	case confirmLoading:
+		paragraphs = append(paragraphs, t("tui.board_init_body", t("dialog.loading")))
+	case confirmRunning:
 		paragraphs = append(paragraphs, t("tui.board_init_body", dialog.path), t("tui.board_init_running"))
-		hint = t("tui.board_init_running")
-	case boardInitFinished:
+	case confirmFinished:
 		paragraphs = []string{dialog.message}
-		hint = t("tui.start_result_keys")
 	default:
 		paragraphs = append(paragraphs, t("tui.board_init_body", dialog.path))
 	}
-	return a.renderStartDialog(paragraphs, hint, boardInitTitle(dialog), &dialog.bodyView)
+	return a.renderConfirm(paragraphs, hint, boardInitTitle(dialog), &dialog.bodyView)
 }
 
 func (a *App) handleBoardInitMouse(x, y, buttons int) {
-	dialog := a.BoardInit
-	if dialog == nil {
-		return
-	}
-	delta := mouseWheelDelta(buttons)
-	if delta == 0 || dialog.phase == boardInitLoading {
-		return
-	}
-	if delta > 0 {
-		dialog.bodyView.ScrollDown(delta)
-	} else {
-		dialog.bodyView.ScrollUp(-delta)
-	}
+	a.BoardInit.handleWheel(x, y, buttons, nil, func() bool { return true })
 }

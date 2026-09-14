@@ -39,8 +39,10 @@ func confirmPageRestore(t *testing.T, panel *optionsPanel) {
 	}
 	panel.wantRestoreConfirm = false
 	pumpPanel(panel, panel.openRestoreConfirm())
-	panel.restoreChoice = restoreChoiceYes
-	pumpPanel(panel, panel.finishRestoreConfirm())
+	if panel.confirm == nil {
+		t.Fatal("restore did not open the shared dialog")
+	}
+	drivePanel(panel, keyMsg("y"))
 }
 
 func attachTempOverlay(t *testing.T, session *menu.Session, mode config.Mode) (string, string) {

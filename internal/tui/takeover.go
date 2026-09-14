@@ -5,51 +5,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
-
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
-)
-
-type takeoverPhase int
-
-const (
-	takeoverLoading takeoverPhase = iota
-	takeoverReady
-	takeoverRunning
-	takeoverFinished
 )
 
 // takeoverState confirms investigation or completed-result reconciliation.
 // cardID selects only the result protocol; the original completed card stays read-only.
 type takeoverState struct {
-	sequence   uint64
+	confirmDialog
 	cardID     string
-	phase      takeoverPhase
 	repository issue.Repository
 	number     int
 	agent      string
 	launcher   string
-	failed     bool
-	message    string
-	bodyView   viewport.Model
-}
-
-// takeoverPreviewResult carries the resolved agent and launcher back to the
-// dialog. The request is bound to the dialog sequence, so a result of a closed
-// or replaced dialog is dropped.
-type takeoverPreviewResult struct {
-	sequence uint64
-	preview  launch.TriagePreview
-	err      error
-}
-
-// takeoverResult carries one finished start attempt. Only the dialog that
-// started it may consume the result.
-type takeoverResult struct {
-	sequence uint64
-	outcome  issue.TriageOutcome
-	err      error
 }
 
 // takeoverIdentity renders the confirmed identity of one issue. It is built
@@ -91,32 +59,31 @@ func (a *App) issuesTakeover() {
 func (a *App) openTakeover(repository issue.Repository, number int) {
 	a.takeoverSeq++
 	dialog := &takeoverState{
-		sequence:   a.takeoverSeq,
-		phase:      takeoverLoading,
-		repository: repository,
-		number:     number,
+		confirmDialog: confirmDialog{sequence: a.takeoverSeq, phase: confirmLoading},
+		repository:    repository,
+		number:        number,
 	}
 	a.Takeover = dialog
 	prepare := a.PrepareTriage
 	if prepare == nil {
 		// Tests may build an App without the binding; the start still uses the
 		// configured defaults, the dialog just cannot show them in advance.
-		dialog.phase = takeoverReady
+		dialog.phase = confirmReady
 		return
 	}
 	sequence := dialog.sequence
 	a.pendingWork = func() any {
 		preview, err := prepare()
-		return takeoverPreviewResult{sequence: sequence, preview: preview, err: err}
+		return confirmWork{kind: workTakeoverPreview, sequence: sequence, payload: preview, err: err}
 	}
 }
 
 // applyTakeoverPreview fills the resolved settings in. An unbound issue has no
 // jump exit, so a failed preview or a launcher that needs the caller's terminal
 // is refused here exactly like the board start dialog and points at the CLI.
-func (a *App) applyTakeoverPreview(result takeoverPreviewResult) {
+func (a *App) applyTakeoverPreview(work confirmWork) {
 	dialog := a.Takeover
-	if dialog == nil || dialog.sequence != result.sequence || dialog.phase != takeoverLoading {
+	if dialog == nil || !dialog.matches(work.sequence, confirmLoading) {
 		return
 	}
 	if !a.takeoverTargetCurrent(dialog) {
@@ -124,18 +91,19 @@ func (a *App) applyTakeoverPreview(result takeoverPreviewResult) {
 		a.issuesSetNotice(t("tui.issues_result_stale"))
 		return
 	}
-	if result.err != nil {
+	if work.err != nil {
 		a.Takeover = nil
-		a.issuesSetNotice(t("tui.issues_takeover_preview_failed", issue.TriageError(result.err)))
+		a.issuesSetNotice(t("tui.issues_takeover_preview_failed", issue.TriageError(work.err)))
 		return
 	}
-	dialog.agent, dialog.launcher = result.preview.Agent, result.preview.Launcher
-	if !backgroundStartLauncher(result.preview.Launcher) {
+	preview, _ := work.payload.(launch.TriagePreview)
+	dialog.agent, dialog.launcher = preview.Agent, preview.Launcher
+	if !backgroundStartLauncher(preview.Launcher) {
 		a.Takeover = nil
-		a.issuesSetNotice(t("tui.start_use_cli", result.preview.Launcher))
+		a.issuesSetNotice(t("tui.start_use_cli", preview.Launcher))
 		return
 	}
-	dialog.phase = takeoverReady
+	dialog.phase = confirmReady
 }
 
 func (a *App) handleTakeoverKey(key string) {
@@ -143,24 +111,12 @@ func (a *App) handleTakeoverKey(key string) {
 	if dialog == nil {
 		return
 	}
-	switch dialog.phase {
-	case takeoverRunning:
-		// The request is already in flight; the dialog owns the input until its
-		// result lands, so a stray key cannot orphan the session it started.
-		return
-	case takeoverFinished:
+	switch dialog.handleKey(key) {
+	case confirmWait:
+		a.issuesSetNotice(t("dialog.loading_keys"))
+	case confirmCancel, confirmClose:
 		a.Takeover = nil
-		return
-	case takeoverLoading:
-		if key == "esc" || key == "n" || key == "N" {
-			a.Takeover = nil
-		}
-		return
-	}
-	switch key {
-	case "esc", "n", "N":
-		a.Takeover = nil
-	case "y", "enter":
+	case confirmAccept:
 		a.startTakeover(dialog)
 	}
 }
@@ -178,9 +134,7 @@ func (a *App) startTakeover(dialog *takeoverState) {
 		runner = a.ResultIssue
 	}
 	if runner == nil {
-		dialog.phase = takeoverFinished
-		dialog.failed = true
-		dialog.message = t("tui.issues_takeover_unavailable")
+		dialog.finish(t("tui.issues_takeover_unavailable"), true)
 		return
 	}
 	// The agent and launcher the dialog showed and validated are passed on, so a
@@ -188,52 +142,40 @@ func (a *App) startTakeover(dialog *takeoverState) {
 	// never a launcher that needs the caller's terminal.
 	options := issue.TriageOptions{Agent: dialog.agent, Launcher: dialog.launcher, CardID: dialog.cardID}
 	sequence, repository, number := dialog.sequence, dialog.repository, dialog.number
-	dialog.phase = takeoverRunning
-	dialog.failed = false
-	dialog.message = ""
+	dialog.run()
 	a.pendingWork = func() any {
 		ctx, cancel := context.WithTimeout(context.Background(), issuesTriageTimeout)
 		defer cancel()
 		outcome, err := runner(ctx, repository, number, options)
-		return takeoverResult{sequence: sequence, outcome: outcome, err: err}
+		return confirmWork{kind: workTakeoverResult, sequence: sequence, payload: outcome, err: err}
 	}
 }
 
-func (a *App) applyTakeoverResult(result takeoverResult) {
+func (a *App) applyTakeoverResult(work confirmWork) {
 	dialog := a.Takeover
-	if dialog == nil || dialog.sequence != result.sequence {
+	if dialog == nil || dialog.sequence != work.sequence {
 		return
 	}
-	dialog.phase = takeoverFinished
-	if result.err != nil {
-		dialog.failed = true
-		dialog.message = t("tui.issues_takeover_failed", issue.TriageError(result.err))
+	if work.err != nil {
+		dialog.finish(t("tui.issues_takeover_failed", issue.TriageError(work.err)), true)
 		return
 	}
-	dialog.failed = false
-	dialog.agent, dialog.launcher = result.outcome.Agent, result.outcome.Launcher
-	address := strings.TrimSpace(result.outcome.Address)
+	outcome, _ := work.payload.(issue.TriageOutcome)
+	dialog.agent, dialog.launcher = outcome.Agent, outcome.Launcher
+	address := strings.TrimSpace(outcome.Address)
 	if address == "" {
 		address = orDash(address)
 	}
-	message := t("tui.issues_takeover_started", result.outcome.Agent, result.outcome.Launcher, address)
-	if len(result.outcome.Warnings) > 0 {
-		message += "\n" + strings.Join(result.outcome.Warnings, "\n")
+	message := t("tui.issues_takeover_started", outcome.Agent, outcome.Launcher, address)
+	if len(outcome.Warnings) > 0 {
+		message += "\n" + strings.Join(outcome.Warnings, "\n")
 	}
-	dialog.message = message
+	dialog.finish(message, false)
 }
 
 func takeoverTitle(dialog *takeoverState) string {
-	switch dialog.phase {
-	case takeoverLoading:
-		return t("tui.start_loading")
-	case takeoverRunning:
-		return t("tui.start_title_starting")
-	case takeoverFinished:
-		if dialog.failed {
-			return t("tui.start_title_failed")
-		}
-		return t("tui.start_title_started")
+	if title := confirmSharedTitle(dialog.phase, dialog.failed); title != "" {
+		return title
 	}
 	if dialog.cardID != "" {
 		return t("tui.issues_result_title", itoa(dialog.number))
@@ -245,18 +187,14 @@ func (a *App) renderTakeover() (popupBox, string) {
 	dialog := a.Takeover
 	identity := takeoverIdentity(dialog.repository, dialog.number)
 	paragraphs := []string{}
-	hint := t("tui.issues_takeover_keys")
+	hint := confirmHint(dialog.phase)
 	switch dialog.phase {
-	case takeoverLoading:
-		placeholder := t("tui.start_loading")
-		paragraphs = append(paragraphs, t("tui.issues_takeover_loading"), t("tui.start_settings", placeholder, placeholder))
-		hint = t("tui.issues_takeover_loading_keys")
-	case takeoverRunning:
-		paragraphs = append(paragraphs, t("tui.start_settings", dialog.agent, dialog.launcher))
-		hint = t("tui.issues_takeover_starting", identity)
-	case takeoverFinished:
+	case confirmLoading:
+		paragraphs = append(paragraphs, t("tui.issues_takeover_loading"), confirmSettings("", ""))
+	case confirmRunning:
+		paragraphs = append(paragraphs, confirmSettings(dialog.agent, dialog.launcher))
+	case confirmFinished:
 		paragraphs = []string{dialog.message}
-		hint = t("tui.start_result_keys")
 	default:
 		body := t("tui.issues_takeover_body", identity)
 		if dialog.cardID != "" {
@@ -264,32 +202,20 @@ func (a *App) renderTakeover() (popupBox, string) {
 		}
 		paragraphs = append(paragraphs, body)
 		if dialog.agent != "" || dialog.launcher != "" {
-			paragraphs = append(paragraphs, t("tui.start_settings", dialog.agent, dialog.launcher))
+			paragraphs = append(paragraphs, confirmSettings(dialog.agent, dialog.launcher))
 		}
 	}
-	return a.renderStartDialog(paragraphs, hint, takeoverTitle(dialog), &dialog.bodyView)
+	return a.renderConfirm(paragraphs, hint, takeoverTitle(dialog), &dialog.bodyView)
 }
 
 // handleTakeoverMouse scrolls the dialog body. While the settings are still
 // loading the wheel keeps operating the overlay underneath, and changing the
 // selected issue closes the dialog, matching the board start dialog.
 func (a *App) handleTakeoverMouse(x, y, buttons int) {
-	dialog := a.Takeover
-	delta := mouseWheelDelta(buttons)
-	if delta == 0 {
-		return
-	}
-	if dialog.phase == takeoverLoading {
-		a.handleIssuesMouse(x, y, buttons)
-		if dialog.number != a.issuesSelectedNumber() {
-			a.Takeover = nil
-		}
-		return
-	}
-	if delta > 0 {
-		dialog.bodyView.ScrollDown(delta)
-	} else {
-		dialog.bodyView.ScrollUp(-delta)
+	if a.Takeover.handleWheel(x, y, buttons, a.handleIssuesMouse, func() bool {
+		return a.Takeover != nil && a.Takeover.number == a.issuesSelectedNumber()
+	}) {
+		a.Takeover = nil
 	}
 }
 

@@ -53,13 +53,19 @@ func TestStartConfirmationStatesAndCancellation(t *testing.T) {
 			if state == "backlog" && !strings.Contains(text, "todo") {
 				t.Fatal("missing backlog move warning")
 			}
-			for _, key := range []string{"esc", "n", "q", "s", "enter", "Y", "ctrl-c"} {
+			for _, key := range []string{"esc", "n", "N"} {
 				app.HandleKey(key)
 				if app.StartConfirmation != nil || app.pendingWork != nil || !app.Running {
 					t.Fatalf("cancel %q produced side effect", key)
 				}
 				app.confirmSelectedStart()
 				finishStartPreview(app)
+			}
+			for _, key := range []string{"q", "s", "enter", "ctrl-c"} {
+				app.HandleKey(key)
+				if app.StartConfirmation == nil || app.pendingWork != nil || !app.Running {
+					t.Fatalf("ignored %q closed the dialog", key)
+				}
 			}
 		})
 	}
@@ -148,15 +154,15 @@ func TestStartBackgroundCompletion(t *testing.T) {
 			app.confirmSelectedStart()
 			finishStartPreview(app)
 			_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-			if cmd == nil || calls != 0 || refreshes != 0 || app.StartConfirmation == nil || app.StartConfirmation.phase != startRunning {
+			if cmd == nil || calls != 0 || refreshes != 0 || app.StartConfirmation == nil || app.StartConfirmation.phase != confirmRunning {
 				t.Fatal("start must be asynchronous")
 			}
 			app.HandleKey("/")
-			if app.Searching || app.StartConfirmation.phase != startRunning {
+			if app.Searching || app.StartConfirmation.phase != confirmRunning {
 				t.Fatal("starting dialog must retain input")
 			}
 			p.Update(cmd())
-			if calls != 1 || refreshes != 1 || app.StartConfirmation.phase != startFinished {
+			if calls != 1 || refreshes != 1 || app.StartConfirmation.phase != confirmFinished {
 				t.Fatalf("calls=%d refreshes=%d", calls, refreshes)
 			}
 			if failed {
@@ -206,7 +212,7 @@ func TestBacklogStartUsesControlledGate(t *testing.T) {
 		t.Fatal("failed gate changed card")
 	}
 	app := startTestApp("backlog")
-	app.applyStartResult(startResult{err: err})
+	app.applyStartResult(confirmWork{err: err})
 	if !strings.Contains(app.CopyNotice, strings.ReplaceAll(err.Error(), "\n", " ")) {
 		t.Fatal("gate error not visible")
 	}
@@ -268,8 +274,12 @@ func TestStartConfirmationNarrowTerminalAndMouse(t *testing.T) {
 		t.Fatal("mouse escaped confirmation")
 	}
 	app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if app.StartConfirmation == nil || !app.Running {
+		t.Fatal("Ctrl+C must be ignored on the ready dialog")
+	}
+	app.HandleKey("n")
 	if app.StartConfirmation != nil || !app.Running {
-		t.Fatal("Ctrl+C must cancel confirmation")
+		t.Fatal("n must cancel confirmation")
 	}
 }
 
@@ -277,7 +287,7 @@ func TestStartResultRendersCompleteContainerAddress(t *testing.T) {
 	app := startTestApp("todo")
 	app.Width = 80
 	const address = "kb-board-start-task-key-12345678:@9:%9"
-	app.applyStartResult(startResult{result: launch.StartResult{
+	app.applyStartResult(confirmWork{payload: launch.StartResult{
 		TaskID: "20260908-options-workflow-flowchart-task", Agent: "claude",
 		Plan:    launch.LaunchPlan{Launcher: "tmux-session", Target: terminal.Target{Session: "kb-board-start-task-key-12345678"}},
 		Outcome: launch.LaunchOutcome{Container: "@9", Pane: "%9"},
