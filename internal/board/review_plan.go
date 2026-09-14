@@ -89,6 +89,12 @@ func CreateReviewPlan(root string, p ReviewPlan) error {
 	return createReviewPlan(root, p, true)
 }
 
+// CreateHistoricalReviewPlan records a plan using the read-compatible 2/4/6-key
+// requirement shapes. Production `kander review plan` uses CreateReviewPlan.
+func CreateHistoricalReviewPlan(root string, p ReviewPlan) error {
+	return createReviewPlan(root, p, false)
+}
+
 func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 	if p.Schema != 1 || !ValidReviewID(p.PlanID) || strings.TrimSpace(p.Author) == "" || strings.TrimSpace(p.Basis) == "" || p.CWD == "" || len(p.Batches) == 0 {
 		return reviewError("review plan identity/provenance")

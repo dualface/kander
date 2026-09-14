@@ -56,25 +56,9 @@ func Run(args []string) (exitCode int) {
 		usage()
 		return 2
 	}
-	if agent == "" {
-		roleInput := rest[3]
-		role, ok := canonicalizeReviewRole(roleInput)
-		if !ok {
-			userError(config.Text("review.unsupported_role", roleInput))
-			return 2
-		}
-		scale := "large"
-		if len(rest) >= 5 {
-			scale = reviewScaleFromTask(rest[4])
-		}
-		agent, err = reviewerFromConfig(role, scale)
-		if err != nil {
-			userError(err.Error())
-			return 1
-		}
-	}
 	archiveRoot := ""
 	replay := false
+	var existing board.ReviewRun
 	if len(options.tasks) > 0 {
 		archiveRoot, err = board.BoardRootAt(rest[0])
 		if err != nil {
@@ -102,6 +86,24 @@ func Run(args []string) (exitCode int) {
 			return 2
 		}
 		replay = exists
+		existing = old
+	}
+	role, ok := parseReviewRole(rest[3])
+	if !ok || !admitReviewRole(role, archiveRoot, options, replay, existing) {
+		userError(config.Text("review.unsupported_role", rest[3]))
+		return 2
+	}
+	rest[3] = role
+	if agent == "" {
+		scale := "large"
+		if len(rest) >= 5 {
+			scale = reviewScaleFromTask(rest[4])
+		}
+		agent, err = reviewerFromConfig(reviewerConfigRole(role), scale)
+		if err != nil {
+			userError(err.Error())
+			return 1
+		}
 	}
 	if len(options.tasks) > 0 {
 		rest, err = hydrateIncremental(archiveRoot, options, rest, replay)

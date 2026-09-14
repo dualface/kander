@@ -33,7 +33,7 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 			"review.incremental_re_review_requires_the_prior_finding_ledger_in",
 		)
 	}
-	role, ok := canonicalizeReviewRole(roleInput)
+	role, ok := parseReviewRole(roleInput)
 	if !ok {
 		return reviewContext{}, newGate(2, "review.unsupported_role", roleInput)
 	}

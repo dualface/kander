@@ -48,7 +48,7 @@ An incremental round automatically reads the original report and author disposit
 
 ## Roles and Historical Compatibility
 
-New `kander review` invocations accept only `PMQA` and `Security` (case-insensitive). Explicit `PM`, `QA`, `CSA`, `Hacker` and `CodeSecurityAnalyst` are rejected. PMQA checks the task contract first, then quality criteria; Security performs trust-boundary analysis before exploit-chain analysis, reporting each root cause once. Both roles default to `auto`.
+New `kander review` invocations and two-key batches accept only `PMQA` and `Security` (case-insensitive). Explicit `PM`, `QA`, `CSA`, `Hacker` and `CodeSecurityAnalyst` are rejected unless the target batch's frozen requirements mark that historical role `required`, or the same-ID replay is already a run of that role. PMQA checks the task contract first, then quality criteria; Security performs trust-boundary analysis before exploit-chain analysis, reporting each root cause once. Both roles default to `auto`.
 
 New batches use the exact two-key requirements form shown above. Creating a four-key or six-key batch is rejected, including when appending a batch to a historical four-role plan. Unknown keys and incomplete sets are rejected.
 
