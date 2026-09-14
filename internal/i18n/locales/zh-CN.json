@@ -853,7 +853,7 @@
   "tui.help_q_back": "? 帮助 · q 返回",
   "tui.help_q_quit": "? 帮助 · q 退出",
   "tui.help_quit": "帮助 / 退出",
-  "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/方向键 | wbe WBE 0^$ {}% f/t | v/V o y yy Y | 滚轮 | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
+  "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/方向键 | wbe WBE 0^$ {}% f/t iw aw i\" | v/V o y yy Y | 滚轮 | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
   "tui.how_to_launch_the_agent_when_claiming_a_task": "领取任务时如何拉起 Agent",
   "tui.installing_herdr": "正在安装 herdr...",
   "tui.interface": "界面",

@@ -130,10 +130,14 @@ func TestDetailVisualTextObjectAndFind(t *testing.T) {
 	if len(copied) != 1 || copied[0] != `use "hi" and x` {
 		t.Fatalf("vf x: %v", copied)
 	}
+	cursor := app.DetailCursor
 	app.handleDetailKey("f")
 	app.handleDetailKey("z")
-	if app.DetailCursor != [2]int{0, 0} && app.DetailFindWait != "" {
-		t.Fatalf("failed f left wait: cursor=%v wait=%q", app.DetailCursor, app.DetailFindWait)
+	if app.DetailFindWait != "" {
+		t.Fatalf("failed f left wait=%q", app.DetailFindWait)
+	}
+	if app.DetailCursor != cursor {
+		t.Fatalf("failed f moved cursor: %v", app.DetailCursor)
 	}
 }
 
@@ -206,5 +210,103 @@ func TestDetailEscCancelsPending(t *testing.T) {
 	app.handleDetailKey("esc")
 	if app.DetailCountOn {
 		t.Fatal("esc left count")
+	}
+}
+
+func TestDetailEscCancelsFindWait(t *testing.T) {
+	var copied []string
+	app := newDetailApp([]string{"one two three four"}, &copied)
+	app.handleDetailKey("y")
+	app.handleDetailKey("f")
+	app.handleDetailKey("esc")
+	if app.DetailOp != "" || app.DetailFindWait != "" || app.DetailCountOn {
+		t.Fatalf("esc left pending: op=%q wait=%q countOn=%v", app.DetailOp, app.DetailFindWait, app.DetailCountOn)
+	}
+	app.handleDetailKey("y")
+	if len(copied) != 0 {
+		t.Fatalf("yf esc y yanked: %v", copied)
+	}
+	if app.DetailOp != "y" {
+		t.Fatalf("second y should enter operator-pending, op=%q", app.DetailOp)
+	}
+	app.handleDetailKey("esc")
+	app.handleDetailKey("3")
+	app.handleDetailKey("f")
+	app.handleDetailKey("esc")
+	app.handleDetailKey("w")
+	if app.DetailCursor != [2]int{0, 4} {
+		t.Fatalf("3f esc w should be 1w, cursor=%v", app.DetailCursor)
+	}
+}
+
+func TestDetailRepeatFindKeepsLastCommand(t *testing.T) {
+	app := newDetailApp([]string{"x a x b x"}, nil)
+	app.handleDetailKey("f")
+	app.handleDetailKey("x")
+	if app.DetailCursor != [2]int{0, 4} {
+		t.Fatalf("fx: %v", app.DetailCursor)
+	}
+	if app.DetailLastFind != "f" {
+		t.Fatalf("last find after fx: %q", app.DetailLastFind)
+	}
+	app.handleDetailKey(",")
+	if app.DetailCursor != [2]int{0, 0} {
+		t.Fatalf("comma: %v", app.DetailCursor)
+	}
+	if app.DetailLastFind != "f" {
+		t.Fatalf("comma must keep last find: %q", app.DetailLastFind)
+	}
+	app.handleDetailKey(";")
+	if app.DetailCursor != [2]int{0, 4} {
+		t.Fatalf("semicolon after comma: %v", app.DetailCursor)
+	}
+	if app.DetailLastFind != "f" {
+		t.Fatalf("semicolon must keep last find: %q", app.DetailLastFind)
+	}
+}
+
+func TestDetailYankPercentIncludesCloser(t *testing.T) {
+	var copied []string
+	app := newDetailApp([]string{"fn(a[0])"}, &copied)
+	app.DetailCursor = [2]int{0, 7}
+	app.handleDetailKey("y")
+	app.handleDetailKey("%")
+	if len(copied) != 1 || copied[0] != "(a[0])" {
+		t.Fatalf("y%% from closer: %v", copied)
+	}
+	copied = copied[:0]
+	app.DetailCursor = [2]int{0, 7}
+	app.handleDetailKey("v")
+	app.handleDetailKey("%")
+	app.handleDetailKey("y")
+	if len(copied) != 1 || copied[0] != "(a[0])" {
+		t.Fatalf("v%% y from closer: %v", copied)
+	}
+}
+
+func TestDetailLineVisualTextObjectYanksChar(t *testing.T) {
+	var copied []string
+	app := newDetailApp([]string{"hello world extra"}, &copied)
+	app.handleDetailKey("V")
+	app.handleDetailKey("b")
+	app.handleDetailKey("i")
+	app.handleDetailKey("w")
+	if app.DetailSelectMode != "char" {
+		t.Fatalf("V iw should switch to char, mode=%q", app.DetailSelectMode)
+	}
+	app.handleDetailKey("y")
+	if len(copied) != 1 || copied[0] != "extra" {
+		t.Fatalf("V b iw y: %v", copied)
+	}
+}
+
+func TestDetailTillYankExcludesTarget(t *testing.T) {
+	var copied []string
+	app := newDetailApp([]string{"hello,world"}, &copied)
+	app.handleDetailKey("y")
+	app.handleDetailKey("t")
+	app.handleDetailKey(",")
+	if len(copied) != 1 || copied[0] != "hello" {
+		t.Fatalf("yt,: %v", copied)
 	}
 }

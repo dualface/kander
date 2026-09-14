@@ -467,19 +467,24 @@ func inclusiveMotion(cmd string) bool {
 	return false
 }
 
+func bumpExclusive(lines []string, p detailPos) detailPos {
+	p = clampDetailPos(lines, p)
+	n := 0
+	if p.line >= 0 && p.line < len(lines) {
+		n = runeCount(lines[p.line])
+	}
+	if p.col < n {
+		return detailPos{line: p.line, col: p.col + 1}
+	}
+	return p
+}
+
 func visualExclusiveEnd(lines []string, origin, dest detailPos) detailPos {
 	dest = clampDetailPos(lines, dest)
 	if compareDetailPos(dest, origin) < 0 {
 		return dest
 	}
-	n := 0
-	if dest.line >= 0 && dest.line < len(lines) {
-		n = runeCount(lines[dest.line])
-	}
-	if dest.col < n {
-		return detailPos{line: dest.line, col: dest.col + 1}
-	}
-	return dest
+	return bumpExclusive(lines, dest)
 }
 
 func wordRange(lines []string, p detailPos, big, around bool, count int) (detailPos, detailPos, bool) {

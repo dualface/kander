@@ -159,6 +159,9 @@ func TestVisualExclusiveEnd(t *testing.T) {
 	}
 	got = visualExclusiveEnd(lines, detailPos{0, 4}, detailPos{0, 0})
 	if got != (detailPos{0, 0}) {
-		t.Fatalf("backward: %+v", got)
+		t.Fatalf("backward helper leaves dest: %+v", got)
+	}
+	if got := bumpExclusive(lines, detailPos{0, 4}); got != (detailPos{0, 5}) {
+		t.Fatalf("bump origin for inclusive reverse: %+v", got)
 	}
 }

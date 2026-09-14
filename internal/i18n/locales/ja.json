@@ -853,7 +853,7 @@
   "tui.help_q_back": "? ヘルプ · q 戻る",
   "tui.help_q_quit": "? ヘルプ · q 終了",
   "tui.help_quit": "ヘルプ / 終了",
-  "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/矢印 | wbe WBE 0^$ {}% f/t | v/V o y yy Y | ホイール | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
+  "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/矢印 | wbe WBE 0^$ {}% f/t iw aw i\" | v/V o y yy Y | ホイール | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
   "tui.how_to_launch_the_agent_when_claiming_a_task": "タスク取得時の Agent 起動方法",
   "tui.installing_herdr": "herdr をインストール中...",
   "tui.interface": "インターフェース",

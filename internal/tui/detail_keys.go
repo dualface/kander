@@ -71,17 +71,28 @@ func (a *App) applyDetailMotion(dest detailPos, inclusive bool) {
 	lines := a.detailLines()
 	origin := posFrom(a.DetailCursor)
 	dest = clampDetailPos(lines, dest)
-	visual := dest
+	from, to := origin, dest
+	if compareDetailPos(dest, origin) < 0 {
+		from, to = dest, origin
+	}
 	if inclusive {
-		visual = visualExclusiveEnd(lines, origin, dest)
+		to = bumpExclusive(lines, to)
 	}
 	if a.DetailOp == "y" && !a.detailSelectionActive() {
-		a.yankCharRange(origin.coords(), visual.coords())
+		a.yankCharRange(from.coords(), to.coords())
 		a.resetDetailPending()
 		return
 	}
 	if a.detailSelectionActive() {
-		a.setDetailCursor(visual.coords())
+		if inclusive && compareDetailPos(dest, origin) < 0 {
+			end := to.coords()
+			a.DetailAnchor = &end
+			a.setDetailCursor(dest.coords())
+		} else if inclusive {
+			a.setDetailCursor(to.coords())
+		} else {
+			a.setDetailCursor(dest.coords())
+		}
 	} else {
 		a.setDetailCursor(dest.coords())
 	}
@@ -99,6 +110,8 @@ func (a *App) applyDetailRange(start, end detailPos) {
 	if !a.detailSelectionActive() {
 		return
 	}
+	a.DetailSelectMode = "char"
+	a.resetMouseSelection()
 	anchor := start.coords()
 	a.DetailAnchor = &anchor
 	a.setDetailCursor(end.coords())
@@ -220,13 +233,14 @@ func (a *App) handleDetailFindChar(key string) {
 	cmd := a.DetailFindWait
 	a.DetailFindWait = ""
 	if key == "esc" || len([]rune(key)) != 1 {
+		a.resetDetailPending()
 		return
 	}
 	ch := []rune(key)[0]
-	a.runDetailFind(cmd, ch, a.detailRepeat())
+	a.runDetailFind(cmd, ch, a.detailRepeat(), true)
 }
 
-func (a *App) runDetailFind(cmd string, ch rune, count int) {
+func (a *App) runDetailFind(cmd string, ch rune, count int, remember bool) {
 	forward := cmd == "f" || cmd == "t"
 	till := cmd == "t" || cmd == "T"
 	dest, ok := findChar(a.detailLines(), posFrom(a.DetailCursor), ch, forward, till, count)
@@ -234,8 +248,10 @@ func (a *App) runDetailFind(cmd string, ch rune, count int) {
 		a.resetDetailPending()
 		return
 	}
-	a.DetailLastFind = cmd
-	a.DetailLastChar = ch
+	if remember {
+		a.DetailLastFind = cmd
+		a.DetailLastChar = ch
+	}
 	a.applyDetailMotion(dest, inclusiveMotion(cmd))
 }
 
@@ -421,14 +437,14 @@ func (a *App) handleDetailKey(key string) {
 		return
 	case ";":
 		if a.DetailLastFind != "" && a.DetailLastChar != 0 {
-			a.runDetailFind(a.DetailLastFind, a.DetailLastChar, a.detailRepeat())
+			a.runDetailFind(a.DetailLastFind, a.DetailLastChar, a.detailRepeat(), false)
 		} else {
 			a.resetDetailPending()
 		}
 		return
 	case ",":
 		if a.DetailLastFind != "" && a.DetailLastChar != 0 {
-			a.runDetailFind(flipFindCmd(a.DetailLastFind), a.DetailLastChar, a.detailRepeat())
+			a.runDetailFind(flipFindCmd(a.DetailLastFind), a.DetailLastChar, a.detailRepeat(), false)
 		} else {
 			a.resetDetailPending()
 		}
