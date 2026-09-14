@@ -74,11 +74,11 @@ type optionsPanel struct {
 	bind         *formBinding
 	report       *reportView
 	// flowScale is "large" or "small" while the workflow report is open; empty otherwise.
-	flowScale   string
-	spinner     spinner.Model
-	status      string
-	doctorTools menu.TerminalTools
-	doctorLines []menu.ReportLine
+	flowScale    string
+	spinner      spinner.Model
+	status       string
+	doctorTools  menu.TerminalTools
+	doctorLines  []menu.ReportLine
 	installHerdr bool
 	dirty        bool
 	initial      string
@@ -203,6 +203,14 @@ type doctorResult struct {
 
 // applyWork consumes the result of a background task; the Bubble Tea shell calls it on a workMsg.
 func (a *App) applyWork(payload any) tea.Cmd {
+	switch result := payload.(type) {
+	case taskActionsLoaded:
+		a.applyTaskActionsLoaded(result)
+		return nil
+	case taskActionResult:
+		a.applyTaskActionResult(result)
+		return nil
+	}
 	if result, ok := payload.(startPreviewResult); ok {
 		a.applyStartPreview(result)
 		return nil

@@ -17,13 +17,13 @@ func TestLoadingStartWheelChangesSelectionAndDiscardsPreview(t *testing.T) {
 	}})
 	app.Model.SelectTaskIndex("todo", 0)
 	selected := app.Model.SelectedTask().TaskID
-	app.HandleKey("s")
+	app.confirmSelectedStart()
 	old := app.takePending()
 	app.HandleMouse(0, 0, mouseBtn5Pressed)
 	if app.Model.SelectedTask().TaskID == selected || app.StartConfirmation != nil {
 		t.Fatal("loading dialog blocked board wheel or retained stale selection")
 	}
-	app.HandleKey("s")
+	app.confirmSelectedStart()
 	dialog := app.StartConfirmation
 	app.applyWork(old().(workMsg).payload)
 	if app.StartConfirmation != dialog || dialog.phase != startLoading {
@@ -57,7 +57,7 @@ func TestStartResultViewportRetainsNarrowContent(t *testing.T) {
 				}
 				return result, nil
 			}
-			app.HandleKey("s")
+			app.confirmSelectedStart()
 			finishStartPreview(app)
 			app.HandleKey("y")
 			app.applyWork(app.takePending()().(workMsg).payload)

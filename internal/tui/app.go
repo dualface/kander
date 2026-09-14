@@ -34,6 +34,9 @@ type boardHit struct {
 }
 
 type App struct {
+	TaskActions       *taskActions
+	LoadTaskActions   func(string) (taskActionSource, error)
+	actionSequence    uint64
 	Width, Height     int
 	Model             *BoardModel
 	RefreshSecs       int
@@ -128,11 +131,14 @@ type App struct {
 	detailCache detailRender
 }
 
-// Update is the message entry point of App: the options panel takes over while open, otherwise the board and detail view handle it.
+// Update routes messages to the active popup, board, or detail view.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
-	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil {
+	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil && (a.TaskActions == nil || !a.TaskActions.running) {
 		a.requestQuit()
 		return nil
+	}
+	if a.TaskActions != nil {
+		return a.updateTaskActions(msg)
 	}
 	if a.Options != nil {
 		if event, ok := msg.(tea.MouseMsg); ok {
@@ -152,7 +158,7 @@ func (a *App) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// View renders the whole screen: the board or the detail view underneath, with the options popup on top.
+// View renders the board or detail view with the active popup on top.
 func (a *App) View() string {
 	var base string
 	switch {
@@ -172,6 +178,10 @@ func (a *App) View() string {
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	switch {
+	case a.TaskActions != nil:
+		a.ShowCursor = false
+		box, popup := a.renderTaskActions()
+		base = overlay(base, popup, box.X, box.Y, p)
 	case a.Options != nil:
 		box, popup := a.Options.view()
 		base = overlay(base, popup, box.X, box.Y, p)
@@ -200,7 +210,7 @@ func (a *App) View() string {
 		box, popup := a.renderHelp()
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
-	if a.Options == nil && !a.Help && a.StartConfirmation == nil && a.startNoticeOverflows(w) {
+	if a.TaskActions == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && a.startNoticeOverflows(w) {
 		box, popup := a.renderStartPopup([]string{a.startNotice.full})
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
@@ -215,24 +225,25 @@ func newApp(single bool, refresh int, ctx pageContext, getBoard func() (BoardPay
 		persist = saveColumns
 	}
 	return &App{
-		Model:          newBoardModel(single),
-		RefreshSecs:    refresh,
-		Theme:          theme,
-		Columns:        clampColumns(columns),
-		MinColumnWidth: minColumnWidth,
-		Context:        ctx,
-		GetBoard:       getBoard,
-		GetTask:        getTask,
-		CopyFn:         copy,
-		FocusWindow:    focus.Window,
-		PrepareStart:   prepareTaskStart,
-		StartTask:      runTaskStart,
-		PersistColumns: persist,
-		Now:            time.Now,
-		Running:        true,
-		Glyphs:         map[string]string{"vbar": "│", "bar": "▎", "hbar": "─", "dot": "·", "left": "‹", "right": "›"},
-		LastRefresh:    time.Now(),
-		detailView:     newDetailViewport(),
+		Model:           newBoardModel(single),
+		RefreshSecs:     refresh,
+		Theme:           theme,
+		Columns:         clampColumns(columns),
+		MinColumnWidth:  minColumnWidth,
+		Context:         ctx,
+		GetBoard:        getBoard,
+		GetTask:         getTask,
+		CopyFn:          copy,
+		LoadTaskActions: loadTaskActionSource,
+		FocusWindow:     focus.Window,
+		PrepareStart:    prepareTaskStart,
+		StartTask:       runTaskStart,
+		PersistColumns:  persist,
+		Now:             time.Now,
+		Running:         true,
+		Glyphs:          map[string]string{"vbar": "│", "bar": "▎", "hbar": "─", "dot": "·", "left": "‹", "right": "›"},
+		LastRefresh:     time.Now(),
+		detailView:      newDetailViewport(),
 	}
 }
 
@@ -247,6 +258,9 @@ func (a *App) size() (h, w int) {
 }
 
 func (a *App) refreshBoard() bool {
+	if a.TaskActions != nil && a.TaskActions.running {
+		return false
+	}
 	previous := a.Model.RefreshError
 	payload, err := a.GetBoard()
 	if err != nil {
@@ -639,12 +653,10 @@ func (a *App) handleBoardKey(key string) {
 		a.Help = true
 	case "y":
 		a.copySelectedTaskID()
-	case "s":
-		a.confirmSelectedStart()
 	case "g":
+		a.openTaskActions()
+	case "G":
 		a.openIssues()
-	case "f", "F":
-		a.focusSelectedTask()
 	case "enter":
 		a.openDetail()
 	}
@@ -877,6 +889,10 @@ func (a *App) handleDetailKey(key string) {
 }
 
 func (a *App) HandleKey(key string) {
+	if a.TaskActions != nil {
+		a.handleTaskActionKey(key)
+		return
+	}
 	if a.StartConfirmation != nil {
 		a.handleStartConfirmation(key)
 		return

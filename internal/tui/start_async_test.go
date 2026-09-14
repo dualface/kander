@@ -28,7 +28,8 @@ func TestStartPreviewUpdateDoesNoIOAndRemainsResponsive(test *testing.T) {
 	refreshes := 0
 	app.GetBoard = func() (BoardPayload, error) { refreshes++; return BoardPayload{Tasks: app.Model.Tasks}, nil }
 	p := program{app: app}
-	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	app.TaskActions = &taskActions{id: "start-task", items: []taskAction{actionStart}}
+	_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil || refreshes != 0 || app.StartConfirmation == nil || app.StartConfirmation.phase != startLoading {
 		test.Fatal("same Update must open loading dialog without reading")
 	}
@@ -68,7 +69,7 @@ func TestStartPreviewDiscardsLateResults(test *testing.T) {
 	for _, mode := range []string{"closed", "same-card-reopened", "other-card", "selection-changed"} {
 		test.Run(mode, func(test *testing.T) {
 			app := startTestApp("todo")
-			app.HandleKey("s")
+			app.confirmSelectedStart()
 			old := app.takePending()
 			if mode != "selection-changed" {
 				app.HandleKey("esc")
@@ -77,7 +78,7 @@ func TestStartPreviewDiscardsLateResults(test *testing.T) {
 				app.Model.SetBoard(BoardPayload{Tasks: []Task{{TaskID: "other-task", State: "todo"}}})
 			}
 			if mode == "same-card-reopened" || mode == "other-card" {
-				app.HandleKey("s")
+				app.confirmSelectedStart()
 			}
 			dialog, notice := app.StartConfirmation, app.CopyNotice
 			app.applyWork(old().(workMsg).payload)
@@ -105,7 +106,7 @@ func TestStartPreviewChangedStateClosesWithReason(test *testing.T) {
 	app := startTestApp("todo")
 	prepare := app.PrepareStart
 	app.PrepareStart = func(id string) (startRequest, error) { r, e := prepare(id); r.State = "working"; return r, e }
-	app.HandleKey("s")
+	app.confirmSelectedStart()
 	finishStartPreview(app)
 	if app.StartConfirmation != nil || app.CopyNotice != t("tui.start_invalid_state", "working") {
 		test.Fatal("changed state must reject before launch")
@@ -115,7 +116,7 @@ func TestStartPreviewChangedStateClosesWithReason(test *testing.T) {
 func TestStartDialogRetainsAsyncProgressAndResultUntilKey(test *testing.T) {
 	for _, failed := range []bool{false, true} {
 		app := startTestApp("todo")
-		app.HandleKey("s")
+		app.confirmSelectedStart()
 		finishStartPreview(app)
 		calls := 0
 		entered, release := make(chan struct{}), make(chan struct{})
@@ -207,7 +208,7 @@ func TestStartDialogParagraphAndFooterLayout(test *testing.T) {
 		}
 	}
 	app := startTestApp("backlog")
-	app.HandleKey("s")
+	app.confirmSelectedStart()
 	finishStartPreview(app)
 	_, popup := app.renderStartConfirmation()
 	lines := strings.Split(ansi.Strip(popup), "\n")
@@ -230,7 +231,7 @@ func TestStartDialogParagraphAndFooterLayout(test *testing.T) {
 
 func TestStartDialogTitleFollowsPhase(test *testing.T) {
 	app := startTestApp("todo")
-	app.HandleKey("s")
+	app.confirmSelectedStart()
 	if title := startDialogTitleText(app); !strings.Contains(title, t("tui.start_loading")) || strings.Contains(title, t("tui.start_confirm")) {
 		test.Fatalf("loading title: %q", title)
 	}
@@ -251,7 +252,7 @@ func TestStartDialogTitleFollowsPhase(test *testing.T) {
 	}
 
 	app = startTestApp("todo")
-	app.HandleKey("s")
+	app.confirmSelectedStart()
 	finishStartPreview(app)
 	app.HandleKey("y")
 	app.applyStartResult(startResult{sequence: app.StartConfirmation.sequence, err: errors.New("boom")})

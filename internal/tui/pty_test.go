@@ -563,7 +563,7 @@ func TestIssuesOverlayOnPTY(t *testing.T) {
 	if !session.waitFor("Task Board", 8*time.Second) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
 	}
-	session.send("g")
+	session.send("G")
 	if !session.waitFor("GitHub Issue", 10*time.Second) {
 		t.Fatalf("issues overlay did not open\npty:\n%s", session.text())
 	}
@@ -601,7 +601,7 @@ func TestIssueTakeoverDialogOnPTY(t *testing.T) {
 	if !session.waitFor("Task Board", 8*time.Second) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
 	}
-	session.send("g")
+	session.send("G")
 	if !session.waitFor("GitHub Issue", 10*time.Second) {
 		t.Fatalf("issues overlay did not open\npty:\n%s", session.text())
 	}

@@ -82,7 +82,7 @@ func TestIssuesSelectionDebouncesContentRequests(t *testing.T) {
 	}
 	app := issuesTestApp(t, fake, 120, 30)
 	clock := freezeIssuesClock(t, app)
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 
 	if fake.getCalls != 0 || app.pendingWork != nil {
@@ -118,7 +118,7 @@ func TestIssuesSelectionWaitsForAStableTick(t *testing.T) {
 	fake.listResult = defaultPage(issuesListLimit)
 	app := issuesTestApp(t, fake, 120, 30)
 	clock := freezeIssuesClock(t, app)
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	app.HandleKey("down")
 
@@ -143,7 +143,7 @@ func TestIssuesCacheHitPaintsBeforeTheRefresh(t *testing.T) {
 	fake.getResult = func(int, int, bool) (issue.IssueSnapshot, error) { return cached, nil }
 	app, clock, saved := cacheTestApp(t, fake, cached)
 
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	st := app.Issues
 	if st.detail == nil || st.detail.Number != 42 {
@@ -184,7 +184,7 @@ func TestIssuesChangedRefreshUpdatesCacheAndNotice(t *testing.T) {
 	fake.getResult = func(int, int, bool) (issue.IssueSnapshot, error) { return refreshed, nil }
 	app, clock, saved := cacheTestApp(t, fake, cached)
 
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	if app.Issues.detail == nil || !strings.Contains(app.Issues.detail.Body, "OLD-BODY") {
 		t.Fatalf("cached detail: %+v", app.Issues.detail)
@@ -223,7 +223,7 @@ func TestIssuesMoveAwayAndBackDropsTheAbandonedTarget(t *testing.T) {
 	}
 	app := issuesTestApp(t, fake, 120, 30)
 	clock := freezeIssuesClock(t, app)
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	clock.tick()
 	inFlight := app.takePending()
@@ -266,7 +266,7 @@ func TestIssuesListReloadInvalidatesTheContentRequest(t *testing.T) {
 	fake.getResult = func(int, int, bool) (issue.IssueSnapshot, error) { return defaultSnapshot(t), nil }
 	app := issuesTestApp(t, fake, 120, 30)
 	clock := freezeIssuesClock(t, app)
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	clock.tick()
 	inFlight := app.takePending()

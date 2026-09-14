@@ -98,6 +98,13 @@ func TestScreensFillBackground(t *testing.T) {
 				expectFilled(t, "start dialog", dialog.View())
 			}
 
+			actions := fillProbeApp(t, theme, width, height)
+			source := actionTestSource(t, "backlog", true)
+			actions.TaskActions = &taskActions{id: source.snapshot.Entry.TaskID, source: source, items: availableTaskActions("backlog", "window")}
+			expectFilled(t, "task action menu", actions.View())
+			pumpActionForm(actions, actions.openTaskActionForm(actionArchive))
+			expectFilled(t, "task action form", actions.View())
+
 			notice := fillProbeApp(t, theme, width, height)
 			_, popup := notice.renderStartPopup([]string{"copied a fairly long notice line", "second line"})
 			expectFilled(t, "start notice", popup)

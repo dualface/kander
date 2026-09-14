@@ -47,7 +47,7 @@ func takeoverListApp(t *testing.T, runner func(context.Context, issue.Repository
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	app, calls := takeoverApp(t, fake, nil, nil, runner)
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	return app, fake, calls
 }
@@ -142,7 +142,7 @@ func TestIssuesTakeoverBoundBacklogOffersJumpAndContract(t *testing.T) {
 	app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
 		return issue.TriageOutcome{Agent: "claude", Launcher: "tmux", Address: "session:win:pane"}, nil
 	})
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 
 	app.HandleKey("s")
@@ -179,7 +179,7 @@ func TestIssuesTakeoverBoundBacklogOffersJumpAndContract(t *testing.T) {
 	}
 
 	// s starts the contract session for that card.
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	app.HandleKey("s")
 	runPendingWork(t, app)
@@ -211,7 +211,7 @@ func TestIssuesTakeoverBoundBacklogKeepsJumpWithoutABackgroundLauncher(t *testin
 			app.PrepareTriage = func() (launch.TriagePreview, error) {
 				return launch.TriagePreview{Agent: "claude", Launcher: launcher}, nil
 			}
-			app.HandleKey("g")
+			app.HandleKey("G")
 			runPendingWork(t, app)
 
 			// A launcher that needs the caller's terminal must not close the
@@ -243,7 +243,7 @@ func TestIssuesTakeoverBoundBacklogKeepsJumpWithoutABackgroundLauncher(t *testin
 			}
 
 			// The contract exit reports the CLI hint only when it is used.
-			app.HandleKey("g")
+			app.HandleKey("G")
 			runPendingWork(t, app)
 			app.HandleKey("s")
 			runPendingWork(t, app)
@@ -274,7 +274,7 @@ func TestIssuesTakeoverBoundBacklogKeepsJumpWhenThePreviewFails(t *testing.T) {
 	app.PrepareTriage = func() (launch.TriagePreview, error) {
 		return launch.TriagePreview{}, errors.New("no config")
 	}
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 
 	// A failed preview keeps the bound-card dialog: the jump stays available.
@@ -318,7 +318,7 @@ func TestIssuesTakeoverBoundBacklogKeepsJumpWhenThePreviewFails(t *testing.T) {
 	}
 
 	// The contract exit reports the preview failure only when it is used.
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	app.HandleKey("s")
 	runPendingWork(t, app)
@@ -351,7 +351,7 @@ func TestIssuesTakeoverBoundOtherStateJumpsDirectly(t *testing.T) {
 	app, calls := takeoverApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
 		return issue.TriageOutcome{}, nil
 	})
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	app.HandleKey("s")
 	if app.Takeover != nil {
@@ -467,7 +467,7 @@ func TestIssuesIndexRefreshIsThrottled(t *testing.T) {
 		scans++
 		return issue.Index{}, nil
 	}
-	app.HandleKey("g")
+	app.HandleKey("G")
 	runPendingWork(t, app)
 	if scans != 1 {
 		t.Fatalf("the list load must read the index once: %d", scans)
