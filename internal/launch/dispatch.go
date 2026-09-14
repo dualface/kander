@@ -174,12 +174,9 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 	// Accepted work may outlive the original deadline. Observe and fence it
 	// before attaching the new epoch's budget to delivery and launch validation.
 	if d.State == board.DispatchAccepted {
-		next, recovered, err := RecoverAcceptedDispatch(parent, root, d)
+		next, err := RecoverAcceptedDispatch(parent, root, d)
 		if err != nil {
 			return err
-		}
-		if !recovered {
-			return launchError("launch.dispatch_recovery_unproven", d.Input.ID, "fresh confirmed exit required")
 		}
 		d = next
 	} else if agent != nil {

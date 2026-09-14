@@ -25,24 +25,24 @@ func observedDispatchExit(ctx context.Context, s board.Snapshot, dispatchID stri
 // RecoverAcceptedDispatch rotates only a proven stopped accepted execution.
 // The caller owns the delivery lease. Unproven observations leave the receipt
 // unchanged and return their diagnostic; notify reconciles the receipt on error.
-func RecoverAcceptedDispatch(ctx context.Context, root string, d board.Dispatch) (board.Dispatch, bool, error) {
+func RecoverAcceptedDispatch(ctx context.Context, root string, d board.Dispatch) (board.Dispatch, error) {
 	if d.State != board.DispatchAccepted {
-		return d, false, nil
+		return d, nil
 	}
 	s, err := board.ReadSnapshot(root, d.Input.TaskID)
 	if err != nil {
-		return d, false, err
+		return d, err
 	}
 	exit, err := observedDispatchExit(ctx, s, d.Input.ID)
 	if err != nil {
-		return d, false, err
+		return d, err
 	}
 	if err = ValidateActionEvidence(ctx, root, d); err != nil {
-		return d, false, err
+		return d, err
 	}
 	if err = ctx.Err(); err != nil {
-		return d, false, err
+		return d, err
 	}
 	next, err := board.ReauthorizeDispatch(root, d.Input.TaskID, d.Input.ID, d.Revision, exit)
-	return next, err == nil, err
+	return next, err
 }
