@@ -282,8 +282,8 @@ func (p *optionsPanel) reportHintLine(width int) string {
 
 func (p *optionsPanel) pageHint() string {
 	switch {
-	case p.current == sectionDoctor && p.confirm == nil:
-		return t("tui.choose_enter_confirm_esc_skip_installation")
+	case p.confirm != nil:
+		return confirmHint(confirmReady)
 	case p.confirming:
 		return t("tui.move_enter_confirm_esc_keep_editing")
 	case p.current == "":

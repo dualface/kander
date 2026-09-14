@@ -370,7 +370,8 @@ func reportTag(level string) string {
 	return "popup"
 }
 
-// Update is the input entry point of the panel: the report first, then the current Huh form.
+// Update is the input entry point of the panel: the shared confirmation first,
+// then the report, then the current Huh form.
 func (p *optionsPanel) Update(msg tea.Msg) tea.Cmd {
 	if p.confirm != nil {
 		return p.updateConfirm(msg)
@@ -601,9 +602,6 @@ func (p *optionsPanel) finishCloseConfirm() tea.Cmd {
 // Ordinary values were already written back in apply; interface / task execution / review / rules reach disk on submit,
 // so there is no need to return to the root menu and pick "save and apply".
 func (p *optionsPanel) finishSection() tea.Cmd {
-	if p.current == sectionDoctor {
-		return p.finishHerdrInstall()
-	}
 	if p.current == "" {
 		return p.dispatch(p.section)
 	}
@@ -651,10 +649,6 @@ func (p *optionsPanel) persistNow() error {
 // Changed values are kept (apply wrote them back long ago); only side effects that need confirmation are skipped.
 // The interface language is the exception: leaving the interface page with Esc cancels its unsaved change.
 func (p *optionsPanel) abortSection() tea.Cmd {
-	if p.current == sectionDoctor {
-		p.installHerdr = false
-		return p.finishHerdrInstall()
-	}
 	if p.current == "" {
 		p.close()
 		return nil

@@ -166,6 +166,12 @@ func (a *App) requestQuit() {
 	a.Running = false
 }
 
+// confirmCapturesKeys reports whether a shared confirmation dialog owns input,
+// so Ctrl+C is ignored instead of quitting the board.
+func (a *App) confirmCapturesKeys() bool {
+	return a.StartConfirmation != nil || a.BoardInit != nil || a.Takeover != nil || (a.Options != nil && a.Options.confirm != nil)
+}
+
 func (a *App) activeStartNotice() bool {
 	return a.startNotice != nil && a.CopyNotice == a.startNotice.full && a.Now().Before(a.CopyNoticeUntil)
 }

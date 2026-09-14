@@ -157,7 +157,7 @@ type App struct {
 
 // Update routes messages to the active popup, board, or detail view.
 func (a *App) Update(msg tea.Msg) tea.Cmd {
-	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && a.StartConfirmation == nil && a.BoardInit == nil && (a.TaskActions == nil || !a.TaskActions.running) && (a.Chat == nil || a.Chat.phase != chatRunning) {
+	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "ctrl-c" && !a.confirmCapturesKeys() && (a.TaskActions == nil || !a.TaskActions.running) && (a.Chat == nil || a.Chat.phase != chatRunning) {
 		a.requestQuit()
 		return nil
 	}
@@ -945,6 +945,10 @@ func (a *App) HandleKey(key string) {
 		a.handleBoardInitKey(key)
 		return
 	}
+	if a.Takeover != nil {
+		a.handleTakeoverKey(key)
+		return
+	}
 	if key == "ctrl-c" {
 		a.requestQuit()
 		return
@@ -963,10 +967,6 @@ func (a *App) HandleKey(key string) {
 		default:
 			return
 		}
-	}
-	if a.Takeover != nil {
-		a.handleTakeoverKey(key)
-		return
 	}
 	if a.Issues != nil {
 		a.handleIssuesKey(key)

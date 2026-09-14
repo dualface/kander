@@ -216,6 +216,35 @@ func TestOptionsRestoreAndHerdrUseReadyConfirm(t *testing.T) {
 	}
 }
 
+func TestConfirmIgnoresCtrlCOnTakeoverAndOptions(t *testing.T) {
+	app, _, _ := takeoverListApp(t, func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
+		return issue.TriageOutcome{Agent: "claude", Launcher: "tmux"}, nil
+	})
+	app.HandleKey("s")
+	runPendingWork(t, app)
+	app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !app.Running || app.Takeover == nil {
+		t.Fatal("ctrl-c must be ignored on the takeover dialog")
+	}
+
+	host, panel := openPanel(t)
+	panel.current = sectionInterface
+	panel.openRestoreConfirm()
+	host.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !host.Running || panel.confirm == nil {
+		t.Fatal("ctrl-c must be ignored on the options confirm")
+	}
+}
+
+func TestOptionsConfirmHintUsesDialogKeys(t *testing.T) {
+	_, panel := openPanel(t)
+	panel.current = sectionInterface
+	panel.openRestoreConfirm()
+	if panel.pageHint() != config.Text("dialog.keys") {
+		t.Fatalf("hint=%q", panel.pageHint())
+	}
+}
+
 func TestConfirmPromptReadyKeys(t *testing.T) {
 	m := newConfirmPrompt("Copy?", []string{"body"})
 	m.width, m.height = 80, 24
