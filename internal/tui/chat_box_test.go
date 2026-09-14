@@ -58,7 +58,7 @@ func openReadyChat(t *testing.T, app *App) {
 	}
 }
 
-func TestChatBoxSubmitsMultilineMessageFocusesAndClears(t *testing.T) {
+func TestChatBoxSubmitsMultilineMessageFocusesAndCloses(t *testing.T) {
 	app, messages, focused := chatApp(t, chatStarted)
 	openReadyChat(t, app)
 	if view := ansi.Strip(app.View()); !strings.Contains(view, config.Text("tui.chat_title")) || !strings.Contains(view, "codex") {
@@ -83,11 +83,8 @@ func TestChatBoxSubmitsMultilineMessageFocusesAndClears(t *testing.T) {
 	if len(*focused) != 1 || (*focused)[0] != "tmux:$1:@2:%3" {
 		t.Fatalf("focus must use the full address: %q", *focused)
 	}
-	if app.Chat == nil || app.Chat.phase != chatReady || app.Chat.input.Value() != "" || app.chatDraft != "" {
-		t.Fatalf("a started chat must clear the input and keep the box open: %+v", app.Chat)
-	}
-	if view := ansi.Strip(app.View()); !strings.Contains(view, "tmux:$1:@2:%3") {
-		t.Fatalf("started address missing:\n%s", view)
+	if app.Chat != nil || app.chatDraft != "" || app.CopyNotice != "" {
+		t.Fatalf("a started chat must close the box without a board notice: chat=%+v draft=%q notice=%q", app.Chat, app.chatDraft, app.CopyNotice)
 	}
 }
 
@@ -145,8 +142,8 @@ func TestChatBoxFailureKeepsTheMessageForRetry(t *testing.T) {
 	fail = false
 	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlS})
 	runPendingWork(t, app)
-	if len(*messages) != 2 || (*messages)[1] != "hello" || app.Chat.input.Value() != "" {
-		t.Fatalf("retry did not start the kept message: %q %+v", *messages, app.Chat)
+	if len(*messages) != 2 || (*messages)[1] != "hello" || app.Chat != nil || app.chatDraft != "" {
+		t.Fatalf("retry did not start the kept message and close: %q chat=%+v draft=%q", *messages, app.Chat, app.chatDraft)
 	}
 }
 
@@ -218,7 +215,10 @@ func TestChatBoxFocusFailureIsOnlyANotice(t *testing.T) {
 	typeText(app, "hello")
 	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlS})
 	runPendingWork(t, app)
-	if app.Chat.input.Value() != "" || !strings.Contains(app.Chat.status, "pane is gone") || !strings.Contains(app.Chat.status, "tmux:$1:@2:%3") {
-		t.Fatalf("focus failure must keep the started result: %+v", app.Chat)
+	if app.Chat != nil || app.chatDraft != "" {
+		t.Fatalf("focus failure must still close the box: chat=%+v draft=%q", app.Chat, app.chatDraft)
+	}
+	if !strings.Contains(app.CopyNotice, "pane is gone") || !strings.Contains(app.CopyNotice, "tmux:$1:@2:%3") {
+		t.Fatalf("focus failure must be a board notice: %q", app.CopyNotice)
 	}
 }

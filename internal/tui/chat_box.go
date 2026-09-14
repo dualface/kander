@@ -170,21 +170,27 @@ func (a *App) applyChatStart(result chatStartResult) {
 	if dialog == nil || dialog.sequence != result.sequence || dialog.phase != chatRunning {
 		return
 	}
-	dialog.phase = chatReady
 	if result.err != nil {
+		dialog.phase = chatReady
 		dialog.failed = true
 		dialog.status = t("tui.chat_start_failed", result.err.Error())
 		return
 	}
-	dialog.input.Reset()
 	a.chatDraft = ""
-	dialog.agent, dialog.launcher = result.result.Agent, result.result.Launcher
-	lines := []string{t("tui.chat_started", result.result.Agent, result.result.Launcher, result.result.Address)}
+	a.Chat = nil
+	// Focus already moved the user to the new session; only surface a board
+	// notice when focus failed or the start returned warnings.
+	var lines []string
+	if !result.focused || len(result.result.Warnings) > 0 {
+		lines = append(lines, t("tui.chat_started", result.result.Agent, result.result.Launcher, result.result.Address))
+	}
 	if !result.focused {
 		lines = append(lines, t("tui.chat_focus_failed", result.focusMsg))
 	}
-	dialog.status = strings.Join(append(lines, result.result.Warnings...), "\n")
-	dialog.failed = !result.focused
+	lines = append(lines, result.result.Warnings...)
+	if len(lines) > 0 {
+		a.showFocusNotice(strings.Join(lines, "\n"))
+	}
 }
 
 // resizeChat fits the editor to the popup width and the screen height.
