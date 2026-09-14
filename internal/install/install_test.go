@@ -591,69 +591,6 @@ func TestGlobalSymlinkRuleIsNotFalseStamped(t *testing.T) {
 	}
 }
 
-func TestShouldRunWizardSkipsSourceTree(t *testing.T) {
-	_ = setupInstallHome(t)
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/dualface/kander\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	exe := filepath.Join(root, "cmd", "kander", binaryName())
-	lookupExecutable = func() (string, error) { return exe, nil }
-	t.Cleanup(func() { lookupExecutable = os.Executable })
-	ok, err := ShouldRunWizard()
-	if err != nil || ok {
-		t.Fatalf("source tree: ok=%v err=%v", ok, err)
-	}
-}
-
-func TestShouldRunWizardSkipsAlreadyInstalled(t *testing.T) {
-	home := setupInstallHome(t)
-	src := stubBinary(t)
-	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: src}); err != nil {
-		t.Fatal(err)
-	}
-	dest := filepath.Join(home, ".local", "bin", binaryName())
-	lookupExecutable = func() (string, error) { return dest, nil }
-	t.Cleanup(func() { lookupExecutable = os.Executable })
-	ok, err := ShouldRunWizard()
-	if err != nil || ok {
-		t.Fatalf("already installed: ok=%v err=%v", ok, err)
-	}
-}
-
-func TestShouldRunWizard(t *testing.T) {
-	home := setupInstallHome(t)
-	t.Setenv(EnvSkipInstall, "1")
-	ok, err := ShouldRunWizard()
-	if err != nil || ok {
-		t.Fatalf("skip: ok=%v err=%v", ok, err)
-	}
-	t.Setenv(EnvSkipInstall, "")
-	lookupExecutable = func() (string, error) {
-		return filepath.Join(t.TempDir(), "downloaded-kander"), nil
-	}
-	t.Cleanup(func() { lookupExecutable = os.Executable })
-	ok, err = ShouldRunWizard()
-	if err != nil || !ok {
-		t.Fatalf("downloaded: ok=%v err=%v", ok, err)
-	}
-	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
-		t.Fatal(err)
-	}
-	cfgDir := filepath.Join(home, ".config", "kander")
-	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cfg := config.DefaultConfig()
-	if _, err := config.Save(cfg); err != nil {
-		t.Fatal(err)
-	}
-	ok, err = ShouldRunWizard()
-	if err != nil || ok {
-		t.Fatalf("configured: ok=%v err=%v", ok, err)
-	}
-}
-
 func TestWriteBinaryBusyRenameAside(t *testing.T) {
 	home := setupInstallHome(t)
 	dest := filepath.Join(home, ".local", "bin", binaryName())

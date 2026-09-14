@@ -58,10 +58,11 @@ func warnPath(current string) {
 	}
 }
 
-// CheckStartupCopy offers a binary-only install before the board opens. handled
-// means the caller must return code (after a handoff, cancellation, or error).
-// Initial scope setup uses RunInteractive instead, and post-install startup skips
-// this check so declining or copying cannot cause a prompt loop in one launch.
+// CheckStartupCopy offers a binary-only install before the board opens when a
+// scope config already exists. handled means the caller must return code (after
+// a handoff, cancellation, or error). Missing-config bare launches skip this
+// prompt and open the board options panel after doctor; post-install startup
+// also skips it so declining or copying cannot cause a prompt loop in one launch.
 func CheckStartupCopy() (handled bool, code int) {
 	if os.Getenv(EnvSkipInstall) != "" || requireInteractive() != nil || inSourceTree() {
 		return false, 0

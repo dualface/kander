@@ -12,7 +12,9 @@ import (
 	"github.com/dualface/kander/internal/fs"
 )
 
-// EnvSkipInstall disables the first-run wizard, including on a developer machine whose config was deleted.
+// EnvSkipInstall skips the optional PATH binary-copy prompt when a scope
+// config already exists. Missing-config bare launches never offer that prompt;
+// the interactive wizard is reached only through `kander install`.
 const EnvSkipInstall = "KANDER_SKIP_INSTALL"
 
 var lookupExecutable = os.Executable
@@ -129,51 +131,6 @@ func inSourceTree() bool {
 		dir = parent
 	}
 	return false
-}
-
-func alreadyInstalled() bool {
-	exe, err := lookupExecutable()
-	if err != nil {
-		return false
-	}
-	exe, err = filepath.Abs(exe)
-	if err != nil {
-		return false
-	}
-	dests := make([]string, 0, 2)
-	if global, err := config.GlobalInstallPaths(); err == nil {
-		dests = append(dests, filepath.Join(global.BinDir, binaryName()))
-	}
-	if current, err := config.CurrentInstallPaths(); err == nil {
-		dests = append(dests, filepath.Join(current.BinDir, binaryName()))
-	}
-	for _, dest := range dests {
-		if sameFile(exe, dest) {
-			return true
-		}
-	}
-	return false
-}
-
-// ShouldRunWizard reports whether a bare kander should open the first-run installer.
-func ShouldRunWizard() (bool, error) {
-	if os.Getenv(EnvSkipInstall) != "" {
-		return false, nil
-	}
-	exists, err := config.Exists()
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return false, nil
-	}
-	if inSourceTree() {
-		return false, nil
-	}
-	if alreadyInstalled() {
-		return false, nil
-	}
-	return true, nil
 }
 
 func rejectDest(path string, project bool) error {
