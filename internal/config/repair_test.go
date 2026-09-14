@@ -164,7 +164,11 @@ func TestRepairFillsMissingReviewStageScaleFromTheOther(t *testing.T) {
 	}
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			if cfg.ReviewStages[scale][role] != "auto" && role != "PMQA" && role != "Security" {
+			want := "auto"
+			if role == "PMQA" || role == "Security" {
+				want = "skip"
+			}
+			if cfg.ReviewStages[scale][role] != want {
 				t.Fatalf("both missing must default %s.%s=%s", scale, role, cfg.ReviewStages[scale][role])
 			}
 		}

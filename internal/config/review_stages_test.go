@@ -74,7 +74,11 @@ func TestValidateReviewStagesFillsMissingWithRoleDefaults(t *testing.T) {
 	}
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			if missingSection.ReviewStages[scale][role] != "auto" && role != "PMQA" && role != "Security" {
+			want := "auto"
+			if role == "PMQA" || role == "Security" {
+				want = "skip"
+			}
+			if missingSection.ReviewStages[scale][role] != want {
 				t.Fatalf("missing section %s.%s=%s", scale, role, missingSection.ReviewStages[scale][role])
 			}
 		}

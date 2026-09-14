@@ -651,7 +651,11 @@ func TestReviewStagesDefaultsAndValidation(t *testing.T) {
 	stages := DefaultReviewStages()
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			if stages[scale][role] != "auto" && role != "PMQA" && role != "Security" {
+			want := "auto"
+			if role == "PMQA" || role == "Security" {
+				want = "skip"
+			}
+			if stages[scale][role] != want {
 				t.Fatalf("%s.%s=%s", scale, role, stages[scale][role])
 			}
 		}

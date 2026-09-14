@@ -68,6 +68,14 @@ func TestDoctorCreatesAndRepairsConfig(t *testing.T) {
 				t.Fatalf("unusable result: %+v", cfg)
 			}
 			for _, role := range config.ReviewRoles {
+				if role == "PMQA" || role == "Security" {
+					for _, scale := range config.TaskScales {
+						if cfg.Reviewers[scale][role] != "codex" || cfg.ReviewStages[scale][role] != "skip" {
+							t.Fatalf("disabled role %s.%s changed: %+v", scale, role, cfg)
+						}
+					}
+					continue
+				}
 				for _, scale := range config.TaskScales {
 					if cfg.Reviewers[scale][role] != "claude" {
 						t.Fatalf("role %s scale %s not repaired: %+v", role, scale, cfg)

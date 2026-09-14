@@ -264,6 +264,9 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 	seenReviewers := map[string]struct{}{}
 	for _, scale := range config.TaskScales {
 		for _, role := range config.ReviewRoles {
+			if skipIntegratedReviewer(effective, scale, role) {
+				continue
+			}
 			reviewer := config.ReviewerFor(effective, scale, role)
 			key := role + "\x00" + reviewer
 			if _, ok := seenReviewers[key]; ok {
