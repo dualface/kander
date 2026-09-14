@@ -80,7 +80,7 @@ func setupLang(t *testing.T, configPath string) {
 		"welcome_complete": true,
 		"kanban_agent":     "codex",
 		"launcher":         "tmux",
-		"reviewers":        map[string]string{"QA": "codex", "Security": "codex"},
+		"reviewers":        map[string]string{"PM": "codex", "CSA": "codex", "Hacker": "codex", "QA": "codex"},
 	})
 	if err != nil {
 		t.Fatal(err)

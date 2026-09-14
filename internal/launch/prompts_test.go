@@ -172,7 +172,7 @@ func TestPromptLanguageDirectiveFromCardAndConfig(t *testing.T) {
 	t.Run("fallback to agent_language", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "config.json")
 		t.Setenv(config.EnvConfig, path)
-		payload := `{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"zh-CN","reviewers":{"QA":"codex","Security":"codex"}}`
+		payload := `{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"zh-CN","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`
 		if err := os.WriteFile(path, []byte(payload), 0o600); err != nil {
 			t.Fatal(err)
 		}

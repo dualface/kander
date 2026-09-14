@@ -36,10 +36,10 @@ func archiveHarnessFor(t *testing.T, h *reviewHarness, agent string) (*reviewHar
 		t.Fatal(err)
 	}
 	requirements := filepath.Join(h.root, "requirements.json")
-	if err := os.WriteFile(requirements, []byte("{\"QA\":\"required\",\"Security\":\"required\"}"), 0600); err != nil {
+	if err := os.WriteFile(requirements, []byte("{\"PM\":\"required\",\"QA\":\"required\",\"CSA\":\"N/A: project\",\"Hacker\":\"N/A: project\"}"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	args := []string{agent, "--task", id, "--task", id, "--run-id", "stable", "--batch-id", "batch", "--requirements-file", requirements, h.repo, h.base, h.head, "QA", "原始目标"}
+	args := []string{agent, "--task", id, "--task", id, "--run-id", "stable", "--batch-id", "batch", "--requirements-file", requirements, h.repo, h.base, h.head, "PM", "原始目标"}
 	return h, root, args
 }
 func TestArchiveCLIOutputRetryAndLanguage(t *testing.T) {
@@ -253,7 +253,7 @@ func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
 	if err = board.UpdateDocument(root, options.tasks[0], board.UpdateOptions{Document: "spec.md", Text: snapshot.Text + "\n## IMPLEMENTATION\n\nFix delivery recorded\n", ExpectedRevision: snapshot.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	nextArgs := []string{"codex", "--task", options.tasks[0], "--batch-id", "batch", "--run-id", "fixed", "--previous-run-id", "stable", "--advance-file", path, h.repo, h.base, next, "QA", snapshot.Entry.Document, "fix context", h.head}
+	nextArgs := []string{"codex", "--task", options.tasks[0], "--batch-id", "batch", "--run-id", "fixed", "--previous-run-id", "stable", "--advance-file", path, h.repo, h.base, next, "PM", snapshot.Entry.Document, "fix context", h.head}
 	writeAdvance := func() {
 		t.Helper()
 		data, err := json.Marshal(advance)
@@ -367,7 +367,7 @@ func TestStandaloneReviewIgnoresInvalidBoard(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv(board.EnvBoardDir, obstruction)
-	code, _, stderr := h.review("codex", "QA", "goal")
+	code, _, stderr := h.review("codex", "PM", "goal")
 	if code != 0 {
 		t.Fatalf("%d %s", code, stderr)
 	}

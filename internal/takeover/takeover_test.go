@@ -219,7 +219,7 @@ func makeDone(t *testing.T, root, slug, window string) (string, string) {
 		t.Fatal(err)
 	}
 	// Dismissal fixtures record review as explicitly inapplicable before completion.
-	requirements := map[string]string{"QA": "N/A: dismissal fixture", "Security": "N/A: dismissal fixture"}
+	requirements := map[string]string{"PM": "N/A: dismissal fixture", "QA": "N/A: dismissal fixture", "CSA": "N/A: dismissal fixture", "Hacker": "N/A: dismissal fixture"}
 	batchID := "dismiss-" + slug
 	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: batchID, Author: "fixture", Basis: "container cleanup test", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{review.TaskID}, Batches: []board.ReviewPlanBatch{{BatchID: batchID, TaskIDs: []string{review.TaskID}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: requirements}}}
 	if err = board.CreateReviewPlan(root, p); err != nil {

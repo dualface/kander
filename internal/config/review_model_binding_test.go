@@ -18,10 +18,10 @@ func TestReviewModelBindingResolution(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Models.Review["cursor"]["model"] = "cursor-default"
-			cfg.Models.ReviewRoles["QA"] = map[string]string{
+			cfg.Models.ReviewRoles["PM"] = map[string]string{
 				"model": "legacy-model", "effort": "legacy-effort", "large_agent": tc.owner,
 			}
-			model, effort := ReviewModelFor(cfg, tc.selected, "QA", "large")
+			model, effort := ReviewModelFor(cfg, tc.selected, "PM", "large")
 			if model != tc.model || effort != tc.effort {
 				t.Fatalf("got %q/%q, want %q/%q", model, effort, tc.model, tc.effort)
 			}
@@ -43,7 +43,7 @@ func TestReviewModelOverlayOwnership(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := DefaultConfig()
-			cfg.Models.ReviewRoles["QA"] = map[string]string{
+			cfg.Models.ReviewRoles["PM"] = map[string]string{
 				"model": "old-shared", "effort": "old-effort",
 				"large_model": "old-large", "large_effort": "old-large-effort",
 			}
@@ -52,20 +52,20 @@ func TestReviewModelOverlayOwnership(t *testing.T) {
 				t.Fatal(err)
 			}
 			overlay := map[string]any{}
-			OverlaySet(overlay, "grok", "reviewers", "large", "QA")
+			OverlaySet(overlay, "grok", "reviewers", "large", "PM")
 			if tc.fields != nil {
-				OverlaySet(overlay, tc.fields, "models", "review_roles", "QA")
+				OverlaySet(overlay, tc.fields, "models", "review_roles", "PM")
 			}
 			merged, err := MergeOverlayOnRaw(scope, overlay)
 			if err != nil {
 				t.Fatal(err)
 			}
-			model, effort := ReviewModelFor(merged, "grok", "QA", "large")
+			model, effort := ReviewModelFor(merged, "grok", "PM", "large")
 			if model != tc.wantModel || effort != tc.wantEffort {
 				t.Fatalf("got %q/%q, want %q/%q", model, effort, tc.wantModel, tc.wantEffort)
 			}
 			if tc.name != "legacy shared project model" {
-				model, effort = ReviewModelFor(merged, "codex", "QA", "small")
+				model, effort = ReviewModelFor(merged, "codex", "PM", "small")
 				if model != "old-shared" || effort != "old-effort" {
 					t.Fatalf("other scale changed: %s/%s", model, effort)
 				}
@@ -78,7 +78,7 @@ func TestReviewModelBindingValidationAndRoundTrip(t *testing.T) {
 	for _, owner := range []string{"grok", "custom-reviewer", "bad name", "bad\nname"} {
 		t.Run(owner, func(t *testing.T) {
 			cfg := DefaultConfig()
-			cfg.Models.ReviewRoles["QA"]["large_agent"] = owner
+			cfg.Models.ReviewRoles["PM"]["large_agent"] = owner
 			data, err := json.Marshal(cfg)
 			if err != nil {
 				t.Fatal(err)
@@ -93,7 +93,7 @@ func TestReviewModelBindingValidationAndRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.Models.ReviewRoles["QA"]["large_agent"] != owner {
+			if got.Models.ReviewRoles["PM"]["large_agent"] != owner {
 				t.Fatal("binding lost")
 			}
 		})
@@ -102,15 +102,15 @@ func TestReviewModelBindingValidationAndRoundTrip(t *testing.T) {
 
 func TestBoundProjectFieldInheritsCompatibleLegacyGlobal(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.Models.ReviewRoles["QA"]["model"] = "global-custom"
+	cfg.Models.ReviewRoles["PM"]["model"] = "global-custom"
 	overlay := map[string]any{}
-	OverlaySet(overlay, "codex", "models", "review_roles", "QA", "large_agent")
-	OverlaySet(overlay, "low", "models", "review_roles", "QA", "large_effort")
+	OverlaySet(overlay, "codex", "models", "review_roles", "PM", "large_agent")
+	OverlaySet(overlay, "low", "models", "review_roles", "PM", "large_effort")
 	merged, err := ApplyOverlay(cfg, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
-	model, effort := ReviewModelFor(merged, "codex", "QA", "large")
+	model, effort := ReviewModelFor(merged, "codex", "PM", "large")
 	if model != "global-custom" || effort != "low" {
 		t.Fatalf("compatible inheritance lost: %s/%s", model, effort)
 	}
@@ -121,21 +121,21 @@ func TestLegacyProjectSharedValuesSurviveGlobalBinding(t *testing.T) {
 		for _, global := range []string{"", "global-specific"} {
 			t.Run(field+"/"+global, func(t *testing.T) {
 				cfg := DefaultConfig()
-				cfg.Reviewers["large"]["QA"] = "grok"
-				cfg.Models.ReviewRoles["QA"]["large_"+field] = global
+				cfg.Reviewers["large"]["PM"] = "grok"
+				cfg.Models.ReviewRoles["PM"]["large_"+field] = global
 				overlay := map[string]any{}
-				OverlaySet(overlay, "project-shared", "models", "review_roles", "QA", field)
+				OverlaySet(overlay, "project-shared", "models", "review_roles", "PM", field)
 				before, err := ApplyOverlay(cfg, overlay)
 				if err != nil {
 					t.Fatal(err)
 				}
-				wantModel, wantEffort := ReviewModelFor(before, "grok", "QA", "large")
-				cfg.Models.ReviewRoles["QA"]["large_agent"] = "grok"
+				wantModel, wantEffort := ReviewModelFor(before, "grok", "PM", "large")
+				cfg.Models.ReviewRoles["PM"]["large_agent"] = "grok"
 				after, err := ApplyOverlay(cfg, overlay)
 				if err != nil {
 					t.Fatal(err)
 				}
-				model, effort := ReviewModelFor(after, "grok", "QA", "large")
+				model, effort := ReviewModelFor(after, "grok", "PM", "large")
 				if model != wantModel || effort != wantEffort {
 					t.Fatalf("binding changed %s/%s to %s/%s", wantModel, wantEffort, model, effort)
 				}

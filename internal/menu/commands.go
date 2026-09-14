@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/dualface/kander/internal/config"
 )
@@ -74,9 +73,6 @@ func Config(args []string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "kander:", err)
 		return 1
-	}
-	if keys := cfg.LegacyReviewKeys(); len(keys) > 0 {
-		fmt.Fprintln(os.Stderr, config.Text("config.legacy_review_keys", strings.Join(keys, ", ")))
 	}
 	if jsonOut {
 		for _, warning := range config.AgentWarnings(cfg) {

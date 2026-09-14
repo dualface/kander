@@ -12,30 +12,30 @@ import (
 func TestValidateReviewStagesScaledAndFlat(t *testing.T) {
 	setupHome(t)
 	scaled := map[string]any{
-		"large": map[string]any{"QA": "required", "Security": "auto"},
-		"small": map[string]any{"QA": "skip", "Security": "auto"},
+		"large": map[string]any{"PM": "required", "QA": "auto"},
+		"small": map[string]any{"PM": "skip", "CSA": "skip", "Hacker": "skip", "QA": "auto"},
 	}
 	validated, err := Validate(minimalPayload(map[string]any{"review_stages": scaled}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validated.ReviewStages["large"]["QA"] != "required" || validated.ReviewStages["large"]["Security"] != "auto" {
+	if validated.ReviewStages["large"]["PM"] != "required" || validated.ReviewStages["large"]["CSA"] != "auto" {
 		t.Fatalf("large=%v", validated.ReviewStages["large"])
 	}
-	if validated.ReviewStages["small"]["QA"] != "skip" || validated.ReviewStages["small"]["Security"] != "auto" {
+	if validated.ReviewStages["small"]["PM"] != "skip" || validated.ReviewStages["small"]["QA"] != "auto" {
 		t.Fatalf("small=%v", validated.ReviewStages["small"])
 	}
 
-	flat := map[string]any{"QA": "required"}
+	flat := map[string]any{"PM": "required", "CSA": "skip"}
 	validated, err = Validate(minimalPayload(map[string]any{"review_stages": flat}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, scale := range TaskScales {
-		if validated.ReviewStages[scale]["QA"] != "required" {
+		if validated.ReviewStages[scale]["PM"] != "required" || validated.ReviewStages[scale]["CSA"] != "skip" {
 			t.Fatalf("%s=%v", scale, validated.ReviewStages[scale])
 		}
-		if validated.ReviewStages[scale]["Security"] != "auto" {
+		if validated.ReviewStages[scale]["QA"] != "auto" || validated.ReviewStages[scale]["Hacker"] != "auto" {
 			t.Fatalf("missing roles on %s: %v", scale, validated.ReviewStages[scale])
 		}
 	}
@@ -48,11 +48,11 @@ func TestValidateReviewStagesRejectsUnknownAndMixed(t *testing.T) {
 		stages   any
 		fragment string
 	}{
-		{"unknown scale", map[string]any{"medium": map[string]any{"QA": "auto"}}, "未知档名"},
+		{"unknown scale", map[string]any{"medium": map[string]any{"PM": "auto"}}, "未知档名"},
 		{"unknown role flat", map[string]any{"Owner": "auto"}, "未知角色"},
 		{"unknown role scaled", map[string]any{"large": map[string]any{"Owner": "auto"}}, "未知角色"},
-		{"invalid mode", map[string]any{"QA": "always"}, "review_stages.large.QA"},
-		{"mixed", map[string]any{"large": map[string]any{"QA": "auto"}, "QA": "auto"}, "QA, large"},
+		{"invalid mode", map[string]any{"PM": "always"}, "review_stages.large.PM"},
+		{"mixed", map[string]any{"large": map[string]any{"PM": "auto"}, "PM": "auto"}, "PM, large"},
 		{"not object", "auto", "必须是 JSON object"},
 		{"scale not object", map[string]any{"large": "auto"}, "review_stages.large"},
 	}
@@ -66,7 +66,7 @@ func TestValidateReviewStagesRejectsUnknownAndMixed(t *testing.T) {
 	}
 }
 
-func TestValidateReviewStagesFillsMissingWithAuto(t *testing.T) {
+func TestValidateReviewStagesFillsMissingWithRoleDefaults(t *testing.T) {
 	setupHome(t)
 	missingSection, err := Validate(minimalPayload(nil))
 	if err != nil {
@@ -74,53 +74,53 @@ func TestValidateReviewStagesFillsMissingWithAuto(t *testing.T) {
 	}
 	for _, scale := range TaskScales {
 		for _, role := range ReviewRoles {
-			if missingSection.ReviewStages[scale][role] != "auto" {
+			if missingSection.ReviewStages[scale][role] != "auto" && role != "PMQA" && role != "Security" {
 				t.Fatalf("missing section %s.%s=%s", scale, role, missingSection.ReviewStages[scale][role])
 			}
 		}
 	}
 
 	oneScale, err := Validate(minimalPayload(map[string]any{
-		"review_stages": map[string]any{"large": map[string]any{"QA": "required"}},
+		"review_stages": map[string]any{"large": map[string]any{"PM": "required"}},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oneScale.ReviewStages["large"]["QA"] != "required" {
+	if oneScale.ReviewStages["large"]["PM"] != "required" {
 		t.Fatal(oneScale.ReviewStages)
 	}
-	if oneScale.ReviewStages["small"]["QA"] != "auto" {
+	if oneScale.ReviewStages["small"]["PM"] != "auto" {
 		t.Fatalf("missing scale must default to auto, got %v", oneScale.ReviewStages["small"])
 	}
 
 	oneRole, err := Validate(minimalPayload(map[string]any{
 		"review_stages": map[string]any{
-			"large": map[string]any{"QA": "skip"},
-			"small": map[string]any{"Security": "required"},
+			"large": map[string]any{"PM": "skip"},
+			"small": map[string]any{"QA": "required"},
 		},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oneRole.ReviewStages["large"]["Security"] != "auto" || oneRole.ReviewStages["small"]["QA"] != "auto" {
+	if oneRole.ReviewStages["large"]["QA"] != "auto" || oneRole.ReviewStages["small"]["PM"] != "auto" {
 		t.Fatal(oneRole.ReviewStages)
 	}
 }
 
 func TestNormalizeReviewStages(t *testing.T) {
 	setupHome(t)
-	flat, err := NormalizeReviewStages(map[string]any{"QA": "required", "Security": "skip"})
+	flat, err := NormalizeReviewStages(map[string]any{"PM": "required", "QA": "skip"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, scale := range TaskScales {
 		roles, ok := flat[scale].(map[string]any)
-		if !ok || roles["QA"] != "required" || roles["Security"] != "skip" {
+		if !ok || roles["PM"] != "required" || roles["QA"] != "skip" {
 			t.Fatalf("%s=%v", scale, flat[scale])
 		}
 	}
 
-	scaledIn := map[string]any{"large": map[string]any{"QA": "required"}, "small": map[string]any{"Security": "auto"}}
+	scaledIn := map[string]any{"large": map[string]any{"PM": "required"}, "small": map[string]any{"QA": "auto"}}
 	scaled, err := NormalizeReviewStages(scaledIn)
 	if err != nil {
 		t.Fatal(err)
@@ -128,13 +128,13 @@ func TestNormalizeReviewStages(t *testing.T) {
 	if !reflect.DeepEqual(scaled["large"], scaledIn["large"]) || !reflect.DeepEqual(scaled["small"], scaledIn["small"]) {
 		t.Fatalf("%v", scaled)
 	}
-	scaledIn["large"].(map[string]any)["QA"] = "skip"
-	if scaled["large"].(map[string]any)["QA"] != "required" {
+	scaledIn["large"].(map[string]any)["PM"] = "skip"
+	if scaled["large"].(map[string]any)["PM"] != "required" {
 		t.Fatal("NormalizeReviewStages must copy the raw object")
 	}
 
-	_, err = NormalizeReviewStages(map[string]any{"large": map[string]any{"QA": "auto"}, "QA": "skip"})
-	if err == nil || !strings.Contains(err.Error(), "QA, large") {
+	_, err = NormalizeReviewStages(map[string]any{"large": map[string]any{"PM": "auto"}, "PM": "skip"})
+	if err == nil || !strings.Contains(err.Error(), "PM, large") {
 		t.Fatalf("mixed: %v", err)
 	}
 	_, err = NormalizeReviewStages("auto")
@@ -146,27 +146,27 @@ func TestNormalizeReviewStages(t *testing.T) {
 func TestReviewStageFor(t *testing.T) {
 	setupHome(t)
 	cfg := DefaultConfig()
-	cfg.ReviewStages["large"]["QA"] = "required"
-	cfg.ReviewStages["small"]["Security"] = "skip"
-	got, err := ReviewStageFor(cfg, "large", "QA")
+	cfg.ReviewStages["large"]["PM"] = "required"
+	cfg.ReviewStages["small"]["QA"] = "skip"
+	got, err := ReviewStageFor(cfg, "large", "PM")
 	if err != nil || got != "required" {
 		t.Fatal(got, err)
 	}
-	got, err = ReviewStageFor(cfg, "small", "Security")
+	got, err = ReviewStageFor(cfg, "small", "QA")
 	if err != nil || got != "skip" {
 		t.Fatal(got, err)
 	}
-	got, err = ReviewStageFor(cfg, "small", "QA")
+	got, err = ReviewStageFor(cfg, "small", "PM")
 	if err != nil || got != "auto" {
 		t.Fatal(got, err)
 	}
-	if _, err := ReviewStageFor(cfg, "medium", "QA"); !IsError(err) {
+	if _, err := ReviewStageFor(cfg, "medium", "PM"); !IsError(err) {
 		t.Fatalf("unknown scale: %v", err)
 	}
 	if _, err := ReviewStageFor(cfg, "large", "Owner"); !IsError(err) {
 		t.Fatalf("unknown role: %v", err)
 	}
-	if _, err := ReviewStageFor(nil, "large", "QA"); !IsError(err) {
+	if _, err := ReviewStageFor(nil, "large", "PM"); !IsError(err) {
 		t.Fatalf("nil config: %v", err)
 	}
 }
@@ -176,7 +176,7 @@ func TestSaveRewritesFlatReviewStages(t *testing.T) {
 	path := filepath.Join(root, "config.json")
 	t.Setenv(EnvConfig, path)
 	validated, err := Validate(minimalPayload(map[string]any{
-		"review_stages": map[string]any{"QA": "required", "Security": "auto"},
+		"review_stages": map[string]any{"PM": "required", "CSA": "skip", "Hacker": "skip", "QA": "auto"},
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -196,7 +196,7 @@ func TestSaveRewritesFlatReviewStages(t *testing.T) {
 	if !ok {
 		t.Fatalf("review_stages=%T", raw["review_stages"])
 	}
-	if _, flat := stages["QA"]; flat {
+	if _, flat := stages["PM"]; flat {
 		t.Fatalf("saved flat review_stages: %v", stages)
 	}
 	large, _ := stages["large"].(map[string]any)
@@ -204,7 +204,7 @@ func TestSaveRewritesFlatReviewStages(t *testing.T) {
 	if !reflect.DeepEqual(large, small) {
 		t.Fatalf("large=%v small=%v", large, small)
 	}
-	if large["QA"] != "required" || large["Security"] != "auto" {
+	if large["PM"] != "required" || large["CSA"] != "skip" {
 		t.Fatalf("saved roles=%v", large)
 	}
 }
@@ -212,10 +212,10 @@ func TestSaveRewritesFlatReviewStages(t *testing.T) {
 func TestFormatReviewStagesSummaryFoldsIdenticalScales(t *testing.T) {
 	setupHome(t)
 	same := DefaultReviewStages()
-	same["large"]["QA"] = "required"
-	same["small"]["QA"] = "required"
+	same["large"]["PM"] = "required"
+	same["small"]["PM"] = "required"
 	folded := FormatReviewStagesSummary(same)
-	if len(folded) != 1 || !strings.Contains(folded[0], "QA=required") {
+	if len(folded) != 1 || !strings.Contains(folded[0], "PM=required") {
 		t.Fatalf("%v", folded)
 	}
 	cfg := DefaultConfig()
@@ -231,8 +231,8 @@ func TestFormatReviewStagesSummaryFoldsIdenticalScales(t *testing.T) {
 	}
 
 	different := DefaultReviewStages()
-	different["large"]["QA"] = "required"
-	different["small"]["QA"] = "skip"
+	different["large"]["PM"] = "required"
+	different["small"]["PM"] = "skip"
 	split := FormatReviewStagesSummary(different)
 	if len(split) != 2 {
 		t.Fatalf("%v", split)

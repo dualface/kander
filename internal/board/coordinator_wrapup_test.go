@@ -25,19 +25,19 @@ func TestCoordinatorWrapUpRestartsAfterPartialArchive(t *testing.T) {
 	ids := []string{a.Entry.TaskID, b.Entry.TaskID}
 	c := coordinatorClaim(t, root, ids...)
 	gatePlan(t, root, ids, archiveRequirements())
-	pm := gateRun(t, root, archiveInput(ids, "coordinator-pm", "QA"), emptyFindings())
+	pm := gateRun(t, root, archiveInput(ids, "coordinator-pm", "PM"), emptyFindings())
 	assignGate(t, root, pm, map[string][]string{})
-	// A successful QA alone cannot manufacture Security or close the batch.
-	if _, e := gateClose(t, root, map[string]ReviewRoleConclusion{"QA": passRole(pm)}); e == nil {
-		t.Fatal("missing Security closed")
+	// A successful PM alone cannot manufacture QA or close the batch.
+	if _, e := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(pm)}); e == nil {
+		t.Fatal("missing QA closed")
 	}
 	pending := coordinatorReconcile(t, root, c)
 	if pending.Members[ids[0]].Review.Status != "pending" {
 		t.Fatal("missing role reported closed")
 	}
-	qa := gateRun(t, root, archiveInput(ids, "coordinator-qa", "Security"), emptyFindings())
+	qa := gateRun(t, root, archiveInput(ids, "coordinator-qa", "QA"), emptyFindings())
 	assignGate(t, root, qa, map[string][]string{})
-	closure, e := gateClose(t, root, map[string]ReviewRoleConclusion{"QA": passRole(pm), "Security": passRole(qa)})
+	closure, e := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(pm), "QA": passRole(qa)})
 	if e != nil {
 		t.Fatal(e)
 	}

@@ -73,12 +73,6 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		warning(agentConfigErr.Error())
 		healthy = false
 	}
-	if agentConfig != nil && len(agentConfig.LegacyReviewKeys()) > 0 {
-		warning(config.Text("config.legacy_review_keys", strings.Join(agentConfig.LegacyReviewKeys(), ", ")))
-		if !repair {
-			healthy = false
-		}
-	}
 	agents := findAgents(agentConfig)
 	if repair {
 		if _, ok := repairDoctorConfig(agents, tools); !ok {
@@ -173,9 +167,6 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 		warning(loadErr.Error())
 		healthy = false
 	} else {
-		if repair && len(loaded.LegacyReviewKeys()) > 0 {
-			healthy = false
-		}
 		cfgPath, _ := config.ConfigPath()
 		if loaded.WelcomeComplete {
 			success(config.Text("menu.config", cfgPath))

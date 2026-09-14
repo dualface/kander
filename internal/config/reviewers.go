@@ -28,8 +28,6 @@ func NormalizeReviewers(raw any) (map[string]any, error) {
 	if !ok {
 		return nil, configErrorf("config.reviewers_must_be_a_json_object")
 	}
-	normalized, _ := NormalizeLegacyReviewKeys(map[string]any{"reviewers": obj})
-	obj = normalized["reviewers"].(map[string]any)
 	scales, roles, unknown := classifyReviewStages(obj)
 	if len(scales) > 0 && len(roles) > 0 {
 		conflict := append(append([]string{}, scales...), roles...)

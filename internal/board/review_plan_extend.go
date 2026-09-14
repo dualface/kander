@@ -167,7 +167,7 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 					return reviewError("foreign plan member")
 				}
 			}
-			if err = validateNewRequirements(b.Requirements); err != nil {
+			if err = validateRequirements(b.Requirements); err != nil {
 				return err
 			}
 			actual := ReviewBatch{Schema: 1, PlanID: p.PlanID, BatchID: b.BatchID, PreviousBatchID: b.PreviousBatchID, TaskIDs: b.TaskIDs, Base: b.Base, TargetCommit: b.TargetCommit, Requirements: b.Requirements, ReportLanguage: p.ReportLanguage, Revision: 1}

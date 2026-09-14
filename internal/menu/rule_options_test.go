@@ -45,16 +45,16 @@ func TestSessionPreservesReviewRoleModels(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
-	cfg.Models.ReviewRoles["QA"] = map[string]string{"model": "role-model", "effort": "xhigh"}
+	cfg.Models.ReviewRoles["PM"] = map[string]string{"model": "role-model", "effort": "xhigh"}
 	session, err := NewSessionForTest(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := session.Config.Models.ReviewRoles["QA"]; got["model"] != "role-model" || got["effort"] != "xhigh" {
+	if got := session.Config.Models.ReviewRoles["PM"]; got["model"] != "role-model" || got["effort"] != "xhigh" {
 		t.Fatalf("role model lost while opening session: %+v", got)
 	}
-	session.Config.Models.ReviewRoles["QA"]["model"] = "changed"
-	if cfg.Models.ReviewRoles["QA"]["model"] != "role-model" {
+	session.Config.Models.ReviewRoles["PM"]["model"] = "changed"
+	if cfg.Models.ReviewRoles["PM"]["model"] != "role-model" {
 		t.Fatal("session shares review role model map with source config")
 	}
 	if _, err := session.Save(); err != nil {
@@ -64,7 +64,7 @@ func TestSessionPreservesReviewRoleModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Models.ReviewRoles["QA"]["model"] != "changed" || loaded.Models.ReviewRoles["QA"]["effort"] != "xhigh" {
-		t.Fatalf("role model lost while saving session: %+v", loaded.Models.ReviewRoles["QA"])
+	if loaded.Models.ReviewRoles["PM"]["model"] != "changed" || loaded.Models.ReviewRoles["PM"]["effort"] != "xhigh" {
+		t.Fatalf("role model lost while saving session: %+v", loaded.Models.ReviewRoles["PM"])
 	}
 }

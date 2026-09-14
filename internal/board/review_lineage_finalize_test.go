@@ -11,7 +11,7 @@ func TestFinalizeRejectsInvalidFindingRelationships(t *testing.T) {
 			root := tempBoard(t)
 			id := gateCard(t, root, "lineage")
 			gatePlan(t, root, []string{id}, archiveRequirements())
-			input := archiveInput([]string{id}, "bad", "QA")
+			input := archiveInput([]string{id}, "bad", "PM")
 			input.FindingsSchema = 1
 			originals := archiveOriginals()
 			var advance *ReviewAdvance
@@ -19,9 +19,9 @@ func TestFinalizeRejectsInvalidFindingRelationships(t *testing.T) {
 				prior := input
 				prior.RunID = "first"
 				f := emptyFindings()
-				f.NonBlocking = []ReviewFinding{{ID: "QA-01", Tier: "low", Text: "Prior item", Evidence: "a:1"}}
+				f.NonBlocking = []ReviewFinding{{ID: "PM-01", Tier: "low", Text: "Prior item", Evidence: "a:1"}}
 				run := gateRun(t, root, prior, f)
-				assignGate(t, root, run, map[string][]string{"QA-01": {id}})
+				assignGate(t, root, run, map[string][]string{"PM-01": {id}})
 				gateRecord(t, root, run, id, f.NonBlocking[0], "deferred")
 				context, err := ReviewIncrementalContext(root, run.RunID)
 				if err != nil {
@@ -32,14 +32,14 @@ func TestFinalizeRejectsInvalidFindingRelationships(t *testing.T) {
 				advance = &ReviewAdvance{PreviousTarget: run.Commit, Target: input.Commit, Reason: "fix scope", Deliveries: map[string]string{input.Commit: id}}
 			}
 			f := emptyFindings()
-			f.Findings = []ReviewFinding{{ID: "QA-02", Tier: "medium", Text: "Invalid lineage", Evidence: "a:1", Lineage: &FindingRef{RunID: "first", FindingID: "QA-01"}}}
+			f.Findings = []ReviewFinding{{ID: "PM-02", Tier: "medium", Text: "Invalid lineage", Evidence: "a:1", Lineage: &FindingRef{RunID: "first", FindingID: "PM-01"}}}
 			switch kind {
 			case "duplicate-reference":
-				f.NonBlocking = []ReviewFinding{{ID: "QA-03", Tier: "low", Text: "Duplicate lineage", Evidence: "a:1", Lineage: &FindingRef{RunID: "first", FindingID: "QA-01"}}}
+				f.NonBlocking = []ReviewFinding{{ID: "PM-03", Tier: "low", Text: "Duplicate lineage", Evidence: "a:1", Lineage: &FindingRef{RunID: "first", FindingID: "PM-01"}}}
 			case "missing-item":
 				f.Findings[0].Lineage.FindingID = "MISSING"
 			case "reused-id":
-				f.Findings[0].ID, f.Findings[0].Lineage = "QA-01", nil
+				f.Findings[0].ID, f.Findings[0].Lineage = "PM-01", nil
 			}
 			report := structuredReport(f)
 			if _, err := ParseReviewFindings(report); err != nil {
@@ -58,7 +58,7 @@ func TestFinalizeRejectsInvalidFindingRelationships(t *testing.T) {
 			if _, err = ReadReviewBatchView(root, "batch"); err != nil {
 				t.Fatalf("failed relation poisoned aggregate: %v", err)
 			}
-			if _, err = gateClose(t, root, map[string]ReviewRoleConclusion{"QA": passRole(run)}); err == nil {
+			if _, err = gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(run)}); err == nil {
 				t.Fatal("invalid relation established PASS")
 			}
 			bytes, err := ReadReviewOriginal(root, run.RunID, "report.md")

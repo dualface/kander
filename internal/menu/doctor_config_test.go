@@ -58,7 +58,7 @@ func TestOperationalCommandsRequireCompleteConfig(t *testing.T) {
 		{"resume", "--message", "go", "20260909-cfg-task"},
 		{"notify", "--message", "go", "20260909-cfg-task"},
 		{"dismiss", "20260909-cfg-task"},
-		{"review", "/tmp", strings.Repeat("a", 40), strings.Repeat("a", 40), "QA", "goal"},
+		{"review", "/tmp", strings.Repeat("a", 40), strings.Repeat("a", 40), "PM", "goal"},
 		{"review", "progress", "/tmp", "20260909-cfg-task"},
 		{"check"},
 		{"subscribe", "20260909-cfg-group", "20260909-cfg-task"},

@@ -1,4 +1,0 @@
-{
-  "config.legacy_review_keys": "旧审核键已映射为 Security 或忽略（PM）：{{.V0}}。运行 kander doctor 保存新键。",
-  "config.legacy_review_keys_repaired": "已保存新审核键，移除旧键：{{.V0}}。"
-}

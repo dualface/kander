@@ -1,4 +1,0 @@
-{
-  "config.legacy_review_keys": "旧レビューキーを Security に統合、または無視（PM）しました：{{.V0}}。kander doctor で新しいキーを保存してください。",
-  "config.legacy_review_keys_repaired": "新しいレビューキーを保存し、旧キーを削除しました：{{.V0}}。"
-}

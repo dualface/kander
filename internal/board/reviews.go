@@ -314,7 +314,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if advance != nil || len(requirements) == 0 {
 				return reviewError("new batch requires requirements; no advance")
 			}
-			if err := validateNewRequirements(requirements); err != nil {
+			if err := validateRequirements(requirements); err != nil {
 				return err
 			}
 			batch = ReviewBatch{TaskContextHash: input.InputHashes["task-context.md"], Schema: 1, BatchID: input.BatchID, TaskIDs: input.TaskIDs, Base: input.Base, TargetCommit: input.Commit, ReportLanguage: language, Requirements: requirements, Revision: 1}
@@ -418,7 +418,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 	return
 }
 func reviewRole(role string) bool {
-	return role == "Security" || role == "PM" || role == "QA" || role == "CSA" || role == "Hacker"
+	return role == "PM" || role == "QA" || role == "CSA" || role == "Hacker" || role == "PMQA" || role == "Security"
 }
 func allPublished(run ReviewRun) bool {
 	for _, id := range run.TaskIDs {

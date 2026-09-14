@@ -34,7 +34,9 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 		)
 	}
 	roles := map[string]string{
-		"qa": "QA", "security": "Security",
+		"pm": "PM", "qa": "QA", "csa": "CSA",
+		"codesecurityanalyst": "CSA", "hacker": "Hacker",
+		"pmqa": "PMQA", "security": "Security",
 	}
 	role, ok := roles[strings.ToLower(roleInput)]
 	if !ok {

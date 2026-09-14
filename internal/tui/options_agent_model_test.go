@@ -26,13 +26,13 @@ func TestOptionsAgentSwitchDoesNotReplayOldModelDraft(t *testing.T) {
 				binding := panel.bind
 				// An edit and selector change can be applied by the same update.
 				for i, field := range binding.modelFields {
-					if field.FieldName() == "large_model" && (section == sectionExecution || field.Agent == "QA") {
+					if field.FieldName() == "large_model" && (section == sectionExecution || field.Agent == "PM") {
 						*binding.modelValues[i] = "old-agent-draft"
 						break
 					}
 				}
 				if section == sectionReview {
-					*binding.reviewers[reviewerFocusKey("QA", "large")] = "grok"
+					*binding.reviewers[reviewerFocusKey("PM", "large")] = "grok"
 				} else {
 					binding.large = "grok"
 				}
@@ -53,8 +53,8 @@ func TestOptionsAgentSwitchDoesNotReplayOldModelDraft(t *testing.T) {
 					t.Fatal(err)
 				}
 				if section == sectionReview {
-					model, effort := config.ReviewModelFor(loaded, "grok", "QA", "large")
-					if config.ReviewerFor(loaded, "large", "QA") != "grok" || model != "" || effort != loaded.Models.Review["grok"]["effort"] {
+					model, effort := config.ReviewModelFor(loaded, "grok", "PM", "large")
+					if config.ReviewerFor(loaded, "large", "PM") != "grok" || model != "" || effort != loaded.Models.Review["grok"]["effort"] {
 						t.Fatalf("wrong reviewer selection: %q/%q", model, effort)
 					}
 				} else {
@@ -77,9 +77,9 @@ func TestReviewModelEditRefreshesCoupledInheritance(t *testing.T) {
 			_, panel := openPanel(t)
 			dir, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
 			overlay := map[string]any{}
-			config.OverlaySet(overlay, "existing-model", "models", "review_roles", "QA", "large_model")
+			config.OverlaySet(overlay, "existing-model", "models", "review_roles", "PM", "large_model")
 			if pinned {
-				config.OverlaySet(overlay, "codex", "reviewers", "large", "QA")
+				config.OverlaySet(overlay, "codex", "reviewers", "large", "PM")
 			}
 			if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, overlay); err != nil {
 				t.Fatal(err)
@@ -90,7 +90,7 @@ func TestReviewModelEditRefreshesCoupledInheritance(t *testing.T) {
 			pumpPanel(panel, panel.openSection(sectionReview))
 			key := ""
 			for i, field := range panel.bind.modelFields {
-				if field.Agent == "QA" && field.FieldName() == "large_model" {
+				if field.Agent == "PM" && field.FieldName() == "large_model" {
 					*panel.bind.modelValues[i] = "edited-model"
 					key = modelFocusKey(field)
 					break
@@ -101,11 +101,11 @@ func TestReviewModelEditRefreshesCoupledInheritance(t *testing.T) {
 				t.Fatal("coupled override did not request rebuild at the edited model")
 			}
 			pumpPanel(panel, panel.rebuildSection())
-			if !panel.session.FieldOverridden("reviewers", "large", "QA") {
+			if !panel.session.FieldOverridden("reviewers", "large", "PM") {
 				t.Fatal("reviewer remains inherited")
 			}
 			for i, field := range panel.bind.modelFields {
-				if field.Agent == "QA" && field.FieldName() == "large_effort" && strings.HasPrefix(*panel.bind.modelValues[i], "(") {
+				if field.Agent == "PM" && field.FieldName() == "large_effort" && strings.HasPrefix(*panel.bind.modelValues[i], "(") {
 					t.Fatal("paired effort still shows an inherited marker")
 				}
 			}

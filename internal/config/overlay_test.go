@@ -40,8 +40,8 @@ func TestDeepMergeObjectsScalarsAndArrays(t *testing.T) {
 	base := map[string]any{
 		"kanban_agent": "codex",
 		"review_stages": map[string]any{
-			"large": map[string]any{"QA": "auto", "Security": "auto"},
-			"small": map[string]any{"QA": "auto", "Security": "skip"},
+			"large": map[string]any{"PM": "auto", "QA": "auto"},
+			"small": map[string]any{"PM": "auto", "QA": "skip"},
 		},
 		"agents": map[string]any{
 			"helper": map[string]any{"args": []any{"old", "keep"}},
@@ -50,7 +50,7 @@ func TestDeepMergeObjectsScalarsAndArrays(t *testing.T) {
 	overlay := map[string]any{
 		"kanban_agent": "claude",
 		"review_stages": map[string]any{
-			"large": map[string]any{"QA": "required"},
+			"large": map[string]any{"PM": "required"},
 		},
 		"agents": map[string]any{
 			"helper": map[string]any{"args": []any{"new"}},
@@ -63,10 +63,10 @@ func TestDeepMergeObjectsScalarsAndArrays(t *testing.T) {
 	stages := merged["review_stages"].(map[string]any)
 	large := stages["large"].(map[string]any)
 	small := stages["small"].(map[string]any)
-	if large["QA"] != "required" || large["Security"] != "auto" {
+	if large["PM"] != "required" || large["QA"] != "auto" {
 		t.Fatalf("nested object merge: %#v", large)
 	}
-	if small["QA"] != "auto" || small["Security"] != "skip" {
+	if small["PM"] != "auto" || small["QA"] != "skip" {
 		t.Fatalf("untouched nested object: %#v", small)
 	}
 	args := merged["agents"].(map[string]any)["helper"].(map[string]any)["args"].([]any)
@@ -79,7 +79,7 @@ func TestDeepMergeObjectsScalarsAndArrays(t *testing.T) {
 	full := deepMerge(minimalPayload(nil), map[string]any{
 		"kanban_agent": "claude",
 		"review_stages": map[string]any{
-			"large": map[string]any{"QA": "required"},
+			"large": map[string]any{"PM": "required"},
 		},
 	})
 	if _, err := Validate(full); err != nil {
@@ -167,24 +167,24 @@ func TestLoadMergesReviewStagesAfterNormalizingFlatScope(t *testing.T) {
 	scope := filepath.Join(root, "config.json")
 	t.Setenv(EnvConfig, scope)
 	payload := minimalPayload(map[string]any{
-		"review_stages": map[string]any{"QA": "auto", "Security": "skip"},
+		"review_stages": map[string]any{"PM": "auto", "QA": "skip", "CSA": "auto", "Hacker": "auto"},
 	})
 	writeJSONFile(t, scope, payload)
 	writeJSONFile(t, filepath.Join(main, OverlayFilename), map[string]any{
-		"review_stages": map[string]any{"large": map[string]any{"QA": "required"}},
+		"review_stages": map[string]any{"large": map[string]any{"PM": "required"}},
 	})
 	cfg, err := Load(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ReviewStages["large"]["QA"] != "required" {
-		t.Fatalf("overlay large.QA=%s", cfg.ReviewStages["large"]["QA"])
+	if cfg.ReviewStages["large"]["PM"] != "required" {
+		t.Fatalf("overlay large.PM=%s", cfg.ReviewStages["large"]["PM"])
 	}
-	if cfg.ReviewStages["large"]["Security"] != "skip" || cfg.ReviewStages["small"]["Security"] != "skip" {
-		t.Fatalf("flat scope Security should apply to both scales: %+v", cfg.ReviewStages)
+	if cfg.ReviewStages["large"]["QA"] != "skip" || cfg.ReviewStages["small"]["QA"] != "skip" {
+		t.Fatalf("flat scope QA should apply to both scales: %+v", cfg.ReviewStages)
 	}
-	if cfg.ReviewStages["small"]["QA"] != "auto" {
-		t.Fatalf("small.QA should stay the normalized scope value: %s", cfg.ReviewStages["small"]["QA"])
+	if cfg.ReviewStages["small"]["PM"] != "auto" {
+		t.Fatalf("small.PM should stay the normalized scope value: %s", cfg.ReviewStages["small"]["PM"])
 	}
 }
 
@@ -196,25 +196,25 @@ func TestLoadMergesReviewStagesAfterNormalizingFlatOverlay(t *testing.T) {
 	scope := filepath.Join(root, "config.json")
 	writeScopeFile(t, scope)
 	writeJSONFile(t, filepath.Join(main, OverlayFilename), map[string]any{
-		"review_stages": map[string]any{"QA": "required"},
+		"review_stages": map[string]any{"PM": "required"},
 	})
 	cfg, err := Load(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ReviewStages["large"]["QA"] != "required" || cfg.ReviewStages["small"]["QA"] != "required" {
-		t.Fatalf("flat overlay QA should apply to both scales: %+v", cfg.ReviewStages)
+	if cfg.ReviewStages["large"]["PM"] != "required" || cfg.ReviewStages["small"]["PM"] != "required" {
+		t.Fatalf("flat overlay PM should apply to both scales: %+v", cfg.ReviewStages)
 	}
 	for _, scale := range []string{"large", "small"} {
-		if cfg.ReviewStages[scale]["Security"] != "auto" {
-			t.Fatalf("%s.Security should stay the scope default: %+v", scale, cfg.ReviewStages)
+		if cfg.ReviewStages[scale]["QA"] != "auto" {
+			t.Fatalf("%s.QA should stay the scope default: %+v", scale, cfg.ReviewStages)
 		}
 	}
 	scopeCfg, err := LoadScope(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if scopeCfg.ReviewStages["large"]["QA"] != "auto" || scopeCfg.ReviewStages["small"]["QA"] != "auto" {
+	if scopeCfg.ReviewStages["large"]["PM"] != "auto" || scopeCfg.ReviewStages["small"]["PM"] != "auto" {
 		t.Fatalf("flat overlay must not rewrite scope review_stages: %+v", scopeCfg.ReviewStages)
 	}
 }
@@ -353,7 +353,7 @@ func TestRepairLeavesOverlayBytesAndValuesOutOfScope(t *testing.T) {
 	original := []byte(`{
 		"schema_version": 999, "welcome_complete": true, "kanban_agent": "codex",
 		"launcher": "foreground", "language": "en",
-		"reviewers": {"QA":"codex","Security":"bad"}
+		"reviewers": {"PM":"codex","QA":"bad","CSA":"codex","Hacker":"codex"}
 	}`)
 	if err := os.WriteFile(scope, original, 0o644); err != nil {
 		t.Fatal(err)

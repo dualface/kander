@@ -67,8 +67,8 @@ func TestReviewerChoicesFollowReviewTemplates(t *testing.T) {
 	}
 	cfg.Agents = map[string]config.AgentDefinition{
 		"helper": {
-			Path:    exe,
-			Args:    &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
+			Path: exe,
+			Args: &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
 			Session: &config.AgentSessionDefinition{Mode: "none"},
 			Review: &config.AgentReview{
 				CWD: config.ReviewCWDRuntime, OutputName: "out.txt",
@@ -100,13 +100,13 @@ func TestReviewModelFieldsHideCursorEffortAfterArgsOverlay(t *testing.T) {
 	cfg.WelcomeComplete = true
 	cfg.Agents = map[string]config.AgentDefinition{"cursor": {Args: &config.AgentArgs{Start: []string{"x"}, Resume: []string{}}}}
 	for _, scale := range config.TaskScales {
-		cfg.Reviewers[scale]["QA"] = "cursor"
+		cfg.Reviewers[scale]["PM"] = "cursor"
 	}
 	s, err := NewSessionForTest(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range s.ReviewModelFieldsFor("QA", "large") {
+	for _, field := range s.ReviewModelFieldsFor("PM", "large") {
 		if field.field == "large_effort" || field.field == "effort" {
 			t.Fatal("review effort shown for cursor")
 		}

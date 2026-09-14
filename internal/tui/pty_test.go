@@ -273,7 +273,7 @@ func TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY(t *testing.T) {
 		t.Fatalf("doctor did not create config: %v", err)
 	}
 	session.send("\r")
-	if !session.waitFor("Save and apply", 4*time.Second) {
+	if !session.waitFor("Review and models", 4*time.Second) {
 		t.Fatalf("interface did not return to options root\npty:\n%s", session.text())
 	}
 	session.send("q")
@@ -295,7 +295,7 @@ func TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY(t *testing.T) {
 	}
 }
 
-// Press o on the board to open the options panel.
+// Press o to open options; detect a top item because Save can scroll below the viewport.
 func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
 	bin := buildKander(t)
 	_, env := boardEnv(t)
@@ -305,7 +305,7 @@ func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
 	}
 	session.send("o")
-	if !session.waitFor("Save and apply", 10*time.Second) {
+	if !session.waitFor("Review and models", 10*time.Second) {
 		t.Fatalf("options panel did not open\npty:\n%s", session.text())
 	}
 	// A gap is required between Esc and the following key, otherwise the terminal parses them as alt+<key>.
@@ -329,7 +329,7 @@ func TestOptionsProjectTabsAndNarrowPathsOnPTY(t *testing.T) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
 	}
 	session.send("o")
-	if !session.waitFor("Save and apply", 10*time.Second) {
+	if !session.waitFor("Review and models", 10*time.Second) {
 		t.Fatalf("options panel did not open\npty:\n%s", session.text())
 	}
 	plain := session.text()

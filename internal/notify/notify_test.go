@@ -327,7 +327,7 @@ func TestNotifyDirectPayloadIncludesCardLanguage(t *testing.T) {
 	writeConfig := func(t *testing.T, root string) {
 		t.Helper()
 		configPath := os.Getenv(config.EnvConfig)
-		if err := os.WriteFile(configPath, []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"zh-CN","reviewers":{"QA":"codex","Security":"codex"}}`), 0o600); err != nil {
+		if err := os.WriteFile(configPath, []byte(`{"schema_version":1,"welcome_complete":true,"kanban_agent":"codex","launcher":"tmux","language":"en","agent_language":"zh-CN","reviewers":{"PM":"codex","CSA":"codex","Hacker":"codex","QA":"codex"}}`), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

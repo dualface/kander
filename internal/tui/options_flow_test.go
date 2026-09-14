@@ -152,13 +152,13 @@ func TestFlowNarrowReportScrolling(t *testing.T) {
 func TestFlowShowsUnsavedModelsAndCLIDefault(t *testing.T) {
 	_, panel := openPanel(t)
 	panel.session.Config.Models.Kanban["codex"]["large_model"] = "unsaved-large"
-	panel.session.Config.Models.ReviewRoles["QA"]["large_model"] = "unsaved-pm"
+	panel.session.Config.Models.ReviewRoles["PM"]["large_model"] = "unsaved-pm"
 	panel.session.Config.Models.Kanban["codex"]["small_model"] = ""
 	panel.session.Config.Models.Kanban["codex"]["model"] = ""
-	panel.session.Config.ReviewStages["large"]["QA"] = "required"
-	panel.session.Config.ReviewStages["large"]["Security"] = "skip"
-	panel.session.Config.ReviewStages["large"]["Security"] = "skip"
-	panel.session.Config.ReviewStages["large"]["Security"] = "skip"
+	panel.session.Config.ReviewStages["large"]["PM"] = "required"
+	panel.session.Config.ReviewStages["large"]["QA"] = "skip"
+	panel.session.Config.ReviewStages["large"]["CSA"] = "skip"
+	panel.session.Config.ReviewStages["large"]["Hacker"] = "skip"
 	panel.dispatch(sectionFlow)
 	text := flowReportText(panel)
 	for _, want := range []string{"unsaved-large", "unsaved-pm"} {
@@ -181,8 +181,8 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 		cfg.ReviewStages["large"] = modes
 		return flow.BuildChart(cfg, "large")
 	}
-	all := map[string]string{"QA": "required", "Security": "auto"}
-	noSecurity := map[string]string{"QA": "required", "Security": "skip"}
+	all := map[string]string{"PM": "required", "QA": "auto", "CSA": "auto", "Hacker": "required"}
+	noSecurity := map[string]string{"PM": "required", "QA": "auto", "CSA": "skip", "Hacker": "skip"}
 	for _, tc := range []struct {
 		name    string
 		chart   flow.Chart
@@ -193,7 +193,7 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 	}{
 		{"rail", chartFor(all, true), 120, []string{
 			text.execute, text.selfCheck, text.stageNames[flow.StagePrimary], text.stageNames[flow.StageSecurity],
-			"QA · " + text.required, "Security · " + text.auto,
+			"PM · " + text.required, "QA · " + text.auto, "Hacker · " + text.required,
 			text.gates[flow.StagePrimary], text.gates[flow.StageSecurity], text.decision, text.fix, text.rereview, text.done,
 		}, []string{"↺"}, 2},
 		{"compact", chartFor(all, true), 40, []string{
