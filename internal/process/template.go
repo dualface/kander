@@ -101,10 +101,52 @@ func expandTemplate(template string, values map[string]string, names []string, r
 	return out.String(), nil
 }
 
+// TemplatePlaceholders returns the placeholder names of a template in order,
+// validating brace escapes but not the names, so a caller with an open-ended
+// name family (such as env.<NAME>) can check names itself.
+func TemplatePlaceholders(template string) ([]string, error) {
+	var names []string
+	for i := 0; i < len(template); {
+		switch template[i] {
+		case '{':
+			if i+1 < len(template) && template[i+1] == '{' {
+				i += 2
+				continue
+			}
+			end := strings.IndexByte(template[i+1:], '}')
+			if end < 0 {
+				return nil, specErrorf("placeholder", template[i:], "unclosed {")
+			}
+			end += i + 1
+			names = append(names, template[i+1:end])
+			i = end + 1
+		case '}':
+			if i+1 < len(template) && template[i+1] == '}' {
+				i += 2
+				continue
+			}
+			return nil, specErrorf("placeholder", "}", "unescaped }")
+		default:
+			i++
+		}
+	}
+	return names, nil
+}
+
 // ExpandArgvOmitEmpty expands each argv element, then drops an element whose
 // placeholder value is empty together with its immediately preceding standalone flag.
 func ExpandArgvOmitEmpty(template []string, values map[string]string, names []string) ([]string, error) {
-	if err := ValidateArgv(template, names, TemplateArgv); err != nil {
+	return expandArgvOmitEmpty(template, values, names, TemplateArgv)
+}
+
+// ExpandTerminalArgv is ExpandArgvOmitEmpty under the terminal argv rule, which
+// allows TAB in template elements (-F format strings).
+func ExpandTerminalArgv(template []string, values map[string]string, names []string) ([]string, error) {
+	return expandArgvOmitEmpty(template, values, names, TemplateArgvTab)
+}
+
+func expandArgvOmitEmpty(template []string, values map[string]string, names []string, kind TemplateKind) ([]string, error) {
+	if err := ValidateArgv(template, names, kind); err != nil {
 		return nil, err
 	}
 	var out []string

@@ -90,7 +90,7 @@ func TestUnimplementedCommands(t *testing.T) {
 		"new": {}, "move": {}, "pick": {},
 		"guard-write": {}, "update": {}, "dispatch": {},
 		"doctor": {}, "config": {},
-		"version": {}, "install": {}, "issue": {},
+		"version": {}, "install": {}, "issue": {}, "terminal": {},
 	}
 	names := append([]string{"ls"}, commandNames...)
 	for _, name := range names {
@@ -199,5 +199,15 @@ func TestDefaultRunner(t *testing.T) {
 	}
 	if code := Run([]string{"kander"}); code != 7 || !called {
 		t.Fatalf("code=%d called=%v", code, called)
+	}
+}
+
+func TestTerminalCommandRegistered(t *testing.T) {
+	resetLang(t)
+	for _, language := range []string{"cn", "en", "ja"} {
+		code, out, diagnostic := captureRun(t, []string{"kander", "--lang", language, "terminal", "--help"})
+		if code != 0 || diagnostic != "" || !strings.Contains(out, "terminal list | test") || !strings.Contains(out, "--skip-focus") {
+			t.Fatalf("language=%s code=%d out=%q err=%q", language, code, out, diagnostic)
+		}
 	}
 }

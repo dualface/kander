@@ -3,6 +3,8 @@ package menu
 import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/internal/terminal/direct"
 )
 
 func repairDoctorConfig(agents map[string]agentState, tools TerminalTools) (*config.Config, bool) {
@@ -88,14 +90,14 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 		}
 	}
 	if !doctorLauncherAvailable(cfg.Launcher, tools) {
-		replacement := "foreground"
+		replacement := direct.Foreground
 		switch {
 		case isWindowsOS():
-			replacement = "console"
+			replacement = direct.Console
 		case tools.Herdr.Available():
-			replacement = "herdr"
+			replacement = builtin.Herdr
 		case tools.Tmux.Available():
-			replacement = "tmux-session"
+			replacement = builtin.TmuxSession
 		}
 		set("launcher", &cfg.Launcher, replacement)
 	}
@@ -113,22 +115,22 @@ func repairConfiguredTools(cfg *config.Config, agents map[string]agentState, too
 // not mean the launcher can start right now — prepareLaunch still requires
 // herdr to actually be on PATH.
 func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
-	if launcher == "foreground" {
+	if launcher == direct.Foreground {
 		return true
 	}
-	if isWindowsOS() && (launcher == "tmux" || launcher == "tmux-session") {
+	if isWindowsOS() && (launcher == builtin.Tmux || launcher == builtin.TmuxSession) {
 		return false
 	}
-	if launcher == "console" {
+	if launcher == direct.Console {
 		return isWindowsOS()
 	}
 	switch launcher {
 	case "auto":
 		return tools.Herdr.Installed() || tools.Tmux.Available()
-	case "herdr":
+	case builtin.Herdr:
 		return tools.Herdr.Installed()
-	case "tmux", "tmux-session":
+	case builtin.Tmux, builtin.TmuxSession:
 		return tools.Tmux.Available()
 	}
-	return false
+	return definitionLauncherAvailable(launcher)
 }

@@ -1,0 +1,487 @@
+{
+  "schema_version": 1,
+  "name": "tmux",
+  "binary": "tmux",
+  "version_args": ["-V"],
+  "capabilities": {
+    "container": true,
+    "focus": true,
+    "pane_metadata": true,
+    "foreground_process": true,
+    "wait_output": false,
+    "session_report": false
+  },
+  "address": [
+    {"name": "session"},
+    {"name": "container"},
+    {"name": "pane"}
+  ],
+  "errors": {
+    "gone": ["stderr:(?i)can't find|no server running|no sessions"],
+    "meta_missing": ["stderr:(?i)^(?:(?:invalid|unknown) option: @(?:kander|onevoke)_session)?$"]
+  },
+  "launchers": {
+    "tmux": {
+      "auto_priority": 100,
+      "requires": {
+        "platform": "posix",
+        "binary": true,
+        "inside_session": true,
+        "env": [{"name": "TMUX"}, {"name": "TMUX_PANE", "skip_auto": true}],
+        "messages": {
+          "binary": {"id": "launch.tmux_is_not_in_path_run_kander_welcome_to"},
+          "env": {"id": "launch.not_currently_in_a_tmux_session_run", "args": ["tmux new -A -s kander"]}
+        }
+      },
+      "started_lines": [
+        {"message": {"id": "launch.launcher_tmux_window", "args": ["{head}", "{container}"]}}
+      ],
+      "ops": {
+        "prepare": {
+          "steps": [
+            {
+              "store": "current",
+              "argv": ["display-message", "-p", "-t", "{env.TMUX_PANE}", "#{{session_id}}"],
+              "output": {"source": "stdout", "parse": "regex:^\\s*(\\$\\d+)\\s*$"},
+              "messages": {
+                "exec": {"id": "launch.failed_to_read_tmux_session", "args": ["{detail}"]},
+                "exit": {"id": "launch.failed_to_read_tmux_session", "args": [{"or": ["{error}", {"id": "launch.cannot_determine_the_current_session"}]}]},
+                "invalid": {"id": "launch.failed_to_read_tmux_session", "args": [{"or": ["{error}", {"id": "launch.cannot_determine_the_current_session"}]}]}
+              }
+            }
+          ],
+          "result": {"session": "{step.current.text}"}
+        }
+      }
+    },
+    "tmux-session": {
+      "requires": {
+        "platform": "posix",
+        "binary": true,
+        "inside_session": false,
+        "messages": {
+          "binary": {"id": "launch.tmux_is_not_in_path_run_kander_welcome_to"}
+        }
+      },
+      "started_lines": [
+        {"message": {"id": "launch.session_window", "args": ["{head}", "{session}", "{container}"]}},
+        {"when": "field_missing:env.TMUX", "message": {"id": "launch.view", "args": ["tmux attach -t {session}"]}},
+        {"when": "!field_missing:env.TMUX", "message": {"id": "launch.view", "args": ["tmux switch-client -t {session}"]}}
+      ],
+      "ops": {
+        "prepare": {
+          "candidates": {
+            "values": [
+              "kb-{project_key}",
+              "kb-{project_key}-2",
+              "kb-{project_key}-3",
+              "kb-{project_key}-4",
+              "kb-{project_key}-5",
+              "kb-{project_key}-6",
+              "kb-{project_key}-7",
+              "kb-{project_key}-8",
+              "kb-{project_key}-9"
+            ],
+            "steps": [
+              {"store": "exists", "argv": ["has-session", "-t", "={candidate}"], "on_error": "continue"},
+              {
+                "store": "owner",
+                "when": "field:step.exists.ok=true",
+                "argv": ["show-options", "-v", "-t", "{candidate}", "@kander_project"],
+                "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+                "on_error": "continue",
+                "stop_on_success": true
+              },
+              {
+                "store": "owner",
+                "when": "field:step.exists.ok=true",
+                "argv": ["show-options", "-v", "-t", "{candidate}", "@onevoke_project"],
+                "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+                "on_error": "continue"
+              }
+            ],
+            "select": [
+              {"when": "field:step.exists.ok=false", "result": {"session": "{candidate}", "session_exists": "false"}},
+              {
+                "when": [["field_missing:step.owner.text"], ["field:step.owner.text={project}"]],
+                "result": {"session": "{candidate}", "session_exists": "true"}
+              }
+            ],
+            "fallback": [
+              {"fail": {"id": "launch.no_project_session_name_is_available_and_its_numbered", "args": ["kb-{project_key}"]}}
+            ]
+          }
+        },
+        "create_container": {
+          "steps": [
+            {
+              "store": "created",
+              "when": "field:session_exists=false",
+              "argv": ["new-session", "-d", "-P", "-F", "#{{window_id}}\t#{{pane_id}}", "-s", "{session}", "-c", "{cwd}", "-n", "{label}"],
+              "output": {"source": "stdout", "parse": "regex:(?s)^(.*?)[\\r\\n]*$"},
+              "fields": {
+                "container": "regex:^([^\\t]+)\\t[^\\t]+$",
+                "pane": "regex:^[^\\t]+\\t([^\\t]+)$"
+              },
+              "expect": [["!field_missing:step.created.container", "!field_missing:step.created.pane"]],
+              "on_error": "continue",
+              "messages": {"invalid": {"id": "launch.tmux_launch_failed_window_pane_id_was_not_returned"}}
+            },
+            {
+              "store": "retry",
+              "when": "field:step.created.ok=false",
+              "argv": ["has-session", "-t", "={session}"],
+              "on_error": "continue"
+            },
+            {
+              "store": "owner",
+              "when": "field:step.retry.ok=true",
+              "argv": ["show-options", "-v", "-t", "{session}", "@kander_project"],
+              "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+              "on_error": "continue"
+            },
+            {
+              "store": "owner",
+              "when": [["field:step.retry.ok=true", "field:step.owner.ok=false"]],
+              "argv": ["show-options", "-v", "-t", "{session}", "@onevoke_project"],
+              "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+              "on_error": "continue"
+            },
+            {
+              "store": "window",
+              "when": [
+                ["field:session_exists=true"],
+                ["field:step.retry.ok=true", "field_missing:step.owner.text"],
+                ["field:step.retry.ok=true", "field:step.owner.text={project}"]
+              ],
+              "argv": ["new-window", "-d", "-P", "-F", "#{{window_id}}\t#{{pane_id}}", "-t", "{session}:", "-c", "{cwd}", "-n", "{label}"],
+              "output": {"source": "stdout", "parse": "regex:(?s)^(.*?)[\\r\\n]*$"},
+              "fields": {
+                "container": "regex:^([^\\t]+)\\t[^\\t]+$",
+                "pane": "regex:^[^\\t]+\\t([^\\t]+)$"
+              },
+              "expect": [["!field_missing:step.window.container", "!field_missing:step.window.pane"]],
+              "messages": {
+                "exec": {"id": "launch.tmux_failed", "args": ["new-window", "{detail}"]},
+                "exit": {"id": "launch.tmux_failed", "args": ["new-window", "{detail}"]},
+                "invalid": {"id": "launch.tmux_launch_failed_window_pane_id_was_not_returned"}
+              }
+            },
+            {
+              "when": [["field:step.created.ok=false", "field_missing:step.window.ok"]],
+              "fail": {"id": "launch.tmux_failed", "args": ["new-session", "{step.created.detail}"]}
+            },
+            {
+              "when": "field:step.created.ok=true",
+              "argv": ["set-option", "-t", "{session}", "@kander_project", "{project}"],
+              "on_error": "continue"
+            }
+          ],
+          "result": {
+            "session": "{session}",
+            "container": "{step.created.container}{step.window.container}",
+            "pane": "{step.created.pane}{step.window.pane}"
+          }
+        },
+        "topology": {
+          "steps": [
+            {
+              "store": "topology",
+              "argv": ["display-message", "-p", "-t", "{pane}", "#{{session_id}}\t#{{session_name}}\t#{{window_id}}\t#{{window_panes}}"],
+              "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+              "fields": {
+                "shape": "regex:^([^\\t]*(?:\\t[^\\t]*){3})$",
+                "session_name": "regex:^[^\\t]*\\t([^\\t]*)\\t[^\\t]*\\t[^\\t]*$",
+                "window": "regex:^[^\\t]*\\t[^\\t]*\\t([^\\t]*)\\t[^\\t]*$",
+                "panes": "regex:^[^\\t]*\\t[^\\t]*\\t[^\\t]*\\t([^\\t]*)$"
+              },
+              "expect": "!field_missing:step.topology.shape",
+              "messages": {
+                "exit": {"id": "probe.failed_to_probe_the_tmux_pane_container", "args": ["{detail}"]},
+                "invalid": {"id": "probe.tmux_pane_container_probe_returned_an_invalid_response"}
+              }
+            }
+          ],
+          "result": {"session": "{step.topology.session_name}", "container": "{step.topology.window}", "pane_count": "{step.topology.panes}"}
+        },
+        "reverse_lookup": {
+          "steps": [
+            {
+              "store": "panes",
+              "argv": ["list-panes", "-a", "-F", "#{{pane_id}}\t#{{session_id}}\t#{{session_name}}\t#{{window_id}}\t#{{pane_current_command}}\t#{{pane_dead}}\t#{{@kander_session}}\t#{{@onevoke_session}}"],
+              "fields": {"visible": "regex:(\\S)"},
+              "expect": "!field_missing:step.panes.visible",
+              "messages": {
+                "exit": {"or": ["{error}", {"id": "liveness.empty_output"}]},
+                "invalid": {"or": ["{error}", {"id": "liveness.empty_output"}]}
+              }
+            }
+          ],
+          "rows": {
+            "from": "panes",
+            "fields": {
+              "shape": "regex:^([^\\t\\x00]*(?:\\t[^\\t\\x00]*){6,7})$",
+              "pane": "regex:^([^:\\s]+)\\t",
+              "session_id": "regex:^[^\\t]*\\t([^:\\s]+)\\t",
+              "session_name": "regex:^(?:[^\\t]*\\t){2}([^\\t]+)\\t",
+              "window": "regex:^(?:[^\\t]*\\t){3}([^:\\s]+)\\t",
+              "command": "regex:^(?:[^\\t]*\\t){4}([^\\t]+)\\t",
+              "dead": "regex:^(?:[^\\t]*\\t){5}([01])\\t",
+              "kander": "regex:^(?:[^\\t]*\\t){6}([^\\t]*)\\t[^\\t]*$",
+              "onevoke": "regex:\\t([^\\t]*)$"
+            },
+            "expect": [[
+              "!field_missing:row.shape", "!field_missing:row.pane", "!field_missing:row.session_id",
+              "!field_missing:row.session_name", "!field_missing:row.window", "!field_missing:row.command", "!field_missing:row.dead"
+            ]],
+            "match": [
+              ["!field_missing:reference", "field:row.kander={reference}", "field:row.dead=0", "field:row.command={process_name}"],
+              ["!field_missing:reference", "field:row.onevoke={reference}", "field:row.dead=0", "field:row.command={process_name}"]
+            ],
+            "result": {"session": "{row.session_name}", "container": "{row.window}", "pane": "{row.pane}"},
+            "messages": {
+              "invalid": {"id": "liveness.tmux_session_lookup_returned_invalid_output"},
+              "none": {"id": "liveness.tmux_session_lookup_found_no_match_0_panes", "args": ["{reference}"]},
+              "ambiguous": {"id": "liveness.tmux_session_lookup_is_ambiguous_panes", "args": ["{reference}", "{count}"]}
+            }
+          }
+        }
+      }
+    }
+  },
+  "ops": {
+    "create_container": {
+      "steps": [
+        {
+          "store": "window",
+          "argv": ["new-window", "-d", "-P", "-F", "#{{window_id}}\t#{{pane_id}}", "-t", "{session}:", "-c", "{cwd}", "-n", "{label}"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^(.*?)[\\r\\n]*$"},
+          "fields": {
+            "container": "regex:^([^\\t]+)\\t[^\\t]+$",
+            "pane": "regex:^[^\\t]+\\t([^\\t]+)$"
+          },
+          "expect": [["!field_missing:step.window.container", "!field_missing:step.window.pane"]],
+          "messages": {
+            "exec": {"id": "launch.tmux_failed", "args": ["new-window", "{detail}"]},
+            "exit": {"id": "launch.tmux_failed", "args": ["new-window", "{detail}"]},
+            "invalid": {"id": "launch.tmux_launch_failed_window_pane_id_was_not_returned"}
+          }
+        }
+      ],
+      "result": {"session": "{session}", "container": "{step.window.container}", "pane": "{step.window.pane}"}
+    },
+    "run_command": {
+      "steps": [
+        {
+          "when": "field:posix=true",
+          "argv": ["respawn-pane", "-k", "-t", "{pane}", "exec {command}"],
+          "messages": {
+            "exec": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]},
+            "exit": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]}
+          }
+        },
+        {
+          "when": "!field:posix=true",
+          "argv": ["respawn-pane", "-k", "-t", "{pane}", "{command}"],
+          "messages": {
+            "exec": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]},
+            "exit": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]}
+          }
+        }
+      ]
+    },
+    "set_session_marker": {
+      "steps": [
+        {
+          "when": "field_missing:value",
+          "argv": ["set-option", "-p", "-u", "-t", "{pane}", "@kander_session"],
+          "messages": {
+            "exec": {"id": "launch.tmux_failed_to_record_the_pane_session", "args": ["{detail}"]},
+            "exit": {"id": "launch.tmux_failed_to_record_the_pane_session", "args": ["{detail}"]}
+          }
+        },
+        {
+          "when": "!field_missing:value",
+          "argv": ["set-option", "-p", "-t", "{pane}", "@kander_session", "{value}"],
+          "messages": {
+            "exec": {"id": "launch.tmux_failed_to_record_the_pane_session", "args": ["{detail}"]},
+            "exit": {"id": "launch.tmux_failed_to_record_the_pane_session", "args": ["{detail}"]}
+          }
+        }
+      ]
+    },
+    "pane_facts": {
+      "steps": [
+        {
+          "store": "pane",
+          "argv": ["display-message", "-p", "-t", "{pane}", "#{{pane_current_command}}\t#{{pane_in_mode}}\t#{{pane_dead}}"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+          "fields": {
+            "shape": "regex:^([^\\t]*\\t[^\\t]*\\t[^\\t]*)$",
+            "command": "regex:^([^\\t]*)\\t[^\\t]*\\t[^\\t]*$",
+            "in_mode": "regex:^[^\\t]*\\t([^\\t]*)\\t[^\\t]*$",
+            "dead": "regex:^[^\\t]*\\t[^\\t]*\\t([^\\t]*)$"
+          },
+          "gone_when": "field_missing:step.pane.text",
+          "expect": "!field_missing:step.pane.shape",
+          "messages": {
+            "gone": {"id": "terminal.target_answered_empty"},
+            "exit": {"id": "launch.tmux_pane_does_not_exist", "args": ["{pane}", "{detail}"]},
+            "invalid": {"id": "launch.tmux_pane_probe_returned_an_invalid_response"}
+          }
+        },
+        {
+          "store": "marker",
+          "argv": ["show-options", "-p", "-v", "-t", "{pane}", "@kander_session"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+          "on_error": "meta_missing",
+          "stop_on_success": true,
+          "messages": {"exit": {"id": "probe.failed_to_probe_the_tmux_pane", "args": ["{detail}"]}}
+        },
+        {
+          "store": "marker",
+          "argv": ["show-options", "-p", "-v", "-t", "{pane}", "@onevoke_session"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+          "on_error": "meta_missing",
+          "messages": {"exit": {"id": "probe.failed_to_probe_the_tmux_pane", "args": ["{detail}"]}}
+        }
+      ],
+      "result": {
+        "command": "{step.pane.command}",
+        "in_mode": "{step.pane.in_mode}",
+        "dead": "{step.pane.dead}",
+        "session_marker": "{step.marker.text}"
+      }
+    },
+    "read_output": {
+      "steps": [
+        {
+          "store": "output",
+          "argv": ["capture-pane", "-p", "-t", "{pane}"],
+          "messages": {"exit": {"id": "launch.tmux_failed", "args": ["capture-pane", "{detail}"]}}
+        }
+      ],
+      "result": {"text": "{step.output.text}"}
+    },
+    "deliver_text": {
+      "steps": [
+        {
+          "argv": ["send-keys", "-t", "{pane}", "-l", "{text}"],
+          "messages": {
+            "exec": {"id": "launch.tmux_send_keys_failed", "args": ["{detail}"]},
+            "exit": {"id": "launch.tmux_send_keys_failed", "args": ["{detail}"]}
+          }
+        },
+        {
+          "argv": ["send-keys", "-t", "{pane}", "Enter"],
+          "messages": {
+            "exec": {"id": "launch.tmux_send_keys_failed", "args": ["{detail}"]},
+            "exit": {"id": "launch.tmux_send_keys_failed", "args": ["{detail}"]}
+          }
+        }
+      ]
+    },
+    "topology": {
+      "steps": [
+        {
+          "store": "topology",
+          "argv": ["display-message", "-p", "-t", "{pane}", "#{{session_id}}\t#{{session_name}}\t#{{window_id}}\t#{{window_panes}}"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+          "fields": {
+            "shape": "regex:^([^\\t]*(?:\\t[^\\t]*){3})$",
+            "session_id": "regex:^([^\\t]*)\\t[^\\t]*\\t[^\\t]*\\t[^\\t]*$",
+            "window": "regex:^[^\\t]*\\t[^\\t]*\\t([^\\t]*)\\t[^\\t]*$",
+            "panes": "regex:^[^\\t]*\\t[^\\t]*\\t[^\\t]*\\t([^\\t]*)$"
+          },
+          "expect": "!field_missing:step.topology.shape",
+          "messages": {
+            "exit": {"id": "probe.failed_to_probe_the_tmux_pane_container", "args": ["{detail}"]},
+            "invalid": {"id": "probe.tmux_pane_container_probe_returned_an_invalid_response"}
+          }
+        }
+      ],
+      "result": {"session": "{step.topology.session_id}", "container": "{step.topology.window}", "pane_count": "{step.topology.panes}"}
+    },
+    "container_exists": {
+      "steps": [
+        {
+          "store": "window",
+          "argv": ["display-message", "-p", "-t", "{container}", "#{{window_id}}"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"},
+          "gone_when": "field_missing:step.window.text",
+          "expect": "field:step.window.text={container}",
+          "messages": {
+            "gone": {"id": "terminal.target_answered_empty"},
+            "exit": {"id": "takeover.failed_to_probe_the_tmux_window", "args": ["{detail}"]},
+            "invalid": {"id": "takeover.tmux_window_probe_returned_an_invalid_response", "args": [{"or": ["{output}", "N/A"]}]}
+          }
+        }
+      ]
+    },
+    "reverse_lookup": {
+      "steps": [
+        {
+          "store": "panes",
+          "argv": ["list-panes", "-a", "-F", "#{{pane_id}}\t#{{session_id}}\t#{{session_name}}\t#{{window_id}}\t#{{pane_current_command}}\t#{{pane_dead}}\t#{{@kander_session}}\t#{{@onevoke_session}}"],
+          "fields": {"visible": "regex:(\\S)"},
+          "expect": "!field_missing:step.panes.visible",
+          "messages": {
+            "exit": {"or": ["{error}", {"id": "liveness.empty_output"}]},
+            "invalid": {"or": ["{error}", {"id": "liveness.empty_output"}]}
+          }
+        }
+      ],
+      "rows": {
+        "from": "panes",
+        "fields": {
+          "shape": "regex:^([^\\t\\x00]*(?:\\t[^\\t\\x00]*){6,7})$",
+          "pane": "regex:^([^:\\s]+)\\t",
+          "session_id": "regex:^[^\\t]*\\t([^:\\s]+)\\t",
+          "session_name": "regex:^(?:[^\\t]*\\t){2}([^\\t]+)\\t",
+          "window": "regex:^(?:[^\\t]*\\t){3}([^:\\s]+)\\t",
+          "command": "regex:^(?:[^\\t]*\\t){4}([^\\t]+)\\t",
+          "dead": "regex:^(?:[^\\t]*\\t){5}([01])\\t",
+          "kander": "regex:^(?:[^\\t]*\\t){6}([^\\t]*)\\t[^\\t]*$",
+          "onevoke": "regex:\\t([^\\t]*)$"
+        },
+        "expect": [[
+          "!field_missing:row.shape", "!field_missing:row.pane", "!field_missing:row.session_id",
+          "!field_missing:row.session_name", "!field_missing:row.window", "!field_missing:row.command", "!field_missing:row.dead"
+        ]],
+        "match": [
+          ["!field_missing:reference", "field:row.kander={reference}", "field:row.dead=0", "field:row.command={process_name}"],
+          ["!field_missing:reference", "field:row.onevoke={reference}", "field:row.dead=0", "field:row.command={process_name}"]
+        ],
+        "result": {"session": "{row.session_id}", "container": "{row.window}", "pane": "{row.pane}"},
+        "messages": {
+          "invalid": {"id": "liveness.tmux_session_lookup_returned_invalid_output"},
+          "none": {"id": "liveness.tmux_session_lookup_found_no_match_0_panes", "args": ["{reference}"]},
+          "ambiguous": {"id": "liveness.tmux_session_lookup_is_ambiguous_panes", "args": ["{reference}", "{count}"]}
+        }
+      }
+    },
+    "focus": {
+      "unavailable": [
+        {"when": "field_missing:env.TMUX", "message": {"id": "focus.outside_tmux"}}
+      ],
+      "closed_when": "field:facts.dead=1",
+      "steps": [
+        {"argv": ["select-window", "-t", "{session}:{container}"]},
+        {"argv": ["select-pane", "-t", "{pane}"]},
+        {"argv": ["switch-client", "-t", "{session}"]}
+      ]
+    },
+    "close_container": {
+      "steps": [
+        {
+          "when": "!field_missing:container",
+          "argv": ["kill-window", "-t", "{container}"],
+          "messages": {
+            "exec": {"id": "launch.failed_to_close_tmux_window", "args": ["{detail}"]},
+            "exit": {"id": "launch.failed_to_close_tmux_window", "args": ["{detail}"]}
+          }
+        }
+      ]
+    }
+  }
+}

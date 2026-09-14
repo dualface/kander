@@ -49,6 +49,8 @@ Creating entries, querying, and moving between states use only `kander`; replaci
 kander config [--json]
 kander install
 kander doctor
+kander terminal list
+kander terminal test <name> [--keep] [--skip-focus]
 kander init [--maintenance] [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] <task-id>
@@ -56,9 +58,9 @@ kander new [--large] [--language <agent language>] <feature|bug|chore|research> 
 kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent>] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
-kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] [task-id]
-kander orchestrate [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message TEXT | --message-file FILE) <task-id|task-group-id>...
-kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher ...] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
+kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
+kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--message TEXT | --message-file FILE) <task-id|task-group-id>...
+kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--launcher <launcher>] [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --message-file FILE) [--dispatch-id <id>] [--kind fix|sync|wrap-up] [--base <full-SHA>] [--evidence-file <JSON>] <task-id>
 kander dispatch prepare <absolute-UTF8-intent.json>
 kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
@@ -71,6 +73,8 @@ kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-i
 kander coordinator show|claim|reconcile ...       # see "Coordinator Checkpoints"
 kander review ...                                 # single review entry: KANDER-BASE-RULES.md and "Review Evidence Completion Gate"
 ```
+
+`<launcher>` for `start` and `resume` is a built-in launcher name (`auto`, `tmux`, `tmux-session`, `herdr`, `foreground`, `console`) or a launcher provided by a loaded terminal definition (see "Launchers").
 
 `kander config --json` prints the merged effective configuration. Without `--json` it prints the same summary, and when a project `.kander-config.json` exists it adds one line with that file's absolute path. `kander show` prints the current state and absolute path before the card body, so the card can be relocated before writing; `kander move` prints the new path after a successful move. `kander show --json` returns the committed `text`, `revision`, `operation_id` and `entry` location. `kander guard-write` is an advisory pre-write check: it exits 0 to allow and non-zero to reject, but the check and an external write are not atomic. It does not cover arbitrary shell commands, external tools, or internal writes. Agents must use `update` for card edits.
 
@@ -260,8 +264,8 @@ An explicit `--pane` override does no stale-address reverse lookup.
 
 **Launchers**
 
-- Six launchers: `auto` is resolved at start time and the result is not written back to the configuration.
-- auto selection order: when inside herdr (`HERDR_ENV=1`), start with `herdr`; otherwise when inside tmux, start with `tmux`; when inside both, herdr wins; when inside neither, fail without claiming, and do not fall back to `tmux-session`, `foreground`, or `console`.
+- Six built-in launchers, plus the launchers provided by loaded terminal definitions (JSON files in the global or project share directory `terminals/`; the project copy replaces the global one, which replaces an embedded one of the same name). `auto` is resolved at start time and the result is not written back to the configuration.
+- auto resolves only among container launchers and never falls back to `foreground` or `console`: it takes the launcher with the highest `auto_priority` among the definition launchers that run inside an existing session and whose required environment for auto holds. The built-in values: `herdr` has priority 200 and needs `HERDR_ENV=1` (its `HERDR_WORKSPACE_ID` stays a precondition checked when preparing the launch and is excluded from auto); `tmux` has priority 100 and needs `TMUX` (its `TMUX_PANE` is checked when preparing the launch). So inside both herdr and tmux, herdr wins unless a loaded definition declares a higher priority; when none applies, fail without claiming, and do not fall back to `tmux-session`, `foreground`, or `console`.
 - `tmux` creates the task window in the background of the starter's current session and requires `start` itself to run inside tmux.
 - `tmux-session` determines a dedicated session by the main worktree path (`kb-<dir-name>-<path-digest>`):
   - Create it when absent; reuse it when it exists and `@kander_project` or `@onevoke_project` matches this project.
@@ -516,7 +520,7 @@ any state except trash -> trash                       only on explicit user requ
 
 ```sh
 # Delegate to a new executing agent: start claims and launches atomically
-kander start [--agent <configured-agent>] [--launcher auto|tmux|tmux-session|herdr|foreground|console] <task-id>
+kander start [--agent <configured-agent>] [--launcher <launcher>] <task-id>
 
 # The user explicitly asks the current agent to execute an existing card: claim and record ownership atomically
 kander move <task-id> working --owner <agent>
@@ -539,9 +543,8 @@ kander move <task-id> working --owner <agent>
 **Start Checks and Rollback**
 
 - `start` checks the agent, launcher, and TTY before launching.
-- `auto` resolves only to `herdr` or `tmux` per "Launchers"; before launching, the preconditions of the actual launcher are checked:
-  - `tmux`: already inside a tmux session.
-  - `tmux-session`: tmux available; the project session name is chosen at start.
+- `auto` resolves only among container launchers per "Launchers"; before launching, the preconditions of the actual launcher are checked:
+  - A launcher provided by a terminal definition: the `requires` of its definition (platform, required environment variables and its program on PATH, in the order the definition declares); whether it must run inside an existing session only decides whether `auto` may select it. For example, the built-in `tmux` requires `TMUX` and `TMUX_PANE` (already inside a tmux session); `tmux-session` requires tmux available, and the project session name is chosen at start.
   - `herdr`: `HERDR_ENV=1`, herdr on PATH, and `HERDR_WORKSPACE_ID` present.
   - `foreground`: all three standard streams are TTYs.
   - `console`: native Windows.
@@ -557,7 +560,7 @@ kander move <task-id> working --owner <agent>
 - foreground/console count as started once the process is created; a later exit does not roll back automatically.
 - On success, `console` prints the PID and returns immediately.
 - On success, print the actual launcher.
-- `auto` must show the resolution result (`herdr` or `tmux`).
+- `auto` must show the resolved launcher.
 
 - herdr counts as started once `pane run` succeeds; the subsequent session identity report and read-back are best-effort, failures only warn and do not enter the `LaunchFailure` tab close and card rollback path.
 - When `prompt_delivery.mode` is `pane`, herdr counts as started once `pane run` succeeds and prompt delivery succeeds.

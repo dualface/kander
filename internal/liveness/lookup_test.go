@@ -10,7 +10,17 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/terminal"
 )
+
+func backendFor(t *testing.T, name string) terminal.Backend {
+	t.Helper()
+	backend, ok := terminal.Lookup(name)
+	if !ok {
+		t.Fatalf("backend %q is not registered", name)
+	}
+	return backend
+}
 
 func TestReverseLookupOutcomes(t *testing.T) {
 	const herdrMatch = `{"pane_id":"w9:p9","tab_id":"w9:t9","agent":"codex","agent_session":{"value":"wanted"}}`
@@ -49,13 +59,13 @@ func TestReverseLookupOutcomes(t *testing.T) {
 				t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p1")
 				t.Setenv("KANBAN_HERDR_SESSION", "wanted")
 				t.Setenv("KANBAN_HERDR_LIST_JSON", test.output)
-				_, _, lookupErr = HerdrReverseLookup("herdr", session)
+				_, lookupErr = ReverseLookup(context.Background(), backendFor(t, "herdr"), "herdr", session)
 			} else {
 				t.Setenv("KANBAN_TMUX_STALE_PANE", "%1")
 				t.Setenv("KANBAN_TMUX_LIST_PANES", test.output)
-				_, lookupErr = TmuxReverseLookup("tmux", session)
+				_, lookupErr = ReverseLookup(context.Background(), backendFor(t, "tmux"), "tmux", session)
 			}
-			var matchErr *lookupMatchError
+			var matchErr *terminal.MatchError
 			switch test.matches {
 			case 1:
 				if lookupErr != nil {
@@ -66,7 +76,7 @@ func TestReverseLookupOutcomes(t *testing.T) {
 					t.Fatalf("invalid output is a collection failure: %v", lookupErr)
 				}
 			default:
-				if !errors.As(lookupErr, &matchErr) || matchErr.matches != test.matches {
+				if !errors.As(lookupErr, &matchErr) || matchErr.Matches != test.matches {
 					t.Fatalf("matches=%d error=%v", test.matches, lookupErr)
 				}
 			}
@@ -127,7 +137,7 @@ func TestReverseLookupTimeoutIsUnknown(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 			defer cancel()
-			report := staleReport(ctx, board.Entry{TaskID: "timeout"}, TaskSession{Agent: "codex", Reference: "wanted"}, channel, "old", "old pane gone", channel, channel, true)
+			report := staleReport(ctx, board.Entry{TaskID: "timeout"}, TaskSession{Agent: "codex", Reference: "wanted"}, channel, "old", "old pane gone", channel, backendFor(t, channel), true)
 			if report.Status != Unknown || report.NewWindow != "" || !strings.Contains(report.Detail, "context deadline exceeded") || !strings.Contains(report.Detail, "old pane gone") || !strings.Contains(report.Detail, "反查:") {
 				t.Fatalf("report=%+v", report)
 			}

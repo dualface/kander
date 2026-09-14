@@ -1,7 +1,7 @@
 // Package cli registers every kander subcommand, parses the global --lang, and dispatches to the implementation packages.
 //
-// The command table in this file is registered once. Later implementation cards only override their Runner;
-// they must not edit the command name list or main.go just to wire themselves in.
+// New commands extend this table; implementation packages bind their Runner.
+// The binary main.go remains a single call to Run.
 package cli
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/internal/terminalcheck"
 	"github.com/dualface/kander/internal/version"
 )
 
@@ -27,6 +28,7 @@ var commandNames = []string{
 	"review",
 	"init",
 	"issue",
+	"terminal",
 	"list",
 	"show",
 	"new",
@@ -64,6 +66,7 @@ func init() {
 	Commands["config"] = menu.Config
 	Commands["version"] = runVersion
 	Commands["install"] = install.Run
+	Commands["terminal"] = terminalcheck.Run
 }
 
 func runVersion(args []string) int {

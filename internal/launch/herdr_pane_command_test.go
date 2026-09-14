@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 // fakeHerdrLaunchSource answers only the three subcommands launchAgent uses and
@@ -80,7 +81,7 @@ func TestLaunchAgentSendsShellSpecificCommandToHerdr(t *testing.T) {
 	t.Setenv("FAKE_HERDR_RUN_LOG", log)
 	t.Cleanup(func() { runtimeWindows = func() bool { return isWindowsGOOS() } })
 
-	plan := LaunchPlan{Launcher: "herdr", HerdrBin: binary, HerdrWorkspace: "w1"}
+	plan := LaunchPlan{Launcher: "herdr", Target: terminal.Target{Program: binary, Workspace: "w1"}}
 	invocation := process.ProcessInvocation{
 		Argv:     []string{`C:\tools\cmd.exe`, "/c", "%KDR_0%"},
 		ShellEnv: map[string]string{"KDR_0": `"C:\tools\codex.cmd"`},
@@ -91,7 +92,7 @@ func TestLaunchAgentSendsShellSpecificCommandToHerdr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if outcome.Tab != "w1:t7" || outcome.Pane != "w1:p7" {
+	if outcome.Container != "w1:t7" || outcome.Pane != "w1:p7" {
 		t.Fatalf("outcome=%+v", outcome)
 	}
 	got := readRunLog(t, log)

@@ -1,6 +1,8 @@
 package launch
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func launchAgent(
@@ -22,7 +25,9 @@ func launchAgent(
 	agentSession *AgentSession,
 	durable ...bool,
 ) (LaunchOutcome, error) {
-	var createdTab, createdWindow string
+	backend := plan.backend()
+	caps := backend.Capabilities()
+	var created terminal.Address
 	sendAttempted := false
 	fail := func(err error) error {
 		// Pane delivery fails before the prompt is sent (blocked or ready
@@ -32,15 +37,15 @@ func launchAgent(
 			return &LaunchFailure{Err: err, DeliveryUnknown: true}
 		}
 		var closeErr string
-		if createdTab != "" {
-			closeErr = herdrCloseTab(plan.HerdrBin, createdTab)
-		} else if plan.Tmux != "" {
-			closeErr = tmuxCloseWindow(plan.Tmux, createdWindow)
+		if created.Container != "" {
+			if err := backend.CloseContainer(context.Background(), boundedSpawnConn(plan), created); err != nil {
+				closeErr = err.Error()
+			}
 		}
 		return &LaunchFailure{Err: err, CloseError: closeErr}
 	}
-	if plan.Launcher == "foreground" || plan.Launcher == "console" {
-		handle, err := startProcessFn(invocation.Argv, invocation.Env, filepath.Dir(root), plan.Launcher == "console")
+	if !caps.Container {
+		handle, err := startProcessFn(invocation.Argv, invocation.Env, filepath.Dir(root), caps.Detached)
 		if err != nil {
 			return LaunchOutcome{}, fail(launchError("launch.failed_to_start_agent", err.Error()))
 		}
@@ -55,78 +60,23 @@ func launchAgent(
 	if paneDelivery {
 		locateNow = nil
 	}
-	if plan.Launcher == "herdr" {
-		tab, pane, err := herdrCreateTab(plan.HerdrBin, plan.HerdrWorkspace, filepath.Dir(root), name)
-		if err != nil {
-			return LaunchOutcome{}, fail(err)
-		}
-		createdTab = tab
-		if err := herdrWaitPaneReady(plan.HerdrBin, pane); err != nil {
-			return LaunchOutcome{}, fail(err)
-		}
-		outcome := LaunchOutcome{Tab: tab, Pane: pane}
-		if locateNow != nil {
-			if err := locateNow(outcome); err != nil {
-				return LaunchOutcome{}, fail(err)
-			}
-		}
-		sendAttempted = true
-		if err := herdrPaneRun(plan.HerdrBin, pane, command); err != nil {
-			return LaunchOutcome{}, fail(err)
-		}
-		if paneDelivery {
-			if err := completePaneDelivery(plan, outcome); err != nil {
-				return LaunchOutcome{}, fail(err)
-			}
-			if location != nil {
-				if err := location(outcome); err != nil {
-					return LaunchOutcome{}, fail(err)
-				}
-			}
-		}
-		if agentSession != nil {
-			warn := plan.warning
-			if warn == nil {
-				warn = func(message string) { fmt.Fprint(os.Stderr, message) }
-			}
-			reportHerdrAgentSession(plan.HerdrBin, pane, *agentSession, warn)
-		}
-		return outcome, nil
+	conn := spawnConn(plan)
+	address, err := backend.CreateContainer(conn, plan.Target, filepath.Dir(root), name)
+	if err != nil {
+		return LaunchOutcome{}, fail(err)
 	}
-	create := plan.Launcher == "tmux-session" && !plan.SessionExists
-	result := tmuxLaunch(plan.Tmux, plan.Session, create, filepath.Dir(root), name)
-	if create && result.Code != 0 {
-		owner, exists := sessionOwner(plan.Tmux, plan.Session)
-		if exists && (owner == "" || owner == plan.Project) {
-			create = false
-			result = tmuxLaunch(plan.Tmux, plan.Session, false, filepath.Dir(root), name)
-		}
+	created = address
+	if err := backend.WaitReady(conn, address.Pane); err != nil {
+		return LaunchOutcome{}, fail(err)
 	}
-	if result.Code != 0 {
-		sub := "new-window"
-		if create {
-			sub = "new-session"
-		}
-		detail := orExit(trimNL(result.Stderr), result.Code)
-		return LaunchOutcome{}, fail(launchError("launch.tmux_failed", sub, detail))
-	}
-	locationParts := splitTab(trimNL(result.Stdout))
-	if len(locationParts) != 2 || locationParts[0] == "" || locationParts[1] == "" {
-		return LaunchOutcome{}, fail(launchError("launch.tmux_launch_failed_window_pane_id_was_not_returned"))
-	}
-	window, pane := locationParts[0], locationParts[1]
-	createdWindow = window
-	if create {
-		_ = tmuxCapture(plan.Tmux, "set-option", "-t", plan.Session, projectSessionOpt, plan.Project)
-	}
-	outcome := LaunchOutcome{Window: window, Pane: pane}
+	outcome := LaunchOutcome{Container: address.Container, Pane: address.Pane}
 	if locateNow != nil {
 		if err := locateNow(outcome); err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
 	}
 	sendAttempted = true
-	if err := tmuxStartPane(plan.Tmux, pane, command); err != nil {
+	if err := backend.RunCommand(conn, address.Pane, command, !runtimeWindows()); err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
 	if paneDelivery {
@@ -139,16 +89,58 @@ func launchAgent(
 			}
 		}
 	}
-	if paneSession != nil {
+	if caps.SessionReport && agentSession != nil {
+		warn := plan.warning
+		if warn == nil {
+			warn = func(message string) { fmt.Fprint(os.Stderr, message) }
+		}
+		reportAgentSession(plan, address.Pane, *agentSession, warn)
+	}
+	if caps.PaneMetadata && paneSession != nil {
 		sess, err := paneSession()
 		if err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
-		if err := tmuxSetPaneSession(plan.Tmux, pane, sess.Reference); err != nil {
+		if err := backend.SetSessionMarker(conn, address.Pane, sess.Reference); err != nil {
 			return LaunchOutcome{}, fail(err)
 		}
 	}
 	return outcome, nil
+}
+
+// reportAgentSession reports the session identity out of band within a short
+// budget. A failure only warns: it never fails the launch or closes the pane.
+func reportAgentSession(plan LaunchPlan, pane string, session AgentSession, warn func(string)) {
+	if session.Reference == "" {
+		return
+	}
+	report := terminal.SessionReport{Conn: probeConn(plan), Pane: pane, Agent: session.Agent, Reference: session.Reference, Now: nowFn}
+	report.Deadline = nowFn().Add(sessionReportBudget)
+	var last error = launchError("launch.herdr_session_identity_report_budget_exhausted")
+	for nowFn().Before(report.Deadline) {
+		err := plan.backend().ReportSession(report)
+		if errors.Is(err, terminal.ErrNoReportChannel) {
+			warn(t(
+				"launch.warning_failed_to_report_the_herdr_session_identity_herdr",
+			))
+			return
+		}
+		if err == nil {
+			return
+		}
+		last = err
+		remaining := report.Deadline.Sub(nowFn())
+		if remaining > 0 {
+			d := notifyPollInterval
+			if remaining < d {
+				d = remaining
+			}
+			sleepFn(d)
+		}
+	}
+	warn(t(
+		"launch.warning_failed_to_report_the_herdr_session_identity", last.Error(),
+	))
 }
 
 func trimNL(s string) string {
@@ -156,21 +148,6 @@ func trimNL(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
-}
-
-func splitTab(s string) []string {
-	out := []string{}
-	cur := ""
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\t' {
-			out = append(out, cur)
-			cur = ""
-			continue
-		}
-		cur += string(s[i])
-	}
-	out = append(out, cur)
-	return out
 }
 
 func rollbackLaunch(root string, moved board.Entry, originalState string, failure *LaunchFailure, originalText *string) error {
@@ -217,8 +194,9 @@ func reportLaunch(verb string, entry board.Entry, agentName string, plan LaunchP
 	head := t(
 		"launch.scale_agent", verb, entry.TaskID, scale, agentName,
 	)
-	switch plan.Launcher {
-	case "foreground":
+	caps := plan.capabilities()
+	switch {
+	case !caps.Container && !caps.Detached:
 		fmt.Println(t("launch.launcher_foreground", head))
 		code, err := outcome.Wait()
 		if err != nil {
@@ -230,7 +208,7 @@ func reportLaunch(verb string, entry board.Entry, agentName string, plan LaunchP
 			)
 		}
 		return nil
-	case "console":
+	case caps.Detached:
 		pid := 0
 		if outcome.Process != nil {
 			pid = outcome.Process.Pid
@@ -239,25 +217,10 @@ func reportLaunch(verb string, entry board.Entry, agentName string, plan LaunchP
 			"launch.launcher_console_pid", head, itoa(pid),
 		))
 		return nil
-	case "herdr":
-		fmt.Println(t(
-			"launch.launcher_herdr_tab_pane", head, outcome.Tab, outcome.Pane,
-		))
-		return nil
-	case "tmux-session":
-		fmt.Println(t(
-			"launch.session_window", head, plan.Session, outcome.Window,
-		))
-		hint := "tmux attach -t " + plan.Session
-		if os.Getenv("TMUX") != "" {
-			hint = "tmux switch-client -t " + plan.Session
-		}
-		fmt.Println(t("launch.view", hint))
-		return nil
 	default:
-		fmt.Println(t(
-			"launch.launcher_tmux_window", head, outcome.Window,
-		))
+		for _, line := range plan.backend().StartedLines(head, plan.Target, plan.address(outcome), os.Getenv) {
+			fmt.Println(line)
+		}
 		return nil
 	}
 }
@@ -297,7 +260,7 @@ func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session
 				return nil
 			}
 		}
-		if plan.Launcher == "foreground" || plan.Launcher == "console" {
+		if !plan.capabilities().Container {
 			if outcome.Poll != nil {
 				if code := outcome.Poll(); code != nil {
 					return launchError(
@@ -321,19 +284,20 @@ func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session
 			return launchError("launch.resumed_agent_liveness_check_timed_out")
 		}
 		ok := false
-		if plan.Launcher == "herdr" {
-			pane, err := probe.HerdrProbePane(plan.HerdrBin, outcome.Pane, remaining)
-			if err == nil {
-				ref := herdrSessionReference(pane)
-				agent, _ := pane["agent"].(string)
-				status, _ := pane["agent_status"].(string)
-				if agent == session.Agent &&
+		if plan.capabilities().AgentIdentity {
+			ctx, cancel := probe.TimeoutContext(remaining)
+			pane, err := plan.backend().PaneFacts(ctx, probeConn(plan), outcome.Pane)
+			cancel()
+			if err == nil && !pane.Gone {
+				ref := pane.AgentSession
+				status := pane.AgentStatus
+				if pane.Agent == session.Agent &&
 					(session.Reference == "" || ref == "" || ref == session.Reference) &&
 					(status == "idle" || status == "working" || status == "blocked") {
 					ok = true
 				}
 			}
-		} else if tmuxNotifyTarget(plan.Tmux, outcome.Pane, session, remaining) == nil {
+		} else if processNotifyTarget(plan, outcome.Pane, session, remaining) == nil {
 			ok = true
 		}
 		if ok {
@@ -352,19 +316,14 @@ func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session
 }
 
 func resumedAgentFailureOutput(plan LaunchPlan, outcome LaunchOutcome) string {
-	var res cmdResult
-	var err error
-	if plan.Launcher == "herdr" && outcome.Pane != "" {
-		res, err = herdrCapture(plan.HerdrBin, []string{"pane", "read", outcome.Pane}, probe.DefaultCommandTimeout)
-	} else if (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") && outcome.Pane != "" {
-		res, err = runCaptured(plan.Tmux, []string{"capture-pane", "-p", "-t", outcome.Pane}, probe.DefaultCommandTimeout)
-	} else {
+	if !plan.capabilities().Container || outcome.Pane == "" {
 		return ""
 	}
-	if err != nil || res.Code != 0 {
+	output, err := plan.backend().ReadOutput(context.Background(), boundedSpawnConn(plan), outcome.Pane)
+	if err != nil {
 		return ""
 	}
-	output := trimNL(res.Stdout)
+	output = trimNL(output)
 	if len(output) > resumeOutputLimit {
 		output = output[len(output)-resumeOutputLimit:]
 	}
@@ -373,10 +332,12 @@ func resumedAgentFailureOutput(plan LaunchPlan, outcome LaunchOutcome) string {
 
 func cleanupFailedResume(plan LaunchPlan, outcome LaunchOutcome) error {
 	var cleanup string
-	if plan.Launcher == "herdr" && outcome.Tab != "" {
-		cleanup = herdrCloseTab(plan.HerdrBin, outcome.Tab)
-	} else if (plan.Launcher == "tmux" || plan.Launcher == "tmux-session") && outcome.Window != "" {
-		cleanup = tmuxCloseWindow(plan.Tmux, outcome.Window)
+	if plan.capabilities().Container {
+		if outcome.Container != "" {
+			if err := plan.backend().CloseContainer(context.Background(), boundedSpawnConn(plan), plan.address(outcome)); err != nil {
+				cleanup = err.Error()
+			}
+		}
 	} else if outcome.Process != nil && outcome.Poll != nil && outcome.Poll() == nil {
 		_ = terminateProcess(outcome.Process)
 		waited := make(chan struct{})

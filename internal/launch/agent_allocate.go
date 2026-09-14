@@ -8,6 +8,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal/direct"
 )
 
 func allocateAgentSession(definition *config.AgentSessionDefinition) (string, error) {
@@ -15,7 +16,7 @@ func allocateAgentSession(definition *config.AgentSessionDefinition) (string, er
 	if program == nil {
 		return "", launchError("launch.agent_is_not_in_path", definition.Allocate[0])
 	}
-	inv, err := launchInvocation(LaunchPlan{Launcher: "foreground"}, *program, definition.Allocate[1:])
+	inv, err := launchInvocation(LaunchPlan{Launcher: direct.Foreground}, *program, definition.Allocate[1:])
 	if err != nil {
 		return "", err
 	}

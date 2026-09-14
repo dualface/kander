@@ -115,13 +115,20 @@ func waitHelper(t *testing.T, dir, mode string) {
 	t.Fatalf("helper %s did not become ready", mode)
 }
 
+// captureWithin bounds one capture by timeout, as probes without a caller context do.
+func captureWithin(program string, args []string, timeout time.Duration) (Result, error) {
+	ctx, cancel := TimeoutContext(timeout)
+	defer cancel()
+	return CaptureContext(ctx, program, args)
+}
+
 func TestAuditDescendantOutputOutlivesProbeDeadline(t *testing.T) {
 	configureProbeHelpers(t)
 	// Invert the original audit: a five-second descendant must not hold a
 	// 300ms probe open after its parent is killed at the deadline.
 	dir := t.TempDir()
 	started := time.Now()
-	result, err := Capture(os.Args[0], helperArgs("parent", dir), 300*time.Millisecond)
+	result, err := captureWithin(os.Args[0], helperArgs("parent", dir), 300*time.Millisecond)
 	elapsed := time.Since(started)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("result=%+v err=%v", result, err)
@@ -169,7 +176,7 @@ func TestCaptureCleansDescendantsAfterParentExits(t *testing.T) {
 	configureProbeHelpers(t)
 	dir := t.TempDir()
 	started := time.Now()
-	_, err := Capture(os.Args[0], helperArgs("parent-exit", dir), 2*time.Second)
+	_, err := captureWithin(os.Args[0], helperArgs("parent-exit", dir), 2*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +188,7 @@ func TestCaptureCleansDescendantsAfterParentExits(t *testing.T) {
 
 func TestCapturePreservesOutputAndExitCode(t *testing.T) {
 	configureProbeHelpers(t)
-	result, err := Capture(os.Args[0], helperArgs("output", t.TempDir()), 3*time.Second)
+	result, err := captureWithin(os.Args[0], helperArgs("output", t.TempDir()), 3*time.Second)
 	if err != nil || result.Code != 7 || result.Stdout != strings.Repeat("out", 100000) || result.Stderr != strings.Repeat("err", 100000) {
 		t.Fatalf("code=%d stdout=%d stderr=%d err=%v", result.Code, len(result.Stdout), len(result.Stderr), err)
 	}
@@ -202,20 +209,5 @@ func TestCaptureDoesNotStartWithExpiredBudget(t *testing.T) {
 		if !errors.Is(err, want) {
 			t.Fatalf("err=%v want=%v", err, want)
 		}
-	}
-}
-
-func TestTmuxExpiredFactsDoNotStartMarkerProbe(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	calls := 0
-	withRun(t, func(ctx context.Context, program string, args []string) (Result, error) {
-		calls++
-		cancel()
-		return Result{Stdout: "codex\t0\t0\n"}, nil
-	})
-	_, err := ProbeTmuxPaneContext(ctx, "tmux", "%1")
-	if calls != 1 || !errors.Is(err, context.Canceled) {
-		t.Fatalf("calls=%d err=%v", calls, err)
 	}
 }

@@ -1,17 +1,12 @@
 package takeover
 
 import (
-	"regexp"
+	"context"
 	"strings"
 
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/notify"
-	"github.com/dualface/kander/internal/probe"
-)
-
-var (
-	herdrWindowRe = regexp.MustCompile(`^herdr:([^:\s]+:[^:\s]+):([^:\s]+:[^:\s]+)$`)
-	tmuxWindowRe  = regexp.MustCompile(`^(tmux|tmux-session):([^:\s]+):([^:\s]+):([^:\s]+)$`)
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func closed(oldWindow, channel, container string) launch.CleanupResult {
@@ -24,101 +19,100 @@ func retained(oldWindow, detail string) launch.CleanupResult {
 
 // Cleanup closes the original container under the dismiss gates once the new agent is alive after a takeover; on failure it only keeps and reports it.
 func Cleanup(oldWindow string, oldSession launch.AgentSession, newWindow string, timeout float64) launch.CleanupResult {
-	if oldWindow == "" || oldWindow == "foreground" || oldWindow == "console" {
+	if oldWindow == "" || terminal.HasCapability(oldWindow, func(c terminal.Capabilities) bool { return !c.Container }) {
 		return closed("N/A", "N/A", "N/A")
 	}
 	if oldWindow == newWindow {
 		return closed("N/A", "N/A", "N/A")
 	}
-	herdrMatch := herdrWindowRe.FindStringSubmatch(oldWindow)
-	tmuxMatch := tmuxWindowRe.FindStringSubmatch(oldWindow)
-	if herdrMatch == nil && tmuxMatch == nil {
+	backend, address, ok := terminal.ParseWindow(oldWindow)
+	if !ok {
 		return retained(oldWindow, t("takeover.old_window_metadata_is_invalid"))
 	}
-	result, err := cleanupContainer(herdrMatch, tmuxMatch, oldWindow, oldSession, timeout)
+	cleanup := cleanupProcessContainer
+	if backend.Capabilities().AgentIdentity {
+		cleanup = cleanupAgentContainer
+	}
+	result, err := cleanup(backend, address, oldWindow, oldSession, timeout)
 	if err != nil {
 		return retained(oldWindow, err.Error())
 	}
 	return result
 }
 
-func cleanupContainer(herdrMatch, tmuxMatch []string, oldWindow string, oldSession launch.AgentSession, timeout float64) (launch.CleanupResult, error) {
-	if herdrMatch != nil {
-		tabID, paneID := herdrMatch[1], herdrMatch[2]
-		herdr, err := lookPath("herdr")
-		if err != nil {
-			return launch.CleanupResult{}, takeoverError("liveness.herdr_is_not_in_path")
-		}
-		paneProbe, err := probe.ProbeHerdrPane(herdr, paneID, 0)
-		if err != nil {
-			return launch.CleanupResult{}, err
-		}
-		pane := paneProbe.Pane
-		if pane == nil {
-			panes, err := herdrTabPanes(herdr, tabID)
-			if err != nil {
-				return launch.CleanupResult{}, err
-			}
-			if len(panes) > 0 {
-				return launch.CleanupResult{}, takeoverError(
-					"takeover.the_old_pane_is_gone_but_its_tab_still", strings.Join(panes, ","),
-				)
-			}
-			if err := herdrCloseTab(herdr, tabID); err != nil {
-				return launch.CleanupResult{}, err
-			}
-			return closed(oldWindow, "herdr", tabID), nil
-		}
-		if err := ValidateHerdrContainer(herdr, tabID, paneID, pane); err != nil {
-			return launch.CleanupResult{}, err
-		}
-		actualAgent, _ := pane["agent"].(string)
-		if actualAgent != "" {
-			actualSession := herdrSessionReference(pane)
-			if actualAgent != oldSession.Agent || oldSession.Reference == "" || actualSession == "" || actualSession != oldSession.Reference {
-				return launch.CleanupResult{}, takeoverError(
-					"takeover.the_old_pane_agent_or_session_identity_does_not",
-				)
-			}
-			status, _ := pane["agent_status"].(string)
-			if status != "idle" && status != "done" {
-				return launch.CleanupResult{}, takeoverError(
-					"takeover.the_old_pane_status_cannot_be_dismissed", orNA(status),
-				)
-			}
-			command, err := AgentExitCommand(oldSession.Agent)
-			if err != nil {
-				return launch.CleanupResult{}, err
-			}
-			if err := notifyHerdrPrompt(herdr, paneID, command); err != nil {
-				return launch.CleanupResult{}, err
-			}
-			paneExists, err := herdrWaitAgentExit(herdr, tabID, paneID, oldSession, timeout)
-			if err != nil {
-				return launch.CleanupResult{}, err
-			}
-			if paneExists {
-				if err := herdrCloseTab(herdr, tabID); err != nil {
-					return launch.CleanupResult{}, err
-				}
-			}
-		} else if err := herdrCloseTab(herdr, tabID); err != nil {
-			return launch.CleanupResult{}, err
-		}
-		return closed(oldWindow, "herdr", tabID), nil
-	}
-
-	launcher, sessionID, windowID, paneID := tmuxMatch[1], tmuxMatch[2], tmuxMatch[3], tmuxMatch[4]
-	tmux, err := lookPath("tmux")
+func cleanupAgentContainer(backend terminal.Backend, address terminal.Address, oldWindow string, oldSession launch.AgentSession, timeout float64) (launch.CleanupResult, error) {
+	tabID, paneID := address.Container, address.Pane
+	program, err := lookPath(backend.Executable())
 	if err != nil {
-		return launch.CleanupResult{}, takeoverError("liveness.tmux_is_not_in_path")
+		return launch.CleanupResult{}, notInPath(backend)
 	}
-	paneProbe, err := probe.ProbeTmuxPane(tmux, paneID)
+	pane, err := paneFacts(backend, program, paneID, 0)
 	if err != nil {
 		return launch.CleanupResult{}, err
 	}
-	if paneProbe.Facts == nil {
-		exists, err := tmuxWindowExists(tmux, windowID)
+	if pane.Gone {
+		topology, err := backend.Topology(context.Background(), probeConn(program), address)
+		if err != nil {
+			return launch.CleanupResult{}, err
+		}
+		if len(topology.Panes) > 0 {
+			return launch.CleanupResult{}, takeoverError(
+				"takeover.the_old_pane_is_gone_but_its_tab_still", strings.Join(topology.Panes, ","),
+			)
+		}
+		if err := closeContainer(backend, program, address); err != nil {
+			return launch.CleanupResult{}, err
+		}
+		return closed(oldWindow, backend.Name(), tabID), nil
+	}
+	if err := validateAgentContainer(backend, program, address, pane); err != nil {
+		return launch.CleanupResult{}, err
+	}
+	if pane.Agent != "" {
+		if pane.Agent != oldSession.Agent || oldSession.Reference == "" || pane.AgentSession == "" || pane.AgentSession != oldSession.Reference {
+			return launch.CleanupResult{}, takeoverError(
+				"takeover.the_old_pane_agent_or_session_identity_does_not",
+			)
+		}
+		if pane.AgentStatus != "idle" && pane.AgentStatus != "done" {
+			return launch.CleanupResult{}, takeoverError(
+				"takeover.the_old_pane_status_cannot_be_dismissed", orNA(pane.AgentStatus),
+			)
+		}
+		command, err := AgentExitCommand(oldSession.Agent)
+		if err != nil {
+			return launch.CleanupResult{}, err
+		}
+		if err := notify.AgentPrompt(backend, program, paneID, command); err != nil {
+			return launch.CleanupResult{}, err
+		}
+		paneExists, err := agentWaitExit(backend, program, address, oldSession, timeout)
+		if err != nil {
+			return launch.CleanupResult{}, err
+		}
+		if paneExists {
+			if err := closeContainer(backend, program, address); err != nil {
+				return launch.CleanupResult{}, err
+			}
+		}
+	} else if err := closeContainer(backend, program, address); err != nil {
+		return launch.CleanupResult{}, err
+	}
+	return closed(oldWindow, backend.Name(), tabID), nil
+}
+
+func cleanupProcessContainer(backend terminal.Backend, address terminal.Address, oldWindow string, oldSession launch.AgentSession, timeout float64) (launch.CleanupResult, error) {
+	launcher, windowID, paneID := backend.Name(), address.Container, address.Pane
+	program, err := lookPath(backend.Executable())
+	if err != nil {
+		return launch.CleanupResult{}, notInPath(backend)
+	}
+	facts, err := paneFacts(backend, program, paneID, 0)
+	if err != nil {
+		return launch.CleanupResult{}, err
+	}
+	if facts.Gone {
+		exists, err := backend.ContainerExists(context.Background(), probeConn(program), address)
 		if err != nil {
 			return launch.CleanupResult{}, err
 		}
@@ -129,8 +123,7 @@ func cleanupContainer(herdrMatch, tmuxMatch []string, oldWindow string, oldSessi
 			"takeover.the_old_pane_is_gone_but_its_window_still",
 		)
 	}
-	facts := paneProbe.Facts
-	if err := ValidateTmuxContainer(tmux, paneID, launcher, sessionID, windowID); err != nil {
+	if err := validateProcessContainer(backend, program, address); err != nil {
 		return launch.CleanupResult{}, err
 	}
 	expected, err := agentCommandName(oldSession.Agent)
@@ -138,7 +131,7 @@ func cleanupContainer(herdrMatch, tmuxMatch []string, oldWindow string, oldSessi
 		return launch.CleanupResult{}, err
 	}
 	if facts.Dead == "1" {
-		if err := tmuxCloseWindow(tmux, windowID); err != nil {
+		if err := closeContainer(backend, program, address); err != nil {
 			return launch.CleanupResult{}, err
 		}
 		return closed(oldWindow, launcher, windowID), nil
@@ -155,21 +148,17 @@ func cleanupContainer(herdrMatch, tmuxMatch []string, oldWindow string, oldSessi
 	if err != nil {
 		return launch.CleanupResult{}, err
 	}
-	if err := tmuxSendAgentExit(tmux, paneID, command); err != nil {
+	if err := sendAgentExit(backend, program, paneID, command); err != nil {
 		return launch.CleanupResult{}, err
 	}
-	windowExists, err := tmuxWaitAgentExit(tmux, launcher, sessionID, windowID, paneID, oldSession, timeout)
+	windowExists, err := processWaitExit(backend, program, address, oldSession, timeout)
 	if err != nil {
 		return launch.CleanupResult{}, err
 	}
 	if windowExists {
-		if err := tmuxCloseWindow(tmux, windowID); err != nil {
+		if err := closeContainer(backend, program, address); err != nil {
 			return launch.CleanupResult{}, err
 		}
 	}
 	return closed(oldWindow, launcher, windowID), nil
-}
-
-func notifyHerdrPrompt(herdr, paneID, command string) error {
-	return notify.HerdrAgentPrompt(herdr, paneID, command)
 }

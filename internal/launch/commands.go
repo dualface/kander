@@ -176,7 +176,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	previous := map[string]struct{}{}
 	if takeover {
-		previous = sessionDiscoverSnapshot(config.AgentFor(cfg, session.Agent).Session.Mode, entry.TaskID, plan.Launcher)
+		previous = sessionDiscoverSnapshot(config.AgentFor(cfg, session.Agent).Session.Mode, entry.TaskID, plan.capabilities().PaneMetadata)
 	}
 	paths, err := currentInstallPaths()
 	if err != nil {
@@ -223,7 +223,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	moved := entry
 	effective := session
 	paneCB := (func() (AgentSession, error))(nil)
-	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+	if plan.capabilities().PaneMetadata {
 		mode := config.AgentFor(cfg, session.Agent).Session.Mode
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
@@ -254,7 +254,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		}
 	}
 	loc := (func(LaunchOutcome) error)(nil)
-	if plan.Launcher == "herdr" || plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+	if plan.capabilities().Container {
 		loc = recordWindowLocation(root, plan, moved)
 	}
 	if takeover {
@@ -263,7 +263,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
 		window := ""
-		if plan.Launcher == "foreground" || plan.Launcher == "console" {
+		if !plan.capabilities().Container {
 			window = plan.Launcher
 		}
 		updated, err := renderTakeoverMetadata(current, session.Agent, session.Render(), window)
@@ -273,7 +273,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		if err := writeDocumentFn(root, moved, updated); err != nil {
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
-	} else if plan.Launcher == "foreground" || plan.Launcher == "console" {
+	} else if !plan.capabilities().Container {
 		current, err := readDocumentFn(moved)
 		if err != nil {
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)

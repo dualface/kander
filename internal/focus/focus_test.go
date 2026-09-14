@@ -9,6 +9,9 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/builtin"
+	"github.com/dualface/kander/internal/terminal/direct"
 )
 
 func TestWindowFocus(t *testing.T) {
@@ -49,6 +52,61 @@ func TestWindowFocus(t *testing.T) {
 					t.Fatal("missing deadline")
 				}
 			}
+			run := func(ctx context.Context, name string, args []string) (probe.Result, error) {
+				check(ctx)
+				switch {
+				case len(args) == 3 && args[0] == "pane" && args[1] == "get":
+					calls = append(calls, "probe-herdr "+args[2])
+					if tc.fault == "probe" {
+						return probe.Result{}, errors.New("failed")
+					}
+					if tc.fault == "gone" {
+						return probe.Result{Code: 1, Stderr: `{"error":{"code":"pane_not_found"}}`}, nil
+					}
+					return probe.Result{Stdout: `{"result":{"pane":{"pane_id":"` + args[2] + `"}}}`}, nil
+				case args[0] == "display-message":
+					calls = append(calls, "probe-tmux "+args[3])
+					if tc.fault == "probe" {
+						return probe.Result{}, errors.New("failed")
+					}
+					if tc.fault == "gone" {
+						return probe.Result{Code: 1, Stderr: "can't find pane: " + args[3]}, nil
+					}
+					dead := "0"
+					if tc.fault == "dead" {
+						dead = "1"
+					}
+					return probe.Result{Stdout: "codex\t0\t" + dead + "\n"}, nil
+				case args[0] == "show-options":
+					return probe.Result{Stdout: "session\n"}, nil
+				}
+				calls = append(calls, strings.Join(args, " "))
+				if args[0] == tc.fault {
+					return probe.Result{Code: 1, Stderr: "failed"}, nil
+				}
+				return probe.Result{}, nil
+			}
+			getenv := func(key string) string {
+				if tc.fault == "outside" {
+					return ""
+				}
+				return "test"
+			}
+			paneFocus := func(ctx context.Context, socket, pane string) error {
+				check(ctx)
+				calls = append(calls, "pane-focus "+pane)
+				if tc.fault == "socket" {
+					return errors.New("failed")
+				}
+				return nil
+			}
+			backends := map[string]terminal.Backend{
+				"herdr":        herdrBackend(t, getenv, paneFocus),
+				"tmux":         tmuxBackend(t, builtin.Tmux, getenv),
+				"tmux-session": tmuxBackend(t, builtin.TmuxSession, getenv),
+				"foreground":   direct.New(direct.Foreground),
+				"console":      direct.New(direct.Console),
+			}
 			e := executor{
 				lookup: func(name string) (string, error) {
 					if tc.fault == "missing" {
@@ -56,54 +114,11 @@ func TestWindowFocus(t *testing.T) {
 					}
 					return name, nil
 				},
-				getenv: func(key string) string {
-					if tc.fault == "outside" {
-						return ""
-					}
-					return "test"
+				backend: func(name string) (terminal.Backend, bool) {
+					backend, ok := backends[name]
+					return backend, ok
 				},
-				run: func(ctx context.Context, name string, args []string) (probe.Result, error) {
-					check(ctx)
-					calls = append(calls, strings.Join(args, " "))
-					if args[0] == tc.fault {
-						return probe.Result{Code: 1, Stderr: "failed"}, nil
-					}
-					return probe.Result{}, nil
-				},
-				herdr: func(ctx context.Context, name, pane string) (probe.HerdrPaneProbe, error) {
-					check(ctx)
-					calls = append(calls, "probe-herdr "+pane)
-					if tc.fault == "probe" {
-						return probe.HerdrPaneProbe{}, errors.New("failed")
-					}
-					if tc.fault == "gone" {
-						return probe.HerdrPaneProbe{GoneDetail: "gone"}, nil
-					}
-					return probe.HerdrPaneProbe{Pane: map[string]any{"pane_id": pane}}, nil
-				},
-				tmux: func(ctx context.Context, name, pane string) (probe.TmuxPaneProbe, error) {
-					check(ctx)
-					calls = append(calls, "probe-tmux "+pane)
-					if tc.fault == "probe" {
-						return probe.TmuxPaneProbe{}, errors.New("failed")
-					}
-					if tc.fault == "gone" {
-						return probe.TmuxPaneProbe{GoneDetail: "gone"}, nil
-					}
-					dead := "0"
-					if tc.fault == "dead" {
-						dead = "1"
-					}
-					return probe.TmuxPaneProbe{Facts: &probe.TmuxPaneFacts{Dead: dead}}, nil
-				},
-				paneFocus: func(ctx context.Context, socket, pane string) error {
-					check(ctx)
-					calls = append(calls, "pane-focus "+pane)
-					if tc.fault == "socket" {
-						return errors.New("failed")
-					}
-					return nil
-				},
+				run: run,
 			}
 			got := e.focus(context.Background(), tc.address)
 			// Compare the localized prefix when a notice also carries external diagnostics.
@@ -118,23 +133,32 @@ func TestWindowFocus(t *testing.T) {
 	}
 }
 
-func TestExecuteDiagnostics(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		result probe.Result
-		err    error
-		want   string
-	}{
-		{"launch", probe.Result{}, errors.New("spawn failed"), "spawn failed"},
-		{"stdout", probe.Result{Code: 1, Stdout: "rejected"}, nil, "rejected"},
-		{"exit", probe.Result{Code: 7}, nil, "exit 7"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			e := executor{run: func(context.Context, string, []string) (probe.Result, error) { return tc.result, tc.err }}
-			err := e.execute(context.Background(), "herdr", []string{"tab"})
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("error=%v", err)
-			}
-		})
+func tmuxBackend(t *testing.T, launcher string, getenv func(string) string) terminal.Backend {
+	t.Helper()
+	backend, err := builtin.DefinitionBackend("tmux", launcher, getenv)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return backend
+}
+
+func herdrBackend(t *testing.T, getenv func(string) string, paneFocus func(context.Context, string, string) error) terminal.Backend {
+	t.Helper()
+	def, err := builtin.Definition("herdr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := "focus-test-" + t.TempDir()
+	terminal.RegisterHook(hook, func(ctx context.Context, call terminal.HookCall) terminal.HookResult {
+		if err := paneFocus(ctx, call.Getenv("HERDR_SOCKET_PATH"), call.Values["pane"]); err != nil {
+			return terminal.HookResult{Status: terminal.HookDegraded, Note: err.Error()}
+		}
+		return terminal.HookResult{Status: terminal.HookOK}
+	})
+	def.Hooks[terminal.HookPointFocusPane] = hook
+	backend, err := terminal.NewDeclarativeBackend(def, "herdr", getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return backend
 }

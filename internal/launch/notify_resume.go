@@ -103,7 +103,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	if plan.Launcher == "foreground" || plan.Launcher == "console" {
+	if !plan.capabilities().Container {
 		current, err := readDocumentFn(entry)
 		if err != nil {
 			return ResumeLaunch{}, err
@@ -117,11 +117,11 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 		}
 	}
 	paneCB := (func() (AgentSession, error))(nil)
-	if plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+	if plan.capabilities().PaneMetadata {
 		paneCB = func() (AgentSession, error) { return session, nil }
 	}
 	loc := (func(LaunchOutcome) error)(nil)
-	if plan.Launcher == "herdr" || plan.Launcher == "tmux" || plan.Launcher == "tmux-session" {
+	if plan.capabilities().Container {
 		loc = recordWindowLocation(root, plan, entry)
 	}
 	durable := board.MetadataFrom(originalText, "DISPATCH_ID") != ""

@@ -185,12 +185,12 @@ func TestLookPathTmux(t *testing.T) {
 	if p != filepath.Join(fakeBin, "tmux") {
 		t.Fatalf("lookPath=%s want %s PATH=%s", p, filepath.Join(fakeBin, "tmux"), os.Getenv("PATH"))
 	}
-	id, err := tmuxSessionID(p)
+	plan, err := prepareLaunch("tmux", t.TempDir(), "start")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id != "$42" {
-		t.Fatalf("session=%q", id)
+	if id := plan.Target.Session; id != "$42" {
+		t.Fatalf("session=%q", plan.Target.Session)
 	}
 }
 

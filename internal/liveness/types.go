@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
+	_ "github.com/dualface/kander/internal/terminal/builtin"
 )
 
 const (
@@ -17,8 +18,6 @@ const (
 
 var (
 	sessionReferenceRe = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
-	herdrWindowRe      = regexp.MustCompile(`^herdr:([^:\s]+:[^:\s]+):([^:\s]+:[^:\s]+)$`)
-	tmuxWindowRe       = regexp.MustCompile(`^(tmux|tmux-session):([^:\s]+):([^:\s]+):([^:\s]+)$`)
 	taskGroupRe        = regexp.MustCompile(`^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*-group$`)
 
 	lookPath = exec.LookPath
@@ -28,14 +27,6 @@ var (
 type TaskSession struct {
 	Agent     string
 	Reference string
-}
-
-// TmuxPaneLocation is the pane coordinate hit by a tmux reverse lookup.
-type TmuxPaneLocation struct {
-	SessionID   string
-	SessionName string
-	WindowID    string
-	PaneID      string
 }
 
 // Report is the read-only liveness classification of one card; it never writes to the card.

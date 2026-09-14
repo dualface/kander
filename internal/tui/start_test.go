@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func startTestApp(state string) *App {
@@ -150,7 +151,7 @@ func TestStartBackgroundCompletion(t *testing.T) {
 				if failed {
 					return launch.StartResult{}, errors.New("launch broke")
 				}
-				return launch.StartResult{TaskID: r.TaskID, Agent: r.Agent, Plan: launch.LaunchPlan{Launcher: launcher, Session: "$4"}, Outcome: launch.LaunchOutcome{Tab: "w1:t9", Window: "@9", Pane: "%9"}, Warnings: []string{"identity warning"}}, nil
+				return launch.StartResult{TaskID: r.TaskID, Agent: r.Agent, Plan: launch.LaunchPlan{Launcher: launcher, Target: terminal.Target{Session: "$4"}}, Outcome: launch.LaunchOutcome{Container: "@9", Pane: "%9"}, Warnings: []string{"identity warning"}}, nil
 			}
 			p := program{app: app}
 			app.HandleKey("s")
@@ -287,8 +288,8 @@ func TestStartResultRendersCompleteContainerAddress(t *testing.T) {
 	const address = "kb-board-start-task-key-12345678:@9:%9"
 	app.applyStartResult(startResult{result: launch.StartResult{
 		TaskID: "20260908-options-workflow-flowchart-task", Agent: "claude",
-		Plan:    launch.LaunchPlan{Launcher: "tmux-session", Session: "kb-board-start-task-key-12345678"},
-		Outcome: launch.LaunchOutcome{Window: "@9", Pane: "%9"},
+		Plan:    launch.LaunchPlan{Launcher: "tmux-session", Target: terminal.Target{Session: "kb-board-start-task-key-12345678"}},
+		Outcome: launch.LaunchOutcome{Container: "@9", Pane: "%9"},
 	}})
 	lines := strings.Split(ansi.Strip(app.View()), "\n")
 	footer := lines[len(lines)-1]

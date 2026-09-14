@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func TestLaunchAgentSendsShellSpecificCommandToTmux(t *testing.T) {
@@ -60,7 +61,7 @@ func main() {
 			}
 			t.Run(name, func(t *testing.T) {
 				runtimeWindows = func() bool { return windows }
-				plan := LaunchPlan{Launcher: launcher, Tmux: binary, Session: "test"}
+				plan := LaunchPlan{Launcher: launcher, Target: terminal.Target{Program: binary, Session: "test"}}
 				if _, err := launchAgent(plan, filepath.Join(dir, "kanban"), "task", invocation, nil, nil, nil); err != nil {
 					t.Fatal(err)
 				}

@@ -1,37 +1,53 @@
 package notify
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/terminal"
 )
 
-func herdrFailureDetail(res probe.Result) string {
-	if s := strings.TrimSpace(res.Stderr); s != "" {
-		return s
+// commandDetail renders a backend failure the way direct delivery reports it:
+// the run error itself, or the trimmed stderr or exit status.
+func commandDetail(err error) string {
+	if commandErr, ok := terminal.AsCommandError(err); ok {
+		return commandErr.Detail()
 	}
-	return fmt.Sprintf("exit %d", res.Code)
+	return err.Error()
 }
 
-// HerdrAgentPrompt delivers the body to the agent TUI already running in the pane, without using pane run.
-func HerdrAgentPrompt(herdr, paneID, text string) error {
-	res, err := probe.Capture(herdr, []string{"agent", "prompt", paneID, text}, 0)
-	if err != nil {
-		return notifyError("launch.herdr_invocation_failed", err.Error())
+// AgentPrompt delivers the body to the agent TUI already running in the pane, without using pane run.
+func AgentPrompt(backend terminal.Backend, program, paneID, text string) error {
+	// The probe runner bounds each command with the default budget.
+	err := backend.DeliverText(context.Background(), probeConn(program), paneID, text)
+	if err == nil {
+		return nil
 	}
-	if res.Code != 0 {
-		return notifyError(
-			"notify.herdr_agent_prompt_failed", herdrFailureDetail(res),
-		)
+	commandErr, ok := terminal.AsCommandError(err)
+	if !ok {
+		return err
 	}
-	return nil
+	if commandErr.Kind == terminal.KindExec {
+		return notifyError("launch.herdr_invocation_failed", commandErr.Cause.Error())
+	}
+	return notifyError("notify.herdr_agent_prompt_failed", commandErr.Detail())
 }
 
-func herdrDirectNotify(herdr, paneID, instruction, marker string, timeout float64) (bool, string, error) {
-	if err := HerdrAgentPrompt(herdr, paneID, instruction); err != nil {
+// directNotify delivers the instruction line and waits for its marker. A
+// backend that waits on output itself is asked to; otherwise the pane text is
+// polled until the timeout.
+func directNotify(target DirectTarget, instruction, marker string, timeout float64) (bool, string, error) {
+	if target.Backend.Capabilities().WaitOutput {
+		return waitingNotify(target, instruction, marker, timeout)
+	}
+	return pollingNotify(target, instruction, marker, timeout)
+}
+
+func waitingNotify(target DirectTarget, instruction, marker string, timeout float64) (bool, string, error) {
+	if err := AgentPrompt(target.Backend, target.Program, target.PaneID, instruction); err != nil {
 		return false, "", err
 	}
 	fmt.Println(t("notify.delivered_waiting_for_acknowledgement_channel_herdr_direct"))
@@ -40,52 +56,25 @@ func herdrDirectNotify(herdr, paneID, instruction, marker string, timeout float6
 	if ms < 1 {
 		ms = 1
 	}
-	res, err := probe.Capture(herdr, []string{
-		"pane", "wait-output", paneID, "--match", marker, "--source", "recent",
-		"--timeout", fmt.Sprintf("%d", ms),
-	}, 0)
-	if err != nil {
-		return false, err.Error(), nil
-	}
-	if res.Code != 0 {
-		return false, herdrFailureDetail(res), nil
+	if err := target.Backend.WaitOutput(context.Background(), probeConn(target.Program), target.PaneID, marker, ms); err != nil {
+		return false, commandDetail(err), nil
 	}
 	return true, "", nil
 }
 
-func tmuxDirectNotify(tmux, paneID, instruction, marker string, timeout float64) (bool, string, error) {
-	for _, args := range [][]string{
-		{"send-keys", "-t", paneID, "-l", instruction},
-		{"send-keys", "-t", paneID, "Enter"},
-	} {
-		res, err := probe.Capture(tmux, args, 0)
-		if err != nil {
-			return false, "", notifyError("notify.tmux_direct_notification_failed", err.Error())
-		}
-		if res.Code != 0 {
-			detail := strings.TrimSpace(res.Stderr)
-			if detail == "" {
-				detail = fmt.Sprintf("exit %d", res.Code)
-			}
-			return false, "", notifyError("notify.tmux_direct_notification_failed", detail)
-		}
+func pollingNotify(target DirectTarget, instruction, marker string, timeout float64) (bool, string, error) {
+	if err := target.Backend.DeliverText(context.Background(), probeConn(target.Program), target.PaneID, instruction); err != nil {
+		return false, "", notifyError("notify.tmux_direct_notification_failed", commandDetail(err))
 	}
 	fmt.Println(t("notify.delivered_waiting_for_acknowledgement_channel_tmux_direct"))
 	flushStdout()
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
 	for {
-		res, err := probe.Capture(tmux, []string{"capture-pane", "-p", "-t", paneID}, 0)
+		output, err := target.Backend.ReadOutput(context.Background(), probeConn(target.Program), target.PaneID)
 		if err != nil {
-			return false, err.Error(), nil
+			return false, commandDetail(err), nil
 		}
-		if res.Code != 0 {
-			detail := strings.TrimSpace(res.Stderr)
-			if detail == "" {
-				detail = fmt.Sprintf("exit %d", res.Code)
-			}
-			return false, detail, nil
-		}
-		if strings.Contains(res.Stdout, marker) {
+		if strings.Contains(output, marker) {
 			return true, "", nil
 		}
 		remaining := deadline.Sub(nowFn())

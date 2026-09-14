@@ -140,7 +140,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 		}
 	}
 	result.Agent, result.Launcher, result.Tasks = agent, plan.Launcher, tasks
-	result.Address = sessionAddress(plan, outcome)
+	result.Address = OpaqueAddress(plan, outcome)
 	return result, nil
 }
 
