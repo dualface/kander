@@ -101,7 +101,9 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 	}
 	expectedAuthors := map[string]DispatchAuthorReference{}
 	seen := map[string]bool{}
-	for i, ref := range binding.Findings {
+	stamped := make([]DispatchFindingReference, len(binding.Findings))
+	copy(stamped, binding.Findings)
+	for i, ref := range stamped {
 		if seen[ref.key()] {
 			return dispatchEvidenceError("duplicate finding")
 		}
@@ -130,8 +132,11 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 			return dispatchEvidenceError("finding section mismatch")
 		}
 		if initial {
-			binding.Findings[i].Section = section
+			stamped[i].Section = section
 		}
+	}
+	if initial {
+		binding.Findings = stamped
 	}
 	supplied := map[string]bool{}
 	for _, ref := range binding.Authors {

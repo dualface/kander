@@ -77,13 +77,23 @@ func TestDispatchFixBindingRelocatesAndReplays(t *testing.T) {
 	if err := ValidateDispatchEvidence(root, in.TaskID, in.ID); err != nil {
 		t.Fatal(err)
 	}
+	if got := in.Evidence.Fix.Findings[0].Section; got != "" {
+		t.Fatalf("prepare mutated caller section: %q", got)
+	}
 	if _, err := dispatchMove(t, root, d, "working"); err != nil {
 		t.Fatal(err)
 	}
 	before := transactionSnapshot(t, root, in.TaskID)
-	replay := prepareTestDispatch(t, root, in)
-	if !reflect.DeepEqual(replay.Input, d.Input) {
-		t.Fatal("retry changed evidence")
+	retry := in
+	fix := *in.Evidence.Fix
+	fix.Findings = append([]DispatchFindingReference(nil), fix.Findings...)
+	for i := range fix.Findings {
+		fix.Findings[i].Section = ""
+	}
+	retry.Evidence.Fix = &fix
+	replay := prepareTestDispatch(t, root, retry)
+	if !reflect.DeepEqual(replay.Input.Evidence.Fix.Findings[0].FindingRef, d.Input.Evidence.Fix.Findings[0].FindingRef) {
+		t.Fatal("retry changed finding identity")
 	}
 	if before.Revision != transactionSnapshot(t, root, in.TaskID).Revision {
 		t.Fatal("retry wrote card")

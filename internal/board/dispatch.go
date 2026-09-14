@@ -130,8 +130,6 @@ func dispatchInputForCompare(in DispatchInput) DispatchInput {
 		findings[i].Section = ""
 	}
 	fix.Findings = findings
-	authors := append([]DispatchAuthorReference(nil), fix.Authors...)
-	fix.Authors = authors
 	in.Evidence.Fix = &fix
 	return in
 }
@@ -226,6 +224,13 @@ func PrepareDispatch(root string, in DispatchInput) (d Dispatch, err error) {
 }
 
 func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
+	// Copy fix evidence before stamping section so caller-owned bindings stay intact.
+	if in.Evidence.Fix != nil {
+		fix := *in.Evidence.Fix
+		fix.Findings = append([]DispatchFindingReference(nil), fix.Findings...)
+		fix.Authors = append([]DispatchAuthorReference(nil), fix.Authors...)
+		in.Evidence.Fix = &fix
+	}
 	registered, exists, e := tx.ReadGroup(dispatchRegistry, in.ID+".json")
 	if e != nil {
 		return e
