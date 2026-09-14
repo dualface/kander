@@ -170,15 +170,24 @@ func TestDecisionOnlyAppliesToReleasedReclaim(t *testing.T) {
 }
 
 func TestCoordinatorAndReviewRecoverReleasedReclaim(t *testing.T) {
-	for _, launch := range []bool{false, true} {
-		t.Run(strconv.FormatBool(launch), func(t *testing.T) {
+	for _, launch := range []string{"manual", "succeeded", "rolled-back"} {
+		t.Run(launch, func(t *testing.T) {
 			root := tempBoard(t)
 			s := coordinatorTodo(t, root, "handoff")
 			c := coordinatorClaim(t, root, s.Entry.TaskID)
-			if launch {
+			if launch != "manual" {
 				entry := startAttemptFixture(t, root, s)
-				if err := ConfirmTaskStart(root, entry); err != nil {
-					t.Fatal(err)
+				if launch == "succeeded" {
+					if err := ConfirmTaskStart(root, entry); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if err := RollbackDocument(root, entry, s.Text, "todo"); err != nil {
+						t.Fatal(err)
+					}
+					if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
+						t.Fatal("claim after rollback")
+					}
 				}
 			} else if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
 				t.Fatal("manual claim failed")
@@ -327,5 +336,58 @@ func TestReleasedEpochCannotSubmitDisposition(t *testing.T) {
 	record := ReviewDisposition{RecordID: "stale-author", RunID: run.RunID, FindingID: finding.ID, BatchID: run.BatchID, TaskID: id, Author: "codex", ReportHash: run.Hashes["report.md"], Original: finding.Text, Status: "confirmed", Basis: "stale epoch", Authorization: &d.Authorization}
 	if err := SubmitReviewDisposition(root, record, s.Revision); err == nil {
 		t.Fatal("released epoch submitted disposition")
+	}
+}
+
+func TestTerminalReleaseRejectsWrongStateOrSupersededBinding(t *testing.T) {
+	for _, kind := range []string{"mismatched-failed", "mismatched-cancelled", "completed", "superseded-failed", "superseded-cancelled"} {
+		t.Run(kind, func(t *testing.T) {
+			root := tempBoard(t)
+			s := dispatchCard(t, root, "terminal-rejection")
+			d := prepareTestDispatch(t, root, dispatchInput(s, "old-terminal"))
+			verb := "fail"
+			if kind == "completed" {
+				if _, err := dispatchMove(t, root, d, "working"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := dispatchMove(t, root, d, "review"); err != nil {
+					t.Fatal(err)
+				}
+				d, _ = ReadDispatch(root, s.Entry.TaskID, d.Input.ID)
+			} else {
+				// Reproduce an old terminal record that still owns the binding and has no release.
+				d.State, d.Reason, d.Revision = DispatchFailed, "legacy", d.Revision+1
+				if strings.HasSuffix(kind, "cancelled") {
+					d.State = DispatchCancelled
+					verb = "cancel"
+				}
+				if err := WithTransaction(root, LockScope{Tasks: []string{s.Entry.TaskID}}, func(tx *Transaction) error { return putDispatch(tx, d) }); err != nil {
+					t.Fatal(err)
+				}
+				if strings.HasPrefix(kind, "mismatched") {
+					if verb == "fail" {
+						verb = "cancel"
+					} else {
+						verb = "fail"
+					}
+				}
+			}
+			if strings.HasPrefix(kind, "superseded") {
+				s = transactionSnapshot(t, root, s.Entry.TaskID)
+				prepareTestDispatch(t, root, dispatchInput(s, "new-active"))
+			}
+			before := transactionSnapshot(t, root, s.Entry.TaskID)
+			if RunDispatch([]string{verb, s.Entry.TaskID, d.Input.ID, strconv.FormatUint(d.Revision, 10), "release", "--decision", "user-decision"}) == 0 {
+				t.Fatal("invalid terminal release accepted")
+			}
+			after := transactionSnapshot(t, root, s.Entry.TaskID)
+			if before.Text != after.Text || before.Revision != after.Revision {
+				t.Fatal("rejection changed card or newer binding")
+			}
+			unchanged, err := ReadDispatch(root, s.Entry.TaskID, d.Input.ID)
+			if err != nil || !reflect.DeepEqual(unchanged, d) {
+				t.Fatal("rejection changed old terminal facts", err)
+			}
+		})
 	}
 }

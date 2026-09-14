@@ -55,7 +55,7 @@ kander init [--maintenance] [project-path]
 kander list [--mobile] [backlog|todo|working|review|done|archived|trash]
 kander show [--json] <task-id>
 kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>
-kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent>] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
+kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task-id>] [--expect-revision <revision>] [--dispatch-id <id> --execution-epoch <epoch>] [--delivery-commit <full-SHA>] [--disposition <card-relative-path>]
 kander pick [task-id]
 kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-revision <revision> [--contract-decision-file <UTF8-decision>] [--dispatch-id <id> --execution-epoch <epoch>]
 kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]

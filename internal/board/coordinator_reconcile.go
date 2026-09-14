@@ -18,7 +18,7 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if err := verifyCoordinatorHandoffs(tx, s, old); err != nil {
 		return m, err
 	}
-	cycle, awaiting, attempt, err := coordinatorStartCycle(ctx, tx, id, old, s)
+	cycle, awaiting, attempt, err := coordinatorStartCycle(ctx, tx, id, &old, s)
 	if err != nil {
 		return m, err
 	}

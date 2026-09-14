@@ -161,36 +161,43 @@ func TestConfirmedStartCannotBeRolledBackOrSilentlyReplaced(t *testing.T) {
 }
 
 func TestStartRollbackProofRevokesPrematureCursorAndAllowsManualClaim(t *testing.T) {
-	root := tempBoard(t)
-	original := coordinatorTodo(t, root, "premature")
-	c := coordinatorClaim(t, root, original.Entry.TaskID)
-	moved := startAttemptFixture(t, root, original)
-	s := transactionSnapshot(t, root, original.Entry.TaskID)
-	// Preserve a cursor shaped like the earlier metadata-only implementation.
-	if err := WithTransaction(root, LockScope{Groups: []string{c.GroupID}}, func(tx *Transaction) error {
-		c.Members[original.Entry.TaskID] = CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: "working"}
-		c.Revision++
-		return putCheckpoint(tx, &c)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := RollbackDocument(root, moved, original.Text, "todo"); err != nil {
-		t.Fatal(err)
-	}
-	c = coordinatorReconcile(t, root, c)
-	if !c.Members[original.Entry.TaskID].AwaitingStart {
-		t.Fatal("exact rollback proof did not revoke temporary binding")
-	}
-	s = transactionSnapshot(t, root, original.Entry.TaskID)
-	if _, err := MoveWithOptions(s.Entry, root, "working", MoveOptions{Owner: "codex"}); err != nil {
-		t.Fatal(err)
-	}
-	c = coordinatorReconcile(t, root, c)
-	if c.Members[original.Entry.TaskID].AwaitingStart {
-		t.Fatal("explicit manual claim blocked")
-	}
-	if next := coordinatorReconcile(t, root, c); !reflect.DeepEqual(next, c) {
-		t.Fatal("manual claim did not remain stable")
+	for _, observedRollback := range []bool{true, false} {
+		t.Run(map[bool]string{true: "observed-rollback", false: "missed-rollback"}[observedRollback], func(t *testing.T) {
+			root := tempBoard(t)
+			original := coordinatorTodo(t, root, "premature")
+			c := coordinatorClaim(t, root, original.Entry.TaskID)
+			moved := startAttemptFixture(t, root, original)
+			s := transactionSnapshot(t, root, original.Entry.TaskID)
+			// Preserve a cursor shaped like the earlier metadata-only implementation.
+			if err := WithTransaction(root, LockScope{Groups: []string{c.GroupID}}, func(tx *Transaction) error {
+				c.Members[original.Entry.TaskID] = CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: "working"}
+				c.Revision++
+				return putCheckpoint(tx, &c)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := RollbackDocument(root, moved, original.Text, "todo"); err != nil {
+				t.Fatal(err)
+			}
+			if observedRollback {
+				c = coordinatorReconcile(t, root, c)
+				if !c.Members[original.Entry.TaskID].AwaitingStart {
+					t.Fatal("exact rollback proof did not revoke temporary binding")
+				}
+			}
+			s = transactionSnapshot(t, root, original.Entry.TaskID)
+			if _, err := MoveWithOptions(s.Entry, root, "working", MoveOptions{Owner: "codex"}); err != nil {
+				t.Fatal(err)
+			}
+			c = coordinatorReconcile(t, root, c)
+			if c.Members[original.Entry.TaskID].AwaitingStart {
+				t.Fatal("explicit manual claim blocked")
+			}
+			if next := coordinatorReconcile(t, root, c); !reflect.DeepEqual(next, c) {
+				t.Fatal("manual claim did not remain stable")
+			}
+
+		})
 	}
 }
 

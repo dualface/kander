@@ -194,7 +194,7 @@
   "board.messages.guard-write": "usage: kander guard-write <path>",
   "board.messages.init": "usage: kander init [--maintenance] [project]",
   "board.messages.list": "usage: kander list [--mobile] [state]",
-  "board.messages.move": "usage: kander move <task> <state> [--owner <agent>] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task>] [--expect-revision <revision>] [--dispatch-id ID --execution-epoch N] [--delivery-commit SHA] [--disposition PATH]",
+  "board.messages.move": "usage: kander move <task> <state> [--owner <agent> [--decision <reference>]] [--result <result>] [--reason <reason> --decision <reference>] [--duplicate-of <task>] [--expect-revision <revision>] [--dispatch-id ID --execution-epoch N] [--delivery-commit SHA] [--disposition PATH]",
   "board.messages.new": "usage: kander new [--large] [--language <agent language>] <feature|bug|chore|research> <slug> <title...>",
   "board.messages.pick": "usage: kander pick [task]",
   "board.messages.show": "usage: kander show [--json] <task>",
