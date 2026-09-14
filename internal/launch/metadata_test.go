@@ -61,3 +61,29 @@ func TestStartAndTakeoverUpdateLegacyFieldsInPlace(t *testing.T) {
 		t.Fatalf("insert order: %q", filled)
 	}
 }
+
+func TestStartRetryCreatesNewClaimAndTakeoverPreservesIt(t *testing.T) {
+	original := "# Card\n\n- OWNER:\n- SESSION:\n- WINDOW:\n- STARTED_AT:\n\n## GOAL\n\nFixture.\n"
+	first, err := renderStartMetadata(original, "codex", "codex", "foreground")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A failed start restores this original body before the next launch renders it.
+	second, err := renderStartMetadata(original, "codex", "codex", "foreground")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstClaim, _ := board.SectionBody(first, "LIFECYCLE_DECISION")
+	secondClaim, _ := board.SectionBody(second, "LIFECYCLE_DECISION")
+	if firstClaim == "" || firstClaim == secondClaim {
+		t.Fatal("retry reused claim identity")
+	}
+	takeover, err := renderTakeoverMetadata(second, "claude", "claude next", "foreground")
+	if err != nil {
+		t.Fatal(err)
+	}
+	takeoverClaim, _ := board.SectionBody(takeover, "LIFECYCLE_DECISION")
+	if takeoverClaim != secondClaim || board.MetadataFrom(takeover, board.FieldStartedAt) != board.MetadataFrom(second, board.FieldStartedAt) {
+		t.Fatal("takeover changed execution cycle")
+	}
+}

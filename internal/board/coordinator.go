@@ -33,14 +33,16 @@ type CoordinatorCheckpoint struct {
 }
 
 type CoordinatorMember struct {
-	Revision       uint64               `json:"revision"`
-	Cycle          string               `json:"cycle"`
-	AwaitingStart  bool                 `json:"awaiting_start,omitempty"`
-	StartAttempt   string               `json:"start_attempt,omitempty"`
-	State          string               `json:"state"`
-	DeliveryCommit string               `json:"delivery_commit,omitempty"`
-	Dispatch       *CoordinatorDispatch `json:"dispatch,omitempty"`
-	Review         *CoordinatorReview   `json:"review,omitempty"`
+	ReleasedDispatches []ArtifactReference  `json:"released_dispatches,omitempty"`
+	Handoffs           []lifecycleHandoff   `json:"handoffs,omitempty"`
+	Revision           uint64               `json:"revision"`
+	Cycle              string               `json:"cycle"`
+	AwaitingStart      bool                 `json:"awaiting_start,omitempty"`
+	StartAttempt       string               `json:"start_attempt,omitempty"`
+	State              string               `json:"state"`
+	DeliveryCommit     string               `json:"delivery_commit,omitempty"`
+	Dispatch           *CoordinatorDispatch `json:"dispatch,omitempty"`
+	Review             *CoordinatorReview   `json:"review,omitempty"`
 }
 
 type CoordinatorDispatch struct {

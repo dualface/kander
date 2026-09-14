@@ -33,6 +33,7 @@ func TestStartResultsFenceRetryAndPreserveTaskRevision(t *testing.T) {
 	root := tempBoard(t)
 	original := coordinatorTodo(t, root, "attempt-fence")
 	first := startAttemptFixture(t, root, original)
+	firstCycle := planCycle(transactionSnapshot(t, root, original.Entry.TaskID))
 	// A coordinator first appearing during a launch cannot adopt metadata as
 	// confirmation, even though it never observed the original todo snapshot.
 	c := coordinatorClaim(t, root, original.Entry.TaskID)
@@ -44,6 +45,9 @@ func TestStartResultsFenceRetryAndPreserveTaskRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := startAttemptFixture(t, root, transactionSnapshot(t, root, original.Entry.TaskID))
+	if firstCycle == planCycle(transactionSnapshot(t, root, original.Entry.TaskID)) {
+		t.Fatal("rollback retry reused execution cycle")
+	}
 	if err := ConfirmTaskStart(root, first); err == nil {
 		t.Fatal("stale launcher confirmed a same-minute retry")
 	}

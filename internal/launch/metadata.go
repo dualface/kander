@@ -83,7 +83,11 @@ func renderStartMetadata(text, agent, session, window string) (string, error) {
 	if len(windowLines) > 0 {
 		text = regexp.MustCompile(`(?m)^- `+board.TokenPattern(windowField)+`:.*\n?`).ReplaceAllString(text, "")
 	}
-	return insertAfterField(text, sessionField, windowField, window)
+	text, err = insertAfterField(text, sessionField, windowField, window)
+	if err != nil {
+		return "", err
+	}
+	return board.NewClaimMetadata(text)
 }
 
 func renderTakeoverMetadata(text, agent, session, window string) (string, error) {

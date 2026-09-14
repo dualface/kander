@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/dualface/kander/internal/config"
 )
@@ -64,6 +65,12 @@ func RunDispatch(args []string) int {
 		}
 		d, err = ReadDispatch(root, args[1], args[2])
 	case "fail", "cancel":
+		var decision string
+		var present bool
+		args, decision, present, err = takeValueFlag(args, "--decision")
+		if err != nil || present && strings.TrimSpace(decision) == "" {
+			return fail(kanbanError("board.dispatch_usage"))
+		}
 		if len(args) != 5 {
 			return fail(kanbanError("board.dispatch_usage"))
 		}
@@ -75,7 +82,7 @@ func RunDispatch(args []string) int {
 		if args[0] == "cancel" {
 			state = DispatchCancelled
 		}
-		err = EndDispatch(root, args[1], args[2], v, state, args[4])
+		err = EndDispatch(root, args[1], args[2], v, state, args[4], decision)
 		if err == nil {
 			d, err = ReadDispatch(root, args[1], args[2])
 		}

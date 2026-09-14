@@ -46,6 +46,12 @@ func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 			return "", err
 		}
 	}
+	if o.Owner != "" {
+		text, err = NewClaimMetadata(text)
+		if err != nil {
+			return "", err
+		}
+	}
 	if o.Result != "" {
 		valid := to == "done" && o.Result == "completed" || to == "trash" && o.Result == "trashed" || to == "archived" && (from == "done" && o.Result == "completed" || from != "done" && (o.Result == "cancelled" || o.Result == "duplicate" || o.Result == "wontfix"))
 		if !valid {
@@ -71,7 +77,7 @@ func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 		record := map[string]string{"at": nowStamp(), "reason": o.Reason, "decision_reference": o.Decision, "duplicate_of": o.DuplicateOf}
 		b, _ := json.Marshal(record)
 		text = appendRecordSection(text, "LIFECYCLE_DECISION", string(b))
-	} else if o.Reason != "" || o.Decision != "" || o.DuplicateOf != "" {
+	} else if o.Reason != "" || o.DuplicateOf != "" || o.Decision != "" && !(from == "review" && to == "working" && o.Owner != "") {
 		return "", kanbanError("board.transaction_invalid", "termination options")
 	}
 	return text, nil

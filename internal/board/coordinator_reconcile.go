@@ -15,11 +15,26 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if s.Revision < old.Revision {
 		return m, coordinatorError("member revision or execution cycle changed: " + id)
 	}
+	if err := verifyCoordinatorHandoffs(tx, s, old); err != nil {
+		return m, err
+	}
 	cycle, awaiting, attempt, err := coordinatorStartCycle(ctx, tx, id, old, s)
 	if err != nil {
 		return m, err
 	}
 	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: cycle, AwaitingStart: awaiting, StartAttempt: attempt, DeliveryCommit: old.DeliveryCommit}
+
+	m.ReleasedDispatches = append([]ArtifactReference(nil), old.ReleasedDispatches...)
+	m.Handoffs = append([]lifecycleHandoff(nil), old.Handoffs...)
+	if cycle != old.Cycle && !awaiting && !old.AwaitingStart && old.Cycle != ReviewDigest([]byte(id+"\n")) {
+		handoffs, e := lifecycleHandoffs(tx, s, old.Cycle)
+		if e != nil {
+			return m, e
+		}
+		m.Handoffs = append(m.Handoffs, handoffs...)
+		// A previous cycle's delivery is history, never this executor's delivery.
+		m.DeliveryCommit = ""
+	}
 	if awaiting && attempt != "" && o.DeliveryCommit != "" {
 		return m, coordinatorError("unconfirmed start cannot establish delivery")
 	}
@@ -59,8 +74,15 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	}
 	a := authFrom(s.Text)
 	if a == (ExecutionAuthorization{}) {
-		if o.DispatchID != "" || o.Epoch != 0 || o.Base != "" || old.Dispatch != nil {
+		if o.DispatchID != "" || o.Epoch != 0 || o.Base != "" {
 			return m, coordinatorError("unbound member cannot acknowledge a dispatch: " + id)
+		}
+
+		if old.Dispatch != nil {
+			if err := coordinatorReleasedDispatch(tx, s, *old.Dispatch); err != nil {
+				return m, err
+			}
+			m.ReleasedDispatches = append(m.ReleasedDispatches, ArtifactReference{id, dispatchPath(old.Dispatch.ID, "release")})
 		}
 		if o.DeliveryCommit != "" {
 			branch := MetadataFrom(s.Text, "TASK_BRANCH")
@@ -186,4 +208,28 @@ func coordinatorDispatchAdvance(tx *Transaction, id string, old CoordinatorDispa
 
 func coordinatorDispatchTerminal(state DispatchState) bool {
 	return state == DispatchCompleted || state == DispatchFailed || state == DispatchCancelled
+}
+
+func coordinatorReleasedDispatch(tx *Transaction, s Snapshot, old CoordinatorDispatch) error {
+	releases, err := cardReleases(s)
+	if err != nil {
+		return err
+	}
+	for _, r := range releases {
+		if r.Termination.Authorization.DispatchID != old.ID {
+			continue
+		}
+		if err := verifyCardRelease(tx, s, r); err != nil {
+			return err
+		}
+		d, err := readDispatch(tx, s.Entry.TaskID, old.ID)
+		if err != nil {
+			return err
+		}
+		if d.Input.Base != old.Base || d.Input.Kind != old.Kind {
+			return coordinatorError("released dispatch facts changed")
+		}
+		return coordinatorDispatchAdvance(tx, s.Entry.TaskID, old, d)
+	}
+	return coordinatorError("unbound member lacks dispatch termination and release originals")
 }

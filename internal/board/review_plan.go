@@ -50,7 +50,11 @@ func validateRequirements(r map[string]string) error {
 	return nil
 }
 func planCycle(s Snapshot) string {
-	return ReviewDigest([]byte(s.Entry.TaskID + "\n" + MetadataFrom(s.Text, FieldStartedAt)))
+	identity := s.Entry.TaskID + "\n" + MetadataFrom(s.Text, FieldStartedAt)
+	if claim := claimIdentity(s.Text); claim != "" {
+		identity += "\n" + claim
+	}
+	return ReviewDigest([]byte(identity))
 }
 func CreateReviewPlan(root string, p ReviewPlan) error {
 	if p.Schema != 1 || !ValidReviewID(p.PlanID) || strings.TrimSpace(p.Author) == "" || strings.TrimSpace(p.Basis) == "" || p.CWD == "" || len(p.Batches) == 0 {

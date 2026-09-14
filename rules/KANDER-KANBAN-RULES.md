@@ -65,7 +65,7 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 kander dispatch prepare <absolute-UTF8-intent.json>
 kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
 kander dispatch show <task-id> <dispatch-id>
-kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
+kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]
 kander dismiss [--timeout SECONDS] <task-id>
 kander check [--all] [task-id ...]
 kander guard-write <path>
@@ -127,7 +127,7 @@ An explicit `--pane` override does no stale-address reverse lookup.
 - The executing agent first runs `kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>`. Its JSON contains `dispatch` and `replayed`. Start work only for `replayed=false`; on replay or failure, report the receipt and do not repeat work. This remains true when the first round already returned to review before notify returned.
 - Every bound author update carries the same ID/epoch and current expected revision. Bound review disposition JSON also carries `authorization: {"dispatch_id":"...","epoch":1}`; legacy records remain unchanged. Complete fix/sync with `move review`, or wrap-up with `move done --result completed`, carrying `--dispatch-id`, `--execution-epoch`, `--delivery-commit <final-full-SHA>` and an applicable `--disposition <card-relative-artifact>`. Completion and its receipt commit atomically. Existing done/review evidence gates still apply; a recorded SHA is not Git integration verification.
 - Only one execution grant is active per card. A new intent replaces only a completed, failed or cancelled intent. Explicit `resume --agent` retains the existing user-authorization requirement and rotates the epoch for an unfinished same-ID dispatch, keeping its original payload and deadline. Old epochs cannot accept, update body/WINDOW or complete. No card lock spans an Agent session.
-- `dispatch fail|cancel` records an explicit intent decision with its expected dispatch revision and reason; it does not cancel or move the task, grant takeover, or discard originals. A changed/expired intent requires an explicit disposition before creating another ID; uncertainty alone is not cancellation authorization.
+- `dispatch fail|cancel` records the explicit terminal decision and releases the card's active `DISPATCH_ID`/`EXECUTION_EPOCH` binding in the same transaction. Its optional `--decision <reference>` records the user decision beside the reason in the immutable termination original. It does not move or cancel the task, grant takeover, or discard intent/receipt history; `dispatch show` still reads the old round and old epochs cannot accept, update, submit dispositions or complete. For a pre-upgrade failed/cancelled round that still owns the binding, repeat its matching terminal command with `--decision <reference>`: this records only the release and preserves the prior terminal state and reason, without creating a second termination original. A nonmatching terminal state, a completed round, or a binding now owned by a newer dispatch rejects. A changed/expired intent requires explicit disposition before another ID; uncertainty alone is not cancellation authorization.
 - Ordinary unbound working messages and non-group legacy notifications retain their previous behavior and create no historical business receipt. The legacy delivery/marker clauses below apply only to those unbound messages. Bound card writes cannot omit the execution grant.
 - Dispatch originals and epoch receipts are producer-owned `dispatches/` attachments. Pending publications use the existing explicit init recovery and maintenance rules. Guarantees cover controlled card operations, never arbitrary external side effects exactly-once.
 
@@ -538,7 +538,7 @@ kander move <task-id> working --owner <agent>
 
   After a failure, re-check; do not create a replacement card, and add no lock service, database, or ID allocator.
 
-- Reclaiming: when a `review/` card's executor has stopped and the user explicitly authorizes a new owner, that agent claims the card with `kander move <task-id> working --owner <agent>`. This is possible only for a card without a dispatch binding (no `DISPATCH_ID`/`EXECUTION_EPOCH` metadata): a bound card rejects `--owner`, and `dispatch fail|cancel` does not remove the binding, so a bound card changes hands only through the takeover paths in "Failure Recovery". The reclaim rewrites `OWNER` and `STARTED_AT`; because the execution cycle is derived from `STARTED_AT` at minute precision, treat the cycle as changed only when `review progress` reports `requirements-needed` (see "Review Evidence Completion Gate"). It is the reclaim referenced by the wrap-up authority and plan rebind rules. A `working/` card is never reclaimed this way: use the `resume --agent` takeover, which keeps `STARTED_AT`.
+- Reclaiming: when a `review/` card's executor has stopped and the user explicitly authorizes a new owner, that agent claims a never-bound card with `kander move <task-id> working --owner <agent>`. Active dispatch bindings still reject `--owner`. After explicit `dispatch fail|cancel` releases a binding, reclaim instead requires `kander move <task-id> working --owner <agent> --decision <user-decision-reference>`. The command verifies the release and atomically records a protected `LIFECYCLE_DECISION` handoff binding the old cycle, new cycle, released dispatch and decision reference; other working moves reject `--decision`. Every claim rewrites `OWNER` and `STARTED_AT` and adds a fresh claim identity, so same-minute reclaims also change the review cycle. Rebind the existing plan with the complete `rebind_cycles` map from `review progress`; an existing coordinator checkpoint consumes the release and handoff evidence on reconciliation. Historical cards without a claim identity keep their original cycle derivation. A `working/` card is never reclaimed this way: use the authorized `resume --agent` takeover, which preserves the cycle and `STARTED_AT`.
 
 **Start Checks and Rollback**
 
@@ -697,8 +697,11 @@ integration authorization. Confirmation comes from same-round receipts, includin
 
 ## Review Evidence Completion Gate
 
-An execution cycle is one claim of a card, identified by its task ID and `STARTED_AT` (minute
-precision): `start` and `move working --owner` write `STARTED_AT`, `resume --agent` keeps it.
+An execution cycle is one claim of a card, identified by its task ID, `STARTED_AT` and the
+producer-owned unique claim identity in `LIFECYCLE_DECISION`. Manual `move working --owner`
+and `start` each create a fresh identity, including a retry after start rollback. Rollback
+restores the previous document; `resume --agent` preserves the identity and timestamp. Cards
+without a claim identity keep the legacy task-ID plus `STARTED_AT` digest unchanged.
 Active execution cycles require an explicit review plan before `move done`, even when REVIEWS is
 empty or no reviewer ran. Record each role as required or N/A with an actual reason and rule
 basis. When review is disabled or nothing triggered it, the minimal sequence is: `review plan`

@@ -11,7 +11,7 @@ func coordinatorStartCycle(ctx context.Context, tx *Transaction, id string, old 
 		if old.StartAttempt != "" {
 			return "", false, "", coordinatorError("start attempt missing")
 		}
-		cycle, awaiting, err := coordinatorMemberCycle(id, old, s, false)
+		cycle, awaiting, err := coordinatorMemberCycle(tx, id, old, s, false)
 		return cycle, awaiting, "", err
 	}
 	if err := coordinatorStartLineage(ctx, tx, id, old, a); err != nil {
@@ -54,11 +54,16 @@ func coordinatorStartCycle(ctx context.Context, tx *Transaction, id string, old 
 			return "", false, "", coordinatorError("rollback metadata not restored")
 		}
 	case "succeeded":
-		if cycle != a.Cycle || s.Revision < a.FinishedRevision {
+		if cycle != a.Cycle {
+			if _, err := lifecycleHandoffs(tx, s, a.Cycle); err != nil {
+				return "", false, "", err
+			}
+		}
+		if s.Revision < a.FinishedRevision {
 			return "", false, "", coordinatorError("confirmed start cycle changed")
 		}
 	}
-	cycle, awaiting, err := coordinatorMemberCycle(id, old, s, a.Status == "succeeded")
+	cycle, awaiting, err := coordinatorMemberCycle(tx, id, old, s, a.Status == "succeeded")
 	return cycle, awaiting, a.ID, err
 }
 

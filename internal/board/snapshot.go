@@ -149,6 +149,10 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if e != nil {
 			return e
 		}
+		updated, e = stageReclaim(tx, s, target, updated, options)
+		if e != nil {
+			return e
+		}
 		if e = validateTarget(s.Entry, target, updated); e != nil {
 			return e
 		}

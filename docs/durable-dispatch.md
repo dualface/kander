@@ -20,7 +20,7 @@ Repeated creation with the same ID, same task, same message, same baseline, and 
 
 Readers check the durable receipt first. When accepted/completed already exists, return it directly without re-sending or re-launching. When there is no receipt, a same-ID retry re-collects the facts: the same-ID instruction may be re-sent to the currently unique, receivable same session; only a stopped observation with valid identity permits recovering the original session. unknown, invalidated observations, missing identity, and busy do not authorize recovery. A send call that reports an error may still have delivered; keep delivery-unknown and the message file, and do not launch a recovery instance right afterwards. Once a recovery launch has attempted to hand the command to the Agent, keep the window, WINDOW, and task files even if subsequent launch, marking, or liveness verification fails; it may have already accepted the work and must not be blindly cleaned up. When a placeholder container was created but no send has been attempted, this attempt's resources may still be cleaned up. Deadline expiry returns non-zero, does not reset the deadline, and does not claim accepted.
 
-An explicit `resume --agent` carries over the existing user-authorized takeover semantics. Taking over a non-terminal dispatch increments the execution epoch and preserves the previous epoch's original state and receipts; the original message, baseline, and confirmation deadline are unchanged. The takeover message cannot be swapped in under the same ID; when a new message is needed or the intent has already expired, the caller first explicitly disposes of the old intent, then creates a new ID. The entry point for canceling/failing an intent is `kander dispatch cancel|fail <task-id> <dispatch-id> <dispatch-revision> <reason>`; it records the dispatch disposition, does not cancel, archive, or move the task card, and does not automatically authorize takeover.
+An explicit `resume --agent` carries over the existing user-authorized takeover semantics. Taking over a non-terminal dispatch increments the execution epoch and preserves the previous epoch's original state and receipts; the original message, baseline, and confirmation deadline are unchanged. The takeover message cannot be swapped in under the same ID; when a new message is needed or the intent has already expired, the caller first explicitly disposes of the old intent, then creates a new ID. The entry point for canceling/failing an intent is `kander dispatch cancel|fail <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`; termination and release of the card's active binding commit together. It does not cancel, archive, or move the task card, and does not automatically authorize takeover.
 
 ## fix Review Artifact Binding
 
@@ -140,3 +140,38 @@ Unbound-mode ordinary messages to working cards, and cards without a group, cont
 The guarantees are limited to local processes that respect the controlled entry points: a repeated acceptance does not produce a second receipt; a new epoch rejects old controlled writes. An on-disk protocol cannot make arbitrary external side effects — Git, network, file edits — exactly-once. If the executor dies after acceptance, midway through an external operation, an existing accepted is not mistaken for completed; subsequent decisions must reconstruct the actual work progress and cannot blindly replay.
 
 Linux regressions use temporary directories, a fake CLI, and child-process kill/restart, covering intent creation, acceptance, review/done completion, interruption before and after sending, same-ID reconciliation, and concurrent rollback. Windows cross-compilation only verifies the build; native Windows lock/DACL/reparse/process-reaping behavior and real tmux/herdr/Agent behavior each require their own on-machine evidence.
+
+## Terminal Binding Release and Reclaim
+
+A new terminal command writes `dispatches/<id>/termination.json` with the authorization,
+terminal state, revision, reason and optional decision reference. The same board transaction
+writes `release.json`, adds its record to the protected `DISPATCHES` section, clears
+`DISPATCH_ID` and `EXECUTION_EPOCH`, and updates the dispatch state with its release binding.
+The release identifies the card revision and execution cycle. Intent and epoch receipt
+originals remain intact and queryable through `dispatch show`. After release, an explicit old
+ID/epoch fails every controlled acceptance, author, WINDOW, disposition and completion entrance.
+An unbound ordinary update has no dispatch authorization; it does not revive the old grant.
+
+For an upgrade-era failed/cancelled dispatch whose binding remains on the card, repeat the
+matching `fail` or `cancel` with its current revision and a nonempty `--decision` reference.
+This writes one legacy release using the existing terminal facts, preserves the historical
+reason and receipts, and creates no replacement termination original. A missing decision,
+mismatched terminal command, completed round or newer current binding rejects. Repeating a
+release after the binding has already gone also rejects; query its durable evidence instead.
+
+Reclaim of a released review card requires `move <id> working --owner <agent> --decision
+<reference>`. It verifies the release and appends a protected `LIFECYCLE_DECISION` handoff with
+old/new cycles, released dispatch ID, new owner, decision and resulting card revision. Other
+working moves reject that decision argument. Active bindings continue to reject `--owner`.
+The command records an authorization reference; it does not establish user intent or prove
+that the previous executor stopped.
+
+Manual claim and launch share `board.NewClaimMetadata`: each appends a random 128-bit claim
+identity to `LIFECYCLE_DECISION`. `STARTED_AT` retains its display format and all metadata field
+names remain unchanged. The cycle digest includes that identity when present, so consecutive
+claims in one minute differ. Failed start rollback restores the original body and a retry
+creates a new identity. `resume --agent` keeps it. Old cards without the record retain their
+exact prior digest. Ordinary updates cannot alter the claim, handoff or release sections.
+Review progress and plan rebind consume the changed digest without resetting old evidence;
+coordinator recovery also requires the verified handoff described in
+[Coordinator recovery](coordinator-recovery.md).

@@ -69,7 +69,7 @@ The complete member set may include backlog/todo cards not yet started; an empty
 
 Start artifacts are published by board's existing transactions to `.kander/groups/00000000-start-group/<task-id>/`: `current.json` points to the latest attempt, `<attempt-id>/pending.json` stores the immutable attempt, and `result.json` stores the immutable `succeeded` or `rolled-back` result. The start metadata shares a transaction with pending; a legitimate launcher rollback shares a transaction with rolled-back. Success is recorded by launch calling `board.ConfirmTaskStart` after the launch: it writes only the result artifact, does not change the task revision/body, and allows the executor to have already written new records or entered review. The start-attempt ID and revision distinguish retries within the same minute; STARTED_AT alone must not be the only comparison.
 
-The coordinator follows the board/group/task lock order and consumes these artifacts; each step of a retry chain must have the previous attempt's rolled-back result. When only metadata is seen, the success result is missing, or the exit is uncertain, remain awaiting start; do not infer delivery or authorize another executor. A controlled rollback may retract that attempt's provisional observations; after success is confirmed, rollback and arbitrary cycle replacement are refused. Confirmed facts and new task records are not erased because of a failed old launcher. When the artifacts, the current pointer, or the chain are missing/corrupted, stop explicitly; deleting the pointer while keeping the artifacts cannot downgrade the card to an old card. When the success-result write is interrupted, recover along the existing transaction; if the result has not yet been published, remain unknown — success cannot be fabricated from external window state.
+The coordinator follows the board/group/task lock order and consumes these artifacts; each step of a retry chain must have the previous attempt's rolled-back result. When only metadata is seen, the success result is missing, or the exit is uncertain, remain awaiting start; do not infer delivery or authorize another executor. A controlled rollback may retract that attempt's provisional observations; after success is confirmed, rollback and arbitrary cycle replacement are refused. An explicit released-binding reclaim is the evidence-backed exception described below. Confirmed facts and new task records are not erased because of a failed old launcher. When the artifacts, the current pointer, or the chain are missing/corrupted, stop explicitly; deleting the pointer while keeping the artifacts cannot downgrade the card to an old card. When the success-result write is interrupted, recover along the existing transaction; if the result has not yet been published, remain unknown — success cannot be fabricated from external window state.
 
 An accepted or completed artifact clears the same round's pending confirmation; only completed with a matching delivery clears the same round's pending delivery/wrap-up. Recovery works when the executor completes before notify returns, when a fast round trip happens within one scan interval, or when the subscription/orchestration side restarts and sees only the final snapshot. Repeating the same observation re-verifies the artifacts and the actual Git, keeping the checkpoint revision and transaction count unchanged. A stale revision, old epoch, wrong round, or wrong delivery keeps the original record and reports an error.
 
@@ -94,3 +94,33 @@ The CLI uses a 30-second context, bounding the preparation phase's lock contenti
 After EOF/output errors, re-reconcile the current facts once; when the facts are valid, rebuild the subscription only once. Only an explicit `board.transaction_pending` warrants, under the maintenance premise, one explicit init followed by another read; if it still fails, report. duplicate, reparse, real corruption, or unknown products immediately preserve evidence; they must not be deleted, renamed, or retried indefinitely. Lock-deadline exhaustion is a temporary inability to observe, not a task failure.
 
 Tests separately cover board structure/transactions, real local Git, isolated child-process kills, and fake terminals/Agents. Native Windows and real tmux/herdr/Agent sessions require separate on-machine testing; cross builds and the fake CLI do not substitute for real-machine passes. For the original reproductions and regression mapping, see the [Reproduction acceptance mapping](recovery-regressions.md).
+
+## Released Bindings and Authorized Cycle Handoffs
+
+A checkpoint may still name an old dispatch after `dispatch fail|cancel` removed the card's
+active binding. Reconciliation accepts an unbound observation only after verifying that
+round's terminal state, immutable termination/release originals, card release record, epoch,
+base, kind and revision progression. The checkpoint clears its active `dispatch` and retains
+a card-relative `released_dispatches` reference. A bare failed/cancelled state string or
+missing original cannot authorize the change. Legacy terminal bindings are first released
+through the public command with a decision reference; the release preserves the old terminal
+facts instead of fabricating a new termination original.
+
+`move working --owner --decision` then publishes the protected `LIFECYCLE_DECISION` handoff.
+Both coordinator cycle consumers verify its old/new cycles, released dispatch, nonempty user
+decision reference and increasing card revisions. A successful launch original remains
+unchanged: its original cycle can reach the new cycle only through those verified handoff
+links. The same path supports a manually claimed card without a launch original. Reconciliation
+updates the member cycle, retains the start-attempt identity and handoff history, and clears
+any previous cycle's delivery from the active cursor. A new delivery still requires the normal
+Git or completed-receipt evidence; release and reclaim alone do not establish delivery.
+
+After reclaim, `review progress` reports `requirements-needed` and the complete
+`rebind_cycles` map. Extend the existing plan with that map, then reconcile the existing
+checkpoint. Its old review batches and originals remain binding. Recovery also accepts a
+checkpoint that missed both release and reclaim, validating the same links in one observation.
+Optional checkpoint fields preserve schema-1 compatibility; old checkpoints need no rewrite
+before reconciliation. Replays revalidate retained release and handoff evidence. Missing or
+changed originals, absent handoff decisions, a substituted cycle or regressing revisions
+reject without changing the checkpoint. These references record user decisions; they do not
+grant the coordinator independent authority to terminate or reclaim an executor.

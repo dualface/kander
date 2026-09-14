@@ -73,6 +73,7 @@ type Dispatch struct {
 	Accepted        *DispatchReceipt       `json:"accepted,omitempty"`
 	Completed       *DispatchReceipt       `json:"completed,omitempty"`
 	Reason          string                 `json:"reason,omitempty"`
+	Release         *DispatchRelease       `json:"release,omitempty"`
 }
 
 const dispatchRegistry = "00000000-dispatch-group"
@@ -185,6 +186,9 @@ func readDispatch(tx *Transaction, task, id string) (Dispatch, error) {
 		return d, dispatchError(id)
 	}
 	if err := validateWrapUpAuthority(tx, d); err != nil {
+		return d, err
+	}
+	if err := validateDispatchRelease(tx, d); err != nil {
 		return d, err
 	}
 	return d, nil
@@ -342,31 +346,6 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		return putDispatch(tx, d)
 	})
 	return
-}
-
-// EndDispatch records an explicit failure/cancellation decision; it never
-// infers a terminal state merely from a transport timeout.
-func EndDispatch(root, task, id string, expected uint64, state DispatchState, reason string) error {
-	if (state != DispatchFailed && state != DispatchCancelled) || strings.TrimSpace(reason) == "" {
-		return dispatchError(id)
-	}
-	return WithTransaction(root, LockScope{Tasks: []string{task}}, func(tx *Transaction) error {
-		d, e := readDispatch(tx, task, id)
-		if e != nil {
-			return e
-		}
-		s, e := tx.Snapshot(task)
-		if e != nil {
-			return e
-		}
-		if d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchCancelled || d.State == DispatchFailed {
-			return dispatchError(id)
-		}
-		d.State = state
-		d.Reason = reason
-		d.Revision++
-		return putDispatch(tx, d)
-	})
 }
 
 // ReauthorizeDispatch fences the previous executor on an explicitly authorized
