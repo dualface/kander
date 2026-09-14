@@ -18,6 +18,9 @@ type DispatchAuthorReference struct {
 type DispatchFindingReference struct {
 	FindingRef
 	PreviousRunID string `json:"previous_run_id,omitempty"`
+	// Section is a read-only stamp of FINDINGS or NON_BLOCKING from the
+	// published report. Callers may omit it; prepare fills it in.
+	Section string `json:"section,omitempty"`
 }
 
 type DispatchFixBinding struct {
@@ -98,7 +101,7 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 	}
 	expectedAuthors := map[string]DispatchAuthorReference{}
 	seen := map[string]bool{}
-	for _, ref := range binding.Findings {
+	for i, ref := range binding.Findings {
 		if seen[ref.key()] {
 			return dispatchEvidenceError("duplicate finding")
 		}
@@ -119,8 +122,15 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 				return dispatchEvidenceError("superseded review round")
 			}
 		}
-		if err = collectDispatchAuthors(tx, run, ref.FindingID, in.TaskID, expectedAuthors, map[string]bool{}); err != nil {
+		section, err := collectDispatchAuthors(tx, run, ref.FindingID, in.TaskID, expectedAuthors, map[string]bool{})
+		if err != nil {
 			return err
+		}
+		if ref.Section != "" && ref.Section != section {
+			return dispatchEvidenceError("finding section mismatch")
+		}
+		if initial {
+			binding.Findings[i].Section = section
 		}
 	}
 	supplied := map[string]bool{}
@@ -143,38 +153,46 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 	return nil
 }
 
-func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task string, refs map[string]DispatchAuthorReference, seen map[string]bool) error {
+func findingSection(findings ReviewFindings, id string) (ReviewFinding, string, bool) {
+	for _, f := range findings.Findings {
+		if f.ID == id {
+			return f, "FINDINGS", true
+		}
+	}
+	for _, f := range findings.NonBlocking {
+		if f.ID == id {
+			return f, "NON_BLOCKING", true
+		}
+	}
+	return ReviewFinding{}, "", false
+}
+
+func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task string, refs map[string]DispatchAuthorReference, seen map[string]bool) (string, error) {
 	key := run.RunID + "/" + findingID
 	if seen[key] {
-		return dispatchEvidenceError("finding lineage cycle")
+		return "", dispatchEvidenceError("finding lineage cycle")
 	}
 	seen[key] = true
 	if err := verifyPublishedReview(tx, run); err != nil {
-		return err
+		return "", err
 	}
 	findings, err := runFindings(tx, run)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err = validateFindingLineage(tx, run, findings); err != nil {
-		return err
+		return "", err
+	}
+	item, section, ok := findingSection(findings, findingID)
+	if !ok {
+		return "", dispatchEvidenceError("missing finding")
 	}
 	ledger, err := readDispositionLedger(tx, run, false)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !containsID(ledger.Assignment.Items[findingID], task) {
-		return dispatchEvidenceError("finding not assigned to task")
-	}
-	var item *ReviewFinding
-	for _, f := range findings.Findings {
-		if f.ID == findingID {
-			copy := f
-			item = &copy
-		}
-	}
-	if item == nil {
-		return dispatchEvidenceError("missing or non-blocking finding")
+		return "", dispatchEvidenceError("finding not assigned to task")
 	}
 	for _, record := range ledger.Records {
 		if record.TaskID != task || record.FindingID != findingID {
@@ -186,14 +204,16 @@ func collectDispatchAuthors(tx *Transaction, run ReviewRun, findingID, task stri
 		var previous ReviewRun
 		ok, e := readReviewJSON(tx, reviewRunName(item.Lineage.RunID), &previous)
 		if e != nil {
-			return e
+			return "", e
 		}
 		if !ok || previous.BatchID != run.BatchID || previous.Role != run.Role || !slices.Equal(previous.TaskIDs, run.TaskIDs) {
-			return dispatchEvidenceError("foreign predecessor")
+			return "", dispatchEvidenceError("foreign predecessor")
 		}
-		return collectDispatchAuthors(tx, previous, item.Lineage.FindingID, task, refs, seen)
+		if _, e = collectDispatchAuthors(tx, previous, item.Lineage.FindingID, task, refs, seen); e != nil {
+			return "", e
+		}
 	}
-	return nil
+	return section, nil
 }
 
 // ValidateDispatchEvidence re-resolves every producer original before transport.
@@ -223,7 +243,11 @@ func DispatchEvidenceInstruction(d Dispatch) string {
 	if f := d.Input.Evidence.Fix; f != nil {
 		lines = append(lines, "BATCH_ID: "+f.BatchID)
 		for _, item := range f.Findings {
-			lines = append(lines, fmt.Sprintf("FINDING: %s/%s; TASK_ID: %s; REPORT: reviews/%s/report.md", item.RunID, item.FindingID, d.Input.TaskID, item.RunID))
+			label := "FINDING"
+			if item.Section == "NON_BLOCKING" {
+				label = "NON_BLOCKING"
+			}
+			lines = append(lines, fmt.Sprintf("%s: %s/%s; TASK_ID: %s; REPORT: reviews/%s/report.md", label, item.RunID, item.FindingID, d.Input.TaskID, item.RunID))
 		}
 		for _, a := range f.Authors {
 			lines = append(lines, fmt.Sprintf("AUTHOR: %s; TASK_ID: %s; ARTIFACT: %s", a.Author, a.Artifact.TaskID, a.Artifact.Path))

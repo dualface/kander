@@ -116,7 +116,24 @@ func sameDispatchInput(a, b DispatchInput) bool {
 	if a.ConfirmBy.IsZero() {
 		a.ConfirmBy = b.ConfirmBy
 	}
-	return reflect.DeepEqual(a, b)
+	// Section is a prepare-time stamp; callers may omit it on same-ID retries.
+	return reflect.DeepEqual(dispatchInputForCompare(a), dispatchInputForCompare(b))
+}
+
+func dispatchInputForCompare(in DispatchInput) DispatchInput {
+	if in.Evidence.Fix == nil {
+		return in
+	}
+	fix := *in.Evidence.Fix
+	findings := append([]DispatchFindingReference(nil), fix.Findings...)
+	for i := range findings {
+		findings[i].Section = ""
+	}
+	fix.Findings = findings
+	authors := append([]DispatchAuthorReference(nil), fix.Authors...)
+	fix.Authors = authors
+	in.Evidence.Fix = &fix
+	return in
 }
 func putDispatch(tx *Transaction, d Dispatch) error {
 	b, err := json.Marshal(d)

@@ -228,3 +228,162 @@ func TestDispatchFixRejectsSupersededRoundAndCarriesLineageAuthors(t *testing.T)
 	in.Evidence.Fix.Authors = []DispatchAuthorReference{{Finding: FindingRef{run.RunID, f.ID}, RecordID: record.RecordID, Author: record.Author, Artifact: ArtifactReference{in.TaskID, dispositionPath(record)}}}
 	prepareTestDispatch(t, root, in)
 }
+
+func nonBlockingFixFixture(t *testing.T, blocking bool) (string, DispatchInput, ReviewRun, ReviewFinding, ReviewFinding) {
+	t.Helper()
+	root := tempBoard(t)
+	id := gateCard(t, root, "nonblock")
+	gatePlan(t, root, []string{id}, archiveRequirements())
+	findings := emptyFindings()
+	nb := ReviewFinding{ID: "PM-NB", Tier: "low", Text: "建议整理命名", Evidence: "file.go:3"}
+	findings.NonBlocking = []ReviewFinding{nb}
+	var blockingFinding ReviewFinding
+	if blocking {
+		blockingFinding = ReviewFinding{ID: "PM-01", Tier: "medium", Text: "需要修复", Evidence: "file.go:1"}
+		findings.Findings = []ReviewFinding{blockingFinding}
+	}
+	run := gateRun(t, root, archiveInput([]string{id}, "pm-nb", "PM"), findings)
+	items := map[string][]string{nb.ID: {id}}
+	if blocking {
+		items[blockingFinding.ID] = []string{id}
+	}
+	assignGate(t, root, run, items)
+	qa := gateRun(t, root, archiveInput([]string{id}, "qa-nb", "QA"), emptyFindings())
+	assignGate(t, root, qa, map[string][]string{})
+	s := transactionSnapshot(t, root, id)
+	if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
+		t.Fatal(err)
+	}
+	s = transactionSnapshot(t, root, id)
+	in := dispatchInput(s, "fix-nb")
+	in.Kind, in.Base = "fix", run.Commit
+	in.Evidence.Fix = &DispatchFixBinding{BatchID: run.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run.RunID, nb.ID}}}}
+	return root, in, run, nb, blockingFinding
+}
+
+func TestDispatchFixBindsNonBlockingFindings(t *testing.T) {
+	t.Run("only non-blocking without author originals", func(t *testing.T) {
+		root, in, run, nb, _ := nonBlockingFixFixture(t, false)
+		d := prepareTestDispatch(t, root, in)
+		if got := d.Input.Evidence.Fix.Findings[0].Section; got != "NON_BLOCKING" {
+			t.Fatalf("section=%q", got)
+		}
+		text := DispatchEvidenceInstruction(d)
+		if !strings.Contains(text, "NON_BLOCKING: "+run.RunID+"/"+nb.ID) || strings.Contains(text, "FINDING: "+run.RunID+"/"+nb.ID) {
+			t.Fatalf("instruction missing non-blocking mark: %s", text)
+		}
+		if err := ValidateDispatchEvidence(root, in.TaskID, in.ID); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("mixed findings and non-blocking", func(t *testing.T) {
+		root, in, run, nb, blocking := nonBlockingFixFixture(t, true)
+		in.Evidence.Fix.Findings = []DispatchFindingReference{
+			{FindingRef: FindingRef{run.RunID, blocking.ID}},
+			{FindingRef: FindingRef{run.RunID, nb.ID}},
+		}
+		d := prepareTestDispatch(t, root, in)
+		sections := map[string]string{}
+		for _, ref := range d.Input.Evidence.Fix.Findings {
+			sections[ref.FindingID] = ref.Section
+		}
+		if sections[blocking.ID] != "FINDINGS" || sections[nb.ID] != "NON_BLOCKING" {
+			t.Fatalf("%v", sections)
+		}
+		text := DispatchEvidenceInstruction(d)
+		if !strings.Contains(text, "FINDING: "+run.RunID+"/"+blocking.ID) || !strings.Contains(text, "NON_BLOCKING: "+run.RunID+"/"+nb.ID) {
+			t.Fatalf("instruction=%s", text)
+		}
+	})
+	t.Run("lineage requires existing author originals", func(t *testing.T) {
+		root, in, run, nb, _ := nonBlockingFixFixture(t, false)
+		s := transactionSnapshot(t, root, in.TaskID)
+		if _, err := MoveEntry(s.Entry, root, "working"); err != nil {
+			t.Fatal(err)
+		}
+		s = transactionSnapshot(t, root, in.TaskID)
+		record := ReviewDisposition{RecordID: "nb-prior", RunID: run.RunID, FindingID: nb.ID, BatchID: run.BatchID, TaskID: in.TaskID, Author: "codex", ReportHash: run.Hashes["report.md"], Original: nb.Text, Status: "deferred", Basis: "下轮再处理"}
+		if err := SubmitReviewDisposition(root, record, s.Revision); err != nil {
+			t.Fatal(err)
+		}
+		nextInput := archiveInput([]string{in.TaskID}, "pm-nb-next", "PM")
+		nextInput.PreviousRunID = run.RunID
+		nextInput.ReviewedCommit = run.Commit
+		nextFindings := emptyFindings()
+		nextFindings.NonBlocking = []ReviewFinding{{ID: "PM-NB2", Tier: "suggest", Text: "命名仍待整理", Evidence: "file.go:4", Lineage: &FindingRef{run.RunID, nb.ID}}}
+		next := gateRun(t, root, nextInput, nextFindings)
+		assignGate(t, root, next, map[string][]string{"PM-NB2": {in.TaskID}})
+		in.Evidence.Fix.Findings = []DispatchFindingReference{{FindingRef: FindingRef{next.RunID, "PM-NB2"}, PreviousRunID: run.RunID}}
+		if _, err := PrepareDispatch(root, in); err == nil {
+			t.Fatal("prior non-blocking author omitted")
+		}
+		in.Evidence.Fix.Authors = []DispatchAuthorReference{{Finding: FindingRef{run.RunID, nb.ID}, RecordID: record.RecordID, Author: record.Author, Artifact: ArtifactReference{in.TaskID, dispositionPath(record)}}}
+		d := prepareTestDispatch(t, root, in)
+		if d.Input.Evidence.Fix.Findings[0].Section != "NON_BLOCKING" {
+			t.Fatal(d.Input.Evidence.Fix.Findings[0].Section)
+		}
+	})
+	t.Run("missing versus unassigned errors", func(t *testing.T) {
+		root, in, _, nb, _ := nonBlockingFixFixture(t, false)
+		in.Evidence.Fix.Findings[0].FindingID = "PM-404"
+		if _, err := PrepareDispatch(root, in); err == nil || !strings.Contains(err.Error(), "missing finding") {
+			t.Fatalf("missing: %v", err)
+		}
+		in.Evidence.Fix.Findings[0].FindingID = nb.ID
+		root2 := tempBoard(t)
+		id := gateCard(t, root2, "unassigned-nb")
+		other := gateCard(t, root2, "other-owner")
+		gatePlan(t, root2, []string{id, other}, archiveRequirements())
+		findings := emptyFindings()
+		findings.NonBlocking = []ReviewFinding{{ID: "PM-UA", Tier: "recommend", Text: "可延后", Evidence: "a:1"}}
+		run2 := gateRun(t, root2, archiveInput([]string{id, other}, "pm-ua", "PM"), findings)
+		assignGate(t, root2, run2, map[string][]string{"PM-UA": {other}})
+		s := transactionSnapshot(t, root2, id)
+		if _, err := MoveEntry(s.Entry, root2, "review"); err != nil {
+			t.Fatal(err)
+		}
+		s = transactionSnapshot(t, root2, id)
+		bad := dispatchInput(s, "fix-ua")
+		bad.Kind, bad.Base = "fix", run2.Commit
+		bad.Evidence.Fix = &DispatchFixBinding{BatchID: run2.BatchID, Findings: []DispatchFindingReference{{FindingRef: FindingRef{run2.RunID, "PM-UA"}}}}
+		if _, err := PrepareDispatch(root2, bad); err == nil || !strings.Contains(err.Error(), "finding not assigned to task") {
+			t.Fatalf("unassigned: %v", err)
+		}
+	})
+}
+
+func TestDispatchFixNonBlockingDispositionOnlyRound(t *testing.T) {
+	root, in, run, nb, _ := nonBlockingFixFixture(t, false)
+	qa, err := ReadReviewRun(root, "qa-nb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := prepareTestDispatch(t, root, in)
+	if _, err := dispatchMove(t, root, d, "working"); err != nil {
+		t.Fatal(err)
+	}
+	s := transactionSnapshot(t, root, in.TaskID)
+	record := ReviewDisposition{
+		RecordID: "nb-done", RunID: run.RunID, FindingID: nb.ID, BatchID: run.BatchID, TaskID: in.TaskID,
+		Author: "codex", ReportHash: run.Hashes["report.md"], Original: nb.Text, Status: "deferred",
+		Basis: "本轮仅处置, 不改代码", Authorization: &d.Authorization,
+	}
+	if err := SubmitReviewDisposition(root, record, s.Revision); err != nil {
+		t.Fatal(err)
+	}
+	s = transactionSnapshot(t, root, in.TaskID)
+	if _, err := MoveWithOptions(s.Entry, root, "review", MoveOptions{Authorization: d.Authorization, DeliveryCommit: run.Commit}); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := ReadDispatch(root, in.TaskID, in.ID)
+	if err != nil || completed.State != DispatchCompleted || completed.Completed.DeliveryCommit != run.Commit {
+		t.Fatalf("%+v %v", completed, err)
+	}
+	closed, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PM": passRole(run), "QA": passRole(qa)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closed.RoleStatuses["PM"] != "PASS" || closed.TargetCommit != run.Commit {
+		t.Fatalf("%+v", closed)
+	}
+}
