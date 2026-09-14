@@ -187,9 +187,6 @@ func TestChatBoxDropsStaleResults(t *testing.T) {
 		t.Fatalf("stale preview applied: %+v", app.Chat)
 	}
 
-	app.PrepareChat = func() (launch.ChatPreview, error) {
-		return launch.ChatPreview{Agent: "codex", Launcher: "tmux"}, nil
-	}
 	runPendingWork(t, app)
 	typeText(app, "hello")
 	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlS})
