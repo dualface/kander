@@ -116,3 +116,16 @@ func TestLegacyReviewOverlayPrecedenceAndRepair(t *testing.T) {
 		t.Fatal("scope repair changed project overlay", err)
 	}
 }
+
+func TestLegacyReviewStageMergeDoesNotHideInvalidPolicies(t *testing.T) {
+	setupHome(t)
+	for _, roles := range []map[string]any{
+		{"CSA": "invalid", "Hacker": "required"},
+		{"CSA": "required", "Hacker": 42},
+		{"Hacker": nil},
+	} {
+		if _, err := Validate(minimalPayload(map[string]any{"review_stages": roles})); err == nil {
+			t.Fatal("invalid legacy policy hidden by merge", roles)
+		}
+	}
+}

@@ -41,14 +41,16 @@ func NormalizeLegacyReviewKeys(raw map[string]any) (map[string]any, []string) {
 						hacker = "auto"
 					}
 					switch {
+					case !legacyReviewStageValid(csa):
+						value = csa
+					case !legacyReviewStageValid(hacker):
+						value = hacker
 					case csa == "required" || hacker == "required":
 						value = "required"
 					case csa == "auto" || hacker == "auto":
 						value = "auto"
-					case csa == "skip" && hacker == "skip":
-						value = "skip"
 					default:
-						value = csa
+						value = "skip"
 					}
 				}
 				roles["Security"] = value
@@ -96,4 +98,11 @@ func validateMergedReviewKeys(merged map[string]any, layers ...map[string]any) (
 	}
 	sort.Strings(cfg.legacyReviewKeys)
 	return cfg, nil
+}
+
+// Preserve malformed legacy values so ordinary schema validation rejects them,
+// instead of concealing an invalid policy behind its sibling's higher priority.
+func legacyReviewStageValid(value any) bool {
+	mode, ok := value.(string)
+	return ok && contains(ReviewStageModes, mode)
 }
