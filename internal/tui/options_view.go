@@ -186,11 +186,7 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 			body = 1
 		}
 		p.report.view.Width, p.report.view.Height = width, body
-		hintKey := "tui.scroll_esc_back"
-		if p.flowScale != "" {
-			hintKey = "tui.flow_tab_scroll_esc"
-		}
-		hint := styleFor("popup-dim", palette).Render(t(hintKey))
+		hint := styleFor("popup-dim", palette).Render(p.reportHintLine(width))
 		return p.report.title, p.report.view.View() + "\n\n" + hint
 	case p.loadErr != "":
 		return t("tui.options_2"), styleFor("popup-warn", palette).Render(p.loadErr)
@@ -260,6 +256,32 @@ func fitOptionsForm(natural, available int) (height int, footerGap string) {
 	return height, footerGap
 }
 
+func joinHint(page, scope string, width int) string {
+	if scope == "" {
+		return clipText(page, width)
+	}
+	const sep = " · "
+	joined := page + sep + scope
+	if width <= 0 || displayWidth(joined) <= width {
+		return joined
+	}
+	budget := width - displayWidth(scope) - displayWidth(sep)
+	if budget < 8 {
+		return clipText(scope, width)
+	}
+	return clipText(page, budget) + sep + scope
+}
+
+func (p *optionsPanel) reportHintLine(width int) string {
+	page := t("tui.scroll_esc_back")
+	scope := ""
+	if p.viewingFlow() {
+		page = t("tui.flow_scale_scroll_esc")
+		scope = p.scopeTabHint()
+	}
+	return joinHint(page, scope, width)
+}
+
 func (p *optionsPanel) pageHint() string {
 	switch {
 	case p.current == sectionDoctor:
@@ -277,21 +299,7 @@ func (p *optionsPanel) pageHint() string {
 // hintLine is the key hint at the bottom of the popup, giving one accurate line for the current page.
 // When Global/Project can be switched, that hint is preserved if the line must be clipped.
 func (p *optionsPanel) hintLine(width int) string {
-	page := p.pageHint()
-	scope := p.scopeTabHint()
-	if scope == "" {
-		return clipText(page, width)
-	}
-	const sep = " · "
-	joined := page + sep + scope
-	if width <= 0 || displayWidth(joined) <= width {
-		return joined
-	}
-	budget := width - displayWidth(scope) - displayWidth(sep)
-	if budget < 8 {
-		return clipText(scope, width)
-	}
-	return clipText(page, budget) + sep + scope
+	return joinHint(p.pageHint(), p.scopeTabHint(), width)
 }
 
 func sectionTitle(section string) string {
@@ -389,6 +397,9 @@ func optionsMouseActivate(bstate int) bool {
 // Every focus move is turned into a command handed back to Bubble Tea rather than driving the form synchronously here.
 func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 	if p.report != nil {
+		if cmd := p.handleTabMouse(x, y, bstate); cmd != nil {
+			return cmd
+		}
 		delta := mouseWheelDelta(bstate)
 		if delta > 0 {
 			p.report.view.ScrollDown(delta * mouseScrollStep)

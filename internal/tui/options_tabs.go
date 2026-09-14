@@ -19,8 +19,18 @@ type tabHit struct {
 	x1     int
 }
 
+func (p *optionsPanel) viewingFlow() bool {
+	return p != nil && p.report != nil && p.flowScale != ""
+}
+
 func (p *optionsPanel) canCycleTabs() bool {
-	return p.session != nil && !p.confirming && !p.restoreConfirming && p.report == nil && len(p.session.AvailableTargets()) > 1
+	if p.session == nil || p.confirming || p.restoreConfirming {
+		return false
+	}
+	if p.report != nil && !p.viewingFlow() {
+		return false
+	}
+	return len(p.session.AvailableTargets()) > 1
 }
 
 func tabLabel(target string) string {
@@ -66,11 +76,16 @@ func (p *optionsPanel) switchTab(target string) tea.Cmd {
 	}
 	focusKey, focusIndex := p.currentFocus()
 	if err := p.session.SetTarget(target); err != nil {
+		p.flowScale = ""
 		p.showReport(t("tui.load_failed"), nil, err.Error())
 		return nil
 	}
 	p.syncAppFromSession()
 	p.dirty = p.session.HasUnsaved()
+	if p.viewingFlow() {
+		p.refreshFlowReport()
+		return nil
+	}
 	if p.current == "" {
 		return p.openRoot()
 	}
@@ -352,7 +367,10 @@ func (p *optionsPanel) hitTab(x, y int) string {
 }
 
 func (p *optionsPanel) handleTabMouse(x, y, bstate int) tea.Cmd {
-	if p.confirming || p.restoreConfirming || p.report != nil || !optionsMouseActivate(bstate) || p.session == nil {
+	if p.confirming || p.restoreConfirming || !optionsMouseActivate(bstate) || p.session == nil {
+		return nil
+	}
+	if p.report != nil && !p.viewingFlow() {
 		return nil
 	}
 	// Tabs live in the dialog header, not the body.

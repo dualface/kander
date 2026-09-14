@@ -74,6 +74,7 @@ type optionsPanel struct {
 	bind         *formBinding
 	report       *reportView
 	// flowScale is "large" or "small" while the workflow report is open; empty otherwise.
+	// While it is set, Tab still cycles Global/Project and ←→ cycles this scale.
 	flowScale    string
 	spinner      spinner.Model
 	status       string
@@ -421,13 +422,21 @@ func (p *optionsPanel) updateReport(msg tea.Msg) tea.Cmd {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch mapKey(key) {
 		case "tab":
-			if p.flowScale != "" {
-				p.cycleFlowScale(1)
-				return nil
+			if p.viewingFlow() {
+				return p.cycleTab(1)
 			}
 		case "shift-tab":
-			if p.flowScale != "" {
+			if p.viewingFlow() {
+				return p.cycleTab(-1)
+			}
+		case "left":
+			if p.viewingFlow() {
 				p.cycleFlowScale(-1)
+				return nil
+			}
+		case "right":
+			if p.viewingFlow() {
+				p.cycleFlowScale(1)
 				return nil
 			}
 		case "esc", "q", "Q", "enter", "backspace":

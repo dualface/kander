@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -81,9 +82,9 @@ func TestFlowScaleTabsAndChart(t *testing.T) {
 		t.Fatalf("expected flowchart boxes: %s", text)
 	}
 
-	drivePanel(panel, keyMsg("tab"))
+	drivePanel(panel, keyMsg("right"))
 	if panel.flowScale != "small" {
-		t.Fatalf("tab scale=%q", panel.flowScale)
+		t.Fatalf("right scale=%q", panel.flowScale)
 	}
 	text = flowReportText(panel)
 	if !strings.Contains(text, "▸ "+config.Text("tui.review_group_small")) {
@@ -92,9 +93,9 @@ func TestFlowScaleTabsAndChart(t *testing.T) {
 	if !strings.Contains(text, "small-only (low)") || strings.Contains(text, "large-only") {
 		t.Fatalf("small chart should show small model only: %s", text)
 	}
-	drivePanel(panel, keyMsg("shift-tab"))
+	drivePanel(panel, keyMsg("left"))
 	if panel.flowScale != "large" {
-		t.Fatalf("shift-tab scale=%q", panel.flowScale)
+		t.Fatalf("left scale=%q", panel.flowScale)
 	}
 }
 
@@ -165,7 +166,7 @@ func TestFlowShowsUnsavedModelsAndCLIDefault(t *testing.T) {
 			t.Fatalf("missing %q: %s", want, text)
 		}
 	}
-	drivePanel(panel, keyMsg("tab"))
+	drivePanel(panel, keyMsg("right"))
 	text = flowReportText(panel)
 	if !strings.Contains(text, config.Text("flow.cli_default")) {
 		t.Fatalf("small empty model should show CLI default: %s", text)
@@ -226,6 +227,125 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFlowScopeTabsAndScaleKeys(t *testing.T) {
+	_, panel := openPanel(t)
+	agent := panel.session.Config.KanbanAgents["large"]
+	dir := t.TempDir()
+	path := filepath.Join(dir, config.OverlayFilename)
+	raw := map[string]any{
+		"models": map[string]any{
+			"kanban": map[string]any{
+				agent: map[string]any{
+					"large_model": "project-flow-model",
+				},
+			},
+		},
+	}
+	if err := panel.session.AttachOverlay(config.ModeGlobal, config.OverlayLocation{ProjectRoot: dir, Path: path}, raw); err != nil {
+		t.Fatal(err)
+	}
+	panel.dispatch(sectionFlow)
+
+	text := flowReportText(panel)
+	if strings.Contains(text, "project-flow-model") {
+		t.Fatalf("global chart leaked project model: %s", text)
+	}
+	plain := ansi.Strip(panelView(panel))
+	if !strings.Contains(plain, uiText("tui.tab_global")) || !strings.Contains(plain, uiText("tui.tab_project")) {
+		t.Fatalf("flow missing Global/Project tabs:\n%s", plain)
+	}
+	if !strings.Contains(plain, uiText("tui.flow_scale_scroll_esc")) || !strings.Contains(plain, uiText("tui.switch_scope_tabs")) {
+		t.Fatalf("flow status bar missing keys:\n%s", plain)
+	}
+	if !flowHintHasBlankLine(panel, uiText("tui.flow_scale_scroll_esc")) {
+		t.Fatal("need a blank line between the chart and the status bar")
+	}
+
+	drivePanel(panel, keyMsg("tab"))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("tab target=%s", panel.session.Target)
+	}
+	if panel.flowScale != "large" || panel.report == nil {
+		t.Fatalf("tab must keep the flowchart open, scale=%q report=%v", panel.flowScale, panel.report != nil)
+	}
+	text = flowReportText(panel)
+	if !strings.Contains(text, "project-flow-model") {
+		t.Fatalf("project chart missing overlay model: %s", text)
+	}
+
+	drivePanel(panel, keyMsg("right"))
+	if panel.flowScale != "small" {
+		t.Fatalf("right scale=%q", panel.flowScale)
+	}
+	drivePanel(panel, keyMsg("left"))
+	if panel.flowScale != "large" {
+		t.Fatalf("left scale=%q", panel.flowScale)
+	}
+
+	drivePanel(panel, keyMsg("shift-tab"))
+	if panel.session.Target != config.TargetScope {
+		t.Fatalf("shift-tab target=%s", panel.session.Target)
+	}
+	if panel.flowScale != "large" {
+		t.Fatalf("shift-tab changed scale to %s", panel.flowScale)
+	}
+	text = flowReportText(panel)
+	if strings.Contains(text, "project-flow-model") {
+		t.Fatalf("global chart kept project model: %s", text)
+	}
+
+	panel.view()
+	if len(panel.tabHits) < 2 {
+		t.Fatalf("tabHits=%d", len(panel.tabHits))
+	}
+	hit := panel.tabHits[1]
+	x := panel.headerX + (hit.x0+hit.x1)/2
+	y := panel.headerY + panel.tabLabelRow
+	pumpPanel(panel, panel.HandleMouse(x, y, mouseBtn1Clicked))
+	if panel.session.Target != config.TargetOverlay {
+		t.Fatalf("click target=%s", panel.session.Target)
+	}
+	if panel.report == nil || panel.flowScale != "large" {
+		t.Fatal("clicking a scope tab closed the flowchart")
+	}
+}
+
+func TestFlowHintOmitsScopeWhenSingleTab(t *testing.T) {
+	_, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeProject)
+	panel.dispatch(sectionFlow)
+	plain := ansi.Strip(panelView(panel))
+	if strings.Contains(plain, " · "+uiText("tui.switch_scope_tabs")) || strings.Contains(plain, uiText("tui.tab_global")) {
+		t.Fatalf("single-tab flow listed Global/Project keys:\n%s", plain)
+	}
+	if !strings.Contains(plain, uiText("tui.flow_scale_scroll_esc")) {
+		t.Fatalf("missing scale keys:\n%s", plain)
+	}
+	if !flowHintHasBlankLine(panel, uiText("tui.flow_scale_scroll_esc")) {
+		t.Fatal("need a blank line between the chart and the status bar")
+	}
+	drivePanel(panel, keyMsg("tab"))
+	if panel.flowScale != "large" {
+		t.Fatalf("tab changed scale to %s", panel.flowScale)
+	}
+	drivePanel(panel, keyMsg("right"))
+	if panel.flowScale != "small" {
+		t.Fatalf("right scale=%s", panel.flowScale)
+	}
+}
+
+func flowHintHasBlankLine(panel *optionsPanel, hint string) bool {
+	inner := panel.innerWidth()
+	_, body := panel.content(themePalette(panel.app.Theme), inner, 24)
+	plain := ansi.Strip(body)
+	idx := strings.LastIndex(plain, hint)
+	if idx < 0 {
+		return false
+	}
+	before := strings.TrimRight(plain[:idx], " ")
+	return strings.HasSuffix(before, "\n\n")
 }
 
 func flowReportText(panel *optionsPanel) string {

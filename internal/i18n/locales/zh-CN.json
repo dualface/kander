@@ -926,7 +926,7 @@
   "tui.save_and_close": "保存并关闭",
   "tui.save_failed": "保存失败",
   "tui.scroll_esc_back": "↑↓ 滚动 · Esc 返回",
-  "tui.flow_tab_scroll_esc": "Tab 切换规模 · ↑↓ 滚动 · Esc 返回",
+  "tui.flow_scale_scroll_esc": "←→ 切换规模 · ↑↓ 滚动 · Esc 返回",
   "tui.search": "搜索",
   "tui.search_2": "搜索",
   "tui.search_and_jump": "搜索与跳转",

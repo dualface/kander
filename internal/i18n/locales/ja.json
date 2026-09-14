@@ -926,7 +926,7 @@
   "tui.save_and_close": "保存して閉じる",
   "tui.save_failed": "保存に失敗しました",
   "tui.scroll_esc_back": "↑↓ スクロール · Esc 戻る",
-  "tui.flow_tab_scroll_esc": "Tab で規模切替 · ↑↓ スクロール · Esc 戻る",
+  "tui.flow_scale_scroll_esc": "←→ で規模切替 · ↑↓ スクロール · Esc 戻る",
   "tui.search": "検索",
   "tui.search_2": "検索",
   "tui.search_and_jump": "検索とジャンプ",
