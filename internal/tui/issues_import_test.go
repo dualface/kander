@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -454,5 +456,82 @@ func TestIssuesImportSharesTheCLIService(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "backlog", local.TaskID, "source", "github-issue.json")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Bound markers must stay accent-bold after plain-text clip/pad, without
+// changing row width or unbound label styling.
+func TestIssuesBoundMarkerHighlightKeepsGeometry(t *testing.T) {
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer lipgloss.SetColorProfile(previous)
+
+	marker := config.Text("tui.issues_imported", "task-1", config.Text("tui.backlog"))
+	labels := "bug, ui"
+	for _, theme := range []string{"dark", "light", "tide", "dusk", "slate-light"} {
+		p := themePalette(theme)
+		for _, selected := range []bool{false, true} {
+			style := issuesBoundMarkerStyle(p, selected)
+			if style.GetForeground() != p.Accent || !style.GetBold() {
+				t.Fatalf("%s selected=%v marker style lost accent/bold", theme, selected)
+			}
+			if selected && p.SelectionBg != "" && style.GetBackground() != p.SelectionBg {
+				t.Fatalf("%s selected marker lost SelectionBg", theme)
+			}
+			const width = 56
+			line := paintIssuesBoundLabelsLine(labels, marker, selected, width, p)
+			if got := ansi.StringWidth(line); got != width {
+				t.Fatalf("%s selected=%v width=%d want %d", theme, selected, got, width)
+			}
+			plain := ansi.Strip(line)
+			if !strings.Contains(plain, "bug") || !strings.Contains(plain, "task-1") {
+				t.Fatalf("%s plain=%q", theme, plain)
+			}
+			if !strings.Contains(line, style.Render(marker)) {
+				t.Fatalf("%s missing accent-styled marker fragment", theme)
+			}
+			base := styleFor("popup-dim", p)
+			if selected {
+				base = styleFor("popup-sel", p)
+			}
+			uniform := base.Render(padLine(clipText(labels+"  "+marker, width), width))
+			if line == uniform {
+				t.Fatalf("%s bound line must not use a single base style", theme)
+			}
+		}
+		narrow := paintIssuesBoundLabelsLine(strings.Repeat("label-", 8), marker, false, 28, p)
+		if got := ansi.StringWidth(narrow); got != 28 {
+			t.Fatalf("%s truncated width=%d", theme, got)
+		}
+		if !strings.Contains(ansi.Strip(narrow), "...") {
+			t.Fatalf("%s expected ellipsis: %q", theme, ansi.Strip(narrow))
+		}
+	}
+
+	fake := newFakeIssues()
+	fake.listResult = defaultPage(issuesListLimit)
+	index := importTestIndex(fake.repository, 42, "task-1",
+		time.Date(2026, 9, 11, 2, 3, 0, 0, time.UTC), time.Date(2026, 9, 11, 3, 0, 0, 0, time.UTC))
+	app, _ := issuesImportApp(t, fake, []Task{{TaskID: "task-1", Title: "Task", State: "backlog"}}, index, nil)
+	app.HandleKey("g")
+	runPendingWork(t, app)
+	item := app.Issues.items[0]
+	p := themePalette(app.Theme)
+	bound := app.issuesItemPaneLines(item, true, 40, p)
+	if len(bound) != issuesItemLines {
+		t.Fatalf("bound lines=%d", len(bound))
+	}
+	for i, line := range bound {
+		if got := ansi.StringWidth(line); got != 40 {
+			t.Fatalf("bound line %d width=%d", i, got)
+		}
+	}
+	app.Issues.index = issue.Index{}
+	unbound := app.issuesItemPaneLines(item, false, 40, p)
+	if len(unbound) != issuesItemLines {
+		t.Fatalf("unbound lines=%d", len(unbound))
+	}
+	if strings.Contains(ansi.Strip(unbound[2]), "task-1") {
+		t.Fatalf("unbound labels still show card marker: %q", ansi.Strip(unbound[2]))
 	}
 }

@@ -218,22 +218,19 @@ func (a *App) issuesListPane(width, height int, p palette) string {
 
 func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width int, p palette) []string {
 	first := "#" + itoa(item.Number) + "  " + a.Context.issueStateLabel(item.State) + "  " + formatIssueTime(item.UpdatedAt)
-	labels := strings.Join(item.Labels, ", ")
+	labels := issue.SanitizeRemoteText(strings.Join(item.Labels, ", "))
+	marker := ""
+	if local, ok := a.issuesLocalCard(item.Number); ok {
+		text := t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State))
+		if item.UpdatedAt.After(local.IssueUpdatedAt) {
+			text += " · " + t("tui.issues_import_update")
+		}
+		marker = issue.SanitizeRemoteText(text)
+	}
 	content := []string{
 		issue.SanitizeRemoteText(first),
 		issue.SanitizeRemoteText(item.Title),
-		issue.SanitizeRemoteText(labels),
-	}
-	if local, ok := a.issuesLocalCard(item.Number); ok {
-		marker := t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State))
-		if item.UpdatedAt.After(local.IssueUpdatedAt) {
-			marker += " · " + t("tui.issues_import_update")
-		}
-		line := issue.SanitizeRemoteText(marker)
-		if strings.TrimSpace(content[2]) != "" {
-			content[2] += "  "
-		}
-		content[2] += line
+		labels,
 	}
 	out := make([]string, 0, issuesItemLines)
 	for index, text := range content {
@@ -246,9 +243,61 @@ func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width 
 		default:
 			style = styleFor("popup-dim", p)
 		}
+		if index == 2 && marker != "" {
+			out = append(out, paintIssuesBoundLabelsLine(labels, marker, selected, width, p))
+			continue
+		}
 		out = append(out, style.Render(padLine(clipText(text, width), width)))
 	}
 	return out
+}
+
+// issuesBoundMarkerStyle emphasizes the local-card marker with the theme accent.
+// Selected rows keep the shared selection background so the whole line stays
+// cohesive while the marker remains distinct from dim labels.
+func issuesBoundMarkerStyle(p palette, selected bool) lipgloss.Style {
+	if selected {
+		if p.SelectionBg != "" {
+			return lipgloss.NewStyle().Foreground(p.Accent).Background(p.SelectionBg).Bold(true)
+		}
+		return lipgloss.NewStyle().Foreground(p.Accent).Background(p.Bg).Reverse(true).Bold(true)
+	}
+	return styleFor("popup-group", p)
+}
+
+// paintIssuesBoundLabelsLine clips labels and the bound-card marker as plain
+// text, then colors only the visible marker fragment. Truncation ellipsis and
+// trailing padding keep the row base style so ANSI never drives width.
+func paintIssuesBoundLabelsLine(labels, marker string, selected bool, width int, p palette) string {
+	prefix := labels
+	if strings.TrimSpace(labels) != "" {
+		prefix += "  "
+	}
+	full := prefix + marker
+	clipped := clipText(full, width)
+	plain := padLine(clipped, width)
+	base := styleFor("popup-dim", p)
+	if selected {
+		base = styleFor("popup-sel", p)
+	}
+	accent := issuesBoundMarkerStyle(p, selected)
+
+	markerStart := runeCount(prefix)
+	keptEnd := runeCount(clipped)
+	const ellipsis = "..."
+	if displayWidth(full) > width {
+		if width < 4 || !strings.HasSuffix(clipped, ellipsis) {
+			return base.Render(plain)
+		}
+		keptEnd -= runeCount(ellipsis)
+	}
+	if keptEnd <= markerStart {
+		return base.Render(plain)
+	}
+	left := sliceRunes(plain, 0, markerStart)
+	mid := sliceRunes(plain, markerStart, keptEnd)
+	right := sliceRunes(plain, keptEnd, runeCount(plain))
+	return base.Render(left) + accent.Render(mid) + base.Render(right)
 }
 
 // issuesMessageLines wraps one message into the available width. The pane
