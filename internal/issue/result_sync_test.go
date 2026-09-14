@@ -301,7 +301,7 @@ func TestResultRejectsChangedBindingStateAndPrivateText(t *testing.T) {
 	root, repo, id, fake := resultFixture(t)
 	ctx := context.Background()
 	i := inspectFixture(t, root, repo, id, fake)
-	for _, body := range []string{"Inspect /etc/passwd", `Use C:\Users\name\file`, "session 12345678-1234-1234-1234-123456789abc", "\x1b[31msecret"} {
+	for _, body := range []string{"Inspect /etc/passwd", "[report](/home/user/report.md)", `See \\server\share\report.md`, `Use C:\Users\name\file`, "session 12345678-1234-1234-1234-123456789abc", "\x1b[31msecret"} {
 		p := fixtureProposal(i)
 		p.Body = body
 		if _, err := ApplyResult(ctx, fake, root, repo, 42, id, p); err == nil {

@@ -101,7 +101,7 @@ func resultVersion(task string, commits, outcomes []string, checks []ResultCheck
 	}{task, commits, outcomes, checks, resolved})
 }
 
-var resultPrivateText = regexp.MustCompile(`(?i)(?:[a-z]:[\\/]|(?:^|[\s\x60"\x27])/(?:[^/\s])|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?:herdr|tmux):|<!--\s*kander-result:)`)
+var resultPrivateText = regexp.MustCompile(`(?i)(?:[a-z]:[\\/]|(?:^|[\s(\[<:=\x60"\x27])/(?:[^/\s])|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(?:herdr|tmux):|\\\\|<!--\s*kander-result:)`)
 
 func validateResultBody(body string) error {
 	if strings.TrimSpace(body) == "" || len(body) > 16000 || !utf8.ValidString(body) || Sanitize(body) != body || resultPrivateText.MatchString(body) {
