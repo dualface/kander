@@ -33,16 +33,16 @@ The `--evidence-file` of `notify` / `resume` reads strict JSON. `dispatch prepar
   "fix": {
     "batch_id": "batch-one",
     "findings": [
-      {"run_id": "pm-round-two", "finding_id": "PM-02", "previous_run_id": "pm-round-one"}
+      {"run_id": "qa-round-two", "finding_id": "QA-02", "previous_run_id": "qa-round-one"}
     ],
     "authors": [
       {
-        "finding": {"run_id": "pm-round-one", "finding_id": "PM-01"},
+        "finding": {"run_id": "qa-round-one", "finding_id": "QA-01"},
         "record_id": "author-one",
         "author": "codex",
         "artifact": {
           "task_id": "20260908-example-task",
-          "path": "reviews/pm-round-one/dispositions/author-one.json"
+          "path": "reviews/qa-round-one/dispositions/author-one.json"
         }
       }
     ]

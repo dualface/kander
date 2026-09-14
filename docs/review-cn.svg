@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1620" viewBox="0 0 800 1620" role="img" aria-labelledby="rv-title rv-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1672" viewBox="0 0 800 1672" role="img" aria-labelledby="rv-title rv-desc">
   <title id="rv-title">Kander 审核流程</title>
-  <desc id="rv-desc">任务命中审核白名单后按审核环节解析角色, PM 与 QA 基于同一 commit 并行首轮, 都通过后 CSA 与 Hacker 进入第二阶段. 修复只做增量复审, 只有经主代理核实的 blocking, high, medium 必修, 通过后先展示未处理项再进入集成.</desc>
+  <desc id="rv-desc">任务命中审核白名单后，QA 在第一阶段核对契约与代码；Security 在第二阶段追踪信任边界与攻击链。修复仅增量复审：本批 QA 已运行时复审 Security 修复，后续 QA 修复实质改动安全代码时由 Security 复审。核实的安全发现交用户决定修复、接受风险或停止集成；看板任务 15 分钟无决策则超时忽略，不等于 PASS 或风险接受。</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -28,10 +28,10 @@
     </style>
   </defs>
 
-  <rect width="800" height="1620" fill="url(#bg)"/>
+  <rect width="800" height="1672" fill="url(#bg)"/>
 
   <text x="48" y="64" class="s h1">Kander 审核流程</text>
-  <text x="48" y="100" class="s h2">命中白名单 → PM ∥ QA 首轮 → 安全角色 → 通过集成</text>
+  <text x="48" y="100" class="s h2">命中白名单 → QA → Security → 通过集成</text>
   <text x="48" y="126" class="s tag">唯一入口: kander review</text>
   <line x1="48" y1="150" x2="752" y2="150" stroke="#e2e8f0" stroke-width="1.5"/>
 
@@ -47,94 +47,97 @@
   <circle cx="90" cy="322" r="4" fill="#fbbf24"/>
   <text x="106" y="327" class="s bt">未命中 → 说明改动范围后集成, 禁静默跳过</text>
 
-  <path d="M400 344 V368" class="flow"/>
+  <path d="M400 344  V368" class="flow"/>
 
-  <!-- 1 PM ∥ QA -->
+  <!-- 1 QA -->
   <rect x="48" y="368" width="704" height="220" rx="16" class="panel" filter="url(#card)"/>
   <rect x="80" y="392" width="40" height="40" rx="12" fill="#4f46e5"/>
   <text x="100" y="419" text-anchor="middle" class="s num">1</text>
-  <text x="136" y="414" class="s pt">PM ∥ QA 首轮</text>
-  <text x="136" y="440" class="s pn">基于同一 commit 并行, 都通过才进入下一阶段</text>
+  <text x="136" y="414" class="s pt">QA</text>
+  <text x="136" y="440" class="s pn">核对契约验收、正确性、回归、测试与代码质量</text>
   <line x1="80" y1="464" x2="720" y2="464" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="488" r="4" fill="#a5b4fc"/>
-  <text x="106" y="493" class="s bt">PM: 核对任务契约, 功能是否达成目标</text>
+  <text x="106" y="493" class="s bt">逐条检查验收条件；未满足项标记 blocking</text>
   <circle cx="90" cy="514" r="4" fill="#a5b4fc"/>
-  <text x="106" y="519" class="s bt">QA: 架构一致性, 功能回归与代码质量</text>
+  <text x="106" y="519" class="s bt">检查架构一致性、功能回归、测试与代码质量</text>
   <circle cx="90" cy="540" r="4" fill="#a5b4fc"/>
-  <text x="106" y="545" class="s bt">必修项合并一次修复, 只增量复审提出问题的角色</text>
+  <text x="106" y="545" class="s bt">修复必修项后，由 QA 增量复审改动</text>
   <circle cx="90" cy="566" r="4" fill="#a5b4fc"/>
-  <text x="106" y="571" class="s bt">按环节策略跳过的角色标 N/A</text>
+  <text x="106" y="571" class="s bt">按阶段策略跳过时标 N/A；机械修复由证据确认</text>
 
-  <path d="M400 588 V612" class="flow"/>
+  <path d="M400 588  V612" class="flow"/>
 
   <!-- 2 安全角色 -->
-  <rect x="48" y="612" width="704" height="220" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="48" y="612" width="704" height="272" rx="16" class="panel" filter="url(#card)"/>
   <rect x="80" y="636" width="40" height="40" rx="12" fill="#7c3aed"/>
   <text x="100" y="663" text-anchor="middle" class="s num">2</text>
-  <text x="136" y="658" class="s pt">CSA / Hacker</text>
-  <text x="136" y="684" class="s pn">PM 与 QA 都通过后才进入第二阶段</text>
+  <text x="136" y="658" class="s pt">Security</text>
+  <text x="136" y="684" class="s pn">QA 通过或标 N/A 后进入；遵循阶段策略与触发条件</text>
   <line x1="80" y1="708" x2="720" y2="708" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="732" r="4" fill="#c4b5fd"/>
-  <text x="106" y="737" class="s bt">CSA 查代码内在安全, Hacker 用对抗视角查弱点</text>
+  <text x="106" y="737" class="s bt">追踪信任边界与完整攻击链；同一根因只报告一次</text>
   <circle cx="90" cy="758" r="4" fill="#c4b5fd"/>
   <text x="106" y="763" class="s bt">经核实的 blocking / high / medium 交用户决策</text>
   <circle cx="90" cy="784" r="4" fill="#c4b5fd"/>
   <text x="106" y="789" class="s bt">三选一: 修复重审 / 接受风险 / 停止集成</text>
   <circle cx="90" cy="810" r="4" fill="#c4b5fd"/>
-  <text x="106" y="815" class="s bt">15 分钟无决策则超时忽略; 修复后各方增量复审</text>
+  <text x="106" y="815" class="s bt">仅看板任务：15 分钟无决策则忽略，不等于 PASS</text>
 
-  <path d="M400 832 V856" class="flow"/>
+  <text x="106" y="841" class="s bt">本批 QA 已运行时，增量复审 Security 修复。</text>
+  <text x="106" y="867" class="s bt">QA 修复实质改动安全代码时，Security 增量复审。</text>
+
+  <path d="M400 884  V908" class="flow"/>
 
   <!-- 3 分级 -->
-  <rect x="48" y="856" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
-  <rect x="80" y="880" width="40" height="40" rx="12" fill="#0d9488"/>
-  <text x="100" y="907" text-anchor="middle" class="s num">3</text>
-  <text x="136" y="902" class="s pt">分级与必修门槛</text>
-  <text x="136" y="928" class="s pn">缺级视为无效结论, 由主代理补判</text>
-  <line x1="80" y1="952" x2="720" y2="952" stroke="#eef1f6" stroke-width="1.5"/>
-  <circle cx="90" cy="976" r="4" fill="#5eead4"/>
-  <text x="106" y="981" class="s bt">blocking, high, medium → 必修</text>
-  <circle cx="90" cy="1002" r="4" fill="#5eead4"/>
-  <text x="106" y="1007" class="s bt">low, recommend, suggest → 不阻塞集成</text>
+  <rect x="48" y="908" width="704" height="168" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="932" width="40" height="40" rx="12" fill="#0d9488"/>
+  <text x="100" y="959" text-anchor="middle" class="s num">3</text>
+  <text x="136" y="954" class="s pt">分级与必修门槛</text>
+  <text x="136" y="980" class="s pn">缺级视为无效结论, 由主代理补判</text>
+  <line x1="80" y1="1004" x2="720" y2="1004" stroke="#eef1f6" stroke-width="1.5"/>
+  <circle cx="90" cy="1028" r="4" fill="#5eead4"/>
+  <text x="106" y="1033" class="s bt">blocking, high, medium → 必修</text>
+  <circle cx="90" cy="1054" r="4" fill="#5eead4"/>
+  <text x="106" y="1059" class="s bt">low, recommend, suggest → 不阻塞集成</text>
 
-  <path d="M400 1024 V1048" class="flow"/>
+  <path d="M400 1076 V1100" class="flow"/>
 
   <!-- 4 核实义务 -->
-  <rect x="48" y="1048" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
-  <rect x="80" y="1072" width="40" height="40" rx="12" fill="#d97706"/>
-  <text x="100" y="1099" text-anchor="middle" class="s num">4</text>
-  <text x="136" y="1094" class="s pt">主代理核实义务</text>
-  <text x="136" y="1120" class="s pn">禁止不加核实就接受或驳回 reviewer 结论</text>
-  <line x1="80" y1="1144" x2="720" y2="1144" stroke="#eef1f6" stroke-width="1.5"/>
-  <circle cx="90" cy="1168" r="4" fill="#fbbf24"/>
-  <text x="106" y="1173" class="s bt">成立 → 按档位处理, 必修档修复并提交</text>
-  <circle cx="90" cy="1194" r="4" fill="#fbbf24"/>
-  <text x="106" y="1199" class="s bt">不成立 → 写明文件, 行号或命令输出等依据</text>
+  <rect x="48" y="1100" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="1124" width="40" height="40" rx="12" fill="#d97706"/>
+  <text x="100" y="1151" text-anchor="middle" class="s num">4</text>
+  <text x="136" y="1146" class="s pt">主代理核实义务</text>
+  <text x="136" y="1172" class="s pn">禁止不加核实就接受或驳回 reviewer 结论</text>
+  <line x1="80" y1="1196" x2="720" y2="1196" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1220" r="4" fill="#fbbf24"/>
-  <text x="106" y="1225" class="s bt">无法核实 → 交用户决策, 不得按不成立处理</text>
+  <text x="106" y="1225" class="s bt">成立 → 按档位处理, 必修档修复并提交</text>
+  <circle cx="90" cy="1246" r="4" fill="#fbbf24"/>
+  <text x="106" y="1251" class="s bt">不成立 → 写明文件, 行号或命令输出等依据</text>
+  <circle cx="90" cy="1272" r="4" fill="#fbbf24"/>
+  <text x="106" y="1277" class="s bt">无法核实 → 交用户决策, 不得按不成立处理</text>
 
-  <path d="M400 1242 V1266" class="flow"/>
+  <path d="M400 1294 V1318" class="flow"/>
 
   <!-- 5 Reviewer -->
-  <rect x="48" y="1266" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
-  <rect x="80" y="1290" width="40" height="40" rx="12" fill="#4f46e5"/>
-  <text x="100" y="1317" text-anchor="middle" class="s num">5</text>
-  <text x="136" y="1312" class="s pt">Reviewer 与隔离边界</text>
-  <text x="136" y="1338" class="s pn">四个角色可分别指定 codex / claude / grok / cursor / pi</text>
-  <line x1="80" y1="1362" x2="720" y2="1362" stroke="#eef1f6" stroke-width="1.5"/>
-  <circle cx="90" cy="1386" r="4" fill="#a5b4fc"/>
-  <text x="106" y="1391" class="s bt">Codex / Claude / Grok 使用只读隔离</text>
-  <circle cx="90" cy="1412" r="4" fill="#a5b4fc"/>
-  <text x="106" y="1417" class="s bt">Cursor 靠 prompt 与事后工作树校验, 不事前阻断</text>
+  <rect x="48" y="1318" width="704" height="194" rx="16" class="panel" filter="url(#card)"/>
+  <rect x="80" y="1342" width="40" height="40" rx="12" fill="#4f46e5"/>
+  <text x="100" y="1369" text-anchor="middle" class="s num">5</text>
+  <text x="136" y="1364" class="s pt">Reviewer 与隔离边界</text>
+  <text x="136" y="1390" class="s pn">两个角色可分别指定 codex / claude / grok / cursor / pi</text>
+  <line x1="80" y1="1414" x2="720" y2="1414" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1438" r="4" fill="#a5b4fc"/>
-  <text x="106" y="1443" class="s bt">同角色重跑不换人, 禁绕过 <tspan class="hl">kander review</tspan></text>
+  <text x="106" y="1443" class="s bt">Codex / Claude / Grok 使用只读隔离</text>
+  <circle cx="90" cy="1464" r="4" fill="#a5b4fc"/>
+  <text x="106" y="1469" class="s bt">Cursor 靠 prompt 与事后工作树校验, 不事前阻断</text>
+  <circle cx="90" cy="1490" r="4" fill="#a5b4fc"/>
+  <text x="106" y="1495" class="s bt">同角色重跑不换人, 禁绕过 <tspan class="hl">kander review</tspan></text>
 
-  <path d="M400 1460 V1484" class="flow"/>
+  <path d="M400 1512 V1536" class="flow"/>
 
   <!-- 通过 -->
-  <rect x="48" y="1484" width="704" height="88" rx="16" fill="#eefaf5" stroke="#a7e0cd" stroke-width="1.5"/>
-  <circle cx="96" cy="1528" r="18" fill="#059669"/>
-  <path d="M88 1528 L94 1534 L105 1521" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="130" y="1522" class="s" font-size="18" font-weight="700" fill="#064e3b">审核通过</text>
-  <text x="130" y="1550" class="s" font-size="15" fill="#3f6b5c">先展示全部未处理项, 再进入集成与清理</text>
+  <rect x="48" y="1536" width="704" height="88" rx="16" fill="#eefaf5" stroke="#a7e0cd" stroke-width="1.5"/>
+  <circle cx="96" cy="1580" r="18" fill="#059669"/>
+  <path d="M88 1580L94 1586L105 1573" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="130" y="1574" class="s" font-size="18" font-weight="700" fill="#064e3b">审核通过</text>
+  <text x="130" y="1602" class="s" font-size="15" fill="#3f6b5c">先展示全部未处理项, 再进入集成与清理</text>
 </svg>

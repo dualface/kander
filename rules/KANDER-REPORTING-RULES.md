@@ -31,7 +31,7 @@ Loaded only when `rules.reporting=true`. See `KANDER-AGENTS.md` for precedence a
 - Delivery: <user-observable outcome and key changes>
 - Acceptance: <completed>/<total>; <per-item self-check conclusion or user-accepted exceptions>
 - Verification: <actual commands and results; for failed or unexecuted items, the reason, impact, and substitute evidence>
-- Review: <reviewer, status, and summary for PM, CSA, Hacker, QA; fixes made during review>
+- Review: <reviewer, status, and summary for QA and Security; fixes made during review>
 - Wrap-up: <full SHA | N/A>; <integration result | N/A>; <main worktree sync, worktree, branch, temporary review files, `kander check` all completed or exceptions item by item>
 - Unresolved issues (<N>): <None; or item by item `[source or category][tier or status] issue; impact: ...; reason: ...`; attach send time and timeout time for timed-out items>
 - Summary: <one-sentence summary>; Code branch: <branch where the code finally lives | N/A>; Final card state: <done | archived (<result>) | trash | working (blocked) | review (blocked)>

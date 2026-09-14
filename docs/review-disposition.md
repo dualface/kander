@@ -4,7 +4,7 @@ This protocol builds on the run/batch of the [Review evidence archive](review-ev
 
 ## Execution Cycles and Plans
 
-An active card must have an explicit review plan before entering done. Even when there is no REVIEWS index, no role has run, or the review rules are disabled, an empty index must not be taken to imply a pass. When review truly does not apply, each of the four roles is written as `N/A: <reason and rule basis>`, followed by an explicit batch close. The tool records the caller's applicability judgment; it does not substitute for user authorization or project-rule judgment.
+An active card must have an explicit review plan before entering done. Even when there is no REVIEWS index, no role has run, or the review rules are disabled, an empty index must not be taken to imply a pass. When review truly does not apply, each of the two roles is written as `N/A: <reason and rule basis>`, followed by an explicit batch close. The tool records the caller's applicability judgment; it does not substitute for user authorization or project-rule judgment.
 
 ```text
 kander review plan <absolute-CWD> <absolute-plan.json>
@@ -30,16 +30,14 @@ Single-batch plan example; every SHA must be replaced with a real full commit:
     "base": "<full-base-sha>",
     "target_commit": "<full-target-sha>",
     "requirements": {
-      "PM": "required",
       "QA": "required",
-      "CSA": "N/A: security-role exception in this repository's AGENTS.md",
-      "Hacker": "N/A: security-role exception in this repository's AGENTS.md"
+      "Security": "N/A: security-role exception in this repository's AGENTS.md"
     }
   }]
 }
 ```
 
-In a non-Git project where all four roles are explicitly N/A, both base and target_commit may be written as `N/A`. In that case close stores a `git.not_applicable` basis, does not invoke Git, and does not claim that commits or ancestry have been verified. As soon as any role is required, real full SHAs must be used.
+In a non-Git project where both roles are explicitly N/A, both base and target_commit may be written as `N/A`. In that case close stores a `git.not_applicable` basis, does not invoke Git, and does not claim that commits or ancestry have been verified. As soon as any role is required, real full SHAs must be used.
 
 The tool generates revision, recorded_at, and each member's execution-cycle binding; the latter binds the task ID and STARTED_AT. The task plan pointer and tracked-cycles live in the stable control directory; the card stores the complete `reviews/plan.json`. A plan cannot be overwritten by a new plan, nor can a changed plan ID be used to discard a failed round. tracked-cycles must be consistent with the cycles stored in the plan; missing or inconsistent entries are structural errors.
 
@@ -71,8 +69,8 @@ For batch-by-batch scheduling, first use `sealed: false`, listing the fixed memb
     "base": "<previous-closed-target-sha>",
     "target_commit": "<next-target-sha>",
     "requirements": {
-      "PM": "required", "QA": "required",
-      "CSA": "N/A: project rule", "Hacker": "N/A: project rule"
+      "QA": "required",
+      "Security": "N/A: project rule"
     }
   }
 }
@@ -90,7 +88,7 @@ Every new Reviewer prompt requires one standalone fenced block:
 ```kander-findings
 {
   "FINDINGS": [{
-    "id": "PM-01",
+    "id": "QA-01",
     "tier": "medium",
     "text": "full original text of the finding",
     "evidence": "file.go:42; concrete trigger and impact"
@@ -118,9 +116,9 @@ The assignment's `run_id/batch_id/author/basis/items` are required. Each key of 
 
 ```json
 {
-  "run_id": "pm-first", "batch_id": "batch-one",
+  "run_id": "qa-first", "batch_id": "batch-one",
   "author": "coordinator", "basis": "assigned by each task's modification scope",
-  "items": {"PM-01": ["20260907-example-task"]}
+  "items": {"QA-01": ["20260907-example-task"]}
 }
 ```
 
@@ -128,8 +126,8 @@ Author record example:
 
 ```json
 {
-  "record_id": "pm01-author-first",
-  "run_id": "pm-first", "finding_id": "PM-01", "batch_id": "batch-one",
+  "record_id": "qa01-author-first",
+  "run_id": "qa-first", "finding_id": "QA-01", "batch_id": "batch-one",
   "task_id": "20260907-example-task", "author": "codex",
   "report_hash": "<SHA-256 of report.md>",
   "original": "original text identical to the entry's text",
@@ -143,7 +141,7 @@ Records are submitted by the working card's current OWNER and only for the autho
 
 must-fix statuses are confirmed/fixed/rejected/unverifiable/waived. confirmed and unverifiable block batch close; rejected must state a factual basis and enters the unresolved list. fixed must have a fix SHA and a verification record; that commit should be strictly later than the finding's target commit. NON_BLOCKING accepts only fixed/deferred/rejected and must also record a basis.
 
-waived is valid only for CSA/Hacker must-fix items. A waiver contains policy=accepted-risk with an explicit decision, or policy=timed-out with a fully documented notification basis decision, sent_at, and timeout_at; the two instants must be at least 15 minutes apart and timeout_at must not be in the future. It does not equal PASS. PM/QA, unverified items, and ordinary acceptance confirmations cannot use this exception. The actual notification, the user's decision, and the applicable rules must still be carried out and cited truthfully by the Agent; the presence of the fields grants no authorization.
+waived is valid only for Security must-fix items. A waiver contains policy=accepted-risk with an explicit decision, or policy=timed-out with a fully documented notification basis decision, sent_at, and timeout_at; the two instants must be at least 15 minutes apart and timeout_at must not be in the future. It does not equal PASS. QA, unverified items, and ordinary acceptance confirmations cannot use this exception. The actual notification, the user's decision, and the applicable rules must still be carried out and cited truthfully by the Agent; the presence of the fields grants no authorization.
 
 Each author record is published only to its own `reviews/<run_id>/dispositions/<record_id>.json`; the tool-controlled ledger binds the original text and preserves the full chain. The orchestrator's verification opinions are separately marked with author/basis in the close request's opinions and may cite finding references, but cannot rewrite or submit a disposition on the author's behalf.
 
@@ -175,8 +173,7 @@ close request example:
   "view_hash": "<SHA-256 of aggregate's raw output bytes>",
   "author": "coordinator",
   "roles": {
-    "PM": {"run_id":"pm-fixed", "passed_at":"<full-sha>", "basis":"item-by-item verification and cross-role impact check"},
-    "QA": {"run_id":"qa-first", "passed_at":"<full-sha>", "basis":"verified structural and functional conclusions"}
+    "QA": {"run_id":"qa-fixed", "passed_at":"<full-sha>", "basis":"verified contract, functional conclusions and cross-role impact"}
   },
   "resolved_failures": {},
   "opinions": [{"author":"coordinator", "basis":"independent delivery verification, not a substitute for author dispositions"}]

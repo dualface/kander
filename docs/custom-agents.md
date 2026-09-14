@@ -103,8 +103,8 @@ Read-only isolation for a custom reviewer is the definition author's responsibil
 
 ```json
 "review_stages": {
-  "large": {"PM": "required", "QA": "auto", "CSA": "skip", "Hacker": "skip"},
-  "small": {"PM": "auto", "QA": "auto", "CSA": "skip", "Hacker": "skip"}
+  "large": {"QA": "auto", "Security": "skip"},
+  "small": {"QA": "auto", "Security": "skip"}
 }
 ```
 
