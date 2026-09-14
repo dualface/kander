@@ -27,6 +27,7 @@ var catalogFiles = []string{
 	"locales/agentlanguage/en.json", "locales/agentlanguage/zh-CN.json", "locales/agentlanguage/ja.json",
 	"locales/orchestrate/en.json", "locales/orchestrate/zh-CN.json", "locales/orchestrate/ja.json",
 	"locales/chat/en.json", "locales/chat/zh-CN.json", "locales/chat/ja.json",
+	"locales/welcome/en.json", "locales/welcome/zh-CN.json", "locales/welcome/ja.json",
 	"locales/terminal/en.json", "locales/terminal/zh-CN.json", "locales/terminal/ja.json",
 }
 

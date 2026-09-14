@@ -108,6 +108,8 @@ type App struct {
 	Session *menu.Session
 	// While Help is true the key reference overlay covers the board.
 	Help bool
+	// welcomeDismissed hides the empty-board welcome overlay for this process.
+	welcomeDismissed bool
 	// While Issues is non-nil the GitHub issues overlay covers the board; it
 	// owns its own filters, selection and scrolling and never touches the board
 	// model, so closing it leaves the board exactly as it was.
@@ -228,8 +230,11 @@ func (a *App) View() string {
 	case a.Help:
 		box, popup := a.renderHelp()
 		base = overlay(base, popup, box.X, box.Y, p)
+	case a.shouldShowWelcome():
+		box, popup := a.renderWelcome()
+		base = overlay(base, popup, box.X, box.Y, p)
 	}
-	if a.TaskActions == nil && a.Chat == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && a.startNoticeOverflows(w) {
+	if a.TaskActions == nil && a.Chat == nil && a.Options == nil && !a.Help && a.StartConfirmation == nil && !a.shouldShowWelcome() && a.startNoticeOverflows(w) {
 		box, popup := a.renderStartPopup([]string{a.startNotice.full})
 		base = overlay(base, popup, box.X, box.Y, p)
 	}
@@ -922,6 +927,16 @@ func (a *App) HandleKey(key string) {
 	if a.Help {
 		a.Help = false
 		return
+	}
+	if a.shouldShowWelcome() {
+		switch key {
+		case "esc":
+			a.dismissWelcome()
+			return
+		case "q", "Q", "c", "g", "?", "o", "O", "r", "R":
+		default:
+			return
+		}
 	}
 	if a.Takeover != nil {
 		a.handleTakeoverKey(key)

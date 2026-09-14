@@ -354,6 +354,12 @@ func (a *App) HandleMouse(x, y, bstate int) {
 		}
 		return
 	}
+	if a.shouldShowWelcome() {
+		if mouseLeftClicked(bstate) {
+			a.dismissWelcome()
+		}
+		return
+	}
 	if a.Options != nil {
 		a.Options.HandleMouse(x, y, bstate)
 		return

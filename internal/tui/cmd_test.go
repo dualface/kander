@@ -68,6 +68,16 @@ func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 	if captured.Options.initial != sectionInterface && captured.Options.current != sectionInterface {
 		t.Fatalf("want interface section, initial=%q current=%q", captured.Options.initial, captured.Options.current)
 	}
+	if captured.shouldShowWelcome() {
+		t.Fatal("welcome must wait until the first-launch options close")
+	}
+	captured.Options.close()
+	if captured.Options != nil {
+		t.Fatal("options close failed")
+	}
+	if !captured.shouldShowWelcome() {
+		t.Fatal("empty board should show welcome after options close")
+	}
 }
 
 // TestPostInstallFirstLaunchCreatesConfigInInstallLanguage covers a fresh install:
@@ -171,6 +181,13 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	if captured.Options.initial != sectionInterface && captured.Options.current != sectionInterface {
 		t.Fatalf("want interface section, initial=%q current=%q", captured.Options.initial, captured.Options.current)
 	}
+	if captured.shouldShowWelcome() {
+		t.Fatal("welcome must wait until the missing-config options close")
+	}
+	captured.Options.close()
+	if !captured.shouldShowWelcome() {
+		t.Fatal("empty board should show welcome after options close")
+	}
 }
 
 // TestExistingConfigDoesNotOpenOptions keeps the normal board entry when a scope
@@ -232,5 +249,8 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 	}
 	if captured.Options != nil {
 		t.Fatal("existing config must not auto-open options")
+	}
+	if !captured.shouldShowWelcome() {
+		t.Fatal("empty board with an existing config should show welcome")
 	}
 }

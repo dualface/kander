@@ -136,6 +136,7 @@ func TestTaskActionsShortcutContexts(t *testing.T) {
 func TestTaskActionsEmptyAndStaleLoads(t *testing.T) {
 	app := startTestApp("working")
 	app.Model.SetBoard(BoardPayload{})
+	app.HandleKey("esc")
 	app.Update(keyMsg("m"))
 	if app.TaskActions != nil || app.pendingWork != nil || app.CopyNotice != tuiText("actions.no_selection") {
 		t.Fatal("empty selection opened menu")
