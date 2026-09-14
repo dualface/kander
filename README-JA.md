@@ -16,6 +16,7 @@
 
 ```sh
 brew install dualface/tap/kander
+
 kander
 ```
 
@@ -24,16 +25,13 @@ kander
 ```sh
 ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
 curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-linux-${ARCH}.tar.gz" | tar xz
+
 ./kander
 ```
 
 **Windows** — [Releases](https://github.com/dualface/kander/releases) から `kander-windows-amd64.zip` をダウンロードし、展開して `kander.exe` を実行してください。
 
 初回起動時にまだインストールされていなければ対話ウィザードが始まります。インストールが完了すればすぐに使えます。
-
-グローバル初期化では実行ファイルを現在の場所に残し、設定と Agent ルールだけをインストールします。対話形式の `kander` と `kander install` は、PATH 上で最初の `kander` と現在の実行ファイルを比較します。一致しない場合や見つからない場合は `~/.local/bin` へのコピーを確認し、既定ではコピーしません。断っても起動は続行し、次回また確認します。コピーに同意するとコピー先の既存ファイルが置き換わる場合がありますが、シェル設定は変更しません。必要に応じて案内どおり PATH を調整してください。これによりパッケージマネージャーで更新されたプログラムを引き続き使用できます。プロジェクトインストールでは従来どおりメイン worktree の `.kander/bin` にコピーします。
-
-古い `~/.local/bin/kander` がパッケージマネージャー版より先に選ばれる場合は、使いたい実行ファイルを絶対パスで起動し、PATH の順序を調整するか古いコピーを自分で移動してください。Kander は古いコピーを自動削除しません。
 
 4 ステップで始められます:
 
@@ -48,38 +46,16 @@ kander
 
 ![ターミナルカンバン](docs/kanban-screenshot-01.png)
 
-`o` → インターフェース → テーマで **Tide**、**Dusk**、**Slate Dark**、**Slate Light** を選べます。Slate のダーク／ライトは herdr などのグレーブルーの端末に調和します。既存テーマと既定設定も引き続き利用できます。
-
 > 上図のカンバンの内容は私の実プロジェクト [https://quicktui.ai](https://quicktui.ai) のものです。QuickTUI はコンピュータ上のさまざまな Agent をリモート操作するツールで、iOS/Android/macOS/Linux/Windows に対応し、無料で使えます。
 
 さらに詳しく: スライド [タスクを効率的に進める方法](docs/how-to-advance-tasks-efficiently-ja.pdf) (PDF) を参照してください。
-
-ボードで `m` を押すと、選択中のカードで利用できる操作だけを表示します：開始、Agent ウィンドウへの移動、todo への移動、backlog への差し戻し、アーカイブ、trash への移動。開始は既存の確認ダイアログを開きます。アーカイブと trash はフォームで理由と判断の根拠を入力します。未開始カードのアーカイブは結果も選択し、重複の場合は代替タスク ID を入力します。`g` は GitHub Issues、`Enter` はカード詳細、`?` は全キーのヘルプを開きます。
 
 ## 2. GitHub 連携
 
 プロジェクトを GitHub リポジトリに紐づけるには [GitHub CLI](https://cli.github.com/)（`gh`）が必要です。Kander はトークンを要求・読み取り・保存せず、`gh` が管理する認証情報をそのまま利用します。
 
-```sh
-kander issue repo                                   # 現在のワークツリーのリポジトリを解決
-kander issue repo --repo HOST/OWNER/REPO --json     # 参照を明示的に指定
-kander issue list --state open --label bug          # Issue を一覧。--state open|closed|all、--label は複数指定可、--search、--limit、--json
-kander issue show 42 --comments                     # 1 件の Issue とそのコメントを表示
-kander issue import 42 --comments                   # backlog カードとして取り込み、本文とコメントも保存
-```
-
-`kander issue repo` はディレクトリ名を信用せず、GitHub に正規のリポジトリ識別情報を確認します。ワークツリーに複数の異なるリモートがある場合は推測せず、`--repo` または `gh repo set-default` を案内します。`kander doctor` は認証情報・リモート・アカウントを変更せずに、`gh` のパス、バージョン、ホストごとの認証状態を報告します。
-
-`kander issue list` は状態・ラベル・検索語で絞り込み、取得する Issue 数を制限します。Pull Request は結果に混入しません。`kander issue show NUMBER` は 1 件の Issue を表示し、`--comments` は明示的な上限つきでコメントを読み込み、黙って切り捨てません。どちらのコマンドも `--json` に対応し、対処可能なエラー（`gh` がない、ホストが未認証、レート制限、リモートの曖昧さ）を報告します。
-
-`kander issue import NUMBER` は Issue に紐づく通常の backlog カードを作成します。`--comments` で議論も保存し、`--type` はラベル由来の種別を上書きし、`--large` は規模を指定し、`--language` はカードの言語を固定し、`--json` はスクリプト向けの結果を出力します。Issue のタイトル・本文・コメントは `spec.md` の隣の `source/github-issue.json` と `source/github-issue.md` に保存され、1 行にサニタイズされたタイトルはカードの見出しにもなります。カードの契約は確認済みのリポジトリ識別情報だけから生成されます。同じ Issue を再取り込みすると既存のカードを返し、ソースキーの一意性確認とカードの公開は同じボードトランザクションで行われるため、並行取り込みでも重複は生じません。上限を超える Issue は切り捨てずにヒント付きで拒否します。スナップショット形式とセキュリティモデルは [docs/github-issue-import.md](docs/github-issue-import.md) を参照してください。
-
-端末ボードでは `g` が同じデータをオーバーレイで開きます。行を選ぶと選択中の Issue とコメントを自動で読み込み（ローカルスナップショットキャッシュが先に描画され、更新はバックグラウンドで実行され、内容が変わった場合だけ通知されます）、`Enter` で詳細ページを開き、`Tab` で状態を切り替え、`/` で検索、`l` でラベル絞り込みを行います。未バインドの Issue では `i` で backlog カードとして取り込み、`I` でコメント付き取り込み、`s` で引き継ぎセッションを確認します（エージェントは再取得したローカル証跡を読んで調査し、同意後にカードを取り込みます）。既にローカルカードがある Issue では `i`/`I` は非表示かつ無効で、`g` がオーバーレイを閉じて該当カードを選択します。`done` カードでは `s` で処理結果を確認できます。Agent は不足する結果コメントを追加できますが、Issue を閉じるには別途明示的な確認が必要です。それ以外の状態では `g` のみです。フッタヒントと Issues ヘルプは同じバインド判定に従います。TUI はバックグラウンド起動（`herdr`、`tmux`、`tmux-session`）のみを行い、それ以外は CLI を案内します。引き継ぎ経路は `CARD_REVIEW:` を書き込まず、カードの作成も移動もしません。`r` で更新、`o` でブラウザ表示、`Esc`/`q` でボードを変えずに閉じます。取り込み済みの Issue はバインドされたタスク ID と状態を表示し、リモートが更新されていてもマークするだけでカードを上書きしません。すべてのリクエストはバックグラウンドで実行され、ボードはブロックしません。
+端末ボードで `g` を押すと、GitHub Issue の一覧がオーバーレイで開きます。
 
 ## 3. ライセンス
 
 本プロジェクトは MIT License を使用しています。[LICENSE](LICENSE) を参照してください。
-
-`kander issue result NUMBER --card TASK_ID` でも完了結果の確認を開始できます。
-ローカルの永続記録が並行セッションを調整し、不確定な書き込みを無条件に再試行しません。
-異なるマシン間ではこの重複防止の仕組みを共有しません。[結果確認の説明](docs/github-issue-results.md)を参照してください。

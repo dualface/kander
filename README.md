@@ -16,6 +16,7 @@ Running requires Git, plus at least one of Codex, Claude, Grok, Cursor, or Pi.
 
 ```sh
 brew install dualface/tap/kander
+
 kander
 ```
 
@@ -24,16 +25,13 @@ kander
 ```sh
 ARCH=$(uname -m); [ "$ARCH" = x86_64 ] && ARCH=amd64; [ "$ARCH" = aarch64 ] && ARCH=arm64
 curl -fsSL "https://github.com/dualface/kander/releases/latest/download/kander-linux-${ARCH}.tar.gz" | tar xz
+
 ./kander
 ```
 
 **Windows** — download `kander-windows-amd64.zip` from [Releases](https://github.com/dualface/kander/releases), unzip it, and run `kander.exe`.
 
 On first launch, if not yet installed, an interactive wizard starts. Once installation finishes, it is ready to use.
-
-Global initialization keeps the executable in its current location and installs only configuration and agent rules. Interactive `kander` and `kander install` compare the first `kander` on `PATH` with the running executable. If they differ or no entry is found, Kander offers to copy the binary to `~/.local/bin`; the default is No. Declining continues this launch and checks again next time. Copying may replace an existing file there, but never changes your shell configuration; follow the displayed PATH guidance when needed. Package-manager upgrades therefore update the executable you keep using. Project installation still copies the binary into the main worktree’s `.kander/bin`.
-
-If an older `~/.local/bin/kander` shadows a package-manager installation, run the desired executable by its absolute path and adjust PATH ordering or move the old copy yourself. Kander does not remove old copies automatically.
 
 Four steps to get going:
 
@@ -48,38 +46,16 @@ kander
 
 ![Terminal kanban](docs/kanban-screenshot-01.png)
 
-Choose **Tide**, **Dusk**, **Slate Dark**, or **Slate Light** in `o` → Interface → Theme. The Slate pair matches a gray-blue terminal host such as herdr; existing themes and the default remain available.
-
 > The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
 
 Further reading: the slides [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
-
-On the board, `m` opens task actions for the selected card. The menu shows only available actions: start, focus its Agent window, pick to todo, return to backlog, archive, or move to trash. Start opens the existing confirmation dialog. Archive and trash use a form for your reason and decision reference; archiving an unstarted card also asks for the result and, for duplicates, a replacement task ID. `g` opens GitHub Issues, `Enter` opens card details, and `?` shows all keys.
 
 ## 2. GitHub Integration
 
 Linking a project to a GitHub repository needs the [GitHub CLI](https://cli.github.com/) (`gh`). Kander never asks for, reads, or stores a token; it reuses the credentials `gh` already manages.
 
-```sh
-kander issue repo                                   # resolve the repository of the current worktree
-kander issue repo --repo HOST/OWNER/REPO --json     # or pass a reference explicitly
-kander issue list --state open --label bug          # list issues: --state open|closed|all, repeated --label, --search, --limit, --json
-kander issue show 42 --comments                     # one issue with its comments
-kander issue import 42 --comments                   # import it as a backlog card, with the issue text and comments
-```
-
-`kander issue repo` confirms the canonical identity with GitHub instead of trusting a directory name. When a worktree has several distinct remotes it refuses to guess, and asks for `--repo` or for `gh repo set-default`. `kander doctor` reports the `gh` path, version, and per-host authentication state without touching credentials, remotes, or accounts.
-
-`kander issue list` filters by state, labels, and a search term and bounds how many issues it fetches; pull requests are never mixed into the result. `kander issue show NUMBER` renders one issue, and `--comments` loads its comments under an explicit bound instead of truncating silently. Both commands support `--json` for scripting and report actionable errors (missing `gh`, unauthenticated host, rate limit, ambiguous remotes) instead of a raw failure.
-
-`kander issue import NUMBER` creates a normal backlog card bound to the issue: `--comments` stores the discussion, `--type` overrides the label-derived type, `--large` sets the size, `--language` freezes the card language, and `--json` prints the result for scripting. The issue title, body, and comments are stored in `source/github-issue.json` and `source/github-issue.md` beside `spec.md`; the sanitized single-line title also becomes the card heading, while the card contract is authored from the confirmed repository identity. Importing the same issue twice returns the existing card, and the unique source key is checked in the same board transaction that publishes the card, so concurrent imports cannot produce duplicates. Over-limit issues are rejected with a hint instead of being truncated. See [docs/github-issue-import.md](docs/github-issue-import.md) for the snapshot format and the security model.
-
-On the terminal board, `g` opens the same data as an overlay: selecting a row loads the issue with its comments on its own (a local snapshot cache paints first, the refresh runs in the background, and a changed refresh is reported without resetting an unchanged one), `Enter` opens the detail page, `Tab` cycles the state, `/` searches, `l` filters by label. For an unbound issue, `i` imports it as a backlog card, `I` imports with comments, and `s` confirms one takeover session that reads the refreshed local evidence, investigates, and agrees on the plan before importing. For an issue that already has a local card, `i`/`I` are hidden and disabled; `g` closes the overlay and selects that card. A `done` card additionally enables `s` to reconcile its result: the agent may add a missing result comment, and closing the issue requires separate explicit confirmation. Other bound states keep only `g`. The footer hint and the Issues help entries follow the same binding. The TUI starts only background launchers (`herdr`, `tmux`, `tmux-session`) and points at the CLI otherwise; it never writes `CARD_REVIEW:` and never creates or moves a card on the takeover path. `r` refreshes, `o` opens it in the browser, and `Esc`/`q` closes the overlay without changing the board. Imported issues show their bound task ID and state, and a newer remote revision is marked as an update instead of overwriting the card. Every request runs in the background, so the board never blocks.
+On the terminal board, press `g` to open the GitHub issue list in an overlay.
 
 ## 3. License
 
 This project is under the MIT License; see [LICENSE](LICENSE).
-
-Completed-result reconciliation is also available through `kander issue result NUMBER --card TASK_ID`.
-Local durable records coordinate concurrent sessions and recover uncertain writes without blind retries.
-Independent machines do not share this deduplication boundary. See [result reconciliation](docs/github-issue-results.md).
