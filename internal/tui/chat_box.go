@@ -196,7 +196,8 @@ func (a *App) resizeChat() {
 	h, w := a.size()
 	frame := a.chatFrame()
 	dialog.input.SetWidth(frame.inner(w, h, 72))
-	// Two rows stay for the settings line and one for the status line.
+	// Four rows stay outside the editor: the settings line and the blank row
+	// under it, and the blank row plus the first status line below it.
 	dialog.input.SetHeight(max(1, min(chatInputRows, h-frame.chrome()-4)))
 }
 

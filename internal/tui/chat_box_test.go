@@ -127,10 +127,11 @@ func TestChatBoxFailureKeepsTheMessageForRetry(t *testing.T) {
 	typeText(app, "hello")
 	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlS})
 
-	// Keys are ignored while the start runs, Esc included.
+	// Keys are ignored while the start runs, Esc and Ctrl+C included.
 	typeText(app, "x")
 	pressKey(app, tea.KeyMsg{Type: tea.KeyEsc})
-	if app.Chat == nil || app.Chat.input.Value() != "hello" {
+	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !app.Running || app.Chat == nil || app.Chat.input.Value() != "hello" {
 		t.Fatalf("running chat must ignore keys: %+v", app.Chat)
 	}
 	runPendingWork(t, app)
@@ -171,20 +172,30 @@ func TestChatBoxUnavailableLauncherNeverStarts(t *testing.T) {
 
 func TestChatBoxDropsStaleResults(t *testing.T) {
 	app, _, _ := chatApp(t, chatStarted)
+	app.PrepareChat = func() (launch.ChatPreview, error) {
+		return launch.ChatPreview{Agent: "stale", Launcher: "tmux"}, nil
+	}
 	typeText(app, "c")
 	stalePreview := app.pendingWork
 	app.pendingWork = nil
 	pressKey(app, tea.KeyMsg{Type: tea.KeyEsc})
-	openReadyChat(t, app)
-	app.Chat.agent = "claude"
+	typeText(app, "c")
+	// The reopened box is still loading, so only the sequence can reject the
+	// preview requested by the closed box.
 	app.applyWork(stalePreview())
-	if app.Chat.agent != "claude" || app.Chat.phase != chatReady {
+	if app.Chat.phase != chatLoading || app.Chat.agent != "" {
 		t.Fatalf("stale preview applied: %+v", app.Chat)
 	}
 
+	app.PrepareChat = func() (launch.ChatPreview, error) {
+		return launch.ChatPreview{Agent: "codex", Launcher: "tmux"}, nil
+	}
+	runPendingWork(t, app)
 	typeText(app, "hello")
+	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlS})
+	app.pendingWork = nil
 	app.applyWork(chatStartResult{sequence: app.Chat.sequence - 1, result: launch.ChatResult{Address: "tmux:old"}})
-	if app.Chat.input.Value() != "hello" || app.Chat.status != "" {
+	if app.Chat.phase != chatRunning || app.Chat.input.Value() != "hello" {
 		t.Fatalf("stale start result applied: %+v", app.Chat)
 	}
 }
