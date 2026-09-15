@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"os"
 	"sort"
 	"time"
@@ -100,8 +101,13 @@ func sortTaskSummaries(tasks []TaskSummary) {
 // BoardPayload returns journal advisories in the display payload; ordinary
 // invalid-entry check warnings stay suppressed, and nothing prints to the terminal.
 func BoardPayload(root string) (BoardView, error) {
+	return BoardPayloadContext(context.Background(), root)
+}
+
+// BoardPayloadContext is BoardPayload with a bound on lock waits.
+func BoardPayloadContext(ctx context.Context, root string) (BoardView, error) {
 	var warnings WarningLog
-	scanned, err := ScanWithWarnings(root, &warnings)
+	scanned, err := scanContext(ctx, root, nil, false, &warnings)
 	if err != nil {
 		return BoardView{}, err
 	}
@@ -122,14 +128,24 @@ func BoardPayload(root string) (BoardView, error) {
 	}, nil
 }
 
-// TaskPayload returns one card digest plus its body, also via Scan.
+// TaskPayload returns one card digest plus its body through a coordinated
+// targeted read. Unrelated card bodies are not opened.
 func TaskPayload(root, taskID string) (TaskSummary, error) {
-	var warnings WarningLog
-	scanned, err := ScanWithWarnings(root, &warnings)
+	return TaskPayloadContext(context.Background(), root, taskID)
+}
+
+// TaskPayloadContext is TaskPayload with a bound on lock waits.
+func TaskPayloadContext(ctx context.Context, root, taskID string) (TaskSummary, error) {
+	id, err := NormalizeTaskID(taskID)
 	if err != nil {
 		return TaskSummary{}, err
 	}
-	entry, err := Locate(scanned, taskID)
+	var warnings WarningLog
+	scanned, err := scanContext(ctx, root, []string{id}, false, &warnings)
+	if err != nil {
+		return TaskSummary{}, err
+	}
+	entry, err := Locate(scanned, id)
 	if err != nil {
 		return TaskSummary{}, err
 	}

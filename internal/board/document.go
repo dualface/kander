@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/dualface/kander/internal/fs"
@@ -21,10 +22,20 @@ var (
 	checkboxRe   = regexp.MustCompile(`(?m)^- \[[ xX]\][ \t]*\S`)
 )
 
+var metadataValueCache sync.Map
+
+func metadataValueRe(name string) *regexp.Regexp {
+	if cached, ok := metadataValueCache.Load(name); ok {
+		return cached.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(`(?m)^- ` + TokenPattern(name) + `:[ \t]*(.*?)[ \t\r]*$`)
+	actual, _ := metadataValueCache.LoadOrStore(name, re)
+	return actual.(*regexp.Regexp)
+}
+
 // MetadataFrom reads a `- field:` metadata value.
 func MetadataFrom(text, name string) string {
-	re := regexp.MustCompile(`(?m)^- ` + TokenPattern(name) + `:[ \t]*(.*?)[ \t\r]*$`)
-	match := re.FindStringSubmatch(text)
+	match := metadataValueRe(name).FindStringSubmatch(text)
 	if match == nil {
 		return ""
 	}
