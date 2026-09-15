@@ -21,7 +21,6 @@ This file constrains the tool and the language used with the user. It does not p
 
 ## Installation and Task Files
 
-- `kander install` runs the interactive wizard; bare `kander` opens the board (after letting doctor create a config when none exists). When PATH still selects another entry, follow the displayed instructions.
 - Automation must invoke the command root's `kander` through a process API argv array; do not assemble shell command strings.
 - The executing agent and the reviewer read the complete task from a UTF-8 temporary file named by a one-line instruction on the command line. The file asks the agent to delete it when done; a failed deletion does not affect the result.
 

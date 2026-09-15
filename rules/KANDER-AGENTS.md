@@ -27,7 +27,6 @@ The directory containing this file is the "rules root". It decides the scope and
 
 ## Language
 
-- The rules ship in English only and are not translated per install.
 - `agent_language` in the configuration is the language for the user: every reply, card title and body, execution record, completion report, review report, and the messages passed to `kander notify` and `kander resume`. When the value is missing or empty, use the language the user writes in.
 - A task card's `LANGUAGE` field overrides the configuration for everything about that card. `kander new` records the configured value at creation; cards without the field use the configuration.
 - Commit messages, code comments, and identifiers follow the project's own conventions.
