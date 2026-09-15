@@ -18,6 +18,8 @@ const (
 	ReviewHomeOptional     = "optional"
 	ReviewStdinInstruction = "instruction"
 	ReviewStdinNone        = "none"
+	// ReviewContractFilename is reserved for Kander's generated review contract.
+	ReviewContractFilename = "review-contract.md"
 )
 
 // AgentReview is the reviewer invocation declared next to args.review.
@@ -196,6 +198,9 @@ func validateReviewDefinition(name string, d AgentDefinition) error {
 	if strings.TrimSpace(review.OutputName) == "" || strings.IndexFunc(review.OutputName, unicode.IsControl) >= 0 || strings.ContainsAny(review.OutputName, `/\`) {
 		return agentDefinitionError(name, Text("config.agent_review_field", "review.output_name", review.OutputName))
 	}
+	if reservedReviewRuntimePath(review.OutputName) {
+		return agentDefinitionError(name, Text("config.agent_review_reserved_path", "review.output_name", ReviewContractFilename))
+	}
 	if review.HomeEnv != "" && !validAgentText(review.HomeEnv) {
 		return agentDefinitionError(name, Text("config.agent_review_field", "review.home_env", review.HomeEnv))
 	}
@@ -234,6 +239,9 @@ func validateReviewDefinition(name string, d AgentDefinition) error {
 		if err := validReviewPromptPath(file.Path); err != nil {
 			return agentDefinitionError(name, Text("config.agent_review_field", label+".path", err.Error()))
 		}
+		if reservedReviewRuntimePath(file.Path) {
+			return agentDefinitionError(name, Text("config.agent_review_reserved_path", label+".path", ReviewContractFilename))
+		}
 		if err := process.ValidateTemplate(file.Template, ReviewPromptFilePlaceholders(), process.TemplateText); err != nil {
 			return agentDefinitionError(name, Text("config.agent_review_field", label+".template", err.Error()))
 		}
@@ -266,6 +274,11 @@ func validReviewPromptPath(p string) error {
 		return processSpec("path is not canonical")
 	}
 	return nil
+}
+
+func reservedReviewRuntimePath(p string) bool {
+	first, _, _ := strings.Cut(p, "/")
+	return strings.EqualFold(first, ReviewContractFilename)
 }
 
 func processSpec(msg string) error {

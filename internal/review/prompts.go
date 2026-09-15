@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 )
 
 //go:embed prompts/*.md prompts/roles/*.md
@@ -130,7 +131,7 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
 		Base:                   ctx.base,
 		Commit:                 ctx.commit,
 		EvidenceFile:           evidenceFile,
-		ContractFile:           filepath.Join(filepath.Dir(evidenceFile), "review-contract.md"),
+		ContractFile:           filepath.Join(filepath.Dir(evidenceFile), config.ReviewContractFilename),
 		TaskContext:            taskContext,
 		AutomaticReviewContext: automatic,
 		CallerReviewContext:    caller,

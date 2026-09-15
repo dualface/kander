@@ -68,7 +68,7 @@ esac
 exit 0
 `
 
-func writeCustomReviewerConfig(t *testing.T, h *reviewHarness, def map[string]any) {
+func writeCustomReviewerConfigUnchecked(t *testing.T, h *reviewHarness, def map[string]any) {
 	t.Helper()
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
@@ -84,6 +84,11 @@ func writeCustomReviewerConfig(t *testing.T, h *reviewHarness, def map[string]an
 	if err := os.WriteFile(os.Getenv(config.EnvConfig), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeCustomReviewerConfig(t *testing.T, h *reviewHarness, def map[string]any) {
+	t.Helper()
+	writeCustomReviewerConfigUnchecked(t, h, def)
 	if _, err := config.Load(false); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +124,44 @@ func newCustomHarness(t *testing.T) *reviewHarness {
 	t.Setenv("HELPER_REVIEW_CHECK_INTERVAL_SECONDS", "1")
 	t.Setenv("HELPER_REVIEW_MAX_RUNTIME_SECONDS", "30")
 	return h
+}
+
+func TestCustomReviewerReservedContractPathRejectedBeforeLaunch(t *testing.T) {
+	validOutput := map[string]any{"source": "file", "parse": "raw"}
+	for _, test := range []struct {
+		name   string
+		args   []string
+		review map[string]any
+	}{
+		{"output", []string{"--out", "{output}"}, map[string]any{
+			"cwd": "runtime", "output_name": "REVIEW-CONTRACT.MD", "output": validOutput,
+		}},
+		{"prompt-child", []string{"--file", "{prompt_file:guide}", "--out", "{output}"}, map[string]any{
+			"cwd": "runtime", "output_name": "result.txt", "output": validOutput,
+			"prompt_files": []any{map[string]any{
+				"name": "guide", "path": "Review-Contract.md/guide.txt", "template": "{prompt}",
+			}},
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h := newCustomHarness(t)
+			writeCustomReviewerConfigUnchecked(t, h, map[string]any{
+				"path": h.fake,
+				"args": map[string]any{
+					"start": []string{}, "resume": []string{}, "review": test.args,
+				},
+				"session": map[string]any{"mode": "none"},
+				"review":  test.review,
+			})
+			code, _, stderr := h.review("helper", "PMQA", "confirm change")
+			if code != 1 || !strings.Contains(stderr, config.ReviewContractFilename) {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			if _, err := os.Stat(h.argvLog); !os.IsNotExist(err) {
+				t.Fatalf("reviewer launched: %v", err)
+			}
+		})
+	}
 }
 
 func TestCustomReviewerOutputSources(t *testing.T) {

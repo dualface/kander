@@ -266,7 +266,7 @@ func (a *archiveExecution) publish() int {
 	return run.ExitCode
 }
 func (a *archiveExecution) snapshotRuntime(runtime string) error {
-	for _, name := range []string{"prompt.txt", "review-contract.md", "evidence.txt"} {
+	for _, name := range []string{"prompt.txt", config.ReviewContractFilename, "evidence.txt"} {
 		data, err := fs.ReadRegularFile(runtime, filepath.Join(runtime, name))
 		if err != nil {
 			return err

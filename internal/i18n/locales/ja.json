@@ -66,6 +66,7 @@
   "config.agent_no_resume": "Agent {{.V0}} は session.mode=none です。resume と直接通知は不可。notify は復旧経路で新しいプロセスを起動します。",
   "config.agent_review_pair": "args.review と review は同時に宣言してください。",
   "config.agent_review_field": "{{.V0}} が無効です: {{.V1}}",
+  "config.agent_review_reserved_path": "{{.V0}} は予約済みのレビューランタイムパス {{.V1}} と競合します。",
   "config.agent_review_stdin_none": "review.stdin が none ですが args.review に {instruction} がありません。",
   "config.agent_review_stdin_dup": "review.stdin が instruction なのに args.review にも {instruction} があります。",
   "config.reviewer_missing_template": "{{.V0}} は {{.V1}} です。この agent には審査テンプレート (args.review) がありません。",

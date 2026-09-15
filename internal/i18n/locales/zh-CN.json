@@ -66,6 +66,7 @@
   "config.agent_no_resume": "Agent {{.V0}} 使用 session.mode=none：不支持 resume 与 notify 直投；notify 将通过恢复通道启动新进程。",
   "config.agent_review_pair": "args.review 与 review 必须同时声明。",
   "config.agent_review_field": "{{.V0}} 无效：{{.V1}}",
+  "config.agent_review_reserved_path": "{{.V0}} 与保留的审核运行时路径 {{.V1}} 冲突。",
   "config.agent_review_stdin_none": "review.stdin 为 none，但 args.review 不含 {instruction}。",
   "config.agent_review_stdin_dup": "review.stdin 为 instruction，但 args.review 同时含有 {instruction}。",
   "config.reviewer_missing_template": "{{.V0}} 为 {{.V1}}，该 agent 未定义审核模板 (args.review)。",

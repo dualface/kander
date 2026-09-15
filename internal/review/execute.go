@@ -53,7 +53,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	errorFile := filepath.Join(outputRoot, "error.log")
 	evidenceFile := filepath.Join(runtime, "evidence.txt")
 	promptFile := filepath.Join(runtime, "prompt.txt")
-	contractFile := filepath.Join(runtime, "review-contract.md")
+	contractFile := filepath.Join(runtime, config.ReviewContractFilename)
 	stdinFile := filepath.Join(runtime, "stdin.txt")
 
 	var lp *launchedProcess
