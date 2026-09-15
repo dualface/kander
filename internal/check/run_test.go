@@ -38,6 +38,14 @@ func TestParseOptionsErrors(t *testing.T) {
 	if opt.base != "--all" || !opt.json {
 		t.Fatalf("option-looking ref: %+v", opt)
 	}
+	opt, err = parseOptions(checkDelivery, []string{"--base", "--json"})
+	if err == nil || err.Code != errCodeUsage || !opt.json {
+		t.Fatalf("reserved value with json: opt=%+v err=%+v", opt, err)
+	}
+	opt, err = parseOptions(checkDelivery, []string{"--unknown", "--json"})
+	if err == nil || err.Code != errCodeUsage || !opt.json {
+		t.Fatalf("unknown option with trailing json: opt=%+v err=%+v", opt, err)
+	}
 }
 
 func TestDeliveryJSONEmptyDiff(t *testing.T) {
@@ -169,9 +177,9 @@ func TestDeliveryDiffCheckFailAndSpecialPaths(t *testing.T) {
 	setupCheckLang(t)
 	dir := initRepo(t)
 	base := git(t, dir, "rev-parse", "HEAD")
-	writeCommit(t, dir, "file name.txt", "ok\n", "space")
-	writeCommit(t, dir, "-dash.txt", "ok\n", "dash")
-	writeCommit(t, dir, `quote"file.txt`, "ok\n", "quote")
+	writeCommit(t, dir, "file name.txt", "ok  \n", "space")
+	writeCommit(t, dir, "-dash.txt", "ok  \n", "dash")
+	writeCommit(t, dir, `quote"file.txt`, "ok  \n", "quote")
 	writeCommit(t, dir, "trail.txt", "hello  \n", "trailing")
 	t.Chdir(dir)
 	code, out, errb := captureRun(t, []string{"delivery", "--base", base, "--json"})
@@ -183,12 +191,11 @@ func TestDeliveryDiffCheckFailAndSpecialPaths(t *testing.T) {
 	if result.Status != statusFail || result.DiffCheck.Status != statusFail {
 		t.Fatalf("%+v", result)
 	}
-	if len(result.DiffCheck.Diagnostics) == 0 {
-		t.Fatal("missing diagnostics")
-	}
 	joined := strings.Join(result.DiffCheck.Diagnostics, "\n")
-	if !strings.Contains(joined, "trail.txt") {
-		t.Fatalf("diagnostics=%q", joined)
+	for _, name := range []string{"file name.txt", "dash.txt", "quote", "trail.txt"} {
+		if !strings.Contains(joined, name) {
+			t.Fatalf("diagnostics missing %q: %q", name, joined)
+		}
 	}
 }
 
@@ -225,8 +232,10 @@ func TestDeliveryHumanEscapesControls(t *testing.T) {
 	setupCheckLang(t)
 	dir := initRepo(t)
 	base := git(t, dir, "rev-parse", "HEAD")
-	name := "weird" + string(rune(0x1b)) + "x.txt"
-	writeCommit(t, dir, name, nLines(1001, true), "esc")
+	escName := "weird" + string(rune(0x1b)) + "x.txt"
+	c1Name := "c1" + string(rune(0x9b)) + "y.txt"
+	writeCommit(t, dir, escName, nLines(1001, true), "esc")
+	writeCommit(t, dir, c1Name, nLines(1001, true), "c1")
 	t.Chdir(dir)
 	code, out, errb := captureRun(t, []string{"delivery", "--base", base})
 	if code != exitAction {
@@ -235,10 +244,18 @@ func TestDeliveryHumanEscapesControls(t *testing.T) {
 	if strings.Contains(out, "\x1b") {
 		t.Fatalf("raw ESC leaked: %q", out)
 	}
-	for _, line := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
-		if strings.Contains(line, "\n") {
-			t.Fatal("nested newline")
-		}
+	if strings.Contains(out, "\u009b") {
+		t.Fatalf("raw C1 leaked: %q", out)
+	}
+	if !strings.Contains(out, `\x1b`) {
+		t.Fatalf("escaped ESC missing: %q", out)
+	}
+	if !strings.Contains(out, `\u009b`) {
+		t.Fatalf("escaped C1 missing: %q", out)
+	}
+	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+	if len(lines) < 6 {
+		t.Fatalf("expected multi-line report, got %d lines: %q", len(lines), out)
 	}
 }
 
@@ -284,6 +301,61 @@ func TestOverlapJSON(t *testing.T) {
 	}
 }
 
+func TestDeliveryCopyUnmodifiedSource(t *testing.T) {
+	setupCheckLang(t)
+	dir := initRepo(t)
+	writeCommit(t, dir, "origin.txt", nLines(1001, true), "origin")
+	base := git(t, dir, "rev-parse", "HEAD")
+	copyCommit(t, dir, "origin.txt", "copy.txt", "copy unmodified")
+	t.Chdir(dir)
+	code, out, errb := captureRun(t, []string{"delivery", "--base", base, "--json"})
+	if code != exitAction {
+		t.Fatalf("code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	var result DeliveryResult
+	mustDeliveryJSON(t, out, &result)
+	if len(result.AddedOverLimit) != 1 {
+		t.Fatalf("added=%+v", result.AddedOverLimit)
+	}
+	item := result.AddedOverLimit[0]
+	if string(item.Path.Raw) != "copy.txt" || item.BasePath == nil || string(item.BasePath.Raw) != "origin.txt" {
+		t.Fatalf("copy candidate %+v", item)
+	}
+	if item.BaseLines != 1001 || item.TargetLines != 1001 {
+		t.Fatalf("copy lines %+v", item)
+	}
+}
+
+func TestOverlapCopyIncludesOldPath(t *testing.T) {
+	setupCheckLang(t)
+	dir := initRepo(t)
+	writeCommit(t, dir, "origin.txt", nLines(40, true), "origin")
+	base := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "-q", "-b", "source")
+	writeCommit(t, dir, "origin.txt", nLines(40, true)+"source\n", "source-edit")
+	source := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "-q", "-B", "headbranch", base)
+	copyCommit(t, dir, "origin.txt", "copy.txt", "copy unmodified")
+	t.Chdir(dir)
+	code, out, errb := captureRun(t, []string{"overlap", "--source", source, "--json"})
+	if code != exitAction {
+		t.Fatalf("code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	var result OverlapResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, path := range result.Paths {
+		if string(path.Raw) == "origin.txt" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("copy old path missing: %+v", result.Paths)
+	}
+}
+
 func TestOverlapRenameConsidersBothPaths(t *testing.T) {
 	setupCheckLang(t)
 	dir := initRepo(t)
@@ -317,17 +389,24 @@ func TestOverlapRenameConsidersBothPaths(t *testing.T) {
 
 func TestUsageJSON(t *testing.T) {
 	setupCheckLang(t)
-	code, out, errb := captureRun(t, []string{"delivery", "--json"})
-	if code != exitUsage {
-		t.Fatalf("code=%d stderr=%s stdout=%s", code, errb, out)
+	cases := [][]string{
+		{"delivery", "--json"},
+		{"delivery", "--unknown", "--json"},
+		{"delivery", "--base", "--json"},
 	}
-	if errb != "" {
-		t.Fatalf("stderr=%q", errb)
-	}
-	var result DeliveryResult
-	mustDeliveryJSON(t, out, &result)
-	if result.Status != statusError || result.Error == nil || result.Error.Code != errCodeUsage {
-		t.Fatalf("%+v", result)
+	for _, args := range cases {
+		code, out, errb := captureRun(t, args)
+		if code != exitUsage {
+			t.Fatalf("%v code=%d stderr=%s stdout=%s", args, code, errb, out)
+		}
+		if errb != "" {
+			t.Fatalf("%v stderr=%q", args, errb)
+		}
+		var result DeliveryResult
+		mustDeliveryJSON(t, out, &result)
+		if result.Status != statusError || result.Error == nil || result.Error.Code != errCodeUsage {
+			t.Fatalf("%v %+v", args, result)
+		}
 	}
 }
 
@@ -336,6 +415,19 @@ func TestHelpAndLegacyUnknownStayCompatible(t *testing.T) {
 	code, out, errb := captureRun(t, []string{"--help"})
 	if code != 0 || !strings.Contains(out, "kander check delivery") {
 		t.Fatalf("help code=%d out=%s err=%s", code, out, errb)
+	}
+	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
+	t.Chdir(t.TempDir())
+	code, out, errb = captureRun(t, []string{"not-a-delivery-mode"})
+	if code == 0 {
+		t.Fatalf("legacy unknown should delegate, code=0 out=%s err=%s", out, errb)
+	}
+	combined := out + errb
+	if strings.Contains(combined, "kander check delivery") || strings.Contains(combined, `"check":"delivery"`) {
+		t.Fatalf("unknown mode must not use delivery usage: %q", combined)
+	}
+	if !strings.Contains(errb, "kander:") {
+		t.Fatalf("expected liveness/board error, got %q", errb)
 	}
 }
 
@@ -373,6 +465,8 @@ func TestInvalidUTF8PathPOSIX(t *testing.T) {
 
 func TestNotRepositoryJSON(t *testing.T) {
 	setupCheckLang(t)
+	t.Setenv("LANG", "zh_CN.UTF-8")
+	t.Setenv("LC_ALL", "zh_CN.UTF-8")
 	dir := t.TempDir()
 	t.Chdir(dir)
 	code, out, errb := captureRun(t, []string{"delivery", "--base", "HEAD", "--json"})

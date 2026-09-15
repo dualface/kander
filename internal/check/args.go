@@ -15,7 +15,7 @@ type options struct {
 }
 
 func parseOptions(mode string, args []string) (options, *CheckError) {
-	opt := options{mode: mode, commit: "HEAD", head: "HEAD"}
+	opt := options{mode: mode, commit: "HEAD", head: "HEAD", json: jsonRequested(args)}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -101,16 +101,34 @@ func nextFlag(args []string, i *int) (name, value string, ok bool, err *CheckErr
 	}
 	switch arg {
 	case "--base", "--commit", "--source", "--head":
-		if *i+1 >= len(args) {
+		if *i+1 >= len(args) || reservedFlag(args[*i+1]) || args[*i+1] == "" {
 			return "", "", false, usageErr(t("check.missing_flag_value", arg))
 		}
 		*i++
-		if args[*i] == "" {
-			return "", "", false, usageErr(t("check.missing_flag_value", arg))
-		}
 		return arg, args[*i], true, nil
 	default:
 		return "", "", false, nil
+	}
+}
+
+func jsonRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if arg == "--json" || strings.HasPrefix(arg, "--json=") {
+			return true
+		}
+	}
+	return false
+}
+
+func reservedFlag(arg string) bool {
+	switch arg {
+	case "--json", "--base", "--commit", "--source", "--head", "-h", "--help":
+		return true
+	default:
+		return false
 	}
 }
 

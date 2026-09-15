@@ -4,8 +4,34 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 )
+
+func TestEscapeControls(t *testing.T) {
+	got := escapeRunes("a" + string(rune(0x1b)) + "b" + string(rune(0x9b)) + "c\u2028d")
+	if got != `a\x1bb\u009bc\u2028d` {
+		t.Fatalf("escapeRunes=%q", got)
+	}
+	if strings.Contains(got, "\x1b") || strings.Contains(got, "\u009b") || strings.Contains(got, "\u2028") {
+		t.Fatalf("raw control remained: %q", got)
+	}
+}
+
+func TestGitCommandEnv(t *testing.T) {
+	t.Setenv("LANG", "zh_CN.UTF-8")
+	t.Setenv("LC_ALL", "zh_CN.UTF-8")
+	t.Setenv("LANGUAGE", "zh_CN")
+	joined := strings.Join(gitCommandEnv(), "\n")
+	for _, want := range []string{"GIT_NO_LAZY_FETCH=1", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C", "LANG=C"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in %s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "zh_CN") {
+		t.Fatalf("host locale leaked: %s", joined)
+	}
+}
 
 func TestPhysicalLines(t *testing.T) {
 	tests := []struct {

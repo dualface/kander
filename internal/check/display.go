@@ -3,6 +3,7 @@ package check
 import (
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -33,19 +34,29 @@ func escapeRunes(s string) string {
 			b.WriteString(`\t`)
 		case '\\':
 			b.WriteString(`\\`)
-		case 0x1b:
-			b.WriteString(`\x1b`)
-		case 0x7f:
-			b.WriteString(`\x7f`)
 		default:
-			if r < 0x20 {
-				fmt.Fprintf(&b, `\x%02x`, r)
+			if shouldEscapeRune(r) {
+				b.WriteString(escapeControlRune(r))
 				continue
 			}
 			b.WriteRune(r)
 		}
 	}
 	return b.String()
+}
+
+func shouldEscapeRune(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029'
+}
+
+func escapeControlRune(r rune) string {
+	if r < 0x80 {
+		return fmt.Sprintf(`\x%02x`, r)
+	}
+	if r <= 0xffff {
+		return fmt.Sprintf(`\u%04x`, r)
+	}
+	return fmt.Sprintf(`\U%08x`, r)
 }
 
 func escapeText(s string) string {
@@ -66,14 +77,13 @@ func displayOptionalPath(path *GitPath) string {
 func cleanMessage(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		switch {
-		case r == '\n' || r == '\r' || r == '\t' || r < 0x20 || r == 0x7f:
+		if r == '\n' || r == '\r' || r == '\t' || shouldEscapeRune(r) {
 			if b.Len() > 0 && !strings.HasSuffix(b.String(), " ") {
 				b.WriteByte(' ')
 			}
-		default:
-			b.WriteRune(r)
+			continue
 		}
+		b.WriteRune(r)
 	}
 	out := strings.TrimSpace(b.String())
 	if len(out) > 512 {

@@ -8,7 +8,7 @@ kander check delivery --base <ref> [--commit <ref>] [--json]
 kander check overlap --source <ref> [--head <ref>] [--json]
 ```
 
-Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z`. Output never includes host-absolute paths or timestamps.
+Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error JSON stays stable. Output never includes host-absolute paths or timestamps.
 
 ## Exit codes
 
@@ -46,4 +46,4 @@ Every `path`, `base_path`, and `paths` element is `{"utf8": <string-or-null>, "b
 
 ## Human output
 
-Without `--json`, en / zh-CN / ja catalogs print a short report. Untrusted paths and diagnostics are escaped onto one terminal line: newlines, ANSI ESC, and other controls cannot inject extra rows or sequences.
+Without `--json`, en / zh-CN / ja catalogs print a short report. Untrusted paths and diagnostics are escaped onto one terminal line: newlines, ANSI ESC, C1 controls, and other non-printing runes cannot inject extra rows or sequences. `--json` is honored even when it appears after another argument error, so recognized usage failures still emit one JSON object.

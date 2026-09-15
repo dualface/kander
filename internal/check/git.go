@@ -49,7 +49,7 @@ func defaultGitExec(ctx context.Context, args ...string) ([]byte, []byte, int, e
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = gitCommandEnv()
 	cmd.WaitDelay = gitWaitDelay
 	stdout := &limitedBuffer{limit: gitStdoutLimit, cancel: cancel}
 	stderr := &limitedBuffer{limit: gitStderrLimit, cancel: cancel}
@@ -99,6 +99,35 @@ func (b *limitedBuffer) Write(data []byte) (int, error) {
 }
 
 func (b *limitedBuffer) Bytes() []byte { return b.buffer.Bytes() }
+
+func gitCommandEnv() []string {
+	skip := func(key string) bool {
+		switch strings.ToUpper(key) {
+		case "GIT_OPTIONAL_LOCKS", "GIT_TERMINAL_PROMPT", "GIT_NO_LAZY_FETCH",
+			"LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE":
+			return true
+		default:
+			return false
+		}
+	}
+	env := make([]string, 0, len(os.Environ())+8)
+	for _, kv := range os.Environ() {
+		key, _, _ := strings.Cut(kv, "=")
+		if skip(key) {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env,
+		"GIT_OPTIONAL_LOCKS=0",
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_NO_LAZY_FETCH=1",
+		"LC_ALL=C",
+		"LANG=C",
+		"LC_MESSAGES=C",
+		"LANGUAGE=",
+	)
+}
 
 func gitConfigArgs(args ...string) []string {
 	prefix := []string{
@@ -170,7 +199,7 @@ func (g gitRunner) mergeBase(ctx context.Context, a, b string) (string, *CheckEr
 }
 
 func (g gitRunner) nameStatus(ctx context.Context, a, b string) ([]change, *CheckError) {
-	stdout, stderr, code, err := g.run(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--name-status", "-z", a, b, "--")
+	stdout, stderr, code, err := g.run(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--find-copies-harder", "--name-status", "-z", a, b, "--")
 	if classified, _ := classifyExec(err); classified != nil {
 		return nil, classified
 	}

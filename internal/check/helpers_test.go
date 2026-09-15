@@ -68,6 +68,24 @@ func initRepo(t *testing.T) string {
 	return dir
 }
 
+func copyCommit(t *testing.T, dir, src, dst, message string) string {
+	t.Helper()
+	in, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(src)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, filepath.FromSlash(dst))
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(out, in, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "--", dst)
+	git(t, dir, "commit", "-q", "-m", message)
+	return git(t, dir, "rev-parse", "HEAD")
+}
+
 func writeCommit(t *testing.T, dir, rel, body, message string) string {
 	t.Helper()
 	path := filepath.Join(dir, filepath.FromSlash(rel))
