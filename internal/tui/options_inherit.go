@@ -153,6 +153,7 @@ func (p *optionsPanel) syncAppFromSession() {
 	p.app.Columns = tui.Columns
 	p.app.MinColumnWidth = tui.MinColumnWidth
 	p.app.RefreshSecs = tui.Refresh
+	p.app.syncSummaryStrongInterval()
 	p.app.Model.Single = tui.Single
 }
 

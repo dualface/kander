@@ -87,3 +87,28 @@ func TestStartResultInvalidatesSummaryCache(t *testing.T) {
 		t.Fatalf("start failure did not invalidate: %+v", got)
 	}
 }
+
+func TestSyncSummaryStrongIntervalFollowsRefreshSecs(t *testing.T) {
+	root := t.TempDir()
+	for _, state := range board.States {
+		if err := os.Mkdir(filepath.Join(root, state), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := board.NewTask(root, "chore", "refresh-interval", "Refresh interval", "en", false); err != nil {
+		t.Fatal(err)
+	}
+	app := newApp(true, 3600, pageContext{}, nil, nil, "auto", 40, nil, nil)
+	attachBoard(app, root)
+	if app.summaries == nil {
+		t.Fatal("missing summary index")
+	}
+	if got, want := app.summaries.StrongEvery(), board.StrongInterval(3600); got != want {
+		t.Fatalf("initial strong interval %s want %s", got, want)
+	}
+	app.RefreshSecs = 1
+	app.syncSummaryStrongInterval()
+	if got, want := app.summaries.StrongEvery(), board.StrongInterval(1); got != want {
+		t.Fatalf("updated strong interval %s want %s", got, want)
+	}
+}

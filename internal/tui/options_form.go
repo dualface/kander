@@ -926,6 +926,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	}
 	if refresh := clampRefresh(b.refresh); previous.Refresh != refresh {
 		app.RefreshSecs = refresh
+		app.syncSummaryStrongInterval()
 		scopeTUI.Refresh = refresh
 		changed = true
 		if overlay {
@@ -956,6 +957,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	app.Columns = scopeTUI.Columns
 	app.MinColumnWidth = scopeTUI.MinColumnWidth
 	app.RefreshSecs = scopeTUI.Refresh
+	app.syncSummaryStrongInterval()
 	app.Model.Single = scopeTUI.Single
 	p.appliedTUI = &scopeTUI
 	if overlay {

@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/dualface/kander/internal/board"
 )
 
 type boardReadResult struct {
@@ -35,6 +37,12 @@ func (a *App) invalidateBoardReads() {
 func (a *App) invalidateSummaries(ids ...string) {
 	if a.summaries != nil {
 		a.summaries.Invalidate(ids...)
+	}
+}
+
+func (a *App) syncSummaryStrongInterval() {
+	if a.summaries != nil {
+		a.summaries.SetStrongEvery(board.StrongInterval(a.RefreshSecs))
 	}
 }
 
