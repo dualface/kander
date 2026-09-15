@@ -1,6 +1,6 @@
 {
   "orchestrate.usage": "usage: kander orchestrate [--agent codex|claude|grok|cursor|pi] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message text | --message-file path) <task-id|task-group-id>...",
-  "orchestrate.requires_more_than_one_task": "orchestrate requires more than one task card; start a single card with kander start",
+  "orchestrate.requires_at_least_one_task": "orchestrate requires at least one task card",
   "orchestrate.task_group_has_no_members": "task group {{.V0}} has no member cards",
   "orchestrate.task_repeated": "task {{.V0}} is named more than once, directly or through its task group",
   "orchestrate.task_already_started": "task {{.V0}} is in {{.V1}}; orchestrate only accepts cards in backlog or todo",

@@ -113,6 +113,42 @@ func TestStartOrchestratorLaunchesSessionWithoutBoardWrites(t *testing.T) {
 	}
 }
 
+func TestStartOrchestratorLaunchesSingleCard(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
+	for _, state := range []string{"backlog", "todo"} {
+		t.Run(state, func(t *testing.T) {
+			root, _, _ := setupBoard(t)
+			loadEffective = func() (*config.Config, error) {
+				return envConfig("codex", "tmux", map[string]string{"large": "grok", "small": "codex"}), nil
+			}
+			var id, document string
+			if state == "backlog" {
+				id, document = makeBacklog(t, root, "orchestrate-single", true)
+			} else {
+				id, document = makeTodo(t, root, "orchestrate-single")
+			}
+			before := mustRead(t, document)
+			result, err := StartOrchestrator(OrchestrateRequest{
+				Root: root, References: []string{id}, Handover: "Start and monitor this card until it is done.",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Agent != "grok" || result.Launcher != "tmux" || !strings.Contains(result.Address, ":") {
+				t.Fatalf("result=%+v", result)
+			}
+			if len(result.Tasks) != 1 || result.Tasks[0] != (OrchestrateTask{TaskID: id, State: state}) {
+				t.Fatalf("tasks=%+v", result.Tasks)
+			}
+			if after := mustRead(t, document); after != before {
+				t.Fatal("starting the orchestrator changed the card")
+			}
+		})
+	}
+}
+
 func TestStartOrchestratorUsesTheLargeAgentAndExpandsTaskGroups(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
@@ -159,10 +195,10 @@ func TestStartOrchestratorRejectsInvalidTaskSets(t *testing.T) {
 		references []string
 		want       string
 	}{
-		{"single", []string{readyID}, "需要多于一张任务卡"},
+		{"empty", nil, "需要至少一张任务卡"},
 		{"repeated", []string{readyID, otherID, readyID}, "被重复指定"},
-		{"started", []string{readyID, startedID}, "位于 working"},
-		{"draft", []string{readyID, draftID}, "尚不能进入 todo"},
+		{"started", []string{startedID}, "位于 working"},
+		{"draft", []string{draftID}, "尚不能进入 todo"},
 		{"group", []string{readyID, emptyGroup}, "没有成员卡"},
 		{"missing", []string{readyID, time.Now().Format("20060102") + "-missing-task"}, "任务不存在"},
 	}

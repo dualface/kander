@@ -1,6 +1,6 @@
 {
   "orchestrate.usage": "用法: kander orchestrate [--agent codex|claude|grok|cursor|pi] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message 文本 | --message-file 路径) <任务|任务组>...",
-  "orchestrate.requires_more_than_one_task": "orchestrate 需要多于一张任务卡; 单张卡请用 kander start",
+  "orchestrate.requires_at_least_one_task": "orchestrate 需要至少一张任务卡",
   "orchestrate.task_group_has_no_members": "任务组 {{.V0}} 没有成员卡",
   "orchestrate.task_repeated": "任务 {{.V0}} 被重复指定 (直接指定或经由其任务组)",
   "orchestrate.task_already_started": "任务 {{.V0}} 位于 {{.V1}}; orchestrate 只接受 backlog 或 todo 中的卡",

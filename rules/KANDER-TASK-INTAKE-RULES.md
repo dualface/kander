@@ -18,7 +18,7 @@ After finishing the analysis and implementation plan, present the options once:
 - Adjust the plan (no card created or started)
 ```
 
-Offer the orchestrator option only when the plan contains more than one card, whether independent single cards, task groups, or both; for a single card omit it and present the other four. Number these options from `1` and make them the only numbered question in that message, so the numbers cannot collide with another question.
+Offer all five options for both single-card and multi-card plans, whether independent single cards, task groups, or both. Number these options from `1` and make them the only numbered question in that message, so the numbers cannot collide with another question.
 
 - Choosing `Confirm the plan and use the kanban board (create the cards; this session starts and advances them here)` authorizes the plan, the development, and the kanban flow at once, including the merge-back steps the plan states; do not ask again before starting work or before integrating. This covers every standalone card and every task group named in the confirmed plan.
 

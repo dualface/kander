@@ -41,7 +41,7 @@ type OrchestrateResult struct {
 	Warnings []string
 }
 
-// StartOrchestrator starts one orchestrator session for more than one card. It
+// StartOrchestrator starts one orchestrator session for one or more cards. It
 // writes no board state: the orchestrator picks and starts the cards itself
 // under the rules. A failed start closes the container it created and removes
 // its temporary task file.
@@ -74,8 +74,8 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 			}
 		}
 	}
-	// Orchestration spans several cards and review batches, so the session
-	// uses the large-tier agent unless the caller overrides it.
+	// Orchestration may span several cards and review batches, so the session
+	// uses the large-tier agent even for one card unless the caller overrides it.
 	agent, launcher, err := sessionDefaults(cfg, "large", request.Agent, request.Launcher)
 	if err != nil {
 		return result, err
@@ -175,8 +175,8 @@ func resolveOrchestrateTasks(loaded board.Board, references []string) ([]Orchest
 		}
 		ids = append(ids, entry.TaskID)
 	}
-	if len(ids) < 2 {
-		return nil, nil, launchError("orchestrate.requires_more_than_one_task")
+	if len(ids) == 0 {
+		return nil, nil, launchError("orchestrate.requires_at_least_one_task")
 	}
 	seen := map[string]bool{}
 	tasks := make([]OrchestrateTask, 0, len(ids))
@@ -291,7 +291,7 @@ func RunOrchestrate(args []string) int {
 		}
 	}
 	if len(references) == 0 {
-		return orchestrateUsageFail(t("orchestrate.requires_more_than_one_task"))
+		return orchestrateUsageFail(t("orchestrate.requires_at_least_one_task"))
 	}
 	text, err := readTaskMessage(handover, handoverSet, handoverFile, "orchestrate")
 	if err != nil {
