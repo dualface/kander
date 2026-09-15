@@ -30,16 +30,17 @@ Before a card moves to `review/`, or a single card requests review, run this che
 6. The touched modules compile, and the targeted tests for the changed behavior ran at the final delivery commit; cite that commit next to the result. Evidence produced before the last code change is stale and must be rerun.
 7. A claim of "all tests pass" names the command, the commit, and the count; without all three it is treated as not executed.
 
-Items 1, 2 and 6 come from commands, not from reading. Run them in the task worktree with `BASE` set to the source-branch SHA the branch is currently based on:
+Items 1, 2 and 6 come from commands, not from reading. In the task worktree, with `BASE` the source-branch SHA the branch is currently based on:
 
-```bash
-git diff --check BASE HEAD
-git diff --name-only --diff-filter=A BASE HEAD | xargs -r wc -l | sort -n | tail -5
-git diff --name-only --diff-filter=M BASE HEAD | while read -r f; do
-  echo "$(git show "BASE:$f" | wc -l) $(wc -l < "$f") $f"; done | awk '$1 <= 1000 && $2 > 1000'
+```sh
+kander check delivery --base BASE --json
 ```
 
-The first prints nothing when clean, the second lists the largest added files, the third prints only touched files that crossed 1000 lines. For item 6, record the build and test commands with the commit they ran at.
+Exit 0 means items 1 and 2 passed. Exit 1 with `status` `fail` means item 1 found whitespace or leftover conflict-marker diagnostics; fix them. Exit 1 with `status` `review-required` (or `fail` that also lists line-count candidates) means item 2 produced candidates: record every `added_over_limit` and `crossed_limit` entry with an explicit disposition (generated file, acceptable exception, or must-split). Kander does not classify source versus generated files. Exit 2 or 3 means the check did not finish; do not record PASS.
+
+JSON is the machine-readable contract. Human output is a convenience. Do not substitute a Bash or GNU pipeline (`comm`, `xargs`, `awk`, process substitution, `wc`) for this command.
+
+For item 6, record the build and test commands with the commit they ran at.
 
 ## Verification Records
 
