@@ -1,5 +1,7 @@
-// Package install initializes rules and agent integrations, copies the global
-// binary when PATH identity does not match, and runs the first-run wizard.
+// Package install initializes rules and agent integrations and runs the
+// first-run wizard. kander install copies the global binary and deletes
+// legacy entries when PATH identity does not match. Bare kander asks a
+// stderr Y/N question (default no) for the same copy before the board opens.
 package install
 
 import (
