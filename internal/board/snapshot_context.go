@@ -46,60 +46,11 @@ func (locks *lockSet) takeSharedContext(ctx context.Context, root, path string) 
 }
 
 func scanContext(ctx context.Context, root string, ids []string, dispatches bool, warnings ...*WarningLog) (b Board, err error) {
-	if err = ctx.Err(); err != nil {
-		return b, err
-	}
-	if err = ensureControl(root); err != nil {
-		return b, err
-	}
 	var locks lockSet
 	defer func() { err = errors.Join(err, locks.close()) }()
-	if err = locks.takeSharedContext(ctx, root, control(root, "locks", "board.lock")); err != nil {
-		return b, err
-	}
-	if ids == nil {
-		b, err = scan(root)
-	} else {
-		b, err = scanTargets(root, ids)
-	}
+	b, selected, err := captureCommittedScan(ctx, root, ids, &locks, warnings...)
 	if err != nil {
 		return b, err
-	}
-	selected := append([]string{}, ids...)
-	for id := range b.Entries {
-		selected = append(selected, id)
-	}
-	selected, err = orderedIDs(selected, false)
-	if err != nil {
-		return b, err
-	}
-	for _, id := range selected {
-		if err = locks.takeSharedContext(ctx, root, control(root, "locks", id+".lock")); err != nil {
-			return b, err
-		}
-	}
-	// Journal locking is terminal: release it before reading card files.
-	var journal lockSet
-	if err = journal.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
-		return b, err
-	}
-	records, readErr := readPendingRecords(root, warnings...)
-	if err = errors.Join(readErr, journal.close()); err != nil {
-		return b, err
-	}
-	for _, rec := range records {
-		if rec.Phase != "prepared" {
-			continue
-		}
-		affected := ids == nil || len(rec.Entries) > 0 || len(rec.Migrations) > 0
-		for _, id := range selected {
-			if _, ok := rec.Revisions[id]; ok {
-				affected = true
-			}
-		}
-		if affected {
-			return b, kanbanError("board.transaction_pending", rec.ID)
-		}
 	}
 	b.documents = make(map[string]string, len(b.Entries))
 	b.documentErrors = make(map[string]error)
@@ -139,6 +90,66 @@ func scanContext(ctx context.Context, root string, ids []string, dispatches bool
 		}
 	}
 	return b, nil
+}
+
+// captureCommittedScan takes the board, per-card, and journal shared locks and
+// rejects a pending prepared record. Callers must close locks and may then read
+// selected documents while those locks are held.
+func captureCommittedScan(ctx context.Context, root string, ids []string, locks *lockSet, warnings ...*WarningLog) (b Board, selected []string, err error) {
+	if err = ctx.Err(); err != nil {
+		return b, nil, err
+	}
+	if err = ensureControl(root); err != nil {
+		return b, nil, err
+	}
+	if err = locks.takeSharedContext(ctx, root, control(root, "locks", "board.lock")); err != nil {
+		return b, nil, err
+	}
+	if ids == nil {
+		b, err = scan(root)
+	} else {
+		b, err = scanTargets(root, ids)
+	}
+	if err != nil {
+		return b, nil, err
+	}
+	selected = append([]string{}, ids...)
+	for id := range b.Entries {
+		selected = append(selected, id)
+	}
+	selected, err = orderedIDs(selected, false)
+	if err != nil {
+		return b, nil, err
+	}
+	for _, id := range selected {
+		if err = locks.takeSharedContext(ctx, root, control(root, "locks", id+".lock")); err != nil {
+			return b, nil, err
+		}
+	}
+	// Journal locking is terminal: release it before reading card files.
+	var journal lockSet
+	if err = journal.takeSharedContext(ctx, root, control(root, "locks", "journal.lock")); err != nil {
+		return b, nil, err
+	}
+	records, readErr := readPendingRecords(root, warnings...)
+	if err = errors.Join(readErr, journal.close()); err != nil {
+		return b, nil, err
+	}
+	for _, rec := range records {
+		if rec.Phase != "prepared" {
+			continue
+		}
+		affected := ids == nil || len(rec.Entries) > 0 || len(rec.Migrations) > 0
+		for _, id := range selected {
+			if _, ok := rec.Revisions[id]; ok {
+				affected = true
+			}
+		}
+		if affected {
+			return b, nil, kanbanError("board.transaction_pending", rec.ID)
+		}
+	}
+	return b, selected, nil
 }
 
 // Revision returns the committed revision captured with the immutable document.
