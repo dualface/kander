@@ -1,0 +1,1 @@
+Output contract: your final message is the complete report. It must already contain the analysis and the exact kander-findings fence. Write that one message and stop. Delete the task file before writing the final message; after that message, do not send any follow-up.

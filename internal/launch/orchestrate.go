@@ -235,7 +235,6 @@ func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover s
 		rules,
 		strings.TrimRight(list.String(), "\n"),
 		handover,
-		commandName(paths),
 		promptAgents(paths),
 	), nil
 }

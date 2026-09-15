@@ -461,7 +461,7 @@ func UpdateReviewRun(root string, run ReviewRun) error {
 // StoreReviewArtifact snapshots generated prompts before launch, without giving
 // the reviewer a board transaction or write access through a Kander command.
 func StoreReviewArtifact(root, runID, name string, data []byte) error {
-	if !ValidReviewID(runID) || (name != "prompt.txt" && name != "evidence.txt") {
+	if !ValidReviewID(runID) || (name != "prompt.txt" && name != "review-contract.md" && name != "evidence.txt") {
 		return reviewError("artifact")
 	}
 	return WithTransaction(root, reviewScope(nil, false), func(tx *Transaction) error {
@@ -554,7 +554,7 @@ func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, er
 }
 func reviewOriginals(tx *Transaction, id string, final bool) (map[string][]byte, error) {
 	result := map[string][]byte{}
-	names := map[string]string{"task-context.md": "inputs", "review-context.md": "inputs", "prompt.txt": "inputs", "evidence.txt": "inputs", "output.raw": "staging", "stdout.log": "staging", "error.log": "staging"}
+	names := map[string]string{"task-context.md": "inputs", "review-context.md": "inputs", "prompt.txt": "inputs", "review-contract.md": "inputs", "evidence.txt": "inputs", "output.raw": "staging", "stdout.log": "staging", "error.log": "staging"}
 	if final {
 		names["report.md"] = "originals"
 	}

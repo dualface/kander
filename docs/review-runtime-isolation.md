@@ -28,9 +28,9 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 
 ## Prompt Delivery
 
-- On all platforms the full prompt is written to a UTF-8 task file in the review runtime. Delivery follows the reviewer definition: `review.stdin` is `instruction` (default) or `none`. With `instruction`, the reviewer receives only a short instruction naming that file path on stdin. With `none`, the same instruction is passed through `{instruction}` in argv and stdin is not that pipe. Extra files in `review.prompt_files` are rendered into the runtime and referenced as `{prompt_file:<name>}`.
-- Built-in reviewers use `review.stdin: instruction` and declare no `review.prompt_files`. Grok's definition keeps `--prompt-file` pointing at Kander's `prompt.txt`.
-- The task file does not check or tighten POSIX permissions or Windows ACLs; when it lives in the review runtime it is still protected by that boundary.
+- On all platforms Kander writes `prompt.txt`, a UTF-8 bootstrap file, and `review-contract.md`, a separate file rendered from embedded protocol, scope, and role resources. The bootstrap carries only runtime facts and frozen task/review context and tells the reviewer to read the contract completely. Delivery follows the reviewer definition: `review.stdin` is `instruction` (default) or `none`. With `instruction`, the reviewer receives only a short instruction naming the bootstrap path on stdin. With `none`, the same instruction is passed through `{instruction}` in argv and stdin is not that pipe. Extra files in `review.prompt_files` are rendered into the runtime and referenced as `{prompt_file:<name>}`.
+- Built-in reviewers use `review.stdin: instruction` and declare no `review.prompt_files`. Grok's definition keeps `--prompt-file` pointing at Kander's `prompt.txt`; that bootstrap names the contract by absolute runtime path.
+- The bootstrap task file does not tighten its own POSIX mode or Windows ACL; the private review runtime protects it. Before launch, Kander validates `review-contract.md` through the no-follow filesystem boundary and sets mode 0400 on POSIX. Windows retains the runtime's protected DACL because the read-only file attribute is not an access-control boundary.
 
 ## Process Collection
 

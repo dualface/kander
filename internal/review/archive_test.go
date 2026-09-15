@@ -44,6 +44,8 @@ func archiveHarnessFor(t *testing.T, h *reviewHarness, agent string) (*reviewHar
 }
 func TestArchiveCLIOutputRetryAndLanguage(t *testing.T) {
 	h, root, args := archiveHarness(t)
+	contractMode := filepath.Join(h.root, "contract.mode")
+	t.Setenv("FAKE_CODEX_CONTRACT_MODE", contractMode)
 	report := "FAIL: 原始审核意见\n" + emptyStructuredReview
 	t.Setenv("FAKE_CODEX_REPORT", report)
 	code, out, stderr := captureRun(t, args)
@@ -65,8 +67,15 @@ func TestArchiveCLIOutputRetryAndLanguage(t *testing.T) {
 		t.Fatalf("%q %v", raw, err)
 	}
 	prompt, err := board.ReadReviewOriginal(root, "stable", "prompt.txt")
-	if err != nil || !strings.Contains(string(prompt), "zh-CN") {
+	if err != nil || !strings.Contains(string(prompt), "review-contract.md") {
 		t.Fatalf("%s %v", prompt, err)
+	}
+	contract, err := board.ReadReviewOriginal(root, "stable", "review-contract.md")
+	if err != nil || !strings.Contains(string(contract), "zh-CN") || run.Hashes["review-contract.md"] != board.ReviewDigest(contract) {
+		t.Fatalf("contract hash/archive mismatch: %s %v", contract, err)
+	}
+	if mode := strings.TrimSpace(readFile(t, contractMode)); !strings.HasPrefix(mode, "-r--------") {
+		t.Fatalf("runtime contract mode=%q", mode)
 	}
 	// The retry may run after the worktree advanced or the CLI disappeared.
 	if err = os.Remove(h.fake); err != nil {

@@ -107,7 +107,7 @@ func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardT
 	cmd := commandName(paths)
 	ending := t("launch.prompt.start_single")
 	if taskGroup != "" {
-		ending = t("launch.prompt.start_group", cmd, taskID)
+		ending = t("launch.prompt.start_group")
 	}
 	return t("launch.prompt.start", t("launch.prompt.start_head", taskID), rules, cmd, taskID, promptAgents(paths), ending), nil
 }

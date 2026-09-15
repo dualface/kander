@@ -215,8 +215,11 @@ func TestTaskFileContainsBodyAndBestEffortDeleteInstruction(t *testing.T) {
 	if !strings.Contains(text, path) {
 		t.Fatalf("missing path in %q", text)
 	}
-	if !strings.Contains(text, "删除失败或文件遗留不影响任务结果") {
+	if !strings.Contains(text, "Failure to delete it or leaving it behind does not affect the task result") {
 		t.Fatalf("missing delete instruction in %q", text)
+	}
+	if strings.Contains(text, "删除失败") {
+		t.Fatalf("task-file entry and cleanup instructions use different languages: %q", text)
 	}
 }
 

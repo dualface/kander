@@ -322,7 +322,7 @@ func newInvocation(program AgentProgram, arguments []string, environment map[str
 
 func taskPayload(body, path string) string {
 	return strings.TrimRightFunc(body, unicode.IsSpace) + "\n\n" +
-		i18n.Text("cn", "process.task_cleanup", path)
+		i18n.Text("en", "process.task_cleanup", path)
 }
 
 // CreateTaskFile writes the task payload through the system temporary file mechanism, without additional permission or ACL checks.

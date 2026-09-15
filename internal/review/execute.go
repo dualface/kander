@@ -53,6 +53,7 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 	errorFile := filepath.Join(outputRoot, "error.log")
 	evidenceFile := filepath.Join(runtime, "evidence.txt")
 	promptFile := filepath.Join(runtime, "prompt.txt")
+	contractFile := filepath.Join(runtime, "review-contract.md")
 	stdinFile := filepath.Join(runtime, "stdin.txt")
 
 	var lp *launchedProcess
@@ -133,6 +134,14 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 		taskContext = "Authoritative spec file: " + snapshot + ". Read it completely before reviewing."
 	}
 	if err := writeEvidence(ctx, runtime, evidenceFile); err != nil {
+		fail(err)
+		return exitCode
+	}
+	if err := fs.WriteTextAtomic(runtime, contractFile, buildReviewContract(ctx), false); err != nil {
+		fail(err)
+		return exitCode
+	}
+	if err := fs.MakeRegularFileReadOnly(runtime, contractFile); err != nil {
 		fail(err)
 		return exitCode
 	}

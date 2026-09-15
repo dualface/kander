@@ -93,6 +93,18 @@ func TestCatalogs(t *testing.T) {
 	}
 }
 
+func TestLaunchPromptsDoNotInlineDeliveryPolicy(t *testing.T) {
+	for _, language := range []string{"en", "zh-CN", "ja"} {
+		messages := readCatalog(t, language)
+		for _, id := range []string{"launch.prompt.start_single", "launch.prompt.start_group"} {
+			message := messages[id]
+			if strings.Contains(message, "Delivery Self-Check") || strings.Contains(message, "KANDER-CODE-RULES.md") {
+				t.Fatalf("%s/%s duplicates policy from the rules file: %s", language, id, message)
+			}
+		}
+	}
+}
+
 func TestDialogTopicKeysMatch(t *testing.T) {
 	keys := func(lang string) map[string]struct{} {
 		data, err := catalogs.ReadFile("locales/dialog/" + lang + ".json")

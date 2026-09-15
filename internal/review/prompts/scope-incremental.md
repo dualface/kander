@@ -1,0 +1,6 @@
+This is an incremental re-review by the same role on the same review base. Your role already reviewed commit {{.Reviewed}}. The fix range {{.Reviewed}}..{{.Commit}} is the only new material. The caller's review context lists every finding from the previous round with its disposition. Do two things and nothing more:
+
+1. For every listed prior finding, verify at {{.Commit}} whether it is closed, still open, or only partially fixed. Report that status per finding ID with exact evidence. Re-examine a disputed finding only against the caller's stated evidence; do not restate it without new facts.
+2. Report a new gate finding only when the fix range introduces, worsens, or conceals it, or when a prior fix breaks a requirement it touched. Treat code unchanged since {{.Reviewed}} as already accepted by your role: do not re-audit it, raise findings on it, or widen the review into unchanged areas. Use unchanged code only to judge the fix range's impact. A non-blocking finding on code outside the fix range goes to NON-BLOCKING with [outside-fix-range]. Only a blocking defect introduced by the fix may enter gate findings.
+
+The FIX RANGE sections of the evidence file are navigation. The full {{.Base}}..{{.Commit}} range is context only.

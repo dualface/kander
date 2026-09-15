@@ -18,7 +18,13 @@ while [ "$#" -gt 0 ]; do
     fi
     shift
 done
-cp "$prompt" "$FAKE_GROK_PROMPT"
+contract=$(sed -n 's/^Before reviewing, read the complete review contract at \(.*\) and follow it exactly\.$/\1/p' "$prompt")
+{
+    cat "$prompt"
+    if [ -n "$contract" ]; then
+        cat "$contract"
+    fi
+} > "$FAKE_GROK_PROMPT"
 if [ -n "${FAKE_GROK_TAMPER:-}" ]; then
     printf '%s\n' 'tampered' > "$FAKE_GROK_TAMPER"
 fi

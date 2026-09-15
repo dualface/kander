@@ -579,6 +579,26 @@ func TestIssueSourceKeyNeedsConfirmedIdentity(t *testing.T) {
 	}
 }
 
+func TestImportContractPreservesEnterpriseSourceIdentity(t *testing.T) {
+	repository := Repository{
+		Host: "ghe.example.com", Owner: "acme", Name: "tool",
+		URL: "https://ghe.example.com/acme/tool", Remote: "origin",
+	}
+	record, err := BuildImportSnapshot(importTestSnapshot(repository, 19))
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := BuildImportContract(record, "", false)
+	for _, want := range []string{
+		"Source: github://ghe.example.com/acme/tool/issues/19",
+		"Source URL: https://ghe.example.com/acme/tool/issues/19",
+	} {
+		if !strings.Contains(contract.Discussion, want) {
+			t.Fatalf("enterprise import contract missing %q:\n%s", want, contract.Discussion)
+		}
+	}
+}
+
 func TestTaskSlugStaysWithinTheBoardLimit(t *testing.T) {
 	repository := Repository{
 		Host: "github.com", Owner: strings.Repeat("owner", 20), Name: strings.Repeat("repo", 20),

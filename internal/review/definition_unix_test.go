@@ -38,8 +38,14 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 if [ -n "$prompt" ] && [ -n "${FAKE_CUSTOM_PROMPT_COPY:-}" ]; then
-    cp "$prompt" "$FAKE_CUSTOM_PROMPT_COPY"
-    ls -l "$prompt" | awk '{print $1}' > "$FAKE_CUSTOM_PROMPT_MODE"
+	contract=$(sed -n 's/^Before reviewing, read the complete review contract at \(.*\) and follow it exactly\.$/\1/p' "$prompt")
+	{
+		cat "$prompt"
+		if [ -n "$contract" ]; then
+			cat "$contract"
+		fi
+	} > "$FAKE_CUSTOM_PROMPT_COPY"
+	ls -l "$prompt" | awk '{print $1}' > "$FAKE_CUSTOM_PROMPT_MODE"
 fi
 case "${FAKE_CUSTOM_MODE:-file}" in
     file)
@@ -137,8 +143,8 @@ func TestCustomReviewerOutputSources(t *testing.T) {
 		t.Run(item.name, func(t *testing.T) {
 			t.Setenv("FAKE_CUSTOM_MODE", item.mode)
 			writeCustomReviewerConfig(t, h, map[string]any{
-				"path": h.fake,
-				"args": map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--out", "{output}"}},
+				"path":    h.fake,
+				"args":    map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--out", "{output}"}},
 				"session": map[string]any{"mode": "none"},
 				"review": map[string]any{
 					"cwd": "runtime", "output_name": "result.txt", "inspection": "INSPECT-TOKEN",
@@ -161,8 +167,8 @@ func TestCustomReviewerInspectionInPrompt(t *testing.T) {
 	t.Setenv("FAKE_CUSTOM_MODE", "file")
 	t.Setenv("FAKE_CUSTOM_PROMPT_COPY", h.promptLog)
 	writeCustomReviewerConfig(t, h, map[string]any{
-		"path": h.fake,
-		"args": map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--file", "{prompt_file}", "--out", "{output}"}},
+		"path":    h.fake,
+		"args":    map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--file", "{prompt_file}", "--out", "{output}"}},
 		"session": map[string]any{"mode": "none"},
 		"review": map[string]any{
 			"cwd": "runtime", "output_name": "result.txt", "inspection": "INSPECT-TOKEN",
@@ -195,7 +201,7 @@ func TestCustomReviewerStdinNonePromptFiles(t *testing.T) {
 		"review": map[string]any{
 			"cwd": "runtime", "output_name": "result.txt", "inspection": "NO-WRITE",
 			"home_policy": "optional", "stdin": "none",
-			"output": map[string]any{"source": "file", "parse": "raw"},
+			"output":       map[string]any{"source": "file", "parse": "raw"},
 			"prompt_files": []any{map[string]any{"name": "guide", "path": "guide.md", "template": template}},
 		},
 	})
@@ -230,8 +236,8 @@ func TestCustomAndBuiltinHomePolicy(t *testing.T) {
 	missing := filepath.Join(h.root, "absent-home")
 	t.Setenv("HELPER_HOME", missing)
 	writeCustomReviewerConfig(t, h, map[string]any{
-		"path": h.fake,
-		"args": map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--out", "{output}"}},
+		"path":    h.fake,
+		"args":    map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--out", "{output}"}},
 		"session": map[string]any{"mode": "none"},
 		"review": map[string]any{
 			"cwd": "runtime", "output_name": "result.txt", "home_env": "HELPER_HOME",
@@ -243,8 +249,8 @@ func TestCustomAndBuiltinHomePolicy(t *testing.T) {
 		t.Fatalf("optional code=%d err=%s", code, err)
 	}
 	writeCustomReviewerConfig(t, h, map[string]any{
-		"path": h.fake,
-		"args": map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--out", "{output}"}},
+		"path":    h.fake,
+		"args":    map[string]any{"start": []string{}, "resume": []string{}, "review": []string{"--out", "{output}"}},
 		"session": map[string]any{"mode": "none"},
 		"review": map[string]any{
 			"cwd": "runtime", "output_name": "result.txt", "home_env": "HELPER_HOME",

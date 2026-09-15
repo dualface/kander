@@ -1,6 +1,7 @@
 package review
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -41,14 +42,20 @@ func TestBuildPromptLastMessageOutputContract(t *testing.T) {
 	evidence := "/runtime/evidence.txt"
 	task := "Authoritative task goal: fix the report."
 	codex := buildPrompt(promptContractContext("codex"), evidence, task)
-	if strings.Contains(codex, lastMessageOutputContract) {
-		t.Fatal("codex prompt must not include last-message output contract")
+	if !strings.Contains(codex, "/runtime/review-contract.md") || strings.Contains(codex, lastMessageOutputContract) {
+		t.Fatal("bootstrap must point at the contract without inlining it")
 	}
-	want := codex + "\n" + lastMessageOutputContract + "\n"
+	codexContract := buildReviewContract(promptContractContext("codex"))
+	if strings.Contains(codexContract, lastMessageOutputContract) {
+		t.Fatal("codex contract must not include last-message output contract")
+	}
 	for _, agent := range []string{"claude", "cursor", "grok"} {
-		got := buildPrompt(promptContractContext(agent), evidence, task)
-		if got != want {
-			t.Fatalf("%s prompt remainder drifted from the shared prompt", agent)
+		ctx := promptContractContext(agent)
+		if got := buildPrompt(ctx, evidence, task); got != codex {
+			t.Fatalf("%s bootstrap drifted from the shared prompt", agent)
+		}
+		if got := buildReviewContract(ctx); !strings.Contains(got, lastMessageOutputContract) {
+			t.Fatalf("%s contract is missing last-message output rules", agent)
 		}
 	}
 }
@@ -58,21 +65,60 @@ func TestBuildPromptLastMessageOutputContractIncremental(t *testing.T) {
 	ctx.reviewed = "cccccccccccccccccccccccccccccccccccccccc"
 	evidence := "/runtime/evidence.txt"
 	task := "Authoritative task goal: fix the report."
-	codex := buildPrompt(ctx, evidence, task)
-	if !strings.Contains(codex, "incremental re-review") {
-		t.Fatal("expected incremental prompt body")
+	bootstrap := buildPrompt(ctx, evidence, task)
+	contract := buildReviewContract(ctx)
+	if strings.Contains(bootstrap, "incremental re-review") || !strings.Contains(contract, "incremental re-review") {
+		t.Fatal("incremental rules must live only in the review contract")
 	}
-	if strings.Contains(codex, lastMessageOutputContract) {
-		t.Fatal("codex incremental prompt must not include last-message output contract")
-	}
-	want := codex + "\n" + lastMessageOutputContract + "\n"
 	for _, agent := range []string{"claude", "cursor", "grok"} {
 		agentCtx := promptContractContext(agent)
 		agentCtx.reviewed = ctx.reviewed
-		got := buildPrompt(agentCtx, evidence, task)
-		if got != want {
-			t.Fatalf("%s incremental prompt remainder drifted from the shared prompt", agent)
+		if got := buildPrompt(agentCtx, evidence, task); got != bootstrap {
+			t.Fatalf("%s incremental bootstrap drifted from the shared prompt", agent)
 		}
+		if got := buildReviewContract(agentCtx); !strings.Contains(got, lastMessageOutputContract) {
+			t.Fatalf("%s incremental contract is missing output rules", agent)
+		}
+	}
+}
+
+func TestReviewPromptResourcesRenderCompletely(t *testing.T) {
+	for _, role := range []string{"PMQA", "Security", "PM", "QA", "CSA", "Hacker"} {
+		for _, reviewed := range []string{"", "cccccccccccccccccccccccccccccccccccccccc"} {
+			ctx := promptContractContext("claude")
+			ctx.role = role
+			ctx.reviewed = reviewed
+			rendered := map[string]string{
+				"bootstrap": buildPrompt(ctx, "/runtime/evidence.txt", "Authoritative task goal: verify prompts."),
+				"contract":  buildReviewContract(ctx),
+			}
+			for name, text := range rendered {
+				if strings.Contains(text, "{{") || strings.Contains(text, "}}") {
+					t.Fatalf("%s/%s left an unrendered template action:\n%s", role, name, text)
+				}
+			}
+		}
+	}
+}
+
+func TestReviewSizeRuleMatchesReleasedRules(t *testing.T) {
+	released, err := os.ReadFile(filepath.Join("..", "..", "rules", "KANDER-REVIEW-RULES.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	promptText := strings.ToLower(roleRules["QA"])
+	releasedText := strings.ToLower(string(released))
+	for _, phrase := range []string{
+		"file added this round exceeds 1000",
+		"touched file that was at or under 1000 lines at the base exceeds 1000 now",
+		"a file already above 1000 lines at the base is not measured",
+	} {
+		if !strings.Contains(promptText, phrase) || !strings.Contains(releasedText, phrase) {
+			t.Fatalf("review size policy drifted at %q", phrase)
+		}
+	}
+	if strings.Contains(promptText, "increases the final physical-line count") {
+		t.Fatal("review prompt retained the obsolete already-oversized-file rule")
 	}
 }
 

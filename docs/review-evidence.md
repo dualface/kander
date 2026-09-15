@@ -63,6 +63,7 @@ reviews/<run_id>/
   task-context.md
   review-context.md
   prompt.txt          # present when preparation succeeded
+  review-contract.md  # rendered runtime contract; present when preparation succeeded
   evidence.txt        # present when preparation succeeded
   output.raw
   stdout.log

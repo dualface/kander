@@ -40,7 +40,16 @@ printf '%s\n' "$@" > "$FAKE_CODEX_ARGV"
 instruction=$(cat)
 prompt=${instruction#*task file at }
 prompt=${prompt%%; read the complete file first*}
-cat "$prompt" > "$FAKE_CODEX_STDIN"
+contract=$(sed -n 's/^Before reviewing, read the complete review contract at \(.*\) and follow it exactly\.$/\1/p' "$prompt")
+if [ -n "${FAKE_CODEX_CONTRACT_MODE:-}" ] && [ -n "$contract" ]; then
+    ls -l "$contract" | awk '{print $1}' > "$FAKE_CODEX_CONTRACT_MODE"
+fi
+{
+    cat "$prompt"
+    if [ -n "$contract" ]; then
+        cat "$contract"
+    fi
+} > "$FAKE_CODEX_STDIN"
 
 out=""
 while [ "$#" -gt 0 ]; do
