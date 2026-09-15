@@ -365,6 +365,47 @@ func TestReadWriteRenameAndEscape(t *testing.T) {
 	if string(data) != "old\n" {
 		t.Fatalf("read=%q", data)
 	}
+	emptyPath := filepath.Join(todo, "empty.md")
+	if err := os.WriteFile(emptyPath, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := ReadRegularFile(root, emptyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("empty=%q", empty)
+	}
+	large := make([]byte, (32<<10)+64)
+	for i := range large {
+		large[i] = byte('A' + i%26)
+	}
+	largePath := filepath.Join(todo, "large.md")
+	if err := os.WriteFile(largePath, large, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gotLarge, err := ReadRegularFile(root, largePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotLarge) != string(large) {
+		t.Fatalf("large file truncated: got %d want %d", len(gotLarge), len(large))
+	}
+	overMeg := make([]byte, (1<<20)+17)
+	for i := range overMeg {
+		overMeg[i] = byte(i)
+	}
+	overPath := filepath.Join(todo, "over-meg.md")
+	if err := os.WriteFile(overPath, overMeg, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gotOver, err := ReadRegularFile(root, overPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gotOver) != len(overMeg) || gotOver[len(gotOver)-1] != overMeg[len(overMeg)-1] || gotOver[0] != overMeg[0] {
+		t.Fatalf("1MiB-plus file truncated: got %d want %d", len(gotOver), len(overMeg))
+	}
 	got, ok, err := ReadRegularFileIfExists(root, source)
 	if err != nil || !ok || string(got) != "old\n" {
 		t.Fatalf("if-exists %q %v %v", got, ok, err)

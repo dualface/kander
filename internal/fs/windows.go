@@ -435,9 +435,19 @@ func deleteHandle(handle windows.Handle, path string, required bool) error {
 	return nil
 }
 
+func handleFileSize(handle windows.Handle) int64 {
+	var info windows.ByHandleFileInformation
+	if err := windows.GetFileInformationByHandle(handle, &info); err != nil {
+		return 0
+	}
+	return int64(uint64(info.FileSizeHigh)<<32 | uint64(info.FileSizeLow))
+}
+
 func readHandle(handle windows.Handle, path string) ([]byte, error) {
-	var chunks []byte
-	buf := make([]byte, 1<<20)
+	scratch := acquireReadScratch()
+	defer releaseReadScratch(scratch)
+	buf := *scratch
+	chunks := destForSize(handleFileSize(handle))
 	for {
 		var done uint32
 		err := windows.ReadFile(handle, buf, &done, nil)

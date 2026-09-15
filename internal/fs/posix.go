@@ -141,9 +141,19 @@ func posixIdentity(fd int) (Identity, error) {
 	return Identity{Dev: uint64(st.Dev), Ino: uint64(st.Ino)}, nil
 }
 
+func posixFileSize(fd int) int64 {
+	var st unix.Stat_t
+	if err := unix.Fstat(fd, &st); err != nil || st.Size <= 0 {
+		return 0
+	}
+	return st.Size
+}
+
 func readFD(fd int) ([]byte, error) {
-	var chunks []byte
-	buf := make([]byte, 1<<20)
+	scratch := acquireReadScratch()
+	defer releaseReadScratch(scratch)
+	buf := *scratch
+	chunks := destForSize(posixFileSize(fd))
 	for {
 		n, err := unix.Read(fd, buf)
 		if n > 0 {
