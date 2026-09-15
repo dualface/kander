@@ -189,9 +189,14 @@ func (a *App) queueTaskAction() {
 	dialog.running = true
 	a.invalidateBoardReads()
 	id, sequence, source, action, options := dialog.id, dialog.sequence, dialog.source, dialog.action, dialog.options
+	a.invalidateSummaries(id)
+	index := a.summaries
 	getBoard := a.GetBoard
 	a.pendingWork = func() any {
 		target, err := runTaskAction(source, action, options)
+		if index != nil {
+			index.Invalidate(id)
+		}
 		payload, refreshErr := getBoard()
 		return taskActionResult{id: id, sequence: sequence, target: target, payload: payload, err: err, refreshErr: refreshErr, warnings: source.warningMessages()}
 	}

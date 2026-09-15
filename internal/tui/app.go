@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/focus"
 	"github.com/dualface/kander/internal/issue"
@@ -75,6 +76,7 @@ type App struct {
 	// kander init. AttachBoard rebinds board-backed operations after success.
 	missingBoard     bool
 	boardRoot        string
+	summaries        *board.SummaryIndex
 	BoardInit        *boardInitState
 	boardInitSeq     uint64
 	PreviewBoardInit func() (string, error)

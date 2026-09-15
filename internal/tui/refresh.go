@@ -32,6 +32,12 @@ func (a *App) invalidateBoardReads() {
 	a.boardInFlightSeq = 0
 }
 
+func (a *App) invalidateSummaries(ids ...string) {
+	if a.summaries != nil {
+		a.summaries.Invalidate(ids...)
+	}
+}
+
 func (a *App) invalidateDetailReads() {
 	if a.detailReadCancel != nil {
 		a.detailReadCancel()

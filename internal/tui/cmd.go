@@ -122,6 +122,10 @@ func Run(_ []string) int {
 func attachBoard(app *App, root string) {
 	app.boardRoot = strings.TrimSpace(root)
 	app.missingBoard = app.boardRoot == ""
+	if app.summaries != nil {
+		app.summaries.Close()
+		app.summaries = nil
+	}
 	app.GetBoard = func() (BoardPayload, error) {
 		if app.boardRoot == "" {
 			return BoardPayload{}, nil
@@ -133,6 +137,16 @@ func attachBoard(app *App, root string) {
 			return BoardPayload{}, nil
 		}
 		return board.BoardPayloadContext(ctx, app.boardRoot)
+	}
+	if app.boardRoot != "" {
+		index, err := board.NewSummaryIndex(app.boardRoot, board.StrongInterval(app.RefreshSecs))
+		if err == nil {
+			app.summaries = index
+			app.GetBoard = func() (BoardPayload, error) {
+				return index.View(context.Background())
+			}
+			app.GetBoardCtx = index.View
+		}
 	}
 	app.GetTask = func(id string) (Task, error) {
 		if app.boardRoot == "" {

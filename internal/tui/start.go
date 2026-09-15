@@ -126,10 +126,19 @@ func (a *App) handleStartConfirmation(key string) {
 }
 
 func (a *App) applyStartResult(work confirmWork) {
+	result, _ := work.payload.(launch.StartResult)
+	id := strings.TrimSpace(result.TaskID)
+	if id == "" && a.StartConfirmation != nil {
+		id = strings.TrimSpace(a.StartConfirmation.startRequest.TaskID)
+	}
+	if id == "" {
+		a.invalidateSummaries()
+	} else {
+		a.invalidateSummaries(id)
+	}
 	a.requestBoardRefresh(true)
 	message := ""
 	compact := ""
-	result, _ := work.payload.(launch.StartResult)
 	if work.err != nil {
 		message = t("tui.start_failed", work.err.Error())
 	} else {
@@ -164,6 +173,10 @@ func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 
 func (a *App) requestQuit() {
 	a.cancelOwnedReads()
+	if a.summaries != nil {
+		a.summaries.Close()
+		a.summaries = nil
+	}
 	a.Running = false
 }
 
