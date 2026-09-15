@@ -1,45 +1,14 @@
 # Review Rules
 
-Loaded automatically and used to judge triggering only when `rules.review=true`.
+Loaded automatically and used to judge triggering only when `rules.review=true`; may also be read when the user explicitly requests the full review flow for the current task. Arguments and the read-only gate for a single `kander review` are in `KANDER-BASE-RULES.md`; that does not automatically enable the full flow.
 
-May also be read when the user explicitly requests the full review flow for the current task.
-
-Precedence and loading flow are in `KANDER-AGENTS.md`.
-
-Arguments and the read-only gate for a single `kander review` are in `KANDER-BASE-RULES.md`; that does not automatically enable the full flow.
-
-- This module does not depend on the Git workflow.
-
-  When `rules.git=false`, keep the user's branch and delivery flow, and determine the review base from the base recorded at task start or the range the user explicitly stated.
-
-  Pin the full SHA before the first round; do not guess `develop` or create branches.
-
-  Committing the review target requires the user's authorization.
-
-- The Kander Git mechanisms for rebase, merge-back and cleanup mentioned in this file are read from `KANDER-GIT-RULES.md` only when `rules.git=true`; when it is off, return to the user's flow once the review completes.
-- Task group clauses apply only when `rules.task_groups=true`; the fixed completion report applies only when `rules.reporting=true`; do not load disabled modules through references.
+- This module does not depend on the Git workflow. When `rules.git=false`, keep the user's branch and delivery flow, determine the review base from the base recorded at task start or the range the user stated, pin the full SHA before the first round, do not guess `develop` or create branches, and get the user's authorization before committing the review target.
+- The Git mechanisms for rebase, merge-back, and cleanup mentioned here are read from `KANDER-GIT-RULES.md` only when `rules.git=true`; task group clauses apply only when `rules.task_groups=true`; the fixed completion report only when `rules.reporting=true`. Do not load disabled modules through references.
 
 ## Reviewer Selection
 
-- Reviewers are the five built-in agents plus any configured agent that
-  declares a review template (`args.review` together with `review.*`).
-
-  The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
-
-  On Windows, prefer the reviewer `.exe`.
-
-  When only `.cmd`/`.bat` exists, launch through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of that reviewer's adapter layer.
-
-  This is not a general invocation contract for arbitrary batch scripts.
-
-  Built-in isolation arguments live on each agent's definition. A custom
-  reviewer's read-only posture is the definition author's responsibility;
-  Kander still validates the result and isolates review-private directories.
-
-  Apart from the CLI and isolation arguments declared for that reviewer,
-  every rule in this file is identical for all reviewers.
-
-  Select the command entry per `KANDER-AGENTS.md` "Scope".
+- Reviewers are the five built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root (per `KANDER-AGENTS.md` "Scope"). On Windows prefer the reviewer `.exe`; when only `.cmd`/`.bat` exists, launch through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of that reviewer's adapter layer.
+- Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from CLI and isolation arguments, every rule here is identical for all reviewers.
 
 | reviewer | argument | CLI | isolation |
 | -------- | -------- | --- | --------- |
@@ -52,120 +21,66 @@ Arguments and the read-only gate for a single `kander review` are in `KANDER-BAS
 
 **Reviewer Isolation**
 
-- Codex and Grok use sandbox-enforced read-only isolation: Codex runs a read-only shell inside the target worktree.
-- Claude and Grok run in an out-of-tree runtime; Grok exposes only read and search tools, while Claude runs fully authorized with its full toolset minus `Edit` and `Write`, and relies on that plus the prompt for read-only. As with Cursor, the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected.
-- Cursor only isolates configuration and session into the runtime; read-only relies on the prompt and post-run worktree verification, with no upfront blocking and no detection of out-of-tree writes.
-- Pi runs with an explicit `--tools read,bash,grep,find,ls` allowlist and no session persistence; it exposes no edit or write tool, and read-only relies on that allowlist plus the prompt. As with Cursor, the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected.
-- On all platforms the full prompt is written to a UTF-8 task file in the
-  review runtime. Delivery follows the reviewer definition: `review.stdin`
-  is `instruction` (default) or `none`. With `instruction`, the reviewer
-  receives only a short instruction that names that file path on stdin.
-  With `none`, the same instruction is passed through `{instruction}` in
-  argv and stdin is not that pipe. Extra files in `review.prompt_files`
-  are rendered into the runtime and referenced as `{prompt_file:<name>}`.
-- Built-in reviewers use `review.stdin: instruction` and declare no
-  `review.prompt_files`. Grok's definition keeps `--prompt-file` pointing
-  at Kander's `prompt.txt`.
-- The task file does not check or tighten POSIX permissions or Windows ACLs; when it lives in the review runtime it is still protected by that boundary.
-- After the reviewer exits, the process group must be forcibly reaped; failure to do so is a review failure.
-- Currently only Cursor ships helper processes that do not wait for wrap-up; for it, only detached descendants that left the parent chain count as leftovers and cause the result to be rejected; ordinary child processes do not cause rejection.
-- For other reviewers, a non-empty process group at the moment of exit causes rejection.
-- Worktree verification looks only at Git-visible state; writes to paths excluded by `.gitignore` do not fail the review.
-- Claude's out-of-tree spec is first snapshotted into a runtime exclusive to the current user; the original parent directory is not authorized.
-- The runtime follows the permission, pinned handle and bounded no-follow cleanup contract of the minimal tool protocol: POSIX `0700`.
-- Windows `CREATE_NEW`, collision-safe retry with random names, and a protected DACL exclusive to the current user.
-- The root handle is held continuously until worktree verification and cleanup finish.
-- Cleanup failures such as reparse points, files in use or budget exhaustion all reject the result; silent leftovers are forbidden.
+- Codex runs a sandbox-enforced read-only shell inside the target worktree. Claude and Grok run in an out-of-tree runtime: Grok exposes only read and search tools; Claude runs with its full toolset minus `Edit` and `Write` and relies on that plus the prompt. Pi runs with an explicit `--tools read,bash,grep,find,ls` allowlist and no session persistence. Cursor isolates only configuration and session; its read-only posture relies on the prompt and post-run verification.
+- For every reviewer the post-run check sees only the Git-visible state of the target worktree: writes outside it or to ignored paths inside it are not detected. Leftover processes at exit (for Cursor, only detached descendants that left the parent chain) and any runtime cleanup failure reject the result; the runtime follows the permission and reparse-point boundaries of the minimal tool protocol.
+- The full prompt is written to a UTF-8 task file in the review runtime. Per the reviewer definition, `review.stdin` is `instruction` (default: a short instruction naming that file arrives on stdin) or `none` (the same instruction is passed through `{instruction}` in argv); extra `review.prompt_files` are rendered into the runtime as `{prompt_file:<name>}`. Built-in reviewers use `instruction` and declare no prompt files.
 - Do not replace or loosen isolation arguments to unify implementations or accommodate Windows.
-
-- `PMQA` and `Security` each select a reviewer, taking the first explicit source by precedence:
-  1. The current user instruction.
-  2. The nearest project `AGENTS.md` or `CLAUDE.md`.
-  3. The user's global rules.
-  4. The role configuration of the current scope.
-
-  When the first three tiers do not specify, `kander review` under the command root reads tier (4); when no configuration exists, Codex.
-
-  Read rule files required for this judgment if not yet loaded; an unreadable one counts as unspecified.
-
-- Different roles may use different reviewers. Fix re-runs and conclusion confirmation for the same role must keep using the reviewer selected for that role in the current batch: the incremental chain requires the same reviewer, and closure rejects any successfully executed run of a role that is not connected to the selected conclusion. A user-designated switch is therefore possible inside the same batch only while that role has no successfully executed run there (its failed runs are bound through `resolved_failures`); a role that already has one is completed by the same reviewer in this batch, and the switch takes effect from the next batch on.
-- Below, "reviewer" and "reviewer CLI" both mean the one selected for the current review role; "review entry" means `kander review` under the command root. "Main agent" means the agent that verifies findings and talks to the user about them: for a single card the executing agent; for a task group the orchestrator for batch scheduling, aggregation and user decisions, and each executing agent for verifying and disposing its own assigned findings (see "Verification Split Between Orchestrator and Executing Agent"). "Delivery notes" means the card's `SUMMARY` section (or `report.md` for a large card) and, for a non-kanban task, the final delivery message to the user.
+- `PMQA` and `Security` each select a reviewer from the first explicit source by precedence: the current user instruction; the nearest project `AGENTS.md` or `CLAUDE.md`; the user's global rules; the role configuration of the current scope (read by `kander review`; Codex when no configuration exists). Read rule files required for this judgment if not yet loaded; an unreadable one counts as unspecified.
+- Different roles may use different reviewers. Fix re-runs and conclusion confirmation for one role keep the reviewer selected for that role in the current batch: the incremental chain requires the same reviewer, and closure rejects a successfully executed run not connected to the selected conclusion. A user-designated switch inside a batch is possible only while that role has no successfully executed run there (failed runs are bound through `resolved_failures`); otherwise it takes effect from the next batch.
+- Below, "reviewer" means the one selected for the current role and "review entry" means `kander review` under the command root. "Main agent" is the agent that verifies findings and talks to the user: the executing agent for a single card; for a task group, the orchestrator for batch scheduling, aggregation, and user decisions, and each executing agent for its own assigned findings (see "Verification Split Between Orchestrator and Executing Agent"). "Delivery notes" means the card's `SUMMARY` (or `report.md` for a large card) and, for a non-kanban task, the final delivery message.
 
 ## Review Roles
 
-The only current runnable roles are `PMQA` (stage one) and `Security` (stage two). Both default to `auto`. `skip` means N/A unless a higher-precedence source requires the role; `required` means the role runs once review is triggered unless a higher-precedence source skips it. New `kander review` invocations and two-key batches accept only these two names and their case aliases. Historical four-key or six-key batches still accept the old names as described below.
+The only runnable roles are `PMQA` (stage one) and `Security` (stage two), both defaulting to `auto`. `skip` means N/A unless a higher-precedence source requires the role; `required` means the role runs once review is triggered unless a higher-precedence source skips it. New invocations and two-key batches accept only these two names and their case aliases.
 
-- `PMQA` first checks every acceptance criterion against the task contract, including explicit performance acceptance, then performs the architecture, correctness, regression, testing and code-quality checks below. Classify contract gaps with the existing tier rules. It inherits the quality-check scope and file-size limits; explicit performance acceptance belongs to the contract portion, without adding general performance review. Finding IDs use the `PMQA-` prefix.
-- `Security` first traces untrusted inputs across trust boundaries, then verifies realistic end-to-end exploit chains. Apply both analyses' evidence standards, report each root cause once, and explicitly state when no qualifying vulnerability was found. Finding IDs use the `Security-` prefix.
-- Reviewer selection, models, large/small policies, incremental chains, verification and failure handling apply equally to both roles. Never switch an existing run chain into a different role.
-- New plans and batches use exactly the two keys `PMQA` and `Security`, each `required` or `N/A: <reason>`. Creating a four-key or six-key batch is rejected. A later batch appended to a historical four-role plan also uses the two-key form; each batch freezes its own role set.
+- `PMQA` first checks every acceptance criterion against the task contract, including explicit performance acceptance, then performs the architecture, correctness, regression, testing, and code-quality checks under "Goals and Boundaries". Explicit performance acceptance belongs to the contract portion; there is no general performance review. Finding IDs use the `PMQA-` prefix.
+- `Security` first traces untrusted inputs across trust boundaries, then verifies realistic end-to-end exploit chains, reporting each root cause once and stating explicitly when no qualifying vulnerability was found. Finding IDs use the `Security-` prefix.
+- Reviewer selection, models, large/small policies, incremental chains, verification, and failure handling apply equally to both roles. Never switch an existing run chain into a different role.
+- New plans and batches use exactly the two keys `PMQA` and `Security`, each `required` or `N/A: <reason>`; a later batch appended to a historical four-role plan also uses the two-key form, and each batch freezes its own role set.
 
 ### Historical four-role evidence
 
-`schema_version` stays 1. Existing plan, batch, run, index, manifest, closure, disposition, waiver and recovery artifacts are never rewritten. Reading, same-ID retries and close accept exact 2-key, 4-key (`PM`, `QA`, `CSA`, `Hacker`) and 6-key (those four plus `PMQA` and `Security`) requirement objects. A run is admitted only when that batch's own requirements mark the role `required`. An open historical four-key batch with `PM: required` may still complete a PM run through `kander review … PM` and close; same-ID replay of that run is also admitted. New invocations and two-key batches reject `PM`, `QA`, `CSA`, `Hacker` and `CodeSecurityAnalyst`. Waived remains valid for historical `CSA`/`Hacker` records and for `Security`; it remains refused for `PMQA` and for historical `PM`/`QA`. Leftover four-role keys in configuration and project overlays fold on load into `PMQA` and `Security` (strongest stage among `{target, first constituent, second}`; first non-default reviewer in `[target, PM|CSA, QA|Hacker]`; first non-empty model field in that same order) and saves write only the two current roles.
+`schema_version` stays 1 and existing plan, batch, run, index, manifest, closure, disposition, waiver, and recovery artifacts are never rewritten. Reading, same-ID retries, and close accept exact 2-key, 4-key (`PM`, `QA`, `CSA`, `Hacker`) and 6-key (those plus `PMQA` and `Security`) requirement objects; a run is admitted only when that batch's own requirements mark the role `required`, so an open four-key batch with `PM: required` may still complete a PM run and close. Waived stays valid for historical `CSA`/`Hacker` records and for `Security`, refused for `PMQA` and historical `PM`/`QA`. Leftover four-role keys in configuration fold on load into `PMQA` and `Security`; saves write only the two current roles.
 
 ## Goals and Boundaries
 
-- Review goal: the plan or user goal is fully and correctly implemented, the flow is closed, and there are no directly related logic holes or regressions; expanding the task scope is forbidden.
-- `PMQA`'s quality portion first checks project architecture, module responsibilities, dependency direction, public boundaries and integration patterns, then directly related correctness, regressions, testability and code quality (single responsibility, readability, change locality, coupling and duplication, error and resource handling).
-
-  That portion does not do general performance review or report performance findings.
-
-  Explicit performance acceptance is checked by `PMQA`'s contract portion against the contract.
-
-- `PMQA` limits non-generated code files to 1000 physical lines, and reports a gate finding only when a file added this round exceeds 1000 lines or a touched file that was at or under 1000 lines at the base exceeds 1000 lines now. A touched file that was already above 1000 lines at the base is not measured; trimming or compressing lines unrelated to the task to shrink such a file is itself a finding, because it spreads the diff into files other cards touch. These are the same conditions as `KANDER-CODE-RULES.md` "Delivery Self-Check" item 2.
-
-  Do not sweep unrelated over-limit files, and do not trigger when the final line count is not above the base.
-
-- `PMQA` findings are limited to realistically reachable problems within the task context, existing contracts, or the code and module boundaries touched this round. Exhaustively stacked conditions, extreme edge cases, fabricated failures or low-realism problems are forbidden; stop once task-related realistic risks are covered, and do not expand into a repository quality sweep.
-- Only handle problems introduced, aggravated or masked by this task. Existing problems that are neither aggravated nor masked do not require fixes, do not block review or integration, and are not sent to the user for decision; unless the user explicitly includes them in this round.
-- If a review result requires changing business logic, user flow or external contracts beyond the user's explicit goal, explain the impact to the user and let the user decide; choosing or implementing that change on the basis of a review conclusion alone is forbidden.
-- For any issue needing the user's attention or decision, the main agent explains each item in detail: the problem, trigger condition, actual impact and suggested handling, marks the review role that raised it, then gives numbered options; giving only abstract options is forbidden, and source attribution must not be lost when aggregating results from multiple agents.
-- Runtime environment problems that affect verification credibility, delivery usability or user data safety must be explicitly reported to the user.
-
-  Unless the change directly introduces, aggravates or masks that problem, or the user explicitly asks to handle it, record it only as a verification fact; judging it alone as blocking, high or medium is forbidden, as is demanding unrelated fixes on that basis.
+- Review goal: the plan or user goal is fully and correctly implemented, the flow is closed, and there are no directly related logic holes or regressions. Expanding the task scope is forbidden.
+- `PMQA`'s quality portion first checks project architecture, module responsibilities, dependency direction, public boundaries, and integration patterns, then directly related correctness, regressions, testability, and code quality (single responsibility, readability, change locality, coupling and duplication, error and resource handling). It reports no performance findings; explicit performance acceptance is checked by the contract portion.
+- `PMQA` limits non-generated code files to 1000 physical lines and reports a gate finding only when a file added this round exceeds 1000 lines or a touched file that was at or under 1000 lines at the base exceeds 1000 now; a file already above 1000 at the base is not measured, and trimming unrelated lines to shrink such a file is itself a finding. These are the conditions of `KANDER-CODE-RULES.md` "Delivery Self-Check" item 2. Do not sweep unrelated over-limit files.
+- `PMQA` findings are limited to realistically reachable problems within the task context, existing contracts, or the code and module boundaries touched this round. Exhaustively stacked conditions, extreme edge cases, fabricated failures, or low-realism problems are forbidden; stop once task-related realistic risks are covered.
+- Only handle problems introduced, aggravated, or masked by this task. Existing problems that are neither do not require fixes, do not block review or integration, and are not sent to the user, unless the user explicitly includes them.
+- If a review result requires changing business logic, user flow, or external contracts beyond the user's explicit goal, explain the impact and let the user decide; implementing that change on a review conclusion alone is forbidden.
+- For any issue needing the user's decision, the main agent explains each item in detail (problem, trigger condition, actual impact, suggested handling, the role that raised it) and gives numbered options; abstract options are forbidden, and source attribution must not be lost when aggregating.
+- Runtime environment problems that affect verification credibility, delivery usability, or user data safety are reported explicitly. Unless the change directly introduces, aggravates, or masks them, or the user asks, record them only as a verification fact; judging them alone as blocking, high, or medium is forbidden.
 
 ## Preconditions and Execution
 
-- Review triggering uses a whitelist: a task enters review only when it hits any entry below; no hit means no automatic review. When the user explicitly requests a review, enter unconditionally, without whitelist restriction.
+- Review triggering uses a whitelist: a task enters review only when it hits an entry below; no hit means no automatic review. An explicit user request enters unconditionally.
   1. An explicit feature development or bug fix task.
-  2. Code changes beyond the small-change threshold: more than 1 code file changed relative to the review base, or added plus deleted lines exceeding 10. Use `git diff --numstat <base>..<commit>` as the source of truth; count only code files, excluding `*.md` and `*.markdown`; binary files are always exempt.
-  3. Security-sensitive changes, regardless of size: authentication and authorization, credentials, cryptography, permission checks, sandbox and isolation arguments, or other logic directly affecting a security boundary.
-  4. External contract changes: adding, modifying or removing CLI arguments, configuration schema, persisted data formats, network or plugin APIs.
-  5. Irreversible or cross-data operations: data migration scripts, bulk rewriting or deleting of user data, and other operations that cannot be recovered by a simple rollback.
-  6. Changes to build, install, release, CI or the review gate flow itself.
-  7. Dependency changes: adding, upgrading or removing external dependencies.
-  8. Test removal or loosening: deleting tests, skipping tests, relaxing assertions or reducing coverage.
+  2. Code changes beyond the small-change threshold: more than 1 code file changed relative to the review base, or added plus deleted lines exceeding 10. `git diff --numstat <base>..<commit>` is the source of truth; count only code files, excluding `*.md` and `*.markdown`; binary files are exempt.
+  3. Security-sensitive changes, regardless of size: authentication and authorization, credentials, cryptography, permission checks, sandbox and isolation arguments, or other logic on a security boundary.
+  4. External contract changes: adding, modifying, or removing CLI arguments, configuration schema, persisted data formats, network or plugin APIs.
+  5. Irreversible or cross-data operations: data migration scripts, bulk rewriting or deleting of user data, anything a simple rollback cannot recover.
+  6. Changes to build, install, release, CI, or the review gate flow itself.
+  7. Dependency changes: adding, upgrading, or removing external dependencies.
+  8. Test removal or loosening: deleting or skipping tests, relaxing assertions, reducing coverage.
   9. Deleting or renaming public modules, or cross-module refactoring.
-- The whitelist is judged by the task's actual changes and the user's wording, not by the task title or labels; rephrasing a task that hits an entry into a non-hitting type to bypass review is forbidden.
-- When review is skipped because no whitelist entry was hit, explicitly tell the user before integration "this task did not trigger the review whitelist and did not go through the review loop", and state the change scope (which files were changed, lines added and deleted). Silent skipping is forbidden. If the user then requests a review, run the full flow as usual.
+- The whitelist is judged by the task's actual changes and the user's wording, not by title or labels; rephrasing a task to bypass review is forbidden.
+- When review is skipped because nothing hit, tell the user before integration "this task did not trigger the review whitelist and did not go through the review loop" and state the change scope (files changed, lines added and deleted). Silent skipping is forbidden. If the user then requests a review, run the full flow.
 
 **Review Tool Unavailable**
 
-- When the selected reviewer's CLI or the review entry for the current platform is unavailable on this machine, review cannot run: explicitly tell the user "the <reviewer> CLI is not installed on this machine; review cannot be executed", keep the branch and worktree, and give numbered options `1. Retry after installing that CLI`, `2. Restart review with another reviewer`, `3. Skip this review and integrate directly (risk borne by the user; record "not reviewed" in the delivery notes)`, `4. Stop integration`. Option 3 exists only while that role's requirement is not yet frozen in a batch, that is before the batch's first run; once a batch names the role `required`, closure needs its successful run and the choice is between 1, 2 and 4.
-- When the review entry is missing, also state that Kander needs to be reinstalled.
-- Skipping on your own is forbidden; switching reviewer without the user's explicit designation is forbidden.
-
+- When the selected reviewer's CLI or the review entry is unavailable on this machine, tell the user "the <reviewer> CLI is not installed on this machine; review cannot be executed" (and that Kander needs reinstalling when the entry itself is missing), keep the branch and worktree, and give numbered options `1. Retry after installing that CLI`, `2. Restart review with another reviewer`, `3. Skip this review and integrate directly (risk borne by the user; record "not reviewed" in the delivery notes)`, `4. Stop integration`. Option 3 exists only before the batch's first run freezes that role as `required`; afterwards closure needs its successful run and the choice is between 1, 2, and 4.
+- Skipping on your own or switching reviewer without the user's explicit designation is forbidden.
 - Before review, commit all task changes since the review base grouped by concern, keeping the worktree free of uncommitted or untracked files.
-- Before review, the author completes `KANDER-CODE-RULES.md` "Delivery Self-Check" and records it when `rules.code=true`; when the code module is off, the author at least verifies `git diff --check`, the three categories under "Fixed archiving" below, and that the targeted tests ran at the final commit, and records that. Findings the self-check should have caught are still ordinary findings: the mechanical ones are `[mechanical]` items closed per "Fixed archiving", the rest follow the normal fix round. Record the self-check failure on the card; it is never an extra review round and never a return outside the review flow.
+- Before review, the author completes `KANDER-CODE-RULES.md` "Delivery Self-Check" and records it when `rules.code=true`; when the code module is off, the author at least verifies `git diff --check`, the three categories under "Fixed archiving" below, and that the targeted tests ran at the final commit, and records that. Findings the self-check should have caught are ordinary findings: mechanical ones are `[mechanical]` items closed per "Fixed archiving", the rest follow the normal fix round. Record the self-check failure on the card; it is never an extra round or a return outside the review flow.
 
 **Review Base**
 
-- When the Git module is enabled: the base of a dedicated task branch is the full `develop` SHA most recently used to create it from `develop` or rebase it onto `develop`.
-- Fixes under the same base do not change the base.
-- The base is frozen once review starts; do not chase `develop` by rebasing or update the base before the loop ends.
-- Advancement of `develop` is left to integration.
-- After the integration rebase, the base is updated to the new base point; whether to re-review follows the one-time gate in `KANDER-GIT-RULES.md` "Integration and Cleanup".
+- With the Git module enabled, the base of a dedicated task branch is the full `develop` SHA most recently used to create it from `develop` or rebase it onto `develop`. Fixes under the same base do not change it.
+- The base is frozen once review starts; do not chase `develop` by rebasing before the loop ends. After the integration rebase, the base moves to the new base point, and whether to re-review follows the one-time gate in `KANDER-GIT-RULES.md` "Integration and Cleanup".
 
-A standard review has two stages.
-
-Whether each role runs is resolved first per "Review Stages"; skipped roles are marked N/A.
-
-Stage one uses `PMQA`. Stage two uses `Security` after stage one passes when that role is enabled. Skipped roles are recorded N/A.
-
-Review focus is still determined per "Review Profiles".
-
-Stage transitions follow this diagram. Non-mechanical fixes receive incremental re-review, including the cross re-reviews below:
+A standard review has two stages. Whether each role runs is resolved per "Review Stages" and its focus per "Review Profiles"; skipped roles are marked N/A. Stage one is `PMQA`; stage two is `Security` after stage one passes. Non-mechanical fixes receive incremental re-review, including the cross re-reviews below:
 
 ```text
 [1] PMQA   First round. Contract portion: whether the implementation fully meets the task context;
@@ -184,25 +99,11 @@ Stage transitions follow this diagram. Non-mechanical fixes receive incremental 
    Review complete --> show all unresolved items to the user --> enter the integration flow
 ```
 
-Incremental re-review: for the same role under the same base, the second round and later are always incremental re-reviews, never full re-reviews.
-
-- Incremental review uses the commit that role reviewed last round as `reviewed-commit`, strictly between base and new HEAD. Task-bound invocations derive it from `--previous-run-id`; an explicitly supplied value must match. Unbound invocations supply it positionally.
-
-  Only `reviewed-commit..commit` is new material.
-
-  The reviewer verifies item by item that last round's findings are closed, and reports only problems introduced, aggravated or masked by the fix, or breakage of the touched requirements.
-
-  Unchanged code is treated as accepted; re-auditing it or expanding the scope is forbidden.
-
-- The review context must include every finding from the previous round together with the main agent's handling conclusion. For task-bound runs, the tool includes the original report, author records and batch view automatically; positional review-context is preserved as a separately delimited supplement. For unbound runs, the caller supplies the full context: for confirmed items, the fix commit and verification result; for rejected items, the verification basis; for unverifiable items, the user's decision.
-
-  The reviewer only checks these facts; the main agent must not omit or rewrite last round's list.
-
-- The first round does not pass `reviewed-commit`. Once that role has PASSed it is not re-run (see "Carrying Conclusions Forward"). A base change or a task context change means a new batch, where that role restarts from a full first round; a reviewer switch is possible only per "Reviewer Selection".
-- The main agent's verification duty is not reduced by incremental re-review: every conclusion of an incremental re-review is likewise verified item by item.
-- A fix round for a role that already produced a report on this base is invalid unless it runs in incremental mode (task-bound `--previous-run-id`, or positional `reviewed-commit` with the full prior list). Do not start another full first round for that role in the same batch: the tool does not refuse the launch, but closure rejects a successfully executed run that is not connected to the selected conclusion chain, so the batch could no longer close. The only later full first rounds are the retry of a failed run (bound through `resolved_failures`) and the first round of a new batch.
-
-- Severity tiers: the output of every role is labeled with the six tiers in the table below. A new-schema report item without a tier fails output validation (see "Controlled Plans, Author Dispositions, and Batch Closure"); only for a legacy unstructured report does the main agent assign the missing tier inside the `map-legacy` mapping.
+- Incremental re-review: for the same role under the same base, the second round and later are always incremental, never full. `reviewed-commit` is the commit that role reviewed last round, strictly between base and new HEAD; task-bound invocations derive it from `--previous-run-id` (an explicit value must match), unbound ones supply it positionally. Only `reviewed-commit..commit` is new material: the reviewer verifies item by item that last round's findings are closed and reports only problems introduced, aggravated, or masked by the fix, or breakage of the touched requirements. Unchanged code is accepted; re-auditing it is forbidden.
+- The review context includes every finding from the previous round with the main agent's handling conclusion. Task-bound runs get the original report, author records, and batch view automatically, with positional review-context as a delimited supplement; unbound runs get the full context from the caller (fix commit and verification for confirmed items, basis for rejected items, the user's decision for unverifiable ones). The reviewer only checks these facts; the main agent must not omit or rewrite last round's list.
+- The first round passes no `reviewed-commit`. A role that PASSed is not re-run (see "Carrying Conclusions Forward"). A base or task context change means a new batch where that role restarts with a full first round. The main agent's verification duty is not reduced by incremental re-review.
+- A fix round for a role that already reported on this base is invalid unless it runs in incremental mode. The tool does not refuse another full first round, but closure rejects a successfully executed run not connected to the selected conclusion chain, so the batch could no longer close. The only later full first rounds are the retry of a failed run (bound through `resolved_failures`) and the first round of a new batch.
+- Severity tiers: every role labels its output with the six tiers below. A new-schema item without a tier fails output validation; only for a legacy unstructured report does the main agent assign the missing tier inside the `map-legacy` mapping.
 
 | Tier        | Meaning                                                                | Must fix |
 | ----------- | ---------------------------------------------------------------------- | -------- |
@@ -213,170 +114,76 @@ Incremental re-review: for the same role under the same base, the second round a
 | `recommend` | Not a defect, but should change per project rules or conventions       | No       |
 | `suggest`   | Optional improvement; the trade-off is up to the owner                 | No       |
 
-- Fixed archiving: the following problems are not downgraded for rare triggering or minor consequences and are always judged at least `medium`, whichever role finds them:
-  - Documentation or code comments inconsistent with the actual implementation.
-  - Dead code (unreachable, or code with no calls or references at all).
-  - Redundant tests (tests that duplicate coverage of the same behavior, or whose assertions are unrelated to the behavior under test).
-- Mechanical must-fix items are the three categories listed under "Fixed archiving" above, labeled `[mechanical]` in the report. They are dispatched together with gate findings, fixed and committed, and closed by the main agent's mechanical evidence (sentence-by-sentence comment comparison, reference search output, or test lists).
-
-  A round whose confirmed must-fix items are all mechanical never re-runs the reviewer; that role passes on the new HEAD after mechanical verification.
-
-  When mixed with non-mechanical items, the incremental re-review covers only the non-mechanical items and states that the mechanical ones were closed by the caller; the mechanical items do not count as a separate round.
-
-  A missing `[mechanical]` label is assigned by the main agent per the definition; classifying non-mechanical defects as mechanical to skip re-review is forbidden.
-
-- Report tiers use English identifiers: `blocking`, `high`, `medium`, `low`, `recommend`, `suggest`.
-
-  The first three go in the report's `FINDINGS` array; the last three go in its `NON_BLOCKING` array. A new-schema report missing either array fails output validation and is retried with a new run ID. Only a legacy unstructured report may lack a non-blocking section; then the mapping records "this role provided no non-blocking items" and that note is added to the unresolved items list.
-
-- Must-fix threshold: only `blocking`, `high` and `medium` verified and accepted by the main agent must be fixed. `low`, `recommend` and `suggest` never block review or integration; record their handling conclusion per "Conclusions and Failure Handling".
-- `low`, `recommend` and `suggest` items never open a fix round. Closure still requires the assigned author's disposition (`fixed`, `deferred` or `rejected`, each with a basis) for every one of them, so they travel to the author in a bound `--kind fix` dispatch whose evidence references every assigned `FINDINGS` and `NON_BLOCKING` item for that card (either set alone, or both together) and whose message lists each item with role and tier, marking non-blocking ones "disposition only". Existing author originals on the lineage must be included, and when none exist yet they need not be generated in advance. Non-blocking references never make the round a reviewer re-run fix round; the author completes a disposition-only round with `move review` on the unchanged delivery SHA after submitting the dispositions. They are recorded on the card's unresolved list with the author's disposition and handled at the next delivery or in a follow-up card. A dispatch that asks the author to "triage" without listing the items with their role and tier is forbidden.
-- In stage two, only `blocking`, `high` and `medium` findings returned by an actually running `Security` (or, on a historical batch, `CSA` or `Hacker`) and confirmed by the main agent's verification are sent to the user for decision.
-
-  Each item lists the problem, impact, fix method and at least three options: `1. Fix and re-review`, `2. Confirm pass and accept the risk`, `3. Stop integration`.
-
-  Other tiers and pure defense-in-depth advisories go straight to the unresolved items list without triggering a decision.
-
-- The security finding timeout applies only to kanban tasks.
-
-  Each item is timed independently from when the full information and options reach the user.
-
-  Items in the same batch share the send time; a partial answer does not stop the timers of the remaining items.
-
-  With no explicit decision after 15 minutes, mark it "timed out and ignored", record the role, tier, problem, impact, send time, timeout time and rationale, then continue.
-
-  "Timed out and ignored" is not equivalent to `PASS`, user confirmation or risk acceptance.
-
-  A decision received before the card completes is handled per the latest instruction.
-
-- Non-kanban tasks, `PMQA` findings (and historical `PM`/`QA` findings), unverifiable items, contract or owner changes, and acceptance or integration confirmation explicitly requested by the user must not be skipped by timeout.
+- Fixed archiving: the following are never downgraded for rare triggering or minor consequences and are always at least `medium`, whichever role finds them: documentation or code comments inconsistent with the implementation; dead code (unreachable, or with no calls or references); redundant tests (duplicated coverage, or assertions unrelated to the behavior under test).
+- Mechanical must-fix items are those three categories, labeled `[mechanical]` in the report. They are dispatched with the gate findings, fixed and committed, and closed by the main agent's mechanical evidence (sentence-by-sentence comment comparison, reference search output, or test lists). A round whose confirmed must-fix items are all mechanical never re-runs the reviewer; that role passes on the new HEAD after mechanical verification. When mixed with non-mechanical items, the incremental re-review covers only the non-mechanical ones and states that the mechanical ones were closed by the caller. A missing `[mechanical]` label is assigned by the main agent per the definition; classifying non-mechanical defects as mechanical to skip re-review is forbidden.
+- Tiers use the English identifiers above. `blocking`, `high`, `medium` go in the report's `FINDINGS` array; the rest in `NON_BLOCKING`. A new-schema report missing either array fails validation and is retried with a new run ID; only a legacy unstructured report may lack a non-blocking section, and then the mapping records "this role provided no non-blocking items" on the unresolved list.
+- Must-fix threshold: only `blocking`, `high`, and `medium` verified and accepted by the main agent must be fixed. `low`, `recommend`, and `suggest` never block review or integration and never open a fix round, but closure still requires the assigned author's disposition (`fixed`, `deferred`, or `rejected`, each with a basis) for every one of them. They therefore travel to the author in a bound `--kind fix` dispatch whose evidence references every assigned `FINDINGS` and `NON_BLOCKING` item for that card (either set alone, or both) and whose message lists each item with role and tier, marking non-blocking ones "disposition only"; existing author originals on the lineage are included. Non-blocking references never make the round a reviewer re-run: the author completes a disposition-only round with `move review` on the unchanged delivery SHA. They stay on the card's unresolved list with the author's disposition for the next delivery or a follow-up card. A dispatch that asks the author to "triage" without listing items with role and tier is forbidden.
+- In stage two, only `blocking`, `high`, and `medium` findings returned by an actually running `Security` (or historical `CSA`/`Hacker`) and confirmed by the main agent go to the user for decision. Each item lists the problem, impact, fix method, and at least `1. Fix and re-review`, `2. Confirm pass and accept the risk`, `3. Stop integration`. Other tiers and pure defense-in-depth advisories go straight to the unresolved list.
+- The security finding timeout applies only to kanban tasks. Each item is timed independently from when its full information and options reach the user; items sent together share the send time, and a partial answer does not stop the other timers. With no explicit decision after 15 minutes, mark it "timed out and ignored", record role, tier, problem, impact, send time, timeout time, and rationale, and continue; this is not `PASS`, confirmation, or risk acceptance, and a decision that arrives before the card completes is honored. Non-kanban tasks, `PMQA` findings (and historical `PM`/`QA`), unverifiable items, contract or owner changes, and acceptance or integration confirmation requested by the user are never skipped by timeout.
 
 **Invocation Arguments**
 
-- Invocation: with no reviewer specified, use the current scope's `kander review <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`, dispatched by configuration.
-- With a reviewer specified, use `kander review <reviewer> <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`.
-- For a global install, use `kander` on PATH or the absolute path of the selected executable. For example, in PowerShell: `& "C:\path\to\kander.exe" review ...`, replacing the example path with the selected executable.
-- Batch files and Windows PowerShell 5 cannot guarantee lossless arbitrary argv.
-- Data containing `&|<>^%!`, quotes or boundary backslashes must not be passed by programmatically invoking `.cmd` or by concatenating shell strings.
-- Automation must launch the selected `kander` executable directly through a process API argv array, passing `review` and each argument separately. Globally, use the absolute executable path resolved from PATH or the selected executable's absolute path; never assume a copy exists in `~/.local/bin`. Project installations still use the absolute entry under their command root.
-- Bypassing Kander to call the reviewer CLI directly is forbidden.
-- `CWD` is the absolute path of the target worktree.
-- All commit arguments are full SHAs.
-- The base is an ancestor of the commit, `HEAD` equals the commit, and there are no uncommitted or untracked files.
-- Only incremental re-reviews use `reviewed-commit`, strictly between base and commit. Task-bound runs derive it from `--previous-run-id` and preserve the complete prior report and author conclusions automatically; an explicit value must match. Caller review-context is an optional supplement. Unbound incremental runs require positional reviewed-commit and a nonempty review-context containing the complete prior finding list and conclusions.
+- With no reviewer specified: `kander review <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`, dispatched by configuration; with one: `kander review <reviewer> <CWD> ...`. A global install uses `kander` on PATH or the absolute path of the selected executable (in PowerShell `& "C:\path\to\kander.exe" review ...`); never assume a copy in `~/.local/bin`. A project install uses the absolute entry under its command root.
+- Automation launches the selected `kander` executable through a process API argv array, passing `review` and each argument separately. Batch files and Windows PowerShell 5 cannot guarantee lossless argv, so data containing `&|<>^%!`, quotes, or boundary backslashes is never passed through `.cmd` or concatenated shell strings. Bypassing Kander to call the reviewer CLI directly is forbidden.
+- `CWD` is the absolute path of the target worktree; all commit arguments are full SHAs; the base is an ancestor of the commit, `HEAD` equals the commit, and there are no uncommitted or untracked files.
+- Only incremental re-reviews use `reviewed-commit`, strictly between base and commit. Task-bound runs derive it from `--previous-run-id` and preserve the prior report and author conclusions automatically; unbound incremental runs require positional reviewed-commit and a nonempty review-context with the complete prior finding list and conclusions.
 
 **Carrying Conclusions Forward**
 
-- Carrying conclusions forward: all roles of a full review share `CWD`, base and task context.
-- Historical `CSA` and `Hacker` triggered together on the same batch use the same commit.
-- Under the same base, a role that already passed is not re-run because of another role's fix, except for two cross re-reviews: security fixes are re-reviewed by enabled `PMQA`. If `PMQA` is N/A in the frozen batch requirements, retain N/A; do not invent a predecessor or change requirements. Any newly required coverage needs a new batch after closing the current batch. On a historical four-role batch, the enabled QA-capability role (`QA` or `PMQA`, plus enabled `PM` when functional behavior changes) still performs that cross re-review.
-- When a subsequent `PMQA` fix (or, historically, a `PM`/`QA` fix) substantively changes security code, the corresponding security role re-reviews the fix scope.
-- Roles may pass on different commits; within the same base, the final commit must be a descendant of every passing commit.
-- Non-integration changes such as the user switching base, recreating the branch, or a forced rebase during review invalidate all conclusions. Because every batch with reviewer runs must still close before its cards can complete, first close the open batch on its current target: the remaining required roles still run there, and superseded findings are disposed as `rejected` with the user's quoted decision. A task context change on the same base chain then continues in a new batch of the same, still unsealed plan; that batch starts at the previous closed target and reviews only the work after it, so the closed range is not re-reviewed under the new contract. When the user wants the closed range re-reviewed under the new contract, or when the base or the history changed, continue as new work under new cards and a new plan per "Group-Level Review for Task Groups". Report the wasted rounds either way.
-- A rebase during integration caused by `develop` advancing carries conclusions forward per the one-time gate in `KANDER-GIT-RULES.md`; the pre-rewrite SHA is not required to remain an ancestor.
-- The task context is the authoritative requirement contract: a string for short tasks, a readable absolute spec path for long tasks.
+- All roles of a full review share `CWD`, base, and task context; historical `CSA` and `Hacker` triggered together use the same commit. The task context is the authoritative requirement contract: a string for short tasks, a readable absolute spec path for long tasks.
+- Under the same base, a role that passed is not re-run because of another role's fix, except two cross re-reviews: security fixes are re-reviewed by enabled `PMQA` (if `PMQA` is N/A in the frozen requirements, retain N/A; newly required coverage needs a new batch), and a subsequent `PMQA` fix that substantively changes security code is re-reviewed by the security role for the fix scope. On a historical four-role batch, the enabled QA-capability role (`QA` or `PMQA`, plus enabled `PM` when functional behavior changes) performs the cross re-review.
+- Roles may pass on different commits; within the same base, the final commit must descend from every passing commit.
+- Non-integration changes such as switching base, recreating the branch, or a forced rebase during review invalidate all conclusions. Because every batch with reviewer runs must still close, first close the open batch on its current target: the remaining required roles run there, and superseded findings are disposed as `rejected` with the user's quoted decision. A task context change on the same base chain then continues in a new batch of the same, still unsealed plan, starting at the previous closed target and reviewing only the work after it. When the user wants the closed range re-reviewed under the new contract, or when the base or the history changed, continue as new work under new cards and a new plan per "Group-Level Review for Task Groups". Report the wasted rounds either way.
+- A rebase during integration caused by `develop` advancing carries conclusions forward per the one-time gate in `KANDER-GIT-RULES.md`; the pre-rewrite SHA need not remain an ancestor.
 
 **Report Files and Stable Identity**
 
-- Without task binding, save each role's stdout in a separate report outside the target worktree, in a private temporary directory. Keep only reports there, and clean it after the round passes, terminates, or the stage-two decision finishes; explain first when retaining diagnostics.
-- For Kanban reviews, pass every reviewed card with repeated `--task <id>` flags before CWD, together with `--batch-id <id>`. Directory cards in working/review and a common report language are required both at intent creation and when a card is first published; legacy file cards must first follow the init maintenance protocol.
-- A batch is named in the review plan before its first run (at plan creation for the first batch, by `extend-plan` afterwards) per `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate"; the first run then supplies `--requirements-file` as an absolute JSON path naming exactly the two keys `PMQA` and `Security` with values `required` or `N/A: <reason>`, resolved through the existing precedence and stage rules and identical to the plan entry. Historical batches already frozen as four-key or six-key objects keep that shape for retries and close. Requirements, members, base, task-context bytes and report language are fixed for the batch. If the live spec changes or moves, subsequent roles, fix rounds and recovery retries must pass the absolute path to the archived `task-context.md` to retain the original bytes and batch ID. Before any card publication, the original input is available in the run control directory under `inputs/task-context.md`.
-- Use a distinct `--run-id` for each actual reviewer invocation. Omit it to generate a random ID printed to stderr, then record that ID. Different roles on one commit share the batch ID and use different run IDs. Timestamps do not establish identity or predecessor order.
-- A same-ID retry with identical inputs does not launch the reviewer again. It verifies existing evidence and fills missing card publications. If the original gate process ended before finalization, recovery marks the run interrupted, preserves partial raw output, and does not invent a report or successful cleanup.
-- A task-bound incremental invocation includes `--previous-run-id`; the predecessor must be fully published for the same batch, base, role and reviewer, and the reviewed-commit rules are under "Invocation Arguments". The tool retains its original report, author records and batch view; caller context is a verbatim supplement, never a replacement.
-- Keep the batch ID for fixes. To advance its target, pass an absolute `--advance-file` JSON path with `previous_target`, `target`, a nonempty `reason`, and `deliveries` mapping every commit in that exact Git range to a member task ID. The caller supplies truthful task attribution; the command verifies the range and membership and applies a compare-and-swap. Outstanding executions or incomplete publications must settle first. Do not include outside deliveries.
-- Each card retains complete immutable originals under `reviews/<run_id>/`: input context, raw output, logs, any valid report, sidecar and manifest. Failed launches after intent creation, timeout, invalid output, leftover processes and cleanup failure also retain evidence. Preflight failures do not invent an executed run. The report language freezes from card LANGUAGE, falling back to configuration only when absent.
-- The tool appends one JSON index line per run in REVIEWS. Do not derive this index from reviewer prose, paste reports into the body, edit originals through update, or remove archived evidence during temporary cleanup.
-- A new structured report with missing/invalid findings or invalid lineage relationships fails output validation at finalization: archive it with `execution_status=failed`, a nonzero gate exit and the exact validation reason, retaining report and raw output. Retry in the same batch with a new run ID: a failed first round retries as a full invocation; a failed incremental round reuses its last valid --previous-run-id and reviewed-commit, preserving that successful predecessor chain. Never select the failed run as predecessor or replace an existing valid chain with an unconnected full round. Do not repeat an advance already committed by the failed intent. Explicitly bind each failed attempt through `resolved_failures`; same-ID recovery never launches another reviewer.
-- A run whose reviewer process ended before producing a valid report, for example a signal exit (exit code 143), a launcher failure, or a kill before any output, is archived as failed or interrupted like any other run and is retried once immediately in the same batch under the previous bullet (new run ID, same predecessor chain, the failed attempt bound through `resolved_failures`), without reporting to the user first. Only when that retry also ends without a report is it a persistent backend failure per "Stage One Backend Failures".
-- `execution_status=ok`, readable stdout and a zero command exit do not imply semantic PASS. Interpret the actual report through this review workflow. Failed/interrupted runs never establish a passing role.
-- Pending reviews allow ordinary updates and moves between working and review. Finish publication before any terminal move. The review-plan and disposition gate below blocks done until the execution cycle is complete. A card moved prematurely by an external older writer retains unpublished originals in the control directory, and explicit `kander check <task-id>` or `kander check --all` still diagnoses incomplete publication. Do not move a done card back or bypass controlled writes to repair it.
-- Publication settles only after process collection, worktree verification and runtime cleanup. Each card publication is atomic; a cross-card failure preserves successful publications, reports each failed card and exits nonzero. Retry the same run ID after resolving the error; if init is required, obey its maintenance preconditions. An incomplete publication must not count toward batch completion.
-- `kander check` validates intents, manifests, indexes, original hashes, language, membership and predecessor relations. It does not infer semantic PASS or close a batch.
-- Reviewer isolation arguments and end-of-run worktree verification still apply; do not bypass the gate.
+- Without task binding, save each role's stdout in a separate report in a private temporary directory outside the target worktree; clean it after the round passes, terminates, or the stage-two decision finishes, explaining first when retaining diagnostics.
+- For kanban reviews, pass every reviewed card with repeated `--task <id>` before CWD, together with `--batch-id <id>`. Directory cards in working/review and a common report language are required; legacy file cards first follow the init maintenance protocol.
+- A batch is named in the review plan before its first run (at plan creation, or by `extend-plan` afterwards) per `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate"; the first run supplies `--requirements-file`, an absolute JSON path naming exactly `PMQA` and `Security` with `required` or `N/A: <reason>`, resolved through the precedence and stage rules and identical to the plan entry. Requirements, members, base, task-context bytes, and report language are fixed for the batch. If the live spec changes or moves, later roles, fix rounds, and retries pass the absolute path to the archived `task-context.md` (available under `inputs/task-context.md` in the run control directory before publication) to retain the original bytes and batch ID.
+- Use a distinct `--run-id` per actual reviewer invocation; omit it to get a random ID on stderr and record it. Different roles on one commit share the batch ID with different run IDs; timestamps establish no identity or order. A same-ID retry with identical inputs never launches the reviewer again: it verifies existing evidence and fills missing card publications, and if the original gate process ended before finalization, recovery marks the run interrupted and preserves partial raw output.
+- A task-bound incremental invocation includes `--previous-run-id`; the predecessor must be fully published for the same batch, base, role, and reviewer. Caller context is a verbatim supplement, never a replacement.
+- Keep the batch ID for fixes. To advance its target, pass an absolute `--advance-file` JSON with `previous_target`, `target`, a nonempty `reason`, and `deliveries` mapping every commit in that exact range to a member task ID; the command verifies range and membership and applies a compare-and-swap. Outstanding executions or incomplete publications settle first; include no outside deliveries.
+- Each card retains complete immutable originals under `reviews/<run_id>/` (input context, raw output, logs, any valid report, sidecar, manifest), also for failed launches after intent creation, timeouts, invalid output, leftover processes, and cleanup failures; preflight failures invent no run. The report language freezes from card LANGUAGE, falling back to configuration only when absent. The tool appends one JSON index line per run in REVIEWS; never derive this index from prose, paste reports into the body, edit originals through update, or remove archived evidence.
+- A structured report with missing or invalid findings or invalid lineage fails output validation at finalization: it is archived with `execution_status=failed`, a nonzero exit, and the reason. Retry in the same batch with a new run ID: a failed first round retries as a full invocation; a failed incremental round reuses its last valid `--previous-run-id` and reviewed-commit. Never select the failed run as predecessor or replace a valid chain with an unconnected full round, and do not repeat an advance the failed intent already committed. Bind each failed attempt through `resolved_failures`.
+- A run whose reviewer process ended before producing a valid report (a signal exit such as 143, a launcher failure, a kill before output) is archived as failed or interrupted and retried once immediately in the same batch under the previous bullet, without reporting to the user first. Only when that retry also ends without a report is it a persistent backend failure per "Stage One Backend Failures".
+- `execution_status=ok`, readable stdout, and a zero exit do not imply semantic PASS; interpret the report through this workflow. Failed or interrupted runs never establish a passing role.
+- Pending reviews allow ordinary updates and moves between working and review; finish publication before any terminal move. Publication settles only after process collection, worktree verification, and runtime cleanup; each card publication is atomic, and a cross-card failure preserves successful publications, reports each failed card, and exits nonzero. Retry the same run ID after resolving the error, obeying init's maintenance preconditions when init is required. An incomplete publication never counts toward batch completion, and `kander check <task-id>` still diagnoses it; do not move a done card back or bypass controlled writes to repair it.
+- `kander check` validates intents, manifests, indexes, original hashes, language, membership, and predecessor relations; it infers no semantic PASS and closes no batch. Reviewer isolation and end-of-run worktree verification always apply.
 
 ## Group-Level Review for Task Groups
 
-Kanban task groups (see `KANDER-TASK-GROUP-RULES.md` "Task Orchestration") are not reviewed card by card; the orchestrator agent reviews them in batches on the group integration branch.
+Kanban task groups (`KANDER-TASK-GROUP-RULES.md` "Task Orchestration") are not reviewed card by card; the orchestrator reviews them in batches on the group integration branch. Single-card tasks are reviewed card by card as above. This section changes only the review unit and role split; stage policy, incremental re-review, verification duty, and conclusion requirements carry over.
 
-Single-card tasks are still reviewed card by card as above.
-
-This section changes only the review unit and role split; stage policy, incremental re-review, verification duty and conclusion requirements all carry over.
-
-- The review unit is the batch: while no batch is open, the orchestrator receives the ready `review/` deliveries onto the group branch per `KANDER-TASK-GROUP-RULES.md` "Group Integration Branch", verifies them, and, once every member of the group has started, opens a batch over every delivery received since the previous closed target, choosing the moment by module, milestone or dependency-chain step. Prefer small batches: when a delivery is large (many files, or several endpoints or clients), open a batch as soon as that delivery is received instead of waiting for a milestone, so that each fix round stays small and later deliveries do not wait in the queue. A batch's diff should be readable in detail by the reviewer, and the batch contract must cover all unreviewed deliveries from the batch base to HEAD; a received delivery is never left out of the batch that follows it. The `review/` state does not replace delivery verification on the group branch.
-
-  At least one batch for the whole group; one batch per card is not mandatory.
-
-  The whitelist is judged on the batch's aggregated actual changes.
-
-  A task group containing feature development or bug fix cards always enters review.
-
-- Each batch is an independent full review.
-
-  `CWD` is the absolute path of the group branch's dedicated worktree, and the commit is the current group branch HEAD.
-
-  The first batch's base is the group's anchor at plan creation: the full `develop` SHA the group branch was created from, or the SHA of the last pre-plan sync per `KANDER-TASK-GROUP-RULES.md` "Creation and Reuse"; a later batch's base is the closed target of the previous batch per "Conclusions and Failure Handling", so each batch reviews only its own newly introduced changes.
-
-  Other preconditions are unchanged: `HEAD` equals the commit, the worktree has no uncommitted or untracked files, and all commit arguments are full SHAs.
-
-  While a batch is in progress, new deliveries outside the batch queue up and the group branch is not updated. Fixes inside the batch must wait for the reviewer to exit, then be fast-forward received by the orchestrator before re-review; do not change the review worktree or HEAD while the reviewer is running.
-
-- The task context is a spec file merging the full contracts of all cards in the batch, placed in a temporary directory accessible only to the current user and passed by absolute path. Mark the task ID per card, keep all six contract fields from "task context and review context Templates", and the cards' `DISCUSSION`, without omitting user trade-offs, acceptance criteria or threat models.
-
-  Passing only one card or only the task group name is forbidden.
-
-  Each card's `OUT_OF_SCOPE` remains the boundary for judging finding overreach.
-
-- Conclusions are not carried across batches and there is no cross-batch incremental re-review: different batches have different task contexts, so per the invalidation conditions under "Preconditions and Execution" (a task context change restarts the role) each must start from a full first round, which does not pass `reviewed-commit`.
-
-  Only fix rounds within a batch are incremental re-reviews: same base, same batch task context, `reviewed-commit` is the group branch commit that role reviewed last round, and the review context contains last round's finding list.
-
-  The previous batch's unresolved items are written into the exclusions of later batches' task contexts and not reported again.
-
-- Carrying conclusions across a re-based or re-split group: when the user authorizes replaying deliveries onto a new base, that replay is new work under new cards and a new plan, because a plan cannot chain a batch whose base is not the previous closed target and its members and worktree are fixed; the previous batches are closed and stay as history. In that batch's review context, list the files whose content is byte-identical to the previously closed target as already reviewed and focus the roles on the files changed during conflict resolution and on the integration seams named in the batch context. This is an instruction inside the review context; at tool level the batch is still a full first round without `reviewed-commit`.
+- The review unit is the batch: while no batch is open, the orchestrator receives ready `review/` deliveries onto the group branch per `KANDER-TASK-GROUP-RULES.md` "Group Integration Branch", verifies them, and, once every member has started, opens a batch over every delivery received since the previous closed target, choosing the moment by module, milestone, or dependency-chain step. Prefer small batches: when a delivery is large (many files, several endpoints or clients), open a batch as soon as it is received, so each fix round stays small and later deliveries do not queue. The batch diff should be readable in detail, and the batch contract covers all unreviewed deliveries from the batch base to HEAD; a received delivery is never left out of the batch that follows it. At least one batch per group; one per card is not mandatory. The whitelist is judged on the batch's aggregated changes, and a group containing feature development or bug fix cards always enters review.
+- Each batch is an independent full review. `CWD` is the group worktree, the commit is the group branch HEAD. The first batch's base is the group's anchor at plan creation (the full `develop` SHA the group branch was created from, or the last pre-plan sync per `KANDER-TASK-GROUP-RULES.md` "Creation and Reuse"); a later batch's base is the closed target of the previous batch, so each batch reviews only its own changes. Other preconditions are unchanged. While a batch runs, new deliveries queue and the group branch is not updated; in-batch fixes wait for the reviewer to exit and are fast-forward received before re-review. Never change the review worktree or HEAD while the reviewer is running.
+- The task context is a spec file merging the full contracts of all batch cards, in a temporary directory accessible only to the current user, passed by absolute path. Mark the task ID per card, keep all six contract fields from "task context and review context Templates" and each card's `DISCUSSION`, omitting no user trade-offs, acceptance criteria, or threat models. Passing only one card or the group name is forbidden. Each card's `OUT_OF_SCOPE` remains the boundary for judging overreach.
+- Conclusions are not carried across batches and there is no cross-batch incremental re-review: each batch starts from a full first round without `reviewed-commit`. Only fix rounds within a batch are incremental (same base, same batch task context, `reviewed-commit` the group branch commit that role reviewed last round). The previous batch's unresolved items are written into later batches' exclusions and not reported again.
+- When the user authorizes replaying deliveries onto a new base after a rebase or re-split, that replay is new work under new cards and a new plan; the previous batches are closed and stay history. In that batch's review context, list the files byte-identical to the previously closed target as already reviewed and focus the roles on files changed during conflict resolution and on the named integration seams; at tool level it is still a full first round.
 
 **Verification Split Between Orchestrator and Executing Agent**
 
-- The orchestrator triggers roles, stores reports, attributes findings by change scope through `review assign` (a finding is assigned to every card of the batch whose scope it hits; a card outside the batch cannot be assigned, and the attribution rules, including findings that hit no batch member's scope, are in `KANDER-TASK-GROUP-RULES.md` "Review Batches and Dispatch-Back"), and uses notify to dispatch the finding text, role and tier back to the original executing agents.
-- Do not separately call `kander resume <task-id> --message-file`; resumption is chosen internally by notify.
-- The orchestrator aggregates the returned lists into the review context, triggers incremental re-review, and shows all unresolved items.
-- The executing agent bears the "Main Agent Verification Duty": verify item by item; for confirmed items, fix on the card's task branch, commit, rebase onto the latest group branch and re-verify, updating the task branch per the Git rule file; for rejected or unverifiable items, write the basis. The executing agent does not update the group branch.
-- Submit each conclusion through `review disposition`, then write into `IMPLEMENTATION` one entry with the counts per status, the card-relative paths of the disposition records and the full SHA of the latest delivery (never the finding list itself, per `KANDER-KANBAN-RULES.md` "Contract and Records"), then `move review` and end this round's response. The orchestrator first verifies and fast-forward receives the fix delivery, then triggers incremental re-review.
-- The orchestrator must not judge confirmation on the executing agent's behalf, nor omit or rewrite conclusions.
-
-- Security roles run per "Review Stages" and trigger conditions after the whole batch passes stage one, with all enabled security roles on the same group branch commit; user decision and timeout rules are unchanged.
-- A valid group-level review requires that the actual roles of every batch satisfy "Conclusions and Failure Handling", and that each later batch's base equals the closed target of the previous batch, forming a continuous chain from the group base to the final HEAD.
-
-  Unresolved items are aggregated and written into each card as one-line references per `KANDER-KANBAN-RULES.md` "Contract and Records".
-
-  The orchestrator integrates per `KANDER-TASK-GROUP-RULES.md` "Group Integration Branch".
-
-  An integration rebase caused by `develop` advancing is handled per `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions"; the reviewed patch must survive it unchanged, and the orchestrator resolves no conflicts on the group branch.
+- The orchestrator triggers roles, stores reports, attributes findings by change scope through `review assign` (a finding goes to every batch card whose scope it hits; a card outside the batch cannot be assigned; attribution rules, including findings that hit no member's scope, are in `KANDER-TASK-GROUP-RULES.md` "Review Batches and Dispatch-Back"), and uses `notify` to dispatch the finding text, role, and tier back to the original executing agents. It does not call `kander resume <task-id> --message-file` separately; resumption is chosen inside notify. It aggregates the returned lists into the review context, triggers incremental re-review, and shows all unresolved items. It never judges confirmation on the executing agent's behalf, nor omits or rewrites conclusions.
+- The executing agent bears the "Main Agent Verification Duty": verify item by item; fix confirmed items on the card's task branch, commit, rebase onto the latest group branch, re-verify, and update the task branch per the Git rule file; write the basis for rejected or unverifiable items; never update the group branch. Submit each conclusion through `review disposition`, write into `IMPLEMENTATION` one entry with the counts per status, the card-relative paths of the disposition records, and the full SHA of the latest delivery (never the finding list itself, per `KANDER-KANBAN-RULES.md` "Contract and Records"), then `move review` and end the turn. The orchestrator verifies and fast-forward receives the fix delivery, then triggers incremental re-review.
+- Security roles run per "Review Stages" and trigger conditions after the whole batch passes stage one, on the same group branch commit; user decision and timeout rules are unchanged.
+- A valid group-level review requires that the actual roles of every batch satisfy "Conclusions and Failure Handling" and that each later batch's base equals the previous closed target, forming a continuous chain from the group base to the final HEAD. Unresolved items are written into each card as one-line references per `KANDER-KANBAN-RULES.md` "Contract and Records". The orchestrator integrates per `KANDER-TASK-GROUP-RULES.md` "Group Integration Branch"; an integration rebase caused by `develop` advancing follows its "Merge-Back and Cleanup Preconditions", the reviewed patch must survive unchanged, and the orchestrator resolves no conflicts on the group branch.
 
 ## Review Stages
 
-Beyond "Review Profiles" and the whitelist trigger conditions, whether each role runs is also constrained by the default stage policy.
+Beyond "Review Profiles" and the whitelist, whether each role runs is constrained by the stage policy. The configuration's `review_stages` specifies `auto`, `skip`, or `required` for `PMQA` and `Security`, per task scale as `review_stages.large` and `review_stages.small` (a legacy flat `{role: mode}` object applies to both scales); missing roles default to `auto`. View it with `kander config`.
 
-The configuration file's `review_stages` specifies `auto`, `skip` or `required` for `PMQA` and `Security`, stored per task scale as `review_stages.large` and `review_stages.small`. A legacy flat `{role: mode}` object is still accepted and applies to both scales; new writes use the two-scale form. Missing current roles default to `auto`, including when a scale or the whole section is absent. Leftover `PM`/`QA`/`CSA`/`Hacker` keys fold on load as described in "Historical four-role evidence"; saves write only the two current roles.
-
-View it with `kander config` under the command root.
-
-When resolving each role, take the first explicitly specified source by precedence:
+Resolve each role from the first explicitly specified source by precedence:
 
 1. The user instruction for the current task.
 2. The project-level `AGENTS.md` or `CLAUDE.md` nearest to the target file; when unspecified, the user's own global rules.
-3. The `review_stages` value for this card's `SIZE` scale; when a task-group batch contains mixed sizes, use the `large` scale.
-4. Review profiles and security role trigger conditions (effective only when tier 3 is `auto`).
+3. The `review_stages` value for this card's `SIZE` scale; a task-group batch with mixed sizes uses `large`.
+4. Review profiles and security trigger conditions (effective only when tier 3 is `auto`).
 
-Semantics of each value:
+- `auto`: run or not per the "Review Profiles" table and the security trigger conditions; N/A when not triggered.
+- `skip`: N/A by default unless a higher-precedence source explicitly requires running.
+- `required`: run by default once review is triggered unless a higher-precedence source explicitly skips.
 
-- `auto` - run or not per the "Review Profiles" table and the security role trigger conditions; mark N/A when not triggered.
-- `skip` - do not run by default and mark N/A, unless a higher-precedence source explicitly requires running.
-- `required` - run by default once review is triggered, unless a higher-precedence source explicitly requires skipping.
-
-Example wording for tier (2): `Security is always N/A in this repository`, or `Skip PMQA for this task`. Skipped roles are recorded as N/A in the delivery notes with the basis stated. When the user explicitly asks to run a skipped role, the user instruction prevails.
-
-For example, this two-role stage policy requires PMQA and leaves Security to auto triggers at either scale (subject to higher-precedence project exceptions):
+Example wording for tier (2): `Security is always N/A in this repository`, or `Skip PMQA for this task`. Skipped roles are recorded N/A in the delivery notes with the basis. When the user explicitly asks to run a skipped role, the user instruction prevails. Example policy requiring PMQA and leaving Security to auto at both scales:
 
 ```json
 {
@@ -389,27 +196,12 @@ For example, this two-role stage policy requires PMQA and leaves Security to aut
 
 ## Review Profiles
 
-Review profiles decide which roles run in a review round and the default content of each role's review context "Review Focus". Profiles do not change stage order, nor the invocation method and isolation arguments of the current platform's review entry.
+Review profiles decide which roles run in a round and the default content of each role's "Review Focus"; they change neither stage order nor the invocation and isolation of the review entry.
 
-- The profile is derived from the whitelist entries hit, based on the task's actual changes.
-
-  The executing agent classifying or downgrading on its own is forbidden.
-
-  When multiple entries hit, take the union: each role starts only one first round, and fixes are handled as incremental re-reviews.
-
-  The focus of each entry is merged into the review context's "Review Focus".
-
-- Stage one is `PMQA`. Stage two is `Security`. Whether they actually run is still constrained by the "Review Stages" precedence chain; the profile table only expresses suggested role combinations.
-
-  Entries that formerly annotated "PM exempt" still run `PMQA`: the contract-only exemption does not remove the combined quality duties.
-
-- Security role trigger conditions (in `auto` mode): `Security` runs when the change involves untrusted input, authentication and authorization, credentials, cryptography, network protocols, remote execution, file writes decided by untrusted input, install/update or release integrity; or when the external attack surface is added or substantively changed, a dedicated security review is being performed, or the user explicitly requests it.
-
-  Annotations in the profile table are hints only; whether a role actually runs is judged jointly by the security role trigger conditions and "Review Stages".
-
-- When enabled as `auto`, `PMQA` runs whenever the profile calls for a stage-one review and performs both the contract and quality portions. Enabled `Security` runs when the security triggers above fire. `required` still overrides these triggers, and `skip` still means N/A.
-
-- When the user explicitly requests a review that hits no whitelist entry, select the profile by the scope the user specified; when unspecified, run the full flow with the feature development profile.
+- The profile is derived from the whitelist entries the task's actual changes hit; the executing agent classifying or downgrading on its own is forbidden. With several hits take the union: each role starts one first round, fixes are incremental re-reviews, and the focus of each entry is merged into "Review Focus".
+- The table only suggests role combinations; whether a role actually runs is decided by "Review Stages". Entries formerly annotated "PM exempt" still run `PMQA`.
+- Security trigger conditions (in `auto` mode): `Security` runs when the change involves untrusted input, authentication and authorization, credentials, cryptography, network protocols, remote execution, file writes decided by untrusted input, install/update or release integrity; when the external attack surface is added or substantively changed; when a dedicated security review is being performed; or when the user requests it. `required` overrides these triggers and `skip` still means N/A.
+- When the user explicitly requests a review that hits no whitelist entry, select the profile by the scope the user specified; when unspecified, use the feature development profile.
 
 | Whitelist entry             | Roles                | Review focus                                                  |
 | --------------------------- | -------------------- | ------------------------------------------------------------- |
@@ -426,61 +218,22 @@ Review profiles decide which roles run in a review round and the default content
 
 ## Main Agent Verification Duty
 
-- Accepting a reviewer conclusion without verification is forbidden; so is rejecting one without verification.
-
-  Every finding and every `NON-BLOCKING` item gets a handling conclusion only after the main agent independently verifies it.
-
-  The reviewer's wording, tone, confidence and number of findings are not evidence.
-
-- Verification must return to the facts of the target commit: read the related code and contracts, walk the trigger path the finding claims, and run commands and record output when needed. Concluding from impression, the reviewer's own statement or "sounds reasonable" counts as unverified.
-- There are only three verification conclusions:
-  - **Confirmed** - handle per tier; must-fix tiers are fixed and committed.
-  - **Rejected** - not handled, not fixed.
-
-    Common types: the basis does not match the actual code of the target commit.
-
-    The problem already existed at the base and was not aggravated or masked this round.
-
-    It hits a specific item in the task context `OUT_OF_SCOPE`.
-
-    Beyond the contract, i.e. the behavior the finding demands is neither in `ACCEPTANCE_CRITERIA` nor a logical necessity of an existing contract (concurrency interleaving, cross-platform or security hardening, and syncing shared contracts and architecture docs all belong here, unless named by the acceptance criteria).
-
-    The trigger premise the finding assumes does not hold in this task.
-
-    Same root cause as another finding already accepted.
-
-    Beyond-contract items are recorded as unresolved items with a follow-up card suggested, and are not fixed this round.
-
-    But a real defect introduced, aggravated or masked this round that reaches `blocking` or `high` is still sent to the user to decide whether to include it.
-
-    Existing problems unaffected by this round are still excluded per "Goals and Boundaries".
-
-  - **Unverifiable** - state which evidence or environment is missing and send it to the user for decision; treating it as rejected on your own is forbidden.
-- Judging as rejected or changing tier (upgrading and downgrading alike) must state the verification basis: file and line number, `commit` SHA, commands actually run with output, the verbatim exclusion item cited, or the user's explicit decision quoted with its time.
-
-  Evidence-free judgments such as "low impact", "later", "too large a change" or "the reviewer lacks context" do not count as a basis.
-
-  A downgraded item still goes into the unresolved items list.
-
-- All rejected and unverifiable items go into the unresolved items list at the end of the loop for the user to re-check; the user may overturn any conclusion: an item the user wants handled becomes must-fix, and an item the user declines to handle is recorded as `rejected` with the quoted decision as its basis and stays on the unresolved list.
-- Confirming a finding does not mean copying the reviewer's fix: the main agent applies the minimal correct fix. If the reviewer's fix would change a direction the user has explicitly set or an external contract, send it to the user for decision per "Goals and Boundaries".
-- One root cause, one item in the dispatch summary and the user-facing report: when different roles report the same root cause, present and count it once, citing all source IDs. Machine identities are not merged: each `(run_id, finding_id)` keeps its own disposition per assigned task, and the duplicate cites the other item as its basis. Splitting one root cause into per-location items in the summary, or counting the same defect twice across roles, is forbidden.
+- Accepting or rejecting a reviewer conclusion without verification is forbidden. Every finding and every `NON-BLOCKING` item gets a conclusion only after the main agent independently verifies it; the reviewer's wording, tone, confidence, and finding count are not evidence.
+- Verification returns to the facts of the target commit: read the related code and contracts, walk the claimed trigger path, run commands and record output when needed. Concluding from impression or "sounds reasonable" is unverified.
+- There are only three conclusions:
+  - **Confirmed**: handle per tier; must-fix tiers are fixed and committed.
+  - **Rejected**: not handled. Valid grounds: the basis does not match the actual code of the target commit; the problem existed at the base and was neither aggravated nor masked; it hits a specific `OUT_OF_SCOPE` item; it is beyond the contract, i.e. the demanded behavior is neither in `ACCEPTANCE_CRITERIA` nor a logical necessity of an existing contract (concurrency interleaving, cross-platform or security hardening, syncing shared contracts and architecture docs all belong here unless named by the acceptance criteria); the assumed trigger premise does not hold; same root cause as an accepted finding. Beyond-contract items are recorded as unresolved with a follow-up card suggested, but a real defect introduced, aggravated, or masked this round that reaches `blocking` or `high` still goes to the user to decide inclusion.
+  - **Unverifiable**: state which evidence or environment is missing and send it to the user; treating it as rejected on your own is forbidden.
+- Rejecting or changing tier (up or down) states the verification basis: file and line, commit SHA, commands run with output, the verbatim exclusion cited, or the user's quoted decision with its time. "Low impact", "later", "too large a change", or "the reviewer lacks context" are not a basis. A downgraded item still goes on the unresolved list.
+- All rejected and unverifiable items go on the unresolved list for the user to re-check; the user may overturn any conclusion. An item the user wants handled becomes must-fix; one the user declines is recorded `rejected` with the quoted decision and stays on the list.
+- Confirming a finding does not mean copying the reviewer's fix; apply the minimal correct fix. A fix that would change a user-set direction or an external contract goes to the user per "Goals and Boundaries".
+- One root cause, one item in the dispatch summary and the user report: when several roles report the same root cause, present and count it once citing all source IDs. Machine identities are not merged: each `(run_id, finding_id)` keeps its own disposition per assigned task, and the duplicate cites the other item as its basis.
 
 ## task context and review context Templates
 
-- `OUT_OF_SCOPE` is the risk-bounded stop boundary of the review and must be judged category by category with reasons stated, across four categories:
-  1. Problems that existed before the change.
-  2. Concurrency interleaving, cross-platform and security hardening.
-  3. Syncing shared contracts, public APIs and architecture docs.
-  4. Adjacent features and later phases.
+- `OUT_OF_SCOPE` is the risk-bounded stop boundary of the review, judged category by category with reasons, across four categories: problems that existed before the change; concurrency interleaving, cross-platform, and security hardening; syncing shared contracts, public APIs, and architecture docs; adjacent features and later phases. Categories not required by `ACCEPTANCE_CRITERIA` are stated as excluded; categories this card owns are stated as included. A single generic exclusion does not complete the contract; the card-creating agent completes it before `pick`. Reviewer and main agent both use this list to judge overreach; overstepping findings are recorded as unresolved with a follow-up card suggested.
 
-  Categories not required by `ACCEPTANCE_CRITERIA` are stated as excluded; categories this card is responsible for are stated as included.
-
-  A single generic exclusion does not make the contract complete; the card-creating agent completes it before `pick`.
-
-  During review, both the reviewer and the main agent use this list to judge whether a finding oversteps the contract; overstepping ones are recorded as unresolved items with a follow-up card suggested.
-
-The task context is organized by the following six fields; keep all of them, write `N/A` when nothing applies, and do not fabricate `USER_DECISIONS` or `ACCEPTANCE_CRITERIA`. When using an absolute spec, pass the full contract, including any existing `DISCUSSION`:
+The task context has six fields; keep all of them, write `N/A` when nothing applies, and never fabricate `USER_DECISIONS` or `ACCEPTANCE_CRITERIA`. When using an absolute spec, pass the full contract including any `DISCUSSION`:
 
 ```text
 GOAL: <what to change and why>
@@ -500,157 +253,46 @@ Verification records: <commands run and their results, including items that coul
 Environment gaps: <actual environment problems affecting verification and substitute evidence; omit if none>
 ```
 
-The concrete boundary of `OUT_OF_SCOPE` makes each role's risk-bounded stop effective, avoiding misreporting known trade-offs or existing problems as this round's findings. Common items:
+Common `OUT_OF_SCOPE` items:
 
-- Existing problems not introduced this round: `<specific item> existed before the change (see <commit>); fixing it would expand this task's scope.`
-- Directions the user has explicitly decided or areas reserved for the user's own decision: `This is the direction the user explicitly requested; do not oppose the direction itself on the grounds of <opposing claim>; the user is aware of the trade-off.`
+- Existing problems: `<specific item> existed before the change (see <commit>); fixing it would expand this task's scope.`
+- User-decided directions: `This is the direction the user explicitly requested; do not oppose the direction itself on the grounds of <opposing claim>; the user is aware of the trade-off.`
 - Hardening beyond the contract: `Concurrency interleaving, cross-platform or security hardening is not listed in ACCEPTANCE_CRITERIA; this card only guarantees <ACCEPTANCE_CRITERIA>, the rest is handled by <follow-up card>.`
-- Theoretical defects with disproportionate cost versus benefit, excludable only when all three hold (triggering requires an additional precondition already compromised; the consequence is minor or even safer; fix complexity clearly exceeds the benefit): `<specific item> requires <premise> to trigger, has consequence <consequence>, and fixing it needs <cost>; not in this round's scope.`
-- Verification gaps caused by the environment: `<command> could not be executed because of <reason>; covered by <substitute verification>; do not judge a problem on that basis.`
-- When the project has dropped backward compatibility: `The project has dropped all backward compatibility; do not raise compatibility, migration or fallback issues.`
+- Theoretical defects with disproportionate cost, excludable only when all three hold (triggering needs an additional precondition already compromised; the consequence is minor or safer; fix complexity clearly exceeds the benefit): `<specific item> requires <premise> to trigger, has consequence <consequence>, and fixing it needs <cost>; not in this round's scope.`
+- Environment verification gaps: `<command> could not be executed because of <reason>; covered by <substitute verification>; do not judge a problem on that basis.`
+- Dropped backward compatibility: `The project has dropped all backward compatibility; do not raise compatibility, migration or fallback issues.`
 
-Exclusions may exclude only "scope", never "severity": writing "do not report high" or "report only doc issues" is forbidden; real blocking, high and medium must still be reportable.
-
-Exclusion reasons must rest on facts (which commit introduced it, what premise triggers it, which user instruction), and empty phrases such as "not important" or "later" are forbidden.
-
-When the implementation was done by other agents, state that in the review context and point out the problems you already fixed, so the reviewer focuses on re-checking similar half-changed states.
+Exclusions exclude only scope, never severity: "do not report high" or "report only doc issues" is forbidden. Exclusion reasons rest on facts (the introducing commit, the triggering premise, the user instruction); "not important" or "later" is forbidden. When other agents did the implementation, say so in the review context and point out the problems already fixed, so the reviewer re-checks similar half-changed states.
 
 ## Conclusions and Failure Handling
 
-- A valid review requires: `PMQA`, as actually run per "Review Stages", has no open must-fix finding: every `blocking`, `high` or `medium` item is `fixed` with verification, or `rejected` with a factual basis or the user's quoted decision per "Main Agent Verification Duty". Historical batches that ran `PM` and/or `QA` apply the same gate to those roles as actually run.
-
-  `Security`, as actually run per trigger conditions, returned conclusions on the same commit, and its security findings have been decided by the user or recorded as timed out and ignored per the timeout rule. Historical `CSA`/`Hacker` runs on an open four-role or six-role batch follow the same rule.
-
-  When a role is exempt per profile or stage policy, record N/A in the delivery notes.
-
-- A blocking, high or medium finding judged "Unverifiable" counts as not passed: that stage must not be released; send it to the user for decision. When the user decides it need not be handled, record that decision as the basis of a `rejected` disposition quoting it, and keep the item on the unresolved list; when the user decides to handle it, treat it as confirmed.
+- A valid review requires: `PMQA`, as actually run per "Review Stages", has no open must-fix finding, every `blocking`, `high`, or `medium` item being `fixed` with verification or `rejected` with a factual basis or the user's quoted decision per "Main Agent Verification Duty"; and `Security`, as actually run, returned conclusions on the same commit with its findings decided by the user or recorded as timed out and ignored. Historical `PM`/`QA` and `CSA`/`Hacker` runs on open historical batches follow the same gates. A role exempt per profile or stage policy is recorded N/A in the delivery notes.
+- A blocking, high, or medium finding judged "Unverifiable" counts as not passed: that stage is not released; send it to the user. A user decision not to handle it becomes a `rejected` disposition quoting the decision, kept on the unresolved list; a decision to handle it makes it confirmed.
 
 **Unresolved Items Summary**
 
-- When the review loop ends (pass or mid-way termination), show the user every unresolved item of this round, omitting none:
-  - Unfixed `low`, `recommend` and `suggest`.
-  - Findings judged rejected or unverifiable.
-  - Risks the user has confirmed accepting, and security findings timed out and ignored.
-  - Roles not completed due to backend failure, and roles that provided no `NON-BLOCKING` section.
-- Each item states the source role, tier, problem, impact and rationale in the user report.
-- The delivery notes and, for kanban tasks, the card carry the same items as one-line references per `KANDER-KANBAN-RULES.md` "Contract and Records": findings point at their disposition record; roles not completed, missing sections and verification gaps point at the run's sidecar or error log with tier and status `N/A`, or, when no run exists, at the actual command log or `IMPLEMENTATION` record with the note "no run produced". The full text stays in the user report and the review artifacts.
-- Reporting only "review passed" or "no blocking issues" is forbidden.
-- When review is skipped because no whitelist entry was hit, following the notification rule in "Preconditions and Execution" is sufficient.
-
-- Round cap: when the same finding is still open after two fix rounds, or a batch has run three fix rounds, stop. Report to the user which finding is stuck, what was tried, and numbered options (`1. Accept the current state and record the item as unresolved`, `2. Change the contract`, `3. Continue with one more round`). Do not open a further round on your own.
-- Review entry argument, authentication, precondition or local environment errors must be corrected first.
-
-  Only when the same role invocation with correct arguments and preconditions returns HTTP 5xx or an explicit service unavailable error 3 times in a row is it treated as a persistent backend failure of that reviewer.
+- When the loop ends (pass or termination), show the user every unresolved item of this round: unfixed `low`, `recommend`, and `suggest`; findings rejected or unverifiable; risks the user accepted and security findings timed out and ignored; roles not completed due to backend failure and roles that provided no `NON-BLOCKING` section. Each item states the source role, tier, problem, impact, and rationale. Reporting only "review passed" or "no blocking issues" is forbidden; when review was skipped for no whitelist hit, the notification rule in "Preconditions and Execution" suffices.
+- The delivery notes and, for kanban tasks, the card carry the same items as one-line references per `KANDER-KANBAN-RULES.md` "Contract and Records": findings point at their disposition record; roles not completed, missing sections, and verification gaps point at the run's sidecar or error log with tier and status `N/A`, or, when no run exists, at the actual command log or `IMPLEMENTATION` record with the note "no run produced". The full text stays in the user report and the review artifacts.
+- Round cap: when the same finding is still open after two fix rounds, or a batch has run three fix rounds, stop and report which finding is stuck, what was tried, and numbered options (`1. Accept the current state and record the item as unresolved`, `2. Change the contract`, `3. Continue with one more round`). Do not open a further round on your own.
+- Review entry argument, authentication, precondition, or local environment errors are corrected first. Only when the same role invocation with correct arguments returns HTTP 5xx or an explicit service unavailable error 3 times in a row is it a persistent backend failure of that reviewer.
 
 **Stage One Backend Failures**
 
-- When `PMQA` has a persistent backend failure, do not switch reviewer on your own: keep the branch and worktree, report the failed role, the actual error and the completed stages, stop integration, and wait for the user to decide to retry, reschedule or explicitly designate another reviewer.
-- When offering the reviewer switch option, state its limit per "Reviewer Selection": with no successfully executed run of that role in the batch, only that role is re-run with the new reviewer; otherwise the remaining options are to retry later or reschedule, and the switch takes effect from the next batch.
-- Only when the user changes the whole reviewer set, the review base or the task context are all stages voided per the corresponding rules and restarted from stage one (the enabled stage-one roles on the same commit).
-
-- A persistent backend failure of `Security` does not block the stage-two decision, but a role named `required` in the batch requirements still needs a successful run before the batch can close: record that role as "not completed due to backend failure", state it in the delivery notes and the report, let the enabled stage-one role decide the semantic conclusion, and wait for the user's retry, reschedule or reviewer switch per "Reviewer Selection". Only a role recorded as N/A in the batch requirements needs no run.
-
-  On a historical batch that still requires more than one security role, remaining security roles still produce their conclusions and are handled per the stage two rules.
+- On a persistent `PMQA` backend failure, do not switch reviewer on your own: keep the branch and worktree, report the failed role, the actual error, and the completed stages, stop integration, and wait for the user to retry, reschedule, or explicitly designate another reviewer. When offering the switch, state its limit per "Reviewer Selection": with no successfully executed run of that role in the batch, only that role is re-run with the new reviewer; otherwise the switch takes effect from the next batch. Only when the user changes the whole reviewer set, the review base, or the task context are all stages voided and restarted from stage one.
+- A persistent `Security` backend failure does not block the stage-two decision, but a role named `required` in the batch still needs a successful run before the batch can close: record it as "not completed due to backend failure" in the delivery notes and the report, let the enabled stage-one role decide the semantic conclusion, and wait for the user's retry, reschedule, or reviewer switch. Only a role recorded N/A needs no run. On a historical batch with several security roles, the remaining ones still produce their conclusions under the stage two rules.
 
 ## Controlled Plans, Author Dispositions, and Batch Closure
 
-- Before completing an active card, establish a machine-readable execution review plan with
-  `kander review plan <CWD> <absolute-plan.json>`. The plan names the cycle, author and basis,
-  worktree, language, members, ordered batch IDs, each batch base/target, and every role
-  requirement in its exact two-key set (`PMQA` and `Security`). Historical plans already frozen with four or six keys keep that set. Use `required` or `N/A: <reason and applicable rule basis>` after resolving
-  existing precedence. Disabled or inapplicable review needs explicit N/A records; empty indexes
-  never imply exemption. Already completed historical cards may remain `legacy-untracked`,
-  without inventing a past PASS.
-- A single known batch may use a sealed plan. For incremental batch scheduling, create the plan
-  unsealed once every member is in `working/` or `review/` and before the first batch runs, naming
-  that batch with its base and current target, then use `review extend-plan <CWD>
-  <absolute-request.json>` with the expected plan revision to append each later batch after its
-  predecessor closes and before that batch's first run (`KANDER-KANBAN-RULES.md` "Review Evidence
-  Completion Gate"). Preserve existing batches, requirements and membership. Seal only after
-  every member is assigned.
-  Unsealed plans and unclosed batches block done. Never replace a plan to discard failed runs.
-  Members are fixed at plan creation: extend-plan appends a batch or seals, never adds or removes
-  members, and a member already in `done/` or `archived/` cannot be extended. Reclaim-induced
-  cycle changes are rebound per `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate".
-  Same-cycle resets are forbidden. Advance and extend-plan must use the plan's exact CWD.
-- New reports must contain exactly one `kander-findings` fenced JSON object with mandatory
-  `FINDINGS` and `NON_BLOCKING` arrays. Each item has `id`, `tier`, `text`, and `evidence`;
-  IDs are unique across both arrays. Gate tiers belong only to FINDINGS, and low/recommend/suggest
-  only to NON_BLOCKING. Empty arrays explicitly mean no items. References in ordinary prose
-  are not entries. Missing/duplicate IDs, duplicate JSON keys, invalid structure, and empty
-  author dispositions cannot waive coverage.
-- The finding identity is `(run_id, finding_id)`. Incremental carried items use explicit
-  `lineage: {run_id, finding_id}` pointing to an actual item in the immediate predecessor.
-  Preserve stable IDs and report complete items in the structured block.
-- Old unstructured reports retain their originals. To use them, submit an explicit complete
-  human mapping through `review map-legacy <CWD> <absolute-map.json>`, including the author,
-  basis, original report hash, structured items, and exact original line ranges and quotes.
-  Mapping publication also validates lineage first; an invalid mapping request is rejected without
-  creating an immutable mapping, so it can be corrected and resubmitted.
-  A missing ID search or empty mapping is not evidence of no findings. New-schema reports
-  cannot use this compatibility route; obtain a valid new report.
-- Attribute every item through `review assign <CWD> <absolute-assignment.json>` with run/batch,
-  the assigning author and basis, and explicit item-to-task arrays. Cross-card findings require
-  every actual owner. An empty assignment is valid only for a parsed report with no items.
-- Each executing agent independently verifies and submits only its own assigned findings through
-  `review disposition <CWD> <absolute-record.json> <expected-card-revision>` while working.
-  Bind record/run/finding/batch/task IDs, author, original report hash and item text, status,
-  factual basis, and applicable fix SHA and verification. The tool records time. Revisions append
-  a new record ID referencing the previous record, preserving the original author text.
-  A successor OWNER may append their own independently verified conclusion on the same assigned
-  task. The tool binds each new record to the current working OWNER and card revision; original
-  assignment ownership and all former authors' records remain unchanged. Former owners cannot
-  submit after handoff. The orchestrator must never impersonate an executing author or overwrite
-  those records.
-- Must-fix statuses are confirmed/fixed/rejected/unverifiable/waived; `deferred` is invalid for
-  must-fix items. Confirmed and unverifiable items block closure; rejected items require factual
-  evidence or the user's quoted decision and remain in the final unresolved list. Fixed items bind
-  a later fix commit and actual verification. Non-blocking statuses are fixed/deferred/rejected,
-  all with a basis, and closure requires one for every assigned non-blocking item as well.
-  Delegated placeholders are invalid.
-- Waived is restricted to `Security` accepted-risk or kanban timeout rules, and to historical `CSA`/`Hacker` records that used the same rules.
-  Record the applicable policy and actual user decision, or the full notification basis and
-  send/timeout times separated by at least 15 minutes. A waiver is not PASS. `PMQA` must-fix
-  items (and historical `PM`/`QA` must-fix items), unverifiable items, and acceptance/integration authorization cannot use that exception;
-  a user decision on those items is recorded as `rejected` with the quoted decision per "Main
-  Agent Verification Duty".
-- `review aggregate <CWD> <batch-id>` validates all run publications and author originals,
-  deduplicates run IDs, and publishes a generated disposition view to every member. Preserve
-  author wording and attribution. Members without findings need no notification merely to
-  copy conclusions. The orchestrator may add separately attributed verification opinions to
-  the closure request; these do not replace author dispositions.
-- Mechanical-only fixes use `review advance <CWD> <absolute-request.json>` to CAS the existing
-  batch target without starting a reviewer. Supply batch ID, expected revision, and the existing
-  advance contract with every in-batch delivery. The worktree must be clean at the target.
-  Preserve mechanical category (documentation/dead-code/redundant-test), fix SHA and actual
-  verification. A disposition's mechanical label alone cannot advance PASSED_AT. The closing main
-  agent must supply a separate `mechanical` assessment for each exception, bound to the exact
-  run/finding/task/author-record, report hash, fix SHA, reviewer category (including an absent label),
-  actual verification facts and changed paths with their Git diff hash. The tool binds that scope
-  to Git evidence; the main agent still verifies the mechanical definition and factual conclusion.
-  Missing reviewer labels may be classified after independent verification; existing labels are
-  not proof. Only those allowed fixes may advance PASSED_AT without a new role run.
-  Non-mechanical must-fix items require a subsequent review covering the fix commit.
-- Incremental `review --task ... --previous-run-id ...` automatically loads the previous report
-  and author records plus the generated batch view. Manual context is preserved verbatim in a separate
-  supplemental section and does not replace originals; reviewed-commit follows "Invocation
-  Arguments". The prior semantic conclusion may be FAIL. Missing, inconsistent, foreign-member, wrong-language or wrong-round evidence
-  rejects before reviewer launch; retries retain the original frozen input and reject changed supplemental text.
-- Close through `review close <CWD> <absolute-request.json>` only after each required role has
-  a valid conclusion. Bind batch ID, expected revision, the SHA-256 of the exact aggregate JSON
-  output, selected role run IDs, PASSED_AT and verification basis. Explicitly link any failed
-  attempts to their successful replacements. Failed execution is never PASS, and one successful
-  role cannot stand in for missing roles.
-- Closure verifies the actual final clean HEAD and Git relationships among the base, passing
-  commits, fixes and target. It publishes the final target and exact verified evidence with the
-  complete disposition. Partial publication is not closure. A closed batch accepts no new runs,
-  target advances or author changes. The next batch names the previous closed batch and uses
-  its final target as base, never an arbitrary older role's pass or wall-clock ordering.
-- `check` and `move done` share structural evidence validation. Pending author conclusions are
-  legitimate execution progress; malformed existing evidence is an error. Structural validation
-  never asserts that code was integrated. Existing integration authorization, delivery checks,
-  rebase handling and final Git verification remain mandatory.
-
-For a non-Git workflow with every role in its selected two-key set explicitly N/A, base and target_commit may both
-be N/A. The closure records Git as inapplicable instead of fabricating ancestry evidence.
-Required review roles always require real commit targets.
+- Before completing an active card, establish a machine-readable execution review plan with `kander review plan <CWD> <absolute-plan.json>` naming the cycle, author and basis, worktree, language, members, ordered batch IDs, each batch base/target, and every role requirement in the exact two-key set (`required` or `N/A: <reason and applicable rule basis>`, resolved through the existing precedence). Disabled or inapplicable review needs explicit N/A records; empty indexes never imply exemption. Completed historical cards may remain `legacy-untracked` without an invented PASS.
+- A single known batch may use a sealed plan. For incremental scheduling, create the plan unsealed once every member is in `working/` or `review/` and before the first batch runs, then `review extend-plan <CWD> <absolute-request.json>` with the expected plan revision appends each later batch after its predecessor closes and before its first run, or seals; it never adds or removes members, and a member already in `done/` or `archived/` cannot be extended. Seal only after every member is assigned. Unsealed plans and unclosed batches block done; never replace a plan to discard failed runs or reset the same cycle. Reclaim-induced cycle changes are rebound per `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate". Advance and extend-plan use the plan's exact CWD.
+- New reports contain exactly one `kander-findings` fenced JSON object with mandatory `FINDINGS` and `NON_BLOCKING` arrays; each item has `id`, `tier`, `text`, and `evidence`, with IDs unique across both arrays, gate tiers only in FINDINGS and the rest only in NON_BLOCKING. Empty arrays explicitly mean no items; references in prose are not entries. The finding identity is `(run_id, finding_id)`; incremental carried items use explicit `lineage: {run_id, finding_id}` pointing to an actual item in the immediate predecessor.
+- Old unstructured reports keep their originals. To use them, submit a complete human mapping through `review map-legacy <CWD> <absolute-map.json>` with author, basis, original report hash, structured items, and exact original line ranges and quotes; an invalid mapping is rejected without creating an immutable record. A missing ID search or empty mapping is not evidence of no findings, and new-schema reports cannot use this route.
+- Attribute every item through `review assign <CWD> <absolute-assignment.json>` with run/batch, the assigning author and basis, and explicit item-to-task arrays; cross-card findings name every actual owner. An empty assignment is valid only for a parsed report with no items.
+- Each executing agent verifies and submits only its own assigned findings through `review disposition <CWD> <absolute-record.json> <expected-card-revision>` while working, binding record/run/finding/batch/task IDs, author, original report hash and item text, status, factual basis, and the applicable fix SHA and verification. Revisions append a new record referencing the previous one. A successor OWNER may append an independently verified conclusion on the same task; former owners cannot submit after handoff, and the orchestrator never impersonates an author or overwrites records.
+- Must-fix statuses are confirmed/fixed/rejected/unverifiable/waived (`deferred` is invalid). Confirmed and unverifiable block closure; rejected needs factual evidence or the user's quoted decision and stays on the unresolved list; fixed binds a later fix commit and actual verification. Non-blocking statuses are fixed/deferred/rejected, each with a basis, required for every assigned non-blocking item. Delegated placeholders are invalid.
+- Waived is restricted to `Security` accepted-risk or kanban timeout rules (and historical `CSA`/`Hacker` records under the same rules), recording the policy and actual user decision, or the full notification basis with send and timeout times at least 15 minutes apart. A waiver is not PASS. `PMQA` must-fix items (and historical `PM`/`QA`), unverifiable items, and acceptance or integration authorization cannot be waived; a user decision on them is recorded as `rejected` with the quoted decision.
+- `review aggregate <CWD> <batch-id>` validates all run publications and author originals and publishes a generated disposition view to every member, preserving author wording and attribution; members without findings need no notification merely to copy conclusions. The orchestrator may add separately attributed verification opinions to the closure request; they do not replace author dispositions.
+- Mechanical-only fixes use `review advance <CWD> <absolute-request.json>` to CAS the batch target without a reviewer, with batch ID, expected revision, and the advance contract covering every in-batch delivery, at a clean worktree. The closing main agent supplies a separate `mechanical` assessment per exception, bound to the exact run/finding/task/author record, report hash, fix SHA, reviewer category (including an absent label), verification facts, and changed paths with their Git diff hash; a disposition's mechanical label alone cannot advance PASSED_AT, and existing labels are not proof. Non-mechanical must-fix items require a subsequent review covering the fix commit.
+- Incremental `review --task ... --previous-run-id ...` loads the previous report, author records, and generated batch view automatically; manual context is a verbatim supplement. The prior semantic conclusion may be FAIL. Missing, inconsistent, foreign-member, wrong-language, or wrong-round evidence rejects before launch; retries retain the frozen input and reject changed supplemental text.
+- Close through `review close <CWD> <absolute-request.json>` only after each required role has a valid conclusion, binding batch ID, expected revision, the SHA-256 of the exact aggregate JSON output, selected role run IDs, PASSED_AT, and verification basis, and linking failed attempts to their successful replacements. Failed execution is never PASS, and one successful role cannot stand in for missing roles. Closure verifies the final clean HEAD and the Git relationships among base, passing commits, fixes, and target, and publishes the final target with the complete disposition; partial publication is not closure. A closed batch accepts no new runs, target advances, or author changes, and the next batch uses its final target as base.
+- `check` and `move done` share structural validation: pending author conclusions are legitimate progress, malformed existing evidence is an error, and structural validation never asserts integration. Integration authorization, delivery checks, rebase handling, and final Git verification remain mandatory. For a non-Git workflow with every role explicitly N/A, base and target_commit may both be N/A and the closure records Git as inapplicable; required roles always need real commit targets.
