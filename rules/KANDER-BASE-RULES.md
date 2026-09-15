@@ -1,44 +1,33 @@
 # Kander Minimal Tool Protocol
 
-- Before using Kander, read the current scope's configuration as described in `KANDER-AGENTS.md`. This file only constrains the tool and the language used with the user; it does not prescribe communication style, architecture, code verification, Git, or automatic review flows.
-- Talk to the user, and write cards, records, and reports, in the `agent_language` from the configuration, or in the card's `LANGUAGE` when working on a task card, as described in `KANDER-AGENTS.md` "Language".
-- When using kanban commands, read the structure, state, claiming, notification, and recovery protocol in `KANDER-KANBAN-RULES.md`; no optional module needs to be enabled.
+This file constrains the tool and the language used with the user. It does not prescribe communication style, architecture, code verification, Git, or automatic review flows; those are the optional modules.
 
-**Single Review**
+- Read the current scope's configuration first, as described in `KANDER-AGENTS.md`.
+- Talk to the user, and write cards, records, and reports, in the `agent_language` from the configuration, or in the card's `LANGUAGE` when working on a task card.
+- Read `KANDER-KANBAN-RULES.md` whenever kanban commands are used; no optional module needs to be enabled.
+- Tool boundary failures must be reported. Bypassing them with ordinary file operations, or by controlling the agent directly, is forbidden. The module switches never change arguments, data structures, path validation, or process isolation.
 
-- `kander review` is a single-review tool that can be invoked explicitly. Its arguments are `[agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute spec path> [review-context] [reviewed-commit]`.
+## Single Review
+
+- `kander review` is a single-review tool that can be invoked explicitly. Invoking it does not enable the full review or Git flow and does not require the target branch to be `develop`. Arguments: `[agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute spec path> [review-context] [reviewed-commit]`.
 - The target must be a clean Git worktree, and base must be an ancestor of commit.
-- Without `--task`, review does not locate a board. With tasks, flags precede CWD, repeated task IDs are deduplicated, and the board is located from the target CWD. Cards must be working/review directory cards with one language and compatible task group membership.
-- Task-bound review requires an explicit batch ID. A new batch also requires a JSON requirements file naming exactly the two keys `PMQA` and `Security`, with every value written as `required` or `N/A: <reason>`. Resolve these requirements from user/project rules and stage policies; the file records that decision, it does not grant approval.
-- A missing run ID is generated and printed to stderr. Reuse that ID only to recover or finish publication; it never launches another reviewer. Changed inputs conflict. New runs and two-key batches accept only `PMQA` and `Security` (case-insensitive). Explicit `PM`, `QA`, `CSA`, `Hacker` and `CodeSecurityAnalyst` are rejected unless the target batch's frozen requirements mark that historical role `required`, or the same-ID replay is already a run of that role. Use distinct run IDs for different roles on the same target. A retry after a process crash records interrupted evidence, never PASS.
-- New batches use the two-key set. Reading, same-ID retries and close also accept historical exact four-key (`PM`, `QA`, `CSA`, `Hacker`) and six-key objects; incomplete or unknown role sets are rejected. Keep schema_version 1 and historical requirements, role order, run IDs, originals, hashes, closures and dispositions unchanged. A four-key batch uses its original roles through completion; do not replace them with the current two-role names.
-- Raw output, logs, input snapshots, sidecar and manifest remain in each card's `reviews/<run_id>/`. The machine-owned REVIEWS section contains one JSON index line per run. Tool execution success is separate from semantic PASS. Do not edit or delete these artifacts as temporary reports.
-- Publication is atomic per card. Partial publication exits nonzero, preserves successful cards and reports each result. After an interrupted board transaction, run `kander init` under its maintenance requirements; then retry the identical review invocation with the same run ID. An incompletely published run cannot establish completion.
-- The command keeps built-in reviewers read-only through the isolation arguments declared on each agent's definition, and validates the output. Custom reviewers that declare a review template are accepted; their read-only posture is the definition author's responsibility. For every reviewer, Kander still isolates the review-private directories and afterwards checks the Git-visible state of the target worktree, which does not detect writes outside it or to ignored paths inside it.
-- Invoking it does not enable the full review or Git flow and does not require the target branch to be `develop`.
+- Without `--task`, no board is located. With `--task`, flags precede CWD, repeated task IDs are deduplicated, and the board is located from the target CWD. Cards must be working/review directory cards with one language and compatible task group membership.
+- Task-bound review requires an explicit batch ID. A new batch also requires a JSON requirements file with exactly the keys `PMQA` and `Security`, each valued `required` or `N/A: <reason>`. Resolve these from user/project rules and stage policies; the file records that decision and grants no approval.
+- A missing run ID is generated and printed to stderr. Reuse a run ID only to recover or finish publication of the same run; it never launches another reviewer, and changed inputs conflict. Use distinct run IDs for different roles on the same target. A retry after a process crash records interrupted evidence, never PASS.
+- New runs and batches accept only the roles `PMQA` and `Security` (case-insensitive). Historical four-key (`PM`, `QA`, `CSA`, `Hacker`) and six-key batches stay readable, retryable, and closable with their original roles; never rewrite their requirements, role order, run IDs, originals, hashes, closures, or dispositions.
+- Raw output, logs, input snapshots, sidecar, and manifest stay in each card's `reviews/<run_id>/`; the machine-owned REVIEWS section holds one JSON index line per run. Tool success is separate from semantic PASS. Never edit or delete these artifacts.
+- Publication is atomic per card. A partial publication exits nonzero and preserves the cards that succeeded. After an interrupted board transaction, run `kander init` under its maintenance requirements, then retry the identical invocation with the same run ID. An incompletely published run cannot establish completion.
+- Built-in reviewers are kept read-only through the isolation arguments on each agent definition, and their output is validated. A custom reviewer's read-only posture is its definition author's responsibility. Kander isolates the review-private directories for every reviewer and afterwards checks the Git-visible state of the target worktree; writes outside the worktree or to ignored paths are not detected.
 
-- The switches do not change arguments, data structures, path validation, or process isolation. Tool boundary failures must be reported; bypassing them with ordinary file operations or by controlling the agent directly is forbidden.
+## Installation and Task Files
 
-**Installation and Task Files**
+- The binary installs itself: `kander install` runs the interactive wizard (language, scope). Bare `kander` without a scope `config.json` lets doctor create a usable config and opens the options section of the board; with a config, bare `kander` opens the board directly. Copying the binary never changes shell configuration; when PATH still selects another entry, follow the displayed instructions.
+- Automation must invoke the command root's `kander` through a process API argv array; do not assemble shell command strings.
+- The executing agent and the reviewer read the complete task from a UTF-8 temporary file; the launch arguments contain only the required CLI options and a one-line instruction naming the file. The file asks the agent to delete it when done; a failed deletion does not affect the result.
 
-- Installation is done by the binary itself: run `kander install` for the interactive wizard (language, scope). Bare interactive `kander` with no scope `config.json` skips the wizard, lets doctor create a usable config, and opens the board options interface section; when a config already exists, bare `kander` opens the board directly.
-- Global `kander install` writes configuration and rules. When the first `kander` on PATH does not identify the running executable, it copies that executable to the global entry and replaces a file already there; it also deletes retired onevoke/kanban entries in that bin directory. Bare interactive `kander` with an existing scope config asks a Y/N question (default no) for the same copy; declining continues this launch and does not persist a skip. Project installs still copy into the main worktree's `.kander/bin`.
-- Copying never changes shell configuration. If PATH still selects another entry or omits the destination directory, follow the displayed instructions.
-- Windows does not modify `PATH` automatically.
-- Automation involving special characters must invoke the command root's `kander` through a process API argv array; do not assemble PowerShell/cmd command strings.
-- On every platform the executing agent and the reviewer read the complete task from a UTF-8 temporary file; the launch arguments contain only the CLI's required control options and a one-line instruction with the file path.
-- The file asks the agent to try deleting it when done.
-- A failed deletion or a leftover file does not affect the result.
+## Permissions and Boundaries
 
-**Permissions and Cleanup**
-
-- Review-private directories and files are accessible only to the current user: POSIX `0600`/`0700`.
-- Windows applies a protected DACL with inheritance disabled at creation time; publishing first and tightening later is forbidden.
-- The Windows review root handle does not share WRITE/DELETE and is held until sensitive files are written, the reviewer has run, the process tree is collected, and cleanup finishes, which blocks renames and in-place reparse switches.
-- Cleanup rejects reparse points level by level from the pinned handle, with a bounded budget; failure means the review fails.
-- The configuration does not check, migrate, or tighten permissions: POSIX keeps the existing mode, new objects follow the umask.
-- On Windows, new config files and directories inherit the parent ACL.
-- On Windows, the configuration rejects reparse points component by component from the volume/UNC anchor and uses pinned handles for reading and atomic replacement.
-- The kanban board and Git exclude likewise reject symlinks, junctions, and other reparse points.
-- Git exclude keeps the existing ACL and appends deduplicated entries within the same pinned handle.
+- Review-private directories and files are accessible only to the current user (POSIX `0600`/`0700`; a protected DACL on Windows). Kander creates them protected and never publishes first and tightens later.
+- Review cleanup, the configuration, the kanban board, and Git exclude all reject symlinks, junctions, and other reparse points; a reparse point in the review root fails the review.
+- The configuration does not check, migrate, or tighten existing permissions; new objects follow the umask or the parent ACL.
 - Bypassing the command to operate on these boundaries directly is forbidden.

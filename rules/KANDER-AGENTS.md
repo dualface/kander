@@ -1,40 +1,37 @@
 # Kander Workflow Rules Entry
 
-This entry only locates and loads rules on demand; it does not take over the development flow by default. The installer copies the same Markdown originals to the rules root and generates no customized rule files.
+This file locates and loads the Kander rules on demand. It does not take over the development flow by default.
 
 ## Scope
 
-The directory containing this file is the "rules root". It determines the scope and the paths below:
+The directory containing this file is the "rules root". It decides the scope and the paths below:
 
-| Logical name    | Global install                 | Project install                     |
-| --------------- | ------------------------------ | ----------------------------------- |
-| Rules root      | `~/.agents`                    | `<main worktree>/.kander/rules`     |
-| Command root    | `kander` on PATH (optional `~/.local/bin`) | `<main worktree>/.kander/bin`       |
-| Config file     | `~/.config/kander/config.json` | `<main worktree>/.kander/config.json` |
-| Share dir       | `~/.local/share/kander`        | `<main worktree>/.kander/share`     |
-| Project overlay | `<main worktree>/.kander-config.json` (non-Git: first file found walking up from cwd) | same |
+| Logical name    | Global install                             | Project install                        |
+| --------------- | ------------------------------------------ | -------------------------------------- |
+| Rules root      | `~/.agents`                                | `<main worktree>/.kander/rules`        |
+| Command root    | `kander` on PATH (optional `~/.local/bin`) | `<main worktree>/.kander/bin`          |
+| Config file     | `~/.config/kander/config.json`             | `<main worktree>/.kander/config.json`  |
+| Share dir       | `~/.local/share/kander`                    | `<main worktree>/.kander/share`        |
+| Project overlay | `<main worktree>/.kander-config.json`      | same                                   |
 
-- Scope settings live in the config file. An optional project overlay is merged on top at read time.
-- Runtime priority is project overlay > scope config (`KANDER_CONFIG` or the install-scope `config.json`) > defaults.
-- Writes (`Save`, `Update`, `kander doctor` repair, the Global tab of the options panel, and the installer) only update the scope `config.json`. The Project tab writes only the project overlay `.kander-config.json` and never writes `.kander/config.json`. Overlay values are merged at read time by key presence; they are not copied wholesale into the scope file.
-- The overlay may set `agents` executable paths and argv templates. That is accepted at the same trust level as checking out and running the repository's own code.
-- A project install keeps its payload only in the main worktree's `.kander/`; task worktrees share it and create no copies, mirrors, or symlinks.
-- Below and in every rule file, `kander` means the entry of the current scope. A global install uses `kander` on PATH or the absolute path of its selected executable; `~/.local/bin` is only the optional copy destination. A project install must use the absolute path `<command root>/kander` (`<command root>\kander` on Windows) and must not substitute a global command from PATH.
+- Effective configuration = project overlay > scope `config.json` (or `KANDER_CONFIG`) > defaults. The overlay is merged at read time and is never copied into the scope file.
+- The overlay may set `agents` executable paths and argv templates; trust it like the repository's own code.
+- A project install keeps its payload only in the main worktree's `.kander/`; task worktrees share it and never copy it.
+- In every rule file, `kander` means the entry of the current scope: a global install uses `kander` on PATH, a project install uses the absolute path `<command root>/kander` and never a global command from PATH.
 
 ## Read the Configuration First
 
-- At the start of every new session run `kander config --json` for the current scope, read the normalized configuration, then read `KANDER-BASE-RULES.md` in the same directory. The minimal tool protocol is not controlled by the optional module switches.
-- When reading or validating the configuration fails, stop the affected Kander operations and report; do not guess switch values. The user's own workflows and unrelated questions continue.
-- Load rule files according to the switch table below and the needs of the task. Do not read, execute, or load a disabled module through cross references; the user may explicitly ask for an exception.
+- At the start of every new session run `kander config --json` for the current scope, read the normalized configuration, then read `KANDER-BASE-RULES.md` in the same directory. The tool protocol in that file is not controlled by the module switches.
+- If reading or validating the configuration fails, stop the affected Kander operations and report; do not guess switch values. Unrelated work continues.
+- Load rule files per the switch table, the reading map by role, and the needs of the task. Do not load a disabled module through cross references unless the user explicitly asks.
 
 ## Language
 
-- These rules are written in English and are the only copy; they are not translated per install.
-- `agent_language` in the configuration is the language for talking to the user. Use it for every reply to the user, for card titles and bodies, execution records, completion reports, review reports, and the messages passed to `kander notify` and `kander resume`. When the value is missing or empty, use the language the user writes in.
-- A task card's `LANGUAGE` field takes precedence over the configuration for everything about that card, so a card keeps its language across sessions, takeovers, and configuration changes. `kander new` records the configured value at creation; cards without the field use the configuration.
-- `kander start`, `resume`, and `notify` (direct delivery and recovery) prompts include an explicit English instruction to communicate in that card language (or the configured `agent_language` when the field is missing), so the agent receives it before reading these rules.
-- Commit messages, code comments, and identifiers follow the project's own conventions, not `agent_language`.
-- `language` in the configuration only selects the interface language of the `kander` command itself and does not affect how the agent talks to the user.
+- The rules ship in English only and are not translated per install.
+- `agent_language` in the configuration is the language for the user: every reply, card title and body, execution record, completion report, review report, and the messages passed to `kander notify` and `kander resume`. When the value is missing or empty, use the language the user writes in.
+- A task card's `LANGUAGE` field overrides the configuration for everything about that card. `kander new` records the configured value at creation; cards without the field use the configuration.
+- Commit messages, code comments, and identifiers follow the project's own conventions.
+- `language` in the configuration only selects the interface language of the `kander` command itself.
 
 ## Optional Modules
 
@@ -49,13 +46,25 @@ The directory containing this file is the "rules root". It determines the scope 
 | `rules.reporting`     | `KANDER-REPORTING-RULES.md`     | When enabled, when reporting at the end of a task     |
 
 - Read `KANDER-KANBAN-RULES.md` whenever kanban commands are used.
-- Read `KANDER-ISSUE-RULES.md` whenever a GitHub issue is imported, investigated, or taken over, including a session started by `kander issue triage` or the issues overlay. Its untrusted-data and binding clauses are security requirements and are not controlled by a configuration switch.
+- Read `KANDER-ISSUE-RULES.md` whenever a GitHub issue is imported, investigated, or taken over, including a session started by `kander issue triage` or the issues overlay. Its untrusted-data and binding clauses are security requirements and ignore the switches.
 - `task_groups` depends on `git`.
 - `review` reads the "Delivery Self-Check" of `KANDER-CODE-RULES.md` only when `code` is also on; with `code` off, `KANDER-REVIEW-RULES.md` "Preconditions and Execution" states what the author checks before review instead.
 - With `task_intake` off, no plan options are presented and cards are created manually; a task group is still possible when `task_groups` is on.
 - With `git` off, a single card follows the user's own working directory, branch, and delivery flow.
 - With `review` off, no review is requested automatically, but `kander review` may still be invoked explicitly.
-- With `reporting` off, filling in real card results and the necessary execution records is still required.
+- With `reporting` off, real card results and the necessary execution records are still required.
+
+## Reading Map by Role
+
+The three largest rule files are protocols, not reading material. Load the sections your role needs at session start and follow cross references only when the referenced situation arises; section names below are the headings inside each file. Every rule binds whether or not it was read; the map limits what must be read up front, not what applies.
+
+| Role | Read at session start | Read when the situation arises |
+| --- | --- | --- |
+| Executing agent, single card | `KANDER-KANBAN-RULES.md` "Command Contract", "Entries and Documents", "Claiming, Starting, and Coordination", "Execution and Completion"; the enabled `KANDER-GIT-RULES.md` and `KANDER-CODE-RULES.md` in full | `KANDER-KANBAN-RULES.md` "Failure Recovery", "Review Evidence Completion Gate"; the enabled `KANDER-REVIEW-RULES.md` from "Preconditions and Execution" through "Review Stages" before requesting review; `KANDER-REPORTING-RULES.md` when reporting |
+| Executing agent, group member | As for a single card, plus `KANDER-TASK-GROUP-RULES.md` "Git Branches and Worktrees", "Group Integration Branch", "Executing Agent Wrap-Up" | `KANDER-KANBAN-RULES.md` "Durable Dispatch" when a `sync`, `fix` or `wrap-up` notice arrives; `KANDER-REVIEW-RULES.md` "Main Agent Verification Duty" for a fix round |
+| Orchestrator | `KANDER-TASK-GROUP-RULES.md` in full; `KANDER-KANBAN-RULES.md` "Durable Dispatch", "Orchestrator Sessions", "Coordinator Checkpoints", "Review Evidence Completion Gate"; the enabled `KANDER-GIT-RULES.md` "Keeping a Task Branch Current" and "Integration and Cleanup" | The enabled `KANDER-REVIEW-RULES.md` "Group-Level Review for Task Groups" and "Controlled Plans, Author Dispositions, and Batch Closure" when the first batch is due; "Stage One Backend Failures" on a reviewer failure |
+| Card creator (intake) | `KANDER-TASK-INTAKE-RULES.md`; `KANDER-KANBAN-RULES.md` "Task Scale and Grouping" including "Post-Creation Self-Review"; `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups", "Dependencies Between Task Cards", "Running Task Cards in Parallel" | The rest of `KANDER-TASK-GROUP-RULES.md` only when the creator also orchestrates |
+| Main agent running a review | `KANDER-REVIEW-RULES.md` from "Reviewer Selection" through "Review Stages", "Main Agent Verification Duty", "Conclusions and Failure Handling" | "Controlled Plans, Author Dispositions, and Batch Closure" when closing a batch; "Review Profiles" and the templates when writing the task context |
 
 ## Rule Precedence
 
