@@ -3,10 +3,14 @@ package board
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"sync"
 	"testing"
@@ -435,6 +439,87 @@ func TestSummaryCacheConcurrentViewInvalidate(t *testing.T) {
 	requireMatchingPayload(t, root, mustView(t, idx))
 }
 
+func TestSummaryCacheInvalidateDoesNotWaitForScan(t *testing.T) {
+	root, ids := summaryCacheBoard(t, 1)
+	idx := mustIndex(t, root)
+	mustView(t, idx)
+	blocked, release := make(chan struct{}), make(chan struct{})
+	idx.beforeScan = func() {
+		idx.beforeScan = nil
+		close(blocked)
+		<-release
+	}
+	errc := make(chan error, 1)
+	go func() {
+		_, err := idx.View(context.Background())
+		errc <- err
+	}()
+	<-blocked
+	start := time.Now()
+	idx.Invalidate(ids[0])
+	if time.Since(start) > 200*time.Millisecond {
+		t.Fatal("Invalidate waited for scan I/O")
+	}
+	close(release)
+	if err := <-errc; err != nil {
+		t.Fatal(err)
+	}
+	if got := idx.Stats(); got.DocumentReads != 1 || got.Parses != 1 {
+		t.Fatalf("stale scan published without retry: %+v", got)
+	}
+	requireMatchingPayload(t, root, mustView(t, idx))
+}
+
+func TestSummaryCacheConcurrentWritesMatchPayload(t *testing.T) {
+	root, ids := summaryCacheBoard(t, 3)
+	idx := mustIndex(t, root)
+	mustView(t, idx)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 8; i++ {
+			if _, err := idx.View(context.Background()); err != nil {
+				t.Errorf("view: %v", err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 8; i++ {
+			s, err := ReadSnapshot(root, ids[0])
+			if err != nil {
+				t.Errorf("snapshot: %v", err)
+				return
+			}
+			if err := UpdateDocument(root, ids[0], UpdateOptions{Document: "spec.md", Text: s.Text + "\nnote\n", ExpectedRevision: s.Revision}); err != nil {
+				continue
+			}
+			idx.Invalidate(ids[0])
+		}
+	}()
+	wg.Wait()
+	requireMatchingPayload(t, root, mustView(t, idx))
+}
+
+func TestSummaryCacheSetStrongEvery(t *testing.T) {
+	root, _ := summaryCacheBoard(t, 1)
+	idx := mustIndex(t, root)
+	mustView(t, idx)
+	idx.SetStrongEvery(time.Hour)
+	mustView(t, idx)
+	if idx.Stats().Strong {
+		t.Fatal("hour interval should not strong immediately")
+	}
+	idx.lastStrong = idx.now().Add(-time.Hour)
+	idx.SetStrongEvery(time.Minute)
+	mustView(t, idx)
+	if got := idx.Stats(); !got.Strong || got.DocumentReads == 0 {
+		t.Fatalf("updated interval did not strong: %+v", got)
+	}
+}
+
 func TestSummaryCacheHotRefreshBudget(t *testing.T) {
 	root, sample := privateSampleBoard(t)
 	const rounds = 21
@@ -458,9 +543,12 @@ func TestSummaryCacheHotRefreshBudget(t *testing.T) {
 	}
 	idx := mustIndex(t, root)
 	firstStart := time.Now()
-	mustView(t, idx)
+	first := mustView(t, idx)
 	firstDur := time.Since(firstStart)
 	firstStats := idx.Stats()
+	if len(first.Tasks) == 0 {
+		t.Fatal("empty board")
+	}
 	cacheSamples := make([]time.Duration, 0, rounds)
 	for i := 0; i < rounds; i++ {
 		start := time.Now()
@@ -472,6 +560,7 @@ func TestSummaryCacheHotRefreshBudget(t *testing.T) {
 			t.Fatalf("hot cache work %+v", got)
 		}
 	}
+	hotAllocs := measureHotAllocs(t, idx, rounds)
 	idx.lastStrong = idx.now().Add(-2 * idx.strongEvery)
 	strongStart := time.Now()
 	mustView(t, idx)
@@ -479,9 +568,52 @@ func TestSummaryCacheHotRefreshBudget(t *testing.T) {
 	strongStats := idx.Stats()
 	payloadP50 := durationP50(payloadSamples)
 	cacheP50 := durationP50(cacheSamples)
-	t.Logf("sample=%v cards=%d first=%s reads=%d parses=%d payload p50=%s p95=%s cache p50=%s p95=%s strong=%s reads=%d parses=%d reused=%v",
-		sample, firstStats.Cards, firstDur, firstStats.DocumentReads, firstStats.Parses,
-		payloadP50, durationP95(payloadSamples), cacheP50, durationP95(cacheSamples),
+	firstRounds := measureViews(t, func() (*SummaryIndex, func()) {
+		idx, err := NewSummaryIndex(root, time.Hour)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return idx, idx.Close
+	}, rounds)
+	singleID := first.Tasks[0].TaskID
+	sevenIDs := make([]string, 0, 7)
+	for _, task := range first.Tasks {
+		if len(sevenIDs) == 7 {
+			break
+		}
+		sevenIDs = append(sevenIDs, task.TaskID)
+	}
+	singleRounds := measureEdits(t, idx, []string{singleID}, rounds)
+	sevenRounds := measureEdits(t, idx, sevenIDs, rounds)
+	strongRounds := make([]timedRound, 0, rounds)
+	for i := 0; i < rounds; i++ {
+		idx.lastStrong = idx.now().Add(-2 * idx.strongEvery)
+		strongRounds = append(strongRounds, timeRound(func() SummaryStats {
+			mustView(t, idx)
+			return idx.Stats()
+		}))
+	}
+	discardRounds := make([]timedRound, 0, rounds)
+	for i := 0; i < rounds; i++ {
+		discardRounds = append(discardRounds, timeRound(func() SummaryStats {
+			idx.afterScan = func() {
+				idx.afterScan = nil
+				idx.Invalidate()
+			}
+			mustView(t, idx)
+			return idx.Stats()
+		}))
+	}
+	t.Logf("sample=%v cards=%d digest=%s", sample, firstStats.Cards, viewDigest(first))
+	t.Logf("payload p50=%s p95=%s", payloadP50, durationP95(payloadSamples))
+	t.Logf("hot p50=%s p95=%s alloc_p50=%d reads=0 parses=0", cacheP50, durationP95(cacheSamples), uintP50(hotAllocs))
+	logScenario(t, "first", firstRounds)
+	logScenario(t, "single", singleRounds)
+	logScenario(t, "seven", sevenRounds)
+	logScenario(t, "strong", strongRounds)
+	logScenario(t, "discard", discardRounds)
+	t.Logf("spot first=%s reads=%d parses=%d strong=%s reads=%d parses=%d reused=%v",
+		firstDur, firstStats.DocumentReads, firstStats.Parses,
 		strongDur, strongStats.DocumentReads, strongStats.Parses, strongStats.Reused)
 	if sample && cacheP50 > payloadP50/5 {
 		t.Fatalf("hot cache p50 %s exceeds 20%% of uncached p50 %s", cacheP50, payloadP50)
@@ -489,6 +621,113 @@ func TestSummaryCacheHotRefreshBudget(t *testing.T) {
 	if !sample && cacheP50 > payloadP50 {
 		t.Fatalf("synthetic hot cache p50 %s slower than payload p50 %s", cacheP50, payloadP50)
 	}
+}
+
+type timedRound struct {
+	d             time.Duration
+	alloc         uint64
+	reads, parses int
+}
+
+func timeRound(fn func() SummaryStats) timedRound {
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	st := fn()
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+	return timedRound{d: elapsed, alloc: after.TotalAlloc - before.TotalAlloc, reads: st.DocumentReads, parses: st.Parses}
+}
+
+func measureViews(t *testing.T, setup func() (*SummaryIndex, func()), n int) []timedRound {
+	t.Helper()
+	out := make([]timedRound, 0, n)
+	for i := 0; i < n; i++ {
+		idx, cleanup := setup()
+		out = append(out, timeRound(func() SummaryStats {
+			mustView(t, idx)
+			return idx.Stats()
+		}))
+		cleanup()
+	}
+	return out
+}
+
+func measureEdits(t *testing.T, idx *SummaryIndex, ids []string, n int) []timedRound {
+	t.Helper()
+	out := make([]timedRound, 0, n)
+	for i := 0; i < n; i++ {
+		bumpDocuments(t, idx.root, ids)
+		out = append(out, timeRound(func() SummaryStats {
+			mustView(t, idx)
+			return idx.Stats()
+		}))
+	}
+	return out
+}
+
+func bumpDocuments(t *testing.T, root string, ids []string) {
+	t.Helper()
+	for _, id := range ids {
+		entry := locateCard(t, root, id)
+		info, err := os.Stat(entry.Document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(entry.Document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(entry.Document, append(data, '\n'), info.Mode().Perm()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func logScenario(t *testing.T, name string, rounds []timedRound) {
+	t.Helper()
+	if len(rounds) == 0 {
+		t.Fatalf("no rounds for %s", name)
+	}
+	ds := make([]time.Duration, len(rounds))
+	allocs := make([]uint64, len(rounds))
+	var reads, parses int
+	for i, round := range rounds {
+		ds[i] = round.d
+		allocs[i] = round.alloc
+		reads += round.reads
+		parses += round.parses
+	}
+	t.Logf("%s n=%d p50=%s p95=%s alloc_p50=%d last_reads=%d last_parses=%d sum_reads=%d sum_parses=%d",
+		name, len(rounds), durationP50(ds), durationP95(ds), uintP50(allocs),
+		rounds[len(rounds)-1].reads, rounds[len(rounds)-1].parses, reads, parses)
+}
+
+func uintP50(samples []uint64) uint64 {
+	sorted := append([]uint64(nil), samples...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	return sorted[len(sorted)/2]
+}
+
+func measureHotAllocs(t *testing.T, idx *SummaryIndex, n int) []uint64 {
+	t.Helper()
+	out := make([]uint64, 0, n)
+	for i := 0; i < n; i++ {
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		mustView(t, idx)
+		runtime.ReadMemStats(&after)
+		out = append(out, after.TotalAlloc-before.TotalAlloc)
+	}
+	return out
+}
+
+func viewDigest(view BoardView) string {
+	sum := sha256.New()
+	for _, task := range view.Tasks {
+		fmt.Fprintf(sum, "%s\t%s\t%s\t%s\t%s\n", task.TaskID, task.State, task.Kind, task.Title, task.Time)
+	}
+	return hex.EncodeToString(sum.Sum(nil))
 }
 
 func durationP50(samples []time.Duration) time.Duration {

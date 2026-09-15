@@ -4,56 +4,56 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"time"
 
 	"github.com/dualface/kander/internal/fs"
 )
 
-func (s *SummaryIndex) refreshLocked(ctx context.Context, strong bool) (BoardView, SummaryStats, error) {
+func refreshFrom(ctx context.Context, root string, snap summarySnapshot, strong bool) (BoardView, SummaryStats, map[string]cachedCard, error) {
 	stats := SummaryStats{Strong: strong}
 	var warnings WarningLog
 	var locks lockSet
-	defer func() { _ = locks.close() }()
-	scanned, selected, err := captureCommittedScan(ctx, s.root, nil, &locks, &warnings)
+	scanned, selected, err := captureCommittedScan(ctx, root, nil, &locks, &warnings)
 	if err != nil {
-		return BoardView{}, stats, err
+		return BoardView{}, stats, nil, errors.Join(err, locks.close())
 	}
 	live := make(map[string]Entry, len(scanned.Entries))
 	for id, entry := range scanned.Entries {
 		live[id] = entry
 	}
 	next := make(map[string]cachedCard, len(live))
-	changed := s.rebuild
+	changed := snap.rebuild
 	for _, id := range selected {
 		if err = ctx.Err(); err != nil {
-			return BoardView{}, stats, err
+			return BoardView{}, stats, nil, errors.Join(err, locks.close())
 		}
 		entry, ok := live[id]
 		if !ok {
 			continue
 		}
-		version, err := revision(s.root, id)
+		version, err := revision(root, id)
 		if err != nil {
-			return BoardView{}, stats, err
+			return BoardView{}, stats, nil, errors.Join(err, locks.close())
 		}
 		finger, err := documentFingerprint(entry, version)
 		if err != nil {
-			return BoardView{}, stats, err
+			return BoardView{}, stats, nil, errors.Join(err, locks.close())
 		}
-		cached, have := s.cards[id]
-		_, dirty := s.dirty[id]
-		needBody := strong || s.rebuild || dirty || !have || cached.finger != finger
+		cached, have := snap.cards[id]
+		_, dirty := snap.dirty[id]
+		needBody := strong || snap.rebuild || dirty || !have || cached.finger != finger
 		if !needBody {
 			next[id] = cached
 			continue
 		}
 		text, err := readDocument(entry)
 		if err != nil {
-			return BoardView{}, stats, err
+			return BoardView{}, stats, nil, errors.Join(err, locks.close())
 		}
 		stats.DocumentReads++
 		digest := sha256Hex(text)
-		if have && !s.rebuild && !dirty && cached.finger == finger && cached.digest == digest {
+		if have && !snap.rebuild && !dirty && cached.finger == finger && cached.digest == digest {
 			next[id] = cached
 			continue
 		}
@@ -66,8 +66,8 @@ func (s *SummaryIndex) refreshLocked(ctx context.Context, strong bool) (BoardVie
 			digest:  digest,
 		}
 	}
-	if !s.rebuild {
-		for id := range s.cards {
+	if !snap.rebuild {
+		for id := range snap.cards {
 			if _, ok := live[id]; !ok {
 				changed = true
 				break
@@ -76,26 +76,28 @@ func (s *SummaryIndex) refreshLocked(ctx context.Context, strong bool) (BoardVie
 	} else {
 		changed = true
 	}
-	s.cards = next
-	stats.Cards = len(s.cards)
+	if err = locks.close(); err != nil {
+		return BoardView{}, stats, nil, err
+	}
+	stats.Cards = len(next)
 	if !changed {
 		stats.Reused = true
-		view := s.view
+		view := snap.view
 		view.Warnings = warnings.Messages()
-		view.Root = s.root
-		return view, stats, nil
+		view.Root = root
+		return view, stats, next, nil
 	}
-	tasks := make([]TaskSummary, 0, len(s.cards))
-	for _, card := range s.cards {
+	tasks := make([]TaskSummary, 0, len(next))
+	for _, card := range next {
 		tasks = append(tasks, card.summary)
 	}
 	sortTaskSummaries(tasks)
 	return BoardView{
 		Warnings:    warnings.Messages(),
 		GeneratedAt: time.Now().Format("2006-01-02 15:04:05"),
-		Root:        s.root,
+		Root:        root,
 		Tasks:       tasks,
-	}, stats, nil
+	}, stats, next, nil
 }
 
 func documentFingerprint(entry Entry, revision uint64) (cardFingerprint, error) {
