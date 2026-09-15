@@ -21,13 +21,11 @@ This file constrains the tool and the language used with the user. It does not p
 
 ## Installation and Task Files
 
-- The binary installs itself: `kander install` runs the interactive wizard (language, scope). Bare `kander` without a scope `config.json` lets doctor create a usable config and opens the options section of the board; with a config, bare `kander` opens the board directly. Copying the binary never changes shell configuration; when PATH still selects another entry, follow the displayed instructions.
+- `kander install` runs the interactive wizard; bare `kander` opens the board (after letting doctor create a config when none exists). When PATH still selects another entry, follow the displayed instructions.
 - Automation must invoke the command root's `kander` through a process API argv array; do not assemble shell command strings.
-- The executing agent and the reviewer read the complete task from a UTF-8 temporary file; the launch arguments contain only the required CLI options and a one-line instruction naming the file. The file asks the agent to delete it when done; a failed deletion does not affect the result.
+- The executing agent and the reviewer read the complete task from a UTF-8 temporary file named by a one-line instruction on the command line. The file asks the agent to delete it when done; a failed deletion does not affect the result.
 
 ## Permissions and Boundaries
 
-- Review-private directories and files are accessible only to the current user (POSIX `0600`/`0700`; a protected DACL on Windows). Kander creates them protected and never publishes first and tightens later.
-- Review cleanup, the configuration, the kanban board, and Git exclude all reject symlinks, junctions, and other reparse points; a reparse point in the review root fails the review.
-- The configuration does not check, migrate, or tighten existing permissions; new objects follow the umask or the parent ACL.
+- Review-private directories and files are accessible only to the current user; the configuration, the kanban board, Git exclude, and the review runtime all reject symlinks, junctions, and other reparse points, and a failed safety check stops the operation.
 - Bypassing the command to operate on these boundaries directly is forbidden.
