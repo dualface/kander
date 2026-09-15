@@ -1,0 +1,33 @@
+name: platform-checks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Delivery and overlap tests
+        run: |
+          go test ./internal/check -count=1
+          go test ./cmd/kander -count=1 -run TestCheck
+
+  windows-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Cross-compile check tests for Windows
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c -o check.test.exe ./internal/check

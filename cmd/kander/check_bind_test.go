@@ -9,13 +9,14 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/check"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/liveness"
 )
 
-// This file intentionally does not import internal/liveness. The production
-// package graph (blank imports plus notify/takeover) must register check with
-// liveness probing; rebinding to board.RunCheck or leaving it unimplemented fails.
+// The production package graph must register check.Run. Rebinding to
+// board.RunCheck or liveness.RunCheck, or leaving it unimplemented, fails.
 
 func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	t.Setenv(config.EnvLang, "cn")
@@ -26,8 +27,14 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	if got == nil {
 		t.Fatal("check is not registered")
 	}
+	if reflect.ValueOf(got).Pointer() != reflect.ValueOf(check.Run).Pointer() {
+		t.Fatal("full binary must bind check.Run")
+	}
 	if reflect.ValueOf(got).Pointer() == reflect.ValueOf(board.RunCheck).Pointer() {
-		t.Fatal("check bound to board.RunCheck; full binary must use liveness.RunCheck")
+		t.Fatal("check bound to board.RunCheck")
+	}
+	if reflect.ValueOf(got).Pointer() == reflect.ValueOf(liveness.RunCheck).Pointer() {
+		t.Fatal("check bound to liveness.RunCheck; full binary must route through check.Run")
 	}
 
 	root := t.TempDir()
@@ -109,5 +116,48 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	}
 	if !strings.Contains(out, "存活: "+id) {
 		t.Fatalf("full binary check must emit liveness output; got %q", out)
+	}
+}
+
+func TestCheckCommandDeliveryBoardFree(t *testing.T) {
+	t.Setenv(config.EnvLang, "en")
+	t.Setenv(config.EnvLangCLI, "1")
+	config.ApplyLanguageArgument([]string{"kander", "--lang", "en"})
+	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
+	t.Chdir(t.TempDir())
+
+	got := cli.Commands["check"]
+	if got == nil {
+		t.Fatal("check is not registered")
+	}
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldOut, oldErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = stdoutW, stderrW
+	code := got([]string{"delivery", "--base", "HEAD", "--json"})
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+	os.Stdout, os.Stderr = oldOut, oldErr
+	outBytes, _ := io.ReadAll(stdoutR)
+	errBytes, _ := io.ReadAll(stderrR)
+	_ = stdoutR.Close()
+	_ = stderrR.Close()
+	if string(errBytes) != "" {
+		t.Fatalf("json stderr=%q", errBytes)
+	}
+	if code != 3 {
+		t.Fatalf("exit=%d stdout=%s", code, outBytes)
+	}
+	if !strings.Contains(string(outBytes), `"check":"delivery"`) || !strings.Contains(string(outBytes), `"status":"error"`) {
+		t.Fatalf("expected delivery JSON error, got %s", outBytes)
+	}
+	if !strings.Contains(string(outBytes), `"code":"not-repository"`) {
+		t.Fatalf("expected not-repository error, got %s", outBytes)
 	}
 }

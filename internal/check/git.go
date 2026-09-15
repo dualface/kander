@@ -1,0 +1,276 @@
+package check
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+)
+
+const (
+	gitTimeout      = 60 * time.Second
+	gitStdoutLimit  = 16 << 20
+	gitStderrLimit  = 64 << 10
+	gitWaitDelay    = 2 * time.Second
+	gitOverallLimit = 2 * time.Minute
+)
+
+var (
+	errOutputLimit = errors.New("git output limit exceeded")
+	errGitTimeout  = errors.New("git command deadline exceeded")
+)
+
+type gitExec func(ctx context.Context, args ...string) (stdout, stderr []byte, code int, err error)
+
+type gitRunner struct {
+	exec gitExec
+}
+
+func newGitRunner(exec gitExec) gitRunner {
+	if exec == nil {
+		exec = defaultGitExec
+	}
+	return gitRunner{exec: exec}
+}
+
+func defaultGitExec(ctx context.Context, args ...string) ([]byte, []byte, int, error) {
+	path, err := exec.LookPath("git")
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	cmd.WaitDelay = gitWaitDelay
+	stdout := &limitedBuffer{limit: gitStdoutLimit, cancel: cancel}
+	stderr := &limitedBuffer{limit: gitStderrLimit, cancel: cancel}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	runErr := cmd.Run()
+	if stdout.overflowed || stderr.overflowed {
+		return stdout.Bytes(), stderr.Bytes(), 0, errOutputLimit
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		return stdout.Bytes(), stderr.Bytes(), 0, errGitTimeout
+	}
+	if runErr == nil {
+		return stdout.Bytes(), stderr.Bytes(), 0, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		return stdout.Bytes(), stderr.Bytes(), exitErr.ExitCode(), nil
+	}
+	return stdout.Bytes(), stderr.Bytes(), 0, runErr
+}
+
+type limitedBuffer struct {
+	limit      int64
+	buffer     bytes.Buffer
+	overflowed bool
+	cancel     context.CancelFunc
+}
+
+func (b *limitedBuffer) Write(data []byte) (int, error) {
+	remaining := b.limit - int64(b.buffer.Len())
+	if remaining <= 0 {
+		b.overflowed = true
+		b.cancel()
+		return 0, errOutputLimit
+	}
+	if int64(len(data)) > remaining {
+		written, err := b.buffer.Write(data[:remaining])
+		if err != nil {
+			return written, err
+		}
+		b.overflowed = true
+		b.cancel()
+		return written, errOutputLimit
+	}
+	return b.buffer.Write(data)
+}
+
+func (b *limitedBuffer) Bytes() []byte { return b.buffer.Bytes() }
+
+func gitConfigArgs(args ...string) []string {
+	prefix := []string{
+		"-c", "core.fsmonitor=false",
+		"-c", "core.quotepath=true",
+		"-c", "diff.renames=copies",
+	}
+	return append(prefix, args...)
+}
+
+func (g gitRunner) run(ctx context.Context, args ...string) ([]byte, []byte, int, error) {
+	return g.exec(ctx, gitConfigArgs(args...)...)
+}
+
+func (g gitRunner) resolve(ctx context.Context, ref string) (string, *CheckError, int) {
+	stdout, stderr, code, err := g.run(ctx, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+	if classified, exit := classifyExec(err); classified != nil {
+		return "", classified, exit
+	}
+	if code != 0 {
+		return "", classifyRefError(ref, stderr, code), exitExec
+	}
+	sha := strings.TrimSpace(string(stdout))
+	if sha == "" {
+		return "", classifyRefError(ref, stderr, code), exitExec
+	}
+	return sha, nil, 0
+}
+
+func (g gitRunner) isAncestor(ctx context.Context, base, target string) *CheckError {
+	_, stderr, code, err := g.run(ctx, "merge-base", "--is-ancestor", base, target)
+	if classified, _ := classifyExec(err); classified != nil {
+		return classified
+	}
+	if code == 0 {
+		return nil
+	}
+	if code == 1 {
+		return &CheckError{
+			Code:    errCodeNotAncestor,
+			Message: t("check.not_ancestor", base, target),
+		}
+	}
+	return classifyGitFailure(stderr, code)
+}
+
+func (g gitRunner) mergeBase(ctx context.Context, a, b string) (string, *CheckError) {
+	stdout, stderr, code, err := g.run(ctx, "merge-base", a, b)
+	if classified, _ := classifyExec(err); classified != nil {
+		return "", classified
+	}
+	if code != 0 {
+		if code == 1 {
+			return "", &CheckError{
+				Code:    errCodeNoMergeBase,
+				Message: t("check.no_merge_base", a, b),
+			}
+		}
+		return "", classifyGitFailure(stderr, code)
+	}
+	sha := strings.TrimSpace(string(stdout))
+	if sha == "" {
+		return "", &CheckError{
+			Code:    errCodeNoMergeBase,
+			Message: t("check.no_merge_base", a, b),
+		}
+	}
+	return sha, nil
+}
+
+func (g gitRunner) nameStatus(ctx context.Context, a, b string) ([]change, *CheckError) {
+	stdout, stderr, code, err := g.run(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--name-status", "-z", a, b, "--")
+	if classified, _ := classifyExec(err); classified != nil {
+		return nil, classified
+	}
+	if code != 0 {
+		return nil, classifyGitFailure(stderr, code)
+	}
+	changes, parseErr := parseNameStatus(stdout)
+	if parseErr != nil {
+		return nil, &CheckError{Code: errCodeParse, Message: t("check.parse_truncated")}
+	}
+	return changes, nil
+}
+
+func (g gitRunner) diffCheck(ctx context.Context, a, b string) (DiffCheck, *CheckError) {
+	stdout, stderr, code, err := g.run(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--check", a, b, "--")
+	if classified, _ := classifyExec(err); classified != nil {
+		return DiffCheck{}, classified
+	}
+	if code >= 128 {
+		return DiffCheck{}, classifyGitFailure(stderr, code)
+	}
+	result := DiffCheck{Status: statusPass, Diagnostics: emptyDiagnostics()}
+	for line := range bytes.SplitSeq(stdout, []byte{'\n'}) {
+		line = bytes.TrimSuffix(line, []byte{'\r'})
+		if len(line) == 0 {
+			continue
+		}
+		result.Diagnostics = append(result.Diagnostics, string(line))
+	}
+	if code != 0 {
+		result.Status = statusFail
+	}
+	return result, nil
+}
+
+func (g gitRunner) blob(ctx context.Context, commit string, path []byte) ([]byte, *CheckError) {
+	object := commit + ":" + string(path)
+	stdout, stderr, code, err := g.run(ctx, "cat-file", "blob", object)
+	if classified, _ := classifyExec(err); classified != nil {
+		return nil, classified
+	}
+	if code != 0 {
+		return nil, classifyGitFailure(stderr, code)
+	}
+	return stdout, nil
+}
+
+func classifyExec(err error) (*CheckError, int) {
+	if err == nil {
+		return nil, 0
+	}
+	if errors.Is(err, errOutputLimit) {
+		return &CheckError{Code: errCodeOutputLimit, Message: t("check.output_limit")}, exitExec
+	}
+	if errors.Is(err, errGitTimeout) {
+		return &CheckError{Code: errCodeInternal, Message: t("check.internal")}, exitExec
+	}
+	if errors.Is(err, exec.ErrNotFound) || isPathError(err) {
+		return &CheckError{Code: errCodeGitUnavailable, Message: t("check.git_unavailable")}, exitExec
+	}
+	return &CheckError{Code: errCodeInternal, Message: cleanMessage(err.Error())}, exitExec
+}
+
+func isPathError(err error) bool {
+	var pathErr *os.PathError
+	return errors.As(err, &pathErr)
+}
+
+func classifyRefError(ref string, stderr []byte, code int) *CheckError {
+	failure := classifyGitFailure(stderr, code)
+	if failure.Code == errCodeNotRepository {
+		return failure
+	}
+	return &CheckError{
+		Code:    errCodeInvalidRef,
+		Message: t("check.invalid_ref", escapeText(ref)),
+	}
+}
+
+func classifyGitFailure(stderr []byte, code int) *CheckError {
+	text := strings.ToLower(string(stderr))
+	switch {
+	case strings.Contains(text, "not a git repository"):
+		return &CheckError{Code: errCodeNotRepository, Message: t("check.not_repository")}
+	case code >= 128 && looksLikeInvalidRef(text):
+		return &CheckError{Code: errCodeInvalidRef, Message: t("check.invalid_ref", "")}
+	default:
+		message := cleanMessage(string(stderr))
+		if message == "" {
+			message = t("check.internal")
+		}
+		return &CheckError{Code: errCodeInternal, Message: message}
+	}
+}
+
+func looksLikeInvalidRef(text string) bool {
+	return strings.Contains(text, "needed a single revision") ||
+		strings.Contains(text, "bad revision") ||
+		strings.Contains(text, "ambiguous argument") ||
+		strings.Contains(text, "unknown revision") ||
+		strings.Contains(text, "invalid object name") ||
+		strings.Contains(text, "not a valid object name")
+}
