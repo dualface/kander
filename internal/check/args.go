@@ -124,7 +124,8 @@ func jsonRequested(args []string) bool {
 }
 
 func reservedFlag(arg string) bool {
-	switch arg {
+	name, _, _ := strings.Cut(arg, "=")
+	switch name {
 	case "--json", "--base", "--commit", "--source", "--head", "-h", "--help":
 		return true
 	default:

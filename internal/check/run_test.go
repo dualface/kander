@@ -46,6 +46,10 @@ func TestParseOptionsErrors(t *testing.T) {
 	if err == nil || err.Code != errCodeUsage || !opt.json {
 		t.Fatalf("unknown option with trailing json: opt=%+v err=%+v", opt, err)
 	}
+	opt, err = parseOptions(checkDelivery, []string{"--base", "--commit=HEAD", "--json"})
+	if err == nil || err.Code != errCodeUsage || !opt.json {
+		t.Fatalf("equals reserved value with json: opt=%+v err=%+v", opt, err)
+	}
 }
 
 func TestDeliveryJSONEmptyDiff(t *testing.T) {
@@ -393,6 +397,7 @@ func TestUsageJSON(t *testing.T) {
 		{"delivery", "--json"},
 		{"delivery", "--unknown", "--json"},
 		{"delivery", "--base", "--json"},
+		{"delivery", "--base", "--commit=HEAD", "--json"},
 	}
 	for _, args := range cases {
 		code, out, errb := captureRun(t, args)
