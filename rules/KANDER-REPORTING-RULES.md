@@ -1,28 +1,17 @@
 # Completion Report Format
 
-Loaded only when `rules.reporting=true`. See `KANDER-AGENTS.md` for precedence and the loading flow. This file only defines the reporting format; it adds no Git, review, or task group gates. Write N/A for steps that do not apply.
+Loaded only when `rules.reporting=true`. This file defines the reporting format only; it adds no Git, review, or task group gates. Write N/A for steps that do not apply.
 
 - When a non-kanban task ends, give one sentence with the goal, completion status, actual commit state, and branch; for non-Git tasks write "No commit, branch not applicable".
 
 ## Completion Report
 
-- When a task card enters `done/`, `archived/`, or `trash/`, or stays blocked in `working/` / `review/` and is handed back to the user, report once using the template; do not report while work is in progress. Do not replace it with free-form text or a one-line done/blocked message.
-- Do not omit or merge any of the 8 fields; write `None` or `N/A` when there is no content.
-
-  Put the ending mode on the last line as `Final card state`, one of `done`, `archived (<result>)`, `trash`, `working (blocked)`, or `review (blocked)`.
-
-- If the card did not enter `done/`, `Task` gives the absolute path of the card under its current state directory; `Delivery`, `Acceptance`, `Verification`, `Review`, and `Wrap-up` list only what was actually completed, and write `Not executed` with the reason for anything not done. Even when incomplete, never leave a field empty, drop a line, or change the format.
-- A blocked report lists, item by item under `Unresolved issues`, the remaining work, the blocking reason, and the condition for unblocking, and states that the branch and worktree are preserved as they are.
-
-  A termination report additionally gives the user-authorized conclusion (`cancelled`, `duplicate`, `wontfix`) and the reason; `duplicate` points to the replacement card.
-
-- Whoever ends the task reports using the template; switching sessions or taking over does not exempt this, and a group-level summary does not replace the per-card report.
-- Verification records only actual results; failures, unexecuted steps, and environment blocks must never be written as passed. Use the full 40-character SHA for the final commit. When every applicable wrap-up step succeeded, write "all completed"; otherwise describe each exception item by item.
-- Unresolved issues list known defects, verification gaps, and follow-up tasks; count the same root cause only once.
-
-  Only when `rules.review=true` or the user explicitly requested a full review this time, record review items additionally by the categories in `KANDER-REVIEW-RULES.md`; do not load a disabled review module because of this.
-
-  When a security review timeout was applied, attach the send time and the timeout time.
+- When a task card enters `done/`, `archived/`, or `trash/`, or stays blocked in `working/` or `review/` and is handed back to the user, report once with the template below; never while work is in progress, and never as free-form text or a one-line done/blocked message.
+- Keep all 8 fields, in order, with `None` or `N/A` where there is no content. The last line carries `Final card state`: `done`, `archived (<result>)`, `trash`, `working (blocked)`, or `review (blocked)`.
+- If the card did not enter `done/`, `Task` gives the absolute path of the card under its current state directory; `Delivery`, `Acceptance`, `Verification`, `Review`, and `Wrap-up` list only what was actually completed and write `Not executed` with the reason for the rest. A blocked report lists under `Unresolved issues`, item by item, the remaining work, the blocking reason, and the unblocking condition, and states that the branch and worktree are preserved. A termination report adds the user-authorized conclusion (`cancelled`, `duplicate`, `wontfix`) and the reason; `duplicate` points to the replacement card.
+- Whoever ends the task reports; a session switch or takeover does not exempt this, and a group-level summary does not replace the per-card report.
+- Verification records actual results only; failures, unexecuted steps, and environment blocks are never written as passed. Use the full 40-character SHA for the final commit. Write "all completed" for wrap-up only when every applicable step succeeded; otherwise describe each exception.
+- Unresolved issues list known defects, verification gaps, and follow-up tasks; count one root cause once. Only when `rules.review=true` or the user explicitly requested a full review this time, record review items by the categories in `KANDER-REVIEW-RULES.md`, without loading a disabled review module. For a security review timeout, attach the send time and the timeout time.
 
 ```markdown
 # Kanban Task Completion Report
