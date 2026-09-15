@@ -1,5 +1,5 @@
-// Package install initializes rules and agent integrations, offers optional global
-// binary installation, and runs the first-run wizard.
+// Package install initializes rules and agent integrations, copies the global
+// binary when PATH identity does not match, and runs the first-run wizard.
 package install
 
 import (

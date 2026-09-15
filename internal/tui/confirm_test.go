@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
@@ -242,38 +241,5 @@ func TestOptionsConfirmHintUsesDialogKeys(t *testing.T) {
 	panel.openRestoreConfirm()
 	if panel.pageHint() != config.Text("dialog.keys") {
 		t.Fatalf("hint=%q", panel.pageHint())
-	}
-}
-
-func TestConfirmPromptReadyKeys(t *testing.T) {
-	m := newConfirmPrompt("Copy?", []string{"body"})
-	m.width, m.height = 80, 24
-	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	prompt := updated.(*confirmPrompt)
-	if prompt.done || cmd != nil {
-		t.Fatal("enter must be ignored")
-	}
-	updated, cmd = prompt.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	prompt = updated.(*confirmPrompt)
-	if !prompt.choice || !prompt.done || cmd == nil {
-		t.Fatal("y must confirm")
-	}
-
-	m = newConfirmPrompt("Copy?", []string{"body"})
-	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	prompt = updated.(*confirmPrompt)
-	if prompt.choice || !prompt.done || cmd == nil {
-		t.Fatal("esc must cancel")
-	}
-
-	m = newConfirmPrompt("Copy?", []string{"body"})
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
-	prompt = updated.(*confirmPrompt)
-	if prompt.choice || !prompt.done {
-		t.Fatal("N must cancel")
-	}
-	view := ansi.Strip(m.View())
-	if !strings.Contains(view, "Copy?") || !strings.Contains(view, config.Text("dialog.keys")) {
-		t.Fatalf("prompt missing title or keys:\n%s", view)
 	}
 }

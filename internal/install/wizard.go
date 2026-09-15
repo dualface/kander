@@ -92,35 +92,6 @@ func runWizard() (Request, error) {
 	return req, nil
 }
 
-func confirmDeleteLegacy(names []string) (bool, error) {
-	fmt.Fprintln(os.Stderr, config.Text("install.legacy_detected"))
-	fmt.Fprintln(os.Stderr, "  "+joinNames(names))
-	fmt.Fprintln(os.Stderr, config.Text("install.legacy_unified"))
-	delete := false
-	form := huh.NewForm(huh.NewGroup(
-		huh.NewConfirm().
-			Title(config.Text("install.delete_legacy")).
-			Affirmative(config.Text("install.confirm_yes")).
-			Negative(config.Text("install.confirm_no")).
-			Value(&delete),
-	))
-	if err := form.Run(); err != nil {
-		return false, mapWizardErr(err)
-	}
-	return delete, nil
-}
-
-func joinNames(names []string) string {
-	out := ""
-	for i, name := range names {
-		if i > 0 {
-			out += " "
-		}
-		out += name
-	}
-	return out
-}
-
 func mapWizardErr(err error) error {
 	if err == nil {
 		return nil
@@ -172,29 +143,7 @@ func RunInteractive() int {
 		return 1
 	}
 	if req.Mode != config.ModeProject {
-		paths, err := config.GlobalInstallPaths()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		req.CopyBinary, err = offerCopy(paths)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		legacy, err := scanLegacy(paths.BinDir)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		if len(legacy) > 0 {
-			delete, err := confirmDeleteLegacy(legacy)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return 1
-			}
-			req.DeleteLegacy = delete
-		}
+		applyGlobalInstallDefaults(&req)
 	}
 	result, err := Perform(req)
 	if err != nil {

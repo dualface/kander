@@ -1,34 +1,26 @@
 package install
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 )
 
 type copyConfirm func(check pathCheck, dest string) (bool, error)
 
-var confirmCopy copyConfirm = runCopyConfirmation
+var confirmCopy copyConfirm = runCopyYesNo
 
-// ConfirmCopy presents the optional binary-copy question. The TUI registers a
-// shared confirmation dialog at init; while unset, the Huh form remains so
-// this package can be used without the board.
-type ConfirmCopy func(title, body string) (bool, error)
-
-// SetConfirmCopy wires the copy prompt. A nil function restores the Huh form.
-func SetConfirmCopy(fn ConfirmCopy) {
-	if fn == nil {
-		confirmCopy = runCopyConfirmation
-		return
-	}
-	confirmCopy = func(check pathCheck, dest string) (bool, error) {
-		return fn(config.Text("install.copy_question"), copyDescription(check, dest))
-	}
-}
+var (
+	copyPromptIn  io.Reader = os.Stdin
+	copyPromptOut io.Writer = os.Stderr
+)
 
 func copyDescription(check pathCheck, dest string) string {
 	description := config.Text("install.copy_current", check.Current)
@@ -42,24 +34,41 @@ func copyDescription(check pathCheck, dest string) string {
 	return description + "\n" + config.Text("install.copy_destination", dest)
 }
 
-func runCopyConfirmation(check pathCheck, dest string) (bool, error) {
-	copy := false
-	form := huh.NewForm(huh.NewGroup(
-		huh.NewConfirm().Title(config.Text("install.copy_question")).
-			Description(copyDescription(check, dest)).
-			Affirmative(config.Text("install.confirm_yes")).
-			Negative(config.Text("install.confirm_no")).Value(&copy),
-	))
-	err := form.Run()
-	return copy, mapWizardErr(err)
+func parseCopyAnswer(line string) bool {
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	default:
+		return false
+	}
 }
 
-func offerCopy(paths config.InstallPaths) (bool, error) {
-	check := inspectPath("")
-	if check.Matches {
-		return false, nil
+func runCopyYesNo(check pathCheck, dest string) (bool, error) {
+	fmt.Fprintln(copyPromptOut, config.Text("install.copy_question"))
+	fmt.Fprintln(copyPromptOut, copyDescription(check, dest))
+	fmt.Fprint(copyPromptOut, config.Text("install.copy_yn"))
+	reader := bufio.NewReader(copyPromptIn)
+	line, err := reader.ReadString('\n')
+	answer := strings.TrimSpace(line)
+	if err != nil && answer == "" {
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		return false, err
 	}
-	return confirmCopy(check, filepath.Join(paths.BinDir, binaryName()))
+	return parseCopyAnswer(line), nil
+}
+
+// offerCopy reports whether kander install should copy the running binary to
+// the global entry. PATH identity match skips the copy; otherwise it copies
+// without asking.
+func offerCopy() bool {
+	return !inspectPath("").Matches
+}
+
+func applyGlobalInstallDefaults(req *Request) {
+	req.CopyBinary = offerCopy()
+	req.DeleteLegacy = true
 }
 
 func warnPath(current string) {
@@ -102,7 +111,12 @@ func CheckStartupCopy() (handled bool, code int) {
 }
 
 func copyForStartup(paths config.InstallPaths) (bool, int) {
-	copy, err := offerCopy(paths)
+	check := inspectPath("")
+	if check.Matches {
+		return false, 0
+	}
+	dest := filepath.Join(paths.BinDir, binaryName())
+	copy, err := confirmCopy(check, dest)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return true, 1
@@ -112,7 +126,6 @@ func copyForStartup(paths config.InstallPaths) (bool, int) {
 	}
 	source, err := resolveSource("", true)
 	if err == nil {
-		dest := filepath.Join(paths.BinDir, binaryName())
 		err = rejectDest(dest, false)
 		if err == nil {
 			err = fs.EnsureInheritedDirectoryPath(paths.BinDir)

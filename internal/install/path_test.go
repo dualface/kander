@@ -65,12 +65,51 @@ func TestMatchingPathDoesNotPrompt(t *testing.T) {
 	source := stubBinary(t)
 	mockCurrentBinary(t, source)
 	t.Setenv("PATH", filepath.Dir(source))
+	if offerCopy() {
+		t.Fatal("matching PATH still requested a copy")
+	}
+}
+
+func TestOfferCopyAutoWhenPathMismatches(t *testing.T) {
+	source := stubBinary(t)
+	mockCurrentBinary(t, source)
+	t.Setenv("PATH", t.TempDir())
+	if !offerCopy() {
+		t.Fatal("mismatched PATH skipped the copy")
+	}
+}
+
+func TestGlobalInstallDefaultsCopyAndDeleteWithoutPrompt(t *testing.T) {
+	source := stubBinary(t)
+	mockCurrentBinary(t, source)
+	t.Setenv("PATH", t.TempDir())
+	req := Request{Mode: config.ModeGlobal}
+	applyGlobalInstallDefaults(&req)
+	if !req.CopyBinary || !req.DeleteLegacy {
+		t.Fatalf("copy=%v delete=%v", req.CopyBinary, req.DeleteLegacy)
+	}
+
+	t.Setenv("PATH", filepath.Dir(source))
+	req = Request{Mode: config.ModeGlobal}
+	applyGlobalInstallDefaults(&req)
+	if req.CopyBinary || !req.DeleteLegacy {
+		t.Fatalf("matched path still copied or skipped legacy delete: copy=%v delete=%v", req.CopyBinary, req.DeleteLegacy)
+	}
+}
+
+func TestCopyForStartupMatchingPathDoesNotPrompt(t *testing.T) {
+	source := stubBinary(t)
+	mockCurrentBinary(t, source)
+	t.Setenv("PATH", filepath.Dir(source))
 	previous := confirmCopy
-	confirmCopy = func(pathCheck, string) (bool, error) { t.Fatal("unexpected copy prompt"); return false, nil }
+	confirmCopy = func(pathCheck, string) (bool, error) {
+		t.Fatal("unexpected copy prompt")
+		return false, nil
+	}
 	t.Cleanup(func() { confirmCopy = previous })
-	paths := config.InstallPaths{BinDir: t.TempDir()}
-	if copy, err := offerCopy(paths); copy || err != nil {
-		t.Fatalf("copy=%v err=%v", copy, err)
+	handled, code := copyForStartup(config.InstallPaths{BinDir: t.TempDir()})
+	if handled || code != 0 {
+		t.Fatalf("handled=%v code=%d", handled, code)
 	}
 }
 

@@ -39,9 +39,9 @@ func TestStartupOptionalCopyOnPTY(t *testing.T) {
 					t.Fatalf("missing copy prompt: %s", session.text())
 				}
 				if choice == "accept" {
-					session.send("y")
+					session.send("y\n")
 				} else {
-					session.send("n")
+					session.send("n\n")
 				}
 			}
 			if !session.waitFor("Task Board", 12*time.Second) {

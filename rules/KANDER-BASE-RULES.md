@@ -21,9 +21,9 @@
 
 **Installation and Task Files**
 
-- Installation is done by the binary itself: run `kander install` for the interactive wizard (language, scope, optional binary copy). Bare interactive `kander` with no scope `config.json` skips the wizard, lets doctor create a usable config, and opens the board options interface section; when a config already exists, bare `kander` opens the board directly.
-- Global initialization installs configuration and rules without copying the executable. When a scope config already exists, interactive bare `kander` and `kander install` offer a copy only when the first `kander` on PATH does not identify the running executable, or its identity cannot be verified. The default is no; declining continues this launch and does not persist a skip. Project installs still copy into the main worktree's `.kander/bin`.
-- Copying is explicit, may replace the destination binary, and never changes shell configuration. If PATH still selects another entry or omits the destination directory, follow the displayed instructions. Existing global copies are not automatically deleted.
+- Installation is done by the binary itself: run `kander install` for the interactive wizard (language, scope). Bare interactive `kander` with no scope `config.json` skips the wizard, lets doctor create a usable config, and opens the board options interface section; when a config already exists, bare `kander` opens the board directly.
+- Global `kander install` writes configuration and rules. When the first `kander` on PATH does not identify the running executable, it copies that executable to the global entry and replaces a file already there; it also deletes retired onevoke/kanban entries in that bin directory. Bare interactive `kander` with an existing scope config asks a Y/N question (default no) for the same copy; declining continues this launch and does not persist a skip. Project installs still copy into the main worktree's `.kander/bin`.
+- Copying never changes shell configuration. If PATH still selects another entry or omits the destination directory, follow the displayed instructions.
 - Windows does not modify `PATH` automatically.
 - Automation involving special characters must invoke the command root's `kander` through a process API argv array; do not assemble PowerShell/cmd command strings.
 - On every platform the executing agent and the reviewer read the complete task from a UTF-8 temporary file; the launch arguments contain only the CLI's required control options and a one-line instruction with the file path.
