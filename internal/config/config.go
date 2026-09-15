@@ -423,7 +423,9 @@ func KanbanAgentFor(cfg *Config, kind string) (string, error) {
 	return cfg.KanbanAgents[kind], nil
 }
 
-// ExecutionAgentsInUse lists the execution agents that will actually be launched, deduplicated, large task first.
+// ExecutionAgentsInUse lists the execution agents that will actually be launched,
+// deduplicated, large task first, then small, then the Chat Agent when it is
+// not already in that set.
 func ExecutionAgentsInUse(cfg *Config) []string {
 	seen := map[string]struct{}{}
 	var out []string
@@ -434,6 +436,11 @@ func ExecutionAgentsInUse(cfg *Config) []string {
 		}
 		seen[agent] = struct{}{}
 		out = append(out, agent)
+	}
+	if chat := ChatAgentFor(cfg); chat != "" {
+		if _, ok := seen[chat]; !ok {
+			out = append(out, chat)
+		}
 	}
 	return out
 }

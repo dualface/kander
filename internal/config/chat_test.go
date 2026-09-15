@@ -207,3 +207,15 @@ func TestLegacyOverlayWithoutChatUsesLarge(t *testing.T) {
 		t.Fatalf("resolved=%s %s %s", agent, model, effort)
 	}
 }
+
+func TestExecutionAgentsInUseIncludesDistinctChatAgent(t *testing.T) {
+	setupHome(t)
+	cfg := DefaultConfig()
+	cfg.KanbanAgents["large"] = "codex"
+	cfg.KanbanAgents["small"] = "codex"
+	cfg.ChatAgent = "claude"
+	got := ExecutionAgentsInUse(cfg)
+	if len(got) != 2 || got[0] != "codex" || got[1] != "claude" {
+		t.Fatalf("%v", got)
+	}
+}

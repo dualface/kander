@@ -12,7 +12,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// useChatConfig makes the large tier run agent on launcher for the chat entry.
+// useChatConfig sets the Chat Agent and launcher for PreviewChat/StartChat.
 func useChatConfig(t *testing.T, agent, launcher string) {
 	t.Helper()
 	oldLoad := loadEffective
@@ -38,7 +38,7 @@ func captureTaskFile(t *testing.T) (body, path *string) {
 	return body, path
 }
 
-func TestStartChatHandsTheMessageToALargeTierSessionWithoutBoardWrites(t *testing.T) {
+func TestStartChatHandsTheMessageWithoutBoardWrites(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
@@ -165,7 +165,7 @@ func TestStartChatRejectsBeforeCreatingAnything(t *testing.T) {
 	}
 }
 
-func TestPreviewChatResolvesTheLargeTierAndRefusesTerminalLaunchers(t *testing.T) {
+func TestPreviewChatResolvesTheChatAgentAndRefusesTerminalLaunchers(t *testing.T) {
 	setupBoard(t)
 	useChatConfig(t, "grok", "tmux")
 	preview, err := PreviewChat()

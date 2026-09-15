@@ -249,7 +249,8 @@ func ResolveChat(cfg *Config) (agent, model, effort string) {
 	return agent, model, effort
 }
 
-// ChatSettingsFor is the shared resolver for PreviewChat and StartChat.
+// ChatSettingsFor is the shared resolver PreviewChat and StartChat use for
+// the effective Chat agent, model, and effort.
 func ChatSettingsFor(cfg *Config) ChatSettings {
 	agent, model, effort := ResolveChat(cfg)
 	return ChatSettings{Agent: agent, Model: model, Effort: effort}

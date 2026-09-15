@@ -38,11 +38,11 @@ func PreviewChat() (ChatPreview, error) {
 	if err != nil {
 		return ChatPreview{}, err
 	}
-	agent, launcher, err := chatDefaults(cfg)
+	settings, launcher, err := chatDefaults(cfg)
 	if err != nil {
 		return ChatPreview{}, err
 	}
-	return ChatPreview{Agent: agent, Launcher: launcher}, nil
+	return ChatPreview{Agent: settings.Agent, Launcher: launcher}, nil
 }
 
 // StartChat starts one session that owns no card and hands it the message. The
@@ -61,11 +61,11 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	agent, launcher, err := chatDefaults(cfg)
+	settings, launcher, err := chatDefaults(cfg)
 	if err != nil {
 		return result, err
 	}
-	settings := config.ChatSettingsFor(cfg)
+	agent := settings.Agent
 	plan, err := prepareLaunch(launcher, parentDir(request.Root), "chat")
 	if err != nil {
 		return result, err
@@ -119,20 +119,20 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	return result, nil
 }
 
-// chatDefaults resolves the agent and launcher of a chat session. The session
-// has no card, so it uses the dedicated Chat Agent, and it must start in a
+// chatDefaults resolves the Chat Agent/model/effort and the configured launcher.
+// The session has no card, so it uses ChatSettingsFor, and it must start in a
 // terminal container: a launcher that occupies the caller's terminal would take
 // the board's terminal away and leave nothing to focus.
-func chatDefaults(cfg *config.Config) (string, string, error) {
+func chatDefaults(cfg *config.Config) (config.ChatSettings, string, error) {
 	_, launcher, err := sessionDefaults(cfg, "large", "", "")
 	if err != nil {
-		return "", "", err
+		return config.ChatSettings{}, "", err
 	}
-	agent := config.ChatAgentFor(cfg)
+	settings := config.ChatSettingsFor(cfg)
 	if !terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.Container }) {
-		return "", "", launchError("launch.chat_requires_container_launcher", launcher)
+		return config.ChatSettings{}, "", launchError("launch.chat_requires_container_launcher", launcher)
 	}
-	return agent, launcher, nil
+	return settings, launcher, nil
 }
 
 func chatAgentArguments(agent, model, effort string, session AgentSession, cfg *config.Config) ([]string, error) {
