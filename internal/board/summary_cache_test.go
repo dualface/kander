@@ -474,32 +474,36 @@ func TestSummaryCacheConcurrentWritesMatchPayload(t *testing.T) {
 	root, ids := summaryCacheBoard(t, 3)
 	idx := mustIndex(t, root)
 	mustView(t, idx)
-	var wg sync.WaitGroup
-	wg.Add(2)
+	before, err := ReadSnapshot(root, ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked, release := make(chan struct{}), make(chan struct{})
+	idx.beforeScan = func() {
+		idx.beforeScan = nil
+		close(blocked)
+		<-release
+	}
+	errc := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		for i := 0; i < 8; i++ {
-			if _, err := idx.View(context.Background()); err != nil {
-				t.Errorf("view: %v", err)
-				return
-			}
-		}
+		_, viewErr := idx.View(context.Background())
+		errc <- viewErr
 	}()
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 8; i++ {
-			s, err := ReadSnapshot(root, ids[0])
-			if err != nil {
-				t.Errorf("snapshot: %v", err)
-				return
-			}
-			if err := UpdateDocument(root, ids[0], UpdateOptions{Document: "spec.md", Text: s.Text + "\nnote\n", ExpectedRevision: s.Revision}); err != nil {
-				continue
-			}
-			idx.Invalidate(ids[0])
-		}
-	}()
-	wg.Wait()
+	<-blocked
+	if err := UpdateDocument(root, ids[0], UpdateOptions{Document: "spec.md", Text: before.Text + "\nnote\n", ExpectedRevision: before.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	if err := <-errc; err != nil {
+		t.Fatal(err)
+	}
+	after, err := ReadSnapshot(root, ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Revision <= before.Revision {
+		t.Fatalf("revision %d after concurrent write from %d", after.Revision, before.Revision)
+	}
 	requireMatchingPayload(t, root, mustView(t, idx))
 }
 
