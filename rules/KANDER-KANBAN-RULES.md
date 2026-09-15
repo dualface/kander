@@ -390,6 +390,47 @@ These single-binary producers store group checkpoints through the existing trans
 - An execution cycle is one claim of a card, identified by its task ID, `STARTED_AT`, and the producer-owned unique claim identity in `LIFECYCLE_DECISION`. Manual `move working --owner` and `start` each create a fresh identity, including a retry after start rollback; `resume --agent` preserves the identity and timestamp; cards without a claim identity keep the legacy task-ID plus `STARTED_AT` digest.
 - New batch requirements contain exactly the two keys `PMQA` and `Security`; creating a four-key or six-key batch is rejected, while reading, same-ID retries, and close still accept exact two-, four-, and six-key objects. Existing originals, role order, hashes, runs, and closure evidence keep their identities; schema_version stays 1.
 - Active execution cycles require an explicit review plan before `move done`, even when REVIEWS is empty or no reviewer ran, recording each role as required or N/A with an actual reason and rule basis. When review is disabled or nothing triggered it, the minimal sequence is `review plan` with one sealed batch from the review base to the final delivery commit naming every role `N/A: <reason and rule basis>`, `review aggregate` for that batch, `review close` binding its view hash, then `move done`; this loads no disabled module.
+
+  For that explicit N/A path, replace every `<...>` value below and write the plan to a private absolute path. `base` and `target_commit` are real full SHAs for a Git delivery; both may be `N/A` only for a non-Git workflow. The `cwd` value must equal the absolute CWD passed to every evidence command.
+
+  ```json
+  {
+    "schema": 1,
+    "sealed": true,
+    "plan_id": "<unique-plan-id>",
+    "author": "<current-owner>",
+    "basis": "review is disabled or did not trigger: <reason and rule basis>",
+    "cwd": "<absolute-CWD>",
+    "report_language": "<card-LANGUAGE>",
+    "task_ids": ["<task-id>"],
+    "batches": [{
+      "batch_id": "<unique-batch-id>",
+      "task_ids": ["<task-id>"],
+      "base": "<full-base-SHA-or-N/A>",
+      "target_commit": "<full-target-SHA-or-N/A>",
+      "requirements": {
+        "PMQA": "N/A: <reason and rule basis>",
+        "Security": "N/A: <reason and rule basis>"
+      }
+    }]
+  }
+  ```
+
+  Run `kander review plan <absolute-CWD> <absolute-plan.json>`, then preserve the exact stdout bytes of `kander review aggregate <absolute-CWD> <batch-id>` in a private file. Read `batch.revision` from that JSON and calculate the SHA-256 of the exact file bytes. Use those values in the close request:
+
+  ```json
+  {
+    "batch_id": "<batch-id>",
+    "expected_revision": 1,
+    "view_hash": "<SHA-256-of-exact-aggregate-output>",
+    "author": "<current-owner>",
+    "roles": {},
+    "resolved_failures": {},
+    "opinions": []
+  }
+  ```
+
+  Run `kander review close <absolute-CWD> <absolute-close-request.json>`. Do not guess the revision, reserialize the aggregate before hashing, or treat the N/A closure as a semantic review PASS.
 - A plan has at least one batch, its members are fixed at creation, and a card belongs to at most one plan per cycle. A plan can be created only while every member is in `working/` or `review/`, so a group plan is created after the last member started, and no batch runs before the plan exists: the plan names the first batch before its first run, and each later batch is appended with `extend-plan` after its predecessor closed and before its own first run (`extend-plan` cannot adopt a batch that already ran). Closing a batch requires it to be planned and the worktree clean at its final target; `review advance` also requires a planned batch. Fix rounds advance the batch's runtime target and, in the same transaction, its recorded plan target, plan revision, and every member's `reviews/plan.json` copy.
 - Wrap-up evidence binds the base of the first planned batch and the closed final target of the last batch as its `source_commit` when history was not rewritten; when rewritten, `rebased_base` compares the complete patch of base..closed final target with the replayed range. A plan whose recorded target lags the runtime batch (legacy boards) fails `check` and `move done` with both SHAs; `review progress` reports `plan_target` and `batch_target`, and `review extend-plan` with `sync_targets` aligns the record. Completed historical cards without a plan stay readable as legacy-untracked, never as an invented PASS.
 

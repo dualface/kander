@@ -13,14 +13,14 @@ Give intake guidance only for a new bug or feature request that has not yet chos
 **Presenting the options.** After the analysis and implementation plan, present the options once, for single-card and multi-card plans alike, numbered from `1` as the only numbered question in that message:
 
 ```text
-- Confirm the plan and use the kanban board (create the cards; this session starts and advances them here)
-- Confirm the plan and use the kanban board (create the cards; a separate orchestrator session advances and reports them in its own window)
-- Confirm the plan and use the kanban board (create the cards only, leave them in backlog, start later on instruction)
-- Confirm the plan, skip the board, implement directly in this session
-- Adjust the plan (no card created or started)
+1. Confirm the plan and use the kanban board (create the cards; this session starts and advances them here)
+2. Confirm the plan and use the kanban board (create the cards; a separate orchestrator session advances and reports them in its own window)
+3. Confirm the plan and use the kanban board (create the cards only, leave them in backlog, start later on instruction)
+4. Confirm the plan, skip the board, implement directly in this session
+5. Adjust the plan (no card created or started)
 ```
 
-- **Option 1** authorizes the plan, the development, and the kanban flow at once, including the merge-back steps the plan states, for every standalone card and task group it names; do not ask again before starting or integrating. For a standalone card with `rules.git=true`, this covers integration into `develop` and cleanup under the conditions in `KANDER-GIT-RULES.md` "Commit and Push"; the completion flow is `KANDER-KANBAN-RULES.md` "Execution and Completion".
+- **Option 1** authorizes the plan, the development, and the kanban flow at once, including the merge-back steps the plan states, for every standalone card and task group it names; do not ask again before starting or integrating. For a standalone card with `rules.git=true`, this covers integration into `develop` and cleanup under the conditions in `KANDER-GIT-RULES.md` "Integration and Cleanup"; the completion flow is `KANDER-KANBAN-RULES.md` "Execution and Completion".
   - For each single card, in order: `kander new`, fill in the complete contract per the confirmed plan, complete the self-review and any applicable independent card review per `KANDER-KANBAN-RULES.md` "Post-Creation Self-Review" and fix the findings, `kander pick <task-id>`, `kander start <task-id>`. Start and tracking follow `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination"; the discussing agent no longer implements a card it has delegated.
   - For a task group, create every member card the same way, complete the group-level checks in `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups", then orchestrate per that file. The confirmed plan is the orchestration plan and carries the integration authorization for each group.
 - **Option 2** carries the same authorization as option 1 but hands the advancing to a separate session. Create every card as in option 1, with its self-review, applicable independent card review, and group-level checks, and leave it in `backlog/`. Write the confirmed plan into a notes file (card and group order, which cards may run in parallel, merge-back steps, user decisions) and run `kander orchestrate --message-file <notes> <task-id|task-group-id>...` in plan order per `KANDER-KANBAN-RULES.md` "Orchestrator Sessions". On success, tell the user where the orchestrator runs, that it advances and reports every card in its own window, and that this session starts no card and no longer follows the plan. On launch failure, report the error; the cards stay in `backlog/` and the user chooses to retry or to continue with option 1 here.
