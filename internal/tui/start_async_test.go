@@ -54,7 +54,10 @@ func TestStartPreviewUpdateDoesNoIOAndRemainsResponsive(test *testing.T) {
 	}
 	app.LastRefresh = app.Now().Add(-time.Hour)
 	p.Update(tickMsg(app.Now()))
-	if refreshes != 1 {
+	if refreshes != 0 {
+		test.Fatal("preview Update must not read the board")
+	}
+	if app.boardInFlightSeq == 0 && !app.boardReadQueued {
 		test.Fatal("preview blocked refresh")
 	}
 	p.Update(tea.WindowSizeMsg{Width: 90, Height: 26})

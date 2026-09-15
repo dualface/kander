@@ -72,6 +72,7 @@ func TestScreensFillBackground(t *testing.T) {
 			app.Help = false
 
 			app.openDetail()
+			finishQueuedWork(t, app)
 			expectFilled(t, "detail", app.View())
 
 			app.DetailSearching, app.DetailQuery = true, "line"

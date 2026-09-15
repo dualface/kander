@@ -42,12 +42,37 @@ func applyWorkCmd(t *testing.T, app *App, cmd tea.Cmd) {
 	if cmd == nil {
 		t.Fatal("no pending work was queued")
 	}
-	message := cmd()
-	work, ok := message.(workMsg)
-	if !ok {
+	applyWorkCmds(t, app, cmd)
+}
+
+func applyWorkCmds(t *testing.T, app *App, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	switch message := cmd().(type) {
+	case tea.BatchMsg:
+		for _, item := range message {
+			applyWorkCmds(t, app, item)
+		}
+	case workMsg:
+		next := app.applyWork(message.payload)
+		applyWorkCmds(t, app, next)
+	default:
 		t.Fatalf("unexpected message %T", message)
 	}
-	app.applyWork(work.payload)
+}
+
+func finishQueuedWork(t *testing.T, app *App) {
+	t.Helper()
+	for i := 0; i < 16; i++ {
+		cmd := app.takePending()
+		if cmd == nil {
+			return
+		}
+		applyWorkCmds(t, app, cmd)
+	}
+	t.Fatal("background work did not drain")
 }
 
 // cacheTestApp wires the overlay to one cached snapshot and records every cache

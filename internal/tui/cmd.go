@@ -128,11 +128,23 @@ func attachBoard(app *App, root string) {
 		}
 		return loadBoardPayload(app.boardRoot)
 	}
+	app.GetBoardCtx = func(ctx context.Context) (BoardPayload, error) {
+		if app.boardRoot == "" {
+			return BoardPayload{}, nil
+		}
+		return board.BoardPayloadContext(ctx, app.boardRoot)
+	}
 	app.GetTask = func(id string) (Task, error) {
 		if app.boardRoot == "" {
 			return Task{}, fmt.Errorf("%s", t("board.board_directory_not_found_run_inside_a_project_or"))
 		}
 		return loadTaskPayload(app.boardRoot, id)
+	}
+	app.GetTaskCtx = func(ctx context.Context, id string) (Task, error) {
+		if app.boardRoot == "" {
+			return Task{}, fmt.Errorf("%s", t("board.board_directory_not_found_run_inside_a_project_or"))
+		}
+		return board.TaskPayloadContext(ctx, app.boardRoot, id)
 	}
 	app.ImportIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.ImportOptions) (issue.ImportResult, error) {
 		if strings.TrimSpace(options.Language) == "" {

@@ -161,9 +161,13 @@ func TestStartBackgroundCompletion(t *testing.T) {
 			if app.Searching || app.StartConfirmation.phase != confirmRunning {
 				t.Fatal("starting dialog must retain input")
 			}
-			p.Update(cmd())
-			if calls != 1 || refreshes != 1 || app.StartConfirmation.phase != confirmFinished {
+			_, next := p.Update(cmd())
+			if calls != 1 || refreshes != 0 || app.StartConfirmation.phase != confirmFinished {
 				t.Fatalf("calls=%d refreshes=%d", calls, refreshes)
+			}
+			applyWorkCmd(t, app, next)
+			if refreshes != 1 {
+				t.Fatalf("start result did not refresh: %d", refreshes)
 			}
 			if failed {
 				if !strings.Contains(app.CopyNotice, "launch broke") {

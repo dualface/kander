@@ -45,6 +45,8 @@ type App struct {
 	Context           pageContext
 	GetBoard          func() (BoardPayload, error)
 	GetTask           func(string) (Task, error)
+	GetBoardCtx       func(context.Context) (BoardPayload, error)
+	GetTaskCtx        func(context.Context, string) (Task, error)
 	CopyFn            copyFn
 	FocusWindow       focusFn
 	PrepareStart      func(string) (startRequest, error)
@@ -154,6 +156,16 @@ type App struct {
 	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()
 	pendingWork  func() any
+	// board/detail snapshot reads use a dedicated scheduler so they do not occupy
+	// pendingWork (start, Issues, chat, task actions) and cannot block Update.
+	boardReadSeq      uint64
+	boardInFlightSeq  uint64
+	boardReadQueued   bool
+	boardReadCancel   context.CancelFunc
+	detailReadSeq     uint64
+	detailInFlightSeq uint64
+	detailQueuedID    string
+	detailReadCancel  context.CancelFunc
 	// optionsLoadSeq identifies the in-flight Options config reload so a stale result cannot land on a newer panel.
 	optionsLoadSeq uint64
 
@@ -307,84 +319,6 @@ func (a *App) size() (h, w int) {
 		a.Width = 80
 	}
 	return a.Height, a.Width
-}
-
-func (a *App) refreshBoard() bool {
-	if a.TaskActions != nil && a.TaskActions.running {
-		return false
-	}
-	previous := a.Model.RefreshError
-	payload, err := a.GetBoard()
-	if err != nil {
-		a.Model.RefreshError = err.Error()
-		a.LastRefresh = a.Now()
-		return a.Model.RefreshError != previous
-	}
-	changed := a.Model.SetBoard(payload)
-	a.showJournalWarnings(payload.Warnings)
-	a.LastRefresh = a.Now()
-	return changed || a.refreshOpenDetail()
-}
-
-func (a *App) refreshOpenDetail() bool {
-	if a.Detail == nil {
-		return false
-	}
-	taskID := a.Detail.TaskID
-	if taskID == "" {
-		return false
-	}
-	previous := a.Model.DetailError
-	next, err := a.GetTask(taskID)
-	if err != nil {
-		a.Model.DetailError = err.Error()
-		return a.Model.DetailError != previous
-	}
-	a.Model.DetailError = ""
-	changed := a.Detail.Document != next.Document ||
-		a.Detail.Title != next.Title ||
-		a.Detail.Time != next.Time ||
-		a.Detail.State != next.State ||
-		a.Detail.Assignee != next.Assignee ||
-		a.Detail.Kind != next.Kind ||
-		a.Detail.TaskGroup != next.TaskGroup ||
-		a.Detail.Type != next.Type
-	a.Detail = &next
-	a.showJournalWarnings(next.Warnings)
-	a.clampDetailCursor()
-	matches := a.detailMatches(nil)
-	if len(matches) > 0 && a.DetailMatchIndex > len(matches)-1 {
-		a.DetailMatchIndex = len(matches) - 1
-	} else if len(matches) == 0 {
-		a.DetailMatchIndex = 0
-	}
-	return changed || previous != ""
-}
-
-func (a *App) openDetail() {
-	selected := a.Model.SelectedTask()
-	if selected == nil {
-		return
-	}
-	task, err := a.GetTask(selected.TaskID)
-	if err != nil {
-		a.Model.DetailError = err.Error()
-		return
-	}
-	a.Detail = &task
-	a.showJournalWarnings(task.Warnings)
-	a.DetailScroll = 0
-	a.DetailCursor = [2]int{0, 0}
-	a.resetDetailSearch()
-	a.resetMouseSelection()
-	a.Model.DetailError = ""
-}
-
-func (a *App) closeDetail() {
-	a.Detail = nil
-	a.DetailScroll = 0
-	a.resetDetailSearch()
-	a.resetMouseSelection()
 }
 
 func (a *App) resetDetailSearch() {
@@ -698,7 +632,7 @@ func (a *App) handleBoardKey(key string) {
 	case "=", "+":
 		a.adjustColumns(1)
 	case "r", "R":
-		a.refreshBoard()
+		a.requestBoardRefresh(true)
 	case "o", "O":
 		a.openOptions()
 	case "?":

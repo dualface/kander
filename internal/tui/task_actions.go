@@ -187,6 +187,7 @@ func (a *App) queueTaskAction() {
 		return
 	}
 	dialog.running = true
+	a.invalidateBoardReads()
 	id, sequence, source, action, options := dialog.id, dialog.sequence, dialog.source, dialog.action, dialog.options
 	getBoard := a.GetBoard
 	a.pendingWork = func() any {

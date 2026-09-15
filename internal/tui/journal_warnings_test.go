@@ -65,6 +65,7 @@ func TestJournalWarningsReachRefreshDetailAndBacklogStart(t *testing.T) {
 			t.Fatal("refresh warning not visible")
 		}
 		app.openDetail()
+		finishQueuedWork(t, app)
 		if app.Detail == nil || len(app.Detail.Warnings) != 1 {
 			t.Fatal("detail warning not retained")
 		}

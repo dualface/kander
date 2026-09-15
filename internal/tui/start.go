@@ -126,7 +126,7 @@ func (a *App) handleStartConfirmation(key string) {
 }
 
 func (a *App) applyStartResult(work confirmWork) {
-	a.refreshBoard()
+	a.requestBoardRefresh(true)
 	message := ""
 	compact := ""
 	result, _ := work.payload.(launch.StartResult)
@@ -163,6 +163,7 @@ func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 }
 
 func (a *App) requestQuit() {
+	a.cancelOwnedReads()
 	a.Running = false
 }
 

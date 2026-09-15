@@ -123,7 +123,7 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, nil
 	case tickMsg:
 		if p.app.Now().Sub(p.app.LastRefresh) >= time.Duration(p.app.RefreshSecs)*time.Second {
-			p.app.refreshBoard()
+			p.app.requestBoardRefresh(false)
 		}
 		p.app.issuesTick()
 		return p, tea.Batch(tickCmd(), p.app.takePending())
@@ -159,6 +159,9 @@ func (a *App) takePending() tea.Cmd {
 		work := a.pendingWork
 		a.pendingWork = nil
 		cmds = append(cmds, func() tea.Msg { return workMsg{payload: work()} })
+	}
+	if cmd := a.takeQueuedReads(); cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 	if len(cmds) == 0 {
 		return nil
