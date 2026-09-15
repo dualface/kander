@@ -173,6 +173,10 @@ func copyModels(src config.Models) config.Models {
 			out.Review[agent][key] = value
 		}
 	}
+	// Keep Chat sparse: DefaultModels pre-creates every built-in Chat entry,
+	// which would hide a later EnsureChatEntry fallback to that agent's
+	// effective kanban large values.
+	out.Chat = map[string]map[string]string{}
 	for agent, entry := range src.Chat {
 		if out.Chat[agent] == nil {
 			out.Chat[agent] = map[string]string{}

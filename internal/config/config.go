@@ -423,10 +423,11 @@ func KanbanAgentFor(cfg *Config, kind string) (string, error) {
 	return cfg.KanbanAgents[kind], nil
 }
 
-// ExecutionAgentsInUse lists the execution agents that will actually be launched,
-// deduplicated, large task first, then small, then the Chat Agent when it is
-// not already in that set.
-func ExecutionAgentsInUse(cfg *Config) []string {
+// KanbanAgentsInUse lists the execution agents bound to task scales,
+// deduplicated, large first then small. kander config kanban-model lines and
+// the Options summary use this set so a Chat-only agent is not labeled as a
+// kanban model.
+func KanbanAgentsInUse(cfg *Config) []string {
 	seen := map[string]struct{}{}
 	var out []string
 	for _, scale := range TaskScales {
@@ -436,6 +437,18 @@ func ExecutionAgentsInUse(cfg *Config) []string {
 		}
 		seen[agent] = struct{}{}
 		out = append(out, agent)
+	}
+	return out
+}
+
+// ExecutionAgentsInUse lists the execution agents that will actually be launched,
+// deduplicated, large task first, then small, then the Chat Agent when it is
+// not already in that set. Doctor and rules integration use this inventory.
+func ExecutionAgentsInUse(cfg *Config) []string {
+	out := KanbanAgentsInUse(cfg)
+	seen := map[string]struct{}{}
+	for _, agent := range out {
+		seen[agent] = struct{}{}
 	}
 	if chat := ChatAgentFor(cfg); chat != "" {
 		if _, ok := seen[chat]; !ok {

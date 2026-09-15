@@ -218,4 +218,32 @@ func TestExecutionAgentsInUseIncludesDistinctChatAgent(t *testing.T) {
 	if len(got) != 2 || got[0] != "codex" || got[1] != "claude" {
 		t.Fatalf("%v", got)
 	}
+	kanban := KanbanAgentsInUse(cfg)
+	if len(kanban) != 1 || kanban[0] != "codex" {
+		t.Fatalf("kanban in use=%v", kanban)
+	}
+}
+
+func TestFormatConfigLinesOmitsChatOnlyKanbanModel(t *testing.T) {
+	setupHome(t)
+	cfg := DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.KanbanAgents["large"] = "codex"
+	cfg.KanbanAgents["small"] = "codex"
+	cfg.ChatAgent = "claude"
+	lines, err := FormatConfigLines(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, Text("config.chat_agent")+": claude") {
+		t.Fatalf("missing chat agent:\n%s", joined)
+	}
+	kanbanLabel := Text("config.kanban_model") + " claude:"
+	if strings.Contains(joined, kanbanLabel) {
+		t.Fatalf("chat-only agent listed as kanban model:\n%s", joined)
+	}
+	if !strings.Contains(joined, Text("config.kanban_model")+":") && !strings.Contains(joined, Text("config.kanban_model")+" codex:") {
+		t.Fatalf("missing kanban model line:\n%s", joined)
+	}
 }

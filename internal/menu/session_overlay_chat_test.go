@@ -90,3 +90,30 @@ func TestCursorChatFieldsOmitEffort(t *testing.T) {
 		t.Fatalf("cursor fields=%+v", fields)
 	}
 }
+
+func TestGlobalChatAgentSwitchFallsBackToKanbanLarge(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.ChatAgent = "codex"
+	cfg.Models.Chat = map[string]map[string]string{
+		"codex": {"model": "codex-chat", "effort": "high"},
+	}
+	cfg.Models.Kanban["claude"]["large_model"] = "custom-claude-large"
+	cfg.Models.Kanban["claude"]["large_effort"] = "high"
+	session, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.SetChatAgent("claude")
+	got := config.ChatSettingsFor(session.Config)
+	if got.Agent != "claude" || got.Model != "custom-claude-large" || got.Effort != "high" {
+		t.Fatalf("chat settings=%+v", got)
+	}
+	fields := session.ChatModelFieldsFor()
+	if len(fields) == 0 {
+		t.Fatal("no chat model fields after agent switch")
+	}
+	if fields[0].Value() != "custom-claude-large" {
+		t.Fatalf("displayed model=%q", fields[0].Value())
+	}
+}

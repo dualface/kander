@@ -702,7 +702,7 @@ func (s *Session) Summary() []string {
 	cfg := s.Config
 	lines := []string{config.Text("menu.current_configuration")}
 	lines = append(lines, config.Text("rules.modules")+": "+config.FormatRulesSummary(cfg.Rules))
-	for _, agent := range config.ExecutionAgentsInUse(cfg) {
+	for _, agent := range config.KanbanAgentsInUse(cfg) {
 		entry := cfg.Models.Kanban[agent]
 		lines = append(lines, "  kanban "+agent+": "+config.FormatKanbanModelSummary(s.Config, agent, entry))
 	}
