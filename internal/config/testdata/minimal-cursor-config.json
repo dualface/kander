@@ -6,6 +6,7 @@
     "large": "cursor",
     "small": "cursor"
   },
+  "chat_agent": "cursor",
   "launcher": "tmux",
   "reviewers": {
     "large": {
@@ -112,6 +113,27 @@
         "small_agent": "",
         "small_effort": "",
         "small_model": ""
+      }
+    },
+    "chat": {
+      "claude": {
+        "effort": "high",
+        "model": "opus"
+      },
+      "codex": {
+        "effort": "high",
+        "model": "gpt-5.6-sol"
+      },
+      "cursor": {
+        "model": "cursor-grok-4.6-xhigh"
+      },
+      "grok": {
+        "effort": "xhigh",
+        "model": ""
+      },
+      "pi": {
+        "effort": "high",
+        "model": ""
       }
     }
   },

@@ -174,6 +174,7 @@ func repairValues(raw any) (*Config, error) {
 	fillMissingReviewerScales(provided)
 	FoldLegacyReviewRoleKeys(provided)
 	recoverConfigFields(root, provided, root)
+	fillMissingChatRaw(root, provided)
 	return Validate(root)
 }
 

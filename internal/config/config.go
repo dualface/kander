@@ -116,6 +116,7 @@ type Models struct {
 	Kanban      map[string]map[string]string `json:"kanban"`
 	Review      map[string]map[string]string `json:"review"`
 	ReviewRoles map[string]map[string]string `json:"review_roles"`
+	Chat        map[string]map[string]string `json:"chat"`
 }
 
 // TUI holds the persistent terminal UI preferences. Command-line flags only affect the current run and never change these values.
@@ -133,6 +134,7 @@ type Config struct {
 	WelcomeComplete bool                         `json:"welcome_complete"`
 	KanbanAgent     string                       `json:"kanban_agent"`
 	KanbanAgents    map[string]string            `json:"kanban_agents"`
+	ChatAgent       string                       `json:"chat_agent"`
 	Launcher        string                       `json:"launcher"`
 	Reviewers       map[string]map[string]string `json:"reviewers"`
 	ReviewStages    map[string]map[string]string `json:"review_stages"`
@@ -152,6 +154,7 @@ func Clone(src *Config) *Config {
 	out := *src
 	out.Agents = CloneAgents(src.Agents)
 	out.KanbanAgents = cloneStringMap(src.KanbanAgents)
+	out.ChatAgent = src.ChatAgent
 	out.Reviewers = cloneNested(src.Reviewers)
 	out.ReviewStages = cloneNested(src.ReviewStages)
 	out.Rules = src.Rules.Clone()
@@ -159,6 +162,7 @@ func Clone(src *Config) *Config {
 		Kanban:      cloneNested(src.Models.Kanban),
 		Review:      cloneNested(src.Models.Review),
 		ReviewRoles: cloneNested(src.Models.ReviewRoles),
+		Chat:        cloneNested(src.Models.Chat),
 	}
 	return &out
 }
@@ -198,6 +202,7 @@ func DefaultModels() Models {
 		Kanban:      cloneNested(kanbanModelDefaults()),
 		Review:      cloneNested(reviewModelDefaults()),
 		ReviewRoles: defaultReviewRoles(),
+		Chat:        cloneNested(chatModelDefaults()),
 	}
 }
 
@@ -258,6 +263,7 @@ func DefaultConfig() *Config {
 		WelcomeComplete: false,
 		KanbanAgent:     agent,
 		KanbanAgents:    agents,
+		ChatAgent:       agent,
 		Launcher:        DefaultLauncher(),
 		Reviewers:       DefaultReviewers(),
 		ReviewStages:    DefaultReviewStages(),
@@ -446,9 +452,10 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 	if !ok {
 		return Models{}, configErrorf("config.models_must_be_a_json_object")
 	}
+	models.Chat = map[string]map[string]string{}
 	var unknown []string
 	for key := range obj {
-		if key != "kanban" && key != "review" && key != "review_roles" {
+		if key != "kanban" && key != "review" && key != "review_roles" && key != "chat" {
 			unknown = append(unknown, key)
 		}
 	}
@@ -553,6 +560,21 @@ func validateModels(raw any, definitions ...map[string]AgentDefinition) (Models,
 				fields[field] = text
 			}
 		}
+	}
+	if providedRaw, exists := obj["chat"]; exists {
+		provided, ok := providedRaw.(map[string]any)
+		if !ok {
+			return Models{}, configErrorf("config.models_must_be_a_json_object_2", "chat")
+		}
+		var defs map[string]AgentDefinition
+		if len(definitions) > 0 {
+			defs = definitions[0]
+		}
+		chat, err := validateChatModels(provided, names, defs)
+		if err != nil {
+			return Models{}, err
+		}
+		models.Chat = chat
 	}
 	return models, nil
 }
@@ -670,6 +692,13 @@ func Validate(raw any) (*Config, error) {
 			kanbanAgents[scale] = kanbanAgent
 		}
 	}
+	chatAgent := ""
+	if _, exists := obj["chat_agent"]; exists {
+		chatAgent, err = validateChoice(obj["chat_agent"], names, "chat_agent")
+		if err != nil {
+			return nil, err
+		}
+	}
 	launcher, err := validateLauncher(obj["launcher"])
 	if err != nil {
 		return nil, err
@@ -733,11 +762,12 @@ func Validate(raw any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Config{
+	cfg := &Config{
 		SchemaVersion:   SchemaVersion,
 		WelcomeComplete: welcome,
 		KanbanAgent:     kanbanAgent,
 		KanbanAgents:    kanbanAgents,
+		ChatAgent:       chatAgent,
 		Launcher:        launcher,
 		Reviewers:       reviewers,
 		ReviewStages:    stages,
@@ -747,7 +777,9 @@ func Validate(raw any) (*Config, error) {
 		Language:        language,
 		AgentLanguage:   agentLanguage,
 		Agents:          definitions,
-	}, nil
+	}
+	applyChatFallbacks(cfg, obj)
+	return cfg, nil
 }
 
 func ValidateJSON(data []byte) (*Config, error) {

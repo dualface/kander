@@ -31,8 +31,8 @@ type ChatResult struct {
 	Warnings []string
 }
 
-// PreviewChat resolves the large-tier execution agent and the configured
-// launcher without allocating a session or creating a container.
+// PreviewChat resolves the Chat Agent and the configured launcher without
+// allocating a session or creating a container.
 func PreviewChat() (ChatPreview, error) {
 	cfg, err := loadEffective()
 	if err != nil {
@@ -65,6 +65,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	if err != nil {
 		return result, err
 	}
+	settings := config.ChatSettingsFor(cfg)
 	plan, err := prepareLaunch(launcher, parentDir(request.Root), "chat")
 	if err != nil {
 		return result, err
@@ -92,7 +93,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 		}
 	}()
 	prompt := taskInstruction(t("launch.prompt.chat_head"), taskFile)
-	args, err := agentArguments(agent, cfg.Models.Kanban[agent], "large", session, false, cfg)
+	args, err := chatAgentArguments(agent, settings.Model, settings.Effort, session, cfg)
 	if err != nil {
 		return result, err
 	}
@@ -119,18 +120,23 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 }
 
 // chatDefaults resolves the agent and launcher of a chat session. The session
-// has no card, so it uses the large tier, and it must start in a terminal
-// container: a launcher that occupies the caller's terminal would take the
-// board's terminal away and leave nothing to focus.
+// has no card, so it uses the dedicated Chat Agent, and it must start in a
+// terminal container: a launcher that occupies the caller's terminal would take
+// the board's terminal away and leave nothing to focus.
 func chatDefaults(cfg *config.Config) (string, string, error) {
-	agent, launcher, err := sessionDefaults(cfg, "large", "", "")
+	_, launcher, err := sessionDefaults(cfg, "large", "", "")
 	if err != nil {
 		return "", "", err
 	}
+	agent := config.ChatAgentFor(cfg)
 	if !terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.Container }) {
 		return "", "", launchError("launch.chat_requires_container_launcher", launcher)
 	}
 	return agent, launcher, nil
+}
+
+func chatAgentArguments(agent, model, effort string, session AgentSession, cfg *config.Config) ([]string, error) {
+	return expandAgentInvocation(agent, model, effort, session, false, cfg)
 }
 
 // chatWindowName names the container after the local start time, so repeated

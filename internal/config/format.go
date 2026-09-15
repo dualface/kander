@@ -144,6 +144,9 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 	lines = append(lines, Text("config.welcome")+": "+status)
 	lines = append(lines, AgentWarnings(effective)...)
 	lines = append(lines, Text("config.kanban_agent")+": "+FormatKanbanAgentsSummary(effective))
+	chatAgent := ChatAgentFor(effective)
+	lines = append(lines, Text("config.chat_agent")+": "+chatAgent)
+	lines = append(lines, Text("config.chat_model")+": "+FormatChatModelSummary(effective, chatAgent, effective.Models.Chat[chatAgent]))
 	lines = append(lines, Text("config.launcher")+": "+effective.Launcher)
 	inUse := ExecutionAgentsInUse(effective)
 	for _, agent := range inUse {

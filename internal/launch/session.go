@@ -418,16 +418,20 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-	definition := config.AgentFor(cfg, agent)
-	if resume && definition.Session.Mode == "none" {
-		return nil, config.AgentResumeError(agent)
-	}
 	scale := "small"
 	if kind == "large" {
 		scale = "large"
 	}
 	// The model is picked per task scale; an empty scale model falls back to the shared "model" key of legacy configs.
 	modelID := config.KanbanModelFor(model, scale)
+	return expandAgentInvocation(agent, modelID, model[scale+"_effort"], session, resume, cfg)
+}
+
+func expandAgentInvocation(agent, modelID, effort string, session AgentSession, resume bool, cfg *config.Config) ([]string, error) {
+	definition := config.AgentFor(cfg, agent)
+	if resume && definition.Session.Mode == "none" {
+		return nil, config.AgentResumeError(agent)
+	}
 	if definition.Args == nil {
 		return nil, launchError("launch.unsupported_agent", agent)
 	}
@@ -440,7 +444,7 @@ func agentArguments(agent string, model map[string]string, kind string, session 
 		reference = ""
 		template = config.RewriteKeepSession(template, true)
 	}
-	return config.ExpandAgentArgs(template, modelID, model[scale+"_effort"], reference), nil
+	return config.ExpandAgentArgs(template, modelID, effort, reference), nil
 }
 
 func requireAgentProgram(agentName string, configs ...*config.Config) (*process.AgentProgram, error) {

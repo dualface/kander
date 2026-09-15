@@ -26,6 +26,7 @@ type ModelField struct {
 	// Agent is the object this field belongs to (an agent on the execution side, a role on the review side),
 	// and together with field it forms the deduplication key.
 	Agent       string
+	kind        string
 	Prompt      string
 	entry       map[string]string
 	field       string
@@ -40,6 +41,14 @@ func (f ModelField) Key() string { return f.Agent + "." + f.field }
 
 // FieldName is the config key this field writes (model, effort, path, ...).
 func (f ModelField) FieldName() string { return f.field }
+
+// Kind is "kanban", "review", or "chat". Empty means kanban.
+func (f ModelField) Kind() string {
+	if f.kind == "" {
+		return "kanban"
+	}
+	return f.kind
+}
 
 // Value returns the current value of the field; an empty string means the CLI default is used.
 func (f ModelField) Value() string {
@@ -147,6 +156,13 @@ func (s *Session) prepare(configValid bool) error {
 	cfg.KanbanAgents = map[string]string{}
 	for k, v := range s.existing.KanbanAgents {
 		cfg.KanbanAgents[k] = v
+	}
+	cfg.ChatAgent = s.existing.ChatAgent
+	if cfg.ChatAgent == "" {
+		cfg.ChatAgent = cfg.KanbanAgents["large"]
+		if cfg.ChatAgent == "" {
+			cfg.ChatAgent = s.existing.KanbanAgent
+		}
 	}
 	if !s.existing.WelcomeComplete {
 		if !agentUsable(s.agents[cfg.KanbanAgent]) {
@@ -481,6 +497,64 @@ func (s *Session) ExecutionModelFields() []ModelField {
 	return out
 }
 
+// SetChatAgent sets the TUI chat execution agent. Project edits write only
+// chat_agent; model fields stay inherited until the user edits them.
+func (s *Session) SetChatAgent(agent string) {
+	if s == nil || s.Config == nil {
+		return
+	}
+	s.materializeChatEntry(agent)
+	s.Config.ChatAgent = agent
+	s.noteOverride([]string{"chat_agent"}, agent)
+}
+
+func (s *Session) materializeChatEntry(agent string) {
+	if s == nil || s.Config == nil || agent == "" {
+		return
+	}
+	config.EnsureChatEntry(s.Config, agent)
+}
+
+// ChatModelFieldsFor returns the model fields of the current Chat Agent.
+func (s *Session) ChatModelFieldsFor() []ModelField {
+	if s == nil || s.Config == nil {
+		return nil
+	}
+	agent := s.Config.ChatAgent
+	if agent == "" {
+		agent = s.Config.KanbanAgents["large"]
+	}
+	if agent == "" {
+		return nil
+	}
+	s.materializeChatEntry(agent)
+	label := agentLabels()[agent]
+	if label == "" {
+		label = agent
+	}
+	fields := []ModelField{{
+		Label:  config.Text("menu.chat_model"),
+		Short:  config.Text("menu.field_model"),
+		Agent:  agent,
+		kind:   "chat",
+		Prompt: config.Text("menu.full_model_id_for_s", label),
+		entry:  s.Config.Models.Chat[agent],
+		field:  "model",
+	}}
+	if !config.AgentSupportsEffort(s.Config, agent) {
+		return fields
+	}
+	return append(fields, ModelField{
+		Label:  config.Text("menu.chat_effort"),
+		Short:  config.Text("menu.field_effort"),
+		Agent:  agent,
+		kind:   "chat",
+		Prompt: config.Text("menu.reasoning_effort_for", label),
+		entry:  s.Config.Models.Chat[agent],
+		field:  "effort",
+	})
+}
+
 // ReviewModelFieldsFor returns the model fields of one review role at one task scale.
 // Fields display the runtime values for the selected reviewer. Stored overrides
 // owned by another agent remain unchanged until the selection is edited.
@@ -498,6 +572,7 @@ func (s *Session) ReviewModelFieldsFor(role, scale string) []ModelField {
 		Label:  config.Text("menu.review_model", role) + " (" + scaleLabel + ")",
 		Short:  config.Text("menu.field_model"),
 		Agent:  role,
+		kind:   "review",
 		Prompt: config.Text("menu.which_model_should_use", role),
 		entry:  entry,
 		field:  scale + "_model",
@@ -509,6 +584,7 @@ func (s *Session) ReviewModelFieldsFor(role, scale string) []ModelField {
 		Label:  config.Text("menu.review_reasoning_effort", role) + " (" + scaleLabel + ")",
 		Short:  config.Text("menu.field_effort"),
 		Agent:  role,
+		kind:   "review",
 		Prompt: config.Text("menu.reasoning_effort_for", role),
 		entry:  entry,
 		field:  scale + "_effort",
@@ -681,6 +757,13 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.Models = copyModels(existing.Models)
 	cfg.KanbanAgent = existing.KanbanAgent
 	cfg.KanbanAgents = cloneStrings(existing.KanbanAgents)
+	cfg.ChatAgent = existing.ChatAgent
+	if cfg.ChatAgent == "" {
+		cfg.ChatAgent = cfg.KanbanAgents["large"]
+		if cfg.ChatAgent == "" {
+			cfg.ChatAgent = existing.KanbanAgent
+		}
+	}
 	cfg.Reviewers = cloneReviewStages(existing.Reviewers)
 	cfg.ReviewStages = cloneReviewStages(existing.ReviewStages)
 	cfg.Rules = existing.Rules.Clone()

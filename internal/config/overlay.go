@@ -20,6 +20,7 @@ var overlayForbiddenKeys = map[string]struct{}{
 var overlayAllowedKeys = map[string]struct{}{
 	"kanban_agent":   {},
 	"kanban_agents":  {},
+	"chat_agent":     {},
 	"launcher":       {},
 	"reviewers":      {},
 	"review_stages":  {},

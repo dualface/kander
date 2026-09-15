@@ -253,7 +253,7 @@ func OptionsSectionOverlayRoots(section string) [][]string {
 	case "interface":
 		return [][]string{{"language"}, {"agent_language"}, {"tui"}}
 	case "execution":
-		return [][]string{{"kanban_agents"}, {"launcher"}, {"models", "kanban"}}
+		return [][]string{{"kanban_agents"}, {"chat_agent"}, {"launcher"}, {"models", "kanban"}, {"models", "chat"}}
 	case "review":
 		return [][]string{{"reviewers"}, {"models", "review_roles"}}
 	case "review_stages":
@@ -444,16 +444,30 @@ func (s *Session) NoteModelOverride(field ModelField, value string) {
 	case "path", "process_name":
 		// Agents definitions are hand-edited only; Options must not write them.
 		return
-	case "model", "effort":
-		s.noteOverride([]string{"models", "review_roles", field.Agent, field.field}, value)
-	default:
-		if isReviewRoleName(field.Agent) {
-			s.noteReviewModelOverride(field, value)
+	}
+	switch field.Kind() {
+	case "chat":
+		s.noteOverride([]string{"models", "chat", field.Agent, field.field}, value)
+		s.pinChatAgent()
+		return
+	case "review":
+		if field.field == "model" || field.field == "effort" {
+			s.noteOverride([]string{"models", "review_roles", field.Agent, field.field}, value)
 			return
 		}
-		s.noteOverride([]string{"models", "kanban", field.Agent, field.field}, value)
-		s.pinKanbanAgentForField(field)
+		s.noteReviewModelOverride(field, value)
+		return
 	}
+	if field.field == "model" || field.field == "effort" {
+		s.noteOverride([]string{"models", "review_roles", field.Agent, field.field}, value)
+		return
+	}
+	if isReviewRoleName(field.Agent) {
+		s.noteReviewModelOverride(field, value)
+		return
+	}
+	s.noteOverride([]string{"models", "kanban", field.Agent, field.field}, value)
+	s.pinKanbanAgentForField(field)
 }
 
 func isReviewRoleName(name string) bool {
@@ -476,6 +490,33 @@ func (s *Session) pinKanbanAgentForField(field ModelField) {
 		return
 	}
 	config.OverlaySet(s.overlayRaw, field.Agent, "kanban_agents", scale)
+	s.OverlayDirty = true
+	if err := s.ensureScopeRaw(); err != nil {
+		return
+	}
+	if merged, err := config.MergeOverlayOnRaw(s.scopeRaw, s.overlayRaw); err == nil {
+		s.Config = merged
+		s.overlayDraft = false
+		return
+	}
+	if draft, err := s.previewOverlayDraft(s.overlayRaw); err == nil {
+		s.Config = draft
+		s.overlayDraft = true
+	}
+}
+
+func (s *Session) pinChatAgent() {
+	if s == nil || !s.EditingOverlay() || s.overlayRaw == nil || s.Config == nil {
+		return
+	}
+	if config.OverlayHas(s.overlayRaw, "chat_agent") {
+		return
+	}
+	agent := s.Config.ChatAgent
+	if agent == "" {
+		return
+	}
+	config.OverlaySet(s.overlayRaw, agent, "chat_agent")
 	s.OverlayDirty = true
 	if err := s.ensureScopeRaw(); err != nil {
 		return

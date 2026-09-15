@@ -17,7 +17,9 @@ func useChatConfig(t *testing.T, agent, launcher string) {
 	t.Helper()
 	oldLoad := loadEffective
 	loadEffective = func() (*config.Config, error) {
-		return envConfig("codex", launcher, map[string]string{"large": agent, "small": "codex"}), nil
+		cfg := envConfig("codex", launcher, map[string]string{"large": agent, "small": "codex"})
+		cfg.ChatAgent = agent
+		return cfg, nil
 	}
 	t.Cleanup(func() { loadEffective = oldLoad })
 }
@@ -176,5 +178,71 @@ func TestPreviewChatResolvesTheLargeTierAndRefusesTerminalLaunchers(t *testing.T
 	useChatConfig(t, "grok", "foreground")
 	if _, err := PreviewChat(); err == nil || !strings.Contains(err.Error(), "foreground") {
 		t.Fatalf("foreground must be refused with its name: %v", err)
+	}
+}
+
+func TestStartChatUsesChatModelNotKanbanLarge(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
+	root, _, _ := setupBoard(t)
+	oldLoad := loadEffective
+	loadEffective = func() (*config.Config, error) {
+		cfg := envConfig("codex", "tmux", map[string]string{"large": "codex", "small": "codex"})
+		cfg.ChatAgent = "claude"
+		cfg.Models.Kanban["claude"]["large_model"] = "kanban-large"
+		cfg.Models.Kanban["claude"]["large_effort"] = "high"
+		cfg.Models.Chat["claude"] = map[string]string{"model": "chat-only-model", "effort": "low"}
+		return cfg, nil
+	}
+	t.Cleanup(func() { loadEffective = oldLoad })
+
+	preview, err := PreviewChat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Agent != "claude" {
+		t.Fatalf("preview agent=%s", preview.Agent)
+	}
+	if _, err := StartChat(ChatRequest{Root: root, Message: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	command := lastCommand(t, root)
+	if !strings.Contains(command, "chat-only-model") || !strings.Contains(command, "low") {
+		t.Fatalf("chat argv missing dedicated model/effort: %s", command)
+	}
+	if strings.Contains(command, "kanban-large") || strings.Contains(command, "gpt-5.6-sol") {
+		t.Fatalf("kanban large leaked into chat argv: %s", command)
+	}
+}
+
+func TestStartChatFallsBackToLargeWhenChatKeysMissing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
+	root, _, _ := setupBoard(t)
+	oldLoad := loadEffective
+	loadEffective = func() (*config.Config, error) {
+		cfg := envConfig("codex", "tmux", map[string]string{"large": "claude", "small": "codex"})
+		cfg.ChatAgent = ""
+		cfg.Models.Chat = map[string]map[string]string{}
+		cfg.Models.Kanban["claude"]["large_model"] = "legacy-large"
+		cfg.Models.Kanban["claude"]["large_effort"] = "high"
+		return cfg, nil
+	}
+	t.Cleanup(func() { loadEffective = oldLoad })
+	preview, err := PreviewChat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Agent != "claude" {
+		t.Fatalf("fallback agent=%s", preview.Agent)
+	}
+	if _, err := StartChat(ChatRequest{Root: root, Message: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	command := lastCommand(t, root)
+	if !strings.Contains(command, "legacy-large") || !strings.Contains(command, "high") {
+		t.Fatalf("fallback argv=%s", command)
 	}
 }

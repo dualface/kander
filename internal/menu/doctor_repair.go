@@ -84,6 +84,12 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 			cfg.KanbanAgents[scale] = selected
 		}
 	}
+	if cfg.ChatAgent == "" {
+		cfg.ChatAgent = cfg.KanbanAgents["large"]
+	}
+	if !agentUsable(agents[cfg.ChatAgent]) && execution != "" {
+		set("chat_agent", &cfg.ChatAgent, execution)
+	}
 	reviewer := choose(config.ReviewAgentNames(cfg), true)
 	for _, scale := range config.TaskScales {
 		if cfg.Reviewers[scale] == nil {

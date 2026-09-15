@@ -9,6 +9,13 @@ import (
 // field was already overridden. Rebuild all affected inheritance labels.
 func (p *optionsPanel) modelSelectionOverrides(field menu.ModelField) [3]bool {
 	path := modelOverlayPath(field)
+	if field.Kind() == "chat" {
+		return [3]bool{
+			p.overridePresence("chat_agent"),
+			p.overridePresence("models", "chat", field.Agent, "model"),
+			p.overridePresence("models", "chat", field.Agent, "effort"),
+		}
+	}
 	if len(path) != 4 {
 		return [3]bool{}
 	}

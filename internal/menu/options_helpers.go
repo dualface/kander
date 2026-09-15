@@ -173,6 +173,14 @@ func copyModels(src config.Models) config.Models {
 			out.Review[agent][key] = value
 		}
 	}
+	for agent, entry := range src.Chat {
+		if out.Chat[agent] == nil {
+			out.Chat[agent] = map[string]string{}
+		}
+		for key, value := range entry {
+			out.Chat[agent][key] = value
+		}
+	}
 	for role, entry := range src.ReviewRoles {
 		if out.ReviewRoles[role] == nil {
 			out.ReviewRoles[role] = map[string]string{}

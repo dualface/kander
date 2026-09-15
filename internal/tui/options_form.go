@@ -26,6 +26,7 @@ type formBinding struct {
 
 	large      string
 	small      string
+	chat       string
 	launcher   string
 	prevLaunch string
 
@@ -549,6 +550,7 @@ func reviewerFocusKey(role, scale string) string { return "reviewer:" + role + "
 func stageFocusKey(role, scale string) string    { return "stage:" + role + ":" + scale }
 func interfaceFocusKey(name string) string       { return "ui:" + name }
 func launcherFocusKey() string                   { return "launcher" }
+func chatFocusKey() string                       { return "chat" }
 func modelFocusKey(field menu.ModelField) string {
 	return "model:" + field.Key()
 }
@@ -558,6 +560,10 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 	cfg := session.Config
 	bind.large = cfg.KanbanAgents["large"]
 	bind.small = cfg.KanbanAgents["small"]
+	bind.chat = cfg.ChatAgent
+	if bind.chat == "" {
+		bind.chat = cfg.KanbanAgents["large"]
+	}
 	bind.launcher = cfg.Launcher
 	bind.prevLaunch = cfg.Launcher
 	bind.reset()
@@ -582,6 +588,14 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 		p.addModelInputs(bind, session.ExecutionModelFieldsFor(scale))
 		// Agent restore is page-level; selecting an agent already materializes its settings.
 	}
+	bind.addSpacer()
+	bind.fieldIndex[chatFocusKey()] = bind.focusable
+	bind.addField(huh.NewSelect[string]().
+		Title(p.inheritTitle(t("tui.titles.chat"), bind.chat, "chat_agent")).
+		Options(toOptions(session.ExecutionChoicesFor(bind.chat))...).
+		Value(&bind.chat).
+		Inline(true))
+	p.addModelInputs(bind, session.ChatModelFieldsFor())
 	// The launcher is independent of any particular agent, so it goes last, separated by a blank line.
 	bind.addSpacer()
 	bind.fieldIndex[launcherFocusKey()] = bind.focusable
@@ -635,6 +649,12 @@ func (p *optionsPanel) addModelInputs(bind *formBinding, fields []menu.ModelFiel
 func modelOverlayPath(field menu.ModelField) []string {
 	if field.Agent == "" || field.FieldName() == "" {
 		return nil
+	}
+	switch field.Kind() {
+	case "chat":
+		return []string{"models", "chat", field.Agent, field.FieldName()}
+	case "review":
+		return []string{"models", "review_roles", field.Agent, field.FieldName()}
 	}
 	name := field.FieldName()
 	switch name {
@@ -773,6 +793,11 @@ func (b *formBinding) apply(p *optionsPanel) {
 			session.SetExecutionAgent("small", b.small)
 			p.markDirty()
 			p.rebuildAt(scaleFocusKey("small"))
+		}
+		if session.Config.ChatAgent != b.chat && b.chat != "" {
+			session.SetChatAgent(b.chat)
+			p.markDirty()
+			p.rebuildAt(chatFocusKey())
 		}
 		if b.launcher != menu.LauncherInstallValue && session.Config.Launcher != b.launcher {
 			before := p.overridePresence("launcher")
