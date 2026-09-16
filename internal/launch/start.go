@@ -136,21 +136,12 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if err != nil {
 				return AgentSession{}, err
 			}
-			effective := AgentSession{Agent: session.Agent, Reference: ref}
-			if config.SessionPersistsAfterStart(mode) {
-				current, err := readDocumentFn(moved)
-				if err != nil {
-					return AgentSession{}, err
-				}
-				updated, err := renderSessionMetadata(current, effective.Render())
-				if err != nil {
-					return AgentSession{}, err
-				}
-				if err := writeDocumentFn(root, moved, updated); err != nil {
-					return AgentSession{}, err
-				}
-			}
-			return effective, nil
+			return AgentSession{Agent: session.Agent, Reference: ref}, nil
+		}
+	}
+	if config.SessionPersistsAfterStart(mode) {
+		plan.sessionFinalize = func(effective AgentSession) error {
+			return board.ConfirmTaskStartSession(root, moved, initialSession, effective.Render())
 		}
 	}
 	loc := (func(LaunchOutcome) error)(nil)
@@ -165,13 +156,11 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
 	taskFileHandedOff = true
-	if config.SessionPersistsAfterStart(mode) {
-		err = board.ConfirmTaskStartSession(root, moved, initialSession, session.Render())
-	} else {
+	if !config.SessionPersistsAfterStart(mode) {
 		err = board.ConfirmTaskStart(root, moved)
-	}
-	if err != nil {
-		return result, err
+		if err != nil {
+			return result, err
+		}
 	}
 	result.TaskID, result.Size, result.Agent = moved.TaskID, moved.Kind, agentName
 	result.Plan, result.Outcome = plan, outcome

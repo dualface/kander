@@ -59,6 +59,13 @@ func launchAgent(
 			if agentSession != nil {
 				*agentSession = sess
 			}
+			if plan.sessionFinalize != nil {
+				if err := plan.sessionFinalize(sess); err != nil {
+					_ = handle.proc.Kill()
+					_, _ = handle.Wait()
+					return LaunchOutcome{}, fail(err)
+				}
+			}
 		}
 		return LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}, nil
 	}
@@ -110,6 +117,11 @@ func launchAgent(
 		}
 		if caps.PaneMetadata {
 			if err := backend.SetSessionMarker(conn, address.Pane, sess.Reference); err != nil {
+				return LaunchOutcome{}, fail(err)
+			}
+		}
+		if plan.sessionFinalize != nil {
+			if err := plan.sessionFinalize(sess); err != nil {
 				return LaunchOutcome{}, fail(err)
 			}
 		}

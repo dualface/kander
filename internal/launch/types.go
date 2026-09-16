@@ -40,11 +40,12 @@ func (s AgentSession) Render() string {
 
 // LaunchPlan is the result of the launcher preflight checks run before claiming; a failed check does not claim the card.
 type LaunchPlan struct {
-	warning        func(string)
-	Launcher       string
-	Target         terminal.Target
-	PromptDelivery config.PromptDelivery
-	Prompt         string
+	warning         func(string)
+	sessionFinalize func(AgentSession) error
+	Launcher        string
+	Target          terminal.Target
+	PromptDelivery  config.PromptDelivery
+	Prompt          string
 }
 
 // backend returns the terminal backend of the resolved launcher. An unknown
