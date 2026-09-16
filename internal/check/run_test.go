@@ -435,7 +435,12 @@ func TestHelpAndLegacyUnknownStayCompatible(t *testing.T) {
 	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
 	// Without a config the delegate stops at "config does not exist" before it
 	// ever reaches the board, so write one the runner can load.
-	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	// macOS puts TempDir under a /var symlink, which config.Save rejects.
+	configDir, symErr := filepath.EvalSymlinks(t.TempDir())
+	if symErr != nil {
+		t.Fatal(symErr)
+	}
+	t.Setenv(config.EnvConfig, filepath.Join(configDir, "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	if _, err := config.Save(cfg); err != nil {
@@ -456,8 +461,8 @@ func TestHelpAndLegacyUnknownStayCompatible(t *testing.T) {
 }
 
 func TestInvalidUTF8PathPOSIX(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("NTFS cannot store invalid UTF-8 names")
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip("NTFS and APFS both reject invalid UTF-8 names")
 	}
 	setupCheckLang(t)
 	dir := initRepo(t)
