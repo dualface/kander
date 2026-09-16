@@ -44,7 +44,12 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 		}
 	}
 	t.Setenv(board.EnvBoardDir, root)
-	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	// macOS puts TempDir under a /var symlink, which config.Save rejects.
+	configDir, symErr := filepath.EvalSymlinks(t.TempDir())
+	if symErr != nil {
+		t.Fatal(symErr)
+	}
+	t.Setenv(config.EnvConfig, filepath.Join(configDir, "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.Language = "cn"
