@@ -6,11 +6,11 @@ import (
 )
 
 func runOverlap(ctx context.Context, git gitRunner, sourceRef, headRef string) (OverlapResult, int) {
-	head, errInfo, _ := git.resolve(ctx, headRef)
+	head, errInfo := git.resolve(ctx, headRef)
 	if errInfo != nil {
 		return overlapError(errInfo.Code, errInfo.Message), exitExec
 	}
-	source, errInfo, _ := git.resolve(ctx, sourceRef)
+	source, errInfo := git.resolve(ctx, sourceRef)
 	if errInfo != nil {
 		result := overlapError(errInfo.Code, errInfo.Message)
 		result.HeadCommit = head

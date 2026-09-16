@@ -6,12 +6,12 @@ import (
 )
 
 func runDelivery(ctx context.Context, git gitRunner, baseRef, targetRef string) (DeliveryResult, int) {
-	base, errInfo, _ := git.resolve(ctx, baseRef)
+	base, errInfo := git.resolve(ctx, baseRef)
 	if errInfo != nil {
 		result := deliveryError(errInfo.Code, errInfo.Message)
 		return result, exitExec
 	}
-	target, errInfo, _ := git.resolve(ctx, targetRef)
+	target, errInfo := git.resolve(ctx, targetRef)
 	if errInfo != nil {
 		result := deliveryError(errInfo.Code, errInfo.Message)
 		result.BaseCommit = base
@@ -70,17 +70,17 @@ func lineCandidates(ctx context.Context, git gitRunner, base, target string, cha
 		case 'D':
 			continue
 		case 'A', 'C':
-			targetLines, errInfo := countBlob(ctx, git, target, item.path)
+			targetLines, targetIsBlob, errInfo := countBlob(ctx, git, target, item.path)
 			if errInfo != nil {
 				return nil, nil, errInfo
 			}
-			if targetLines <= lineLimit {
+			if !targetIsBlob || targetLines <= lineLimit {
 				continue
 			}
 			baseLines := 0
 			var basePath *GitPath
 			if item.letter == 'C' && item.oldPath != nil {
-				n, errInfo := countBlob(ctx, git, base, item.oldPath)
+				n, _, errInfo := countBlob(ctx, git, base, item.oldPath)
 				if errInfo != nil {
 					return nil, nil, errInfo
 				}
@@ -99,15 +99,15 @@ func lineCandidates(ctx context.Context, git gitRunner, base, target string, cha
 			if item.oldPath != nil {
 				oldPath = item.oldPath
 			}
-			baseLines, errInfo := countBlob(ctx, git, base, oldPath)
+			baseLines, _, errInfo := countBlob(ctx, git, base, oldPath)
 			if errInfo != nil {
 				return nil, nil, errInfo
 			}
-			targetLines, errInfo := countBlob(ctx, git, target, item.path)
+			targetLines, targetIsBlob, errInfo := countBlob(ctx, git, target, item.path)
 			if errInfo != nil {
 				return nil, nil, errInfo
 			}
-			if baseLines > lineLimit || targetLines <= lineLimit {
+			if !targetIsBlob || baseLines > lineLimit || targetLines <= lineLimit {
 				continue
 			}
 			var basePath *GitPath
@@ -126,10 +126,13 @@ func lineCandidates(ctx context.Context, git gitRunner, base, target string, cha
 	return added, crossed, nil
 }
 
-func countBlob(ctx context.Context, git gitRunner, commit string, path []byte) (int, *CheckError) {
-	blob, errInfo := git.blob(ctx, commit, path)
+func countBlob(ctx context.Context, git gitRunner, commit string, path []byte) (int, bool, *CheckError) {
+	blob, isBlob, errInfo := git.blob(ctx, commit, path)
 	if errInfo != nil {
-		return 0, errInfo
+		return 0, false, errInfo
 	}
-	return physicalLines(blob), nil
+	if !isBlob {
+		return 0, false, nil
+	}
+	return physicalLines(blob), true, nil
 }

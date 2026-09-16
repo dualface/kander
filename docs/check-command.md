@@ -8,7 +8,7 @@ kander check delivery --base <ref> [--commit <ref>] [--json]
 kander check overlap --source <ref> [--head <ref>] [--json]
 ```
 
-Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error JSON stays stable. Output never includes host-absolute paths or timestamps.
+Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error JSON stays stable. Commit and path fields never include host-absolute paths or timestamps, and invalid-ref errors do not echo the supplied ref.
 
 ## Exit codes
 
@@ -19,7 +19,7 @@ Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, 
 | 2 | Argument error |
 | 3 | Git, repository, ref/ancestry, output-limit, or internal error |
 
-An incomplete check never reports PASS. `--json` writes one object and a trailing newline on stdout for completed results and for recognized argument, Git, output-limit, and internal errors. Successful JSON runs leave stderr empty.
+An incomplete check never reports PASS. `--json` is a valueless switch; `--json=<value>` is a usage error that is itself written as JSON. `--json` writes one object and a trailing newline on stdout for completed results and for recognized argument, Git, output-limit, and internal errors. Successful JSON runs leave stderr empty.
 
 ## Delivery
 
@@ -28,6 +28,7 @@ An incomplete check never reports PASS. `--json` writes one object and a trailin
 - Added or copied files with more than 1000 lines go in `added_over_limit`.
 - Modified, renamed, or type-changed files whose base count is at most 1000 and whose target count is more than 1000 go in `crossed_limit`.
 - Deletes are ignored. Rename and copy keep `base_path` as the old path.
+- Non-blob tree entries such as gitlinks are excluded from line counting. A type change from a non-blob entry to a blob uses zero base lines.
 - Kander does not classify source versus generated files. Any line-count candidate yields overall `review-required` (unless `diff_check` failed, which is `fail`). Agents record a disposition per candidate.
 
 Status precedence: `error > fail > review-required > pass`.

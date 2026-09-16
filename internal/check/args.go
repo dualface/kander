@@ -5,7 +5,6 @@ import (
 )
 
 type options struct {
-	mode   string
 	json   bool
 	help   bool
 	base   string
@@ -15,7 +14,7 @@ type options struct {
 }
 
 func parseOptions(mode string, args []string) (options, *CheckError) {
-	opt := options{mode: mode, commit: "HEAD", head: "HEAD", json: jsonRequested(args)}
+	opt := options{commit: "HEAD", head: "HEAD", json: jsonRequested(args)}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -94,6 +93,9 @@ func nextFlag(args []string, i *int) (name, value string, ok bool, err *CheckErr
 		return "--json", "", true, nil
 	}
 	if name, value, found := strings.Cut(arg, "="); found && strings.HasPrefix(name, "--") {
+		if name == "--json" {
+			return "", "", false, usageErr(t("check.flag_does_not_take_value", name))
+		}
 		if value == "" {
 			return "", "", false, usageErr(t("check.missing_flag_value", name))
 		}

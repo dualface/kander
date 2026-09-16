@@ -142,6 +142,31 @@ func TestParseNameStatus(t *testing.T) {
 	}
 }
 
+func TestParseTreeEntry(t *testing.T) {
+	tests := []struct {
+		name       string
+		data       []byte
+		wantType   string
+		wantObject string
+		wantOK     bool
+	}{
+		{name: "blob", data: []byte("100644 blob abc123\tpath\twith-tab\x00"), wantType: "blob", wantObject: "abc123", wantOK: true},
+		{name: "gitlink", data: []byte("160000 commit def456\tmodule\x00"), wantType: "commit", wantObject: "def456", wantOK: true},
+		{name: "empty", data: nil},
+		{name: "missing terminator", data: []byte("100644 blob abc123\tpath")},
+		{name: "multiple", data: []byte("100644 blob abc123\ta\x00100644 blob def456\tb\x00")},
+		{name: "missing tab", data: []byte("100644 blob abc123\x00")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			objectType, objectID, ok := parseTreeEntry(tc.data)
+			if objectType != tc.wantType || objectID != tc.wantObject || ok != tc.wantOK {
+				t.Fatalf("parseTreeEntry=%q,%q,%t want %q,%q,%t", objectType, objectID, ok, tc.wantType, tc.wantObject, tc.wantOK)
+			}
+		})
+	}
+}
+
 func TestDeliveryStatusPrecedence(t *testing.T) {
 	if got := deliveryStatus(true, true); got != statusFail {
 		t.Fatalf("fail+candidates=%s", got)

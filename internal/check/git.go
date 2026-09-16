@@ -142,24 +142,24 @@ func (g gitRunner) run(ctx context.Context, args ...string) ([]byte, []byte, int
 	return g.exec(ctx, gitConfigArgs(args...)...)
 }
 
-func (g gitRunner) resolve(ctx context.Context, ref string) (string, *CheckError, int) {
+func (g gitRunner) resolve(ctx context.Context, ref string) (string, *CheckError) {
 	stdout, stderr, code, err := g.run(ctx, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
-	if classified, exit := classifyExec(err); classified != nil {
-		return "", classified, exit
+	if classified := classifyExec(err); classified != nil {
+		return "", classified
 	}
 	if code != 0 {
-		return "", classifyRefError(ref, stderr, code), exitExec
+		return "", classifyRefError(stderr, code)
 	}
 	sha := strings.TrimSpace(string(stdout))
 	if sha == "" {
-		return "", classifyRefError(ref, stderr, code), exitExec
+		return "", classifyRefError(stderr, code)
 	}
-	return sha, nil, 0
+	return sha, nil
 }
 
 func (g gitRunner) isAncestor(ctx context.Context, base, target string) *CheckError {
 	_, stderr, code, err := g.run(ctx, "merge-base", "--is-ancestor", base, target)
-	if classified, _ := classifyExec(err); classified != nil {
+	if classified := classifyExec(err); classified != nil {
 		return classified
 	}
 	if code == 0 {
@@ -176,7 +176,7 @@ func (g gitRunner) isAncestor(ctx context.Context, base, target string) *CheckEr
 
 func (g gitRunner) mergeBase(ctx context.Context, a, b string) (string, *CheckError) {
 	stdout, stderr, code, err := g.run(ctx, "merge-base", a, b)
-	if classified, _ := classifyExec(err); classified != nil {
+	if classified := classifyExec(err); classified != nil {
 		return "", classified
 	}
 	if code != 0 {
@@ -200,7 +200,7 @@ func (g gitRunner) mergeBase(ctx context.Context, a, b string) (string, *CheckEr
 
 func (g gitRunner) nameStatus(ctx context.Context, a, b string) ([]change, *CheckError) {
 	stdout, stderr, code, err := g.run(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--find-copies-harder", "--name-status", "-z", a, b, "--")
-	if classified, _ := classifyExec(err); classified != nil {
+	if classified := classifyExec(err); classified != nil {
 		return nil, classified
 	}
 	if code != 0 {
@@ -215,7 +215,7 @@ func (g gitRunner) nameStatus(ctx context.Context, a, b string) ([]change, *Chec
 
 func (g gitRunner) diffCheck(ctx context.Context, a, b string) (DiffCheck, *CheckError) {
 	stdout, stderr, code, err := g.run(ctx, "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--check", a, b, "--")
-	if classified, _ := classifyExec(err); classified != nil {
+	if classified := classifyExec(err); classified != nil {
 		return DiffCheck{}, classified
 	}
 	if code >= 128 {
@@ -235,32 +235,61 @@ func (g gitRunner) diffCheck(ctx context.Context, a, b string) (DiffCheck, *Chec
 	return result, nil
 }
 
-func (g gitRunner) blob(ctx context.Context, commit string, path []byte) ([]byte, *CheckError) {
-	object := commit + ":" + string(path)
-	stdout, stderr, code, err := g.run(ctx, "cat-file", "blob", object)
-	if classified, _ := classifyExec(err); classified != nil {
-		return nil, classified
+func (g gitRunner) blob(ctx context.Context, commit string, path []byte) ([]byte, bool, *CheckError) {
+	stdout, stderr, code, err := g.run(ctx, "--literal-pathspecs", "ls-tree", "-z", "--full-tree", commit, "--", string(path))
+	if classified := classifyExec(err); classified != nil {
+		return nil, false, classified
 	}
 	if code != 0 {
-		return nil, classifyGitFailure(stderr, code)
+		return nil, false, classifyGitFailure(stderr, code)
 	}
-	return stdout, nil
+	objectType, objectID, ok := parseTreeEntry(stdout)
+	if !ok {
+		return nil, false, &CheckError{Code: errCodeParse, Message: t("check.parse_tree_entry")}
+	}
+	if objectType != "blob" {
+		return nil, false, nil
+	}
+	stdout, stderr, code, err = g.run(ctx, "cat-file", "blob", objectID)
+	if classified := classifyExec(err); classified != nil {
+		return nil, false, classified
+	}
+	if code != 0 {
+		return nil, false, classifyGitFailure(stderr, code)
+	}
+	return stdout, true, nil
 }
 
-func classifyExec(err error) (*CheckError, int) {
+func parseTreeEntry(data []byte) (objectType, objectID string, ok bool) {
+	if len(data) < 2 || data[len(data)-1] != 0 || bytes.IndexByte(data[:len(data)-1], 0) >= 0 {
+		return "", "", false
+	}
+	record := data[:len(data)-1]
+	tab := bytes.IndexByte(record, '\t')
+	if tab < 0 {
+		return "", "", false
+	}
+	fields := bytes.Fields(record[:tab])
+	if len(fields) != 3 {
+		return "", "", false
+	}
+	return string(fields[1]), string(fields[2]), true
+}
+
+func classifyExec(err error) *CheckError {
 	if err == nil {
-		return nil, 0
+		return nil
 	}
 	if errors.Is(err, errOutputLimit) {
-		return &CheckError{Code: errCodeOutputLimit, Message: t("check.output_limit")}, exitExec
+		return &CheckError{Code: errCodeOutputLimit, Message: t("check.output_limit")}
 	}
 	if errors.Is(err, errGitTimeout) {
-		return &CheckError{Code: errCodeInternal, Message: t("check.internal")}, exitExec
+		return &CheckError{Code: errCodeInternal, Message: t("check.internal")}
 	}
 	if errors.Is(err, exec.ErrNotFound) || isPathError(err) {
-		return &CheckError{Code: errCodeGitUnavailable, Message: t("check.git_unavailable")}, exitExec
+		return &CheckError{Code: errCodeGitUnavailable, Message: t("check.git_unavailable")}
 	}
-	return &CheckError{Code: errCodeInternal, Message: cleanMessage(err.Error())}, exitExec
+	return &CheckError{Code: errCodeInternal, Message: cleanMessage(err.Error())}
 }
 
 func isPathError(err error) bool {
@@ -268,14 +297,14 @@ func isPathError(err error) bool {
 	return errors.As(err, &pathErr)
 }
 
-func classifyRefError(ref string, stderr []byte, code int) *CheckError {
+func classifyRefError(stderr []byte, code int) *CheckError {
 	failure := classifyGitFailure(stderr, code)
 	if failure.Code == errCodeNotRepository {
 		return failure
 	}
 	return &CheckError{
 		Code:    errCodeInvalidRef,
-		Message: t("check.invalid_ref", escapeText(ref)),
+		Message: t("check.invalid_ref"),
 	}
 }
 
@@ -285,7 +314,7 @@ func classifyGitFailure(stderr []byte, code int) *CheckError {
 	case strings.Contains(text, "not a git repository"):
 		return &CheckError{Code: errCodeNotRepository, Message: t("check.not_repository")}
 	case code >= 128 && looksLikeInvalidRef(text):
-		return &CheckError{Code: errCodeInvalidRef, Message: t("check.invalid_ref", "")}
+		return &CheckError{Code: errCodeInvalidRef, Message: t("check.invalid_ref")}
 	default:
 		message := cleanMessage(string(stderr))
 		if message == "" {

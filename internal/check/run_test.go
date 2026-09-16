@@ -50,6 +50,10 @@ func TestParseOptionsErrors(t *testing.T) {
 	if err == nil || err.Code != errCodeUsage || !opt.json {
 		t.Fatalf("equals reserved value with json: opt=%+v err=%+v", opt, err)
 	}
+	opt, err = parseOptions(checkDelivery, []string{"--base", "HEAD", "--json=false"})
+	if err == nil || err.Code != errCodeUsage || !opt.json || !strings.Contains(err.Message, "does not take a value") {
+		t.Fatalf("valued json: opt=%+v err=%+v", opt, err)
+	}
 }
 
 func TestDeliveryJSONEmptyDiff(t *testing.T) {
@@ -157,6 +161,71 @@ func TestDeliveryCrossedAndRename(t *testing.T) {
 	}
 }
 
+func TestDeliverySkipsGitlinksAndCountsGitlinkToBlob(t *testing.T) {
+	setupCheckLang(t)
+	dir := initRepo(t)
+	root := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+root+",module")
+	git(t, dir, "commit", "-q", "-m", "add gitlink")
+	gitlinkCommit := git(t, dir, "rev-parse", "HEAD")
+	t.Chdir(dir)
+
+	code, out, errb := captureRun(t, []string{"delivery", "--base", root, "--json"})
+	if code != exitOK {
+		t.Fatalf("gitlink add code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	var result DeliveryResult
+	mustDeliveryJSON(t, out, &result)
+	if result.Status != statusPass || len(result.AddedOverLimit) != 0 || len(result.CrossedLimit) != 0 {
+		t.Fatalf("gitlink add result=%+v", result)
+	}
+
+	git(t, dir, "update-index", "--cacheinfo", "160000,"+gitlinkCommit+",module")
+	git(t, dir, "commit", "-q", "-m", "update gitlink")
+	updatedGitlinkCommit := git(t, dir, "rev-parse", "HEAD")
+	code, out, errb = captureRun(t, []string{"delivery", "--base", gitlinkCommit, "--json"})
+	if code != exitOK {
+		t.Fatalf("gitlink update code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	mustDeliveryJSON(t, out, &result)
+	if result.Status != statusPass || len(result.AddedOverLimit) != 0 || len(result.CrossedLimit) != 0 {
+		t.Fatalf("gitlink update result=%+v", result)
+	}
+
+	git(t, dir, "rm", "--cached", "-q", "--", "module")
+	if err := os.WriteFile(filepath.Join(dir, "module"), []byte(nLines(1001, true)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "--", "module")
+	git(t, dir, "commit", "-q", "-m", "replace gitlink with blob")
+	blobCommit := git(t, dir, "rev-parse", "HEAD")
+
+	code, out, errb = captureRun(t, []string{"delivery", "--base", updatedGitlinkCommit, "--json"})
+	if code != exitAction {
+		t.Fatalf("gitlink-to-blob code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	mustDeliveryJSON(t, out, &result)
+	if len(result.CrossedLimit) != 1 {
+		t.Fatalf("gitlink-to-blob result=%+v", result)
+	}
+	item := result.CrossedLimit[0]
+	if string(item.Path.Raw) != "module" || item.BaseLines != 0 || item.TargetLines != 1001 {
+		t.Fatalf("gitlink-to-blob candidate=%+v", item)
+	}
+
+	git(t, dir, "rm", "-q", "--", "module")
+	git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+updatedGitlinkCommit+",module")
+	git(t, dir, "commit", "-q", "-m", "replace blob with gitlink")
+	code, out, errb = captureRun(t, []string{"delivery", "--base", blobCommit, "--json"})
+	if code != exitOK {
+		t.Fatalf("blob-to-gitlink code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	mustDeliveryJSON(t, out, &result)
+	if result.Status != statusPass || len(result.AddedOverLimit) != 0 || len(result.CrossedLimit) != 0 {
+		t.Fatalf("blob-to-gitlink result=%+v", result)
+	}
+}
+
 func TestDeliveryFailOutranksReviewRequired(t *testing.T) {
 	setupCheckLang(t)
 	dir := initRepo(t)
@@ -230,6 +299,15 @@ func TestDeliveryInvalidRefAndNotAncestor(t *testing.T) {
 	if result.Status != statusError || result.Error == nil || result.Error.Code != errCodeInvalidRef {
 		t.Fatalf("%+v", result)
 	}
+	absoluteRef := filepath.Join(dir, "private", "missing-ref")
+	code, out, errb = captureRun(t, []string{"delivery", "--base", absoluteRef, "--json"})
+	if code != exitExec || errb != "" {
+		t.Fatalf("absolute ref code=%d stderr=%s stdout=%s", code, errb, out)
+	}
+	mustDeliveryJSON(t, out, &result)
+	if result.Error == nil || result.Error.Code != errCodeInvalidRef || strings.Contains(out, absoluteRef) {
+		t.Fatalf("absolute ref leaked: %+v output=%s", result, out)
+	}
 	code, out, errb = captureRun(t, []string{"delivery", "--base", second, "--commit", first, "--json"})
 	if code != exitExec {
 		t.Fatalf("ancestor code=%d stderr=%s stdout=%s", code, errb, out)
@@ -271,6 +349,21 @@ func TestDeliveryHumanEscapesControls(t *testing.T) {
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
 	if len(lines) < 6 {
 		t.Fatalf("expected multi-line report, got %d lines: %q", len(lines), out)
+	}
+}
+
+func TestUsageHumanEscapesControls(t *testing.T) {
+	setupCheckLang(t)
+	argument := "bad" + string(rune(0x1b)) + "[31m\ninjected" + string(rune(0x9b))
+	code, out, errb := captureRun(t, []string{"delivery", argument})
+	if code != exitUsage || out != "" {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, errb)
+	}
+	if strings.ContainsRune(errb, rune(0x1b)) || strings.ContainsRune(errb, rune(0x9b)) {
+		t.Fatalf("raw control leaked: %q", errb)
+	}
+	if !strings.Contains(errb, `\x1b[31m\ninjected\u009b`) {
+		t.Fatalf("escaped controls missing: %q", errb)
 	}
 }
 
@@ -409,6 +502,7 @@ func TestUsageJSON(t *testing.T) {
 		{"delivery", "--unknown", "--json"},
 		{"delivery", "--base", "--json"},
 		{"delivery", "--base", "--commit=HEAD", "--json"},
+		{"delivery", "--base", "HEAD", "--json=garbage"},
 	}
 	for _, args := range cases {
 		code, out, errb := captureRun(t, args)

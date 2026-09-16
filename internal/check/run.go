@@ -63,7 +63,7 @@ func writeModeError(mode string, jsonMode bool, errInfo *CheckError, code int) i
 		return code
 	}
 	fmt.Fprintln(os.Stderr, usageFor(mode))
-	fmt.Fprintln(os.Stderr, "kander: "+errInfo.Message)
+	fmt.Fprintln(os.Stderr, "kander: "+escapeText(errInfo.Message))
 	return code
 }
 
