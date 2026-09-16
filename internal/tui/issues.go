@@ -148,6 +148,14 @@ type issuesIndexResult struct {
 }
 
 func (a *App) applyIssuesImport(result issuesImportResult) {
+	a.invalidateBoardReads()
+	if id := strings.TrimSpace(result.result.TaskID); id == "" {
+		a.invalidateSummaries()
+	} else {
+		a.invalidateSummaries(id)
+	}
+	a.requestBoardRefresh(true)
+
 	st := a.Issues
 	if st == nil || result.seq != a.issuesImportSeq {
 		return
@@ -156,7 +164,6 @@ func (a *App) applyIssuesImport(result issuesImportResult) {
 	if result.index != nil {
 		st.index = result.index
 		st.indexRefreshedAt = a.Now()
-		a.LastRefresh = time.Time{}
 	}
 	if result.err != nil {
 		a.issuesSetNotice(a.Context.IssuesImportFailed + ": " + issue.Message(result.err))

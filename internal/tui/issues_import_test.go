@@ -288,6 +288,77 @@ func TestIssuesImportStaleResultIsDropped(t *testing.T) {
 	}
 }
 
+func TestIssuesImportResultFencesOlderBoardRead(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		stale func(*App)
+	}{
+		{
+			name: "overlay closed",
+			stale: func(app *App) {
+				app.Issues = nil
+			},
+		},
+		{
+			name: "sequence expired",
+			stale: func(app *App) {
+				app.Issues = &issuesState{importing: true}
+				app.issuesImportSeq = 2
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			oldPayload := BoardPayload{Tasks: []Task{{TaskID: "task-old", Title: "Old", State: "todo"}}}
+			current := oldPayload
+			app := newApp(true, 30, tuiPageContext(), func() (BoardPayload, error) {
+				return current, nil
+			}, nil, "dark", 1, nil, nil)
+			app.Model.SetBoard(oldPayload)
+			fixedNow := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+			app.Now = func() time.Time { return fixedNow }
+			app.LastRefresh = fixedNow.Add(-time.Minute)
+
+			app.requestBoardRefresh(false)
+			oldCmd := app.takeBoardRead()
+			if oldCmd == nil {
+				t.Fatal("old board read was not queued")
+			}
+			message := oldCmd()
+			oldMessage, ok := message.(workMsg)
+			if !ok {
+				t.Fatalf("old board read returned %T", message)
+			}
+			oldResult, ok := oldMessage.payload.(boardReadResult)
+			if !ok {
+				t.Fatalf("old board read payload %T", oldMessage.payload)
+			}
+
+			current = BoardPayload{Tasks: []Task{
+				{TaskID: "task-old", Title: "Old", State: "todo"},
+				{TaskID: "task-imported", Title: "Imported", State: "backlog"},
+			}}
+			test.stale(app)
+			before := app.LastRefresh
+			app.applyIssuesImport(issuesImportResult{
+				seq:    1,
+				result: issue.ImportResult{TaskID: "task-imported", State: "backlog"},
+			})
+			if !app.boardReadQueued || app.boardInFlightSeq != 0 {
+				t.Fatalf("import result did not replace old read: queued=%v in-flight=%d", app.boardReadQueued, app.boardInFlightSeq)
+			}
+
+			app.applyBoardRead(oldResult)
+			if !app.LastRefresh.Equal(before) {
+				t.Fatalf("old result advanced refresh time: got %s want %s", app.LastRefresh, before)
+			}
+			finishQueuedWork(t, app)
+			if len(app.Model.Tasks) != 2 || app.Model.Tasks[1].TaskID != "task-imported" {
+				t.Fatalf("fresh board did not include import: %+v", app.Model.Tasks)
+			}
+		})
+	}
+}
+
 func TestIssuesImportUpdateMarker(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)

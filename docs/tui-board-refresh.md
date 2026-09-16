@@ -16,6 +16,7 @@ Periodic refresh (`r` / the refresh interval), opening or updating a detail, and
 - A fresh board request (manual refresh, start result) coalesces onto an in-flight read so the later generation is applied. Periodic ticks do not pile extra reads while one is in flight.
 - Each result carries a sequence. A stale board snapshot cannot replace a newer operation result; a detail result for a previous card cannot land after the selection changes.
 - A running task-action write invalidates in-flight board reads and blocks new UI board reads until the write worker finishes. The write worker still loads a fresh payload on both success and failure.
+- Every Issue import result cancels any older board read, invalidates the affected summary (or the full cache when no task ID is available), and queues a fresh board read before checking whether its Issues overlay or request sequence is still current. Closing the overlay or superseding the request therefore cannot suppress board recovery after an import write.
 - A failed read keeps the last valid snapshot (or open detail) and sets the existing refresh/detail error string.
 - Quit and closing a detail cancel the reads this session owns.
 
