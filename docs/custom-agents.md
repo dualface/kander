@@ -101,9 +101,26 @@ The built-in Kimi definition targets the upstream CLI shape verified on `kimi` 0
 
 A brand-new templated agent is recommended to launch via tmux / tmux-session, probed with the configured foreground name and session markers. herdr still relies on its own recognition of agent types; configuring path does not install a recognizer for herdr. foreground/console has no terminal address for `check` to probe and keeps the unknown classification.
 
+## Chat Agent and Model
+
+TUI chat sessions use the independent `chat_agent`, which must name a usable execution agent. Its settings live under `models.chat.<agent>`: `model` is available for every agent, while `effort` is available only when that agent's argv template supports it (Cursor therefore accepts only `model`). For example:
+
+```json
+{
+  "chat_agent": "helper",
+  "models": {
+    "chat": {
+      "helper": {"model": "helper-chat", "effort": "high"}
+    }
+  }
+}
+```
+
+When `chat_agent` is absent, it follows the effective `kanban_agents.large`. A missing Chat model falls back to that agent's `models.kanban.<agent>.large_model`, then its legacy shared `model`; a missing Chat effort falls back to `large_effort`. Project overlays prefer their explicit `models.chat` fields, then scope Chat fields, then the effective large-task fields.
+
 ## Panel and Review Boundaries
 
-"Task Execution and Models" can select a custom agent and edit its model fields. Built-in agents that have not yet been probed successfully remain selectable so they can still be chosen for work. Executable `path`, `process_name`, dialects, argv templates, session policies, and review templates are edited only in JSON (`config.json` or the project overlay). Options saves never rewrite the `agents` section, so a TUI save cannot clobber hand-edited agent definitions.
+"Task Execution and Models" can select custom agents independently for large tasks, small tasks, and Chat, and edit their model fields. Switching Chat Agent presents that agent's effective large-task model and effort; Project edits copy Chat fields sparsely, so only explicitly edited values override inheritance. Built-in agents that have not yet been probed successfully remain selectable so they can still be chosen for work. Executable `path`, `process_name`, dialects, argv templates, session policies, and review templates are edited only in JSON (`config.json` or the project overlay). Options saves never rewrite the `agents` section, so a TUI save cannot clobber hand-edited agent definitions.
 
 Changing a reviewer in Options adopts that agent's `models.review` model and effort together. Role settings record their owner in `models.review_roles.<role>.large_agent` or `small_agent`; overrides apply only to that agent. Empty values in a bound scale inherit directly from that agent's defaults, skipping the legacy shared role keys. Legacy entries without an owner retain their shared-key fallback for the configured reviewer; explicitly running another reviewer uses that agent's defaults. Agent bindings prevent cross-agent reuse; they do not validate model availability or supported effort levels.
 
