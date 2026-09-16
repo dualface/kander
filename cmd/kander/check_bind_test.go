@@ -64,7 +64,8 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
+	// A CRLF checkout (autocrlf on Windows) would defeat the \n replacements.
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
 		text = strings.Replace(text, board.Placeholder, replacement, 1)
 	}

@@ -183,7 +183,11 @@ func TestDeliveryDiffCheckFailAndSpecialPaths(t *testing.T) {
 	base := git(t, dir, "rev-parse", "HEAD")
 	writeCommit(t, dir, "file name.txt", "ok  \n", "space")
 	writeCommit(t, dir, "-dash.txt", "ok  \n", "dash")
-	writeCommit(t, dir, `quote"file.txt`, "ok  \n", "quote")
+	wantQuote := runtime.GOOS != "windows"
+	if wantQuote {
+		// NTFS rejects `"` in a file name; the quoting path is POSIX-only.
+		writeCommit(t, dir, `quote"file.txt`, "ok  \n", "quote")
+	}
 	writeCommit(t, dir, "trail.txt", "hello  \n", "trailing")
 	t.Chdir(dir)
 	code, out, errb := captureRun(t, []string{"delivery", "--base", base, "--json"})
@@ -196,7 +200,11 @@ func TestDeliveryDiffCheckFailAndSpecialPaths(t *testing.T) {
 		t.Fatalf("%+v", result)
 	}
 	joined := strings.Join(result.DiffCheck.Diagnostics, "\n")
-	for _, name := range []string{"file name.txt", "dash.txt", "quote", "trail.txt"} {
+	names := []string{"file name.txt", "dash.txt", "trail.txt"}
+	if wantQuote {
+		names = append(names, "quote")
+	}
+	for _, name := range names {
 		if !strings.Contains(joined, name) {
 			t.Fatalf("diagnostics missing %q: %q", name, joined)
 		}
@@ -233,6 +241,9 @@ func TestDeliveryInvalidRefAndNotAncestor(t *testing.T) {
 }
 
 func TestDeliveryHumanEscapesControls(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("NTFS cannot store control characters in names")
+	}
 	setupCheckLang(t)
 	dir := initRepo(t)
 	base := git(t, dir, "rev-parse", "HEAD")
@@ -422,6 +433,14 @@ func TestHelpAndLegacyUnknownStayCompatible(t *testing.T) {
 		t.Fatalf("help code=%d out=%s err=%s", code, out, errb)
 	}
 	t.Setenv(board.EnvBoardDir, filepath.Join(t.TempDir(), "missing-board"))
+	// Without a config the delegate stops at "config does not exist" before it
+	// ever reaches the board, so write one the runner can load.
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
 	t.Chdir(t.TempDir())
 	code, out, errb = captureRun(t, []string{"not-a-delivery-mode"})
 	if code == 0 {
