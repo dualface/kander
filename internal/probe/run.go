@@ -59,15 +59,27 @@ func CaptureContext(ctx context.Context, program string, args []string) (Result,
 func CaptureWithEnv(ctx context.Context, program string, args, env []string) (Result, error) {
 	ctx, cancel := WithDefaultTimeout(ctx)
 	defer cancel()
-	return captureWithEnv(ctx, program, args, env)
+	return captureWithEnvDir(ctx, program, args, env, "")
 }
 
-func captureWithEnv(ctx context.Context, program string, args, env []string) (res Result, runErr error) {
+// CaptureWithEnvDir is CaptureWithEnv with an explicit working directory.
+func CaptureWithEnvDir(ctx context.Context, program string, args, env []string, dir string) (Result, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	return captureWithEnvDir(ctx, program, args, env, dir)
+}
+
+func captureWithEnv(ctx context.Context, program string, args, env []string) (Result, error) {
+	return captureWithEnvDir(ctx, program, args, env, "")
+}
+
+func captureWithEnvDir(ctx context.Context, program string, args, env []string, dir string) (res Result, runErr error) {
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
 	cmd := exec.Command(program, args...)
 	cmd.Env = env
+	cmd.Dir = dir
 	tree, err := newProcessTree(cmd)
 	if err != nil {
 		return res, err

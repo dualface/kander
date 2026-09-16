@@ -28,7 +28,7 @@ func TestDefaultChatSettingsMatchLargeFallbacks(t *testing.T) {
 				t.Fatalf("%s effort=%q", agent, entry["effort"])
 			}
 		} else if _, ok := entry["effort"]; ok {
-			t.Fatalf("cursor chat must not store effort: %v", entry)
+			t.Fatalf("%s chat must not store effort: %v", agent, entry)
 		}
 	}
 	encoded, err := json.Marshal(cfg)
@@ -70,7 +70,7 @@ func TestMissingChatFieldsFallBackToLarge(t *testing.T) {
 	}
 }
 
-func TestChatRejectsUnknownAgentFieldsAndCursorEffort(t *testing.T) {
+func TestChatRejectsUnknownAgentFieldsAndUnsupportedEffort(t *testing.T) {
 	setupHome(t)
 	cases := []struct {
 		models   any
@@ -82,6 +82,7 @@ func TestChatRejectsUnknownAgentFieldsAndCursorEffort(t *testing.T) {
 		{map[string]any{"chat": map[string]any{"codex": map[string]any{"model": "a\nb"}}}, "models.chat.codex.model"},
 		{map[string]any{"chat": map[string]any{"codex": map[string]any{"effort": "hi\x00gh"}}}, "models.chat.codex.effort"},
 		{map[string]any{"chat": map[string]any{"cursor": map[string]any{"effort": "high"}}}, "models.chat.cursor 含未知字段"},
+		{map[string]any{"chat": map[string]any{"devin": map[string]any{"effort": "high"}}}, "models.chat.devin 含未知字段"},
 	}
 	for _, tc := range cases {
 		payload := minimalPayload(nil)

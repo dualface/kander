@@ -124,6 +124,19 @@ func stageTaskStart(tx *Transaction, s Snapshot, text, state string) error {
 // ConfirmTaskStart records launcher success without overwriting or revising task
 // work produced by a fast executor. The original operation cursor fences retries.
 func ConfirmTaskStart(root string, entry Entry) error {
+	return confirmTaskStart(root, entry, "", "")
+}
+
+// ConfirmTaskStartSession confirms success when launch-time discovery replaced
+// the session metadata recorded by the pending attempt.
+func ConfirmTaskStartSession(root string, entry Entry, before, after string) error {
+	if before == "" || after == "" || before == after {
+		return coordinatorError("start discovered session binding")
+	}
+	return confirmTaskStart(root, entry, before, after)
+}
+
+func confirmTaskStart(root string, entry Entry, before, after string) error {
 	if entry.Version == nil {
 		return coordinatorError("start cursor missing")
 	}
@@ -138,7 +151,11 @@ func ConfirmTaskStart(root string, entry Entry) error {
 		if err != nil {
 			return err
 		}
-		if !exists || a.Status == "rolled-back" || a.Revision > entry.Version.revision || a.Cycle != planCycle(s) || a.Owner != MetadataFrom(s.Text, FieldOwner) || a.Session != MetadataFrom(s.Text, FieldSession) {
+		sessionMatches := a.Session == MetadataFrom(s.Text, FieldSession)
+		if before != "" || after != "" {
+			sessionMatches = a.Session == before && MetadataFrom(s.Text, FieldSession) == after
+		}
+		if !exists || a.Status == "rolled-back" || a.Revision > entry.Version.revision || a.Cycle != planCycle(s) || a.Owner != MetadataFrom(s.Text, FieldOwner) || !sessionMatches {
 			return coordinatorError("start success binding")
 		}
 		if a.Status == "succeeded" {

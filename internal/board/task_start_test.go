@@ -86,6 +86,44 @@ func TestStartResultsFenceRetryAndPreserveTaskRevision(t *testing.T) {
 	}
 }
 
+func TestConfirmTaskStartAcceptsBoundDiscoveredSession(t *testing.T) {
+	root := tempBoard(t)
+	original := coordinatorTodo(t, root, "discovered-session")
+	moved, err := MoveEntry(original.Entry, root, "working")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := moveMetadata(original.Text, "todo", "working", MoveOptions{Owner: "devin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err = setMetadata(text, FieldSession, "devin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err = setMetadata(text, FieldStartedAt, "2026-09-08 10:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteManagedDocument(root, moved, text); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := transactionSnapshot(t, root, original.Entry.TaskID)
+	text, err = setMetadata(snapshot.Text, FieldSession, "devin exact-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteManagedDocument(root, snapshot.Entry, text); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfirmTaskStartSession(root, moved, "codex", "devin exact-session"); err == nil {
+		t.Fatal("mismatched pending session was accepted")
+	}
+	if err := ConfirmTaskStartSession(root, moved, "devin", "devin exact-session"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStartOriginalDamageStopsRecovery(t *testing.T) {
 	for _, damage := range []string{"pending", "rollback", "success", "current", "unobserved-current", "adopted-rollback"} {
 		t.Run(damage, func(t *testing.T) {

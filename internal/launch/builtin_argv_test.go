@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/process"
 )
@@ -84,15 +85,12 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 						}
 						want = append(want, "--thinking", effort)
 					case "devin":
-						// devin became a built-in after pi; this case pins its initial
-						// baseline. The generated reference is a pane marker only: Devin
-						// CLI allocates its own session ids, so resume uses --continue.
 						if modelID != "" {
 							want = append(want, "--model", modelID)
 						}
 						want = append(want, "--permission-mode", "dangerous", "--respect-workspace-trust", "false")
-						if resume {
-							want = append(want, "--continue")
+						if resume && ref != "" {
+							want = append(want, "--resume", ref)
 						}
 						want = append(want, "--")
 					}
@@ -138,6 +136,18 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 	for _, launcher := range []string{"tmux", "herdr"} {
 		for _, agent := range config.ExecutionAgents {
 			t.Run(launcher+"/"+agent, func(t *testing.T) {
+				if agent == "devin" {
+					previousList := listDevinSessionsFn
+					calls := 0
+					listDevinSessionsFn = func(*process.AgentProgram, string) ([]string, error) {
+						calls++
+						if calls == 1 {
+							return nil, nil
+						}
+						return []string{"devin-session"}, nil
+					}
+					defer func() { listDevinSessionsFn = previousList }()
+				}
 				captured = nil
 				id, _ := makeTodo(t, root, "argv-"+launcher+"-"+agent)
 				_, _, err := capture(t, func() error { return commandStart(root, agent, launcher, id) })
@@ -152,6 +162,15 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 				}
 				if _, err := os.Stat(herdrLog + ".prompt"); !os.IsNotExist(err) {
 					t.Fatalf("argv path used agent prompt: %v", err)
+				}
+				if agent == "devin" {
+					snapshot, err := board.ReadSnapshot(root, id)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !strings.Contains(snapshot.Text, "- SESSION: devin devin-session\n") {
+						t.Fatalf("card session was not persisted: %s", snapshot.Text)
+					}
 				}
 			})
 		}

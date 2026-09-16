@@ -17,7 +17,7 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
 		{"claude", cfg.Agents["claude"].Path, "node", "claude", "generated"},
 		{"cursor", "renamed", "renamed", "cursor", "hook:cursor-create-chat"},
 		{"codex", "codex", "codex", "codex", "hook:codex-rollout"},
-		{"devin", "devin", "devin", "devin", "generated"},
+		{"devin", "devin", "devin", "devin", "hook:devin-session"},
 		{"fresh", "fresh", "fresh", "claude", "generated"},
 		{"unregistered", "unregistered", "unregistered", "", "generated"},
 	} {
@@ -72,6 +72,7 @@ func TestAgentDefinitionValidation(t *testing.T) {
 		{"discovered", map[string]any{"session": map[string]any{"mode": "discovered"}}, true},
 		{"hook-codex", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:codex-rollout"}}, false},
 		{"hook-cursor", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:cursor-create-chat"}}, false},
+		{"hook-devin", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:devin-session"}}, false},
 		{"hook-unknown", map[string]any{"args": map[string]any{"start": []string{}, "resume": []string{}}, "session": map[string]any{"mode": "hook:not-registered"}}, true},
 		{"exit-ok", map[string]any{"exit_command": "/bye"}, false},
 		{"exit-empty", map[string]any{"exit_command": ""}, false},
@@ -187,8 +188,8 @@ func TestDialectSessionCompatibility(t *testing.T) {
 		{"codex", "generated", true}, {"codex", "allocated", true}, {"cursor", "generated", true},
 		{"cursor", "allocated", false}, {"claude", "allocated", false},
 		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
-		{"devin", "generated", false}, {"devin", "allocated", false}, {"devin", "none", false},
-		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false},
+		{"devin", "generated", true}, {"devin", "allocated", true}, {"devin", "none", false},
+		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false}, {"devin", "hook:devin-session", false},
 	} {
 		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
 			cfg := DefaultConfig()
