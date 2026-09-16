@@ -673,9 +673,12 @@ func (s *Session) finish() error {
 			))
 			continue
 		}
-		if outcome.Status == install.IntegrationPresent {
+		switch outcome.Status {
+		case install.IntegrationPresent:
 			success(config.Text("menu.is_connected_to_kander_rules", labels[selected], outcome.Target))
-		} else {
+		case install.IntegrationRewritten:
+			success(config.Text("menu.updated_kander_rules_reference", labels[selected], outcome.Target))
+		default:
 			success(config.Text("menu.added_kander_rules_reference", labels[selected], outcome.Target))
 		}
 	}

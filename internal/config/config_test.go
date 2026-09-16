@@ -127,7 +127,7 @@ func TestSourceTreeEntryKeepsGlobalHomePaths(t *testing.T) {
 	if paths.ConfigPath != filepath.Join(home, ".config", "kander", "config.json") {
 		t.Fatalf("config=%s", paths.ConfigPath)
 	}
-	if paths.RulesDir != filepath.Join(home, ".agents") {
+	if paths.RulesDir != filepath.Join(home, ".agents", "kander") {
 		t.Fatalf("rules=%s", paths.RulesDir)
 	}
 	if paths.BinDir != filepath.Join(home, ".local", "bin") {

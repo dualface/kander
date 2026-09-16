@@ -21,7 +21,7 @@ func writeIntegrateFile(t *testing.T, path, contents string) {
 
 func globalIntegrationPaths(t *testing.T, home string) config.InstallPaths {
 	t.Helper()
-	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents")}
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	writeIntegrateFile(t, RulesEntry(paths), "# Kander entry\n")
 	return paths
 }
@@ -41,7 +41,7 @@ func TestEnsureRulesIntegrationCreatesClaudeImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "@~/.agents/KANDER-AGENTS.md\n" {
+	if string(got) != "@~/.agents/kander/KANDER-AGENTS.md\n" {
 		t.Fatalf("content=%q", got)
 	}
 	again, err := EnsureRulesIntegration("claude", paths)
@@ -71,7 +71,7 @@ func TestEnsureRulesIntegrationAppendsToExistingFile(t *testing.T) {
 	if !strings.HasPrefix(text, "# My own rules\n\nAlways be kind.\n") {
 		t.Fatalf("existing content lost: %q", text)
 	}
-	if strings.Count(text, "@~/.agents/KANDER-AGENTS.md") != 1 {
+	if strings.Count(text, "@~/.agents/kander/KANDER-AGENTS.md") != 1 {
 		t.Fatalf("reference count wrong: %q", text)
 	}
 	if again, err := EnsureRulesIntegration("claude", paths); err != nil || again.Status != IntegrationPresent {
@@ -91,7 +91,7 @@ func TestEnsureRulesIntegrationWritesAgentsInstruction(t *testing.T) {
 		t.Fatalf("outcome=%+v", outcome)
 	}
 	got, _ := os.ReadFile(target)
-	if !strings.Contains(string(got), "~/.agents/KANDER-AGENTS.md") {
+	if !strings.Contains(string(got), "~/.agents/kander/KANDER-AGENTS.md") {
 		t.Fatalf("content=%q", got)
 	}
 	if again, err := EnsureRulesIntegration("codex", paths); err != nil || again.Status != IntegrationPresent {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/fs"
 )
 
 var negationRE = regexp.MustCompile(`(?i)(禁用|废弃|停用|不要遵守|勿遵守|不遵守|不要使用|不使用|请勿使用|未导入|尚未导入|不再生效|已失效|请忽略|do not follow|do not use|disabled|deprecated|\bignore\b)`)
@@ -22,6 +23,9 @@ const (
 	IntegrationCreated
 	// IntegrationUpdated means the reference was appended to an existing file.
 	IntegrationUpdated
+	// IntegrationRewritten means a reference to the previous rules entry location was rewritten
+	// in place to the current one.
+	IntegrationRewritten
 )
 
 // IntegrationOutcome is the result of ensuring one agent rules file references the Kander entry.
@@ -208,6 +212,25 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 	if err != nil {
 		return outcome, err
 	}
+	// A reference to the previous rules location is rewritten first, even when the current
+	// reference is already present: a repair that ran before the migration may have appended
+	// the current one next to the stale one, and the stale one must not survive.
+	if rewritten, changed := rewriteLegacyReference(string(existing), paths, filepath.Dir(target)); changed {
+		rewritten = dropDuplicateLines(rewritten, block)
+		writePath := resolved
+		if real, err := filepath.EvalSymlinks(resolved); err == nil {
+			writePath = real
+		}
+		anchor, err := fileAnchor(writePath)
+		if err != nil {
+			return outcome, err
+		}
+		if err := fs.WriteBytesAtomicInherited(anchor, writePath, []byte(rewritten), true); err != nil {
+			return outcome, err
+		}
+		outcome.Status = IntegrationRewritten
+		return outcome, nil
+	}
 	if strictReferencePresent(string(existing), RulesEntry(paths), filepath.Dir(target)) {
 		outcome.Status = IntegrationPresent
 		return outcome, nil
@@ -233,6 +256,27 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 	}
 	outcome.Status = IntegrationUpdated
 	return outcome, nil
+}
+
+// dropDuplicateLines removes repeated copies of the one-line import form of block, keeping the
+// first: rewriting a stale reference next to an already current one must not leave two lines.
+func dropDuplicateLines(text, block string) string {
+	line := strings.TrimSpace(block)
+	if line == "" || strings.Contains(line, "\n") || strings.Count(text, line) < 2 {
+		return text
+	}
+	var out []string
+	seen := false
+	for _, raw := range splitKeepEnds(text) {
+		if strings.TrimSpace(raw) == line {
+			if seen {
+				continue
+			}
+			seen = true
+		}
+		out = append(out, raw)
+	}
+	return strings.Join(out, "")
 }
 
 // entrySpelling is the portable spelling of the rules entry written into agent rules files:

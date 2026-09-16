@@ -192,7 +192,17 @@ func writeRule(paths config.InstallPaths, name string, data []byte, project bool
 }
 
 // RepairRules restores missing and outdated rule files. Locally edited files are left untouched.
-func RepairRules(paths config.InstallPaths) error {
+// A global repair also migrates rule files left at the previous rules location, so a binary
+// upgraded without running install still converges on the current layout.
+func RepairRules(paths config.InstallPaths) (LegacyRulesMigration, []string, error) {
+	if err := repairRuleFiles(paths); err != nil {
+		return LegacyRulesMigration{}, nil, err
+	}
+	migration := migrateLegacyRules(paths)
+	return migration, removeLegacyEntrySymlinks(paths), nil
+}
+
+func repairRuleFiles(paths config.InstallPaths) error {
 	report, err := InspectRules(paths)
 	if err != nil {
 		return err
@@ -257,7 +267,11 @@ func RepairRules(paths config.InstallPaths) error {
 // the entry through references in their own rules files, so the extra entry only risks
 // serving outdated content. User-authored files are kept. Best effort: never fails install.
 func cleanupAgentsEntryLink(paths config.InstallPaths) {
-	link := filepath.Join(paths.RulesDir, "AGENTS.md")
+	cleanupAgentsEntryLinkIn(paths.RulesDir)
+}
+
+func cleanupAgentsEntryLinkIn(dir string) {
+	link := filepath.Join(dir, "AGENTS.md")
 	info, err := os.Lstat(link)
 	if err != nil {
 		return

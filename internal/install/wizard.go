@@ -116,6 +116,9 @@ func printResult(result Result) {
 	} else if len(result.Legacy) > 0 {
 		fmt.Fprintln(os.Stderr, config.Text("install.legacy_kept"))
 	}
+	for _, path := range result.LegacyLinksRemoved {
+		fmt.Fprintln(os.Stderr, config.Text("install.legacy_link_replaced", path))
+	}
 	for _, item := range result.Integrations {
 		target := item.Target
 		if target == "" {
@@ -125,7 +128,10 @@ func printResult(result Result) {
 			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_failed", target, item.Err.Error()))
 			continue
 		}
-		if item.Status != IntegrationPresent {
+		switch item.Status {
+		case IntegrationRewritten:
+			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_updated", target))
+		case IntegrationCreated, IntegrationUpdated:
 			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_added", target))
 		}
 	}

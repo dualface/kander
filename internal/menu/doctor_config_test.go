@@ -357,7 +357,7 @@ func TestRulesIntegrationRejectsGlobalEntry(t *testing.T) {
 	if err := os.WriteFile(entry, []byte("# project Kander entry\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	globalEntry := filepath.Join(h.home, ".agents", "KANDER-AGENTS.md")
+	globalEntry := filepath.Join(h.home, ".agents", "kander", "KANDER-AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(globalEntry), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestRulesIntegrationRejectsGlobalEntry(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(claude), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(claude, []byte("@~/.agents/KANDER-AGENTS.md\n"), 0o644); err != nil {
+	if err := os.WriteFile(claude, []byte("@~/.agents/kander/KANDER-AGENTS.md\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ok, _ := rulesIntegration("claude", paths)

@@ -86,7 +86,7 @@ func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 			if len(report.Missing) != 0 {
 				t.Fatalf("missing rules: %v", report.Missing)
 			}
-			if err := install.RepairRules(paths); err != nil {
+			if _, _, err := install.RepairRules(paths); err != nil {
 				t.Fatal(err)
 			}
 			for _, name := range wantOutdated {
@@ -102,7 +102,7 @@ func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 					t.Fatalf("repair %s: err=%v; content mismatch=%v", name, err, !bytes.Equal(got, want))
 				}
 			}
-			if err := install.RepairRules(paths); err != nil {
+			if _, _, err := install.RepairRules(paths); err != nil {
 				t.Fatalf("repeat repair: %v", err)
 			}
 			after, err := install.InspectRules(paths)

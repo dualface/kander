@@ -21,7 +21,7 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					home := setupInstallHome(t)
 					paths := globalIntegrationPaths(t, home)
-					spelling := "~/.agents/KANDER-AGENTS.md"
+					spelling := "~/.agents/kander/KANDER-AGENTS.md"
 					target := filepath.Join(home, "."+agent, "AGENTS.md")
 					if agent == "claude" {
 						target = filepath.Join(home, ".claude", "CLAUDE.md")

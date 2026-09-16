@@ -31,9 +31,13 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 	}
 	install.CleanupStaleBinary(paths)
 	if repair {
-		if repairErr := install.RepairRules(paths); repairErr != nil {
+		_, links, repairErr := install.RepairRules(paths)
+		if repairErr != nil {
 			warning(repairErr.Error())
 			healthy = false
+		}
+		for _, path := range links {
+			hint(config.Text("install.legacy_link_replaced", path))
 		}
 	}
 	if report, inspectErr := install.InspectRules(paths); inspectErr != nil {
@@ -210,9 +214,12 @@ func reportRulesIntegration(cfg *config.Config, paths config.InstallPaths, repai
 				hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
 				continue
 			}
-			if outcome.Status == install.IntegrationPresent {
+			switch outcome.Status {
+			case install.IntegrationPresent:
 				success(config.Text("menu.is_connected_to_kander_rules", labels[selected], outcome.Target))
-			} else {
+			case install.IntegrationRewritten:
+				success(config.Text("menu.updated_kander_rules_reference", labels[selected], outcome.Target))
+			default:
 				success(config.Text("menu.added_kander_rules_reference", labels[selected], outcome.Target))
 			}
 			continue

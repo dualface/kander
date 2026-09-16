@@ -30,7 +30,12 @@ type Result struct {
 	Copied        bool
 	Legacy        []string
 	LegacyRemoved bool
-	Integrations  []AgentIntegration
+	// LegacyRules records rule files migrated away from the previous global rules root.
+	LegacyRules LegacyRulesMigration
+	// LegacyLinksRemoved lists agent rules files that were symlinks to the previous entry and
+	// were replaced by reference files during integration.
+	LegacyLinksRemoved []string
+	Integrations       []AgentIntegration
 }
 
 // AgentIntegration records ensuring one agent rules file references the Kander entry.
@@ -109,6 +114,8 @@ func Perform(req Request) (Result, error) {
 		return result, err
 	}
 	cleanupAgentsEntryLink(paths)
+	result.LegacyRules = migrateLegacyRules(paths)
+	result.LegacyLinksRemoved = removeLegacyEntrySymlinks(paths)
 	result.Integrations = integrateAgentRules(paths)
 	if req.DeleteLegacy && len(result.Legacy) > 0 {
 		if !destIsExecutable(result.RunBinary) {

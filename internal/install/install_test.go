@@ -89,7 +89,7 @@ func TestPerformGlobalInstall(t *testing.T) {
 	if err != nil || (runtime.GOOS != "windows" && st.Mode()&0o111 == 0) {
 		t.Fatalf("not executable: %v", err)
 	}
-	if len(rules.Names()) != 11 {
+	if len(rules.Names()) != 12 {
 		t.Fatalf("names=%v", rules.Names())
 	}
 	for _, name := range rules.Names() {
@@ -97,12 +97,12 @@ func TestPerformGlobalInstall(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := os.ReadFile(filepath.Join(home, ".agents", name))
+		got, err := os.ReadFile(filepath.Join(home, ".agents", "kander", name))
 		if err != nil || !bytes.Equal(got, data) {
 			t.Fatalf("%s mismatch: %v", name, err)
 		}
 	}
-	if _, err := os.Lstat(filepath.Join(home, ".agents", "AGENTS.md")); !os.IsNotExist(err) {
+	if _, err := os.Lstat(filepath.Join(home, ".agents", "kander", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("AGENTS.md entry must not be created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".local", "share", "kander")); err != nil {
@@ -112,7 +112,7 @@ func TestPerformGlobalInstall(t *testing.T) {
 
 func TestPerformPreservesExistingAgentsEntry(t *testing.T) {
 	home := setupInstallHome(t)
-	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	agents := filepath.Join(home, ".agents", "kander", "AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(agents), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestPerformPreservesExistingAgentsEntry(t *testing.T) {
 
 func TestPerformRemovesInstallerAgentsEntryCopy(t *testing.T) {
 	home := setupInstallHome(t)
-	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	agents := filepath.Join(home, ".agents", "kander", "AGENTS.md")
 	official, err := rules.File("KANDER-AGENTS.md")
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestPerformRemovesPreviousOfficialAgentsEntryCopy(t *testing.T) {
 	original := previousOfficialHashes["KANDER-AGENTS.md"]
 	previousOfficialHashes["KANDER-AGENTS.md"] = append(append([]string{}, original...), fileHash(stale))
 	t.Cleanup(func() { previousOfficialHashes["KANDER-AGENTS.md"] = original })
-	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	agents := filepath.Join(home, ".agents", "kander", "AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(agents), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestPerformRemovesPreviousOfficialAgentsEntryCopy(t *testing.T) {
 
 func TestPerformRemovesInstallerAgentsEntrySymlink(t *testing.T) {
 	home := setupInstallHome(t)
-	agents := filepath.Join(home, ".agents", "AGENTS.md")
+	agents := filepath.Join(home, ".agents", "kander", "AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(agents), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestPerformRejectsLegacyDirectory(t *testing.T) {
 
 func TestPerformRejectsDirectoryTarget(t *testing.T) {
 	home := setupInstallHome(t)
-	blocked := filepath.Join(home, ".agents", "KANDER-AGENTS.md")
+	blocked := filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md")
 	if err := os.MkdirAll(blocked, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestPerformProjectSkipsGlobal(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".local")); !os.IsNotExist(err) {
 		t.Fatal("touched global bin")
 	}
-	if _, err := os.Stat(filepath.Join(home, ".agents")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".agents", "kander")); !os.IsNotExist(err) {
 		t.Fatal("touched global agents")
 	}
 	got, _ := os.ReadFile(canary)
@@ -397,7 +397,7 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
-	edited := filepath.Join(home, ".agents", "KANDER-CODE-RULES.md")
+	edited := filepath.Join(home, ".agents", "kander", "KANDER-CODE-RULES.md")
 	if err := os.WriteFile(edited, []byte("edited locally\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -412,13 +412,13 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	if len(report.Modified) != 1 || report.Modified[0] != "KANDER-CODE-RULES.md" {
 		t.Fatalf("modified=%v", report.Modified)
 	}
-	if err := os.Remove(filepath.Join(home, ".agents", "KANDER-AGENTS.md")); err != nil {
+	if err := os.Remove(filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md")); err != nil {
 		t.Fatal(err)
 	}
-	if err := RepairRules(paths); err != nil {
+	if _, _, err := RepairRules(paths); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".agents", "KANDER-AGENTS.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md")); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(edited)
@@ -432,7 +432,7 @@ func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
 	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
-	agents := filepath.Join(home, ".agents")
+	agents := filepath.Join(home, ".agents", "kander")
 	if err := os.Remove(filepath.Join(agents, stateFileName)); err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +454,7 @@ func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
 	if len(report.Outdated) != 1 || report.Outdated[0] != "KANDER-BASE-RULES.md" {
 		t.Fatalf("outdated=%v modified=%v", report.Outdated, report.Modified)
 	}
-	if err := RepairRules(paths); err != nil {
+	if _, _, err := RepairRules(paths); err != nil {
 		t.Fatal(err)
 	}
 	want, err := rules.File("KANDER-BASE-RULES.md")
@@ -482,7 +482,7 @@ func TestRepairRulesBootstrapsStampWhenCurrent(t *testing.T) {
 	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(home, ".agents", stateFileName)); err != nil {
+	if err := os.Remove(filepath.Join(home, ".agents", "kander", stateFileName)); err != nil {
 		t.Fatal(err)
 	}
 	paths, err := config.GlobalInstallPaths()
@@ -496,7 +496,7 @@ func TestRepairRulesBootstrapsStampWhenCurrent(t *testing.T) {
 	if len(report.Missing)+len(report.Outdated)+len(report.Modified) != 0 {
 		t.Fatalf("%+v", report)
 	}
-	if err := RepairRules(paths); err != nil {
+	if _, _, err := RepairRules(paths); err != nil {
 		t.Fatal(err)
 	}
 	state, err := loadRulesState(paths)
@@ -548,7 +548,7 @@ func TestGlobalSymlinkRuleIsNotFalseStamped(t *testing.T) {
 	if _, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)}); err != nil {
 		t.Fatal(err)
 	}
-	dest := filepath.Join(home, ".agents", "KANDER-CODE-RULES.md")
+	dest := filepath.Join(home, ".agents", "kander", "KANDER-CODE-RULES.md")
 	target := filepath.Join(home, "dotfiles", "KANDER-CODE-RULES.md")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)

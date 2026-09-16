@@ -144,7 +144,7 @@ func globalInstallPaths() (InstallPaths, error) {
 	return InstallPaths{
 		Mode:       ModeGlobal,
 		ConfigPath: filepath.Join(home, ".config", "kander", "config.json"),
-		RulesDir:   filepath.Join(home, ".agents"),
+		RulesDir:   filepath.Join(home, ".agents", "kander"),
 		BinDir:     filepath.Join(home, ".local", "bin"),
 		ShareDir:   filepath.Join(home, ".local", "share", "kander"),
 	}, nil
