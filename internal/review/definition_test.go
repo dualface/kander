@@ -183,6 +183,8 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 		{"claude", `{"type":"result","subtype":"error","is_error":true,"result":"ok"}`, false},
 		{"cursor", `{"type":"result","subtype":"success","is_error":false,"result":"ok"}`, true},
 		{"cursor", `{"type":"result","subtype":"success","is_error":true,"result":"ok"}`, false},
+		{"devin", "report text\n", true},
+		{"devin", "", false},
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
@@ -206,6 +208,46 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// Devin print mode never reads a prompt from stdin, so its definition is the
+// one built-in that passes the instruction through argv after a literal "--".
+func TestDevinReviewDefinitionUsesArgvInstruction(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	settings, err := agentSettingsFor("devin", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.stdin != config.ReviewStdinNone || settings.cwd != "root" ||
+		settings.outputName != "output.txt" || !settings.spawnsHelperProcesses || settings.snapshotSpec {
+		t.Fatalf("settings %+v", settings)
+	}
+	ctx := reviewContext{
+		agent: "devin", settings: settings, root: "/work",
+		program:     process.AgentProgram{Path: "/bin/reviewer"},
+		instruction: process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+	}
+	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cwd != "/work" {
+		t.Fatalf("cwd %s", cwd)
+	}
+	want := []string{
+		"--print", "--respect-workspace-trust", "false",
+		"--permission-mode", "auto",
+	}
+	if settings.model != "" {
+		want = append(want, "--model", settings.model)
+	}
+	want = append(want, "--", ctx.instruction)
+	last := inv.Argv[len(inv.Argv)-1]
+	if !reflect.DeepEqual(inv.Argv[1:len(inv.Argv)-1], want) ||
+		!strings.HasPrefix(last, "Output contract: your final message is the complete review report") {
+		t.Fatalf("argv\n got %q\nwant %q + output contract", inv.Argv[1:], want)
 	}
 }
 

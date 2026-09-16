@@ -17,7 +17,7 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 	cfg := config.DefaultConfig()
 	models := cfg.Models.Kanban
 	const sid = "session-id"
-	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi"} {
+	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin"} {
 		for _, kind := range []string{"large", "small"} {
 			for _, resume := range []bool{false, true} {
 				for _, hasSession := range []bool{true, false} {
@@ -83,6 +83,18 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 							want = append(want, "--model", modelID)
 						}
 						want = append(want, "--thinking", effort)
+					case "devin":
+						// devin became a built-in after pi; this case pins its initial
+						// baseline. The generated reference is a pane marker only: Devin
+						// CLI allocates its own session ids, so resume uses --continue.
+						if modelID != "" {
+							want = append(want, "--model", modelID)
+						}
+						want = append(want, "--permission-mode", "dangerous", "--respect-workspace-trust", "false")
+						if resume {
+							want = append(want, "--continue")
+						}
+						want = append(want, "--")
 					}
 					name := agent + "/" + kind
 					if resume {

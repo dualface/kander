@@ -1,5 +1,5 @@
 {
-  "orchestrate.usage": "用法: kander orchestrate [--agent codex|claude|grok|cursor|pi] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message text | --message-file path) <task-id|task-group-id>...",
+  "orchestrate.usage": "用法: kander orchestrate [--agent codex|claude|grok|cursor|pi|devin] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message text | --message-file path) <task-id|task-group-id>...",
   "orchestrate.requires_at_least_one_task": "orchestrate には少なくとも 1 枚のタスクカードが必要です",
   "orchestrate.task_group_has_no_members": "タスクグループ {{.V0}} にメンバーカードがありません",
   "orchestrate.task_repeated": "タスク {{.V0}} が重複して指定されています (直接またはタスクグループ経由)",

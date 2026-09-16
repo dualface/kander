@@ -12,7 +12,7 @@ import (
 // before embedded definitions; pi was added later and pins its own ~/.pi/agent target.
 func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
-		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi"} {
+		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin"} {
 			for _, existing := range []bool{false, true} {
 				name := string(mode) + "/" + agent + "/create"
 				if existing {
@@ -28,6 +28,9 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 					}
 					if agent == "pi" {
 						target = filepath.Join(home, ".pi", "agent", "AGENTS.md")
+					}
+					if agent == "devin" {
+						target = filepath.Join(home, ".config", "devin", "AGENTS.md")
 					}
 					if mode == config.ModeProject {
 						project := t.TempDir()

@@ -57,6 +57,10 @@
         "large_model": "cursor-grok-4.6-xhigh",
         "small_model": "cursor-grok-4.6-high"
       },
+      "devin": {
+        "large_model": "swe-2-max",
+        "small_model": "swe-2-max"
+      },
       "grok": {
         "large_effort": "xhigh",
         "large_model": "",
@@ -83,6 +87,9 @@
       },
       "cursor": {
         "model": "cursor-grok-4.6-xhigh"
+      },
+      "devin": {
+        "model": "swe-2-max"
       },
       "grok": {
         "effort": "high",
@@ -126,6 +133,9 @@
       },
       "cursor": {
         "model": "cursor-grok-4.6-xhigh"
+      },
+      "devin": {
+        "model": "swe-2-max"
       },
       "grok": {
         "effort": "xhigh",

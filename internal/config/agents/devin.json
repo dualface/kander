@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "path": "devin",
+  "process_name": "devin",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "dangerous",
+      "--respect-workspace-trust",
+      "false",
+      "--"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--permission-mode",
+      "dangerous",
+      "--respect-workspace-trust",
+      "false",
+      "--continue",
+      "--"
+    ],
+    "review": [
+      "--print",
+      "--respect-workspace-trust",
+      "false",
+      "--permission-mode",
+      "auto",
+      "--model",
+      "{model}",
+      "--",
+      "{instruction}",
+      "Output contract: your final message is the complete review report and must contain exactly one kander-findings JSON fence. Use read-only inspection only; never create, modify, or delete any file, and do not run commands that change the worktree."
+    ]
+  },
+  "session": {
+    "mode": "generated"
+  },
+  "exit_command": "/exit",
+  "display_name": "Devin",
+  "supports_effort": false,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "review": {
+    "cwd": "root",
+    "home_policy": "optional",
+    "output_name": "output.txt",
+    "inspection": "Use only read-only inspection: read, search, and shell commands that do not write. Never create, modify, or delete any file; the review gate fails if HEAD moves or the worktree is dirty.",
+    "spawns_helpers": true,
+    "snapshot_spec": false,
+    "stdin": "none",
+    "output": {
+      "source": "stdout",
+      "parse": "raw"
+    }
+  },
+  "rules_target": {
+    "global": ".config/devin/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "swe-2-max",
+  "small_model": "swe-2-max",
+  "model": "swe-2-max"
+}
