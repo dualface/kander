@@ -7,7 +7,7 @@ Loaded automatically and used to judge triggering only when `rules.review=true`;
 
 ## Reviewer Selection
 
-- Reviewers are the five built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root (per `KANDER-AGENTS.md` "Scope").
+- Reviewers are the five built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root (per `KANDER-LOADING-RULES.md` "Scope").
 - Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from CLI and isolation arguments, every rule here is identical for all reviewers.
 
 | reviewer | argument | CLI | isolation |

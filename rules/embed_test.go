@@ -7,7 +7,7 @@ import (
 
 func TestNamesAreMarkdownOnly(t *testing.T) {
 	names := Names()
-	if len(names) != 11 {
+	if len(names) != 12 {
 		t.Fatalf("names=%v", names)
 	}
 	seen := map[string]bool{}
@@ -42,6 +42,18 @@ func TestEntryDeclaresIssueRulesLoadTiming(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "KANDER-ISSUE-RULES.md") {
 		t.Fatal("the rules entry must name the issue rules file and its load timing")
+	}
+}
+
+func TestEntryNamesLoadPath(t *testing.T) {
+	data, err := File("KANDER-AGENTS.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"KANDER-BASE-RULES.md", "KANDER-LOADING-RULES.md"} {
+		if !strings.Contains(string(data), name) {
+			t.Fatalf("the rules entry must send every session to %s", name)
+		}
 	}
 }
 

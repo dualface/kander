@@ -3,7 +3,7 @@
 ## Applicability
 
 - Read this file when actually using kanban commands: first the configuration per `KANDER-AGENTS.md`, then enabled modules as needed. This file does not by itself require intake guidance, the Git workflow, review, or fixed reports.
-- This file governs the board managed by the `kander` command of the current scope (selected per `KANDER-AGENTS.md` "Scope"). User instructions and target project rules take precedence; cards only store the task contract and execution records and never override user decisions, project rules, or security gates.
+- This file governs the board managed by the `kander` command of the current scope (selected per `KANDER-LOADING-RULES.md` "Scope"). User instructions and target project rules take precedence; cards only store the task contract and execution records and never override user decisions, project rules, or security gates.
 - Before operating on the board, read this file under the rules root, then the target card.
 
 ## Storage and Location

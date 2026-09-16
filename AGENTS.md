@@ -16,7 +16,7 @@ This file is the development contract for the Kander repository itself. The work
 - Commit messages are English only: title, body, and trailers all in English, with no Chinese left. History is already unified to English; later commits must not regress.
 - Code comments are English only: line, block, and doc comments in `.go`, plus comments in `.sh` / `.ps1` and other scripts.
 - Task card titles are English only: every card created for this repository (`kander new`, cards under `kanban/`, and cards created by hand) gets an English title, no matter what the card's `LANGUAGE` field or the configured `agent_language` says. That field still governs the card body, execution records, reports, and conversation with the user; it does not exempt the title.
-- The released rules `rules/*.md` are English only and kept as the single copy; no per-language translations are maintained. The language the agent uses with the user is decided by the `agent_language` setting, and the "Language" section of the rules entry `KANDER-AGENTS.md` requires agents to honor it; keep that section in place when changing the rules.
+- The released rules `rules/*.md` are English only and kept as the single copy; no per-language translations are maintained. The language the agent uses with the user is decided by the `agent_language` setting, and the "Language" section of the rules entry `KANDER-AGENTS.md` requires agents to honor it, with the full wording in `KANDER-LOADING-RULES.md` "Language Details"; keep both in place when changing the rules.
 - Repository documentation (`AGENTS.md`, `docs/`) is written in English. The README defaults to the English `README.md`, with the Chinese and Japanese translations in `README-CN.md` and `README-JA.md`. The user maintains consistency across these versions. User-facing strings still go through the `internal/i18n` message catalog and are not rewritten because of this bullet.
 
 ## Go Module and Package Map
@@ -129,7 +129,7 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 
 ## Released Rules
 
-- `rules/KANDER-AGENTS.md` is the released rules entry; it first reads `kander config --json` for the current scope. `KANDER-BASE-RULES.md` and `KANDER-KANBAN-RULES.md` are the tool protocol; the other seven module booklets load per switch and per need, all live in `rules/`, and exist only in English. No customized rule files are generated, and disabled modules are not loaded through cross references.
+- `rules/KANDER-AGENTS.md` is the released rules entry; it first reads `kander config --json` for the current scope, then `KANDER-BASE-RULES.md`, then `KANDER-LOADING-RULES.md`. The entry stays minimal: scope paths, the module switch table, the reading map, and rule precedence live in `KANDER-LOADING-RULES.md`. `KANDER-BASE-RULES.md` and `KANDER-KANBAN-RULES.md` are the tool protocol; the other seven module booklets load per switch and per need, all live in `rules/`, and exist only in English. A global install extracts them to `~/.agents/kander/`; a project install to `<main worktree>/.kander/rules/`. No customized rule files are generated, and disabled modules are not loaded through cross references.
 - The root `AGENTS.md` only constrains development of this repository; when changing the released workflow, change `rules/`. Do not write implementation details into the released booklets, and do not put the package map into `KANDER-AGENTS.md`.
 - The runtime-created `kanban/` is machine-local shared data; never commit it and never write it into the project `.gitignore`.
 
