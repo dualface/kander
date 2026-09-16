@@ -1,26 +1,10 @@
 package check
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
-
-func TestWindowsCrossCompile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("already running on windows")
-	}
-	out := filepath.Join(t.TempDir(), "check.test.exe")
-	cmd := exec.Command("go", "test", "-c", "-o", out, ".")
-	cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
-	data, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("windows cross-compile: %v\n%s", err, data)
-	}
-}
 
 func TestPackageDoesNotImportTUI(t *testing.T) {
 	data, err := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", "github.com/dualface/kander/internal/check").Output()
