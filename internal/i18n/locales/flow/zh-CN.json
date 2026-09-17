@@ -1,0 +1,20 @@
+{
+  "flow.title": "流程图",
+  "flow.stage_execute": "执行",
+  "flow.stage_self_check": "交付自检",
+  "flow.stage_primary": "第一阶段审核",
+  "flow.stage_security": "第二阶段安全审核",
+  "flow.stage_na": "N/A · 直接通过",
+  "flow.gate_primary": "有必修项?",
+  "flow.gate_security": "有合格发现?",
+  "flow.yes": "是",
+  "flow.no": "否",
+  "flow.stage_user_decision": "用户决策",
+  "flow.stage_fix": "修复并提交",
+  "flow.stage_rereview": "增量复审",
+  "flow.stage_done": "整合完成",
+  "flow.mode_required": "必跑",
+  "flow.mode_auto": "按条件",
+  "flow.review_off": "审核已关闭",
+  "flow.cli_default": "CLI 默认"
+}

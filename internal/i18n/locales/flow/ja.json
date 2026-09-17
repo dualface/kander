@@ -1,0 +1,20 @@
+{
+  "flow.title": "フロー図",
+  "flow.stage_execute": "実行",
+  "flow.stage_self_check": "納品セルフチェック",
+  "flow.stage_primary": "第1段階レビュー",
+  "flow.stage_security": "第2段階セキュリティレビュー",
+  "flow.stage_na": "N/A · そのまま通過",
+  "flow.gate_primary": "必須修正あり?",
+  "flow.gate_security": "有効な指摘あり?",
+  "flow.yes": "はい",
+  "flow.no": "いいえ",
+  "flow.stage_user_decision": "ユーザー判断",
+  "flow.stage_fix": "修正してコミット",
+  "flow.stage_rereview": "増分再レビュー",
+  "flow.stage_done": "統合して完了",
+  "flow.mode_required": "必須",
+  "flow.mode_auto": "条件付き",
+  "flow.review_off": "レビュー無効",
+  "flow.cli_default": "CLI 既定値"
+}

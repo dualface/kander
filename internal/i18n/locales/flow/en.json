@@ -1,0 +1,20 @@
+{
+  "flow.title": "Workflow",
+  "flow.stage_execute": "Execute",
+  "flow.stage_self_check": "Delivery self-check",
+  "flow.stage_primary": "Stage 1 review",
+  "flow.stage_security": "Stage 2 security review",
+  "flow.stage_na": "N/A · passes directly",
+  "flow.gate_primary": "Must-fix findings?",
+  "flow.gate_security": "Qualified findings?",
+  "flow.yes": "yes",
+  "flow.no": "no",
+  "flow.stage_user_decision": "User decision",
+  "flow.stage_fix": "Fix and commit",
+  "flow.stage_rereview": "Incremental re-review",
+  "flow.stage_done": "Integrate and finish",
+  "flow.mode_required": "required",
+  "flow.mode_auto": "conditional",
+  "flow.review_off": "Review disabled",
+  "flow.cli_default": "CLI default"
+}
