@@ -14,7 +14,7 @@ func arbitrationFixture(t *testing.T, status string) (string, string, ReviewRun,
 	input.FindingsSchema = 1
 	finding := ReviewFinding{ID: "PMQA-01", Tier: "medium", Text: "changed lifecycle can skip cleanup", Evidence: "worker.go:42"}
 	run := gateRun(t, root, input, ReviewFindings{Findings: []ReviewFinding{finding}, NonBlocking: []ReviewFinding{}})
-	assignGate(t, root, run, map[string][]string{finding.ID: {id}})
+	assignGate(t, root, run, map[string][]string{finding.ID: []string{id}})
 	d := gateRecord(t, root, run, id, finding, status)
 	return root, id, run, finding, d
 }
@@ -97,7 +97,7 @@ func TestReviewArbitrationRejectsNonMustFixFinding(t *testing.T) {
 	input.FindingsSchema = 1
 	finding := ReviewFinding{ID: "PMQA-LOW", Tier: "low", Text: "minor defect", Evidence: "worker.go:9"}
 	run := gateRun(t, root, input, ReviewFindings{Findings: []ReviewFinding{}, NonBlocking: []ReviewFinding{finding}})
-	assignGate(t, root, run, map[string][]string{finding.ID: {id}})
+	assignGate(t, root, run, map[string][]string{finding.ID: []string{id}})
 	d := gateRecord(t, root, run, id, finding, "rejected")
 	a := arbitrationFor(run, id, finding, d)
 	if err := SubmitReviewArbitration(root, a); err == nil {
