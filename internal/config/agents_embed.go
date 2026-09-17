@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -322,11 +323,9 @@ func cloneArgs(src *AgentArgs) *AgentArgs {
 		return nil
 	}
 	out := *src
-	out.Start = append([]string{}, src.Start...)
-	out.Resume = append([]string{}, src.Resume...)
-	if src.Review != nil {
-		out.Review = append([]string{}, src.Review...)
-	}
+	out.Start = slices.Clone(src.Start)
+	out.Resume = slices.Clone(src.Resume)
+	out.Review = slices.Clone(src.Review)
 	return &out
 }
 

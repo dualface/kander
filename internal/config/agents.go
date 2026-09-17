@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -140,11 +141,9 @@ func LoadAgent(name string) (AgentDefinition, error) {
 func cloneAgent(d AgentDefinition) AgentDefinition {
 	if d.Args != nil {
 		a := *d.Args
-		a.Start = append([]string{}, a.Start...)
-		a.Resume = append([]string{}, a.Resume...)
-		if a.Review != nil {
-			a.Review = append([]string{}, a.Review...)
-		}
+		a.Start = slices.Clone(a.Start)
+		a.Resume = slices.Clone(a.Resume)
+		a.Review = slices.Clone(a.Review)
 		d.Args = &a
 	}
 	d.Review = cloneReview(d.Review)

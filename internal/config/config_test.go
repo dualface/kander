@@ -745,6 +745,35 @@ func TestUpdateAndSaveIfUnchangedPreventLostUpdate(t *testing.T) {
 	}
 }
 
+func TestSaveIfUnchangedAcceptsClonedNullAgentArgs(t *testing.T) {
+	root := setupHome(t)
+	path := filepath.Join(root, "config.json")
+	t.Setenv(EnvConfig, path)
+	initial := DefaultConfig()
+	initial.WelcomeComplete = true
+	initial.Agents = map[string]AgentDefinition{
+		"custom": {
+			Args:    &AgentArgs{Start: []string{"run"}, Resume: nil},
+			Session: &AgentSessionDefinition{Mode: "none"},
+		},
+	}
+	if _, err := Save(initial); err != nil {
+		t.Fatal(err)
+	}
+	baseline, err := LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := Clone(baseline)
+	edited.Launcher = "foreground"
+	if edited.Agents["custom"].Args.Resume != nil {
+		t.Fatal("clone changed a nil resume template into an empty slice")
+	}
+	if _, err := SaveIfUnchanged(edited, baseline); err != nil {
+		t.Fatalf("unchanged config reported a conflict: %v", err)
+	}
+}
+
 func TestDefaultLauncherMatchesPlatform(t *testing.T) {
 	setupHome(t)
 	got := DefaultConfig().Launcher
