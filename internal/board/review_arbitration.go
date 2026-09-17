@@ -7,8 +7,8 @@ import (
 )
 
 // ReviewArbitration is immutable third-party evidence for a disputed must-fix
-// finding. It binds a verdict to the exact latest author disposition that was
-// disputed; later author revisions require a new arbitration.
+// finding. It binds a verdict to the exact latest unverifiable author
+// disposition; later author revisions require a new arbitration.
 type ReviewArbitration struct {
 	Schema              int    `json:"schema"`
 	ArbitrationID       string `json:"arbitration_id"`
@@ -45,9 +45,9 @@ func validArbitrationVerdict(verdict string) bool {
 }
 
 // SubmitReviewArbitration records a narrow third-party decision about one
-// rejected or unverifiable must-fix finding. It does not mutate the author's
-// disposition: sustain still requires the author to confirm/fix, overrule may
-// support a rejected revision, and inconclusive remains unresolved.
+// unverifiable must-fix finding. It does not mutate the author's disposition:
+// sustain still requires the author to confirm/fix, overrule may support a new
+// rejected revision, and inconclusive remains unresolved.
 func SubmitReviewArbitration(root string, a ReviewArbitration) error {
 	run, err := ReadReviewRun(root, a.RunID)
 	if err != nil {
@@ -105,8 +105,8 @@ func SubmitReviewArbitration(root string, a ReviewArbitration) error {
 		if !found || disposition.RecordID != a.DispositionRecordID {
 			return reviewError("arbitration must bind latest disposition")
 		}
-		if disposition.Status != "rejected" && disposition.Status != "unverifiable" {
-			return reviewError("arbitration requires disputed disposition")
+		if disposition.Status != "unverifiable" {
+			return reviewError("arbitration requires unverifiable disposition")
 		}
 		if a.Arbiter == disposition.Author {
 			return reviewError("arbiter must differ from author")
