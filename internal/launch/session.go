@@ -573,7 +573,14 @@ func discoverNewAgentSession(disc *config.SessionDiscovery, taskID string, previ
 	deadline := nowFn().Add(disc.Timeout())
 	var last error
 	for {
-		ctx, cancel := probe.TimeoutContext(deadline.Sub(nowFn()))
+		remaining := deadline.Sub(nowFn())
+		if remaining <= 0 {
+			if last == nil {
+				last = launchError("launch.the_newly_started_session_has_not_appeared_yet")
+			}
+			return "", last
+		}
+		ctx, cancel := probe.TimeoutContext(remaining)
 		candidates, err := enumerateSessionsFn(ctx, disc, program, cwd, taskID)
 		cancel()
 		if err != nil {

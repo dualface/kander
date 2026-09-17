@@ -251,6 +251,30 @@ func TestDiscoverNewAgentSessionTimesOutWithoutCandidates(t *testing.T) {
 	}
 }
 
+func TestDiscoverNewAgentSessionStopsEnumeratingPastDeadline(t *testing.T) {
+	calls := 0
+	previousList := enumerateSessionsFn
+	enumerateSessionsFn = func(context.Context, *config.SessionDiscovery, *process.AgentProgram, string, string) ([]string, error) {
+		calls++
+		return []string{"existing"}, nil
+	}
+	t.Cleanup(func() { enumerateSessionsFn = previousList })
+	previousNow := nowFn
+	now := previousNow()
+	nowFn = func() time.Time { return now }
+	t.Cleanup(func() { nowFn = previousNow })
+	previousSleep := sleepFn
+	sleepFn = func(time.Duration) { now = now.Add(time.Hour) }
+	t.Cleanup(func() { sleepFn = previousSleep })
+	disc := devinDiscovery(t)
+	if _, err := discoverNewAgentSession(disc, "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir()); err == nil {
+		t.Fatal("discovery without a new session must fail")
+	}
+	if calls != 1 {
+		t.Fatalf("enumerate ran %d times past the deadline", calls)
+	}
+}
+
 func fakeEnumerate(t *testing.T, script string) *process.AgentProgram {
 	t.Helper()
 	if runtime.GOOS == "windows" {
