@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -137,16 +138,16 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 		for _, agent := range config.ExecutionAgents {
 			t.Run(launcher+"/"+agent, func(t *testing.T) {
 				if agent == "devin" {
-					previousList := listDevinSessionsFn
+					previousList := enumerateSessionsFn
 					calls := 0
-					listDevinSessionsFn = func(*process.AgentProgram, string) ([]string, error) {
+					enumerateSessionsFn = func(context.Context, *config.SessionDiscovery, *process.AgentProgram, string, string) ([]string, error) {
 						calls++
 						if calls == 1 {
 							return nil, nil
 						}
 						return []string{"devin-session"}, nil
 					}
-					defer func() { listDevinSessionsFn = previousList }()
+					defer func() { enumerateSessionsFn = previousList }()
 				}
 				captured = nil
 				id, _ := makeTodo(t, root, "argv-"+launcher+"-"+agent)

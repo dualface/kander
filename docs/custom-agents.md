@@ -58,10 +58,18 @@ Neither the allocate command nor the argument templates use shell interpolation;
 
 - `generated`: generates a UUID and saves it to the card's SESSION, for use by `{session}` and resume.
 - `allocated`: first executes the `session.allocate` argv (the first element is the program), waiting at most 10 seconds; successful output must be a single ID, or a top-level JSON string field designated via `session.json_field`. An ID accepts only 1–128 letters, digits, `.`, `_`, `:`, and `-`. Program failure, invalid output, and timeout are all reported before the task is claimed.
-- `hook:<name>`: names a registered Go hook when argv templates cannot express how the CLI creates or discovers a session. The built-in names are listed in the [Hook Catalog](#hook-catalog). An unregistered name is rejected at load time with the agent name and hook name. `discovered` is not accepted in hand-written configuration; Codex uses `hook:codex-rollout` and Devin uses `hook:devin-session` instead.
+- `hook:<name>`: names a registered Go hook when argv templates cannot express how the CLI creates or discovers a session. The built-in names are listed in the [Hook Catalog](#hook-catalog). An unregistered name is rejected at load time with the agent name and hook name. Codex uses `hook:codex-rollout`.
+- `discovered`: the agent CLI enumerates its own sessions, so Kander can identify the exact session a launch created without a Go hook. Before launch Kander snapshots the enumerated ids; after launch it polls the enumeration until exactly one id is new relative to the snapshot and satisfies every declared `match`. Zero new sessions at the deadline, several new sessions, an enumerate failure, malformed output, an invalid id, or an exceeded bound all fail the launch and roll the card back — there is no "latest session" or `--continue` fallback. `session.discovery` is required for this mode and rejected under any other mode. Fields:
+  - `args`: argv appended to the agent program and spawned directly, never through a shell; placeholders are not expanded here and braces are rejected.
+  - `format`: `json` (a JSON array of objects), `jsonl` (one object per line), or `lines` (one bare id per line). `lines` takes no `id_field` or `match`.
+  - `id_field`: for `json`/`jsonl`, the field whose string value is the session id. An id accepts only 1–128 letters, digits, `.`, `_`, `:`, and `-`.
+  - `match`: optional `{field, equals}` pairs; a record must have each field as a string equal to `equals` after placeholder expansion. `{cwd}` expands to the launch project directory and `{task_id}` to the card id; `{cwd}` comparisons are canonicalized on both sides so a symlinked spelling still binds. A missing or non-string field never matches, which prevents cross-project binding.
+  - `timeout_ms`: total post-launch discovery budget, 1000–120000, default 10000.
+  - `interval_ms`: pause between enumerations, 20–10000 and below the timeout, default 100.
+  - `max_bytes`: enumerate output bound, 4096–16777216, default 1048576; overflowing output is rejected.
 - `none`: `resume` refuses explicitly; `notify` does not deliver directly and instead runs the start template through the recovery channel, re-reading the card context. The card keeps a UUID used only for terminal marking; `{session}` in the template is empty, the dialect parameters likewise omit session creation/resume options, and the UUID serves only terminal identity checks. `dismiss` still allows closing a terminal whose identity has been confirmed. `kander config`, the stderr of `config --json`, and `kander check` display a degradation notice. Persistent dispatch-back must still satisfy the existing stop facts and receipt gates, and does not use `none` to bypass the duplicate-execution guard.
 
-A templated custom agent without a dialect must declare session explicitly. With a dialect, the default is inherited from that dialect's embedded `session` field: Claude/Grok/Pi generate a UUID; Cursor uses `hook:cursor-create-chat`; Codex uses `hook:codex-rollout`; Devin uses `hook:devin-session`. Without explicit argv templates, a dialect using a session hook accepts that hook or `none`; a dialect whose hook allocates an ID before start also accepts an explicit `allocated` session. Thus Cursor still accepts `allocated`; Codex and Devin reject `generated` and `allocated`; Cursor rejects `generated`. Dialects whose default is `generated` retain their existing session overrides. All dialects allow `none`, passing no session parameters at start.
+A templated custom agent without a dialect must declare session explicitly. With a dialect, the default is inherited from that dialect's embedded `session` field: Claude/Grok/Pi generate a UUID; Cursor uses `hook:cursor-create-chat`; Codex uses `hook:codex-rollout`; Devin discovers its session via `session.discovery`. Without explicit argv templates, a dialect whose session produces an agent-native id accepts only that same mode or `none`; a dialect whose hook allocates an ID before start also accepts an explicit `allocated` session. Thus Cursor still accepts `allocated`; Codex and Devin reject `generated` and `allocated`; Cursor rejects `generated`. Dialects whose default is `generated` retain their existing session overrides. All dialects allow `none`, passing no session parameters at start.
 
 Allocation example:
 
@@ -70,6 +78,20 @@ Allocation example:
   "mode": "allocated",
   "allocate": ["helper", "create-session", "--json"],
   "json_field": "id"
+}
+```
+
+Discovery example (the built-in Devin definition uses exactly this shape):
+
+```json
+"session": {
+  "mode": "discovered",
+  "discovery": {
+    "args": ["list", "--format", "json"],
+    "format": "json",
+    "id_field": "id",
+    "match": [{"field": "working_directory", "equals": "{cwd}"}]
+  }
 }
 ```
 
@@ -120,11 +142,10 @@ These hooks live in one Go registry (`internal/config/session_hooks.go`). A defi
 | ---- | ------- | -------- |
 | `codex-rollout` | Scan CODEX_HOME rollouts; discover or wait for the id | `codex` |
 | `cursor-create-chat` | Run `create-chat`; last nonempty stdout line is the id | `cursor` |
-| `devin-session` | Diff `devin list --format json` before and after launch; persist the new id | `devin` |
 
 The following changes still require Go code:
 
-- A new session identity source that cannot be expressed as `generated`, `allocated`, or `none` (add a named hook and list it here).
+- A new session identity source that cannot be expressed as `generated`, `allocated`, `none`, or `discovered` (add a named hook and list it here).
 - A new interactive exit sequence that is not a single `exit_command` string.
 - Merging agent hooks with terminal-side hooks (herdr socket and similar) into one registry.
 

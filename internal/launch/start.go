@@ -75,10 +75,10 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	mode := config.AgentFor(cfg, agentName).Session.Mode
+	sessionDef := config.AgentFor(cfg, agentName).Session
 	initialSession := session.Render()
-	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(mode)
-	previous, err := sessionDiscoverSnapshot(mode, entry.TaskID, discoverSession, program, parentDir(root))
+	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(sessionDef)
+	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root))
 	if err != nil {
 		return result, err
 	}
@@ -129,17 +129,17 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if session.Reference != "" {
 				return session, nil
 			}
-			if !config.SessionDiscoversAfterStart(mode) {
+			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous, program, parentDir(root))
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, program, parentDir(root))
 			if err != nil {
 				return AgentSession{}, err
 			}
 			return AgentSession{Agent: session.Agent, Reference: ref}, nil
 		}
 	}
-	if config.SessionPersistsAfterStart(mode) {
+	if config.SessionPersistsAfterStart(sessionDef) {
 		plan.sessionFinalize = func(effective AgentSession) error {
 			return board.ConfirmTaskStartSession(root, moved, initialSession, effective.Render())
 		}
@@ -156,7 +156,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
 	taskFileHandedOff = true
-	if !config.SessionPersistsAfterStart(mode) {
+	if !config.SessionPersistsAfterStart(sessionDef) {
 		err = board.ConfirmTaskStart(root, moved)
 		if err != nil {
 			return result, err

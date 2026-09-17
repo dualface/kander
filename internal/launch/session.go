@@ -23,7 +23,10 @@ import (
 
 var sessionReferenceRe = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
-var listDevinSessionsFn = devinSessions
+// enumerateSessionsFn runs the declared enumerate command and returns the
+// validated session ids that satisfy every declared match. It is a var so
+// tests can stub the agent CLI boundary.
+var enumerateSessionsFn = enumerateAgentSessions
 
 func randomUUID() string {
 	var buf [16]byte
@@ -88,7 +91,7 @@ func newAgentSession(agent string, program *process.AgentProgram, configs ...*co
 		cfg = configs[0]
 	}
 	definition := config.AgentFor(cfg, agent)
-	if config.SessionAllocatesBeforeStart(definition.Session.Mode) {
+	if config.SessionAllocatesBeforeStart(definition.Session) {
 		id, err := runSessionAllocateHook(definition.Session.Mode, program)
 		return AgentSession{Agent: agent, Reference: id}, err
 	}
@@ -162,7 +165,7 @@ func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*co
 	if requireResume && definition.Session.Mode == "none" {
 		return AgentSession{}, config.AgentResumeError(session.Agent)
 	}
-	if config.SessionResolvesEmptyReference(definition.Session.Mode) && session.Reference == "" {
+	if config.SessionResolvesEmptyReference(definition.Session) && session.Reference == "" {
 		id, err := runSessionResolveHook(definition.Session.Mode, taskID)
 		if err != nil {
 			return AgentSession{}, err
@@ -338,28 +341,41 @@ func runSessionResolveHook(mode, taskID string) (string, error) {
 	}
 }
 
-func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
-	name, ok := config.ParseSessionHook(mode)
+func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
+	if session.Mode == "discovered" {
+		return discoverNewAgentSession(session.Discovery, taskID, previous, program, cwd)
+	}
+	name, ok := config.ParseSessionHook(session.Mode)
 	if !ok {
-		return "", launchError("launch.unsupported_agent", mode)
+		return "", launchError("launch.unsupported_agent", session.Mode)
 	}
 	switch name {
 	case "codex-rollout":
 		return discoverNewCodexSession(taskID, previous)
-	case "devin-session":
-		return discoverNewDevinSession(program, cwd, previous)
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
 }
 
 // sessionDiscoverSnapshot records the sessions that exist before a launch.
-func sessionDiscoverSnapshot(mode, taskID string, discover bool, program *process.AgentProgram, cwd string) (map[string]struct{}, error) {
+func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string) (map[string]struct{}, error) {
 	previous := map[string]struct{}{}
-	if !config.SessionDiscoversAfterStart(mode) || !discover {
+	if !config.SessionDiscoversAfterStart(session) || !discover {
 		return previous, nil
 	}
-	name, ok := config.ParseSessionHook(mode)
+	if session.Mode == "discovered" {
+		ctx, cancel := probe.TimeoutContext(session.Discovery.Timeout())
+		sessions, err := enumerateSessionsFn(ctx, session.Discovery, program, cwd, taskID)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range sessions {
+			previous[id] = struct{}{}
+		}
+		return previous, nil
+	}
+	name, ok := config.ParseSessionHook(session.Mode)
 	if !ok {
 		return previous, nil
 	}
@@ -369,14 +385,6 @@ func sessionDiscoverSnapshot(mode, taskID string, discover bool, program *proces
 			for _, id := range sessions {
 				previous[id] = struct{}{}
 			}
-		}
-	case "devin-session":
-		sessions, err := listDevinSessionsFn(program, cwd)
-		if err != nil {
-			return nil, err
-		}
-		for _, id := range sessions {
-			previous[id] = struct{}{}
 		}
 	}
 	return previous, nil
@@ -427,54 +435,147 @@ func discoverNewCodexSession(taskID string, previous map[string]struct{}) (strin
 	}
 }
 
-func devinSessions(program *process.AgentProgram, cwd string) ([]string, error) {
+// enumerateAgentSessions runs the declared enumerate command directly (no
+// shell) in the launch project directory and returns the validated ids of the
+// records that satisfy every declared match.
+func enumerateAgentSessions(ctx context.Context, disc *config.SessionDiscovery, program *process.AgentProgram, cwd, taskID string) ([]string, error) {
 	if program == nil {
-		return nil, launchError("launch.devin_session_list_failed", "agent program is unavailable")
+		return nil, launchError("launch.session_list_failed", "agent program is unavailable")
 	}
-	inv, err := launchInvocation(LaunchPlan{Launcher: direct.Foreground}, *program, []string{"list", "--format", "json"})
+	inv, err := launchInvocation(LaunchPlan{Launcher: direct.Foreground}, *program, disc.Args)
 	if err != nil {
-		return nil, launchError("launch.devin_session_list_failed", err.Error())
+		return nil, launchError("launch.session_list_failed", err.Error())
 	}
-	result, err := probe.CaptureWithEnvDir(context.Background(), inv.Argv[0], inv.Argv[1:], envSlice(inv.Env), cwd)
+	result, err := probe.CaptureWithEnvDirLimit(ctx, inv.Argv[0], inv.Argv[1:], envSlice(inv.Env), cwd, disc.OutputLimit())
 	if err != nil {
-		return nil, launchError("launch.devin_session_list_failed", err.Error())
+		return nil, launchError("launch.session_list_failed", err.Error())
+	}
+	if result.Overflow {
+		return nil, launchError("launch.session_list_output_limit")
 	}
 	if result.Code != 0 {
-		return nil, launchError("launch.devin_session_list_failed", "exit "+strconv.Itoa(result.Code))
+		detail := strings.TrimSpace(result.Stderr)
+		if detail == "" {
+			detail = strings.TrimSpace(result.Stdout)
+		}
+		if detail == "" {
+			detail = "exit " + strconv.Itoa(result.Code)
+		}
+		return nil, launchError("launch.session_list_failed", detail)
 	}
-	return parseDevinSessions([]byte(result.Stdout))
+	return parseSessionList(disc, result.Stdout, cwd, taskID)
 }
 
-func parseDevinSessions(data []byte) ([]string, error) {
-	var records []struct {
-		ID string `json:"id"`
+// canonicalSessionDir normalizes a directory for the {cwd} match on
+// untrusted CLI output: both sides are cleaned and symlink-resolved so a
+// different spelling of the same directory still binds.
+func canonicalSessionDir(p string) string {
+	abs, err := filepath.Abs(p)
+	if err == nil {
+		p = abs
 	}
-	if err := json.Unmarshal(data, &records); err != nil {
-		return nil, launchError("launch.devin_session_list_invalid")
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		p = resolved
 	}
-	if records == nil {
-		return nil, launchError("launch.devin_session_list_invalid")
-	}
-	seen := make(map[string]struct{}, len(records))
-	sessions := make([]string, 0, len(records))
-	for _, record := range records {
-		if !sessionReferenceRe.MatchString(record.ID) {
-			return nil, launchError("launch.devin_session_list_invalid")
+	return filepath.Clean(p)
+}
+
+func discoveryMatchEquals(template, cwd, taskID string) string {
+	return strings.NewReplacer("{cwd}", canonicalSessionDir(cwd), "{task_id}", taskID).Replace(template)
+}
+
+// recordMatches reports whether one enumerated record satisfies every declared
+// match. A missing or non-string field never matches.
+func recordMatches(match []config.DiscoveryMatch, record map[string]any, cwd, taskID string) bool {
+	for _, m := range match {
+		value, ok := record[m.Field].(string)
+		if !ok {
+			return false
 		}
-		if _, ok := seen[record.ID]; ok {
+		want := m.Equals
+		if strings.Contains(want, "{cwd}") {
+			if canonicalSessionDir(value) != discoveryMatchEquals(want, cwd, taskID) {
+				return false
+			}
 			continue
 		}
-		seen[record.ID] = struct{}{}
-		sessions = append(sessions, record.ID)
+		if value != discoveryMatchEquals(want, cwd, taskID) {
+			return false
+		}
+	}
+	return true
+}
+
+// parseSessionList decodes one enumerate output into validated session ids.
+// Malformed output, a missing id field, and an invalid id all fail closed.
+func parseSessionList(disc *config.SessionDiscovery, stdout, cwd, taskID string) ([]string, error) {
+	var records []map[string]any
+	switch disc.Format {
+	case "json":
+		if err := json.Unmarshal([]byte(stdout), &records); err != nil {
+			return nil, launchError("launch.session_list_invalid")
+		}
+	case "jsonl":
+		for _, line := range strings.Split(stdout, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			var record map[string]any
+			if err := json.Unmarshal([]byte(line), &record); err != nil || record == nil {
+				return nil, launchError("launch.session_list_invalid")
+			}
+			records = append(records, record)
+		}
+	case "lines":
+		seen := map[string]struct{}{}
+		var sessions []string
+		for _, line := range strings.Split(stdout, "\n") {
+			id := strings.TrimSpace(line)
+			if id == "" {
+				continue
+			}
+			if !sessionReferenceRe.MatchString(id) {
+				return nil, launchError("launch.session_list_invalid")
+			}
+			if _, ok := seen[id]; !ok {
+				seen[id] = struct{}{}
+				sessions = append(sessions, id)
+			}
+		}
+		return sessions, nil
+	}
+	if disc.Format == "json" && records == nil {
+		return nil, launchError("launch.session_list_invalid")
+	}
+	seen := map[string]struct{}{}
+	var sessions []string
+	for _, record := range records {
+		if !recordMatches(disc.Match, record, cwd, taskID) {
+			continue
+		}
+		id, ok := record[disc.IDField].(string)
+		if !ok || !sessionReferenceRe.MatchString(id) {
+			return nil, launchError("launch.session_list_invalid")
+		}
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			sessions = append(sessions, id)
+		}
 	}
 	return sessions, nil
 }
 
-func discoverNewDevinSession(program *process.AgentProgram, cwd string, previous map[string]struct{}) (string, error) {
-	deadline := nowFn().Add(sessionDiscoverWait)
+// discoverNewAgentSession polls the declared enumerate command until exactly
+// one session id is new relative to the pre-launch snapshot. Zero candidates
+// retry until the deadline; several candidates fail immediately.
+func discoverNewAgentSession(disc *config.SessionDiscovery, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
+	deadline := nowFn().Add(disc.Timeout())
 	var last error
 	for {
-		candidates, err := listDevinSessionsFn(program, cwd)
+		ctx, cancel := probe.TimeoutContext(deadline.Sub(nowFn()))
+		candidates, err := enumerateSessionsFn(ctx, disc, program, cwd, taskID)
+		cancel()
 		if err != nil {
 			last = err
 		} else {
@@ -488,14 +589,14 @@ func discoverNewDevinSession(program *process.AgentProgram, cwd string, previous
 				return neu[0], nil
 			}
 			if len(neu) > 1 {
-				return "", launchError("launch.multiple_new_devin_sessions_appeared_during_launch", strconv.Itoa(len(neu)))
+				return "", launchError("launch.multiple_new_sessions_appeared_during_launch", strconv.Itoa(len(neu)))
 			}
-			last = launchError("launch.the_newly_started_devin_session_has_not_appeared_yet")
+			last = launchError("launch.the_newly_started_session_has_not_appeared_yet")
 		}
 		if !nowFn().Before(deadline) {
 			return "", last
 		}
-		sleepFn(notifyPollInterval)
+		sleepFn(disc.Interval())
 	}
 }
 

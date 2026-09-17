@@ -175,10 +175,10 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		return err
 	}
 	previous := map[string]struct{}{}
-	mode := config.AgentFor(cfg, session.Agent).Session.Mode
-	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(mode)
+	sessionDef := config.AgentFor(cfg, session.Agent).Session
+	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(sessionDef)
 	if takeover {
-		previous, err = sessionDiscoverSnapshot(mode, entry.TaskID, discoverSession, program, parentDir(root))
+		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root))
 		if err != nil {
 			return err
 		}
@@ -233,15 +233,15 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if session.Reference != "" {
 				return session, nil
 			}
-			if !config.SessionDiscoversAfterStart(mode) {
+			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous, program, parentDir(root))
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, program, parentDir(root))
 			if err != nil {
 				return AgentSession{}, err
 			}
 			effective = AgentSession{Agent: session.Agent, Reference: ref}
-			if takeover || config.SessionPersistsAfterStart(mode) {
+			if takeover || config.SessionPersistsAfterStart(sessionDef) {
 				current, err := readDocumentFn(moved)
 				if err != nil {
 					return AgentSession{}, err

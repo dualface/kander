@@ -16,6 +16,9 @@ type Result struct {
 	Code   int
 	Stdout string
 	Stderr string
+	// Overflow marks output truncated by a caller byte limit; the process still
+	// ran to completion because the drain continues after the cap.
+	Overflow bool
 }
 
 // DefaultCommandTimeout bounds probes without a caller-owned deadline.
@@ -69,11 +72,50 @@ func CaptureWithEnvDir(ctx context.Context, program string, args, env []string, 
 	return captureWithEnvDir(ctx, program, args, env, dir)
 }
 
+// CaptureWithEnvDirLimit is CaptureWithEnvDir with a byte cap on captured
+// stdout and stderr. Output beyond the cap is drained but dropped and marks
+// Result.Overflow instead of failing the run.
+func CaptureWithEnvDirLimit(ctx context.Context, program string, args, env []string, dir string, limit int64) (Result, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	return captureWithEnvDirBound(ctx, program, args, env, dir, limit)
+}
+
 func captureWithEnv(ctx context.Context, program string, args, env []string) (Result, error) {
 	return captureWithEnvDir(ctx, program, args, env, "")
 }
 
+// boundedBuffer drains all writes but retains at most max bytes, flagging the
+// overflow so the caller can reject untrusted oversized output.
+type boundedBuffer struct {
+	buf       bytes.Buffer
+	max       int64
+	truncated bool
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	if b.max <= 0 {
+		_, err := b.buf.Write(p)
+		return len(p), err
+	}
+	room := b.max - int64(b.buf.Len())
+	if room < int64(len(p)) {
+		b.truncated = true
+		if room <= 0 {
+			return len(p), nil
+		}
+		_, _ = b.buf.Write(p[:room])
+		return len(p), nil
+	}
+	_, err := b.buf.Write(p)
+	return len(p), err
+}
+
 func captureWithEnvDir(ctx context.Context, program string, args, env []string, dir string) (res Result, runErr error) {
+	return captureWithEnvDirBound(ctx, program, args, env, dir, 0)
+}
+
+func captureWithEnvDirBound(ctx context.Context, program string, args, env []string, dir string, limit int64) (res Result, runErr error) {
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
@@ -114,7 +156,10 @@ func captureWithEnvDir(ctx context.Context, program string, args, env []string, 
 	// unblock even an escaped descendant retaining an inherited output handle.
 	_ = stdoutWriter.Close()
 	_ = stderrWriter.Close()
-	var out, diagnostic bytes.Buffer
+	var out, diagnostic boundedBuffer
+	if limit > 0 {
+		out.max, diagnostic.max = limit, limit
+	}
 	reads := make(chan error, 2)
 	go func() { _, err := io.Copy(&out, stdout); reads <- err }()
 	go func() { _, err := io.Copy(&diagnostic, stderr); reads <- err }()
@@ -137,7 +182,8 @@ func captureWithEnvDir(ctx context.Context, program string, args, env []string, 
 	if !stop() {
 		<-canceled
 	}
-	res.Stdout, res.Stderr = out.String(), diagnostic.String()
+	res.Stdout, res.Stderr = out.buf.String(), diagnostic.buf.String()
+	res.Overflow = out.truncated || diagnostic.truncated
 	if err := ctx.Err(); err != nil {
 		return res, errors.Join(err, killErr)
 	}

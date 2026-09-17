@@ -37,7 +37,13 @@
     ]
   },
   "session": {
-    "mode": "hook:devin-session"
+    "mode": "discovered",
+    "discovery": {
+      "args": ["list", "--format", "json"],
+      "format": "json",
+      "id_field": "id",
+      "match": [{"field": "working_directory", "equals": "{cwd}"}]
+    }
   },
   "exit_command": "/exit",
   "display_name": "Devin",

@@ -20,7 +20,6 @@ type SessionHook struct {
 var registeredSessionHooks = []SessionHook{
 	{Name: "codex-rollout", DiscoverAfterStart: true, ResolveEmptyReference: true},
 	{Name: "cursor-create-chat", AllocateBeforeStart: true},
-	{Name: "devin-session", DiscoverAfterStart: true, PersistAfterStart: true},
 }
 
 // RegisteredSessionHooks returns the built-in hook list in registration order.
@@ -55,31 +54,51 @@ func LookupSessionHook(mode string) (SessionHook, bool) {
 }
 
 func validDeclaredSessionMode(mode string) bool {
-	if contains([]string{"generated", "allocated", "none"}, mode) {
+	if contains([]string{"generated", "allocated", "none", "discovered"}, mode) {
 		return true
 	}
 	_, ok := LookupSessionHook(mode)
 	return ok
 }
 
-func SessionDiscoversAfterStart(mode string) bool {
-	hook, ok := LookupSessionHook(mode)
+// SessionDiscoversAfterStart reports whether launch must snapshot sessions
+// before start and identify the new one afterwards.
+func SessionDiscoversAfterStart(s *AgentSessionDefinition) bool {
+	if s == nil {
+		return false
+	}
+	if s.Mode == "discovered" {
+		return true
+	}
+	hook, ok := LookupSessionHook(s.Mode)
 	return ok && hook.DiscoverAfterStart
 }
 
-func SessionResolvesEmptyReference(mode string) bool {
-	hook, ok := LookupSessionHook(mode)
+func SessionResolvesEmptyReference(s *AgentSessionDefinition) bool {
+	if s == nil {
+		return false
+	}
+	hook, ok := LookupSessionHook(s.Mode)
 	return ok && hook.ResolveEmptyReference
 }
 
-func SessionAllocatesBeforeStart(mode string) bool {
-	hook, ok := LookupSessionHook(mode)
+func SessionAllocatesBeforeStart(s *AgentSessionDefinition) bool {
+	if s == nil {
+		return false
+	}
+	hook, ok := LookupSessionHook(s.Mode)
 	return ok && hook.AllocateBeforeStart
 }
 
 // SessionPersistsAfterStart reports whether a discovered id must replace the
 // provisional task-card session value.
-func SessionPersistsAfterStart(mode string) bool {
-	hook, ok := LookupSessionHook(mode)
+func SessionPersistsAfterStart(s *AgentSessionDefinition) bool {
+	if s == nil {
+		return false
+	}
+	if s.Mode == "discovered" {
+		return true
+	}
+	hook, ok := LookupSessionHook(s.Mode)
 	return ok && hook.PersistAfterStart
 }

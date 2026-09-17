@@ -45,7 +45,7 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 	}
 	if !allowReverseLookup || session.Reference == "" {
 		if session.Reference == "" {
-			if definition, err := config.LoadAgent(session.Agent); err == nil && config.SessionResolvesEmptyReference(definition.Session.Mode) {
+			if definition, err := config.LoadAgent(session.Agent); err == nil && config.SessionResolvesEmptyReference(definition.Session) {
 				detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
 			}
 		}
