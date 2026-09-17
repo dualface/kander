@@ -1,6 +1,6 @@
 # Review Disposition Rules
 
-Loaded together with `KANDER-REVIEW-RULES.md` whenever `rules.review=true`. This file tightens how the main/executing agent may reject reviewer findings. It does not change the durable disposition schema or add a new review stage.
+Loaded together with `KANDER-REVIEW-RULES.md` whenever `rules.review=true`. This file tightens how the main/executing agent may reject reviewer findings. It does not change the author-disposition schema or add a new review stage; disputed must-fix findings may additionally carry immutable arbitration evidence as defined below.
 
 ## Independent Verification Before Rejection
 
@@ -28,6 +28,42 @@ Examples include:
 - a migration or compatibility claim that depends on unavailable historical data.
 
 Uncertainty is not evidence that the reviewer is wrong.
+
+## Dispute Arbitration
+
+A `blocking`, `high`, or `medium` finding may enter narrow arbitration when the reviewer and author remain in factual disagreement after the author's independent verification and the latest author disposition is `rejected` or `unverifiable`.
+
+Arbitration is not another full review round. The arbiter examines only the disputed finding and the evidence needed to decide its material factual premise. Do not ask the arbiter to re-review the entire task or generate unrelated findings.
+
+The arbiter must be independent from both sides of the dispute:
+
+- it must not be the original reviewer agent for the run;
+- it must not be the executing/author agent that submitted the disputed disposition;
+- when several independent agents are available, prefer a different model family or training lineage to reduce correlated failure modes;
+- do not expose the author's private reasoning or the reviewer's private reasoning. Provide their recorded claims and evidence only.
+
+Give the arbiter the minimum complete dispute packet:
+
+1. the relevant task requirement, existing contract, or invariant;
+2. the exact reviewer finding and its evidence;
+3. the exact latest author disposition and rejection/unverifiable basis;
+4. the relevant target code or diff and directly related callers/callees;
+5. the relevant test, reproducer, runtime, or contract evidence;
+6. the precise factual question whose answer decides the dispute.
+
+The arbiter returns exactly one semantic verdict:
+
+- `sustain`: the finding's material premise is established. The author must not keep the item rejected; continue through `confirmed` and repair/verification under the normal review loop.
+- `overrule`: a material premise of the finding is falsified. The author may keep or resubmit `rejected`, and should cite the arbitration ID plus the decisive evidence in the basis.
+- `inconclusive`: the available evidence cannot establish either side. The item remains `unverifiable` and follows the existing user-decision/stop behavior; arbitration must not convert uncertainty into PASS.
+
+Record the decision with:
+
+`kander review arbitrate <CWD> <absolute-arbitration.json>`
+
+The arbitration JSON is schema 1 and contains `arbitration_id`, `run_id`, `finding_id`, `batch_id`, `task_id`, `disposition_record_id`, `arbiter`, optional `model` / `effort`, `verdict`, `basis`, `report`, and `report_hash`. `report_hash` is the SHA-256 digest of the exact UTF-8 `report` bytes. Kander binds the record to the latest disputed disposition and stores immutable copies in the review control archive and the task review archive.
+
+A later author disposition creates a new factual position. An old arbitration does not silently apply to that later disposition; arbitrate again only if the new disposition is still disputed.
 
 ## Evidence Must Address the Actual Claim
 
