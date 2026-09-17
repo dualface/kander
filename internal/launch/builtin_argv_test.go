@@ -19,7 +19,7 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 	cfg := config.DefaultConfig()
 	models := cfg.Models.Kanban
 	const sid = "session-id"
-	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin", "opencode"} {
+	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin", "opencode", "kimi"} {
 		for _, kind := range []string{"large", "small"} {
 			for _, resume := range []bool{false, true} {
 				for _, hasSession := range []bool{true, false} {
@@ -102,6 +102,14 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 							want = append(want, "--session", ref)
 						}
 						want = append(want, "--auto", "--prompt")
+					case "kimi":
+						want = append(want, "--auto")
+						if modelID != "" {
+							want = append(want, "--model", modelID)
+						}
+						if resume && ref != "" {
+							want = append(want, "--session", ref)
+						}
 					}
 					name := agent + "/" + kind
 					if resume {
@@ -144,8 +152,12 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 	t.Cleanup(func() { newShellInvocation = previous })
 	for _, launcher := range []string{"tmux", "herdr"} {
 		for _, agent := range config.ExecutionAgents {
+			definition := config.AgentFor(nil, agent)
+			if definition.PromptDelivery != nil && definition.PromptDelivery.Mode == "pane" {
+				continue
+			}
 			t.Run(launcher+"/"+agent, func(t *testing.T) {
-				session := config.AgentFor(nil, agent).Session
+				session := definition.Session
 				discovered := session != nil && session.Mode == "discovered"
 				if discovered {
 					previousList := enumerateSessionsFn

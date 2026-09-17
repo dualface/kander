@@ -188,6 +188,10 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 		{"opencode", `{"type":"text","part":{"text":"ok"}}` + "\n" + `{"type":"step_finish","part":{"reason":"stop"}}` + "\n", true},
 		{"opencode", `{"type":"text","part":{"text":"ok"}}` + "\n", false},
 		{"opencode", `{"type":"step_finish","part":{"reason":"error"}}` + "\n", false},
+		{"kimi", `{"role":"assistant","content":"ok"}` + "\n" + `{"role":"meta","type":"session.resume_hint","session_id":"s1"}` + "\n", true},
+		{"kimi", `{"role":"assistant","tool_calls":[{"type":"function","id":"1"}]}` + "\n" + `{"role":"assistant","content":"ok"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", true},
+		{"kimi", `{"role":"assistant","content":"ok"}` + "\n", false},
+		{"kimi", `{"role":"tool","tool_call_id":"1","content":"x"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", false},
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
@@ -296,6 +300,54 @@ func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	}
 	if !strings.Contains(inv.Env["OPENCODE_PERMISSION"], `"*":"deny"`) {
 		t.Fatal("review env lost OPENCODE_PERMISSION deny-all")
+	}
+}
+
+// Kimi reviews run `kimi --prompt ... --output-format stream-json` under a
+// read-only agent file rendered into the private runtime; the run must never
+// carry --auto/--yolo or a guessed model.
+func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	settings, err := agentSettingsFor("kimi", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.stdin != config.ReviewStdinNone || settings.cwd != "root" ||
+		settings.outputName != "output.jsonl" || !settings.spawnsHelperProcesses || !settings.snapshotSpec {
+		t.Fatalf("settings %+v", settings)
+	}
+	if settings.homePolicy != config.ReviewHomeOptional || len(settings.promptFiles) != 1 {
+		t.Fatalf("settings %+v", settings)
+	}
+	ctx := reviewContext{
+		agent: "kimi", settings: settings, root: "/work",
+		program:         process.AgentProgram{Path: "/bin/reviewer"},
+		instruction:     process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+		promptFilePaths: map[string]string{"kimi-reviewer": "/rt/kimi-reviewer.md"},
+	}
+	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cwd != "/work" {
+		t.Fatalf("cwd %s", cwd)
+	}
+	var want []string
+	want = append(want, "--prompt", ctx.instruction, "--output-format", "stream-json",
+		"--agent-file", "/rt/kimi-reviewer.md", "--add-dir", "/rt")
+	if settings.model != "" {
+		want = append(want, "--model", settings.model)
+	}
+	if !reflect.DeepEqual(inv.Argv[1:], want) {
+		t.Fatalf("argv\n got %q\nwant %q", inv.Argv[1:], want)
+	}
+	for _, banned := range []string{"--auto", "--yolo", "--continue", "--session"} {
+		for _, arg := range inv.Argv {
+			if arg == banned {
+				t.Fatalf("review argv carries %s: %q", banned, inv.Argv)
+			}
+		}
 	}
 }
 

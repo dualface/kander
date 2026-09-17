@@ -68,6 +68,10 @@
         "small_effort": "high",
         "small_model": ""
       },
+      "kimi": {
+        "large_model": "",
+        "small_model": ""
+      },
       "opencode": {
         "large_effort": "high",
         "large_model": "opencode-go/deepseek-v4.1-flash",
@@ -100,6 +104,9 @@
       },
       "grok": {
         "effort": "high",
+        "model": ""
+      },
+      "kimi": {
         "model": ""
       },
       "opencode": {
@@ -150,6 +157,9 @@
       },
       "grok": {
         "effort": "xhigh",
+        "model": ""
+      },
+      "kimi": {
         "model": ""
       },
       "opencode": {

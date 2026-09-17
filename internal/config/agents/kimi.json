@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "path": "kimi",
+  "process_name": "kimi",
+  "args": {
+    "start": [
+      "--auto",
+      "--model",
+      "{model}"
+    ],
+    "resume": [
+      "--auto",
+      "--model",
+      "{model}",
+      "--session",
+      "{session}"
+    ],
+    "review": [
+      "--prompt",
+      "{instruction}",
+      "--output-format",
+      "stream-json",
+      "--agent-file",
+      "{prompt_file:kimi-reviewer}",
+      "--add-dir",
+      "{runtime}",
+      "--model",
+      "{model}"
+    ]
+  },
+  "session": {
+    "mode": "discovered",
+    "discovery": {
+      "args": ["session", "list", "--json", "--all"],
+      "format": "json",
+      "id_field": "id",
+      "match": [{"field": "workDir", "equals": "{cwd}"}]
+    }
+  },
+  "exit_command": "/exit",
+  "display_name": "Kimi",
+  "supports_effort": false,
+  "prompt_delivery": {
+    "mode": "pane",
+    "ready": {
+      "match": "context:",
+      "timeout_ms": 30000
+    },
+    "blocked": [
+      {
+        "match": "Trust this folder?",
+        "reason": "Kimi is asking whether to trust the launch directory"
+      }
+    ]
+  },
+  "review": {
+    "cwd": "root",
+    "home_env": "KIMI_CODE_HOME",
+    "home_policy": "optional",
+    "output_name": "output.jsonl",
+    "inspection": "Use only Read, Grep, and Glob to inspect code; never modify files or run commands.",
+    "spawns_helpers": true,
+    "snapshot_spec": true,
+    "stdin": "none",
+    "prompt_files": [
+      {
+        "name": "kimi-reviewer",
+        "path": "kimi-reviewer.md",
+        "template": "---\nname: kander-reviewer\ndescription: Read-only review agent for Kander reviews.\ntools: [Read, Grep, Glob]\ndisallowedTools: [Bash, Write, Edit, MultiEdit, Agent, AgentSwarm, Skill, TaskStop, WaitFor, CronCreate, CronDelete, TowerInit, TowerStatus, TowerSend, TowerReview, TowerTeardown, WebSearch, FetchURL, AskUserQuestion, NotifyUser, EnterPlanMode, ExitPlanMode, CreateGoal, GetGoal, SetGoalBudget, UpdateGoal, TodoList]\n---\n\nYou are the {role} review agent for Kander. You inspect a worktree and report findings; you never change it.\n\nHard rules:\n- Read-only: you may only read files. Never create, modify, delete, move, or rename any file or directory anywhere. Never run commands or spawn subagents.\n- {inspection}\n- The instruction names a UTF-8 bootstrap file inside a private review runtime; that directory is readable through --add-dir. Read the bootstrap and the review-contract.md it names completely before reviewing, and follow the contract exactly: scope, evidence, finding bar, and the output contract that makes your final message the complete report with exactly one kander-findings fence.\n"
+      }
+    ],
+    "output": {
+      "source": "stdout",
+      "format": "ndjson",
+      "select": [
+        {"json_field": "role", "equals": "assistant"},
+        {"json_field": "tool_calls", "absent": true}
+      ],
+      "parse": "json_field:content",
+      "join": "\n",
+      "success": [
+        {"json_field": "type", "equals": "session.resume_hint"}
+      ]
+    }
+  },
+  "rules_target": {
+    "global": ".kimi-code/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "",
+  "small_model": "",
+  "model": ""
+}

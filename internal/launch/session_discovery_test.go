@@ -33,6 +33,45 @@ func opencodeDiscovery(t *testing.T) *config.SessionDiscovery {
 	return disc
 }
 
+func kimiDiscovery(t *testing.T) *config.SessionDiscovery {
+	t.Helper()
+	disc := config.AgentFor(config.DefaultConfig(), "kimi").Session.Discovery
+	if disc == nil {
+		t.Fatal("kimi embedded definition declares no session discovery")
+	}
+	return disc
+}
+
+func TestKimiSessionIsDiscoveredAfterStart(t *testing.T) {
+	cfg := config.DefaultConfig()
+	session, err := newAgentSession("kimi", &process.AgentProgram{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Agent != "kimi" || session.Reference != "" {
+		t.Fatalf("session=%+v", session)
+	}
+	def := config.AgentFor(cfg, "kimi").Session
+	if def.Mode != "discovered" || !config.SessionDiscoversAfterStart(def) || !config.SessionPersistsAfterStart(def) {
+		t.Fatalf("mode=%q", def.Mode)
+	}
+}
+
+func TestParseSessionListKimiWorkDirMatch(t *testing.T) {
+	cwd := t.TempDir()
+	disc := kimiDiscovery(t)
+	out := `[{"id":"k_other","workDir":"/elsewhere","lastPrompt":"task","updatedAt":1},` +
+		`{"id":"k_mine","workDir":"` + cwd + `","lastPrompt":"执行任务 task; full instructions are in the UTF-8 task file","updatedAt":2},` +
+		`{"id":"k_missing","lastPrompt":"no directory","updatedAt":3}]`
+	got, err := parseSessionList(disc, out, cwd, "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"k_mine"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got=%q want=%q", got, want)
+	}
+}
+
 func TestOpenCodeSessionIsDiscoveredAfterStart(t *testing.T) {
 	cfg := config.DefaultConfig()
 	session, err := newAgentSession("opencode", &process.AgentProgram{}, cfg)

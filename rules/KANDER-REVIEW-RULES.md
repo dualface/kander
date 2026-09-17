@@ -7,7 +7,7 @@ Loaded automatically and used to judge triggering only when `rules.review=true`;
 
 ## Reviewer Selection
 
-- Reviewers are the seven built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root (per `KANDER-LOADING-RULES.md` "Scope").
+- Reviewers are the eight built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root (per `KANDER-LOADING-RULES.md` "Scope").
 - Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from CLI and isolation arguments, every rule here is identical for all reviewers.
 
 | reviewer | argument | CLI | isolation |
@@ -19,11 +19,12 @@ Loaded automatically and used to judge triggering only when `rules.review=true`;
 | Pi | `pi` | `pi` | from the embedded definition |
 | Devin | `devin` | `devin` | from the embedded definition |
 | OpenCode | `opencode` | `opencode` | from the embedded definition |
+| Kimi | `kimi` | `kimi` | from the embedded definition |
 | custom | the agent name | `review.path` or `path` | author's responsibility |
 
 **Reviewer Isolation**
 
-- Codex runs a sandbox-enforced read-only shell inside the target worktree; Grok exposes only read and search tools; Claude runs with its full toolset minus `Edit` and `Write`; Pi runs with a read-only tool allowlist; Cursor relies on the prompt and post-run verification; Devin uses auto-approved read-only operations plus the prompt and post-run verification; OpenCode runs under an `OPENCODE_PERMISSION` policy that denies every action except `read`/`glob`/`grep`/`list`/`external_directory`, plus the prompt and post-run verification. Kander validates every reviewer's output and afterwards checks the Git-visible state of the target worktree, which does not detect writes outside it or to ignored paths inside it. Leftover processes and runtime cleanup failures reject the result.
+- Codex runs a sandbox-enforced read-only shell inside the target worktree; Grok exposes only read and search tools; Claude runs with its full toolset minus `Edit` and `Write`; Pi runs with a read-only tool allowlist; Cursor relies on the prompt and post-run verification; Devin uses auto-approved read-only operations plus the prompt and post-run verification; OpenCode runs under an `OPENCODE_PERMISSION` policy that denies every action except `read`/`glob`/`grep`/`list`/`external_directory`, plus the prompt and post-run verification; Kimi runs under a `--agent-file` profile that allowlists only `Read`/`Grep`/`Glob` and denies shell, write, subagent, and interaction tools, plus the prompt and post-run verification. Kander validates every reviewer's output and afterwards checks the Git-visible state of the target worktree, which does not detect writes outside it or to ignored paths inside it. Leftover processes and runtime cleanup failures reject the result.
 - A UTF-8 bootstrap task file in the protected review runtime names a separate `review-contract.md`; the reviewer reads both completely and does not modify either file. The reviewer receives only a short instruction naming the bootstrap file (on stdin by default, or through `{instruction}` in argv when the definition says `review.stdin: none`). Do not replace or loosen isolation arguments to unify implementations or accommodate Windows.
 - `PMQA` and `Security` each select a reviewer from the first explicit source by precedence: the current user instruction; the nearest project `AGENTS.md` or `CLAUDE.md`; the user's global rules; the role configuration of the current scope (read by `kander review`; Codex when no configuration exists). Read rule files required for this judgment if not yet loaded; an unreadable one counts as unspecified.
 - Different roles may use different reviewers. Fix re-runs and conclusion confirmation for one role keep the reviewer selected for that role in the current batch: the incremental chain requires the same reviewer, and closure rejects a successfully executed run not connected to the selected conclusion. A user-designated switch inside a batch is possible only while that role has no successfully executed run there (failed runs are bound through `resolved_failures`); otherwise it takes effect from the next batch.

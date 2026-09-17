@@ -4,7 +4,7 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 
 ## Reviewer Entry
 
-- Reviewers are the seven built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
+- Reviewers are the eight built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
 - On Windows, the reviewer `.exe` is preferred. When only `.cmd`/`.bat` exists, the launch goes through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of that reviewer's adapter layer. This is not a general invocation contract for arbitrary batch scripts.
 - Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from the CLI and isolation arguments declared for that reviewer, every review rule is identical for all reviewers.
 
@@ -17,6 +17,7 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 | Pi | `pi` | `pi` | from the embedded definition |
 | Devin | `devin` | `devin` | from the embedded definition |
 | OpenCode | `opencode` | `opencode` | from the embedded definition |
+| Kimi | `kimi` | `kimi` | from the embedded definition |
 | custom | the agent name | `review.path` or `path` | author's responsibility |
 
 ## Per-Reviewer Posture
@@ -27,19 +28,20 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 - Pi runs with an explicit `--tools read,bash,grep,find,ls` allowlist and no session persistence; it exposes no edit or write tool, and read-only relies on that allowlist plus the prompt.
 - Devin runs non-interactive print mode under `--permission-mode auto`, which auto-approves read-only operations and rejects any action that would require confirmation instead of prompting; `--respect-workspace-trust false` skips the workspace-trust dialog. Read-only relies on that rejection plus the prompt.
 - OpenCode runs `opencode run --pure --format json` with `OPENCODE_PERMISSION` set to a literal JSON policy that denies every action (`"*": "deny") and allows only `read`, `glob`, `grep`, `list`, and `external_directory` (the last so the reviewer can read the runtime bootstrap outside the worktree); it never passes `--auto`, so nothing is auto-approved. Read-only relies on that deny-first policy plus the prompt.
-- For Claude, Cursor, Pi, Devin, and OpenCode the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected. Worktree verification never fails a review for writes to paths excluded by `.gitignore`.
+- Kimi runs `kimi --prompt <instruction> --output-format stream-json` under a `kimi-reviewer.md` agent file rendered into the runtime and passed through `--agent-file`; the file allowlists `tools: [Read, Grep, Glob]` and denies shell, write/edit, subagent, and interaction tools, so the reviewer has no write, execute, or delegate capability. It never passes `--auto`/`--yolo`, and `--add-dir` exposes only the private runtime to the reviewer. Read-only relies on that tool policy plus the prompt.
+- For Claude, Cursor, Pi, Devin, OpenCode, and Kimi the post-run check sees only the Git-visible state of the target worktree: writes outside that worktree and to ignored paths inside it are not detected. Worktree verification never fails a review for writes to paths excluded by `.gitignore`.
 - Isolation arguments are never replaced or loosened to unify implementations or accommodate Windows.
 
 ## Prompt Delivery
 
 - On all platforms Kander writes `prompt.txt`, a UTF-8 bootstrap file, and `review-contract.md`, a separate file rendered from embedded protocol, scope, and role resources. The bootstrap carries only runtime facts and frozen task/review context and tells the reviewer to read the contract completely. Delivery follows the reviewer definition: `review.stdin` is `instruction` (default) or `none`. With `instruction`, the reviewer receives only a short instruction naming the bootstrap path on stdin. With `none`, the same instruction is passed through `{instruction}` in argv and stdin is not that pipe. Extra files in `review.prompt_files` are rendered into the runtime and referenced as `{prompt_file:<name>}`.
-- Built-in reviewers other than Devin and OpenCode use `review.stdin: instruction` and declare no `review.prompt_files`. Devin's print mode never reads a prompt from stdin, so its definition uses `review.stdin: none` and passes the same instruction through `{instruction}` in argv after a literal `--`, followed by a literal output contract naming the final message as the complete report. OpenCode likewise uses `review.stdin: none`: `opencode run` takes the same instruction and output contract as trailing argv positionals. Grok's definition keeps `--prompt-file` pointing at Kander's `prompt.txt`; that bootstrap names the contract by absolute runtime path.
+- Built-in reviewers other than Devin, OpenCode, and Kimi use `review.stdin: instruction` and declare no `review.prompt_files`. Devin's print mode never reads a prompt from stdin, so its definition uses `review.stdin: none` and passes the same instruction through `{instruction}` in argv after a literal `--`, followed by a literal output contract naming the final message as the complete report. OpenCode likewise uses `review.stdin: none`: `opencode run` takes the same instruction and output contract as trailing argv positionals. Kimi also uses `review.stdin: none`: the instruction goes to `kimi --prompt` in argv, and its `kimi-reviewer` prompt file renders the read-only agent definition that `--agent-file` selects. Grok's definition keeps `--prompt-file` pointing at Kander's `prompt.txt`; that bootstrap names the contract by absolute runtime path.
 - The bootstrap task file does not tighten its own POSIX mode or Windows ACL; the private review runtime protects it. Before launch, Kander validates `review-contract.md` through the no-follow filesystem boundary and sets mode 0400 on POSIX. Windows retains the runtime's protected DACL because the read-only file attribute is not an access-control boundary.
 
 ## Process Collection
 
 - After the reviewer exits, the process group must be forcibly reaped; failure to do so is a review failure.
-- Cursor, Devin, and OpenCode may ship helper processes that do not wait for wrap-up; for them, only detached descendants that left the parent chain count as leftovers and cause the result to be rejected, while ordinary child processes do not. For other reviewers, a non-empty process group at the moment of exit causes rejection.
+- Cursor, Devin, OpenCode, and Kimi may ship helper processes that do not wait for wrap-up; for them, only detached descendants that left the parent chain count as leftovers and cause the result to be rejected, while ordinary child processes do not. For other reviewers, a non-empty process group at the moment of exit causes rejection.
 
 ## Runtime Directory Contract
 

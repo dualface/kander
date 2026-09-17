@@ -1,5 +1,5 @@
 {
-  "orchestrate.usage": "用法: kander orchestrate [--agent codex|claude|grok|cursor|pi|devin|opencode] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message 文本 | --message-file 路径) <任务|任务组>...",
+  "orchestrate.usage": "用法: kander orchestrate [--agent codex|claude|grok|cursor|pi|devin|opencode|kimi] [--launcher auto|tmux|tmux-session|herdr|foreground|console] (--message 文本 | --message-file 路径) <任务|任务组>...",
   "orchestrate.requires_at_least_one_task": "orchestrate 需要至少一张任务卡",
   "orchestrate.task_group_has_no_members": "任务组 {{.V0}} 没有成员卡",
   "orchestrate.task_repeated": "任务 {{.V0}} 被重复指定 (直接指定或经由其任务组)",

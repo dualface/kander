@@ -23,6 +23,7 @@ func TestCustomDialectArguments(t *testing.T) {
 		{"cursor", []string{"--model", "model", "--trust", "--force", "--resume", "session-id"}, []string{"--model", "model", "--trust", "--force", "--resume", "session-id"}},
 		{"devin", []string{"--model", "model", "--permission-mode", "dangerous", "--respect-workspace-trust", "false", "--"}, []string{"--model", "model", "--permission-mode", "dangerous", "--respect-workspace-trust", "false", "--resume", "session-id", "--"}},
 		{"opencode", []string{"--model", "model", "--auto", "--prompt"}, []string{"--model", "model", "--session", "session-id", "--auto", "--prompt"}},
+		{"kimi", []string{"--auto", "--model", "model"}, []string{"--auto", "--model", "model", "--session", "session-id"}},
 	} {
 		t.Run(test.dialect, func(t *testing.T) {
 			cfg := config.DefaultConfig()
