@@ -1,6 +1,6 @@
 # Custom Execution Agents
 
-The optional `agents` object in `config.json` is keyed by agent name. The built-in names are `codex`, `claude`, `grok`, `cursor`, `pi`, and `devin`. Those six are themselves definition files embedded at `internal/config/agents/` (`index.json` plus one JSON file per name), `schema_version` 1. A user `agents.<name>` overlay replaces individual fields of that embedded definition (path, process name, dialect, argv templates, session, `prompt_delivery`, review templates); fields that are omitted keep the embedded values. A new name starts with a lowercase letter, is at most 64 characters, and contains only lowercase letters, digits, `_`, and `-`. When this section is not configured, the existing parameters and configuration output remain unchanged.
+The optional `agents` object in `config.json` is keyed by agent name. The built-in names are `codex`, `claude`, `grok`, `cursor`, `pi`, `devin`, and `opencode`. Those seven are themselves definition files embedded at `internal/config/agents/` (`index.json` plus one JSON file per name), `schema_version` 1. A user `agents.<name>` overlay replaces individual fields of that embedded definition (path, process name, dialect, argv templates, session, `prompt_delivery`, review templates); fields that are omitted keep the embedded values. A new name starts with a lowercase letter, is at most 64 characters, and contains only lowercase letters, digits, `_`, and `-`. When this section is not configured, the existing parameters and configuration output remain unchanged.
 
 Shared stdout/file/pane output parsing used by templates, review, and later terminal definitions is specified only in `docs/output-parsing.md` (delivered by task `20260909-process-output-parser-task`). This page does not repeat that field set.
 
@@ -41,13 +41,13 @@ Start, resume, doctor, options-panel probing, tmux liveness checks, notification
 }
 ```
 
-A custom agent must have `dialect` or `args`. Built-in agents automatically inherit their own dialect. `dialect` accepts the six built-in names and reuses the same model, effort, permission-bypass, and session parameters. Models still live under `models.kanban.<agent>`, using `large_model`, `small_model`, and the corresponding effort fields; the legacy shared `model` fallback remains compatible. A custom Cursor dialect follows Cursor's effort-less model fields.
+A custom agent must have `dialect` or `args`. Built-in agents automatically inherit their own dialect. `dialect` accepts the seven built-in names and reuses the same model, effort, permission-bypass, and session parameters. Models still live under `models.kanban.<agent>`, using `large_model`, `small_model`, and the corresponding effort fields; the legacy shared `model` fallback remains compatible. A custom Cursor dialect follows Cursor's effort-less model fields.
 
 When both are declared, `args` takes precedence and completely replaces the dialect parameters. `args.start` is required; a template that supports resume must also have `args.resume`; empty arrays are allowed. Each element independently substitutes `{model}`, `{effort}`, `{session}`, and `{session=}`, and substituted values are not parsed recursively. When `{model}`, `{effort}`, or `{session}` is empty, that element is dropped; if its immediately preceding original element is a standalone flag (starting with `-`, containing no placeholder or `=`), that flag is dropped as well. `{session=}` always substitutes, including an empty value, so a session flag can remain present. Other positional arguments are kept. Unknown placeholders, control characters, and empty elements are rejected. These primitives are the only substitution mechanism; there is no shell interpolation and no script hook.
 
 `prompt_delivery` chooses how the task-file instruction reaches the CLI:
 
-- `mode: argv` (the default, including the six built-in agents): Kander appends the prompt last. `ready` and `blocked` are rejected.
+- `mode: argv` (the default, including the seven built-in agents): Kander appends the prompt last. `ready` and `blocked` are rejected.
 - `mode: pane`: the bare positional argument is not a prompt. After the existing container-shell ready wait and `pane run`, Kander waits again for the agent TUI using `ready.match` (`<literal>` or `regex:<pattern>`) and `ready.timeout_ms`. `blocked` entries are checked on every poll and win immediately if they match, even when the ready mark is also visible. After ready, the prompt is delivered with the notify primitives (herdr `agent prompt`, tmux `send-keys -l` plus a separate Enter), before the pane session marker is written. `start` and a `resume` takeover that creates a new container use this two-stage wait; `notify` to an already-running container does not wait for `ready`.
 
 A pane-mode failure (`blocked` match, the delivery primitive rejecting the prompt, or a pure ready timeout) captures the pane output, closes this invocation's tab/window, and rolls the card back. It does not keep the container or write `WINDOW`/`SESSION`. The first two errors tell the operator to run that CLI once in a terminal to answer the dialog and then retry `kander start`; a pure timeout reports the captured pane output without that instruction. Pane mode is rejected before claiming when the resolved launcher is `foreground` or `console`.
@@ -69,7 +69,7 @@ Neither the allocate command nor the argument templates use shell interpolation;
   - `max_bytes`: enumerate output bound, 4096–16777216, default 1048576; overflowing output is rejected.
 - `none`: `resume` refuses explicitly; `notify` does not deliver directly and instead runs the start template through the recovery channel, re-reading the card context. The card keeps a UUID used only for terminal marking; `{session}` in the template is empty, the dialect parameters likewise omit session creation/resume options, and the UUID serves only terminal identity checks. `dismiss` still allows closing a terminal whose identity has been confirmed. `kander config`, the stderr of `config --json`, and `kander check` display a degradation notice. Persistent dispatch-back must still satisfy the existing stop facts and receipt gates, and does not use `none` to bypass the duplicate-execution guard.
 
-A templated custom agent without a dialect must declare session explicitly. With a dialect, the default is inherited from that dialect's embedded `session` field: Claude/Grok/Pi generate a UUID; Cursor uses `hook:cursor-create-chat`; Codex uses `hook:codex-rollout`; Devin discovers its session via `session.discovery`. Without explicit argv templates, a dialect whose session produces an agent-native id accepts only that same mode or `none`; a dialect whose hook allocates an ID before start also accepts an explicit `allocated` session. Thus Cursor still accepts `allocated`; Codex and Devin reject `generated` and `allocated`; Cursor rejects `generated`. Dialects whose default is `generated` retain their existing session overrides. All dialects allow `none`, passing no session parameters at start.
+A templated custom agent without a dialect must declare session explicitly. With a dialect, the default is inherited from that dialect's embedded `session` field: Claude/Grok/Pi generate a UUID; Cursor uses `hook:cursor-create-chat`; Codex uses `hook:codex-rollout`; Devin and OpenCode discover their session via `session.discovery`. Without explicit argv templates, a dialect whose session produces an agent-native id accepts only that same mode or `none`; a dialect whose hook allocates an ID before start also accepts an explicit `allocated` session. Thus Cursor still accepts `allocated`; Codex, Devin, and OpenCode reject `generated` and `allocated`; Cursor rejects `generated`. Dialects whose default is `generated` retain their existing session overrides. All dialects allow `none`, passing no session parameters at start.
 
 Allocation example:
 
@@ -81,7 +81,7 @@ Allocation example:
 }
 ```
 
-Discovery example (the built-in Devin definition uses exactly this shape):
+Discovery example (the built-in Devin definition uses exactly this shape; OpenCode uses `args: ["session", "list", "--format", "json"]` and matches `directory` against `{cwd}`):
 
 ```json
 "session": {
@@ -95,6 +95,8 @@ Discovery example (the built-in Devin definition uses exactly this shape):
 }
 ```
 
+The built-in OpenCode definition targets the upstream CLI shape verified on `opencode` 1.18.x: top-level `--model`, `--session`, `--prompt`, and `--auto` on the interactive entry (the TUI has no `--variant`, so effort applies only to reviews), `opencode session list --format json` records carrying an `id` and a `directory` equal to the launch directory, and `opencode run --pure --format json` emitting NDJSON events whose `step_finish` record reports `part.reason`. Its default kanban/review/chat model is `opencode-go/deepseek-v4.1-flash`, and the review pins `OPENCODE_PERMISSION` to a deny-first read-only policy described in [Review Runtime Isolation](review-runtime-isolation.md). Kander does not install OpenCode, configure providers, or enumerate its model catalog.
+
 A brand-new templated agent is recommended to launch via tmux / tmux-session, probed with the configured foreground name and session markers. herdr still relies on its own recognition of agent types; configuring path does not install a recognizer for herdr. foreground/console has no terminal address for `check` to probe and keeps the unknown classification.
 
 ## Panel and Review Boundaries
@@ -107,7 +109,7 @@ Project role-model edits also pin the corresponding reviewer. A project reviewer
 
 Compatible legacy shared Project values continue to fill empty Global scale fields when the Global scale acquires an owner binding. A nonempty scale value still takes precedence over a legacy shared value. Opening the review page displays effective values without overwriting stored overrides owned by a different reviewer; an explicit model edit or reviewer switch establishes the new ownership.
 
-A reviewer is any configured agent that declares `args.review` together with `review.*`. The six built-in names keep that pair in their embedded definitions. A custom name becomes a reviewer only by declaring that pair; inheriting `args.review` / `review.*` from a dialect does not make a path+dialect execution wrapper a reviewer. `args.review` and `review` must be declared together. Dialect defaults supply the built-in pair only when neither is declared; after the pair is declared, omitted review fields are not filled from the dialect. An agent that only has start/resume templates, or only `path` plus `dialect`, cannot be stored in `reviewers.<role>`; `kander config --json` reports the missing review template and `kander doctor` leaves that value unchanged.
+A reviewer is any configured agent that declares `args.review` together with `review.*`. The seven built-in names keep that pair in their embedded definitions. A custom name becomes a reviewer only by declaring that pair; inheriting `args.review` / `review.*` from a dialect does not make a path+dialect execution wrapper a reviewer. `args.review` and `review` must be declared together. Dialect defaults supply the built-in pair only when neither is declared; after the pair is declared, omitted review fields are not filled from the dialect. An agent that only has start/resume templates, or only `path` plus `dialect`, cannot be stored in `reviewers.<role>`; `kander config --json` reports the missing review template and `kander doctor` leaves that value unchanged.
 
 Review invocation is declared, not hard-coded:
 
@@ -132,7 +134,7 @@ Read-only isolation for a custom reviewer is the definition author's responsibil
 
 A legacy flat `{role: mode}` object still loads and applies to both scales; saving rewrites it as the two-scale form. Missing `PMQA` and `Security` default to `auto`, including when the scale or whole section is absent. Leftover `PM`/`QA`/`CSA`/`Hacker` keys fold on load into the two current roles (strongest stage; first non-default reviewer; first non-empty model field) and are not written back. The options panel's "Review stages" section edits large and small independently under each role; "Review and models" edits the reviewer agent and model/effort only. Agents resolve the third review-stage precedence tier from the card `SIZE`, and a mixed-size task-group batch uses the `large` scale.
 
-`exit_command` is a single-line string without control characters and may be empty. Built-in Codex/Claude/Devin use `/exit`; Grok/Cursor/Pi use `/quit`. A custom name with a dialect inherits that field. A purely templated program that declares `exit_command` can be dismissed and cleaned up the same way, still requiring the identity and single-pane container checks to pass. Without `exit_command`, `dismiss` refuses explicitly, names the missing field, and keeps the container.
+`exit_command` is a single-line string without control characters and may be empty. Built-in Codex/Claude/Devin/OpenCode use `/exit`; Grok/Cursor/Pi use `/quit`. A custom name with a dialect inherits that field. A purely templated program that declares `exit_command` can be dismissed and cleaned up the same way, still requiring the identity and single-pane container checks to pass. Without `exit_command`, `dismiss` refuses explicitly, names the missing field, and keeps the container.
 
 ## Hook Catalog
 

@@ -68,6 +68,13 @@
         "small_effort": "high",
         "small_model": ""
       },
+      "opencode": {
+        "large_effort": "high",
+        "large_model": "opencode-go/deepseek-v4.1-flash",
+        "model": "",
+        "small_effort": "medium",
+        "small_model": "opencode-go/deepseek-v4.1-flash"
+      },
       "pi": {
         "large_effort": "high",
         "large_model": "",
@@ -94,6 +101,10 @@
       "grok": {
         "effort": "high",
         "model": ""
+      },
+      "opencode": {
+        "effort": "high",
+        "model": "opencode-go/deepseek-v4.1-flash"
       },
       "pi": {
         "effort": "high",
@@ -140,6 +151,10 @@
       "grok": {
         "effort": "xhigh",
         "model": ""
+      },
+      "opencode": {
+        "effort": "high",
+        "model": "opencode-go/deepseek-v4.1-flash"
       },
       "pi": {
         "effort": "high",

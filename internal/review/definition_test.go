@@ -185,6 +185,9 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 		{"cursor", `{"type":"result","subtype":"success","is_error":true,"result":"ok"}`, false},
 		{"devin", "report text\n", true},
 		{"devin", "", false},
+		{"opencode", `{"type":"text","part":{"text":"ok"}}` + "\n" + `{"type":"step_finish","part":{"reason":"stop"}}` + "\n", true},
+		{"opencode", `{"type":"text","part":{"text":"ok"}}` + "\n", false},
+		{"opencode", `{"type":"step_finish","part":{"reason":"error"}}` + "\n", false},
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
@@ -248,6 +251,51 @@ func TestDevinReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	if !reflect.DeepEqual(inv.Argv[1:len(inv.Argv)-1], want) ||
 		!strings.HasPrefix(last, "Output contract: your final message is the complete review report") {
 		t.Fatalf("argv\n got %q\nwant %q + output contract", inv.Argv[1:], want)
+	}
+}
+
+// OpenCode reviews run `opencode run` non-interactively: the instruction is an
+// argv positional, stdin stays unused, and OPENCODE_PERMISSION keeps the run
+// read-only even when the agent would otherwise auto-approve.
+func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	settings, err := agentSettingsFor("opencode", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.stdin != config.ReviewStdinNone || settings.cwd != "root" ||
+		settings.outputName != "output.jsonl" || !settings.spawnsHelperProcesses || settings.snapshotSpec {
+		t.Fatalf("settings %+v", settings)
+	}
+	permission := settings.env["OPENCODE_PERMISSION"]
+	if !strings.Contains(permission, `"*":"deny"`) || !strings.Contains(permission, `"read":"allow"`) {
+		t.Fatalf("OPENCODE_PERMISSION=%q", permission)
+	}
+	ctx := reviewContext{
+		agent: "opencode", settings: settings, root: "/work",
+		program:     process.AgentProgram{Path: "/bin/reviewer"},
+		instruction: process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+	}
+	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cwd != "/work" {
+		t.Fatalf("cwd %s", cwd)
+	}
+	want := []string{"run", "--pure"}
+	if settings.model != "" {
+		want = append(want, "--model", settings.model)
+	}
+	want = append(want, "--variant", settings.effort, "--format", "json", ctx.instruction)
+	last := inv.Argv[len(inv.Argv)-1]
+	if !reflect.DeepEqual(inv.Argv[1:len(inv.Argv)-1], want) ||
+		!strings.HasPrefix(last, "Output contract: your final message is the complete review report") {
+		t.Fatalf("argv\n got %q\nwant %q + output contract", inv.Argv[1:], want)
+	}
+	if !strings.Contains(inv.Env["OPENCODE_PERMISSION"], `"*":"deny"`) {
+		t.Fatal("review env lost OPENCODE_PERMISSION deny-all")
 	}
 }
 

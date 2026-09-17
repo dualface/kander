@@ -18,6 +18,7 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
 		{"cursor", "renamed", "renamed", "cursor", "hook:cursor-create-chat"},
 		{"codex", "codex", "codex", "codex", "hook:codex-rollout"},
 		{"devin", "devin", "devin", "devin", "discovered"},
+		{"opencode", "opencode", "opencode", "opencode", "discovered"},
 		{"fresh", "fresh", "fresh", "claude", "generated"},
 		{"unregistered", "unregistered", "unregistered", "", "generated"},
 	} {
@@ -189,7 +190,9 @@ func TestDialectSessionCompatibility(t *testing.T) {
 		{"cursor", "allocated", false}, {"claude", "allocated", false},
 		{"codex", "none", false}, {"cursor", "none", false}, {"claude", "generated", false},
 		{"devin", "generated", true}, {"devin", "allocated", true}, {"devin", "none", false},
+		{"opencode", "generated", true}, {"opencode", "allocated", true}, {"opencode", "none", false},
 		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false}, {"devin", "discovered", false},
+		{"opencode", "discovered", false},
 	} {
 		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
 			cfg := DefaultConfig()

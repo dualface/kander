@@ -123,7 +123,7 @@
   <rect x="80" y="1342" width="40" height="40" rx="12" fill="#4f46e5"/>
   <text x="100" y="1369" text-anchor="middle" class="s num">5</text>
   <text x="136" y="1364" class="s pt">Reviewer と隔離境界</text>
-  <text x="136" y="1390" class="s pn">各ロールに codex / claude / grok / cursor / pi / devin を指定可能</text>
+  <text x="136" y="1390" class="s pn">各ロールに codex / claude / grok / cursor / pi / devin / opencode を指定可能</text>
   <line x1="80" y1="1414" x2="720" y2="1414" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1438" r="4" fill="#a5b4fc"/>
   <text x="106" y="1443" class="s bt">Codex / Claude / Grok / Pi / Devin は読み取り専用制御</text>

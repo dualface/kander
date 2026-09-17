@@ -19,7 +19,7 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 	cfg := config.DefaultConfig()
 	models := cfg.Models.Kanban
 	const sid = "session-id"
-	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin"} {
+	for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin", "opencode"} {
 		for _, kind := range []string{"large", "small"} {
 			for _, resume := range []bool{false, true} {
 				for _, hasSession := range []bool{true, false} {
@@ -94,6 +94,14 @@ func TestBuiltinAgentArgumentsMatchPreChangeOutput(t *testing.T) {
 							want = append(want, "--resume", ref)
 						}
 						want = append(want, "--")
+					case "opencode":
+						if modelID != "" {
+							want = append(want, "--model", modelID)
+						}
+						if resume && ref != "" {
+							want = append(want, "--session", ref)
+						}
+						want = append(want, "--auto", "--prompt")
 					}
 					name := agent + "/" + kind
 					if resume {
@@ -137,7 +145,9 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 	for _, launcher := range []string{"tmux", "herdr"} {
 		for _, agent := range config.ExecutionAgents {
 			t.Run(launcher+"/"+agent, func(t *testing.T) {
-				if agent == "devin" {
+				session := config.AgentFor(nil, agent).Session
+				discovered := session != nil && session.Mode == "discovered"
+				if discovered {
 					previousList := enumerateSessionsFn
 					calls := 0
 					enumerateSessionsFn = func(context.Context, *config.SessionDiscovery, *process.AgentProgram, string, string) ([]string, error) {
@@ -145,7 +155,7 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 						if calls == 1 {
 							return nil, nil
 						}
-						return []string{"devin-session"}, nil
+						return []string{agent + "-session"}, nil
 					}
 					defer func() { enumerateSessionsFn = previousList }()
 				}
@@ -164,12 +174,12 @@ func TestBuiltinStartKeepsPromptOnArgvAndDoesNotDeliverToPane(t *testing.T) {
 				if _, err := os.Stat(herdrLog + ".prompt"); !os.IsNotExist(err) {
 					t.Fatalf("argv path used agent prompt: %v", err)
 				}
-				if agent == "devin" {
+				if discovered {
 					snapshot, err := board.ReadSnapshot(root, id)
 					if err != nil {
 						t.Fatal(err)
 					}
-					if !strings.Contains(snapshot.Text, "- SESSION: devin devin-session\n") {
+					if !strings.Contains(snapshot.Text, "- SESSION: "+agent+" "+agent+"-session\n") {
 						t.Fatalf("card session was not persisted: %s", snapshot.Text)
 					}
 				}

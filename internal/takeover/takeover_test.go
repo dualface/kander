@@ -344,7 +344,7 @@ func TestAgentExitCommands(t *testing.T) {
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	for _, agent := range []string{"claude", "devin"} {
+	for _, agent := range []string{"claude", "devin", "opencode"} {
 		exit, err := AgentExitCommand(agent)
 		if err != nil || exit != "/exit" {
 			t.Fatal(agent, exit, err)

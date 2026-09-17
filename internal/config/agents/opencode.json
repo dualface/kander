@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "path": "opencode",
+  "process_name": "opencode",
+  "args": {
+    "start": [
+      "--model",
+      "{model}",
+      "--auto",
+      "--prompt"
+    ],
+    "resume": [
+      "--model",
+      "{model}",
+      "--session",
+      "{session}",
+      "--auto",
+      "--prompt"
+    ],
+    "review": [
+      "run",
+      "--pure",
+      "--model",
+      "{model}",
+      "--variant",
+      "{effort}",
+      "--format",
+      "json",
+      "{instruction}",
+      "Output contract: your final message is the complete review report and must contain exactly one kander-findings JSON fence. Use read-only inspection only; never create, modify, or delete any file, and do not run commands that change the worktree."
+    ]
+  },
+  "session": {
+    "mode": "discovered",
+    "discovery": {
+      "args": ["session", "list", "--format", "json"],
+      "format": "json",
+      "id_field": "id",
+      "match": [{"field": "directory", "equals": "{cwd}"}]
+    }
+  },
+  "exit_command": "/exit",
+  "display_name": "OpenCode",
+  "supports_effort": true,
+  "prompt_delivery": {
+    "mode": "argv"
+  },
+  "review": {
+    "env": {
+      "OPENCODE_PERMISSION": "{{\"*\":\"deny\",\"read\":\"allow\",\"glob\":\"allow\",\"grep\":\"allow\",\"list\":\"allow\",\"external_directory\":\"allow\"}}"
+    },
+    "cwd": "root",
+    "home_policy": "optional",
+    "output_name": "output.jsonl",
+    "inspection": "Use read, glob, grep, and list only for read-only inspection; never modify files.",
+    "spawns_helpers": true,
+    "stdin": "none",
+    "output": {
+      "source": "stdout",
+      "format": "ndjson",
+      "select": [
+        {
+          "json_field": "type",
+          "equals": "text"
+        }
+      ],
+      "parse": "json_field:part.text",
+      "join": "\n",
+      "success": [
+        {
+          "json_field": "type",
+          "equals": "step_finish"
+        },
+        {
+          "json_field": "part.reason",
+          "equals": "stop"
+        }
+      ]
+    }
+  },
+  "rules_target": {
+    "global": ".config/opencode/AGENTS.md",
+    "project": "AGENTS.md"
+  },
+  "rules_integration": "markdown-reference",
+  "large_model": "opencode-go/deepseek-v4.1-flash",
+  "small_model": "opencode-go/deepseek-v4.1-flash",
+  "large_effort": "high",
+  "small_effort": "medium",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "effort": "high"
+}

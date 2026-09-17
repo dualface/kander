@@ -24,6 +24,45 @@ func devinDiscovery(t *testing.T) *config.SessionDiscovery {
 	return disc
 }
 
+func opencodeDiscovery(t *testing.T) *config.SessionDiscovery {
+	t.Helper()
+	disc := config.AgentFor(config.DefaultConfig(), "opencode").Session.Discovery
+	if disc == nil {
+		t.Fatal("opencode embedded definition declares no session discovery")
+	}
+	return disc
+}
+
+func TestOpenCodeSessionIsDiscoveredAfterStart(t *testing.T) {
+	cfg := config.DefaultConfig()
+	session, err := newAgentSession("opencode", &process.AgentProgram{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.Agent != "opencode" || session.Reference != "" {
+		t.Fatalf("session=%+v", session)
+	}
+	def := config.AgentFor(cfg, "opencode").Session
+	if def.Mode != "discovered" || !config.SessionDiscoversAfterStart(def) || !config.SessionPersistsAfterStart(def) {
+		t.Fatalf("mode=%q", def.Mode)
+	}
+}
+
+func TestParseSessionListOpenCodeDirectoryMatch(t *testing.T) {
+	cwd := t.TempDir()
+	disc := opencodeDiscovery(t)
+	out := `[{"id":"ses_other","directory":"/elsewhere","title":"x"},` +
+		`{"id":"ses_mine","directory":"` + cwd + `","title":"reply"},` +
+		`{"id":"ses_missing","title":"no directory"}]`
+	got, err := parseSessionList(disc, out, cwd, "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"ses_mine"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got=%q want=%q", got, want)
+	}
+}
+
 func TestDevinSessionIsDiscoveredAfterStart(t *testing.T) {
 	cfg := config.DefaultConfig()
 	session, err := newAgentSession("devin", &process.AgentProgram{}, cfg)
