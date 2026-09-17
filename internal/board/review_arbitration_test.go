@@ -39,24 +39,28 @@ func arbitrationFor(run ReviewRun, id string, finding ReviewFinding, d ReviewDis
 	}
 }
 
-func TestReviewArbitrationBindsDisputedMustFixDisposition(t *testing.T) {
-	for _, status := range []string{"rejected", "unverifiable"} {
-		t.Run(status, func(t *testing.T) {
-			root, id, run, finding, d := arbitrationFixture(t, status)
-			a := arbitrationFor(run, id, finding, d)
-			if err := SubmitReviewArbitration(root, a); err != nil {
-				t.Fatal(err)
-			}
-			// Exact replay is idempotent even though RecordedAt is assigned by Kander.
-			if err := SubmitReviewArbitration(root, a); err != nil {
-				t.Fatal(err)
-			}
-		})
+func TestReviewArbitrationBindsUnverifiableMustFixDisposition(t *testing.T) {
+	root, id, run, finding, d := arbitrationFixture(t, "unverifiable")
+	a := arbitrationFor(run, id, finding, d)
+	if err := SubmitReviewArbitration(root, a); err != nil {
+		t.Fatal(err)
+	}
+	// Exact replay is idempotent even though RecordedAt is assigned by Kander.
+	if err := SubmitReviewArbitration(root, a); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReviewArbitrationRequiresUnverifiableDisposition(t *testing.T) {
+	root, id, run, finding, d := arbitrationFixture(t, "rejected")
+	a := arbitrationFor(run, id, finding, d)
+	if err := SubmitReviewArbitration(root, a); err == nil {
+		t.Fatal("rejected finding entered arbitration without becoming unverifiable")
 	}
 }
 
 func TestReviewArbitrationRequiresIndependentArbiterAndExactEvidence(t *testing.T) {
-	root, id, run, finding, d := arbitrationFixture(t, "rejected")
+	root, id, run, finding, d := arbitrationFixture(t, "unverifiable")
 	for name, mutate := range map[string]func(*ReviewArbitration){
 		"author":      func(a *ReviewArbitration) { a.Arbiter = d.Author },
 		"reviewer":    func(a *ReviewArbitration) { a.Arbiter = run.Reviewer },
@@ -74,11 +78,11 @@ func TestReviewArbitrationRequiresIndependentArbiterAndExactEvidence(t *testing.
 }
 
 func TestReviewArbitrationRejectsStaleDisposition(t *testing.T) {
-	root, id, run, finding, first := arbitrationFixture(t, "rejected")
+	root, id, run, finding, first := arbitrationFixture(t, "unverifiable")
 	second := first
 	second.RecordID = "record-arbitration-2"
 	second.PreviousRecordID = first.RecordID
-	second.Basis = "additional repository evidence still leaves the finding disputed"
+	second.Basis = "additional repository evidence still leaves the finding unverifiable"
 	s := transactionSnapshot(t, root, id)
 	if err := SubmitReviewDisposition(root, second, s.Revision); err != nil {
 		t.Fatal(err)
