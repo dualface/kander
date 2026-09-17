@@ -26,6 +26,9 @@ func Run(args []string) (exitCode int) {
 		userError(err.Error())
 		return 1
 	}
+	if args[0] == "arbitrate" {
+		return runArbitrationCommand(args)
+	}
 	if dispositionCommand(args[0]) {
 		return runDispositionCommand(args)
 	}
