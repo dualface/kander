@@ -31,7 +31,9 @@ Uncertainty is not evidence that the reviewer is wrong.
 
 ## Dispute Arbitration
 
-A `blocking`, `high`, or `medium` finding may enter narrow arbitration when the reviewer and author remain in factual disagreement after the author's independent verification and the latest author disposition is `rejected` or `unverifiable`.
+A `blocking`, `high`, or `medium` finding may enter narrow arbitration when the reviewer and author remain in factual disagreement after the author's independent verification. Arbitration starts only from an `unverifiable` author disposition.
+
+If an author initially records `rejected` and the reviewer dispute remains live because the decisive fact is not actually established, append a new `unverifiable` disposition before arbitration. This keeps the existing closure gate fail-closed while the third opinion is pending.
 
 Arbitration is not another full review round. The arbiter examines only the disputed finding and the evidence needed to decide its material factual premise. Do not ask the arbiter to re-review the entire task or generate unrelated findings.
 
@@ -46,24 +48,24 @@ Give the arbiter the minimum complete dispute packet:
 
 1. the relevant task requirement, existing contract, or invariant;
 2. the exact reviewer finding and its evidence;
-3. the exact latest author disposition and rejection/unverifiable basis;
+3. the exact latest `unverifiable` author disposition and its basis;
 4. the relevant target code or diff and directly related callers/callees;
 5. the relevant test, reproducer, runtime, or contract evidence;
 6. the precise factual question whose answer decides the dispute.
 
 The arbiter returns exactly one semantic verdict:
 
-- `sustain`: the finding's material premise is established. The author must not keep the item rejected; continue through `confirmed` and repair/verification under the normal review loop.
-- `overrule`: a material premise of the finding is falsified. The author may keep or resubmit `rejected`, and should cite the arbitration ID plus the decisive evidence in the basis.
-- `inconclusive`: the available evidence cannot establish either side. The item remains `unverifiable` and follows the existing user-decision/stop behavior; arbitration must not convert uncertainty into PASS.
+- `sustain`: the finding's material premise is established. The author must keep closure blocked and continue through `confirmed` and repair/verification under the normal review loop.
+- `overrule`: a material premise of the finding is falsified. The author may append a new `rejected` disposition and should cite the arbitration ID plus the decisive evidence in the basis.
+- `inconclusive`: the available evidence cannot establish either side. Leave the item `unverifiable` and follow the existing user-decision/stop behavior; arbitration must not convert uncertainty into PASS.
 
 Record the decision with:
 
 `kander review arbitrate <CWD> <absolute-arbitration.json>`
 
-The arbitration JSON is schema 1 and contains `arbitration_id`, `run_id`, `finding_id`, `batch_id`, `task_id`, `disposition_record_id`, `arbiter`, optional `model` / `effort`, `verdict`, `basis`, `report`, and `report_hash`. `report_hash` is the SHA-256 digest of the exact UTF-8 `report` bytes. Kander binds the record to the latest disputed disposition and stores immutable copies in the review control archive and the task review archive.
+The arbitration JSON is schema 1 and contains `arbitration_id`, `run_id`, `finding_id`, `batch_id`, `task_id`, `disposition_record_id`, `arbiter`, optional `model` / `effort`, `verdict`, `basis`, `report`, and `report_hash`. `report_hash` is the SHA-256 digest of the exact UTF-8 `report` bytes. Kander binds the record to the latest `unverifiable` disposition and stores immutable copies in the review control archive and the task review archive.
 
-A later author disposition creates a new factual position. An old arbitration does not silently apply to that later disposition; arbitrate again only if the new disposition is still disputed.
+A later author disposition creates a new factual position. An old arbitration does not silently apply to that later disposition; arbitrate again only if the new position is again `unverifiable` and still disputed.
 
 ## Evidence Must Address the Actual Claim
 
