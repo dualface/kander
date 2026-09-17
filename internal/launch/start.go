@@ -75,7 +75,13 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	previous := sessionDiscoverSnapshot(config.AgentFor(cfg, agentName).Session.Mode, entry.TaskID, plan.capabilities().PaneMetadata)
+	mode := config.AgentFor(cfg, agentName).Session.Mode
+	initialSession := session.Render()
+	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(mode)
+	previous, err := sessionDiscoverSnapshot(mode, entry.TaskID, discoverSession, program, parentDir(root))
+	if err != nil {
+		return result, err
+	}
 	window := ""
 	if !plan.capabilities().Container {
 		window = plan.Launcher
@@ -118,8 +124,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	name := windowName(entry, original)
 	paneCB := (func() (AgentSession, error))(nil)
-	if plan.capabilities().PaneMetadata {
-		mode := config.AgentFor(cfg, agentName).Session.Mode
+	if discoverSession {
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
 				return session, nil
@@ -127,11 +132,16 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if !config.SessionDiscoversAfterStart(mode) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous)
+			ref, err := runSessionDiscoverHook(mode, moved.TaskID, previous, program, parentDir(root))
 			if err != nil {
 				return AgentSession{}, err
 			}
 			return AgentSession{Agent: session.Agent, Reference: ref}, nil
+		}
+	}
+	if config.SessionPersistsAfterStart(mode) {
+		plan.sessionFinalize = func(effective AgentSession) error {
+			return board.ConfirmTaskStartSession(root, moved, initialSession, effective.Render())
 		}
 	}
 	loc := (func(LaunchOutcome) error)(nil)
@@ -146,8 +156,11 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
 	taskFileHandedOff = true
-	if err = board.ConfirmTaskStart(root, moved); err != nil {
-		return result, err
+	if !config.SessionPersistsAfterStart(mode) {
+		err = board.ConfirmTaskStart(root, moved)
+		if err != nil {
+			return result, err
+		}
 	}
 	result.TaskID, result.Size, result.Agent = moved.TaskID, moved.Kind, agentName
 	result.Plan, result.Outcome = plan, outcome

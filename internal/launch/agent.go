@@ -49,6 +49,24 @@ func launchAgent(
 		if err != nil {
 			return LaunchOutcome{}, fail(launchError("launch.failed_to_start_agent", err.Error()))
 		}
+		if paneSession != nil {
+			sess, err := paneSession()
+			if err != nil {
+				_ = handle.proc.Kill()
+				_, _ = handle.Wait()
+				return LaunchOutcome{}, fail(err)
+			}
+			if agentSession != nil {
+				*agentSession = sess
+			}
+			if plan.sessionFinalize != nil {
+				if err := plan.sessionFinalize(sess); err != nil {
+					_ = handle.proc.Kill()
+					_, _ = handle.Wait()
+					return LaunchOutcome{}, fail(err)
+				}
+			}
+		}
 		return LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}, nil
 	}
 	command, err := paneCommand(invocation)
@@ -89,21 +107,31 @@ func launchAgent(
 			}
 		}
 	}
+	if paneSession != nil {
+		sess, err := paneSession()
+		if err != nil {
+			return LaunchOutcome{}, fail(err)
+		}
+		if agentSession != nil {
+			*agentSession = sess
+		}
+		if caps.PaneMetadata {
+			if err := backend.SetSessionMarker(conn, address.Pane, sess.Reference); err != nil {
+				return LaunchOutcome{}, fail(err)
+			}
+		}
+		if plan.sessionFinalize != nil {
+			if err := plan.sessionFinalize(sess); err != nil {
+				return LaunchOutcome{}, fail(err)
+			}
+		}
+	}
 	if caps.SessionReport && agentSession != nil {
 		warn := plan.warning
 		if warn == nil {
 			warn = func(message string) { fmt.Fprint(os.Stderr, message) }
 		}
 		reportAgentSession(plan, address.Pane, *agentSession, warn)
-	}
-	if caps.PaneMetadata && paneSession != nil {
-		sess, err := paneSession()
-		if err != nil {
-			return LaunchOutcome{}, fail(err)
-		}
-		if err := backend.SetSessionMarker(conn, address.Pane, sess.Reference); err != nil {
-			return LaunchOutcome{}, fail(err)
-		}
 	}
 	return outcome, nil
 }

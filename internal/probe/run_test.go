@@ -27,6 +27,13 @@ func TestProbeProcessHelper(t *testing.T) {
 		fmt.Fprint(os.Stdout, strings.Repeat("out", 100000))
 		fmt.Fprint(os.Stderr, strings.Repeat("err", 100000))
 		os.Exit(7)
+	case "cwd":
+		cwd, err := os.Getwd()
+		if err != nil {
+			os.Exit(6)
+		}
+		fmt.Fprint(os.Stdout, cwd)
+		os.Exit(0)
 	case "parent", "parent-exit", "parent-escape":
 		child := exec.Command(os.Args[0], "-test.run=^TestProbeProcessHelper$", "--", "probe-process-helper", "child", dir)
 		child.Stdout, child.Stderr = os.Stdout, os.Stderr
@@ -56,6 +63,17 @@ func TestProbeProcessHelper(t *testing.T) {
 	}
 	time.Sleep(5 * time.Second)
 	os.Exit(0)
+}
+
+func TestCaptureWithEnvDirUsesWorkingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	result, err := CaptureWithEnvDir(t.Context(), os.Args[0], helperArgs("cwd", dir), nil, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Code != 0 || result.Stdout != dir {
+		t.Fatalf("result=%+v", result)
+	}
 }
 
 func configureProbeHelpers(t *testing.T) {

@@ -19,7 +19,8 @@
       "dangerous",
       "--respect-workspace-trust",
       "false",
-      "--continue",
+      "--resume",
+      "{session}",
       "--"
     ],
     "review": [
@@ -36,7 +37,7 @@
     ]
   },
   "session": {
-    "mode": "generated"
+    "mode": "hook:devin-session"
   },
   "exit_command": "/exit",
   "display_name": "Devin",

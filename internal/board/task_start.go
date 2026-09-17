@@ -124,6 +124,70 @@ func stageTaskStart(tx *Transaction, s Snapshot, text, state string) error {
 // ConfirmTaskStart records launcher success without overwriting or revising task
 // work produced by a fast executor. The original operation cursor fences retries.
 func ConfirmTaskStart(root string, entry Entry) error {
+	return confirmTaskStart(root, entry)
+}
+
+// ConfirmTaskStartSession atomically replaces a launch-time provisional session
+// and records start success, so readers cannot observe mismatched pending facts.
+func ConfirmTaskStartSession(root string, entry Entry, before, after string) error {
+	if before == "" || after == "" || before == after {
+		return coordinatorError("start discovered session binding")
+	}
+	if entry.Version == nil {
+		return coordinatorError("start cursor missing")
+	}
+	entry.Version.mu.Lock()
+	defer entry.Version.mu.Unlock()
+	mutated := false
+	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
+		a, exists, err := readTaskStart(tx, entry.TaskID, "")
+		if err != nil {
+			return err
+		}
+		s, err := tx.Expect(entry.TaskID, entry.State, entry.Version.revision)
+		if err != nil {
+			return err
+		}
+		if !exists || a.Status == "rolled-back" || a.Revision > entry.Version.revision || a.Cycle != planCycle(s) || a.Owner != MetadataFrom(s.Text, FieldOwner) || a.Session != before {
+			return coordinatorError("start success binding")
+		}
+		current := MetadataFrom(s.Text, FieldSession)
+		if a.Status == "succeeded" {
+			if current != after {
+				return coordinatorError("start success binding")
+			}
+			return nil
+		}
+		if current != before || s.Entry.Path != entry.Path {
+			return coordinatorError("start success binding")
+		}
+		if err = tx.requireExecution(s, entry.Version.authorization, false); err != nil {
+			return err
+		}
+		if err = tx.requireFullExecution(s); err != nil {
+			return err
+		}
+		text, err := setMetadata(s.Text, FieldSession, after)
+		if err != nil {
+			return err
+		}
+		if err = tx.Put(entry.TaskID, "spec.md", text); err != nil {
+			return err
+		}
+		a.Status, a.FinishedRevision = "succeeded", s.Revision+1
+		if err = putTaskStart(tx, a, "result"); err != nil {
+			return err
+		}
+		mutated = true
+		return nil
+	})
+	if err == nil && mutated {
+		entry.Version.revision++
+	}
+	return err
+}
+
+func confirmTaskStart(root string, entry Entry) error {
 	if entry.Version == nil {
 		return coordinatorError("start cursor missing")
 	}

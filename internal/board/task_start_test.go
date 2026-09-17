@@ -86,6 +86,51 @@ func TestStartResultsFenceRetryAndPreserveTaskRevision(t *testing.T) {
 	}
 }
 
+func TestConfirmTaskStartAcceptsBoundDiscoveredSession(t *testing.T) {
+	root := tempBoard(t)
+	original := coordinatorTodo(t, root, "discovered-session")
+	moved, err := MoveEntry(original.Entry, root, "working")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := moveMetadata(original.Text, "todo", "working", MoveOptions{Owner: "devin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err = setMetadata(text, FieldSession, "devin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err = setMetadata(text, FieldStartedAt, "2026-09-08 10:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteManagedDocument(root, moved, text); err != nil {
+		t.Fatal(err)
+	}
+	c := coordinatorClaim(t, root, original.Entry.TaskID)
+	c = coordinatorReconcile(t, root, c)
+	if !c.Members[original.Entry.TaskID].AwaitingStart {
+		t.Fatal("pending start was treated as confirmed")
+	}
+	if err := ConfirmTaskStartSession(root, moved, "codex", "devin exact-session"); err == nil {
+		t.Fatal("mismatched pending session was accepted")
+	}
+	if got := MetadataFrom(transactionSnapshot(t, root, original.Entry.TaskID).Text, FieldSession); got != "devin" {
+		t.Fatalf("failed confirmation changed session to %q", got)
+	}
+	if err := ConfirmTaskStartSession(root, moved, "devin", "devin exact-session"); err != nil {
+		t.Fatal(err)
+	}
+	if got := MetadataFrom(transactionSnapshot(t, root, original.Entry.TaskID).Text, FieldSession); got != "devin exact-session" {
+		t.Fatalf("confirmed session=%q", got)
+	}
+	c = coordinatorReconcile(t, root, c)
+	if c.Members[original.Entry.TaskID].AwaitingStart {
+		t.Fatal("atomic session confirmation was not consumed")
+	}
+}
+
 func TestStartOriginalDamageStopsRecovery(t *testing.T) {
 	for _, damage := range []string{"pending", "rollback", "success", "current", "unobserved-current", "adopted-rollback"} {
 		t.Run(damage, func(t *testing.T) {

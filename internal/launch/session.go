@@ -2,6 +2,7 @@ package launch
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -15,10 +16,14 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
+	"github.com/dualface/kander/internal/terminal/direct"
 )
 
 var sessionReferenceRe = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
+var listDevinSessionsFn = devinSessions
 
 func randomUUID() string {
 	var buf [16]byte
@@ -333,7 +338,7 @@ func runSessionResolveHook(mode, taskID string) (string, error) {
 	}
 }
 
-func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}) (string, error) {
+func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
 	name, ok := config.ParseSessionHook(mode)
 	if !ok {
 		return "", launchError("launch.unsupported_agent", mode)
@@ -341,21 +346,22 @@ func runSessionDiscoverHook(mode, taskID string, previous map[string]struct{}) (
 	switch name {
 	case "codex-rollout":
 		return discoverNewCodexSession(taskID, previous)
+	case "devin-session":
+		return discoverNewDevinSession(program, cwd, previous)
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
 }
 
-// sessionDiscoverSnapshot records the sessions that exist before a launch whose
-// backend can record a session discovered after start in pane metadata.
-func sessionDiscoverSnapshot(mode, taskID string, paneMetadata bool) map[string]struct{} {
+// sessionDiscoverSnapshot records the sessions that exist before a launch.
+func sessionDiscoverSnapshot(mode, taskID string, discover bool, program *process.AgentProgram, cwd string) (map[string]struct{}, error) {
 	previous := map[string]struct{}{}
-	if !config.SessionDiscoversAfterStart(mode) || !paneMetadata {
-		return previous
+	if !config.SessionDiscoversAfterStart(mode) || !discover {
+		return previous, nil
 	}
 	name, ok := config.ParseSessionHook(mode)
 	if !ok {
-		return previous
+		return previous, nil
 	}
 	switch name {
 	case "codex-rollout":
@@ -364,8 +370,16 @@ func sessionDiscoverSnapshot(mode, taskID string, paneMetadata bool) map[string]
 				previous[id] = struct{}{}
 			}
 		}
+	case "devin-session":
+		sessions, err := listDevinSessionsFn(program, cwd)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range sessions {
+			previous[id] = struct{}{}
+		}
 	}
-	return previous
+	return previous, nil
 }
 
 func findCodexSession(taskID string) (string, error) {
@@ -405,6 +419,78 @@ func discoverNewCodexSession(taskID string, previous map[string]struct{}) (strin
 				)
 			}
 			last = launchError("launch.the_newly_started_codex_session_has_not_appeared_yet")
+		}
+		if !nowFn().Before(deadline) {
+			return "", last
+		}
+		sleepFn(notifyPollInterval)
+	}
+}
+
+func devinSessions(program *process.AgentProgram, cwd string) ([]string, error) {
+	if program == nil {
+		return nil, launchError("launch.devin_session_list_failed", "agent program is unavailable")
+	}
+	inv, err := launchInvocation(LaunchPlan{Launcher: direct.Foreground}, *program, []string{"list", "--format", "json"})
+	if err != nil {
+		return nil, launchError("launch.devin_session_list_failed", err.Error())
+	}
+	result, err := probe.CaptureWithEnvDir(context.Background(), inv.Argv[0], inv.Argv[1:], envSlice(inv.Env), cwd)
+	if err != nil {
+		return nil, launchError("launch.devin_session_list_failed", err.Error())
+	}
+	if result.Code != 0 {
+		return nil, launchError("launch.devin_session_list_failed", "exit "+strconv.Itoa(result.Code))
+	}
+	return parseDevinSessions([]byte(result.Stdout))
+}
+
+func parseDevinSessions(data []byte) ([]string, error) {
+	var records []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &records); err != nil {
+		return nil, launchError("launch.devin_session_list_invalid")
+	}
+	if records == nil {
+		return nil, launchError("launch.devin_session_list_invalid")
+	}
+	seen := make(map[string]struct{}, len(records))
+	sessions := make([]string, 0, len(records))
+	for _, record := range records {
+		if !sessionReferenceRe.MatchString(record.ID) {
+			return nil, launchError("launch.devin_session_list_invalid")
+		}
+		if _, ok := seen[record.ID]; ok {
+			continue
+		}
+		seen[record.ID] = struct{}{}
+		sessions = append(sessions, record.ID)
+	}
+	return sessions, nil
+}
+
+func discoverNewDevinSession(program *process.AgentProgram, cwd string, previous map[string]struct{}) (string, error) {
+	deadline := nowFn().Add(sessionDiscoverWait)
+	var last error
+	for {
+		candidates, err := listDevinSessionsFn(program, cwd)
+		if err != nil {
+			last = err
+		} else {
+			var neu []string
+			for _, id := range candidates {
+				if _, ok := previous[id]; !ok {
+					neu = append(neu, id)
+				}
+			}
+			if len(neu) == 1 {
+				return neu[0], nil
+			}
+			if len(neu) > 1 {
+				return "", launchError("launch.multiple_new_devin_sessions_appeared_during_launch", strconv.Itoa(len(neu)))
+			}
+			last = launchError("launch.the_newly_started_devin_session_has_not_appeared_yet")
 		}
 		if !nowFn().Before(deadline) {
 			return "", last
