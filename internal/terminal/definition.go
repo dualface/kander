@@ -231,10 +231,23 @@ type Rows struct {
 	Expect Conditions        `json:"expect,omitempty"`
 	// Checks run after expect, in order; the first that does not hold fails
 	// the operation with its own message.
-	Checks   []RowCheck        `json:"checks,omitempty"`
-	Match    Conditions        `json:"match"`
+	Checks []RowCheck `json:"checks,omitempty"`
+	Match  Conditions `json:"match"`
+	// Session (reverse_lookup only) names the row fields carrying the
+	// reported session kind and value. Rows surviving match are decided by
+	// resolving that identity against {reference} instead of comparing raw
+	// strings: a unique resolved match is the result, undecidable
+	// candidates make the lookup incomplete.
+	Session  *RowsSession      `json:"session,omitempty"`
 	Result   map[string]string `json:"result"`
 	Messages RowMessages       `json:"messages"`
+}
+
+// RowsSession names the extracted row fields that carry the reported
+// session kind and value of a reverse_lookup candidate.
+type RowsSession struct {
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
 }
 
 // RowCheck is one ordered row validation with its own message.
@@ -250,6 +263,10 @@ type RowMessages struct {
 	Invalid   *Message `json:"invalid,omitempty"`
 	None      *Message `json:"none,omitempty"`
 	Ambiguous *Message `json:"ambiguous,omitempty"`
+	// Incomplete renders a lookup that could not decide because one or more
+	// candidates' session identity stayed unresolved; {detail} is the first
+	// unresolved reason.
+	Incomplete *Message `json:"incomplete,omitempty"`
 }
 
 // MessageLine is a message rendered only when its condition holds.

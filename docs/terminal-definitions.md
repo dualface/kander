@@ -81,7 +81,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `wait_ready` (optional; absent means ready) | `pane`                           | none |
 | `run_command`        | `pane`, `command`, `posix` (`true`/`false`)             | none |
 | `set_session_marker` | `pane`, `value`                                         | none |
-| `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `container` |
+| `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `agent_session_kind`, `container` |
 | `read_output`        | `pane`                                                  | `text` |
 | `wait_output`        | `pane`, `marker` (literal or `regex:` prefixed), `marker_literal` (the marker without a `regex:` prefix, else empty), `marker_regex` (the expression after `regex:`, else empty), `timeout_ms` | none |
 | `deliver_text`       | `pane`, `text`                                          | none |
@@ -173,14 +173,16 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
   "expect": <conditions over row.*>,
   "checks": [{"when": <conditions over row.*>, "message": <message>}],
   "match": <conditions>,
+  "session": {"kind": "<kind field>", "value": "<value field>"},   // reverse_lookup only
   "result": {"session": "...", "container": "...", "pane": "..."},
-  "messages": {"missing": <message>, "invalid": <message>, "none": <message>, "ambiguous": <message using count>}
+  "messages": {"missing": <message>, "invalid": <message>, "none": <message>, "ambiguous": <message using count>, "incomplete": <message using detail>}
 }
 ```
 
 - `split` defaults to `lines`, where blank lines are skipped. `json_array:<path>` takes the array at that path of the JSON output (a missing or non-array value fails with `missing`); each element becomes one row re-encoded as compact JSON with sorted keys, so `json_field` reads its members and a `regex` can check the encoded form (for example that `"agent":` is followed by a string or `null`).
 - Every row must satisfy `expect`, otherwise the operation fails with `invalid`; then each of `checks`, in order, whose own message ends the operation when its condition does not hold.
 - `reverse_lookup` maps `session`, `container` and `pane`; exactly one matching row is the result, while zero or several matches return `terminal.MatchError` with the count. `topology` maps only `pane` and collects the matching rows in order into `Topology.Panes`. `process_name` is resolved only after the collection steps succeed, so a collection failure is reported before an agent definition error.
+- `session` (reverse_lookup only) names the row fields carrying the reported session `kind` and `value`. Rows surviving `expect`, `checks` and `match` — which should narrow to the agent, since session identity is decided separately — are candidates: each is resolved with the shared agent-session rules (a missing kind is a direct id, `path` resolves through the agent's `session.file` declaration, unknown kinds stay undecidable). Exactly one resolved match returns the row's result; zero decided matches return `MatchError{0}`; several decided matches return `MatchError` with the count; any undecidable candidate returns `terminal.IncompleteLookupError` — an unfinished lookup, rendered by `messages.incomplete` (`{detail}` is the first unresolved reason). Candidates of another agent never affect the outcome. Without `session`, `match` alone decides membership as before.
 
 ## Error Classification
 
@@ -234,7 +236,9 @@ For a malformed response with a string-valued `result`, the definition rejects t
 
 The herdr launch requirements preserve the former backend's order and messages: `HERDR_ENV=1` is checked before PATH, then the workspace is trimmed and checked for emptiness. The workspace requirement is excluded from auto detection, so a missing workspace is diagnosed after selecting herdr. The prepare operation guards and returns that normalized workspace without running a command; tab creation also expands the trimmed environment value. Topology checks first that each row is an object, then that its IDs are present, preserving the separate diagnostics for these failures.
 
-Reverse lookup's validity expressions scan the complete row. An unrelated nested `agent` or `value` with a non-string value can therefore reject an otherwise matching pane. The former backend checked only the top-level `agent` and `agent_session.value`; a path-aware type check would be needed to remove this stricter rejection.
+Reverse lookup's validity expressions scan the complete row. An unrelated nested `agent`, `value` or `kind` with a non-string value can therefore reject an otherwise matching pane. The former backend checked only the top-level `agent` and `agent_session.value`; a path-aware type check would be needed to remove this stricter rejection.
+
+The embedded herdr definition extracts `agent_session.kind` and `agent_session.value` and declares `rows.session`, so a `kind: "path"` report resolves through the agent's `session.file` declaration (pi's JSONL session header) instead of comparing the raw path string to the recorded session id. Candidates whose identity cannot be resolved make the lookup incomplete rather than a match, a mismatch, or a stopped observation.
 
 ## Example
 

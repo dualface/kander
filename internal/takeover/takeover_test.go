@@ -95,11 +95,16 @@ if [ "$1" = "pane" ] && [ "$2" = "get" ]; then
   status="${KANBAN_HERDR_STATUS:-idle}"
   tab="${KANBAN_HERDR_TAB_ID:-w1:t8}"
   session="${KANBAN_HERDR_SESSION:-session-1}"
+  kind="${KANBAN_HERDR_SESSION_KIND:-}"
   if [ -f "$log.prompt" ]; then
     printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\"}}}"
     exit 0
   fi
-  printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"value\":\"$session\"}}}}"
+  if [ -n "$kind" ]; then
+    printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"kind\":\"$kind\",\"value\":\"$session\"}}}}"
+  else
+    printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"value\":\"$session\"}}}}"
+  fi
   exit 0
 fi
 if [ "$1" = "pane" ] && [ "$2" = "list" ]; then
@@ -277,6 +282,40 @@ func TestDismissStaleHerdrDoesNotRewriteWindow(t *testing.T) {
 	}
 }
 
+// An undecidable pane identity refuses the exit/close path entirely: dismiss
+// never delivers the exit command to a pane it cannot confirm.
+func TestDismissUncertainHerdrRefuses(t *testing.T) {
+	root, _ := setupBoard(t)
+	missing := filepath.Join(t.TempDir(), "gone.jsonl")
+	t.Setenv("KANBAN_HERDR_AGENT", "pi")
+	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
+	t.Setenv("KANBAN_HERDR_SESSION", missing)
+	taskID, path := makeDone(t, root, "dismiss-uncertain-herdr", "herdr:w1:t9:w1:p9")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := regexp.MustCompile(`(?m)^- SESSION:.*$`).ReplaceAllLiteralString(string(data), "- SESSION: pi wanted")
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(path)
+	_, _, err = capture(t, func() error { return commandDismiss(root, taskID, 61) })
+	if err == nil {
+		t.Fatal("uncertain identity must refuse dismiss")
+	}
+	after, _ := os.ReadFile(path)
+	if string(before) != string(after) {
+		t.Fatal("card mutated")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "herdr.log.prompt")); !os.IsNotExist(statErr) {
+		t.Fatal("exit command must not be delivered to an unconfirmed pane")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "herdr.log.close")); !os.IsNotExist(statErr) {
+		t.Fatal("container must not be closed on unconfirmed identity")
+	}
+}
+
 func TestDismissStaleTmuxRevalidatesContainer(t *testing.T) {
 	root, _ := setupBoard(t)
 	t.Setenv("KANBAN_TMUX_STALE_PANE", "%9")
@@ -312,6 +351,47 @@ func TestCleanupRetainsMismatchedHerdr(t *testing.T) {
 	}
 	if !strings.Contains(result.Detail, "身份不匹配") {
 		t.Fatalf("detail=%s", result.Detail)
+	}
+}
+
+// An undecidable old-pane identity is never cleanup proof: the container
+// stays open instead of closing a pane that cannot be confirmed.
+func TestCleanupRetainsUncertainHerdr(t *testing.T) {
+	_, _ = setupBoard(t)
+	missing := filepath.Join(t.TempDir(), "gone.jsonl")
+	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
+	t.Setenv("KANBAN_HERDR_SESSION", missing)
+	t.Setenv("KANBAN_HERDR_TAB_ID", "w1:t1")
+	t.Setenv("KANBAN_HERDR_LIST_JSON", `{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","agent":"claude","agent_status":"idle","agent_session":{"kind":"path","value":"`+missing+`"}}]}}`)
+	result := Cleanup("herdr:w1:t1:w1:p1", launch.AgentSession{Agent: "claude", Reference: "old"}, "herdr:w1:t2:w1:p2", 61)
+	if result.Cleaned {
+		t.Fatalf("%+v", result)
+	}
+	if !strings.Contains(result.Detail, "无法核实") {
+		t.Fatalf("detail=%s", result.Detail)
+	}
+}
+
+// A path-kind old-pane identity resolving to the card session is a proven
+// match: cleanup exits the agent and closes the container like an id match.
+func TestCleanupClosesPathIdentityHerdr(t *testing.T) {
+	root, _ := setupBoard(t)
+	file := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(file, []byte(`{"type":"session","version":3,"id":"old"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANBAN_HERDR_AGENT", "pi")
+	t.Setenv("KANBAN_HERDR_SESSION_KIND", "path")
+	t.Setenv("KANBAN_HERDR_SESSION", file)
+	t.Setenv("KANBAN_HERDR_TAB_ID", "w1:t1")
+	t.Setenv("KANBAN_HERDR_LIST_JSON", `{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","agent":"pi","agent_status":"idle","agent_session":{"kind":"path","value":"`+file+`"}}]}}`)
+	result := Cleanup("herdr:w1:t1:w1:p1", launch.AgentSession{Agent: "pi", Reference: "old"}, "herdr:w1:t2:w1:p2", 61)
+	if !result.Cleaned {
+		t.Fatalf("%+v", result)
+	}
+	prompt, _ := os.ReadFile(filepath.Join(root, "herdr.log.prompt"))
+	if !strings.Contains(string(prompt), "/quit") {
+		t.Fatalf("prompt=%s", prompt)
 	}
 }
 

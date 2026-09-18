@@ -67,8 +67,18 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 		if pane.Gone || pane.Agent != session.Agent {
 			return report(entry, &sess, Stopped, channel, container, detail, "")
 		}
-		if session.Reference != "" && pane.AgentSession != "" && pane.AgentSession != session.Reference {
-			return report(entry, &sess, Stopped, channel, container, detail, "")
+		if session.Reference != "" {
+			// A pane found by session must keep a decidable identity: an
+			// empty or unresolvable report means the identity changed or is
+			// unverifiable, so drift is never attached on that evidence.
+			verdict, detail := terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
+			switch verdict {
+			case terminal.SessionDiffers:
+				return report(entry, &sess, Stopped, channel, container, detail, "")
+			case terminal.SessionUncertain:
+				return lookupFailure(&probe.Error{Message: t(
+					"liveness.session_identity_uncertain_reverse", detail)})
+			}
 		}
 		status := pane.AgentStatus
 		runtimeState = status
@@ -134,8 +144,16 @@ func classifyAgentPane(ctx context.Context, entry board.Entry, session TaskSessi
 		), program, backend, allowReverseLookup)
 	}
 	actualSession := pane.AgentSession
-	if session.Reference != "" && actualSession != "" && actualSession != session.Reference {
-		return staleReport(ctx, entry, session, channel, container, t("liveness.session_identity_mismatch"), program, backend, allowReverseLookup)
+	if session.Reference != "" && (actualSession != "" || pane.AgentSessionKind != "") {
+		verdict, detail := terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, actualSession, session.Reference)
+		switch verdict {
+		case terminal.SessionDiffers:
+			return staleReport(ctx, entry, session, channel, container, t("liveness.session_identity_mismatch"), program, backend, allowReverseLookup)
+		case terminal.SessionUncertain:
+			return report(entry, &session, Unknown, channel, container, t(
+				"liveness.session_identity_uncertain", detail,
+			), "")
+		}
 	}
 	status := pane.AgentStatus
 	if status != "idle" && status != "working" && status != "blocked" && status != "done" {

@@ -38,12 +38,47 @@ type AgentArgs struct {
 // JSON object with the named top-level field. Both forms validate the resulting ID.
 // Discovery is valid only for mode "discovered" and declares how the agent CLI
 // enumerates its sessions after launch.
+// File optionally declares the on-disk session file format, so a path-kind
+// session identity reported by a terminal resolves to the session id inside
+// the file. Agents without it keep path identities undecidable.
 type AgentSessionDefinition struct {
 	Mode      string            `json:"mode"`
 	Allocate  []string          `json:"allocate,omitempty"`
 	JSONField string            `json:"json_field,omitempty"`
 	Discovery *SessionDiscovery `json:"discovery,omitempty"`
+	File      *SessionFile      `json:"file,omitempty"`
 }
+
+// SessionFile declares the format of the on-disk session file an agent
+// writes, letting a reported path-kind session identity resolve to the real
+// session id inside it.
+type SessionFile struct {
+	// Format is the file layout; "jsonl_header" reads the first JSON line of
+	// the file as the session header.
+	Format string `json:"format"`
+	// IDField is the top-level header field whose string value is the
+	// session id.
+	IDField string `json:"id_field"`
+	// TypeField and TypeValue pin an optional header discriminator; a header
+	// whose field does not equal the value is not a session record. Both
+	// must be set or neither.
+	TypeField string `json:"type_field,omitempty"`
+	TypeValue string `json:"type_value,omitempty"`
+	// MaxBytes bounds the header read; 0 means DefaultSessionFileMaxBytes.
+	MaxBytes int `json:"max_bytes,omitempty"`
+}
+
+const (
+	// DefaultSessionFileMaxBytes bounds a session header read when the
+	// declaration omits max_bytes.
+	DefaultSessionFileMaxBytes = 8 * 1024
+	// MaxSessionFileMaxBytes caps the declared bound of a session header read.
+	MaxSessionFileMaxBytes = 1024 * 1024
+)
+
+// SessionFileFormats are the file layouts a session.file declaration may
+// name; "jsonl_header" reads the first JSON line as the session header.
+var SessionFileFormats = []string{"jsonl_header"}
 
 var agentNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
@@ -185,6 +220,10 @@ func cloneSession(src *AgentSessionDefinition) *AgentSessionDefinition {
 	out := *src
 	out.Allocate = append([]string(nil), src.Allocate...)
 	out.Discovery = cloneDiscovery(src.Discovery)
+	if src.File != nil {
+		file := *src.File
+		out.File = &file
+	}
 	return &out
 }
 
@@ -286,6 +325,9 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				return nil, agentDefinitionError(name, Text("config.agent_session"))
 			}
 			if err := validateSessionDiscovery(name, s); err != nil {
+				return nil, err
+			}
+			if err := validateSessionFile(name, s); err != nil {
 				return nil, err
 			}
 			if s.Mode == "allocated" {

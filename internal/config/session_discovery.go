@@ -126,6 +126,31 @@ func validateSessionDiscovery(name string, s *AgentSessionDefinition) error {
 	return nil
 }
 
+// validateSessionFile checks an optional session.file declaration, shared by
+// embedded files and user overlays.
+func validateSessionFile(name string, s *AgentSessionDefinition) error {
+	if s == nil || s.File == nil {
+		return nil
+	}
+	f := s.File
+	if !contains(SessionFileFormats, f.Format) {
+		return agentDefinitionError(name, Text("config.agent_session_file"))
+	}
+	if !sessionFieldName.MatchString(f.IDField) {
+		return agentDefinitionError(name, Text("config.agent_session_file"))
+	}
+	if (f.TypeField == "") != (f.TypeValue == "") {
+		return agentDefinitionError(name, Text("config.agent_session_file"))
+	}
+	if f.TypeField != "" && (!sessionFieldName.MatchString(f.TypeField) || !validAgentText(f.TypeValue)) {
+		return agentDefinitionError(name, Text("config.agent_session_file"))
+	}
+	if f.MaxBytes < 0 || f.MaxBytes > MaxSessionFileMaxBytes {
+		return agentDefinitionError(name, Text("config.agent_session_file"))
+	}
+	return nil
+}
+
 func cloneDiscovery(src *SessionDiscovery) *SessionDiscovery {
 	if src == nil {
 		return nil

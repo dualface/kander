@@ -91,7 +91,7 @@ Every operation receives a `terminal.Conn` containing the resolved binary path a
 | `RunCommand` | Dispatches an initial startup command line to the pane. |
 | `SetSessionMarker` | Statically tags a pane with a Kander session reference. |
 | `ReportSession` | Actively reports agent startup identity to the multiplexer socket. |
-| `PaneFacts` | Inspects pane liveness, foreground process, and marker metadata. |
+| `PaneFacts` | Inspects pane liveness, foreground process, marker metadata, and the reported session identity (`AgentSession` value plus `AgentSessionKind`). |
 | `ReadOutput` | Captures plain text from the pane screen buffer. |
 | `WaitOutput` | Bounded wait for a specific text pattern to appear on screen. |
 | `DeliverText` | Sends interactive input followed by Enter into the pane. |
@@ -100,7 +100,21 @@ Every operation receives a `terminal.Conn` containing the resolved binary path a
 
 ---
 
-## 6. Error Classification
+## 6. Session Identity Resolution
+
+Backends with `AgentIdentity` report the pane's session as a kind plus a value (`AgentSessionKind`, `AgentSession`). A missing kind is a legacy direct id. `terminal.MatchAgentSession(ctx, agent, kind, value, reference)` is the single tri-state comparison every consumer shares:
+
+- **Match**: the reported identity resolves to the recorded card reference. `id` (or absent kind) compares verbatim — ids are compared as strings, never parsed as UUIDs.
+- **Differ**: a resolved identity that names a different session.
+- **Uncertain**: the identity is missing, of an unknown kind, or could not be resolved — evidence of neither a match nor a mismatch, and never a `stopped` observation.
+
+`kind: "path"` resolves through the agent definition's `session.file` declaration: the file is opened only through the `internal/fs` safe boundary (no symlinks, reparse points, or special files; the POSIX leaf opens non-blocking so a FIFO fails instead of hanging), the first line is read within the declared `max_bytes`, and the JSON header must carry the declared `id_field` and, when configured, the matching `type_field`/`type_value`. Unsupported formats, unreadable or missing files, oversized headers, malformed headers, and agents without a declaration all return Uncertain with a diagnosable detail. File content is never executed, never scanned beyond the bounded first line, and checks the caller's context before and after the read inside the existing probe budget.
+
+`ReverseLookup` evaluates every row the terminal reports (not just the recorded tab/workspace): rows that pass `expect`, `checks`, and the declarative `match` (agent filter) become candidates whose session identity is resolved the same way. Exactly one resolved match is the answer; zero decided matches return `terminal.MatchError{Matches:0}`; several decided matches return `MatchError` with the count; any undecidable same-agent candidate returns `terminal.IncompleteLookupError` — an unfinished lookup that callers must treat as unknown, never as a unique match or a proven absence.
+
+---
+
+## 7. Error Classification
 
 Operations return structured errors mapped to `*terminal.CommandError`:
 
@@ -109,3 +123,4 @@ Operations return structured errors mapped to `*terminal.CommandError`:
 3. **Response Syntax Errors**: `KindNotJSON`, `KindNotObject`, `KindMissingResult`, `KindInvalidResponse` identify malformed output from declarative command steps.
 4. **Missing Container**: A vanished pane or tab is returned as a structured fact (`PaneFacts.Gone = true`), never as an unhandled error.
 5. **Unsupported Operation**: Calling an unsupported feature returns `terminal.ErrUnsupported`.
+6. **Lookup Outcomes**: `terminal.MatchError` (completed lookup, zero or several matches) and `terminal.IncompleteLookupError` (undecidable candidates, lookup not finished) keep absence, ambiguity, and undecidability distinct.

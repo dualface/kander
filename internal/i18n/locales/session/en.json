@@ -1,0 +1,22 @@
+{
+  "config.agent_session_file": "session.file must declare format jsonl_header, a valid id_field, type_field and type_value together, and max_bytes within 1 MiB.",
+  "liveness.herdr_session_lookup_incomplete": "herdr session lookup could not decide: {{.V0}}",
+  "liveness.session_identity_uncertain": "session identity could not be verified: {{.V0}}",
+  "liveness.session_identity_uncertain_reverse": "reverse-looked-up pane session identity could not be verified: {{.V0}}",
+  "notify.session_uncertain_task_pane": "Session identity could not be verified: {{.V0}}",
+  "takeover.the_old_pane_session_identity_uncertain": "The old pane session identity could not be verified: {{.V0}}",
+  "takeover.the_pane_session_uncertain_while_waiting_for_exit": "The pane session identity could not be verified while waiting for exit: {{.V0}}",
+  "terminal.session_file_agent_error": "cannot load the agent definition: {{.V0}}",
+  "terminal.session_file_format_unknown": "agent {{.V0}} declares no session file format for path identities",
+  "terminal.session_file_header_invalid": "session file {{.V0}} header is not a JSON object",
+  "terminal.session_file_header_too_long": "session file header exceeds {{.V0}} bytes",
+  "terminal.session_file_header_type": "session file {{.V0}} header is not the expected session record",
+  "terminal.session_file_id_missing": "session file {{.V0}} header carries no session id",
+  "terminal.session_file_missing": "file does not exist",
+  "terminal.session_file_not_absolute": "not an absolute path",
+  "terminal.session_file_unreadable": "session file {{.V0}} cannot be read safely: {{.V1}}",
+  "terminal.session_identity_kind_unknown": "session identity kind {{.V0}} is not supported (agent {{.V1}})",
+  "terminal.session_identity_missing": "pane reported no session identity value",
+  "terminal.session_lookup_incomplete": "session lookup could not decide: {{.V0}}",
+  "terminal.session_lookup_uncertain_count": "{{.V0}} ({{.V1}} unresolved panes)"
+}

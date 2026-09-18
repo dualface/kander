@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"time"
 
@@ -58,6 +59,9 @@ func waitForTarget(probeFn func(time.Duration) TargetProbe, timeout float64) (Ta
 }
 
 func requireReady(probe TargetProbe) error {
+	if probe.State == "uncertain" {
+		return &UncertainError{Message: probe.Detail}
+	}
 	if probe.State != "ready" {
 		return &Error{Message: probe.Detail}
 	}
@@ -67,8 +71,14 @@ func requireReady(probe TargetProbe) error {
 func staleLookup(detail string, lookup func() (DirectTarget, error)) (DirectTarget, error) {
 	target, err := lookup()
 	if err != nil {
-		if isBusy(err) {
+		if isBusy(err) || isUncertain(err) {
 			return DirectTarget{}, err
+		}
+		var incomplete *terminal.IncompleteLookupError
+		if errors.As(err, &incomplete) {
+			// An unfinished lookup proves neither a unique match nor absence;
+			// it is never evidence for recovering another executor.
+			return DirectTarget{}, &UncertainError{Message: err.Error()}
 		}
 		return DirectTarget{}, notifyError(
 			"notify.stale_address_lookup", detail, err.Error(),

@@ -112,7 +112,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 		return nil
 	}()
 	if err != nil {
-		if isBusy(err) {
+		if isBusy(err) || isUncertain(err) {
 			return err
 		}
 		directError = err.Error()

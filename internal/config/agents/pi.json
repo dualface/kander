@@ -39,7 +39,13 @@
     ]
   },
   "session": {
-    "mode": "generated"
+    "mode": "generated",
+    "file": {
+      "format": "jsonl_header",
+      "id_field": "id",
+      "type_field": "type",
+      "type_value": "session"
+    }
   },
   "exit_command": "/quit",
   "display_name": "Pi",

@@ -118,11 +118,16 @@ if [ "$1" = "pane" ] && [ "$2" = "get" ]; then
   agent="${KANBAN_HERDR_AGENT:-claude}"
   tab="${KANBAN_HERDR_TAB_ID:-w1:t9}"
   session="${KANBAN_HERDR_SESSION:-session-1}"
+  kind="${KANBAN_HERDR_SESSION_KIND:-}"
   if [ -f "$log.prompt" ]; then
     printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\"}}}"
     exit 0
   fi
-  printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"value\":\"$session\"}}}}"
+  if [ -n "$kind" ]; then
+    printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"kind\":\"$kind\",\"value\":\"$session\"}}}}"
+  else
+    printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"value\":\"$session\"}}}}"
+  fi
   exit 0
 fi
 if [ "$1" = "pane" ] && [ "$2" = "list" ]; then

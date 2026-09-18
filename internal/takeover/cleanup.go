@@ -6,6 +6,7 @@ import (
 
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/notify"
+	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -69,7 +70,21 @@ func cleanupAgentContainer(backend terminal.Backend, address terminal.Address, o
 		return launch.CleanupResult{}, err
 	}
 	if pane.Agent != "" {
-		if pane.Agent != oldSession.Agent || oldSession.Reference == "" || pane.AgentSession == "" || pane.AgentSession != oldSession.Reference {
+		sameSession := false
+		var uncertainDetail string
+		if pane.Agent == oldSession.Agent && oldSession.Reference != "" && pane.AgentSession != "" {
+			ctx, cancel := probe.WithDefaultTimeout(context.Background())
+			verdict, detail := terminal.MatchAgentSession(ctx, oldSession.Agent, pane.AgentSessionKind, pane.AgentSession, oldSession.Reference)
+			cancel()
+			sameSession = verdict == terminal.SessionMatches
+			uncertainDetail = detail
+		}
+		if !sameSession {
+			if uncertainDetail != "" {
+				return launch.CleanupResult{}, takeoverError(
+					"takeover.the_old_pane_session_identity_uncertain", uncertainDetail,
+				)
+			}
 			return launch.CleanupResult{}, takeoverError(
 				"takeover.the_old_pane_agent_or_session_identity_does_not",
 			)

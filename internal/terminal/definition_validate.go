@@ -49,7 +49,7 @@ var opInputs = map[string][]string{
 var opResults = map[string][]string{
 	OpPrepare:         {"session", "session_exists", "workspace"},
 	OpCreateContainer: {"session", "container", "pane"},
-	OpPaneFacts:       {"command", "in_mode", "dead", "session_marker", "agent", "agent_status", "agent_session", "container"},
+	OpPaneFacts:       {"command", "in_mode", "dead", "session_marker", "agent", "agent_status", "agent_session", "agent_session_kind", "container"},
 	OpReadOutput:      {"text"},
 	OpTopology:        {"session", "container", "pane_count"},
 	OpReverseLookup:   {"session", "container", "pane"},
@@ -59,7 +59,7 @@ var startedLineNames = []string{"head", "session", "session_exists", "workspace"
 
 var paneFactNames = []string{
 	"facts.command", "facts.in_mode", "facts.dead", "facts.session_marker",
-	"facts.agent", "facts.agent_status", "facts.agent_session", "facts.container",
+	"facts.agent", "facts.agent_status", "facts.agent_session", "facts.agent_session_kind", "facts.container",
 }
 
 // rowResults are the per-row result fields of the operations that scan rows.
@@ -749,6 +749,14 @@ func (v validator) rows(op string, rows *Rows, names scope) error {
 	if err := v.conditions("rows.match", rows.Match, rowNames); err != nil {
 		return err
 	}
+	if rows.Session != nil {
+		if op != OpReverseLookup {
+			return v.fieldErr("rows.session", "only reverse_lookup declares a session identity")
+		}
+		if !containsField(fields, rows.Session.Kind) || !containsField(fields, rows.Session.Value) {
+			return v.fieldErr("rows.session", "kind and value must name extracted rows.fields")
+		}
+	}
 	results := newScope(rowResults[op]...)
 	for _, key := range sortedKeys(rows.Result) {
 		if !results[key] {
@@ -770,7 +778,19 @@ func (v validator) rows(op string, rows *Rows, names scope) error {
 	if err := v.optionalMessage("rows.messages.none", rows.Messages.None, names); err != nil {
 		return err
 	}
-	return v.optionalMessage("rows.messages.ambiguous", rows.Messages.Ambiguous, names.with("count"))
+	if err := v.optionalMessage("rows.messages.ambiguous", rows.Messages.Ambiguous, names.with("count")); err != nil {
+		return err
+	}
+	return v.optionalMessage("rows.messages.incomplete", rows.Messages.Incomplete, names.with("detail"))
+}
+
+func containsField(fields []string, name string) bool {
+	for _, field := range fields {
+		if field == name {
+			return true
+		}
+	}
+	return false
 }
 
 func positiveDuration(text string) (time.Duration, error) {

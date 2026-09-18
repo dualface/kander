@@ -327,6 +327,7 @@
             "agent": "json_field:pane.agent",
             "status": "json_field:pane.agent_status",
             "reference": "json_field:pane.agent_session.value",
+            "kind": "json_field:pane.agent_session.kind",
             "tab": "json_field:pane.tab_id"
           },
           "expect": [
@@ -341,6 +342,7 @@
         "agent": "{step.pane.agent}",
         "agent_status": "{step.pane.status}",
         "agent_session": "{step.pane.reference}",
+        "agent_session_kind": "{step.pane.kind}",
         "container": "{step.pane.tab}"
       }
     },
@@ -559,9 +561,11 @@
           "tab": "json_field:tab_id",
           "pane": "json_field:pane_id",
           "agent": "json_field:agent",
+          "kind": "json_field:agent_session.kind",
           "reference": "json_field:agent_session.value",
           "bad_agent": "regex:\"agent\":([^\"n])",
           "bad_session": "regex:\"agent_session\":([^{n])",
+          "bad_kind": "regex:\"kind\":([^\"n])",
           "bad_reference": "regex:\"value\":([^\"n])",
           "valid_tab": "regex:\"tab_id\":\"([^:\\s\"\\\\]+:[^:\\s\"\\\\]+)\"",
           "valid_pane": "regex:\"pane_id\":\"([^:\\s\"\\\\]+:[^:\\s\"\\\\]+)\""
@@ -572,15 +576,19 @@
             "!field_missing:row.valid_pane",
             "field_missing:row.bad_agent",
             "field_missing:row.bad_session",
+            "field_missing:row.bad_kind",
             "field_missing:row.bad_reference"
           ]
         ],
         "match": [
           [
-            "field:row.agent={agent}",
-            "field:row.reference={reference}"
+            "field:row.agent={agent}"
           ]
         ],
+        "session": {
+          "kind": "kind",
+          "value": "reference"
+        },
         "result": {
           "container": "{row.tab}",
           "pane": "{row.pane}"
@@ -603,6 +611,12 @@
             "args": [
               "{reference}",
               "{count}"
+            ]
+          },
+          "incomplete": {
+            "id": "liveness.herdr_session_lookup_incomplete",
+            "args": [
+              "{detail}"
             ]
           }
         }

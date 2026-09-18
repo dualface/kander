@@ -243,6 +243,9 @@ func RegularFileExists(root, path string) (bool, error) {
 }
 
 // OpenRegularFileIfExists safely opens an optional regular file. Absence returns (nil, nil).
+// The leaf opens non-blocking so a FIFO or another special file fails
+// requireRegular instead of hanging the caller; O_NONBLOCK is a no-op on the
+// regular files this function returns.
 func OpenRegularFileIfExists(root, path string) (*os.File, error) {
 	parent, err := openPosixParent(root, path)
 	if err != nil {
@@ -252,7 +255,7 @@ func OpenRegularFileIfExists(root, path string) (*os.File, error) {
 		return nil, err
 	}
 	defer parent.close()
-	fd, err := openat(parent.parentFD, parent.name, unix.O_RDONLY, 0)
+	fd, err := openat(parent.parentFD, parent.name, unix.O_RDONLY|unix.O_NONBLOCK, 0)
 	if err != nil {
 		if err == unix.ENOENT {
 			return nil, nil

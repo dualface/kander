@@ -57,12 +57,26 @@ func AgentNotifyTarget(backend terminal.Backend, program, paneID string, session
 			"notify.pane_status_does_not_accept_delivery", paneID, orNA(pane.AgentStatus),
 		)
 	}
-	if pane.AgentSession != session.Reference {
+	verdict, detail := matchSession(session, pane)
+	switch verdict {
+	case terminal.SessionDiffers:
 		return terminal.PaneFacts{}, notifyError(
 			"notify.session_mismatch_task_pane", session.Reference, orNA(pane.AgentSession),
 		)
+	case terminal.SessionUncertain:
+		return terminal.PaneFacts{}, &UncertainError{Message: t(
+			"notify.session_uncertain_task_pane", detail,
+		)}
 	}
 	return pane, nil
+}
+
+// matchSession resolves the reported pane session identity against the card
+// reference within the default probe budget.
+func matchSession(session liveness.TaskSession, pane terminal.PaneFacts) (terminal.SessionMatch, string) {
+	ctx, cancel := probe.WithDefaultTimeout(context.Background())
+	defer cancel()
+	return terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
 }
 
 // AgentNotifyProbe classifies an agent-aware target: stale / busy / ready. A
@@ -85,9 +99,15 @@ func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session 
 			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.Agent),
 		)}
 	}
-	if pane.AgentSession != session.Reference {
+	verdict, detail := matchSession(session, pane)
+	switch verdict {
+	case terminal.SessionDiffers:
 		return TargetProbe{State: "stale", Detail: t(
 			"notify.session_mismatch_task_pane", session.Reference, orNA(pane.AgentSession),
+		)}
+	case terminal.SessionUncertain:
+		return TargetProbe{State: "uncertain", Detail: t(
+			"notify.session_uncertain_task_pane", detail,
 		)}
 	}
 	if pane.AgentStatus != "idle" && pane.AgentStatus != "done" {

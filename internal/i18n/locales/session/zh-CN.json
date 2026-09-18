@@ -1,0 +1,22 @@
+{
+  "config.agent_session_file": "session.file 必须声明 format=jsonl_header、合法的 id_field、成对的 type_field/type_value 以及 1 MiB 以内的 max_bytes。",
+  "liveness.herdr_session_lookup_incomplete": "herdr 会话反查无法判定: {{.V0}}",
+  "liveness.session_identity_uncertain": "会话身份无法核实: {{.V0}}",
+  "liveness.session_identity_uncertain_reverse": "反查所得 pane 的会话身份无法核实: {{.V0}}",
+  "notify.session_uncertain_task_pane": "会话身份无法核实: {{.V0}}",
+  "takeover.the_old_pane_session_identity_uncertain": "旧 pane 的会话身份无法核实: {{.V0}}",
+  "takeover.the_pane_session_uncertain_while_waiting_for_exit": "等待退出期间会话身份无法核实: {{.V0}}",
+  "terminal.session_file_agent_error": "无法加载 agent 定义: {{.V0}}",
+  "terminal.session_file_format_unknown": "agent {{.V0}} 未声明 path 身份的会话文件格式",
+  "terminal.session_file_header_invalid": "会话文件 {{.V0}} 的文件头不是 JSON 对象",
+  "terminal.session_file_header_too_long": "会话文件头超过 {{.V0}} 字节",
+  "terminal.session_file_header_type": "会话文件 {{.V0}} 的文件头不是预期的会话记录",
+  "terminal.session_file_id_missing": "会话文件 {{.V0}} 的文件头不含会话 id",
+  "terminal.session_file_missing": "文件不存在",
+  "terminal.session_file_not_absolute": "不是绝对路径",
+  "terminal.session_file_unreadable": "会话文件 {{.V0}} 无法安全读取: {{.V1}}",
+  "terminal.session_identity_kind_unknown": "不支持会话身份 kind {{.V0}}(agent {{.V1}})",
+  "terminal.session_identity_missing": "pane 未上报会话身份值",
+  "terminal.session_lookup_incomplete": "会话反查无法判定: {{.V0}}",
+  "terminal.session_lookup_uncertain_count": "{{.V0}}({{.V1}} 个未决 pane)"
+}

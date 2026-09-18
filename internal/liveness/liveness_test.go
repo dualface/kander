@@ -180,8 +180,23 @@ if [ "$1" = "pane" ] && [ "$2" = "get" ]; then
     printf '%s\n' 'fake pane not found' >&2
     exit 1
   fi
-  printf '{"id":"cli:pane:get","result":{"type":"pane_info","pane":{"pane_id":"%s","tab_id":"%s","agent":"%s","agent_status":"%s","agent_session":{"value":"%s"}}}}\n' \
-    "$3" "${KANBAN_HERDR_TAB_ID:-w1:t9}" "${KANBAN_HERDR_AGENT:-codex}" "${KANBAN_HERDR_STATUS:-idle}" "${KANBAN_HERDR_SESSION:-}"
+  if [ -n "${KANBAN_HERDR_PANE2:-}" ] && [ "$3" = "$KANBAN_HERDR_PANE2" ]; then
+    if [ -n "${KANBAN_HERDR_SESSION_KIND2:-}" ]; then
+      printf '{"id":"cli:pane:get","result":{"type":"pane_info","pane":{"pane_id":"%s","tab_id":"%s","agent":"%s","agent_status":"%s","agent_session":{"kind":"%s","value":"%s"}}}}\n' \
+        "$3" "${KANBAN_HERDR_TAB_ID2:-w1:t9}" "${KANBAN_HERDR_AGENT2:-codex}" "${KANBAN_HERDR_STATUS2:-idle}" "$KANBAN_HERDR_SESSION_KIND2" "${KANBAN_HERDR_SESSION2:-}"
+    else
+      printf '{"id":"cli:pane:get","result":{"type":"pane_info","pane":{"pane_id":"%s","tab_id":"%s","agent":"%s","agent_status":"%s","agent_session":{"value":"%s"}}}}\n' \
+        "$3" "${KANBAN_HERDR_TAB_ID2:-w1:t9}" "${KANBAN_HERDR_AGENT2:-codex}" "${KANBAN_HERDR_STATUS2:-idle}" "${KANBAN_HERDR_SESSION2:-}"
+    fi
+    exit 0
+  fi
+  if [ -n "${KANBAN_HERDR_SESSION_KIND:-}" ]; then
+    printf '{"id":"cli:pane:get","result":{"type":"pane_info","pane":{"pane_id":"%s","tab_id":"%s","agent":"%s","agent_status":"%s","agent_session":{"kind":"%s","value":"%s"}}}}\n' \
+      "$3" "${KANBAN_HERDR_TAB_ID:-w1:t9}" "${KANBAN_HERDR_AGENT:-codex}" "${KANBAN_HERDR_STATUS:-idle}" "$KANBAN_HERDR_SESSION_KIND" "${KANBAN_HERDR_SESSION:-}"
+  else
+    printf '{"id":"cli:pane:get","result":{"type":"pane_info","pane":{"pane_id":"%s","tab_id":"%s","agent":"%s","agent_status":"%s","agent_session":{"value":"%s"}}}}\n' \
+      "$3" "${KANBAN_HERDR_TAB_ID:-w1:t9}" "${KANBAN_HERDR_AGENT:-codex}" "${KANBAN_HERDR_STATUS:-idle}" "${KANBAN_HERDR_SESSION:-}"
+  fi
   exit 0
 fi
 if [ "$1" = "pane" ] && [ "$2" = "list" ]; then

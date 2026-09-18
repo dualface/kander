@@ -81,6 +81,30 @@ Allocation example:
 }
 ```
 
+### Session File (`session.file`)
+
+Optional and orthogonal to `mode`: `session.file` declares the on-disk session file format so a terminal-reported `kind: "path"` session identity resolves to the real session id inside the file. Agents without it keep path identities undecidable — an undecidable candidate is never proof of a match or a mismatch, so liveness reports unknown instead of stopped, and delivery, exit, and close paths refuse rather than act on an unconfirmed pane. Only the pi built-in declares it today; herdr reports pi sessions as `kind: "path"` whose value is the session JSONL path while the card records the UUID passed by `--session-id`.
+
+```json
+"session": {
+  "mode": "generated",
+  "file": {
+    "format": "jsonl_header",
+    "id_field": "id",
+    "type_field": "type",
+    "type_value": "session",
+    "max_bytes": 8192
+  }
+}
+```
+
+- `format`: `jsonl_header` is the only supported layout — the session id lives in the first JSON line of the file.
+- `id_field`: the top-level header field whose string value is the session id, required and non-empty.
+- `type_field` / `type_value`: optional header discriminator, required as a pair; a header whose field does not equal the value is not a session record and stays undecidable.
+- `max_bytes`: bound on the header read, default 8192, at most 1048576; a longer header line is undecidable.
+
+The file is read only through the `internal/fs` safe boundary (regular files only, no symlinks or reparse points, non-blocking open), only the bounded first line is parsed as data, and content is never executed. The whole `session` object keeps its existing overlay semantics: an overlay `session` replaces the embedded object as a whole, so an overlay that wants the file declaration must restate it.
+
 Discovery example (the built-in Devin definition uses exactly this shape; OpenCode uses `args: ["session", "list", "--format", "json"]` and matches `directory` against `{cwd}`; Kimi uses `args: ["session", "list", "--json", "--all"]` and matches `workDir` against `{cwd}`):
 
 ```json

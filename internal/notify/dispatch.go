@@ -252,7 +252,12 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 		return DirectTarget{}, false, err
 	}
 	if backend.Capabilities().AgentIdentity {
-		if found.Gone || session.Reference == "" || found.AgentSession != session.Reference || found.Agent != session.Agent {
+		proven := false
+		if !found.Gone && found.Agent == session.Agent && session.Reference != "" {
+			verdict, _ := terminal.MatchAgentSession(ctx, session.Agent, found.AgentSessionKind, found.AgentSession, session.Reference)
+			proven = verdict == terminal.SessionMatches
+		}
+		if !proven {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "identity")
 		}
 		if found.Container == "" {

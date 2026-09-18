@@ -13,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
+	"github.com/dualface/kander/internal/process"
 )
 
 // DeclarativeBackend is one launcher of a validated terminal definition. It
@@ -423,7 +424,8 @@ func (b *DeclarativeBackend) PaneFacts(ctx context.Context, conn Conn, pane stri
 	}
 	return PaneFacts{
 		Command: result["command"], InMode: result["in_mode"], Dead: result["dead"], SessionMarker: result["session_marker"],
-		Agent: result["agent"], AgentStatus: result["agent_status"], AgentSession: result["agent_session"], Container: result["container"],
+		Agent: result["agent"], AgentStatus: result["agent_status"], AgentSession: result["agent_session"],
+		AgentSessionKind: result["agent_session_kind"], Container: result["container"],
 	}, nil
 }
 
@@ -511,11 +513,82 @@ func (b *DeclarativeBackend) ReverseLookup(ctx context.Context, conn Conn, ident
 		}
 		e.values["process_name"] = name
 	}
+	if op.Rows.Session != nil {
+		return b.sessionRow(e, op.Rows, identity)
+	}
 	result, err := e.uniqueRow(op.Rows)
 	if err != nil {
 		return Address{}, err
 	}
 	return Address{Session: result["session"], Container: result["container"], Pane: result["pane"]}, nil
+}
+
+// sessionRow is the reverse lookup of a definition whose rows declare a
+// session identity: rows passing expect, checks and the match conditions are
+// the same-agent candidates, each decided by resolving its reported session
+// kind and value against the recorded reference. Exactly one resolved match
+// is the answer; undecidable candidates make the lookup incomplete instead
+// of fabricating a unique match or a proven absence.
+func (b *DeclarativeBackend) sessionRow(e *execution, rows *Rows, identity Identity) (Address, error) {
+	texts, err := e.rowTexts(rows)
+	if err != nil {
+		return Address{}, err
+	}
+	var matches []map[string]string
+	var uncertain []string
+	for _, text := range texts {
+		if err := e.ctx.Err(); err != nil {
+			return Address{}, err
+		}
+		fields := parseFields(rows.Fields, process.SourceStdout, text)
+		for name := range rows.Fields {
+			e.values["row."+name] = fields[name]
+		}
+		if !e.holds(rows.Expect) {
+			return Address{}, &probe.Error{Message: e.renderOr(rows.Messages.Invalid, nil, "terminal.rows_invalid")}
+		}
+		for index := range rows.Checks {
+			if check := &rows.Checks[index]; !e.holds(check.When) {
+				return Address{}, &probe.Error{Message: e.render(&check.Message, nil)}
+			}
+		}
+		if !e.holds(rows.Match) {
+			continue
+		}
+		verdict, detail := MatchAgentSession(e.ctx, identity.Agent, fields[rows.Session.Kind], fields[rows.Session.Value], identity.Reference)
+		switch verdict {
+		case SessionMatches:
+			result := map[string]string{}
+			for key, template := range rows.Result {
+				result[key] = e.expand(template, nil)
+			}
+			matches = append(matches, result)
+		case SessionUncertain:
+			uncertain = append(uncertain, detail)
+		}
+	}
+	if err := e.ctx.Err(); err != nil {
+		return Address{}, err
+	}
+	if len(uncertain) > 0 {
+		detail := uncertain[0]
+		if len(uncertain) > 1 {
+			detail = config.Text("terminal.session_lookup_uncertain_count", detail, strconv.Itoa(len(uncertain)))
+		}
+		return Address{}, &IncompleteLookupError{
+			Matches: len(matches), Candidates: len(uncertain),
+			Cause: &probe.Error{Message: e.renderOr(rows.Messages.Incomplete, map[string]string{"detail": detail}, "terminal.session_lookup_incomplete", detail)},
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return Address{Session: matches[0]["session"], Container: matches[0]["container"], Pane: matches[0]["pane"]}, nil
+	case 0:
+		return Address{}, &MatchError{Matches: 0, Cause: &probe.Error{Message: e.renderOr(rows.Messages.None, nil, "terminal.no_match")}}
+	default:
+		count := strconv.Itoa(len(matches))
+		return Address{}, &MatchError{Matches: len(matches), Cause: &probe.Error{Message: e.renderOr(rows.Messages.Ambiguous, map[string]string{"count": count}, "terminal.ambiguous_match", count)}}
+	}
 }
 
 // Focus checks availability, probes the pane, runs the container switch steps

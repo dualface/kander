@@ -1,0 +1,22 @@
+{
+  "config.agent_session_file": "session.file は format=jsonl_header、有効な id_field、対になった type_field/type_value、1 MiB 以内の max_bytes を宣言してください。",
+  "liveness.herdr_session_lookup_incomplete": "herdr セッション逆引きを判定できません: {{.V0}}",
+  "liveness.session_identity_uncertain": "セッション識別を確認できません: {{.V0}}",
+  "liveness.session_identity_uncertain_reverse": "逆引きした pane のセッション識別を確認できません: {{.V0}}",
+  "notify.session_uncertain_task_pane": "セッション識別を確認できません: {{.V0}}",
+  "takeover.the_old_pane_session_identity_uncertain": "旧 pane のセッション識別を確認できません: {{.V0}}",
+  "takeover.the_pane_session_uncertain_while_waiting_for_exit": "終了待機中にセッション識別を確認できません: {{.V0}}",
+  "terminal.session_file_agent_error": "agent 定義を読み込めません: {{.V0}}",
+  "terminal.session_file_format_unknown": "agent {{.V0}} は path 識別のセッションファイル形式を宣言していません",
+  "terminal.session_file_header_invalid": "セッションファイル {{.V0}} のヘッダーが JSON オブジェクトではありません",
+  "terminal.session_file_header_too_long": "セッションファイルヘッダーが {{.V0}} バイトを超えています",
+  "terminal.session_file_header_type": "セッションファイル {{.V0}} のヘッダーが期待されるセッションレコードではありません",
+  "terminal.session_file_id_missing": "セッションファイル {{.V0}} のヘッダーにセッション id がありません",
+  "terminal.session_file_missing": "ファイルが存在しません",
+  "terminal.session_file_not_absolute": "絶対パスではありません",
+  "terminal.session_file_unreadable": "セッションファイル {{.V0}} を安全に読み取れません: {{.V1}}",
+  "terminal.session_identity_kind_unknown": "セッション識別 kind {{.V0}} はサポートされていません(agent {{.V1}})",
+  "terminal.session_identity_missing": "pane がセッション識別値を報告していません",
+  "terminal.session_lookup_incomplete": "セッション逆引きを判定できません: {{.V0}}",
+  "terminal.session_lookup_uncertain_count": "{{.V0}}({{.V1}} 件の未決 pane)"
+}

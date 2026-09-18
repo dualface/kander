@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 const pollInterval = 100 * time.Millisecond
@@ -19,6 +20,13 @@ type BusyError struct{ Message string }
 
 func (e *BusyError) Error() string { return e.Message }
 
+// UncertainError means the target's session identity could not be decided:
+// it is neither a match nor proof of a different session, so it is never
+// evidence for recovering another executor or closing the container.
+type UncertainError struct{ Message string }
+
+func (e *UncertainError) Error() string { return e.Message }
+
 func notifyError(id string, args ...any) *Error {
 	return &Error{Message: config.Text(id, args...)}
 }
@@ -30,4 +38,14 @@ func t(id string, args ...any) string {
 func isBusy(err error) bool {
 	var busy *BusyError
 	return errors.As(err, &busy)
+}
+
+func isUncertain(err error) bool {
+	var uncertain *UncertainError
+	if errors.As(err, &uncertain) {
+		return true
+	}
+	// A reverse lookup that could not decide is equally uncertain evidence.
+	var incomplete *terminal.IncompleteLookupError
+	return errors.As(err, &incomplete)
 }

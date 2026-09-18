@@ -125,6 +125,14 @@ func TestDefinitionValidationRejects(t *testing.T) {
 		{"rows outside reverse lookup", func(r map[string]any) {
 			object(r, "ops", "read_output")["rows"] = object(r, "ops", "reverse_lookup")["rows"]
 		}, []string{"op read_output", "field rows"}},
+		{"session outside reverse lookup", func(r map[string]any) {
+			object(r, "ops", "topology")["rows"] = map[string]any{
+				"from": "topo", "fields": map[string]any{"pane": "raw"}, "match": "prev_ok",
+				"session": map[string]any{"kind": "pane", "value": "pane"}, "result": map[string]any{"pane": "{row.pane}"}}
+		}, []string{"op topology", "field rows.session", "only reverse_lookup"}},
+		{"session names unknown fields", func(r map[string]any) {
+			object(r, "ops", "reverse_lookup", "rows")["session"] = map[string]any{"kind": "nope", "value": "nada"}
+		}, []string{"field rows.session", "must name extracted rows.fields"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

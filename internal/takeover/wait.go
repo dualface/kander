@@ -82,7 +82,21 @@ func agentWaitExit(backend terminal.Backend, program string, address terminal.Ad
 				"takeover.the_pane_changed_to_another_agent_while_waiting_for", session.Agent, pane.Agent,
 			)
 		}
-		if session.Reference == "" || pane.AgentSession != session.Reference {
+		if session.Reference == "" {
+			return false, takeoverError(
+				"takeover.the_pane_session_changed_while_waiting_for_exit_task", orNA(session.Reference), orNA(pane.AgentSession),
+			)
+		}
+		mctx, cancel := probe.WithDefaultTimeout(context.Background())
+		verdict, detail := terminal.MatchAgentSession(mctx, session.Agent, pane.AgentSessionKind, pane.AgentSession, session.Reference)
+		cancel()
+		switch verdict {
+		case terminal.SessionMatches:
+		case terminal.SessionUncertain:
+			return false, takeoverError(
+				"takeover.the_pane_session_uncertain_while_waiting_for_exit", detail,
+			)
+		default:
 			return false, takeoverError(
 				"takeover.the_pane_session_changed_while_waiting_for_exit_task", orNA(session.Reference), orNA(pane.AgentSession),
 			)

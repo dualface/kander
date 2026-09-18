@@ -84,8 +84,13 @@ func reportSession(call terminal.HookCall) error {
 	if facts.Gone {
 		return textError("launch.pane_does_not_exist_2", report.Pane)
 	}
-	if facts.AgentSession == report.Reference {
+	verdict, detail := terminal.MatchAgentSession(ctx, report.Agent, facts.AgentSessionKind, facts.AgentSession, report.Reference)
+	if verdict == terminal.SessionMatches {
 		return nil
 	}
-	return textError("launch.herdr_session_identity_read_back_mismatch_reported_pane", report.Reference, orNA(facts.AgentSession))
+	actual := orNA(facts.AgentSession)
+	if verdict == terminal.SessionUncertain {
+		actual = detail
+	}
+	return textError("launch.herdr_session_identity_read_back_mismatch_reported_pane", report.Reference, actual)
 }

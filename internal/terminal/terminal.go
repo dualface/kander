@@ -100,7 +100,11 @@ type PaneFacts struct {
 	Agent        string
 	AgentStatus  string
 	AgentSession string
-	Container    string
+	// AgentSessionKind is the reported kind of AgentSession (for example
+	// "id" or "path"); empty means the backend reported no kind, which
+	// consumers treat as a direct session id for compatibility.
+	AgentSessionKind string
+	Container        string
 }
 
 // Topology is the container that owns a pane.
@@ -197,6 +201,36 @@ type MatchError struct {
 
 func (e *MatchError) Error() string { return e.Cause.Error() }
 func (e *MatchError) Unwrap() error { return e.Cause }
+
+// IncompleteLookupError means the reverse lookup could not finish its
+// decision: at least one candidate of the same agent had a session identity
+// that could not be resolved, so neither a unique match nor the absence of
+// one is proven. Callers must not treat it as a stopped observation.
+type IncompleteLookupError struct {
+	// Matches counts the decided matches; Candidates counts the candidates
+	// whose session identity stayed unresolved.
+	Matches    int
+	Candidates int
+	Cause      error
+}
+
+func (e *IncompleteLookupError) Error() string { return e.Cause.Error() }
+func (e *IncompleteLookupError) Unwrap() error { return e.Cause }
+
+// SessionMatch is the tri-state verdict of comparing a reported pane session
+// identity (kind plus value) with the recorded card reference.
+type SessionMatch int
+
+const (
+	// SessionMatches proves the reported identity names the same session.
+	SessionMatches SessionMatch = iota
+	// SessionDiffers proves the reported identity is a different session.
+	SessionDiffers
+	// SessionUncertain means the reported identity cannot be decided: it is
+	// missing, malformed, of an unknown kind, or its file could not be
+	// resolved. It is evidence of neither a match nor a different session.
+	SessionUncertain
+)
 
 // FormatAddress renders the complete WINDOW value of an address.
 // A backend without a container records its bare launcher name.
