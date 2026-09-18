@@ -12,10 +12,12 @@ import (
 )
 
 func printDoctor() bool {
-	return printDoctorWithTools(CheckTerminalTools(), false)
+	return printDoctorWithTools(CheckTerminalTools(), false, false)
 }
 
-func printDoctorWithTools(tools TerminalTools, repair bool) bool {
+// interactive gates the prompts inside the PATH-binary cleanup: the TUI doctor
+// report passes false so the captured output stays passive.
+func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bool {
 	healthy := true
 	hint(config.Text("menu.kander_environment_check"))
 	paths, err := currentPaths()
@@ -63,6 +65,9 @@ func printDoctorWithTools(tools TerminalTools, repair bool) bool {
 			healthy = false
 			warning(commandMissingMessage(name, paths))
 		}
+	}
+	if !reportPathKanders(interactive) {
+		healthy = false
 	}
 	reportTerminalTools(tools)
 	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {

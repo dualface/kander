@@ -206,7 +206,43 @@ func isolatedHome(t *testing.T) (home string, env []string) {
 		"KANDER_LANG=en",
 		"KANDER_SKIP_INSTALL=1",
 	}
+	// Pre-stamp the startup-doctor gate so config-backed launches reach the board
+	// directly; a missing config still triggers doctor plus the Enter wait.
+	rulesDir := filepath.Join(home, ".agents", "kander")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(rulesDir, "kander-startup-state.json"),
+		[]byte(`{"version":"dev"}`), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
 	return home, env
+}
+
+// childEnvWithoutKander returns env with every PATH directory holding a kander
+// executable removed, so this machine's own installs cannot leak into doctor's
+// duplicate check inside a spawned child.
+func childEnvWithoutKander(t *testing.T, env []string) []string {
+	t.Helper()
+	var out []string
+	for _, item := range env {
+		pathValue, ok := strings.CutPrefix(item, "PATH=")
+		if !ok {
+			out = append(out, item)
+			continue
+		}
+		var dirs []string
+		for _, dir := range filepath.SplitList(pathValue) {
+			if _, err := os.Stat(filepath.Join(dir, "kander")); err == nil {
+				continue
+			}
+			dirs = append(dirs, dir)
+		}
+		out = append(out, "PATH="+strings.Join(dirs, string(os.PathListSeparator)))
+	}
+	return out
 }
 
 func boardEnv(t *testing.T) (string, []string) {
@@ -261,7 +297,15 @@ func writeCompleteConfigTheme(t *testing.T, env []string, theme string) {
 func TestBareKanderBootstrapsConfigAndOpensInterfaceOptionsOnPTY(t *testing.T) {
 	bin := buildKander(t)
 	_, env := boardEnv(t)
+	// Drop this machine's own kander installs so doctor's duplicate check stays
+	// passive and only the final Enter acknowledgement needs an answer.
+	env = childEnvWithoutKander(t, env)
 	session := startPTY(t, bin, env)
+	// The first-launch doctor report holds until the user acknowledges it.
+	if !session.waitForPlain("Press Enter to open the board", 20*time.Second) {
+		t.Fatalf("doctor acknowledgement prompt missing\npty:\n%s", session.text())
+	}
+	session.send("\n")
 	if !session.waitFor("Task Board", 8*time.Second) {
 		t.Fatalf("board did not render\npty:\n%s", session.text())
 	}

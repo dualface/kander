@@ -326,3 +326,93 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 		t.Fatal("empty board with an existing config should show welcome")
 	}
 }
+
+// startupGateTestEnv builds the common fixture: temp HOME, an existing config,
+// interactive TTY stubs, and stubbed doctor/ack hooks. It returns flags recording
+// whether the startup doctor and the report acknowledgement ran.
+func startupGateTestEnv(t *testing.T) (doctorRan, ackRan *bool) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(install.EnvSkipInstall, "1")
+	_ = os.Unsetenv(board.EnvBoardDir)
+	cfgPath := filepath.Join(home, ".config", "kander", "config.json")
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(config.EnvConfig, cfgPath)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	t.Chdir(t.TempDir())
+
+	origTTY := isInteractiveTerminal
+	isInteractiveTerminal = func() bool { return true }
+	t.Cleanup(func() { isInteractiveTerminal = origTTY })
+	origRun := runBoardTUI
+	runBoardTUI = func(*App) error { return nil }
+	t.Cleanup(func() { runBoardTUI = origRun })
+
+	doctorRan, ackRan = new(bool), new(bool)
+	origDoctor := runStartupDoctor
+	runStartupDoctor = func(bool) { *doctorRan = true }
+	t.Cleanup(func() { runStartupDoctor = origDoctor })
+	origAck := confirmDoctorContinue
+	confirmDoctorContinue = func() { *ackRan = true }
+	t.Cleanup(func() { confirmDoctorContinue = origAck })
+	return doctorRan, ackRan
+}
+
+// A stale version stamp reruns doctor plus the acknowledgement once and re-stamps.
+func TestStartupVersionGateStaleStampRunsDoctor(t *testing.T) {
+	doctorRan, ackRan := startupGateTestEnv(t)
+	paths, err := config.CurrentInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(paths.RulesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(paths.RulesDir, "kander-startup-state.json"),
+		[]byte(`{"version":"0.0.0"}`), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if code := Run(nil); code != 0 {
+		t.Fatalf("Run exit=%d", code)
+	}
+	if !*doctorRan || !*ackRan {
+		t.Fatalf("stale stamp must run doctor and wait for ack: doctor=%v ack=%v", *doctorRan, *ackRan)
+	}
+	if got := install.StartupVersion(paths); got != "dev" {
+		t.Fatalf("stamp = %q, want dev", got)
+	}
+}
+
+// A current version stamp skips doctor and the acknowledgement entirely.
+func TestStartupVersionGateCurrentStampSkipsDoctor(t *testing.T) {
+	doctorRan, ackRan := startupGateTestEnv(t)
+	paths, err := config.CurrentInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := install.RecordStartupVersion(paths); err != nil {
+		t.Fatal(err)
+	}
+	if code := Run(nil); code != 0 {
+		t.Fatalf("Run exit=%d", code)
+	}
+	if *doctorRan || *ackRan {
+		t.Fatalf("current stamp must skip doctor and ack: doctor=%v ack=%v", *doctorRan, *ackRan)
+	}
+}

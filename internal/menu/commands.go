@@ -52,7 +52,7 @@ func Doctor(args []string) int {
 		fmt.Fprintln(os.Stderr, "kander:", config.Text("board.unknown_option", arg))
 		return 2
 	}
-	if printDoctorWithTools(offerHerdrInstall(CheckTerminalTools()), true) {
+	if printDoctorWithTools(offerHerdrInstall(CheckTerminalTools()), true, stdinStderrTTY()) {
 		return 0
 	}
 	return 1

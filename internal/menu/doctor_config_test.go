@@ -275,7 +275,16 @@ func TestProjectConfigAndDoctor(t *testing.T) {
 	h.configPath = globalCfg
 	h.writeConfig(defaultPayload(map[string]any{"kanban_agent": "grok"}))
 	projectBin := filepath.Join(binDir, "kander")
-	env := envWith(h.home, "", h.fakeBin+string(os.PathListSeparator)+"/usr/bin:/bin:"+os.Getenv("PATH"))
+	// The child PATH keeps real directories except those holding a kander binary,
+	// so this machine's own installs cannot leak into the duplicate check.
+	childPath := []string{h.fakeBin, "/usr/bin", "/bin"}
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if _, err := os.Stat(filepath.Join(dir, "kander")); err == nil {
+			continue
+		}
+		childPath = append(childPath, dir)
+	}
+	env := envWith(h.home, "", strings.Join(childPath, string(os.PathListSeparator)))
 	filtered := env[:0]
 	for _, item := range env {
 		if !strings.HasPrefix(item, "KANDER_CONFIG=") {

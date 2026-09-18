@@ -5,7 +5,7 @@ package menu
 func DoctorReport(tools TerminalTools) ([]ReportLine, bool) {
 	healthy := false
 	lines := CaptureReport(func() {
-		healthy = printDoctorWithTools(tools, true)
+		healthy = printDoctorWithTools(tools, true, false)
 	})
 	return lines, healthy
 }

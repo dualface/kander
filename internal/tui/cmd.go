@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/internal/version"
 )
 
 func init() {
@@ -56,6 +59,17 @@ func requireTerminal() error {
 
 var checkStartupCopy = install.CheckStartupCopy
 
+// runStartupDoctor runs doctor before the board opens; tests stub it to skip
+// the real probe. confirmDoctorContinue waits for the user to acknowledge the
+// doctor report; tests stub it so Run never blocks on stdin.
+var runStartupDoctor = firstLaunchDoctor
+var confirmDoctorContinue = waitDoctorAck
+
+var (
+	doctorAckIn  io.Reader = os.Stdin
+	doctorAckOut io.Writer = os.Stderr
+)
+
 // Run is the default TUI entry point used when no subcommand is given.
 func Run(_ []string) int {
 	postInstall := os.Getenv(install.EnvPostInstall) != ""
@@ -75,9 +89,20 @@ func Run(_ []string) int {
 			return code
 		}
 	}
-	if !configExists {
-		// The first launch probes the environment with doctor and produces a usable config; a failed health check does not stop the user from fixing the options.
-		firstLaunchDoctor(postInstall)
+	installPaths, installPathsErr := config.CurrentInstallPaths()
+	versionStale := installPathsErr == nil && install.StartupVersion(installPaths) != version.String()
+	if !configExists || versionStale {
+		// The first launch probes the environment with doctor and produces a usable
+		// config; a failed health check does not stop the user from fixing the
+		// options. A binary version this scope has not seen reruns doctor once and
+		// holds the report until the user acknowledges it, then stamps the version.
+		runStartupDoctor(postInstall)
+		confirmDoctorContinue()
+		if installPathsErr == nil {
+			if err := install.RecordStartupVersion(installPaths); err != nil {
+				fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+			}
+		}
 	}
 	config.BindEffectiveLanguage()
 	ctx := tuiPageContext()
@@ -227,4 +252,12 @@ func firstLaunchDoctor(postInstall bool) {
 		defer config.ApplyLanguageArgument(nil)
 	}
 	_ = menu.Doctor(nil)
+}
+
+// waitDoctorAck keeps the startup doctor report on screen until the user presses
+// Enter, so first-launch health output stays readable before the alt-screen
+// takes over. EOF and read errors continue without blocking.
+func waitDoctorAck() {
+	fmt.Fprint(doctorAckOut, config.Text("tui.doctor_report_above_press_enter_to_open_the_board"))
+	_, _ = bufio.NewReader(doctorAckIn).ReadString('\n')
 }
