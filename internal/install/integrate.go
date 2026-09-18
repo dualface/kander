@@ -169,7 +169,9 @@ func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
 }
 
 // EnsureRulesIntegration makes the agent rules file reference the Kander entry: it creates the file
-// when missing, appends the reference when absent, and leaves every already-integrated file untouched.
+// when missing, appends the reference when absent, rewrites references to the previous rules
+// location, and removes invalid or duplicate load commands; a file whose references are already
+// clean is left untouched.
 // The write gate is strictReferencePresent, not RulesIntegration: appending must never repeat, so any
 // literal mention of the entry blocks it, even one RulesIntegration would report as inactive.
 func EnsureRulesIntegration(agent string, paths config.InstallPaths) (IntegrationOutcome, error) {

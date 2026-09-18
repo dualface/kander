@@ -251,6 +251,7 @@
   "install.legacy_removed": "已删除旧入口.",
   "install.legacy_link_replaced": "已把指向旧规则入口的链接替换为引用文件: {{.V0}}",
   "install.rules_reference_updated": "已把 Kander 规则引用更新到当前规则位置: {{.V0}}",
+  "install.rules_reference_cleaned": "已从 {{.V0}} 删除 {{.V1}} 条无效或重复的 Kander 规则引用",
   "install.legacy_is_directory": "错误: 旧版安装目标是目录: {{.V0}}",
   "install.new_entry_not_executable": "错误: 新入口不可执行, 已保留旧入口: {{.V0}}",
   "install.cannot_resolve_executable": "错误: 无法解析当前 kander 可执行文件",

@@ -131,6 +131,8 @@ func printResult(result Result) {
 		switch item.Status {
 		case IntegrationRewritten:
 			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_updated", target))
+		case IntegrationCleaned:
+			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_cleaned", target, item.Removed))
 		case IntegrationCreated, IntegrationUpdated:
 			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_added", target))
 		}

@@ -251,6 +251,7 @@
   "install.legacy_removed": "Legacy entries were removed.",
   "install.legacy_link_replaced": "replaced the link to the previous rules entry with a reference file: {{.V0}}",
   "install.rules_reference_updated": "updated the Kander rules reference to the current rules location: {{.V0}}",
+  "install.rules_reference_cleaned": "cleaned {{.V1}} invalid or duplicate Kander rules references: {{.V0}}",
   "install.legacy_is_directory": "error: legacy installation target is a directory: {{.V0}}",
   "install.new_entry_not_executable": "error: new entry is not executable; legacy entries were kept: {{.V0}}",
   "install.cannot_resolve_executable": "error: cannot resolve the current kander executable",
