@@ -137,6 +137,25 @@ func printResult(result Result) {
 			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_added", target))
 		}
 	}
+	for _, item := range result.Extensions {
+		target := item.Target
+		if target == "" {
+			target = item.Agent
+		}
+		label := config.AgentDisplayName(item.Agent)
+		if item.Err != nil {
+			fmt.Fprintln(os.Stderr, config.Text("install.agent_extension_failed", label, target, item.Err.Error()))
+			continue
+		}
+		switch item.Status {
+		case ExtensionWritten:
+			fmt.Fprintln(os.Stderr, config.Text("install.agent_extension_written", label, target))
+		case ExtensionUpdated:
+			fmt.Fprintln(os.Stderr, config.Text("install.agent_extension_updated", label, target))
+		case ExtensionModified:
+			fmt.Fprintln(os.Stderr, config.Text("install.agent_extension_modified", label, target))
+		}
+	}
 }
 
 // RunInteractive initializes the chosen scope and hands off to its selected entry.

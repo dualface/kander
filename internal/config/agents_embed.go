@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-//go:embed agents/*.json
+//go:embed agents/*.json agents/extensions/*.ts
 var embeddedAgentFS embed.FS
 
 const (
@@ -28,6 +28,17 @@ type AgentRulesSpec struct {
 	Global      string
 	Project     string
 	Integration string
+}
+
+// AgentExtensionSpec is the optional rules-extension declaration of one embedded agent.
+// Only embedded definitions may declare it; a user agents.<name> overlay cannot add,
+// change, or remove it. Source names a file embedded under agents/extensions/;
+// Global and Project are the install targets relative to the home directory and the
+// Git main worktree.
+type AgentExtensionSpec struct {
+	Source  string
+	Global  string
+	Project string
 }
 
 type PromptDelivery struct {
@@ -51,6 +62,12 @@ type agentRulesTarget struct {
 	Project string `json:"project"`
 }
 
+type agentRulesExtension struct {
+	Source  string `json:"source"`
+	Global  string `json:"global"`
+	Project string `json:"project"`
+}
+
 type embeddedAgent struct {
 	SchemaVersion    int                    `json:"schema_version"`
 	Path             string                 `json:"path"`
@@ -64,12 +81,14 @@ type embeddedAgent struct {
 	Review           AgentReview            `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
 	RulesIntegration string                 `json:"rules_integration"`
-	LargeModel       string                 `json:"large_model"`
-	SmallModel       string                 `json:"small_model"`
-	LargeEffort      string                 `json:"large_effort"`
-	SmallEffort      string                 `json:"small_effort"`
-	Model            string                 `json:"model"`
-	Effort           string                 `json:"effort"`
+	RulesExtension   *agentRulesExtension   `json:"rules_extension"`
+	extensionData    []byte
+	LargeModel       string `json:"large_model"`
+	SmallModel       string `json:"small_model"`
+	LargeEffort      string `json:"large_effort"`
+	SmallEffort      string `json:"small_effort"`
+	Model            string `json:"model"`
+	Effort           string `json:"effort"`
 }
 
 var embeddedAgents = map[string]embeddedAgent{}
@@ -125,9 +144,29 @@ func loadEmbeddedAgentsFrom(fsys fs.FS) ([]string, map[string]embeddedAgent, err
 		if err != nil {
 			return nil, nil, err
 		}
+		if agent.RulesExtension != nil {
+			payload, err := readExtensionSource(fsys, agent.RulesExtension.Source)
+			if err != nil {
+				return nil, nil, err
+			}
+			agent.extensionData = payload
+		}
 		out[name] = agent
 	}
 	return append([]string{}, names...), out, nil
+}
+
+// readExtensionSource loads the embedded extension payload named by an agent's
+// rules_extension.source, using the same rooted-FS fallback as the agent files.
+func readExtensionSource(fsys fs.FS, source string) ([]byte, error) {
+	data, err := fs.ReadFile(fsys, path.Join("agents", "extensions", source))
+	if err != nil {
+		data, err = fs.ReadFile(fsys, path.Join("extensions", source))
+		if err != nil {
+			return nil, embedAgentError("extensions/"+source, err.Error())
+		}
+	}
+	return data, nil
 }
 
 func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error) {
@@ -179,6 +218,17 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 	}
 	if !contains([]string{rulesIntegrationClaude, rulesIntegrationMarkdown}, agent.RulesIntegration) {
 		return embeddedAgent{}, embedAgentError(fileName, "rules_integration")
+	}
+	if ext := agent.RulesExtension; ext != nil {
+		if !validAgentText(ext.Source) || strings.ContainsAny(ext.Source, `/\\`) {
+			return embeddedAgent{}, embedAgentError(fileName, "rules_extension.source")
+		}
+		if !validAgentText(ext.Global) {
+			return embeddedAgent{}, embedAgentError(fileName, "rules_extension.global")
+		}
+		if !validAgentText(ext.Project) {
+			return embeddedAgent{}, embedAgentError(fileName, "rules_extension.project")
+		}
 	}
 	if strings.ContainsAny(agent.LargeModel+agent.SmallModel+agent.LargeEffort+agent.SmallEffort+agent.Model+agent.Effort, "\n\r\x00") {
 		return embeddedAgent{}, embedAgentError(fileName, "model")
@@ -276,6 +326,21 @@ func RulesSpec(name string) (AgentRulesSpec, bool) {
 		Project:     emb.RulesTarget.Project,
 		Integration: emb.RulesIntegration,
 	}, true
+}
+
+// AgentExtension returns the embedded rules-extension spec and payload of one
+// agent. The second return value is false when the agent is unknown or declares
+// no rules_extension; user overlays never change the answer.
+func AgentExtension(name string) (AgentExtensionSpec, []byte, bool) {
+	emb, ok := embeddedByName(name)
+	if !ok || emb.RulesExtension == nil {
+		return AgentExtensionSpec{}, nil, false
+	}
+	return AgentExtensionSpec{
+		Source:  emb.RulesExtension.Source,
+		Global:  emb.RulesExtension.Global,
+		Project: emb.RulesExtension.Project,
+	}, emb.extensionData, true
 }
 
 func (e embeddedAgent) kanbanFields() map[string]string {

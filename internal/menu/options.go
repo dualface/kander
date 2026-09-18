@@ -690,6 +690,8 @@ func (s *Session) finish() error {
 			))
 		}
 	}
+	// The rules-extension files converge the same way the references do.
+	reportAgentExtensions(paths, true)
 	note(config.Text(
 		"menu.note_kanban_start_uses_the_agent_s_no_confirmation",
 	))

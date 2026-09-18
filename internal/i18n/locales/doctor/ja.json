@@ -15,5 +15,12 @@
   "menu.no_usable_agent_replacement_for_keeping": "{{.V0}} の {{.V1}} を置き換えられる利用可能な Agent がありません。設定値を保持します。",
   "menu.running_kander_is_older_than_path_binary_doctor_stopped": "実行中の kander {{.V0}} は {{.V1}}（{{.V2}}）より古いため、doctor はチェックや修復を行わず停止しました。古いバイナリで修復するとディスク上の新しいルールと設定がダウングレードされます。新しい kander で doctor を実行してください。",
   "menu.upgrade_kander_via_brew": "brew で kander をアップグレード",
-  "tui.doctor_report_above_press_enter_to_open_the_board": "上の結果を確認し、Enter を押してボードを開きます。"
+  "tui.doctor_report_above_press_enter_to_open_the_board": "上の結果を確認し、Enter を押してボードを開きます。",
+  "menu.agent_extension_installed": "{{.V0}} ルール拡張はインストール済みです: {{.V1}}",
+  "menu.agent_extension_missing": "{{.V0}} ルール拡張がありません: {{.V1}}",
+  "menu.agent_extension_outdated": "{{.V0}} ルール拡張は古いバージョンです: {{.V1}}",
+  "menu.agent_extension_modified": "{{.V0}} ルール拡張はローカルで変更されているため上書きしませんでした: {{.V1}}",
+  "menu.agent_extension_written": "{{.V0}}: ルール拡張を {{.V1}} に書き込みました",
+  "menu.agent_extension_updated": "{{.V0}}: {{.V1}} のルール拡張を更新しました",
+  "menu.agent_extension_error": "{{.V0}} ルール拡張を確認できませんでした: {{.V1}}"
 }

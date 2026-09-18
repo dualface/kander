@@ -64,6 +64,11 @@
     "project": "AGENTS.md"
   },
   "rules_integration": "markdown-reference",
+  "rules_extension": {
+    "source": "kander-rules.ts",
+    "global": ".pi/agent/extensions/kander-rules.ts",
+    "project": ".pi/extensions/kander-rules.ts"
+  },
   "large_model": "",
   "small_model": "",
   "large_effort": "high",

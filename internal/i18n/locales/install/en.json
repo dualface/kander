@@ -9,5 +9,9 @@
   "install.copy_yn": "[y/N]: ",
   "install.path_adjust": "The copied executable is not the first kander on PATH. Add {{.V0}} to PATH before other kander directories, then reopen your terminal.",
   "install.copy_failed": "Failed to install or start the selected executable: {{.V0}}",
-  "install.existing_entry": "Using the existing executable: {{.V0}}"
+  "install.existing_entry": "Using the existing executable: {{.V0}}",
+  "install.agent_extension_written": "wrote the {{.V0}} rules extension: {{.V1}}",
+  "install.agent_extension_updated": "updated the {{.V0}} rules extension: {{.V1}}",
+  "install.agent_extension_modified": "{{.V0}} rules extension was edited locally and was not overwritten: {{.V1}}",
+  "install.agent_extension_failed": "failed to write the {{.V0}} rules extension {{.V1}}: {{.V2}}"
 }

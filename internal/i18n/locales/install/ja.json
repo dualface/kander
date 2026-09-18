@@ -9,5 +9,9 @@
   "install.copy_yn": "[y/N]: ",
   "install.path_adjust": "コピー先が PATH 上の最初の kander になっていません。{{.V0}} をほかの kander ディレクトリより前に PATH へ追加し、ターミナルを開き直してください。",
   "install.copy_failed": "選択したプログラムのインストールまたは起動に失敗しました：{{.V0}}",
-  "install.existing_entry": "既存の実行ファイルを使用します：{{.V0}}"
+  "install.existing_entry": "既存の実行ファイルを使用します：{{.V0}}",
+  "install.agent_extension_written": "{{.V0}} ルール拡張を書き込みました: {{.V1}}",
+  "install.agent_extension_updated": "{{.V0}} ルール拡張を更新しました: {{.V1}}",
+  "install.agent_extension_modified": "{{.V0}} ルール拡張はローカルで変更されているため上書きしませんでした: {{.V1}}",
+  "install.agent_extension_failed": "{{.V0}} ルール拡張 {{.V1}} の書き込みに失敗しました: {{.V2}}"
 }

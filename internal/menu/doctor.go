@@ -205,6 +205,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
 		if loaded.WelcomeComplete {
 			healthy = reportRulesIntegration(loaded, paths, repair) && healthy
+			healthy = reportAgentExtensions(paths, repair) && healthy
 		}
 	}
 	return healthy
@@ -266,6 +267,58 @@ func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair 
 				"menu.found_invalid_or_duplicate_kander_rules_references",
 				labels[selected], issues.Invalid, issues.Duplicates, target,
 			))
+		}
+	}
+	return healthy
+}
+
+// reportAgentExtensions reports the state of every covered agent rules extension,
+// reusing install.ExtensionAgents so doctor cannot drift from the install-time
+// coverage; in repair mode it writes missing and outdated copies instead of only
+// warning, while a locally modified file is reported and left untouched.
+func reportAgentExtensions(paths config.InstallPaths, repair bool) bool {
+	healthy := true
+	for _, agent := range install.ExtensionAgents(paths) {
+		label := config.AgentDisplayName(agent)
+		if repair {
+			outcome, ensureErr := install.EnsureExtension(agent, paths)
+			if ensureErr != nil {
+				healthy = false
+				warning(config.Text("menu.agent_extension_error", label, ensureErr.Error()))
+				continue
+			}
+			switch outcome.Status {
+			case install.ExtensionInstalled:
+				success(config.Text("menu.agent_extension_installed", label, outcome.Target))
+			case install.ExtensionWritten:
+				success(config.Text("menu.agent_extension_written", label, outcome.Target))
+			case install.ExtensionUpdated:
+				success(config.Text("menu.agent_extension_updated", label, outcome.Target))
+			case install.ExtensionModified:
+				hint(config.Text("menu.agent_extension_modified", label, outcome.Target))
+			default:
+				healthy = false
+				warning(config.Text("menu.agent_extension_missing", label, outcome.Target))
+			}
+			continue
+		}
+		outcome, inspectErr := install.InspectExtension(agent, paths)
+		if inspectErr != nil {
+			healthy = false
+			warning(config.Text("menu.agent_extension_error", label, inspectErr.Error()))
+			continue
+		}
+		switch outcome.Status {
+		case install.ExtensionInstalled:
+			success(config.Text("menu.agent_extension_installed", label, outcome.Target))
+		case install.ExtensionMissing:
+			healthy = false
+			warning(config.Text("menu.agent_extension_missing", label, outcome.Target))
+		case install.ExtensionOutdated:
+			healthy = false
+			warning(config.Text("menu.agent_extension_outdated", label, outcome.Target))
+		default:
+			hint(config.Text("menu.agent_extension_modified", label, outcome.Target))
 		}
 	}
 	return healthy

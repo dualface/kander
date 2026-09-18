@@ -36,6 +36,8 @@ type Result struct {
 	// were replaced by reference files during integration.
 	LegacyLinksRemoved []string
 	Integrations       []AgentIntegration
+	// Extensions records ensuring each covered agent's rules-extension file.
+	Extensions []AgentExtension
 }
 
 // AgentIntegration records ensuring one agent rules file references the Kander entry.
@@ -117,6 +119,7 @@ func Perform(req Request) (Result, error) {
 	result.LegacyRules = migrateLegacyRules(paths)
 	result.LegacyLinksRemoved = removeLegacyEntrySymlinks(paths)
 	result.Integrations = integrateAgentRules(paths)
+	result.Extensions = integrateAgentExtensions(paths)
 	if req.DeleteLegacy && len(result.Legacy) > 0 {
 		if !destIsExecutable(result.RunBinary) {
 			return result, fmt.Errorf("%s", config.Text("install.new_entry_not_executable", result.RunBinary))

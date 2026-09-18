@@ -155,6 +155,20 @@ A legacy flat `{role: mode}` object still loads and applies to both scales; savi
 
 `exit_command` is a single-line string without control characters and may be empty. Built-in Codex/Claude/Devin/OpenCode/Kimi use `/exit`; Grok/Cursor/Pi use `/quit`. A custom name with a dialect inherits that field. A purely templated program that declares `exit_command` can be dismissed and cleaned up the same way, still requiring the identity and single-pane container checks to pass. Without `exit_command`, `dismiss` refuses explicitly, names the missing field, and keeps the container.
 
+## Embedded-Only Fields
+
+The embedded definitions also carry fields a user `agents.<name>` overlay cannot declare — the validator rejects them as unknown keys, so an overlay can neither add, change, nor remove them, and omitting them changes nothing. `rules_target` and `rules_integration` name the agent rules file each install scope integrates and how the reference is written; `rules_extension` names an optional Kander-shipped agent extension:
+
+```json
+"rules_extension": {
+  "source": "kander-rules.ts",
+  "global": ".pi/agent/extensions/kander-rules.ts",
+  "project": ".pi/extensions/kander-rules.ts"
+}
+```
+
+`source` is a file embedded under `internal/config/agents/extensions/`; `global` is the install target relative to the user's home, `project` the target relative to the Git main worktree. Only the embedded `pi.json` declares it today. Install and `kander doctor --repair` write the file for the covered scope, refuse any symlink or reparse point on the target chain, classify an existing file as installed, missing, outdated, or locally modified by its digest, and never overwrite a modified copy. See [Installation and permission boundaries](install-and-permissions.md) for the write and reporting rules.
+
 ## Hook Catalog
 
 These hooks live in one Go registry (`internal/config/session_hooks.go`). A definition may only reference a registered name.

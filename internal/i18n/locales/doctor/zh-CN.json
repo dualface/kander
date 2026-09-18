@@ -15,5 +15,12 @@
   "menu.no_usable_agent_replacement_for_keeping": "没有可用 Agent 替代 {{.V0}} 配置的 {{.V1}}；保留原值。",
   "menu.running_kander_is_older_than_path_binary_doctor_stopped": "正在运行的 kander {{.V0}} 旧于 {{.V1}}（{{.V2}}）；doctor 已停止，未执行任何检查或修复，因为用旧版本修复会把磁盘上更新的规则和配置降级。请用更新的 kander 运行 doctor。",
   "menu.upgrade_kander_via_brew": "通过 brew 升级 kander",
-  "tui.doctor_report_above_press_enter_to_open_the_board": "上方为检查结果，按 Enter 打开看板。"
+  "tui.doctor_report_above_press_enter_to_open_the_board": "上方为检查结果，按 Enter 打开看板。",
+  "menu.agent_extension_installed": "{{.V0}} 规则扩展已安装: {{.V1}}",
+  "menu.agent_extension_missing": "{{.V0}} 规则扩展缺失: {{.V1}}",
+  "menu.agent_extension_outdated": "{{.V0}} 规则扩展版本过旧: {{.V1}}",
+  "menu.agent_extension_modified": "{{.V0}} 规则扩展被本地修改过，未覆盖: {{.V1}}",
+  "menu.agent_extension_written": "{{.V0}}: 已写入规则扩展到 {{.V1}}",
+  "menu.agent_extension_updated": "{{.V0}}: 已更新 {{.V1}} 的规则扩展",
+  "menu.agent_extension_error": "无法检查 {{.V0}} 规则扩展: {{.V1}}"
 }

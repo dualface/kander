@@ -15,5 +15,12 @@
   "menu.no_usable_agent_replacement_for_keeping": "No usable Agent can replace {{.V1}} for {{.V0}}; keeping the configured value.",
   "menu.running_kander_is_older_than_path_binary_doctor_stopped": "The running kander {{.V0}} is older than {{.V1}} ({{.V2}}); doctor stopped before any check or repair, because repairing with an older binary would downgrade the newer on-disk rules and config. Run doctor with the newer kander.",
   "menu.upgrade_kander_via_brew": "Upgrade kander via brew",
-  "tui.doctor_report_above_press_enter_to_open_the_board": "Doctor report above. Press Enter to open the board."
+  "tui.doctor_report_above_press_enter_to_open_the_board": "Doctor report above. Press Enter to open the board.",
+  "menu.agent_extension_installed": "{{.V0}} rules extension is installed: {{.V1}}",
+  "menu.agent_extension_missing": "{{.V0}} rules extension is missing: {{.V1}}",
+  "menu.agent_extension_outdated": "{{.V0}} rules extension is out of date: {{.V1}}",
+  "menu.agent_extension_modified": "{{.V0}} rules extension was edited locally and was not overwritten: {{.V1}}",
+  "menu.agent_extension_written": "{{.V0}}: wrote the rules extension to {{.V1}}",
+  "menu.agent_extension_updated": "{{.V0}}: updated the rules extension at {{.V1}}",
+  "menu.agent_extension_error": "{{.V0}} rules extension could not be checked: {{.V1}}"
 }

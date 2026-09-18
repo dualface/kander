@@ -9,5 +9,9 @@
   "install.copy_yn": "[y/N]: ",
   "install.path_adjust": "复制后的程序尚未成为 PATH 中首个 kander。请将 {{.V0}} 加入 PATH 并置于其他 kander 目录之前，然后重新打开终端。",
   "install.copy_failed": "安装或启动所选程序失败：{{.V0}}",
-  "install.existing_entry": "继续使用现有程序：{{.V0}}"
+  "install.existing_entry": "继续使用现有程序：{{.V0}}",
+  "install.agent_extension_written": "已写入 {{.V0}} 规则扩展: {{.V1}}",
+  "install.agent_extension_updated": "已更新 {{.V0}} 规则扩展: {{.V1}}",
+  "install.agent_extension_modified": "{{.V0}} 规则扩展被本地修改过，未覆盖: {{.V1}}",
+  "install.agent_extension_failed": "写入 {{.V0}} 规则扩展 {{.V1}} 失败: {{.V2}}"
 }
