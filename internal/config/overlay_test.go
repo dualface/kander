@@ -483,3 +483,42 @@ func TestFormatConfigLinesIncludesOverlayPath(t *testing.T) {
 		t.Fatalf("missing overlay path:\n%s", joined)
 	}
 }
+
+func TestLoadDeletesEmptyOverlay(t *testing.T) {
+	setupHome(t)
+	root := t.TempDir()
+	main := initGitRepo(t, filepath.Join(root, "repo"))
+	t.Chdir(main)
+	writeScopeFile(t, filepath.Join(root, "config.json"))
+	overlay := filepath.Join(main, OverlayFilename)
+
+	writeJSONFile(t, overlay, map[string]any{})
+	if _, err := Load(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(overlay); !os.IsNotExist(err) {
+		t.Fatal("empty overlay object must be deleted on load")
+	}
+
+	if err := os.WriteFile(overlay, []byte(" \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(overlay); !os.IsNotExist(err) {
+		t.Fatal("whitespace-only overlay must be deleted on load")
+	}
+
+	writeJSONFile(t, overlay, map[string]any{"language": "ja"})
+	cfg, err := Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Language != "ja" {
+		t.Fatalf("non-empty overlay override lost: %s", cfg.Language)
+	}
+	if _, err := os.Stat(overlay); err != nil {
+		t.Fatal("non-empty overlay must be kept")
+	}
+}

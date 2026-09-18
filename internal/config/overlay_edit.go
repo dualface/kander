@@ -194,13 +194,9 @@ func ReadOverlayFile(path string) (map[string]any, error) {
 	if data == nil {
 		return map[string]any{}, nil
 	}
-	raw, err := decodeJSON(data)
+	obj, err := decodeOverlayObject(path, data)
 	if err != nil {
-		return nil, configErrorfWrap(err, "config.overlay_invalid_json", path, err.Error())
-	}
-	obj, ok := raw.(map[string]any)
-	if !ok {
-		return nil, configErrorf("config.overlay_root_must_be_a_json_object", path)
+		return nil, err
 	}
 	if err := validateOverlayKeys(path, obj); err != nil {
 		return nil, err
@@ -305,18 +301,44 @@ func readOverlayMapAt(path string) (map[string]any, bool, error) {
 	if data == nil {
 		return map[string]any{}, false, nil
 	}
-	raw, err := decodeJSON(data)
+	obj, err := decodeOverlayObject(path, data)
 	if err != nil {
-		return nil, true, configErrorfWrap(err, "config.overlay_invalid_json", path, err.Error())
-	}
-	obj, ok := raw.(map[string]any)
-	if !ok {
-		return nil, true, configErrorf("config.overlay_root_must_be_a_json_object", path)
+		return nil, true, err
 	}
 	if err := validateOverlayKeys(path, obj); err != nil {
 		return nil, true, err
 	}
 	return cloneRawObjectDeep(obj), true, nil
+}
+
+// removeEmptyOverlay deletes an overlay that carries no overrides. The advisory
+// lock and second read keep a concurrent save from losing freshly written keys.
+func removeEmptyOverlay(path string) error {
+	abs, err := lexicalAbsolute(path)
+	if err != nil {
+		return err
+	}
+	lockPath, err := overlayAdvisoryLock(abs)
+	if err != nil {
+		return err
+	}
+	return withConfigLockFile(abs, lockPath, func() error {
+		data, readErr := readConfigBytes(abs)
+		if readErr != nil {
+			return configErrorfWrap(readErr, "config.failed_to_read_config", abs, readErr.Error())
+		}
+		if data == nil {
+			return nil
+		}
+		obj, decodeErr := decodeOverlayObject(abs, data)
+		if decodeErr != nil {
+			return decodeErr
+		}
+		if len(obj) > 0 {
+			return nil
+		}
+		return removeOverlayFile(abs)
+	})
 }
 
 func removeOverlayFile(path string) error {

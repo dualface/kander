@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -241,18 +242,39 @@ func readOverlay(cwd string) (string, map[string]any, error) {
 	if data == nil {
 		return "", nil, nil
 	}
-	raw, err := decodeJSON(data)
+	obj, err := decodeOverlayObject(path, data)
 	if err != nil {
-		return "", nil, configErrorfWrap(err, "config.overlay_invalid_json", path, err.Error())
+		return "", nil, err
 	}
-	obj, ok := raw.(map[string]any)
-	if !ok {
-		return "", nil, configErrorf("config.overlay_root_must_be_a_json_object", path)
+	if len(obj) == 0 {
+		// An overlay without overrides is removed so an emptied project config
+		// does not leave a dead .kander-config.json behind.
+		if err := removeEmptyOverlay(path); err != nil {
+			return "", nil, err
+		}
+		return "", nil, nil
 	}
 	if err := validateOverlayKeys(path, obj); err != nil {
 		return "", nil, err
 	}
 	return path, obj, nil
+}
+
+// decodeOverlayObject decodes one overlay document. Whitespace-only content and
+// an empty object both decode to an empty map; a non-object document fails.
+func decodeOverlayObject(path string, data []byte) (map[string]any, error) {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return map[string]any{}, nil
+	}
+	raw, err := decodeJSON(data)
+	if err != nil {
+		return nil, configErrorfWrap(err, "config.overlay_invalid_json", path, err.Error())
+	}
+	obj, ok := raw.(map[string]any)
+	if !ok {
+		return nil, configErrorf("config.overlay_root_must_be_a_json_object", path)
+	}
+	return obj, nil
 }
 
 func mergeOverlayRaw(scope map[string]any, overlay map[string]any) (map[string]any, error) {
