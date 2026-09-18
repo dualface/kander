@@ -32,7 +32,7 @@ func TestDoctorSyncPreservesPendingSettings(t *testing.T) {
 }
 
 func TestDoctorInstallDecision(t *testing.T) {
-	for _, action := range []string{"default", "escape", "confirm", "available"} {
+	for _, action := range []string{"default", "escape", "confirm", "available", "offpath"} {
 		t.Run(action, func(t *testing.T) {
 			// An empty PATH guarantees the confirmation flow only ever meets a missing installer and never performs a real download.
 			home := t.TempDir()
@@ -42,13 +42,17 @@ func TestDoctorInstallDecision(t *testing.T) {
 			t.Setenv("PATH", t.TempDir())
 			app, panel := openPanel(t)
 			tools := menu.TerminalTools{}
-			if action == "available" {
+			switch action {
+			case "available":
 				tools.Tmux.Path = "tmux"
+			case "offpath":
+				// Installed by the official installer but not yet on PATH: no install prompt.
+				tools.Herdr.OffPath = filepath.Join(home, ".local", "bin", "herdr")
 			}
 			pumpPanel(panel, app.applyWork(terminalToolsResult{tools: tools}))
-			if action == "available" {
+			if action == "available" || action == "offpath" {
 				if app.pendingWork == nil || app.pendingShell != nil {
-					t.Fatal("available tools should proceed without installation")
+					t.Fatal("usable tools should proceed without installation")
 				}
 				return
 			}

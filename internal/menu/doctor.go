@@ -380,12 +380,18 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 	case "auto":
 		if !tools.Tmux.Available() && !tools.Herdr.Available() {
 			healthy = false
-			// Native Windows never probes tmux and auto can only land on herdr, so the hint must not mention tmux.
-			key := "menu.the_configured_launcher_is_auto_but_neither_herdr_nor"
-			if isWindowsOS() {
-				key = "menu.the_configured_launcher_is_auto_but_herdr_is_not_available"
+			if tools.Herdr.OffPath != "" {
+				// herdr is installed but the current PATH cannot see it; pointing at
+				// the path beats telling the user to install what they already have.
+				warning(config.Text("menu.herdr_installed_at_reopen_terminal", tools.Herdr.OffPath))
+			} else {
+				// Native Windows never probes tmux and auto can only land on herdr, so the hint must not mention tmux.
+				key := "menu.the_configured_launcher_is_auto_but_neither_herdr_nor"
+				if isWindowsOS() {
+					key = "menu.the_configured_launcher_is_auto_but_herdr_is_not_available"
+				}
+				warning(config.Text(key))
 			}
-			warning(config.Text(key))
 		} else {
 			hint(config.Text(
 				"menu.launcher_auto_chooses_at_start_a_herdr_tab_if",

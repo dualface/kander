@@ -89,6 +89,9 @@ func TestDoctorHerdrInstallConfirmation(t *testing.T) {
 			if code != 0 || !strings.Contains(out, tc.message) || !strings.Contains(out, "配置:") {
 				t.Fatalf("doctor did not continue: code=%d output=%s", code, out)
 			}
+			if tc.name == "noninteractive" && !strings.Contains(out, "curl -fsSL https://herdr.dev/install.sh") {
+				t.Fatalf("non-interactive doctor must print the install command: %s", out)
+			}
 			_, err := os.Stat(marker)
 			if (err == nil) != tc.run {
 				t.Fatalf("installer ran=%v, want %v", err == nil, tc.run)
