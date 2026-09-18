@@ -121,6 +121,10 @@ func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
+	// Global scope covers only agents whose configuration directory exists.
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	if !reportRulesIntegration(cfg, paths, true) {
@@ -201,6 +205,98 @@ func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T
 		if strings.Contains(line.Text, "removed") {
 			t.Fatalf("second repair must change nothing: %+v", lines)
 		}
+	}
+}
+
+func TestReportRulesIntegrationCoversEveryInstalledAgent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
+	// claude is installed (config directory exists) but not configured for use; grok has no
+	// configuration directory and must gain no files.
+	for _, dir := range []string{".codex", ".claude"} {
+		if err := os.MkdirAll(filepath.Join(home, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+
+	var lines []ReportLine
+	healthy := true
+	lines = CaptureReport(func() { healthy = reportRulesIntegration(cfg, paths, false) })
+	if healthy {
+		t.Fatal("unintegrated covered targets must make doctor unhealthy")
+	}
+	for _, target := range []string{
+		filepath.Join(home, ".codex", "AGENTS.md"),
+		filepath.Join(home, ".claude", "CLAUDE.md"),
+	} {
+		found := false
+		for _, line := range lines {
+			if strings.Contains(line.Text, target) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("non-repair report misses covered target %s: %+v", target, lines)
+		}
+	}
+
+	if !reportRulesIntegration(cfg, paths, true) {
+		t.Fatal("repair must succeed")
+	}
+	claudeTarget := filepath.Join(home, ".claude", "CLAUDE.md")
+	got, err := os.ReadFile(claudeTarget)
+	if err != nil || !strings.Contains(string(got), "@") || !strings.Contains(string(got), "KANDER-AGENTS.md") {
+		t.Fatalf("claude import missing after repair: %v %q", err, got)
+	}
+	codexTarget := filepath.Join(home, ".codex", "AGENTS.md")
+	got, err = os.ReadFile(codexTarget)
+	if err != nil || !strings.Contains(string(got), "Kander Rules Entry") {
+		t.Fatalf("codex reference missing after repair: %v %q", err, got)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".grok")); !os.IsNotExist(err) {
+		t.Fatalf("agent without a configuration directory gained files: %v", err)
+	}
+	if !reportRulesIntegration(cfg, paths, false) {
+		t.Fatal("report after repair must be healthy")
+	}
+}
+
+func TestReportRulesIntegrationCoversProjectTargets(t *testing.T) {
+	home, project := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	paths := config.InstallPaths{
+		Mode:        config.ModeProject,
+		ProjectRoot: project,
+		RulesDir:    filepath.Join(project, ".kander", "rules"),
+	}
+	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+
+	if reportRulesIntegration(cfg, paths, false) {
+		t.Fatal("unintegrated project targets must make doctor unhealthy")
+	}
+	if !reportRulesIntegration(cfg, paths, true) {
+		t.Fatal("repair must succeed")
+	}
+	claudeTarget := filepath.Join(project, "CLAUDE.md")
+	got, err := os.ReadFile(claudeTarget)
+	if err != nil || !strings.Contains(string(got), "@") || !strings.Contains(string(got), "KANDER-AGENTS.md") {
+		t.Fatalf("project CLAUDE.md import missing after repair: %v %q", err, got)
+	}
+	agentsTarget := filepath.Join(project, "AGENTS.md")
+	got, err = os.ReadFile(agentsTarget)
+	if err != nil || !strings.Contains(string(got), "Kander Rules Entry") {
+		t.Fatalf("project AGENTS.md reference missing after repair: %v %q", err, got)
+	}
+	if !reportRulesIntegration(cfg, paths, false) {
+		t.Fatal("report after repair must be healthy")
 	}
 }
 

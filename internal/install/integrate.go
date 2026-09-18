@@ -46,7 +46,7 @@ type IntegrationOutcome struct {
 func integrateAgentRules(paths config.InstallPaths) []AgentIntegration {
 	var out []AgentIntegration
 	seen := map[string]struct{}{}
-	for _, agent := range integrationAgents(paths) {
+	for _, agent := range IntegrationAgents(paths) {
 		target := AgentRulesTarget(agent, paths)
 		if target == "" {
 			continue
@@ -61,7 +61,11 @@ func integrateAgentRules(paths config.InstallPaths) []AgentIntegration {
 	return out
 }
 
-func integrationAgents(paths config.InstallPaths) []string {
+// IntegrationAgents lists the agents whose rules files the scope covers: a project install
+// covers every embedded agent with a project rules target, while a global install covers only
+// agents whose configuration directory already exists. Doctor reuses this set so its coverage
+// cannot drift from the install-time semantics.
+func IntegrationAgents(paths config.InstallPaths) []string {
 	var importFirst, rest []string
 	for _, agent := range config.ExecutionAgents {
 		target := AgentRulesTarget(agent, paths)

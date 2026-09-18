@@ -201,18 +201,15 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 	return healthy
 }
 
-// reportRulesIntegration reports whether every configured execution agent's rules file references
-// the Kander entry; in repair mode it writes the missing references instead of only warning.
-func reportRulesIntegration(cfg *config.Config, paths config.InstallPaths, repair bool) bool {
+// reportRulesIntegration reports whether the rules file of every agent the install scope covers
+// references the Kander entry, reusing install.IntegrationAgents so doctor cannot drift from the
+// install-time coverage; in repair mode it writes the missing references instead of only warning.
+func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair bool) bool {
 	healthy := true
-	effective, err := config.Effective(cfg)
-	if err != nil {
-		return healthy
-	}
 	labels := agentLabels()
 	entry := rulesEntry(paths)
 	seen := map[string]struct{}{}
-	for _, selected := range config.ExecutionAgentsInUse(effective) {
+	for _, selected := range install.IntegrationAgents(paths) {
 		target := install.AgentRulesTarget(selected, paths)
 		if target == "" {
 			continue

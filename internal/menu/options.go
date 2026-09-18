@@ -656,7 +656,7 @@ func (s *Session) finish() error {
 	}
 	entry := rulesEntry(paths)
 	seen := map[string]struct{}{}
-	for _, selected := range config.ExecutionAgentsInUse(s.Config) {
+	for _, selected := range install.IntegrationAgents(paths) {
 		target := install.AgentRulesTarget(selected, paths)
 		if target == "" {
 			continue
