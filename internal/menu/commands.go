@@ -52,7 +52,9 @@ func Doctor(args []string) int {
 		fmt.Fprintln(os.Stderr, "kander:", config.Text("board.unknown_option", arg))
 		return 2
 	}
-	if printDoctorWithTools(offerHerdrInstall(CheckTerminalTools()), true, stdinStderrTTY()) {
+	// printDoctorWithTools runs the version guard first, so an older binary
+	// stops before the herdr install prompt and every repair.
+	if printDoctorWithTools(CheckTerminalTools(), true, stdinStderrTTY()) {
 		return 0
 	}
 	return 1

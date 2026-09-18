@@ -28,3 +28,16 @@ func TestCompare(t *testing.T) {
 		}
 	}
 }
+
+func TestValid(t *testing.T) {
+	for _, value := range []string{"1.2.3", "v1.2.3", "0.5.0-3-gabcdef1", "1.0.0-rc1"} {
+		if !Valid(value) {
+			t.Errorf("Valid(%q) = false, want true", value)
+		}
+	}
+	for _, value := range []string{"dev", "", "1.2"} {
+		if Valid(value) {
+			t.Errorf("Valid(%q) = true, want false", value)
+		}
+	}
+}

@@ -11,6 +11,7 @@
   "menu.kander_version_unknown": "version unknown",
   "menu.keep_which_kander_executable": "Keep which kander executable?",
   "menu.multiple_kander_run_kander_doctor_in_a_terminal": "Run `kander doctor` in a terminal to choose which executable to keep.",
+  "menu.running_kander_is_older_than_path_binary_doctor_stopped": "The running kander {{.V0}} is older than {{.V1}} ({{.V2}}); doctor stopped before any check or repair, because repairing with an older binary would downgrade the newer on-disk rules and config. Run doctor with the newer kander.",
   "menu.upgrade_kander_via_brew": "Upgrade kander via brew",
   "tui.doctor_report_above_press_enter_to_open_the_board": "Doctor report above. Press Enter to open the board."
 }

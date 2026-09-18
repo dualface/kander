@@ -18,6 +18,16 @@ func printDoctor() bool {
 // interactive gates the prompts inside the PATH-binary cleanup: the TUI doctor
 // report passes false so the captured output stays passive.
 func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bool {
+	// The version guard runs before any check, prompt, or repair; the same PATH
+	// inventory is then reused by reportPathKanders so `kander version` runs once
+	// per binary per doctor run.
+	binaries := pathKanderBinaries()
+	if !reportOutdatedRunningKander(binaries) {
+		return false
+	}
+	if interactive {
+		tools = offerHerdrInstall(tools)
+	}
 	healthy := true
 	hint(config.Text("menu.kander_environment_check"))
 	paths, err := currentPaths()
@@ -66,7 +76,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 			warning(commandMissingMessage(name, paths))
 		}
 	}
-	if !reportPathKanders(interactive) {
+	if !reportPathKanders(interactive, binaries) {
 		healthy = false
 	}
 	reportTerminalTools(tools)

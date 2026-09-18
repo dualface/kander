@@ -49,6 +49,12 @@ func mustAtoi(text string) int {
 	return value
 }
 
+// Valid reports whether value parses as a release version. Unparseable values
+// such as "dev" are not ordered against releases.
+func Valid(value string) bool {
+	return parseVersion(value).ok
+}
+
 // Compare orders two version strings: semver base first, then commits-ahead of
 // the tag, then release before prerelease of the same base. Unparseable values
 // such as "dev" sort below every parseable version and compare lexically

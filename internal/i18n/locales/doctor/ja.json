@@ -11,6 +11,7 @@
   "menu.kander_version_unknown": "バージョン不明",
   "menu.keep_which_kander_executable": "どの kander 実行ファイルを残しますか？",
   "menu.multiple_kander_run_kander_doctor_in_a_terminal": "ターミナルで `kander doctor` を実行すると、残す実行ファイルを選べます。",
+  "menu.running_kander_is_older_than_path_binary_doctor_stopped": "実行中の kander {{.V0}} は {{.V1}}（{{.V2}}）より古いため、doctor はチェックや修復を行わず停止しました。古いバイナリで修復するとディスク上の新しいルールと設定がダウングレードされます。新しい kander で doctor を実行してください。",
   "menu.upgrade_kander_via_brew": "brew で kander をアップグレード",
   "tui.doctor_report_above_press_enter_to_open_the_board": "上の結果を確認し、Enter を押してボードを開きます。"
 }

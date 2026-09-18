@@ -26,12 +26,36 @@ func execBrewUpgrade() error {
 	return cmd.Run()
 }
 
+// reportOutdatedRunningKander is doctor's first check: when any kander on PATH
+// reports a strictly newer version than the running binary, doctor stops before
+// any check, prompt, or repair, because repairing would write this older
+// binary's embedded rules and config schema over newer on-disk copies. An
+// unparseable running version (a dev build) and binaries that report no
+// version do not trigger the stop.
+func reportOutdatedRunningKander(binaries []install.PathKanderBinary) bool {
+	running := version.String()
+	if !version.Valid(running) {
+		return true
+	}
+	healthy := true
+	for _, bin := range binaries {
+		if version.Compare(bin.Version, running) > 0 {
+			healthy = false
+			warning(config.Text(
+				"menu.running_kander_is_older_than_path_binary_doctor_stopped", running, bin.Path, bin.Version,
+			))
+		}
+	}
+	return healthy
+}
+
 // reportPathKanders lists every distinct kander executable reachable through PATH.
 // With several installs it flags outdated Homebrew copies and, when interactive,
 // offers to run `brew upgrade kander` and to keep one executable while removing
 // the other non-Homebrew files. Non-interactive callers get the passive listing.
-func reportPathKanders(interactive bool) bool {
-	binaries := pathKanderBinaries()
+// The caller supplies the inventory already probed for the version guard so the
+// PATH binaries are not version-probed twice per run.
+func reportPathKanders(interactive bool, binaries []install.PathKanderBinary) bool {
 	if len(binaries) <= 1 {
 		return true
 	}

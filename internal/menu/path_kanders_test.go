@@ -70,9 +70,10 @@ func reportText(lines []ReportLine) string {
 }
 
 func TestReportPathKandersSingleIsQuiet(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{{Path: "/usr/local/bin/kander", Version: "1.0.0"}})
+	binaries := []install.PathKanderBinary{{Path: "/usr/local/bin/kander", Version: "1.0.0"}}
+	stubKanderInventory(t, binaries)
 	lines := CaptureReport(func() {
-		if !reportPathKanders(true) {
+		if !reportPathKanders(true, binaries) {
 			t.Fatal("single binary must report healthy")
 		}
 	})
@@ -82,12 +83,13 @@ func TestReportPathKandersSingleIsQuiet(t *testing.T) {
 }
 
 func TestReportPathKandersListsAndHintsNonInteractive(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	binaries := []install.PathKanderBinary{
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
 		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
-	})
+	}
+	stubKanderInventory(t, binaries)
 	var healthy bool
-	lines := CaptureReport(func() { healthy = reportPathKanders(false) })
+	lines := CaptureReport(func() { healthy = reportPathKanders(false, binaries) })
 	if healthy {
 		t.Fatal("duplicates must report unhealthy")
 	}
@@ -100,49 +102,52 @@ func TestReportPathKandersListsAndHintsNonInteractive(t *testing.T) {
 }
 
 func TestReportPathKandersOffersBrewUpgrade(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	binaries := []install.PathKanderBinary{
 		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
-	})
+	}
+	stubKanderInventory(t, binaries)
 	var brewRan bool
 	stubBrewUpgrade(t, &brewRan, nil)
 	stubAskChoice(t, []string{"upgrade", ""})
 	var removed []string
 	stubRemoval(t, &removed, nil)
-	CaptureReport(func() { reportPathKanders(true) })
+	CaptureReport(func() { reportPathKanders(true, binaries) })
 	if !brewRan {
 		t.Fatal("outdated brew install must offer `brew upgrade kander`")
 	}
 }
 
 func TestReportPathKandersSkipsBrewUpgrade(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	binaries := []install.PathKanderBinary{
 		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
-	})
+	}
+	stubKanderInventory(t, binaries)
 	var brewRan bool
 	stubBrewUpgrade(t, &brewRan, nil)
 	stubAskChoice(t, []string{"skip", ""})
 	var removed []string
 	stubRemoval(t, &removed, nil)
-	CaptureReport(func() { reportPathKanders(true) })
+	CaptureReport(func() { reportPathKanders(true, binaries) })
 	if brewRan {
 		t.Fatal("skip answer must not run brew upgrade")
 	}
 }
 
 func TestReportPathKandersBrewFailureWarns(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	binaries := []install.PathKanderBinary{
 		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
-	})
+	}
+	stubKanderInventory(t, binaries)
 	var brewRan bool
 	stubBrewUpgrade(t, &brewRan, errors.New("brew missing"))
 	stubAskChoice(t, []string{"upgrade", ""})
 	var removed []string
 	stubRemoval(t, &removed, nil)
 	var healthy bool
-	lines := CaptureReport(func() { healthy = reportPathKanders(true) })
+	lines := CaptureReport(func() { healthy = reportPathKanders(true, binaries) })
 	if healthy || !brewRan {
 		t.Fatalf("failed brew upgrade: healthy=%v ran=%v", healthy, brewRan)
 	}
@@ -165,7 +170,7 @@ func TestReportPathKandersKeepOneRemovesOthers(t *testing.T) {
 	stubRemoval(t, &removed, nil)
 	var lines []ReportLine
 	var healthy bool
-	lines = CaptureReport(func() { healthy = reportPathKanders(true) })
+	lines = CaptureReport(func() { healthy = reportPathKanders(true, inventory) })
 	want := []string{"/usr/local/bin/kander"}
 	if !reflect.DeepEqual(removed, want) {
 		t.Fatalf("removed %v, want %v", removed, want)
@@ -198,7 +203,7 @@ func TestReportPathKandersHealthyAfterCleanup(t *testing.T) {
 	}
 	t.Cleanup(func() { removeKanderBinary = old })
 	var healthy bool
-	CaptureReport(func() { healthy = reportPathKanders(true) })
+	CaptureReport(func() { healthy = reportPathKanders(true, inventory) })
 	if !healthy {
 		t.Fatal("cleanup leaving one binary must report healthy")
 	}
@@ -246,7 +251,7 @@ func TestReportPathKandersReprobesAfterBrewUpgrade(t *testing.T) {
 	}
 	t.Cleanup(func() { removeKanderBinary = oldRemove })
 	var healthy bool
-	lines := CaptureReport(func() { healthy = reportPathKanders(true) })
+	lines := CaptureReport(func() { healthy = reportPathKanders(true, before) })
 	if !brewRan || len(seenChoices) != 2 {
 		t.Fatalf("brew=%v prompts=%d", brewRan, len(seenChoices))
 	}
@@ -270,14 +275,15 @@ func TestReportPathKandersReprobesAfterBrewUpgrade(t *testing.T) {
 }
 
 func TestReportPathKandersKeepBrewRemovesNonBrew(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	binaries := []install.PathKanderBinary{
 		{Path: "/opt/homebrew/bin/kander", Version: "1.0.0", Brew: true},
 		{Path: "/usr/local/bin/kander", Version: "0.9.0"},
-	})
+	}
+	stubKanderInventory(t, binaries)
 	stubAskChoice(t, []string{"/opt/homebrew/bin/kander"})
 	var removed []string
 	stubRemoval(t, &removed, nil)
-	CaptureReport(func() { reportPathKanders(true) })
+	CaptureReport(func() { reportPathKanders(true, binaries) })
 	want := []string{"/usr/local/bin/kander"}
 	if !reflect.DeepEqual(removed, want) {
 		t.Fatalf("removed %v, want %v", removed, want)
@@ -285,14 +291,15 @@ func TestReportPathKandersKeepBrewRemovesNonBrew(t *testing.T) {
 }
 
 func TestReportPathKandersSkipRemovesNothing(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	binaries := []install.PathKanderBinary{
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
 		{Path: "/home/u/bin/kander", Version: "0.9.0"},
-	})
+	}
+	stubKanderInventory(t, binaries)
 	stubAskChoice(t, []string{""})
 	var removed []string
 	stubRemoval(t, &removed, nil)
-	CaptureReport(func() { reportPathKanders(true) })
+	CaptureReport(func() { reportPathKanders(true, binaries) })
 	if len(removed) != 0 {
 		t.Fatalf("skip answer removed %v", removed)
 	}
