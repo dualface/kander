@@ -33,7 +33,7 @@ func TestPlanToolReplacementsCoversBrokenFields(t *testing.T) {
 	cfg.Reviewers["large"]["PMQA"] = "devin"
 	cfg.Reviewers["small"]["Security"] = "devin"
 
-	plans := planToolReplacements(cfg, usableAgentsFixture())
+	plans := planToolReplacements(cfg, usableAgentsFixture(), true)
 	var fields []string
 	byField := map[string]toolReplacement{}
 	for _, plan := range plans {
@@ -57,19 +57,31 @@ func TestPlanToolReplacementsCoversBrokenFields(t *testing.T) {
 	}
 }
 
-// An empty chat_agent inherits the repaired large-scale agent at apply time,
-// so the plan must not prompt for it.
+// A chat_agent absent from the scope document is derived from
+// kanban_agents.large and follows the repaired value, so the plan must not
+// prompt for it even when the loaded value looks broken.
 func TestPlanToolReplacementsSkipsDerivedChat(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.ChatAgent = ""
+	cfg.ChatAgent = "devin" // derived value after load fallbacks
 	cfg.KanbanAgents["large"] = "devin"
 	cfg.KanbanAgents["small"] = "claude"
 	cfg.KanbanAgent = "claude"
-	plans := planToolReplacements(cfg, usableAgentsFixture())
+	plans := planToolReplacements(cfg, usableAgentsFixture(), false)
 	for _, plan := range plans {
 		if plan.field == "chat_agent" {
 			t.Fatalf("derived chat must not be planned: %+v", plan)
 		}
+	}
+	// The same value plans a prompt once the document sets chat_agent itself.
+	plans = planToolReplacements(cfg, usableAgentsFixture(), true)
+	found := false
+	for _, plan := range plans {
+		if plan.field == "chat_agent" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("explicit broken chat_agent must be planned")
 	}
 }
 
@@ -130,14 +142,14 @@ func TestRepairConfiguredToolsAppliesDecisions(t *testing.T) {
 	cfg.ChatAgent = "kimi"
 	cfg.Reviewers["large"]["PMQA"] = "devin"
 	cfg.Reviewers["small"]["PMQA"] = "claude"
-	decisions := map[string]string{
+	decisions := toolRepairDecisions{chatExplicit: true, fields: map[string]string{
 		"kanban_agent":         "pi",
 		"kanban_agents.large":  "claude",
 		"chat_agent":           "pi",
 		"reviewers.large.PMQA": "claude",
 		"reviewers.small.PMQA": "pi", // not broken: must be ignored
 		"kanban_agents.small":  "pi", // not broken: must be ignored
-	}
+	}}
 	changes, warnings := repairConfiguredTools(cfg, cfg, usableAgentsFixture(), TerminalTools{}, decisions, nil)
 	if len(warnings) != 0 {
 		t.Fatalf("warnings=%v", warnings)
@@ -172,7 +184,7 @@ func TestRepairConfiguredToolsWarnsAndKeepsWithoutCandidates(t *testing.T) {
 	cfg.KanbanAgent = "devin"
 	cfg.Launcher = "foreground"
 	cfg.Reviewers["large"]["PMQA"] = "devin"
-	changes, warnings := repairConfiguredTools(cfg, cfg, map[string]agentState{}, TerminalTools{}, nil, nil)
+	changes, warnings := repairConfiguredTools(cfg, cfg, map[string]agentState{}, TerminalTools{}, toolRepairDecisions{chatExplicit: true}, nil)
 	if cfg.KanbanAgent != "devin" || cfg.Reviewers["large"]["PMQA"] != "devin" {
 		t.Fatalf("fields without candidates must keep their values: %+v", cfg)
 	}
@@ -294,5 +306,63 @@ func TestRepairDoctorConfigNonInteractiveNeverPrompts(t *testing.T) {
 	}
 	if repaired.KanbanAgent != "claude" || repaired.Reviewers["large"]["PMQA"] != "claude" {
 		t.Fatalf("automatic first-usable repair changed: %+v", repaired)
+	}
+}
+
+// PMQA-1 regression: a document that omits chat_agent derives the field from
+// kanban_agents.large; the interactive repair must not prompt for it, and the
+// written config follows the repaired large value, not the first candidate.
+func TestRepairDoctorConfigDerivedChatFollowsLarge(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	cfgPath := filepath.Join(home, "config.json")
+	payload := `{
+		"schema_version": 1, "welcome_complete": true, "language": "en",
+		"kanban_agent": "claude",
+		"kanban_agents": {"large": "devin", "small": "claude"},
+		"launcher": "foreground",
+		"reviewers": {"large": {"PMQA": "claude", "Security": "claude"}, "small": {"PMQA": "claude", "Security": "claude"}}
+	}`
+	if err := os.WriteFile(cfgPath, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KANDER_CONFIG", cfgPath)
+
+	var prompts []string
+	old := askDoctorAgentChoice
+	askDoctorAgentChoice = func(prompt string, choices []choice, defaultValue string) (string, error) {
+		prompts = append(prompts, prompt)
+		return "pi", nil
+	}
+	t.Cleanup(func() { askDoctorAgentChoice = old })
+
+	repaired, ok := repairDoctorConfig(usableAgentsFixture(), TerminalTools{}, true)
+	if !ok || repaired == nil {
+		t.Fatal("interactive repair failed")
+	}
+	for _, prompt := range prompts {
+		if strings.Contains(prompt, "chat_agent") {
+			t.Fatalf("derived chat_agent must not prompt: %v", prompts)
+		}
+	}
+	found := false
+	for _, prompt := range prompts {
+		if strings.Contains(prompt, "kanban_agents.large") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("kanban_agents.large should have prompted: %v", prompts)
+	}
+	if repaired.ChatAgent != "pi" {
+		t.Fatalf("derived chat must follow the repaired large agent: %s", repaired.ChatAgent)
+	}
+	saved, err := config.LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.ChatAgent != "pi" || saved.KanbanAgents["large"] != "pi" {
+		t.Fatalf("saved config wrong: %+v", saved)
 	}
 }

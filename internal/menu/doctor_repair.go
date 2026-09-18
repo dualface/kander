@@ -28,12 +28,16 @@ func repairDoctorConfig(agents map[string]agentState, tools TerminalTools, inter
 	// Replacement choices are collected before config.Repair: its adjust
 	// closure runs under the config lock and must never read the terminal.
 	// When the scope file cannot be loaded, nothing is collected and the
-	// repair keeps the automatic first-usable choice.
-	decisions := map[string]string{}
-	if interactive {
-		if scope, loadErr := config.LoadScope(true); loadErr == nil {
+	// repair keeps the automatic first-usable choice. The raw document also
+	// says whether chat_agent is set explicitly: a derived value follows the
+	// repaired large-scale agent instead of being prompted or auto-picked.
+	decisions := toolRepairDecisions{fields: map[string]string{}, chatExplicit: true}
+	if scope, raw, loadErr := config.LoadScopeRaw(true); loadErr == nil {
+		chatValue, _ := raw["chat_agent"].(string)
+		decisions.chatExplicit = chatValue != ""
+		if interactive {
 			language = scope.Language
-			decisions = collectToolReplacements(planToolReplacements(scope, agents), text)
+			decisions.fields = collectToolReplacements(planToolReplacements(scope, agents, decisions.chatExplicit), text)
 		}
 	}
 
@@ -89,10 +93,20 @@ type toolReplacement struct {
 	fallback    string
 }
 
+// toolRepairDecisions carries the choices collected outside the repair lock:
+// fields maps a broken config field to the picked replacement, and
+// chatExplicit says whether the scope document sets chat_agent itself. A
+// missing or empty chat_agent is derived from kanban_agents.large and follows
+// its repaired value rather than prompting or auto-picking another agent.
+type toolRepairDecisions struct {
+	fields       map[string]string
+	chatExplicit bool
+}
+
 // planToolReplacements mirrors the field scan of repairConfiguredTools on a
 // config loaded outside the repair lock, so the interactive path can collect
 // every decision before any write begins.
-func planToolReplacements(cfg *config.Config, agents map[string]agentState) []toolReplacement {
+func planToolReplacements(cfg *config.Config, agents map[string]agentState, chatExplicit bool) []toolReplacement {
 	execution := usableAgentNames(config.AgentNames(cfg), agents, false)
 	reviewers := usableAgentNames(config.ReviewAgentNames(cfg), agents, true)
 	var plans []toolReplacement
@@ -107,9 +121,9 @@ func planToolReplacements(cfg *config.Config, agents map[string]agentState) []to
 			})
 		}
 	}
-	// An empty chat_agent inherits the repaired large-scale agent at apply
-	// time, so only an explicitly configured value can need a prompt.
-	if cfg.ChatAgent != "" && !agentUsable(agents[cfg.ChatAgent]) {
+	// A chat_agent absent from the document inherits the repaired large-scale
+	// agent at apply time, so only an explicitly configured value prompts.
+	if chatExplicit && cfg.ChatAgent != "" && !agentUsable(agents[cfg.ChatAgent]) {
 		plans = append(plans, toolReplacement{
 			field: "chat_agent", current: cfg.ChatAgent, candidates: execution,
 			defaultFrom: "kanban_agents.large",
@@ -176,7 +190,7 @@ func usableAgentNames(names []string, agents map[string]agentState, review bool)
 	return usable
 }
 
-func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentState, tools TerminalTools, decisions map[string]string, text func(string, ...any) string) (changes, warnings []string) {
+func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentState, tools TerminalTools, decisions toolRepairDecisions, text func(string, ...any) string) (changes, warnings []string) {
 	if text == nil {
 		text = func(id string, args ...any) string { return i18n.Text("en", id, args...) }
 	}
@@ -186,7 +200,7 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 	// already repaired kanban_agent for the scale fields), then the first
 	// usable candidate, matching the previous automatic repair.
 	pick := func(field string, candidates []string, preferred string) string {
-		if chosen := decisions[field]; slices.Contains(candidates, chosen) {
+		if chosen := decisions.fields[field]; slices.Contains(candidates, chosen) {
 			return chosen
 		}
 		if slices.Contains(candidates, preferred) {
@@ -231,7 +245,12 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 		cfg.ChatAgent = cfg.KanbanAgents["large"]
 	}
 	if !agentUsable(agents[cfg.ChatAgent]) {
-		replacement := pick("chat_agent", execution, "")
+		preferred := ""
+		if !decisions.chatExplicit {
+			// A derived chat_agent follows the repaired large-scale agent.
+			preferred = cfg.KanbanAgents["large"]
+		}
+		replacement := pick("chat_agent", execution, preferred)
 		if replacement == "" {
 			noCandidate("chat_agent", cfg.ChatAgent)
 		}
