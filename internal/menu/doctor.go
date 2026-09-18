@@ -43,18 +43,21 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 	}
 	install.CleanupStaleBinary(paths)
 	if repair {
-		migration, links, repairErr := install.RepairRules(paths)
+		rulesRepair, repairErr := install.RepairRules(paths)
 		if repairErr != nil {
 			warning(repairErr.Error())
 			healthy = false
 		}
-		for _, path := range migration.Removed {
+		for _, name := range rulesRepair.Rewritten {
+			success(config.Text("install.rule_rewritten", name))
+		}
+		for _, path := range rulesRepair.Legacy.Removed {
 			success(config.Text("install.legacy_rule_removed", path))
 		}
-		for _, path := range migration.Kept {
+		for _, path := range rulesRepair.Legacy.Kept {
 			hint(config.Text("install.legacy_rule_kept", path))
 		}
-		for _, path := range links {
+		for _, path := range rulesRepair.Links {
 			hint(config.Text("install.legacy_link_replaced", path))
 		}
 	}

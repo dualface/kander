@@ -415,8 +415,12 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	if err := os.Remove(filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := RepairRules(paths); err != nil {
+	repair, err := RepairRules(paths)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(repair.Rewritten) != 1 || repair.Rewritten[0] != "KANDER-AGENTS.md" {
+		t.Fatalf("rewritten=%v", repair.Rewritten)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md")); err != nil {
 		t.Fatal(err)
@@ -424,6 +428,14 @@ func TestRepairRulesLeavesModifiedFile(t *testing.T) {
 	got, _ := os.ReadFile(edited)
 	if string(got) != "edited locally\n" {
 		t.Fatalf("overwrote modified file: %q", got)
+	}
+	// A second repair must be silent: nothing left to rewrite.
+	again, err := RepairRules(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again.Rewritten) != 0 {
+		t.Fatalf("second repair rewrote %v", again.Rewritten)
 	}
 }
 
@@ -454,8 +466,12 @@ func TestRepairRulesUpgradesUnstampedOfficial(t *testing.T) {
 	if len(report.Outdated) != 1 || report.Outdated[0] != "KANDER-BASE-RULES.md" {
 		t.Fatalf("outdated=%v modified=%v", report.Outdated, report.Modified)
 	}
-	if _, _, err := RepairRules(paths); err != nil {
+	repair, err := RepairRules(paths)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(repair.Rewritten) != 1 || repair.Rewritten[0] != "KANDER-BASE-RULES.md" {
+		t.Fatalf("rewritten=%v", repair.Rewritten)
 	}
 	want, err := rules.File("KANDER-BASE-RULES.md")
 	if err != nil {
@@ -496,8 +512,12 @@ func TestRepairRulesBootstrapsStampWhenCurrent(t *testing.T) {
 	if len(report.Missing)+len(report.Outdated)+len(report.Modified) != 0 {
 		t.Fatalf("%+v", report)
 	}
-	if _, _, err := RepairRules(paths); err != nil {
+	repair, err := RepairRules(paths)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(repair.Rewritten) != 0 {
+		t.Fatalf("rewrote converged rules: %v", repair.Rewritten)
 	}
 	state, err := loadRulesState(paths)
 	if err != nil {

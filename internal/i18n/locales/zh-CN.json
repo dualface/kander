@@ -262,6 +262,7 @@
   "install.rule_missing": "规则文件缺失: {{.V0}}",
   "install.rule_outdated": "规则文件过期: {{.V0}}",
   "install.rule_modified": "规则文件已被本地修改, 未覆盖: {{.V0}}",
+  "install.rule_rewritten": "已从内嵌副本重写规则文件: {{.V0}}",
   "install.rules_reference_added": "已写入 Kander 规则引用: {{.V0}}",
   "install.rules_target_symlink_escapes_project": "拒绝通过指向项目外的符号链接写入: {{.V0}}",
   "install.rules_reference_failed": "写入 Kander 规则引用失败: {{.V0}}: {{.V1}}",

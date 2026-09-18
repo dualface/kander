@@ -225,12 +225,12 @@ func TestRepairRulesMigratesLegacyLayoutBeforeRewrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A binary upgraded without install: doctor repair runs first.
-	migration, _, err := RepairRules(paths)
+	repair, err := RepairRules(paths)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(migration.Removed) == 0 {
-		t.Fatalf("repair reported no migration: %+v", migration)
+	if len(repair.Legacy.Removed) == 0 {
+		t.Fatalf("repair reported no migration: %+v", repair.Legacy)
 	}
 	if _, err := os.Lstat(filepath.Join(legacy, "KANDER-AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("repair left the previous entry: %v", err)

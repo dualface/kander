@@ -191,47 +191,68 @@ func writeRule(paths config.InstallPaths, name string, data []byte, project bool
 	return true, nil
 }
 
-// RepairRules restores missing and outdated rule files. Locally edited files are left untouched.
-// A global repair also migrates rule files left at the previous rules location, so a binary
-// upgraded without running install still converges on the current layout.
-func RepairRules(paths config.InstallPaths) (LegacyRulesMigration, []string, error) {
-	if err := repairRuleFiles(paths); err != nil {
-		return LegacyRulesMigration{}, nil, err
-	}
-	migration := migrateLegacyRules(paths)
-	return migration, removeLegacyEntrySymlinks(paths), nil
+// RulesRepair reports what RepairRules changed: Rewritten names every rule file restored
+// from the embedded copy, Legacy the previous-location migration, and Links the removed
+// legacy entry symlinks.
+type RulesRepair struct {
+	Rewritten []string
+	Legacy    LegacyRulesMigration
+	Links     []string
 }
 
-func repairRuleFiles(paths config.InstallPaths) error {
+// RepairRules restores missing and outdated rule files and reports every file it rewrote.
+// Locally edited files are left untouched. A global repair also migrates rule files left at
+// the previous rules location, so a binary upgraded without running install still converges
+// on the current layout.
+func RepairRules(paths config.InstallPaths) (RulesRepair, error) {
+	var result RulesRepair
+	rewritten, err := repairRuleFiles(paths)
+	if err != nil {
+		return result, err
+	}
+	result.Rewritten = rewritten
+	result.Legacy = migrateLegacyRules(paths)
+	result.Links = removeLegacyEntrySymlinks(paths)
+	return result, nil
+}
+
+// repairRuleFiles rewrites every Missing or Outdated rule file from the embedded copy and
+// returns the names actually written, in InspectRules order. Files the write gate skipped
+// (a global reparse point) are not reported.
+func repairRuleFiles(paths config.InstallPaths) ([]string, error) {
 	report, err := InspectRules(paths)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	state, err := loadRulesState(paths)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := fs.EnsureInheritedDirectoryPath(paths.RulesDir); err != nil {
-		return err
+		return nil, err
 	}
 	if state.Files == nil {
 		state.Files = map[string]string{}
 	}
 	changed := false
+	var rewritten []string
 	repair := append(append([]string{}, report.Missing...), report.Outdated...)
 	project := paths.Mode == config.ModeProject
 	for _, name := range repair {
 		data, err := rules.File(name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		wrote, err := writeRule(paths, name, data, project)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if digest, ok := stampDigest(paths, name, data, wrote); ok {
 			state.Files[name] = digest
 			changed = true
+		}
+		if wrote {
+			rewritten = append(rewritten, name)
 		}
 	}
 	for _, name := range rules.Names() {
@@ -240,14 +261,14 @@ func repairRuleFiles(paths config.InstallPaths) error {
 		}
 		data, ok, err := readInstalledRule(paths, name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !ok {
 			continue
 		}
 		want, err := rules.Hash(name)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if fileHash(data) != want {
 			continue
@@ -256,9 +277,9 @@ func repairRuleFiles(paths config.InstallPaths) error {
 		changed = true
 	}
 	if !changed {
-		return nil
+		return rewritten, nil
 	}
-	return saveRulesState(paths, state)
+	return rewritten, saveRulesState(paths, state)
 }
 
 // cleanupAgentsEntryLink removes the AGENTS.md entry earlier installers placed next to

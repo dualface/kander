@@ -86,8 +86,19 @@ func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 			if len(report.Missing) != 0 {
 				t.Fatalf("missing rules: %v", report.Missing)
 			}
-			if _, _, err := install.RepairRules(paths); err != nil {
+			repair, err := install.RepairRules(paths)
+			if err != nil {
 				t.Fatal(err)
+			}
+			// Only outdated official files are rewritten; locally edited ones are
+			// reported as kept and never touched.
+			wantRewritten := wantOutdated
+			if edited {
+				wantRewritten = nil
+			}
+			sort.Strings(repair.Rewritten)
+			if !reflect.DeepEqual(repair.Rewritten, wantRewritten) {
+				t.Fatalf("repair rewrote %v, want %v", repair.Rewritten, wantRewritten)
 			}
 			for _, name := range wantOutdated {
 				want, err := rules.File(name)
@@ -102,8 +113,12 @@ func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 					t.Fatalf("repair %s: err=%v; content mismatch=%v", name, err, !bytes.Equal(got, want))
 				}
 			}
-			if _, _, err := install.RepairRules(paths); err != nil {
+			again, err := install.RepairRules(paths)
+			if err != nil {
 				t.Fatalf("repeat repair: %v", err)
+			}
+			if len(again.Rewritten) != 0 {
+				t.Fatalf("repeat repair rewrote %v", again.Rewritten)
 			}
 			after, err := install.InspectRules(paths)
 			if err != nil || len(after.Missing)+len(after.Outdated) != 0 {

@@ -262,6 +262,7 @@
   "install.rule_missing": "ルールファイルがありません: {{.V0}}",
   "install.rule_outdated": "ルールファイルが古いです: {{.V0}}",
   "install.rule_modified": "ルールファイルはローカルで編集されているため上書きしませんでした: {{.V0}}",
+  "install.rule_rewritten": "埋め込みコピーからルールファイルを書き直しました: {{.V0}}",
   "install.rules_reference_added": "Kander ルール参照を書き込みました: {{.V0}}",
   "install.rules_target_symlink_escapes_project": "プロジェクト外を指すシンボリックリンク経由の書き込みを拒否しました: {{.V0}}",
   "install.rules_reference_failed": "Kander ルール参照の書き込みに失敗しました: {{.V0}}: {{.V1}}",

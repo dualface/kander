@@ -262,6 +262,7 @@
   "install.rule_missing": "rule file is missing: {{.V0}}",
   "install.rule_outdated": "rule file is out of date: {{.V0}}",
   "install.rule_modified": "rule file was edited locally and was not overwritten: {{.V0}}",
+  "install.rule_rewritten": "rewrote rule file from the embedded copy: {{.V0}}",
   "install.rules_reference_added": "added the Kander rules reference: {{.V0}}",
   "install.rules_target_symlink_escapes_project": "refusing to write through a symlink that leaves the project: {{.V0}}",
   "install.rules_reference_failed": "failed to add the Kander rules reference to {{.V0}}: {{.V1}}",
