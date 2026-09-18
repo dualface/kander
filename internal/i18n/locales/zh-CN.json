@@ -250,6 +250,8 @@
   "install.legacy_kept": "已保留旧入口.",
   "install.legacy_removed": "已删除旧入口.",
   "install.legacy_link_replaced": "已把指向旧规则入口的链接替换为引用文件: {{.V0}}",
+  "install.legacy_rule_removed": "已删除旧规则位置的规则文件: {{.V0}}",
+  "install.legacy_rule_kept": "无法删除旧规则位置的文件，已保留: {{.V0}}",
   "install.rules_reference_updated": "已把 Kander 规则引用更新到当前规则位置: {{.V0}}",
   "install.rules_reference_cleaned": "已从 {{.V0}} 删除 {{.V1}} 条无效或重复的 Kander 规则引用",
   "install.legacy_is_directory": "错误: 旧版安装目标是目录: {{.V0}}",

@@ -250,6 +250,8 @@
   "install.legacy_kept": "Legacy entries were kept.",
   "install.legacy_removed": "Legacy entries were removed.",
   "install.legacy_link_replaced": "replaced the link to the previous rules entry with a reference file: {{.V0}}",
+  "install.legacy_rule_removed": "removed rule file from the previous rules location: {{.V0}}",
+  "install.legacy_rule_kept": "could not remove this file at the previous rules location; left in place: {{.V0}}",
   "install.rules_reference_updated": "updated the Kander rules reference to the current rules location: {{.V0}}",
   "install.rules_reference_cleaned": "cleaned {{.V1}} invalid or duplicate Kander rules references: {{.V0}}",
   "install.legacy_is_directory": "error: legacy installation target is a directory: {{.V0}}",

@@ -250,6 +250,8 @@
   "install.legacy_kept": "旧エントリを保持しました.",
   "install.legacy_removed": "旧エントリを削除しました.",
   "install.legacy_link_replaced": "以前のルールエントリへのリンクを参照ファイルに置き換えました: {{.V0}}",
+  "install.legacy_rule_removed": "以前のルール配置のルールファイルを削除しました: {{.V0}}",
+  "install.legacy_rule_kept": "以前のルール配置のファイルを削除できなかったため残しました: {{.V0}}",
   "install.rules_reference_updated": "Kander ルール参照を現在のルールの場所に更新しました: {{.V0}}",
   "install.rules_reference_cleaned": "{{.V0}} から {{.V1}} 件の無効または重複した Kander ルール参照を削除しました",
   "install.legacy_is_directory": "エラー: 旧インストール先がディレクトリです: {{.V0}}",
