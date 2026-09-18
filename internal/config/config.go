@@ -443,7 +443,9 @@ func KanbanAgentsInUse(cfg *Config) []string {
 
 // ExecutionAgentsInUse lists the execution agents that will actually be launched,
 // deduplicated, large task first, then small, then the Chat Agent when it is
-// not already in that set. Doctor and rules integration use this inventory.
+// not already in that set. Doctor uses this inventory only for configured-agent
+// availability checks; the rules integration coverage set lives in
+// internal/install (IntegrationAgents).
 func ExecutionAgentsInUse(cfg *Config) []string {
 	out := KanbanAgentsInUse(cfg)
 	seen := map[string]struct{}{}
