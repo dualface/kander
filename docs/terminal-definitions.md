@@ -43,7 +43,7 @@ These points are the contract and are not extended:
 | `hooks`        | Mount point to registered hook name (below) |
 | `ops`          | Operation name to operation object (below) |
 
-A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session` and `container`, and `topology` lists pane IDs through `rows`).
+A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session`, `agent_session_kind` and `container`, and `topology` lists pane IDs through `rows`).
 
 `ParseAddress` applies the `address` patterns strictly. The read-only focus path (`ParseFocusAddress`) also accepts the same number of fields when each is a plain colon-free segment, which keeps legacy IDs without a prefix focusable.
 

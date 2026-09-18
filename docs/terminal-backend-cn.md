@@ -91,7 +91,7 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 | `RunCommand` | 发送初始命令行给窗格执行。 |
 | `SetSessionMarker` | 给窗格打上 Kander 静态会话标记。 |
 | `ReportSession` | 汇报 Agent 启动身份至复用器套接字。 |
-| `PaneFacts` | 检查窗格存活、前台进程与标记元数据。 |
+| `PaneFacts` | 检查窗格存活、前台进程、标记元数据及上报的会话身份（`AgentSession` 值与 `AgentSessionKind` 种类）。 |
 | `ReadOutput` | 读取窗格当前屏幕缓冲区文本。 |
 | `WaitOutput` | 等待窗格屏幕输出匹配指定模式。 |
 | `DeliverText` | 向窗格输入文本并追加回车。 |
@@ -100,7 +100,21 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 
 ---
 
-## 6. 错误分类体系
+## 6. 会话身份解析
+
+具备 `AgentIdentity` 的后端以“种类 + 值”上报窗格会话（`AgentSessionKind`、`AgentSession`）。缺失种类按兼容语义视为直接 ID。所有消费端共享唯一的三态判定 `terminal.MatchAgentSession(ctx, agent, kind, value, reference)`：
+
+- **匹配**：上报身份解析为卡片记录的会话引用。`id`（或缺失 kind）按字符串原样比较，从不按 UUID 解析。
+- **不同**：已解析身份指向另一会话。
+- **不确定**：身份缺失、种类未知或无法解析——既不能证明匹配也不能证明失配，绝不作为 stopped 证据。
+
+`kind: "path"` 经 agent 定义中的 `session.file` 声明解析：文件只经 `internal/fs` 安全边界打开（拒绝符号链接/reparse/特殊文件；POSIX 叶节点以非阻塞方式打开，FIFO 失败而非挂起），在声明的 `max_bytes` 内读取首行，JSON 头必须携带声明的 `id_field`，以及配置了时的 `type_field`/`type_value` 匹配值。格式不支持、文件缺失或不可读、头超长、头不合规、agent 未声明，一律返回带可诊断原因的不确定。文件内容从不执行、从不越首行扫描，读取在既有探测预算内并检查调用方上下文。
+
+`ReverseLookup` 遍历终端上报的全部行（不限于记录的 tab/workspace）：通过 `expect`、`checks` 与声明式 `match`（agent 过滤）的行成为候选，按同一规则解析其会话身份。恰好一个解析匹配即结果；确定的零匹配返回 `terminal.MatchError{Matches:0}`；多个确定匹配返回带计数的 `MatchError`；任一不可判定的同 agent 候选返回 `terminal.IncompleteLookupError`——未完成的查找，调用方必须按未知处理，绝不能当作唯一匹配或已证缺席。
+
+---
+
+## 7. 错误分类体系
 
 后端操作返回结构化的 `*terminal.CommandError` 错误：
 
@@ -109,3 +123,4 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 3. **响应解析错误**：`KindNotJSON`、`KindNotObject`、`KindMissingResult`、`KindInvalidResponse` 标识声明式步进输出不合规。
 4. **容器已消失**：窗格退出属于客观事实（`PaneFacts.Gone = true`），绝不作为未捕获异常抛出。
 5. **不支持的操作**：调用后端未声明能力的方法将明确返回 `terminal.ErrUnsupported`。
+6. **查找结果**：`terminal.MatchError`（已完成查找、零或多个匹配）与 `terminal.IncompleteLookupError`（存在不可判定候选、查找未完成）区分缺席、歧义与不可判定。

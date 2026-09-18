@@ -610,7 +610,8 @@ func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Addre
 	e.values["facts.command"], e.values["facts.in_mode"] = facts.Command, facts.InMode
 	e.values["facts.dead"], e.values["facts.session_marker"] = facts.Dead, facts.SessionMarker
 	e.values["facts.agent"], e.values["facts.agent_status"] = facts.Agent, facts.AgentStatus
-	e.values["facts.agent_session"], e.values["facts.container"] = facts.AgentSession, facts.Container
+	e.values["facts.agent_session"], e.values["facts.agent_session_kind"] = facts.AgentSession, facts.AgentSessionKind
+	e.values["facts.container"] = facts.Container
 	if facts.Gone || (op.ClosedWhen != nil && e.holds(op.ClosedWhen)) {
 		return FocusResult{ID: "focus.closed"}
 	}

@@ -91,7 +91,7 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 | `RunCommand` | ペインへ初期コマンド行を送信。 |
 | `SetSessionMarker` | ペインに Kander の静的マーカーを設定。 |
 | `ReportSession` | マルチプレクサのソケットへ Agent の起動情報を報告。 |
-| `PaneFacts` | ペインの生存状態、プロセス情報、マーカーを取得。 |
+| `PaneFacts` | ペインの生存状態、プロセス情報、マーカー、および報告されたセッション ID（`AgentSession` 値と `AgentSessionKind` 種別）を取得。 |
 | `ReadOutput` | ペイン画面のテキストバッファを取得。 |
 | `WaitOutput` | 指定パターンの出力が現れるまで待機。 |
 | `DeliverText` | テキストをペインへ送信し Enter を押下。 |
@@ -100,7 +100,21 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 
 ---
 
-## 6. エラー分類
+## 6. セッション ID 解決
+
+`AgentIdentity` を持つバックエンドは、ペインのセッションを「種別 + 値」（`AgentSessionKind`、`AgentSession`）として報告します。種別が空の場合は後方互換のため直接 ID として扱います。すべての消費箇所は単一の三値判定 `terminal.MatchAgentSession(ctx, agent, kind, value, reference)` を共有します：
+
+- **一致**：報告された ID がカード記録のセッション参照と一致。`id`（または種別なし）は文字列としてそのまま比較し、UUID として解析しません。
+- **不一致**：解決済みの ID が別のセッションを指す。
+- **不確定**：ID が欠落、種別が未知、または解決不能。一致・不一致いずれの証拠にもならず、stopped の証拠には決してなりません。
+
+`kind: "path"` はエージェント定義の `session.file` 宣言を通じて解決します。ファイルは `internal/fs` の安全境界でのみ開かれ（シンボリックリンク・reparse・特殊ファイルは拒否。POSIX では葉ノードをノンブロッキングで開くため FIFO はハングせず失敗）、宣言された `max_bytes` 以内で先頭行を読み取り、JSON ヘッダーは宣言された `id_field` と、設定時は `type_field`/`type_value` 一致を含む必要があります。未対応形式、ファイル欠落・読み取り不可、ヘッダー超過・不正、宣言なしのエージェントは、診断可能な理由付きの不確定になります。ファイル内容は実行せず、先頭行を越えて走査せず、読み取りは既存のプローブ予算内で呼び出し側コンテキストを確認します。
+
+`ReverseLookup` は端末が報告した全行を走査します（記録された tab/workspace に限定しません）。`expect`、`checks`、宣言的 `match`（エージェント絞り込み）を通過した行は候補となり、同一ルールでセッション ID を解決します。解決済み一致がちょうど 1 件なら結果、確定的な 0 件一致は `terminal.MatchError{Matches:0}`、複数の確定一致は件数付き `MatchError`、同じエージェントの未判定候補が 1 件でもあれば `terminal.IncompleteLookupError` を返します。後者は未完了の検索であり、呼び出し側は未知として扱い、一意の一致や欠落の証明として扱ってはいけません。
+
+---
+
+## 7. エラー分類
 
 バックエンドの戻り値は `*terminal.CommandError` に分類されます：
 
@@ -109,3 +123,4 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 3. **レスポンス構文エラー**：`KindNotJSON`, `KindNotObject`, `KindMissingResult`, `KindInvalidResponse`。
 4. **ペイン消失**：ペインが閉じている場合はエラーではなく客観的事実（`PaneFacts.Gone = true`）として扱われます。
 5. **未対応の操作**：提供されていない機能の呼び出しは `terminal.ErrUnsupported` を返します。
+6. **検索結果**：`terminal.MatchError`（完了した検索で 0 件または複数一致）と `terminal.IncompleteLookupError`（未判定候補があり検索未完了）は、欠落・曖昧・不確定を区別します。
