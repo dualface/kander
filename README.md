@@ -8,7 +8,7 @@ Schedule multiple AI agents in parallel with a kanban board, built-in independen
 
 > **Built for real engineering, not synthetic demos.**  
 > Since August 2026, Kander has driven nearly 1,000 production tasks for [QuickTUI](https://quicktui.ai). Built to survive actual bugs, race conditions, and merge conflicts, Kander delivers rock-solid orchestration, independent code review, and automatic recovery.
-> 
+>
 > In-depth reading: [Kander in Production](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) | [Full Production Retrospective](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md) (Deep Dive)
 
 ![Kander workflow](docs/workflow-en.svg)
@@ -62,14 +62,15 @@ kander
 
 ### Terminal Kanban Shortcuts
 
-| Key | Description |
-|---|---|
-| `Space` / `Enter` | View task details with Vim-style navigation |
-| `m` | Task action menu (start, move, archive) |
-| `g` | Open GitHub Issues overlay (browse and one-click import) |
-| `c` | Open standalone Chat session (quick discussion without creating a card) |
-| `/` | Filter and search task cards |
-| `r` | Refresh board data |
+| Key               | Description                                                             |
+| ----------------- | ----------------------------------------------------------------------- |
+| `Space` / `Enter` | View task details with Vim-style navigation                             |
+| `m`               | Task action menu (start, move, archive)                                 |
+| `g`               | Open GitHub Issues overlay (browse and one-click import)                |
+| `c`               | Open standalone Chat session (quick discussion without creating a card) |
+| `y`               | Copy selected task ID to clipboard                                      |
+| `/`               | Filter and search task cards                                            |
+| `r`               | Refresh board data                                                      |
 
 Further reading: the slides [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
 
@@ -84,7 +85,21 @@ Linking a project to a GitHub repository needs the [GitHub CLI](https://cli.gith
 
 On the terminal board, press `g` to open the GitHub issue list in an overlay.
 
-## 4. Advanced Documentation
+## 4. Frequently Asked Questions (FAQ)
+
+#### Q: How do I hand off a task card to a different Agent?
+
+**A:** Stop the agent currently working on the card, launch a new agent, and prompt it to take over and continue task card `TASK-ID` (replace `TASK-ID` with the actual card ID). In the terminal kanban board, select the card and press `y` to copy its task ID.
+
+#### Q: How do I instruct an Agent to take over an entire task group?
+
+**A:** Copy the task card ID, launch an agent, and instruct it to act as the coordinator to take over and advance the task group containing `TASK-ID`.
+
+#### Q: How do I check the progress and status of unfinished tasks?
+
+**A:** Start an agent (with Kander rules loaded) and directly ask for the current status and progress of any unfinished task cards.
+
+## 5. Advanced Documentation
 
 - [Review Disposition & Completion Gate](docs/review-disposition.md)
 - [Card Transactions & Crash Recovery](docs/card-transactions.md)
@@ -92,10 +107,10 @@ On the terminal board, press `g` to open the GitHub issue list in an overlay.
 - [Durable Dispatch Protocol](docs/durable-dispatch.md)
 - [GitHub Issue Import & Result Protocol](docs/github-issue-import.md)
 
-## 5. License
+## 6. License
 
 This project is under the MIT License; see [LICENSE](LICENSE).
 
-## 6. Changelog
+## 7. Changelog
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md).

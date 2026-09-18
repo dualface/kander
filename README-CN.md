@@ -8,7 +8,7 @@
 
 > **为真实工程而生，而非概念演示。**  
 > 自 2026 年 8 月以来，Kander 已在 [QuickTUI](https://quicktui.ai) 的生产环境中完成了近 1,000 个真实开发任务。在解决代码冲突、并发竞争与复杂缺陷中历练而成，提供真正可靠的 Agent 调度、独立代码审查与崩溃恢复机制。
-> 
+>
 > 深入阅读：[Kander 生产实践回顾](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) ｜ [完整分析报告（英文深度分析）](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md)
 
 ![Kander 工作流](docs/workflow-cn.svg)
@@ -62,14 +62,15 @@ kander
 
 ### 终端看板快捷键
 
-| 按键 | 说明 |
-|---|---|
-| `Space` / `Enter` | 查看任务详情，支持 Vim 模式浏览 |
-| `m` | 任务操作菜单（启动、移动、归档） |
-| `g` | 打开 GitHub Issues 浮层（查看与一键导入） |
-| `c` | 调起独立 Chat 会话（即时讨论，不占卡片） |
-| `/` | 过滤/搜索卡片 |
-| `r` | 手动刷新看板数据 |
+| 按键              | 说明                                      |
+| ----------------- | ----------------------------------------- |
+| `Space` / `Enter` | 查看任务详情，支持 Vim 模式浏览           |
+| `m`               | 任务操作菜单（启动、移动、归档）          |
+| `g`               | 打开 GitHub Issues 浮层（查看与一键导入） |
+| `c`               | 调起独立 Chat 会话（即时讨论，不占卡片）  |
+| `y`               | 复制选中卡片的任务 ID                     |
+| `/`               | 过滤/搜索卡片                             |
+| `r`               | 手动刷新看板数据                          |
 
 进阶阅读：幻灯片 [如何高效推进任务](docs/how-to-advance-tasks-efficiently-cn.pdf) (PDF)。
 
@@ -84,18 +85,32 @@ kander
 
 在终端看板中按 `g` 会以弹窗形式打开 GitHub Issue 列表。
 
-## 4. 进阶文档
+## 4. 常见问题 (FAQ)
 
-- [审查机制与完成门禁](docs/review-disposition.md)
-- [卡片事务与崩溃恢复](docs/card-transactions.md)
-- [终端后端与容器定义](docs/terminal-backend.md)
-- [任务持久化派发协议](docs/durable-dispatch.md)
-- [GitHub Issue 导入与结果协议](docs/github-issue-import.md)
+#### Q: 如何将任务卡交给不同的 Agent 继续推进？
 
-## 5. 许可
+**A:** 停止正在处理该任务卡的 Agent，启动新的 Agent，然后要求它接手并继续推进任务卡 `TASK-ID`（将 `TASK-ID` 替换为具体任务卡 ID 即可）。在终端看板中选中任务卡按 `y` 键可直接复制任务卡 ID。
+
+#### Q: 如何让 Agent 接手整个任务组？
+
+**A:** 复制任务卡 ID，启动 Agent，要求它作为主控接手并推进任务卡 `TASK-ID` 所在的任务组。
+
+#### Q: 如何搞清楚未完成任务的状态？
+
+**A:** 启动任意已安装 Kander 规则的 Agent，直接询问它未完成任务卡的当前状态与进展即可。
+
+## 5. 进阶文档
+
+- [审查机制与完成门禁](docs/review-disposition-cn.md)
+- [卡片事务与崩溃恢复](docs/card-transactions-cn.md)
+- [终端后端与容器定义](docs/terminal-backend-cn.md)
+- [任务持久化派发协议](docs/durable-dispatch-cn.md)
+- [GitHub Issue 导入与结果协议](docs/github-issue-import-cn.md)
+
+## 6. 许可
 
 本项目使用 MIT License，见 [LICENSE](LICENSE)。
 
-## 6. 更新日志
+## 7. 更新日志
 
 发布说明见 [CHANGELOG.md](CHANGELOG.md)。
