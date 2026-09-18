@@ -8,9 +8,9 @@ import (
 )
 
 // TestPiExtensionLogicUnderNode exercises the embedded TypeScript extension's
-// exported decision functions under the same runtime pi loads it with. The
-// harness imports the real embedded source, so a logic regression fails the
-// test instead of drifting into a shipped file.
+// exported decision functions under a vanilla node harness: the test imports
+// the real embedded source, so a logic regression fails the test instead of
+// drifting into a shipped file.
 func TestPiExtensionLogicUnderNode(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {

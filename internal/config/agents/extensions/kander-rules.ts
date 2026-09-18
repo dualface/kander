@@ -187,31 +187,14 @@ export function statusText(
 
 export default function kanderRulesExtension(pi: ExtensionAPI) {
 	const state: ExtensionState = { enabled: true };
-	let cachedCwd = "";
-	let cachedRoot: ResolvedRulesRoot | null = null;
-
-	const resolveFor = (cwd: string): ResolvedRulesRoot | null => {
-		// Re-resolve when the cwd moved or the cached root lost its entry file;
-		// a rules install or removal mid-session is picked up on the next turn.
-		if (cachedCwd !== cwd || (cachedRoot !== null && !fs.existsSync(path.join(cachedRoot.root, ENTRY_FILE)))) {
-			cachedCwd = cwd;
-			cachedRoot = resolveRulesRoot(cwd);
-		}
-		return cachedRoot;
-	};
-
-	pi.on("session_start", async (_event, ctx) => {
-		const resolved = resolveFor(ctx.cwd ?? process.cwd());
-		if (resolved && state.enabled && !envDisabled(process.env)) {
-			ctx.ui.notify(`Kander rules: ${resolved.root}`, "info");
-		}
-	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
 		if (!shouldInject(state, process.env, event.systemPromptOptions?.contextFiles)) {
 			return;
 		}
-		const resolved = resolveFor(ctx.cwd ?? process.cwd());
+		// Resolve every turn: a project install that appears mid-session must
+		// win over a previously resolved (or missing) rules root.
+		const resolved = resolveRulesRoot(ctx.cwd ?? process.cwd());
 		if (!resolved) {
 			return;
 		}
@@ -230,7 +213,7 @@ export default function kanderRulesExtension(pi: ExtensionAPI) {
 				ctx.ui.notify("Usage: /kander-rules on|off|status", "warning");
 				return;
 			}
-			const resolved = resolveFor(ctx.cwd ?? process.cwd());
+			const resolved = resolveRulesRoot(ctx.cwd ?? process.cwd());
 			ctx.ui.notify(statusText(state, process.env, resolved), "info");
 		},
 	});
