@@ -4,9 +4,21 @@
 
 [![Kander - Kanban Orchestration for Multiple AI Agents](docs/star-please.png)](https://github.com/dualface/kander)
 
-One person schedules multiple AI agents with a kanban board.
+Schedule multiple AI agents in parallel with a kanban board, built-in independent review, and delivery gates.
+
+> **Built for real engineering, not synthetic demos.**  
+> Since August 2026, Kander has driven nearly 1,000 production tasks for [QuickTUI](https://quicktui.ai). Built to survive actual bugs, race conditions, and merge conflicts, Kander delivers rock-solid orchestration, independent code review, and automatic recovery.
+> 
+> In-depth reading: [Kander in Production](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) | [Full Production Retrospective](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md) (Deep Dive)
 
 ![Kander workflow](docs/workflow-en.svg)
+
+### Key Features
+
+- **Two-Stage Independent Review Gates**: Physical isolation between execution and review. PMQA catches semantic and state-machine bugs, blocking false-green tests.
+- **Conflict-Aware Scheduling**: Static analysis of Git branch overlaps and file modification boundaries ensures controlled concurrency without write conflicts.
+- **Terminal and Workspace Isolation**: Isolated parallel agent execution powered by Git Worktrees and tmux/herdr containers.
+- **Zero-Token GitHub Integration**: Seamlessly reuses local `gh` credentials to browse issues, import task cards, and sync progress directly from the board.
 
 ## 1. Quick Start
 
@@ -36,7 +48,7 @@ On first launch, if not yet installed, an interactive wizard starts. Once instal
 Four steps to get going:
 
 1. Start an agent session and discuss the requirement or task there, making the goal and acceptance criteria clear. The agent's Plan mode is recommended.
-2. Once the task is confirmed, the agent asks whether to launch it through the kanban flow. Confirm, and the task launches automatically.
+2. Once the task is confirmed, the agent (with Kander rules loaded) confirms whether to launch it through the kanban flow. Confirm, and the task is created and started automatically.
 3. When you have multiple requirements, repeat steps 1-2 for each one, continuously scheduling and launching tasks.
 4. Check task status with the command-line interface:
 
@@ -48,18 +60,42 @@ kander
 
 > The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
 
+### Terminal Kanban Shortcuts
+
+| Key | Description |
+|---|---|
+| `Space` / `Enter` | View task details with Vim-style navigation |
+| `m` | Task action menu (start, move, archive) |
+| `g` | Open GitHub Issues overlay (browse and one-click import) |
+| `c` | Open standalone Chat session (quick discussion without creating a card) |
+| `/` | Filter and search task cards |
+| `r` | Refresh board data |
+
 Further reading: the slides [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
 
-## 2. GitHub Integration
+## 2. Key Commands
+
+- `kander`: Open the interactive terminal kanban board.
+- `kander doctor`: Check and repair environment dependencies, agent availability, launchers, and rules configuration.
+
+## 3. GitHub Integration
 
 Linking a project to a GitHub repository needs the [GitHub CLI](https://cli.github.com/) (`gh`). Kander never asks for, reads, or stores a token; it reuses the credentials `gh` already manages.
 
 On the terminal board, press `g` to open the GitHub issue list in an overlay.
 
-## 3. License
+## 4. Advanced Documentation
+
+- [Review Disposition & Completion Gate](docs/review-disposition.md)
+- [Card Transactions & Crash Recovery](docs/card-transactions.md)
+- [Terminal Backends & Container Definitions](docs/terminal-backend.md)
+- [Durable Dispatch Protocol](docs/durable-dispatch.md)
+- [GitHub Issue Import & Result Protocol](docs/github-issue-import.md)
+
+## 5. License
 
 This project is under the MIT License; see [LICENSE](LICENSE).
 
-## 4. Changelog
+## 6. Changelog
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md).
