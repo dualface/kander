@@ -1,0 +1,16 @@
+{
+  "menu.brew_kander_is_not_the_latest_upgrade_via_brew": "Homebrew 安装的 {{.V0}} 不是最新版（最新为 {{.V1}}），请通过 brew 升级。",
+  "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew 管理的可执行文件未动；需要移除请使用 brew uninstall。",
+  "menu.brew_upgrade_completed": "brew 升级完成。",
+  "menu.brew_upgrade_failed_continuing": "brew 升级失败，继续检查：{{.V0}}",
+  "menu.found_kander_executables_on_path": "PATH 中发现 {{.V0}} 个 kander 可执行文件：",
+  "menu.kander_executable_removed": "已删除 {{.V0}}。",
+  "menu.kander_executable_remove_failed": "删除 {{.V0}} 失败：{{.V1}}",
+  "menu.kander_homebrew": "（Homebrew）",
+  "menu.kander_latest": "（最新）",
+  "menu.kander_version_unknown": "版本未知",
+  "menu.keep_which_kander_executable": "保留哪个 kander 可执行文件？",
+  "menu.multiple_kander_run_kander_doctor_in_a_terminal": "在终端中运行 `kander doctor` 可选择保留哪个可执行文件。",
+  "menu.upgrade_kander_via_brew": "通过 brew 升级 kander",
+  "tui.doctor_report_above_press_enter_to_open_the_board": "上方为检查结果，按 Enter 打开看板。"
+}

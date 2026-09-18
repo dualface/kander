@@ -1,0 +1,16 @@
+{
+  "menu.brew_kander_is_not_the_latest_upgrade_via_brew": "Homebrew の {{.V0}} は最新ではありません（最新は {{.V1}}）。brew でアップグレードしてください。",
+  "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew 管理の実行ファイルはそのままです。削除するには brew uninstall を使ってください。",
+  "menu.brew_upgrade_completed": "brew アップグレードが完了しました。",
+  "menu.brew_upgrade_failed_continuing": "brew アップグレードに失敗しました。続行します: {{.V0}}",
+  "menu.found_kander_executables_on_path": "PATH で {{.V0}} 個の kander 実行ファイルが見つかりました：",
+  "menu.kander_executable_removed": "{{.V0}} を削除しました。",
+  "menu.kander_executable_remove_failed": "{{.V0}} の削除に失敗しました: {{.V1}}",
+  "menu.kander_homebrew": "（Homebrew）",
+  "menu.kander_latest": "（最新）",
+  "menu.kander_version_unknown": "バージョン不明",
+  "menu.keep_which_kander_executable": "どの kander 実行ファイルを残しますか？",
+  "menu.multiple_kander_run_kander_doctor_in_a_terminal": "ターミナルで `kander doctor` を実行すると、残す実行ファイルを選べます。",
+  "menu.upgrade_kander_via_brew": "brew で kander をアップグレード",
+  "tui.doctor_report_above_press_enter_to_open_the_board": "上の結果を確認し、Enter を押してボードを開きます。"
+}

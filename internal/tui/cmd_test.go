@@ -11,6 +11,28 @@ import (
 	"github.com/dualface/kander/internal/install"
 )
 
+// stampStartupVersion records the running version so Run skips the startup
+// doctor gate entirely, matching the pre-gate behavior these tests assert.
+func stampStartupVersion(t *testing.T) {
+	t.Helper()
+	paths, err := config.CurrentInstallPaths()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := install.RecordStartupVersion(paths); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// stubDoctorAck replaces the Enter wait so a TTY-backed test run never blocks
+// on os.Stdin; the real doctor still runs where the test needs it.
+func stubDoctorAck(t *testing.T) {
+	t.Helper()
+	old := confirmDoctorContinue
+	confirmDoctorContinue = func() {}
+	t.Cleanup(func() { confirmDoctorContinue = old })
+}
+
 func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 	previousCheck := checkStartupCopy
 	checkStartupCopy = func() (bool, int) { t.Fatal("post-install startup repeated PATH confirmation"); return true, 1 }
@@ -21,6 +43,7 @@ func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(install.EnvSkipInstall, "1")
 	_ = os.Unsetenv(board.EnvBoardDir)
+	stampStartupVersion(t)
 
 	cfgPath := filepath.Join(home, ".config", "kander", "config.json")
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
@@ -100,6 +123,7 @@ func TestPostInstallFirstLaunchCreatesConfigInInstallLanguage(t *testing.T) {
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Chdir(t.TempDir())
 
+	stubDoctorAck(t)
 	t.Setenv(install.EnvPostInstall, "1")
 	origTTY := isInteractiveTerminal
 	isInteractiveTerminal = func() bool { return true }
@@ -156,6 +180,7 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	config.BindConfigLanguage(nil)
 	t.Cleanup(func() { config.BindConfigLanguage(nil) })
 	t.Chdir(t.TempDir())
+	stubDoctorAck(t)
 
 	origTTY := isInteractiveTerminal
 	isInteractiveTerminal = func() bool { return true }
@@ -223,6 +248,7 @@ func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
 	}
 	config.ApplyLanguageArgument(nil)
 	config.BindConfigLanguage(nil)
+	stampStartupVersion(t)
 
 	t.Chdir(t.TempDir())
 
@@ -294,6 +320,7 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 	}
 	config.ApplyLanguageArgument(nil)
 	config.BindConfigLanguage(nil)
+	stampStartupVersion(t)
 
 	cwd := t.TempDir()
 	t.Chdir(cwd)

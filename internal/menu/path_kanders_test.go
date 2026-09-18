@@ -11,8 +11,15 @@ import (
 
 func stubKanderInventory(t *testing.T, binaries []install.PathKanderBinary) {
 	t.Helper()
+	stubKanderInventoryPtr(t, &binaries)
+}
+
+// stubKanderInventoryPtr makes the inventory re-read on every call, so a test
+// can model the post-upgrade or post-removal PATH state.
+func stubKanderInventoryPtr(t *testing.T, binaries *[]install.PathKanderBinary) {
+	t.Helper()
 	old := pathKanderBinaries
-	pathKanderBinaries = func() []install.PathKanderBinary { return binaries }
+	pathKanderBinaries = func() []install.PathKanderBinary { return *binaries }
 	t.Cleanup(func() { pathKanderBinaries = old })
 }
 
@@ -145,11 +152,12 @@ func TestReportPathKandersBrewFailureWarns(t *testing.T) {
 }
 
 func TestReportPathKandersKeepOneRemovesOthers(t *testing.T) {
-	stubKanderInventory(t, []install.PathKanderBinary{
+	inventory := []install.PathKanderBinary{
 		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
 		{Path: "/home/u/bin/kander", Version: "0.9.0"},
 		{Path: "/opt/homebrew/bin/kander", Version: "1.0.0", Brew: true},
-	})
+	}
+	stubKanderInventoryPtr(t, &inventory)
 	var brewRan bool
 	stubBrewUpgrade(t, &brewRan, nil)
 	stubAskChoice(t, []string{"/home/u/bin/kander"})
@@ -158,9 +166,6 @@ func TestReportPathKandersKeepOneRemovesOthers(t *testing.T) {
 	var lines []ReportLine
 	var healthy bool
 	lines = CaptureReport(func() { healthy = reportPathKanders(true) })
-	if healthy {
-		t.Fatal("cleanup flow must keep healthy=false for this report cycle")
-	}
 	want := []string{"/usr/local/bin/kander"}
 	if !reflect.DeepEqual(removed, want) {
 		t.Fatalf("removed %v, want %v", removed, want)
@@ -170,6 +175,97 @@ func TestReportPathKandersKeepOneRemovesOthers(t *testing.T) {
 	}
 	if !strings.Contains(reportText(lines), "brew") {
 		t.Fatalf("kept-nonbrew choice must hint brew-managed files stay:\n%s", reportText(lines))
+	}
+	if healthy {
+		t.Fatal("stale inventory still holding duplicates must report unhealthy")
+	}
+}
+
+// A successful keep-one that leaves a single file flips the report healthy.
+func TestReportPathKandersHealthyAfterCleanup(t *testing.T) {
+	inventory := []install.PathKanderBinary{
+		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
+		{Path: "/home/u/bin/kander", Version: "0.9.0"},
+	}
+	stubKanderInventoryPtr(t, &inventory)
+	stubAskChoice(t, []string{"/home/u/bin/kander"})
+	var removed []string
+	old := removeKanderBinary
+	removeKanderBinary = func(path string) error {
+		removed = append(removed, path)
+		inventory = []install.PathKanderBinary{{Path: "/home/u/bin/kander", Version: "0.9.0"}}
+		return nil
+	}
+	t.Cleanup(func() { removeKanderBinary = old })
+	var healthy bool
+	CaptureReport(func() { healthy = reportPathKanders(true) })
+	if !healthy {
+		t.Fatal("cleanup leaving one binary must report healthy")
+	}
+	if !reflect.DeepEqual(removed, []string{"/usr/local/bin/kander"}) {
+		t.Fatalf("removed %v", removed)
+	}
+}
+
+// A successful brew upgrade re-probes before the keep-one question.
+func TestReportPathKandersReprobesAfterBrewUpgrade(t *testing.T) {
+	before := []install.PathKanderBinary{
+		{Path: "/opt/homebrew/bin/kander", Version: "0.9.0", Brew: true},
+		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
+	}
+	after := []install.PathKanderBinary{
+		{Path: "/opt/homebrew/bin/kander", Version: "1.0.0", Brew: true},
+		{Path: "/usr/local/bin/kander", Version: "1.0.0"},
+	}
+	inventory := before
+	stubKanderInventoryPtr(t, &inventory)
+	var brewRan bool
+	old := runBrewUpgrade
+	runBrewUpgrade = func() error {
+		brewRan = true
+		inventory = after
+		return nil
+	}
+	t.Cleanup(func() { runBrewUpgrade = old })
+	var seenChoices [][]choice
+	oldAsk := askKanderChoice
+	askKanderChoice = func(prompt string, choices []choice, defaultValue string) (string, error) {
+		seenChoices = append(seenChoices, choices)
+		if len(choices) > 2 {
+			return choices[0].Value, nil
+		}
+		return "upgrade", nil
+	}
+	t.Cleanup(func() { askKanderChoice = oldAsk })
+	var removed []string
+	oldRemove := removeKanderBinary
+	removeKanderBinary = func(path string) error {
+		removed = append(removed, path)
+		inventory = after[:1]
+		return nil
+	}
+	t.Cleanup(func() { removeKanderBinary = oldRemove })
+	var healthy bool
+	lines := CaptureReport(func() { healthy = reportPathKanders(true) })
+	if !brewRan || len(seenChoices) != 2 {
+		t.Fatalf("brew=%v prompts=%d", brewRan, len(seenChoices))
+	}
+	// The keep-one question must offer the post-upgrade inventory.
+	var keepChoices []choice
+	for _, c := range seenChoices {
+		if len(c) > 2 {
+			keepChoices = c
+		}
+	}
+	if len(keepChoices) != 3 || keepChoices[0].Value != "/opt/homebrew/bin/kander" {
+		t.Fatalf("keep-one choices = %+v", keepChoices)
+	}
+	_ = lines
+	if !healthy {
+		t.Fatal("keeping brew after upgrade leaves one binary -> healthy")
+	}
+	if !reflect.DeepEqual(removed, []string{"/usr/local/bin/kander"}) {
+		t.Fatalf("removed %v", removed)
 	}
 }
 

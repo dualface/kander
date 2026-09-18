@@ -78,6 +78,15 @@ func reportPathKanders(interactive bool) bool {
 				warning(config.Text("menu.brew_upgrade_failed_continuing", err.Error()))
 			} else {
 				success(config.Text("menu.brew_upgrade_completed"))
+				// The inventory printed above is stale now; the keep-one question
+				// must offer the post-upgrade binaries, not the pre-upgrade ones.
+				binaries = pathKanderBinaries()
+				nonBrewCount = 0
+				for _, bin := range binaries {
+					if !bin.Brew {
+						nonBrewCount++
+					}
+				}
 			}
 		}
 	}
@@ -119,7 +128,6 @@ func reportPathKanders(interactive bool) bool {
 	if brewSkipped {
 		hint(config.Text("menu.brew_managed_executables_left_alone_uninstall_via_brew"))
 	}
-	// The PATH inventory changed; whether it is now healthy is decided by the
-	// remaining checks, so this report does not flip healthy back on.
-	return false
+	// Report the post-cleanup inventory so a successful keep-one reads healthy.
+	return len(pathKanderBinaries()) <= 1
 }

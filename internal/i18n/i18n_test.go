@@ -22,6 +22,7 @@ var argumentPattern = regexp.MustCompile(`\.V([0-9]+)`)
 // of its general catalog and its topic catalogs, and duplicates are rejected.
 var testCatalogFiles = []string{
 	"locales/install/%s.json",
+	"locales/doctor/%s.json",
 	"locales/%s.json",
 	"locales/issue/%s.json",
 	"locales/agentlanguage/%s.json",
