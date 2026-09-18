@@ -26,6 +26,9 @@ const (
 	// IntegrationRewritten means a reference to the previous rules entry location was rewritten
 	// in place to the current one.
 	IntegrationRewritten
+	// IntegrationCleaned means invalid or duplicate load commands were removed without a
+	// legacy rewrite and no new reference had to be appended.
+	IntegrationCleaned
 )
 
 // IntegrationOutcome is the result of ensuring one agent rules file references the Kander entry.
@@ -33,6 +36,8 @@ type IntegrationOutcome struct {
 	Agent  string
 	Target string
 	Status IntegrationStatus
+	// Removed counts the invalid or duplicate Kander rules load commands the cleanup dropped.
+	Removed int
 }
 
 // integrateAgentRules ensures agent rules files reference the Kander entry after an install.
@@ -183,7 +188,11 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return outcome, err
 		}
-		if err := os.WriteFile(target, []byte(block), 0o644); err != nil {
+		anchor, err := fileAnchor(target)
+		if err != nil {
+			return outcome, err
+		}
+		if err := fs.WriteBytesAtomicInherited(anchor, target, []byte(block), false); err != nil {
 			return outcome, err
 		}
 		outcome.Status = IntegrationCreated
@@ -215,68 +224,54 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 	// A reference to the previous rules location is rewritten first, even when the current
 	// reference is already present: a repair that ran before the migration may have appended
 	// the current one next to the stale one, and the stale one must not survive.
-	if rewritten, changed := rewriteLegacyReference(string(existing), paths, filepath.Dir(target)); changed {
-		rewritten = dropDuplicateLines(rewritten, block)
-		writePath := resolved
-		if real, err := filepath.EvalSymlinks(resolved); err == nil {
-			writePath = real
-		}
-		anchor, err := fileAnchor(writePath)
-		if err != nil {
-			return outcome, err
-		}
-		if err := fs.WriteBytesAtomicInherited(anchor, writePath, []byte(rewritten), true); err != nil {
-			return outcome, err
-		}
-		outcome.Status = IntegrationRewritten
-		return outcome, nil
+	text := string(existing)
+	legacyChanged := false
+	if rewritten, changed := rewriteLegacyReference(text, paths, filepath.Dir(target)); changed {
+		text = rewritten
+		legacyChanged = true
 	}
-	if strictReferencePresent(string(existing), RulesEntry(paths), filepath.Dir(target)) {
+	// Dead and duplicate load commands are dropped next, so a stale third-party reference or a
+	// repeated import can neither satisfy the strict gate nor survive the repair.
+	cleaned, removed := CleanRulesReferences(text, paths, filepath.Dir(target))
+	if !legacyChanged && cleaned == text && strictReferencePresent(text, RulesEntry(paths), filepath.Dir(target)) {
 		outcome.Status = IntegrationPresent
 		return outcome, nil
 	}
-	separator := "\n"
-	if len(existing) == 0 || strings.HasSuffix(string(existing), "\n\n") {
-		separator = ""
-	} else if strings.HasSuffix(string(existing), "\n") {
-		separator = "\n"
-	} else {
-		separator = "\n\n"
+	final := cleaned
+	appended := false
+	if !strictReferencePresent(cleaned, RulesEntry(paths), filepath.Dir(target)) {
+		separator := "\n"
+		if len(cleaned) == 0 || strings.HasSuffix(cleaned, "\n\n") {
+			separator = ""
+		} else if strings.HasSuffix(cleaned, "\n") {
+			separator = "\n"
+		} else {
+			separator = "\n\n"
+		}
+		final = cleaned + separator + block
+		appended = true
 	}
-	file, err := os.OpenFile(resolved, os.O_WRONLY|os.O_APPEND, 0o644)
+	writePath := resolved
+	if real, err := filepath.EvalSymlinks(resolved); err == nil {
+		writePath = real
+	}
+	anchor, err := fileAnchor(writePath)
 	if err != nil {
 		return outcome, err
 	}
-	_, writeErr := file.WriteString(separator + block)
-	if closeErr := file.Close(); writeErr == nil {
-		writeErr = closeErr
+	if err := fs.WriteBytesAtomicInherited(anchor, writePath, []byte(final), true); err != nil {
+		return outcome, err
 	}
-	if writeErr != nil {
-		return outcome, writeErr
+	outcome.Removed = removed
+	switch {
+	case appended:
+		outcome.Status = IntegrationUpdated
+	case legacyChanged:
+		outcome.Status = IntegrationRewritten
+	default:
+		outcome.Status = IntegrationCleaned
 	}
-	outcome.Status = IntegrationUpdated
 	return outcome, nil
-}
-
-// dropDuplicateLines removes repeated copies of the one-line import form of block, keeping the
-// first: rewriting a stale reference next to an already current one must not leave two lines.
-func dropDuplicateLines(text, block string) string {
-	line := strings.TrimSpace(block)
-	if line == "" || strings.Contains(line, "\n") || strings.Count(text, line) < 2 {
-		return text
-	}
-	var out []string
-	seen := false
-	for _, raw := range splitKeepEnds(text) {
-		if strings.TrimSpace(raw) == line {
-			if seen {
-				continue
-			}
-			seen = true
-		}
-		out = append(out, raw)
-	}
-	return strings.Join(out, "")
 }
 
 // entrySpelling is the portable spelling of the rules entry written into agent rules files:

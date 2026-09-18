@@ -143,6 +143,67 @@ func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
 	}
 }
 
+func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
+	entry := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
+	writeRulesFile(t, entry, "# Kander entry\n")
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	target := filepath.Join(home, ".codex", "AGENTS.md")
+	block := "## Kander Rules Entry\n\nAt the start of every session, read `" + entry +
+		"` and follow it as the Kander workflow rules entry.\n"
+	writeRulesFile(t, target, "# Notes\n\n/dead/KANDER-AGENTS.md\n\n"+block+"\n"+block)
+
+	lines := CaptureReport(func() {
+		if !reportRulesIntegration(cfg, paths, false) {
+			t.Error("non-repair report must stay healthy on a connected file")
+		}
+	})
+	var found bool
+	for _, line := range lines {
+		if strings.Contains(line.Text, "invalid") && strings.Contains(line.Text, "duplicate") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("non-repair report misses the invalid/duplicate hint: %+v", lines)
+	}
+
+	lines = CaptureReport(func() {
+		if !reportRulesIntegration(cfg, paths, true) {
+			t.Error("repair must succeed")
+		}
+	})
+	found = false
+	for _, line := range lines {
+		if strings.Contains(line.Text, "removed") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("repair report misses the removed count: %+v", lines)
+	}
+	got, _ := os.ReadFile(target)
+	text := string(got)
+	if strings.Contains(text, "/dead/") || strings.Count(text, "Kander Rules Entry") != 1 {
+		t.Fatalf("repair left invalid or duplicate references: %q", text)
+	}
+
+	lines = CaptureReport(func() {
+		if !reportRulesIntegration(cfg, paths, true) {
+			t.Error("second repair must succeed")
+		}
+	})
+	for _, line := range lines {
+		if strings.Contains(line.Text, "removed") {
+			t.Fatalf("second repair must change nothing: %+v", lines)
+		}
+	}
+}
+
 func TestRulesIntegrationRejectsMissingProjectRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
