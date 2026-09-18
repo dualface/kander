@@ -137,7 +137,7 @@ func TestDoctorWindowsLauncherKeepsHerdrWhenInstalled(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Launcher = "herdr"
 	agents := map[string]agentState{"codex": {Path: "codex.exe", Version: "1", Review: true}}
-	repairConfiguredTools(cfg, cfg, agents, TerminalTools{Herdr: TerminalTool{Path: "herdr.exe"}})
+	repairConfiguredTools(cfg, cfg, agents, TerminalTools{Herdr: TerminalTool{Path: "herdr.exe"}}, nil, nil)
 	if cfg.Launcher != "herdr" {
 		t.Fatalf("launcher=%s", cfg.Launcher)
 	}
@@ -150,7 +150,7 @@ func TestDoctorWindowsLauncherFallbackWithoutHerdr(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Launcher = "herdr"
 	agents := map[string]agentState{"codex": {Path: "codex.exe", Version: "1", Review: true}}
-	repairConfiguredTools(cfg, cfg, agents, TerminalTools{})
+	repairConfiguredTools(cfg, cfg, agents, TerminalTools{}, nil, nil)
 	if cfg.Launcher != "console" {
 		t.Fatalf("launcher=%s", cfg.Launcher)
 	}

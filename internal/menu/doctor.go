@@ -103,7 +103,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 	}
 	agents := findAgents(agentConfig)
 	if repair {
-		if _, ok := repairDoctorConfig(agents, tools); !ok {
+		if _, ok := repairDoctorConfig(agents, tools, interactive); !ok {
 			healthy = false
 		}
 		if loaded, loadErr := config.Load(false); loadErr != nil {

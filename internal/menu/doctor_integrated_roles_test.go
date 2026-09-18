@@ -24,7 +24,7 @@ func TestDoctorIntegratedRoleAvailability(t *testing.T) {
 					if healthy := validateConfiguredResources(cfg, agents, paths, TerminalTools{}); healthy {
 						t.Errorf("healthy=%v want false", healthy)
 					}
-					changes := repairConfiguredTools(cfg, cfg, agents, TerminalTools{})
+					changes, _ := repairConfiguredTools(cfg, cfg, agents, TerminalTools{}, nil, nil)
 					if cfg.Reviewers[scale][role] != "claude" || cfg.Models.ReviewRoles[role][scale+"_agent"] != "claude" || cfg.Models.ReviewRoles[role][scale+"_model"] != cfg.Models.Review["claude"]["model"] {
 						t.Fatalf("unavailable reviewer was not repaired: %v", changes)
 					}

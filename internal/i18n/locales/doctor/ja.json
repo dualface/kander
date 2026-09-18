@@ -3,6 +3,7 @@
   "menu.brew_managed_executables_left_alone_uninstall_via_brew": "Homebrew 管理の実行ファイルはそのままです。削除するには brew uninstall を使ってください。",
   "menu.brew_upgrade_completed": "brew アップグレードが完了しました。",
   "menu.brew_upgrade_failed_continuing": "brew アップグレードに失敗しました。続行します: {{.V0}}",
+  "menu.configured_agent_for_is_unavailable_choose_a_replacement": "{{.V1}} に設定された Agent {{.V0}} は利用できません。代替を選択してください。",
   "menu.found_kander_executables_on_path": "PATH で {{.V0}} 個の kander 実行ファイルが見つかりました：",
   "menu.kander_executable_removed": "{{.V0}} を削除しました。",
   "menu.kander_executable_remove_failed": "{{.V0}} の削除に失敗しました: {{.V1}}",
@@ -11,6 +12,7 @@
   "menu.kander_version_unknown": "バージョン不明",
   "menu.keep_which_kander_executable": "どの kander 実行ファイルを残しますか？",
   "menu.multiple_kander_run_kander_doctor_in_a_terminal": "ターミナルで `kander doctor` を実行すると、残す実行ファイルを選べます。",
+  "menu.no_usable_agent_replacement_for_keeping": "{{.V0}} の {{.V1}} を置き換えられる利用可能な Agent がありません。設定値を保持します。",
   "menu.running_kander_is_older_than_path_binary_doctor_stopped": "実行中の kander {{.V0}} は {{.V1}}（{{.V2}}）より古いため、doctor はチェックや修復を行わず停止しました。古いバイナリで修復するとディスク上の新しいルールと設定がダウングレードされます。新しい kander で doctor を実行してください。",
   "menu.upgrade_kander_via_brew": "brew で kander をアップグレード",
   "tui.doctor_report_above_press_enter_to_open_the_board": "上の結果を確認し、Enter を押してボードを開きます。"
