@@ -75,7 +75,7 @@ func InspectRulesReferences(agent string, paths config.InstallPaths) (RulesRefer
 	for _, file := range targets {
 		count, err := inspectRulesReferences(file, paths)
 		if err != nil {
-			return issues, err
+			return RulesReferenceIssues{}, err
 		}
 		issues.Invalid += count.Invalid
 		issues.Duplicates += count.Duplicates
