@@ -4,10 +4,10 @@
 
 [![Kander - 複数 AI Agent のカンバン調整](docs/star-please.png)](https://github.com/dualface/kander)
 
-カンバンで複数の AI Agent を並行スケジューリング、独立レビューと品質ゲートを標準装備。
+厳格なルール駆動型マルチ Agent 並行開発。独立レビューと品質ゲートを標準装備し、自動化された納品品質を徹底担保。
 
-> **デモではなく、実際のソフトウェア開発のために。**  
-> 2026 年 8 月以来、Kander は [QuickTUI](https://quicktui.ai) の本番開発で 1,000 件近い実タスクを完了してきました。実際の競合、バグ、不整合を解決しながら鍛え上げられた、堅牢な Agent スケジューリング、独立レビュー、自動リカバリを提供します。
+> **実際のエンジニアリングから誕生**  
+> 2026 年 8 月以来、Kander は [QuickTUI](https://quicktui.ai) の本番環境で 1,000 件近い実タスクを完了してきました。実際のコード競合、並行性競合、複雑な不具合の対応を通じて継続的に洗練され、真に信頼できる Agent スケジューリング、独立レビュー、クラッシュリカバリ機構を確立。より安価なモデルを使用した場合でも、納品品質を保証します。
 >
 > 詳細レポート：[Kander 本番運用の振り返り](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) ｜ [本番運用詳細レポート（英語深度分析）](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md)
 

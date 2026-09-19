@@ -4,10 +4,10 @@
 
 [![Kander - Kanban Orchestration for Multiple AI Agents](docs/star-please.png)](https://github.com/dualface/kander)
 
-Schedule multiple AI agents in parallel with a kanban board, built-in independent review, and delivery gates.
+Strict rule-driven multi-agent parallel development with built-in independent review and delivery gates to ensure automated delivery quality.
 
-> **Built for real engineering, not synthetic demos.**  
-> Since August 2026, Kander has driven nearly 1,000 production tasks for [QuickTUI](https://quicktui.ai). Built to survive actual bugs, race conditions, and merge conflicts, Kander delivers rock-solid orchestration, independent code review, and automatic recovery.
+> **Born from real engineering**  
+> Since August 2026, Kander has driven nearly 1,000 production tasks in the [QuickTUI](https://quicktui.ai) production environment. Refined through handling actual code conflicts, race conditions, and complex bugs, it establishes truly reliable agent orchestration, independent review, and crash recovery. Even with lower-cost models, it guarantees delivery quality.
 >
 > In-depth reading: [Kander in Production](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) | [Full Production Retrospective](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md) (Deep Dive)
 

@@ -4,10 +4,10 @@
 
 [![Kander - 多 AI Agent 的看板调度](docs/star-please.png)](https://github.com/dualface/kander)
 
-用看板调度多 AI Agent 并行开发，内置独立审查与交付门禁。
+强规则驱动的多 Agent 并行开发，内置独立审查与交付门禁，充分保障自动化交付质量。
 
-> **为真实工程而生，而非概念演示。**  
-> 自 2026 年 8 月以来，Kander 已在 [QuickTUI](https://quicktui.ai) 的生产环境中完成了近 1,000 个真实开发任务。在解决代码冲突、并发竞争与复杂缺陷中历练而成，提供真正可靠的 Agent 调度、独立代码审查与崩溃恢复机制。
+> **从真实工程中诞生**  
+> 自 2026 年 8 月以来，Kander 已在 [QuickTUI](https://quicktui.ai) 生产环境中完成了近千个真实开发任务。在处理实际的代码冲突、并发竞争和复杂缺陷时，不断优化提炼，最终沉淀出了一套真正可靠的 Agent 调度、独立审查与崩溃恢复机制。即便使用更廉价的模型，也能保证交付质量。
 >
 > 深入阅读：[Kander 生产实践回顾](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) ｜ [完整分析报告（英文深度分析）](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md)
 
