@@ -83,17 +83,7 @@ Multi-model routing is most useful when disagreement is treated as information r
 
 When an author rejects a must-fix reviewer finding, require a factual basis that falsifies a material premise. If neither side can establish the decisive runtime fact, prefer `unverifiable` over an unsupported rejection.
 
-A future arbitration layer can route only disputed findings to a third model instead of running another full review. That keeps the expensive third opinion narrow and preserves independent reasoning.
-
-A sensible dynamic arbitration policy is:
-
-| Author | PMQA | Third opinion |
-| --- | --- | --- |
-| SWE-2 | Grok-4.6 | DeepSeek-V4.1-Flash |
-| DeepSeek-V4.1-Flash | Grok-4.6 | SWE-2 |
-| Composer 2.5 | Grok-4.6 | SWE-2 |
-
-The third model should receive the task contract, relevant code/diff, reviewer finding and evidence, author rejection basis, and objective verification evidence. It should not receive hidden chain-of-thought from either model.
+Kander has no arbitration stage today: an `unverifiable` must-fix item goes to the user. One possible future direction, not a shipped feature, is to route only the disputed finding to a third model instead of running another full review. Such a model would come from a family different from both the author and the PMQA reviewer, and would receive the task contract, relevant code/diff, reviewer finding and evidence, author rejection basis, and objective verification evidence, never hidden chain-of-thought from either model.
 
 ## What Not to Hard-Code
 
