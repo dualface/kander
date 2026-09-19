@@ -150,6 +150,16 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 		} else {
 			d.Session = &AgentSessionDefinition{Mode: "generated"}
 		}
+	} else if d.Session.File == nil {
+		// An overlay session that keeps the embedded mode also inherits the
+		// embedded file declaration; a different mode opts out, and an
+		// explicit file always wins. Inheritance follows the dialect's
+		// embedded definition so wrappers driving the same CLI resolve the
+		// same on-disk session format.
+		if emb, ok := embeddedByName(d.Dialect); ok && emb.Session.Mode == d.Session.Mode && emb.Session.File != nil {
+			file := *emb.Session.File
+			d.Session.File = &file
+		}
 	}
 	if d.ExitCommand == nil {
 		if emb, ok := embeddedByName(d.Dialect); ok {

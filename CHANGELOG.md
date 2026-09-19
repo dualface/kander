@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Agent overlay merge contract change: an `agents.<name>.session` overlay that omits `file` now inherits the embedded `session.file` declaration when its `mode` matches the embedded `mode`, instead of dropping it. This fixes `kander notify` failures and `kander check` liveness stuck at `unknown` (`agent pi declares no session file format for path identities`) for configs that overlaid `agents.pi.session` before pi gained `session.file` in v0.7.6. An explicit overlay `file` still wins, a different `mode` opts out, and every agent whose dialect resolves to the declaring embedded definition inherits — including custom wrappers with `dialect: pi`. `kander doctor` reports each relying overlay as an informational hint, and interactive repair can store the embedded declaration into the scope `config.json` (never into a project `.kander-config.json`).
+
 ## v0.7.6 — 2026-09-19
 
 - Review: the PM reviewer prompt no longer treats a regression of a guarantee the system already had as out of contract. A regression introduced, worsened, or concealed by the review range is a gate finding even when the task context does not restate the guarantee; adding a guarantee the system never had stays out of scope. This matches the rejection grounds in the v0.7.5 rules.

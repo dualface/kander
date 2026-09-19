@@ -22,5 +22,9 @@
   "menu.agent_extension_modified": "{{.V0}} rules extension was edited locally and was not overwritten: {{.V1}}",
   "menu.agent_extension_written": "{{.V0}}: wrote the rules extension to {{.V1}}",
   "menu.agent_extension_updated": "{{.V0}}: updated the rules extension at {{.V1}}",
-  "menu.agent_extension_error": "{{.V0}} rules extension could not be checked: {{.V1}}"
+  "menu.agent_extension_error": "{{.V0}} rules extension could not be checked: {{.V1}}",
+  "menu.agent_session_file_inherited": "Agent {{.V0}} omits session.file; the embedded {{.V1}} declaration applies by inheritance.",
+  "menu.agent_session_file_store": "Agent {{.V0}} inherits session.file from the embedded definition. Store that declaration into config.json?",
+  "menu.agent_session_file_store_yes": "Store session.file in config.json",
+  "menu.agent_session_file_store_no": "Keep inheriting session.file"
 }

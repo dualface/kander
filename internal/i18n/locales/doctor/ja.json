@@ -22,5 +22,9 @@
   "menu.agent_extension_modified": "{{.V0}} ルール拡張はローカルで変更されているため上書きしませんでした: {{.V1}}",
   "menu.agent_extension_written": "{{.V0}}: ルール拡張を {{.V1}} に書き込みました",
   "menu.agent_extension_updated": "{{.V0}}: {{.V1}} のルール拡張を更新しました",
-  "menu.agent_extension_error": "{{.V0}} ルール拡張を確認できませんでした: {{.V1}}"
+  "menu.agent_extension_error": "{{.V0}} ルール拡張を確認できませんでした: {{.V1}}",
+  "menu.agent_session_file_inherited": "Agent {{.V0}} は session.file を宣言していません。埋め込み {{.V1}} 定義の宣言が継承で有効です。",
+  "menu.agent_session_file_store": "Agent {{.V0}} の session.file は埋め込み定義から継承されています。その宣言を config.json に書き込みますか？",
+  "menu.agent_session_file_store_yes": "session.file を config.json に書き込む",
+  "menu.agent_session_file_store_no": "session.file の継承を維持する"
 }

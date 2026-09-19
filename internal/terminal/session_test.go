@@ -156,6 +156,42 @@ func TestMatchAgentSessionSpecialFiles(t *testing.T) {
 	}
 }
 
+// An overlay session that predates session.file inherits the embedded pi
+// declaration at read time, so path-kind identities resolve end to end while
+// the on-disk overlay is never rewritten.
+func TestMatchAgentSessionPathOverlayInheritsFile(t *testing.T) {
+	resetLanguage(t)
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Agents = map[string]config.AgentDefinition{
+		"pi": {Session: &config.AgentSessionDefinition{Mode: "generated"}},
+	}
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	definition, err := config.LoadAgent("pi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.Session == nil || definition.Session.File == nil {
+		t.Fatal("resolved definition must carry the inherited session.file")
+	}
+	path := writeSessionJSONL(t, "s1", "")
+	verdict, detail := MatchAgentSession(context.Background(), "pi", "path", path, "s1")
+	if verdict != SessionMatches {
+		t.Fatalf("verdict=%v detail=%s", verdict, detail)
+	}
+	// The raw overlay on disk keeps its original shape: no file key.
+	saved, err := config.LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Agents["pi"].Session == nil || saved.Agents["pi"].Session.File != nil {
+		t.Fatalf("overlay rewritten: %+v", saved.Agents["pi"].Session)
+	}
+}
+
 func TestMatchAgentSessionCancelled(t *testing.T) {
 	resetLanguage(t)
 	writeTestConfig(t)

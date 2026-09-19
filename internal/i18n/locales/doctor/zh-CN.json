@@ -22,5 +22,9 @@
   "menu.agent_extension_modified": "{{.V0}} 规则扩展被本地修改过，未覆盖: {{.V1}}",
   "menu.agent_extension_written": "{{.V0}}: 已写入规则扩展到 {{.V1}}",
   "menu.agent_extension_updated": "{{.V0}}: 已更新 {{.V1}} 的规则扩展",
-  "menu.agent_extension_error": "无法检查 {{.V0}} 规则扩展: {{.V1}}"
+  "menu.agent_extension_error": "无法检查 {{.V0}} 规则扩展: {{.V1}}",
+  "menu.agent_session_file_inherited": "Agent {{.V0}} 未声明 session.file；当前通过继承生效的是内置 {{.V1}} 定义的声明。",
+  "menu.agent_session_file_store": "Agent {{.V0}} 的 session.file 当前继承自内置定义。是否把该声明写入 config.json？",
+  "menu.agent_session_file_store_yes": "把 session.file 写入 config.json",
+  "menu.agent_session_file_store_no": "保持继承 session.file"
 }

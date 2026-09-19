@@ -3,6 +3,7 @@ package menu
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/dualface/kander/internal/config"
@@ -203,6 +204,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 			maybeHintLegacyOnevoke()
 		}
 		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
+		reportAgentSessionFileInheritance(loaded)
 		if loaded.WelcomeComplete {
 			healthy = reportRulesIntegration(loaded, paths, repair) && healthy
 			healthy = reportAgentExtensions(paths, repair) && healthy
@@ -335,6 +337,49 @@ func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) 
 			"menu.removed_invalid_or_duplicate_kander_rules_references",
 			label, outcome.Removed, outcome.Target,
 		))
+	}
+}
+
+// sessionFileInheritSpec reports whether the named agent overlay declares a
+// session without file and therefore inherits the file declaration of its
+// dialect's embedded definition, returning the resolved dialect and a detached
+// copy of that declaration. Inheritance applies only while the overlay keeps
+// the embedded session mode; AgentFor(nil, dialect) resolves the embedded
+// definition because dialect accepts embedded names only.
+func sessionFileInheritSpec(cfg *config.Config, name string) (dialect string, file *config.SessionFile, ok bool) {
+	if cfg == nil {
+		return "", nil, false
+	}
+	overlay, exists := cfg.Agents[name]
+	if !exists || overlay.Session == nil || overlay.Session.File != nil {
+		return "", nil, false
+	}
+	dialect = overlay.Dialect
+	if dialect == "" {
+		if !slices.Contains(config.ExecutionAgents, name) {
+			return "", nil, false
+		}
+		dialect = name
+	}
+	embedded := config.AgentFor(nil, dialect)
+	if embedded.Session == nil || embedded.Session.File == nil || embedded.Session.Mode != overlay.Session.Mode {
+		return "", nil, false
+	}
+	return dialect, embedded.Session.File, true
+}
+
+// reportAgentSessionFileInheritance surfaces every agent overlay whose session
+// omits the file declaration it now inherits from the same-mode embedded
+// definition. The hint is informational only: it never counts as an error and
+// never changes the doctor exit status. Interactive repair may offer to store
+// the declaration into the scope config.json.
+func reportAgentSessionFileInheritance(cfg *config.Config) {
+	for _, name := range config.AgentNames(cfg) {
+		dialect, _, ok := sessionFileInheritSpec(cfg, name)
+		if !ok {
+			continue
+		}
+		hint(config.Text("menu.agent_session_file_inherited", name, dialect))
 	}
 }
 

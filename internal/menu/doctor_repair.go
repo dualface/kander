@@ -31,13 +31,14 @@ func repairDoctorConfig(agents map[string]agentState, tools TerminalTools, inter
 	// repair keeps the automatic first-usable choice. The raw document also
 	// says whether chat_agent is set explicitly: a derived value follows the
 	// repaired large-scale agent instead of being prompted or auto-picked.
-	decisions := toolRepairDecisions{fields: map[string]string{}, chatExplicit: true}
+	decisions := toolRepairDecisions{fields: map[string]string{}, chatExplicit: true, sessionFiles: map[string]bool{}}
 	if scope, raw, loadErr := config.LoadScopeRaw(true); loadErr == nil {
 		chatValue, _ := raw["chat_agent"].(string)
 		decisions.chatExplicit = chatValue != ""
 		if interactive {
 			language = scope.Language
 			decisions.fields = collectToolReplacements(planToolReplacements(scope, agents, decisions.chatExplicit), text)
+			decisions.sessionFiles = collectSessionFileStores(scope, text)
 		}
 	}
 
@@ -94,13 +95,16 @@ type toolReplacement struct {
 }
 
 // toolRepairDecisions carries the choices collected outside the repair lock:
-// fields maps a broken config field to the picked replacement, and
-// chatExplicit says whether the scope document sets chat_agent itself. A
-// missing or empty chat_agent is derived from kanban_agents.large and follows
-// its repaired value rather than prompting or auto-picking another agent.
+// fields maps a broken config field to the picked replacement, chatExplicit
+// says whether the scope document sets chat_agent itself, and sessionFiles
+// records per-agent confirmation to store an inherited session.file
+// declaration into the overlay. A missing or empty chat_agent is derived from
+// kanban_agents.large and follows its repaired value rather than prompting or
+// auto-picking another agent.
 type toolRepairDecisions struct {
 	fields       map[string]string
 	chatExplicit bool
+	sessionFiles map[string]bool
 }
 
 // planToolReplacements mirrors the field scan of repairConfiguredTools on a
@@ -176,6 +180,34 @@ func collectToolReplacements(plans []toolReplacement, text func(string, ...any) 
 		decisions[plan.field] = selected
 	}
 	return decisions
+}
+
+// collectSessionFileStores asks once per scope agent whose session overlay
+// omits the embedded file declaration it inherits; storing is opt-in, so the
+// default keeps the overlay untouched and a skipped answer means keep. Only
+// the scope document is scanned: a session overlay living in the project
+// .kander-config.json is never written into the scope file. An input error
+// stops the collection; agents left without a decision keep inheriting.
+func collectSessionFileStores(scope *config.Config, text func(string, ...any) string) map[string]bool {
+	stores := map[string]bool{}
+	for _, name := range config.AgentNames(scope) {
+		if _, _, ok := sessionFileInheritSpec(scope, name); !ok {
+			continue
+		}
+		selected, err := askDoctorAgentChoice(
+			text("menu.agent_session_file_store", name),
+			[]choice{
+				{Value: "store", Label: text("menu.agent_session_file_store_yes")},
+				{Value: "keep", Label: text("menu.agent_session_file_store_no")},
+			},
+			"keep",
+		)
+		if err != nil {
+			break
+		}
+		stores[name] = selected == "store"
+	}
+	return stores
 }
 
 // usableAgentNames filters the candidate list down to the agents that probed
@@ -295,6 +327,24 @@ func repairConfiguredTools(cfg, policy *config.Config, agents map[string]agentSt
 			replacement = builtin.TmuxSession
 		}
 		set("launcher", &cfg.Launcher, replacement)
+	}
+	// Confirmed session.file stores write only the file key into the scope
+	// overlay; every other overlay field stays untouched, and the written
+	// declaration is the same embedded spec the overlay already inherits.
+	for _, name := range config.AgentNames(cfg) {
+		if !decisions.sessionFiles[name] {
+			continue
+		}
+		dialect, file, ok := sessionFileInheritSpec(cfg, name)
+		if !ok {
+			continue
+		}
+		agent := cfg.Agents[name]
+		session := *agent.Session
+		session.File = file
+		agent.Session = &session
+		cfg.Agents[name] = agent
+		changes = append(changes, "agents."+name+".session.file: inherited -> "+file.Format+" ("+dialect+")")
 	}
 	// Once an execution agent and a reviewer exist, the repaired choices should immediately become the effective config.
 	if len(execution) > 0 && len(reviewers) > 0 {
