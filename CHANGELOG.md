@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.5 — 2026-09-19
+
+- Rules: a plan with exactly one standalone card starts that card directly; `kander orchestrate` is for two or more cards or a task group.
+- Rules: rejecting a `blocking`, `high`, or `medium` finding on factual grounds now needs evidence that falsifies a material premise; an unsettled factual dispute is `unverifiable`. Scope grounds (pre-existing, `OUT_OF_SCOPE`, beyond the contract, same root cause) stay separate and need no falsifying evidence, and a regression of a guarantee the system already had has no scope ground.
+- Rules: review notices (whitelist not hit, the unresolved list) no longer read as questions; integration continues, and only the items sent for a user decision wait.
+- Rules: the 15-minute Security finding timeout covers `medium` findings only. A confirmed `blocking` or `high` Security finding waits for the user. A decision that arrives after the batch closed never reopens it.
+- Rules: the orchestrator's pre-plan sync is the single case where a group branch is updated with `--force-with-lease`; it is required only when `develop` touched files the group changes.
+- Rules: when the group merge-back rebase conflicts or changes the patch, the orchestrator resolves the conflict in a merge commit, which keeps the reviewed history intact. Hand-resolved code conflicts are reviewed before `develop` moves.
+- Rules: a user-authorized takeover of a stopped executing agent proceeds inside an open review batch.
+- Rules: when a reviewer becomes permanently unavailable after a successful run with open must-fix findings, the agent reports the batch state and the user decides.
+- Docs: new multi-model routing guide (`docs/multi-model-routing.md`).
+
 ## v0.7.4 — 2026-09-19
 
 - Bare `kander` now runs doctor once per binary version per scope, recorded in `kander-startup-state.json` under the rules root; the report waits for Enter before the board opens.
