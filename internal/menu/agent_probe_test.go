@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
@@ -41,6 +42,34 @@ func TestDoctorAndPanelProbeAgentOverride(t *testing.T) {
 	out += diagnostic
 	if !strings.Contains(out, "Codex: renamed-version") || !strings.Contains(out, "helper: renamed-version") {
 		t.Fatalf("%s %s", out, diagnostic)
+	}
+}
+
+// Three agents that each sleep one second must finish probing well under the
+// three seconds a sequential loop would need.
+func TestFindAgentsProbesConcurrently(t *testing.T) {
+	h := newHarness(t)
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Launcher = "foreground"
+	cfg.Agents = map[string]config.AgentDefinition{}
+	for _, name := range []string{"slow-a", "slow-b", "slow-c"} {
+		path := filepath.Join(h.fakeBin, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nsleep 1\necho slow-version\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		cfg.Agents[name] = config.AgentDefinition{Path: path, Dialect: "claude"}
+	}
+	started := time.Now()
+	states := findAgents(cfg)
+	elapsed := time.Since(started)
+	if elapsed >= 2*time.Second {
+		t.Fatalf("probes look sequential: %v", elapsed)
+	}
+	for _, name := range []string{"slow-a", "slow-b", "slow-c"} {
+		if states[name].Version != "slow-version" {
+			t.Fatalf("%s not probed: %+v", name, states[name])
+		}
 	}
 }
 

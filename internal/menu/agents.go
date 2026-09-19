@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dualface/kander/internal/config"
@@ -134,41 +135,60 @@ func findAgents(configs ...*config.Config) map[string]agentState {
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-	agents := map[string]agentState{}
 	reviewSet := map[string]struct{}{}
 	for _, name := range config.ReviewAgentNames(cfg) {
 		reviewSet[name] = struct{}{}
 	}
-	for _, name := range config.AgentNames(cfg) {
-		executable := config.AgentPath(cfg, name)
-		program := process.ResolveAgentProgram(executable)
-		state := agentState{
-			Execution: true,
-			Review:    false,
-		}
-		if _, ok := reviewSet[name]; ok {
-			state.Review = true
-		}
-		if program != nil {
-			state.Path = program.Path
-			state.Version = agentVersion(program)
-			state.Batch = program.Batch
-		}
-		if state.Review {
-			reviewPath := config.ReviewExecutable(cfg, name)
-			if reviewPath != executable {
-				reviewer := agentState{Review: true}
-				if program := process.ResolveAgentProgram(reviewPath); program != nil {
-					reviewer.Path = program.Path
-					reviewer.Version = agentVersion(program)
-					reviewer.Batch = program.Batch
-				}
-				state.reviewer = &reviewer
-			}
-		}
-		agents[name] = state
+	// Each probe runs a `--version` subprocess with its own timeout, so the
+	// agents are probed concurrently: one slow CLI no longer serializes the
+	// wait. The fan-out is bounded by config.AgentNames, and each goroutine
+	// writes only its own slot, so no mutex is needed.
+	names := config.AgentNames(cfg)
+	states := make([]agentState, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Go(func() {
+			states[i] = probeAgent(cfg, name, reviewSet)
+		})
+	}
+	wg.Wait()
+	agents := make(map[string]agentState, len(names))
+	for i, name := range names {
+		agents[name] = states[i]
 	}
 	return agents
+}
+
+// probeAgent resolves one agent's executables and versions it. It only reads
+// cfg, so callers may run it concurrently.
+func probeAgent(cfg *config.Config, name string, reviewSet map[string]struct{}) agentState {
+	executable := config.AgentPath(cfg, name)
+	program := process.ResolveAgentProgram(executable)
+	state := agentState{
+		Execution: true,
+		Review:    false,
+	}
+	if _, ok := reviewSet[name]; ok {
+		state.Review = true
+	}
+	if program != nil {
+		state.Path = program.Path
+		state.Version = agentVersion(program)
+		state.Batch = program.Batch
+	}
+	if state.Review {
+		reviewPath := config.ReviewExecutable(cfg, name)
+		if reviewPath != executable {
+			reviewer := agentState{Review: true}
+			if program := process.ResolveAgentProgram(reviewPath); program != nil {
+				reviewer.Path = program.Path
+				reviewer.Version = agentVersion(program)
+				reviewer.Batch = program.Batch
+			}
+			state.reviewer = &reviewer
+		}
+	}
+	return state
 }
 
 func reviewGatePresent(paths config.InstallPaths) (bool, string) {
