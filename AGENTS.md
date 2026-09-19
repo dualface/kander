@@ -146,6 +146,7 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - [Orchestration checkpoints and recovery](docs/coordinator-recovery.md): coordinator epochs, CAS, snapshot reconciliation, originals and Git wrap-up evidence, recovery boundaries.
 - [Original reproduction acceptance mapping](docs/recovery-regressions.md): the 13 original bad behaviors, their owning regressions, and cross-module recovery acceptance.
 - [Custom execution agents](docs/custom-agents.md): executable names, process names, dialect/argv templates, session policies and session file declarations, and review boundaries.
+- [Multi-model routing](docs/multi-model-routing.md): routing principles for small/large executors and per-role reviewers, example profiles, and why concrete model names stay in configuration.
 - [Output parsing](docs/output-parsing.md): declarative `source`/`format`/`select`/`parse`/`join`/`success`, line conditions, and `{name}` / `{{` `}}` placeholders.
 - [Terminal backends](docs/terminal-backend.md): the `internal/terminal` operation set, the `WINDOW` address contract, capability flags, session identity resolution, error classification, and the rule that callers reach terminals only through `terminal.Backend`.
 - [Terminal definitions](docs/terminal-definitions.md): the declarative definition format (launchers, requires, steps, conditions, candidates, rows and session-aware reverse lookup, error classification, hooks), the search path and precedence, versioning, the fixed no-scripting boundary, and contributor conformance checks.
