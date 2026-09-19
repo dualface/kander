@@ -10,6 +10,7 @@
 - Doctor repair reports legacy rules migration results and names each rule file it restored or upgraded from the embedded copy; locally edited files are still only hinted, never overwritten.
 - Interactive doctor asks which usable agent should replace a configured agent that is unavailable, once per affected field, instead of silently writing the first candidate. Non-interactive runs keep the automatic replacement; a field with no usable candidate keeps its value with a warning. A `chat_agent` that was never set follows the repaired large-scale kanban agent.
 - An empty or whitespace-only `.kander-config.json` project overlay is deleted on load instead of failing configuration loading.
+- The Options panel probes every agent concurrently when it opens, so one slow CLI no longer serializes the environment check.
 - Docs: advanced documents were rewritten against the implementation and translated into Chinese and Japanese; the READMEs gained a FAQ section and a production retrospective.
 
 ## v0.7.3 — 2026-09-18
