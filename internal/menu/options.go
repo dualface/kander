@@ -673,21 +673,9 @@ func (s *Session) finish() error {
 			))
 			continue
 		}
-		switch outcome.Status {
-		case install.IntegrationPresent:
-			success(config.Text("menu.is_connected_to_kander_rules", labels[selected], outcome.Target))
-		case install.IntegrationRewritten:
-			success(config.Text("menu.updated_kander_rules_reference", labels[selected], outcome.Target))
-		case install.IntegrationCleaned:
-			success(config.Text("menu.cleaned_kander_rules_references", labels[selected], outcome.Target))
-		default:
-			success(config.Text("menu.added_kander_rules_reference", labels[selected], outcome.Target))
-		}
-		if outcome.Removed > 0 {
-			success(config.Text(
-				"menu.removed_invalid_or_duplicate_kander_rules_references",
-				labels[selected], outcome.Removed, outcome.Target,
-			))
+		reportIntegrationOutcome(labels[selected], outcome)
+		if outcome.Override != nil {
+			reportIntegrationOutcome(labels[selected], *outcome.Override)
 		}
 	}
 	// The rules-extension files converge the same way the references do.

@@ -128,13 +128,9 @@ func printResult(result Result) {
 			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_failed", target, item.Err.Error()))
 			continue
 		}
-		switch item.Status {
-		case IntegrationRewritten:
-			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_updated", target))
-		case IntegrationCleaned:
-			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_cleaned", target, item.Removed))
-		case IntegrationCreated, IntegrationUpdated:
-			fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_added", target))
+		printIntegrationLine(item.IntegrationOutcome)
+		if item.Override != nil {
+			printIntegrationLine(*item.Override)
 		}
 	}
 	for _, item := range result.Extensions {
@@ -155,6 +151,23 @@ func printResult(result Result) {
 		case ExtensionModified:
 			fmt.Fprintln(os.Stderr, config.Text("install.agent_extension_modified", label, target))
 		}
+	}
+}
+
+// printIntegrationLine prints the per-file result of one ensured rules file, so the
+// AGENTS.override.md sibling reports the same way the configured target does.
+func printIntegrationLine(item IntegrationOutcome) {
+	target := item.Target
+	if target == "" {
+		target = item.Agent
+	}
+	switch item.Status {
+	case IntegrationRewritten:
+		fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_updated", target))
+	case IntegrationCleaned:
+		fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_cleaned", target, item.Removed))
+	case IntegrationCreated, IntegrationUpdated:
+		fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_added", target))
 	}
 }
 

@@ -38,6 +38,10 @@ type IntegrationOutcome struct {
 	Status IntegrationStatus
 	// Removed counts the invalid or duplicate Kander rules load commands the cleanup dropped.
 	Removed int
+	// Override reports the AGENTS.override.md sibling the same call processed when that file
+	// already exists next to an AGENTS.md target; nil otherwise. It never carries its own
+	// Override.
+	Override *IntegrationOutcome
 }
 
 // integrateAgentRules ensures agent rules files reference the Kander entry after an install.
@@ -123,13 +127,29 @@ func AgentRulesTarget(agent string, paths config.InstallPaths) string {
 }
 
 // RulesIntegration reports whether the agent rules file of the given scope references the Kander entry.
-// The second value is the target path when integrated, or a localized explanation when not.
+// When an AGENTS.override.md sibling exists next to an AGENTS.md target, both files must
+// reference the entry: the agent reads the override instead of the main file, so a missing
+// reference there reports the override path as the explanation. The second value is the
+// integrated path, or a localized explanation when not.
 func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return false, config.Text("config.project_install_paths_are_missing_the_main_worktree")
 	}
 	entry := RulesEntry(paths)
 	target := AgentRulesTarget(agent, paths)
+	integrated, detail := rulesFileIntegration(agent, target, entry, paths)
+	if !integrated {
+		return false, detail
+	}
+	if override := rulesOverrideTarget(target); override != "" {
+		return rulesFileIntegration(agent, override, entry, paths)
+	}
+	return true, target
+}
+
+// rulesFileIntegration reports whether one rules file references the Kander entry, applying
+// the same checks RulesIntegration used for the configured target to any sibling file.
+func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths) (bool, string) {
 	info, err := os.Lstat(target)
 	if err != nil {
 		return false, config.Text("menu.not_found", target)
@@ -176,6 +196,9 @@ func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
 // when missing, appends the reference when absent, rewrites references to the previous rules
 // location, and removes invalid or duplicate load commands; a file whose references are already
 // clean is left untouched.
+// When an AGENTS.override.md sibling already exists next to an AGENTS.md target, the same pipeline
+// runs on it too and its result is reported through the outcome's Override field; the override
+// expresses the user's choice to shadow the main file, so it is only ever edited, never created.
 // The write gate is strictReferencePresent, not RulesIntegration: appending must never repeat, so any
 // literal mention of the entry blocks it, even one RulesIntegration would report as inactive.
 func EnsureRulesIntegration(agent string, paths config.InstallPaths) (IntegrationOutcome, error) {
@@ -188,9 +211,45 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 		return outcome, fmt.Errorf("%s", config.Text("config.cannot_resolve_home_directory"))
 	}
 	outcome.Target = target
+	main, err := ensureTargetIntegration(agent, target, true, paths)
+	outcome.Status = main.Status
+	outcome.Removed = main.Removed
+	if err != nil {
+		return outcome, err
+	}
+	if override := rulesOverrideTarget(target); override != "" {
+		secondary, err := ensureTargetIntegration(agent, override, false, paths)
+		outcome.Override = &secondary
+		if err != nil {
+			return outcome, err
+		}
+	}
+	return outcome, nil
+}
+
+// rulesOverrideTarget returns the AGENTS.override.md sibling of an AGENTS.md rules target when
+// that file already exists; it is never created by Kander, so a missing file yields "".
+func rulesOverrideTarget(target string) string {
+	if filepath.Base(target) != "AGENTS.md" {
+		return ""
+	}
+	candidate := filepath.Join(filepath.Dir(target), "AGENTS.override.md")
+	if _, err := os.Lstat(candidate); err != nil {
+		return ""
+	}
+	return candidate
+}
+
+// ensureTargetIntegration runs the reference pipeline on one rules file. The configured target
+// may be created when missing (create=true); an override sibling (create=false) is only edited.
+func ensureTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (IntegrationOutcome, error) {
+	outcome := IntegrationOutcome{Agent: agent, Target: target}
 	block := referenceBlock(agent, paths)
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
+		if !create {
+			return outcome, err
+		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return outcome, err
 		}

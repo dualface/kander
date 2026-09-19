@@ -236,21 +236,9 @@ func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair 
 				hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
 				continue
 			}
-			switch outcome.Status {
-			case install.IntegrationPresent:
-				success(config.Text("menu.is_connected_to_kander_rules", labels[selected], outcome.Target))
-			case install.IntegrationRewritten:
-				success(config.Text("menu.updated_kander_rules_reference", labels[selected], outcome.Target))
-			case install.IntegrationCleaned:
-				success(config.Text("menu.cleaned_kander_rules_references", labels[selected], outcome.Target))
-			default:
-				success(config.Text("menu.added_kander_rules_reference", labels[selected], outcome.Target))
-			}
-			if outcome.Removed > 0 {
-				success(config.Text(
-					"menu.removed_invalid_or_duplicate_kander_rules_references",
-					labels[selected], outcome.Removed, outcome.Target,
-				))
+			reportIntegrationOutcome(labels[selected], outcome)
+			if outcome.Override != nil {
+				reportIntegrationOutcome(labels[selected], *outcome.Override)
 			}
 			continue
 		}
@@ -263,10 +251,15 @@ func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair 
 			hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
 		}
 		if issues, inspectErr := install.InspectRulesReferences(selected, paths); inspectErr == nil && issues.Total() > 0 {
-			hint(config.Text(
-				"menu.found_invalid_or_duplicate_kander_rules_references",
-				labels[selected], issues.Invalid, issues.Duplicates, target,
-			))
+			for _, file := range issues.Files {
+				if file.Invalid+file.Duplicates == 0 {
+					continue
+				}
+				hint(config.Text(
+					"menu.found_invalid_or_duplicate_kander_rules_references",
+					labels[selected], file.Invalid, file.Duplicates, file.Target,
+				))
+			}
 		}
 	}
 	return healthy
@@ -322,6 +315,27 @@ func reportAgentExtensions(paths config.InstallPaths, repair bool) bool {
 		}
 	}
 	return healthy
+}
+
+// reportIntegrationOutcome prints the per-file result of one ensured rules file; doctor repair
+// and the options finish share it so the override sibling reports identically.
+func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) {
+	switch outcome.Status {
+	case install.IntegrationPresent:
+		success(config.Text("menu.is_connected_to_kander_rules", label, outcome.Target))
+	case install.IntegrationRewritten:
+		success(config.Text("menu.updated_kander_rules_reference", label, outcome.Target))
+	case install.IntegrationCleaned:
+		success(config.Text("menu.cleaned_kander_rules_references", label, outcome.Target))
+	default:
+		success(config.Text("menu.added_kander_rules_reference", label, outcome.Target))
+	}
+	if outcome.Removed > 0 {
+		success(config.Text(
+			"menu.removed_invalid_or_duplicate_kander_rules_references",
+			label, outcome.Removed, outcome.Target,
+		))
+	}
 }
 
 func maybeHintLegacyOnevoke() {

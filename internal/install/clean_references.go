@@ -20,11 +20,21 @@ var rulesEntryTokenRE = regexp.MustCompile(`[A-Za-z0-9._\-/\\~:]*KANDER-AGENTS\.
 var claudeImportRE = regexp.MustCompile(`^@(\S+)$`)
 
 // RulesReferenceIssues counts the load commands InspectRulesReferences found that the repair
-// pipeline would drop from one agent rules file.
+// pipeline would drop, aggregated over every rules file the agent's target covers.
 type RulesReferenceIssues struct {
 	// Invalid counts load commands whose path does not resolve to the current rules entry.
 	Invalid int
 	// Duplicates counts load commands dropped because an earlier valid one stays.
+	Duplicates int
+	// Files holds the per-file counts in processing order: the configured target first,
+	// then the existing AGENTS.override.md sibling when one applies.
+	Files []FileReferenceIssues
+}
+
+// FileReferenceIssues counts the load commands the repair pipeline would drop from one file.
+type FileReferenceIssues struct {
+	Target     string
+	Invalid    int
 	Duplicates int
 }
 
@@ -48,15 +58,36 @@ const (
 	refLegacy
 )
 
-// InspectRulesReferences simulates the repair pipeline on the agent rules file — legacy
-// rewrite followed by the reference cleanup — and counts what it would drop, without writing.
-// A missing or unreadable file reports an error and zero issues.
+// InspectRulesReferences simulates the repair pipeline on every rules file the agent's target
+// covers — the configured target plus an existing AGENTS.override.md sibling — running the
+// legacy rewrite followed by the reference cleanup on each and counting what it would drop,
+// without writing. A missing or unreadable file reports an error and zero issues.
 func InspectRulesReferences(agent string, paths config.InstallPaths) (RulesReferenceIssues, error) {
 	var issues RulesReferenceIssues
 	target := AgentRulesTarget(agent, paths)
 	if target == "" {
 		return issues, nil
 	}
+	targets := []string{target}
+	if override := rulesOverrideTarget(target); override != "" {
+		targets = append(targets, override)
+	}
+	for _, file := range targets {
+		count, err := inspectRulesReferences(file, paths)
+		if err != nil {
+			return issues, err
+		}
+		issues.Invalid += count.Invalid
+		issues.Duplicates += count.Duplicates
+		issues.Files = append(issues.Files, count)
+	}
+	return issues, nil
+}
+
+// inspectRulesReferences runs the simulated repair pipeline on one rules file and counts the
+// load commands it would drop.
+func inspectRulesReferences(target string, paths config.InstallPaths) (FileReferenceIssues, error) {
+	issues := FileReferenceIssues{Target: target}
 	resolved := target
 	if info, err := os.Lstat(target); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		if real, err := filepath.EvalSymlinks(target); err == nil {
@@ -72,7 +103,10 @@ func InspectRulesReferences(agent string, paths config.InstallPaths) (RulesRefer
 	if rewritten, changed := rewriteLegacyReference(text, paths, baseDir); changed {
 		text = rewritten
 	}
-	_, issues = cleanRulesReferences(text, paths, baseDir)
+	var found RulesReferenceIssues
+	_, found = cleanRulesReferences(text, paths, baseDir)
+	issues.Invalid = found.Invalid
+	issues.Duplicates = found.Duplicates
 	return issues, nil
 }
 
