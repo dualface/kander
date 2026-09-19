@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.6 — 2026-09-19
+
+- Review: the PM reviewer prompt no longer treats a regression of a guarantee the system already had as out of contract. A regression introduced, worsened, or concealed by the review range is a gate finding even when the task context does not restate the guarantee; adding a guarantee the system never had stays out of scope. This matches the rejection grounds in the v0.7.5 rules.
+
 ## v0.7.5 — 2026-09-19
 
 - Rules: a plan with exactly one standalone card starts that card directly; `kander orchestrate` is for two or more cards or a task group.
