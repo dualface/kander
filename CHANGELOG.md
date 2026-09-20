@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.11 — 2026-09-20
+
+- Feature: bare TUI startup now checks the latest stable GitHub release asynchronously and defers its update prompt until other overlays close. Confirmed Homebrew updates run `brew upgrade kander`; direct installs download the matching platform archive and checksums, enforce trusted hosts and size limits, verify SHA-256, safely extract and version-probe the binary, atomically replace the executable, then restart into the verified version. Failed checks remain non-blocking, and failed replacements preserve the installed binary.
+
 ## v0.7.10 — 2026-09-20
 
 - Fix: a task card with broken task group ownership no longer blocks `kander orchestrate`, dependency expansion, or `kander subscribe` when it cannot belong to any referenced group. The board now records, per membership problem, the group values that card could still declare, and each caller checks completeness only for the groups it actually references. A card whose `TASK_GROUP` value is not a legal group ID, or whose duplicate `TASK_GROUP` lines all name other groups, is ruled out; unreadable cards and scan problems such as a duplicate task ID still block, because their ownership is unknown. Duplicate empty `TASK_GROUP` lines keep the legacy discussion-section group value in play, so a real member is never skipped silently.
