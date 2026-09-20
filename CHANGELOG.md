@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.13 — 2026-09-20
+
+- Fix: Homebrew self-updates now run `brew update` to refresh the tap metadata before `brew upgrade dualface/tap/kander`, so a stale local tap can no longer make the upgrade exit successfully while keeping the old binary. The upgrade targets the fully qualified formula name instead of the ambiguous short name, and the post-upgrade PATH version probe still fails the update when the installed binary is older than the release. Refresh failures, upgrade failures, and a stale post-upgrade version each return their own error with the bounded command output preserved for the TUI result.
+
 ## v0.7.12 — 2026-09-20
 
 - Feature: interactive startup checks and `kander doctor` now offer one localized confirmation when installed rule files contain local edits. On confirmation, Kander creates a unique timestamped backup of each original file before atomically installing the embedded rule, reports every file result independently, and updates rule state only for successful replacements. Declining, ended input, backup or replacement failures, and non-interactive doctor paths preserve local edits; tests now resolve localized expectations through the configured catalog.
