@@ -241,7 +241,7 @@ func TestAuditWatchedGroupSilentlyOmitsUnreadableMember(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if scanned.GroupMembership().Err() == nil {
+			if scanned.GroupMembership().ErrFor() == nil {
 				t.Fatal("lost document failure")
 			}
 		})

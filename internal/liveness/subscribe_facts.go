@@ -108,8 +108,15 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 	var membership board.Membership
 	if s.hasGroups {
 		membership = facts.scanned.GroupMembership()
-		// Unknown ownership could conceal a member of any requested group.
-		if err = membership.Err(); err != nil {
+		// Unknown ownership could conceal a member of a watched group; a card
+		// that provably belongs to no watched group does not.
+		var watchedGroups []string
+		for _, reference := range s.opts.Watch {
+			if taskGroupRe.MatchString(reference) {
+				watchedGroups = append(watchedGroups, reference)
+			}
+		}
+		if err = membership.ErrFor(watchedGroups...); err != nil {
 			return facts, err
 		}
 	} else if len(facts.scanned.Problems) > 0 {

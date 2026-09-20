@@ -40,7 +40,7 @@ func TestGroupExpansionKeepsCommittedSnapshot(t *testing.T) {
 	}
 	// The update occurs after Scan and before the consumer reads its entries.
 	membership := scanned.GroupMembership()
-	members, err := membership.Groups, membership.Err()
+	members, err := membership.Groups, membership.ErrFor()
 	if err != nil || !reflect.DeepEqual(members[group], ids) {
 		t.Fatalf("partial expansion returned: %+v, %v", members, err)
 	}
@@ -49,7 +49,7 @@ func TestGroupExpansionKeepsCommittedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	membership = scanned.GroupMembership()
-	members, err = membership.Groups, membership.Err()
+	members, err = membership.Groups, membership.ErrFor()
 	if err != nil || !reflect.DeepEqual(members[group], ids) {
 		t.Fatalf("fresh expansion: %+v, %v", members, err)
 	}

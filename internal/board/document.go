@@ -95,6 +95,12 @@ func TaskGroupFrom(text string) string {
 	if value := MetadataFrom(text, FieldTaskGroup); value != "" {
 		return value
 	}
+	return legacyTaskGroupFrom(text)
+}
+
+// legacyTaskGroupFrom reads the group value from the discussion section, which
+// older cards used instead of the metadata field.
+func legacyTaskGroupFrom(text string) string {
 	discussion, ok := SectionBody(text, SectionDiscussion)
 	if !ok {
 		return ""
