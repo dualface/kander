@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.10 — 2026-09-20
+
+- Fix: a task card with broken task group ownership no longer blocks `kander orchestrate`, dependency expansion, or `kander subscribe` when it cannot belong to any referenced group. The board now records, per membership problem, the group values that card could still declare, and each caller checks completeness only for the groups it actually references. A card whose `TASK_GROUP` value is not a legal group ID, or whose duplicate `TASK_GROUP` lines all name other groups, is ruled out; unreadable cards and scan problems such as a duplicate task ID still block, because their ownership is unknown. Duplicate empty `TASK_GROUP` lines keep the legacy discussion-section group value in play, so a real member is never skipped silently.
+
 ## v0.7.9 — 2026-09-20
 
 - Release: the release workflow reads the Homebrew tap credential from the `HOMEBREW_TAP_TOKEN` repository secret (formerly `TAP_TOKEN`), so the tap formula is synced automatically when a tag is pushed. No change to the binary or the rules.
