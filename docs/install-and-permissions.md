@@ -4,6 +4,14 @@ How the binary installs itself and which filesystem boundaries the configuration
 
 ## Installation
 
+### Automatic updates
+
+Bare `kander` TUI startup requests the latest stable release from GitHub in the background. The request has a five-second deadline and does not delay the first screen. CLI subcommands do not perform this check.
+
+When a newer release supports the current OS and architecture, Kander waits for active dialogs and overlays to close before asking for confirmation. Homebrew-managed executables use `brew upgrade kander` with direct argv execution. Other installations download the fixed release archive and `checksums.txt` from GitHub, enforce response and extracted-binary size limits, verify SHA-256, reject unsafe archive entries, run the staged binary's `version` command, and atomically replace the running executable. Windows uses a rename-aside replacement and restores the original if writing the replacement fails.
+
+After a successful update, Kander waits for a key, restores the terminal, then starts the verified executable. The existing startup version stamp causes the new process to rerun doctor and refresh embedded rules. Update-check failures only produce a transient TUI notice; they never block offline use.
+
 - Installation is done by the binary itself: `kander install` runs the interactive wizard (language, scope). Bare interactive `kander` with no scope `config.json` skips the wizard, lets doctor create a usable config, and opens the board options interface section; when a config already exists, bare `kander` opens the board directly.
 - Global `kander install` writes configuration and rules. When the first `kander` on PATH does not identify the running executable, it copies that executable to the global entry and replaces a file already there; it also deletes retired onevoke/kanban entries in that bin directory. Bare interactive `kander` with an existing scope config asks a Y/N question (default no) for the same copy; declining continues this launch and does not persist a skip. Project installs copy into the main worktree's `.kander/bin`.
 - Copying never changes shell configuration. If PATH still selects another entry or omits the destination directory, the command prints instructions. Windows does not modify `PATH` automatically.

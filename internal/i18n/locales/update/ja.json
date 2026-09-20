@@ -1,0 +1,10 @@
+{
+  "update.available": "Kander {{.V0}} がインストールされています。新しいバージョン {{.V1}} を利用できます。今すぐ更新しますか？",
+  "update.check_failed": "更新の確認に失敗しました: {{.V0}}",
+  "update.failed": "更新に失敗しました: {{.V0}}",
+  "update.restart_failed": "更新後の Kander を起動できませんでした: {{.V0}}",
+  "update.restart_keys": "任意のキーを押すと新しいバージョンで再起動します",
+  "update.running": "Kander {{.V0}} をインストールしています…",
+  "update.success": "Kander {{.V0}} をインストールしました。",
+  "update.title": "Kander の更新"
+}

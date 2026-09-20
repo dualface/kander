@@ -123,6 +123,8 @@ func Run(_ []string) int {
 		root = ""
 	}
 	app := newApp(prefs.Single, prefs.Refresh, ctx, nil, nil, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
+	app.updateCheck = install.CheckUpdate
+	app.updateApply = install.ApplyUpdate
 	app.IssueProvider = cli.IssueProvider
 	attachBoard(app, root)
 	initial, err := app.GetBoard()
@@ -137,6 +139,11 @@ func Run(_ []string) int {
 	}
 	if err := runBoardTUI(app); err != nil {
 		return fail(err)
+	}
+	if app.RestartPath != "" {
+		if err := install.RestartUpdatedBinary(app.RestartPath); err != nil {
+			return fail(fmt.Errorf("%s", t("update.restart_failed", err.Error())))
+		}
 	}
 	return 0
 }

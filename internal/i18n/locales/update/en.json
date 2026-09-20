@@ -1,0 +1,10 @@
+{
+  "update.available": "Kander {{.V0}} is installed. Version {{.V1}} is available. Update now?",
+  "update.check_failed": "Update check failed: {{.V0}}",
+  "update.failed": "Update failed: {{.V0}}",
+  "update.restart_failed": "could not start updated Kander: {{.V0}}",
+  "update.restart_keys": "Press any key to restart with the updated version",
+  "update.running": "Installing Kander {{.V0}}...",
+  "update.success": "Kander {{.V0}} was installed successfully.",
+  "update.title": "Kander update"
+}

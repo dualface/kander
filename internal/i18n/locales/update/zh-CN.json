@@ -1,0 +1,10 @@
+{
+  "update.available": "当前安装 Kander {{.V0}}，新版 {{.V1}} 可用。现在更新吗？",
+  "update.check_failed": "新版检测失败：{{.V0}}",
+  "update.failed": "更新失败：{{.V0}}",
+  "update.restart_failed": "无法启动新版 Kander：{{.V0}}",
+  "update.restart_keys": "按任意键重启并使用新版",
+  "update.running": "正在安装 Kander {{.V0}}……",
+  "update.success": "Kander {{.V0}} 安装成功。",
+  "update.title": "Kander 更新"
+}

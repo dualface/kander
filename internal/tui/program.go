@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"golang.org/x/term"
+
+	"github.com/dualface/kander/internal/install"
 )
 
 // mouseButtons is a terminal-library-independent button set, so tests can build events directly.
@@ -100,13 +103,23 @@ type shellDoneMsg struct{}
 // workMsg carries the result of a background task (environment checks, task starts or terminal focus).
 type workMsg struct{ payload any }
 
+type updateCheckMsg struct {
+	info *install.UpdateInfo
+	err  error
+}
+
+type updateApplyMsg struct {
+	result install.UpdateResult
+	err    error
+}
+
 // program is the Bubble Tea shell of App: it only translates events and holds no UI logic.
 type program struct {
 	app *App
 }
 
 func (p program) Init() tea.Cmd {
-	return tea.Batch(tickCmd(), p.app.takePending())
+	return tea.Batch(tickCmd(), p.app.takePending(), p.app.startUpdateCheck())
 }
 
 func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -126,7 +139,19 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.app.requestBoardRefresh(false)
 		}
 		p.app.issuesTick()
+		p.app.activatePendingUpdate()
 		return p, tea.Batch(tickCmd(), p.app.takePending())
+	case updateCheckMsg:
+		p.app.updateCheckCancel = nil
+		p.app.receiveUpdateCheck(event.info, event.err)
+		return p, nil
+	case updateApplyMsg:
+		p.app.updateApplyCancel = nil
+		p.app.receiveUpdateApply(event.result, event.err)
+		if !p.app.Running {
+			return p, tea.Quit
+		}
+		return p, nil
 	case shellDoneMsg:
 		return p, p.app.takePending()
 	case workMsg:
@@ -141,6 +166,19 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, tea.Quit
 	}
 	return p, tea.Batch(cmd, p.app.takePending())
+}
+
+func (a *App) startUpdateCheck() tea.Cmd {
+	if a.updateCheck == nil {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	a.updateCheckCancel = cancel
+	check := a.updateCheck
+	return func() tea.Msg {
+		info, err := check(ctx)
+		return updateCheckMsg{info: info, err: err}
+	}
 }
 
 func (p program) View() string {

@@ -11,6 +11,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/menu"
@@ -34,6 +35,13 @@ type boardHit struct {
 }
 
 type App struct {
+	UpdateDialog      *updateDialog
+	pendingUpdate     *install.UpdateInfo
+	updateCheck       func(context.Context) (*install.UpdateInfo, error)
+	updateApply       func(context.Context, install.UpdateInfo) (install.UpdateResult, error)
+	updateCheckCancel context.CancelFunc
+	updateApplyCancel context.CancelFunc
+	RestartPath       string
 	TaskActions       *taskActions
 	LoadTaskActions   func(string) (taskActionSource, error)
 	actionSequence    uint64
@@ -225,6 +233,10 @@ func (a *App) View() string {
 	h, w := a.size()
 	p := themePalette(a.Theme)
 	switch {
+	case a.UpdateDialog != nil:
+		a.ShowCursor = false
+		box, popup := a.renderUpdate()
+		base = overlay(base, popup, box.X, box.Y, p)
 	case a.TaskActions != nil:
 		a.ShowCursor = false
 		box, popup := a.renderTaskActions()
@@ -677,6 +689,10 @@ func (a *App) handleSearchKey(key string) {
 }
 
 func (a *App) HandleKey(key string) {
+	if a.UpdateDialog != nil {
+		a.handleUpdateKey(key)
+		return
+	}
 	if a.StartConfirmation != nil {
 		a.handleStartConfirmation(key)
 		return

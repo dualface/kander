@@ -172,6 +172,12 @@ func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 }
 
 func (a *App) requestQuit() {
+	if a.updateCheckCancel != nil {
+		a.updateCheckCancel()
+	}
+	if a.updateApplyCancel != nil {
+		a.updateApplyCancel()
+	}
 	a.cancelOwnedReads()
 	if a.summaries != nil {
 		a.summaries.Close()
@@ -183,7 +189,7 @@ func (a *App) requestQuit() {
 // confirmCapturesKeys reports whether a shared confirmation dialog owns input,
 // so Ctrl+C is ignored instead of quitting the board.
 func (a *App) confirmCapturesKeys() bool {
-	return a.StartConfirmation != nil || a.BoardInit != nil || a.Takeover != nil || (a.Options != nil && a.Options.confirm != nil)
+	return a.UpdateDialog != nil || a.StartConfirmation != nil || a.BoardInit != nil || a.Takeover != nil || (a.Options != nil && a.Options.confirm != nil)
 }
 
 func (a *App) activeStartNotice() bool {

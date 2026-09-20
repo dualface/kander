@@ -344,6 +344,10 @@ func (a *App) hitBoard(x, y int) *boardHit {
 }
 
 func (a *App) HandleMouse(x, y, bstate int) {
+	if a.UpdateDialog != nil {
+		a.UpdateDialog.scroll(mouseWheelDelta(bstate))
+		return
+	}
 	if a.StartConfirmation != nil {
 		a.handleStartMouse(x, y, bstate)
 		return
