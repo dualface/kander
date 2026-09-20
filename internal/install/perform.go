@@ -213,5 +213,11 @@ func writeBinary(dest string, data []byte) error {
 	if renameErr := fs.Rename(anchor, dest, aside); renameErr != nil {
 		return err
 	}
-	return writeExec(anchor, dest, data, false)
+	if writeErr := writeExec(anchor, dest, data, false); writeErr != nil {
+		if restoreErr := fs.Rename(anchor, aside, dest); restoreErr != nil {
+			return fmt.Errorf("write replacement: %w; restore original: %v", writeErr, restoreErr)
+		}
+		return writeErr
+	}
+	return nil
 }
