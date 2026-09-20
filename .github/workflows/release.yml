@@ -16,7 +16,7 @@ jobs:
     # Exposed as env so the tap step can skip itself when the secret is absent;
     # the secrets context is not available in a step-level `if`.
     env:
-      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -74,14 +74,14 @@ jobs:
             dist/checksums.txt
 
       # Rewrites Formula/kander.rb in dualface/homebrew-tap from the checksums
-      # just published. Needs TAP_TOKEN: a PAT with contents:write on the tap
+      # just published. Needs HOMEBREW_TAP_TOKEN: a PAT with contents:write on the tap
       # repo (GITHUB_TOKEN cannot push to another repository). Without the
       # secret the release still succeeds and the formula must be synced by
       # hand with: scripts/release.sh --skip-tag <tag>
       - name: Sync Homebrew tap
-        if: env.TAP_TOKEN != ''
+        if: env.HOMEBREW_TAP_TOKEN != ''
         env:
-          GH_TOKEN: ${{ secrets.TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'

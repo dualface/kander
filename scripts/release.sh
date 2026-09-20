@@ -8,7 +8,7 @@
 # dualface/homebrew-tap from the published checksums.
 #
 # The workflow now runs the tap half itself (`--skip-tag --no-test`) when the
-# TAP_TOKEN secret is set, so a normal release only needs the tag. Run this
+# HOMEBREW_TAP_TOKEN secret is set, so a normal release only needs the tag. Run this
 # script by hand to cut a tag locally, or to repair a formula that drifted:
 #
 #   scripts/release.sh --skip-tag v0.5.0

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.9 — 2026-09-20
+
+- Release: the release workflow reads the Homebrew tap credential from the `HOMEBREW_TAP_TOKEN` repository secret (formerly `TAP_TOKEN`), so the tap formula is synced automatically when a tag is pushed. No change to the binary or the rules.
+
 ## v0.7.8 — 2026-09-20
 
 - Rules, behavior change: intake option 1 now means the current session claims each card with `kander move <task-id> working --owner <agent>` and executes it itself; it no longer launches a separate executing agent with `kander start`. Option 2 remains the hand-off: `kander start` for exactly one standalone card, `kander orchestrate` otherwise. When the option 2 launch fails, falling back to option 1 means this session executes every card.
