@@ -189,6 +189,15 @@ func (a *App) Update(msg tea.Msg) tea.Cmd {
 		a.requestQuit()
 		return nil
 	}
+	if a.UpdateDialog != nil {
+		switch event := msg.(type) {
+		case tea.KeyMsg:
+			return a.handleUpdateKey(mapKey(event))
+		case tea.MouseMsg:
+			a.HandleMouse(event.X, event.Y, a.mouse.mapButtons(event.X, event.Y, neutralButtons(event), time.Now()))
+		}
+		return nil
+	}
 	if a.TaskActions != nil {
 		return a.updateTaskActions(msg)
 	}

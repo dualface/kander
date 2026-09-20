@@ -28,7 +28,8 @@ func (a *App) receiveUpdateCheck(info *install.UpdateInfo, err error) {
 
 func (a *App) updateBlocked() bool {
 	return a.UpdateDialog != nil || a.TaskActions != nil || a.Chat != nil || a.Options != nil || a.Help ||
-		a.StartConfirmation != nil || a.BoardInit != nil || a.Takeover != nil || a.Issues != nil || a.shouldShowWelcome()
+		a.StartConfirmation != nil || a.BoardInit != nil || a.Takeover != nil || a.Issues != nil ||
+		a.Detail != nil || a.Searching || a.DetailSearching || a.shouldShowWelcome()
 }
 
 func (a *App) activatePendingUpdate() {

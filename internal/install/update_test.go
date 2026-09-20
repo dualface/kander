@@ -97,10 +97,10 @@ type updateRoundTrip func(*http.Request) (*http.Response, error)
 func (f updateRoundTrip) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func TestCheckUpdateStableRelease(t *testing.T) {
-	oldVersion, oldClient := version.Version, updateHTTPClient
-	t.Cleanup(func() { version.Version, updateHTTPClient = oldVersion, oldClient })
+	oldVersion, oldClient := version.Version, updateCheckHTTPClient
+	t.Cleanup(func() { version.Version, updateCheckHTTPClient = oldVersion, oldClient })
 	version.Version = "1.2.3"
-	updateHTTPClient = &http.Client{Transport: updateRoundTrip(func(request *http.Request) (*http.Response, error) {
+	updateCheckHTTPClient = &http.Client{Transport: updateRoundTrip(func(request *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(strings.NewReader(`{"tag_name":"v1.3.0","draft":false,"prerelease":false}`)),
@@ -112,7 +112,7 @@ func TestCheckUpdateStableRelease(t *testing.T) {
 		t.Fatalf("info=%+v err=%v", info, err)
 	}
 	version.Version = "dev"
-	updateHTTPClient = &http.Client{Transport: updateRoundTrip(func(*http.Request) (*http.Response, error) {
+	updateCheckHTTPClient = &http.Client{Transport: updateRoundTrip(func(*http.Request) (*http.Response, error) {
 		return nil, errors.New("must not request")
 	})}
 	if info, err := CheckUpdate(t.Context()); err != nil || info != nil {

@@ -50,14 +50,21 @@ type UpdateResult struct {
 	Diagnostic string
 }
 
-var updateHTTPClient = &http.Client{
-	Timeout: 5 * time.Second,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 5 || !allowedUpdateHost(req.URL) {
-			return errors.New("update download redirected to an untrusted host")
-		}
-		return nil
-	},
+var (
+	updateCheckHTTPClient    = newUpdateHTTPClient(5 * time.Second)
+	updateDownloadHTTPClient = newUpdateHTTPClient(10 * time.Minute)
+)
+
+func newUpdateHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 || !allowedUpdateHost(req.URL) {
+				return errors.New("update download redirected to an untrusted host")
+			}
+			return nil
+		},
+	}
 }
 
 func allowedUpdateHost(u *url.URL) bool {
@@ -93,7 +100,9 @@ func CheckUpdate(ctx context.Context) (*UpdateInfo, error) {
 	if !ok {
 		return nil, nil
 	}
-	body, err := updateGet(ctx, latestReleaseURL, maxReleaseJSON)
+	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	body, err := updateGet(checkCtx, updateCheckHTTPClient, latestReleaseURL, maxReleaseJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -120,14 +129,14 @@ func CheckUpdate(ctx context.Context) (*UpdateInfo, error) {
 	return &UpdateInfo{Current: current, Version: target, AssetName: asset, Brew: isBrewManaged(resolved)}, nil
 }
 
-func updateGet(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
+func updateGet(ctx context.Context, client *http.Client, rawURL string, limit int64) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "kander/"+version.String())
-	response, err := updateHTTPClient.Do(req)
+	response, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request update: %w", err)
 	}
@@ -201,7 +210,7 @@ func applyBrewUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error)
 func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (UpdateResult, error) {
 	tag := "v" + strings.TrimPrefix(info.Version, "v")
 	base := "https://github.com/dualface/kander/releases/download/" + tag + "/"
-	checksums, err := updateGet(ctx, base+"checksums.txt", maxChecksums)
+	checksums, err := updateGet(ctx, updateDownloadHTTPClient, base+"checksums.txt", maxChecksums)
 	if err != nil {
 		return UpdateResult{}, err
 	}
@@ -209,7 +218,7 @@ func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (Updat
 	if err != nil {
 		return UpdateResult{}, err
 	}
-	archive, err := updateGet(ctx, base+info.AssetName, maxArchive)
+	archive, err := updateGet(ctx, updateDownloadHTTPClient, base+info.AssetName, maxArchive)
 	if err != nil {
 		return UpdateResult{}, err
 	}

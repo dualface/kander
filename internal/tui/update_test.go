@@ -54,7 +54,7 @@ func TestUpdateDialogFailureAndSuccess(t *testing.T) {
 		return install.UpdateResult{Diagnostic: "brew output"}, errors.New("failed")
 	}
 	app.receiveUpdateCheck(&install.UpdateInfo{Current: "1.0.0", Version: "1.1.0"}, nil)
-	cmd := app.handleUpdateKey("y")
+	cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	if cmd == nil || app.UpdateDialog.phase != confirmRunning {
 		t.Fatal("update did not start")
 	}
