@@ -26,5 +26,8 @@
   "menu.agent_session_file_inherited": "Agent {{.V0}} 未声明 session.file；当前通过继承生效的是内置 {{.V1}} 定义的声明。",
   "menu.agent_session_file_store": "Agent {{.V0}} 的 session.file 当前继承自内置定义。是否把该声明写入 config.json？",
   "menu.agent_session_file_store_yes": "把 session.file 写入 config.json",
-  "menu.agent_session_file_store_no": "保持继承 session.file"
+  "menu.agent_session_file_store_no": "保持继承 session.file",
+  "menu.modified_rules_backup_replace_prompt": "上面列出的 {{.V0}} 个规则文件被本地修改过。先备份每个文件, 再替换为内嵌版本?",
+  "menu.backup_and_replace_modified_rules": "备份并替换",
+  "menu.keep_modified_rules": "保留本地文件"
 }

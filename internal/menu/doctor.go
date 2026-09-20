@@ -77,6 +77,11 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		for _, name := range report.Modified {
 			hint(config.Text("install.rule_modified", name))
 		}
+		// Only an interactive session may turn the modified list into the
+		// backup-and-replace decision; the TUI report stays read-only.
+		if interactive && len(report.Modified) > 0 {
+			healthy = promptModifiedRules(paths, report.Modified) && healthy
+		}
 	}
 	for name, path := range findCommands(paths) {
 		if path != "" {

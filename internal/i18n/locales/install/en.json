@@ -13,5 +13,9 @@
   "install.agent_extension_written": "wrote the {{.V0}} rules extension: {{.V1}}",
   "install.agent_extension_updated": "updated the {{.V0}} rules extension: {{.V1}}",
   "install.agent_extension_modified": "{{.V0}} rules extension was edited locally and was not overwritten: {{.V1}}",
-  "install.agent_extension_failed": "failed to write the {{.V0}} rules extension {{.V1}}: {{.V2}}"
+  "install.agent_extension_failed": "failed to write the {{.V0}} rules extension {{.V1}}: {{.V2}}",
+  "install.rule_replaced_with_backup": "backed up {{.V0}} to {{.V1}} and installed the embedded copy",
+  "install.rule_replace_failed": "failed to replace modified rule file {{.V0}}: {{.V1}}",
+  "install.rule_backup_refused_link": "rule file is a link and was not replaced: {{.V0}}",
+  "install.rule_replace_missing": "rule file is no longer present: {{.V0}}"
 }

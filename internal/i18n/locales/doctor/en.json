@@ -26,5 +26,8 @@
   "menu.agent_session_file_inherited": "Agent {{.V0}} omits session.file; the embedded {{.V1}} declaration applies by inheritance.",
   "menu.agent_session_file_store": "Agent {{.V0}} inherits session.file from the embedded definition. Store that declaration into config.json?",
   "menu.agent_session_file_store_yes": "Store session.file in config.json",
-  "menu.agent_session_file_store_no": "Keep inheriting session.file"
+  "menu.agent_session_file_store_no": "Keep inheriting session.file",
+  "menu.modified_rules_backup_replace_prompt": "{{.V0}} rule file(s) listed above were edited locally. Back up each file, then replace it with the embedded version?",
+  "menu.backup_and_replace_modified_rules": "Back up and replace",
+  "menu.keep_modified_rules": "Keep the local files"
 }

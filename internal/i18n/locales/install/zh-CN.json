@@ -13,5 +13,9 @@
   "install.agent_extension_written": "已写入 {{.V0}} 规则扩展: {{.V1}}",
   "install.agent_extension_updated": "已更新 {{.V0}} 规则扩展: {{.V1}}",
   "install.agent_extension_modified": "{{.V0}} 规则扩展被本地修改过，未覆盖: {{.V1}}",
-  "install.agent_extension_failed": "写入 {{.V0}} 规则扩展 {{.V1}} 失败: {{.V2}}"
+  "install.agent_extension_failed": "写入 {{.V0}} 规则扩展 {{.V1}} 失败: {{.V2}}",
+  "install.rule_replaced_with_backup": "已备份 {{.V0}} 到 {{.V1}} 并安装了内嵌副本",
+  "install.rule_replace_failed": "替换本地修改的规则文件 {{.V0}} 失败: {{.V1}}",
+  "install.rule_backup_refused_link": "规则文件是链接, 未替换: {{.V0}}",
+  "install.rule_replace_missing": "规则文件已不存在: {{.V0}}"
 }

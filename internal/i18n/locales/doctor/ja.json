@@ -26,5 +26,8 @@
   "menu.agent_session_file_inherited": "Agent {{.V0}} は session.file を宣言していません。埋め込み {{.V1}} 定義の宣言が継承で有効です。",
   "menu.agent_session_file_store": "Agent {{.V0}} の session.file は埋め込み定義から継承されています。その宣言を config.json に書き込みますか？",
   "menu.agent_session_file_store_yes": "session.file を config.json に書き込む",
-  "menu.agent_session_file_store_no": "session.file の継承を維持する"
+  "menu.agent_session_file_store_no": "session.file の継承を維持する",
+  "menu.modified_rules_backup_replace_prompt": "上に列挙した {{.V0}} 個のルールファイルはローカルで編集されています。各ファイルをバックアップしてから埋め込み版に置き換えますか?",
+  "menu.backup_and_replace_modified_rules": "バックアップして置き換える",
+  "menu.keep_modified_rules": "ローカルファイルを保持"
 }

@@ -13,5 +13,9 @@
   "install.agent_extension_written": "{{.V0}} ルール拡張を書き込みました: {{.V1}}",
   "install.agent_extension_updated": "{{.V0}} ルール拡張を更新しました: {{.V1}}",
   "install.agent_extension_modified": "{{.V0}} ルール拡張はローカルで変更されているため上書きしませんでした: {{.V1}}",
-  "install.agent_extension_failed": "{{.V0}} ルール拡張 {{.V1}} の書き込みに失敗しました: {{.V2}}"
+  "install.agent_extension_failed": "{{.V0}} ルール拡張 {{.V1}} の書き込みに失敗しました: {{.V2}}",
+  "install.rule_replaced_with_backup": "{{.V0}} を {{.V1}} にバックアップし、埋め込みコピーをインストールしました",
+  "install.rule_replace_failed": "ローカルで編集されたルールファイル {{.V0}} の置き換えに失敗しました: {{.V1}}",
+  "install.rule_backup_refused_link": "ルールファイルはリンクのため置き換えませんでした: {{.V0}}",
+  "install.rule_replace_missing": "ルールファイルはもう存在しません: {{.V0}}"
 }
