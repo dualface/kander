@@ -4,9 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -117,6 +119,92 @@ func TestCheckUpdateStableRelease(t *testing.T) {
 	})}
 	if info, err := CheckUpdate(t.Context()); err != nil || info != nil {
 		t.Fatalf("dev info=%+v err=%v", info, err)
+	}
+}
+
+// stubBrew swaps the Homebrew seams of applyBrewUpdate and records the
+// command sequence. failOn names the brew argument that returns an error.
+func stubBrew(t *testing.T, failOn string, installedVersion string, probeErr error) *[][]string {
+	t.Helper()
+	origLook, origRun, origProbe := updateLookPath, runBrew, probeBinary
+	t.Cleanup(func() { updateLookPath, runBrew, probeBinary = origLook, origRun, origProbe })
+	var calls [][]string
+	updateLookPath = func(name string) (string, error) { return "/fake/bin/" + name, nil }
+	runBrew = func(_ context.Context, brew string, output io.Writer, args ...string) error {
+		calls = append(calls, append([]string{brew}, args...))
+		if _, err := fmt.Fprintln(output, "brew "+strings.Join(args, " ")); err != nil {
+			return err
+		}
+		if len(args) > 0 && args[0] == failOn {
+			return errors.New("brew " + failOn + " failed")
+		}
+		return nil
+	}
+	probeBinary = func(context.Context, string) (string, error) { return installedVersion, probeErr }
+	return &calls
+}
+
+func TestApplyBrewUpdateRefreshesTapThenUpgradesFormula(t *testing.T) {
+	calls := stubBrew(t, "", "0.7.12", nil)
+	result, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	if err != nil {
+		t.Fatalf("applyBrewUpdate: %v", err)
+	}
+	want := [][]string{
+		{"/fake/bin/brew", "update"},
+		{"/fake/bin/brew", "upgrade", "dualface/tap/kander"},
+	}
+	if len(*calls) != len(want) {
+		t.Fatalf("calls=%v want %v", *calls, want)
+	}
+	for i := range want {
+		if strings.Join((*calls)[i], " ") != strings.Join(want[i], " ") {
+			t.Fatalf("calls=%v want %v", *calls, want)
+		}
+	}
+	if result.Path != "/fake/bin/kander" && result.Path != "/fake/bin/kander.exe" {
+		t.Fatalf("result.Path=%q", result.Path)
+	}
+	if result.Version != "0.7.12" || !strings.Contains(result.Diagnostic, "brew update") {
+		t.Fatalf("result=%+v", result)
+	}
+}
+
+func TestApplyBrewUpdateStopsWhenRefreshFails(t *testing.T) {
+	calls := stubBrew(t, "update", "0.7.12", nil)
+	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	if err == nil || !strings.Contains(err.Error(), "brew update") {
+		t.Fatalf("err=%v", err)
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("upgrade ran after failed refresh: %v", *calls)
+	}
+}
+
+func TestApplyBrewUpdateReportsUpgradeFailure(t *testing.T) {
+	calls := stubBrew(t, "upgrade", "0.7.12", nil)
+	result, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	if err == nil || !strings.Contains(err.Error(), "brew upgrade dualface/tap/kander") {
+		t.Fatalf("err=%v", err)
+	}
+	if len(*calls) != 2 || !strings.Contains(result.Diagnostic, "brew upgrade") {
+		t.Fatalf("calls=%v diagnostic=%q", *calls, result.Diagnostic)
+	}
+}
+
+func TestApplyBrewUpdateRejectsStaleInstalledVersion(t *testing.T) {
+	stubBrew(t, "", "0.7.11", nil)
+	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	if err == nil || !strings.Contains(err.Error(), "0.7.11") || !strings.Contains(err.Error(), "0.7.12") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestApplyBrewUpdateReportsProbeFailure(t *testing.T) {
+	stubBrew(t, "", "", errors.New("probe failed"))
+	_, err := applyBrewUpdate(t.Context(), UpdateInfo{Version: "0.7.12"})
+	if err == nil || !strings.Contains(err.Error(), "probe failed") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

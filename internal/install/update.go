@@ -50,9 +50,16 @@ type UpdateResult struct {
 	Diagnostic string
 }
 
+// brewFormula pins the upgrade target to this tap so a conflicting
+// short-name formula can never be selected instead.
+const brewFormula = "dualface/tap/kander"
+
 var (
 	updateCheckHTTPClient    = newUpdateHTTPClient(5 * time.Second)
 	updateDownloadHTTPClient = newUpdateHTTPClient(10 * time.Minute)
+	updateLookPath           = exec.LookPath
+	runBrew                  = runBrewCommand
+	probeBinary              = validateUpdateBinary
 )
 
 func newUpdateHTTPClient(timeout time.Duration) *http.Client {
@@ -183,21 +190,24 @@ func ApplyUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
 }
 
 func applyBrewUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
-	brew, err := exec.LookPath("brew")
+	brew, err := updateLookPath("brew")
 	if err != nil {
 		return UpdateResult{}, errors.New("Homebrew executable not found")
 	}
 	var output limitedBuffer
-	cmd := exec.CommandContext(ctx, brew, "upgrade", "kander")
-	cmd.Stdout, cmd.Stderr = &output, &output
-	if err := cmd.Run(); err != nil {
-		return UpdateResult{Diagnostic: output.String()}, fmt.Errorf("brew upgrade kander: %w", err)
+	// A stale local tap makes `brew upgrade` succeed without installing
+	// anything, so refresh the tap metadata before upgrading.
+	if err := runBrew(ctx, brew, &output, "update"); err != nil {
+		return UpdateResult{Diagnostic: output.String()}, fmt.Errorf("brew update: %w", err)
 	}
-	installed, err := exec.LookPath(binaryName())
+	if err := runBrew(ctx, brew, &output, "upgrade", brewFormula); err != nil {
+		return UpdateResult{Diagnostic: output.String()}, fmt.Errorf("brew upgrade %s: %w", brewFormula, err)
+	}
+	installed, err := updateLookPath(binaryName())
 	if err != nil {
 		return UpdateResult{Diagnostic: output.String()}, errors.New("updated kander not found on PATH")
 	}
-	got, err := validateUpdateBinary(ctx, installed)
+	got, err := probeBinary(ctx, installed)
 	if err != nil || version.Compare(got, info.Version) < 0 {
 		if err == nil {
 			err = fmt.Errorf("updated kander reports %s, expected at least %s", got, info.Version)
@@ -205,6 +215,12 @@ func applyBrewUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error)
 		return UpdateResult{Diagnostic: output.String()}, err
 	}
 	return UpdateResult{Path: installed, Version: got, Diagnostic: output.String()}, nil
+}
+
+func runBrewCommand(ctx context.Context, brew string, output io.Writer, args ...string) error {
+	cmd := exec.CommandContext(ctx, brew, args...)
+	cmd.Stdout, cmd.Stderr = output, output
+	return cmd.Run()
 }
 
 func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (UpdateResult, error) {
@@ -239,7 +255,7 @@ func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (Updat
 	if err := os.WriteFile(staged, binary, 0o700); err != nil {
 		return UpdateResult{}, err
 	}
-	gotVersion, err := validateUpdateBinary(ctx, staged)
+	gotVersion, err := probeBinary(ctx, staged)
 	if err != nil {
 		return UpdateResult{}, err
 	}
