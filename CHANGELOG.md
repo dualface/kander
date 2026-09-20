@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.7.12 — 2026-09-20
+
+- Feature: interactive startup checks and `kander doctor` now offer one localized confirmation when installed rule files contain local edits. On confirmation, Kander creates a unique timestamped backup of each original file before atomically installing the embedded rule, reports every file result independently, and updates rule state only for successful replacements. Declining, ended input, backup or replacement failures, and non-interactive doctor paths preserve local edits; tests now resolve localized expectations through the configured catalog.
+
 ## v0.7.11 — 2026-09-20
 
 - Feature: bare TUI startup now checks the latest stable GitHub release asynchronously and defers its update prompt until other overlays close. Confirmed Homebrew updates run `brew upgrade kander`; direct installs download the matching platform archive and checksums, enforce trusted hosts and size limits, verify SHA-256, safely extract and version-probe the binary, atomically replace the executable, then restart into the verified version. Failed checks remain non-blocking, and failed replacements preserve the installed binary.
