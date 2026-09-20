@@ -116,7 +116,7 @@ func TestDoctorModifiedRulesDeclineKeepsFiles(t *testing.T) {
 	if backups := ruleBackups(t, paths.RulesDir); len(backups) != 0 {
 		t.Fatalf("declined replace created backups: %v", backups)
 	}
-	if !strings.Contains(reportText(lines), "rule file was edited locally and was not overwritten: KANDER-CODE-RULES.md") {
+	if !strings.Contains(reportText(lines), config.Text("install.rule_modified", "KANDER-CODE-RULES.md")) {
 		t.Fatalf("modified hint missing:\n%s", reportText(lines))
 	}
 }
@@ -141,7 +141,7 @@ func TestDoctorModifiedRulesNonInteractiveNeverAsks(t *testing.T) {
 	if backups := ruleBackups(t, paths.RulesDir); len(backups) != 0 {
 		t.Fatalf("non-interactive doctor created backups: %v", backups)
 	}
-	if !strings.Contains(reportText(lines), "rule file was edited locally and was not overwritten") {
+	if !strings.Contains(reportText(lines), config.Text("install.rule_modified", "KANDER-CODE-RULES.md")) {
 		t.Fatalf("modified hint missing:\n%s", reportText(lines))
 	}
 }
@@ -169,7 +169,7 @@ func TestDoctorModifiedRulesReplaceFailureIsReported(t *testing.T) {
 	if healthy {
 		t.Fatal("a failed replace must report unhealthy")
 	}
-	if !strings.Contains(reportText(lines), "failed to replace modified rule file KANDER-CODE-RULES.md") {
+	if !strings.Contains(reportText(lines), config.Text("install.rule_replace_failed", "KANDER-CODE-RULES.md", "")) {
 		t.Fatalf("failure warning missing:\n%s", reportText(lines))
 	}
 	data, err := os.ReadFile(file)
