@@ -44,7 +44,6 @@ type flowBuilder struct {
 	offset   int // x of the content area
 	avail    int
 	order    map[string]int
-	phaseTop map[string]int
 	phaseMid map[string]int
 	phaseBox map[string][2]int // left, right column of the box
 	edges    []flowEdge
@@ -93,7 +92,6 @@ func layoutFlowChart(chart flow.Chart, limit int, compact bool) ([]string, bool)
 		offset:   left,
 		avail:    avail,
 		order:    order,
-		phaseTop: map[string]int{},
 		phaseMid: map[string]int{},
 		phaseBox: map[string][2]int{},
 		compact:  compact,
@@ -170,7 +168,6 @@ func (b *flowBuilder) placeBox(key string, box []string) {
 	for i, line := range box {
 		b.put(left, b.row+i, line)
 	}
-	b.phaseTop[key] = b.row
 	b.phaseMid[key] = b.row + len(box)/2
 	b.phaseBox[key] = [2]int{b.offset + left, b.offset + left + linesWidth(box) - 1}
 	b.row += len(box)
