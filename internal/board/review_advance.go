@@ -13,6 +13,26 @@ type ReviewBatchAdvance struct {
 	Advance          ReviewAdvance `json:"advance"`
 }
 
+func validateReviewAdvanceAttribution(advance ReviewAdvance, taskIDs []string) error {
+	if len(advance.Deliveries) == 0 {
+		return reviewError("member delivery required")
+	}
+	for commit, id := range advance.Deliveries {
+		if !validCommit(commit) || !containsID(taskIDs, id) {
+			return reviewError("foreign delivery")
+		}
+	}
+	for commit, reason := range advance.ForeignCommits {
+		if !validCommit(commit) || strings.TrimSpace(reason) == "" {
+			return reviewError("invalid foreign commit attribution")
+		}
+		if _, exists := advance.Deliveries[commit]; exists {
+			return reviewError("duplicate advance attribution")
+		}
+	}
+	return nil
+}
+
 // reviewPlanTargetSyncRequest records why a plan batch target was rewritten.
 // Advance paths and extend-plan SyncTargets share this history shape.
 type reviewPlanTargetSyncRequest struct {
@@ -77,13 +97,11 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 			return reviewError("batch already closed")
 		}
 		a := x.Advance
-		if a.PreviousTarget != b.TargetCommit || a.Target == a.PreviousTarget || !validCommit(a.Target) || strings.TrimSpace(a.Reason) == "" || len(a.Deliveries) == 0 {
+		if a.PreviousTarget != b.TargetCommit || a.Target == a.PreviousTarget || !validCommit(a.Target) || strings.TrimSpace(a.Reason) == "" {
 			return reviewError("batch target CAS conflict")
 		}
-		for commit, id := range a.Deliveries {
-			if !validCommit(commit) || !containsID(b.TaskIDs, id) {
-				return reviewError("foreign delivery")
-			}
+		if err = validateReviewAdvanceAttribution(a, b.TaskIDs); err != nil {
+			return err
 		}
 		if err = settledReviewBatch(tx, b.BatchID); err != nil {
 			return err

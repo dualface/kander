@@ -176,17 +176,35 @@ func validateReviewAdvance(ctx reviewContext, advance board.ReviewAdvance, tasks
 		return archiveError("advance range")
 	}
 	commits := strings.Fields(output)
-	if len(commits) == 0 || len(commits) != len(advance.Deliveries) {
-		return archiveError("advance must attribute every commit")
+	rangeCommits := make(map[string]bool, len(commits))
+	for _, commit := range commits {
+		rangeCommits[commit] = true
 	}
 	members := map[string]bool{}
 	for _, id := range tasks {
 		members[id] = true
 	}
-	for _, commit := range commits {
-		if !members[advance.Deliveries[commit]] {
+	for commit, taskID := range advance.Deliveries {
+		if !rangeCommits[commit] {
+			return archiveError("advance attribution outside range: " + commit)
+		}
+		if !members[taskID] {
 			return archiveError("unattributed or foreign delivery: " + commit)
 		}
+	}
+	for commit, reason := range advance.ForeignCommits {
+		if !rangeCommits[commit] {
+			return archiveError("advance attribution outside range: " + commit)
+		}
+		if strings.TrimSpace(reason) == "" {
+			return archiveError("foreign commit reason required: " + commit)
+		}
+		if _, exists := advance.Deliveries[commit]; exists {
+			return archiveError("duplicate advance attribution: " + commit)
+		}
+	}
+	if len(commits) == 0 || len(commits) != len(advance.Deliveries)+len(advance.ForeignCommits) {
+		return archiveError("advance must attribute every commit")
 	}
 	return nil
 }

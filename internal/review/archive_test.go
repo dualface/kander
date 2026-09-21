@@ -233,6 +233,48 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 		t.Fatal("recovery fabricated report")
 	}
 }
+
+func TestValidateReviewAdvanceForeignCommits(t *testing.T) {
+	h := newCodexHarness(t)
+	foreign := commitFile(t, h.repo, "foreign.txt", "foreign", "foreign")
+	target := commitFile(t, h.repo, "fix.txt", "fix", "fix")
+	taskID := "20260907-archive-test-task"
+	ctx := reviewContext{root: h.repo, commit: target}
+	advance := func() board.ReviewAdvance {
+		return board.ReviewAdvance{
+			PreviousTarget: h.head,
+			Target:         target,
+			Reason:         "member fix after integration",
+			Deliveries:     map[string]string{target: taskID},
+			ForeignCommits: map[string]string{foreign: "concurrent delivery outside this batch"},
+		}
+	}
+	if err := validateReviewAdvance(ctx, advance(), []string{taskID}); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		edit func(*board.ReviewAdvance)
+		want string
+	}{
+		{"missing", func(a *board.ReviewAdvance) { delete(a.ForeignCommits, foreign) }, "advance must attribute every commit"},
+		{"empty reason", func(a *board.ReviewAdvance) { a.ForeignCommits[foreign] = " " }, "foreign commit reason required"},
+		{"duplicate", func(a *board.ReviewAdvance) { a.ForeignCommits[target] = "wrongly duplicated" }, "duplicate advance attribution"},
+		{"outside range", func(a *board.ReviewAdvance) { a.ForeignCommits[h.base] = "outside range" }, "advance attribution outside range"},
+		{"foreign delivery", func(a *board.ReviewAdvance) { a.Deliveries[target] = "20260907-foreign-task" }, "unattributed or foreign delivery"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := advance()
+			test.edit(&candidate)
+			if err := validateReviewAdvance(ctx, candidate, []string{taskID}); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("got %v; want %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
 	h, root, args := archiveHarness(t)
 	t.Setenv("FAKE_CODEX_REPORT", "```kander-findings\n{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```")
@@ -252,8 +294,9 @@ func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
 	if err = board.AssignReviewFindings(root, board.ReviewAssignment{RunID: "stable", BatchID: "batch", Author: "coordinator", Basis: "empty structured report", Items: map[string][]string{}}); err != nil {
 		t.Fatal(err)
 	}
+	foreign := commitFile(t, h.repo, "foreign.txt", "foreign", "foreign")
 	next := commitFile(t, h.repo, "fix.txt", "fix", "fix")
-	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "member fix", Deliveries: map[string]string{next: "20260907-foreign-task"}}
+	advance := board.ReviewAdvance{PreviousTarget: h.head, Target: next, Reason: "member fix", Deliveries: map[string]string{next: "20260907-foreign-task"}, ForeignCommits: map[string]string{foreign: "concurrent delivery outside this batch"}}
 	path := filepath.Join(h.root, "advance.json")
 	snapshot, err = board.ReadSnapshot(root, options.tasks[0])
 	if err != nil {

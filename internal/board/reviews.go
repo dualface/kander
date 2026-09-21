@@ -53,6 +53,7 @@ type ReviewAdvance struct {
 	Target         string            `json:"target"`
 	Reason         string            `json:"reason"`
 	Deliveries     map[string]string `json:"deliveries"`
+	ForeignCommits map[string]string `json:"foreign_commits,omitempty"`
 }
 
 type ReviewBatch struct {
@@ -339,13 +340,11 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				}
 			}
 			if batch.TargetCommit != input.Commit {
-				if advance == nil || advance.PreviousTarget != batch.TargetCommit || advance.Target != input.Commit || strings.TrimSpace(advance.Reason) == "" || len(advance.Deliveries) == 0 {
+				if advance == nil || advance.PreviousTarget != batch.TargetCommit || advance.Target != input.Commit || strings.TrimSpace(advance.Reason) == "" {
 					return reviewError("batch target CAS conflict")
 				}
-				for commit, id := range advance.Deliveries {
-					if commit == "" || !containsID(input.TaskIDs, id) {
-						return reviewError("foreign delivery")
-					}
+				if e = validateReviewAdvanceAttribution(*advance, input.TaskIDs); e != nil {
+					return e
 				}
 				if e = settledReviewBatch(tx, input.BatchID); e != nil {
 					return e

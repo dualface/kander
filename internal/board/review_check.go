@@ -187,13 +187,11 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 	found := run.Commit == target
 	for i := len(batch.Advances) - 1; i >= 0; i-- {
 		a := batch.Advances[i]
-		if a.Target != target || strings.TrimSpace(a.Reason) == "" || len(a.Deliveries) == 0 {
+		if a.Target != target || strings.TrimSpace(a.Reason) == "" {
 			return reviewError("batch advance chain")
 		}
-		for _, id := range a.Deliveries {
-			if !containsID(batch.TaskIDs, id) {
-				return reviewError("foreign delivery")
-			}
+		if err := validateReviewAdvanceAttribution(a, batch.TaskIDs); err != nil {
+			return err
 		}
 		target = a.PreviousTarget
 		if run.Commit == target {

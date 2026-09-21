@@ -277,8 +277,30 @@ func TestReviewBatchCASAndExplicitPredecessor(t *testing.T) {
 	if err := ReviewPublicationComplete(root, fixed.RunID); err == nil {
 		t.Fatal("tampered predecessor accepted")
 	}
-
 }
+
+func TestReviewAdvanceAttributionValidation(t *testing.T) {
+	taskID := "20260907-archive-test-task"
+	delivery := strings.Repeat("a", 40)
+	foreign := strings.Repeat("b", 40)
+	valid := ReviewAdvance{
+		Deliveries:     map[string]string{delivery: taskID},
+		ForeignCommits: map[string]string{foreign: "concurrent delivery outside this batch"},
+	}
+	if err := validateReviewAdvanceAttribution(valid, []string{taskID}); err != nil {
+		t.Fatal(err)
+	}
+	valid.ForeignCommits[delivery] = "duplicate"
+	if err := validateReviewAdvanceAttribution(valid, []string{taskID}); err == nil || !strings.Contains(err.Error(), "duplicate advance attribution") {
+		t.Fatalf("duplicate attribution accepted: %v", err)
+	}
+	delete(valid.ForeignCommits, delivery)
+	valid.ForeignCommits[foreign] = " "
+	if err := validateReviewAdvanceAttribution(valid, []string{taskID}); err == nil || !strings.Contains(err.Error(), "invalid foreign commit attribution") {
+		t.Fatalf("empty foreign reason accepted: %v", err)
+	}
+}
+
 func TestReviewCheckDetectsTamperingAndIncompleteIntent(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "archive-check")

@@ -233,7 +233,7 @@ When fixes are committed, advance the batch target:
 kander review advance <absolute-CWD> <advance-request.json>
 ```
 
-The request records `{batch_id, expected_revision, advance: {previous_target, target, reason, deliveries}}`. Git working tree must be clean.
+The request records `{batch_id, expected_revision, advance: {previous_target, target, reason, deliveries, foreign_commits}}`. `deliveries` maps batch-member commit SHAs to task IDs. Optional `foreign_commits` maps other commit SHAs in the range to nonempty reasons. Every commit in the range must appear in exactly one map. Git working tree must be clean.
 
 ### 2. Incremental Review
 
