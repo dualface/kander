@@ -21,6 +21,12 @@ func dispositionCommand(name string) bool {
 	return false
 }
 func runDispositionCommand(args []string) int {
+	if len(args) >= 2 && args[1] == "--schema" {
+		if len(args) != 2 || !schemaCommand(args[0]) {
+			return dispositionFailure(newGate(2, "review.schema.usage"))
+		}
+		return printEvidenceSchema(args[0])
+	}
 	if len(args) < 3 {
 		return dispositionFailure(newGate(2, "review.gate_usage"))
 	}

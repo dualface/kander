@@ -45,7 +45,10 @@ Before a card enters `done`, it must have a sealed review plan. An empty review 
 kander review plan <absolute-CWD> <absolute-plan.json>
 kander review extend-plan <absolute-CWD> <absolute-extension.json>
 kander review progress <absolute-CWD> <task-id>
+kander review <plan|extend-plan|assign|disposition|advance|close> --schema
 ```
+
+`--schema` prints that command's fields, required flag, type, closed values, and a description in the interface language. It does not take a worktree or a JSON file and does not write the board. An extension file rejects unknown fields such as `cwd` and `report_language`; those belong on the plan file.
 
 ### Single-Batch Plan Example
 
@@ -175,7 +178,7 @@ kander review aggregate <absolute-CWD> <batch-id>
 
 ### Assignment
 
-Findings must be explicitly assigned to task IDs:
+Findings must be explicitly assigned to task IDs. `items` is keyed by finding ID, and each value is an array of task IDs:
 
 ```json
 {
@@ -250,11 +253,12 @@ The reviewer prompt automatically receives the predecessor report, author dispos
 If **all** remaining fixes are mechanical (e.g. comment typo, dead code removal), the gate allows advancing `passed_at` without launching an extra reviewer agent.
 
 The close request must provide a `mechanical` verification array:
-- `diff_hash`: SHA-256 of the raw Git diff for the exact files.
-- `facts`: Factual proof that no logic changed (e.g. line comparison, test suite result).
+- `paths`: the sorted, unique, repository-relative files changed from the run commit to `fix_commit`. No other changed file may be omitted.
+- `diff_hash`: lowercase SHA-256 of the stdout of the command below. Repeat `:(literal)` once per path.
+- `facts`: factual proof that no logic changed.
 
 ```sh
-git diff --no-ext-diff --no-textconv --no-renames --binary --full-index --no-color <run-commit> <fix-commit> -- ':(literal)<path>'
+git diff --no-ext-diff --no-textconv --no-renames --binary --full-index --no-color <run-commit> <fix-commit> -- :(literal)<path>
 ```
 
 ### 4. Close the Batch
@@ -275,7 +279,7 @@ kander review close <CWD> <close-request.json>
   "roles": {
     "PMQA": {
       "run_id": "pmqa-fixed",
-      "passed_at": "<full-sha>",
+      "passed_at": "<full-sha, not a timestamp>",
       "basis": "item-by-item verification of contract and quality conclusions"
     }
   },

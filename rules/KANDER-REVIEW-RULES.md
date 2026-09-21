@@ -303,5 +303,160 @@ Exclusions exclude only scope, never severity: "do not report high" or "report o
 - `review aggregate <CWD> <batch-id>` validates all run publications and author originals and publishes a generated disposition view to every member, preserving author wording and attribution; members without findings need no notification merely to copy conclusions. The orchestrator may add separately attributed verification opinions to the closure request; they do not replace author dispositions.
 - Mechanical-only fixes use `review advance <CWD> <absolute-request.json>` to CAS the batch target without a reviewer, with batch ID, expected revision, and the advance-file contract covering every batch-member delivery plus `foreign_commits` for outside commits, at a clean worktree. The closing main agent supplies a separate `mechanical` assessment per exception, bound to the exact run/finding/task/author record, report hash, fix SHA, reviewer category (including an absent label), verification facts, and changed paths with their Git diff hash; a disposition's mechanical label alone cannot advance PASSED_AT, and existing labels are not proof. Non-mechanical must-fix items require a subsequent review covering the fix commit.
 - Incremental `review --task ... --previous-run-id ...` loads the previous report, author records, and generated batch view automatically; manual context is a verbatim supplement. The prior semantic conclusion may be FAIL. Missing, inconsistent, foreign-member, wrong-language, or wrong-round evidence rejects before launch; retries retain the frozen input and reject changed supplemental text.
-- Close through `review close <CWD> <absolute-request.json>` only after each required role has a valid conclusion, binding batch ID, expected revision, the SHA-256 of the exact aggregate JSON output, selected role run IDs, PASSED_AT, and verification basis, and linking failed attempts to their successful replacements. Failed execution is never PASS, and one successful role cannot stand in for missing roles. Closure verifies the final clean HEAD and the Git relationships among base, passing commits, fixes, and target, and publishes the final target with the complete disposition; partial publication is not closure. A closed batch accepts no new runs, target advances, or author changes, and the next batch uses its final target as base.
+- Close through `review close <CWD> <absolute-request.json>` only after each required role has a valid conclusion, binding batch ID, expected revision, the SHA-256 of the exact aggregate JSON output, selected role run IDs, PASSED_AT as a full commit SHA rather than a timestamp, and verification basis, and linking failed attempts to their successful replacements. Failed execution is never PASS, and one successful role cannot stand in for missing roles. Closure verifies the final clean HEAD and the Git relationships among base, passing commits, fixes, and target, and publishes the final target with the complete disposition; partial publication is not closure. A closed batch accepts no new runs, target advances, or author changes, and the next batch uses its final target as base.
 - `check` and `move done` share structural validation: pending author conclusions are legitimate progress, malformed existing evidence is an error, and structural validation never asserts integration. Integration authorization, delivery checks, rebase handling, and final Git verification remain mandatory. For a non-Git workflow with every role explicitly N/A, base and target_commit may both be N/A and the closure records Git as inapplicable; required roles always need real commit targets.
+
+## Evidence Command JSON
+
+`kander review <plan|extend-plan|assign|disposition|advance|close> --schema` prints every accepted JSON field of that command, including nested fields, whether it is required, its type, closed values, and a description in the interface language. It takes no CWD and no JSON file, does not locate a board, and writes nothing. Field names in that output stay English. `map-legacy`, `aggregate`, `progress`, and a normal review run have no schema output.
+
+The decoder rejects unknown fields. An ID starts with a lowercase letter or digit and then contains at most 63 more characters from `[a-z0-9-]`. A commit is 40 or 64 lowercase hex characters, never a timestamp. `cycles`, `owners`, `recorded_at`, `revision`, and `submitted_revision` may be sent and are replaced by the command.
+
+### plan
+
+Required: `schema` (`1`), `plan_id`, `author`, `basis`, `cwd` (equal to the command CWD), `task_ids`, and `batches`. Each batch requires `batch_id`, `task_ids`, `base`, `target_commit`, and `requirements`. `requirements` has exactly `PMQA` and `Security`; each value is `required` or `N/A: ` plus a non-empty reason. The first batch omits `previous_batch_id`; each later batch sets it to the preceding `batch_id`. `report_language` is optional when every member card has `LANGUAGE`. `sealed` is optional and means every member appears in a batch. `base` and `target_commit` may be `N/A` only when every role is `N/A`.
+
+```json
+{
+  "schema": 1,
+  "sealed": true,
+  "plan_id": "implementation-cycle",
+  "author": "coordinator",
+  "basis": "confirmed task and this repository's AGENTS.md",
+  "cwd": "/absolute/worktree",
+  "report_language": "en",
+  "task_ids": ["20260907-example-task"],
+  "batches": [{
+    "batch_id": "batch-one",
+    "task_ids": ["20260907-example-task"],
+    "base": "0123456789abcdef0123456789abcdef01234567",
+    "target_commit": "0123456789abcdef0123456789abcdef01234567",
+    "requirements": {
+      "PMQA": "required",
+      "Security": "N/A: security-role exception in this repository's AGENTS.md"
+    }
+  }]
+}
+```
+
+### extend-plan
+
+Required: `plan_id`, `expected_revision`, `author`, and `basis`. Send exactly one of `rebind_cycles`, `sync_targets`, or a `batch`/`seal` operation. `batch` and `seal` may travel together. `rebind_cycles` maps a task ID to the cycle digest from `review progress` and must name exactly the members whose cycle changed. `sync_targets` maps a batch ID to that batch's current target commit. A `batch` object does not accept `cwd` or `report_language`; those belong on `plan`. When `batch` is present it needs `batch_id`, `previous_batch_id` equal to the plan's current last batch, `task_ids`, `base`, `target_commit`, and `requirements`.
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 1,
+  "author": "coordinator",
+  "basis": "previous batch is closed",
+  "seal": true,
+  "batch": {
+    "batch_id": "batch-two",
+    "previous_batch_id": "batch-one",
+    "task_ids": ["20260907-example-task"],
+    "base": "0123456789abcdef0123456789abcdef01234567",
+    "target_commit": "89abcdef0123456789abcdef0123456789abcdef01",
+    "requirements": {
+      "PMQA": "required",
+      "Security": "N/A: security-role exception in this repository's AGENTS.md"
+    }
+  }
+}
+```
+
+### assign
+
+Required: `run_id`, `batch_id`, `author`, `basis`, and `items`. `items` maps each finding ID to an array of task IDs. The keys are finding IDs, not assignee names, and they must be exactly the findings in the report.
+
+```json
+{
+  "run_id": "pmqa-1",
+  "batch_id": "batch-one",
+  "author": "coordinator",
+  "basis": "assigned by task scope",
+  "items": {"PMQA-01": ["20260907-example-task"]}
+}
+```
+
+### disposition
+
+Required: `record_id`, `run_id`, `finding_id`, `batch_id`, `task_id`, `author`, `report_hash`, `original`, `status`, and `basis`. `author` must be the assignment owner of `task_id` unless a successor owner appends a later record. `report_hash` is the lowercase SHA-256 of `report.md`. `original` is the finding text verbatim. `status` is one of `confirmed`, `fixed`, `rejected`, `unverifiable`, `waived`, or `deferred`. `fixed` also requires `fix_commit` (a later full commit) and non-empty `verification`, and forbids them for every other status. `mechanical` is allowed only on `fixed`, and only as `documentation`, `dead-code`, or `redundant-test`. `waived` requires `waiver` and is only for Security; other statuses forbid `waiver`.
+
+```json
+{
+  "record_id": "pmqa-01-author",
+  "run_id": "pmqa-1",
+  "finding_id": "PMQA-01",
+  "batch_id": "batch-one",
+  "task_id": "20260907-example-task",
+  "author": "codex",
+  "report_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "original": "original text identical to the finding text",
+  "status": "fixed",
+  "basis": "the cited path now matches the contract",
+  "fix_commit": "89abcdef0123456789abcdef0123456789abcdef01",
+  "verification": "go test ./internal/review",
+  "mechanical": "documentation"
+}
+```
+
+### advance
+
+Required: `batch_id`, `expected_revision`, and `advance`. `advance` requires `previous_target`, `target`, `reason`, and `deliveries`. `target` equals the clean worktree HEAD. `deliveries` maps a commit in `previous_target..target` to a member task ID. Optional `foreign_commits` maps every other commit in that exact range to a non-empty reason. Each commit appears in exactly one map.
+
+```json
+{
+  "batch_id": "batch-one",
+  "expected_revision": 2,
+  "advance": {
+    "previous_target": "0123456789abcdef0123456789abcdef01234567",
+    "target": "89abcdef0123456789abcdef0123456789abcdef01",
+    "reason": "mechanical documentation fix",
+    "deliveries": {
+      "89abcdef0123456789abcdef0123456789abcdef01": "20260907-example-task"
+    }
+  }
+}
+```
+
+### close
+
+Required: `batch_id`, `expected_revision`, `view_hash`, `author`, and `roles`. `view_hash` is the lowercase SHA-256 of the exact `review aggregate` output. `roles` contains each required role and omits N/A roles. Each role needs `run_id`, `passed_at`, and `basis`. `passed_at` is the run commit, or the mechanical fix commit when every remaining must-fix fixed in that same run has a mechanical assessment. `resolved_failures` maps each failed run ID to its successful replacement; send `{}` when there is none.
+
+A same-run must-fix needs `disposition.mechanical` or a later review run. When `mechanical` is set, `close` also needs one `mechanical` entry for that disposition: `record_id`, `finding.run_id`, `finding.finding_id`, `task_id`, `author`, `category`, `reported_category` (empty when the reviewer omitted it), `report_hash`, `fix_commit`, `basis`, `facts`, `paths`, and `diff_hash`. `paths` is the sorted unique repository-relative set of files changed from the run commit to `fix_commit`, with no absolute path and no `..`. `diff_hash` is the SHA-256 of the stdout of:
+
+```sh
+git diff --no-ext-diff --no-textconv --no-renames --binary --full-index --no-color <run-commit> <fix-commit> -- :(literal)<each path>
+```
+
+```json
+{
+  "batch_id": "batch-one",
+  "expected_revision": 3,
+  "view_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "author": "coordinator",
+  "roles": {
+    "PMQA": {
+      "run_id": "pmqa-1",
+      "passed_at": "89abcdef0123456789abcdef0123456789abcdef01",
+      "basis": "the mechanical documentation fix matches the finding"
+    }
+  },
+  "resolved_failures": {},
+  "opinions": [],
+  "mechanical": [{
+    "record_id": "pmqa-01-author",
+    "finding": {"run_id": "pmqa-1", "finding_id": "PMQA-01"},
+    "task_id": "20260907-example-task",
+    "author": "coordinator",
+    "category": "documentation",
+    "reported_category": "documentation",
+    "report_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "fix_commit": "89abcdef0123456789abcdef0123456789abcdef01",
+    "basis": "comment text only",
+    "facts": "the diff contains no code change",
+    "paths": ["docs/example.md"],
+    "diff_hash": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+  }]
+}
+```

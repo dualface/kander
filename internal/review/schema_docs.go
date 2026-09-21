@@ -1,0 +1,136 @@
+package review
+
+import "strings"
+
+func evidenceSchemaDocs() map[string]map[string]schemaMeta {
+	docs := map[string]map[string]schemaMeta{
+		"plan": {
+			"revision":                    opt(""),
+			"sealed":                      opt("true | false"),
+			"schema":                      req("1"),
+			"plan_id":                     req(""),
+			"author":                      req(""),
+			"basis":                       req(""),
+			"cwd":                         req(""),
+			"report_language":             opt(""),
+			"task_ids":                    req(""),
+			"cycles":                      opt(""),
+			"batches":                     req(""),
+			"batches[].batch_id":          req(""),
+			"batches[].previous_batch_id": opt(""),
+			"batches[].task_ids":          req(""),
+			"batches[].base":              req(""),
+			"batches[].target_commit":     req(""),
+			"batches[].requirements":      req(""),
+			"recorded_at":                 opt(""),
+		},
+		"extend-plan": {
+			"rebind_cycles":           opt(""),
+			"sync_targets":            opt(""),
+			"plan_id":                 req(""),
+			"expected_revision":       req(""),
+			"batch":                   opt(""),
+			"batch.batch_id":          opt(""),
+			"batch.previous_batch_id": opt(""),
+			"batch.task_ids":          opt(""),
+			"batch.base":              opt(""),
+			"batch.target_commit":     opt(""),
+			"batch.requirements":      opt(""),
+			"seal":                    opt("true | false"),
+			"author":                  req(""),
+			"basis":                   req(""),
+		},
+		"assign": {
+			"run_id":      req(""),
+			"batch_id":    req(""),
+			"author":      req(""),
+			"basis":       req(""),
+			"items":       req(""),
+			"owners":      opt(""),
+			"recorded_at": opt(""),
+		},
+		"disposition": {
+			"authorization":             opt(""),
+			"authorization.dispatch_id": opt(""),
+			"authorization.epoch":       opt(""),
+			"submitted_revision":        opt(""),
+			"record_id":                 req(""),
+			"previous_record_id":        opt(""),
+			"run_id":                    req(""),
+			"finding_id":                req(""),
+			"batch_id":                  req(""),
+			"task_id":                   req(""),
+			"author":                    req(""),
+			"recorded_at":               opt(""),
+			"report_hash":               req(""),
+			"original":                  req(""),
+			"status":                    req("confirmed | fixed | rejected | unverifiable | waived | deferred"),
+			"basis":                     req(""),
+			"fix_commit":                opt(""),
+			"mechanical":                opt("documentation | dead-code | redundant-test"),
+			"verification":              opt(""),
+			"waiver":                    opt(""),
+			"waiver.policy":             opt("accepted-risk | timed-out"),
+			"waiver.decision":           opt(""),
+			"waiver.sent_at":            opt(""),
+			"waiver.timeout_at":         opt(""),
+		},
+		"advance": {
+			"batch_id":                req(""),
+			"expected_revision":       req(""),
+			"advance":                 req(""),
+			"advance.previous_target": req(""),
+			"advance.target":          req(""),
+			"advance.reason":          req(""),
+			"advance.deliveries":      req(""),
+			"advance.foreign_commits": opt(""),
+		},
+		"close": {
+			"mechanical":                      opt(""),
+			"mechanical[].record_id":          opt(""),
+			"mechanical[].finding":            opt(""),
+			"mechanical[].finding.run_id":     opt(""),
+			"mechanical[].finding.finding_id": opt(""),
+			"mechanical[].task_id":            opt(""),
+			"mechanical[].author":             opt(""),
+			"mechanical[].category":           opt("documentation | dead-code | redundant-test"),
+			"mechanical[].reported_category":  opt(""),
+			"mechanical[].report_hash":        opt(""),
+			"mechanical[].fix_commit":         opt(""),
+			"mechanical[].basis":              opt(""),
+			"mechanical[].facts":              opt(""),
+			"mechanical[].paths":              opt(""),
+			"mechanical[].diff_hash":          opt(""),
+			"batch_id":                        req(""),
+			"expected_revision":               req(""),
+			"view_hash":                       req(""),
+			"author":                          req(""),
+			"roles":                           req(""),
+			"roles.<key>.run_id":              req(""),
+			"roles.<key>.passed_at":           req(""),
+			"roles.<key>.basis":               req(""),
+			"resolved_failures":               opt(""),
+			"opinions":                        opt(""),
+			"opinions[].author":               opt(""),
+			"opinions[].basis":                opt(""),
+			"opinions[].finding":              opt(""),
+			"opinions[].finding.run_id":       opt(""),
+			"opinions[].finding.finding_id":   opt(""),
+		},
+	}
+	for command, fields := range docs {
+		for path, meta := range fields {
+			meta.textID = schemaTextID(command, path)
+			fields[path] = meta
+		}
+	}
+	return docs
+}
+
+func req(values string) schemaMeta { return schemaMeta{required: true, values: values} }
+func opt(values string) schemaMeta { return schemaMeta{values: values} }
+
+func schemaTextID(command, path string) string {
+	path = strings.NewReplacer("[]", ".item", "<key>", "key").Replace(path)
+	return "review.schema." + command + "." + path
+}
