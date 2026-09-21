@@ -7,6 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/charmbracelet/huh"
 )
 
 // Runtime terminal background probing for the "auto" theme.
@@ -197,16 +199,36 @@ func (a *App) probeTick() {
 	}
 }
 
+// themeRefreshMsg nudges an open Huh form so its group rebuilds the viewport
+// with the mutated theme styles. Huh fields only see messages they know, so a
+// private empty type refreshes the view without acting as an input event.
+type themeRefreshMsg struct{}
+
+// refreshHuhForm rebuilds one open form's viewport after its theme was mutated
+// in place: Group.View only emits what buildView stored during Update, and the
+// UI tick never reaches an open form, so without this nudge one frame would
+// mix the old form palette with the new popup palette.
+func refreshHuhForm(form *huh.Form) {
+	if form == nil {
+		return
+	}
+	// Update returns the same form plus a command; fields ignore the private
+	// message and buildView repaints with the new theme values.
+	_, _ = form.Update(themeRefreshMsg{})
+}
+
 // applyThemeSwitch refreshes theme state held outside per-frame rendering:
-// the Huh forms keep a *huh.Theme whose styles are updated in place, and their
-// fields pick the new values up on the next form update.
+// the Huh forms keep a *huh.Theme whose styles are updated in place, then the
+// open forms are nudged so their viewports repaint with the new styles.
 func (a *App) applyThemeSwitch() {
 	p := themePalette(a.Theme)
 	if a.Options != nil {
 		a.Options.syncFormTheme(p)
+		refreshHuhForm(a.Options.form)
 	}
 	if a.TaskActions != nil && a.TaskActions.formTheme != nil {
 		applyHuhPalette(a.TaskActions.formTheme, p)
+		refreshHuhForm(a.TaskActions.form)
 	}
 }
 

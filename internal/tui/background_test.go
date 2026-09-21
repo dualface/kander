@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
@@ -421,11 +422,19 @@ func TestApplyThemeSwitchUpdatesHuhForms(t *testing.T) {
 	app := newApp(false, 30, tuiPageContext(), nil, nil, "auto", 3, nil, nil)
 	dialog := &taskActions{}
 	dialog.formTheme = huhTheme(themePalette("light"))
+	dialog.form = huh.NewForm(huh.NewGroup(
+		huh.NewSelect[string]().Title("action").Options(huh.NewOption("start", "start")),
+	)).WithTheme(dialog.formTheme).WithShowHelp(false)
 	app.TaskActions = dialog
 	autoBackground.Store(4<<1 | 1)
 	app.applyThemeSwitch()
 	want := termenv.TrueColor.Color(string(themePalette("dark").Bg)).Sequence(true)
 	if got := dialog.formTheme.Focused.Base.Render("x"); !strings.Contains(got, want) {
 		t.Fatalf("task action form theme must follow the resolved palette, want %q in %q", want, got)
+	}
+	// The open form's viewport must repaint without waiting for a real input
+	// message, or one frame mixes the old form palette with the new popup one.
+	if view := dialog.form.View(); !strings.Contains(view, "38;2;230;232;235") {
+		t.Fatalf("form viewport kept the light palette after the switch: %q", view)
 	}
 }
