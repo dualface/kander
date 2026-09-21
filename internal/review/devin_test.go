@@ -50,7 +50,7 @@ func TestDevinReviewUsesArgvInstructionWithoutDevinHome(t *testing.T) {
 		t.Fatalf("out=%q err=%q", out, err)
 	}
 	argv := strings.Split(strings.TrimRight(readFile(t, h.argvLog), "\n"), "\n")
-	for _, want := range []string{"--print", "--permission-mode", "auto", "--"} {
+	for _, want := range []string{"--print", "--permission-mode", "dangerous", "--"} {
 		if !contains(argv, want) {
 			t.Fatalf("argv missing %q: %v", want, argv)
 		}

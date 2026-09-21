@@ -245,7 +245,7 @@ func TestDevinReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	}
 	want := []string{
 		"--print", "--respect-workspace-trust", "false",
-		"--permission-mode", "auto",
+		"--permission-mode", "dangerous",
 	}
 	if settings.model != "" {
 		want = append(want, "--model", settings.model)

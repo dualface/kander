@@ -28,7 +28,7 @@
       "--respect-workspace-trust",
       "false",
       "--permission-mode",
-      "auto",
+      "dangerous",
       "--model",
       "{model}",
       "--",
