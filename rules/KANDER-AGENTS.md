@@ -8,6 +8,10 @@ This file is the Kander rules entry. It is short on purpose: it names what every
 2. Read `KANDER-BASE-RULES.md`. It is the tool protocol and is not controlled by the module switches.
 3. Read `KANDER-LOADING-RULES.md`. It holds the scope paths, the module switch table, the reading map by role, and the rule precedence. Load the other rule files only when it says to or the task needs them, and never load a disabled module through cross references unless the user explicitly asks.
 
+## Before Code Changes
+
+When `rules.task_intake=true`, read `KANDER-TASK-INTAKE-RULES.md` before the first code write for any request expected to create, modify, delete, or regenerate code, regardless of wording or size. Follow its execution-choice gate and continuation exemptions, including after leaving an agent's Plan mode: a generic implementation confirmation alone does not select an intake option. Preserve an existing execution choice; read-only investigation may continue while a required choice is pending.
+
 ## Language
 
 `agent_language` in the configuration is the language for the user: every reply, card, record, report, and the messages passed to `kander notify` and `kander resume`; when it is missing or empty, use the language the user writes in. A task card's `LANGUAGE` field overrides it for everything about that card; a card without the field uses the configuration. Commit messages, code comments, and identifiers follow the project's own conventions.

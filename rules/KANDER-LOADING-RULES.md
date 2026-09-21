@@ -33,7 +33,7 @@ The rules root is the directory containing `KANDER-AGENTS.md`. It decides the sc
 | `rules.code`          | `KANDER-CODE-RULES.md`          | When enabled, before changing code or verifying       |
 | `rules.collaboration` | `KANDER-COLLABORATION-RULES.md` | When enabled, when starting a collaborative task      |
 | `rules.git`           | `KANDER-GIT-RULES.md`           | When enabled, before branch, commit, or integration   |
-| `rules.task_intake`   | `KANDER-TASK-INTAKE-RULES.md`   | When enabled, on receiving a bug or feature request   |
+| `rules.task_intake`   | `KANDER-TASK-INTAKE-RULES.md`   | When enabled, whenever a request is expected to change code, before any code write; also for a new bug or feature request |
 | `rules.task_groups`   | `KANDER-TASK-GROUP-RULES.md`    | When enabled, when planning or running a task group   |
 | `rules.review`        | `KANDER-REVIEW-RULES.md`        | When enabled, to decide review triggers and execution |
 | `rules.reporting`     | `KANDER-REPORTING-RULES.md`     | When enabled, when reporting at the end of a task     |
