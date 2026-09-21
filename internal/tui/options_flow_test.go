@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -52,8 +53,8 @@ func TestFlowRootAndReadOnlySession(t *testing.T) {
 		t.Fatal("unsaved state must be retained and visible")
 	}
 	text := flowReportText(panel)
-	if !strings.Contains(text, config.Text("flow.review_off")) {
-		t.Fatalf("expected review-off note: %s", text)
+	if strings.Contains(text, config.Text("flow.phase_stage_primary")) {
+		t.Fatalf("review off must drop the review stages: %s", text)
 	}
 	after, err := os.ReadFile(path)
 	if err != nil || string(disk) != string(after) {
@@ -171,63 +172,71 @@ func TestFlowShowsUnsavedModelsAndCLIDefault(t *testing.T) {
 	}
 }
 
-func TestRenderFlowChartReviewLoops(t *testing.T) {
-	text := newFlowText()
-	chartFor := func(modes map[string]string, review bool) flow.Chart {
-		cfg := config.DefaultConfig()
-		cfg.Rules[config.RuleReview] = review
-		cfg.ReviewStages["large"] = modes
-		return flow.BuildChart(cfg, "large")
+func chartWithRules(t *testing.T, scale string, overrides map[string]bool, stages map[string]string) flow.Chart {
+	t.Helper()
+	cfg := config.DefaultConfig()
+	for name, value := range overrides {
+		cfg.Rules[name] = value
 	}
-	all := map[string]string{"PMQA": "required", "Security": "required"}
-	noSecurity := map[string]string{"PMQA": "required", "Security": "skip"}
-	securityAuto := map[string]string{"PMQA": "required", "Security": "auto"}
-	pmqaSkipped := map[string]string{"PMQA": "skip", "Security": "required"}
-	withRules := func(review, code, git bool, modes map[string]string) flow.Chart {
-		cfg := config.DefaultConfig()
-		cfg.Rules[config.RuleReview] = review
-		cfg.Rules[config.RuleCode] = code
-		cfg.Rules[config.RuleGit] = git
-		cfg.ReviewStages["large"] = modes
-		return flow.BuildChart(cfg, "large")
+	if stages != nil {
+		cfg.ReviewStages[scale] = stages
 	}
+	return flow.BuildChart(cfg, scale)
+}
+
+// TestRenderFlowChartEdges covers that every Exit.Target becomes a drawn edge
+// when the width allows, and that the compact form names the target instead.
+func TestRenderFlowChartEdges(t *testing.T) {
+	required := map[string]string{"PMQA": "required", "Security": "required"}
 	for _, tc := range []struct {
-		name    string
-		chart   flow.Chart
-		width   int
-		want    []string
-		absent  []string
-		returns int
+		name   string
+		chart  flow.Chart
+		width  int
+		want   []string
+		absent []string
 	}{
-		{"wide", chartFor(all, true), 160, []string{
-			text.execute, text.selfCheck, text.stageNames[flow.StagePrimary], text.stageNames[flow.StageSecurity],
-			"PMQA · " + text.required, "Security · " + text.required,
-			text.gateReview, text.skipLoop, text.gates[flow.StagePrimary], text.gates[flow.StageSecurity],
-			text.decision, text.fix, text.rereview, text.mechanical, text.unverifiable, text.contract,
-			text.accept, text.stop, text.timeout, text.wait, text.pmqaCross, text.securityReturn,
-			text.unresolved, text.pass, text.done, text.notePrecedence, text.noteRebase, text.noteGroup,
-		}, []string{text.gateRole, text.roleSkip, text.finish, text.deliveryCheck, "◀"}, 2},
-		{"compact", chartFor(all, true), 40, []string{
-			text.gates[flow.StagePrimary], "▶ " + text.fix, "↺ " + text.stageNames[flow.StagePrimary], text.done,
-		}, []string{"◀"}, 2},
-		{"security auto", chartFor(securityAuto, true), 160, []string{
-			text.gateRole, text.roleSkip, text.decision, "Security · " + text.auto,
-		}, []string{text.stageNA}, 2},
-		{"security skipped", chartFor(noSecurity, true), 160, []string{
-			text.stageNA, text.naOverride, text.gates[flow.StagePrimary], text.mechanical,
-		}, []string{text.gates[flow.StageSecurity], text.decision, text.pmqaCross}, 1},
-		{"pmqa skipped", chartFor(pmqaSkipped, true), 160, []string{
-			text.stageNA, text.decision, text.rereview, text.accept,
-		}, []string{text.gates[flow.StagePrimary], text.pmqaCross, text.securityReturn}, 1},
-		{"code off", withRules(true, false, true, all), 160, []string{text.deliveryCheck, text.noteRebase},
-			[]string{text.selfCheck}, 2},
-		{"git off", withRules(true, true, false, all), 160, []string{text.finish, text.stopDelivery, text.selfCheck},
-			[]string{text.done, text.stop, text.noteRebase, text.noteGroup}, 2},
-		{"review off", chartFor(all, false), 60, []string{text.execute, text.reviewOff, text.done},
-			[]string{text.selfCheck, text.stageNames[flow.StagePrimary], text.gateReview}, 0},
+		{"wide", chartWithRules(t, "large", nil, required), 100, []string{
+			config.Text("flow.phase_implement"), config.Text("flow.phase_stage_primary"),
+			config.Text("flow.phase_stage_security"), config.Text("flow.gate_must_fix"),
+			config.Text("flow.gate_security_qualified"), config.Text("flow.sec_cross_primary"),
+			config.Text("flow.mf_round_cap"), config.Text("flow.reviewer_unavailable"),
+			config.Text("flow.mf_attribution"),
+			config.Text("flow.phase_unresolved"), config.Text("flow.user_exit"),
+			"┌", "└", "▶",
+		}, []string{" → "}},
+		{"compact", chartWithRules(t, "large", nil, required), 60, []string{
+			" → " + config.Text("flow.phase_stage_primary"),
+			" → " + config.Text("flow.phase_intake"),
+		}, []string{"◀"}},
+		{"review off", chartWithRules(t, "large", map[string]bool{
+			config.RuleReview: false, config.RuleTaskGroups: false,
+		}, nil), 100, []string{
+			config.Text("flow.phase_implement"), config.Text("flow.phase_integrate"),
+		}, []string{
+			config.Text("flow.phase_stage_primary"), config.Text("flow.gate_whitelist"),
+			config.Text("flow.phase_self_check"),
+		}},
+		{"review off keeps the self-check for group members", chartWithRules(t, "large", map[string]bool{
+			config.RuleReview: false,
+		}, nil), 100, []string{config.Text("flow.phase_self_check")}, nil},
+		{"code off", chartWithRules(t, "large", map[string]bool{
+			config.RuleCode: false,
+		}, required), 100, []string{
+			config.Text("flow.phase_delivery_check"),
+		}, []string{config.Text("flow.phase_self_check")}},
+		{"git off", chartWithRules(t, "large", map[string]bool{
+			config.RuleGit: false,
+		}, required), 100, []string{
+			config.Text("flow.phase_finish_own"), config.Text("flow.sec_decision_stop_delivery"),
+		}, []string{config.Text("flow.phase_integrate"), config.Text("flow.phase_wrap_up")}},
+		{"security skipped", chartWithRules(t, "large", nil, map[string]string{
+			"PMQA": "required", "Security": "skip",
+		}), 100, []string{
+			config.Text("flow.note_stage_na"), config.Text("flow.note_stage_na_override"),
+		}, []string{config.Text("flow.gate_security_qualified"), config.Text("flow.sec_cross_primary")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			lines := renderFlowChart(tc.chart, tc.width, text)
+			lines := renderFlowChart(tc.chart, tc.width)
 			joined := strings.Join(lines, "\n")
 			for _, line := range lines {
 				if displayWidth(line) > tc.width {
@@ -244,11 +253,113 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 					t.Fatalf("unexpected %q:\n%s", absent, joined)
 				}
 			}
-			if got := strings.Count(joined, "↺"); got != tc.returns {
-				t.Fatalf("loop returns=%d want %d:\n%s", got, tc.returns, joined)
-			}
 		})
 	}
+}
+
+// TestRenderFlowChartCompactNamesEveryTarget covers that the compact form keeps
+// one named target per edge the wide form would draw.
+func TestRenderFlowChartCompactNamesEveryTarget(t *testing.T) {
+	chart := chartWithRules(t, "large", nil, map[string]string{"PMQA": "required", "Security": "required"})
+	compact := strings.Join(renderFlowChart(chart, 60), "\n")
+	back, forward := countFlowEdges(chart)
+	edges := back + forward
+	if back == 0 || forward == 0 {
+		t.Fatalf("expected both loops and forward jumps, got %d and %d", back, forward)
+	}
+	if got := strings.Count(compact, " → "); got != edges {
+		t.Fatalf("compact named %d targets, wide drew %d", got, edges)
+	}
+}
+
+// TestRenderFlowChartWidthCeiling covers the diagram width ceiling and that a
+// wide terminal never widens the chart past it.
+func TestRenderFlowChartWidthCeiling(t *testing.T) {
+	chart := chartWithRules(t, "large", nil, map[string]string{"PMQA": "required", "Security": "required"})
+	for _, width := range []int{24, 40, 80, 100, 200} {
+		limit := width
+		if limit > flowMaxWidth {
+			limit = flowMaxWidth
+		}
+		for _, line := range renderFlowChart(chart, width) {
+			if displayWidth(line) > limit {
+				t.Fatalf("width %d produced %q", width, line)
+			}
+		}
+	}
+}
+
+// TestFlowLocaleKeysResolve covers that every key the chart uses exists in all
+// three catalogs and that the catalogs carry no unused keys.
+func TestFlowLocaleKeysResolve(t *testing.T) {
+	used := map[string]bool{
+		"flow.title": true, "flow.cli_default": true, "flow.user_exit": true,
+	}
+	for _, mode := range []string{flow.ModeRequired, flow.ModeAuto, flow.ModeSkip, flow.ModeInvalid} {
+		used["flow.mode_"+mode] = true
+	}
+	for _, combo := range flowRuleCombos() {
+		for _, scale := range config.TaskScales {
+			for _, stages := range []map[string]string{
+				{"PMQA": "required", "Security": "required"},
+				{"PMQA": "auto", "Security": "auto"},
+				{"PMQA": "skip", "Security": "skip"},
+				{"PMQA": "broken", "Security": "broken"},
+			} {
+				chart := chartWithRules(t, scale, combo, stages)
+				for _, phase := range chart.Phases {
+					used["flow.phase_"+phase.Key] = true
+					for _, note := range phase.Notes {
+						used["flow."+note] = true
+					}
+					for _, gate := range phase.Gates {
+						used["flow."+gate.Key] = true
+						for _, exit := range gate.Exits {
+							used["flow."+exit.Key] = true
+							for _, step := range exit.Steps {
+								used["flow."+step] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	for _, lang := range []string{"en", "zh-CN", "ja"} {
+		raw, err := os.ReadFile(filepath.Join("..", "i18n", "locales", "flow", lang+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var catalog map[string]string
+		if err := json.Unmarshal(raw, &catalog); err != nil {
+			t.Fatal(err)
+		}
+		for key := range used {
+			value, ok := catalog[key]
+			if !ok || strings.TrimSpace(value) == "" {
+				t.Fatalf("%s: missing %q", lang, key)
+			}
+		}
+		for key := range catalog {
+			if !used[key] {
+				t.Fatalf("%s: unused %q", lang, key)
+			}
+		}
+	}
+}
+
+// flowRuleCombos returns every switch combination that changes the chart.
+func flowRuleCombos() []map[string]bool {
+	names := []string{config.RuleTaskIntake, config.RuleCode, config.RuleGit, config.RuleReview, config.RuleTaskGroups, config.RuleReporting}
+	var out []map[string]bool
+	for mask := 0; mask < 1<<len(names); mask++ {
+		combo := map[string]bool{}
+		for i, name := range names {
+			combo[name] = mask&(1<<i) != 0
+		}
+		out = append(out, combo)
+	}
+	return out
 }
 
 func TestFlowScopeTabsAndScaleKeys(t *testing.T) {

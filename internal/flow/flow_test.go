@@ -1,171 +1,333 @@
 package flow
 
 import (
-	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
 )
 
-func TestBuildChartPerScale(t *testing.T) {
+func testConfig(rules map[string]bool) *config.Config {
 	cfg := config.DefaultConfig()
-	cfg.KanbanAgents["large"], cfg.KanbanAgents["small"] = "claude", "codex"
-	cfg.Models.Kanban["claude"] = map[string]string{
-		"large_model": "large-model", "large_effort": "high", "model": "legacy-large",
+	for name, value := range rules {
+		cfg.Rules[name] = value
 	}
-	cfg.Models.Kanban["codex"] = map[string]string{
-		"small_model": "small-model", "small_effort": "medium", "model": "legacy-small",
-	}
-	cfg.Reviewers["large"]["PMQA"], cfg.Reviewers["large"]["Security"] = "claude", "codex"
-	cfg.Reviewers["small"]["PMQA"], cfg.Reviewers["small"]["Security"] = "claude", "codex"
-	cfg.Models.ReviewRoles["PMQA"] = map[string]string{"large_model": "pm-large", "large_effort": "xhigh", "model": "pm-model"}
-	cfg.Models.ReviewRoles["Security"] = map[string]string{}
-	cfg.Models.Review["codex"] = map[string]string{"model": "qa-fallback", "effort": "low"}
-	cfg.ReviewStages = map[string]map[string]string{
-		"large": {"PMQA": "required", "Security": "skip"},
-		"small": {"PMQA": "required", "Security": "skip"},
-	}
-	before := config.Clone(cfg)
-
-	large := BuildChart(cfg, "large")
-	if large.Scale != "large" || large.ReviewDisabled || !large.DeliveryFull || !large.Integrate || !large.GroupBatches {
-		t.Fatalf("%+v", large)
-	}
-	if large.Execution != (Node{Model: "large-model", Effort: "high"}) {
-		t.Fatalf("large execution=%+v", large.Execution)
-	}
-	if len(large.Stages) != 2 || large.Stages[0].Name != StagePrimary || len(large.Stages[0].Nodes) != 1 ||
-		large.Stages[1].Name != StageSecurity || len(large.Stages[1].Nodes) != 0 {
-		t.Fatalf("large stages=%+v", large.Stages)
-	}
-	if large.Stages[0].Nodes[0] != (Node{Role: "PMQA", Mode: "required", Model: "pm-large", Effort: "xhigh"}) {
-		t.Fatalf("PMQA=%+v", large.Stages[0].Nodes[0])
-	}
-
-	small := BuildChart(cfg, "small")
-	if small.Execution != (Node{Model: "small-model", Effort: "medium"}) {
-		t.Fatalf("small execution=%+v", small.Execution)
-	}
-	if small.Stages[0].Nodes[0].Model != "pm-model" {
-		t.Fatalf("small PMQA falls back to shared model: %+v", small.Stages[0].Nodes[0])
-	}
-
-	if !reflect.DeepEqual(cfg, before) {
-		t.Fatal("BuildChart mutated configuration")
-	}
-	charts := BuildCharts(cfg)
-	if len(charts) != 2 || charts[0].Scale != "large" || charts[1].Scale != "small" {
-		t.Fatalf("%+v", charts)
-	}
+	return cfg
 }
 
-func TestBuildChartReviewModes(t *testing.T) {
-	same := func(modes map[string]string) map[string]map[string]string {
-		return map[string]map[string]string{"large": modes, "small": modes}
+func allRules(on bool) map[string]bool {
+	out := map[string]bool{}
+	for _, name := range config.RuleModules {
+		out[name] = on
 	}
+	return out
+}
+
+func phaseKeys(chart Chart) []string {
+	keys := make([]string, 0, len(chart.Phases))
+	for _, phase := range chart.Phases {
+		keys = append(keys, phase.Key)
+	}
+	return keys
+}
+
+// exitOf returns the exit with that key anywhere in the chart.
+func exitOf(chart Chart, key string) (Exit, bool) {
+	for _, phase := range chart.Phases {
+		for _, gate := range phase.Gates {
+			for _, exit := range gate.Exits {
+				if exit.Key == key {
+					return exit, true
+				}
+			}
+		}
+	}
+	return Exit{}, false
+}
+
+func gateOf(chart Chart, phase, key string) bool {
+	p, ok := chart.Phase(phase)
+	if !ok {
+		return false
+	}
+	for _, gate := range p.Gates {
+		if gate.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// TestPhaseMatrix pins which module switch owns which phase.
+func TestPhaseMatrix(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		enabled  bool
-		modes    map[string]map[string]string
-		disabled bool
-		roles    [2][]string
+		name    string
+		rules   map[string]bool
+		present []string
+		absent  []string
 	}{
-		{"disabled", false, config.DefaultReviewStages(), true, [2][]string{}},
-		{"all skipped", true, same(map[string]string{"PMQA": "skip", "Security": "skip"}), false, [2][]string{nil, nil}},
-		{"both stages", true, same(map[string]string{"PMQA": "auto", "Security": "required"}), false, [2][]string{{"PMQA"}, {"Security"}}},
-		{"second only", true, same(map[string]string{"PMQA": "skip", "Security": "required"}), false, [2][]string{nil, {"Security"}}},
+		{"all on", allRules(true),
+			[]string{PhaseIntake, PhaseCreate, PhaseClaim, PhaseBranch, PhaseImplement, PhaseSelfCheck,
+				PhaseDeliverGroup, PhaseWhitelist, PhaseReviewPlan, PhaseStagePrimary, PhaseStageSecurity,
+				PhaseBatchClose, PhaseUnresolved, PhaseIntegrate, PhaseWrapUp, PhaseComplete, PhaseReport},
+			[]string{PhaseFinishOwn, PhaseDeliveryCheck}},
+		{"all off", allRules(false),
+			[]string{PhaseCreate, PhaseClaim, PhaseImplement, PhaseFinishOwn, PhaseComplete},
+			[]string{PhaseIntake, PhaseBranch, PhaseSelfCheck, PhaseDeliveryCheck, PhaseDeliverGroup,
+				PhaseWhitelist, PhaseStagePrimary, PhaseStageSecurity, PhaseIntegrate, PhaseWrapUp, PhaseReport}},
+		{"git off drops groups", map[string]bool{config.RuleGit: false},
+			[]string{PhaseFinishOwn}, []string{PhaseBranch, PhaseIntegrate, PhaseDeliverGroup, PhaseWrapUp}},
+		{"reporting off", map[string]bool{config.RuleReporting: false},
+			[]string{PhaseComplete}, []string{PhaseReport}},
+		{"intake off", map[string]bool{config.RuleTaskIntake: false},
+			[]string{PhaseCreate}, []string{PhaseIntake}},
+		{"review off", map[string]bool{config.RuleReview: false},
+			[]string{PhaseImplement, PhaseIntegrate},
+			[]string{PhaseWhitelist, PhaseReviewPlan, PhaseStagePrimary, PhaseStageSecurity, PhaseBatchClose, PhaseUnresolved}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := config.DefaultConfig()
-			cfg.Rules[config.RuleReview], cfg.ReviewStages = tc.enabled, tc.modes
-			got := BuildChart(cfg, "large")
-			if got.ReviewDisabled != tc.disabled {
-				t.Fatalf("disabled=%v", got.ReviewDisabled)
+			rules := allRules(true)
+			for name, value := range tc.rules {
+				rules[name] = value
 			}
-			if !got.DeliveryFull || !got.Integrate || !got.GroupBatches {
-				t.Fatalf("module flags=%+v", got)
-			}
-			if tc.disabled {
-				if len(got.Stages) != 0 {
-					t.Fatalf("disabled review must have no stages: %+v", got.Stages)
+			chart := BuildChart(testConfig(rules), "large")
+			for _, key := range tc.present {
+				if !chart.Has(key) {
+					t.Fatalf("missing phase %q in %v", key, phaseKeys(chart))
 				}
-				return
 			}
-			// Both stages stay in place so a skipped stage one never shifts stage two.
-			if len(got.Stages) != 2 || got.Stages[0].Name != StagePrimary || got.Stages[1].Name != StageSecurity {
-				t.Fatalf("stages=%+v", got.Stages)
-			}
-			for i, stage := range got.Stages {
-				var roles []string
-				for _, node := range stage.Nodes {
-					roles = append(roles, node.Role)
-				}
-				if !reflect.DeepEqual(roles, tc.roles[i]) {
-					t.Fatalf("stage %d roles=%v want %v", i, roles, tc.roles[i])
+			for _, key := range tc.absent {
+				if chart.Has(key) {
+					t.Fatalf("unexpected phase %q in %v", key, phaseKeys(chart))
 				}
 			}
 		})
 	}
 }
 
-func TestModuleSwitchesChangeOnlyTheirChartFlags(t *testing.T) {
-	cfg := config.DefaultConfig()
-	want := BuildChart(cfg, "large")
-	if !want.DeliveryFull || !want.Integrate || !want.GroupBatches {
-		t.Fatalf("%+v", want)
-	}
-	for _, module := range []string{config.RuleCollaboration, config.RuleReporting, config.RuleTaskIntake} {
-		cfg.Rules[module] = false
-	}
-	if got := BuildChart(cfg, "large"); !reflect.DeepEqual(got, want) {
-		t.Fatal("unrelated module switches changed chart")
-	}
-	cfg.Rules[config.RuleCode] = false
-	got := BuildChart(cfg, "large")
-	if got.DeliveryFull || !got.Integrate || !got.GroupBatches {
-		t.Fatalf("code off: %+v", got)
-	}
-	cfg.Rules[config.RuleGit] = false
-	cfg.Rules[config.RuleTaskGroups] = true
-	got = BuildChart(cfg, "large")
-	if got.Integrate || got.GroupBatches {
-		t.Fatalf("git off: %+v", got)
-	}
-}
-
-func TestReviewChartHidesEffortTheReviewLaunchOmits(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Reviewers["large"]["PMQA"] = "cursor"
-	cfg.ReviewStages["large"]["PMQA"] = "required"
-	cfg.ReviewStages["large"]["Security"] = "skip"
-	cfg.Models.ReviewRoles["PMQA"]["large_model"] = "cursor-model"
-	cfg.Models.ReviewRoles["PMQA"]["large_effort"] = "high"
-	cfg.Models.ReviewRoles["PMQA"]["large_agent"] = "cursor"
-	cfg.Agents = map[string]config.AgentDefinition{
-		"cursor": {Args: &config.AgentArgs{Start: []string{"{model}", "{effort}"}}},
-	}
-	if !config.AgentSupportsEffort(cfg, "cursor") || config.ReviewModelSupportsEffort(cfg, "cursor") {
-		t.Fatal("fixture does not separate execution effort from review effort")
-	}
-	got := BuildChart(cfg, "large")
-	node := got.Stages[0].Nodes[0]
-	if node.Model != "cursor-model" || node.Effort != "" {
-		t.Fatalf("PMQA=%+v", node)
+// TestDeliverySelfCheckTriggers covers the real triggers of the self-check:
+// the code module decides its content, and a card reaches it by entering
+// review/ (task groups) or by requesting review.
+func TestDeliverySelfCheckTriggers(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		code, review, grp  bool
+		selfCheck, reduced bool
+	}{
+		{"code and review", true, true, false, true, false},
+		{"code and groups only", true, false, true, true, false},
+		{"code alone", true, false, false, false, false},
+		{"review without code", false, true, false, false, true},
+		{"neither", false, false, false, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rules := allRules(true)
+			rules[config.RuleCode] = tc.code
+			rules[config.RuleReview] = tc.review
+			rules[config.RuleTaskGroups] = tc.grp
+			chart := BuildChart(testConfig(rules), "large")
+			if got := chart.Has(PhaseSelfCheck); got != tc.selfCheck {
+				t.Fatalf("self check=%v want %v", got, tc.selfCheck)
+			}
+			if got := chart.Has(PhaseDeliveryCheck); got != tc.reduced {
+				t.Fatalf("reduced check=%v want %v", got, tc.reduced)
+			}
+		})
 	}
 }
 
-func TestEmptyModelsRetainCLIDefaultSemantics(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.Models.Kanban = map[string]map[string]string{}
-	cfg.Models.Review = map[string]map[string]string{}
-	cfg.Models.ReviewRoles = map[string]map[string]string{}
-	cfg.ReviewStages["large"]["PMQA"] = "required"
-	cfg.ReviewStages["large"]["Security"] = "skip"
-	got := BuildChart(cfg, "large")
-	if got.Execution.Model != "" || got.Execution.Effort != "" {
-		t.Fatalf("execution=%+v", got.Execution)
+// TestStagePolicies pins the per-role stage semantics, including that stage one
+// never gets a trigger-condition gate of its own.
+func TestStagePolicies(t *testing.T) {
+	cfg := testConfig(allRules(true))
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeAuto, "Security": ModeAuto}
+	chart := BuildChart(cfg, "large")
+	if gateOf(chart, PhaseStagePrimary, "gate_security_conditions") {
+		t.Fatal("stage one must not have trigger conditions of its own")
 	}
-	if len(got.Stages) != 2 || len(got.Stages[0].Nodes) != 1 || got.Stages[0].Nodes[0].Model != "" {
-		t.Fatalf("review=%+v", got.Stages)
+	if !gateOf(chart, PhaseStageSecurity, "gate_security_conditions") {
+		t.Fatal("an auto security stage needs its trigger-condition gate")
+	}
+
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeRequired, "Security": ModeRequired}
+	chart = BuildChart(cfg, "large")
+	if gateOf(chart, PhaseStageSecurity, "gate_security_conditions") {
+		t.Fatal("required overrides the trigger conditions")
+	}
+
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeRequired, "Security": ModeSkip}
+	chart = BuildChart(cfg, "large")
+	security, _ := chart.Phase(PhaseStageSecurity)
+	if len(security.Gates) != 0 || len(security.Notes) == 0 {
+		t.Fatal("a skipped stage is N/A with its override note and no gates")
+	}
+	if _, ok := exitOf(chart, "cross_security_touched"); ok {
+		t.Fatal("no cross edge to a skipped security stage")
+	}
+
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeSkip, "Security": ModeRequired}
+	chart = BuildChart(cfg, "large")
+	if _, ok := exitOf(chart, "sec_cross_primary"); ok {
+		t.Fatal("no cross edge to a skipped primary stage")
+	}
+}
+
+// TestInvalidStagePolicyStaysVisible covers that an unreadable policy keeps the
+// role on the chart instead of dropping it silently.
+func TestInvalidStagePolicyStaysVisible(t *testing.T) {
+	cfg := testConfig(allRules(true))
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": "nonsense", "Security": ModeRequired}
+	chart := BuildChart(cfg, "large")
+	primary, ok := chart.Phase(PhaseStagePrimary)
+	if !ok || primary.Node.Mode != ModeInvalid {
+		t.Fatalf("mode=%q want %q", primary.Node.Mode, ModeInvalid)
+	}
+	if len(primary.Gates) != 0 {
+		t.Fatal("an unreadable policy gates nothing")
+	}
+}
+
+// TestBackEdgeTargets pins every loop the rules require.
+func TestBackEdgeTargets(t *testing.T) {
+	cfg := testConfig(allRules(true))
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeRequired, "Security": ModeRequired}
+	chart := BuildChart(cfg, "large")
+	for _, want := range []struct{ exit, target string }{
+		{"intake_adjust", PhaseIntake},
+		{"todo_incomplete", PhaseCreate},
+		{"delivery_fail", PhaseImplement},
+		{"delivery_incomplete", PhaseImplement},
+		{"group_ff_conflict", PhaseImplement},
+		{"whitelist_miss", PhaseIntegrate},
+		{"mf_other", PhaseStagePrimary},
+		{"cross_security_touched", PhaseStageSecurity},
+		{"sec_fix", PhaseStageSecurity},
+		{"sec_cross_primary", PhaseStagePrimary},
+		{"rebase_code_conflict", PhaseStagePrimary},
+		{"group_patch_changed", PhaseReviewPlan},
+	} {
+		exit, ok := exitOf(chart, want.exit)
+		if !ok {
+			t.Fatalf("missing exit %q", want.exit)
+		}
+		if exit.Target != want.target {
+			t.Fatalf("%s target=%q want %q", want.exit, exit.Target, want.target)
+		}
+	}
+	// A single card re-reviews a hand-resolved rebase conflict; a task group
+	// integrates a merge commit instead of rebasing its reviewed patch.
+	single := allRules(true)
+	single[config.RuleTaskGroups] = false
+	solo := BuildChart(testConfig(single), "large")
+	if _, ok := exitOf(solo, "group_patch_changed"); ok {
+		t.Fatal("the group patch gate belongs to task groups only")
+	}
+	if exit, ok := exitOf(solo, "rebase_code_conflict"); !ok || exit.Target != PhaseStagePrimary {
+		t.Fatal("a single card re-reviews a hand-resolved code conflict")
+	}
+}
+
+// TestUserDecisionExits pins the exits the rules route to the user.
+func TestUserDecisionExits(t *testing.T) {
+	cfg := testConfig(allRules(true))
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeRequired, "Security": ModeRequired}
+	chart := BuildChart(cfg, "large")
+	for _, key := range []string{
+		"mf_unverifiable", "mf_attribution", "mf_round_cap",
+		"reviewer_unavailable", "reviewer_backend_failure",
+		"sec_fix", "sec_accept", "sec_decision_stop", "sec_round_cap",
+		"group_patch_changed",
+	} {
+		exit, ok := exitOf(chart, key)
+		if !ok {
+			t.Fatalf("missing exit %q", key)
+		}
+		if !exit.User {
+			t.Fatalf("%q must be marked as a user decision", key)
+		}
+	}
+	// A confirmed blocking or high finding always waits; the timeout is a
+	// medium-only rule and is not itself a user decision.
+	timeout, ok := exitOf(chart, "sec_timeout")
+	if !ok || timeout.User || len(timeout.Steps) == 0 {
+		t.Fatal("the timeout exit states that blocking and high still wait")
+	}
+}
+
+// TestGitOffReplacesIntegration covers the delivery end when Git is disabled.
+func TestGitOffReplacesIntegration(t *testing.T) {
+	rules := allRules(true)
+	rules[config.RuleGit] = false
+	chart := BuildChart(testConfig(rules), "large")
+	if exit, ok := exitOf(chart, "whitelist_miss"); !ok || exit.Target != PhaseFinishOwn {
+		t.Fatal("a whitelist miss must reach the user's own finish")
+	}
+	if _, ok := exitOf(chart, "sec_decision_stop_delivery"); !ok {
+		t.Fatal("without Git the third security option stops delivery")
+	}
+	if _, ok := exitOf(chart, "sec_decision_stop"); ok {
+		t.Fatal("integration cannot be stopped when there is none")
+	}
+}
+
+// TestScalesDiffer covers that the two scales project their own configuration.
+func TestScalesDiffer(t *testing.T) {
+	cfg := testConfig(allRules(true))
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": ModeRequired, "Security": ModeRequired}
+	cfg.ReviewStages["small"] = map[string]string{"PMQA": ModeRequired, "Security": ModeAuto}
+	charts := BuildCharts(cfg)
+	if len(charts) != len(config.TaskScales) {
+		t.Fatalf("charts=%d", len(charts))
+	}
+	large, small := charts[0], charts[1]
+	if large.Scale != "large" || small.Scale != "small" {
+		t.Fatalf("scales %q %q", large.Scale, small.Scale)
+	}
+	if gateOf(large, PhaseStageSecurity, "gate_security_conditions") {
+		t.Fatal("large security is required here")
+	}
+	if !gateOf(small, PhaseStageSecurity, "gate_security_conditions") {
+		t.Fatal("small security is auto here and needs its trigger gate")
+	}
+	// The execution node follows the scale's agent and model.
+	cfg.KanbanAgents["large"] = "codex"
+	cfg.KanbanAgents["small"] = "claude"
+	cfg.Models.Kanban["codex"]["large_model"] = "large-only"
+	cfg.Models.Kanban["claude"]["small_model"] = "small-only"
+	charts = BuildCharts(cfg)
+	largeNode, _ := charts[0].Phase(PhaseImplement)
+	smallNode, _ := charts[1].Phase(PhaseImplement)
+	if largeNode.Node.Model != "large-only" || smallNode.Node.Model != "small-only" {
+		t.Fatalf("models %q %q", largeNode.Node.Model, smallNode.Node.Model)
+	}
+}
+
+// TestCardReviewNote covers the independent card review large cards and group
+// members need before todo/.
+func TestCardReviewNote(t *testing.T) {
+	rules := allRules(true)
+	rules[config.RuleTaskGroups] = false
+	large, _ := BuildChart(testConfig(rules), "large").Phase(PhaseCreate)
+	small, _ := BuildChart(testConfig(rules), "small").Phase(PhaseCreate)
+	if !strings.Contains(strings.Join(large.Notes, " "), "note_card_review") {
+		t.Fatal("a large card needs the independent card review")
+	}
+	if strings.Contains(strings.Join(small.Notes, " "), "note_card_review") {
+		t.Fatal("a standalone small card needs no independent card review")
+	}
+	grouped, _ := BuildChart(testConfig(allRules(true)), "small").Phase(PhaseCreate)
+	if !strings.Contains(strings.Join(grouped.Notes, " "), "note_card_review") {
+		t.Fatal("a group member needs the independent card review at any scale")
+	}
+}
+
+// TestNilConfigIsSafe covers the read path with no configuration at all.
+func TestNilConfigIsSafe(t *testing.T) {
+	chart := BuildChart(nil, "large")
+	if len(chart.Phases) == 0 {
+		t.Fatal("a chart without configuration still shows the fixed phases")
+	}
+	if chart.Has(PhaseStagePrimary) || chart.Has(PhaseIntegrate) {
+		t.Fatal("no module is enabled without configuration")
 	}
 }

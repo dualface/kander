@@ -31,7 +31,7 @@ func (p *optionsPanel) refreshFlowReport() {
 	if width < 24 {
 		width = 24
 	}
-	body := renderFlowChart(chart, width, newFlowText())
+	body := renderFlowChart(chart, width)
 	lines := make([]menu.ReportLine, 0, len(body)+3)
 	for _, row := range flowScaleTabs(p.flowScale) {
 		lines = append(lines, menu.ReportLine{Level: menu.LevelNote, Text: row})
