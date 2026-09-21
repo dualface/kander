@@ -62,7 +62,7 @@
   "review.schema.disposition.status": "confirmed と unverifiable は要修正の段階だけに使い、終了を止めます。deferred は非遮断の段階だけです。waived は Security だけです。fixed は fix_commit と verification も必要です。",
   "review.schema.disposition.submitted_revision": "新規記録では無視されます。コマンドがカードのリビジョンを保存します。同一内容の再送は保存済みの値を保ちます。",
   "review.schema.disposition.task_id": "割り当てがこの finding に列挙したタスク ID。",
-  "review.schema.disposition.verification": "status が fixed のとき必須で、それ以外では禁止です。修正を確かめたコマンド、検査、または比較です。",
+  "review.schema.disposition.verification": "status が fixed のとき必須です。他の状態でも付けられます。コマンドは値を残し、拒否しません。修正を確かめたコマンド、検査、または比較です。",
   "review.schema.disposition.waiver": "status が waived のとき必須で、それ以外では禁止です。",
   "review.schema.disposition.waiver.decision": "waiver があるとき必須。利用者の決定、またはタイムアウト通知の根拠。空にできません。",
   "review.schema.disposition.waiver.policy": "waiver があるとき必須。accepted-risk は利用者の決定を記録します。timed-out は sent_at と timeout_at も必要です。",
@@ -100,6 +100,6 @@
   "review.schema.plan.revision": "作成時は無視されます。コマンドが 1 に設定します。",
   "review.schema.plan.schema": "計画の schema バージョン。新しい計画は 1 です。",
   "review.schema.plan.sealed": "true のとき、計画の全メンバーがいずれかのバッチに入っていなければなりません。false なら extend-plan で追加できます。",
-  "review.schema.plan.task_ids": "メンバーのタスク ID。コマンドが並べ、重複を拒否します。各バッチのタスク ID はこの一覧に含まれます。",
+  "review.schema.plan.task_ids": "メンバーのタスク ID。コマンドが並べ、重複を除きます。各バッチのタスク ID はこの一覧に含まれます。",
   "review.schema.usage": "用法: kander review <plan|extend-plan|assign|disposition|advance|close> --schema"
 }

@@ -62,7 +62,7 @@
   "review.schema.disposition.status": "confirmed and unverifiable apply only to must-fix tiers and block closure. deferred applies only to non-blocking tiers. waived applies only to Security. fixed also requires fix_commit and verification.",
   "review.schema.disposition.submitted_revision": "Ignored on a new record. The command stores the card revision. A resubmit of the same bytes keeps the stored value.",
   "review.schema.disposition.task_id": "Task ID that the assignment lists for this finding.",
-  "review.schema.disposition.verification": "Required when status is fixed, and forbidden otherwise. The command, inspection, or comparison that showed the fix.",
+  "review.schema.disposition.verification": "Required when status is fixed. Other statuses may include it; the command keeps the value and does not reject it.",
   "review.schema.disposition.waiver": "Required when status is waived, and forbidden otherwise.",
   "review.schema.disposition.waiver.decision": "Required when waiver is present. The user decision, or the timeout notice basis. Non-empty.",
   "review.schema.disposition.waiver.policy": "Required when waiver is present. accepted-risk records a user decision. timed-out also requires sent_at and timeout_at.",
@@ -100,6 +100,6 @@
   "review.schema.plan.revision": "Ignored on create. The command sets this to 1.",
   "review.schema.plan.schema": "Plan schema version. A new plan must use 1.",
   "review.schema.plan.sealed": "When true, every plan member must appear in a batch. False leaves the plan open for extend-plan.",
-  "review.schema.plan.task_ids": "Member task IDs. The command sorts them and rejects duplicates. Every batch task ID must be in this list.",
+  "review.schema.plan.task_ids": "Member task IDs. The command sorts them and removes duplicates. Every batch task ID must be in this list.",
   "review.schema.usage": "usage: kander review <plan|extend-plan|assign|disposition|advance|close> --schema"
 }

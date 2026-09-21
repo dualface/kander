@@ -62,7 +62,7 @@
   "review.schema.disposition.status": "confirmed 和 unverifiable 只用于必须修复的级别，并且阻止关闭。deferred 只用于非阻断级别。waived 只用于 Security。fixed 还必须带 fix_commit 和 verification。",
   "review.schema.disposition.submitted_revision": "新记录上忽略。命令会保存卡片修订号。相同内容再次提交时保留已保存的值。",
   "review.schema.disposition.task_id": "指派里为该 finding 列出的任务 ID。",
-  "review.schema.disposition.verification": "status 为 fixed 时必填，其他状态禁止填写。说明用什么命令、检查或对比确认了修复。",
+  "review.schema.disposition.verification": "status 为 fixed 时必填。其他状态可以带上该字段，命令会保留它，不会拒绝。说明用什么命令、检查或对比确认了修复。",
   "review.schema.disposition.waiver": "status 为 waived 时必填，其他状态禁止填写。",
   "review.schema.disposition.waiver.decision": "出现 waiver 时必填。用户决定或超时通知依据，不能为空。",
   "review.schema.disposition.waiver.policy": "出现 waiver 时必填。accepted-risk 记录用户决定。timed-out 还需要 sent_at 和 timeout_at。",
@@ -100,6 +100,6 @@
   "review.schema.plan.revision": "创建时忽略。命令把它设为 1。",
   "review.schema.plan.schema": "计划的 schema 版本。新计划必须为 1。",
   "review.schema.plan.sealed": "为 true 时，每个计划成员都必须出现在某个批次中。false 表示计划仍可用 extend-plan 追加。",
-  "review.schema.plan.task_ids": "成员任务 ID。命令会排序并拒绝重复。每个批次里的任务 ID 都必须在这个列表中。",
+  "review.schema.plan.task_ids": "成员任务 ID。命令会排序并去掉重复。每个批次里的任务 ID 都必须在这个列表中。",
   "review.schema.usage": "用法: kander review <plan|extend-plan|assign|disposition|advance|close> --schema"
 }
