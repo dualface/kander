@@ -28,7 +28,7 @@ func TestBuildChartPerScale(t *testing.T) {
 	before := config.Clone(cfg)
 
 	large := BuildChart(cfg, "large")
-	if large.Scale != "large" || large.ReviewDisabled {
+	if large.Scale != "large" || large.ReviewDisabled || !large.DeliveryFull || !large.Integrate || !large.GroupBatches {
 		t.Fatalf("%+v", large)
 	}
 	if large.Execution != (Node{Model: "large-model", Effort: "high"}) {
@@ -82,6 +82,9 @@ func TestBuildChartReviewModes(t *testing.T) {
 			if got.ReviewDisabled != tc.disabled {
 				t.Fatalf("disabled=%v", got.ReviewDisabled)
 			}
+			if !got.DeliveryFull || !got.Integrate || !got.GroupBatches {
+				t.Fatalf("module flags=%+v", got)
+			}
 			if tc.disabled {
 				if len(got.Stages) != 0 {
 					t.Fatalf("disabled review must have no stages: %+v", got.Stages)
@@ -105,16 +108,49 @@ func TestBuildChartReviewModes(t *testing.T) {
 	}
 }
 
-func TestUnrelatedModulesDoNotChangeChart(t *testing.T) {
+func TestModuleSwitchesChangeOnlyTheirChartFlags(t *testing.T) {
 	cfg := config.DefaultConfig()
 	want := BuildChart(cfg, "large")
-	for _, module := range config.RuleModules {
-		if module != config.RuleReview {
-			cfg.Rules[module] = false
-		}
+	if !want.DeliveryFull || !want.Integrate || !want.GroupBatches {
+		t.Fatalf("%+v", want)
+	}
+	for _, module := range []string{config.RuleCollaboration, config.RuleReporting, config.RuleTaskIntake} {
+		cfg.Rules[module] = false
 	}
 	if got := BuildChart(cfg, "large"); !reflect.DeepEqual(got, want) {
 		t.Fatal("unrelated module switches changed chart")
+	}
+	cfg.Rules[config.RuleCode] = false
+	got := BuildChart(cfg, "large")
+	if got.DeliveryFull || !got.Integrate || !got.GroupBatches {
+		t.Fatalf("code off: %+v", got)
+	}
+	cfg.Rules[config.RuleGit] = false
+	cfg.Rules[config.RuleTaskGroups] = true
+	got = BuildChart(cfg, "large")
+	if got.Integrate || got.GroupBatches {
+		t.Fatalf("git off: %+v", got)
+	}
+}
+
+func TestReviewChartHidesEffortTheReviewLaunchOmits(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Reviewers["large"]["PMQA"] = "cursor"
+	cfg.ReviewStages["large"]["PMQA"] = "required"
+	cfg.ReviewStages["large"]["Security"] = "skip"
+	cfg.Models.ReviewRoles["PMQA"]["large_model"] = "cursor-model"
+	cfg.Models.ReviewRoles["PMQA"]["large_effort"] = "high"
+	cfg.Models.ReviewRoles["PMQA"]["large_agent"] = "cursor"
+	cfg.Agents = map[string]config.AgentDefinition{
+		"cursor": {Args: &config.AgentArgs{Start: []string{"{model}", "{effort}"}}},
+	}
+	if !config.AgentSupportsEffort(cfg, "cursor") || config.ReviewModelSupportsEffort(cfg, "cursor") {
+		t.Fatal("fixture does not separate execution effort from review effort")
+	}
+	got := BuildChart(cfg, "large")
+	node := got.Stages[0].Nodes[0]
+	if node.Model != "cursor-model" || node.Effort != "" {
+		t.Fatalf("PMQA=%+v", node)
 	}
 }
 

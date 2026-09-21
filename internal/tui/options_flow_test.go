@@ -181,6 +181,16 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 	}
 	all := map[string]string{"PMQA": "required", "Security": "required"}
 	noSecurity := map[string]string{"PMQA": "required", "Security": "skip"}
+	securityAuto := map[string]string{"PMQA": "required", "Security": "auto"}
+	pmqaSkipped := map[string]string{"PMQA": "skip", "Security": "required"}
+	withRules := func(review, code, git bool, modes map[string]string) flow.Chart {
+		cfg := config.DefaultConfig()
+		cfg.Rules[config.RuleReview] = review
+		cfg.Rules[config.RuleCode] = code
+		cfg.Rules[config.RuleGit] = git
+		cfg.ReviewStages["large"] = modes
+		return flow.BuildChart(cfg, "large")
+	}
 	for _, tc := range []struct {
 		name    string
 		chart   flow.Chart
@@ -189,18 +199,32 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 		absent  []string
 		returns int
 	}{
-		{"rail", chartFor(all, true), 120, []string{
+		{"wide", chartFor(all, true), 160, []string{
 			text.execute, text.selfCheck, text.stageNames[flow.StagePrimary], text.stageNames[flow.StageSecurity],
 			"PMQA · " + text.required, "Security · " + text.required,
-			text.gates[flow.StagePrimary], text.gates[flow.StageSecurity], text.decision, text.fix, text.rereview, text.done,
-		}, []string{"↺"}, 2},
+			text.gateReview, text.skipLoop, text.gates[flow.StagePrimary], text.gates[flow.StageSecurity],
+			text.decision, text.fix, text.rereview, text.mechanical, text.unverifiable, text.contract,
+			text.accept, text.stop, text.timeout, text.wait, text.pmqaCross, text.securityReturn,
+			text.unresolved, text.pass, text.done, text.notePrecedence, text.noteRebase, text.noteGroup,
+		}, []string{text.gateRole, text.roleSkip, text.finish, text.deliveryCheck, "◀"}, 2},
 		{"compact", chartFor(all, true), 40, []string{
 			text.gates[flow.StagePrimary], "▶ " + text.fix, "↺ " + text.stageNames[flow.StagePrimary], text.done,
-		}, []string{"◀"}, 0},
-		{"security skipped", chartFor(noSecurity, true), 120, []string{text.stageNA, text.gates[flow.StagePrimary]},
-			[]string{text.gates[flow.StageSecurity], text.decision}, 1},
+		}, []string{"◀"}, 2},
+		{"security auto", chartFor(securityAuto, true), 160, []string{
+			text.gateRole, text.roleSkip, text.decision, "Security · " + text.auto,
+		}, []string{text.stageNA}, 2},
+		{"security skipped", chartFor(noSecurity, true), 160, []string{
+			text.stageNA, text.naOverride, text.gates[flow.StagePrimary], text.mechanical,
+		}, []string{text.gates[flow.StageSecurity], text.decision, text.pmqaCross}, 1},
+		{"pmqa skipped", chartFor(pmqaSkipped, true), 160, []string{
+			text.stageNA, text.decision, text.rereview, text.accept,
+		}, []string{text.gates[flow.StagePrimary], text.pmqaCross, text.securityReturn}, 1},
+		{"code off", withRules(true, false, true, all), 160, []string{text.deliveryCheck, text.noteRebase},
+			[]string{text.selfCheck}, 2},
+		{"git off", withRules(true, true, false, all), 160, []string{text.finish, text.stopDelivery, text.selfCheck},
+			[]string{text.done, text.stop, text.noteRebase, text.noteGroup}, 2},
 		{"review off", chartFor(all, false), 60, []string{text.execute, text.reviewOff, text.done},
-			[]string{text.selfCheck, text.stageNames[flow.StagePrimary]}, 0},
+			[]string{text.selfCheck, text.stageNames[flow.StagePrimary], text.gateReview}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lines := renderFlowChart(tc.chart, tc.width, text)
@@ -220,7 +244,7 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 					t.Fatalf("unexpected %q:\n%s", absent, joined)
 				}
 			}
-			if got := strings.Count(joined, "◀"); got != tc.returns {
+			if got := strings.Count(joined, "↺"); got != tc.returns {
 				t.Fatalf("loop returns=%d want %d:\n%s", got, tc.returns, joined)
 			}
 		})

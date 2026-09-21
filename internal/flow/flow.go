@@ -30,6 +30,14 @@ type Chart struct {
 	Scale          string
 	Execution      Node
 	ReviewDisabled bool
+	// DeliveryFull selects the full delivery self-check. Review that is on
+	// still shows the reduced delivery check when this is false.
+	DeliveryFull bool
+	// Integrate selects integration as the finish. Otherwise finish is the
+	// user's own delivery flow.
+	Integrate bool
+	// GroupBatches is true only when task groups and git are both on.
+	GroupBatches bool
 	// Stages holds both review stages in order (primary, then security) when
 	// review is enabled, and is empty when review is off.
 	Stages []Stage
@@ -38,8 +46,11 @@ type Chart struct {
 // BuildChart reads the options-session configuration for one task scale.
 func BuildChart(cfg *config.Config, scale string) Chart {
 	chart := Chart{
-		Scale:     scale,
-		Execution: executionNode(cfg, scale),
+		Scale:        scale,
+		Execution:    executionNode(cfg, scale),
+		DeliveryFull: cfg.Rules[config.RuleCode],
+		Integrate:    cfg.Rules[config.RuleGit],
+		GroupBatches: cfg.Rules[config.RuleTaskGroups] && cfg.Rules[config.RuleGit],
 	}
 	if !cfg.Rules[config.RuleReview] {
 		chart.ReviewDisabled = true
@@ -87,7 +98,8 @@ func executionNode(cfg *config.Config, scale string) Node {
 func reviewNode(cfg *config.Config, scale, role string) Node {
 	agent := config.ReviewerFor(cfg, scale, role)
 	model, effort := config.ReviewModelFor(cfg, agent, role, scale)
-	if !config.AgentSupportsEffort(cfg, agent) {
+	// Review launch keeps effort only when models.review stores an effort key.
+	if !config.ReviewModelSupportsEffort(cfg, agent) {
 		effort = ""
 	}
 	return Node{Role: role, Model: model, Effort: effort}
