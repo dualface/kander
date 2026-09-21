@@ -265,6 +265,7 @@ func deliveryCheckPhase() Phase {
 		Key: "gate_delivery",
 		Exits: []Exit{
 			{Key: "delivery_fail", Target: PhaseImplement},
+			{Key: "delivery_review_required", Steps: []string{"delivery_record_disposition"}},
 			{Key: "delivery_incomplete", Target: PhaseImplement},
 			{Key: "delivery_pass"},
 		},
@@ -435,8 +436,8 @@ func integratePhase(review, groups bool) Phase {
 			// identical, and any conflict is integrated by a merge commit.
 			exits = []Exit{
 				{Key: "group_patch_equal"},
+				{Key: "group_markdown_conflict"},
 				{Key: "group_patch_changed", Steps: []string{"group_merge_commit", "group_merge_options"}, Target: PhaseReviewPlan, User: true},
-				{Key: "rebase_code_conflict", Steps: []string{"rebase_reverify"}, Target: PhaseStagePrimary},
 			}
 		}
 		phase.Gates = append(phase.Gates, Gate{Key: "gate_rebase", Exits: exits})

@@ -143,5 +143,6 @@
   "flow.note_report_fields": "8 个字段按序, 空处写 N/A",
   "flow.cap_reason": "同一项两轮未关, 或批次已三轮",
   "flow.note_mode_required": "required: 评审触发后必跑, 除非更高优先级来源跳过",
-  "flow.note_mode_auto": "auto: 按评审画像表与安全触发条件判定"
+  "flow.note_mode_auto": "auto: 按评审画像表与安全触发条件判定; 更高优先级来源仍可要求或跳过该角色",
+  "flow.group_markdown_conflict": "只有 Markdown 冲突: 合并, 不评审"
 }

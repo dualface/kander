@@ -143,5 +143,6 @@
   "flow.note_report_fields": "8 項目を順に, 空欄は N/A",
   "flow.cap_reason": "同一項目が二周, またはバッチ三周",
   "flow.note_mode_required": "required: レビュー起動後は必ず実行, 上位指定が省略する場合を除く",
-  "flow.note_mode_auto": "auto: レビュープロファイル表とセキュリティ起動条件で判定"
+  "flow.note_mode_auto": "auto: レビュープロファイル表とセキュリティ起動条件で判定; 上位の指定は依然として実行や省略を指示できる",
+  "flow.group_markdown_conflict": "Markdown のみの衝突: マージ, レビュー不要"
 }

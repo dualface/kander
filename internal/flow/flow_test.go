@@ -203,7 +203,6 @@ func TestBackEdgeTargets(t *testing.T) {
 		{"cross_security_touched", PhaseStageSecurity},
 		{"sec_fix", PhaseStageSecurity},
 		{"sec_cross_primary", PhaseStagePrimary},
-		{"rebase_code_conflict", PhaseStagePrimary},
 		{"group_patch_changed", PhaseReviewPlan},
 	} {
 		exit, ok := exitOf(chart, want.exit)
@@ -214,8 +213,15 @@ func TestBackEdgeTargets(t *testing.T) {
 			t.Fatalf("%s target=%q want %q", want.exit, exit.Target, want.target)
 		}
 	}
-	// A single card re-reviews a hand-resolved rebase conflict; a task group
-	// integrates a merge commit instead of rebasing its reviewed patch.
+	// A task group never re-reviews a rebase: its patch must stay identical and
+	// any conflict, Markdown included, integrates through a merge commit.
+	if _, ok := exitOf(chart, "rebase_code_conflict"); ok {
+		t.Fatal("a task group does not re-review a rebase conflict")
+	}
+	if _, ok := exitOf(chart, "group_markdown_conflict"); !ok {
+		t.Fatal("a Markdown-only group conflict merges without review")
+	}
+	// A single card re-reviews a hand-resolved rebase conflict instead.
 	single := allRules(true)
 	single[config.RuleTaskGroups] = false
 	solo := BuildChart(testConfig(single), "large")
@@ -224,6 +230,12 @@ func TestBackEdgeTargets(t *testing.T) {
 	}
 	if exit, ok := exitOf(solo, "rebase_code_conflict"); !ok || exit.Target != PhaseStagePrimary {
 		t.Fatal("a single card re-reviews a hand-resolved code conflict")
+	}
+	// The reduced check runs the same command and keeps its review-required exit.
+	reduced := allRules(true)
+	reduced[config.RuleCode] = false
+	if exit, ok := exitOf(BuildChart(testConfig(reduced), "large"), "delivery_review_required"); !ok || len(exit.Steps) == 0 {
+		t.Fatal("the reduced delivery check keeps the review-required exit")
 	}
 }
 

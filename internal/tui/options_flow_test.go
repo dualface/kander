@@ -261,14 +261,29 @@ func TestRenderFlowChartEdges(t *testing.T) {
 // one named target per edge the wide form would draw.
 func TestRenderFlowChartCompactNamesEveryTarget(t *testing.T) {
 	chart := chartWithRules(t, "large", nil, map[string]string{"PMQA": "required", "Security": "required"})
-	compact := strings.Join(renderFlowChart(chart, 60), "\n")
 	back, forward := countFlowEdges(chart)
 	edges := back + forward
 	if back == 0 || forward == 0 {
 		t.Fatalf("expected both loops and forward jumps, got %d and %d", back, forward)
 	}
-	if got := strings.Count(compact, " → "); got != edges {
-		t.Fatalf("compact named %d targets, wide drew %d", got, edges)
+	for _, width := range []int{24, 40, 60} {
+		compact := strings.Join(renderFlowChart(chart, width), "\n")
+		if got := strings.Count(compact, " → "); got != edges {
+			t.Fatalf("width %d named %d targets, the chart has %d:\n%s", width, got, edges, compact)
+		}
+		for _, phase := range chart.Phases {
+			for _, gate := range phase.Gates {
+				for _, exit := range gate.Exits {
+					if exit.Target == "" {
+						continue
+					}
+					name := config.Text("flow.phase_" + exit.Target)
+					if strings.Contains(compact, " → ") && !strings.Contains(compact, name) {
+						t.Fatalf("width %d clipped the target %q:\n%s", width, name, compact)
+					}
+				}
+			}
+		}
 	}
 }
 

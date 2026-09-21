@@ -143,5 +143,6 @@
   "flow.note_report_fields": "8 fields in order, N/A where empty",
   "flow.cap_reason": "the same finding twice, or three rounds in a batch",
   "flow.note_mode_required": "required: runs once review is triggered, unless a higher-precedence source skips it",
-  "flow.note_mode_auto": "auto: runs per the review profile table and the security trigger conditions"
+  "flow.note_mode_auto": "auto: runs per the review profile table and the security trigger conditions; a higher-precedence source can still require or skip the role",
+  "flow.group_markdown_conflict": "Markdown-only conflict: merge, no review"
 }

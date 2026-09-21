@@ -54,7 +54,7 @@ Task groups need Git, so `rules.task_groups` without `rules.git` produces the si
 | `gate_todo` | `todo_incomplete` | `create` | `KANDER-KANBAN-RULES.md` "State Model" todo gate |
 | `gate_claim` | `claim_start`, `claim_self` | fall through | `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination" |
 | `gate_delivery` | `delivery_fail`, `delivery_incomplete` | `implement` | `KANDER-CODE-RULES.md` "Delivery Self-Check" exit codes |
-| `gate_delivery` | `delivery_review_required` | falls through with a recorded disposition | same |
+| `gate_delivery` | `delivery_review_required` | falls through with a recorded disposition | same; the reduced check runs the same command and keeps this exit |
 | `gate_group_receive` | `group_ff_conflict` | `implement` | `KANDER-TASK-GROUP-RULES.md` "Delivering a Task Branch to the Group Branch" (`notify --kind sync`) |
 | `gate_whitelist` | `whitelist_miss` | `integrate`, or `finish_own` without Git | `KANDER-REVIEW-RULES.md` "Preconditions and Execution": notify the change scope and continue without waiting |
 | `gate_reviewer_ran` | `reviewer_unavailable` | user, four options | `KANDER-REVIEW-RULES.md` "Review Tool Unavailable" |
@@ -74,8 +74,8 @@ Task groups need Git, so `rules.task_groups` without `rules.git` produces the si
 | `gate_security_qualified` | `sec_decision_stop` / `sec_decision_stop_delivery` | user decision 3 | same; without Git there is no integration to stop |
 | `gate_security_qualified` | `sec_timeout` | falls through | `KANDER-REVIEW-RULES.md` security finding timeout: `medium` only, `blocking` and `high` always wait |
 | `gate_security_qualified` | `sec_round_cap` | user, three options | round cap, as above |
-| `gate_rebase` | `rebase_code_conflict` | `stage_primary` | `KANDER-GIT-RULES.md` "One-Time Review Gate": re-review only on a hand-resolved substantive code conflict |
-| `gate_rebase` | `group_patch_changed` | `review_plan`, user | `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions": the patch must stay identical, any conflict integrates through a merge commit, and a hand-resolved code conflict is reviewed as a new batch |
+| `gate_rebase` (single card) | `rebase_code_conflict` | `stage_primary` | `KANDER-GIT-RULES.md` "One-Time Review Gate": for a single card, re-review only on a hand-resolved substantive code conflict |
+| `gate_rebase` (task group) | `group_patch_equal`, `group_markdown_conflict`, `group_patch_changed` | the last one reaches `review_plan`, user | `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions": the rebased patch must equal the closed one, any conflict integrates through a merge commit, a Markdown-only resolution needs no review, and a hand-resolved code conflict is reviewed as a new batch. A task group therefore never takes the single-card `rebase_code_conflict` exit |
 
 A skipped stage keeps its box with the N/A note and its override note and has no gates; the cross edges to and from it disappear with it.
 
@@ -87,4 +87,4 @@ A skipped stage keeps its box with the N/A note and its override note and has no
 
 - The spine is a single centered column of phase boxes. Notes sit under their box; gates hang off the spine.
 - Back edges route through the left gutter, forward jumps through the right one. Lanes are assigned shortest span first so nested edges do not cross; several edges reaching the same box share one horizontal run.
-- The chart is drawn with edges only while the label column stays readable. Below that the compact form drops the gutters, and the named target is protected from clipping: the label yields room to it.
+- The chart is drawn with edges only while the label column stays readable. Below that the compact form drops the gutters and starts the gate trees at the left edge, so the exit lines get the full width. The named target is protected from clipping: the label yields room to it, and the target takes its own line when even that is not enough.

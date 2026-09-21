@@ -180,9 +180,16 @@ func (b *flowBuilder) note(text string) {
 	}
 }
 
+// gate lists one decision and its exits. The drawn layout hangs the tree off
+// the spine; the compact layout starts at the left edge, because there the
+// exit lines also carry each edge's target name.
 func (b *flowBuilder) gate(gate flow.Gate, phase, next string) {
-	order := b.order
-	b.put(b.spine, b.row, clipText("◆ "+t("flow."+gate.Key), b.avail-b.spine))
+	x := b.spine
+	if b.compact {
+		x = 0
+	}
+	room := b.avail - x
+	b.put(x, b.row, clipText("◆ "+t("flow."+gate.Key), room))
 	b.row++
 	for i, exit := range gate.Exits {
 		mark := "├─ "
@@ -193,26 +200,33 @@ func (b *flowBuilder) gate(gate flow.Gate, phase, next string) {
 		if exit.User {
 			label += " " + t("flow.user_exit")
 		}
-		room := b.avail - b.spine
-		drawn := flowEdgeDrawn(exit, next, order)
+		drawn := flowEdgeDrawn(exit, next, b.order)
+		target := ""
 		if drawn && b.compact {
 			// The named target replaces the drawn edge, so it is never clipped
-			// away: the label yields room to it.
-			suffix := " → " + t("flow.phase_"+exit.Target)
-			label = clipText(label, room-displayWidth(mark)-displayWidth(suffix)) + suffix
+			// away: the label yields room to it, and takes its own line when
+			// even that is not enough.
+			target = " → " + t("flow.phase_"+exit.Target)
+			if fit := room - displayWidth(mark) - displayWidth(target); fit >= 8 {
+				label, target = clipText(label, fit)+target, ""
+			}
 		}
-		b.put(b.spine, b.row, clipText(mark+label, room))
+		b.put(x, b.row, clipText(mark+label, room))
 		if drawn && !b.compact {
 			b.edges = append(b.edges, flowEdge{
 				origin: b.row,
-				from:   b.offset + b.spine,
+				from:   b.offset + x,
 				to:     exit.Target,
-				back:   order[exit.Target] <= order[phase],
+				back:   b.order[exit.Target] <= b.order[phase],
 			})
 		}
 		b.row++
+		if target != "" {
+			b.put(x, b.row, clipText("  "+target, room))
+			b.row++
+		}
 		for _, step := range exit.Steps {
-			b.put(b.spine, b.row, clipText("   ▶ "+t("flow."+step), b.avail-b.spine))
+			b.put(x, b.row, clipText("   ▶ "+t("flow."+step), room))
 			b.row++
 		}
 	}
