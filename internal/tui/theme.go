@@ -489,11 +489,19 @@ func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
 	return p.ink(p.Dim).Reverse(true)
 }
 
-// resolveTheme only normalizes auto: a named theme is returned as itself,
-// and auto (or any name not in the table) uses the cached terminal probe.
+// resolveTheme only normalizes auto: a named theme is returned as itself.
+// auto (or any name not in the table) uses the latest runtime background
+// classification once the TUI probe has applied one, and the one-time startup
+// probe before that or when probing is unsupported.
 func resolveTheme(name string) string {
 	if _, ok := themeDefByName(name); ok {
 		return name
+	}
+	if dark, ok := runtimeBackground(); ok {
+		if dark {
+			return "dark"
+		}
+		return "light"
 	}
 	if detectDarkBackground() {
 		return "dark"

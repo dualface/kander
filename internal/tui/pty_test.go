@@ -30,6 +30,7 @@ type ptySession struct {
 	mu     sync.Mutex
 	out    []byte
 	done   chan error
+	osc11  string
 }
 
 func startPTY(t *testing.T, bin string, env []string, args ...string) *ptySession {
@@ -63,7 +64,7 @@ func startPTYAtReply(t *testing.T, dir, bin string, env []string, osc11 string, 
 		t.Fatal(err)
 	}
 	_ = slave.Close()
-	session := &ptySession{t: t, cmd: cmd, master: master, done: make(chan error, 1)}
+	session := &ptySession{t: t, cmd: cmd, master: master, done: make(chan error, 1), osc11: osc11}
 	go func() {
 		buf := make([]byte, 4096)
 		for {
@@ -72,9 +73,10 @@ func startPTYAtReply(t *testing.T, dir, bin string, env []string, osc11 string, 
 				chunk := buf[:n]
 				session.mu.Lock()
 				session.out = append(session.out, chunk...)
+				reply := session.osc11
 				session.mu.Unlock()
-				if bytes.Contains(chunk, []byte("\x1b]11;?")) {
-					_, _ = master.Write([]byte(osc11))
+				if reply != "" && bytes.Contains(chunk, []byte("\x1b]11;?")) {
+					_, _ = master.Write([]byte(reply))
 				}
 				if bytes.Contains(chunk, []byte("\x1b[6n")) {
 					_, _ = master.Write([]byte("\x1b[1;1R"))
@@ -91,6 +93,22 @@ func startPTYAtReply(t *testing.T, dir, bin string, env []string, osc11 string, 
 		_ = master.Close()
 	})
 	return session
+}
+
+// setOSC11 changes the response the harness gives to later background
+// queries; an empty string makes it stop answering, like a terminal that
+// does not support the query.
+func (s *ptySession) setOSC11(reply string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.osc11 = reply
+}
+
+// countOSC11 returns how many background queries the child has emitted.
+func (s *ptySession) countOSC11() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return bytes.Count(s.out, []byte("\x1b]11;?"))
 }
 
 func (s *ptySession) send(keys string) {
@@ -677,5 +695,104 @@ func TestIssueTakeoverDialogOnPTY(t *testing.T) {
 	}
 	if cards, err := os.ReadDir(filepath.Join(root, "backlog")); err != nil || len(cards) != 0 {
 		t.Fatalf("the takeover dialog created a backlog card: %v %v", cards, err)
+	}
+}
+
+// With tui.theme=auto the board follows the terminal background at runtime:
+// the harness answers the first queries as a light terminal, then switches to
+// dark and back, and each flip must repaint the canvas within the probe cycle.
+func TestAutoThemeFollowsRuntimeBackgroundOnPTY(t *testing.T) {
+	bin := buildKander(t)
+	_, env := boardEnv(t)
+	env = append(env, "COLORTERM=truecolor")
+	writeCompleteConfigTheme(t, env, "auto")
+	// fg+bg pairs identify the palette: a lone bg can also come from an
+	// inverted selection, while the pair only matches the theme canvas.
+	const lightCanvas = "38;2;22;24;29;48;2;250;250;250"
+	const darkCanvas = "38;2;230;232;235;48;2;22;24;29"
+	// The startup palette depends on the terminal's own fallback, so each
+	// phase is checked only in bytes written after that phase began.
+	session := startPTYReply(t, bin, env, "\x1b]11;rgb:ffff/ffff/ffff\x1b\\")
+	waitAfter := func(offset int, needle, what string) {
+		t.Helper()
+		deadline := time.Now().Add(6 * time.Second)
+		for time.Now().Before(deadline) {
+			if strings.Contains(session.textFrom(offset), needle) {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		t.Fatalf("%s missing\npty:\n%s", what, session.textFrom(offset))
+	}
+	if !session.waitFor("Task Board", 8*time.Second) {
+		t.Fatalf("board did not render\npty:\n%s", session.text())
+	}
+	waitAfter(session.size(), lightCanvas, "light canvas")
+	session.setOSC11("\x1b]11;rgb:0000/0000/0000\x1b\\")
+	waitAfter(session.size(), darkCanvas, "dark canvas")
+	session.setOSC11("\x1b]11;rgb:ffff/ffff/ffff\x1b\\")
+	waitAfter(session.size(), lightCanvas, "light canvas after the second flip")
+	if session.countOSC11() < 3 {
+		t.Fatalf("auto theme must keep probing, saw %d queries", session.countOSC11())
+	}
+	session.send("q")
+	if err := session.waitExit(8 * time.Second); err != nil {
+		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
+	}
+}
+
+// A named theme never probes: the only query on the wire is the one Lip Gloss
+// sends before Bubble Tea starts, and runtime answers change nothing.
+func TestNamedThemeSkipsBackgroundProbeOnPTY(t *testing.T) {
+	bin := buildKander(t)
+	_, env := boardEnv(t)
+	env = append(env, "COLORTERM=truecolor")
+	writeCompleteConfigTheme(t, env, "dark")
+	session := startPTYReply(t, bin, env, "\x1b]11;rgb:ffff/ffff/ffff\x1b\\")
+	if !session.waitFor("38;2;230;232;235;48;2;22;24;29", 8*time.Second) {
+		t.Fatalf("dark canvas missing\npty:\n%s", session.text())
+	}
+	queries := session.countOSC11()
+	time.Sleep(2500 * time.Millisecond)
+	if n := session.countOSC11(); n != queries {
+		t.Fatalf("named theme must not probe at runtime, queries %d -> %d", queries, n)
+	}
+	if strings.Contains(session.text(), "48;2;250;250;250") {
+		t.Fatalf("named theme followed the terminal background\npty:\n%s", session.text())
+	}
+	session.send("q")
+	if err := session.waitExit(8 * time.Second); err != nil {
+		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
+	}
+}
+
+// When the terminal stops answering, the board keeps the last valid theme and
+// input keeps working; queries keep running so a later answer still applies.
+func TestAutoThemeKeepsThemeWhenProbeUnansweredOnPTY(t *testing.T) {
+	bin := buildKander(t)
+	_, env := boardEnv(t)
+	env = append(env, "COLORTERM=truecolor")
+	writeCompleteConfigTheme(t, env, "auto")
+	session := startPTYReply(t, bin, env, "\x1b]11;rgb:0000/0000/0000\x1b\\")
+	if !session.waitFor("38;2;230;232;235;48;2;22;24;29", 8*time.Second) {
+		t.Fatalf("dark canvas missing\npty:\n%s", session.text())
+	}
+	session.setOSC11("")
+	session.send("?")
+	if !session.waitForPlain("quit", 5*time.Second) {
+		t.Fatalf("help overlay did not open while queries timed out\npty:\n%s", session.text())
+	}
+	session.send("\x1b")
+	time.Sleep(1200 * time.Millisecond)
+	if strings.Contains(session.text(), "38;2;22;24;29;48;2;250;250;250") {
+		t.Fatalf("unanswered probes must keep the last theme\npty:\n%s", session.text())
+	}
+	session.setOSC11("\x1b]11;rgb:ffff/ffff/ffff\x1b\\")
+	if !session.waitFor("38;2;22;24;29;48;2;250;250;250", 5*time.Second) {
+		t.Fatalf("a terminal answering again must reapply its background\npty:\n%s", session.text())
+	}
+	session.send("q")
+	if err := session.waitExit(8 * time.Second); err != nil {
+		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
 	}
 }
