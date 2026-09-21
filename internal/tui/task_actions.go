@@ -35,8 +35,11 @@ type taskActions struct {
 	cursor           int
 	loading, running bool
 	form             *huh.Form
-	action           taskAction
-	options          board.MoveOptions
+	// formTheme is the *huh.Theme handed to the form; applyThemeSwitch mutates
+	// it in place so an "auto" background flip repaints an open form.
+	formTheme *huh.Theme
+	action    taskAction
+	options   board.MoveOptions
 }
 
 type taskActionsLoaded struct {

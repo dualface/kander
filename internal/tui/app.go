@@ -181,6 +181,12 @@ type App struct {
 
 	detailView  viewport.Model
 	detailCache detailRender
+
+	// probe drives the runtime terminal background query behind the "auto"
+	// theme; nil outside runTUI. resolvedTheme is the last theme name
+	// resolveTheme produced, so probeTick can spot a palette switch.
+	probe         *backgroundProbe
+	resolvedTheme string
 }
 
 // Update routes messages to the active popup, board, or detail view.
@@ -331,6 +337,7 @@ func newApp(single bool, refresh int, ctx pageContext, getBoard func() (BoardPay
 		Glyphs:          map[string]string{"vbar": "│", "bar": "▎", "hbar": "─", "dot": "·", "left": "‹", "right": "›"},
 		LastRefresh:     time.Now(),
 		detailView:      newDetailViewport(),
+		resolvedTheme:   resolveTheme(theme),
 	}
 }
 

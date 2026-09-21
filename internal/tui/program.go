@@ -140,6 +140,7 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		p.app.issuesTick()
 		p.app.activatePendingUpdate()
+		p.app.probeTick()
 		return p, tea.Batch(tickCmd(), p.app.takePending())
 	case updateCheckMsg:
 		p.app.updateCheckCancel = nil
@@ -278,10 +279,20 @@ func mapKey(event tea.KeyMsg) string {
 // runTUI starts Bubble Tea. The program enters the alt-screen right away, so all later loading,
 // refreshing and error reporting happen on the alternate screen and never pollute the user's terminal scrollback.
 func runTUI(app *App) error {
-	p := tea.NewProgram(
-		program{app: app},
+	app.probe = newBackgroundProbe(backgroundProbePeriod, backgroundProbeTimeout, backgroundProbeHold, backgroundProbeStripGrace, probeSupported())
+	options := []tea.ProgramOption{
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+	}
+	if app.probe.supported {
+		in := newProbeInput(os.Stdin, app.probe)
+		out := newProbeOutput(os.Stdout)
+		app.probe.out = out
+		options = append(options, tea.WithInput(in), tea.WithOutput(out))
+	}
+	p := tea.NewProgram(
+		program{app: app},
+		options...,
 	)
 	app.LastRefresh = app.Now()
 	if _, err := p.Run(); err != nil {
