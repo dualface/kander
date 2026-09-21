@@ -126,9 +126,9 @@
   <text x="136" y="1390" class="s pn">Each role can use codex / claude / grok / cursor / pi / devin / opencode / kimi</text>
   <line x1="80" y1="1414" x2="720" y2="1414" stroke="#eef1f6" stroke-width="1.5"/>
   <circle cx="90" cy="1438" r="4" fill="#a5b4fc"/>
-  <text x="106" y="1443" class="s bt">Codex / Claude / Grok / Pi / Devin use read-only controls</text>
+  <text x="106" y="1443" class="s bt">Codex / Claude / Grok / Pi use read-only controls</text>
   <circle cx="90" cy="1464" r="4" fill="#a5b4fc"/>
-  <text x="106" y="1469" class="s bt">Cursor uses prompts and post-hoc worktree checks, no upfront blocking</text>
+  <text x="106" y="1469" class="s bt">Cursor / Devin use prompts and post-run checks, no read-only sandbox</text>
   <circle cx="90" cy="1490" r="4" fill="#a5b4fc"/>
   <text x="106" y="1495" class="s bt">Reruns keep the same reviewer; bypassing <tspan class="hl">kander review</tspan> is forbidden</text>
 
