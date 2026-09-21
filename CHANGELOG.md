@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.7.16 — 2026-09-22
+
+- Feature: `kander review plan`, `extend-plan`, `assign`, `disposition`, `advance`, and `close` accept `--schema` and print every accepted JSON field, including nested fields, whether it is required, its type, closed values, and a description in the interface language. The command takes no working directory and no JSON file, does not locate a board, and writes nothing. `map-legacy`, `aggregate`, `progress`, and a normal review run have no schema output.
+- Fix: assignment, disposition, `passed_at`, and same-run mechanical checks name the field or comparison that failed. Unknown-field errors are unchanged.
+- Fix: advancing a review batch may record commits from outside the batch in `foreign_commits`, each with a nonempty reason. Every commit in the range appears in exactly one of `deliveries` or `foreign_commits`. A delivery still maps to a member task. An outside commit cannot be recorded as a batch fix. Advance files whose range contains only member deliveries stay valid without `foreign_commits`.
+- Fix: Devin review auto-approves every tool call, so a non-interactive run no longer stops on a confirmation and returns an empty report. Devin's read-only posture is the review prompt plus the post-run Git check. The other built-in reviewers stay on their isolation arguments.
+- Rules: reading `kander subscribe` is a background process whose standard output is a new UTF-8 file of JSON lines. The agent reads complete lines from a cursor, waits on that file, and treats unread lines as pending work. Waiting on the subscription file is allowed. Polling the board, the cards, and the executing agents is not.
+- Rules: the review schema text matches stored validation. Verification may remain on a non-fixed disposition, duplicate task IDs are removed rather than rejected, and the rules name `authorization`, `previous_record_id`, and `opinions`.
+
+## v0.7.15 — 2026-09-21
+
+- Feature: the board stacks consecutive states into fewer visual columns when the terminal cannot fit the configured column count at `min_column_width`. Each visual column starts with one state and may take more while reserving one state for each remaining column and keeping every stacked panel's full content visible. Rendering, paging, scrolling, and mouse hit testing use that same geometry. The option is "Stack columns when space is limited" (`tui.compact`).
+- Fix: `tui.compact` is stored with the other TUI fields when the scope section syncs, and changing the compact override in the options panel rebuilds that field when its presence changes, so the inherited value stays.
+
+## v0.7.14 — 2026-09-21
+
+- Fix: the auto theme follows a terminal background change while Kander is running. The probe is serialized on the TUI I/O boundary, applies only between frames, and ignores stale or invalid replies. Named themes do not probe. Unsupported terminals, timeouts, and Windows keep the startup palette. An open Huh form repaints in the same frame, so the form palette and the popup palette do not mix.
+- Fix: an agent that declares `session.file` no longer receives an eager herdr id-kind session report. That report raced the agent's own path-kind report and could warn that the herdr session identity failed to report after a successful start. Agents without the declaration still get the report and a real failure warning.
+- Rules: when task intake is on, a request expected to create, modify, delete, or regenerate code waits for an explicit execution choice before the first code write. Leaving Plan mode, or accepting its implement action, does not select that choice. Read-only work, and documentation that does not change executable code, stay exempt.
+
 ## v0.7.13 — 2026-09-20
 
 - Fix: Homebrew self-updates now run `brew update` to refresh the tap metadata before `brew upgrade dualface/tap/kander`, so a stale local tap can no longer make the upgrade exit successfully while keeping the old binary. The upgrade targets the fully qualified formula name instead of the ambiguous short name, and the post-upgrade PATH version probe still fails the update when the installed binary is older than the release. Refresh failures, upgrade failures, and a stale post-upgrade version each return their own error with the bounded command output preserved for the TUI result.
