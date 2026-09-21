@@ -186,7 +186,7 @@ func AssignReviewFindings(root string, a ReviewAssignment) error {
 			return err
 		}
 		if len(a.Items) != len(f.all()) {
-			return reviewError("assignment must cover exactly every finding")
+			return reviewError("assignment items must use finding IDs as keys and task IDs as values, covering every finding")
 		}
 		a.Owners = map[string]string{}
 		for _, item := range f.all() {
@@ -232,11 +232,29 @@ func AssignReviewFindings(root string, a ReviewAssignment) error {
 	})
 }
 func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding, a ReviewAssignment) error {
-	if !ValidReviewID(d.RecordID) || d.RunID != run.RunID || d.BatchID != run.BatchID || d.FindingID != item.ID || !containsID(a.Items[item.ID], d.TaskID) || d.Author != a.Owners[d.TaskID] && d.SubmittedRevision == 0 || d.Author == "" {
-		return reviewError("disposition identity/ownership")
+	switch {
+	case !ValidReviewID(d.RecordID):
+		return reviewError("disposition record_id must start with a lowercase letter or digit and then use only [a-z0-9-]")
+	case d.RunID != run.RunID:
+		return reviewError("disposition run_id must equal the review run")
+	case d.BatchID != run.BatchID:
+		return reviewError("disposition batch_id must equal the review run batch")
+	case d.FindingID != item.ID:
+		return reviewError("disposition finding_id must equal the finding")
+	case !containsID(a.Items[item.ID], d.TaskID):
+		return reviewError("disposition task_id is not assigned finding " + d.FindingID)
+	case d.Author != a.Owners[d.TaskID] && d.SubmittedRevision == 0:
+		return reviewError(fmt.Sprintf("disposition author %q is not assignment owner %q for task %s", d.Author, a.Owners[d.TaskID], d.TaskID))
+	case d.Author == "":
+		return reviewError("disposition author is required")
 	}
-	if d.ReportHash != run.Hashes["report.md"] || d.Original != item.Text || strings.TrimSpace(d.Basis) == "" {
-		return reviewError("disposition original and basis required")
+	switch {
+	case d.ReportHash != run.Hashes["report.md"]:
+		return reviewError("disposition report_hash must equal the SHA-256 of report.md")
+	case d.Original != item.Text:
+		return reviewError("disposition original must equal the finding text")
+	case strings.TrimSpace(d.Basis) == "":
+		return reviewError("disposition basis is required")
 	}
 	if d.Status != "confirmed" && d.Status != "fixed" && d.Status != "rejected" && d.Status != "unverifiable" && d.Status != "waived" && d.Status != "deferred" {
 		return reviewError("disposition status")
@@ -247,8 +265,11 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 	if mustFix(item.Tier) && d.Status == "deferred" {
 		return reviewError("must-fix cannot be deferred")
 	}
-	if d.Status == "fixed" && (!validCommit(d.FixCommit) || strings.TrimSpace(d.Verification) == "") {
-		return reviewError("fixed requires commit and verification")
+	if d.Status == "fixed" && !validCommit(d.FixCommit) {
+		return reviewError("fixed requires fix_commit as a 40 or 64 character lowercase hex commit")
+	}
+	if d.Status == "fixed" && strings.TrimSpace(d.Verification) == "" {
+		return reviewError("fixed requires verification")
 	}
 	if d.Status != "fixed" && (d.FixCommit != "" || d.Mechanical != "") {
 		return reviewError("fix evidence without fixed status")

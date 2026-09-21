@@ -277,8 +277,11 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 		required++
 		c, ok := r.Roles[role]
 		rv, found := runs[c.RunID]
-		if !ok || !found || rv.Run.Role != role || rv.Run.ExecutionStatus != "ok" || strings.TrimSpace(c.Basis) == "" || !validCommit(c.PassedAt) {
+		if !ok || !found || rv.Run.Role != role || rv.Run.ExecutionStatus != "ok" || strings.TrimSpace(c.Basis) == "" {
 			return nil, nil, reviewError("required successful role conclusion: " + role)
+		}
+		if !validCommit(c.PassedAt) {
+			return nil, nil, reviewError("role " + role + " passed_at must be a 40 or 64 character lowercase hex commit, not a timestamp")
 		}
 		if referenced[c.RunID] {
 			return nil, nil, reviewError("old role conclusion selected")
@@ -350,7 +353,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 				}
 				if prior.Run.RunID == c.RunID {
 					if d.Mechanical == "" {
-						return nil, nil, reviewError("non-mechanical fix requires a new run")
+						return nil, nil, reviewError("same-run must-fix " + d.FindingID + " needs disposition.mechanical or a new review run")
 					}
 					mechanicalFix = true
 					add(d.FixCommit, c.PassedAt)
