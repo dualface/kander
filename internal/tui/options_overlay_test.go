@@ -378,6 +378,26 @@ func TestRestoreTUIInheritRevertsAppTheme(t *testing.T) {
 	}
 }
 
+func TestCompactOverrideRefreshesInheritanceChrome(t *testing.T) {
+	app, panel := openPanel(t)
+	attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	pumpPanel(panel, panel.openSection(sectionInterface))
+	panel.bind.compact = !panel.loadedTUI.Compact
+	panel.bind.applyInterface(panel)
+	if !panel.session.FieldOverridden("tui", "compact") {
+		t.Fatal("compact override not recorded")
+	}
+	if panel.rebuildFocus != interfaceFocusKey("compact") {
+		t.Fatalf("rebuildFocus=%q", panel.rebuildFocus)
+	}
+	if app.Compact != panel.bind.compact {
+		t.Fatalf("app compact=%v want %v", app.Compact, panel.bind.compact)
+	}
+}
+
 func TestMouseClickAccountsForScopeChrome(t *testing.T) {
 	_, panel := openPanel(t)
 	attachTempOverlay(t, panel.session, config.ModeGlobal)

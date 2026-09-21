@@ -629,12 +629,13 @@ func TestGlobalTUISyncUpdatesProjectInheritance(t *testing.T) {
 	session, _ := tempOverlaySession(t, config.ModeGlobal)
 	value := session.Config.TUI
 	value.Theme = "dark"
+	value.Compact = true
 	session.SyncTUI(value, true)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	if session.Config.TUI.Theme != "dark" {
-		t.Fatal("project kept old global theme")
+	if session.Config.TUI.Theme != "dark" || !session.Config.TUI.Compact {
+		t.Fatalf("project kept old global TUI: %+v", session.Config.TUI)
 	}
 	session.SetTUIField("theme", "light")
 	if err := session.RestoreInherit("tui", "theme"); err != nil {

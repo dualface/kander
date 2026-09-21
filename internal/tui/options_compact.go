@@ -32,7 +32,9 @@ func (b *formBinding) applyCompact(p *optionsPanel, previous config.TUI, scopeTU
 	p.app.Compact = b.compact
 	scopeTUI.Compact = b.compact
 	if overlay {
+		before := p.overridePresence("tui", "compact")
 		p.setOverlayTUIField("compact", b.compact)
+		p.rebuildIfOverrideChanged(before, interfaceFocusKey("compact"), "tui", "compact")
 	}
 	return true
 }
