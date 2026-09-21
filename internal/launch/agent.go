@@ -139,7 +139,10 @@ func launchAgent(
 // reportAgentSession reports the session identity out of band within a short
 // budget. A failure only warns: it never fails the launch or closes the pane.
 func reportAgentSession(plan LaunchPlan, pane string, session AgentSession, warn func(string)) {
-	if session.Reference == "" {
+	// An agent declaring session.file reports a path-kind identity through
+	// its own integration; an early id-kind report races that native report
+	// and reads back as a false mismatch, so it is skipped entirely.
+	if session.Reference == "" || plan.sessionFileDeclared {
 		return
 	}
 	report := terminal.SessionReport{Conn: probeConn(plan), Pane: pane, Agent: session.Agent, Reference: session.Reference, Now: nowFn}

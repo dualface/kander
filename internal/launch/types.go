@@ -42,10 +42,14 @@ func (s AgentSession) Render() string {
 type LaunchPlan struct {
 	warning         func(string)
 	sessionFinalize func(AgentSession) error
-	Launcher        string
-	Target          terminal.Target
-	PromptDelivery  config.PromptDelivery
-	Prompt          string
+	// sessionFileDeclared marks an agent whose session.file declaration means
+	// its own integration reports a path-kind session identity; the proactive
+	// id report is skipped for it.
+	sessionFileDeclared bool
+	Launcher            string
+	Target              terminal.Target
+	PromptDelivery      config.PromptDelivery
+	Prompt              string
 }
 
 // backend returns the terminal backend of the resolved launcher. An unknown
