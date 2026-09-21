@@ -121,6 +121,7 @@ type Models struct {
 
 // TUI holds the persistent terminal UI preferences. Command-line flags only affect the current run and never change these values.
 type TUI struct {
+	Compact        bool   `json:"compact"`
 	Columns        int    `json:"columns"`
 	MinColumnWidth int    `json:"min_column_width"`
 	Refresh        int    `json:"refresh"`
@@ -621,7 +622,7 @@ func validateTUI(raw any) (TUI, error) {
 		return TUI{}, configErrorf("config.tui_must_be_a_json_object")
 	}
 	allowed := map[string]struct{}{
-		"columns": {}, "min_column_width": {}, "refresh": {}, "single": {}, "theme": {},
+		"compact": {}, "columns": {}, "min_column_width": {}, "refresh": {}, "single": {}, "theme": {},
 	}
 	var unknown []string
 	for key := range obj {
@@ -650,11 +651,19 @@ func validateTUI(raw any) (TUI, error) {
 	if !ok {
 		return TUI{}, configErrorf("config.tui_single_must_be_a_boolean")
 	}
+	compact := false
+	if raw, exists := obj["compact"]; exists {
+		var ok bool
+		compact, ok = raw.(bool)
+		if !ok {
+			return TUI{}, configErrorf("config.tui_compact_must_be_a_boolean")
+		}
+	}
 	theme, err := validateChoice(obj["theme"], TUIThemes, "tui.theme")
 	if err != nil {
 		return TUI{}, err
 	}
-	return TUI{Columns: columns, MinColumnWidth: width, Refresh: refresh, Single: single, Theme: theme}, nil
+	return TUI{Compact: compact, Columns: columns, MinColumnWidth: width, Refresh: refresh, Single: single, Theme: theme}, nil
 }
 
 func asObject(raw any) (map[string]any, bool) {

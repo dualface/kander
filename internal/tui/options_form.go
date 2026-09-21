@@ -22,6 +22,7 @@ type formBinding struct {
 	minWidth int
 	refresh  int
 	single   bool
+	compact  bool
 	archived bool
 
 	large      string
@@ -287,19 +288,6 @@ func (p *optionsPanel) dirtyLabel() string {
 	return ""
 }
 
-func (p *optionsPanel) scopeTUI() config.TUI {
-	if p.session != nil && p.session.Config != nil {
-		return p.session.Config.TUI
-	}
-	return config.TUI{
-		Theme:          p.app.Theme,
-		Columns:        p.app.Columns,
-		MinColumnWidth: p.app.MinColumnWidth,
-		Refresh:        p.app.RefreshSecs,
-		Single:         p.app.Model.Single,
-	}
-}
-
 func (p *optionsPanel) interfaceSummary() string {
 	tui := p.scopeTUI()
 	out := p.app.Context.themeLabel(tui.Theme) + " · " +
@@ -410,6 +398,7 @@ func (p *optionsPanel) openSectionWithInputs(section string, inputs map[string]m
 		minWidth:    tui.MinColumnWidth,
 		refresh:     tui.Refresh,
 		single:      tui.Single,
+		compact:     tui.Compact,
 		archived:    p.app.Model.ShowArchived,
 		reviewers:   map[string]*string{},
 		stages:      map[string]*string{},
@@ -503,7 +492,7 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 		Title(p.inheritTitle(t("tui.show_only_the_current_column"), formatBool(bind.single), "tui", "single")).
 		Value(&bind.single))
 	if !bind.single {
-		bind.addSpacer()
+		bind.addCompactField(p)
 		bind.fieldIndex[interfaceFocusKey("columns")] = bind.focusable
 		bind.addField(huh.NewSelect[int]().
 			Title(p.inheritTitle(t("tui.max_columns_on_screen"), formatInt(bind.columns), "tui", "columns")).
@@ -944,6 +933,9 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 		}
 		p.rebuildAt(interfaceFocusKey("single"))
 	}
+	if b.applyCompact(p, previous, &scopeTUI, overlay) {
+		changed = true
+	}
 	if app.Model.ShowArchived != b.archived {
 		app.Model.ToggleArchived()
 	}
@@ -959,6 +951,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	app.RefreshSecs = scopeTUI.Refresh
 	app.syncSummaryStrongInterval()
 	app.Model.Single = scopeTUI.Single
+	app.Compact = scopeTUI.Compact
 	p.appliedTUI = &scopeTUI
 	if overlay {
 		p.markDirty()

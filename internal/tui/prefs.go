@@ -6,6 +6,7 @@ import (
 
 // uiPrefs is the UI preference view used inside the TUI; persistence goes through config.json alone.
 type uiPrefs struct {
+	Compact        bool
 	Columns        int
 	MinColumnWidth int
 	Theme          string
@@ -39,6 +40,7 @@ func savePrefs(prefs uiPrefs) (config.TUI, error) {
 
 func prefsFromConfig(value config.TUI) uiPrefs {
 	return uiPrefs{
+		Compact:        value.Compact,
 		Columns:        value.Columns,
 		MinColumnWidth: value.MinColumnWidth,
 		Theme:          value.Theme,
@@ -53,6 +55,7 @@ func prefsConfig(prefs uiPrefs) config.TUI {
 		theme = "auto"
 	}
 	return config.TUI{
+		Compact:        prefs.Compact,
 		Columns:        clampColumns(prefs.Columns),
 		MinColumnWidth: clampMinColumnWidth(prefs.MinColumnWidth),
 		Refresh:        clampRefresh(prefs.Refresh),

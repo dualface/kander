@@ -645,6 +645,22 @@ func TestGlobalTUISyncUpdatesProjectInheritance(t *testing.T) {
 	}
 }
 
+func TestSetTUICompactFieldCreatesSparseOverlay(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTUIField("compact", true); err != nil {
+		t.Fatal(err)
+	}
+	if !session.Config.TUI.Compact || !session.FieldOverridden("tui", "compact") {
+		t.Fatalf("compact override not applied: %+v", session.Config.TUI)
+	}
+	if session.FieldOverridden("tui", "columns") {
+		t.Fatal("compact edit copied unrelated TUI fields")
+	}
+}
+
 func TestInvalidOverlayEditRemainsDirtyAndCannotSave(t *testing.T) {
 	session, path := tempOverlaySession(t, config.ModeProject)
 	delete(session.scopeRaw, "tui")

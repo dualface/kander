@@ -1,29 +1,32 @@
 package tui
 
+import "slices"
+
 func (a *App) boardCardHit(x, y int) *mouseSel {
 	hit := a.hitBoard(x, y)
 	if hit == nil || hit.Kind != "task" {
 		return nil
 	}
-	bodyHeight := a.boardBodyHeight()
-	tasks, scroll, _ := columnTaskWindow(a.Model, hit.State, bodyHeight)
+	layout := a.visibleColumnLayout()
+	panel := layoutPanelForState(layout, hit.State)
+	if panel == nil {
+		return nil
+	}
+	tasks, scroll, _ := columnTaskWindow(a.Model, hit.State, panel.BodyHeight)
 	if hit.Index < scroll || hit.Index >= len(tasks) {
 		return nil
 	}
 	task := tasks[hit.Index]
-	layout := a.visibleColumnLayout()
-	colX, colWidth := 0, 1
-	for _, col := range layout {
-		if col.State == hit.State {
-			colX, colWidth = col.X, col.Width
-			break
-		}
-	}
+	colX, colWidth := panel.X, panel.Width
 	if x < colX || x >= colX+colWidth {
 		return nil
 	}
-	row := (y - bodyTop) / cardHeight
-	lineInCard := y - bodyTop - row*cardHeight
+	bodyStart := panel.Y
+	if !panel.SkipTop {
+		bodyStart++
+	}
+	row := (y - bodyStart) / cardHeight
+	lineInCard := y - bodyStart - row*cardHeight
 	if lineInCard < 0 {
 		lineInCard = 0
 	}
@@ -280,9 +283,12 @@ func (a *App) hitColumnAt(x, y int) string {
 	if y < panelTopRow {
 		return ""
 	}
-	for _, col := range a.visibleColumnLayout() {
-		if x >= col.X && x < col.X+col.Width {
-			return col.State
+	if state := a.hitColumnStrip(x, y); state != "" {
+		return state
+	}
+	for _, panel := range a.visibleColumnLayout() {
+		if x >= panel.X && x < panel.X+panel.Width && y >= panel.Y && y < panel.Y+panel.Height {
+			return panel.State
 		}
 	}
 	return ""
@@ -306,41 +312,53 @@ func (a *App) hitBoard(x, y int) *boardHit {
 	if len(layout) == 0 {
 		return nil
 	}
-	bodyHeight := a.boardBodyHeight()
-	for index, col := range layout {
-		if x < col.X || x >= col.X+col.Width {
+	visualColumns := layout[len(layout)-1].VisualColumn + 1
+	for _, panel := range layout {
+		if x < panel.X || x >= panel.X+panel.Width || y < panel.Y || y >= panel.Y+panel.Height {
 			continue
 		}
-		localX := x - col.X
-		first := index == 0
-		last := index == len(layout)-1
-		singleNav := a.Model.Single || (first && last && len(a.Model.States()) > 1)
-		if y == panelTopRow && !a.columnStripVisible() && singleNav && len(a.Model.States()) > 1 {
+		localX := x - panel.X
+		singleNav := a.Model.Single || visualColumns == 1
+		if y == panel.Y && !panel.SkipTop && singleNav && len(a.Model.States()) > 1 {
 			if localX <= 2 {
 				return &boardHit{Kind: "nav", Delta: -1}
 			}
-			if localX >= max(0, col.Width-3) {
+			if localX >= max(0, panel.Width-3) {
 				return &boardHit{Kind: "nav", Delta: 1}
 			}
 		}
-		if y < bodyTop || y >= bodyTop+bodyHeight || bodyHeight <= 0 {
-			return &boardHit{Kind: "column", State: col.State}
+		bodyStart := panel.Y
+		if !panel.SkipTop {
+			bodyStart++
 		}
-		tasks, scroll, capacity := columnTaskWindow(a.Model, col.State, bodyHeight)
+		if y < bodyStart || y >= bodyStart+panel.BodyHeight || panel.BodyHeight <= 0 {
+			return &boardHit{Kind: "column", State: panel.State}
+		}
+		tasks, scroll, capacity := columnTaskWindow(a.Model, panel.State, panel.BodyHeight)
 		if len(tasks) == 0 {
-			return &boardHit{Kind: "column", State: col.State}
+			return &boardHit{Kind: "column", State: panel.State}
 		}
-		row := (y - bodyTop) / cardHeight
+		row := (y - bodyStart) / cardHeight
 		if row < 0 || row >= capacity {
-			return &boardHit{Kind: "column", State: col.State}
+			return &boardHit{Kind: "column", State: panel.State}
 		}
 		taskIndex := scroll + row
 		if taskIndex >= len(tasks) {
-			return &boardHit{Kind: "column", State: col.State}
+			return &boardHit{Kind: "column", State: panel.State}
 		}
-		return &boardHit{Kind: "task", State: col.State, Index: taskIndex}
+		return &boardHit{Kind: "task", State: panel.State, Index: taskIndex}
 	}
 	return nil
+}
+
+func layoutPanelForState(layout []boardLayout, state string) *boardLayout {
+	index := slices.IndexFunc(layout, func(panel boardLayout) bool {
+		return panel.State == state
+	})
+	if index < 0 {
+		return nil
+	}
+	return &layout[index]
 }
 
 func (a *App) HandleMouse(x, y, bstate int) {

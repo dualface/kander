@@ -274,7 +274,7 @@ func TestValidateTUI(t *testing.T) {
 	valid := minimalPayload(map[string]any{
 		"tui": map[string]any{
 			"columns": 4, "min_column_width": 36, "refresh": 10,
-			"single": true, "theme": "dark",
+			"compact": true, "single": true, "theme": "dark",
 		},
 	})
 	payload, err := json.Marshal(valid)
@@ -285,11 +285,24 @@ func TestValidateTUI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.TUI.Columns != 4 || cfg.TUI.Theme != "dark" || !cfg.TUI.Single {
+	if cfg.TUI.Columns != 4 || cfg.TUI.Theme != "dark" || !cfg.TUI.Single || !cfg.TUI.Compact {
 		t.Fatalf("tui=%+v", cfg.TUI)
+	}
+	legacy := minimalPayload(map[string]any{"tui": map[string]any{
+		"columns": 4, "min_column_width": 36, "refresh": 10,
+		"single": false, "theme": "dark",
+	}})
+	legacyPayload, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyConfig, err := ValidateJSON(legacyPayload)
+	if err != nil || legacyConfig.TUI.Compact {
+		t.Fatalf("legacy compact=%v err=%v", legacyConfig.TUI.Compact, err)
 	}
 
 	for name, tui := range map[string]any{
+		"compact type":  map[string]any{"compact": "yes", "columns": 3, "min_column_width": 40, "refresh": 30, "single": false, "theme": "auto"},
 		"columns range": map[string]any{"columns": 8, "min_column_width": 40, "refresh": 30, "single": false, "theme": "auto"},
 		"refresh type":  map[string]any{"columns": 3, "min_column_width": 40, "refresh": "fast", "single": false, "theme": "auto"},
 		"unknown theme": map[string]any{"columns": 3, "min_column_width": 40, "refresh": 30, "single": false, "theme": "blue"},

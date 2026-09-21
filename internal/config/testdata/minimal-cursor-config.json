@@ -173,6 +173,7 @@
     }
   },
   "tui": {
+    "compact": false,
     "columns": 5,
     "min_column_width": 40,
     "refresh": 30,

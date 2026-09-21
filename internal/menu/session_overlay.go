@@ -429,6 +429,10 @@ func (s *Session) SetTUIField(field string, value any) error {
 		if flag, ok := value.(bool); ok {
 			s.Config.TUI.Single = flag
 		}
+	case "compact":
+		if flag, ok := value.(bool); ok {
+			s.Config.TUI.Compact = flag
+		}
 	}
 	return s.noteOverride([]string{"tui", field}, value)
 }

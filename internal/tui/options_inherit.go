@@ -155,6 +155,7 @@ func (p *optionsPanel) syncAppFromSession() {
 	p.app.RefreshSecs = tui.Refresh
 	p.app.syncSummaryStrongInterval()
 	p.app.Model.Single = tui.Single
+	p.app.Compact = tui.Compact
 }
 
 func formatBool(flag bool) string {

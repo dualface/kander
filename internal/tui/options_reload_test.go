@@ -269,6 +269,7 @@ func TestOpenOptionsFormUsesScopeTUINotApp(t *testing.T) {
 	initial.WelcomeComplete = true
 	initial.TUI.Theme = "light"
 	initial.TUI.Columns = 3
+	initial.TUI.Compact = true
 	_ = newTestSession(t, initial)
 	useTestOptionsSession(t)
 	app.Theme = "dark"
@@ -276,8 +277,8 @@ func TestOpenOptionsFormUsesScopeTUINotApp(t *testing.T) {
 	app.openOptions()
 	finishOptionsLoad(t, app)
 	pumpPanel(app.Options, app.Options.dispatch(sectionInterface))
-	if app.Options.bind == nil || app.Options.bind.theme != "light" || app.Options.bind.columns != 3 {
-		t.Fatalf("form theme=%v columns=%v", app.Options.bind.theme, app.Options.bind.columns)
+	if app.Options.bind == nil || app.Options.bind.theme != "light" || app.Options.bind.columns != 3 || !app.Options.bind.compact {
+		t.Fatalf("form theme=%v columns=%v compact=%v", app.Options.bind.theme, app.Options.bind.columns, app.Options.bind.compact)
 	}
 	if app.Theme != "dark" || app.Columns != 7 {
 		t.Fatalf("board theme=%s columns=%d", app.Theme, app.Columns)

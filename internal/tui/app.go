@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -49,6 +50,7 @@ type App struct {
 	Model             *BoardModel
 	RefreshSecs       int
 	Theme             string
+	Compact           bool
 	Columns           int
 	MinColumnWidth    int
 	Context           pageContext
@@ -568,7 +570,14 @@ func (a *App) applyDetailSearch() {
 }
 
 func (a *App) pageSize() int {
-	n := a.boardBodyHeight() / cardHeight
+	bodyHeight := a.boardBodyHeight()
+	for _, panel := range a.visibleColumnLayout() {
+		if panel.State == a.Model.CurrentState() {
+			bodyHeight = panel.BodyHeight
+			break
+		}
+	}
+	n := bodyHeight / cardHeight
 	if n < 1 {
 		return 1
 	}
@@ -596,14 +605,104 @@ func (a *App) page(direction int) {
 
 func (a *App) visibleColumnLayout() []boardLayout {
 	_, width := a.size()
-	count := visibleColumnCount(width, len(a.Model.States()), a.Model.Single, a.Columns, a.MinColumnWidth)
-	states := a.Model.VisibleStates(count)
-	geom := columnGeometry(width, len(states))
-	out := make([]boardLayout, len(states))
-	for i, state := range states {
-		out[i] = boardLayout{State: state, X: geom[i].X, Width: geom[i].Width, HasSeparator: geom[i].HasSeparator}
+	states := a.Model.States()
+	visualCount := visibleColumnCount(width, len(states), a.Model.Single, a.Columns, a.MinColumnWidth)
+	desired := effectiveDesiredColumns(len(states), a.Columns)
+	compact := a.Compact && !a.Model.Single && visualCount < desired
+	if !compact {
+		visible := a.Model.VisibleStates(visualCount)
+		return a.buildColumnLayout(visible, visualCount, false)
 	}
-	return out
+
+	current := a.Model.CurrentState()
+	currentIndex := stateIndex(current)
+	if currentIndex < a.Model.ColumnOffset {
+		a.Model.ColumnOffset = currentIndex
+	}
+	maxOffset := max(0, len(states)-visualCount)
+	a.Model.ColumnOffset = min(max(0, a.Model.ColumnOffset), maxOffset)
+	layout := a.buildColumnLayout(states[a.Model.ColumnOffset:], visualCount, true)
+	if layoutContainsState(layout, current) {
+		return layout
+	}
+	a.Model.ColumnOffset = max(0, currentIndex-visualCount+1)
+	a.Model.ColumnOffset = min(a.Model.ColumnOffset, maxOffset)
+	return a.buildColumnLayout(states[a.Model.ColumnOffset:], visualCount, true)
+}
+
+func layoutContainsState(layout []boardLayout, state string) bool {
+	return slices.ContainsFunc(layout, func(panel boardLayout) bool {
+		return panel.State == state
+	})
+}
+
+func (a *App) buildColumnLayout(states []string, visualCount int, compact bool) []boardLayout {
+	_, width := a.size()
+	visualCount = min(visualCount, len(states))
+	if visualCount < 1 {
+		return nil
+	}
+	geometry := columnGeometry(width, visualCount)
+	tabs := a.columnStripVisible()
+	areaTop := panelTopRow
+	areaHeight := a.boardBodyHeight() + 2
+	if tabs {
+		areaTop = bodyTop
+		areaHeight--
+	}
+	if !compact {
+		layout := make([]boardLayout, len(states))
+		for index, state := range states {
+			layout[index] = boardLayout{
+				State: state, X: geometry[index].X, Y: areaTop,
+				Width: geometry[index].Width, Height: areaHeight, BodyHeight: a.boardBodyHeight(),
+				VisualColumn: index, HasSeparator: geometry[index].HasSeparator, SkipTop: tabs,
+				FirstVisual: index == 0, LastVisual: index == len(states)-1,
+			}
+		}
+		return layout
+	}
+
+	layout := make([]boardLayout, 0, len(states))
+	cursor := 0
+	for visual := range visualCount {
+		remainingColumns := visualCount - visual - 1
+		group := []string{states[cursor]}
+		minimums := []int{panelMinimumHeight(len(a.Model.TasksFor(states[cursor])), tabs)}
+		minimumTotal := minimums[0]
+		cursor++
+		for cursor < len(states) && len(states)-cursor > remainingColumns {
+			minimum := panelMinimumHeight(len(a.Model.TasksFor(states[cursor])), false)
+			if minimumTotal+minimum > areaHeight {
+				break
+			}
+			group = append(group, states[cursor])
+			minimums = append(minimums, minimum)
+			minimumTotal += minimum
+			cursor++
+		}
+
+		heights := []int{areaHeight}
+		if len(group) > 1 {
+			heights = balancedPanelHeights(minimums, areaHeight)
+		}
+		y := areaTop
+		for index, state := range group {
+			skipTop := tabs && index == 0
+			chrome := 2
+			if skipTop {
+				chrome = 1
+			}
+			layout = append(layout, boardLayout{
+				State: state, X: geometry[visual].X, Y: y,
+				Width: geometry[visual].Width, Height: heights[index], BodyHeight: max(1, heights[index]-chrome),
+				VisualColumn: visual, HasSeparator: geometry[visual].HasSeparator, SkipTop: skipTop,
+				FirstVisual: visual == 0, LastVisual: visual == visualCount-1,
+			})
+			y += heights[index]
+		}
+	}
+	return layout
 }
 
 // adjustColumns changes how many columns the user wants on screen. How many are actually shown also depends on the terminal width

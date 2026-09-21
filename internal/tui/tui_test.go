@@ -217,11 +217,11 @@ func TestThemeCycle(t *testing.T) {
 }
 
 func TestPrefsConfigUnknownThemeFallsBackToAuto(t *testing.T) {
-	got := prefsConfig(uiPrefs{Columns: 3, MinColumnWidth: 32, Theme: "blue", Refresh: 15, Single: true})
+	got := prefsConfig(uiPrefs{Compact: true, Columns: 3, MinColumnWidth: 32, Theme: "blue", Refresh: 15, Single: true})
 	if got.Theme != "auto" {
 		t.Fatalf("theme=%q", got.Theme)
 	}
-	if got.Columns != 3 || got.MinColumnWidth != 32 || got.Refresh != 15 || !got.Single {
+	if got.Columns != 3 || got.MinColumnWidth != 32 || got.Refresh != 15 || !got.Single || !got.Compact {
 		t.Fatalf("other fields changed: %+v", got)
 	}
 }

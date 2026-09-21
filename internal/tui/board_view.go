@@ -6,12 +6,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// boardLayout is the geometry of each column in one render, reused directly for mouse hit testing.
+// boardLayout is the geometry of one state panel in a render. Rendering, paging,
+// and mouse hit testing all consume this same two-dimensional layout.
 type boardLayout struct {
 	State        string
-	X            int
+	X, Y         int
 	Width        int
+	Height       int
+	BodyHeight   int
+	VisualColumn int
 	HasSeparator bool
+	SkipTop      bool
+	FirstVisual  bool
+	LastVisual   bool
 }
 
 // Rounded border characters of a column panel.
@@ -66,14 +73,20 @@ func (a *App) renderBoardView() string {
 	}
 
 	blocks := make([]string, 0, len(layout)*2)
-	for i, col := range layout {
-		blocks = append(blocks, a.renderColumnPanel(p, col, bodyHeight, tabs,
-			i == 0, i == len(layout)-1,
-			a.Model.ColumnOffset > 0,
-			a.Model.ColumnOffset+len(layout) < len(a.Model.States())))
-		if col.HasSeparator {
+	for start := 0; start < len(layout); {
+		end := start + 1
+		for end < len(layout) && layout[end].VisualColumn == layout[start].VisualColumn {
+			end++
+		}
+		panels := make([]string, 0, end-start)
+		for _, panel := range layout[start:end] {
+			panels = append(panels, a.renderColumnPanel(p, panel, len(layout)))
+		}
+		blocks = append(blocks, lipgloss.JoinVertical(lipgloss.Left, panels...))
+		if layout[start].HasSeparator {
 			blocks = append(blocks, p.fillColumn(1, columnHeight))
 		}
+		start = end
 	}
 	board := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
 	parts := []string{
@@ -165,30 +178,32 @@ func (a *App) visibleTaskCount() int {
 }
 
 // renderColumnPanel draws one column as a rounded panel with a title.
-func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, skipTop, first, last, moreLeft, moreRight bool) string {
+func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) string {
 	width := col.Width
 	focused := col.State == a.Model.CurrentState()
-	tasks, scroll, capacity := columnTaskWindow(a.Model, col.State, bodyHeight)
+	tasks, scroll, capacity := columnTaskWindow(a.Model, col.State, col.BodyHeight)
 
 	label := a.Context.stateLabel(col.State)
-	single := a.Model.Single || (first && last && len(a.Model.States()) > 1)
-	showLeft := (single || first) && moreLeft
-	showRight := (single || last) && moreRight
+	single := a.Model.Single || (col.FirstVisual && col.LastVisual && len(a.Model.States()) > 1)
+	moreLeft := a.Model.ColumnOffset > 0
+	moreRight := a.Model.ColumnOffset+visibleStates < len(a.Model.States())
+	showLeft := (single || col.FirstVisual) && moreLeft
+	showRight := (single || col.LastVisual) && moreRight
 	if single && len(a.Model.States()) > 1 {
 		showLeft, showRight = true, true
 	}
 
 	var lines []string
-	if !skipTop {
+	if !col.SkipTop {
 		lines = append(lines, a.panelTop(p, col.State, label, itoa(len(tasks)), width, focused, showLeft, showRight))
 	}
 	contentWidth := width - panelChrome
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	body := make([]string, 0, bodyHeight)
+	body := make([]string, 0, col.BodyHeight)
 	if len(tasks) == 0 {
-		if bodyHeight > 1 {
+		if col.BodyHeight > 1 {
 			body = append(body, "")
 		}
 		body = append(body, styleFor("dim", p).Render(centerText(a.Context.Empty, width-2)))
@@ -202,7 +217,7 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, bodyHeight int, skip
 			body = append(body, "")
 		}
 	}
-	for i := 0; i < bodyHeight; i++ {
+	for i := 0; i < col.BodyHeight; i++ {
 		content := ""
 		if i < len(body) {
 			content = body[i]
