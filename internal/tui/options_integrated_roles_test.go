@@ -46,10 +46,10 @@ func TestExistingFlowRendererSupportsIntegratedRoles(t *testing.T) {
 			t.Fatal("missing integrated primary node", joined)
 		}
 		if mode == "skip" {
-			if len(chart.Stages[1].Nodes) != 0 || !strings.Contains(joined, text.stageNA) || strings.Contains(joined, text.decision) {
-				t.Fatal("skipped security stage must remain N/A", joined)
+			if len(chart.Stages[1].Nodes) != 0 || strings.Contains(joined, "Security") || strings.Contains(joined, text.securityFix) {
+				t.Fatal("skipped security stage and its loop must be hidden", joined)
 			}
-		} else if len(chart.Stages[1].Nodes) != 1 || chart.Stages[1].Nodes[0].Role != "Security" || !strings.Contains(joined, "Security") || !strings.Contains(joined, text.decision) {
+		} else if len(chart.Stages[1].Nodes) != 1 || chart.Stages[1].Nodes[0].Role != "Security" || !strings.Contains(joined, "Security") || !strings.Contains(joined, text.decideFix) {
 			t.Fatal("missing integrated security node or decision", joined)
 		}
 	}

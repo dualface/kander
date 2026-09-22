@@ -30,6 +30,8 @@ type Chart struct {
 	Scale          string
 	Execution      Node
 	ReviewDisabled bool
+	ConfirmPlan    bool
+	Integrate      bool
 	// Stages holds both review stages in order (primary, then security) when
 	// review is enabled, and is empty when review is off.
 	Stages []Stage
@@ -38,8 +40,10 @@ type Chart struct {
 // BuildChart reads the options-session configuration for one task scale.
 func BuildChart(cfg *config.Config, scale string) Chart {
 	chart := Chart{
-		Scale:     scale,
-		Execution: executionNode(cfg, scale),
+		Scale:       scale,
+		Execution:   executionNode(cfg, scale),
+		ConfirmPlan: cfg.Rules[config.RuleTaskIntake],
+		Integrate:   cfg.Rules[config.RuleGit],
 	}
 	if !cfg.Rules[config.RuleReview] {
 		chart.ReviewDisabled = true

@@ -105,16 +105,27 @@ func TestBuildChartReviewModes(t *testing.T) {
 	}
 }
 
-func TestUnrelatedModulesDoNotChangeChart(t *testing.T) {
+func TestMainPathModules(t *testing.T) {
 	cfg := config.DefaultConfig()
-	want := BuildChart(cfg, "large")
-	for _, module := range config.RuleModules {
-		if module != config.RuleReview {
-			cfg.Rules[module] = false
-		}
+	initial := BuildChart(cfg, "large")
+	if !initial.ConfirmPlan || !initial.Integrate {
+		t.Fatal("default chart must include plan confirmation and integration")
 	}
-	if got := BuildChart(cfg, "large"); !reflect.DeepEqual(got, want) {
-		t.Fatal("unrelated module switches changed chart")
+	cfg.Rules[config.RuleTaskIntake] = false
+	cfg.Rules[config.RuleGit] = false
+	got := BuildChart(cfg, "large")
+	if got.ConfirmPlan || got.Integrate {
+		t.Fatal("disabled intake and Git must disappear from the main path")
+	}
+	initial.ConfirmPlan, initial.Integrate = false, false
+	if !reflect.DeepEqual(got, initial) {
+		t.Fatal("main-path switches changed execution or review assignments")
+	}
+	for _, module := range []string{config.RuleCode, config.RuleCollaboration, config.RuleTaskGroups, config.RuleReporting} {
+		cfg.Rules[module] = false
+	}
+	if !reflect.DeepEqual(BuildChart(cfg, "large"), got) {
+		t.Fatal("detail-only modules changed the main path")
 	}
 }
 

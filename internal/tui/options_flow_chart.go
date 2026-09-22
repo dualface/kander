@@ -6,231 +6,161 @@ import (
 	"github.com/dualface/kander/internal/flow"
 )
 
-// flowText carries the localized labels of the flowchart so rendering stays pure.
+// flowText keeps rendering independent of the active locale.
 type flowText struct {
-	execute    string
-	selfCheck  string
-	done       string
-	reviewOff  string
-	cliDefault string
-	required   string
-	auto       string
-	stageNA    string
-	yes        string
-	no         string
-	fix        string
-	rereview   string
-	decision   string
-	stageNames map[string]string
-	gates      map[string]string
+	plan, execute, integrate, done                  string
+	cliDefault, required, auto                      string
+	fix, securityFix, needsFix, decideFix, rereview string
+	reviewOff, note                                 string
 }
 
 func newFlowText() flowText {
 	return flowText{
-		execute:    t("flow.stage_execute"),
-		selfCheck:  t("flow.stage_self_check"),
-		done:       t("flow.stage_done"),
-		reviewOff:  t("flow.review_off"),
-		cliDefault: t("flow.cli_default"),
-		required:   t("flow.mode_required"),
-		auto:       t("flow.mode_auto"),
-		stageNA:    t("flow.stage_na"),
-		yes:        t("flow.yes"),
-		no:         t("flow.no"),
-		fix:        t("flow.stage_fix"),
-		rereview:   t("flow.stage_rereview"),
-		decision:   t("flow.stage_user_decision"),
-		stageNames: map[string]string{
-			flow.StagePrimary:  t("flow.stage_primary"),
-			flow.StageSecurity: t("flow.stage_security"),
-		},
-		gates: map[string]string{
-			flow.StagePrimary:  t("flow.gate_primary"),
-			flow.StageSecurity: t("flow.gate_security"),
-		},
+		plan:        t("flow.stage_plan"),
+		execute:     t("flow.stage_execute"),
+		integrate:   t("flow.stage_integrate"),
+		done:        t("flow.stage_done"),
+		cliDefault:  t("flow.cli_default"),
+		required:    t("flow.mode_required"),
+		auto:        t("flow.mode_auto"),
+		fix:         t("flow.stage_fix"),
+		securityFix: t("flow.stage_security_fix"),
+		needsFix:    t("flow.needs_fix"),
+		decideFix:   t("flow.decide_fix"),
+		rereview:    t("flow.stage_rereview"),
+		reviewOff:   t("flow.review_off"),
+		note:        t("flow.note"),
 	}
 }
 
-// renderFlowChart draws execution, self-check, both review stages with their
-// fix and incremental re-review loops, and completion. Loops are drawn as a
-// rail on the right; when the rail does not fit the width, each loop becomes a
-// short indented branch under its gate instead.
+type flowStep struct {
+	box                  []string
+	role, fix, condition string
+}
+
+// renderFlowChart shows the main path and an independent repair loop for each
+// enabled review role. Detailed gates remain in the rules, outside this view.
 func renderFlowChart(chart flow.Chart, width int, text flowText) []string {
-	if lines, ok := layoutFlowChart(chart, width, text, false); ok {
-		return lines
+	width = max(width, 24)
+	lines, ok := layoutFlowChart(chart, width, text, false)
+	if !ok {
+		lines, _ = layoutFlowChart(chart, width, text, true)
 	}
-	lines, _ := layoutFlowChart(chart, width, text, true)
-	return lines
+	lines = append(lines, "")
+	if chart.ReviewDisabled {
+		lines = append(lines, wrapText(text.reviewOff, width)...)
+	}
+	return append(lines, wrapText(text.note, width)...)
 }
 
 func layoutFlowChart(chart flow.Chart, width int, text flowText, compact bool) ([]string, bool) {
-	main := [][]string{titledBox(text.execute, nodeLabel(chart.Execution, text.cliDefault), width)}
-	var stageBoxes [][]string
+	var steps []flowStep
+	if chart.ConfirmPlan {
+		steps = append(steps, flowStep{box: labelBox(text.plan, width)})
+	}
+	steps = append(steps, flowStep{box: titledBox(text.execute, nodeLabel(chart.Execution, text.cliDefault), width)})
 	if !chart.ReviewDisabled {
-		main = append(main, labelBox(text.selfCheck, width))
 		for _, stage := range chart.Stages {
-			box := stageBox(stage, width, text)
-			stageBoxes = append(stageBoxes, box)
-			main = append(main, box)
+			for _, node := range stage.Nodes {
+				mode := text.auto
+				if node.Mode == "required" {
+					mode = text.required
+				}
+				step := flowStep{
+					box:       titledBox(node.Role+" · "+mode, nodeLabel(node, text.cliDefault), width),
+					role:      node.Role,
+					fix:       text.fix,
+					condition: text.needsFix,
+				}
+				if stage.Name == flow.StageSecurity {
+					step.fix, step.condition = text.securityFix, text.decideFix
+				}
+				steps = append(steps, step)
+			}
 		}
 	}
-	main = append(main, labelBox(text.done, width))
+	if chart.Integrate {
+		steps = append(steps, flowStep{box: labelBox(text.integrate, width)})
+	}
+	steps = append(steps, flowStep{box: labelBox(text.done, width)})
 	spine := 0
-	for _, box := range main {
-		spine = max(spine, linesWidth(box)/2)
+	for _, step := range steps {
+		spine = max(spine, linesWidth(step.box)/2)
 	}
-
-	c := &flowCanvas{}
-	y := c.center(spine, 0, main[0])
-	if chart.ReviewDisabled {
-		c.put(spine, y, "│")
-		c.put(spine+2, y, text.reviewOff)
-		c.put(spine, y+1, "▼")
-		c.center(spine, y+2, main[len(main)-1])
-		return c.finish(width)
-	}
-	y = c.arrow(spine, y)
-	y = c.center(spine, y, main[1])
-	for i, stage := range chart.Stages {
-		y = c.arrow(spine, y)
-		top := y
-		box := stageBoxes[i]
-		y = c.center(spine, y, box)
-		if len(stage.Nodes) == 0 {
-			continue
+	canvas := &flowCanvas{}
+	y := 0
+	for i, step := range steps {
+		if i > 0 {
+			y = canvas.arrow(spine, y)
 		}
-		c.put(spine, y, "│")
-		y++
-		steps := []string{text.fix, text.rereview}
-		if stage.Name == flow.StageSecurity {
-			steps = append([]string{text.decision}, steps...)
+		top := y
+		y = canvas.center(spine, y, step.box)
+		if step.role == "" {
+			continue
 		}
 		loop := flowLoop{
 			spine:      spine,
-			gate:       text.gates[stage.Name],
-			yes:        text.yes,
-			no:         text.no,
-			steps:      steps,
-			entryY:     top + len(box)/2,
-			entryRight: spine - linesWidth(box)/2 + linesWidth(box),
+			entryY:     top + len(step.box)/2,
+			entryRight: spine - linesWidth(step.box)/2 + linesWidth(step.box),
+			condition:  step.condition,
+			fix:        step.fix,
+			rereview:   text.rereview,
+			role:       step.role,
 		}
 		if compact {
-			y = loop.drawCompact(c, y, text.stageNames[stage.Name], width)
+			y = loop.drawCompact(canvas, y, width)
 		} else {
-			y = loop.drawRail(c, y, width)
+			y = loop.drawRail(canvas, y, width)
 		}
 	}
-	y = c.arrow(spine, y)
-	c.center(spine, y, main[len(main)-1])
-	lines, ok := c.finish(width)
-	return lines, ok || compact
+	return canvas.finish(width)
 }
 
-// flowLoop is one gate with its "yes" branch that returns to the stage entry.
+// flowLoop returns only to its own review node. The main path continues below it.
 type flowLoop struct {
-	spine      int
-	gate       string
-	yes        string
-	no         string
-	steps      []string
-	entryY     int // stage box row the loop arrow re-enters
-	entryRight int // first column right of the stage box
+	spine, entryY, entryRight      int
+	condition, fix, rereview, role string
 }
 
 func (l flowLoop) drawRail(c *flowCanvas, y, width int) int {
-	boxes := make([][]string, len(l.steps))
-	branchWidth := 0
-	for i, step := range l.steps {
-		boxes[i] = labelBox(step, width)
-		branchWidth = max(branchWidth, linesWidth(boxes[i]))
-	}
-	yes := "─ " + l.yes + " ─"
-	branch := max(l.spine+2+displayWidth(l.gate)+1+displayWidth(yes)+1, l.spine+displayWidth(l.no)+4+branchWidth/2)
-	rail := max(l.entryRight, branch-branchWidth/2+branchWidth) + 2
-
-	c.put(l.spine, y, "◆ "+l.gate+" ")
-	x := l.spine + 2 + displayWidth(l.gate) + 1
-	c.put(x, y, yes)
-	c.put(x+displayWidth(yes), y, strings.Repeat("─", branch-x-displayWidth(yes))+"┐")
+	box := labelBox(l.fix, width)
+	boxWidth := linesWidth(box)
+	exit := "├─ " + l.condition + " ─"
+	branch := max(l.spine+displayWidth(exit)+1, l.spine+3+boxWidth/2)
+	back := "◀ " + l.rereview + " "
+	rail := max(branch-boxWidth/2+boxWidth+2, l.entryRight+displayWidth(back)+1)
+	c.put(l.spine, y, exit+strings.Repeat("─", branch-l.spine-displayWidth(exit))+"┐")
 	start := y
-	y++
-	c.put(branch, y, "▼")
-	y++
-	for i, box := range boxes {
-		if i > 0 {
-			c.put(branch, y, "│")
-			c.put(branch, y+1, "▼")
-			y += 2
-		}
-		y = c.center(branch, y, box)
-	}
+	c.put(branch, y+1, "▼")
+	y = c.center(branch, y+2, box)
 	c.put(branch, y, "└"+strings.Repeat("─", rail-branch-1)+"┘")
 	for row := l.entryY + 1; row < y; row++ {
 		c.put(rail, row, "│")
 	}
-	c.put(l.entryRight, l.entryY, "◀"+strings.Repeat("─", rail-l.entryRight-1)+"┐")
+	c.put(l.entryRight, l.entryY, back+strings.Repeat("─", rail-l.entryRight-displayWidth(back))+"┐")
 	for row := start + 1; row <= y; row++ {
 		c.put(l.spine, row, "│")
 	}
-	c.put(l.spine+2, start+1, l.no)
-	return y
+	return y + 1
 }
 
-// drawCompact lists the loop under the gate so it fits narrow widths:
-// each step is one line, followed by the stage the loop returns to.
-func (l flowLoop) drawCompact(c *flowCanvas, y int, back string, width int) int {
-	c.put(l.spine, y, "◆ "+clipText(l.gate, width-l.spine-2))
-	c.put(l.spine, y+1, "├─ "+l.yes)
-	rows := make([]string, 0, len(l.steps)+1)
-	for _, step := range l.steps {
-		rows = append(rows, "▶ "+step)
-	}
-	rows = append(rows, "↺ "+back)
-	for i, row := range rows {
-		c.put(l.spine, y+2+i, "│")
-		c.put(l.spine+3, y+2+i, clipText(row, width-l.spine-3))
-	}
-	y += 2 + len(rows)
-	c.put(l.spine, y, "│")
-	c.put(l.spine+2, y, l.no)
-	return y
-}
-
-// stageBox frames one review stage, titled with its name, around its parallel
-// role boxes (side by side when they fit, stacked otherwise).
-func stageBox(stage flow.Stage, width int, text flowText) []string {
-	name := text.stageNames[stage.Name]
-	if len(stage.Nodes) == 0 {
-		return titledBox(name, text.stageNA, width)
-	}
-	roles := make([][]string, len(stage.Nodes))
-	for i, node := range stage.Nodes {
-		mode := text.auto
-		if node.Mode == "required" {
-			mode = text.required
-		}
-		roles[i] = titledBox(node.Role+" · "+mode, nodeLabel(node, text.cliDefault), width-4)
-	}
-	const gap = 3
-	rowWidth := gap * (len(roles) - 1)
-	for _, box := range roles {
-		rowWidth += linesWidth(box)
-	}
-	var inner []string
-	if rowWidth+4 <= width {
-		for row := range roles[0] {
-			parts := make([]string, len(roles))
-			for i, box := range roles {
-				parts[i] = box[row]
+// Compact branches wrap their labels and keep the return role explicit, so a
+// narrow viewport never loses the destination or clips a wide character.
+func (l flowLoop) drawCompact(c *flowCanvas, y, width int) int {
+	first := true
+	for _, label := range []string{l.condition, l.fix, l.rereview, "↺ " + l.role} {
+		for _, line := range wrapText(label, width-l.spine-3) {
+			if first {
+				c.put(l.spine, y, "├─")
+				first = false
+			} else {
+				c.put(l.spine, y, "│")
 			}
-			inner = append(inner, strings.Join(parts, strings.Repeat(" ", gap)))
-		}
-	} else {
-		for _, box := range roles {
-			inner = append(inner, box...)
+			c.put(l.spine+3, y, line)
+			y++
 		}
 	}
-	return flowFrame(clipText(name, width-7), inner)
+	return y
 }
 
 func titledBox(title, body string, width int) []string {
@@ -241,7 +171,7 @@ func labelBox(label string, width int) []string {
 	return flowFrame("", []string{clipText(label, width-4)})
 }
 
-// frame draws a border around lines, centering each one, with an optional title
+// flowFrame draws a border around lines, centering each one, with an optional title
 // in the top border.
 func flowFrame(title string, lines []string) []string {
 	inner := linesWidth(lines)

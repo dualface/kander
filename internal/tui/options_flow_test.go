@@ -173,34 +173,38 @@ func TestFlowShowsUnsavedModelsAndCLIDefault(t *testing.T) {
 
 func TestRenderFlowChartReviewLoops(t *testing.T) {
 	text := newFlowText()
-	chartFor := func(modes map[string]string, review bool) flow.Chart {
+	chartFor := func(primary, security string, review bool) flow.Chart {
 		cfg := config.DefaultConfig()
 		cfg.Rules[config.RuleReview] = review
-		cfg.ReviewStages["large"] = modes
+		cfg.ReviewStages["large"] = map[string]string{"PMQA": primary, "Security": security}
 		return flow.BuildChart(cfg, "large")
 	}
-	all := map[string]string{"PMQA": "required", "Security": "required"}
-	noSecurity := map[string]string{"PMQA": "required", "Security": "skip"}
 	for _, tc := range []struct {
-		name    string
-		chart   flow.Chart
-		width   int
-		want    []string
-		absent  []string
-		returns int
+		name         string
+		chart        flow.Chart
+		width        int
+		want, absent []string
+		returns      int
 	}{
-		{"rail", chartFor(all, true), 120, []string{
-			text.execute, text.selfCheck, text.stageNames[flow.StagePrimary], text.stageNames[flow.StageSecurity],
-			"PMQA · " + text.required, "Security · " + text.required,
-			text.gates[flow.StagePrimary], text.gates[flow.StageSecurity], text.decision, text.fix, text.rereview, text.done,
-		}, []string{"↺"}, 2},
-		{"compact", chartFor(all, true), 40, []string{
-			text.gates[flow.StagePrimary], "▶ " + text.fix, "↺ " + text.stageNames[flow.StagePrimary], text.done,
-		}, []string{"◀"}, 0},
-		{"security skipped", chartFor(noSecurity, true), 120, []string{text.stageNA, text.gates[flow.StagePrimary]},
-			[]string{text.gates[flow.StageSecurity], text.decision}, 1},
-		{"review off", chartFor(all, false), 60, []string{text.execute, text.reviewOff, text.done},
-			[]string{text.selfCheck, text.stageNames[flow.StagePrimary]}, 0},
+		{"rail", chartFor("required", "required", true), 120,
+			[]string{text.plan, text.execute, "PMQA · " + text.required, "Security · " + text.required,
+				text.needsFix, text.decideFix, text.fix, text.securityFix, text.rereview, text.integrate, text.done},
+			[]string{"↺", "◆"}, 2},
+		{"compact", chartFor("required", "required", true), 40,
+			[]string{text.needsFix, text.fix, "↺ PMQA", "↺ Security", text.done},
+			[]string{"◀", "◆"}, 0},
+		{"security skipped", chartFor("required", "skip", true), 120,
+			[]string{"PMQA", text.needsFix, text.integrate},
+			[]string{"Security", text.decideFix, text.securityFix}, 1},
+		{"primary skipped", chartFor("skip", "required", true), 120,
+			[]string{"Security", text.decideFix, text.integrate},
+			[]string{"PMQA", text.needsFix}, 1},
+		{"both skipped", chartFor("skip", "skip", true), 120,
+			[]string{text.plan, text.execute, text.integrate, text.done},
+			[]string{"PMQA", "Security", text.needsFix, text.decideFix, text.rereview}, 0},
+		{"review off", chartFor("required", "required", false), 60,
+			[]string{text.plan, text.execute, text.reviewOff, text.integrate, text.done},
+			[]string{"PMQA", "Security", text.needsFix, text.decideFix, text.rereview}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lines := renderFlowChart(tc.chart, tc.width, text)
@@ -222,6 +226,61 @@ func TestRenderFlowChartReviewLoops(t *testing.T) {
 			}
 			if got := strings.Count(joined, "◀"); got != tc.returns {
 				t.Fatalf("loop returns=%d want %d:\n%s", got, tc.returns, joined)
+			}
+		})
+	}
+}
+
+func TestFlowMainPathOrderAndSwitches(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.ReviewStages["large"] = map[string]string{"PMQA": "required", "Security": "required"}
+	text := newFlowText()
+	joined := strings.Join(renderFlowChart(flow.BuildChart(cfg, "large"), 120, text), "\n")
+	previous := -1
+	for _, label := range []string{text.plan, text.execute, "PMQA", "Security", text.integrate, text.done} {
+		index := strings.Index(joined, label)
+		if index <= previous {
+			t.Fatalf("main path out of order at %q:\n%s", label, joined)
+		}
+		previous = index
+	}
+	primary := strings.Index(joined, "PMQA")
+	security := strings.Index(joined, "Security")
+	delivery := strings.Index(joined, text.integrate)
+	for _, segment := range []string{joined[primary:security], joined[security:delivery]} {
+		if strings.Count(segment, "◀") != 1 || strings.Count(segment, text.rereview) != 1 {
+			t.Fatalf("each role needs exactly one local return:\n%s", segment)
+		}
+	}
+	cfg.Rules[config.RuleTaskIntake], cfg.Rules[config.RuleGit] = false, false
+	joined = strings.Join(renderFlowChart(flow.BuildChart(cfg, "large"), 120, text), "\n")
+	if strings.Contains(joined, text.plan) || strings.Contains(joined, text.integrate) || !strings.Contains(joined, text.done) {
+		t.Fatalf("disabled intake/Git stages still visible, or completion missing:\n%s", joined)
+	}
+}
+
+func TestFlowWidthsAndLocales(t *testing.T) {
+	for _, lang := range []string{"en", "cn", "ja"} {
+		t.Run(lang, func(t *testing.T) {
+			config.ApplyLanguageArgument([]string{"--lang", lang})
+			defer config.ApplyLanguageArgument(nil)
+			cfg := config.DefaultConfig()
+			agent := cfg.KanbanAgents["large"]
+			cfg.Models.Kanban[agent]["large_model"] = strings.Repeat("model-長い-", 12)
+			text := newFlowText()
+			for _, modes := range [][2]string{{"required", "required"}, {"skip", "required"}, {"required", "skip"}, {"skip", "skip"}} {
+				cfg.ReviewStages["large"] = map[string]string{"PMQA": modes[0], "Security": modes[1]}
+				for _, width := range []int{24, 40, 72, 120} {
+					lines := renderFlowChart(flow.BuildChart(cfg, "large"), width, text)
+					for _, line := range lines {
+						if !utf8.ValidString(line) || displayWidth(line) > width || strings.Contains(line, "�") {
+							t.Fatalf("locale=%s width=%d broken line: %q", lang, width, line)
+						}
+						if strings.Contains(line, "flow.") {
+							t.Fatalf("untranslated label: %q", line)
+						}
+					}
+				}
 			}
 		})
 	}
