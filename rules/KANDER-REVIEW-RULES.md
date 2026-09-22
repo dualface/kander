@@ -81,7 +81,7 @@ The only runnable roles are `PMQA` (stage one) and `Security` (stage two), both 
 - With the Git module enabled, the base of a dedicated task branch is the full `develop` SHA most recently used to create it from `develop` or rebase it onto `develop`. Fixes under the same base do not change it.
 - The base is frozen once review starts; do not chase `develop` by rebasing before the loop ends. After the integration rebase, the base moves to the new base point, and whether to re-review follows the one-time gate in `KANDER-GIT-RULES.md` "Integration and Cleanup".
 
-A standard review has two stages. Whether each role runs is resolved per "Review Stages" and its focus per "Review Profiles"; skipped roles are marked N/A. Stage one is `PMQA`; stage two is `Security` after stage one passes. Non-mechanical fixes receive incremental re-review, including the cross re-reviews below:
+A standard review has two stages. Whether each role runs is resolved per "Review Stages" and its focus per "Review Profiles"; skipped roles are marked N/A. Stage one is `PMQA`; stage two is `Security` after stage one passes. Non-mechanical fixes receive incremental re-review by the role that reported them. Security fixes do not reopen PMQA:
 
 ```text
 [1] PMQA   First round. Contract portion: whether the implementation fully meets the task context;
@@ -91,8 +91,7 @@ A standard review has two stages. Whether each role runs is resolved per "Review
      |  Only mechanical must-fix items left --> fix and commit, main agent verifies mechanically --> PMQA passes on the new HEAD without re-running
      v  Enabled stage-one role passes
 [2] Security  Decided by stage policy and trigger conditions; required overrides trigger conditions; when it does not run, mark N/A and pass directly
-     |  Qualified finding --> user decision --> 1 fix and commit --> incremental re-review [2]; fix scope is incrementally re-reviewed by enabled PMQA
-     |                                  Subsequent PMQA fixes substantively change security-related code --> Security incrementally re-reviews [2], until all parties pass
+     |  Qualified finding --> user decision --> 1 fix and commit --> Security incremental re-review [2]; do not return to PMQA
      |                           --> 2 confirm pass (record accepted risk and rationale in the delivery notes)
      |                           --> 3 stop integration (keep branch and worktree)
      |                           --> kanban task with no decision for 15 minutes: timed-out and ignored --> stage ends
@@ -132,7 +131,7 @@ A standard review has two stages. Whether each role runs is resolved per "Review
 **Carrying Conclusions Forward**
 
 - All roles of a full review share `CWD`, base, and task context; historical `CSA` and `Hacker` triggered together use the same commit. The task context is the authoritative requirement contract: a string for short tasks, a readable absolute spec path for long tasks.
-- Under the same base, a role that passed is not re-run because of another role's fix, except two cross re-reviews: security fixes are re-reviewed by enabled `PMQA` (if `PMQA` is N/A in the frozen requirements, retain N/A; newly required coverage needs a new batch), and a subsequent `PMQA` fix that substantively changes security code is re-reviewed by the security role for the fix scope. On a historical four-role batch, the enabled QA-capability role (`QA` or `PMQA`, plus enabled `PM` when functional behavior changes) performs the cross re-review.
+- Under the same base, Security fixes receive only Security incremental re-review; they do not reopen a passed `PMQA` or require a skipped `PMQA` to run. Necessary verification and the mechanical-only exception still apply. If a later, independently required `PMQA` fix substantively changes already-reviewed security code, the enabled security role re-reviews that changed scope. Historical four-role batches likewise do not reopen passed `PM` or `QA` solely because of a security fix; their frozen role requirements and evidence remain unchanged.
 - Roles may pass on different commits; within the same base, the final commit must descend from every passing commit.
 - Non-integration changes such as switching base, recreating the branch, or a forced rebase during review invalidate all conclusions. Because every batch with reviewer runs must still close, first close the open batch on its current target: the remaining required roles run there, and superseded findings are disposed as `rejected` with the user's quoted decision. A task context change on the same base chain then continues in a new batch of the same, still unsealed plan, starting at the previous closed target and reviewing only the work after it. When the user wants the closed range re-reviewed under the new contract, or when the base or the history changed, continue as new work under new cards and a new plan per "Group-Level Review for Task Groups". Report the wasted rounds either way.
 - A rebase during integration caused by `develop` advancing carries conclusions forward per the one-time gate in `KANDER-GIT-RULES.md`; the pre-rewrite SHA need not remain an ancestor.
@@ -275,7 +274,7 @@ Exclusions exclude only scope, never severity: "do not report high" or "report o
 
 ## Conclusions and Failure Handling
 
-- A valid review requires: `PMQA`, as actually run per "Review Stages", has no open must-fix finding, every `blocking`, `high`, or `medium` item being `fixed` with verification or `rejected` with a factual basis or the user's quoted decision per "Main Agent Verification Duty"; and `Security`, as actually run, returned conclusions on the same commit with its findings decided by the user or recorded as timed out and ignored. Historical `PM`/`QA` and `CSA`/`Hacker` runs on open historical batches follow the same gates. A role exempt per profile or stage policy is recorded N/A in the delivery notes.
+- A valid review requires: `PMQA`, as actually run per "Review Stages", has no open must-fix finding, every `blocking`, `high`, or `medium` item being `fixed` with verification or `rejected` with a factual basis or the user's quoted decision per "Main Agent Verification Duty"; and `Security`, as actually run, has a valid conclusion with its findings decided by the user or recorded as timed out and ignored. Roles may pass on different commits per "Carrying Conclusions Forward"; Security-only fixes retain the earlier valid PMQA conclusion, and the final target must descend from every passing commit. Historical `PM`/`QA` and `CSA`/`Hacker` runs on open historical batches follow the same gates. A role exempt per profile or stage policy is recorded N/A in the delivery notes.
 - A blocking, high, or medium finding judged "Unverifiable" counts as not passed: that stage is not released; send it to the user. A user decision not to handle it becomes a `rejected` disposition quoting the decision, kept on the unresolved list; a decision to handle it makes it confirmed.
 
 **Unresolved Items Summary**
