@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.17 — 2026-09-22
+
+- Feature: the options-panel workflow chart now covers the whole card lifecycle from the intake gate to the completion report. It is a Phase/Gate/Exit model: every rule loop is an `Exit.Target` back edge, and every user decision is marked. All seven module switches and that scale's agents, reviewers, and stage policies change the chart; an unresolvable stage policy stays visible as `invalid`. The renderer draws every target through side gutters, and falls back to a compact form that names the destination when labels would no longer be readable. `internal/flow` emits catalog keys, not text.
+- Docs: `docs/workflow-chart.md` records the Phase/Gate/Exit model, which module switch owns which phase, and the rule clause behind every gate, exit, and back edge.
+- Fix: a task-group merge-back no longer shows the single-card code-conflict re-review exit; it uses the Markdown-only conflict the merge-back rules name. The reduced delivery check keeps the review-required exit. Compact layout starts gate trees at the left edge and puts a clipped target on its own line. An auto stage still notes that a higher-precedence source can require or skip the role.
+
 ## v0.7.16 — 2026-09-22
 
 - Feature: `kander review plan`, `extend-plan`, `assign`, `disposition`, `advance`, and `close` accept `--schema` and print every accepted JSON field, including nested fields, whether it is required, its type, closed values, and a description in the interface language. The command takes no working directory and no JSON file, does not locate a board, and writes nothing. `map-legacy`, `aggregate`, `progress`, and a normal review run have no schema output.
