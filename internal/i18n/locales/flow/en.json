@@ -12,6 +12,5 @@
   "flow.mode_required": "required",
   "flow.mode_auto": "conditional",
   "flow.review_off": "Review disabled",
-  "flow.cli_default": "CLI default",
-  "flow.note": "Configuration preview: the main path means release conditions are met. Mechanical fixes, exceptions, and integration rework are omitted."
+  "flow.cli_default": "CLI default"
 }

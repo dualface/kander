@@ -11,7 +11,7 @@ type flowText struct {
 	plan, execute, integrate, done                  string
 	cliDefault, required, auto                      string
 	fix, securityFix, needsFix, decideFix, rereview string
-	reviewOff, note                                 string
+	reviewOff                                       string
 }
 
 func newFlowText() flowText {
@@ -29,7 +29,6 @@ func newFlowText() flowText {
 		decideFix:   t("flow.decide_fix"),
 		rereview:    t("flow.stage_rereview"),
 		reviewOff:   t("flow.review_off"),
-		note:        t("flow.note"),
 	}
 }
 
@@ -46,11 +45,11 @@ func renderFlowChart(chart flow.Chart, width int, text flowText) []string {
 	if !ok {
 		lines, _ = layoutFlowChart(chart, width, text, true)
 	}
-	lines = append(lines, "")
 	if chart.ReviewDisabled {
+		lines = append(lines, "")
 		lines = append(lines, wrapText(text.reviewOff, width)...)
 	}
-	return append(lines, wrapText(text.note, width)...)
+	return lines
 }
 
 func layoutFlowChart(chart flow.Chart, width int, text flowText, compact bool) ([]string, bool) {

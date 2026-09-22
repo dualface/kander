@@ -12,6 +12,5 @@
   "flow.mode_required": "必須",
   "flow.mode_auto": "条件付き",
   "flow.review_off": "レビュー無効",
-  "flow.cli_default": "CLI 既定値",
-  "flow.note": "設定プレビュー：主経路は通過条件の充足を示します。機械的修正、例外、統合時の手戻りは省略します。"
+  "flow.cli_default": "CLI 既定値"
 }

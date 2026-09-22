@@ -12,6 +12,5 @@
   "flow.mode_required": "必跑",
   "flow.mode_auto": "按条件",
   "flow.review_off": "审核已关闭",
-  "flow.cli_default": "CLI 默认",
-  "flow.note": "配置预览：主线表示满足放行条件；机械修复、异常及整合返工省略。"
+  "flow.cli_default": "CLI 默认"
 }
