@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.0 — 2026-09-22
+
+- TUI: simplify the options-panel workflow chart to the main path: confirm plan, execute and verify, PMQA, Security, deliver and integrate, and done. Each review role has its own fix-and-verification loop. The chart omits detailed gates, self-check, pause nodes, and integration rework; the underlying completion rules still apply.
+- TUI: skipped review stages disappear and their surrounding nodes connect directly. Plan confirmation and integration follow their module switches. Wide layouts show return rails; narrow layouts name the role to re-review. Task-scale and scope switching, unsaved configuration previews, and model and effort labels remain available.
+- Rules: fixing Security findings requires only Security incremental re-review and the necessary verification, without reopening PMQA. The mechanical-fix exception remains. Independently required PMQA fixes that change already-reviewed security code still require the relevant Security re-review.
+- TUI: remove the configuration-preview footer from the workflow chart in English, Chinese, and Japanese. The review-disabled notice remains.
+
 ## v0.7.17 — 2026-09-22
 
 - Feature: the options-panel workflow chart now covers the whole card lifecycle from the intake gate to the completion report. It is a Phase/Gate/Exit model: every rule loop is an `Exit.Target` back edge, and every user decision is marked. All seven module switches and that scale's agents, reviewers, and stage policies change the chart; an unresolvable stage policy stays visible as `invalid`. The renderer draws every target through side gutters, and falls back to a compact form that names the destination when labels would no longer be readable. `internal/flow` emits catalog keys, not text.
