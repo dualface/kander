@@ -37,27 +37,20 @@ func TestExistingFlowRendererSupportsIntegratedRoles(t *testing.T) {
 		cfg.Rules[config.RuleReview] = true
 		cfg.ReviewStages["large"] = map[string]string{"PMQA": "required", "Security": mode}
 		chart := flow.BuildChart(cfg, "large")
-		primary, ok := chart.Phase(flow.PhaseStagePrimary)
-		if !ok || primary.Node.Role != "PMQA" || primary.Node.Mode != flow.ModeRequired {
-			t.Fatalf("incorrect primary stage: %+v", primary)
+		if len(chart.Stages) != 2 || chart.Stages[0].Name != flow.StagePrimary || len(chart.Stages[0].Nodes) != 1 || chart.Stages[0].Nodes[0].Role != "PMQA" || chart.Stages[1].Name != flow.StageSecurity {
+			t.Fatalf("incorrect integrated stage assignment: %+v", chart.Stages)
 		}
-		security, ok := chart.Phase(flow.PhaseStageSecurity)
-		if !ok || security.Node.Role != "Security" || security.Node.Mode != mode {
-			t.Fatalf("incorrect security stage: %+v", security)
+		text := newFlowText()
+		joined := strings.Join(renderFlowChart(chart, 120, text), "\n")
+		if !strings.Contains(joined, "PMQA") {
+			t.Fatal("missing integrated primary node", joined)
 		}
-		joined := strings.Join(renderFlowChart(chart, 100), "\n")
-		if !strings.Contains(joined, "PMQA") || !strings.Contains(joined, "Security") {
-			t.Fatal("missing an integrated role", joined)
-		}
-		hasDecision := strings.Contains(joined, config.Text("flow.gate_security_qualified"))
 		if mode == "skip" {
-			if len(security.Gates) != 0 || !strings.Contains(joined, config.Text("flow.note_stage_na")) || hasDecision {
+			if len(chart.Stages[1].Nodes) != 0 || !strings.Contains(joined, text.stageNA) || strings.Contains(joined, text.decision) {
 				t.Fatal("skipped security stage must remain N/A", joined)
 			}
-			continue
-		}
-		if !hasDecision {
-			t.Fatal("missing the security decision gate", joined)
+		} else if len(chart.Stages[1].Nodes) != 1 || chart.Stages[1].Nodes[0].Role != "Security" || !strings.Contains(joined, "Security") || !strings.Contains(joined, text.decision) {
+			t.Fatal("missing integrated security node or decision", joined)
 		}
 	}
 }
