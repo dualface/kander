@@ -74,6 +74,7 @@ reviews/<run_id>/
   report.md           # present when the output decoded validly
   sidecar.json
   manifest.json
+  interpretation.json # optional receiver reading, separately published after the run
 ```
 
 raw/log files are stored as-is, including invalid UTF-8. report.md stores the valid result text without rewriting line endings or content; a JSON Reviewer's original JSON is stored separately as output.raw. When there is no valid report, no report.md is fabricated and the index points to output.raw. Failure evidence may contain empty files; the sidecar states explicitly that the run did not start or failed, and an empty file does not indicate success.
@@ -82,6 +83,7 @@ sidecar schema 1 contains:
 
 - run_id, batch_id, previous_run_id, task_ids, task_group, role.
 - reviewer/model/effort, cwd/base/commit/reviewed_commit, the applicable advance.
+- findings_schema (new runs: 2; historical 0/1 retain their behavior).
 - report_language, SHA-256 of the inputs and all original artifacts, kander_version.
 - phase, launch_status, execution_status, semantic_status, exit_code, failure_reason.
 - created_at, finished_at, duration_ms.
@@ -91,6 +93,8 @@ launch_status is not_started, unknown, or started. Before launching, launching/u
 manifest schema 1 stores the complete input identity, the sidecar hash, and the hashes of the original artifacts. In the body, each line of `## REVIEWS` is `- {JSON}`, with fields run_id, batch_id, role, execution_status, base, commit, previous_run_id, report. That section and the reviews attachments are managed by a dedicated publisher and cannot be modified via update. The manifest and index are not derived from the report body.
 
 A card's LANGUAGE is resolved only when the intent is created; only when missing does it fall back to the configuration at that time. The frozen language does not drift with later configuration changes; a card with a LANGUAGE that disagrees with the frozen value reports a conflict.
+
+New schema 2 runs separate format extraction from execution. A nonempty readable report whose findings cannot be extracted stays `execution_status: ok`; aggregation shows `findings_status: pending` and progress names `interpretation:<run-id>`. A complete receiver interpretation with original hash, attribution and exact quotes resolves it through `review interpret`; valid structured reports need no interpretation. This record is published in one transaction to all members and checked on consumption; it does not become part of the frozen original manifest. The closed batch view binds its full content. See [receiver interpretation](review-disposition.md#receiver-interpretation) for the zero-findings and completion gates. Invalid explicit structured lineage and execution failures remain failed. Historical failures, hashes, same-ID retries and closed views are unchanged.
 
 ## Persistence and Recovery
 
@@ -105,6 +109,7 @@ kanban/.kander/groups/00000000-review-archive-group/
     staging/
     originals/
     sidecar.json
+    interpretation.json # optional immutable receiver reading
 ```
 
 This is a tool-reserved namespace, not a kanban task group, and no group card is created. run.json stores the per-card publication receipts; each card independently holds the complete original artifacts and a non-overwritable manifest. Hashes are for integrity detection and do not defend against arbitrary same-user tampering.
@@ -123,6 +128,7 @@ All writes go through internal/fs, keeping POSIX private permissions and Windows
 
 ## Consumption Interfaces and Checks
 
+- `board.InterpretReview` / `ReviewNeedsInterpretation`: immutable receiver interpretations and pending-format status; `check` treats a missing interpretation as progress and conflicting copies as damage.
 - `board.PrepareReviewRun` / `UpdateReviewRun` / `FinalizeReviewRun`: intent and execution facts.
 - `board.PublishReviewRun`: publishes per card and returns failures without erasing successful receipts.
 - `board.ParseReviewIndexes` and ReviewInput/ReviewRun/ReviewBatch/ReviewManifest: shared types; board does not depend on review.

@@ -35,10 +35,11 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 		t.Fatal(err)
 	}
 	args := []string{"codex", "--task", ids[0], "--task", ids[1], "--batch-id", "batch", "--run-id", "bad", h.repo, h.base, h.head, "PMQA", "group goal"}
-	t.Setenv("FAKE_CODEX_REPORT", "invalid report")
+	t.Setenv("FAKE_CODEX_FAIL", "1")
 	if code, _, _ := captureRun(t, args); code == 0 {
-		t.Fatal("invalid report passed")
+		t.Fatal("failed process passed")
 	}
+	t.Setenv("FAKE_CODEX_FAIL", "")
 	failed, err := board.ReadReviewRun(root, "bad")
 	if err != nil {
 		t.Fatal(err)

@@ -38,6 +38,7 @@ var testCatalogFiles = []string{
 	"locales/flow/%s.json",
 	"locales/session/%s.json",
 	"locales/update/%s.json",
+	"locales/reviewinterpretation/%s.json",
 	"locales/reviewschema/%s.json",
 }
 

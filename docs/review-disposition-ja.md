@@ -1,5 +1,7 @@
 # レビューの処置と完了ゲート
 
+> Historical translation: the report-format section below describes the former strict protocol. For current schema 2 behavior, `review interpret`, and pending-interpretation gates, use the [English specification](review-disposition.md#receiver-interpretation). Existing schema 0/1 evidence is unchanged.
+
 本文書では、Kander のコードレビューライフサイクル、構造化された指摘事項（Findings）の管理、作成者による処置（Author Disposition）の追跡、および完了ゲート（Completion Gate）の検証メカニズムについて説明します。
 
 `internal/board` はデータモデル、永続化の解析、制御された公開、純粋な構造検証を担当し、`internal/review` は CLI コマンド、Reviewer プロンプトの組み立て、Git 検証を提供します。`board` が `review` に逆依存することはありません。

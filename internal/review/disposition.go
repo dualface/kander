@@ -15,7 +15,7 @@ import (
 
 func dispositionCommand(name string) bool {
 	switch name {
-	case "plan", "extend-plan", "advance", "assign", "disposition", "map-legacy", "aggregate", "close", "progress":
+	case "plan", "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "aggregate", "close", "progress":
 		return true
 	}
 	return false
@@ -108,6 +108,12 @@ func runDispositionCommand(args []string) int {
 			err = board.SubmitReviewDisposition(root, d, revision)
 		}
 		result = map[string]string{"record_id": d.RecordID}
+	case "interpret":
+		var m board.ReviewInterpretation
+		if err = readArchiveJSON(input, &m); err == nil {
+			err = board.InterpretReview(root, m)
+		}
+		result = map[string]string{"run_id": m.RunID}
 	case "map-legacy":
 		var m board.LegacyFindingMap
 		if err = readArchiveJSON(input, &m); err == nil {

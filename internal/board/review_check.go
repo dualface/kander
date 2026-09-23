@@ -26,6 +26,7 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 	add := func(id string, e error) {
 		problems = append(problems, Problem{Path: id, Message: id + ": " + e.Error()})
 	}
+	receiverRuns := map[string]ReviewRun{}
 	err = WithTransaction(root, reviewScope(ids, true), func(tx *Transaction) error {
 		runs := map[string]ReviewRun{}
 		entries, e := fs.ListDirectory(root, control(root, "groups", reviewControlGroup, "runs"))
@@ -118,7 +119,9 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 				if e = verifyCardReview(tx, id, manifest, sidecar); e != nil {
 					add(id, e)
 				}
-				if run.FindingsSchema > 0 && run.ExecutionStatus == "ok" {
+				if run.FindingsSchema == FindingsSchemaReceiver && run.ExecutionStatus == "ok" {
+					receiverRuns[runID] = run
+				} else if run.FindingsSchema > 0 && run.ExecutionStatus == "ok" {
 					if _, e := runFindings(tx, run); e != nil {
 						add(id, e)
 					}
@@ -127,6 +130,19 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 		}
 		return nil
 	})
+	// A targeted check may hold only one card lock. Interpretation copies need
+	// every member lock, so validate them in their own bounded transaction.
+	if err == nil {
+		for _, run := range receiverRuns {
+			if _, e := ReviewNeedsInterpretation(root, run.RunID); e != nil {
+				for _, id := range ids {
+					if containsID(run.TaskIDs, id) {
+						add(id, e)
+					}
+				}
+			}
+		}
+	}
 	sort.Slice(problems, func(i, j int) bool {
 		if problems[i].Path != problems[j].Path {
 			return problems[i].Path < problems[j].Path
@@ -143,7 +159,7 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		}
 	}()
 
-	if run.FindingsSchema < 0 || run.FindingsSchema > 1 || run.Schema != 1 || !reviewRole(run.Role) || run.SemanticStatus != "unassessed" || run.ReportLanguage == "" {
+	if run.FindingsSchema < 0 || run.FindingsSchema > FindingsSchemaReceiver || run.Schema != 1 || !reviewRole(run.Role) || run.SemanticStatus != "unassessed" || run.ReportLanguage == "" {
 		return reviewError("schema")
 	}
 	if run.ExecutionStatus != "ok" && run.ExecutionStatus != "failed" && run.ExecutionStatus != "interrupted" && run.ExecutionStatus != "not_started" {

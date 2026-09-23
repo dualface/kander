@@ -125,7 +125,11 @@ func Run(args []string) (exitCode int) {
 		return 2
 	}
 	if len(options.tasks) > 0 {
-		fresh, e := archiveInvocation(&ctx, options, rest, archiveRoot)
+		findingsSchema := board.FindingsSchemaReceiver
+		if replay {
+			findingsSchema = existing.FindingsSchema
+		}
+		fresh, e := archiveInvocation(&ctx, options, rest, archiveRoot, findingsSchema)
 		if e != nil {
 			userError(e.Error())
 			return 2

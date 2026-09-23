@@ -104,7 +104,7 @@ func parseArchiveOptions(args []string) (archiveOptions, []string, error) {
 	return options, append(prefix, args...), nil
 }
 
-func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []string, root string) (bool, error) {
+func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []string, root string, findingsSchema int) (bool, error) {
 	requirements := map[string]string{}
 	if options.requirementsFile != "" {
 		if err := readArchiveJSON(options.requirementsFile, &requirements); err != nil {
@@ -133,7 +133,7 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 	if len(arguments) >= 6 {
 		reviewContext = []byte(arguments[5])
 	}
-	input := board.ReviewInput{FindingsSchema: 1, RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage}
+	input := board.ReviewInput{FindingsSchema: findingsSchema, RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage}
 	run, fresh, err := board.PrepareReviewRun(root, input, requirements, advance, map[string][]byte{"task-context.md": task, "review-context.md": reviewContext}, version.String())
 	if err != nil {
 		return false, err
@@ -280,6 +280,14 @@ func (a *archiveExecution) publish() int {
 	if err = board.ReviewPublicationComplete(a.root, run.RunID); err != nil {
 		userError(err.Error())
 		return 2
+	}
+	pending, err := board.ReviewNeedsInterpretation(a.root, run.RunID)
+	if err != nil {
+		userError(err.Error())
+		return 2
+	}
+	if pending {
+		fmt.Fprintln(os.Stderr, config.Text("review.interpretation_pending", run.RunID))
 	}
 	return run.ExitCode
 }

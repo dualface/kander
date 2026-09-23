@@ -38,6 +38,8 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 - Built-in reviewers other than Devin, OpenCode, and Kimi use `review.stdin: instruction` and declare no `review.prompt_files`. Devin's print mode never reads a prompt from stdin, so its definition uses `review.stdin: none` and passes the same instruction through `{instruction}` in argv after a literal `--`, followed by a literal output contract naming the final message as the complete report. OpenCode likewise uses `review.stdin: none`: `opencode run` takes the same instruction and output contract as trailing argv positionals. Kimi also uses `review.stdin: none`: the instruction goes to `kimi --prompt` in argv, and its `kimi-reviewer` prompt file renders the read-only agent definition that `--agent-file` selects. Grok's definition keeps `--prompt-file` pointing at Kander's `prompt.txt`; that bootstrap names the contract by absolute runtime path.
 - The bootstrap task file does not tighten its own POSIX mode or Windows ACL; the private review runtime protects it. Before launch, Kander validates `review-contract.md` through the no-follow filesystem boundary and sets mode 0400 on POSIX. Windows retains the runtime's protected DACL because the read-only file attribute is not an access-control boundary.
 
+The final message remains the complete report. A `kander-findings` JSON fence is recommended for automatic extraction; complete readable reports with formatting errors are retained for [receiver interpretation](review-disposition.md#receiver-interpretation). This changes no isolation, process collection, worktree or cleanup requirement.
+
 ## Process Collection
 
 - After the reviewer exits, the process group must be forcibly reaped; failure to do so is a review failure.

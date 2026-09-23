@@ -21,7 +21,7 @@ func commandOK(t *testing.T, args ...string) string {
 	return out
 }
 
-func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
+func TestMalformedReviewCanBeInterpretedThroughCLI(t *testing.T) {
 	h, root, args := archiveHarness(t)
 	id := "20260907-archive-test-task"
 	snapshot, err := board.ReadSnapshot(root, id)
@@ -35,64 +35,50 @@ func TestMalformedReviewCanBeExplicitlyReplacedThroughCLI(t *testing.T) {
 		t.Fatal("claim fixture")
 	}
 	requirements := map[string]string{"PMQA": "required", "Security": "N/A: project"}
-	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "cycle", Author: "coordinator", Basis: "failure recovery", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
+	p := board.ReviewPlan{Schema: 1, Sealed: true, PlanID: "cycle", Author: "coordinator", Basis: "report interpretation", CWD: h.repo, ReportLanguage: "zh-CN", TaskIDs: []string{id}, Batches: []board.ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: h.base, TargetCommit: h.head, Requirements: requirements}}}
 	commandOK(t, "plan", h.repo, dispositionJSON(t, h, "plan", p))
-	t.Setenv("FAKE_CODEX_REPORT", "```kander-findings\n{\"FINDINGS\":[]}\n```")
+	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview+"No findings in either section.")
 	code, output, stderr := captureRun(t, args)
-	if code == 0 || !strings.Contains(stderr, "invalid structured review report") {
-		t.Fatalf("invalid structure succeeded: %d %s", code, stderr)
+	if code != 0 || !strings.Contains(stderr, "interpret") || !strings.Contains(stderr, "stable") {
+		t.Fatalf("formatting became execution failure: %d %s", code, stderr)
 	}
-	failed, err := board.ReadReviewRun(root, "stable")
-	if err != nil || failed.ExecutionStatus != "failed" || failed.ExitCode == 0 {
-		t.Fatalf("failure facts: %+v %v", failed, err)
+	run, err := board.ReadReviewRun(root, "stable")
+	if err != nil || run.ExecutionStatus != "ok" || run.ExitCode != 0 {
+		t.Fatalf("execution facts: %+v %v", run, err)
 	}
-	original, err := board.ReadReviewOriginal(root, "stable", "report.md")
-	if err != nil || string(original) != output {
-		t.Fatalf("original lost: %q %v", original, err)
+	if code, retry, _ := captureRun(t, args); code != 0 || retry != output {
+		t.Fatal("same-ID retry lost original")
 	}
-	if err = board.ReviewPublicationComplete(root, "stable"); err != nil {
-		t.Fatal(err)
+	if out := commandOK(t, "aggregate", h.repo, "batch"); !strings.Contains(out, `"findings_status": "pending"`) {
+		t.Fatal(out)
 	}
-	if code, _, _ = captureRun(t, args); code == 0 {
-		t.Fatal("retry converted failure to success")
+	if out := commandOK(t, "progress", h.repo, id); !strings.Contains(out, "interpretation:stable") {
+		t.Fatal(out)
 	}
-	commandOK(t, "aggregate", h.repo, "batch")
 	if code := board.RunMove([]string{id, "done", "--result", "completed"}); code == 0 {
-		t.Fatal("all-failed batch completed")
+		t.Fatal("pending batch completed")
 	}
-	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
-	next := append([]string(nil), args...)
-	for i := range next {
-		if next[i] == "stable" {
-			next[i] = "pmqa"
-		}
-		if next[i] == "PMQA" {
-			next[i] = "PMQA"
-		}
-	}
-	commandOK(t, next...)
-	a := board.ReviewAssignment{RunID: "pmqa", BatchID: "batch", Author: "coordinator", Basis: "all parsed findings assigned", Items: map[string][]string{}}
-	commandOK(t, "assign", h.repo, dispositionJSON(t, h, "PMQA-assignment", a))
+	m := board.ReviewInterpretation{RunID: "stable", ReportHash: run.Hashes["report.md"], Author: "receiver", Basis: "Complete report read: both arrays are empty and the explicit conclusion states no findings.", Complete: true, Findings: board.ReviewFindings{Findings: []board.ReviewFinding{}, NonBlocking: []board.ReviewFinding{}}, NoFindings: &board.ReviewReportQuote{StartLine: 2, EndLine: 3, Quote: "{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```No findings in either section."}}
+	input := dispositionJSON(t, h, "interpret", m)
+	commandOK(t, "interpret", h.repo, input)
+	commandOK(t, "interpret", h.repo, input)
+	commandOK(t, "assign", h.repo, dispositionJSON(t, h, "assignment", board.ReviewAssignment{RunID: "stable", BatchID: "batch", Author: "receiver", Basis: "explicit zero findings", Items: map[string][]string{}}))
 	v, err := board.ReadReviewBatchView(root, "batch")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "pmqa", PassedAt: h.head, Basis: "verified"}}}
-	if code, _, _ = captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)}); code == 0 {
-		t.Fatal("failed run silently ignored")
-	}
-	r.ResolvedFailures = map[string]string{"stable": "pmqa"}
+	r := board.ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "coordinator", Roles: map[string]board.ReviewRoleConclusion{"PMQA": {RunID: "stable", PassedAt: h.head, Basis: "verified original and interpretation"}}}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
 	if code := board.RunMove([]string{id, "done", "--result", "completed"}); code != 0 {
-		t.Fatal("recovered complete batch cannot finish")
+		t.Fatal("interpreted batch cannot finish")
 	}
 	after, err := board.ReadReviewRun(root, "stable")
-	if err != nil || !reflect.DeepEqual(failed, after) {
-		t.Fatalf("failed original metadata rewritten: %v", err)
+	if err != nil || !reflect.DeepEqual(run, after) {
+		t.Fatalf("original execution metadata rewritten: %v", err)
 	}
 	saved, err := board.ReadReviewOriginal(root, "stable", "report.md")
 	if err != nil || string(saved) != output {
-		t.Fatal("recovery rewrote invalid original")
+		t.Fatal("interpretation rewrote original report")
 	}
 }
 

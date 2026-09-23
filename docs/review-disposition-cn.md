@@ -1,5 +1,7 @@
 # 代码审查处置与完成门禁
 
+> Historical translation: the report-format section below describes the former strict protocol. For current schema 2 behavior, `review interpret`, and pending-interpretation gates, use the [English specification](review-disposition.md#receiver-interpretation). Existing schema 0/1 evidence is unchanged.
+
 本文档描述 Kander 的审查生命周期、结构化审查结论（Findings）管理、作者处置（Author Disposition）跟踪以及完成门禁（Completion Gate）验证机制。
 
 `internal/board` 负责定义数据模型、持久化解析、受控发布与纯结构校验；`internal/review` 提供 CLI 命令、Reviewer 提示词组装与 Git 验证。`board` 绝不反向依赖 `review`。

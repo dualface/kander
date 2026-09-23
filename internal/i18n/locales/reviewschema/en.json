@@ -101,5 +101,5 @@
   "review.schema.plan.schema": "Plan schema version. A new plan must use 1.",
   "review.schema.plan.sealed": "When true, every plan member must appear in a batch. False leaves the plan open for extend-plan.",
   "review.schema.plan.task_ids": "Member task IDs. The command sorts them and removes duplicates. Every batch task ID must be in this list.",
-  "review.schema.usage": "usage: kander review <plan|extend-plan|assign|disposition|advance|close> --schema"
+  "review.schema.usage": "usage: kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --schema"
 }

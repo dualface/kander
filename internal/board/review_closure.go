@@ -12,10 +12,12 @@ import (
 )
 
 type ReviewRunView struct {
-	Run        ReviewRun           `json:"run"`
-	Findings   *ReviewFindings     `json:"findings,omitempty"`
-	Assignment *ReviewAssignment   `json:"assignment,omitempty"`
-	Records    []ReviewDisposition `json:"records"`
+	FindingsStatus string                `json:"findings_status,omitempty"`
+	Interpretation *ReviewInterpretation `json:"interpretation,omitempty"`
+	Run            ReviewRun             `json:"run"`
+	Findings       *ReviewFindings       `json:"findings,omitempty"`
+	Assignment     *ReviewAssignment     `json:"assignment,omitempty"`
+	Records        []ReviewDisposition   `json:"records"`
 }
 
 // ReviewBatchView is generated from originals; it never substitutes an orchestrator's
@@ -111,6 +113,11 @@ func aggregateReviewBatch(tx *Transaction, b ReviewBatch) (ReviewBatchView, erro
 		rv := ReviewRunView{Run: run, Records: []ReviewDisposition{}}
 		if run.ExecutionStatus == "ok" {
 			findings, err := runFindings(tx, run)
+			if errors.Is(err, errInterpretationPending) {
+				rv.FindingsStatus = "pending"
+				view.Runs = append(view.Runs, rv)
+				continue
+			}
 			if err != nil {
 				return view, err
 			}
@@ -120,6 +127,17 @@ func aggregateReviewBatch(tx *Transaction, b ReviewBatch) (ReviewBatchView, erro
 			ledger, err := readDispositionLedger(tx, run, true)
 			if err != nil {
 				return view, err
+			}
+			if run.FindingsSchema == FindingsSchemaReceiver {
+				rv.FindingsStatus = "ready"
+				var interpretation ReviewInterpretation
+				exists, err := readReviewJSON(tx, interpretationName(run.RunID), &interpretation)
+				if err != nil {
+					return view, err
+				}
+				if exists {
+					rv.Interpretation = &interpretation
+				}
 			}
 			rv.Findings = &findings
 			rv.Assignment = &ledger.Assignment
@@ -238,6 +256,11 @@ func latestViewRecords(rv ReviewRunView) []ReviewDisposition {
 // which the review layer must verify. Structural validation makes no Git calls.
 func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdge, map[string]string, error) {
 	b := v.Batch
+	for _, run := range v.Runs {
+		if run.FindingsStatus == "pending" {
+			return nil, nil, reviewError("report needs review interpret: " + run.Run.RunID)
+		}
+	}
 	if _, err := ReviewMechanicalClaims(v, r); err != nil {
 		return nil, nil, err
 	}

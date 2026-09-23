@@ -219,7 +219,7 @@ func reviewCards(tx *Transaction, ids []string, fallback, frozen string) (string
 // PrepareReviewRun commits all input bytes and intent before process launch.
 // Reusing an identity returns its durable state and never authorizes a rerun.
 func PrepareReviewRun(root string, input ReviewInput, requirements map[string]string, advance *ReviewAdvance, originals map[string][]byte, version string) (run ReviewRun, fresh bool, err error) {
-	if input.FindingsSchema < 0 || input.FindingsSchema > 1 || input.RunID == "batches" || !ValidReviewID(input.RunID) || !ValidReviewID(input.BatchID) || input.PreviousRunID != "" && !ValidReviewID(input.PreviousRunID) {
+	if input.FindingsSchema < 0 || input.FindingsSchema > FindingsSchemaReceiver || input.RunID == "batches" || !ValidReviewID(input.RunID) || !ValidReviewID(input.BatchID) || input.PreviousRunID != "" && !ValidReviewID(input.PreviousRunID) {
 		return run, false, reviewError("run/batch/previous ID")
 	}
 	input.TaskIDs, err = normalizedReviewTasks(input.TaskIDs)
@@ -490,7 +490,7 @@ func StoreReviewArtifact(root, runID, name string, data []byte) error {
 // FinalizeReviewRun freezes originals only after the execution layer has settled
 // process collection, target checks and runtime cleanup. Recovery uses interrupted.
 func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, error) {
-	err := WithTransaction(root, reviewScope(nil, false), func(tx *Transaction) error {
+	err := WithTransaction(root, reviewScope(run.TaskIDs, false), func(tx *Transaction) error {
 		var old ReviewRun
 		ok, err := readReviewJSON(tx, reviewRunName(run.RunID), &old)
 		if err != nil {
@@ -499,12 +499,15 @@ func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, er
 		if !ok || old.Phase == "finalized" || !reflect.DeepEqual(old.ReviewInput, run.ReviewInput) {
 			return reviewError("finalize conflict")
 		}
-		if run.ExecutionStatus == "ok" && (run.ExitCode != 0 || run.LaunchStatus != "started" || len(report) == 0) {
+		if run.ExecutionStatus == "ok" && (run.ExitCode != 0 || run.LaunchStatus != "started" || len(report) == 0 || run.FindingsSchema == FindingsSchemaReceiver && strings.TrimSpace(string(report)) == "") {
 			return reviewError("invalid ok finalization")
 		}
 		if run.ExecutionStatus == "ok" && run.FindingsSchema > 0 {
 			findings, e := ParseReviewFindings(report)
-			if e == nil {
+			if e != nil && run.FindingsSchema == FindingsSchemaReceiver {
+				// Formatting is interpreted separately; execution facts stay successful.
+				e = nil
+			} else if e == nil {
 				e = validateFindingLineage(tx, run, findings)
 			}
 			if e != nil {

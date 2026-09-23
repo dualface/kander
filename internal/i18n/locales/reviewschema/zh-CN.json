@@ -101,5 +101,5 @@
   "review.schema.plan.schema": "计划的 schema 版本。新计划必须为 1。",
   "review.schema.plan.sealed": "为 true 时，每个计划成员都必须出现在某个批次中。false 表示计划仍可用 extend-plan 追加。",
   "review.schema.plan.task_ids": "成员任务 ID。命令会排序并去掉重复。每个批次里的任务 ID 都必须在这个列表中。",
-  "review.schema.usage": "用法: kander review <plan|extend-plan|assign|disposition|advance|close> --schema"
+  "review.schema.usage": "用法: kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --schema"
 }

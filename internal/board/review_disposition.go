@@ -70,6 +70,9 @@ func runFindings(tx *Transaction, run ReviewRun) (findings ReviewFindings, err e
 	if !ok || ReviewDigest(data) != run.Hashes["report.md"] {
 		return ReviewFindings{}, reviewError("missing report original")
 	}
+	if run.FindingsSchema == FindingsSchemaReceiver {
+		return receiverFindings(tx, run, data)
+	}
 	f, parseErr := ParseReviewFindings(data)
 	if parseErr == nil {
 		return f, nil

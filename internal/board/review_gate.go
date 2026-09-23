@@ -138,9 +138,11 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		}
 		if !closed {
 			progress.Pending = append(progress.Pending, b.BatchID)
-			if e = checkPendingDispositions(tx, b); e != nil {
+			pending, e := checkPendingDispositions(tx, b)
+			if e != nil {
 				return progress, e
 			}
+			progress.Pending = append(progress.Pending, pending...)
 			previous = ""
 			continue
 		}
@@ -190,33 +192,37 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	}
 	return progress, nil
 }
-func checkPendingDispositions(tx *Transaction, b ReviewBatch) error {
+func checkPendingDispositions(tx *Transaction, b ReviewBatch) (pending []string, err error) {
 	runs, err := batchRuns(tx, b)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, run := range runs {
 		if run.Phase != "finalized" || !allPublished(run) {
 			continue
 		}
 		if err = verifyPublishedReview(tx, run); err != nil {
-			return err
+			return nil, err
 		}
 		if run.ExecutionStatus != "ok" {
 			continue
 		}
 		f, err := runFindings(tx, run)
+		if errors.Is(err, errInterpretationPending) {
+			pending = append(pending, "interpretation:"+run.RunID)
+			continue
+		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err = validateFindingLineage(tx, run, f); err != nil {
-			return err
+			return nil, err
 		}
 		if _, err = readDispositionLedger(tx, run, false); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return pending, nil
 }
 func ReviewTaskProgress(root, id string) (p ReviewProgress, err error) {
 	scope, err := reviewGateScope(root, id, false)

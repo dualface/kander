@@ -35,7 +35,7 @@
       "--no-prompt-templates",
       "--no-themes",
       "--append-system-prompt",
-      "Output contract: your final message is the complete review report and must contain exactly one kander-findings JSON fence. Use read-only inspection only; never create, modify, or delete any file, and do not run commands that change the worktree."
+      "Output contract: your final message is the complete review report and should preferably include one kander-findings JSON fence; a complete readable report is accepted for receiver interpretation. Use read-only inspection only; never create, modify, or delete any file, and do not run commands that change the worktree."
     ]
   },
   "session": {

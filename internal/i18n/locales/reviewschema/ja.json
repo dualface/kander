@@ -101,5 +101,5 @@
   "review.schema.plan.schema": "計画の schema バージョン。新しい計画は 1 です。",
   "review.schema.plan.sealed": "true のとき、計画の全メンバーがいずれかのバッチに入っていなければなりません。false なら extend-plan で追加できます。",
   "review.schema.plan.task_ids": "メンバーのタスク ID。コマンドが並べ、重複を除きます。各バッチのタスク ID はこの一覧に含まれます。",
-  "review.schema.usage": "用法: kander review <plan|extend-plan|assign|disposition|advance|close> --schema"
+  "review.schema.usage": "用法: kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --schema"
 }

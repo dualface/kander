@@ -11,7 +11,7 @@ import (
 
 // schemaCommands are the evidence subcommands that print a field table.
 // map-legacy, aggregate, and progress stay out of this surface.
-var schemaCommands = []string{"plan", "extend-plan", "assign", "disposition", "advance", "close"}
+var schemaCommands = []string{"plan", "extend-plan", "assign", "disposition", "interpret", "advance", "close"}
 
 type schemaMeta struct {
 	required bool
@@ -40,6 +40,8 @@ func schemaRoot(command string) (reflect.Type, bool) {
 		return reflect.TypeFor[board.ReviewPlan](), true
 	case "extend-plan":
 		return reflect.TypeFor[board.ReviewPlanExtension](), true
+	case "interpret":
+		return reflect.TypeFor[board.ReviewInterpretation](), true
 	case "assign":
 		return reflect.TypeFor[board.ReviewAssignment](), true
 	case "disposition":

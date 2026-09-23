@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -208,7 +209,7 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fresh, err := archiveInvocation(&ctx, options, rest, root)
+	fresh, err := archiveInvocation(&ctx, options, rest, root, board.FindingsSchemaReceiver)
 	if err != nil || !fresh {
 		t.Fatalf("%v %v", fresh, err)
 	}
@@ -231,6 +232,51 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 	}
 	if _, err = board.ReadReviewOriginal(root, "stable", "report.md"); err == nil {
 		t.Fatal("recovery fabricated report")
+	}
+}
+
+func TestArchiveHistoricalProtocolReplayDoesNotUpgrade(t *testing.T) {
+	for _, schema := range []int{0, 1} {
+		t.Run(itoa(schema), func(t *testing.T) {
+			h, root, args := archiveHarness(t)
+			options, remaining, err := parseArchiveOptions(args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			agent, rest, err := splitAgentArgs(remaining)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, err := validateContextMode(agent, rest, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fresh, err := archiveInvocation(&ctx, options, rest, root, schema); err != nil || !fresh {
+				t.Fatalf("historical intent: %v %v", fresh, err)
+			}
+			if err := ctx.archive.phase("running", "started"); err != nil {
+				t.Fatal(err)
+			}
+			ctx.archive.report = []byte("No findings in either section.\n")
+			code := ctx.archive.finish(0)
+			if code != schema {
+				t.Fatalf("historical format validation: %d", code)
+			}
+			before, err := board.ReadReviewRun(root, "stable")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.Remove(h.fake); err != nil {
+				t.Fatal(err)
+			}
+			if got, out, stderr := captureRun(t, args); got != code || out != string(ctx.archive.report) {
+				t.Fatalf("historical replay: %d %q %s", got, out, stderr)
+			}
+			after, err := board.ReadReviewRun(root, "stable")
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("historical identity changed: %v", err)
+			}
+		})
 	}
 }
 
