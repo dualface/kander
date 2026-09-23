@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.1 — 2026-09-23
+
+- Review: accept complete readable reviewer reports for attributed receiver interpretation when structured findings cannot be parsed. `kander review interpret` binds findings to the original report hash and quoted evidence; unresolved interpretations cannot satisfy the review completion gate.
+- Fix: Cursor reviewer invocations pass `--yolo` so tool calls do not wait for interactive approval.
+- Review: Pi reviewer invocations use default tools and resource loading by removing the explicit tool allowlist and the switches disabling extensions, skills, prompt templates, and themes. Read-only inspection still relies on the prompt and post-run worktree verification.
+- Fix: recognize the previous official review rules when the installation state file is missing, allowing doctor to update those rules without treating them as local edits.
+
 ## v0.8.0 — 2026-09-22
 
 - TUI: simplify the options-panel workflow chart to the main path: confirm plan, execute and verify, PMQA, Security, deliver and integrate, and done. Each review role has its own fix-and-verification loop. The chart omits detailed gates, self-check, pause nodes, and integration rework; the underlying completion rules still apply.
