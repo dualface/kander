@@ -130,7 +130,7 @@ func previousBuiltinArgv(agent, model, effort, root, runtime, output, prompt str
 			"--append-system-prompt", lastMessageOutputContract)
 	case "cursor":
 		return append([]string{
-			"--print", "--output-format", "json", "--trust",
+			"--print", "--output-format", "json", "--trust", "--yolo",
 			"--add-dir", root,
 		}, modelArgs...)
 	case "grok":

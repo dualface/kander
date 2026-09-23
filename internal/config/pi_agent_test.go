@@ -31,7 +31,7 @@ func TestPiIsAnExecutionAndReviewAgent(t *testing.T) {
 		t.Fatalf("review home policy=%q", d.Review.HomePolicy)
 	}
 	joined := strings.Join(d.Args.Review, " ")
-	for _, want := range []string{"--print", "--no-session", "--tools", "read,bash,grep,find,ls", "--append-system-prompt", "kander-findings"} {
+	for _, want := range []string{"--print", "--no-session", "--append-system-prompt", "kander-findings"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("review args missing %q: %v", want, d.Args.Review)
 		}

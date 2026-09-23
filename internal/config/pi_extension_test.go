@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -66,14 +67,15 @@ func TestAgentExtensionSurvivesUserOverlay(t *testing.T) {
 	}
 }
 
-func TestPiReviewArgsKeepNoExtensions(t *testing.T) {
+func TestPiReviewArgsAllowDefaultToolsAndResources(t *testing.T) {
 	d := AgentFor(nil, "pi")
 	if d.Args == nil {
 		t.Fatal("pi args missing")
 	}
-	joined := strings.Join(d.Args.Review, " ")
-	if !strings.Contains(joined, "--no-extensions") {
-		t.Fatalf("pi review args must keep --no-extensions: %v", d.Args.Review)
+	for _, flag := range []string{"--tools", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes"} {
+		if slices.Contains(d.Args.Review, flag) {
+			t.Fatalf("pi review args must not restrict default tools or resources with %s: %v", flag, d.Args.Review)
+		}
 	}
 }
 

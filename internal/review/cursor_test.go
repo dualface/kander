@@ -5,6 +5,7 @@ package review
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -113,7 +114,7 @@ func TestCursorIsolationFlags(t *testing.T) {
 	}
 	argv := strings.Split(strings.TrimRight(readFile(t, h.argvLog), "\n"), "\n")
 	assertArg(t, argv, "--output-format", "json")
-	if !contains(argv, "--print") || !contains(argv, "--trust") {
+	if !slices.Contains(argv, "--print") || !slices.Contains(argv, "--trust") || !slices.Contains(argv, "--yolo") {
 		t.Fatalf("argv=%v", argv)
 	}
 	assertArg(t, argv, "--add-dir", h.repoReal)
