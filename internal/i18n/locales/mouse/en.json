@@ -1,0 +1,10 @@
+{
+  "tui.status_options": "o options",
+  "tui.status_help": "? help",
+  "tui.help_mouse_hint": "Wheel scroll · Click / any key close",
+  "tui.mouse_save": "Save",
+  "tui.mouse_back": "Back",
+  "tui.mouse_close": "Close",
+  "tui.mouse_yes": "Yes",
+  "tui.mouse_no": "No"
+}

@@ -375,7 +375,9 @@ func (a *App) HandleMouse(x, y, bstate int) {
 		return
 	}
 	if a.Help {
-		if mouseLeftClicked(bstate) {
+		if delta := mouseWheelDelta(bstate); delta != 0 {
+			a.helpView.SetYOffset(a.helpView.YOffset + delta*mouseScrollStep)
+		} else if a.popupClick(x, y, bstate) {
 			a.Help = false
 		}
 		return
@@ -404,6 +406,9 @@ func (a *App) HandleMouse(x, y, bstate int) {
 	}
 	if a.Searching {
 		a.handleSearchMouse(x, y, bstate)
+		return
+	}
+	if a.handleStatusMouse(x, y, bstate) {
 		return
 	}
 	a.handleBoardMouse(x, y, bstate)

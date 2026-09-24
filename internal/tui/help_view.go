@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -139,7 +141,7 @@ func (a *App) renderHelp() (popupBox, string) {
 		body = joinBlocksVertical(p, rendered...)
 	}
 
-	frame := popup{Title: t("tui.key_bindings"), Hint: t("tui.press_any_key_to_close"), MaxWidth: available}
+	frame := popup{Title: t("tui.key_bindings"), Hint: t("tui.help_mouse_hint"), MaxWidth: available}
 	inner := blockWidth(body)
 	if width := displayWidth(frame.Hint); width > inner {
 		inner = width
@@ -147,7 +149,13 @@ func (a *App) renderHelp() (popupBox, string) {
 	if width := displayWidth(frame.Title); width > inner {
 		inner = width
 	}
-	box, _, out := frame.render(p, w, h, inner, body)
+	inner = frame.inner(w, h, inner)
+	body = ansi.Wrap(body, inner, "")
+	a.helpView.Width = inner
+	a.helpView.Height = max(1, min(blockHeight(body), h-2-frame.chrome()))
+	a.helpView.SetContent(body)
+	a.helpView.SetYOffset(a.helpView.YOffset)
+	box, _, out := frame.render(p, w, h, inner, a.helpView.View())
 	return box, out
 }
 
@@ -198,4 +206,9 @@ func renderHelpGroup(p palette, group helpGroup) string {
 				p.fillLine(2)+styleFor("popup", p).Render(entry.Desc))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (a *App) openHelp() {
+	a.Help = true
+	a.helpView = viewport.New(1, 1)
 }

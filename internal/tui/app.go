@@ -137,7 +137,9 @@ type App struct {
 	// Session is the editable options config session, replaced from disk each time Options opens.
 	Session *menu.Session
 	// While Help is true the key reference overlay covers the board.
-	Help bool
+	Help       bool
+	helpView   viewport.Model
+	statusHits []statusActionHit
 	// welcomeDismissed hides the empty-board welcome overlay for this process.
 	welcomeDismissed bool
 	// While Issues is non-nil the GitHub issues overlay covers the board; it
@@ -226,6 +228,9 @@ func (a *App) Update(msg tea.Msg) tea.Cmd {
 		}
 	case tea.MouseMsg:
 		a.HandleMouse(event.X, event.Y, a.mouse.mapButtons(event.X, event.Y, neutralButtons(event), time.Now()))
+		if a.Options != nil {
+			return a.Options.Init()
+		}
 	}
 	return nil
 }
@@ -765,7 +770,7 @@ func (a *App) handleBoardKey(key string) {
 	case "o", "O":
 		a.openOptions()
 	case "?":
-		a.Help = true
+		a.openHelp()
 	case "y":
 		a.copySelectedTaskID()
 	case "m":

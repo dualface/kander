@@ -37,7 +37,7 @@ type reportView struct {
 }
 
 // optionsPanel is the options popup opened with o.
-// The form part is carried by Huh, the report part by a Bubbles viewport.
+// Huh owns the fields; Bubbles viewports scroll forms and reports independently of values.
 type optionsPanel struct {
 	app     *App
 	session *menu.Session
@@ -49,10 +49,17 @@ type optionsPanel struct {
 	// appliedTUI is the last TUI actually pushed to the board; nil until the user edits a field.
 	appliedTUI *config.TUI
 
-	form        *huh.Form
-	formTheme   *huh.Theme
-	formNatural int
-	formWidth   int
+	form            *huh.Form
+	formGroup       *huh.Group
+	formView        viewport.Model
+	followFocus     bool
+	menuOptions     []huh.Option[string]
+	menuDescription string
+	actionHits      []optionsActionHit
+	confirmHits     []optionsConfirmHit
+	formTheme       *huh.Theme
+	formNatural     int
+	formWidth       int
 	// pendingMeasure asks for a second measure after Huh finishes Init; Note
 	// titles can leave the first View() empty until that update lands.
 	pendingMeasure bool
@@ -493,8 +500,7 @@ func (p *optionsPanel) rebuildSection() tea.Cmd {
 	return tea.Batch(cmd, repeatCmd(index, huh.NextField))
 }
 
-// resizeForm rebuilds the form so every page re-measures its natural height against the new terminal size.
-// Huh's WithHeight cannot be undone; a form once compressed by a short terminal can only leave the scrolling layout through a rebuild.
+// resizeForm rebuilds fields at the new width and restores keyboard focus.
 func (p *optionsPanel) resizeForm() tea.Cmd {
 	if p.form == nil || p.report != nil {
 		return nil
@@ -533,6 +539,10 @@ func (p *optionsPanel) requestClose() tea.Cmd {
 }
 
 func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
+	if _, ok := msg.(tea.KeyMsg); ok {
+		p.followFocus = true
+	}
+	before := p.form.GetFocusedField()
 	// Inside the panel Enter always means "submit the current form", no matter which field the cursor is on;
 	// Huh treats Enter as "move to the next field" by default, so it is intercepted here first.
 	if event, ok := msg.(tea.KeyMsg); ok && mapKey(event) == "enter" {
@@ -551,6 +561,9 @@ func (p *optionsPanel) updateForm(msg tea.Msg) tea.Cmd {
 	model, cmd := p.form.Update(msg)
 	if form, ok := model.(*huh.Form); ok {
 		p.form = form
+	}
+	if p.form.GetFocusedField() != before {
+		p.followFocus = true
 	}
 	if p.pendingMeasure {
 		p.pendingMeasure = false

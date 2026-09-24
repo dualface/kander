@@ -540,7 +540,7 @@ func (a *App) handleDetailKey(key string) {
 		a.ShowCursor = true
 		a.resetDetailPending()
 	case "?":
-		a.Help = true
+		a.openHelp()
 		a.resetDetailPending()
 	case "n":
 		n := a.detailRepeat()

@@ -416,9 +416,8 @@ func TestMouseClickAccountsForScopeChrome(t *testing.T) {
 		t.Skip("popup too short for this assertion")
 	}
 	pumpPanel(panel, panel.HandleMouse(panel.bodyX+1, panel.bodyY+panel.chromeLines+target, mouseBtn1Clicked))
-	moved, _, ok := focusRange(panel.currentBodyLines())
-	if !ok || moved != target {
-		t.Fatalf("click through chrome should focus form row %d, focus is %d", target, moved)
+	if panel.current != sectionReview {
+		t.Fatalf("click through chrome should open Review, got %q", panel.current)
 	}
 }
 
@@ -635,9 +634,8 @@ func TestAppUpdateRoutesOptionsClick(t *testing.T) {
 	_ = app.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	cmd := app.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
 	pumpPanel(panel, cmd)
-	moved, _, ok := focusRange(panel.currentBodyLines())
-	if !ok || moved != target {
-		t.Fatalf("App.Update click should focus form row %d, focus is %d", target, moved)
+	if panel.current != sectionReview {
+		t.Fatalf("App.Update click should open Review, got %q", panel.current)
 	}
 }
 

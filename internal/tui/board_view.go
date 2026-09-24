@@ -138,6 +138,7 @@ func compactStamp(value string) string {
 // renderStatusBar is the bottom status bar: segmented information on the left, the two most used keys on the right.
 // The full key table belongs to the ? help overlay, so the status bar no longer carries a long truncated hint.
 func (a *App) renderStatusBar(p palette, w, visible int) string {
+	a.statusHits = nil
 	if notice := a.transientNotice(); notice != "" {
 		return styleFor("footer", p).Render(padLine(" "+clipText(notice, max(0, w-1)), w))
 	}
@@ -147,10 +148,20 @@ func (a *App) renderStatusBar(p palette, w, visible int) string {
 		itoa(a.visibleTaskCount()) + " " + a.Context.CardUnit,
 	}
 	left := " " + strings.Join(segments, "  "+a.Glyphs["vbar"]+"  ")
-	right := a.Context.StatusHelp + " "
+	options, help := a.Context.StatusOptions, a.Context.StatusHelp
+	right := options + " | " + help + " "
 	gap := w - displayWidth(left) - displayWidth(right)
 	if gap < 1 {
+		left = clipText(left, max(0, w-displayWidth(right)-1))
+		gap = max(0, w-displayWidth(left)-displayWidth(right))
+	}
+	if displayWidth(right) > w {
 		return styleFor("footer", p).Render(padLine(clipText(left, w), w))
+	}
+	x := displayWidth(left) + gap
+	a.statusHits = []statusActionHit{
+		{x: x, width: displayWidth(options), options: true},
+		{x: x + displayWidth(options) + 3, width: displayWidth(help)},
 	}
 	return styleFor("footer", p).Render(padLine(left+strings.Repeat(" ", gap)+right, w))
 }

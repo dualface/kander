@@ -849,7 +849,7 @@ func (a *App) handleIssuesKey(key string) {
 		}
 		a.issuesEnsureSelectionVisible()
 	case "?":
-		a.Help = true
+		a.openHelp()
 	}
 }
 

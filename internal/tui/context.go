@@ -20,6 +20,7 @@ type pageContext struct {
 	ColumnUnit          string
 	CardUnit            string
 	StatusHelp          string
+	StatusOptions       string
 	DetailStatusHelp    string
 	ThemeLabels         map[string]string
 	Help                string
@@ -65,7 +66,8 @@ func tuiPageContext() pageContext {
 		Columns:          t("tui.columns"),
 		ColumnUnit:       t("tui.cols"),
 		CardUnit:         t("tui.cards"),
-		StatusHelp:       t("tui.help_q_quit"),
+		StatusHelp:       t("tui.status_help"),
+		StatusOptions:    t("tui.status_options"),
 		DetailStatusHelp: t("tui.help_q_back"),
 		ThemeLabels: map[string]string{
 			"tide":           t("tui.tide"),

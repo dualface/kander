@@ -571,7 +571,7 @@ func TestUnsavedChangesGuardOnClose(t *testing.T) {
 	}
 }
 
-func TestMouseClickFocusesRow(t *testing.T) {
+func TestMouseClickOpensMenuRow(t *testing.T) {
 	_, panel := openPanel(t)
 	panel.view()
 	lo, _, ok := focusRange(panel.currentBodyLines())
@@ -583,9 +583,8 @@ func TestMouseClickFocusesRow(t *testing.T) {
 		t.Skip("popup too short for this assertion")
 	}
 	pumpPanel(panel, panel.HandleMouse(panel.bodyX+1, panel.bodyY+panel.chromeLines+target, mouseBtn1Clicked))
-	moved, _, ok := focusRange(panel.currentBodyLines())
-	if !ok || moved != target {
-		t.Fatalf("click should focus row %d, focus is %d", target, moved)
+	if panel.current != sectionReview {
+		t.Fatalf("click should open Review, got %q", panel.current)
 	}
 }
 

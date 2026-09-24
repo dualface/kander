@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/menu"
@@ -122,7 +123,20 @@ func (p *optionsPanel) renderConfirm() (popupBox, string) {
 		title = menu.HerdrInstallPrompt()
 		paragraphs = []string{menu.HerdrInstallCommand()}
 	}
-	return p.app.renderConfirm(paragraphs, confirmHint(confirmReady), title, &p.confirm.bodyView)
+	yes, no := "["+t("tui.mouse_yes")+"]", "["+t("tui.mouse_no")+"]"
+	box, out := p.app.renderConfirm(paragraphs, yes+"  "+no+"\n"+confirmHint(confirmReady), title, &p.confirm.bodyView)
+	p.confirmHits = nil
+	for row, line := range strings.Split(ansi.Strip(out), "\n") {
+		for _, button := range []struct {
+			label  string
+			accept bool
+		}{{yes, true}, {no, false}} {
+			if index := strings.Index(line, button.label); index >= 0 {
+				p.confirmHits = append(p.confirmHits, optionsConfirmHit{box.X + displayWidth(line[:index]), box.Y + row, displayWidth(button.label), button.accept})
+			}
+		}
+	}
+	return box, out
 }
 
 func (p *optionsPanel) finishRestoreConfirm() tea.Cmd {
@@ -195,4 +209,21 @@ func (p *optionsPanel) setOverlayTUIField(field string, value any) {
 	if err := p.session.SetTUIField(field, value); err != nil {
 		p.showReport(t("tui.save_failed"), nil, err.Error())
 	}
+}
+
+type optionsConfirmHit struct {
+	x, y, width int
+	accept      bool
+}
+
+func (p *optionsPanel) clickConfirmation(x, y int) tea.Cmd {
+	if p.confirm.phase != confirmReady {
+		return nil
+	}
+	for _, hit := range p.confirmHits {
+		if y == hit.y && x >= hit.x && x < hit.x+hit.width {
+			return p.finishOptionsConfirm(hit.accept)
+		}
+	}
+	return nil
 }

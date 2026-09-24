@@ -111,12 +111,12 @@ func applyHuhPalette(theme *huh.Theme, p palette) {
 	theme.Blurred.Option = p.paint(fresh.Blurred.Option.Foreground(p.Base))
 	theme.Focused.UnselectedOption = p.paint(fresh.Focused.UnselectedOption.Foreground(p.Base))
 	theme.Blurred.UnselectedOption = p.paint(fresh.Blurred.UnselectedOption.Foreground(p.Base))
-	// Inline Selects draw "← value →" only while focused. Blurred must keep the
-	// same left inset ("←" + margin) as two spaces so the value column does not jump.
+	// Keep arrows visible on every selector so mouse users can edit without
+	// first discovering its keyboard focus state.
 	theme.Focused.PrevIndicator = p.paint(fresh.Focused.PrevIndicator.Foreground(p.Accent))
 	theme.Focused.NextIndicator = p.paint(fresh.Focused.NextIndicator.Foreground(p.Accent))
-	theme.Blurred.PrevIndicator = lipgloss.NewStyle().SetString("  ")
-	theme.Blurred.NextIndicator = lipgloss.NewStyle()
+	theme.Blurred.PrevIndicator = p.paint(fresh.Focused.PrevIndicator.Foreground(p.Dim))
+	theme.Blurred.NextIndicator = p.paint(fresh.Focused.NextIndicator.Foreground(p.Dim))
 	theme.Focused.TextInput.Text = p.paint(fresh.Focused.TextInput.Text.Foreground(p.Accent).Bold(true))
 	theme.Blurred.TextInput.Text = p.paint(fresh.Blurred.TextInput.Text.Foreground(p.Base).Bold(true))
 	theme.Focused.TextInput.Placeholder = p.paint(fresh.Focused.TextInput.Placeholder.Foreground(p.Dim))
@@ -231,9 +231,10 @@ func sectionKeyMap() *huh.KeyMap {
 	return keys
 }
 
-func (p *optionsPanel) newForm(keys *huh.KeyMap, groups ...*huh.Group) *huh.Form {
+func (p *optionsPanel) newForm(keys *huh.KeyMap, group *huh.Group) *huh.Form {
+	p.formGroup = group
 	p.formTheme = huhTheme(themePalette(p.app.Theme))
-	return huh.NewForm(groups...).
+	return huh.NewForm(group).
 		WithTheme(p.formTheme).
 		WithKeyMap(keys).
 		// The hint line is drawn by this package: Huh's help truncates by its internal width, swallowing later bindings
@@ -265,9 +266,11 @@ func (p *optionsPanel) openRoot() tea.Cmd {
 		huh.NewOption(p.rootLabel(t("tui.save_and_apply"), p.dirtyLabel()), sectionSave),
 		huh.NewOption(p.rootLabel(t("tui.close_2"), ""), sectionClose),
 	)
+	p.menuOptions = options
+	p.menuDescription = t("tui.enter_to_open_esc_to_close")
 	form := p.newForm(rootKeyMap(), huh.NewGroup(
 		huh.NewSelect[string]().
-			Description(t("tui.enter_to_open_esc_to_close")).
+			Description(p.menuDescription).
 			Options(options...).
 			Value(&p.section),
 	))
@@ -364,15 +367,15 @@ func (p *optionsPanel) openCloseConfirm() tea.Cmd {
 	p.confirming = true
 	p.current = ""
 	p.bind = nil
+	p.menuOptions = []huh.Option[string]{
+		huh.NewOption(t("tui.save_and_close"), closeSave),
+		huh.NewOption(t("tui.discard_and_close"), closeDiscard),
+		huh.NewOption(t("tui.keep_editing"), closeBack),
+	}
+	p.menuDescription = t("tui.there_are_unsaved_configuration_changes")
 	form := p.newForm(rootKeyMap(), huh.NewGroup(
-		huh.NewSelect[string]().
-			Description(t("tui.there_are_unsaved_configuration_changes")).
-			Options(
-				huh.NewOption(t("tui.save_and_close"), closeSave),
-				huh.NewOption(t("tui.discard_and_close"), closeDiscard),
-				huh.NewOption(t("tui.keep_editing"), closeBack),
-			).
-			Value(&p.closeChoice),
+		huh.NewSelect[string]().Description(p.menuDescription).
+			Options(p.menuOptions...).Value(&p.closeChoice),
 	))
 	return p.startForm(form)
 }
