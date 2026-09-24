@@ -71,7 +71,9 @@ func (p *optionsPanel) renderActions(width int) string {
 			labels = append(labels, label)
 		}
 	}
-	if p.current != "" {
+	if p.confirming {
+		add(t("tui.keep_editing"), tea.KeyEsc)
+	} else if p.current != "" {
 		add(t("tui.mouse_save"), tea.KeyEnter)
 		add(t("tui.mouse_back"), tea.KeyEsc)
 	} else {

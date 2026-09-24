@@ -307,3 +307,41 @@ func TestOptionsFieldsFitMouseViewport(t *testing.T) {
 		}
 	}
 }
+
+func TestOptionsMouseKeepEditingAfterCloseConfirmation(t *testing.T) {
+	useInterfaceLanguage(t, "en")
+	app, panel := openPanel(t)
+	pumpPanel(panel, panel.openSection(sectionReviewStages))
+	drivePanel(panel, keyMsg("right"))
+	drivePanel(panel, keyMsg("q"))
+	if !panel.confirming {
+		t.Fatal("missing unsaved close confirmation")
+	}
+	before, _ := json.Marshal(panel.session.Config)
+	clickOptionsText(t, app, "["+config.Text("tui.keep_editing")+"]")
+	after, _ := json.Marshal(panel.session.Config)
+	if app.Options == nil || panel.confirming || !panel.dirty || string(before) != string(after) {
+		t.Fatal("keep editing lost panel or unsaved values")
+	}
+}
+
+func TestStatusWheelStillMovesBoardSelection(t *testing.T) {
+	app := newPanelApp(t)
+	app.Model.SetBoard(BoardPayload{Tasks: []Task{
+		{TaskID: "one", Title: "one", State: "backlog"},
+		{TaskID: "two", Title: "two", State: "backlog"},
+	}})
+	app.Model.FocusState("backlog")
+	app.View()
+	app.Update(tea.MouseMsg{X: app.Width - 3, Y: app.Height - 1, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	if task := app.Model.SelectedTask(); task == nil || task.TaskID != "two" {
+		t.Fatal("status wheel did not select next task")
+	}
+	app.Update(tea.MouseMsg{X: app.Width - 3, Y: app.Height - 1, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	if task := app.Model.SelectedTask(); task == nil || task.TaskID != "one" {
+		t.Fatal("status wheel did not select previous task")
+	}
+	if app.Options != nil || app.Help {
+		t.Fatal("wheel activated status action")
+	}
+}

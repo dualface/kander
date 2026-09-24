@@ -15,7 +15,7 @@ func (a *App) popupClick(x, y, bstate int) bool {
 
 func (a *App) handleStatusMouse(x, y, bstate int) bool {
 	height, _ := a.size()
-	if y != height-1 || a.transientNotice() != "" {
+	if y != height-1 || a.transientNotice() != "" || mouseWheelDelta(bstate) != 0 {
 		return false
 	}
 	if a.popupClick(x, y, bstate) {
