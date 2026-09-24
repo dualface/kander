@@ -139,6 +139,7 @@ type App struct {
 	// While Help is true the key reference overlay covers the board.
 	Help       bool
 	helpView   viewport.Model
+	helpBox    popupBox
 	statusHits []statusActionHit
 	// welcomeDismissed hides the empty-board welcome overlay for this process.
 	welcomeDismissed bool

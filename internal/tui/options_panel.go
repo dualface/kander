@@ -531,10 +531,15 @@ func (p *optionsPanel) resizeForm() tea.Cmd {
 
 // requestClose closes the panel; unsaved changes make the user choose first.
 func (p *optionsPanel) requestClose() tea.Cmd {
+	if p.confirming {
+		return nil
+	}
 	if !p.dirty {
 		p.close()
 		return nil
 	}
+	p.report = nil
+	p.flowScale = ""
 	return p.openCloseConfirm()
 }
 
@@ -669,8 +674,7 @@ func (p *optionsPanel) persistNow() error {
 // The interface language is the exception: leaving the interface page with Esc cancels its unsaved change.
 func (p *optionsPanel) abortSection() tea.Cmd {
 	if p.current == "" {
-		p.close()
-		return nil
+		return p.requestClose()
 	}
 	if p.current == sectionInterface {
 		if err := p.restoreLanguage(); err != nil {
@@ -687,8 +691,7 @@ func (p *optionsPanel) dispatch(section string) tea.Cmd {
 		p.save()
 		return nil
 	case sectionClose:
-		p.close()
-		return nil
+		return p.requestClose()
 	case sectionFlow:
 		p.openFlow()
 		return nil

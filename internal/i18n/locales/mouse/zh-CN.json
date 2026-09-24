@@ -1,10 +1,11 @@
 {
   "tui.status_options": "o 选项",
   "tui.status_help": "? 帮助",
-  "tui.help_mouse_hint": "滚轮滚动 · 点击 / 任意键关闭",
+  "tui.help_mouse_hint": "滚轮滚动 · 点击框外 / 任意键关闭",
   "tui.mouse_save": "保存",
   "tui.mouse_back": "返回",
-  "tui.mouse_close": "关闭",
   "tui.mouse_yes": "是",
-  "tui.mouse_no": "否"
+  "tui.mouse_no": "否",
+  "tui.options_close_hint": "Esc 关闭",
+  "tui.options_root_hint": "Esc 关闭 · ↑↓ 选择 · Enter 进入"
 }

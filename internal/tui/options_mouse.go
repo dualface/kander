@@ -76,8 +76,6 @@ func (p *optionsPanel) renderActions(width int) string {
 	} else if p.current != "" {
 		add(t("tui.mouse_save"), tea.KeyEnter)
 		add(t("tui.mouse_back"), tea.KeyEsc)
-	} else {
-		add(t("tui.mouse_close"), tea.KeyEsc)
 	}
 	return styleFor("popup-title", themePalette(p.app.Theme)).Render(strings.Join(labels, "  "))
 }
@@ -96,6 +94,9 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 			return p.clickConfirmation(x, y)
 		}
 		return nil
+	}
+	if click && !p.box.contains(x, y) {
+		return p.requestClose()
 	}
 	if click {
 		if p.hitTab(x-p.headerX, y-p.headerY) != "" {
@@ -124,6 +125,9 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 	if !click || x < p.bodyX || x >= p.bodyX+p.bodyWidth {
 		return nil
 	}
+	if p.closeHintAt(x, y) {
+		return p.requestClose()
+	}
 	row := y - p.bodyY - p.chromeLines
 	if row == p.formView.Height+1 {
 		for _, hit := range p.actionHits {
@@ -140,6 +144,37 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 		return p.clickMenu(row)
 	}
 	return p.clickField(x-p.bodyX, row)
+}
+
+// Only visible close hints are clickable; menu values and clipped text are not.
+func (p *optionsPanel) closeHintAt(x, y int) bool {
+	if p.current != "" || p.confirming {
+		return false
+	}
+	row := y - p.bodyY
+	if row < 0 || row >= len(p.bodyLines) {
+		return false
+	}
+	label := t("tui.options_close_hint")
+	if row != len(p.bodyLines)-1 {
+		start, _ := p.menuRows()
+		formRow := row - p.chromeLines + p.formView.YOffset
+		if formRow < 0 || formRow >= start {
+			return false
+		}
+		_, suffix, ok := strings.Cut(p.menuDescription, "Esc")
+		if !ok {
+			return false
+		}
+		label = "Esc" + suffix
+	}
+	line := ansi.Strip(p.bodyLines[row])
+	index := strings.Index(line, label)
+	if index < 0 {
+		return false
+	}
+	left := p.bodyX + displayWidth(line[:index])
+	return x >= left && x < left+displayWidth(label)
 }
 
 // menuRows mirrors Huh's wrapping, including continuation rows of long labels.

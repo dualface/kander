@@ -156,6 +156,7 @@ func (a *App) renderHelp() (popupBox, string) {
 	a.helpView.SetContent(body)
 	a.helpView.SetYOffset(a.helpView.YOffset)
 	box, _, out := frame.render(p, w, h, inner, a.helpView.View())
+	a.helpBox = box
 	return box, out
 }
 

@@ -1,10 +1,11 @@
 {
   "tui.status_options": "o オプション",
   "tui.status_help": "? ヘルプ",
-  "tui.help_mouse_hint": "ホイールでスクロール · クリック / 任意キーで閉じる",
+  "tui.help_mouse_hint": "ホイールでスクロール · 枠外クリック / 任意キーで閉じる",
   "tui.mouse_save": "保存",
   "tui.mouse_back": "戻る",
-  "tui.mouse_close": "閉じる",
   "tui.mouse_yes": "はい",
-  "tui.mouse_no": "いいえ"
+  "tui.mouse_no": "いいえ",
+  "tui.options_close_hint": "Esc で閉じる",
+  "tui.options_root_hint": "Esc で閉じる · ↑↓ 移動 · Enter で開く"
 }

@@ -377,7 +377,7 @@ func (a *App) HandleMouse(x, y, bstate int) {
 	if a.Help {
 		if delta := mouseWheelDelta(bstate); delta != 0 {
 			a.helpView.SetYOffset(a.helpView.YOffset + delta*mouseScrollStep)
-		} else if a.popupClick(x, y, bstate) {
+		} else if a.popupClick(x, y, bstate) && !a.helpBox.contains(x, y) {
 			a.Help = false
 		}
 		return

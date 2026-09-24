@@ -223,13 +223,22 @@ func (p *optionsPanel) content(palette palette, width, height int) (string, stri
 		noticeLines = 2
 	}
 	p.chromeLines = noticeLines
-	formView := p.renderForm(width, height-noticeLines-1)
+	actions := p.renderActions(width)
+	actionHeight := 0
+	if actions != "" {
+		actionHeight = 1
+	}
+	formView := p.renderForm(width, height-noticeLines-actionHeight)
 	hint := styleFor("popup-dim", palette).Render(p.hintLine(width))
-	return title, notice + formView + "\n\n" + p.renderActions(width) + "\n" + hint
+	footer := hint
+	if actions != "" {
+		footer = actions + "\n" + hint
+	}
+	return title, notice + formView + "\n\n" + footer
 }
 
 // fitOptionsForm owns the vertical layout of every section. One blank line is always kept between the form
-// and the bottom hint. The caller reserves an additional row for mouse actions.
+// and the bottom hint. The caller reserves an additional row when mouse actions are present.
 func fitOptionsForm(natural, available int) (height int, footerGap string) {
 	const footerHeight = 2
 	footerGap = "\n\n"
@@ -276,7 +285,7 @@ func (p *optionsPanel) pageHint() string {
 	case p.confirming:
 		return t("tui.move_enter_confirm_esc_keep_editing")
 	case p.current == "":
-		return t("tui.move_enter_open_esc_close")
+		return t("tui.options_root_hint")
 	case p.current == sectionExecution || p.current == sectionReview:
 		return t("tui.field_change_type_model_ids_enter_save_esc_back")
 	}

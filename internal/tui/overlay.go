@@ -19,6 +19,10 @@ type popupBox struct {
 	Width, Height int
 }
 
+func (b popupBox) contains(x, y int) bool {
+	return x >= b.X && x < b.X+b.Width && y >= b.Y && y < b.Y+b.Height
+}
+
 // centerPopup centers a popup on screen at the size its content needs.
 // maxWidth of 0 takes the ordinary limit; table-shaped content such as the key reference asks for more.
 // tightFit keeps the ordinary vertical margin while the content fits and gives it up only on a height shortage.

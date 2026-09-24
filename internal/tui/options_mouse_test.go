@@ -105,7 +105,7 @@ func TestHelpWheelAndResize(t *testing.T) {
 	if app.helpView.YOffset != 0 {
 		t.Fatal("help scroll up failed")
 	}
-	clickOptions(t, app, 3, 3)
+	clickOptions(t, app, 0, 0)
 	if app.Help {
 		t.Fatal("single click failed to close")
 	}
@@ -234,7 +234,7 @@ func TestOptionsMouseSaveBackAndClose(t *testing.T) {
 	if panel.current != "" {
 		t.Fatal("back did not return")
 	}
-	clickOptionsText(t, app, "["+tuiMouseLabel("close")+"]")
+	clickOptionsText(t, app, config.Text("tui.options_close_hint"))
 	if app.Options != nil {
 		t.Fatal("close failed")
 	}
