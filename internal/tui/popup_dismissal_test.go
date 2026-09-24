@@ -11,7 +11,23 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
+func preserveDismissalLanguage(t *testing.T) {
+	t.Helper()
+	bound, cli := config.BoundConfigLanguage(), config.CLILanguage()
+	t.Setenv(config.EnvLang, os.Getenv(config.EnvLang))
+	t.Setenv(config.EnvLangCLI, os.Getenv(config.EnvLangCLI))
+	t.Cleanup(func() {
+		var args []string
+		if cli != "" {
+			args = []string{"--lang", cli}
+		}
+		config.ApplyLanguageArgument(args)
+		config.BindConfigLanguage(&config.Config{Language: bound})
+	})
+}
+
 func TestOptionsDismissalHints(t *testing.T) {
+	preserveDismissalLanguage(t)
 	for _, language := range []string{"en", "cn", "ja"} {
 		for _, width := range []int{48, 120} {
 			t.Run(fmt.Sprintf("%s/%d", language, width), func(t *testing.T) {
@@ -43,6 +59,7 @@ func TestOptionsDismissalHints(t *testing.T) {
 }
 
 func TestOptionsDismissalOutsidePages(t *testing.T) {
+	preserveDismissalLanguage(t)
 	for _, page := range []string{"root", "section", "report", "flow"} {
 		for _, dirty := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/dirty=%v", page, dirty), func(t *testing.T) {
@@ -61,8 +78,12 @@ func TestOptionsDismissalOutsidePages(t *testing.T) {
 					panel.markDirty()
 				}
 				app.View()
-				// The underlying status action must not reopen a closed popup.
-				clickOptions(t, app, app.statusHits[0].x, app.Height-1)
+				// Use the underlying status action unless the tall flow covers it.
+				x, y := app.statusHits[0].x, app.Height-1
+				if panel.box.contains(x, y) {
+					x = panel.box.X - 1
+				}
+				clickOptions(t, app, x, y)
 				if !dirty {
 					if app.Options != nil || app.Help {
 						t.Fatal("outside click did not close clean options without fallthrough")
@@ -87,6 +108,7 @@ func TestOptionsDismissalOutsidePages(t *testing.T) {
 }
 
 func TestOptionsDismissalUnsavedRoutes(t *testing.T) {
+	preserveDismissalLanguage(t)
 	for _, route := range []string{"footer", "description", "esc", "menu"} {
 		t.Run(route, func(t *testing.T) {
 			app, panel := openPanel(t)
@@ -112,6 +134,7 @@ func TestOptionsDismissalUnsavedRoutes(t *testing.T) {
 }
 
 func TestOptionsDismissalSaveAndDiscard(t *testing.T) {
+	preserveDismissalLanguage(t)
 	for _, choice := range []string{"save", "discard", "save-error"} {
 		t.Run(choice, func(t *testing.T) {
 			t.Chdir(t.TempDir())
@@ -161,6 +184,7 @@ func TestOptionsDismissalSaveAndDiscard(t *testing.T) {
 }
 
 func TestPopupDismissalIgnoresInsideAndDrag(t *testing.T) {
+	preserveDismissalLanguage(t)
 	for _, help := range []bool{false, true} {
 		t.Run(fmt.Sprintf("help=%v", help), func(t *testing.T) {
 			app, panel := openPanel(t)
