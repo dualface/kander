@@ -875,7 +875,6 @@
   "tui.move": "移動",
   "tui.move_cursor": "カーソル移動",
   "tui.move_enter_confirm_esc_keep_editing": "↑↓ 移動 · Enter 確定 · Esc で編集を続ける",
-  "tui.move_enter_open_esc_close": "↑↓ 移動 · Enter で開く · Esc で閉じる",
   "tui.narrow_terminals_show_fewer": "狭いターミナルでは少なく表示",
   "tui.no_board_available": "利用可能なボードがありません",
   "tui.no_match": "一致なし",

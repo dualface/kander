@@ -875,7 +875,6 @@
   "tui.move": "move",
   "tui.move_cursor": "move cursor",
   "tui.move_enter_confirm_esc_keep_editing": "↑↓ move · Enter confirm · Esc keep editing",
-  "tui.move_enter_open_esc_close": "↑↓ move · Enter open · Esc close",
   "tui.narrow_terminals_show_fewer": "narrow terminals show fewer",
   "tui.no_board_available": "no board available",
   "tui.no_match": "no match",

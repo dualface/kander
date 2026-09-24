@@ -875,7 +875,6 @@
   "tui.move": "选字段",
   "tui.move_cursor": "移动光标",
   "tui.move_enter_confirm_esc_keep_editing": "↑↓ 选择 · Enter 确认 · Esc 继续编辑",
-  "tui.move_enter_open_esc_close": "↑↓ 选择 · Enter 进入 · Esc 关闭",
   "tui.narrow_terminals_show_fewer": "终端放不下时会自动少显示几栏",
   "tui.no_board_available": "没有可用看板",
   "tui.no_match": "无匹配",
