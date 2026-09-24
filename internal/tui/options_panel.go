@@ -685,6 +685,13 @@ func (p *optionsPanel) abortSection() tea.Cmd {
 	return p.openRoot()
 }
 
+// leaveSection is the outside-click form of Back. Unlike Esc it keeps an interface
+// language edit pending, so every mouse edit reaches the unsaved-close confirmation.
+func (p *optionsPanel) leaveSection() tea.Cmd {
+	p.current = ""
+	return p.openRoot()
+}
+
 func (p *optionsPanel) dispatch(section string) tea.Cmd {
 	switch section {
 	case sectionSave:

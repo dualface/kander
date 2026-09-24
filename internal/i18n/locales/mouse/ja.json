@@ -2,8 +2,6 @@
   "tui.status_options": "o オプション",
   "tui.status_help": "? ヘルプ",
   "tui.help_mouse_hint": "ホイールでスクロール · 枠外クリック / 任意キーで閉じる",
-  "tui.mouse_save": "保存",
-  "tui.mouse_back": "戻る",
   "tui.mouse_yes": "はい",
   "tui.mouse_no": "いいえ",
   "tui.options_close_hint": "Esc で閉じる",

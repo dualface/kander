@@ -71,11 +71,9 @@ func (p *optionsPanel) renderActions(width int) string {
 			labels = append(labels, label)
 		}
 	}
+	// Sections have no mouse actions: an outside click leaves them and Enter still saves.
 	if p.confirming {
 		add(t("tui.keep_editing"), tea.KeyEsc)
-	} else if p.current != "" {
-		add(t("tui.mouse_save"), tea.KeyEnter)
-		add(t("tui.mouse_back"), tea.KeyEsc)
 	}
 	return styleFor("popup-title", themePalette(p.app.Theme)).Render(strings.Join(labels, "  "))
 }
@@ -96,6 +94,9 @@ func (p *optionsPanel) HandleMouse(x, y, bstate int) tea.Cmd {
 		return nil
 	}
 	if click && !p.box.contains(x, y) {
+		if p.current != "" && !p.confirming && p.report == nil && p.form != nil {
+			return p.leaveSection()
+		}
 		return p.requestClose()
 	}
 	if click {

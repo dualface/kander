@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -212,32 +213,53 @@ func TestOptionsMouseSelectAndInput(t *testing.T) {
 	}
 }
 
-func TestOptionsMouseSaveBackAndClose(t *testing.T) {
+func TestOptionsMouseSectionOutsideReturnsWithoutSaving(t *testing.T) {
 	app, panel := openPanel(t)
-	pumpPanel(panel, panel.openSection(sectionReviewStages))
-	clickOptionsText(t, app, "→")
-	expected, _ := config.ReviewStageFor(panel.session.Config, "large", "PMQA")
-	clickOptionsText(t, app, "["+tuiMouseLabel("save")+"]")
-	if panel.current != "" {
-		t.Fatal("save did not return to root")
-	}
-	saved, err := config.Load(false)
+	before, err := os.ReadFile(os.Getenv(config.EnvConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := config.ReviewStageFor(saved, "large", "PMQA")
-	if got != expected {
-		t.Fatalf("saved %s, want %s", got, expected)
+	pumpPanel(panel, panel.openSection(sectionReviewStages))
+	clickOptionsText(t, app, "→")
+	edited, _ := config.ReviewStageFor(panel.session.Config, "large", "PMQA")
+	if !panel.dirty || len(panel.actionHits) != 0 {
+		t.Fatal("setup: section edit not pending, or section renders action buttons")
 	}
-	pumpPanel(panel, panel.openSection(sectionExecution))
-	clickOptionsText(t, app, "["+tuiMouseLabel("back")+"]")
-	if panel.current != "" {
-		t.Fatal("back did not return")
+	clickOptions(t, app, 0, 0)
+	if app.Options == nil || panel.current != "" || panel.confirming || !panel.dirty {
+		t.Fatal("outside click did not return to root with the edit pending")
 	}
-	clickOptionsText(t, app, config.Text("tui.options_close_hint"))
+	if got, _ := config.ReviewStageFor(panel.session.Config, "large", "PMQA"); got != edited {
+		t.Fatalf("pending stage %s, want %s", got, edited)
+	}
+	after, err := os.ReadFile(os.Getenv(config.EnvConfig))
+	if err != nil || string(before) != string(after) {
+		t.Fatal("outside click saved the section")
+	}
+	app.View()
+	clickOptions(t, app, 0, 0)
+	if app.Options == nil || !panel.confirming {
+		t.Fatal("closing with pending edits skipped confirmation")
+	}
+}
+
+func TestOptionsMouseSectionOutsideKeepsLanguageEdit(t *testing.T) {
+	useInterfaceLanguage(t, "en")
+	app, panel := openPanel(t, englishConfig())
+	openLanguageField(t, panel)
+	edited := panel.session.Config.Language
+	app.View()
+	clickOptions(t, app, 0, 0)
+	if panel.current != "" || !panel.dirty || panel.session.Config.Language != edited || panel.languageBase == nil {
+		t.Fatal("outside click dropped the pending language edit")
+	}
+	app.View()
+	clickOptions(t, app, 0, 0)
+	clickOptionsText(t, app, config.Text("tui.discard_and_close"))
 	if app.Options != nil {
-		t.Fatal("close failed")
+		t.Fatal("discard did not close options")
 	}
+	assertLanguageCopy(t, app, "en")
 }
 
 func tuiMouseLabel(name string) string { return t("tui.mouse_" + name) }

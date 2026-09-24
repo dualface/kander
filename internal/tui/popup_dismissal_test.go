@@ -83,6 +83,14 @@ func TestOptionsDismissalOutsidePages(t *testing.T) {
 				if panel.box.contains(x, y) {
 					x = panel.box.X - 1
 				}
+				if page == "section" {
+					// A section click only returns to the root; the next one tries to close.
+					clickOptions(t, app, x, y)
+					if app.Options == nil || panel.current != "" || panel.confirming || panel.dirty != dirty {
+						t.Fatal("outside click on a section did not return to root")
+					}
+					app.View()
+				}
 				clickOptions(t, app, x, y)
 				if !dirty {
 					if app.Options != nil || app.Help {
