@@ -6,7 +6,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/charmbracelet/x/cellbuf"
 )
 
 type optionsActionHit struct {
@@ -178,16 +177,56 @@ func (p *optionsPanel) closeHintAt(x, y int) bool {
 	return x >= left && x < left+displayWidth(label)
 }
 
-// menuRows mirrors Huh's wrapping, including continuation rows of long labels.
+// menuRows finds the description height and each option's rows in the Select
+// Huh actually rendered. Recomputing Huh's wrapping drifted from the drawn rows
+// under real themes, so clicks landed on a different option.
 func (p *optionsPanel) menuRows() (int, []int) {
+	lines := p.currentBodyLines()
 	styles := p.formTheme.Focused
-	width := p.fieldWidth(p.formWidth) - styles.Base.GetHorizontalFrameSize()
-	row := blockHeight(cellbuf.Wrap(p.menuDescription, width, ",.-; "))
-	heights := make([]int, len(p.menuOptions))
-	for i, option := range p.menuOptions {
-		heights[i] = blockHeight(cellbuf.Wrap(option.Key, width-displayWidth(styles.SelectSelector.String()), ",.-; "))
+	border := styles.Base.GetBorderStyle().Left
+	selector := strings.TrimSpace(ansi.Strip(styles.SelectSelector.String()))
+	text := make([]string, len(lines))
+	for i, line := range lines {
+		text[i] = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(ansi.Strip(line)), border))
 	}
-	return row, heights
+	starts := make([]int, 0, len(p.menuOptions))
+	row := 0
+	for _, option := range p.menuOptions {
+		for row < len(text) && !menuOptionStarts(text[row], selector, option.Key) {
+			row++
+		}
+		if row == len(text) {
+			return len(text), nil
+		}
+		starts = append(starts, row)
+		row++
+	}
+	heights := make([]int, len(starts))
+	for i, start := range starts {
+		end := start + 1
+		if i+1 < len(starts) {
+			end = starts[i+1]
+		} else {
+			for end < len(text) && text[end] != "" {
+				end++
+			}
+		}
+		heights[i] = end - start
+	}
+	if len(starts) == 0 {
+		return len(text), heights
+	}
+	return starts[0], heights
+}
+
+// menuOptionStarts reports whether a rendered row opens the option: after the
+// selector, its first word is a prefix of the label, even when Huh splits that word.
+func menuOptionStarts(row, selector, label string) bool {
+	if selector != "" {
+		row = strings.TrimSpace(strings.TrimPrefix(row, selector))
+	}
+	fields := strings.Fields(row)
+	return len(fields) > 0 && strings.HasPrefix(label, fields[0])
 }
 
 func (p *optionsPanel) clickMenu(row int) tea.Cmd {

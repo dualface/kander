@@ -3,13 +3,16 @@ package tui
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/dualface/kander/internal/config"
+	"github.com/muesli/termenv"
 )
 
 func clickOptions(t *testing.T, app *App, x, y int) {
@@ -365,5 +368,93 @@ func TestStatusWheelStillMovesBoardSelection(t *testing.T) {
 	}
 	if app.Options != nil || app.Help {
 		t.Fatal("wheel activated status action")
+	}
+}
+
+// clickMenuOption clicks the rendered row of a menu option: the label follows the
+// focus border and optional selector, so descriptions and footers never match.
+func clickMenuOption(t *testing.T, app *App, label string) {
+	t.Helper()
+	pattern := regexp.MustCompile(`┃\s*(▸\s*)?` + regexp.QuoteMeta(label))
+	for y, line := range strings.Split(ansi.Strip(app.View()), "\n") {
+		if loc := pattern.FindStringIndex(line); loc != nil {
+			x := displayWidth(line[:loc[1]]) - displayWidth(label)
+			clickOptions(t, app, x+displayWidth(label)-1, y)
+			return
+		}
+	}
+	t.Fatalf("missing menu option %q:\n%s", label, ansi.Strip(app.View()))
+}
+
+// Real terminals style the selector; its escape bytes once counted as label width.
+func useTrueColor(t *testing.T) {
+	t.Helper()
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
+}
+
+func TestOptionsMouseMenuHitsRenderedOption(t *testing.T) {
+	preserveDismissalLanguage(t)
+	useTrueColor(t)
+	for _, language := range []string{"en", "cn", "ja"} {
+		for _, width := range []int{80, 120} {
+			for _, theme := range []string{"light", "dark"} {
+				useInterfaceLanguage(t, language)
+				cfg := englishConfig()
+				cfg.Language = language
+				app, panel := openPanel(t, cfg)
+				app.dismissWelcome()
+				app.Width, app.Height = width, 40
+				for _, option := range panel.menuOptions {
+					if option.Value == sectionClose || option.Value == sectionSave || option.Value == sectionDoctor {
+						continue
+					}
+					app.Theme = theme
+					pumpPanel(panel, panel.openRoot())
+					clickMenuOption(t, app, option.Key)
+					if panel.section != option.Value {
+						t.Fatalf("%s/%d/%s: click on %q opened %q", language, width, theme, option.Key, panel.section)
+					}
+					panel.report, panel.flowScale = nil, ""
+				}
+			}
+		}
+	}
+}
+
+func TestOptionsMouseTrueColorConfirmAndFields(t *testing.T) {
+	preserveDismissalLanguage(t)
+	useTrueColor(t)
+	app, panel := openPanel(t)
+	app.dismissWelcome()
+	pumpPanel(panel, panel.openSection(sectionReviewStages))
+	app.View()
+	before, _ := config.ReviewStageFor(panel.session.Config, "small", "Security")
+	lines := strings.Split(ansi.Strip(app.View()), "\n")
+	for y := len(lines) - 1; y >= 0; y-- {
+		if i := strings.LastIndex(lines[y], " →"); i >= 0 && strings.Contains(lines[y], "← ") {
+			i++
+			clickOptions(t, app, displayWidth(lines[y][:i]), y)
+			break
+		}
+	}
+	if got, _ := config.ReviewStageFor(panel.session.Config, "small", "Security"); got == before {
+		t.Fatal("last field arrow did not edit its own field")
+	}
+	clickOptions(t, app, 0, 0)
+	app.View()
+	clickOptions(t, app, 0, 0)
+	if !panel.confirming {
+		t.Fatal("setup: close confirmation not shown")
+	}
+	clickMenuOption(t, app, config.Text("tui.keep_editing"))
+	if panel.confirming || app.Options == nil || !panel.dirty {
+		t.Fatal("keep editing row did not keep editing")
+	}
+	clickMenuOption(t, app, config.Text("tui.close_2"))
+	clickMenuOption(t, app, config.Text("tui.discard_and_close"))
+	if app.Options != nil {
+		t.Fatal("discard row did not close options")
 	}
 }
