@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.2 — 2026-09-25
+
+- TUI: the options panel and help accept the mouse. The status bar has clickable `o options | ? help` entries. In options, the wheel scrolls without changing values, clicking a menu item opens it, the selector arrows and Yes/No labels edit values, and clicking a text field gives it keyboard focus. Scope tabs and restore confirmations accept clicks.
+- TUI: options sections have no mouse Save/Back buttons; Enter still saves. Clicking outside the frame on a section returns to the root menu and keeps every edit pending, including an interface language change. Clicking outside the root menu, or the visible Esc-close hint, closes options, and unsaved edits ask Save and close / Discard and close / Keep editing first.
+- TUI: help scrolls with the wheel and closes on any key or a click outside its frame; clicks inside it keep it open.
+- Fix: a click on an options menu item opens the item under the cursor. Menu rows were computed from a recalculated wrap that counted the colored selector's escape bytes as width, so in color terminals long labels took two rows and later clicks opened an item above the target. The unsaved-close confirmation and the menu's Esc-close hint are fixed the same way.
+
 ## v0.8.1 — 2026-09-23
 
 - Review: accept complete readable reviewer reports for attributed receiver interpretation when structured findings cannot be parsed. `kander review interpret` binds findings to the original report hash and quoted evidence; unresolved interpretations cannot satisfy the review completion gate.
