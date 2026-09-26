@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.8.3 — 2026-09-26
+
+- Rules: review run IDs and batch IDs are unique across the whole board, not per card. Agents prefer the generated run ID; a chosen ID starts with the task ID (or the task-group ID for a batch), such as `<task-id>-pmqa-1`, instead of short generic names that collide with earlier cards and fail with `run identity conflict`.
+
 ## v0.8.2 — 2026-09-25
 
 - TUI: the options panel and help accept the mouse. The status bar has clickable `o options | ? help` entries. In options, the wheel scrolls without changing values, clicking a menu item opens it, the selector arrows and Yes/No labels edit values, and clicking a text field gives it keyboard focus. Scope tabs and restore confirmations accept clicks.
