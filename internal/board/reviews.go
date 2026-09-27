@@ -226,6 +226,12 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 	if err != nil {
 		return run, false, err
 	}
+	if advance != nil && len(advance.ForeignCommits) == 0 {
+		// JSON omits an empty map, so keep the returned input equal to its durable identity.
+		normalized := *advance
+		normalized.ForeignCommits = nil
+		advance = &normalized
+	}
 	input.Advance = advance
 	input.InputHashes = map[string]string{}
 	for name, data := range originals {

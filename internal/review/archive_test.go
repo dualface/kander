@@ -235,6 +235,60 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 	}
 }
 
+func TestArchiveEmptyForeignCommitsLaunchesAndPublishes(t *testing.T) {
+	h, root, args := archiveHarness(t)
+	t.Setenv("FAKE_CODEX_REPORT", emptyStructuredReview)
+	if code, _, stderr := captureRun(t, args); code != 0 {
+		t.Fatalf("first review: code=%d stderr=%s", code, stderr)
+	}
+	if err := board.AssignReviewFindings(root, board.ReviewAssignment{
+		RunID: "stable", BatchID: "batch", Author: "coordinator",
+		Basis: "empty structured report", Items: map[string][]string{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	target := commitFile(t, h.repo, "fix.txt", "fix", "fix")
+	data, err := json.Marshal(map[string]any{
+		"previous_target": h.head,
+		"target":          target,
+		"reason":          "member fix",
+		"deliveries":      map[string]string{target: "20260907-archive-test-task"},
+		"foreign_commits": map[string]string{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceFile := filepath.Join(h.root, "advance.json")
+	if err := os.WriteFile(advanceFile, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(h.argvLog); err != nil {
+		t.Fatal(err)
+	}
+	nextArgs := []string{
+		"codex", "--task", "20260907-archive-test-task", "--batch-id", "batch",
+		"--run-id", "fixed", "--previous-run-id", "stable", "--advance-file", advanceFile,
+		h.repo, h.base, target, "PMQA", "原始目标", "fix context", h.head,
+	}
+	if code, _, stderr := captureRun(t, nextArgs); code != 0 {
+		t.Fatalf("incremental review: code=%d stderr=%s", code, stderr)
+	}
+	if _, err := os.Stat(h.argvLog); err != nil {
+		t.Fatalf("reviewer was not launched: %v", err)
+	}
+	run, err := board.ReadReviewRun(root, "fixed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Phase != "finalized" || run.LaunchStatus != "started" || run.ExecutionStatus != "ok" || run.Advance == nil || run.Advance.ForeignCommits != nil {
+		t.Fatalf("unexpected run state: %+v", run)
+	}
+	if err := board.ReviewPublicationComplete(root, run.RunID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestArchiveHistoricalProtocolReplayDoesNotUpgrade(t *testing.T) {
 	for _, schema := range []int{0, 1} {
 		t.Run(itoa(schema), func(t *testing.T) {

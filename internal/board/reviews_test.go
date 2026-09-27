@@ -279,6 +279,69 @@ func TestReviewBatchCASAndExplicitPredecessor(t *testing.T) {
 	}
 }
 
+func TestEmptyForeignCommitsRetryPublishesInterruptedRun(t *testing.T) {
+	root := tempBoard(t)
+	id := archiveCard(t, root, "empty-foreign-commits")
+	first := finalizedRun(t, root, archiveInput([]string{id}, "first", "PMQA"))
+	publishRun(t, root, first.RunID)
+
+	input := first.ReviewInput
+	input.RunID = "interrupted"
+	input.Commit = strings.Repeat("c", 40)
+	input.ReviewedCommit = first.Commit
+	input.PreviousRunID = first.RunID
+	advance := &ReviewAdvance{
+		PreviousTarget: first.Commit,
+		Target:         input.Commit,
+		Reason:         "member fix",
+		Deliveries:     map[string]string{input.Commit: id},
+	}
+	prepared, fresh, err := PrepareReviewRun(root, input, nil, advance, archiveOriginals(), "test")
+	if err != nil || !fresh {
+		t.Fatalf("prepare: fresh=%v err=%v", fresh, err)
+	}
+	advance.ForeignCommits = map[string]string{}
+	changed := *advance
+	changed.Reason = "different fix"
+	if _, _, err := PrepareReviewRun(root, input, nil, &changed, archiveOriginals(), "test"); err == nil || !strings.Contains(err.Error(), "input conflict") {
+		t.Fatalf("changed input accepted: %v", err)
+	}
+	retry, fresh, err := PrepareReviewRun(root, input, nil, advance, archiveOriginals(), "test")
+	if err != nil || fresh || !reflect.DeepEqual(prepared.ReviewInput, retry.ReviewInput) {
+		t.Fatalf("retry: fresh=%v err=%v", fresh, err)
+	}
+	retry.ExecutionStatus = "interrupted"
+	retry.ExitCode = 2
+	retry.FailureReason = "reviewer completion unconfirmed"
+	retry, err = FinalizeReviewRun(root, retry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishRun(t, root, retry.RunID)
+	if err := ReviewPublicationComplete(root, retry.RunID); err != nil {
+		t.Fatal(err)
+	}
+	if problems, err := CheckReviewEvidence(root, []string{id}); err != nil || len(problems) != 0 {
+		t.Fatalf("recovered run invalid: problems=%v err=%v", problems, err)
+	}
+
+	input.RunID = "new-review"
+	next, fresh, err := PrepareReviewRun(root, input, nil, nil, archiveOriginals(), "test")
+	if err != nil || !fresh {
+		t.Fatalf("next run: fresh=%v err=%v", fresh, err)
+	}
+	next.LaunchStatus = "started"
+	next.ExecutionStatus = "ok"
+	next, err = FinalizeReviewRun(root, next, []byte("PASS\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishRun(t, root, next.RunID)
+	if err := ReviewPublicationComplete(root, next.RunID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReviewAdvanceAttributionValidation(t *testing.T) {
 	taskID := "20260907-archive-test-task"
 	delivery := strings.Repeat("a", 40)
