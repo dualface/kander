@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.8.4 — 2026-09-28
+
+- Fix: retrying an interrupted review run whose advance records no `foreign_commits` no longer fails with `input conflict`. An empty `foreign_commits` map is normalized to its durable (omitted) form before the run identity is compared, so the identical retry is accepted and can finish publication.
+
 ## v0.8.3 — 2026-09-26
 
 - Rules: review run IDs and batch IDs are unique across the whole board, not per card. Agents prefer the generated run ID; a chosen ID starts with the task ID (or the task-group ID for a batch), such as `<task-id>-pmqa-1`, instead of short generic names that collide with earlier cards and fail with `run identity conflict`.
