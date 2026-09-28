@@ -137,6 +137,25 @@ func TestDispatchReceiptBeforeNotifyReturnAndRetry(t *testing.T) {
 	}
 }
 
+func TestDispatchDeliversToWorkingAgent(t *testing.T) {
+	root, task, d := durableNotifyFixture(t, 5*time.Second)
+	t.Setenv("KANBAN_HERDR_STATUS", "working")
+	result := make(chan error, 1)
+	go func() { result <- acceptDelivered(root, task, d, true) }()
+	out, _, err := capture(t, func() error {
+		return commandNotify(root, task, d.Input.Message, "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := <-result; e != nil {
+		t.Fatal(e)
+	}
+	if !strings.Contains(out, `"accepted":`) {
+		t.Fatalf("missing receipt: %s", out)
+	}
+}
+
 func TestDispatchUnknownProbeAndBusyDoNotRecover(t *testing.T) {
 	for _, mode := range []string{"unknown", "busy"} {
 		t.Run(mode, func(t *testing.T) {
@@ -144,7 +163,7 @@ func TestDispatchUnknownProbeAndBusyDoNotRecover(t *testing.T) {
 			if mode == "unknown" {
 				t.Setenv("KANBAN_HERDR_GET_FAIL", "1")
 			} else {
-				t.Setenv("KANBAN_HERDR_STATUS", "working")
+				t.Setenv("KANBAN_HERDR_STATUS", "blocked")
 			}
 			_, _, err := capture(t, func() error { return deliverDispatch(root, task, d.Input.ID, "") })
 			if err == nil {

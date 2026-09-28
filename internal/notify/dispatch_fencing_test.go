@@ -19,7 +19,7 @@ log="$KANBAN_HERDR_LOG"
 if [ "$1" = pane ] && [ "$2" = get ]; then
   status=idle
   if [ ! -f "$log.paused" ]; then
-    status=working
+    status=blocked
     touch "$log.paused"
     while [ ! -f "$log.release" ]; do sleep 0.01; done
   fi

@@ -80,7 +80,8 @@ func matchSession(session liveness.TaskSession, pane terminal.PaneFacts) (termin
 }
 
 // AgentNotifyProbe classifies an agent-aware target: stale / busy / ready. A
-// mismatched identity is stale; only a busy status is retried.
+// mismatched identity is stale; only a status refused by acceptsDelivery is
+// busy and retried.
 func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session liveness.TaskSession, timeout time.Duration) TargetProbe {
 	pane, err := paneFactsWithin(backend, program, paneID, timeout)
 	if err != nil {
@@ -110,12 +111,19 @@ func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session 
 			"notify.session_uncertain_task_pane", detail,
 		)}
 	}
-	if pane.AgentStatus != "idle" && pane.AgentStatus != "done" {
+	if !acceptsDelivery(pane.AgentStatus) {
 		return TargetProbe{State: "busy", Detail: t(
 			"notify.pane_status_does_not_accept_delivery", paneID, orNA(pane.AgentStatus),
 		)}
 	}
 	return TargetProbe{State: "ready"}
+}
+
+// acceptsDelivery reports whether an agent status takes a direct delivery. A
+// working agent queues the prompt and handles it later; blocked (possibly a
+// permission or confirmation dialog) and unknown states are still refused.
+func acceptsDelivery(status string) bool {
+	return status == "idle" || status == "done" || status == "working"
 }
 
 // ExplicitPaneTarget resolves the container of a --pane override, without

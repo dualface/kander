@@ -111,7 +111,7 @@ if [ "$1" = "pane" ] && [ "$2" = "get" ]; then
   fi
   if [ "${KANBAN_HERDR_BUSY_ONCE:-}" = "1" ] && [ ! -f "$log.busy" ]; then
     printf '%s\n' busy > "$log.busy"
-    status=working
+    status=blocked
   else
     status="${KANBAN_HERDR_STATUS:-idle}"
   fi
@@ -429,7 +429,7 @@ func TestNotifyAmbiguousLookupDegradesToResumeReason(t *testing.T) {
 
 func TestNotifyBusyTimeoutDoesNotResumeOrWrite(t *testing.T) {
 	root, _ := setupBoard(t)
-	t.Setenv("KANBAN_HERDR_STATUS", "working")
+	t.Setenv("KANBAN_HERDR_STATUS", "blocked")
 	taskID, path := makeReview(t, root, "notify-busy-timeout")
 	before, _ := os.ReadFile(path)
 	oldNow, oldSleep := nowFn, sleepFn
@@ -449,6 +449,27 @@ func TestNotifyBusyTimeoutDoesNotResumeOrWrite(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(root, "working", filepath.Base(path))); !os.IsNotExist(statErr) {
 		t.Fatal("moved to working")
+	}
+}
+
+func TestNotifyWorkingAgentDeliversWithoutWaiting(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_HERDR_STATUS", "working")
+	taskID, _ := makeReview(t, root, "notify-working")
+	oldSleep := sleepFn
+	t.Cleanup(func() { sleepFn = oldSleep })
+	sleepFn = func(time.Duration) { t.Fatal("working target was polled as busy") }
+	out, _, err := capture(t, func() error {
+		return commandNotify(root, taskID, "x", "", "", true, 61)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "通道=herdr-direct") {
+		t.Fatalf("out=%s", out)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "herdr.log.prompt")); statErr != nil {
+		t.Fatal("prompt not sent")
 	}
 }
 

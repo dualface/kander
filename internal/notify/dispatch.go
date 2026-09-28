@@ -264,7 +264,7 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, "tab")
 		}
 		window := terminal.FormatAddress(backend, terminal.Address{Container: found.Container, Pane: pane})
-		return DirectTarget{Backend: backend, Program: program, PaneID: pane, Window: window}, found.AgentStatus != "idle" && found.AgentStatus != "done", nil
+		return DirectTarget{Backend: backend, Program: program, PaneID: pane, Window: window}, !acceptsDelivery(found.AgentStatus), nil
 	}
 	expected, err := agentCommandName(session.Agent)
 	if err != nil {

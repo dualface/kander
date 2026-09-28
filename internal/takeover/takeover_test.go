@@ -316,6 +316,29 @@ func TestDismissUncertainHerdrRefuses(t *testing.T) {
 	}
 }
 
+// A working agent accepts notify delivery, but dismiss still refuses it: the
+// exit command is never sent to an agent in the middle of a turn.
+func TestDismissWorkingHerdrRefuses(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_HERDR_STATUS", "working")
+	taskID, path := makeDone(t, root, "dismiss-working-herdr", "herdr:w1:t9:w1:p9")
+	before, _ := os.ReadFile(path)
+	_, _, err := capture(t, func() error { return commandDismiss(root, taskID, 61) })
+	if err == nil {
+		t.Fatal("working agent must refuse dismiss")
+	}
+	after, _ := os.ReadFile(path)
+	if string(before) != string(after) {
+		t.Fatal("card mutated")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "herdr.log.prompt")); !os.IsNotExist(statErr) {
+		t.Fatal("exit command must not be delivered to a working agent")
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "herdr.log.close")); !os.IsNotExist(statErr) {
+		t.Fatal("container must not be closed while the agent is working")
+	}
+}
+
 func TestDismissStaleTmuxRevalidatesContainer(t *testing.T) {
 	root, _ := setupBoard(t)
 	t.Setenv("KANBAN_TMUX_STALE_PANE", "%9")
