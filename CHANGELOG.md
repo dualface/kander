@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.8.5 — 2026-09-28
+
+- Notify: a herdr agent in the `working` state now receives `kander notify` and durable dispatch messages directly and handles them after its current turn, instead of being polled as busy until the timeout with nothing delivered. `blocked` and other states stay busy, since the pane may show a dialog that typed text would answer; tmux copy-mode stays busy, and `dismiss` still refuses a working agent. A durable dispatch the agent accepts only after its deadline is still rejected and follows the existing expiry handling.
+
 ## v0.8.4 — 2026-09-28
 
 - Fix: retrying an interrupted review run whose advance records no `foreign_commits` no longer fails with `input conflict`. An empty `foreign_commits` map is normalized to its durable (omitted) form before the run identity is compared, so the identical retry is accepted and can finish publication.
