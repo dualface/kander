@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.6 — 2026-09-29
+
+- Fix (Windows): the private review runtime is usable by grok and codex. The runtime lease no longer holds DELETE access, so a reviewer can enter the runtime as its working directory; embedded agent definitions may declare `review_windows_read_groups` (Codex declares its sandbox group), and reviewers with read groups always get the spec snapshotted into the runtime. The claude review no longer injects `CLAUDE_CONFIG_DIR`.
+- Fix (Windows): review evidence compares working directories as one directory, ignoring separator style and case, so a plan written with the `C:/...` spelling from Git no longer fails with `run/plan worktree mismatch`.
+- Fix (Windows): herdr session reporting and pane focusing dial the herdr named pipe instead of a unix socket, so starts report the session identity and notify, dismiss, and focus work again.
+- Fix (Windows): agent-facing paths in task files, rules, and notify messages use forward slashes, so claude and grok running commands through Git Bash no longer mangle the project-install `kander` path or the task file cleanup.
+- Review: a later run of an existing batch whose member specs drifted only in task context now fails with a dedicated error naming the frozen `reviews/<run-id>/task-context.md` snapshot to pass, or asking for a new batch, instead of the generic `batch binding conflict`. The review rules describe the frozen snapshot; run `kander doctor` after upgrading to update the rules.
+
 ## v0.8.5 — 2026-09-28
 
 - Notify: a herdr agent in the `working` state now receives `kander notify` and durable dispatch messages directly and handles them after its current turn, instead of being polled as busy until the timeout with nothing delivered. `blocked` and other states stay busy, since the pane may show a dialog that typed text would answer; tmux copy-mode stays busy, and `dismiss` still refuses a working agent. A durable dispatch the agent accepts only after its deadline is still rejected and follows the existing expiry handling.
