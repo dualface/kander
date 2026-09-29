@@ -96,11 +96,13 @@ func TestReviewTaskContextDriftWithoutSnapshot(t *testing.T) {
 func TestReviewOtherBindingConflictsUnchanged(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "drift-other")
+	other := archiveCard(t, root, "drift-member")
 	first := finalizedRun(t, root, archiveInput([]string{id}, "other-first", "PMQA"))
 	publishRun(t, root, first.RunID)
 	changed := map[string]string{"PMQA": "required", "Security": "required"}
 	for name, mutate := range map[string]func(*ReviewInput, *map[string]string){
 		"base":         func(in *ReviewInput, _ *map[string]string) { in.Base = strings.Repeat("c", 40) },
+		"members":      func(in *ReviewInput, _ *map[string]string) { in.TaskIDs = []string{id, other} },
 		"requirements": func(_ *ReviewInput, req *map[string]string) { *req = changed },
 	} {
 		for _, originals := range []map[string][]byte{archiveOriginals(), driftOriginals()} {
@@ -112,5 +114,25 @@ func TestReviewOtherBindingConflictsUnchanged(t *testing.T) {
 				t.Fatalf("%s mismatch: %v", name, err)
 			}
 		}
+	}
+}
+
+// A member whose language no longer matches the frozen report language is rejected by the card check
+// before the binding check, so a drifted task context never turns it into the snapshot error.
+func TestReviewLanguageMismatchPrecedesTaskContextDrift(t *testing.T) {
+	root := tempBoard(t)
+	id := archiveCard(t, root, "drift-language")
+	first := finalizedRun(t, root, archiveInput([]string{id}, "language-first", "PMQA"))
+	publishRun(t, root, first.RunID)
+	s := transactionSnapshot(t, root, id)
+	err := WithTransaction(root, LockScope{Tasks: []string{id}}, func(tx *Transaction) error {
+		return tx.Put(id, "spec.md", strings.Replace(s.Text, "- LANGUAGE: zh-CN", "- LANGUAGE: ja", 1))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = PrepareReviewRun(root, archiveInput([]string{id}, "language-next", "PMQA"), nil, nil, driftOriginals(), "test")
+	if err == nil || !strings.Contains(err.Error(), id+": report_language") {
+		t.Fatalf("language mismatch: %v", err)
 	}
 }
