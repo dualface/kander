@@ -96,16 +96,24 @@ func TestNamedPipeDeadlineStopsSilentServer(t *testing.T) {
 	server := newPipeServer(t)
 	release := make(chan struct{})
 	defer close(release)
-	server.serve(func(map[string]any) string { return "" }, release)
+	requests := server.serve(func(map[string]any) string { return "" }, release)
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	started := time.Now()
 	err := focusPane(ctx, server.socket, "w1:p3")
+	elapsed := time.Since(started)
 	if err == nil {
 		t.Fatal("silent server answered")
 	}
-	if elapsed := time.Since(started); elapsed > 3*time.Second {
-		t.Fatalf("deadline ignored: %v after %v", err, elapsed)
+	// The request reached the server, so the error comes from the read deadline, not from the dial.
+	if request := <-requests; request["method"] != "pane.focus" {
+		t.Fatalf("request=%v", request)
+	}
+	if !errors.Is(err, os.ErrDeadlineExceeded) && !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("error is not a deadline or cancellation: %v", err)
+	}
+	if elapsed < 250*time.Millisecond || elapsed > 3*time.Second {
+		t.Fatalf("deadline not honored: %v after %v", err, elapsed)
 	}
 }
 

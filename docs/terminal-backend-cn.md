@@ -35,7 +35,7 @@ Kander 严格且仅通过 `internal/terminal` 包访问终端会话（如 `herdr
 |---|---|
 | `internal/terminal` | 定义 `Backend` 接口、`Address`、`Target`、`PaneFacts`、`Topology` 及 `DeclarativeBackend` 引擎。 |
 | `internal/terminal/builtin` | 注册内置声明式定义（`definitions/herdr.json`、`tmux.json`）与核心 Go 钩子。 |
-| `internal/terminal/herdr` | 承载 herdr 套接字会话握手与面板聚焦专用钩子。 |
+| `internal/terminal/herdr` | 承载 herdr 套接字会话握手与面板聚焦专用钩子。两者按 `HERDR_SOCKET_PATH` 拨同一个控制通道：POSIX 为 unix socket，Windows 为命名管道 `\\.\pipe\` 加该路径。 |
 | `internal/terminal/direct` | 承载无容器后端（`foreground`、`console`）。所有容器分配方法均返回 `terminal.ErrUnsupported`。 |
 | `internal/terminal/terminaltest`| 将测试二进制作为 Fake 终端的测试夹具。 |
 

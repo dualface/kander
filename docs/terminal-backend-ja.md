@@ -35,7 +35,7 @@ Kander は、`internal/terminal` パッケージを通じてのみ端末セッ�
 |---|---|
 | `internal/terminal` | `Backend` インターフェース、`Address`, `Target`, `PaneFacts`, `Topology`, `DeclarativeBackend` の定義。 |
 | `internal/terminal/builtin` | 組み込みの宣言的定義（`herdr.json`, `tmux.json`）と Go フックの登録。 |
-| `internal/terminal/herdr` | herdr ソケット通信とペインフォーカス用のフック実装。 |
+| `internal/terminal/herdr` | herdr ソケット通信とペインフォーカス用のフック実装。どちらも `HERDR_SOCKET_PATH` から同じ制御チャネルに接続します。POSIX では unix socket、Windows では名前付きパイプ `\\.\pipe\` にそのパスを付けたものです。 |
 | `internal/terminal/direct` | コンテナを持たないバックエンド（`foreground`, `console`）。コンテナ系メソッドは `terminal.ErrUnsupported` を返却。 |
 | `internal/terminal/terminaltest`| テスト用モックターミナル。 |
 
