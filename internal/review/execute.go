@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"syscall"
 	"time"
 
@@ -39,6 +40,15 @@ func executeReview(ctx reviewContext, abort <-chan os.Signal) int {
 		return ctx.archive.finish(code)
 	}
 	return code
+}
+
+// reviewReadGroups returns the local groups the embedded definition of agent grants read access to the review
+// runtime. They apply only on Windows; other platforms get nil.
+func reviewReadGroups(agent string) []string {
+	if goruntime.GOOS != "windows" {
+		return nil
+	}
+	return config.ReviewWindowsReadGroups(agent)
 }
 
 func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os.Signal) (exitCode int) {
@@ -114,8 +124,11 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		}
 	}()
 
+	readGroups := reviewReadGroups(ctx.agent)
 	taskContext := ctx.taskContext
-	if (ctx.archive != nil || ctx.settings.snapshotSpec) && ctx.taskSpec != "" {
+	// A reviewer whose sandbox accounts get read access to the runtime cannot read a spec outside it, so the spec
+	// is snapshotted into the runtime for it as well.
+	if (ctx.archive != nil || ctx.settings.snapshotSpec || len(readGroups) > 0) && ctx.taskSpec != "" {
 		snapshot := filepath.Join(runtime, "task-spec.md")
 		var snapshotErr error
 		if ctx.archive != nil {
@@ -192,7 +205,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 	}
 	// Every reviewer input is in place: on Windows the embedded definition may name local groups, such as the
 	// codex sandbox accounts, that need read-only access to them. Other platforms and agents change nothing.
-	if err := runtimeDir.GrantLocalGroupRead(config.ReviewWindowsReadGroups(ctx.agent)); err != nil {
+	if err := runtimeDir.GrantLocalGroupRead(readGroups); err != nil {
 		fail(err)
 		return exitCode
 	}

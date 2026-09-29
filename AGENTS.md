@@ -126,7 +126,7 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 
 - Reject symlinks, junctions, and other reparse points component by component from the volume/UNC anchor.
 - Config reads/writes neither check nor automatically tighten permissions: POSIX saves keep the existing file mode and new files and directories follow the umask; on Windows new files and directories inherit the parent directory's ACL.
-- Other private objects managed by `internal/fs` get a protected DACL exclusive to the current user at the moment of creation; never publish with an inherited ACL first and tighten later.
+- Other private objects managed by `internal/fs` get a protected DACL exclusive to the current user at the moment of creation; never publish with an inherited ACL first and tighten later. The one later addition is the read-only entry the review runtime grants to local groups an embedded reviewer definition declares in `review_windows_read_groups` (Codex's sandbox group); see [Review runtime isolation](docs/review-runtime-isolation.md#runtime-directory-contract).
 - Blocking exclusive locks use `LockFileEx`; the POSIX counterpart is `flock`.
 - Atomic replacement in `internal/fs` is relative to a pinned parent handle; any secure-backend failure errors out explicitly and never silently falls back to plain path APIs.
 

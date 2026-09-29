@@ -4,6 +4,7 @@ package review
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,6 +46,22 @@ func runWindowsFakeReviewer() int {
 	}
 	if path := os.Getenv("FAKE_REVIEW_CURSOR_DATA"); path != "" {
 		_ = os.WriteFile(path, []byte(os.Getenv("CURSOR_DATA_DIR")+"\n"), 0o644)
+	}
+	if path := os.Getenv("FAKE_REVIEW_PROMPT_LOG"); path != "" {
+		instruction, _ := io.ReadAll(os.Stdin)
+		prompt := string(instruction)
+		if _, after, ok := strings.Cut(prompt, "task file at "); ok {
+			prompt, _, _ = strings.Cut(after, "; read the complete file first")
+		}
+		body, _ := os.ReadFile(strings.TrimSpace(prompt))
+		_ = os.WriteFile(path, body, 0o644)
+		for _, line := range strings.Split(string(body), "\n") {
+			if spec, ok := strings.CutPrefix(line, "Authoritative spec file: "); ok {
+				spec = strings.TrimSuffix(strings.TrimSpace(spec), ". Read it completely before reviewing.")
+				data, _ := os.ReadFile(spec)
+				_ = os.WriteFile(path+".spec", data, 0o644)
+			}
+		}
 	}
 	if os.Getenv("FAKE_REVIEW_SLEEP") != "" {
 		time.Sleep(30 * time.Second)
@@ -194,6 +211,37 @@ func TestWindowsCodexIsolationAndRuntimeLease(t *testing.T) {
 	assertArg(t, argv, "--sandbox", "read-only")
 	if !contains(argv, "--ephemeral") {
 		t.Fatalf("argv=%v", argv)
+	}
+	leftoverRuntimes(t, h.tmp, "codex-review.")
+}
+
+// Codex declares Windows read groups, so an unbound review snapshots an out-of-runtime spec into the runtime,
+// where the sandbox group is granted read access, instead of pointing the reviewer at the original path.
+func TestWindowsCodexSnapshotsSpecIntoRuntime(t *testing.T) {
+	h := newWindowsHarness(t, "codex")
+	promptLog := filepath.Join(h.root, "prompt.log")
+	t.Setenv("FAKE_REVIEW_PROMPT_LOG", promptLog)
+	specDir := filepath.Join(h.root, "private")
+	if err := os.Mkdir(specDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	spec := filepath.Join(specDir, "spec.md")
+	if err := os.WriteFile(spec, []byte("# Spec\n\nSPEC BODY\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errOut := h.review("codex", "PMQA", spec)
+	if code != 0 {
+		t.Fatalf("code=%d err=%s", code, errOut)
+	}
+	prompt := readFile(t, promptLog)
+	if strings.Contains(prompt, "Authoritative spec file: "+spec) {
+		t.Fatalf("prompt points at the original spec: %s", prompt)
+	}
+	if !strings.Contains(prompt, "codex-review.") || !strings.Contains(prompt, `\task-spec.md. Read it completely`) {
+		t.Fatalf("prompt must point at the runtime snapshot: %s", prompt)
+	}
+	if got := readFile(t, promptLog+".spec"); !strings.Contains(got, "SPEC BODY") {
+		t.Fatalf("snapshot content = %q", got)
 	}
 	leftoverRuntimes(t, h.tmp, "codex-review.")
 }
