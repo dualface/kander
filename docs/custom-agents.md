@@ -199,7 +199,7 @@ The embedded definitions also carry fields a user `agents.<name>` overlay cannot
 "review_windows_read_groups": ["CodexSandboxUsers"]
 ```
 
-Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensitively. At review time a name must resolve to a local group of this machine's account domain; builtin and well-known groups fail the review and an unresolved name is skipped. Only the embedded `codex.json` declares it; POSIX ignores it. See [Review runtime isolation](review-runtime-isolation.md#runtime-directory-contract).
+Each entry is a plain group name without `\`, `/`, or `@`, unique case-insensitively. At review time a name must resolve to a local group of this machine's account domain; builtin and well-known groups fail the review and an unresolved name is skipped. On Windows such a reviewer also gets the task spec snapshotted into the runtime regardless of `review.snapshot_spec`. Only the embedded `codex.json` declares it; POSIX ignores it. See [Review runtime isolation](review-runtime-isolation.md#runtime-directory-contract).
 
 ## Hook Catalog
 
