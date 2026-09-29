@@ -70,6 +70,9 @@
     "project": "AGENTS.md"
   },
   "rules_integration": "markdown-reference",
+  "review_windows_read_groups": [
+    "CodexSandboxUsers"
+  ],
   "large_model": "gpt-5.6-sol",
   "small_model": "gpt-5.6-sol",
   "large_effort": "high",

@@ -395,8 +395,8 @@ func openChain(root, path string, finalAccess uint32, finalExpected objectKind) 
 		expected := kindDirectory
 		if final {
 			expected = finalExpected
-			// The directory leaf is opened with shared delete: the lease handle of a private temporary directory holds DELETE the whole time,
-			// so reopening that directory without FILE_SHARE_DELETE in the share mode would hit a sharing violation.
+			// The directory leaf is opened with shared delete so that it never conflicts with another handle holding DELETE on
+			// the same directory, such as the removal handle of a private temporary directory.
 			// File leaves keep the narrow sharing, governed by the caller's own DELETE access.
 			leaf, err := tryOpenLeaf(handles[len(handles)-1], part, current, finalAccess, expected, true, expected == kindDirectory)
 			if err != nil {
@@ -410,7 +410,7 @@ func openChain(root, path string, finalAccess uint32, finalExpected objectKind) 
 			handles = append(handles, leaf)
 			continue
 		}
-		// Same as above: any component of the chain may be a private temporary directory holding DELETE.
+		// Same as above: any component of the chain may be held open by another handle with DELETE access.
 		next, err := openRelative(handles[len(handles)-1], part, current, windows.FILE_READ_ATTRIBUTES, false, kindDirectory, true, true, kindAny)
 		if err != nil {
 			cleanup()

@@ -82,6 +82,8 @@ type embeddedAgent struct {
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
 	RulesIntegration string                 `json:"rules_integration"`
 	RulesExtension   *agentRulesExtension   `json:"rules_extension"`
+	// ReviewReadGroups names local groups granted read-only access to the review runtime on Windows.
+	ReviewReadGroups []string `json:"review_windows_read_groups"`
 	extensionData    []byte
 	LargeModel       string `json:"large_model"`
 	SmallModel       string `json:"small_model"`
@@ -233,6 +235,14 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 			return embeddedAgent{}, embedAgentError(fileName, "rules_extension.project")
 		}
 	}
+	seenGroups := map[string]bool{}
+	for _, group := range agent.ReviewReadGroups {
+		key := strings.ToLower(group)
+		if !validAgentText(group) || strings.ContainsAny(group, `\/@`) || seenGroups[key] {
+			return embeddedAgent{}, embedAgentError(fileName, "review_windows_read_groups")
+		}
+		seenGroups[key] = true
+	}
 	if strings.ContainsAny(agent.LargeModel+agent.SmallModel+agent.LargeEffort+agent.SmallEffort+agent.Model+agent.Effort, "\n\r\x00") {
 		return embeddedAgent{}, embedAgentError(fileName, "model")
 	}
@@ -344,6 +354,18 @@ func AgentExtension(name string) (AgentExtensionSpec, []byte, bool) {
 		Global:  emb.RulesExtension.Global,
 		Project: emb.RulesExtension.Project,
 	}, emb.extensionData, true
+}
+
+// ReviewWindowsReadGroups returns the local groups that get read-only access to the
+// review runtime of the named agent on Windows. Only embedded definitions declare it;
+// a user or project agents.<name> overlay cannot add, change, or remove it, so an
+// untrusted project configuration cannot widen access to review inputs.
+func ReviewWindowsReadGroups(name string) []string {
+	emb, ok := embeddedByName(name)
+	if !ok {
+		return nil
+	}
+	return slices.Clone(emb.ReviewReadGroups)
 }
 
 func (e embeddedAgent) kanbanFields() map[string]string {

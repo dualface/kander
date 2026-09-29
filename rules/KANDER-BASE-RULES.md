@@ -27,5 +27,5 @@ This file constrains the tool and the language used with the user. It does not p
 
 ## Permissions and Boundaries
 
-- Review-private directories and files are accessible only to the current user; the configuration, the kanban board, Git exclude, and the review runtime all reject symlinks, junctions, and other reparse points, and a failed safety check stops the operation.
+- Review-private directories and files are accessible only to the current user, except that on Windows the review runtime also grants read-only access to a local sandbox group a built-in reviewer definition names (Codex); the configuration, the kanban board, Git exclude, and the review runtime all reject symlinks, junctions, and other reparse points, and a failed safety check stops the operation.
 - Bypassing the command to operate on these boundaries directly is forbidden.

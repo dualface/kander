@@ -146,8 +146,21 @@ func (d *TempDir) Close() error {
 	return err
 }
 
+// GrantLocalGroupRead adds a read-only access entry for each named local group to the directory and to every
+// entry currently inside it; directories also pass the entry on to objects created in them later. Only Windows
+// changes anything: a name must resolve to a local group of this machine's account domain, builtin and
+// well-known groups are rejected, and a name that does not resolve is skipped. The current user's full control
+// and the protected DACL stay unchanged. Other platforms return nil.
+func (d *TempDir) GrantLocalGroupRead(groups []string) error {
+	if d == nil || d.impl == nil || len(groups) == 0 {
+		return nil
+	}
+	return d.impl.grantLocalGroupRead(groups)
+}
+
 type tempDirImpl interface {
 	close() error
+	grantLocalGroupRead(groups []string) error
 }
 
 type objectKind int

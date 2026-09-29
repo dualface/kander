@@ -35,7 +35,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 		"claude": {
 			cwd: "runtime", output: "output.json", homeEnv: "CLAUDE_CONFIG_DIR", snapshot: true,
 			inspection: "Use only read-only inspection: read, search, and shell commands that do not write. Never create, modify, or delete any file; the review gate fails if HEAD moves or the worktree is dirty.",
-			env:        []string{"CLAUDE_CONFIG_DIR"},
+			// No env: the reviewer inherits the caller's CLAUDE_CONFIG_DIR, if any, so Claude keeps its default config files.
 		},
 		"cursor": {
 			cwd: "runtime", output: "output.json", homeEnv: "CURSOR_CONFIG_DIR", helpers: true, snapshot: true,
@@ -95,6 +95,14 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 			}
 			if inv.Env["GIT_OPTIONAL_LOCKS"] != "0" {
 				t.Fatal("GIT_OPTIONAL_LOCKS")
+			}
+			if agent == "claude" {
+				if _, ok := settings.env["CLAUDE_CONFIG_DIR"]; ok {
+					t.Fatalf("claude review must not inject CLAUDE_CONFIG_DIR: %v", settings.env)
+				}
+				if inv.Env["CLAUDE_CONFIG_DIR"] != "" {
+					t.Fatalf("claude review env CLAUDE_CONFIG_DIR = %q, want inherited empty value", inv.Env["CLAUDE_CONFIG_DIR"])
+				}
 			}
 			if agent == "cursor" {
 				if inv.Env["CURSOR_CONFIG_DIR"] != "/rt" || inv.Env["CURSOR_DATA_DIR"] != "/rt" {

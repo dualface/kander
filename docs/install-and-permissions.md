@@ -30,8 +30,8 @@ After a successful update, Kander waits for a key, restores the terminal, then s
 
 ## Review-Private Files
 
-- Review-private directories and files are accessible only to the current user: POSIX `0600`/`0700`. Windows applies a protected DACL with inheritance disabled at creation time; publishing first and tightening later is forbidden.
-- The Windows review root handle does not share WRITE/DELETE and is held until sensitive files are written, the reviewer has run, the process tree is collected, and cleanup finishes, which blocks renames and in-place reparse switches. Cleanup rejects reparse points level by level from the pinned handle, with a bounded budget; failure means the review fails. See [Review runtime isolation](review-runtime-isolation.md).
+- Review-private directories and files are accessible only to the current user: POSIX `0600`/`0700`. Windows applies a protected DACL with inheritance disabled at creation time; publishing first and tightening later is forbidden. The one exception is a read-only entry on the review runtime for local sandbox groups that an embedded reviewer definition names (Codex: `CodexSandboxUsers`); see [Review runtime isolation](review-runtime-isolation.md#runtime-directory-contract).
+- The Windows review root handle does not share DELETE and is held until sensitive files are written, the reviewer has run, the process tree is collected, and the contents are removed, which blocks renames and in-place reparse switches. It holds no DELETE access itself, so other processes may enter the runtime as their working directory; the empty directory is removed through a reopened handle whose identity must match the lease. Cleanup rejects reparse points level by level from the pinned handle, with a bounded budget; failure means the review fails. See [Review runtime isolation](review-runtime-isolation.md).
 
 ## Configuration, Board, and Git Exclude
 

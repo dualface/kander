@@ -214,3 +214,6 @@ func CreatePrivateTempDir(parent, prefix string) (*TempDir, error) {
 	dir.fd = -1
 	return &TempDir{Path: candidate, impl: impl}, nil
 }
+
+// grantLocalGroupRead is a no-op: the local group exception exists only on Windows.
+func (d *posixTempDir) grantLocalGroupRead([]string) error { return nil }

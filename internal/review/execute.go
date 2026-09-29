@@ -24,7 +24,7 @@ func executeReview(ctx reviewContext, abort <-chan os.Signal) int {
 		}
 		return 1
 	}
-	code := executeInRuntime(ctx, runtimeDir.Path, abort)
+	code := executeInRuntime(ctx, runtimeDir, abort)
 	if cleanup := runtimeDir.Close(); cleanup != nil {
 		userError(config.Text(
 			"review.could_not_safely_clean_the_private_review_runtime", cleanup.Error(),
@@ -41,7 +41,8 @@ func executeReview(ctx reviewContext, abort <-chan os.Signal) int {
 	return code
 }
 
-func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal) (exitCode int) {
+func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os.Signal) (exitCode int) {
+	runtime := runtimeDir.Path
 	outputRoot := runtime
 	outputName := ctx.settings.outputName
 	if ctx.archive != nil {
@@ -188,6 +189,12 @@ func executeInRuntime(ctx reviewContext, runtime string, abort <-chan os.Signal)
 			return exitCode
 		}
 		ctx.promptFilePaths[file.Name] = abs
+	}
+	// Every reviewer input is in place: on Windows the embedded definition may name local groups, such as the
+	// codex sandbox accounts, that need read-only access to them. Other platforms and agents change nothing.
+	if err := runtimeDir.GrantLocalGroupRead(config.ReviewWindowsReadGroups(ctx.agent)); err != nil {
+		fail(err)
+		return exitCode
 	}
 	for _, path := range []string{outputFile, stdoutFile, errorFile} {
 		if ctx.archive != nil {

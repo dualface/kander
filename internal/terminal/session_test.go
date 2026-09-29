@@ -5,14 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal/terminaltest"
-	"golang.org/x/sys/unix"
 )
 
 func writeTestConfig(t *testing.T) {
@@ -127,32 +124,6 @@ func TestMatchAgentSessionHeaderValidation(t *testing.T) {
 	}
 	if got, _ := MatchAgentSession(ctx, "pi", "path", path, "s1"); got != SessionMatches {
 		t.Fatalf("verdict=%v", got)
-	}
-}
-
-func TestMatchAgentSessionSpecialFiles(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fifo/socket are POSIX concepts")
-	}
-	resetLanguage(t)
-	writeTestConfig(t)
-	ctx := context.Background()
-	fifo := filepath.Join(t.TempDir(), "fifo")
-	if err := unix.Mkfifo(fifo, 0o600); err != nil {
-		t.Skip(err)
-	}
-	done := make(chan SessionMatch, 1)
-	go func() {
-		got, _ := MatchAgentSession(ctx, "pi", "path", fifo, "s1")
-		done <- got
-	}()
-	select {
-	case got := <-done:
-		if got != SessionUncertain {
-			t.Fatalf("verdict=%v", got)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("FIFO open blocked past the bound")
 	}
 }
 

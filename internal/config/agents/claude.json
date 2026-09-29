@@ -47,9 +47,6 @@
     "mode": "argv"
   },
   "review": {
-    "env": {
-      "CLAUDE_CONFIG_DIR": "{home}"
-    },
     "cwd": "runtime",
     "home_env": "CLAUDE_CONFIG_DIR",
     "home_policy": "required",
