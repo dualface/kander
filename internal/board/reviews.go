@@ -332,8 +332,11 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if batch.TaskContextHash == "" {
 				batch.TaskContextHash = input.InputHashes["task-context.md"]
 			}
-			if batch.Schema != 1 || batch.TaskContextHash != input.InputHashes["task-context.md"] || batch.Base != input.Base || !reflect.DeepEqual(batch.TaskIDs, input.TaskIDs) || batch.ReportLanguage != language || len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
+			if batch.Schema != 1 || batch.Base != input.Base || !reflect.DeepEqual(batch.TaskIDs, input.TaskIDs) || batch.ReportLanguage != language || len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
 				return reviewError("batch binding conflict")
+			}
+			if batch.TaskContextHash != input.InputHashes["task-context.md"] {
+				return frozenTaskContextError(tx, batch, input.PreviousRunID)
 			}
 			if batch.PlanID != "" {
 				if p, e := batchPlan(tx, batch); e != nil {

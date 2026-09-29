@@ -1,0 +1,4 @@
+{
+  "board.review_task_context_frozen": "the task context differs from the one batch {{.V0}} froze (publishing a run appends the review index to the live spec.md). Rerun with the frozen snapshot {{.V1}} as the task context and put only execution and fix evidence in the supplemental review context; a change to GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, THREAT_MODEL, or OUT_OF_SCOPE needs a new batch",
+  "board.review_task_context_frozen_no_snapshot": "the task context differs from the one batch {{.V0}} froze, and the batch has no published snapshot of it; start a new batch"
+}

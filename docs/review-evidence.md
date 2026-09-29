@@ -27,7 +27,7 @@ The requirements file for a new batch must list exactly `PMQA` and `Security`. E
 }
 ```
 
-The caller resolves role requirements according to the user, project rules, and configuration; this file does not mean the tool can prove user authorization. Membership, base, requirements, the task-context hash, and language are fixed. Later invocations may omit requirements; when provided, it must match the existing requirements.
+The caller resolves role requirements according to the user, project rules, and configuration; this file does not mean the tool can prove user authorization. Membership, base, requirements, the task-context hash, and language are fixed. Publication appends the review index to each member spec, so a later run that passes the live spec always drifts from the frozen hash. When only the task context differs, the run is rejected before launch with a dedicated error naming the batch. That error also names the absolute path of the snapshot to pass: `reviews/<run-id>/task-context.md` in the first member, by task ID, that published the chosen run. The chosen run is the given previous run when it is finalized and carries the frozen hash; otherwise it is the earliest such run by creation time. With no such run, the error asks for a new batch. Any other binding mismatch still reports `batch binding conflict`. Later invocations may omit requirements; when provided, it must match the existing requirements.
 
 Fixes do not open a new batch. Advancing the target requires an advance file:
 

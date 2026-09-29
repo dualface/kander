@@ -426,14 +426,15 @@ func TestArchiveBatchAdvanceRangeAttribution(t *testing.T) {
 	}
 	advance.Deliveries[next] = options.tasks[0]
 	writeAdvance()
+	frozen := filepath.Join(snapshot.Entry.Path, "reviews", "stable", "task-context.md")
 	code, _, stderr = captureRun(t, nextArgs)
-	if code != 2 || !strings.Contains(stderr, "batch binding conflict") {
-		t.Fatalf("changed live spec accepted: %d %s", code, stderr)
+	if code != 2 || !strings.Contains(stderr, frozen) || strings.Contains(stderr, "batch binding conflict") {
+		t.Fatalf("changed live spec accepted or not pointed at %s: %d %s", frozen, code, stderr)
 	}
 	if _, exists, err := board.LookupReviewRun(root, "fixed"); err != nil || exists {
 		t.Fatalf("changed spec persisted: %v %v", exists, err)
 	}
-	nextArgs[len(nextArgs)-3] = filepath.Join(snapshot.Entry.Path, "reviews", "stable", "task-context.md")
+	nextArgs[len(nextArgs)-3] = frozen
 	code, _, stderr = captureRun(t, nextArgs)
 	if code != 0 {
 		t.Fatalf("%d %s", code, stderr)

@@ -1,0 +1,4 @@
+{
+  "board.review_task_context_frozen": "任务上下文与批次 {{.V0}} 冻结的不一致（发布运行时会往实时 spec.md 追加审核索引）。请用冻结快照 {{.V1}} 作为任务上下文重新运行，补充 review context 只放执行和修复证据；GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、THREAT_MODEL、OUT_OF_SCOPE 有变化时需要开新批次",
+  "board.review_task_context_frozen_no_snapshot": "任务上下文与批次 {{.V0}} 冻结的不一致，且该批次没有已发布的快照；请开新批次"
+}

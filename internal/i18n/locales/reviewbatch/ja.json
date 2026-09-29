@@ -1,0 +1,4 @@
+{
+  "board.review_task_context_frozen": "タスクコンテキストがバッチ {{.V0}} で固定されたものと異なります (実行を公開するとレビュー索引が現在の spec.md に追記されます). 固定スナップショット {{.V1}} をタスクコンテキストとして再実行し, 補足レビューコンテキストには実行と修正の証拠だけを入れてください. GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, THREAT_MODEL, OUT_OF_SCOPE を変更する場合は新しいバッチが必要です",
+  "board.review_task_context_frozen_no_snapshot": "タスクコンテキストがバッチ {{.V0}} で固定されたものと異なり, そのバッチには公開済みのスナップショットがありません. 新しいバッチを開始してください"
+}
