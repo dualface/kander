@@ -15,7 +15,7 @@ func focusPane(ctx context.Context, socket, pane string) error {
 	if socket == "" {
 		return errors.New(config.Text("focus.socket_missing"))
 	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
+	conn, err := dialChannel(ctx, socket)
 	if err != nil {
 		return err
 	}

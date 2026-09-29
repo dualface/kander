@@ -11,11 +11,11 @@ import (
 )
 
 // ReportSession performs the socket handshake and verifies the reported identity.
-func ReportSession(_ context.Context, call terminal.HookCall) terminal.HookResult {
+func ReportSession(ctx context.Context, call terminal.HookCall) terminal.HookResult {
 	if call.Report == nil {
 		return terminal.HookResult{Status: terminal.HookFailed, Err: errors.New("herdr session hook requires a report")}
 	}
-	err := reportSession(call)
+	err := reportSession(ctx, call)
 	if errors.Is(err, terminal.ErrNoReportChannel) {
 		return terminal.HookResult{Status: terminal.HookDegraded, Note: err.Error()}
 	}

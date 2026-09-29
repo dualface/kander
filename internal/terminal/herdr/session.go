@@ -2,8 +2,8 @@ package herdr
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
-	"net"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -18,7 +18,7 @@ var reportSeq atomic.Int64
 // reportSession reports the session identity once through the herdr socket
 // and reads it back from the pane. It returns ErrNoReportChannel when
 // HERDR_SOCKET_PATH is not set.
-func reportSession(call terminal.HookCall) error {
+func reportSession(ctx context.Context, call terminal.HookCall) error {
 	report := *call.Report
 	socketPath := strings.TrimSpace(call.Getenv("HERDR_SOCKET_PATH"))
 	if socketPath == "" {
@@ -43,7 +43,9 @@ func reportSession(call terminal.HookCall) error {
 	}
 	payload, _ := json.Marshal(req)
 	payload = append(payload, '\n')
-	conn, err := net.DialTimeout("unix", socketPath, report.Deadline.Sub(report.Now()))
+	dialCtx, cancelDial := context.WithTimeout(ctx, report.Deadline.Sub(report.Now()))
+	conn, err := dialChannel(dialCtx, socketPath)
+	cancelDial()
 	if err != nil {
 		return err
 	}

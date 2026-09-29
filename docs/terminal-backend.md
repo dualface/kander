@@ -35,7 +35,7 @@ To ensure stability across heterogeneous terminal multiplexers and OS platforms,
 |---|---|
 | `internal/terminal` | Defines `Backend` interface, `Address`, `Target`, `PaneFacts`, `Topology`, and `DeclarativeBackend`. |
 | `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/herdr.json`, `tmux.json`) and Go hooks. |
-| `internal/terminal/herdr` | Specialized socket hooks for herdr session reporting and pane focusing. |
+| `internal/terminal/herdr` | Specialized socket hooks for herdr session reporting and pane focusing. Both dial one control channel from `HERDR_SOCKET_PATH`: a unix socket on POSIX, the named pipe `\\.\pipe\` plus that path on Windows. |
 | `internal/terminal/direct` | Containerless backends (`foreground`, `console`). Container operations return `terminal.ErrUnsupported`. |
 | `internal/terminal/terminaltest`| Test harnesses running the test binary as a mock terminal. |
 
