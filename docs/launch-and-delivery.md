@@ -13,6 +13,15 @@ This document records how `kander start`, `resume`, `notify`, `dismiss`, and the
 ## Task Files and Command Lines
 
 - `start`, `resume`, and a `notify` that needs to recover a process write the full prompt to a UTF-8 temporary task file on all platforms, containing the task ID, fixed requirements, and the message body. The agent command line receives only one instruction containing that absolute path. The file asks the agent to try to delete it when done; failure to delete or leftover files do not affect the result. These files get no POSIX permission or Windows ACL check or tightening.
+- Every filesystem path shown to an agent goes through `process.AgentPath`. This covers:
+  - the task file path in the one-line instruction and in the cleanup sentence;
+  - the project-install `kander` entry, the rules entry, the command contract, and the issue rules path;
+  - the project `AGENTS.md`;
+  - the issue evidence files of triage and result sessions;
+  - the notify message file in the direct delivery line;
+  - the reviewer's one-line prompt pointer.
+
+  On Windows these paths use forward slashes (`C:/Users/x/proj/.kander/bin/kander`), because claude and grok run shell commands through Git Bash, which consumes backslashes as escapes. Forward slashes also work in PowerShell and in the agents' file tools; cmd is not guaranteed. POSIX output is byte-for-byte unchanged. Kander still opens files, builds argv, writes card metadata, and compares paths with native paths; only the displayed text changes. Paths containing spaces are not quoted, so an agent must quote them itself for its shell. The review bootstrap body (contract, evidence, and spec snapshot paths) is read by file tools rather than a shell and keeps native paths.
 - When `prompt_delivery.mode` is `pane`, that instruction is not an argv element: after `pane run`, Kander waits for the agent TUI using the definition's `ready` / `blocked` marks (`blocked` is checked in parallel and wins immediately), then delivers the prompt with the same primitives as notify (herdr `agent prompt`, tmux `send-keys -l` plus a separate Enter).
 - Native Windows prefers the agent `.exe`. When Codex, Claude, Grok, Cursor, Pi, Devin, OpenCode, or Kimi only has a `.cmd`/`.bat`, it is launched through an explicit `cmd.exe /d /s /v:off /c` with the agent adapter layer's argument encoding.
 - The agent command sent into a terminal container is parsed once more by that container's shell: POSIX joins per sh; Windows assumes the herdr pane is PowerShell, always encodes argv into `%VAR%` variables restored by `cmd.exe /d /s /v:off /c`, and does not rely on PowerShell to pass arguments to native programs. A command containing a newline or NUL refuses to start; half a command is never sent.

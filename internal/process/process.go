@@ -322,7 +322,7 @@ func newInvocation(program AgentProgram, arguments []string, environment map[str
 
 func taskPayload(body, path string) string {
 	return strings.TrimRightFunc(body, unicode.IsSpace) + "\n\n" +
-		i18n.Text("en", "process.task_cleanup", path)
+		i18n.Text("en", "process.task_cleanup", AgentPath(path))
 }
 
 // CreateTaskFile writes the task payload through the system temporary file mechanism, without additional permission or ACL checks.
@@ -360,5 +360,5 @@ func WriteTaskFile(root, path, body string) error {
 // TaskFileInstruction builds the one-line file instruction handed to the agent CLI.
 func TaskFileInstruction(prefix, path string) string {
 	cleaned := strings.TrimRight(prefix, " .")
-	return i18n.Text("en", "process.task_instruction", cleaned, path)
+	return i18n.Text("en", "process.task_instruction", cleaned, AgentPath(path))
 }

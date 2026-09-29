@@ -8,26 +8,32 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/process"
 )
 
+// commandName is the kander command as prompts show it; a project install names its entry through
+// process.AgentPath.
 func commandName(paths config.InstallPaths) string {
 	if paths.Mode == config.ModeProject {
-		return filepath.Join(paths.BinDir, "kander")
+		return process.AgentPath(filepath.Join(paths.BinDir, "kander"))
 	}
 	return "kander"
+}
+
+// rulesPath is the displayed path of one released rules file in the install scope.
+func rulesPath(paths config.InstallPaths, name string) string {
+	return process.AgentPath(filepath.Join(paths.RulesDir, name))
 }
 
 // RuleLoadingInstruction is shared by fresh launches and notifications to existing Agents.
 // It names the bootstrap before the command contract so optional rules cannot be loaded first.
 func RuleLoadingInstruction(paths config.InstallPaths) string {
-	entry := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
-	contract := filepath.Join(paths.RulesDir, "KANDER-KANBAN-RULES.md")
-	return t("launch.prompt.rule_loading", entry, commandName(paths), contract)
+	return t("launch.prompt.rule_loading", rulesPath(paths, "KANDER-AGENTS.md"), commandName(paths), rulesPath(paths, "KANDER-KANBAN-RULES.md"))
 }
 
 func promptAgents(paths config.InstallPaths) string {
 	if paths.Mode == config.ModeProject {
-		return filepath.Join(paths.ProjectRoot, "AGENTS.md")
+		return process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md"))
 	}
 	return t("launch.the_target_project_s_agents_md")
 }

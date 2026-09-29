@@ -1,7 +1,6 @@
 package launch
 
 import (
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/internal/process"
 )
 
 // TriagePreview contains the configured execution agent and launcher an
@@ -192,7 +192,7 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		return "", err
 	}
 	rules := RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " "
-	issueRules := filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md")
+	issueRules := rulesPath(paths, "KANDER-ISSUE-RULES.md")
 	// The import instruction belongs to the unbound branch only: a session
 	// started for a bound card continues that card and must never be told to
 	// import the issue again.
@@ -204,8 +204,8 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		"launch.prompt.triage",
 		triageTarget(request.Repository, request.Number),
 		rules,
-		request.JSONPath,
-		request.MarkdownPath,
+		process.AgentPath(request.JSONPath),
+		process.AgentPath(request.MarkdownPath),
 		cardLine,
 		promptAgents(paths),
 		issueRules,

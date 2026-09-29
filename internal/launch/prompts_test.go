@@ -3,10 +3,12 @@ package launch
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/process"
 )
 
 func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
@@ -21,9 +23,9 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 		RulesDir:    filepath.Join(t.TempDir(), "rules"),
 	}
 	card := "- LANGUAGE: en\n"
-	want := filepath.Join(paths.RulesDir, "KANDER-KANBAN-RULES.md")
-	bootstrap := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
-	configuration := filepath.Join(paths.BinDir, "kander") + " config --json"
+	want := process.AgentPath(filepath.Join(paths.RulesDir, "KANDER-KANBAN-RULES.md"))
+	bootstrap := process.AgentPath(filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"))
+	configuration := process.AgentPath(filepath.Join(paths.BinDir, "kander")) + " config --json"
 	prompts := []struct {
 		name string
 		make func() (string, error)
@@ -43,6 +45,12 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 				}
 				if !strings.Contains(prompt, want) {
 					t.Fatalf("prompt does not contain %q: %s", want, prompt)
+				}
+				if !strings.Contains(prompt, process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md"))) {
+					t.Fatalf("prompt does not name the project AGENTS.md: %s", prompt)
+				}
+				if runtime.GOOS == "windows" && strings.Contains(prompt, "\\") {
+					t.Fatalf("Windows prompt still embeds a backslash path: %s", prompt)
 				}
 				if strings.Contains(prompt, commandName(paths)+" rules") {
 					t.Fatalf("prompt still invokes rules command: %s", prompt)

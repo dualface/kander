@@ -2,10 +2,10 @@ package launch
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/internal/process"
 )
 
 func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, error) {
@@ -25,5 +25,5 @@ missing result comment through the controlled command. It NEVER authorizes closi
 closing needs separate explicit user consent for this current issue and result.
 Use only %s issue result %d --repo %s/%s/%s --card %s with --action inspect,
 --action apply, or --action decide as defined by the protocol.
-`, triageTarget(request.Repository, request.Number), request.CardID, RuleLoadingInstruction(paths), promptLanguageDirective(lang), request.JSONPath, filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md"), commandName(paths), request.Number, request.Repository.Host, request.Repository.Owner, request.Repository.Name, request.CardID), nil
+`, triageTarget(request.Repository, request.Number), request.CardID, RuleLoadingInstruction(paths), promptLanguageDirective(lang), process.AgentPath(request.JSONPath), rulesPath(paths, "KANDER-ISSUE-RULES.md"), commandName(paths), request.Number, request.Repository.Host, request.Repository.Owner, request.Repository.Name, request.CardID), nil
 }

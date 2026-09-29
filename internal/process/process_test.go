@@ -212,7 +212,7 @@ func TestTaskFileContainsBodyAndBestEffortDeleteInstruction(t *testing.T) {
 	if !strings.HasPrefix(text, "line one\nline two\n\n") {
 		t.Fatalf("prefix mismatch: %q", text)
 	}
-	if !strings.Contains(text, path) {
+	if !strings.Contains(text, AgentPath(path)) {
 		t.Fatalf("missing path in %q", text)
 	}
 	if !strings.Contains(text, "Failure to delete it or leaving it behind does not affect the task result") {
@@ -236,7 +236,7 @@ func TestWriteTaskFileUsesSamePayload(t *testing.T) {
 	if !strings.HasPrefix(text, "hello\n\n") {
 		t.Fatalf("payload = %q", text)
 	}
-	if !strings.Contains(text, path) {
+	if !strings.Contains(text, AgentPath(path)) {
 		t.Fatalf("missing path in %q", text)
 	}
 }
@@ -250,7 +250,7 @@ func TestTaskFilePointerIsOneShortInstruction(t *testing.T) {
 	if strings.Contains(instruction, "\n") {
 		t.Fatalf("contains newline: %q", instruction)
 	}
-	if !strings.Contains(instruction, path) {
+	if !strings.Contains(instruction, AgentPath(path)) {
 		t.Fatalf("missing path: %q", instruction)
 	}
 	if !strings.HasSuffix(instruction, "exactly.") {

@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/internal/process"
 )
 
 type triageProvider struct {
@@ -108,7 +109,7 @@ func TestStartTriageLaunchesBackgroundSessionWithoutBoardWrites(t *testing.T) {
 	if !strings.HasPrefix(prefix, "kander-issue-dualface-kander-42-triage-") {
 		t.Fatalf("prefix=%s", prefix)
 	}
-	if !strings.Contains(body, request.JSONPath) || !strings.Contains(body, request.MarkdownPath) {
+	if !strings.Contains(body, process.AgentPath(request.JSONPath)) || !strings.Contains(body, process.AgentPath(request.MarkdownPath)) {
 		t.Fatalf("prompt is missing the evidence paths:\n%s", body)
 	}
 	if !strings.Contains(body, "KANDER-ISSUE-RULES.md") {
@@ -232,7 +233,7 @@ func TestTriagePromptResolvesTheIssueRulesPathFromScope(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md")
+			want := process.AgentPath(filepath.Join(paths.RulesDir, "KANDER-ISSUE-RULES.md"))
 			if !strings.Contains(body, want) {
 				t.Fatalf("prompt is missing the scope-resolved issue rules path %q:\n%s", want, body)
 			}
@@ -277,7 +278,7 @@ func TestTriagePromptImportsOnlyWithoutABoundCard(t *testing.T) {
 			if strings.Contains(body, "issue import") {
 				t.Fatalf("bound prompt still tells the agent to import:\n%s", body)
 			}
-			if !strings.Contains(body, bound.CardID) || !strings.Contains(body, bound.JSONPath) {
+			if !strings.Contains(body, bound.CardID) || !strings.Contains(body, process.AgentPath(bound.JSONPath)) {
 				t.Fatalf("bound prompt is missing the card or the evidence path:\n%s", body)
 			}
 		})

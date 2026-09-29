@@ -8,6 +8,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/process"
 )
 
 func randomHex(n int) string {
@@ -55,7 +56,7 @@ func removeNotifyMessage(path string) error {
 
 func notifyInstruction(entry board.Entry, messagePath, marker string) string {
 	return t(
-		"notify.kander_notify_read_first_output_exactly_then_handle_task", messagePath, marker, entry.TaskID,
+		"notify.kander_notify_read_first_output_exactly_then_handle_task", process.AgentPath(messagePath), marker, entry.TaskID,
 	)
 }
 
