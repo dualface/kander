@@ -152,7 +152,7 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(c.Git.NotApplicable) != "") {
 			return progress, reviewError("Git N/A evidence binding")
 		}
-		if c.Schema != 1 || c.PlanID != p.PlanID || c.BatchID != b.BatchID || c.TargetCommit != b.TargetCommit || c.Git.Head != b.TargetCommit || c.Git.CWD != p.CWD {
+		if c.Schema != 1 || c.PlanID != p.PlanID || c.BatchID != b.BatchID || c.TargetCommit != b.TargetCommit || c.Git.Head != b.TargetCommit || !SameReviewCWD(c.Git.CWD, p.CWD) {
 			return progress, reviewError("closed target binding")
 		}
 		v, e := aggregateReviewBatch(tx, b)

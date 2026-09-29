@@ -23,20 +23,32 @@ func captureRun(t *testing.T, args []string) (int, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Drain both pipes while Run writes: a Windows pipe buffers only a few KiB, so a large report or
+	// aggregate view would otherwise block the command forever.
+	type drained struct {
+		data []byte
+		err  error
+	}
+	drain := func(r *os.File) <-chan drained {
+		ch := make(chan drained, 1)
+		go func() { data, err := io.ReadAll(r); ch <- drained{data, err} }()
+		return ch
+	}
+	outCh, errCh := drain(stdoutR), drain(stderrR)
 	oldOut, oldErr := os.Stdout, os.Stderr
 	os.Stdout, os.Stderr = stdoutW, stderrW
 	code := Run(args)
 	_ = stdoutW.Close()
 	_ = stderrW.Close()
 	os.Stdout, os.Stderr = oldOut, oldErr
-	out, err := io.ReadAll(stdoutR)
-	if err != nil {
-		t.Fatal(err)
+	outResult, errResult := <-outCh, <-errCh
+	if outResult.err != nil {
+		t.Fatal(outResult.err)
 	}
-	errb, err := io.ReadAll(stderrR)
-	if err != nil {
-		t.Fatal(err)
+	if errResult.err != nil {
+		t.Fatal(errResult.err)
 	}
+	out, errb := outResult.data, errResult.data
 	_ = stdoutR.Close()
 	_ = stderrR.Close()
 	return code, string(out), string(errb)

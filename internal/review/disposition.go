@@ -34,6 +34,7 @@ func runDispositionCommand(args []string) int {
 	if !filepath.IsAbs(cwd) {
 		return dispositionFailure(archiveError("absolute CWD required"))
 	}
+	cwd = canonicalEvidenceCWD(cwd)
 	root, err := board.BoardRootAt(cwd)
 	if err != nil {
 		return dispositionFailure(err)
@@ -46,9 +47,10 @@ func runDispositionCommand(args []string) int {
 	case "plan":
 		var p board.ReviewPlan
 		if err = readArchiveJSON(input, &p); err == nil {
-			if p.CWD != cwd {
+			if !filepath.IsAbs(p.CWD) || !board.SameReviewCWD(canonicalEvidenceCWD(p.CWD), cwd) {
 				err = archiveError("plan CWD mismatch")
 			} else {
+				p.CWD = cwd
 				err = validatePlanGit(p)
 			}
 			if err == nil {
@@ -280,8 +282,20 @@ func verifyPlanCWD(root, planID, cwd string) error {
 	if err != nil {
 		return err
 	}
-	if p.CWD != cwd {
+	if !board.SameReviewCWD(p.CWD, cwd) {
 		return archiveError("plan CWD mismatch")
 	}
 	return nil
+}
+
+// canonicalEvidenceCWD resolves an evidence command CWD the same way kander review resolves its
+// worktree root (EvalSymlinks, Abs, Clean), so Git checks and stored evidence use one spelling of the
+// directory. A path that cannot be resolved keeps its cleaned spelling and fails in the later checks.
+func canonicalEvidenceCWD(cwd string) string {
+	if resolved, err := filepath.EvalSymlinks(cwd); err == nil {
+		if abs, err := filepath.Abs(resolved); err == nil {
+			return filepath.Clean(abs)
+		}
+	}
+	return filepath.Clean(cwd)
 }

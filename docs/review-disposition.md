@@ -50,6 +50,8 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 
 `--schema` prints that command's fields, required flag, type, closed values, and a description in the interface language. It does not take a worktree or a JSON file and does not write the board. An extension file rejects unknown fields such as `cwd` and `report_language`; those belong on the plan file.
 
+The `cwd` of a plan and the CWD argument of every evidence command name one worktree, not one string. Each evidence command resolves its CWD argument once like the `kander review` worktree root (`EvalSymlinks`, `Abs`, `Clean`) and uses it for Git checks and stored Git evidence; `review plan` accepts a plan whose resolved `cwd` names the same directory and stores the resolved form. Plan, run, closure, gate, and `kander check` comparisons go through `board.SameReviewCWD`, which is lexical: it cleans both paths and, on Windows, treats `\` and `/` alike and ignores case. It never touches the filesystem, so historical plans and closures stored with another spelling stay valid without being rewritten, and POSIX comparison stays case-sensitive.
+
 ### Single-Batch Plan Example
 
 ```json

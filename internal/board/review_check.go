@@ -184,7 +184,7 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		if e != nil {
 			return e
 		}
-		if p.CWD != run.CWD {
+		if !SameReviewCWD(p.CWD, run.CWD) {
 			return reviewError("run/plan worktree mismatch")
 		}
 	}

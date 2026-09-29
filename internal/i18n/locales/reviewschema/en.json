@@ -92,7 +92,7 @@
   "review.schema.plan.batches.item.requirements": "Exactly the keys PMQA and Security. Each value is required, or N/A: followed by a non-empty reason.",
   "review.schema.plan.batches.item.target_commit": "Commit this batch reviews. A 40 or 64 character lowercase hex commit, not a timestamp, or N/A when every role is N/A.",
   "review.schema.plan.batches.item.task_ids": "Task IDs covered by this batch. Each one must be a plan member.",
-  "review.schema.plan.cwd": "Absolute worktree path. It must equal the CWD argument of the plan command.",
+  "review.schema.plan.cwd": "Absolute worktree path. It must name the same directory as the CWD argument of the plan command; on Windows separator style, drive-letter case, and a trailing separator do not matter. The plan stores the resolved path.",
   "review.schema.plan.cycles": "Ignored. The command records each member's execution cycle.",
   "review.schema.plan.plan_id": "Plan ID. It starts with a lowercase letter or digit, then up to 63 more characters from [a-z0-9-].",
   "review.schema.plan.recorded_at": "Ignored. The command sets the UTC timestamp.",

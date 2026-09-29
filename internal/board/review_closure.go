@@ -470,7 +470,7 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 		if e = verifyMechanicalEvidence(v, r, evidence); e != nil {
 			return e
 		}
-		if evidence.CWD != p.CWD || evidence.Head != b.TargetCommit || !reflect.DeepEqual(edges, evidence.Edges) {
+		if !SameReviewCWD(evidence.CWD, p.CWD) || evidence.Head != b.TargetCommit || !reflect.DeepEqual(edges, evidence.Edges) {
 			return reviewError("Git evidence binding")
 		}
 		if _, e = time.Parse(time.RFC3339Nano, evidence.VerifiedAt); e != nil {
@@ -538,7 +538,7 @@ func verifyClosureIntegrity(tx *Transaction, c ReviewClosure) error {
 	if noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements) != (strings.TrimSpace(c.Git.NotApplicable) != "") {
 		return reviewError("Git N/A evidence binding")
 	}
-	if c.Git.CWD != p.CWD {
+	if !SameReviewCWD(c.Git.CWD, p.CWD) {
 		return reviewError("closed Git CWD mismatch")
 	}
 	v, err := aggregateReviewBatch(tx, b)

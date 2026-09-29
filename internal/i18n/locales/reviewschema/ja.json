@@ -92,7 +92,7 @@
   "review.schema.plan.batches.item.requirements": "キーは PMQA と Security ちょうど二つ。値は required、または N/A: の後に空でない理由です。",
   "review.schema.plan.batches.item.target_commit": "このバッチがレビューする commit。40 または 64 桁の小文字十六進で、時刻ではありません。全ロールが N/A のときは N/A も可。",
   "review.schema.plan.batches.item.task_ids": "このバッチが含むタスク ID。いずれも計画メンバーでなければなりません。",
-  "review.schema.plan.cwd": "ワークツリーの絶対パス。plan コマンドの CWD 引数と一致しなければなりません。",
+  "review.schema.plan.cwd": "ワークツリーの絶対パス。plan コマンドの CWD 引数と同じディレクトリを指さなければなりません。Windows では区切り文字の種類、ドライブ文字の大小、末尾の区切り文字は区別しません。plan には解決済みのパスが保存されます。",
   "review.schema.plan.cycles": "無視されます。コマンドが各メンバーの実行サイクルを記録します。",
   "review.schema.plan.plan_id": "計画 ID。小文字または数字で始まり、その後は [a-z0-9-] を最大 63 文字です。",
   "review.schema.plan.recorded_at": "無視されます。コマンドが UTC 時刻を設定します。",

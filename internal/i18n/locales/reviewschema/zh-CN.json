@@ -92,7 +92,7 @@
   "review.schema.plan.batches.item.requirements": "键必须正好是 PMQA 和 Security。每个值是 required，或 N/A: 后接非空原因。",
   "review.schema.plan.batches.item.target_commit": "本批次审核的 commit。40 或 64 位小写十六进制，不是时间戳；每个角色都是 N/A 时可以为 N/A。",
   "review.schema.plan.batches.item.task_ids": "本批次覆盖的任务 ID。每一个都必须是计划成员。",
-  "review.schema.plan.cwd": "工作树的绝对路径。必须与 plan 命令的 CWD 参数相同。",
+  "review.schema.plan.cwd": "工作树的绝对路径。必须与 plan 命令的 CWD 参数指向同一目录；Windows 下不区分正反斜杠、盘符大小写和末尾分隔符。plan 保存解析后的路径。",
   "review.schema.plan.cycles": "忽略。命令会记录每个成员的执行周期。",
   "review.schema.plan.plan_id": "计划 ID。以小写字母或数字开头，其后最多 63 个 [a-z0-9-] 字符。",
   "review.schema.plan.recorded_at": "忽略。命令会写入 UTC 时间。",

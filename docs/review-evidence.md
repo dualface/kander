@@ -82,7 +82,7 @@ raw/log files are stored as-is, including invalid UTF-8. report.md stores the va
 sidecar schema 1 contains:
 
 - run_id, batch_id, previous_run_id, task_ids, task_group, role.
-- reviewer/model/effort, cwd/base/commit/reviewed_commit, the applicable advance.
+- reviewer/model/effort, cwd/base/commit/reviewed_commit, the applicable advance. `cwd` is the resolved worktree root; a planned run must name the plan's directory under `board.SameReviewCWD` (see [Review disposition](review-disposition.md)).
 - findings_schema (new runs: 2; historical 0/1 retain their behavior).
 - report_language, SHA-256 of the inputs and all original artifacts, kander_version.
 - phase, launch_status, execution_status, semantic_status, exit_code, failure_reason.

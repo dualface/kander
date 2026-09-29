@@ -338,7 +338,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if batch.PlanID != "" {
 				if p, e := batchPlan(tx, batch); e != nil {
 					return e
-				} else if p.CWD != input.CWD {
+				} else if !SameReviewCWD(p.CWD, input.CWD) {
 					return reviewError("run/plan worktree mismatch")
 				}
 				if e := validatePreviousClosure(tx, batch); e != nil {
