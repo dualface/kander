@@ -110,13 +110,13 @@ func TestGroupHeaderStartsExpanded(t *testing.T) {
 	}
 }
 
-func TestGroupHeaderTextAndSlotColor(t *testing.T) {
+func TestGroupHeaderTextWithoutRail(t *testing.T) {
 	previous := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
 
 	text := groupHeaderText(compactGroup("20260930-g1"), 2, 40, false)
-	if displayWidth(text) != 40 || !strings.HasPrefix(text, " ▾ ") || !strings.HasSuffix(text, "2") || !strings.Contains(text, "g1") {
+	if displayWidth(text) != 40 || !strings.HasPrefix(text, "▾ ") || !strings.HasSuffix(text, "2") || !strings.Contains(text, "g1") {
 		t.Fatalf("header text %q", text)
 	}
 	narrow := groupHeaderText("group-name", 12, 4, true)
@@ -131,7 +131,6 @@ func TestGroupHeaderTextAndSlotColor(t *testing.T) {
 		"light", 5, nil, nil)
 	app.Model = model
 	app.Model.FocusState("todo")
-	rails := columnGroupRails(model.TasksFor("todo"), false)
 	plain := ansi.Strip(renderStateColumn(t, model, "todo"))
 	if !strings.Contains(plain, text) {
 		t.Fatalf("rendered header missing %q\n%s", text, plain)
@@ -139,16 +138,15 @@ func TestGroupHeaderTextAndSlotColor(t *testing.T) {
 	if strings.Contains(plain, "20260930-g1") {
 		t.Fatal("raw group id leaked")
 	}
-	raw := renderStateColumn(t, model, "todo")
-	seq := trueColorSeq(string(rails[0].color), true)
-	found := false
-	for _, line := range strings.Split(raw, "\n") {
-		if strings.Contains(ansi.Strip(line), "▾") && strings.Contains(line, seq) {
-			found = true
+	model.HeaderFocus["todo"] = "20260930-g1"
+	p := themePalette("light")
+	for _, collapsed := range []bool{false, true} {
+		model.Collapsed["20260930-g1"] = collapsed
+		header := app.renderGroupHeader(p, "todo", "20260930-g1", 2, 40, true)
+		want := cardStyle(p, "todo", 0, true).Render(" " + groupHeaderText("g1", 2, 40, collapsed) + " ")
+		if header != want || strings.Contains(ansi.Strip(header), "│") {
+			t.Fatalf("collapsed=%v header style or rail: %q", collapsed, header)
 		}
-	}
-	if !found {
-		t.Fatal("header rail lost the slot color")
 	}
 }
 

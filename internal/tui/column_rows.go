@@ -402,7 +402,7 @@ func (a *App) pageFocus(direction int) {
 	a.Model.Scrolls[state] = scroll
 }
 
-// groupHeaderText is " ▾ name" or " ▸ name" with the member count flush
+// groupHeaderText is "▾ name" or "▸ name" with the member count flush
 // to the right edge of the content width. The twistie and the count win
 // when the width cannot hold the name.
 func groupHeaderText(name string, count, width int, collapsed bool) string {
@@ -419,7 +419,7 @@ func groupHeaderText(name string, count, width int, collapsed bool) string {
 		clipped := clipText(countText, width)
 		return strings.Repeat(" ", width-displayWidth(clipped)) + clipped
 	}
-	prefix := " " + twistie + " "
+	prefix := twistie + " "
 	prefixW := displayWidth(prefix)
 	room := width - countW
 	if room < prefixW {

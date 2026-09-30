@@ -28,6 +28,11 @@ func (a *App) boardCardHit(x, y int) *mouseSel {
 		contentWidth = 1
 	}
 	displayCol := x - panel.X - 2
+	grouped := clusterInColumn(tasks, task.TaskGroup)
+	contentWidth = boardCardContentWidth(contentWidth, grouped)
+	if grouped {
+		displayCol -= groupCardInset
+	}
 	if displayCol < 0 {
 		displayCol = 0
 	}

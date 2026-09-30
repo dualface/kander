@@ -232,7 +232,7 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 		for _, line := range rows[scroll:end] {
 			switch line.kind {
 			case "header":
-				body = append(body, a.renderGroupHeader(p, col.State, line.group, clusterSize(tasks, line.group), contentWidth, focused, rails[line.task].color))
+				body = append(body, a.renderGroupHeader(p, col.State, line.group, clusterSize(tasks, line.group), contentWidth, focused))
 			case "card":
 				rendered, ok := cards[line.task]
 				if !ok {
@@ -245,7 +245,7 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 			default:
 				gap := ""
 				if line.rail {
-					gap = p.ink(rails[line.task].color).Render(borderVertical)
+					gap = " " + p.ink(rails[line.task].color).Render(borderVertical) + " "
 				}
 				body = append(body, gap)
 			}
@@ -388,12 +388,22 @@ func (a *App) renderColumnTabs(p palette, width int) string {
 	return padLineFill(strings.Join(parts, ""), width, p)
 }
 
-// renderCard draws one task card. A card outside a cluster keeps one column of
-// padding on each side and both take part in the coloring, so a selected card
-// is one solid block. A cluster member replaces the left pad with │ in the
-// cluster color; the three body lines, including a selected card, keep cardStyle.
+// groupCardInset reserves the rail and its following space after the left pad.
+const groupCardInset = 2
+
+func boardCardContentWidth(contentWidth int, grouped bool) int {
+	if grouped {
+		return max(0, contentWidth-groupCardInset)
+	}
+	return max(0, contentWidth)
+}
+
+// renderCard keeps an ungrouped selected card in one solid block. A cluster
+// member has one space before its colored rail and one before the body.
+// Rendering and mouse selection use the same reduced content width.
 func (a *App) renderCard(p palette, state string, task Task, contentWidth int, focused bool, rail groupRail) []string {
 	selected := focused && a.Model.cardHighlighted(state, task.TaskID)
+	contentWidth = boardCardContentWidth(contentWidth, rail.member)
 	card := a.boardCardLines(task, contentWidth)
 	out := make([]string, 0, len(card))
 	for offset, text := range card {
@@ -411,15 +421,14 @@ func (a *App) renderCard(p palette, state string, task Task, contentWidth int, f
 			out = append(out, style.Render(" "+body))
 			continue
 		}
-		out = append(out, p.ink(rail.color).Render(borderVertical)+style.Render(body))
+		out = append(out, " "+p.ink(rail.color).Render(borderVertical)+style.Render(" "+body))
 	}
 	return out
 }
 
-// renderGroupHeader draws the cluster title on the rail card's left pad.
-// Expanded is ▾ and collapsed is ▸. A focused header uses the card selection
-// style on the body; the │ keeps the slot color.
-func (a *App) renderGroupHeader(p palette, state, group string, count, contentWidth int, focused bool, color lipgloss.Color) string {
+// renderGroupHeader draws a rail-free title. Expanded is ▾ and collapsed is ▸.
+// A focused header uses the card selection style including both padding spaces.
+func (a *App) renderGroupHeader(p palette, state, group string, count, contentWidth int, focused bool) string {
 	collapsed := a.Model.groupCollapsed(group)
 	text := groupHeaderText(compactGroup(group), count, contentWidth, collapsed)
 	body := padLine(text, contentWidth) + " "
@@ -428,7 +437,7 @@ func (a *App) renderGroupHeader(p palette, state, group string, count, contentWi
 	if selected {
 		style = cardStyle(p, state, 0, true)
 	}
-	return p.ink(color).Render(borderVertical) + style.Render(body)
+	return style.Render(" " + body)
 }
 
 // panelTop draws the panel top border with the title and the count badge embedded in it: ╭─ Todo 3 ────╮

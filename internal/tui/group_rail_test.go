@@ -23,13 +23,13 @@ func TestColumnClustersOrderAndRail(t *testing.T) {
 	if strings.Join(got, ",") != "A,C,B,D,E" {
 		t.Fatalf("order %v", got)
 	}
-	pads := columnLeftPads(t, model, "todo")
+	pads := columnRailMarks(t, model, "todo")
 	want := []rune{
-		'│',
+		' ',
 		'│', '│', '│', '│',
 		'│', '│', '│', ' ',
 		' ', ' ', ' ', ' ',
-		'│',
+		' ',
 		'│', '│', '│', '│',
 		'│', '│', '│', ' ',
 	}
@@ -58,7 +58,7 @@ func TestPlainCardsKeepFilteredOrderWithoutRail(t *testing.T) {
 	if strings.Join(taskIDs(model.TasksFor("todo")), ",") != "U1,S,U2" {
 		t.Fatalf("order %v", taskIDs(model.TasksFor("todo")))
 	}
-	for i, pad := range columnLeftPads(t, model, "todo") {
+	for i, pad := range columnRailMarks(t, model, "todo") {
 		if pad == '│' {
 			t.Fatalf("pad %d is a group rail", i)
 		}
@@ -80,12 +80,12 @@ func TestFilteredSingletonStaysPutWithoutRail(t *testing.T) {
 	if strings.Join(got, ",") != "S,U,M1,M2" {
 		t.Fatalf("order %v", got)
 	}
-	pads := columnLeftPads(t, model, "todo")
+	pads := columnRailMarks(t, model, "todo")
 	// S and U are plain. M1 and M2 are a cluster, with a header and the gap under M1.
 	want := []rune{
 		' ', ' ', ' ', ' ',
 		' ', ' ', ' ', ' ',
-		'│',
+		' ',
 		'│', '│', '│', '│',
 		'│', '│', '│', ' ',
 	}
@@ -147,7 +147,7 @@ func TestGroupRailContrast(t *testing.T) {
 	assertRailFamily(t, groupRailDark, true)
 }
 
-func TestSelectedClusterKeepsSlotColorOnLeftPad(t *testing.T) {
+func TestSelectedClusterKeepsIndentedSlotColor(t *testing.T) {
 	previous := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
@@ -166,8 +166,8 @@ func TestSelectedClusterKeepsSlotColorOnLeftPad(t *testing.T) {
 		lines := app.renderCard(p, "todo", task, width, true, rail)
 		for offset, line := range lines {
 			style := cardStyle(p, "todo", offset, true)
-			body := style.Render(padLine(clipText(app.boardCardLines(task, width)[offset], width), width) + " ")
-			left := p.ink(rail.color).Render(borderVertical)
+			body := style.Render(" " + padLine(app.boardCardLines(task, width-2)[offset], width-2) + " ")
+			left := " " + p.ink(rail.color).Render(borderVertical)
 			if line != left+body {
 				t.Fatalf("%s line %d left pad or title style diverged", theme, offset)
 			}
@@ -291,18 +291,28 @@ func renderTodoColumn(t *testing.T, model *BoardModel) string {
 	}, 1)
 }
 
-func columnLeftPads(t *testing.T, model *BoardModel, state string) []rune {
+func columnRailMarks(t *testing.T, model *BoardModel, state string) []rune {
 	t.Helper()
 	if state != "todo" {
 		t.Fatalf("helper renders %s", state)
 	}
 	var pads []rune
-	for _, line := range strings.Split(renderTodoColumn(t, model), "\n") {
+	for line := range strings.SplitSeq(renderTodoColumn(t, model), "\n") {
 		plain := []rune(ansi.Strip(line))
 		if len(plain) < 2 || plain[0] != '│' || plain[len(plain)-1] != '│' {
 			continue
 		}
-		pads = append(pads, plain[1])
+		if plain[1] != ' ' {
+			t.Fatalf("left pad is not blank: %q", string(plain))
+		}
+		mark := ' '
+		if len(plain) > 3 && plain[2] == '│' {
+			if plain[3] != ' ' {
+				t.Fatalf("rail has no following space: %q", string(plain))
+			}
+			mark = '│'
+		}
+		pads = append(pads, mark)
 	}
 	return pads
 }
