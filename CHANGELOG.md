@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.8.8 — 2026-09-30
 
+- TUI: task-group rails start below the group header. The header row draws no rail, and member rows and in-group gaps indent the rail by one character with one space between it and the card content; group color, selection background, collapse state, scrolling, and mouse character selection follow the new layout.
 - TUI: two new named themes. `matcha-zen` is a light theme ported from the livlign/posh-palette terminal theme and `bamboo-multiplex` is a dark theme ported from ribru17/bamboo.nvim; both use the selection-surface palette form and appear at the end of the `t` key cycle and the options Color theme list, and `tui.theme` accepts them.
 
 ## v0.8.7 — 2026-09-30
