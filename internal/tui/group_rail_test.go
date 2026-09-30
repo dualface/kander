@@ -25,9 +25,11 @@ func TestColumnClustersOrderAndRail(t *testing.T) {
 	}
 	pads := columnLeftPads(t, model, "todo")
 	want := []rune{
+		'│',
 		'│', '│', '│', '│',
 		'│', '│', '│', ' ',
 		' ', ' ', ' ', ' ',
+		'│',
 		'│', '│', '│', '│',
 		'│', '│', '│', ' ',
 	}
@@ -79,10 +81,11 @@ func TestFilteredSingletonStaysPutWithoutRail(t *testing.T) {
 		t.Fatalf("order %v", got)
 	}
 	pads := columnLeftPads(t, model, "todo")
-	// S and U are plain. M1 and M2 are a cluster, including the gap under M1.
+	// S and U are plain. M1 and M2 are a cluster, with a header and the gap under M1.
 	want := []rune{
 		' ', ' ', ' ', ' ',
 		' ', ' ', ' ', ' ',
+		'│',
 		'│', '│', '│', '│',
 		'│', '│', '│', ' ',
 	}
@@ -278,8 +281,10 @@ func renderTodoColumn(t *testing.T, model *BoardModel) string {
 		func(string) (Task, error) { return Task{}, nil },
 		"light", 5, nil, nil)
 	app.Model = model
-	count := len(model.TasksFor("todo"))
-	body := count * cardHeight
+	body := len(columnRows(model, "todo"))
+	if body < 1 {
+		body = 1
+	}
 	return app.renderColumnPanel(themePalette("light"), boardLayout{
 		State: "todo", Width: 44, Height: body + 2, BodyHeight: body,
 		FirstVisual: true, LastVisual: true,

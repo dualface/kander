@@ -30,6 +30,7 @@ func (a *App) boardHelpGroups() []helpGroup {
 				{"↑↓ jk", t("tui.switch_task")},
 				{"PgUp PgDn", t("tui.page")},
 				{"Enter", t("tui.task_detail")},
+				{"z", t("tui.toggle_task_group")},
 				{"/", t("tui.search_2")},
 				{"y", t("tui.copy_task_id")},
 				{"m", t("actions.menu")},

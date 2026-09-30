@@ -11,10 +11,15 @@ type BoardModel struct {
 	SelectedIDs     map[string]string
 	SelectedIndexes map[string]int
 	Scrolls         map[string]int
-	GeneratedAt     string
-	ContentKey      string
-	RefreshError    string
-	DetailError     string
+	// Collapsed is true after the user folds a group. A missing key stays expanded.
+	// SetBoard, column normalize, and query edits do not clear it.
+	Collapsed map[string]bool
+	// HeaderFocus names the focused header in a column. Empty means the selected card.
+	HeaderFocus  map[string]string
+	GeneratedAt  string
+	ContentKey   string
+	RefreshError string
+	DetailError  string
 }
 
 func newBoardModel(single bool) *BoardModel {
@@ -23,11 +28,14 @@ func newBoardModel(single bool) *BoardModel {
 		SelectedIDs:     map[string]string{},
 		SelectedIndexes: map[string]int{},
 		Scrolls:         map[string]int{},
+		Collapsed:       map[string]bool{},
+		HeaderFocus:     map[string]string{},
 	}
 	for _, state := range allStates {
 		m.SelectedIDs[state] = ""
 		m.SelectedIndexes[state] = 0
 		m.Scrolls[state] = 0
+		m.HeaderFocus[state] = ""
 	}
 	return m
 }
@@ -139,35 +147,9 @@ func (m *BoardModel) Normalize() {
 		m.ColumnOffset = m.ColumnIndex
 	}
 	for _, state := range allStates {
-		tasks := m.TasksFor(state)
-		taskIDs := make([]string, len(tasks))
-		for i, task := range tasks {
-			taskIDs[i] = task.TaskID
-		}
-		selected := m.SelectedIDs[state]
-		found := -1
-		for i, id := range taskIDs {
-			if id == selected {
-				found = i
-				break
-			}
-		}
-		if found >= 0 {
-			m.SelectedIndexes[state] = found
-		} else if len(taskIDs) > 0 {
-			index := m.SelectedIndexes[state]
-			if index > len(taskIDs)-1 {
-				index = len(taskIDs) - 1
-			}
-			if index < 0 {
-				index = 0
-			}
-			m.SelectedIDs[state] = taskIDs[index]
-			m.SelectedIndexes[state] = index
-		} else {
-			m.SelectedIDs[state] = ""
-		}
-		maxScroll := len(tasks) - 1
+		lines := columnRows(m, state)
+		m.ensureColumnFocus(state, lines)
+		maxScroll := len(lines) - 1
 		if maxScroll < 0 {
 			maxScroll = 0
 		}
@@ -217,6 +199,10 @@ func (m *BoardModel) SelectTaskIndex(state string, index int) bool {
 	if index > len(tasks)-1 {
 		index = len(tasks) - 1
 	}
+	if m.HeaderFocus == nil {
+		m.HeaderFocus = map[string]string{}
+	}
+	m.HeaderFocus[state] = ""
 	m.SelectedIDs[state] = tasks[index].TaskID
 	m.SelectedIndexes[state] = index
 	return true
@@ -262,38 +248,34 @@ func (m *BoardModel) VisibleStates(visibleCount int) []string {
 
 func (m *BoardModel) MoveTask(delta int) {
 	state := m.CurrentState()
-	tasks := m.TasksFor(state)
-	if len(tasks) == 0 {
+	lines := columnRows(m, state)
+	stops := focusStops(lines)
+	if len(stops) == 0 {
 		m.SelectedIDs[state] = ""
+		if m.HeaderFocus != nil {
+			m.HeaderFocus[state] = ""
+		}
 		return
 	}
-	index := 0
-	found := false
-	for i, task := range tasks {
-		if task.TaskID == m.SelectedIDs[state] {
-			index = i
-			found = true
-			break
-		}
+	m.ensureColumnFocus(state, lines)
+	next := m.focusStopIndex(state, stops) + delta
+	if next < 0 {
+		next = 0
 	}
-	if !found {
-		index = 0
+	if next > len(stops)-1 {
+		next = len(stops) - 1
 	}
-	index += delta
-	if index < 0 {
-		index = 0
-	}
-	if index > len(tasks)-1 {
-		index = len(tasks) - 1
-	}
-	m.SelectedIDs[state] = tasks[index].TaskID
-	m.SelectedIndexes[state] = index
+	m.applyFocusStop(state, stops[next])
 }
 
 func (m *BoardModel) SelectedTask() *Task {
-	selectedID := m.SelectedIDs[m.CurrentState()]
-	for i := range m.TasksFor(m.CurrentState()) {
-		tasks := m.TasksFor(m.CurrentState())
+	state := m.CurrentState()
+	if m.focusedHeaderGroup(state) != "" {
+		return nil
+	}
+	selectedID := m.SelectedIDs[state]
+	tasks := m.TasksFor(state)
+	for i := range tasks {
 		if tasks[i].TaskID == selectedID {
 			task := tasks[i]
 			return &task

@@ -930,6 +930,7 @@
   "tui.switch_task": "switch task",
   "tui.task_board": "Task Board",
   "tui.task_detail": "task detail",
+  "tui.toggle_task_group": "collapse or expand task group",
   "tui.task_detail_2": "Task detail",
   "tui.terminal_is_too_small_enlarge_the_window": "Terminal is too small; enlarge the window.",
   "tui.there_are_unsaved_configuration_changes": "There are unsaved configuration changes.",

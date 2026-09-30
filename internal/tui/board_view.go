@@ -192,7 +192,8 @@ func (a *App) visibleTaskCount() int {
 func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) string {
 	width := col.Width
 	focused := col.State == a.Model.CurrentState()
-	tasks, scroll, capacity := columnTaskWindow(a.Model, col.State, col.BodyHeight)
+	rows, scroll := columnWindow(a.Model, col.State, col.BodyHeight)
+	tasks := a.Model.TasksFor(col.State)
 
 	label := a.Context.stateLabel(col.State)
 	single := a.Model.Single || (col.FirstVisual && col.LastVisual && len(a.Model.States()) > 1)
@@ -219,20 +220,35 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 		}
 		body = append(body, styleFor("dim", p).Render(centerText(a.Context.Empty, width-2)))
 	} else {
-		end := scroll + capacity
-		if end > len(tasks) {
-			end = len(tasks)
+		end := scroll + col.BodyHeight
+		if end > len(rows) {
+			end = len(rows)
 		}
-		window := tasks[scroll:end]
+		if scroll > end {
+			scroll = end
+		}
 		rails := columnGroupRails(tasks, themeIsDark(a.Theme))
-		for i, task := range window {
-			rail := rails[scroll+i]
-			body = append(body, a.renderCard(p, col.State, task, contentWidth, focused, rail)...)
-			gap := ""
-			if rail.continueAfter {
-				gap = p.ink(rail.color).Render(borderVertical)
+		cards := map[int][]string{}
+		for _, line := range rows[scroll:end] {
+			switch line.kind {
+			case "header":
+				body = append(body, a.renderGroupHeader(p, col.State, line.group, clusterSize(tasks, line.group), contentWidth, focused, rails[line.task].color))
+			case "card":
+				rendered, ok := cards[line.task]
+				if !ok {
+					rendered = a.renderCard(p, col.State, tasks[line.task], contentWidth, focused, rails[line.task])
+					cards[line.task] = rendered
+				}
+				if line.cardLine >= 0 && line.cardLine < len(rendered) {
+					body = append(body, rendered[line.cardLine])
+				}
+			default:
+				gap := ""
+				if line.rail {
+					gap = p.ink(rails[line.task].color).Render(borderVertical)
+				}
+				body = append(body, gap)
 			}
-			body = append(body, gap)
 		}
 	}
 	for i := 0; i < col.BodyHeight; i++ {
@@ -377,7 +393,7 @@ func (a *App) renderColumnTabs(p palette, width int) string {
 // is one solid block. A cluster member replaces the left pad with │ in the
 // cluster color; the three body lines, including a selected card, keep cardStyle.
 func (a *App) renderCard(p palette, state string, task Task, contentWidth int, focused bool, rail groupRail) []string {
-	selected := focused && task.TaskID == a.Model.SelectedIDs[state]
+	selected := focused && a.Model.cardHighlighted(state, task.TaskID)
 	card := a.boardCardLines(task, contentWidth)
 	out := make([]string, 0, len(card))
 	for offset, text := range card {
@@ -398,6 +414,21 @@ func (a *App) renderCard(p palette, state string, task Task, contentWidth int, f
 		out = append(out, p.ink(rail.color).Render(borderVertical)+style.Render(body))
 	}
 	return out
+}
+
+// renderGroupHeader draws the cluster title on the rail card's left pad.
+// Expanded is ▾ and collapsed is ▸. A focused header uses the card selection
+// style on the body; the │ keeps the slot color.
+func (a *App) renderGroupHeader(p palette, state, group string, count, contentWidth int, focused bool, color lipgloss.Color) string {
+	collapsed := a.Model.groupCollapsed(group)
+	text := groupHeaderText(compactGroup(group), count, contentWidth, collapsed)
+	body := padLine(text, contentWidth) + " "
+	selected := focused && a.Model.focusedHeaderGroup(state) == group
+	style := p.ink(p.Base)
+	if selected {
+		style = cardStyle(p, state, 0, true)
+	}
+	return p.ink(color).Render(borderVertical) + style.Render(body)
 }
 
 // panelTop draws the panel top border with the title and the count badge embedded in it: ╭─ Todo 3 ────╮

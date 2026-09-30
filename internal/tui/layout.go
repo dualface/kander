@@ -61,15 +61,25 @@ func effectiveDesiredColumns(total, desired int) int {
 	return min(clampColumns(desired), total)
 }
 
-func fullColumnBodyHeight(taskCount int) int {
-	if taskCount < 1 {
+// columnBodyLines is the column content height. A trailing gap is omitted,
+// matching the old minimum that dropped the blank under the last card.
+func columnBodyLines(model *BoardModel, state string) int {
+	lines := columnRows(model, state)
+	n := len(lines)
+	if n == 0 {
 		return 1
 	}
-	return taskCount*cardHeight - 1
+	if lines[n-1].kind == "gap" {
+		n--
+	}
+	if n < 1 {
+		return 1
+	}
+	return n
 }
 
-func panelMinimumHeight(taskCount int, skipTop bool) int {
-	height := fullColumnBodyHeight(taskCount) + 1 // bottom border
+func panelMinimumHeight(model *BoardModel, state string, skipTop bool) int {
+	height := columnBodyLines(model, state) + 1 // bottom border
 	if !skipTop {
 		height++
 	}
@@ -111,53 +121,4 @@ func balancedPanelHeights(minimums []int, total int) []int {
 		active = next
 	}
 	return heights
-}
-
-func columnTaskWindow(model *BoardModel, state string, bodyHeight int) (tasks []Task, scroll, capacity int) {
-	tasks = model.TasksFor(state)
-	capacity = (bodyHeight + 1) / cardHeight
-	if capacity < 1 {
-		capacity = 1
-	}
-	if len(tasks) == 0 {
-		model.Scrolls[state] = 0
-		return tasks, 0, capacity
-	}
-	taskIDs := make([]string, len(tasks))
-	for i, task := range tasks {
-		taskIDs[i] = task.TaskID
-	}
-	selectedID := model.SelectedIDs[state]
-	selectedIndex := 0
-	found := false
-	for i, id := range taskIDs {
-		if id == selectedID {
-			selectedIndex = i
-			found = true
-			break
-		}
-	}
-	if !found {
-		selectedIndex = 0
-		model.SelectedIDs[state] = taskIDs[0]
-		model.SelectedIndexes[state] = 0
-	}
-	scroll = model.Scrolls[state]
-	if selectedIndex < scroll {
-		scroll = selectedIndex
-	} else if selectedIndex >= scroll+capacity {
-		scroll = selectedIndex - capacity + 1
-	}
-	maxScroll := len(tasks) - capacity
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if scroll < 0 {
-		scroll = 0
-	}
-	if scroll > maxScroll {
-		scroll = maxScroll
-	}
-	model.Scrolls[state] = scroll
-	return tasks, scroll, capacity
 }

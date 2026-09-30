@@ -7,41 +7,37 @@ func (a *App) boardCardHit(x, y int) *mouseSel {
 	if hit == nil || hit.Kind != "task" {
 		return nil
 	}
-	layout := a.visibleColumnLayout()
-	panel := layoutPanelForState(layout, hit.State)
-	if panel == nil {
+	tasks := a.Model.TasksFor(hit.State)
+	if hit.Index < 0 || hit.Index >= len(tasks) {
 		return nil
 	}
-	tasks, scroll, _ := columnTaskWindow(a.Model, hit.State, panel.BodyHeight)
-	if hit.Index < scroll || hit.Index >= len(tasks) {
+	panel := layoutPanelForState(a.visibleColumnLayout(), hit.State)
+	if panel == nil || x < panel.X || x >= panel.X+panel.Width {
 		return nil
 	}
 	task := tasks[hit.Index]
-	colX, colWidth := panel.X, panel.Width
-	if x < colX || x >= colX+colWidth {
-		return nil
-	}
-	bodyStart := panel.Y
-	if !panel.SkipTop {
-		bodyStart++
-	}
-	row := (y - bodyStart) / cardHeight
-	lineInCard := y - bodyStart - row*cardHeight
+	lineInCard := hit.CardLine
 	if lineInCard < 0 {
 		lineInCard = 0
 	}
 	if lineInCard > 2 {
 		lineInCard = 2
 	}
-	contentWidth := colWidth - panelChrome
+	contentWidth := panel.Width - panelChrome
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
-	displayCol := x - colX - 2
+	displayCol := x - panel.X - 2
 	if displayCol < 0 {
 		displayCol = 0
 	}
 	lines := a.boardCardLines(task, contentWidth)
+	if len(lines) == 0 {
+		return nil
+	}
+	if lineInCard >= len(lines) {
+		lineInCard = len(lines) - 1
+	}
 	lineText := lines[lineInCard]
 	charCol := displayColumnToCharIndex(lineText, displayCol)
 	return &mouseSel{Kind: "board", TaskID: task.TaskID, Line: lineInCard, Col: charCol, ContentWidth: contentWidth}
@@ -222,6 +218,11 @@ func (a *App) handleBoardClick(x, y, bstate int) {
 		if mouseLeftDoubleClicked(bstate) {
 			a.openDetail()
 		}
+	case "header":
+		a.Model.FocusGroupHeader(hit.State, hit.Group)
+		if !mouseLeftDoubleClicked(bstate) {
+			a.Model.ToggleCollapsed(hit.Group)
+		}
 	}
 }
 
@@ -334,19 +335,24 @@ func (a *App) hitBoard(x, y int) *boardHit {
 		if y < bodyStart || y >= bodyStart+panel.BodyHeight || panel.BodyHeight <= 0 {
 			return &boardHit{Kind: "column", State: panel.State}
 		}
-		tasks, scroll, capacity := columnTaskWindow(a.Model, panel.State, panel.BodyHeight)
-		if len(tasks) == 0 {
+		lines, scroll := columnWindow(a.Model, panel.State, panel.BodyHeight)
+		if len(lines) == 0 {
 			return &boardHit{Kind: "column", State: panel.State}
 		}
-		row := (y - bodyStart) / cardHeight
-		if row < 0 || row >= capacity {
+		local := y - bodyStart
+		index := scroll + local
+		if local < 0 || index < 0 || index >= len(lines) {
 			return &boardHit{Kind: "column", State: panel.State}
 		}
-		taskIndex := scroll + row
-		if taskIndex >= len(tasks) {
+		line := lines[index]
+		switch line.kind {
+		case "header":
+			return &boardHit{Kind: "header", State: panel.State, Group: line.group}
+		case "card":
+			return &boardHit{Kind: "task", State: panel.State, Index: line.task, CardLine: line.cardLine}
+		default:
 			return &boardHit{Kind: "column", State: panel.State}
 		}
-		return &boardHit{Kind: "task", State: panel.State, Index: taskIndex}
 	}
 	return nil
 }

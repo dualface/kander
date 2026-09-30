@@ -29,10 +29,12 @@ type mouseSel struct {
 }
 
 type boardHit struct {
-	Kind  string
-	State string
-	Index int
-	Delta int
+	Kind     string
+	State    string
+	Index    int
+	Delta    int
+	Group    string
+	CardLine int
 }
 
 type App struct {
@@ -575,38 +577,8 @@ func (a *App) applyDetailSearch() {
 	a.ensureDetailCursorVisible(a.detailLines())
 }
 
-func (a *App) pageSize() int {
-	bodyHeight := a.boardBodyHeight()
-	for _, panel := range a.visibleColumnLayout() {
-		if panel.State == a.Model.CurrentState() {
-			bodyHeight = panel.BodyHeight
-			break
-		}
-	}
-	n := bodyHeight / cardHeight
-	if n < 1 {
-		return 1
-	}
-	return n
-}
-
 func (a *App) page(direction int) {
-	page := a.pageSize()
-	state := a.Model.CurrentState()
-	a.Model.MoveTask(direction * page)
-	taskCount := len(a.Model.TasksFor(state))
-	next := a.Model.Scrolls[state] + direction*page
-	maxScroll := taskCount - page
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if next < 0 {
-		next = 0
-	}
-	if next > maxScroll {
-		next = maxScroll
-	}
-	a.Model.Scrolls[state] = next
+	a.pageFocus(direction)
 }
 
 func (a *App) visibleColumnLayout() []boardLayout {
@@ -674,11 +646,11 @@ func (a *App) buildColumnLayout(states []string, visualCount int, compact bool) 
 	for visual := range visualCount {
 		remainingColumns := visualCount - visual - 1
 		group := []string{states[cursor]}
-		minimums := []int{panelMinimumHeight(len(a.Model.TasksFor(states[cursor])), tabs)}
+		minimums := []int{panelMinimumHeight(a.Model, states[cursor], tabs)}
 		minimumTotal := minimums[0]
 		cursor++
 		for cursor < len(states) && len(states)-cursor > remainingColumns {
-			minimum := panelMinimumHeight(len(a.Model.TasksFor(states[cursor])), false)
+			minimum := panelMinimumHeight(a.Model, states[cursor], false)
 			if minimumTotal+minimum > areaHeight {
 				break
 			}
@@ -752,9 +724,9 @@ func (a *App) handleBoardKey(key string) {
 	case "pgdn":
 		a.page(1)
 	case "home":
-		a.Model.MoveTask(-len(a.Model.Tasks))
+		a.Model.MoveFocusEdge(false)
 	case "end":
-		a.Model.MoveTask(len(a.Model.Tasks))
+		a.Model.MoveFocusEdge(true)
 	case "/":
 		a.Searching = true
 		a.ShowCursor = true
@@ -773,16 +745,46 @@ func (a *App) handleBoardKey(key string) {
 	case "?":
 		a.openHelp()
 	case "y":
+		if a.Model.focusedHeaderGroup(a.Model.CurrentState()) != "" {
+			return
+		}
 		a.copySelectedTaskID()
 	case "m":
+		if a.Model.focusedHeaderGroup(a.Model.CurrentState()) != "" {
+			return
+		}
 		a.openTaskActions()
+	case "z":
+		a.toggleFocusedGroup()
+	case " ", "enter":
+		if group := a.Model.focusedHeaderGroup(a.Model.CurrentState()); group != "" {
+			a.Model.ToggleCollapsed(group)
+			return
+		}
+		if key == "enter" {
+			a.openDetail()
+		}
 	case "g":
 		a.openIssues()
 	case "c":
 		a.openChat()
-	case "enter":
-		a.openDetail()
 	}
+}
+
+func (a *App) toggleFocusedGroup() {
+	state := a.Model.CurrentState()
+	if group := a.Model.focusedHeaderGroup(state); group != "" {
+		a.Model.ToggleCollapsed(group)
+		return
+	}
+	task := a.Model.SelectedTask()
+	if task == nil || task.TaskGroup == "" {
+		return
+	}
+	if !clusterInColumn(a.Model.TasksFor(state), task.TaskGroup) {
+		return
+	}
+	a.Model.ToggleCollapsed(task.TaskGroup)
 }
 
 func (a *App) handleSearchKey(key string) {
