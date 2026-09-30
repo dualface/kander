@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"regexp"
@@ -321,12 +320,11 @@ func hexNibble(b byte) int {
 	return 0
 }
 
+// trueColorSeq asks termenv for the emitted bytes instead of recomputing them:
+// the renderer drops a channel by one for values like #232923, where the
+// float round trip through colorful.Hex ends below the integer.
 func trueColorSeq(hex string, foreground bool) string {
-	prefix := "48;2"
-	if foreground {
-		prefix = "38;2"
-	}
-	return fmt.Sprintf("%s;%.0f;%.0f;%.0f", prefix, hexByte(hex[1], hex[2]), hexByte(hex[3], hex[4]), hexByte(hex[5], hex[6]))
+	return termenv.TrueColor.Color(hex).Sequence(!foreground)
 }
 
 func TestResolveThemeNamedAndAuto(t *testing.T) {
@@ -358,12 +356,12 @@ func TestResolveThemeNamedAndAuto(t *testing.T) {
 }
 
 func TestThemeIsDarkClassifiesFamilies(t *testing.T) {
-	for _, name := range []string{"light", "light-warm", "light-contrast", "slate-light"} {
+	for _, name := range []string{"light", "light-warm", "light-contrast", "slate-light", "matcha-zen"} {
 		if themeIsDark(name) {
 			t.Fatalf("%s should be light", name)
 		}
 	}
-	for _, name := range []string{"dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark"} {
+	for _, name := range []string{"dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "bamboo-multiplex"} {
 		if !themeIsDark(name) {
 			t.Fatalf("%s should be dark", name)
 		}
@@ -449,7 +447,7 @@ func TestThemeSurfacesPaintOwnBackground(t *testing.T) {
 
 // The new themes separate selection surfaces from decorative panel outlines.
 func TestSurfaceThemeSelectionAndFocus(t *testing.T) {
-	for _, name := range []string{"tide", "dusk", "slate-dark", "slate-light"} {
+	for _, name := range []string{"tide", "dusk", "slate-dark", "slate-light", "matcha-zen", "bamboo-multiplex"} {
 		t.Run(name, func(t *testing.T) {
 			p := themePalette(name)
 			assertHexColor(t, name+".SelectionBg", p.SelectionBg)

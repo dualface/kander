@@ -361,7 +361,7 @@ func TestBlurredInlineSelectKeepsValueColumn(t *testing.T) {
 func TestOptionsThemeSelectListsAllThemes(t *testing.T) {
 	app, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionInterface))
-	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
+	want := []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light", "matcha-zen", "bamboo-multiplex"}
 	if strings.Join(themes, ",") != strings.Join(want, ",") {
 		t.Fatalf("themes=%v", themes)
 	}
@@ -428,10 +428,12 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 		{"right", "dusk"},
 		{"right", "slate-dark"},
 		{"right", "slate-light"},
+		{"right", "matcha-zen"},
+		{"right", "bamboo-multiplex"},
 		{"right", "auto"},
 		{"right", "light"},
 		{"left", "auto"},
-		{"left", "slate-light"},
+		{"left", "bamboo-multiplex"},
 		{"right", "auto"},
 		{"right", "light"},
 	} {

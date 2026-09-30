@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- TUI: two new named themes. `matcha-zen` is a light theme ported from the livlign/posh-palette terminal theme and `bamboo-multiplex` is a dark theme ported from ribru17/bamboo.nvim; both use the selection-surface palette form and appear at the end of the `t` key cycle and the options Color theme list, and `tui.theme` accepts them.
+
 ## v0.8.7 — 2026-09-30
 
 - TUI: cards of the same task group in one column cluster together and are joined by a continuous `│` rail drawn in the existing left pad column, so the column width and the card body offset stay unchanged. Each cluster takes one of eight colors for the active theme family (dark and light palettes, every color at least 3:1 against that family's backgrounds), chosen from the group ID's FNV-1a hash and shifted one slot when it would repeat the previous cluster's color; a selected card keeps its group color in the left pad.

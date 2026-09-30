@@ -33,7 +33,7 @@ var (
 	ReviewRoles      = []string{"PMQA", "Security"}
 	ReviewStageModes = []string{"auto", "skip", "required"}
 	Languages        = []string{"cn", "en", "ja"}
-	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light"}
+	TUIThemes        = []string{"auto", "light", "light-warm", "light-contrast", "dark", "dark-soft", "dark-contrast", "tide", "dusk", "slate-dark", "slate-light", "matcha-zen", "bamboo-multiplex"}
 )
 
 const (
