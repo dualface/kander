@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"hash/fnv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -305,6 +306,83 @@ func themePalette(name string) palette {
 func themeIsDark(name string) bool {
 	def, _ := themeDefByName(resolveTheme(name))
 	return def.dark
+}
+
+// groupRailSlots is the fixed rail palette size. A column does not promise
+// a unique color per group: a cluster only moves off the previous cluster's slot.
+const groupRailSlots = 8
+
+// groupRailLight is for themes with dark == false. groupRailDark is for dark == true.
+// Each color clears 3:1 against every background in that family.
+var groupRailLight = [groupRailSlots]lipgloss.Color{
+	"#9b1c3a", "#0b5f4e", "#1d4e89", "#6b3fa0",
+	"#8a4b08", "#0e6b78", "#7a2f6e", "#3f6212",
+}
+
+var groupRailDark = [groupRailSlots]lipgloss.Color{
+	"#ff8aa3", "#5eecc8", "#8ec5ff", "#d2a6ff",
+	"#ffc36b", "#7ee0ea", "#ff9ad5", "#c6e37a",
+}
+
+// groupRail is the left-pad paint for one card in clustered column order.
+// Member is false for an ungrouped card and for a group with one visible card.
+// ContinueAfter is the gap under this card when the next card is the same cluster.
+type groupRail struct {
+	color         lipgloss.Color
+	member        bool
+	continueAfter bool
+}
+
+func groupRailPalette(dark bool) [groupRailSlots]lipgloss.Color {
+	if dark {
+		return groupRailDark
+	}
+	return groupRailLight
+}
+
+// groupRailSlot is FNV-1a 32-bit of the raw group ID, modulo the palette size.
+func groupRailSlot(group string) int {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(group))
+	return int(hash.Sum32() % uint32(groupRailSlots))
+}
+
+// columnGroupRails assigns slots on already clustered column order.
+// A run of two or more cards with the same non-empty group is one cluster.
+// The displayed slot is the base slot unless that equals the previous cluster's
+// displayed slot, in which case it is the next slot. Three base-0 clusters
+// therefore use slots 0, 1, 0.
+func columnGroupRails(tasks []Task, dark bool) []groupRail {
+	out := make([]groupRail, len(tasks))
+	palette := groupRailPalette(dark)
+	previous := -1
+	for i := 0; i < len(tasks); {
+		group := tasks[i].TaskGroup
+		j := i + 1
+		if group != "" {
+			for j < len(tasks) && tasks[j].TaskGroup == group {
+				j++
+			}
+		}
+		if group == "" || j-i < 2 {
+			i = j
+			continue
+		}
+		slot := groupRailSlot(group)
+		if previous >= 0 && slot == previous {
+			slot = (slot + 1) % groupRailSlots
+		}
+		previous = slot
+		for k := i; k < j; k++ {
+			out[k] = groupRail{
+				color:         palette[slot],
+				member:        true,
+				continueAfter: k+1 < j,
+			}
+		}
+		i = j
+	}
+	return out
 }
 
 func (p palette) ink(color lipgloss.Color) lipgloss.Style {

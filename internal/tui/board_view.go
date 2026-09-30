@@ -223,9 +223,16 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 		if end > len(tasks) {
 			end = len(tasks)
 		}
-		for _, task := range tasks[scroll:end] {
-			body = append(body, a.renderCard(p, col.State, task, contentWidth, focused)...)
-			body = append(body, "")
+		window := tasks[scroll:end]
+		rails := columnGroupRails(tasks, themeIsDark(a.Theme))
+		for i, task := range window {
+			rail := rails[scroll+i]
+			body = append(body, a.renderCard(p, col.State, task, contentWidth, focused, rail)...)
+			gap := ""
+			if rail.continueAfter {
+				gap = p.ink(rail.color).Render(borderVertical)
+			}
+			body = append(body, gap)
 		}
 	}
 	for i := 0; i < col.BodyHeight; i++ {
@@ -365,9 +372,11 @@ func (a *App) renderColumnTabs(p palette, width int) string {
 	return padLineFill(strings.Join(parts, ""), width, p)
 }
 
-// renderCard draws one task card. The card keeps one column of padding on each side and both take part in the coloring,
-// so a selected card is one solid block spanning the panel's inner width, with no extra vertical bar needed.
-func (a *App) renderCard(p palette, state string, task Task, contentWidth int, focused bool) []string {
+// renderCard draws one task card. A card outside a cluster keeps one column of
+// padding on each side and both take part in the coloring, so a selected card
+// is one solid block. A cluster member replaces the left pad with │ in the
+// cluster color; the three body lines, including a selected card, keep cardStyle.
+func (a *App) renderCard(p palette, state string, task Task, contentWidth int, focused bool, rail groupRail) []string {
 	selected := focused && task.TaskID == a.Model.SelectedIDs[state]
 	card := a.boardCardLines(task, contentWidth)
 	out := make([]string, 0, len(card))
@@ -381,7 +390,12 @@ func (a *App) renderCard(p palette, state string, task Task, contentWidth int, f
 		if len(spans) > 0 {
 			style = styleFor("select", p)
 		}
-		out = append(out, style.Render(" "+padLine(clipText(text, contentWidth), contentWidth)+" "))
+		body := padLine(clipText(text, contentWidth), contentWidth) + " "
+		if !rail.member {
+			out = append(out, style.Render(" "+body))
+			continue
+		}
+		out = append(out, p.ink(rail.color).Render(borderVertical)+style.Render(body))
 	}
 	return out
 }

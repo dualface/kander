@@ -74,12 +74,52 @@ func (m *BoardModel) SetBoard(payload BoardPayload) bool {
 	return true
 }
 
+// TasksFor returns one column's visible cards. Filtering keeps the previous
+// field match, then same-column groups of two or more cluster at the first
+// member. Render, selection, scroll, and hit testing all read this list.
 func (m *BoardModel) TasksFor(state string) []Task {
 	var out []Task
 	for _, task := range m.Tasks {
 		if task.State == state && taskMatches(task, m.Query) {
 			out = append(out, task)
 		}
+	}
+	return clusterColumnTasks(out)
+}
+
+// clusterColumnTasks pulls each non-empty group of two or more cards forward
+// to that group's first visible member. Members keep their relative order.
+// Ungrouped cards and singleton groups stay where that pull leaves them.
+func clusterColumnTasks(tasks []Task) []Task {
+	if len(tasks) < 2 {
+		return tasks
+	}
+	counts := map[string]int{}
+	for _, task := range tasks {
+		if task.TaskGroup == "" {
+			continue
+		}
+		counts[task.TaskGroup]++
+	}
+	emitted := make([]bool, len(tasks))
+	out := make([]Task, 0, len(tasks))
+	for i, task := range tasks {
+		if emitted[i] {
+			continue
+		}
+		group := task.TaskGroup
+		if group != "" && counts[group] >= 2 {
+			for j := i; j < len(tasks); j++ {
+				if tasks[j].TaskGroup != group {
+					continue
+				}
+				out = append(out, tasks[j])
+				emitted[j] = true
+			}
+			continue
+		}
+		out = append(out, task)
+		emitted[i] = true
 	}
 	return out
 }
