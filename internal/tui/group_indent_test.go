@@ -5,10 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 )
 
 func TestGroupIndentAndColumnWidth(t *testing.T) {
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
+
 	title := strings.Repeat("任务abc", 12)
 	tasks := []Task{
 		{TaskID: "A", Title: title, State: "todo", TaskGroup: "20260930-g1"},
@@ -27,6 +33,7 @@ func TestGroupIndentAndColumnWidth(t *testing.T) {
 					State: "todo", Width: width, Height: len(rows) + 2, BodyHeight: len(rows),
 					FirstVisual: true, LastVisual: true,
 				}, 1)
+				expectFilled(t, "grouped column", frame)
 				lines := strings.Split(ansi.Strip(frame), "\n")
 				for i, line := range lines[1 : len(lines)-1] {
 					if displayWidth(line) != width {

@@ -245,7 +245,7 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 			default:
 				gap := ""
 				if line.rail {
-					gap = " " + p.ink(rails[line.task].color).Render(borderVertical) + " "
+					gap = p.fillLine(1) + p.ink(rails[line.task].color).Render(borderVertical) + p.fillLine(1)
 				}
 				body = append(body, gap)
 			}
@@ -421,7 +421,7 @@ func (a *App) renderCard(p palette, state string, task Task, contentWidth int, f
 			out = append(out, style.Render(" "+body))
 			continue
 		}
-		out = append(out, " "+p.ink(rail.color).Render(borderVertical)+style.Render(" "+body))
+		out = append(out, p.fillLine(1)+p.ink(rail.color).Render(borderVertical)+style.Render(" "+body))
 	}
 	return out
 }

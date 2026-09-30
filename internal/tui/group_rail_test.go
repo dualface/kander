@@ -167,7 +167,7 @@ func TestSelectedClusterKeepsIndentedSlotColor(t *testing.T) {
 		for offset, line := range lines {
 			style := cardStyle(p, "todo", offset, true)
 			body := style.Render(" " + padLine(app.boardCardLines(task, width-2)[offset], width-2) + " ")
-			left := " " + p.ink(rail.color).Render(borderVertical)
+			left := p.fillLine(1) + p.ink(rail.color).Render(borderVertical)
 			if line != left+body {
 				t.Fatalf("%s line %d left pad or title style diverged", theme, offset)
 			}

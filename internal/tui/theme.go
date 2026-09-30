@@ -374,7 +374,7 @@ var groupRailDark = [groupRailSlots]lipgloss.Color{
 	"#ffc36b", "#7ee0ea", "#ff9ad5", "#c6e37a",
 }
 
-// groupRail is the left-pad paint for one card in clustered column order.
+// groupRail is the indented rail paint for one card in clustered column order.
 // Member is false for an ungrouped card and for a group with one visible card.
 // ContinueAfter is the gap under this card when the next card is the same cluster.
 type groupRail struct {
