@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.8.7 — 2026-09-30
+
+- TUI: cards of the same task group in one column cluster together and are joined by a continuous `│` rail drawn in the existing left pad column, so the column width and the card body offset stay unchanged. Each cluster takes one of eight colors for the active theme family (dark and light palettes, every color at least 3:1 against that family's backgrounds), chosen from the group ID's FNV-1a hash and shifted one slot when it would repeat the previous cluster's color; a selected card keeps its group color in the left pad.
+- TUI: a clustered group can be collapsed and expanded. Its header row shows the rail color, `▾` or `▸`, the shortened group name, and the member count; `Enter`, `Space`, or a click toggles it, `z` toggles the focused card's group, and `m`, `y`, and `Enter` on a header no longer open the task menu, copy the ID, or open the detail view. Groups start expanded and keep their collapsed state for the process, a non-empty search temporarily expands them, and the column badge still counts hidden cards. Board rows now have variable heights, so `j`/`k`, paging, the wheel, and mouse hit testing follow visible rows, and the compact and archived columns use the same rows. Help gains `z`; the three catalogs add `tui.toggle_task_group`.
+
 ## v0.8.6 — 2026-09-29
 
 - Fix (Windows): the private review runtime is usable by grok and codex. The runtime lease no longer holds DELETE access, so a reviewer can enter the runtime as its working directory; embedded agent definitions may declare `review_windows_read_groups` (Codex declares its sandbox group), and reviewers with read groups always get the spec snapshotted into the runtime. The claude review no longer injects `CLAUDE_CONFIG_DIR`.
