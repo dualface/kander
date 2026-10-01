@@ -77,7 +77,8 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	sessionDef := config.AgentFor(cfg, agentName).Session
 	initialSession := session.Render()
-	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(sessionDef)
+	persistSession := config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
+	discoverSession := plan.capabilities().PaneMetadata || persistSession
 	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root))
 	if err != nil {
 		return result, err
@@ -139,7 +140,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			return AgentSession{Agent: session.Agent, Reference: ref}, nil
 		}
 	}
-	if config.SessionPersistsAfterStart(sessionDef) {
+	if persistSession {
 		plan.sessionFinalize = func(effective AgentSession) error {
 			return board.ConfirmTaskStartSession(root, moved, initialSession, effective.Render())
 		}
@@ -156,7 +157,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
 	taskFileHandedOff = true
-	if !config.SessionPersistsAfterStart(sessionDef) {
+	if !persistSession {
 		err = board.ConfirmTaskStart(root, moved)
 		if err != nil {
 			return result, err

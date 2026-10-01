@@ -1,8 +1,10 @@
 package notify
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -12,14 +14,11 @@ import (
 )
 
 func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messageSet bool, timeout float64) error {
-	loaded, err := board.LoadBoard(root)
+	snapshot, err := board.ReadSnapshot(root, taskID)
 	if err != nil {
 		return err
 	}
-	entry, err := board.Locate(loaded, taskID)
-	if err != nil {
-		return err
-	}
+	entry := snapshot.Entry
 	if entry.State != "review" && entry.State != "working" {
 		return notifyError(
 			"notify.only_tasks_in_review_or_working_can_be_notified", entry.TaskID, entry.State,
@@ -32,10 +31,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 	if err != nil {
 		return err
 	}
-	text, err := board.ReadDocument(entry)
-	if err != nil {
-		return err
-	}
+	text := snapshot.Text
 	if err := board.ValidateMutable(entry, text); err != nil {
 		return err
 	}
@@ -46,6 +42,15 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 	if err := cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(text)); err != nil {
 		return err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout*float64(time.Second)))
+	defer cancel()
+	snapshot, err = launch.RepairMissingSession(ctx, root, snapshot, pane)
+	if err != nil {
+		return &UncertainError{Message: err.Error()}
+	}
+	entry, text = snapshot.Entry, snapshot.Text
+	deadline, _ := ctx.Deadline()
+	timeout = time.Until(deadline).Seconds()
 	paths, err := config.CurrentInstallPaths()
 	if err != nil {
 		return err

@@ -32,6 +32,39 @@ func contextTask(t *testing.T) (string, string) {
 	return "", ""
 }
 
+func TestPinnedDocumentContextContention(t *testing.T) {
+	root, id := contextTask(t)
+	snapshot, err := ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var holder lockSet
+	if err := holder.take(root, control(root, "locks", id+".lock"), false); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = holder.close() }()
+	for _, write := range []bool{false, true} {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
+		if write {
+			err = WriteManagedDocumentContext(ctx, root, snapshot.Entry, snapshot.Text+"\nchanged\n")
+		} else {
+			_, err = ReadDocumentContext(ctx, snapshot.Entry)
+		}
+		cancel()
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("write=%v err=%v", write, err)
+		}
+	}
+	if err := holder.close(); err != nil {
+		t.Fatal(err)
+	}
+	holder = nil
+	text, err := ReadDocument(snapshot.Entry)
+	if err != nil || text != snapshot.Text {
+		t.Fatalf("cancelled mutation published: %v", err)
+	}
+}
+
 func TestSnapshotContextContentionReleasesLocks(t *testing.T) {
 	for _, name := range []string{"board", "task", "journal"} {
 		t.Run(name, func(t *testing.T) {

@@ -18,5 +18,17 @@
   "terminal.session_identity_kind_unknown": "セッション識別 kind {{.V0}} はサポートされていません(agent {{.V1}})",
   "terminal.session_identity_missing": "pane がセッション識別値を報告していません",
   "terminal.session_lookup_incomplete": "セッション逆引きを判定できません: {{.V0}}",
-  "terminal.session_lookup_uncertain_count": "{{.V0}}({{.V1}} 件の未決 pane)"
+  "terminal.session_lookup_uncertain_count": "{{.V0}}({{.V1}} 件の未決 pane)",
+  "launch.session_repair_unresolved_native": "ネイティブセッション識別情報を解決できないため、自動修復では置き換えません。",
+  "launch.session_repair_unsupported": "セッション識別情報を修復できません。バックエンドまたは agent がプロセスの検証やセッション報告に対応していません。",
+  "launch.session_repair_changed": "検証中にカード、pane、プロセスまたはセッション識別情報が変わったため、修復を拒否しました。",
+  "launch.session_repair_binding_missing": "現在の pane、プロセス、セッションの対応を検証できないため、識別情報を修復できません。",
+  "launch.session_repair_binding_ambiguous": "プロセスが複数の該当セッションを開いているため、識別情報を修復できません。",
+  "launch.session_repair_binding_mismatch": "現在のプロセスのセッションがカードのセッションと異なるため、修復を拒否しました。",
+  "launch.session_repair_process_unavailable": "プロセスの検証情報を取得できないため、識別情報を修復できません：{{.V0}}",
+  "launch.session_repair_report_failed": "セッション識別情報の修復報告に失敗しました：{{.V0}}",
+  "terminal.process_facts_wrong_pane": "プロセス情報が別のペインを返しました",
+  "terminal.process_facts_invalid": "プロセス情報が無効です",
+  "terminal.process_facts_limit": "プロセス情報が 64 件を超えています",
+  "terminal.process_facts_identity_invalid": "フォアグラウンドプロセスの識別情報が無効です"
 }

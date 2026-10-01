@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -50,12 +49,20 @@ func reportSession(ctx context.Context, call terminal.HookCall) error {
 		return err
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	_ = conn.SetDeadline(report.Deadline)
 	if _, err := conn.Write(payload); err != nil {
 		return err
 	}
 	reader := bufio.NewReader(conn)
 	line, err := reader.ReadBytes('\n')
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err != nil && len(line) == 0 {
 		return textError("launch.herdr_socket_returned_no_response")
 	}
@@ -73,7 +80,7 @@ func reportSession(ctx context.Context, call terminal.HookCall) error {
 	if remaining <= 0 {
 		return textError("launch.timed_out_reading_back_the_herdr_session_identity")
 	}
-	ctx, cancel := probe.TimeoutContext(remaining)
+	ctx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	backend, ok := terminal.Lookup(call.Launcher)
 	if !ok {

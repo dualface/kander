@@ -690,6 +690,36 @@
           }
         }
       ]
+    },
+    "process_facts": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "process-info",
+            "--pane",
+            "{pane}"
+          ],
+          "store": "process",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result.process_info"
+          },
+          "fields": {
+            "pane": "json_field:pane_id",
+            "processes": "json_field:foreground_processes"
+          },
+          "expect": [
+            [
+              "field:step.process.pane={pane}"
+            ]
+          ]
+        }
+      ],
+      "result": {
+        "pane": "{step.process.pane}",
+        "processes": "{step.process.processes}"
+      }
     }
   }
 }

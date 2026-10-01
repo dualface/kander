@@ -21,11 +21,26 @@ func ScanTargets(root string, values []string) (Board, error) {
 // ReadDocument reads a committed revision and rejects an Entry invalidated by a
 // concurrent mutation. Relocate through ReadSnapshot when retrying a conflict.
 func ReadDocument(entry Entry) (string, error) {
+	return readPinnedDocument(nil, entry)
+}
+
+// ReadDocumentContext bounds board lock contention while retaining the cursor's
+// revision check. Kernel file operations retain their existing limits.
+func ReadDocumentContext(ctx context.Context, entry Entry) (string, error) {
+	return readPinnedDocument(ctx, entry)
+}
+
+func readPinnedDocument(ctx context.Context, entry Entry) (string, error) {
 	if entry.Version != nil {
 		entry.Version.mu.Lock()
 		defer entry.Version.mu.Unlock()
 	}
-	s, err := ReadSnapshotWithWarnings(boardRootFromEntry(entry), entry.TaskID, entryWarningLog(entry))
+	var s Snapshot
+	err := withTransaction(ctx, boardRootFromEntry(entry), LockScope{Tasks: []string{entry.TaskID}, ReadOnly: true, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
+		var err error
+		s, err = tx.Snapshot(entry.TaskID)
+		return err
+	})
 	if err != nil {
 		return "", err
 	}
@@ -38,21 +53,27 @@ func ReadDocument(entry Entry) (string, error) {
 // WriteManagedDocument commits a lifecycle operation's existing document and
 // advances only its own cursor. Other operation cursors remain stale.
 func WriteManagedDocument(root string, entry Entry, text string) error {
-	return managedMutation(root, entry, text, "")
+	return managedMutation(nil, root, entry, text, "")
+}
+
+// WriteManagedDocumentContext bounds lock contention and transaction preparation.
+// A published journal intent is completed by the existing recovery protocol.
+func WriteManagedDocumentContext(ctx context.Context, root string, entry Entry, text string) error {
+	return managedMutation(ctx, root, entry, text, "")
 }
 
 // RollbackDocument restores the original document and optional state only while
 // this operation still owns the current revision; it cannot erase newer work.
 func RollbackDocument(root string, entry Entry, text, state string) error {
-	return managedMutation(root, entry, text, state)
+	return managedMutation(nil, root, entry, text, state)
 }
-func managedMutation(root string, entry Entry, text, state string) error {
+func managedMutation(ctx context.Context, root string, entry Entry, text, state string) error {
 	if entry.Version == nil {
 		return kanbanError("board.transaction_conflict", entry.TaskID)
 	}
 	entry.Version.mu.Lock()
 	defer entry.Version.mu.Unlock()
-	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
+	err := withTransaction(ctx, root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
 		s, err := tx.Expect(entry.TaskID, entry.State, entry.Version.revision)
 		if err != nil {
 			return err

@@ -129,6 +129,8 @@ type Identity struct {
 
 // SessionReport is one out-of-band session identity report.
 type SessionReport struct {
+	// Context carries cancellation from a notification repair.
+	Context context.Context
 	// Conn runs the read-back probe of the reported identity.
 	Conn      Conn
 	Pane      string

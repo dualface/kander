@@ -129,6 +129,10 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 		if err = launch.ValidateActionEvidence(ctx, root, d); err != nil {
 			return err
 		}
+		s, err = launch.RepairMissingSession(ctx, root, s, paneOverride)
+		if err != nil {
+			return &UncertainError{Message: err.Error()}
+		}
 		target, stopped, busy, err := resolveDispatchTarget(ctx, s, paneOverride)
 		if err != nil {
 			return err

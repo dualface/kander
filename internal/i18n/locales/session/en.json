@@ -18,5 +18,17 @@
   "terminal.session_identity_kind_unknown": "session identity kind {{.V0}} is not supported (agent {{.V1}})",
   "terminal.session_identity_missing": "pane reported no session identity value",
   "terminal.session_lookup_incomplete": "session lookup could not decide: {{.V0}}",
-  "terminal.session_lookup_uncertain_count": "{{.V0}} ({{.V1}} unresolved panes)"
+  "terminal.session_lookup_uncertain_count": "{{.V0}} ({{.V1}} unresolved panes)",
+  "launch.session_repair_unresolved_native": "Native session identity cannot be resolved; automatic repair will not replace it.",
+  "launch.session_repair_unsupported": "Missing session identity cannot be repaired: this backend or agent lacks process evidence or session reporting.",
+  "launch.session_repair_changed": "Session repair rejected: the card, pane, process or session identity changed during verification.",
+  "launch.session_repair_binding_missing": "Missing session identity cannot be repaired: no verified current pane/process/session binding.",
+  "launch.session_repair_binding_ambiguous": "Missing session identity cannot be repaired: the process has several matching open sessions.",
+  "launch.session_repair_binding_mismatch": "Session repair rejected: the current process session differs from the card session.",
+  "launch.session_repair_process_unavailable": "Missing session identity cannot be repaired: process evidence is unavailable: {{.V0}}",
+  "launch.session_repair_report_failed": "Session identity repair report failed: {{.V0}}",
+  "terminal.process_facts_wrong_pane": "Process observation returned another pane",
+  "terminal.process_facts_invalid": "Invalid process observation",
+  "terminal.process_facts_limit": "Process observation exceeds 64 processes",
+  "terminal.process_facts_identity_invalid": "Invalid foreground process identity"
 }

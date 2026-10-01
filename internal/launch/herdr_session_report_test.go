@@ -10,7 +10,96 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/board"
 )
+
+func TestHerdrCodexDiscoversAndPersistsWithoutNativeHook(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX launcher fixture")
+	}
+	for _, reportAvailable := range []bool{true, false} {
+		t.Run(fmtBool(reportAvailable), func(t *testing.T) {
+			freezeClock(t)
+			root, home, bin := setupBoard(t)
+			log := installHerdr(t, root, bin)
+			t.Setenv("CODEX_THREAD_ID", "orchestrator-session")
+			task, _ := makeTodo(t, root, "codex-no-native-hook")
+			repairRollout(t, task, "old", "old-session", "")
+			repairRollout(t, task, "orchestrator", "orchestrator-session", "orchestrate "+task)
+			var reports chan map[string]any
+			if reportAvailable {
+				socket, ch := herdrReportListener(t, root)
+				reports = ch
+				t.Setenv("HERDR_SOCKET_PATH", socket)
+			} else {
+				t.Setenv("HERDR_SOCKET_PATH", "")
+			}
+			t.Setenv("KANBAN_HERDR_AGENT", "codex")
+			id := "fake-codex-" + task
+			t.Setenv("KANBAN_HERDR_SESSION", id)
+			result, err := Start(root, "codex", "herdr", task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err := board.ReadSnapshot(root, task)
+			if err != nil || board.MetadataFrom(snapshot.Text, board.FieldSession) != "codex "+id {
+				t.Fatalf("session=%s err=%v", snapshot.Text, err)
+			}
+			if snapshot.Entry.State != "working" {
+				t.Fatal("launch was rolled back")
+			}
+			if _, err := os.Stat(log + ".close"); !os.IsNotExist(err) {
+				t.Fatal("live container closed")
+			}
+			if _, err := os.Stat(filepath.Join(home, ".codex", "hooks.json")); !os.IsNotExist(err) {
+				t.Fatal("native hook was installed")
+			}
+			if reportAvailable {
+				if len(result.Warnings) != 0 {
+					t.Fatalf("warnings=%q", result.Warnings)
+				}
+				select {
+				case report := <-reports:
+					params := report["params"].(map[string]any)
+					if params["agent_session_id"] != id || params["pane_id"] != "w1:p9" {
+						t.Fatalf("report=%v", report)
+					}
+				default:
+					t.Fatal("no proactive report")
+				}
+			} else if len(result.Warnings) != 1 {
+				t.Fatalf("warnings=%q", result.Warnings)
+			}
+		})
+	}
+}
+
+func fmtBool(value bool) string {
+	if value {
+		return "reported"
+	}
+	return "no-channel"
+}
+
+func TestCodexDiscoveryRejectsAbsentAndAmbiguousNewSessions(t *testing.T) {
+	for _, count := range []int{0, 2} {
+		t.Run(fmtBool(count == 0), func(t *testing.T) {
+			freezeClock(t)
+			setupBoard(t)
+			const task = "task-1"
+			repairRollout(t, task, "old", "old-session", "")
+			repairRollout(t, task, "orchestrator", "orchestrator-session", "orchestrate "+task)
+			for index := range count {
+				name := []string{"first", "second"}[index]
+				repairRollout(t, task, name, name+"-session", "")
+			}
+			if id, err := discoverNewCodexSession(task, map[string]struct{}{"old-session": {}}); err == nil || id != "" {
+				t.Fatalf("id=%s err=%v", id, err)
+			}
+		})
+	}
+}
 
 // herdrReportListener fakes the herdr session-report socket: every accepted
 // connection's request line is decoded into the reports channel and answered

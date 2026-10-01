@@ -108,6 +108,9 @@ An operation object is:
 
 `steps` must not be empty unless `candidates` supplies them.
 
+Optional `process_facts` receives `{pane}` and returns `pane` plus `processes`, a compact JSON array of objects with positive unique integer `pid` and non-empty `name` (at most 64 entries). Additional process object fields are ignored. The returned `pane` must equal the requested pane. Older definitions need not declare it; callers treat absent process evidence as unsupported, not a session match. The embedded herdr operation extracts `result.process_info.pane_id` and `foreground_processes` from `pane process-info --pane {pane}`.
+
+
 ## Steps
 
 ```text
@@ -132,7 +135,7 @@ An operation object is:
 
 - Steps run in order. A step whose `when` does not hold is skipped. A `fail` step ends the operation with its message. A runtime value rejected during argv expansion is a failure of that step, so `on_error` applies to it.
 - `argv` elements are expanded one by one. An element whose placeholder value is empty is dropped together with an immediately preceding standalone flag, as in agent definitions. A runtime value containing CR, LF or NUL fails the step; TAB and braces are allowed in runtime values.
-- `output` extracts the step text (the raw stdout without it). `fields` apply one primitive each to that text; a primitive that does not match leaves the field absent. An `output` that does not parse fails the step as an invalid response (`KindInvalidResponse`). A `json_field` output is classified like a JSON API response: output that is not JSON is `KindNotJSON`, a root that is not an object `KindNotObject`, and a missing path `KindMissingResult`, each with its own optional message falling back to `invalid`; a path holding an object or array yields that sub-document as compact JSON with sorted keys, so `fields` can read inside it.
+- `output` extracts the step text (the raw stdout without it). `fields` apply one primitive each to that text; a primitive that does not match leaves the field absent. A `json_field` holding an object or array is retained as compact JSON, matching `output` extraction, so structured process facts can be passed through results. An `output` that does not parse fails the step as an invalid response (`KindInvalidResponse`). A `json_field` output is classified like a JSON API response: output that is not JSON is `KindNotJSON`, a root that is not an object `KindNotObject`, and a missing path `KindMissingResult`, each with its own optional message falling back to `invalid`; a path holding an object or array yields that sub-document as compact JSON with sorted keys, so `fields` can read inside it.
 - `store` records the step under `step.<store>.*`: the declared fields plus `ok` (`true`/`false`), `detail` and `text`. A later step with the same store name replaces the record, which is how a legacy fallback read supersedes a missing primary field.
 - `expect` is checked after a successful command; when it does not hold the operation fails with the `invalid` message, whatever `on_error` says.
 - `on_error: continue` records a failed command (or an output that does not parse) as `ok=false` with its `detail` and goes on; `meta_missing` does so only when `errors.meta_missing` classifies a non-zero exit. `fail` (default) ends the operation.

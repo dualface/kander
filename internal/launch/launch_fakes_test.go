@@ -198,6 +198,13 @@ if [ "$1" = "pane" ] && [ "$2" = "run" ]; then
     printf '%s\n' 'fake herdr run failure' >&2
     exit 1
   fi
+  task=$(printf '%s\n' "$4" | grep -Eo '[0-9]{8}-[a-z0-9-]+-task' | head -n 1)
+  if [ -n "$task" ] && printf '%s' "$4" | grep -q '/codex'; then
+    session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/fake"
+    mkdir -p "$session_dir"
+    printf '{"type":"session_meta","payload":{"id":"fake-codex-%s"}}\n' "$task" > "$session_dir/rollout-$task.jsonl"
+    printf '{"type":"event_msg","payload":{"type":"user_message","message":"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly."}}\n' "$task" >> "$session_dir/rollout-$task.jsonl"
+  fi
   exit 0
 fi
 if [ "$1" = "agent" ] && [ "$2" = "prompt" ]; then

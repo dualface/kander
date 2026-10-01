@@ -118,6 +118,10 @@ if [ "$1" = "pane" ] && [ "$2" = "get" ]; then
   agent="${KANBAN_HERDR_AGENT:-claude}"
   tab="${KANBAN_HERDR_TAB_ID:-w1:t9}"
   session="${KANBAN_HERDR_SESSION:-session-1}"
+  if [ -n "${KANBAN_HERDR_SESSION_FILE:-}" ]; then
+    session=""
+    [ ! -f "$KANBAN_HERDR_SESSION_FILE" ] || session=$(cat "$KANBAN_HERDR_SESSION_FILE")
+  fi
   kind="${KANBAN_HERDR_SESSION_KIND:-}"
   if [ -f "$log.prompt" ]; then
     printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\"}}}"
@@ -128,6 +132,10 @@ if [ "$1" = "pane" ] && [ "$2" = "get" ]; then
   else
     printf '%s\n' "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"pane_id\":\"$3\",\"tab_id\":\"$tab\",\"agent\":\"$agent\",\"agent_status\":\"$status\",\"agent_session\":{\"value\":\"$session\"}}}}"
   fi
+  exit 0
+fi
+if [ "$1" = "pane" ] && [ "$2" = "process-info" ]; then
+  printf '%s\n' "$KANBAN_HERDR_PROCESS_JSON"
   exit 0
 fi
 if [ "$1" = "pane" ] && [ "$2" = "list" ]; then

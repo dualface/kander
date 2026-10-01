@@ -25,6 +25,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 )
 
 func main() {
@@ -44,6 +46,13 @@ func main() {
 	}
 	if len(args) >= 4 && args[0] == "pane" && args[1] == "run" {
 		os.WriteFile(os.Getenv("FAKE_HERDR_RUN_LOG"), []byte(args[3]), 0o644)
+		task := regexp.MustCompile("[0-9]{8}-[a-z0-9-]+-task").FindString(args[3])
+		if task != "" {
+			root := filepath.Join(os.Getenv("CODEX_HOME"), "sessions", "fake")
+			os.MkdirAll(root, 0o700)
+			body := fmt.Sprintf("{\"type\":\"session_meta\",\"payload\":{\"id\":\"fake-codex-session\"}}\n{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly.\"}}\n", task)
+			os.WriteFile(filepath.Join(root, "rollout-"+task+".jsonl"), []byte(body), 0o600)
+		}
 		return
 	}
 	fmt.Fprintln(os.Stderr, "unexpected herdr args")

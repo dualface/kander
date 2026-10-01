@@ -176,7 +176,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	previous := map[string]struct{}{}
 	sessionDef := config.AgentFor(cfg, session.Agent).Session
-	discoverSession := plan.capabilities().PaneMetadata || config.SessionPersistsAfterStart(sessionDef)
+	discoverSession := plan.capabilities().PaneMetadata || plan.capabilities().SessionReport || config.SessionPersistsAfterStart(sessionDef)
 	if takeover {
 		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root))
 		if err != nil {

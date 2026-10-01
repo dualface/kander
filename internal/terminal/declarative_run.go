@@ -486,7 +486,8 @@ func extractFields(step *Step, text string) map[string]string {
 func parseFields(fields map[string]string, source, text string) map[string]string {
 	out := make(map[string]string, len(fields))
 	for name, parse := range fields {
-		if value, err := process.ParseTerminalOutput(process.OutputSpec{Source: source, Parse: parse}, text); err == nil {
+		spec := process.OutputSpec{Source: source, Parse: parse}
+		if value, _, err := extractOutput(&spec, probe.Result{Stdout: text, Stderr: text}); err == nil {
 			out[name] = value
 		}
 	}

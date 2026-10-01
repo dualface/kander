@@ -375,7 +375,10 @@ func (b *DeclarativeBackend) ReportSession(report SessionReport) error {
 	if !ok {
 		return ErrUnsupported
 	}
-	ctx := context.Background()
+	ctx := report.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !report.Deadline.IsZero() {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, report.Deadline)

@@ -102,6 +102,10 @@ Every operation receives a `terminal.Conn` containing the resolved binary path a
 
 ## 6. Session Identity Resolution
 
+`ProcessInspector` is an optional extension, independent of the required `Backend` interface. `ProcessFacts(ctx, conn, pane)` returns foreground process IDs and names observed for exactly that pane. Old Go backends and definitions remain valid; a declarative backend without `process_facts` returns `ErrUnsupported`. The embedded herdr operation validates pane ownership before exposing process facts. The launch layer combines them with Linux process incarnation and open-file evidence to repair only missing Codex identity; terminal process facts alone cannot prove a session match.
+
+`SessionReport.Context` carries caller cancellation through the declarative hook, socket handshake and read-back. A nil context preserves the existing deadline-only startup reporting behavior. Session reporting remains best-effort on startup; notification repair requires successful read-back and revalidation before ordinary delivery.
+
 Backends with `AgentIdentity` report the pane's session as a kind plus a value (`AgentSessionKind`, `AgentSession`). A missing kind is a legacy direct id. `terminal.MatchAgentSession(ctx, agent, kind, value, reference)` is the single tri-state comparison every consumer shares:
 
 - **Match**: the reported identity resolves to the recorded card reference. `id` (or absent kind) compares verbatim — ids are compared as strings, never parsed as UUIDs.
