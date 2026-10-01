@@ -31,5 +31,6 @@
   "terminal.process_facts_invalid": "进程取证结果无效",
   "terminal.process_facts_limit": "进程取证超过 64 个进程",
   "terminal.process_facts_identity_invalid": "前台进程身份无效",
-  "launch.session_repair_process_ambiguous": "当前 pane 有多个前台代理进程，无法唯一绑定会话"
+  "launch.session_repair_process_ambiguous": "当前 pane 有多个前台代理进程，无法唯一绑定会话",
+  "launch.session_repair_directory_mismatch": "当前打开的 rollout 启动目录与本任务不匹配"
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
@@ -75,7 +76,8 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 	if reference == "" {
 		reference = facts.AgentSession
 	}
-	proof, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, reference, observe)
+	cwd := filepath.Dir(root)
+	proof, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, reference, cwd, observe)
 	if err != nil {
 		return snapshot, err
 	}
@@ -83,7 +85,7 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		current, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, proof.reference, observe)
+		current, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, proof.reference, cwd, observe)
 		if err != nil {
 			return err
 		}
@@ -156,7 +158,7 @@ func repairError(id string, args ...any) error {
 	return launchError(id, args...)
 }
 
-func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspector, conn terminal.Conn, pane, name, task, reference string, observe func(context.Context, int) (process.ProcessFiles, error)) (sessionProof, error) {
+func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspector, conn terminal.Conn, pane, name, task, reference, cwd string, observe func(context.Context, int) (process.ProcessFiles, error)) (sessionProof, error) {
 	processes, err := inspector.ProcessFacts(ctx, conn, pane)
 	if err != nil {
 		if errors.Is(err, terminal.ErrUnsupported) {
@@ -180,7 +182,7 @@ func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspecto
 	if err != nil {
 		return sessionProof{}, repairError("launch.session_repair_process_unavailable", err.Error())
 	}
-	return proveOpenSession(ctx, files, task, reference)
+	return proveOpenSession(ctx, files, task, reference, cwd)
 }
 
 type sessionProof struct {

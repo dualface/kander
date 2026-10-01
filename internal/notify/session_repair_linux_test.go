@@ -54,7 +54,7 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 				prompt = "orchestrate " + task
 			}
 			for _, record := range []any{
-				map[string]any{"type": "session_meta", "payload": map[string]any{"id": "target-session"}},
+				map[string]any{"type": "session_meta", "payload": map[string]any{"id": "target-session", "cwd": filepath.Dir(root)}},
 				map[string]any{"type": "event_msg", "payload": map[string]any{"type": "user_message", "message": prompt}},
 			} {
 				if err := json.NewEncoder(file).Encode(record); err != nil {
@@ -67,7 +67,7 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 					t.Fatal(err)
 				}
 				for _, record := range []any{
-					map[string]any{"type": "session_meta", "payload": map[string]any{"id": "newer-session"}},
+					map[string]any{"type": "session_meta", "payload": map[string]any{"id": "newer-session", "cwd": filepath.Dir(root)}},
 					map[string]any{"type": "event_msg", "payload": map[string]any{"type": "user_message", "message": prompt}},
 				} {
 					if err := json.NewEncoder(other).Encode(record); err != nil {

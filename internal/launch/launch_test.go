@@ -96,6 +96,7 @@ func setupBoard(t *testing.T) (root, home, fakeBin string) {
 		}
 	}
 	t.Setenv(board.EnvBoardDir, root)
+	t.Setenv("KANBAN_LAUNCH_CWD", filepath.Dir(root))
 	home = t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))

@@ -12,7 +12,7 @@ import (
 	"github.com/dualface/kander/internal/process"
 )
 
-func proveOpenSession(ctx context.Context, files process.ProcessFiles, task, reference string) (sessionProof, error) {
+func proveOpenSession(ctx context.Context, files process.ProcessFiles, task, reference, cwd string) (sessionProof, error) {
 	root, err := filepath.Abs(codexSessionsRoot())
 	if err != nil || files.Identity == "" {
 		return sessionProof{}, repairError("launch.session_repair_binding_missing")
@@ -30,7 +30,7 @@ func proveOpenSession(ctx context.Context, files process.ProcessFiles, task, ref
 			continue
 		}
 		seen[path] = true
-		id, err := readOpenSession(ctx, root, observed, task)
+		id, err := readOpenSession(ctx, root, observed, task, cwd)
 		if err != nil {
 			return sessionProof{}, err
 		}
@@ -51,7 +51,7 @@ func proveOpenSession(ctx context.Context, files process.ProcessFiles, task, ref
 	return proof, nil
 }
 
-func readOpenSession(ctx context.Context, root string, observed process.OpenFile, task string) (string, error) {
+func readOpenSession(ctx context.Context, root string, observed process.OpenFile, task, cwd string) (string, error) {
 	file, err := fs.OpenRegularFileIfExists(root, observed.Path)
 	if err != nil || file == nil {
 		return "", repairError("launch.session_repair_binding_missing")
@@ -72,6 +72,7 @@ func readOpenSession(ctx context.Context, root string, observed process.OpenFile
 			Type    string `json:"type"`
 			Payload struct {
 				ID      string `json:"id"`
+				CWD     string `json:"cwd"`
 				Type    string `json:"type"`
 				Role    string `json:"role"`
 				Message string `json:"message"`
@@ -87,6 +88,9 @@ func readOpenSession(ctx context.Context, root string, observed process.OpenFile
 		if index == 0 {
 			if record.Type != "session_meta" || !sessionReferenceRe.MatchString(record.Payload.ID) {
 				return "", nil
+			}
+			if !matchesSessionDirectory(record.Payload.CWD, cwd) {
+				return "", &sessionDirectoryMismatch{repairError("launch.session_repair_directory_mismatch")}
 			}
 			id = record.Payload.ID
 			continue

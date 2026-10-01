@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 )
 
 func TestHerdrCodexDiscoversAndPersistsWithoutNativeHook(t *testing.T) {
@@ -94,7 +95,7 @@ func TestCodexDiscoveryRejectsAbsentAndAmbiguousNewSessions(t *testing.T) {
 				name := []string{"first", "second"}[index]
 				repairRollout(t, task, name, name+"-session", "")
 			}
-			if id, err := discoverNewCodexSession(task, map[string]struct{}{"old-session": {}}); err == nil || id != "" {
+			if id, err := discoverNewCodexSession(task, map[string]struct{}{"old-session": {}}, os.Getenv("KANBAN_LAUNCH_CWD")); err == nil || id != "" {
 				t.Fatalf("id=%s err=%v", id, err)
 			}
 		})
@@ -237,5 +238,57 @@ func TestApplyAgentDeliveryMarksSessionFileDeclaration(t *testing.T) {
 	}
 	if plan.sessionFileDeclared {
 		t.Fatal("cursor declares no session.file")
+	}
+}
+
+func TestCodexDiscoveryBindsLaunchDirectory(t *testing.T) {
+	freezeClock(t)
+	root, _, _ := setupBoard(t)
+	const task = "same-task-in-two-projects"
+	cwd := filepath.Dir(root)
+	foreign := repairRollout(t, task, "foreign", "foreign-session", "")
+	rewriteRolloutDirectory(t, foreign, t.TempDir())
+	def := config.AgentFor(envConfig("codex", "herdr", nil), "codex").Session
+	previous, err := sessionDiscoverSnapshot(def, task, true, nil, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(previous) != 0 {
+		t.Fatalf("foreign session included: %v", previous)
+	}
+	if id, err := discoverNewCodexSession(task, previous, cwd); err == nil || id != "" {
+		t.Fatalf("foreign-only discovery: id=%s err=%v", id, err)
+	}
+	repairRollout(t, task, "own", "own-session", "")
+	if id, err := discoverNewCodexSession(task, previous, cwd); err != nil || id != "own-session" {
+		t.Fatalf("local discovery: id=%s err=%v", id, err)
+	}
+}
+
+func TestHerdrCodexInvalidSnapshotFailsBeforeClaim(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX launcher fixture")
+	}
+	root, _, bin := setupBoard(t)
+	log := installHerdr(t, root, bin)
+	task, _ := makeTodo(t, root, "invalid-session-snapshot")
+	if err := os.MkdirAll(filepath.Dir(codexSessionsRoot()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(codexSessionsRoot(), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Start(root, "codex", "herdr", task); err == nil {
+		t.Fatal("invalid pre-launch snapshot accepted")
+	}
+	snapshot, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Entry.State != "todo" || board.MetadataFrom(snapshot.Text, board.FieldOwner) != "" {
+		t.Fatal("failed snapshot claimed card")
+	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatal("failed snapshot launched a container")
 	}
 }

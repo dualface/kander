@@ -6,10 +6,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -273,10 +275,18 @@ func codexRolloutMentionsTask(path, taskID string) string {
 type fileInfo struct {
 	path string
 	mod  time.Time
+	info os.FileInfo
 }
 
 func codexSessionsForTask(taskID string) ([]string, error) {
-	root := codexSessionsRoot()
+	return codexSessionsIn(context.Background(), taskID, "")
+}
+
+func codexSessionsIn(ctx context.Context, taskID, cwd string) ([]string, error) {
+	root, err := filepath.Abs(codexSessionsRoot())
+	if err != nil {
+		return nil, err
+	}
 	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
 		return nil, launchError(
@@ -284,27 +294,49 @@ func codexSessionsForTask(taskID string) ([]string, error) {
 		)
 	}
 	var files []fileInfo
-	_ = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
+	walkErr := filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err != nil {
+			if cwd != "" {
+				return err
+			}
+			return nil
+		}
+		if fi.IsDir() {
 			return nil
 		}
 		base := filepath.Base(path)
 		if strings.HasPrefix(base, "rollout-") && strings.HasSuffix(base, ".jsonl") {
-			files = append(files, fileInfo{path: path, mod: fi.ModTime()})
+			files = append(files, fileInfo{path: path, mod: fi.ModTime(), info: fi})
 		}
 		return nil
 	})
-	for i := 0; i < len(files); i++ {
-		for j := i + 1; j < len(files); j++ {
-			if files[j].mod.After(files[i].mod) {
-				files[i], files[j] = files[j], files[i]
-			}
-		}
+	if walkErr != nil {
+		return nil, walkErr
 	}
+	slices.SortFunc(files, func(a, b fileInfo) int { return b.mod.Compare(a.mod) })
 	var sessions []string
 	seen := map[string]struct{}{}
 	for _, f := range files {
-		id := codexRolloutMentionsTask(f.path, taskID)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		var id string
+		if cwd == "" {
+			id = codexRolloutMentionsTask(f.path, taskID)
+		} else {
+			var err error
+			id, err = readOpenSession(ctx, root, process.OpenFile{Path: f.path, Info: f.info}, taskID, cwd)
+			if err != nil {
+				var directoryMismatch *sessionDirectoryMismatch
+				if errors.As(err, &directoryMismatch) {
+					continue
+				}
+				return nil, err
+			}
+		}
 		if id != "" && sessionReferenceRe.MatchString(id) {
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
@@ -351,7 +383,7 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 	}
 	switch name {
 	case "codex-rollout":
-		return discoverNewCodexSession(taskID, previous)
+		return discoverNewCodexSession(taskID, previous, cwd)
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
@@ -381,10 +413,17 @@ func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID stri
 	}
 	switch name {
 	case "codex-rollout":
-		if sessions, err := codexSessionsForTask(taskID); err == nil {
-			for _, id := range sessions {
-				previous[id] = struct{}{}
-			}
+		if _, err := os.Stat(codexSessionsRoot()); os.IsNotExist(err) {
+			return previous, nil
+		}
+		ctx, cancel := probe.TimeoutContext(sessionDiscoverWait)
+		defer cancel()
+		sessions, err := codexSessionsIn(ctx, taskID, cwd)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range sessions {
+			previous[id] = struct{}{}
 		}
 	}
 	return previous, nil
@@ -404,11 +443,17 @@ func findCodexSession(taskID string) (string, error) {
 	)
 }
 
-func discoverNewCodexSession(taskID string, previous map[string]struct{}) (string, error) {
+func discoverNewCodexSession(taskID string, previous map[string]struct{}, cwd string) (string, error) {
 	deadline := nowFn().Add(sessionDiscoverWait)
 	var last error
 	for {
-		candidates, err := codexSessionsForTask(taskID)
+		remaining := deadline.Sub(nowFn())
+		if remaining <= 0 {
+			return "", last
+		}
+		ctx, cancel := probe.TimeoutContext(remaining)
+		candidates, err := codexSessionsIn(ctx, taskID, cwd)
+		cancel()
 		if err != nil {
 			last = err
 		} else {

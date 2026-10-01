@@ -81,7 +81,7 @@ if [ "$1" = "respawn-pane" ]; then
     if [ -n "$task" ]; then
       session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/fake"
       mkdir -p "$session_dir"
-      printf '%s\n' '{"type":"session_meta","payload":{"id":"fake-codex-session"}}' > "$session_dir/rollout-$task.jsonl"
+      printf '{"type":"session_meta","payload":{"id":"fake-codex-session","cwd":"%s"}}\n' "$KANBAN_LAUNCH_CWD" > "$session_dir/rollout-$task.jsonl"
       printf '{"type":"event_msg","payload":{"type":"user_message","message":"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly."}}\n' "$task" >> "$session_dir/rollout-$task.jsonl"
     fi
   fi
@@ -202,7 +202,7 @@ if [ "$1" = "pane" ] && [ "$2" = "run" ]; then
   if [ -n "$task" ] && printf '%s' "$4" | grep -q '/codex'; then
     session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/fake"
     mkdir -p "$session_dir"
-    printf '{"type":"session_meta","payload":{"id":"fake-codex-%s"}}\n' "$task" > "$session_dir/rollout-$task.jsonl"
+    printf '{"type":"session_meta","payload":{"id":"fake-codex-%s","cwd":"%s"}}\n' "$task" "$KANBAN_LAUNCH_CWD" > "$session_dir/rollout-$task.jsonl"
     printf '{"type":"event_msg","payload":{"type":"user_message","message":"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly."}}\n' "$task" >> "$session_dir/rollout-$task.jsonl"
   fi
   exit 0

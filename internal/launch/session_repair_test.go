@@ -69,7 +69,7 @@ func repairRollout(t *testing.T, task, name, id, prompt string) process.OpenFile
 		prompt = codexPromptPrefixes(task)[0] + " full instructions"
 	}
 	records := []any{
-		map[string]any{"type": "session_meta", "payload": map[string]any{"id": id}},
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": filepath.Dir(os.Getenv(board.EnvBoardDir))}},
 		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": prompt}}}},
 	}
 	file, err := os.Create(path)
@@ -92,7 +92,7 @@ func repairRollout(t *testing.T, task, name, id, prompt string) process.OpenFile
 }
 
 func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
-	for _, scenario := range []string{"legacy", "recorded", "missing-file", "other-task", "mismatch", "multiple-files", "multiple-processes", "process-change", "file-change", "board-change", "native-arrival", "post-report-change", "report-failure", "readback-failure", "existing-conflict", "native-path", "cancelled"} {
+	for _, scenario := range []string{"legacy", "recorded", "missing-file", "other-task", "other-directory", "missing-directory", "mismatch", "multiple-files", "multiple-processes", "process-change", "file-change", "board-change", "native-arrival", "post-report-change", "report-failure", "readback-failure", "existing-conflict", "native-path", "cancelled"} {
 		t.Run(scenario, func(t *testing.T) {
 			root, _, _ := setupBoard(t)
 			task, _ := makeTodo(t, root, "repair-"+scenario)
@@ -131,6 +131,10 @@ func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
 				files.Files = nil
 			case "other-task":
 				files.Files = []process.OpenFile{repairRollout(t, task, "target", "target-session", "orchestrate "+task)}
+			case "other-directory":
+				files.Files[0] = rewriteRolloutDirectory(t, files.Files[0], t.TempDir())
+			case "missing-directory":
+				files.Files[0] = rewriteRolloutDirectory(t, files.Files[0], "")
 			case "multiple-files":
 				files.Files = append(files.Files, repairRollout(t, task, "second", "second-session", ""))
 			case "multiple-processes":
@@ -273,4 +277,35 @@ func TestRepairMissingSessionFinishesPartialReportOnRetry(t *testing.T) {
 			}
 		})
 	}
+}
+
+func rewriteRolloutDirectory(t *testing.T, observed process.OpenFile, cwd string) process.OpenFile {
+	t.Helper()
+	data, err := os.ReadFile(observed.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.SplitN(string(data), "\n", 2)
+	var header map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &header); err != nil {
+		t.Fatal(err)
+	}
+	payload := header["payload"].(map[string]any)
+	if cwd == "" {
+		delete(payload, "cwd")
+	} else {
+		payload["cwd"] = cwd
+	}
+	encoded, err := json.Marshal(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(observed.Path, []byte(string(encoded)+"\n"+lines[1]), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(observed.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return process.OpenFile{Path: observed.Path, Info: info}
 }

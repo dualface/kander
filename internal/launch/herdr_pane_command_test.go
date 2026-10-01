@@ -50,7 +50,9 @@ func main() {
 		if task != "" {
 			root := filepath.Join(os.Getenv("CODEX_HOME"), "sessions", "fake")
 			os.MkdirAll(root, 0o700)
-			body := fmt.Sprintf("{\"type\":\"session_meta\",\"payload\":{\"id\":\"fake-codex-session\"}}\n{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly.\"}}\n", task)
+			header, _ := json.Marshal(map[string]any{"type":"session_meta","payload":map[string]any{"id":"fake-codex-session","cwd":os.Getenv("KANBAN_LAUNCH_CWD")}})
+			message, _ := json.Marshal(map[string]any{"type":"event_msg","payload":map[string]any{"type":"user_message","message":fmt.Sprintf("执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly.",task)}})
+			body := string(header)+"\n"+string(message)+"\n"
 			os.WriteFile(filepath.Join(root, "rollout-"+task+".jsonl"), []byte(body), 0o600)
 		}
 		return
