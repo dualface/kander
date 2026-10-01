@@ -30,5 +30,6 @@
   "terminal.process_facts_wrong_pane": "进程取证返回了其他 pane",
   "terminal.process_facts_invalid": "进程取证结果无效",
   "terminal.process_facts_limit": "进程取证超过 64 个进程",
-  "terminal.process_facts_identity_invalid": "前台进程身份无效"
+  "terminal.process_facts_identity_invalid": "前台进程身份无效",
+  "launch.session_repair_process_ambiguous": "当前 pane 有多个前台代理进程，无法唯一绑定会话"
 }

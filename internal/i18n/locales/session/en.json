@@ -30,5 +30,6 @@
   "terminal.process_facts_wrong_pane": "Process observation returned another pane",
   "terminal.process_facts_invalid": "Invalid process observation",
   "terminal.process_facts_limit": "Process observation exceeds 64 processes",
-  "terminal.process_facts_identity_invalid": "Invalid foreground process identity"
+  "terminal.process_facts_identity_invalid": "Invalid foreground process identity",
+  "launch.session_repair_process_ambiguous": "Multiple foreground agent processes prevent a unique session binding"
 }

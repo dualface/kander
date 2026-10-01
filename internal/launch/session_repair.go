@@ -13,7 +13,8 @@ import (
 	"github.com/dualface/kander/internal/terminal"
 )
 
-// RepairMissingSession repairs only absent pane identities. It never supplies
+// RepairMissingSession repairs absent pane identities or finishes a proven
+// agent-only card binding after a partial report. It never supplies
 // delivery or stopped evidence by itself: callers repeat their normal checks.
 // The snapshot cursor pins the revision and dispatch authorization throughout.
 func RepairMissingSession(ctx context.Context, root string, snapshot board.Snapshot, override string) (board.Snapshot, error) {
@@ -43,7 +44,10 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		return snapshot, nil
 	}
 	session := parseTaskSession(snapshot.Text)
-	if session == nil || facts.Gone || facts.Agent != session.Agent || facts.AgentSession != "" {
+	if session == nil || facts.Gone || facts.Agent != session.Agent {
+		return snapshot, nil
+	}
+	if facts.AgentSession != "" && (session.Reference != "" || (facts.AgentSessionKind != "" && facts.AgentSessionKind != "id")) {
 		return snapshot, nil
 	}
 	if facts.AgentSessionKind != "" && facts.AgentSessionKind != "id" {
@@ -58,13 +62,20 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		return snapshot, nil
 	}
 	if definition.Session == nil || definition.Session.Mode != "hook:codex-rollout" || !backend.Capabilities().SessionReport {
+		if facts.AgentSession != "" {
+			return snapshot, nil
+		}
 		return snapshot, repairError("launch.session_repair_unsupported")
 	}
 	inspector, ok := backend.(terminal.ProcessInspector)
 	if !ok {
 		return snapshot, repairError("launch.session_repair_unsupported")
 	}
-	proof, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, session.Reference, observe)
+	reference := session.Reference
+	if reference == "" {
+		reference = facts.AgentSession
+	}
+	proof, err := observeBoundSession(ctx, inspector, conn, address.Pane, definition.ProcessName, snapshot.Entry.TaskID, reference, observe)
 	if err != nil {
 		return snapshot, err
 	}
@@ -159,7 +170,10 @@ func observeBoundSession(ctx context.Context, inspector terminal.ProcessInspecto
 			candidates = append(candidates, candidate)
 		}
 	}
-	if len(candidates) != 1 {
+	if len(candidates) > 1 {
+		return sessionProof{}, repairError("launch.session_repair_process_ambiguous")
+	}
+	if len(candidates) == 0 {
 		return sessionProof{}, repairError("launch.session_repair_binding_missing")
 	}
 	files, err := observe(ctx, candidates[0].PID)

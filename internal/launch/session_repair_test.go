@@ -104,7 +104,7 @@ func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			backend := &repairBackend{name: "repair-" + scenario, facts: terminal.PaneFacts{Agent: "codex", AgentStatus: "idle", Container: "tab"}, processes: []terminal.ForegroundProcess{{PID: 42, Name: "codex"}}, readBack: true}
+			backend := &repairBackend{name: "repair-" + scenario + "-" + terminal.ProjectKey(root), facts: terminal.PaneFacts{Agent: "codex", AgentStatus: "idle", Container: "tab"}, processes: []terminal.ForegroundProcess{{PID: 42, Name: "codex"}}, readBack: true}
 			terminal.Register(backend)
 			text, err := board.ReadDocument(entry)
 			if err != nil {
@@ -112,7 +112,7 @@ func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
 			}
 			text = strings.Replace(text, "- SESSION:\n", "- SESSION: codex\n", 1)
 			text = strings.Replace(text, "- WINDOW:\n", "- WINDOW: "+backend.name+":pane\n", 1)
-			if scenario == "recorded" {
+			if scenario == "recorded" || scenario == "existing-conflict" {
 				text = strings.Replace(text, "SESSION: codex\n", "SESSION: codex target-session\n", 1)
 			}
 			if scenario == "mismatch" {
@@ -203,6 +203,73 @@ func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
 				if board.MetadataFrom(current.Text, board.FieldSession) != board.MetadataFrom(snapshot.Text, board.FieldSession) || current.Entry.State != "working" {
 					t.Fatal("failed repair changed executor")
 				}
+			}
+		})
+	}
+}
+
+func TestRepairMissingSessionFinishesPartialReportOnRetry(t *testing.T) {
+	for _, failure := range []string{"card-conflict", "report-applied-error", "changed-native-session"} {
+		t.Run(failure, func(t *testing.T) {
+			root, _, _ := setupBoard(t)
+			task, _ := makeTodo(t, root, "repair-retry")
+			snapshot, err := board.ReadSnapshot(root, task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry, err := board.MoveWithOptions(snapshot.Entry, root, "working", board.MoveOptions{Owner: "codex"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			backend := &repairBackend{name: "repair-retry-" + terminal.ProjectKey(root), facts: terminal.PaneFacts{Agent: "codex", AgentStatus: "idle", Container: "tab"}, processes: []terminal.ForegroundProcess{{PID: 42, Name: "codex"}}, readBack: true}
+			terminal.Register(backend)
+			text, err := board.ReadDocument(entry)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text = strings.Replace(text, "- SESSION:\n", "- SESSION: codex\n", 1)
+			text = strings.Replace(text, "- WINDOW:\n", "- WINDOW: "+backend.name+":pane\n", 1)
+			if err := board.WriteManagedDocument(root, entry, text); err != nil {
+				t.Fatal(err)
+			}
+			snapshot, err = board.ReadSnapshot(root, task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files := process.ProcessFiles{Identity: "42:start", Files: []process.OpenFile{repairRollout(t, task, "target", "target-session", "")}}
+			observe := func(ctx context.Context, _ int) (process.ProcessFiles, error) { return files, ctx.Err() }
+			backend.afterReport = func() {
+				if err := board.WriteManagedDocument(root, entry, text+"\nConcurrent body update\n"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if failure == "report-applied-error" {
+				backend.reportErr = errors.New("response lost after apply")
+			}
+			if _, err := repairMissingSession(t.Context(), root, snapshot, "", observe); err == nil {
+				t.Fatal("partial write reported success")
+			}
+			backend.afterReport = nil
+			backend.reportErr = nil
+			snapshot, err = board.ReadSnapshot(root, task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if failure == "changed-native-session" {
+				files.Files = []process.OpenFile{repairRollout(t, task, "current", "new-session", "")}
+			}
+			got, err := repairMissingSession(t.Context(), root, snapshot, "", observe)
+			if failure == "changed-native-session" {
+				if err == nil {
+					t.Fatal("stale native ID fell through to resume")
+				}
+				return
+			}
+			if err != nil || board.MetadataFrom(got.Text, board.FieldSession) != "codex target-session" || backend.reports != 1 {
+				t.Fatalf("retry session=%s reports=%d err=%v", got.Text, backend.reports, err)
+			}
+			if !strings.Contains(got.Text, "Concurrent body update") {
+				t.Fatal("retry overwrote concurrent body")
 			}
 		})
 	}

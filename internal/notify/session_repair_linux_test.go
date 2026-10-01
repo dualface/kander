@@ -18,7 +18,7 @@ import (
 )
 
 func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
-	for _, mode := range []string{"legacy", "dispatch", "blocked", "unbound"} {
+	for _, mode := range []string{"legacy", "dispatch", "blocked", "unbound", "partial"} {
 		t.Run(mode, func(t *testing.T) {
 			root, _ := setupBoard(t)
 			task, path := makeReview(t, root, "repair-"+mode)
@@ -32,6 +32,11 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 			}
 			t.Setenv("KANBAN_HERDR_AGENT", "codex")
 			identityPath := filepath.Join(root, "identity")
+			if mode == "partial" {
+				if err := os.WriteFile(identityPath, []byte("target-session"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			t.Setenv("KANBAN_HERDR_SESSION_FILE", identityPath)
 			t.Setenv("KANBAN_HERDR_PROCESS_JSON", fmt.Sprintf(`{"result":{"process_info":{"pane_id":"w1:p9","foreground_processes":[{"pid":%d,"name":"codex"}]}}}`, os.Getpid()))
 			t.Setenv("CODEX_HOME", filepath.Join(root, "codex"))
@@ -53,6 +58,26 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 				map[string]any{"type": "event_msg", "payload": map[string]any{"type": "user_message", "message": prompt}},
 			} {
 				if err := json.NewEncoder(file).Encode(record); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "partial" {
+				other, err := os.Create(filepath.Join(sessions, "rollout-newer-but-not-open.jsonl"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, record := range []any{
+					map[string]any{"type": "session_meta", "payload": map[string]any{"id": "newer-session"}},
+					map[string]any{"type": "event_msg", "payload": map[string]any{"type": "user_message", "message": prompt}},
+				} {
+					if err := json.NewEncoder(other).Encode(record); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := other.Close(); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chtimes(filepath.Join(sessions, "rollout-newer-but-not-open.jsonl"), time.Now().Add(time.Hour), time.Now().Add(time.Hour)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -86,7 +111,7 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 			}()
 			var d board.Dispatch
 			var receipts chan error
-			if mode != "legacy" {
+			if mode != "legacy" && mode != "partial" {
 				created := time.Now().UTC()
 				d, err = board.PrepareDispatch(root, board.DispatchInput{ID: "repair-notify", TaskID: task, Kind: "sync", Message: "修复问题", Base: strings.Repeat("a", 40), CreatedAt: created, ConfirmBy: created.Add(5 * time.Second)})
 				if err != nil {
@@ -101,25 +126,31 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 				if mode == "dispatch" {
 					return commandNotify(root, task, d.Input.Message, "", "", true, 61, launch.DispatchOptions{ID: d.Input.ID})
 				}
-				if mode != "legacy" {
+				if mode != "legacy" && mode != "partial" {
 					ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 					defer cancel()
 					return deliverDispatchContext(ctx, root, task, d.Input.ID, "")
 				}
 				return commandNotifyLegacy(root, task, "修复问题", "", "", true, 61)
 			})
-			if (err == nil) != (mode == "legacy" || mode == "dispatch") {
+			if (err == nil) != (mode == "legacy" || mode == "dispatch" || mode == "partial") {
 				t.Fatalf("out=%s err=%v", out, err)
 			}
 			_, sent := os.Stat(filepath.Join(root, "herdr.log.prompt"))
-			if (sent == nil) != (mode == "legacy" || mode == "dispatch") {
+			if (sent == nil) != (mode == "legacy" || mode == "dispatch" || mode == "partial") {
 				t.Fatalf("delivery gate bypassed: %v", sent)
 			}
-			if mode == "unbound" {
+			if mode == "unbound" || mode == "partial" {
 				select {
 				case report := <-reports:
 					t.Fatalf("unbound report=%v", report)
 				default:
+				}
+				if mode == "partial" {
+					snapshot, err := board.ReadSnapshot(root, task)
+					if err != nil || board.MetadataFrom(snapshot.Text, board.FieldSession) != "codex target-session" {
+						t.Fatalf("partial repair: %s %v", snapshot.Text, err)
+					}
 				}
 			} else {
 				select {

@@ -30,5 +30,6 @@
   "terminal.process_facts_wrong_pane": "プロセス情報が別のペインを返しました",
   "terminal.process_facts_invalid": "プロセス情報が無効です",
   "terminal.process_facts_limit": "プロセス情報が 64 件を超えています",
-  "terminal.process_facts_identity_invalid": "フォアグラウンドプロセスの識別情報が無効です"
+  "terminal.process_facts_identity_invalid": "フォアグラウンドプロセスの識別情報が無効です",
+  "launch.session_repair_process_ambiguous": "複数のフォアグラウンドエージェントプロセスがあり、セッションを一意に関連付けられません"
 }
