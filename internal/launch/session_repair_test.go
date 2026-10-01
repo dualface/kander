@@ -26,8 +26,9 @@ type repairBackend struct {
 	readBack              bool
 }
 
-func (b *repairBackend) Name() string       { return b.name }
-func (b *repairBackend) Executable() string { return os.Args[0] }
+func (b *repairBackend) Name() string                        { return b.name }
+func (b *repairBackend) Executable() string                  { return os.Args[0] }
+func (b *repairBackend) AutoDetect(func(string) string) bool { return false }
 func (b *repairBackend) Capabilities() terminal.Capabilities {
 	return terminal.Capabilities{Container: true, AgentIdentity: true, SessionReport: true}
 }
