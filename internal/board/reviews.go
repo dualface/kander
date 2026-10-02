@@ -44,6 +44,9 @@ type ReviewInput struct {
 	ReviewedCommit string            `json:"reviewed_commit,omitempty"`
 	ReportLanguage string            `json:"report_language"`
 	InputHashes    map[string]string `json:"input_hashes"`
+	// Resolved is the REVIEW_<ROLE>_RESOLVED record publication writes on the
+	// bound cards that pin anything; empty when none does.
+	Resolved string `json:"resolved,omitempty"`
 }
 
 // ReviewAdvance records the explicit CAS and attribution for every new commit.
@@ -689,6 +692,12 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 			}
 			if _, e = ParseReviewIndexes(text); e != nil {
 				return e
+			}
+			if run.Resolved != "" {
+				// The record shares the index transaction, so it adds no card revision of its own.
+				if text, e = WithResolvedRecord(text, ReviewResolvedField(run.Role), run.Resolved); e != nil {
+					return e
+				}
 			}
 			if e = tx.Put(id, "spec.md", text); e != nil {
 				return e

@@ -45,13 +45,11 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err := cfg.Rules.CheckTaskGroup(taskGroupFrom(original)); err != nil {
 		return result, err
 	}
-	agentName := agentOverride
-	if agentName == "" {
-		agentName, err = config.KanbanAgentFor(cfg, entry.Kind)
-		if err != nil {
-			return result, err
-		}
+	choice, err := resolveExecution(cfg, original, entry.Kind, agentOverride, execStart)
+	if err != nil {
+		return result, err
 	}
+	agentName := choice.Agent
 	if !config.HasAgent(cfg, agentName) {
 		return result, launchError("launch.unsupported_agent", agentName)
 	}
@@ -91,6 +89,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
+	if updated, err = withExecRecord(updated, choice); err != nil {
+		return result, err
+	}
 	paths, err := currentInstallPaths()
 	if err != nil {
 		return result, err
@@ -110,8 +111,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		}
 	}()
 	prompt := taskInstruction(t("launch.prompt.start_head", entry.TaskID), taskFile)
-	model := cfg.Models.Kanban[agentName]
-	args, err := agentArguments(agentName, model, entry.Kind, session, false, cfg)
+	args, err := execArguments(choice, session, false, cfg)
 	if err != nil {
 		return result, err
 	}
@@ -147,7 +147,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	loc := (func(LaunchOutcome) error)(nil)
 	if plan.capabilities().Container {
-		loc = recordWindowLocation(root, plan, moved)
+		loc = recordWindowLocation(root, plan, moved, execChoice{})
 	}
 	if err := writeDocumentFn(root, moved, updated); err != nil {
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
@@ -191,10 +191,11 @@ func PreviewStart(root, taskID string) (preview StartPreview, err error) {
 	if err != nil {
 		return StartPreview{}, err
 	}
-	agent, err := config.KanbanAgentFor(cfg, snapshot.Entry.Kind)
+	choice, err := resolveExecution(cfg, snapshot.Text, snapshot.Entry.Kind, "", execStart)
 	if err != nil {
 		return StartPreview{}, err
 	}
+	agent := choice.Agent
 	launcher, err := resolveStartLauncher(cfg.Launcher)
 	if err != nil {
 		return StartPreview{}, err

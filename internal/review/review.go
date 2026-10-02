@@ -94,12 +94,29 @@ func Run(args []string) (exitCode int) {
 		return 2
 	}
 	rest[3] = role
-	if agent == "" {
-		scale := "large"
+	pinRole := reviewerConfigRole(role)
+	var pinning reviewPinning
+	if len(options.tasks) > 0 {
+		pinning, err = boundReviewPinning(archiveRoot, options.tasks, pinRole)
+		if err != nil {
+			userError(err.Error())
+			return 2
+		}
+	}
+	scale := pinning.scale
+	if scale == "" {
+		scale = "large"
 		if len(rest) >= 5 {
 			scale = reviewScaleFromTask(rest[4])
 		}
-		agent, err = reviewerFromConfig(reviewerConfigRole(role), scale)
+	}
+	agent, agentSource, err := pinnedReviewer(pinning, pinRole, agent)
+	if err != nil {
+		userError(err.Error())
+		return 2
+	}
+	if agent == "" {
+		agent, err = reviewerFromConfig(pinRole, scale)
 		if err != nil {
 			userError(err.Error())
 			return 1
@@ -112,7 +129,10 @@ func Run(args []string) (exitCode int) {
 			return 2
 		}
 	}
-	ctx, err := validateContextMode(agent, rest, replay)
+	ctx, err := validateContextMode(agent, rest, replay, pinning.scale)
+	if err == nil {
+		ctx.resolved, err = applyReviewPin(&ctx, pinning, pinRole, agentSource, scale)
+	}
 	if err != nil {
 		var ge *gateError
 		if errors.As(err, &ge) {

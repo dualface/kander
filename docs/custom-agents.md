@@ -52,6 +52,8 @@ When both are declared, `args` takes precedence and completely replaces the dial
 
 A pane-mode failure (`blocked` match, the delivery primitive rejecting the prompt, or a pure ready timeout) captures the pane output, closes this invocation's tab/window, and rolls the card back. It does not keep the container or write `WINDOW`/`SESSION`. The first two errors tell the operator to run that CLI once in a terminal to answer the dialog and then retry `kander start`; a pure timeout reports the captured pane output without that instruction. Pane mode is rejected before claiming when the resolved launcher is `foreground` or `console`.
 
+A card pin (`EXEC_EFFORT`, `REVIEW_<ROLE>_EFFORT`) is accepted only when the agent's `args.start` or `args.review` template contains `{effort}`; otherwise the card is rejected instead of silently dropping the value. Pinned models and efforts must be one ASCII token of letters, digits, and `._:/@+[]-_` that does not start with `-`, so a card value cannot turn into an option once a terminal launcher renders the argv into a shell command line. Pinned agent names follow the same naming rule as configured agents and must name a loaded definition.
+
 Neither the allocate command nor the argument templates use shell interpolation; terminal launches still go through the existing platform argument encoding. The configuration can execute programs declared by the local user, which does not constitute a new inter-user privilege boundary.
 
 ## Session Policies

@@ -235,7 +235,10 @@ func validateTarget(entry Entry, targetState, text string) error {
 		if err := validateReady(text); err != nil {
 			return err
 		}
-		return validateReviewRecords(entry, text)
+		if err := validateReviewRecords(entry, text); err != nil {
+			return err
+		}
+		return cardPinProblem(text)
 	case "review":
 		if MetadataFrom(text, FieldTaskBranch) == "" {
 			return kanbanError("board.before_moving_to_review_set")

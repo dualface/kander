@@ -151,9 +151,13 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if err != nil {
 		return err
 	}
-	agentName := oldSession.Agent
+	agentName, mode := oldSession.Agent, execContinue
 	if takeover {
-		agentName = *agent
+		agentName, mode = *agent, execTakeover
+	}
+	choice, err := resolveExecution(cfg, text, entry.Kind, agentName, mode)
+	if err != nil {
+		return err
 	}
 	if !config.HasAgent(cfg, agentName) {
 		return launchError("launch.unsupported_agent", agentName)
@@ -215,8 +219,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		head = t("launch.prompt.takeover_head", entry.TaskID)
 	}
 	prompt := taskInstruction(head, taskFile)
-	model := cfg.Models.Kanban[session.Agent]
-	args, err := agentArguments(session.Agent, model, entry.Kind, session, !takeover, cfg)
+	args, err := execArguments(choice, session, !takeover, cfg)
 	if err != nil {
 		return err
 	}
@@ -259,7 +262,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	loc := (func(LaunchOutcome) error)(nil)
 	if plan.capabilities().Container {
-		loc = recordWindowLocation(root, plan, moved)
+		loc = recordWindowLocation(root, plan, moved, choice)
 	}
 	if takeover {
 		current, err := readDocumentFn(moved)
@@ -271,6 +274,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			window = plan.Launcher
 		}
 		updated, err := renderTakeoverMetadata(current, session.Agent, session.Render(), window)
+		if err == nil {
+			updated, err = withExecRecord(updated, choice)
+		}
 		if err != nil {
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
@@ -283,6 +289,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
 		updated, err := windowMetadata(current, plan.Launcher)
+		if err == nil {
+			updated, err = withExecRecord(updated, choice)
+		}
 		if err != nil {
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}

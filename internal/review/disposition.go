@@ -56,6 +56,9 @@ func runDispositionCommand(args []string) int {
 			if err == nil {
 				err = board.CreateReviewPlan(root, p)
 			}
+			if err == nil {
+				notePinnedNotApplicable(root, p)
+			}
 		}
 		result = map[string]string{"plan_id": p.PlanID}
 	case "advance":

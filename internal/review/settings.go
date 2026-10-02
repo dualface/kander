@@ -75,6 +75,8 @@ type reviewContext struct {
 	promptFilePaths map[string]string
 	// reportLanguage is the config agent_language; the reviewer writes its report in it. Empty leaves the language unspecified.
 	reportLanguage string
+	// resolved is the REVIEW_<ROLE>_RESOLVED record of a task-bound run; empty when no bound card pins anything.
+	resolved string
 }
 
 func userError(message string) {

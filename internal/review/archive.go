@@ -128,12 +128,15 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 		if err != nil {
 			return false, err
 		}
+		// *_RESOLVED records are rewritten by launches and review runs; keeping them
+		// out of the snapshot keeps the batch's frozen task context stable.
+		task = []byte(board.WithoutResolvedRecords(string(task)))
 	}
 	reviewContext := []byte{}
 	if len(arguments) >= 6 {
 		reviewContext = []byte(arguments[5])
 	}
-	input := board.ReviewInput{FindingsSchema: findingsSchema, RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage}
+	input := board.ReviewInput{FindingsSchema: findingsSchema, RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage, Resolved: ctx.resolved}
 	run, fresh, err := board.PrepareReviewRun(root, input, requirements, advance, map[string][]byte{"task-context.md": task, "review-context.md": reviewContext}, version.String())
 	if err != nil {
 		return false, err

@@ -10,7 +10,9 @@ import (
 	"github.com/dualface/kander/internal/process"
 )
 
-func validateContextMode(agent string, arguments []string, replay bool) (reviewContext, error) {
+// validateContextMode builds the review context. scale overrides the task scale
+// read from the spec argument when the bound cards decided it (pinned batches).
+func validateContextMode(agent string, arguments []string, replay bool, scale string) (reviewContext, error) {
 	if len(arguments) < 5 || len(arguments) > 7 {
 		usage()
 		return reviewContext{}, &gateError{code: 2}
@@ -39,7 +41,9 @@ func validateContextMode(agent string, arguments []string, replay bool) (reviewC
 	}
 	// Model and reasoning effort can be configured per role and scale, so both
 	// must be settled before the settings are read.
-	scale := reviewScaleFromTask(taskInput)
+	if scale == "" {
+		scale = reviewScaleFromTask(taskInput)
+	}
 	settings, err := agentSettingsFor(agent, role, scale)
 	if err != nil {
 		return reviewContext{}, err

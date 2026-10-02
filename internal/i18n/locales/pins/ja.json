@@ -1,0 +1,16 @@
+{
+  "board.pin_duplicate_field": "カードのヘッダーで {{.V0}} が重複しています。1 行だけにしてください",
+  "board.pin_effort_unsupported": "{{.V0}}: agent {{.V1}} は推論レベルを受け付けません。フィールドを削除してください",
+  "board.pin_header_missing": "{{.V0}} を書き込めません: カードのヘッダーにメタデータ行がありません",
+  "board.pin_invalid_agent": "{{.V0}}: agent 名 {{.V1}} が無効です（先頭は小文字、以降は小文字・数字・'_'・'-'）",
+  "board.pin_invalid_value": "{{.V0}}: 値 {{.V1}} が無効です（英字・数字・._:/@+[]-_ のみの ASCII 1 語で、'-' で始まらないこと）",
+  "board.pin_requires_agent": "{{.V0}} なしで model または effort が指定されています。同じ段階の agent も指定してください",
+  "board.pin_unknown_agent": "{{.V0}}: {{.V1}} は読み込まれた実行 agent 定義ではありません",
+  "board.pin_unknown_reviewer": "{{.V0}}: {{.V1}} にはレビューテンプレートがありません",
+  "launch.pin_agent_conflict": "{{.V0}} は {{.V1}} を指定していますが、--agent は {{.V2}} を求めています。指定された agent を使うか、契約変更でカードを修正してください",
+  "launch.pin_owner_conflict": "{{.V0}} は {{.V1}} を指定していますが、カードは {{.V2}} で実行中です。--agent {{.V1}} で引き継ぐか、契約変更でカードを修正してください",
+  "review.pin_agent_conflict": "{{.V0}} は {{.V1}} を指定していますが、コマンドの reviewer は {{.V2}} です",
+  "review.pin_batch_conflict": "カード {{.V1}} と {{.V2}} で {{.V0}} の指定が異なります。バインドされたレビューではロールごとに設定を 1 つにしてください",
+  "review.pin_env_conflict": "{{.V0}} は {{.V1}} を指定していますが、環境変数の上書きは {{.V2}} を求めています",
+  "review.pin_role_not_applicable": "注意: {{.V0}} は {{.V1}} の reviewer を指定していますが、バッチ {{.V2}} で {{.V1}} は N/A のため、この指定は効きません"
+}

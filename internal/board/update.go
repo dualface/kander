@@ -97,6 +97,9 @@ var frozenSections = []string{SectionGoal, SectionUserDecisions, SectionExpected
 
 func frozenContract(text string) map[string]string {
 	fields := map[string]string{"TASK_GROUP": TaskGroupFrom(text), "SIZE": MetadataFrom(text, "SIZE")}
+	for name, lines := range pinFrozenFields(text) {
+		fields[name] = lines
+	}
 	for _, h := range frozenSections {
 		body, ok := SectionBody(text, h)
 		if ok {
@@ -128,6 +131,12 @@ func validSpecUpdate(old, next, state, decision string) (string, error) {
 	}
 	if _, err := prerequisiteIDsFrom(next, "update"); err != nil {
 		return "", err
+	}
+	if field := pinDuplicateField(next); field != "" {
+		return "", kanbanError("board.transaction_invalid", field)
+	}
+	if field := pinManagedViolation(old, next); field != "" {
+		return "", kanbanError("board.transaction_managed", field)
 	}
 
 	for _, field := range managedFields {

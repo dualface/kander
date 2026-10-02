@@ -1,0 +1,16 @@
+{
+  "board.pin_duplicate_field": "card header repeats {{.V0}}; keep exactly one line",
+  "board.pin_effort_unsupported": "{{.V0}}: agent {{.V1}} takes no reasoning effort; remove the field",
+  "board.pin_header_missing": "cannot write {{.V0}}: the card header has no metadata lines",
+  "board.pin_invalid_agent": "{{.V0}}: invalid agent name {{.V1}} (lowercase letter first, then lowercase letters, digits, '_' or '-')",
+  "board.pin_invalid_value": "{{.V0}}: invalid value {{.V1}} (one ASCII token of letters, digits and ._:/@+[]-_ that does not start with '-')",
+  "board.pin_requires_agent": "model or effort is pinned without {{.V0}}; pin the agent of the same stage too",
+  "board.pin_unknown_agent": "{{.V0}}: {{.V1}} is not a loaded execution agent definition",
+  "board.pin_unknown_reviewer": "{{.V0}}: {{.V1}} has no review template",
+  "launch.pin_agent_conflict": "{{.V0}} pins {{.V1}} but --agent asks for {{.V2}}; use the pinned agent or change the card through a contract decision",
+  "launch.pin_owner_conflict": "{{.V0}} pins {{.V1}} but the card runs {{.V2}}; take over with --agent {{.V1}} or change the card through a contract decision",
+  "review.pin_agent_conflict": "{{.V0}} pins {{.V1}} but the command names reviewer {{.V2}}",
+  "review.pin_batch_conflict": "cards {{.V1}} and {{.V2}} pin {{.V0}} differently; a bound review needs one setting for the role",
+  "review.pin_env_conflict": "{{.V0}} pins {{.V1}} but the environment override asks for {{.V2}}",
+  "review.pin_role_not_applicable": "notice: {{.V0}} pins the {{.V1}} reviewer, but {{.V1}} is N/A in batch {{.V2}}; the pin takes no effect there"
+}

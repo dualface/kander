@@ -145,6 +145,9 @@ func contractProblems(board Board) []Problem {
 		if lacksAcceptanceItems(text) {
 			defects = append(defects, t("board.task_requires_acceptance_items"))
 		}
+		if err := cardPinProblem(text); err != nil {
+			defects = append(defects, err.Error())
+		}
 		for _, defect := range defects {
 			problems = append(problems, Problem{
 				Path:    entry.Document,

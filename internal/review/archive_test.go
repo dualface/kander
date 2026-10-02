@@ -205,7 +205,7 @@ func TestArchiveExplicitRecoveryDoesNotRerun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, err := validateContextMode(agent, rest, false)
+	ctx, err := validateContextMode(agent, rest, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestArchiveHistoricalProtocolReplayDoesNotUpgrade(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ctx, err := validateContextMode(agent, rest, false)
+			ctx, err := validateContextMode(agent, rest, false, "")
 			if err != nil {
 				t.Fatal(err)
 			}

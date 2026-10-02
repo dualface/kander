@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Cards can pin their executor and reviewers regardless of the configuration with optional header fields: `EXEC_AGENT`, `EXEC_MODEL`, `EXEC_EFFORT`, and `REVIEW_PMQA_*` / `REVIEW_SECURITY_*` with the same three items. `start` (and the TUI start preview), `resume`, takeover, `notify` recovery, and task-bound `kander review` apply them; a conflicting `--agent`, reviewer argument, or review environment override, a model or effort without its agent, an unknown agent, or an effort the agent cannot take fails before any side effect. Pins freeze with the contract, and `kander check` and the `todo` gate validate them. Cards that pin anything get managed `EXEC_RESOLVED` / `REVIEW_<ROLE>_RESOLVED` records marking each value `forced`, `cli`, or `config:<scale>`; the records stay out of review task-context snapshots. Cards without these fields behave and are written exactly as before; older binaries ignore the fields. Run `kander doctor` after upgrading to update the rules.
+
 ## v0.8.8 — 2026-09-30
 
 - TUI: task-group rails start below the group header. The header row draws no rail, and member rows and in-group gaps indent the rail by one character with one space between it and the card content; group color, selection background, collapse state, scrolling, and mouse character selection follow the new layout.

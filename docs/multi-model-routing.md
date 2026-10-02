@@ -85,6 +85,10 @@ When an author rejects a must-fix reviewer finding, require a factual basis that
 
 Kander has no arbitration stage today: an `unverifiable` must-fix item goes to the user. One possible future direction, not a shipped feature, is to route only the disputed finding to a third model instead of running another full review. Such a model would come from a family different from both the author and the PMQA reviewer, and would receive the task contract, relevant code/diff, reviewer finding and evidence, author rejection basis, and objective verification evidence, never hidden chain-of-thought from either model.
 
+## Per-Card Overrides
+
+Routing by scale fits most cards. When one card needs a specific harness or model regardless of the configuration, pin it in the card header: `EXEC_AGENT`/`EXEC_MODEL`/`EXEC_EFFORT` for the executor and `REVIEW_PMQA_*`/`REVIEW_SECURITY_*` for reviewers (see `rules/KANDER-KANBAN-RULES.md` "Card Pins"). A pinned card records how each stage was actually chosen in `EXEC_RESOLVED` and `REVIEW_<ROLE>_RESOLVED`, marking every value `forced`, `cli`, or `config:<scale>`, so a later reader can tell a deliberate override from the routing default. Pins freeze with the card contract; use them for user decisions about one card, not as a substitute for a routing profile.
+
 ## What Not to Hard-Code
 
 Do not make the example model names permanent protocol rules. Provider models, effort levels, and harness behavior change faster than Kander's review semantics.

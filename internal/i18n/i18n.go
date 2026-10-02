@@ -38,6 +38,7 @@ var catalogFiles = []string{
 	"locales/session/en.json", "locales/session/zh-CN.json", "locales/session/ja.json",
 	"locales/update/en.json", "locales/update/zh-CN.json", "locales/update/ja.json",
 	"locales/reviewinterpretation/en.json", "locales/reviewinterpretation/zh-CN.json", "locales/reviewinterpretation/ja.json",
+	"locales/pins/en.json", "locales/pins/zh-CN.json", "locales/pins/ja.json",
 	"locales/reviewschema/en.json", "locales/reviewschema/zh-CN.json", "locales/reviewschema/ja.json",
 	"locales/reviewbatch/en.json", "locales/reviewbatch/zh-CN.json", "locales/reviewbatch/ja.json",
 }

@@ -164,7 +164,9 @@ func locationOf(plan LaunchPlan, outcome LaunchOutcome) string {
 	return terminal.FormatAddress(plan.backend(), plan.address(outcome))
 }
 
-func recordWindowLocation(root string, plan LaunchPlan, entry board.Entry) func(LaunchOutcome) error {
+// recordWindowLocation writes WINDOW once the container exists, together with the
+// EXEC_RESOLVED record of a relaunch whose card pins anything.
+func recordWindowLocation(root string, plan LaunchPlan, entry board.Entry, choice execChoice) func(LaunchOutcome) error {
 	return func(outcome LaunchOutcome) error {
 		current, err := readDocumentFn(entry)
 		if err != nil {
@@ -172,6 +174,9 @@ func recordWindowLocation(root string, plan LaunchPlan, entry board.Entry) func(
 		}
 		updated, err := windowMetadata(current, locationOf(plan, outcome))
 		if err != nil {
+			return err
+		}
+		if updated, err = withExecRecord(updated, choice); err != nil {
 			return err
 		}
 		return writeDocumentFn(root, entry, updated)

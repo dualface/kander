@@ -64,6 +64,10 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err := cfg.Rules.CheckTaskGroup(taskGroupFrom(originalText)); err != nil {
 		return ResumeLaunch{}, err
 	}
+	choice, err := resolveExecution(cfg, originalText, entry.Kind, session.Agent, execContinue)
+	if err != nil {
+		return ResumeLaunch{}, err
+	}
 	plan, err := prepareLaunch(cfg.Launcher, parentDir(root), "notify")
 	if err != nil {
 		return ResumeLaunch{}, err
@@ -94,8 +98,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 		}
 	}()
 	prompt := taskInstruction(t("launch.prompt.resume_head", entry.TaskID), taskFile)
-	model := cfg.Models.Kanban[session.Agent]
-	args, err := agentArguments(session.Agent, model, entry.Kind, session, resume, cfg)
+	args, err := execArguments(choice, session, resume, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
@@ -109,6 +112,9 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 			return ResumeLaunch{}, err
 		}
 		updated, err := windowMetadata(current, plan.Launcher)
+		if err == nil {
+			updated, err = withExecRecord(updated, choice)
+		}
 		if err != nil {
 			return ResumeLaunch{}, err
 		}
@@ -122,7 +128,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	}
 	loc := (func(LaunchOutcome) error)(nil)
 	if plan.capabilities().Container {
-		loc = recordWindowLocation(root, plan, entry)
+		loc = recordWindowLocation(root, plan, entry, choice)
 	}
 	durable := board.MetadataFrom(originalText, "DISPATCH_ID") != ""
 	outcome, err := launchAgent(plan, root, windowName(entry, originalText), inv, loc, paneCB, &session, durable)

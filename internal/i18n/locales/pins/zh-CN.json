@@ -1,0 +1,16 @@
+{
+  "board.pin_duplicate_field": "卡片头部重复出现 {{.V0}}，只能保留一行",
+  "board.pin_effort_unsupported": "{{.V0}}：agent {{.V1}} 不接受推理档位，请删除该字段",
+  "board.pin_header_missing": "无法写入 {{.V0}}：卡片头部没有元数据行",
+  "board.pin_invalid_agent": "{{.V0}}：agent 名 {{.V1}} 无效（须以小写字母开头，其后为小写字母、数字、'_' 或 '-'）",
+  "board.pin_invalid_value": "{{.V0}}：取值 {{.V1}} 无效（须为单个 ASCII 词，只含字母、数字和 ._:/@+[]-_，且不以 '-' 开头）",
+  "board.pin_requires_agent": "指定了 model 或 effort 却没有 {{.V0}}；请同时指定同一阶段的 agent",
+  "board.pin_unknown_agent": "{{.V0}}：{{.V1}} 不是已加载的执行 agent 定义",
+  "board.pin_unknown_reviewer": "{{.V0}}：{{.V1}} 没有审核模板",
+  "launch.pin_agent_conflict": "{{.V0}} 指定了 {{.V1}}，但 --agent 要求 {{.V2}}；请使用卡片指定的 agent，或经契约变更修改卡片",
+  "launch.pin_owner_conflict": "{{.V0}} 指定了 {{.V1}}，但卡片当前由 {{.V2}} 执行；请用 --agent {{.V1}} 接管，或经契约变更修改卡片",
+  "review.pin_agent_conflict": "{{.V0}} 指定了 {{.V1}}，但命令给出的 reviewer 是 {{.V2}}",
+  "review.pin_batch_conflict": "卡片 {{.V1}} 与 {{.V2}} 对 {{.V0}} 的指定不一致；绑定审核要求同一角色只有一种设置",
+  "review.pin_env_conflict": "{{.V0}} 指定了 {{.V1}}，但环境变量覆盖要求 {{.V2}}",
+  "review.pin_role_not_applicable": "提示：{{.V0}} 指定了 {{.V1}} 的 reviewer，但批次 {{.V2}} 中 {{.V1}} 为 N/A，该指定在此批次不生效"
+}
