@@ -430,6 +430,11 @@ func InitBoardWithOptions(project string, options InitOptions) (root string, exc
 	if migrated, err = MigrateCards(root, options); err != nil {
 		return "", "", "", migrated, err
 	}
+	report, pruneErr := PruneArchived(root)
+	report.Err = pruneErr
+	if options.Pruned != nil {
+		*options.Pruned = report
+	}
 	exclude, err = addGitExclude(root)
 	if err != nil {
 		return "", "", "", migrated, err

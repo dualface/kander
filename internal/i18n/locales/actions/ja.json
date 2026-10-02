@@ -19,6 +19,7 @@
   "actions.duplicate": "重複（duplicate）",
   "actions.wontfix": "対応しない（wontfix）",
   "actions.duplicate_of": "代替タスク ID",
+  "actions.archive_final_warning": "アーカイブは最終操作で取り消せません。カードは以後移動も編集もできず、関連カードがすべてアーカイブされるとレビュー証跡は完全に削除されます。",
   "actions.reason": "理由",
   "actions.decision": "判断の根拠",
   "actions.menu": "タスク操作"

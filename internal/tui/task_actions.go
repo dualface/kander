@@ -164,7 +164,9 @@ func (a *App) handleTaskActionKey(key string) tea.Cmd {
 	return nil
 }
 
-func runTaskAction(source taskActionSource, action taskAction, options board.MoveOptions) (string, error) {
+// runTaskAction also returns the archive cleanup summary, which the result
+// notice shows next to the move.
+func runTaskAction(source taskActionSource, action taskAction, options board.MoveOptions) (string, []string, error) {
 	target := string(action)
 	switch action {
 	case actionPick:
@@ -177,11 +179,16 @@ func runTaskAction(source taskActionSource, action taskAction, options board.Mov
 	case actionPick, actionBacklog:
 		_, err = board.MoveEntry(source.snapshot.Entry, source.root, target)
 	case actionArchive, actionTrash:
+		var pruned board.PruneReport
+		options.Pruned = &pruned
 		_, err = board.MoveWithOptions(source.snapshot.Entry, source.root, target, options)
+		if err == nil && action == actionArchive {
+			return target, board.PruneSummary(pruned), nil
+		}
 	default:
 		err = fmt.Errorf("%s", t("actions.none"))
 	}
-	return target, err
+	return target, nil, err
 }
 
 func (a *App) queueTaskAction() {
@@ -196,12 +203,12 @@ func (a *App) queueTaskAction() {
 	index := a.summaries
 	getBoard := a.GetBoard
 	a.pendingWork = func() any {
-		target, err := runTaskAction(source, action, options)
+		target, cleanup, err := runTaskAction(source, action, options)
 		if index != nil {
 			index.Invalidate(id)
 		}
 		payload, refreshErr := getBoard()
-		return taskActionResult{id: id, sequence: sequence, target: target, payload: payload, err: err, refreshErr: refreshErr, warnings: source.warningMessages()}
+		return taskActionResult{id: id, sequence: sequence, target: target, payload: payload, err: err, refreshErr: refreshErr, warnings: append(source.warningMessages(), cleanup...)}
 	}
 }
 

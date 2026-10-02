@@ -34,8 +34,12 @@ func (a *App) openTaskActionForm(action taskAction) tea.Cmd {
 			Value(&dialog.options.DuplicateOf).Validate(requireActionValue)).
 			WithHideFunc(func() bool { return dialog.options.Result != "duplicate" }))
 	}
+	reason := huh.NewInput().Title(t("actions.reason")).Value(&dialog.options.Reason).Validate(requireActionValue)
+	if action == actionArchive {
+		reason = reason.Description(t("actions.archive_final_warning"))
+	}
 	groups = append(groups,
-		huh.NewGroup(huh.NewInput().Title(t("actions.reason")).Value(&dialog.options.Reason).Validate(requireActionValue)),
+		huh.NewGroup(reason),
 		huh.NewGroup(huh.NewInput().Title(t("actions.decision")).Value(&dialog.options.Decision).Validate(requireActionValue)),
 	)
 	dialog.formTheme = huhTheme(themePalette(a.Theme))

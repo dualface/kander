@@ -19,6 +19,7 @@
   "actions.duplicate": "Duplicate",
   "actions.wontfix": "Will not fix",
   "actions.duplicate_of": "Replacement task ID",
+  "actions.archive_final_warning": "Archiving is final and cannot be undone: the card can never be moved or edited again, and its review evidence is permanently deleted once every related card is archived.",
   "actions.reason": "Reason",
   "actions.decision": "Decision reference",
   "actions.menu": "Task actions"

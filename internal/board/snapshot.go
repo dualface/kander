@@ -120,6 +120,9 @@ type MoveOptions struct {
 	DeliveryCommit   string
 	Disposition      *ArtifactReference
 	Replayed         *bool
+	// Pruned receives the cleanup that follows a committed move into
+	// archived; its Err never turns the move into a failure.
+	Pruned *PruneReport
 }
 
 // MoveEntry preserves the existing API for callers already holding a snapshot.
@@ -137,6 +140,9 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		defer entry.Version.mu.Unlock()
 	}
 	scope := LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: true}
+	if target == "archived" {
+		scope.Groups = []string{pruneControlGroup}
+	}
 	if target == "done" {
 		scope, err = reviewGateScope(root, entry.TaskID, true, entryWarningLog(entry))
 		if err != nil {
@@ -199,6 +205,11 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if e = tx.Relocate(entry.TaskID, target); e != nil {
 			return e
 		}
+		if target == "archived" {
+			if e = stageArchivePruneIntent(tx, entry.TaskID); e != nil {
+				return e
+			}
+		}
 		moved = s.Entry
 		moved.State = target
 		moved.Path = joinBoard(root, target, baseEntryName(entry))
@@ -209,6 +220,13 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry)}
 		return nil
 	})
+	if err == nil && moved.State == "archived" && entry.State != "archived" {
+		report, e := pruneArchived(root, entryWarningLog(entry))
+		report.Err = e
+		if options.Pruned != nil {
+			*options.Pruned = report
+		}
+	}
 	return moved, err
 }
 

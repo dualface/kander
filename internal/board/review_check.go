@@ -61,9 +61,22 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 				add(id, e)
 				continue
 			}
+			// Evidence an archive cleanup removed is recorded, not damaged.
+			receipt, e := readPruneReceipt(root, id)
+			if e != nil {
+				add(id, e)
+				continue
+			}
+			pruned := map[string]bool{}
+			for _, runID := range receipt.Runs {
+				pruned[runID] = true
+			}
 			indexed := map[string]bool{}
 			for _, index := range indexes {
 				indexed[index.RunID] = true
+				if pruned[index.RunID] {
+					continue
+				}
 				if run, ok := runs[index.RunID]; !ok || !containsID(run.TaskIDs, id) {
 					add(id, reviewError(index.RunID+": missing intent or membership"))
 				}
@@ -85,7 +98,7 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 			}
 			for _, runID := range slices.Sorted(maps.Keys(runs)) {
 				run := runs[runID]
-				if !containsID(run.TaskIDs, id) {
+				if !containsID(run.TaskIDs, id) || pruned[runID] {
 					continue
 				}
 				if run.Phase != "finalized" || !allPublished(run) {

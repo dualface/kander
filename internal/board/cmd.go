@@ -90,12 +90,16 @@ func RunInit(args []string) int {
 		}
 		project = args[0]
 	}
-	root, exclude, rules, migrated, err := InitBoardWithOptions(project, InitOptions{Maintenance: maintenance})
+	var pruned PruneReport
+	root, exclude, rules, migrated, err := InitBoardWithOptions(project, InitOptions{Maintenance: maintenance, Pruned: &pruned})
 	if err != nil {
 		return fail(err)
 	}
 	fmt.Println(t("board.initialized", root))
 	fmt.Println(t("board.migrated", itoa(migrated)))
+	for _, line := range PruneSummary(pruned) {
+		fmt.Fprintln(os.Stderr, line)
+	}
 	if exclude != "" {
 		fmt.Println(t("board.git_exclude", exclude))
 	}
@@ -255,9 +259,16 @@ func RunMove(args []string) int {
 	if values["--disposition"] != "" {
 		options.Disposition = &ArtifactReference{TaskID: entry.TaskID, Path: values["--disposition"]}
 	}
+	var pruned PruneReport
+	options.Pruned = &pruned
 	moved, err := MoveWithOptions(entry, root, args[1], options)
 	if err != nil {
 		return fail(err)
+	}
+	if moved.State == "archived" {
+		for _, line := range PruneSummary(pruned) {
+			fmt.Fprintln(os.Stderr, line)
+		}
 	}
 	if authorization.DispatchID != "" {
 		d, err := ReadDispatch(root, entry.TaskID, authorization.DispatchID)

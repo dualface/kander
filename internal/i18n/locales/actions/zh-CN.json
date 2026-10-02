@@ -19,6 +19,7 @@
   "actions.duplicate": "重复（duplicate）",
   "actions.wontfix": "不处理（wontfix）",
   "actions.duplicate_of": "替代任务 ID",
+  "actions.archive_final_warning": "归档是最终操作，无法撤销：卡片之后不能再移动或修改；相关卡片全部归档后，其审核证据会被永久删除。",
   "actions.reason": "原因",
   "actions.decision": "决策依据",
   "actions.menu": "任务操作"

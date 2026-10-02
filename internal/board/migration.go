@@ -23,7 +23,12 @@ type FormMigration struct {
 
 // InitOptions records an operator's explicit maintenance-window acknowledgement.
 // It cannot prove that arbitrary external editors or old agents have stopped.
-type InitOptions struct{ Maintenance bool }
+type InitOptions struct {
+	Maintenance bool
+	// Pruned receives the archive cleanup init runs after migration, which
+	// also resumes cleanups an interrupted archive left behind.
+	Pruned *PruneReport
+}
 
 func maintenanceRequired(state string) bool { return state == "working" || state == "review" }
 

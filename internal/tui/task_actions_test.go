@@ -14,6 +14,9 @@ import (
 	"github.com/dualface/kander/internal/focus"
 )
 
+// translate reaches the catalog helper from tests that shadow t.
+var translate = t
+
 func actionTestSource(t *testing.T, state string, ready bool) taskActionSource {
 	t.Helper()
 	root := t.TempDir()
@@ -293,6 +296,10 @@ func TestTaskActionLifecycleForms(t *testing.T) {
 			if app.pendingWork != nil || dialog.running {
 				t.Fatal("blank reason submitted")
 			}
+			warning := string([]rune(translate("actions.archive_final_warning"))[:6])
+			if shown := strings.Contains(dialog.form.View(), warning); shown != (tc.action == actionArchive) {
+				t.Fatalf("archive warning shown=%v: %s", shown, dialog.form.View())
+			}
 			send("User reason")
 			send("enter")
 			send("enter")
@@ -324,6 +331,9 @@ func TestTaskActionLifecycleForms(t *testing.T) {
 			if after.Entry.State != target {
 				t.Fatalf("state %s notice %s", after.Entry.State, app.CopyNotice)
 			}
+			if cleanup := board.PruneSummary(board.PruneReport{})[0]; strings.Contains(app.CopyNotice, cleanup) != (tc.action == actionArchive) {
+				t.Fatalf("cleanup summary in notice: %s", app.CopyNotice)
+			}
 			if tc.result == "duplicate" && !strings.Contains(after.Text, "replacement-task") {
 				t.Fatal("replacement lost")
 			}
@@ -343,7 +353,7 @@ func TestTaskActionLifecycleRejectionAndCancel(t *testing.T) {
 				{Result: result, Reason: " ", Decision: "decision"},
 				{Result: result, Reason: "reason", Decision: " "},
 			} {
-				_, err := runTaskAction(source, action, options)
+				_, _, err := runTaskAction(source, action, options)
 				if err == nil {
 					t.Fatal("board accepted missing authorization fields")
 				}
