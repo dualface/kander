@@ -1,6 +1,7 @@
 {
+  "board.lock_busy": "{{.V0}} 正被其他进程持有; 保留到之后的清理",
   "board.prune_failed": "警告: archive 清理未完成; 下一次 archive 或 kander init 会继续: {{.V0}}",
   "board.prune_kept": "archive 清理保留了 {{.V0}}",
   "board.prune_nothing": "archive 清理: 没有可删除的数据",
-  "board.prune_summary": "archive 清理删除了 {{.V0}} 个文件 ({{.V1}}); 审核 run: {{.V2}}; 批次: {{.V3}}; 计划: {{.V4}}; 启动和派发记录: {{.V5}}; 任务组: {{.V6}}"
+  "board.prune_summary": "archive 清理删除了 {{.V0}} 个文件 ({{.V1}}); 审核 run: {{.V2}}; 批次: {{.V3}}; 计划: {{.V4}}; 启动记录: {{.V5}}; 派发记录: {{.V6}}; 任务组: {{.V7}}"
 }

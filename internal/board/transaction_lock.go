@@ -3,10 +3,12 @@ package board
 import (
 	"context"
 	"errors"
-	"github.com/dualface/kander/internal/fs"
 	"os"
-	"path/filepath"
 	"sort"
+	"time"
+
+	"github.com/dualface/kander/internal/fs"
+	"path/filepath"
 )
 
 func acquireContext(ctx context.Context, root string, scope LockScope) (locks lockSet, err error) {
@@ -80,6 +82,28 @@ func (locks *lockSet) close() error {
 	*locks = nil
 	return result
 }
+
+// tryTake takes an exclusive lock only if it frees up within a short bound.
+// Callers already holding the board lock use it against locks that others
+// take first, so contention means "busy" instead of a lock-order deadlock.
+func (locks *lockSet) tryTake(root, path string) error {
+	f, err := fs.OpenLockFile(root, path)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	l, err := fs.LockExclusiveContext(ctx, f)
+	if errors.Is(err, context.DeadlineExceeded) {
+		err = kanbanError("board.lock_busy", path)
+	}
+	if err != nil {
+		return errors.Join(err, f.Close())
+	}
+	*locks = append(*locks, heldLock{f, l})
+	return nil
+}
+
 func (locks *lockSet) take(root, path string, shared bool) error {
 	f, err := fs.OpenLockFile(root, path)
 	if err != nil {

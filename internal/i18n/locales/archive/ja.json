@@ -1,6 +1,7 @@
 {
+  "board.lock_busy": "{{.V0}} は別のプロセスが保持しています; 後のクリーンアップまで保持します",
   "board.prune_failed": "警告: archive のクリーンアップが完了していません; 次の archive または kander init で再開します: {{.V0}}",
   "board.prune_kept": "archive のクリーンアップで保持: {{.V0}}",
   "board.prune_nothing": "archive のクリーンアップ: 削除対象はありません",
-  "board.prune_summary": "archive のクリーンアップで {{.V0}} 個のファイル ({{.V1}}) を削除しました; レビュー run: {{.V2}}; バッチ: {{.V3}}; 計画: {{.V4}}; 開始・ディスパッチ記録: {{.V5}}; タスクグループ: {{.V6}}"
+  "board.prune_summary": "archive のクリーンアップで {{.V0}} 個のファイル ({{.V1}}) を削除しました; レビュー run: {{.V2}}; バッチ: {{.V3}}; 計画: {{.V4}}; 開始記録: {{.V5}}; ディスパッチ記録: {{.V6}}; タスクグループ: {{.V7}}"
 }

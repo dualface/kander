@@ -21,20 +21,21 @@ const pruneControlGroup = "00000000-prune-group"
 // deletions were keyed by; Err is a cleanup failure that never undoes the
 // archive move that triggered it.
 type PruneReport struct {
-	Runs     []string
-	Batches  []string
-	Plans    []string
-	Tasks    []string
-	Groups   []string
-	Files    int
-	Bytes    int64
-	Warnings []string
-	Err      error
+	Runs       []string
+	Batches    []string
+	Plans      []string
+	Tasks      []string
+	Dispatches []string
+	Groups     []string
+	Files      int
+	Bytes      int64
+	Warnings   []string
+	Err        error
 }
 
 // Empty reports whether nothing was removed.
 func (r PruneReport) Empty() bool {
-	return r.Files == 0 && len(r.Runs)+len(r.Batches)+len(r.Plans)+len(r.Tasks)+len(r.Groups) == 0
+	return r.Files == 0 && len(r.Runs)+len(r.Batches)+len(r.Plans)+len(r.Tasks)+len(r.Dispatches)+len(r.Groups) == 0
 }
 
 // pruneReceipt records, per card, which review evidence was removed so check
@@ -92,6 +93,9 @@ type prunePlan struct {
 	copyFiles []string
 	// reviews lists the card reviews directories copies were removed from.
 	reviews []string
+	// runLocks holds the execution lock of every run to delete, so no review
+	// gate is still writing into a run while it is removed.
+	runLocks lockSet
 }
 
 // PruneArchived removes evidence and control records that belong only to
@@ -119,6 +123,7 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	if err != nil {
 		return report, err
 	}
+	defer func() { err = errors.Join(err, plan.runLocks.close()) }()
 	if err = writePruneReceipts(root, plan); err != nil {
 		return report, err
 	}
@@ -170,6 +175,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	}
 	report.Runs, report.Batches, report.Plans = sortedKeys(plan.runs), sortedKeys(plan.batches), sortedKeys(plan.plans)
 	report.Tasks, report.Groups = sortedKeys(plan.starts), sortedKeys(plan.groups)
+	for _, name := range sortedKeys(plan.dispatches) {
+		report.Dispatches = append(report.Dispatches, strings.TrimSuffix(name, ".json"))
+	}
 	if err = errors.Join(failures...); err != nil {
 		return report, err
 	}
@@ -204,10 +212,13 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 	warn := func(name string, e error) { report.Warnings = append(report.Warnings, name+": "+e.Error()) }
 	groupOf := map[string]string{}
 	groupMembers := map[string][]string{}
+	// An unreadable card hides its group, so no group may count as settled.
+	unreadable := map[string]bool{}
 	for id, e := range b.Entries {
 		text, e2 := readDocument(e)
 		if e2 != nil {
 			warn(id, e2)
+			unreadable[id] = true
 			continue
 		}
 		if g := TaskGroupFrom(text); g != "" {
@@ -215,16 +226,28 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 			groupMembers[g] = append(groupMembers[g], id)
 		}
 	}
-	archived := func(id string) bool {
-		e, ok := b.Entries[id]
-		return ok && e.State == "archived"
+	state := func(id string) string {
+		if e, ok := b.Entries[id]; ok {
+			return e.State
+		}
+		return ""
 	}
+	// A group settles once no member can move again: every member is archived
+	// or in trash. Until then the coordinator may still read the records of
+	// its archived members, so they are kept.
 	settledGroup := func(g string) bool {
 		members := groupMembers[g]
-		return len(members) > 0 && !slices.ContainsFunc(members, func(id string) bool { return !archived(id) })
+		return len(unreadable) == 0 && len(members) > 0 && !slices.ContainsFunc(members, func(id string) bool {
+			return state(id) != "archived" && state(id) != "trash"
+		})
 	}
+	invalid := map[string]bool{}
 	settled := func(id string) bool {
-		if !taskIDRe.MatchString(id) || !archived(id) {
+		if !taskIDRe.MatchString(id) {
+			invalid[id] = true
+			return false
+		}
+		if state(id) != "archived" || unreadable[id] {
 			return false
 		}
 		g := groupOf[id]
@@ -275,11 +298,28 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 	}
 	for id, v := range runs {
 		_, hasBatch := batches[v.BatchID]
-		plan.runs[id] = v.Phase == "finalized" && allPublished(v) && allSettled(v.TaskIDs) && (!hasBatch || plan.batches[v.BatchID])
+		// Unfinished runs of final cards can never complete, so they go too,
+		// unless a review gate still holds the run's execution lock.
+		plan.runs[id] = allSettled(v.TaskIDs) && (!hasBatch || plan.batches[v.BatchID])
 	}
-	// A kept record must keep its whole predecessor chain readable.
+	for _, id := range sortedKeys(plan.runs) {
+		if !plan.runs[id] {
+			continue
+		}
+		if e := plan.runLocks.tryTake(root, control(root, "locks", "review-run-"+id+".lock")); e != nil {
+			warn("runs/"+id, e)
+			plan.runs[id] = false
+		}
+	}
+	// A kept record must keep its whole predecessor chain, its batch and its
+	// plan readable.
 	for changed := true; changed; {
 		changed = false
+		for id, v := range runs {
+			if !plan.runs[id] && plan.batches[v.BatchID] {
+				plan.batches[v.BatchID], changed = false, true
+			}
+		}
 		for id, v := range runs {
 			if !plan.runs[id] && plan.runs[v.PreviousRunID] {
 				plan.runs[v.PreviousRunID], changed = false, true
@@ -408,6 +448,9 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 	}
 	slices.Sort(plan.copies)
 	slices.Sort(plan.copyFiles)
+	for _, id := range sortedKeys(invalid) {
+		warn(id, reviewError("invalid task ID; its records are kept"))
+	}
 	plan.reviews = sortedKeys(touched)
 	return plan, nil
 }
@@ -568,6 +611,7 @@ func listNames(root, dir string, kind fs.Kind, suffix string, warn func(string, 
 	for _, entry := range entries {
 		name, ok := strings.CutSuffix(entry.Name, suffix)
 		if entry.Kind != kind || !ok || !ValidReviewID(name) {
+			warn(filepath.Join(filepath.Base(dir), entry.Name), reviewError("unexpected entry; kept"))
 			continue
 		}
 		names = append(names, name)
@@ -607,7 +651,7 @@ func PruneSummary(r PruneReport) []string {
 			}
 			return strings.Join(ids, ", ")
 		}
-		lines = append(lines, t("board.prune_summary", itoa(r.Files), formatBytes(r.Bytes), none(r.Runs), none(r.Batches), none(r.Plans), none(r.Tasks), none(r.Groups)))
+		lines = append(lines, t("board.prune_summary", itoa(r.Files), formatBytes(r.Bytes), none(r.Runs), none(r.Batches), none(r.Plans), none(r.Tasks), none(r.Dispatches), none(r.Groups)))
 	}
 	for _, w := range r.Warnings {
 		lines = append(lines, t("board.prune_kept", w))

@@ -1,6 +1,7 @@
 package board
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/dualface/kander/internal/fs"
 )
 
 // pruneCard creates a working directory card, optionally in a task group.
@@ -152,6 +155,11 @@ func TestArchivePrunesStartDispatchAndGroupRecordsOnlyWhenGroupSettles(t *testin
 	root := tempBoard(t)
 	group := "20261002-prune-fixture-group"
 	a, b := pruneCard(t, root, "prune-group-a", group), pruneCard(t, root, "prune-group-b", group)
+	// A trashed member can never move again, so it does not hold the group open.
+	dropped := transactionSnapshot(t, root, pruneCard(t, root, "prune-group-c", group))
+	if _, err := MoveWithOptions(dropped.Entry, root, "trash", MoveOptions{Result: "trashed", Reason: "删除", Decision: "删除决定"}); err != nil {
+		t.Fatal(err)
+	}
 	start := control(root, "groups", taskStartGroup, a, "current.json")
 	dispatch := control(root, "groups", dispatchRegistry, "0123456789abcdef0123456789abcdef.json")
 	shared := control(root, "groups", dispatchRegistry, "fedcba9876543210fedcba9876543210.json")
@@ -167,7 +175,8 @@ func TestArchivePrunesStartDispatchAndGroupRecordsOnlyWhenGroupSettles(t *testin
 		requireExists(t, path, true)
 	}
 	report := archiveWithReport(t, root, b)
-	if report.Err != nil || !slices.Equal(report.Tasks, []string{a}) || !slices.Equal(report.Groups, []string{group}) {
+	dispatches := []string{"0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"}
+	if report.Err != nil || !slices.Equal(report.Tasks, []string{a}) || !slices.Equal(report.Dispatches, dispatches) || !slices.Equal(report.Groups, []string{group}) {
 		t.Fatalf("report: %+v", report)
 	}
 	for _, path := range []string{filepath.Dir(start), dispatch, shared, filepath.Dir(checkpoint)} {
@@ -196,8 +205,14 @@ func TestArchivePruneLeavesUnlistedAndUntrustedData(t *testing.T) {
 	forged := reviewPath(root, "runs", "forged-run", "run.json")
 	writeControl(t, forged, `{"run_id":"forged-run","phase":"finalized","task_ids":["../escape"],"published":{"../escape":true}}`)
 	kept = append(kept, forged)
-	if report := archiveWithReport(t, root, id); report.Err != nil {
+	report := archiveWithReport(t, root, id)
+	if report.Err != nil {
 		t.Fatal(report.Err)
+	}
+	for _, want := range []string{"../escape", "not-a-task", "../../"} {
+		if !slices.ContainsFunc(report.Warnings, func(w string) bool { return strings.Contains(w, want) }) {
+			t.Fatalf("no warning for %s: %v", want, report.Warnings)
+		}
 	}
 	for _, path := range append(kept, outside) {
 		requireExists(t, path, true)
@@ -359,4 +374,60 @@ func TestArchivePrunesPlanClosureAndTaskPlans(t *testing.T) {
 		requireExists(t, path, false)
 	}
 	requirePrunedCheck(t, root, id)
+}
+
+func TestArchivePrunesUnfinishedRunsUnlessAGateHoldsThem(t *testing.T) {
+	root := tempBoard(t)
+	id := pruneCard(t, root, "prune-unfinished", "")
+	for _, run := range []string{"prune-unfinished-run", "prune-busy-run"} {
+		input := archiveInput([]string{id}, run, "PMQA")
+		input.BatchID = run + "-batch"
+		if _, _, err := PrepareReviewRun(root, input, archiveRequirements(), nil, archiveOriginals(), "test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, err := fs.OpenLockFile(root, control(root, "locks", "review-run-prune-busy-run.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock, err := fs.LockExclusive(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := archiveWithReport(t, root, id)
+	if report.Err != nil || !slices.Equal(report.Runs, []string{"prune-unfinished-run"}) {
+		t.Fatalf("report: %+v", report)
+	}
+	if !slices.ContainsFunc(report.Warnings, func(w string) bool { return strings.Contains(w, "prune-busy-run") }) {
+		t.Fatalf("busy run not reported: %v", report.Warnings)
+	}
+	requireExists(t, reviewPath(root, "runs", "prune-unfinished-run"), false)
+	requireExists(t, reviewPath(root, "runs", "prune-busy-run"), true)
+	requireExists(t, reviewPath(root, "batches", "prune-busy-run-batch.json"), true)
+	if err = errors.Join(lock.Unlock(), f.Close()); err != nil {
+		t.Fatal(err)
+	}
+	if next, err := PruneArchived(root); err != nil || !slices.Equal(next.Runs, []string{"prune-busy-run"}) {
+		t.Fatalf("released run: %+v %v", next, err)
+	}
+	requirePrunedCheck(t, root, id)
+}
+
+func TestUnreadableCardKeepsGroupRecords(t *testing.T) {
+	root := tempBoard(t)
+	group := "20261002-prune-unreadable-group"
+	a, b := pruneCard(t, root, "prune-unreadable-a", group), pruneCard(t, root, "prune-unreadable-b", group)
+	checkpoint := control(root, "groups", group, "checkpoint.json")
+	writeControl(t, checkpoint, `{"members":{"`+a+`":{}}}`)
+	if err := os.WriteFile(transactionSnapshot(t, root, b).Entry.Document, []byte("# broken\n\xff\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report := archiveWithReport(t, root, a)
+	if report.Err != nil || len(report.Groups) > 0 {
+		t.Fatalf("report: %+v", report)
+	}
+	requireExists(t, checkpoint, true)
+	if !slices.ContainsFunc(report.Warnings, func(w string) bool { return strings.Contains(w, b) }) {
+		t.Fatalf("unreadable card not reported: %v", report.Warnings)
+	}
 }

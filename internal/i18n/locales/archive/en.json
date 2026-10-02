@@ -1,6 +1,7 @@
 {
+  "board.lock_busy": "{{.V0}} is held by another process; kept for a later cleanup",
   "board.prune_failed": "Warning: archive cleanup did not finish; the next archive or kander init resumes it: {{.V0}}",
   "board.prune_kept": "Archive cleanup kept {{.V0}}",
   "board.prune_nothing": "Archive cleanup: nothing to remove",
-  "board.prune_summary": "Archive cleanup removed {{.V0}} files ({{.V1}}); review runs: {{.V2}}; batches: {{.V3}}; plans: {{.V4}}; start and dispatch records: {{.V5}}; task groups: {{.V6}}"
+  "board.prune_summary": "Archive cleanup removed {{.V0}} files ({{.V1}}); review runs: {{.V2}}; batches: {{.V3}}; plans: {{.V4}}; start records: {{.V5}}; dispatch records: {{.V6}}; task groups: {{.V7}}"
 }
