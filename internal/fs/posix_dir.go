@@ -89,6 +89,34 @@ func DirectoryExists(root, path string) (bool, error) {
 	return true, nil
 }
 
+// RemoveEmptyDirectoryIfExists removes one empty directory relative to a
+// no-follow parent. A symlink, a non-directory, or a non-empty directory fails.
+func RemoveEmptyDirectoryIfExists(root, path string) (bool, error) {
+	parent, err := openPosixParent(root, path)
+	if err != nil {
+		return false, err
+	}
+	defer parent.close()
+	var st unix.Stat_t
+	err = unix.Fstatat(parent.parentFD, parent.name, &st, unix.AT_SYMLINK_NOFOLLOW)
+	if err == unix.ENOENT {
+		return false, nil
+	}
+	if err != nil {
+		return false, mapOpenErr("lstat", parent.path, err)
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFDIR {
+		return false, failClosed("rmdir", parent.path, "not a directory")
+	}
+	if err := unix.Unlinkat(parent.parentFD, parent.name, unix.AT_REMOVEDIR); err != nil {
+		if err == unix.ENOENT {
+			return false, nil
+		}
+		return false, wrap("rmdir", parent.path, err)
+	}
+	return true, nil
+}
+
 // ListDirectory enumerates direct members through a pinned directory descriptor and rejects symlinks.
 func ListDirectory(root, path string) ([]DirEntry, error) {
 	dir, err := openPosixDirectory(root, path)

@@ -190,6 +190,27 @@ func RemoveRegularFileIfExists(root, path string) (bool, error) {
 	return true, nil
 }
 
+// RemoveEmptyDirectoryIfExists deletes one empty directory through a pinned
+// leaf handle; reparse points and non-empty directories fail.
+func RemoveEmptyDirectoryIfExists(root, path string) (bool, error) {
+	exists, err := DirectoryExists(root, path)
+	if err != nil || !exists {
+		return false, err
+	}
+	abs, handle, cleanup, err := openChain(root, path, windows.DELETE|windows.FILE_READ_ATTRIBUTES, kindDirectory)
+	if err != nil {
+		if isMissingWin(err) || isNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer cleanup()
+	if err := deleteHandle(handle, abs, true); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func walkWindowsDirs(path string, createPrivate bool, inherited bool) error {
 	candidate, err := absolutePath(path)
 	if err != nil {

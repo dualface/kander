@@ -587,6 +587,43 @@ func TestWriteExecutableAtomicInherited(t *testing.T) {
 	}
 }
 
+func TestRemoveEmptyDirectoryIfExists(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "reviews")
+	if err := os.MkdirAll(filepath.Join(dir, "run"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RemoveEmptyDirectoryIfExists(root, dir); err == nil {
+		t.Fatal("non-empty directory removed")
+	}
+	if ok, err := RemoveEmptyDirectoryIfExists(root, filepath.Join(dir, "run")); err != nil || !ok {
+		t.Fatalf("remove empty: ok=%v err=%v", ok, err)
+	}
+	if ok, err := RemoveEmptyDirectoryIfExists(root, filepath.Join(dir, "run")); err != nil || ok {
+		t.Fatalf("missing: ok=%v err=%v", ok, err)
+	}
+	file := filepath.Join(dir, "plan.json")
+	if err := os.WriteFile(file, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RemoveEmptyDirectoryIfExists(root, file); err == nil {
+		t.Fatal("file removed as a directory")
+	}
+	target := filepath.Join(root, "target")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(target, link); err == nil {
+		if _, err := RemoveEmptyDirectoryIfExists(root, link); err == nil {
+			t.Fatal("symlink followed")
+		}
+		if _, err := os.Stat(target); err != nil {
+			t.Fatalf("link target removed: %v", err)
+		}
+	}
+}
+
 func TestRemoveNonDirectoryIfExists(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "KANDER-AGENTS.md")
