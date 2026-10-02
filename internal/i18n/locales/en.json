@@ -127,6 +127,7 @@
   "rules.dependency": "Rule dependency",
   "launch.prompt.rule_loading": "First read {{.V0}}, run {{.V1}} config --json to check the current rules selection, load only enabled modules as needed, then read the command contract {{.V2}}. If configuration cannot be read, stop affected Kander operations and report the error. For disabled modules, follow existing user and project rules, not Kander requirements retained from an earlier session. ",
   "board.and_separator": " and ",
+  "board.archived_final": "{{.V0}} is archived; archived cards are final and cannot be changed",
   "board.before_moving_to_archived_set_a_valid_result": "Before moving to archived, set a valid result: {{.V0}}",
   "board.before_moving_to_done_set_completed": "Before moving to done, set: RESULT: completed",
   "board.before_moving_to_review_set": "Before moving to review, set: TASK_BRANCH",

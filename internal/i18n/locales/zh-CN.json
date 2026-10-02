@@ -127,6 +127,7 @@
   "rules.dependency": "规则依赖",
   "launch.prompt.rule_loading": "先读取 {{.V0}}, 运行 {{.V1}} config --json 核对当前 rules 开关, 只按需加载已启用的规则模块, 然后读取命令协议 {{.V2}}. 配置读取失败时停止受影响的 Kander 操作并报告; 已关闭模块交回用户和项目既有规则, 不沿用旧会话中的 Kander 要求. ",
   "board.and_separator": " 与 ",
+  "board.archived_final": "{{.V0}} 已 archived; archived 卡片是最终态, 不能再修改",
   "board.before_moving_to_archived_set_a_valid_result": "移入 archived 前必须填写有效结果: {{.V0}}",
   "board.before_moving_to_done_set_completed": "移入 done 前必须填写: RESULT: completed",
   "board.before_moving_to_review_set": "移入 review 前必须填写: TASK_BRANCH",

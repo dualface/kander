@@ -282,6 +282,36 @@ func TestDismissStaleHerdrDoesNotRewriteWindow(t *testing.T) {
 	}
 }
 
+// Archived cards are final, yet dismiss still closes their agent because it
+// never writes the card.
+func TestDismissArchivedCardClosesContainerWithoutWrite(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
+	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p9")
+	t.Setenv("KANBAN_HERDR_TAB_ID", "w1:t8")
+	t.Setenv("KANBAN_HERDR_LIST_JSON", `{"id":"cli:pane:list","result":{"type":"pane_list","panes":[{"pane_id":"w1:p8","tab_id":"w1:t8","agent":"claude","agent_status":"idle","agent_session":{"value":"session-1"}}]}}`)
+	taskID, _ := makeDone(t, root, "dismiss-archived", "herdr:w1:t9:w1:p9")
+	snapshot, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived, err := board.MoveWithOptions(snapshot.Entry, root, "archived", board.MoveOptions{Result: "completed", Reason: "archive completed work", Decision: "user decision"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(archived.Document)
+	out, _, err := capture(t, func() error { return commandDismiss(root, taskID, 61) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(archived.Document); string(before) != string(after) {
+		t.Fatal("card mutated")
+	}
+	if !strings.Contains(out, "关闭容器=w1:t8") {
+		t.Fatalf("out=%s", out)
+	}
+}
+
 // An undecidable pane identity refuses the exit/close path entirely: dismiss
 // never delivers the exit command to a pane it cannot confirm.
 func TestDismissUncertainHerdrRefuses(t *testing.T) {

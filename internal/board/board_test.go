@@ -478,15 +478,14 @@ func TestInitLayoutAndArchive(t *testing.T) {
 	}); code != 0 {
 		t.Fatalf("archive: %s", err)
 	}
-	task = filepath.Join(root, "archived", taskID, "spec.md")
-	if code, _, _ := capture(t, func() int { return RunMove([]string{taskID, "trash"}) }); code == 0 {
-		t.Fatal("trash without result")
+	code, _, errText := capture(t, func() int {
+		return RunMove([]string{taskID, "trash", "--result", "trashed", "--reason", "deleted by user", "--decision", "test decision"})
+	})
+	if code == 0 || !strings.Contains(errText, "最终态") {
+		t.Fatalf("archived card left its final state: %d %s", code, errText)
 	}
-	setMeta(t, task, "- RESULT: cancelled\n", "- RESULT: trashed\n")
-	if code, _, err := capture(t, func() int {
-		return RunMove([]string{taskID, "trash", "--reason", "deleted by user", "--decision", "test decision"})
-	}); code != 0 {
-		t.Fatalf("trash: %s", err)
+	if _, err := os.Stat(filepath.Join(root, "archived", taskID, "spec.md")); err != nil {
+		t.Fatal(err)
 	}
 }
 

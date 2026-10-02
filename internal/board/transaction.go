@@ -279,6 +279,9 @@ func (tx *Transaction) putBytes(id, name string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	if err = requireNotArchived(s); err != nil {
+		return err
+	}
 	if name == "spec.md" {
 		if _, err := taskSize(s.Entry, text); err != nil {
 			return err
@@ -324,6 +327,17 @@ func (tx *Transaction) putBytes(id, name string, data []byte) error {
 	return nil
 }
 
+// requireNotArchived keeps archived cards final. Every card write is staged by
+// putBytes or Relocate, so checking the committed state there covers update,
+// moves, review publication, dispositions and dispatch records at once, while
+// the move into archived itself still sees the previous state.
+func requireNotArchived(s Snapshot) error {
+	if s.Entry.State == "archived" {
+		return kanbanError("board.archived_final", s.Entry.TaskID)
+	}
+	return nil
+}
+
 // Relocate stages a state move. Form migrations can extend EntryChange without
 // changing the lock, version, visibility or recovery protocol.
 func (tx *Transaction) Relocate(id, state string) error {
@@ -335,6 +349,9 @@ func (tx *Transaction) Relocate(id, state string) error {
 	}
 	s, err := tx.Snapshot(id)
 	if err != nil {
+		return err
+	}
+	if err = requireNotArchived(s); err != nil {
 		return err
 	}
 	if err = tx.touch(id); err != nil {

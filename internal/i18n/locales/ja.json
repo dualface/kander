@@ -127,6 +127,7 @@
   "rules.dependency": "ルール依存関係",
   "launch.prompt.rule_loading": "まず {{.V0}} を読み, {{.V1}} config --json を実行して現在の rules 選択を確認し, 有効なモジュールのみ必要に応じて読み込み, その後コマンド契約 {{.V2}} を読んでください. 設定を読めない場合は影響する Kander 操作を停止してエラーを報告してください. 無効なモジュールについては, 以前のセッションに残った Kander 要件ではなく, 既存のユーザーおよびプロジェクトルールに従ってください. ",
   "board.and_separator": " と ",
+  "board.archived_final": "{{.V0}} は archived です; archived のカードは最終状態のため変更できません",
   "board.before_moving_to_archived_set_a_valid_result": "archived に移す前に有効な結果を設定してください: {{.V0}}",
   "board.before_moving_to_done_set_completed": "done に移す前に設定してください: RESULT: completed",
   "board.before_moving_to_review_set": "review に移す前に設定してください: TASK_BRANCH",

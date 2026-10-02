@@ -31,7 +31,7 @@ var (
 		"working":  {"review": {}, "done": {}, "archived": {}, "trash": {}},
 		"review":   {"working": {}, "done": {}, "archived": {}, "trash": {}},
 		"done":     {"archived": {}, "trash": {}},
-		"archived": {"trash": {}},
+		"archived": {},
 		"trash":    {},
 	}
 

@@ -584,16 +584,12 @@ func TestReadAndUpdateRejectIncompleteLayout(t *testing.T) {
 func TestTerminationHistoryRemainsOneProtectedSection(t *testing.T) {
 	root := tempBoard(t)
 	s := transactionCard(t, root, "termination-history", false)
-	archived, err := MoveWithOptions(s.Entry, root, "archived", MoveOptions{Result: "cancelled", Reason: "取消", Decision: "取消决定"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	trash, err := MoveWithOptions(archived, root, "trash", MoveOptions{Result: "trashed", Reason: "删除", Decision: "删除决定"})
+	trash, err := MoveWithOptions(s.Entry, root, "trash", MoveOptions{Result: "trashed", Reason: "删除", Decision: "删除决定"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s = transactionSnapshot(t, root, trash.TaskID)
-	if strings.Count(s.Text, "## LIFECYCLE_DECISION") != 1 || !strings.Contains(s.Text, "取消决定") || !strings.Contains(s.Text, "删除决定") {
+	if strings.Count(s.Text, "## LIFECYCLE_DECISION") != 1 || !strings.Contains(s.Text, "删除决定") {
 		t.Fatal("termination history lost or ambiguous")
 	}
 	updateSnapshot(t, root, s, s.Text+"\n## NOTES\n\n后续说明\n")
