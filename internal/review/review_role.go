@@ -29,16 +29,7 @@ func currentReviewRole(role string) bool {
 	return role == "PMQA" || role == "Security"
 }
 
-func reviewerConfigRole(role string) string {
-	switch role {
-	case "PM", "QA":
-		return "PMQA"
-	case "CSA", "Hacker":
-		return "Security"
-	default:
-		return role
-	}
-}
+func reviewerConfigRole(role string) string { return board.PinRole(role) }
 
 func admitReviewRole(role string, root string, options archiveOptions, replay bool, existing board.ReviewRun) bool {
 	if currentReviewRole(role) {

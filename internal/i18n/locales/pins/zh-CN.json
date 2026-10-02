@@ -6,6 +6,7 @@
   "board.pin_invalid_value": "{{.V0}}：取值 {{.V1}} 无效（须为单个 ASCII 词，只含字母、数字和 ._:/@+[]-_，且不以 '-' 开头）",
   "board.pin_requires_agent": "指定了 model 或 effort 却没有 {{.V0}}；请同时指定同一阶段的 agent",
   "board.pin_unknown_agent": "{{.V0}}：{{.V1}} 不是已加载的执行 agent 定义",
+  "board.pin_unknown_record": "无法写入 {{.V0}}：卡片没有这种记录",
   "board.pin_unknown_reviewer": "{{.V0}}：{{.V1}} 没有审核模板",
   "launch.pin_agent_conflict": "{{.V0}} 指定了 {{.V1}}，但 --agent 要求 {{.V2}}；请使用卡片指定的 agent，或经契约变更修改卡片",
   "launch.pin_owner_conflict": "{{.V0}} 指定了 {{.V1}}，但卡片当前由 {{.V2}} 执行；请用 --agent {{.V1}} 接管，或经契约变更修改卡片",

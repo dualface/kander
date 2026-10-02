@@ -87,6 +87,23 @@ func resolveExecution(cfg *config.Config, text, kind, agent string, mode execMod
 	return choice, nil
 }
 
+// CheckExecutionPins runs the EXEC_* checks of a relaunch (takeoverAgent set
+// for `resume --agent`) before durable dispatch records its intent, so a pin
+// conflict leaves the card untouched. A card without a session is left to the
+// relaunch path, which reports that error itself.
+func CheckExecutionPins(cfg *config.Config, text, kind string, takeoverAgent *string) error {
+	if takeoverAgent != nil {
+		_, err := resolveExecution(cfg, text, kind, *takeoverAgent, execTakeover)
+		return err
+	}
+	session, err := sessionFrom(text)
+	if err != nil {
+		return nil
+	}
+	_, err = resolveExecution(cfg, text, kind, session.Agent, execContinue)
+	return err
+}
+
 // continuedAgentSource labels the agent of a relaunch: the pin when there is
 // one, the configuration when the owner is still the configured agent, and
 // otherwise an earlier command-line choice.

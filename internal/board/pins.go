@@ -71,8 +71,21 @@ func ReviewPinField(role, item string) string {
 	return "REVIEW_" + strings.ToUpper(role) + "_" + item
 }
 
-// ReviewResolvedField returns the REVIEW_<ROLE>_RESOLVED record name of a role.
-func ReviewResolvedField(role string) string { return ReviewPinField(role, pinResolved) }
+// ReviewResolvedField returns the REVIEW_<ROLE>_RESOLVED record name of a role;
+// historical roles fold onto the current role that reads their pins.
+func ReviewResolvedField(role string) string { return ReviewPinField(PinRole(role), pinResolved) }
+
+// PinRole folds the historical PM/QA and CSA/Hacker roles onto PMQA and
+// Security, the roles whose REVIEW_<ROLE>_* fields apply to them.
+func PinRole(role string) string {
+	switch role {
+	case "PM", "QA":
+		return "PMQA"
+	case "CSA", "Hacker":
+		return "Security"
+	}
+	return role
+}
 
 func execPinFields() [3]string { return [3]string{FieldExecAgent, FieldExecModel, FieldExecEffort} }
 
@@ -328,9 +341,12 @@ func WithResolvedRecord(text, field, value string) (string, error) {
 	if !pins.Any() {
 		return text, nil
 	}
+	re := headerFieldRe(field)
+	if re == nil {
+		return "", kanbanError("board.pin_unknown_record", field)
+	}
 	line := RenderField(field, value)
 	header := CardHeader(text)
-	re := headerFieldRe(field)
 	if loc := re.FindStringIndex(header); loc != nil {
 		return text[:loc[0]] + line + text[loc[1]:], nil
 	}

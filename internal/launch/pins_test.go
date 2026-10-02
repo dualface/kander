@@ -236,3 +236,35 @@ func TestResumeAndNotifyApplyExecutionPins(t *testing.T) {
 		t.Fatal("rejected relaunch changed the card or reached the launcher")
 	}
 }
+
+func TestDurableRelaunchChecksPinsBeforeRecordingDispatch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX fake agent")
+	}
+	root, _, _ := setupBoard(t)
+	task, path := makeTodo(t, root, "pin-durable")
+	pinCard(t, path, "- EXEC_AGENT: claude\n")
+	startThenReview(t, root, "claude", task, path)
+	before, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := "codex"
+	err = commandResume(root, &other, "", task, "同步", "", true, 61, DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
+	if err == nil || !strings.Contains(err.Error(), "--agent") {
+		t.Fatalf("durable takeover conflict err=%v", err)
+	}
+	after, err := board.ReadSnapshot(root, task)
+	if err != nil || after.Revision != before.Revision || after.Text != before.Text {
+		t.Fatalf("conflict changed the card: %v\n%s", err, after.Text)
+	}
+
+	cfg := envConfig("codex", "tmux", nil)
+	repinned := strings.Replace(before.Text, "- EXEC_AGENT: claude\n", "- EXEC_AGENT: grok\n", 1)
+	if err := CheckExecutionPins(cfg, repinned, before.Entry.Kind, nil); err == nil || !strings.Contains(err.Error(), "grok") {
+		t.Fatalf("owner conflict err=%v", err)
+	}
+	if err := CheckExecutionPins(cfg, before.Text, before.Entry.Kind, nil); err != nil {
+		t.Fatal(err)
+	}
+}

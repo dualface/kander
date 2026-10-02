@@ -6,6 +6,7 @@
   "board.pin_invalid_value": "{{.V0}}: invalid value {{.V1}} (one ASCII token of letters, digits and ._:/@+[]-_ that does not start with '-')",
   "board.pin_requires_agent": "model or effort is pinned without {{.V0}}; pin the agent of the same stage too",
   "board.pin_unknown_agent": "{{.V0}}: {{.V1}} is not a loaded execution agent definition",
+  "board.pin_unknown_record": "cannot write {{.V0}}: no such card record",
   "board.pin_unknown_reviewer": "{{.V0}}: {{.V1}} has no review template",
   "launch.pin_agent_conflict": "{{.V0}} pins {{.V1}} but --agent asks for {{.V2}}; use the pinned agent or change the card through a contract decision",
   "launch.pin_owner_conflict": "{{.V0}} pins {{.V1}} but the card runs {{.V2}}; take over with --agent {{.V1}} or change the card through a contract decision",

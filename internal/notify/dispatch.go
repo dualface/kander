@@ -33,6 +33,9 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 	if err = cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(s.Text)); err != nil {
 		return err
 	}
+	if err = launch.CheckExecutionPins(cfg, s.Text, s.Entry.Kind, nil); err != nil {
+		return err
+	}
 	var o launch.DispatchOptions
 	if len(options) > 0 {
 		o = options[0]

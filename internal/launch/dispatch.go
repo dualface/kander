@@ -122,6 +122,9 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if err = cfg.Rules.CheckTaskGroup(board.TaskGroupFrom(s.Text)); err != nil {
 		return err
 	}
+	if err = CheckExecutionPins(cfg, s.Text, s.Entry.Kind, agent); err != nil {
+		return err
+	}
 	var o DispatchOptions
 	if len(options) > 0 {
 		o = options[0]

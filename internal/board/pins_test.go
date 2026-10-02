@@ -140,3 +140,16 @@ func TestTodoGateAndCheckValidatePins(t *testing.T) {
 		t.Fatalf("check code=%d stderr=%v err=%v", code, stderr, err)
 	}
 }
+
+func TestHistoricalReviewRolesWriteTheFoldedRecord(t *testing.T) {
+	pinned := pinHeader + "- REVIEW_PMQA_AGENT: grok\n\n## GOAL\n"
+	for role, want := range map[string]string{"PM": "REVIEW_PMQA_RESOLVED", "QA": "REVIEW_PMQA_RESOLVED", "CSA": "REVIEW_SECURITY_RESOLVED", "Hacker": "REVIEW_SECURITY_RESOLVED"} {
+		got, err := WithResolvedRecord(pinned, ReviewResolvedField(role), "agent=grok(forced)")
+		if err != nil || !strings.Contains(got, "- "+want+": agent=grok(forced)\n") {
+			t.Fatalf("%s: %q %v", role, got, err)
+		}
+	}
+	if _, err := WithResolvedRecord(pinned, "REVIEW_OTHER_RESOLVED", "x"); err == nil {
+		t.Fatal("an unknown record name was written")
+	}
+}

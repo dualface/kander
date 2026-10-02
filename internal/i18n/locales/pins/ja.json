@@ -6,6 +6,7 @@
   "board.pin_invalid_value": "{{.V0}}: 値 {{.V1}} が無効です（英字・数字・._:/@+[]-_ のみの ASCII 1 語で、'-' で始まらないこと）",
   "board.pin_requires_agent": "{{.V0}} なしで model または effort が指定されています。同じ段階の agent も指定してください",
   "board.pin_unknown_agent": "{{.V0}}: {{.V1}} は読み込まれた実行 agent 定義ではありません",
+  "board.pin_unknown_record": "{{.V0}} を書き込めません: そのようなカード記録はありません",
   "board.pin_unknown_reviewer": "{{.V0}}: {{.V1}} にはレビューテンプレートがありません",
   "launch.pin_agent_conflict": "{{.V0}} は {{.V1}} を指定していますが、--agent は {{.V2}} を求めています。指定された agent を使うか、契約変更でカードを修正してください",
   "launch.pin_owner_conflict": "{{.V0}} は {{.V1}} を指定していますが、カードは {{.V2}} で実行中です。--agent {{.V1}} で引き継ぐか、契約変更でカードを修正してください",
