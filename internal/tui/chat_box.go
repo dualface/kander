@@ -72,6 +72,8 @@ func (a *App) openChat() {
 	input.Prompt = ""
 	input.Placeholder = t("tui.chat_placeholder")
 	input.CharLimit = 0
+	// Ctrl+J sends a line feed, the newline key many terminal users expect.
+	input.KeyMap.InsertNewline.SetKeys("enter", "ctrl+m", "ctrl+j")
 	input.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	input.FocusedStyle.Base = lipgloss.NewStyle()
 	input.Cursor.SetMode(cursor.CursorStatic)

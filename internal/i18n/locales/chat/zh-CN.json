@@ -3,7 +3,7 @@
   "launch.chat_requires_container_launcher": "对话框需要在终端容器中启动 agent 的启动器, 例如 herdr 或 tmux; 启动器 {{.V0}} 会占用看板所在的终端",
   "tui.chat_title": "与 agent 对话",
   "tui.chat_placeholder": "输入要交给 agent 的内容",
-  "tui.chat_keys": "Enter 换行 | Ctrl+S 发送 | Esc 关闭(保留草稿)",
+  "tui.chat_keys": "Enter/Ctrl+J 换行 | Ctrl+S 发送 | Esc 关闭(保留草稿)",
   "tui.chat_running_keys": "正在启动 agent, 完成前忽略按键",
   "tui.chat_empty": "请先输入内容再发送",
   "tui.chat_loading_keys": "仍在解析 agent, 请稍后再发送",

@@ -88,6 +88,21 @@ func TestChatBoxSubmitsMultilineMessageFocusesAndCloses(t *testing.T) {
 	}
 }
 
+func TestChatBoxCtrlJInsertsNewlineWithoutSending(t *testing.T) {
+	app, messages, _ := chatApp(t, chatStarted)
+	openReadyChat(t, app)
+
+	typeText(app, "first")
+	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlJ})
+	typeText(app, "second")
+	if got := app.Chat.input.Value(); got != "first\nsecond" {
+		t.Fatalf("Ctrl+J must insert a newline: %q", got)
+	}
+	if app.Chat.phase != chatReady || len(*messages) != 0 {
+		t.Fatalf("Ctrl+J must not send: phase=%v calls=%v", app.Chat.phase, *messages)
+	}
+}
+
 func TestChatBoxEscKeepsTheDraftAndRejectsBlankMessages(t *testing.T) {
 	app, messages, _ := chatApp(t, chatStarted)
 	openReadyChat(t, app)

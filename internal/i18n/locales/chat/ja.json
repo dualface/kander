@@ -3,7 +3,7 @@
   "launch.chat_requires_container_launcher": "チャットボックスには herdr や tmux など、ターミナルコンテナで agent を起動するランチャーが必要です。ランチャー {{.V0}} はボードのターミナルを占有します",
   "tui.chat_title": "Agent とチャット",
   "tui.chat_placeholder": "Agent に渡す内容を入力",
-  "tui.chat_keys": "Enter 改行 | Ctrl+S 送信 | Esc 閉じる(下書きを保持)",
+  "tui.chat_keys": "Enter/Ctrl+J 改行 | Ctrl+S 送信 | Esc 閉じる(下書きを保持)",
   "tui.chat_running_keys": "Agent を起動中です。完了までキー入力は無視されます",
   "tui.chat_empty": "送信する前に内容を入力してください",
   "tui.chat_loading_keys": "Agent を解決中です。しばらくしてから送信してください",
