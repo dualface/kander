@@ -29,6 +29,7 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <decis
 2. **Optimistic Locking (CAS)**: Mutations require an `--expect-revision`. Every successful write increments the task revision by 1.
 3. **State Source of Truth**: State is solely determined by the card's residence directory (`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`).
 4. **Contract Freeze**: After moving past `todo`, task size, groups, and core contracts cannot be modified without an explicit `--contract-decision-file` revision record.
+5. **Archived Is Final**: `archived` has no outgoing transition. `Transaction.Put`, `PutBytes`, and `Relocate` reject a card whose committed state is `archived` (`board.archived_final`), so update, moves, review publication and interpretation, dispositions, dispatch records, and WINDOW/SESSION write-back all fail before staging anything. The move into `archived/` still sees the previous state, and `init` recovery and legacy-card migration replay their own records.
 
 ---
 

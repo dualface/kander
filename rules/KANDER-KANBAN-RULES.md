@@ -181,7 +181,7 @@ The directory is the single source of truth for state; the card body has no `sta
 - `working/`: claimed and being implemented, verified, reviewed, or integrated; task group cards also return here during fix rounds and post-integration wrap-up.
 - `review/`: used only by task group cards. Development, verification, and the task branch delivery record are complete, waiting for the orchestrator to ff that delivery onto the group branch and arrange applicable review and final integration. The state itself does not guarantee the delivery is on the group branch; the orchestrator verifies before releasing in-group dependencies. After moving in, the executing agent ends this round of response and keeps the interactive CLI session; fixes, syncs, or wrap-up are dispatched back via `notify`, and the executing agent first runs the ID/epoch-bound `kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>` from the dispatch prompt, then handles them. Members of a self-executed group (`KANDER-TASK-GROUP-RULES.md` "Self-Executed Groups") are received, moved back, and completed by the same session with plain moves.
 - `done/`: recent tasks that satisfied the completion gate.
-- `archived/`: completed, cancelled, duplicate, or wontfix records off the active board.
+- `archived/`: completed, cancelled, duplicate, or wontfix records off the active board. Archived is final: no move leaves it, and no command writes the card again (body, attachments, review evidence, dispositions, dispatch or session records). Read commands and `dismiss` still work, and an `archived/` card with `RESULT: completed` still satisfies dependencies.
 - `trash/`: entries the user explicitly asked to delete but not yet permanently cleaned; not a task state.
 
 ```text
@@ -194,7 +194,7 @@ backlog <-> todo -> working -> done -> archived        (single-card flow)
 todo -> backlog                                       withdraw commitment, back to scheduling
 review -> working (--owner)                           user-authorized reclaim of an unbound card, see "Claiming, Starting, and Coordination"
 backlog, todo, working, review -> archived            only user-authorized termination
-any state except trash -> trash                       only on explicit user request
+any state except archived and trash -> trash          only on explicit user request
 ```
 
 - Entering `todo/` requires complete `GOAL`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA` (at least one top-level `- [ ]` item that can be judged), and `OUT_OF_SCOPE`, no `<FILL_IN>` placeholders in those four sections, and the `SELF_REVIEW:` line of "Post-Creation Self-Review" (large tasks and group members also the `CARD_REVIEW:` line). Entering `review/` requires `TASK_BRANCH`. The `done/` gate is in "Execution and Completion" with "Review Evidence Completion Gate"; the rest in "Termination and Cleanup".
@@ -390,7 +390,7 @@ kander move <task-id> working --owner <agent>
 
 - Only after the user explicitly cancels, judges a duplicate, decides not to fix, or accepts an alternative direction may a `backlog/`, `todo/`, `working/`, or `review/` card be archived directly; implementation difficulty, failed verification, or a temporary blocker is not authorization. The result is `cancelled`, `duplicate`, or `wontfix` with a reason (`duplicate` also points to the replacement card); `completed` is used only for `done -> archived`.
 - After a card moves into `archived/` or `trash/`, the agent operating on it reports the result per the user's convention (the `KANDER-REPORTING-RULES.md` template only when `rules.reporting=true`), with the last line stating the actual destination and result.
-- `done/` keeps recently completed items; archive them after the user confirms. Move a card into `trash/` only when the user explicitly asks to delete that card, using the trash move options to record `RESULT: trashed`, reason, decision reference, and time atomically. Never empty or permanently delete automatically; permanent deletion needs per-item authorization.
+- `done/` keeps recently completed items; archive them after the user confirms. Archiving cannot be undone: the card is never moved, edited, reviewed, or dispatched again, so finish every record first. Move a card into `trash/` only when the user explicitly asks to delete that card, using the trash move options to record `RESULT: trashed`, reason, decision reference, and time atomically. Never empty or permanently delete automatically; permanent deletion needs per-item authorization.
 
 ## Failure Recovery
 
