@@ -435,16 +435,33 @@ func TestUnreadableCardKeepsGroupRecords(t *testing.T) {
 	}
 }
 
-// Many siblings make it all but certain that an order-dependent removal
-// would reach a regular file before the link.
 func TestRemovePathRefusesUnsafeTreeBeforeDeleting(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink creation needs privileges on Windows")
 	}
+	requireRemovePathRefuses(t, func(dir string) error {
+		return os.Symlink(filepath.Join(t.TempDir(), "victim"), filepath.Join(dir, "inputs", "link"))
+	})
+}
+
+// requireRemovePathRefuses builds a run-like tree, adds an unsafe entry with
+// addUnsafe, and requires removePath to refuse it without deleting anything.
+// Listing order is filesystem-dependent and cannot be forced. Creating the
+// unsafe entry first puts it last on tmpfs, which lists newest first, and 64
+// siblings make it all but certain that a hashed listing also reaches a
+// regular file before it, so an order-dependent removal fails this check.
+func requireRemovePathRefuses(t *testing.T, addUnsafe func(dir string) error) {
+	t.Helper()
 	root := tempBoard(t)
 	dir := reviewPath(root, "runs", "remove-unsafe")
+	if err := os.MkdirAll(filepath.Join(dir, "inputs"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := addUnsafe(dir); err != nil {
+		t.Fatal(err)
+	}
 	var paths []string
-	for i := range 16 {
+	for i := range 64 {
 		path := filepath.Join(dir, fmt.Sprintf("f%02d.json", i))
 		writeControl(t, path, "{}\n")
 		paths = append(paths, path)
@@ -452,9 +469,6 @@ func TestRemovePathRefusesUnsafeTreeBeforeDeleting(t *testing.T) {
 	nested := filepath.Join(dir, "inputs", "input.json")
 	writeControl(t, nested, "{}\n")
 	paths = append(paths, nested)
-	if err := os.Symlink(filepath.Join(t.TempDir(), "victim"), filepath.Join(dir, "inputs", "link")); err != nil {
-		t.Fatal(err)
-	}
 	files, bytes, err := removePath(root, dir, true)
 	if err == nil || files != 0 || bytes != 0 {
 		t.Fatalf("unsafe tree must be refused untouched: %d %d %v", files, bytes, err)
