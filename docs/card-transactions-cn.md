@@ -29,7 +29,7 @@ kander move <task-id> trash --result trashed --reason <原因> --decision <决�
 2. **乐观并发控制（CAS）**：修改卡片必须传入 `--expect-revision`。每次成功写入将版本号严格自增 1。
 3. **状态唯一事实源**：任务状态完全且仅由其所在的物理目录决定（`backlog/`、`todo/`、`working/`、`review/`、`done/`、`archived/`、`trash/`）。
 4. **合约冻结机制**：卡片移出 `todo` 之后，任务规模（SIZE）、任务组归属及核心契约被严格冻结，如需修改必须通过 `--contract-decision-file` 记录显式决策。
-5. **archived 是最终态**：`archived` 没有任何出边。`Transaction.Put`、`PutBytes` 和 `Relocate` 会拒绝已提交状态为 `archived` 的卡片（`board.archived_final`），因此 update、迁移、审核发布与 interpret、disposition、派发记录以及 WINDOW/SESSION 回写都会在暂存任何内容之前失败。迁入 `archived/` 的那次 move 看到的仍是原状态；`init` 恢复和旧版卡片迁移重放的是各自的记录，不受影响。
+5. **archived 是最终态**：`archived` 没有任何出边。`Transaction.Put`、`PutBytes` 和 `Relocate` 会拒绝已提交状态为 `archived` 的卡片（`board.archived_final`），因此 update、迁移、审核发布与 interpret、disposition、派发记录以及 WINDOW/SESSION 回写都会在暂存任何内容之前失败。迁入 `archived/` 的那次 move 看到的仍是原状态；`init` 恢复和旧版卡片迁移重放的是各自的记录，不受影响。唯一的例外是 [审核证据](review-evidence.md#pruning-on-archive) 中的 archive 清理：它在排他看板锁下、在卡片事务之外删除 archived 卡片下的审核副本，从不改写卡片文档。
 
 ---
 

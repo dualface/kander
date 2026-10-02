@@ -29,7 +29,7 @@ kander move <task-id> trash --result trashed --reason <理由> --decision <決�
 2. **楽観的排他制御（CAS）**：変更には `--expect-revision` が必須です。書き込みが成功するごとに版数が 1 ずつインクリメントされます。
 3. **状態の唯一の事実源**：タスクの状態は、それが存在する物理ディレクトリ（`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`）のみによって決定されます。
 4. **契約の凍結**：`todo` を超えて移動した後は、タスクサイズ、グループ所属、コア契約の変更が禁止されます。変更には `--contract-decision-file` による決定記録が必須です。
-5. **archived は最終状態**：`archived` からの遷移はありません。`Transaction.Put`、`PutBytes`、`Relocate` はコミット済み状態が `archived` のカードを拒否する（`board.archived_final`）ため、update、移動、レビューの公開と interpret、disposition、ディスパッチ記録、WINDOW/SESSION の書き戻しはすべて何もステージングする前に失敗します。`archived/` への移動自体は移動前の状態を参照し、`init` のリカバリと旧形式カードの移行はそれぞれの記録を再生するため影響を受けません。
+5. **archived は最終状態**：`archived` からの遷移はありません。`Transaction.Put`、`PutBytes`、`Relocate` はコミット済み状態が `archived` のカードを拒否する（`board.archived_final`）ため、update、移動、レビューの公開と interpret、disposition、ディスパッチ記録、WINDOW/SESSION の書き戻しはすべて何もステージングする前に失敗します。`archived/` への移動自体は移動前の状態を参照し、`init` のリカバリと旧形式カードの移行はそれぞれの記録を再生するため影響を受けません。唯一の例外は [レビュー証跡](review-evidence.md#pruning-on-archive) の archive クリーンアップで、排他ボードロックの下、カードのトランザクションの外で archived カード配下のレビューコピーを削除し、カード文書は書き換えません。
 
 ---
 
