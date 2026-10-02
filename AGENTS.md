@@ -131,6 +131,10 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - Blocking exclusive locks use `LockFileEx`; the POSIX counterpart is `flock`.
 - Atomic replacement in `internal/fs` is relative to a pinned parent handle; any secure-backend failure errors out explicitly and never silently falls back to plain path APIs.
 
+## Releases
+
+- Update `CHANGELOG.md` before every release. Before pushing a `vX.Y.Z` tag, the top of `CHANGELOG.md` must hold a `## vX.Y.Z — YYYY-MM-DD` section that covers every user-visible change since the previous tag, and that entry must be committed on `develop` and fast-forwarded into `main` before `scripts/release.sh` runs. Never tag first and backfill the changelog afterwards.
+
 ## Released Rules
 
 - `rules/KANDER-AGENTS.md` is the released rules entry; it first reads `kander config --json` for the current scope, then `KANDER-BASE-RULES.md`, then `KANDER-LOADING-RULES.md`. The entry stays minimal: scope paths, the module switch table, the reading map, and rule precedence live in `KANDER-LOADING-RULES.md`. `KANDER-BASE-RULES.md` and `KANDER-KANBAN-RULES.md` are the tool protocol; the other seven module booklets load per switch and per need, all live in `rules/`, and exist only in English. A global install extracts them to `~/.agents/kander/`; a project install to `<main worktree>/.kander/rules/`. No customized rule files are generated, and disabled modules are not loaded through cross references.
