@@ -516,6 +516,41 @@ func removePath(root, path string, tree bool) (files int, bytes int64, err error
 	if !tree {
 		return removeFile(root, path)
 	}
+	// Directory order is filesystem-dependent, so refusing an unsafe entry
+	// mid-removal could already have deleted an intent such as run.json and
+	// left a damaged directory. Refuse before deleting anything.
+	if err = requireRegularTree(root, path); err != nil {
+		return 0, 0, err
+	}
+	return removeTree(root, path)
+}
+
+// requireRegularTree fails when the tree under path holds anything other
+// than regular files and directories.
+func requireRegularTree(root, path string) error {
+	entries, err := fs.ListDirectory(root, path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		child := filepath.Join(path, entry.Name)
+		switch entry.Kind {
+		case fs.KindFile:
+		case fs.KindDirectory:
+			if err = requireRegularTree(root, child); err != nil {
+				return err
+			}
+		default:
+			return reviewError(child + ": not a regular file or directory")
+		}
+	}
+	return nil
+}
+
+func removeTree(root, path string) (files int, bytes int64, err error) {
 	entries, err := fs.ListDirectory(root, path)
 	if errors.Is(err, os.ErrNotExist) {
 		return removeFile(root, path)
@@ -531,7 +566,7 @@ func removePath(root, path string, tree bool) (files int, bytes int64, err error
 		case fs.KindFile:
 			n, size, err = removeFile(root, child)
 		case fs.KindDirectory:
-			n, size, err = removePath(root, child, true)
+			n, size, err = removeTree(root, child)
 		default:
 			err = reviewError(child + ": not a regular file or directory")
 		}

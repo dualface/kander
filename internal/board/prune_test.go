@@ -2,6 +2,7 @@ package board
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -240,6 +241,8 @@ func TestArchivePruneRefusesLinksAndResumes(t *testing.T) {
 		t.Fatalf("cleanup failure must keep the archive: %v %+v", err, report)
 	}
 	requireExists(t, target, true)
+	requireExists(t, reviewPath(root, "runs", "prune-link-run", "run.json"), true)
+	requireExists(t, reviewPath(root, "runs", "prune-link-run", "inputs"), true)
 	if intents := pruneIntents(t, root); !slices.Equal(intents, []string{id + ".json"}) {
 		t.Fatalf("intent not kept: %v", intents)
 	}
@@ -429,5 +432,34 @@ func TestUnreadableCardKeepsGroupRecords(t *testing.T) {
 	requireExists(t, checkpoint, true)
 	if !slices.ContainsFunc(report.Warnings, func(w string) bool { return strings.Contains(w, b) }) {
 		t.Fatalf("unreadable card not reported: %v", report.Warnings)
+	}
+}
+
+// Many siblings make it all but certain that an order-dependent removal
+// would reach a regular file before the link.
+func TestRemovePathRefusesUnsafeTreeBeforeDeleting(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs privileges on Windows")
+	}
+	root := tempBoard(t)
+	dir := reviewPath(root, "runs", "remove-unsafe")
+	var paths []string
+	for i := range 16 {
+		path := filepath.Join(dir, fmt.Sprintf("f%02d.json", i))
+		writeControl(t, path, "{}\n")
+		paths = append(paths, path)
+	}
+	nested := filepath.Join(dir, "inputs", "input.json")
+	writeControl(t, nested, "{}\n")
+	paths = append(paths, nested)
+	if err := os.Symlink(filepath.Join(t.TempDir(), "victim"), filepath.Join(dir, "inputs", "link")); err != nil {
+		t.Fatal(err)
+	}
+	files, bytes, err := removePath(root, dir, true)
+	if err == nil || files != 0 || bytes != 0 {
+		t.Fatalf("unsafe tree must be refused untouched: %d %d %v", files, bytes, err)
+	}
+	for _, path := range paths {
+		requireExists(t, path, true)
 	}
 }
