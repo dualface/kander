@@ -61,10 +61,7 @@ func agentBackend() (terminal.Backend, bool) {
 }
 
 func notInPath(backend terminal.Backend) error {
-	if backend.Capabilities().AgentIdentity {
-		return takeoverError("liveness.herdr_is_not_in_path")
-	}
-	return takeoverError("liveness.tmux_is_not_in_path")
+	return takeoverError("terminal.executable_not_in_path", backend.Executable())
 }
 
 // closeContainer closes the container and reports a run failure with its

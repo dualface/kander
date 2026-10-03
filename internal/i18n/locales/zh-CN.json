@@ -503,7 +503,6 @@
   "liveness.task_does_not_belong_to_the_specified_group_actual": "任务不属于指定任务组: {{.V0}} (实际: {{.V1}})",
   "liveness.the_reverse_looked_up_pane_agent_status_cannot_be": "反查 pane 的 Agent 状态不可判定: {{.V0}}",
   "liveness.this_launcher_has_no_probeable_address": "该 launcher 没有可探测地址",
-  "liveness.tmux_is_not_in_path": "tmux 不在 PATH",
   "liveness.tmux_pane_has_no_session_marker": "tmux pane 缺少会话标记",
   "liveness.tmux_session_lookup_found_no_match_0_panes": "tmux 会话反查无匹配: {{.V0}}: 0 个 pane",
   "liveness.tmux_session_lookup_is_ambiguous_panes": "tmux 会话反查匹配不唯一: {{.V0}}: {{.V1}} 个 pane",

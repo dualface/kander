@@ -34,5 +34,6 @@
   "terminal.test_focus_skip": "--skip-focus",
   "terminal.test_no_client": "接続済みの端末クライアントがないためフォーカスをスキップ",
   "terminal.test_unknown": "読み込まれた端末定義またはランチャーがありません: {{.V0}}",
-  "terminal.target_reported_gone": "ターミナルが対象を存在しないと報告しました"
+  "terminal.target_reported_gone": "ターミナルが対象を存在しないと報告しました",
+  "terminal.executable_not_in_path": "{{.V0}} が PATH にありません"
 }

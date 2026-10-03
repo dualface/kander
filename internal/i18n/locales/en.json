@@ -503,7 +503,6 @@
   "liveness.task_does_not_belong_to_the_specified_group_actual": "Task does not belong to the specified group: {{.V0}} (actual: {{.V1}})",
   "liveness.the_reverse_looked_up_pane_agent_status_cannot_be": "the reverse-looked-up pane Agent status cannot be classified: {{.V0}}",
   "liveness.this_launcher_has_no_probeable_address": "this launcher has no probeable address",
-  "liveness.tmux_is_not_in_path": "tmux is not in PATH",
   "liveness.tmux_pane_has_no_session_marker": "tmux pane has no session marker",
   "liveness.tmux_session_lookup_found_no_match_0_panes": "tmux session lookup found no match: {{.V0}}: 0 panes",
   "liveness.tmux_session_lookup_is_ambiguous_panes": "tmux session lookup is ambiguous: {{.V0}}: {{.V1}} panes",

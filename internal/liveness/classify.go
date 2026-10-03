@@ -120,12 +120,12 @@ func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allo
 }
 
 // classifyAgentPane classifies a pane whose backend reports the agent, its
-// status and session identity (herdr).
+// status and session identity (herdr, luvus).
 func classifyAgentPane(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, allowReverseLookup bool) Report {
 	channel, container, paneID := backend.Name(), address.Container, address.Pane
 	program, err := lookPath(backend.Executable())
 	if err != nil {
-		return report(entry, &session, Unknown, channel, container, t("liveness.herdr_is_not_in_path"), "")
+		return report(entry, &session, Unknown, channel, container, t("terminal.executable_not_in_path", backend.Executable()), "")
 	}
 	pane, err := backend.PaneFacts(ctx, terminal.Conn{Program: program, Run: terminal.ProbeRunner}, paneID)
 	if err != nil {
@@ -183,7 +183,7 @@ func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSes
 	container := address.Session + ":" + address.Container
 	program, err := lookPath(backend.Executable())
 	if err != nil {
-		return report(entry, &session, Unknown, launcher, container, t("liveness.tmux_is_not_in_path"), "")
+		return report(entry, &session, Unknown, launcher, container, t("terminal.executable_not_in_path", backend.Executable()), "")
 	}
 	facts, err := backend.PaneFacts(ctx, terminal.Conn{Program: program, Run: terminal.ProbeRunner}, paneID)
 	if err != nil {

@@ -83,10 +83,7 @@ func staleLookup(detail string, lookup func() (DirectTarget, error)) (DirectTarg
 }
 
 func notInPath(backend terminal.Backend) error {
-	if backend.Capabilities().AgentIdentity {
-		return notifyError("liveness.herdr_is_not_in_path")
-	}
-	return notifyError("liveness.tmux_is_not_in_path")
+	return notifyError("terminal.executable_not_in_path", backend.Executable())
 }
 
 // agentBackend is the backend that can locate a session without a recorded
