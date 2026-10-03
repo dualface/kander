@@ -20,7 +20,7 @@ Kander は、`internal/terminal` パッケージを通じてのみ端末セッ�
        +-----------------+-----------------+
        |                                   |
 [ 宣言型バックエンド Declarative ]   [ 直接バックエンド Direct ]
- (herdr, tmux, tmux-session)       (foreground, console)
+ (herdr, luvus, tmux, tmux-session) (foreground, console)
 ```
 
 1. **生のコマンドライン構築の禁止**：呼び出し側（`launch`, `liveness`, `notify`, `takeover`, `focus`, `tui` 等）は、コマンドライン引数を自前で組み立てたり、端末のバイナリを直接実行したり**しません**。`terminal.Lookup` 等を通じてバックエンドを取得し、インターフェース経由で呼び出します。
@@ -34,7 +34,7 @@ Kander は、`internal/terminal` パッケージを通じてのみ端末セッ�
 | パッケージ | 役割 |
 |---|---|
 | `internal/terminal` | `Backend` インターフェース、`Address`, `Target`, `PaneFacts`, `Topology`, `DeclarativeBackend` の定義。 |
-| `internal/terminal/builtin` | 組み込みの宣言的定義（`herdr.json`, `tmux.json`）と Go フックの登録。 |
+| `internal/terminal/builtin` | 組み込みの宣言的定義（`herdr.json`, `luvus.json`, `tmux.json`）と Go フックの登録。 |
 | `internal/terminal/herdr` | herdr ソケット通信とペインフォーカス用のフック実装。どちらも `HERDR_SOCKET_PATH` から同じ制御チャネルに接続します。POSIX では unix socket、Windows では名前付きパイプ `\\.\pipe\` にそのパスを付けたものです。 |
 | `internal/terminal/direct` | コンテナを持たないバックエンド（`foreground`, `console`）。コンテナ系メソッドは `terminal.ErrUnsupported` を返却。 |
 | `internal/terminal/terminaltest`| テスト用モックターミナル。 |
@@ -52,6 +52,7 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 | ランチャー | 不透明部分の形式 | パース後の `Address` 構造 |
 |---|---|---|
 | `herdr` | `<tab-id>:<pane-id>` | `Container` = タブ (`w0:...`), `Pane` = ペイン |
+| `luvus` | `<pane-id>:<pane-id>` | `Container` = `Pane` = luvus の pane id (`7`) |
 | `tmux` | `<session-id>:<window-id>:<pane-id>` | `Session` = `$0`, `Container` = `@1`, `Pane` = `%1` |
 | `tmux-session` | `<session-name>:<window-id>:<pane-id>` | `Session` = セッション名, `Container` = `@1`, `Pane` = `%1` |
 | 宣言型ユーザー定義 | 定義スキーマの `address` フィールドをコロン連結 | 名前付きアドレスフィールドへマッピング |
@@ -63,17 +64,17 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 
 バックエンドは `terminal.Capabilities` によりサポート機能を明示します：
 
-| 機能フラグ | 説明 | herdr | tmux / tmux-session | foreground / console |
-|---|---|:---:|:---:|:---:|
-| `Container` | 隔離されたタブ/ウィンドウを生成可能 | 対応 | 対応 | 非対応 |
-| `Focus` | ウィンドウやペインを前面にフォーカス可能 | 対応 | 対応 | 非対応 |
-| `PaneMetadata` | ペインの環境変数やオプションを読み取り可能 | 非対応 | 対応 | 非対応 |
-| `ForegroundProcess` | フォアグラウンドの PID/プロセス名を特定可能 | 非対応 | 対応 | 非対応 |
-| `AgentIdentity` | Agent による自己申告IDの検証に対応 | 対応 | 非対応 | 非対応 |
-| `SessionReport` | ソケットを通じた双方向セッション報告に対応 | 対応 | 非対応 | 非対応 |
-| `WaitOutput` | 画面出力のパターンマッチング待機に対応 | 対応 | 非対応 *(ポーリング)* | 非対応 |
-| `POSIXOnly` | POSIX 環境のみに限定 | 非対応 | 対応 | 非対応 |
-| `Detached` | 管理外の独立したバックグラウンドプロセス | 非対応 | 非対応 | console のみ |
+| 機能フラグ | 説明 | herdr | luvus | tmux / tmux-session | foreground / console |
+|---|---|:---:|:---:|:---:|:---:|
+| `Container` | 隔離されたタブ/ウィンドウを生成可能 | 対応 | 対応 | 対応 | 非対応 |
+| `Focus` | ウィンドウやペインを前面にフォーカス可能 | 対応 | 対応 | 対応 | 非対応 |
+| `PaneMetadata` | ペインの環境変数やオプションを読み取り可能 | 非対応 | 非対応 | 対応 | 非対応 |
+| `ForegroundProcess` | フォアグラウンドの PID/プロセス名を特定可能 | 非対応 | 非対応 | 対応 | 非対応 |
+| `AgentIdentity` | Agent による自己申告IDの検証に対応 | 対応 | 対応 | 非対応 | 非対応 |
+| `SessionReport` | ソケットを通じた双方向セッション報告に対応 | 対応 | 非対応 | 非対応 | 非対応 |
+| `WaitOutput` | 画面出力のパターンマッチング待機に対応 | 対応 | 非対応 *(ポーリング)* | 非対応 *(ポーリング)* | 非対応 |
+| `POSIXOnly` | POSIX 環境のみに限定 | 非対応 | 対応 | 対応 | 非対応 |
+| `Detached` | 管理外の独立したバックグラウンドプロセス | 非対応 | 非対応 | 非対応 | console のみ |
 
 ---
 
@@ -124,3 +125,17 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 4. **ペイン消失**：ペインが閉じている場合はエラーではなく客観的事実（`PaneFacts.Gone = true`）として扱われます。
 5. **未対応の操作**：提供されていない機能の呼び出しは `terminal.ErrUnsupported` を返します。
 6. **検索結果**：`terminal.MatchError`（完了した検索で 0 件または複数一致）と `terminal.IncompleteLookupError`（未判定候補があり検索未完了）は、欠落・曖昧・不確定を区別します。
+
+---
+
+## 8. 組み込み luvus ランチャー
+
+埋め込みの [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json) は、[luvus](https://github.com/RizRiyz/luvus) の pane から Kander を動かすための `luvus` ランチャーを提供します。POSIX 専用です。
+
+- **前提条件**: `luvus` が `PATH` にあり、`LUVUS_ENV=1` で `LUVUS_PANE_ID` が空でないこと(どちらも luvus が pane 内で設定します)。`LUVUS_ENV=1` のとき `auto` は優先度 150 で luvus を選びます。herdr(200)と tmux(100)の間です。
+- **最低バージョン**: `pane split` が `--cwd` を受け付ける最初の luvus 正式版(上流 PR #480)。luvus 0.14.3 以前は対応していません。luvus server も同じ版で動いている必要があるため、更新後は server を再起動してください。
+- **コンテナ**: `pane split <LUVUS_PANE_ID> --no-focus --cwd <cwd>` のあと、`pane move --new-tab`、カードのラベルで `pane name`、呼び出し元 pane への `pane focus` を実行します。コンテナは pane 自体なので、`WINDOW` は `luvus:<pane>:<pane>` です。
+- **ディレクトリ検証**: 古い CLI は `--cwd` を黙って無視し、古い server は新しい CLI が送るディレクトリを無視します。どちらでも split は成功し、新しい pane は基点 pane のディレクトリで開きます。そのため `create_container` は `agent get` で新しい pane を読み戻し(ディレクトリが報告されるまで短くポーリング)、報告されたディレクトリが要求したもの、またはシンボリックリンクを解決した形と一致するときだけ受け入れます。一致しなければ新しい pane を閉じて更新を促すメッセージで失敗し、`start` はカードを `todo/` に戻し、agent は起動しません。
+- **セッション ID**: luvus は自身の連携 hook で agent のセッションを報告します。agent ごとに一度 `luvus integration install <agent>` を実行すると、`pane_facts` と逆引きがセッション ID を得られます。Kander 独自のセッション hook はありません。
+- **既知の制限**: 新しい pane を新しい tab へ移す間、呼び出し元 pane のフォーカスが一瞬外れます。luvus 連携 hook のない agent(cursor や pi など)はセッションを報告しません。liveness は記録された pane の agent と状態を確認できますが、`notify` の直接配信は使えず、pane のアドレスが変わった後の逆引きは未完了(`unknown`)のままで、`stopped` にはなりません。通常の shell pane は agent としてシェル名を報告します。tmux と luvus を入れ子にした場合、`auto` は上記の優先度に従います。
+- グローバルまたはプロジェクトの share ディレクトリにある `luvus.json` という名前のユーザー定義は、この埋め込み定義を丸ごと置き換えます。組み込み定義を使うには、古い手書きのコピーを削除してください。

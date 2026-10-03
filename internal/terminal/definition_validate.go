@@ -30,7 +30,7 @@ var stepMessageNames = []string{"detail", "error", "output"}
 // method arguments.
 var opInputs = map[string][]string{
 	OpPrepare:          {"project", "project_key", "command"},
-	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "label"},
+	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label"},
 	OpWaitReady:        {"pane"},
 	OpRunCommand:       {"pane", "command", "posix"},
 	OpSetSessionMarker: {"pane", "value"},

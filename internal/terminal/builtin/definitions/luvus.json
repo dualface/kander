@@ -1,0 +1,678 @@
+{
+  "schema_version": 1,
+  "name": "luvus",
+  "binary": "luvus",
+  "version_args": [
+    "--version"
+  ],
+  "capabilities": {
+    "container": true,
+    "focus": true,
+    "agent_identity": true,
+    "session_report": false,
+    "wait_output": false
+  },
+  "address": [
+    {
+      "name": "container",
+      "pattern": "[0-9]+"
+    },
+    {
+      "name": "pane",
+      "pattern": "[0-9]+"
+    }
+  ],
+  "errors": {
+    "gone": [
+      "stdout_json:error.code=not_found",
+      "stderr_json:error.code=not_found"
+    ]
+  },
+  "launchers": {
+    "luvus": {
+      "auto_priority": 150,
+      "requires": {
+        "platform": "posix",
+        "binary": true,
+        "inside_session": true,
+        "env": [
+          {
+            "name": "LUVUS_ENV",
+            "value": "1",
+            "before_binary": true,
+            "message": {
+              "id": "luvus.not_inside_luvus"
+            }
+          },
+          {
+            "name": "LUVUS_PANE_ID",
+            "trim": true,
+            "skip_auto": true,
+            "message": {
+              "id": "luvus.pane_id_missing"
+            }
+          }
+        ],
+        "messages": {
+          "binary": {
+            "id": "luvus.not_in_path"
+          }
+        }
+      },
+      "started_lines": [
+        {
+          "message": {
+            "id": "luvus.started",
+            "args": [
+              "{head}",
+              "{pane}"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "ops": {
+    "create_container": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "split",
+            "{env.LUVUS_PANE_ID}",
+            "--no-focus",
+            "--cwd",
+            "{cwd}"
+          ],
+          "store": "new",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result"
+          },
+          "fields": {
+            "pane": "json_field:pane"
+          },
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.command_failed",
+              "args": [
+                "pane split",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "luvus.unexpected_response",
+              "args": [
+                "pane split",
+                "{detail}"
+              ]
+            }
+          }
+        },
+        {
+          "when": "field_missing:step.new.pane",
+          "fail": {
+            "id": "luvus.split_missing_pane"
+          }
+        },
+        {
+          "argv": [
+            "agent",
+            "get",
+            "{step.new.pane}"
+          ],
+          "store": "where",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result.cwd"
+          },
+          "poll": {
+            "interval": "100ms",
+            "timeout": "3s",
+            "until": "nonempty"
+          },
+          "on_error": "continue"
+        },
+        {
+          "when": [
+            [
+              "!field:step.where.text={cwd}",
+              "!field:step.where.text={cwd_resolved}"
+            ]
+          ],
+          "argv": [
+            "pane",
+            "close",
+            "{step.new.pane}"
+          ],
+          "timeout": "10s",
+          "messages": {
+            "exec": {
+              "id": "luvus.cwd_cleanup_failed",
+              "args": [
+                "{step.new.pane}",
+                "{cwd}",
+                {
+                  "id": "luvus.invocation_failed",
+                  "args": [
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "exit": {
+              "id": "luvus.cwd_cleanup_failed",
+              "args": [
+                "{step.new.pane}",
+                "{cwd}",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "when": "field:step.where.ok=false",
+          "fail": {
+            "id": "luvus.cwd_unreadable",
+            "args": [
+              "{step.new.pane}",
+              "{cwd}",
+              "{step.where.detail}"
+            ]
+          }
+        },
+        {
+          "when": [
+            [
+              "!field:step.where.text={cwd}",
+              "!field:step.where.text={cwd_resolved}"
+            ]
+          ],
+          "fail": {
+            "id": "luvus.cwd_mismatch",
+            "args": [
+              "{step.new.pane}",
+              "{step.where.text}",
+              "{cwd}"
+            ]
+          }
+        },
+        {
+          "argv": [
+            "pane",
+            "move",
+            "{step.new.pane}",
+            "--new-tab"
+          ],
+          "on_error": "continue"
+        },
+        {
+          "argv": [
+            "pane",
+            "name",
+            "--pane",
+            "{step.new.pane}",
+            "{label}"
+          ],
+          "on_error": "continue"
+        },
+        {
+          "argv": [
+            "pane",
+            "focus",
+            "{env.LUVUS_PANE_ID}"
+          ],
+          "on_error": "continue"
+        }
+      ],
+      "result": {
+        "container": "{step.new.pane}",
+        "pane": "{step.new.pane}"
+      }
+    },
+    "wait_ready": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "read",
+            "{pane}"
+          ],
+          "output": {
+            "source": "stdout",
+            "parse": "regex:\"text\":\\s*\"(?:\\\\[nrt]|\\s)*([^\\s\"\\\\])"
+          },
+          "poll": {
+            "interval": "200ms",
+            "timeout": "15s",
+            "until": "nonempty"
+          },
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.pane_not_ready",
+              "args": [
+                "{pane}",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "run_command": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "run",
+            "{pane}",
+            "{command}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.command_failed",
+              "args": [
+                "pane run",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "pane_facts": {
+      "steps": [
+        {
+          "argv": [
+            "agent",
+            "get",
+            "{pane}"
+          ],
+          "store": "pane",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result"
+          },
+          "fields": {
+            "id": "json_field:pane",
+            "agent": "json_field:agent",
+            "status": "json_field:status",
+            "reference": "json_field:session"
+          },
+          "expect": [
+            [
+              "!field_missing:step.pane.id",
+              "field:step.pane.id={pane}"
+            ]
+          ],
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.pane_missing",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "luvus.agent_get_invalid",
+              "args": [
+                "{pane}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "agent": "{step.pane.agent}",
+        "agent_status": "{step.pane.status}",
+        "agent_session": "{step.pane.reference}",
+        "container": "{pane}"
+      }
+    },
+    "read_output": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "read",
+            "{pane}"
+          ],
+          "store": "read",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result"
+          },
+          "fields": {
+            "out": "json_field:text"
+          },
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.command_failed",
+              "args": [
+                "pane read",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "text": "{step.read.out}"
+      }
+    },
+    "deliver_text": {
+      "steps": [
+        {
+          "argv": [
+            "agent",
+            "prompt",
+            "{pane}",
+            "--",
+            "{text}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.command_failed",
+              "args": [
+                "agent prompt",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "topology": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "list"
+          ],
+          "store": "list",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result"
+          },
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.command_failed",
+              "args": [
+                "pane list",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "from": "list",
+        "split": "json_array:panes",
+        "fields": {
+          "pane": "json_field:pane"
+        },
+        "match": "field:row.pane={pane}",
+        "result": {
+          "pane": "{row.pane}"
+        },
+        "messages": {
+          "missing": {
+            "id": "luvus.pane_list_missing"
+          }
+        }
+      },
+      "result": {
+        "container": "{container}"
+      }
+    },
+    "reverse_lookup": {
+      "steps": [
+        {
+          "argv": [
+            "agent",
+            "list"
+          ],
+          "store": "list",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result"
+          },
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.command_failed",
+              "args": [
+                "agent list",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "from": "list",
+        "split": "json_array:agents",
+        "fields": {
+          "pane": "json_field:pane",
+          "agent": "json_field:agent",
+          "reference": "json_field:session",
+          "kind": "json_field:session_kind"
+        },
+        "expect": "!field_missing:row.pane",
+        "match": "field:row.agent={agent}",
+        "session": {
+          "kind": "kind",
+          "value": "reference"
+        },
+        "result": {
+          "container": "{row.pane}",
+          "pane": "{row.pane}"
+        },
+        "messages": {
+          "missing": {
+            "id": "luvus.agent_list_missing"
+          },
+          "invalid": {
+            "id": "luvus.agent_list_invalid"
+          },
+          "none": {
+            "id": "luvus.lookup_none",
+            "args": [
+              "{reference}"
+            ]
+          },
+          "ambiguous": {
+            "id": "luvus.lookup_ambiguous",
+            "args": [
+              "{reference}",
+              "{count}"
+            ]
+          },
+          "incomplete": {
+            "id": "luvus.lookup_incomplete",
+            "args": [
+              "{detail}"
+            ]
+          }
+        }
+      }
+    },
+    "focus": {
+      "unavailable": [
+        {
+          "when": "field_missing:env.LUVUS_ENV",
+          "message": {
+            "id": "luvus.focus_unavailable",
+            "args": [
+              "{pane}"
+            ]
+          }
+        }
+      ],
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "focus",
+            "{pane}"
+          ]
+        }
+      ]
+    },
+    "close_container": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "close",
+            "{pane}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "luvus.close_failed",
+              "args": [
+                "{pane}",
+                {
+                  "id": "luvus.invocation_failed",
+                  "args": [
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "exit": {
+              "id": "luvus.close_failed",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "container_exists": {
+      "steps": [
+        {
+          "argv": [
+            "pane",
+            "status",
+            "{pane}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "luvus.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "luvus.pane_missing",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

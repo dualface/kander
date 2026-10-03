@@ -20,7 +20,7 @@ To ensure stability across heterogeneous terminal multiplexers and OS platforms,
        +-----------------+-----------------+
        |                                   |
 [ Declarative Backends ]          [ Direct Backends ]
- (herdr, tmux, tmux-session)       (foreground, console)
+ (herdr, luvus, tmux, tmux-session) (foreground, console)
 ```
 
 1. **No Raw Terminal Commands**: Callers (`launch`, `liveness`, `notify`, `takeover`, `focus`, `tui`) **never** construct command-line argument lists or execute terminal binaries directly. They resolve a backend via `terminal.Lookup`, `terminal.ParseWindow`, or `terminal.ResolveAuto`, and invoke `terminal.Backend` methods.
@@ -34,7 +34,7 @@ To ensure stability across heterogeneous terminal multiplexers and OS platforms,
 | Package | Role |
 |---|---|
 | `internal/terminal` | Defines `Backend` interface, `Address`, `Target`, `PaneFacts`, `Topology`, and `DeclarativeBackend`. |
-| `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/herdr.json`, `tmux.json`) and Go hooks. |
+| `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/herdr.json`, `luvus.json`, `tmux.json`) and Go hooks. |
 | `internal/terminal/herdr` | Specialized socket hooks for herdr session reporting and pane focusing. Both dial one control channel from `HERDR_SOCKET_PATH`: a unix socket on POSIX, the named pipe `\\.\pipe\` plus that path on Windows. |
 | `internal/terminal/direct` | Containerless backends (`foreground`, `console`). Container operations return `terminal.ErrUnsupported`. |
 | `internal/terminal/terminaltest`| Test harnesses running the test binary as a mock terminal. |
@@ -52,6 +52,7 @@ Only the owning backend parses and formats the opaque component:
 | Launcher | Opaque Format | Parsed `Address` Structure |
 |---|---|---|
 | `herdr` | `<tab-id>:<pane-id>` | `Container` = tab (`w0:...`), `Pane` = pane |
+| `luvus` | `<pane-id>:<pane-id>` | `Container` = `Pane` = luvus pane id (`7`) |
 | `tmux` | `<session-id>:<window-id>:<pane-id>` | `Session` = `$0`, `Container` = `@1`, `Pane` = `%1` |
 | `tmux-session` | `<session-name>:<window-id>:<pane-id>` | `Session` = `kander-...`, `Container` = `@1`, `Pane` = `%1` |
 | Declarative user definition | Colon-separated values matching definition schema | Maps to named definition address fields |
@@ -63,17 +64,17 @@ Only the owning backend parses and formats the opaque component:
 
 Backends declare supported features via `terminal.Capabilities`:
 
-| Capability | Description | herdr | tmux / tmux-session | foreground / console |
-|---|---|:---:|:---:|:---:|
-| `Container` | Can spawn isolated tabs/windows | Yes | Yes | No |
-| `Focus` | Can switch active window/pane focus | Yes | Yes | No |
-| `PaneMetadata` | Can read window/pane variables | No | Yes | No |
-| `ForegroundProcess` | Can inspect active foreground PID/name | No | Yes | No |
-| `AgentIdentity` | Supports agent-reported identity checks | Yes | No | No |
-| `SessionReport` | Supports bidirectional session handshake | Yes | No | No |
-| `WaitOutput` | Native output pattern matching | Yes | No *(polled)* | No |
-| `POSIXOnly` | Restricted to POSIX platforms | No | Yes | No |
-| `Detached` | Runs as an unmanaged detached process | No | No | console only |
+| Capability | Description | herdr | luvus | tmux / tmux-session | foreground / console |
+|---|---|:---:|:---:|:---:|:---:|
+| `Container` | Can spawn isolated tabs/windows | Yes | Yes | Yes | No |
+| `Focus` | Can switch active window/pane focus | Yes | Yes | Yes | No |
+| `PaneMetadata` | Can read window/pane variables | No | No | Yes | No |
+| `ForegroundProcess` | Can inspect active foreground PID/name | No | No | Yes | No |
+| `AgentIdentity` | Supports agent-reported identity checks | Yes | Yes | No | No |
+| `SessionReport` | Supports bidirectional session handshake | Yes | No | No | No |
+| `WaitOutput` | Native output pattern matching | Yes | No *(polled)* | No *(polled)* | No |
+| `POSIXOnly` | Restricted to POSIX platforms | No | Yes | Yes | No |
+| `Detached` | Runs as an unmanaged detached process | No | No | No | console only |
 
 ---
 
@@ -128,3 +129,17 @@ Operations return structured errors mapped to `*terminal.CommandError`:
 4. **Missing Container**: A vanished pane or tab is returned as a structured fact (`PaneFacts.Gone = true`), never as an unhandled error.
 5. **Unsupported Operation**: Calling an unsupported feature returns `terminal.ErrUnsupported`.
 6. **Lookup Outcomes**: `terminal.MatchError` (completed lookup, zero or several matches) and `terminal.IncompleteLookupError` (undecidable candidates, lookup not finished) keep absence, ambiguity, and undecidability distinct.
+
+---
+
+## 8. The Built-In luvus Launcher
+
+The embedded [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json) provides the `luvus` launcher for running Kander from a [luvus](https://github.com/RizRiyz/luvus) pane. It is POSIX-only.
+
+- **Prerequisites**: `luvus` on `PATH`, `LUVUS_ENV=1` and a non-empty `LUVUS_PANE_ID` (both set by luvus in its panes). `auto` picks luvus with priority 150, between herdr (200) and tmux (100), when `LUVUS_ENV=1`.
+- **Minimum version**: the first luvus release whose `pane split` accepts `--cwd` (upstream PR #480); luvus 0.14.3 and earlier do not. The luvus server must also run that version: restart it after upgrading.
+- **Container**: `pane split <LUVUS_PANE_ID> --no-focus --cwd <cwd>`, then `pane move --new-tab`, `pane name` with the card label, and `pane focus` back to the calling pane. The container is the pane itself, so `WINDOW` is `luvus:<pane>:<pane>`.
+- **Directory check**: an older CLI silently ignores `--cwd`, and an older server ignores the directory a newer CLI sends; the split still succeeds in the anchor pane's directory. `create_container` therefore reads the new pane back with `agent get` (polling briefly until the directory is reported) and accepts it only when the reported directory equals the requested one or its symlink-resolved form. Otherwise it closes the new pane and fails with an upgrade message, so `start` rolls the card back to `todo/` and no agent starts.
+- **Session identity**: luvus reports an agent's session through its own integration hooks. Run `luvus integration install <agent>` once per agent so `pane_facts` and reverse lookup carry the session id. Kander binds no session hook of its own.
+- **Known limits**: the calling pane briefly loses focus while the new pane moves to its tab. Agents without a luvus integration hook (for example cursor and pi) report no session: liveness can still confirm the agent and status of the recorded pane, but direct `notify` delivery is unavailable and a reverse lookup of a moved pane stays incomplete (`unknown`), never `stopped`. A plain shell pane reports the shell name as its agent. Inside nested tmux and luvus, `auto` follows the priorities above.
+- A user definition named `luvus.json` in the global or project share directory replaces this embedded definition as a whole; remove an older hand-written copy to use the built-in one.

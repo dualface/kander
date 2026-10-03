@@ -52,6 +52,7 @@ func envWith(home, configPath, path string) []string {
 		"KANDER_LANG": {}, "KANDER_LANG_CLI": {}, "KANDER_CONFIG": {},
 		"HOME": {}, "PATH": {}, "NO_COLOR": {}, "LC_ALL": {}, "LC_MESSAGES": {}, "LANG": {},
 		"HERDR_ENV": {}, "HERDR_WORKSPACE_ID": {}, "HERDR_TAB_ID": {}, "HERDR_PANE_ID": {},
+		"LUVUS_ENV": {}, "LUVUS_PANE_ID": {},
 		"TMUX": {}, "GIT_DIR": {}, "GIT_WORK_TREE": {}, "GIT_COMMON_DIR": {},
 	}
 	out := make([]string, 0, len(env)+8)

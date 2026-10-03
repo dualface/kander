@@ -5,7 +5,7 @@ import "sync"
 // defaultLauncherNames is the built-in launcher set. It stays valid whether or
 // not a terminal backend registered anything, so this package keeps its
 // validation behavior when used alone or in single-package tests.
-var defaultLauncherNames = []string{"auto", "tmux", "tmux-session", "herdr", "foreground", "console"}
+var defaultLauncherNames = []string{"auto", "tmux", "tmux-session", "herdr", "luvus", "foreground", "console"}
 
 var launcherRegistry struct {
 	sync.Mutex

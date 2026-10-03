@@ -95,7 +95,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		healthy = false
 	}
 	reportTerminalTools(tools)
-	if tools.Herdr.Error != "" || tools.Tmux.Error != "" {
+	if tools.Herdr.Error != "" || tools.Tmux.Error != "" || tools.Luvus.Error != "" {
 		healthy = false
 	}
 	if !reportTerminalDefinitions() {
@@ -129,7 +129,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 	if isWindowsOS() {
 		success(config.Text("menu.windows_console_launcher_available"))
 	} else if tools.Tmux.Available() {
-		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != builtin.Herdr {
+		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != builtin.Herdr && configuredLauncher != builtin.Luvus {
 			hint(config.Text(
 				"menu.tmux_installed_but_not_in_a_session_start_one", builtin.TmuxSessionHint,
 			))
@@ -494,8 +494,27 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 				"menu.launcher_herdr_creates_a_tab_in_the_current_workspace",
 			))
 		}
+	case builtin.Luvus:
+		if isWindowsOS() {
+			healthy = false
+			warning(config.Text(
+				"menu.the_configured_launcher_is_but_native_windows_does_not", launcher,
+			))
+		} else if !tools.Luvus.Available() {
+			healthy = false
+			warning(config.Text("luvus.doctor_not_in_path"))
+		} else if !cfg.WelcomeComplete {
+			break
+		} else if os.Getenv("LUVUS_ENV") != "1" {
+			hint(config.Text("luvus.doctor_not_inside"))
+		} else if strings.TrimSpace(os.Getenv("LUVUS_PANE_ID")) == "" {
+			healthy = false
+			warning(config.Text("luvus.doctor_pane_id_missing"))
+		} else {
+			hint(config.Text("luvus.doctor_ready"))
+		}
 	case "auto":
-		if !tools.Tmux.Available() && !tools.Herdr.Available() {
+		if !tools.Tmux.Available() && !tools.Herdr.Available() && !tools.Luvus.Available() {
 			healthy = false
 			if tools.Herdr.OffPath != "" {
 				// herdr is installed but the current PATH cannot see it; pointing at

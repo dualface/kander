@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -335,7 +336,7 @@ func (b *DeclarativeBackend) launchOp(name string, conn Conn, inputs map[string]
 func (b *DeclarativeBackend) CreateContainer(conn Conn, target Target, cwd, label string) (Address, error) {
 	result, err := b.launchOp(OpCreateContainer, conn, map[string]string{
 		"session": target.Session, "session_exists": strconv.FormatBool(target.SessionExists), "workspace": target.Workspace,
-		"project": target.Project, "project_key": ProjectKey(target.Project), "cwd": cwd, "label": label,
+		"project": target.Project, "project_key": ProjectKey(target.Project), "cwd": cwd, "cwd_resolved": resolvedPath(cwd), "label": label,
 	})
 	if err != nil {
 		return Address{}, err
@@ -345,6 +346,20 @@ func (b *DeclarativeBackend) CreateContainer(conn Conn, target Target, cwd, labe
 		return Address{}, &probe.Error{Message: config.Text("terminal.container_address_missing", b.launcher)}
 	}
 	return address, nil
+}
+
+// resolvedPath is cwd with symbolic links resolved, so a definition can accept
+// a terminal that reports the canonical directory. It falls back to cwd when
+// the path cannot be resolved.
+func resolvedPath(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	resolved, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		return cwd
+	}
+	return resolved
 }
 
 func (b *DeclarativeBackend) WaitReady(conn Conn, pane string) error {

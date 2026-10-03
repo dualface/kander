@@ -33,10 +33,11 @@ func (t TerminalTool) Installed() bool { return t.Available() || t.OffPath != ""
 type TerminalTools struct {
 	Herdr TerminalTool
 	Tmux  TerminalTool
+	Luvus TerminalTool
 }
 
 func (t TerminalTools) NeedsHerdrInstall() bool {
-	return !t.Herdr.Available() && t.Herdr.OffPath == "" && !t.Tmux.Available()
+	return !t.Herdr.Available() && t.Herdr.OffPath == "" && !t.Tmux.Available() && !t.Luvus.Available()
 }
 
 func defaultToolBinary(name string) string {
@@ -71,11 +72,12 @@ func probeTerminalTool(backend terminal.Backend) TerminalTool {
 }
 
 // CheckTerminalTools only probes commands: it starts no session/window/tab and installs no software.
-// Native Windows has no tmux, so it is neither probed nor reported there.
+// Native Windows has no tmux or luvus, so they are neither probed nor reported there.
 func CheckTerminalTools() TerminalTools {
 	tools := TerminalTools{Herdr: probeTerminalTool(herdrBackend())}
 	if !isWindowsOS() {
 		tools.Tmux = probeTerminalTool(tmuxBackend())
+		tools.Luvus = probeTerminalTool(luvusBackend())
 	}
 	return tools
 }
@@ -87,6 +89,11 @@ func herdrBackend() terminal.Backend {
 
 func tmuxBackend() terminal.Backend {
 	backend, _ := terminal.Lookup(builtin.Tmux)
+	return backend
+}
+
+func luvusBackend() terminal.Backend {
+	backend, _ := terminal.Lookup(builtin.Luvus)
 	return backend
 }
 
@@ -194,6 +201,11 @@ func reportTerminalTools(tools TerminalTools) {
 	report(builtin.HerdrExecutable, tools.Herdr)
 	if !isWindowsOS() {
 		report(builtin.TmuxExecutable, tools.Tmux)
+	}
+	// luvus is optional and has no installer here, so only a found binary is
+	// reported; the configured-launcher checks name a missing one.
+	if tools.Luvus.Path != "" {
+		report(builtin.LuvusExecutable, tools.Luvus)
 	}
 	if tools.NeedsHerdrInstall() {
 		if isWindowsOS() {

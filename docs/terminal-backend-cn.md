@@ -20,7 +20,7 @@ Kander 严格且仅通过 `internal/terminal` 包访问终端会话（如 `herdr
        +-----------------+-----------------+
        |                                   |
 [ 声明式后端 Declarative ]          [ 直接后端 Direct ]
- (herdr, tmux, tmux-session)       (foreground, console)
+ (herdr, luvus, tmux, tmux-session) (foreground, console)
 ```
 
 1. **禁止直接拼装终端命令**：调用者（`launch`、`liveness`、`notify`、`takeover`、`focus`、`tui` 等）**绝不**构建命令参数列表，**绝不**直接调用终端二进制可执行文件。统一通过 `terminal.Lookup`、`terminal.ParseWindow`、`terminal.ResolveAuto` 获取后端实例并调用其接口方法。
@@ -34,7 +34,7 @@ Kander 严格且仅通过 `internal/terminal` 包访问终端会话（如 `herdr
 | 包路径 | 核心职责 |
 |---|---|
 | `internal/terminal` | 定义 `Backend` 接口、`Address`、`Target`、`PaneFacts`、`Topology` 及 `DeclarativeBackend` 引擎。 |
-| `internal/terminal/builtin` | 注册内置声明式定义（`definitions/herdr.json`、`tmux.json`）与核心 Go 钩子。 |
+| `internal/terminal/builtin` | 注册内置声明式定义（`definitions/herdr.json`、`luvus.json`、`tmux.json`）与核心 Go 钩子。 |
 | `internal/terminal/herdr` | 承载 herdr 套接字会话握手与面板聚焦专用钩子。两者按 `HERDR_SOCKET_PATH` 拨同一个控制通道：POSIX 为 unix socket，Windows 为命名管道 `\\.\pipe\` 加该路径。 |
 | `internal/terminal/direct` | 承载无容器后端（`foreground`、`console`）。所有容器分配方法均返回 `terminal.ErrUnsupported`。 |
 | `internal/terminal/terminaltest`| 将测试二进制作为 Fake 终端的测试夹具。 |
@@ -52,6 +52,7 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 | 启动器 | 不透明格式 | 解析后的 `Address` 结构体 |
 |---|---|---|
 | `herdr` | `<tab-id>:<pane-id>` | `Container` = 标签页 (`w0:...`), `Pane` = 面板 |
+| `luvus` | `<pane-id>:<pane-id>` | `Container` = `Pane` = luvus pane id (`7`) |
 | `tmux` | `<session-id>:<window-id>:<pane-id>` | `Session` = `$0`, `Container` = `@1`, `Pane` = `%1` |
 | `tmux-session` | `<session-name>:<window-id>:<pane-id>` | `Session` = 会话名, `Container` = `@1`, `Pane` = `%1` |
 | 声明式用户定义 | 由定义 schema 中 `address` 字段以冒号拼接 | 映射为命名的定义地址字段 |
@@ -63,17 +64,17 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 
 后端通过 `terminal.Capabilities` 显式声明其支持的功能：
 
-| 能力标志 | 说明 | herdr | tmux / tmux-session | foreground / console |
-|---|---|:---:|:---:|:---:|
-| `Container` | 支持分配隔离的标签页或窗口 | 支持 | 支持 | 不支持 |
-| `Focus` | 支持将焦点切到指定窗口/面板 | 支持 | 支持 | 不支持 |
-| `PaneMetadata` | 支持读取窗格自定义变量 | 不支持 | 支持 | 不支持 |
-| `ForegroundProcess` | 支持检查当前前台运行的 PID 与进程名 | 不支持 | 支持 | 不支持 |
-| `AgentIdentity` | 支持 Agent 握手汇报身份校验 | 支持 | 不支持 | 不支持 |
-| `SessionReport` | 支持双向会话握手通道 | 支持 | 不支持 | 不支持 |
-| `WaitOutput` | 支持原生屏幕输出模式等待 | 支持 | 不支持 *(轮询模拟)* | 不支持 |
-| `POSIXOnly` | 仅支持 POSIX 环境 | 不支持 | 支持 | 不支持 |
-| `Detached` | 脱离托管的后台独立进程 | 不支持 | 不支持 | 仅 console |
+| 能力标志 | 说明 | herdr | luvus | tmux / tmux-session | foreground / console |
+|---|---|:---:|:---:|:---:|:---:|
+| `Container` | 支持分配隔离的标签页或窗口 | 支持 | 支持 | 支持 | 不支持 |
+| `Focus` | 支持将焦点切到指定窗口/面板 | 支持 | 支持 | 支持 | 不支持 |
+| `PaneMetadata` | 支持读取窗格自定义变量 | 不支持 | 不支持 | 支持 | 不支持 |
+| `ForegroundProcess` | 支持检查当前前台运行的 PID 与进程名 | 不支持 | 不支持 | 支持 | 不支持 |
+| `AgentIdentity` | 支持 Agent 握手汇报身份校验 | 支持 | 支持 | 不支持 | 不支持 |
+| `SessionReport` | 支持双向会话握手通道 | 支持 | 不支持 | 不支持 | 不支持 |
+| `WaitOutput` | 支持原生屏幕输出模式等待 | 支持 | 不支持 *(轮询)* | 不支持 *(轮询模拟)* | 不支持 |
+| `POSIXOnly` | 仅支持 POSIX 环境 | 不支持 | 支持 | 支持 | 不支持 |
+| `Detached` | 脱离托管的后台独立进程 | 不支持 | 不支持 | 不支持 | 仅 console |
 
 ---
 
@@ -124,3 +125,17 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 4. **容器已消失**：窗格退出属于客观事实（`PaneFacts.Gone = true`），绝不作为未捕获异常抛出。
 5. **不支持的操作**：调用后端未声明能力的方法将明确返回 `terminal.ErrUnsupported`。
 6. **查找结果**：`terminal.MatchError`（已完成查找、零或多个匹配）与 `terminal.IncompleteLookupError`（存在不可判定候选、查找未完成）区分缺席、歧义与不可判定。
+
+---
+
+## 8. 内置 luvus launcher
+
+内嵌的 [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json) 提供 `luvus` launcher,用于在 [luvus](https://github.com/RizRiyz/luvus) pane 中运行 Kander。仅支持 POSIX。
+
+- **前置条件**:`luvus` 在 `PATH` 中,`LUVUS_ENV=1` 且 `LUVUS_PANE_ID` 非空(两者由 luvus 在其 pane 中设置)。`LUVUS_ENV=1` 时 `auto` 以优先级 150 选中 luvus,介于 herdr(200)和 tmux(100)之间。
+- **最低版本**:`pane split` 支持 `--cwd` 的首个 luvus 正式版(上游 PR #480);luvus 0.14.3 及更早版本不支持。luvus server 也必须是该版本:升级后请重启 server。
+- **容器**:`pane split <LUVUS_PANE_ID> --no-focus --cwd <cwd>`,然后 `pane move --new-tab`、用卡片标签 `pane name`、再 `pane focus` 回到调用方 pane。容器就是 pane 本身,所以 `WINDOW` 为 `luvus:<pane>:<pane>`。
+- **目录校验**:旧版 CLI 会静默忽略 `--cwd`,旧版 server 会忽略新 CLI 传来的目录;两种情况下 split 都成功,但新 pane 开在锚 pane 的目录。因此 `create_container` 用 `agent get` 读回新 pane(在目录上报前短暂轮询),只有上报目录等于请求目录或其解析符号链接后的形式时才接受。否则关闭新 pane 并以升级提示失败,`start` 把卡片回滚到 `todo/`,不启动 agent。
+- **session 身份**:luvus 通过自己的集成 hook 上报 agent 的 session。每个 agent 执行一次 `luvus integration install <agent>`,`pane_facts` 和反查才能拿到 session id。Kander 不绑定自己的 session hook。
+- **已知限制**:新 pane 移到新 tab 时调用方 pane 会短暂失去焦点。没有 luvus 集成 hook 的 agent(如 cursor、pi)不上报 session:liveness 仍能确认记录的 pane 中的 agent 与状态,但 `notify` 无法直接投递,pane 地址变化后的反查保持未完成(`unknown`),不会判为 `stopped`。普通 shell pane 的 agent 字段是 shell 名。tmux 与 luvus 嵌套时,`auto` 按上述优先级选择。
+- 全局或项目 share 目录中名为 `luvus.json` 的用户定义会整体替换这个内嵌定义;要使用内置定义,请删除旧的手写副本。

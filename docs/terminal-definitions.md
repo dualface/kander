@@ -1,6 +1,6 @@
 # Terminal Definitions
 
-A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `herdr`, `tmux` and `tmux-session` launchers are embedded definitions ([`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
+A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `herdr`, `luvus`, `tmux` and `tmux-session` launchers are embedded definitions ([`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
 
 ## Fixed Boundaries
 
@@ -77,7 +77,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | Operation            | Inputs (placeholders)                                   | Result fields |
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
-| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `label` | `session`, `container`, `pane` (container and pane required) |
+| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label` | `session`, `container`, `pane` (container and pane required) |
 | `wait_ready` (optional; absent means ready) | `pane`                           | none |
 | `run_command`        | `pane`, `command`, `posix` (`true`/`false`)             | none |
 | `set_session_marker` | `pane`, `value`                                         | none |
@@ -91,7 +91,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `focus`              | `session`, `container`, `pane`                          | focus notice |
 | `close_container`    | `session`, `container`, `pane`                          | none |
 
-Every template also accepts `env.<VAR>` and the stored step results `step.<store>.<field>`. `project_key` is the directory label plus an eight-digit digest of the project path. `report_session` has no steps; it is the `report_session` hook.
+Every template also accepts `env.<VAR>` and the stored step results `step.<store>.<field>`. `project_key` is the directory label plus an eight-digit digest of the project path. `cwd_resolved` is `cwd` with symbolic links resolved (and so without a trailing separator), or `cwd` unchanged when it cannot be resolved; a definition that reads the new pane's directory back compares against both. `report_session` has no steps; it is the `report_session` hook.
 
 An operation object is:
 
@@ -245,6 +245,10 @@ Reverse lookup's validity expressions scan the complete row. An unrelated nested
 
 The embedded herdr definition extracts `agent_session.kind` and `agent_session.value` and declares `rows.session`, so a `kind: "path"` report resolves through the agent's `session.file` declaration (pi's JSONL session header) instead of comparing the raw path string to the recorded session id. Candidates whose identity cannot be resolved make the lookup incomplete rather than a match, a mismatch, or a stopped observation.
 
+## luvus Notes
+
+The embedded luvus definition opens its pane with `pane split --cwd` and then verifies the directory with only steps and conditions: an `agent get` step polls `result.cwd` until it is non-empty and continues on error; a `pane close` step and two `fail` steps run when the stored text equals neither `{cwd}` nor `{cwd_resolved}`, so an older luvus that ignores `--cwd` leaves no orphan pane. The pane move, rename and refocus that follow continue on error. Reverse lookup reads `agent list` rows and declares `rows.session` with an extracted `session_kind` field that luvus does not report today, so every session is a direct id; a same-agent pane without a session makes the lookup incomplete. Usage, prerequisites and limits are in [Terminal backends](terminal-backend.md#8-the-built-in-luvus-launcher).
+
 ## Example
 
 A fragment of a two-field address definition:
@@ -367,3 +371,6 @@ execs `bash`, exercising a different foreground executable name. Herdr is
 opt-in: only `KANDER_E2E_HERDR=1` with an available `HERDR_SOCKET_PATH` runs the
 real lifecycle. Otherwise its test reports the precise skip reason. Preserve
 that skip in contribution evidence rather than claiming a real herdr pass.
+Luvus is opt-in the same way: only `KANDER_E2E_LUVUS=1` inside a luvus pane
+(`LUVUS_ENV=1` and `LUVUS_PANE_ID` set) runs the real lifecycle against the
+calling pane's luvus server.

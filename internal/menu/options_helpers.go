@@ -144,7 +144,21 @@ func herdrLauncherChoices(cfg *config.Config) []Choice {
 	return []Choice{{Value: builtin.Herdr, Label: label}}
 }
 
-// windowsLauncherChoices leaves out tmux: native Windows has none.
+// luvusLauncherChoices offers luvus once installed, or keeps a configured
+// luvus visible with the not-installed note.
+func luvusLauncherChoices(cfg *config.Config) []Choice {
+	installed := lookPath(builtin.LuvusExecutable) != ""
+	if !installed && cfg.Launcher != builtin.Luvus {
+		return nil
+	}
+	label := config.Text("luvus.menu_choice")
+	if !installed {
+		label += config.Text("menu.not_currently_installed")
+	}
+	return []Choice{{Value: builtin.Luvus, Label: label}}
+}
+
+// windowsLauncherChoices leaves out tmux and luvus: native Windows has neither.
 // herdr has a native Windows build, so it is offered once installed.
 func windowsLauncherChoices(cfg *config.Config) []Choice {
 	choices := []Choice{{Value: direct.Console, Label: config.Text("menu.separate_windows_console")}}

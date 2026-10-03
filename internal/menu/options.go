@@ -378,6 +378,7 @@ func (s *Session) LauncherChoices() []Choice {
 	if lookPath(builtin.TmuxExecutable) != "" {
 		choices = append(choices, tmuxLauncherChoices()...)
 		choices = append(choices, herdrLauncherChoices(s.Config)...)
+		choices = append(choices, luvusLauncherChoices(s.Config)...)
 		choices = append(choices, definitionLauncherChoices()...)
 		return append(choices, foreground)
 	}
@@ -388,6 +389,7 @@ func (s *Session) LauncherChoices() []Choice {
 		}
 	}
 	choices = append(choices, herdrLauncherChoices(s.Config)...)
+	choices = append(choices, luvusLauncherChoices(s.Config)...)
 	choices = append(choices, definitionLauncherChoices()...)
 	return append(choices, foreground, Choice{
 		Value: LauncherInstallValue,
