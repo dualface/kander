@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.0 — 2026-10-04
+
+- Built-in `luvus` launcher. Embeds `definitions/luvus.json` so `kander start`, `notify`, `resume`, `focus`, and `dismiss` work from a luvus pane on POSIX without a user-placed definition (`LUVUS_ENV=1`, `LUVUS_PANE_ID`, and luvus on PATH). Container creation passes `--cwd` and validates that the new pane honors the requested directory (resolving symlinks with `cwd_resolved`), failing early with an upgrade hint on older luvus versions. Auto launcher resolution selects luvus at priority 150 (between herdr 200 and tmux 100); native Windows rejects luvus. Run `kander doctor` after upgrading to update the rules.
+- TUI compact stacked panels: stacked panels fit their content height and divide spare column height evenly, so collapsing or expanding a task group immediately re-stacks the column. Up and down keys continue across stacked panels in the same visual column when reaching panel boundaries without crossing columns or wrapping around, and scrolling stops at the last content row.
+- TUI: the board status bar adds a clickable `c chat` entry before `o options` and `? help`.
+- TUI: pressing `y` on a focused task-group header copies the full task-group ID.
+- Fix (liveness): missing terminal program diagnostics name the backend's own executable instead of always attributing it to herdr.
+
 ## v0.8.9 — 2026-10-02
 
 - Archiving cleans up. After a card moves into `archived/`, Kander deletes the review evidence and control records that belong only to archived cards: review runs (inputs, originals, staging), batches, plans, closures, dispositions, task plans, start and dispatch records, task-group checkpoints, and the `reviews/` copies under those cards. Anything still shared with a card that is not archived, or belonging to a task group with a member outside `archived/` and `trash/`, stays until that changes (a task-group checkpoint also needs every member it lists to be archived); unfinished review runs of archived cards go too unless a review gate still holds them. Card bodies, `REVIEWS` index lines, reports, and `versions/`, `locks/`, and `issue-results/` are kept. `move` prints what was removed and how much space it freed; a failed cleanup never undoes the archive, and the next archive or `kander init` resumes it. `kander init` also cleans cards archived by earlier releases. Per-card receipts keep `kander check --all` quiet about removed evidence. The TUI archive form warns that archiving is final.
