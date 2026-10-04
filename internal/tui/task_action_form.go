@@ -42,7 +42,7 @@ func (a *App) openTaskActionForm(action taskAction) tea.Cmd {
 		huh.NewGroup(reason),
 		huh.NewGroup(huh.NewInput().Title(t("actions.decision")).Value(&dialog.options.Decision).Validate(requireActionValue)),
 	)
-	dialog.formTheme = huhTheme(themePalette(a.Theme))
+	dialog.formTheme = huhTheme(themePalette(a.themeName()))
 	dialog.form = huh.NewForm(groups...).WithTheme(dialog.formTheme).WithShowHelp(false).WithShowErrors(true)
 	a.resizeTaskActionForm()
 	return dialog.form.Init()

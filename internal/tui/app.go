@@ -52,6 +52,7 @@ type App struct {
 	Model             *BoardModel
 	RefreshSecs       int
 	Theme             string
+	AutoThemes        autoThemes
 	Compact           bool
 	Columns           int
 	MinColumnWidth    int
@@ -191,7 +192,7 @@ type App struct {
 
 	// probe drives the runtime terminal background query behind the "auto"
 	// theme; nil outside runTUI. resolvedTheme is the last theme name
-	// resolveTheme produced, so probeTick can spot a palette switch.
+	// themeName produced, so probeTick can spot a palette switch.
 	probe         *backgroundProbe
 	resolvedTheme string
 }
@@ -256,7 +257,7 @@ func (a *App) View() string {
 		a.ShowCursor = false
 	}
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	switch {
 	case a.UpdateDialog != nil:
 		a.ShowCursor = false
@@ -331,6 +332,7 @@ func newApp(single bool, refresh int, ctx pageContext, getBoard func() (BoardPay
 		Model:           newBoardModel(single),
 		RefreshSecs:     refresh,
 		Theme:           theme,
+		AutoThemes:      defaultAutoThemes(),
 		Columns:         clampColumns(columns),
 		MinColumnWidth:  minColumnWidth,
 		Context:         ctx,

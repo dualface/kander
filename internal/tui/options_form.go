@@ -17,13 +17,14 @@ import (
 // formBinding holds the mutable values bound to a Huh form. Huh needs stable pointers,
 // so everything is flattened per section up front and written back to App and the config session when the form closes.
 type formBinding struct {
-	theme    string
-	columns  int
-	minWidth int
-	refresh  int
-	single   bool
-	compact  bool
-	archived bool
+	theme                 string
+	themeLight, themeDark string
+	columns               int
+	minWidth              int
+	refresh               int
+	single                bool
+	compact               bool
+	archived              bool
 
 	large      string
 	small      string
@@ -233,7 +234,7 @@ func sectionKeyMap() *huh.KeyMap {
 
 func (p *optionsPanel) newForm(keys *huh.KeyMap, group *huh.Group) *huh.Form {
 	p.formGroup = group
-	p.formTheme = huhTheme(themePalette(p.app.Theme))
+	p.formTheme = huhTheme(themePalette(p.app.themeName()))
 	return huh.NewForm(group).
 		WithTheme(p.formTheme).
 		WithKeyMap(keys).
@@ -397,6 +398,8 @@ func (p *optionsPanel) openSectionWithInputs(section string, inputs map[string]m
 	bind := &formBinding{
 		reuseInputs: inputs,
 		theme:       tui.Theme,
+		themeLight:  tui.ThemeLight,
+		themeDark:   tui.ThemeDark,
 		columns:     tui.Columns,
 		minWidth:    tui.MinColumnWidth,
 		refresh:     tui.Refresh,
@@ -482,7 +485,7 @@ func (p *optionsPanel) interfaceGroup(bind *formBinding) *huh.Group {
 		Options(themeOptions...).
 		Value(&bind.theme).
 		Inline(true))
-	bind.addSpacer()
+	bind.addAutoThemeFields(p)
 	bind.fieldIndex[interfaceFocusKey("refresh")] = bind.focusable
 	bind.addField(huh.NewSelect[int]().
 		Title(p.inheritTitle(t("tui.auto_refresh_s"), formatInt(bind.refresh), "tui", "refresh")).
@@ -939,6 +942,7 @@ func (b *formBinding) applyInterface(p *optionsPanel) {
 	if b.applyCompact(p, previous, &scopeTUI, overlay) {
 		changed = true
 	}
+	changed = b.applyAutoThemes(p, previous, &scopeTUI, overlay) || changed
 	if app.Model.ShowArchived != b.archived {
 		app.Model.ToggleArchived()
 	}

@@ -192,7 +192,7 @@ func (a *App) probeTick() {
 	_, named := themeDefByName(a.Theme)
 	bp.enabled.Store(!named)
 	bp.tick(a.Now())
-	resolved := resolveTheme(a.Theme)
+	resolved := a.themeName()
 	if resolved != a.resolvedTheme {
 		a.resolvedTheme = resolved
 		a.applyThemeSwitch()
@@ -221,7 +221,7 @@ func refreshHuhForm(form *huh.Form) {
 // the Huh forms keep a *huh.Theme whose styles are updated in place, then the
 // open forms are nudged so their viewports repaint with the new styles.
 func (a *App) applyThemeSwitch() {
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	if a.Options != nil {
 		a.Options.syncFormTheme(p)
 		refreshHuhForm(a.Options.form)

@@ -74,7 +74,7 @@ func (p *optionsPanel) renderActions(width int) string {
 	if p.confirming {
 		add(t("tui.keep_editing"), tea.KeyEsc)
 	}
-	return styleFor("popup-title", themePalette(p.app.Theme)).Render(strings.Join(labels, "  "))
+	return styleFor("popup-title", themePalette(p.app.themeName())).Render(strings.Join(labels, "  "))
 }
 
 // optionsMouseActivate also accepts release events for the scope-tab adapter.

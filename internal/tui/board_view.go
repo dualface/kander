@@ -54,7 +54,7 @@ func (a *App) boardBodyHeight() int {
 // renderBoardView assembles the board with Lip Gloss: header, blank line, the column panels, and the bottom status bar.
 func (a *App) renderBoardView() string {
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	header := a.renderHeader(p, w)
 	if h < minBoardHeight || w < 1 {
 		body := styleFor("bold", p).Render(padLine(a.Context.TooSmall, w))
@@ -239,7 +239,7 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 		if scroll > end {
 			scroll = end
 		}
-		rails := columnGroupRails(tasks, themeIsDark(a.Theme))
+		rails := columnGroupRails(tasks, themeIsDark(a.themeName()))
 		cards := map[int][]string{}
 		for _, line := range rows[scroll:end] {
 			switch line.kind {

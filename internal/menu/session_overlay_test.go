@@ -662,6 +662,38 @@ func TestSetTUICompactFieldCreatesSparseOverlay(t *testing.T) {
 	}
 }
 
+func TestSetTUIAutoVariantFieldCreatesSparseOverlay(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetTUIField("theme_dark", "tide"); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.TUI.ThemeDark != "tide" || !session.FieldOverridden("tui", "theme_dark") {
+		t.Fatalf("theme_dark override not applied: %+v", session.Config.TUI)
+	}
+	if session.FieldOverridden("tui", "theme_light") || session.FieldOverridden("tui", "theme") {
+		t.Fatal("theme_dark edit copied unrelated TUI fields")
+	}
+}
+
+func TestGlobalTUISyncKeepsAutoVariantThemes(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	value := session.Config.TUI
+	value.ThemeLight = "slate-light"
+	value.ThemeDark = "dusk"
+	session.SyncTUI(value, true)
+	value.Columns = 4
+	session.SyncTUI(value, true)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if session.Config.TUI.ThemeLight != "slate-light" || session.Config.TUI.ThemeDark != "dusk" {
+		t.Fatalf("project lost global auto variants: %+v", session.Config.TUI)
+	}
+}
+
 func TestInvalidOverlayEditRemainsDirtyAndCannotSave(t *testing.T) {
 	session, path := tempOverlaySession(t, config.ModeProject)
 	delete(session.scopeRaw, "tui")

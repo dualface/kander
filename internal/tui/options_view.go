@@ -41,7 +41,7 @@ func (p *optionsPanel) measureForm() {
 		return
 	}
 	p.formWidth = p.innerWidth()
-	p.syncFormTheme(themePalette(p.app.Theme))
+	p.syncFormTheme(themePalette(p.app.themeName()))
 	p.form.WithWidth(p.fieldWidth(p.formWidth))
 	p.formNatural = contentHeight(p.formContent())
 }
@@ -68,7 +68,7 @@ func optionsHeader(left string, width int) string {
 // view renders the popup and records its geometry for mouse hit testing.
 // The body is rendered against the available space first, then the border is tightened to the body's actual height to avoid large blank areas.
 func (p *optionsPanel) view() (popupBox, string) {
-	palette := themePalette(p.app.Theme)
+	palette := themePalette(p.app.themeName())
 	screenHeight, screenWidth := p.app.size()
 	inner := p.innerWidth()
 

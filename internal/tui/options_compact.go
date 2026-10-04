@@ -9,6 +9,8 @@ func (p *optionsPanel) scopeTUI() config.TUI {
 	return config.TUI{
 		Compact:        p.app.Compact,
 		Theme:          p.app.Theme,
+		ThemeLight:     p.app.AutoThemes.Light,
+		ThemeDark:      p.app.AutoThemes.Dark,
 		Columns:        p.app.Columns,
 		MinColumnWidth: p.app.MinColumnWidth,
 		Refresh:        p.app.RefreshSecs,

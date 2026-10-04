@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -44,6 +45,8 @@ const (
 	MinTUIMinColumnWidth     = 20
 	MaxTUIMinColumnWidth     = 60
 	DefaultTUIRefresh        = 30
+	DefaultTUIThemeLight     = "light"
+	DefaultTUIThemeDark      = "dark"
 	MinTUIRefresh            = 1
 	MaxTUIRefresh            = 3600
 )
@@ -127,6 +130,10 @@ type TUI struct {
 	Refresh        int    `json:"refresh"`
 	Single         bool   `json:"single"`
 	Theme          string `json:"theme"`
+	// ThemeLight and ThemeDark are the named themes "auto" picks for a light
+	// or dark terminal background. They never take "auto" themselves.
+	ThemeLight string `json:"theme_light"`
+	ThemeDark  string `json:"theme_dark"`
 }
 
 // Config is the schema-validated configuration.
@@ -213,6 +220,8 @@ func DefaultTUI() TUI {
 		MinColumnWidth: DefaultTUIMinColumnWidth,
 		Refresh:        DefaultTUIRefresh,
 		Theme:          "auto",
+		ThemeLight:     DefaultTUIThemeLight,
+		ThemeDark:      DefaultTUIThemeDark,
 	}
 }
 
@@ -623,6 +632,7 @@ func validateTUI(raw any) (TUI, error) {
 	}
 	allowed := map[string]struct{}{
 		"compact": {}, "columns": {}, "min_column_width": {}, "refresh": {}, "single": {}, "theme": {},
+		"theme_light": {}, "theme_dark": {},
 	}
 	var unknown []string
 	for key := range obj {
@@ -663,7 +673,35 @@ func validateTUI(raw any) (TUI, error) {
 	if err != nil {
 		return TUI{}, err
 	}
-	return TUI{Compact: compact, Columns: columns, MinColumnWidth: width, Refresh: refresh, Single: single, Theme: theme}, nil
+	themeLight, err := validateAutoVariantTheme(obj, "theme_light", DefaultTUIThemeLight)
+	if err != nil {
+		return TUI{}, err
+	}
+	themeDark, err := validateAutoVariantTheme(obj, "theme_dark", DefaultTUIThemeDark)
+	if err != nil {
+		return TUI{}, err
+	}
+	return TUI{
+		Compact: compact, Columns: columns, MinColumnWidth: width, Refresh: refresh, Single: single,
+		Theme: theme, ThemeLight: themeLight, ThemeDark: themeDark,
+	}, nil
+}
+
+// validateAutoVariantTheme reads an optional "auto" variant key: a missing key
+// keeps the built-in default so older configs stay valid, while a present key
+// must name a concrete theme. The light/dark family is not checked here, so a
+// hand-edited cross-family choice is honored.
+func validateAutoVariantTheme(obj map[string]any, key, fallback string) (string, error) {
+	raw, exists := obj[key]
+	if !exists {
+		return fallback, nil
+	}
+	return validateChoice(raw, NamedTUIThemes(), "tui."+key)
+}
+
+// NamedTUIThemes lists the concrete themes, that is TUIThemes without "auto".
+func NamedTUIThemes() []string {
+	return slices.DeleteFunc(slices.Clone(TUIThemes), func(name string) bool { return name == "auto" })
 }
 
 func asObject(raw any) (map[string]any, bool) {

@@ -243,7 +243,7 @@ func (a *App) applyTaskActionResult(result taskActionResult) {
 func (a *App) renderTaskActions() (popupBox, string) {
 	dialog := a.TaskActions
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	frame := popup{Title: printableText(dialog.id), Hint: t("actions.menu_hint"), TightFit: true}
 	inner := frame.inner(w, h, 64)
 	body := ""

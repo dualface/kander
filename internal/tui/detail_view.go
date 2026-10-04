@@ -35,7 +35,7 @@ func (a *App) renderedDetail() []string {
 		doc = a.Detail.Document
 	}
 	width := a.detailRenderWidth()
-	theme := resolveTheme(a.Theme)
+	theme := a.themeName()
 	key := theme + "\x00" + itoa(width) + "\x00" + doc
 	if a.detailCache.key == key {
 		return a.detailCache.styled
@@ -179,7 +179,7 @@ func renderCaret(text string, col int, style lipgloss.Style, fallback string, se
 // (title embedded in the top border, holding the metadata, a separator and the Glamour body), and the bottom status bar.
 func (a *App) renderDetailView() string {
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	if h < minBoardHeight || w < 20 {
 		return padBlock(styleFor("bold", p).Render(a.Context.TooSmall), w, h, p)
 	}

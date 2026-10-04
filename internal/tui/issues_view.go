@@ -127,7 +127,7 @@ func clampInt(value, low, high int) int {
 // renderIssues paints the overlay and returns its geometry for mouse hit
 // testing.
 func (a *App) renderIssues() (popupBox, string) {
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	h, w := a.size()
 	layout := a.issuesLayout()
 	frame := a.issuesFrame()
@@ -415,12 +415,12 @@ func (a *App) issuesDetailBodyLines(width int) []string {
 	if st == nil || st.detail == nil {
 		return nil
 	}
-	key := resolveTheme(a.Theme) + "\x00" + itoa(width) + "\x00" + itoa(int(st.detailStamp))
+	key := a.themeName() + "\x00" + itoa(width) + "\x00" + itoa(int(st.detailStamp))
 	if st.renderKey == key {
 		return st.renderLines
 	}
 	doc := a.issuesDetailDocument(*st.detail)
-	lines := renderMarkdown(doc, width, a.Theme)
+	lines := renderMarkdown(doc, width, a.themeName())
 	st.renderKey = key
 	st.renderLines = lines
 	return lines

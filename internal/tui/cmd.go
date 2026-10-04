@@ -124,6 +124,8 @@ func Run(_ []string) int {
 	}
 	app := newApp(prefs.Single, prefs.Refresh, ctx, nil, nil, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.Compact = prefs.Compact
+	app.AutoThemes = autoThemes{Light: prefs.ThemeLight, Dark: prefs.ThemeDark}
+	app.resolvedTheme = app.themeName()
 	app.updateCheck = install.CheckUpdate
 	app.updateApply = install.ApplyUpdate
 	app.IssueProvider = cli.IssueProvider

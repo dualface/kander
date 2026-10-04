@@ -178,7 +178,9 @@
     "min_column_width": 40,
     "refresh": 30,
     "single": false,
-    "theme": "auto"
+    "theme": "auto",
+    "theme_light": "light",
+    "theme_dark": "dark"
   },
   "language": "en",
   "agent_language": "en"

@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 var detectDarkBackground = lipgloss.HasDarkBackground
@@ -617,22 +619,60 @@ func badgeStyle(p palette, state string, focused bool) lipgloss.Style {
 	return p.ink(p.Dim).Reverse(true)
 }
 
-// resolveTheme only normalizes auto: a named theme is returned as itself.
-// auto (or any name not in the table) uses the latest runtime background
-// classification once the TUI probe has applied one, and the one-time startup
-// probe before that or when probing is unsupported.
+// autoThemes names the concrete themes "auto" uses for each terminal
+// background family; it mirrors tui.theme_light and tui.theme_dark.
+type autoThemes struct {
+	Light string
+	Dark  string
+}
+
+func defaultAutoThemes() autoThemes {
+	return autoThemes{Light: config.DefaultTUIThemeLight, Dark: config.DefaultTUIThemeDark}
+}
+
+// resolveTheme resolves with the built-in auto variants. App code resolves
+// through App.themeName so the configured variants apply.
 func resolveTheme(name string) string {
+	return resolveThemeWith(name, defaultAutoThemes())
+}
+
+// resolveThemeWith only normalizes auto: a named theme is returned as itself.
+// auto (or any name not in the table) picks the variant for the latest runtime
+// background classification once the TUI probe has applied one, and the
+// one-time startup probe before that or when probing is unsupported. A variant
+// that is not a known theme falls back to the built-in one for its family.
+func resolveThemeWith(name string, variants autoThemes) string {
 	if _, ok := themeDefByName(name); ok {
 		return name
 	}
-	if dark, ok := runtimeBackground(); ok {
-		if dark {
-			return "dark"
+	dark, ok := runtimeBackground()
+	if !ok {
+		dark = detectDarkBackground()
+	}
+	pick, fallback := variants.Light, config.DefaultTUIThemeLight
+	if dark {
+		pick, fallback = variants.Dark, config.DefaultTUIThemeDark
+	}
+	if _, ok := themeDefByName(pick); ok {
+		return pick
+	}
+	return fallback
+}
+
+// themeName is the concrete theme this App renders with: tui.theme, or for
+// auto the configured variant of the current background family.
+func (a *App) themeName() string {
+	return resolveThemeWith(a.Theme, a.AutoThemes)
+}
+
+// familyThemeNames lists the named themes of one background family, in table
+// order, for the auto variant selectors.
+func familyThemeNames(dark bool) []string {
+	var out []string
+	for _, def := range themeTable {
+		if def.dark == dark {
+			out = append(out, def.name)
 		}
-		return "light"
 	}
-	if detectDarkBackground() {
-		return "dark"
-	}
-	return "light"
+	return out
 }

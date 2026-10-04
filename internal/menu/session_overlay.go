@@ -413,6 +413,14 @@ func (s *Session) SetTUIField(field string, value any) error {
 		if text, ok := value.(string); ok {
 			s.Config.TUI.Theme = text
 		}
+	case "theme_light":
+		if text, ok := value.(string); ok {
+			s.Config.TUI.ThemeLight = text
+		}
+	case "theme_dark":
+		if text, ok := value.(string); ok {
+			s.Config.TUI.ThemeDark = text
+		}
 	case "columns":
 		if n, ok := intValue(value); ok {
 			s.Config.TUI.Columns = n

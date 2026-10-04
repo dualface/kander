@@ -24,7 +24,7 @@ func (a *App) dismissWelcome() {
 
 func (a *App) renderWelcome() (popupBox, string) {
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	frame := popup{Title: t("tui.welcome_title"), Hint: t("tui.welcome_hint")}
 	inner := frame.inner(w, h, 68)
 	bodyStyle := styleFor("popup", p)

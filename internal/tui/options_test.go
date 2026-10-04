@@ -411,13 +411,15 @@ func TestThemeChangeKeepsInterfaceState(t *testing.T) {
 		t.Fatal("default language should be the first interface option")
 	}
 	// Change a neighboring field first, then switch themes repeatedly, verifying that the refresh loses no setting and does not move focus.
-	// The interface section is ordered language, agent language, theme, refresh.
-	drivePanel(panel, keyMsg("down"))
-	drivePanel(panel, keyMsg("down"))
-	drivePanel(panel, keyMsg("down"))
+	// The interface section is ordered language, agent language, theme, the two auto variants, refresh.
+	for range 5 {
+		drivePanel(panel, keyMsg("down"))
+	}
 	drivePanel(panel, keyMsg("right"))
 	refresh := app.RefreshSecs
-	drivePanel(panel, keyMsg("up"))
+	for range 3 {
+		drivePanel(panel, keyMsg("up"))
+	}
 	for _, step := range []struct{ key, theme string }{
 		{"right", "light-warm"},
 		{"right", "light-contrast"},

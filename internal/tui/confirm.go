@@ -178,7 +178,7 @@ func confirmSettings(agent, launcher string) string {
 
 func (a *App) renderConfirm(paragraphs []string, hint, title string, view *viewport.Model) (popupBox, string) {
 	h, w := a.size()
-	return renderConfirmDialog(w, h, a.Theme, paragraphs, hint, title, view)
+	return renderConfirmDialog(w, h, a.themeName(), paragraphs, hint, title, view)
 }
 
 // renderConfirmDialog draws one confirmation body; view scrolls the paragraphs

@@ -223,7 +223,7 @@ func (a *App) chatFrame() popup {
 func (a *App) renderChat() (popupBox, string) {
 	dialog := a.Chat
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	frame := a.chatFrame()
 	if dialog.phase == chatRunning {
 		frame.Title = t("tui.start_title_starting")

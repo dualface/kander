@@ -164,6 +164,7 @@ func (p *optionsPanel) syncAppFromSession() {
 	p.loadedTUI = tui
 	p.appliedTUI = nil
 	p.app.Theme = tui.Theme
+	p.app.AutoThemes = autoThemes{Light: tui.ThemeLight, Dark: tui.ThemeDark}
 	p.app.Columns = tui.Columns
 	p.app.MinColumnWidth = tui.MinColumnWidth
 	p.app.RefreshSecs = tui.Refresh

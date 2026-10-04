@@ -10,6 +10,8 @@ type uiPrefs struct {
 	Columns        int
 	MinColumnWidth int
 	Theme          string
+	ThemeLight     string
+	ThemeDark      string
 	Refresh        int
 	Single         bool
 }
@@ -44,6 +46,8 @@ func prefsFromConfig(value config.TUI) uiPrefs {
 		Columns:        value.Columns,
 		MinColumnWidth: value.MinColumnWidth,
 		Theme:          value.Theme,
+		ThemeLight:     value.ThemeLight,
+		ThemeDark:      value.ThemeDark,
 		Refresh:        value.Refresh,
 		Single:         value.Single,
 	}
@@ -61,6 +65,8 @@ func prefsConfig(prefs uiPrefs) config.TUI {
 		Refresh:        clampRefresh(prefs.Refresh),
 		Single:         prefs.Single,
 		Theme:          theme,
+		ThemeLight:     namedThemeOr(prefs.ThemeLight, config.DefaultTUIThemeLight),
+		ThemeDark:      namedThemeOr(prefs.ThemeDark, config.DefaultTUIThemeDark),
 	}
 }
 
@@ -74,4 +80,13 @@ func saveColumns(count int) (config.TUI, error) {
 		return nil
 	})
 	return written, err
+}
+
+// namedThemeOr keeps a concrete theme name and replaces anything else, such as
+// "auto" or an unknown name, with the fallback.
+func namedThemeOr(name, fallback string) string {
+	if _, ok := themeDefByName(name); ok {
+		return name
+	}
+	return fallback
 }

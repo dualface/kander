@@ -115,7 +115,7 @@ func (a *App) issuesHelpEntries() []helpEntry {
 // on a narrow terminal it falls back to a single vertical column so nothing is truncated by the popup width.
 func (a *App) renderHelp() (popupBox, string) {
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	groups := a.boardHelpGroups()
 	rendered := make([]string, 0, len(groups))
 	for _, group := range groups {

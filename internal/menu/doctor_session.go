@@ -82,6 +82,7 @@ func (s *Session) SyncTUI(value config.TUI, persisted bool) {
 		// Sync the whole section, including legacy scopes without a tui object.
 		for key, field := range map[string]any{
 			"compact": value.Compact, "theme": value.Theme, "columns": value.Columns,
+			"theme_light": value.ThemeLight, "theme_dark": value.ThemeDark,
 			"min_column_width": value.MinColumnWidth,
 			"refresh":          value.Refresh, "single": value.Single,
 		} {

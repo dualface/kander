@@ -117,7 +117,7 @@ func (a *App) openOptionsAt(section string) {
 	if a.Options != nil {
 		return
 	}
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = lipgloss.NewStyle().Foreground(p.Accent).Background(p.Bg)

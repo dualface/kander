@@ -161,7 +161,7 @@ func (a *App) applyStartResult(work confirmWork) {
 
 func (a *App) renderStartPopup(lines []string) (popupBox, string) {
 	h, w := a.size()
-	p := themePalette(a.Theme)
+	p := themePalette(a.themeName())
 	for i, line := range lines {
 		lines[i] = printableText(ansi.Strip(line))
 	}
