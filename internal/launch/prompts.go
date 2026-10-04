@@ -99,7 +99,20 @@ func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string
 	if size != "small" && size != "large" {
 		return "", launchError("board.size_invalid", "prompt")
 	}
-	return RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " " + t("launch.prompt.size", size) + " ", nil
+	return RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + promptReportingDirective() + " " + t("launch.prompt.size", size) + " ", nil
+}
+
+// promptReportingDirective is the fixed English completion-report reminder embedded in launch
+// prompts while rules.reporting is enabled; it is empty otherwise so the prompt stays unchanged.
+// An unreadable config also leaves it out: a card with LANGUAGE must still launch without a
+// config, and the reporting rule itself is read through the config the agent loads first.
+func promptReportingDirective() string {
+	cfg, err := config.Load(false)
+	if err != nil || !cfg.Rules[config.RuleReporting] {
+		return ""
+	}
+	return " When the card ends in done, archived, or trash, report to the user with the completion report" +
+		" template in KANDER-REPORTING-RULES.md; kander move prints it prefilled."
 }
 
 func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {

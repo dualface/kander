@@ -1,0 +1,4 @@
+{
+  "board.report_template_reminder": "rules.reporting 已开启：现在按 KANDER-REPORTING-RULES.md 的完成报告模板向用户汇报，替换全部 <...> 占位：",
+  "board.report_template_unavailable": "提示：无法生成完成报告模板：{{.V0}}"
+}

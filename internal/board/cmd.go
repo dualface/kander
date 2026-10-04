@@ -270,6 +270,9 @@ func RunMove(args []string) int {
 			fmt.Fprintln(os.Stderr, line)
 		}
 	}
+	if !replayed {
+		writeCompletionReportReminder(os.Stderr, moved)
+	}
 	if authorization.DispatchID != "" {
 		d, err := ReadDispatch(root, entry.TaskID, authorization.DispatchID)
 		if err != nil {

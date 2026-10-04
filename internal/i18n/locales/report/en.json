@@ -1,0 +1,4 @@
+{
+  "board.report_template_reminder": "rules.reporting is on: report to the user now with this completion report template from KANDER-REPORTING-RULES.md, replacing every <...> placeholder:",
+  "board.report_template_unavailable": "Notice: completion report template unavailable: {{.V0}}"
+}

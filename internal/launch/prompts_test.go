@@ -276,3 +276,38 @@ func TestStartPromptNeverCarriesCardBodies(t *testing.T) {
 		t.Fatalf("task ID missing from the prompt: %s", prompt)
 	}
 }
+
+// TestPromptReportingDirectiveFollowsRule covers every prompt built on ruleLoadingWithLanguage:
+// start, resume, takeover, and notify direct or dispatch delivery. With reporting off the
+// instruction keeps its previous bytes.
+func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
+	config.ApplyLanguageArgument(nil)
+	config.BindConfigLanguage(nil)
+	t.Cleanup(func() { config.BindConfigLanguage(nil) })
+	t.Setenv(config.EnvLangCLI, "")
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
+	card := "- LANGUAGE: en\n- SIZE: small\n"
+	legacy := RuleLoadingInstruction(paths) + promptLanguageDirective("en") + " " + config.Text("launch.prompt.size", "small") + " "
+	for _, enabled := range []bool{true, false} {
+		cfg := config.DefaultConfig()
+		cfg.Rules[config.RuleReporting] = enabled
+		if _, err := config.Save(cfg); err != nil {
+			t.Fatal(err)
+		}
+		instruction, err := RuleLoadingWithLanguage(paths, card)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if enabled == (instruction == legacy) {
+			t.Fatalf("reporting %v: %q", enabled, instruction)
+		}
+		if enabled && !strings.Contains(instruction, "KANDER-REPORTING-RULES.md") {
+			t.Fatalf("reporting directive missing: %q", instruction)
+		}
+		start, err := startAgentPrompt("task-1", paths, "group-1", card)
+		if err != nil || !strings.Contains(start, instruction) {
+			t.Fatalf("group start prompt: %q %v", start, err)
+		}
+	}
+}
