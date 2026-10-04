@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.1 — 2026-10-05
+
+- Completion report reminder. With `rules.reporting` on, `kander move` into `done`, `archived`, or `trash` (not a dispatch replay) prints a localized reminder and the completion report template on stderr, prefilled with the task ID, title, absolute final path, final card state, and card language. Stdout and dispatch JSON are unchanged, and TUI moves print nothing. The start, resume, takeover, and notify prompts also carry a short report reminder while the switch is on. Run `kander doctor` after upgrading to update the rules.
+- TUI: new optional `tui.theme_light` and `tui.theme_dark` settings (default `light` / `dark`) choose the concrete themes `auto` uses on a light or dark terminal background, at startup and when the background changes at runtime. The options panel adds two selectors that list the matching theme family and keep a hand-edited cross-family value.
+
 ## v0.9.0 — 2026-10-04
 
 - Built-in `luvus` launcher. Embeds `definitions/luvus.json` so `kander start`, `notify`, `resume`, `focus`, and `dismiss` work from a luvus pane on POSIX without a user-placed definition (`LUVUS_ENV=1`, `LUVUS_PANE_ID`, and luvus on PATH). Container creation passes `--cwd` and validates that the new pane honors the requested directory (resolving symlinks with `cwd_resolved`), failing early with an upgrade hint on older luvus versions. Auto launcher resolution selects luvus at priority 150 (between herdr 200 and tmux 100); native Windows rejects luvus. Run `kander doctor` after upgrading to update the rules.
