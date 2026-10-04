@@ -823,7 +823,7 @@
   "tui.copied": "コピーしました",
   "tui.copy_failed": "コピーに失敗しました",
   "tui.copy_selection": "選択 / 行 / 行末までコピー",
-  "tui.copy_task_id": "タスク ID をコピー",
+  "tui.copy_task_id": "タスク ID またはタスクグループ ID をコピー",
   "tui.copy_text": "テキストをコピー",
   "tui.cycle_theme": "テーマ切替",
   "tui.dark": "ダーク",

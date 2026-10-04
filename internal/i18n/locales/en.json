@@ -823,7 +823,7 @@
   "tui.copied": "Copied",
   "tui.copy_failed": "Copy failed",
   "tui.copy_selection": "copy selection / line / to EOL",
-  "tui.copy_task_id": "copy task id",
+  "tui.copy_task_id": "copy task or group id",
   "tui.copy_text": "copy text",
   "tui.cycle_theme": "cycle theme",
   "tui.dark": "dark",

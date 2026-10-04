@@ -823,7 +823,7 @@
   "tui.copied": "已复制",
   "tui.copy_failed": "复制失败",
   "tui.copy_selection": "复制选区 / 当前行 / 到行尾",
-  "tui.copy_task_id": "复制任务 ID",
+  "tui.copy_task_id": "复制任务 ID 或任务组 ID",
   "tui.copy_text": "复制文本",
   "tui.cycle_theme": "切换主题",
   "tui.dark": "深色",

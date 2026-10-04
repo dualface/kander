@@ -745,7 +745,8 @@ func (a *App) handleBoardKey(key string) {
 	case "?":
 		a.openHelp()
 	case "y":
-		if a.Model.focusedHeaderGroup(a.Model.CurrentState()) != "" {
+		if group := a.Model.focusedHeaderGroup(a.Model.CurrentState()); group != "" {
+			a.copyText(group)
 			return
 		}
 		a.copySelectedTaskID()

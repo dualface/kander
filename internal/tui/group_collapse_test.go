@@ -245,10 +245,19 @@ func TestGroupHeaderKeys(t *testing.T) {
 		return true, ""
 	}
 	app.handleBoardKey("y")
-	app.handleBoardKey("m")
-	if copied != "" || app.CopyNotice != "" || app.TaskActions != nil {
-		t.Fatalf("header y/m copied %q notice %q menu %v", copied, app.CopyNotice, app.TaskActions != nil)
+	if copied != "20260930-g1" || app.CopyNotice == "" {
+		t.Fatalf("header y copied %q notice %q", copied, app.CopyNotice)
 	}
+	app.handleBoardKey("m")
+	if app.TaskActions != nil {
+		t.Fatal("header m opened the task menu")
+	}
+	app.handleBoardKey("j")
+	app.handleBoardKey("y")
+	if copied != "B" {
+		t.Fatalf("card y copied %q", copied)
+	}
+	app.handleBoardKey("k")
 	app.handleBoardKey("enter")
 	if app.Detail != nil {
 		t.Fatal("enter on a header opened detail")
