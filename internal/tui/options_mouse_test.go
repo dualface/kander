@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -41,9 +42,9 @@ func TestStatusMouseEntrances(t *testing.T) {
 		app := newPanelApp(t)
 		app.Width = width
 		app.dismissWelcome()
-		app.Context.StatusOptions, app.Context.StatusHelp = "o 选项", "? 帮助"
+		app.Context.StatusChat, app.Context.StatusOptions, app.Context.StatusHelp = "c 聊天", "o 选项", "? 帮助"
 		view := ansi.Strip(app.View())
-		if !strings.Contains(view, "o 选项 | ? 帮助") {
+		if !strings.Contains(view, "c 聊天 | o 选项 | ? 帮助") {
 			t.Fatalf("missing status at width %d", width)
 		}
 		clickOptionsText(t, app, "? 帮助")
@@ -66,7 +67,9 @@ func TestStatusMouseIgnoresDragAndNotice(t *testing.T) {
 	app := newPanelApp(t)
 	app.dismissWelcome()
 	app.View()
-	hit := app.statusHits[0]
+	hit := app.statusHits[slices.IndexFunc(app.statusHits, func(hit statusActionHit) bool {
+		return hit.action == statusActionOptions
+	})]
 	y := app.Height - 1
 	app.Update(tea.MouseMsg{X: hit.x - 5, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	app.Update(tea.MouseMsg{X: hit.x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})

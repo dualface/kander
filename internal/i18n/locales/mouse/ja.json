@@ -1,4 +1,5 @@
 {
+  "tui.status_chat": "c チャット",
   "tui.status_options": "o オプション",
   "tui.status_help": "? ヘルプ",
   "tui.help_mouse_hint": "ホイールでスクロール · 枠外クリック / 任意キーで閉じる",

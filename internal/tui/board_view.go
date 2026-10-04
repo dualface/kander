@@ -135,7 +135,7 @@ func compactStamp(value string) string {
 	return value
 }
 
-// renderStatusBar is the bottom status bar: segmented information on the left, the two most used keys on the right.
+// renderStatusBar is the bottom status bar: segmented information on the left, the most used keys on the right.
 // The full key table belongs to the ? help overlay, so the status bar no longer carries a long truncated hint.
 func (a *App) renderStatusBar(p palette, w, visible int) string {
 	a.statusHits = nil
@@ -148,8 +148,19 @@ func (a *App) renderStatusBar(p palette, w, visible int) string {
 		itoa(a.visibleTaskCount()) + " " + a.Context.CardUnit,
 	}
 	left := " " + strings.Join(segments, "  "+a.Glyphs["vbar"]+"  ")
-	options, help := a.Context.StatusOptions, a.Context.StatusHelp
-	right := options + " | " + help + " "
+	entries := []struct {
+		label  string
+		action statusAction
+	}{
+		{a.Context.StatusChat, statusActionChat},
+		{a.Context.StatusOptions, statusActionOptions},
+		{a.Context.StatusHelp, statusActionHelp},
+	}
+	labels := make([]string, len(entries))
+	for index, entry := range entries {
+		labels[index] = entry.label
+	}
+	right := strings.Join(labels, " | ") + " "
 	gap := w - displayWidth(left) - displayWidth(right)
 	if gap < 1 {
 		left = clipText(left, max(0, w-displayWidth(right)-1))
@@ -159,9 +170,10 @@ func (a *App) renderStatusBar(p palette, w, visible int) string {
 		return styleFor("footer", p).Render(padLine(clipText(left, w), w))
 	}
 	x := displayWidth(left) + gap
-	a.statusHits = []statusActionHit{
-		{x: x, width: displayWidth(options), options: true},
-		{x: x + displayWidth(options) + 3, width: displayWidth(help)},
+	for _, entry := range entries {
+		width := displayWidth(entry.label)
+		a.statusHits = append(a.statusHits, statusActionHit{x: x, width: width, action: entry.action})
+		x += width + 3
 	}
 	return styleFor("footer", p).Render(padLine(left+strings.Repeat(" ", gap)+right, w))
 }

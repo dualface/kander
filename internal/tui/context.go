@@ -19,6 +19,7 @@ type pageContext struct {
 	Columns             string
 	ColumnUnit          string
 	CardUnit            string
+	StatusChat          string
 	StatusHelp          string
 	StatusOptions       string
 	DetailStatusHelp    string
@@ -66,6 +67,7 @@ func tuiPageContext() pageContext {
 		Columns:          t("tui.columns"),
 		ColumnUnit:       t("tui.cols"),
 		CardUnit:         t("tui.cards"),
+		StatusChat:       t("tui.status_chat"),
 		StatusHelp:       t("tui.status_help"),
 		StatusOptions:    t("tui.status_options"),
 		DetailStatusHelp: t("tui.help_q_back"),

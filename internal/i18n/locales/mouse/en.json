@@ -1,4 +1,5 @@
 {
+  "tui.status_chat": "c chat",
   "tui.status_options": "o options",
   "tui.status_help": "? help",
   "tui.help_mouse_hint": "Wheel scroll · Click outside / any key close",

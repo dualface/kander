@@ -1,8 +1,17 @@
 package tui
 
+// statusAction names the board action a status bar entry opens.
+type statusAction int
+
+const (
+	statusActionChat statusAction = iota
+	statusActionOptions
+	statusActionHelp
+)
+
 type statusActionHit struct {
 	x, width int
-	options  bool
+	action   statusAction
 }
 
 // popupClick activates once on release, at the position where the press began.
@@ -21,9 +30,12 @@ func (a *App) handleStatusMouse(x, y, bstate int) bool {
 	if a.popupClick(x, y, bstate) {
 		for _, hit := range a.statusHits {
 			if x >= hit.x && x < hit.x+hit.width {
-				if hit.options {
+				switch hit.action {
+				case statusActionChat:
+					a.openChat()
+				case statusActionOptions:
 					a.openOptions()
-				} else {
+				case statusActionHelp:
 					a.openHelp()
 				}
 				break

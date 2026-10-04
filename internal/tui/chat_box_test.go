@@ -88,6 +88,15 @@ func TestChatBoxSubmitsMultilineMessageFocusesAndCloses(t *testing.T) {
 	}
 }
 
+func TestStatusChatClickOpensChatBox(t *testing.T) {
+	app, _, _ := chatApp(t, chatStarted)
+	app.dismissWelcome()
+	clickOptionsText(t, app, config.Text("tui.status_chat"))
+	if app.Chat == nil || app.Chat.phase != chatLoading {
+		t.Fatalf("status chat click must open the chat box: %+v", app.Chat)
+	}
+}
+
 func TestChatBoxCtrlJInsertsNewlineWithoutSending(t *testing.T) {
 	app, messages, _ := chatApp(t, chatStarted)
 	openReadyChat(t, app)
