@@ -75,19 +75,32 @@ func panelMinimumHeight(model *BoardModel, state string, skipTop bool) int {
 	return height
 }
 
-// stackedPanelHeights gives every panel but the last its full-content
-// height and leaves the rest of the column to the last panel, so a panel
-// shrinks as soon as its content does (for example after a group collapses).
-// The caller only stacks panels whose minimums fit in total.
+// stackedPanelHeights gives every panel its full-content height and then
+// shares the rest of the column evenly, so one panel does not take all the
+// spare rows while the others stay at their content height. Rows that do
+// not divide evenly go one each to the last panels. A panel still shrinks
+// as soon as its content does (for example after a group collapses).
+// The caller only stacks panels whose minimums fit in total; a lone panel
+// always takes the whole column.
 func stackedPanelHeights(minimums []int, total int) []int {
 	heights := append([]int(nil), minimums...)
 	if len(heights) == 0 {
 		return heights
 	}
-	used := 0
-	for _, height := range heights[:len(heights)-1] {
-		used += height
+	if len(heights) == 1 {
+		heights[0] = total
+		return heights
 	}
-	heights[len(heights)-1] = total - used
+	leftover := total
+	for _, height := range heights {
+		leftover -= height
+	}
+	share, remainder := leftover/len(heights), leftover%len(heights)
+	for index := range heights {
+		heights[index] += share
+		if index >= len(heights)-remainder {
+			heights[index]++
+		}
+	}
 	return heights
 }

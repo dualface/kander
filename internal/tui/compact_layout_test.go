@@ -42,8 +42,8 @@ func TestStackedPanelHeights(t *testing.T) {
 		total    int
 		want     []int
 	}{
-		{minimums: []int{3, 3, 3}, total: 17, want: []int{3, 3, 11}},
-		{minimums: []int{12, 4}, total: 20, want: []int{12, 8}},
+		{minimums: []int{3, 3, 3}, total: 17, want: []int{5, 6, 6}},
+		{minimums: []int{12, 4}, total: 20, want: []int{14, 6}},
 		{minimums: []int{7}, total: 25, want: []int{25}},
 	} {
 		got := stackedPanelHeights(test.minimums, test.total)
@@ -73,7 +73,7 @@ func TestCompactLayoutStacksOnlyAfterWidthReduction(t *testing.T) {
 		t.Fatalf("visible panels=%d", len(layout))
 	}
 	wantColumns := []int{0, 0, 0, 1, 2}
-	wantHeights := []int{3, 3, 11}
+	wantHeights := []int{5, 6, 6}
 	for index, want := range wantColumns {
 		if layout[index].State != activeStates[index] || layout[index].VisualColumn != want {
 			t.Fatalf("panel %d=%+v", index, layout[index])
@@ -84,7 +84,7 @@ func TestCompactLayoutStacksOnlyAfterWidthReduction(t *testing.T) {
 			t.Fatalf("stack height %d=%d want %d", index, layout[index].Height, want)
 		}
 	}
-	if layout[0].Y != panelTopRow || layout[1].Y != panelTopRow+3 || layout[2].Y != panelTopRow+6 {
+	if layout[0].Y != panelTopRow || layout[1].Y != panelTopRow+5 || layout[2].Y != panelTopRow+11 {
 		t.Fatalf("stack y positions=%d,%d,%d", layout[0].Y, layout[1].Y, layout[2].Y)
 	}
 }
@@ -202,17 +202,16 @@ func TestCompactStackRelayoutsOnGroupToggle(t *testing.T) {
 	if expanded["todo"].VisualColumn != 0 || expanded["working"].VisualColumn != 1 {
 		t.Fatalf("expanded layout=%+v", expanded)
 	}
-	if expanded["backlog"].Height != panelMinimumHeight(app.Model, "backlog", false) {
-		t.Fatalf("expanded backlog height=%d", expanded["backlog"].Height)
-	}
+	assertEvenSpareRows(t, app, expanded, "backlog", "todo")
 
 	app.Model.ToggleCollapsed("20261004-g")
 	collapsed := columns()
 	if collapsed["working"].VisualColumn != 0 {
 		t.Fatalf("working did not join the stack after collapse: %+v", collapsed)
 	}
-	if got, want := collapsed["backlog"].Height, panelMinimumHeight(app.Model, "backlog", false); got != want || got >= expanded["backlog"].Height {
-		t.Fatalf("collapsed backlog height=%d want %d", got, want)
+	assertEvenSpareRows(t, app, collapsed, "backlog", "todo", "working")
+	if collapsed["backlog"].Height >= expanded["backlog"].Height {
+		t.Fatalf("collapsed backlog height=%d not below expanded %d", collapsed["backlog"].Height, expanded["backlog"].Height)
 	}
 	if collapsed["todo"].Y != collapsed["backlog"].Y+collapsed["backlog"].Height {
 		t.Fatalf("todo does not follow the shrunk backlog: %+v", collapsed)
@@ -224,12 +223,43 @@ func TestCompactStackRelayoutsOnGroupToggle(t *testing.T) {
 	}
 }
 
+// assertEvenSpareRows checks that the stacked panels of one column each got
+// their content height plus an even share of the spare rows.
+func assertEvenSpareRows(t *testing.T, app *App, panels map[string]boardLayout, states ...string) {
+	t.Helper()
+	low, high := -1, -1
+	for _, state := range states {
+		spare := panels[state].Height - panelMinimumHeight(app.Model, state, false)
+		if spare < 0 {
+			t.Fatalf("%s height=%d below its content", state, panels[state].Height)
+		}
+		if low < 0 || spare < low {
+			low = spare
+		}
+		high = max(high, spare)
+	}
+	if high-low > 1 {
+		t.Fatalf("spare rows of %v differ by %d: %+v", states, high-low, panels)
+	}
+}
+
 func TestCompactExactHeightPanelPagesWithoutHidingFirstRow(t *testing.T) {
 	tasks := []Task{
 		{TaskID: "T0", Title: "t", State: "todo"},
 		{TaskID: "T1", Title: "t", State: "todo"},
 	}
 	app := compactLayoutApp(minColumnWidth*3+2, 40, tasks)
+	// Shrink the board until the first column has no spare rows, so todo is
+	// exactly as tall as its content.
+	columnHeight := 0
+	contentHeight := 0
+	for _, panel := range app.visibleColumnLayout() {
+		if panel.VisualColumn == 0 {
+			columnHeight += panel.Height
+			contentHeight += panelMinimumHeight(app.Model, panel.State, false)
+		}
+	}
+	app.Height -= columnHeight - contentHeight
 	app.Model.FocusState("todo")
 	panel := layoutPanelForState(app.visibleColumnLayout(), "todo")
 	if panel == nil || panel.VisualColumn != 0 || panel.LastVisual || panel.BodyHeight != columnBodyLines(app.Model, "todo") {
