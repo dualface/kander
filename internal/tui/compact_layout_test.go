@@ -271,3 +271,87 @@ func TestCompactExactHeightPanelPagesWithoutHidingFirstRow(t *testing.T) {
 		t.Fatalf("page down scrolled %d selected %q", scroll, app.Model.SelectedIDs["todo"])
 	}
 }
+
+// stackedNavigationApp stacks backlog, an empty todo and working in the first
+// visual column; review and done sit in their own columns.
+func stackedNavigationApp(t *testing.T) *App {
+	t.Helper()
+	tasks := []Task{
+		{TaskID: "B0", Title: "b", State: "backlog"},
+		{TaskID: "B1", Title: "b", State: "backlog"},
+		{TaskID: "W0", Title: "w", State: "working"},
+		{TaskID: "W1", Title: "w", State: "working"},
+		{TaskID: "R0", Title: "r", State: "review"},
+	}
+	app := compactLayoutApp(minColumnWidth*3+2, 40, tasks)
+	columns := map[string]int{}
+	for _, panel := range app.visibleColumnLayout() {
+		columns[panel.State] = panel.VisualColumn
+	}
+	if columns["backlog"] != 0 || columns["todo"] != 0 || columns["working"] != 0 || columns["review"] != 1 {
+		t.Fatalf("unexpected stack: %+v", columns)
+	}
+	return app
+}
+
+func assertFocus(t *testing.T, app *App, state, taskID string) {
+	t.Helper()
+	if got := app.Model.CurrentState(); got != state {
+		t.Fatalf("focused state=%s want %s", got, state)
+	}
+	if got := app.Model.SelectedIDs[state]; got != taskID {
+		t.Fatalf("selected %s in %s, want %s", got, state, taskID)
+	}
+}
+
+func TestCompactStackUpDownCrossesPanelsInColumn(t *testing.T) {
+	app := stackedNavigationApp(t)
+	app.Model.SelectTaskIndex("working", 0)
+	app.handleBoardKey("up")
+	assertFocus(t, app, "backlog", "B1")
+	app.handleBoardKey("k")
+	assertFocus(t, app, "backlog", "B0")
+
+	app.handleBoardKey("down")
+	app.handleBoardKey("j")
+	assertFocus(t, app, "working", "W0")
+	app.handleBoardKey("down")
+	assertFocus(t, app, "working", "W1")
+}
+
+func TestCompactStackUpDownLeavesEmptyPanel(t *testing.T) {
+	app := stackedNavigationApp(t)
+	app.Model.FocusState("todo")
+	app.handleBoardKey("up")
+	assertFocus(t, app, "backlog", "B1")
+
+	app.Model.FocusState("todo")
+	app.handleBoardKey("down")
+	assertFocus(t, app, "working", "W0")
+}
+
+func TestCompactStackUpDownStopsAtColumnEnds(t *testing.T) {
+	app := stackedNavigationApp(t)
+	app.Model.SelectTaskIndex("backlog", 0)
+	app.handleBoardKey("up")
+	assertFocus(t, app, "backlog", "B0")
+
+	app.Model.SelectTaskIndex("working", 1)
+	app.handleBoardKey("down")
+	assertFocus(t, app, "working", "W1")
+
+	app.Model.SelectTaskIndex("review", 0)
+	app.handleBoardKey("up")
+	assertFocus(t, app, "review", "R0")
+}
+
+func TestWideBoardUpDownStaysInPanel(t *testing.T) {
+	tasks := []Task{
+		{TaskID: "B0", Title: "b", State: "backlog"},
+		{TaskID: "T0", Title: "t", State: "todo"},
+	}
+	app := compactLayoutApp(minColumnWidth*5+4, 40, tasks)
+	app.Model.SelectTaskIndex("todo", 0)
+	app.handleBoardKey("up")
+	assertFocus(t, app, "todo", "T0")
+}

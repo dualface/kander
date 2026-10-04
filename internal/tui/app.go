@@ -713,9 +713,9 @@ func (a *App) handleBoardKey(key string) {
 	case "right", "l", "L", "tab":
 		a.Model.MoveColumn(1)
 	case "up", "k", "K":
-		a.Model.MoveTask(-1)
+		a.moveTask(-1)
 	case "down", "j", "J":
-		a.Model.MoveTask(1)
+		a.moveTask(1)
 	case "pgup":
 		a.page(-1)
 	case "pgdn":
@@ -767,6 +767,56 @@ func (a *App) handleBoardKey(key string) {
 	case "c":
 		a.openChat()
 	}
+}
+
+// moveTask moves the focus one stop. In compact mode, once the focused panel
+// has no stop left in that direction, the focus continues into the nearest
+// non-empty panel stacked in the same visual column, never into another
+// column and never wrapping around.
+func (a *App) moveTask(delta int) {
+	state := a.Model.CurrentState()
+	if a.atPanelEdge(state, delta) {
+		if next := a.stackedNeighbor(state, delta); next != "" {
+			a.Model.FocusState(next)
+			a.Model.MoveFocusEdge(delta < 0)
+			return
+		}
+	}
+	a.Model.MoveTask(delta)
+}
+
+// atPanelEdge reports whether moving delta stops would leave the panel.
+func (a *App) atPanelEdge(state string, delta int) bool {
+	lines := columnRows(a.Model, state)
+	stops := focusStops(lines)
+	if len(stops) == 0 {
+		return true
+	}
+	a.Model.ensureColumnFocus(state, lines)
+	next := a.Model.focusStopIndex(state, stops) + delta
+	return next < 0 || next >= len(stops)
+}
+
+// stackedNeighbor returns the nearest panel in the delta direction that is
+// stacked in the same visual column as state and has a focus stop.
+func (a *App) stackedNeighbor(state string, delta int) string {
+	layout := a.visibleColumnLayout()
+	current := slices.IndexFunc(layout, func(panel boardLayout) bool {
+		return panel.State == state
+	})
+	if current < 0 {
+		return ""
+	}
+	column := layout[current].VisualColumn
+	for index := current + delta; index >= 0 && index < len(layout); index += delta {
+		if layout[index].VisualColumn != column {
+			return ""
+		}
+		if len(focusStops(columnRows(a.Model, layout[index].State))) > 0 {
+			return layout[index].State
+		}
+	}
+	return ""
 }
 
 func (a *App) toggleFocusedGroup() {
