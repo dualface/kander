@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func compactLayoutApp(width, height int, tasks []Task) *App {
 	app := newApp(false, 30, pageContext{
@@ -33,24 +36,19 @@ func tasksPerActiveState(count int) []Task {
 	return tasks
 }
 
-func TestBalancedPanelHeights(t *testing.T) {
+func TestStackedPanelHeights(t *testing.T) {
 	for _, test := range []struct {
 		minimums []int
 		total    int
 		want     []int
 	}{
-		{minimums: []int{3, 3, 3}, total: 17, want: []int{6, 6, 5}},
-		{minimums: []int{4, 12}, total: 20, want: []int{8, 12}},
-		{minimums: []int{12, 4, 4}, total: 25, want: []int{12, 7, 6}},
+		{minimums: []int{3, 3, 3}, total: 17, want: []int{3, 3, 11}},
+		{minimums: []int{12, 4}, total: 20, want: []int{12, 8}},
+		{minimums: []int{7}, total: 25, want: []int{25}},
 	} {
-		got := balancedPanelHeights(test.minimums, test.total)
-		if len(got) != len(test.want) {
-			t.Fatalf("got %v want %v", got, test.want)
-		}
-		for index := range got {
-			if got[index] != test.want[index] {
-				t.Fatalf("minimums=%v total=%d got=%v want=%v", test.minimums, test.total, got, test.want)
-			}
+		got := stackedPanelHeights(test.minimums, test.total)
+		if !slices.Equal(got, test.want) {
+			t.Fatalf("minimums=%v total=%d got=%v want=%v", test.minimums, test.total, got, test.want)
 		}
 	}
 }
@@ -75,7 +73,7 @@ func TestCompactLayoutStacksOnlyAfterWidthReduction(t *testing.T) {
 		t.Fatalf("visible panels=%d", len(layout))
 	}
 	wantColumns := []int{0, 0, 0, 1, 2}
-	wantHeights := []int{6, 6, 5}
+	wantHeights := []int{3, 3, 11}
 	for index, want := range wantColumns {
 		if layout[index].State != activeStates[index] || layout[index].VisualColumn != want {
 			t.Fatalf("panel %d=%+v", index, layout[index])
@@ -86,7 +84,7 @@ func TestCompactLayoutStacksOnlyAfterWidthReduction(t *testing.T) {
 			t.Fatalf("stack height %d=%d want %d", index, layout[index].Height, want)
 		}
 	}
-	if layout[0].Y != panelTopRow || layout[1].Y != panelTopRow+6 || layout[2].Y != panelTopRow+12 {
+	if layout[0].Y != panelTopRow || layout[1].Y != panelTopRow+3 || layout[2].Y != panelTopRow+6 {
 		t.Fatalf("stack y positions=%d,%d,%d", layout[0].Y, layout[1].Y, layout[2].Y)
 	}
 }
@@ -177,5 +175,51 @@ func TestCompactLayoutStacksBelowNarrowColumnStrip(t *testing.T) {
 	todo := tabCellByState(t, app.columnTabCells(app.Width), "todo")
 	if state := app.hitColumnAt(todo.x, panelTopRow); state != "todo" {
 		t.Fatalf("tab strip target=%q", state)
+	}
+}
+
+func TestCompactStackRelayoutsOnGroupToggle(t *testing.T) {
+	var tasks []Task
+	for index := range 4 {
+		tasks = append(tasks, Task{TaskID: "B" + itoa(index), Title: "b", State: "backlog", TaskGroup: "20261004-g"})
+	}
+	tasks = append(tasks, Task{TaskID: "B9", Title: "b", State: "backlog"})
+	for index := range 2 {
+		tasks = append(tasks,
+			Task{TaskID: "T" + itoa(index), Title: "t", State: "todo"},
+			Task{TaskID: "W" + itoa(index), Title: "w", State: "working"})
+	}
+	app := compactLayoutApp(minColumnWidth*3+2, 40, tasks)
+	app.Model.FocusState("backlog")
+	columns := func() map[string]boardLayout {
+		panels := map[string]boardLayout{}
+		for _, panel := range app.visibleColumnLayout() {
+			panels[panel.State] = panel
+		}
+		return panels
+	}
+	expanded := columns()
+	if expanded["todo"].VisualColumn != 0 || expanded["working"].VisualColumn != 1 {
+		t.Fatalf("expanded layout=%+v", expanded)
+	}
+	if expanded["backlog"].Height != panelMinimumHeight(app.Model, "backlog", false) {
+		t.Fatalf("expanded backlog height=%d", expanded["backlog"].Height)
+	}
+
+	app.Model.ToggleCollapsed("20261004-g")
+	collapsed := columns()
+	if collapsed["working"].VisualColumn != 0 {
+		t.Fatalf("working did not join the stack after collapse: %+v", collapsed)
+	}
+	if got, want := collapsed["backlog"].Height, panelMinimumHeight(app.Model, "backlog", false); got != want || got >= expanded["backlog"].Height {
+		t.Fatalf("collapsed backlog height=%d want %d", got, want)
+	}
+	if collapsed["todo"].Y != collapsed["backlog"].Y+collapsed["backlog"].Height {
+		t.Fatalf("todo does not follow the shrunk backlog: %+v", collapsed)
+	}
+
+	app.Model.ToggleCollapsed("20261004-g")
+	if reopened := columns(); reopened["working"].VisualColumn != 1 || reopened["backlog"].Height != expanded["backlog"].Height {
+		t.Fatalf("expand did not restore the stack: %+v", reopened)
 	}
 }

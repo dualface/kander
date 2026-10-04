@@ -660,10 +660,7 @@ func (a *App) buildColumnLayout(states []string, visualCount int, compact bool) 
 			cursor++
 		}
 
-		heights := []int{areaHeight}
-		if len(group) > 1 {
-			heights = balancedPanelHeights(minimums, areaHeight)
-		}
+		heights := stackedPanelHeights(minimums, areaHeight)
 		y := areaTop
 		for index, state := range group {
 			skipTop := tabs && index == 0

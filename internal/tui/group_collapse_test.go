@@ -450,7 +450,9 @@ func TestCompactClusterUsesSameRows(t *testing.T) {
 	}
 	app := compactLayoutApp(minColumnWidth*2+1, 80, tasks)
 	app.Model.FocusState("todo")
+	// A stacked panel fits its content, which omits the trailing gap row.
 	rows := columnRows(app.Model, "todo")
+	rows = rows[:columnBodyLines(app.Model, "todo")]
 	panel := layoutPanelForState(app.visibleColumnLayout(), "todo")
 	if panel == nil || panel.BodyHeight < len(rows) {
 		t.Fatalf("panel %#v rows %d", panel, len(rows))

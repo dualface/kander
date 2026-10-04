@@ -86,39 +86,19 @@ func panelMinimumHeight(model *BoardModel, state string, skipTop bool) int {
 	return height
 }
 
-// balancedPanelHeights shares total height as evenly as possible without
-// shrinking any panel below the height required to show all of its contents.
-func balancedPanelHeights(minimums []int, total int) []int {
+// stackedPanelHeights gives every panel but the last its full-content
+// height and leaves the rest of the column to the last panel, so a panel
+// shrinks as soon as its content does (for example after a group collapses).
+// The caller only stacks panels whose minimums fit in total.
+func stackedPanelHeights(minimums []int, total int) []int {
 	heights := append([]int(nil), minimums...)
 	if len(heights) == 0 {
 		return heights
 	}
-	remaining := total
-	active := make([]int, len(heights))
-	for i := range active {
-		active[i] = i
+	used := 0
+	for _, height := range heights[:len(heights)-1] {
+		used += height
 	}
-	for len(active) > 0 {
-		share := remaining / len(active)
-		next := active[:0]
-		for _, index := range active {
-			if minimums[index] > share {
-				heights[index] = minimums[index]
-				remaining -= minimums[index]
-				continue
-			}
-			next = append(next, index)
-		}
-		if len(next) == len(active) {
-			for _, index := range next {
-				heights[index] = share
-			}
-			for _, index := range next[:remaining-share*len(next)] {
-				heights[index]++
-			}
-			break
-		}
-		active = next
-	}
+	heights[len(heights)-1] = total - used
 	return heights
 }
