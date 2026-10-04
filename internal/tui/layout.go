@@ -64,18 +64,7 @@ func effectiveDesiredColumns(total, desired int) int {
 // columnBodyLines is the column content height. A trailing gap is omitted,
 // matching the old minimum that dropped the blank under the last card.
 func columnBodyLines(model *BoardModel, state string) int {
-	lines := columnRows(model, state)
-	n := len(lines)
-	if n == 0 {
-		return 1
-	}
-	if lines[n-1].kind == "gap" {
-		n--
-	}
-	if n < 1 {
-		return 1
-	}
-	return n
+	return max(1, columnContentLines(columnRows(model, state)))
 }
 
 func panelMinimumHeight(model *BoardModel, state string, skipTop bool) int {

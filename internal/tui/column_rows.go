@@ -73,6 +73,23 @@ func columnRows(m *BoardModel, state string) []columnLine {
 	return lines
 }
 
+// columnContentLines counts the rows up to the last card or header. The
+// trailing gap is never a focus stop and panels sized to their content
+// leave it out.
+func columnContentLines(lines []columnLine) int {
+	n := len(lines)
+	if n > 0 && lines[n-1].kind == "gap" {
+		n--
+	}
+	return n
+}
+
+// columnMaxScroll stops scrolling at the last content row, so a panel
+// sized to its content never scrolls its first row out for the trailing gap.
+func columnMaxScroll(lines []columnLine, bodyHeight int) int {
+	return max(0, columnContentLines(lines)-bodyHeight)
+}
+
 func focusStops(lines []columnLine) []focusStop {
 	stops := make([]focusStop, 0, len(lines)/cardHeight+1)
 	for i, line := range lines {
@@ -305,10 +322,7 @@ func columnWindow(m *BoardModel, state string, bodyHeight int) (lines []columnLi
 		} else if stop.start+stop.height > scroll+bodyHeight {
 			scroll = stop.start + stop.height - bodyHeight
 		}
-		maxScroll := len(lines) - bodyHeight
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
+		maxScroll := columnMaxScroll(lines, bodyHeight)
 		if scroll < 0 {
 			scroll = 0
 		}
@@ -389,10 +403,7 @@ func (a *App) pageFocus(direction int) {
 	delta := stops[next].start - stops[current].start
 	a.Model.applyFocusStop(state, stops[next])
 	scroll := a.Model.Scrolls[state] + delta
-	maxScroll := len(lines) - body
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
+	maxScroll := columnMaxScroll(lines, body)
 	if scroll < 0 {
 		scroll = 0
 	}

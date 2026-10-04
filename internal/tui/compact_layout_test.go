@@ -223,3 +223,21 @@ func TestCompactStackRelayoutsOnGroupToggle(t *testing.T) {
 		t.Fatalf("expand did not restore the stack: %+v", reopened)
 	}
 }
+
+func TestCompactExactHeightPanelPagesWithoutHidingFirstRow(t *testing.T) {
+	tasks := []Task{
+		{TaskID: "T0", Title: "t", State: "todo"},
+		{TaskID: "T1", Title: "t", State: "todo"},
+	}
+	app := compactLayoutApp(minColumnWidth*3+2, 40, tasks)
+	app.Model.FocusState("todo")
+	panel := layoutPanelForState(app.visibleColumnLayout(), "todo")
+	if panel == nil || panel.VisualColumn != 0 || panel.LastVisual || panel.BodyHeight != columnBodyLines(app.Model, "todo") {
+		t.Fatalf("todo is not an exact-height stacked panel: %+v", panel)
+	}
+	app.pageFocus(1)
+	app.View()
+	if scroll := app.Model.Scrolls["todo"]; scroll != 0 || app.Model.SelectedIDs["todo"] != "T1" {
+		t.Fatalf("page down scrolled %d selected %q", scroll, app.Model.SelectedIDs["todo"])
+	}
+}
