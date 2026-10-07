@@ -1,5 +1,7 @@
 # Multi-Model Routing for Coding Workflows
 
+**English** | [简体中文](multi-model-routing-cn.md)
+
 Kander can use different execution agents for `small` and `large` cards and different reviewers for `PMQA` and `Security`. This makes it possible to optimize for complementary failure modes instead of choosing one model for the whole workflow.
 
 This page describes routing principles and one concrete example profile. Model capabilities and provider names change quickly, so the example is guidance rather than a Kander default.
