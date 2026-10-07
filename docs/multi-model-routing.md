@@ -30,50 +30,83 @@ A model's coding performance depends on its agent harness, tools, context manage
 
 The relevant outcome is the probability that the final merged change is correct. A model that is slightly weaker as a standalone implementer can still be valuable as a reviewer when it catches different errors. Conversely, a very fast implementer is not automatically a good final reviewer.
 
-## Example Profile: quality-max
+## Example Profile: Current Production (October 2026)
 
-As of September 2026, one quality-first profile worth evaluating is:
+This is the configuration the Kander author runs as of 2026-10-07 across QuickTUI, Kander itself, and other projects:
 
-| Kander role | Example model | Rationale |
-| --- | --- | --- |
-| `small` executor | DeepSeek-V4.1-Flash | Strong coding capability with good throughput for contained tasks; keep PMQA independent. |
-| `large` executor | SWE-2 | Allocate the strongest repo-level implementation behavior to high-risk cards. |
-| `PMQA` reviewer | Grok-4.6 | Cross-family review for both DeepSeek and SWE-2 implementations; use the highest practical reasoning setting. |
-| `Security` reviewer | DeepSeek-V4.1-Flash | Specialist second pass on security-triggered work; for `large` cards the author is normally SWE-2, preserving model independence. |
-| fast-lane executor | Cursor Composer 2.5 | Optional throughput-oriented executor for low-risk work, not the default final correctness judge. |
+| Kander role | Agent | Model | Effort |
+| --- | --- | --- | --- |
+| `small` executor | Claude Code | Opus (1M context) | medium |
+| `large` executor | Claude Code | Opus (1M context) | medium |
+| `PMQA` reviewer, `small` | Devin | SWE-2-max | agent default |
+| `PMQA` reviewer, `large` | Cursor | Grok-4.7-xhigh | agent default |
+| `Security` reviewer, `small` | Pi | DeepSeek-V4.1-Flash (via OpenCode Go) | max |
+| `Security` reviewer, `large` | Devin | SWE-2-max | agent default |
 
 The intended flow is:
 
 ```text
-small card -> DeepSeek-V4.1-Flash --\
-                                      -> Grok-4.6 PMQA -> Security when triggered -> closure
-large card -> SWE-2 ----------------/
+small card -> Claude Code (Opus) -> Devin SWE-2-max PMQA  -> Pi DeepSeek-V4.1-Flash Security when triggered -> closure
+large card -> Claude Code (Opus) -> Cursor Grok-4.7 PMQA  -> Devin SWE-2-max Security when triggered       -> closure
 ```
 
-For security-sensitive work, Kander's scale rules normally make the card `large`, giving a useful separation:
+How it applies the principles above:
 
-```text
-SWE-2 implementation -> Grok-4.6 PMQA -> DeepSeek-V4.1-Flash Security
+- **Implementation and judgment are separate.** Every review stage uses a model family other than the executor's: xAI Grok, Cognition SWE, and DeepSeek review Anthropic Opus.
+- **One executor, two review weights.** A single strong executor handles both scales; the scale decides how heavy the review is. `large` cards get a Grok-4.7-xhigh PMQA pass and a SWE-2-max Security pass.
+- **Security is a separate choice.** On `large` cards the PMQA and Security reviewers come from different families, so a card that triggers both gets two independent judgments.
+
+The configuration that produces this profile:
+
+```json
+{
+  "kanban_agents": { "large": "claude", "small": "claude" },
+  "reviewers": {
+    "large": { "PMQA": "cursor", "Security": "devin" },
+    "small": { "PMQA": "devin", "Security": "pi" }
+  },
+  "models": {
+    "kanban": {
+      "claude": { "large_model": "opus[1m]", "large_effort": "medium",
+                  "small_model": "opus[1m]", "small_effort": "medium" }
+    },
+    "review_roles": {
+      "PMQA": {
+        "large_agent": "cursor", "large_model": "grok-4.7-xhigh",
+        "small_agent": "devin", "small_model": "swe-2-max"
+      },
+      "Security": {
+        "large_agent": "devin", "large_model": "swe-2-max",
+        "small_agent": "pi", "small_model": "opencode-go/deepseek-v4.1-flash", "small_effort": "max"
+      }
+    }
+  }
+}
 ```
 
-This yields three independently trained model families across implementation, general review, and security review.
+This is an excerpt of `kander config --json`; only the keys relevant to routing are shown.
 
-## Example Profile: quality-fast
+### What Actually Ran in October
 
-For higher throughput while retaining independent review:
+Profiles change as models and harnesses change. Review runs recorded from 2026-10-01 to 2026-10-07 across four projects (355 runs):
 
-| Kander role | Example model |
-| --- | --- |
-| `small` executor | Cursor Composer 2.5 |
-| `large` executor | SWE-2 |
-| `PMQA` reviewer | Grok-4.6 |
-| `Security` reviewer | DeepSeek-V4.1-Flash |
+| Role | Reviewer | Model | Runs |
+| --- | --- | --- | ---: |
+| PMQA | Grok CLI | grok-4.7 | 106 |
+| PMQA | Grok CLI | grok-4.7-build-fast | 89 |
+| PMQA | Devin | swe-2-max | 34 |
+| PMQA | Cursor | grok-4.7-xhigh | 26 |
+| PMQA | Cursor | gemini-3.8-flash-high | 10 |
+| PMQA | Grok CLI / other | other Grok variants | 5 |
+| Security | Devin | swe-2-max | 85 |
 
-This profile spends the faster executor on contained cards but keeps the quality gates unchanged.
+Claude Code executed 227 of the 247 October cards that record an executor. Through 2026-10-05, PMQA ran mostly on the Grok CLI. From 2026-10-06, Cursor took over most PMQA runs, matching the size-split routing above.
+
+The September 2026 example on this page (SWE-2 for `large`, DeepSeek-V4.1-Flash for `small`, Grok-4.6 for PMQA) has been replaced by this profile. See [Production Stats](production-stats.md) for per-agent totals.
 
 ## Card Review and Planning
 
-When an independent CARD_REVIEW is required before execution, use a model different from the planned large-card executor when possible. For the example profile above, DeepSeek-V4.1-Flash is a useful planning/card-review counterpart to SWE-2.
+When an independent CARD_REVIEW is required before execution, use a model different from the planned large-card executor when possible. In the profile above, where Claude Code executes both scales, a Grok or SWE-2 reviewer keeps the card review independent of the executor.
 
 CARD_REVIEW should focus on requirement completeness, acceptance-criteria quality, scope contradictions, dependencies, and whether the proposed card split can be verified independently. It should not pre-justify the implementation approach for the later PMQA reviewer.
 

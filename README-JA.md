@@ -7,7 +7,13 @@
 厳格なルール駆動型マルチ Agent 並行開発。独立レビューと品質ゲートを標準装備し、自動化された納品品質を徹底担保。
 
 > **実際のエンジニアリングから誕生**  
-> 2026 年 8 月以来、Kander は [QuickTUI](https://quicktui.ai) の本番環境で 1,000 件近い実タスクを完了してきました。実際のコード競合、並行性競合、複雑な不具合の対応を通じて継続的に洗練され、真に信頼できる Agent スケジューリング、独立レビュー、クラッシュリカバリ機構を確立。より安価なモデルを使用した場合でも、納品品質を保証します。
+> 2026 年 8 月以来、Kander は 4 つのプロジェクトで 1,500 件を超える実タスクを完了してきました。そのうち 1,315 件は [QuickTUI](https://quicktui.ai/) の本番環境です。実際のコード競合、並行性競合、複雑な不具合の対応を通じて継続的に洗練され、真に信頼できる Agent スケジューリング、独立レビュー、クラッシュリカバリ機構を確立。より安価なモデルを使用した場合でも、納品品質を保証します。
+>
+> | 1 人 + 6 つの Agent | 68 日 | 4 プロジェクト |
+> | --- | --- | --- |
+> | 完了カード **1,544** 枚 | 独立レビュー **1,484** 回 | レビューバッチの **50%** がブロック |
+>
+> 数値と定義：[Kander 実運用データ](docs/production-stats-ja.md)（2026-10-07 時点）
 >
 > 詳細レポート：[Kander 本番運用の振り返り](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) ｜ [本番運用詳細レポート（英語深度分析）](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md)
 
@@ -58,7 +64,7 @@ kander
 
 ![ターミナルカンバン](docs/kanban-screenshot-01.png)
 
-> 上図のカンバンの内容は私の実プロジェクト [https://quicktui.ai](https://quicktui.ai) のものです。QuickTUI はコンピュータ上のさまざまな Agent をリモート操作するツールで、iOS/Android/macOS/Linux/Windows に対応し、無料で使えます。
+> 上図のカンバンの内容は私の実プロジェクト [https://quicktui.ai](https://quicktui.ai/) のものです。QuickTUI はコンピュータ上のさまざまな Agent をリモート操作するツールで、iOS/Android/macOS/Linux/Windows に対応し、無料で使えます。
 
 ### ターミナルカンバンのショートカット
 
@@ -99,7 +105,26 @@ kander
 
 **A:** Kander ルールを読み込んだ Agent を起動し、「未完了のタスクカードの現在の状態はどうなっていますか？」と直接尋ねてください。
 
-## 5. 応用ドキュメント
+## 5. ste-zh でタスク報告をわかりやすく
+
+Agent の報告を中国語で読む場合は、Kander と [ste-zh](https://github.com/dualface/ste-zh) の併用をおすすめします。ste-zh は、Agent に ASD-STE100（簡略化技術英語）の原則で、中国語で結果を報告させる Agent skill です。
+
+作者の日常の Kander ワークフローでは、この組み合わせが非常にうまく機能しています。Kander の完了報告はもともと実際の検証結果の記録を求めます。ste-zh はすべての返答を読みやすくします：
+
+- 最初に結論を書く；
+- 状態語を固定する（例：「已完成」「未验证」「阻塞」）；
+- 各結論について、検証したかどうかと検証方法を書く；
+- 判断が必要なときは、番号付きの選択肢を示す。
+
+多数のカードを並行実行していても、各報告を数秒で読み、完了したもの、未検証のもの、判断待ちのものがわかります。
+
+Claude Code へのインストール（ディレクトリ名は `ste` である必要があります）。セッションで `/ste` と入力して有効にするか、グローバルルールに書いて毎セッション有効にします：
+
+```bash
+git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
+```
+
+## 6. 応用ドキュメント
 
 - [レビュー機構と完了ゲート](docs/review-disposition-ja.md)
 - [カードトランザクションと障害復旧](docs/card-transactions-ja.md)
@@ -107,10 +132,18 @@ kander
 - [タスク永続化ディスパッチプロトコル](docs/durable-dispatch-ja.md)
 - [GitHub Issue 取り込みと結果プロトコル](docs/github-issue-import-ja.md)
 
-## 6. ライセンス
+## 7. ライセンス
 
 本プロジェクトは MIT License を使用しています。[LICENSE](LICENSE) を参照してください。
 
-## 7. 変更履歴
+## 8. 変更履歴
 
 リリースノートは [CHANGELOG.md](CHANGELOG.md) を参照してください。
+
+## 9. 作者のその他のプロジェクト
+
+Kander の作者 [dualface](https://github.com/dualface) によるその他のプロジェクト：
+
+- [ste-zh](https://github.com/dualface/ste-zh)：ASD-STE100 の原則で Agent に中国語で結果を報告させる skill。結論ファースト、固定の状態語、検証状態の明記。
+- [Ullage](https://github.com/dualface/ullage-cli)：Claude、ChatGPT、Grok、Cursor などのサブスクリプション使用量を確認するローカルデーモン + CLI。
+- [QuickTUI](https://quicktui.ai/)：あらゆるコーディング Agent のための、スマホ上の完全なターミナル。セルフホストで直接接続。1 台のホストまで無料。

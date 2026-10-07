@@ -7,7 +7,13 @@
 Strict rule-driven multi-agent parallel development with built-in independent review and delivery gates to ensure automated delivery quality.
 
 > **Born from real engineering**  
-> Since August 2026, Kander has driven nearly 1,000 production tasks in the [QuickTUI](https://quicktui.ai) production environment. Refined through handling actual code conflicts, race conditions, and complex bugs, it establishes truly reliable agent orchestration, independent review, and crash recovery. Even with lower-cost models, it guarantees delivery quality.
+> Since August 2026, Kander has driven more than 1,500 real tasks across 4 projects, 1,315 of them in the [QuickTUI](https://quicktui.ai/) production environment. Refined through handling actual code conflicts, race conditions, and complex bugs, it establishes truly reliable agent orchestration, independent review, and crash recovery. Even with lower-cost models, it guarantees delivery quality.
+>
+> | One developer + 6 agents | 68 days | 4 projects |
+> | --- | --- | --- |
+> | **1,544** task cards done | **1,484** independent review runs | **50%** of review batches blocked |
+>
+> Numbers and definitions: [Production Stats](docs/production-stats.md) (as of 2026-10-07)
 >
 > In-depth reading: [Kander in Production](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) | [Full Production Retrospective](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md) (Deep Dive)
 
@@ -58,7 +64,7 @@ kander
 
 ![Terminal kanban](docs/kanban-screenshot-01.png)
 
-> The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
+> The board contents above come from my real project [https://quicktui.ai](https://quicktui.ai/). QuickTUI is a tool for remotely operating the agents on your computer; it supports iOS/Android/macOS/Linux/Windows and is free to use.
 
 ### Terminal Kanban Shortcuts
 
@@ -99,7 +105,26 @@ On the terminal board, press `g` to open the GitHub issue list in an overlay.
 
 **A:** Start an agent (with Kander rules loaded) and directly ask for the current status and progress of any unfinished task cards.
 
-## 5. Advanced Documentation
+## 5. Clearer Task Reports with ste-zh
+
+If you read agent reports in Chinese, pair Kander with [ste-zh](https://github.com/dualface/ste-zh). It is an agent skill that makes the agent report results by ASD-STE100 (Simplified Technical English) principles, in Chinese.
+
+In the author's daily Kander workflow, this combination works very well. Kander's completion reports already require actual verification results; ste-zh makes every reply easy to scan:
+
+- the conclusion comes first;
+- status words are fixed, such as "completed", "not verified", and "blocked";
+- every conclusion states whether it was verified, and how;
+- when you must decide, the options are numbered.
+
+When many cards run in parallel, you can read each report in seconds and know what is done, what is unverified, and what needs your decision.
+
+Install it for Claude Code (the directory name must be `ste`), then type `/ste` in a session, or load it from your global agent rules so every session uses it:
+
+```bash
+git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
+```
+
+## 6. Advanced Documentation
 
 - [Review Disposition & Completion Gate](docs/review-disposition.md)
 - [Card Transactions & Crash Recovery](docs/card-transactions.md)
@@ -107,10 +132,18 @@ On the terminal board, press `g` to open the GitHub issue list in an overlay.
 - [Durable Dispatch Protocol](docs/durable-dispatch.md)
 - [GitHub Issue Import & Result Protocol](docs/github-issue-import.md)
 
-## 6. License
+## 7. License
 
 This project is under the MIT License; see [LICENSE](LICENSE).
 
-## 7. Changelog
+## 8. Changelog
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md).
+
+## 9. More Projects by the Author
+
+Other projects by [dualface](https://github.com/dualface), the author of Kander:
+
+- [ste-zh](https://github.com/dualface/ste-zh): an agent skill that makes agents report results in Chinese by ASD-STE100 principles: conclusion first, fixed status words, explicit verification state.
+- [Ullage](https://github.com/dualface/ullage-cli): a local daemon and CLI that shows subscription usage for Claude, ChatGPT, Grok, Cursor, and more.
+- [QuickTUI](https://quicktui.ai/): a full terminal for any coding agent, on your phone. Self-hosted, direct connection. Free for a single host.

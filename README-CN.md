@@ -6,10 +6,17 @@
 
 强规则驱动的多 Agent 并行开发，内置独立审查与交付门禁，充分保障自动化交付质量。
 
-> **从真实工程中诞生**  
-> 自 2026 年 8 月以来，Kander 已在 [QuickTUI](https://quicktui.ai) 生产环境中完成了近千个真实开发任务。在处理实际的代码冲突、并发竞争和复杂缺陷时，不断优化提炼，最终沉淀出了一套真正可靠的 Agent 调度、独立审查与崩溃恢复机制。即便使用更廉价的模型，也能保证交付质量。
+> **从真实工程中诞生**
 >
-> 深入阅读：[Kander 生产实践回顾](docs/KANDER_PRODUCTION_RETROSPECTIVE.md) ｜ [完整分析报告（英文深度分析）](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md)
+> 自 2026 年 8 月以来，Kander 已在 4 个项目中完成了 1,500 多个真实开发任务，其中 1,315 个来自 [QuickTUI](https://quicktui.ai/) 生产环境。在处理实际的代码冲突、并发竞争和复杂缺陷时，不断优化提炼，最终沉淀出了一套真正可靠的 Agent 调度、独立审查与崩溃恢复机制。即便使用更廉价的模型，也能保证交付质量。
+>
+> | 1 人 + 6 个 Agent       | 68 天                 | 4 个项目                 |
+> | ----------------------- | --------------------- | ------------------------ |
+> | 完成 **1,544** 张任务卡 | 独立审核 **1,484** 次 | **50%** 的审核批次被拦下 |
+>
+> 数据与口径：[Kander 实战数据](docs/production-stats-cn.md)（统计至 2026-10-07）
+>
+> 深入阅读：[Kander 生产实践回顾](docs/KANDER_PRODUCTION_RETROSPECTIVE_CN.md) ｜ [完整分析报告（英文深度分析）](docs/KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md)
 
 ![Kander 工作流](docs/workflow-cn.svg)
 
@@ -58,7 +65,7 @@ kander
 
 ![终端看板](docs/kanban-screenshot-01.png)
 
-> 上图看板内容来自我的真实项目 [https://quicktui.ai](https://quicktui.ai)。QuickTUI 是一个远程操作电脑上各种 Agent 的工具，支持 iOS/Android/macOS/Linux/Windows，免费使用。
+> 上图看板内容来自我的真实项目 [https://quicktui.ai](https://quicktui.ai/)。QuickTUI 是一个远程操作电脑上各种 Agent 的工具，支持 iOS/Android/macOS/Linux/Windows，免费使用。
 
 ### 终端看板快捷键
 
@@ -99,7 +106,26 @@ kander
 
 **A:** 启动任意已安装 Kander 规则的 Agent，直接询问它未完成任务卡的当前状态与进展即可。
 
-## 5. 进阶文档
+## 5. 搭配 ste-zh，任务汇报一眼看懂
+
+推荐把 Kander 和 [ste-zh](https://github.com/dualface/ste-zh) 一起用。ste-zh 是一个 Agent skill，让 Agent 按 ASD-STE100（简化技术英语）的原则，用中文汇报结果。
+
+作者日常用 Kander 时搭配 ste-zh，任务汇报的效果非常理想。Kander 的完成报告本来就要求如实记录验证结果；ste-zh 让每一条回复都容易读：
+
+- 第一句写结论；
+- 状态词固定，例如「已完成」「未验证」「阻塞」；
+- 每个结论都写明是否验证，以及怎样验证；
+- 需要你决定时，列出编号选项。
+
+多张卡并行跑的时候，每份汇报几秒钟就能读完：哪些完成了，哪些没验证，哪些等你拍板。
+
+Claude Code 安装方式如下（目录名必须是 `ste`）。安装后在会话里输入 `/ste` 开启；也可以写进全局规则，让每个会话默认开启。
+
+```bash
+git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
+```
+
+## 6. 进阶文档
 
 - [审查机制与完成门禁](docs/review-disposition-cn.md)
 - [卡片事务与崩溃恢复](docs/card-transactions-cn.md)
@@ -107,10 +133,18 @@ kander
 - [任务持久化派发协议](docs/durable-dispatch-cn.md)
 - [GitHub Issue 导入与结果协议](docs/github-issue-import-cn.md)
 
-## 6. 许可
+## 7. 许可
 
 本项目使用 MIT License，见 [LICENSE](LICENSE)。
 
-## 7. 更新日志
+## 8. 更新日志
 
 发布说明见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 9. 作者的其他项目
+
+以下是 Kander 作者 [dualface](https://github.com/dualface) 的其他项目：
+
+- [ste-zh](https://github.com/dualface/ste-zh)：让 Agent 按 ASD-STE100 原则用中文汇报结果，结论先行、状态词固定、写明是否验证。
+- [Ullage](https://github.com/dualface/ullage-cli)：本地守护进程 + CLI，查看 Claude、ChatGPT、Grok、Cursor 等订阅的用量。
+- [QuickTUI](https://quicktui.ai/)：手机上的完整终端，适用于任何编码 Agent。自托管直连，单台主机免费。

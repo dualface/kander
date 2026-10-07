@@ -1,6 +1,7 @@
 # Kander × QuickTUI: A Production Retrospective on Nearly 1,000 Real-World AI Coding Tasks
 
 **Analysis date:** 2026-09-18  
+**Note:** This report is a snapshot as of 2026-09-18. "Nearly 1,000 tasks" below is the user's estimate at that time; the QuickTUI kanban holds 881 cards dated 2026-08-01 to 2026-09-18 (`done/` and `archived/`, counted 2026-10-07). For current numbers, see [Production Stats](production-stats.md).  
 **Primary time range:** 2026-08-01 to 2026-09-18  
 **Source repository:** `dualface/quicktui-mono`  
 **Task/work-record repository:** `dualface/quicktui-mono-kanban`  
