@@ -72,7 +72,7 @@ kander
 | `/`               | 过滤/搜索卡片                             |
 | `r`               | 手动刷新看板数据                          |
 
-进阶阅读：幻灯片 [如何高效推进任务](docs/how-to-advance-tasks-efficiently-cn.pdf) (PDF)。
+进阶阅读：[如何高效推进任务](docs/how-to-advance-tasks-efficiently-cn.md) ([PDF 幻灯片](docs/how-to-advance-tasks-efficiently-cn.pdf))。
 
 ## 2. 常用命令
 

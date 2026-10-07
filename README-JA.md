@@ -72,7 +72,7 @@ kander
 | `/`               | タスクカードのフィルタ・検索                             |
 | `r`               | カンバンデータの最新化                                   |
 
-さらに詳しく: スライド [タスクを効率的に進める方法](docs/how-to-advance-tasks-efficiently-ja.pdf) (PDF) を参照してください。
+さらに詳しく: [タスクを効率的に進める方法](docs/how-to-advance-tasks-efficiently-ja.md) ([PDF スライド](docs/how-to-advance-tasks-efficiently-ja.pdf)) を参照してください。
 
 ## 2. 主なコマンド
 

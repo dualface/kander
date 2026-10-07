@@ -72,7 +72,7 @@ kander
 | `/`               | Filter and search task cards                                            |
 | `r`               | Refresh board data                                                      |
 
-Further reading: the slides [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.pdf) (PDF).
+Further reading: [How to Advance Tasks Efficiently](docs/how-to-advance-tasks-efficiently-en.md) ([PDF slides](docs/how-to-advance-tasks-efficiently-en.pdf)).
 
 ## 2. Key Commands
 
