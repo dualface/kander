@@ -88,19 +88,20 @@ This is an excerpt of `kander config --json`; only the keys relevant to routing 
 
 ### What Actually Ran in October
 
-Profiles change as models and harnesses change. Review runs recorded from 2026-10-01 to 2026-10-07 across four projects (355 runs):
+Profiles change as models and harnesses change. Review runs recorded from 2026-10-01 to 2026-10-07 across five projects (359 runs):
 
 | Role | Reviewer | Model | Runs |
 | --- | --- | --- | ---: |
 | PMQA | Grok CLI | grok-4.7 | 106 |
 | PMQA | Grok CLI | grok-4.7-build-fast | 89 |
-| PMQA | Devin | swe-2-max | 34 |
-| PMQA | Cursor | grok-4.7-xhigh | 26 |
+| PMQA | Devin | swe-2-max | 35 |
+| PMQA | Cursor | grok-4.7-xhigh | 28 |
 | PMQA | Cursor | gemini-3.8-flash-high | 10 |
 | PMQA | Grok CLI / other | other Grok variants | 5 |
 | Security | Devin | swe-2-max | 85 |
+| Security | Pi | opencode-go/deepseek-v4.1-flash | 1 |
 
-Claude Code executed 227 of the 247 October cards that record an executor. Through 2026-10-05, PMQA ran mostly on the Grok CLI. From 2026-10-06, Cursor took over most PMQA runs, matching the size-split routing above.
+Claude Code executed 229 of the 249 October cards. Through 2026-10-05, PMQA ran mostly on the Grok CLI. From 2026-10-06, Cursor took over most PMQA runs, matching the size-split routing above.
 
 The September 2026 example on this page (SWE-2 for `large`, DeepSeek-V4.1-Flash for `small`, Grok-4.6 for PMQA) has been replaced by this profile. See [Production Stats](production-stats.md) for per-agent totals.
 

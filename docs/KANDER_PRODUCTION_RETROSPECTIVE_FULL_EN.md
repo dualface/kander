@@ -1,7 +1,7 @@
 # Kander × QuickTUI: A Production Retrospective on Nearly 1,000 Real-World AI Coding Tasks
 
 **Analysis date:** 2026-09-18  
-**Note:** This report is a snapshot as of 2026-09-18. "Nearly 1,000 tasks" below is the user's estimate at that time; the QuickTUI kanban holds 881 cards dated 2026-08-01 to 2026-09-18 (`done/` and `archived/`, counted 2026-10-07). For current numbers, see [Production Stats](production-stats.md).  
+**Note:** This report is a snapshot as of 2026-09-18. "Nearly 1,000 tasks" below is the user's estimate at that time; the QuickTUI kanban holds 881 cards dated 2026-08-01 to 2026-09-18 (`done/` and `archived/`, counted 2026-10-07). For current numbers, see [Production Stats](production-stats.md). Corrected 2026-10-07: "QT" in task names is the prefix of QuickTUI's own design system (for example `QTSelectSheet`), not the Qt framework; QuickTUI has no Qt/QML code, so the earlier Qt/QML mentions were removed.  
 **Primary time range:** 2026-08-01 to 2026-09-18  
 **Source repository:** `dualface/quicktui-mono`  
 **Task/work-record repository:** `dualface/quicktui-mono-kanban`  
@@ -66,7 +66,7 @@ The repository contains several clearly distinct product and engineering boundar
 - `client/`
 - `cloud/`
 - server / relay / account-related modules
-- iOS / Android / Qt/QML / Web
+- iOS / Android / Web
 - repository-level `AGENTS.md`
 - agent configuration such as `.claude/` and `.codex/`
 
@@ -240,10 +240,9 @@ Model comparison therefore needs task-complexity normalization and finding dispo
 
 Based on task names and reports, the workload includes at least the following categories.
 
-### Desktop / Qt / QML
+### Client UI
 
 - UI layout
-- resource/QRC
 - model management
 - command palette
 - file preview
@@ -726,7 +725,7 @@ For example, future analysis could separate:
 
 ```text
 implementation:
-  UI/QML
+  UI
   Kotlin concurrency
   Go backend
   protocol/codegen

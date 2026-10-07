@@ -4,7 +4,7 @@
 
 Kander is not a multi-agent demo. It is a workflow system that has been shaped by real software development.
 
-Since August 2026, Kander has been used continuously on **QuickTUI**, a real cross-platform product covering iOS, Android, Qt/QML, backend services, networking, authentication, code generation, testing, and integration work. By 2026-10-07, the workflow had handled **1,315 real engineering tasks** on QuickTUI and more than 1,500 across 4 projects. See [Production Stats](production-stats.md) for the numbers and definitions.
+Since August 2026, Kander has been used continuously on **QuickTUI**, a real cross-platform product covering iOS, Android, backend services, networking, authentication, code generation, testing, and integration work. By 2026-10-07, the workflow had handled **1,317 real engineering tasks** on QuickTUI and more than 1,700 across 5 projects. See [Production Stats](production-stats.md) for the numbers and definitions.
 
 That matters because many of Kander's core ideas did not come from a whiteboard. They came from actual failures, review findings, race conditions, broken assumptions, integration conflicts, and recovery cases encountered during day-to-day development.
 
@@ -155,7 +155,7 @@ The goal is not to find one model that is best at everything. It is to let diffe
 
 ## The workflow itself has been trained by production
 
-Across more than 1,500 real tasks, Kander has accumulated experience about:
+Across more than 1,700 real tasks, Kander has accumulated experience about:
 
 - which tasks are safe to parallelize;
 - where hidden lifecycle and concurrency bugs appear;

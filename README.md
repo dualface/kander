@@ -7,11 +7,11 @@
 Strict rule-driven multi-agent parallel development with built-in independent review and delivery gates to ensure automated delivery quality.
 
 > **Born from real engineering**  
-> Since August 2026, Kander has driven more than 1,500 real tasks across 4 projects, 1,315 of them in the [QuickTUI](https://quicktui.ai/) production environment. Refined through handling actual code conflicts, race conditions, and complex bugs, it establishes truly reliable agent orchestration, independent review, and crash recovery. Even with lower-cost models, it guarantees delivery quality.
+> Since August 2026, Kander has driven more than 1,700 real tasks across 5 projects, 1,317 of them in the [QuickTUI](https://quicktui.ai/) production environment. Refined through handling actual code conflicts, race conditions, and complex bugs, it establishes truly reliable agent orchestration, independent review, and crash recovery. Even with lower-cost models, it guarantees delivery quality.
 >
-> | One developer + 6 agents | 68 days | 4 projects |
+> | One developer + 6 agents | 68 days | 5 projects |
 > | --- | --- | --- |
-> | **1,544** task cards done | **1,484** independent review runs | **50%** of review batches blocked |
+> | **1,726** task cards done | **1,694** independent review runs | **49%** of review batches blocked |
 >
 > Numbers and definitions: [Production Stats](docs/production-stats.md) (as of 2026-10-07)
 >

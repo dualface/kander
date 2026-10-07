@@ -2,47 +2,69 @@
 
 [简体中文](production-stats-cn.md) | [日本語](production-stats-ja.md)
 
-As of 2026-10-07. Read-only counts from `kanban/done/` in four projects that use Kander.
+As of 2026-10-07. Read-only counts from `kanban/done/` in five projects that use Kander.
 
 ## In One Line
 
-One developer, 6 agents, 68 days, 4 projects, **1,544 task cards**. 855 of them have structured review records from an independent review by a different agent; older cards used a different review record format and are not in the review counts.
+One developer, 6 agents, 68 days, 5 projects, **1,726 task cards**. 975 of them have structured review records: each review is a separate review run, and in about 80% of reviews the reviewer is a different agent from the executor. Older cards used a different review record format and are not in the review counts.
 
 ## By Project
 
 | Project | What it is | Period | Cards done | Review batches | Batches blocked | Review runs | Blocking findings |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| [QuickTUI](https://quicktui.ai/) | Cross-platform product (iOS / Android / Qt desktop / backend) | 08-01 to 10-07, 68 days | 1,315 | 565 | 257 (45%) | 1,002 | 887 |
+| [QuickTUI](https://quicktui.ai/) | Terminal for coding agents on your phone (iOS / Android / server) | 08-01 to 10-07, 68 days | 1,317 | 567 | 259 (46%) | 1,006 | 889 |
+| Backend service | Server-side project (closed source) | 08-11 to 09-29, 50 days | 180 | 97 | 36 (37%) | 206 | 63 |
 | [Kander](https://github.com/dualface/kander) | This project, built with itself | 09-04 to 10-05, 32 days | 155 | 103 | 69 (67%) | 312 | 280 |
 | Quick Compress | iOS app (closed source) | 10-02 to 10-06, 5 days | 51 | 50 | 29 (58%) | 93 | 64 |
 | [Ullage](https://github.com/dualface/ullage-cli) | Subscription usage CLI | 09-16 to 10-03, 18 days | 23 | 23 | 18 (78%) | 77 | 75 |
-| **Total** | | **68 days** | **1,544** | **741** | **373 (50%)** | **1,484** | **1,306** |
+| **Total** | | **68 days** | **1,726** | **840** | **411 (49%)** | **1,694** | **1,371** |
 
-- About 23 cards per day. Across the 878 cards with start and finish times, the median card took 53 minutes.
-- Half of all review batches were blocked: independent review found blocking issues, and each one had to be dispositioned (fixed, rejected, or deferred) before delivery.
+- About 25 cards per day. Across the 1,718 cards with start and finish times, the median card took 60 minutes.
+- About half of all review batches were blocked: independent review found blocking issues, and each one had to be dispositioned (fixed, rejected, or deferred) before delivery.
+
+## About the Projects
+
+Lines of code are counted with `cloc` over git-tracked files: programming languages only, tests included, protobuf and other generated code excluded, JSON / Markdown / YAML and other data and docs excluded. The creation date is the repository's first commit.
+
+- **QuickTUI**: a terminal product for operating coding agents on your computer from your phone. Repository created 2026-04-14; driven with Kander since August.
+  Architecture: a self-hosted Go server (Linux / macOS / Windows), an iOS client (Swift), an Android client (Kotlin), a WebView component shared by the clients (TypeScript), cloud relay and account services (Go), and a Rust installer.
+  About 1.1 million lines: Go 500k, Swift 240k, Kotlin 200k; about 400k of them are tests.
+- **Backend service**: a closed-source production service. Repository created 2026-06-22.
+  Architecture: a Go server, a TypeScript admin console, PostgreSQL and Redis.
+  About 210k lines: Go 150k, TypeScript 48k; about 90k of them are tests.
+- **Kander**: this project. Repository created 2026-09-04.
+  Architecture: a single Go binary with a CLI and a TUI board (Bubble Tea), for macOS / Linux / Windows on amd64 and arm64.
+  About 137k lines of Go; about 70k of them are tests.
+- **Quick Compress**: a closed-source iOS media compression app. Repository created 2026-10-02; the first TestFlight build shipped on day 4 (10-05).
+  Architecture: a native iOS 26 app (Swift), split into the QCCore / QCMedia / QCUI packages.
+  About 22k lines; about 6.5k of them are tests.
+- **Ullage**: a daemon and CLI that shows usage across AI subscriptions. Repository created 2026-08-27; driven with Kander since mid-September.
+  Architecture: a Rust workspace (7 crates); one binary provides the daemon, CLI, TUI, and an optional HTTP API, for macOS / Linux / Windows.
+  About 60k lines of Rust (unit tests live inside source files and are not counted separately).
 
 ## By Agent
 
 | Agent | Cards executed | Review runs |
 | --- | ---: | ---: |
-| Claude Code | 424 | 164 |
-| Codex | 193 | 357 |
-| Pi | 98 | 158 |
-| Cursor | 72 | 223 |
-| Grok | 48 | 439 |
-| Devin | 42 | 143 |
+| Codex | 561 | 358 |
+| Claude Code | 466 | 166 |
+| Grok | 340 | 508 |
+| Cursor | 203 | 251 |
+| Pi | 113 | 228 |
+| Devin | 42 | 183 |
 
 Every agent both writes code and reviews code written by others. OpenCode also executed 1 card, not listed above.
 
 ## Definitions
 
-- **Cards done**: card directories under `kanban/done/`; `archived/` and `trash/` are excluded.
+- **Cards done**: cards under `kanban/done/`, both directory cards and single-file cards; `archived/` and `trash/` are excluded.
+- **Project scope**: 8 other projects with 1 to 3 cards each (12 cards in total) are not counted.
 - **Period**: first and last date from the card ID date prefix, both days included.
 - **Review batches**: `reviews/batches/<batch>/disposition.json`, deduplicated by batch ID. A batch that covers several cards in a task group is stored under each card and counted once.
 - **Review runs**: one review by one role (such as PMQA or Security), deduplicated by run ID.
 - **Batches blocked**: any review run in the batch reported a blocking finding.
 - **Blocking findings**: entries in the review report's `FINDINGS` (blocking / high / medium tiers); non-blocking suggestions are excluded.
-- **Cards executed**: the card header `OWNER` field. Only the newer card format (since 2026-09) has it: 878 cards.
+- **Cards executed**: the card header `OWNER` field (written as `负责人` on older cards). All 1,726 cards have it.
 - **Card counts measure throughput, not value or difficulty.** Task sizes differ by project; do not compare projects directly.
 
 For the earlier analysis, see [Kander in Production](KANDER_PRODUCTION_RETROSPECTIVE.md) (data through 2026-09-18).
