@@ -10,7 +10,7 @@ One developer, 6 agents, 68 days, 5 projects, **1,726 task cards**. 975 of them 
 
 ## By Project
 
-| Project | What it is | Period | Cards done | Review batches | Batches blocked | Review runs | Blocking findings |
+| Project | What it is | Period | Cards done | Review batches | Batches with must-fix issues | Review runs | Must-fix issues |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | [QuickTUI](https://quicktui.ai/) | Terminal for coding agents on your phone (iOS / Android / server) | 08-01 to 10-07, 68 days | 1,317 | 567 | 259 (46%) | 1,006 | 889 |
 | Backend service | Server-side project (closed source) | 08-11 to 09-29, 50 days | 180 | 97 | 36 (37%) | 206 | 63 |
@@ -20,7 +20,7 @@ One developer, 6 agents, 68 days, 5 projects, **1,726 task cards**. 975 of them 
 | **Total** | | **68 days** | **1,726** | **840** | **411 (49%)** | **1,694** | **1,371** |
 
 - About 25 cards per day. Across the 1,718 cards with start and finish times, the median card took 60 minutes.
-- About half of all review batches were blocked: independent review found blocking issues, and each one had to be dispositioned (fixed, rejected, or deferred) before delivery.
+- About half of all review batches found must-fix issues. Each issue is verified first, then fixed, rejected (with evidence), or deferred; all of them must be handled before delivery. 75% of the disposition records are fixes.
 
 ## About the Projects
 
@@ -62,8 +62,8 @@ Every agent both writes code and reviews code written by others. OpenCode also e
 - **Period**: first and last date from the card ID date prefix, both days included.
 - **Review batches**: `reviews/batches/<batch>/disposition.json`, deduplicated by batch ID. A batch that covers several cards in a task group is stored under each card and counted once.
 - **Review runs**: one review by one role (such as PMQA or Security), deduplicated by run ID.
-- **Batches blocked**: any review run in the batch reported a blocking finding.
-- **Blocking findings**: entries in the review report's `FINDINGS` (blocking / high / medium tiers); non-blocking suggestions are excluded.
+- **Batches with must-fix issues**: any review run in the batch reported a must-fix issue.
+- **Must-fix issues**: Kander sorts review findings into six tiers. The top three (blocking / high / medium) must be handled and go in the report's `FINDINGS`; the bottom three (low / recommend / suggest) are suggestions only and are not counted. 88% of the 1,371 issues are medium: defects that fail only under specific conditions, or documentation that disagrees with the code, dead code, and similar.
 - **Cards executed**: the card header `OWNER` field (written as `负责人` on older cards). All 1,726 cards have it.
 - **Card counts measure throughput, not value or difficulty.** Task sizes differ by project; do not compare projects directly.
 

@@ -11,7 +11,7 @@ Strict rule-driven multi-agent parallel development with built-in independent re
 >
 > | One developer + 6 agents | 68 days | 5 projects |
 > | --- | --- | --- |
-> | **1,726** task cards done | **1,694** independent review runs | **49%** of review batches blocked |
+> | **1,726** task cards done | **1,694** independent review runs | **49%** of review batches found must-fix issues |
 >
 > Numbers and definitions: [Production Stats](docs/production-stats.md) (as of 2026-10-07)
 >
