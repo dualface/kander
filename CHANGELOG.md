@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.2 — 2026-10-10
+
+- Rules wording follows ASD-STE100 (Simplified Technical English) principles. Imperative prohibitions consistently use "never", sentences over 40 words are split into one instruction or fact each with their conditions kept, and the blocked-card and self-resolution condition lists become sub-bullets. A new "Rule Wording" section in `KANDER-LOADING-RULES.md` fixes the modal words: in directive sentences `must` is an obligation, `never` a prohibition, and `may` a permission. The rules' meaning is unchanged.
+- Report and card wording. `KANDER-REPORTING-RULES.md` adds "Report Wording": result first, one fact per sentence, fixed status words (values defined by the template or other rules take precedence), the verification method for each claim, marked uncertainty, locatable evidence, numbered options, and no invented facts. The card self-review checklist adds that each acceptance criterion states one checkable result, conditions come before actions, and one term names one thing. Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.1 — 2026-10-05
 
 - Completion report reminder. With `rules.reporting` on, `kander move` into `done`, `archived`, or `trash` (not a dispatch replay) prints a localized reminder and the completion report template on stderr, prefilled with the task ID, title, absolute final path, final card state, and card language. Stdout and dispatch JSON are unchanged, and TUI moves print nothing. The start, resume, takeover, and notify prompts also carry a short report reminder while the switch is on. Run `kander doctor` after upgrading to update the rules.
