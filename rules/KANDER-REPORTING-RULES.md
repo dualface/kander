@@ -25,3 +25,18 @@ Loaded only when `rules.reporting=true`. This file defines the reporting format 
 - Unresolved issues (<N>): <None; or item by item `[source or category][tier or status] issue; impact: ...; reason: ...`; attach send time and timeout time for timed-out items>
 - Summary: <one-sentence summary>; Code branch: <branch where the code finally lives | N/A>; Final card state: <done | archived (<result>) | trash | working (blocked) | review (blocked)>
 ```
+
+## Report Wording
+
+These points apply to every report this file defines, in any `agent_language`. They follow the writing principles of ASD-STE100 (Simplified Technical English); the standard itself is not required.
+
+- Put the result first. The first sentence of a message states the outcome; process, details, and evidence follow it.
+- Write one fact or one action per sentence. Split a sentence that carries two facts.
+- Use one term for one thing. After choosing a word for a concept, keep it for the whole message and never rotate synonyms.
+- Write a status with a fixed word. Where the template or another rule file defines a value (for example `None`, `N/A`, `Not executed`, `PASS`, `FAIL`, a final card state), use it. Elsewhere use only these words, or one fixed equivalent of each in the report language: completed, partially completed, in progress, verified, not verified, failed, skipped, blocked, unconfirmed. Completed never implies verified; write "completed, not verified" when no check ran.
+- Give each verified claim its method: the command or check and its actual result. Quote the relevant failing lines verbatim; redact credentials and personal data.
+- Mark a fact that was not checked as unconfirmed and name how to confirm it. Never hide uncertainty behind words such as "probably" or "should be".
+- Never narrate the process ("first I ..., then I ..."). Give the results and the evidence the reader needs.
+- Make evidence locatable: `path:line` for code, the full SHA for a commit, the full command line for a command.
+- When the user must decide, give numbered options. Each option states one action and its consequence. Put the recommended option first, unless a rule file fixes the option list and its order.
+- Take every fact from a source: the user's input, file contents, or tool output. List a missing fact under `Unresolved issues` or as a question; never fill it in.

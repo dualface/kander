@@ -59,6 +59,10 @@ The three largest rule files are protocols, not reading material. Load the secti
 | Card creator (intake) | `KANDER-TASK-INTAKE-RULES.md`; `KANDER-KANBAN-RULES.md` "Task Scale and Grouping" including "Post-Creation Self-Review"; when `task_groups` and `git` are enabled, `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups", "Dependencies Between Task Cards", "Running Task Cards in Parallel" | When `task_groups` and `git` are enabled, the rest of `KANDER-TASK-GROUP-RULES.md` only when the creator also orchestrates; under intake option 1 the creator also executes, so it reads the "Executing agent" rows and, for a group, the "Orchestrator" row including "Self-Executed Groups" |
 | Main agent running a review | `KANDER-REVIEW-RULES.md` from "Reviewer Selection" through "Review Stages", "Main Agent Verification Duty", "Conclusions and Failure Handling" | "Controlled Plans, Author Dispositions, and Batch Closure" when closing a batch; "Review Profiles" and the templates when writing the task context |
 
+## Rule Wording
+
+In a sentence that directs the agent, `must` marks an obligation, `never` marks a prohibition, and `may` marks a permission. A plain imperative sentence is an obligation. A sentence that describes the behaviour of a tool, the system, or a card uses these words in their ordinary sense, and `can` states a capability.
+
 ## Rule Precedence
 
 - Explicit user instructions in the current session > the project-level `AGENTS.md` or `CLAUDE.md` closest to the target file > the user's own global rules > enabled Kander modules and the current scope's configuration > module defaults.
