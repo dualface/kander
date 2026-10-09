@@ -4,7 +4,7 @@ This file is the Kander rules entry. It is short on purpose: it names what every
 
 ## Every Session
 
-1. Run `kander config --json` for the current scope and read the normalized configuration. `kander` means the entry of the current scope: a global install uses `kander` on PATH, a project install uses `<main worktree>/.kander/bin/kander` and never a global command from PATH. If reading or validating the configuration fails, stop the affected Kander operations and report; do not guess switch values. Unrelated work continues.
+1. Run `kander config --json` for the current scope and read the normalized configuration. `kander` means the entry of the current scope: a global install uses `kander` on PATH, a project install uses `<main worktree>/.kander/bin/kander` and never a global command from PATH. If reading or validating the configuration fails, stop the affected Kander operations and report; never guess switch values. Unrelated work continues.
 2. Read `KANDER-BASE-RULES.md`. It is the tool protocol and is not controlled by the module switches.
 3. Read `KANDER-LOADING-RULES.md`. It holds the scope paths, the module switch table, the reading map by role, and the rule precedence. Load the other rule files only when it says to or the task needs them, and never load a disabled module through cross references unless the user explicitly asks.
 

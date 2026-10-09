@@ -22,10 +22,10 @@ This file constrains the tool and the language used with the user. It does not p
 
 ## Installation and Task Files
 
-- Automation must invoke the command root's `kander` through a process API argv array; do not assemble shell command strings.
+- Automation must invoke the command root's `kander` through a process API argv array; never assemble shell command strings.
 - The executing agent and the reviewer read the complete task from a UTF-8 temporary file named by a one-line instruction on the command line. The file asks the agent to delete it when done; a failed deletion does not affect the result.
 
 ## Permissions and Boundaries
 
-- Review-private directories and files are accessible only to the current user, except that on Windows the review runtime also grants read-only access to a local sandbox group a built-in reviewer definition names (Codex); the configuration, the kanban board, Git exclude, and the review runtime all reject symlinks, junctions, and other reparse points, and a failed safety check stops the operation.
+- Review-private directories and files are accessible only to the current user. One exception applies on Windows: the review runtime also grants read-only access to a local sandbox group a built-in reviewer definition names (Codex). The configuration, the kanban board, Git exclude, and the review runtime all reject symlinks, junctions, and other reparse points. A failed safety check stops the operation.
 - Bypassing the command to operate on these boundaries directly is forbidden.

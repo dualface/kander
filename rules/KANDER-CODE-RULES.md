@@ -36,9 +36,9 @@ Items 1, 2 and 6 come from commands, not from reading. In the task worktree, wit
 kander check delivery --base BASE --json
 ```
 
-Exit 0 means items 1 and 2 passed. Exit 1 with `status` `fail` means item 1 found whitespace or leftover conflict-marker diagnostics; fix them. Exit 1 with `status` `review-required` (or `fail` that also lists line-count candidates) means item 2 produced candidates: record every `added_over_limit` and `crossed_limit` entry with an explicit disposition (generated file, acceptable exception, or must-split). Kander does not classify source versus generated files. Exit 2 or 3 means the check did not finish; do not record PASS.
+Exit 0 means items 1 and 2 passed. Exit 1 with `status` `fail` means item 1 found whitespace or leftover conflict-marker diagnostics; fix them. Exit 1 with `status` `review-required` (or `fail` that also lists line-count candidates) means item 2 produced candidates: record every `added_over_limit` and `crossed_limit` entry with an explicit disposition (generated file, acceptable exception, or must-split). Kander does not classify source versus generated files. Exit 2 or 3 means the check did not finish; never record PASS.
 
-JSON is the machine-readable contract. Human output is a convenience. Do not substitute a Bash or GNU pipeline (`comm`, `xargs`, `awk`, process substitution, `wc`) for this command.
+JSON is the machine-readable contract. Human output is a convenience. Never substitute a Bash or GNU pipeline (`comm`, `xargs`, `awk`, process substitution, `wc`) for this command.
 
 For item 6, record the build and test commands with the commit they ran at.
 
