@@ -11,4 +11,4 @@ Run the first card first.
 
 Read and follow `snippets/orchestrate-sessions.md` "Orchestrator Sessions" in the command contract. The confirmed plan authorizes development and integration for every task listed above. Continue under the target project's AGENTS.md, the command contract, and the loaded modules.
 
-Before running any `kander` command in this session, read `/rules/snippets/commands/README.md` once. Before the first use of a command, read its contract file. Read `/rules/snippets/orchestrate-sessions.md` before orchestrating.
+Before running any `kander` command in this session, read `/rules/snippets/commands/README.md` once. Before the first use of a command, read its contract file. Read `/rules/snippets/orchestrate-sessions.md` before orchestrating. Read `/rules/snippets/orchestrate-start.md` before starting a task group; later phase snippets are listed in KANDER-LOADING-RULES.md "Phase Snippets".

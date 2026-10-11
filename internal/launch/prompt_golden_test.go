@@ -160,19 +160,50 @@ func TestPromptsNamePhaseSnippets(t *testing.T) {
 			t.Fatalf("%s must carry the read sentence and the execute-single snippet:\n%s", name, text)
 		}
 	}
-	if strings.Count(group, "snippets/") != 2 {
-		t.Fatalf("group start must name only README and execute-single:\n%s", group)
+	member := "`/rules/snippets/execute-group-member.md`"
+	if !strings.Contains(group, member) || strings.Count(group, "snippets/") != 3 {
+		t.Fatalf("group start must name README, execute-single, and execute-group-member:\n%s", group)
 	}
-	review := must(resumePrompt("20260101-golden-task", "go", goldenPaths, "review", card))
-	dispatch := must(DispatchInstruction(goldenPaths, dispatchFor("fix")))
-	for name, text := range map[string]string{"resume review": review, "dispatch": dispatch} {
-		if !strings.Contains(text, sentence) || strings.Contains(strings.ReplaceAll(text, "snippets/commands/README.md", ""), "snippets/") {
-			t.Fatalf("%s must carry only the read sentence:\n%s", name, text)
+	for name, text := range map[string]string{"start": start, "resume working": resume, "takeover": takeover} {
+		if strings.Contains(text, member) {
+			t.Fatalf("single card %s must not name the group member snippet:\n%s", name, text)
 		}
 	}
-	orchestrate := must(orchestratorAgentPrompt([]OrchestrateTask{{TaskID: "20260101-golden-task", State: "todo"}}, []string{card}, "notes", goldenPaths))
-	if !strings.Contains(orchestrate, sentence) || !strings.Contains(orchestrate, "`/rules/snippets/orchestrate-sessions.md`") {
-		t.Fatalf("orchestrate must name the orchestrator snippet:\n%s", orchestrate)
+	groupCard := card + "- TASK_GROUP: 20260101-golden-group\n"
+	groupResume := must(resumeAgentPrompt("20260101-golden-task", "go", goldenPaths, "working", groupCard))
+	groupTakeover := must(takeoverAgentPrompt("20260101-golden-task", "go", goldenPaths, "codex", "working", groupCard))
+	if !strings.Contains(groupResume, member) || !strings.Contains(groupTakeover, member) {
+		t.Fatalf("group member resume and takeover must name execute-group-member:\n%s\n%s", groupResume, groupTakeover)
+	}
+	review := must(resumePrompt("20260101-golden-task", "go", goldenPaths, "review", card))
+	if !strings.Contains(review, sentence) || strings.Contains(strings.ReplaceAll(review, "snippets/commands/README.md", ""), "snippets/") {
+		t.Fatalf("resume of a review card must carry only the read sentence:\n%s", review)
+	}
+	for kind, want := range map[string][]string{
+		"fix":     {"`/rules/snippets/fix-round.md`"},
+		"sync":    {"`/rules/snippets/git-sync.md`", "`/rules/snippets/execute-group-member.md`"},
+		"wrap-up": {"`/rules/snippets/wrap-up.md`"},
+	} {
+		dispatch := must(DispatchInstruction(goldenPaths, dispatchFor(kind)))
+		if !strings.Contains(dispatch, sentence) {
+			t.Fatalf("dispatch %s must carry the read sentence:\n%s", kind, dispatch)
+		}
+		for _, path := range want {
+			if !strings.Contains(dispatch, path) {
+				t.Fatalf("dispatch %s must name %s:\n%s", kind, path, dispatch)
+			}
+		}
+		if strings.Count(dispatch, "snippets/") != len(want)+1 {
+			t.Fatalf("dispatch %s names unexpected snippets:\n%s", kind, dispatch)
+		}
+	}
+	standalone := must(orchestratorAgentPrompt([]OrchestrateTask{{TaskID: "20260101-golden-task", State: "todo"}}, []string{card}, "notes", goldenPaths))
+	if !strings.Contains(standalone, sentence) || !strings.Contains(standalone, "`/rules/snippets/orchestrate-sessions.md`") || strings.Contains(standalone, "orchestrate-start.md") {
+		t.Fatalf("standalone orchestrate must name only the orchestrator snippet:\n%s", standalone)
+	}
+	grouped := must(orchestratorAgentPrompt([]OrchestrateTask{{TaskID: "20260101-golden-task", State: "todo", TaskGroup: "20260101-golden-group"}}, []string{card}, "notes", goldenPaths))
+	if !strings.Contains(grouped, "`/rules/snippets/orchestrate-start.md`") || !strings.Contains(grouped, "Phase Snippets") || !strings.Contains(grouped, "`/rules/snippets/orchestrate-sessions.md`") {
+		t.Fatalf("grouped orchestrate must name both orchestrator snippets and the Phase Snippets list:\n%s", grouped)
 	}
 }
 

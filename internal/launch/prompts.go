@@ -186,8 +186,36 @@ type snippetRef struct {
 
 var (
 	executeSingleSnippet      = snippetRef{"snippets/execute-single.md", "before executing the card"}
+	executeGroupMemberSnippet = snippetRef{"snippets/execute-group-member.md", "for what a task group member does differently"}
 	orchestrateSessionSnippet = snippetRef{"snippets/orchestrate-sessions.md", "before orchestrating"}
+	orchestrateStartSnippet   = snippetRef{"snippets/orchestrate-start.md", "before starting a task group; later phase snippets are listed in KANDER-LOADING-RULES.md \"Phase Snippets\""}
+	fixRoundSnippet           = snippetRef{"snippets/fix-round.md", "before handling the findings"}
+	gitSyncSnippet            = snippetRef{"snippets/git-sync.md", "before rebasing the task branch"}
+	wrapUpSnippet             = snippetRef{"snippets/wrap-up.md", "before wrapping up"}
 )
+
+// executionSnippets names the execution snippets for a card: the single-card snippet, plus the
+// group-member snippet when the card belongs to a task group.
+func executionSnippets(taskGroup string) []snippetRef {
+	refs := []snippetRef{executeSingleSnippet}
+	if taskGroup != "" {
+		refs = append(refs, executeGroupMemberSnippet)
+	}
+	return refs
+}
+
+// dispatchSnippets names the phase snippets a dispatch of kind brings to the executing agent.
+func dispatchSnippets(kind string) []snippetRef {
+	switch kind {
+	case "fix":
+		return []snippetRef{fixRoundSnippet}
+	case "sync":
+		return []snippetRef{gitSyncSnippet, executeGroupMemberSnippet}
+	case "wrap-up":
+		return []snippetRef{wrapUpSnippet}
+	}
+	return nil
+}
 
 // phaseSnippets renders the conditional read sentence that every rule entry repeats, followed
 // by the phase snippets Kander names for this prompt, each with its absolute path.
@@ -236,7 +264,7 @@ func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardT
 		"TaskID":        taskID,
 		"Agents":        agents,
 		"Group":         taskGroup != "",
-		"PhaseSnippets": phaseSnippets(paths, executeSingleSnippet),
+		"PhaseSnippets": phaseSnippets(paths, executionSnippets(taskGroup)...),
 	})
 }
 
@@ -276,7 +304,7 @@ func resumeData(taskID, message string, paths config.InstallPaths, state, cardTe
 	// a working card continues or restarts its execution and gets the execution snippet.
 	snippets := phaseSnippets(paths)
 	if state != "review" {
-		snippets = phaseSnippets(paths, executeSingleSnippet)
+		snippets = phaseSnippets(paths, executionSnippets(taskGroupFrom(cardText))...)
 	}
 	return map[string]any{
 		"Head":          head,

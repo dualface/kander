@@ -91,7 +91,7 @@ func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) (string, e
 		"DispatchID":    d.Input.ID,
 		"Epoch":         d.Authorization.Epoch,
 		"Kind":          d.Input.Kind,
-		"PhaseSnippets": phaseSnippets(paths),
+		"PhaseSnippets": phaseSnippets(paths, dispatchSnippets(d.Input.Kind)...),
 	})
 	if err != nil {
 		return "", err

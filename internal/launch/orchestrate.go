@@ -249,8 +249,20 @@ func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover s
 		"Tasks":         strings.TrimRight(list.String(), "\n"),
 		"Handover":      handover,
 		"Agents":        agents,
-		"PhaseSnippets": phaseSnippets(paths, orchestrateSessionSnippet),
+		"PhaseSnippets": phaseSnippets(paths, orchestrateSnippets(tasks)...),
 	})
+}
+
+// orchestrateSnippets names the orchestrator snippet and, when the plan holds a task group
+// member, the group start snippet.
+func orchestrateSnippets(tasks []OrchestrateTask) []snippetRef {
+	refs := []snippetRef{orchestrateSessionSnippet}
+	for _, task := range tasks {
+		if task.TaskGroup != "" {
+			return append(refs, orchestrateStartSnippet)
+		}
+	}
+	return refs
 }
 
 // orchestratorWindowName names the container after the first card in plan
