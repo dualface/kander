@@ -1,0 +1,1 @@
+the target project's AGENTS.md

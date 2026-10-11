@@ -137,6 +137,43 @@ func Render(rulesDir, name string, data any) (string, Source, error) {
 	return out.String(), source, nil
 }
 
+// RenderSet executes the template named name from the set of every embedded file below dir
+// (a relative directory such as "templates/review"), each read per Installed and registered
+// under its base name, so templates may include each other with {{template "x.md" .}}. The
+// Source is SourceEmbedded when any file of the set fell back to the embedded copy.
+func RenderSet(rulesDir, dir, name string, data any) (string, Source, error) {
+	if !strings.HasPrefix(dir, TemplatesDir+"/") && dir != TemplatesDir {
+		return "", "", fmt.Errorf("rules: %q is not a template directory", dir)
+	}
+	set := template.New(dir).Option("missingkey=error")
+	source := SourceInstalled
+	found := false
+	for _, rel := range Names() {
+		if !strings.HasPrefix(rel, dir+"/") {
+			continue
+		}
+		text, fileSource, err := Installed(rulesDir, rel)
+		if err != nil {
+			return "", "", err
+		}
+		if fileSource == SourceEmbedded {
+			source = SourceEmbedded
+		}
+		if _, err := set.New(path.Base(rel)).Parse(string(text)); err != nil {
+			return "", "", fmt.Errorf("rules: parse %s: %w", rel, err)
+		}
+		found = true
+	}
+	if !found {
+		return "", "", fmt.Errorf("rules: no templates below %q", dir)
+	}
+	var out bytes.Buffer
+	if err := set.ExecuteTemplate(&out, name, data); err != nil {
+		return "", "", fmt.Errorf("rules: render %s/%s: %w", dir, name, err)
+	}
+	return out.String(), source, nil
+}
+
 // validateName accepts only clean, slash-separated relative paths to markdown files below
 // this directory: no absolute paths, no backslashes, no "." or ".." segments.
 func validateName(name string) error {

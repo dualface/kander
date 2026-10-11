@@ -1,0 +1,1 @@
+This card uses durable dispatch receipts. Follow the dispatch-specific move/update instructions in this message.

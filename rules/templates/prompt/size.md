@@ -1,0 +1,1 @@
+Task size is {{.Size}} (SIZE); directory form does not determine size. Follow the corresponding completion requirements.

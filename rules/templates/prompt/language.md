@@ -1,0 +1,1 @@
+Communicate with the user and write all card content, records and reports in "{{.Language}}". Commit messages and code comments follow the project's conventions.

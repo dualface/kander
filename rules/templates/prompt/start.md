@@ -1,0 +1,1 @@
+{{.Head}} {{.Preamble}} Then run {{.Command}} show {{.TaskID}}. The card is already in working. Follow {{.Agents}}, {{if .Group}}this card is a task-group member; execute it under the loaded task-group rules.{{else}}execute the task under its contract and the loaded rules.{{end}}{{.PhaseSnippets}}

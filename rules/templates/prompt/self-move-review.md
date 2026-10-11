@@ -1,0 +1,1 @@
+The card is still in review; first run {{.Command}} move {{.TaskID}} working to move it back to working, then handle the items.

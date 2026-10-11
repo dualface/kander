@@ -10,3 +10,5 @@ Writing rules:
 - Card bodies, messages, and other user content are passed as data and are never parsed as template text.
 
 Kander installs this directory next to the rule files and `kander doctor` tracks every file in it like a rule file: outdated files are replaced, locally modified files are backed up before replacement.
+
+Layout: `prompt/` holds the fragments and bodies of the prompts that `start`, `resume`, `notify`, `orchestrate`, and the issue sessions send; `report/` holds the prefilled completion report that `kander move` prints; `review/` holds the reviewer bootstrap, contract, and role texts (its `roles/*.md` include each other, so the directory is rendered as one template set). Every prompt body carries a `PhaseSnippets` extension point (a template field rendered empty until the rules name phase snippets) for the rules that name phase snippets.

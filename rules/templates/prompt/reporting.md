@@ -1,0 +1,1 @@
+When the card ends in done, archived, or trash, report to the user with the completion report template in KANDER-REPORTING-RULES.md; kander move prints it prefilled.
