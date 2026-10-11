@@ -42,7 +42,10 @@ func TestTaskFileShowsAgentPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	instruction := TaskFileInstruction("", "Execute this task.", path)
+	instruction, err := TaskFileInstruction("", "Execute this task.", path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, text := range []string{string(content), instruction} {
 		if !strings.Contains(text, AgentPath(path)) {
 			t.Fatalf("missing agent path in %q", text)

@@ -243,7 +243,10 @@ func TestWriteTaskFileUsesSamePayload(t *testing.T) {
 
 func TestTaskFilePointerIsOneShortInstruction(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "task.md")
-	instruction := TaskFileInstruction("", "Execute this task.", path)
+	instruction, err := TaskFileInstruction("", "Execute this task.", path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if strings.Count(instruction, ";") != 2 {
 		t.Fatalf("semicolons: %q", instruction)
 	}

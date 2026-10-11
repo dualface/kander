@@ -114,7 +114,10 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskFileInstruction(paths, promptHead(paths, "orchestrate", "", "", len(tasks)), taskFile)
+	prompt, err := headedTaskFileInstruction(paths, "orchestrate", "", "", len(tasks), taskFile)
+	if err != nil {
+		return result, err
+	}
 	args, err := agentArguments(agent, cfg.Models.Kanban[agent], "large", session, false, cfg)
 	if err != nil {
 		return result, err
@@ -233,11 +236,19 @@ func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover s
 		}
 		fmt.Fprintf(&list, "- %s (%s, %s)\n", task.TaskID, task.State, group)
 	}
+	preamble, err := rulesAndLanguage(paths, lang)
+	if err != nil {
+		return "", err
+	}
+	agents, err := promptAgents(paths)
+	if err != nil {
+		return "", err
+	}
 	return render(paths, "orchestrate.md", map[string]any{
-		"Preamble":      RuleLoadingInstruction(paths) + " " + promptLanguageDirective(paths, lang),
+		"Preamble":      preamble,
 		"Tasks":         strings.TrimRight(list.String(), "\n"),
 		"Handover":      handover,
-		"Agents":        promptAgents(paths),
+		"Agents":        agents,
 		"PhaseSnippets": "",
 	})
 }

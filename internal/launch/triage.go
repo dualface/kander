@@ -99,11 +99,14 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	head := promptHead(paths, "triage", "", triageTarget(request.Repository, request.Number), 0)
+	kind := "triage"
 	if request.ResultSync {
-		head = promptHead(paths, "result", "", triageTarget(request.Repository, request.Number), 0)
+		kind = "result"
 	}
-	prompt := taskFileInstruction(paths, head, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, kind, "", triageTarget(request.Repository, request.Number), 0, taskFile)
+	if err != nil {
+		return result, err
+	}
 	args, err := agentArguments(agent, cfg.Models.Kanban[agent], "small", session, false, cfg)
 	if err != nil {
 		return result, err
@@ -194,16 +197,29 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	// The import instruction belongs to the unbound branch only: a session
 	// started for a bound card continues that card and must never be told to
 	// import the issue again.
+	f := &fragments{paths: paths}
+	head := f.render("head.md", map[string]any{"Kind": "triage", "TaskID": "", "Target": triageTarget(request.Repository, request.Number), "Count": 0})
+	preamble, err := rulesAndLanguage(paths, lang)
+	if err != nil {
+		return "", err
+	}
+	agents, err := promptAgents(paths)
+	if err != nil {
+		return "", err
+	}
+	if f.err != nil {
+		return "", f.err
+	}
 	return render(paths, "triage.md", map[string]any{
-		"Head":         promptHead(paths, "triage", "", triageTarget(request.Repository, request.Number), 0),
-		"Preamble":     RuleLoadingInstruction(paths) + " " + promptLanguageDirective(paths, lang),
+		"Head":         head,
+		"Preamble":     preamble,
 		"IssueRules":   rulesPath(paths, "KANDER-ISSUE-RULES.md"),
 		"JSONPath":     process.AgentPath(request.JSONPath),
 		"MarkdownPath": process.AgentPath(request.MarkdownPath),
 		"CardID":       request.CardID,
 		"Command":      commandName(paths),
 		"Number":       request.Number,
-		"Agents":       promptAgents(paths),
+		"Agents":       agents,
 	})
 }
 

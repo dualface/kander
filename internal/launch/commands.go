@@ -214,11 +214,14 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	head := promptHead(paths, "resume", entry.TaskID, "", 0)
+	kind := "resume"
 	if takeover {
-		head = promptHead(paths, "takeover", entry.TaskID, "", 0)
+		kind = "takeover"
 	}
-	prompt := taskFileInstruction(paths, head, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, kind, entry.TaskID, "", 0, taskFile)
+	if err != nil {
+		return err
+	}
 	args, err := execArguments(choice, session, !takeover, cfg)
 	if err != nil {
 		return err

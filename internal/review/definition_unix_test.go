@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/process"
 )
 
 const fakeCustomReviewer = `#!/bin/sh
@@ -373,7 +372,7 @@ func TestBuiltinReviewStdinAndPromptBytes(t *testing.T) {
 					t.Fatalf("argv=%v", argv)
 				}
 			} else {
-				instruction := process.TaskFileInstruction("", "Perform the QA review.", "dummy")
+				instruction := mustInstruction(t, "Perform the QA review.", "dummy")
 				prefix, _, _ := strings.Cut(instruction, "dummy")
 				if prefix == "" || !strings.Contains(prefix, "Perform the QA review") {
 					t.Fatalf("instruction %q", instruction)

@@ -26,16 +26,27 @@ func rulesPath(paths config.InstallPaths, name string) string {
 }
 
 // render executes one prompt template below templates/prompt with data. The installed copy
-// wins over the embedded one; a missing installed copy is reported once on standard error.
+// wins over the embedded one; a missing installed copy is reported once on standard error. A
+// template that fails to parse or lacks a data key is an error the caller returns, never an
+// empty prompt.
 func render(paths config.InstallPaths, name string, data any) (string, error) {
 	return config.RenderRulesTemplate(paths, "templates/prompt/"+name, data, os.Stderr)
 }
 
-// mustRender is for prompt fragments whose data cannot fail validation; a template error is a
-// broken installation and is returned to the caller as a launch error elsewhere.
-func mustRender(paths config.InstallPaths, name string, data any) string {
-	text, err := render(paths, name, data)
+// fragments collects the rendered pieces of one prompt and keeps the first render error, so
+// a builder reads linearly and still fails as a whole.
+type fragments struct {
+	paths config.InstallPaths
+	err   error
+}
+
+func (f *fragments) render(name string, data any) string {
+	if f.err != nil {
+		return ""
+	}
+	text, err := render(f.paths, name, data)
 	if err != nil {
+		f.err = err
 		return ""
 	}
 	return text
@@ -43,35 +54,36 @@ func mustRender(paths config.InstallPaths, name string, data any) string {
 
 // RuleLoadingInstruction is shared by fresh launches and notifications to existing Agents.
 // It names the bootstrap before the command contract so optional rules cannot be loaded first.
-func RuleLoadingInstruction(paths config.InstallPaths) string {
-	return mustRender(paths, "rule-loading.md", map[string]string{
+func RuleLoadingInstruction(paths config.InstallPaths) (string, error) {
+	return render(paths, "rule-loading.md", map[string]string{
 		"AgentsRules": rulesPath(paths, "KANDER-AGENTS.md"),
 		"Command":     commandName(paths),
 		"KanbanRules": rulesPath(paths, "KANDER-KANBAN-RULES.md"),
 	})
 }
 
-func promptAgents(paths config.InstallPaths) string {
+func promptAgents(paths config.InstallPaths) (string, error) {
 	if paths.Mode == config.ModeProject {
-		return process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md"))
+		return process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md")), nil
 	}
-	return mustRender(paths, "agents-default.md", nil)
+	return render(paths, "agents-default.md", nil)
 }
 
 // SelfMoveInstruction produces the "move yourself back to working before handling this" requirement while the card sits in review;
 // other states return an empty string. notify/resume no longer move cards, the notified execution agent does it.
-func SelfMoveInstruction(paths config.InstallPaths, taskID, state string) string {
+func SelfMoveInstruction(paths config.InstallPaths, taskID, state string) (string, error) {
 	if state != "review" {
-		return ""
+		return "", nil
 	}
-	return mustRender(paths, "self-move-review.md", map[string]string{"Command": commandName(paths), "TaskID": taskID})
+	return render(paths, "self-move-review.md", map[string]string{"Command": commandName(paths), "TaskID": taskID})
 }
 
-func cardStateStatus(paths config.InstallPaths, taskID, state string) string {
-	if instruction := SelfMoveInstruction(paths, taskID, state); instruction != "" {
-		return instruction
+func cardStateStatus(paths config.InstallPaths, taskID, state string) (string, error) {
+	instruction, err := SelfMoveInstruction(paths, taskID, state)
+	if err != nil || instruction != "" {
+		return instruction, err
 	}
-	return mustRender(paths, "card-working.md", nil)
+	return render(paths, "card-working.md", nil)
 }
 
 // resolvePromptLanguage returns the agent communication language for start/resume/takeover
@@ -91,8 +103,24 @@ func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, 
 }
 
 // promptLanguageDirective renders the fixed language instruction embedded in launch prompts.
-func promptLanguageDirective(paths config.InstallPaths, language string) string {
-	return mustRender(paths, "language.md", map[string]string{"Language": language})
+func promptLanguageDirective(paths config.InstallPaths, language string) (string, error) {
+	return render(paths, "language.md", map[string]string{"Language": language})
+}
+
+// rulesAndLanguage joins the rule-loading instruction and the language directive, the
+// preamble shared by every prompt that does not carry a card SIZE.
+func rulesAndLanguage(paths config.InstallPaths, language string) (string, error) {
+	f := &fragments{paths: paths}
+	rules := f.render("rule-loading.md", map[string]string{
+		"AgentsRules": rulesPath(paths, "KANDER-AGENTS.md"),
+		"Command":     commandName(paths),
+		"KanbanRules": rulesPath(paths, "KANDER-KANBAN-RULES.md"),
+	})
+	directive := f.render("language.md", map[string]string{"Language": language})
+	if f.err != nil {
+		return "", f.err
+	}
+	return rules + " " + directive, nil
 }
 
 // RuleLoadingWithLanguage appends the card language directive after the rule-loading instruction.
@@ -115,29 +143,37 @@ func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string
 	if size != "small" && size != "large" {
 		return "", launchError("board.size_invalid", "prompt")
 	}
-	parts := []string{RuleLoadingInstruction(paths), promptLanguageDirective(paths, lang)}
-	if reporting := promptReportingDirective(paths); reporting != "" {
+	preamble, err := rulesAndLanguage(paths, lang)
+	if err != nil {
+		return "", err
+	}
+	parts := []string{preamble}
+	if reportingEnabled() {
+		reporting, err := render(paths, "reporting.md", nil)
+		if err != nil {
+			return "", err
+		}
 		parts = append(parts, reporting)
 	}
-	parts = append(parts, mustRender(paths, "size.md", map[string]string{"Size": size}))
+	sizeText, err := render(paths, "size.md", map[string]string{"Size": size})
+	if err != nil {
+		return "", err
+	}
+	parts = append(parts, sizeText)
 	return strings.Join(parts, " "), nil
 }
 
-// promptReportingDirective is the completion-report reminder embedded in launch prompts while
-// rules.reporting is enabled; it is empty otherwise so the prompt stays unchanged. An
-// unreadable config also leaves it out: a card with LANGUAGE must still launch without a
-// config, and the reporting rule itself is read through the config the agent loads first.
-func promptReportingDirective(paths config.InstallPaths) string {
+// reportingEnabled reports whether the completion-report reminder belongs in launch prompts.
+// An unreadable config leaves it out: a card with LANGUAGE must still launch without a config,
+// and the reporting rule itself is read through the config the agent loads first.
+func reportingEnabled() bool {
 	cfg, err := config.Load(false)
-	if err != nil || !cfg.Rules[config.RuleReporting] {
-		return ""
-	}
-	return mustRender(paths, "reporting.md", nil)
+	return err == nil && cfg.Rules[config.RuleReporting]
 }
 
 // promptHead renders the one-line head that opens a task file and the argv instruction.
-func promptHead(paths config.InstallPaths, kind, taskID, target string, count int) string {
-	return mustRender(paths, "head.md", map[string]any{"Kind": kind, "TaskID": taskID, "Target": target, "Count": count})
+func promptHead(paths config.InstallPaths, kind, taskID, target string, count int) (string, error) {
+	return render(paths, "head.md", map[string]any{"Kind": kind, "TaskID": taskID, "Target": target, "Count": count})
 }
 
 // taskFileTrailer renders the delete-when-done note appended to every task file.
@@ -146,8 +182,17 @@ func taskFileTrailer(paths config.InstallPaths) process.TaskFileTrailer {
 }
 
 // taskFileInstruction builds the one-line file instruction handed to the agent CLI.
-func taskFileInstruction(paths config.InstallPaths, head, path string) string {
+func taskFileInstruction(paths config.InstallPaths, head, path string) (string, error) {
 	return process.TaskFileInstruction(paths.RulesDir, head, path)
+}
+
+// headedTaskFileInstruction renders the head of kind and the one-line instruction in one call.
+func headedTaskFileInstruction(paths config.InstallPaths, kind, taskID, target string, count int, path string) (string, error) {
+	head, err := promptHead(paths, kind, taskID, target, count)
+	if err != nil {
+		return "", err
+	}
+	return taskFileInstruction(paths, head, path)
 }
 
 func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {
@@ -158,12 +203,21 @@ func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardT
 	if err != nil {
 		return "", err
 	}
+	f := &fragments{paths: paths}
+	head := f.render("head.md", map[string]any{"Kind": "start", "TaskID": taskID, "Target": "", "Count": 0})
+	agents, err := promptAgents(paths)
+	if err != nil {
+		return "", err
+	}
+	if f.err != nil {
+		return "", f.err
+	}
 	return render(paths, "start.md", map[string]any{
-		"Head":          promptHead(paths, "start", taskID, "", 0),
+		"Head":          head,
 		"Preamble":      preamble,
 		"Command":       commandName(paths),
 		"TaskID":        taskID,
-		"Agents":        promptAgents(paths),
+		"Agents":        agents,
 		"Group":         taskGroup != "",
 		"PhaseSnippets": "",
 	})
@@ -173,52 +227,61 @@ func resumeAgentPrompt(taskID, message string, paths config.InstallPaths, state,
 	return resumePrompt(taskID, message, paths, state, cardText)
 }
 
-func promptStatus(paths config.InstallPaths, taskID, state, cardText string) string {
+func promptStatus(paths config.InstallPaths, taskID, state, cardText string) (string, error) {
 	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
-		return mustRender(paths, "dispatch-bound.md", nil)
+		return render(paths, "dispatch-bound.md", nil)
 	}
 	return cardStateStatus(paths, taskID, state)
 }
 
-func resumePrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
+// resumeData gathers the fields shared by the resume and takeover bodies.
+func resumeData(taskID, message string, paths config.InstallPaths, state, cardText, kind string) (map[string]any, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
+		return nil, launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
 	preamble, err := ruleLoadingWithLanguage(paths, cardText)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return render(paths, "resume.md", map[string]any{
-		"Head":          promptHead(paths, "resume", taskID, "", 0),
-		"Status":        promptStatus(paths, taskID, state, cardText),
+	head, err := promptHead(paths, kind, taskID, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	status, err := promptStatus(paths, taskID, state, cardText)
+	if err != nil {
+		return nil, err
+	}
+	agents, err := promptAgents(paths)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"Head":          head,
+		"Status":        status,
 		"Preamble":      preamble,
 		"Command":       commandName(paths),
 		"TaskID":        taskID,
 		"Message":       message,
-		"Agents":        promptAgents(paths),
+		"Agents":        agents,
 		"PhaseSnippets": "",
-	})
+	}, nil
+}
+
+func resumePrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
+	data, err := resumeData(taskID, message, paths, state, cardText, "resume")
+	if err != nil {
+		return "", err
+	}
+	return render(paths, "resume.md", data)
 }
 
 func takeoverAgentPrompt(taskID, message string, paths config.InstallPaths, previous, state, cardText string) (string, error) {
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
-	}
-	preamble, err := ruleLoadingWithLanguage(paths, cardText)
+	data, err := resumeData(taskID, message, paths, state, cardText, "takeover")
 	if err != nil {
 		return "", err
 	}
-	return render(paths, "takeover.md", map[string]any{
-		"Head":          promptHead(paths, "takeover", taskID, "", 0),
-		"Previous":      previous,
-		"Status":        promptStatus(paths, taskID, state, cardText),
-		"Preamble":      preamble,
-		"Command":       commandName(paths),
-		"TaskID":        taskID,
-		"Message":       message,
-		"Agents":        promptAgents(paths),
-		"PhaseSnippets": "",
-	})
+	data["Previous"] = previous
+	return render(paths, "takeover.md", data)
 }
 
 func readTaskMessage(message string, messageSet bool, messageFile string, command string) (string, error) {

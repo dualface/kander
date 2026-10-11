@@ -58,7 +58,7 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 				if strings.Index(prompt, bootstrap) < 0 || strings.Index(prompt, configuration) < strings.Index(prompt, bootstrap) || strings.Index(prompt, want) < strings.Index(prompt, configuration) {
 					t.Fatalf("bootstrap/configuration/contract order is wrong: %s", prompt)
 				}
-				directive := promptLanguageDirective(paths, "en")
+				directive, _ := promptLanguageDirective(paths, "en")
 				ruleIdx := strings.Index(prompt, bootstrap)
 				dirIdx := strings.Index(prompt, directive)
 				if dirIdx < 0 || dirIdx < ruleIdx {
@@ -166,7 +166,8 @@ func TestPromptLanguageDirectiveFromCardAndConfig(t *testing.T) {
 			if !strings.Contains(tc.body, want) {
 				t.Fatalf("%s missing %q: %s", tc.name, want, tc.body)
 			}
-			if !strings.Contains(tc.body, promptLanguageDirective(paths, "ja")) {
+			directive, _ := promptLanguageDirective(paths, "ja")
+			if !strings.Contains(tc.body, directive) {
 				t.Fatalf("%s missing full language directive: %s", tc.name, tc.body)
 			}
 		}
@@ -283,7 +284,9 @@ func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
 	card := "- LANGUAGE: en\n- SIZE: small\n"
-	legacy := RuleLoadingInstruction(paths) + " " + promptLanguageDirective(paths, "en") + " " + mustRender(paths, "size.md", map[string]string{"Size": "small"})
+	preamble, _ := rulesAndLanguage(paths, "en")
+	sizeText, _ := render(paths, "size.md", map[string]string{"Size": "small"})
+	legacy := preamble + " " + sizeText
 	for _, enabled := range []bool{true, false} {
 		cfg := config.DefaultConfig()
 		cfg.Rules[config.RuleReporting] = enabled

@@ -201,11 +201,19 @@ var legacyPromptHeads = map[string][]string{
 }
 
 // promptPrefixes lists every head a rollout of the given kinds may start with: the current
-// template head and the legacy localized heads.
+// template head, rendered from the same installed template the launch wrote with, and the
+// legacy localized heads. A head that fails to render leaves only the legacy heads.
 func promptPrefixes(taskID string, kinds ...string) []string {
+	paths, err := currentInstallPaths()
+	if err != nil {
+		paths = config.InstallPaths{}
+	}
 	var out []string
 	for _, kind := range kinds {
-		heads := []string{strings.TrimSuffix(promptHead(config.InstallPaths{}, kind, taskID, "", 0), ".")}
+		var heads []string
+		if head, err := promptHead(paths, kind, taskID, "", 0); err == nil {
+			heads = append(heads, strings.TrimSuffix(head, "."))
+		}
 		for _, legacy := range legacyPromptHeads[kind] {
 			heads = append(heads, fmt.Sprintf(legacy, taskID))
 		}

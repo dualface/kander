@@ -109,7 +109,11 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 	if err != nil {
 		return err
 	}
-	message := rules + "\n\n" + launch.DispatchInstruction(paths, d) + "\n\n" + d.Input.Message
+	instruction, err := launch.DispatchInstruction(paths, d)
+	if err != nil {
+		return err
+	}
+	message := rules + "\n\n" + instruction + "\n\n" + d.Input.Message
 	for {
 		if ctx.Err() != nil {
 			return notifyError("launch.dispatch_pending", id)
@@ -150,7 +154,7 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 				return err
 			}
 			deadline, _ := ctx.Deadline()
-			result, resumeErr := launch.NotifyViaResume(root, s.Entry, s.Text, launch.DispatchInstruction(paths, d)+"\n\n"+d.Input.Message, time.Until(deadline).Seconds())
+			result, resumeErr := launch.NotifyViaResume(root, s.Entry, s.Text, instruction+"\n\n"+d.Input.Message, time.Until(deadline).Seconds())
 			if len(resumed) > 0 {
 				*resumed[0] = result
 			}

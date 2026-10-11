@@ -74,7 +74,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 			ctx := reviewContext{
 				agent: agent, settings: settings, root: "/work",
 				program:     process.AgentProgram{Path: "/bin/reviewer"},
-				instruction: process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
+				instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
 			}
 			inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 			if err != nil {
@@ -242,7 +242,7 @@ func TestDevinReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	ctx := reviewContext{
 		agent: "devin", settings: settings, root: "/work",
 		program:     process.AgentProgram{Path: "/bin/reviewer"},
-		instruction: process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
+		instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
 	}
 	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 	if err != nil {
@@ -287,7 +287,7 @@ func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	ctx := reviewContext{
 		agent: "opencode", settings: settings, root: "/work",
 		program:     process.AgentProgram{Path: "/bin/reviewer"},
-		instruction: process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
+		instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
 	}
 	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 	if err != nil {
@@ -331,7 +331,7 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 	ctx := reviewContext{
 		agent: "kimi", settings: settings, root: "/work",
 		program:         process.AgentProgram{Path: "/bin/reviewer"},
-		instruction:     process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
+		instruction:     mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
 		promptFilePaths: map[string]string{"kimi-reviewer": "/rt/kimi-reviewer.md"},
 	}
 	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
@@ -362,7 +362,7 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
 	promptFile := "/rt/prompt.txt"
-	want := process.TaskFileInstruction("", "Perform the QA review.", promptFile)
+	want := mustInstruction(t, "Perform the QA review.", promptFile)
 	if !strings.Contains(want, "task file at "+promptFile) {
 		t.Fatalf("instruction %q", want)
 	}
@@ -374,7 +374,7 @@ func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 		if settings.stdin != config.ReviewStdinInstruction || len(settings.promptFiles) != 0 {
 			t.Fatalf("%s stdin=%q files=%v", agent, settings.stdin, settings.promptFiles)
 		}
-		got := process.TaskFileInstruction("", "Perform the QA review.", promptFile)
+		got := mustInstruction(t, "Perform the QA review.", promptFile)
 		if got != want {
 			t.Fatalf("%s instruction %q", agent, got)
 		}

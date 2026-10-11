@@ -84,15 +84,19 @@ func PrepareAction(root string, s board.Snapshot, message string, o DispatchOpti
 
 // DispatchInstruction names the only business acknowledgement and completion
 // entrances. A repeated receipt must never start the external work twice.
-func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) string {
-	return mustRender(paths, "dispatch.md", map[string]any{
+func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) (string, error) {
+	text, err := render(paths, "dispatch.md", map[string]any{
 		"Command":       commandName(paths),
 		"TaskID":        d.Input.TaskID,
 		"DispatchID":    d.Input.ID,
 		"Epoch":         d.Authorization.Epoch,
 		"Kind":          d.Input.Kind,
 		"PhaseSnippets": "",
-	}) + "\n" + board.DispatchEvidenceInstruction(d)
+	})
+	if err != nil {
+		return "", err
+	}
+	return text + "\n" + board.DispatchEvidenceInstruction(d), nil
 }
 
 // DispatchObservation uses P3's shared deadline and identity-valid report. A
@@ -217,7 +221,11 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 	if err != nil {
 		return err
 	}
-	msg := DispatchInstruction(paths, d) + "\n\n" + d.Input.Message
+	instruction, err := DispatchInstruction(paths, d)
+	if err != nil {
+		return err
+	}
+	msg := instruction + "\n\n" + d.Input.Message
 	deadline, _ := ctx.Deadline()
 	remaining := time.Until(deadline).Seconds()
 	if remaining <= 0 {

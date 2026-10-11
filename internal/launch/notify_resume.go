@@ -97,7 +97,10 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskFileInstruction(paths, promptHead(paths, "resume", entry.TaskID, "", 0), taskFile)
+	prompt, err := headedTaskFileInstruction(paths, "resume", entry.TaskID, "", 0, taskFile)
+	if err != nil {
+		return ResumeLaunch{}, err
+	}
 	args, err := execArguments(choice, session, resume, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err

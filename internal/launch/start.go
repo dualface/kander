@@ -110,7 +110,10 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskFileInstruction(paths, promptHead(paths, "start", entry.TaskID, "", 0), taskFile)
+	prompt, err := headedTaskFileInstruction(paths, "start", entry.TaskID, "", 0, taskFile)
+	if err != nil {
+		return result, err
+	}
 	args, err := execArguments(choice, session, false, cfg)
 	if err != nil {
 		return result, err

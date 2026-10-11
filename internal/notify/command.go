@@ -61,7 +61,11 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 	if err != nil {
 		return err
 	}
-	if selfMove := launch.SelfMoveInstruction(paths, entry.TaskID, entry.State); selfMove != "" {
+	selfMove, err := launch.SelfMoveInstruction(paths, entry.TaskID, entry.State)
+	if err != nil {
+		return err
+	}
+	if selfMove != "" {
 		directMessage += "\n\n" + selfMove
 	}
 	directMessage += "\n\n" + msg

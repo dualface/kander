@@ -119,7 +119,11 @@ func TestPromptGoldens(t *testing.T) {
 	}
 	assertGolden(t, "orchestrate", orchestrate)
 	for _, kind := range []string{"fix", "sync", "wrap-up"} {
-		assertGolden(t, "dispatch-"+kind, DispatchInstruction(goldenPaths, dispatchFor(kind)))
+		instruction, err := DispatchInstruction(goldenPaths, dispatchFor(kind))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertGolden(t, "dispatch-"+kind, instruction)
 	}
 	report, err := config.RenderRulesTemplate(goldenPaths, "templates/report/completion.md", map[string]string{
 		"TaskID": "20260101-golden-task", "Title": "Golden {{.X}} title", "Path": "/board/done/20260101-golden-task", "FinalState": "done",
@@ -163,5 +167,53 @@ func TestInstalledPromptTemplateOverridesEmbedded(t *testing.T) {
 	}
 	if !strings.HasPrefix(start, "LOCAL START 20260101-golden-task First read") {
 		t.Fatalf("installed template not used: %s", start)
+	}
+}
+
+// A broken installed template fails the prompt instead of silently dropping the fragment.
+func TestBrokenInstalledTemplateFailsPrompt(t *testing.T) {
+	goldenConfig(t, false)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	if err := os.MkdirAll(filepath.Join(paths.RulesDir, "templates", "prompt"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.RulesDir, "templates", "prompt", "language.md"), []byte("{{.Missing}}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	card := "- LANGUAGE: en\n- SIZE: small\n"
+	if _, err := startAgentPrompt("20260101-golden-task", paths, "", card); err == nil {
+		t.Fatal("start prompt must fail on a broken installed template")
+	}
+	if _, err := resumePrompt("20260101-golden-task", "go", paths, "review", card); err == nil {
+		t.Fatal("resume prompt must fail on a broken installed template")
+	}
+	if err := os.WriteFile(filepath.Join(paths.RulesDir, "templates", "prompt", "head.md"), []byte("{{.Missing}}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := headedTaskFileInstruction(paths, "start", "20260101-golden-task", "", 0, "/tmp/task.md"); err == nil {
+		t.Fatal("task-file instruction must fail on a broken head template")
+	}
+	if _, err := DispatchInstruction(config.InstallPaths{Mode: config.ModeGlobal, RulesDir: paths.RulesDir}, dispatchFor("fix")); err != nil {
+		t.Fatalf("dispatch template untouched, must still render: %v", err)
+	}
+}
+
+// The rollout prefixes used to find a Codex session come from the same installed head template
+// the launch wrote with, so a customized head still matches.
+func TestPromptPrefixesFollowInstalledHead(t *testing.T) {
+	goldenConfig(t, false)
+	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: t.TempDir()}
+	if err := os.MkdirAll(filepath.Join(paths.RulesDir, "templates", "prompt"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(paths.RulesDir, "templates", "prompt", "head.md"), []byte("Custom {{.Kind}} {{.TaskID}}."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := currentInstallPaths
+	currentInstallPaths = func() (config.InstallPaths, error) { return paths, nil }
+	t.Cleanup(func() { currentInstallPaths = old })
+	prefixes := codexPromptPrefixes("task-9")
+	if !startsWithAny("Custom start task-9; full instructions", prefixes) || !startsWithAny("执行 Kanban 任务 task-9.", prefixes) {
+		t.Fatalf("prefixes=%v", prefixes)
 	}
 }

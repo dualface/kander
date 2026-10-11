@@ -15,10 +15,14 @@ func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	if err != nil {
 		return "", err
 	}
+	preamble, err := rulesAndLanguage(paths, lang)
+	if err != nil {
+		return "", err
+	}
 	return render(paths, "result.md", map[string]any{
 		"Target":     triageTarget(request.Repository, request.Number),
 		"CardID":     request.CardID,
-		"Preamble":   RuleLoadingInstruction(paths) + promptLanguageDirective(paths, lang),
+		"Preamble":   preamble,
 		"JSONPath":   process.AgentPath(request.JSONPath),
 		"IssueRules": rulesPath(paths, "KANDER-ISSUE-RULES.md"),
 		"Command":    commandName(paths),

@@ -182,7 +182,11 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		fail(readPromptErr)
 		return exitCode
 	}
-	ctx.instruction = process.TaskFileInstruction(paths.RulesDir, "Perform the "+ctx.role+" review.", promptFile)
+	ctx.instruction, err = process.TaskFileInstruction(paths.RulesDir, "Perform the "+ctx.role+" review.", promptFile)
+	if err != nil {
+		fail(err)
+		return exitCode
+	}
 	if ctx.settings.stdin == config.ReviewStdinInstruction {
 		if err := fs.WriteTextAtomic(runtime, stdinFile, ctx.instruction+"\n", false); err != nil {
 			fail(err)

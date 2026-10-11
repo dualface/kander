@@ -132,7 +132,10 @@ func TestDispatchPromptTranslationsAndFlagParsing(t *testing.T) {
 		t.Setenv(config.EnvLang, lang)
 		t.Setenv(config.EnvLangCLI, "1")
 		d := board.Dispatch{Input: board.DispatchInput{ID: "prompt-one", TaskID: "20260908-prompt-task", Kind: "fix"}, Authorization: board.ExecutionAuthorization{DispatchID: "prompt-one", Epoch: 4}}
-		prompt := DispatchInstruction(config.InstallPaths{Mode: config.ModeGlobal}, d)
+		prompt, err := DispatchInstruction(config.InstallPaths{Mode: config.ModeGlobal}, d)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, part := range []string{"--dispatch-id prompt-one", "--execution-epoch 4", "--expect-revision", "--delivery-commit", "--disposition", "replayed=false"} {
 			if !strings.Contains(prompt, part) {
 				t.Fatalf("%s missing %s: %s", lang, part, prompt)
