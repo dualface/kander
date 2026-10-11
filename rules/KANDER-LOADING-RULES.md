@@ -47,17 +47,27 @@ The rules root is the directory containing `KANDER-AGENTS.md`. It decides the sc
 - With `review` off, no review is requested automatically, but `kander review` may still be invoked explicitly.
 - With `reporting` off, real card results and the necessary execution records are still required.
 
-## Reading Map by Role
+## Phase Snippets
 
-The three largest rule files are protocols, not reading material. Load the sections your role needs at session start and follow cross references only when the referenced situation arises; section names below are the headings inside each file. Every applicable rule in the always-on protocols and enabled modules binds whether or not it was read. Disabled module rules do not bind unless the user explicitly asks for that workflow. The map limits what must be read up front, not what applies.
+Phase rules live in `snippets/` below the rules root. Kander names the file in the prompt that starts the phase; read it then, by its absolute path. Every applicable rule binds whether or not it was read. Command contracts are `snippets/commands/<command>.md`, indexed by its `README.md`.
 
-| Role | Read at session start | Read when the situation arises |
-| --- | --- | --- |
-| Executing agent, single card | `KANDER-KANBAN-RULES.md` "Command Contract", "Entries and Documents", "Claiming, Starting, and Coordination", "Execution and Completion"; the enabled `KANDER-GIT-RULES.md` and `KANDER-CODE-RULES.md` in full | `KANDER-KANBAN-RULES.md` "Failure Recovery", "Review Evidence Completion Gate"; the enabled `KANDER-REVIEW-RULES.md` from "Preconditions and Execution" through "Review Stages" before requesting review; `KANDER-REPORTING-RULES.md` when reporting |
-| Executing agent, group member | As for a single card, plus `KANDER-TASK-GROUP-RULES.md` "Git Branches and Worktrees", "Group Integration Branch", "Executing Agent Wrap-Up" | `snippets/commands/dispatch.md` "Durable Dispatch" when a `sync`, `fix` or `wrap-up` notice arrives; `KANDER-REVIEW-RULES.md` "Main Agent Verification Duty" for a fix round |
-| Orchestrator | `KANDER-TASK-GROUP-RULES.md` in full; `snippets/commands/dispatch.md` "Durable Dispatch"; `KANDER-KANBAN-RULES.md` "Orchestrator Sessions", "Coordinator Checkpoints", "Review Evidence Completion Gate"; the enabled `KANDER-GIT-RULES.md` "Keeping a Task Branch Current" and "Integration and Cleanup" | The enabled `KANDER-REVIEW-RULES.md` "Group-Level Review for Task Groups" and "Controlled Plans, Author Dispositions, and Batch Closure" when the first batch is due; "Stage One Backend Failures" on a reviewer failure; the enabled `KANDER-REPORTING-RULES.md` "Orchestration Summary" and "Report Wording" when the orchestration ends |
-| Card creator (intake) | `KANDER-TASK-INTAKE-RULES.md`; `KANDER-KANBAN-RULES.md` "Task Scale and Grouping" including "Post-Creation Self-Review"; when `task_groups` and `git` are enabled, `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups", "Dependencies Between Task Cards", "Running Task Cards in Parallel" | When `task_groups` and `git` are enabled, the rest of `KANDER-TASK-GROUP-RULES.md` only when the creator also orchestrates; under intake option 1 the creator also executes, so it reads the "Executing agent" rows and, for a group, the "Orchestrator" row including "Self-Executed Groups" |
-| Main agent running a review | `KANDER-REVIEW-RULES.md` from "Reviewer Selection" through "Review Stages", "Main Agent Verification Duty", "Conclusions and Failure Handling" | "Controlled Plans, Author Dispositions, and Batch Closure" when closing a batch; "Review Profiles" and the templates when writing the task context |
+| Snippet | Read when |
+| --- | --- |
+| `snippets/execute-single.md` | Executing a card (named in the start, resume, and takeover task files) |
+| `snippets/orchestrate-sessions.md` | Orchestrating (named in the orchestrate task file); a blocked executing agent |
+| `snippets/failure-recovery.md` | Terminating a card; an executing agent stopped or lost its session |
+| `snippets/coordinator-checkpoints.md` | Writing or recovering a task group checkpoint |
+| `snippets/review-evidence-gate.md` | Before `move done`; handling a review plan, batch, or closure |
+| `snippets/git-sync.md` | Before and after a work item, before review, before delivery (Git module) |
+| `snippets/git-integrate.md` | Integrating a task or group branch into its target (Git module) |
+| `snippets/report-orchestration.md` | Issuing the orchestration summary (reporting module) |
+| `snippets/execute-group-member.md` | (pending) |
+| `snippets/orchestrate-start.md` | (pending) |
+| `snippets/orchestrate-review.md` | (pending) |
+| `snippets/orchestrate-integrate.md` | (pending) |
+| `snippets/self-executed-group.md` | (pending) |
+| `snippets/fix-round.md` | (pending) |
+| `snippets/wrap-up.md` | (pending) |
 
 ## Rule Wording
 
@@ -66,4 +76,5 @@ In a sentence that directs the agent, `must` marks an obligation, `never` marks 
 ## Rule Precedence
 
 - Explicit user instructions in the current session > the project-level `AGENTS.md` or `CLAUDE.md` closest to the target file > the user's own global rules > enabled Kander modules and the current scope's configuration > module defaults.
+- A prompt Kander renders carries instance facts (task ID, dispatch ID, epoch, paths, language, size) and the exact command lines to run; those are authoritative for that run. The protocol itself comes from the rule files and the snippets, never from a prompt.
 - When `AGENTS.md` and `CLAUDE.md` in the same directory conflict and no user instruction resolves it, stop only the affected operation and ask the user.

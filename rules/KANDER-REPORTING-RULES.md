@@ -33,24 +33,12 @@ Loaded only when `rules.reporting=true`. This file defines the reporting format 
 - Keep all 9 fields, in order, with `None` or `N/A` where there is no content. The last line carries `Orchestration state`: `completed`, `terminated`, or `blocked`.
 - The summary never replaces the per-card completion report: each card's executing agent (or the on-behalf finisher) reports with the completion report template. `Card states` lists each card once with its final card state and does not repeat the per-card fields.
 - `Unresolved issues` collects every item that stays open after the orchestration: known defects, verification gaps, follow-up tasks, and unresolved review items. Write each item in the same form as the completion report's `Unresolved issues` field, prefixed with the task IDs it affects, and count one root cause once even when it hits several cards. A blocking item names its unblocking condition. Only when `rules.review=true`, classify unresolved review items by the categories in `KANDER-REVIEW-RULES.md` "Conclusions and Failure Handling". Every item follows "Report Wording": one fact per sentence, a fixed status word, the evidence as `path:line` or a full SHA, and no filled-in facts.
-- `Self-resolutions` lists the blockers the orchestrator resolved on its own per `KANDER-KANBAN-RULES.md` "Handling Blocked Executing Agents": task ID, cause, action, basis, and outcome with a fixed status word.
+- `Self-resolutions` lists the blockers the orchestrator resolved on its own per `snippets/orchestrate-sessions.md` "Handling Blocked Executing Agents": task ID, cause, action, basis, and outcome with a fixed status word.
 - `Integration` records, per group, the group HEAD before and after integration, the `develop` commit after merge-back, and the method. The method is `ff`, `rebase` with the patch-equality result, or `merge commit` with the conflicting paths and their verification per `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions". A standalone card integrated by its executing agent is listed with its final commit and `integrated by executing agent`.
 - `Wrap-up` records, per group, the group worktree and branch cleanup, the untargeted `kander check` result, and every wrap-up completed on behalf with its reason; write "all completed" only when every applicable step succeeded.
 - On termination, the unfinished cards are reported one by one with the completion report template first; the orchestration summary then follows with `Orchestration state: terminated` and the termination decision under `Summary`.
 
-```markdown
-# Kanban Orchestration Summary
-
-- Scope: <task group IDs and standalone task IDs in plan order; source of the plan notes>
-- Order and parallelism: <actual start order; cards that ran in parallel | None>
-- Review batches: <per batch: batch ID, base and target, roles with conclusions, fix rounds | N/A with the basis>
-- Integration: <per group: group HEAD before and after, `develop` full SHA, method (ff | rebase, patch equal | merge commit, conflicting paths, verification); per standalone card: final full SHA, integrated by executing agent | N/A>
-- Wrap-up: <per group: worktree and branches deleted, `kander check` result, wrap-ups done on behalf with reason; all completed or exceptions item by item>
-- Self-resolutions (<N>): <None; or item by item `<task-id>: cause; action; basis; outcome`>
-- Unresolved issues (<N>): <None; or item by item `<task-id>[, <task-id>] [source or category][tier or status] issue; impact: ...; reason: ...; unblocking condition: ... | N/A`>
-- Card states: <item by item `<task-id> - <title>: <done | archived (<result>) | trash | working (blocked) | review (blocked)>`>
-- Summary: <one-sentence summary; on termination, the termination decision and reason>; Orchestration state: <completed | terminated | blocked>
-```
+The template is the static snippet `snippets/report-orchestration.md`; its nine fields follow the rules above.
 
 ## Report Wording
 

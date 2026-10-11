@@ -32,42 +32,7 @@
 - For a standalone kanban card with `rules.git=true`, authorization to execute the card includes integration into `develop` and cleanup. This holds whether the request executes an existing card or a confirmed plan creates and starts one, and it survives a resume of the same task. Once the task contract, verification, and applicable review gates pass, the executing agent integrates, pushes and syncs as applicable, cleans up, and completes the card without asking for a separate merge-back confirmation.
 - Explicit user or project requirements to pause, wait for acceptance, use a PR, or retain the branch still apply. Enabling the Git module, or recording a card without authorization to execute it, grants no integration authority. Non-kanban tasks and task group integration need an explicit integration request or a user-confirmed plan that includes that step; never ask again when authorization exists. Integration into `main` always needs its own explicit confirmation.
 
-## Keeping a Task Branch Current
+## Phase Rules
 
-- A task branch drifts from its source branch (`develop` for a single card, the group branch for an in-group card) the whole time it is open, and the eventual conflict grows with the drift. Fetch at every natural pause (before starting a work item, after finishing one, before requesting review, before delivery) and run the overlap check, with `SOURCE` the remote or local source branch:
-
-```sh
-git fetch -q origin
-kander check overlap --source SOURCE --json
-```
-
-- `status` `action-required` names paths changed on both sides: rebase onto the latest source branch now, while the upstream change is small and its author is reachable. `status` `pass` (empty `paths`): rebase at the latest before the next delivery. A rebase onto an unchanged source branch is a no-op, so running it often is fine. Exit 2 or 3 means the check did not finish; never treat that as an empty overlap. Never substitute `comm`, process substitution, or `git diff --name-only` pipelines for this command.
-- Never rebase while a review batch is open on this branch (`KANDER-REVIEW-RULES.md` "Review Base"); rebase before the review starts or after the batch closes.
-- Re-verification after a clean mid-task rebase: compile the touched modules and run the targeted tests of the changed behavior; the full `KANDER-CODE-RULES.md` "Delivery Self-Check" item 6 runs once, at the final delivery commit. After a rebase with conflict resolution, also rerun the tests of every file touched by the resolution.
-- When the source branch already contains a fix for the same problem, take the upstream version and drop this branch's duplicate commit.
-- Only the dedicated task branch is rewritten this way, and only with `--force-with-lease` per "Integration and Cleanup"; the group branch exception named there belongs to the orchestrator alone.
-
-## Integration and Cleanup
-
-- Before integrating, verify the authorization above and any PR, acceptance, or pause requirement from the user or project. Without authorization or with an unmet gate, keep the branch and worktree and report the specific pending items; a kanban single card stays in `working/`, and a task group keeps its actual state per the group rules.
-- The source branch is the delivery target recorded when the task branch was created. A kanban card records it in the card's `IMPLEMENTATION`; any other task records it in the task's own delivery record. The target is `develop` for a single card or a group branch, and the group branch for an in-group task branch. Integrate only into that target; the checked-out branch or a temporary rebase never changes it.
-- Before integrating, fetch the source branch (remote path) or read the local source branch (local path), rebase if needed, and re-verify per "Keeping a Task Branch Current". If the fetch fails, stop and report. On rebase conflicts, prefer the task branch's changes but never replace whole files outright; resolve feature point by feature point, and ask the user when the resolution would be a major change. After a successful rebase, only the dedicated task branch may `--force-with-lease` its pushed history; if the lease fails, stop and report.
-
-**One-Time Review Gate**
-
-- Review is triggered and executed per `KANDER-REVIEW-RULES.md` only when the review module is enabled or the user explicitly asks for a full review this time. Otherwise record N/A and never load the disabled module.
-- An applicable review is a one-time gate before integration; the base is frozen during the review. For a single card, a rebase after the review because the source branch advanced only redoes verification; re-review only when the user asks or substantive code conflicts were resolved by hand, never for no conflicts or Markdown-only conflicts. For a task group, the bound wrap-up evidence accepts the rebased group line only when its complete patch equals the closed reviewed patch. The integration rebase is therefore used only when it applies cleanly and leaves the patch unchanged. On any conflict, Markdown included, or a changed patch, the orchestrator integrates through a merge commit per `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions".
-- For a task group, this gate constrains merging the group branch back into `develop`; delivering a task branch to the group branch prepares the group-level review and does not wait for it.
-
-**Direct Integration and PRs**
-
-- Remote direct integration first pushes the complete commit: `git push origin <final delivery commit>:refs/heads/<source branch>`; never advance the local source branch before this succeeds. When the remote rejects because it advanced concurrently, fetch, rebase the branch to deliver onto the latest `origin/<source branch>`, re-verify, and retry; an in-group task branch is handled by its original executing agent, the orchestrator only dispatches back and receives.
-- After a successful push, fetch and run `git merge --ff-only origin/<source branch>` in the worktree that owns the source branch. When the remote already contains the recorded final delivery commit, do only this sync. If the local branch is missing, create it from the remote branch. If the sync fails (local divergence, working tree, other), preserve the working state, report "integrated on remote, local not synced", and handle only the sync problem afterwards without resetting or discarding local commits.
-- Without `origin`, or with local-only explicit: run `git merge --ff-only <final delivery commit>` in the worktree that owns the source branch. If it fails because the local source branch advanced, rebase the branch to deliver onto it, re-verify, and retry; never push.
-- Direct integration and local sync never create merge commits, except the orchestrator's conflict-resolving group merge-back named above. `main` and `develop` never have their remote history rewritten with `--force` or `--force-with-lease`. Neither does a group branch, with one exception: the orchestrator's pre-plan sync in `KANDER-TASK-GROUP-RULES.md` "Group Integration Branch", which uses `--force-with-lease` only while no review plan exists; no other agent and no later stage rewrites it. Save and restore user changes per "Local Change Protection" around any operation on the main worktree.
-- When the user or project requires a PR, follow its review, CI, merge method, and authorization requirements; never bypass it with direct integration. Integration is complete only when the PR is merged, its target is the recorded source branch, and the final delivery is contained in the merge result. Confirm squash and rebase merges by this evidence, without requiring the pre-merge commit to remain an ancestor. For a task group, the durable wrap-up evidence additionally needs the Git mapping in `KANDER-TASK-GROUP-RULES.md` "Merge-Back and Cleanup Preconditions".
-
-**Cleanup Preconditions**
-
-- Only after integration, verification, applicable push, and local sync all succeed, verify that the final delivery entered the actual target: for direct integration `git merge-base --is-ancestor <final delivery commit> <origin/source branch or local source branch>` with the full SHA after the integration rebase, for PRs the merged criteria above. If this cannot be confirmed, preserve the working state and report.
-- A single card that meets the preconditions cleans up its task branch and worktree; the remote task branch only on a non-local path. An in-group card keeps its working state after delivering to the group branch. It keeps that state until the orchestrator confirms the whole group entered `develop` and sends the wrap-up notice. The orchestrator cleans up the group worktree and branch after the whole group wraps up.
+- Keeping a task branch current (fetch, overlap check, rebase, re-verification): `snippets/git-sync.md`.
+- Integration and cleanup (authorization, the one-time review gate, direct integration and PRs, cleanup preconditions): `snippets/git-integrate.md`.

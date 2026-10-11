@@ -8,4 +8,4 @@ Confirmed plan notes:
 
 {{.Handover}}
 
-Read and follow "Orchestrator Sessions" in the command contract. The confirmed plan authorizes development and integration for every task listed above. Continue under {{.Agents}}, the command contract, and the loaded modules.{{.PhaseSnippets}}
+Read and follow `snippets/orchestrate-sessions.md` "Orchestrator Sessions" in the command contract. The confirmed plan authorizes development and integration for every task listed above. Continue under {{.Agents}}, the command contract, and the loaded modules.{{.PhaseSnippets}}
