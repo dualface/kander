@@ -16,6 +16,7 @@ var (
 	sectionReference = regexp.MustCompile("`(KANDER-[A-Z-]+\\.md)`((?:,? ?(?:and |or )?\"[^\"]+\")+)")
 	quotedName       = regexp.MustCompile(`"([^"]+)"`)
 	pathReference    = regexp.MustCompile(`(?:snippets|templates)/[A-Za-z0-9_./-]+\.md`)
+	pathSection      = regexp.MustCompile("`?((?:snippets|templates)/[A-Za-z0-9_./-]+\\.md)`?((?:,? ?(?:and |or )?\"[^\"]+\")+)")
 	headingLine      = regexp.MustCompile(`(?m)^(?:#{2,6}\s+(.+?)\s*|\*\*(.+?)\*\*\s*|- ([A-Z][^:\n]{2,60}):.*)$`)
 )
 
@@ -67,6 +68,20 @@ func brokenReferences(t *testing.T, files map[string]string) []string {
 		for _, ref := range pathReference.FindAllString(text, -1) {
 			if !exists[ref] {
 				broken = append(broken, fmt.Sprintf("%s: references missing path %s", name, ref))
+			}
+		}
+		for _, match := range pathSection.FindAllStringSubmatch(text, -1) {
+			target := match[1]
+			if !exists[target] {
+				continue
+			}
+			if headingCache[target] == nil {
+				headingCache[target] = headings(t, target)
+			}
+			for _, quoted := range quotedName.FindAllStringSubmatch(match[2], -1) {
+				if !headingCache[target][quoted[1]] {
+					broken = append(broken, fmt.Sprintf("%s: references %s %q, no such section", name, target, quoted[1]))
+				}
 			}
 		}
 	}

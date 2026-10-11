@@ -1,0 +1,41 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/dualface/kander/internal/config"
+)
+
+// Every registered command answers --help with its contract usage: the Syntax lines, the
+// contract path, and the conditional read sentence, on stdout with exit 0.
+func TestEveryCommandHelpPrintsContractUsage(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "internal", "cli", "cli.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := regexp.MustCompile(`(?s)var commandNames = \[\]string\{(.*?)\n\}`).FindStringSubmatch(string(data))
+	if block == nil {
+		t.Fatal("commandNames not found")
+	}
+	for _, m := range regexp.MustCompile(`"([a-z-]+)"`).FindAllStringSubmatch(block[1], -1) {
+		cmd := m[1]
+		t.Run(cmd, func(t *testing.T) {
+			result := runKander(t, cmd, "--help")
+			want := config.CommandUsage(cmd) + "\n"
+			if result.code != 0 || result.stdout != want || result.stderr != "" {
+				t.Fatalf("exit=%d\nstdout=%q\nwant=%q\nstderr=%q", result.code, result.stdout, want, result.stderr)
+			}
+			lines := strings.Split(strings.TrimRight(result.stdout, "\n"), "\n")
+			if len(lines) < 3 || !strings.HasPrefix(lines[0], "kander "+cmd) || !strings.HasPrefix(lines[len(lines)-2], "Contract: ") || !strings.HasSuffix(lines[len(lines)-2], "/snippets/commands/"+cmd+".md") {
+				t.Fatalf("usage shape:\n%s", result.stdout)
+			}
+			if lines[len(lines)-1] != config.CommandReadSentence(strings.TrimSuffix(strings.TrimPrefix(lines[len(lines)-2], "Contract: "), "/snippets/commands/"+cmd+".md")) {
+				t.Fatalf("last line is not the read sentence:\n%s", result.stdout)
+			}
+		})
+	}
+}
