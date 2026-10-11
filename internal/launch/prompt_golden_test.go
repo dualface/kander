@@ -62,7 +62,7 @@ func dispatchFor(kind string) board.Dispatch {
 }
 
 // Every prompt Kander hands to an agent is rendered from the templates with fixed data and
-// compared with its golden file. The PhaseSnippets extension point renders empty in this card.
+// compared with its golden file, including the read sentence and phase snippet paths they end with.
 func TestPromptGoldens(t *testing.T) {
 	card := "- LANGUAGE: en\n- SIZE: small\n"
 	for _, reporting := range []bool{false, true} {
@@ -137,9 +137,11 @@ func TestPromptGoldens(t *testing.T) {
 	}
 }
 
-// Every prompt carries the conditional read sentence; start, resume of a working card, and
-// takeover name the execution snippet, orchestrate names the orchestrator snippet, and a review
-// card's resume and a dispatch name no snippet (the dispatch that follows names its own).
+// Every prompt carries the conditional read sentence. Start, resume of a working card, and
+// takeover name the execution snippets (plus the group member snippet for a group card);
+// orchestrate names the orchestrator snippet (plus the group start snippet when the plan holds a
+// group member); a dispatch names the snippets of its kind; a review card's resume names none,
+// because the dispatch that brings it back does.
 func TestPromptsNamePhaseSnippets(t *testing.T) {
 	goldenConfig(t, false)
 	card := "- LANGUAGE: en\n- SIZE: small\n"
