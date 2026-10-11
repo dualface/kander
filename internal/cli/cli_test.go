@@ -124,7 +124,7 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, err)
 	}
 	code, out, err = captureRun(t, []string{"kander", "version", "--help"})
-	if code != 0 || !strings.Contains(out, "kander version") || err != "" {
+	if code != 0 || !strings.Contains(out, "kander version") || !onlyFallbackHint(err) {
 		t.Fatalf("help code=%d stdout=%q stderr=%q", code, out, err)
 	}
 	code, _, err = captureRun(t, []string{"kander", "version", "extra"})
@@ -206,8 +206,14 @@ func TestTerminalCommandRegistered(t *testing.T) {
 	resetLang(t)
 	for _, language := range []string{"cn", "en", "ja"} {
 		code, out, diagnostic := captureRun(t, []string{"kander", "--lang", language, "terminal", "--help"})
-		if code != 0 || diagnostic != "" || !strings.Contains(out, "kander terminal list") || !strings.Contains(out, "--skip-focus") || !strings.Contains(out, "snippets/commands/terminal.md") {
+		if code != 0 || !onlyFallbackHint(diagnostic) || !strings.Contains(out, "kander terminal list") || !strings.Contains(out, "--skip-focus") || !strings.Contains(out, "snippets/commands/terminal.md") {
 			t.Fatalf("language=%s code=%d out=%q err=%q", language, code, out, diagnostic)
 		}
 	}
+}
+
+// onlyFallbackHint accepts an empty stderr, or the once-per-file hint that the installed
+// contract is missing (printed on a machine whose rules root predates snippets/commands).
+func onlyFallbackHint(stderr string) bool {
+	return stderr == "" || strings.Contains(stderr, "kander doctor")
 }

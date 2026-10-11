@@ -1,6 +1,8 @@
 package config
 
 import (
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -29,17 +31,23 @@ func CommandUsage(command string) string {
 	if paths, err := CurrentInstallPaths(); err == nil {
 		rulesDir = paths.RulesDir
 	}
-	return commandUsage(rulesDir, command)
+	return commandUsage(rulesDir, command, os.Stderr)
 }
 
-func commandUsage(rulesDir, command string) string {
+// commandUsage renders the usage text. When the installed contract is missing and the
+// embedded copy stands in, the Contract line still names the installed path the agent will
+// look for, so the embedded-fallback hint goes to warn to make the gap visible.
+func commandUsage(rulesDir, command string, warn io.Writer) string {
 	name := commandContractsDir + "/" + command + ".md"
 	root := rulesRootPlaceholder
 	if rulesDir != "" {
 		root = process.AgentPath(filepath.Clean(rulesDir))
+	} else {
+		warn = nil
 	}
 	var lines []string
-	if data, _, err := rules.Installed(rulesDir, name); err == nil {
+	if data, source, err := rules.Installed(rulesDir, name); err == nil {
+		warnEmbeddedFallback(warn, name, source)
 		lines = contractSyntaxLines(string(data))
 	}
 	if len(lines) == 0 {

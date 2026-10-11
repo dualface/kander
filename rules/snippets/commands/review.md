@@ -27,6 +27,7 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 
 - Reviewer run: `[agent]` an optional configured agent with a review template; `--task <id>` (repeated) binds the run to cards; `--run-id`, `--batch-id`, `--previous-run-id` identify the run, its batch, and the predecessor of an incremental round; `--requirements-file <JSON>` names the batch requirements for a new batch; `--advance-file <JSON>` advances the batch target; then `<CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]`.
 - Evidence subcommands: the words `plan`, `extend-plan`, `assign`, `disposition`, `interpret`, `map-legacy`, `aggregate`, `advance`, `close`, and `progress` select an evidence subcommand; each takes an absolute CWD and a JSON file or an ID as shown in Syntax. `--schema` prints the JSON schema of a subcommand's input.
+- `batch` is not a subcommand (no documented caller): batches are named in the plan by `plan` and `extend-plan`, advanced by `advance`, and closed by `close`.
 
 ## Preconditions
 

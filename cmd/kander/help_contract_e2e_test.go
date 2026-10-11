@@ -26,8 +26,13 @@ func TestEveryCommandHelpPrintsContractUsage(t *testing.T) {
 		t.Run(cmd, func(t *testing.T) {
 			result := runKander(t, cmd, "--help")
 			want := config.CommandUsage(cmd) + "\n"
-			if result.code != 0 || result.stdout != want || result.stderr != "" {
-				t.Fatalf("exit=%d\nstdout=%q\nwant=%q\nstderr=%q", result.code, result.stdout, want, result.stderr)
+			// An installation that predates the contracts gets the once-per-file hint to run
+			// kander doctor on stderr; nothing else may appear there.
+			if result.stderr != "" && !strings.Contains(result.stderr, "kander doctor") {
+				t.Fatalf("unexpected stderr: %q", result.stderr)
+			}
+			if result.code != 0 || result.stdout != want {
+				t.Fatalf("exit=%d\nstdout=%q\nwant=%q", result.code, result.stdout, want)
 			}
 			lines := strings.Split(strings.TrimRight(result.stdout, "\n"), "\n")
 			if len(lines) < 3 || !strings.HasPrefix(lines[0], "kander "+cmd) || !strings.HasPrefix(lines[len(lines)-2], "Contract: ") || !strings.HasSuffix(lines[len(lines)-2], "/snippets/commands/"+cmd+".md") {
