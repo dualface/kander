@@ -62,7 +62,8 @@ func dispatchFor(kind string) board.Dispatch {
 }
 
 // Every prompt Kander hands to an agent is rendered from the templates with fixed data and
-// compared with its golden file, including the read sentence and phase snippet paths they end with.
+// compared with its golden file, including the read sentence they end with and the phase snippet
+// paths of the prompts that name snippets (a review card's resume names none).
 func TestPromptGoldens(t *testing.T) {
 	card := "- LANGUAGE: en\n- SIZE: small\n"
 	for _, reporting := range []bool{false, true} {
