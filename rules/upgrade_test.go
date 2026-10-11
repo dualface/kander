@@ -65,7 +65,11 @@ func TestUpgradeUnstampedFourRoleRules(t *testing.T) {
 						data = append(data, []byte("\nLocal policy adjustment.\n")...)
 					}
 				}
-				if err := os.WriteFile(filepath.Join(paths.RulesDir, name), data, 0600); err != nil {
+				dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
+				if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(dest, data, 0600); err != nil {
 					t.Fatal(err)
 				}
 			}
