@@ -137,8 +137,46 @@ func TestPromptGoldens(t *testing.T) {
 	}
 }
 
-// Every prompt body template carries the PhaseSnippets extension point, and this card renders it
-// empty: the rendered prompts equal the same templates rendered with PhaseSnippets removed.
+// Every prompt carries the conditional read sentence; start, resume of a working card, and
+// takeover name the execution snippet, orchestrate names the orchestrator snippet, and a review
+// card's resume and a dispatch name no snippet (the dispatch that follows names its own).
+func TestPromptsNamePhaseSnippets(t *testing.T) {
+	goldenConfig(t, false)
+	card := "- LANGUAGE: en\n- SIZE: small\n"
+	sentence := config.CommandReadSentence("/rules")
+	execute := "`/rules/snippets/execute-single.md`"
+	must := func(text string, err error) string {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return text
+	}
+	start := must(startAgentPrompt("20260101-golden-task", goldenPaths, "", card))
+	group := must(startAgentPrompt("20260101-golden-task", goldenPaths, "20260101-golden-group", card))
+	resume := must(resumeAgentPrompt("20260101-golden-task", "go", goldenPaths, "working", card))
+	takeover := must(takeoverAgentPrompt("20260101-golden-task", "go", goldenPaths, "codex", "working", card))
+	for name, text := range map[string]string{"start": start, "group start": group, "resume working": resume, "takeover": takeover} {
+		if !strings.Contains(text, sentence) || !strings.Contains(text, execute) {
+			t.Fatalf("%s must carry the read sentence and the execute-single snippet:\n%s", name, text)
+		}
+	}
+	if strings.Count(group, "snippets/") != 2 {
+		t.Fatalf("group start must name only README and execute-single:\n%s", group)
+	}
+	review := must(resumePrompt("20260101-golden-task", "go", goldenPaths, "review", card))
+	dispatch := must(DispatchInstruction(goldenPaths, dispatchFor("fix")))
+	for name, text := range map[string]string{"resume review": review, "dispatch": dispatch} {
+		if !strings.Contains(text, sentence) || strings.Contains(strings.ReplaceAll(text, "snippets/commands/README.md", ""), "snippets/") {
+			t.Fatalf("%s must carry only the read sentence:\n%s", name, text)
+		}
+	}
+	orchestrate := must(orchestratorAgentPrompt([]OrchestrateTask{{TaskID: "20260101-golden-task", State: "todo"}}, []string{card}, "notes", goldenPaths))
+	if !strings.Contains(orchestrate, sentence) || !strings.Contains(orchestrate, "`/rules/snippets/orchestrate-sessions.md`") {
+		t.Fatalf("orchestrate must name the orchestrator snippet:\n%s", orchestrate)
+	}
+}
+
+// Every prompt body template carries the PhaseSnippets extension point.
 func TestPromptTemplatesCarryPhaseSnippetsPlaceholder(t *testing.T) {
 	for _, name := range []string{"start.md", "resume.md", "takeover.md", "orchestrate.md", "dispatch.md"} {
 		data, err := config.ReadRulesFile(goldenPaths, "templates/prompt/"+name, nil)

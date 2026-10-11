@@ -249,7 +249,7 @@ func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover s
 		"Tasks":         strings.TrimRight(list.String(), "\n"),
 		"Handover":      handover,
 		"Agents":        agents,
-		"PhaseSnippets": "",
+		"PhaseSnippets": phaseSnippets(paths, orchestrateSessionSnippet),
 	})
 }
 

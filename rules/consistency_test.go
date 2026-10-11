@@ -17,6 +17,7 @@ var (
 	quotedName       = regexp.MustCompile(`"([^"]+)"`)
 	pathReference    = regexp.MustCompile(`(?:snippets|templates)/[A-Za-z0-9_./-]+\.md`)
 	pathSection      = regexp.MustCompile("`?((?:snippets|templates)/[A-Za-z0-9_./-]+\\.md)`?((?:,? ?(?:and |or )?\"[^\"]+\")+)")
+	sourceLine       = regexp.MustCompile(`(?m)^Source: moved from .*$`)
 	headingLine      = regexp.MustCompile(`(?m)^(?:#{2,6}\s+(.+?)\s*|\*\*(.+?)\*\*\s*|- ([A-Z][^:\n]{2,60}):.*)$`)
 )
 
@@ -50,6 +51,8 @@ func brokenReferences(t *testing.T, files map[string]string) []string {
 	headingCache := map[string]map[string]bool{}
 	var broken []string
 	for name, text := range files {
+		// A moved snippet records where its text came from; that section no longer exists there.
+		text = sourceLine.ReplaceAllString(text, "")
 		for _, match := range sectionReference.FindAllStringSubmatch(text, -1) {
 			target := match[1]
 			if !exists[target] {
@@ -65,9 +68,15 @@ func brokenReferences(t *testing.T, files map[string]string) []string {
 				}
 			}
 		}
-		for _, ref := range pathReference.FindAllString(text, -1) {
-			if !exists[ref] {
-				broken = append(broken, fmt.Sprintf("%s: references missing path %s", name, ref))
+		for _, line := range strings.Split(text, "\n") {
+			// A "(pending)" row announces a snippet a later card adds; it is not a reference yet.
+			if strings.Contains(line, "(pending)") {
+				continue
+			}
+			for _, ref := range pathReference.FindAllString(line, -1) {
+				if !exists[ref] {
+					broken = append(broken, fmt.Sprintf("%s: references missing path %s", name, ref))
+				}
 			}
 		}
 		for _, match := range pathSection.FindAllStringSubmatch(text, -1) {

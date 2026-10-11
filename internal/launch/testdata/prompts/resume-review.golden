@@ -3,3 +3,5 @@ Resume Kanban task 20260101-golden-task. The card is still in review; first run 
 Fix the failing test.
 
 Continue under the target project's AGENTS.md, the command contract, and the loaded modules.
+
+Before running any `kander` command in this session, read `/rules/snippets/commands/README.md` once. Before the first use of a command, read its contract file.

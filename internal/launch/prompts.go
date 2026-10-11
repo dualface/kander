@@ -178,6 +178,31 @@ func taskFileInstruction(paths config.InstallPaths, head, path string) (string, 
 	return process.TaskFileInstruction(paths.RulesDir, head, path)
 }
 
+// snippetRef names a phase snippet below the rules root and when the agent reads it.
+type snippetRef struct {
+	name string
+	when string
+}
+
+var (
+	executeSingleSnippet      = snippetRef{"snippets/execute-single.md", "before executing the card"}
+	orchestrateSessionSnippet = snippetRef{"snippets/orchestrate-sessions.md", "before orchestrating"}
+)
+
+// phaseSnippets renders the conditional read sentence that every rule entry repeats, followed
+// by the phase snippets Kander names for this prompt, each with its absolute path.
+func phaseSnippets(paths config.InstallPaths, refs ...snippetRef) string {
+	root := "<rules root>"
+	if paths.RulesDir != "" {
+		root = process.AgentPath(filepath.Clean(paths.RulesDir))
+	}
+	text := "\n\n" + config.CommandReadSentence(root)
+	for _, ref := range refs {
+		text += " Read `" + rulesPath(paths, ref.name) + "` " + ref.when + "."
+	}
+	return text
+}
+
 // headedTaskFileInstruction renders the head of kind and the one-line instruction in one call.
 func headedTaskFileInstruction(paths config.InstallPaths, kind, taskID, target string, count int, path string) (string, error) {
 	head, err := promptHead(paths, kind, taskID, target, count)
@@ -211,7 +236,7 @@ func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardT
 		"TaskID":        taskID,
 		"Agents":        agents,
 		"Group":         taskGroup != "",
-		"PhaseSnippets": "",
+		"PhaseSnippets": phaseSnippets(paths, executeSingleSnippet),
 	})
 }
 
@@ -247,6 +272,12 @@ func resumeData(taskID, message string, paths config.InstallPaths, state, cardTe
 	if err != nil {
 		return nil, err
 	}
+	// A card waiting in review/ gets its phase snippet from the dispatch that brings it back;
+	// a working card continues or restarts its execution and gets the execution snippet.
+	snippets := phaseSnippets(paths)
+	if state != "review" {
+		snippets = phaseSnippets(paths, executeSingleSnippet)
+	}
 	return map[string]any{
 		"Head":          head,
 		"Status":        status,
@@ -255,7 +286,7 @@ func resumeData(taskID, message string, paths config.InstallPaths, state, cardTe
 		"TaskID":        taskID,
 		"Message":       message,
 		"Agents":        agents,
-		"PhaseSnippets": "",
+		"PhaseSnippets": snippets,
 	}, nil
 }
 

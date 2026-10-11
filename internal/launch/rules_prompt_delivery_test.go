@@ -15,7 +15,7 @@ func TestKanbanRulesKeepArgvPromisesAndDocumentPane(t *testing.T) {
 	}
 	// The start contract carries the argv promises; the kanban rules keep the start checks.
 	var text string
-	for _, name := range []string{"KANDER-KANBAN-RULES.md", "snippets/commands/start.md"} {
+	for _, name := range []string{"KANDER-KANBAN-RULES.md", "snippets/commands/start.md", "snippets/execute-single.md"} {
 		data, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "rules", filepath.FromSlash(name)))
 		if err != nil {
 			t.Fatal(err)
