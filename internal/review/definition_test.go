@@ -74,7 +74,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 			ctx := reviewContext{
 				agent: agent, settings: settings, root: "/work",
 				program:     process.AgentProgram{Path: "/bin/reviewer"},
-				instruction: process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+				instruction: process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
 			}
 			inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 			if err != nil {
@@ -84,7 +84,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 				t.Fatalf("cwd %s", cwd)
 			}
 			got := inv.Argv[1:]
-			wantArgv := previousBuiltinArgv(agent, settings.model, settings.effort, "/work", "/rt", "/rt/out", "/rt/prompt.txt")
+			wantArgv := previousBuiltinArgv(t, agent, settings.model, settings.effort, "/work", "/rt", "/rt/out", "/rt/prompt.txt")
 			if !reflect.DeepEqual(got, wantArgv) {
 				t.Fatalf("argv\n got %q\nwant %q", got, wantArgv)
 			}
@@ -113,7 +113,7 @@ func TestBuiltinReviewDefinitionsMatchPrevious(t *testing.T) {
 	}
 }
 
-func previousBuiltinArgv(agent, model, effort, root, runtime, output, prompt string) []string {
+func previousBuiltinArgv(t *testing.T, agent, model, effort, root, runtime, output, prompt string) []string {
 	var modelArgs []string
 	if model != "" {
 		modelArgs = []string{"--model", model}
@@ -135,7 +135,7 @@ func previousBuiltinArgv(agent, model, effort, root, runtime, output, prompt str
 			"--permission-mode", "bypassPermissions",
 			"--disallowedTools", "Edit,Write",
 		}, modelArgs...), "--effort", effort,
-			"--append-system-prompt", lastMessageOutputContract)
+			"--append-system-prompt", mustLastMessageContract(t))
 	case "cursor":
 		return append([]string{
 			"--print", "--output-format", "json", "--trust", "--yolo",
@@ -242,7 +242,7 @@ func TestDevinReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	ctx := reviewContext{
 		agent: "devin", settings: settings, root: "/work",
 		program:     process.AgentProgram{Path: "/bin/reviewer"},
-		instruction: process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+		instruction: process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
 	}
 	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 	if err != nil {
@@ -287,7 +287,7 @@ func TestOpenCodeReviewDefinitionUsesArgvInstruction(t *testing.T) {
 	ctx := reviewContext{
 		agent: "opencode", settings: settings, root: "/work",
 		program:     process.AgentProgram{Path: "/bin/reviewer"},
-		instruction: process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+		instruction: process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
 	}
 	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
 	if err != nil {
@@ -331,7 +331,7 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 	ctx := reviewContext{
 		agent: "kimi", settings: settings, root: "/work",
 		program:         process.AgentProgram{Path: "/bin/reviewer"},
-		instruction:     process.TaskFileInstruction("Perform the PM review.", "/rt/prompt.txt"),
+		instruction:     process.TaskFileInstruction("", "Perform the PM review.", "/rt/prompt.txt"),
 		promptFilePaths: map[string]string{"kimi-reviewer": "/rt/kimi-reviewer.md"},
 	}
 	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
@@ -362,7 +362,7 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
 	promptFile := "/rt/prompt.txt"
-	want := process.TaskFileInstruction("Perform the QA review.", promptFile)
+	want := process.TaskFileInstruction("", "Perform the QA review.", promptFile)
 	if !strings.Contains(want, "task file at "+promptFile) {
 		t.Fatalf("instruction %q", want)
 	}
@@ -374,7 +374,7 @@ func TestBuiltinReviewStdinMatchesPreviousInstruction(t *testing.T) {
 		if settings.stdin != config.ReviewStdinInstruction || len(settings.promptFiles) != 0 {
 			t.Fatalf("%s stdin=%q files=%v", agent, settings.stdin, settings.promptFiles)
 		}
-		got := process.TaskFileInstruction("Perform the QA review.", promptFile)
+		got := process.TaskFileInstruction("", "Perform the QA review.", promptFile)
 		if got != want {
 			t.Fatalf("%s instruction %q", agent, got)
 		}

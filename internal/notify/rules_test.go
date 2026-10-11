@@ -79,7 +79,7 @@ func TestNotifyPayloadLoadsRuleConfigurationWithAllModulesOff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"KANDER-AGENTS.md", "config --json", "已启用", "执行用户流程"} {
+	for _, required := range []string{"KANDER-AGENTS.md", "config --json", "load only enabled modules", "执行用户流程"} {
 		if !strings.Contains(string(body), required) {
 			t.Fatalf("missing %s: %s", required, body)
 		}

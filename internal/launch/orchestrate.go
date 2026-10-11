@@ -104,7 +104,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	if err != nil {
 		return result, err
 	}
-	taskFile, err := createTaskFile(body, "kander-orchestrate-"+tasks[0].TaskID+"-")
+	taskFile, err := createTaskFile(body, "kander-orchestrate-"+tasks[0].TaskID+"-", taskFileTrailer(paths))
 	if err != nil {
 		return result, err
 	}
@@ -114,7 +114,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskInstruction(t("orchestrate.prompt_head", strconv.Itoa(len(tasks))), taskFile)
+	prompt := taskFileInstruction(paths, promptHead(paths, "orchestrate", "", "", len(tasks)), taskFile)
 	args, err := agentArguments(agent, cfg.Models.Kanban[agent], "large", session, false, cfg)
 	if err != nil {
 		return result, err
@@ -229,18 +229,17 @@ func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover s
 	for _, task := range tasks {
 		group := task.TaskGroup
 		if group == "" {
-			group = t("orchestrate.no_task_group")
+			group = "no task group"
 		}
 		fmt.Fprintf(&list, "- %s (%s, %s)\n", task.TaskID, task.State, group)
 	}
-	rules := RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " "
-	return t(
-		"orchestrate.prompt",
-		rules,
-		strings.TrimRight(list.String(), "\n"),
-		handover,
-		promptAgents(paths),
-	), nil
+	return render(paths, "orchestrate.md", map[string]any{
+		"Preamble":      RuleLoadingInstruction(paths) + " " + promptLanguageDirective(paths, lang),
+		"Tasks":         strings.TrimRight(list.String(), "\n"),
+		"Handover":      handover,
+		"Agents":        promptAgents(paths),
+		"PhaseSnippets": "",
+	})
 }
 
 // orchestratorWindowName names the container after the first card in plan

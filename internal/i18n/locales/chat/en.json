@@ -1,5 +1,4 @@
 {
-  "launch.prompt.chat_head": "Reply to the message the user typed into the Kander chat box",
   "launch.chat_requires_container_launcher": "the chat box needs a launcher that starts the agent in a terminal container such as herdr or tmux; launcher {{.V0}} would take over the board's terminal",
   "tui.chat_title": "Chat with an agent",
   "tui.chat_placeholder": "Type a message for the agent",

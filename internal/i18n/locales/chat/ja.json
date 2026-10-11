@@ -1,5 +1,4 @@
 {
-  "launch.prompt.chat_head": "Kander のチャットボックスにユーザーが入力したメッセージに返信してください",
   "launch.chat_requires_container_launcher": "チャットボックスには herdr や tmux など、ターミナルコンテナで agent を起動するランチャーが必要です。ランチャー {{.V0}} はボードのターミナルを占有します",
   "tui.chat_title": "Agent とチャット",
   "tui.chat_placeholder": "Agent に渡す内容を入力",

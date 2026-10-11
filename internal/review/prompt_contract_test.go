@@ -32,8 +32,8 @@ func TestLastMessageOutputContractText(t *testing.T) {
 		"Delete the task file before writing the final message",
 		"do not send any follow-up",
 	} {
-		if !strings.Contains(lastMessageOutputContract, phrase) {
-			t.Fatalf("output contract missing %q: %q", phrase, lastMessageOutputContract)
+		if !strings.Contains(mustLastMessageContract(t), phrase) {
+			t.Fatalf("output contract missing %q: %q", phrase, mustLastMessageContract(t))
 		}
 	}
 }
@@ -41,20 +41,20 @@ func TestLastMessageOutputContractText(t *testing.T) {
 func TestBuildPromptLastMessageOutputContract(t *testing.T) {
 	evidence := "/runtime/evidence.txt"
 	task := "Authoritative task goal: fix the report."
-	codex := buildPrompt(promptContractContext("codex"), evidence, task)
-	if !strings.Contains(codex, "/runtime/review-contract.md") || strings.Contains(codex, lastMessageOutputContract) {
+	codex := mustBuildPrompt(t, promptContractContext("codex"), evidence, task)
+	if !strings.Contains(codex, "/runtime/review-contract.md") || strings.Contains(codex, mustLastMessageContract(t)) {
 		t.Fatal("bootstrap must point at the contract without inlining it")
 	}
-	codexContract := buildReviewContract(promptContractContext("codex"))
-	if strings.Contains(codexContract, lastMessageOutputContract) {
+	codexContract := mustBuildContract(t, promptContractContext("codex"))
+	if strings.Contains(codexContract, mustLastMessageContract(t)) {
 		t.Fatal("codex contract must not include last-message output contract")
 	}
 	for _, agent := range []string{"claude", "cursor", "grok"} {
 		ctx := promptContractContext(agent)
-		if got := buildPrompt(ctx, evidence, task); got != codex {
+		if got := mustBuildPrompt(t, ctx, evidence, task); got != codex {
 			t.Fatalf("%s bootstrap drifted from the shared prompt", agent)
 		}
-		if got := buildReviewContract(ctx); !strings.Contains(got, lastMessageOutputContract) {
+		if got := mustBuildContract(t, ctx); !strings.Contains(got, mustLastMessageContract(t)) {
 			t.Fatalf("%s contract is missing last-message output rules", agent)
 		}
 	}
@@ -65,18 +65,18 @@ func TestBuildPromptLastMessageOutputContractIncremental(t *testing.T) {
 	ctx.reviewed = "cccccccccccccccccccccccccccccccccccccccc"
 	evidence := "/runtime/evidence.txt"
 	task := "Authoritative task goal: fix the report."
-	bootstrap := buildPrompt(ctx, evidence, task)
-	contract := buildReviewContract(ctx)
+	bootstrap := mustBuildPrompt(t, ctx, evidence, task)
+	contract := mustBuildContract(t, ctx)
 	if strings.Contains(bootstrap, "incremental re-review") || !strings.Contains(contract, "incremental re-review") {
 		t.Fatal("incremental rules must live only in the review contract")
 	}
 	for _, agent := range []string{"claude", "cursor", "grok"} {
 		agentCtx := promptContractContext(agent)
 		agentCtx.reviewed = ctx.reviewed
-		if got := buildPrompt(agentCtx, evidence, task); got != bootstrap {
+		if got := mustBuildPrompt(t, agentCtx, evidence, task); got != bootstrap {
 			t.Fatalf("%s incremental bootstrap drifted from the shared prompt", agent)
 		}
-		if got := buildReviewContract(agentCtx); !strings.Contains(got, lastMessageOutputContract) {
+		if got := mustBuildContract(t, agentCtx); !strings.Contains(got, mustLastMessageContract(t)) {
 			t.Fatalf("%s incremental contract is missing output rules", agent)
 		}
 	}
@@ -89,8 +89,8 @@ func TestReviewPromptResourcesRenderCompletely(t *testing.T) {
 			ctx.role = role
 			ctx.reviewed = reviewed
 			rendered := map[string]string{
-				"bootstrap": buildPrompt(ctx, "/runtime/evidence.txt", "Authoritative task goal: verify prompts."),
-				"contract":  buildReviewContract(ctx),
+				"bootstrap": mustBuildPrompt(t, ctx, "/runtime/evidence.txt", "Authoritative task goal: verify prompts."),
+				"contract":  mustBuildContract(t, ctx),
 			}
 			for name, text := range rendered {
 				if strings.Contains(text, "{{") || strings.Contains(text, "}}") {
@@ -106,7 +106,7 @@ func TestReviewSizeRuleMatchesReleasedRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	promptText := strings.ToLower(roleRules["QA"])
+	promptText := strings.ToLower(mustRoleRules(t, "QA"))
 	releasedText := strings.ToLower(string(released))
 	for _, phrase := range []string{
 		"file added this round exceeds 1000",
@@ -124,7 +124,7 @@ func TestReviewSizeRuleMatchesReleasedRules(t *testing.T) {
 
 func TestReviewerArgumentsClaudeAppendsSystemPrompt(t *testing.T) {
 	inv := mustReviewerArgs(t, "claude")
-	assertArg(t, inv.Argv, "--append-system-prompt", lastMessageOutputContract)
+	assertArg(t, inv.Argv, "--append-system-prompt", mustLastMessageContract(t))
 	assertArg(t, inv.Argv, "--permission-mode", "bypassPermissions")
 	assertArg(t, inv.Argv, "--disallowedTools", "Edit,Write")
 	if !slices.Contains(inv.Argv, "--print") {

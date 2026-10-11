@@ -82,7 +82,11 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	taskFile, err := createTaskFile(request.Message, "kander-chat-")
+	paths, err := currentInstallPaths()
+	if err != nil {
+		return result, err
+	}
+	taskFile, err := createTaskFile(request.Message, "kander-chat-", taskFileTrailer(paths))
 	if err != nil {
 		return result, err
 	}
@@ -92,7 +96,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskInstruction(t("launch.prompt.chat_head"), taskFile)
+	prompt := taskFileInstruction(paths, promptHead(paths, "chat", "", "", 0), taskFile)
 	args, err := chatAgentArguments(agent, settings.Model, settings.Effort, session, cfg)
 	if err != nil {
 		return result, err

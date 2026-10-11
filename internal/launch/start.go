@@ -100,7 +100,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	taskFile, err := createTaskFile(body, "kander-"+entry.TaskID+"-start-")
+	taskFile, err := createTaskFile(body, "kander-"+entry.TaskID+"-start-", taskFileTrailer(paths))
 	if err != nil {
 		return result, err
 	}
@@ -110,7 +110,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskInstruction(t("launch.prompt.start_head", entry.TaskID), taskFile)
+	prompt := taskFileInstruction(paths, promptHead(paths, "start", entry.TaskID, "", 0), taskFile)
 	args, err := execArguments(choice, session, false, cfg)
 	if err != nil {
 		return result, err

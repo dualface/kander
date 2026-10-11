@@ -5,9 +5,6 @@
   "orchestrate.task_already_started": "task {{.V0}} is in {{.V1}}; orchestrate only accepts cards in backlog or todo",
   "orchestrate.task_not_ready": "task {{.V0}} cannot enter todo yet: {{.V1}}",
   "orchestrate.agent_exited_with_status": "the orchestrator agent exited with status {{.V0}}; cards it already advanced keep their state, so check the board before retrying",
-  "orchestrate.no_task_group": "no task group",
   "orchestrate.started": "orchestrator session started: {{.V0}} ({{.V1}}) for {{.V2}} tasks at {{.V3}}",
-  "orchestrate.started_no_address": "orchestrator session started: {{.V0}} ({{.V1}}) for {{.V2}} tasks",
-  "orchestrate.prompt_head": "Orchestrate {{.V0}} Kanban tasks as the plan orchestrator.",
-  "orchestrate.prompt": "{{.V0}}You are the orchestrator of a confirmed plan. The creating session handed over these cards and no longer follows their progress.\n\nTasks in plan order:\n\n{{.V1}}\n\nConfirmed plan notes:\n\n{{.V2}}\n\nRead and follow \"Orchestrator Sessions\" in the command contract. The confirmed plan authorizes development and integration for every task listed above. Continue under {{.V3}}, the command contract, and the loaded modules."
+  "orchestrate.started_no_address": "orchestrator session started: {{.V0}} ({{.V1}}) for {{.V2}} tasks"
 }

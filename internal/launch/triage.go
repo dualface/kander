@@ -89,7 +89,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 		return result, err
 	}
 	prefix := "kander-issue-" + issue.TriageDirectoryName(request.Repository, request.Number) + "-triage-"
-	taskFile, err := createTaskFile(body, prefix)
+	taskFile, err := createTaskFile(body, prefix, taskFileTrailer(paths))
 	if err != nil {
 		return result, err
 	}
@@ -99,11 +99,11 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	head := t("launch.prompt.triage_head", triageTarget(request.Repository, request.Number))
+	head := promptHead(paths, "triage", "", triageTarget(request.Repository, request.Number), 0)
 	if request.ResultSync {
-		head = t("launch.prompt.result_head", triageTarget(request.Repository, request.Number))
+		head = promptHead(paths, "result", "", triageTarget(request.Repository, request.Number), 0)
 	}
-	prompt := taskInstruction(head, taskFile)
+	prompt := taskFileInstruction(paths, head, taskFile)
 	args, err := agentArguments(agent, cfg.Models.Kanban[agent], "small", session, false, cfg)
 	if err != nil {
 		return result, err
@@ -191,25 +191,20 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	if err != nil {
 		return "", err
 	}
-	rules := RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + " "
-	issueRules := rulesPath(paths, "KANDER-ISSUE-RULES.md")
 	// The import instruction belongs to the unbound branch only: a session
 	// started for a bound card continues that card and must never be told to
 	// import the issue again.
-	cardLine := t("launch.prompt.triage_no_card", commandName(paths), strconv.Itoa(request.Number))
-	if request.CardID != "" {
-		cardLine = t("launch.prompt.triage_with_card", request.CardID)
-	}
-	return t(
-		"launch.prompt.triage",
-		triageTarget(request.Repository, request.Number),
-		rules,
-		process.AgentPath(request.JSONPath),
-		process.AgentPath(request.MarkdownPath),
-		cardLine,
-		promptAgents(paths),
-		issueRules,
-	), nil
+	return render(paths, "triage.md", map[string]any{
+		"Head":         promptHead(paths, "triage", "", triageTarget(request.Repository, request.Number), 0),
+		"Preamble":     RuleLoadingInstruction(paths) + " " + promptLanguageDirective(paths, lang),
+		"IssueRules":   rulesPath(paths, "KANDER-ISSUE-RULES.md"),
+		"JSONPath":     process.AgentPath(request.JSONPath),
+		"MarkdownPath": process.AgentPath(request.MarkdownPath),
+		"CardID":       request.CardID,
+		"Command":      commandName(paths),
+		"Number":       request.Number,
+		"Agents":       promptAgents(paths),
+	})
 }
 
 // triageTarget renders the confirmed identity of one issue from the validated

@@ -5,9 +5,6 @@
   "orchestrate.task_already_started": "任务 {{.V0}} 位于 {{.V1}}; orchestrate 只接受 backlog 或 todo 中的卡",
   "orchestrate.task_not_ready": "任务 {{.V0}} 尚不能进入 todo: {{.V1}}",
   "orchestrate.agent_exited_with_status": "主控 Agent 以状态 {{.V0}} 退出; 它已推进的卡保持当前状态, 重试前先检查看板",
-  "orchestrate.no_task_group": "无任务组",
   "orchestrate.started": "主控会话已启动: {{.V0}} ({{.V1}}), 共 {{.V2}} 张任务卡, 位置 {{.V3}}",
-  "orchestrate.started_no_address": "主控会话已启动: {{.V0}} ({{.V1}}), 共 {{.V2}} 张任务卡",
-  "orchestrate.prompt_head": "作为计划主控推进 {{.V0}} 张看板任务卡.",
-  "orchestrate.prompt": "{{.V0}}你是已确认计划的主控. 创建会话已移交这些卡片, 不再跟踪后续进度.\n\n计划顺序内的任务:\n\n{{.V1}}\n\n已确认的计划说明:\n\n{{.V2}}\n\n读取并遵守命令协议中的 \"Orchestrator Sessions\". 已确认计划授权上列每项任务的开发与集成. 继续遵守 {{.V3}}、命令协议和已加载模块."
+  "orchestrate.started_no_address": "主控会话已启动: {{.V0}} ({{.V1}}), 共 {{.V2}} 张任务卡"
 }

@@ -58,7 +58,7 @@ func TestAgentPromptsLoadConfigurationBeforeCommandContract(t *testing.T) {
 				if strings.Index(prompt, bootstrap) < 0 || strings.Index(prompt, configuration) < strings.Index(prompt, bootstrap) || strings.Index(prompt, want) < strings.Index(prompt, configuration) {
 					t.Fatalf("bootstrap/configuration/contract order is wrong: %s", prompt)
 				}
-				directive := promptLanguageDirective("en")
+				directive := promptLanguageDirective(paths, "en")
 				ruleIdx := strings.Index(prompt, bootstrap)
 				dirIdx := strings.Index(prompt, directive)
 				if dirIdx < 0 || dirIdx < ruleIdx {
@@ -100,16 +100,11 @@ func TestLocalizedPromptsAndSessionLookup(t *testing.T) {
 			if !strings.Contains(pending, selfMove) || strings.Contains(normal, selfMove) {
 				t.Fatalf("review state must require self move, working must not: %s", pending)
 			}
-			if lang == "en" && !strings.HasPrefix(normal, "Resume Kanban task task-1.") {
-				t.Fatalf("English prompt: %s", normal)
+			// Prompts come from the English templates in every interface language.
+			if !strings.HasPrefix(normal, "Resume Kanban task task-1.") {
+				t.Fatalf("prompt head in %s: %s", lang, normal)
 			}
-			if lang == "cn" && !strings.HasPrefix(normal, "继续 Kanban 任务 task-1.") {
-				t.Fatalf("Chinese prompt: %s", normal)
-			}
-			if lang == "ja" && !strings.HasPrefix(normal, "Kanban タスク task-1 を再開します.") {
-				t.Fatalf("Japanese prompt: %s", normal)
-			}
-			// Every interface language and the old mixed-language file pointer remain searchable.
+			// The current head and the legacy localized heads remain searchable.
 			for _, prefix := range []string{
 				"执行 Kanban 任务 task-1; full instructions are in the UTF-8 task file at /tmp/task.md",
 				"Resume Kanban task task-1; full instructions are in the UTF-8 task file at /tmp/task.md",
@@ -171,7 +166,7 @@ func TestPromptLanguageDirectiveFromCardAndConfig(t *testing.T) {
 			if !strings.Contains(tc.body, want) {
 				t.Fatalf("%s missing %q: %s", tc.name, want, tc.body)
 			}
-			if !strings.Contains(tc.body, promptLanguageDirective("ja")) {
+			if !strings.Contains(tc.body, promptLanguageDirective(paths, "ja")) {
 				t.Fatalf("%s missing full language directive: %s", tc.name, tc.body)
 			}
 		}
@@ -240,7 +235,7 @@ func TestPromptUsesSizeIndependentOfDirectoryForm(t *testing.T) {
 	for _, size := range []string{"small", "large"} {
 		text := "- LANGUAGE: en\n- SIZE: " + size + "\n"
 		instruction, err := RuleLoadingWithLanguage(config.InstallPaths{Mode: config.ModeGlobal, RulesDir: "/rules"}, text)
-		if err != nil || !strings.Contains(instruction, config.Text("launch.prompt.size", size)) {
+		if err != nil || !strings.Contains(instruction, "Task size is "+size+" (SIZE)") {
 			t.Fatalf("size %s: %q %v", size, instruction, err)
 		}
 	}
@@ -288,7 +283,7 @@ func TestPromptReportingDirectiveFollowsRule(t *testing.T) {
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(t.TempDir(), "rules")}
 	card := "- LANGUAGE: en\n- SIZE: small\n"
-	legacy := RuleLoadingInstruction(paths) + promptLanguageDirective("en") + " " + config.Text("launch.prompt.size", "small") + " "
+	legacy := RuleLoadingInstruction(paths) + " " + promptLanguageDirective(paths, "en") + " " + mustRender(paths, "size.md", map[string]string{"Size": "small"})
 	for _, enabled := range []bool{true, false} {
 		cfg := config.DefaultConfig()
 		cfg.Rules[config.RuleReporting] = enabled

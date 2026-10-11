@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -108,14 +109,12 @@ func TestCatalogs(t *testing.T) {
 }
 
 func TestLaunchPromptsDoNotInlineDeliveryPolicy(t *testing.T) {
-	for _, language := range []string{"en", "zh-CN", "ja"} {
-		messages := readCatalog(t, language)
-		for _, id := range []string{"launch.prompt.start_single", "launch.prompt.start_group"} {
-			message := messages[id]
-			if strings.Contains(message, "Delivery Self-Check") || strings.Contains(message, "KANDER-CODE-RULES.md") {
-				t.Fatalf("%s/%s duplicates policy from the rules file: %s", language, id, message)
-			}
-		}
+	message, err := os.ReadFile(filepath.Join("..", "..", "rules", "templates", "prompt", "start.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(message), "Delivery Self-Check") || strings.Contains(string(message), "KANDER-CODE-RULES.md") {
+		t.Fatalf("the start prompt duplicates policy from the rules file: %s", message)
 	}
 }
 
@@ -152,7 +151,7 @@ func TestText(t *testing.T) {
 		{"ja", "cli.subcommand_is_not_implemented", []any{"demo"}, "サブコマンドは未実装です: demo"},
 		{"unknown", "cli.subcommand_is_not_implemented", []any{"demo"}, "子命令尚未实现: demo"},
 		{"en", "config.unknown_task_scale", []any{"a\"b"}, "unknown task scale: \"a\\\"b\""},
-		{"cn", "launch.prompt.resume_head", []any{"{{.V9}} <&>"}, "继续 Kanban 任务 {{.V9}} <&>."},
+		{"cn", "install.rule_missing", []any{"{{.V9}} <&>"}, "规则文件缺失: {{.V9}} <&>"},
 		{"en", "missing.id", nil, "missing.id"},
 		{"en", "", nil, ""},
 	} {

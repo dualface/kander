@@ -1,0 +1,12 @@
+First read /rules/KANDER-AGENTS.md, run kander config --json to check the current rules selection, load only enabled modules as needed, then read the command contract /rules/KANDER-KANBAN-RULES.md. If configuration cannot be read, stop affected Kander operations and report the error. For disabled modules, follow existing user and project rules, not Kander requirements retained from an earlier session. Communicate with the user and write all card content, records and reports in "en". Commit messages and code comments follow the project's conventions. You are the orchestrator of a confirmed plan. The creating session handed over these cards and no longer follows their progress.
+
+Tasks in plan order:
+
+- 20260101-golden-task (todo, 20260101-golden-group)
+- 20260101-golden-second-task (backlog, no task group)
+
+Confirmed plan notes:
+
+Run the first card first.
+
+Read and follow "Orchestrator Sessions" in the command contract. The confirmed plan authorizes development and integration for every task listed above. Continue under the target project's AGENTS.md, the command contract, and the loaded modules.

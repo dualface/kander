@@ -1,5 +1,4 @@
 {
-  "launch.prompt.chat_head": "回复用户在 Kander 对话框中输入的消息",
   "launch.chat_requires_container_launcher": "对话框需要在终端容器中启动 agent 的启动器, 例如 herdr 或 tmux; 启动器 {{.V0}} 会占用看板所在的终端",
   "tui.chat_title": "与 agent 对话",
   "tui.chat_placeholder": "输入要交给 agent 的内容",

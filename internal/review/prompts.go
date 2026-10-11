@@ -1,26 +1,17 @@
 package review
 
 import (
-	"bytes"
-	"embed"
+	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 )
 
-//go:embed prompts/*.md prompts/roles/*.md
-var reviewPromptFS embed.FS
-
-var reviewPromptTemplates = template.Must(
-	template.New("review-prompts").Option("missingkey=error").ParseFS(
-		reviewPromptFS,
-		"prompts/*.md",
-		"prompts/roles/*.md",
-	),
-)
+// reviewTemplatesDir holds the reviewer prompt templates below the rules root; roles/*.md
+// include each other, so the directory is rendered as one template set.
+const reviewTemplatesDir = "templates/review"
 
 type reviewContractData struct {
 	Role                      string
@@ -51,79 +42,97 @@ type incrementalScopeData struct {
 	Reviewed string
 }
 
-func renderReviewTemplate(name string, data any) string {
-	var out bytes.Buffer
-	if err := reviewPromptTemplates.ExecuteTemplate(&out, name, data); err != nil {
-		panic(err)
+func renderReviewTemplate(name string, data any) (string, error) {
+	paths, err := config.CurrentInstallPaths()
+	if err != nil {
+		paths = config.InstallPaths{}
 	}
-	return strings.TrimSpace(out.String()) + "\n"
+	out, err := config.RenderRulesTemplateSet(paths, reviewTemplatesDir, name, data, os.Stderr)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out) + "\n", nil
 }
 
-func renderRoleRules(role string) string {
-	name, ok := map[string]string{
-		"PMQA":     "role-pmqa.md",
-		"Security": "role-security.md",
-		"PM":       "role-pm.md",
-		"QA":       "role-qa.md",
-		"CSA":      "role-csa.md",
-		"Hacker":   "role-hacker.md",
-	}[role]
+var roleTemplates = map[string]string{
+	"PMQA":     "role-pmqa.md",
+	"Security": "role-security.md",
+	"PM":       "role-pm.md",
+	"QA":       "role-qa.md",
+	"CSA":      "role-csa.md",
+	"Hacker":   "role-hacker.md",
+}
+
+// roleRules renders the review-focus text of one role; an unknown role has none.
+func roleRules(role string) (string, error) {
+	name, ok := roleTemplates[role]
 	if !ok {
-		return ""
+		return "", nil
 	}
 	return renderReviewTemplate(name, nil)
 }
 
-var roleRules = map[string]string{
-	"PMQA":     renderRoleRules("PMQA"),
-	"Security": renderRoleRules("Security"),
-	"PM":       renderRoleRules("PM"),
-	"QA":       renderRoleRules("QA"),
-	"CSA":      renderRoleRules("CSA"),
-	"Hacker":   renderRoleRules("Hacker"),
+func lastMessageOutputContract() (string, error) {
+	text, err := renderReviewTemplate("last-message-output.md", nil)
+	return strings.TrimSpace(text), err
 }
 
-var (
-	tierRules                 = renderReviewTemplate("tiers.md", nil)
-	structuredFindingRules    = renderReviewTemplate("structured-findings.md", nil)
-	lastMessageOutputContract = strings.TrimSpace(renderReviewTemplate("last-message-output.md", nil))
-)
-
-func incrementalScopeRules(ctx reviewContext) string {
+func incrementalScopeRules(ctx reviewContext) (string, error) {
 	return renderReviewTemplate("scope-incremental.md", incrementalScopeData{
 		Base: ctx.base, Commit: ctx.commit, Reviewed: ctx.reviewed,
 	})
 }
 
-func buildReviewContract(ctx reviewContext) string {
-	scope := renderReviewTemplate("scope-full.md", nil)
+func buildReviewContract(ctx reviewContext) (string, error) {
+	scope, err := renderReviewTemplate("scope-full.md", nil)
 	if ctx.reviewed != "" {
-		scope = incrementalScopeRules(ctx)
+		scope, err = incrementalScopeRules(ctx)
+	}
+	if err != nil {
+		return "", err
 	}
 	outputContract := ""
 	if usesLastMessageReport(ctx.agent) {
-		outputContract = lastMessageOutputContract
+		if outputContract, err = lastMessageOutputContract(); err != nil {
+			return "", err
+		}
+	}
+	roles, err := roleRules(ctx.role)
+	if err != nil {
+		return "", err
+	}
+	tiers, err := renderReviewTemplate("tiers.md", nil)
+	if err != nil {
+		return "", err
+	}
+	findings, err := renderReviewTemplate("structured-findings.md", nil)
+	if err != nil {
+		return "", err
+	}
+	language, err := reportLanguageRule(ctx.reportLanguage)
+	if err != nil {
+		return "", err
 	}
 	return renderReviewTemplate("review-contract.md", reviewContractData{
 		Role:                      ctx.role,
 		Scope:                     scope,
-		RoleRules:                 roleRules[ctx.role],
-		TierRules:                 tierRules,
-		StructuredFindingRules:    structuredFindingRules,
+		RoleRules:                 roles,
+		TierRules:                 tiers,
+		StructuredFindingRules:    findings,
 		InspectionRules:           ctx.settings.inspectionRules,
-		ReportLanguageRule:        reportLanguageRule(ctx.reportLanguage),
+		ReportLanguageRule:        language,
 		LastMessageOutputContract: outputContract,
 	})
 }
 
-func reportLanguageRule(language string) string {
+func reportLanguageRule(language string) (string, error) {
 	if language == "" {
-		return ""
+		return "", nil
 	}
 	return renderReviewTemplate("report-language.md", struct{ Language string }{Language: language})
 }
 
-func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) string {
+func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) (string, error) {
 	automatic, caller := reviewPromptContext(ctx)
 	return renderReviewTemplate("bootstrap.md", reviewBootstrapData{
 		Role:                   ctx.role,

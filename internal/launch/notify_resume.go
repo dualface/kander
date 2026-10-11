@@ -87,7 +87,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	taskFile, err := createTaskFile(promptBody, "kander-"+entry.TaskID+"-notify-")
+	taskFile, err := createTaskFile(promptBody, "kander-"+entry.TaskID+"-notify-", taskFileTrailer(paths))
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
@@ -97,7 +97,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt := taskInstruction(t("launch.prompt.resume_head", entry.TaskID), taskFile)
+	prompt := taskFileInstruction(paths, promptHead(paths, "resume", entry.TaskID, "", 0), taskFile)
 	args, err := execArguments(choice, session, resume, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err

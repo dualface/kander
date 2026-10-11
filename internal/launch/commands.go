@@ -204,7 +204,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if takeover {
 		prefix = "kander-" + entry.TaskID + "-takeover-"
 	}
-	taskFile, err := createTaskFile(instruction, prefix)
+	taskFile, err := createTaskFile(instruction, prefix, taskFileTrailer(paths))
 	if err != nil {
 		return err
 	}
@@ -214,11 +214,11 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	head := t("launch.prompt.resume_head", entry.TaskID)
+	head := promptHead(paths, "resume", entry.TaskID, "", 0)
 	if takeover {
-		head = t("launch.prompt.takeover_head", entry.TaskID)
+		head = promptHead(paths, "takeover", entry.TaskID, "", 0)
 	}
-	prompt := taskInstruction(head, taskFile)
+	prompt := taskFileInstruction(paths, head, taskFile)
 	args, err := execArguments(choice, session, !takeover, cfg)
 	if err != nil {
 		return err

@@ -5,9 +5,6 @@
   "orchestrate.task_already_started": "タスク {{.V0}} は {{.V1}} にあります; orchestrate は backlog または todo のカードのみ受け付けます",
   "orchestrate.task_not_ready": "タスク {{.V0}} はまだ todo に入れません: {{.V1}}",
   "orchestrate.agent_exited_with_status": "オーケストレーター Agent がステータス {{.V0}} で終了しました; すでに進めたカードはその状態のままなので、再試行前にボードを確認してください",
-  "orchestrate.no_task_group": "タスクグループなし",
   "orchestrate.started": "オーケストレーターセッションを開始しました: {{.V0}} ({{.V1}}), タスク {{.V2}} 件, 場所 {{.V3}}",
-  "orchestrate.started_no_address": "オーケストレーターセッションを開始しました: {{.V0}} ({{.V1}}), タスク {{.V2}} 件",
-  "orchestrate.prompt_head": "計画のオーケストレーターとして {{.V0}} 件のカンバンタスクを進めます。",
-  "orchestrate.prompt": "{{.V0}}あなたは確定済み計画のオーケストレーターです。作成セッションはこれらのカードを引き渡し、以後の進捗を追いません。\n\n計画順のタスク:\n\n{{.V1}}\n\n確定済み計画のメモ:\n\n{{.V2}}\n\nコマンド契約の \"Orchestrator Sessions\" を読み、従ってください。確定済み計画は上記すべてのタスクの開発と統合を承認済みです。{{.V3}}、コマンド契約、読み込んだモジュールに従って続行してください。"
+  "orchestrate.started_no_address": "オーケストレーターセッションを開始しました: {{.V0}} ({{.V1}}), タスク {{.V2}} 件"
 }

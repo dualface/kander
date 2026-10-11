@@ -67,10 +67,10 @@ func TestReviewerFromConfigRequiresCompleteConfig(t *testing.T) {
 }
 
 func TestReportLanguageRuleOnlyWhenKnown(t *testing.T) {
-	if reportLanguageRule("") != "" {
+	if mustReportLanguageRule(t, "") != "" {
 		t.Fatal("no language must add no instruction")
 	}
-	rule := reportLanguageRule("ja")
+	rule := mustReportLanguageRule(t, "ja")
 	if !strings.Contains(rule, `"ja"`) || !strings.Contains(rule, "exactly as they are") {
 		t.Fatalf("unexpected rule: %q", rule)
 	}

@@ -1,0 +1,5 @@
+Take over Kanban task 20260101-golden-task. The previous Agent codex has stopped; this is a fresh session without its context. The card is in working. First read /rules/KANDER-AGENTS.md, run kander config --json to check the current rules selection, load only enabled modules as needed, then read the command contract /rules/KANDER-KANBAN-RULES.md. If configuration cannot be read, stop affected Kander operations and report the error. For disabled modules, follow existing user and project rules, not Kander requirements retained from an earlier session. Communicate with the user and write all card content, records and reports in "en". Commit messages and code comments follow the project's conventions. Task size is small (SIZE); directory form does not determine size. Follow the corresponding completion requirements. Then run kander show 20260101-golden-task, reconstruct progress from the card, worktree, and records, and address the following:
+
+Fix the failing test.
+
+Continue under the target project's AGENTS.md, the command contract, and the loaded modules.

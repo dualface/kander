@@ -190,7 +190,11 @@ func TestReportTemplateMatchesReleasedRules(t *testing.T) {
 	if block == nil {
 		t.Fatal("template block missing from KANDER-REPORTING-RULES.md")
 	}
-	if got, want := templateLabels(completionReportTemplate), templateLabels(string(block[1])); strings.Join(got, "|") != strings.Join(want, "|") {
+	rendered, err := rules.File("templates/report/completion.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := templateLabels(string(rendered)), templateLabels(string(block[1])); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("template drift:\n got %v\nwant %v", got, want)
 	}
 }

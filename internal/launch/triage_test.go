@@ -82,9 +82,9 @@ func TestStartTriageLaunchesBackgroundSessionWithoutBoardWrites(t *testing.T) {
 
 	oldCreate := createTaskFile
 	var body, prefix, taskFile string
-	createTaskFile = func(text, name string) (string, error) {
+	createTaskFile = func(text, name string, trailer process.TaskFileTrailer) (string, error) {
 		body, prefix = text, name
-		path, err := oldCreate(text, name)
+		path, err := oldCreate(text, name, trailer)
 		taskFile = path
 		return path, err
 	}
@@ -153,8 +153,8 @@ func TestStartTriageFailureClosesTheContainerAndTaskFile(t *testing.T) {
 
 	oldCreate := createTaskFile
 	var taskFile string
-	createTaskFile = func(text, name string) (string, error) {
-		path, err := oldCreate(text, name)
+	createTaskFile = func(text, name string, trailer process.TaskFileTrailer) (string, error) {
+		path, err := oldCreate(text, name, trailer)
 		taskFile = path
 		return path, err
 	}
@@ -344,9 +344,9 @@ func TestResultSessionPromptAndLaunchCleanup(t *testing.T) {
 			request.Launcher = "tmux"
 			old := createTaskFile
 			var taskFile, body string
-			createTaskFile = func(text, prefix string) (string, error) {
+			createTaskFile = func(text, prefix string, trailer process.TaskFileTrailer) (string, error) {
 				body = text
-				p, e := old(text, prefix)
+				p, e := old(text, prefix, trailer)
 				taskFile = p
 				return p, e
 			}

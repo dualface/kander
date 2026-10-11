@@ -44,8 +44,8 @@ func TestReviewExecutableIgnoresExecutionDefinitions(t *testing.T) {
 		t.Fatal("custom reviewer accepted")
 	}
 	cfg.Agents["helper"] = config.AgentDefinition{
-		Path: exe,
-		Args: &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--review"}},
+		Path:    exe,
+		Args:    &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--review"}},
 		Session: &config.AgentSessionDefinition{Mode: "none"},
 		Review: &config.AgentReview{
 			CWD: config.ReviewCWDRuntime, OutputName: "out.txt",

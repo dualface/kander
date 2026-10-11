@@ -1,8 +1,6 @@
 package launch
 
 import (
-	"fmt"
-
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/process"
@@ -17,13 +15,16 @@ func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(`Reconcile the completed result of %s, bound card %s.
-%s%s
-Read %s as current evidence. Before acting, read "Completed Result Reconciliation" in %s.
-This session never authorizes task execution or card mutation. Startup authorizes adding one
-missing result comment through the controlled command. It NEVER authorizes closing the issue;
-closing needs separate explicit user consent for this current issue and result.
-Use only %s issue result %d --repo %s/%s/%s --card %s with --action inspect,
---action apply, or --action decide as defined by the protocol.
-`, triageTarget(request.Repository, request.Number), request.CardID, RuleLoadingInstruction(paths), promptLanguageDirective(lang), process.AgentPath(request.JSONPath), rulesPath(paths, "KANDER-ISSUE-RULES.md"), commandName(paths), request.Number, request.Repository.Host, request.Repository.Owner, request.Repository.Name, request.CardID), nil
+	return render(paths, "result.md", map[string]any{
+		"Target":     triageTarget(request.Repository, request.Number),
+		"CardID":     request.CardID,
+		"Preamble":   RuleLoadingInstruction(paths) + promptLanguageDirective(paths, lang),
+		"JSONPath":   process.AgentPath(request.JSONPath),
+		"IssueRules": rulesPath(paths, "KANDER-ISSUE-RULES.md"),
+		"Command":    commandName(paths),
+		"Number":     request.Number,
+		"Host":       request.Repository.Host,
+		"Owner":      request.Repository.Owner,
+		"Repo":       request.Repository.Name,
+	})
 }

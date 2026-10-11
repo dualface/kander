@@ -370,7 +370,7 @@ func TestResumeClaudeAndGroupPrompt(t *testing.T) {
 	pathEnd = strings.IndexByte(rest, ';')
 	file := strings.TrimSpace(rest[:pathEnd])
 	body, _ := os.ReadFile(file)
-	if !strings.Contains(string(body), "此卡是任务组成员") || !strings.Contains(string(body), "KANDER-KANBAN-RULES.md") {
+	if !strings.Contains(string(body), "this card is a task-group member") || !strings.Contains(string(body), "KANDER-KANBAN-RULES.md") {
 		t.Fatalf("group prompt=%s", body)
 	}
 	if strings.Contains(string(body), "Delivery Self-Check") || strings.Contains(string(body), "kander move "+groupID+" review") {
@@ -550,8 +550,8 @@ func TestStartRemovesTaskFileWhenClaimFails(t *testing.T) {
 	taskID, _ := makeTodo(t, root, "task-file-cleanup")
 	oldCreate, oldMove := createTaskFile, moveEntryFn
 	var taskFile string
-	createTaskFile = func(body, prefix string) (string, error) {
-		path, err := oldCreate(body, prefix)
+	createTaskFile = func(body, prefix string, trailer process.TaskFileTrailer) (string, error) {
+		path, err := oldCreate(body, prefix, trailer)
 		taskFile = path
 		return path, err
 	}

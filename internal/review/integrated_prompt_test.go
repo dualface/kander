@@ -6,7 +6,7 @@ import (
 )
 
 func TestIntegratedReviewRolePromptsComposeHistoricalRoles(t *testing.T) {
-	pmqa := roleRules["PMQA"]
+	pmqa := mustRoleRules(t, "PMQA")
 	contract, quality := strings.Index(pmqa, "Build a requirement table"), strings.Index(pmqa, "Act as the quality owner")
 	if contract < 0 || quality <= contract || !strings.Contains(pmqa, "PM component owns explicit performance acceptance") || !strings.Contains(pmqa, "root cause once") || !strings.Contains(pmqa, "PMQA-prefixed finding IDs") {
 		t.Fatal("PMQA must cover original PM+QA duties without losing contract-before-quality order")
@@ -14,18 +14,18 @@ func TestIntegratedReviewRolePromptsComposeHistoricalRoles(t *testing.T) {
 	if !strings.Contains(pmqa, "1000 physical lines") || !strings.Contains(pmqa, "requirement table is analysis") {
 		t.Fatal("PMQA dropped original PM or QA clauses")
 	}
-	if !strings.Contains(pmqa, strings.TrimSpace(roleRules["PM"])) || !strings.Contains(pmqa, strings.TrimSpace(roleRules["QA"])) {
+	if !strings.Contains(pmqa, strings.TrimSpace(mustRoleRules(t, "PM"))) || !strings.Contains(pmqa, strings.TrimSpace(mustRoleRules(t, "QA"))) {
 		t.Fatal("PMQA must compose the shared PM and QA role resources")
 	}
-	security := roleRules["Security"]
+	security := mustRoleRules(t, "Security")
 	boundary, attacker := strings.Index(security, "Trace untrusted inputs across trust boundaries"), strings.Index(security, "Act as an external attacker")
 	if boundary < 0 || attacker <= boundary || !strings.Contains(security, "root cause only once") || !strings.Contains(security, "no qualifying exploit chain exists") || !strings.Contains(security, "Security-prefixed finding IDs") {
 		t.Fatal("Security must cover original CSA+Hacker duties without losing boundary-before-chains order")
 	}
-	if roleRules["PM"] == "" || roleRules["QA"] == "" || roleRules["CSA"] == "" || roleRules["Hacker"] == "" {
+	if mustRoleRules(t, "PM") == "" || mustRoleRules(t, "QA") == "" || mustRoleRules(t, "CSA") == "" || mustRoleRules(t, "Hacker") == "" {
 		t.Fatal("historical roles need prompts for open four-key batches")
 	}
-	if !strings.Contains(security, strings.TrimSpace(roleRules["CSA"])) || !strings.Contains(security, strings.TrimSpace(roleRules["Hacker"])) {
+	if !strings.Contains(security, strings.TrimSpace(mustRoleRules(t, "CSA"))) || !strings.Contains(security, strings.TrimSpace(mustRoleRules(t, "Hacker"))) {
 		t.Fatal("Security must compose the shared CSA and Hacker role resources")
 	}
 }

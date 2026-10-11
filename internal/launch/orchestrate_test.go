@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"github.com/dualface/kander/internal/process"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -64,9 +65,9 @@ func TestStartOrchestratorLaunchesSessionWithoutBoardWrites(t *testing.T) {
 
 	oldCreate := createTaskFile
 	var body, prefix, taskFile string
-	createTaskFile = func(text, name string) (string, error) {
+	createTaskFile = func(text, name string, trailer process.TaskFileTrailer) (string, error) {
 		body, prefix = text, name
-		path, err := oldCreate(text, name)
+		path, err := oldCreate(text, name, trailer)
 		taskFile = path
 		return path, err
 	}
@@ -227,8 +228,8 @@ func TestStartOrchestratorFailureClosesTheContainerAndTaskFile(t *testing.T) {
 	secondID, _ := makeTodo(t, root, "orchestrate-fail-second")
 	oldCreate := createTaskFile
 	var taskFile string
-	createTaskFile = func(text, name string) (string, error) {
-		path, err := oldCreate(text, name)
+	createTaskFile = func(text, name string, trailer process.TaskFileTrailer) (string, error) {
+		path, err := oldCreate(text, name, trailer)
 		taskFile = path
 		return path, err
 	}

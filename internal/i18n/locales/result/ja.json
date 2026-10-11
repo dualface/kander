@@ -3,6 +3,5 @@
   "tui.issues_result_help": "完了した処理結果を確認",
   "tui.issues_result_title": "Issue #{{.V0}} の処理結果を確認",
   "tui.issues_result_body": "{{.V0}} の結果確認を開始しますか（done カード {{.V1}}）？不足する結果コメントを Agent が追加する場合があります。Issue を閉じるには別途明示的な確認が必要です。元のカードは変更しません。",
-  "tui.issues_result_stale": "選択した Issue、紐付け、カードの状態が変わりました。選択し直してください。",
-  "launch.prompt.result_head": "完了した Issue の処理結果を確認 {{.V0}}"
+  "tui.issues_result_stale": "選択した Issue、紐付け、カードの状態が変わりました。選択し直してください。"
 }

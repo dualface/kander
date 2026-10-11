@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"github.com/dualface/kander/internal/process"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,8 +30,8 @@ func captureTaskFile(t *testing.T) (body, path *string) {
 	t.Helper()
 	body, path = new(string), new(string)
 	oldCreate := createTaskFile
-	createTaskFile = func(text, prefix string) (string, error) {
-		created, err := oldCreate(text, prefix)
+	createTaskFile = func(text, prefix string, trailer process.TaskFileTrailer) (string, error) {
+		created, err := oldCreate(text, prefix, trailer)
 		*body, *path = text, created
 		return created, err
 	}

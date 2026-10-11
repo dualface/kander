@@ -85,7 +85,14 @@ func PrepareAction(root string, s board.Snapshot, message string, o DispatchOpti
 // DispatchInstruction names the only business acknowledgement and completion
 // entrances. A repeated receipt must never start the external work twice.
 func DispatchInstruction(paths config.InstallPaths, d board.Dispatch) string {
-	return t("launch.dispatch_prompt", commandName(paths), d.Input.TaskID, d.Input.ID, d.Authorization.Epoch, d.Input.Kind) + "\n" + board.DispatchEvidenceInstruction(d)
+	return mustRender(paths, "dispatch.md", map[string]any{
+		"Command":       commandName(paths),
+		"TaskID":        d.Input.TaskID,
+		"DispatchID":    d.Input.ID,
+		"Epoch":         d.Authorization.Epoch,
+		"Kind":          d.Input.Kind,
+		"PhaseSnippets": "",
+	}) + "\n" + board.DispatchEvidenceInstruction(d)
 }
 
 // DispatchObservation uses P3's shared deadline and identity-valid report. A

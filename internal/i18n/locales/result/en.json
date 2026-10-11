@@ -3,6 +3,5 @@
   "tui.issues_result_help": "Reconcile completed result",
   "tui.issues_result_title": "Reconcile result of issue #{{.V0}}",
   "tui.issues_result_body": "Start result reconciliation for {{.V0}} (done card {{.V1}})? The agent may add a missing result comment. Closing requires separate explicit confirmation. The card stays unchanged.",
-  "tui.issues_result_stale": "The selected issue or card binding/state changed. Select it again.",
-  "launch.prompt.result_head": "Reconcile completed issue result {{.V0}}"
+  "tui.issues_result_stale": "The selected issue or card binding/state changed. Select it again."
 }

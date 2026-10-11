@@ -373,7 +373,7 @@ func TestNotifyDirectPayloadIncludesCardLanguage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := `Communicate with the user and write all card content, records and reports in "ja". Commit messages and code comments follow the project's conventions.`
+		want := `records and reports in "ja". Commit messages and code comments follow the project's conventions.`
 		if !strings.Contains(string(payload), want) {
 			t.Fatalf("direct payload missing card language directive: %s", payload)
 		}

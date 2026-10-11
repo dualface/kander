@@ -151,7 +151,12 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		fail(err)
 		return exitCode
 	}
-	if err := fs.WriteTextAtomic(runtime, contractFile, buildReviewContract(ctx), false); err != nil {
+	contract, err := buildReviewContract(ctx)
+	if err != nil {
+		fail(err)
+		return exitCode
+	}
+	if err := fs.WriteTextAtomic(runtime, contractFile, contract, false); err != nil {
 		fail(err)
 		return exitCode
 	}
@@ -159,8 +164,16 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		fail(err)
 		return exitCode
 	}
-	promptBody := buildPrompt(ctx, evidenceFile, taskContext)
-	if err := process.WriteTaskFile(runtime, promptFile, promptBody); err != nil {
+	promptBody, err := buildPrompt(ctx, evidenceFile, taskContext)
+	if err != nil {
+		fail(err)
+		return exitCode
+	}
+	paths, err := config.CurrentInstallPaths()
+	if err != nil {
+		paths = config.InstallPaths{}
+	}
+	if err := process.WriteTaskFile(runtime, promptFile, promptBody, process.TaskFileTrailerFor(paths.RulesDir)); err != nil {
 		fail(err)
 		return exitCode
 	}
@@ -169,7 +182,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		fail(readPromptErr)
 		return exitCode
 	}
-	ctx.instruction = process.TaskFileInstruction("Perform the "+ctx.role+" review.", promptFile)
+	ctx.instruction = process.TaskFileInstruction(paths.RulesDir, "Perform the "+ctx.role+" review.", promptFile)
 	if ctx.settings.stdin == config.ReviewStdinInstruction {
 		if err := fs.WriteTextAtomic(runtime, stdinFile, ctx.instruction+"\n", false); err != nil {
 			fail(err)

@@ -151,7 +151,6 @@ var (
 	newShellInvocation  = process.NewShellInvocation
 	createTaskFile      = process.CreateTaskFile
 	removeTaskFile      = os.Remove
-	taskInstruction     = process.TaskFileInstruction
 	loadEffective       = func() (*config.Config, error) { return config.Load(false) }
 	currentInstallPaths = config.CurrentInstallPaths
 	nowStamp            = func() string { return time.Now().Format("2006-01-02 15:04") }

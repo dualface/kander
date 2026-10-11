@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/i18n"
 	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/terminal/direct"
@@ -191,13 +191,25 @@ func codexSessionsRoot() string {
 	return filepath.Join(home, "sessions")
 }
 
-// Match every interface language regardless of the current UI language. The Chinese
-// heads also match sessions created before prompts were localized.
+// legacyPromptHeads are the localized heads earlier releases wrote into Codex rollouts; the
+// current head comes from the English prompt template, but sessions created before the
+// templates existed still start with one of these.
+var legacyPromptHeads = map[string][]string{
+	"start":    {"执行 Kanban 任务 %s", "Kanban タスク %s を実行します"},
+	"resume":   {"继续 Kanban 任务 %s", "Kanban タスク %s を再開します"},
+	"takeover": {"接管 Kanban 任务 %s", "Kanban タスク %s を引き継ぎます"},
+}
+
+// promptPrefixes lists every head a rollout of the given kinds may start with: the current
+// template head and the legacy localized heads.
 func promptPrefixes(taskID string, kinds ...string) []string {
 	var out []string
-	for _, lang := range []string{"cn", "en", "ja"} {
-		for _, kind := range kinds {
-			head := strings.TrimSuffix(i18n.Text(lang, "launch.prompt."+kind+"_head", taskID), ".")
+	for _, kind := range kinds {
+		heads := []string{strings.TrimSuffix(promptHead(config.InstallPaths{}, kind, taskID, "", 0), ".")}
+		for _, legacy := range legacyPromptHeads[kind] {
+			heads = append(heads, fmt.Sprintf(legacy, taskID))
+		}
+		for _, head := range heads {
 			out = append(out, head+";", head+".")
 		}
 	}

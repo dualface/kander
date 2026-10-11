@@ -58,17 +58,17 @@ type agentSettings struct {
 }
 
 type reviewContext struct {
-	archive       *archiveExecution
-	agent         string
-	settings      agentSettings
-	root          string
-	base          string
-	commit        string
-	role          string
-	taskContext   string
-	taskSpec      string
-	reviewContext string
-	reviewed      string
+	archive         *archiveExecution
+	agent           string
+	settings        agentSettings
+	root            string
+	base            string
+	commit          string
+	role            string
+	taskContext     string
+	taskSpec        string
+	reviewContext   string
+	reviewed        string
 	program         process.AgentProgram
 	tempRoot        string
 	instruction     string

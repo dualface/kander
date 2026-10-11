@@ -25,17 +25,37 @@ func rulesPath(paths config.InstallPaths, name string) string {
 	return process.AgentPath(filepath.Join(paths.RulesDir, name))
 }
 
+// render executes one prompt template below templates/prompt with data. The installed copy
+// wins over the embedded one; a missing installed copy is reported once on standard error.
+func render(paths config.InstallPaths, name string, data any) (string, error) {
+	return config.RenderRulesTemplate(paths, "templates/prompt/"+name, data, os.Stderr)
+}
+
+// mustRender is for prompt fragments whose data cannot fail validation; a template error is a
+// broken installation and is returned to the caller as a launch error elsewhere.
+func mustRender(paths config.InstallPaths, name string, data any) string {
+	text, err := render(paths, name, data)
+	if err != nil {
+		return ""
+	}
+	return text
+}
+
 // RuleLoadingInstruction is shared by fresh launches and notifications to existing Agents.
 // It names the bootstrap before the command contract so optional rules cannot be loaded first.
 func RuleLoadingInstruction(paths config.InstallPaths) string {
-	return t("launch.prompt.rule_loading", rulesPath(paths, "KANDER-AGENTS.md"), commandName(paths), rulesPath(paths, "KANDER-KANBAN-RULES.md"))
+	return mustRender(paths, "rule-loading.md", map[string]string{
+		"AgentsRules": rulesPath(paths, "KANDER-AGENTS.md"),
+		"Command":     commandName(paths),
+		"KanbanRules": rulesPath(paths, "KANDER-KANBAN-RULES.md"),
+	})
 }
 
 func promptAgents(paths config.InstallPaths) string {
 	if paths.Mode == config.ModeProject {
 		return process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md"))
 	}
-	return t("launch.the_target_project_s_agents_md")
+	return mustRender(paths, "agents-default.md", nil)
 }
 
 // SelfMoveInstruction produces the "move yourself back to working before handling this" requirement while the card sits in review;
@@ -44,23 +64,20 @@ func SelfMoveInstruction(paths config.InstallPaths, taskID, state string) string
 	if state != "review" {
 		return ""
 	}
-	return t("launch.prompt.self_move_review", commandName(paths), taskID)
+	return mustRender(paths, "self-move-review.md", map[string]string{"Command": commandName(paths), "TaskID": taskID})
 }
 
 func cardStateStatus(paths config.InstallPaths, taskID, state string) string {
 	if instruction := SelfMoveInstruction(paths, taskID, state); instruction != "" {
 		return instruction
 	}
-	return t("launch.prompt.working")
+	return mustRender(paths, "card-working.md", nil)
 }
 
 // resolvePromptLanguage returns the agent communication language for start/resume/takeover
 // prompts and notify direct delivery. Card LANGUAGE wins; when the field is absent it falls
 // back to agent_language from the process config scope (ConfigPath / KANDER_CONFIG), matching
 // kander new (a missing or invalid config is an error, not a derived default).
-// paths is the install scope used alongside this language for rule-loading paths in the same
-// prompt; config I/O intentionally follows ConfigPath rather than paths.ConfigPath so
-// KANDER_CONFIG overrides remain consistent with the rest of the tool.
 func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, error) {
 	if lang := strings.TrimSpace(metadataFrom(cardText, board.FieldLanguage)); lang != "" {
 		return lang, nil
@@ -73,10 +90,9 @@ func resolvePromptLanguage(cardText string, paths config.InstallPaths) (string, 
 	return cfg.AgentLanguage, nil
 }
 
-// promptLanguageDirective is the fixed English hard instruction embedded in launch prompts.
-func promptLanguageDirective(language string) string {
-	return `Communicate with the user and write all card content, records and reports in "` + language +
-		`". Commit messages and code comments follow the project's conventions.`
+// promptLanguageDirective renders the fixed language instruction embedded in launch prompts.
+func promptLanguageDirective(paths config.InstallPaths, language string) string {
+	return mustRender(paths, "language.md", map[string]string{"Language": language})
 }
 
 // RuleLoadingWithLanguage appends the card language directive after the rule-loading instruction.
@@ -85,8 +101,8 @@ func RuleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string
 	return ruleLoadingWithLanguage(paths, cardText)
 }
 
-// ruleLoadingWithLanguage appends the language directive after the rule-loading instruction.
-// A trailing space keeps the localized template suffix from gluing onto the English sentence.
+// ruleLoadingWithLanguage joins the preamble fragments: rule loading, language directive, the
+// reporting reminder while rules.reporting is enabled, and the SIZE sentence.
 func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string, error) {
 	lang, err := resolvePromptLanguage(cardText, paths)
 	if err != nil {
@@ -99,70 +115,110 @@ func ruleLoadingWithLanguage(paths config.InstallPaths, cardText string) (string
 	if size != "small" && size != "large" {
 		return "", launchError("board.size_invalid", "prompt")
 	}
-	return RuleLoadingInstruction(paths) + promptLanguageDirective(lang) + promptReportingDirective() + " " + t("launch.prompt.size", size) + " ", nil
+	parts := []string{RuleLoadingInstruction(paths), promptLanguageDirective(paths, lang)}
+	if reporting := promptReportingDirective(paths); reporting != "" {
+		parts = append(parts, reporting)
+	}
+	parts = append(parts, mustRender(paths, "size.md", map[string]string{"Size": size}))
+	return strings.Join(parts, " "), nil
 }
 
-// promptReportingDirective is the fixed English completion-report reminder embedded in launch
-// prompts while rules.reporting is enabled; it is empty otherwise so the prompt stays unchanged.
-// An unreadable config also leaves it out: a card with LANGUAGE must still launch without a
+// promptReportingDirective is the completion-report reminder embedded in launch prompts while
+// rules.reporting is enabled; it is empty otherwise so the prompt stays unchanged. An
+// unreadable config also leaves it out: a card with LANGUAGE must still launch without a
 // config, and the reporting rule itself is read through the config the agent loads first.
-func promptReportingDirective() string {
+func promptReportingDirective(paths config.InstallPaths) string {
 	cfg, err := config.Load(false)
 	if err != nil || !cfg.Rules[config.RuleReporting] {
 		return ""
 	}
-	return " When the card ends in done, archived, or trash, report to the user with the completion report" +
-		" template in KANDER-REPORTING-RULES.md; kander move prints it prefilled."
+	return mustRender(paths, "reporting.md", nil)
+}
+
+// promptHead renders the one-line head that opens a task file and the argv instruction.
+func promptHead(paths config.InstallPaths, kind, taskID, target string, count int) string {
+	return mustRender(paths, "head.md", map[string]any{"Kind": kind, "TaskID": taskID, "Target": target, "Count": count})
+}
+
+// taskFileTrailer renders the delete-when-done note appended to every task file.
+func taskFileTrailer(paths config.InstallPaths) process.TaskFileTrailer {
+	return process.TaskFileTrailerFor(paths.RulesDir)
+}
+
+// taskFileInstruction builds the one-line file instruction handed to the agent CLI.
+func taskFileInstruction(paths config.InstallPaths, head, path string) string {
+	return process.TaskFileInstruction(paths.RulesDir, head, path)
 }
 
 func startAgentPrompt(taskID string, paths config.InstallPaths, taskGroup, cardText string) (string, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
-	rules, err := ruleLoadingWithLanguage(paths, cardText)
+	preamble, err := ruleLoadingWithLanguage(paths, cardText)
 	if err != nil {
 		return "", err
 	}
-	cmd := commandName(paths)
-	ending := t("launch.prompt.start_single")
-	if taskGroup != "" {
-		ending = t("launch.prompt.start_group")
-	}
-	return t("launch.prompt.start", t("launch.prompt.start_head", taskID), rules, cmd, taskID, promptAgents(paths), ending), nil
+	return render(paths, "start.md", map[string]any{
+		"Head":          promptHead(paths, "start", taskID, "", 0),
+		"Preamble":      preamble,
+		"Command":       commandName(paths),
+		"TaskID":        taskID,
+		"Agents":        promptAgents(paths),
+		"Group":         taskGroup != "",
+		"PhaseSnippets": "",
+	})
 }
 
 func resumeAgentPrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
 	return resumePrompt(taskID, message, paths, state, cardText)
 }
 
+func promptStatus(paths config.InstallPaths, taskID, state, cardText string) string {
+	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
+		return mustRender(paths, "dispatch-bound.md", nil)
+	}
+	return cardStateStatus(paths, taskID, state)
+}
+
 func resumePrompt(taskID, message string, paths config.InstallPaths, state, cardText string) (string, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
-	rules, err := ruleLoadingWithLanguage(paths, cardText)
+	preamble, err := ruleLoadingWithLanguage(paths, cardText)
 	if err != nil {
 		return "", err
 	}
-	status := cardStateStatus(paths, taskID, state)
-	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
-		status = t("launch.dispatch_bound")
-	}
-	return t("launch.prompt.resume", t("launch.prompt.resume_head", taskID), status, rules, commandName(paths), taskID, message, promptAgents(paths)), nil
+	return render(paths, "resume.md", map[string]any{
+		"Head":          promptHead(paths, "resume", taskID, "", 0),
+		"Status":        promptStatus(paths, taskID, state, cardText),
+		"Preamble":      preamble,
+		"Command":       commandName(paths),
+		"TaskID":        taskID,
+		"Message":       message,
+		"Agents":        promptAgents(paths),
+		"PhaseSnippets": "",
+	})
 }
 
 func takeoverAgentPrompt(taskID, message string, paths config.InstallPaths, previous, state, cardText string) (string, error) {
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
-	rules, err := ruleLoadingWithLanguage(paths, cardText)
+	preamble, err := ruleLoadingWithLanguage(paths, cardText)
 	if err != nil {
 		return "", err
 	}
-	status := cardStateStatus(paths, taskID, state)
-	if board.MetadataFrom(cardText, "DISPATCH_ID") != "" {
-		status = t("launch.dispatch_bound")
-	}
-	return t("launch.prompt.takeover", t("launch.prompt.takeover_head", taskID), previous, status, rules, commandName(paths), taskID, message, promptAgents(paths)), nil
+	return render(paths, "takeover.md", map[string]any{
+		"Head":          promptHead(paths, "takeover", taskID, "", 0),
+		"Previous":      previous,
+		"Status":        promptStatus(paths, taskID, state, cardText),
+		"Preamble":      preamble,
+		"Command":       commandName(paths),
+		"TaskID":        taskID,
+		"Message":       message,
+		"Agents":        promptAgents(paths),
+		"PhaseSnippets": "",
+	})
 }
 
 func readTaskMessage(message string, messageSet bool, messageFile string, command string) (string, error) {
