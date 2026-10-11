@@ -58,7 +58,7 @@ func migrateLegacyRules(paths config.InstallPaths) LegacyRulesMigration {
 	}
 	names := append(rules.Names(), stateFileName)
 	for _, name := range names {
-		path := filepath.Join(dir, name)
+		path := filepath.Join(dir, filepath.FromSlash(name))
 		info, err := os.Lstat(path)
 		if err != nil {
 			continue

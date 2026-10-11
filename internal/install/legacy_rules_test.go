@@ -11,6 +11,18 @@ import (
 	"github.com/dualface/kander/rules"
 )
 
+// legacyRuleNames returns the top-level rule files. Earlier releases shipped only these; the
+// templates/ and snippets/ directories never existed at the flat legacy location.
+func legacyRuleNames() []string {
+	var names []string
+	for _, name := range rules.Names() {
+		if !strings.Contains(name, "/") {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // writeLegacyRules places the official rule files at the flat ~/.agents root earlier
 // releases used, together with the installer state file.
 func writeLegacyRules(t *testing.T, home string) string {
@@ -19,7 +31,7 @@ func writeLegacyRules(t *testing.T, home string) string {
 	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range rules.Names() {
+	for _, name := range legacyRuleNames() {
 		data, err := rules.File(name)
 		if err != nil {
 			t.Fatal(err)
@@ -44,10 +56,10 @@ func TestPerformMovesOfficialLegacyRules(t *testing.T) {
 	if len(result.LegacyRules.Kept) != 0 {
 		t.Fatalf("kept=%v", result.LegacyRules.Kept)
 	}
-	if len(result.LegacyRules.Removed) != len(rules.Names())+1 {
+	if len(result.LegacyRules.Removed) != len(legacyRuleNames())+1 {
 		t.Fatalf("removed=%v", result.LegacyRules.Removed)
 	}
-	for _, name := range append(rules.Names(), stateFileName) {
+	for _, name := range append(legacyRuleNames(), stateFileName) {
 		if _, err := os.Lstat(filepath.Join(legacy, name)); !os.IsNotExist(err) {
 			t.Fatalf("%s still at the previous location: %v", name, err)
 		}
@@ -334,7 +346,7 @@ func TestProjectInstallLeavesFlatGlobalRulesAlone(t *testing.T) {
 	if len(result.LegacyRules.Removed) != 0 || len(result.LegacyRules.Kept) != 0 {
 		t.Fatalf("project install touched global rules: %+v", result.LegacyRules)
 	}
-	for _, name := range rules.Names() {
+	for _, name := range legacyRuleNames() {
 		if _, err := os.Stat(filepath.Join(legacy, name)); err != nil {
 			t.Fatalf("%s removed by a project install: %v", name, err)
 		}

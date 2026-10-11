@@ -89,15 +89,16 @@ func TestPerformGlobalInstall(t *testing.T) {
 	if err != nil || (runtime.GOOS != "windows" && st.Mode()&0o111 == 0) {
 		t.Fatalf("not executable: %v", err)
 	}
-	if len(rules.Names()) != 12 {
-		t.Fatalf("names=%v", rules.Names())
+	names := rules.Names()
+	if len(names) < 14 {
+		t.Fatalf("names=%v", names)
 	}
-	for _, name := range rules.Names() {
+	for _, name := range names {
 		data, err := rules.File(name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := os.ReadFile(filepath.Join(home, ".agents", "kander", name))
+		got, err := os.ReadFile(filepath.Join(home, ".agents", "kander", filepath.FromSlash(name)))
 		if err != nil || !bytes.Equal(got, data) {
 			t.Fatalf("%s mismatch: %v", name, err)
 		}

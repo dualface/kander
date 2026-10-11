@@ -73,7 +73,7 @@ func Perform(req Request) (Result, error) {
 		}
 	}
 	for _, name := range rules.Names() {
-		if err := rejectDest(filepath.Join(paths.RulesDir, name), project); err != nil {
+		if err := rejectDest(filepath.Join(paths.RulesDir, filepath.FromSlash(name)), project); err != nil {
 			return result, err
 		}
 	}

@@ -86,7 +86,7 @@ func replaceModifiedRule(paths config.InstallPaths, name string, project bool) (
 	if !ok {
 		return fail(fmt.Errorf("%s", config.Text("install.rule_replace_missing", name)))
 	}
-	dest := filepath.Join(paths.RulesDir, name)
+	dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
 	if !project && fs.IsReparsePoint(dest) {
 		return fail(fmt.Errorf("%s", config.Text("install.rule_backup_refused_link", name)))
 	}
@@ -122,7 +122,7 @@ func replaceModifiedRule(paths config.InstallPaths, name string, project bool) (
 func uniqueRuleBackupPath(dir, name string) (string, error) {
 	stamp := time.Now().Format("20060102-150405")
 	base := name + ".backup-" + stamp
-	candidate := filepath.Join(dir, base)
+	candidate := filepath.Join(dir, filepath.FromSlash(base))
 	for suffix := 1; ; suffix++ {
 		_, err := os.Lstat(candidate)
 		if err != nil {
@@ -131,6 +131,6 @@ func uniqueRuleBackupPath(dir, name string) (string, error) {
 			}
 			return "", err
 		}
-		candidate = filepath.Join(dir, fmt.Sprintf("%s-%d", base, suffix))
+		candidate = filepath.Join(dir, filepath.FromSlash(fmt.Sprintf("%s-%d", base, suffix)))
 	}
 }

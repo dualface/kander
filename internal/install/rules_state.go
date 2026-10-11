@@ -69,7 +69,7 @@ func fileHash(data []byte) string {
 }
 
 func readInstalledRule(paths config.InstallPaths, name string) ([]byte, bool, error) {
-	path := filepath.Join(paths.RulesDir, name)
+	path := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
 	anchor, err := fileAnchor(path)
 	if err != nil {
 		return nil, false, err
@@ -108,7 +108,7 @@ func InspectRules(paths config.InstallPaths) (RulesReport, error) {
 		if err != nil {
 			return report, err
 		}
-		dest := filepath.Join(paths.RulesDir, name)
+		dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
 		// Global rule symlinks are user-managed; doctor must not classify them as
 		// outdated because writeRule will not replace a reparse point.
 		if paths.Mode != config.ModeProject && fs.IsReparsePoint(dest) {
@@ -174,12 +174,17 @@ func stampDigest(paths config.InstallPaths, name string, embedded []byte, wrote 
 }
 
 func writeRule(paths config.InstallPaths, name string, data []byte, project bool) (bool, error) {
-	dest := filepath.Join(paths.RulesDir, name)
+	dest := filepath.Join(paths.RulesDir, filepath.FromSlash(name))
 	if err := rejectDest(dest, project); err != nil {
 		return false, err
 	}
 	if !project && fs.IsReparsePoint(dest) {
 		return false, nil
+	}
+	// templates/ and snippets/ files live below the rules root; their directory may not
+	// exist yet on an installation made by an earlier release.
+	if err := fs.EnsureInheritedDirectoryPath(filepath.Dir(dest)); err != nil {
+		return false, err
 	}
 	anchor, err := fileAnchor(dest)
 	if err != nil {

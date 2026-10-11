@@ -49,7 +49,7 @@ func TestGlobalInitializationDoesNotCopy(t *testing.T) {
 				t.Fatalf("created binary directory: %v", err)
 			}
 			for _, name := range rules.Names() {
-				if _, err := os.Stat(filepath.Join(result.Paths.RulesDir, name)); err != nil {
+				if _, err := os.Stat(filepath.Join(result.Paths.RulesDir, filepath.FromSlash(name))); err != nil {
 					t.Fatal(err)
 				}
 			}
