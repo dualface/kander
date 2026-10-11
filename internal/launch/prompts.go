@@ -52,16 +52,6 @@ func (f *fragments) render(name string, data any) string {
 	return text
 }
 
-// RuleLoadingInstruction is shared by fresh launches and notifications to existing Agents.
-// It names the bootstrap before the command contract so optional rules cannot be loaded first.
-func RuleLoadingInstruction(paths config.InstallPaths) (string, error) {
-	return render(paths, "rule-loading.md", map[string]string{
-		"AgentsRules": rulesPath(paths, "KANDER-AGENTS.md"),
-		"Command":     commandName(paths),
-		"KanbanRules": rulesPath(paths, "KANDER-KANBAN-RULES.md"),
-	})
-}
-
 func promptAgents(paths config.InstallPaths) (string, error) {
 	if paths.Mode == config.ModeProject {
 		return process.AgentPath(filepath.Join(paths.ProjectRoot, "AGENTS.md")), nil
@@ -107,8 +97,10 @@ func promptLanguageDirective(paths config.InstallPaths, language string) (string
 	return render(paths, "language.md", map[string]string{"Language": language})
 }
 
-// rulesAndLanguage joins the rule-loading instruction and the language directive, the
-// preamble shared by every prompt that does not carry a card SIZE.
+// rulesAndLanguage joins the rule-loading instruction and the language directive: the preamble
+// of every prompt Kander hands to an agent, for fresh launches and notifications alike. The
+// rule-loading sentence names the bootstrap before the command contract so optional rules
+// cannot be loaded first.
 func rulesAndLanguage(paths config.InstallPaths, language string) (string, error) {
 	f := &fragments{paths: paths}
 	rules := f.render("rule-loading.md", map[string]string{
