@@ -20,7 +20,7 @@ import (
 	"unicode"
 
 	"github.com/dualface/kander/internal/fs"
-	"github.com/dualface/kander/internal/i18n"
+	"github.com/dualface/kander/rules"
 )
 
 const (
@@ -320,13 +320,20 @@ func newInvocation(program AgentProgram, arguments []string, environment map[str
 	}, nil
 }
 
-func taskPayload(body, path string) string {
-	return strings.TrimRightFunc(body, unicode.IsSpace) + "\n\n" +
-		i18n.Text("en", "process.task_cleanup", AgentPath(path))
+// TaskFileTrailer renders the text appended after a task body, given the absolute path of the
+// file it ends up in; callers render it from the rules templates.
+type TaskFileTrailer func(path string) string
+
+func taskPayload(body, path string, trailer TaskFileTrailer) string {
+	text := strings.TrimRightFunc(body, unicode.IsSpace) + "\n"
+	if trailer != nil {
+		text += "\n" + trailer(path)
+	}
+	return text
 }
 
 // CreateTaskFile writes the task payload through the system temporary file mechanism, without additional permission or ACL checks.
-func CreateTaskFile(body, prefix string) (string, error) {
+func CreateTaskFile(body, prefix string, trailer TaskFileTrailer) (string, error) {
 	if prefix == "" {
 		prefix = defaultTaskPrefix
 	}
@@ -340,7 +347,7 @@ func CreateTaskFile(body, prefix string) (string, error) {
 		os.Remove(handle.Name())
 		return "", err
 	}
-	if _, err := io.WriteString(handle, taskPayload(body, path)); err != nil {
+	if _, err := io.WriteString(handle, taskPayload(body, path, trailer)); err != nil {
 		handle.Close()
 		os.Remove(handle.Name())
 		return "", err
@@ -353,12 +360,28 @@ func CreateTaskFile(body, prefix string) (string, error) {
 }
 
 // WriteTaskFile safely writes a new task payload relative to an existing runtime root.
-func WriteTaskFile(root, path, body string) error {
-	return fs.WriteTextAtomic(root, path, taskPayload(body, path), false)
+func WriteTaskFile(root, path, body string, trailer TaskFileTrailer) error {
+	return fs.WriteTextAtomic(root, path, taskPayload(body, path, trailer), false)
 }
 
-// TaskFileInstruction builds the one-line file instruction handed to the agent CLI.
-func TaskFileInstruction(prefix, path string) string {
-	cleaned := strings.TrimRight(prefix, " .")
-	return i18n.Text("en", "process.task_instruction", cleaned, AgentPath(path))
+// TaskFileTrailerFor renders the delete-when-done note from the rules template below rulesDir
+// (the installed copy wins over the embedded one; an empty rulesDir uses the embedded copy).
+func TaskFileTrailerFor(rulesDir string) TaskFileTrailer {
+	return func(path string) string {
+		text, _, err := rules.Render(rulesDir, "templates/prompt/task-file-cleanup.md", map[string]string{"Path": AgentPath(path)})
+		if err != nil {
+			return ""
+		}
+		return text
+	}
+}
+
+// TaskFileInstruction builds the one-line file instruction handed to the agent CLI from the
+// rules template below rulesDir.
+func TaskFileInstruction(rulesDir, head, path string) string {
+	text, _, err := rules.Render(rulesDir, "templates/prompt/task-file-instruction.md", map[string]string{"Head": strings.TrimRight(head, " ."), "Path": AgentPath(path)})
+	if err != nil {
+		return ""
+	}
+	return text
 }

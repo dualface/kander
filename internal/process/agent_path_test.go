@@ -30,7 +30,7 @@ func TestAgentPathUsesForwardSlashesOnlyOnWindows(t *testing.T) {
 // The task file and its one-line pointer show the agent-facing path, while the file itself is still
 // created and read at its native path.
 func TestTaskFileShowsAgentPath(t *testing.T) {
-	path, err := CreateTaskFile("body", "kander-agent-path-")
+	path, err := CreateTaskFile("body", "kander-agent-path-", TaskFileTrailerFor(""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestTaskFileShowsAgentPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	instruction := TaskFileInstruction("Execute this task.", path)
+	instruction := TaskFileInstruction("", "Execute this task.", path)
 	for _, text := range []string{string(content), instruction} {
 		if !strings.Contains(text, AgentPath(path)) {
 			t.Fatalf("missing agent path in %q", text)

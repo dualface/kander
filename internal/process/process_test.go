@@ -199,7 +199,7 @@ func TestBatchIgnoresRelativeComspec(t *testing.T) {
 }
 
 func TestTaskFileContainsBodyAndBestEffortDeleteInstruction(t *testing.T) {
-	path, err := CreateTaskFile("line one\nline two", "kander-test-")
+	path, err := CreateTaskFile("line one\nline two", "kander-test-", TaskFileTrailerFor(""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestTaskFileContainsBodyAndBestEffortDeleteInstruction(t *testing.T) {
 
 func TestWriteTaskFileUsesSamePayload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "task.md")
-	if err := WriteTaskFile(filepath.Dir(path), path, "hello"); err != nil {
+	if err := WriteTaskFile(filepath.Dir(path), path, "hello", TaskFileTrailerFor("")); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(path)
@@ -243,7 +243,7 @@ func TestWriteTaskFileUsesSamePayload(t *testing.T) {
 
 func TestTaskFilePointerIsOneShortInstruction(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "task.md")
-	instruction := TaskFileInstruction("Execute this task.", path)
+	instruction := TaskFileInstruction("", "Execute this task.", path)
 	if strings.Count(instruction, ";") != 2 {
 		t.Fatalf("semicolons: %q", instruction)
 	}
