@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 )
 
 func dispositionCommand(name string) bool {
@@ -23,12 +24,12 @@ func dispositionCommand(name string) bool {
 func runDispositionCommand(args []string) int {
 	if len(args) >= 2 && args[1] == "--schema" {
 		if len(args) != 2 || !schemaCommand(args[0]) {
-			return dispositionFailure(newGate(2, "review.schema.usage"))
+			return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
 		}
 		return printEvidenceSchema(args[0])
 	}
 	if len(args) < 3 {
-		return dispositionFailure(newGate(2, "review.gate_usage"))
+		return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
 	}
 	action, cwd, input := args[0], args[1], args[2]
 	if !filepath.IsAbs(cwd) {

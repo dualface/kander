@@ -257,7 +257,7 @@ func orchestratorWindowName(firstTaskID string) string {
 func RunOrchestrate(args []string) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
-			fmt.Fprintln(os.Stdout, t("orchestrate.usage"))
+			fmt.Fprintln(os.Stdout, config.CommandUsage("orchestrate"))
 			return 0
 		}
 	}
@@ -325,7 +325,7 @@ func RunOrchestrate(args []string) int {
 }
 
 func orchestrateUsageFail(message string) int {
-	fmt.Fprintln(os.Stderr, t("orchestrate.usage"))
+	fmt.Fprintln(os.Stderr, config.CommandUsage("orchestrate"))
 	fmt.Fprintln(os.Stderr, message)
 	return 2
 }

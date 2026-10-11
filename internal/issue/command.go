@@ -57,7 +57,7 @@ func runWith(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 }
 
 func usageText() string {
-	return config.Text("issue.usage")
+	return config.CommandUsage("issue")
 }
 
 // commandContext bounds one provider interaction the same way for every

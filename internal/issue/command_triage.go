@@ -29,7 +29,7 @@ func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		arg := args[index]
 		switch {
 		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, config.Text("issue.triage_usage"))
+			fmt.Fprintln(stdout, usageText())
 			return 0
 		case matchesLongOption(arg, "--repo"), matchesLongOption(arg, "--card"),
 			matchesLongOption(arg, "--agent"), matchesLongOption(arg, "--launcher"):
@@ -55,13 +55,13 @@ func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 			}
 		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, config.Text("issue.triage_usage"))
+			fmt.Fprintln(stderr, usageText())
 			return 2
 		default:
 			positional++
 			if positional > 1 {
 				fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-				fmt.Fprintln(stderr, config.Text("issue.triage_usage"))
+				fmt.Fprintln(stderr, usageText())
 				return 2
 			}
 			number, err := strconv.Atoi(strings.TrimSpace(arg))
@@ -74,7 +74,7 @@ func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	}
 	if positional == 0 {
 		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "NUMBER"))
-		fmt.Fprintln(stderr, config.Text("issue.triage_usage"))
+		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
 	provider := factory()

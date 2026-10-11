@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/liveness"
 )
 
@@ -15,7 +16,7 @@ func Run(args []string) int {
 		return liveness.RunCheck(args)
 	}
 	if args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprintln(os.Stdout, t("check.usage"))
+		fmt.Fprintln(os.Stdout, config.CommandUsage("check"))
 		return 0
 	}
 	switch args[0] {
@@ -29,7 +30,7 @@ func Run(args []string) int {
 func runMode(mode string, args []string) int {
 	opt, parseErr := parseOptions(mode, args)
 	if opt.help && parseErr == nil {
-		fmt.Fprintln(os.Stdout, usageFor(mode))
+		fmt.Fprintln(os.Stdout, config.CommandUsage("check"))
 		return 0
 	}
 	if parseErr != nil {
@@ -62,7 +63,7 @@ func writeModeError(mode string, jsonMode bool, errInfo *CheckError, code int) i
 		}
 		return code
 	}
-	fmt.Fprintln(os.Stderr, usageFor(mode))
+	fmt.Fprintln(os.Stderr, config.CommandUsage("check"))
 	fmt.Fprintln(os.Stderr, "kander: "+escapeText(errInfo.Message))
 	return code
 }

@@ -24,9 +24,7 @@ func fail(err error) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, t(
-		"notify.usage_kander_notify_pane_herdr_pane_id_timeout_seconds",
-	))
+	fmt.Fprintln(w, config.CommandUsage("notify"))
 }
 
 func usageFail(id string, args ...any) int {

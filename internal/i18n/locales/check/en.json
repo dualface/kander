@@ -27,8 +27,5 @@
   "check.parse_truncated": "git name-status output was truncated",
   "check.status": "{{.V0}} check: {{.V1}}",
   "check.unexpected_argument": "unexpected argument: {{.V0}}",
-  "check.unknown_option": "unknown option: {{.V0}}",
-  "check.usage": "usage: kander check [--all] [task...]\n   or: kander check delivery --base <ref> [--commit <ref>] [--json]\n   or: kander check overlap --source <ref> [--head <ref>] [--json]",
-  "check.usage_delivery": "usage: kander check delivery --base <ref> [--commit <ref>] [--json]",
-  "check.usage_overlap": "usage: kander check overlap --source <ref> [--head <ref>] [--json]"
+  "check.unknown_option": "unknown option: {{.V0}}"
 }

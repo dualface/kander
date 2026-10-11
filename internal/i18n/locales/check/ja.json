@@ -27,8 +27,5 @@
   "check.parse_truncated": "git name-status 出力が切り詰められました",
   "check.status": "{{.V0}} チェック: {{.V1}}",
   "check.unexpected_argument": "予期しない引数: {{.V0}}",
-  "check.unknown_option": "不明なオプション: {{.V0}}",
-  "check.usage": "用法: kander check [--all] [task...]\n     または: kander check delivery --base <ref> [--commit <ref>] [--json]\n     または: kander check overlap --source <ref> [--head <ref>] [--json]",
-  "check.usage_delivery": "用法: kander check delivery --base <ref> [--commit <ref>] [--json]",
-  "check.usage_overlap": "用法: kander check overlap --source <ref> [--head <ref>] [--json]"
+  "check.unknown_option": "不明なオプション: {{.V0}}"
 }

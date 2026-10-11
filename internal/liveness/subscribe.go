@@ -332,7 +332,7 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 }
 
 func usageSubscribe(w io.Writer) error {
-	return writeSubscriptionDiagnostic(w, t("liveness.usage_kander_subscribe_refresh_seconds_heartbeat_seconds_task_group"))
+	return writeSubscriptionDiagnostic(w, config.CommandUsage("subscribe"))
 }
 
 // A merged stdout/stderr pipe must not turn an output failure into another

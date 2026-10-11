@@ -603,12 +603,13 @@ func TestNotRepositoryJSON(t *testing.T) {
 	}
 }
 
-func TestChineseCatalog(t *testing.T) {
+// Usage text comes from the English command contract in every locale.
+func TestUsageIsEnglishInEveryLocale(t *testing.T) {
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(config.EnvLangCLI, "1")
 	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
 	code, out, _ := captureRun(t, []string{"delivery", "--help"})
-	if code != 0 || !strings.Contains(out, "用法") {
+	if code != 0 || !strings.Contains(out, "kander check delivery --base <ref>") || !strings.Contains(out, "snippets/commands/check.md") {
 		t.Fatalf("cn help=%q", out)
 	}
 }

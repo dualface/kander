@@ -28,7 +28,7 @@ func runList(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 		arg := args[index]
 		switch {
 		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, config.Text("issue.list_usage"))
+			fmt.Fprintln(stdout, usageText())
 			return 0
 		case arg == "--json":
 			options.json = true
@@ -75,7 +75,7 @@ func runList(factory func() IssueProvider, args []string, stdout, stderr io.Writ
 			options.hasRepo = true
 		default:
 			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, config.Text("issue.list_usage"))
+			fmt.Fprintln(stderr, usageText())
 			return 2
 		}
 	}

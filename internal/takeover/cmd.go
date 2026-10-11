@@ -25,9 +25,7 @@ func fail(err error) int {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, t(
-		"takeover.usage_kander_dismiss_timeout_seconds_task",
-	))
+	fmt.Fprintln(w, config.CommandUsage("dismiss"))
 }
 
 func usageFail(id string, args ...any) int {

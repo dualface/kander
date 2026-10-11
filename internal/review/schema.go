@@ -67,11 +67,11 @@ func printEvidenceSchema(command string) int {
 func evidenceSchema(command string) (string, error) {
 	root, ok := schemaRoot(command)
 	if !ok {
-		return "", newGate(2, "review.schema.usage")
+		return "", newGateMsg(2, config.CommandUsage("review"))
 	}
 	docs, ok := evidenceSchemaDocs()[command]
 	if !ok {
-		return "", newGate(2, "review.schema.usage")
+		return "", newGateMsg(2, config.CommandUsage("review"))
 	}
 	rows, err := schemaRows(root, docs)
 	if err != nil {

@@ -52,15 +52,16 @@ func ReconcileCoordinator(ctx context.Context, root string, r board.CoordinatorR
 	})
 }
 
+func coordinatorUsageFail() int {
+	fmt.Fprintln(os.Stderr, config.CommandUsage("coordinator"))
+	return 2
+}
+
 // RunCoordinator is a one-shot recovery tool. Subscription events are wakeups;
 // it never starts a subscriber, notifies an agent or changes a Git reference.
 func RunCoordinator(args []string) int {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Println(t("board.coordinator_usage"))
-		return 0
-	}
 	if len(args) != 2 {
-		return fail(launchError("board.coordinator_usage"))
+		return coordinatorUsageFail()
 	}
 	cfg, err := config.Load(false)
 	if err != nil {
@@ -97,7 +98,7 @@ func RunCoordinator(args []string) int {
 			}
 		}
 	default:
-		return fail(launchError("board.coordinator_usage"))
+		return coordinatorUsageFail()
 	}
 	if err != nil {
 		return fail(err)

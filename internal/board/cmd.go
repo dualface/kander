@@ -18,19 +18,7 @@ func fail(err error) int {
 }
 
 func usage(w io.Writer, cmd string) {
-	messages := map[string]string{
-		"init":        "board.messages.init",
-		"list":        "board.messages.list",
-		"show":        "board.messages.show",
-		"update":      "board.messages.update",
-		"new":         "board.messages.new",
-		"move":        "board.messages.move",
-		"pick":        "board.messages.pick",
-		"check":       "board.messages.check",
-		"guard-write": "board.messages.guard-write",
-	}
-	pair := messages[cmd]
-	fmt.Fprintln(w, t(pair))
+	fmt.Fprintln(w, config.CommandUsage(cmd))
 }
 
 func usageFail(cmd, id string, args ...any) int {

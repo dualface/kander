@@ -32,7 +32,7 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		arg := args[index]
 		switch {
 		case arg == "-h" || arg == "--help":
-			fmt.Fprintln(stdout, config.Text("issue.import_usage"))
+			fmt.Fprintln(stdout, usageText())
 			return 0
 		case arg == "--json":
 			options.json = true
@@ -64,13 +64,13 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 			options.language = value
 		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-			fmt.Fprintln(stderr, config.Text("issue.import_usage"))
+			fmt.Fprintln(stderr, usageText())
 			return 2
 		default:
 			positional++
 			if positional > 1 {
 				fmt.Fprintln(stderr, config.Text("issue.error_unknown_argument", arg))
-				fmt.Fprintln(stderr, config.Text("issue.import_usage"))
+				fmt.Fprintln(stderr, usageText())
 				return 2
 			}
 			number, err := strconv.Atoi(strings.TrimSpace(arg))
@@ -83,7 +83,7 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	}
 	if positional == 0 {
 		fmt.Fprintln(stderr, config.Text("issue.error_missing_value", "NUMBER"))
-		fmt.Fprintln(stderr, config.Text("issue.import_usage"))
+		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
 	taskType := strings.TrimSpace(options.taskType)

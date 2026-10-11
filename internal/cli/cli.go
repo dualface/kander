@@ -70,12 +70,8 @@ func init() {
 }
 
 func runVersion(args []string) int {
-	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Fprintln(os.Stdout, config.Text("cli.version_usage"))
-		return 0
-	}
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, config.Text("cli.version_usage"))
+		fmt.Fprintln(os.Stderr, config.CommandUsage("version"))
 		return 2
 	}
 	fmt.Fprintln(os.Stdout, "kander "+version.String())
@@ -257,6 +253,12 @@ func Run(arguments []string) int {
 	runner, ok := Commands[name]
 	if !ok {
 		return failUsage(unknownCommandMessage(parsed.command))
+	}
+	// `kander <command> --help` prints the command's contract usage for every registered
+	// command in one place; the contract file is the single source of that text.
+	if len(parsed.rest) == 1 && (parsed.rest[0] == "-h" || parsed.rest[0] == "--help") {
+		fmt.Fprintln(os.Stdout, config.CommandUsage(name))
+		return 0
 	}
 	return runner(parsed.rest)
 }

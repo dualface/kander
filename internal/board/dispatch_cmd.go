@@ -25,14 +25,15 @@ func parseExecutionAuthorization(values map[string]string) (ExecutionAuthorizati
 	return a, nil
 }
 
+func dispatchUsageFail() int {
+	fmt.Fprintln(os.Stderr, config.CommandUsage("dispatch"))
+	return 2
+}
+
 // RunDispatch exposes producer-owned intents without permitting ordinary updates.
 func RunDispatch(args []string) int {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Println(t("board.dispatch_usage"))
-		return 0
-	}
 	if len(args) < 1 {
-		return fail(kanbanError("board.dispatch_usage"))
+		return dispatchUsageFail()
 	}
 	if _, err := config.Load(false); err != nil {
 		return fail(err)
@@ -45,7 +46,7 @@ func RunDispatch(args []string) int {
 	switch args[0] {
 	case "prepare":
 		if len(args) != 2 {
-			return fail(kanbanError("board.dispatch_usage"))
+			return dispatchUsageFail()
 		}
 		b, e := os.ReadFile(args[1])
 		if e != nil {
@@ -61,7 +62,7 @@ func RunDispatch(args []string) int {
 		d, err = PrepareDispatch(root, in)
 	case "show":
 		if len(args) != 3 {
-			return fail(kanbanError("board.dispatch_usage"))
+			return dispatchUsageFail()
 		}
 		d, err = ReadDispatch(root, args[1], args[2])
 	case "fail", "cancel":
@@ -69,10 +70,10 @@ func RunDispatch(args []string) int {
 		var present bool
 		args, decision, present, err = takeValueFlag(args, "--decision")
 		if err != nil || present && strings.TrimSpace(decision) == "" {
-			return fail(kanbanError("board.dispatch_usage"))
+			return dispatchUsageFail()
 		}
 		if len(args) != 5 {
-			return fail(kanbanError("board.dispatch_usage"))
+			return dispatchUsageFail()
 		}
 		v, e := strconv.ParseUint(args[3], 10, 64)
 		if e != nil {
@@ -87,7 +88,7 @@ func RunDispatch(args []string) int {
 			d, err = ReadDispatch(root, args[1], args[2])
 		}
 	default:
-		return fail(kanbanError("board.dispatch_usage"))
+		return dispatchUsageFail()
 	}
 	if err != nil {
 		return fail(err)

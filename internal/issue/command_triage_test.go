@@ -21,7 +21,7 @@ func TestIssueTriageUsageErrors(t *testing.T) {
 		code int
 		want string
 	}{
-		{"help", []string{"triage", "--help"}, 0, config.Text("issue.triage_usage")},
+		{"help", []string{"triage", "--help"}, 0, config.CommandUsage("issue")},
 		{"missing number", []string{"triage"}, 2, config.Text("issue.error_missing_value", "NUMBER")},
 		{"invalid number", []string{"triage", "abc"}, 2, config.Text("issue.error_invalid_value", "NUMBER", "abc")},
 		{"zero number", []string{"triage", "0"}, 2, config.Text("issue.error_invalid_value", "NUMBER", "0")},

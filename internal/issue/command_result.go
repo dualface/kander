@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 )
 
 // runResult exposes the controlled inspection, assessment and decision protocol.
@@ -19,7 +18,7 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	number := 0
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--help" || args[i] == "-h" {
-			fmt.Fprintln(stdout, config.Text("issue.result_usage"))
+			fmt.Fprintln(stdout, usageText())
 			return 0
 		}
 		name := strings.SplitN(args[i], "=", 2)[0]
@@ -34,19 +33,19 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		default:
 			parsed, err := strconv.Atoi(args[i])
 			if err != nil || parsed <= 0 || number != 0 {
-				fmt.Fprintln(stderr, config.Text("issue.result_usage"))
+				fmt.Fprintln(stderr, usageText())
 				return 2
 			}
 			number = parsed
 		}
 	}
 	if number == 0 || values["--card"] == "" {
-		fmt.Fprintln(stderr, config.Text("issue.result_usage"))
+		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
 	action := values["--action"]
 	if action != "start" && action != "inspect" && action != "apply" && action != "decide" {
-		fmt.Fprintln(stderr, config.Text("issue.result_usage"))
+		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
 	provider := factory()

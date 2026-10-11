@@ -92,7 +92,7 @@ func takeFlag(args []string, name string) ([]string, bool) {
 }
 
 func usageCheck(w *os.File) {
-	fmt.Fprintln(w, t("liveness.usage_kander_check_all_task"))
+	fmt.Fprintln(w, config.CommandUsage("check"))
 }
 
 // RunCheck implements kander check, reusing the board structural validation and appending a read-only liveness section.

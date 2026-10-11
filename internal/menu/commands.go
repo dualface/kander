@@ -32,7 +32,7 @@ func parseConfigArgs(args []string) (jsonOut bool, err error) {
 		case "--json":
 			jsonOut = true
 		case "-h", "--help":
-			fmt.Println(config.Text("menu.usage_kander_config_json"))
+			fmt.Println(config.CommandUsage("config"))
 			return false, errHelp
 		default:
 			return false, errors.New(config.Text("board.unknown_option", arg))
@@ -46,7 +46,7 @@ func Doctor(args []string) int {
 	prepareLanguage()
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
-			fmt.Println(config.Text("menu.usage_kander_doctor"))
+			fmt.Println(config.CommandUsage("doctor"))
 			return 0
 		}
 		fmt.Fprintln(os.Stderr, "kander:", config.Text("board.unknown_option", arg))

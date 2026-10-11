@@ -1,5 +1,4 @@
 {
-  "issue.result_usage": "用法: kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]",
   "tui.issues_hint_done": "↑↓ 选择 · Enter 详情 · g 任务卡 · s 核对结果 · ? 帮助 · Esc 关闭",
   "tui.issues_result_help": "核对已完成处理结果",
   "tui.issues_result_title": "核对 Issue #{{.V0}} 处理结果",

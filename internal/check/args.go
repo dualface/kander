@@ -138,14 +138,3 @@ func reservedFlag(arg string) bool {
 func usageErr(message string) *CheckError {
 	return &CheckError{Code: errCodeUsage, Message: message}
 }
-
-func usageFor(mode string) string {
-	switch mode {
-	case checkDelivery:
-		return t("check.usage_delivery")
-	case checkOverlap:
-		return t("check.usage_overlap")
-	default:
-		return t("check.usage")
-	}
-}

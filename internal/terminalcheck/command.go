@@ -16,14 +16,14 @@ func Run(args []string) int { return run(args, os.Stdout, os.Stderr) }
 
 func run(args []string, out, diagnostics io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Fprintln(out, config.Text("terminal.usage"))
+		fmt.Fprintln(out, config.CommandUsage("terminal"))
 		return 0
 	}
 	if len(args) == 1 && args[0] == "list" {
 		return list(out)
 	}
 	if len(args) < 2 || args[0] != "test" || strings.HasPrefix(args[1], "-") {
-		fmt.Fprintln(diagnostics, config.Text("terminal.usage"))
+		fmt.Fprintln(diagnostics, config.CommandUsage("terminal"))
 		return 2
 	}
 	options := Options{}
@@ -34,7 +34,7 @@ func run(args []string, out, diagnostics io.Writer) int {
 		case "--skip-focus":
 			options.SkipFocus = true
 		default:
-			fmt.Fprintln(diagnostics, config.Text("terminal.usage"))
+			fmt.Fprintln(diagnostics, config.CommandUsage("terminal"))
 			return 2
 		}
 	}

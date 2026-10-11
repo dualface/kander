@@ -84,7 +84,7 @@ func userError(message string) {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, config.Text("review.usage"))
+	fmt.Fprintln(os.Stderr, config.CommandUsage("review"))
 }
 
 func positiveInteger(value, variable string) (int, error) {

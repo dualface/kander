@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"github.com/dualface/kander/rules"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -564,7 +565,14 @@ func TestStartHelpListsAuto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "auto") {
+	if !strings.Contains(out, "--launcher <launcher>") || !strings.Contains(out, "snippets/commands/start.md") {
 		t.Fatalf("help=%s", out)
+	}
+	contract, err := rules.File("snippets/commands/start.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contract), "`auto`") {
+		t.Fatal("the start contract must document the auto launcher")
 	}
 }

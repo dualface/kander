@@ -19,7 +19,7 @@ func TestMissingArgsReportsUsage(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("code=%d err=%s", code, err)
 	}
-	if !strings.Contains(err, "Usage: kander review") {
+	if !strings.Contains(err, "kander review [agent]") {
 		t.Fatalf("stderr=%q", err)
 	}
 	_ = h
@@ -436,13 +436,14 @@ func TestDefaultLocaleReportsEnglishUsage(t *testing.T) {
 	t.Setenv("LANG", "")
 	config.BindConfigLanguage(nil)
 	code, _, err := captureRun(t, nil)
-	if code != 2 || !strings.Contains(err, "Usage: kander review") {
+	if code != 2 || !strings.Contains(err, "kander review [agent]") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
 	_ = h
 }
 
-func TestChineseLocaleReportsChineseUsage(t *testing.T) {
+// Usage text comes from the English command contract in every locale.
+func TestUsageIsEnglishInEveryLocale(t *testing.T) {
 	h := newCodexHarness(t)
 	t.Setenv("KANDER_LANG", "")
 	t.Setenv("KANDER_LANG_CLI", "")
@@ -451,7 +452,7 @@ func TestChineseLocaleReportsChineseUsage(t *testing.T) {
 	t.Setenv("LANG", "zh_CN.UTF-8")
 	config.BindConfigLanguage(nil)
 	code, _, err := captureRun(t, nil)
-	if code != 2 || !strings.Contains(err, "用法: kander review") {
+	if code != 2 || !strings.Contains(err, "kander review [agent]") {
 		t.Fatalf("code=%d err=%q", code, err)
 	}
 	_ = h

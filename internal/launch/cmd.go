@@ -31,15 +31,7 @@ func fail(err error) int {
 }
 
 func usage(w io.Writer, cmd string) {
-	if cmd == "start" {
-		fmt.Fprintln(w, t(
-			"launch.usage_kander_start",
-		))
-		return
-	}
-	fmt.Fprintln(w, t(
-		"launch.usage_kander_resume_agent_timeout_seconds_message_text_message",
-	))
+	fmt.Fprintln(w, config.CommandUsage(cmd))
 }
 
 func usageFail(cmd, id string, args ...any) int {

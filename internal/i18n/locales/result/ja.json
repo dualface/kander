@@ -1,5 +1,4 @@
 {
-  "issue.result_usage": "使い方: kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]",
   "tui.issues_hint_done": "↑↓ 選択 · Enter 詳細 · g カード · s 結果確認 · ? ヘルプ · Esc 閉じる",
   "tui.issues_result_help": "完了した処理結果を確認",
   "tui.issues_result_title": "Issue #{{.V0}} の処理結果を確認",

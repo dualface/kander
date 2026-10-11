@@ -206,7 +206,7 @@ func TestTerminalCommandRegistered(t *testing.T) {
 	resetLang(t)
 	for _, language := range []string{"cn", "en", "ja"} {
 		code, out, diagnostic := captureRun(t, []string{"kander", "--lang", language, "terminal", "--help"})
-		if code != 0 || diagnostic != "" || !strings.Contains(out, "terminal list | test") || !strings.Contains(out, "--skip-focus") {
+		if code != 0 || diagnostic != "" || !strings.Contains(out, "kander terminal list") || !strings.Contains(out, "--skip-focus") || !strings.Contains(out, "snippets/commands/terminal.md") {
 			t.Fatalf("language=%s code=%d out=%q err=%q", language, code, out, diagnostic)
 		}
 	}

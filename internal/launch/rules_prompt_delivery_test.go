@@ -13,11 +13,15 @@ func TestKanbanRulesKeepArgvPromisesAndDocumentPane(t *testing.T) {
 	if !ok {
 		t.Fatal("caller")
 	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "rules", "KANDER-KANBAN-RULES.md"))
-	if err != nil {
-		t.Fatal(err)
+	// The start contract carries the argv promises; the kanban rules keep the start checks.
+	var text string
+	for _, name := range []string{"KANDER-KANBAN-RULES.md", "snippets/commands/start.md"} {
+		data, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "rules", filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text += string(data) + "\n"
 	}
-	text := string(data)
 	for _, keep := range []string{
 		"Templates replace `{model}`, `{effort}`, `{session}` within argv elements; Kander appends the prompt last. No shell interpolation is used.",
 		"The agent command line receives only one instruction containing that absolute path.",
