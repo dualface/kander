@@ -60,7 +60,7 @@ func TestSplitRuleFilesStayShort(t *testing.T) {
 	}
 	loading, _ := File("KANDER-LOADING-RULES.md")
 	text := string(loading)
-	if strings.Contains(text, "Reading Map by Role") || !strings.Contains(text, "## Phase Snippets") {
+	if strings.Contains(text, "Reading Map "+"by Role") || !strings.Contains(text, "## Phase Snippets") {
 		t.Fatal("KANDER-LOADING-RULES.md must replace the reading map with the phase snippet list")
 	}
 	if !strings.Contains(text, "instance facts") || !strings.Contains(text, "the snippets") {

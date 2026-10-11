@@ -1,6 +1,6 @@
 # kander review
 
-Source: moved from `KANDER-BASE-RULES.md` "Single Review"; the evidence subcommands are specified in `KANDER-KANBAN-RULES.md` "Review Evidence Completion Gate"
+Source: moved from `KANDER-BASE-RULES.md` "Single Review"; the evidence subcommands are specified in `snippets/review-evidence-gate.md` "Review Evidence Completion Gate"
 
 ## Purpose and users
 
