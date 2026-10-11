@@ -16,7 +16,7 @@
 
 - File-changing tasks use a dedicated task branch and worktree at `<repo-root>/worktrees/<task-name>/`, where `<task-name>` is the branch name, a short kebab-case string. Never carry a task on a stable branch, `develop`, or a detached `HEAD`. Reuse the branch and worktree when already on this task's own.
 - With `origin` and no local-only request: fetch, then create the task branch from the latest `origin/develop`; if the fetch fails, stop and report. Without `origin`, or with local-only explicit: create from the local `develop` and report that the remote is not synced.
-- These points apply to single cards. When the task group module is enabled, the group branch is created from `develop`. Its worktree is named by the group ID, while the branch carries the `group/` prefix. In-group task branches are created from the group branch; see `KANDER-TASK-GROUP-RULES.md` "Group Integration Branch". Never load a disabled task group module through this reference.
+- These points apply to single cards. When the task group module is enabled, the group branch is created from `develop`. Its worktree is named by the group ID, while the branch carries the `group/` prefix. In-group task branches are created from the group branch; see `snippets/orchestrate-start.md` "Group Integration Branch". Never load a disabled task group module through this reference.
 
 ## Local Change Protection
 

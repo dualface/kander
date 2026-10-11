@@ -55,7 +55,7 @@ kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 
 Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination".
 
-- When no task is specified and `todo/` has several cards, list the candidates for the user; task groups are ordered by confirmed dependencies, not asked card by card. When a specified card belongs to a task group, inspect the group and its prerequisites before claiming and use the member-card start entry in `KANDER-TASK-GROUP-RULES.md` "Task Orchestration". If that makes the current agent the orchestrator, advance the group in dependency order instead of claiming the requested card early. For other unmet start conditions, only report the gap; never claim or move back to `backlog/`.
+- When no task is specified and `todo/` has several cards, list the candidates for the user; task groups are ordered by confirmed dependencies, not asked card by card. When a specified card belongs to a task group, inspect the group and its prerequisites before claiming and use the member-card start entry in `snippets/orchestrate-start.md` "Task Orchestration". If that makes the current agent the orchestrator, advance the group in dependency order instead of claiming the requested card early. For other unmet start conditions, only report the gap; never claim or move back to `backlog/`.
 
 **Start Checks and Rollback**
 

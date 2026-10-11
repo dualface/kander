@@ -49,25 +49,25 @@ The rules root is the directory containing `KANDER-AGENTS.md`. It decides the sc
 
 ## Phase Snippets
 
-Phase rules live in `snippets/` below the rules root. Kander names the file in the prompt that starts the phase; read it then, by its absolute path. Every applicable rule binds whether or not it was read. Command contracts are `snippets/commands/<command>.md`, indexed by its `README.md`.
+Phase rules live in `snippets/` below the rules root; Kander names the file in the prompt that starts the phase. Every applicable rule binds whether or not it was read. Command contracts: `snippets/commands/`.
 
 | Snippet | Read when |
 | --- | --- |
-| `snippets/execute-single.md` | Executing a card (named in the start, resume, and takeover task files) |
-| `snippets/orchestrate-sessions.md` | Orchestrating (named in the orchestrate task file); a blocked executing agent |
-| `snippets/failure-recovery.md` | Terminating a card; an executing agent stopped or lost its session |
-| `snippets/coordinator-checkpoints.md` | Writing or recovering a task group checkpoint |
-| `snippets/review-evidence-gate.md` | Before `move done`; handling a review plan, batch, or closure |
-| `snippets/git-sync.md` | Before and after a work item, before review, before delivery (Git module) |
-| `snippets/git-integrate.md` | Integrating a task or group branch into its target (Git module) |
-| `snippets/report-orchestration.md` | Issuing the orchestration summary (reporting module) |
-| `snippets/execute-group-member.md` | (pending) |
-| `snippets/orchestrate-start.md` | (pending) |
-| `snippets/orchestrate-review.md` | (pending) |
-| `snippets/orchestrate-integrate.md` | (pending) |
-| `snippets/self-executed-group.md` | (pending) |
-| `snippets/fix-round.md` | (pending) |
-| `snippets/wrap-up.md` | (pending) |
+| `snippets/execute-single.md` | Executing a card (start, resume, takeover) |
+| `snippets/orchestrate-sessions.md` | Orchestrating; a blocked executing agent |
+| `snippets/failure-recovery.md` | Terminating a card; a stopped or lost executing agent |
+| `snippets/coordinator-checkpoints.md` | Task group checkpoints |
+| `snippets/review-evidence-gate.md` | Before `move done`; review plans, batches, closures |
+| `snippets/git-sync.md` | Around work items, before review and delivery (Git module) |
+| `snippets/git-integrate.md` | Integrating a branch into its target (Git module) |
+| `snippets/report-orchestration.md` | The orchestration summary (reporting module) |
+| `snippets/execute-group-member.md` | Executing a task group member (start, resume, takeover, sync) |
+| `snippets/orchestrate-start.md` | Orchestrating a task group: start entry to receiving deliveries |
+| `snippets/orchestrate-review.md` | Review batches, dispatch-back, batch closure |
+| `snippets/orchestrate-integrate.md` | Group merge-back, wrap-up, cleanup failures |
+| `snippets/self-executed-group.md` | One session orchestrates and executes the members |
+| `snippets/fix-round.md` | A `notify --kind fix` dispatch arrives |
+| `snippets/wrap-up.md` | A `notify --kind wrap-up` dispatch arrives |
 
 ## Rule Wording
 

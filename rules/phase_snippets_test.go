@@ -11,6 +11,8 @@ var phaseSnippets = []string{
 	"snippets/execute-single.md", "snippets/orchestrate-sessions.md", "snippets/failure-recovery.md",
 	"snippets/coordinator-checkpoints.md", "snippets/review-evidence-gate.md", "snippets/git-sync.md",
 	"snippets/git-integrate.md", "snippets/report-orchestration.md",
+	"snippets/execute-group-member.md", "snippets/orchestrate-start.md", "snippets/orchestrate-review.md",
+	"snippets/orchestrate-integrate.md", "snippets/self-executed-group.md", "snippets/fix-round.md", "snippets/wrap-up.md",
 }
 
 func words(t *testing.T, name string) int {
@@ -39,7 +41,7 @@ func TestPhaseSnippetsExistWithSource(t *testing.T) {
 }
 
 func TestSplitRuleFilesStayShort(t *testing.T) {
-	for name, limit := range map[string]int{"KANDER-KANBAN-RULES.md": 4000, "KANDER-GIT-RULES.md": 900, "KANDER-LOADING-RULES.md": 1000} {
+	for name, limit := range map[string]int{"KANDER-KANBAN-RULES.md": 4000, "KANDER-GIT-RULES.md": 900, "KANDER-LOADING-RULES.md": 1000, "KANDER-TASK-GROUP-RULES.md": 2000} {
 		if n := words(t, name); n > limit {
 			t.Fatalf("%s has %d words, limit %d", name, n, limit)
 		}
@@ -67,6 +69,40 @@ func TestSplitRuleFilesStayShort(t *testing.T) {
 	for _, name := range phaseSnippets {
 		if !strings.Contains(text, "`"+name+"`") {
 			t.Fatalf("Phase Snippets does not list %s", name)
+		}
+	}
+	if strings.Contains(text, "(pending)") {
+		t.Fatal("Phase Snippets must list no pending rows")
+	}
+	group, _ := File("KANDER-TASK-GROUP-RULES.md")
+	for _, title := range []string{"## Git Branches and Worktrees", "## Group Integration Branch", "## Task Orchestration", "### Self-Executed Groups", "### Starting and Subscribing", "### Review Batches and Dispatch-Back", "### Integration and Wrap-Up", "## Machine Aggregation and Author Boundaries"} {
+		if strings.Contains(string(group), title) {
+			t.Fatalf("KANDER-TASK-GROUP-RULES.md still carries %s", title)
+		}
+	}
+	review, _ := File("KANDER-REVIEW-RULES.md")
+	for _, title := range []string{"## Group-Level Review for Task Groups", "**Verification Split Between Orchestrator and Executing Agent**", "## Main Agent Verification Duty", "## Controlled Plans, Author Dispositions, and Batch Closure", "## Evidence Command JSON"} {
+		if strings.Contains(string(review), title) {
+			t.Fatalf("KANDER-REVIEW-RULES.md still carries %s", title)
+		}
+	}
+	member, _ := File("snippets/execute-group-member.md")
+	if !strings.Contains(string(member), "`snippets/orchestrate-start.md`") || !strings.Contains(string(member), "`snippets/execute-single.md`") {
+		t.Fatal("execute-group-member must point at execute-single and at orchestrate-start for the orchestrator entry")
+	}
+	start, _ := File("snippets/orchestrate-start.md")
+	if !strings.Contains(string(start), "`snippets/orchestrate-sessions.md`") {
+		t.Fatal("orchestrate-start must build on orchestrate-sessions")
+	}
+	for _, name := range Names() {
+		if strings.HasPrefix(name, "snippets/") || strings.HasPrefix(name, "templates/") {
+			continue
+		}
+		data, _ := File(name)
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(line, "\"Self-Executed Groups\"") && !strings.Contains(line, "snippets/self-executed-group.md") {
+				t.Fatalf("%s references Self-Executed Groups without the snippet path: %s", name, line)
+			}
 		}
 	}
 }
