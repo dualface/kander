@@ -129,6 +129,28 @@ func TestCompactLayoutDoesNotShiftForAlreadyStackedFocus(t *testing.T) {
 	}
 }
 
+func TestCompactLayoutShowsLeftStatesThatFitBesideFocus(t *testing.T) {
+	app := compactLayoutApp(minColumnWidth, 20, tasksPerActiveState(1))
+	for _, step := range []struct {
+		focus  string
+		offset int
+		want   []string
+	}{
+		{focus: "done", offset: 2, want: []string{"working", "review", "done"}},
+		{focus: "working", offset: 0, want: []string{"backlog", "todo", "working"}},
+	} {
+		app.Model.FocusState(step.focus)
+		layout := app.visibleColumnLayout()
+		states := make([]string, len(layout))
+		for index, panel := range layout {
+			states[index] = panel.State
+		}
+		if app.Model.ColumnOffset != step.offset || !slices.Equal(states, step.want) {
+			t.Fatalf("focus %s: offset=%d states=%v", step.focus, app.Model.ColumnOffset, states)
+		}
+	}
+}
+
 func TestCompactLayoutMouseTargetsStackedPanel(t *testing.T) {
 	tasks := []Task{
 		{TaskID: "backlog-0", Title: "backlog", State: "backlog"},

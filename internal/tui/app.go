@@ -594,20 +594,19 @@ func (a *App) visibleColumnLayout() []boardLayout {
 		return a.buildColumnLayout(visible, visualCount, false)
 	}
 
+	// Start at the leftmost state whose stacked layout still shows the
+	// focused panel. Reusing the previous offset would keep states on the
+	// left hidden after the focus moves back, although they fit beside it.
+	// Starting at the focused state always shows it, so the loop returns.
 	current := a.Model.CurrentState()
-	currentIndex := stateIndex(current)
-	if currentIndex < a.Model.ColumnOffset {
-		a.Model.ColumnOffset = currentIndex
+	currentIndex := max(0, slices.Index(states, current))
+	for offset := 0; ; offset++ {
+		layout := a.buildColumnLayout(states[offset:], visualCount, true)
+		if offset == currentIndex || layoutContainsState(layout, current) {
+			a.Model.ColumnOffset = offset
+			return layout
+		}
 	}
-	maxOffset := max(0, len(states)-visualCount)
-	a.Model.ColumnOffset = min(max(0, a.Model.ColumnOffset), maxOffset)
-	layout := a.buildColumnLayout(states[a.Model.ColumnOffset:], visualCount, true)
-	if layoutContainsState(layout, current) {
-		return layout
-	}
-	a.Model.ColumnOffset = max(0, currentIndex-visualCount+1)
-	a.Model.ColumnOffset = min(a.Model.ColumnOffset, maxOffset)
-	return a.buildColumnLayout(states[a.Model.ColumnOffset:], visualCount, true)
 }
 
 func layoutContainsState(layout []boardLayout, state string) bool {

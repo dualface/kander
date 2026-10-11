@@ -57,15 +57,6 @@ func knownState(state string) bool {
 	return false
 }
 
-func stateIndex(state string) int {
-	for i, item := range allStates {
-		if item == state {
-			return i
-		}
-	}
-	return len(allStates)
-}
-
 func boardContentKey(tasks []Task) string {
 	type row map[string]string
 	rows := make([]row, 0, len(tasks))
