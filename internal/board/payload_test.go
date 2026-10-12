@@ -196,3 +196,14 @@ func TestTaskPayloadKeepsDuplicateAndSizeChecks(t *testing.T) {
 		t.Fatal("duplicate id must fail targeted locate")
 	}
 }
+
+func TestTaskSummaryCarriesExecutionMetadata(t *testing.T) {
+	text := "# t\n\n- SESSION: claude s1\n- WINDOW: herdr:w1:t1:w1:p1\n"
+	summary := TaskSummaryOf(Entry{TaskID: "x", State: "working"}, text)
+	if summary.Session != "claude s1" || summary.Window != "herdr:w1:t1:w1:p1" {
+		t.Fatalf("summary %+v", summary)
+	}
+	if empty := TaskSummaryOf(Entry{TaskID: "y", State: "backlog"}, "# t\n"); empty.Session != "" || empty.Window != "" {
+		t.Fatalf("summary %+v", empty)
+	}
+}

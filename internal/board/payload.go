@@ -22,7 +22,11 @@ type TaskSummary struct {
 	CompletedAt string   `json:"completed_at"`
 	Time        string   `json:"time"`
 	Result      string   `json:"result"`
-	Document    string   `json:"document,omitempty"`
+	// Session and Window are the raw execution metadata, consumed by the TUI
+	// agent status observation.
+	Session  string `json:"session,omitempty"`
+	Window   string `json:"window,omitempty"`
+	Document string `json:"document,omitempty"`
 }
 
 // BoardView is the read-only board JSON consumed by tui.
@@ -83,6 +87,8 @@ func TaskSummaryOf(entry Entry, text string) TaskSummary {
 		CompletedAt: MetadataFrom(text, FieldFinishedAt),
 		Time:        TaskDisplayTime(entry, text),
 		Result:      resultFrom(text),
+		Session:     MetadataFrom(text, FieldSession),
+		Window:      MetadataFrom(text, FieldWindow),
 	}
 }
 
