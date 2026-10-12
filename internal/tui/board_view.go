@@ -219,11 +219,7 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 
 	var lines []string
 	if !col.SkipTop {
-		badge := itoa(len(tasks))
-		if blocked := a.blockedCount(tasks); blocked > 0 {
-			badge += " " + agentClassGlyphs[agentBlocked] + itoa(blocked)
-		}
-		lines = append(lines, a.panelTop(p, col.State, label, badge, width, focused, showLeft, showRight))
+		lines = append(lines, a.panelTop(p, col.State, label, a.countBadge(tasks), width, focused, showLeft, showRight))
 	}
 	contentWidth := width - panelChrome
 	if contentWidth < 1 {
@@ -285,12 +281,14 @@ type columnTabCell struct {
 	selected bool
 }
 
-func columnTabSegment(label string, selected bool, index int, prevSelected bool, count int) string {
+// columnTabSegment renders one state tab; badge is the count badge of that
+// state, the same one its panel title shows.
+func columnTabSegment(label string, selected bool, index int, prevSelected bool, count int, badge string) string {
 	text := label
 	// Selected tabs always keep the count (including zero). Idle tabs only
 	// show it when the column has cards, so empty states stay compact.
 	if selected || count > 0 {
-		text = label + " " + itoa(count)
+		text = label + " " + badge
 	}
 	if selected {
 		return borderVertical + text + borderVertical
@@ -301,12 +299,12 @@ func columnTabSegment(label string, selected bool, index int, prevSelected bool,
 	return text
 }
 
-func measureTabLabels(states, labels []string, current string, counts []int) int {
+func measureTabLabels(states, labels []string, current string, counts []int, badges []string) int {
 	width := 0
 	prevSelected := false
 	for i, state := range states {
 		selected := state == current
-		width += displayWidth(columnTabSegment(labels[i], selected, i, prevSelected, counts[i]))
+		width += displayWidth(columnTabSegment(labels[i], selected, i, prevSelected, counts[i], badges[i]))
 		prevSelected = selected
 	}
 	return width
@@ -349,11 +347,14 @@ func (a *App) columnTabCells(width int) []columnTabCell {
 	current := a.Model.CurrentState()
 	labels := make([]string, len(states))
 	counts := make([]int, len(states))
+	badges := make([]string, len(states))
 	for i, state := range states {
 		labels[i] = a.Context.stateLabel(state)
-		counts[i] = len(a.Model.TasksFor(state))
+		tasks := a.Model.TasksFor(state)
+		counts[i] = len(tasks)
+		badges[i] = a.countBadge(tasks)
 	}
-	for measureTabLabels(states, labels, current, counts) > width {
+	for measureTabLabels(states, labels, current, counts, badges) > width {
 		idle := longestIdleLabel(states, labels, current)
 		if idle < 0 {
 			break
@@ -365,7 +366,7 @@ func (a *App) columnTabCells(width int) []columnTabCell {
 	prevSelected := false
 	for i, state := range states {
 		selected := state == current
-		text := columnTabSegment(labels[i], selected, i, prevSelected, counts[i])
+		text := columnTabSegment(labels[i], selected, i, prevSelected, counts[i], badges[i])
 		w := displayWidth(text)
 		if x+w > width {
 			remain := width - x

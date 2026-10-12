@@ -245,6 +245,16 @@ func (a *App) renderAgentMark(p palette, task Task, body string, style lipgloss.
 	return mark.Render(glyph) + style.Render(rest), true
 }
 
+// countBadge is the card count of a panel or state tab, followed by the
+// blocked count when any of its agents is blocked.
+func (a *App) countBadge(tasks []Task) string {
+	badge := itoa(len(tasks))
+	if blocked := a.blockedCount(tasks); blocked > 0 {
+		badge += " " + agentClassGlyphs[agentBlocked] + itoa(blocked)
+	}
+	return badge
+}
+
 // blockedCount counts the cards of a panel whose agent is blocked.
 func (a *App) blockedCount(tasks []Task) int {
 	count := 0

@@ -30,7 +30,7 @@ The board marks each `working/` or `review/` card whose `WINDOW` names an `Agent
 - The classification follows `kander check`: a gone pane, another agent or a different session is lost; an undecidable session or an unclassifiable status is unknown; a pane without a reported session shows its status. `working` shows working, `blocked` blocked, and `idle` or `done` (the agent finished its turn) waiting for input.
 - Automatic observations start every 5 seconds, a fixed constant independent of `tui.refresh`; `r` queues one immediately. At most one is in flight and a queued one starts after it. Without observable cards nothing starts, so no terminal process runs.
 - The observation runs outside `Update`, carries a sequence, and a result whose sequence is not the in-flight one is dropped. Quit cancels it.
-- A status is shown only while the card keeps the `WINDOW` it was observed at. The card title starts with the mark, the panel title adds the blocked count, and the detail view shows the status, observation time and the sanitized reason in the separator row, so neither the card nor the detail geometry changes.
+- A status is shown only while the card keeps the `WINDOW` it was observed at. The card title starts with the mark, the panel title (or, on a narrow board, its state tab) adds the blocked count, and the detail view shows the status, observation time and the sanitized reason in the separator row, so neither the card nor the detail geometry changes.
 
 ## Process-local summary cache
 

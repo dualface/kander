@@ -277,3 +277,24 @@ func TestAgentStatusHelpLegendListsEveryMark(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentStatusBlockedCountOnNarrowTabs(t *testing.T) {
+	for _, compact := range []bool{false, true} {
+		app := stripBoardApp(t, 64, 20)
+		app.Compact = compact
+		for index := range app.Model.Tasks {
+			if app.Model.Tasks[index].State == "working" {
+				app.Model.Tasks[index].Window = agentWindowOne
+				app.agents.statuses = map[string]agentStatus{
+					app.Model.Tasks[index].TaskID: {class: agentBlocked, window: agentWindowOne},
+				}
+			}
+		}
+		if !app.columnStripVisible() {
+			t.Fatal("width 64 should show tabs")
+		}
+		if names := viewLine(app, panelTopRow); !strings.Contains(names, "working 1 "+agentClassGlyphs[agentBlocked]+"1") {
+			t.Fatalf("compact=%v: tab lacks the blocked count: %q", compact, names)
+		}
+	}
+}
