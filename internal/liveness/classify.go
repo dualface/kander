@@ -131,6 +131,13 @@ func classifyAgentPane(ctx context.Context, entry board.Entry, session TaskSessi
 	if err != nil {
 		return report(entry, &session, Unknown, channel, container, probe.FailureDetail(err), "")
 	}
+	return classifyAgentFacts(ctx, entry, session, backend, address, program, pane, allowReverseLookup)
+}
+
+// classifyAgentFacts classifies the facts already collected for the recorded
+// pane, whether from PaneFacts or from an agent list row.
+func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, program string, pane terminal.PaneFacts, allowReverseLookup bool) Report {
+	channel, container, paneID := backend.Name(), address.Container, address.Pane
 	if pane.Gone {
 		return staleReport(ctx, entry, session, channel, container, t("launch.pane_does_not_exist_2", paneID), program, backend, allowReverseLookup)
 	}

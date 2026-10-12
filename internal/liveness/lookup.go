@@ -15,7 +15,11 @@ func taskGroupFrom(text string) string {
 
 // ParseTaskSession parses the session field of a card; it returns nil when the field cannot be parsed.
 func ParseTaskSession(text string) *TaskSession {
-	value := board.MetadataFrom(text, board.FieldSession)
+	return ParseSessionValue(board.MetadataFrom(text, board.FieldSession))
+}
+
+// ParseSessionValue parses a SESSION metadata value; it returns nil when the value cannot be parsed.
+func ParseSessionValue(value string) *TaskSession {
 	if value == "" {
 		return nil
 	}
