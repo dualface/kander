@@ -139,6 +139,7 @@ func (p program) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.app.requestBoardRefresh(false)
 		}
 		p.app.issuesTick()
+		p.app.agentStatusTick()
 		p.app.activatePendingUpdate()
 		p.app.probeTick()
 		return p, tea.Batch(tickCmd(), p.app.takePending())

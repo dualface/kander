@@ -1,0 +1,9 @@
+{
+  "tui.agent_status_working": "Working",
+  "tui.agent_status_blocked": "Blocked",
+  "tui.agent_status_waiting": "Waiting for input",
+  "tui.agent_status_lost": "Lost",
+  "tui.agent_status_unknown": "Unknown",
+  "tui.agent_status_line": "Agent {{.V0}} {{.V1}} · {{.V2}} · {{.V3}}",
+  "tui.agent_status_title": "Agent status (working and review cards)"
+}

@@ -220,6 +220,9 @@ func (a *App) applyWork(payload any) tea.Cmd {
 	case detailReadResult:
 		a.applyDetailRead(result)
 		return nil
+	case agentStatusResult:
+		a.applyAgentStatus(result)
+		return nil
 	case taskActionsLoaded:
 		a.applyTaskActionsLoaded(result)
 		return nil

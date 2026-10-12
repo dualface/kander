@@ -219,7 +219,11 @@ func (a *App) renderColumnPanel(p palette, col boardLayout, visibleStates int) s
 
 	var lines []string
 	if !col.SkipTop {
-		lines = append(lines, a.panelTop(p, col.State, label, itoa(len(tasks)), width, focused, showLeft, showRight))
+		badge := itoa(len(tasks))
+		if blocked := a.blockedCount(tasks); blocked > 0 {
+			badge += " " + agentClassGlyphs[agentBlocked] + itoa(blocked)
+		}
+		lines = append(lines, a.panelTop(p, col.State, label, badge, width, focused, showLeft, showRight))
 	}
 	contentWidth := width - panelChrome
 	if contentWidth < 1 {
@@ -429,11 +433,17 @@ func (a *App) renderCard(p palette, state string, task Task, contentWidth int, f
 			style = styleFor("select", p)
 		}
 		body := padLine(clipText(text, contentWidth), contentWidth) + " "
+		rendered := style.Render(" " + body)
+		if offset == 0 && len(spans) == 0 {
+			if marked, ok := a.renderAgentMark(p, task, body, style); ok {
+				rendered = style.Render(" ") + marked
+			}
+		}
 		if !rail.member {
-			out = append(out, style.Render(" "+body))
+			out = append(out, rendered)
 			continue
 		}
-		out = append(out, p.fillLine(1)+p.ink(rail.color).Render(borderVertical)+style.Render(" "+body))
+		out = append(out, p.fillLine(1)+p.ink(rail.color).Render(borderVertical)+rendered)
 	}
 	return out
 }

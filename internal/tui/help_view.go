@@ -75,6 +75,10 @@ func (a *App) boardHelpGroups() []helpGroup {
 				{t("tui.wheel"), t("tui.cards_document")},
 			},
 		},
+		{
+			Title:   t("tui.agent_status_title"),
+			Entries: agentStatusHelpEntries(),
+		},
 	}
 }
 
@@ -123,7 +127,7 @@ func (a *App) renderHelp() (popupBox, string) {
 	}
 
 	left := joinBlocksVertical(p, rendered[0], rendered[1])
-	right := joinBlocksVertical(p, rendered[2], rendered[3])
+	right := joinBlocksVertical(p, rendered[2], rendered[3], rendered[4])
 	height := blockHeight(left)
 	if got := blockHeight(right); got > height {
 		height = got

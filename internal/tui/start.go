@@ -179,6 +179,7 @@ func (a *App) requestQuit() {
 		a.updateApplyCancel()
 	}
 	a.cancelOwnedReads()
+	a.cancelAgentStatus()
 	if a.summaries != nil {
 		a.summaries.Close()
 		a.summaries = nil

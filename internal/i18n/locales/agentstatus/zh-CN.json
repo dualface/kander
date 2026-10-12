@@ -1,0 +1,9 @@
+{
+  "tui.agent_status_working": "工作中",
+  "tui.agent_status_blocked": "阻塞",
+  "tui.agent_status_waiting": "等待输入",
+  "tui.agent_status_lost": "失联",
+  "tui.agent_status_unknown": "未知",
+  "tui.agent_status_line": "Agent {{.V0}} {{.V1}} · {{.V2}} · {{.V3}}",
+  "tui.agent_status_title": "Agent 状态（进行中与审核中卡片）"
+}

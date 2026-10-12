@@ -103,6 +103,9 @@ func (a *App) takeQueuedReads() tea.Cmd {
 	if cmd := a.takeDetailRead(); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
+	if cmd := a.takeAgentStatus(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 	switch len(cmds) {
 	case 0:
 		return nil

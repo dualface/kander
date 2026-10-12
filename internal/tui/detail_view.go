@@ -210,7 +210,7 @@ func (a *App) renderDetailView() string {
 		ruleRow = a.panelRow(p, state, panelPad(p, styleFor("search", p).Render(padLine(prefix+a.DetailQuery, contentWidth))), w, true)
 		a.CursorY, a.CursorX = detailRuleRow, 2+displayWidth(prefix+a.DetailQuery)
 	} else {
-		ruleRow = a.panelRow(p, state, styleFor("separator", p).Render(strings.Repeat("─", inner)), w, true)
+		ruleRow = a.panelRow(p, state, a.detailRule(p, task, inner), w, true)
 	}
 
 	bodyHeight := a.detailBodyHeight()
@@ -266,4 +266,17 @@ func (a *App) renderDetailStatusBar(p palette, w int, task Task) string {
 
 func newDetailViewport() viewport.Model {
 	return viewport.New(1, 1)
+}
+
+// detailRule is the separator under the metadata row. An observed executing
+// agent embeds its status there, so the body geometry stays unchanged.
+func (a *App) detailRule(p palette, task Task, inner int) string {
+	separator := styleFor("separator", p)
+	line := a.agentStatusLine(task)
+	if line == "" || inner < 6 {
+		return separator.Render(strings.Repeat("─", inner))
+	}
+	text := " " + clipText(line, inner-4) + " "
+	fill := max(0, inner-2-displayWidth(text))
+	return separator.Render("──") + styleFor("dim", p).Render(text) + separator.Render(strings.Repeat("─", fill))
 }

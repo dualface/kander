@@ -129,6 +129,7 @@ func Run(_ []string) int {
 	app.updateCheck = install.CheckUpdate
 	app.updateApply = install.ApplyUpdate
 	app.IssueProvider = cli.IssueProvider
+	app.ObserveAgents = observeAgentStatus
 	attachBoard(app, root)
 	initial, err := app.GetBoard()
 	if err != nil {

@@ -1,0 +1,9 @@
+{
+  "tui.agent_status_working": "作業中",
+  "tui.agent_status_blocked": "ブロック中",
+  "tui.agent_status_waiting": "入力待ち",
+  "tui.agent_status_lost": "所在不明",
+  "tui.agent_status_unknown": "不明",
+  "tui.agent_status_line": "Agent {{.V0}} {{.V1}} · {{.V2}} · {{.V3}}",
+  "tui.agent_status_title": "Agent 状態（作業中・レビュー中のカード）"
+}

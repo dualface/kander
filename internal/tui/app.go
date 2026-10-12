@@ -15,6 +15,7 @@ import (
 	"github.com/dualface/kander/internal/install"
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/menu"
 )
 
@@ -84,6 +85,11 @@ type App struct {
 	// leaving StartChat nil for the whole process.
 	PrepareChat func() (launch.ChatPreview, error)
 	StartChat   func(message string) (launch.ChatResult, error)
+	// ObserveAgents classifies the executing agents of in-flight cards; Run
+	// binds liveness.ObserveAgentStatus and tests inject fakes. Nil disables
+	// the observation.
+	ObserveAgents func(context.Context, []liveness.AgentStatusInput) []liveness.Report
+	agents        agentStatusTracker
 	// missingBoard is set when startup could not locate kanban/. Board-requiring
 	// actions then confirm creating it through InitBoard, the same path as
 	// kander init. AttachBoard rebinds board-backed operations after success.
@@ -450,7 +456,7 @@ func (a *App) boardCardLines(task Task, contentWidth int) []string {
 		title = task.TaskID
 	}
 	return []string{
-		clipText(title, contentWidth),
+		clipText(a.agentMarkText(task)+title, contentWidth),
 		clipText(task.TaskID, contentWidth),
 		clipText(a.cardMetaLine(task), contentWidth),
 	}
@@ -738,6 +744,7 @@ func (a *App) handleBoardKey(key string) {
 		a.adjustColumns(1)
 	case "r", "R":
 		a.requestBoardRefresh(true)
+		a.requestAgentStatus()
 	case "o", "O":
 		a.openOptions()
 	case "?":
