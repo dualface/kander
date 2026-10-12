@@ -22,6 +22,16 @@ Periodic refresh (`r` / the refresh interval), opening or updating a detail, and
 
 Keyboard, mouse, and resize continue to flow through `Update` while a read is in flight, except where an existing popup already captures input.
 
+## Agent status observation
+
+The board marks each `working/` or `review/` card whose `WINDOW` names an `AgentIdentity` terminal (herdr, luvus) with the state of its executing agent. Summaries carry the raw `SESSION` and `WINDOW` values, so the TUI still parses no card file.
+
+- One observation calls `liveness.ObserveAgentStatus` for every such card. It lists each backend that declares `agent_list` once, probes `PaneFacts` only for a pane missing from that list or a backend without it, and never runs a reverse lookup. A failed list marks only that backend's cards unknown.
+- The classification follows `kander check`: a gone pane, another agent or a different session is lost; an undecidable session or an unclassifiable status is unknown; a pane without a reported session shows its status. `working` shows working, `blocked` blocked, and `idle` or `done` (the agent finished its turn) waiting for input.
+- Automatic observations start every 5 seconds, a fixed constant independent of `tui.refresh`; `r` queues one immediately. At most one is in flight and a queued one starts after it. Without observable cards nothing starts, so no terminal process runs.
+- The observation runs outside `Update`, carries a sequence, and a result whose sequence is not the in-flight one is dropped. Quit cancels it.
+- A status is shown only while the card keeps the `WINDOW` it was observed at. The card title starts with the mark, the panel title adds the blocked count, and the detail view shows the status, observation time and the sanitized reason in the separator row, so neither the card nor the detail geometry changes.
+
 ## Process-local summary cache
 
 `SummaryIndex` is a display cache owned by `internal/board`, isolated by a canonical board root (`Abs` + `Clean`, no symlink follow). It is not an authorization source: start, pick, archive, trash, and other writers still use `ReadSnapshot` / `Expect` / CAS.

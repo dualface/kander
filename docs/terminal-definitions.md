@@ -88,6 +88,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `topology`           | `session`, `container`, `pane`                          | `session`, `container`, `pane_count`; optional `rows` whose matching rows' `pane` form the pane ID list |
 | `container_exists`   | `session`, `container`, `pane`                          | exists when the steps succeed |
 | `reverse_lookup`     | `agent`, `reference`, `process_name`                    | from `rows.result`: `session`, `container`, `pane` |
+| `agent_list` (optional) | none                                                 | from `rows.result`, one entry per matching row: `pane` (required), `agent`, `agent_status`, `agent_session`, `agent_session_kind` |
 | `focus`              | `session`, `container`, `pane`                          | focus notice |
 | `close_container`    | `session`, `container`, `pane`                          | none |
 
@@ -99,7 +100,7 @@ An operation object is:
 {
   "steps": [<step>, ...],
   "candidates": <candidates, prepare and create_container only>,
-  "rows": <rows, reverse_lookup (required) and topology (optional)>,
+  "rows": <rows, reverse_lookup and agent_list (required), topology (optional)>,
   "result": {"<result field>": "<template>"},
   "unavailable": [{"when": <conditions>, "message": <message>}],   // focus only
   "closed_when": <conditions over facts.*>                         // focus only
@@ -109,6 +110,8 @@ An operation object is:
 `steps` must not be empty unless `candidates` supplies them.
 
 Optional `process_facts` receives `{pane}` and returns `pane` plus `processes`, a compact JSON array of objects with positive unique integer `pid` and non-empty `name` (at most 64 entries). Additional process object fields are ignored. The returned `pane` must equal the requested pane. Older definitions need not declare it; callers treat absent process evidence as unsupported, not a session match. The embedded herdr operation extracts `result.process_info.pane_id` and `foreground_processes` from `pane process-info --pane {pane}`.
+
+Optional `agent_list` reports every agent pane in one call, so an observer of many cards (the TUI agent status) starts one process per backend instead of one `pane_facts` per card. It takes no inputs and declares no operation-level `result`; its required `rows` map, per matching row, `pane` plus the same agent identity fields as `pane_facts`. A pane reported twice fails the operation. Only a definition with `agent_identity` may declare it, and it never declares `rows.session`: callers compare the session themselves with `terminal.MatchAgentSession`. A pane missing from the list is not proof that it is gone; callers confirm it with `pane_facts`. Older definitions need not declare it, and adding it keeps `schema_version` 1. The embedded herdr operation reads `herdr agent list`. The embedded luvus definition does not declare it, because the status field of `luvus agent list` is not documented; luvus cards use `pane_facts`.
 
 
 ## Steps
@@ -166,7 +169,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 
 ## Rows
 
-`reverse_lookup` and `topology` scan one stored step output row by row:
+`reverse_lookup`, `agent_list` and `topology` scan one stored step output row by row:
 
 ```text
 "rows": {
@@ -184,7 +187,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 
 - `split` defaults to `lines`, where blank lines are skipped. `json_array:<path>` takes the array at that path of the JSON output (a missing or non-array value fails with `missing`); each element becomes one row re-encoded as compact JSON with sorted keys, so `json_field` reads its members and a `regex` can check the encoded form (for example that `"agent":` is followed by a string or `null`).
 - Every row must satisfy `expect`, otherwise the operation fails with `invalid`; then each of `checks`, in order, whose own message ends the operation when its condition does not hold.
-- `reverse_lookup` maps `session`, `container` and `pane`; exactly one matching row is the result, while zero or several matches return `terminal.MatchError` with the count. `topology` maps only `pane` and collects the matching rows in order into `Topology.Panes`. `process_name` is resolved only after the collection steps succeed, so a collection failure is reported before an agent definition error.
+- `reverse_lookup` maps `session`, `container` and `pane`; exactly one matching row is the result, while zero or several matches return `terminal.MatchError` with the count. `topology` maps only `pane` and collects the matching rows in order into `Topology.Panes`. `agent_list` maps `pane`, `agent`, `agent_status`, `agent_session` and `agent_session_kind` and returns every matching row. `process_name` is resolved only after the collection steps succeed, so a collection failure is reported before an agent definition error.
 - `session` (reverse_lookup only) names the row fields carrying the reported session `kind` and `value`. Rows surviving `expect`, `checks` and `match` — which should narrow to the agent, since session identity is decided separately — are candidates: each is resolved with the shared agent-session rules (a missing kind is a direct id, `path` resolves through the agent's `session.file` declaration, unknown kinds stay undecidable). Exactly one resolved match returns the row's result; zero decided matches return `MatchError{0}`; several decided matches return `MatchError` with the count; any undecidable candidate returns `terminal.IncompleteLookupError` — an unfinished lookup, rendered by `messages.incomplete` (`{detail}` is the first unresolved reason). Candidates of another agent never affect the outcome. Without `session`, `match` alone decides membership as before.
 
 ## Error Classification
