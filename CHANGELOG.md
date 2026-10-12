@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.4 — 2026-10-12
+
+- TUI agent status. Cards in `working` or `review` whose `WINDOW` names an agent-identity terminal (herdr, luvus) show the state of their executing agent: a mark before the card title (working, blocked, waiting for input, lost, unknown), the blocked count in the panel title or narrow-board state tab, and the status, observation time, and reason in the detail view. The board observes every 5 seconds (independent of `tui.refresh`) and at once on `r`, in the background, without blocking input; the help overlay lists the marks. The classification follows `kander check`.
+- Terminal definitions accept an optional `agent_list` operation that reports every agent pane in one call, so the status observation runs one process per backend instead of one probe per card. The embedded herdr definition declares it over `herdr agent list`; backends without it fall back to per-pane `pane_facts`.
+
 ## v0.9.3 — 2026-10-12
 
 - Rules split into phase snippets. The rules root now holds `snippets/` and `templates/` beside the `KANDER-*.md` files, and the installer installs, tracks, and repairs them (a locally modified template is backed up before replacement). The phase sections of the kanban, git, task group, and review rules move into snippets (`execute-single`, `execute-group-member`, `orchestrate-start`, `orchestrate-sessions`, `orchestrate-review`, `orchestrate-integrate`, `self-executed-group`, `fix-round`, `wrap-up`, `failure-recovery`, `coordinator-checkpoints`, `review-evidence-gate`, `git-sync`, `git-integrate`, `report-orchestration`), and `KANDER-LOADING-RULES.md` replaces the reading map by role with a phase snippet list. Start, resume, takeover, orchestrate, and dispatch prompts name the snippet to read for their phase. Run `kander doctor` after upgrading to update the rules.
