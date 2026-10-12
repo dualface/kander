@@ -720,6 +720,86 @@
         "pane": "{step.process.pane}",
         "processes": "{step.process.processes}"
       }
+    },
+    "agent_list": {
+      "steps": [
+        {
+          "argv": [
+            "agent",
+            "list"
+          ],
+          "messages": {
+            "exec": {
+              "id": "launch.herdr_invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "invalid": {
+              "id": "probe.herdr_response_is_missing_result"
+            },
+            "not_object": {
+              "id": "probe.herdr_response_is_missing_result"
+            },
+            "missing_result": {
+              "id": "probe.herdr_response_is_missing_result"
+            },
+            "not_json": "{detail}"
+          },
+          "store": "list",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result"
+          }
+        }
+      ],
+      "rows": {
+        "from": "list",
+        "split": "json_array:agents",
+        "fields": {
+          "pane": "json_field:pane_id",
+          "agent": "json_field:agent",
+          "status": "json_field:agent_status",
+          "kind": "json_field:agent_session.kind",
+          "reference": "json_field:agent_session.value",
+          "bad_agent": "regex:\"agent\":([^\"n])",
+          "bad_status": "regex:\"agent_status\":([^\"n])",
+          "bad_session": "regex:\"agent_session\":([^{n])",
+          "bad_kind": "regex:\"kind\":([^\"n])",
+          "bad_reference": "regex:\"value\":([^\"n])",
+          "valid_pane": "regex:\"pane_id\":\"([^:\\s\"\\\\]+:[^:\\s\"\\\\]+)\""
+        },
+        "expect": [
+          [
+            "!field_missing:row.valid_pane",
+            "field_missing:row.bad_agent",
+            "field_missing:row.bad_status",
+            "field_missing:row.bad_session",
+            "field_missing:row.bad_kind",
+            "field_missing:row.bad_reference"
+          ]
+        ],
+        "match": [
+          [
+            "!field_missing:row.pane"
+          ]
+        ],
+        "result": {
+          "pane": "{row.pane}",
+          "agent": "{row.agent}",
+          "agent_status": "{row.status}",
+          "agent_session": "{row.reference}",
+          "agent_session_kind": "{row.kind}"
+        },
+        "messages": {
+          "missing": {
+            "id": "probe.herdr_response_is_missing_result"
+          },
+          "invalid": {
+            "id": "terminal.herdr_agent_list_invalid"
+          }
+        }
+      }
     }
   }
 }

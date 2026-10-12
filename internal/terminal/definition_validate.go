@@ -36,6 +36,7 @@ var opInputs = map[string][]string{
 	OpSetSessionMarker: {"pane", "value"},
 	OpPaneFacts:        {"pane"},
 	OpProcessFacts:     {"pane"},
+	OpAgentList:        {},
 	OpReadOutput:       {"pane"},
 	OpWaitOutput:       {"pane", "marker", "marker_literal", "marker_regex", "timeout_ms"},
 	OpDeliverText:      {"pane", "text"},
@@ -68,6 +69,7 @@ var paneFactNames = []string{
 var rowResults = map[string][]string{
 	OpReverseLookup: {"session", "container", "pane"},
 	OpTopology:      {"pane"},
+	OpAgentList:     {"pane", "agent", "agent_status", "agent_session", "agent_session_kind"},
 }
 
 // ValidateDefinition checks a decoded definition. Hooks named by the
@@ -451,6 +453,11 @@ func (v validator) requiredOps(def *Definition, name string, launcher LauncherDe
 			return v.fieldErr("launchers."+name+".ops", "operation %s is declared but its capability is false", op)
 		}
 	}
+	// agent_list is optional, but it reports agent identity facts only an
+	// AgentIdentity backend has.
+	if has(OpAgentList) && !def.Capabilities.AgentIdentity {
+		return v.fieldErr("launchers."+name+".ops", "operation %s is declared but agent_identity is false", OpAgentList)
+	}
 	sort.Strings(required)
 	for _, op := range required {
 		if !has(op) {
@@ -502,8 +509,8 @@ func (v validator) op(label, name string, op Op) error {
 			return err
 		}
 	}
-	if (op.Rows == nil && name == OpReverseLookup) || (op.Rows != nil && rowResults[name] == nil) {
-		return v.fieldErr("rows", "reverse_lookup requires rows, and only reverse_lookup and topology declare them")
+	if (op.Rows == nil && (name == OpReverseLookup || name == OpAgentList)) || (op.Rows != nil && rowResults[name] == nil) {
+		return v.fieldErr("rows", "reverse_lookup and agent_list require rows, and only they and topology declare them")
 	}
 	if op.Rows != nil {
 		if err := v.rows(name, op.Rows, names); err != nil {

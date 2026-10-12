@@ -22,6 +22,7 @@ const (
 	OpSetSessionMarker = "set_session_marker"
 	OpPaneFacts        = "pane_facts"
 	OpProcessFacts     = "process_facts"
+	OpAgentList        = "agent_list"
 	OpReadOutput       = "read_output"
 	OpWaitOutput       = "wait_output"
 	OpDeliverText      = "deliver_text"
