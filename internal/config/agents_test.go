@@ -42,6 +42,15 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
 	}
 }
 
+// One devin list call takes several seconds, so the default discovery budget
+// leaves too few polls for the new session to appear.
+func TestDevinDiscoveryBudget(t *testing.T) {
+	d := AgentFor(nil, "devin")
+	if d.Session == nil || d.Session.Discovery == nil || d.Session.Discovery.TimeoutMS != 30000 {
+		t.Fatalf("session=%+v", d.Session)
+	}
+}
+
 func TestAgentDefinitionValidation(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {

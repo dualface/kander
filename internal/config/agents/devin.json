@@ -42,7 +42,8 @@
       "args": ["list", "--format", "json"],
       "format": "json",
       "id_field": "id",
-      "match": [{"field": "working_directory", "equals": "{cwd}"}]
+      "match": [{"field": "working_directory", "equals": "{cwd}"}],
+      "timeout_ms": 30000
     }
   },
   "exit_command": "/exit",
