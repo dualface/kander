@@ -79,9 +79,9 @@ if [ "$1" = "respawn-pane" ]; then
   if [ "${current##*/}" = "codex" ]; then
     task=$(printf '%s\n' "$5" | grep -Eo '[0-9]{8}-[a-z0-9-]+-task' | head -n 1)
     if [ -n "$task" ]; then
-      session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/fake"
+      session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/$(date -u +%Y/%m/%d)"
       mkdir -p "$session_dir"
-      printf '{"type":"session_meta","payload":{"id":"fake-codex-session","cwd":"%s"}}\n' "$KANBAN_LAUNCH_CWD" > "$session_dir/rollout-$task.jsonl"
+      printf '{"type":"session_meta","payload":{"id":"fake-codex-session","cwd":"%s","timestamp":"%s.999Z"}}\n' "$KANBAN_LAUNCH_CWD" "$(date -u +%Y-%m-%dT%H:%M:%S)" > "$session_dir/rollout-$task.jsonl"
       printf '{"type":"event_msg","payload":{"type":"user_message","message":"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly."}}\n' "$task" >> "$session_dir/rollout-$task.jsonl"
     fi
   fi
@@ -200,9 +200,9 @@ if [ "$1" = "pane" ] && [ "$2" = "run" ]; then
   fi
   task=$(printf '%s\n' "$4" | grep -Eo '[0-9]{8}-[a-z0-9-]+-task' | head -n 1)
   if [ -n "$task" ] && printf '%s' "$4" | grep -q '/codex'; then
-    session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/fake"
+    session_dir="${CODEX_HOME:-$HOME/.codex}/sessions/$(date -u +%Y/%m/%d)"
     mkdir -p "$session_dir"
-    printf '{"type":"session_meta","payload":{"id":"fake-codex-%s","cwd":"%s"}}\n' "$task" "$KANBAN_LAUNCH_CWD" > "$session_dir/rollout-$task.jsonl"
+    printf '{"type":"session_meta","payload":{"id":"fake-codex-%s","cwd":"%s","timestamp":"%s.999Z"}}\n' "$task" "$KANBAN_LAUNCH_CWD" "$(date -u +%Y-%m-%dT%H:%M:%S)" > "$session_dir/rollout-$task.jsonl"
     printf '{"type":"event_msg","payload":{"type":"user_message","message":"执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly."}}\n' "$task" >> "$session_dir/rollout-$task.jsonl"
   fi
   exit 0

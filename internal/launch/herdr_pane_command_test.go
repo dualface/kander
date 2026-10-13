@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 )
 
 func main() {
@@ -48,9 +49,10 @@ func main() {
 		os.WriteFile(os.Getenv("FAKE_HERDR_RUN_LOG"), []byte(args[3]), 0o644)
 		task := regexp.MustCompile("[0-9]{8}-[a-z0-9-]+-task").FindString(args[3])
 		if task != "" {
-			root := filepath.Join(os.Getenv("CODEX_HOME"), "sessions", "fake")
+			created := time.Now().UTC()
+			root := filepath.Join(os.Getenv("CODEX_HOME"), "sessions", filepath.FromSlash(created.Format("2006/01/02")))
 			os.MkdirAll(root, 0o700)
-			header, _ := json.Marshal(map[string]any{"type":"session_meta","payload":map[string]any{"id":"fake-codex-session","cwd":os.Getenv("KANBAN_LAUNCH_CWD")}})
+			header, _ := json.Marshal(map[string]any{"type":"session_meta","payload":map[string]any{"id":"fake-codex-session","cwd":os.Getenv("KANBAN_LAUNCH_CWD"),"timestamp":created.Format(time.RFC3339Nano)}})
 			message, _ := json.Marshal(map[string]any{"type":"event_msg","payload":map[string]any{"type":"user_message","message":fmt.Sprintf("执行 Kanban 任务 %s; full instructions are in the UTF-8 task file at /tmp/task.md; read the complete file first and follow it exactly.",task)}})
 			body := string(header)+"\n"+string(message)+"\n"
 			os.WriteFile(filepath.Join(root, "rollout-"+task+".jsonl"), []byte(body), 0o600)

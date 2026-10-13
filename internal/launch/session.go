@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -241,8 +240,7 @@ func startsWithAny(text string, prefixes []string) bool {
 	return false
 }
 
-func codexRolloutMentionsTask(path, taskID string) string {
-	prefixes := codexPromptPrefixes(taskID)
+func codexRolloutMentionsTask(path string, prefixes []string) string {
 	f, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -295,14 +293,11 @@ func codexRolloutMentionsTask(path, taskID string) string {
 type fileInfo struct {
 	path string
 	mod  time.Time
-	info os.FileInfo
 }
 
+// codexSessionsForTask lists the sessions of every rollout whose user prompt
+// starts with this task's prompt, newest rollout first.
 func codexSessionsForTask(taskID string) ([]string, error) {
-	return codexSessionsIn(context.Background(), taskID, "")
-}
-
-func codexSessionsIn(ctx context.Context, taskID, cwd string) ([]string, error) {
 	root, err := filepath.Abs(codexSessionsRoot())
 	if err != nil {
 		return nil, err
@@ -314,49 +309,22 @@ func codexSessionsIn(ctx context.Context, taskID, cwd string) ([]string, error) 
 		)
 	}
 	var files []fileInfo
-	walkErr := filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if err != nil {
-			if cwd != "" {
-				return err
-			}
-			return nil
-		}
-		if fi.IsDir() {
+	_ = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
+		if err != nil || fi.IsDir() {
 			return nil
 		}
 		base := filepath.Base(path)
 		if strings.HasPrefix(base, "rollout-") && strings.HasSuffix(base, ".jsonl") {
-			files = append(files, fileInfo{path: path, mod: fi.ModTime(), info: fi})
+			files = append(files, fileInfo{path: path, mod: fi.ModTime()})
 		}
 		return nil
 	})
-	if walkErr != nil {
-		return nil, walkErr
-	}
 	slices.SortFunc(files, func(a, b fileInfo) int { return b.mod.Compare(a.mod) })
+	prefixes := codexPromptPrefixes(taskID)
 	var sessions []string
 	seen := map[string]struct{}{}
 	for _, f := range files {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		var id string
-		if cwd == "" {
-			id = codexRolloutMentionsTask(f.path, taskID)
-		} else {
-			var err error
-			id, err = readOpenSession(ctx, root, process.OpenFile{Path: f.path, Info: f.info}, taskID, cwd)
-			if err != nil {
-				var directoryMismatch *sessionDirectoryMismatch
-				if errors.As(err, &directoryMismatch) {
-					continue
-				}
-				return nil, err
-			}
-		}
+		id := codexRolloutMentionsTask(f.path, prefixes)
 		if id != "" && sessionReferenceRe.MatchString(id) {
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
@@ -393,7 +361,10 @@ func runSessionResolveHook(mode, taskID string) (string, error) {
 	}
 }
 
-func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
+// runSessionDiscoverHook finds the session a launch created. previous holds the
+// ids enumerated before a discovered-mode launch; launchStart is the time
+// recorded right before the agent was launched.
+func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, launchStart time.Time, program *process.AgentProgram, cwd string) (string, error) {
 	if session.Mode == "discovered" {
 		return discoverNewAgentSession(session.Discovery, taskID, previous, program, cwd)
 	}
@@ -403,13 +374,14 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 	}
 	switch name {
 	case "codex-rollout":
-		return discoverNewCodexSession(taskID, previous, cwd)
+		return discoverNewCodexSession(taskID, launchStart, cwd)
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
 }
 
-// sessionDiscoverSnapshot records the sessions that exist before a launch.
+// sessionDiscoverSnapshot records the sessions that exist before a
+// discovered-mode launch. Codex needs no snapshot and returns an empty set.
 func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string) (map[string]struct{}, error) {
 	previous := map[string]struct{}{}
 	if !config.SessionDiscoversAfterStart(session) || !discover {
@@ -433,17 +405,10 @@ func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID stri
 	}
 	switch name {
 	case "codex-rollout":
-		if _, err := os.Stat(codexSessionsRoot()); os.IsNotExist(err) {
-			return previous, nil
-		}
-		ctx, cancel := probe.TimeoutContext(sessionDiscoverWait)
-		defer cancel()
-		sessions, err := codexSessionsIn(ctx, taskID, cwd)
-		if err != nil {
+		// Codex discovery selects new sessions by creation time, so no rollout is
+		// read before launch; only an unusable sessions root fails early.
+		if err := checkCodexSessionsRoot(); err != nil {
 			return nil, err
-		}
-		for _, id := range sessions {
-			previous[id] = struct{}{}
 		}
 	}
 	return previous, nil
@@ -461,43 +426,6 @@ func findCodexSession(taskID string) (string, error) {
 	return "", launchError(
 		"launch.no_codex_execution_session_started_for_was_found_under", root, taskID,
 	)
-}
-
-func discoverNewCodexSession(taskID string, previous map[string]struct{}, cwd string) (string, error) {
-	deadline := nowFn().Add(sessionDiscoverWait)
-	var last error
-	for {
-		remaining := deadline.Sub(nowFn())
-		if remaining <= 0 {
-			return "", last
-		}
-		ctx, cancel := probe.TimeoutContext(remaining)
-		candidates, err := codexSessionsIn(ctx, taskID, cwd)
-		cancel()
-		if err != nil {
-			last = err
-		} else {
-			var neu []string
-			for _, id := range candidates {
-				if _, ok := previous[id]; !ok {
-					neu = append(neu, id)
-				}
-			}
-			if len(neu) == 1 {
-				return neu[0], nil
-			}
-			if len(neu) > 1 {
-				return "", launchError(
-					"launch.multiple_new_codex_sessions_appeared_during_launch", strconv.Itoa(len(neu)),
-				)
-			}
-			last = launchError("launch.the_newly_started_codex_session_has_not_appeared_yet")
-		}
-		if !nowFn().Before(deadline) {
-			return "", last
-		}
-		sleepFn(notifyPollInterval)
-	}
 }
 
 // enumerateAgentSessions runs the declared enumerate command directly (no

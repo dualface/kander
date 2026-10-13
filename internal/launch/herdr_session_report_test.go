@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/config"
 )
 
 func TestHerdrCodexDiscoversAndPersistsWithoutNativeHook(t *testing.T) {
@@ -87,15 +86,17 @@ func TestCodexDiscoveryRejectsAbsentAndAmbiguousNewSessions(t *testing.T) {
 	for _, count := range []int{0, 2} {
 		t.Run(fmtBool(count == 0), func(t *testing.T) {
 			freezeClock(t)
-			setupBoard(t)
+			root, _, _ := setupBoard(t)
 			const task = "task-1"
+			launchStart := nowFn()
 			repairRollout(t, task, "old", "old-session", "")
-			repairRollout(t, task, "orchestrator", "orchestrator-session", "orchestrate "+task)
+			// A new session whose prompt only mentions the task is never a candidate.
+			codexRolloutAt(t, task, "orchestrator", "orchestrator-session", "orchestrate "+task, launchStart.Add(time.Second))
 			for index := range count {
 				name := []string{"first", "second"}[index]
-				repairRollout(t, task, name, name+"-session", "")
+				codexRolloutAt(t, task, name, name+"-session", "", launchStart.Add(time.Second))
 			}
-			if id, err := discoverNewCodexSession(task, map[string]struct{}{"old-session": {}}, os.Getenv("KANBAN_LAUNCH_CWD")); err == nil || id != "" {
+			if id, err := discoverNewCodexSession(task, launchStart, filepath.Dir(root)); err == nil || id != "" {
 				t.Fatalf("id=%s err=%v", id, err)
 			}
 		})
@@ -246,21 +247,14 @@ func TestCodexDiscoveryBindsLaunchDirectory(t *testing.T) {
 	root, _, _ := setupBoard(t)
 	const task = "same-task-in-two-projects"
 	cwd := filepath.Dir(root)
-	foreign := repairRollout(t, task, "foreign", "foreign-session", "")
+	launchStart := nowFn()
+	foreign := codexRolloutAt(t, task, "foreign", "foreign-session", "", launchStart.Add(time.Second))
 	rewriteRolloutDirectory(t, foreign, t.TempDir())
-	def := config.AgentFor(envConfig("codex", "herdr", nil), "codex").Session
-	previous, err := sessionDiscoverSnapshot(def, task, true, nil, cwd)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(previous) != 0 {
-		t.Fatalf("foreign session included: %v", previous)
-	}
-	if id, err := discoverNewCodexSession(task, previous, cwd); err == nil || id != "" {
+	if id, err := discoverNewCodexSession(task, launchStart, cwd); err == nil || id != "" {
 		t.Fatalf("foreign-only discovery: id=%s err=%v", id, err)
 	}
-	repairRollout(t, task, "own", "own-session", "")
-	if id, err := discoverNewCodexSession(task, previous, cwd); err != nil || id != "own-session" {
+	codexRolloutAt(t, task, "own", "own-session", "", launchStart.Add(time.Second))
+	if id, err := discoverNewCodexSession(task, launchStart, cwd); err != nil || id != "own-session" {
 		t.Fatalf("local discovery: id=%s err=%v", id, err)
 	}
 }

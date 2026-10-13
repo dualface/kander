@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
@@ -233,6 +234,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	// resume never moves the card state; a review card is moved back to working by the woken agent itself.
 	moved := entry
 	effective := session
+	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
 	if discoverSession {
 		paneCB = func() (AgentSession, error) {
@@ -242,7 +244,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, program, parentDir(root))
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root))
 			if err != nil {
 				return AgentSession{}, err
 			}
@@ -302,6 +304,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
 		}
 	}
+	launchStart = nowFn()
 	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, len(authorization) > 0)
 	if err != nil {
 		if asLaunchFailure(err).DeliveryUnknown {

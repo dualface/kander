@@ -1,6 +1,8 @@
 package launch
 
 import (
+	"time"
+
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 )
@@ -127,6 +129,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, err
 	}
 	name := windowName(entry, original)
+	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
 	if discoverSession {
 		paneCB = func() (AgentSession, error) {
@@ -136,7 +139,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, program, parentDir(root))
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root))
 			if err != nil {
 				return AgentSession{}, err
 			}
@@ -155,6 +158,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err := writeDocumentFn(root, moved, updated); err != nil {
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
+	launchStart = nowFn()
 	outcome, err := launchAgent(plan, root, name, inv, loc, paneCB, &session)
 	if err != nil {
 		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)

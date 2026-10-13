@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/process"
@@ -58,9 +59,19 @@ func (b *repairBackend) ReportSession(r terminal.SessionReport) error {
 	return b.reportErr
 }
 
+// repairRollout writes a rollout created an hour ago, before any launch a test
+// starts, so discovery treats it as a pre-existing session.
 func repairRollout(t *testing.T, task, name, id, prompt string) process.OpenFile {
 	t.Helper()
-	root := filepath.Join(codexSessionsRoot(), "fake")
+	return codexRolloutAt(t, task, name, id, prompt, time.Now().Add(-time.Hour))
+}
+
+// codexRolloutAt writes rollout-<name>.jsonl into the UTC date directory of
+// created, with created as the session_meta timestamp. An empty prompt uses
+// this task's start prompt.
+func codexRolloutAt(t *testing.T, task, name, id, prompt string, created time.Time) process.OpenFile {
+	t.Helper()
+	root := filepath.Join(codexSessionsRoot(), filepath.FromSlash(created.UTC().Format("2006/01/02")))
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +80,7 @@ func repairRollout(t *testing.T, task, name, id, prompt string) process.OpenFile
 		prompt = codexPromptPrefixes(task)[0] + " full instructions"
 	}
 	records := []any{
-		map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": filepath.Dir(os.Getenv(board.EnvBoardDir))}},
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": id, "cwd": filepath.Dir(os.Getenv(board.EnvBoardDir)), "timestamp": created.UTC().Format(time.RFC3339Nano)}},
 		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": prompt}}}},
 	}
 	file, err := os.Create(path)
