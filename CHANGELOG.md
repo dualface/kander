@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.5 — 2026-10-14
+
+- Fix: `kander start` and takeover of a Codex card no longer fail with `context deadline exceeded` when the Codex sessions directory holds many rollouts. Discovery no longer reads any rollout before launch: after launch it reads only the date directories around the launch time, and a rollout counts as new when its UTC session timestamp is at or after the moment the launch began, so a Codex process in another time zone is still found. The task prompt prefixes are built once per lookup instead of once per rollout file.
+- Fix: the embedded Devin definition gives session discovery a 30 second budget (`session.discovery.timeout_ms: 30000`), since one `devin list` call can take several seconds.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.4 — 2026-10-12
 
 - TUI agent status. Cards in `working` or `review` whose `WINDOW` names an agent-identity terminal (herdr, luvus) show the state of their executing agent: a mark before the card title (working, blocked, waiting for input, lost, unknown), the blocked count in the panel title or narrow-board state tab, and the status, observation time, and reason in the detail view. The board observes every 5 seconds (independent of `tui.refresh`) and at once on `r`, in the background, without blocking input; the help overlay lists the marks. The classification follows `kander check`.
