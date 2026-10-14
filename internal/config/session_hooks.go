@@ -7,7 +7,9 @@ const sessionHookPrefix = "hook:"
 // SessionHook is a named Go capability that argv templates cannot express.
 type SessionHook struct {
 	Name string
-	// DiscoverAfterStart snapshots existing sessions and waits for a new id after launch.
+	// DiscoverAfterStart waits for a new session id after launch. The hook picks
+	// the new session itself; codex-rollout selects the rollout created after the
+	// launch began and reads no rollout before it.
 	DiscoverAfterStart bool
 	// ResolveEmptyReference scans for an existing session when SESSION has no id.
 	ResolveEmptyReference bool
@@ -61,8 +63,9 @@ func validDeclaredSessionMode(mode string) bool {
 	return ok
 }
 
-// SessionDiscoversAfterStart reports whether launch must snapshot sessions
-// before start and identify the new one afterwards.
+// SessionDiscoversAfterStart reports whether launch must identify the new
+// session after start. Only discovered mode snapshots the existing sessions
+// before start; a hook selects the new session by its own rule.
 func SessionDiscoversAfterStart(s *AgentSessionDefinition) bool {
 	if s == nil {
 		return false

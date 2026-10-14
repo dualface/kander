@@ -116,7 +116,8 @@ Discovery example (the built-in Devin definition uses exactly this shape; OpenCo
     "args": ["list", "--format", "json"],
     "format": "json",
     "id_field": "id",
-    "match": [{"field": "working_directory", "equals": "{cwd}"}]
+    "match": [{"field": "working_directory", "equals": "{cwd}"}],
+    "timeout_ms": 30000
   }
 }
 ```
