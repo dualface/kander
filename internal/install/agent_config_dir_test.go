@@ -237,7 +237,7 @@ func TestAgentConfigEnvTargets(t *testing.T) {
 		{"opencode", map[string]string{"XDG_CONFIG_HOME": "relative"}, filepath.Join(home, ".config", "opencode", "AGENTS.md")},
 		{"devin", map[string]string{"XDG_CONFIG_HOME": xdg}, filepath.Join(xdg, "devin", "AGENTS.md")},
 		{"devin", map[string]string{"XDG_CONFIG_HOME": "~/xdg"}, filepath.Join(home, ".config", "devin", "AGENTS.md")},
-		{"cursor", map[string]string{"CODEX_HOME": custom, "XDG_CONFIG_HOME": xdg}, filepath.Join(home, ".cursor", "AGENTS.md")},
+		{"cursor", map[string]string{"CODEX_HOME": custom, "XDG_CONFIG_HOME": xdg}, filepath.Join(home, ".cursor", "rules", "kander.mdc")},
 	} {
 		t.Run(tt.agent, func(t *testing.T) {
 			for name, value := range tt.env {

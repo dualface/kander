@@ -28,6 +28,9 @@ type AgentConfigEnv struct {
 type agentConfigHome struct {
 	Default string           `json:"default"`
 	Env     []AgentConfigEnv `json:"env"`
+	// Fixed marks a directory the agent only reads at its default place, so
+	// neither variables nor agents.<name>.config_dir may relocate it.
+	Fixed bool `json:"fixed,omitempty"`
 }
 
 var envNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
@@ -39,6 +42,9 @@ func validateConfigHome(fileName string, agent embeddedAgent) error {
 	home := agent.ConfigHome.Default
 	if !cleanRelativeSlashPath(home) {
 		return embedAgentError(fileName, "config_home.default")
+	}
+	if agent.ConfigHome.Fixed && len(agent.ConfigHome.Env) > 0 {
+		return embedAgentError(fileName, "config_home.fixed")
 	}
 	for _, env := range agent.ConfigHome.Env {
 		if !envNamePattern.MatchString(env.Name) {

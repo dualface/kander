@@ -21,6 +21,7 @@ func TestAgentConfigDirValidation(t *testing.T) {
 		{"relative", "codex", "codex", false},
 		{"control", "codex", "/tmp/a\nb", false},
 		{"custom agent", "wrapper", "/tmp/wrapper", false},
+		{"fixed directory", "cursor", "/tmp/cursor", false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fields := map[string]any{"config_dir": tt.value}
@@ -74,6 +75,7 @@ func TestEmbeddedConfigHomeValidation(t *testing.T) {
 		{"bad env name", map[string]any{"default": ".demo", "env": []any{map[string]any{"name": "demo-home"}}}, ".demo/AGENTS.md", "config_home.env.name"},
 		{"escaping join", map[string]any{"default": ".demo", "env": []any{map[string]any{"name": "XDG", "join": "../x"}}}, ".demo/AGENTS.md", "config_home.env.join"},
 		{"global outside", map[string]any{"default": ".demo"}, ".other/AGENTS.md", "rules_target.global"},
+		{"fixed with env", map[string]any{"default": ".demo", "fixed": true, "env": []any{map[string]any{"name": "DEMO_HOME"}}}, ".demo/AGENTS.md", "config_home.fixed"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := load(tt.home, tt.global); err == nil || !strings.Contains(err.Error(), tt.want) {

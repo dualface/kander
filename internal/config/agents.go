@@ -289,8 +289,12 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 			}
 		}
 		if v, exists := fields["config_dir"]; exists {
-			if _, builtin := embeddedByName(name); !builtin {
+			emb, builtin := embeddedByName(name)
+			if !builtin {
 				return nil, agentDefinitionError(name, Text("config.agent_config_dir_builtin_only"))
+			}
+			if emb.ConfigHome.Fixed {
+				return nil, agentDefinitionError(name, Text("config.agent_config_dir_fixed"))
 			}
 			s, ok := v.(string)
 			if !ok || !validConfigDirValue(s) {

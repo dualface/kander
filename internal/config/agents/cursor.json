@@ -64,12 +64,13 @@
     }
   },
   "rules_target": {
-    "global": ".cursor/AGENTS.md",
+    "global": ".cursor/rules/kander.mdc",
     "project": "AGENTS.md"
   },
   "config_home": {
     "default": ".cursor",
-    "env": []
+    "env": [],
+    "fixed": true
   },
   "rules_integration": "markdown-reference",
   "large_model": "cursor-grok-4.6-xhigh",

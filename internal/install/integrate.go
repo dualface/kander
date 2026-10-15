@@ -94,7 +94,14 @@ func IntegrationAgents(paths config.InstallPaths) []string {
 			}
 			continue
 		}
-		if info, err := os.Stat(filepath.Dir(target)); err == nil && info.IsDir() {
+		// Coverage follows the agent's config directory, not the target's parent: a
+		// target in a subdirectory (cursor's rules/) is created on first install.
+		root, _, err := agentConfigRoot(agent, paths)
+		if err != nil {
+			rest = append(rest, agent)
+			continue
+		}
+		if info, err := os.Stat(root); err == nil && info.IsDir() {
 			rest = append(rest, agent)
 		}
 	}
@@ -163,6 +170,9 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 	if err != nil {
 		return false, config.Text("menu.not_found", target)
 	}
+	if isMDCTarget(target) && info.Mode()&os.ModeSymlink != 0 {
+		return false, config.Text("menu.mdc_rule_is_symlink", target)
+	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		linked, err := filepath.EvalSymlinks(target)
 		if err == nil {
@@ -184,6 +194,9 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 	text, err := os.ReadFile(target)
 	if err != nil {
 		return false, config.Text("menu.cannot_read", target)
+	}
+	if isMDCTarget(target) && classifyMDCFrontmatter(string(text)) != mdcAlwaysApply {
+		return false, config.Text("menu.mdc_rule_not_always_applied", target)
 	}
 	var integrated bool
 	spec, _ := config.RulesSpec(agent)
@@ -257,10 +270,14 @@ func rulesOverrideTarget(target string) string {
 func ensureTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (IntegrationOutcome, error) {
 	outcome := IntegrationOutcome{Agent: agent, Target: target}
 	block := referenceBlock(agent, paths)
+	mdc := isMDCTarget(target)
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		if !create {
 			return outcome, err
+		}
+		if mdc {
+			block = alwaysApplyFrontmatter + block
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return outcome, err
@@ -277,6 +294,9 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	}
 	if err != nil {
 		return outcome, err
+	}
+	if mdc && info.Mode()&os.ModeSymlink != 0 {
+		return outcome, fmt.Errorf("%s", config.Text("menu.mdc_rule_is_symlink", target))
 	}
 	resolved := target
 	if info.Mode()&os.ModeSymlink != 0 {
@@ -302,6 +322,15 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	// reference is already present: a repair that ran before the migration may have appended
 	// the current one next to the stale one, and the stale one must not survive.
 	text := string(existing)
+	needFrontmatter := false
+	if mdc {
+		switch classifyMDCFrontmatter(text) {
+		case mdcOtherFrontmatter:
+			return outcome, fmt.Errorf("%s", config.Text("menu.mdc_rule_not_always_applied", target))
+		case mdcNoFrontmatter:
+			needFrontmatter = true
+		}
+	}
 	legacyChanged := false
 	if rewritten, changed := rewriteLegacyReference(text, paths, filepath.Dir(target)); changed {
 		text = rewritten
@@ -310,7 +339,7 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	// Dead and duplicate load commands are dropped next, so a stale third-party reference or a
 	// repeated import can neither satisfy the strict gate nor survive the repair.
 	cleaned, removed := CleanRulesReferences(text, paths, filepath.Dir(target))
-	if !legacyChanged && cleaned == text && strictReferencePresent(text, RulesEntry(paths), filepath.Dir(target)) {
+	if !needFrontmatter && !legacyChanged && cleaned == text && strictReferencePresent(text, RulesEntry(paths), filepath.Dir(target)) {
 		outcome.Status = IntegrationPresent
 		return outcome, nil
 	}
@@ -328,6 +357,9 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 		final = cleaned + separator + block
 		appended = true
 	}
+	if needFrontmatter {
+		final = alwaysApplyFrontmatter + final
+	}
 	writePath := resolved
 	if real, err := filepath.EvalSymlinks(resolved); err == nil {
 		writePath = real
@@ -341,7 +373,7 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	}
 	outcome.Removed = removed
 	switch {
-	case appended:
+	case appended || needFrontmatter:
 		outcome.Status = IntegrationUpdated
 	case legacyChanged:
 		outcome.Status = IntegrationRewritten

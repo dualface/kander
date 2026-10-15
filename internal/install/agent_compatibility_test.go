@@ -9,7 +9,8 @@ import (
 )
 
 // Expectations for codex/claude/grok/cursor are pinned to integrate.go at 8abdfe2e,
-// before embedded definitions; pi was added later and pins its own ~/.pi/agent target.
+// before embedded definitions; pi was added later and pins its own ~/.pi/agent target, and
+// cursor's global target moved to an always-applied ~/.cursor/rules/kander.mdc rule.
 func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
 		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin", "opencode", "kimi"} {
@@ -38,6 +39,9 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 					if agent == "kimi" {
 						target = filepath.Join(home, ".kimi-code", "AGENTS.md")
 					}
+					if agent == "cursor" {
+						target = filepath.Join(home, ".cursor", "rules", "kander.mdc")
+					}
 					if mode == config.ModeProject {
 						project := t.TempDir()
 						paths = config.InstallPaths{Mode: mode, ProjectRoot: project, RulesDir: filepath.Join(project, ".kander", "rules")}
@@ -57,6 +61,9 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 						writeIntegrateFile(t, target, "# Personal rules\n")
 						want = "# Personal rules\n\n" + want
 						status = IntegrationUpdated
+					}
+					if isMDCTarget(target) {
+						want = alwaysApplyFrontmatter + want
 					}
 					for attempt := 0; attempt < 3; attempt++ {
 						got, err := EnsureRulesIntegration(agent, paths)

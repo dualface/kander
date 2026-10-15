@@ -50,6 +50,11 @@ func TestRulesIntegrationUsesInstallScope(t *testing.T) {
 			if agent == "kimi" {
 				globalTarget = filepath.Join(home, ".kimi-code", name)
 			}
+			globalPrefix := ""
+			if agent == "cursor" {
+				globalTarget = filepath.Join(home, ".cursor", "rules", "kander.mdc")
+				globalPrefix = "---\nalwaysApply: true\n---\n\n"
+			}
 			projectTarget := filepath.Join(project, name)
 			globalPaths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Dir(globalEntry)}
 			projectPaths := config.InstallPaths{Mode: config.ModeProject, ProjectRoot: project, RulesDir: filepath.Dir(projectEntry)}
@@ -68,7 +73,7 @@ func TestRulesIntegrationUsesInstallScope(t *testing.T) {
 			check(projectPaths, true, projectTarget)
 
 			// Both installations can remain integrated with their own entries at the same time.
-			writeRulesFile(t, globalTarget, globalRules)
+			writeRulesFile(t, globalTarget, globalPrefix+globalRules)
 			check(globalPaths, true, globalTarget)
 			check(projectPaths, true, projectTarget)
 			writeRulesFile(t, projectTarget, globalRules)
