@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.6 — 2026-10-15
+
+- Issue import with card refinement. In the TUI GitHub Issues overlay, `i` (`I` is now an alias) imports the selected issue with its comments and immediately starts the configured agent to complete the new backlog card. The refinement session reads the stored source attachments and the repository, completes the card contract, asks only for missing facts or real user decisions, and leaves the card in backlog; it never implements code, moves the card, or writes to GitHub. A launch failure keeps the imported card, and `s` on a bound backlog issue retries refinement. Importing an issue that already has a card does not launch a session or refresh its snapshot. `KANDER-ISSUE-RULES.md` adds the "Imported Card Refinement" section and the rules root adds `templates/prompt/refine.md`.
+- Issue import rejects an issue with more than 50 comments instead of truncating to the latest 50.
+- Fix (TUI): a refinement result or failure that returns after the overlay closed, or after the selection moved to another issue, keeps its receipt and binding, and the retry hint names the issue to select. A superseded issue index scan now fills missing card bindings instead of being dropped, so a just-committed import keeps its binding in the overlay.
+- Fix (install): a nonempty `PI_CODING_AGENT_DIR` replaces `~/.pi/agent` for the global Pi rules reference and the `kander-rules.ts` extension, in install, `kander doctor`, and repair. `~` and relative values are expanded; project targets are unchanged.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.5 — 2026-10-14
 
 - Fix: `kander start` and takeover of a Codex card no longer fail with `context deadline exceeded` when the Codex sessions directory holds many rollouts. Discovery no longer reads any rollout before launch: after launch it reads only the date directories around the launch time, and a rollout counts as new when its UTC session timestamp is at or after the moment the launch began, so a Codex process in another time zone is still found. The task prompt prefixes are built once per lookup instead of once per rollout file.
