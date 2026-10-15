@@ -137,6 +137,20 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 ## Releases
 
 - Update `CHANGELOG.md` before every release. Before pushing a `vX.Y.Z` tag, the top of `CHANGELOG.md` must hold a `## vX.Y.Z — YYYY-MM-DD` section that covers every user-visible change since the previous tag, and that entry must be committed on `develop` and fast-forwarded into `main` before `scripts/release.sh` runs. Never tag first and backfill the changelog afterwards.
+- Release order: commit to `develop` and push, fast-forward `main` to the same commit and push, then run `git checkout main && ./scripts/release.sh --skip-tap vX.Y.Z && git checkout develop`. `--skip-tap` leaves the Homebrew formula to the release workflow, so the script and the workflow never push the tap at the same time.
+- A release is not done until `dualface/homebrew-tap` `Formula/kander.rb` is at the same version, and the release report must state the tap sync result. The release workflow step "Sync Homebrew tap" pushes the formula with the repository secret `HOMEBREW_TAP_TOKEN` (a fine-grained PAT with Contents read/write on `dualface/homebrew-tap` only). Check it after every tag:
+
+  ```bash
+  id=$(gh run list --repo dualface/kander --workflow Release --limit 1 --json databaseId -q '.[0].databaseId')
+  gh run watch "$id" --repo dualface/kander --exit-status
+  gh run view "$id" --repo dualface/kander --json jobs \
+    -q '.jobs[].steps[] | select(.name|test("tap";"i")) | "\(.name): \(.conclusion)"'
+  gh api repos/dualface/homebrew-tap/contents/Formula/kander.rb -q .content | base64 -d | grep -m1 version
+  ```
+
+  The step conclusion must be `success` and the formula version must equal the tag. `skipped` means the secret could not be read (deleted, expired, or renamed).
+- When the tap sync is skipped or fails, push the formula manually with the local `gh` login: `./scripts/release.sh --skip-tag vX.Y.Z`. It succeeded only when the script ends with `pushed formula for X.Y.Z to dualface/homebrew-tap`. The PAT expires; when the sync step suddenly turns `skipped` or fails authentication, ask the user to rotate it with `gh secret set HOMEBREW_TAP_TOKEN --repo dualface/kander`.
+- Homebrew is not installed on the development machine, so `brew install` cannot be verified locally; say so in the release report.
 
 ## Released Rules
 
