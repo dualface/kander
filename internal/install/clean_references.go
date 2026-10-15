@@ -89,7 +89,12 @@ func InspectRulesReferences(agent string, paths config.InstallPaths) (RulesRefer
 func inspectRulesReferences(target string, paths config.InstallPaths) (FileReferenceIssues, error) {
 	issues := FileReferenceIssues{Target: target}
 	resolved := target
-	if info, err := os.Lstat(target); err == nil && info.Mode()&os.ModeSymlink != 0 {
+	info, err := os.Lstat(target)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 && isMDCTarget(target) {
+		// A symlinked cursor rule is never read or repaired; the integration check reports it.
+		return issues, nil
+	}
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
 		if real, err := filepath.EvalSymlinks(target); err == nil {
 			resolved = real
 		}

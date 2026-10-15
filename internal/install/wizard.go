@@ -168,6 +168,8 @@ func printIntegrationLine(item IntegrationOutcome) {
 		fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_cleaned", target, item.Removed))
 	case IntegrationCreated, IntegrationUpdated:
 		fmt.Fprintln(os.Stderr, config.Text("install.rules_reference_added", target))
+	case IntegrationFrontmatterAdded:
+		fmt.Fprintln(os.Stderr, config.Text("install.always_apply_frontmatter_added", target))
 	}
 }
 

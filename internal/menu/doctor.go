@@ -350,6 +350,8 @@ func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) 
 		success(config.Text("menu.updated_kander_rules_reference", label, outcome.Target))
 	case install.IntegrationCleaned:
 		success(config.Text("menu.cleaned_kander_rules_references", label, outcome.Target))
+	case install.IntegrationFrontmatterAdded:
+		success(config.Text("menu.added_always_apply_frontmatter", label, outcome.Target))
 	default:
 		success(config.Text("menu.added_kander_rules_reference", label, outcome.Target))
 	}

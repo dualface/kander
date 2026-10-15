@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 func TestClassifyMDCFrontmatter(t *testing.T) {
@@ -75,11 +77,11 @@ func TestCursorRuleRepairsFrontmatterAndReference(t *testing.T) {
 	block := referenceBlock("cursor", paths)
 
 	writeIntegrateFile(t, target, block)
-	if ok, _ := RulesIntegration("cursor", paths); ok {
-		t.Fatal("reference without frontmatter reported as integrated")
+	if ok, detail := RulesIntegration("cursor", paths); ok || detail != config.Text("menu.mdc_rule_missing_frontmatter", target) {
+		t.Fatalf("missing frontmatter: integrated=%v detail=%s", ok, detail)
 	}
 	out, err := EnsureRulesIntegration("cursor", paths)
-	if err != nil || out.Status != IntegrationUpdated {
+	if err != nil || out.Status != IntegrationFrontmatterAdded {
 		t.Fatalf("prepend: %+v %v", out, err)
 	}
 	if data, _ := os.ReadFile(target); string(data) != alwaysApplyFrontmatter+block {
@@ -104,7 +106,7 @@ func TestCursorRuleKeepsUserFrontmatter(t *testing.T) {
 	paths := globalIntegrationPaths(t, home)
 	original := "---\nalwaysApply: false\n---\n\n" + referenceBlock("cursor", paths)
 	writeIntegrateFile(t, target, original)
-	if ok, detail := RulesIntegration("cursor", paths); ok || !strings.Contains(detail, target) {
+	if ok, detail := RulesIntegration("cursor", paths); ok || detail != config.Text("menu.mdc_rule_not_always_applied", target) {
 		t.Fatalf("integrated=%v detail=%s", ok, detail)
 	}
 	if _, err := EnsureRulesIntegration("cursor", paths); err == nil {
@@ -121,8 +123,14 @@ func TestCursorRuleRejectsSymlink(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(RulesEntry(paths), target); err != nil {
+	linked := filepath.Join(t.TempDir(), "rules.md")
+	entry := RulesEntry(paths)
+	writeIntegrateFile(t, linked, entry+"\n"+entry+"\n")
+	if err := os.Symlink(linked, target); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
+	}
+	if issues, err := InspectRulesReferences("cursor", paths); err != nil || issues.Total() != 0 {
+		t.Fatalf("symlinked rule inspected: %+v %v", issues, err)
 	}
 	if ok, detail := RulesIntegration("cursor", paths); ok || !strings.Contains(detail, target) {
 		t.Fatalf("integrated=%v detail=%s", ok, detail)
@@ -130,7 +138,7 @@ func TestCursorRuleRejectsSymlink(t *testing.T) {
 	if _, err := EnsureRulesIntegration("cursor", paths); err == nil {
 		t.Fatal("repair wrote through a symlinked rule")
 	}
-	if data, _ := os.ReadFile(RulesEntry(paths)); string(data) != "# Kander entry\n" {
+	if data, _ := os.ReadFile(linked); string(data) != entry+"\n"+entry+"\n" {
 		t.Fatalf("link target changed: %q", data)
 	}
 	if info, err := os.Lstat(target); err != nil || info.Mode()&os.ModeSymlink == 0 {

@@ -21,7 +21,8 @@ const (
 	IntegrationPresent IntegrationStatus = iota
 	// IntegrationCreated means the file did not exist and was created with the reference.
 	IntegrationCreated
-	// IntegrationUpdated means the reference was appended to an existing file.
+	// IntegrationUpdated means the reference was appended to an existing file; a .mdc rule
+	// without frontmatter also gained the alwaysApply frontmatter.
 	IntegrationUpdated
 	// IntegrationRewritten means a reference to the previous rules entry location was rewritten
 	// in place to the current one.
@@ -29,6 +30,9 @@ const (
 	// IntegrationCleaned means invalid or duplicate load commands were removed without a
 	// legacy rewrite and no new reference had to be appended.
 	IntegrationCleaned
+	// IntegrationFrontmatterAdded means a .mdc rule that already referenced the entry gained
+	// the alwaysApply frontmatter and no reference had to be appended.
+	IntegrationFrontmatterAdded
 )
 
 // IntegrationOutcome is the result of ensuring one agent rules file references the Kander entry.
@@ -195,8 +199,13 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 	if err != nil {
 		return false, config.Text("menu.cannot_read", target)
 	}
-	if isMDCTarget(target) && classifyMDCFrontmatter(string(text)) != mdcAlwaysApply {
-		return false, config.Text("menu.mdc_rule_not_always_applied", target)
+	if isMDCTarget(target) {
+		switch classifyMDCFrontmatter(string(text)) {
+		case mdcNoFrontmatter:
+			return false, config.Text("menu.mdc_rule_missing_frontmatter", target)
+		case mdcOtherFrontmatter:
+			return false, config.Text("menu.mdc_rule_not_always_applied", target)
+		}
 	}
 	var integrated bool
 	spec, _ := config.RulesSpec(agent)
@@ -373,8 +382,10 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	}
 	outcome.Removed = removed
 	switch {
-	case appended || needFrontmatter:
+	case appended:
 		outcome.Status = IntegrationUpdated
+	case needFrontmatter:
+		outcome.Status = IntegrationFrontmatterAdded
 	case legacyChanged:
 		outcome.Status = IntegrationRewritten
 	default:
