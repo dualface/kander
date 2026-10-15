@@ -114,5 +114,6 @@
   "tui.issues_refine_failed": "カード {{.V0}} は保存済み。補完の起動に失敗：{{.V1}}。s で再試行。",
   "tui.issues_refine_started": "カード {{.V0}}：{{.V1}} による補完を {{.V2}} で開始しました",
   "tui.issues_hint_backlog": "Enter 詳細  / 検索  Tab 状態  l ラベル  g カードへ移動  s カード補完  r 更新  o ブラウザ  Esc 閉じる",
-  "launch.refinement_requires_container": "カード補完には端末コンテナ対応のランチャーが必要です。"
+  "launch.refinement_requires_container": "カード補完には端末コンテナ対応のランチャーが必要です。",
+  "tui.issues_refine_failed_board": "カード {{.V0}} は保存済み。補完の起動に失敗：{{.V1}}。g で Issues を開き、該当 Issue を選択して s で再試行。"
 }

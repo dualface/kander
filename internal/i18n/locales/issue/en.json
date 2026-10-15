@@ -114,5 +114,6 @@
   "tui.issues_refine_failed": "Card {{.V0}} kept; refinement failed: {{.V1}}. Press s to retry.",
   "tui.issues_refine_started": "Card {{.V0}}: refinement started with {{.V1}} at {{.V2}}",
   "tui.issues_hint_backlog": "Enter detail  / search  Tab state  l label  g jump to card  s refine card  r refresh  o browser  Esc close",
-  "launch.refinement_requires_container": "Card refinement requires a launcher with a terminal container."
+  "launch.refinement_requires_container": "Card refinement requires a launcher with a terminal container.",
+  "tui.issues_refine_failed_board": "Card {{.V0}} kept; refinement failed: {{.V1}}. Press g, select its issue, then s to retry."
 }

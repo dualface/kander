@@ -138,3 +138,89 @@ func TestIssuesImportCloseReopenKeepsOperationAndFencesReceipt(t *testing.T) {
 		t.Fatalf("receipt on wrong overlay: %q / %q", app.Issues.notice, app.CopyNotice)
 	}
 }
+
+func TestIssuesRefinementFailureRemainsVisibleAfterNavigation(t *testing.T) {
+	for _, navigation := range []string{"down", "q", "reopen"} {
+		t.Run(navigation, func(t *testing.T) {
+			fake := newFakeIssues()
+			fake.listResult = defaultPage(issuesListLimit)
+			app, _ := issuesImportApp(t, fake, nil, nil, func(context.Context, issue.Repository, int, issue.ImportOptions) (issue.ImportResult, error) {
+				return issue.ImportResult{TaskID: "saved", State: "backlog"}, nil
+			})
+			starts := 0
+			app.RefineIssue = func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
+				starts++
+				return issue.TriageOutcome{}, errors.New("offline")
+			}
+			app.HandleKey("g")
+			runPendingWork(t, app)
+			app.HandleKey("i")
+			work := app.pendingWork
+			app.pendingWork = nil
+			if navigation == "reopen" {
+				app.HandleKey("q")
+				app.HandleKey("g")
+				runPendingWork(t, app)
+			} else {
+				app.HandleKey(navigation)
+			}
+			notice := ""
+			if app.Issues != nil {
+				notice = app.Issues.notice
+			}
+			app.applyWork(work())
+			if !strings.Contains(app.CopyNotice, "offline") || !strings.Contains(app.CopyNotice, "saved") {
+				t.Fatalf("failure receipt lost: %q", app.CopyNotice)
+			}
+			if app.Issues != nil && app.Issues.notice != notice {
+				t.Fatal("old result changed another selection/overlay notice")
+			}
+			if navigation == "q" {
+				if !strings.Contains(app.CopyNotice, "g") || !strings.Contains(app.CopyNotice, "s") {
+					t.Fatal("board receipt lacks reopen instructions", app.CopyNotice)
+				}
+			}
+			if navigation == "reopen" {
+				if card, ok := app.issuesSelectedBound(); !ok || card.TaskID != "saved" {
+					t.Fatal("reopened overlay lost saved binding")
+				}
+				app.HandleKey("s")
+				if app.Takeover != nil {
+					t.Fatal("retry opened unbound takeover")
+				}
+				runPendingWork(t, app)
+				if starts != 2 {
+					t.Fatalf("retry launches=%d", starts)
+				}
+			}
+		})
+	}
+}
+
+func TestIssuesRefinementBindingSurvivesOlderListAndIndex(t *testing.T) {
+	fake := newFakeIssues()
+	fake.listResult = defaultPage(issuesListLimit)
+	app, _ := issuesImportApp(t, fake, nil, nil, func(context.Context, issue.Repository, int, issue.ImportOptions) (issue.ImportResult, error) {
+		return issue.ImportResult{TaskID: "saved", State: "backlog"}, nil
+	})
+	app.HandleKey("g")
+	runPendingWork(t, app)
+	app.HandleKey("i")
+	importWork := app.pendingWork
+	app.pendingWork = nil
+	app.HandleKey("q")
+	app.HandleKey("g")
+	listWork := app.pendingWork
+	app.pendingWork = nil
+	oldList := listWork()
+	oldIndex := issuesIndexResult{seq: app.issuesIndexSeq, index: issue.Index{}}
+	app.applyWork(importWork())
+	app.applyWork(oldList)
+	app.applyIssuesIndex(oldIndex)
+	if card, ok := app.issuesSelectedBound(); !ok || card.TaskID != "saved" {
+		t.Fatal("old scan erased committed binding")
+	}
+	if app.Issues.importing {
+		t.Fatal("reopened busy hint did not settle")
+	}
+}

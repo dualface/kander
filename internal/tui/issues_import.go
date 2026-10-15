@@ -122,33 +122,36 @@ func (a *App) applyIssuesImport(result issuesImportResult) {
 		return
 	}
 	a.issuesImporting = false
+	// Older list and index scans must not erase the committed binding below.
+	a.issuesIndexSeq++
 	st := a.Issues
-	if st == nil || (result.origin != nil && result.origin != st) {
-		// The receipt remains visible on the board when its originating overlay left.
-		a.showFocusNotice(a.issueRefinementReceipt(result))
-		return
+	sameOrigin := st != nil && (result.origin == nil || result.origin == st)
+	if st != nil {
+		st.importing = false
 	}
-	st.importing = false
 	repository := a.issuesRepository()
-	if repository == nil || *repository != result.repository {
-		return
-	}
-	if result.index != nil {
-		st.index = result.index
-		st.indexRefreshedAt = a.Now()
-	}
-	// Even a failed index refresh must not hide the card just imported.
-	if result.err == nil && result.result.TaskID != "" {
-		if key, err := result.repository.IssueSourceKey(result.number); err == nil {
-			if st.index == nil {
-				st.index = issue.Index{}
-			}
-			if _, exists := st.index[key]; !exists {
-				st.index[key] = issue.LocalCard{TaskID: result.result.TaskID, State: result.result.State, Path: result.result.Path, CommentsLoaded: result.result.CommentsLoaded}
+	sameRepository := st != nil && repository != nil && *repository == result.repository
+	if sameRepository {
+		// A reopened overlay keeps its own list/index scan, but still learns the
+		// committed binding immediately so s cannot select the unbound action.
+		if sameOrigin && result.index != nil {
+			st.index = result.index
+			st.indexRefreshedAt = a.Now()
+		}
+		if result.err == nil && result.result.TaskID != "" {
+			if key, err := result.repository.IssueSourceKey(result.number); err == nil {
+				if st.index == nil {
+					st.index = issue.Index{}
+				}
+				if _, exists := st.index[key]; !exists {
+					st.index[key] = issue.LocalCard{TaskID: result.result.TaskID, State: result.result.State, Path: result.result.Path, CommentsLoaded: result.result.CommentsLoaded}
+				}
 			}
 		}
 	}
-	if result.number != a.issuesSelectedNumber() {
+	if !sameOrigin || !sameRepository || result.number != a.issuesSelectedNumber() {
+		// Navigation changes where the receipt belongs, not whether it is shown.
+		a.showFocusNotice(a.issueRefinementReceipt(result))
 		return
 	}
 	a.issuesSetNotice(a.issueRefinementReceipt(result))
@@ -161,7 +164,11 @@ func (a *App) issueRefinementReceipt(result issuesImportResult) string {
 	var message string
 	switch {
 	case result.launchErr != nil:
-		message = t("tui.issues_refine_failed", result.result.TaskID, issue.TriageError(result.launchErr))
+		key := "tui.issues_refine_failed"
+		if a.Issues == nil {
+			key = "tui.issues_refine_failed_board"
+		}
+		message = t(key, result.result.TaskID, issue.TriageError(result.launchErr))
 	case result.launched:
 		message = t("tui.issues_refine_started", result.result.TaskID, result.outcome.Agent, result.outcome.Address)
 	default:

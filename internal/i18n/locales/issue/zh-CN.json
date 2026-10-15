@@ -114,5 +114,6 @@
   "tui.issues_refine_failed": "卡片 {{.V0}} 已保留；补全启动失败：{{.V1}}。按 s 重试。",
   "tui.issues_refine_started": "卡片 {{.V0}}：已启动 {{.V1}} 补全，位置 {{.V2}}",
   "tui.issues_hint_backlog": "Enter 详情  / 搜索  Tab 状态  l 标签  g 跳转任务卡  s 补全卡片  r 刷新  o 浏览器  Esc 关闭",
-  "launch.refinement_requires_container": "卡片补全需要支持终端容器的启动方式。"
+  "launch.refinement_requires_container": "卡片补全需要支持终端容器的启动方式。",
+  "tui.issues_refine_failed_board": "卡片 {{.V0}} 已保留；补全启动失败：{{.V1}}。按 g 打开 Issues，选中对应 Issue 后按 s 重试。"
 }

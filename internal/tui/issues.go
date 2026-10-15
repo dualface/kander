@@ -107,6 +107,7 @@ type issuesState struct {
 // longer the latest is dropped, which keeps out-of-order async replies from
 // landing on a newer query or a reopened overlay.
 type issuesListResult struct {
+	indexSeq   uint64
 	seq        uint64
 	repository *issue.Repository
 	page       issue.IssuePage
@@ -169,6 +170,8 @@ func (a *App) issuesReloadList() {
 	a.issuesListSeq++
 	a.issuesDetailSeq++
 	seq := a.issuesListSeq
+	a.issuesIndexSeq++
+	indexSeq := a.issuesIndexSeq
 	query := issue.IssueQuery{State: st.state, Search: st.search, Limit: issuesListLimit}
 	if st.label != "" {
 		query.Labels = []string{st.label}
@@ -178,9 +181,8 @@ func (a *App) issuesReloadList() {
 	cached := a.issuesRepo
 	st.loading = true
 	st.listErr = ""
-	// A new list request supersedes the previous background task, so a lost
-	// import result must not leave the overlay unable to start another import.
-	st.importing = false
+	// Keep the busy hint across list reloads and reopened overlays.
+	st.importing = a.issuesImporting
 	a.pendingWork = func() any {
 		if provider == nil {
 			return issuesListResult{seq: seq, err: issue.NewError(issue.ErrorCLIUnavailable, "tui", "no issue provider is registered")}
@@ -197,7 +199,7 @@ func (a *App) issuesReloadList() {
 			repository = &resolved
 		}
 		page, err := instance.ListIssues(ctx, *repository, query)
-		result := issuesListResult{seq: seq, repository: repository, page: page, err: err}
+		result := issuesListResult{seq: seq, indexSeq: indexSeq, repository: repository, page: page, err: err}
 		if err == nil && loader != nil {
 			result.index, _ = loader()
 		}
@@ -314,7 +316,7 @@ func (a *App) applyIssuesIndex(result issuesIndexResult) {
 }
 
 // issuesLoadDetail starts the snapshot request of one issue. Comments are
-// requested only here, so the list never pays for them. When another content
+// requested here for browsing and also by import; the list never pays for them. When another content
 // request is still in flight the target is armed for the tick grid instead of
 // starting a second request.
 func (a *App) issuesLoadDetail(number int) {
@@ -390,7 +392,7 @@ func (a *App) applyIssuesList(result issuesListResult) {
 	st.limit = result.page.Limit
 	st.more = result.page.More
 	st.listErr = ""
-	if result.index != nil {
+	if result.index != nil && result.indexSeq == a.issuesIndexSeq {
 		st.index = result.index
 		st.indexRefreshedAt = a.Now()
 	}
