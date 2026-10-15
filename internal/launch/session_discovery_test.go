@@ -210,7 +210,8 @@ func TestDiscoverNewAgentSessionUsesSetDifference(t *testing.T) {
 		return []string{"existing", "new-session"}, nil
 	}
 	t.Cleanup(func() { enumerateSessionsFn = previousList })
-	got, err := discoverNewAgentSession(devinDiscovery(t), "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir())
+	disc := devinDiscovery(t)
+	got, err := discoverNewAgentSession(disc, disc.Timeout(), "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +227,7 @@ func TestDiscoverNewAgentSessionRejectsMultipleCandidates(t *testing.T) {
 	}
 	t.Cleanup(func() { enumerateSessionsFn = previousList })
 	disc := devinDiscovery(t)
-	_, err := discoverNewAgentSession(disc, "task", map[string]struct{}{}, &process.AgentProgram{}, t.TempDir())
+	_, err := discoverNewAgentSession(disc, disc.Timeout(), "task", map[string]struct{}{}, &process.AgentProgram{}, t.TempDir())
 	if err == nil || !strings.Contains(err.Error(), "2") {
 		t.Fatalf("err=%v", err)
 	}
@@ -246,7 +247,7 @@ func TestDiscoverNewAgentSessionTimesOutWithoutCandidates(t *testing.T) {
 	}
 	t.Cleanup(func() { nowFn = previousNow })
 	disc := devinDiscovery(t)
-	if _, err := discoverNewAgentSession(disc, "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir()); err == nil {
+	if _, err := discoverNewAgentSession(disc, disc.Timeout(), "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir()); err == nil {
 		t.Fatal("discovery without a new session must fail")
 	}
 }
@@ -267,7 +268,7 @@ func TestDiscoverNewAgentSessionStopsEnumeratingPastDeadline(t *testing.T) {
 	sleepFn = func(time.Duration) { now = now.Add(time.Hour) }
 	t.Cleanup(func() { sleepFn = previousSleep })
 	disc := devinDiscovery(t)
-	if _, err := discoverNewAgentSession(disc, "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir()); err == nil {
+	if _, err := discoverNewAgentSession(disc, disc.Timeout(), "task", map[string]struct{}{"existing": {}}, &process.AgentProgram{}, t.TempDir()); err == nil {
 		t.Fatal("discovery without a new session must fail")
 	}
 	if calls != 1 {
@@ -344,7 +345,7 @@ func TestAgentsWithoutDiscoveryNeverEnumerate(t *testing.T) {
 		if def.Mode == "discovered" {
 			t.Fatalf("%s must not declare discovered", agent)
 		}
-		if _, err := sessionDiscoverSnapshot(def, "task", true, &process.AgentProgram{}, t.TempDir()); err != nil {
+		if _, err := sessionDiscoverSnapshot(def, "task", true, &process.AgentProgram{}, t.TempDir(), LaunchPlan{}.launchTimeout); err != nil {
 			t.Fatal(err)
 		}
 	}

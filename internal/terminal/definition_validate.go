@@ -31,7 +31,7 @@ var stepMessageNames = []string{"detail", "error", "output"}
 var opInputs = map[string][]string{
 	OpPrepare:          {"project", "project_key", "command"},
 	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label"},
-	OpWaitReady:        {"pane"},
+	OpWaitReady:        {"pane", "timeout_ms"},
 	OpRunCommand:       {"pane", "command", "posix"},
 	OpSetSessionMarker: {"pane", "value"},
 	OpPaneFacts:        {"pane"},
@@ -650,7 +650,7 @@ func (v validator) poll(op string, poll *Poll, names scope) error {
 	}
 	if poll.Timeout == "{timeout_ms}" {
 		if !names.allows("timeout_ms") {
-			return v.fieldErr("poll.timeout", "{timeout_ms} is only available to wait_output")
+			return v.fieldErr("poll.timeout", "{timeout_ms} is only available to wait_ready and wait_output")
 		}
 	} else if _, err := positiveDuration(poll.Timeout); err != nil {
 		return v.fieldErr("poll.timeout", "%s", err.Error())

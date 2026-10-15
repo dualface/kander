@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
@@ -56,7 +57,7 @@ func TestLuvusDefinitionArgvAndParsing(t *testing.T) {
 		reply string
 		want  [][]string
 	}{
-		{"ready", func(c terminal.Conn) error { return backend.WaitReady(c, "7") },
+		{"ready", func(c terminal.Conn) error { return backend.WaitReady(c, "7", 15000) },
 			`{"id":"1","result":{"type":"pane_read","pane":"7","text":"\n$ "}}`, [][]string{{"pane", "read", "7"}}},
 		{"run", func(c terminal.Conn) error { return backend.RunCommand(c, "7", "agent 'task file'", true) },
 			`{"id":"1","result":{}}`, [][]string{{"pane", "run", "7", "agent 'task file'"}}},
@@ -160,6 +161,20 @@ func TestLuvusDefinitionCreateAcceptsEquivalentCwd(t *testing.T) {
 }
 
 // A pane whose directory is not reported yet is read again until it is.
+// The ready poll waits for the budget WaitReady passes, not a fixed one.
+func TestLuvusDefinitionReadyHonorsTimeout(t *testing.T) {
+	r := &recorder{reply: func([]string) probe.Result {
+		return probe.Result{Stdout: `{"id":"1","result":{"type":"pane_read","pane":"7","text":"\n"}}`}
+	}}
+	start := time.Now()
+	if err := luvusBackendForTest(t).WaitReady(r.conn(), "7", 300); err == nil {
+		t.Fatal("blank pane reported ready")
+	}
+	if elapsed := time.Since(start); elapsed < 300*time.Millisecond || elapsed > 1500*time.Millisecond {
+		t.Fatalf("ready waited %v for a 300ms budget", elapsed)
+	}
+}
+
 func TestLuvusDefinitionCreatePollsForCwd(t *testing.T) {
 	cwd := t.TempDir()
 	reads := 0

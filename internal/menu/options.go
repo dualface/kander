@@ -188,6 +188,7 @@ func (s *Session) prepare(configValid bool) error {
 	}
 	cfg.Launcher = s.existing.Launcher
 	s.normalizeLauncher(cfg)
+	cfg.ExtendedLaunchTimeouts = s.existing.ExtendedLaunchTimeouts
 	cfg.TUI = s.existing.TUI
 	cfg.Rules = s.existing.Rules.Clone()
 	cfg.ReviewStages = cloneReviewStages(s.existing.ReviewStages)
@@ -363,6 +364,12 @@ func (s *Session) SetAgentLanguage(language string) {
 func (s *Session) SetLauncher(launcher string) {
 	s.Config.Launcher = launcher
 	s.noteOverride([]string{"launcher"}, launcher)
+}
+
+// SetExtendedLaunchTimeouts turns the extended launch-time waits on or off.
+func (s *Session) SetExtendedLaunchTimeouts(on bool) {
+	s.Config.ExtendedLaunchTimeouts = on
+	s.noteOverride([]string{"extended_launch_timeouts"}, on)
 }
 
 // LauncherInstallValue is the value of the "install tmux" item in the launcher list.
@@ -772,6 +779,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.ReviewStages = cloneReviewStages(existing.ReviewStages)
 	cfg.Rules = existing.Rules.Clone()
 	cfg.Launcher = existing.Launcher
+	cfg.ExtendedLaunchTimeouts = existing.ExtendedLaunchTimeouts
 	cfg.TUI = existing.TUI
 	cfg.Language = existing.Language
 	cfg.AgentLanguage = existing.AgentLanguage

@@ -183,7 +183,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	sessionDef := config.AgentFor(cfg, session.Agent).Session
 	discoverSession := plan.capabilities().PaneMetadata || plan.capabilities().SessionReport || config.SessionPersistsAfterStart(sessionDef)
 	if takeover {
-		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root))
+		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
 		if err != nil {
 			return err
 		}
@@ -244,7 +244,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root))
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root), plan.launchTimeout)
 			if err != nil {
 				return AgentSession{}, err
 			}

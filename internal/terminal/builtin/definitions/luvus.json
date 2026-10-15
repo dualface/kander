@@ -260,7 +260,7 @@
           },
           "poll": {
             "interval": "200ms",
-            "timeout": "15s",
+            "timeout": "{timeout_ms}",
             "until": "nonempty"
           },
           "messages": {

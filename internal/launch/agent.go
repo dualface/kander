@@ -84,7 +84,8 @@ func launchAgent(
 		return LaunchOutcome{}, fail(err)
 	}
 	created = address
-	if err := backend.WaitReady(conn, address.Pane); err != nil {
+	readyTimeout := plan.launchTimeout(terminal.DefaultReadyTimeout)
+	if err := backend.WaitReady(conn, address.Pane, int(readyTimeout/time.Millisecond)); err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
 	outcome := LaunchOutcome{Container: address.Container, Pane: address.Pane}

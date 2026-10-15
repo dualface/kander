@@ -78,7 +78,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
 | `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label` | `session`, `container`, `pane` (container and pane required) |
-| `wait_ready` (optional; absent means ready) | `pane`                           | none |
+| `wait_ready` (optional; absent means ready) | `pane`, `timeout_ms` (the readiness budget: 15000, or 120000 with `extended_launch_timeouts`; `kander terminal test` always passes 15000) | none |
 | `run_command`        | `pane`, `command`, `posix` (`true`/`false`)             | none |
 | `set_session_marker` | `pane`, `value`                                         | none |
 | `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `agent_session_kind`, `container` |
@@ -136,6 +136,7 @@ Optional `agent_list` reports every agent pane in one call, so an observer of ma
 }
 ```
 
+- `poll.timeout` accepts `{timeout_ms}` only in `wait_ready` and `wait_output`, which receive that input; other operations name a fixed duration.
 - Steps run in order. A step whose `when` does not hold is skipped. A `fail` step ends the operation with its message. A runtime value rejected during argv expansion is a failure of that step, so `on_error` applies to it.
 - `argv` elements are expanded one by one. An element whose placeholder value is empty is dropped together with an immediately preceding standalone flag, as in agent definitions. A runtime value containing CR, LF or NUL fails the step; TAB and braces are allowed in runtime values.
 - `output` extracts the step text (the raw stdout without it). `fields` apply one primitive each to that text; a primitive that does not match leaves the field absent. A `json_field` holding an object or array is retained as compact JSON, matching `output` extraction, so structured process facts can be passed through results. An `output` that does not parse fails the step as an invalid response (`KindInvalidResponse`). A `json_field` output is classified like a JSON API response: output that is not JSON is `KindNotJSON`, a root that is not an object `KindNotObject`, and a missing path `KindMissingResult`, each with its own optional message falling back to `invalid`; a path holding an object or array yields that sub-document as compact JSON with sorted keys, so `fields` can read inside it.

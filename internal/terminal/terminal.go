@@ -172,7 +172,8 @@ type Backend interface {
 	StartedLines(head string, target Target, address Address, getenv func(string) string) []string
 
 	CreateContainer(conn Conn, target Target, cwd, label string) (Address, error)
-	WaitReady(conn Conn, pane string) error
+	// WaitReady waits up to timeoutMS for the new pane to accept input.
+	WaitReady(conn Conn, pane string, timeoutMS int) error
 	RunCommand(conn Conn, pane, command string, posix bool) error
 	SetSessionMarker(conn Conn, pane, value string) error
 	ReportSession(SessionReport) error
@@ -189,6 +190,10 @@ type Backend interface {
 }
 
 // ErrUnsupported is returned by operations a backend does not provide.
+// DefaultReadyTimeout is the WaitReady budget of a launch without
+// extended_launch_timeouts, and of the terminal conformance check.
+const DefaultReadyTimeout = 15 * time.Second
+
 var ErrUnsupported = errors.New("terminal: operation not supported by this backend")
 
 // ErrNoReportChannel means the out-of-band session report has no channel.

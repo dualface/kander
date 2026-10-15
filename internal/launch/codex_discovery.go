@@ -168,14 +168,14 @@ func (s *codexRolloutScan) check(ctx context.Context, path string, entry os.DirE
 }
 
 // discoverNewCodexSession polls until exactly one rollout created at or after
-// launchStart is bound to this task and launch directory.
-func discoverNewCodexSession(taskID string, launchStart time.Time, cwd string) (string, error) {
+// launchStart is bound to this task and launch directory, for at most wait.
+func discoverNewCodexSession(taskID string, launchStart time.Time, cwd string, wait time.Duration) (string, error) {
 	root, err := filepath.Abs(codexSessionsRoot())
 	if err != nil {
 		return "", err
 	}
 	scan := newCodexRolloutScan(root, codexPromptPrefixes(taskID), launchStart, cwd)
-	deadline := nowFn().Add(sessionDiscoverWait)
+	deadline := nowFn().Add(wait)
 	var last error
 	for {
 		remaining := deadline.Sub(nowFn())

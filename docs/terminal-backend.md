@@ -88,7 +88,7 @@ Every operation receives a `terminal.Conn` containing the resolved binary path a
 |---|---|
 | `Prepare` | Resolves target binary, platform requirements, and environment variables. |
 | `CreateContainer` | Allocates a new tab/window and returns its `Address`. |
-| `WaitReady` | Waits until the container shell/pane is responsive. |
+| `WaitReady` | Waits up to the given millisecond budget until the container shell/pane is responsive. |
 | `RunCommand` | Dispatches an initial startup command line to the pane. |
 | `SetSessionMarker` | Statically tags a pane with a Kander session reference. |
 | `ReportSession` | Actively reports agent startup identity to the multiplexer socket. |

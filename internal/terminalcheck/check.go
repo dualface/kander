@@ -286,7 +286,7 @@ func (c *checker) started(_ bool) (string, error) {
 	return "", nil
 }
 func (c *checker) ready(_ bool) (string, error) {
-	return "", c.backend.WaitReady(c.conn, c.address.Pane)
+	return "", c.backend.WaitReady(c.conn, c.address.Pane, int(terminal.DefaultReadyTimeout/time.Millisecond))
 }
 
 // The marker is assembled inside the pane so a shell echo of RunCommand

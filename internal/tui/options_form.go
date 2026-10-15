@@ -31,6 +31,8 @@ type formBinding struct {
 	chat       string
 	launcher   string
 	prevLaunch string
+	// launchTimeouts binds the extended_launch_timeouts switch.
+	launchTimeouts bool
 
 	reviewers map[string]*string
 	stages    map[string]*string
@@ -601,6 +603,7 @@ func (p *optionsPanel) executionGroup(bind *formBinding) *huh.Group {
 		Options(toOptions(session.LauncherChoices())...).
 		Value(&bind.launcher).
 		Inline(true))
+	bind.addLaunchTimeoutsField(p)
 	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
 }
@@ -801,6 +804,7 @@ func (b *formBinding) apply(p *optionsPanel) {
 			p.markDirty()
 			p.rebuildIfOverrideChanged(before, launcherFocusKey(), "launcher")
 		}
+		b.applyLaunchTimeouts(p)
 	case sectionReview:
 		session := p.session
 		b.applyModels(p)

@@ -362,11 +362,11 @@ func resolvedPath(cwd string) string {
 	return resolved
 }
 
-func (b *DeclarativeBackend) WaitReady(conn Conn, pane string) error {
+func (b *DeclarativeBackend) WaitReady(conn Conn, pane string, timeoutMS int) error {
 	if _, ok := b.op(OpWaitReady); !ok {
 		return nil
 	}
-	_, err := b.launchOp(OpWaitReady, conn, map[string]string{"pane": pane})
+	_, err := b.launchOp(OpWaitReady, conn, map[string]string{"pane": pane, "timeout_ms": strconv.Itoa(timeoutMS)})
 	return err
 }
 

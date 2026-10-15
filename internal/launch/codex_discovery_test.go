@@ -37,7 +37,7 @@ func TestCodexSnapshotReadsNoRollout(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(unreadable.Path, 0o600) })
 	def := config.AgentFor(config.DefaultConfig(), "codex").Session
-	previous, err := sessionDiscoverSnapshot(def, "task", true, nil, t.TempDir())
+	previous, err := sessionDiscoverSnapshot(def, "task", true, nil, t.TempDir(), LaunchPlan{}.launchTimeout)
 	if err != nil || len(previous) != 0 {
 		t.Fatalf("previous=%v err=%v", previous, err)
 	}
@@ -162,7 +162,7 @@ func TestCodexPromptPrefixesBuiltOncePerLookup(t *testing.T) {
 	count("discovery", func() {
 		freezeClock(t)
 		// Every poll until the deadline finds no candidate.
-		if _, err := discoverNewCodexSession(task, nowFn(), cwd); err == nil {
+		if _, err := discoverNewCodexSession(task, nowFn(), cwd, sessionDiscoverWait); err == nil {
 			t.Fatal("discovery without a new session succeeded")
 		}
 	})

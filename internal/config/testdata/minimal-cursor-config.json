@@ -186,5 +186,6 @@
     "result_on_done": "auto"
   },
   "language": "en",
-  "agent_language": "en"
+  "agent_language": "en",
+  "extended_launch_timeouts": false
 }

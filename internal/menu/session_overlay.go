@@ -253,7 +253,7 @@ func OptionsSectionOverlayRoots(section string) [][]string {
 	case "interface":
 		return [][]string{{"language"}, {"agent_language"}, {"tui"}}
 	case "execution":
-		return [][]string{{"kanban_agents"}, {"chat_agent"}, {"launcher"}, {"models", "kanban"}, {"models", "chat"}}
+		return [][]string{{"kanban_agents"}, {"chat_agent"}, {"launcher"}, {"extended_launch_timeouts"}, {"models", "kanban"}, {"models", "chat"}}
 	case "review":
 		return [][]string{{"reviewers"}, {"models", "review_roles"}}
 	case "review_stages":

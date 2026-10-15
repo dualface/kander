@@ -50,6 +50,10 @@ type LaunchPlan struct {
 	Target              terminal.Target
 	PromptDelivery      config.PromptDelivery
 	Prompt              string
+
+	// extendedTimeouts carries extended_launch_timeouts into the launch-time
+	// waits; see launchTimeout.
+	extendedTimeouts bool
 }
 
 // backend returns the terminal backend of the resolved launcher. An unknown
@@ -60,6 +64,12 @@ func (p LaunchPlan) backend() terminal.Backend {
 	}
 	backend, _ := terminal.Lookup(direct.Foreground)
 	return backend
+}
+
+// launchTimeout returns the budget of one launch-time wait that takes base
+// when extended_launch_timeouts is off.
+func (p LaunchPlan) launchTimeout(base time.Duration) time.Duration {
+	return config.LaunchTimeout(p.extendedTimeouts, base)
 }
 
 func (p LaunchPlan) capabilities() terminal.Capabilities {

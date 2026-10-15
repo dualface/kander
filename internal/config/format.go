@@ -148,6 +148,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 	lines = append(lines, Text("config.chat_agent")+": "+chatAgent)
 	lines = append(lines, Text("config.chat_model")+": "+FormatChatModelSummary(effective, chatAgent, effective.Models.Chat[chatAgent]))
 	lines = append(lines, Text("config.launcher")+": "+effective.Launcher)
+	lines = append(lines, Text("config.extended_launch_timeouts")+": "+FormatSwitch(effective.ExtendedLaunchTimeouts))
 	inUse := KanbanAgentsInUse(effective)
 	for _, agent := range inUse {
 		entry := effective.Models.Kanban[agent]

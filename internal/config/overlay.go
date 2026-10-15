@@ -32,6 +32,8 @@ var overlayAllowedKeys = map[string]struct{}{
 	"language":       {},
 	"agent_language": {},
 	"agents":         {},
+
+	"extended_launch_timeouts": {},
 }
 
 func cloneRawValue(v any) any {

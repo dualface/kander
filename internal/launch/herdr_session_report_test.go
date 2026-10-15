@@ -96,7 +96,7 @@ func TestCodexDiscoveryRejectsAbsentAndAmbiguousNewSessions(t *testing.T) {
 				name := []string{"first", "second"}[index]
 				codexRolloutAt(t, task, name, name+"-session", "", launchStart.Add(time.Second))
 			}
-			if id, err := discoverNewCodexSession(task, launchStart, filepath.Dir(root)); err == nil || id != "" {
+			if id, err := discoverNewCodexSession(task, launchStart, filepath.Dir(root), sessionDiscoverWait); err == nil || id != "" {
 				t.Fatalf("id=%s err=%v", id, err)
 			}
 		})
@@ -250,11 +250,11 @@ func TestCodexDiscoveryBindsLaunchDirectory(t *testing.T) {
 	launchStart := nowFn()
 	foreign := codexRolloutAt(t, task, "foreign", "foreign-session", "", launchStart.Add(time.Second))
 	rewriteRolloutDirectory(t, foreign, t.TempDir())
-	if id, err := discoverNewCodexSession(task, launchStart, cwd); err == nil || id != "" {
+	if id, err := discoverNewCodexSession(task, launchStart, cwd, sessionDiscoverWait); err == nil || id != "" {
 		t.Fatalf("foreign-only discovery: id=%s err=%v", id, err)
 	}
 	codexRolloutAt(t, task, "own", "own-session", "", launchStart.Add(time.Second))
-	if id, err := discoverNewCodexSession(task, launchStart, cwd); err != nil || id != "own-session" {
+	if id, err := discoverNewCodexSession(task, launchStart, cwd, sessionDiscoverWait); err != nil || id != "own-session" {
 		t.Fatalf("local discovery: id=%s err=%v", id, err)
 	}
 }

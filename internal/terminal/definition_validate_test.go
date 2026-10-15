@@ -44,7 +44,9 @@ func TestDefinitionValidationRejects(t *testing.T) {
 		{"bad poll until", func(r map[string]any) { object(firstStep(r, "wait_ready"), "poll")["until"] = "forever" }, []string{"op wait_ready", "field poll.until"}},
 		{"matched outside wait_output", func(r map[string]any) { object(firstStep(r, "wait_ready"), "poll")["until"] = "matched" }, []string{"field poll.until", "only valid there"}},
 		{"bad poll interval", func(r map[string]any) { object(firstStep(r, "wait_ready"), "poll")["interval"] = "soon" }, []string{"field poll.interval", "invalid duration"}},
-		{"timeout_ms outside wait_output", func(r map[string]any) { object(firstStep(r, "wait_ready"), "poll")["timeout"] = "{timeout_ms}" }, []string{"field poll.timeout"}},
+		{"timeout_ms outside wait ops", func(r map[string]any) {
+			firstStep(r, "run_command")["poll"] = map[string]any{"interval": "5ms", "timeout": "{timeout_ms}", "until": "nonempty"}
+		}, []string{"op run_command", "field poll.timeout", "wait_ready and wait_output"}},
 		{"bad on_error", func(r map[string]any) { firstStep(r, "run_command")["on_error"] = "ignore" }, []string{"field on_error", "must be fail, continue or meta_missing"}},
 		{"bad step timeout", func(r map[string]any) { firstStep(r, "run_command")["timeout"] = "-1s" }, []string{"field timeout", "must be positive"}},
 		{"stop_on_success type", func(r map[string]any) { firstStep(r, "run_command")["stop_on_success"] = "yes" }, []string{"stop_on_success"}},

@@ -231,7 +231,7 @@
             "--source",
             "visible",
             "--timeout",
-            "15000"
+            "{timeout_ms}"
           ],
           "messages": {
             "exec": {

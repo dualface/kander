@@ -12,6 +12,7 @@ import (
 func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) error {
 	definition := config.AgentFor(cfg, agent)
 	plan.sessionFileDeclared = definition.Session != nil && definition.Session.File != nil
+	plan.extendedTimeouts = cfg.ExtendedLaunchTimeouts
 	if definition.PromptDelivery != nil {
 		plan.PromptDelivery = *clonePlanDelivery(definition.PromptDelivery)
 	} else {
@@ -69,7 +70,7 @@ func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) error {
 	if delivery.Ready == nil {
 		return launchError("launch.pane_ready_timeout", "")
 	}
-	timeout := time.Duration(delivery.Ready.TimeoutMS) * time.Millisecond
+	timeout := plan.launchTimeout(time.Duration(delivery.Ready.TimeoutMS) * time.Millisecond)
 	deadline := nowFn().Add(timeout)
 	readyFn, err := compileDeliveryMatch(delivery.Ready.Match)
 	if err != nil {

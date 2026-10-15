@@ -363,10 +363,11 @@ func runSessionResolveHook(mode, taskID string) (string, error) {
 
 // runSessionDiscoverHook finds the session a launch created. previous holds the
 // ids enumerated before a discovered-mode launch; launchStart is the time
-// recorded right before the agent was launched.
-func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, launchStart time.Time, program *process.AgentProgram, cwd string) (string, error) {
+// recorded right before the agent was launched. budget maps each discovery
+// wait to its launch budget (LaunchPlan.launchTimeout).
+func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID string, previous map[string]struct{}, launchStart time.Time, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (string, error) {
 	if session.Mode == "discovered" {
-		return discoverNewAgentSession(session.Discovery, taskID, previous, program, cwd)
+		return discoverNewAgentSession(session.Discovery, budget(session.Discovery.Timeout()), taskID, previous, program, cwd)
 	}
 	name, ok := config.ParseSessionHook(session.Mode)
 	if !ok {
@@ -374,7 +375,7 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 	}
 	switch name {
 	case "codex-rollout":
-		return discoverNewCodexSession(taskID, launchStart, cwd)
+		return discoverNewCodexSession(taskID, launchStart, cwd, budget(sessionDiscoverWait))
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
@@ -382,13 +383,14 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 
 // sessionDiscoverSnapshot records the sessions that exist before a
 // discovered-mode launch. Codex needs no snapshot and returns an empty set.
-func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string) (map[string]struct{}, error) {
+// budget maps the enumeration wait to its launch budget.
+func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (map[string]struct{}, error) {
 	previous := map[string]struct{}{}
 	if !config.SessionDiscoversAfterStart(session) || !discover {
 		return previous, nil
 	}
 	if session.Mode == "discovered" {
-		ctx, cancel := probe.TimeoutContext(session.Discovery.Timeout())
+		ctx, cancel := probe.TimeoutContext(budget(session.Discovery.Timeout()))
 		sessions, err := enumerateSessionsFn(ctx, session.Discovery, program, cwd, taskID)
 		cancel()
 		if err != nil {
@@ -561,9 +563,9 @@ func parseSessionList(disc *config.SessionDiscovery, stdout, cwd, taskID string)
 
 // discoverNewAgentSession polls the declared enumerate command until exactly
 // one session id is new relative to the pre-launch snapshot. Zero candidates
-// retry until the deadline; several candidates fail immediately.
-func discoverNewAgentSession(disc *config.SessionDiscovery, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
-	deadline := nowFn().Add(disc.Timeout())
+// retry until timeout elapses; several candidates fail immediately.
+func discoverNewAgentSession(disc *config.SessionDiscovery, timeout time.Duration, taskID string, previous map[string]struct{}, program *process.AgentProgram, cwd string) (string, error) {
+	deadline := nowFn().Add(timeout)
 	var last error
 	for {
 		remaining := deadline.Sub(nowFn())

@@ -4,6 +4,7 @@ package menu
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,5 +154,30 @@ func TestDoctorWindowsLauncherFallbackWithoutHerdr(t *testing.T) {
 	repairConfiguredTools(cfg, cfg, agents, TerminalTools{}, toolRepairDecisions{chatExplicit: true}, nil)
 	if cfg.Launcher != "console" {
 		t.Fatalf("launcher=%s", cfg.Launcher)
+	}
+}
+
+func TestDoctorRepairWritesExtendedLaunchTimeoutsOff(t *testing.T) {
+	h := newHarness(t)
+	h.fakeCommand("claude", "")
+	if err := os.MkdirAll(filepath.Dir(h.configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.configPath, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, out := h.run("doctor"); code != 0 {
+		t.Fatalf("doctor=%d %s", code, out)
+	}
+	data, err := os.ReadFile(h.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if value, ok := raw["extended_launch_timeouts"]; !ok || value != false {
+		t.Fatalf("extended_launch_timeouts=%v present=%v", value, ok)
 	}
 }

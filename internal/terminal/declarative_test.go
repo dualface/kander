@@ -59,7 +59,7 @@ func TestDeclarativeBackendOperations(t *testing.T) {
 		t.Fatalf("create=%+v err=%v", address, err)
 	}
 	wantCalls(t, fake, []string{"new", "--cwd", "/work dir", "--label", "task"})
-	if err := backend.WaitReady(spawn, "p1"); err != nil {
+	if err := backend.WaitReady(spawn, "p1", 15000); err != nil {
 		t.Fatal(err)
 	}
 	wantCalls(t, fake, []string{"ready", "p1"})
@@ -208,14 +208,25 @@ func TestDeclarativePoll(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 	fake.SetReplies(t, terminaltest.Reply{Args: []string{"ready"}, Stdout: "", Times: 1}, reply("{}", "ready"))
-	if err := backend.WaitReady(Conn{Program: fake.Program, Run: SpawnRunner}, "p1"); err != nil {
+	if err := backend.WaitReady(Conn{Program: fake.Program, Run: SpawnRunner}, "p1", 15000); err != nil {
 		t.Fatalf("nonempty poll: %v", err)
 	}
 	json := declarativeOp(t, OpWaitReady, `{"steps": [{"argv": ["state"], "poll": {"interval": "5ms", "timeout": "30s", "until": "json_field:state=ready"}}]}`, nil)
 	fake.SetReplies(t, terminaltest.Reply{Args: []string{"state"}, Stdout: `{"state":"booting"}`, Times: 1}, reply(`{"state":"ready"}`, "state"))
-	if err := json.WaitReady(Conn{Program: fake.Program, Run: SpawnRunner}, "p1"); err != nil {
+	if err := json.WaitReady(Conn{Program: fake.Program, Run: SpawnRunner}, "p1", 15000); err != nil {
 		t.Fatalf("json_field poll: %v", err)
 	}
+}
+
+// TestDeclarativeWaitReadyTimeoutInput checks that WaitReady hands its budget
+// to the definition as {timeout_ms}.
+func TestDeclarativeWaitReadyTimeoutInput(t *testing.T) {
+	fake := terminaltest.New(t, reply("", "ready"))
+	backend := declarativeOp(t, OpWaitReady, `{"steps": [{"argv": ["ready", "{pane}", "{timeout_ms}"]}]}`, nil)
+	if err := backend.WaitReady(Conn{Program: fake.Program, Run: SpawnRunner}, "p1", 120000); err != nil {
+		t.Fatal(err)
+	}
+	wantCalls(t, fake, []string{"ready", "p1", "120000"})
 }
 
 func TestDeclarativeCandidates(t *testing.T) {

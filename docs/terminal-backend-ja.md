@@ -88,7 +88,7 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 |---|---|
 | `Prepare` | コマンド、プラットフォーム、PATH、環境変数の解決。 |
 | `CreateContainer` | 新しいタブ/ウィンドウを生成し `Address` を返却。 |
-| `WaitReady` | 端末が入力受付可能になるまで待機。 |
+| `WaitReady` | 指定のミリ秒予算内で端末が入力受付可能になるまで待機。 |
 | `RunCommand` | ペインへ初期コマンド行を送信。 |
 | `SetSessionMarker` | ペインに Kander の静的マーカーを設定。 |
 | `ReportSession` | マルチプレクサのソケットへ Agent の起動情報を報告。 |

@@ -79,7 +79,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	initialSession := session.Render()
 	persistSession := config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
 	discoverSession := plan.capabilities().PaneMetadata || persistSession
-	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root))
+	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
 	if err != nil {
 		return result, err
 	}
@@ -139,7 +139,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
-			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root))
+			ref, err := runSessionDiscoverHook(sessionDef, moved.TaskID, previous, launchStart, program, parentDir(root), plan.launchTimeout)
 			if err != nil {
 				return AgentSession{}, err
 			}

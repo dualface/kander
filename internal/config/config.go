@@ -153,6 +153,10 @@ type Config struct {
 	Language        string                       `json:"language"`
 	AgentLanguage   string                       `json:"agent_language"`
 	Agents          map[string]AgentDefinition   `json:"agents,omitempty"`
+
+	// ExtendedLaunchTimeouts raises the launch-time waits to
+	// ExtendedLaunchTimeout; see LaunchTimeout.
+	ExtendedLaunchTimeouts bool `json:"extended_launch_timeouts"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -774,6 +778,10 @@ func Validate(raw any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	extendedTimeouts, err := validateExtendedLaunchTimeouts(obj)
+	if err != nil {
+		return nil, err
+	}
 	reviewersRaw, ok := asObject(obj["reviewers"])
 	if !ok {
 		return nil, configErrorf("config.reviewers_must_be_a_json_object")
@@ -856,6 +864,8 @@ func Validate(raw any) (*Config, error) {
 		Language:        language,
 		AgentLanguage:   agentLanguage,
 		Agents:          definitions,
+
+		ExtendedLaunchTimeouts: extendedTimeouts,
 	}
 	applyChatFallbacks(cfg, obj)
 	return cfg, nil
