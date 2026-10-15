@@ -3,8 +3,10 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
@@ -175,6 +177,9 @@ func TestIssuesRefinementFailureRemainsVisibleAfterNavigation(t *testing.T) {
 			if app.Issues != nil && app.Issues.notice != notice {
 				t.Fatal("old result changed another selection/overlay notice")
 			}
+			if navigation == "down" && (!strings.Contains(app.CopyNotice, "#42") || !strings.Contains(app.CopyNotice, "Select")) {
+				t.Fatal("receipt does not identify the failed issue before retry", app.CopyNotice)
+			}
 			if navigation == "q" {
 				if !strings.Contains(app.CopyNotice, "g") || !strings.Contains(app.CopyNotice, "s") {
 					t.Fatal("board receipt lacks reopen instructions", app.CopyNotice)
@@ -222,5 +227,58 @@ func TestIssuesRefinementBindingSurvivesOlderListAndIndex(t *testing.T) {
 	}
 	if app.Issues.importing {
 		t.Fatal("reopened busy hint did not settle")
+	}
+}
+
+func TestIssuesRefinementKeepsCompleteIndexAcrossReopen(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		for _, listFirst := range []bool{false, true} {
+			t.Run(fmt.Sprintf("failed=%v/list-first=%v", failed, listFirst), func(t *testing.T) {
+				fake := newFakeIssues()
+				fake.listResult = defaultPage(issuesListLimit)
+				updated := time.Date(2026, 10, 15, 1, 0, 0, 0, time.UTC)
+				savedKey, _ := fake.repository.IssueSourceKey(42)
+				otherKey, _ := fake.repository.IssueSourceKey(43)
+				lateKey, _ := fake.repository.IssueSourceKey(44)
+				other := issue.LocalCard{TaskID: "other", State: "backlog", IssueUpdatedAt: updated, FetchedAt: updated}
+				saved := issue.LocalCard{TaskID: "saved", State: "backlog", IssueUpdatedAt: updated, FetchedAt: updated}
+				index := issue.Index{otherKey: other}
+				app, _ := issuesImportApp(t, fake, nil, nil, func(context.Context, issue.Repository, int, issue.ImportOptions) (issue.ImportResult, error) {
+					if failed {
+						return issue.ImportResult{}, errors.New("fetch failed")
+					}
+					index = issue.Index{otherKey: other, savedKey: saved}
+					return issue.ImportResult{TaskID: "saved", State: "backlog"}, nil
+				})
+				app.ImportIndex = func() (issue.Index, error) { return index, nil }
+				app.HandleKey("g")
+				runPendingWork(t, app)
+				app.HandleKey("i")
+				work := app.pendingWork
+				app.pendingWork = nil
+				app.HandleKey("q")
+				app.HandleKey("g")
+				listWork := app.pendingWork
+				app.pendingWork = nil
+				oldList := listWork().(issuesListResult)
+				oldList.index = issue.Index{otherKey: other, lateKey: {TaskID: "late", State: "backlog", IssueUpdatedAt: updated}}
+				if listFirst {
+					app.applyWork(oldList)
+				}
+				app.applyWork(work())
+				if !listFirst {
+					app.applyWork(oldList)
+				}
+				if app.Issues.index[otherKey] != other {
+					t.Fatal("unrelated binding lost", app.Issues.index)
+				}
+				if !failed && app.Issues.index[savedKey] != saved {
+					t.Fatal("new binding lost metadata", app.Issues.index)
+				}
+				if !listFirst && app.Issues.index[lateKey].TaskID != "late" {
+					t.Fatal("later scan lost additional binding")
+				}
+			})
+		}
 	}
 }

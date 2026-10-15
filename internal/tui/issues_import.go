@@ -122,8 +122,10 @@ func (a *App) applyIssuesImport(result issuesImportResult) {
 		return
 	}
 	a.issuesImporting = false
-	// Older list and index scans must not erase the committed binding below.
-	a.issuesIndexSeq++
+	// Only a committed binding fences earlier scans; a failed import changes none.
+	if result.err == nil && result.result.TaskID != "" {
+		a.issuesIndexSeq++
+	}
 	st := a.Issues
 	sameOrigin := st != nil && (result.origin == nil || result.origin == st)
 	if st != nil {
@@ -132,12 +134,9 @@ func (a *App) applyIssuesImport(result issuesImportResult) {
 	repository := a.issuesRepository()
 	sameRepository := st != nil && repository != nil && *repository == result.repository
 	if sameRepository {
-		// A reopened overlay keeps its own list/index scan, but still learns the
-		// committed binding immediately so s cannot select the unbound action.
-		if sameOrigin && result.index != nil {
-			st.index = result.index
-			st.indexRefreshedAt = a.Now()
-		}
+		// This scan ran after import, so carry all bindings and snapshot metadata
+		// into a reopened overlay as well as the originating one.
+		a.applyIssuesBindingIndex(result.index, a.issuesIndexSeq)
 		if result.err == nil && result.result.TaskID != "" {
 			if key, err := result.repository.IssueSourceKey(result.number); err == nil {
 				if st.index == nil {
@@ -165,10 +164,14 @@ func (a *App) issueRefinementReceipt(result issuesImportResult) string {
 	switch {
 	case result.launchErr != nil:
 		key := "tui.issues_refine_failed"
+		repository := a.issuesRepository()
 		if a.Issues == nil {
 			key = "tui.issues_refine_failed_board"
+		} else if repository == nil || *repository != result.repository || result.number != a.issuesSelectedNumber() {
+			key = "tui.issues_refine_failed_other"
 		}
-		message = t(key, result.result.TaskID, issue.TriageError(result.launchErr))
+		target := result.repository.Host + "/" + takeoverIdentity(result.repository, result.number)
+		message = t(key, result.result.TaskID, issue.TriageError(result.launchErr), target)
 	case result.launched:
 		message = t("tui.issues_refine_started", result.result.TaskID, result.outcome.Agent, result.outcome.Address)
 	default:

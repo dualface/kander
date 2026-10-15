@@ -305,20 +305,36 @@ func (a *App) issuesQueueIndexRefresh() {
 }
 
 func (a *App) applyIssuesIndex(result issuesIndexResult) {
-	st := a.Issues
-	if st == nil || result.seq != a.issuesIndexSeq {
-		return
+	if result.err == nil {
+		a.applyIssuesBindingIndex(result.index, result.seq)
 	}
-	if result.err != nil || result.index == nil {
-		return
-	}
-	st.index = result.index
 }
 
-// issuesLoadDetail starts the snapshot request of one issue. Comments are
-// requested here for browsing and also by import; the list never pays for them. When another content
-// request is still in flight the target is armed for the tick grid instead of
-// starting a second request.
+// applyIssuesBindingIndex replaces a current scan, while older scans only fill
+// missing bindings. This preserves committed imports without losing other cards.
+func (a *App) applyIssuesBindingIndex(index issue.Index, sequence uint64) {
+	st := a.Issues
+	if st == nil || index == nil {
+		return
+	}
+	if sequence == a.issuesIndexSeq {
+		st.index = index
+		st.indexRefreshedAt = a.Now()
+		return
+	}
+	if st.index == nil {
+		st.index = issue.Index{}
+	}
+	for key, card := range index {
+		if _, exists := st.index[key]; !exists {
+			st.index[key] = card
+		}
+	}
+}
+
+// issuesLoadDetail fetches the selected detail with comments; list requests
+// omit comments. queueIssueRefinement requests import comments separately.
+// An in-flight detail request defers the next target to the tick grid.
 func (a *App) issuesLoadDetail(number int) {
 	st := a.Issues
 	if st == nil || number <= 0 {
@@ -392,10 +408,7 @@ func (a *App) applyIssuesList(result issuesListResult) {
 	st.limit = result.page.Limit
 	st.more = result.page.More
 	st.listErr = ""
-	if result.index != nil && result.indexSeq == a.issuesIndexSeq {
-		st.index = result.index
-		st.indexRefreshedAt = a.Now()
-	}
+	a.applyIssuesBindingIndex(result.index, result.indexSeq)
 	if st.selected > len(st.items)-1 {
 		st.selected = max(0, len(st.items)-1)
 	}

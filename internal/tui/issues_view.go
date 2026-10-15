@@ -228,7 +228,7 @@ func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width 
 	marker := ""
 	if local, ok := a.issuesLocalCard(item.Number); ok {
 		text := t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State))
-		if item.UpdatedAt.After(local.IssueUpdatedAt) {
+		if !local.IssueUpdatedAt.IsZero() && item.UpdatedAt.After(local.IssueUpdatedAt) {
 			text += " · " + t("tui.issues_import_update")
 		}
 		marker = issue.SanitizeRemoteText(text)

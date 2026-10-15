@@ -394,6 +394,14 @@ func TestIssuesImportUpdateMarker(t *testing.T) {
 	if strings.Contains(freshView, config.Text("tui.issues_import_update")) {
 		t.Fatalf("fresh card reported an update:\n%s", freshView)
 	}
+	// A fallback binding has no snapshot timestamp until an index scan succeeds.
+	for key, local := range freshApp.Issues.index {
+		local.IssueUpdatedAt = time.Time{}
+		freshApp.Issues.index[key] = local
+	}
+	if strings.Contains(ansi.Strip(freshApp.View()), config.Text("tui.issues_import_update")) {
+		t.Fatal("unknown snapshot claimed a remote update")
+	}
 }
 
 func TestIssuesImportWritesNothingToTheTerminal(t *testing.T) {
