@@ -14,6 +14,7 @@ func setupExtensionHome(t *testing.T) (string, config.InstallPaths, string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	spec, _, ok := config.AgentExtension("pi")
 	if !ok {
@@ -108,6 +109,7 @@ func TestReportAgentExtensionsSkipsMissingPiDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	lines := CaptureReport(func() {
 		if !reportAgentExtensions(paths, false) {
@@ -122,5 +124,36 @@ func TestReportAgentExtensionsSkipsMissingPiDir(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".pi")); !os.IsNotExist(err) {
 		t.Fatalf("repair created ~/.pi: %v", err)
+	}
+}
+
+func TestReportAgentExtensionsUsesPiDirectory(t *testing.T) {
+	_, paths, oldTarget := setupExtensionHome(t)
+	directory := filepath.Join(t.TempDir(), "pi")
+	t.Setenv("PI_CODING_AGENT_DIR", directory)
+	if lines := CaptureReport(func() {
+		if !reportAgentExtensions(paths, true) {
+			t.Error("missing override must be skipped")
+		}
+	}); len(lines) != 0 {
+		t.Fatalf("default directory affected coverage: %+v", lines)
+	}
+	if _, err := os.Lstat(directory); !os.IsNotExist(err) {
+		t.Fatalf("repair created missing override: %v", err)
+	}
+	if err := os.Mkdir(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if reportAgentExtensions(paths, false) {
+		t.Fatal("missing extension in override must be unhealthy")
+	}
+	if !reportAgentExtensions(paths, true) || !reportAgentExtensions(paths, false) {
+		t.Fatal("override repair or subsequent inspection failed")
+	}
+	if _, err := os.Stat(filepath.Join(directory, "extensions", "kander-rules.ts")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(oldTarget); !os.IsNotExist(err) {
+		t.Fatalf("doctor wrote default target: %v", err)
 	}
 }

@@ -51,7 +51,8 @@ func envWith(home, configPath, path string) []string {
 	blocked := map[string]struct{}{
 		"KANDER_LANG": {}, "KANDER_LANG_CLI": {}, "KANDER_CONFIG": {},
 		"HOME": {}, "PATH": {}, "NO_COLOR": {}, "LC_ALL": {}, "LC_MESSAGES": {}, "LANG": {},
-		"HERDR_ENV": {}, "HERDR_WORKSPACE_ID": {}, "HERDR_TAB_ID": {}, "HERDR_PANE_ID": {},
+		"PI_CODING_AGENT_DIR": {},
+		"HERDR_ENV":           {}, "HERDR_WORKSPACE_ID": {}, "HERDR_TAB_ID": {}, "HERDR_PANE_ID": {},
 		"LUVUS_ENV": {}, "LUVUS_PANE_ID": {},
 		"TMUX": {}, "GIT_DIR": {}, "GIT_WORK_TREE": {}, "GIT_COMMON_DIR": {},
 	}
@@ -101,6 +102,7 @@ func newHarness(t *testing.T) *harness {
 	// instead of letting them reach the developer's real home.
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	cfg := filepath.Join(home, ".config", "kander", "config.json")
 	h := &harness{

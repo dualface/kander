@@ -119,11 +119,7 @@ func AgentRulesTarget(agent string, paths config.InstallPaths) string {
 		}
 		return filepath.Join(paths.ProjectRoot, filepath.FromSlash(rel))
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, filepath.FromSlash(rel))
+	return globalAgentTarget(agent, rel)
 }
 
 // RulesIntegration reports whether the agent rules file of the given scope references the Kander entry.

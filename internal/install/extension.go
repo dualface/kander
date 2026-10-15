@@ -43,8 +43,8 @@ type AgentExtension struct {
 }
 
 // extensionTarget resolves the scope's install target of one agent's rules
-// extension: <home>/<spec.Global> for a global install, or
-// <ProjectRoot>/<spec.Project> for a project install.
+// extension. Global targets honor Pi's config directory override; project
+// targets remain relative to the main worktree.
 func extensionTarget(agent string, paths config.InstallPaths) string {
 	spec, _, ok := config.AgentExtension(agent)
 	if !ok {
@@ -61,11 +61,7 @@ func extensionTarget(agent string, paths config.InstallPaths) string {
 	if strings.TrimSpace(rel) == "" {
 		return ""
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, filepath.FromSlash(rel))
+	return globalAgentTarget(agent, rel)
 }
 
 // ExtensionAgents lists the agents whose extension the scope covers, mirroring
@@ -134,13 +130,18 @@ func rejectExtensionReparse(base, target string) error {
 }
 
 // extensionBase is the trusted anchor the target must stay under: the home
-// directory for a global install or the main worktree for a project install.
-func extensionBase(paths config.InstallPaths) (string, error) {
+// directory for a default global install or the main worktree for a project
+// install. A Pi override may be outside home, so check its entire chain from
+// the filesystem anchor, including the override directory itself.
+func extensionBase(agent string, paths config.InstallPaths) (string, error) {
 	if paths.Mode == config.ModeProject {
 		if paths.ProjectRoot == "" {
 			return "", fmt.Errorf("%s", config.Text("config.project_install_paths_are_missing_the_main_worktree"))
 		}
 		return paths.ProjectRoot, nil
+	}
+	if agent == "pi" && os.Getenv("PI_CODING_AGENT_DIR") != "" {
+		return fileAnchor(extensionTarget(agent, paths))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -174,7 +175,7 @@ func InspectExtension(agent string, paths config.InstallPaths) (ExtensionOutcome
 		return outcome, nil
 	}
 	outcome.Target = target
-	base, err := extensionBase(paths)
+	base, err := extensionBase(agent, paths)
 	if err != nil {
 		return outcome, err
 	}
@@ -212,7 +213,7 @@ func EnsureExtension(agent string, paths config.InstallPaths) (ExtensionOutcome,
 		return outcome, nil
 	}
 	outcome.Target = target
-	base, err := extensionBase(paths)
+	base, err := extensionBase(agent, paths)
 	if err != nil {
 		return outcome, err
 	}

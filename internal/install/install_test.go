@@ -22,6 +22,7 @@ func setupInstallHome(t *testing.T) string {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(config.EnvLangCLI, "")
 	_ = os.Unsetenv(config.EnvConfig)
