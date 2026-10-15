@@ -87,6 +87,14 @@
     "global": ".kimi-code/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".kimi-code",
+    "env": [
+      {
+        "name": "KIMI_CODE_HOME"
+      }
+    ]
+  },
   "rules_integration": "markdown-reference",
   "large_model": "",
   "small_model": "",

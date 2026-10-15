@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/json"
+	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,12 +63,16 @@ func newPanelApp(t *testing.T) *App {
 }
 
 // newTestSession builds a config session directly, without any environment probing.
-// It overrides KANDER_CONFIG and Pi's directory so saving options cannot reach
-// the user's config or Pi rules through inherited environment variables.
+// It overrides KANDER_CONFIG and every agent config directory variable with a
+// missing directory, so saving options cannot reach the user's config or the
+// rules of an agent that honors one of those variables.
 func newTestSession(t *testing.T, initial ...*config.Config) *menu.Session {
 	t.Helper()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
-	t.Setenv("PI_CODING_AGENT_DIR", filepath.Join(t.TempDir(), "pi"))
+	missing := t.TempDir()
+	for _, name := range installtest.AgentConfigEnvNames() {
+		t.Setenv(name, filepath.Join(missing, name))
+	}
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	if len(initial) > 0 {

@@ -28,6 +28,8 @@
   "config.agent_session_dialect": "Dialect {{.V0}} cannot use session mode {{.V1}} without args templates; omit session to inherit the dialect or provide args.start and args.resume.",
   "config.agent_definition_invalid": "Invalid agents.{{.V0}}: {{.V1}}",
   "config.agent_object": "Use a JSON object; null is not allowed.",
+  "config.agent_config_dir": "config_dir must be an absolute path or start with ~ or ~/, without control characters.",
+  "config.agent_config_dir_builtin_only": "config_dir is accepted only for built-in agents.",
   "config.agent_name": "Use a lowercase agent name starting with a letter, at most 64 characters (letters, digits, _ or -).",
   "config.agent_text": "{{.V0}} must be nonempty without control characters; omit it to use defaults.",
   "config.agent_path": "{{.V0}} must resolve on PATH or be an existing executable absolute path.",

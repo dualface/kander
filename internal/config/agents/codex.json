@@ -69,6 +69,14 @@
     "global": ".codex/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".codex",
+    "env": [
+      {
+        "name": "CODEX_HOME"
+      }
+    ]
+  },
   "rules_integration": "markdown-reference",
   "review_windows_read_groups": [
     "CodexSandboxUsers"

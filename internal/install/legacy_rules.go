@@ -94,8 +94,10 @@ func removeLegacyEntrySymlinks(paths config.InstallPaths) []string {
 	var removed []string
 	seen := map[string]struct{}{}
 	for _, agent := range config.ExecutionAgents {
-		target := AgentRulesTarget(agent, paths)
-		if target == "" {
+		// An unresolvable target is skipped here; the integration pass that
+		// follows reports the same resolution error for the agent.
+		target, err := AgentRulesTarget(agent, paths)
+		if err != nil || target == "" {
 			continue
 		}
 		if _, ok := seen[target]; ok {

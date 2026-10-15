@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/dualface/kander/internal/install/installtest"
 	"io"
 	"os"
 	"path/filepath"
@@ -194,7 +195,7 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	shareDir := filepath.Join(home, ".local", "share", "kander", terminal.DefinitionsDirName)
 	if err := os.MkdirAll(shareDir, 0o755); err != nil {
 		t.Fatal(err)

@@ -51,7 +51,11 @@ func integrateAgentRules(paths config.InstallPaths) []AgentIntegration {
 	var out []AgentIntegration
 	seen := map[string]struct{}{}
 	for _, agent := range IntegrationAgents(paths) {
-		target := AgentRulesTarget(agent, paths)
+		target, err := AgentRulesTarget(agent, paths)
+		if err != nil {
+			out = append(out, AgentIntegration{IntegrationOutcome: IntegrationOutcome{Agent: agent}, Err: err})
+			continue
+		}
 		if target == "" {
 			continue
 		}
@@ -68,11 +72,16 @@ func integrateAgentRules(paths config.InstallPaths) []AgentIntegration {
 // IntegrationAgents lists the agents whose rules files the scope covers: a project install
 // covers every embedded agent with a project rules target, while a global install covers only
 // agents whose configuration directory already exists. Doctor reuses this set so its coverage
-// cannot drift from the install-time semantics.
+// cannot drift from the install-time semantics. An agent whose target cannot be resolved is
+// kept, so the caller's per-agent integration step reports the resolution error.
 func IntegrationAgents(paths config.InstallPaths) []string {
 	var importFirst, rest []string
 	for _, agent := range config.ExecutionAgents {
-		target := AgentRulesTarget(agent, paths)
+		target, err := AgentRulesTarget(agent, paths)
+		if err != nil {
+			rest = append(rest, agent)
+			continue
+		}
 		if target == "" {
 			continue
 		}
@@ -100,26 +109,27 @@ func RulesEntry(paths config.InstallPaths) string {
 	return filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 }
 
-// AgentRulesTarget returns the rules file one agent reads in the given scope.
-func AgentRulesTarget(agent string, paths config.InstallPaths) string {
+// AgentRulesTarget returns the rules file one agent reads in the given scope. A global target
+// follows the agent's resolved config directory (see agentConfigRoot).
+func AgentRulesTarget(agent string, paths config.InstallPaths) (string, error) {
 	spec, ok := config.RulesSpec(agent)
 	if !ok {
-		return ""
+		return "", nil
 	}
 	rel := spec.Global
 	if paths.Mode == config.ModeProject {
 		rel = spec.Project
 	}
 	if strings.TrimSpace(rel) == "" {
-		return ""
+		return "", nil
 	}
 	if paths.Mode == config.ModeProject {
 		if paths.ProjectRoot == "" {
-			return ""
+			return "", nil
 		}
-		return filepath.Join(paths.ProjectRoot, filepath.FromSlash(rel))
+		return filepath.Join(paths.ProjectRoot, filepath.FromSlash(rel)), nil
 	}
-	return globalAgentTarget(agent, rel)
+	return globalAgentTarget(agent, rel, paths)
 }
 
 // RulesIntegration reports whether the agent rules file of the given scope references the Kander entry.
@@ -132,7 +142,10 @@ func RulesIntegration(agent string, paths config.InstallPaths) (bool, string) {
 		return false, config.Text("config.project_install_paths_are_missing_the_main_worktree")
 	}
 	entry := RulesEntry(paths)
-	target := AgentRulesTarget(agent, paths)
+	target, err := AgentRulesTarget(agent, paths)
+	if err != nil {
+		return false, err.Error()
+	}
 	integrated, detail := rulesFileIntegration(agent, target, entry, paths)
 	if !integrated {
 		return false, detail
@@ -202,7 +215,10 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return outcome, fmt.Errorf("%s", config.Text("config.project_install_paths_are_missing_the_main_worktree"))
 	}
-	target := AgentRulesTarget(agent, paths)
+	target, err := AgentRulesTarget(agent, paths)
+	if err != nil {
+		return outcome, err
+	}
 	if target == "" {
 		return outcome, fmt.Errorf("%s", config.Text("config.cannot_resolve_home_directory"))
 	}

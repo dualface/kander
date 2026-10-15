@@ -28,6 +28,8 @@
   "config.agent_session_dialect": "方言 {{.V0}} 无法直接使用会话模式 {{.V1}}；请删除 session 以继承方言默认值，或提供 args.start 与 args.resume 模板。",
   "config.agent_definition_invalid": "agents.{{.V0}} 无效：{{.V1}}",
   "config.agent_object": "请使用 JSON 对象，不接受 null。",
+  "config.agent_config_dir": "config_dir 须为绝对路径，或以 ~ 或 ~/ 开头，且不含控制字符。",
+  "config.agent_config_dir_builtin_only": "config_dir 只能用于内置 agent。",
   "config.agent_name": "agent 名须以小写字母开头，最多 64 字符，仅含小写字母、数字、_ 或 -。",
   "config.agent_text": "{{.V0}} 须非空且不含控制字符；使用默认值请删除该字段。",
   "config.agent_path": "{{.V0}} 须能从 PATH 解析，或为存在且可执行的绝对路径。",

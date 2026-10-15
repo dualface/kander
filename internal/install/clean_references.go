@@ -64,9 +64,9 @@ const (
 // without writing. A missing or unreadable file reports an error and zero issues.
 func InspectRulesReferences(agent string, paths config.InstallPaths) (RulesReferenceIssues, error) {
 	var issues RulesReferenceIssues
-	target := AgentRulesTarget(agent, paths)
-	if target == "" {
-		return issues, nil
+	target, err := AgentRulesTarget(agent, paths)
+	if err != nil || target == "" {
+		return issues, err
 	}
 	targets := []string{target}
 	if override := rulesOverrideTarget(target); override != "" {

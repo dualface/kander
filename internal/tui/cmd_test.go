@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/json"
+	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -40,7 +41,7 @@ func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(install.EnvSkipInstall, "1")
 	_ = os.Unsetenv(board.EnvBoardDir)
@@ -111,7 +112,7 @@ func TestPostInstallFirstLaunchCreatesConfigInInstallLanguage(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	// An empty PATH makes every probed agent unavailable without running any CLI.
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv(config.EnvLang, "ja")
@@ -170,7 +171,7 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv(config.EnvLang, "cn")
 	_ = os.Unsetenv(install.EnvSkipInstall)
@@ -229,7 +230,7 @@ func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(install.EnvSkipInstall, "1")
 	_ = os.Unsetenv(install.EnvPostInstall)
@@ -302,7 +303,7 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(install.EnvSkipInstall, "1")
 	_ = os.Unsetenv(install.EnvPostInstall)
@@ -367,7 +368,7 @@ func startupGateTestEnv(t *testing.T) (doctorRan, ackRan *bool) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv(install.EnvSkipInstall, "1")
 	_ = os.Unsetenv(board.EnvBoardDir)
 	cfgPath := filepath.Join(home, ".config", "kander", "config.json")

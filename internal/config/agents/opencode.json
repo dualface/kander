@@ -82,6 +82,19 @@
     "global": ".config/opencode/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".config/opencode",
+    "env": [
+      {
+        "name": "OPENCODE_CONFIG_DIR"
+      },
+      {
+        "name": "XDG_CONFIG_HOME",
+        "join": "opencode",
+        "absolute_only": true
+      }
+    ]
+  },
   "rules_integration": "markdown-reference",
   "large_model": "opencode-go/deepseek-v4.1-flash",
   "small_model": "opencode-go/deepseek-v4.1-flash",

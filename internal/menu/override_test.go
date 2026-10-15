@@ -1,6 +1,7 @@
 package menu
 
 import (
+	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ func setupOverrideDoctorHome(t *testing.T) (config.InstallPaths, *config.Config,
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	entry := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 	writeRulesFile(t, entry, "# Kander entry\n")

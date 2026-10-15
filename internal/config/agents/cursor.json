@@ -67,6 +67,10 @@
     "global": ".cursor/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".cursor",
+    "env": []
+  },
   "rules_integration": "markdown-reference",
   "large_model": "cursor-grok-4.6-xhigh",
   "small_model": "cursor-grok-4.6-high",

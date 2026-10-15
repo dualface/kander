@@ -70,6 +70,7 @@ func TestEmbeddedReviewWindowsReadGroupsValidation(t *testing.T) {
 		"supports_effort":   true,
 		"prompt_delivery":   map[string]any{"mode": "argv"},
 		"rules_target":      map[string]any{"global": ".demo/AGENTS.md", "project": "AGENTS.md"},
+		"config_home":       map[string]any{"default": ".demo", "env": []any{}},
 		"rules_integration": "markdown-reference",
 	}
 	mk := func(groups []string) error {

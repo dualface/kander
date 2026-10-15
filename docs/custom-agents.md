@@ -19,6 +19,8 @@ A project may also commit `.kander-config.json` at the Git main worktree root (o
 
 `path` is a PATH name or an absolute path that exists and is executable; relative paths containing separators are not accepted. When specified explicitly it must be resolvable; when omitted it falls back in order to the embedded definition's `path`, then the agent name. `process_name` is used for tmux foreground-process matching and defaults to the basename of the final path. When given explicitly, both must be non-empty and contain no control characters; to restore the default, delete the field. An npm trampoline can use `process_name: "node"`, and a renamed wrapper can set only `path`. Embedded definitions are not probed at config-load time; a missing CLI is reported by `start` and `doctor` only.
 
+A built-in name may also set `config_dir` to relocate the agent's global config directory, which holds its global rules file (and Pi's extension), for example `{"agents": {"codex": {"config_dir": "~/work/codex-home"}}}`. It is not the Kander rules root. The value is an absolute path or starts with `~` or `~/`; a relative value, control characters, or the key on a custom name fail validation. Only the scope `config.json` takes effect; see [Installation and permission boundaries](install-and-permissions.md) for the precedence over the agent's own environment variables.
+
 Start, resume, doctor, options-panel probing, tmux liveness checks, notification reverse lookup, and takeover cleanup all read this set of settings. Both saving and reading validate explicit paths; after deleting a wrapper, the configuration must be fixed or the executable restored. When doctor encounters an agent definition it cannot validate, it preserves the original file and reports, to avoid losing templates.
 
 ## Dialect or argv Templates
@@ -184,7 +186,7 @@ A legacy flat `{role: mode}` object still loads and applies to both scales; savi
 
 ## Embedded-Only Fields
 
-The embedded definitions also carry fields a user `agents.<name>` overlay cannot declare — the validator rejects them as unknown keys, so an overlay can neither add, change, nor remove them, and omitting them changes nothing. `rules_target` and `rules_integration` name the agent rules file each install scope integrates and how the reference is written; `rules_extension` names an optional Kander-shipped agent extension:
+The embedded definitions also carry fields a user `agents.<name>` overlay cannot declare — the validator rejects them as unknown keys, so an overlay can neither add, change, nor remove them, and omitting them changes nothing. `rules_target` and `rules_integration` name the agent rules file each install scope integrates and how the reference is written; `config_home` declares the default global config directory (`default`, relative to the home directory, containing every global target) and the environment variables that relocate it (`env`, in precedence order, each with `name`, an optional `join` subdirectory, and `absolute_only`); `rules_extension` names an optional Kander-shipped agent extension:
 
 ```json
 "rules_extension": {
@@ -194,7 +196,7 @@ The embedded definitions also carry fields a user `agents.<name>` overlay cannot
 }
 ```
 
-`source` is a file embedded under `internal/config/agents/extensions/`; `global` is the default install target relative to the user's home, `project` the target relative to the Git main worktree. For Pi only, a nonempty `PI_CODING_AGENT_DIR` replaces the global `.pi/agent` root for both the rules reference and extension; project targets remain unchanged. The installer expands `~` and `~/`, resolves relative values from its working directory, and preserves spaces. This runtime override does not make the embedded fields user-configurable. Only the embedded `pi.json` declares it today. Install and `kander doctor --repair` write the file for the covered scope, refuse any symlink or reparse point on the target chain, classify an existing file as installed, missing, outdated, or locally modified by its digest, and never overwrite a modified copy. See [Installation and permission boundaries](install-and-permissions.md) for the write and reporting rules.
+`source` is a file embedded under `internal/config/agents/extensions/`; `global` is the default install target relative to the user's home, `project` the target relative to the Git main worktree. A global target follows the agent's resolved config directory (`config_dir`, then `config_home.env`, then `config_home.default`), so the rules reference and the extension move together; project targets remain unchanged. This resolution does not make the embedded fields user-configurable. Only the embedded `pi.json` declares an extension today. Install and `kander doctor --repair` write the file for the covered scope, refuse any symlink or reparse point on the target chain, classify an existing file as installed, missing, outdated, or locally modified by its digest, and never overwrite a modified copy. See [Installation and permission boundaries](install-and-permissions.md) for the write and reporting rules.
 
 `review_windows_read_groups` lists local groups that get read-only access to the review runtime on Windows, for reviewers whose sandbox runs commands under separate accounts:
 

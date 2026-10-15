@@ -382,3 +382,27 @@ func TestRewriteLegacyReferenceSpellings(t *testing.T) {
 		})
 	}
 }
+
+func TestPerformReplacesLegacyEntrySymlinkInRelocatedConfigDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs privileges on Windows")
+	}
+	home := setupInstallHome(t)
+	legacy := writeLegacyRules(t, home)
+	relocated := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", relocated)
+	claude := filepath.Join(relocated, "CLAUDE.md")
+	if err := os.Symlink(filepath.Join(legacy, "KANDER-AGENTS.md"), claude); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Perform(Request{CopyBinary: true, Language: "cn", Source: stubBinary(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.LegacyLinksRemoved) != 1 || result.LegacyLinksRemoved[0] != claude {
+		t.Fatalf("links=%v", result.LegacyLinksRemoved)
+	}
+	if info, err := os.Lstat(claude); err != nil || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("relocated target still a symlink: %v", err)
+	}
+}

@@ -92,6 +92,14 @@
     "global": ".grok/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".grok",
+    "env": [
+      {
+        "name": "GROK_HOME"
+      }
+    ]
+  },
   "rules_integration": "markdown-reference",
   "large_model": "",
   "small_model": "",

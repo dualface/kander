@@ -69,6 +69,16 @@
     "global": ".config/devin/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".config/devin",
+    "env": [
+      {
+        "name": "XDG_CONFIG_HOME",
+        "join": "devin",
+        "absolute_only": true
+      }
+    ]
+  },
   "rules_integration": "markdown-reference",
   "large_model": "swe-2-max",
   "small_model": "swe-2-max",

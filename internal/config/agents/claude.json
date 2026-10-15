@@ -69,6 +69,14 @@
     "global": ".claude/CLAUDE.md",
     "project": "CLAUDE.md"
   },
+  "config_home": {
+    "default": ".claude",
+    "env": [
+      {
+        "name": "CLAUDE_CONFIG_DIR"
+      }
+    ]
+  },
   "rules_integration": "claude-import",
   "large_model": "opus",
   "small_model": "opus",

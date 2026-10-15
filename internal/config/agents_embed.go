@@ -28,6 +28,12 @@ type AgentRulesSpec struct {
 	Global      string
 	Project     string
 	Integration string
+	// ConfigHome is the default global config directory relative to the home
+	// directory; Global and the extension's global target live below it.
+	ConfigHome string
+	// ConfigEnv lists, in precedence order, the environment variables the
+	// agent itself reads to relocate ConfigHome.
+	ConfigEnv []AgentConfigEnv
 }
 
 // AgentExtensionSpec is the optional rules-extension declaration of one embedded agent.
@@ -80,6 +86,7 @@ type embeddedAgent struct {
 	ExitCommand      string                 `json:"exit_command"`
 	Review           AgentReview            `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
+	ConfigHome       agentConfigHome        `json:"config_home"`
 	RulesIntegration string                 `json:"rules_integration"`
 	RulesExtension   *agentRulesExtension   `json:"rules_extension"`
 	// ReviewReadGroups names local groups granted read-only access to the review runtime on Windows.
@@ -235,6 +242,9 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 			return embeddedAgent{}, embedAgentError(fileName, "rules_extension.project")
 		}
 	}
+	if err := validateConfigHome(fileName, agent); err != nil {
+		return embeddedAgent{}, err
+	}
 	seenGroups := map[string]bool{}
 	for _, group := range agent.ReviewReadGroups {
 		key := strings.ToLower(group)
@@ -338,6 +348,8 @@ func RulesSpec(name string) (AgentRulesSpec, bool) {
 		Global:      emb.RulesTarget.Global,
 		Project:     emb.RulesTarget.Project,
 		Integration: emb.RulesIntegration,
+		ConfigHome:  emb.ConfigHome.Default,
+		ConfigEnv:   slices.Clone(emb.ConfigHome.Env),
 	}, true
 }
 

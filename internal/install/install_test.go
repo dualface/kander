@@ -3,6 +3,7 @@ package install
 import (
 	"bytes"
 	"errors"
+	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,7 @@ func setupInstallHome(t *testing.T) string {
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv(config.EnvLang, "cn")
 	t.Setenv(config.EnvLangCLI, "")
 	_ = os.Unsetenv(config.EnvConfig)

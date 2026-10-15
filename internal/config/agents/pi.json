@@ -63,6 +63,14 @@
     "global": ".pi/agent/AGENTS.md",
     "project": "AGENTS.md"
   },
+  "config_home": {
+    "default": ".pi/agent",
+    "env": [
+      {
+        "name": "PI_CODING_AGENT_DIR"
+      }
+    ]
+  },
   "rules_integration": "markdown-reference",
   "rules_extension": {
     "source": "kander-rules.ts",

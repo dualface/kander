@@ -659,11 +659,12 @@ func (s *Session) finish() error {
 	entry := rulesEntry(paths)
 	seen := map[string]struct{}{}
 	for _, selected := range install.IntegrationAgents(paths) {
-		target := install.AgentRulesTarget(selected, paths)
-		if target == "" {
+		// A resolution error is not deduplicated: the integration call below reports it.
+		target, targetErr := install.AgentRulesTarget(selected, paths)
+		if targetErr == nil && target == "" {
 			continue
 		}
-		if _, ok := seen[target]; ok && target != "" {
+		if _, ok := seen[target]; ok && targetErr == nil {
 			continue
 		}
 		seen[target] = struct{}{}

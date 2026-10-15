@@ -5,6 +5,7 @@ package menu
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/dualface/kander/internal/install/installtest"
 	"io"
 	"os"
 	"os/exec"
@@ -51,10 +52,12 @@ func envWith(home, configPath, path string) []string {
 	blocked := map[string]struct{}{
 		"KANDER_LANG": {}, "KANDER_LANG_CLI": {}, "KANDER_CONFIG": {},
 		"HOME": {}, "PATH": {}, "NO_COLOR": {}, "LC_ALL": {}, "LC_MESSAGES": {}, "LANG": {},
-		"PI_CODING_AGENT_DIR": {},
-		"HERDR_ENV":           {}, "HERDR_WORKSPACE_ID": {}, "HERDR_TAB_ID": {}, "HERDR_PANE_ID": {},
+		"HERDR_ENV": {}, "HERDR_WORKSPACE_ID": {}, "HERDR_TAB_ID": {}, "HERDR_PANE_ID": {},
 		"LUVUS_ENV": {}, "LUVUS_PANE_ID": {},
 		"TMUX": {}, "GIT_DIR": {}, "GIT_WORK_TREE": {}, "GIT_COMMON_DIR": {},
+	}
+	for _, name := range installtest.AgentConfigEnvNames() {
+		blocked[name] = struct{}{}
 	}
 	out := make([]string, 0, len(env)+8)
 	for _, item := range env {
@@ -102,7 +105,7 @@ func newHarness(t *testing.T) *harness {
 	// instead of letting them reach the developer's real home.
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	cfg := filepath.Join(home, ".config", "kander", "config.json")
 	h := &harness{

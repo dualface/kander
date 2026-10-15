@@ -5,6 +5,7 @@ package tui
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -220,10 +221,12 @@ func isolatedHome(t *testing.T) (home string, env []string) {
 		"PATH=" + fakeBin + ":" + os.Getenv("PATH"),
 		"HOME=" + home,
 		"USERPROFILE=" + home,
-		"PI_CODING_AGENT_DIR=",
 		"KANDER_CONFIG=" + filepath.Join(home, ".config", "kander", "config.json"),
 		"KANDER_LANG=en",
 		"KANDER_SKIP_INSTALL=1",
+	}
+	for _, name := range installtest.AgentConfigEnvNames() {
+		env = append(env, name+"=")
 	}
 	// Pre-stamp the startup-doctor gate so config-backed launches reach the board
 	// directly; a missing config still triggers doctor plus the Enter wait.

@@ -1,6 +1,7 @@
 package menu
 
 import (
+	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,7 @@ func setupExtensionHome(t *testing.T) (string, config.InstallPaths, string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	spec, _, ok := config.AgentExtension("pi")
 	if !ok {
@@ -109,7 +110,7 @@ func TestReportAgentExtensionsSkipsMissingPiDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("PI_CODING_AGENT_DIR", "")
+	installtest.IsolateAgentConfigEnv(t)
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	lines := CaptureReport(func() {
 		if !reportAgentExtensions(paths, false) {

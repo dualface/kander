@@ -210,12 +210,27 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		}
 		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
 		reportAgentSessionFileInheritance(loaded)
+		reportOverlayConfigDirs()
 		if loaded.WelcomeComplete {
 			healthy = reportRulesIntegration(loaded, paths, repair) && healthy
 			healthy = reportAgentExtensions(paths, repair) && healthy
 		}
 	}
 	return healthy
+}
+
+// reportOverlayConfigDirs warns about agents.<name>.config_dir in the project
+// overlay: install and doctor read that key only from the scope config file, so
+// a checked-out repository cannot redirect writes to global agent files.
+func reportOverlayConfigDirs() {
+	file, names, err := config.OverlayAgentConfigDirs()
+	if err != nil {
+		warning(err.Error())
+		return
+	}
+	for _, name := range names {
+		warning(config.Text("menu.overlay_config_dir_ignored", name, file))
+	}
 }
 
 // reportRulesIntegration reports whether the rules file of every agent the install scope covers
@@ -227,11 +242,12 @@ func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair 
 	entry := rulesEntry(paths)
 	seen := map[string]struct{}{}
 	for _, selected := range install.IntegrationAgents(paths) {
-		target := install.AgentRulesTarget(selected, paths)
-		if target == "" {
+		// A resolution error is not deduplicated: the integration call below reports it.
+		target, targetErr := install.AgentRulesTarget(selected, paths)
+		if targetErr == nil && target == "" {
 			continue
 		}
-		if _, ok := seen[target]; ok && target != "" {
+		if _, ok := seen[target]; ok && targetErr == nil {
 			continue
 		}
 		seen[target] = struct{}{}
