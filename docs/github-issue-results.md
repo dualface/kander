@@ -2,8 +2,9 @@
 
 The Issues overlay uses `s` for investigation on an unbound issue and for result
 reconciliation on an issue whose work set is ready. Bound issues whose work set is
-not ready offer `g` only, and `s` shows the work set progress instead; all bound
-cards retain `g` and disable `i`/`I`. The result confirmation explains that
+not ready offer `g` only; their rows show `k/n` when the set has several members, and
+`s` on a `done` or `archived` anchor only shows the incomplete-progress notice. All
+bound cards retain `g` and disable `i`/`I`. The result confirmation explains that
 missing result comments may be added but closing requires separate explicit
 confirmation. Selection, binding and state are checked before launching. The
 background work uses the existing `pendingWork` and terminal backend paths.
@@ -56,7 +57,8 @@ was ready before a CLI `kander move` into `done/`, `archived/` or `trash/`, and 
 a successful, non-replayed move prints a stderr notice when the set became ready and
 the mode is not `off`. The notice names the issue, the anchor, the mode and the
 `--action inspect` command; stdout, exit code and dispatch JSON are unchanged, and TUI
-moves print nothing. Observer failures skip the notice and never affect the move.
+moves print nothing. A board read failure skips the notice and a configuration
+read failure prints one "notice unavailable" line; neither changes the move.
 
 The released rule (`KANDER-ISSUE-RULES.md` "Completion Handoff") makes the session
 that ran the move run the protocol below in place: `auto` publishes without asking,

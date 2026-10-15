@@ -14,7 +14,8 @@ func init() { board.RegisterMoveObserver(observeResultHandoff) }
 // observeResultHandoff watches a CLI move into a terminal state. When that move
 // turns an issue's work set from not ready into ready, the notice names the
 // result protocol entry so the moving session can run the completion handoff.
-// Any read failure only skips the notice; the move itself never depends on it.
+// A board read failure skips the notice and a configuration read failure
+// prints one line saying the notice is unavailable; neither changes the move.
 func observeResultHandoff(root string, entry board.Entry, target string) func(io.Writer, board.Entry) {
 	if target != "done" && target != "archived" && target != "trash" {
 		return nil

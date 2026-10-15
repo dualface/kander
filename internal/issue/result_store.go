@@ -78,6 +78,14 @@ func withResultStore(ctx context.Context, root string, repository Repository, nu
 		if err := json.Unmarshal(data, &store); err != nil {
 			return err
 		}
+		if store.TaskID != cardID {
+			// A sibling ID is a usage mistake, not a damaged record: name the anchor.
+			if sets, err := LoadWorkSets(root); err != nil {
+				return err
+			} else if err := siblingCardError(sets[key], cardID); err != nil {
+				return err
+			}
+		}
 		if store.Schema != 1 || store.SourceKey != key || store.TaskID != cardID || store.Records == nil {
 			return resultError("inconsistent result recovery record")
 		}
@@ -120,8 +128,8 @@ func ReadResultWork(root string, repository Repository, number int, cardID strin
 		return ResultWork{}, NewError(ErrorInvalidQuery, "card", Sanitize(cardID))
 	}
 	if set.Anchor.TaskID != cardID {
-		if set.Contains(cardID) {
-			return ResultWork{}, resultError("card " + cardID + " is not the anchor card; use --card " + set.Anchor.TaskID)
+		if err := siblingCardError(set, cardID); err != nil {
+			return ResultWork{}, err
 		}
 		return ResultWork{}, NewError(ErrorInvalidQuery, "card", Sanitize(cardID))
 	}
@@ -141,6 +149,15 @@ func ReadResultWork(root string, repository Repository, number int, cardID strin
 	}
 	work.combine()
 	return work, nil
+}
+
+// siblingCardError explains a --card that names a non-anchor member of the
+// work set; it returns nil for any other card.
+func siblingCardError(set WorkSet, cardID string) error {
+	if cardID == "" || set.Anchor.TaskID == "" || set.Anchor.TaskID == cardID || !set.Contains(cardID) {
+		return nil
+	}
+	return resultError("card " + cardID + " is not the anchor card; use --card " + set.Anchor.TaskID)
 }
 
 // combine derives the work-wide identity. A single-card work keeps the exact

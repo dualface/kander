@@ -73,6 +73,18 @@ func TestResultRejectsSiblingCardArgument(t *testing.T) {
 	}
 }
 
+func TestResultRejectsSiblingCardAfterRecordExists(t *testing.T) {
+	root, repo, id, fake := resultFixture(t)
+	key, _ := repo.IssueSourceKey(42)
+	sibling := siblingFixture(t, root, "sib-recorded", sourceLine(key, id), "done", "")
+	// The anchor inspection persists the recovery record for the issue.
+	inspectFixture(t, root, repo, id, fake)
+	_, err := InspectResult(context.Background(), fake, root, repo, 42, sibling)
+	if err == nil || !strings.Contains(err.Error(), "--card "+id) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestResultInspectListsEveryCardAndExclusion(t *testing.T) {
 	root, repo, id, fake := resultFixture(t)
 	key, _ := repo.IssueSourceKey(42)
