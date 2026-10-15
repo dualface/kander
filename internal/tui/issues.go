@@ -103,9 +103,8 @@ type issuesState struct {
 	noticeUntil time.Time
 }
 
-// Background results carry the request sequence; a result whose sequence is no
-// longer the latest is dropped, which keeps out-of-order async replies from
-// landing on a newer query or a reopened overlay.
+// List and detail request sequences reject replies superseded by newer queries.
+// The separate index sequence controls replacement versus merging of bindings.
 type issuesListResult struct {
 	indexSeq   uint64
 	seq        uint64
@@ -128,8 +127,8 @@ type issuesDetailResult struct {
 	err     error
 }
 
-// issuesIndexResult carries one throttled index scan. The sequence drops a
-// result that a newer list reload or a newer scan already superseded.
+// issuesIndexResult carries one throttled scan. Superseded scans can fill
+// missing bindings, but cannot replace the current index.
 type issuesIndexResult struct {
 	seq   uint64
 	index issue.Index
