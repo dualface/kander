@@ -24,7 +24,7 @@ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-
 ## Preconditions
 
 - Obtain the revision from `kander show --json <task-id>` first; prepare the replacement in a separate file.
-- After `todo/`, the frozen fields (`GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, task group relations) change only with `--contract-decision-file`.
+- After `todo/`, the frozen fields (`GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, task group relations) change only with `--contract-decision-file`. One exception: in `working/` or `review/`, an update whose only frozen difference toggles line-start markers of top-level acceptance items between `- [ ] ` and `- [x] ` needs no decision file and records no `CONTRACT_DECISIONS` entry.
 
 ## Effects
 

@@ -28,7 +28,7 @@ kander move <task-id> trash --result trashed --reason <reason> --decision <decis
 1. **Card Identity**: Cards are stored as directory cards containing `spec.md` and optional attachments.
 2. **Optimistic Locking (CAS)**: Mutations require an `--expect-revision`. Every successful write increments the task revision by 1.
 3. **State Source of Truth**: State is solely determined by the card's residence directory (`backlog/`, `todo/`, `working/`, `review/`, `done/`, `archived/`, `trash/`).
-4. **Contract Freeze**: After moving past `todo`, task size, groups, and core contracts cannot be modified without an explicit `--contract-decision-file` revision record.
+4. **Contract Freeze**: After moving past `todo`, task size, groups, and core contracts cannot be modified without an explicit `--contract-decision-file` revision record. The one exception: a `working` or `review` card may toggle line-start markers of top-level `ACCEPTANCE_CRITERIA` items between `- [ ]` and `- [x]` without a decision record.
 5. **Archived Is Final**: `archived` has no outgoing transition. `Transaction.Put`, `PutBytes`, and `Relocate` reject a card whose committed state is `archived` (`board.archived_final`), so update, moves, review publication and interpretation, dispositions, dispatch records, and WINDOW/SESSION write-back all fail before staging anything. The move into `archived/` still sees the previous state, and `init` recovery and legacy-card migration replay their own records. The archive cleanup of [Review evidence](review-evidence.md#pruning-on-archive) is the one exception: it deletes review copies under archived cards outside any card transaction, under the exclusive board lock, and never rewrites a card document.
 
 ---
