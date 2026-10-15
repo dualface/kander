@@ -149,6 +149,7 @@ type Config struct {
 	Rules           Rules                        `json:"rules"`
 	Models          Models                       `json:"models"`
 	TUI             TUI                          `json:"tui"`
+	Issue           Issue                        `json:"issue"`
 	Language        string                       `json:"language"`
 	AgentLanguage   string                       `json:"agent_language"`
 	Agents          map[string]AgentDefinition   `json:"agents,omitempty"`
@@ -280,6 +281,7 @@ func DefaultConfig() *Config {
 		Rules:           DefaultRules(true),
 		Models:          DefaultModels(),
 		TUI:             DefaultTUI(),
+		Issue:           DefaultIssue(),
 		Language:        "en",
 		AgentLanguage:   DefaultAgentLanguage("en"),
 	}
@@ -815,6 +817,13 @@ func Validate(raw any) (*Config, error) {
 			return nil, err
 		}
 	}
+	issue := DefaultIssue()
+	if _, exists := obj["issue"]; exists {
+		issue, err = validateIssue(obj["issue"])
+		if err != nil {
+			return nil, err
+		}
+	}
 	languageRaw, hasLanguage := obj["language"]
 	if !hasLanguage {
 		languageRaw = "en"
@@ -843,6 +852,7 @@ func Validate(raw any) (*Config, error) {
 		Rules:           rules,
 		Models:          models,
 		TUI:             tui,
+		Issue:           issue,
 		Language:        language,
 		AgentLanguage:   agentLanguage,
 		Agents:          definitions,

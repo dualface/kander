@@ -1,6 +1,12 @@
 package menu
 
-import "github.com/dualface/kander/internal/config"
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/dualface/kander/internal/config"
+)
 
 // SetRules keeps both configuration UIs on the same validation and copy boundary.
 func (s *Session) SetRules(rules config.Rules) error {
@@ -63,4 +69,24 @@ func editRules(session *Session) error {
 			warning(err.Error())
 		}
 	}
+}
+
+// SetIssueResultOnDone shares the completion handoff choice between both
+// configuration UIs, with the same validation and copy boundary as the rules.
+func (s *Session) SetIssueResultOnDone(mode string) error {
+	if !slices.Contains(config.IssueResultModes, mode) {
+		return fmt.Errorf("%s", config.Text("config.must_be_one_of", "issue.result_on_done", strings.Join(config.IssueResultModes, ", ")))
+	}
+	if s.Config.Issue.ResultOnDone == mode {
+		return nil
+	}
+	if s.EditingOverlay() {
+		return s.applyOverlayEdit(func(candidate map[string]any) {
+			config.OverlaySet(candidate, mode, "issue", "result_on_done")
+		})
+	}
+	s.Config.Issue.ResultOnDone = mode
+	s.ScopeDirty = true
+	s.syncScopeRaw([]string{"issue", "result_on_done"}, mode)
+	return nil
 }

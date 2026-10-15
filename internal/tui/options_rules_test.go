@@ -149,3 +149,24 @@ func TestRuleModuleCategoriesCoverConfig(t *testing.T) {
 		t.Fatalf("unknown rules in UI categories: %v", seen)
 	}
 }
+
+func TestRulePanelSavesIssueResultOnDone(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	_, panel := openPanel(t)
+	for _, mode := range []string{config.IssueResultAsk, config.IssueResultOff, config.IssueResultAuto} {
+		pumpPanel(panel, panel.openSection(sectionRules))
+		if panel.bind.issueResult == nil {
+			t.Fatal("rules page has no issue.result_on_done field")
+		}
+		*panel.bind.issueResult = mode
+		panel.bind.apply(panel)
+		pumpPanel(panel, panel.finishSection())
+		saved, err := config.Load(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if saved.Issue.ResultOnDone != mode {
+			t.Fatalf("saved %q, want %q", saved.Issue.ResultOnDone, mode)
+		}
+	}
+}

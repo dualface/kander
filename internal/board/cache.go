@@ -31,15 +31,26 @@ func EnsureCacheDir(root string, parts ...string) (string, error) {
 // EnsurePrivateDataDir creates feature-owned durable private storage below the
 // board control root. Unlike caches, recovery evidence must not be pruned.
 func EnsurePrivateDataDir(root string, parts ...string) (string, error) {
+	path, err := PrivateDataPath(root, parts...)
+	if err != nil {
+		return "", err
+	}
+	if err := fs.EnsurePrivateDirectory(root, path, true); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// PrivateDataPath validates the components and returns the path that
+// EnsurePrivateDataDir would create, without creating or inspecting it.
+// Read-only callers still read below it through the no-follow file layer.
+func PrivateDataPath(root string, parts ...string) (string, error) {
 	path := control(root)
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." || part != filepath.Base(part) || strings.ContainsAny(part, `/\`) {
 			return "", kanbanError("board.invalid_board_path", path)
 		}
 		path = filepath.Join(path, part)
-	}
-	if err := fs.EnsurePrivateDirectory(root, path, true); err != nil {
-		return "", err
 	}
 	return path, nil
 }

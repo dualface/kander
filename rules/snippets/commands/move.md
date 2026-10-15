@@ -50,6 +50,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 - `kander move` prints the new path after a successful move; when `rules.reporting=true` and the move enters `done/`, `archived/`, or `trash/` (and is not a dispatch replay), it also prints the prefilled completion report template from `KANDER-REPORTING-RULES.md` on standard error.
 - A bound move prints JSON with `dispatch` and `replayed`; start work only for `replayed=false`.
 - A move into `archived/` prints what cleanup removed and how much space it freed.
+- When a move (not a dispatch replay) turns a GitHub issue's work set from not ready into ready and `issue.result_on_done` is not `off`, it prints a result handoff notice on standard error: the issue, the anchor card, the setting, and the `kander issue result ... --action inspect` command line. The session that ran the move follows `KANDER-ISSUE-RULES.md` "Completion Handoff". Standard output and the exit code are unchanged.
 
 ## Rejections
 

@@ -2,6 +2,12 @@
   "tui.issues_hint_done": "↑↓ select · Enter detail · g card · s reconcile result · ? help · Esc close",
   "tui.issues_result_help": "Reconcile completed result",
   "tui.issues_result_title": "Reconcile result of issue #{{.V0}}",
-  "tui.issues_result_body": "Start result reconciliation for {{.V0}} (done card {{.V1}})? The agent may add a missing result comment. Closing requires separate explicit confirmation. The card stays unchanged.",
-  "tui.issues_result_stale": "The selected issue or card binding/state changed. Select it again."
+  "tui.issues_result_body": "Start result reconciliation for {{.V0}} (anchor card {{.V1}} and its work set)? The agent may add a missing result comment. Closing requires separate explicit confirmation. The cards stay unchanged.",
+  "tui.issues_result_stale": "The selected issue or card binding/state changed. Select it again.",
+  "tui.issues_work_progress": "{{.V0}}/{{.V1}} cards complete",
+  "tui.issues_result_pending": "reply pending",
+  "tui.issues_work_incomplete": "Work set incomplete: {{.V0}}/{{.V1}} cards complete. Reconcile the result once every card is complete.",
+  "issue.result_handoff_ready": "Issue {{.V0}} is ready for its result: all {{.V2}} cards of its work set are complete (anchor {{.V1}}, {{.V3}} excluded, issue.result_on_done={{.V4}}).",
+  "issue.result_handoff_next": "Next: {{.V0}}",
+  "issue.result_handoff_unavailable": "Issue result handoff notice unavailable: {{.V0}}"
 }

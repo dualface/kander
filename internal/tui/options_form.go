@@ -40,6 +40,7 @@ type formBinding struct {
 	rules          map[string]*bool
 	rulePreset     string
 	prevRulePreset string
+	issueResult    *string
 
 	modelFields  []menu.ModelField
 	modelInputs  map[string]modelInput

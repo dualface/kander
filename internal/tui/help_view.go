@@ -99,7 +99,7 @@ func (a *App) issuesHelpEntries() []helpEntry {
 			if card.State == "backlog" {
 				entries = append(entries, helpEntry{"s", t("tui.issues_refine_help")})
 			}
-			if card.State == "done" {
+			if card.WorkReady {
 				entries = append(entries, helpEntry{"s", t("tui.issues_result_help")})
 			}
 			entries = append(entries, helpEntry{"g", t("tui.jump_to_local_card")})

@@ -115,3 +115,5 @@ When work for a single large issue is decomposed across multiple cards:
   ```text
   SOURCE_ISSUE: github://HOST/OWNER/REPO/issues/42 (anchor: <anchor-task-id>)
   ```
+
+The anchor card and its sibling cards form the issue's work set. Result reconciliation waits until every member is complete; see [GitHub issue result reconciliation](github-issue-results.md#work-sets).

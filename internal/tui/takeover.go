@@ -47,7 +47,10 @@ func (a *App) issuesTakeover() {
 			a.issuesRefineSelected(card)
 			return
 		}
-		if card.State != "done" {
+		if !card.WorkReady {
+			if card.State == "done" || card.State == "archived" {
+				a.issuesSetNotice(t("tui.issues_work_incomplete", card.WorkDone, card.WorkTotal))
+			}
 			return
 		}
 		a.openTakeover(*repository, number)
@@ -232,5 +235,5 @@ func (a *App) takeoverTargetCurrent(dialog *takeoverState) bool {
 	if dialog.cardID == "" {
 		return !bound
 	}
-	return bound && card.State == "done" && card.TaskID == dialog.cardID
+	return bound && card.WorkReady && card.TaskID == dialog.cardID
 }

@@ -1,4 +1,4 @@
-Reconcile the completed result of {{.Target}}, bound card {{.CardID}}.
+Reconcile the completed result of {{.Target}}, anchor card {{.CardID}} and its work set.
 {{.Preamble}}
 Read {{.JSONPath}} as current evidence. Before acting, read "Completed Result Reconciliation" in {{.IssueRules}}.
 This session never authorizes task execution or card mutation. Startup authorizes adding one

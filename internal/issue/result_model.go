@@ -36,6 +36,7 @@ type ResultProvider interface {
 // ResultCard exposes current local evidence without modifying the completed card.
 type ResultCard struct {
 	TaskID          string   `json:"task_id"`
+	State           string   `json:"state"`
 	Spec            string   `json:"spec"`
 	Report          string   `json:"report"`
 	Digest          string   `json:"digest"`
@@ -43,10 +44,42 @@ type ResultCard struct {
 	Commits         []string `json:"commits"`
 }
 
+// ResultWork is the evidence of a ready work set: the anchor card first, then
+// the siblings in task ID order. TaskKey, Commits, EvidenceVersion and Digest
+// identify the whole work; for the anchor alone they equal its own values.
+type ResultWork struct {
+	Cards           []ResultCard
+	Excluded        []WorkCard
+	TaskKey         string
+	Commits         []string
+	EvidenceVersion string
+	Digest          string
+}
+
+// Anchor returns the anchor card's evidence.
+func (w ResultWork) Anchor() ResultCard { return w.Cards[0] }
+
+// taskIDs returns the member IDs a multi-card record stores; nil for the
+// anchor alone keeps single-card records byte compatible.
+func (w ResultWork) taskIDs() []string {
+	if len(w.Cards) < 2 {
+		return nil
+	}
+	ids := make([]string, 0, len(w.Cards))
+	for _, card := range w.Cards {
+		ids = append(ids, card.TaskID)
+	}
+	return ids
+}
+
+// ResultInspection keeps Card as the anchor for single-card readers; Cards
+// lists every member in assessment order and Excluded the withdrawn siblings.
 type ResultInspection struct {
 	Schema    int                      `json:"schema_version"`
 	SourceKey string                   `json:"source_key"`
 	Card      ResultCard               `json:"card"`
+	Cards     []ResultCard             `json:"cards"`
+	Excluded  []WorkCard               `json:"excluded"`
 	Remote    ResultRemote             `json:"remote"`
 	Token     string                   `json:"token"`
 	Records   map[string]*ResultRecord `json:"records"`
@@ -59,7 +92,8 @@ type ResultCheck struct {
 }
 
 // ResultProposal contains the agent's semantic assessment. Criterion outcomes
-// are ordered by the card's acceptance criteria, using met/unmet/unknown only.
+// follow the top-level acceptance criteria of every card in inspection order,
+// using met/unmet/unknown only.
 // They and the recorded delivery SHAs form the language-independent result key.
 type ResultProposal struct {
 	Checks              []ResultCheck `json:"checks"`
@@ -81,6 +115,9 @@ type ResultDecision struct {
 
 // ResultRecord is durable recovery evidence; never prune it as a cache.
 type ResultRecord struct {
+	// TaskIDs lists the members of a multi-card work in order; it stays empty
+	// for a record that covers the anchor card alone.
+	TaskIDs            []string            `json:"task_ids,omitempty"`
 	EvidenceVersion    string              `json:"evidence_version"`
 	Failures           []ResultFailure     `json:"failures,omitempty"`
 	Commits            []string            `json:"commits"`

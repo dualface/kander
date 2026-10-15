@@ -249,6 +249,7 @@ func RunMove(args []string) int {
 	}
 	var pruned PruneReport
 	options.Pruned = &pruned
+	notices := observeMove(root, entry, args[1])
 	moved, err := MoveWithOptions(entry, root, args[1], options)
 	if err != nil {
 		return fail(err)
@@ -260,6 +261,9 @@ func RunMove(args []string) int {
 	}
 	if !replayed {
 		writeCompletionReportReminder(os.Stderr, moved)
+		for _, notice := range notices {
+			notice(os.Stderr, moved)
+		}
 	}
 	if authorization.DispatchID != "" {
 		d, err := ReadDispatch(root, entry.TaskID, authorization.DispatchID)

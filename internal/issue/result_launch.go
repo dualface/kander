@@ -38,7 +38,7 @@ func StartResult(ctx context.Context, provider ResultProvider, root string, repo
 	if err := fs.WriteTextAtomic(root, path, string(data)+"\n", true); err != nil {
 		return TriageOutcome{}, err
 	}
-	if _, err := ReadResultCard(root, repository, number, options.CardID); err != nil {
+	if _, err := ReadResultWork(root, repository, number, options.CardID); err != nil {
 		return TriageOutcome{}, err
 	}
 	return triageStarter(TriageLaunch{Root: root, Repository: repository, Number: number, CardID: options.CardID, JSONPath: path, MarkdownPath: path, Agent: options.Agent, Launcher: options.Launcher, ResultSync: true})

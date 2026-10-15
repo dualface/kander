@@ -73,7 +73,7 @@ func (a *App) issuesActionHint() string {
 		if card.State == "backlog" {
 			return t("tui.issues_hint_backlog")
 		}
-		if card.State == "done" {
+		if card.WorkReady {
 			return t("tui.issues_hint_done")
 		}
 		return t("tui.issues_hint_bound")
@@ -227,7 +227,7 @@ func (a *App) issuesItemPaneLines(item issue.IssueSummary, selected bool, width 
 	labels := issue.SanitizeRemoteText(strings.Join(item.Labels, ", "))
 	marker := ""
 	if local, ok := a.issuesLocalCard(item.Number); ok {
-		text := t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State))
+		text := t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State)) + issuesWorkMarker(local)
 		if !local.IssueUpdatedAt.IsZero() && item.UpdatedAt.After(local.IssueUpdatedAt) {
 			text += " · " + t("tui.issues_import_update")
 		}
@@ -355,7 +355,7 @@ func (a *App) issuesDetailPane(width, height int, p palette) string {
 		meta += "  " + issue.SanitizeRemoteText(strings.Join(snapshot.Labels, ", "))
 	}
 	if local, ok := a.issuesLocalCard(snapshot.Number); ok {
-		meta += "  " + issue.SanitizeRemoteText(t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State)))
+		meta += "  " + issue.SanitizeRemoteText(t("tui.issues_imported", local.TaskID, a.Context.stateLabel(local.State))+issuesWorkMarker(local))
 		if snapshot.UpdatedAt.After(local.IssueUpdatedAt) {
 			meta += " · " + issue.SanitizeRemoteText(t("tui.issues_import_update"))
 		}
@@ -479,4 +479,17 @@ func formatIssueTime(value time.Time) string {
 		return "-"
 	}
 	return value.Local().Format("2006-01-02 15:04")
+}
+
+// issuesWorkMarker shows the work set progress of an issue split across
+// several cards, and flags a ready work set whose result is not replied yet.
+func issuesWorkMarker(local issue.LocalCard) string {
+	marker := ""
+	if local.WorkTotal > 1 {
+		marker += " · " + t("tui.issues_work_progress", local.WorkDone, local.WorkTotal)
+	}
+	if local.WorkReady && local.ResultPending {
+		marker += " · " + t("tui.issues_result_pending")
+	}
+	return marker
 }

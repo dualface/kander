@@ -2,6 +2,12 @@
   "tui.issues_hint_done": "↑↓ 選択 · Enter 詳細 · g カード · s 結果確認 · ? ヘルプ · Esc 閉じる",
   "tui.issues_result_help": "完了した処理結果を確認",
   "tui.issues_result_title": "Issue #{{.V0}} の処理結果を確認",
-  "tui.issues_result_body": "{{.V0}} の結果確認を開始しますか（done カード {{.V1}}）？不足する結果コメントを Agent が追加する場合があります。Issue を閉じるには別途明示的な確認が必要です。元のカードは変更しません。",
-  "tui.issues_result_stale": "選択した Issue、紐付け、カードの状態が変わりました。選択し直してください。"
+  "tui.issues_result_body": "{{.V0}} の結果確認を開始しますか（アンカーカード {{.V1}} とそのワークセット）？不足する結果コメントを Agent が追加する場合があります。Issue を閉じるには別途明示的な確認が必要です。カードはいずれも変更しません。",
+  "tui.issues_result_stale": "選択した Issue、紐付け、カードの状態が変わりました。選択し直してください。",
+  "tui.issues_work_progress": "{{.V0}}/{{.V1}} 枚完了",
+  "tui.issues_result_pending": "返信待ち",
+  "tui.issues_work_incomplete": "ワークセットが未完了です: {{.V0}}/{{.V1}} 枚完了. すべてのカードが完了してから結果を返信してください.",
+  "issue.result_handoff_ready": "Issue {{.V0}} の結果を返信できます: ワークセットの {{.V2}} 枚のカードがすべて完了しました (anchor {{.V1}}, 除外 {{.V3}} 枚, issue.result_on_done={{.V4}}).",
+  "issue.result_handoff_next": "次の手順: {{.V0}}",
+  "issue.result_handoff_unavailable": "issue 結果の引き継ぎ通知を表示できません: {{.V0}}"
 }

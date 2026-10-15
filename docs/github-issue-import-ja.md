@@ -115,3 +115,5 @@ kanban/backlog/<task-id>/
   ```text
   SOURCE_ISSUE: github://HOST/OWNER/REPO/issues/42 (anchor: <anchor-task-id>)
   ```
+
+アンカーカードと兄弟カードがその Issue のワークセットを構成します. ワークセットのすべてのカードが完了してから結果を返信します. 詳細は [GitHub issue result reconciliation](github-issue-results.md#work-sets) を参照してください.

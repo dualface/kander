@@ -115,3 +115,5 @@ kanban/backlog/<task-id>/
   ```text
   SOURCE_ISSUE: github://HOST/OWNER/REPO/issues/42 (anchor: <anchor-task-id>)
   ```
+
+锚点卡片与兄弟卡片组成该 issue 的工作集. 工作集的每张卡都完成后才能回复结果, 见 [GitHub issue result reconciliation](github-issue-results.md#work-sets).

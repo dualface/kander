@@ -110,6 +110,17 @@ type LocalCard struct {
 	IssueUpdatedAt time.Time
 	FetchedAt      time.Time
 	CommentsLoaded bool
+	// Repository and Number repeat the confirmed identity of the binding.
+	Repository ImportRepository
+	Number     int
+	// WorkDone and WorkTotal count the complete members of the issue's work
+	// set; WorkReady is true when every member is complete.
+	WorkDone  int
+	WorkTotal int
+	WorkReady bool
+	// ResultPending marks a ready work set whose current completion evidence
+	// has no published or equivalent result comment in the local records.
+	ResultPending bool
 }
 
 // Index maps a canonical source key to the local card bound to it.
@@ -262,6 +273,21 @@ func LoadIndex(root string) (Index, error) {
 	if err != nil {
 		return nil, err
 	}
+	index := indexFrom(view)
+	for key, set := range workSetsFrom(view, index) {
+		local := index[key]
+		local.WorkDone, local.WorkTotal = set.Progress()
+		local.WorkReady = set.Ready()
+		if local.WorkReady {
+			local.ResultPending = resultPending(root, set)
+		}
+		index[key] = local
+	}
+	return index, nil
+}
+
+// indexFrom maps every valid source binding of one scan to its anchor card.
+func indexFrom(view board.Board) Index {
 	index := Index{}
 	for _, id := range sortedTaskIDs(view) {
 		entry := view.Entries[id]
@@ -291,9 +317,11 @@ func LoadIndex(root string) (Index, error) {
 			IssueUpdatedAt: updatedAt,
 			FetchedAt:      fetchedAt,
 			CommentsLoaded: record.CommentsLoaded,
+			Repository:     record.Repository,
+			Number:         record.Issue.Number,
 		}
 	}
-	return index, nil
+	return index
 }
 
 // Import imports one issue as a backlog card. The source-key uniqueness check

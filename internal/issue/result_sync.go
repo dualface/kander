@@ -18,7 +18,7 @@ import (
 // an idempotency key or a proof that an interrupted request was not accepted.
 func InspectResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string) (out ResultInspection, err error) {
 	err = withResultStore(ctx, root, repository, number, cardID, func(store *resultStore, save func() error) error {
-		card, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
+		work, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
 		if err != nil {
 			return err
 		}
@@ -47,22 +47,28 @@ func InspectResult(ctx context.Context, provider ResultProvider, root string, re
 		if err := save(); err != nil {
 			return err
 		}
-		out = ResultInspection{Schema: 1, SourceKey: store.SourceKey, Card: card, Remote: remote, Token: resultToken(card, remote), Records: store.Records}
+		out = ResultInspection{Schema: 1, SourceKey: store.SourceKey, Card: work.Anchor(), Cards: work.Cards, Excluded: work.Excluded, Remote: remote, Token: resultToken(work.Digest, remote), Records: store.Records}
 		return nil
 	})
 	return
 }
 
-func proposalVersion(card ResultCard, proposal ResultProposal) (string, error) {
-	acceptance, _ := board.SectionBody(card.Spec, "ACCEPTANCE_CRITERIA")
+func proposalVersion(work ResultWork, proposal ResultProposal) (string, error) {
 	count := 0
-	for _, line := range strings.Split(acceptance, "\n") {
-		if strings.HasPrefix(line, "- [ ] ") || strings.HasPrefix(line, "- [x] ") {
-			count++
+	var documents, completion []string
+	for _, card := range work.Cards {
+		acceptance, _ := board.SectionBody(card.Spec, "ACCEPTANCE_CRITERIA")
+		for _, line := range strings.Split(acceptance, "\n") {
+			if strings.HasPrefix(line, "- [ ] ") || strings.HasPrefix(line, "- [x] ") {
+				count++
+			}
 		}
+		summary, _ := board.SectionBody(card.Spec, "SUMMARY")
+		documents = append(documents, card.Spec, card.Report)
+		completion = append(completion, summary, card.Report)
 	}
 	if count == 0 || len(proposal.Outcomes) != count {
-		return "", resultError("assess every acceptance criterion in order")
+		return "", resultError("assess every acceptance criterion of every card in order")
 	}
 	for _, outcome := range proposal.Outcomes {
 		if outcome != "met" && outcome != "unmet" && outcome != "unknown" {
@@ -72,15 +78,16 @@ func proposalVersion(card ResultCard, proposal ResultProposal) (string, error) {
 			return "", resultError("incomplete criteria cannot authorize closure")
 		}
 	}
+	// Evidence may come from any member: a sibling can carry the verification
+	// or the completion statement for the whole issue.
 	if proposal.FullyResolved {
-		summary, _ := board.SectionBody(card.Spec, "SUMMARY")
-		if strings.TrimSpace(proposal.ResolutionEvidence) == "" || !strings.Contains(summary+"\n"+card.Report, proposal.ResolutionEvidence) {
+		if strings.TrimSpace(proposal.ResolutionEvidence) == "" || !containsInAny(completion, proposal.ResolutionEvidence) {
 			return "", resultError("full resolution needs an exact completion-document quotation")
 		}
 	}
 	checks := append([]ResultCheck{}, proposal.Checks...)
 	for _, check := range checks {
-		if strings.TrimSpace(check.Command) == "" || !strings.Contains(card.Spec+"\n"+card.Report, check.Command) || (check.Status != "pass" && check.Status != "fail" && check.Status != "not-run" && check.Status != "N/A") {
+		if strings.TrimSpace(check.Command) == "" || !containsInAny(documents, check.Command) || (check.Status != "pass" && check.Status != "fail" && check.Status != "not-run" && check.Status != "N/A") {
 			return "", resultError("verification must cite a recorded command and pass/fail/not-run/N/A")
 		}
 	}
@@ -90,7 +97,17 @@ func proposalVersion(card ResultCard, proposal ResultProposal) (string, error) {
 			return "", resultError("duplicate verification command")
 		}
 	}
-	return resultVersion(card.TaskID, card.Commits, proposal.Outcomes, proposal.FullyResolved), nil
+	return resultVersion(work.TaskKey, work.Commits, proposal.Outcomes, proposal.FullyResolved), nil
+}
+
+// containsInAny matches within one document, never across a document boundary.
+func containsInAny(documents []string, text string) bool {
+	for _, document := range documents {
+		if strings.Contains(document, text) {
+			return true
+		}
+	}
+	return false
 }
 
 func resultVersion(task string, commits, outcomes []string, resolved bool) string {
@@ -116,14 +133,14 @@ func validateResultBody(body string) error {
 // a stale observation cannot be used to publish or assert equivalence.
 func ApplyResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string, proposal ResultProposal) (out ResultRecord, err error) {
 	err = withResultStore(ctx, root, repository, number, cardID, func(store *resultStore, save func() error) error {
-		card, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
+		work, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
 		if err != nil {
 			return err
 		}
-		if proposal.Token != resultToken(card, remote) {
+		if proposal.Token != resultToken(work.Digest, remote) {
 			return resultError("inspection changed; inspect and assess again")
 		}
-		version, err := proposalVersion(card, proposal)
+		version, err := proposalVersion(work, proposal)
 		if err != nil {
 			return err
 		}
@@ -135,8 +152,8 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		if record := store.Records[version]; record != nil && record.Status != "rejected" {
 			// Reassessing current evidence may allow a close, without republishing
 			// a language rewrite or new run log as another result comment.
-			record.CardDigest = card.Digest
-			record.EvidenceVersion = card.EvidenceVersion
+			record.CardDigest = work.Digest
+			record.EvidenceVersion = work.EvidenceVersion
 			record.FullyResolved = proposal.FullyResolved
 			record.ResolutionEvidence = proposal.ResolutionEvidence
 			out = *record
@@ -144,7 +161,7 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 		}
 		checks := append([]ResultCheck{}, proposal.Checks...)
 		sort.Slice(checks, func(i, j int) bool { return checks[i].Command < checks[j].Command })
-		record := &ResultRecord{EvidenceVersion: card.EvidenceVersion, Commits: card.Commits, Outcomes: proposal.Outcomes, Checks: checks, Version: version, CardDigest: card.Digest, ActorID: remote.ActorID, FullyResolved: proposal.FullyResolved, ResolutionEvidence: proposal.ResolutionEvidence}
+		record := &ResultRecord{TaskIDs: work.taskIDs(), EvidenceVersion: work.EvidenceVersion, Commits: work.Commits, Outcomes: proposal.Outcomes, Checks: checks, Version: version, CardDigest: work.Digest, ActorID: remote.ActorID, FullyResolved: proposal.FullyResolved, ResolutionEvidence: proposal.ResolutionEvidence}
 		if previous := store.Records[version]; previous != nil {
 			record.Failures = previous.Failures
 		}
@@ -163,7 +180,7 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 			return resultError("equivalent comment absent from current complete observation")
 		}
 		for _, previous := range store.Records {
-			if (previous.Status == "published" || previous.Status == "equivalent") && previous.EvidenceVersion == card.EvidenceVersion && resultHash(previous.Commits) == resultHash(card.Commits) {
+			if (previous.Status == "published" || previous.Status == "equivalent") && previous.EvidenceVersion == work.EvidenceVersion && resultHash(previous.Commits) == resultHash(work.Commits) {
 				return resultError("completion evidence unchanged; reference the existing result comment instead of publishing another assessment")
 			}
 		}
@@ -206,15 +223,15 @@ func ApplyResult(ctx context.Context, provider ResultProvider, root string, repo
 // a user who actively requests another decision. Old consent is never reused.
 func DecideResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string, decision ResultDecision) (out ResultRecord, err error) {
 	err = withResultStore(ctx, root, repository, number, cardID, func(store *resultStore, save func() error) error {
-		card, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
+		work, remote, err := readResult(ctx, provider, root, repository, number, cardID, store)
 		if err != nil {
 			return err
 		}
-		if decision.Token != resultToken(card, remote) {
+		if decision.Token != resultToken(work.Digest, remote) {
 			return resultError("close target changed; inspect and request a new decision")
 		}
 		record := store.Records[decision.Version]
-		if record == nil || (record.Status != "published" && record.Status != "equivalent") || record.CardDigest != card.Digest || !record.FullyResolved {
+		if record == nil || (record.Status != "published" && record.Status != "equivalent") || record.CardDigest != work.Digest || !record.FullyResolved {
 			return resultError("no current fully resolved assessment")
 		}
 		if remote.State == "closed" {

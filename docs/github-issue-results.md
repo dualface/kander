@@ -1,18 +1,67 @@
 # GitHub issue result reconciliation
 
 The Issues overlay uses `s` for investigation on an unbound issue and for result
-reconciliation on a done anchor card. Bound non-done cards offer `g` only; all
-bound cards retain `g` and disable `i`/`I`. The result confirmation explains that
+reconciliation on an issue whose work set is ready. Bound issues whose work set is
+not ready offer `g` only, and `s` shows the work set progress instead; all bound
+cards retain `g` and disable `i`/`I`. The result confirmation explains that
 missing result comments may be added but closing requires separate explicit
 confirmation. Selection, binding and state are checked before launching. The
 background work uses the existing `pendingWork` and terminal backend paths.
 
 `kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO]` starts the
 same session from the CLI; `--agent` and `--launcher` override defaults. The session
-uses the small execution tier, inherits the card language, and owns no card. Its
+uses the small execution tier, inherits the anchor card language, and owns no card. Its
 launch prompt selects the result protocol in the released issue rules. Evidence
 files are unique per session under the private `result-sessions` cache; the agent
 must refresh with `--action inspect`, not use startup evidence as a write grant.
+
+## Work sets
+
+An issue's work set is its anchor card plus every sibling card that declares
+`SOURCE_ISSUE: <canonical source key> (anchor: <anchor-task-id>)` in `DISCUSSION`
+with the anchor's key and task ID. The line is matched after trimming whitespace and
+one optional `- ` list prefix, inside or outside a code block; any other text voids
+it. A card already bound as an anchor is never a sibling. `internal/issue.WorkSet`
+derives the set from one board scan (`LoadWorkSets`); `LoadIndex` adds the progress
+(`WorkDone`/`WorkTotal`), readiness and a "reply pending" hint to each `LocalCard`.
+
+A member is complete in `done/`, or in `archived/` with `RESULT: completed`. A sibling
+in `trash/`, or archived with any other result, is excluded and reported in the
+inspection's `excluded` list. The set is ready when every member is complete; a
+withdrawn anchor keeps it from becoming ready. Every result action refuses an
+incomplete set and names the pending cards, and `--card` must be the anchor.
+
+`ResultWork` carries the member evidence in assessment order: the anchor, then the
+siblings by task ID. With the anchor alone, the task key, delivery SHAs, evidence
+version and digest equal the single-card values used before work sets existed, so
+earlier records stay valid. With several members the task key joins the member IDs,
+the SHAs are the sorted union, and the evidence version and digest hash the per-card
+values with their IDs. Multi-card records store `task_ids`, which the store
+validation uses to recompute the result key. Proposal outcomes follow every
+member's top-level acceptance checkboxes in order; checks and the resolution
+quotation may come from any member's documents.
+
+The Issues overlay shows `k/n` for a bound issue with several members, and marks a
+ready set "reply pending" while no published or equivalent record covers its current
+evidence version. The hint reads the records without the writer lock and treats
+unreadable evidence or records as pending.
+
+## Completion handoff
+
+`issue.result_on_done` (`auto`, `ask`, `off`; default `auto`, overridable in the
+project overlay and editable on the Options rules page) selects the handoff after
+the last card completes. `internal/board` exposes `RegisterMoveObserver`; the issue
+package registers an observer at init. It records whether the moved card's work set
+was ready before a CLI `kander move` into `done/`, `archived/` or `trash/`, and after
+a successful, non-replayed move prints a stderr notice when the set became ready and
+the mode is not `off`. The notice names the issue, the anchor, the mode and the
+`--action inspect` command; stdout, exit code and dispatch JSON are unchanged, and TUI
+moves print nothing. Observer failures skip the notice and never affect the move.
+
+The released rule (`KANDER-ISSUE-RULES.md` "Completion Handoff") makes the session
+that ran the move run the protocol below in place: `auto` publishes without asking,
+`ask` shows the draft and waits for an explicit yes, and closing always needs its own
+consent. No separate result session is started from `kander move`.
 
 ## Controlled workflow
 

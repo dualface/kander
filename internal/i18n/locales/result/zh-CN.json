@@ -2,6 +2,12 @@
   "tui.issues_hint_done": "↑↓ 选择 · Enter 详情 · g 任务卡 · s 核对结果 · ? 帮助 · Esc 关闭",
   "tui.issues_result_help": "核对已完成处理结果",
   "tui.issues_result_title": "核对 Issue #{{.V0}} 处理结果",
-  "tui.issues_result_body": "启动 {{.V0}} 的结果核对（done 卡片 {{.V1}}）？Agent 可能追加缺少的处理结果评论。关闭 Issue 必须另行明确确认。原卡片保持不变。",
-  "tui.issues_result_stale": "选中的 Issue、绑定或卡片状态已变化，请重新选择。"
+  "tui.issues_result_body": "启动 {{.V0}} 的结果核对（anchor 卡片 {{.V1}} 及其工作集）？Agent 可能追加缺少的处理结果评论。关闭 Issue 必须另行明确确认。所有卡片保持不变。",
+  "tui.issues_result_stale": "选中的 Issue、绑定或卡片状态已变化，请重新选择。",
+  "tui.issues_work_progress": "{{.V0}}/{{.V1}} 张卡完成",
+  "tui.issues_result_pending": "待回复",
+  "tui.issues_work_incomplete": "工作集未完成: {{.V0}}/{{.V1}} 张卡完成. 全部卡完成后才能回复结果.",
+  "issue.result_handoff_ready": "Issue {{.V0}} 可以回复结果: 工作集的 {{.V2}} 张卡都已完成 (anchor {{.V1}}, 排除 {{.V3}} 张, issue.result_on_done={{.V4}}).",
+  "issue.result_handoff_next": "下一步: {{.V0}}",
+  "issue.result_handoff_unavailable": "无法给出 issue 结果交接提示: {{.V0}}"
 }

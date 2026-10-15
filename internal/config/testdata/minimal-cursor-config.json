@@ -182,6 +182,9 @@
     "theme_light": "light",
     "theme_dark": "dark"
   },
+  "issue": {
+    "result_on_done": "auto"
+  },
   "language": "en",
   "agent_language": "en"
 }

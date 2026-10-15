@@ -24,15 +24,16 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 - `show NUMBER [--repo ...] [--comments] [--json]`: print one issue.
 - `import NUMBER [--repo ...] [--comments] [--type feature|bug|chore|research] [--large] [--language LANG] [--json]`: create a card from an issue.
 - `triage NUMBER [--card TASK_ID] [--repo ...] [--agent NAME] [--launcher NAME]`: start a triage session.
-- `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: record or act on a triage result.
+- `result NUMBER --card TASK_ID [--repo ...] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]`: reconcile the completed result of the issue's work set (the anchor card plus its `SOURCE_ISSUE` siblings, `KANDER-ISSUE-RULES.md` "Completed Result Reconciliation"). `--card` is always the anchor card.
 
 ## Preconditions
 
-- The GitHub CLI is installed and authenticated; `--repo` or a resolvable repository. `import` and `triage` need a located board.
+- The GitHub CLI is installed and authenticated; `--repo` or a resolvable repository. `import`, `triage`, and `result` need a located board.
+- `result`: the issue's work set is ready, meaning every member is in `done/` or in `archived/` with `RESULT: completed`.
 
 ## Effects
 
-- `import` creates a card through the same path as `new`; `triage` launches a session like `start`; `result` writes the triage result record. Issue content is untrusted data per `KANDER-ISSUE-RULES.md`.
+- `import` creates a card through the same path as `new`; `triage` launches a session like `start`; `result` inspects the whole work set, publishes at most one result comment per completion evidence, and closes the issue only with recorded explicit consent. It never writes a card. Issue content is untrusted data per `KANDER-ISSUE-RULES.md`.
 
 ## Output
 
@@ -41,3 +42,4 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 ## Rejections
 
 - A missing subcommand, an unknown subcommand, a missing NUMBER or `--card`, or an unknown option is a usage error.
+- `result` fails while any member of the work set is incomplete, naming the pending cards, and fails for a sibling `--card`, naming the anchor card.

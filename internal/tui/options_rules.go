@@ -66,6 +66,7 @@ func (p *optionsPanel) rulesGroup(bind *formBinding) *huh.Group {
 	bind.addSpacer()
 	bind.formFields = append(bind.formFields, huh.NewNote().Title(t("rules.independent")))
 	bind.addRuleFields(p, p.session.Config.Rules, independentRuleModules)
+	bind.addIssueResultField(p)
 	bind.formFields = append(bind.formFields, huh.NewNote().Description(t("rules.contract_notice")))
 	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
@@ -82,7 +83,40 @@ func (bind *formBinding) addRuleFields(p *optionsPanel, rules config.Rules, modu
 	}
 }
 
+// addIssueResultField edits issue.result_on_done, the completion handoff the
+// issue rules apply once every card of an issue's work set is complete.
+func (bind *formBinding) addIssueResultField(p *optionsPanel) {
+	mode := p.session.Config.Issue.ResultOnDone
+	bind.issueResult = &mode
+	options := make([]huh.Option[string], 0, len(config.IssueResultModes))
+	for _, value := range config.IssueResultModes {
+		options = append(options, huh.NewOption(config.IssueResultLabel(value), value))
+	}
+	bind.fieldIndex[issueResultFocusKey] = bind.focusable
+	bind.addField(huh.NewSelect[string]().
+		Title(p.inheritTitle(t("config.issue_result_on_done"), config.IssueResultLabel(mode), "issue", "result_on_done")).
+		Options(options...).Inline(true).Value(bind.issueResult))
+}
+
+const issueResultFocusKey = "issue:result_on_done"
+
+func (b *formBinding) applyIssueResult(p *optionsPanel) {
+	if b.issueResult == nil || *b.issueResult == p.session.Config.Issue.ResultOnDone {
+		return
+	}
+	before := p.overridePresence("issue", "result_on_done")
+	if err := p.session.SetIssueResultOnDone(*b.issueResult); err != nil {
+		*b.issueResult = p.session.Config.Issue.ResultOnDone
+		p.showReport(t("config.issue_result_on_done"), nil, err.Error())
+		p.rebuildAt(issueResultFocusKey)
+		return
+	}
+	p.markDirty()
+	p.rebuildIfOverrideChanged(before, issueResultFocusKey, "issue", "result_on_done")
+}
+
 func (b *formBinding) applyRules(p *optionsPanel) {
+	b.applyIssueResult(p)
 	rules := p.session.Config.Rules.Clone()
 	focus := "rules:preset"
 	for _, module := range config.RuleModules {

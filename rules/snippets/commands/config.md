@@ -27,7 +27,7 @@ kander config [--json]
 ## Output
 
 - Without `--json`: the summary lines plus, when a project `.kander-config.json` exists, that file's absolute path.
-- With `--json`: the merged effective configuration.
+- With `--json`: the merged effective configuration. Among other keys it holds `issue.result_on_done` (`auto`, `ask`, or `off`; `auto` when missing), the completion handoff mode of `KANDER-ISSUE-RULES.md` "Completion Handoff".
 
 ## Rejections
 
