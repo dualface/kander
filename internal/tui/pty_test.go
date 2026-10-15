@@ -220,6 +220,7 @@ func isolatedHome(t *testing.T) (home string, env []string) {
 		"PATH=" + fakeBin + ":" + os.Getenv("PATH"),
 		"HOME=" + home,
 		"USERPROFILE=" + home,
+		"PI_CODING_AGENT_DIR=",
 		"KANDER_CONFIG=" + filepath.Join(home, ".config", "kander", "config.json"),
 		"KANDER_LANG=en",
 		"KANDER_SKIP_INSTALL=1",

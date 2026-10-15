@@ -194,6 +194,7 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	shareDir := filepath.Join(home, ".local", "share", "kander", terminal.DefinitionsDirName)
 	if err := os.MkdirAll(shareDir, 0o755); err != nil {
 		t.Fatal(err)

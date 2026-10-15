@@ -38,6 +38,7 @@ func TestDoctorInstallDecision(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
 			t.Setenv("USERPROFILE", home)
+			t.Setenv("PI_CODING_AGENT_DIR", "")
 			t.Setenv("KANDER_CONFIG", filepath.Join(home, "config.json"))
 			t.Setenv("PATH", t.TempDir())
 			app, panel := openPanel(t)

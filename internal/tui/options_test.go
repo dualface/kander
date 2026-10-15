@@ -62,10 +62,12 @@ func newPanelApp(t *testing.T) *App {
 }
 
 // newTestSession builds a config session directly, without any environment probing.
-// It always overrides the inherited KANDER_CONFIG, so tests can never write the user's config.
+// It overrides KANDER_CONFIG and Pi's directory so saving options cannot reach
+// the user's config or Pi rules through inherited environment variables.
 func newTestSession(t *testing.T, initial ...*config.Config) *menu.Session {
 	t.Helper()
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	t.Setenv("PI_CODING_AGENT_DIR", filepath.Join(t.TempDir(), "pi"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 	if len(initial) > 0 {

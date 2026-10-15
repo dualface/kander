@@ -25,6 +25,7 @@ func TestRulesIntegrationUsesInstallScope(t *testing.T) {
 			home, project := t.TempDir(), t.TempDir()
 			t.Setenv("HOME", home)
 			t.Setenv("USERPROFILE", home)
+			t.Setenv("PI_CODING_AGENT_DIR", "")
 			globalEntry := filepath.Join(home, ".agents", "kander", "KANDER-AGENTS.md")
 			projectEntry := filepath.Join(project, ".kander", "rules", "KANDER-AGENTS.md")
 			globalRules, projectRules := "# Global Kander rules\n", "# Project Kander rules\n"
@@ -80,6 +81,7 @@ func TestRulesIntegrationResolvesClaudeImportsFromRulesFile(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "main worktree")
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	for _, tc := range []struct {
 		name, target, reference string
 		paths                   config.InstallPaths
@@ -119,6 +121,7 @@ func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
 	// Global scope covers only agents whose configuration directory exists.
@@ -151,6 +154,7 @@ func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	entry := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 	writeRulesFile(t, entry, "# Kander entry\n")
@@ -212,6 +216,7 @@ func TestReportRulesIntegrationCoversEveryInstalledAgent(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
 	// claude is installed (config directory exists) but not configured for use; grok has no
@@ -270,6 +275,7 @@ func TestReportRulesIntegrationCoversProjectTargets(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	paths := config.InstallPaths{
 		Mode:        config.ModeProject,
 		ProjectRoot: project,
@@ -304,6 +310,7 @@ func TestRulesIntegrationRejectsMissingProjectRoot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
 	ok, detail := rulesIntegration("claude", config.InstallPaths{Mode: config.ModeProject})
 	if ok || detail != config.Text("config.project_install_paths_are_missing_the_main_worktree") {
 		t.Fatalf("missing project root: integrated=%v detail=%s", ok, detail)
