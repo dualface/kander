@@ -151,8 +151,9 @@ func ReadResultWork(root string, repository Repository, number int, cardID strin
 	return work, nil
 }
 
-// siblingCardError explains a --card that names a non-anchor member of the
-// work set; it returns nil for any other card.
+// siblingCardError explains a --card that names any non-anchor card bound to
+// the issue, a member sibling or an excluded one, with the anchor's ID; it
+// returns nil for the anchor and for cards outside the work set.
 func siblingCardError(set WorkSet, cardID string) error {
 	if cardID == "" || set.Anchor.TaskID == "" || set.Anchor.TaskID == cardID || !set.Contains(cardID) {
 		return nil
