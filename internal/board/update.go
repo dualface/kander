@@ -115,6 +115,31 @@ func frozenContract(text string) map[string]string {
 	}
 	return fields
 }
+
+// acceptanceTickRe matches the top-level acceptance checkbox markers the
+// executing agent may toggle; indented and uppercase markers stay frozen.
+var acceptanceTickRe = regexp.MustCompile(`(?m)^- \[x\] `)
+
+// acceptanceTicksOnly reports whether the only frozen difference is toggling
+// top-level acceptance checkboxes while the card is being executed. Ticking
+// records progress against the contract without changing it, so it needs no
+// contract decision.
+func acceptanceTicksOnly(state string, before, after map[string]string) bool {
+	if state != "working" && state != "review" {
+		return false
+	}
+	untick := func(fields map[string]string) map[string]string {
+		out := make(map[string]string, len(fields))
+		for name, value := range fields {
+			if name == SectionAcceptanceCriteria {
+				value = acceptanceTickRe.ReplaceAllString(value, "- [ ] ")
+			}
+			out[name] = value
+		}
+		return out
+	}
+	return reflect.DeepEqual(untick(before), untick(after))
+}
 func fieldLines(text, name string) []string { return FieldLineRe(name).FindAllString(text, -1) }
 func validSpecUpdate(old, next, state, decision string) (string, error) {
 	// Duplicate headings and metadata create ambiguous contracts across readers.
@@ -154,6 +179,9 @@ func validSpecUpdate(old, next, state, decision string) (string, error) {
 	before, after := frozenContract(old), frozenContract(next)
 	if state != "backlog" && !reflect.DeepEqual(before, after) {
 		if strings.TrimSpace(decision) == "" {
+			if acceptanceTicksOnly(state, before, after) {
+				return next, nil
+			}
 			return "", kanbanError("board.transaction_decision_required")
 		}
 		record := struct {
