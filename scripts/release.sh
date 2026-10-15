@@ -127,6 +127,14 @@ if [ "$skip_tag" -eq 0 ] && [ "$dry_run" -eq 0 ]; then
 	[ "$local_head" = "$remote_head" ] ||
 		die "HEAD ($local_head) differs from origin/$RELEASE_BRANCH ($remote_head); push or pull first"
 
+	# The changelog entry must be committed before the tag: the newest
+	# section of CHANGELOG.md has to be this version with a release date.
+	[ -f CHANGELOG.md ] || die "CHANGELOG.md not found; add a '## $version — YYYY-MM-DD' section first"
+	changelog_head="$(grep -m1 '^## ' CHANGELOG.md || true)"
+	printf '%s\n' "$changelog_head" | grep -Fq "## $version — " &&
+		printf '%s\n' "$changelog_head" | grep -Eq ' — [0-9]{4}-[0-9]{2}-[0-9]{2}$' ||
+		die "the top section of CHANGELOG.md is '${changelog_head:-<none>}'; add '## $version — YYYY-MM-DD' covering every user-visible change since the previous tag, commit it on develop, and fast-forward $RELEASE_BRANCH"
+
 	if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
 		die "tag $version already exists locally"
 	fi
