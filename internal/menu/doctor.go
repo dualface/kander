@@ -196,6 +196,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		warning(config.Text("menu.no_reviewer_found_reviews_cannot_run"))
 	}
 
+	reportOverlayConfigDirs()
 	loaded, loadErr := config.Load(false)
 	if loadErr != nil {
 		warning(loadErr.Error())
@@ -210,7 +211,6 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		}
 		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
 		reportAgentSessionFileInheritance(loaded)
-		reportOverlayConfigDirs()
 		if loaded.WelcomeComplete {
 			healthy = reportRulesIntegration(loaded, paths, repair) && healthy
 			healthy = reportAgentExtensions(paths, repair) && healthy
@@ -225,7 +225,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 func reportOverlayConfigDirs() {
 	file, names, err := config.OverlayAgentConfigDirs()
 	if err != nil {
-		warning(err.Error())
+		// config.Load reads the same overlay next and reports this error.
 		return
 	}
 	for _, name := range names {

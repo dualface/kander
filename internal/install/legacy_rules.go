@@ -49,11 +49,14 @@ func legacyRulesEntry(paths config.InstallPaths) string {
 // global rules root after the current root has been written. Every file with a rule name goes,
 // whatever its content or link status: the old location is retired, and a stale copy there
 // would only be read by mistake. Directories are left alone. It never fails the install and
-// is silent by design; the result exists for tests and diagnostics.
+// is silent by design; the result exists for tests and diagnostics. While any agent rules
+// target cannot be resolved, the migration waits: removeLegacyEntrySymlinks could not replace
+// a link at that target, and deleting the entry would leave the link dangling. The integration
+// pass reports the resolution error, and the next successful run migrates.
 func migrateLegacyRules(paths config.InstallPaths) LegacyRulesMigration {
 	var out LegacyRulesMigration
 	dir := legacyRulesDir(paths)
-	if dir == "" {
+	if dir == "" || !agentRulesTargetsResolve(paths) {
 		return out
 	}
 	names := append(rules.Names(), stateFileName)
@@ -94,8 +97,9 @@ func removeLegacyEntrySymlinks(paths config.InstallPaths) []string {
 	var removed []string
 	seen := map[string]struct{}{}
 	for _, agent := range config.ExecutionAgents {
-		// An unresolvable target is skipped here; the integration pass that
-		// follows reports the same resolution error for the agent.
+		// migrateLegacyRules keeps the entry while a target is unresolvable, so
+		// this skip only happens when no entry was deleted; the integration pass
+		// that follows reports the resolution error for the agent.
 		target, err := AgentRulesTarget(agent, paths)
 		if err != nil || target == "" {
 			continue
@@ -241,4 +245,14 @@ func isPathChar(c byte) bool {
 		return true
 	}
 	return strings.IndexByte("._-/\\~:", c) >= 0
+}
+
+// agentRulesTargetsResolve reports whether every embedded agent's rules target resolves.
+func agentRulesTargetsResolve(paths config.InstallPaths) bool {
+	for _, agent := range config.ExecutionAgents {
+		if _, err := AgentRulesTarget(agent, paths); err != nil {
+			return false
+		}
+	}
+	return true
 }

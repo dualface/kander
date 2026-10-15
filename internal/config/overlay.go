@@ -285,6 +285,7 @@ func mergeOverlayRaw(scope map[string]any, overlay map[string]any) (map[string]a
 		return nil, err
 	}
 	overlayCopy := cloneRawObjectDeep(overlay)
+	dropOverlayConfigDirs(overlayCopy)
 	if err := normalizeReviewStagesField(overlayCopy); err != nil {
 		return nil, err
 	}

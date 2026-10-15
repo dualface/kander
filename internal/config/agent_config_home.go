@@ -103,6 +103,18 @@ func ScopeAgentConfigDir(paths InstallPaths, name string) (string, error) {
 	return cfg.Agents[name].ConfigDir, nil
 }
 
+// dropOverlayConfigDirs removes agents.<name>.config_dir from an overlay copy
+// before the merge: the effective config never carries an overlay value, and an
+// invalid one cannot fail Load while doctor reports it as ignored.
+func dropOverlayConfigDirs(overlay map[string]any) {
+	agents, _ := asObject(overlay["agents"])
+	for _, value := range agents {
+		if fields, ok := asObject(value); ok {
+			delete(fields, "config_dir")
+		}
+	}
+}
+
 // OverlayAgentConfigDirs returns the project overlay path and the agents whose
 // config_dir it declares; ScopeAgentConfigDir ignores those values.
 func OverlayAgentConfigDirs() (string, []string, error) {

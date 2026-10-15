@@ -406,3 +406,38 @@ func TestPerformReplacesLegacyEntrySymlinkInRelocatedConfigDir(t *testing.T) {
 		t.Fatalf("relocated target still a symlink: %v", err)
 	}
 }
+
+func TestLegacyMigrationWaitsForResolvableTargets(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs privileges on Windows")
+	}
+	home := setupInstallHome(t)
+	legacy := writeLegacyRules(t, home)
+	entry := filepath.Join(legacy, "KANDER-AGENTS.md")
+	claude := filepath.Join(home, ".claude", "CLAUDE.md")
+	if err := os.MkdirAll(filepath.Dir(claude), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(entry, claude); err != nil {
+		t.Fatal(err)
+	}
+	paths := globalExtensionPaths(t, home)
+	paths.ConfigPath = filepath.Join(t.TempDir(), "config.json")
+	writeScopeConfig(t, paths.ConfigPath, "codex", "relative")
+	if out := migrateLegacyRules(paths); len(out.Removed) != 0 {
+		t.Fatalf("migrated with an unresolvable target: %+v", out)
+	}
+	if links := removeLegacyEntrySymlinks(paths); len(links) != 0 {
+		t.Fatalf("links=%v", links)
+	}
+	if _, err := os.Stat(claude); err != nil {
+		t.Fatalf("rules link dangling: %v", err)
+	}
+	writeScopeConfig(t, paths.ConfigPath, "codex", t.TempDir())
+	if out := migrateLegacyRules(paths); len(out.Removed) == 0 {
+		t.Fatal("migration did not resume after the config was fixed")
+	}
+	if links := removeLegacyEntrySymlinks(paths); len(links) != 1 || links[0] != claude {
+		t.Fatalf("links=%v", links)
+	}
+}

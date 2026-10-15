@@ -106,3 +106,25 @@ func sameFile(t *testing.T, a, b string) bool {
 	ib, errB := os.Stat(b)
 	return errA == nil && errB == nil && os.SameFile(ia, ib)
 }
+
+func TestOverlayConfigDirNeverMerged(t *testing.T) {
+	scope := map[string]any{"agents": map[string]any{"codex": map[string]any{"config_dir": "/scope/codex"}}}
+	overlay := map[string]any{"agents": map[string]any{
+		"codex":  map[string]any{"config_dir": "relative"},
+		"claude": map[string]any{"config_dir": "/overlay/claude"},
+	}}
+	merged, err := mergeOverlayRaw(scope, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents := merged["agents"].(map[string]any)
+	if got := agents["codex"].(map[string]any)["config_dir"]; got != "/scope/codex" {
+		t.Fatalf("scope value lost: %v", got)
+	}
+	if _, ok := agents["claude"].(map[string]any)["config_dir"]; ok {
+		t.Fatal("overlay config_dir merged")
+	}
+	if _, ok := overlay["agents"].(map[string]any)["codex"].(map[string]any)["config_dir"]; !ok {
+		t.Fatal("caller overlay modified")
+	}
+}
