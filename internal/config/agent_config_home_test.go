@@ -121,10 +121,21 @@ func TestOverlayConfigDirNeverMerged(t *testing.T) {
 	if got := agents["codex"].(map[string]any)["config_dir"]; got != "/scope/codex" {
 		t.Fatalf("scope value lost: %v", got)
 	}
-	if _, ok := agents["claude"].(map[string]any)["config_dir"]; ok {
-		t.Fatal("overlay config_dir merged")
+	if _, ok := agents["claude"]; ok {
+		t.Fatal("overlay agent with only config_dir merged")
 	}
 	if _, ok := overlay["agents"].(map[string]any)["codex"].(map[string]any)["config_dir"]; !ok {
 		t.Fatal("caller overlay modified")
+	}
+}
+
+func TestOverlayConfigDirOnlyAgentValidates(t *testing.T) {
+	overlay := map[string]any{"agents": map[string]any{"myagent": map[string]any{"config_dir": "~/agent"}}}
+	cfg, err := MergeScopeAndOverlay(DefaultConfig(), overlay)
+	if err != nil {
+		t.Fatalf("config_dir-only overlay agent failed validation: %v", err)
+	}
+	if _, ok := cfg.Agents["myagent"]; ok {
+		t.Fatal("empty overlay agent merged")
 	}
 }
