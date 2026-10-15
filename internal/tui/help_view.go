@@ -83,8 +83,8 @@ func (a *App) boardHelpGroups() []helpGroup {
 }
 
 // issuesHelpEntries mirrors the overlay footer: unbound selections advertise
-// import and takeover, bound selections advertise the jump, and an empty
-// selection omits both.
+// import and takeover; bound selections advertise the jump and the action
+// allowed by their state. An empty selection omits card actions.
 func (a *App) issuesHelpEntries() []helpEntry {
 	entries := []helpEntry{
 		{"↑↓ jk", t("tui.switch_issue")},
@@ -96,6 +96,9 @@ func (a *App) issuesHelpEntries() []helpEntry {
 	}
 	if a != nil && a.Issues != nil && a.issuesSelectedNumber() > 0 {
 		if card, ok := a.issuesSelectedBound(); ok {
+			if card.State == "backlog" {
+				entries = append(entries, helpEntry{"s", t("tui.issues_refine_help")})
+			}
 			if card.State == "done" {
 				entries = append(entries, helpEntry{"s", t("tui.issues_result_help")})
 			}
@@ -103,7 +106,6 @@ func (a *App) issuesHelpEntries() []helpEntry {
 		} else {
 			entries = append(entries,
 				helpEntry{"i", t("tui.import_issue")},
-				helpEntry{"I", t("tui.import_issue_with_comments")},
 				helpEntry{"s", t("tui.issues_takeover_help")},
 			)
 		}

@@ -145,7 +145,7 @@ func TestIssuesTakeoverCancelKeepsTheBoard(t *testing.T) {
 	}
 }
 
-func TestIssuesBoundSelectionUsesJumpKeyOnly(t *testing.T) {
+func TestIssuesBacklogSelectionOffersRefinement(t *testing.T) {
 	fake := newFakeIssues()
 	fake.listResult = defaultPage(issuesListLimit)
 	task := Task{TaskID: "task-1", Title: "Task", State: "backlog", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
@@ -165,7 +165,10 @@ func TestIssuesBoundSelectionUsesJumpKeyOnly(t *testing.T) {
 	if keys["g"] != config.Text("tui.jump_to_local_card") {
 		t.Fatalf("help missing jump key: %+v", keys)
 	}
-	for _, unexpected := range []string{"i", "I", "s"} {
+	if keys["s"] != config.Text("tui.issues_refine_help") {
+		t.Fatalf("help missing refinement: %+v", keys)
+	}
+	for _, unexpected := range []string{"i", "I"} {
 		if _, ok := keys[unexpected]; ok {
 			t.Fatalf("help still shows %s: %+v", unexpected, keys)
 		}

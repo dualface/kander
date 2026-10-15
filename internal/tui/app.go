@@ -75,9 +75,11 @@ type App struct {
 	// PrepareTriage resolves the configured agent and launcher of an unstarted
 	// takeover session; TriageIssue prepares the evidence and starts it through
 	// the shared issue.StartTriage path, the same one `kander issue triage`
-	// uses. cmd.go binds both and tests inject fakes.
+	// uses. RefineIssue completes an existing backlog contract from its saved
+	// attachments. cmd.go binds these callbacks and tests inject fakes.
 	PrepareTriage func() (launch.TriagePreview, error)
 	ResultIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
+	RefineIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
 	TriageIssue   func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error)
 	// PrepareChat resolves the agent and launcher of the chat box; StartChat
 	// starts one card-less session for a typed message. cmd.go binds StartChat
@@ -176,6 +178,8 @@ type App struct {
 	issuesListSeq   uint64
 	issuesDetailSeq uint64
 	issuesImportSeq uint64
+	// Survives closing the overlay until import and launch have both settled.
+	issuesImporting bool
 	issuesIndexSeq  uint64
 	// pendingShell is an action that must hand the terminal back; pendingWork is a background task.
 	pendingShell func()

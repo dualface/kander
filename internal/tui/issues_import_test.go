@@ -17,6 +17,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/internal/launch"
 )
 
 // importTestIndex builds the board mapping the TUI shows beside the issue list.
@@ -47,6 +48,12 @@ func issuesImportApp(t *testing.T, fake *fakeIssues, tasks []Task, index issue.I
 	app.IssueProvider = func() issue.IssueProvider { return fake }
 	app.ImportIndex = func() (issue.Index, error) { return index, nil }
 	calls := &[]importCall{}
+	app.PrepareTriage = func() (launch.TriagePreview, error) {
+		return launch.TriagePreview{Agent: "claude", Launcher: "tmux"}, nil
+	}
+	app.RefineIssue = func(context.Context, issue.Repository, int, issue.TriageOptions) (issue.TriageOutcome, error) {
+		return issue.TriageOutcome{Agent: "claude", Address: "tmux:refine"}, nil
+	}
 	app.ImportIssue = importer
 	if importer != nil {
 		original := importer
@@ -81,7 +88,7 @@ func TestIssuesImportSwitchesHintsToBound(t *testing.T) {
 	}
 	app.HandleKey("i")
 	runPendingWork(t, app)
-	if got := app.issuesActionHint(); got != config.Text("tui.issues_hint_bound") {
+	if got := app.issuesActionHint(); got != config.Text("tui.issues_hint_backlog") {
 		t.Fatalf("after import hint=%q", got)
 	}
 	keys := map[string]string{}
@@ -102,6 +109,10 @@ func TestIssuesImportJumpsToTheBoundCard(t *testing.T) {
 	task := Task{TaskID: "task-1", Title: "Task", State: "working", Document: "- WINDOW: herdr:w1:t2:w1:p3\n"}
 	index := importTestIndex(fake.repository, 42, "task-1",
 		time.Date(2026, 9, 11, 2, 3, 0, 0, time.UTC), time.Date(2026, 9, 11, 3, 0, 0, 0, time.UTC))
+	for key, card := range index {
+		card.State = "working"
+		index[key] = card
+	}
 	app, calls := issuesImportApp(t, fake, []Task{task}, index, func(context.Context, issue.Repository, int, issue.ImportOptions) (issue.ImportResult, error) {
 		t.Fatal("a bound issue must not be imported again")
 		return issue.ImportResult{}, nil
@@ -209,7 +220,7 @@ func TestIssuesImportCreatesTheCardThroughPendingWork(t *testing.T) {
 		t.Fatalf("calls %+v", *calls)
 	}
 	call := (*calls)[0]
-	if call.number != 42 || call.repository.Owner != "dualface" || call.options.Comments {
+	if call.number != 42 || call.repository.Owner != "dualface" || !call.options.Comments {
 		t.Fatalf("call %+v", call)
 	}
 	if app.Issues.importing {

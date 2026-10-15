@@ -70,6 +70,9 @@ func (a *App) issuesActionHint() string {
 		return t("tui.issues_hint_none")
 	}
 	if card, ok := a.issuesSelectedBound(); ok {
+		if card.State == "backlog" {
+			return t("tui.issues_hint_backlog")
+		}
 		if card.State == "done" {
 			return t("tui.issues_hint_done")
 		}

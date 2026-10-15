@@ -32,7 +32,7 @@
   "tui.browse_github_issues": "浏览 GitHub Issue",
   "tui.issues_overlay": "Issue 弹窗",
   "tui.issues_title": "GitHub Issue",
-  "tui.issues_hint": "Enter 详情  / 搜索  Tab 状态  l 标签  i 导入  I 含评论  s 交接  r 刷新  o 浏览器  Esc 关闭",
+  "tui.issues_hint": "Enter 详情  / 搜索  Tab 状态  l 标签  i 导入并补全  s 交接  r 刷新  o 浏览器  Esc 关闭",
   "tui.issues_hint_bound": "Enter 详情  / 搜索  Tab 状态  l 标签  g 跳转任务卡  r 刷新  o 浏览器  Esc 关闭",
   "tui.issues_hint_none": "Enter 详情  / 搜索  Tab 状态  l 标签  r 刷新  o 浏览器  Esc 关闭",
   "tui.issues_loading": "正在加载 Issue…",
@@ -99,8 +99,7 @@
   "tui.issues_import_no_card": "未找到已导入的卡片",
   "tui.issues_import_created": "已导入: {{.V0}}",
   "tui.issues_import_existing": "已存在: {{.V0}}",
-  "tui.import_issue": "导入为卡片",
-  "tui.import_issue_with_comments": "导入为卡片（含评论）",
+  "tui.import_issue": "含评论导入并补全任务卡",
   "tui.jump_to_local_card": "跳转到关联任务卡",
   "tui.issues_takeover_help": "接手选中的 Issue",
   "tui.issues_takeover_title": "接手 Issue #{{.V0}}",
@@ -109,5 +108,11 @@
   "tui.issues_takeover_started": "接手会话已启动: {{.V0}} ({{.V1}}), 位置 {{.V2}}。Agent 会调查该 Issue, 导入卡片前会先征得你的同意。",
   "tui.issues_takeover_failed": "无法启动接手会话: {{.V0}}",
   "tui.issues_takeover_preview_failed": "无法解析接手设置: {{.V0}}",
-  "tui.issues_takeover_unavailable": "当前构建无法启动接手会话; 请使用命令行。"
+  "tui.issues_takeover_unavailable": "当前构建无法启动接手会话; 请使用命令行。",
+  "tui.issues_refine_help": "补全 backlog 卡片（启动失败后可重试）",
+  "tui.issues_import_refining": "正在导入 / 启动卡片补全…",
+  "tui.issues_refine_failed": "卡片 {{.V0}} 已保留；补全启动失败：{{.V1}}。按 s 重试。",
+  "tui.issues_refine_started": "卡片 {{.V0}}：已启动 {{.V1}} 补全，位置 {{.V2}}",
+  "tui.issues_hint_backlog": "Enter 详情  / 搜索  Tab 状态  l 标签  g 跳转任务卡  s 补全卡片  r 刷新  o 浏览器  Esc 关闭",
+  "launch.refinement_requires_container": "卡片补全需要支持终端容器的启动方式。"
 }

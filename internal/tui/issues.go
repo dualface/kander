@@ -63,8 +63,8 @@ type issuesState struct {
 	// throttle, so a takeover session that imported a card in the background
 	// shows its binding without reopening the overlay.
 	indexRefreshedAt time.Time
-	// importing is true while an import request is in flight. It is a UI hint
-	// only: the board transaction remains the authority on duplicates.
+	// importing is the overlay hint while import or refinement is in flight.
+	// App.issuesImporting also guards an operation across overlay closure.
 	importing bool
 
 	detailNumber  int
@@ -127,56 +127,12 @@ type issuesDetailResult struct {
 	err     error
 }
 
-// issuesImportResult carries the request sequence and the exact issue identity
-// of one import; a result that no longer matches the current selection is
-// dropped without reporting anything for another issue.
-type issuesImportResult struct {
-	seq        uint64
-	repository issue.Repository
-	number     int
-	result     issue.ImportResult
-	index      issue.Index
-	err        error
-}
-
 // issuesIndexResult carries one throttled index scan. The sequence drops a
 // result that a newer list reload or a newer scan already superseded.
 type issuesIndexResult struct {
 	seq   uint64
 	index issue.Index
 	err   error
-}
-
-func (a *App) applyIssuesImport(result issuesImportResult) {
-	a.invalidateBoardReads()
-	if id := strings.TrimSpace(result.result.TaskID); id == "" {
-		a.invalidateSummaries()
-	} else {
-		a.invalidateSummaries(id)
-	}
-	a.requestBoardRefresh(true)
-
-	st := a.Issues
-	if st == nil || result.seq != a.issuesImportSeq {
-		return
-	}
-	st.importing = false
-	if result.index != nil {
-		st.index = result.index
-		st.indexRefreshedAt = a.Now()
-	}
-	if result.err != nil {
-		a.issuesSetNotice(a.Context.IssuesImportFailed + ": " + issue.Message(result.err))
-		return
-	}
-	if result.number != a.issuesSelectedNumber() {
-		return
-	}
-	key := "tui.issues_import_created"
-	if result.result.Existing {
-		key = "tui.issues_import_existing"
-	}
-	a.issuesSetNotice(t(key, result.result.TaskID))
 }
 
 func (a *App) openIssues() {
@@ -525,15 +481,6 @@ func (a *App) issuesSelectedBound() (issue.LocalCard, bool) {
 	return a.issuesLocalCard(a.issuesSelectedNumber())
 }
 
-// issuesImportSelected imports the selected unbound issue. A bound selection
-// ignores the key so import cannot be mistaken for a silent jump.
-func (a *App) issuesImportSelected(withComments bool) {
-	if _, ok := a.issuesSelectedBound(); ok {
-		return
-	}
-	a.issuesImport(withComments)
-}
-
 // issuesJumpToBoundCard closes the overlay and selects the card bound to the
 // current issue. An unbound selection ignores the key; a missing card keeps
 // the overlay and shows the IssuesImportNoCard notice.
@@ -546,49 +493,6 @@ func (a *App) issuesJumpToBoundCard() {
 		return
 	}
 	a.issuesSetNotice(a.Context.IssuesImportNoCard + ": " + local.TaskID)
-}
-
-// issuesImport starts one import request. The request is bound to the resolved
-// repository and the issue number; the result is dropped when either moved on.
-func (a *App) issuesImport(withComments bool) {
-	st := a.Issues
-	if st == nil || st.importing {
-		return
-	}
-	number := a.issuesSelectedNumber()
-	repository := a.issuesRepository()
-	if number <= 0 || repository == nil {
-		a.issuesSetNotice(a.Context.IssuesNoTarget)
-		return
-	}
-	next := boardInitImport
-	if withComments {
-		next = boardInitImportComments
-	}
-	if a.offerBoardInit(next) {
-		return
-	}
-	importer := a.ImportIssue
-	if importer == nil {
-		a.issuesSetNotice(a.Context.IssuesImportFailed)
-		return
-	}
-	loader := a.ImportIndex
-	resolved := *repository
-	a.issuesImportSeq++
-	seq := a.issuesImportSeq
-	st.importing = true
-	a.issuesSetNotice(a.Context.IssuesImporting)
-	a.pendingWork = func() any {
-		ctx, cancel := context.WithTimeout(context.Background(), issuesRequestTimeout)
-		defer cancel()
-		result, err := importer(ctx, resolved, number, issue.ImportOptions{Comments: withComments})
-		out := issuesImportResult{seq: seq, repository: resolved, number: number, result: result, err: err}
-		if err == nil && loader != nil {
-			out.index, _ = loader()
-		}
-		return out
-	}
 }
 
 // issuesFocusLocalCard moves the board selection onto one card and closes the
@@ -795,10 +699,8 @@ func (a *App) handleIssuesKey(key string) {
 		}
 	case "o", "O":
 		a.issuesOpenBrowser()
-	case "i":
-		a.issuesImportSelected(false)
-	case "I":
-		a.issuesImportSelected(true)
+	case "i", "I":
+		a.issuesImportSelected()
 	case "s":
 		a.issuesTakeover()
 	case "g":

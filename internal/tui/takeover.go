@@ -27,10 +27,10 @@ func takeoverIdentity(repository issue.Repository, number int) string {
 	return repository.Owner + "/" + repository.Name + "#" + strconv.Itoa(number)
 }
 
-// issuesTakeover opens investigation for unbound issues or result sync for done cards.
+// issuesTakeover opens investigation, backlog refinement, or completed-result sync.
 func (a *App) issuesTakeover() {
 	st := a.Issues
-	if st == nil || st.importing || a.Takeover != nil {
+	if st == nil || a.issuesImporting || a.Takeover != nil {
 		return
 	}
 	number := a.issuesSelectedNumber()
@@ -43,6 +43,10 @@ func (a *App) issuesTakeover() {
 		return
 	}
 	if card, ok := a.issuesLocalCard(number); ok {
+		if card.State == "backlog" {
+			a.issuesRefineSelected(card)
+			return
+		}
 		if card.State != "done" {
 			return
 		}

@@ -229,6 +229,9 @@ func attachBoard(app *App, root string) {
 		}
 		return issue.StartTriage(ctx, cli.IssueProvider(), app.boardRoot, repository, number, options)
 	}
+	app.RefineIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
+		return issue.StartRefinement(ctx, app.boardRoot, repository, number, options)
+	}
 	app.ResultIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
 		provider, ok := cli.IssueProvider().(issue.ResultProvider)
 		if !ok {

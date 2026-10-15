@@ -35,11 +35,10 @@ func PreviewTriage(agentOverride, launcherOverride string) (TriagePreview, error
 	return TriagePreview{Agent: agent, Launcher: launcher}, nil
 }
 
-// StartTriage starts one takeover session for a prepared issue. It reads and
-// writes no board state: the evidence files were written by the caller, the
-// card is created by the takeover agent after the user agrees, and the card
-// metadata of the target project is never touched. A failed start closes the
-// container it created and removes its temporary task file.
+// StartTriage starts a prepared issue session without writing board state.
+// Refinement reads the existing backlog card for its language and state. The
+// selected prompt defines investigation, refinement, or result authority. A
+// failed start closes its container and removes its temporary task file.
 func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err error) {
 	var warnings board.WarningLog
 	defer func() { result.Warnings = append(warnings.Messages(), result.Warnings...) }()
@@ -67,6 +66,9 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	plan, err := prepareLaunch(launcher, parentDir(request.Root), "triage")
 	if err != nil {
 		return result, err
+	}
+	if request.RefineCard && plan.OccupiesTerminal() {
+		return result, launchError("launch.refinement_requires_container")
 	}
 	if err := applyAgentDelivery(&plan, cfg, agent); err != nil {
 		return result, err
@@ -102,6 +104,8 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	kind := "triage"
 	if request.ResultSync {
 		kind = "result"
+	} else if request.RefineCard {
+		kind = "refine"
 	}
 	prompt, err := headedTaskFileInstruction(paths, kind, "", triageTarget(request.Repository, request.Number), 0, taskFile)
 	if err != nil {
@@ -186,6 +190,9 @@ func validateTriageEvidence(request issue.TriageLaunch) error {
 func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, error) {
 	if request.ResultSync {
 		return resultAgentPrompt(request, paths)
+	}
+	if request.RefineCard {
+		return refinementAgentPrompt(request, paths)
 	}
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")

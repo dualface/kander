@@ -21,12 +21,19 @@ kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
 - `--language`：设定卡片 `LANGUAGE`（默认继承当前配置的 `agent_language`）。
 - `--json`：输出机器可读 JSON，包含 `task_id`、`state`、`path`、`existing`、`source_key`、`source_url`、`comments_loaded`。
 
-### 终端看板浮层快捷键（`g`）
+### Interactive TUI Overlay (`g`)
 
-在终端看板中按 `g` 键唤起 GitHub Issues 浮层：
-- `i` / `I`：导入选中的 Issue（`I` 包含评论）。
-- `g`：对于已导入的 Issue，一键跳转到对应本地任务卡。
-- `s`：对未绑定的 Issue 发起交互式接管会话（Triage），或对已完成卡片发起[结果回写对齐](github-issue-results.md)。
+- `i` imports the selected issue with comments and immediately starts the configured agent to complete the new card. `I` is an alias; help shows one import action.
+- `g` jumps to the linked card.
+- `s` starts triage for an unbound issue, completes an existing backlog card, or starts [result reconciliation](github-issue-results.md) for a done card.
+
+Refinement reads the stored attachments and repository evidence, completes the
+contract, and leaves the card in backlog. It asks only for missing facts or genuine
+user decisions. It does not implement code or write to GitHub. A launch failure
+keeps the imported card; select it and press `s` to retry. Existing-card imports
+do not auto-launch, add comments, or refresh the snapshot. Repeated keys are
+suppressed while this TUI's import or launch is in flight, including after closing
+and reopening the overlay; separate TUI processes do not share a session lock.
 
 ---
 
@@ -69,7 +76,7 @@ kanban/backlog/<task-id>/
 |---|---|---|
 | Issue 正文 | 512 KiB | 拒绝并给出错误建议 |
 | 单条评论 | 64 KiB | 拒绝并给出错误建议 |
-| 评论总条数 | 50 条 | 截断保留最新 50 条 |
+| 评论总条数 | 50 条 | Rejected with error; never truncated |
 | 单卡总快照体积 | 1 MiB | 拒绝并给出错误建议 |
 
 ---

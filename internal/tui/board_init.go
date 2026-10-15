@@ -11,7 +11,6 @@ type boardInitAction int
 const (
 	boardInitChat boardInitAction = iota + 1
 	boardInitImport
-	boardInitImportComments
 	boardInitTakeover
 )
 
@@ -126,9 +125,7 @@ func (a *App) continueBoardInit(next boardInitAction) {
 	case boardInitChat:
 		a.openChat()
 	case boardInitImport:
-		a.issuesImport(false)
-	case boardInitImportComments:
-		a.issuesImport(true)
+		a.issuesImportSelected()
 	case boardInitTakeover:
 		a.issuesTakeover()
 	}

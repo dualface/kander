@@ -21,12 +21,19 @@ kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
 - `--language`：カードの `LANGUAGE` を指定（デフォルトは設定済みの `agent_language`）。
 - `--json`：機械可読な JSON（`task_id`, `state`, `path`, `existing`, `source_key`, `source_url`, `comments_loaded`）を出力。
 
-### ターミナルカンバンオーバーレイ（`g`）
+### Interactive TUI Overlay (`g`)
 
-ボード上で `g` キーを押すと GitHub Issues オーバーレイが開きます：
-- `i` / `I`：選択された Issue を取り込み（`I` はコメント付き）。
-- `g`：すでに取り込み済みの Issue である場合、該当のローカルカードへジャンプ。
-- `s`：未バインドの Issue に対して調査セッション（Triage）を開始、または完了カードに対して[結果同期](github-issue-results.md)を開始。
+- `i` imports the selected issue with comments and immediately starts the configured agent to complete the new card. `I` is an alias; help shows one import action.
+- `g` jumps to the linked card.
+- `s` starts triage for an unbound issue, completes an existing backlog card, or starts [result reconciliation](github-issue-results.md) for a done card.
+
+Refinement reads the stored attachments and repository evidence, completes the
+contract, and leaves the card in backlog. It asks only for missing facts or genuine
+user decisions. It does not implement code or write to GitHub. A launch failure
+keeps the imported card; select it and press `s` to retry. Existing-card imports
+do not auto-launch, add comments, or refresh the snapshot. Repeated keys are
+suppressed while this TUI's import or launch is in flight, including after closing
+and reopening the overlay; separate TUI processes do not share a session lock.
 
 ---
 
@@ -69,7 +76,7 @@ kanban/backlog/<task-id>/
 |---|---|---|
 | Issue 本文 | 512 KiB | エラーで拒否 |
 | 単一コメント | 64 KiB | エラーで拒否 |
-| コメント件数 | 50 件 | 最新 50 件に切り詰め |
+| コメント件数 | 50 件 | Rejected with error; never truncated |
 | 合計サイズ | 1 MiB | エラーで拒否 |
 
 ---

@@ -405,7 +405,7 @@ func BuildImportContract(record ImportSnapshot, requestedType string, large bool
 	if requestedType != "" {
 		typeNote = fmt.Sprintf("TYPE was set with --type %s; the issue did not decide it, so correct it if that is wrong.", requestedType)
 	}
-	comments := "Comments were not imported; import again with comments if the discussion matters."
+	comments := "Comments were not imported; this snapshot stays unchanged on repeated import."
 	if record.CommentsLoaded {
 		comments = fmt.Sprintf("Comments were imported with the snapshot (%d).", len(record.Comments))
 	}

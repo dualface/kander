@@ -32,7 +32,7 @@
   "tui.browse_github_issues": "GitHub Issue を参照",
   "tui.issues_overlay": "Issue オーバーレイ",
   "tui.issues_title": "GitHub Issue",
-  "tui.issues_hint": "Enter 詳細  / 検索  Tab 状態  l ラベル  i 取り込み  I コメント付き  s 引き継ぎ  r 更新  o ブラウザ  Esc 閉じる",
+  "tui.issues_hint": "Enter 詳細  / 検索  Tab 状態  l ラベル  i 取り込み・補完  s 引き継ぎ  r 更新  o ブラウザ  Esc 閉じる",
   "tui.issues_hint_bound": "Enter 詳細  / 検索  Tab 状態  l ラベル  g カードへ移動  r 更新  o ブラウザ  Esc 閉じる",
   "tui.issues_hint_none": "Enter 詳細  / 検索  Tab 状態  l ラベル  r 更新  o ブラウザ  Esc 閉じる",
   "tui.issues_loading": "Issue を読み込み中…",
@@ -99,8 +99,7 @@
   "tui.issues_import_no_card": "インポート済みカードが見つかりません",
   "tui.issues_import_created": "インポートしました: {{.V0}}",
   "tui.issues_import_existing": "インポート済み: {{.V0}}",
-  "tui.import_issue": "カードとしてインポート",
-  "tui.import_issue_with_comments": "コメント付きでカードとしてインポート",
+  "tui.import_issue": "コメント付きでインポートしカードを補完",
   "tui.jump_to_local_card": "紐づいたカードへ移動",
   "tui.issues_takeover_help": "選択中の Issue を引き継ぐ",
   "tui.issues_takeover_title": "Issue #{{.V0}} を引き継ぐ",
@@ -109,5 +108,11 @@
   "tui.issues_takeover_started": "引き継ぎセッションを開始しました: {{.V0}} ({{.V1}})、場所 {{.V2}}。エージェントは Issue を調査し、カード作成の前に確認します。",
   "tui.issues_takeover_failed": "引き継ぎセッションを開始できませんでした: {{.V0}}",
   "tui.issues_takeover_preview_failed": "引き継ぎ設定を解決できませんでした: {{.V0}}",
-  "tui.issues_takeover_unavailable": "このビルドでは引き継ぎセッションを開始できません。CLI を使用してください。"
+  "tui.issues_takeover_unavailable": "このビルドでは引き継ぎセッションを開始できません。CLI を使用してください。",
+  "tui.issues_refine_help": "backlog カードを補完（起動失敗時は再試行）",
+  "tui.issues_import_refining": "インポート / カード補完を起動中…",
+  "tui.issues_refine_failed": "カード {{.V0}} は保存済み。補完の起動に失敗：{{.V1}}。s で再試行。",
+  "tui.issues_refine_started": "カード {{.V0}}：{{.V1}} による補完を {{.V2}} で開始しました",
+  "tui.issues_hint_backlog": "Enter 詳細  / 検索  Tab 状態  l ラベル  g カードへ移動  s カード補完  r 更新  o ブラウザ  Esc 閉じる",
+  "launch.refinement_requires_container": "カード補完には端末コンテナ対応のランチャーが必要です。"
 }

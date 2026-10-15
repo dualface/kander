@@ -23,10 +23,17 @@ kander issue import NUMBER [--repo HOST/OWNER/REPO] [--comments]
 
 ### Interactive TUI Overlay (`g`)
 
-Inside the terminal kanban board, pressing `g` opens the GitHub Issues overlay:
-- `i` / `I`: Imports the selected issue (`I` includes comments).
-- `g`: Jumps directly to the linked local task card if already imported.
-- `s`: Starts an interactive triage takeover session for unbound issues, or starts [result reconciliation](github-issue-results.md) for completed cards.
+- `i` imports the selected issue with comments and immediately starts the configured agent to complete the new card. `I` is an alias; help shows one import action.
+- `g` jumps to the linked card.
+- `s` starts triage for an unbound issue, completes an existing backlog card, or starts [result reconciliation](github-issue-results.md) for a done card.
+
+Refinement reads the stored attachments and repository evidence, completes the
+contract, and leaves the card in backlog. It asks only for missing facts or genuine
+user decisions. It does not implement code or write to GitHub. A launch failure
+keeps the imported card; select it and press `s` to retry. Existing-card imports
+do not auto-launch, add comments, or refresh the snapshot. Repeated keys are
+suppressed while this TUI's import or launch is in flight, including after closing
+and reopening the overlay; separate TUI processes do not share a session lock.
 
 ---
 
@@ -69,7 +76,7 @@ To prevent prompt injection, privilege escalation, or corrupted board states:
 |---|---|---|
 | Issue Body | 512 KiB | Rejected with error hint |
 | Single Comment | 64 KiB | Rejected with error hint |
-| Comment Count | 50 comments | Truncated to 50 latest comments |
+| Comment Count | 50 comments | Rejected with error; never truncated |
 | Total Payload | 1 MiB | Rejected with error hint |
 
 ---
