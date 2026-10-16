@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.9.9 — 2026-10-16
 
 - Language reminder. Every one-line instruction Kander delivers to an agent now ends with one sentence, written in the agent language itself, to communicate in that language (for example `用 zh-CN 语言交流。` or `ja 言語でやり取りしてください。`). It covers start, resume, takeover, notify recovery, orchestrate, issue triage, refinement and result, and chat sessions, the `# kander-notify:` line of direct and dispatch delivery, and the reviewer instruction. The value is the card `LANGUAGE` (or `agent_language`), the same one the existing English language directive uses. Sentences exist for English, simplified and traditional Chinese, Japanese, Korean, Spanish, French, and German, matched by primary subtag (`en`, `zh`, `ja`, `ko`, `es`, `fr`, `de`). Chinese uses the traditional sentence for script `Hant`, or for region `TW`, `HK`, or `MO` without script `Hans`, and the simplified sentence otherwise. Other languages get the English sentence, and an invalid value gets none. The reminder rides only on the delivered line: task files and notify message files are unchanged.
+- Rules: option lists, report templates, and example questions that the rules give in English now fix only the meaning, numbering, and order. Agents present them, field labels included, in the `agent_language` (or the card `LANGUAGE`), keeping identifiers, command lines, paths, SHAs, card states, and fixed values such as `None` and `N/A` verbatim. This covers the task intake options, the completion report, the orchestration summary, and the orchestrator's integration and dismiss questions.
+- Run `kander doctor` after upgrading to update the rules.
 
 ## v0.9.8 — 2026-10-16
 
