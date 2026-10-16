@@ -2,6 +2,8 @@
 
 Source: moved from `KANDER-REPORTING-RULES.md` "Orchestration Summary".
 
+Write the summary, field labels included, in the `agent_language`; the block below fixes the fields and their order, not their English wording. Card states, orchestration states, `None`, `N/A`, paths, SHAs, and command lines stay verbatim.
+
 ```markdown
 # Kanban Orchestration Summary
 

@@ -4,6 +4,7 @@ This file constrains the tool and the language used with the user. It does not p
 
 - Read the current scope's configuration first, as described in `KANDER-AGENTS.md`.
 - Talk to the user, and write cards, records, and reports, in the `agent_language` from the configuration, or in the card's `LANGUAGE` when working on a task card.
+- English wording that a rule file gives for text shown to the user (option lists, report templates, example questions) fixes the meaning, numbering, and order, not the words. Present that text in the same language. Keep identifiers, command lines, paths, SHAs, card states, and fixed values such as `None` and `N/A` verbatim.
 - Read `KANDER-KANBAN-RULES.md` whenever kanban commands are used; no optional module needs to be enabled.
 - Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 - Tool boundary failures must be reported. Bypassing them with ordinary file operations, or by controlling the agent directly, is forbidden. The module switches never change arguments, data structures, path validation, or process isolation.

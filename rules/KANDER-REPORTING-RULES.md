@@ -13,6 +13,7 @@ Loaded only when `rules.reporting=true`. This file defines the reporting format 
 - Whoever ends the task reports; a session switch or takeover does not exempt this, and the orchestration summary does not replace the per-card report.
 - Verification records actual results only; failures, unexecuted steps, and environment blocks are never written as passed. Use the full 40-character SHA for the final commit. Write "all completed" for wrap-up only when every applicable step succeeded; otherwise describe each exception.
 - Unresolved issues list known defects, verification gaps, and follow-up tasks; count one root cause once. Only when `rules.review=true` or the user explicitly requested a full review this time, record review items by the categories in `KANDER-REVIEW-RULES.md`, without loading a disabled review module. For a security review timeout, attach the send time and the timeout time.
+- Write the report, field labels included, in the card's `LANGUAGE` (or the `agent_language`); the template below fixes the fields and their order, not their English wording. Keep card states, `None`, `N/A`, `Not executed`, paths, SHAs, and command lines verbatim.
 
 ```markdown
 # Kanban Task Completion Report
@@ -42,7 +43,7 @@ Loaded only when `rules.reporting=true`. This file defines the reporting format 
 - `Wrap-up` records, per group, the group worktree and branch cleanup, the untargeted `kander check` result, and every wrap-up completed on behalf with its reason; write "all completed" only when every applicable step succeeded.
 - On termination, the unfinished cards are reported one by one with the completion report template first; the orchestration summary then follows with `Orchestration state: terminated` and the termination decision under `Summary`.
 
-The template is the static snippet `snippets/report-orchestration.md`; its nine fields follow the rules above.
+The template is the static snippet `snippets/report-orchestration.md`; its nine fields follow the rules above. Write the summary, field labels included, in the `agent_language`; the template fixes the fields and their order, not their English wording, and card states, orchestration states, `None`, `N/A`, paths, SHAs, and command lines stay verbatim.
 
 ## Report Wording
 
