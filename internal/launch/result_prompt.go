@@ -6,20 +6,20 @@ import (
 	"github.com/dualface/kander/internal/process"
 )
 
-func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, error) {
+func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, string, error) {
 	work, err := issue.ReadResultWork(request.Root, request.Repository, request.Number, request.CardID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	lang, err := resolvePromptLanguage(work.Anchor().Spec, paths)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	preamble, err := rulesAndLanguage(paths, lang)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return render(paths, "result.md", map[string]any{
+	body, err := render(paths, "result.md", map[string]any{
 		"Target":     triageTarget(request.Repository, request.Number),
 		"CardID":     request.CardID,
 		"Preamble":   preamble,
@@ -31,4 +31,5 @@ func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		"Owner":      request.Repository.Owner,
 		"Repo":       request.Repository.Name,
 	})
+	return body, lang, err
 }

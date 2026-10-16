@@ -262,7 +262,7 @@ func TestBrokenInstalledTemplateFailsPrompt(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(paths.RulesDir, "templates", "prompt", "head.md"), []byte("{{.Missing}}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := headedTaskFileInstruction(paths, "start", "20260101-golden-task", "", 0, "/tmp/task.md"); err == nil {
+	if _, err := headedTaskFileInstruction(paths, "start", "20260101-golden-task", "", 0, "en", "/tmp/task.md"); err == nil {
 		t.Fatal("task-file instruction must fail on a broken head template")
 	}
 	if _, err := DispatchInstruction(config.InstallPaths{Mode: config.ModeGlobal, RulesDir: paths.RulesDir}, dispatchFor("fix")); err != nil {

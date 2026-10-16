@@ -97,7 +97,11 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt, err := headedTaskFileInstruction(paths, "resume", entry.TaskID, "", 0, taskFile)
+	language, err := resolvePromptLanguage(originalText, paths)
+	if err != nil {
+		return ResumeLaunch{}, err
+	}
+	prompt, err := headedTaskFileInstruction(paths, "resume", entry.TaskID, "", 0, language, taskFile)
 	if err != nil {
 		return ResumeLaunch{}, err
 	}

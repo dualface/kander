@@ -114,7 +114,11 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt, err := headedTaskFileInstruction(paths, "orchestrate", "", "", len(tasks), taskFile)
+	language, err := orchestrateLanguage(texts, paths)
+	if err != nil {
+		return result, err
+	}
+	prompt, err := headedTaskFileInstruction(paths, "orchestrate", "", "", len(tasks), language, taskFile)
 	if err != nil {
 		return result, err
 	}
@@ -207,13 +211,9 @@ func resolveOrchestrateTasks(loaded board.Board, references []string) ([]Orchest
 	return tasks, texts, nil
 }
 
-// orchestratorAgentPrompt lists the handed-over cards and the creator's plan
-// notes. The communication language is the cards' shared LANGUAGE, or the
-// configured agent language when the cards disagree or carry none.
-func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover string, paths config.InstallPaths) (string, error) {
-	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
-	}
+// orchestrateLanguage is the communication language of an orchestrator session: the cards'
+// shared LANGUAGE, or the configured agent language when the cards disagree or carry none.
+func orchestrateLanguage(texts []string, paths config.InstallPaths) (string, error) {
 	shared := strings.TrimSpace(metadataFrom(texts[0], board.FieldLanguage))
 	for _, text := range texts[1:] {
 		if strings.TrimSpace(metadataFrom(text, board.FieldLanguage)) != shared {
@@ -221,12 +221,21 @@ func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover s
 			break
 		}
 	}
-	lang := shared
-	if lang == "" {
-		var err error
-		if lang, err = resolvePromptLanguage("", paths); err != nil {
-			return "", err
-		}
+	if shared != "" {
+		return shared, nil
+	}
+	return resolvePromptLanguage("", paths)
+}
+
+// orchestratorAgentPrompt lists the handed-over cards and the creator's plan
+// notes in the language orchestrateLanguage resolves.
+func orchestratorAgentPrompt(tasks []OrchestrateTask, texts []string, handover string, paths config.InstallPaths) (string, error) {
+	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
+		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
+	}
+	lang, err := orchestrateLanguage(texts, paths)
+	if err != nil {
+		return "", err
 	}
 	var list strings.Builder
 	for _, task := range tasks {

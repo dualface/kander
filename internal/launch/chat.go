@@ -96,7 +96,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt, err := headedTaskFileInstruction(paths, "chat", "", "", 0, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, "chat", "", "", 0, cfg.AgentLanguage, taskFile)
 	if err != nil {
 		return result, err
 	}

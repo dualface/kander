@@ -38,6 +38,9 @@ func writeFake(t *testing.T, path, body string) {
 const fakeCodex = `#!/bin/sh
 printf '%s\n' "$@" > "$FAKE_CODEX_ARGV"
 instruction=$(cat)
+if [ -n "${FAKE_CODEX_INSTRUCTION:-}" ]; then
+    printf '%s' "$instruction" > "$FAKE_CODEX_INSTRUCTION"
+fi
 prompt=${instruction#*task file at }
 prompt=${prompt%%; read the complete file first*}
 contract=$(sed -n 's/^Before reviewing, read the complete review contract at \(.*\) and follow it exactly\.$/\1/p' "$prompt")

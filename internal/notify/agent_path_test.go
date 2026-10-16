@@ -22,7 +22,7 @@ func TestNotifyInstructionShowsAgentMessagePath(t *testing.T) {
 	if data, err := os.ReadFile(path); err != nil || string(data) != "hello\n" {
 		t.Fatalf("message file at native path: %q %v", data, err)
 	}
-	line := notifyInstruction(board.Entry{TaskID: "task-1"}, path, "KANDER-NOTIFY-ACK:x")
+	line := notifyInstruction(board.Entry{TaskID: "task-1"}, path, "KANDER-NOTIFY-ACK:x", "en")
 	if !strings.Contains(line, process.AgentPath(path)) {
 		t.Fatalf("delivery line misses the agent path: %s", line)
 	}

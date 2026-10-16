@@ -86,7 +86,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
-	body, err := triageAgentPrompt(request, paths)
+	body, language, err := triageAgentPrompt(request, paths)
 	if err != nil {
 		return result, err
 	}
@@ -107,7 +107,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	} else if request.RefineCard {
 		kind = "refine"
 	}
-	prompt, err := headedTaskFileInstruction(paths, kind, "", triageTarget(request.Repository, request.Number), 0, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, kind, "", triageTarget(request.Repository, request.Number), 0, language, taskFile)
 	if err != nil {
 		return result, err
 	}
@@ -186,8 +186,9 @@ func validateTriageEvidence(request issue.TriageLaunch) error {
 
 // triageAgentPrompt builds the takeover prompt from local paths and the
 // confirmed identity only. The remote title, body and comments never enter the
-// prompt; the agent reads them from the evidence files as untrusted data.
-func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, error) {
+// prompt; the agent reads them from the evidence files as untrusted data. It
+// also returns the communication language the delivered line reminds of.
+func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, string, error) {
 	if request.ResultSync {
 		return resultAgentPrompt(request, paths)
 	}
@@ -195,11 +196,11 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		return refinementAgentPrompt(request, paths)
 	}
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
-		return "", launchError("config.project_install_paths_are_missing_the_main_worktree")
+		return "", "", launchError("config.project_install_paths_are_missing_the_main_worktree")
 	}
 	lang, err := resolvePromptLanguage("", paths)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	// The import instruction belongs to the unbound branch only: a session
 	// started for a bound card continues that card and must never be told to
@@ -208,16 +209,16 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 	head := f.render("head.md", map[string]any{"Kind": "triage", "TaskID": "", "Target": triageTarget(request.Repository, request.Number), "Count": 0})
 	preamble, err := rulesAndLanguage(paths, lang)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	agents, err := promptAgents(paths)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if f.err != nil {
-		return "", f.err
+		return "", "", f.err
 	}
-	return render(paths, "triage.md", map[string]any{
+	body, err := render(paths, "triage.md", map[string]any{
 		"Head":         head,
 		"Preamble":     preamble,
 		"IssueRules":   rulesPath(paths, "KANDER-ISSUE-RULES.md"),
@@ -228,6 +229,7 @@ func triageAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (s
 		"Number":       request.Number,
 		"Agents":       agents,
 	})
+	return body, lang, err
 }
 
 // triageTarget renders the confirmed identity of one issue from the validated

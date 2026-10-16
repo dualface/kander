@@ -112,7 +112,11 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 			_ = removeTaskFile(taskFile)
 		}
 	}()
-	prompt, err := headedTaskFileInstruction(paths, "start", entry.TaskID, "", 0, taskFile)
+	language, err := resolvePromptLanguage(original, paths)
+	if err != nil {
+		return result, err
+	}
+	prompt, err := headedTaskFileInstruction(paths, "start", entry.TaskID, "", 0, language, taskFile)
 	if err != nil {
 		return result, err
 	}

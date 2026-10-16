@@ -197,7 +197,11 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			return reconcileDispatch(root, task, id, err)
 		}
 		marker := ackMarker()
-		instruction := notifyInstruction(s.Entry, path, marker)
+		language, err := launch.PromptLanguage(paths, s.Text)
+		if err != nil {
+			return reconcileDispatch(root, task, id, err)
+		}
+		instruction := notifyInstruction(s.Entry, path, marker, language)
 		if err = sendDispatch(ctx, target, instruction); err != nil {
 			return reconcileDispatch(root, task, id, err)
 		}

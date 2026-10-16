@@ -182,7 +182,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		fail(readPromptErr)
 		return exitCode
 	}
-	ctx.instruction, err = process.TaskFileInstruction(paths.RulesDir, "Perform the "+ctx.role+" review.", promptFile)
+	ctx.instruction, err = reviewInstruction(paths.RulesDir, ctx.role, promptFile, ctx.reportLanguage)
 	if err != nil {
 		fail(err)
 		return exitCode
@@ -405,4 +405,14 @@ func signalExitCode(sig os.Signal) int {
 		return 128 + int(s)
 	}
 	return 130
+}
+
+// reviewInstruction renders the one-line instruction handed to the reviewer (argv or stdin). It
+// ends with the reminder to write in the report language; the bootstrap task file never carries it.
+func reviewInstruction(rulesDir, role, promptFile, reportLanguage string) (string, error) {
+	line, err := process.TaskFileInstruction(rulesDir, "Perform the "+role+" review.", promptFile)
+	if err != nil {
+		return "", err
+	}
+	return config.WithLanguageReminder(line, reportLanguage), nil
 }

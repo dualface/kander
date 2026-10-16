@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Language reminder. Every one-line instruction Kander delivers to an agent now ends with one sentence, written in the agent language itself, to communicate in that language (for example `用 zh-CN 语言交流。` or `ja 言語でやり取りしてください。`). It covers start, resume, takeover, notify recovery, orchestrate, issue triage, refinement and result, and chat sessions, the `# kander-notify:` line of direct and dispatch delivery, and the reviewer instruction. The value is the card `LANGUAGE` (or `agent_language`), the same one the existing English language directive uses. Sentences exist for `en`, `zh-CN`, `zh-TW`, `ja`, `ko`, `es`, `fr`, and `de`, matched by primary subtag; other languages get the English sentence, and an invalid value gets none. The reminder rides only on the delivered line: task files and notify message files are unchanged.
+
 ## v0.9.8 — 2026-10-16
 
 - Fix (TUI): the Options "Execution and models" page separates the extended launch timeouts switch from the launcher above it by a blank line, and its description is shortened to "Raise launch timeouts to 120s".

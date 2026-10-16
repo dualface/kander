@@ -377,6 +377,7 @@ func TestNotifyDirectPayloadIncludesCardLanguage(t *testing.T) {
 		if !strings.Contains(string(payload), want) {
 			t.Fatalf("direct payload missing card language directive: %s", payload)
 		}
+		assertPastedLanguageReminder(t, root, string(payload), "ja")
 	})
 
 	t.Run("fallback to agent_language", func(t *testing.T) {
@@ -402,7 +403,25 @@ func TestNotifyDirectPayloadIncludesCardLanguage(t *testing.T) {
 		if !strings.Contains(string(payload), `in "zh-CN"`) {
 			t.Fatalf("direct payload missing config language fallback: %s", payload)
 		}
+		assertPastedLanguageReminder(t, root, string(payload), "zh-CN")
 	})
+}
+
+// assertPastedLanguageReminder checks that the line pasted into the pane ends its kander-notify
+// instruction with the reminder for language, and that the message file does not carry it.
+func assertPastedLanguageReminder(t *testing.T, root, payload, language string) {
+	t.Helper()
+	reminder := config.LanguageReminder(language)
+	pasted, err := os.ReadFile(filepath.Join(root, "herdr.log.prompt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(string(pasted)), ". "+reminder) {
+		t.Fatalf("pasted line lacks the %q reminder: %s", language, pasted)
+	}
+	if strings.Contains(payload, reminder) {
+		t.Fatalf("message file carries the reminder: %s", payload)
+	}
 }
 
 func TestNotifyAmbiguousLookupDegradesToResumeReason(t *testing.T) {

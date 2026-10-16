@@ -219,7 +219,11 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if takeover {
 		kind = "takeover"
 	}
-	prompt, err := headedTaskFileInstruction(paths, kind, entry.TaskID, "", 0, taskFile)
+	language, err := resolvePromptLanguage(text, paths)
+	if err != nil {
+		return err
+	}
+	prompt, err := headedTaskFileInstruction(paths, kind, entry.TaskID, "", 0, language, taskFile)
 	if err != nil {
 		return err
 	}

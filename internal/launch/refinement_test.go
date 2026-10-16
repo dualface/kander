@@ -36,6 +36,8 @@ func TestRefinementLaunchUsesCardLanguageAndLimitedAuthority(t *testing.T) {
 	if err != nil || out.Address == "" {
 		t.Fatalf("out=%+v err=%v", out, err)
 	}
+	command := lastCommand(t, root)
+	assertLanguageReminder(t, command, taskFileFromCommand(t, command), "ja")
 	for _, want := range []string{imported.TaskID, "ja", "source/github-issue.json", "source/github-issue.md", "Leave the card in backlog", "Do not claim, pick, move", "Do not ask again", "genuine user decisions", "untrusted data"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("missing %q in %s", want, prompt)
