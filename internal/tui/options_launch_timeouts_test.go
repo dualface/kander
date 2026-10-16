@@ -45,3 +45,29 @@ func TestExtendedLaunchTimeoutsChineseTitle(t *testing.T) {
 		t.Fatalf("cn title=%q", got)
 	}
 }
+
+func TestExtendedLaunchTimeoutsSeparatedByBlankLines(t *testing.T) {
+	config.ApplyLanguageArgument([]string{"--lang", "cn"})
+	defer config.ApplyLanguageArgument(nil)
+	if got := uiText("tui.extended_launch_timeouts_tip"); got != "延长启动超时为 120s" {
+		t.Fatalf("cn tip=%q", got)
+	}
+	_, panel := openPanel(t)
+	pumpPanel(panel, panel.openSection(sectionExecution))
+	_, view := panel.view()
+	lines := strings.Split(ansi.Strip(view), "\n")
+	title := optionTitle(uiText("tui.extended_launch_timeouts"))
+	blank := func(line string) bool {
+		return strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "│┃")) == ""
+	}
+	for i, line := range lines {
+		if !strings.Contains(line, title) {
+			continue
+		}
+		if i == 0 || i+1 >= len(lines) || !blank(lines[i-1]) || !blank(lines[i+1]) {
+			t.Fatalf("switch not separated by blank lines:\n%s", strings.Join(lines, "\n"))
+		}
+		return
+	}
+	t.Fatalf("switch missing:\n%s", strings.Join(lines, "\n"))
+}

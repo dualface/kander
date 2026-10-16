@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.8 — 2026-10-16
+
+- Fix (TUI): the Options "Execution and models" page separates the extended launch timeouts switch from the launcher above it by a blank line, and its description is shortened to "Raise launch timeouts to 120s".
+
 ## v0.9.7 — 2026-10-16
 
 - Issue results for split work. An issue's anchor card plus every sibling card whose `DISCUSSION` holds a `SOURCE_ISSUE` line naming it now form one work set. `kander issue result` takes only the anchor (a sibling ID is rejected with the anchor's ID), and `start`, `inspect`, `apply`, and `decide` fail while any member is incomplete and name the pending cards. A member is complete in `done/` or archived as completed; a sibling in `trash/` or archived with another result is excluded and listed separately. `inspect` lists every member and the excluded siblings, and the proposal's `outcomes` cover every member's acceptance checkboxes in order. A single-card work set keeps its previous result identity, so existing records stay valid.

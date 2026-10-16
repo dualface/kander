@@ -832,7 +832,7 @@
   "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/arrows | wbe WBE 0^$ {}% f/t iw aw i\" | v/V o y yy Y | wheel | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
   "tui.how_to_launch_the_agent_when_claiming_a_task": "how to launch the Agent when claiming a task",
   "tui.extended_launch_timeouts": "Extended launch timeouts",
-  "tui.extended_launch_timeouts_tip": "wait up to 120s for pane readiness, session discovery, and prompt delivery",
+  "tui.extended_launch_timeouts_tip": "Raise launch timeouts to 120s",
   "tui.installing_herdr": "Installing herdr...",
   "tui.interface": "Interface",
   "tui.kander_options": "Kander options",

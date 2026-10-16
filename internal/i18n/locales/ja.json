@@ -832,7 +832,7 @@
   "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/矢印 | wbe WBE 0^$ {}% f/t iw aw i\" | v/V o y yy Y | ホイール | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
   "tui.how_to_launch_the_agent_when_claiming_a_task": "タスク取得時の Agent 起動方法",
   "tui.extended_launch_timeouts": "起動タイムアウトを延長",
-  "tui.extended_launch_timeouts_tip": "pane の準備、セッション検出、prompt 送信を最大 120s 待つ",
+  "tui.extended_launch_timeouts_tip": "起動タイムアウトを 120s に延長",
   "tui.installing_herdr": "herdr をインストール中...",
   "tui.interface": "インターフェース",
   "tui.kander_options": "Kander オプション",

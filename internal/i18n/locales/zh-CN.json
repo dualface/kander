@@ -832,7 +832,7 @@
   "tui.hjkl_arrows_move_cursor_wheel_scroll_ctrl_d_u": "hjkl/方向键 | wbe WBE 0^$ {}% f/t iw aw i\" | v/V o y yy Y | 滚轮 | Ctrl-d/u/f/b | gg/G | / n N | q/Esc",
   "tui.how_to_launch_the_agent_when_claiming_a_task": "领取任务时如何拉起 Agent",
   "tui.extended_launch_timeouts": "延长启动超时",
-  "tui.extended_launch_timeouts_tip": "pane 就绪、会话发现与 prompt 投递最多等待 120s",
+  "tui.extended_launch_timeouts_tip": "延长启动超时为 120s",
   "tui.installing_herdr": "正在安装 herdr...",
   "tui.interface": "界面",
   "tui.kander_options": "Kander 选项",
