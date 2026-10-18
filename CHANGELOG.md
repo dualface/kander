@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.10 — 2026-10-19
+
+- Rules (review): the PMQA reviewer prompt now yields one report: one requirement table, one behavior table, and one merged findings list, with an incremental layout for re-reviews (prior finding statuses by ID first, then sections limited to the fix range). A bug fix without a reproducing automated test is a medium finding (the bug-fix review profile takes precedence over project-rule exceptions), and a test a project rule requires is a recommend item. A test counts as evidence only when it exercises the production path and would fail if the behavior were reverted; false coverage is a non-mechanical medium finding that needs re-review. Reviewers look for an existing equivalent before accepting a new function, type, or abstraction, report changes that bypass an established layer, and take architecture from architecture docs, decision records, and `AGENTS.md` / `CLAUDE.md`. An obvious complexity regression with a realistic trigger is reported as a non-blocking suggestion.
+- Tests: the full test suite passes on Windows.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.9 — 2026-10-16
 
 - Language reminder. Every one-line instruction Kander delivers to an agent now ends with one sentence, written in the agent language itself, to communicate in that language (for example `用 zh-CN 语言交流。` or `ja 言語でやり取りしてください。`). It covers start, resume, takeover, notify recovery, orchestrate, issue triage, refinement and result, and chat sessions, the `# kander-notify:` line of direct and dispatch delivery, and the reviewer instruction. The value is the card `LANGUAGE` (or `agent_language`), the same one the existing English language directive uses. Sentences exist for English, simplified and traditional Chinese, Japanese, Korean, Spanish, French, and German, matched by primary subtag (`en`, `zh`, `ja`, `ko`, `es`, `fr`, `de`). Chinese uses the traditional sentence for script `Hant`, or for region `TW`, `HK`, or `MO` without script `Hans`, and the simplified sentence otherwise. Other languages get the English sentence, and an invalid value gets none. The reminder rides only on the delivered line: task files and notify message files are unchanged.
