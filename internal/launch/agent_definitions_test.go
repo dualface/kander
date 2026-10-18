@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -47,6 +48,9 @@ func TestCustomDialectArguments(t *testing.T) {
 }
 
 func TestAgentTemplatePrecedenceAndSessions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake agents are POSIX shell scripts")
+	}
 	_, _, bin := setupBoard(t)
 	cfg := envConfig("custom", "tmux", nil)
 	cfg.Agents = map[string]config.AgentDefinition{"custom": {Path: filepath.Join(bin, "claude"), Dialect: "claude", Args: &config.AgentArgs{Start: []string{"start", "--model", "{model}", "--id", "{session}"}, Resume: []string{"again", "{session}"}}, Session: &config.AgentSessionDefinition{Mode: "generated"}}}
@@ -82,6 +86,9 @@ func TestAgentTemplatePrecedenceAndSessions(t *testing.T) {
 }
 
 func TestAllocatedAgentSession(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake agents are POSIX shell scripts")
+	}
 	_, _, bin := setupBoard(t)
 	allocator := filepath.Join(bin, "allocator")
 	for _, test := range []struct {
@@ -103,6 +110,9 @@ func TestAllocatedAgentSession(t *testing.T) {
 }
 
 func TestTemplateStartAppendsPromptAndUsesConfiguredProgram(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
 	root, _, bin := setupBoard(t)
 	cfg := envConfig("custom", "tmux", nil)
 	cfg.Agents = map[string]config.AgentDefinition{"custom": {Path: filepath.Join(bin, "claude"), ProcessName: "node", Args: &config.AgentArgs{Start: []string{"--model", "{model}", "--session-id", "{session}"}, Resume: []string{"--resume", "{session}"}}, Session: &config.AgentSessionDefinition{Mode: "generated"}}}

@@ -80,6 +80,9 @@ func TestStatusSanitizesHostileProbeOutput(t *testing.T) {
 }
 
 func TestStatusSanitizesExecutablePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file names cannot contain control characters")
+	}
 	directory := filepath.Join(t.TempDir(), "bin\x1b[2J")
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

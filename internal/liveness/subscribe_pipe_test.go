@@ -27,6 +27,21 @@ func fullSubscriptionPipe(t *testing.T) (*os.File, *os.File) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("pipe did not block: %v", err)
 	}
+	// A canceled Windows pipe write discards its bytes, so top the buffer up
+	// until even a single byte blocks.
+	for _, size := range []int{4096, 1} {
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+			_, err = adapter.WriteContext(ctx, bytes.Repeat([]byte("x"), size))
+			cancel()
+			if errors.Is(err, context.DeadlineExceeded) {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	if err := cleanup(); err != nil {
 		t.Fatal(err)
 	}

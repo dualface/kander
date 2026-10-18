@@ -168,6 +168,9 @@ func TestDispatchWrapUpPublicAuthorizationReconcilesAndObserves(t *testing.T) {
 }
 
 func TestDispatchEvidenceFlagsAndRejectedFixHaveNoIntent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
 	root, _, _ := setupBoard(t)
 	task, path := makeTodo(t, root, "missing-fix")
 	startThenReview(t, root, "claude", task, path)
@@ -198,6 +201,9 @@ func TestDispatchEvidenceFlagsAndRejectedFixHaveNoIntent(t *testing.T) {
 }
 
 func TestDispatchExplicitNewIDPreparesAndReusesIntent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
 	root, _, _ := setupBoard(t)
 	task, path := makeTodo(t, root, "explicit-dispatch")
 	startThenReview(t, root, "claude", task, path)

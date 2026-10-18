@@ -25,7 +25,8 @@ func TestPiDirectoryTargets(t *testing.T) {
 		{"tilde", "~", home},
 		{"tilde-prefix", "~/.config/pi", filepath.Join(home, ".config", "pi")},
 		{"relative", "custom/pi", filepath.Join(cwd, "custom", "pi")},
-		{"spaces", " pi config ", filepath.Join(cwd, " pi config ")},
+		// Windows drops trailing spaces when it makes a path absolute.
+		{"spaces", " pi config ", mustAbs(t, filepath.Join(cwd, " pi config "))},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("PI_CODING_AGENT_DIR", tt.value)
@@ -380,4 +381,13 @@ func TestRelocatedConfigDirCoverageAndCleanup(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(home, ".codex", "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("default target touched: %v", err)
 	}
+}
+
+func mustAbs(t *testing.T, path string) string {
+	t.Helper()
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return abs
 }

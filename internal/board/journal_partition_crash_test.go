@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestJournalPartitionKillRestart(t *testing.T) {
 			root := tempBoard(t)
 			s := transactionCard(t, root, "partition-crash", false)
 			before := s.Text
-			r := OperationRecord{Schema: 1, ID: "crash-partition", Phase: "prepared", Revisions: map[string]uint64{s.Entry.TaskID: s.Revision + 1}, Files: []FileChange{{Path: "backlog/" + s.Entry.TaskID + "/spec.md", Before: &before, After: before + "\ncrash recovery\n"}}}
+			r := OperationRecord{Schema: 1, ID: "crash-partition", Phase: "prepared", Revisions: map[string]uint64{s.Entry.TaskID: s.Revision + 1}, Files: []FileChange{{Path: filepath.Join("backlog", s.Entry.TaskID, "spec.md"), Before: &before, After: before + "\ncrash recovery\n"}}}
 			if err := writeOperation(root, control(root, "operations", "pending", r.ID+".json"), r, false); err != nil {
 				t.Fatal(err)
 			}

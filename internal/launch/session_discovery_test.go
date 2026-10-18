@@ -61,7 +61,7 @@ func TestParseSessionListKimiWorkDirMatch(t *testing.T) {
 	cwd := t.TempDir()
 	disc := kimiDiscovery(t)
 	out := `[{"id":"k_other","workDir":"/elsewhere","lastPrompt":"task","updatedAt":1},` +
-		`{"id":"k_mine","workDir":"` + cwd + `","lastPrompt":"执行任务 task; full instructions are in the UTF-8 task file","updatedAt":2},` +
+		`{"id":"k_mine","workDir":"` + jsonPath(cwd) + `","lastPrompt":"执行任务 task; full instructions are in the UTF-8 task file","updatedAt":2},` +
 		`{"id":"k_missing","lastPrompt":"no directory","updatedAt":3}]`
 	got, err := parseSessionList(disc, out, cwd, "task")
 	if err != nil {
@@ -91,7 +91,7 @@ func TestParseSessionListOpenCodeDirectoryMatch(t *testing.T) {
 	cwd := t.TempDir()
 	disc := opencodeDiscovery(t)
 	out := `[{"id":"ses_other","directory":"/elsewhere","title":"x"},` +
-		`{"id":"ses_mine","directory":"` + cwd + `","title":"reply"},` +
+		`{"id":"ses_mine","directory":"` + jsonPath(cwd) + `","title":"reply"},` +
 		`{"id":"ses_missing","title":"no directory"}]`
 	got, err := parseSessionList(disc, out, cwd, "task")
 	if err != nil {
@@ -120,7 +120,7 @@ func TestDevinSessionIsDiscoveredAfterStart(t *testing.T) {
 func TestParseSessionList(t *testing.T) {
 	cwd := t.TempDir()
 	disc := devinDiscovery(t)
-	got, err := parseSessionList(disc, `[{"id":"session-2","working_directory":"`+cwd+`"},{"id":"session-1","working_directory":"`+cwd+`"},{"id":"session-2","working_directory":"`+cwd+`"}]`, cwd, "task")
+	got, err := parseSessionList(disc, `[{"id":"session-2","working_directory":"`+jsonPath(cwd)+`"},{"id":"session-1","working_directory":"`+jsonPath(cwd)+`"},{"id":"session-2","working_directory":"`+jsonPath(cwd)+`"}]`, cwd, "task")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,8 +128,8 @@ func TestParseSessionList(t *testing.T) {
 		t.Fatalf("got=%q want=%q", got, want)
 	}
 	for _, data := range []string{
-		`not-json`, `null`, `[{"title":"missing","working_directory":"` + cwd + `"}]`,
-		`[{"id":"bad id","working_directory":"` + cwd + `"}]`, `[{"id":42,"working_directory":"` + cwd + `"}]`,
+		`not-json`, `null`, `[{"title":"missing","working_directory":"` + jsonPath(cwd) + `"}]`,
+		`[{"id":"bad id","working_directory":"` + jsonPath(cwd) + `"}]`, `[{"id":42,"working_directory":"` + jsonPath(cwd) + `"}]`,
 	} {
 		if _, err := parseSessionList(disc, data, cwd, "task"); err == nil {
 			t.Fatalf("accepted %q", data)
@@ -141,7 +141,7 @@ func TestParseSessionListMatchesProjectDirectory(t *testing.T) {
 	cwd := t.TempDir()
 	disc := devinDiscovery(t)
 	out := `[{"id":"other-project","working_directory":"/elsewhere"},` +
-		`{"id":"mine","working_directory":"` + cwd + `"},` +
+		`{"id":"mine","working_directory":"` + jsonPath(cwd) + `"},` +
 		`{"id":"missing-dir"}]`
 	got, err := parseSessionList(disc, out, cwd, "task")
 	if err != nil {
@@ -159,7 +159,7 @@ func TestParseSessionListMatchesSymlinkedDirectory(t *testing.T) {
 		t.Skip("symlink unavailable")
 	}
 	disc := devinDiscovery(t)
-	got, err := parseSessionList(disc, `[{"id":"mine","working_directory":"`+real+`"}]`, link, "task")
+	got, err := parseSessionList(disc, `[{"id":"mine","working_directory":"`+jsonPath(real)+`"}]`, link, "task")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,4 +394,9 @@ func TestStartPostLaunchDiscoveryFailureRollsBack(t *testing.T) {
 	if _, stat := os.Stat(path); stat != nil {
 		t.Fatal("card must roll back to todo")
 	}
+}
+
+// jsonPath escapes a native path for embedding in a JSON string literal.
+func jsonPath(p string) string {
+	return strings.ReplaceAll(p, `\`, `\\`)
 }

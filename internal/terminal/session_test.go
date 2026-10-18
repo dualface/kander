@@ -230,25 +230,25 @@ func TestSessionRowLookupOutcomes(t *testing.T) {
 			address: Address{Container: "w1:t1", Pane: "w1:p1"},
 		},
 		"path match": {
-			list:    `{"result":{"panes":[` + paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+good+`"}`) + `]}}`,
+			list:    `{"result":{"panes":[` + paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+jsonPath(good)+`"}`) + `]}}`,
 			address: Address{Container: "w1:t2", Pane: "w1:p2"},
 		},
 		"cross-workspace path match": {
-			list:    `{"result":{"panes":[` + paneRow("w9:t9", "w9:p9", "pi", `{"kind":"path","value":"`+good+`"}`) + `]}}`,
+			list:    `{"result":{"panes":[` + paneRow("w9:t9", "w9:p9", "pi", `{"kind":"path","value":"`+jsonPath(good)+`"}`) + `]}}`,
 			address: Address{Container: "w9:t9", Pane: "w9:p9"},
 		},
 		"decided zero match": {
 			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "pi", `{"kind":"id","value":"s2"}`) + `,` +
-				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+other+`"}`) + `]}}`,
+				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+jsonPath(other)+`"}`) + `]}}`,
 			matches: 0,
 		},
 		"decided ambiguous": {
 			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "pi", `{"kind":"id","value":"s1"}`) + `,` +
-				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+good+`"}`) + `]}}`,
+				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+jsonPath(good)+`"}`) + `]}}`,
 			matches: 2,
 		},
 		"unrelated agent never blocks": {
-			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "claude", `{"kind":"path","value":"`+missing+`"}`) + `,` +
+			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "claude", `{"kind":"path","value":"`+jsonPath(missing)+`"}`) + `,` +
 				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"id","value":"s1"}`) + `]}}`,
 			address: Address{Container: "w1:t2", Pane: "w1:p2"},
 		},
@@ -258,11 +258,11 @@ func TestSessionRowLookupOutcomes(t *testing.T) {
 		},
 		"match plus undecidable is incomplete": {
 			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "pi", `{"kind":"id","value":"s1"}`) + `,` +
-				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+missing+`"}`) + `]}}`,
+				paneRow("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+jsonPath(missing)+`"}`) + `]}}`,
 			err: true,
 		},
 		"undecidable path is incomplete": {
-			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "pi", `{"kind":"path","value":"`+missing+`"}`) + `]}}`,
+			list: `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "pi", `{"kind":"path","value":"`+jsonPath(missing)+`"}`) + `]}}`,
 			err:  true,
 		},
 		"unknown kind is incomplete": {
@@ -270,7 +270,7 @@ func TestSessionRowLookupOutcomes(t *testing.T) {
 			err:  true,
 		},
 		"other agent path never resolves": {
-			list:    `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "codex", `{"kind":"path","value":"`+good+`"}`) + `]}}`,
+			list:    `{"result":{"panes":[` + paneRow("w1:t1", "w1:p1", "codex", `{"kind":"path","value":"`+jsonPath(good)+`"}`) + `]}}`,
 			matches: 0,
 		},
 	} {
@@ -299,4 +299,9 @@ func TestSessionRowLookupOutcomes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// jsonPath escapes a native path for embedding in a JSON string literal.
+func jsonPath(p string) string {
+	return strings.ReplaceAll(p, `\`, `\\`)
 }

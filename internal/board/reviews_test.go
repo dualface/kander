@@ -220,7 +220,7 @@ func TestReviewBinaryOriginalsSurviveJournal(t *testing.T) {
 	found := false
 	for _, record := range records {
 		for _, f := range record.Files {
-			if strings.HasSuffix(f.Path, "originals/output.raw") && f.After == string(raw) {
+			if strings.HasSuffix(filepath.ToSlash(f.Path), "originals/output.raw") && f.After == string(raw) {
 				found = true
 			}
 		}

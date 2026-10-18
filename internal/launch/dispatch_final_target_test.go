@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,9 @@ import (
 )
 
 func TestPrepareBoundDispatchUsesAdvancedClosedFinalTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tmux fakes are POSIX")
+	}
 	root, _, _ := setupBoard(t)
 	task, path := makeTodo(t, root, "final-target")
 	startThenReview(t, root, "claude", task, path)

@@ -371,7 +371,11 @@ func TestGlobalAgentPathOverrideDoesNotTouchOverlay(t *testing.T) {
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
 		t.Fatal(err)
 	}
-	config.OverlaySet(session.overlayRaw, "/bin/true", "agents", "codex", "path")
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.OverlaySet(session.overlayRaw, executable, "agents", "codex", "path")
 	session.OverlayDirty = true
 	if !session.FieldOverridden("agents", "codex", "path") {
 		t.Fatal("overlay path missing")
