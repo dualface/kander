@@ -38,7 +38,11 @@ func TestPiExtensionLogicUnderNode(t *testing.T) {
 }
 
 const nodeHarness = `import * as assert from "node:assert/strict";
+import * as path from "node:path";
 import * as ext from "./kander-rules.ts";
+
+// The extension joins paths natively, so expected paths use path.join too.
+const j = (...parts) => path.join(...parts);
 
 // Context-file gate: only a loaded file mentioning the entry triggers injection.
 assert.equal(ext.contextReferencesKander([{ path: "/x/AGENTS.md", content: "read KANDER-AGENTS.md first" }]), true);
@@ -48,27 +52,27 @@ assert.equal(ext.contextReferencesKander(undefined), false);
 
 // Rules root resolution: cwd project rules win, then the main worktree via the
 // git common dir, then the global root; nothing found resolves to null.
-const files = new Set(["/proj/.kander/rules/KANDER-AGENTS.md", "/main/.kander/rules/KANDER-AGENTS.md", "/home/.agents/kander/KANDER-AGENTS.md"]);
+const files = new Set([j("/proj/.kander/rules/KANDER-AGENTS.md"), j("/main/.kander/rules/KANDER-AGENTS.md"), j("/home/.agents/kander/KANDER-AGENTS.md")]);
 const deps = {
   exists: (p) => files.has(p),
   homedir: () => "/home",
   gitCommonDir: (cwd) => cwd === "/proj" || cwd === "/main/wt" ? "/main/.git" : null,
 };
-assert.deepEqual(ext.resolveRulesRoot("/proj", deps), { root: "/proj/.kander/rules", scope: "project" });
-assert.deepEqual(ext.resolveRulesRoot("/main/wt", deps), { root: "/main/.kander/rules", scope: "project" });
-files.delete("/proj/.kander/rules/KANDER-AGENTS.md");
-files.delete("/main/.kander/rules/KANDER-AGENTS.md");
-assert.deepEqual(ext.resolveRulesRoot("/elsewhere", deps), { root: "/home/.agents/kander", scope: "global" });
-files.delete("/home/.agents/kander/KANDER-AGENTS.md");
+assert.deepEqual(ext.resolveRulesRoot("/proj", deps), { root: j("/proj/.kander/rules"), scope: "project" });
+assert.deepEqual(ext.resolveRulesRoot("/main/wt", deps), { root: j("/main/.kander/rules"), scope: "project" });
+files.delete(j("/proj/.kander/rules/KANDER-AGENTS.md"));
+files.delete(j("/main/.kander/rules/KANDER-AGENTS.md"));
+assert.deepEqual(ext.resolveRulesRoot("/elsewhere", deps), { root: j("/home/.agents/kander"), scope: "global" });
+files.delete(j("/home/.agents/kander/KANDER-AGENTS.md"));
 assert.equal(ext.resolveRulesRoot("/elsewhere", deps), null);
 
 // Injection block: every rule file, the absolute paths, the rules root, and
 // the still-required config probe are named; a missing file yields no block.
-const read = (p) => ({ "/r/KANDER-AGENTS.md": "# A", "/r/KANDER-BASE-RULES.md": "# B", "/r/KANDER-LOADING-RULES.md": "# L" })[p] ?? (() => { throw new Error("missing"); })();
+const read = (p) => ({ [j("/r/KANDER-AGENTS.md")]: "# A", [j("/r/KANDER-BASE-RULES.md")]: "# B", [j("/r/KANDER-LOADING-RULES.md")]: "# L" })[p] ?? (() => { throw new Error("missing"); })();
 const block = ext.buildInjection("/r", { read });
-assert.ok(block.includes("/r/KANDER-AGENTS.md"));
-assert.ok(block.includes("/r/KANDER-BASE-RULES.md"));
-assert.ok(block.includes("/r/KANDER-LOADING-RULES.md"));
+assert.ok(block.includes(j("/r/KANDER-AGENTS.md")));
+assert.ok(block.includes(j("/r/KANDER-BASE-RULES.md")));
+assert.ok(block.includes(j("/r/KANDER-LOADING-RULES.md")));
 assert.ok(block.includes("Rules root: /r"));
 assert.ok(block.includes("kander config --json"));
 assert.equal(ext.buildInjection("/r", { read: () => { throw new Error("x"); } }), null);

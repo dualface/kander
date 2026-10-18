@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/rules"
 )
 
@@ -21,7 +22,8 @@ func TestCommandUsageReadsInstalledContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := commandUsage(dir, "probe", nil)
-	want := "kander probe --a\nkander probe sub --b\nContract: " + dir + "/snippets/commands/probe.md\n" + CommandReadSentence(dir)
+	root := process.AgentPath(dir)
+	want := "kander probe --a\nkander probe sub --b\nContract: " + root + "/snippets/commands/probe.md\n" + CommandReadSentence(root)
 	if got != want {
 		t.Fatalf("usage:\n%s\nwant:\n%s", got, want)
 	}
@@ -75,7 +77,7 @@ func TestCommandUsageWarnsWhenInstalledContractIsMissing(t *testing.T) {
 	var warn bytes.Buffer
 	dir := t.TempDir()
 	got := commandUsage(dir, "move", &warn)
-	if !strings.Contains(got, "kander move <task-id>") || !strings.Contains(got, "Contract: "+dir+"/snippets/commands/move.md") {
+	if !strings.Contains(got, "kander move <task-id>") || !strings.Contains(got, "Contract: "+process.AgentPath(dir)+"/snippets/commands/move.md") {
 		t.Fatalf("usage:\n%s", got)
 	}
 	if !strings.Contains(warn.String(), "kander doctor") || !strings.Contains(warn.String(), "snippets/commands/move.md") {

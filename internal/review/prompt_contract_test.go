@@ -42,7 +42,8 @@ func TestBuildPromptLastMessageOutputContract(t *testing.T) {
 	evidence := "/runtime/evidence.txt"
 	task := "Authoritative task goal: fix the report."
 	codex := mustBuildPrompt(t, promptContractContext("codex"), evidence, task)
-	if !strings.Contains(codex, "/runtime/review-contract.md") || strings.Contains(codex, mustLastMessageContract(t)) {
+	contractFile := filepath.Join(filepath.Dir(evidence), config.ReviewContractFilename)
+	if !strings.Contains(codex, contractFile) || strings.Contains(codex, mustLastMessageContract(t)) {
 		t.Fatal("bootstrap must point at the contract without inlining it")
 	}
 	codexContract := mustBuildContract(t, promptContractContext("codex"))
