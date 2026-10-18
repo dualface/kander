@@ -356,7 +356,7 @@ func TestEmptyReviewedKeepsFullReview(t *testing.T) {
 	if !strings.Contains(prompt, "Review the complete code state") {
 		t.Fatal(prompt)
 	}
-	if strings.Contains(prompt, "incremental re-review") {
+	if strings.Contains(prompt, "This is an incremental re-review by the same role") {
 		t.Fatal(prompt)
 	}
 	if !strings.Contains(prompt, "Additional caller-supplied review context: None provided.") {
