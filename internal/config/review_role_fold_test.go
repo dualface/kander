@@ -134,9 +134,9 @@ func TestConflictingConstituentReviewersAndModelsUseSourceOrder(t *testing.T) {
 			"CSA": "cursor", "Hacker": "grok",
 		},
 		"models": map[string]any{"review_roles": map[string]any{
-			"PM": map[string]any{"model": "pm-model", "large_agent": "codex"},
-			"QA": map[string]any{"model": "qa-model", "large_agent": "claude"},
-			"CSA": map[string]any{"effort": "high"},
+			"PM":     map[string]any{"model": "pm-model", "large_agent": "codex"},
+			"QA":     map[string]any{"model": "qa-model", "large_agent": "claude"},
+			"CSA":    map[string]any{"effort": "high"},
 			"Hacker": map[string]any{"effort": "low"},
 		}},
 	}))

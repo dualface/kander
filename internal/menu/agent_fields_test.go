@@ -67,8 +67,8 @@ func TestReviewerChoicesFollowReviewTemplates(t *testing.T) {
 	}
 	cfg.Agents = map[string]config.AgentDefinition{
 		"helper": {
-			Path: exe,
-			Args: &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
+			Path:    exe,
+			Args:    &config.AgentArgs{Start: []string{}, Resume: []string{}, Review: []string{"--x"}},
 			Session: &config.AgentSessionDefinition{Mode: "none"},
 			Review: &config.AgentReview{
 				CWD: config.ReviewCWDRuntime, OutputName: "out.txt",

@@ -62,7 +62,7 @@ func TestHerdrSessionAwareReverseLookup(t *testing.T) {
 		err     bool
 	}{
 		"path resolves to same session": {
-			list:    list(row("w9:t9", "w9:p9", "pi", `{"kind":"path","value":"` + jsonPath(good) + `"}`)),
+			list:    list(row("w9:t9", "w9:p9", "pi", `{"kind":"path","value":"`+jsonPath(good)+`"}`)),
 			address: terminal.Address{Container: "w9:t9", Pane: "w9:p9"},
 		},
 		"id still matches directly": {
@@ -74,17 +74,17 @@ func TestHerdrSessionAwareReverseLookup(t *testing.T) {
 			address: terminal.Address{Container: "w1:t1", Pane: "w1:p1"},
 		},
 		"path to another session is decided": {
-			list:    list(row("w1:t1", "w1:p1", "pi", `{"kind":"path","value":"` + jsonPath(other) + `"}`)),
+			list:    list(row("w1:t1", "w1:p1", "pi", `{"kind":"path","value":"`+jsonPath(other)+`"}`)),
 			matches: 0,
 		},
 		"unresolvable candidate stays incomplete": {
-			list: list(row("w1:t1", "w1:p1", "pi", `{"kind":"path","value":"` + jsonPath(missing) + `"}`)),
+			list: list(row("w1:t1", "w1:p1", "pi", `{"kind":"path","value":"`+jsonPath(missing)+`"}`)),
 			err:  true,
 		},
 		"match plus unresolvable stays incomplete": {
 			list: list(
 				row("w1:t1", "w1:p1", "pi", `{"kind":"id","value":"s1"}`),
-				row("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"` + jsonPath(missing) + `"}`),
+				row("w1:t2", "w1:p2", "pi", `{"kind":"path","value":"`+jsonPath(missing)+`"}`),
 			),
 			err: true,
 		},
@@ -95,7 +95,7 @@ func TestHerdrSessionAwareReverseLookup(t *testing.T) {
 		"ambiguous decided matches": {
 			list: list(
 				row("w1:t1", "w1:p1", "pi", `{"kind":"id","value":"s1"}`),
-				row("w2:t2", "w2:p2", "pi", `{"kind":"path","value":"` + jsonPath(good) + `"}`),
+				row("w2:t2", "w2:p2", "pi", `{"kind":"path","value":"`+jsonPath(good)+`"}`),
 			),
 			matches: 2,
 		},
