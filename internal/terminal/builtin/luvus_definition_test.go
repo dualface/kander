@@ -31,7 +31,7 @@ func luvusReply(cwd string) func(args []string) probe.Result {
 		case "pane split":
 			return probe.Result{Stdout: `{"id":"1","result":{"type":"pane","pane":"7","workspace":"0","tab":"1"}}`}
 		case "agent get":
-			return probe.Result{Stdout: `{"id":"1","result":{"type":"agent","pane":"7","agent":"zsh","status":"idle","session":null,"cwd":"` + cwd + `"}}`}
+			return probe.Result{Stdout: `{"id":"1","result":{"type":"agent","pane":"7","agent":"zsh","status":"idle","session":null,"cwd":"` + jsonPath(cwd) + `"}}`}
 		}
 		return probe.Result{Stdout: `{"id":"1","result":{}}`}
 	}

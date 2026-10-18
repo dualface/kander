@@ -283,8 +283,10 @@ func TestModelInputShowsInheritedValue(t *testing.T) {
 func TestOverlaySaveFailureKeepsEdits(t *testing.T) {
 	_, panel := openPanel(t)
 	dir := t.TempDir()
+	// A regular file in the parent position blocks the save on every
+	// platform; a read-only directory does not stop writes on Windows.
 	blocked := filepath.Join(dir, "blocked")
-	if err := os.Mkdir(blocked, 0o555); err != nil {
+	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(blocked, config.OverlayFilename)

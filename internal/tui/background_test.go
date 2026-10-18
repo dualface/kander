@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -87,7 +88,9 @@ func testProbe(t *testing.T, period, timeout time.Duration) (*backgroundProbe, *
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { qr.Close(); qw.Close() })
+	// Close the writer first: the drain pump then sees EOF, and closing the
+	// reader never waits on its blocked Read.
+	t.Cleanup(func() { qw.Close(); qr.Close() })
 	bp := newBackgroundProbe(period, timeout, 40*time.Millisecond, 10*time.Second, true)
 	bp.out = newProbeOutput(qw)
 	return bp, qr, qw
@@ -101,16 +104,38 @@ func (bp *backgroundProbe) armOpenRound(d time.Duration) {
 	bp.deadline.Store(now.Add(d).UnixNano())
 }
 
+// queryPumps holds one reader goroutine per query pipe. Windows anonymous
+// pipes do not support read deadlines, so drains wait on a channel instead.
+var queryPumps sync.Map
+
 func drainQueries(f *os.File) string {
+	pump, loaded := queryPumps.LoadOrStore(f, make(chan []byte, 64))
+	ch := pump.(chan []byte)
+	if !loaded {
+		go func() {
+			defer close(ch)
+			buf := make([]byte, 256)
+			for {
+				n, err := f.Read(buf)
+				if n > 0 {
+					ch <- append([]byte(nil), buf[:n]...)
+				}
+				if err != nil {
+					return
+				}
+			}
+		}()
+	}
 	out := ""
-	buf := make([]byte, 256)
-	_ = f.SetReadDeadline(time.Now().Add(5 * time.Millisecond))
+	timeout := time.After(5 * time.Millisecond)
 	for {
-		n, err := f.Read(buf)
-		if n > 0 {
-			out += string(buf[:n])
-		}
-		if err != nil {
+		select {
+		case data, ok := <-ch:
+			if !ok {
+				return out
+			}
+			out += string(data)
+		case <-timeout:
 			return out
 		}
 	}
@@ -260,6 +285,9 @@ func TestProbeInputStripsResponseAndKeepsKeys(t *testing.T) {
 }
 
 func TestProbeInputAssemblesSplitResponse(t *testing.T) {
+	if !waitReadableWorks {
+		t.Skip("the runtime background probe is disabled on this platform")
+	}
 	t.Cleanup(resetAutoBackground)
 	bp, _, _ := testProbe(t, time.Second, 5*time.Second)
 	bp.armOpenRound(5 * time.Second)
