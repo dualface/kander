@@ -198,7 +198,7 @@ func (tx *Transaction) Snapshot(id string) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	e = attachSize(e, text)
-	if !tx.scope.ReadOnly {
+	if !tx.scope.ReadOnly || tx.scope.validateMutable {
 		if err := ValidateMutable(e, text); err != nil {
 			return Snapshot{}, err
 		}

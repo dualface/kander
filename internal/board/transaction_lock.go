@@ -61,11 +61,14 @@ func acquireContext(ctx context.Context, root string, scope LockScope) (locks lo
 // is board, sorted groups, sorted tasks, then the short-lived journal lock.
 // Migration requires ExclusiveBoard.
 type LockScope struct {
-	warnings       *WarningLog
-	Groups         []string
-	Tasks          []string
-	ExclusiveBoard bool
-	ReadOnly       bool
+	warnings *WarningLog
+	// validateMutable keeps the mutable-entry check of a writer in a read-only
+	// pass that must report the same errors before its writing pass.
+	validateMutable bool
+	Groups          []string
+	Tasks           []string
+	ExclusiveBoard  bool
+	ReadOnly        bool
 }
 
 type heldLock struct {

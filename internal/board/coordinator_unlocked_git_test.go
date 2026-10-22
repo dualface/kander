@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -166,5 +167,31 @@ func bumpCoordinatorCard(t *testing.T, root, id string) {
 	}
 	if e = WriteManagedDocument(root, s.Entry, text); e != nil {
 		t.Fatal(e)
+	}
+}
+
+func TestCoordinatorInvalidCardFailsBeforeGit(t *testing.T) {
+	root, id, c := unlockedGitFixture(t, "invalid")
+	r := coordinatorRequest(t, root, c)
+	s := transactionSnapshot(t, root, id)
+	text := strings.Replace(s.Text, "- SIZE: small", "- SIZE: huge", 1)
+	if text == s.Text {
+		t.Fatal("fixture has no SIZE line")
+	}
+	if e := os.WriteFile(filepath.Join(s.Entry.Path, "spec.md"), []byte(text), 0600); e != nil {
+		t.Fatal(e)
+	}
+	calls := 0
+	_, e := ReconcileCoordinator(context.Background(), root, r, func(context.Context, CoordinatorGitFacts) error {
+		calls++
+		return errors.New("Git ancestry absent")
+	})
+	var ke *Error
+	if !errors.As(e, &ke) || ke.Code != "board.size_invalid" || calls != 0 {
+		t.Fatal("card error not reported before Git", e, calls)
+	}
+	after, e := ReadCoordinatorCheckpoint(root, c.GroupID)
+	if e != nil || !reflect.DeepEqual(after, c) {
+		t.Fatal("invalid card changed the checkpoint", e)
 	}
 }

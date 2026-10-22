@@ -248,8 +248,10 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 	return
 }
 
-// coordinatorMembership runs under the exclusive board lock. This freezes
-// topology while metadata is read and rejects partial or ambiguous membership.
+// coordinatorMembership runs under the board lock: shared while reconcile
+// collects Git facts, exclusive for claim and for the reconcile pass that
+// commits. Either freezes topology while metadata is read and rejects partial
+// or ambiguous membership.
 func coordinatorMembership(tx *Transaction, group string, ids []string) error {
 	b, err := scan(tx.root)
 	if err != nil {
@@ -307,7 +309,7 @@ func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconci
 		}
 	}
 	readOnly := scope
-	readOnly.ExclusiveBoard, readOnly.ReadOnly = false, true
+	readOnly.ExclusiveBoard, readOnly.ReadOnly, readOnly.validateMutable = false, true, true
 	collectErr := WithTransactionContext(ctx, root, readOnly, func(tx *Transaction) error {
 		_, _, e := reconcileCheckpoint(ctx, tx, r, ids, collect)
 		return e
