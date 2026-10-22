@@ -276,8 +276,13 @@ func coordinatorMembership(tx *Transaction, group string, ids []string) error {
 }
 
 // ReconcileCoordinator uses the same path for snapshots and every later event.
-// The verifier is the Git-aware consumer; it must be read-only and must not
-// reenter board APIs while this transaction holds the declared locks.
+// The verifier is the Git-aware consumer; it must be read-only. It runs with no
+// board, group, task or journal lock held, so Git subprocesses never block
+// readers: a shared-lock pass collects the facts to verify, the verifier checks
+// them unlocked, and the exclusive pass repeats the same reconciliation and
+// commits only when every fact it needs was verified. A board change in between
+// fails through the card revision or checkpoint CAS; changed Git facts behind an
+// unchanged revision fail as a coordinator conflict.
 func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconcile, verify func(context.Context, CoordinatorGitFacts) error) (c CoordinatorCheckpoint, err error) {
 	ids := make([]string, 0, len(r.Members))
 	for id := range r.Members {
@@ -287,48 +292,89 @@ func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconci
 	if len(ids) == 0 {
 		return c, coordinatorError("members required")
 	}
-	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{r.GroupID, reviewControlGroup, dispatchRegistry, taskStartGroup}, Tasks: ids, ExclusiveBoard: true}, func(tx *Transaction) error {
-		var exists bool
-		c, exists, err = readCheckpoint(tx, r.GroupID)
-		if err != nil {
+	scope := LockScope{Groups: []string{r.GroupID, reviewControlGroup, dispatchRegistry, taskStartGroup}, Tasks: ids, ExclusiveBoard: true}
+	var verified []CoordinatorGitFacts
+	var collect, compare func(context.Context, CoordinatorGitFacts) error
+	if verify != nil {
+		collect = func(_ context.Context, f CoordinatorGitFacts) error { verified = append(verified, f); return nil }
+		compare = func(_ context.Context, f CoordinatorGitFacts) error {
+			for _, v := range verified {
+				if reflect.DeepEqual(v, f) {
+					return nil
+				}
+			}
+			return coordinatorError("Git facts changed after verification")
+		}
+	}
+	readOnly := scope
+	readOnly.ExclusiveBoard, readOnly.ReadOnly = false, true
+	collectErr := WithTransactionContext(ctx, root, readOnly, func(tx *Transaction) error {
+		_, _, e := reconcileCheckpoint(ctx, tx, r, ids, collect)
+		return e
+	})
+	// Facts collected before a board error come first in a single pass, so they
+	// are verified before that error is reported.
+	for _, f := range verified {
+		if err = verify(ctx, f); err != nil {
+			return c, err
+		}
+	}
+	if collectErr != nil {
+		return c, collectErr
+	}
+	err = WithTransactionContext(ctx, root, scope, func(tx *Transaction) error {
+		var changed bool
+		c, changed, err = reconcileCheckpoint(ctx, tx, r, ids, compare)
+		if err != nil || !changed {
 			return err
 		}
-		if !exists || c.Authority != r.Authority {
-			return coordinatorError("stale coordinator authority")
-		}
-		if c.Revision != r.ExpectedRevision {
-			if c.LastRequestHash != coordinatorHash(r) {
-				return coordinatorError("checkpoint CAS")
-			}
-			// A lost response may retry the same request, but evidence is still
-			// revalidated before returning its existing result.
-		}
-		if !slices.Equal(ids, checkpointIDs(c)) {
-			return coordinatorError("unknown or missing member")
-		}
-		if err := coordinatorMembership(tx, r.GroupID, ids); err != nil {
-			return err
-		}
-		members := map[string]CoordinatorMember{}
-		for _, id := range ids {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			m, e := reconcileCoordinatorMember(ctx, tx, id, c.Members[id], r.Members[id], verify)
-			if e != nil {
-				return e
-			}
-			members[id] = m
-		}
-		if reflect.DeepEqual(c.Members, members) {
-			return nil
-		}
-		if c.Revision == ^uint64(0) {
-			return coordinatorError("checkpoint revision overflow")
-		}
-		c.Revision++
-		c.Members, c.LastRequestHash = members, coordinatorHash(r)
 		return putCheckpoint(tx, &c)
 	})
 	return
+}
+
+// reconcileCheckpoint validates the request and members against the board and
+// returns the next checkpoint. It stages no write; changed reports whether the
+// caller must publish the returned checkpoint.
+func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReconcile, ids []string, verify func(context.Context, CoordinatorGitFacts) error) (c CoordinatorCheckpoint, changed bool, err error) {
+	c, exists, err := readCheckpoint(tx, r.GroupID)
+	if err != nil {
+		return c, false, err
+	}
+	if !exists || c.Authority != r.Authority {
+		return c, false, coordinatorError("stale coordinator authority")
+	}
+	if c.Revision != r.ExpectedRevision {
+		if c.LastRequestHash != coordinatorHash(r) {
+			return c, false, coordinatorError("checkpoint CAS")
+		}
+		// A lost response may retry the same request, but evidence is still
+		// revalidated before returning its existing result.
+	}
+	if !slices.Equal(ids, checkpointIDs(c)) {
+		return c, false, coordinatorError("unknown or missing member")
+	}
+	if err := coordinatorMembership(tx, r.GroupID, ids); err != nil {
+		return c, false, err
+	}
+	members := map[string]CoordinatorMember{}
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return c, false, err
+		}
+		m, e := reconcileCoordinatorMember(ctx, tx, id, c.Members[id], r.Members[id], verify)
+		if e != nil {
+			return c, false, e
+		}
+		members[id] = m
+	}
+	if reflect.DeepEqual(c.Members, members) {
+		return c, false, nil
+	}
+	if c.Revision == ^uint64(0) {
+		return c, false, coordinatorError("checkpoint revision overflow")
+	}
+	c.Revision++
+	c.Members, c.LastRequestHash = members, coordinatorHash(r)
+	return c, true, nil
 }

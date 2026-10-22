@@ -8,6 +8,14 @@ The current record lives at `kanban/.kander/groups/<group-id>/checkpoint.json`. 
 
 The lock order is board, sorted group_id, sorted task_id, then the short-lived journal lock. claim/reconcile confirms the complete member set inside the board's exclusive lock, avoiding topology changes between discovering members and writing the checkpoint; the review and dispatch control-group locks are declared together with the member locks. The checkpoint revision is independent of task revisions, does not increment because of reads, and does not modify task revisions.
 
+reconcile never runs Git while it holds a board, group, task, or journal lock, so a subscription read is not blocked by Git subprocesses. It runs in three steps:
+
+1. Read the facts. Under shared locks over the same board, group, and task scope, it runs the complete member reconciliation and collects the Git facts each member needs (first-delivery branch heads, wrap-up integration, and closed review batches). It writes nothing.
+2. Verify Git. With every lock released, it verifies the collected facts in member order. A Git failure returns that error and keeps the checkpoint. A board error found in step 1 is returned after the facts collected before it were verified, the same order as a single pass.
+3. Re-check and commit. Under the exclusive scope it runs the same reconciliation again and accepts only Git facts that step 2 verified, then publishes the checkpoint.
+
+When the board changed between steps 1 and 3, step 3 fails and keeps the checkpoint: a changed member revision returns `board.transaction_conflict`; a checkpoint advanced by a different request returns `board.coordinator_conflict` ("checkpoint CAS"); a Git fact that differs from the verified one behind an unchanged member revision returns `board.coordinator_conflict`. When the same request was committed in between, step 3 follows the replay path and returns that committed checkpoint. Git refs are not protected by board locks, before or after this change.
+
 The coordinator authority contains `owner`, `token`, and `epoch`. A new session uses a unique token and the existing orchestration authorization basis, and CASes the current checkpoint revision/epoch; only one contender succeeds. An old epoch cannot write the checkpoint even if it holds the latest task revision. Retrying with identical claim JSON does not increment the epoch. This authority covers only the checkpoint; it is not a task takeover, integration, notification, or wrap-up-on-behalf authorization.
 
 ## Invocation
@@ -89,7 +97,7 @@ Wrap-up on behalf can only consume the dispatch's dedicated wrap-up-only authori
 
 ## Failure and Platform Boundaries
 
-The CLI uses a 30-second context, bounding the preparation phase's lock contention, member loop, and Git verification. Underlying OS opens/reads and the publish after the redo is committed still follow the existing transaction boundaries; the entire command cannot claim a hard wall-clock upper bound. Cancellation leaves no background workers waiting on locks; once publishing has begun, recoverable artifacts are kept, with no mid-way rollback guessing.
+The CLI uses a 30-second context, bounding the lock contention of both locked steps, both member loops, and the unlocked Git verification. Underlying OS opens/reads and the publish after the redo is committed still follow the existing transaction boundaries; the entire command cannot claim a hard wall-clock upper bound. Cancellation leaves no background workers waiting on locks; once publishing has begun, recoverable artifacts are kept, with no mid-way rollback guessing.
 
 After EOF/output errors, re-reconcile the current facts once; when the facts are valid, rebuild the subscription only once. Only an explicit `board.transaction_pending` warrants, under the maintenance premise, one explicit init followed by another read; if it still fails, report. duplicate, reparse, real corruption, or unknown products immediately preserve evidence; they must not be deleted, renamed, or retried indefinitely. Lock-deadline exhaustion is a temporary inability to observe, not a task failure.
 
