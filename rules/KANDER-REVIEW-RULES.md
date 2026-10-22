@@ -80,7 +80,7 @@ The only runnable roles are `PMQA` (stage one) and `Security` (stage two), both 
 **Review Base**
 
 - With the Git module enabled, the base of a dedicated task branch is the full `develop` SHA most recently used to create it from `develop` or rebase it onto `develop`. Fixes under the same base do not change it.
-- The base is frozen once review starts; never chase `develop` by rebasing before the loop ends. After the integration rebase, the base moves to the new base point, and whether to re-review follows the one-time gate in `snippets/git-integrate.md` "Integration and Cleanup".
+- The base is frozen once review starts; never chase `develop` by rebasing before the loop ends. After a clean integration rebase, the base moves to the new base point; an integration merge commit keeps the reviewed history unchanged. Whether to re-review follows the one-time gate in `snippets/git-integrate.md` "Integration and Cleanup".
 
 A standard review has two stages. Whether each role runs is resolved per "Review Stages" and its focus per "Review Profiles"; skipped roles are marked N/A. Stage one is `PMQA`; stage two is `Security` after stage one passes. Non-mechanical fixes receive incremental re-review by the role that reported them. Security fixes do not reopen PMQA:
 
@@ -135,7 +135,7 @@ A standard review has two stages. Whether each role runs is resolved per "Review
 - Under the same base, Security fixes receive only Security incremental re-review; they do not reopen a passed `PMQA` or require a skipped `PMQA` to run. Necessary verification and the mechanical-only exception still apply. If a later, independently required `PMQA` fix substantively changes already-reviewed security code, the enabled security role re-reviews that changed scope. Historical four-role batches likewise do not reopen passed `PM` or `QA` solely because of a security fix; their frozen role requirements and evidence remain unchanged.
 - Roles may pass on different commits; within the same base, the final commit must descend from every passing commit.
 - Non-integration changes such as switching base, recreating the branch, or a forced rebase during review invalidate all conclusions. Because every batch with reviewer runs must still close, first close the open batch on its current target: the remaining required roles run there, and superseded findings are disposed as `rejected` with the user's quoted decision. A task context change on the same base chain then continues in a new batch of the same, still unsealed plan, starting at the previous closed target and reviewing only the work after it. When the user wants the closed range re-reviewed under the new contract, or when the base or the history changed, continue as new work under new cards and a new plan per `snippets/orchestrate-review.md` "Group-Level Review for Task Groups". Report the wasted rounds either way.
-- A rebase during integration caused by `develop` advancing carries conclusions forward per `snippets/git-integrate.md` "One-Time Review Gate"; the pre-rewrite SHA need not remain an ancestor.
+- A patch-equal rebase or a merge commit during integration caused by `develop` advancing carries conclusions forward per `snippets/git-integrate.md` "One-Time Review Gate"; after such a rebase the pre-rewrite SHA need not remain an ancestor.
 
 **Report Files and Stable Identity**
 
