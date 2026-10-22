@@ -235,9 +235,9 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 	session.probes = probes
 	session.heartbeat = heartbeat
 	w = output
-	snapshot, err := session.readContext(ctx, root)
+	snapshot, err := session.readTolerant(ctx, root, refresh, w, output)
 	if err != nil {
-		return session.unavailable(w, snapshot, err)
+		return err
 	}
 	if err := session.emit(w, "snapshot", snapshot, nil, nil, nil); err != nil {
 		return err
@@ -283,9 +283,9 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			probeCompleted = true
 		case <-timer.C:
 		}
-		current, err := session.readContext(ctx, root)
+		current, err := session.readTolerant(ctx, root, refresh, w, output)
 		if err != nil {
-			return session.unavailable(w, current, err)
+			return err
 		}
 		var changed []changeEvent
 		var updated []string

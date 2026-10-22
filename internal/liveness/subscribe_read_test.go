@@ -1,6 +1,7 @@
 package liveness
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -52,6 +53,20 @@ func TestSubscribeUnavailableCommittedFacts(t *testing.T) {
 					t.Skipf("symlink unavailable: %v", err)
 				}
 			}
+			// Real reads; each failure advances the clock past the contention
+			// limit, so only a lock wait timeout earns exactly one retry.
+			script := &contentionScript{}
+			installContention(t, script)
+			realRead := readSubscriptionFacts
+			readSubscriptionFacts = func(s *subscription, ctx context.Context, root string) (subscriptionFacts, error) {
+				facts, err := realRead(s, ctx, root)
+				if err != nil {
+					script.mu.Lock()
+					script.clock = script.clock.Add(subscriptionContentionLimit)
+					script.mu.Unlock()
+				}
+				return facts, err
+			}
 			start := time.Now()
 			events, err := factsEvents(t, root, opts, nil)
 			if err == nil || len(events) != 1 {
@@ -67,7 +82,14 @@ func TestSubscribeUnavailableCommittedFacts(t *testing.T) {
 			if events[0].ReadStatus != expected || events[0].MembershipComplete || !events[0].ReconciliationRequired {
 				t.Fatalf("unsafe failure: %+v", events[0])
 			}
-			if mode == "maintenance" && time.Since(start) > subscriptionReadTimeout+time.Second {
+			reads := 1
+			if mode == "maintenance" {
+				reads = 2
+			}
+			if calls := script.callCount(); calls != reads {
+				t.Fatalf("reads=%d; want %d", calls, reads)
+			}
+			if mode == "maintenance" && time.Since(start) > 2*subscriptionReadTimeout+time.Second {
 				t.Fatal("unbounded maintenance wait")
 			}
 			raw, err := os.ReadFile(snapshot.Entry.Document)
