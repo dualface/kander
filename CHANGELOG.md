@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.11 — 2026-10-23
+
+- Fix (subscribe): a subscription read that exhausts its 2-second board lock wait no longer ends the subscription at once. It emits nothing, keeps the last snapshot, and retries after a full `--refresh` interval. Only lock wait timeouts that continue for 30 seconds emit the terminal read-error (`read_status=maintenance`). The initial snapshot follows the same rule.
+- Fix (coordinator): `kander coordinator reconcile` no longer runs Git while it holds the exclusive board lock, so concurrent subscription reads no longer time out during a reconcile. Reconcile collects Git facts under shared locks, verifies them with no lock held, and commits only verified facts. A member, checkpoint, or Git fact that changed in between is reported as a conflict. An invalid member card is still reported before Git runs.
+- Rules (Git, review): a reviewed single card now integrates the way a task group does. The integration rebase is used only when it applies cleanly and leaves the reviewed patch unchanged. On any conflict or a changed patch, the agent merges the latest `develop` into the task branch instead, and later advances are merged again. A merge commit whose code conflicts were resolved by hand, or one the user asks about, is reviewed in a new batch, so a single card keeps its review plan unsealed until integration succeeds and then seals it. A task group merge-back is also re-reviewed when the user asks.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.10 — 2026-10-19
 
 - Rules (review): the PMQA reviewer prompt now yields one report: one requirement table, one behavior table, and one merged findings list, with an incremental layout for re-reviews (prior finding statuses by ID first, then sections limited to the fix range). A bug fix without a reproducing automated test is a medium finding (the bug-fix review profile takes precedence over project-rule exceptions), and a test a project rule requires is a recommend item. A test counts as evidence only when it exercises the production path and would fail if the behavior were reverted; false coverage is a non-mechanical medium finding that needs re-review. Reviewers look for an existing equivalent before accepting a new function, type, or abstraction, report changes that bypass an established layer, and take architecture from architecture docs, decision records, and `AGENTS.md` / `CLAUDE.md`. An obvious complexity regression with a realistic trigger is reported as a non-blocking suggestion.
