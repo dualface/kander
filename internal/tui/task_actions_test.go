@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/focus"
+	"github.com/dualface/kander/internal/launch"
 )
 
 // translate reaches the catalog helper from tests that shadow t.
@@ -105,16 +107,128 @@ func TestTaskActionsAvailability(t *testing.T) {
 	}
 	for state, want := range expected {
 		for _, window := range []string{"", "herdr:w1:t2:w1:p3"} {
-			t.Run(state+"/"+window, func(t *testing.T) {
-				expected := append([]taskAction(nil), want...)
-				if window != "" {
-					expected = append(expected, actionFocus)
-				}
-				if got := availableTaskActions(state, window); !reflect.DeepEqual(got, expected) {
-					t.Fatalf("got %v want %v", got, expected)
-				}
-			})
+			for _, blocked := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/%t", state, window, blocked), func(t *testing.T) {
+					expected := append([]taskAction(nil), want...)
+					if blocked && state == "backlog" {
+						expected[0] = actionTalk
+					}
+					if window != "" {
+						expected = append(expected, actionFocus)
+					}
+					if got := availableTaskActions(state, window, blocked); !reflect.DeepEqual(got, expected) {
+						t.Fatalf("got %v want %v", got, expected)
+					}
+				})
+			}
 		}
+	}
+}
+
+// useStartCheck replaces the start check of loadTaskActionSource and records
+// whether it ran.
+func useStartCheck(t *testing.T, problem, err error) *bool {
+	t.Helper()
+	called := new(bool)
+	old := checkStartProblem
+	checkStartProblem = func(board.Entry, string) (error, error) {
+		*called = true
+		return problem, err
+	}
+	t.Cleanup(func() { checkStartProblem = old })
+	return called
+}
+
+func TestTaskActionSourceStartProblem(t *testing.T) {
+	notReady := actionTestSource(t, "backlog", false)
+	t.Setenv("KANBAN_DIR", notReady.root)
+	source, err := loadTaskActionSource(notReady.snapshot.Entry.TaskID)
+	if err != nil || source.startProblem == nil || !strings.Contains(source.startProblem.Error(), "GOAL") {
+		t.Fatalf("todo gate problem missing: %v %v", source.startProblem, err)
+	}
+	for _, tc := range []struct {
+		name     string
+		state    string
+		problem  error
+		checkErr error
+		want     error
+		checked  bool
+	}{
+		{"problem", "backlog", errors.New("blocked"), nil, errors.New("blocked"), true},
+		{"startable", "backlog", nil, nil, nil, true},
+		{"check error keeps start", "backlog", errors.New("ignored"), errors.New("config read failed"), nil, true},
+		{"todo is not checked", "todo", errors.New("blocked"), nil, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := actionTestSource(t, tc.state, true)
+			t.Setenv("KANBAN_DIR", fixture.root)
+			called := useStartCheck(t, tc.problem, tc.checkErr)
+			source, err := loadTaskActionSource(fixture.snapshot.Entry.TaskID)
+			if err != nil || *called != tc.checked || !reflect.DeepEqual(source.startProblem, tc.want) {
+				t.Fatalf("problem %v err %v checked %t", source.startProblem, err, *called)
+			}
+		})
+	}
+}
+
+// talkTestApp opens the menu on a backlog card whose start check reports
+// problem, with chat bindings that record what they receive.
+func talkTestApp(t *testing.T, problem error) (*App, taskActionSource, *[]string) {
+	t.Helper()
+	source := actionTestSource(t, "backlog", false)
+	app := actionTestApp(t, source)
+	app.LoadTaskActions = func(id string) (taskActionSource, error) {
+		snapshot, err := board.ReadSnapshot(source.root, id)
+		return taskActionSource{root: source.root, snapshot: snapshot, startProblem: problem}, err
+	}
+	sent := &[]string{}
+	app.PrepareChat = func() (launch.ChatPreview, error) { return launch.ChatPreview{Agent: "claude", Launcher: "herdr"}, nil }
+	app.StartChat = func(message string) (launch.ChatResult, error) {
+		*sent = append(*sent, message)
+		return launch.ChatResult{Agent: "claude", Launcher: "herdr", Address: "herdr:w9"}, nil
+	}
+	app.FocusWindow = func(context.Context, string) focus.Result { return focus.Result{Success: true} }
+	return app, source, sent
+}
+
+func TestTaskActionTalkPrefillsChat(t *testing.T) {
+	problem := errors.New("contract incomplete")
+	app, source, sent := talkTestApp(t, problem)
+	app.chatDraft = "old draft"
+	chooseTaskAction(t, app, actionTalk)
+	entry := source.snapshot.Entry
+	prompt := translate("actions.talk_prompt", entry.TaskID, entry.Path, problem.Error())
+	if app.TaskActions != nil || app.Chat == nil || app.Chat.input.Value() != prompt {
+		t.Fatalf("chat not prefilled: %#v", app.Chat)
+	}
+	for _, part := range []string{entry.TaskID, entry.Path, problem.Error()} {
+		if !strings.Contains(prompt, part) {
+			t.Fatalf("prompt misses %q: %s", part, prompt)
+		}
+	}
+	runPendingWork(t, app)
+	if app.Chat.phase != chatReady || app.Chat.agent != "claude" {
+		t.Fatal("chat preview not reused")
+	}
+	app.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	runPendingWork(t, app)
+	if !reflect.DeepEqual(*sent, []string{prompt}) || app.Chat != nil {
+		t.Fatalf("chat start not reused: %v", *sent)
+	}
+}
+
+func TestTaskActionTalkSelectionChanged(t *testing.T) {
+	app, _, sent := talkTestApp(t, errors.New("blocked"))
+	app.Update(keyMsg("m"))
+	runPendingWork(t, app)
+	app.Model.SetBoard(BoardPayload{Tasks: []Task{{TaskID: "20260914-other-task", Title: "Other", State: "backlog"}}})
+	app.TaskActions.cursor = 0
+	if app.TaskActions.items[0] != actionTalk {
+		t.Fatalf("menu %v", app.TaskActions.items)
+	}
+	app.Update(keyMsg("enter"))
+	if app.TaskActions != nil || app.Chat != nil || len(*sent) != 0 || app.CopyNotice != tuiText("actions.selection_changed") {
+		t.Fatal("changed selection opened chat")
 	}
 }
 

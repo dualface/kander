@@ -8,6 +8,8 @@
   "actions.running": "Applying task action…",
   "actions.moved": "{{.V0}} moved to {{.V1}}",
   "actions.start": "Start task",
+  "actions.talk": "Talk about",
+  "actions.talk_prompt": "Task card {{.V0}} ({{.V1}}) is in backlog and cannot be started. The start check reported:\n\n{{.V2}}\n\nRead this card and the Kander rules, find out why it cannot be started, then explain the cause to me and propose how to fix it. Do not move, start, or claim this card. Ask me before you change the card.",
   "actions.focus": "Focus agent window",
   "actions.pick": "Pick to todo",
   "actions.backlog": "Return to backlog",

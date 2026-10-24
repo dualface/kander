@@ -114,7 +114,7 @@ func TestScreensFillBackground(t *testing.T) {
 
 			actions := fillProbeApp(t, theme, width, height)
 			source := actionTestSource(t, "backlog", true)
-			actions.TaskActions = &taskActions{id: source.snapshot.Entry.TaskID, source: source, items: availableTaskActions("backlog", "window")}
+			actions.TaskActions = &taskActions{id: source.snapshot.Entry.TaskID, source: source, items: availableTaskActions("backlog", "window", false)}
 			expectFilled(t, "task action menu", actions.View())
 			pumpActionForm(actions, actions.openTaskActionForm(actionArchive))
 			expectFilled(t, "task action form", actions.View())

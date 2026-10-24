@@ -8,6 +8,8 @@
   "actions.running": "操作を実行中…",
   "actions.moved": "{{.V0}} を {{.V1}} に移動しました",
   "actions.start": "タスクを開始",
+  "actions.talk": "相談する",
+  "actions.talk_prompt": "タスクカード {{.V0}}（{{.V1}}）は backlog にあり、開始できません。開始チェックの結果：\n\n{{.V2}}\n\nこのカードと Kander のルールを読み、開始できない理由を調べてから、原因と修正方法を説明してください。このカードを move、start、claim しないでください。カードを変更する前に私の同意を得てください。",
   "actions.focus": "Agent ウィンドウに移動",
   "actions.pick": "todo に移動",
   "actions.backlog": "backlog に戻す",

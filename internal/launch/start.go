@@ -41,11 +41,12 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	if err := board.ValidateMutable(entry, original); err != nil {
+	problem, err := cardStartProblem(entry, original, func() (config.Rules, error) { return cfg.Rules, nil })
+	if err != nil {
 		return result, err
 	}
-	if err := cfg.Rules.CheckTaskGroup(taskGroupFrom(original)); err != nil {
-		return result, err
+	if problem != nil {
+		return result, problem
 	}
 	choice, err := resolveExecution(cfg, original, entry.Kind, agentOverride, execStart)
 	if err != nil {
@@ -212,4 +213,36 @@ func PreviewStart(root, taskID string) (preview StartPreview, err error) {
 		return StartPreview{}, err
 	}
 	return StartPreview{TaskID: taskID, State: snapshot.Entry.State, Size: snapshot.Entry.Kind, Agent: agent, Launcher: launcher}, nil
+}
+
+// StartProblem runs, read-only, the checks the TUI start path makes for one
+// backlog card: the todo gate of the backlog -> todo move, then the card form
+// and task-group checks of Start. problem is the first check the card fails;
+// err reports that the checks could not finish. Only the task-group check
+// reads the effective configuration, so a card problem found earlier never
+// depends on it. Nothing is moved, written or launched.
+func StartProblem(entry board.Entry, text string) (problem, err error) {
+	if problem := board.ValidateTodoContract(entry.Kind, text); problem != nil {
+		return problem, nil
+	}
+	return cardStartProblem(entry, text, func() (config.Rules, error) {
+		cfg, err := loadEffective()
+		if err != nil {
+			return nil, err
+		}
+		return cfg.Rules, nil
+	})
+}
+
+// cardStartProblem holds the card checks Start and StartProblem share. rules is
+// called only once the card form passed.
+func cardStartProblem(entry board.Entry, text string, rules func() (config.Rules, error)) (problem, err error) {
+	if problem := board.ValidateMutable(entry, text); problem != nil {
+		return problem, nil
+	}
+	current, err := rules()
+	if err != nil {
+		return nil, err
+	}
+	return current.CheckTaskGroup(taskGroupFrom(text)), nil
 }

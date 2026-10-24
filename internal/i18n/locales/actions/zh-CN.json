@@ -8,6 +8,8 @@
   "actions.running": "正在执行任务操作…",
   "actions.moved": "{{.V0}} 已移至 {{.V1}}",
   "actions.start": "启动任务卡",
+  "actions.talk": "讨论",
+  "actions.talk_prompt": "任务卡 {{.V0}}（{{.V1}}）在 backlog 中，无法启动。启动检查报告：\n\n{{.V2}}\n\n请阅读这张卡和 Kander 规则，查清它为什么不能启动，然后向我说明原因并给出修复办法。不要 move、start 或认领这张卡。修改卡片前先征得我同意。",
   "actions.focus": "跳转到 Agent 窗口",
   "actions.pick": "Pick 到 todo",
   "actions.backlog": "退回 backlog",

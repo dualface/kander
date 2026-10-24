@@ -8,12 +8,14 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/launch"
 )
 
 type taskAction string
 
 const (
 	actionStart   taskAction = "start"
+	actionTalk    taskAction = "talk"
 	actionFocus   taskAction = "focus"
 	actionPick    taskAction = "pick"
 	actionBacklog taskAction = "backlog"
@@ -25,7 +27,13 @@ type taskActionSource struct {
 	root     string
 	snapshot board.Snapshot
 	warnings *board.WarningLog
+	// startProblem is the first start check a backlog card fails; nil when the
+	// card can start or the check could not finish.
+	startProblem error
 }
+
+// checkStartProblem is replaced by tests that need a failing check.
+var checkStartProblem = launch.StartProblem
 
 type taskActions struct {
 	id               string
@@ -58,11 +66,17 @@ type taskActionResult struct {
 	warnings        []string
 }
 
-func availableTaskActions(state, window string) []taskAction {
+// availableTaskActions offers talk in place of start for a backlog card that
+// cannot start, so the user can ask an agent why instead of failing the start.
+func availableTaskActions(state, window string, startBlocked bool) []taskAction {
 	var actions []taskAction
 	switch state {
 	case "backlog":
-		actions = []taskAction{actionStart, actionPick, actionArchive, actionTrash}
+		first := actionStart
+		if startBlocked {
+			first = actionTalk
+		}
+		actions = []taskAction{first, actionPick, actionArchive, actionTrash}
 	case "todo":
 		actions = []taskAction{actionStart, actionBacklog, actionArchive, actionTrash}
 	case "done":
@@ -81,7 +95,16 @@ func loadTaskActionSource(id string) (taskActionSource, error) {
 	}
 	warnings := &board.WarningLog{}
 	snapshot, err := board.ReadSnapshotWithWarnings(root, id, warnings)
-	return taskActionSource{root: root, snapshot: snapshot, warnings: warnings}, err
+	source := taskActionSource{root: root, snapshot: snapshot, warnings: warnings}
+	if err != nil || snapshot.Entry.State != "backlog" {
+		return source, err
+	}
+	// A check that cannot finish keeps start: the start preview then reports
+	// the same failure through the existing dialog.
+	if problem, checkErr := checkStartProblem(snapshot.Entry, snapshot.Text); checkErr == nil {
+		source.startProblem = problem
+	}
+	return source, nil
 }
 
 func (a *App) openTaskActions() {
@@ -117,7 +140,7 @@ func (a *App) applyTaskActionsLoaded(result taskActionsLoaded) {
 	if warnings := result.source.warningMessages(); len(warnings) > 0 {
 		a.showFocusNotice(strings.Join(warnings, "\n"))
 	}
-	dialog.items = availableTaskActions(result.source.snapshot.Entry.State, board.MetadataFrom(result.source.snapshot.Text, board.FieldWindow))
+	dialog.items = availableTaskActions(result.source.snapshot.Entry.State, board.MetadataFrom(result.source.snapshot.Text, board.FieldWindow), result.source.startProblem != nil)
 	if len(dialog.items) == 0 {
 		a.TaskActions = nil
 		a.showFocusNotice(strings.Join(append([]string{t("actions.none")}, result.source.warningMessages()...), "\n"))
@@ -144,14 +167,17 @@ func (a *App) handleTaskActionKey(key string) tea.Cmd {
 	case "enter":
 		action := dialog.items[dialog.cursor]
 		switch action {
-		case actionStart, actionFocus:
+		case actionStart, actionTalk, actionFocus:
 			selected := a.Model.SelectedTask()
 			a.TaskActions = nil
-			if selected == nil || selected.TaskID != dialog.id {
+			switch {
+			case selected == nil || selected.TaskID != dialog.id:
 				a.showFocusNotice(t("actions.selection_changed"))
-			} else if action == actionStart {
+			case action == actionStart:
 				a.confirmSelectedStart()
-			} else {
+			case action == actionTalk:
+				a.talkAboutStartProblem(dialog.source)
+			default:
 				a.focusSelectedTask()
 			}
 		case actionArchive, actionTrash:
@@ -162,6 +188,14 @@ func (a *App) handleTaskActionKey(key string) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// talkAboutStartProblem opens the chat box with a prompt that asks an agent
+// why the card cannot start; the prompt replaces the kept draft.
+func (a *App) talkAboutStartProblem(source taskActionSource) {
+	entry := source.snapshot.Entry
+	a.chatDraft = t("actions.talk_prompt", entry.TaskID, entry.Path, source.startProblem.Error())
+	a.openChat()
 }
 
 // runTaskAction also returns the archive cleanup summary, which the result
