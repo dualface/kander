@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.9.12 — 2026-10-25
+
+- TUI: for a backlog card that cannot start, the `m` task actions menu shows "Talk about" in place of "Start task". The menu runs the same read-only checks as the TUI start path: the todo gate (complete contract, review records, card pins), the card form (valid SIZE, directory card), and the task-group switches. Choosing "Talk about" opens the chat box prefilled with a prompt that names the task, the card directory, and the problem, and asks the agent to explain why the card cannot start and how to fix it, without moving, starting, or claiming the card. The prompt replaces the kept chat draft and can be edited before Ctrl+S sends it. A startable card, a todo card, or a check that cannot finish keeps "Start task".
+
 ## v0.9.11 — 2026-10-23
 
 - Fix (subscribe): a subscription read that exhausts its 2-second board lock wait no longer ends the subscription at once. It emits nothing, keeps the last snapshot, and retries after a full `--refresh` interval. Only lock wait timeouts that continue for 30 seconds emit the terminal read-error (`read_status=maintenance`). The initial snapshot follows the same rule.
