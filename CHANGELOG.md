@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.9.13 — 2026-10-27
+
+- Review recovery: when two runs of the same role ran in parallel by mistake, the agent can close the batch instead of being blocked. `kander review close` accepts an optional `superseded_runs` map that names each extra run, its replacement run, and the basis. A run qualifies only as a parallel twin of a run on the conclusion chain (same commit, same reviewer, same previous run), or as the successor of a superseded run whose commit and reviewer match the conclusion run. Each entry adds the Git edge from the superseded run's commit to the replacement's, and the superseded run's findings still need dispositions. A close that meets an unlisted run fails with a hint that names the run, the conclusion run, and the entry to add. Runs that used a different reviewer, or a full first-round rerun after a fix, still cannot be superseded; the rules tell the agent to report them to the user.
+- `kander review progress` adds `next_actions`, which lists duplicate runs to supersede before close is tried. Starting a review run while another run of the same role is not linked into the chain still runs and prints a warning on stderr.
+- `kander update` keeps its error codes and texts, and adds one line that says where the rejected content belongs and which command writes it: managed fields, managed sections, managed paths, duplicate headings, resolved pins, and frozen contract changes.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.12 — 2026-10-25
 
 - TUI: for a backlog card that cannot start, the `m` task actions menu shows "Talk about" in place of "Start task". The menu runs the same read-only checks as the TUI start path: the todo gate (complete contract, review records, card pins), the card form (valid SIZE, directory card), and the task-group switches. Choosing "Talk about" opens the chat box prefilled with a prompt that names the task, the card directory, and the problem, and asks the agent to explain why the card cannot start and how to fix it, without moving, starting, or claiming the card. The prompt replaces the kept chat draft and can be edited before Ctrl+S sends it. A startable card, a todo card, or a check that cannot finish keeps "Start task".
