@@ -48,7 +48,8 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 
 ## Output
 
-- The reviewer run prints the generated run ID on stderr and the report on stdout; task-bound runs publish into each card. `aggregate` prints the generated disposition view (preserve its exact bytes for `close`); `progress` prints the plan state; `--schema` prints the input schema.
+- The reviewer run prints the generated run ID on stderr and the report on stdout; task-bound runs publish into each card. `aggregate` prints the generated disposition view (preserve its exact bytes for `close`); `progress` prints the plan state, with optional `next_actions` (`{action, batch_id, role, run_ids}`; `supersede-duplicate-runs` lists two or more successful chain heads of one role in an unclosed batch); `--schema` prints the input schema.
+- A new run prints a stderr warning when another run of its batch and role is outside its predecessor chain and is still running or a successful chain head; finalized failed runs never trigger it. The run continues and the exit code is unchanged. Resolve the duplicate with `--previous-run-id` or the close request's `superseded_runs`.
 
 ## Rejections
 

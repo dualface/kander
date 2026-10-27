@@ -1,0 +1,20 @@
+{
+  "board.review_unlinked_run_hint": "run {{.V0}} は実行に成功した {{.V1}} run ですが、{{.V2}} の結論チェーン上にありません。次の手順: チェーン上の run と同じコミット・同じ reviewer で並行実行されたものなら、close リクエストに \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<チェーン上の成功した run。例: {{.V2}}>\", \"basis\": \"<重複である理由>\"}} を追加します。その findings には引き続き割り当てと作成者の処置が必要です。修正済みの must-fix finding がある場合は、先に --previous-run-id {{.V2}} で増分レビューを実行し、その run を結論にします。",
+  "board.review_unlinked_runs_warning": "警告: batch {{.V0}} には run {{.V3}} の前任チェーンが届かない {{.V1}} run がすでにあります: {{.V2}}。この run は続行します。review close の前に、--previous-run-id で run をつなぐか、close リクエストの superseded_runs で並行した重複 run を指定してください。",
+  "review.unlinked_runs_unchecked": "警告: このロールの他の run を確認できませんでした: {{.V0}}。この run は続行します。",
+  "board.update_hint_owner": "次の手順: この行は kander show の出力どおりに残してください。kander move <task-id> working --owner が書き込みます。",
+  "board.update_hint_session": "次の手順: この行は kander show の出力どおりに残してください。kander start と kander resume が書き込みます。",
+  "board.update_hint_result": "次の手順: この行は kander show の出力どおりに残してください。kander move が done、archived、trash への移動時に書き込みます。",
+  "board.update_hint_created": "次の手順: この行は kander show の出力どおりに残してください。kander new が書き込みます。",
+  "board.update_hint_dispatch_field": "次の手順: この行は kander show の出力どおりに残してください。dispatch と notify のフローが書き込みます。",
+  "board.update_hint_internal": "次の手順: この行は kander show の出力どおりに残してください。Kander のトランザクションが書き込みます。",
+  "board.update_hint_resolved": "次の手順: *_RESOLVED 行は kander show の出力どおりに残してください。kander start と kander review が書き込みます。",
+  "board.update_hint_reviews_section": "次の手順: REVIEWS セクションは kander show の出力どおりに残してください。kander review が公開します。レビューの処置は kander review disposition で記録します。",
+  "board.update_hint_dispatches_section": "次の手順: DISPATCHES セクションは kander show の出力どおりに残してください。dispatch と notify のフローが書き込みます。",
+  "board.update_hint_dispositions_section": "次の手順: REVIEW_DISPOSITIONS セクションは kander show の出力どおりに残してください。これは過去のセクションで、書き込むコマンドはありません。",
+  "board.update_hint_contract_decisions_section": "次の手順: CONTRACT_DECISIONS セクションは kander show の出力どおりに残してください。update --contract-decision-file が書き込みます。",
+  "board.update_hint_lifecycle_section": "次の手順: LIFECYCLE_DECISION セクションは kander show の出力どおりに残してください。kander move の終了オプションと、引き取り・引き継ぎのフローが書き込みます。",
+  "board.update_hint_managed_path": "次の手順: このパスは専用コマンドが公開します。update では書き込めません。",
+  "board.update_hint_duplicate": "次の手順: 各フィールドとセクションは 1 か所だけにし、新しい内容は既存の箇所にまとめてください。",
+  "board.update_hint_frozen": "次の手順: 凍結された契約は GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、OUT_OF_SCOPE、TASK_GROUP、SIZE、pin フィールド、PREREQUISITES 行です。実行記録は DISCUSSION か IMPLEMENTATION に書きます。working か review の間は、トップレベルの受け入れ項目を - [ ] と - [x] の間で切り替えるだけなら決定は不要です。契約を変えるには、まずユーザーの決定を得てから --contract-decision-file を渡してください。"
+}

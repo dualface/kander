@@ -1,0 +1,20 @@
+{
+  "board.review_unlinked_run_hint": "run {{.V0}} 是执行成功的 {{.V1}} run，但不在 {{.V2}} 的结论链上。下一步：若它与链上某个 run 在同一提交、同一 reviewer 下并行运行，在关闭请求中加入 \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<链上执行成功的 run，例如 {{.V2}}>\", \"basis\": \"<为何是重复 run>\"}}；它的 findings 仍须分配并有作者处置。若它有已修复的 must-fix finding，先用 --previous-run-id {{.V2}} 运行一次增量审核，再以该 run 作结论。",
+  "board.review_unlinked_runs_warning": "警告：batch {{.V0}} 中已有 run {{.V3}} 的前驱链覆盖不到的 {{.V1}} run：{{.V2}}。本次 run 继续执行。review close 之前，用 --previous-run-id 把 run 接成链，或在关闭请求的 superseded_runs 中标记并行的重复 run。",
+  "review.unlinked_runs_unchecked": "警告：无法检查该角色的其他 run：{{.V0}}。本次 run 继续执行。",
+  "board.update_hint_owner": "下一步：按 kander show 的输出原样保留这一行；它由 kander move <task-id> working --owner 写入。",
+  "board.update_hint_session": "下一步：按 kander show 的输出原样保留这一行；它由 kander start 和 kander resume 写入。",
+  "board.update_hint_result": "下一步：按 kander show 的输出原样保留这一行；它由 kander move 在进入 done、archived 或 trash 时写入。",
+  "board.update_hint_created": "下一步：按 kander show 的输出原样保留这一行；它由 kander new 写入。",
+  "board.update_hint_dispatch_field": "下一步：按 kander show 的输出原样保留这一行；它由 dispatch 和 notify 流程写入。",
+  "board.update_hint_internal": "下一步：按 kander show 的输出原样保留这一行；它由 Kander 事务写入。",
+  "board.update_hint_resolved": "下一步：按 kander show 的输出原样保留 *_RESOLVED 行；它们由 kander start 和 kander review 写入。",
+  "board.update_hint_reviews_section": "下一步：按 kander show 的输出原样保留 REVIEWS 段落；它由 kander review 发布。审核处置用 kander review disposition 记录。",
+  "board.update_hint_dispatches_section": "下一步：按 kander show 的输出原样保留 DISPATCHES 段落；它由 dispatch 和 notify 流程写入。",
+  "board.update_hint_dispositions_section": "下一步：按 kander show 的输出原样保留 REVIEW_DISPOSITIONS 段落；这是历史段落，没有命令写入它。",
+  "board.update_hint_contract_decisions_section": "下一步：按 kander show 的输出原样保留 CONTRACT_DECISIONS 段落；它由 update --contract-decision-file 写入。",
+  "board.update_hint_lifecycle_section": "下一步：按 kander show 的输出原样保留 LIFECYCLE_DECISION 段落；它由 kander move 的终止选项和认领、交接流程写入。",
+  "board.update_hint_managed_path": "下一步：该路径由专用命令发布，update 不能写入。",
+  "board.update_hint_duplicate": "下一步：每个字段和段落只保留一处；把新内容合并进已有的那一处。",
+  "board.update_hint_frozen": "下一步：冻结契约包括 GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、OUT_OF_SCOPE、TASK_GROUP、SIZE、pin 字段和 PREREQUISITES 行。执行记录写进 DISCUSSION 或 IMPLEMENTATION。卡片处于 working 或 review 时，只在 - [ ] 与 - [x] 之间切换顶层验收项不需要决定。要修改契约，先取得用户决定，再传 --contract-decision-file。"
+}

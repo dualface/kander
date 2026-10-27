@@ -145,35 +145,35 @@ func validSpecUpdate(old, next, state, decision string) (string, error) {
 	// Duplicate headings and metadata create ambiguous contracts across readers.
 	for _, field := range append(append([]string(nil), managedFields...), FieldTaskGroup, "SIZE", FieldType, FieldTaskBranch) {
 		if len(fieldLines(next, field)) > 1 {
-			return "", kanbanError("board.transaction_invalid", field)
+			return "", withUpdateHint(kanbanError("board.transaction_invalid", field), "board.update_hint_duplicate")
 		}
 	}
 	for _, section := range append(append([]string(nil), frozenSections...), SectionDiscussion, "REVIEWS", "DISPATCHES", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION") {
 		re := regexp.MustCompile(`(?m)^## ` + TokenPattern(section) + `[ \t\r]*$`)
 		if len(re.FindAllStringIndex(next, -1)) > 1 {
-			return "", kanbanError("board.transaction_invalid", section)
+			return "", withUpdateHint(kanbanError("board.transaction_invalid", section), "board.update_hint_duplicate")
 		}
 	}
 	if _, err := prerequisiteIDsFrom(next, "update"); err != nil {
 		return "", err
 	}
 	if field := pinDuplicateField(next); field != "" {
-		return "", kanbanError("board.transaction_invalid", field)
+		return "", withUpdateHint(kanbanError("board.transaction_invalid", field), "board.update_hint_duplicate")
 	}
 	if field := pinManagedViolation(old, next); field != "" {
-		return "", kanbanError("board.transaction_managed", field)
+		return "", withUpdateHint(kanbanError("board.transaction_managed", field), "board.update_hint_resolved")
 	}
 
 	for _, field := range managedFields {
 		if !reflect.DeepEqual(fieldLines(old, field), fieldLines(next, field)) {
-			return "", kanbanError("board.transaction_managed", field)
+			return "", withUpdateHint(kanbanError("board.transaction_managed", field), managedFieldHint(field))
 		}
 	}
 	for _, section := range []string{"REVIEWS", "DISPATCHES", "REVIEW_DISPOSITIONS", "CONTRACT_DECISIONS", "LIFECYCLE_DECISION"} {
 		a, ok := SectionBody(old, section)
 		b, present := SectionBody(next, section)
 		if ok != present || a != b {
-			return "", kanbanError("board.transaction_managed", section)
+			return "", withUpdateHint(kanbanError("board.transaction_managed", section), managedSectionHints[section])
 		}
 	}
 	before, after := frozenContract(old), frozenContract(next)
@@ -182,7 +182,7 @@ func validSpecUpdate(old, next, state, decision string) (string, error) {
 			if acceptanceTicksOnly(state, before, after) {
 				return next, nil
 			}
-			return "", kanbanError("board.transaction_decision_required")
+			return "", withUpdateHint(kanbanError("board.transaction_decision_required"), "board.update_hint_frozen")
 		}
 		record := struct {
 			At            string `json:"at"`
@@ -195,6 +195,39 @@ func validSpecUpdate(old, next, state, decision string) (string, error) {
 		next = appendRecordSection(next, "CONTRACT_DECISIONS", "```json\n"+string(b)+"\n```")
 	}
 	return next, nil
+}
+
+// withUpdateHint appends the recovery step for an update rejection. The code and
+// the shared message stay unchanged, so move and other callers of the same key
+// keep their exact text.
+func withUpdateHint(err *Error, hint string) *Error {
+	err.Message += "\n" + t(hint)
+	return err
+}
+
+// managedFieldHint names the command that owns a managed metadata line.
+func managedFieldHint(field string) string {
+	switch field {
+	case FieldOwner, FieldStartedAt:
+		return "board.update_hint_owner"
+	case FieldSession, FieldWindow:
+		return "board.update_hint_session"
+	case FieldFinishedAt, FieldResult:
+		return "board.update_hint_result"
+	case FieldLanguage, FieldCreatedAt:
+		return "board.update_hint_created"
+	case "DISPATCH_ID", "EXECUTION_EPOCH":
+		return "board.update_hint_dispatch_field"
+	}
+	return "board.update_hint_internal"
+}
+
+var managedSectionHints = map[string]string{
+	"REVIEWS":             "board.update_hint_reviews_section",
+	"DISPATCHES":          "board.update_hint_dispatches_section",
+	"REVIEW_DISPOSITIONS": "board.update_hint_dispositions_section",
+	"CONTRACT_DECISIONS":  "board.update_hint_contract_decisions_section",
+	"LIFECYCLE_DECISION":  "board.update_hint_lifecycle_section",
 }
 
 // Producer-owned paths are excluded from ordinary updates and migration edits.
@@ -232,7 +265,7 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		}
 		for _, part := range strings.Split(strings.ToLower(o.Document), "/") {
 			if managedDocumentPart(part) {
-				return kanbanError("board.transaction_managed", o.Document)
+				return withUpdateHint(kanbanError("board.transaction_managed", o.Document), "board.update_hint_managed_path")
 			}
 		}
 		text := o.Text

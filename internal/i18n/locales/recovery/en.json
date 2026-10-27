@@ -1,0 +1,20 @@
+{
+  "board.review_unlinked_run_hint": "run {{.V0}} is a successful {{.V1}} run outside the conclusion chain of {{.V2}}. Next step: when it ran in parallel with a chain run on the same commit and reviewer, add \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<a successful run on the chain, such as {{.V2}}>\", \"basis\": \"<why it is a duplicate>\"}} to the close request; its findings still need assignment and author dispositions. When it has a fixed must-fix finding, first run an incremental review with --previous-run-id {{.V2}} and conclude with that run.",
+  "board.review_unlinked_runs_warning": "Warning: batch {{.V0}} already has {{.V1}} runs that the predecessor chain of run {{.V3}} does not reach: {{.V2}}. The run continues. Before review close, connect the runs with --previous-run-id or mark the parallel duplicate in the close request's superseded_runs.",
+  "review.unlinked_runs_unchecked": "Warning: could not check the other runs of this role: {{.V0}}. The run continues.",
+  "board.update_hint_owner": "Next step: keep this line exactly as kander show prints it; kander move <task-id> working --owner writes it.",
+  "board.update_hint_session": "Next step: keep this line exactly as kander show prints it; kander start and kander resume write it.",
+  "board.update_hint_result": "Next step: keep this line exactly as kander show prints it; kander move writes it on entering done, archived, or trash.",
+  "board.update_hint_created": "Next step: keep this line exactly as kander show prints it; kander new writes it.",
+  "board.update_hint_dispatch_field": "Next step: keep this line exactly as kander show prints it; the dispatch and notify flow writes it.",
+  "board.update_hint_internal": "Next step: keep this line exactly as kander show prints it; Kander transactions write it.",
+  "board.update_hint_resolved": "Next step: keep the *_RESOLVED lines exactly as kander show prints them; kander start and kander review write them.",
+  "board.update_hint_reviews_section": "Next step: keep the REVIEWS section exactly as kander show prints it; kander review publishes it. Record review dispositions with kander review disposition.",
+  "board.update_hint_dispatches_section": "Next step: keep the DISPATCHES section exactly as kander show prints it; the dispatch and notify flow writes it.",
+  "board.update_hint_dispositions_section": "Next step: keep the REVIEW_DISPOSITIONS section exactly as kander show prints it; it is a historical section and no command writes it.",
+  "board.update_hint_contract_decisions_section": "Next step: keep the CONTRACT_DECISIONS section exactly as kander show prints it; update --contract-decision-file writes it.",
+  "board.update_hint_lifecycle_section": "Next step: keep the LIFECYCLE_DECISION section exactly as kander show prints it; the termination options of kander move and the claim and handoff flow write it.",
+  "board.update_hint_managed_path": "Next step: a dedicated command publishes this path; update cannot write it.",
+  "board.update_hint_duplicate": "Next step: keep each field and section once; merge the new content into the existing one.",
+  "board.update_hint_frozen": "Next step: the frozen contract is GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, OUT_OF_SCOPE, TASK_GROUP, SIZE, the pin fields, and the PREREQUISITES line. Write execution records into DISCUSSION or IMPLEMENTATION. In working or review, toggling top-level acceptance items between - [ ] and - [x] needs no decision. To change the contract, get the user's decision first, then pass --contract-decision-file."
+}

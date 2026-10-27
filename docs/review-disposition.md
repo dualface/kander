@@ -325,6 +325,22 @@ kander review close <CWD> <close-request.json>
 }
 ```
 
+### 5. Parallel Duplicate Runs
+
+Every successful run of a required role must sit on the conclusion chain (the conclusion run and its `previous_run_id` ancestors), with one exception: a parallel duplicate listed in the optional `superseded_runs` map.
+
+```json
+"superseded_runs": {
+  "pmqa-twin": {"replacement": "pmqa-fixed", "basis": "started in parallel with pmqa-first on the same commit"}
+}
+```
+
+- The superseded run has `execution_status: ok` and the conclusion's role, and is not on the chain. A chain run has the same commit and reviewer and the same `previous_run_id`, or the superseded run's predecessor is itself superseded. A full re-run after a fix or a reviewer switch has no such twin and stays rejected.
+- `replacement` is a successful run on the chain; `basis` is nonempty. An entry that matches no unlinked successful run (another batch, a failed run, a chain run) is rejected.
+- Each entry adds the edge `superseded.commit → replacement.commit` to the Git claims. The superseded run's findings keep the ordinary rules: they need assignment and author dispositions, and a fixed must-fix must be an ancestor of the conclusion run's commit. A fixed must-fix of the duplicate therefore needs a later incremental run as the conclusion.
+- An unlisted duplicate fails close with a localized next step naming the run, the conclusion, and the entry to add. `review progress` reports every role with two or more successful chain heads in an unclosed batch as `next_actions: [{"action": "supersede-duplicate-runs", "batch_id", "role", "run_ids"}]`.
+- The field is `omitempty`: closures without it keep their stored bytes, so existing closed batches verify unchanged.
+
 ---
 
 ## 6. Completion Gate Verification

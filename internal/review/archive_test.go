@@ -594,3 +594,19 @@ func TestArchiveJSONReviewerReplayBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestArchiveWarnsAboutParallelDuplicateAndStillRuns(t *testing.T) {
+	_, root, args := archiveHarness(t)
+	t.Setenv("FAKE_CODEX_REPORT", "PASS\n"+emptyStructuredReview)
+	if code, _, stderr := captureRun(t, args); code != 0 {
+		t.Fatalf("first run: %d %s", code, stderr)
+	}
+	args[6] = "parallel"
+	code, _, stderr := captureRun(t, args)
+	if code != 0 || !strings.Contains(stderr, "stable (finalized/ok)") {
+		t.Fatalf("parallel run: %d %s", code, stderr)
+	}
+	if run, err := board.ReadReviewRun(root, "parallel"); err != nil || run.ExecutionStatus != "ok" {
+		t.Fatalf("parallel run not created: %+v %v", run, err)
+	}
+}

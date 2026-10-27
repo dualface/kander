@@ -10,14 +10,15 @@ import (
 )
 
 type ReviewProgress struct {
-	TaskID       string            `json:"task_id"`
-	PlanID       string            `json:"plan_id,omitempty"`
-	Status       string            `json:"status"`
-	Pending      []string          `json:"pending,omitempty"`
-	RebindCycles map[string]string `json:"rebind_cycles,omitempty"`
-	PlanTarget   string            `json:"plan_target,omitempty"`
-	BatchTarget  string            `json:"batch_target,omitempty"`
-	BatchID      string            `json:"batch_id,omitempty"`
+	TaskID       string             `json:"task_id"`
+	PlanID       string             `json:"plan_id,omitempty"`
+	Status       string             `json:"status"`
+	Pending      []string           `json:"pending,omitempty"`
+	RebindCycles map[string]string  `json:"rebind_cycles,omitempty"`
+	PlanTarget   string             `json:"plan_target,omitempty"`
+	BatchTarget  string             `json:"batch_target,omitempty"`
+	BatchID      string             `json:"batch_id,omitempty"`
+	NextActions  []ReviewNextAction `json:"next_actions,omitempty"`
 }
 
 func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (LockScope, error) {
@@ -143,6 +144,11 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 				return progress, e
 			}
 			progress.Pending = append(progress.Pending, pending...)
+			runs, e := batchRuns(tx, b)
+			if e != nil {
+				return progress, e
+			}
+			progress.NextActions = append(progress.NextActions, duplicateRunActions(b, runs)...)
 			previous = ""
 			continue
 		}

@@ -72,3 +72,19 @@ func schemaOutput(t *testing.T, command string) string {
 	}
 	return out
 }
+
+func TestCloseSchemaDescribesSupersededRunsInEveryLanguage(t *testing.T) {
+	dir := t.TempDir()
+	setupLang(t, filepath.Join(dir, "config.json"))
+	for _, lang := range []string{"en", "cn", "ja"} {
+		t.Setenv(config.EnvLang, lang)
+		config.BindEffectiveLanguage()
+		out := schemaOutput(t, "close")
+		for _, field := range []string{"superseded_runs", "superseded_runs.<key>.replacement", "superseded_runs.<key>.basis"} {
+			description := config.Text(schemaTextID("close", field))
+			if !strings.Contains(out, "field: "+field+"\n") || !strings.Contains(out, description) || strings.HasPrefix(description, "review.schema.") {
+				t.Fatalf("%s: %s undocumented:\n%s", lang, field, out)
+			}
+		}
+	}
+}

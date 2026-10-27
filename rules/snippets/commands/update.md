@@ -40,4 +40,5 @@ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-
 
 - A revision conflict: read and reconcile the current document before retrying.
 - A frozen-field change without a decision file, a managed path, a non-canonical path, an archived card, or a bound card without the grant.
+- A rejected managed field or section, managed path, duplicate field or section, or frozen-contract change adds a localized next step on the following line: keep the line or section exactly as `kander show` prints it and use the command that writes it, merge duplicates into one place, or write execution records into `DISCUSSION` or `IMPLEMENTATION`. Follow that step instead of retrying the same content.
 - A missing task ID, an option without a value, or an unknown option is a usage error.

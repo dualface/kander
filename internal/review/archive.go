@@ -148,6 +148,15 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 	ctx.reportLanguage = run.ReportLanguage
 	ctx.archive = &archiveExecution{root: root, run: run, staging: staging, taskSnapshot: task}
 	fmt.Fprintln(os.Stderr, config.Text("review.archive_identity", run.RunID, run.BatchID))
+	if fresh {
+		// The warning is advisory: the intent is already committed, so a read
+		// failure is reported and the run continues.
+		if unlinked, e := board.UnlinkedReviewRuns(root, run); e != nil {
+			fmt.Fprintln(os.Stderr, config.Text("review.unlinked_runs_unchecked", e))
+		} else if warning := board.UnlinkedReviewRunsWarning(run, unlinked); warning != "" {
+			fmt.Fprintln(os.Stderr, warning)
+		}
+	}
 	return fresh, nil
 }
 func readArchiveJSON(path string, value any) error {

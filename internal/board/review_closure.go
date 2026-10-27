@@ -45,7 +45,15 @@ type ReviewCloseRequest struct {
 	Author           string                          `json:"author"`
 	Roles            map[string]ReviewRoleConclusion `json:"roles"`
 	ResolvedFailures map[string]string               `json:"resolved_failures"`
+	SupersededRuns   map[string]ReviewSupersededRun  `json:"superseded_runs,omitempty"`
 	Opinions         []ReviewOpinion                 `json:"opinions"`
+}
+
+// ReviewSupersededRun retires a parallel duplicate of a conclusion-chain run.
+// omitempty keeps closures written before the field byte-identical on re-encode.
+type ReviewSupersededRun struct {
+	Replacement string `json:"replacement"`
+	Basis       string `json:"basis"`
 }
 type ReviewGitEdge struct {
 	Ancestor   string `json:"ancestor"`
@@ -248,6 +256,33 @@ func PublishReviewDisposition(root, id string) (v ReviewBatchView, err error) {
 	})
 	return
 }
+
+// supersededReplacement admits a successful run outside the conclusion chain
+// only as a parallel duplicate: a chain run with the same commit and reviewer
+// shares its predecessor, or its predecessor is itself superseded. Anything
+// else would let a full re-run bypass the incremental fix round or switch
+// reviewers mid-batch.
+func supersededReplacement(runs map[string]ReviewRunView, chain map[string]bool, conclusion, run ReviewRun, superseded map[string]ReviewSupersededRun) (string, error) {
+	s, ok := superseded[run.RunID]
+	if !ok {
+		return "", reviewError("unconnected successful role run: " + t("board.review_unlinked_run_hint", run.RunID, run.Role, conclusion.RunID))
+	}
+	if strings.TrimSpace(s.Basis) == "" {
+		return "", reviewError("superseded_runs basis required: " + run.RunID)
+	}
+	replacement, ok := runs[s.Replacement]
+	if !ok || !chain[s.Replacement] || replacement.Run.ExecutionStatus != "ok" {
+		return "", reviewError("superseded_runs replacement must be a successful run on the conclusion chain of " + conclusion.RunID + ": " + run.RunID)
+	}
+	_, previousSuperseded := superseded[run.PreviousRunID]
+	for id := range chain {
+		twin := runs[id].Run
+		if twin.Commit == run.Commit && twin.Reviewer == run.Reviewer && (twin.PreviousRunID == run.PreviousRunID || previousSuperseded) {
+			return replacement.Run.Commit, nil
+		}
+	}
+	return "", reviewError("superseded_runs entry has no parallel twin (same commit, reviewer and predecessor) on the conclusion chain: " + run.RunID)
+}
 func latestViewRecords(rv ReviewRunView) []ReviewDisposition {
 	return latestDispositions(dispositionLedger{Records: rv.Records})
 }
@@ -289,6 +324,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 		add(b.Base, b.TargetCommit)
 	}
 	required := 0
+	superseded := map[string]bool{}
 	for _, role := range reviewRequirementRoles(b.Requirements) {
 		if b.Requirements[role] != "required" {
 			statuses[role] = b.Requirements[role]
@@ -330,7 +366,13 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 				continue
 			}
 			if other.Run.ExecutionStatus == "ok" && !chain[other.Run.RunID] {
-				return nil, nil, reviewError("unconnected successful role run")
+				replacement, e := supersededReplacement(runs, chain, rv.Run, other.Run, r.SupersededRuns)
+				if e != nil {
+					return nil, nil, e
+				}
+				superseded[other.Run.RunID] = true
+				add(other.Run.Commit, replacement)
+				continue
 			}
 			if other.Run.ExecutionStatus != "ok" {
 				replacement, ok := runs[r.ResolvedFailures[other.Run.RunID]]
@@ -391,6 +433,11 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 	}
 	if len(r.Roles) != required {
 		return nil, nil, reviewError("unexpected role conclusions")
+	}
+	for id := range r.SupersededRuns {
+		if !superseded[id] {
+			return nil, nil, reviewError("superseded_runs entry is not a successful run outside its role's conclusion chain: " + id)
+		}
 	}
 	for id, replacement := range r.ResolvedFailures {
 		rv, ok := runs[id]

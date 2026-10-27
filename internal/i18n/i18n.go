@@ -46,6 +46,7 @@ var catalogFiles = []string{
 	"locales/luvus/en.json", "locales/luvus/zh-CN.json", "locales/luvus/ja.json",
 	"locales/report/en.json", "locales/report/zh-CN.json", "locales/report/ja.json",
 	"locales/theme/en.json", "locales/theme/zh-CN.json", "locales/theme/ja.json",
+	"locales/recovery/en.json", "locales/recovery/zh-CN.json", "locales/recovery/ja.json",
 }
 
 var localizers = loadLocalizers()
