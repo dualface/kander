@@ -14,7 +14,8 @@ type ReviewNextAction struct {
 }
 
 // reviewChainHeads returns the successful runs of role that no other successful
-// run names as previous_run_id. More than one head means parallel duplicates.
+// run names as previous_run_id. More than one head means at most one chain can
+// conclude; the others close only when they qualify for superseded_runs.
 func reviewChainHeads(runs []ReviewRun, role string) []string {
 	referenced := map[string]bool{}
 	for _, r := range runs {

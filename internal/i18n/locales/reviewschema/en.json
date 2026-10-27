@@ -39,7 +39,7 @@
   "review.schema.close.opinions.item.finding.finding_id": "Required when finding is present. Finding ID.",
   "review.schema.close.opinions.item.finding.run_id": "Required when finding is present. Run ID of the referenced finding.",
   "review.schema.close.resolved_failures": "Map of a failed run ID to the successful replacement run ID. Send an empty object when the role has no failed run. Every failed run of a required role must appear.",
-  "review.schema.close.superseded_runs": "Map of a successful run ID outside its role's conclusion chain to its replacement. Use it only for a parallel duplicate: a chain run with the same commit and reviewer shares its predecessor, or its predecessor is also superseded. Its findings still need assignment and author dispositions. Omit it when there is none.",
+  "review.schema.close.superseded_runs": "Map of a successful run ID outside its role's conclusion chain to its replacement. Use it only for a parallel duplicate: a chain run with the same commit and reviewer shares its predecessor, or its predecessor is also superseded and it has the conclusion's commit and reviewer. Its findings still need assignment and author dispositions. Omit it when there is none.",
   "review.schema.close.superseded_runs.key.replacement": "Successful run on the same role's conclusion chain that replaces the duplicate.",
   "review.schema.close.superseded_runs.key.basis": "Why the run is a parallel duplicate; must be nonempty.",
   "review.schema.close.roles": "One entry for each required role. Do not include a role whose requirement is N/A.",

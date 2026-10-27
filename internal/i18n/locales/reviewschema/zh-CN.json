@@ -39,7 +39,7 @@
   "review.schema.close.opinions.item.finding.finding_id": "出现 finding 时必填。finding ID。",
   "review.schema.close.opinions.item.finding.run_id": "出现 finding 时必填。所引用 finding 的运行 ID。",
   "review.schema.close.resolved_failures": "失败运行 ID 到成功替代运行 ID 的映射。该角色没有失败运行时发送空对象。required 角色的每个失败运行都必须出现。",
-  "review.schema.close.superseded_runs": "不在本角色结论链上的成功运行 ID 到替代运行的映射。只用于并行重复：结论链上有同一提交、同一 reviewer 且前驱相同的运行，或其前驱也已被替代。它的 findings 仍须分配并有作者处置。没有时省略。",
+  "review.schema.close.superseded_runs": "不在本角色结论链上的成功运行 ID 到替代运行的映射。只用于并行重复：结论链上有同一提交、同一 reviewer 且前驱相同的运行，或其前驱也已被替代且它的提交和 reviewer 与结论运行相同。它的 findings 仍须分配并有作者处置。没有时省略。",
   "review.schema.close.superseded_runs.key.replacement": "同一角色结论链上替代该重复运行的成功运行。",
   "review.schema.close.superseded_runs.key.basis": "说明该运行为何是并行重复；不得为空。",
   "review.schema.close.roles": "每个 required 角色一条。不要列入要求为 N/A 的角色。",

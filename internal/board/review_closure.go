@@ -259,9 +259,9 @@ func PublishReviewDisposition(root, id string) (v ReviewBatchView, err error) {
 
 // supersededReplacement admits a successful run outside the conclusion chain
 // only as a parallel duplicate: a chain run with the same commit and reviewer
-// shares its predecessor, or its predecessor is itself superseded. Anything
-// else would let a full re-run bypass the incremental fix round or switch
-// reviewers mid-batch.
+// shares its predecessor, or its predecessor is itself superseded and it
+// matches the conclusion's commit and reviewer. Anything else would let a full
+// re-run bypass the incremental fix round or switch reviewers mid-batch.
 func supersededReplacement(runs map[string]ReviewRunView, chain map[string]bool, conclusion, run ReviewRun, superseded map[string]ReviewSupersededRun) (string, error) {
 	s, ok := superseded[run.RunID]
 	if !ok {
@@ -274,12 +274,14 @@ func supersededReplacement(runs map[string]ReviewRunView, chain map[string]bool,
 	if !ok || !chain[s.Replacement] || replacement.Run.ExecutionStatus != "ok" {
 		return "", reviewError("superseded_runs replacement must be a successful run on the conclusion chain of " + conclusion.RunID + ": " + run.RunID)
 	}
-	_, previousSuperseded := superseded[run.PreviousRunID]
 	for id := range chain {
 		twin := runs[id].Run
-		if twin.Commit == run.Commit && twin.Reviewer == run.Reviewer && (twin.PreviousRunID == run.PreviousRunID || previousSuperseded) {
+		if twin.Commit == run.Commit && twin.Reviewer == run.Reviewer && twin.PreviousRunID == run.PreviousRunID {
 			return replacement.Run.Commit, nil
 		}
+	}
+	if _, ok := superseded[run.PreviousRunID]; ok && run.Commit == conclusion.Commit && run.Reviewer == conclusion.Reviewer {
+		return replacement.Run.Commit, nil
 	}
 	return "", reviewError("superseded_runs entry has no parallel twin (same commit, reviewer and predecessor) on the conclusion chain: " + run.RunID)
 }

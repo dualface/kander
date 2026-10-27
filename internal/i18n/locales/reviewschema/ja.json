@@ -39,7 +39,7 @@
   "review.schema.close.opinions.item.finding.finding_id": "finding があるとき必須。finding ID。",
   "review.schema.close.opinions.item.finding.run_id": "finding があるとき必須。参照する finding の実行 ID。",
   "review.schema.close.resolved_failures": "失敗した実行 ID から成功した代替実行 ID への対応。そのロールに失敗実行がなければ空オブジェクトを送ります。required ロールの失敗実行はすべて含めます。",
-  "review.schema.close.superseded_runs": "ロールの結論チェーン外にある成功した実行 ID から代替実行への対応。並行した重複にだけ使います: チェーン上に同じコミット・同じ reviewer で前任が同じ実行があるか、その前任も置き換え済みであること。その findings には引き続き割り当てと作成者の処置が必要です。該当がなければ省略します。",
+  "review.schema.close.superseded_runs": "ロールの結論チェーン外にある成功した実行 ID から代替実行への対応。並行した重複にだけ使います: チェーン上に同じコミット・同じ reviewer で前任が同じ実行があるか、その前任も置き換え済みで、結論の実行と同じコミット・reviewer であること。その findings には引き続き割り当てと作成者の処置が必要です。該当がなければ省略します。",
   "review.schema.close.superseded_runs.key.replacement": "同じロールの結論チェーン上で重複を置き換える成功した実行。",
   "review.schema.close.superseded_runs.key.basis": "その実行が並行した重複である理由。空にできません。",
   "review.schema.close.roles": "required のロールごとに一つ。要求が N/A のロールは入れません。",

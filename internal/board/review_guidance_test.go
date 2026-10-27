@@ -41,6 +41,29 @@ func closeWith(t *testing.T, root string, v ReviewBatchView, r ReviewCloseReques
 	return c, edges, err
 }
 
+// advanceAndRun advances the batch to target and publishes an incremental PMQA
+// run after previous on it.
+func advanceAndRun(t *testing.T, root, id string, previous ReviewRun, runID, target string, revision uint64) ReviewRun {
+	t.Helper()
+	if err := AdvanceReviewBatch(root, ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: revision, Advance: ReviewAdvance{PreviousTarget: previous.Commit, Target: target, Reason: "member fix", Deliveries: map[string]string{target: id}}}); err != nil {
+		t.Fatal(err)
+	}
+	return incrementalRun(t, root, id, previous, runID)
+}
+
+func incrementalRun(t *testing.T, root, id string, previous ReviewRun, runID string) ReviewRun {
+	t.Helper()
+	v, err := ReadReviewBatchView(root, "batch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := archiveInput([]string{id}, runID, "PMQA")
+	input.PreviousRunID, input.ReviewedCommit, input.Commit = previous.RunID, previous.Commit, v.Batch.TargetCommit
+	run := gateRun(t, root, input, emptyFindings())
+	assignGate(t, root, run, map[string][]string{})
+	return run
+}
+
 func TestSupersededTwinRunClosesBatch(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "twin-close")
@@ -57,12 +80,15 @@ func TestSupersededTwinRunClosesBatch(t *testing.T) {
 		}
 	}
 
-	v, r = supersedeRequest(t, root, a, map[string]ReviewSupersededRun{b.RunID: {Replacement: a.RunID, Basis: "parallel duplicate of twin-a"}})
+	// Conclude on a later commit so the superseded edge differs from every edge
+	// the conclusion chain produces by itself.
+	c := advanceAndRun(t, root, id, a, "twin-c", strings.Repeat("c", 40), 1)
+	v, r = supersedeRequest(t, root, c, map[string]ReviewSupersededRun{b.RunID: {Replacement: c.RunID, Basis: "parallel duplicate of twin-a"}})
 	_, edges, err := closeWith(t, root, v, r)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(edges, ReviewGitEdge{Ancestor: b.Commit, Descendant: a.Commit}) {
+	if !slices.Contains(edges, ReviewGitEdge{Ancestor: b.Commit, Descendant: c.Commit}) {
 		t.Fatalf("superseded edge missing: %v", edges)
 	}
 	p, err := ReviewTaskProgress(root, id)
@@ -118,16 +144,28 @@ func TestSupersededRunsRejectInvalidEntries(t *testing.T) {
 	}
 }
 
-func TestSupersededRunRequiresParallelTwinAndRole(t *testing.T) {
+func TestSupersededRunRejectsReviewerSwitch(t *testing.T) {
 	root := tempBoard(t)
-	id := gateCard(t, root, "twin-required")
-	gatePlan(t, root, []string{id}, map[string]string{"PMQA": "required", "Security": "required"})
+	id := gateCard(t, root, "twin-reviewer")
+	gatePlan(t, root, []string{id}, archiveRequirements())
 	a := gateRun(t, root, archiveInput([]string{id}, "pm-a", "PMQA"), emptyFindings())
 	assignGate(t, root, a, map[string][]string{})
 	other := archiveInput([]string{id}, "pm-other-reviewer", "PMQA")
 	other.Reviewer = "claude"
 	b := gateRun(t, root, other, emptyFindings())
 	assignGate(t, root, b, map[string][]string{})
+	v, r := supersedeRequest(t, root, a, map[string]ReviewSupersededRun{b.RunID: {Replacement: a.RunID, Basis: "dup"}})
+	if _, _, err := ReviewClosureEdges(v, r); err == nil || !strings.Contains(err.Error(), "twin") {
+		t.Fatalf("reviewer switch accepted as duplicate: %v", err)
+	}
+}
+
+func TestSupersededRunRejectsCrossRoleReplacement(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "twin-role")
+	gatePlan(t, root, []string{id}, map[string]string{"PMQA": "required", "Security": "required"})
+	a := gateRun(t, root, archiveInput([]string{id}, "pm-a", "PMQA"), emptyFindings())
+	assignGate(t, root, a, map[string][]string{})
 	sec := gateRun(t, root, archiveInput([]string{id}, "sec", "Security"), emptyFindings())
 	assignGate(t, root, sec, map[string][]string{})
 	secTwin := gateRun(t, root, archiveInput([]string{id}, "sec-twin", "Security"), emptyFindings())
@@ -137,14 +175,32 @@ func TestSupersededRunRequiresParallelTwinAndRole(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := ReviewCloseRequest{BatchID: "batch", ExpectedRevision: v.Batch.Revision, ViewHash: ReviewViewDigest(v), Author: "coordinator", Roles: map[string]ReviewRoleConclusion{"PMQA": passRole(a), "Security": passRole(sec)}}
-	r.SupersededRuns = map[string]ReviewSupersededRun{b.RunID: {Replacement: a.RunID, Basis: "dup"}, secTwin.RunID: {Replacement: sec.RunID, Basis: "dup"}}
-	if _, _, err = ReviewClosureEdges(v, r); err == nil || !strings.Contains(err.Error(), "twin") {
-		t.Fatalf("reviewer switch accepted as duplicate: %v", err)
+	r.SupersededRuns = map[string]ReviewSupersededRun{secTwin.RunID: {Replacement: sec.RunID, Basis: "dup"}}
+	if _, _, err = ReviewClosureEdges(v, r); err != nil {
+		t.Fatalf("same-role replacement rejected: %v", err)
 	}
-	r.Roles["PMQA"] = passRole(a)
 	r.SupersededRuns = map[string]ReviewSupersededRun{secTwin.RunID: {Replacement: a.RunID, Basis: "dup"}}
-	if _, _, err = ReviewClosureEdges(v, r); err == nil {
-		t.Fatal("cross-role replacement accepted")
+	if _, _, err = ReviewClosureEdges(v, r); err == nil || !strings.Contains(err.Error(), "replacement") {
+		t.Fatalf("cross-role replacement accepted: %v", err)
+	}
+}
+
+func TestSupersededBranchMustMatchConclusion(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "twin-branch")
+	a0, b0 := twinRuns(t, root, id)
+	a1 := advanceAndRun(t, root, id, a0, "a1", strings.Repeat("c", 40), 1)
+	b1 := incrementalRun(t, root, id, b0, "b1")
+	branch := map[string]ReviewSupersededRun{b0.RunID: {Replacement: a0.RunID, Basis: "dup"}, b1.RunID: {Replacement: a1.RunID, Basis: "dup"}}
+	v, r := supersedeRequest(t, root, a1, branch)
+	if _, _, err := ReviewClosureEdges(v, r); err != nil {
+		t.Fatalf("branch at the conclusion's commit rejected: %v", err)
+	}
+	a2 := advanceAndRun(t, root, id, a1, "a2", strings.Repeat("d", 40), 2)
+	branch[b1.RunID] = ReviewSupersededRun{Replacement: a2.RunID, Basis: "dup"}
+	v, r = supersedeRequest(t, root, a2, branch)
+	if _, _, err := ReviewClosureEdges(v, r); err == nil || !strings.Contains(err.Error(), b1.RunID) {
+		t.Fatalf("branch behind the conclusion accepted: %v", err)
 	}
 }
 
@@ -203,8 +259,12 @@ func TestClosureWithoutSupersededRunsKeepsStoredBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "superseded_runs") {
-		t.Fatal("closure without superseded runs changed its stored form")
+	stored, err := readClosure(root, "batch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy := legacyClosureJSON(stored); string(data) != legacy {
+		t.Fatalf("closure bytes differ from the pre-superseded_runs format:\n%s\n%s", data, legacy)
 	}
 	p, err := ReviewTaskProgress(root, id)
 	if err != nil || p.Status != "closed" || p.NextActions != nil {
@@ -292,4 +352,41 @@ func TestUnlinkedReviewRunsWarnOnlyForOpenDuplicates(t *testing.T) {
 			t.Fatal("linked predecessor reported as unlinked")
 		}
 	}
+}
+
+// legacyCloseRequest and legacyClosure mirror the closure schema before
+// superseded_runs existed; encoding through them yields the old stored bytes.
+type legacyCloseRequest struct {
+	Mechanical       []ReviewMechanicalAssessment    `json:"mechanical,omitempty"`
+	BatchID          string                          `json:"batch_id"`
+	ExpectedRevision uint64                          `json:"expected_revision"`
+	ViewHash         string                          `json:"view_hash"`
+	Author           string                          `json:"author"`
+	Roles            map[string]ReviewRoleConclusion `json:"roles"`
+	ResolvedFailures map[string]string               `json:"resolved_failures"`
+	Opinions         []ReviewOpinion                 `json:"opinions"`
+}
+type legacyClosure struct {
+	Schema       int                `json:"schema"`
+	PlanID       string             `json:"plan_id"`
+	BatchID      string             `json:"batch_id"`
+	TargetCommit string             `json:"target_commit"`
+	Request      legacyCloseRequest `json:"request"`
+	Git          ReviewGitEvidence  `json:"git"`
+	RoleStatuses map[string]string  `json:"role_statuses"`
+	View         ReviewBatchView    `json:"view"`
+	ClosedAt     string             `json:"closed_at"`
+}
+
+func legacyClosureJSON(c ReviewClosure) string {
+	r := c.Request
+	return reviewJSON(legacyClosure{Schema: c.Schema, PlanID: c.PlanID, BatchID: c.BatchID, TargetCommit: c.TargetCommit, Request: legacyCloseRequest{Mechanical: r.Mechanical, BatchID: r.BatchID, ExpectedRevision: r.ExpectedRevision, ViewHash: r.ViewHash, Author: r.Author, Roles: r.Roles, ResolvedFailures: r.ResolvedFailures, Opinions: r.Opinions}, Git: c.Git, RoleStatuses: c.RoleStatuses, View: c.View, ClosedAt: c.ClosedAt})
+}
+
+func readClosure(root, batch string) (c ReviewClosure, err error) {
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+		_, e := readReviewJSON(tx, closureName(batch), &c)
+		return e
+	})
+	return
 }
