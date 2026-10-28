@@ -17,6 +17,9 @@ type copyConfirm func(check pathCheck, dest string) (bool, error)
 
 var confirmCopy copyConfirm = runCopyYesNo
 
+// startupInteractive gates the startup copy prompt on a terminal; tests replace it.
+var startupInteractive = requireInteractive
+
 var (
 	copyPromptIn  io.Reader = os.Stdin
 	copyPromptOut io.Writer = os.Stderr
@@ -61,9 +64,10 @@ func runCopyYesNo(check pathCheck, dest string) (bool, error) {
 
 // offerCopy reports whether kander install should copy the running binary to
 // the global entry. PATH identity match skips the copy; otherwise it copies
-// without asking.
+// without asking. A Microsoft Store install never copies: its execution alias
+// is already on PATH and a copy would leave the Store's update channel.
 func offerCopy() bool {
-	return !inspectPath("").Matches
+	return !Packaged() && !inspectPath("").Matches
 }
 
 func applyGlobalInstallDefaults(req *Request) {
@@ -90,8 +94,9 @@ func warnPath(current string) {
 // a handoff, cancellation, or error). Missing-config bare launches skip this
 // prompt and open the board options panel after doctor; post-install startup
 // also skips it so declining or copying cannot cause a prompt loop in one launch.
+// A Microsoft Store install skips it as well; see offerCopy.
 func CheckStartupCopy() (handled bool, code int) {
-	if os.Getenv(EnvSkipInstall) != "" || requireInteractive() != nil || inSourceTree() {
+	if Packaged() || os.Getenv(EnvSkipInstall) != "" || startupInteractive() != nil || inSourceTree() {
 		return false, 0
 	}
 	entry, err := lookupExecutable()

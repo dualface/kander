@@ -98,7 +98,11 @@ func updateAssetName(goos, goarch string) (string, bool) {
 }
 
 // CheckUpdate queries the latest stable GitHub release. No update is (nil, nil).
+// A Microsoft Store install never checks: the Store delivers its updates.
 func CheckUpdate(ctx context.Context) (*UpdateInfo, error) {
+	if Packaged() {
+		return nil, nil
+	}
 	current := version.String()
 	if !version.Valid(current) || strings.Contains(strings.TrimPrefix(current, "v"), "-") {
 		return nil, nil
@@ -166,7 +170,11 @@ func updateGet(ctx context.Context, client *http.Client, rawURL string, limit in
 }
 
 // ApplyUpdate installs info and returns the verified executable path.
+// A Microsoft Store install refuses before any download or file write.
 func ApplyUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
+	if Packaged() {
+		return UpdateResult{}, errStoreManaged()
+	}
 	if !version.Valid(info.Version) || strings.Contains(info.Version, "-") {
 		return UpdateResult{}, errors.New("invalid update version")
 	}

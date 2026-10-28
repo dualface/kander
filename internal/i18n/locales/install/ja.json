@@ -17,5 +17,6 @@
   "install.rule_replaced_with_backup": "{{.V0}} を {{.V1}} にバックアップし、埋め込みコピーをインストールしました",
   "install.rule_replace_failed": "ローカルで編集されたルールファイル {{.V0}} の置き換えに失敗しました: {{.V1}}",
   "install.rule_backup_refused_link": "ルールファイルはリンクのため置き換えませんでした: {{.V0}}",
-  "install.rule_replace_missing": "ルールファイルはもう存在しません: {{.V0}}"
+  "install.rule_replace_missing": "ルールファイルはもう存在しません: {{.V0}}",
+  "install.update_store_managed": "kander は Microsoft Store からインストールされています。更新は Microsoft Store が管理します"
 }
