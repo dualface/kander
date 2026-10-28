@@ -87,3 +87,14 @@ jobs:
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
           gh auth setup-git
           ./scripts/release.sh --skip-tag --no-test "${GITHUB_REF_NAME}"
+
+  # Builds the Microsoft Store upload bundle on a Windows runner and attaches
+  # it to the release. Stable tags only: an MSIX version cannot carry a
+  # prerelease suffix. msix.yml skips itself with a notice while the Store
+  # identity variables are unset; see docs/windows-msix-store.md.
+  msix:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/msix.yml
+    with:
+      tag: ${{ github.ref_name }}

@@ -1,0 +1,138 @@
+# Build the Microsoft Store MSIX bundle on a Windows runner.
+#
+# - push touching the packaging: a sideload test bundle (test identity,
+#   throwaway signature) as a run artifact, to keep the packaging verified.
+# - workflow_dispatch: any ref and version, test or Store identity, as a run
+#   artifact. GitHub offers it only once this file is on the default branch.
+# - workflow_call from Release: the Store upload bundle for the tag, attached
+#   to that GitHub Release. Skipped with a notice while the Store identity
+#   variables are unset, so the release itself still succeeds.
+#
+# The Store identity is public (Partner Center > Product identity) and lives
+# in the repository variables KANDER_MSIX_IDENTITY_NAME, KANDER_MSIX_PUBLISHER
+# and KANDER_MSIX_PUBLISHER_DISPLAY_NAME. See docs/windows-msix-store.md.
+
+name: MSIX
+
+on:
+  push:
+    paths:
+      - 'packaging/msix/**'
+      - '.github/workflows/msix.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: true
+        default: main
+      version:
+        description: kander version X.Y.Z (MSIX version X.Y.Z.0)
+        required: true
+      test_identity:
+        description: Build a signed sideload test bundle instead of the Store upload
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag vX.Y.Z to build and attach the Store bundle to
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      KANDER_MSIX_IDENTITY_NAME: ${{ vars.KANDER_MSIX_IDENTITY_NAME }}
+      KANDER_MSIX_PUBLISHER: ${{ vars.KANDER_MSIX_PUBLISHER }}
+      KANDER_MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.KANDER_MSIX_PUBLISHER_DISPLAY_NAME }}
+    steps:
+      - name: Resolve build mode
+        id: mode
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TEST: ${{ inputs.test_identity }}
+        run: |
+          if ($env:INPUT_TAG) {
+            $ref = $env:INPUT_TAG
+            $version = $env:INPUT_TAG -replace '^v', ''
+            $test = $false
+            $release = $true
+          } elseif ($env:INPUT_REF) {
+            $ref = $env:INPUT_REF
+            $version = $env:INPUT_VERSION
+            $test = $env:INPUT_TEST -eq 'true'
+            $release = $false
+          } else {
+            # Push builds only check the packaging; the version is a placeholder.
+            $ref = $env:GITHUB_SHA
+            $version = '0.0.1'
+            $test = $true
+            $release = $false
+          }
+          $build = $true
+          if (-not $test -and -not ($env:KANDER_MSIX_IDENTITY_NAME -and $env:KANDER_MSIX_PUBLISHER -and $env:KANDER_MSIX_PUBLISHER_DISPLAY_NAME)) {
+            if (-not $release) { throw 'Store identity variables are unset; set them or build with test_identity' }
+            Write-Output '::notice title=MSIX skipped::KANDER_MSIX_* repository variables are unset; no Store bundle was built for this release. See docs/windows-msix-store.md.'
+            $build = $false
+          }
+          "ref=$ref", "version=$version", "test=$($test.ToString().ToLower())", "release=$($release.ToString().ToLower())", "build=$($build.ToString().ToLower())" |
+            Add-Content -LiteralPath $env:GITHUB_OUTPUT
+
+      - uses: actions/checkout@v5
+        if: steps.mode.outputs.build == 'true'
+        with:
+          ref: ${{ steps.mode.outputs.ref }}
+
+      - uses: actions/setup-go@v5
+        if: steps.mode.outputs.build == 'true'
+        with:
+          go-version-file: go.mod
+
+      - name: Build kander.exe
+        if: steps.mode.outputs.build == 'true'
+        env:
+          VERSION: ${{ steps.mode.outputs.version }}
+        run: |
+          $ldflags = "-s -w -X github.com/dualface/kander/internal/version.Version=$env:VERSION"
+          foreach ($arch in 'amd64', 'arm64') {
+            $env:CGO_ENABLED = '0'; $env:GOOS = 'windows'; $env:GOARCH = $arch
+            go build -trimpath -ldflags $ldflags -o "msix-bin/$arch/kander.exe" ./cmd/kander
+            if ($LASTEXITCODE -ne 0) { throw "go build failed for windows/$arch" }
+          }
+
+      - name: Pack MSIX bundle
+        if: steps.mode.outputs.build == 'true'
+        env:
+          VERSION: ${{ steps.mode.outputs.version }}
+          TEST: ${{ steps.mode.outputs.test }}
+        run: |
+          $extra = @{}
+          if ($env:TEST -eq 'true') { $extra = @{ TestIdentity = $true; TestSign = $true } }
+          ./packaging/msix/build-msix.ps1 -Version $env:VERSION -BinDir msix-bin -OutDir msix-out @extra
+
+      - uses: actions/upload-artifact@v4
+        if: steps.mode.outputs.build == 'true'
+        with:
+          name: kander-msix-${{ steps.mode.outputs.version }}${{ steps.mode.outputs.test == 'true' && '-localtest' || '' }}
+          path: msix-out/*
+          if-no-files-found: error
+
+      - name: Attach Store bundle to the release
+        if: steps.mode.outputs.build == 'true' && steps.mode.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.mode.outputs.ref }}
+        run: |
+          $bundle = Get-ChildItem -LiteralPath msix-out -Filter '*.msixbundle' | Select-Object -First 1
+          if (-not $bundle) { throw 'no .msixbundle was produced' }
+          gh release upload $env:TAG $bundle.FullName --clobber --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'gh release upload failed' }

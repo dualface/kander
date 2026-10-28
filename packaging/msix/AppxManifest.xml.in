@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Microsoft Store MSIX manifest template for kander.
+  packaging/msix/build-msix.ps1 fills the @...@ placeholders; the identity
+  values come from Partner Center > Product identity and are never defaulted.
+  See docs/windows-msix-store.md.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 desktop desktop6 rescap">
+
+  <Identity
+    Name="@IDENTITY_NAME@"
+    Publisher="@PUBLISHER@"
+    Version="@PACKAGE_VERSION@"
+    ProcessorArchitecture="@ARCH@" />
+
+  <Properties>
+    <DisplayName>Kander</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Kanban orchestration for multiple AI coding agents.</Description>
+    <!-- kander writes task files under %TEMP% and settings under the user
+         profile for agents that run outside the package. Write
+         virtualization would redirect those writes to a package-private
+         location the agents cannot see, so it is off. -->
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+  </Properties>
+
+  <Dependencies>
+    <!-- 19041 (Windows 10 2004) is the first release with the desktop6
+         virtualization switches above. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <!-- Start menu launches open the terminal kanban, like bare `kander`. -->
+    <Application Id="Kander" Executable="kander.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Kander"
+        Description="Kanban orchestration for multiple AI coding agents."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- CLI entry: %LOCALAPPDATA%\Microsoft\WindowsApps\kander.exe. -->
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="kander.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="kander.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+</Package>
