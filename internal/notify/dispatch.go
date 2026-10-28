@@ -182,7 +182,9 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			}
 			s.Revision++
 		}
-		path, err := writeNotifyMessage(message)
+		// The receipt, not the marker, settles a dispatch; the marker only keeps
+		// the agent-visible protocol identical to direct delivery.
+		path, err := writeNotifyMessage(withAckRequest(ackMarker(), message))
 		if err != nil {
 			return err
 		}
@@ -196,12 +198,11 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			}
 			return reconcileDispatch(root, task, id, err)
 		}
-		marker := ackMarker()
 		language, err := launch.PromptLanguage(paths, s.Text)
 		if err != nil {
 			return reconcileDispatch(root, task, id, err)
 		}
-		instruction := notifyInstruction(s.Entry, path, marker, language)
+		instruction := notifyInstruction(s.Entry, path, language)
 		if err = sendDispatch(ctx, target, instruction); err != nil {
 			return reconcileDispatch(root, task, id, err)
 		}

@@ -52,9 +52,7 @@ func TestPromptEchoDoesNotCountAsAcknowledgement(t *testing.T) {
 		t.Fatal("terminal echo was used as business acknowledgement")
 	}
 	prompt, _ := os.ReadFile(filepath.Join(root, "herdr.log.prompt"))
-	if !strings.Contains(string(prompt), "KANDER-NOTIFY-ACK:") {
-		t.Fatal("transport diagnostic marker missing")
-	}
+	assertAckOnlyInMessageFile(t, string(prompt))
 	paths, err := config.CurrentInstallPaths()
 	if err != nil {
 		t.Fatal(err)

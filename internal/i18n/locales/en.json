@@ -659,7 +659,7 @@
   "notify.failed_to_create_notification_message": "Failed to create notification message: {{.V0}}",
   "notify.herdr_agent_prompt_failed": "herdr agent prompt failed: {{.V0}}",
   "notify.herdr_is_not_in_path_cannot_look_up_a": "herdr is not in PATH; cannot look up a pane",
-  "notify.kander_notify_read_first_output_exactly_then_handle_task": "# kander-notify: read {{.V0}}, first output {{.V1}} exactly, then handle task {{.V2}} under the kanban rules.",
+  "notify.kander_notify_read_first_output_exactly_then_handle_task": "# kander-notify: read {{.V0}}, first output the acknowledgement line it names exactly, then handle task {{.V1}} under the kanban rules.",
   "notify.missing_pane_value": "missing --pane value",
   "notify.no_direct_notification_address": "No direct notification address: {{.V0}}",
   "notify.notified_channel_acknowledgement_message_file": "notified: {{.V0}}\tchannel={{.V1}}\tacknowledgement={{.V2}}\tmessage-file={{.V3}}{{.V4}}",

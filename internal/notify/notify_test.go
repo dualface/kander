@@ -214,8 +214,14 @@ if [ "$1" = "capture-pane" ]; then
   if [ ! -f "$log.send" ]; then
     printf '%s\n' "$@" >> "$log.capture-before-send"
   fi
+  # The pane echoes every delivered key, submitted or not.
   cat "$log.send" 2>/dev/null
   printf '\n'
+  # KANBAN_TMUX_AGENT_ACK simulates an agent that read the message file and output its marker.
+  if [ "${KANBAN_TMUX_AGENT_ACK:-}" = "1" ] && [ -f "$log.instruction" ]; then
+    message=$(grep -o '/[^ ,]*/message\.txt' "$log.instruction" | tail -n 1)
+    [ -z "$message" ] || grep -o 'KANDER-NOTIFY-ACK:[0-9a-f]*' "$message"
+  fi
   exit 0
 fi
 if [ "$1" = "kill-window" ]; then
@@ -544,6 +550,7 @@ func TestNotifyStaleTmuxRewritesWindow(t *testing.T) {
 	t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "claude")
 	t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
 	t.Setenv("KANBAN_TMUX_LIST_PANES", "%new\t$42\tfake-session\t@new\tclaude\t0\tsession-1")
+	t.Setenv("KANBAN_TMUX_AGENT_ACK", "1")
 	out, _, err := capture(t, func() error {
 		return commandNotify(root, taskID, "x", "", "", true, 61)
 	})

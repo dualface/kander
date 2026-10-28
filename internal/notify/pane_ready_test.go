@@ -22,6 +22,7 @@ func TestNotifyDirectDeliveryDoesNotWaitForPaneReady(t *testing.T) {
 				window, sentLog = "tmux:$1:@1:%1", "tmux.log.send"
 				t.Setenv("KANBAN_TMUX_CURRENT_COMMAND", "claude")
 				t.Setenv("KANBAN_TMUX_PANE_SESSION", "session-1")
+				t.Setenv("KANBAN_TMUX_AGENT_ACK", "1")
 			}
 			setWindow(t, path, window)
 			_, _, err := capture(t, func() error {

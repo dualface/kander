@@ -56,14 +56,22 @@ func removeNotifyMessage(path string) error {
 }
 
 // notifyInstruction renders the line pasted into the agent pane. It ends with the reminder to
-// communicate in language; the message file it names never carries that reminder.
-func notifyInstruction(entry board.Entry, messagePath, marker, language string) string {
+// communicate in language; the message file it names never carries that reminder. The line
+// never carries the acknowledgement marker: the pane echoes it whether or not the agent
+// submitted it, so only the message file names the marker (see withAckRequest).
+func notifyInstruction(entry board.Entry, messagePath, language string) string {
 	line := t(
-		"notify.kander_notify_read_first_output_exactly_then_handle_task", process.AgentPath(messagePath), marker, entry.TaskID,
+		"notify.kander_notify_read_first_output_exactly_then_handle_task", process.AgentPath(messagePath), entry.TaskID,
 	)
 	return config.WithLanguageReminder(line, language)
 }
 
 func ackMarker() string {
 	return "KANDER-NOTIFY-ACK:" + randomHex(16)
+}
+
+// withAckRequest prefixes the message file body with the fixed English request to output the
+// marker. The marker reaches the pane only once the agent has read this file.
+func withAckRequest(marker, message string) string {
+	return "Acknowledge this notification: before anything else, output this line exactly:\n" + marker + "\n\n" + message
 }

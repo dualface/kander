@@ -659,7 +659,7 @@
   "notify.failed_to_create_notification_message": "创建通知消息失败: {{.V0}}",
   "notify.herdr_agent_prompt_failed": "herdr agent prompt 失败: {{.V0}}",
   "notify.herdr_is_not_in_path_cannot_look_up_a": "herdr 不在 PATH, 无法反查 pane",
-  "notify.kander_notify_read_first_output_exactly_then_handle_task": "# kander-notify: 请读取 {{.V0}}, 先原样输出 {{.V1}}, 再按看板规则处理任务 {{.V2}}.",
+  "notify.kander_notify_read_first_output_exactly_then_handle_task": "# kander-notify: 请读取 {{.V0}}, 先原样输出其中指定的确认行, 再按看板规则处理任务 {{.V1}}.",
   "notify.missing_pane_value": "缺少 --pane 取值",
   "notify.no_direct_notification_address": "无可用直投地址: {{.V0}}",
   "notify.notified_channel_acknowledgement_message_file": "已通知: {{.V0}}\t通道={{.V1}}\t回执={{.V2}}\t消息文件={{.V3}}{{.V4}}",

@@ -47,7 +47,10 @@ case "$1" in
   read) cat "$(pane_dir "$2")/output" ;;
   type)
     dir=$(pane_dir "$2"); printf '%s' "$3" >> "$dir/output"
-    [ "$3" = "/exit" ] && printf '1' > "$dir/dead" ;;
+    [ "$3" = "/exit" ] && printf '1' > "$dir/dead"
+    # Act as the agent: read the notify message file and output its marker.
+    message=$(printf '%s' "$3" | grep -o '/[^ ,]*/message\.txt')
+    [ -z "$message" ] || grep -o 'KANDER-NOTIFY-ACK:[0-9a-f]*' "$message" >> "$dir/output" ;;
   key) printf '\n' >> "$(pane_dir "$2")/output" ;;
   topology)
     dir=$(pane_dir "$2"); [ -d "$dir" ] || { printf 'no such pane: %s\n' "$2" >&2; exit 1; }

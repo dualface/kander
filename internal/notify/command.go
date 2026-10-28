@@ -100,7 +100,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 			windowWritten = true
 		}
 		marker := ackMarker()
-		path, err := writeNotifyMessage(directMessage)
+		path, err := writeNotifyMessage(withAckRequest(marker, directMessage))
 		if err != nil {
 			return err
 		}
@@ -109,7 +109,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 		if err != nil {
 			return err
 		}
-		instruction := notifyInstruction(entry, messagePath, marker, language)
+		instruction := notifyInstruction(entry, messagePath, language)
 		var confirmed bool
 		confirmed, acknowledgementDetail, err = directNotify(target, instruction, marker, target.Timeout)
 		directChannel = target.Backend.Executable() + "-direct"
