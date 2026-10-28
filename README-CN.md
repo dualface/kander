@@ -121,11 +121,23 @@ kander
 
 多张卡并行跑的时候，每份汇报几秒钟就能读完：哪些完成了，哪些没验证，哪些等你拍板。
 
-Claude Code 安装方式如下（目录名必须是 `ste`）。安装后在会话里输入 `/ste` 开启；也可以写进全局规则，让每个会话默认开启。
+推荐用 [`skills`](https://github.com/vercel-labs/skills) CLI 安装，支持 Claude Code、Cursor、Codex 等 Agent，会自动装到 `ste` 目录：
+
+```bash
+# 全局安装（所有项目通用）
+npx skills add dualface/ste-zh -g
+
+# 只为 Claude Code 安装
+npx skills add dualface/ste-zh -g -a claude-code
+```
+
+也可以手动克隆到 Agent 的 skills 目录，目录名必须是 `ste`。Claude Code 全局安装：
 
 ```bash
 git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
 ```
+
+安装后在会话里输入 `/ste` 开启；也可以把「每个会话开始时加载 ste skill」写进全局规则，让每个会话默认开启。
 
 ## 6. 进阶文档
 

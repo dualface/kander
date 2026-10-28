@@ -107,26 +107,7 @@ On the terminal board, press `g` to open the GitHub issue list in an overlay.
 
 **A:** Start an agent (with Kander rules loaded) and directly ask for the current status and progress of any unfinished task cards.
 
-## 5. Clearer Task Reports with ste-zh
-
-If you read agent reports in Chinese, pair Kander with [ste-zh](https://github.com/dualface/ste-zh). It is an agent skill that makes the agent report results by ASD-STE100 (Simplified Technical English) principles, in Chinese.
-
-In the author's daily Kander workflow, this combination works very well. Kander's completion reports already require actual verification results; ste-zh makes every reply easy to scan:
-
-- the conclusion comes first;
-- status words are fixed, such as "completed", "not verified", and "blocked";
-- every conclusion states whether it was verified, and how;
-- when you must decide, the options are numbered.
-
-When many cards run in parallel, you can read each report in seconds and know what is done, what is unverified, and what needs your decision.
-
-Install it for Claude Code (the directory name must be `ste`), then type `/ste` in a session, or load it from your global agent rules so every session uses it:
-
-```bash
-git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
-```
-
-## 6. Advanced Documentation
+## 5. Advanced Documentation
 
 - [Review Disposition & Completion Gate](docs/review-disposition.md)
 - [Card Transactions & Crash Recovery](docs/card-transactions.md)
@@ -134,18 +115,17 @@ git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
 - [Durable Dispatch Protocol](docs/durable-dispatch.md)
 - [GitHub Issue Import & Result Protocol](docs/github-issue-import.md)
 
-## 7. License
+## 6. License
 
 This project is under the MIT License; see [LICENSE](LICENSE).
 
-## 8. Changelog
+## 7. Changelog
 
 Release notes live in [CHANGELOG.md](CHANGELOG.md).
 
-## 9. More Projects by the Author
+## 8. More Projects by the Author
 
 Other projects by [dualface](https://github.com/dualface), the author of Kander:
 
-- [ste-zh](https://github.com/dualface/ste-zh): an agent skill that makes agents report results in Chinese by ASD-STE100 principles: conclusion first, fixed status words, explicit verification state.
 - [Ullage](https://github.com/dualface/ullage-cli): a local daemon and CLI that shows subscription usage for Claude, ChatGPT, Grok, Cursor, and more.
 - [QuickTUI](https://quicktui.ai/): a full terminal for any coding agent, on your phone. Self-hosted, direct connection. Free for a single host.

@@ -107,26 +107,7 @@ kander
 
 **A:** Kander ルールを読み込んだ Agent を起動し、「未完了のタスクカードの現在の状態はどうなっていますか？」と直接尋ねてください。
 
-## 5. ste-zh でタスク報告をわかりやすく
-
-Agent の報告を中国語で読む場合は、Kander と [ste-zh](https://github.com/dualface/ste-zh) の併用をおすすめします。ste-zh は、Agent に ASD-STE100（簡略化技術英語）の原則で、中国語で結果を報告させる Agent skill です。
-
-作者の日常の Kander ワークフローでは、この組み合わせが非常にうまく機能しています。Kander の完了報告はもともと実際の検証結果の記録を求めます。ste-zh はすべての返答を読みやすくします：
-
-- 最初に結論を書く；
-- 状態語を固定する（例：「已完成」「未验证」「阻塞」）；
-- 各結論について、検証したかどうかと検証方法を書く；
-- 判断が必要なときは、番号付きの選択肢を示す。
-
-多数のカードを並行実行していても、各報告を数秒で読み、完了したもの、未検証のもの、判断待ちのものがわかります。
-
-Claude Code へのインストール（ディレクトリ名は `ste` である必要があります）。セッションで `/ste` と入力して有効にするか、グローバルルールに書いて毎セッション有効にします：
-
-```bash
-git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
-```
-
-## 6. 応用ドキュメント
+## 5. 応用ドキュメント
 
 - [レビュー機構と完了ゲート](docs/review-disposition-ja.md)
 - [カードトランザクションと障害復旧](docs/card-transactions-ja.md)
@@ -134,18 +115,17 @@ git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
 - [タスク永続化ディスパッチプロトコル](docs/durable-dispatch-ja.md)
 - [GitHub Issue 取り込みと結果プロトコル](docs/github-issue-import-ja.md)
 
-## 7. ライセンス
+## 6. ライセンス
 
 本プロジェクトは MIT License を使用しています。[LICENSE](LICENSE) を参照してください。
 
-## 8. 変更履歴
+## 7. 変更履歴
 
 リリースノートは [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
-## 9. 作者のその他のプロジェクト
+## 8. 作者のその他のプロジェクト
 
 Kander の作者 [dualface](https://github.com/dualface) によるその他のプロジェクト：
 
-- [ste-zh](https://github.com/dualface/ste-zh)：ASD-STE100 の原則で Agent に中国語で結果を報告させる skill。結論ファースト、固定の状態語、検証状態の明記。
 - [Ullage](https://github.com/dualface/ullage-cli)：Claude、ChatGPT、Grok、Cursor などのサブスクリプション使用量を確認するローカルデーモン + CLI。
 - [QuickTUI](https://quicktui.ai/)：あらゆるコーディング Agent のための、スマホ上の完全なターミナル。セルフホストで直接接続。1 台のホストまで無料。
