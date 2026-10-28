@@ -551,7 +551,7 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	}
 	if step.Fail != nil {
 		if step.Store != "" || step.Output != nil || step.Fields != nil || step.Expect != nil || step.Poll != nil ||
-			step.OnError != "" || step.Timeout != "" || step.StopOnSuccess || step.Messages != (StepMessages{}) {
+			step.OnError != "" || step.Timeout != "" || step.Delay != "" || step.StopOnSuccess || step.Messages != (StepMessages{}) {
 			return nil, v.fieldErr("fail", "a fail step declares only when and fail")
 		}
 		return names, v.message("fail", step.Fail, names)
@@ -578,6 +578,11 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	if step.Timeout != "" {
 		if _, err := positiveDuration(step.Timeout); err != nil {
 			return nil, v.fieldErr("timeout", "%s", err.Error())
+		}
+	}
+	if step.Delay != "" {
+		if err := stepDelay(step.Delay); err != nil {
+			return nil, v.fieldErr("delay", "%s", err.Error())
 		}
 	}
 	if err := v.poll(op, step.Poll, names); err != nil {
@@ -811,6 +816,21 @@ func positiveDuration(text string) (time.Duration, error) {
 		return 0, fmt.Errorf("duration %q must be positive", text)
 	}
 	return duration, nil
+}
+
+// MaxStepDelay bounds a step delay, so a definition cannot stall an
+// operation whose caller passes no deadline.
+const MaxStepDelay = 5 * time.Second
+
+func stepDelay(text string) error {
+	duration, err := positiveDuration(text)
+	if err != nil {
+		return err
+	}
+	if duration > MaxStepDelay {
+		return fmt.Errorf("duration %q exceeds %s", text, MaxStepDelay)
+	}
+	return nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {

@@ -318,6 +318,12 @@ func (e *execution) runStep(step *Step) (bool, error) {
 		}
 	}
 	e.executed++
+	if step.Delay != "" {
+		delay, _ := positiveDuration(step.Delay)
+		if err := wait(e.ctx, delay); err != nil {
+			return false, err
+		}
+	}
 	argv, err := e.expandArgv(step.Argv)
 	if err != nil {
 		// A rejected runtime value is a failure of this step, so on_error
@@ -350,6 +356,18 @@ func (e *execution) runStep(step *Step) (bool, error) {
 	}
 	e.prevRan, e.prevOK = true, true
 	return step.StopOnSuccess, nil
+}
+
+// wait sleeps for delay unless ctx ends first.
+func wait(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // attempt runs the command, repeating it while a poll condition is unmet.

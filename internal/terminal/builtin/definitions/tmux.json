@@ -374,6 +374,7 @@
         },
         {
           "argv": ["send-keys", "-t", "{pane}", "Enter"],
+          "delay": "500ms",
           "messages": {
             "exec": {"id": "launch.tmux_send_keys_failed", "args": ["{detail}"]},
             "exit": {"id": "launch.tmux_send_keys_failed", "args": ["{detail}"]}

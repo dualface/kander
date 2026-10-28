@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/probe"
@@ -177,6 +178,25 @@ func TestTmuxDefinitionArgvMatchesGoBackend(t *testing.T) {
 	}
 	if got := backend.VersionArgs(); !reflect.DeepEqual(got, []string{"-V"}) {
 		t.Fatalf("version args=%q", got)
+	}
+}
+
+// Codex drops an Enter that arrives right after typed text, so tmux waits
+// before submitting.
+func TestTmuxDefinitionDeliverTextWaitsBeforeEnter(t *testing.T) {
+	resetLang(t)
+	backend := tmuxBackend(t, Tmux, envOf(map[string]string{"TMUX": "/tmp/tmux,1,0"}))
+	var times []time.Time
+	rec := &recorder{reply: func([]string) probe.Result {
+		times = append(times, time.Now())
+		return probe.Result{}
+	}}
+	if err := backend.DeliverText(context.Background(), rec.conn(), "%9", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	assertCalls(t, rec.calls, [][]string{{"send-keys", "-t", "%9", "-l", "hello"}, {"send-keys", "-t", "%9", "Enter"}})
+	if gap := times[1].Sub(times[0]); gap < 500*time.Millisecond {
+		t.Fatalf("Enter sent %s after the text, want at least 500ms", gap)
 	}
 }
 

@@ -218,6 +218,58 @@ func TestDeclarativePoll(t *testing.T) {
 	}
 }
 
+// timedConn records each argv with the time it ran and whether its context
+// had already ended.
+type timedCall struct {
+	args  []string
+	at    time.Time
+	ended bool
+}
+
+func timedConn(calls *[]timedCall) Conn {
+	return Conn{Program: "faketerm", Run: func(ctx context.Context, _ string, args []string) (probe.Result, error) {
+		*calls = append(*calls, timedCall{args: append([]string{}, args...), at: time.Now(), ended: ctx.Err() != nil})
+		return probe.Result{}, nil
+	}}
+}
+
+func TestDeclarativeStepDelay(t *testing.T) {
+	resetLanguage(t)
+	backend := declarativeOp(t, OpDeliverText, `{"steps": [
+		{"argv": ["type", "{text}"]},
+		{"argv": ["key", "{pane}"], "delay": "80ms", "timeout": "40ms"},
+		{"when": "prev_failed", "argv": ["skipped"], "delay": "5s"}
+	]}`, nil)
+	var calls []timedCall
+	start := time.Now()
+	if err := backend.DeliverText(context.Background(), timedConn(&calls), "p1", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 || calls[0].args[0] != "type" || calls[1].args[0] != "key" {
+		t.Fatalf("calls=%+v", calls)
+	}
+	if gap := calls[1].at.Sub(calls[0].at); gap < 80*time.Millisecond {
+		t.Fatalf("key ran %s after type, want at least 80ms", gap)
+	}
+	// The delay is outside the step timeout, and a skipped step does not wait.
+	if calls[1].ended {
+		t.Fatal("step timeout counted the delay")
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("skipped step waited: %s", elapsed)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(20*time.Millisecond, cancel)
+	slow := declarativeOp(t, OpDeliverText, `{"steps": [{"argv": ["type", "{text}"]}, {"argv": ["key", "{pane}"], "delay": "5s"}]}`, nil)
+	calls = nil
+	start = time.Now()
+	err := slow.DeliverText(ctx, timedConn(&calls), "p1", "hello")
+	if !errors.Is(err, context.Canceled) || len(calls) != 1 || time.Since(start) > 3*time.Second {
+		t.Fatalf("canceled delay: err=%v calls=%+v elapsed=%s", err, calls, time.Since(start))
+	}
+}
+
 // TestDeclarativeWaitReadyTimeoutInput checks that WaitReady hands its budget
 // to the definition as {timeout_ms}.
 func TestDeclarativeWaitReadyTimeoutInput(t *testing.T) {

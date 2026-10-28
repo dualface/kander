@@ -129,6 +129,7 @@ Optional `agent_list` reports every agent pane in one call, so an observer of ma
   "poll": {"interval": "<duration>", "timeout": "<duration>" | "{timeout_ms}", "until": "matched" | "nonempty" | "json_field:<path>=<value>"},
   "on_error": "fail" | "continue" | "meta_missing",
   "timeout": "<duration>",
+  "delay": "<duration>",
   "stop_on_success": <bool>,
   "messages": {"exec": <message>, "exit": <message>, "invalid": <message>,
                "not_json": <message>, "not_object": <message>, "missing_result": <message>,
@@ -146,6 +147,7 @@ Optional `agent_list` reports every agent pane in one call, so an observer of ma
 - `stop_on_success` skips the rest of the current step list after this step succeeds.
 - `poll` reruns a succeeding command every `interval` until `until` holds on its text or `timeout` elapses (a failure). `matched` compares the `wait_output` marker; a failing command ends polling at once. `timeout` bounds the whole step.
 - From the second command of an operation on, a cancelled or expired context ends the operation before the next command.
+- `delay` waits that long before the step's command runs. It is a Go duration string such as `"500ms"`, must be positive, may not exceed 5s, and takes no placeholders; any other value fails the definition at load time. A step whose `when` does not hold is skipped without waiting, and a `fail` step cannot declare it. The wait is not part of the step `timeout`, which starts when the command runs. A cancelled or expired context ends the wait at once, and the operation fails without running the command. The built-in tmux `deliver_text` uses `"delay": "500ms"` on its `Enter` step: an agent TUI such as Codex treats an Enter that arrives right after typed text as part of a paste and does not submit the composer.
 
 ### Conditions
 

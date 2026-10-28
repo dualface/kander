@@ -49,6 +49,13 @@ func TestDefinitionValidationRejects(t *testing.T) {
 		}, []string{"op run_command", "field poll.timeout", "wait_ready and wait_output"}},
 		{"bad on_error", func(r map[string]any) { firstStep(r, "run_command")["on_error"] = "ignore" }, []string{"field on_error", "must be fail, continue or meta_missing"}},
 		{"bad step timeout", func(r map[string]any) { firstStep(r, "run_command")["timeout"] = "-1s" }, []string{"field timeout", "must be positive"}},
+		{"bad step delay", func(r map[string]any) { firstStep(r, "run_command")["delay"] = "soon" }, []string{"field delay", "invalid duration"}},
+		{"negative step delay", func(r map[string]any) { firstStep(r, "run_command")["delay"] = "-1s" }, []string{"field delay", "must be positive"}},
+		{"placeholder step delay", func(r map[string]any) { firstStep(r, "run_command")["delay"] = "{timeout_ms}" }, []string{"field delay", "invalid duration"}},
+		{"step delay over limit", func(r map[string]any) { firstStep(r, "run_command")["delay"] = "6s" }, []string{"field delay", "exceeds 5s"}},
+		{"fail step with delay", func(r map[string]any) {
+			object(r, "ops", "run_command")["steps"] = []any{map[string]any{"fail": "nope", "delay": "1s"}}
+		}, []string{"field fail", "only when and fail"}},
 		{"stop_on_success type", func(r map[string]any) { firstStep(r, "run_command")["stop_on_success"] = "yes" }, []string{"stop_on_success"}},
 		{"when references later store", func(r map[string]any) {
 			step := firstStep(r, "pane_facts")

@@ -172,6 +172,10 @@ type Step struct {
 	Timeout       string       `json:"timeout,omitempty"`
 	StopOnSuccess bool         `json:"stop_on_success,omitempty"`
 	Messages      StepMessages `json:"messages,omitempty"`
+	// Delay waits this long before the command runs, outside Timeout; a
+	// skipped step does not wait. Agent TUIs such as Codex need it between
+	// typed text and the Enter that submits it.
+	Delay string `json:"delay,omitempty"`
 }
 
 // StepMessages render a failed step: exec when the command could not run,

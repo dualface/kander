@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix (notify, #19): tmux and tmux-session delivery now waits 500ms between the typed instruction and the `Enter` that submits it. Codex treated an Enter that arrived right after the text as part of a paste, so the instruction stayed in its composer and notify reported the acknowledgement as unconfirmed. The wait applies to every agent and to every tmux delivery: direct notify, durable dispatch, pane-mode start prompts, `dismiss` exit commands, and `kander terminal test`. herdr and luvus keep their own `agent prompt` and are unchanged.
+- Terminal definitions: a step may declare `delay`, a Go duration (at most 5s) that the backend waits before running the step's command. The wait is outside the step `timeout`, a skipped step does not wait, and a cancelled context ends the wait.
+
 ## v0.9.14 — 2026-10-28
 
 - Fix (notify, #18): direct notify no longer reports `acknowledgement=confirmed` when the pane only shows the delivered instruction, for example in an agent composer that never submitted it. The `# kander-notify:` line no longer contains the acknowledgement marker. It names the private message file and asks the agent to output the acknowledgement line that file names. The message file now starts with a fixed request followed by `KANDER-NOTIFY-ACK:<32 hex>`, so the marker reaches the pane only after the agent read the file. This applies to tmux, tmux-session, and luvus polling and to herdr `wait-output`. Durable dispatch writes the same request and is still settled only by its accepted receipt. When no marker appears, notify waits for `--timeout`, prints the existing "delivered, not confirmed" warning, and reports the acknowledgement as unconfirmed.
