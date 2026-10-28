@@ -37,15 +37,16 @@ All of this applies only while `install.Packaged()` is true; every other install
 $env:KANDER_MSIX_IDENTITY_NAME = '...'
 $env:KANDER_MSIX_PUBLISHER = 'CN=...'
 $env:KANDER_MSIX_PUBLISHER_DISPLAY_NAME = '...'
-pwsh packaging/msix/build-msix.ps1 -Version 0.9.15 -BinDir bin -OutDir out
+pwsh packaging/msix/build-msix.ps1 -Version 1.0.0 -BinDir bin -OutDir out
 
 # Sideload test bundle and its public certificate
-pwsh packaging/msix/build-msix.ps1 -Version 0.9.15 -BinDir bin -OutDir out -TestIdentity -TestSign
+pwsh packaging/msix/build-msix.ps1 -Version 1.0.0 -BinDir bin -OutDir out -TestIdentity -TestSign
 ```
 
 - `-BinDir` holds `amd64\kander.exe` and `arm64\kander.exe`, built with `-ldflags "-X github.com/dualface/kander/internal/version.Version=<X.Y.Z>"`. `-Arches` narrows the architectures (default `amd64 arm64`).
 - Without `-TestIdentity`, a missing package identity value fails the build; there are no defaults.
-- Version mapping: kander `X.Y.Z` becomes MSIX `X.Y.Z.0`. The Store requires revision 0, every part at most 65535, and a version above the last published submission. Prerelease versions (with `-`) are rejected.
+- Version mapping: kander `X.Y.Z` becomes MSIX `X.Y.Z.0`. The Store requires revision 0, every part at most 65535, and a first part above 0; customers receive an update only when its version is higher than the one they have. A Store build therefore rejects a kander version whose first part is 0 (every `0.Y.Z` release); a sideload test bundle may keep it. Prerelease versions (with `-`) are rejected.
+- `-ValidateOnly` checks the version and identity, prints the MSIX version, and builds nothing; the workflow uses it to check these rules on every run.
 - The script lists the bundle entries and fails when an architecture is missing. With `-TestSign` it signs with a fresh self-signed certificate whose subject is the test publisher, exports the public `kander-msix-test.cer`, and deletes the certificate and its private key from the user store. Store uploads stay unsigned.
 - The output directory also gets `SHA256SUMS`.
 - Tile icons in `packaging/msix/Assets/` are exported from the logo `docs/images/kander-icon.svg`:
@@ -75,7 +76,7 @@ pwsh packaging/msix/build-msix.ps1 -Version 0.9.15 -BinDir bin -OutDir out -Test
 
 1. In Partner Center, create a product of type **MSIX or PWA app** (not "EXE or MSI app") and reserve the name Kander.
 2. Copy the three package identity values from the product's identity page and store them as the repository variables above, for example `gh variable set KANDER_MSIX_IDENTITY_NAME --repo dualface/kander --body '...'`.
-3. Release a new version through the normal release order in `AGENTS.md` "Releases" (this needs the `develop` to `main` fast-forward and the tag). The Release workflow attaches `kander_<X.Y.Z>.0.msixbundle` to the GitHub Release.
+3. Release a new version through the normal release order in `AGENTS.md` "Releases" (this needs the `develop` to `main` fast-forward and the tag). The version needs a first part of at least 1, so the first Store release cannot be a `0.Y.Z` tag. The Release workflow attaches `kander_<X.Y.Z>.0.msixbundle` to the GitHub Release; for a `0.Y.Z` tag with the variables set, the MSIX job fails on the version rule and the release itself stays published.
 4. After a release that contains `msix.yml`, `workflow_dispatch` with `test_identity` off can rebuild the Store bundle for an existing tag as a run artifact, for example after the variables were set too late.
 5. Upload the bundle in a new submission and fill in the submission materials below. The first submission is manual.
 

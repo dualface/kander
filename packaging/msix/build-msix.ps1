@@ -3,7 +3,7 @@
 # and signtool.exe for -TestSign). The Release workflow runs it on a GitHub
 # Actions Windows runner; see docs/windows-msix-store.md.
 #
-#   pwsh packaging/msix/build-msix.ps1 -Version 0.9.15 -BinDir dist -OutDir out
+#   pwsh packaging/msix/build-msix.ps1 -Version 1.0.0 -BinDir dist -OutDir out
 #
 # BinDir holds <arch>\kander.exe for every architecture in -Arches.
 #
@@ -14,14 +14,16 @@
 # identity whose bundle name ends in -localtest and cannot be uploaded.
 # -TestSign signs the bundle with a throwaway self-signed certificate for
 # sideload testing; its private key is deleted right after signing and only
-# the public .cer is written.
+# the public .cer is written. -ValidateOnly checks the version and identity,
+# prints the MSIX version, and builds nothing.
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [Parameter(Mandatory = $true)][string]$BinDir,
-    [Parameter(Mandatory = $true)][string]$OutDir,
+    [string]$BinDir,
+    [string]$OutDir,
     [string]$Arches = 'amd64 arm64',
     [switch]$TestIdentity,
-    [switch]$TestSign
+    [switch]$TestSign,
+    [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,12 +46,17 @@ function Invoke-Tool([string]$Tool, [string[]]$Arguments) {
 }
 
 # kander X.Y.Z -> MSIX X.Y.Z.0: the Store requires revision 0, every part
-# <= 65535, and a version above the last published submission.
+# <= 65535, and a first part above 0; updates reach customers only with a
+# higher version. Sideload test bundles may keep a 0 first part.
 if ($Version -notmatch '^(\d{1,5})\.(\d{1,5})\.(\d{1,5})$') {
     throw "version must be a stable X.Y.Z release, got '$Version'"
 }
-foreach ($part in $Matches[1..3]) {
+$parts = $Matches[1..3]
+foreach ($part in $parts) {
     if ([int]$part -gt 65535) { throw "version part exceeds 65535: $Version" }
+}
+if (-not $TestIdentity -and [int]$parts[0] -eq 0) {
+    throw "the Microsoft Store rejects package versions whose first part is 0, got '$Version'; see docs/windows-msix-store.md"
 }
 $packageVersion = "$Version.0"
 
@@ -74,6 +81,14 @@ if ($TestIdentity) {
 }
 if ($identityName -notmatch '^[A-Za-z0-9.-]{3,50}$') { throw "invalid package identity name: $identityName" }
 if (-not $publisher.StartsWith('CN=')) { throw "publisher must be a distinguished name starting with CN=: $publisher" }
+
+if ($ValidateOnly) {
+    Write-Output "MSIX version $packageVersion for identity $identityName"
+    return
+}
+foreach ($pair in @(@('BinDir', $BinDir), @('OutDir', $OutDir))) {
+    if ([string]::IsNullOrWhiteSpace($pair[1])) { throw "-$($pair[0]) is required unless -ValidateOnly is set" }
+}
 
 $archList = @($Arches -split '\s+' | Where-Object { $_ } | Select-Object -Unique)
 if ($archList.Count -eq 0) { throw 'no architectures selected' }

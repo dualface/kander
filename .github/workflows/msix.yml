@@ -97,6 +97,36 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # The packer's version and identity rules, checked without building.
+      - name: Check packer version rules
+        if: steps.mode.outputs.build == 'true'
+        env:
+          KANDER_MSIX_IDENTITY_NAME: Kander.RuleCheck
+          KANDER_MSIX_PUBLISHER: CN=Kander Rule Check
+          KANDER_MSIX_PUBLISHER_DISPLAY_NAME: Kander Rule Check
+        run: |
+          # Called in process so the exception message is compared, not
+          # console-formatted error text.
+          $packer = './packaging/msix/build-msix.ps1'
+          function Assert-Accepts([string]$version, [string]$expected, [switch]$test) {
+            $output = & $packer -Version $version -ValidateOnly -TestIdentity:$test
+            if ("$output" -notmatch [regex]::Escape("MSIX version $expected ")) { throw "expected $version to map to $expected, got: $output" }
+            Write-Output "accepted $version -> $expected (test identity: $test)"
+          }
+          function Assert-Rejects([string]$version, [string]$reason) {
+            try { & $packer -Version $version -ValidateOnly | Out-Null } catch {
+              if ($_.Exception.Message -notmatch [regex]::Escape($reason)) { throw "expected $version to be rejected with '$reason', got: $($_.Exception.Message)" }
+              Write-Output "rejected $version"
+              return
+            }
+            throw "expected $version to be rejected with '$reason'"
+          }
+          Assert-Accepts '1.0.0' '1.0.0.0'
+          Assert-Accepts '0.0.1' '0.0.1.0' -test
+          Assert-Rejects '0.9.15' 'first part is 0'
+          Assert-Rejects '1.0.0-rc1' 'stable X.Y.Z release'
+          Assert-Rejects '1.70000.0' 'exceeds 65535'
+
       - name: Build kander.exe
         if: steps.mode.outputs.build == 'true'
         env:
