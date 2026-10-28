@@ -2,6 +2,7 @@
 // first-run wizard. kander install copies the global binary and deletes
 // legacy entries when PATH identity does not match. Bare kander asks a
 // stderr Y/N question (default no) for the same copy before the board opens.
+// A Microsoft Store install (see Packaged) skips both copies and self-updates.
 package install
 
 import (
