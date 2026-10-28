@@ -1,3 +1,5 @@
+<img src="docs/images/kander-icon.svg" alt="Kander logo" width="96">
+
 # Kander
 
 [English](README.md) | **简体中文** | [日本語](README-JA.md)
