@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.14 — 2026-10-28
+
+- Fix (notify, #18): direct notify no longer reports `acknowledgement=confirmed` when the pane only shows the delivered instruction, for example in an agent composer that never submitted it. The `# kander-notify:` line no longer contains the acknowledgement marker. It names the private message file and asks the agent to output the acknowledgement line that file names. The message file now starts with a fixed request followed by `KANDER-NOTIFY-ACK:<32 hex>`, so the marker reaches the pane only after the agent read the file. This applies to tmux, tmux-session, and luvus polling and to herdr `wait-output`. Durable dispatch writes the same request and is still settled only by its accepted receipt. When no marker appears, notify waits for `--timeout`, prints the existing "delivered, not confirmed" warning, and reports the acknowledgement as unconfirmed.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v0.9.13 — 2026-10-27
 
 - Review recovery: when two runs of the same role ran in parallel by mistake, the agent can close the batch instead of being blocked. `kander review close` accepts an optional `superseded_runs` map that names each extra run, its replacement run, and the basis. A run qualifies only as a parallel twin of a run on the conclusion chain (same commit, same reviewer, same previous run), or as the successor of a superseded run whose commit and reviewer match the conclusion run. Each entry adds the Git edge from the superseded run's commit to the replacement's, and the superseded run's findings still need dispositions. A close that meets an unlisted run fails with a hint that names the run, the conclusion run, and the entry to add. Runs that used a different reviewer, or a full first-round rerun after a fix, still cannot be superseded; the rules tell the agent to report them to the user.
