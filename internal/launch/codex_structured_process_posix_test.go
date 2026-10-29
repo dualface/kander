@@ -26,13 +26,16 @@ func TestStructuredSignalForwardingStopsProcessGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(script)
-	configureStructuredProcess(cmd)
-	if err := cmd.Start(); err != nil {
+	tree, err := newStructuredProcessTree(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tree.start(); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan struct{})
 	signals := make(chan os.Signal, 1)
-	stop := forwardStructuredSignals(cmd, done, signals)
+	stop := forwardStructuredSignals(tree, done, signals)
 	defer stop()
 	deadline := time.Now().Add(time.Second)
 	for {
@@ -53,6 +56,51 @@ func TestStructuredSignalForwardingStopsProcessGroup(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		t.Fatal("forwarded interrupt did not stop the process group")
+	}
+}
+
+func TestStructuredSignalForwardingEscalatesIgnoredTermination(t *testing.T) {
+	dir := t.TempDir()
+	ready := filepath.Join(dir, "ready")
+	script := filepath.Join(dir, "codex")
+	body := "#!/bin/sh\ntrap '' TERM\n: > " + posixQuote(ready) + "\nexec sleep 30\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(script)
+	tree, err := newStructuredProcessTree(cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tree.start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	signals := make(chan os.Signal, 1)
+	stop := forwardStructuredSignals(tree, done, signals)
+	defer stop()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			_, _ = cmd.Process.Wait()
+			t.Fatal("signal helper did not become ready")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	signals <- syscall.SIGINT
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+	select {
+	case <-waited:
+		close(done)
+	case <-time.After(4 * structuredCleanupGrace):
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-waited
+		t.Fatal("forwarded cancellation did not escalate to SIGKILL")
 	}
 }
 

@@ -3,6 +3,7 @@ package launch
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 const (
 	structuredCleanupGrace      = 500 * time.Millisecond
+	structuredPromptWriteWait   = time.Second
 	structuredMaxJSONLRecordLen = 8 * 1024 * 1024
 )
 
@@ -39,12 +41,24 @@ type structuredProcessResult struct {
 	response string
 }
 
+type structuredOutputResult struct {
+	err      error
+	response string
+}
+
 type structuredProcess struct {
-	cmd         *exec.Cmd
-	done        chan struct{}
-	stopSignals func()
-	mu          sync.Mutex
-	result      structuredProcessResult
+	cmd             *exec.Cmd
+	tree            *structuredProcessTree
+	stdin           *os.File
+	stdout          *os.File
+	done            chan struct{}
+	stopSignals     func()
+	stdinCloseOnce  sync.Once
+	stdoutCloseOnce sync.Once
+	stdinCloseErr   error
+	stdoutCloseErr  error
+	mu              sync.Mutex
+	result          structuredProcessResult
 }
 
 func (p *structuredProcess) finish(result structuredProcessResult) {
@@ -79,33 +93,112 @@ func (p *structuredProcess) Response() string {
 	return p.result.response
 }
 
+func (p *structuredProcess) closeStdin() error {
+	p.stdinCloseOnce.Do(func() {
+		if p.stdin != nil {
+			p.stdinCloseErr = p.stdin.Close()
+		}
+	})
+	return p.stdinCloseErr
+}
+
+func (p *structuredProcess) closeStdout() error {
+	p.stdoutCloseOnce.Do(func() {
+		if p.stdout != nil {
+			p.stdoutCloseErr = p.stdout.Close()
+		}
+	})
+	return p.stdoutCloseErr
+}
+
+func writeStructuredPrompt(writer io.Writer, closeWriter func() error, cancel func() error, prompt string, timeout time.Duration) (int, error) {
+	type writeResult struct {
+		written int
+		err     error
+	}
+	written := make(chan writeResult, 1)
+	go func() {
+		count, err := io.WriteString(writer, prompt)
+		written <- writeResult{written: count, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	finish := func(result writeResult) (int, error) {
+		return result.written, errors.Join(result.err, closeWriter())
+	}
+	select {
+	case result := <-written:
+		return finish(result)
+	case <-timer.C:
+		// Prefer a completed write when it raced with the timer.
+		select {
+		case result := <-written:
+			return finish(result)
+		default:
+		}
+	}
+
+	// The owned process tree is the only possible reader after startup. Closing
+	// it first releases a full pipe. Closing the writer then cancels any I/O
+	// still pending in the Go runtime; wait for the writer before returning so
+	// its byte count remains authoritative for durable-delivery uncertainty.
+	cancelErr := cancel()
+	closeErr := closeWriter()
+	result := <-written
+	return result.written, errors.Join(
+		fmt.Errorf("structured prompt write timed out after %s", timeout),
+		result.err,
+		cancelErr,
+		closeErr,
+	)
+}
+
 func launchStructuredAgent(plan LaunchPlan, invocation process.ProcessInvocation, cwd string, paneSession func() (AgentSession, error), agentSession *AgentSession, durable ...bool) (LaunchOutcome, error) {
 	cmd := exec.Command(invocation.Argv[0], invocation.Argv[1:]...)
 	cmd.Dir = cwd
 	cmd.Env = envSlice(invocation.Env)
-	cmd.Stderr = os.Stderr
-	configureStructuredProcess(cmd)
-	stdin, err := cmd.StdinPipe()
+	tree, err := newStructuredProcessTree(cmd)
 	if err != nil {
 		return LaunchOutcome{}, launchError("launch.failed_to_start_agent", err.Error())
 	}
-	stdout, err := cmd.StdoutPipe()
+	stdinReader, stdinWriter, err := os.Pipe()
 	if err != nil {
+		_ = tree.close()
 		return LaunchOutcome{}, launchError("launch.failed_to_start_agent", err.Error())
 	}
-	if err := cmd.Start(); err != nil {
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		_ = stdinReader.Close()
+		_ = stdinWriter.Close()
+		_ = tree.close()
 		return LaunchOutcome{}, launchError("launch.failed_to_start_agent", err.Error())
 	}
+	cmd.Stdin = stdinReader
+	cmd.Stdout = stdoutWriter
+	// Structured diagnostics belong to the process boundary. They must not
+	// write into a CLI or TUI global stream.
+	cmd.Stderr = nil
+	if err := tree.start(); err != nil {
+		_ = stdinReader.Close()
+		_ = stdinWriter.Close()
+		_ = stdoutReader.Close()
+		_ = stdoutWriter.Close()
+		if cmd.Process != nil {
+			_ = tree.signal(true)
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+		_ = tree.close()
+		return LaunchOutcome{}, launchError("launch.failed_to_start_agent", err.Error())
+	}
+	_ = stdinReader.Close()
+	_ = stdoutWriter.Close()
 
-	proc := &structuredProcess{cmd: cmd, done: make(chan struct{})}
-	if err := attachStructuredProcess(cmd); err != nil {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
-		return LaunchOutcome{}, launchError("launch.failed_to_start_agent", err.Error())
-	}
-	proc.stopSignals = watchStructuredSignals(cmd, proc.done)
+	proc := &structuredProcess{cmd: cmd, tree: tree, stdin: stdinWriter, stdout: stdoutReader, done: make(chan struct{})}
+	proc.stopSignals = watchStructuredSignals(tree, proc.done)
 	sessionReady := make(chan structuredSessionResult, 1)
-	go drainStructuredOutput(proc, stdout, sessionReady)
+	go reapStructuredProcess(proc, sessionReady)
 	outcome := LaunchOutcome{Process: cmd.Process, Wait: proc.Wait, Poll: proc.Poll, cleanup: func() { cleanupStructuredProcess(proc) }, response: proc.Response}
 	delivered := false
 	isDurable := len(durable) > 0 && durable[0]
@@ -118,16 +211,18 @@ func launchStructuredAgent(plan LaunchPlan, invocation process.ProcessInvocation
 		return LaunchOutcome{}, failure
 	}
 
-	written, err := io.WriteString(stdin, plan.Prompt)
+	written, err := writeStructuredPrompt(
+		stdinWriter,
+		proc.closeStdin,
+		func() error { return proc.tree.signal(true) },
+		plan.Prompt,
+		plan.launchTimeout(structuredPromptWriteWait),
+	)
 	delivered = written > 0
 	if err != nil {
-		_ = stdin.Close()
 		return fail(launchError("launch.failed_to_start_agent", err.Error()))
 	}
 	delivered = true
-	if err := stdin.Close(); err != nil {
-		return fail(launchError("launch.failed_to_start_agent", err.Error()))
-	}
 
 	if paneSession == nil {
 		return outcome, nil
@@ -178,8 +273,8 @@ func launchStructuredAgent(plan LaunchPlan, invocation process.ProcessInvocation
 	return outcome, nil
 }
 
-func drainStructuredOutput(proc *structuredProcess, stdout io.Reader, sessionReady chan<- structuredSessionResult) {
-	scanner := bufio.NewScanner(stdout)
+func drainStructuredOutput(proc *structuredProcess, sessionReady chan<- structuredSessionResult) structuredOutputResult {
+	scanner := bufio.NewScanner(proc.stdout)
 	scanner.Buffer(make([]byte, 64*1024), structuredMaxJSONLRecordLen)
 	var parseErr error
 	var response string
@@ -221,22 +316,47 @@ func drainStructuredOutput(proc *structuredProcess, stdout io.Reader, sessionRea
 		case sessionReady <- structuredSessionResult{err: parseErr}:
 		default:
 		}
-		_ = signalStructuredProcess(proc.cmd, true)
+		_ = proc.tree.signal(true)
 	}
+	return structuredOutputResult{err: parseErr, response: response}
+}
+
+func reapStructuredProcess(proc *structuredProcess, sessionReady chan<- structuredSessionResult) {
+	outputDone := make(chan structuredOutputResult, 1)
+	go func() { outputDone <- drainStructuredOutput(proc, sessionReady) }()
 	waitErr := proc.cmd.Wait()
 	if proc.stopSignals != nil {
 		proc.stopSignals()
 	}
-	releaseStructuredProcess(proc.cmd)
+	// The direct process is reaped, so no legitimate descendant remains. Kill
+	// the owned tree before waiting for inherited output handles to close.
+	_ = proc.tree.signal(true)
+	treeCloseErr := proc.tree.close()
+	var output structuredOutputResult
+	select {
+	case output = <-outputDone:
+	case <-time.After(structuredCleanupGrace):
+		_ = proc.closeStdout()
+		select {
+		case output = <-outputDone:
+		case <-time.After(structuredCleanupGrace):
+			output.err = errors.New("Codex JSONL output did not stop after the owned pipe was closed")
+		}
+	}
+	if errors.Is(output.err, os.ErrClosed) {
+		output.err = nil
+	}
+	_ = proc.closeStdout()
 	code := 0
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {
 			code = exitErr.ExitCode()
-		} else if parseErr == nil {
-			parseErr = waitErr
+		} else if output.err == nil {
+			output.err = waitErr
 		}
 	}
-	proc.finish(structuredProcessResult{code: code, err: parseErr, response: response})
+	output.err = errors.Join(output.err, treeCloseErr)
+	proc.finish(structuredProcessResult{code: code, err: output.err, response: output.response})
 }
 
 func cleanupStructuredProcess(proc *structuredProcess) {
@@ -248,13 +368,15 @@ func cleanupStructuredProcess(proc *structuredProcess) {
 		return
 	default:
 	}
-	_ = signalStructuredProcess(proc.cmd, false)
+	_ = proc.closeStdin()
+	_ = proc.tree.signal(false)
 	select {
 	case <-proc.done:
 		return
 	case <-time.After(structuredCleanupGrace):
 	}
-	_ = signalStructuredProcess(proc.cmd, true)
+	_ = proc.closeStdout()
+	_ = proc.tree.signal(true)
 	select {
 	case <-proc.done:
 	case <-time.After(structuredCleanupGrace):
