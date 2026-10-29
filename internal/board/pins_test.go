@@ -116,7 +116,7 @@ func TestUpdateProtectsPinsAndRecords(t *testing.T) {
 func TestValidateCardPinsRejectsAModelTheStartTemplateDropsIt(t *testing.T) {
 	cfg := config.DefaultConfig()
 	modelPin := func(agent string) CardPins { return CardPins{Exec: StagePin{Agent: agent, Model: "m1"}} }
-	if err := ValidateCardPins(cfg, modelPin("droid")); err == nil || !strings.Contains(err.Error(), FieldExecModel) {
+	if err := ValidateCardPins(cfg, modelPin("droid")); err == nil || !strings.Contains(err.Error(), FieldExecModel) || !strings.Contains(err.Error(), "droid") {
 		t.Fatalf("droid model pin err=%v", err)
 	}
 	if err := ValidateCardPins(cfg, modelPin("claude")); err != nil {
