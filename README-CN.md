@@ -1,12 +1,16 @@
-<img src="docs/images/kander-icon.svg" alt="Kander logo" width="96">
+<div align="center">
+
+<img src="docs/images/kander-icon.svg" alt="Kander logo" width="128">
 
 # Kander
 
+强规则驱动的多 Agent 并行开发，内置独立审查与交付门禁，充分保障自动化交付质量。
+
 [English](README.md) | **简体中文** | [日本語](README-JA.md)
 
-[![Kander - 多 AI Agent 的看板调度](docs/star-please.png)](https://github.com/dualface/kander)
+</div>
 
-强规则驱动的多 Agent 并行开发，内置独立审查与交付门禁，充分保障自动化交付质量。
+[![Kander - 多 AI Agent 的看板调度](docs/star-please.png)](https://github.com/dualface/kander)
 
 > **从真实工程中诞生**
 >

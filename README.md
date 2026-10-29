@@ -1,12 +1,16 @@
-<img src="docs/images/kander-icon.svg" alt="Kander logo" width="96">
+<div align="center">
+
+<img src="docs/images/kander-icon.svg" alt="Kander logo" width="128">
 
 # Kander
 
+Strict rule-driven multi-agent parallel development with built-in independent review and delivery gates to ensure automated delivery quality.
+
 **English** | [简体中文](README-CN.md) | [日本語](README-JA.md)
 
-[![Kander - Kanban Orchestration for Multiple AI Agents](docs/star-please.png)](https://github.com/dualface/kander)
+</div>
 
-Strict rule-driven multi-agent parallel development with built-in independent review and delivery gates to ensure automated delivery quality.
+[![Kander - Kanban Orchestration for Multiple AI Agents](docs/star-please.png)](https://github.com/dualface/kander)
 
 > **Born from real engineering**  
 > Since August 2026, Kander has driven more than 2,400 real tasks across 5 projects, 1,980 of them in the [QuickTUI](https://quicktui.ai/) production environment. Refined through handling actual code conflicts, race conditions, and complex bugs, it establishes truly reliable agent orchestration, independent review, and crash recovery. Even with lower-cost models, it guarantees delivery quality.

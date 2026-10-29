@@ -1,12 +1,16 @@
-<img src="docs/images/kander-icon.svg" alt="Kander logo" width="96">
+<div align="center">
+
+<img src="docs/images/kander-icon.svg" alt="Kander logo" width="128">
 
 # Kander
 
+厳格なルール駆動型マルチ Agent 並行開発。独立レビューと品質ゲートを標準装備し、自動化された納品品質を徹底担保。
+
 [English](README.md) | [简体中文](README-CN.md) | **日本語**
 
-[![Kander - 複数 AI Agent のカンバン調整](docs/star-please.png)](https://github.com/dualface/kander)
+</div>
 
-厳格なルール駆動型マルチ Agent 並行開発。独立レビューと品質ゲートを標準装備し、自動化された納品品質を徹底担保。
+[![Kander - 複数 AI Agent のカンバン調整](docs/star-please.png)](https://github.com/dualface/kander)
 
 > **実際のエンジニアリングから誕生**  
 > 2026 年 8 月以来、Kander は 5 つのプロジェクトで 2,400 件を超える実タスクを完了してきました。そのうち 1,980 件は [QuickTUI](https://quicktui.ai/) の本番環境です。実際のコード競合、並行性競合、複雑な不具合の対応を通じて継続的に洗練され、真に信頼できる Agent スケジューリング、独立レビュー、クラッシュリカバリ機構を確立。より安価なモデルを使用した場合でも、納品品質を保証します。
