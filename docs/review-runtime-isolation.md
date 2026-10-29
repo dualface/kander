@@ -4,7 +4,7 @@ How `kander review` keeps a reviewer read-only and how the review runtime is pro
 
 ## Reviewer Entry
 
-- Reviewers are the eight built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
+- Reviewers are the nine built-in agents plus any configured agent that declares a review template (`args.review` together with `review.*`). The public review entry on all platforms is `kander review` under the command root, which enters the single gate implementation.
 - On Windows, the reviewer `.exe` is preferred. When only `.cmd`/`.bat` exists, the launch goes through an explicit `cmd.exe /d /s /v:off /c` and the argument encoding of that reviewer's adapter layer. This is not a general invocation contract for arbitrary batch scripts.
 - Built-in isolation arguments live on each agent's definition. A custom reviewer's read-only posture is the definition author's responsibility; Kander still validates the result and isolates review-private directories. Apart from the CLI and isolation arguments declared for that reviewer, every review rule is identical for all reviewers.
 
