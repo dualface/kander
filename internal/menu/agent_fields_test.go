@@ -112,3 +112,38 @@ func TestReviewModelFieldsHideCursorEffortAfterArgsOverlay(t *testing.T) {
 		}
 	}
 }
+
+func TestModelFieldsOmitTheModelAStartTemplateDoesNotTake(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.KanbanAgents["large"] = "droid"
+	cfg.KanbanAgents["small"] = "claude"
+	cfg.ChatAgent = "droid"
+	s, err := NewSessionForTest(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fields := s.ExecutionModelFieldsFor("large"); len(fields) != 0 {
+		t.Fatalf("droid execution fields=%v", fields)
+	}
+	if fields := s.ChatModelFieldsFor(); len(fields) != 0 {
+		t.Fatalf("droid chat fields=%v", fields)
+	}
+	if fields := s.ExecutionModelFieldsFor("small"); len(fields) == 0 {
+		t.Fatal("claude execution fields missing")
+	}
+	s.Config.ChatAgent = "claude"
+	if fields := s.ChatModelFieldsFor(); len(fields) == 0 {
+		t.Fatal("claude chat fields missing")
+	}
+	// An agent that takes an effort but no model keeps its effort field.
+	s.Config.Agents = map[string]config.AgentDefinition{"effort_only": {Path: "effort-only", Args: &config.AgentArgs{Start: []string{"--effort", "{effort}"}}}}
+	s.Config.KanbanAgents["large"] = "effort_only"
+	s.Config.ChatAgent = "effort_only"
+	for name, fields := range map[string][]ModelField{"execution": s.ExecutionModelFieldsFor("large"), "chat": s.ChatModelFieldsFor()} {
+		if len(fields) != 1 || fields[0].FieldName() != "large_effort" && fields[0].FieldName() != "effort" {
+			t.Fatalf("%s fields=%v", name, fields)
+		}
+	}
+}

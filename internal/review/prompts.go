@@ -149,7 +149,7 @@ func buildPrompt(ctx reviewContext, evidenceFile, taskContext string) (string, e
 
 func usesLastMessageReport(agent string) bool {
 	switch agent {
-	case "claude", "cursor", "grok", "kimi":
+	case "claude", "cursor", "grok", "kimi", "droid":
 		return true
 	default:
 		return false

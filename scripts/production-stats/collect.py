@@ -24,7 +24,7 @@ KEYS = {
     "FINISHED_AT": "finished", "完成时间": "finished",
     "SIZE": "size", "TYPE": "type", "类型": "type",
 }
-AGENTS = ["claude", "codex", "grok", "cursor", "pi", "devin", "opencode", "kimi"]
+AGENTS = ["claude", "codex", "grok", "cursor", "pi", "devin", "opencode", "kimi", "droid"]
 HEADER = re.compile(r"^- ([^:\s][^:]*?):\s*(.*)$")
 FINDINGS = re.compile(r"```kander-findings\s*\n(.*?)\n```", re.S)
 TIME = re.compile(r"(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})")

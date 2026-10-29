@@ -207,11 +207,15 @@ func parseStagePin(text string, fields [3]string) (StagePin, error) {
 // ValidateCardPins checks parsed pins against the loaded agent definitions: the
 // execution agent must be a configured execution agent, a review agent must have
 // a review template, and an effort is accepted only when the stage's argv
-// template consumes {effort}.
+// template consumes {effort}. An execution model is accepted only when the
+// start template consumes {model}.
 func ValidateCardPins(cfg *config.Config, pins CardPins) error {
 	if pin := pins.Exec; pin.Agent != "" {
 		if !config.HasAgent(cfg, pin.Agent) {
 			return kanbanError("board.pin_unknown_agent", FieldExecAgent, pin.Agent)
+		}
+		if pin.Model != "" && !config.ExecutionTakesModel(cfg, pin.Agent) {
+			return kanbanError("board.pin_model_unsupported", FieldExecModel, pin.Agent)
 		}
 		if pin.Effort != "" && !ExecutionTakesEffort(cfg, pin.Agent) {
 			return kanbanError("board.pin_effort_unsupported", FieldExecEffort, pin.Agent)
@@ -299,7 +303,7 @@ const (
 func PinSourceConfig(scale string) string { return "config:" + scale }
 
 // ResolvedItem is one resolved value with its source. An empty Value renders as
-// `-`; NotApplicable renders `N/A` for an effort the agent does not take.
+// `-`; NotApplicable renders `N/A` for a model or effort the agent does not take.
 type ResolvedItem struct {
 	Value         string
 	Source        string

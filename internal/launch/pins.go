@@ -80,9 +80,11 @@ func resolveExecution(cfg *config.Config, text, kind, agent string, mode execMod
 	}
 	choice := execChoice{Agent: agentItem.Value, Model: modelItem.Value, Effort: effortItem.Value}
 	if pins.Any() {
+		recordedModel := modelItem
+		recordedModel.NotApplicable = !config.ExecutionTakesModel(cfg, agentItem.Value)
 		recorded := effortItem
 		recorded.NotApplicable = !board.ExecutionTakesEffort(cfg, agentItem.Value)
-		choice.record = board.Resolution{Agent: agentItem, Model: modelItem, Effort: recorded}.Render()
+		choice.record = board.Resolution{Agent: agentItem, Model: recordedModel, Effort: recorded}.Render()
 	}
 	return choice, nil
 }

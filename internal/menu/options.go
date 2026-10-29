@@ -453,7 +453,8 @@ func (s *Session) kanbanModelField(agent, field, label, short, prompt string) Mo
 
 // ExecutionModelFieldsFor returns the model fields of the agent currently selected for one task scale (large/small).
 // Model and reasoning effort are stored per scale, so large and small tasks each keep their own
-// independently editable values even when they select the same agent.
+// independently editable values even when they select the same agent. An agent whose start template
+// takes no {model} has no model field.
 func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 	agent := s.Config.KanbanAgents[scale]
 	if agent == "" {
@@ -477,10 +478,13 @@ func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 	if scale == "small" {
 		scaleLabel = config.Text("menu.small_task")
 	}
-	fields := []ModelField{s.kanbanModelField(agent, scale+"_model",
-		config.Text("menu.kanban_model", label, scaleLabel),
-		config.Text("menu.field_model"),
-		config.Text("menu.full_model_id_for_s", scaleLabel))}
+	var fields []ModelField
+	if config.ExecutionTakesModel(s.Config, agent) {
+		fields = append(fields, s.kanbanModelField(agent, scale+"_model",
+			config.Text("menu.kanban_model", label, scaleLabel),
+			config.Text("menu.field_model"),
+			config.Text("menu.full_model_id_for_s", scaleLabel)))
+	}
 	if !config.AgentSupportsEffort(s.Config, agent) {
 		return fields
 	}
@@ -524,7 +528,8 @@ func (s *Session) materializeChatEntry(agent string) {
 	config.EnsureChatEntry(s.Config, agent)
 }
 
-// ChatModelFieldsFor returns the model fields of the current Chat Agent.
+// ChatModelFieldsFor returns the model fields of the current Chat Agent, without
+// the model field when its start template takes no {model}.
 func (s *Session) ChatModelFieldsFor() []ModelField {
 	if s == nil || s.Config == nil {
 		return nil
@@ -541,15 +546,18 @@ func (s *Session) ChatModelFieldsFor() []ModelField {
 	if label == "" {
 		label = agent
 	}
-	fields := []ModelField{{
-		Label:  config.Text("menu.chat_model"),
-		Short:  config.Text("menu.field_model"),
-		Agent:  agent,
-		kind:   "chat",
-		Prompt: config.Text("menu.full_model_id_for_s", label),
-		entry:  s.Config.Models.Chat[agent],
-		field:  "model",
-	}}
+	var fields []ModelField
+	if config.ExecutionTakesModel(s.Config, agent) {
+		fields = append(fields, ModelField{
+			Label:  config.Text("menu.chat_model"),
+			Short:  config.Text("menu.field_model"),
+			Agent:  agent,
+			kind:   "chat",
+			Prompt: config.Text("menu.full_model_id_for_s", label),
+			entry:  s.Config.Models.Chat[agent],
+			field:  "model",
+		})
+	}
 	if !config.AgentSupportsEffort(s.Config, agent) {
 		return fields
 	}

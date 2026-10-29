@@ -20,6 +20,7 @@ func TestAgentDefinitionFallbacksAndClone(t *testing.T) {
 		{"devin", "devin", "devin", "devin", "discovered"},
 		{"opencode", "opencode", "opencode", "opencode", "discovered"},
 		{"kimi", "kimi", "kimi", "kimi", "discovered"},
+		{"droid", "droid", "droid", "droid", "hook:droid-sessions"},
 		{"fresh", "fresh", "fresh", "claude", "generated"},
 		{"unregistered", "unregistered", "unregistered", "", "generated"},
 	} {
@@ -202,8 +203,9 @@ func TestDialectSessionCompatibility(t *testing.T) {
 		{"devin", "generated", true}, {"devin", "allocated", true}, {"devin", "none", false},
 		{"opencode", "generated", true}, {"opencode", "allocated", true}, {"opencode", "none", false},
 		{"kimi", "generated", true}, {"kimi", "allocated", true}, {"kimi", "none", false},
+		{"droid", "generated", true}, {"droid", "allocated", true}, {"droid", "none", false},
 		{"codex", "hook:codex-rollout", false}, {"cursor", "hook:cursor-create-chat", false}, {"devin", "discovered", false},
-		{"opencode", "discovered", false}, {"kimi", "discovered", false},
+		{"opencode", "discovered", false}, {"kimi", "discovered", false}, {"droid", "hook:droid-sessions", false},
 	} {
 		t.Run(test.dialect+"-"+test.mode, func(t *testing.T) {
 			cfg := DefaultConfig()

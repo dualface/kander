@@ -124,6 +124,7 @@ func TestStartPinConflictsFailBeforeSideEffects(t *testing.T) {
 		{"cli-conflict", "- EXEC_AGENT: claude\n", "codex", "--agent"},
 		{"model-without-agent", "- EXEC_MODEL: m1\n", "", "EXEC_AGENT"},
 		{"effort-unsupported", "- EXEC_AGENT: cursor\n- EXEC_EFFORT: high\n", "", "EXEC_EFFORT"},
+		{"model-unsupported", "- EXEC_AGENT: droid\n- EXEC_MODEL: m1\n", "", "EXEC_MODEL"},
 		{"unknown-agent", "- EXEC_AGENT: my_agent\n", "", "my_agent"},
 		{"option-like-model", "- EXEC_AGENT: claude\n- EXEC_MODEL: --yolo\n", "", "--yolo"},
 		{"duplicate", "- EXEC_AGENT: claude\n- EXEC_AGENT: codex\n", "", "EXEC_AGENT"},
@@ -143,6 +144,19 @@ func TestStartPinConflictsFailBeforeSideEffects(t *testing.T) {
 	}
 	if mustRead(t, filepath.Join(root, "tmux.log")) != before {
 		t.Fatal("a rejected start reached the launcher")
+	}
+}
+
+func TestExecutionRecordMarksAModelTheAgentDropsNotApplicable(t *testing.T) {
+	cfg := envConfig("codex", "tmux", nil)
+	cfg.Models.Kanban["droid"] = map[string]string{"large_model": "never-passed", "small_model": ""}
+	text := "# Card\n\n- SIZE: large\n- RESULT:\n- EXEC_AGENT: droid\n\n## GOAL\n"
+	choice, err := resolveExecution(cfg, text, "large", "", execStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if choice.record != "agent=droid(forced) model=N/A effort=N/A" {
+		t.Fatalf("record=%q", choice.record)
 	}
 }
 
