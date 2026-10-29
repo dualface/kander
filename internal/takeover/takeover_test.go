@@ -483,7 +483,7 @@ func TestAgentExitCommands(t *testing.T) {
 			t.Fatal(agent, exit, err)
 		}
 	}
-	for _, agent := range []string{"cursor", "pi"} {
+	for _, agent := range []string{"cursor", "pi", "droid"} {
 		quit, err := AgentExitCommand(agent)
 		if err != nil || quit != "/quit" {
 			t.Fatal(agent, quit, err)

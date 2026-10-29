@@ -13,7 +13,7 @@ import (
 // cursor's global target moved to an always-applied ~/.cursor/rules/kander.mdc rule.
 func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 	for _, mode := range []config.Mode{config.ModeGlobal, config.ModeProject} {
-		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin", "opencode", "kimi"} {
+		for _, agent := range []string{"codex", "claude", "grok", "cursor", "pi", "devin", "opencode", "kimi", "droid"} {
 			for _, existing := range []bool{false, true} {
 				name := string(mode) + "/" + agent + "/create"
 				if existing {
@@ -38,6 +38,9 @@ func TestBuiltinIntegrationPreservesTargetsAndBytes(t *testing.T) {
 					}
 					if agent == "kimi" {
 						target = filepath.Join(home, ".kimi-code", "AGENTS.md")
+					}
+					if agent == "droid" {
+						target = filepath.Join(home, ".factory", "AGENTS.md")
 					}
 					if agent == "cursor" {
 						target = filepath.Join(home, ".cursor", "rules", "kander.mdc")

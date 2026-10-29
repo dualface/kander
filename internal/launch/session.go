@@ -376,13 +376,16 @@ func runSessionDiscoverHook(session *config.AgentSessionDefinition, taskID strin
 	switch name {
 	case "codex-rollout":
 		return discoverNewCodexSession(taskID, launchStart, cwd, budget(sessionDiscoverWait))
+	case "droid-sessions":
+		return discoverNewDroidSession(previous, cwd, budget(sessionDiscoverWait))
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
 }
 
 // sessionDiscoverSnapshot records the sessions that exist before a
-// discovered-mode launch. Codex needs no snapshot and returns an empty set.
+// discovered-mode or droid-sessions launch. Codex needs no snapshot and
+// returns an empty set.
 // budget maps the enumeration wait to its launch budget.
 func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID string, discover bool, program *process.AgentProgram, cwd string, budget func(time.Duration) time.Duration) (map[string]struct{}, error) {
 	previous := map[string]struct{}{}
@@ -412,6 +415,8 @@ func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID stri
 		if err := checkCodexSessionsRoot(); err != nil {
 			return nil, err
 		}
+	case "droid-sessions":
+		return droidSessionSnapshot(budget(sessionDiscoverWait))
 	}
 	return previous, nil
 }

@@ -200,6 +200,8 @@ func TestParseReviewOutputSuccessBeforeExtract(t *testing.T) {
 		{"kimi", `{"role":"assistant","tool_calls":[{"type":"function","id":"1"}]}` + "\n" + `{"role":"assistant","content":"ok"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", true},
 		{"kimi", `{"role":"assistant","content":"ok"}` + "\n", false},
 		{"kimi", `{"role":"tool","tool_call_id":"1","content":"x"}` + "\n" + `{"role":"meta","type":"session.resume_hint"}` + "\n", false},
+		{"droid", `{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1"}`, true},
+		{"droid", `{"type":"result","subtype":"failure","is_error":true,"result":"Exec ended early: insufficient permission to proceed."}`, false},
 	}
 	for _, item := range rows {
 		t.Run(item.agent+"/"+item.body[:min(12, len(item.body))], func(t *testing.T) {
@@ -356,6 +358,46 @@ func TestKimiReviewDefinitionUsesAgentFile(t *testing.T) {
 				t.Fatalf("review argv carries %s: %q", banned, inv.Argv)
 			}
 		}
+	}
+}
+
+// Droid reviews run `droid exec`, whose default autonomy is read-only: a write
+// ends the run with is_error, so the run must never raise autonomy or skip
+// permission checks.
+func TestDroidReviewDefinitionStaysReadOnly(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "missing.json"))
+	t.Setenv("HOME", filepath.Join(t.TempDir(), "home"))
+	settings, err := agentSettingsFor("droid", "PMQA", "large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.stdin != config.ReviewStdinNone || settings.cwd != "root" || settings.outputName != "output.json" ||
+		!settings.spawnsHelperProcesses || !settings.snapshotSpec || settings.homePolicy != config.ReviewHomeOptional {
+		t.Fatalf("settings %+v", settings)
+	}
+	ctx := reviewContext{
+		agent: "droid", settings: settings, root: "/work",
+		program:     process.AgentProgram{Path: "/bin/reviewer"},
+		instruction: mustInstruction(t, "Perform the PM review.", "/rt/prompt.txt"),
+	}
+	inv, cwd, err := reviewerArguments(ctx, "/rt", "/rt/out", "/rt/prompt.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cwd != "/work" {
+		t.Fatalf("cwd %s", cwd)
+	}
+	args := inv.Argv[1:]
+	if len(args) < 4 || !reflect.DeepEqual(args[:3], []string{"exec", "--output-format", "json"}) || args[len(args)-1] != ctx.instruction {
+		t.Fatalf("argv %q", args)
+	}
+	for _, arg := range args {
+		if arg == "--auto" || arg == "--skip-permissions-unsafe" || arg == "--reasoning-effort" || arg == "--model" {
+			t.Fatalf("review argv carries %s: %q", arg, args)
+		}
+	}
+	if !usesLastMessageReport("droid") {
+		t.Fatal("droid exec reports its final message")
 	}
 }
 

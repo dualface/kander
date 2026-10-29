@@ -15,7 +15,7 @@ import statistics
 MUST = ("blocking", "high", "medium")
 ROLE_GROUP = {"PMQA": "PMQA", "Security": "Security", "PM": "PM / QA", "QA": "PM / QA"}
 AGENT_NAMES = {"claude": "Claude Code", "codex": "Codex", "grok": "Grok", "cursor": "Cursor",
-               "pi": "Pi", "devin": "Devin", "opencode": "OpenCode", "kimi": "Kimi"}
+               "pi": "Pi", "devin": "Devin", "opencode": "OpenCode", "kimi": "Kimi", "droid": "Droid"}
 MIN_EXEC_CARDS = 10
 MIN_REVIEW_RUNS = 20
 

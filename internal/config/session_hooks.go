@@ -22,6 +22,7 @@ type SessionHook struct {
 var registeredSessionHooks = []SessionHook{
 	{Name: "codex-rollout", DiscoverAfterStart: true, ResolveEmptyReference: true},
 	{Name: "cursor-create-chat", AllocateBeforeStart: true},
+	{Name: "droid-sessions", DiscoverAfterStart: true, PersistAfterStart: true},
 }
 
 // RegisteredSessionHooks returns the built-in hook list in registration order.
