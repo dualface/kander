@@ -109,6 +109,9 @@ func orNA(v string) string {
 // only takes one line, so argv has to survive being parsed by a shell again;
 // foreground and console spawn directly and keep native argv.
 func launchInvocation(plan LaunchPlan, program process.AgentProgram, arguments []string) (process.ProcessInvocation, error) {
+	if plan.Structured {
+		return newInvocation(program, arguments, nil)
+	}
 	if plan.capabilities().Container {
 		return newShellInvocation(program, arguments, nil)
 	}

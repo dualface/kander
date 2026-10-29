@@ -73,6 +73,7 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 	if err := applyAgentDelivery(&plan, cfg, agent); err != nil {
 		return result, err
 	}
+	plan.Structured = config.AgentFor(cfg, agent).Transport == "structured"
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 	program, err := requireAgentProgram(agent, cfg)
 	if err != nil {

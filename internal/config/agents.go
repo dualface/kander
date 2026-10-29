@@ -21,6 +21,7 @@ type AgentDefinition struct {
 	Path           string                  `json:"path,omitempty"`
 	ProcessName    string                  `json:"process_name,omitempty"`
 	Dialect        string                  `json:"dialect,omitempty"`
+	Transport      string                  `json:"transport,omitempty"`
 	Args           *AgentArgs              `json:"args,omitempty"`
 	Session        *AgentSessionDefinition `json:"session,omitempty"`
 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
@@ -319,6 +320,9 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		}
 		if d.Dialect != "" && !contains(ExecutionAgents, d.Dialect) {
 			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
+		}
+		if d.Transport != "" && (name != "codex" || d.Transport != "structured") {
+			return nil, agentDefinitionError(name, Text("config.agent_text", "transport"))
 		}
 		if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_adapter"))

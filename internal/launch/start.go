@@ -67,6 +67,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
 		return result, err
 	}
+	plan.Structured = config.AgentFor(cfg, agentName).Transport == "structured"
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 	program, err := requireAgentProgram(agentName, cfg)
 	if err != nil {
@@ -79,7 +80,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	sessionDef := config.AgentFor(cfg, agentName).Session
 	initialSession := session.Render()
 	persistSession := config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
-	discoverSession := plan.capabilities().PaneMetadata || persistSession
+	discoverSession := plan.Structured || plan.capabilities().PaneMetadata || persistSession
 	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
 	if err != nil {
 		return result, err
@@ -139,6 +140,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if discoverSession {
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
+				return session, nil
+			}
+			if plan.Structured {
 				return session, nil
 			}
 			if !config.SessionDiscoversAfterStart(sessionDef) {

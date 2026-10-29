@@ -75,6 +75,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err := applyAgentDelivery(&plan, cfg, session.Agent); err != nil {
 		return ResumeLaunch{}, err
 	}
+	plan.Structured = config.AgentFor(cfg, session.Agent).Transport == "structured"
 	program, err := requireAgentProgram(session.Agent, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err

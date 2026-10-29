@@ -45,6 +45,9 @@ func launchAgent(
 		return &LaunchFailure{Err: err, CloseError: closeErr}
 	}
 	if !caps.Container {
+		if plan.Structured {
+			return launchStructuredAgent(plan, invocation, filepath.Dir(root), paneSession, agentSession)
+		}
 		handle, err := startProcessFn(invocation.Argv, invocation.Env, filepath.Dir(root), caps.Detached)
 		if err != nil {
 			return LaunchOutcome{}, fail(launchError("launch.failed_to_start_agent", err.Error()))

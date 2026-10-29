@@ -633,6 +633,13 @@ func expandAgentInvocation(agent, modelID, effort string, session AgentSession, 
 		reference = ""
 		template = config.RewriteKeepSession(template, true)
 	}
+	if definition.Dialect == "codex" && definition.Transport == "structured" {
+		if resume {
+			template = []string{"exec", "resume", "--json", "--model", "{model}", "--config", `model_reasoning_effort="{effort}"`, "--dangerously-bypass-approvals-and-sandbox", "{session=}", "-"}
+		} else {
+			template = []string{"exec", "--json", "--model", "{model}", "--config", `model_reasoning_effort="{effort}"`, "--dangerously-bypass-approvals-and-sandbox", "-"}
+		}
+	}
 	return config.ExpandAgentArgs(template, modelID, effort, reference), nil
 }
 

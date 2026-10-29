@@ -23,6 +23,20 @@ A built-in name may also set `config_dir` to relocate the agent's global config 
 
 Start, resume, doctor, options-panel probing, tmux liveness checks, notification reverse lookup, and takeover cleanup all read this set of settings. Both saving and reading validate explicit paths; after deleting a wrapper, the configuration must be fixed or the executable restored. When doctor encounters an agent definition it cannot validate, it preserves the original file and reports, to avoid losing templates.
 
+### Optional Codex structured transport
+
+Codex keeps the interactive TUI transport by default, including tmux and Herdr compatibility. To opt in to the non-interactive JSON Lines transport, set the built-in Codex overlay:
+
+```json
+{
+  "agents": {
+    "codex": {"transport": "structured"}
+  }
+}
+```
+
+The structured transport starts Codex with `codex exec --json ... -`, writes the task-file instruction to stdin, and records the `thread_id` from the `thread.started` event as the card session. Resume uses `codex exec resume --json ... <session> -`. The option is valid only for the built-in `codex` agent and does not change the default launcher or the transport of other agents.
+
 ## Dialect or argv Templates
 
 ```json
