@@ -1,9 +1,11 @@
 package launch
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -134,6 +136,45 @@ func TestDroidScanRetriesAHeaderStillBeingWritten(t *testing.T) {
 	got, err = scan.candidates(t.Context())
 	if err != nil || !reflect.DeepEqual(got, []string{"cccc"}) {
 		t.Fatalf("complete header: got=%q err=%v", got, err)
+	}
+}
+
+// writeUnreadableDroidSession writes a session file of cwd that this user
+// cannot open.
+func writeUnreadableDroidSession(t *testing.T, root, dir, id, cwd string) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("file mode 0 does not deny reads on Windows or to root")
+	}
+	path := writeDroidSession(t, root, dir, id, droidHeader(id, cwd))
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDroidDiscoveryReadsPastAnUnreadableSession(t *testing.T) {
+	root := droidHome(t)
+	cwd := t.TempDir()
+	writeUnreadableDroidSession(t, root, "-project", "eeee", cwd)
+	writeDroidSession(t, root, "-project", "ffff", droidHeader("ffff", cwd))
+	got, err := discoverNewDroidSession(map[string]struct{}{}, cwd, time.Second)
+	if err != nil || got != "ffff" {
+		t.Fatalf("got=%q err=%v", got, err)
+	}
+}
+
+func TestDroidDiscoveryReportsTheReadErrorWithoutASession(t *testing.T) {
+	root := droidHome(t)
+	cwd := t.TempDir()
+	writeUnreadableDroidSession(t, root, "-project", "eeee", cwd)
+	previousNow, previousSleep := nowFn, sleepFn
+	t.Cleanup(func() { nowFn, sleepFn = previousNow, previousSleep })
+	clock := time.Unix(1_800_000_000, 0)
+	nowFn = func() time.Time { return clock }
+	sleepFn = func(d time.Duration) { clock = clock.Add(d) }
+	_, err := discoverNewDroidSession(map[string]struct{}{}, cwd, time.Second)
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("err=%v", err)
 	}
 }
 

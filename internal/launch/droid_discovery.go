@@ -116,7 +116,8 @@ func readDroidSessionHeader(root, path, id, cwd string) (match, retry bool, err 
 
 // droidSessionScan finds the sessions one launch created. It opens only files
 // absent from the pre-launch snapshot and remembers every file that can never
-// match, so later polls do not open it again.
+// match, so later polls do not open it again. A file that cannot be read does
+// not stop the scan: its error is returned only when no session matches.
 type droidSessionScan struct {
 	root     string
 	previous map[string]struct{}
@@ -130,6 +131,7 @@ func (s *droidSessionScan) candidates(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	var sessions []string
+	var readErr error
 	for id, path := range files {
 		if _, ok := s.previous[id]; ok {
 			continue
@@ -139,13 +141,17 @@ func (s *droidSessionScan) candidates(ctx context.Context) ([]string, error) {
 		}
 		match, retry, err := readDroidSessionHeader(s.root, path, id, s.cwd)
 		if err != nil {
-			return nil, err
+			readErr = err
+			continue
 		}
 		if match {
 			sessions = append(sessions, id)
 		} else if !retry {
 			s.settled[id] = struct{}{}
 		}
+	}
+	if len(sessions) == 0 && readErr != nil {
+		return nil, readErr
 	}
 	slices.Sort(sessions)
 	return sessions, nil
