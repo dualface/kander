@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## v1.0.0 — 2026-10-29
 
+- Microsoft Store: kander can ship as an MSIX package for Windows (x64 and arm64) with the `kander.exe` execution alias. A Start menu launch opens the board. The package turns off file and registry write virtualization so agents outside the package can read the task files kander writes under `%TEMP%`; it needs Windows 10 2004 (build 19041) or later. The Store's package version rules start the version line at 1.0.0, because a Store version cannot begin with 0.
+- A kander installed from Microsoft Store leaves updates to the Store: the board's startup update check makes no network request and shows no update dialog, and a self-update is refused before anything is downloaded or written. It also never copies itself onto PATH: bare `kander` asks no copy question and `kander install` copies no binary, because the execution alias is already on PATH. Other installs are unchanged.
+- Releases: for a stable tag the Release workflow also builds the Store upload bundle on a Windows runner and attaches it to the GitHub Release once the `KANDER_MSIX_IDENTITY_NAME`, `KANDER_MSIX_PUBLISHER`, and `KANDER_MSIX_PUBLISHER_DISPLAY_NAME` repository variables are set; until then it skips with a notice. The new MSIX workflow can also be run by hand. See `docs/windows-msix-store.md`.
 - Fix (notify, #19): tmux and tmux-session delivery now waits 500ms between the typed instruction and the `Enter` that submits it. Codex treated an Enter that arrived right after the text as part of a paste, so the instruction stayed in its composer and notify reported the acknowledgement as unconfirmed. The wait applies to every agent and to every tmux delivery: direct notify, durable dispatch, pane-mode start prompts, `dismiss` exit commands, and `kander terminal test`. herdr and luvus keep their own `agent prompt` and are unchanged.
 - Terminal definitions: a step may declare `delay`, a Go duration (at most 5s) that the backend waits before running the step's command. The wait is outside the step `timeout`, a skipped step does not wait, and a cancelled context ends the wait.
 
