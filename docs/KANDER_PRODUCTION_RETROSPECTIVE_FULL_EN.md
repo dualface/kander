@@ -1,7 +1,7 @@
 # Kander × QuickTUI: A Production Retrospective on Nearly 1,000 Real-World AI Coding Tasks
 
 **Analysis date:** 2026-09-18  
-**Note:** This report is a snapshot as of 2026-09-18. "Nearly 1,000 tasks" below is the user's estimate at that time; the QuickTUI kanban holds 881 cards dated 2026-08-01 to 2026-09-18 (`done/` and `archived/`, counted 2026-10-07). For current numbers, see [Production Stats](production-stats.md). Corrected 2026-10-07: "QT" in task names is the prefix of QuickTUI's own design system (for example `QTSelectSheet`), not the Qt framework; QuickTUI has no Qt/QML code, so the earlier Qt/QML mentions were removed.  
+**Note:** This report is a snapshot as of 2026-09-18. "Nearly 1,000 tasks" below is the user's estimate at that time; the QuickTUI kanban holds 881 cards dated 2026-08-01 to 2026-09-18 (`done/` and `archived/`, counted 2026-10-07). For current numbers, see [Production Stats](production-stats.md). Corrected 2026-10-07: "QT" in task names is the prefix of QuickTUI's own design system (for example `QTSelectSheet`), not the Qt framework; QuickTUI has no Qt/QML code, so the earlier Qt/QML mentions were removed. Updated 2026-10-29: [Appendix D](#appendix-d-model-level-execution-and-review-statistics-2026-10-29) adds model-level execution and review statistics from five projects through 2026-10-29; the rest of the report is unchanged.  
 **Primary time range:** 2026-08-01 to 2026-09-18  
 **Source repository:** `dualface/quicktui-mono`  
 **Task/work-record repository:** `dualface/quicktui-mono-kanban`  
@@ -231,6 +231,8 @@ But simply counting “which model found more bugs” would be seriously mislead
 - some findings may later be rejected.
 
 Model comparison therefore needs task-complexity normalization and finding disposition, not raw finding counts.
+
+Since mid-September, review findings carry structured disposition records; [Appendix D](#appendix-d-model-level-execution-and-review-statistics-2026-10-29) reports the per-model rates with these caveats.
 
 ---
 
@@ -2245,4 +2247,88 @@ That is already a strong and auditable story.
 
 ---
 
-**Report generated: 2026-09-18**
+# Appendix D: Model-Level Execution and Review Statistics (2026-10-29)
+
+This appendix was added on 2026-10-29. It uses the boards of the five projects in [Production Stats](production-stats.md): QuickTUI, the closed-source backend service, Kander, Quick Compress, and Ullage. The data covers 2026-08-01 to 2026-10-29: 2,477 done cards, of which 1,471 had at least one review run, with 2,865 review runs and 3,328 finding dispositions. The definitions are in [Production Stats](production-stats.md#definitions).
+
+Section 16 asked for structured finding disposition. The boards now record it:
+
+- Each review run records its reviewer, model, and effort.
+- Each finding gets a structured disposition record: `fixed`, `rejected`, `deferred`, `waived`, `confirmed`, or `unverifiable`.
+
+The executor model is not on the card. It was read from the executor's own session log and resolved for 75% of the reviewed cards.
+
+## D.1 Executor send-backs
+
+A send-back is a review round that found at least one must-fix issue in the card's own delivery. A review round is the set of normally finished review runs of one batch on one reviewed commit.
+
+| Executor | Model | Reviewed cards | Large cards | Review rounds | Send-backs | Send-backs per card | Cards sent back at least once | Must-fix issues per card |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Claude Code | `claude-opus-5-5` | 765 | 88% | 1,386 | 595 | 0.78 | 463 (61%) | 1.29 |
+| Claude Code | not resolved | 193 | 75% | 337 | 138 | 0.72 | 101 (52%) | 1.33 |
+| Codex | not resolved | 113 | 95% | 189 | 48 | 0.42 | 36 (32%) | 0.64 |
+| Codex | `gpt-6-astra` | 71 | 62% | 158 | 65 | 0.92 | 41 (58%) | 3.52 |
+| Pi | `swe-2` | 48 | 73% | 99 | 49 | 1.02 | 31 (65%) | 1.79 |
+| Pi | `deepseek-v4-flash` | 39 | 51% | 90 | 46 | 1.18 | 29 (74%) | 3.13 |
+| Codex | `gpt-5.6-sol` | 32 | 94% | 63 | 27 | 0.84 | 23 (72%) | 1.78 |
+| Devin | not resolved | 31 | 68% | 70 | 35 | 1.13 | 18 (58%) | 2.16 |
+| Grok | `grok-4.7-build` | 27 | 67% | 40 | 11 | 0.41 | 9 (33%) | 0.48 |
+| Codex | `gpt-6-sol` | 22 | 50% | 31 | 8 | 0.36 | 7 (32%) | 0.36 |
+| Grok | `grok-4.6-build` | 20 | 65% | 44 | 22 | 1.10 | 12 (60%) | 3.00 |
+| Cursor | `default` | 17 | 24% | 27 | 14 | 0.82 | 8 (47%) | 2.94 |
+| Cursor | `grok-4.6` | 16 | 69% | 39 | 23 | 1.44 | 13 (81%) | 5.75 |
+| Cursor | `grok-4.7` | 16 | 44% | 21 | 7 | 0.44 | 7 (44%) | 0.44 |
+| Grok | not resolved | 13 | 23% | 23 | 13 | 1.00 | 8 (62%) | 1.54 |
+| Claude Code | `claude-fable-5-1` | 12 | 83% | 22 | 8 | 0.67 | 6 (50%) | 1.17 |
+| **All** (including 36 cards in smaller rows) | | **1,471** | **80%** | **2,704** | **1,141** | **0.78** | **835 (57%)** | **1.52** |
+
+On average a reviewed card needed 1.8 review rounds and was sent back 0.78 times; 57% of reviewed cards were sent back at least once. Claude Code with `claude-opus-5-5` executed 58% of the large reviewed cards (677 of 1,175), so its row carries most of the large work.
+
+## D.2 Reviewer findings, rejections, and deferrals
+
+| Role | Reviewer | Model | Review runs | Runs with must-fix issues | Must-fix issues per run | Dispositions | Rejected | Must-fix rejected | Deferred |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| PMQA | Grok | `grok-4.7-build-fast` | 422 | 189 (45%) | 0.70 | 457 | 26 (5.7%) | 15 / 297 (5.1%) | 57 (12.5%) |
+| PMQA | Codex | `gpt-6.1-sol` | 422 | 223 (54%) | 1.09 | 544 | 29 (5.3%) | 22 / 461 (4.8%) | 29 (5.3%) |
+| PMQA | Grok | `grok-4.7` | 345 | 159 (47%) | 0.74 | 365 | 15 (4.1%) | 6 / 256 (2.3%) | 46 (12.6%) |
+| PMQA | Cursor | `cursor-grok-4.6-xhigh` | 142 | 67 (48%) | 0.86 | 190 | 17 (8.9%) | 6 / 120 (5.0%) | 23 (12.1%) |
+| PMQA | Devin | `swe-2-max` | 112 | 23 (27%) | 0.31 | 106 | 19 (17.9%) | 1 / 26 (3.8%) | 43 (40.6%) |
+| PMQA | Cursor | `grok-4.7-high` | 94 | 34 (37%) | 0.41 | 49 | 3 (6.1%) | 3 / 39 (7.7%) | 2 (4.1%) |
+| PMQA | Cursor | `grok-4.7-xhigh` | 68 | 28 (42%) | 0.79 | 66 | 5 (7.6%) | 2 / 53 (3.8%) | 6 (9.1%) |
+| PMQA | Codex | `gpt-5.6-sol` | 58 | 33 (63%) | 1.35 | 74 | 1 (1.4%) | 1 / 70 (1.4%) | 0 (0.0%) |
+| PMQA | Codex | `gpt-6-sol` | 56 | 27 (48%) | 0.70 | 39 | 4 (10.3%) | 4 / 39 (10.3%) | 0 (0.0%) |
+| PMQA | Grok | `grok-4.6` | 25 | 11 (44%) | 1.08 | 58 | 5 (8.6%) | 0 / 28 (0.0%) | 18 (31.0%) |
+| **PMQA, all** | | | **1,821** | **819 (47%)** | **0.82** | **2,060** | **127 (6.2%)** | **61 / 1,450 (4.2%)** | **246 (11.9%)** |
+| PM / QA | Codex | `gpt-6-astra` | 231 | 127 (57%) | 1.69 | 394 | 8 (2.0%) | 8 / 393 (2.0%) | 0 (0.0%) |
+| PM / QA | Claude Code | `opus` | 157 | 67 (68%) | 1.58 | 304 | 23 (7.6%) | 4 / 160 (2.5%) | 84 (27.6%) |
+| PM / QA | Pi | `deepseek-v4-flash` | 110 | 50 (52%) | 1.04 | 214 | 18 (8.4%) | 6 / 101 (5.9%) | 58 (27.1%) |
+| PM / QA | Grok | `grok-4.6` | 45 | 16 (46%) | 1.06 | 93 | 0 (0.0%) | 0 / 39 (0.0%) | 40 (43.0%) |
+| **PM / QA, all** | | | **558** | **261 (57%)** | **1.47** | **1,008** | **49 (4.9%)** | **18 / 694 (2.6%)** | **184 (18.3%)** |
+| Security | Pi | `opencode-go/deepseek-v4.1-flash` | 189 | 31 (18%) | 0.20 | 110 | 9 (8.2%) | 1 / 37 (2.7%) | 35 (31.8%) |
+| Security | Devin | `swe-2-max` | 91 | 12 (13%) | 0.19 | 66 | 10 (15.2%) | 2 / 15 (13.3%) | 25 (37.9%) |
+| Security | Pi | `devin/swe-2` | 74 | 8 (14%) | 0.21 | 52 | 11 (21.2%) | 2 / 12 (16.7%) | 23 (44.2%) |
+| Security | Cursor | `grok-4.7-high` | 37 | 5 (14%) | 0.16 | 6 | 0 (0.0%) | 0 / 6 (0.0%) | 0 (0.0%) |
+| Security | Grok | `grok-4.7-build-fast` | 27 | 2 (8%) | 0.08 | 2 | 0 (0.0%) | 0 / 2 (0.0%) | 0 (0.0%) |
+| **Security, all** | | | **475** | **70 (16%)** | **0.20** | **257** | **30 (11.7%)** | **5 / 86 (5.8%)** | **83 (32.3%)** |
+| **All roles** | | | **2,865** | **1,150 (43%)** | **0.82** | **3,328** | **206 (6.2%)** | **84 / 2,230 (3.8%)** | **515 (15.5%)** |
+
+## D.3 What the numbers support
+
+1. **The role explains more than the model.** PMQA runs found must-fix issues in 47% of runs and Security runs in 16%. Each of the earlier PM and QA roles reviewed half of the PMQA scope; together they found must-fix issues in 57% of runs.
+2. **Reviewer findings rarely turn out wrong.** 6.2% of all dispositions are rejections, and only 3.8% of must-fix findings are rejected. A rejection also covers findings superseded by a user decision, so these rates are upper bounds for the false-positive rate that Section 16 proposed.
+3. **Deferral measures the non-blocking volume, not the reviewer's precision.** Only non-blocking items can be deferred, and the executors deferred 47% of them. Models that report many non-blocking items, such as Devin `swe-2-max`, have deferral rates near 40%. The Codex models report almost none, so their deferral rates are near zero.
+4. **Send-backs follow card size.** 80% of the reviewed cards are large. Rows with a low share of large cards, or with only a few dozen cards, cannot be compared with the Claude Code row.
+
+## D.4 What the numbers still do not support
+
+The caveats of Section 2.5 and Appendix C still apply:
+
+- Rows differ in card size, project, role, period, and effort, and the routing changed during the 90 days.
+- No row is normalized for task complexity, and no escaped-defect data exists yet.
+- 25% of the reviewed cards have no resolved executor model.
+
+These tables are evidence for routing decisions and for the risk-tiered workflow in Section 22. They are not a model leaderboard.
+
+---
+
+**Report generated: 2026-09-18; Appendix D added 2026-10-29**

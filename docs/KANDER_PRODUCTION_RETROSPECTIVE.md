@@ -4,7 +4,7 @@
 
 Kander is not a multi-agent demo. It is a workflow system that has been shaped by real software development.
 
-Since August 2026, Kander has been used continuously on **QuickTUI**, a real cross-platform product covering iOS, Android, backend services, networking, authentication, code generation, testing, and integration work. By 2026-10-07, the workflow had handled **1,317 real engineering tasks** on QuickTUI and more than 1,700 across 5 projects. See [Production Stats](production-stats.md) for the numbers and definitions.
+Since August 2026, Kander has been used continuously on **QuickTUI**, a real cross-platform product covering iOS, Android, backend services, networking, authentication, code generation, testing, and integration work. By 2026-10-29, the workflow had handled **1,980 real engineering tasks** on QuickTUI and 2,477 across 5 projects. See [Production Stats](production-stats.md) for the numbers and definitions.
 
 That matters because many of Kander's core ideas did not come from a whiteboard. They came from actual failures, review findings, race conditions, broken assumptions, integration conflicts, and recovery cases encountered during day-to-day development.
 
@@ -98,7 +98,7 @@ Fix
 Incremental re-review
 ```
 
-This matters because reviewers can also be wrong. Kander treats review as an auditable engineering process rather than an oracle call.
+This matters because reviewers can also be wrong. Of 3,328 finding dispositions in production, 206 (6.2%) were rejections after verification. Kander treats review as an auditable engineering process rather than an oracle call.
 
 ## Controlled parallelism instead of agent count
 
@@ -153,9 +153,11 @@ Security reviewer
 
 The goal is not to find one model that is best at everything. It is to let different models contribute where they are strongest. For a configuration example, see [Multi-Model Routing](multi-model-routing.md).
 
+The boards record which model executed and which model reviewed each task. Across 2,865 review runs, the role mattered more than the model: PMQA runs found must-fix issues in 47% of runs, Security runs in 16%. Only 3.8% of must-fix findings were rejected after verification. [Production Stats](production-stats.md) lists the send-back, finding, rejection, and deferral rates per model.
+
 ## The workflow itself has been trained by production
 
-Across more than 1,700 real tasks, Kander has accumulated experience about:
+Across more than 2,400 real tasks, Kander has accumulated experience about:
 
 - which tasks are safe to parallelize;
 - where hidden lifecycle and concurrency bugs appear;
@@ -177,4 +179,4 @@ One developer. Multiple coding agents. One controlled engineering workflow.
 
 ---
 
-For the detailed evidence, task examples, limitations, architecture observations, and methodology, see [KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md](KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md) (data through 2026-09-18).
+For the detailed evidence, task examples, limitations, architecture observations, and methodology, see [KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md](KANDER_PRODUCTION_RETROSPECTIVE_FULL_EN.md) (data through 2026-09-18; Appendix D adds model-level statistics through 2026-10-29).
