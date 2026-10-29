@@ -1,6 +1,7 @@
 {
   "board.pin_duplicate_field": "カードのヘッダーで {{.V0}} が重複しています。1 行だけにしてください",
   "board.pin_effort_unsupported": "{{.V0}}: agent {{.V1}} は推論レベルを受け付けません。フィールドを削除してください",
+  "board.pin_model_unsupported": "{{.V0}}: agent {{.V1}} はモデル引数を受け付けません。フィールドを削除してください",
   "board.pin_header_missing": "{{.V0}} を書き込めません: カードのヘッダーにメタデータ行がありません",
   "board.pin_invalid_agent": "{{.V0}}: agent 名 {{.V1}} が無効です（先頭は小文字、以降は小文字・数字・'_'・'-'）",
   "board.pin_invalid_value": "{{.V0}}: 値 {{.V1}} が無効です（英字・数字・._:/@+[]-_ のみの ASCII 1 語で、'-' で始まらないこと）",

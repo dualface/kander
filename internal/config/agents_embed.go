@@ -323,6 +323,22 @@ func AgentSupportsEffort(cfg *Config, name string) bool {
 	return true
 }
 
+// ExecutionTakesModel reports whether the agent's start argv template consumes
+// {model}. An agent whose template does not is launched without a model, so a
+// model pin is rejected and the options panel offers no execution or Chat model.
+func ExecutionTakesModel(cfg *Config, name string) bool {
+	def := AgentFor(cfg, name)
+	if def.Args == nil {
+		return false
+	}
+	for _, arg := range def.Args.Start {
+		if strings.Contains(arg, "{model}") {
+			return true
+		}
+	}
+	return false
+}
+
 // ReviewModelSupportsEffort reports whether models.review.<agent> stores an
 // effort key. User argv overlays must not invent a review effort field that
 // configuredModel would discard.

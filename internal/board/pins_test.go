@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 const pinHeader = "# Card\n\n- TYPE: Chore\n- SIZE: small\n- OWNER:\n- RESULT:\n"
@@ -108,6 +110,17 @@ func TestUpdateProtectsPinsAndRecords(t *testing.T) {
 	}
 	if s = transactionSnapshot(t, root, todo.TaskID); !strings.Contains(s.Text, `"EXEC_AGENT": "- EXEC_AGENT: codex"`) {
 		t.Fatalf("decision record=%s", s.Text)
+	}
+}
+
+func TestValidateCardPinsRejectsAModelTheStartTemplateDropsIt(t *testing.T) {
+	cfg := config.DefaultConfig()
+	modelPin := func(agent string) CardPins { return CardPins{Exec: StagePin{Agent: agent, Model: "m1"}} }
+	if err := ValidateCardPins(cfg, modelPin("droid")); err == nil || !strings.Contains(err.Error(), FieldExecModel) {
+		t.Fatalf("droid model pin err=%v", err)
+	}
+	if err := ValidateCardPins(cfg, modelPin("claude")); err != nil {
+		t.Fatalf("claude model pin err=%v", err)
 	}
 }
 

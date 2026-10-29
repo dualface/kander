@@ -453,10 +453,11 @@ func (s *Session) kanbanModelField(agent, field, label, short, prompt string) Mo
 
 // ExecutionModelFieldsFor returns the model fields of the agent currently selected for one task scale (large/small).
 // Model and reasoning effort are stored per scale, so large and small tasks each keep their own
-// independently editable values even when they select the same agent.
+// independently editable values even when they select the same agent. An agent whose start template
+// takes no {model} has no fields.
 func (s *Session) ExecutionModelFieldsFor(scale string) []ModelField {
 	agent := s.Config.KanbanAgents[scale]
-	if agent == "" {
+	if agent == "" || !config.ExecutionTakesModel(s.Config, agent) {
 		return nil
 	}
 	// When a legacy config only has the shared model key, the scale models are filled in with the same concrete value,
@@ -524,7 +525,8 @@ func (s *Session) materializeChatEntry(agent string) {
 	config.EnsureChatEntry(s.Config, agent)
 }
 
-// ChatModelFieldsFor returns the model fields of the current Chat Agent.
+// ChatModelFieldsFor returns the model fields of the current Chat Agent, none
+// when its start template takes no {model}.
 func (s *Session) ChatModelFieldsFor() []ModelField {
 	if s == nil || s.Config == nil {
 		return nil
@@ -533,7 +535,7 @@ func (s *Session) ChatModelFieldsFor() []ModelField {
 	if agent == "" {
 		agent = s.Config.KanbanAgents["large"]
 	}
-	if agent == "" {
+	if agent == "" || !config.ExecutionTakesModel(s.Config, agent) {
 		return nil
 	}
 	s.materializeChatEntry(agent)

@@ -1,6 +1,7 @@
 {
   "board.pin_duplicate_field": "card header repeats {{.V0}}; keep exactly one line",
   "board.pin_effort_unsupported": "{{.V0}}: agent {{.V1}} takes no reasoning effort; remove the field",
+  "board.pin_model_unsupported": "{{.V0}}: agent {{.V1}} takes no model argument; remove the field",
   "board.pin_header_missing": "cannot write {{.V0}}: the card header has no metadata lines",
   "board.pin_invalid_agent": "{{.V0}}: invalid agent name {{.V1}} (lowercase letter first, then lowercase letters, digits, '_' or '-')",
   "board.pin_invalid_value": "{{.V0}}: invalid value {{.V1}} (one ASCII token of letters, digits and ._:/@+[]-_ that does not start with '-')",

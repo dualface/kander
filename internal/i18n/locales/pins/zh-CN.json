@@ -1,6 +1,7 @@
 {
   "board.pin_duplicate_field": "卡片头部重复出现 {{.V0}}，只能保留一行",
   "board.pin_effort_unsupported": "{{.V0}}：agent {{.V1}} 不接受推理档位，请删除该字段",
+  "board.pin_model_unsupported": "{{.V0}}：agent {{.V1}} 不接受模型参数，请删除该字段",
   "board.pin_header_missing": "无法写入 {{.V0}}：卡片头部没有元数据行",
   "board.pin_invalid_agent": "{{.V0}}：agent 名 {{.V1}} 无效（须以小写字母开头，其后为小写字母、数字、'_' 或 '-'）",
   "board.pin_invalid_value": "{{.V0}}：取值 {{.V1}} 无效（须为单个 ASCII 词，只含字母、数字和 ._:/@+[]-_，且不以 '-' 开头）",
