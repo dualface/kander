@@ -36,3 +36,26 @@ func TestDurableProcessLivenessRequiresReceiptAtDeadline(t *testing.T) {
 		})
 	}
 }
+
+func TestDurableStructuredQuickSuccessStillRequiresReceipt(t *testing.T) {
+	root, task, d := resumeDispatchFixture(t)
+	d, err := board.BeginDispatchAttempt(root, task, d.Input.ID, d.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freezeClock(t)
+	code := 0
+	outcome := LaunchOutcome{Poll: func() *int { return &code }, Wait: func() (int, error) { return code, nil }}
+	err = validateResumedDispatch(root, s.Entry, s.Text, LaunchPlan{Launcher: "foreground", Structured: true}, outcome, AgentSession{}, time.Minute.Seconds())
+	if err == nil {
+		t.Fatal("clean structured exit without receipt reported success")
+	}
+	current, readErr := board.ReadDispatch(root, task, d.Input.ID)
+	if readErr != nil || current.State != board.DispatchUnknown || current.Accepted != nil {
+		t.Fatalf("pending validation altered durable intent: %+v %v", current, readErr)
+	}
+}

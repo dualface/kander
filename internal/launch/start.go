@@ -60,11 +60,8 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}
-	plan, err := prepareLaunch(launcher, parentDir(root), "start")
+	plan, err := prepareAgentLaunch(cfg, agentName, launcher, launcherOverride != "", parentDir(root), "start")
 	if err != nil {
-		return result, err
-	}
-	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
 		return result, err
 	}
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
@@ -78,11 +75,14 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	sessionDef := config.AgentFor(cfg, agentName).Session
 	initialSession := session.Render()
-	persistSession := config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
-	discoverSession := plan.capabilities().PaneMetadata || persistSession
-	previous, err := sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
-	if err != nil {
-		return result, err
+	persistSession := plan.Structured || config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
+	discoverSession := plan.Structured || plan.capabilities().PaneMetadata || persistSession
+	previous := map[string]struct{}{}
+	if !plan.Structured {
+		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
+		if err != nil {
+			return result, err
+		}
 	}
 	window := ""
 	if !plan.capabilities().Container {
@@ -139,6 +139,9 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if discoverSession {
 		paneCB = func() (AgentSession, error) {
 			if session.Reference != "" {
+				return session, nil
+			}
+			if plan.Structured {
 				return session, nil
 			}
 			if !config.SessionDiscoversAfterStart(sessionDef) {
@@ -208,7 +211,7 @@ func PreviewStart(root, taskID string) (preview StartPreview, err error) {
 		return StartPreview{}, err
 	}
 	agent := choice.Agent
-	launcher, err := resolveStartLauncher(cfg.Launcher)
+	launcher, err := resolveTransportLauncher(cfg, agent, cfg.Launcher, false)
 	if err != nil {
 		return StartPreview{}, err
 	}

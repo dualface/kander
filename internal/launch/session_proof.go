@@ -111,7 +111,7 @@ func readRolloutSession(ctx context.Context, root string, observed process.OpenF
 			return session, nil
 		}
 		if index == 0 {
-			if record.Type != "session_meta" || !sessionReferenceRe.MatchString(record.Payload.ID) {
+			if record.Type != "session_meta" || !validSessionReference(record.Payload.ID) {
 				return rolloutSession{}, nil
 			}
 			if !matchesSessionDirectory(record.Payload.CWD, cwd) {

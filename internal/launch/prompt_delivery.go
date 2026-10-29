@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/direct"
 )
 
 func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) error {
 	definition := config.AgentFor(cfg, agent)
+	plan.Structured = definition.Transport == "structured"
 	plan.sessionFileDeclared = definition.Session != nil && definition.Session.File != nil
 	plan.extendedTimeouts = cfg.ExtendedLaunchTimeouts
 	if definition.PromptDelivery != nil {
@@ -19,6 +22,41 @@ func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) erro
 		plan.PromptDelivery = config.PromptDelivery{Mode: "argv"}
 	}
 	return rejectPaneDirectLauncher(*plan)
+}
+
+func resolveTransportLauncher(cfg *config.Config, agent, launcher string, explicit bool) (string, error) {
+	if config.AgentFor(cfg, agent).Transport != "structured" {
+		return resolveStartLauncher(launcher)
+	}
+	if !explicit {
+		return direct.Foreground, nil
+	}
+	resolved, err := resolveStartLauncher(launcher)
+	if err != nil {
+		return "", err
+	}
+	if terminal.HasCapability(resolved, func(c terminal.Capabilities) bool { return c.Container }) {
+		return "", launchError("launch.structured_transport_requires_direct_launcher", resolved)
+	}
+	return direct.Foreground, nil
+}
+
+func prepareAgentLaunch(cfg *config.Config, agent, launcher string, explicit bool, project, command string) (LaunchPlan, error) {
+	resolved, err := resolveTransportLauncher(cfg, agent, launcher, explicit)
+	if err != nil {
+		return LaunchPlan{}, err
+	}
+	plan := LaunchPlan{Launcher: resolved}
+	if config.AgentFor(cfg, agent).Transport != "structured" {
+		plan, err = prepareLaunch(resolved, project, command)
+		if err != nil {
+			return LaunchPlan{}, err
+		}
+	}
+	if err := applyAgentDelivery(&plan, cfg, agent); err != nil {
+		return LaunchPlan{}, err
+	}
+	return plan, nil
 }
 
 func clonePlanDelivery(src *config.PromptDelivery) *config.PromptDelivery {
@@ -48,7 +86,7 @@ func rejectPaneDirectLauncher(plan LaunchPlan) error {
 
 func attachPrompt(plan *LaunchPlan, args []string, prompt string) []string {
 	plan.Prompt = prompt
-	if plan.PromptDelivery.Mode == "pane" {
+	if plan.Structured || plan.PromptDelivery.Mode == "pane" {
 		return args
 	}
 	return append(args, prompt)

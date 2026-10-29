@@ -50,6 +50,7 @@ type LaunchPlan struct {
 	Target              terminal.Target
 	PromptDelivery      config.PromptDelivery
 	Prompt              string
+	Structured          bool
 
 	// extendedTimeouts carries extended_launch_timeouts into the launch-time
 	// waits; see launchTimeout.
@@ -117,8 +118,11 @@ type LaunchOutcome struct {
 	Process   *os.Process
 	Wait      func() (int, error)
 	Poll      func() *int
+	cleanup   func()
+	response  func() string
 	Container string
 	Pane      string
+	Session   string
 }
 
 // LaunchFailure is a failed launch, together with the result of closing the container created by this attempt.

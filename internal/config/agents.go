@@ -21,6 +21,7 @@ type AgentDefinition struct {
 	Path           string                  `json:"path,omitempty"`
 	ProcessName    string                  `json:"process_name,omitempty"`
 	Dialect        string                  `json:"dialect,omitempty"`
+	Transport      string                  `json:"transport,omitempty"`
 	Args           *AgentArgs              `json:"args,omitempty"`
 	Session        *AgentSessionDefinition `json:"session,omitempty"`
 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
@@ -259,6 +260,22 @@ func validateAgentProgram(path string) bool {
 	return err == nil
 }
 
+func validateStructuredAdapter(name string, d AgentDefinition) error {
+	if d.Transport != "structured" {
+		return nil
+	}
+	if d.Args != nil {
+		return agentDefinitionError(name, Text("config.agent_structured_adapter", "args"))
+	}
+	if d.Session != nil && (d.Session.Mode != "hook:codex-rollout" || d.Session.File != nil) {
+		return agentDefinitionError(name, Text("config.agent_structured_adapter", "session"))
+	}
+	if d.PromptDelivery != nil && d.PromptDelivery.Mode != "argv" {
+		return agentDefinitionError(name, Text("config.agent_structured_adapter", "prompt_delivery"))
+	}
+	return nil
+}
+
 func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 	obj, ok := asObject(raw)
 	if !ok {
@@ -319,6 +336,15 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		}
 		if d.Dialect != "" && !contains(ExecutionAgents, d.Dialect) {
 			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
+		}
+		if d.Transport != "" && (name != "codex" || d.Transport != "structured") {
+			return nil, agentDefinitionError(name, Text("config.agent_text", "transport"))
+		}
+		if d.Transport == "structured" && AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name).Dialect != "codex" {
+			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
+		}
+		if err := validateStructuredAdapter(name, d); err != nil {
+			return nil, err
 		}
 		if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_adapter"))

@@ -162,7 +162,7 @@ func (a *App) submitChat() {
 	a.pendingWork = func() any {
 		result, err := run(message)
 		out := chatStartResult{sequence: sequence, result: result, err: err}
-		if err == nil && focusWindow != nil {
+		if err == nil && result.Response == "" && strings.TrimSpace(result.Address) != "" && focusWindow != nil {
 			focused := focusWindow(context.Background(), result.Address)
 			out.focused, out.focusMsg = focused.Success, focused.Message
 		}
@@ -179,6 +179,13 @@ func (a *App) applyChatStart(result chatStartResult) {
 		dialog.phase = chatReady
 		dialog.failed = true
 		dialog.status = t("tui.chat_start_failed", result.err.Error())
+		return
+	}
+	if result.result.Response != "" {
+		dialog.phase, dialog.failed = chatReady, false
+		dialog.input.SetValue("")
+		dialog.status = result.result.Response
+		a.chatDraft = ""
 		return
 	}
 	a.chatDraft = ""

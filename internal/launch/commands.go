@@ -148,10 +148,6 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}
-	plan, err := prepareLaunch(launcher, parentDir(root), "resume")
-	if err != nil {
-		return err
-	}
 	agentName, mode := oldSession.Agent, execContinue
 	if takeover {
 		agentName, mode = *agent, execTakeover
@@ -163,7 +159,8 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if !config.HasAgent(cfg, agentName) {
 		return launchError("launch.unsupported_agent", agentName)
 	}
-	if err := applyAgentDelivery(&plan, cfg, agentName); err != nil {
+	plan, err := prepareAgentLaunch(cfg, agentName, launcher, launcherOverride != "", parentDir(root), "resume")
+	if err != nil {
 		return err
 	}
 	program, err := requireAgentProgram(agentName, cfg)
@@ -181,8 +178,8 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	previous := map[string]struct{}{}
 	sessionDef := config.AgentFor(cfg, session.Agent).Session
-	discoverSession := plan.capabilities().PaneMetadata || plan.capabilities().SessionReport || config.SessionPersistsAfterStart(sessionDef)
-	if takeover {
+	discoverSession := plan.Structured || plan.capabilities().PaneMetadata || plan.capabilities().SessionReport || config.SessionPersistsAfterStart(sessionDef)
+	if takeover && !plan.Structured {
 		previous, err = sessionDiscoverSnapshot(sessionDef, entry.TaskID, discoverSession, program, parentDir(root), plan.launchTimeout)
 		if err != nil {
 			return err
@@ -245,6 +242,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			if session.Reference != "" {
 				return session, nil
 			}
+			if plan.Structured {
+				return session, nil
+			}
 			if !config.SessionDiscoversAfterStart(sessionDef) {
 				return session, nil
 			}
@@ -267,6 +267,20 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 				}
 			}
 			return effective, nil
+		}
+	}
+	if plan.Structured && takeover {
+		plan.sessionFinalize = func(discovered AgentSession) error {
+			current, err := readDocumentFn(moved)
+			if err != nil {
+				return err
+			}
+			updated, err := renderSessionMetadata(current, discovered.Render())
+			if err != nil {
+				return err
+			}
+			effective = discovered
+			return writeDocumentFn(root, moved, updated)
 		}
 	}
 	loc := (func(LaunchOutcome) error)(nil)
@@ -320,7 +334,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	taskFileHandedOff = true
 	if err := validateResumedDispatch(root, moved, text, plan, outcome, effective, timeout); err != nil {
 		if len(authorization) > 0 {
-			return err
+			return &LaunchFailure{Err: err, DeliveryUnknown: plan.Structured}
 		}
 		detail := resumedAgentFailureOutput(plan, outcome)
 		if detail != "" {

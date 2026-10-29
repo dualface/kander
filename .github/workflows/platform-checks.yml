@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Structured transport lifecycle tests
+        run: go test ./internal/launch ./internal/config -run 'Structured|Transport' -count=1 -timeout=120s -v
       - name: Delivery and overlap tests
         run: |
           go test ./internal/check -count=1

@@ -24,6 +24,10 @@ import (
 
 var sessionReferenceRe = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
+func validSessionReference(reference string) bool {
+	return sessionReferenceRe.MatchString(reference)
+}
+
 // enumerateSessionsFn runs the declared enumerate command and returns the
 // validated session ids that satisfy every declared match. It is a var so
 // tests can stub the agent CLI boundary.
@@ -71,7 +75,7 @@ func cursorCreateChat(program *process.AgentProgram) (string, error) {
 			code = 1
 		}
 	}
-	if code != 0 || !sessionReferenceRe.MatchString(chatID) {
+	if code != 0 || !validSessionReference(chatID) {
 		detail := strings.TrimSpace(stderr)
 		if detail == "" {
 			detail = strings.TrimSpace(stdout)
@@ -121,7 +125,7 @@ func parseTaskSession(text string) *AgentSession {
 	if len(parts) > 1 {
 		reference = parts[1]
 	}
-	if !config.ValidAgentName(agent) || len(parts) > 2 || (reference != "" && !sessionReferenceRe.MatchString(reference)) {
+	if !config.ValidAgentName(agent) || len(parts) > 2 || (reference != "" && !validSessionReference(reference)) {
 		return nil
 	}
 	return &AgentSession{Agent: agent, Reference: reference}
@@ -325,7 +329,7 @@ func codexSessionsForTask(taskID string) ([]string, error) {
 	seen := map[string]struct{}{}
 	for _, f := range files {
 		id := codexRolloutMentionsTask(f.path, prefixes)
-		if id != "" && sessionReferenceRe.MatchString(id) {
+		if id != "" && validSessionReference(id) {
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
 				sessions = append(sessions, id)
@@ -530,7 +534,7 @@ func parseSessionList(disc *config.SessionDiscovery, stdout, cwd, taskID string)
 			if id == "" {
 				continue
 			}
-			if !sessionReferenceRe.MatchString(id) {
+			if !validSessionReference(id) {
 				return nil, launchError("launch.session_list_invalid")
 			}
 			if _, ok := seen[id]; !ok {
@@ -550,7 +554,7 @@ func parseSessionList(disc *config.SessionDiscovery, stdout, cwd, taskID string)
 			continue
 		}
 		id, ok := record[disc.IDField].(string)
-		if !ok || !sessionReferenceRe.MatchString(id) {
+		if !ok || !validSessionReference(id) {
 			return nil, launchError("launch.session_list_invalid")
 		}
 		if _, dup := seen[id]; !dup {
@@ -632,6 +636,13 @@ func expandAgentInvocation(agent, modelID, effort string, session AgentSession, 
 	if definition.Session.Mode == "none" {
 		reference = ""
 		template = config.RewriteKeepSession(template, true)
+	}
+	if definition.Dialect == "codex" && definition.Transport == "structured" {
+		if resume {
+			template = []string{"exec", "resume", "--json", "--model", "{model}", "--config", `model_reasoning_effort="{effort}"`, "--dangerously-bypass-approvals-and-sandbox", "{session=}", "-"}
+		} else {
+			template = []string{"exec", "--json", "--model", "{model}", "--config", `model_reasoning_effort="{effort}"`, "--dangerously-bypass-approvals-and-sandbox", "-"}
+		}
 	}
 	return config.ExpandAgentArgs(template, modelID, effort, reference), nil
 }

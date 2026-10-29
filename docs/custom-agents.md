@@ -23,6 +23,22 @@ A built-in name may also set `config_dir` to relocate the agent's global config 
 
 Start, resume, doctor, options-panel probing, tmux liveness checks, notification reverse lookup, and takeover cleanup all read this set of settings. Both saving and reading validate explicit paths; after deleting a wrapper, the configuration must be fixed or the executable restored. When doctor encounters an agent definition it cannot validate, it preserves the original file and reports, to avoid losing templates.
 
+### Optional Codex structured transport
+
+Codex keeps the interactive TUI transport by default, including tmux and Herdr compatibility. To opt in to the non-interactive JSON Lines transport, set the built-in Codex overlay:
+
+```json
+{
+  "agents": {
+    "codex": {"transport": "structured"}
+  }
+}
+```
+
+The structured transport runs Codex as a direct foreground process, regardless of a container launcher configured as the default. An explicitly requested container launcher such as tmux or Herdr is rejected during preflight; the interactive transport remains the way to use those launchers. Structured start uses `codex exec --json ... -`, writes the task-file instruction to stdin exactly once, and records the validated `thread_id` from the `thread.started` event as the card session. The stdin write is bounded at one second by default and follows `extended_launch_timeouts`; a partial durable write remains an unknown delivery. Kander owns the structured process tree, keeps child stderr out of global CLI and TUI streams, bounds output-pipe cleanup, and escalates POSIX cancellation from TERM to KILL. Windows assigns the suspended process to a kill-on-close job before it can create descendants. Resume uses `codex exec resume --json ... <session> -`. The adapter also applies to direct chat, triage/result, takeover, notify-resume, and orchestrator launches. The option is valid only for the built-in `codex` agent; when transport is unset, existing interactive launcher behavior is unchanged.
+
+The structured adapter owns its execution argv, session identity, and stdin prompt delivery as one contract. In the final scope-plus-project definition, `args` is rejected, an explicit `session` must be `{"mode":"hook:codex-rollout"}` without `session.file`, and an explicit `prompt_delivery` must use `mode: "argv"`; pane delivery and other session modes are rejected. Omitting all three fields inherits the compatible built-in values and is the recommended form. Validation runs after the scope configuration and project overlay are merged, so incompatible fields cannot be split across the two files.
+
 ## Dialect or argv Templates
 
 ```json

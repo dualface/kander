@@ -63,16 +63,14 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
-	plan, err := prepareLaunch(launcher, parentDir(request.Root), "triage")
+	plan, err := prepareAgentLaunch(cfg, agent, launcher, strings.TrimSpace(request.Launcher) != "", parentDir(request.Root), "triage")
 	if err != nil {
 		return result, err
 	}
 	if request.RefineCard && plan.OccupiesTerminal() {
 		return result, launchError("launch.refinement_requires_container")
 	}
-	if err := applyAgentDelivery(&plan, cfg, agent); err != nil {
-		return result, err
-	}
+
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 	program, err := requireAgentProgram(agent, cfg)
 	if err != nil {
@@ -162,7 +160,7 @@ func sessionDefaults(cfg *config.Config, scale, agentOverride, launcherOverride 
 	if !config.ValidLauncherName(launcher) {
 		return "", "", launchError("launch.unknown_launcher", launcher)
 	}
-	resolved, err := resolveStartLauncher(launcher)
+	resolved, err := resolveTransportLauncher(cfg, agent, launcher, strings.TrimSpace(launcherOverride) != "")
 	if err != nil {
 		return "", "", err
 	}
