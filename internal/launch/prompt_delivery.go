@@ -55,9 +55,11 @@ func attachPrompt(plan *LaunchPlan, args []string, prompt string) []string {
 }
 
 func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
-	if err := waitAgentTUI(plan, outcome); err != nil {
+	deadline, err := waitAgentTUI(plan, outcome)
+	if err != nil {
 		return err
 	}
+	waitAgentRecognized(plan, outcome, deadline)
 	if err := deliverPromptToPane(plan, outcome); err != nil {
 		output := resumedAgentFailureOutput(plan, outcome)
 		return launchError("launch.pane_prompt_rejected", err.Error(), output)
@@ -65,16 +67,44 @@ func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
 	return nil
 }
 
-func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) error {
+// waitAgentRecognized waits, within the ready deadline, until a backend that
+// reports agent identity names an agent in the pane. herdr routes `agent
+// prompt` only to panes it has recognized, which can lag behind the TUI ready
+// mark. A pane that stays unrecognized is delivered to anyway, so the delivery
+// primitive reports its own error.
+func waitAgentRecognized(plan LaunchPlan, outcome LaunchOutcome, deadline time.Time) {
+	if !plan.capabilities().AgentIdentity {
+		return
+	}
+	for {
+		facts, err := plan.backend().PaneFacts(context.Background(), boundedSpawnConn(plan), outcome.Pane)
+		if err == nil && (facts.Gone || facts.Agent != "") {
+			return
+		}
+		remaining := deadline.Sub(nowFn())
+		if remaining <= 0 {
+			return
+		}
+		slice := notifyPollInterval
+		if remaining < slice {
+			slice = remaining
+		}
+		sleepFn(slice)
+	}
+}
+
+// waitAgentTUI waits for the agent TUI ready mark and returns the ready
+// deadline, which the rest of the delivery shares.
+func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) (time.Time, error) {
 	delivery := plan.PromptDelivery
 	if delivery.Ready == nil {
-		return launchError("launch.pane_ready_timeout", "")
+		return time.Time{}, launchError("launch.pane_ready_timeout", "")
 	}
 	timeout := plan.launchTimeout(time.Duration(delivery.Ready.TimeoutMS) * time.Millisecond)
 	deadline := nowFn().Add(timeout)
 	readyFn, err := compileDeliveryMatch(delivery.Ready.Match)
 	if err != nil {
-		return launchError("launch.pane_ready_timeout", err.Error())
+		return time.Time{}, launchError("launch.pane_ready_timeout", err.Error())
 	}
 	type blockedRule struct {
 		match  func(string) bool
@@ -84,7 +114,7 @@ func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) error {
 	for _, item := range delivery.Blocked {
 		fn, err := compileDeliveryMatch(item.Match)
 		if err != nil {
-			return launchError("launch.pane_ready_timeout", err.Error())
+			return time.Time{}, launchError("launch.pane_ready_timeout", err.Error())
 		}
 		blocked = append(blocked, blockedRule{match: fn, reason: item.Reason})
 	}
@@ -95,15 +125,15 @@ func waitAgentTUI(plan LaunchPlan, outcome LaunchOutcome) error {
 			lastOutput = output
 			for _, rule := range blocked {
 				if rule.match(output) {
-					return launchError("launch.pane_ready_blocked", rule.reason, output)
+					return time.Time{}, launchError("launch.pane_ready_blocked", rule.reason, output)
 				}
 			}
 			if readyFn(output) {
-				return nil
+				return deadline, nil
 			}
 		}
 		if !nowFn().Before(deadline) {
-			return launchError("launch.pane_ready_timeout", lastOutput)
+			return time.Time{}, launchError("launch.pane_ready_timeout", lastOutput)
 		}
 		remaining := deadline.Sub(nowFn())
 		slice := notifyPollInterval
