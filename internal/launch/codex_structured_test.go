@@ -159,6 +159,92 @@ func TestStructuredResumeUsesDirectProcessAndAcceptsQuickSuccess(t *testing.T) {
 	}
 }
 
+func TestStructuredStartAndResumeRejectIncompatibleComposedConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is POSIX")
+	}
+	makeConfigLoader := func(t *testing.T) func() (*config.Config, error) {
+		t.Helper()
+		scope := envConfig("codex", "tmux", nil)
+		scope.WelcomeComplete = true
+		raw, err := config.DocumentFromConfig(scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw["agents"] = map[string]any{
+			"codex": map[string]any{"transport": "structured"},
+		}
+		overlay := map[string]any{
+			"agents": map[string]any{
+				"codex": map[string]any{
+					"args": map[string]any{
+						"start":  []string{"ignored"},
+						"resume": []string{"ignored", "{session}"},
+					},
+					"session": map[string]any{"mode": "generated"},
+				},
+			},
+		}
+		return func() (*config.Config, error) {
+			return config.MergeOverlayOnRaw(raw, overlay)
+		}
+	}
+
+	t.Run("start", func(t *testing.T) {
+		root, _, fakeBin := setupBoard(t)
+		argsLog := filepath.Join(root, "structured-args")
+		writeStructuredCodex(t, filepath.Join(fakeBin, "codex"), argsLog, filepath.Join(root, "structured-input"), "thread-start")
+		loadEffective = makeConfigLoader(t)
+		taskID, taskPath := makeTodo(t, root, "structured-invalid-composed-start")
+
+		if _, err := Start(root, "", "", taskID); err == nil || !strings.Contains(strings.ToLower(err.Error()), "structured transport") {
+			t.Fatalf("start error = %v, want structured transport rejection", err)
+		}
+		if _, err := os.Stat(taskPath); err != nil {
+			t.Fatalf("start claimed the card before rejecting config: %v", err)
+		}
+		if _, err := os.Stat(argsLog); !os.IsNotExist(err) {
+			t.Fatalf("structured process started before config rejection: %v", err)
+		}
+	})
+
+	t.Run("resume", func(t *testing.T) {
+		root, _, fakeBin := setupBoard(t)
+		argsLog := filepath.Join(root, "structured-args")
+		writeStructuredCodex(t, filepath.Join(fakeBin, "codex"), argsLog, filepath.Join(root, "structured-input"), "thread-resume")
+		loadEffective = func() (*config.Config, error) { return structuredConfig("tmux"), nil }
+		taskID, _ := makeTodo(t, root, "structured-invalid-composed-resume")
+		started, err := Start(root, "", "", taskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := started.Outcome.Wait(); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err := board.LoadBoard(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entry, err := board.Locate(loaded, taskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := mustRead(t, entry.Document)
+		if !strings.Contains(text, "- SESSION: codex thread-resume\n") {
+			t.Fatalf("start did not persist the Codex thread: %s", text)
+		}
+
+		before := mustRead(t, argsLog)
+		loadEffective = makeConfigLoader(t)
+		if _, err := NotifyViaResume(root, entry, text, "continue", 61); err == nil || !strings.Contains(strings.ToLower(err.Error()), "structured transport") {
+			t.Fatalf("resume error = %v, want structured transport rejection", err)
+		}
+		if after := mustRead(t, argsLog); after != before {
+			t.Fatalf("resume launched before config rejection:\nbefore=%s\nafter=%s", before, after)
+		}
+	})
+}
+
 func TestStructuredTakeoverCapturesAndPersistsReplacementThread(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell fixture is POSIX")

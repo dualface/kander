@@ -260,6 +260,22 @@ func validateAgentProgram(path string) bool {
 	return err == nil
 }
 
+func validateStructuredAdapter(name string, d AgentDefinition) error {
+	if d.Transport != "structured" {
+		return nil
+	}
+	if d.Args != nil {
+		return agentDefinitionError(name, Text("config.agent_structured_adapter", "args"))
+	}
+	if d.Session != nil && (d.Session.Mode != "hook:codex-rollout" || d.Session.File != nil) {
+		return agentDefinitionError(name, Text("config.agent_structured_adapter", "session"))
+	}
+	if d.PromptDelivery != nil && d.PromptDelivery.Mode != "argv" {
+		return agentDefinitionError(name, Text("config.agent_structured_adapter", "prompt_delivery"))
+	}
+	return nil
+}
+
 func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 	obj, ok := asObject(raw)
 	if !ok {
@@ -326,6 +342,9 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		}
 		if d.Transport == "structured" && AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name).Dialect != "codex" {
 			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
+		}
+		if err := validateStructuredAdapter(name, d); err != nil {
+			return nil, err
 		}
 		if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_adapter"))
