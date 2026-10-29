@@ -14,6 +14,14 @@ func TestCodexStructuredTransportOverlayIsAccepted(t *testing.T) {
 	}
 }
 
+func TestCodexStructuredTransportRejectsForeignDialect(t *testing.T) {
+	if _, err := validateAgentDefinitions(map[string]any{
+		"codex": map[string]any{"transport": "structured", "dialect": "claude"},
+	}); err == nil {
+		t.Fatal("structured transport accepted a non-Codex dialect")
+	}
+}
+
 func TestAgentTransportRejectsUnsupportedValues(t *testing.T) {
 	for _, test := range []struct {
 		name      string

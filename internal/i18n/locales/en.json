@@ -58,6 +58,7 @@
   "config.agent_review_stdin_dup": "review.stdin is instruction but args.review also contains {instruction}.",
   "config.reviewer_missing_template": "{{.V0}} is {{.V1}}, which does not define a review template (args.review).",
   "launch.pane_delivery_requires_tmux_or_herdr": "This agent delivers the prompt through the terminal pane and requires tmux, herdr, or luvus.",
+  "launch.structured_transport_requires_direct_launcher": "Codex structured transport runs as a direct process; launcher {{.V0}} is a terminal container launcher.",
   "launch.pane_ready_blocked": "This CLI is stopped on a dialog that needs a person ({{.V0}}). Run that CLI once in a terminal to answer the dialog, then retry `kander start`. Pane output:\n{{.V1}}",
   "launch.pane_prompt_rejected": "Prompt delivery was rejected ({{.V0}}). Run that CLI once in a terminal to answer the dialog, then retry `kander start`. Pane output:\n{{.V1}}",
   "launch.pane_ready_timeout": "Timed out waiting for the agent TUI. Pane output:\n{{.V0}}",

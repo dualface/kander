@@ -324,6 +324,9 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		if d.Transport != "" && (name != "codex" || d.Transport != "structured") {
 			return nil, agentDefinitionError(name, Text("config.agent_text", "transport"))
 		}
+		if d.Transport == "structured" && AgentFor(&Config{Agents: map[string]AgentDefinition{name: d}}, name).Dialect != "codex" {
+			return nil, agentDefinitionError(name, Text("config.agent_dialect"))
+		}
 		if d.Dialect == "" && d.Args == nil && !contains(ExecutionAgents, name) {
 			return nil, agentDefinitionError(name, Text("config.agent_adapter"))
 		}

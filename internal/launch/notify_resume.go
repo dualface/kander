@@ -68,14 +68,10 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	plan, err := prepareLaunch(cfg.Launcher, parentDir(root), "notify")
+	plan, err := prepareAgentLaunch(cfg, session.Agent, cfg.Launcher, false, parentDir(root), "notify")
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	if err := applyAgentDelivery(&plan, cfg, session.Agent); err != nil {
-		return ResumeLaunch{}, err
-	}
-	plan.Structured = config.AgentFor(cfg, session.Agent).Transport == "structured"
 	program, err := requireAgentProgram(session.Agent, cfg)
 	if err != nil {
 		return ResumeLaunch{}, err
@@ -155,7 +151,7 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	taskFileHandedOff = true
 	if err := validateResumedDispatch(root, entry, originalText, plan, outcome, session, timeout); err != nil {
 		if durable {
-			return ResumeLaunch{}, err
+			return ResumeLaunch{}, &LaunchFailure{Err: err, DeliveryUnknown: plan.Structured}
 		}
 		var cleanup error
 		if cErr := cleanupFailedResume(plan, outcome); cErr != nil {

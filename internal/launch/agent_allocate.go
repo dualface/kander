@@ -39,7 +39,7 @@ func allocateAgentSession(definition *config.AgentSessionDefinition) (string, er
 			return "", launchError("launch.agent_allocate_invalid")
 		}
 	}
-	if !sessionReferenceRe.MatchString(id) {
+	if !validSessionReference(id) {
 		return "", launchError("launch.agent_allocate_invalid")
 	}
 	return id, nil

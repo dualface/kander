@@ -46,7 +46,8 @@ func launchAgent(
 	}
 	if !caps.Container {
 		if plan.Structured {
-			return launchStructuredAgent(plan, invocation, filepath.Dir(root), paneSession, agentSession)
+			isDurable := len(durable) > 0 && durable[0]
+			return launchStructuredAgent(plan, invocation, filepath.Dir(root), paneSession, agentSession, isDurable)
 		}
 		handle, err := startProcessFn(invocation.Argv, invocation.Env, filepath.Dir(root), caps.Detached)
 		if err != nil {
@@ -298,6 +299,13 @@ func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session
 		if !plan.capabilities().Container {
 			if outcome.Poll != nil {
 				if code := outcome.Poll(); code != nil {
+					if plan.Structured && *code == 0 && receipt == nil {
+						if outcome.Wait != nil {
+							_, err := outcome.Wait()
+							return err
+						}
+						return nil
+					}
 					return launchError(
 						"launch.resumed_agent_exited_during_the_liveness_observation_period_exit", itoa(*code),
 					)
@@ -379,6 +387,8 @@ func cleanupFailedResume(plan LaunchPlan, outcome LaunchOutcome) error {
 				cleanup = err.Error()
 			}
 		}
+	} else if outcome.cleanup != nil {
+		outcome.cleanup()
 	} else if outcome.Process != nil && outcome.Poll != nil && outcome.Poll() == nil {
 		_ = terminateProcess(outcome.Process)
 		waited := make(chan struct{})

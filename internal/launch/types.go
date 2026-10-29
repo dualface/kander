@@ -118,6 +118,8 @@ type LaunchOutcome struct {
 	Process   *os.Process
 	Wait      func() (int, error)
 	Poll      func() *int
+	cleanup   func()
+	response  func() string
 	Container string
 	Pane      string
 	Session   string

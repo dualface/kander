@@ -35,7 +35,7 @@ Codex keeps the interactive TUI transport by default, including tmux and Herdr c
 }
 ```
 
-The structured transport starts Codex with `codex exec --json ... -`, writes the task-file instruction to stdin, and records the `thread_id` from the `thread.started` event as the card session. Resume uses `codex exec resume --json ... <session> -`. The option is valid only for the built-in `codex` agent and does not change the default launcher or the transport of other agents.
+The structured transport runs Codex as a direct foreground process, regardless of a container launcher configured as the default. An explicitly requested container launcher such as tmux or Herdr is rejected during preflight; the interactive transport remains the way to use those launchers. Structured start uses `codex exec --json ... -`, writes the task-file instruction to stdin exactly once, and records the validated `thread_id` from the `thread.started` event as the card session. Resume uses `codex exec resume --json ... <session> -`. The adapter also applies to direct chat, triage/result, takeover, notify-resume, and orchestrator launches. The option is valid only for the built-in `codex` agent; when transport is unset, existing interactive launcher behavior is unchanged.
 
 ## Dialect or argv Templates
 

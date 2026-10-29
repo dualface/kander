@@ -88,6 +88,22 @@ func TestChatBoxSubmitsMultilineMessageFocusesAndCloses(t *testing.T) {
 	}
 }
 
+func TestStructuredChatResponseStaysVisibleWithoutFocus(t *testing.T) {
+	app, messages, focused := chatApp(t, func(string) (launch.ChatResult, error) {
+		return launch.ChatResult{Agent: "codex", Launcher: "foreground", Response: "structured reply"}, nil
+	})
+	openReadyChat(t, app)
+	typeText(app, "hello")
+	pressKey(app, tea.KeyMsg{Type: tea.KeyCtrlS})
+	runPendingWork(t, app)
+	if len(*messages) != 1 || len(*focused) != 0 {
+		t.Fatalf("messages=%q focused=%q", *messages, *focused)
+	}
+	if app.Chat == nil || app.Chat.phase != chatReady || app.Chat.input.Value() != "" || app.Chat.status != "structured reply" {
+		t.Fatalf("structured reply was not kept in the chat box: %+v", app.Chat)
+	}
+}
+
 func TestStatusChatClickOpensChatBox(t *testing.T) {
 	app, _, _ := chatApp(t, chatStarted)
 	app.dismissWelcome()

@@ -28,6 +28,7 @@ type ChatResult struct {
 	Agent    string
 	Launcher string
 	Address  string
+	Response string
 	Warnings []string
 }
 
@@ -66,14 +67,10 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 		return result, err
 	}
 	agent := settings.Agent
-	plan, err := prepareLaunch(launcher, parentDir(request.Root), "chat")
+	plan, err := prepareAgentLaunch(cfg, agent, launcher, false, parentDir(request.Root), "chat")
 	if err != nil {
 		return result, err
 	}
-	if err := applyAgentDelivery(&plan, cfg, agent); err != nil {
-		return result, err
-	}
-	plan.Structured = config.AgentFor(cfg, agent).Transport == "structured"
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
 	program, err := requireAgentProgram(agent, cfg)
 	if err != nil {
@@ -121,23 +118,36 @@ func StartChat(request ChatRequest) (result ChatResult, err error) {
 		}
 		return result, err
 	}
+	if plan.Structured {
+		code, waitErr := outcome.Wait()
+		if waitErr != nil {
+			return result, launchError("launch.failed_to_start_agent", waitErr.Error())
+		}
+		if code != 0 {
+			return result, launchError("launch.failed_to_start_agent", itoa(code))
+		}
+		if outcome.response != nil {
+			result.Response = strings.TrimSpace(outcome.response())
+		}
+	}
 	handedOff = true
 	result.Agent, result.Launcher = agent, plan.Launcher
-	result.Address = terminal.FormatAddress(plan.backend(), plan.address(outcome))
+	if !plan.Structured {
+		result.Address = terminal.FormatAddress(plan.backend(), plan.address(outcome))
+	}
 	return result, nil
 }
 
-// chatDefaults resolves the Chat Agent/model/effort and the configured launcher.
-// The session has no card, so it uses ChatSettingsFor, and it must start in a
-// terminal container: a launcher that occupies the caller's terminal would take
-// the board's terminal away and leave nothing to focus.
+// chatDefaults resolves the Chat Agent/model/effort and launcher. Interactive
+// chat must use a terminal container so it does not take over the board's
+// terminal; structured Codex chat is a finite direct-process launch.
 func chatDefaults(cfg *config.Config) (config.ChatSettings, string, error) {
-	_, launcher, err := sessionDefaults(cfg, "large", "", "")
+	settings := config.ChatSettingsFor(cfg)
+	launcher, err := resolveTransportLauncher(cfg, settings.Agent, cfg.Launcher, false)
 	if err != nil {
 		return config.ChatSettings{}, "", err
 	}
-	settings := config.ChatSettingsFor(cfg)
-	if !terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.Container }) {
+	if config.AgentFor(cfg, settings.Agent).Transport != "structured" && !terminal.HasCapability(launcher, func(c terminal.Capabilities) bool { return c.Container }) {
 		return config.ChatSettings{}, "", launchError("launch.chat_requires_container_launcher", launcher)
 	}
 	return settings, launcher, nil

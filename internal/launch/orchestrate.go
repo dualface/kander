@@ -80,11 +80,8 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	if err != nil {
 		return result, err
 	}
-	plan, err := prepareLaunch(launcher, parentDir(request.Root), "orchestrate")
+	plan, err := prepareAgentLaunch(cfg, agent, launcher, strings.TrimSpace(request.Launcher) != "", parentDir(request.Root), "orchestrate")
 	if err != nil {
-		return result, err
-	}
-	if err := applyAgentDelivery(&plan, cfg, agent); err != nil {
 		return result, err
 	}
 	plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
