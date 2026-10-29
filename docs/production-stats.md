@@ -131,6 +131,7 @@ A send-back is a review round that found at least one must-fix issue in the card
 - **Reviewer model**: the `model` field of the review run as configured, including aliases such as `opus`.
 - **Dispositions, rejected, deferred**: the latest disposition record of each finding, counted against the review run that reported it. "Rejected" and "Deferred" use all dispositions as the denominator; "Must-fix rejected" uses only blocking / high / medium findings. A rejection needs a factual basis or the user's quoted decision, and also covers findings superseded by a user decision, so the rejection rate is an upper bound for reviewer false positives.
 - **Smaller rows**: the model tables list executor models with at least 10 reviewed cards and reviewer models with at least 20 runs in a role. The "all" rows include every card and run.
+- **Reproducing**: every number except lines of code comes from the scripts in [`scripts/production-stats/`](../scripts/production-stats/README.md).
 - **Card counts measure throughput, not value or difficulty.** Task sizes differ by project; do not compare projects directly.
 - **The model tables are not a leaderboard.** Card size, project, role, and period differ between rows, and the model routing changed during the 90 days.
 

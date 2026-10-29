@@ -125,7 +125,7 @@ go test ./internal/fs
 go test ./internal/config
 ```
 
-The repository has no Python yet. Run `go test ./...` at the module root before committing; no coverage threshold is set currently. Tests must isolate themselves in temporary directories and never rewrite the user's real board or `$HOME` configuration.
+The only Python in the repository is the read-only stats tool in `scripts/production-stats/` (standard library only, outside `go test`). Run `go test ./...` at the module root before committing; no coverage threshold is set currently. Tests must isolate themselves in temporary directories and never rewrite the user's real board or `$HOME` configuration.
 
 ## Windows Handles / Reparse / DACL
 
