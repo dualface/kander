@@ -74,7 +74,8 @@ func processRecorder(root string, entry board.Entry, plan LaunchPlan, taskFile s
 
 // taskFileRead reports a read of the task file since this call; the launcher calls
 // it before the agent starts. The executor removes the file when it is done, which
-// counts too. A mount without access times never reports, so the check stays unknown.
+// counts too. A mount without access times shows no read, so the check stays unknown
+// while the file exists; a removal still counts while the process runs.
 func taskFileRead(path string) func() bool {
 	baseline, err := process.FileAccessTime(path)
 	return func() bool {
