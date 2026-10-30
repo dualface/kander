@@ -65,6 +65,7 @@ Heartbeats carry over `agent/status/channel/detail` and add the following fields
 
 - `revision` and `identity`: this card revision and the request identity; a result is consumable only when both match.
 - `observed_at`, `age_seconds`: the real collection end time and the age at heartbeat generation; the time is omitted when there was no collection.
+- `status`: the result set of [`kander check`](check-command.md#liveness-results): `alive`, `alive-orphaned`, `stopped`, `drifted`, `identity-mismatch`, `unprobeable`, `unknown`. A `foreground` or `console` card is classified by its process identity.
 - `runtime_state`, `observation_valid`: reuse the batch collection facts; ready and business progress are not derived from alive.
 - `collection_state`: `pending` means the current revision has no result, `complete` means a collection was attempted, `not-observed` means the batch did not actually collect; `collecting` independently indicates whether the subscription has a batch running.
 - `stale`: true when the cache age exceeds heartbeat plus 10 seconds, at which point status/runtime_state become unknown and observation_valid becomes false; the original observation time and age are preserved and do not masquerade as a fresh observation.

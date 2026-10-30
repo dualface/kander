@@ -10,6 +10,22 @@ kander check overlap --source <ref> [--head <ref>] [--json]
 
 Git is invoked with `exec.CommandContext` and a direct argv. There is no shell, and refs are resolved to commit IDs with `--end-of-options` before any diff. Paths are read from `git diff --name-status -z --find-copies-harder`. Every Git subprocess sets `GIT_OPTIONAL_LOCKS=0`, `GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1`, and a C locale so missing objects fail instead of fetching and so error JSON stays stable. Commit and path fields never include host-absolute paths or timestamps, and invalid-ref errors do not echo the supplied ref.
 
+## Liveness results
+
+The no-mode form probes `working/` cards and prints one line per card with its status and reason. `internal/liveness` classifies the card; `kander subscribe` reuses the same classifier and result set.
+
+| Result | Meaning | Next step |
+| --- | --- | --- |
+| `alive` | Agent and session identity match, or a process identity matches completely. Presence only. | None. |
+| `alive-orphaned` | The agent of a `foreground` card runs. The Kander process that started it is gone. | Adoption or a takeover. |
+| `stopped` | Pane gone with no reverse lookup hit, or the process exited, its ID was reused, or the system restarted. | Takeover. |
+| `drifted` | The session moved to a new pane, attached as the new address. | Notify. |
+| `identity-mismatch` | A process holds the recorded ID and start time but runs another executable, or the card moved to another execution. | Verify by hand. Not alive. |
+| `unprobeable` | The platform has no process identity, or refused the probe. | Verify by hand. |
+| `unknown` | A failed probe, an invalid session or window, or a foreground or console card with no process identity. | Verify by hand. |
+
+`unprobeable` and `unknown` never read as alive, and their `observation_valid` is false. The process identity check is described in [Launch, delivery, and terminal cleanup](launch-and-delivery.md#process-identity). A probe writes no card and does not change the exit code.
+
 ## Exit codes
 
 | Code | Meaning |

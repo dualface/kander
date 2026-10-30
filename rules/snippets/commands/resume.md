@@ -46,10 +46,14 @@ kander resume --adopt --decision <reference> <task-id>
 - A takeover of a `pending` or `unresolved` record ends that start attempt: the handoff record carries the decision, and a launcher that is still running steps aside with `superseded`.
 - A takeover is a launcher, so its late failures follow `snippets/commands/start.md` "Late Failures": the same judgement, the same `started-unresolved` output, and the same exit status. A failed takeover without executor evidence restores the record it replaced, including `unresolved`.
 
+**Foreground and Console Have No Native Resume**
+
+- A session started by `foreground` or `console` has no address and no native resume. These cards get liveness (`kander check`), adoption of an unfinished start, and a takeover. Plain `resume` refuses a card whose `WINDOW` is `foreground` or `console` and whose execution record has a process identity, with the next step in the error. A card without an identity comes from an older binary and is not refused.
+
 **Adopting an Unfinished Start**
 
 - `resume --adopt` starts no executor. Use it when the start attempt has no result and the executor works. Then a takeover would replace a healthy executor.
-- The command probes the recorded `SESSION` and `WINDOW`. It accepts only `alive`, and never treats `unknown` as alive. Foreground and console records have no probeable address, so they are refused. A tmux pane with no session marker reads `unknown`, so a start that failed before its marker was set is refused too. Use a takeover in these cases.
+- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start whose launcher died before it recorded the identity reads `unknown`, and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
 - On success it writes `kind=adopt` with the decision and changes the record to `running`. The card stays unchanged. A launcher that is still running steps aside with `superseded`.
 
 ## Output

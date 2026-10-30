@@ -20,7 +20,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Orchestrator Sessions" and "Handlin
   - The pane shows a dialog, permission or confirmation prompt, a question, a repeated error, or an agent CLI error (rate limit, context exhaustion, crashed tool).
   - The agent is idle while the card is still `working/`, and neither the task revision nor the dispatch receipt changed since the previous heartbeat.
   - The latest `IMPLEMENTATION` entry records a blocker or question.
-  - Liveness is `stopped` or `drifted`.
+  - Liveness is `stopped`, `drifted`, or `identity-mismatch`.
   - The event carries `dispatch-attention` for it.
 
   An `unknown`, `pending`, or stale observation whose pane cannot be read is judged again next heartbeat; the same card undeterminable for three consecutive heartbeats is reported to the user.

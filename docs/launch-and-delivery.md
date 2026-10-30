@@ -91,7 +91,48 @@ The judgement looks only at the card. Two limits follow:
 
 Until the attempt ends, `PrepareDispatch` and `RepairMissingSession` refuse the card with the next step, and `BeginTakeover` requires a decision. The launcher is the only writer during `pending`; a repair of `SESSION` would break the exact comparison in `ConfirmTaskStartSession`. A launcher that died leaves a `pending` record with the same two exits. Replaying a dispatch by its ID stays allowed, because a retried takeover needs it.
 
-`kander resume --adopt` binds a cursor to the record, probes the recorded address without reverse lookup, and calls `AdoptExecution`. Only `alive` passes. A handoff during the probe moves the record, so the fence refuses the write. `AdoptExecution` also compares `OWNER`, `SESSION` and `WINDOW` with the probed snapshot, so a new address on the same record refuses too.
+`kander resume --adopt` binds a cursor to the record, probes the recorded address without reverse lookup, and calls `AdoptExecution`. Only `alive` and `alive-orphaned` pass. A foreground or console card is probed by its [process identity](#process-identity). A handoff during the probe moves the record, so the fence refuses the write. `AdoptExecution` also compares `OWNER`, `SESSION` and `WINDOW` with the probed snapshot, so a new address on the same record refuses too.
+
+## Process Identity
+
+`foreground` and `console` have no pane to probe. When the launcher starts the agent it records one process identity in the execution record, as the immutable `process.json` original plus the `process` field of the current record. The write goes through `RecordExecutionProcess`, a `process-identity` link of the chain, and it never touches the card, so it does not race the executor for a revision. Identity is the tuple `(boot_id, agent_pid, agent_start, executable)`. A process ID alone proves nothing.
+
+| Field | Source |
+| --- | --- |
+| `launcher` | `foreground` or `console` |
+| `kander_pid`, `kander_start` | The waiting Kander process. `foreground` only: `console` returns at once, so they stay 0 and empty |
+| `agent_pid`, `agent_start` | The process the launcher created, and its start time from the kernel |
+| `boot_id` | The boot identifier below |
+| `executable` | The base name the kernel reports, never the configured agent name |
+| `recorded_at` | RFC 3339 time of the write |
+
+| Platform | Start time | Parent | Executable | Boot identifier |
+| --- | --- | --- | --- | --- |
+| Linux | `/proc/<pid>/stat` field 22 | `/proc/<pid>/stat` field 4 | Base name of `/proc/<pid>/exe` | `/proc/sys/kernel/random/boot_id` |
+| macOS | `kern.proc.pid` `p_starttime` | `e_ppid` | `p_comm` | `kern.boottime` in Unix seconds |
+| Windows | `GetProcessTimes` creation time | Toolhelp snapshot | Base name of `QueryFullProcessImageNameW` | Now minus `GetTickCount64`, in Unix seconds |
+| Other | Not supported | Not supported | Not supported | Not supported |
+
+- Linux uses `/proc/<pid>/exe` and not `comm`, because a process can rewrite `comm` and `comm` truncates at 15 bytes. The ` (deleted)` suffix is removed, so an agent that updates itself keeps its identity.
+- A zombie counts as exited on every platform.
+- Numeric boot identifiers compare within 300 seconds, because the Windows value is derived from the wall clock and the macOS value moves with the calendar clock. The tolerance is safe: after a reboot the exact start time of a process cannot match, so only the reason of `stopped` differs.
+- The launcher samples every 100ms and records once the process has not changed for 500ms, or at 3 seconds. A shim execs the real binary, so the first reading names the interpreter. A shim that execs later than that records the earlier name and reads `identity-mismatch` afterwards, which is the safe direction.
+- A process gone before it could be read, or a failed read, leaves no `process.json`: the start only warns. On a platform without process identity the record holds only `launcher` and `agent_pid`, so the check says `unprobeable`.
+- A probe reads kernel metadata only. It never reads the environment or the command line of a process.
+
+The check runs these steps. The first one that fails decides the result:
+
+1. The current record has no `process`: `unknown`. The reason is "old card has no process identity" for a card without ledger links, otherwise "the launcher recorded no process identity".
+2. The platform has no process identity: `unprobeable`.
+3. The boot differs: `stopped`.
+4. The agent process does not exist: `stopped`.
+5. The start time differs: `stopped`, because the ID was reused.
+6. The executable differs: `identity-mismatch`.
+7. The card `OWNER` or execution cycle differs from the record: `identity-mismatch`.
+8. `console`: `alive`. `foreground`: `alive` when the Kander process exists, has the recorded start time, and is the parent of the agent; otherwise `alive-orphaned`.
+9. A refused probe at any step is `unprobeable`. A timeout or any other error is `unknown`.
+
+`foreground` and `console` have no native resume. Plain `kander resume` and the recovery channel of `kander notify` refuse a card whose `WINDOW` is one of the two and whose record has an identity, because a relaunch on the same record would leave the identity naming the old process, and next to a live executor it would be a second one. The next step is adoption of an unfinished start or a takeover. A takeover opens a new record, so it records a new identity. A failed takeover that restores the replaced record keeps that record's identity. A card without an identity comes from an older binary and keeps its behavior.
 
 ## Start Success Conditions and Rollback
 
@@ -159,7 +200,7 @@ When `notify` probes the recorded `WINDOW`, it handles three classes, and this c
 
 ## Notify Recovery
 
-- Only foreground/console, no direct delivery channel, or a failed probe or delivery action make the command recover the original session internally. A process-type recovery must stay alive during the full timeout observation window; after validation, foreground keeps occupying the current terminal until the agent exits. herdr recovery liveness follows the new-pane criteria of `resume`: the state accepts only `idle`, `working`, `blocked` and rejects `done` and `unknown`.
+- Only foreground/console, no direct delivery channel, or a failed probe or delivery action make the command recover the original session internally. A foreground or console card with a [process identity](#process-identity) has no recovery, so the command fails with the next step. A process-type recovery must stay alive during the full timeout observation window; after validation, foreground keeps occupying the current terminal until the agent exits. herdr recovery liveness follows the new-pane criteria of `resume`: the state accepts only `idle`, `working`, `blocked` and rejects `done` and `unknown`.
 - When tab/window/process cleanup after a failed recovery validation fails, it is reported together with the original error, noting that the new agent may still be alive. When both paths fail, the command exits non-zero and reports both reasons; the card body and original state are unchanged. After a successful recovery or takeover, the new container address is written back to the card `WINDOW`.
 
 ## Dismiss
@@ -172,9 +213,10 @@ When `notify` probes the recorded `WINDOW`, it handles three classes, and this c
 
 ## Check Liveness Classification
 
-- `check` with no arguments or `--all` probes all `working/` cards; targeted checks probe only the specified `working/` cards, never `review/`. Before the summary line it prints a four-state liveness section:
+- `check` with no arguments or `--all` probes all `working/` cards; targeted checks probe only the specified `working/` cards, never `review/`. Before the summary line it prints a liveness section. Cards with a pane use the first four results below; `foreground` and `console` cards use the [process identity](#process-identity) check:
   - `alive`: the agent and available session identity match. It is an observation of presence, not readiness to receive input or evidence of progress; `notify` applies its own readiness checks. A herdr pane with missing identity but a valid agent and state is still `alive`, noted as not directly deliverable.
   - `stopped`: the pane is gone or the agent/process mismatches and a valid reverse lookup confirms zero matches. When lookup is disabled or the session reference is empty, the direct-pane classification applies; a Codex empty reference gets no reverse lookup.
   - `drifted`: the session was uniquely reverse looked up to a new pane, with the new address attached.
-  - `unknown`: an invalid session/window, foreground/console, program unavailable, state or probe failure. Reverse lookup errors, invalid output, timeouts, and multiple matches are `unknown`, preserving the stale-address reason and the reverse-lookup stage and reason; they do not prove the session stopped.
+  - `unknown`: an invalid session/window, a foreground or console card without a process identity, program unavailable, state or probe failure. Reverse lookup errors, invalid output, timeouts, and multiple matches are `unknown`, preserving the stale-address reason and the reverse-lookup stage and reason; they do not prove the session stopped.
+  - `alive-orphaned`, `identity-mismatch`, `unprobeable`: results of the process identity check only.
 - Probe errors count as `unknown`; they do not write the card or affect the `check` exit code. One card's forward probe, session reverse lookup, revalidation, and process cleanup share one deadline (10 seconds by default); exhaustion or cancellation stops subsequent queries and reports `unknown`. The liveness section collects all selected working cards within one 10-second batch budget with at most 4 concurrent probes; unfinished cards retain an `unknown` reason. Output includes observation time, validity, and a separate runtime state. The budget excludes board reads and output writes and is not a hard real-time guarantee. See [Probe deadlines and cancellation](probe-deadlines.md) for the process ownership contract, and [Subscription facts and member sets](subscription-facts.md) for the event schema and output lifecycle of `subscribe`.
