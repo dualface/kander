@@ -61,4 +61,4 @@ An operation that always strands a card, or that only exists to reach one dead e
 
 - Time stays out of the model. Expiry transitions (`AcceptBefore`, the wrap-up grant deadline) are not modelled.
 - Git is structural: the reconcile verifier accepts every fact, so a rewritten history is covered by a directed test in `internal/launch`.
-- Launcher steps run as the board functions the launcher calls. Container and process effects are the `executor` flag of the model; `internal/launch` covers the real order of those steps.
+- Launcher steps run as the board functions the launcher calls. Container and process effects are the `executor` flag of the model; `internal/launch` covers the real order of those steps. `L.fail` makes the judgement of a late failure, `L.closeFailed` stands for a failed close, and `H.adopt` assumes the liveness probe passed.

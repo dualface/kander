@@ -61,5 +61,6 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 ## Rejections
 
 - A nonmatching terminal state, a completed round for `fail|cancel`, a round that did not complete for `settle`, a binding owned by a newer dispatch, a `wrap-up` intent passed to `prepare`, or malformed JSON.
+- `prepare` of a new round on a card whose start attempt has not ended (current execution record `pending` or `unresolved`). A replay of an existing ID stays allowed.
 - An accepted round ended without `--decision`, or a dispatch of another execution cycle.
 - A missing subcommand, wrong argument count, an empty `--decision` value, or an unknown subcommand is a usage error.

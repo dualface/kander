@@ -23,6 +23,8 @@ An entrance writes on the latest snapshot and changes only its own fields. It ch
 | `BeginTaskStart` | `start`: the move to `working/`, the metadata, and a `pending` record |
 | `ConfirmTaskStart`, `ConfirmTaskStartSession` | `confirm`: the record becomes `running` |
 | `BeginTakeover` | `handoff`: the old record becomes `handed-off`, and a new `pending` record starts |
+| `UnresolveExecution` | `unresolve`: the launcher that holds a `pending` record ends it as `unresolved`, with the failure and the container address |
+| `AdoptExecution` | `adopt`: a `pending` or `unresolved` record becomes `running`, with the decision reference |
 | `RecordExecutionWindow` | `window-update` |
 | `RecordExecutionSession` | `session-repair` |
 | `RecordExecutionProcess` | `process-identity`: the one-time `process.json` original |
@@ -58,9 +60,43 @@ An entrance returns `ExecutionResult.Advanced`: the card revision or column diff
 - `foreground` runs in the foreground of the current terminal and waits for the agent to exit. `console` is supported only on native Windows; it starts the agent in a separate console window and returns the PID immediately, with no session/window reuse, attach, or output capture.
 - POSIX defaults to `auto`; Windows defaults to `console`, rejects `tmux`, `tmux-session`, and `luvus`, supports `herdr` (native Windows build), and resolves `auto` only to herdr.
 
+## Late Failures
+
+A launcher judges a failed launch before it closes anything. `launchAgent` calls the judge of `LaunchPlan` at its failure point; `settleAfterLaunch` does the same for a step that fails after `launchAgent` returned (liveness validation, the confirmation). `kander start` and `resume --agent` set the judge. Plain `resume`, notify recovery and the board-free sessions own no start attempt and always clean up.
+
+`board.ReadExecutionStanding` is read-only and gives two facts:
+
+- `Superseded`: a `handoff`, `adopt` or `reclaim` link leaves the launcher's record. The launcher closes nothing and rolls nothing back, and `kander start` exits 0 with `superseded`.
+- `Evidence`: `Entry.AdvancedPastCursor`, or the card differs from the cursor by revision or column. The launcher's own writes keep the cursor current, so they do not count. An entrance moves the cursor, so `Advanced` keeps a write the entrance covered up.
+
+| Judgement | Container or process | Card | Attempt |
+| --- | --- | --- | --- |
+| Superseded | untouched | untouched | owned by its successor |
+| Evidence | kept | kept | `unresolved` |
+| Read failed | kept | kept | `unresolved` |
+| No evidence, close succeeds | closed | rolled back | `rolled-back` |
+| No evidence, close fails (T-01) | unknown | kept | `unresolved` |
+| No evidence, rollback refused | closed | kept | `unresolved` |
+
+The last row is the window between the judgement and the rollback. `RollbackDocument` refuses, so the write survives, and the attempt still ends.
+
+`settleFailedLaunch` writes the result. `UnresolvedError` carries the fixed line and the two next steps, and `exitLaunch` prints them with exit status 3. A takeover with a durable dispatch never cleans up after the send, so its delivery-unknown and validation failures end as `unresolved`.
+
+The judgement looks only at the card. Two limits follow:
+
+- A dispatch or a manual `kander update` counts as evidence. The result is `unresolved`, which is a misjudgment on the safe side: the user adopts or takes over.
+- An executor that runs but has not written the card counts as no evidence. The container closes and the executor ends with it. Kander adds no process probe for this case.
+
+`unresolved` writes one more thing: the container address when the card lacks it, so the next owner can reach the executor. A card that already left `working/` and `review/` keeps its text. The cycle never changes.
+
+Until the attempt ends, `PrepareDispatch` and `RepairMissingSession` refuse the card with the next step, and `BeginTakeover` requires a decision. The launcher is the only writer during `pending`; a repair of `SESSION` would break the exact comparison in `ConfirmTaskStartSession`. A launcher that died leaves a `pending` record with the same two exits. Replaying a dispatch by its ID stays allowed, because a retried takeover needs it.
+
+`kander resume --adopt` binds a cursor to the record, probes the recorded address without reverse lookup, and calls `AdoptExecution`. Only `alive` passes. A handoff during the probe moves the record, so the fence refuses the write.
+
 ## Start Success Conditions and Rollback
 
 - Precondition checks before launch: a definition launcher's `requires` (platform, required environment variables, its program on PATH, in the order the definition declares); `herdr` needs `HERDR_ENV=1`, herdr on PATH, and `HERDR_WORKSPACE_ID`; `foreground` needs all three standard streams to be TTYs; `console` needs native Windows. A failed precondition does not claim. An agent whose `prompt_delivery.mode` is `pane` is rejected before claiming when the resolved launcher is `foreground` or `console`.
+- Every failure below passes the judgement of [Late Failures](#late-failures) first.
 - When process creation, tmux session, tmux window, herdr tab, herdr pane readiness wait, or `pane run` fails, the document is restored and the card moved back to `todo/`. A failed herdr readiness wait or `pane run` also closes the newly created tab; failed Codex discovery and pane session marker failures on tmux/tmux-session also close the newly created window. Failed Devin/OpenCode/Kimi/Droid discovery closes the created tmux window or herdr tab, or terminates a foreground/console process started by this invocation, before rollback.
 - For `prompt_delivery.mode` `pane`, a second-stage TUI ready failure (`blocked` match, prompt-delivery rejection, or ready timeout) is the same class of failure: capture the pane output, close this invocation's tab/window, restore the document, and move back to `todo/`, without keeping the container or writing `WINDOW`/`SESSION`. Failures that need a person to answer a dialog say to run that CLI once manually and retry; a pure ready timeout reports the captured output without that instruction.
 - tmux/tmux-session count as started only after session discovery and pane marker write succeed (with `pane` delivery, only after prompt delivery also succeeds). herdr counts as started once `pane run` and any required session discovery succeed (with `pane` delivery, once prompt delivery also succeeds); an agent declaring `session.file` gets no proactive session identity report — its own integration reports the path-kind identity — while for other agents the subsequent session identity report and read-back are best-effort. foreground/console normally count as started once the process is created, while Devin, OpenCode, Kimi, and Droid additionally require exact-session discovery and persistence; a later exit does not roll back automatically. `console` prints the PID and returns immediately.
@@ -83,9 +119,12 @@ An entrance returns `ExecutionResult.Advanced`: the card revision or column diff
 
 - An explicit `--agent <name>` allocates a brand-new session even when the name equals the original agent; the old CLI context is not migrated. When new-session preparation such as Cursor `create-chat` fails, the card is unchanged. Before launch, `OWNER`/`SESSION`/`WINDOW` are overwritten with the new agent, session, and launcher; `STARTED_AT` is unchanged.
 - A Codex takeover on tmux/tmux-session or a session-reporting launcher such as herdr discovers this invocation's exact session id, writes it as `codex <id>`, and sets the pane marker when supported. Process-type Codex launchers retain `codex` and resolve by rollout mtime in later recoveries. Devin and OpenCode takeovers discover and persist the exact id on every launcher; Kimi and Droid takeovers do so on the container launchers they support.
+- A takeover of a `pending` or `unresolved` record needs `--decision`, and the `handoff` link records it. The launcher of the replaced record steps aside. A failed takeover follows [Late Failures](#late-failures); without evidence, `rollback` restores the replaced record with its status and failure.
 - After the new agent passes liveness validation and before printing `taken over`, the command attempts a graceful exit and closes the original herdr/tmux container under the identity and single-pane topology gate of `dismiss`. When the original agent is already dead, it closes only when the container topology can be proven; when the original address is empty, foreground/console, or the same as the new address, it records N/A. When validation, exit, or close fails, it prints only `original container kept` with the reason, does not force-kill, does not roll back the new agent, and still succeeds. Cleanup and liveness observation may each use one full `--timeout`, so the worst case takes about 2x timeout. On success it prints `cleaned up original container: ...` first, then `taken over: ...`.
 
 ## Missing Identity Repair
+
+Repair refuses a card whose current execution record is `pending` or `unresolved`. The attempt ends first ([Late Failures](#late-failures)), so only one path writes `SESSION`.
 
 Before normal notification or an unaccepted durable dispatch resolves its target, Kander attempts reporting only when the recorded pane has the card's agent and an empty direct identity (`id` or absent kind). If reporting already took effect but an agent-only card was not saved, retry proves the currently open rollout against the existing direct pane ID and only completes the card binding; a conflicting proof remains uncertain and never enters stale-target recovery. Existing mismatches, unknown kinds and unresolved native `path` identities stay with the shared tri-state rules and are never overwritten. Accepted/completed dispatch retries retain their existing receipt and stopped-executor reconciliation.
 

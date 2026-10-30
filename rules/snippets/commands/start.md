@@ -34,9 +34,9 @@ kander start [--agent <configured-agent>] [--launcher <launcher>] [task-id]
 **Start Parameters and Metadata**
 
 - The agent, launcher, and model tier of `start` default to the configuration; `--agent` and `--launcher` override only this invocation. `SIZE: large` uses `kanban_agents.large`, `SIZE: small` uses `kanban_agents.small`, both falling back to `kanban_agent`. On success, print the scale and the actual agent.
-- `start` needs no confirmation and writes the session identifier into `SESSION` and the delivery address into `WINDOW` (herdr `herdr:<tab-id>:<pane-id>`; tmux/tmux-session `<launcher>:<session-id>:<window-id>:<pane-id>`; foreground/console the launcher name). A launch that cannot record the address or start the agent closes its own container and rolls the card back. Old cards missing the two fields get them inserted after `OWNER` on the next start; unstarted old cards are not batch-rewritten.
+- `start` needs no confirmation and writes the session identifier into `SESSION` and the delivery address into `WINDOW` (herdr `herdr:<tab-id>:<pane-id>`; tmux/tmux-session `<launcher>:<session-id>:<window-id>:<pane-id>`; foreground/console the launcher name). A launch that cannot record the address or start the agent closes its own container and rolls the card back, unless "Late Failures" keeps it. Old cards missing the two fields get them inserted after `OWNER` on the next start; unstarted old cards are not batch-rewritten.
 - New writes use `@kander_session`, `@kander_project`, and `# kander-notify:`; when reading or matching identity, the `@onevoke_*` markers and `# onevoke-notify:` are equivalent. A session marker matches when either side is non-empty and equals the card session; it counts as missing only when both are empty. foreground/console are normalized to the launcher name.
-- When start or liveness validation fails, the pre-call text is restored only if the operation still owns the current revision; otherwise the newer text is preserved and a conflict reported.
+- When start or liveness validation fails, the pre-call text is restored only if the operation still owns the current revision; otherwise the newer text is preserved and the start ends as `started-unresolved` ("Late Failures").
 - `start`, `resume`, and a `notify` that recovers a process write the full prompt to a UTF-8 temporary task file containing the task ID, fixed requirements, and the message body. The agent command line receives only one instruction containing that absolute path. When `prompt_delivery.mode` is `pane`, that instruction is not an argv element: it is delivered after the agent TUI is ready. The task file asks the agent to delete it when done; a failed deletion does not affect the result.
 
 **Card Pins**
@@ -57,11 +57,39 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 
 - When no task is specified and `todo/` has several cards, list the candidates for the user; task groups are ordered by confirmed dependencies, not asked card by card. When a specified card belongs to a task group, inspect the group and its prerequisites before claiming and use the member-card start entry in `snippets/orchestrate-start.md` "Task Orchestration". If that makes the current agent the orchestrator, advance the group in dependency order instead of claiming the requested card early. For other unmet start conditions, only report the gap; never claim or move back to `backlog/`.
 
+**Late Failures**
+
+A start has three results:
+
+| Result | Exit status | Output | Card | Container |
+| --- | --- | --- | --- | --- |
+| Success | 0 | the started lines | stays in `working/` | kept |
+| Failed, rolled back | 1 | `kander: <error>` | back in `todo/` | closed |
+| Unresolved | 3 | `started-unresolved: ...` | keeps its column | kept |
+
+- Before it closes anything, the starter judges executor evidence: the card moved past the starter's own last write, by revision or by column.
+  - No evidence: it closes the container and rolls back.
+  - Evidence: it keeps the container and the card, and writes the start attempt as `unresolved`.
+- Without a container the same rule applies: with evidence the starter keeps the process and does not roll back. A foreground starter then waits for the agent to exit.
+- When closing the container fails, the executor may still run. The starter does not roll back, and the result is unresolved.
+- A write that lands after the judgement makes the rollback refuse. The result is then unresolved too, although the container is closed.
+- The judgement has two limits. A dispatch or a manual `kander update` also counts as evidence, so the result is unresolved; that error is on the safe side. An executor that runs but has not written the card counts as no evidence, so the container closes and the executor ends with it.
+- The output is one line, then two next steps:
+
+```text
+started-unresolved: <task-id> window=<address> reason=<reason>
+  kander resume <task-id> --adopt --decision <reference>
+  kander resume <task-id> --agent <agent> --decision <reference> --message <message>
+```
+
+- After `started-unresolved`, never retry `kander start`. The card is no longer in `todo/`, and a second executor could overwrite the first. Report to the user and let the user choose adoption or takeover.
+- When a takeover or an adoption ended the attempt first, the starter prints `superseded: <task-id> ...` and exits 0. It closes nothing and rolls back nothing.
+
 **Start Checks and Rollback**
 
 - `start` checks the agent, launcher, and TTY before launching. `auto` resolves only among container launchers per `snippets/commands/start.md` "Launchers". The actual launcher's preconditions (its definition's `requires`; `HERDR_ENV=1`, herdr on PATH, and `HERDR_WORKSPACE_ID` for herdr; three TTY standard streams for `foreground`; native Windows for `console`) are checked first. A failed precondition does not claim.
 - An agent whose `prompt_delivery.mode` is `pane` is rejected before claiming when the resolved launcher is `foreground` or `console`; the card stays in `todo/`.
-- When process creation, the terminal container, or the agent launch fails, the command closes the container it created, restores the document, and moves the card back to `todo/`.
+- When process creation, the terminal container, or the agent launch fails, and "Late Failures" finds no evidence, the command closes the container it created, restores the document, and moves the card back to `todo/`.
 - For `prompt_delivery.mode` `pane`, a second-stage TUI ready failure (`blocked` match, prompt-delivery rejection, or ready timeout) is the same class of failure. Capture the pane output, close this invocation's tab/window, restore the document, and move back to `todo/`, without keeping the container or writing `WINDOW`/`SESSION`. Failures that need a person to answer a dialog say to run that CLI once manually and retry `kander start`; a pure ready timeout reports the captured output without that instruction.
 - tmux/tmux-session count as started only after session discovery and pane marker write succeed. When `prompt_delivery.mode` is `pane`, tmux/tmux-session count as started only after prompt delivery succeeds and session discovery and pane marker write succeed. herdr counts as started once `pane run` and any required exact-session discovery succeed; Codex discovers the unique task-bound rollout created after the launch began and persists its ID before best-effort reporting; an agent declaring `session.file` gets no proactive session identity report — its own integration reports the path-kind identity — while for other agents the subsequent session identity report and read-back are best-effort, failures only warn and do not enter the `LaunchFailure` tab close and card rollback path. When `prompt_delivery.mode` is `pane`, herdr also requires prompt delivery to succeed. foreground/console normally count as started once the process is created. Devin additionally requires exact-session discovery and persistence, and a discovery failure terminates the process started by this invocation before rollback. A later exit does not roll back. On success, print the actual launcher (`auto` shows the resolved one); `console` also prints the PID.
 - Coordination after launch depends on the launcher:

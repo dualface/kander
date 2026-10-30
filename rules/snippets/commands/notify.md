@@ -48,5 +48,6 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 ## Rejections
 
 - A card claimed or reclaimed with `--owner`: it has no executor session. The refusal comes before any dispatch binds and names `snippets/failure-recovery.md`.
+- A card whose start attempt has not ended (current execution record `pending` or `unresolved`): the error names adoption and takeover (`snippets/commands/start.md` "Late Failures").
 - "target agent busy, not delivered" after the probe retries; both reasons when direct delivery and recovery fail; dispatch conflicts per `snippets/commands/dispatch.md`.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error.
