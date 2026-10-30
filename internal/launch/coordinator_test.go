@@ -119,6 +119,17 @@ func TestCoordinatorRechecksActualGitAfterWrapUpRestart(t *testing.T) {
 	if e != nil || !reflect.DeepEqual(next, after) {
 		t.Fatal("failed Git changed cursor", e)
 	}
+	// DE-18: a new coordinator session finds the same refusal, so a member already
+	// done has no exit. A repair turns this red and removes the modelDeadEnds row.
+	fenced, e := board.ClaimCoordinator(context.Background(), root, board.CoordinatorClaim{GroupID: next.GroupID, ExpectedRevision: next.Revision, ExpectedEpoch: next.Authority.Epoch, Owner: "coordinator", Token: "two-session", Basis: "recovery", Members: []string{task}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	r = launchCoordinatorRequest(t, root, task, fenced, d)
+	r.CWD = survivor
+	if _, e = ReconcileCoordinator(context.Background(), root, r); e == nil {
+		t.Fatal("a new coordinator session accepted the rewritten history")
+	}
 }
 
 func TestCoordinatorFirstDeliveryRequiresActualTaskHead(t *testing.T) {
