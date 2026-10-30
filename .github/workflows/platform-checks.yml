@@ -22,9 +22,19 @@ jobs:
           go test ./internal/check -count=1
           go test ./cmd/kander -count=1 -run TestCheck
       # One command per step: a PowerShell step exits with the last command's code.
+      # The runner temp directory is real on macOS, where the default temp path is
+      # a symlink the board refuses, and it is the fast drive on Windows.
       - name: Composite state model, default mode
-        run: go test ./internal/board -count=1 -timeout 30m -run TestModel
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test ./internal/board -count=1 -timeout 90m -run TestModel
       - name: Directed dead-end tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
         run: go test ./internal/launch -count=1 -run "TestDeadEnd|TestCoordinatorRechecksActualGitAfterWrapUpRestart"
 
   model-full:

@@ -20,7 +20,7 @@ The search is bounded. It does not prove that no dead end exists.
 | default | `go test ./...` | explore 3, exit 2 | explore 2, exit 2, focused |
 | full | `KANDER_MODEL_DEPTH=full` | explore 4, exit 3 | explore 3, exit 3, focused |
 
-`platform-checks.yml` runs the default mode on Linux, macOS and Windows and the full mode in the `model-full` job on Linux. On Linux the search runs in `/dev/shm` when that mount has at least 4 GiB free, because board writes sync every file. The full mode peaks near 2.7 GiB there.
+`platform-checks.yml` runs the default mode on Linux, macOS and Windows and the full mode in the `model-full` job on Linux. Without a memory directory the search is much slower: expect several minutes on macOS and tens of minutes on Windows. Those steps set `TMPDIR`, `TMP` and `TEMP` to the runner temp directory, because `tempBoard` refuses the symlinked default temp path of macOS. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
 
 ## Reading a failure
 

@@ -24,6 +24,10 @@ type modelBounds struct {
 	exit    int
 }
 
+// modelBatchSize bounds the states expanded between two merges, and with them
+// the copies on disk at one time.
+const modelBatchSize = 64
+
 type modelEdge struct {
 	op    string
 	child int
@@ -170,7 +174,15 @@ func (s *modelSearch) expand(n *modelNode, tailOnly bool) (x modelExpansion) {
 				return x
 			}
 			x.violations = append(x.violations, modelCheckInvariants(n.facts, f, name)...)
-			x.children = append(x.children, modelChild{op: name, exit: !op.abandons, narrow: op.narrows, finished: finished, key: f.key(), world: c, facts: f})
+			child := modelChild{op: name, exit: !op.abandons, narrow: op.narrows, finished: finished, key: f.key(), world: c, facts: f}
+			// The index only grows between batches, so this read is safe and the merge
+			// sees the same result. Dropping the copy here keeps a batch's disk use
+			// to its new states: most children repeat a known state.
+			if _, known := s.index[child.key]; known {
+				os.RemoveAll(c.root)
+				child.world, child.facts = nil, nil
+			}
+			x.children = append(x.children, child)
 		}
 	}
 	return x
@@ -186,6 +198,18 @@ func (s *modelSearch) add(world *modelWorld, facts *modelFacts, key string, dept
 // and operation order, so the first path to a state and the identifiers on that
 // path do not depend on scheduling. It returns the states the batch added.
 func (s *modelSearch) expandAll(ids []int, tailOnly bool) ([]int, error) {
+	var added []int
+	for batch := range slices.Chunk(ids, modelBatchSize) {
+		more, err := s.expandBatch(batch, tailOnly)
+		if err != nil {
+			return nil, err
+		}
+		added = append(added, more...)
+	}
+	return added, nil
+}
+
+func (s *modelSearch) expandBatch(ids []int, tailOnly bool) ([]int, error) {
 	results := make([]modelExpansion, len(ids))
 	modelParallel(len(ids), func(at int) { results[at] = s.expand(s.nodes[ids[at]], tailOnly) })
 	var added, released []int
@@ -201,7 +225,9 @@ func (s *modelSearch) expandAll(ids []int, tailOnly bool) ([]int, error) {
 		for _, child := range x.children {
 			known, seen := s.index[child.key]
 			if seen {
-				discarded = append(discarded, child.world.root)
+				if child.world != nil {
+					discarded = append(discarded, child.world.root)
+				}
 			} else {
 				known = s.add(child.world, child.facts, child.key, n.depth+1, modelSeed{name: n.seed, focus: n.focus}, append(slices.Clone(n.trace), child.op))
 				s.nodes[known].narrow, s.nodes[known].finished = child.narrow, child.finished
@@ -274,11 +300,12 @@ func (s *modelSearch) run(seeds []modelSeed, start *modelWorld) error {
 			}
 		}
 		s.release(idle)
+		// One batch per pass: the next pass releases what this one resolved.
 		switch {
 		case len(tail) > 0:
-			_, err = s.expandAll(tail, true)
+			_, err = s.expandBatch(tail[:min(len(tail), modelBatchSize)], true)
 		case len(full) > 0:
-			_, err = s.expandAll(full, false)
+			_, err = s.expandBatch(full[:min(len(full), modelBatchSize)], false)
 		default:
 			return nil
 		}

@@ -8,8 +8,8 @@ import (
 )
 
 // modelMinimumShm keeps the search on disk where /dev/shm is a small mount, as
-// in a default container. Full mode peaks at 2.7 GiB.
-const modelMinimumShm = 4 << 30
+// in a default container. Full mode peaks near 310 MiB.
+const modelMinimumShm = 1 << 30
 
 // modelFastTemp moves the search to memory where that is possible: board writes
 // sync every file, and on disk the sync dominates the run time.
