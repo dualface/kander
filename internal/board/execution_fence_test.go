@@ -57,6 +57,32 @@ func TestBindRefusesTheFirstRecordAfterALegacySnapshot(t *testing.T) {
 	}
 }
 
+// A cursor's first write stores the legacy card's synthesized record. That is the
+// same execution, so the cursor binds again after it; a successor stays refused.
+func TestBindAcceptsTheRecordItsOwnWriteStored(t *testing.T) {
+	root := tempBoard(t)
+	s := legacyStartedCard(t, root, "legacy-own-write")
+	id := s.Entry.TaskID
+	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecordExecutionWindow(root, s.Entry, "tmux:drifted", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := RollbackDocument(root, s.Entry, s.Text, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BeginTakeover(root, bound(t, root, id).Entry, TakeoverInput{Owner: "claude", Session: "claude next"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BindExecutionCursor(root, s.Entry); err == nil {
+		t.Fatal("the cursor bound a successor of the record it stored")
+	}
+}
+
 // Confirmation keeps the record, so it never invalidates a snapshot of that record.
 func TestBindAcceptsAConfirmedRecord(t *testing.T) {
 	root := tempBoard(t)

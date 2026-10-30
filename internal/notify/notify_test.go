@@ -96,6 +96,10 @@ if [ "$1" = "pane" ] && [ "$2" = "run" ]; then
   exit 0
 fi
 if [ "$1" = "agent" ] && [ "$2" = "prompt" ]; then
+  if [ "${KANBAN_HERDR_PROMPT_FAIL:-}" = "1" ]; then
+    printf '%s\n' 'fake herdr prompt failure' >&2
+    exit 1
+  fi
   printf '%s\n' "$@" > "$log.prompt"
   printf '%s\n' "$@" >> "$log.order"
   exit 0
@@ -421,6 +425,39 @@ func assertPastedLanguageReminder(t *testing.T, root, payload, language string) 
 	}
 	if strings.Contains(payload, reminder) {
 		t.Fatalf("message file carries the reminder: %s", payload)
+	}
+}
+
+// A card from before the ledger has no stored record. The drift write-back stores
+// the synthesized one, and a failed delivery still recovers the session after the
+// rollback: the stored record is this execution, not a successor.
+func TestNotifyRecoversALegacyCardAfterADriftWriteBack(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
+	t.Setenv("KANBAN_HERDR_STALE_PANE", "w0:p0")
+	t.Setenv("KANBAN_HERDR_PROMPT_FAIL", "1")
+	t.Setenv("HERDR_ENV", "1")
+	t.Setenv("HERDR_WORKSPACE_ID", "workspace-test")
+	taskID, path := makeReview(t, root, "notify-legacy-drift")
+	if err := os.RemoveAll(filepath.Join(root, ".kander", "groups", "00000000-start-group", taskID)); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := regexp.MustCompile(`(?m)^- WINDOW:.*$`).ReplaceAllLiteralString(string(data), "- WINDOW: herdr:w0:t0:w0:p0")
+	if err = os.WriteFile(path, []byte(stale), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := capture(t, func() error {
+		return commandNotify(root, taskID, "x", "", "", true, 61)
+	})
+	if err != nil {
+		t.Fatalf("err=%v out=%s stderr=%s", err, out, errOut)
+	}
+	if !strings.Contains(out, "通道=resume") {
+		t.Fatalf("out=%s", out)
 	}
 }
 

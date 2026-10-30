@@ -177,7 +177,10 @@ func BindExecutionCursor(root string, entry Entry) (r ExecutionRecord, err error
 		if e != nil {
 			return e
 		}
-		if record != v.record {
+		// The cursor's own fence also passes: its first write on a legacy card
+		// stores the synthesized record it was bound to, so the pointer changes
+		// while the execution stays the same.
+		if record != v.record && record != v.fence.RecordID {
 			return kanbanError("board.transaction_conflict", entry.TaskID)
 		}
 		s, e := tx.Snapshot(entry.TaskID)
