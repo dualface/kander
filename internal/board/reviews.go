@@ -361,6 +361,9 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				if e = settledReviewBatch(tx, input.BatchID); e != nil {
 					return e
 				}
+				if e = requireAuthorDispositions(tx, batch); e != nil {
+					return e
+				}
 				batch.Advances = append(batch.Advances, *advance)
 				batch.TargetCommit = input.Commit
 				batch.Revision++

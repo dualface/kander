@@ -212,22 +212,11 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 			return reviewError("missing original: " + name)
 		}
 	}
-	target := batch.TargetCommit
-	found := run.Commit == target
-	for i := len(batch.Advances) - 1; i >= 0; i-- {
-		a := batch.Advances[i]
-		if a.Target != target || strings.TrimSpace(a.Reason) == "" {
-			return reviewError("batch advance chain")
-		}
-		if err := validateReviewAdvanceAttribution(a, batch.TaskIDs); err != nil {
-			return err
-		}
-		target = a.PreviousTarget
-		if run.Commit == target {
-			found = true
-		}
+	targets, err := reviewBatchTargets(batch)
+	if err != nil {
+		return err
 	}
-	if !found {
+	if !slices.Contains(targets, run.Commit) {
 		return reviewError("target outside batch")
 	}
 	previous := run
@@ -293,6 +282,25 @@ func reviewAncestors(tx *Transaction, run ReviewRun) (map[string]ReviewRun, erro
 		previous = ancestor.PreviousRunID
 	}
 	return result, nil
+}
+
+// reviewBatchTargets lists the batch's recorded targets, oldest first. It reads
+// batch records only, so no Git or worktree state can extend the chain.
+func reviewBatchTargets(batch ReviewBatch) ([]string, error) {
+	target := batch.TargetCommit
+	targets := []string{target}
+	for _, a := range slices.Backward(batch.Advances) {
+		if a.Target != target || strings.TrimSpace(a.Reason) == "" {
+			return nil, reviewError("batch advance chain")
+		}
+		if err := validateReviewAdvanceAttribution(a, batch.TaskIDs); err != nil {
+			return nil, err
+		}
+		target = a.PreviousTarget
+		targets = append(targets, target)
+	}
+	slices.Reverse(targets)
+	return targets, nil
 }
 
 func settledReviewBatch(tx *Transaction, batchID string) error {

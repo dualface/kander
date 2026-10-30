@@ -95,6 +95,10 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 	if !ok || batch.BatchID != binding.BatchID || !completed && batch.TargetCommit != in.Base || !containsID(batch.TaskIDs, in.TaskID) || len(binding.Findings) == 0 {
 		return dispatchEvidenceError("batch, target or membership")
 	}
+	targets, err := reviewBatchTargets(batch)
+	if err != nil {
+		return err
+	}
 	runs, err := batchRuns(tx, batch)
 	if err != nil {
 		return err
@@ -116,7 +120,10 @@ func validateDispatchFix(tx *Transaction, in DispatchInput, initial bool, histor
 		if err != nil {
 			return err
 		}
-		if run.BatchID != binding.BatchID || run.Commit != in.Base || run.PreviousRunID != ref.PreviousRunID || !containsID(run.TaskIDs, in.TaskID) {
+		// A batch advanced before this round leaves the run behind the base; the
+		// recorded chain still ties the two together, also on historical replay.
+		commitAt := slices.Index(targets, run.Commit)
+		if run.BatchID != binding.BatchID || commitAt < 0 || !slices.Contains(targets[commitAt:], in.Base) || run.PreviousRunID != ref.PreviousRunID || !containsID(run.TaskIDs, in.TaskID) {
 			return dispatchEvidenceError("run, predecessor or task binding")
 		}
 		for _, other := range runs {

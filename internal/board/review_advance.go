@@ -2,6 +2,7 @@ package board
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -45,6 +46,37 @@ type reviewPlanTargetSyncRequest struct {
 	ExpectedPlanRev uint64 `json:"expected_revision,omitempty"`
 }
 
+// requireAuthorDispositions keeps a target move from overtaking an open fix
+// round: an assigned finding without an author record is a round not finished.
+func requireAuthorDispositions(tx *Transaction, b ReviewBatch) error {
+	runs, err := batchRuns(tx, b)
+	if err != nil {
+		return err
+	}
+	var missing []string
+	for _, run := range runs {
+		ledger, err := readDispositionLedger(tx, run, false)
+		if err != nil {
+			return err
+		}
+		recorded := map[string]bool{}
+		for _, d := range ledger.Records {
+			recorded[dispositionKey(d)] = true
+		}
+		for _, findingID := range slices.Sorted(maps.Keys(ledger.Assignment.Items)) {
+			for _, id := range ledger.Assignment.Items[findingID] {
+				if !recorded[findingID+"/"+id] {
+					missing = append(missing, id+"/"+run.RunID+"/"+findingID)
+				}
+			}
+		}
+	}
+	if len(missing) > 0 {
+		return reviewError("missing author disposition: " + strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 // AdvanceReviewBatch receives a verified in-batch delivery without starting a
 // reviewer. Mechanical-only fixes need this same CAS to close at their new HEAD.
 // Planned batches also rewrite the plan's recorded target in the same transaction.
@@ -62,6 +94,7 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 		if !ok {
 			return reviewError("missing batch")
 		}
+		scopeIDs = b.TaskIDs
 		if b.PlanID == "" {
 			return nil
 		}
@@ -104,6 +137,9 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 			return err
 		}
 		if err = settledReviewBatch(tx, b.BatchID); err != nil {
+			return err
+		}
+		if err = requireAuthorDispositions(tx, b); err != nil {
 			return err
 		}
 		b.Advances = append(b.Advances, a)
