@@ -1,4 +1,5 @@
 {
+  "board.wrap_up_grant_hint": "wrap-up 授权不能续期，只覆盖 WRAP_UP_RECORDS 与 wrap-up/<dispatch>-<epoch>.md，不覆盖 SUMMARY 与 report.md。请在授权之前写好它们，或者用 kander dispatch fail 或 cancel 结束这一轮，再派发新的 wrap-up",
   "tui.start_loading": "读取中…",
   "tui.start_state": "状态：{{.V0}}（backlog/todo）",
   "tui.start_success_compact": "已启动 | {{.V0}} | {{.V1}} | {{.V2}}",
@@ -71,9 +72,10 @@
   "board.coordinator_conflict": "编排检查点冲突或事实无效：{{.V0}}",
   "board.dispatch_evidence_invalid": "派回证据无效：{{.V0}}",
   "launch.dispatch_wrap_up_only": "已为 {{.V0}} 授予仅收尾授权：dispatch {{.V1}}，epoch {{.V2}}。只允许清理和追加收尾记录；禁止代码修改、运行时接管及原作者结论。",
-  "board.dispatch_conflict": "派回冲突、期限已过或执行授权过期：{{.V0}}",
+  "board.dispatch_conflict": "派回冲突、期限已过或执行授权过期：{{.V0}}。用 kander dispatch show 查看。过期的一轮无法续期：用 kander dispatch fail 或 cancel 结束，再用新 ID 派发",
   "launch.dispatch_id": "派回 ID：{{.V0}}",
-  "launch.dispatch_pending": "派回 {{.V0}} 尚无接受回执，投递仍不确定。使用同一 ID 对账，不得盲启另一执行者。",
+  "launch.review_dispatch_required": "{{.V0}} 在 review 列，只接受派发消息。用 --kind fix、--kind sync 或 --kind wrap-up 指明这一轮；fix 与 wrap-up 还要带 --evidence-file",
+  "launch.dispatch_pending": "派回 {{.V0}} 尚无接受回执，投递仍不确定。使用同一 ID 对账，不得盲启另一执行者。期限已过时，唯一的出路是 kander dispatch fail 或 cancel",
   "launch.dispatch_recovery_unproven": "拒绝恢复派回 {{.V0}}：缺少当前有效的 stopped 观测（{{.V1}}）",
   "liveness.subscription_writer_unsupported": "订阅 Writer 必须支持 context 取消",
   "liveness.subscription_output_failed": "订阅输出失败",

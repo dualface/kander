@@ -15,8 +15,8 @@ import (
 	"github.com/dualface/kander/internal/liveness"
 )
 
-// DispatchOptions opt working/generic messages into the durable protocol.
-// Group review dispatches opt in automatically, defaulting to fix.
+// DispatchOptions opt working/generic messages into the durable protocol. A
+// review card of a group or with a binding takes dispatch messages only.
 type DispatchOptions struct {
 	ID, Kind, Base, EvidenceFile string
 	// Decision is the user decision of a takeover. It never opts into the
@@ -27,8 +27,11 @@ type DispatchOptions struct {
 // PrepareAction resolves defaults once; a retry compares the original payload
 // and never derives a new baseline or confirmation deadline.
 func PrepareAction(root string, s board.Snapshot, message string, o DispatchOptions, timeout float64) (board.Dispatch, bool, error) {
-	active := o.EvidenceFile != "" || o.ID != "" || o.Kind != "" || o.Base != "" || s.Entry.State == "review" && (board.TaskGroupFrom(s.Text) != "" || board.MetadataFrom(s.Text, "DISPATCH_ID") != "")
+	active := o.EvidenceFile != "" || o.ID != "" || o.Kind != "" || o.Base != ""
 	if !active {
+		if s.Entry.State == "review" && (board.TaskGroupFrom(s.Text) != "" || board.MetadataFrom(s.Text, "DISPATCH_ID") != "") {
+			return board.Dispatch{}, false, launchError("launch.review_dispatch_required", s.Entry.TaskID)
+		}
 		return board.Dispatch{}, false, nil
 	}
 	evidence, err := readDispatchEvidence(o.EvidenceFile)

@@ -1,4 +1,5 @@
 {
+  "board.wrap_up_grant_hint": "A wrap-up grant has no renewal and covers only WRAP_UP_RECORDS and wrap-up/<dispatch>-<epoch>.md, never SUMMARY or report.md. Write those before the grant, or end the round with kander dispatch fail or cancel and dispatch a new wrap-up",
   "tui.start_loading": "Loading…",
   "tui.start_state": "State: {{.V0}} (backlog/todo)",
   "tui.start_success_compact": "Started | {{.V0}} | {{.V1}} | {{.V2}}",
@@ -71,9 +72,10 @@
   "board.coordinator_conflict": "Coordinator checkpoint conflict or invalid facts: {{.V0}}",
   "board.dispatch_evidence_invalid": "Invalid dispatch evidence: {{.V0}}",
   "launch.dispatch_wrap_up_only": "Wrap-up-only authority for {{.V0}}: dispatch {{.V1}}, epoch {{.V2}}. Only cleanup and append-only records are allowed. No code changes, runtime takeover or author conclusions.",
-  "board.dispatch_conflict": "Dispatch conflict, expired deadline or stale execution authorization: {{.V0}}",
+  "board.dispatch_conflict": "Dispatch conflict, expired deadline or stale execution authorization: {{.V0}}. Read it with kander dispatch show. An expired round has no renewal: end it with kander dispatch fail or cancel, then dispatch with a new ID",
   "launch.dispatch_id": "Dispatch ID: {{.V0}}",
-  "launch.dispatch_pending": "Dispatch {{.V0}} has no accepted receipt; delivery remains uncertain. Reconcile this same ID; do not start another executor.",
+  "launch.review_dispatch_required": "{{.V0}} is in review and takes dispatch messages only. Name the round with --kind fix, --kind sync or --kind wrap-up, with --evidence-file for a fix or a wrap-up",
+  "launch.dispatch_pending": "Dispatch {{.V0}} has no accepted receipt; delivery remains uncertain. Reconcile this same ID; do not start another executor. When its deadline passed, the only way out is kander dispatch fail or cancel",
   "launch.dispatch_recovery_unproven": "Dispatch {{.V0}} recovery refused: no current, valid stopped observation ({{.V1}})",
   "liveness.subscription_writer_unsupported": "Subscription writer must support context cancellation",
   "liveness.subscription_output_failed": "Subscription output failed",
