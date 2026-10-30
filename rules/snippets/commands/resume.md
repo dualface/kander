@@ -48,12 +48,12 @@ kander resume --adopt --decision <reference> <task-id>
 
 **Foreground and Console Have No Native Resume**
 
-- A session started by `foreground` or `console` has no address and no native resume. These cards get liveness (`kander check`), adoption of an unfinished start, and a takeover. Plain `resume` refuses a card whose `WINDOW` is `foreground` or `console` and whose execution record has a process identity, with the next step in the error. A card without an identity comes from an older binary and is not refused.
+- A session started by `foreground` or `console` has no address and no native resume. These cards get liveness (`kander check`), adoption of an unfinished start, and a takeover. Plain `resume` refuses a card whose `WINDOW` is `foreground` or `console`, and a relaunch through either launcher, with the next step in the error. It does not matter whether a process identity was recorded. `resume --agent` is not refused.
 
 **Adopting an Unfinished Start**
 
 - `resume --adopt` starts no executor. Use it when the start attempt has no result and the executor works. Then a takeover would replace a healthy executor.
-- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start whose launcher died before it recorded the identity reads `unknown`, and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
+- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start without a recorded identity reads `unknown` (the launcher died first, or a shim has not written the card yet), and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
 - On success it writes `kind=adopt` with the decision and changes the record to `running`. The card stays unchanged. A launcher that is still running steps aside with `superseded`.
 
 ## Output
