@@ -46,6 +46,7 @@ type modelMember struct {
 	launcher *modelCursor
 	original string // the todo text a launcher restores on rollback
 	executor bool   // an executor process is alive
+	unproven bool   // the liveness probe cannot confirm the executor (unknown)
 	self     bool   // the current session owns the card (manual claim)
 	stranded string // why a launcher ended without finishing its start attempt
 }
@@ -413,9 +414,9 @@ func (f *modelFacts) memberKey(i int) string {
 		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs))
 	}
 	settled := slices.ContainsFunc(f.rounds[i], func(d Dispatch) bool { return d.Settlement != nil })
-	return fmt.Sprintf("col=%s attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
+	return fmt.Sprintf("col=%s attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
 		s.Entry.State, attempt, f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
-		m.launcher != nil, m.executor, m.self, m.stranded, bound, len(releases) > 0, settled,
+		m.launcher != nil, m.executor, m.executor && m.unproven, m.self, m.stranded, bound, len(releases) > 0, settled,
 		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)))
 }
 

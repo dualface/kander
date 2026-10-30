@@ -136,6 +136,33 @@ func TestModelVerdictRejectsListDrift(t *testing.T) {
 	}
 }
 
+// Adoption needs a confirmed executor. A stopped or an unconfirmed one leaves the
+// card to a takeover, which must still reach done.
+func TestModelAdoptionNeedsConfirmedLiveness(t *testing.T) {
+	modelFastTemp(t)
+	start := modelInitial(t, false, 1)
+	s := &modelSearch{ops: modelOps(), index: map[string]int{}, scratch: t.TempDir()}
+	unresolved := []string{"L.begin", "X.write", "L.fail"}
+	for _, loss := range []string{"X.exit", "X.probeLost"} {
+		t.Run(loss, func(t *testing.T) {
+			w := modelWalk(t, s, start, append(slices.Clone(unresolved), loss)...)
+			f, err := w.read()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if w.members[0].adoptable() || !f.attempts[0].StartUnfinished() {
+				t.Fatalf("state %s", f.key())
+			}
+			for _, op := range s.ops {
+				if op.name == "H.adopt" && op.guard(f, 0) {
+					t.Fatal("H.adopt is open without proof of the executor")
+				}
+			}
+			modelAllDone(t, modelWalk(t, s, w, "H.handoff", "F.done"))
+		})
+	}
+}
+
 // A reconcile that adopts a new dispatch changes what a later release must
 // match, so the state before and after it must not merge.
 func TestModelKeyFollowsTheCheckpointDispatch(t *testing.T) {

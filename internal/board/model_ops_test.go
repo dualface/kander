@@ -90,6 +90,10 @@ func modelUnfinished(f *modelFacts, i int) bool {
 	return f.world.members[i].launcher == nil && f.attempts[i].StartUnfinished()
 }
 
+// adoptable reports what kander resume --adopt accepts: a stopped executor reads
+// stopped and an unconfirmed one unknown, and both leave only a takeover.
+func (m *modelMember) adoptable() bool { return m.executor && !m.unproven }
+
 func modelAdopt(w *modelWorld, m *modelMember) error {
 	s, err := w.snapshot(m)
 	if err != nil {
@@ -118,7 +122,7 @@ func modelLifecycleOps() []modelOp {
 					return err
 				}
 				m.launcher = &modelCursor{state: moved.State, revision: moved.Version.revision, auth: moved.Version.authorization, fence: moved.Version.fence}
-				m.executor, m.self, m.original, m.stranded = true, false, s.Text, ""
+				m.executor, m.unproven, m.self, m.original, m.stranded = true, false, false, s.Text, ""
 				return nil
 			}},
 		{name: "L.confirm", cli: "kander start: ConfirmTaskStart after launch",
@@ -174,7 +178,9 @@ func modelLifecycleOps() []modelOp {
 				return modelUnresolve(w, m, entry, "close-failed")
 			}},
 		{name: "H.adopt", cli: "kander resume <id> --adopt --decision <ref>: keeps a live executor",
-			guard: func(f *modelFacts, i int) bool { return f.attempts[i].StartUnfinished() && f.world.members[i].executor },
+			guard: func(f *modelFacts, i int) bool {
+				return f.attempts[i].StartUnfinished() && f.world.members[i].adoptable()
+			},
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return modelAdopt(w, m) }},
 		{name: "H.handoff", cli: "kander resume <id> --agent <agent> --decision <ref>, on a start attempt that has not ended",
 			guard: func(f *modelFacts, i int) bool {
@@ -211,6 +217,11 @@ func modelLifecycleOps() []modelOp {
 		{name: "X.exit", cli: "executor process stops",
 			guard: func(f *modelFacts, i int) bool { return f.world.members[i].executor },
 			apply: func(_ *modelWorld, m *modelMember, _ *modelFacts) error { m.executor = false; return nil }},
+		{name: "X.probeLost", cli: "kander check <id> reads unknown for an executor that runs: the probe failed or the launcher recorded no process identity",
+			guard: func(f *modelFacts, i int) bool {
+				return f.attempts[i].StartUnfinished() && f.world.members[i].adoptable()
+			},
+			apply: func(_ *modelWorld, m *modelMember, _ *modelFacts) error { m.unproven = true; return nil }},
 		{name: "H.takeover", cli: "kander resume --agent <agent> --message ... <id>",
 			guard: modelInState("working"),
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return modelTakeover(w, m) }},
@@ -345,7 +356,7 @@ func modelTakeover(w *modelWorld, m *modelMember) error {
 	if err = ConfirmTaskStart(w.root, s.Entry); err != nil {
 		return err
 	}
-	m.executor, m.self = true, false
+	m.executor, m.unproven, m.self = true, false, false
 	return nil
 }
 
@@ -642,7 +653,7 @@ func (w *modelWorld) finishMember(m *modelMember) error {
 				return err
 			}
 			if modelUnfinished(f, f.index(m)) {
-				if m.executor {
+				if m.adoptable() {
 					err = modelAdopt(w, m)
 				} else {
 					err = modelTakeover(w, m)
