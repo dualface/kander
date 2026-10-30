@@ -210,9 +210,11 @@ func TestResumeAndNotifyApplyExecutionPins(t *testing.T) {
 	}
 
 	clearRecord()
-	loaded, _ := board.LoadBoard(root)
-	entry, _ := board.Locate(loaded, id)
-	if _, err := NotifyViaResume(root, entry, mustRead(t, working), "继续", 61); err != nil {
+	snapshot, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NotifyViaResume(root, snapshot.Entry, mustRead(t, working), "继续", 61); err != nil {
 		t.Fatal(err)
 	}
 	if cmd := lastCommand(t, root); !strings.Contains(cmd, "--model pinned-model") {
@@ -241,8 +243,8 @@ func TestResumeAndNotifyApplyExecutionPins(t *testing.T) {
 	if err := commandResume(root, nil, "", id, "继续", "", true, 61); err == nil || !strings.Contains(err.Error(), "grok") {
 		t.Fatalf("resume owner conflict err=%v", err)
 	}
-	loaded, _ = board.LoadBoard(root)
-	entry, _ = board.Locate(loaded, id)
+	loaded, _ := board.LoadBoard(root)
+	entry, _ := board.Locate(loaded, id)
 	if _, err := NotifyViaResume(root, entry, text, "继续", 61); err == nil || !strings.Contains(err.Error(), "grok") {
 		t.Fatalf("notify owner conflict err=%v", err)
 	}

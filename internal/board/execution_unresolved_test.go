@@ -316,6 +316,7 @@ func TestLegacyPendingAcceptsAnAdoption(t *testing.T) {
 	s := legacyStartedCard(t, root, "legacy-adopt")
 	id := s.Entry.TaskID
 	legacyAttempt(t, root, s, "stuck-attempt", "pending", 0)
+	s = transactionSnapshot(t, root, id)
 	c := coordinatorClaim(t, root, id)
 	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
 		t.Fatal(err)

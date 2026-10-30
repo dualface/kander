@@ -2,9 +2,12 @@ package board
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
+
+	"github.com/dualface/kander/internal/fs"
 )
 
 // ErrExecutionSuperseded reports that a takeover, an adoption or a reclaim ended
@@ -125,24 +128,76 @@ func CurrentExecution(root, task string) (r ExecutionRecord, exists bool, err er
 	return r, exists, err
 }
 
-// BindExecutionCursor fences an operation cursor to the card's current record.
-// A launcher gets this binding from BeginTaskStart or BeginTakeover; every other
-// writer binds once, before its first entrance call.
-func BindExecutionCursor(root string, entry Entry) (ExecutionRecord, error) {
-	if entry.Version == nil {
-		return ExecutionRecord{}, kanbanError("board.transaction_conflict", entry.TaskID)
+// storedRecordID reads the current.json pointer without validating it. Every
+// ledger writer holds the task lock exclusively, so the task lock alone makes this
+// read consistent with the card the same transaction reads.
+func (tx *Transaction) storedRecordID(task string) (string, error) {
+	data, exists, err := fs.ReadRegularFileIfExists(tx.root, control(tx.root, "groups", taskStartGroup, task, "current.json"))
+	if err != nil || !exists {
+		return "", err
 	}
-	r, exists, err := CurrentExecution(root, entry.TaskID)
+	var pointer struct {
+		ID string `json:"id"`
+	}
+	if err = json.Unmarshal(data, &pointer); err != nil {
+		return "", coordinatorError("start attempt identity")
+	}
+	return pointer.ID, nil
+}
+
+// pinExecution records which execution a snapshot belongs to, so a later binding
+// can tell that execution from a successor.
+func (tx *Transaction) pinExecution(s Snapshot) error {
+	record, err := tx.storedRecordID(s.Entry.TaskID)
 	if err != nil {
-		return r, err
+		return err
 	}
-	if !exists {
-		return r, coordinatorError("start attempt missing")
+	s.Entry.Version.record, s.Entry.Version.pinned = record, true
+	return nil
+}
+
+// BindExecutionCursor fences a snapshot's cursor to the execution that snapshot
+// read. A record that replaced it since then is a conflict, because every decision
+// the caller drew from the snapshot is about the old execution. Reading the
+// current record alone would hand the caller its successor. A launcher gets this
+// binding from BeginTaskStart or BeginTakeover; every other writer binds once,
+// before its first entrance call.
+func BindExecutionCursor(root string, entry Entry) (r ExecutionRecord, err error) {
+	v := entry.Version
+	if v == nil {
+		return r, kanbanError("board.transaction_conflict", entry.TaskID)
 	}
-	entry.Version.mu.Lock()
-	defer entry.Version.mu.Unlock()
-	entry.Version.fence = ExecutionFence{RecordID: r.ID, Cycle: r.Cycle}
-	return r, nil
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if !v.pinned {
+		return r, kanbanError("board.transaction_conflict", entry.TaskID)
+	}
+	err = WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ReadOnly: true}, func(tx *Transaction) error {
+		record, e := tx.storedRecordID(entry.TaskID)
+		if e != nil {
+			return e
+		}
+		if record != v.record {
+			return kanbanError("board.transaction_conflict", entry.TaskID)
+		}
+		s, e := tx.Snapshot(entry.TaskID)
+		if e != nil {
+			return e
+		}
+		l, e := readExecutionLedger(tx, s)
+		if e != nil {
+			return e
+		}
+		if l.current == nil {
+			return coordinatorError("start attempt missing")
+		}
+		r = *l.current
+		return nil
+	})
+	if err == nil {
+		v.fence = ExecutionFence{RecordID: r.ID, Cycle: r.Cycle}
+	}
+	return r, err
 }
 
 // BeginTaskStart claims a todo card for a launcher in one transaction: the move,
@@ -205,15 +260,15 @@ func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *T
 }
 
 // requireIdentityWrite holds the checks every card write of an identity shares: a
-// wrap-up-only grant owns no identity, and a dispatch cursor must still be current.
+// wrap-up-only grant owns no identity, and the cursor's authorization must still
+// be the card's. An empty authorization counts: a card that a dispatch bound after
+// the cursor was read refuses the write.
 func requireIdentityWrite(tx *Transaction, s Snapshot, v *Version) error {
 	if s.Entry.State != "working" && s.Entry.State != "review" {
 		return coordinatorError("start success binding")
 	}
-	if v.authorization != (ExecutionAuthorization{}) {
-		if err := tx.requireExecution(s, v.authorization, false); err != nil {
-			return err
-		}
+	if err := tx.requireExecution(s, v.authorization, false); err != nil {
+		return err
 	}
 	return tx.requireFullExecution(s)
 }
@@ -341,7 +396,7 @@ func BeginTakeover(root string, entry Entry, in TakeoverInput) (ExecutionResult,
 	})
 	if err == nil {
 		v.mu.Lock()
-		v.fence = fence
+		v.fence, v.record, v.pinned = fence, fence.RecordID, true
 		v.mu.Unlock()
 	}
 	return result, err

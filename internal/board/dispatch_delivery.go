@@ -37,7 +37,10 @@ func ReadExecutionSnapshot(root, task string, a ExecutionAuthorization) (s Snaps
 		if e != nil {
 			return e
 		}
-		return tx.requireExecution(s, a, false)
+		if e = tx.requireExecution(s, a, false); e != nil {
+			return e
+		}
+		return tx.pinExecution(s)
 	})
 	return
 }

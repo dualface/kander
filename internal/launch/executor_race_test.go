@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/process"
 )
 
@@ -258,6 +259,42 @@ func TestReclaimThenTakeover(t *testing.T) {
 	}
 	record, _, err := board.CurrentExecution(root, taskID)
 	if err != nil || record.Kind != board.ExecutionTakeover || record.Status != board.ExecutionRunning {
+		t.Fatalf("record=%+v err=%v", record, err)
+	}
+}
+
+// A takeover that lands after commandAdopt read the card must not be adopted on
+// the strength of the old executor's liveness.
+func TestAdoptRefusesARecordNewerThanItsSnapshot(t *testing.T) {
+	root, _, _ := setupBoard(t)
+	taskID, _ := makeTodo(t, root, "adopt-race")
+	s, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "claude", Session: "claude old", Window: "foreground"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := loadEffective
+	t.Cleanup(func() { loadEffective = previous })
+	loadEffective = func() (*config.Config, error) {
+		if _, err := board.BeginTakeover(root, moved, board.TakeoverInput{Owner: "claude", Session: "claude new", Decision: "user"}); err != nil {
+			t.Fatal(err)
+		}
+		return previous()
+	}
+	adoptLiveness := adoptLivenessFn
+	t.Cleanup(func() { adoptLivenessFn = adoptLiveness })
+	adoptLivenessFn = func(board.Snapshot) liveness.Report {
+		t.Fatal("the probe ran for a record the snapshot did not read")
+		return liveness.Report{}
+	}
+	if err = commandAdopt(root, taskID, "user"); err == nil {
+		t.Fatal("the adoption bound the successor record")
+	}
+	record, _, err := board.CurrentExecution(root, taskID)
+	if err != nil || record.Status != board.ExecutionPending || record.Kind != board.ExecutionTakeover {
 		t.Fatalf("record=%+v err=%v", record, err)
 	}
 }

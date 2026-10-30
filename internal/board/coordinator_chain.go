@@ -243,7 +243,11 @@ func coordinatorAdvanceRounds(tx *Transaction, s Snapshot, m *CoordinatorMember,
 			m.DeliveryCommit = d.Completed.DeliveryCommit
 		}
 	}
+	// An open round is not passed yet, so the next walk starts at it.
 	m.DispatchSeq = uint64(len(rounds))
+	if bound != "" {
+		m.DispatchSeq--
+	}
 	return nil
 }
 

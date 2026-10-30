@@ -218,7 +218,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if moved.IsDirectory() {
 			moved.Document = joinBoard(moved.Path, "spec.md")
 		}
-		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry), fence: ExecutionFence{RecordID: tx.record.ID, Cycle: planCycle(Snapshot{Entry: s.Entry, Text: updated})}}
+		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry), fence: ExecutionFence{RecordID: tx.record.ID, Cycle: planCycle(Snapshot{Entry: s.Entry, Text: updated})}, record: tx.record.ID, pinned: true}
 		return nil
 	})
 	if err == nil && moved.State == "archived" && entry.State != "archived" {

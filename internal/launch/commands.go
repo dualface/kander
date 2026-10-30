@@ -123,10 +123,13 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if err != nil {
 		return err
 	}
-	text, err := readDocumentFn(entry)
+	// A snapshot pins the execution this resume acts for; a scan entry pins none.
+	current, err := board.ReadSnapshot(root, taskID)
 	if err != nil {
 		return err
 	}
+	entry = current.Entry
+	text := current.Text
 	if durable {
 		bound, e := board.ReadExecutionSnapshot(root, taskID, binding.Authorization)
 		if e != nil {

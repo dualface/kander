@@ -23,6 +23,10 @@ type Version struct {
 	fence ExecutionFence
 	// advanced stays true once an entrance saw the card ahead of this cursor.
 	advanced bool
+	// pinned is set when the cursor recorded record: the current execution
+	// record ID at the moment the cursor read the card, "" for no stored record.
+	pinned bool
+	record string
 }
 
 // Snapshot is a committed, consistent task document and its optimistic version.
@@ -393,7 +397,13 @@ func ReadSnapshotWithWarnings(root, id string, warnings *WarningLog) (s Snapshot
 	if err != nil {
 		return s, err
 	}
-	err = WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true, warnings: warnings}, func(tx *Transaction) error { var e error; s, e = tx.Snapshot(id); return e })
+	err = WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true, warnings: warnings}, func(tx *Transaction) error {
+		var e error
+		if s, e = tx.Snapshot(id); e != nil {
+			return e
+		}
+		return tx.pinExecution(s)
+	})
 	return s, err
 }
 

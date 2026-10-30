@@ -77,9 +77,9 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 		}
 	}
 	if unconfirmed {
-		// Rounds wait with the member: the mirror adopts none of them until a
-		// durable result ends the attempt, and the chain walk catches up then.
-		m.Dispatch = old.Dispatch
+		// No dispatch is active for an execution that has not started. The round
+		// the mirror held stays reachable: dispatch_seq stops before an open round,
+		// so the walk validates it once a durable result ends the attempt.
 		return m, nil
 	}
 	rounds, err := dispatchRounds(tx, s)

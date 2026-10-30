@@ -88,9 +88,11 @@ func TestCardLaunchesDeliverTheCardLanguageReminder(t *testing.T) {
 	assertLanguageReminder(t, cmd, taskFileFromCommand(t, cmd), "ko")
 
 	reviewed := filepath.Join(root, "review", filepath.Base(filepath.Dir(path)), "spec.md")
-	loaded, _ = board.LoadBoard(root)
-	entry, _ = board.Locate(loaded, taskID)
-	if _, err := NotifyViaResume(root, entry, mustRead(t, reviewed), "继续", 61); err != nil {
+	snapshot, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NotifyViaResume(root, snapshot.Entry, mustRead(t, reviewed), "继续", 61); err != nil {
 		t.Fatal(err)
 	}
 	cmd = lastCommand(t, root)
