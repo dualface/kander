@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
+	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -54,6 +57,20 @@ func sysctlError(err error) error {
 		return fmt.Errorf("%w: %v", ErrProcessDenied, err)
 	}
 	return err
+}
+
+// FileAccessTime returns when the kernel last recorded a read of a file. A mount
+// with noatime never moves it.
+func FileAccessTime(path string) (time.Time, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return time.Time{}, ErrProcessUnsupported
+	}
+	return time.Unix(stat.Atimespec.Unix()), nil
 }
 
 // BootIdentity returns the boot time in Unix seconds.

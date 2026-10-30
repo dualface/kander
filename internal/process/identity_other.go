@@ -2,7 +2,10 @@
 
 package process
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ProcessIdentitySupported reports whether this platform can observe a process.
 const ProcessIdentitySupported = false
@@ -17,6 +20,9 @@ func ObserveProcess(ctx context.Context, _ int) (ProcessFacts, error) {
 	}
 	return ProcessFacts{}, ErrProcessUnsupported
 }
+
+// FileAccessTime has no implementation on this platform.
+func FileAccessTime(string) (time.Time, error) { return time.Time{}, ErrProcessUnsupported }
 
 // BootIdentity has no implementation on this platform.
 func BootIdentity() (string, error) { return "", ErrProcessUnsupported }

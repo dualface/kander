@@ -96,6 +96,10 @@ func processError(err error) error {
 	return err
 }
 
+// FileAccessTime is not needed here: no image can change, and Windows does not
+// maintain the last access time by default.
+func FileAccessTime(string) (time.Time, error) { return time.Time{}, ErrProcessUnsupported }
+
 // BootIdentity derives the boot time in Unix seconds. Windows has no boot
 // identifier, so SameBoot compares this value with a tolerance.
 func BootIdentity() (string, error) {

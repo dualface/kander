@@ -27,49 +27,33 @@ func startScript(t *testing.T, name, body string) *exec.Cmd {
 	return cmd
 }
 
-// A shim execs the real binary after it started: the settled reading names the
-// binary that keeps running, and the configured agent name appears nowhere.
-func TestObserveSettledFollowsAShimExec(t *testing.T) {
-	cmd := startScript(t, "claude", "#!/bin/sh\nsleep 0.2\nexec sleep 30\n")
-	facts, err := ObserveSettled(context.Background(), cmd.Process.Pid, alwaysRunning)
+// A wrapper execs the real binary long after its start, and its first reading names
+// the interpreter. The reading after the evidence names the final image.
+func TestObserveWhenReadyReadsTheFinalImage(t *testing.T) {
+	cmd := startScript(t, "claude", "#!/bin/sh\nsleep 0.6\nexec sleep 30\n")
+	early, err := ObserveStarted(context.Background(), cmd.Process.Pid, alwaysRunning)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if facts.Executable != "sleep" {
-		t.Fatalf("facts=%+v", facts)
-	}
-	later, err := ObserveProcess(context.Background(), cmd.Process.Pid)
-	if err != nil || later != facts {
-		t.Fatalf("later %+v err=%v, recorded %+v", later, err, facts)
-	}
-}
-
-// A shim that works longer than the quiet window looks settled while it still runs
-// the interpreter. Only the start file proves an image, so the reading stays
-// unconfirmed, and the evidence of a running agent gives the final one.
-func TestQuietDoesNotConfirmALateShim(t *testing.T) {
-	cmd := startScript(t, "claude", "#!/bin/sh\nsleep 1.2\nexec sleep 30\n")
-	early, err := ObserveSettled(context.Background(), cmd.Process.Pid, alwaysRunning)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if early.Executable == "sleep" || ImageConfirmed(cmd.Path, early) {
-		t.Fatalf("early=%+v", early)
 	}
 	began := time.Now()
-	ready := func() bool { return time.Since(began) > 1500*time.Millisecond }
+	ready := func() bool { return time.Since(began) > time.Second }
 	final, err := ObserveWhenReady(context.Background(), early, alwaysRunning, ready)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if final.Executable != "sleep" || final.Start != early.Start {
+	if final.Executable != "sleep" || early.Executable == "sleep" || final.Start != early.Start {
 		t.Fatalf("final=%+v early=%+v", final, early)
 	}
 }
 
-func TestObserveSettledReportsAnExitDuringTheWait(t *testing.T) {
+func TestObserveWhenReadyReportsAnExit(t *testing.T) {
 	cmd := startScript(t, "short", "#!/bin/sh\nexec sleep 0.2\n")
-	if _, err := ObserveSettled(context.Background(), cmd.Process.Pid, alwaysRunning); !errors.Is(err, ErrProcessGone) {
+	first, err := ObserveStarted(context.Background(), cmd.Process.Pid, alwaysRunning)
+	if err != nil {
+		t.Fatal(err)
+	}
+	never := func() bool { return false }
+	if _, err := ObserveWhenReady(context.Background(), first, alwaysRunning, never); !errors.Is(err, ErrProcessGone) {
 		t.Fatalf("err=%v", err)
 	}
 }

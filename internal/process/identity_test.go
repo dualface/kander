@@ -5,9 +5,10 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
-	"strconv"
 	"testing"
+	"time"
 )
 
 func alwaysRunning() bool { return true }
@@ -99,22 +100,24 @@ func TestSameBoot(t *testing.T) {
 	}
 }
 
-// The ID was reused while the process settled. The later process is never recorded,
-// however stable it looks.
-func TestSettleRefusesALaterProcess(t *testing.T) {
-	first := ProcessFacts{PID: 7, Start: "100", Executable: "agent"}
+// The ID was reused while the launcher watched. The later process is never
+// recorded, however ready the agent looks.
+func TestAwaitReadyRefusesALaterProcess(t *testing.T) {
 	later := ProcessFacts{PID: 7, Start: "200", Executable: "agent"}
-	watched := &incarnation{pid: 7, running: alwaysRunning, observe: samples(first, later)}
-	if _, err := settle(context.Background(), watched); !errors.Is(err, ErrProcessReplaced) {
+	watched := &incarnation{pid: 7, start: "100", running: alwaysRunning, observe: samples(later)}
+	if _, err := awaitReady(context.Background(), watched, alwaysRunning); !errors.Is(err, ErrProcessReplaced) {
 		t.Fatalf("err=%v", err)
 	}
 }
 
-func TestAwaitReadyRefusesALaterProcess(t *testing.T) {
-	first := ProcessFacts{PID: 7, Start: "100", Executable: "dash"}
+func TestSampleKeepsTheFirstStartTime(t *testing.T) {
+	first := ProcessFacts{PID: 7, Start: "100", Executable: "agent"}
 	later := ProcessFacts{PID: 7, Start: "200", Executable: "agent"}
-	watched := &incarnation{pid: 7, start: first.Start, running: alwaysRunning, observe: samples(later)}
-	if _, err := awaitReady(context.Background(), watched, alwaysRunning); !errors.Is(err, ErrProcessReplaced) {
+	watched := &incarnation{pid: 7, running: alwaysRunning, observe: samples(first, later)}
+	if got, err := watched.sample(context.Background()); err != nil || got != first {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+	if _, err := watched.sample(context.Background()); !errors.Is(err, ErrProcessReplaced) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -123,31 +126,8 @@ func TestAwaitReadyRefusesALaterProcess(t *testing.T) {
 // read, where there is no earlier start time to compare.
 func TestSampleChecksTheStartHandleAfterTheRead(t *testing.T) {
 	facts := ProcessFacts{PID: 7, Start: "100", Executable: "agent"}
-	exited := func() bool { return false }
-	watched := &incarnation{pid: 7, running: exited, observe: samples(facts)}
-	if _, err := settle(context.Background(), watched); !errors.Is(err, ErrProcessGone) {
-		t.Fatalf("err=%v", err)
-	}
-}
-
-func TestSettleKeepsAnEarlyImageChange(t *testing.T) {
-	early := ProcessFacts{PID: 7, Start: "100", Executable: "dash"}
-	final := ProcessFacts{PID: 7, Start: "100", Executable: "agent"}
-	watched := &incarnation{pid: 7, running: alwaysRunning, observe: samples(early, final)}
-	got, err := settle(context.Background(), watched)
-	if err != nil || got != final {
-		t.Fatalf("got=%+v err=%v", got, err)
-	}
-}
-
-func TestSettleGivesUpOnAProcessThatKeepsChanging(t *testing.T) {
-	var n int
-	observe := func(context.Context, int) (ProcessFacts, error) {
-		n++
-		return ProcessFacts{PID: 7, Start: "100", Executable: strconv.Itoa(n)}, nil
-	}
-	watched := &incarnation{pid: 7, running: alwaysRunning, observe: observe}
-	if _, err := settle(context.Background(), watched); !errors.Is(err, ErrProcessUnsettled) {
+	watched := &incarnation{pid: 7, running: func() bool { return false }, observe: samples(facts)}
+	if _, err := watched.sample(context.Background()); !errors.Is(err, ErrProcessGone) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -165,19 +145,32 @@ func TestAwaitReadyReadsAfterTheEvidence(t *testing.T) {
 	}
 }
 
-func TestImageConfirmed(t *testing.T) {
-	for _, c := range []struct {
-		program, executable string
-		confirmed           bool
-	}{
-		{"/usr/bin/agent", "agent", true},
-		{"/opt/a-very-long-agent-binary-name", "a-very-long-agen", true},
-		{"/usr/bin/agent", "dash", !ImageCanChange},
-		{"/usr/bin/agent", "age", !ImageCanChange},
-		{"/usr/bin/agent", "", !ImageCanChange},
-	} {
-		if got := ImageConfirmed(c.program, ProcessFacts{Executable: c.executable}); got != c.confirmed {
-			t.Errorf("ImageConfirmed(%q, %q) = %v", c.program, c.executable, got)
-		}
+// The evidence of a running agent. A filesystem without access times skips this
+// test, and the launcher then keeps unknown; the skip names the gap in CI logs.
+func TestFileAccessTimeFollowsARead(t *testing.T) {
+	if !ProcessIdentitySupported || !ImageCanChange {
+		t.Skip("no use for access times on " + runtime.GOOS)
+	}
+	path := filepath.Join(t.TempDir(), "task")
+	if err := os.WriteFile(path, []byte("task"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := FileAccessTime(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if unchanged, err := FileAccessTime(path); err != nil || !unchanged.Equal(before) {
+		t.Fatalf("a stat moved the access time: %v %v", unchanged, err)
+	}
+	if _, err = os.ReadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	after, err := FileAccessTime(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.After(before) {
+		t.Skip("this filesystem records no access time")
 	}
 }

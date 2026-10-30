@@ -16,7 +16,7 @@ func TestOtherPlatformsReportNoProcessIdentity(t *testing.T) {
 	if _, err := ObserveProcess(context.Background(), os.Getpid()); !errors.Is(err, ErrProcessUnsupported) {
 		t.Fatalf("err=%v", err)
 	}
-	if _, err := ObserveSettled(context.Background(), os.Getpid(), func() bool { return true }); !errors.Is(err, ErrProcessUnsupported) {
+	if _, err := ObserveStarted(context.Background(), os.Getpid(), func() bool { return true }); !errors.Is(err, ErrProcessUnsupported) {
 		t.Fatalf("err=%v", err)
 	}
 	if _, err := BootIdentity(); !errors.Is(err, ErrProcessUnsupported) {
