@@ -441,18 +441,24 @@ func UnresolveExecution(root string, entry Entry, window, reason string) (Execut
 }
 
 // AdoptExecution keeps the running executor of an unfinished start and ends the
-// attempt. The caller proved the executor alive under a cursor bound to this
-// record, so a handoff in between refuses the write. The card stays unchanged.
-func AdoptExecution(root string, entry Entry, decision string) (ExecutionResult, error) {
+// attempt. observed is the snapshot the caller proved alive, with a cursor bound
+// to its record. A handoff in between refuses the write through the fence. A new
+// OWNER, SESSION or WINDOW on the same record refuses it here: the proof named the
+// old identity. The card stays unchanged.
+func AdoptExecution(root string, observed Snapshot, decision string) (ExecutionResult, error) {
 	if strings.TrimSpace(decision) == "" {
-		return ExecutionResult{}, kanbanError("board.adopt_decision_required", entry.TaskID)
+		return ExecutionResult{}, kanbanError("board.adopt_decision_required", observed.Entry.TaskID)
 	}
-	return executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
+	owner, session, window := cardExecutionFacts(observed)
+	return executionWrite(context.Background(), root, observed.Entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		cur := l.current
 		if !cur.StartUnfinished() {
 			return "", kanbanError("board.adopt_needs_unfinished_start", l.task, cur.Status)
 		}
-		if s.Entry.State != "working" && s.Entry.State != "review" || cur.Owner != MetadataFrom(s.Text, FieldOwner) || cur.Session != MetadataFrom(s.Text, FieldSession) {
+		if s.Entry.State != "working" && s.Entry.State != "review" || cur.Owner != owner || cur.Session != session {
+			return "", coordinatorError("start adoption binding")
+		}
+		if o, ses, w := cardExecutionFacts(s); o != owner || ses != session || w != window {
 			return "", coordinatorError("start adoption binding")
 		}
 		r := *cur

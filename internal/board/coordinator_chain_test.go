@@ -45,7 +45,7 @@ func TestReconcileAcceptsAChainOfUnobservedRecords(t *testing.T) {
 	if _, err := UnresolveExecution(root, s.Entry, "", "second failure"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AdoptExecution(root, bound(t, root, id).Entry, "user"); err != nil {
+	if _, err := AdoptExecution(root, bound(t, root, id), "user"); err != nil {
 		t.Fatal(err)
 	}
 	next := coordinatorReconcile(t, root, c)

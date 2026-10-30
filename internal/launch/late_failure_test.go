@@ -247,7 +247,7 @@ func adoptFixture(t *testing.T, root, task string) {
 	if _, err = board.BindExecutionCursor(root, s.Entry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = board.AdoptExecution(root, s.Entry, "user"); err != nil {
+	if _, err = board.AdoptExecution(root, s, "user"); err != nil {
 		t.Fatal(err)
 	}
 }

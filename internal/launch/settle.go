@@ -212,7 +212,7 @@ func commandAdopt(root, task, decision string) error {
 	if report := adoptLivenessFn(s); report.Status != liveness.Alive {
 		return launchError("launch.adopt_liveness_unconfirmed", s.Entry.TaskID, report.Status, report.Detail)
 	}
-	if _, err = board.AdoptExecution(root, s.Entry, decision); err != nil {
+	if _, err = board.AdoptExecution(root, s, decision); err != nil {
 		return err
 	}
 	fmt.Println(t("launch.adopted", s.Entry.TaskID, orNA(board.MetadataFrom(s.Text, board.FieldWindow))))

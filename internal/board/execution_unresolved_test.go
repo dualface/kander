@@ -138,7 +138,7 @@ func TestAdoptEndsAnUnfinishedStart(t *testing.T) {
 				}
 			}
 			before := transactionSnapshot(t, root, id)
-			if _, err := AdoptExecution(root, bound(t, root, id).Entry, "user"); err != nil {
+			if _, err := AdoptExecution(root, bound(t, root, id), "user"); err != nil {
 				t.Fatal(err)
 			}
 			r := cursorRecord(t, root, id)
@@ -161,13 +161,13 @@ func TestAdoptRefuses(t *testing.T) {
 	moved := startedCard(t, root, "adopt-refused")
 	id := moved.TaskID
 	var e *Error
-	if _, err := AdoptExecution(root, bound(t, root, id).Entry, " "); !errors.As(err, &e) || e.Code != "board.adopt_decision_required" {
+	if _, err := AdoptExecution(root, bound(t, root, id), " "); !errors.As(err, &e) || e.Code != "board.adopt_decision_required" {
 		t.Fatalf("err=%v", err)
 	}
 	if err := ConfirmTaskStart(root, moved); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AdoptExecution(root, bound(t, root, id).Entry, "user"); !errors.As(err, &e) || e.Code != "board.adopt_needs_unfinished_start" {
+	if _, err := AdoptExecution(root, bound(t, root, id), "user"); !errors.As(err, &e) || e.Code != "board.adopt_needs_unfinished_start" {
 		t.Fatalf("running: %v", err)
 	}
 }
@@ -182,7 +182,7 @@ func TestAdoptIsFencedToTheObservedRecord(t *testing.T) {
 	if _, err := BeginTakeover(root, taker.Entry, TakeoverInput{Owner: "claude", Session: "claude next", Decision: "user"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AdoptExecution(root, observed.Entry, "user"); err == nil {
+	if _, err := AdoptExecution(root, observed, "user"); err == nil {
 		t.Fatal("a stale observation adopted the new attempt")
 	}
 }
@@ -245,7 +245,7 @@ func TestSupersededLauncherStepsAside(t *testing.T) {
 			}
 		},
 		"adoption": func(t *testing.T, root, id string) {
-			if _, err := AdoptExecution(root, bound(t, root, id).Entry, "user"); err != nil {
+			if _, err := AdoptExecution(root, bound(t, root, id), "user"); err != nil {
 				t.Fatal(err)
 			}
 		},
@@ -301,7 +301,7 @@ func TestDispatchWaitsForAnUnfinishedStart(t *testing.T) {
 			if _, err := PrepareDispatch(root, in); !errors.As(err, &e) || e.Code != "board.dispatch_start_unfinished" {
 				t.Fatalf("err=%v", err)
 			}
-			if _, err := AdoptExecution(root, bound(t, root, id).Entry, "user"); err != nil {
+			if _, err := AdoptExecution(root, bound(t, root, id), "user"); err != nil {
 				t.Fatal(err)
 			}
 			prepareTestDispatch(t, root, in)
@@ -321,7 +321,7 @@ func TestLegacyPendingAcceptsAnAdoption(t *testing.T) {
 	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AdoptExecution(root, s.Entry, "user"); err != nil {
+	if _, err := AdoptExecution(root, s, "user"); err != nil {
 		t.Fatal(err)
 	}
 	if r := cursorRecord(t, root, id); r.Status != ExecutionRunning {

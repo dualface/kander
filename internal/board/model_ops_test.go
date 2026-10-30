@@ -98,7 +98,7 @@ func modelAdopt(w *modelWorld, m *modelMember) error {
 	if _, err = BindExecutionCursor(w.root, s.Entry); err != nil {
 		return err
 	}
-	_, err = AdoptExecution(w.root, s.Entry, "model-decision")
+	_, err = AdoptExecution(w.root, s, "model-decision")
 	return err
 }
 

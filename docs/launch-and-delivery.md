@@ -91,7 +91,7 @@ The judgement looks only at the card. Two limits follow:
 
 Until the attempt ends, `PrepareDispatch` and `RepairMissingSession` refuse the card with the next step, and `BeginTakeover` requires a decision. The launcher is the only writer during `pending`; a repair of `SESSION` would break the exact comparison in `ConfirmTaskStartSession`. A launcher that died leaves a `pending` record with the same two exits. Replaying a dispatch by its ID stays allowed, because a retried takeover needs it.
 
-`kander resume --adopt` binds a cursor to the record, probes the recorded address without reverse lookup, and calls `AdoptExecution`. Only `alive` passes. A handoff during the probe moves the record, so the fence refuses the write.
+`kander resume --adopt` binds a cursor to the record, probes the recorded address without reverse lookup, and calls `AdoptExecution`. Only `alive` passes. A handoff during the probe moves the record, so the fence refuses the write. `AdoptExecution` also compares `OWNER`, `SESSION` and `WINDOW` with the probed snapshot, so a new address on the same record refuses too.
 
 ## Start Success Conditions and Rollback
 

@@ -263,6 +263,36 @@ func TestReclaimThenTakeover(t *testing.T) {
 	}
 }
 
+// The liveness proof names one WINDOW. A new WINDOW on the same record is an
+// address nobody probed, so the adoption refuses it.
+func TestAdoptRefusesAnIdentityChangedDuringTheProbe(t *testing.T) {
+	root, _, _ := setupBoard(t)
+	taskID, _ := makeTodo(t, root, "adopt-identity")
+	s, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := board.BeginTaskStart(s.Entry, root, board.TaskStartInput{Owner: "claude", Session: "claude old", Window: "tmux:$1:@1:%1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := adoptLivenessFn
+	t.Cleanup(func() { adoptLivenessFn = previous })
+	adoptLivenessFn = func(board.Snapshot) liveness.Report {
+		if _, err := board.RecordExecutionWindow(root, moved, "tmux:$1:@2:%2", ""); err != nil {
+			t.Fatal(err)
+		}
+		return liveness.Report{Status: liveness.Alive}
+	}
+	if err = commandAdopt(root, taskID, "user"); err == nil {
+		t.Fatal("the adoption accepted an address the probe never saw")
+	}
+	record, _, err := board.CurrentExecution(root, taskID)
+	if err != nil || record.Status != board.ExecutionPending {
+		t.Fatalf("record=%+v err=%v", record, err)
+	}
+}
+
 // A takeover that lands after commandAdopt read the card must not be adopted on
 // the strength of the old executor's liveness.
 func TestAdoptRefusesARecordNewerThanItsSnapshot(t *testing.T) {

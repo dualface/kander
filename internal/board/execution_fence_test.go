@@ -36,7 +36,7 @@ func TestBindRefusesARecordNewerThanTheSnapshot(t *testing.T) {
 	if _, err := RecordExecutionWindow(root, stale.Entry, "tmux:old", ""); err == nil {
 		t.Fatal("the stale cursor rewrote the successor's WINDOW")
 	}
-	if _, err := AdoptExecution(root, stale.Entry, "user"); err == nil {
+	if _, err := AdoptExecution(root, stale, "user"); err == nil {
 		t.Fatal("the stale cursor adopted the successor")
 	}
 	if got := MetadataFrom(transactionSnapshot(t, root, id).Text, FieldWindow); got != "tmux:new" {
@@ -153,7 +153,7 @@ func TestPendingTakeoverDropsTheMirrorDispatchAndKeepsItsPosition(t *testing.T) 
 			}
 			if status == ExecutionUnresolved {
 				s = bound(t, root, id)
-				if _, err = AdoptExecution(root, s.Entry, "user"); err != nil {
+				if _, err = AdoptExecution(root, s, "user"); err != nil {
 					t.Fatal(err)
 				}
 			} else if err = ConfirmTaskStart(root, s.Entry); err != nil {
