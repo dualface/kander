@@ -355,7 +355,11 @@ func verifyPublishedReview(tx *Transaction, run ReviewRun) error {
 			return reviewError("missing sidecar")
 		}
 		manifest := ReviewManifest{Schema: 1, Input: ancestor.ReviewInput, SidecarHash: ReviewDigest(sidecar), Hashes: ancestor.Hashes}
-		for _, id := range ancestor.TaskIDs {
+		targets, err := reviewCopyTargets(tx, ancestor.TaskIDs)
+		if err != nil {
+			return err
+		}
+		for _, id := range targets {
 			if slices.Contains(ancestor.SkippedMembers, id) {
 				continue
 			}

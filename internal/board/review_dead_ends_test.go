@@ -408,6 +408,33 @@ func TestRunNamesTheMembersThatRemain(t *testing.T) {
 	}
 }
 
+// The incremental round names fewer members than its predecessor, and holds no
+// lock of the member that left.
+func TestIncrementalRunAfterAMemberLeft(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{gateCard(t, root, "next-stays"), gateCard(t, root, "next-leaves")}
+	gatePlan(t, root, ids, archiveRequirements())
+	first := gateRun(t, root, archiveInput(ids, "next-first", "PMQA"), deadEndFindings())
+	assignGate(t, root, first, map[string][]string{"PMQA-01": {ids[1]}})
+	gateRecord(t, root, first, ids[1], deadEndFinding(), "rejected")
+	target := strings.Repeat("f", 40)
+	advance := ReviewBatchAdvance{BatchID: "batch", ExpectedRevision: 1, Advance: ReviewAdvance{PreviousTarget: first.Commit, Target: target, Reason: "fix", Deliveries: map[string]string{target: ids[0]}}}
+	if err := AdvanceReviewBatch(root, advance); err != nil {
+		t.Fatal(err)
+	}
+	deadEndExit(t, root, ids[1], "trash")
+	in := archiveInput(ids[:1], "next-second", "PMQA")
+	in.Commit, in.PreviousRunID, in.ReviewedCommit = target, first.RunID, first.Commit
+	second := gateRun(t, root, in, emptyFindings())
+	assignGate(t, root, second, map[string][]string{})
+	if _, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": {RunID: second.RunID, PassedAt: second.Commit, Basis: "结论"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deadEndDone(t, root, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPublicationSkipsAMemberThatLeftDuringTheRun(t *testing.T) {
 	root := tempBoard(t)
 	ids := []string{gateCard(t, root, "pub-stays"), gateCard(t, root, "pub-leaves")}

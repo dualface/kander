@@ -69,18 +69,23 @@ func stageMemberExclusion(tx *Transaction, s Snapshot, target, text string, o Mo
 // reviewCopyTargets lists the members that still take a card copy. An archived
 // card is final, so it takes none even when it was never excluded; an excluded
 // card takes none in trash either. Skipping a copy exempts a card from no gate.
+// A later run names fewer members than its predecessor, so a caller may not hold
+// the lock of an excluded member: the record is read first, from the control group.
 func reviewCopyTargets(tx *Transaction, ids []string) ([]string, error) {
 	targets := make([]string, 0, len(ids))
 	for _, id := range ids {
-		s, err := tx.Snapshot(id)
-		if err != nil {
-			return nil, err
-		}
 		excluded, err := memberExcluded(tx, id)
 		if err != nil {
 			return nil, err
 		}
-		if s.Entry.State != "archived" && !excluded {
+		if excluded {
+			continue
+		}
+		s, err := tx.Snapshot(id)
+		if err != nil {
+			return nil, err
+		}
+		if s.Entry.State != "archived" {
 			targets = append(targets, id)
 		}
 	}

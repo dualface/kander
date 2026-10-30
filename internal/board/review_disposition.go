@@ -536,6 +536,13 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 			}
 			continue
 		}
+		excluded, err := memberExcluded(tx, d.TaskID)
+		if err != nil {
+			return l, err
+		}
+		if excluded {
+			continue
+		}
 		text, err := tx.Read(d.TaskID, dispositionPath(d))
 		if err != nil {
 			return l, err
