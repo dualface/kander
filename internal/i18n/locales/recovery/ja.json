@@ -34,7 +34,7 @@
   "launch.superseded": "superseded: {{.V0}}: takeover または引き取りがこの開始試行を終わらせました。コンテナとカードは変更していません",
   "launch.adopted": "adopted: {{.V0}} window={{.V1}}",
   "liveness.process_identity_legacy": "古いカードにはプロセス ID 情報がありません",
-  "liveness.process_identity_unrecorded": "起動側がプロセス ID 情報を記録していません。shim は executor の最初のカード書き込み後に記録されます",
+  "liveness.process_identity_unrecorded": "起動側がプロセス ID 情報を記録していません。executor がタスクファイルを読んだ後に記録されます",
   "liveness.process_platform_unsupported": "このプラットフォームではプロセス ID 情報を確認できません",
   "liveness.process_probe_denied": "プラットフォームがプロセスプローブを拒否しました: {{.V0}}",
   "liveness.process_rebooted": "システムが再起動しました",

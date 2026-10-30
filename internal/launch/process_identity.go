@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
@@ -13,40 +13,41 @@ import (
 	"github.com/dualface/kander/internal/terminal"
 )
 
-var observeSettledFn = process.ObserveSettled
+// Test seams: imageCanChange stands for a platform without exec.
+var (
+	observeStartedFn = process.ObserveStarted
+	imageCanChange   = process.ImageCanChange
+)
 
 // processRecorder returns the step that records the identity of a process a
 // launcher without a pane started. The identity is immutable, so it is written only
-// once the executable is final. The kernel image of a shim says nothing about the
-// exec still to come, and no signal announces it, so a shim waits for the first
-// executor evidence in the background: only a foreground Kander stays to do that.
-// Until then the check says unknown, never a mismatch for a healthy process. The
-// returned channel closes when the step ended.
-func processRecorder(root string, entry board.Entry, plan LaunchPlan) func(pid int, running func() bool, program string) <-chan struct{} {
+// once the executable is final. A running process can still exec, nothing announces
+// that, and a healthy agent must not read as a mismatch. The one fact only the agent
+// produces is the read of its task file: a shim never opens it, and neither a card
+// update nor a dispatch touches it. Until then the check says unknown. Only a
+// foreground Kander stays to watch; console exists on Windows, which has no exec.
+// The returned channel closes when the step ended.
+func processRecorder(root string, entry board.Entry, plan LaunchPlan, taskFile string) func(pid int, running func() bool) <-chan struct{} {
 	warn := plan.warning
 	if warn == nil {
 		warn = func(message string) { fmt.Fprint(os.Stderr, message) }
 	}
-	observed := observeSettledFn
-	ready := func() bool {
-		standing, err := board.ReadExecutionStanding(root, entry)
-		return err == nil && standing.Evidence
-	}
+	observed, watch := observeStartedFn, imageCanChange
+	read := taskFileRead(taskFile)
 	publish := func(identity board.ExecutionProcess) error {
 		_, err := board.RecordExecutionProcess(root, entry, identity)
 		return err
 	}
-	return func(pid int, running func() bool, program string) <-chan struct{} {
+	return func(pid int, running func() bool) <-chan struct{} {
 		done := make(chan struct{})
 		ctx := context.Background()
 		agent, err := observed(ctx, pid, running)
-		final := errors.Is(err, process.ErrProcessUnsupported) || err == nil && process.ImageConfirmed(resolvedProgram(program), agent)
-		if err == nil && !final && plan.OccupiesTerminal() {
+		if err == nil && watch {
 			go func() {
 				defer close(done)
 				// A failure stays silent: the terminal belongs to the agent, and
 				// the check names the missing identity.
-				if agent, err := process.ObserveWhenReady(ctx, agent, running, ready); err == nil {
+				if agent, err := process.ObserveWhenReady(ctx, agent, running, read); err == nil {
 					if identity, err := identityOf(ctx, plan, pid, agent); err == nil {
 						_ = publish(identity)
 					}
@@ -56,8 +57,6 @@ func processRecorder(root string, entry board.Entry, plan LaunchPlan) func(pid i
 		}
 		defer close(done)
 		switch {
-		case err == nil && !final:
-			err = process.ErrProcessUnsettled
 		case err == nil:
 			var identity board.ExecutionProcess
 			if identity, err = identityOf(ctx, plan, pid, agent); err == nil {
@@ -70,6 +69,20 @@ func processRecorder(root string, entry board.Entry, plan LaunchPlan) func(pid i
 			warn(t("launch.process_identity_not_recorded", entry.TaskID, err.Error()))
 		}
 		return done
+	}
+}
+
+// taskFileRead reports a read of the task file since this call; the launcher calls
+// it before the agent starts. The executor removes the file when it is done, which
+// counts too. A mount without access times never reports, so the check stays unknown.
+func taskFileRead(path string) func() bool {
+	baseline, err := process.FileAccessTime(path)
+	return func() bool {
+		if err != nil {
+			return false
+		}
+		current, e := process.FileAccessTime(path)
+		return errors.Is(e, fs.ErrNotExist) || e == nil && current.After(baseline)
 	}
 }
 
@@ -96,17 +109,6 @@ func identityOf(ctx context.Context, plan LaunchPlan, pid int, agent process.Pro
 		identity.KanderPID, identity.KanderStart = starter.PID, starter.Start
 	}
 	return identity, nil
-}
-
-// resolvedProgram follows PATH and symlinks to the file the kernel runs.
-func resolvedProgram(program string) string {
-	if found, err := lookPathExec(program); err == nil {
-		program = found
-	}
-	if real, err := filepath.EvalSymlinks(program); err == nil {
-		return real
-	}
-	return program
 }
 
 // refuseNativeResume keeps the boundary of foreground and console: a session there

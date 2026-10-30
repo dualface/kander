@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,26 @@ import (
 )
 
 func stillRunning() bool { return true }
+
+// recordProcess publishes the identity of a foreground process, optionally with
+// another starter start time.
+func recordProcess(t *testing.T, root string, moved board.Entry, pid int, starterStart string) {
+	t.Helper()
+	agent, err := process.ObserveProcess(context.Background(), pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := identityOf(context.Background(), LaunchPlan{Launcher: "foreground"}, pid, agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if starterStart != "" {
+		identity.KanderStart = starterStart
+	}
+	if _, err = board.RecordExecutionProcess(root, moved, identity); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // startSleeper starts a real process whose kernel image is the started file.
 func startSleeper(t *testing.T) *exec.Cmd {
@@ -73,6 +94,7 @@ func observeCard(t *testing.T, root, task string) liveness.Report {
 // foregroundClaude installs a fake claude: it needs no session discovery.
 func foregroundClaude(t *testing.T, bin, script string) {
 	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
 	foregroundAgent(t, bin)
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -102,11 +124,45 @@ func endForeground(result StartResult) {
 	}
 }
 
-// The configured agent is a shim, so quiet proves nothing about its image. Nothing
-// is recorded until the executor wrote the card; the identity then holds what the
-// kernel reports, and the agent name appears nowhere in it.
-func TestForegroundShimIsRecordedAfterTheExecutorWrote(t *testing.T) {
+// readTaskFile does what the agent does first. The launcher wrote one task file.
+func readTaskFile(t *testing.T, task string) {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(os.TempDir(), "kander-"+task+"-*"))
+	if err != nil || len(files) != 1 {
+		t.Fatalf("task files %v err=%v", files, err)
+	}
+	if _, err = os.ReadFile(files[0]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// requireAccessTimes skips where the mount records no read: the launcher then keeps
+// unknown, and there is nothing to publish.
+func requireAccessTimes(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "probe")
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := process.FileAccessTime(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if _, err = os.ReadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if after, err := process.FileAccessTime(path); err != nil || !after.After(before) {
+		t.Skip("the task file directory records no access time")
+	}
+}
+
+// The configured agent is a shim. Nothing is recorded until the agent read its task
+// file; the identity then holds what the kernel reports, and the agent name appears
+// nowhere in it.
+func TestForegroundIdentityWaitsForTheTaskFileRead(t *testing.T) {
 	skipOnWindows(t)
+	requireAccessTimes(t)
 	root, _, bin := setupBoard(t)
 	task, result := startForeground(t, root, bin, "identity-start")
 	if record, _, err := board.CurrentExecution(root, task); err != nil || record.Process != nil {
@@ -115,7 +171,7 @@ func TestForegroundShimIsRecordedAfterTheExecutorWrote(t *testing.T) {
 	if got := observeCard(t, root, task); got.Status != liveness.Unknown {
 		t.Fatalf("report=%+v", got)
 	}
-	executorWrite(t, root, task)
+	readTaskFile(t, task)
 	awaitIdentity(t, root, task, result)
 	identity := requireIdentity(t, root, task)
 	self, err := process.ObserveProcess(context.Background(), os.Getpid())
@@ -141,44 +197,113 @@ func TestForegroundShimIsRecordedAfterTheExecutorWrote(t *testing.T) {
 	}
 }
 
-// The regression of a shim slower than the quiet window: it stays unknown while it
-// initializes and reads alive afterwards, never identity-mismatch.
-func TestLateExecShimIsNeverAMismatch(t *testing.T) {
+func awaitExec(t *testing.T, pid int) {
+	t.Helper()
+	for {
+		facts, err := process.ObserveProcess(context.Background(), pid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if facts.Executable == "sleep" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// A card write while the shim still initializes proves nothing: a person or a
+// dispatch can make it. It stays unknown, and reads alive once the agent runs.
+func TestACardWriteBeforeTheExecRecordsNothing(t *testing.T) {
 	skipOnWindows(t)
+	requireAccessTimes(t)
 	root, _, bin := setupBoard(t)
 	foregroundClaude(t, bin, "#!/bin/sh\nsleep 1.5\nexec sleep 30\n")
-	task, _ := makeTodo(t, root, "identity-late-shim")
+	task, _ := makeTodo(t, root, "identity-human-write")
 	result, err := Start(root, "claude", "foreground", task)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { endForeground(result) })
+	executorWrite(t, root, task)
+	awaitExec(t, result.Outcome.Process.Pid)
 	if got := observeCard(t, root, task); got.Status != liveness.Unknown {
 		t.Fatalf("report=%+v", got)
 	}
-	for facts := (process.ProcessFacts{}); facts.Executable != "sleep"; {
-		if facts, err = process.ObserveProcess(context.Background(), result.Outcome.Process.Pid); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	executorWrite(t, root, task)
+	readTaskFile(t, task)
 	awaitIdentity(t, root, task, result)
+	if identity := requireIdentity(t, root, task); identity.Executable != "sleep" {
+		t.Fatalf("identity=%+v", identity)
+	}
 	if got := observeCard(t, root, task); got.Status != liveness.Alive {
 		t.Fatalf("report=%+v", got)
 	}
 }
 
-// A started file the kernel runs itself needs no evidence.
-func TestAProgramThatIsItsOwnImageIsRecordedAtOnce(t *testing.T) {
+// A native wrapper: the kernel image is the started file itself, and it execs late.
+// Neither the name nor any quiet time records it.
+func TestLateExecOfANativeWrapperIsNeverAMismatch(t *testing.T) {
 	skipOnWindows(t)
+	requireAccessTimes(t)
 	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "identity-native")
-	sleeper := startSleeper(t)
+	task, _ := makeTodo(t, root, "identity-wrapper")
+	path := filepath.Join(t.TempDir(), "task")
+	if err := os.WriteFile(path, []byte("task"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wrapper := exec.Command("sh", "-c", "sleep 1.5; exec sleep 30")
 	moved := beginDirect(t, root, task, "foreground")
-	processRecorder(root, moved, LaunchPlan{Launcher: "foreground"})(sleeper.Process.Pid, stillRunning, "sleep")
-	if identity := requireIdentity(t, root, task); identity.KanderPID != os.Getpid() || identity.Executable != "sleep" {
+	record := processRecorder(root, moved, LaunchPlan{Launcher: "foreground"}, path)
+	if err := wrapper.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = wrapper.Process.Kill(); _ = wrapper.Wait() })
+	var exited atomic.Bool
+	done := record(wrapper.Process.Pid, func() bool { return !exited.Load() })
+	t.Cleanup(func() { exited.Store(true); <-done })
+	time.Sleep(time.Second)
+	if current, _, err := board.CurrentExecution(root, task); err != nil || current.Process != nil {
+		t.Fatalf("recorded before the exec: %+v err=%v", current, err)
+	}
+	awaitExec(t, wrapper.Process.Pid)
+	if _, err := os.ReadFile(path); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the identity step did not end")
+	}
+	if identity := requireIdentity(t, root, task); identity.Executable != "sleep" {
 		t.Fatalf("identity=%+v", identity)
+	}
+	if got := observeCard(t, root, task); got.Status != liveness.Alive {
+		t.Fatalf("report=%+v", got)
+	}
+}
+
+// An executor that finished removes its task file; that is a read too.
+func TestARemovedTaskFileCountsAsRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "task")
+	if err := os.WriteFile(path, []byte("task"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	read := taskFileRead(path)
+	if read() {
+		t.Fatal("an untouched file reads as read")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if !read() {
+		t.Fatal("a removed file does not read as read")
+	}
+}
+
+// A task file that cannot be read at the start gives no evidence, so the check keeps
+// unknown instead of guessing.
+func TestAMissingTaskFileIsNoEvidence(t *testing.T) {
+	if taskFileRead(filepath.Join(t.TempDir(), "missing"))() {
+		t.Fatal("a file that never existed reads as read")
 	}
 }
 
@@ -191,7 +316,7 @@ func TestRecorderRefusesAProcessItsHandleLost(t *testing.T) {
 	moved := beginDirect(t, root, task, "foreground")
 	warnings := ""
 	plan := LaunchPlan{Launcher: "foreground", warning: func(message string) { warnings += message }}
-	processRecorder(root, moved, plan)(sleeper.Process.Pid, func() bool { return false }, "sleep")
+	<-processRecorder(root, moved, plan, "")(sleeper.Process.Pid, func() bool { return false })
 	record, _, err := board.CurrentExecution(root, task)
 	if err != nil || record.Process != nil || !strings.Contains(warnings, task) {
 		t.Fatalf("record=%+v warnings=%q err=%v", record, warnings, err)
@@ -205,11 +330,11 @@ func TestStartWithoutAProcessIdentityRecordsNothing(t *testing.T) {
 	root, _, bin := setupBoard(t)
 	foregroundClaude(t, bin, "#!/bin/sh\nexit 0\n")
 	task, _ := makeTodo(t, root, "identity-gone")
-	oldObserve := observeSettledFn
-	observeSettledFn = func(context.Context, int, func() bool) (process.ProcessFacts, error) {
+	oldObserve := observeStartedFn
+	observeStartedFn = func(context.Context, int, func() bool) (process.ProcessFacts, error) {
 		return process.ProcessFacts{}, process.ErrProcessGone
 	}
-	t.Cleanup(func() { observeSettledFn = oldObserve })
+	t.Cleanup(func() { observeStartedFn = oldObserve })
 	result, err := Start(root, "claude", "foreground", task)
 	if err != nil {
 		t.Fatal(err)
@@ -236,11 +361,11 @@ func TestStartWithoutAProcessIdentityRecordsNothing(t *testing.T) {
 func TestUnsupportedPlatformRecordsThePIDAlone(t *testing.T) {
 	root, _, _ := setupBoard(t)
 	task, _ := makeTodo(t, root, "identity-unsupported")
-	oldObserve := observeSettledFn
-	observeSettledFn = func(context.Context, int, func() bool) (process.ProcessFacts, error) {
+	oldObserve := observeStartedFn
+	observeStartedFn = func(context.Context, int, func() bool) (process.ProcessFacts, error) {
 		return process.ProcessFacts{}, process.ErrProcessUnsupported
 	}
-	t.Cleanup(func() { observeSettledFn = oldObserve })
+	t.Cleanup(func() { observeStartedFn = oldObserve })
 	s, err := board.ReadSnapshot(root, task)
 	if err != nil {
 		t.Fatal(err)
@@ -249,21 +374,25 @@ func TestUnsupportedPlatformRecordsThePIDAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	processRecorder(root, moved, LaunchPlan{Launcher: "console"})(1234, stillRunning, "agent")
+	<-processRecorder(root, moved, LaunchPlan{Launcher: "console"}, "")(1234, stillRunning)
 	identity := requireIdentity(t, root, task)
 	if identity != (board.ExecutionProcess{Launcher: "console", AgentPID: 1234, RecordedAt: identity.RecordedAt}) {
 		t.Fatalf("identity=%+v", identity)
 	}
 }
 
-// console has no waiting Kander, so the starter fields stay empty.
+// Without exec the image is final at once, and console has no waiting Kander, so the
+// starter fields stay empty.
 func TestConsoleIdentityHasNoStarter(t *testing.T) {
 	skipOnWindows(t)
 	root, _, _ := setupBoard(t)
 	task, _ := makeTodo(t, root, "identity-console")
 	sleeper := startSleeper(t)
 	moved := beginDirect(t, root, task, "console")
-	processRecorder(root, moved, LaunchPlan{Launcher: "console"})(sleeper.Process.Pid, stillRunning, "sleep")
+	previous := imageCanChange
+	imageCanChange = false
+	t.Cleanup(func() { imageCanChange = previous })
+	<-processRecorder(root, moved, LaunchPlan{Launcher: "console"}, "")(sleeper.Process.Pid, stillRunning)
 	identity := requireIdentity(t, root, task)
 	if identity.Launcher != "console" || identity.KanderPID != 0 || identity.KanderStart != "" || identity.Executable != "sleep" {
 		t.Fatalf("identity=%+v", identity)
@@ -316,7 +445,7 @@ func TestAdoptUsesTheProcessIdentity(t *testing.T) {
 	task, _ := makeTodo(t, root, "adopt-identity")
 	sleeper := startSleeper(t)
 	moved := beginDirect(t, root, task, "foreground")
-	processRecorder(root, moved, LaunchPlan{Launcher: "foreground"})(sleeper.Process.Pid, stillRunning, "sleep")
+	recordProcess(t, root, moved, sleeper.Process.Pid, "")
 	_ = sleeper.Process.Kill()
 	_ = sleeper.Wait()
 	if _, _, err := capture(t, func() error { return commandAdopt(root, task, "user") }); err == nil || !strings.Contains(err.Error(), liveness.Stopped) {
@@ -333,19 +462,8 @@ func TestAdoptAcceptsAnOrphanedForegroundExecutor(t *testing.T) {
 	task, _ := makeTodo(t, root, "adopt-orphan")
 	sleeper := startSleeper(t)
 	moved := beginDirect(t, root, task, "foreground")
-	agent, err := process.ObserveProcess(context.Background(), sleeper.Process.Pid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := identityOf(context.Background(), LaunchPlan{Launcher: "foreground"}, sleeper.Process.Pid, agent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity.KanderStart = "another-start"
-	if _, err = board.RecordExecutionProcess(root, moved, identity); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err = capture(t, func() error { return commandAdopt(root, task, "user") }); err != nil {
+	recordProcess(t, root, moved, sleeper.Process.Pid, "another-start")
+	if _, _, err := capture(t, func() error { return commandAdopt(root, task, "user") }); err != nil {
 		t.Fatal(err)
 	}
 	requireRecord(t, root, task, board.ExecutionRunning)
@@ -382,7 +500,8 @@ func TestForegroundHasNoNativeResume(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			task, result := startForeground(t, root, bin, "no-resume-"+strings.ReplaceAll(name, " ", "-"))
 			if recorded {
-				executorWrite(t, root, task)
+				requireAccessTimes(t)
+				readTaskFile(t, task)
 				awaitIdentity(t, root, task, result)
 			}
 			s, err := board.ReadSnapshot(root, task)

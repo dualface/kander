@@ -300,7 +300,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		}
 		plan.judge = lateFailureJudge(root, moved)
 		if !plan.capabilities().Container {
-			plan.processRecord = processRecorder(root, moved, plan)
+			plan.processRecord = processRecorder(root, moved, plan, taskFile)
 		}
 	}
 	launchStart = nowFn()

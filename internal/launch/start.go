@@ -133,7 +133,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	plan.judge = lateFailureJudge(root, moved)
 	if !plan.capabilities().Container {
-		plan.processRecord = processRecorder(root, moved, plan)
+		plan.processRecord = processRecorder(root, moved, plan, taskFile)
 	}
 	name := windowName(entry, original)
 	var launchStart time.Time
