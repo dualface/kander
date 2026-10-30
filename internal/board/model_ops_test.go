@@ -48,22 +48,58 @@ func modelLive(f *modelFacts, i int) bool {
 	return m.executor || m.self
 }
 
-// modelLauncherFail is launchAgent's fail(): the container closes first, then
-// rollbackLaunch restores the todo text through the launcher's cursor.
+// modelLauncherFail is launchAgent's fail() and settleFailedLaunch: the launcher
+// judges first. A superseded launcher touches nothing. Evidence keeps the executor
+// and ends the attempt as unresolved. Without evidence the container closes and
+// the todo text comes back through the launcher's cursor.
 func modelLauncherFail(w *modelWorld, m *modelMember, cause string) error {
 	s, err := w.snapshot(m)
 	if err != nil {
 		return err
 	}
-	m.executor = false
 	entry := w.launcherEntry(m, s)
+	standing, err := ReadExecutionStanding(w.root, entry)
+	if err != nil {
+		return err
+	}
 	m.launcher = nil
+	if standing.Superseded {
+		return nil
+	}
+	if standing.Evidence {
+		return modelUnresolve(w, m, entry, cause)
+	}
+	m.executor = false
 	if err := RollbackDocument(w.root, entry, m.original, "todo"); err != nil {
 		m.stranded = cause
 	} else {
 		m.stranded = ""
 	}
 	return nil
+}
+
+func modelUnresolve(w *modelWorld, m *modelMember, entry Entry, cause string) error {
+	if _, err := UnresolveExecution(w.root, entry, "", cause); err != nil {
+		m.stranded = cause
+	}
+	return nil
+}
+
+// modelUnfinished reports a start attempt no launcher is left to finish.
+func modelUnfinished(f *modelFacts, i int) bool {
+	return f.world.members[i].launcher == nil && f.attempts[i].StartUnfinished()
+}
+
+func modelAdopt(w *modelWorld, m *modelMember) error {
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	if _, err = BindExecutionCursor(w.root, s.Entry); err != nil {
+		return err
+	}
+	_, err = AdoptExecution(w.root, s.Entry, "model-decision")
+	return err
 }
 
 func modelLifecycleOps() []modelOp {
@@ -94,7 +130,7 @@ func modelLifecycleOps() []modelOp {
 				}
 				entry := w.launcherEntry(m, s)
 				m.launcher = nil
-				if err := ConfirmTaskStart(w.root, entry); err != nil {
+				if err := ConfirmTaskStart(w.root, entry); err != nil && !errors.Is(err, ErrExecutionSuperseded) {
 					m.stranded = "confirm-binding"
 				}
 				return nil
@@ -106,7 +142,12 @@ func modelLifecycleOps() []modelOp {
 				if err != nil {
 					return err
 				}
-				if err := ConfirmTaskStartSession(w.root, w.launcherEntry(m, s), modelExecutor, modelExecutor+" exact-session"); err != nil {
+				err = ConfirmTaskStartSession(w.root, w.launcherEntry(m, s), modelExecutor, modelExecutor+" exact-session")
+				if errors.Is(err, ErrExecutionSuperseded) {
+					m.launcher = nil
+					return nil
+				}
+				if err != nil {
 					cause := "confirm-session"
 					if authFrom(s.Text).DispatchID != "" {
 						cause = "confirm-dispatch"
@@ -121,6 +162,26 @@ func modelLifecycleOps() []modelOp {
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error {
 				return modelLauncherFail(w, m, "rollback")
 			}},
+		{name: "L.closeFailed", cli: "kander start: late launch failure, and closing the container fails; no rollback (T-01)",
+			guard: func(f *modelFacts, i int) bool { return f.world.members[i].launcher != nil },
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error {
+				s, err := w.snapshot(m)
+				if err != nil {
+					return err
+				}
+				entry := w.launcherEntry(m, s)
+				m.launcher = nil
+				return modelUnresolve(w, m, entry, "close-failed")
+			}},
+		{name: "H.adopt", cli: "kander resume <id> --adopt --decision <ref>: keeps a live executor",
+			guard: func(f *modelFacts, i int) bool { return f.attempts[i].StartUnfinished() && f.world.members[i].executor },
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return modelAdopt(w, m) }},
+		{name: "H.handoff", cli: "kander resume <id> --agent <agent> --decision <ref>, on a start attempt that has not ended",
+			guard: func(f *modelFacts, i int) bool {
+				state := f.cards[i].Entry.State
+				return f.attempts[i].StartUnfinished() && (state == "working" || state == "review")
+			},
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return modelTakeover(w, m) }},
 		{name: "X.write", cli: "executor: kander update <id> --document spec.md --expect-revision <rev>",
 			guard: func(f *modelFacts, i int) bool { return modelLive(f, i) && f.cards[i].Entry.State == "working" },
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error {
@@ -570,10 +631,27 @@ func (w *modelWorld) finishMember(m *modelMember) error {
 			entry := w.launcherEntry(m, s)
 			m.launcher = nil
 			// A launcher a takeover overtook ends here; the new execution goes on.
-			if err := ConfirmTaskStart(w.root, entry); err != nil {
+			if err := ConfirmTaskStart(w.root, entry); err != nil && !errors.Is(err, ErrExecutionSuperseded) {
 				m.stranded = "confirm-binding"
 			}
 			continue
+		}
+		if !modelTerminal(s.Entry.State) {
+			f, err := w.read()
+			if err != nil {
+				return err
+			}
+			if modelUnfinished(f, f.index(m)) {
+				if m.executor {
+					err = modelAdopt(w, m)
+				} else {
+					err = modelTakeover(w, m)
+				}
+				if err != nil {
+					return err
+				}
+				continue
+			}
 		}
 		if s.Entry.State == "todo" {
 			if err := modelClaim(w, m, MoveOptions{Owner: modelTaker}); err != nil {

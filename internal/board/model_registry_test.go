@@ -9,7 +9,6 @@ import (
 
 // Cards that own the follow-up work the registries below name.
 const (
-	cardIssue22  = "20261030-gh-dualface-kander-22-task"
 	cardEvidence = "20261030-review-evidence-dead-ends-task"
 	cardRecovery = "20261030-group-member-recovery-task"
 )
@@ -265,12 +264,6 @@ var modelDeadEnds = []modelDeadEnd{
 	{id: "DE-11", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool {
 		return d.has("previous closed batch required") || d.has("closed batch chain mismatch")
 	}},
-	// The takeover handoff gives these four an exit in the model. What stays is
-	// the launcher's half, which the board model cannot see.
-	{id: "DE-01", owner: cardIssue22, class: modelDirected, proof: "internal/launch:TestDeadEndStartClosesContainerOverExecutorWork"},
-	{id: "DE-03", owner: cardIssue22, class: modelDirected, proof: "internal/board:TestDeadEndDispatchBindsAPendingStart"},
-	{id: "DE-04", owner: cardIssue22, class: modelDirected, proof: "internal/board:TestDeadEndConfirmAfterHandoffIsAnError"},
-	{id: "DE-15", owner: cardIssue22, class: modelDirected, proof: "internal/board:TestDeadEndDispatchBindsAPendingStart"},
 	{id: "DE-18", owner: cardRecovery, class: modelDirected, proof: "internal/launch:TestCoordinatorRechecksActualGitAfterWrapUpRestart"},
 }
 

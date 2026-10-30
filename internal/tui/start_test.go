@@ -187,6 +187,42 @@ func TestStartBackgroundCompletion(t *testing.T) {
 	}
 }
 
+func TestStartDialogShowsTheOtherResults(t *testing.T) {
+	unresolved := &launch.UnresolvedError{TaskID: "start-task", Window: "herdr:w1:p9", Reason: "discovery failed", Command: "kander"}
+	cases := map[string]struct {
+		result launch.StartResult
+		err    error
+		failed bool
+		want   []string
+	}{
+		"unresolved": {err: unresolved, failed: true, want: []string{"started-unresolved: start-task window=herdr:w1:p9 reason=discovery failed", "--adopt --decision", "--agent <agent> --decision"}},
+		"superseded": {result: launch.StartResult{TaskID: "start-task", Superseded: true}, want: []string{"start-task"}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			app := startTestApp("todo")
+			app.StartTask = func(startRequest) (launch.StartResult, error) { return c.result, c.err }
+			p := program{app: app}
+			app.confirmSelectedStart()
+			finishStartPreview(app)
+			_, cmd := p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+			p.Update(cmd())
+			dialog := app.StartConfirmation
+			if dialog == nil || dialog.phase != confirmFinished || dialog.failed != c.failed {
+				t.Fatalf("dialog %+v", dialog)
+			}
+			for _, want := range c.want {
+				if !strings.Contains(dialog.message, want) {
+					t.Fatalf("missing %q: %s", want, dialog.message)
+				}
+			}
+			if app.startNotice != nil {
+				t.Fatal("a start that did not succeed left the success notice")
+			}
+		})
+	}
+}
+
 func TestBacklogStartUsesControlledGate(t *testing.T) {
 	root := t.TempDir()
 	for _, state := range board.States {

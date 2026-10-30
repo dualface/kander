@@ -33,8 +33,7 @@ const (
 	ExecutionHandedOff  = "handed-off"
 )
 
-// Execution transition kinds. Unresolve and adopt have no writer yet: their
-// format is fixed here and the coordinator already accepts them.
+// Execution transition kinds.
 const (
 	TransitionStart           = "start"
 	TransitionConfirm         = "confirm"
@@ -107,6 +106,12 @@ type ExecutionTransition struct {
 // ExecutionTerminal reports a record that no longer owns the card.
 func (r ExecutionRecord) ExecutionTerminal() bool {
 	return r.Status == ExecutionRolledBack || r.Status == ExecutionHandedOff
+}
+
+// StartUnfinished reports a start attempt that no launcher, adoption or takeover
+// ended yet. Only those three may change the execution until one of them does.
+func (r ExecutionRecord) StartUnfinished() bool {
+	return r.Status == ExecutionPending || r.Status == ExecutionUnresolved
 }
 
 // SelfClaimed reports a record no launcher started, so no session exists.
@@ -370,6 +375,14 @@ type executionLedger struct {
 
 func (l executionLedger) end() uint64 { return uint64(len(l.chain)) }
 
+// supersedes reports that a handoff, an adoption or a reclaim ended the record a
+// launcher fenced. The launcher no longer speaks for the execution.
+func (l executionLedger) supersedes(f ExecutionFence) bool {
+	return f.launcher && slices.ContainsFunc(l.chain, func(t ExecutionTransition) bool {
+		return t.FromRecord == f.RecordID && (t.Kind == TransitionHandoff || t.Kind == TransitionAdopt || t.Kind == TransitionReclaim)
+	})
+}
+
 // tail returns the facts the last link leaves behind.
 func (l executionLedger) tail() (ExecutionTransition, bool) {
 	if len(l.chain) == 0 {
@@ -447,11 +460,11 @@ func (l executionLedger) assertCard(s Snapshot) error {
 	if len(l.chain) > l.synthesized {
 		unrecorded = unrecorded || t.NewOwner != MetadataFrom(s.Text, FieldOwner) || t.NewSession != MetadataFrom(s.Text, FieldSession) || t.NewWindow != MetadataFrom(s.Text, FieldWindow)
 	}
-	if l.current != nil && l.current.Status == ExecutionPending && (l.current.Owner != MetadataFrom(s.Text, FieldOwner) || l.current.Session != MetadataFrom(s.Text, FieldSession)) {
+	if l.current != nil && l.current.StartUnfinished() && (l.current.Owner != MetadataFrom(s.Text, FieldOwner) || l.current.Session != MetadataFrom(s.Text, FieldSession)) {
 		unrecorded = true
 	}
 	if unrecorded {
-		if l.current != nil && l.current.Status == ExecutionPending {
+		if l.current != nil && l.current.StartUnfinished() {
 			return coordinatorError("pending start facts changed")
 		}
 		return coordinatorError("execution cycle changed without lifecycle handoff")
@@ -543,6 +556,9 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 	if err != nil {
 		return err
 	}
+	if l.supersedes(fence) {
+		return ErrExecutionSuperseded
+	}
 	cur := l.current
 	if cur == nil || !fence.launcher || cur.ID != fence.RecordID || cur.Status != ExecutionPending {
 		return stageWindowRestore(tx, s, text, &l)
@@ -580,7 +596,7 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 	if status == "" {
 		return coordinatorError("start rollback binding")
 	}
-	restored := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, PreviousID: cur.ID, Cycle: cur.Cycle, Kind: replaced.Kind, Status: status, Owner: t.NewOwner, Session: t.NewSession, Window: t.NewWindow, Revision: s.Revision + 1}
+	restored := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, PreviousID: cur.ID, Cycle: cur.Cycle, Kind: replaced.Kind, Status: status, Owner: t.NewOwner, Session: t.NewSession, Window: t.NewWindow, Revision: s.Revision + 1, Failure: replaced.Failure}
 	t.ToRecord = restored.ID
 	if err := publishRecord(tx, restored); err != nil {
 		return err

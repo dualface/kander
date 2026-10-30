@@ -48,7 +48,10 @@ func legacyAttempts(tx *Transaction, task string) ([]ExecutionRecord, error) {
 		if e != nil {
 			return nil, e
 		}
-		if exists {
+		// A result of this binary has its own stored link: an adoption or a
+		// rollback of a legacy attempt continues the chain, it does not extend
+		// the prefix that the stored links were numbered after.
+		if exists && result.Schema == 0 {
 			next = result
 		}
 		ordered = append(ordered, next)

@@ -41,6 +41,9 @@ func (s AgentSession) Render() string {
 type LaunchPlan struct {
 	warning         func(string)
 	sessionFinalize func(AgentSession) error
+	// judge decides what a failed launch may destroy. A launch that owns no
+	// start attempt leaves it nil and always cleans up.
+	judge func() launchVerdict
 	// sessionFileDeclared marks an agent whose session.file declaration means
 	// its own integration reports a path-kind session identity; the proactive
 	// id report is skipped for it.
@@ -69,6 +72,13 @@ func (p LaunchPlan) backend() terminal.Backend {
 // when extended_launch_timeouts is off.
 func (p LaunchPlan) launchTimeout(base time.Duration) time.Duration {
 	return config.LaunchTimeout(p.extendedTimeouts, base)
+}
+
+func (p LaunchPlan) judgeFailure() launchVerdict {
+	if p.judge == nil {
+		return verdictCleanup
+	}
+	return p.judge()
 }
 
 func (p LaunchPlan) capabilities() terminal.Capabilities {
@@ -125,6 +135,9 @@ type LaunchFailure struct {
 	DeliveryUnknown bool
 	Err             error
 	CloseError      string
+	Verdict         launchVerdict
+	// Outcome is what the attempt left running, as far as it got.
+	Outcome LaunchOutcome
 }
 
 func (f *LaunchFailure) Error() string {
@@ -177,4 +190,5 @@ var (
 	readDocumentFn      = board.ReadDocument
 	beginStartFn        = board.BeginTaskStart
 	beginTakeoverFn     = board.BeginTakeover
+	readStandingFn      = board.ReadExecutionStanding
 )

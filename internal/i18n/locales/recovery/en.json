@@ -21,5 +21,16 @@
   "board.dispatch_end_decision_required": "Dispatch {{.V0}} was accepted, so its executor may still be running. Next step: stop the executor, then rerun with --decision <user-decision-reference>.",
   "board.update_group_checkpointed": "Group {{.V0}} has a coordinator checkpoint, so its member set is frozen and TASK_GROUP cannot change.",
   "board.update_hint_group_checkpointed": "Next step: keep the TASK_GROUP line as it is; move new work into a separate group or a standalone card.",
-  "launch.execution_has_no_session": "{{.V0}} has no executor session: its current execution is a {{.V1}} record. Next step: the session that claimed the card continues it; to replace that session, use kander resume --agent <agent> (see snippets/failure-recovery.md)."
+  "launch.execution_has_no_session": "{{.V0}} has no executor session: its current execution is a {{.V1}} record. Next step: the session that claimed the card continues it; to replace that session, use kander resume --agent <agent> (see snippets/failure-recovery.md).",
+  "board.dispatch_start_unfinished": "{{.V0}} has an unfinished start attempt (status {{.V1}}). Next step: while the launcher runs, wait for it; otherwise end the attempt with kander resume {{.V0}} --adopt --decision <reference> or kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>.",
+  "board.takeover_decision_required": "{{.V0}} has an unfinished start attempt (status {{.V1}}), so a takeover needs the user's decision. Next step: add --decision <reference>.",
+  "board.adopt_decision_required": "Adopting the executor of {{.V0}} needs the user's decision. Next step: add --decision <reference>.",
+  "board.adopt_needs_unfinished_start": "{{.V0}} cannot be adopted: its current execution record is {{.V1}}; only pending or unresolved can be adopted.",
+  "launch.adopt_liveness_unconfirmed": "{{.V0}} cannot be adopted: the executor is not confirmed alive ({{.V1}}: {{.V2}}). Next step: use kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>.",
+  "launch.adopt_takes_only_a_decision": "--adopt takes only the task ID and --decision",
+  "launch.decision_needs_adopt_or_agent": "--decision needs --adopt or --agent",
+  "launch.session_repair_start_unfinished": "{{.V0}} has an unfinished start attempt (status {{.V1}}), so its session cannot be repaired. Next step: while the launcher runs, wait for it; otherwise end the attempt with kander resume {{.V0}} --adopt --decision <reference> or kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>.",
+  "launch.unresolved_next_steps": "The executor may be working. Do not run kander start again. Next step, one of:",
+  "launch.superseded": "superseded: {{.V0}}: a takeover or an adoption ended this start attempt; its container and card are untouched",
+  "launch.adopted": "adopted: {{.V0}} window={{.V1}}"
 }

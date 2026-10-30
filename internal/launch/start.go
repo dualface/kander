@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
@@ -9,16 +10,20 @@ import (
 
 // StartResult describes a started task. Foreground callers must consume Outcome.Wait.
 type StartResult struct {
-	TaskID   string
-	Size     string
-	Agent    string
-	Plan     LaunchPlan
-	Outcome  LaunchOutcome
-	Warnings []string
+	TaskID  string
+	Size    string
+	Agent   string
+	Plan    LaunchPlan
+	Outcome LaunchOutcome
+	// Superseded: a takeover or an adoption ended this start attempt first. The
+	// start stepped aside and that is not a failure.
+	Superseded bool
+	Warnings   []string
 }
 
 // Start starts one explicit todo task without printing. It preserves the CLI's
-// preflight, claim and rollback protocol; the caller owns result presentation.
+// preflight, claim and rollback protocol; the caller owns result presentation. A
+// late failure with executor evidence returns an *UnresolvedError.
 func Start(root, agentOverride, launcherOverride, taskID string) (result StartResult, err error) {
 	if taskID == "" {
 		return result, launchError("launch.task_id_is_required")
@@ -126,6 +131,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
+	plan.judge = lateFailureJudge(root, moved)
 	name := windowName(entry, original)
 	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
@@ -155,19 +161,27 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	launchStart = nowFn()
 	outcome, err := launchAgent(plan, root, name, inv, loc, paneCB, &session)
-	if err != nil {
-		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
-	}
-	taskFileHandedOff = true
-	if !persistSession {
-		err = board.ConfirmTaskStart(root, moved)
-		if err != nil {
-			return result, err
-		}
-	}
 	result.TaskID, result.Size, result.Agent = moved.TaskID, moved.Kind, agentName
 	result.Plan, result.Outcome = plan, outcome
-	return result, nil
+	if err != nil {
+		failure := asLaunchFailure(err)
+		result.Outcome = failure.Outcome
+		err = settleFailedLaunch(root, plan, moved, entry.State, failure, original)
+		// Only a finished rollback leaves no executor to read the task file.
+		taskFileHandedOff = err != failure.Err
+	} else {
+		taskFileHandedOff = true
+		if !persistSession {
+			if err = board.ConfirmTaskStart(root, moved); err != nil {
+				err = settleAfterLaunch(root, plan, moved, entry.State, outcome, err, original)
+			}
+		}
+	}
+	if errors.Is(err, board.ErrExecutionSuperseded) {
+		result.Superseded = true
+		return result, nil
+	}
+	return result, err
 }
 
 // StartPreview contains read-only defaults for a start confirmation.

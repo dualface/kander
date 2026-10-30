@@ -28,32 +28,40 @@ func launchAgent(
 	backend := plan.backend()
 	caps := backend.Capabilities()
 	var created terminal.Address
+	var running LaunchOutcome
+	stop := func() string { return "" }
 	sendAttempted := false
 	fail := func(err error) error {
 		// Pane delivery fails before the prompt is sent (blocked or ready
 		// timeout). That outcome is known, so close the container even on a
 		// durable dispatch instead of leaving a stuck tab and an unrolled card.
 		if sendAttempted && len(durable) > 0 && durable[0] && plan.PromptDelivery.Mode != "pane" {
-			return &LaunchFailure{Err: err, DeliveryUnknown: true}
+			return &LaunchFailure{Err: err, DeliveryUnknown: true, Outcome: running}
 		}
-		var closeErr string
-		if created.Container != "" {
-			if err := backend.CloseContainer(context.Background(), boundedSpawnConn(plan), created); err != nil {
-				closeErr = err.Error()
-			}
+		// This is the last moment the judgement can change anything: past it the
+		// executor is gone.
+		if verdict := plan.judgeFailure(); verdict != verdictCleanup {
+			return &LaunchFailure{Err: err, Verdict: verdict, Outcome: running}
 		}
-		return &LaunchFailure{Err: err, CloseError: closeErr}
+		return &LaunchFailure{Err: err, CloseError: stop(), Outcome: running}
 	}
 	if !caps.Container {
 		handle, err := startProcessFn(invocation.Argv, invocation.Env, filepath.Dir(root), caps.Detached)
 		if err != nil {
 			return LaunchOutcome{}, fail(launchError("launch.failed_to_start_agent", err.Error()))
 		}
+		running = LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}
+		stop = func() string {
+			err := handle.proc.Kill()
+			_, _ = handle.Wait()
+			if err != nil && !errors.Is(err, os.ErrProcessDone) {
+				return err.Error()
+			}
+			return ""
+		}
 		if paneSession != nil {
 			sess, err := paneSession()
 			if err != nil {
-				_ = handle.proc.Kill()
-				_, _ = handle.Wait()
 				return LaunchOutcome{}, fail(err)
 			}
 			if agentSession != nil {
@@ -61,13 +69,11 @@ func launchAgent(
 			}
 			if plan.sessionFinalize != nil {
 				if err := plan.sessionFinalize(sess); err != nil {
-					_ = handle.proc.Kill()
-					_, _ = handle.Wait()
 					return LaunchOutcome{}, fail(err)
 				}
 			}
 		}
-		return LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}, nil
+		return running, nil
 	}
 	command, err := paneCommand(invocation)
 	if err != nil {
@@ -84,6 +90,13 @@ func launchAgent(
 		return LaunchOutcome{}, fail(err)
 	}
 	created = address
+	running = LaunchOutcome{Container: address.Container, Pane: address.Pane}
+	stop = func() string {
+		if err := backend.CloseContainer(context.Background(), boundedSpawnConn(plan), created); err != nil {
+			return err.Error()
+		}
+		return ""
+	}
 	readyTimeout := plan.launchTimeout(terminal.DefaultReadyTimeout)
 	if err := backend.WaitReady(conn, address.Pane, int(readyTimeout/time.Millisecond)); err != nil {
 		return LaunchOutcome{}, fail(err)

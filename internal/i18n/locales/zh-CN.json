@@ -968,5 +968,7 @@
   "board.import_contract_section_must_not_contain_headings": "导入契约段落不能包含二级标题: {{.V0}}",
   "board.import_contract_section_must_not_rewrite_metadata": "导入契约段落不能重写卡片元数据: {{.V0}}",
   "board.import_contract_section_must_not_carry_records": "导入契约段落不能携带审查或前置任务记录: {{.V0}}",
-  "board.import_acceptance_criteria_requires_items": "导入的验收条件至少需要一个检查项"
+  "board.import_acceptance_criteria_requires_items": "导入的验收条件至少需要一个检查项",
+  "tui.start_unresolved": "{{.V0}}。executor 可能仍在工作，不要再次启动。下一步：{{.V1}}",
+  "tui.start_superseded": "{{.V0}}：takeover 或接手已结束本次启动尝试"
 }

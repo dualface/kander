@@ -21,5 +21,16 @@
   "board.dispatch_end_decision_required": "ディスパッチ {{.V0}} は受理済みのため、その executor がまだ動いている可能性があります。次の手順: executor を止めてから --decision <ユーザー決定の参照> を付けて再実行してください。",
   "board.update_group_checkpointed": "グループ {{.V0}} には coordinator checkpoint があるためメンバー集合は凍結されており、TASK_GROUP は変更できません。",
   "board.update_hint_group_checkpointed": "次の手順: TASK_GROUP の行はそのまま残し、新しい作業は別のグループか単独カードに入れてください。",
-  "launch.execution_has_no_session": "{{.V0}} には executor セッションがありません。現在の実行記録の kind は {{.V1}} です。次の手順: カードを取得したセッションが続行します。そのセッションを置き換えるには kander resume --agent <agent> を使ってください（snippets/failure-recovery.md を参照）。"
+  "launch.execution_has_no_session": "{{.V0}} には executor セッションがありません。現在の実行記録の kind は {{.V1}} です。次の手順: カードを取得したセッションが続行します。そのセッションを置き換えるには kander resume --agent <agent> を使ってください（snippets/failure-recovery.md を参照）。",
+  "board.dispatch_start_unfinished": "{{.V0}} の開始試行は未完了です（状態 {{.V1}}）。次の手順: ランチャーの実行中は待ちます。それ以外は kander resume {{.V0}} --adopt --decision <参照> または kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> で開始試行を終わらせてください。",
+  "board.takeover_decision_required": "{{.V0}} の開始試行は未完了です（状態 {{.V1}}）。takeover にはユーザーの決定が必要です。次の手順: --decision <参照> を付けてください。",
+  "board.adopt_decision_required": "{{.V0}} の executor の引き取りにはユーザーの決定が必要です。次の手順: --decision <参照> を付けてください。",
+  "board.adopt_needs_unfinished_start": "{{.V0}} は引き取れません: 現在の実行記録は {{.V1}} です。引き取れるのは pending または unresolved だけです。",
+  "launch.adopt_liveness_unconfirmed": "{{.V0}} は引き取れません: executor の生存を確認できません（{{.V1}}: {{.V2}}）。次の手順: kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
+  "launch.adopt_takes_only_a_decision": "--adopt に指定できるのはタスク ID と --decision だけです",
+  "launch.decision_needs_adopt_or_agent": "--decision には --adopt または --agent が必要です",
+  "launch.session_repair_start_unfinished": "{{.V0}} の開始試行は未完了です（状態 {{.V1}}）。セッションは修復できません。次の手順: ランチャーの実行中は待ちます。それ以外は kander resume {{.V0}} --adopt --decision <参照> または kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> で開始試行を終わらせてください。",
+  "launch.unresolved_next_steps": "executor が作業中の可能性があります。kander start を再実行しないでください。次の手順はどちらか一方です:",
+  "launch.superseded": "superseded: {{.V0}}: takeover または引き取りがこの開始試行を終わらせました。コンテナとカードは変更していません",
+  "launch.adopted": "adopted: {{.V0}} window={{.V1}}"
 }

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -139,9 +140,15 @@ func (a *App) applyStartResult(work confirmWork) {
 	a.requestBoardRefresh(true)
 	message := ""
 	compact := ""
-	if work.err != nil {
+	var unresolved *launch.UnresolvedError
+	switch {
+	case errors.As(work.err, &unresolved):
+		message = t("tui.start_unresolved", unresolved.Error(), strings.Join(unresolved.NextSteps(), " | "))
+	case work.err != nil:
 		message = t("tui.start_failed", work.err.Error())
-	} else {
+	case result.Superseded:
+		message = t("tui.start_superseded", result.TaskID)
+	default:
 		address := launch.OpaqueAddress(result.Plan, result.Outcome)
 		message = t("tui.start_success", result.TaskID, result.Agent, result.Plan.Launcher, address)
 		compact = t("tui.start_success_compact", result.Agent, result.Plan.Launcher, address)
@@ -154,7 +161,7 @@ func (a *App) applyStartResult(work confirmWork) {
 		dialog.finish(message, work.err != nil)
 	}
 	a.showFocusNotice(message)
-	if work.err == nil {
+	if work.err == nil && !result.Superseded {
 		a.startNotice = &startNotice{a.CopyNotice, strings.ReplaceAll(printableText(ansi.Strip(compact)), "\n", " ")}
 	}
 }

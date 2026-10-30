@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/process"
 )
 
 // A pane-delivery executor runs before WINDOW is written. Its card write must not
@@ -158,9 +160,29 @@ func TestSessionConfirmationAppliesBySessionDefinition(t *testing.T) {
 	}
 }
 
+// executorWrite stands in for the executor publishing progress on the card.
 func executorWrite(t *testing.T, root, taskID string) {
 	t.Helper()
-	deadEndExecutorWrite(t, root, taskID)
+	s, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.TrimRight(s.Text, "\n") + "\n\n- executor progress\n"
+	if err := board.UpdateDocument(root, taskID, board.UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision}); err != nil {
+		t.Fatalf("executor write: %v", err)
+	}
+}
+
+// stubDiscovery lets poll run on each session enumeration of a launch.
+func stubDiscovery(t *testing.T, poll func(call int) []string) {
+	t.Helper()
+	calls := 0
+	previous := enumerateSessionsFn
+	enumerateSessionsFn = func(context.Context, *config.SessionDiscovery, *process.AgentProgram, string, string) ([]string, error) {
+		calls++
+		return poll(calls), nil
+	}
+	t.Cleanup(func() { enumerateSessionsFn = previous })
 }
 
 // paneDiscoveryStubs prepares the session discovery of each pane agent. The

@@ -2,8 +2,15 @@ package board
 
 import (
 	"context"
+	"errors"
 	"regexp"
+	"strings"
 )
+
+// ErrExecutionSuperseded reports that a takeover, an adoption or a reclaim ended
+// the record a launcher holds. It is not a failure: the launcher steps aside and
+// leaves the container and the card alone.
+var ErrExecutionSuperseded = errors.New("execution superseded")
 
 // ExecutionFence names the record a writer acts for. It lives in the operation's
 // Version cursor. A writer fenced to an earlier record or cycle is refused.
@@ -41,6 +48,43 @@ type TakeoverInput struct {
 	Window       string
 	ExecResolved string
 	Decision     string
+}
+
+// ExecutionStanding is what a launcher must know before it destroys anything.
+type ExecutionStanding struct {
+	// Superseded: the record of this launcher ended without it.
+	Superseded bool
+	// Evidence: the card moved past the cursor. The launcher's own writes keep
+	// the cursor current, so they never count. A dispatch or a human update counts
+	// too; that misjudgment keeps a container and is the safe direction.
+	Evidence bool
+}
+
+// ReadExecutionStanding judges a failed launch on the latest card. It writes
+// nothing, so the launcher can call it before it closes a container.
+func ReadExecutionStanding(root string, entry Entry) (standing ExecutionStanding, err error) {
+	v := entry.Version
+	if v == nil {
+		return standing, kanbanError("board.transaction_conflict", entry.TaskID)
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	scope := executionScope(entry)
+	scope.ReadOnly = true
+	err = WithTransaction(root, scope, func(tx *Transaction) error {
+		s, e := tx.Snapshot(entry.TaskID)
+		if e != nil {
+			return e
+		}
+		l, e := readExecutionLedger(tx, s)
+		if e != nil {
+			return e
+		}
+		standing.Superseded = l.supersedes(v.fence)
+		standing.Evidence = v.advanced || s.Revision != v.revision || s.Entry.State != entry.State
+		return nil
+	})
+	return standing, err
 }
 
 // AdvancedPastCursor reports whether any entrance call on this cursor saw the
@@ -132,6 +176,9 @@ func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *T
 		l, e := readExecutionLedger(tx, s)
 		if e != nil {
 			return e
+		}
+		if l.supersedes(v.fence) {
+			return ErrExecutionSuperseded
 		}
 		if l.current == nil || v.fence.RecordID == "" || l.current.ID != v.fence.RecordID || l.current.Cycle != v.fence.Cycle || l.current.Cycle != planCycle(s) {
 			return coordinatorError("start success binding")
@@ -266,6 +313,9 @@ func BeginTakeover(root string, entry Entry, in TakeoverInput) (ExecutionResult,
 		if cur.ExecutionTerminal() {
 			return "", coordinatorError("start success binding")
 		}
+		if cur.StartUnfinished() && strings.TrimSpace(in.Decision) == "" {
+			return "", kanbanError("board.takeover_decision_required", l.task, cur.Status)
+		}
 		text, err := renderTakeover(s.Text, in)
 		if err != nil {
 			return "", err
@@ -295,6 +345,70 @@ func BeginTakeover(root string, entry Entry, in TakeoverInput) (ExecutionResult,
 		v.mu.Unlock()
 	}
 	return result, err
+}
+
+// UnresolveExecution ends a start attempt whose late step failed while an executor
+// may still work. Only the launcher that holds the attempt writes it. The cycle
+// stays, and the card keeps its column. A container address the card lacks is
+// recorded here, because the next owner needs it; a card that already left working
+// and review keeps its text.
+func UnresolveExecution(root string, entry Entry, window, reason string) (ExecutionResult, error) {
+	if strings.TrimSpace(reason) == "" {
+		return ExecutionResult{}, coordinatorError("start unresolved reason")
+	}
+	v := entry.Version
+	if v == nil {
+		return ExecutionResult{}, kanbanError("board.transaction_conflict", entry.TaskID)
+	}
+	return executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
+		cur := l.current
+		if !v.fence.launcher || cur.Status != ExecutionPending || v.revision < cur.Revision {
+			return "", coordinatorError("start unresolved binding")
+		}
+		text, revision := s.Text, s.Revision
+		if window != "" && window != MetadataFrom(s.Text, FieldWindow) && (s.Entry.State == "working" || s.Entry.State == "review") {
+			var err error
+			if text, err = setExecutionField(s.Text, FieldWindow, FieldSession, window); err != nil {
+				return "", err
+			}
+			revision++
+		}
+		r := *cur
+		r.Schema, r.Status, r.FinishedRevision, r.Failure = executionSchema, ExecutionUnresolved, revision, reason
+		r.Window = MetadataFrom(text, FieldWindow)
+		if err := putRecordOriginal(tx, r, statusOriginal(ExecutionUnresolved)); err != nil {
+			return "", err
+		}
+		t := transitionFrom(TransitionUnresolve, s, cur).withCard(s, text, revision)
+		t.FromStatus = cur.Status
+		return text, putTransition(tx, l, t)
+	})
+}
+
+// AdoptExecution keeps the running executor of an unfinished start and ends the
+// attempt. The caller proved the executor alive under a cursor bound to this
+// record, so a handoff in between refuses the write. The card stays unchanged.
+func AdoptExecution(root string, entry Entry, decision string) (ExecutionResult, error) {
+	if strings.TrimSpace(decision) == "" {
+		return ExecutionResult{}, kanbanError("board.adopt_decision_required", entry.TaskID)
+	}
+	return executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
+		cur := l.current
+		if !cur.StartUnfinished() {
+			return "", kanbanError("board.adopt_needs_unfinished_start", l.task, cur.Status)
+		}
+		if s.Entry.State != "working" && s.Entry.State != "review" || cur.Owner != MetadataFrom(s.Text, FieldOwner) || cur.Session != MetadataFrom(s.Text, FieldSession) {
+			return "", coordinatorError("start adoption binding")
+		}
+		r := *cur
+		r.Schema, r.Status, r.FinishedRevision, r.Failure = executionSchema, ExecutionRunning, s.Revision, ""
+		if err := putRecordOriginal(tx, r, statusOriginal(ExecutionRunning)); err != nil {
+			return "", err
+		}
+		t := transitionFrom(TransitionAdopt, s, cur).withCard(s, s.Text, s.Revision)
+		t.FromStatus, t.Decision = cur.Status, decision
+		return "", putTransition(tx, l, t)
+	})
 }
 
 // ConfirmTaskStart records launcher success. The card stays unchanged, so a fast

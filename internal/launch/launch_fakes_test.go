@@ -66,6 +66,10 @@ if [ "$1" = "set-option" ]; then
 fi
 if [ "$1" = "kill-window" ]; then
   printf '%s\n' "$@" > "$log.kill"
+  if [ "${KANBAN_TMUX_KILL_FAIL:-}" = "1" ]; then
+    printf '%s\n' 'fake kill failure' >&2
+    exit 1
+  fi
   exit 0
 fi
 if [ "$1" = "send-keys" ]; then

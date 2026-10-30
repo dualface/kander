@@ -17,7 +17,12 @@ import (
 
 // DispatchOptions opt working/generic messages into the durable protocol.
 // Group review dispatches opt in automatically, defaulting to fix.
-type DispatchOptions struct{ ID, Kind, Base, EvidenceFile string }
+type DispatchOptions struct {
+	ID, Kind, Base, EvidenceFile string
+	// Decision is the user decision of a takeover. It never opts into the
+	// durable protocol.
+	Decision string
+}
 
 // PrepareAction resolves defaults once; a retry compares the original payload
 // and never derives a new baseline or confirmation deadline.
@@ -136,14 +141,17 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if err = CheckExecutionPins(cfg, s.Text, s.Entry.Kind, agent); err != nil {
 		return err
 	}
-	if agent == nil {
-		if err = RequireSessionExecution(root, task); err != nil {
-			return err
-		}
-	}
 	var o DispatchOptions
 	if len(options) > 0 {
 		o = options[0]
+	}
+	if agent == nil {
+		err = RequireSessionExecution(root, task)
+	} else {
+		err = requireTakeoverDecision(root, task, o.Decision)
+	}
+	if err != nil {
+		return err
 	}
 	d, active, err := PrepareAction(root, s, msg, o, timeout)
 	if err != nil {
@@ -153,7 +161,7 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 		if board.MetadataFrom(s.Text, "DISPATCH_ID") != "" {
 			return launchError("board.dispatch_conflict", board.MetadataFrom(s.Text, "DISPATCH_ID"))
 		}
-		return commandResumeLegacy(root, agent, launcher, task, message, messageFile, messageSet, timeout)
+		return commandResumeLegacy(root, agent, launcher, task, message, messageFile, messageSet, timeout, resumeBinding{Decision: o.Decision})
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout*float64(time.Second)))
 	defer cancel()
@@ -163,8 +171,8 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 		if err != nil {
 			return err
 		}
-		err = resumeDispatch(ctx, root, agent, launcher, task, current, &launched)
-		if err != nil {
+		err = resumeDispatch(ctx, root, agent, launcher, task, current, o.Decision, &launched)
+		if err != nil && !isUnresolved(err) {
 			latest, readErr := board.ReadDispatch(root, task, d.Input.ID)
 			if readErr != nil {
 				return readErr
@@ -181,7 +189,7 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	return WaitForResumedForeground(launched)
 }
 
-func resumeDispatch(parent context.Context, root string, agent *string, launcher, task string, d board.Dispatch, launched *ResumeLaunch) error {
+func resumeDispatch(parent context.Context, root string, agent *string, launcher, task string, d board.Dispatch, decision string, launched *ResumeLaunch) error {
 	if d.State == board.DispatchCompleted || d.State == board.DispatchAccepted && agent == nil {
 		return PrintDispatchResult(d)
 	}
@@ -236,7 +244,10 @@ func resumeDispatch(parent context.Context, root string, agent *string, launcher
 	if remaining <= 0 {
 		return launchError("launch.dispatch_pending", d.Input.ID)
 	}
-	err = commandResumeLegacy(root, agent, launcher, task, msg, "", true, remaining, resumeBinding{Authorization: d.Authorization, Outcome: launched})
+	err = commandResumeLegacy(root, agent, launcher, task, msg, "", true, remaining, resumeBinding{Authorization: d.Authorization, Outcome: launched, Decision: decision})
+	if isUnresolved(err) {
+		return err
+	}
 	current, readErr := board.ReadDispatch(root, task, d.Input.ID)
 	if readErr != nil {
 		return readErr
@@ -268,7 +279,7 @@ func ParseDispatchOptions(args []string) ([]string, DispatchOptions, error) {
 			// A message or path may itself look like a dispatch control option.
 			if !inline && i+1 < len(args) {
 				switch name {
-				case "--message", "--message-file", "--timeout", "--agent", "--launcher", "--pane":
+				case "--message", "--message-file", "--timeout", "--agent", "--launcher", "--pane", "--decision":
 					i++
 					rest = append(rest, args[i])
 				}
@@ -336,6 +347,7 @@ func validateResumedDispatch(root string, entry board.Entry, text string, plan L
 type resumeBinding struct {
 	Authorization board.ExecutionAuthorization
 	Outcome       *ResumeLaunch
+	Decision      string
 }
 
 // WaitForResumedForeground preserves foreground ownership after the bounded

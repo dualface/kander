@@ -281,6 +281,13 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 	if s.Entry.State != "working" && s.Entry.State != "review" {
 		return dispatchError(in.ID)
 	}
+	ledger, e := readExecutionLedger(tx, s)
+	if e != nil {
+		return e
+	}
+	if ledger.current != nil && ledger.current.StartUnfinished() {
+		return kanbanError("board.dispatch_start_unfinished", in.TaskID, ledger.current.Status)
+	}
 	current := authFrom(s.Text)
 	if current.DispatchID != "" {
 		previous, e := readDispatch(tx, in.TaskID, current.DispatchID)

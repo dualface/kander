@@ -41,7 +41,7 @@ func dispatchEvidenceError(detail string) error {
 }
 
 func dispatchEvidenceScope(root string, in DispatchInput) (LockScope, error) {
-	scope := LockScope{Tasks: []string{in.TaskID}, Groups: []string{dispatchRegistry, reviewControlGroup}}
+	scope := LockScope{Tasks: []string{in.TaskID}, Groups: []string{dispatchRegistry, reviewControlGroup, taskStartGroup}}
 	if in.Evidence.Fix != nil {
 		b, err := ReadReviewBatch(root, in.Evidence.Fix.BatchID)
 		if err != nil {

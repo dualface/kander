@@ -23,6 +23,15 @@ func RepairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 }
 
 func repairMissingSession(ctx context.Context, root string, snapshot board.Snapshot, override string, observe func(context.Context, int) (process.ProcessFiles, error)) (board.Snapshot, error) {
+	// The launcher is the only writer of an unfinished start. A repair here would
+	// break the exact SESSION its confirmation compares, so the attempt ends first.
+	record, exists, err := board.CurrentExecution(root, snapshot.Entry.TaskID)
+	if err != nil {
+		return snapshot, err
+	}
+	if exists && record.StartUnfinished() {
+		return snapshot, repairError("launch.session_repair_start_unfinished", snapshot.Entry.TaskID, record.Status)
+	}
 	value := board.MetadataFrom(snapshot.Text, board.FieldWindow)
 	backend, address, ok := terminal.ParseWindow(value)
 	if !ok || !backend.Capabilities().AgentIdentity {
@@ -32,7 +41,6 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		address.Pane = override
 	}
 	conn := terminal.Conn{Run: terminal.ProbeRunner}
-	var err error
 	conn.Program, err = exec.LookPath(backend.Executable())
 	if err != nil {
 		return snapshot, nil

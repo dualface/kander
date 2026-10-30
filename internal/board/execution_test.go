@@ -3,6 +3,7 @@ package board
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -181,14 +182,14 @@ func TestEntranceFencesRecordAndCycle(t *testing.T) {
 	moved := startedCard(t, root, "ledger-fence")
 	id := moved.TaskID
 	s := bound(t, root, id)
-	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "claude", Session: "claude next"}); err != nil {
+	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "claude", Session: "claude next", Decision: "user"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RecordExecutionWindow(root, moved, "stale", ""); err == nil {
-		t.Fatal("a handed-off launcher wrote WINDOW")
+	if _, err := RecordExecutionWindow(root, moved, "stale", ""); !errors.Is(err, ErrExecutionSuperseded) {
+		t.Fatalf("a handed-off launcher wrote WINDOW: %v", err)
 	}
-	if err := ConfirmTaskStartSession(root, moved, "codex", "codex found"); err == nil {
-		t.Fatal("a handed-off launcher confirmed")
+	if err := ConfirmTaskStartSession(root, moved, "codex", "codex found"); !errors.Is(err, ErrExecutionSuperseded) {
+		t.Fatalf("a handed-off launcher confirmed: %v", err)
 	}
 }
 

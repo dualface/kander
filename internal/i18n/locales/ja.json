@@ -968,5 +968,7 @@
   "board.import_contract_section_must_not_contain_headings": "インポート契約のセクションにレベル 2 見出しを含めることはできません: {{.V0}}",
   "board.import_contract_section_must_not_rewrite_metadata": "インポート契約のセクションでカードのメタデータを書き換えることはできません: {{.V0}}",
   "board.import_contract_section_must_not_carry_records": "インポート契約のセクションにレビューまたは前提タスクの記録を含めることはできません: {{.V0}}",
-  "board.import_acceptance_criteria_requires_items": "インポートの受け入れ条件には少なくとも 1 つのチェック項目が必要です"
+  "board.import_acceptance_criteria_requires_items": "インポートの受け入れ条件には少なくとも 1 つのチェック項目が必要です",
+  "tui.start_unresolved": "{{.V0}}。executor が作業中の可能性があります。再度開始しないでください。次の手順: {{.V1}}",
+  "tui.start_superseded": "{{.V0}}: takeover または引き取りがこの開始試行を終わらせました"
 }

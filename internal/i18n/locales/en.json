@@ -968,5 +968,7 @@
   "board.import_contract_section_must_not_contain_headings": "import contract section must not contain a level-two heading: {{.V0}}",
   "board.import_contract_section_must_not_rewrite_metadata": "import contract section must not rewrite card metadata: {{.V0}}",
   "board.import_contract_section_must_not_carry_records": "import contract section must not carry review or prerequisite records: {{.V0}}",
-  "board.import_acceptance_criteria_requires_items": "import acceptance criteria require at least one checklist item"
+  "board.import_acceptance_criteria_requires_items": "import acceptance criteria require at least one checklist item",
+  "tui.start_unresolved": "{{.V0}}. The executor may be working; do not start again. Next step: {{.V1}}",
+  "tui.start_superseded": "{{.V0}}: a takeover or an adoption ended this start attempt"
 }

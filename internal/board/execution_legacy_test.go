@@ -138,7 +138,7 @@ func TestLegacyPendingAcceptsATakeover(t *testing.T) {
 	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "claude", Session: "claude next"}); err != nil {
+	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "claude", Session: "claude next", Decision: "user"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := ConfirmTaskStart(root, s.Entry); err != nil {

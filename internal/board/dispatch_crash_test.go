@@ -23,7 +23,7 @@ func TestDispatchCrashChild(t *testing.T) {
 	id := os.Getenv("KANDER_DISPATCH_CRASH_TASK")
 	mode := os.Getenv("KANDER_DISPATCH_CRASH_MODE")
 	stage := os.Getenv("KANDER_DISPATCH_CRASH_STAGE")
-	scope := LockScope{Tasks: []string{id}, Groups: []string{dispatchRegistry, reviewControlGroup}, ExclusiveBoard: true}
+	scope := LockScope{Tasks: []string{id}, Groups: []string{dispatchRegistry, reviewControlGroup, taskStartGroup}, ExclusiveBoard: true}
 	locks, err := acquire(root, scope)
 	if err != nil {
 		t.Fatal(err)

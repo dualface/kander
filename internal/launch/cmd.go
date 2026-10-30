@@ -122,7 +122,7 @@ func RunStart(args []string) int {
 		return fail(err)
 	}
 	if err := commandStart(root, agent, launcher, task); err != nil {
-		return fail(err)
+		return exitLaunch(err)
 	}
 	return 0
 }
@@ -140,8 +140,8 @@ func RunResume(args []string) int {
 		return fail(dispatchErr)
 	}
 	timeout := notifyDefaultTimeout
-	var message, messageFile, agent, launcher string
-	var messageSet, agentSet bool
+	var message, messageFile, agent, launcher, decision string
+	var messageSet, agentSet, adopt, timeoutSet bool
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -171,13 +171,23 @@ func RunResume(args []string) int {
 			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 				return fail(launchError("launch.resume_timeout_must_be_a_finite_number_greater_than"))
 			}
-			timeout, i = n, next
+			timeout, timeoutSet, i = n, true, next
 		case strings.HasPrefix(arg, "--timeout="):
 			n, err := strconv.ParseFloat(strings.TrimPrefix(arg, "--timeout="), 64)
 			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
 				return fail(launchError("launch.resume_timeout_must_be_a_finite_number_greater_than"))
 			}
-			timeout = n
+			timeout, timeoutSet = n, true
+		case arg == "--adopt":
+			adopt = true
+		case arg == "--decision":
+			val, next, ok := takeValue(args, i)
+			if !ok {
+				return usageFail("resume", "board.option_requires_a_value", arg)
+			}
+			decision, i = val, next
+		case strings.HasPrefix(arg, "--decision="):
+			decision = strings.TrimPrefix(arg, "--decision=")
 		case arg == "--agent":
 			val, next, ok := takeValue(args, i)
 			if !ok {
@@ -218,6 +228,16 @@ func RunResume(args []string) int {
 	if len(positional) != 1 {
 		return usageFail("resume", "launch.task_id_is_required")
 	}
+	if adopt && (agentSet || messageSet || messageFile != "" || launcher != "" || timeoutSet || dispatchOptions != (DispatchOptions{})) {
+		return usageFail("resume", "launch.adopt_takes_only_a_decision")
+	}
+	if adopt && strings.TrimSpace(decision) == "" {
+		return usageFail("resume", "board.adopt_decision_required", positional[0])
+	}
+	if !adopt && !agentSet && decision != "" {
+		return usageFail("resume", "launch.decision_needs_adopt_or_agent")
+	}
+	dispatchOptions.Decision = decision
 	if _, err := config.Load(false); err != nil {
 		return fail(err)
 	}
@@ -229,8 +249,14 @@ func RunResume(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	if adopt {
+		if err := commandAdopt(root, positional[0], decision); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
 	if err := commandResume(root, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions); err != nil {
-		return fail(err)
+		return exitLaunch(err)
 	}
 	return 0
 }

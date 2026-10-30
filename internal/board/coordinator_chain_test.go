@@ -35,13 +35,19 @@ func TestReconcileAcceptsAChainOfUnobservedRecords(t *testing.T) {
 	if _, err := RecordExecutionWindow(root, moved, "tmux:a:b:c", ""); err != nil {
 		t.Fatal(err)
 	}
-	unresolveFixture(t, root, id, "late failure")
+	if _, err := UnresolveExecution(root, moved, "", "late failure"); err != nil {
+		t.Fatal(err)
+	}
 	s := bound(t, root, id)
 	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "claude", Session: "claude next", Decision: "user"}); err != nil {
 		t.Fatal(err)
 	}
-	unresolveFixture(t, root, id, "second failure")
-	adoptFixture(t, root, id)
+	if _, err := UnresolveExecution(root, s.Entry, "", "second failure"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AdoptExecution(root, bound(t, root, id).Entry, "user"); err != nil {
+		t.Fatal(err)
+	}
 	next := coordinatorReconcile(t, root, c)
 	m := next.Members[id]
 	if m.AwaitingStart || m.Cycle != planCycle(transactionSnapshot(t, root, id)) || m.TransitionSeq != ledgerOf(t, root, id).end() {
@@ -49,6 +55,8 @@ func TestReconcileAcceptsAChainOfUnobservedRecords(t *testing.T) {
 	}
 }
 
+// A member with an unfinished start waits. The attempt refuses a dispatch, so
+// no round can bind it, and reconcile stays clean.
 func TestUnresolvedStartWaitsWithoutADispatch(t *testing.T) {
 	for _, status := range []string{ExecutionPending, ExecutionUnresolved} {
 		t.Run(status, func(t *testing.T) {
@@ -56,15 +64,19 @@ func TestUnresolvedStartWaitsWithoutADispatch(t *testing.T) {
 			moved := startedCard(t, root, "waiting-start")
 			id := moved.TaskID
 			if status == ExecutionUnresolved {
-				unresolveFixture(t, root, id, "late failure")
-			}
-			c := coordinatorClaim(t, root, id)
-			if s := transactionSnapshot(t, root, id); s.Entry.State == "working" {
-				if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
+				if _, err := UnresolveExecution(root, moved, "", "late failure"); err != nil {
 					t.Fatal(err)
 				}
 			}
-			prepareTestDispatch(t, root, dispatchInput(transactionSnapshot(t, root, id), "waiting-round"))
+			c := coordinatorClaim(t, root, id)
+			s := transactionSnapshot(t, root, id)
+			if _, err := MoveEntry(s.Entry, root, "review"); err != nil {
+				t.Fatal(err)
+			}
+			var e *Error
+			if _, err := PrepareDispatch(root, dispatchInput(transactionSnapshot(t, root, id), "waiting-round")); !errors.As(err, &e) || e.Code != "board.dispatch_start_unfinished" {
+				t.Fatalf("err=%v", err)
+			}
 			next := coordinatorReconcile(t, root, c)
 			m := next.Members[id]
 			if !m.AwaitingStart || m.Dispatch != nil {
@@ -143,40 +155,4 @@ func TestUpdateCannotMoveACardAcrossACheckpoint(t *testing.T) {
 	}
 	refuse(outsider, coordinatorGroup)
 	refuse(member, "20261031-other-group")
-}
-
-// unresolveFixture and adoptFixture write the records card
-// 20261030-gh-dualface-kander-22-task produces, so the coordinator can accept
-// them before their commands exist.
-func unresolveFixture(t *testing.T, root, id, reason string) {
-	t.Helper()
-	statusFixture(t, root, id, TransitionUnresolve, ExecutionUnresolved, reason)
-}
-
-func adoptFixture(t *testing.T, root, id string) {
-	t.Helper()
-	statusFixture(t, root, id, TransitionAdopt, ExecutionRunning, "")
-}
-
-func statusFixture(t *testing.T, root, id, kind, status, failure string) {
-	t.Helper()
-	err := WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{id}}, func(tx *Transaction) error {
-		s, e := tx.Snapshot(id)
-		if e != nil {
-			return e
-		}
-		l, e := readExecutionLedger(tx, s)
-		if e != nil {
-			return e
-		}
-		r := *l.current
-		r.Status, r.Failure, r.FinishedRevision = status, failure, s.Revision
-		if e = putRecordOriginal(tx, r, statusOriginal(status)); e != nil {
-			return e
-		}
-		return putTransition(tx, &l, transitionFrom(kind, s, l.current).withCard(s, s.Text, s.Revision))
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 }

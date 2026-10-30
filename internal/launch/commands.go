@@ -3,6 +3,7 @@ package launch
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -79,6 +80,10 @@ func commandStart(root, agentOverride, launcherOverride, taskID string) error {
 	if err != nil {
 		return err
 	}
+	if result.Superseded {
+		stepAside(result.TaskID, result.Plan, result.Outcome)
+		return nil
+	}
 	return reportLaunch(t("launch.started"), board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome)
 }
 
@@ -99,7 +104,8 @@ func lastSlash(p string) int {
 	return i
 }
 
-func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, message, messageFile string, messageSet bool, timeout float64, authorization ...resumeBinding) error {
+func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, message, messageFile string, messageSet bool, timeout float64, binding resumeBinding) error {
+	durable := binding.Authorization != (board.ExecutionAuthorization{})
 	loaded, err := loadBoardFn(root)
 	if err != nil {
 		return err
@@ -121,8 +127,8 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if err != nil {
 		return err
 	}
-	if len(authorization) > 0 {
-		bound, e := board.ReadExecutionSnapshot(root, taskID, authorization[0].Authorization)
+	if durable {
+		bound, e := board.ReadExecutionSnapshot(root, taskID, binding.Authorization)
 		if e != nil {
 			return e
 		}
@@ -281,31 +287,56 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		if !plan.capabilities().Container {
 			window = plan.Launcher
 		}
-		if _, err := beginTakeoverFn(root, moved, board.TakeoverInput{Owner: session.Agent, Session: session.Render(), Window: window, ExecResolved: choice.record}); err != nil {
+		if _, err := beginTakeoverFn(root, moved, board.TakeoverInput{Owner: session.Agent, Session: session.Render(), Window: window, ExecResolved: choice.record, Decision: binding.Decision}); err != nil {
 			return err
 		}
+		plan.judge = lateFailureJudge(root, moved)
 	} else if !plan.capabilities().Container {
 		if _, err := recordWindowFn(root, moved, plan.Launcher, choice.record); err != nil {
 			return err
 		}
 	}
 	launchStart = nowFn()
-	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, len(authorization) > 0)
+	// settled ends a takeover that failed, and reports a takeover another one
+	// overtook as a normal exit.
+	settled := func(outcome LaunchOutcome, err error) error {
+		if errors.Is(err, board.ErrExecutionSuperseded) {
+			stepAside(entry.TaskID, plan, outcome)
+			return nil
+		}
+		return err
+	}
+	outcome, err := launchAgent(plan, root, windowName(entry, text), inv, loc, paneCB, &session, durable)
 	if err != nil {
-		if asLaunchFailure(err).DeliveryUnknown {
+		failure := asLaunchFailure(err)
+		switch {
+		case failure.DeliveryUnknown && takeover:
+			taskFileHandedOff = true
+			return settled(failure.Outcome, recordUnresolved(root, plan, moved, failure.Outcome, failure.Err))
+		case failure.DeliveryUnknown:
 			taskFileHandedOff = true
 			return err
+		case takeover:
+			err = settleFailedLaunch(root, plan, moved, entry.State, failure, text)
+			taskFileHandedOff = err != failure.Err
+			return settled(failure.Outcome, err)
 		}
-		return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
+		return rollbackLaunch(root, moved, entry.State, failure, &text)
 	}
 	taskFileHandedOff = true
 	if err := validateResumedDispatch(root, moved, text, plan, outcome, effective, timeout); err != nil {
-		if len(authorization) > 0 {
+		if durable && takeover {
+			return settled(outcome, recordUnresolved(root, plan, moved, outcome, err))
+		}
+		if durable {
 			return err
 		}
 		detail := resumedAgentFailureOutput(plan, outcome)
 		if detail != "" {
 			err = launchError("launch.agent_output", err.Error(), detail)
+		}
+		if takeover {
+			return settled(outcome, settleAfterLaunch(root, plan, moved, entry.State, outcome, err, text))
 		}
 		var cleanup string
 		if cErr := cleanupFailedResume(plan, outcome); cErr != nil {
@@ -315,7 +346,7 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	}
 	if takeover {
 		if err := board.ConfirmTaskStart(root, moved); err != nil {
-			return err
+			return settled(outcome, settleAfterLaunch(root, plan, moved, entry.State, outcome, err, text))
 		}
 		cleanup := naCleanup()
 		if CleanupTakeover != nil {
@@ -343,9 +374,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if takeover {
 		verb = t("launch.taken_over")
 	}
-	if len(authorization) > 0 {
-		if authorization[0].Outcome != nil {
-			*authorization[0].Outcome = ResumeLaunch{Plan: plan, Outcome: outcome}
+	if durable {
+		if binding.Outcome != nil {
+			*binding.Outcome = ResumeLaunch{Plan: plan, Outcome: outcome}
 		}
 		return nil
 	}

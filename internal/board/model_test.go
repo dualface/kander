@@ -47,6 +47,8 @@ func modelSingleSeeds() []modelSeed {
 		{name: "claimed", steps: []string{"H.claim"}},
 		{name: "finding", steps: []string{"H.claim", "R.planRequired", "R.run", "R.assign"}},
 		{name: "chained", steps: []string{"H.claim", "R.planChained"}},
+		{name: "unresolved", steps: []string{"L.begin", "X.write", "L.fail"}},
+		{name: "close-failed", steps: []string{"L.begin", "L.closeFailed"}},
 	}
 }
 
@@ -61,6 +63,7 @@ func modelGroupSeeds() []modelSeed {
 		{name: "review", focus: "A", steps: review},
 		{name: "launching", focus: "A", steps: launching},
 		{name: "rolled-back", focus: "A", steps: slices.Concat(launching, []string{"A:L.fail"})},
+		{name: "unresolved", focus: "A", steps: slices.Concat(launching, []string{"A:X.write", "A:L.fail", "C.reconcile"})},
 		{name: "finding", focus: "B", steps: slices.Concat(claimed, []string{"R.planRequired", "R.run", "B:R.assign", "C.reconcile"})},
 		{name: "round", focus: "A", steps: round},
 		{name: "round-released", focus: "A", steps: slices.Concat(round, []string{"A:D.prepareSync", "A:D.cancel", "A:H.return"})},

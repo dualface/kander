@@ -21,5 +21,16 @@
   "board.dispatch_end_decision_required": "派发 {{.V0}} 已被接受，它的 executor 可能仍在运行。下一步：先停止 executor，再带 --decision <用户决定引用> 重新执行。",
   "board.update_group_checkpointed": "任务组 {{.V0}} 已有 coordinator checkpoint，成员集合已冻结，TASK_GROUP 不能改变。",
   "board.update_hint_group_checkpointed": "下一步：保留 TASK_GROUP 这一行不变；把新工作放进另一个任务组或独立卡。",
-  "launch.execution_has_no_session": "{{.V0}} 没有 executor 会话：当前执行记录的 kind 是 {{.V1}}。下一步：由认领该卡的会话继续；要换掉该会话，用 kander resume --agent <agent>（见 snippets/failure-recovery.md）。"
+  "launch.execution_has_no_session": "{{.V0}} 没有 executor 会话：当前执行记录的 kind 是 {{.V1}}。下一步：由认领该卡的会话继续；要换掉该会话，用 kander resume --agent <agent>（见 snippets/failure-recovery.md）。",
+  "board.dispatch_start_unfinished": "{{.V0}} 的启动尝试尚未结束（状态 {{.V1}}）。下一步：启动者还在运行时等待它；否则用 kander resume {{.V0}} --adopt --decision <引用> 或 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息> 结束启动尝试。",
+  "board.takeover_decision_required": "{{.V0}} 的启动尝试尚未结束（状态 {{.V1}}），takeover 需要用户决定。下一步：加上 --decision <引用>。",
+  "board.adopt_decision_required": "接手 {{.V0}} 的 executor 需要用户决定。下一步：加上 --decision <引用>。",
+  "board.adopt_needs_unfinished_start": "{{.V0}} 不能接手：当前执行记录是 {{.V1}}；只有 pending 或 unresolved 可以接手。",
+  "launch.adopt_liveness_unconfirmed": "{{.V0}} 不能接手：executor 存活未确认（{{.V1}}：{{.V2}}）。下一步：用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
+  "launch.adopt_takes_only_a_decision": "--adopt 只接受任务 ID 与 --decision",
+  "launch.decision_needs_adopt_or_agent": "--decision 需要 --adopt 或 --agent",
+  "launch.session_repair_start_unfinished": "{{.V0}} 的启动尝试尚未结束（状态 {{.V1}}），不能修复会话。下一步：启动者还在运行时等待它；否则用 kander resume {{.V0}} --adopt --decision <引用> 或 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息> 结束启动尝试。",
+  "launch.unresolved_next_steps": "executor 可能仍在工作。不要再次运行 kander start。下一步，二选一：",
+  "launch.superseded": "superseded: {{.V0}}：takeover 或接手已结束本次启动尝试；容器与卡均未改动",
+  "launch.adopted": "adopted: {{.V0}} window={{.V1}}"
 }

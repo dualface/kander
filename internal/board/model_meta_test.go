@@ -11,7 +11,6 @@ import (
 
 // The owner table of the card that added this test; the repair cards shrink it.
 var modelExpectedOwners = map[string]string{
-	"DE-01": cardIssue22, "DE-03": cardIssue22, "DE-04": cardIssue22, "DE-15": cardIssue22,
 	"DE-08": cardEvidence, "DE-10": cardEvidence, "DE-11": cardEvidence, "DE-12": cardEvidence, "DE-13": cardEvidence,
 	"DE-18": cardRecovery,
 }
