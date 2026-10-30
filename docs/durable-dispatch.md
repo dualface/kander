@@ -69,7 +69,7 @@ kander dispatch show <task-id> <id>
 
 ## 3. `fix` Review Evidence Binding
 
-Fix dispatches enforce that the executor receives exact, structured review findings:
+Fix dispatches enforce that the executor receives exact, structured review findings. `base` must equal the current batch target. A referenced run may sit at `base` or at an earlier target on the batch's recorded advance chain, so a batch advanced before a fix round ended can still dispatch that round:
 
 ```json
 {

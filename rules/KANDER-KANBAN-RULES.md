@@ -97,7 +97,7 @@ backlog <-> todo -> working -> done -> archived        (single-card flow)
                                                        takes the same path under its fenced grant)
 
 todo -> backlog                                       withdraw commitment, back to scheduling
-review -> working (--owner)                           user-authorized reclaim of an unbound card, see `snippets/commands/move.md` "Reclaiming"
+review -> working (--owner --decision)                user-authorized reclaim of an unbound card, see `snippets/commands/move.md` "Reclaiming"
 backlog, todo, working, review -> archived            only user-authorized termination
 any state except archived and trash -> trash          only on explicit user request
 ```

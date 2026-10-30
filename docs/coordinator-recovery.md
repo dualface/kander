@@ -116,7 +116,13 @@ facts instead of fabricating a new termination original.
 
 `move working --owner --decision` then publishes the protected `LIFECYCLE_DECISION` handoff.
 Both coordinator cycle consumers verify its old/new cycles, released dispatch, nonempty user
-decision reference and increasing card revisions. A successful launch original remains
+decision reference and increasing card revisions. A cycle that never held a dispatch has no
+release to cite, so its reclaim writes a dispatchless handoff with an empty `dispatch_id`. A
+release is the only way to clear a binding and a bound card rejects `--owner`, so a cycle with
+a dispatch always has its own release. The producer and the consumers apply one check
+(`verifyDispatchlessHandoff`): no release names the old cycle, and every completed or accepted
+dispatch before the handoff was followed by a release. A plain reclaim that an older binary
+already wrote has no handoff and stays rejected; this change does not repair such a checkpoint. A successful launch original remains
 unchanged: its original cycle can reach the new cycle only through those verified handoff
 links. The same path supports a manually claimed card without a launch original. Reconciliation
 updates the member cycle, retains the start-attempt identity and handoff history, and clears

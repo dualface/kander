@@ -15,7 +15,7 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 ## Arguments
 
 - `task-id`, `state`: the card and its new state (`backlog`, `todo`, `working`, `review`, `done`, `archived`, `trash`).
-- `--owner <agent>`: manual claiming into `working/` writes `OWNER` and `STARTED_AT`; `--decision <reference>` records the user decision for a reclaim.
+- `--owner <agent>`: manual claiming into `working/` writes `OWNER` and `STARTED_AT`; `--decision <reference>` records the user decision and is required for a reclaim from `review/`.
 - `--result <result>`: `completed` for `done/`; `cancelled`, `duplicate`, `wontfix`, or `completed` for `archived/`; `trashed` for `trash/`.
 - `--reason <reason> --decision <reference>`: required for `archived/` and `trash/`; they record the user decision.
 - `--duplicate-of <task-id>`: the replacement card for `--result duplicate`.
@@ -43,7 +43,7 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 
 Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordination".
 
-- Reclaiming: when a `review/` card's executor has stopped and the user explicitly authorizes a new owner, that agent claims a never-bound card with `kander move <task-id> working --owner <agent>`; active dispatch bindings still reject `--owner`. After `dispatch fail|cancel` releases a binding, reclaim requires `kander move <task-id> working --owner <agent> --decision <user-decision-reference>`, which verifies the release and atomically records a protected `LIFECYCLE_DECISION` handoff binding the old cycle, new cycle, released dispatch, and decision reference; other working moves reject `--decision`. Every claim rewrites `OWNER` and `STARTED_AT` and adds a fresh claim identity, so same-minute reclaims also change the review cycle. Rebind the existing plan with the complete `rebind_cycles` map from `review progress`; an existing coordinator checkpoint consumes the release and handoff evidence on reconciliation. A `working/` card is never reclaimed this way: use the authorized `resume --agent` takeover, which preserves the cycle and `STARTED_AT`.
+- Reclaiming: when a `review/` card's executor has stopped and the user explicitly authorizes a new owner, that agent runs `kander move <task-id> working --owner <agent> --decision <user-decision-reference>`. The move rejects a missing or blank `--decision`, and active dispatch bindings, including a completed dispatch that was not released, still reject `--owner`. When `dispatch fail|cancel` released a binding in the current cycle, the move verifies the release. When the cycle never held a dispatch, no release exists and the move verifies that. In both cases it atomically records a protected `LIFECYCLE_DECISION` handoff binding the old cycle, new cycle, owner, decision reference, card revision, and the released dispatch (empty for a cycle that never held one); other working moves reject `--decision`. Every claim rewrites `OWNER` and `STARTED_AT` and adds a fresh claim identity, so same-minute reclaims also change the review cycle. Rebind the existing plan with the complete `rebind_cycles` map from `review progress`; an existing coordinator checkpoint consumes the release and handoff evidence on reconciliation. A `working/` card is never reclaimed this way: use the authorized `resume --agent` takeover, which preserves the cycle and `STARTED_AT`.
 
 ## Output
 

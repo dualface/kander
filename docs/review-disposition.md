@@ -83,7 +83,7 @@ The `cwd` of a plan and the CWD argument of every evidence command name one work
 
 ### Cycle Rebinding
 
-When `kander move <id> working --owner <agent>` changes `STARTED_AT`, the plan status changes to `requirements-needed`.
+When `kander move <id> working --owner <agent> --decision <reference>` changes `STARTED_AT`, the plan status changes to `requirements-needed`. A reclaim from `review/` requires `--decision`.
 - `kander review progress` outputs `rebind_cycles` for all affected members.
 - `extend-plan` re-binds members atomically using `rebind_cycles`. Old runs, failed rounds, and disposition records are preserved.
 
@@ -274,6 +274,10 @@ kander review advance <absolute-CWD> <advance-request.json>
 ```
 
 The request records `{batch_id, expected_revision, advance: {previous_target, target, reason, deliveries, foreign_commits}}`. `deliveries` maps batch-member commit SHAs to task IDs. Optional `foreign_commits` maps other commit SHAs in the range to nonempty reasons. Every commit in the range must appear in exactly one map. Git working tree must be clean.
+
+The command, and an incremental run with `--advance-file`, refuses while any assigned finding has no author disposition. Mechanical items count. The error lists each `task/run/finding`, and neither the batch nor the plan changes. An assigned finding without a record is a fix round that has not ended, and a target move would overtake it.
+
+A fix dispatch normally binds a run at its base. A batch that an older binary advanced before a fix round ended stays recoverable: the dispatch base equals the current target, and a referenced run may sit on an earlier target of the batch's advance chain. The chain comes from `batch.advances` alone, from the initial target to the current target, with no Git access. A foreign batch, a run outside the chain, a superseded round, and a task outside the run stay rejected. Reconciling the completed fix accepts the same chain and does not depend on the target at reconciliation time.
 
 ### 2. Incremental Review
 

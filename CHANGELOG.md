@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fix (review, #20): `kander review advance` and a review run with `--advance-file` now refuse to move a batch target while an assigned finding has no author disposition, and the error lists each task, run, and finding. Mechanical items count. An advance could previously overtake a member's fix round and leave its fix dispatch rejected at every base.
+- Fix (dispatch, #20): a batch already advanced past a finding recovers without any board edit. A fix dispatch with `--base` set to the current batch target may reference a run on the batch's recorded advance chain, and `kander coordinator reconcile` accepts the completed round.
+- Fix (coordinator, #20): reclaiming a `review/` card that never held a dispatch now records a handoff, so `kander coordinator reconcile` follows the cycle change instead of failing with `execution cycle changed without lifecycle handoff`.
+- Breaking (`kander move`): `kander move <id> working --owner <agent>` from `review/` now requires `--decision <reference>`. Scripts that omit it are rejected with no change. A card that a plain reclaim already moved keeps its old failure; this release has no repair for an existing checkpoint.
+- Run `kander doctor` after upgrading to update the rules.
+
 ## v1.0.0 — 2026-10-29
 
 - Microsoft Store: kander can ship as an MSIX package for Windows (x64 and arm64) with the `kander.exe` execution alias. A Start menu launch opens the board. The package turns off file and registry write virtualization so agents outside the package can read the task files kander writes under `%TEMP%`; it needs Windows 10 2004 (build 19041) or later. The Store's package version rules start the version line at 1.0.0, because a Store version cannot begin with 0.
