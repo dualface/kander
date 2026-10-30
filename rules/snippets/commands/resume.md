@@ -53,7 +53,7 @@ kander resume --adopt --decision <reference> <task-id>
 **Adopting an Unfinished Start**
 
 - `resume --adopt` starts no executor. Use it when the start attempt has no result and the executor works. Then a takeover would replace a healthy executor.
-- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start without a recorded identity reads `unknown` (the launcher died first, or a shim has not written the card yet), and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
+- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start without a recorded identity reads `unknown` (the launcher died first, or the agent has not read its task file yet), and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
 - On success it writes `kind=adopt` with the decision and changes the record to `running`. The card stays unchanged. A launcher that is still running steps aside with `superseded`.
 
 ## Output
