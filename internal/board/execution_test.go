@@ -255,6 +255,9 @@ func TestTakeoverRollbackRestoresTheReplacedRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := bound(t, root, id)
+	if _, err := RecordExecutionProcess(root, s.Entry, ExecutionProcess{Launcher: "foreground", AgentPID: 7}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "claude", Session: "claude next"}); err != nil {
 		t.Fatal(err)
 	}
@@ -265,6 +268,9 @@ func TestTakeoverRollbackRestoresTheReplacedRecord(t *testing.T) {
 	cur := ledgerOf(t, root, id).current
 	if MetadataFrom(after.Text, FieldOwner) != "codex" || cur.Status != ExecutionRunning || cur.Kind != ExecutionStart || cur.Owner != "codex" {
 		t.Fatalf("record %+v", cur)
+	}
+	if cur.Process == nil || cur.Process.AgentPID != 7 {
+		t.Fatalf("the executor that stayed lost its identity: %+v", cur)
 	}
 	if err := ledgerOf(t, root, id).assertCard(after); err != nil {
 		t.Fatal(err)

@@ -102,7 +102,7 @@ func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allo
 		return report(entry, nil, Unknown, "unknown", window, t("liveness.missing_or_invalid_session_metadata"), "")
 	}
 	if terminal.HasCapability(window, func(c terminal.Capabilities) bool { return !c.Container }) {
-		return report(entry, session, Unknown, window, window, t("liveness.this_launcher_has_no_probeable_address"), "")
+		return classifyProcess(ctx, entry, text, *session, window)
 	}
 	backend, address, ok := terminal.ParseWindow(window)
 	if !ok {
@@ -258,7 +258,7 @@ func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text stri
 		}
 		out.Identity = identityFrom(entry, text)
 		out.ObservedAt = time.Now().UTC()
-		out.ObservationValid = out.Status != Unknown
+		out.ObservationValid = out.Status != Unknown && out.Status != Unprobeable
 	}()
 	if err := ctx.Err(); err != nil {
 		return unknownFrom(entry, text, probe.FailureDetail(err))

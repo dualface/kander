@@ -107,11 +107,29 @@ func executionScope(entry Entry) LockScope {
 
 // CurrentExecution returns the current record of a card, stored or synthesized.
 func CurrentExecution(root, task string) (r ExecutionRecord, exists bool, err error) {
+	view, err := readExecutionView(context.Background(), root, task)
+	return view.Record, view.Exists, err
+}
+
+// ExecutionView is the current record of a card as a probe reads it. Stored is
+// false for a card no ledger link was written for: a card from before the ledger.
+type ExecutionView struct {
+	Record ExecutionRecord
+	Exists bool
+	Stored bool
+}
+
+// ReadEntryExecution reads the current record under the caller's probe deadline.
+func ReadEntryExecution(ctx context.Context, entry Entry) (ExecutionView, error) {
+	return readExecutionView(ctx, boardRootFromEntry(entry), entry.TaskID)
+}
+
+func readExecutionView(ctx context.Context, root, task string) (view ExecutionView, err error) {
 	task, err = NormalizeTaskID(task)
 	if err != nil {
-		return r, false, err
+		return view, err
 	}
-	err = WithTransaction(root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{task}, ReadOnly: true}, func(tx *Transaction) error {
+	err = withTransaction(ctx, root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{task}, ReadOnly: true}, func(tx *Transaction) error {
 		s, e := tx.Snapshot(task)
 		if e != nil {
 			return e
@@ -120,12 +138,18 @@ func CurrentExecution(root, task string) (r ExecutionRecord, exists bool, err er
 		if e != nil {
 			return e
 		}
+		view.Stored = l.synthesized < len(l.chain)
 		if l.current != nil {
-			r, exists = *l.current, true
+			view.Record, view.Exists = *l.current, true
 		}
 		return nil
 	})
-	return r, exists, err
+	return view, err
+}
+
+// ExecutionCycle returns the execution cycle a card text carries.
+func ExecutionCycle(entry Entry, text string) string {
+	return planCycle(Snapshot{Entry: entry, Text: text})
 }
 
 // storedRecordID reads the current.json pointer without validating it. Every

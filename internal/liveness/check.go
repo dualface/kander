@@ -36,6 +36,10 @@ func formatReport(rep Report) string {
 		fields = append(fields, t(
 			"liveness.suggestion_kander_notify_message_status", rep.TaskID,
 		))
+	case AliveOrphaned:
+		fields = append(fields, t("liveness.suggestion_orphaned", rep.TaskID))
+	case IdentityMismatch, Unprobeable:
+		fields = append(fields, t("liveness.suggestion_verify_by_hand"))
 	}
 	return strings.Join(fields, "\t")
 }

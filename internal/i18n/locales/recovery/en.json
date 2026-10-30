@@ -32,5 +32,20 @@
   "launch.session_repair_start_unfinished": "{{.V0}} has an unfinished start attempt (status {{.V1}}), so its session cannot be repaired. Next step: while the launcher runs, wait for it; otherwise end the attempt with kander resume {{.V0}} --adopt --decision <reference> or kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>.",
   "launch.unresolved_next_steps": "The executor may be working. Do not run kander start again. Next step, one of:",
   "launch.superseded": "superseded: {{.V0}}: a takeover or an adoption ended this start attempt; its container and card are untouched",
-  "launch.adopted": "adopted: {{.V0}} window={{.V1}}"
+  "launch.adopted": "adopted: {{.V0}} window={{.V1}}",
+  "liveness.process_identity_legacy": "old card has no process identity",
+  "liveness.process_identity_unrecorded": "the launcher recorded no process identity",
+  "liveness.process_platform_unsupported": "this platform cannot check a process identity",
+  "liveness.process_probe_denied": "the platform refused the process probe: {{.V0}}",
+  "liveness.process_rebooted": "the system restarted",
+  "liveness.process_exited": "process {{.V0}} has exited",
+  "liveness.process_pid_reused": "process ID {{.V0}} was reused",
+  "liveness.process_executable_mismatch": "executable mismatch: expected {{.V0}}, actual {{.V1}}",
+  "liveness.process_card_transferred": "the card moved to another execution",
+  "liveness.process_identity_matches": "process {{.V0}} matches its recorded identity",
+  "liveness.process_starter_gone": "the agent runs, but the Kander process {{.V0}} that started it is gone",
+  "liveness.suggestion_orphaned": "Suggestion: to end an unfinished start, run kander resume {{.V0}} --adopt --decision <reference>; to replace the executor, run kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>",
+  "liveness.suggestion_verify_by_hand": "Suggestion: verify the executor by hand; do not treat this result as alive",
+  "launch.process_identity_not_recorded": "warning: {{.V0}}: process identity not recorded, so kander check reports unknown: {{.V1}}\n",
+  "launch.native_resume_unsupported": "{{.V0}} runs on {{.V1}}, which has no native resume. Next step: check the executor with kander check {{.V0}}; end an unfinished start with kander resume {{.V0}} --adopt --decision <reference>, or replace the executor with kander resume {{.V0}} --agent <agent> --message <message>."
 }

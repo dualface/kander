@@ -32,5 +32,20 @@
   "launch.session_repair_start_unfinished": "{{.V0}} 的启动尝试尚未结束（状态 {{.V1}}），不能修复会话。下一步：启动者还在运行时等待它；否则用 kander resume {{.V0}} --adopt --decision <引用> 或 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息> 结束启动尝试。",
   "launch.unresolved_next_steps": "executor 可能仍在工作。不要再次运行 kander start。下一步，二选一：",
   "launch.superseded": "superseded: {{.V0}}：takeover 或接手已结束本次启动尝试；容器与卡均未改动",
-  "launch.adopted": "adopted: {{.V0}} window={{.V1}}"
+  "launch.adopted": "adopted: {{.V0}} window={{.V1}}",
+  "liveness.process_identity_legacy": "旧卡没有进程身份",
+  "liveness.process_identity_unrecorded": "启动者没有记录进程身份",
+  "liveness.process_platform_unsupported": "此平台不支持进程身份核对",
+  "liveness.process_probe_denied": "平台拒绝进程探测：{{.V0}}",
+  "liveness.process_rebooted": "系统已重启",
+  "liveness.process_exited": "进程 {{.V0}} 已退出",
+  "liveness.process_pid_reused": "PID {{.V0}} 已复用",
+  "liveness.process_executable_mismatch": "可执行文件不符：期望 {{.V0}}，实际 {{.V1}}",
+  "liveness.process_card_transferred": "卡已转给其他执行",
+  "liveness.process_identity_matches": "进程 {{.V0}} 与记录的身份一致",
+  "liveness.process_starter_gone": "agent 仍在运行，但启动它的 Kander 进程 {{.V0}} 已不在",
+  "liveness.suggestion_orphaned": "建议：结束未决启动用 kander resume {{.V0}} --adopt --decision <引用>；替换 executor 用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>",
+  "liveness.suggestion_verify_by_hand": "建议：人工核对 executor，不得把这个结果当作存活",
+  "launch.process_identity_not_recorded": "警告：{{.V0}}：没有记录进程身份，kander check 将报 unknown：{{.V1}}\n",
+  "launch.native_resume_unsupported": "{{.V0}} 运行在 {{.V1}} 上，不支持原生恢复。下一步：用 kander check {{.V0}} 核对 executor；用 kander resume {{.V0}} --adopt --decision <引用> 结束未决启动，或者用 kander resume {{.V0}} --agent <agent> --message <消息> 替换 executor。"
 }

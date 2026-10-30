@@ -14,6 +14,11 @@ const (
 	Stopped = "stopped"
 	Drifted = "drifted"
 	Unknown = "unknown"
+
+	// The results below only the process identity of a card without a pane gives.
+	AliveOrphaned    = "alive-orphaned"
+	IdentityMismatch = "identity-mismatch"
+	Unprobeable      = "unprobeable"
 )
 
 var (

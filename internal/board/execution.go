@@ -596,7 +596,7 @@ func stageExecutionRollback(tx *Transaction, s Snapshot, text, state string, fen
 	if status == "" {
 		return coordinatorError("start rollback binding")
 	}
-	restored := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, PreviousID: cur.ID, Cycle: cur.Cycle, Kind: replaced.Kind, Status: status, Owner: t.NewOwner, Session: t.NewSession, Window: t.NewWindow, Revision: s.Revision + 1, Failure: replaced.Failure}
+	restored := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, PreviousID: cur.ID, Cycle: cur.Cycle, Kind: replaced.Kind, Status: status, Owner: t.NewOwner, Session: t.NewSession, Window: t.NewWindow, Process: replaced.Process, Revision: s.Revision + 1, Failure: replaced.Failure}
 	t.ToRecord = restored.ID
 	if err := publishRecord(tx, restored); err != nil {
 		return err

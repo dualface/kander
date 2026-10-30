@@ -32,5 +32,20 @@
   "launch.session_repair_start_unfinished": "{{.V0}} の開始試行は未完了です（状態 {{.V1}}）。セッションは修復できません。次の手順: ランチャーの実行中は待ちます。それ以外は kander resume {{.V0}} --adopt --decision <参照> または kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> で開始試行を終わらせてください。",
   "launch.unresolved_next_steps": "executor が作業中の可能性があります。kander start を再実行しないでください。次の手順はどちらか一方です:",
   "launch.superseded": "superseded: {{.V0}}: takeover または引き取りがこの開始試行を終わらせました。コンテナとカードは変更していません",
-  "launch.adopted": "adopted: {{.V0}} window={{.V1}}"
+  "launch.adopted": "adopted: {{.V0}} window={{.V1}}",
+  "liveness.process_identity_legacy": "古いカードにはプロセス ID 情報がありません",
+  "liveness.process_identity_unrecorded": "起動側がプロセス ID 情報を記録していません",
+  "liveness.process_platform_unsupported": "このプラットフォームではプロセス ID 情報を確認できません",
+  "liveness.process_probe_denied": "プラットフォームがプロセスプローブを拒否しました: {{.V0}}",
+  "liveness.process_rebooted": "システムが再起動しました",
+  "liveness.process_exited": "プロセス {{.V0}} は終了しました",
+  "liveness.process_pid_reused": "PID {{.V0}} は再利用されました",
+  "liveness.process_executable_mismatch": "実行ファイルが一致しません: 期待 {{.V0}}、実際 {{.V1}}",
+  "liveness.process_card_transferred": "カードは別の実行に移りました",
+  "liveness.process_identity_matches": "プロセス {{.V0}} は記録された ID 情報と一致します",
+  "liveness.process_starter_gone": "agent は動作中ですが、起動した Kander プロセス {{.V0}} はもうありません",
+  "liveness.suggestion_orphaned": "提案: 未完了の起動を終えるには kander resume {{.V0}} --adopt --decision <参照>、executor を置き換えるには kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を実行してください",
+  "liveness.suggestion_verify_by_hand": "提案: executor を手動で確認してください。この結果を生存として扱わないでください",
+  "launch.process_identity_not_recorded": "警告: {{.V0}}: プロセス ID 情報を記録できなかったため、kander check は unknown を報告します: {{.V1}}\n",
+  "launch.native_resume_unsupported": "{{.V0}} は {{.V1}} で動作しており、ネイティブ再開に対応していません。次の手順: kander check {{.V0}} で executor を確認し、未完了の起動は kander resume {{.V0}} --adopt --decision <参照> で終えるか、kander resume {{.V0}} --agent <agent> --message <メッセージ> で executor を置き換えてください。"
 }
