@@ -12,6 +12,9 @@ import (
 // ProcessIdentitySupported reports whether this platform can observe a process.
 const ProcessIdentitySupported = true
 
+// ImageCanChange reports whether a running process can replace its image.
+const ImageCanChange = true
+
 // szomb is SZOMB of <sys/proc.h>; x/sys does not export it.
 const szomb = 5
 

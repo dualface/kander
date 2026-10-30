@@ -7,6 +7,9 @@ import "context"
 // ProcessIdentitySupported reports whether this platform can observe a process.
 const ProcessIdentitySupported = false
 
+// ImageCanChange reports whether a running process can replace its image.
+const ImageCanChange = true
+
 // ObserveProcess has no implementation on this platform.
 func ObserveProcess(ctx context.Context, _ int) (ProcessFacts, error) {
 	if err := ctx.Err(); err != nil {

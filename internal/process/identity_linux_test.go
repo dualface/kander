@@ -31,7 +31,7 @@ func startScript(t *testing.T, name, body string) *exec.Cmd {
 // binary that keeps running, and the configured agent name appears nowhere.
 func TestObserveSettledFollowsAShimExec(t *testing.T) {
 	cmd := startScript(t, "claude", "#!/bin/sh\nsleep 0.2\nexec sleep 30\n")
-	facts, err := ObserveSettled(context.Background(), cmd.Process.Pid)
+	facts, err := ObserveSettled(context.Background(), cmd.Process.Pid, alwaysRunning)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,9 +44,32 @@ func TestObserveSettledFollowsAShimExec(t *testing.T) {
 	}
 }
 
+// A shim that works longer than the quiet window looks settled while it still runs
+// the interpreter. Only the start file proves an image, so the reading stays
+// unconfirmed, and the evidence of a running agent gives the final one.
+func TestQuietDoesNotConfirmALateShim(t *testing.T) {
+	cmd := startScript(t, "claude", "#!/bin/sh\nsleep 1.2\nexec sleep 30\n")
+	early, err := ObserveSettled(context.Background(), cmd.Process.Pid, alwaysRunning)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if early.Executable == "sleep" || ImageConfirmed(cmd.Path, early) {
+		t.Fatalf("early=%+v", early)
+	}
+	began := time.Now()
+	ready := func() bool { return time.Since(began) > 1500*time.Millisecond }
+	final, err := ObserveWhenReady(context.Background(), early, alwaysRunning, ready)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.Executable != "sleep" || final.Start != early.Start {
+		t.Fatalf("final=%+v early=%+v", final, early)
+	}
+}
+
 func TestObserveSettledReportsAnExitDuringTheWait(t *testing.T) {
 	cmd := startScript(t, "short", "#!/bin/sh\nexec sleep 0.2\n")
-	if _, err := ObserveSettled(context.Background(), cmd.Process.Pid); !errors.Is(err, ErrProcessGone) {
+	if _, err := ObserveSettled(context.Background(), cmd.Process.Pid, alwaysRunning); !errors.Is(err, ErrProcessGone) {
 		t.Fatalf("err=%v", err)
 	}
 }

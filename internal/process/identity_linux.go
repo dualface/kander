@@ -14,6 +14,9 @@ import (
 // ProcessIdentitySupported reports whether this platform can observe a process.
 const ProcessIdentitySupported = true
 
+// ImageCanChange reports whether a running process can replace its image.
+const ImageCanChange = true
+
 // ObserveProcess reads kernel process metadata only: never the environment or the
 // command line of the process. /proc/<pid>/exe names the executable, because a
 // process can rewrite comm, and comm truncates at 15 bytes.

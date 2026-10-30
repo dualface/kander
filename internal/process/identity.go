@@ -3,7 +3,9 @@ package process
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,6 +18,11 @@ var (
 	ErrProcessDenied = errors.New("process observation denied")
 	// ErrProcessUnsupported: this platform has no process identity.
 	ErrProcessUnsupported = errors.New("process identity is unavailable on this platform")
+	// ErrProcessReplaced: the ID now names another process than the one observed
+	// first. The started process has exited.
+	ErrProcessReplaced = errors.New("process was replaced by a later process")
+	// ErrProcessUnsettled: the process kept changing up to the observation limit.
+	ErrProcessUnsettled = errors.New("process did not settle")
 )
 
 // ProcessFacts are kernel facts of one process. Start is a platform token that
@@ -31,20 +38,56 @@ const (
 	settleInterval = 100 * time.Millisecond
 	settleQuiet    = 500 * time.Millisecond
 	settleLimit    = 3 * time.Second
+	readyInterval  = 500 * time.Millisecond
 
 	// bootClockTolerance bounds the drift of a boot time derived from the wall
 	// clock. Widening it costs nothing: after a reboot the exact start time of a
 	// process cannot match, so only the reason of the stopped result differs.
 	bootClockTolerance = 300
+
+	// commLimit is the length a platform may truncate an executable name to.
+	commLimit = 16
 )
 
-// ObserveSettled waits until a new process stops changing. A shim execs the real
-// binary, so the first reading names the interpreter. At the limit it returns the
-// latest reading: a slower shim is judged by the first exec it finished.
-func ObserveSettled(ctx context.Context, pid int) (ProcessFacts, error) {
+// incarnation binds observations to one started process. A process ID alone can
+// name a later process, so every sample is read first and then checked against the
+// start handle: until the handle reports an exit, the ID cannot have been reused.
+type incarnation struct {
+	pid     int
+	start   string
+	running func() bool
+	observe func(context.Context, int) (ProcessFacts, error)
+}
+
+func (i *incarnation) sample(ctx context.Context) (ProcessFacts, error) {
+	facts, err := i.observe(ctx, i.pid)
+	if err != nil {
+		return ProcessFacts{}, err
+	}
+	if !i.running() {
+		return ProcessFacts{}, ErrProcessGone
+	}
+	if i.start == "" {
+		i.start = facts.Start
+	}
+	if facts.Start != i.start {
+		return ProcessFacts{}, ErrProcessReplaced
+	}
+	return facts, nil
+}
+
+// ObserveSettled reads a new process once it stopped changing for a short time. A
+// shim execs the real binary, so an early reading can name an interpreter. Quiet
+// does not prove the exec happened: only ImageConfirmed says the result is final.
+// running reports whether the handle that started the process still holds it.
+func ObserveSettled(ctx context.Context, pid int, running func() bool) (ProcessFacts, error) {
+	return settle(ctx, &incarnation{pid: pid, running: running, observe: ObserveProcess})
+}
+
+func settle(ctx context.Context, watched *incarnation) (ProcessFacts, error) {
 	limit, cancel := context.WithTimeout(ctx, settleLimit)
 	defer cancel()
-	latest, err := ObserveProcess(limit, pid)
+	latest, err := watched.sample(limit)
 	if err != nil {
 		return ProcessFacts{}, err
 	}
@@ -54,14 +97,14 @@ func ObserveSettled(ctx context.Context, pid int) (ProcessFacts, error) {
 	for {
 		select {
 		case <-limit.Done():
-			return latest, ctx.Err()
+			if ctx.Err() != nil {
+				return ProcessFacts{}, ctx.Err()
+			}
+			return ProcessFacts{}, ErrProcessUnsettled
 		case <-ticker.C:
 		}
-		next, err := ObserveProcess(limit, pid)
+		next, err := watched.sample(limit)
 		if err != nil {
-			if limit.Err() != nil && ctx.Err() == nil {
-				return latest, nil
-			}
 			return ProcessFacts{}, err
 		}
 		if next != latest {
@@ -70,6 +113,44 @@ func ObserveSettled(ctx context.Context, pid int) (ProcessFacts, error) {
 			return latest, nil
 		}
 	}
+}
+
+// ObserveWhenReady waits for ready and then reads the same incarnation as first.
+// ready must be evidence that the agent itself runs; time is not.
+func ObserveWhenReady(ctx context.Context, first ProcessFacts, running, ready func() bool) (ProcessFacts, error) {
+	return awaitReady(ctx, &incarnation{pid: first.PID, start: first.Start, running: running, observe: ObserveProcess}, ready)
+}
+
+func awaitReady(ctx context.Context, watched *incarnation, ready func() bool) (ProcessFacts, error) {
+	ticker := time.NewTicker(readyInterval)
+	defer ticker.Stop()
+	for {
+		// Ready first: the sample that returns must postdate the evidence.
+		isReady := ready()
+		facts, err := watched.sample(ctx)
+		if err != nil {
+			return ProcessFacts{}, err
+		}
+		if isReady {
+			return facts, nil
+		}
+		select {
+		case <-ctx.Done():
+			return ProcessFacts{}, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// ImageConfirmed reports whether facts can be final for the process started from
+// program. A platform without exec never changes the image. Elsewhere the kernel
+// image must be the started file itself; a script or a wrapper may still exec.
+func ImageConfirmed(program string, facts ProcessFacts) bool {
+	if !ImageCanChange {
+		return true
+	}
+	base := filepath.Base(program)
+	return base == facts.Executable || len(facts.Executable) == commLimit && strings.HasPrefix(base, facts.Executable)
 }
 
 // SameBoot compares two boot identifiers. Numeric identifiers are boot times in

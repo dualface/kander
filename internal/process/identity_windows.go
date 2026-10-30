@@ -15,6 +15,10 @@ import (
 // ProcessIdentitySupported reports whether this platform can observe a process.
 const ProcessIdentitySupported = true
 
+// ImageCanChange reports whether a running process can replace its image. Windows
+// has no exec.
+const ImageCanChange = false
+
 // stillActive is STILL_ACTIVE of the Win32 process API.
 const stillActive = 259
 
