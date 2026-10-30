@@ -355,12 +355,13 @@ func verifyPublishedReview(tx *Transaction, run ReviewRun) error {
 			return reviewError("missing sidecar")
 		}
 		manifest := ReviewManifest{Schema: 1, Input: ancestor.ReviewInput, SidecarHash: ReviewDigest(sidecar), Hashes: ancestor.Hashes}
-		targets, err := reviewCopyTargets(tx, ancestor.TaskIDs)
-		if err != nil {
-			return err
-		}
-		for _, id := range targets {
-			if slices.Contains(ancestor.SkippedMembers, id) {
+		for _, id := range ancestor.TaskIDs {
+			// An archived member keeps its copies, and damage to them still counts.
+			excluded, err := memberExcluded(tx, id)
+			if err != nil {
+				return err
+			}
+			if excluded || slices.Contains(ancestor.SkippedMembers, id) {
 				continue
 			}
 			if err = verifyCardReview(tx, id, manifest, sidecar); err != nil {
