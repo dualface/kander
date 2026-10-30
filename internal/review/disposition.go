@@ -248,7 +248,11 @@ func hydrateIncremental(root string, options archiveOptions, arguments []string,
 	if err != nil {
 		return nil, err
 	}
-	if previous.BatchID != options.batchID || !slices.Equal(previous.TaskIDs, options.tasks) {
+	remaining, err := board.ReviewRemainingMembers(root, previous.TaskIDs)
+	if err != nil {
+		return nil, err
+	}
+	if previous.BatchID != options.batchID || !slices.Equal(remaining, options.tasks) {
 		return nil, archiveError("incremental batch/members mismatch")
 	}
 	if len(arguments) == 7 && arguments[6] != "" && arguments[6] != previous.Commit {

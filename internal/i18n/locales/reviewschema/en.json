@@ -1,5 +1,5 @@
 {
-  "review.schema.plan.cycle_batch_from": "Written by Kander: a member rebound after its batches closed, mapped to the batch count at that rebind. Its new cycle needs a batch from that position on.",
+  "review.schema.plan.cycle_batch_from": "Written by Kander: a rebound member, mapped to the position of the first batch that can review its new cycle. That cycle needs a batch from there on.",
   "review.schema.extend-plan.drop_batches": "IDs of the trailing batches to remove, in plan order. Each batch must have no run, advance or closure. Reopens a sealed plan. Mutually exclusive with every other operation.",
   "review.schema.disposition.withdrawal.decision": "User decision reference for the withdrawal.",
   "review.schema.disposition.withdrawal.exclusion_id": "The exclusion_id of the member, from review progress.",

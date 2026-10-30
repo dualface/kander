@@ -1,5 +1,5 @@
 {
-  "review.schema.plan.cycle_batch_from": "Kander が書き込みます。バッチのクローズ後に再バインドされたメンバーから、その時点のバッチ数への対応です。新しい実行サイクルにはその位置以降のバッチが必要です。",
+  "review.schema.plan.cycle_batch_from": "Kander が書き込みます。再バインドされたメンバーから、新しいサイクルをレビューできる最初のバッチの位置への対応です。そのサイクルにはその位置以降のバッチが必要です。",
   "review.schema.extend-plan.drop_batches": "削除する末尾のバッチ ID（計画順）。各バッチに run、前進、クローズがあってはいけません。封印済みの計画は再び開きます。他の操作とは同時に使えません。",
   "review.schema.disposition.withdrawal.decision": "取り下げのユーザー決定の参照。",
   "review.schema.disposition.withdrawal.exclusion_id": "メンバーの exclusion_id。review progress で確認します。",

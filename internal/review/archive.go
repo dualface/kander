@@ -117,7 +117,12 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 		if err := readArchiveJSON(options.advanceFile, advance); err != nil {
 			return false, err
 		}
-		if err := validateReviewAdvance(*ctx, *advance, options.tasks); err != nil {
+		// The range may hold a delivery of a member that left the batch since.
+		members := options.tasks
+		if b, err := board.ReadReviewBatch(root, options.batchID); err == nil {
+			members = b.TaskIDs
+		}
+		if err := validateReviewAdvance(*ctx, *advance, members); err != nil {
 			return false, err
 		}
 	}

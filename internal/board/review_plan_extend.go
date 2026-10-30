@@ -102,15 +102,15 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			}
 			for id, cycle := range changed {
 				p.Cycles[id] = cycle
-				closed, e := memberBatchesClosed(tx, p, id)
+				start, found, e := cycleBatchStart(tx, p, id)
 				if e != nil {
 					return e
 				}
-				if closed {
+				if found {
 					if p.CycleBatchFrom == nil {
 						p.CycleBatchFrom = map[string]int{}
 					}
-					p.CycleBatchFrom[id] = len(p.Batches)
+					p.CycleBatchFrom[id] = start
 				}
 			}
 		}

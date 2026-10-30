@@ -76,7 +76,11 @@ func incrementalReviewContext(tx *Transaction, run ReviewRun) (data []byte, err 
 			return e
 		}
 		if exists {
-			for _, task := range b.TaskIDs {
+			targets, e := reviewCopyTargets(tx, b.TaskIDs)
+			if e != nil {
+				return e
+			}
+			for _, task := range targets {
 				text, e := tx.Read(task, "reviews/batches/"+b.BatchID+"/disposition.json")
 				if e != nil {
 					return e

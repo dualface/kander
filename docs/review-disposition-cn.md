@@ -96,7 +96,7 @@ kander review progress <绝对工作目录> <task-id>
 }
 ```
 
-成员的全部批次都关闭之后再重绑，新执行周期就没有批次复审。计划在 `cycle_batch_from` 中记录该成员与重绑时的批次数，`kander move <id> done` 会拒绝：`kander review progress` 在 `pending` 中列出 `cycle-batch:<task-id>`，并给出带 `task_id` 的动作 `append-cycle-batch`。用 `extend-plan` 的 `batch` 追加一个批次。已封存的计划只在批次包含这样的成员时才接受，并且该批次仍受普通链规则约束：`previous_batch_id` 是最后一个批次，`base` 等于它关闭时的目标。这个批次可以实际复审，也可以走显式 N/A 路径，把每个角色写成 `N/A: <原因与规则依据>`。成员的批次还开着时重绑，不需要新批次，因为该批次在新周期内关闭。
+成员的全部批次都关闭之后再重绑，新执行周期就没有批次复审。计划在 `cycle_batch_from` 中记录能够复审新周期的第一个批次的位置：该成员第一个未关闭的批次，或者计划末尾。该位置之后没有批次时，`kander move <id> done` 会拒绝，所以移除那个未关闭的批次之后仍然欠一个批次：`kander review progress` 在 `pending` 中列出 `cycle-batch:<task-id>`，并给出带 `task_id` 的动作 `append-cycle-batch`。用 `extend-plan` 的 `batch` 追加一个批次。已封存的计划只在批次包含这样的成员时才接受，并且该批次仍受普通链规则约束：`previous_batch_id` 是最后一个批次，`base` 等于它关闭时的目标。这个批次可以实际复审，也可以走显式 N/A 路径，把每个角色写成 `N/A: <原因与规则依据>`。成员的批次还开着时重绑，只要该批次留在计划中，就不需要新批次，因为它在新周期内关闭。
 
 `done/` 成员不受影响：其他成员的后续批次、不含该成员的未关闭批次、其他成员的重绑，都不改变它的 `check`、coordinator 镜像，以及已完成的 wrap-up。已完成的 wrap-up 仍然绑定当时的计划终点。
 

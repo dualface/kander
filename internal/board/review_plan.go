@@ -31,8 +31,8 @@ type ReviewPlan struct {
 	TaskIDs        []string          `json:"task_ids"`
 	Cycles         map[string]string `json:"cycles"`
 	Batches        []ReviewPlanBatch `json:"batches"`
-	// CycleBatchFrom maps a member rebound after all its batches closed to the
-	// count of batches at that rebind. Its new cycle needs a batch from there on.
+	// CycleBatchFrom maps a rebound member to the position of the first batch that
+	// can review its new cycle. That cycle needs a batch from there on.
 	CycleBatchFrom map[string]int `json:"cycle_batch_from,omitempty"`
 	RecordedAt     string         `json:"recorded_at"`
 }

@@ -290,7 +290,15 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				input.ReportLanguage = existingBatch.ReportLanguage
 			}
 		}
-		language, e := reviewCards(tx, input.TaskIDs, fallback, input.ReportLanguage)
+		// A replay finishes a run for the members that remain.
+		cards, e := input.TaskIDs, error(nil)
+		if exists {
+			cards, e = withoutExcluded(tx, cards)
+		}
+		if e != nil {
+			return e
+		}
+		language, e := reviewCards(tx, cards, fallback, input.ReportLanguage)
 		if e != nil {
 			return e
 		}

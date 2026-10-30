@@ -104,6 +104,30 @@ func voidReviewBatch(tx *Transaction, ids []string) (bool, error) {
 	return len(ids) > 0, nil
 }
 
+// ReviewRemainingMembers returns ids without the members that left.
+func ReviewRemainingMembers(root string, ids []string) (remaining []string, err error) {
+	err = WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
+		var e error
+		remaining, e = withoutExcluded(tx, ids)
+		return e
+	})
+	return remaining, err
+}
+
+func withoutExcluded(tx *Transaction, ids []string) ([]string, error) {
+	remaining := make([]string, 0, len(ids))
+	for _, id := range ids {
+		excluded, err := memberExcluded(tx, id)
+		if err != nil {
+			return nil, err
+		}
+		if !excluded {
+			remaining = append(remaining, id)
+		}
+	}
+	return remaining, nil
+}
+
 // requireRunMembers keeps the batch member set fixed: a run names every member
 // except the excluded ones, which can no longer take a review.
 func requireRunMembers(tx *Transaction, batch ReviewBatch, ids []string) error {
@@ -216,9 +240,8 @@ func withdrawnRecords(l dispositionLedger) []ReviewDisposition {
 	return out
 }
 
-// cycleBatchMissing reports a member whose rebound cycle has no batch yet. A
-// batch appended after the rebind covers the cycle; a batch that was open during
-// the rebind never enters this list.
+// cycleBatchMissing reports a member whose rebound cycle has no batch. A batch from
+// the recorded position on covers the cycle, so dropping it owes the batch again.
 func cycleBatchMissing(p ReviewPlan, id string) bool {
 	from, ok := p.CycleBatchFrom[id]
 	if !ok {
@@ -232,22 +255,27 @@ func cycleBatchMissing(p ReviewPlan, id string) bool {
 	return true
 }
 
-// memberBatchesClosed reports a member whose every batch closed. A rebind on such a
-// member starts a cycle no batch reviews, and that alone must not pass done.
-func memberBatchesClosed(tx *Transaction, p ReviewPlan, id string) (bool, error) {
+// cycleBatchStart returns the position from which a batch reviews the new cycle of
+// a member: its first open batch, or the end of the plan when every batch of the
+// member closed. A rebind alone must not pass done. A member of no batch has no
+// closed review to reuse, and the seal covers it.
+func cycleBatchStart(tx *Transaction, p ReviewPlan, id string) (int, bool, error) {
 	found := false
-	for _, b := range p.Batches {
+	for i, b := range p.Batches {
 		if !containsID(b.TaskIDs, id) {
 			continue
 		}
 		found = true
 		var c ReviewClosure
 		closed, err := readReviewJSON(tx, closureName(b.BatchID), &c)
-		if err != nil || !closed {
-			return false, err
+		if err != nil {
+			return 0, false, err
+		}
+		if !closed {
+			return i, true, nil
 		}
 	}
-	return found, nil
+	return len(p.Batches), found, nil
 }
 
 // putPlanCopies publishes the plan to every member that still takes a copy.

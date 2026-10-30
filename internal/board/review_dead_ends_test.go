@@ -435,6 +435,39 @@ func TestIncrementalRunAfterAMemberLeft(t *testing.T) {
 	}
 }
 
+func TestIncrementalContextAfterAPublishedViewAndAnExit(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{gateCard(t, root, "view-stays"), gateCard(t, root, "view-leaves")}
+	gatePlan(t, root, ids, archiveRequirements())
+	first := gateRun(t, root, archiveInput(ids, "view-first", "PMQA"), emptyFindings())
+	assignGate(t, root, first, map[string][]string{})
+	deadEndExit(t, root, ids[1], "trash")
+	if _, err := PublishReviewDisposition(root, "batch"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReviewIncrementalContext(root, first.RunID); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := ReviewRemainingMembers(root, first.TaskIDs)
+	if err != nil || !slices.Equal(remaining, ids[:1]) {
+		t.Fatalf("%v %v", remaining, err)
+	}
+}
+
+func TestReplayFinishesARunAfterAMemberLeft(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{gateCard(t, root, "replay-stays"), gateCard(t, root, "replay-leaves")}
+	gatePlan(t, root, ids, archiveRequirements())
+	in := archiveInput(ids, "replay-run", "PMQA")
+	if _, fresh, err := PrepareReviewRun(root, in, nil, nil, archiveOriginals(), "test"); err != nil || !fresh {
+		t.Fatalf("%v %v", fresh, err)
+	}
+	deadEndExit(t, root, ids[1], "archived")
+	if _, fresh, err := PrepareReviewRun(root, in, nil, nil, archiveOriginals(), "test"); err != nil || fresh {
+		t.Fatalf("replay: %v %v", fresh, err)
+	}
+}
+
 func TestPublicationSkipsAMemberThatLeftDuringTheRun(t *testing.T) {
 	root := tempBoard(t)
 	ids := []string{gateCard(t, root, "pub-stays"), gateCard(t, root, "pub-leaves")}
@@ -626,7 +659,7 @@ func TestReboundCycleNeedsABatchBeforeDone(t *testing.T) {
 	}
 }
 
-func TestPlanInputCannotClearOrForgeCycleBatches(t *testing.T) {
+func TestPlanInputCannotForgeCycleBatches(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "forged-from")
 	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-forged", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, CycleBatchFrom: map[string]int{id: 0}, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: noReviewRequirements()}}}
@@ -651,14 +684,39 @@ func TestSealedPlanTakesNoBatchWithoutAReboundCycle(t *testing.T) {
 	}
 }
 
+func TestDroppingTheOpenBatchOfAReboundCycleOwesItAgain(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "drop-owed")
+	a, b, c := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
+	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-drop-owed", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{
+		{BatchID: "old", TaskIDs: []string{id}, Base: a, TargetCommit: b, Requirements: noReviewRequirements()},
+		{BatchID: "open", PreviousBatchID: "old", TaskIDs: []string{id}, Base: b, TargetCommit: c, Requirements: noReviewRequirements()},
+	}}
+	if err := CreateReviewPlan(root, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deadEndClose(t, root, "old", map[string]ReviewRoleConclusion{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadEndReclaim(t, root, id)
+	rebound := deadEndRebind(t, root, id)
+	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: rebound.Revision, DropBatches: []string{"open"}, Author: "coordinator", Basis: "drop"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: rebound.Revision + 1, Seal: true, Author: "coordinator", Basis: "seal"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := deadEndDone(t, root, id); err == nil || !strings.Contains(err.Error(), "cycle-batch:"+id) {
+		t.Fatalf("the old closure passed done for the new cycle: %v", err)
+	}
+}
+
 func TestReboundWhileABatchIsOpenOwesNoNewBatch(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "open-rebind")
 	gatePlan(t, root, []string{id}, noReviewRequirements())
 	deadEndReclaim(t, root, id)
-	if p := deadEndRebind(t, root, id); len(p.CycleBatchFrom) != 0 {
-		t.Fatalf("%+v", p.CycleBatchFrom)
-	}
+	deadEndRebind(t, root, id)
 	if _, err := gateClose(t, root, map[string]ReviewRoleConclusion{}); err != nil {
 		t.Fatal(err)
 	}

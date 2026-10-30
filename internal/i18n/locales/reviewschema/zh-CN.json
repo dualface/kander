@@ -1,5 +1,5 @@
 {
-  "review.schema.plan.cycle_batch_from": "由 Kander 写入：在批次全部关闭之后重绑的成员，到重绑时的批次数。其新执行周期需要从该位置起的一个批次。",
+  "review.schema.plan.cycle_batch_from": "由 Kander 写入：重绑的成员，到能够复审其新周期的第一个批次的位置。该周期需要从该位置起的一个批次。",
   "review.schema.extend-plan.drop_batches": "要移除的末尾批次 ID，按计划顺序。每个批次都不得有 run、推进或关闭。已封存的计划会重新打开。不能与其他操作同时使用。",
   "review.schema.disposition.withdrawal.decision": "撤回所依据的用户决定引用。",
   "review.schema.disposition.withdrawal.exclusion_id": "该成员的 exclusion_id，来自 review progress。",
