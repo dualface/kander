@@ -39,6 +39,7 @@ kander move <task-id> <backlog|todo|working|review|done|archived|trash> [--owner
 - Completion writes `RESULT` and `FINISHED_AT` in one transaction. A bound completion commits its receipt atomically with the move.
 - A move into `archived/` or `trash/` of a card whose dispatch completed settles that binding in the same transaction (`snippets/commands/dispatch.md`).
 - A claim, a reclaim, and a plain move from `todo/` to `working/` write the card's current execution record in the same transaction.
+- A move into `archived/` or `trash/` of a plan or task group member writes a member exclusion record in the same transaction. A move from `done/` into `archived/` writes none (`snippets/review-evidence-gate.md`).
 - A move into `archived/` deletes the review evidence and control records that belong only to archived cards (`KANDER-KANBAN-RULES.md` "Archived Review Evidence").
 
 **Reclaiming**

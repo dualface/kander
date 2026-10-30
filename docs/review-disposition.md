@@ -97,6 +97,20 @@ When `kander move <id> working --owner <agent> --decision <reference>` changes `
 }
 ```
 
+A rebind after every batch of the member closed starts a cycle no batch reviews. The plan records the member in `cycle_batch_from`, with the batch count at that rebind, and `kander move <id> done` refuses: `kander review progress` lists `cycle-batch:<task-id>` under `pending` and the action `append-cycle-batch` with `task_id`. Append one batch with `extend-plan` and `batch`. A sealed plan accepts this batch only when it names such a member, and the batch stays subject to the ordinary chain rules: `previous_batch_id` is the last batch, and `base` equals its closed target. The batch can run a review, or it can use the explicit N/A path with every role `N/A: <reason and rule basis>`. A rebind while a batch of the member is still open owes no new batch, because that batch closes in the new cycle.
+
+A member in `done/` stays as it was: a later batch of another member, an open batch that does not name it, and the rebind of another member do not change its `check`, its coordinator mirror, or its completed wrap-up, which stays bound to the plan end of its day.
+
+### Member Exclusion
+
+A `kander move` into `archived/` or `trash/` of a plan or task group member writes `exclusions/<task-id>.json` in the same transaction: exclusion ID, plan, task group, source and target state, result, cycle, reason, and decision reference. Only that move writes the record, and neither state has a way back, so an exclusion cannot be forged to escape a review. A move from `done/` into `archived/` writes none. A move from `done/` into `trash/` does, because the card no longer counts as delivered.
+
+- Plan, batch, closure, assignment, interpretation, and legacy-map writes skip the copies of excluded members and of every archived member, and the validators stop comparing those copies. A copy that exists stays as it is.
+- Only an excluded member is exempt from the gate. Its cycle needs no rebind, and completion covers the other members. A member archived after `done/` keeps its facts and has no exemption.
+- A new run names the batch members that remain. A run prepared before the exclusion takes no copy on the excluded member (`skipped_members`) and settles for the others. A batch with no member left neither closes nor blocks: the chain continues over it, and wrap-up evidence ends at the last batch with a member.
+- An assigned finding of an excluded member blocks aggregation, advance, and closure until it has a `withdrawn` record (see "Status Lifecycle"). A new assignment refuses an excluded member.
+- `kander coordinator reconcile` accepts a terminal member only from what the move wrote. A member archived with `RESULT: completed` needs `FINISHED_AT`, the fact of `done/`. A member with a stored execution chain needs an exclusion whose state, result, and cycle match the card. A member with no stored chain keeps the result check alone.
+
 ### Incremental Multi-Batch Planning
 
 For multi-step delivery:
@@ -260,6 +274,9 @@ The task `OWNER` resolves assigned findings by submitting disposition records:
 | `rejected` | Blocking / Non-blocking | Enters unresolved list | Must state factual basis. |
 | `waived` | Security only | No | Requires `accepted-risk` or 15-minute `timed-out` notice. |
 | `deferred` | Non-blocking only | No | Must state rationale. |
+| `withdrawn` | Excluded member only | No | Written by the orchestrator. Requires `withdrawal.exclusion_id` and `withdrawal.decision`. Not a fix. |
+
+A `withdrawn` record goes through `kander review disposition` with the revision of the excluded card. The orchestrator takes `exclusion_id` from `kander review progress <task-id>`, whose `pending` also lists each `withdrawal:<run>/<finding>/<task>` still owed. The original lives in the ledger, because an archived card takes no write. The aggregate view repeats these records in `runs[].withdrawn`, apart from the author dispositions.
 
 ---
 
@@ -274,6 +291,8 @@ kander review advance <absolute-CWD> <advance-request.json>
 ```
 
 The request records `{batch_id, expected_revision, advance: {previous_target, target, reason, deliveries, foreign_commits}}`. `deliveries` maps batch-member commit SHAs to task IDs. Optional `foreign_commits` maps other commit SHAs in the range to nonempty reasons. Every commit in the range must appear in exactly one map. Git working tree must be clean.
+
+A batch with a planned successor refuses both entrances, because the base of the successor is immutable and must equal the closed target of this batch. The error names the successors. Remove them with `extend-plan` and `drop_batches`, which accepts trailing batches with no run, advance, or closure, reopens a sealed plan, and leaves the batch records, so an ID cannot return with another base. After the close, append the next batch under a new ID, then seal again.
 
 The command, and an incremental run with `--advance-file`, refuses while any assigned finding has no author disposition. Mechanical items count. The error lists each `task/run/finding`, and neither the batch nor the plan changes. An assigned finding without a record is a fix round that has not ended, and a target move would overtake it.
 
@@ -329,9 +348,9 @@ kander review close <CWD> <close-request.json>
 }
 ```
 
-### 5. Parallel Duplicate Runs
+### 5. Parallel Duplicate Runs and Retired Root Runs
 
-Every successful run of a required role must sit on the conclusion chain (the conclusion run and its `previous_run_id` ancestors), with one exception: a parallel duplicate listed in the optional `superseded_runs` map.
+Every successful run of a required role must sit on the conclusion chain (the conclusion run and its `previous_run_id` ancestors), with one exception: a run listed in the optional `superseded_runs` map, as a parallel duplicate or as a retired root run.
 
 ```json
 "superseded_runs": {
@@ -339,9 +358,11 @@ Every successful run of a required role must sit on the conclusion chain (the co
 }
 ```
 
-- The superseded run has `execution_status: ok` and the conclusion's role, and is not on the chain. A chain run has the same commit, reviewer, and `previous_run_id`; or the superseded run's predecessor is itself superseded and the run has the conclusion run's commit and reviewer. A full re-run after a fix or a reviewer switch qualifies under neither rule and stays rejected.
+- The superseded run has `execution_status: ok` and the conclusion's role, and is not on the chain. A chain run has the same commit, reviewer, and `previous_run_id`; or the superseded run's predecessor is itself superseded and the run has the conclusion run's commit and reviewer. A full re-run after a fix or a reviewer switch qualifies under neither rule and stays rejected without a decision.
+- With `decision`, a user decision reference, an entry also retires a root run that cannot join the chain, and a run whose predecessor has such an entry. Each such run needs its own entry. A run that branches off the conclusion chain does not qualify. Kander records the reference and does not verify it.
 - `replacement` is a successful run on the chain; `basis` is nonempty. An entry that matches no unlinked successful run (another batch, a failed run, a chain run) is rejected.
 - Each entry adds the edge `superseded.commit → replacement.commit` to the Git claims. The superseded run's findings keep the ordinary rules: they need assignment and author dispositions, and a fixed must-fix must be an ancestor of the conclusion run's commit. A fixed must-fix of the duplicate therefore needs a later incremental run as the conclusion.
+- The entry stays in the closure. The originals, findings, and failures of a retired run stay, and they keep binding the close.
 - An unlisted duplicate fails close with a localized next step naming the run, the conclusion, and the entry to add. `review progress` reports every role with two or more successful chain heads in an unclosed batch (candidates; only qualifying heads can be superseded) as `next_actions: [{"action": "supersede-duplicate-runs", "batch_id", "role", "run_ids"}]`.
 - The field is `omitempty`: closures without it keep their stored bytes, so existing closed batches verify unchanged.
 
@@ -351,7 +372,7 @@ Every successful run of a required role must sit on the conclusion chain (the co
 
 The `kander move <task-id> done` gate checks:
 1. **Plan Sealed**: The task's review plan has `"sealed": true`.
-2. **Batches Closed**: All batches are closed with valid role conclusions.
+2. **Batches Closed**: All batches are closed with valid role conclusions, except a batch with no member left. A rebound member whose every earlier batch closed has a later batch.
 3. **No Unresolved Blockers**: All blocking findings are resolved (`fixed` or validly `waived`).
 4. **Git Ancestry**: All pass commits and fix commits are verified ancestors of the final delivery target.
-5. **Artifact Integrity**: Local ledger matches hashes, without missing copies or broken links.
+5. **Artifact Integrity**: Local ledger matches hashes, without missing copies or broken links. Copies of excluded and archived members are not compared.
