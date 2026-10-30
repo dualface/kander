@@ -12,6 +12,24 @@ This document records how `kander start`, `resume`, `notify`, `dismiss`, and the
 - When an old card lacks the two fields, they are inserted in order after `OWNER`; unstarted old cards are not batch-rewritten.
 - When start or liveness validation fails, the original document is restored only while the operation still owns the current revision; otherwise the newer text is preserved and a conflict reported. When restoring the document fails, the error states the directory where the card actually is.
 
+## Transition Entrances
+
+`internal/launch`, `internal/notify` and `internal/window` never render `OWNER`, `SESSION` or `WINDOW`. Those fields change only through the entrances of `internal/board`, and each entrance writes the matching execution transition in the same transaction. See [Execution Ledger and Chain Walk](coordinator-recovery.md#execution-ledger-and-chain-walk).
+
+An entrance writes on the latest snapshot and changes only its own fields. It checks the execution record and the cycle of the caller's cursor, never the card revision, so a write by the executor cannot make the launcher fail. `BeginTaskStart` and `BeginTakeover` bind the cursor to the record they create; any other writer calls `BindExecutionCursor` once. A cursor bound to a record that is no longer current is refused.
+
+| Entrance | Transition |
+| --- | --- |
+| `BeginTaskStart` | `start`: the move to `working/`, the metadata, and a `pending` record |
+| `ConfirmTaskStart`, `ConfirmTaskStartSession` | `confirm`: the record becomes `running` |
+| `BeginTakeover` | `handoff`: the old record becomes `handed-off`, and a new `pending` record starts |
+| `RecordExecutionWindow` | `window-update` |
+| `RecordExecutionSession` | `session-repair` |
+| `RecordExecutionProcess` | `process-identity`: the one-time `process.json` original |
+| `RollbackDocument` | `rollback`, or `window-update` for a relaunch that only wrote `WINDOW` |
+
+An entrance returns `ExecutionResult.Advanced`: the card revision or column differed from the cursor before this write. The entrance then moves the cursor forward, so without this fact the launcher's own successful write would hide an earlier executor write. `Entry.AdvancedPastCursor` keeps the fact for the whole operation, and `RollbackDocument` refuses once it is set, so a rollback cannot erase executor work behind a current cursor.
+
 ## Task Files and Command Lines
 
 - `start`, `resume`, and a `notify` that needs to recover a process write the full prompt to a UTF-8 temporary task file on all platforms, containing the task ID, fixed requirements, and the message body. The agent command line receives only one instruction containing that absolute path. The file asks the agent to try to delete it when done; failure to delete or leftover files do not affect the result. These files get no POSIX permission or Windows ACL check or tightening.

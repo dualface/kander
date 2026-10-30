@@ -46,6 +46,7 @@ kander dispatch prepare <absolute-UTF8-intent.json>
 kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
 kander dispatch show <task-id> <dispatch-id>
 kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]
+kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 kander dismiss [--timeout SECONDS] <task-id>
 kander check [--all] [task-id ...]
 kander check delivery --base <ref> [--commit <ref>] [--json]

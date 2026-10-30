@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-One contract per command, seven sections in this order: Purpose and users, Syntax, Arguments, Preconditions, Effects, Output, Rejections. `kander <command> --help` prints the Syntax block, the contract path, and the sentence above. The table at the end equals the block in `KANDER-KANBAN-RULES.md` "Command Contract".
+One contract per command, seven sections: Purpose and users, Syntax, Arguments, Preconditions, Effects, Output, Rejections. `kander <command> --help` prints the Syntax block and the contract path. The table at the end equals the block in `KANDER-KANBAN-RULES.md` "Command Contract".
 
 Read first: `show`, `update`, `move`, `check`.
 
@@ -55,6 +55,7 @@ kander dispatch prepare <absolute-UTF8-intent.json>
 kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
 kander dispatch show <task-id> <dispatch-id>
 kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]
+kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 kander dismiss [--timeout SECONDS] <task-id>
 kander check [--all] [task-id ...]
 kander check delivery --base <ref> [--commit <ref>] [--json]

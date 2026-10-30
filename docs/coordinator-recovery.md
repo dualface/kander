@@ -103,11 +103,38 @@ After EOF/output errors, re-reconcile the current facts once; when the facts are
 
 Tests separately cover board structure/transactions, real local Git, isolated child-process kills, and fake terminals/Agents. Native Windows and real tmux/herdr/Agent sessions require separate on-machine testing; cross builds and the fake CLI do not substitute for real-machine passes. For the original reproductions and regression mapping, see the [Reproduction acceptance mapping](recovery-regressions.md).
 
+## Execution Ledger and Chain Walk
+
+Every change of `OWNER`, `SESSION`, `WINDOW` or the execution cycle writes a producer record in the transaction of the change. The records live in the start control group `kanban/.kander/groups/00000000-start-group/<task-id>/`:
+
+| Path | Content |
+| --- | --- |
+| `current.json` | The current execution record, schema 2. A replaceable pointer. |
+| `<record-id>/pending.json`, `result.json` | Immutable originals, as for a start attempt. A claim or reclaim has only `result.json`. |
+| `<record-id>/unresolved.json`, `handed-off.json` | Immutable originals of those statuses. |
+| `<record-id>/process.json` | The one-time process identity of a record. |
+| `transitions/<seq>.json` | Immutable transition records. `seq` is gapless. |
+
+A record has a `kind` (`start`, `claim`, `takeover`, `reclaim`) and a `status` (`pending`, `running`, `unresolved`, `rolled-back`, `handed-off`). A transition has a `kind` (`start`, `confirm`, `rollback`, `unresolve`, `adopt`, `handoff`, `claim`, `reclaim`, `session-repair`, `window-update`, `process-identity`), its from and to records, cycles, and the old and new `OWNER`, `SESSION` and `WINDOW`. `kander update` cannot reach these paths. The packages that launch and notify write the card fields only through the board entrances; see [Launch, delivery, and terminal cleanup](launch-and-delivery.md).
+
+Reconcile no longer infers transitions from snapshots. For each member it:
+
+1. Reads the chain and requires every link to continue the previous one.
+2. Requires the chain to end at the card: the last link names the card's cycle, `OWNER`, `SESSION` and `WINDOW`. This snapshot comparison is a consistency assertion only. A difference means a change no producer recorded, and reconcile fails with `pending start facts changed` or `execution cycle changed without lifecycle handoff`.
+3. Finds the mirror's position (`transition_seq`) and accepts everything after it. A skipped reconcile only makes this segment longer.
+4. Reads the card's dispatch rounds from `dispatch_seq`. Each round before the bound one must be released, settled, or replaced by the next round.
+
+A member whose current record is `pending` or `unresolved` stays waiting: reconcile succeeds, keeps the mirror's dispatch, and adopts no new round. A member in `archived/` or `trash/` takes a separate branch that checks only the `RESULT` field and the chain, then copies the last round into the mirror as a record. An archived card whose evidence cleanup removed the records is accepted on its prune receipt. Such a member no longer repeats Git verification.
+
+Coordinator claims and reconciles write checkpoint schema 2. A schema 1 mirror has no position, so the first reconcile selects one by its facts: the observed start attempt, or the last link that reaches its cycle. No match fails with the same errors as before.
+
+A card from before the ledger has no transitions. A reader synthesizes its chain in memory from start attempts, claim lines, and `LIFECYCLE_DECISION` handoffs, and never writes that chain back. The first producer write on such a card continues the sequence after the synthesized links. A stuck schema 1 `pending` attempt opens to a takeover. Old and new binaries cannot share a board: an old binary rejects schema 2 records.
+
 ## Released Bindings and Authorized Cycle Handoffs
 
-A checkpoint may still name an old dispatch after `dispatch fail|cancel` removed the card's
-active binding. Reconciliation accepts an unbound observation only after verifying that
-round's terminal state, immutable termination/release originals, card release record, epoch,
+A checkpoint may still name an old dispatch after `dispatch fail|cancel` or `dispatch settle`
+removed the card's active binding. Reconciliation accepts an unbound observation only after
+verifying that round's terminal state, immutable termination/release originals, card release record, epoch,
 base, kind and revision progression. The checkpoint clears its active `dispatch` and retains
 a card-relative `released_dispatches` reference. A bare failed/cancelled state string or
 missing original cannot authorize the change. Legacy terminal bindings are first released
@@ -121,7 +148,7 @@ release to cite, so its reclaim writes a dispatchless handoff with an empty `dis
 release is the only way to clear a binding and a bound card rejects `--owner`, so a cycle with
 a dispatch always has its own release. The producer and the consumers apply one check
 (`verifyDispatchlessHandoff`): no release names the old cycle, and every completed or accepted
-dispatch before the handoff was followed by a release. A plain reclaim that an older binary
+dispatch before the handoff was followed by a release or has a settlement original. A plain reclaim that an older binary
 already wrote has no handoff and stays rejected; this change does not repair such a checkpoint. A successful launch original remains
 unchanged: its original cycle can reach the new cycle only through those verified handoff
 links. The same path supports a manually claimed card without a launch original. Reconciliation

@@ -43,6 +43,16 @@
 
 ---
 
+## 执行周期、轮次链与结清
+
+新的派发记录（schema 2）带两个由生产者计算的字段。`cycle` 是准备时卡的执行周期。`previous_dispatch_id` 是本卡上一个派发的 ID，第一个派发为空。派发的 release 带相同的 `cycle`。
+
+接受、完成、结束、结清派发，以及轮换 epoch，都要求 `cycle` 等于当前执行周期。不相等时命令失败，错误写明执行周期已变化。schema 1 记录没有 `cycle`，仍然可用，所以升级时在途的派发不会卡住。它在链上的位置由回执的卡修订号决定。epoch 不能给轮次排序，因为 release 会重置 epoch。回执不能确定顺序时，coordinator 报错，不猜测。
+
+`kander dispatch settle <task-id> <dispatch-id> <revision>` 结束当前执行周期中已完成轮次的绑定。它写不可变的 `dispatches/<id>/settlement.json`，并清除 `DISPATCH_ID` 与 `EXECUTION_EPOCH`。派发保持 completed，交付 commit 不变。对 reclaim 而言，结清等同 release。`kander move` 进入 `archived/` 或 `trash/` 时，在同一事务中结清已完成的绑定。
+
+对已接受的轮次执行 `dispatch fail|cancel` 时必须带 `--decision`，因为 executor 可能仍在运行。
+
 ## 2. 派发分类与证据绑定
 
 每次派发必须声明其类别（`kind`）并附带语义证据：

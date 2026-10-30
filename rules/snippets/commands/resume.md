@@ -23,7 +23,7 @@ kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT |
 
 ## Preconditions
 
-- The card is in `review/` or `working/` and has a `SESSION` record; cards without one cannot be resumed, and cards that never went through `start` cannot be taken over.
+- The card is in `review/` or `working/`. A plain `resume` needs a `SESSION` record and an execution a launcher started; a claimed or reclaimed card is refused before any dispatch binds. `resume --agent` needs neither.
 - A card whose agent differs from `EXEC_AGENT` refuses a plain resume (`snippets/commands/start.md` "Card Pins").
 
 ## Effects
@@ -37,7 +37,7 @@ kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT |
 **Taking Over with a New Session**
 
 - By default `resume` keeps the original agent and context. An explicit `--agent <name>` means the user authorizes a takeover: even with the same name, a brand-new session is allocated and the old context is not migrated. The new agent rebuilds progress from the card, task worktree, Git state, and implementation records, then handles the message. It verifies delivery facts against the card, the task branch, and the review originals; it does not reset acceptance criteria, rewrite the contract, or reopen a finding closed by verified evidence unless it cites the specific gap (command, output, commit). Retracting a predecessor's completion claim is a separate `TAKEOVER_AUDIT` entry with the invalidating evidence; the predecessor's claim stays as history.
-- The command overwrites `OWNER`/`SESSION`/`WINDOW` with the new agent, session, and launcher, and keeps `STARTED_AT`. After the new agent is alive, it tries to exit and close the original container under the gate of `dismiss`. When that fails it prints `original container kept` with the reason and still succeeds.
+- The command overwrites `OWNER`/`SESSION`/`WINDOW` with the new agent, session, and launcher, and keeps `STARTED_AT`. In the same transaction it ends the current execution record and opens a new pending one; the new record runs once the agent is alive. A launch that fails restores the record it replaced. After the new agent is alive, it tries to exit and close the original container under the gate of `dismiss`. When that fails it prints `original container kept` with the reason and still succeeds.
 - A takeover of a card with an unfinished durable dispatch rotates the epoch per `snippets/commands/dispatch.md`.
 
 ## Output
@@ -46,5 +46,5 @@ kander resume [--agent <configured-agent>] [--timeout SECONDS] (--message TEXT |
 
 ## Rejections
 
-- A card outside `review/` or `working/`, a missing `SESSION`, a pin violation, an immediate agent exit, or a dispatch conflict.
+- A card outside `review/` or `working/`, a missing `SESSION`, a claimed or reclaimed card without `--agent` (the error names `snippets/failure-recovery.md`), a pin violation, an immediate agent exit, or a dispatch conflict.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error.

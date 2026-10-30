@@ -43,6 +43,16 @@ Dispatch identity is governed by `dispatch_id`. Status is never inferred from te
 
 ---
 
+## Execution Cycle, Round Chain, and Settlement
+
+A new dispatch record (schema 2) carries two fields the producer computes. `cycle` is the card's execution cycle at preparation. `previous_dispatch_id` names the previous dispatch of the card, empty for the first one. The release of a dispatch has the same `cycle`.
+
+Accepting, completing, ending and settling a dispatch, and rotating its epoch, all require `cycle` to equal the current execution cycle. A mismatch fails with an error that says the cycle changed. A schema 1 record has no `cycle` and stays usable, so a dispatch in flight across an upgrade does not get stuck. Its place in the chain comes from the card revisions of its receipts. Epoch cannot order rounds, because a release resets it. When the receipts do not fix the order, the coordinator reports an error and does not guess.
+
+`kander dispatch settle <task-id> <dispatch-id> <revision>` ends the binding of a completed round of the current cycle. It writes the immutable `dispatches/<id>/settlement.json` and clears `DISPATCH_ID` and `EXECUTION_EPOCH`. The dispatch stays completed and keeps its delivery commit. A settlement counts as a release for a reclaim. `kander move` into `archived/` or `trash/` settles a completed binding in its own transaction.
+
+`dispatch fail|cancel` on an accepted round requires `--decision`, because the executor may still be running.
+
 ## 2. Dispatch Kinds & Evidence Bindings
 
 Every dispatch must declare a `kind` and attach semantic evidence:

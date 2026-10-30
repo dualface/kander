@@ -33,7 +33,7 @@ The search is bounded. It does not prove that no dead end exists.
 - `DE-nn: another row covers every state of this row`: two rows overlap. Narrow one of them, so a repair of either dead end stays visible.
 - `DE-nn: the model no longer reaches this dead end`: a change removed the dead end, or moved it out of the bounds. When the fix is deliberate, remove the row. When it is not, a seed no longer reaches the state.
 - `<invariant> after <operation>`: a transition broke an enabled invariant.
-- A directed test named `TestDeadEnd...` in `internal/launch` fails: the launcher dead end it reproduces is gone. Remove the test and its row.
+- A directed test named `TestDeadEnd...` in `internal/launch` or `internal/board` fails: the launcher dead end it reproduces is gone. Remove the test and its row.
 
 A failure that says `model infrastructure` is a defect of the test itself, not a board refusal.
 
@@ -53,7 +53,7 @@ An operation that always strands a card, or that only exists to reach one dead e
 `model_registry_test.go` holds both.
 
 - `modelDeadEnds` has one row per known dead end, with its owner card and its evidence class: `model` (the search reaches it), `directed` (a directed test reproduces it), or `outside` (neither reproduces it). Rows are ordered: a state can show two causes, and the first row that covers it names it. Every `model` row must be needed: the test removes each row in turn and fails when no state turns unlisted, so one row cannot hide another.
-- `modelInvariants` has one row per invariant. A row with a `check` is enabled. A row with an `owner` waits for the records that card adds. `check` receives the facts before and after one transition.
+- `modelInvariants` has one row per invariant. I1, I2, I3, I4, I5, I7 and I9 are enabled. A row with a `check` is enabled. A row with an `owner` waits for the records that card adds. `check` receives the facts before and after one transition.
 
 `model_meta_test.go` keeps both tables honest: it fails on a missing owner and on a directed test that does not exist. It also proves that the verdict fails on a removed row, on a repaired dead end that stays listed, and on an injected dead end.
 

@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Durable Dispatc
 
 ## Purpose and users
 
-Inspects and ends durable dispatches: the receipts behind `notify` and `resume` rounds. Used by the orchestrator to reconcile uncertainty (`show`), to prepare an explicit intent (`prepare`), to obtain the on-behalf wrap-up grant (`authorize-wrap-up`), and to record a terminal decision (`fail`, `cancel`). Executing agents consume dispatches through the ID/epoch-bound forms of `move` and `update`.
+Inspects and ends durable dispatches: the receipts behind `notify` and `resume` rounds. Used by the orchestrator to reconcile uncertainty (`show`), to prepare an explicit intent (`prepare`), to obtain the on-behalf wrap-up grant (`authorize-wrap-up`), to record a terminal decision (`fail`, `cancel`), and to give a completed binding a direct exit (`settle`). Executing agents consume dispatches through the ID/epoch-bound forms of `move` and `update`.
 
 ## Syntax
 
@@ -13,6 +13,7 @@ kander dispatch prepare <absolute-UTF8-intent.json>
 kander dispatch authorize-wrap-up <absolute-UTF8-request.json>
 kander dispatch show <task-id> <dispatch-id>
 kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]
+kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 ```
 
 ## Arguments
@@ -20,7 +21,8 @@ kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
 - `prepare <absolute-UTF8-intent.json>`: create an intent without sending (not for `wrap-up`, which needs the Git-aware entrance of `notify`).
 - `authorize-wrap-up <absolute-UTF8-request.json>`: the on-behalf wrap-up grant.
 - `show <task-id> <dispatch-id>`: print the dispatch and its receipts.
-- `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding.
+- `fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason> [--decision <reference>]`: record the terminal decision and release the binding. An accepted round requires `--decision`.
+- `settle <task-id> <dispatch-id> <dispatch-revision>`: end the binding of a completed round of the current execution cycle.
 
 ## Preconditions
 
@@ -47,7 +49,9 @@ kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
 - The executing agent first runs `kander move <task-id> working --dispatch-id <id> --execution-epoch <epoch>`; its JSON contains `dispatch` and `replayed`. Start work only for `replayed=false`; on replay or failure, report the receipt and never repeat work, even when the first round already returned to review before notify returned.
 - Every bound author update carries the same ID/epoch and current expected revision; bound review disposition JSON also carries `authorization: {"dispatch_id":"...","epoch":1}`. Complete fix/sync with `move review`, or wrap-up with `move done --result completed`, carrying `--dispatch-id`, `--execution-epoch`, `--delivery-commit <final-full-SHA>`, and an applicable `--disposition <card-relative-artifact>`. Completion and its receipt commit atomically. Existing done/review evidence gates still apply, and a recorded SHA is not Git integration verification.
 - Only one execution grant is active per card; a new intent replaces only a completed, failed, or cancelled one. Explicit `resume --agent` keeps the user-authorization requirement and rotates the epoch of an unfinished same-ID dispatch with its original payload and timestamps. A prepared or delivery-unknown takeover keeps the current deadline; an accepted takeover requires a stopped observation collected for this request, no older than 30 seconds, matching SESSION/WINDOW/OWNER/STARTED_AT and the card revision, and gets a new 120-second deadline. Old epochs cannot accept, update body or WINDOW, submit dispositions, or complete. No card lock spans an agent session.
-- `dispatch fail|cancel` records the explicit terminal decision and releases the card's active `DISPATCH_ID`/`EXECUTION_EPOCH` binding in one transaction; the optional `--decision <reference>` records the user decision in the immutable termination original. It does not move or cancel the task, grant takeover, or discard history. For a pre-upgrade failed or cancelled round that still owns the binding, repeat its matching terminal command with `--decision <reference>` to record only the release. A nonmatching terminal state, a completed round, or a binding owned by a newer dispatch rejects. A changed or expired intent requires explicit disposition before another ID; uncertainty alone is not cancellation authorization.
+- `dispatch fail|cancel` records the explicit terminal decision and releases the card's active `DISPATCH_ID`/`EXECUTION_EPOCH` binding in one transaction; `--decision <reference>` records the user decision in the immutable termination original. Ending an accepted round requires it, because the executor may still be running and the card stops fencing that executor. It does not move or cancel the task, grant takeover, or discard history. For a pre-upgrade failed or cancelled round that still owns the binding, repeat its matching terminal command with `--decision <reference>` to record only the release. A nonmatching terminal state, a completed round, or a binding owned by a newer dispatch rejects. A changed or expired intent requires explicit disposition before another ID; uncertainty alone is not cancellation authorization.
+- `dispatch settle` is the direct exit of a completed binding, on a card in `working/` or `review/`. It writes the immutable `dispatches/<id>/settlement.json` original and clears `DISPATCH_ID`/`EXECUTION_EPOCH` in one transaction. The dispatch stays completed and keeps its delivery commit. After it the card moves normally: a `review/` card can return to its owner, reclaim, or `done/`, and the next dispatch names this one as its predecessor. `move archived` and `move trash` settle a completed binding in their own transaction.
+- A new dispatch records the execution cycle it was prepared in (`cycle`) and the previous dispatch of the card (`previous_dispatch_id`). Accept, complete, end, settle, and takeover all require `cycle` to equal the card's current execution cycle; otherwise they fail and the error says the cycle changed. A dispatch record from before this field exists has no `cycle` and stays usable in every one of those commands.
 - Ordinary unbound working messages and non-group legacy notifications create no receipt. Bound card writes cannot omit the execution grant. Dispatch originals and epoch receipts are producer-owned `dispatches/` attachments; guarantees cover controlled card operations, never exactly-once external side effects.
 
 ## Output
@@ -56,5 +60,6 @@ kander dispatch fail|cancel <task-id> <dispatch-id> <dispatch-revision> <reason>
 
 ## Rejections
 
-- A nonmatching terminal state, a completed round, a binding owned by a newer dispatch, a `wrap-up` intent passed to `prepare`, or malformed JSON.
+- A nonmatching terminal state, a completed round for `fail|cancel`, a round that did not complete for `settle`, a binding owned by a newer dispatch, a `wrap-up` intent passed to `prepare`, or malformed JSON.
+- An accepted round ended without `--decision`, or a dispatch of another execution cycle.
 - A missing subcommand, wrong argument count, an empty `--decision` value, or an unknown subcommand is a usage error.
