@@ -2,7 +2,8 @@ package board
 
 // coordinatorMemberCycle binds a waiting member only from committed producer
 // metadata under the caller's task revision and checkpoint CAS. It does not
-// create a task execution; an observed cycle changes only with a release handoff.
+// create a task execution; an observed cycle changes only with a verified
+// lifecycle handoff.
 func coordinatorMemberCycle(tx *Transaction, id string, old CoordinatorMember, s Snapshot, confirmedStart bool) (string, bool, error) {
 	emptyCycle := ReviewDigest([]byte(id + "\n"))
 	awaiting := old.AwaitingStart

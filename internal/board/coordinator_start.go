@@ -39,7 +39,7 @@ func coordinatorStartCycle(ctx context.Context, tx *Transaction, id string, old 
 		}
 		if old.Cycle != empty {
 			// A later explicit move --owner can establish a manual execution
-			// after rollback. Further changes require the same release handoff
+			// after rollback. Further changes require the same verified lifecycle handoff
 			// evidence as an execution that has no launcher history.
 			if old.StartAttempt == a.ID && !old.AwaitingStart && old.Revision > a.FinishedRevision {
 				cycle, awaiting, err := coordinatorMemberCycle(tx, id, *old, s, false)
