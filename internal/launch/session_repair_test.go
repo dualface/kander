@@ -117,25 +117,21 @@ func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
 			}
 			backend := &repairBackend{name: "repair-" + scenario + "-" + terminal.ProjectKey(root), facts: terminal.PaneFacts{Agent: "codex", AgentStatus: "idle", Container: "tab"}, processes: []terminal.ForegroundProcess{{PID: 42, Name: "codex"}}, readBack: true}
 			terminal.Register(backend)
-			text, err := board.ReadDocument(entry)
-			if err != nil {
-				t.Fatal(err)
-			}
-			text = strings.Replace(text, "- SESSION:\n", "- SESSION: codex\n", 1)
-			text = strings.Replace(text, "- WINDOW:\n", "- WINDOW: "+backend.name+":pane\n", 1)
+			session := "codex"
 			if scenario == "recorded" || scenario == "existing-conflict" {
-				text = strings.Replace(text, "SESSION: codex\n", "SESSION: codex target-session\n", 1)
+				session = "codex target-session"
 			}
 			if scenario == "mismatch" {
-				text = strings.Replace(text, "SESSION: codex\n", "SESSION: codex different-session\n", 1)
+				session = "codex different-session"
 			}
-			if err := board.WriteManagedDocument(root, entry, text); err != nil {
+			if err := executionFixture(root, entry, "codex", session, backend.name+":pane"); err != nil {
 				t.Fatal(err)
 			}
 			snapshot, err = board.ReadSnapshot(root, task)
 			if err != nil {
 				t.Fatal(err)
 			}
+			text := snapshot.Text
 			files := process.ProcessFiles{Identity: "42:start", Files: []process.OpenFile{repairRollout(t, task, "target", "target-session", "")}}
 			switch scenario {
 			case "missing-file":
@@ -174,7 +170,7 @@ func TestRepairMissingSessionEvidenceAndDrift(t *testing.T) {
 			case "board-change":
 				backend.beforeObserve = func(n int) {
 					if n == 2 {
-						if err := board.WriteManagedDocument(root, entry, text+"\nConcurrent change\n"); err != nil {
+						if err := writeCardFixture(root, entry, text+"\nConcurrent change\n"); err != nil {
 							t.Fatal(err)
 						}
 					}
@@ -238,23 +234,18 @@ func TestRepairMissingSessionFinishesPartialReportOnRetry(t *testing.T) {
 			}
 			backend := &repairBackend{name: "repair-retry-" + terminal.ProjectKey(root), facts: terminal.PaneFacts{Agent: "codex", AgentStatus: "idle", Container: "tab"}, processes: []terminal.ForegroundProcess{{PID: 42, Name: "codex"}}, readBack: true}
 			terminal.Register(backend)
-			text, err := board.ReadDocument(entry)
-			if err != nil {
-				t.Fatal(err)
-			}
-			text = strings.Replace(text, "- SESSION:\n", "- SESSION: codex\n", 1)
-			text = strings.Replace(text, "- WINDOW:\n", "- WINDOW: "+backend.name+":pane\n", 1)
-			if err := board.WriteManagedDocument(root, entry, text); err != nil {
+			if err := executionFixture(root, entry, "codex", "codex", backend.name+":pane"); err != nil {
 				t.Fatal(err)
 			}
 			snapshot, err = board.ReadSnapshot(root, task)
 			if err != nil {
 				t.Fatal(err)
 			}
+			text := snapshot.Text
 			files := process.ProcessFiles{Identity: "42:start", Files: []process.OpenFile{repairRollout(t, task, "target", "target-session", "")}}
 			observe := func(ctx context.Context, _ int) (process.ProcessFiles, error) { return files, ctx.Err() }
 			backend.afterReport = func() {
-				if err := board.WriteManagedDocument(root, entry, text+"\nConcurrent body update\n"); err != nil {
+				if err := writeCardFixture(root, entry, text+"\nConcurrent body update\n"); err != nil {
 					t.Fatal(err)
 				}
 			}

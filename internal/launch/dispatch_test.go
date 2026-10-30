@@ -10,7 +10,6 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/window"
 )
 
 func resumeDispatchFixture(t *testing.T) (string, string, board.Dispatch) {
@@ -25,11 +24,10 @@ func resumeDispatchFixture(t *testing.T) (string, string, board.Dispatch) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text, err := window.RenderWindowMetadata(s.Text, "foreground")
-	if err != nil {
+	if _, err = board.BindExecutionCursor(root, s.Entry); err != nil {
 		t.Fatal(err)
 	}
-	if err = board.WriteManagedDocument(root, s.Entry, text); err != nil {
+	if _, err = board.RecordExecutionWindow(root, s.Entry, "foreground", ""); err != nil {
 		t.Fatal(err)
 	}
 	d, err := board.PrepareDispatch(root, board.DispatchInput{ID: "resume-one", TaskID: task, Kind: "sync", Message: "同步本轮交付", Base: strings.Repeat("a", 40)})

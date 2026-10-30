@@ -119,14 +119,6 @@ func continuedAgentSource(cfg *config.Config, pin board.StagePin, kind, agent st
 	return board.PinSourceCLI
 }
 
-// withExecRecord writes EXEC_RESOLVED when the choice carries a record.
-func withExecRecord(text string, choice execChoice) (string, error) {
-	if choice.record == "" {
-		return text, nil
-	}
-	return board.WithResolvedRecord(text, board.FieldExecResolved, choice.record)
-}
-
 // execArguments renders the agent argv for a resolved choice.
 func execArguments(choice execChoice, session AgentSession, resume bool, cfg *config.Config) ([]string, error) {
 	return expandAgentInvocation(choice.Agent, choice.Model, choice.Effort, session, resume, cfg)

@@ -13,13 +13,10 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 	original, _ := os.ReadFile(path)
 	loaded, _ := board.LoadBoard(root)
 	entry, _ := board.Locate(loaded, taskID)
-	moved, err := board.MoveEntry(entry, root, "working")
+	moved, err := board.BeginTaskStart(entry, root, board.TaskStartInput{Owner: "codex", Session: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	working := moved.Document
-	mut := strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)
-	_ = os.WriteFile(working, []byte(mut), 0o644)
 	orig := string(original)
 	err = rollbackLaunch(root, moved, "todo", &LaunchFailure{Err: launchError("tmux new-window 失败", "tmux new-window 失败")}, &orig)
 	if err == nil || err.Error() != "tmux new-window 失败" {
@@ -33,14 +30,13 @@ func TestRollbackLaunchRestoresOrKeepsWorking(t *testing.T) {
 	original, _ = os.ReadFile(path)
 	loaded, _ = board.LoadBoard(root)
 	entry, _ = board.Locate(loaded, taskID)
-	moved, _ = board.MoveEntry(entry, root, "working")
-	_ = os.WriteFile(moved.Document, []byte(strings.Replace(string(original), "- OWNER:\n", "- OWNER: codex\n", 1)), 0o644)
+	moved, _ = board.BeginTaskStart(entry, root, board.TaskStartInput{Owner: "codex", Session: "codex"})
 
 	newer, readErr := board.ReadSnapshot(root, taskID)
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if writeErr := board.WriteManagedDocument(root, newer.Entry, newer.Text+"\nnew executor record\n"); writeErr != nil {
+	if writeErr := writeCardFixture(root, newer.Entry, newer.Text+"\nnew executor record\n"); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 	orig = string(original)

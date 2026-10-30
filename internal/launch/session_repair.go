@@ -141,15 +141,14 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		return snapshot, err
 	}
 	if session.Reference == "" {
-		updated, err := renderSessionMetadata(snapshot.Text, (AgentSession{Agent: session.Agent, Reference: proof.reference}).Render())
-		if err != nil {
+		if _, err := board.BindExecutionCursor(root, snapshot.Entry); err != nil {
 			return snapshot, err
 		}
-		if err := board.WriteManagedDocumentContext(ctx, root, snapshot.Entry, updated); err != nil {
+		before := board.MetadataFrom(snapshot.Text, board.FieldSession)
+		if _, err := board.RecordExecutionSession(ctx, root, snapshot.Entry, before, (AgentSession{Agent: session.Agent, Reference: proof.reference}).Render()); err != nil {
 			return snapshot, err
 		}
-		snapshot.Text = updated
-		snapshot.Revision++
+		return board.ReadSnapshot(root, snapshot.Entry.TaskID)
 	}
 	return snapshot, nil
 }

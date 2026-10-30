@@ -29,7 +29,8 @@ type DispatchRelease struct {
 }
 
 // EndDispatch records explicit termination and removes the active binding in
-// one transaction. A legacy terminal binding needs a decision to release only.
+// one transaction. A legacy terminal binding needs a decision to release only,
+// and so does ending an accepted round.
 func EndDispatch(root, task, id string, expected uint64, state DispatchState, reason string, decisions ...string) error {
 	decision := ""
 	if len(decisions) > 1 {
@@ -53,6 +54,14 @@ func EndDispatch(root, task, id string, expected uint64, state DispatchState, re
 		if d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.Release != nil || d.Revision == ^uint64(0) {
 			return dispatchError(id)
 		}
+		if err = requireDispatchCycle(d, s); err != nil {
+			return err
+		}
+		// Unbinding an accepted round leaves its executor running with no fence,
+		// so somebody must have decided that.
+		if d.State == DispatchAccepted && strings.TrimSpace(decision) == "" {
+			return kanbanError("board.dispatch_end_decision_required", id)
+		}
 		legacy := d.State == DispatchFailed || d.State == DispatchCancelled
 		if legacy && (d.State != state || strings.TrimSpace(decision) == "") {
 			return dispatchError(id)
@@ -74,11 +83,7 @@ func EndDispatch(root, task, id string, expected uint64, state DispatchState, re
 		if err := putDispatch(tx, d); err != nil {
 			return err
 		}
-		text, err := setMetadata(s.Text, "DISPATCH_ID", "")
-		if err != nil {
-			return err
-		}
-		text, err = setMetadata(text, "EXECUTION_EPOCH", "")
+		text, err := clearDispatchBinding(s.Text)
 		if err != nil {
 			return err
 		}
@@ -87,13 +92,21 @@ func EndDispatch(root, task, id string, expected uint64, state DispatchState, re
 	})
 }
 
+func clearDispatchBinding(text string) (string, error) {
+	text, err := setMetadata(text, "DISPATCH_ID", "")
+	if err != nil {
+		return "", err
+	}
+	return setMetadata(text, "EXECUTION_EPOCH", "")
+}
+
 func validateDispatchRelease(tx *Transaction, d Dispatch) error {
 	r := d.Release
 	if r == nil {
 		return nil
 	}
 	t := r.Termination
-	if (d.State != DispatchFailed && d.State != DispatchCancelled) || t.State != d.State || t.Authorization != d.Authorization || t.Reason != d.Reason || r.Cycle == "" || r.CardRevision == 0 || r.At == "" || (!r.Legacy && (t.Revision != d.Revision || t.Decision != r.Decision)) || (r.Legacy && (strings.TrimSpace(r.Decision) == "" || t.Revision+1 != d.Revision)) {
+	if d.Cycle != "" && r.Cycle != d.Cycle || (d.State != DispatchFailed && d.State != DispatchCancelled) || t.State != d.State || t.Authorization != d.Authorization || t.Reason != d.Reason || r.Cycle == "" || r.CardRevision == 0 || r.At == "" || (!r.Legacy && (t.Revision != d.Revision || t.Decision != r.Decision)) || (r.Legacy && (strings.TrimSpace(r.Decision) == "" || t.Revision+1 != d.Revision)) {
 		return dispatchError(d.Input.ID)
 	}
 	raw, err := tx.Read(d.Input.TaskID, dispatchPath(d.Input.ID, "release"))

@@ -15,27 +15,31 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if s.Revision < old.Revision {
 		return m, coordinatorError("member revision or execution cycle changed: " + id)
 	}
+	if s.Entry.State == "archived" || s.Entry.State == "trash" {
+		return reconcileTerminalMember(ctx, tx, s, old, o)
+	}
 	if err := verifyCoordinatorHandoffs(tx, s, old); err != nil {
 		return m, err
 	}
-	cycle, awaiting, attempt, err := coordinatorStartCycle(ctx, tx, id, &old, s)
+	l, walk, err := coordinatorWalkChain(ctx, tx, s, old)
 	if err != nil {
 		return m, err
 	}
-	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: cycle, AwaitingStart: awaiting, StartAttempt: attempt, DeliveryCommit: old.DeliveryCommit}
+	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: walk.cycle, AwaitingStart: walk.awaiting, StartAttempt: walk.attempt, DeliveryCommit: old.DeliveryCommit, TransitionSeq: walk.seq, DispatchSeq: old.DispatchSeq}
 
 	m.ReleasedDispatches = append([]ArtifactReference(nil), old.ReleasedDispatches...)
 	m.Handoffs = append([]lifecycleHandoff(nil), old.Handoffs...)
-	if cycle != old.Cycle && !awaiting && !old.AwaitingStart && old.Cycle != ReviewDigest([]byte(id+"\n")) {
-		handoffs, e := lifecycleHandoffs(tx, s, old.Cycle)
-		if e != nil {
-			return m, e
-		}
-		m.Handoffs = append(m.Handoffs, handoffs...)
+	handoffs, err := reclaimHandoffs(tx, s, walk)
+	if err != nil {
+		return m, err
+	}
+	m.Handoffs = append(m.Handoffs, handoffs...)
+	if walk.cycle != old.Cycle && !walk.awaiting && !old.AwaitingStart && old.Cycle != emptyCycle(id) {
 		// A previous cycle's delivery is history, never this executor's delivery.
 		m.DeliveryCommit = ""
 	}
-	if awaiting && attempt != "" && o.DeliveryCommit != "" {
+	unconfirmed := l.current != nil && !l.current.ExecutionTerminal() && l.current.Status != ExecutionRunning
+	if unconfirmed && o.DeliveryCommit != "" {
 		return m, coordinatorError("unconfirmed start cannot establish delivery")
 	}
 	p, err := validateTaskReview(tx, id, false)
@@ -72,17 +76,23 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 			}
 		}
 	}
+	if unconfirmed {
+		// Rounds wait with the member: the mirror adopts none of them until a
+		// durable result ends the attempt, and the chain walk catches up then.
+		m.Dispatch = old.Dispatch
+		return m, nil
+	}
+	rounds, err := dispatchRounds(tx, s)
+	if err != nil {
+		return m, err
+	}
 	a := authFrom(s.Text)
+	if err = coordinatorAdvanceRounds(tx, s, &m, old, rounds, a.DispatchID); err != nil {
+		return m, err
+	}
 	if a == (ExecutionAuthorization{}) {
 		if o.DispatchID != "" || o.Epoch != 0 || o.Base != "" {
 			return m, coordinatorError("unbound member cannot acknowledge a dispatch: " + id)
-		}
-
-		if old.Dispatch != nil {
-			if err := coordinatorReleasedDispatch(tx, s, *old.Dispatch); err != nil {
-				return m, err
-			}
-			m.ReleasedDispatches = append(m.ReleasedDispatches, ArtifactReference{id, dispatchPath(old.Dispatch.ID, "release")})
 		}
 		if o.DeliveryCommit != "" {
 			branch := MetadataFrom(s.Text, "TASK_BRANCH")
@@ -107,11 +117,6 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if d.Authorization != a || d.Input.Base != o.Base {
 		return m, coordinatorError("dispatch base or epoch: " + id)
 	}
-	if old.Dispatch != nil {
-		if err = coordinatorDispatchAdvance(tx, id, *old.Dispatch, d); err != nil {
-			return m, err
-		}
-	}
 	if d.Input.Kind == "fix" && d.State == DispatchCompleted {
 		// A closed later round may supersede the batch target. Verify immutable
 		// lineage without requiring an old completed intent to be sendable again.
@@ -124,11 +129,7 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if _, err = snapshotDispatch(tx, id, s.Text, s.Revision); err != nil {
 		return m, err
 	}
-	m.Dispatch = &CoordinatorDispatch{ID: d.Input.ID, Epoch: a.Epoch, Base: d.Input.Base, Kind: d.Input.Kind, Revision: d.Revision, State: d.State, Intent: ArtifactReference{id, dispatchPath(d.Input.ID, "intent")}}
-	terminal := d.State == DispatchCompleted || d.State == DispatchCancelled || d.State == DispatchFailed
-	m.Dispatch.PendingConfirmation = !terminal && d.Accepted == nil
-	m.Dispatch.PendingDelivery = !terminal && d.Input.Kind != "wrap-up"
-	m.Dispatch.PendingWrapUp = !terminal && d.Input.Kind == "wrap-up"
+	m.Dispatch = mirrorDispatch(id, d)
 	if d.Completed != nil {
 		if d.Completed.DeliveryCommit != o.DeliveryCommit || !dispatchCommitPattern.MatchString(o.DeliveryCommit) || d.Completed.State != "review" && d.Completed.State != "done" {
 			return m, coordinatorError("completion delivery mismatch: " + id)
@@ -160,17 +161,29 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 		if err = verify(ctx, facts); err != nil {
 			return m, err
 		}
-		ref := w.Artifact
-		m.Dispatch.Integration = &ref
-		if d.WrapUpAuthority != nil {
-			ref := ArtifactReference{id, dispatchPath(d.Input.ID, "wrap-up-authority-"+strconv.FormatUint(a.Epoch, 10))}
-			m.Dispatch.WrapUpAuthority = &ref
-		}
 		if d.State == DispatchCompleted && (s.Entry.State != "done" && s.Entry.State != "archived" || MetadataFrom(s.Text, "RESULT") != "completed") {
 			return m, coordinatorError("wrap-up completion state: " + id)
 		}
 	}
 	return m, ctx.Err()
+}
+
+// mirrorDispatch copies the facts of one round into a checkpoint.
+func mirrorDispatch(id string, d Dispatch) *CoordinatorDispatch {
+	m := &CoordinatorDispatch{ID: d.Input.ID, Epoch: d.Authorization.Epoch, Base: d.Input.Base, Kind: d.Input.Kind, Revision: d.Revision, State: d.State, Intent: ArtifactReference{id, dispatchPath(d.Input.ID, "intent")}}
+	terminal := coordinatorDispatchTerminal(d.State)
+	m.PendingConfirmation = !terminal && d.Accepted == nil
+	m.PendingDelivery = !terminal && d.Input.Kind != "wrap-up"
+	m.PendingWrapUp = !terminal && d.Input.Kind == "wrap-up"
+	if w := d.Input.Evidence.WrapUp; w != nil {
+		ref := w.Artifact
+		m.Integration = &ref
+		if d.WrapUpAuthority != nil {
+			ref := ArtifactReference{id, dispatchPath(d.Input.ID, "wrap-up-authority-"+strconv.FormatUint(d.Authorization.Epoch, 10))}
+			m.WrapUpAuthority = &ref
+		}
+	}
+	return m
 }
 
 func coordinatorDispatchAdvance(tx *Transaction, id string, old CoordinatorDispatch, d Dispatch) error {
@@ -208,28 +221,4 @@ func coordinatorDispatchAdvance(tx *Transaction, id string, old CoordinatorDispa
 
 func coordinatorDispatchTerminal(state DispatchState) bool {
 	return state == DispatchCompleted || state == DispatchFailed || state == DispatchCancelled
-}
-
-func coordinatorReleasedDispatch(tx *Transaction, s Snapshot, old CoordinatorDispatch) error {
-	releases, err := cardReleases(s)
-	if err != nil {
-		return err
-	}
-	for _, r := range releases {
-		if r.Termination.Authorization.DispatchID != old.ID {
-			continue
-		}
-		if err := verifyCardRelease(tx, s, r); err != nil {
-			return err
-		}
-		d, err := readDispatch(tx, s.Entry.TaskID, old.ID)
-		if err != nil {
-			return err
-		}
-		if d.Input.Base != old.Base || d.Input.Kind != old.Kind {
-			return coordinatorError("released dispatch facts changed")
-		}
-		return coordinatorDispatchAdvance(tx, s.Entry.TaskID, old, d)
-	}
-	return coordinatorError("unbound member lacks dispatch termination and release originals")
 }

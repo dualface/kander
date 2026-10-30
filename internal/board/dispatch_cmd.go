@@ -87,6 +87,18 @@ func RunDispatch(args []string) int {
 		if err == nil {
 			d, err = ReadDispatch(root, args[1], args[2])
 		}
+	case "settle":
+		if len(args) != 4 {
+			return dispatchUsageFail()
+		}
+		v, e := strconv.ParseUint(args[3], 10, 64)
+		if e != nil {
+			return fail(e)
+		}
+		err = SettleDispatch(root, args[1], args[2], v)
+		if err == nil {
+			d, err = ReadDispatch(root, args[1], args[2])
+		}
 	default:
 		return dispatchUsageFail()
 	}

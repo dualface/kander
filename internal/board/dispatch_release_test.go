@@ -64,7 +64,7 @@ func TestDispatchReleaseCommandsFenceOldAuthorization(t *testing.T) {
 			}
 			stale := s.Entry
 			stale.Version.authorization = d.Authorization
-			if err := WriteManagedDocument(root, stale, strings.Replace(s.Text, "- WINDOW:", "- WINDOW: stale", 1)); err == nil {
+			if err := fixtureWrite(root, stale, strings.Replace(s.Text, "- WINDOW:", "- WINDOW: stale", 1)); err == nil {
 				t.Fatal("old epoch changed WINDOW")
 			}
 			if RunMove([]string{s.Entry.TaskID, "working", "--owner", "claude"}) == 0 {

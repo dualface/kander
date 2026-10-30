@@ -11,7 +11,6 @@ import (
 	"github.com/dualface/kander/internal/terminal"
 	_ "github.com/dualface/kander/internal/terminal/builtin"
 	"github.com/dualface/kander/internal/terminal/direct"
-	"github.com/dualface/kander/internal/window"
 )
 
 const (
@@ -163,7 +162,6 @@ var (
 	removeTaskFile      = os.Remove
 	loadEffective       = func() (*config.Config, error) { return config.Load(false) }
 	currentInstallPaths = config.CurrentInstallPaths
-	nowStamp            = func() string { return time.Now().Format("2006-01-02 15:04") }
 	newUUID             = randomUUID
 	runtimeWindows      = func() bool { return isWindowsGOOS() }
 	stdinIsTTY          = func() bool { return fileIsTTY(os.Stdin) }
@@ -171,11 +169,12 @@ var (
 	stderrIsTTY         = func() bool { return fileIsTTY(os.Stderr) }
 	sleepFn             = time.Sleep
 	nowFn               = time.Now
-	writeDocumentFn     = window.WriteDocument
+	recordWindowFn      = board.RecordExecutionWindow
 	startProcessFn      = startProcess
 	boardRootFn         = board.BoardRoot
 	loadBoardFn         = board.LoadBoard
 	locateFn            = board.Locate
 	readDocumentFn      = board.ReadDocument
-	moveEntryFn         = board.MoveEntry
+	beginStartFn        = board.BeginTaskStart
+	beginTakeoverFn     = board.BeginTakeover
 )

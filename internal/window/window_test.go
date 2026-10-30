@@ -11,24 +11,15 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-func TestRenderWindowMetadataInsertAndReplace(t *testing.T) {
-	t.Setenv(config.EnvLang, "cn")
-	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
-	withWindow := "- OWNER: claude\n- SESSION: claude abc\n- WINDOW: old\n"
-	updated, err := RenderWindowMetadata(withWindow, "herdr:w1:t9:w1:p9")
-	if err != nil {
+const windowCard = "# Card\n- OWNER: codex\n- SESSION: codex\n- WINDOW: old\n- STARTED_AT: 2026-09-07 10:00\n- TASK_BRANCH: task\n"
+
+func recordWindow(t *testing.T, root string, entry board.Entry, value string) {
+	t.Helper()
+	if _, err := board.BindExecutionCursor(root, entry); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(updated, "- WINDOW: herdr:w1:t9:w1:p9\n") {
-		t.Fatalf("replace: %q", updated)
-	}
-	without := "- OWNER: claude\n- SESSION: claude abc\n- STARTED_AT: 2026-09-04 12:00\n"
-	inserted, err := RenderWindowMetadata(without, "foreground")
-	if err != nil {
+	if _, err := board.RecordExecutionWindow(root, entry, value, ""); err != nil {
 		t.Fatal(err)
-	}
-	if !strings.Contains(inserted, "- SESSION: claude abc\n- WINDOW: foreground\n") {
-		t.Fatalf("insert: %q", inserted)
 	}
 }
 
@@ -46,7 +37,7 @@ func TestRestoreWindowTextAndFailureMessage(t *testing.T) {
 	if err := os.Mkdir(filepath.Dir(doc), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(doc, []byte("original\n"), 0o644); err != nil {
+	if err := os.WriteFile(doc, []byte(windowCard), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := board.ReadSnapshot(root, id)
@@ -54,14 +45,12 @@ func TestRestoreWindowTextAndFailureMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry := snapshot.Entry
-	if err := WriteDocument(root, entry, "changed\n"); err != nil {
-		t.Fatal(err)
-	}
-	if err := RestoreWindowText(root, entry, "original\n"); err != nil {
+	recordWindow(t, root, entry, "changed")
+	if err := RestoreWindowText(root, entry, windowCard); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(doc)
-	if string(body) != "original\n" {
+	if string(body) != windowCard {
 		t.Fatalf("got %q", body)
 	}
 	msg := ResumeFailureMessage(errors.New("liveness failed"), errors.New("cleanup boom"), errors.New("rollback boom"))
@@ -70,38 +59,6 @@ func TestRestoreWindowTextAndFailureMessage(t *testing.T) {
 	}
 	if ResumeFailureMessage(errors.New("only"), nil, nil) != "" {
 		t.Fatal("expected empty when no extra failures")
-	}
-}
-
-// A card still using the legacy Chinese fields is updated in place: the window
-// line keeps its single occurrence and switches to the canonical name, instead
-// of the card gaining a second window field.
-func TestRenderWindowMetadataUpdatesLegacyFieldsInPlace(t *testing.T) {
-	t.Setenv(config.EnvLang, "cn")
-	config.ApplyLanguageArgument([]string{"kander", "--lang", "cn"})
-
-	withWindow := "- 负责人: claude\n- 会话: claude abc\n- 窗口: old\n"
-	updated, err := RenderWindowMetadata(withWindow, "herdr:t1:p1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := len(board.FieldLineRe(WindowField).FindAllString(updated, -1)); count != 1 {
-		t.Fatalf("window fields: %d in %q", count, updated)
-	}
-	if !strings.Contains(updated, "- "+board.FieldWindow+": herdr:t1:p1\n") || strings.Contains(updated, "窗口") {
-		t.Fatalf("replace: %q", updated)
-	}
-
-	without := "- 负责人: claude\n- 会话: claude abc\n- 开始时间: 2026-09-04 12:00\n"
-	inserted, err := RenderWindowMetadata(without, "foreground")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(inserted, "- 会话: claude abc\n- "+board.FieldWindow+": foreground\n") {
-		t.Fatalf("insert: %q", inserted)
-	}
-	if count := len(board.FieldLineRe(SessionField).FindAllString(inserted, -1)); count != 1 {
-		t.Fatalf("session fields: %d in %q", count, inserted)
 	}
 }
 
@@ -125,10 +82,8 @@ func TestRollbackNeverResurrectsMovedSmallCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, _ := RenderWindowMetadata(text, "new")
-	if err = WriteDocument(root, snapshot.Entry, updated); err != nil {
-		t.Fatal(err)
-	}
+	recordWindow(t, root, snapshot.Entry, "new")
+	updated := strings.Replace(text, "- WINDOW: old", "- WINDOW: new", 1)
 	mover, err := board.ReadSnapshot(root, id)
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +120,7 @@ func TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback(t *testing.T) {
 	if err := os.Mkdir(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("original\n"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(windowCard), 0600); err != nil {
 		t.Fatal(err)
 	}
 	first, err := board.ReadSnapshot(root, id)
@@ -176,24 +131,22 @@ func TestStaleRollbackPreservesNewBodyAndRejectsSecondRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = WriteDocument(root, first.Entry, "window changed\n"); err != nil {
-		t.Fatal(err)
-	}
-	if err = RestoreWindowText(root, second.Entry, "original\n"); err == nil {
+	recordWindow(t, root, first.Entry, "changed")
+	if err = RestoreWindowText(root, second.Entry, windowCard); err == nil {
 		t.Fatal("second operation overwrote first")
 	}
 	next, err := board.ReadSnapshot(root, id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", Text: "new body\n", ExpectedRevision: next.Revision}); err != nil {
+	if err = board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", Text: next.Text + "new body\n", ExpectedRevision: next.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if err = RestoreWindowText(root, first.Entry, "original\n"); err == nil {
+	if err = RestoreWindowText(root, first.Entry, windowCard); err == nil {
 		t.Fatal("stale full rollback succeeded")
 	}
 	body, _ := os.ReadFile(path)
-	if string(body) != "new body\n" {
+	if !strings.HasSuffix(string(body), "new body\n") {
 		t.Fatalf("new body lost: %q", body)
 	}
 }

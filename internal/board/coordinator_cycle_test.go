@@ -155,28 +155,15 @@ func TestCoordinatorLegacyWaitingCursorAndIncompleteLaunch(t *testing.T) {
 	if !c.Members[s.Entry.TaskID].AwaitingStart {
 		t.Fatal("legacy waiting cursor not upgraded")
 	}
-	// start publishes state before metadata. The intermediate snapshot must
-	// retain the waiting fact across a restart instead of binding an empty cycle.
-	if _, err := MoveEntry(s.Entry, root, "working"); err != nil {
-		t.Fatal(err)
-	}
-	c = coordinatorReconcile(t, root, c)
-	if !c.Members[s.Entry.TaskID].AwaitingStart {
-		t.Fatal("incomplete launch bound a cycle")
-	}
-	s = transactionSnapshot(t, root, s.Entry.TaskID)
-	text, err := moveMetadata(s.Text, "todo", "working", MoveOptions{Owner: "codex"})
+	moved, err := BeginTaskStart(s.Entry, root, TaskStartInput{Owner: "codex"})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := WriteManagedDocument(root, s.Entry, text); err != nil {
 		t.Fatal(err)
 	}
 	c = coordinatorReconcile(t, root, c)
 	if !c.Members[s.Entry.TaskID].AwaitingStart {
 		t.Fatal("metadata alone confirmed the launcher")
 	}
-	if err := ConfirmTaskStart(root, s.Entry); err != nil {
+	if err := ConfirmTaskStart(root, moved); err != nil {
 		t.Fatal(err)
 	}
 	c = coordinatorReconcile(t, root, c)

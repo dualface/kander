@@ -77,21 +77,11 @@ func modelLifecycleOps() []modelOp {
 				if err != nil {
 					return err
 				}
-				moved, err := MoveEntry(s.Entry, w.root, "working")
+				moved, err := BeginTaskStart(s.Entry, w.root, TaskStartInput{Owner: modelExecutor, Session: modelExecutor})
 				if err != nil {
 					return err
 				}
-				text, err := moveMetadata(s.Text, "todo", "working", MoveOptions{Owner: modelExecutor})
-				if err == nil {
-					text, err = setMetadata(text, FieldSession, modelExecutor)
-				}
-				if err != nil {
-					return err
-				}
-				if err = WriteManagedDocument(w.root, moved, text); err != nil {
-					return err
-				}
-				m.launcher = &modelCursor{state: moved.State, revision: moved.Version.revision, auth: moved.Version.authorization}
+				m.launcher = &modelCursor{state: moved.State, revision: moved.Version.revision, auth: moved.Version.authorization, fence: moved.Version.fence}
 				m.executor, m.self, m.original, m.stranded = true, false, s.Text, ""
 				return nil
 			}},
@@ -243,7 +233,7 @@ func modelLifecycleOps() []modelOp {
 				}
 				return err
 			}},
-		{name: "U.regroup", cli: "kander update <id> --document spec.md --contract-decision-file <f>: rewrite TASK_GROUP", narrows: []string{"U.regroup", "T.archive", "C.reconcile", "F.done"},
+		{name: "U.regroup", cli: "kander update <id> --document spec.md --contract-decision-file <f>: rewrite TASK_GROUP; a checkpoint refuses it",
 			guard: func(f *modelFacts, i int) bool {
 				return f.world.group && !f.review.planned() && f.bound[i] == nil && f.cards[i].Entry.State != "archived"
 			},
@@ -256,8 +246,7 @@ func modelLifecycleOps() []modelOp {
 			}},
 		{name: modelTailOp, cli: "the completion tail of one card, ending in kander move <id> done",
 			guard: func(f *modelFacts, i int) bool {
-				state := f.cards[i].Entry.State
-				return !modelTerminal(state) || state != "archived" && f.world.group && TaskGroupFrom(f.cards[i].Text) != coordinatorGroup
+				return !modelTerminal(f.cards[i].Entry.State)
 			},
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.finishMember(m) }},
 		{name: "C.reconcile", cli: "kander coordinator reconcile <observations.json>", shared: true,
@@ -272,13 +261,9 @@ func modelLifecycleOps() []modelOp {
 	}
 }
 
-// modelRegroup toggles the card between the group and another one.
+// modelRegroup moves the card to another group.
 func modelRegroup(w *modelWorld, m *modelMember, s Snapshot) error {
-	group := "20261030-model-other-group"
-	if TaskGroupFrom(s.Text) != coordinatorGroup {
-		group = coordinatorGroup
-	}
-	text, err := setMetadata(s.Text, FieldTaskGroup, group)
+	text, err := setMetadata(s.Text, FieldTaskGroup, "20261030-model-other-group")
 	if err != nil {
 		return modelInfra(err)
 	}
@@ -290,14 +275,13 @@ func modelTakeover(w *modelWorld, m *modelMember) error {
 	if err != nil {
 		return err
 	}
-	text, err := setMetadata(s.Text, FieldOwner, modelTaker)
-	if err == nil {
-		text, err = setMetadata(text, FieldSession, modelTaker+" takeover-session")
+	if _, err = BindExecutionCursor(w.root, s.Entry); err != nil {
+		return err
 	}
-	if err != nil {
-		return modelInfra(err)
+	if _, err = BeginTakeover(w.root, s.Entry, TakeoverInput{Owner: modelTaker, Session: modelTaker + " takeover-session", Decision: "model-decision"}); err != nil {
+		return err
 	}
-	if err = WriteManagedDocument(w.root, s.Entry, text); err != nil {
+	if err = ConfirmTaskStart(w.root, s.Entry); err != nil {
 		return err
 	}
 	m.executor, m.self = true, false
@@ -353,7 +337,7 @@ func modelDispatchOps() []modelOp {
 	end := func(state DispatchState) func(*modelWorld, *modelMember, *modelFacts) error {
 		return func(w *modelWorld, m *modelMember, f *modelFacts) error {
 			d := f.bound[f.index(m)]
-			return EndDispatch(w.root, m.id, d.Input.ID, d.Revision, state, "model")
+			return EndDispatch(w.root, m.id, d.Input.ID, d.Revision, state, "model", "model-decision")
 		}
 	}
 	return []modelOp{
@@ -383,6 +367,15 @@ func modelDispatchOps() []modelOp {
 			}},
 		{name: "D.fail", cli: "kander dispatch fail <id> <dispatch> <revision> <reason>", guard: active, apply: end(DispatchFailed)},
 		{name: "D.cancel", cli: "kander dispatch cancel <id> <dispatch> <revision> <reason>", guard: active, apply: end(DispatchCancelled)},
+		{name: "D.settle", cli: "kander dispatch settle <id> <dispatch> <revision>",
+			guard: func(f *modelFacts, i int) bool {
+				state := f.cards[i].Entry.State
+				return f.bound[i] != nil && f.bound[i].State == DispatchCompleted && (state == "working" || state == "review")
+			},
+			apply: func(w *modelWorld, m *modelMember, f *modelFacts) error {
+				d := f.bound[f.index(m)]
+				return SettleDispatch(w.root, m.id, d.Input.ID, d.Revision)
+			}},
 		{name: "D.authorizeWrapUp", cli: "kander dispatch authorize-wrap-up <request.json>",
 			guard: func(f *modelFacts, i int) bool {
 				d := f.bound[i]
@@ -576,9 +569,9 @@ func (w *modelWorld) finishMember(m *modelMember) error {
 		if m.launcher != nil && !modelTerminal(s.Entry.State) {
 			entry := w.launcherEntry(m, s)
 			m.launcher = nil
+			// A launcher a takeover overtook ends here; the new execution goes on.
 			if err := ConfirmTaskStart(w.root, entry); err != nil {
 				m.stranded = "confirm-binding"
-				return err
 			}
 			continue
 		}
@@ -601,12 +594,6 @@ func (w *modelWorld) finishMember(m *modelMember) error {
 				return modelInfra(err)
 			}
 			d = &read
-		}
-		if w.group && TaskGroupFrom(s.Text) != coordinatorGroup && s.Entry.State != "archived" && (d == nil || d.State != DispatchPrepared) {
-			if err := modelRegroup(w, m, s); err != nil {
-				return err
-			}
-			continue
 		}
 		if modelTerminal(s.Entry.State) {
 			return nil

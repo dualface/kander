@@ -57,7 +57,7 @@ func TestDispatchCrashChild(t *testing.T) {
 			target = "done"
 			o.Result = "completed"
 		}
-		if _, err = stageDispatchMove(tx, s, target, o); err != nil {
+		if _, _, err = stageDispatchMove(tx, s, target, o); err != nil {
 			t.Fatal(err)
 		}
 		text, err := moveMetadata(s.Text, s.Entry.State, target, o)

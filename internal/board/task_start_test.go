@@ -9,21 +9,8 @@ import (
 
 func startAttemptFixture(t *testing.T, root string, original Snapshot) Entry {
 	t.Helper()
-	moved, err := MoveEntry(original.Entry, root, "working")
+	moved, err := BeginTaskStart(original.Entry, root, TaskStartInput{Owner: "codex"})
 	if err != nil {
-		t.Fatal(err)
-	}
-	text, err := moveMetadata(original.Text, "todo", "working", MoveOptions{Owner: "codex"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Keep the timestamp identical across retries to prove identity fencing
-	// does not accidentally depend on the wall clock's minute precision.
-	text, err = setMetadata(text, FieldStartedAt, "2026-09-08 10:00")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = WriteManagedDocument(root, moved, text); err != nil {
 		t.Fatal(err)
 	}
 	return moved
@@ -89,23 +76,8 @@ func TestStartResultsFenceRetryAndPreserveTaskRevision(t *testing.T) {
 func TestConfirmTaskStartAcceptsBoundDiscoveredSession(t *testing.T) {
 	root := tempBoard(t)
 	original := coordinatorTodo(t, root, "discovered-session")
-	moved, err := MoveEntry(original.Entry, root, "working")
+	moved, err := BeginTaskStart(original.Entry, root, TaskStartInput{Owner: "devin", Session: "devin"})
 	if err != nil {
-		t.Fatal(err)
-	}
-	text, err := moveMetadata(original.Text, "todo", "working", MoveOptions{Owner: "devin"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	text, err = setMetadata(text, FieldSession, "devin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text, err = setMetadata(text, FieldStartedAt, "2026-09-08 10:00")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := WriteManagedDocument(root, moved, text); err != nil {
 		t.Fatal(err)
 	}
 	c := coordinatorClaim(t, root, original.Entry.TaskID)
@@ -142,13 +114,13 @@ func TestStartOriginalDamageStopsRecovery(t *testing.T) {
 				c = coordinatorReconcile(t, root, c)
 			}
 			id := c.Members[original.Entry.TaskID].StartAttempt
-			path := taskStartPath(original.Entry.TaskID, id, "pending")
+			path := executionPath(original.Entry.TaskID, id, "pending")
 			if damage == "rollback" || damage == "adopted-rollback" {
 				if err := RollbackDocument(root, first, original.Text, "todo"); err != nil {
 					t.Fatal(err)
 				}
 				startAttemptFixture(t, root, transactionSnapshot(t, root, original.Entry.TaskID))
-				path = taskStartPath(original.Entry.TaskID, id, "result")
+				path = executionPath(original.Entry.TaskID, id, "result")
 				if damage == "adopted-rollback" {
 					c = coordinatorReconcile(t, root, c)
 				}
@@ -157,7 +129,7 @@ func TestStartOriginalDamageStopsRecovery(t *testing.T) {
 				if err := ConfirmTaskStart(root, first); err != nil {
 					t.Fatal(err)
 				}
-				path = taskStartPath(original.Entry.TaskID, id, "result")
+				path = executionPath(original.Entry.TaskID, id, "result")
 			}
 			if damage == "current" || damage == "unobserved-current" {
 				path = original.Entry.TaskID + "/current.json"
@@ -197,7 +169,7 @@ func TestConfirmedStartCannotBeRolledBackOrSilentlyReplaced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = WriteManagedDocument(root, after.Entry, text); err != nil {
+	if err = fixtureWrite(root, after.Entry, text); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), nil); err == nil {

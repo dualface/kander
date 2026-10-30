@@ -1,6 +1,7 @@
 package board
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 // Cards that own the follow-up work the registries below name.
 const (
-	cardLedger   = "20261030-execution-ledger-task"
 	cardIssue22  = "20261030-gh-dualface-kander-22-task"
 	cardEvidence = "20261030-review-evidence-dead-ends-task"
 	cardRecovery = "20261030-group-member-recovery-task"
@@ -24,15 +24,146 @@ type modelInvariant struct {
 }
 
 var modelInvariants = []modelInvariant{
-	{id: "I1", owner: cardLedger, definition: "A card in working or review has exactly one current execution record, with status pending, running or unresolved."},
-	{id: "I2", owner: cardLedger, definition: "Each execution cycle change has one execution transition record that links the old cycle to the new cycle."},
-	{id: "I3", owner: cardLedger, definition: "Each OWNER, SESSION or WINDOW change has one execution transition record."},
-	{id: "I4", owner: cardLedger, definition: "When the execution authorization is set, the dispatch it names exists, that dispatch's execution cycle equals the current cycle, and the card has no other nonterminal dispatch."},
-	{id: "I5", owner: cardLedger, definition: "When a card enters done, each completed fix or sync dispatch of the card has a later dispatch that replaced it, or a settlement record; a wrap-up dispatch completes on move done and is exempt. When a card enters archived or trash, the same transaction writes the settlement original of a completed binding."},
+	{id: "I1", check: modelCheckI1, definition: "A card in working or review has exactly one current execution record, with status pending, running or unresolved."},
+	{id: "I2", check: modelCheckI2, definition: "Each execution cycle change has one execution transition record that links the old cycle to the new cycle."},
+	{id: "I3", check: modelCheckI3, definition: "Each OWNER, SESSION or WINDOW change has one execution transition record."},
+	{id: "I4", check: modelCheckI4, definition: "When the execution authorization is set, the dispatch it names exists, that dispatch's execution cycle equals the current cycle, and the card has no other nonterminal dispatch."},
+	{id: "I5", check: modelCheckI5, definition: "When a card enters done, each completed fix or sync dispatch of the card has a later dispatch that replaced it, or a settlement record; a wrap-up dispatch completes on move done and is exempt. When a card enters archived or trash, the same transaction writes the settlement original of a completed binding."},
 	{id: "I6", owner: cardEvidence, definition: "Each review run of a plan member belongs to a batch of that plan. Successful runs of one role form one chain, or carry an explicit replacement record."},
 	{id: "I7", definition: "Before a review batch advances, each assigned finding has an author disposition.", check: modelCheckI7},
 	{id: "I8", owner: cardEvidence, definition: "A member that ends in archived or trash gets a member exclusion record in the same transaction, and later plan writes skip its copy. An excluded member's assigned findings may wait for withdrawal, but they need a withdrawn disposition before aggregation and closure. A done member is not excluded, and archiving it later does not exclude it, but plan writes skip the copies of every archived member."},
-	{id: "I9", owner: cardLedger, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state."},
+	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state."},
+}
+
+// modelCheckEach runs check for every member, and hands it the same member of the
+// state before, or nil for the first state of a search.
+func modelCheckEach(before, after *modelFacts, check func(i int, old *modelMemberFacts, now modelMemberFacts) error) error {
+	for i := range after.world.members {
+		var old *modelMemberFacts
+		if before != nil {
+			member := before.member(i)
+			old = &member
+		}
+		if err := check(i, old, after.member(i)); err != nil {
+			return fmt.Errorf("%s: %w", after.world.members[i].label, err)
+		}
+	}
+	return nil
+}
+
+func modelCheckI1(before, after *modelFacts) error {
+	return modelCheckEach(before, after, func(_ int, _ *modelMemberFacts, m modelMemberFacts) error {
+		if state := m.card.Entry.State; state != "working" && state != "review" {
+			return nil
+		}
+		cur := m.ledger.current
+		if cur == nil || cur.ExecutionTerminal() {
+			return fmt.Errorf("card in %s has no current execution record: %+v", m.card.Entry.State, cur)
+		}
+		return nil
+	})
+}
+
+func modelCheckI2(before, after *modelFacts) error {
+	return modelCheckEach(before, after, func(_ int, old *modelMemberFacts, m modelMemberFacts) error {
+		if old == nil || !m.chained() || planCycle(old.card) == planCycle(m.card) {
+			return nil
+		}
+		if m.ledger.end() <= old.ledger.end() {
+			return errors.New("the cycle changed with no transition")
+		}
+		if tail, _ := m.ledger.tail(); tail.ToCycle != planCycle(m.card) {
+			return errors.New("the last transition does not reach the cycle of the card")
+		}
+		return nil
+	})
+}
+
+func modelCheckI3(before, after *modelFacts) error {
+	return modelCheckEach(before, after, func(_ int, old *modelMemberFacts, m modelMemberFacts) error {
+		if old == nil || !m.chained() {
+			return nil
+		}
+		was := [3]string{}
+		was[0], was[1], was[2] = cardExecutionFacts(old.card)
+		now := [3]string{}
+		now[0], now[1], now[2] = cardExecutionFacts(m.card)
+		if was != now && m.ledger.end() <= old.ledger.end() {
+			return fmt.Errorf("execution fields changed from %v to %v with no transition", was, now)
+		}
+		return m.ledger.assertCard(m.card)
+	})
+}
+
+func modelCheckI4(before, after *modelFacts) error {
+	return modelCheckEach(before, after, func(_ int, _ *modelMemberFacts, m modelMemberFacts) error {
+		a := authFrom(m.card.Text)
+		if a.DispatchID == "" || modelTerminal(m.card.Entry.State) {
+			return nil
+		}
+		at := slices.IndexFunc(m.rounds, func(d Dispatch) bool { return d.Input.ID == a.DispatchID })
+		if at < 0 {
+			return fmt.Errorf("authorization names a missing dispatch %s", a.DispatchID)
+		}
+		if m.rounds[at].Cycle != planCycle(m.card) {
+			return fmt.Errorf("dispatch %s belongs to another cycle", a.DispatchID)
+		}
+		for i, d := range m.rounds {
+			if i != at && !coordinatorDispatchTerminal(d.State) {
+				return fmt.Errorf("dispatch %s is live beside the bound %s", d.Input.ID, a.DispatchID)
+			}
+		}
+		return nil
+	})
+}
+
+func modelCheckI5(before, after *modelFacts) error {
+	return modelCheckEach(before, after, func(_ int, old *modelMemberFacts, m modelMemberFacts) error {
+		if old == nil || old.card.Entry.State == m.card.Entry.State {
+			return nil
+		}
+		switch m.card.Entry.State {
+		case "done":
+			for i, d := range m.rounds {
+				if d.State == DispatchCompleted && d.Input.Kind != "wrap-up" && d.Settlement == nil && i == len(m.rounds)-1 {
+					return fmt.Errorf("completed dispatch %s has no successor and no settlement", d.Input.ID)
+				}
+			}
+		case "archived", "trash":
+			if !m.chained() {
+				return nil
+			}
+			if a := authFrom(old.card.Text); a.DispatchID != "" {
+				at := slices.IndexFunc(m.rounds, func(d Dispatch) bool { return d.Input.ID == a.DispatchID })
+				if at >= 0 && m.rounds[at].State == DispatchCompleted && m.rounds[at].Settlement == nil {
+					return fmt.Errorf("completed binding %s has no settlement original", a.DispatchID)
+				}
+			}
+		}
+		return nil
+	})
+}
+
+func modelCheckI9(_, after *modelFacts) error {
+	if after.ckpt == nil {
+		return nil
+	}
+	return modelCheckEach(nil, after, func(i int, _ *modelMemberFacts, m modelMemberFacts) error {
+		c := after.ckpt.Members[after.world.members[i].id]
+		if !m.chained() {
+			return nil
+		}
+		if c.TransitionSeq > m.ledger.end() || c.DispatchSeq > uint64(len(m.rounds)) {
+			return fmt.Errorf("mirror at %d/%d is past the chain %d/%d", c.TransitionSeq, c.DispatchSeq, m.ledger.end(), len(m.rounds))
+		}
+		if c.TransitionSeq > 0 && !c.AwaitingStart && m.ledger.chain[c.TransitionSeq-1].ToCycle != c.Cycle {
+			return fmt.Errorf("mirror cycle is not on the chain at %d", c.TransitionSeq)
+		}
+		if d := c.Dispatch; d != nil && !slices.ContainsFunc(m.rounds, func(r Dispatch) bool { return r.Input.ID == d.ID }) {
+			return fmt.Errorf("mirror names a dispatch outside the chain: %s", d.ID)
+		}
+		return nil
+	})
 }
 
 func modelCheckI7(before, after *modelFacts) error {
@@ -84,56 +215,6 @@ type modelDeadEnd struct {
 	covers func(modelDiagnosis) bool
 }
 
-func (d modelDiagnosis) strandedBy(causes ...string) bool {
-	for _, m := range d.facts.world.members {
-		if slices.Contains(causes, m.stranded) {
-			return true
-		}
-	}
-	return false
-}
-
-// pendingAttemptChanged reports a stranded attempt whose card moved on: a
-// takeover, a reclaim or a dispatch changed facts the pending record binds. It
-// leaves out what racedStart and the confirm-dispatch row name.
-func (d modelDiagnosis) pendingAttemptChanged() bool {
-	f := d.facts
-	for i, m := range f.world.members {
-		if f.attempts[i].Status != "pending" {
-			continue
-		}
-		s := f.cards[i]
-		changed := MetadataFrom(s.Text, FieldOwner) != f.attempts[i].Owner || MetadataFrom(s.Text, FieldSession) != f.attempts[i].Session
-		switch m.stranded {
-		case "rollback", "confirm-session":
-			if changed || f.bound[i] != nil {
-				return true
-			}
-		case "":
-			if !changed && f.bound[i] != nil && modelTerminal(s.Entry.State) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// racedStart reports a takeover or reclaim that overtook a running launcher, or
-// that made its confirmation fail.
-func (d modelDiagnosis) racedStart() bool {
-	f := d.facts
-	for i, m := range f.world.members {
-		if f.attempts[i].Status != "pending" {
-			continue
-		}
-		owner := MetadataFrom(f.cards[i].Text, FieldOwner)
-		if m.stranded == "confirm-binding" || m.launcher != nil && (owner != f.attempts[i].Owner || MetadataFrom(f.cards[i].Text, FieldSession) != f.attempts[i].Session) {
-			return true
-		}
-	}
-	return false
-}
-
 func (d modelDiagnosis) terminalMemberOwesFinding() bool {
 	f := d.facts
 	for i, m := range f.world.members {
@@ -152,18 +233,6 @@ func (d modelDiagnosis) terminalMemberOwesFinding() bool {
 		}
 	}
 	return false
-}
-
-// archivedOutsideGroup reports the reconcile refusal of a member set that no
-// command can restore: the archived card itself left the group, or another card
-// left it and the archive cleanup then removed what a later reconcile reads.
-func (d modelDiagnosis) archivedOutsideGroup() bool {
-	if !d.has("group membership changed") {
-		return false
-	}
-	return slices.ContainsFunc(d.facts.cards, func(s Snapshot) bool {
-		return s.Entry.State == "archived" && (modelGroupClass(TaskGroupFrom(s.Text)) != "same" || d.final != "ok")
-	})
 }
 
 func (d modelDiagnosis) planMemberEnded() bool {
@@ -190,30 +259,18 @@ func (d modelDiagnosis) planMemberEnded() bool {
 // and adds its transition to the operations.
 var modelDeadEnds = []modelDeadEnd{
 	{id: "DE-08", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool { return d.facts.world.stray }},
-	{id: "DE-14", owner: cardLedger, class: modelReached, covers: modelDiagnosis.archivedOutsideGroup},
-	{id: "DE-09", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool {
-		return d.has("member execution cycle changed without first-start facts")
-	}},
-	{id: "DE-20", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool {
-		return d.has("unconfirmed start cannot establish delivery")
-	}},
-	{id: "DE-19", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool { return d.has("wrap-up completion state") }},
-	{id: "DE-04", owner: cardIssue22, class: modelReached, covers: modelDiagnosis.racedStart},
-	{id: "DE-15", owner: cardIssue22, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("confirm-dispatch") }},
-	{id: "DE-03", owner: cardIssue22, class: modelReached, covers: modelDiagnosis.pendingAttemptChanged},
-	{id: "DE-01", owner: cardIssue22, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("rollback") && !d.pendingAttemptChanged() }},
-	{id: "DE-02", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("confirm-session") && !d.pendingAttemptChanged() }},
-	{id: "DE-07", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool {
-		return d.has("unbound member lacks dispatch termination and release originals")
-	}},
 	{id: "DE-13", owner: cardEvidence, class: modelReached, covers: modelDiagnosis.terminalMemberOwesFinding},
 	{id: "DE-12", owner: cardEvidence, class: modelReached, covers: modelDiagnosis.planMemberEnded},
 	{id: "DE-10", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool { return d.has("unconnected successful role run") }},
 	{id: "DE-11", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool {
 		return d.has("previous closed batch required") || d.has("closed batch chain mismatch")
 	}},
-	{id: "DE-16", owner: cardLedger, class: modelDirected, proof: "internal/launch:TestDeadEndPaneWindowWriteLosesToExecutor"},
-	{id: "DE-17", owner: cardLedger, class: modelDirected, proof: "internal/launch:TestDeadEndTakeoverDiscoveryUsesStaleCursor"},
+	// The takeover handoff gives these four an exit in the model. What stays is
+	// the launcher's half, which the board model cannot see.
+	{id: "DE-01", owner: cardIssue22, class: modelDirected, proof: "internal/launch:TestDeadEndStartClosesContainerOverExecutorWork"},
+	{id: "DE-03", owner: cardIssue22, class: modelDirected, proof: "internal/board:TestDeadEndDispatchBindsAPendingStart"},
+	{id: "DE-04", owner: cardIssue22, class: modelDirected, proof: "internal/board:TestDeadEndConfirmAfterHandoffIsAnError"},
+	{id: "DE-15", owner: cardIssue22, class: modelDirected, proof: "internal/board:TestDeadEndDispatchBindsAPendingStart"},
 	{id: "DE-18", owner: cardRecovery, class: modelDirected, proof: "internal/launch:TestCoordinatorRechecksActualGitAfterWrapUpRestart"},
 }
 

@@ -19,6 +19,10 @@ type Version struct {
 	mu            sync.Mutex
 	revision      uint64
 	authorization ExecutionAuthorization
+	// fence names the execution record this operation acts for.
+	fence ExecutionFence
+	// advanced stays true once an entrance saw the card ahead of this cursor.
+	advanced bool
 }
 
 // Snapshot is a committed, consistent task document and its optimistic version.

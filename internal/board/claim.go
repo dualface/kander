@@ -50,13 +50,13 @@ type lifecycleHandoff struct {
 	CardRevision uint64 `json:"card_revision"`
 }
 
-func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOptions) (string, error) {
+func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOptions) (string, *lifecycleHandoff, error) {
 	if o.Owner == "" || target != "working" {
-		return text, nil
+		return text, nil, nil
 	}
 	releases, err := cardReleases(s)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var released *DispatchRelease
 	for i := range releases {
@@ -66,29 +66,30 @@ func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOption
 	}
 	if released == nil && s.Entry.State != "review" {
 		if o.Decision != "" {
-			return "", kanbanError("board.transaction_invalid", "--decision")
+			return "", nil, kanbanError("board.transaction_invalid", "--decision")
 		}
-		return text, nil
+		return text, nil, nil
 	}
 	if s.Entry.State != "review" || strings.TrimSpace(o.Decision) == "" {
-		return "", kanbanError("board.transaction_decision_required")
+		return "", nil, kanbanError("board.transaction_decision_required")
 	}
 	handoff := lifecycleHandoff{Kind: "reclaim", OldCycle: planCycle(s), NewCycle: planCycle(Snapshot{Entry: s.Entry, Text: text}), Decision: o.Decision, Owner: o.Owner, CardRevision: s.Revision + 1}
 	if released != nil {
 		if err := verifyCardRelease(tx, s, *released); err != nil {
-			return "", err
+			return "", nil, err
 		}
 		handoff.DispatchID = released.Termination.Authorization.DispatchID
 	} else if err := verifyDispatchlessHandoff(tx, s, releases, handoff); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return appendLifecycleRecord(text, "LIFECYCLE_DECISION", lifecycleJSON(handoff)), nil
+	return appendLifecycleRecord(text, "LIFECYCLE_DECISION", lifecycleJSON(handoff)), &handoff, nil
 }
 
 // verifyDispatchlessHandoff proves that the old cycle never held a dispatch.
 // Only a release clears a binding, and a bound card refuses --owner, so a cycle
 // that held one has a release of its own. A completed dispatch of an earlier
-// cycle passes only when a release ended its binding before this handoff.
+// cycle passes only when a release ended its binding before this handoff. A
+// settlement ends a completed binding the way a release ends any other.
 func verifyDispatchlessHandoff(tx *Transaction, s Snapshot, releases []DispatchRelease, h lifecycleHandoff) error {
 	for _, r := range releases {
 		if r.Cycle == h.OldCycle {
@@ -108,7 +109,7 @@ func verifyDispatchlessHandoff(tx *Transaction, s Snapshot, releases []DispatchR
 			return err
 		}
 		receipt := cmp.Or(d.Completed, d.Accepted)
-		if d.Release != nil || receipt == nil || receipt.CardRevision >= h.CardRevision {
+		if d.Release != nil || d.Settlement != nil || receipt == nil || receipt.CardRevision >= h.CardRevision {
 			continue
 		}
 		ended := slices.ContainsFunc(releases, func(r DispatchRelease) bool {

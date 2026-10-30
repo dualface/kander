@@ -103,7 +103,7 @@ func TestDispatchWrapUpPublicAuthorizationReconcilesAndObserves(t *testing.T) {
 			}
 			if mode == "no-session" {
 				next := strings.ReplaceAll(s.Text, "- SESSION: "+board.MetadataFrom(s.Text, board.FieldSession), "- SESSION:")
-				if err = board.WriteManagedDocument(root, s.Entry, next); err != nil {
+				if err = writeCardFixture(root, s.Entry, next); err != nil {
 					t.Fatal(err)
 				}
 			}

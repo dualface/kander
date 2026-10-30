@@ -57,8 +57,8 @@ func TestResolveExecutionUnpinnedMatchesConfiguration(t *testing.T) {
 				if choice != want {
 					t.Fatalf("%s/%s/%v: choice=%+v want %+v", name, kind, tc.mode, choice, want)
 				}
-				if got, err := withExecRecord(text, choice); err != nil || got != text {
-					t.Fatalf("%s: unpinned card changed: %v %q", name, err, got)
+				if choice.record != "" {
+					t.Fatalf("%s: unpinned card gained a record: %q", name, choice.record)
 				}
 			}
 		}

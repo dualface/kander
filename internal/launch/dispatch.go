@@ -136,6 +136,11 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if err = CheckExecutionPins(cfg, s.Text, s.Entry.Kind, agent); err != nil {
 		return err
 	}
+	if agent == nil {
+		if err = RequireSessionExecution(root, task); err != nil {
+			return err
+		}
+	}
 	var o DispatchOptions
 	if len(options) > 0 {
 		o = options[0]

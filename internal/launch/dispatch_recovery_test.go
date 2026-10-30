@@ -48,8 +48,10 @@ func TestAcceptedResumeRequiresStoppedAndRenewsExpiredDeadline(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				text := strings.Replace(s.Text, "- WINDOW: foreground", "- WINDOW: tmux:$42:@8:%8", 1)
-				if err = board.WriteManagedDocument(root, s.Entry, text); err != nil {
+				if _, err = board.BindExecutionCursor(root, s.Entry); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = board.RecordExecutionWindow(root, s.Entry, "tmux:$42:@8:%8", ""); err != nil {
 					t.Fatal(err)
 				}
 				program, err := exec.LookPath("tmux")

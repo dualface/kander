@@ -40,6 +40,8 @@ type CoordinatorMember struct {
 	AwaitingStart      bool                 `json:"awaiting_start,omitempty"`
 	StartAttempt       string               `json:"start_attempt,omitempty"`
 	State              string               `json:"state"`
+	TransitionSeq      uint64               `json:"transition_seq,omitzero"`
+	DispatchSeq        uint64               `json:"dispatch_seq,omitzero"`
 	DeliveryCommit     string               `json:"delivery_commit,omitempty"`
 	Dispatch           *CoordinatorDispatch `json:"dispatch,omitempty"`
 	Review             *CoordinatorReview   `json:"review,omitempty"`
@@ -111,6 +113,10 @@ type CoordinatorDelivery struct {
 	Commit string
 }
 
+// checkpointSchema 2 adds the chain positions of a mirror. A schema 1 checkpoint
+// stays readable and upgrades on the first reconcile that publishes.
+const checkpointSchema = 2
+
 func coordinatorError(detail string) error { return kanbanError("board.coordinator_conflict", detail) }
 func coordinatorHash(v any) string         { b, _ := json.Marshal(v); return messageHash(string(b)) }
 
@@ -131,7 +137,7 @@ func readCheckpoint(tx *Transaction, group string) (c CoordinatorCheckpoint, exi
 	if err = DecodeReviewJSON(b, &c); err != nil {
 		return c, true, err
 	}
-	if c.Schema != 1 || c.GroupID != group || c.Revision == 0 || c.Authority.Epoch == 0 || strings.TrimSpace(c.Authority.Owner) == "" || !validDispatchID(c.Authority.Token) || c.ClaimHash == "" || c.Basis == "" || len(c.Members) == 0 || c.MemberVersion != coordinatorHash(checkpointIDs(c)) {
+	if (c.Schema != 1 && c.Schema != checkpointSchema) || c.GroupID != group || c.Revision == 0 || c.Authority.Epoch == 0 || strings.TrimSpace(c.Authority.Owner) == "" || !validDispatchID(c.Authority.Token) || c.ClaimHash == "" || c.Basis == "" || len(c.Members) == 0 || c.MemberVersion != coordinatorHash(checkpointIDs(c)) {
 		return c, true, coordinatorError("checkpoint identity or membership")
 	}
 	if _, err = orderedIDs(checkpointIDs(c), false); err != nil {
@@ -219,7 +225,7 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 			return err
 		}
 		if !exists {
-			c = CoordinatorCheckpoint{Schema: 1, GroupID: r.GroupID, MemberVersion: coordinatorHash(ids), Members: map[string]CoordinatorMember{}}
+			c = CoordinatorCheckpoint{Schema: checkpointSchema, GroupID: r.GroupID, MemberVersion: coordinatorHash(ids), Members: map[string]CoordinatorMember{}}
 		}
 		for _, id := range ids {
 			if _, ok := c.Members[id]; ok {
@@ -229,14 +235,13 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 			if e != nil {
 				return e
 			}
-			m := CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: s.Entry.State, AwaitingStart: MetadataFrom(s.Text, FieldStartedAt) == "" && (s.Entry.State == "todo" || s.Entry.State == "backlog")}
-			if a, exists, e := readTaskStart(tx, id, ""); e != nil {
+			l, e := readExecutionLedger(tx, s)
+			if e != nil {
 				return e
-			} else if exists {
-				m.StartAttempt = a.ID
-				if a.Status == "pending" {
-					m.Cycle, m.AwaitingStart = ReviewDigest([]byte(id+"\n")), true
-				}
+			}
+			m := CoordinatorMember{Revision: s.Revision, Cycle: planCycle(s), State: s.Entry.State, AwaitingStart: MetadataFrom(s.Text, FieldStartedAt) == "" && (s.Entry.State == "todo" || s.Entry.State == "backlog"), StartAttempt: l.startAttempt(), TransitionSeq: l.end()}
+			if cur := l.current; cur != nil && (cur.Status == ExecutionPending || cur.Status == ExecutionUnresolved) {
+				m.Cycle, m.AwaitingStart = emptyCycle(id), true
 			}
 			c.Members[id] = m
 		}
@@ -377,6 +382,6 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 		return c, false, coordinatorError("checkpoint revision overflow")
 	}
 	c.Revision++
-	c.Members, c.LastRequestHash = members, coordinatorHash(r)
+	c.Schema, c.Members, c.LastRequestHash = checkpointSchema, members, coordinatorHash(r)
 	return c, true, nil
 }

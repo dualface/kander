@@ -67,88 +67,33 @@ func stubDiscovery(t *testing.T, poll func(call int) []string) {
 	t.Cleanup(func() { enumerateSessionsFn = previous })
 }
 
-// DE-01 and DE-02: the launcher closes the container before it judges whether
-// the executor already worked, and its cursor then loses to the executor's write.
+// DE-01: the launcher closes the container before it judges whether the executor
+// already worked, and its rollback then loses to the executor's write.
 func TestDeadEndStartClosesContainerOverExecutorWork(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("tmux fakes are POSIX")
 	}
-	for name, discovered := range map[string][]string{"discovery-fails": {"existing"}, "confirm-fails": {"existing", "devin-new-session"}} {
-		t.Run(name, func(t *testing.T) {
-			root, _, _ := setupBoard(t)
-			taskID, _ := makeTodo(t, root, "dead-end-start")
-			expired := false
-			stubDiscovery(t, func(call int) []string {
-				if call == 1 {
-					return []string{"existing"}
-				}
-				if call == 2 {
-					deadEndExecutorWrite(t, root, taskID)
-					expired = true
-				}
-				return discovered
-			})
-			previousNow := nowFn
-			nowFn = func() time.Time {
-				if expired {
-					return previousNow().Add(time.Hour)
-				}
-				return previousNow()
-			}
-			t.Cleanup(func() { nowFn = previousNow })
-			_, _, err := capture(t, func() error { return commandStart(root, "devin", "tmux", taskID) })
-			assertStranded(t, root, taskID, err, "working")
-		})
-	}
-}
-
-// DE-16: with pane delivery the executor runs before WINDOW is written, and that
-// write uses the launcher's exact revision.
-func TestDeadEndPaneWindowWriteLosesToExecutor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
 	root, _, _ := setupBoard(t)
-	t.Setenv("KANBAN_TMUX_PANE_OUTPUT", "Never Ask  /repo  context: 0%")
-	stubKimiDiscovery(t, "kimi-dead-end")
-	taskID, _ := makeTodo(t, root, "dead-end-window")
-	delivered := filepath.Join(root, "tmux.log.send-keys")
-	wrote := false
-	previous := readDocumentFn
-	readDocumentFn = func(e board.Entry) (string, error) {
-		if _, err := os.Stat(delivered); err == nil && !wrote {
-			wrote = true
-			deadEndExecutorWrite(t, root, taskID)
-		}
-		return previous(e)
-	}
-	t.Cleanup(func() { readDocumentFn = previous })
-	_, _, err := capture(t, func() error { return commandStart(root, "kimi", "tmux", taskID) })
-	if !wrote {
-		t.Fatal("the prompt was not delivered before WINDOW")
-	}
-	assertStranded(t, root, taskID, err, "working")
-}
-
-// DE-17: the takeover writes the discovered session through the cursor it held
-// before the new executor ran.
-func TestDeadEndTakeoverDiscoveryUsesStaleCursor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("tmux fakes are POSIX")
-	}
-	root, _, _ := setupBoard(t)
-	taskID, path := makeTodo(t, root, "dead-end-takeover")
-	startThenReview(t, root, "claude", taskID, path)
+	taskID, _ := makeTodo(t, root, "dead-end-start")
+	expired := false
 	stubDiscovery(t, func(call int) []string {
 		if call == 1 {
 			return []string{"existing"}
 		}
 		if call == 2 {
 			deadEndExecutorWrite(t, root, taskID)
+			expired = true
 		}
-		return []string{"existing", "devin-new-session"}
+		return []string{"existing"}
 	})
-	agent := "devin"
-	_, _, err := capture(t, func() error { return commandResume(root, &agent, "tmux", taskID, "take over", "", true, 61) })
-	assertStranded(t, root, taskID, err, "review")
+	previousNow := nowFn
+	nowFn = func() time.Time {
+		if expired {
+			return previousNow().Add(time.Hour)
+		}
+		return previousNow()
+	}
+	t.Cleanup(func() { nowFn = previousNow })
+	_, _, err := capture(t, func() error { return commandStart(root, "devin", "tmux", taskID) })
+	assertStranded(t, root, taskID, err, "working")
 }

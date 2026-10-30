@@ -46,7 +46,7 @@ func TestPinnedDocumentContextContention(t *testing.T) {
 	for _, write := range []bool{false, true} {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
 		if write {
-			err = WriteManagedDocumentContext(ctx, root, snapshot.Entry, snapshot.Text+"\nchanged\n")
+			_, err = RecordExecutionSession(ctx, root, snapshot.Entry, "before", "after")
 		} else {
 			_, err = ReadDocumentContext(ctx, snapshot.Entry)
 		}
@@ -191,7 +191,7 @@ func TestSnapshotRevisionSurvivesMutationCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = WriteManagedDocument(root, captured.Entries[id], text+"\nnew\n"); err != nil {
+	if err = fixtureWrite(root, captured.Entries[id], text+"\nnew\n"); err != nil {
 		t.Fatal(err)
 	}
 	previous, err := captured.Revision(id)

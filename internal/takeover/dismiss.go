@@ -52,6 +52,9 @@ func commandDismiss(root, taskID string, timeout float64) error {
 	if err := board.ValidateMutable(entry, text); err != nil {
 		return err
 	}
+	if err := launch.RequireSessionExecution(root, entry.TaskID); err != nil {
+		return err
+	}
 	windowValue := board.MetadataFrom(text, window.WindowField)
 	backend, address, parsed := terminal.ParseWindow(windowValue)
 	if windowValue != "" && !parsed {

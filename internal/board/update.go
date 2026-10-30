@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/dualface/kander/internal/fs"
 )
 
 func baseEntryName(e Entry) string { return filepath.Base(e.Path) }
@@ -33,10 +35,14 @@ func setMetadata(text, field, value string) (string, error) {
 }
 func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 	var err error
-	if o.Owner != "" {
-		if to != "working" {
-			return "", kanbanError("board.transaction_invalid", "--owner")
+	if o.Owner != "" && to != "working" {
+		return "", kanbanError("board.transaction_invalid", "--owner")
+	}
+	if o.start != nil {
+		if text, err = renderStart(text, o.Owner, *o.start); err != nil {
+			return "", err
 		}
+	} else if o.Owner != "" {
 		text, err = setMetadata(text, FieldOwner, o.Owner)
 		if err != nil {
 			return "", err
@@ -45,8 +51,6 @@ func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 		if err != nil {
 			return "", err
 		}
-	}
-	if o.Owner != "" {
 		text, err = NewClaimMetadata(text)
 		if err != nil {
 			return "", err
@@ -278,6 +282,9 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			if version.ContractFrozen && state == "backlog" {
 				state = "frozen"
 			}
+			if err = rejectCheckpointedRegroup(tx, s.Text, text); err != nil {
+				return err
+			}
 			if len(fieldLines(s.Text, FieldSize)) > 0 && len(fieldLines(text, FieldSize)) == 0 {
 				return kanbanError("board.size_invalid", id)
 			}
@@ -336,6 +343,29 @@ func RunUpdate(args []string) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// rejectCheckpointedRegroup keeps the member set a coordinator froze: a card can
+// neither leave nor enter a group that has a checkpoint. The check reads the
+// checkpoint file under the shared board lock, which excludes a concurrent claim.
+func rejectCheckpointedRegroup(tx *Transaction, before, after string) error {
+	old, next := TaskGroupFrom(before), TaskGroupFrom(after)
+	if old == next {
+		return nil
+	}
+	for _, group := range []string{old, next} {
+		if !validDispatchID(group) {
+			continue
+		}
+		exists, err := fs.RegularFileExists(tx.root, control(tx.root, "groups", group, "checkpoint.json"))
+		if err != nil {
+			return err
+		}
+		if exists {
+			return withUpdateHint(kanbanError("board.update_group_checkpointed", group), "board.update_hint_group_checkpointed")
+		}
+	}
+	return nil
 }
 
 func appendRecordSection(text, heading, record string) string {

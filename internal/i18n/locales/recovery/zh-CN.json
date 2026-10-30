@@ -16,5 +16,10 @@
   "board.update_hint_lifecycle_section": "下一步：按 kander show 的输出原样保留 LIFECYCLE_DECISION 段落；它由 kander move 的终止选项和认领、交接流程写入。",
   "board.update_hint_managed_path": "下一步：该路径由专用命令发布，update 不能写入。",
   "board.update_hint_duplicate": "下一步：每个字段和段落只保留一处；把新内容合并进已有的那一处。",
-  "board.update_hint_frozen": "下一步：冻结契约包括 GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、OUT_OF_SCOPE、TASK_GROUP、SIZE、pin 字段和 PREREQUISITES 行。执行记录写进 DISCUSSION 或 IMPLEMENTATION。卡片处于 working 或 review 时，只在 - [ ] 与 - [x] 之间切换顶层验收项不需要决定。要修改契约，先取得用户决定，再传 --contract-decision-file。"
+  "board.update_hint_frozen": "下一步：冻结契约包括 GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、OUT_OF_SCOPE、TASK_GROUP、SIZE、pin 字段和 PREREQUISITES 行。执行记录写进 DISCUSSION 或 IMPLEMENTATION。卡片处于 working 或 review 时，只在 - [ ] 与 - [x] 之间切换顶层验收项不需要决定。要修改契约，先取得用户决定，再传 --contract-decision-file。",
+  "board.dispatch_cycle_changed": "派发 {{.V0}} 属于更早的执行周期；准备之后执行周期已变化。下一步：为当前执行准备新的派发。",
+  "board.dispatch_end_decision_required": "派发 {{.V0}} 已被接受，它的 executor 可能仍在运行。下一步：先停止 executor，再带 --decision <用户决定引用> 重新执行。",
+  "board.update_group_checkpointed": "任务组 {{.V0}} 已有 coordinator checkpoint，成员集合已冻结，TASK_GROUP 不能改变。",
+  "board.update_hint_group_checkpointed": "下一步：保留 TASK_GROUP 这一行不变；把新工作放进另一个任务组或独立卡。",
+  "launch.execution_has_no_session": "{{.V0}} 没有 executor 会话：当前执行记录的 kind 是 {{.V1}}。下一步：由认领该卡的会话继续；要换掉该会话，用 kander resume --agent <agent>（见 snippets/failure-recovery.md）。"
 }

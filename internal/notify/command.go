@@ -35,6 +35,9 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 	if err := board.ValidateMutable(entry, text); err != nil {
 		return err
 	}
+	if err := launch.RequireSessionExecution(root, entry.TaskID); err != nil {
+		return err
+	}
 	cfg, err := config.Load(false)
 	if err != nil {
 		return err
@@ -90,11 +93,10 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 			return err
 		}
 		if target.Window != "" && target.Window != windowValue {
-			updated, err := window.RenderWindowMetadata(text, target.Window)
-			if err != nil {
+			if _, err := board.BindExecutionCursor(root, entry); err != nil {
 				return err
 			}
-			if err := window.WriteDocument(root, entry, updated); err != nil {
+			if _, err := board.RecordExecutionWindow(root, entry, target.Window, ""); err != nil {
 				return err
 			}
 			windowWritten = true

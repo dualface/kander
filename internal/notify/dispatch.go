@@ -10,7 +10,6 @@ import (
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/terminal"
-	"github.com/dualface/kander/internal/window"
 )
 
 func commandNotify(root, task, message, messageFile, pane string, messageSet bool, timeout float64, options ...launch.DispatchOptions) error {
@@ -34,6 +33,9 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 		return err
 	}
 	if err = launch.CheckExecutionPins(cfg, s.Text, s.Entry.Kind, nil); err != nil {
+		return err
+	}
+	if err = launch.RequireSessionExecution(root, task); err != nil {
 		return err
 	}
 	var o launch.DispatchOptions
@@ -173,14 +175,17 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			}
 		}
 		if target.Window != "" && target.Window != board.MetadataFrom(s.Text, board.FieldWindow) {
-			text, err := window.RenderWindowMetadata(s.Text, target.Window)
-			if err != nil {
+			if _, err = board.BindExecutionCursor(root, s.Entry); err != nil {
 				return err
 			}
-			if err = window.WriteDocument(root, s.Entry, text); err != nil {
+			if _, err = board.RecordExecutionWindow(root, s.Entry, target.Window, ""); err != nil {
 				return err
 			}
-			s.Revision++
+			// The entrance writes on the latest snapshot; the attempt below
+			// compares the revision, so it needs that one.
+			if s, err = board.ReadExecutionSnapshot(root, task, authorization); err != nil {
+				return err
+			}
 		}
 		// The receipt, not the marker, settles a dispatch; the marker only keeps
 		// the agent-visible protocol identical to direct delivery.

@@ -25,7 +25,7 @@ func expiredAcceptedFixture(t *testing.T) (string, Dispatch, Snapshot) {
 	text, _ := setMetadata(s.Text, FieldSession, "codex original-session")
 	text, _ = setMetadata(text, FieldWindow, "herdr:t1:p1")
 	text, _ = setMetadata(text, FieldOwner, "codex")
-	if err := WriteManagedDocument(root, s.Entry, text); err != nil {
+	if err := fixtureWrite(root, s.Entry, text); err != nil {
 		t.Fatal(err)
 	}
 	d := prepareTestDispatch(t, root, dispatchInput(s, "accepted-recovery"))
@@ -113,7 +113,7 @@ func TestAcceptedRecoveryPersistsDeadlineAndFencesWrites(t *testing.T) {
 	// Even knowledge of the latest revision cannot rescue an old epoch.
 	stale.Entry.Version.revision = current.Revision
 	windowText, _ := setMetadata(stale.Text, FieldWindow, "herdr:t2:p2")
-	if err = WriteManagedDocument(root, stale.Entry, windowText); err == nil {
+	if err = fixtureWrite(root, stale.Entry, windowText); err == nil {
 		t.Fatal("old runtime writer updated WINDOW")
 	}
 	next, err = BeginDispatchAttempt(root, d.Input.TaskID, d.Input.ID, next.Revision, current.Revision)

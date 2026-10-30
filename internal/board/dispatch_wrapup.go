@@ -107,6 +107,9 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 		if d.Input.Kind != "wrap-up" || d.Revision != expected || d.Authorization != authFrom(s.Text) || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.WrapUpAuthority != nil || d.Authorization.Epoch == ^uint64(0) || (s.Entry.State != "review" && s.Entry.State != "working") || strings.TrimSpace(author) == "" || strings.TrimSpace(reason) == "" {
 			return dispatchEvidenceError("wrap-up authority conflict")
 		}
+		if e = requireDispatchCycle(d, s); e != nil {
+			return e
+		}
 		if (exit.Outcome != "stopped" && exit.Outcome != "reclaimed") || exit.Outcome == "reclaimed" && strings.TrimSpace(exit.Decision) == "" || !validDispatchExit(s, exit, time.Now()) {
 			return dispatchEvidenceError("fresh confirmed exit required")
 		}

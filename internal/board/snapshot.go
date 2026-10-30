@@ -50,35 +50,26 @@ func readPinnedDocument(ctx context.Context, entry Entry) (string, error) {
 	return s.Text, nil
 }
 
-// WriteManagedDocument commits a lifecycle operation's existing document and
-// advances only its own cursor. Other operation cursors remain stale.
-func WriteManagedDocument(root string, entry Entry, text string) error {
-	return managedMutation(nil, root, entry, text, "")
-}
-
-// WriteManagedDocumentContext bounds lock contention and transaction preparation.
-// A published journal intent is completed by the existing recovery protocol.
-func WriteManagedDocumentContext(ctx context.Context, root string, entry Entry, text string) error {
-	return managedMutation(ctx, root, entry, text, "")
-}
-
 // RollbackDocument restores the original document and optional state only while
-// this operation still owns the current revision; it cannot erase newer work.
+// this operation still owns the current revision; it cannot erase newer work. A
+// card that moved past the cursor refuses the rollback even when a later
+// entrance call caught the cursor up.
 func RollbackDocument(root string, entry Entry, text, state string) error {
-	return managedMutation(nil, root, entry, text, state)
-}
-func managedMutation(ctx context.Context, root string, entry Entry, text, state string) error {
-	if entry.Version == nil {
+	v := entry.Version
+	if v == nil {
 		return kanbanError("board.transaction_conflict", entry.TaskID)
 	}
-	entry.Version.mu.Lock()
-	defer entry.Version.mu.Unlock()
-	err := withTransaction(ctx, root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
-		s, err := tx.Expect(entry.TaskID, entry.State, entry.Version.revision)
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	err := withTransaction(nil, root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{entry.TaskID}, ExclusiveBoard: state != "" && state != entry.State, warnings: entryWarningLog(entry)}, func(tx *Transaction) error {
+		s, err := tx.Expect(entry.TaskID, entry.State, v.revision)
 		if err != nil {
 			return err
 		}
-		if err = tx.requireExecution(s, entry.Version.authorization, false); err != nil {
+		if v.advanced || s.Entry.Path != entry.Path {
+			return kanbanError("board.transaction_conflict", entry.TaskID)
+		}
+		if err = tx.requireExecution(s, v.authorization, false); err != nil {
 			return err
 		}
 		if err = tx.requireFullExecution(s); err != nil {
@@ -87,10 +78,7 @@ func managedMutation(ctx context.Context, root string, entry Entry, text, state 
 		if authFrom(text) != authFrom(s.Text) {
 			return dispatchError(entry.TaskID)
 		}
-		if s.Entry.Path != entry.Path {
-			return kanbanError("board.transaction_conflict", entry.TaskID)
-		}
-		if err = stageTaskStart(tx, s, text, state); err != nil {
+		if err = stageExecutionRollback(tx, s, text, state, v.fence); err != nil {
 			return err
 		}
 		if err = tx.Put(entry.TaskID, "spec.md", text); err != nil {
@@ -102,7 +90,7 @@ func managedMutation(ctx context.Context, root string, entry Entry, text, state 
 		return nil
 	})
 	if err == nil {
-		entry.Version.revision++
+		v.revision++
 	}
 	return err
 }
@@ -123,6 +111,8 @@ type MoveOptions struct {
 	// Pruned receives the cleanup that follows a committed move into
 	// archived; its Err never turns the move into a failure.
 	Pruned *PruneReport
+	// start makes the claim a launcher start; only BeginTaskStart sets it.
+	start *TaskStartInput
 }
 
 // MoveEntry preserves the existing API for callers already holding a snapshot.
@@ -142,6 +132,9 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 	scope := LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: true}
 	if target == "archived" {
 		scope.Groups = []string{pruneControlGroup}
+	}
+	if target == "working" {
+		scope.Groups = []string{taskStartGroup}
 	}
 	if target == "done" {
 		scope, err = reviewGateScope(root, entry.TaskID, true, entryWarningLog(entry))
@@ -163,7 +156,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if e := requireNotArchived(s); e != nil {
 			return e
 		}
-		replayed, e := stageDispatchMove(tx, s, target, options)
+		replayed, settled, e := stageDispatchMove(tx, s, target, options)
 		if e != nil {
 			return e
 		}
@@ -181,7 +174,12 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if e != nil {
 			return e
 		}
-		updated, e = stageReclaim(tx, s, target, updated, options)
+		if settled {
+			if updated, e = clearDispatchBinding(updated); e != nil {
+				return e
+			}
+		}
+		updated, handoff, e := stageReclaim(tx, s, target, updated, options)
 		if e != nil {
 			return e
 		}
@@ -202,6 +200,9 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 				return e
 			}
 		}
+		if e = stageExecutionMove(tx, s, target, updated, options, handoff); e != nil {
+			return e
+		}
 		if e = tx.Relocate(entry.TaskID, target); e != nil {
 			return e
 		}
@@ -217,7 +218,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		if moved.IsDirectory() {
 			moved.Document = joinBoard(moved.Path, "spec.md")
 		}
-		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry)}
+		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry), fence: ExecutionFence{RecordID: tx.record.ID, Cycle: planCycle(Snapshot{Entry: s.Entry, Text: updated})}}
 		return nil
 	})
 	if err == nil && moved.State == "archived" && entry.State != "archived" {

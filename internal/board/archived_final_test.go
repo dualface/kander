@@ -104,7 +104,7 @@ func TestArchivedCardRejectsProducerStaging(t *testing.T) {
 		}
 	}
 	text := strings.Replace(s.Text, "- WINDOW:", "- WINDOW: herdr:pane", 1)
-	requireArchivedFinal(t, WriteManagedDocument(root, s.Entry, text))
+	requireArchivedFinal(t, fixtureWrite(root, s.Entry, text))
 	requireUnchanged(t, root, s)
 }
 

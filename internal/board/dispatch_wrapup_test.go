@@ -16,7 +16,7 @@ func wrapUpGrantFixture(t *testing.T, expired bool) (string, Dispatch, WrapUpExi
 	text, _ := setMetadata(s.Text, FieldSession, "original-session")
 	text, _ = setMetadata(text, FieldOwner, "codex")
 	text, _ = setMetadata(text, FieldWindow, "herdr:t1:p1")
-	if err := WriteManagedDocument(root, s.Entry, text); err != nil {
+	if err := fixtureWrite(root, s.Entry, text); err != nil {
 		t.Fatal(err)
 	}
 	s = transactionSnapshot(t, root, s.Entry.TaskID)
@@ -87,7 +87,7 @@ func TestDispatchWrapUpGrantFencesAndRestrictsWrites(t *testing.T) {
 	if err = UpdateDocument(root, d.Input.TaskID, UpdateOptions{Document: "spec.md", Text: strings.ReplaceAll(s.Text, "fixture", "rewritten conclusion"), ExpectedRevision: s.Revision, Authorization: next.Authorization}); err == nil {
 		t.Fatal("predecessor text overwritten")
 	}
-	if err = WriteManagedDocument(root, s.Entry, s.Text+"\nnew runtime identity\n"); err == nil {
+	if err = fixtureWrite(root, s.Entry, s.Text+"\nnew runtime identity\n"); err == nil {
 		t.Fatal("managed runtime write accepted")
 	}
 	if _, err = BeginDispatchAttempt(root, d.Input.TaskID, d.Input.ID, next.Revision); err == nil {

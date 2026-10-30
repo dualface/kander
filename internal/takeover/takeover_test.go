@@ -219,6 +219,7 @@ func makeDone(t *testing.T, root, slug, window string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	executionFixture(t, root, working)
 	review, err := board.MoveEntry(working, root, "review")
 	if err != nil {
 		t.Fatal(err)

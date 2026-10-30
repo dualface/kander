@@ -16,5 +16,10 @@
   "board.update_hint_lifecycle_section": "Next step: keep the LIFECYCLE_DECISION section exactly as kander show prints it; the termination options of kander move and the claim and handoff flow write it.",
   "board.update_hint_managed_path": "Next step: a dedicated command publishes this path; update cannot write it.",
   "board.update_hint_duplicate": "Next step: keep each field and section once; merge the new content into the existing one.",
-  "board.update_hint_frozen": "Next step: the frozen contract is GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, OUT_OF_SCOPE, TASK_GROUP, SIZE, the pin fields, and the PREREQUISITES line. Write execution records into DISCUSSION or IMPLEMENTATION. In working or review, toggling top-level acceptance items between - [ ] and - [x] needs no decision. To change the contract, get the user's decision first, then pass --contract-decision-file."
+  "board.update_hint_frozen": "Next step: the frozen contract is GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, OUT_OF_SCOPE, TASK_GROUP, SIZE, the pin fields, and the PREREQUISITES line. Write execution records into DISCUSSION or IMPLEMENTATION. In working or review, toggling top-level acceptance items between - [ ] and - [x] needs no decision. To change the contract, get the user's decision first, then pass --contract-decision-file.",
+  "board.dispatch_cycle_changed": "Dispatch {{.V0}} belongs to an earlier execution cycle; the execution cycle has changed since it was prepared. Next step: prepare a new dispatch for the current execution.",
+  "board.dispatch_end_decision_required": "Dispatch {{.V0}} was accepted, so its executor may still be running. Next step: stop the executor, then rerun with --decision <user-decision-reference>.",
+  "board.update_group_checkpointed": "Group {{.V0}} has a coordinator checkpoint, so its member set is frozen and TASK_GROUP cannot change.",
+  "board.update_hint_group_checkpointed": "Next step: keep the TASK_GROUP line as it is; move new work into a separate group or a standalone card.",
+  "launch.execution_has_no_session": "{{.V0}} has no executor session: its current execution is a {{.V1}} record. Next step: the session that claimed the card continues it; to replace that session, use kander resume --agent <agent> (see snippets/failure-recovery.md)."
 }

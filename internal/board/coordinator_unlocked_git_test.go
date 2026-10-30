@@ -161,11 +161,7 @@ func TestCoordinatorGitFailureKeepsCheckpoint(t *testing.T) {
 func bumpCoordinatorCard(t *testing.T, root, id string) {
 	t.Helper()
 	s := transactionSnapshot(t, root, id)
-	text, e := setMetadata(s.Text, FieldSession, "bumped")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = WriteManagedDocument(root, s.Entry, text); e != nil {
+	if e := fixtureWrite(root, s.Entry, s.Text+"\nbumped\n"); e != nil {
 		t.Fatal(e)
 	}
 }

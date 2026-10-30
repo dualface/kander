@@ -34,9 +34,11 @@ func TestStartCollectsJournalWarningsThroughSuccessAndRollback(t *testing.T) {
 				t.Fatalf("preview: %+v %q %q %v", preview, out, stderr, err)
 			}
 			if fail {
-				oldWrite := writeDocumentFn
-				t.Cleanup(func() { writeDocumentFn = oldWrite })
-				writeDocumentFn = func(string, board.Entry, string) error { return errors.New("injected metadata failure") }
+				oldWrite := recordWindowFn
+				t.Cleanup(func() { recordWindowFn = oldWrite })
+				recordWindowFn = func(string, board.Entry, string, string) (board.ExecutionResult, error) {
+					return board.ExecutionResult{}, errors.New("injected metadata failure")
+				}
 			}
 			var result StartResult
 			out, stderr, err = capture(t, func() error { var e error; result, e = Start(root, "claude", "tmux", id); return e })

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -16,14 +15,7 @@ import (
 
 func setSessionField(t *testing.T, path, session string) {
 	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := regexp.MustCompile(`(?m)^- SESSION:.*$`).ReplaceAllLiteralString(string(data), "- SESSION: "+session)
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	setExecutionFields(t, path, session, "")
 }
 
 func writeNotifySessionFile(t *testing.T, id string) string {

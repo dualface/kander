@@ -10,15 +10,7 @@ import (
 func recoveryMember(t *testing.T, root, slug string) string {
 	t.Helper()
 	s := coordinatorCard(t, root, slug)
-	text, err := setMetadata(s.Text, FieldOwner, "codex")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = WithTransaction(root, LockScope{Tasks: []string{s.Entry.TaskID}}, func(tx *Transaction) error { return tx.Put(s.Entry.TaskID, "spec.md", text) }); err != nil {
-		t.Fatal(err)
-	}
-	s = transactionSnapshot(t, root, s.Entry.TaskID)
-	if _, err = MoveEntry(s.Entry, root, "working"); err != nil {
+	if _, err := MoveWithOptions(s.Entry, root, "working", MoveOptions{Owner: "codex", Decision: "测试决定"}); err != nil {
 		t.Fatal(err)
 	}
 	return s.Entry.TaskID

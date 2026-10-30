@@ -52,14 +52,12 @@ func TestCoordinatorRecoversStartRollbackAndRetry(t *testing.T) {
 					t.Fatal("recovery blocked", err)
 				}
 			}
-			oldWrite := writeDocumentFn
-			oldStamp := nowStamp
-			nowStamp = func() string { return "2026-09-08 10:00" }
-			t.Cleanup(func() { nowStamp = oldStamp })
-			t.Cleanup(func() { writeDocumentFn = oldWrite })
-			writeDocumentFn = func(root string, e board.Entry, text string) error {
-				if err := oldWrite(root, e, text); err != nil {
-					return err
+			oldStart := beginStartFn
+			t.Cleanup(func() { beginStartFn = oldStart })
+			beginStartFn = func(e board.Entry, root string, in board.TaskStartInput) (board.Entry, error) {
+				moved, err := oldStart(e, root, in)
+				if err != nil {
+					return moved, err
 				}
 				// Deterministically observe committed metadata before the real
 				// launcher executes and fails. No task mutation comes from polling.
@@ -67,13 +65,13 @@ func TestCoordinatorRecoversStartRollbackAndRetry(t *testing.T) {
 				if !c.Members[ids[1]].AwaitingStart {
 					t.Fatal("unconfirmed launch bound the execution cycle")
 				}
-				return nil
+				return moved, nil
 			}
 			t.Setenv("KANBAN_TMUX_FAIL", "1")
 			if _, _, err = capture(t, func() error { return commandStart(root, "claude", "tmux", ids[1]) }); err == nil {
 				t.Fatal("launcher failure not injected")
 			}
-			writeDocumentFn = oldWrite
+			beginStartFn = oldStart
 			s, err := board.ReadSnapshot(root, ids[1])
 			if err != nil || s.Entry.State != "todo" || board.MetadataFrom(s.Text, board.FieldStartedAt) != "" {
 				t.Fatal("real rollback did not restore todo", err)
@@ -90,7 +88,6 @@ func TestCoordinatorRecoversStartRollbackAndRetry(t *testing.T) {
 				reconcile()
 			}
 			t.Setenv("KANBAN_TMUX_FAIL", "")
-			nowStamp = func() string { return "2026-09-08 10:01" }
 			if _, _, err = capture(t, func() error { return commandStart(root, "claude", "tmux", ids[1]) }); err != nil {
 				t.Fatal(err)
 			}

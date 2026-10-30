@@ -12,7 +12,6 @@ import (
 // The owner table of the card that added this test; the repair cards shrink it.
 var modelExpectedOwners = map[string]string{
 	"DE-01": cardIssue22, "DE-03": cardIssue22, "DE-04": cardIssue22, "DE-15": cardIssue22,
-	"DE-02": cardLedger, "DE-07": cardLedger, "DE-09": cardLedger, "DE-14": cardLedger, "DE-16": cardLedger, "DE-17": cardLedger, "DE-19": cardLedger, "DE-20": cardLedger,
 	"DE-08": cardEvidence, "DE-10": cardEvidence, "DE-11": cardEvidence, "DE-12": cardEvidence, "DE-13": cardEvidence,
 	"DE-18": cardRecovery,
 }
@@ -50,9 +49,9 @@ func TestModelRegistriesAreComplete(t *testing.T) {
 			t.Errorf("%s is missing from the allow list", id)
 		}
 	}
-	for _, closed := range []string{"DE-05", "DE-06"} {
+	for _, closed := range []string{"DE-02", "DE-05", "DE-06", "DE-07", "DE-09", "DE-14", "DE-16", "DE-17", "DE-19", "DE-20"} {
 		if seen[closed] {
-			t.Errorf("%s was closed by #20 and must stay off the allow list", closed)
+			t.Errorf("%s is closed and must stay off the allow list", closed)
 		}
 	}
 	var ids []string
@@ -159,25 +158,43 @@ func TestModelKeyFollowsTheCheckpointDispatch(t *testing.T) {
 	}
 }
 
-// DE-14 needs the card that left the group to be the one no command can reach.
-func TestModelDE14NamesTheMemberThatCannotReturn(t *testing.T) {
-	entry := modelDeadEnds[slices.IndexFunc(modelDeadEnds, func(e modelDeadEnd) bool { return e.id == "DE-14" })]
-	card := func(state, group string) Snapshot {
-		return Snapshot{Entry: Entry{State: state}, Text: "- TASK_GROUP: " + group + "\n"}
+// The ledger closed these by walking chains instead of comparing snapshots. Each
+// path is the one that used to strand the member.
+func TestModelConfirmsTheLedgerClosedItsDeadEnds(t *testing.T) {
+	modelFastTemp(t)
+	start := modelInitial(t, true, 2)
+	s := &modelSearch{ops: modelOps(), index: map[string]int{}, scratch: t.TempDir()}
+	claimed := []string{"A:H.claim", "B:H.claim", "C.reconcile"}
+	review := slices.Concat(claimed, []string{"A:X.review", "B:X.review", "C.reconcile"})
+	round := slices.Concat(review, []string{"A:D.prepareSync", "A:D.accept", "A:D.complete", "C.reconcile"})
+	finish := func(t *testing.T, w *modelWorld) {
+		t.Helper()
+		modelAllDone(t, modelWalk(t, s, w, "A:F.done", "B:F.done", "C.reconcile"))
 	}
-	diagnosis := func(mirror string, cards ...Snapshot) modelDiagnosis {
-		return modelDiagnosis{mirror: mirror, final: "ok", facts: &modelFacts{cards: cards}}
-	}
-	const refused = "group membership changed; reconcile the explicit member set"
-	if !entry.covers(diagnosis(refused, card("archived", "20261030-other-group"), card("working", coordinatorGroup))) {
-		t.Fatal("an archived card outside the group was not covered")
-	}
-	if entry.covers(diagnosis(refused, card("working", "20261030-other-group"), card("trash", coordinatorGroup))) {
-		t.Fatal("a member that can return was covered")
-	}
-	if entry.covers(diagnosis("another refusal", card("archived", "20261030-other-group"), card("working", coordinatorGroup))) {
-		t.Fatal("an unrelated refusal was covered")
-	}
+	t.Run("DE-07 a discarded round no reconcile saw", func(t *testing.T) {
+		finish(t, modelWalk(t, s, start, slices.Concat(round, []string{"A:D.prepareSync", "A:D.cancel", "A:H.return"})...))
+	})
+	t.Run("a settled round", func(t *testing.T) {
+		finish(t, modelWalk(t, s, start, slices.Concat(round, []string{"A:D.settle", "A:H.reclaimDecision"})...))
+	})
+	t.Run("DE-09 trash after an unobserved claim", func(t *testing.T) {
+		w := modelWalk(t, s, start, "B:H.claim", "B:T.trash")
+		if err := w.reconcile(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("DE-14 a regroup is refused", func(t *testing.T) {
+		modelRefuses(t, s, modelWalk(t, s, start, claimed...), "A:U.regroup")
+	})
+	t.Run("DE-19 trash after a wrap-up", func(t *testing.T) {
+		w := modelWalk(t, s, start, slices.Concat(claimed, []string{"R.planNA", "R.close", "A:F.done", "A:T.trash"})...)
+		if err := w.reconcile(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("DE-20 a plain move after a rollback", func(t *testing.T) {
+		finish(t, modelWalk(t, s, start, "A:L.begin", "B:H.claim", "C.reconcile", "A:L.fail", "C.reconcile", "A:H.plainWorking", "A:X.review", "C.reconcile"))
+	})
 }
 
 func TestModelInvariantI7RejectsAdvanceOverOpenFinding(t *testing.T) {

@@ -143,7 +143,7 @@ func TestCoordinatorFirstDeliveryRequiresActualTaskHead(t *testing.T) {
 		t.Fatal(e)
 	}
 	text := strings.Replace(s.Text, "- TASK_BRANCH: "+board.MetadataFrom(s.Text, "TASK_BRANCH"), "- TASK_BRANCH: delivery-test", 1)
-	if e = board.WriteManagedDocument(root, s.Entry, text); e != nil {
+	if e = writeCardFixture(root, s.Entry, text); e != nil {
 		t.Fatal(e)
 	}
 	s, e = board.ReadSnapshot(root, task)

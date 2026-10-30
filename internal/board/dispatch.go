@@ -62,22 +62,29 @@ type DispatchReceipt struct {
 
 // Dispatch is the committed protocol state. Transport never supplies Accepted.
 type Dispatch struct {
-	Execution       *DispatchExecution     `json:"execution,omitempty"`
-	WrapUpAuthority *WrapUpAuthority       `json:"wrap_up_authority,omitempty"`
-	Schema          int                    `json:"schema"`
-	Input           DispatchInput          `json:"intent"`
-	MessageHash     string                 `json:"message_hash"`
-	Authorization   ExecutionAuthorization `json:"authorization"`
-	Revision        uint64                 `json:"revision"`
-	State           DispatchState          `json:"state"`
-	Attempts        uint64                 `json:"attempts"`
-	Accepted        *DispatchReceipt       `json:"accepted,omitempty"`
-	Completed       *DispatchReceipt       `json:"completed,omitempty"`
-	Reason          string                 `json:"reason,omitempty"`
-	Release         *DispatchRelease       `json:"release,omitempty"`
+	Execution       *DispatchExecution `json:"execution,omitempty"`
+	WrapUpAuthority *WrapUpAuthority   `json:"wrap_up_authority,omitempty"`
+	Schema          int                `json:"schema"`
+	Input           DispatchInput      `json:"intent"`
+	// Cycle and PreviousID are empty only on schema 1 records.
+	Cycle         string                 `json:"cycle,omitempty"`
+	PreviousID    string                 `json:"previous_dispatch_id,omitempty"`
+	MessageHash   string                 `json:"message_hash"`
+	Authorization ExecutionAuthorization `json:"authorization"`
+	Revision      uint64                 `json:"revision"`
+	State         DispatchState          `json:"state"`
+	Attempts      uint64                 `json:"attempts"`
+	Accepted      *DispatchReceipt       `json:"accepted,omitempty"`
+	Completed     *DispatchReceipt       `json:"completed,omitempty"`
+	Reason        string                 `json:"reason,omitempty"`
+	Release       *DispatchRelease       `json:"release,omitempty"`
+	Settlement    *DispatchSettlement    `json:"settlement,omitempty"`
 }
 
-const dispatchRegistry = "00000000-dispatch-group"
+const (
+	dispatchRegistry = "00000000-dispatch-group"
+	dispatchSchema   = 2
+)
 
 var dispatchIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 var dispatchCommitPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -162,7 +169,7 @@ func readDispatch(tx *Transaction, task, id string) (Dispatch, error) {
 	if err = json.Unmarshal([]byte(intent), &original); err != nil {
 		return d, err
 	}
-	if d.Schema != 1 || d.Input.TaskID != task || d.Input.ID != id || validateDispatchInput(d.Input) != nil || d.MessageHash != messageHash(d.Input.Message) || !reflect.DeepEqual(original.Input, d.Input) || original.MessageHash != d.MessageHash || d.Authorization.DispatchID != id || d.Authorization.Epoch == 0 || d.Revision == 0 || d.Input.CreatedAt.IsZero() || !d.Input.ConfirmBy.After(d.Input.CreatedAt) {
+	if (d.Schema != 1 && d.Schema != dispatchSchema) || d.Schema == dispatchSchema && d.Cycle == "" || original.Cycle != d.Cycle || original.PreviousID != d.PreviousID || d.Input.TaskID != task || d.Input.ID != id || validateDispatchInput(d.Input) != nil || d.MessageHash != messageHash(d.Input.Message) || !reflect.DeepEqual(original.Input, d.Input) || original.MessageHash != d.MessageHash || d.Authorization.DispatchID != id || d.Authorization.Epoch == 0 || d.Revision == 0 || d.Input.CreatedAt.IsZero() || !d.Input.ConfirmBy.After(d.Input.CreatedAt) {
 		return d, dispatchError(id)
 	}
 	switch d.State {
@@ -195,7 +202,20 @@ func readDispatch(tx *Transaction, task, id string) (Dispatch, error) {
 	if err := validateDispatchRelease(tx, d); err != nil {
 		return d, err
 	}
+	if err := validateDispatchSettlement(tx, d); err != nil {
+		return d, err
+	}
 	return d, nil
+}
+
+// requireDispatchCycle refuses to act on a round of an earlier execution. A
+// schema 1 record has no cycle and stays usable, so a dispatch in flight across
+// the upgrade does not become a dead end.
+func requireDispatchCycle(d Dispatch, s Snapshot) error {
+	if d.Cycle != "" && d.Cycle != planCycle(s) {
+		return kanbanError("board.dispatch_cycle_changed", d.Input.ID)
+	}
+	return nil
 }
 
 // ReadDispatch reads intent and receipts under one shared card lock.
@@ -283,7 +303,14 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 	if !in.ConfirmBy.After(in.CreatedAt) {
 		return dispatchError(in.ID)
 	}
-	*d = Dispatch{Schema: 1, Input: in, MessageHash: messageHash(in.Message), Authorization: ExecutionAuthorization{in.ID, current.Epoch + 1}, Revision: 1, State: DispatchPrepared}
+	rounds, e := dispatchRounds(tx, s)
+	if e != nil {
+		return e
+	}
+	*d = Dispatch{Schema: dispatchSchema, Input: in, Cycle: planCycle(s), MessageHash: messageHash(in.Message), Authorization: ExecutionAuthorization{in.ID, current.Epoch + 1}, Revision: 1, State: DispatchPrepared}
+	if len(rounds) > 0 {
+		d.PreviousID = rounds[len(rounds)-1].Input.ID
+	}
 	text, e := setMetadata(s.Text, "DISPATCH_ID", in.ID)
 	if e != nil {
 		return e
@@ -335,6 +362,9 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		if d.WrapUpAuthority != nil {
 			return dispatchEvidenceError("wrap-up-only grant cannot launch or deliver")
 		}
+		if e = requireDispatchCycle(d, s); e != nil {
+			return e
+		}
 		if e = validateDispatchEvidence(tx, d.Input, false); e != nil {
 			return e
 		}
@@ -369,6 +399,9 @@ func ReauthorizeDispatch(root, task, id string, expected uint64, stopped ...Wrap
 		}
 		if d.WrapUpAuthority != nil || d.Revision != expected || authFrom(s.Text) != d.Authorization || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.Authorization.Epoch == ^uint64(0) {
 			return dispatchError(id)
+		}
+		if e = requireDispatchCycle(d, s); e != nil {
+			return e
 		}
 		now := time.Now().UTC()
 		execution := DispatchExecution{Epoch: d.Authorization.Epoch + 1, IssuedAt: now, ConfirmBy: d.AcceptBefore()}

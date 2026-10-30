@@ -88,13 +88,6 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if !plan.capabilities().Container {
 		window = plan.Launcher
 	}
-	updated, err := startMetadata(original, agentName, session, window)
-	if err != nil {
-		return result, err
-	}
-	if updated, err = withExecRecord(updated, choice); err != nil {
-		return result, err
-	}
 	paths, err := currentInstallPaths()
 	if err != nil {
 		return result, err
@@ -129,7 +122,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	moved, err := moveEntryFn(entry, root, "working")
+	moved, err := beginStartFn(entry, root, board.TaskStartInput{Owner: agentName, Session: initialSession, Window: window, ExecResolved: choice.record})
 	if err != nil {
 		return result, err
 	}
@@ -159,9 +152,6 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	loc := (func(LaunchOutcome) error)(nil)
 	if plan.capabilities().Container {
 		loc = recordWindowLocation(root, plan, moved, execChoice{})
-	}
-	if err := writeDocumentFn(root, moved, updated); err != nil {
-		return result, rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &original)
 	}
 	launchStart = nowFn()
 	outcome, err := launchAgent(plan, root, name, inv, loc, paneCB, &session)

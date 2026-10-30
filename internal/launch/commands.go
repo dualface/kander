@@ -2,6 +2,7 @@ package launch
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -128,9 +129,12 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		entry = bound.Entry
 		text = bound.Text
 	}
-	oldSession, err := sessionFrom(text)
-	if err != nil {
-		return err
+	// A self-claimed card has no session; a takeover replaces the claiming owner.
+	oldSession := AgentSession{Agent: metadataFrom(text, board.FieldOwner)}
+	if agent == nil || metadataFrom(text, sessionField) != "" {
+		if oldSession, err = sessionFrom(text); err != nil {
+			return err
+		}
 	}
 	if err := board.ValidateMutable(entry, text); err != nil {
 		return err
@@ -238,6 +242,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	// resume never moves the card state; a review card is moved back to working by the woken agent itself.
 	moved := entry
 	effective := session
+	if _, err := board.BindExecutionCursor(root, moved); err != nil {
+		return err
+	}
 	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
 	if discoverSession {
@@ -254,15 +261,11 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			}
 			effective = AgentSession{Agent: session.Agent, Reference: ref}
 			if takeover || config.SessionPersistsAfterStart(sessionDef) {
-				current, err := readDocumentFn(moved)
-				if err != nil {
-					return AgentSession{}, err
+				before := session.Render()
+				if !takeover {
+					before = metadataFrom(text, sessionField)
 				}
-				updated, err := renderSessionMetadata(current, effective.Render())
-				if err != nil {
-					return AgentSession{}, err
-				}
-				if err := writeDocumentFn(root, moved, updated); err != nil {
+				if _, err := board.RecordExecutionSession(context.Background(), root, moved, before, effective.Render()); err != nil {
 					return AgentSession{}, err
 				}
 			}
@@ -274,38 +277,16 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		loc = recordWindowLocation(root, plan, moved, choice)
 	}
 	if takeover {
-		current, err := readDocumentFn(moved)
-		if err != nil {
-			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
-		}
 		window := ""
 		if !plan.capabilities().Container {
 			window = plan.Launcher
 		}
-		updated, err := renderTakeoverMetadata(current, session.Agent, session.Render(), window)
-		if err == nil {
-			updated, err = withExecRecord(updated, choice)
-		}
-		if err != nil {
-			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
-		}
-		if err := writeDocumentFn(root, moved, updated); err != nil {
-			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
+		if _, err := beginTakeoverFn(root, moved, board.TakeoverInput{Owner: session.Agent, Session: session.Render(), Window: window, ExecResolved: choice.record}); err != nil {
+			return err
 		}
 	} else if !plan.capabilities().Container {
-		current, err := readDocumentFn(moved)
-		if err != nil {
-			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
-		}
-		updated, err := windowMetadata(current, plan.Launcher)
-		if err == nil {
-			updated, err = withExecRecord(updated, choice)
-		}
-		if err != nil {
-			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
-		}
-		if err := writeDocumentFn(root, moved, updated); err != nil {
-			return rollbackLaunch(root, moved, entry.State, asLaunchFailure(err), &text)
+		if _, err := recordWindowFn(root, moved, plan.Launcher, choice.record); err != nil {
+			return err
 		}
 	}
 	launchStart = nowFn()
@@ -333,11 +314,14 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		return rollbackLaunch(root, moved, entry.State, &LaunchFailure{Err: err, CloseError: cleanup}, &text)
 	}
 	if takeover {
+		if err := board.ConfirmTaskStart(root, moved); err != nil {
+			return err
+		}
 		cleanup := naCleanup()
 		if CleanupTakeover != nil {
 			newWindow := oldWindow
-			if current, err := readDocumentFn(moved); err == nil {
-				newWindow = metadataFrom(current, windowField)
+			if current, err := board.ReadSnapshot(root, moved.TaskID); err == nil {
+				newWindow = metadataFrom(current.Text, windowField)
 			} else {
 				cleanup = CleanupResult{Cleaned: false, OldWindow: orNA(oldWindow), Detail: strings.Join(strings.Fields(err.Error()), " ")}
 			}

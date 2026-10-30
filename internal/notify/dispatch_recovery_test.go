@@ -81,8 +81,10 @@ func TestAcceptedNotifyRecoversExpiredIntentAndCompletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := strings.Replace(s.Text, "herdr:w1:t9:w1:p9", "herdr:w1:t8:w1:p8", 1)
-	if err = board.WriteManagedDocument(root, s.Entry, text); err != nil {
+	if _, err = board.BindExecutionCursor(root, s.Entry); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = board.RecordExecutionWindow(root, s.Entry, "herdr:w1:t8:w1:p8", ""); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p8")

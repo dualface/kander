@@ -147,7 +147,7 @@ func TestDispatchReceiptsFenceUpdatesAndFastRounds(t *testing.T) {
 	if err = UpdateDocument(root, s.Entry.TaskID, UpdateOptions{Document: "notes.md", Text: "new content", ExpectedRevision: accepted.Revision, Authorization: d.Authorization}); err != nil {
 		t.Fatal(err)
 	}
-	if err = WriteManagedDocument(root, accepted.Entry, accepted.Text+"stale window"); err == nil {
+	if err = fixtureWrite(root, accepted.Entry, accepted.Text+"stale window"); err == nil {
 		t.Fatal("stale rollback overwrote body")
 	}
 	if _, err = dispatchMove(t, root, d, "review"); err != nil {
@@ -185,7 +185,7 @@ func TestDispatchReceiptsFenceUpdatesAndFastRounds(t *testing.T) {
 	if err = UpdateDocument(root, s.Entry.TaskID, UpdateOptions{Document: "notes.md", Text: "late", ExpectedRevision: latest.Revision, Authorization: d.Authorization}); err == nil {
 		t.Fatal("old executor bypassed with fresh revision")
 	}
-	if err = WriteManagedDocument(root, completed.Entry, completed.Text); err == nil {
+	if err = fixtureWrite(root, completed.Entry, completed.Text); err == nil {
 		t.Fatal("old window operation revived")
 	}
 	data, err := os.ReadFile(filepath.Join(latest.Entry.Path, "notes.md"))
@@ -205,7 +205,7 @@ func TestDispatchWrapUpTakeoverAndExpiry(t *testing.T) {
 	}
 	s = transactionSnapshot(t, root, s.Entry.TaskID)
 	text, _ := setMetadata(s.Text, FieldSession, "original-session")
-	if err := WriteManagedDocument(root, s.Entry, text); err != nil {
+	if err := fixtureWrite(root, s.Entry, text); err != nil {
 		t.Fatal(err)
 	}
 	s = transactionSnapshot(t, root, s.Entry.TaskID)
@@ -301,7 +301,7 @@ func TestDispatchFencesReviewAuthorDisposition(t *testing.T) {
 	assignGate(t, root, run, map[string][]string{f.ID: {id}})
 	s := transactionSnapshot(t, root, id)
 	text, _ := setMetadata(s.Text, FieldSession, "codex disposition-session")
-	if err := WriteManagedDocument(root, s.Entry, text); err != nil {
+	if err := fixtureWrite(root, s.Entry, text); err != nil {
 		t.Fatal(err)
 	}
 	grant := prepareTestDispatch(t, root, dispatchInput(s, "author-round"))
@@ -384,7 +384,7 @@ func TestDispatchWindowWritesFromCommittedScans(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = WriteManagedDocument(root, entry, text+"\nwindow writer record\n"); err != nil {
+		if err = fixtureWrite(root, entry, text+"\nwindow writer record\n"); err != nil {
 			t.Fatal("scan lost execution cursor", err)
 		}
 	}

@@ -548,19 +548,19 @@ func TestStartRemovesTaskFileWhenClaimFails(t *testing.T) {
 	}
 	root, _, _ := setupBoard(t)
 	taskID, _ := makeTodo(t, root, "task-file-cleanup")
-	oldCreate, oldMove := createTaskFile, moveEntryFn
+	oldCreate, oldStart := createTaskFile, beginStartFn
 	var taskFile string
 	createTaskFile = func(body, prefix string, trailer process.TaskFileTrailer) (string, error) {
 		path, err := oldCreate(body, prefix, trailer)
 		taskFile = path
 		return path, err
 	}
-	moveEntryFn = func(board.Entry, string, string) (board.Entry, error) {
+	beginStartFn = func(board.Entry, string, board.TaskStartInput) (board.Entry, error) {
 		return board.Entry{}, os.ErrPermission
 	}
 	t.Cleanup(func() {
 		createTaskFile = oldCreate
-		moveEntryFn = oldMove
+		beginStartFn = oldStart
 	})
 	if err := commandStart(root, "", "", taskID); err == nil {
 		t.Fatal("expected claim failure")

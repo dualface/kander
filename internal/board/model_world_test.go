@@ -35,6 +35,7 @@ type modelCursor struct {
 	state    string
 	revision uint64
 	auth     ExecutionAuthorization
+	fence    ExecutionFence
 }
 
 // modelMember holds the facts that live outside the board: processes and the
@@ -129,7 +130,7 @@ func (w *modelWorld) launcherEntry(m *modelMember, s Snapshot) Entry {
 	e.State = m.launcher.state
 	e.Path = joinBoard(w.root, m.launcher.state, baseEntryName(s.Entry))
 	e.Document = filepath.Join(e.Path, "spec.md")
-	e.Version = &Version{revision: m.launcher.revision, authorization: m.launcher.auth, warnings: entryWarningLog(s.Entry)}
+	e.Version = &Version{revision: m.launcher.revision, authorization: m.launcher.auth, fence: m.launcher.fence, warnings: entryWarningLog(s.Entry)}
 	return e
 }
 
@@ -148,10 +149,29 @@ func (w *modelWorld) nextCommit() string {
 type modelFacts struct {
 	world    *modelWorld
 	cards    []Snapshot
-	attempts []taskStart
+	attempts []ExecutionRecord
+	ledgers  []executionLedger
+	rounds   [][]Dispatch
 	bound    []*Dispatch
 	ckpt     *CoordinatorCheckpoint
 	review   modelReviewFacts
+}
+
+// modelMemberFacts is the view of one member an invariant reads.
+type modelMemberFacts struct {
+	card   Snapshot
+	ledger executionLedger
+	rounds []Dispatch
+}
+
+func (f *modelFacts) member(i int) modelMemberFacts {
+	return modelMemberFacts{f.cards[i], f.ledgers[i], f.rounds[i]}
+}
+
+// chained reports a card whose chain still exists. Archive cleanup removes the
+// records of a card, and the receipt stands in for them.
+func (m modelMemberFacts) chained() bool {
+	return m.card.Entry.State != "archived" || m.ledger.synthesized < len(m.ledger.chain)
 }
 
 type modelBatchFacts struct {
@@ -303,16 +323,26 @@ func (w *modelWorld) read() (*modelFacts, error) {
 			return nil, err
 		}
 		f.cards = append(f.cards, s)
-		var attempt taskStart
-		err = WithTransaction(w.root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{m.id}}, func(tx *Transaction) error {
+		var attempt ExecutionRecord
+		var ledger executionLedger
+		var rounds []Dispatch
+		err = WithTransaction(w.root, LockScope{Groups: []string{taskStartGroup}, Tasks: []string{m.id}, ReadOnly: true}, func(tx *Transaction) error {
 			var e error
-			attempt, _, e = readTaskStart(tx, m.id, "")
+			if attempt, _, e = readExecutionRecord(tx, m.id); e != nil {
+				return e
+			}
+			if ledger, e = readExecutionLedger(tx, s); e != nil {
+				return e
+			}
+			rounds, e = dispatchRounds(tx, s)
 			return e
 		})
 		if err != nil {
 			return nil, modelInfra(err)
 		}
 		f.attempts = append(f.attempts, attempt)
+		f.ledgers = append(f.ledgers, ledger)
+		f.rounds = append(f.rounds, rounds)
 		var bound *Dispatch
 		if a := authFrom(s.Text); a.DispatchID != "" {
 			d, err := ReadDispatch(w.root, m.id, a.DispatchID)
@@ -382,9 +412,10 @@ func (f *modelFacts) memberKey(i int) string {
 		c := f.ckpt.Members[m.id]
 		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs))
 	}
-	return fmt.Sprintf("col=%s attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v self=%v stranded=%s bound=%s releases=%v handoffs=%d mirror[%s] group=%s",
+	settled := slices.ContainsFunc(f.rounds[i], func(d Dispatch) bool { return d.Settlement != nil })
+	return fmt.Sprintf("col=%s attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
 		s.Entry.State, attempt, f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
-		m.launcher != nil, m.executor, m.self, m.stranded, bound, len(releases) > 0,
+		m.launcher != nil, m.executor, m.self, m.stranded, bound, len(releases) > 0, settled,
 		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)))
 }
 

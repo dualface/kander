@@ -22,14 +22,7 @@ func TestNotifyRepairsIdentityBeforeDelivery(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			root, _ := setupBoard(t)
 			task, path := makeReview(t, root, "repair-"+mode)
-			text, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			text = []byte(strings.Replace(string(text), "- SESSION: claude session-1", "- SESSION: codex", 1))
-			if err := os.WriteFile(path, text, 0o600); err != nil {
-				t.Fatal(err)
-			}
+			setSessionField(t, path, "codex")
 			t.Setenv("KANBAN_HERDR_AGENT", "codex")
 			identityPath := filepath.Join(root, "identity")
 			if mode == "partial" {

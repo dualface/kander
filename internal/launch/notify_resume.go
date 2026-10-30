@@ -22,6 +22,20 @@ func ReadMessage(message string, messageSet bool, messageFile, command string) (
 	return readTaskMessage(message, messageSet, messageFile, command)
 }
 
+// RequireSessionExecution refuses a card no launcher started. Such a card has no
+// session to resume, notify or dismiss, and the refusal comes before any dispatch
+// binds. resume --agent never calls it: a takeover needs no old session.
+func RequireSessionExecution(root, task string) error {
+	record, exists, err := board.CurrentExecution(root, task)
+	if err != nil {
+		return err
+	}
+	if exists && !record.ExecutionTerminal() && record.SelfClaimed() {
+		return launchError("launch.execution_has_no_session", task, record.Kind)
+	}
+	return nil
+}
+
 // ResolvedSession resolves the card session; Codex cards without an id go through rollout lookup.
 func ResolvedSession(taskID, text string) (AgentSession, error) {
 	return resolvedTaskSession(taskID, text)
@@ -113,19 +127,11 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
+	if _, err := board.BindExecutionCursor(root, entry); err != nil {
+		return ResumeLaunch{}, err
+	}
 	if !plan.capabilities().Container {
-		current, err := readDocumentFn(entry)
-		if err != nil {
-			return ResumeLaunch{}, err
-		}
-		updated, err := windowMetadata(current, plan.Launcher)
-		if err == nil {
-			updated, err = withExecRecord(updated, choice)
-		}
-		if err != nil {
-			return ResumeLaunch{}, err
-		}
-		if err := writeDocumentFn(root, entry, updated); err != nil {
+		if _, err := recordWindowFn(root, entry, plan.Launcher, choice.record); err != nil {
 			return ResumeLaunch{}, err
 		}
 	}

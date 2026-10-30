@@ -87,12 +87,7 @@ func coordinatorAdvancedFix(t *testing.T) (string, CoordinatorCheckpoint, Dispat
 	t.Helper()
 	root := tempBoard(t)
 	s := coordinatorCard(t, root, "completed-fix")
-	text, _ := setMetadata(s.Text, FieldOwner, "codex")
-	if e := WithTransaction(root, LockScope{Tasks: []string{s.Entry.TaskID}}, func(tx *Transaction) error { return tx.Put(s.Entry.TaskID, "spec.md", text) }); e != nil {
-		t.Fatal(e)
-	}
-	s = transactionSnapshot(t, root, s.Entry.TaskID)
-	if _, e := MoveEntry(s.Entry, root, "working"); e != nil {
+	if _, e := MoveWithOptions(s.Entry, root, "working", MoveOptions{Owner: "codex", Decision: "测试决定"}); e != nil {
 		t.Fatal(e)
 	}
 	gatePlan(t, root, []string{s.Entry.TaskID}, archiveRequirements())

@@ -16,5 +16,10 @@
   "board.update_hint_lifecycle_section": "次の手順: LIFECYCLE_DECISION セクションは kander show の出力どおりに残してください。kander move の終了オプションと、引き取り・引き継ぎのフローが書き込みます。",
   "board.update_hint_managed_path": "次の手順: このパスは専用コマンドが公開します。update では書き込めません。",
   "board.update_hint_duplicate": "次の手順: 各フィールドとセクションは 1 か所だけにし、新しい内容は既存の箇所にまとめてください。",
-  "board.update_hint_frozen": "次の手順: 凍結された契約は GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、OUT_OF_SCOPE、TASK_GROUP、SIZE、pin フィールド、PREREQUISITES 行です。実行記録は DISCUSSION か IMPLEMENTATION に書きます。working か review の間は、トップレベルの受け入れ項目を - [ ] と - [x] の間で切り替えるだけなら決定は不要です。契約を変えるには、まずユーザーの決定を得てから --contract-decision-file を渡してください。"
+  "board.update_hint_frozen": "次の手順: 凍結された契約は GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、OUT_OF_SCOPE、TASK_GROUP、SIZE、pin フィールド、PREREQUISITES 行です。実行記録は DISCUSSION か IMPLEMENTATION に書きます。working か review の間は、トップレベルの受け入れ項目を - [ ] と - [x] の間で切り替えるだけなら決定は不要です。契約を変えるには、まずユーザーの決定を得てから --contract-decision-file を渡してください。",
+  "board.dispatch_cycle_changed": "ディスパッチ {{.V0}} は以前の実行サイクルに属します。準備後に実行サイクルが変わりました。次の手順: 現在の実行に対して新しいディスパッチを準備してください。",
+  "board.dispatch_end_decision_required": "ディスパッチ {{.V0}} は受理済みのため、その executor がまだ動いている可能性があります。次の手順: executor を止めてから --decision <ユーザー決定の参照> を付けて再実行してください。",
+  "board.update_group_checkpointed": "グループ {{.V0}} には coordinator checkpoint があるためメンバー集合は凍結されており、TASK_GROUP は変更できません。",
+  "board.update_hint_group_checkpointed": "次の手順: TASK_GROUP の行はそのまま残し、新しい作業は別のグループか単独カードに入れてください。",
+  "launch.execution_has_no_session": "{{.V0}} には executor セッションがありません。現在の実行記録の kind は {{.V1}} です。次の手順: カードを取得したセッションが続行します。そのセッションを置き換えるには kander resume --agent <agent> を使ってください（snippets/failure-recovery.md を参照）。"
 }

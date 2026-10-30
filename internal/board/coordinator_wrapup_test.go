@@ -84,7 +84,8 @@ func TestCoordinatorWrapUpRestartsAfterPartialArchive(t *testing.T) {
 			t.Fatal("completed round remains pending")
 		}
 	}
-	if calls < 6 {
+	// The archived member left the Git checks; its round stays as a record.
+	if calls < 4 {
 		t.Fatal("same delivery not reverified", calls)
 	}
 	for _, id := range ids {
@@ -151,8 +152,13 @@ func TestCoordinatorWrapUpRequiresGitAndDedicatedGrant(t *testing.T) {
 		}
 	}
 	current := transactionSnapshot(t, root, s.Entry.TaskID)
-	text, _ := setMetadata(current.Text, FieldSession, "original")
-	if e = WriteManagedDocument(root, current.Entry, text); e != nil {
+	if _, e = BindExecutionCursor(root, current.Entry); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = BeginTakeover(root, current.Entry, TakeoverInput{Owner: "codex", Session: "original"}); e != nil {
+		t.Fatal(e)
+	}
+	if e = ConfirmTaskStart(root, current.Entry); e != nil {
 		t.Fatal(e)
 	}
 	current = transactionSnapshot(t, root, s.Entry.TaskID)
