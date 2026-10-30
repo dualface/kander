@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/terminal"
 )
@@ -187,4 +189,39 @@ func (b *factsBackend) Capabilities() terminal.Capabilities {
 
 func (b *factsBackend) PaneFacts(context.Context, terminal.Conn, string) (terminal.PaneFacts, error) {
 	return b.facts, nil
+}
+
+// A self-claimed card has no session to reach. The refusal comes before a dispatch
+// binds, and it names the recovery rule.
+func TestNotifyRefusesASelfClaimedCardBeforeBinding(t *testing.T) {
+	root, _ := setupBoard(t)
+	path, err := board.NewTask(root, "feature", "self-claimed", "任务", "en", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(path, "spec.md"), []byte(strings.Replace(strings.Replace(cardTemplate("任务"), "- OWNER: claude\n", "- OWNER:\n", 1), "- STARTED_AT: 2026-09-04 11:00\n", "- STARTED_AT:\n", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id := filepath.Base(path)
+	s, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	todo, err := board.MoveEntry(s.Entry, root, "todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = board.MoveWithOptions(todo, root, "working", board.MoveOptions{Owner: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = capture(t, func() error {
+		return commandNotify(root, id, "x", "", "", true, 61, launch.DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
+	})
+	if err == nil || !strings.Contains(err.Error(), "failure-recovery.md") {
+		t.Fatalf("err=%v", err)
+	}
+	after, err := board.ReadSnapshot(root, id)
+	if err != nil || board.MetadataFrom(after.Text, "DISPATCH_ID") != "" {
+		t.Fatalf("the refused notify bound a dispatch: %v", err)
+	}
 }

@@ -491,3 +491,38 @@ func TestAgentExitCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestDismissRefusesACardNoLauncherStarted(t *testing.T) {
+	root, _ := setupBoard(t)
+	path, err := board.NewTask(root, "feature", "self-done", "任务", "en", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := doneCard("任务")
+	for _, field := range []string{"OWNER", "SESSION", "STARTED_AT", "WINDOW"} {
+		text = regexp.MustCompile(`(?m)^- `+field+`:.*$`).ReplaceAllLiteralString(text, "- "+field+":")
+	}
+	if err = os.WriteFile(filepath.Join(path, "spec.md"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id := filepath.Base(path)
+	s, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	todo, err := board.MoveEntry(s.Entry, root, "todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	working, err := board.MoveWithOptions(todo, root, "working", board.MoveOptions{Owner: "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = board.MoveWithOptions(working, root, "archived", board.MoveOptions{Result: "cancelled", Reason: "stop", Decision: "user"}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = capture(t, func() error { return commandDismiss(root, id, 61) })
+	if err == nil || !strings.Contains(err.Error(), "failure-recovery.md") {
+		t.Fatalf("err=%v", err)
+	}
+}
