@@ -194,9 +194,10 @@ func (s *modelSearch) add(world *modelWorld, facts *modelFacts, key string, dept
 	return len(s.nodes) - 1
 }
 
-// expandAll runs one batch in parallel and merges the results in the fixed node
-// and operation order, so the first path to a state and the identifiers on that
-// path do not depend on scheduling. It returns the states the batch added.
+// expandAll expands ids in batches, one after the other. Each batch expands in
+// parallel and merges in the fixed node and operation order, so the first path
+// to a state and the identifiers on that path do not depend on scheduling. It
+// returns the states the batches added.
 func (s *modelSearch) expandAll(ids []int, tailOnly bool) ([]int, error) {
 	var added []int
 	for batch := range slices.Chunk(ids, modelBatchSize) {
