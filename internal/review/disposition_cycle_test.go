@@ -70,7 +70,7 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 			t.Fatal("move review failed")
 		}
 	}
-	if board.RunMove([]string{ids[0], "working", "--owner", "claude"}) != 0 {
+	if board.RunMove([]string{ids[0], "working", "--owner", "claude", "--decision", "user-reclaim"}) != 0 {
 		t.Fatal("supported reclaim failed")
 	}
 	var progress board.ReviewProgress

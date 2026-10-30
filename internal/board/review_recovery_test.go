@@ -65,7 +65,7 @@ func TestRebindPreservesClosedEvidenceAndTerminalMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = MoveWithOptions(moved, root, "working", MoveOptions{Owner: "claude"}); err != nil {
+	if _, err = MoveWithOptions(moved, root, "working", MoveOptions{Owner: "claude", Decision: "user-reclaim"}); err != nil {
 		t.Fatal(err)
 	}
 	progress, err := ReviewTaskProgress(root, ids[0])

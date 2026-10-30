@@ -31,7 +31,7 @@ func TestMalformedReviewCanBeInterpretedThroughCLI(t *testing.T) {
 	if err = board.UpdateDocument(root, id, board.UpdateOptions{Document: "spec.md", ExpectedRevision: snapshot.Revision, Text: snapshot.Text + "\n## SUMMARY\n\nFixture delivery verified.\n"}); err != nil {
 		t.Fatal(err)
 	}
-	if board.RunMove([]string{id, "review"}) != 0 || board.RunMove([]string{id, "working", "--owner", "codex"}) != 0 {
+	if board.RunMove([]string{id, "review"}) != 0 || board.RunMove([]string{id, "working", "--owner", "codex", "--decision", "user-reclaim"}) != 0 {
 		t.Fatal("claim fixture")
 	}
 	requirements := map[string]string{"PMQA": "required", "Security": "N/A: project"}

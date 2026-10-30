@@ -1,8 +1,15 @@
 package board
 
 import (
+	"cmp"
 	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/dualface/kander/internal/fs"
 )
 
 type claimRecord struct {
@@ -57,7 +64,7 @@ func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOption
 			released = &releases[i]
 		}
 	}
-	if released == nil {
+	if released == nil && s.Entry.State != "review" {
 		if o.Decision != "" {
 			return "", kanbanError("board.transaction_invalid", "--decision")
 		}
@@ -66,15 +73,57 @@ func stageReclaim(tx *Transaction, s Snapshot, target, text string, o MoveOption
 	if s.Entry.State != "review" || strings.TrimSpace(o.Decision) == "" {
 		return "", kanbanError("board.transaction_decision_required")
 	}
-	if err := verifyCardRelease(tx, s, *released); err != nil {
+	handoff := lifecycleHandoff{Kind: "reclaim", OldCycle: planCycle(s), NewCycle: planCycle(Snapshot{Entry: s.Entry, Text: text}), Decision: o.Decision, Owner: o.Owner, CardRevision: s.Revision + 1}
+	if released != nil {
+		if err := verifyCardRelease(tx, s, *released); err != nil {
+			return "", err
+		}
+		handoff.DispatchID = released.Termination.Authorization.DispatchID
+	} else if err := verifyDispatchlessHandoff(tx, s, releases, handoff); err != nil {
 		return "", err
 	}
-	handoff := lifecycleHandoff{Kind: "reclaim", OldCycle: planCycle(s), NewCycle: planCycle(Snapshot{Entry: s.Entry, Text: text}), DispatchID: released.Termination.Authorization.DispatchID, Decision: o.Decision, Owner: o.Owner, CardRevision: s.Revision + 1}
 	return appendLifecycleRecord(text, "LIFECYCLE_DECISION", lifecycleJSON(handoff)), nil
 }
 
+// verifyDispatchlessHandoff proves that the old cycle never held a dispatch.
+// Only a release clears a binding, and a bound card refuses --owner, so a cycle
+// that held one has a release of its own. A completed dispatch of an earlier
+// cycle passes only when a release ended its binding before this handoff.
+func verifyDispatchlessHandoff(tx *Transaction, s Snapshot, releases []DispatchRelease, h lifecycleHandoff) error {
+	for _, r := range releases {
+		if r.Cycle == h.OldCycle {
+			return coordinatorError("dispatchless handoff hides a dispatch release")
+		}
+	}
+	entries, err := fs.ListDirectory(tx.root, filepath.Join(s.Entry.Path, "dispatches"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		d, err := readDispatch(tx, s.Entry.TaskID, entry.Name)
+		if err != nil {
+			return err
+		}
+		receipt := cmp.Or(d.Completed, d.Accepted)
+		if d.Release != nil || receipt == nil || receipt.CardRevision >= h.CardRevision {
+			continue
+		}
+		ended := slices.ContainsFunc(releases, func(r DispatchRelease) bool {
+			return r.CardRevision > receipt.CardRevision && r.CardRevision < h.CardRevision
+		})
+		if !ended {
+			return coordinatorError("dispatchless handoff hides a dispatch binding")
+		}
+	}
+	return nil
+}
+
 // lifecycleHandoffs consumes only producer-owned records. Each link must bind a
-// verified release and advance both cycle and revision; old owners remain history.
+// verified release, or prove its old cycle never held a dispatch, and advance
+// both cycle and revision; old owners remain history.
 func lifecycleHandoffs(tx *Transaction, s Snapshot, from string) ([]lifecycleHandoff, error) {
 	if from == planCycle(s) {
 		return nil, nil
@@ -95,18 +144,24 @@ func lifecycleHandoffs(tx *Transaction, s Snapshot, from string) ([]lifecycleHan
 		if h.NewCycle == h.OldCycle || h.NewCycle == "" || strings.TrimSpace(h.Decision) == "" || h.Owner == "" || h.CardRevision > s.Revision || h.CardRevision <= revision {
 			return nil, coordinatorError("invalid lifecycle handoff")
 		}
-		found := false
-		for _, r := range releases {
-			if r.Cycle == h.OldCycle && r.Termination.Authorization.DispatchID == h.DispatchID && r.CardRevision < h.CardRevision {
-				if err := verifyCardRelease(tx, s, r); err != nil {
-					return nil, err
-				}
-				found = true
-				break
+		if h.DispatchID == "" {
+			if err := verifyDispatchlessHandoff(tx, s, releases, h); err != nil {
+				return nil, err
 			}
-		}
-		if !found {
-			return nil, coordinatorError("handoff lacks dispatch release original")
+		} else {
+			found := false
+			for _, r := range releases {
+				if r.Cycle == h.OldCycle && r.Termination.Authorization.DispatchID == h.DispatchID && r.CardRevision < h.CardRevision {
+					if err := verifyCardRelease(tx, s, r); err != nil {
+						return nil, err
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, coordinatorError("handoff lacks dispatch release original")
+			}
 		}
 		result = append(result, h)
 		cycle, revision = h.NewCycle, h.CardRevision

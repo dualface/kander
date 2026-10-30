@@ -138,7 +138,7 @@ func TestLegacyTerminalReleasePreservesOriginalsAndRejectsNewBinding(t *testing.
 	}
 }
 
-func TestDecisionOnlyAppliesToReleasedReclaim(t *testing.T) {
+func TestDecisionOnlyAppliesToReclaim(t *testing.T) {
 	root := tempBoard(t)
 	s := coordinatorTodo(t, root, "ordinary-claim")
 	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex", "--decision", "unused"}) == 0 {
@@ -151,11 +151,11 @@ func TestDecisionOnlyAppliesToReleasedReclaim(t *testing.T) {
 	if _, err := MoveEntry(first.Entry, root, "review"); err != nil {
 		t.Fatal(err)
 	}
-	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex", "--decision", "unused"}) == 0 {
-		t.Fatal("never-bound reclaim accepted decision")
+	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) == 0 {
+		t.Fatal("never-bound reclaim skipped decision")
 	}
-	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex"}) != 0 {
-		t.Fatal("ordinary reclaim failed")
+	if RunMove([]string{s.Entry.TaskID, "working", "--owner", "codex", "--decision", "reclaim"}) != 0 {
+		t.Fatal("never-bound reclaim failed")
 	}
 	second := transactionSnapshot(t, root, s.Entry.TaskID)
 	// Equalize the display timestamp; the fresh claim component alone must differ.
