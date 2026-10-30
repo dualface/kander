@@ -328,10 +328,11 @@ func TestLateFailureWithoutAContainer(t *testing.T) {
 					t.Fatalf("state=%s err=%v", s.Entry.State, err)
 				}
 				requireRecord(t, root, task, board.ExecutionRolledBack)
+				<-result.Outcome.IdentityDone
 				return
 			}
 			unresolved := requireUnresolved(t, err)
-			defer func() { _ = result.Outcome.Process.Kill(); _, _ = result.Outcome.Wait() }()
+			defer endForeground(result)
 			if s.Entry.State != "working" || unresolved.Window != "foreground" || unresolved.hold == nil {
 				t.Fatalf("state=%s unresolved=%+v", s.Entry.State, unresolved)
 			}

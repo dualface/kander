@@ -52,7 +52,7 @@ func launchAgent(
 		}
 		running = LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}
 		if plan.processRecord != nil && handle.proc != nil {
-			plan.processRecord(handle.proc.Pid)
+			running.IdentityDone = plan.processRecord(handle.proc.Pid, func() bool { return handle.Poll() == nil }, invocation.Argv[0])
 		}
 		stop = func() string {
 			err := handle.proc.Kill()

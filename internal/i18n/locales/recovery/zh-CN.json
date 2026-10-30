@@ -34,7 +34,7 @@
   "launch.superseded": "superseded: {{.V0}}：takeover 或接手已结束本次启动尝试；容器与卡均未改动",
   "launch.adopted": "adopted: {{.V0}} window={{.V1}}",
   "liveness.process_identity_legacy": "旧卡没有进程身份",
-  "liveness.process_identity_unrecorded": "启动者没有记录进程身份",
+  "liveness.process_identity_unrecorded": "启动者没有记录进程身份；shim 要等 executor 第一次写卡后才记录",
   "liveness.process_platform_unsupported": "此平台不支持进程身份核对",
   "liveness.process_probe_denied": "平台拒绝进程探测：{{.V0}}",
   "liveness.process_rebooted": "系统已重启",

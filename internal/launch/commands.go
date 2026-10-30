@@ -149,7 +149,6 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 		return err
 	}
 	oldWindow := metadataFrom(text, windowField)
-	takeover := agent != nil
 	cfg, err := loadEffective()
 	if err != nil {
 		return err
@@ -164,6 +163,12 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	plan, err := prepareLaunch(launcher, parentDir(root), "resume")
 	if err != nil {
 		return err
+	}
+	takeover := agent != nil
+	if !takeover {
+		if err := refuseNativeResume(entry.TaskID, text, plan); err != nil {
+			return err
+		}
 	}
 	agentName, mode := oldSession.Agent, execContinue
 	if takeover {
@@ -251,16 +256,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	// resume never moves the card state; a review card is moved back to working by the woken agent itself.
 	moved := entry
 	effective := session
-	record, err := board.BindExecutionCursor(root, moved)
-	if err != nil {
+	if _, err := board.BindExecutionCursor(root, moved); err != nil {
 		return err
 	}
-	if !takeover {
-		if err := refuseNativeResume(entry.TaskID, text, record, plan); err != nil {
-			return err
-		}
-	}
-	plan.processRecord = processRecorder(root, moved, plan)
 	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
 	if discoverSession {
@@ -301,9 +299,8 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			return err
 		}
 		plan.judge = lateFailureJudge(root, moved)
-	} else if !plan.capabilities().Container {
-		if _, err := recordWindowFn(root, moved, plan.Launcher, choice.record); err != nil {
-			return err
+		if !plan.capabilities().Container {
+			plan.processRecord = processRecorder(root, moved, plan)
 		}
 	}
 	launchStart = nowFn()

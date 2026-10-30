@@ -46,7 +46,7 @@ type LaunchPlan struct {
 	judge func() launchVerdict
 	// processRecord records the identity of a process without a pane. A launch
 	// that owns no execution record leaves it nil.
-	processRecord func(pid int)
+	processRecord func(pid int, running func() bool, program string) <-chan struct{}
 	// sessionFileDeclared marks an agent whose session.file declaration means
 	// its own integration reports a path-kind session identity; the proactive
 	// id report is skipped for it.
@@ -131,6 +131,9 @@ type LaunchOutcome struct {
 	Poll      func() *int
 	Container string
 	Pane      string
+	// IdentityDone closes when the process identity step ended. It is nil for a
+	// launch that records none.
+	IdentityDone <-chan struct{}
 }
 
 // LaunchFailure is a failed launch, together with the result of closing the container created by this attempt.

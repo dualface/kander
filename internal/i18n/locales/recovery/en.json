@@ -34,7 +34,7 @@
   "launch.superseded": "superseded: {{.V0}}: a takeover or an adoption ended this start attempt; its container and card are untouched",
   "launch.adopted": "adopted: {{.V0}} window={{.V1}}",
   "liveness.process_identity_legacy": "old card has no process identity",
-  "liveness.process_identity_unrecorded": "the launcher recorded no process identity",
+  "liveness.process_identity_unrecorded": "the launcher recorded no process identity; a shim is recorded after the first card write",
   "liveness.process_platform_unsupported": "this platform cannot check a process identity",
   "liveness.process_probe_denied": "the platform refused the process probe: {{.V0}}",
   "liveness.process_rebooted": "the system restarted",
