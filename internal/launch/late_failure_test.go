@@ -477,9 +477,9 @@ func TestAdoptKeepsTheExecutor(t *testing.T) {
 	}
 }
 
-// foreground and console have no probeable address until they get a process
-// identity, so the real observation refuses them.
-func TestAdoptRefusesAnAddressWithoutLiveness(t *testing.T) {
+// A launcher that died before it recorded a process identity leaves nothing to
+// prove the executor alive, so the real observation refuses.
+func TestAdoptRefusesAnExecutorWithoutProcessIdentity(t *testing.T) {
 	root, _, _ := setupBoard(t)
 	task, _ := makeTodo(t, root, "adopt-foreground")
 	s, err := board.ReadSnapshot(root, task)

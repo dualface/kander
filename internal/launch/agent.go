@@ -51,6 +51,9 @@ func launchAgent(
 			return LaunchOutcome{}, fail(launchError("launch.failed_to_start_agent", err.Error()))
 		}
 		running = LaunchOutcome{Process: handle.proc, Wait: handle.Wait, Poll: handle.Poll}
+		if plan.processRecord != nil && handle.proc != nil {
+			plan.processRecord(handle.proc.Pid)
+		}
 		stop = func() string {
 			err := handle.proc.Kill()
 			_, _ = handle.Wait()

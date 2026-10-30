@@ -44,6 +44,9 @@ type LaunchPlan struct {
 	// judge decides what a failed launch may destroy. A launch that owns no
 	// start attempt leaves it nil and always cleans up.
 	judge func() launchVerdict
+	// processRecord records the identity of a process without a pane. A launch
+	// that owns no execution record leaves it nil.
+	processRecord func(pid int)
 	// sessionFileDeclared marks an agent whose session.file declaration means
 	// its own integration reports a path-kind session identity; the proactive
 	// id report is skipped for it.

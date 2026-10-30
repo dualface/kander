@@ -251,9 +251,16 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	// resume never moves the card state; a review card is moved back to working by the woken agent itself.
 	moved := entry
 	effective := session
-	if _, err := board.BindExecutionCursor(root, moved); err != nil {
+	record, err := board.BindExecutionCursor(root, moved)
+	if err != nil {
 		return err
 	}
+	if !takeover {
+		if err := refuseNativeResume(entry.TaskID, text, record, plan); err != nil {
+			return err
+		}
+	}
+	plan.processRecord = processRecorder(root, moved, plan)
 	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)
 	if discoverSession {

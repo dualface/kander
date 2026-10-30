@@ -127,9 +127,14 @@ func NotifyViaResume(root string, entry board.Entry, originalText, message strin
 	if err != nil {
 		return ResumeLaunch{}, err
 	}
-	if _, err := board.BindExecutionCursor(root, entry); err != nil {
+	record, err := board.BindExecutionCursor(root, entry)
+	if err != nil {
 		return ResumeLaunch{}, err
 	}
+	if err := refuseNativeResume(entry.TaskID, originalText, record, plan); err != nil {
+		return ResumeLaunch{}, err
+	}
+	plan.processRecord = processRecorder(root, entry, plan)
 	if !plan.capabilities().Container {
 		if _, err := recordWindowFn(root, entry, plan.Launcher, choice.record); err != nil {
 			return ResumeLaunch{}, err

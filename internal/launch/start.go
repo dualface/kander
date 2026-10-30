@@ -132,6 +132,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 		return result, err
 	}
 	plan.judge = lateFailureJudge(root, moved)
+	plan.processRecord = processRecorder(root, moved, plan)
 	name := windowName(entry, original)
 	var launchStart time.Time
 	paneCB := (func() (AgentSession, error))(nil)

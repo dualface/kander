@@ -184,9 +184,10 @@ var adoptLivenessFn = func(s board.Snapshot) liveness.Report {
 	return liveness.ClassifyTaskLookupContext(context.Background(), s.Entry, s.Text, false)
 }
 
-// commandAdopt keeps the running executor of an unfinished start. Alive is the only
-// accepted observation: an unknown executor is never adopted, and foreground or
-// console cards have no probeable address yet, so they are refused.
+// commandAdopt keeps the running executor of an unfinished start. Foreground and
+// console cards are observed by their process identity, and an executor whose
+// starter is gone is the case adoption exists for. Every other observation refuses:
+// an unknown executor is never adopted.
 func commandAdopt(root, task, decision string) error {
 	s, err := board.ReadSnapshot(root, task)
 	if err != nil {
@@ -209,7 +210,7 @@ func commandAdopt(root, task, decision string) error {
 	if !record.StartUnfinished() {
 		return launchError("board.adopt_needs_unfinished_start", s.Entry.TaskID, record.Status)
 	}
-	if report := adoptLivenessFn(s); report.Status != liveness.Alive {
+	if report := adoptLivenessFn(s); report.Status != liveness.Alive && report.Status != liveness.AliveOrphaned {
 		return launchError("launch.adopt_liveness_unconfirmed", s.Entry.TaskID, report.Status, report.Detail)
 	}
 	if _, err = board.AdoptExecution(root, s, decision); err != nil {
