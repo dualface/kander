@@ -114,6 +114,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 		}
 		p.ReportLanguage = language
 		p.Cycles = map[string]string{}
+		p.CycleBatchFrom = nil
 		for _, id := range ids {
 			s, err := tx.Snapshot(id)
 			if err != nil {
@@ -156,6 +157,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 		if exists {
 			p.RecordedAt = old.RecordedAt
 			p.Revision = old.Revision
+			p.CycleBatchFrom = old.CycleBatchFrom
 			if !reflect.DeepEqual(old, p) {
 				return reviewError("immutable review plan conflict")
 			}

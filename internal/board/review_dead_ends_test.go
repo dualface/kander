@@ -599,6 +599,18 @@ func TestReboundCycleNeedsABatchBeforeDone(t *testing.T) {
 	}
 }
 
+func TestPlanInputCannotClearOrForgeCycleBatches(t *testing.T) {
+	root := tempBoard(t)
+	id := gateCard(t, root, "forged-from")
+	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-forged", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, CycleBatchFrom: map[string]int{id: 0}, Batches: []ReviewPlanBatch{{BatchID: "batch", TaskIDs: []string{id}, Base: strings.Repeat("a", 40), TargetCommit: strings.Repeat("b", 40), Requirements: noReviewRequirements()}}}
+	if err := CreateReviewPlan(root, p); err != nil {
+		t.Fatal(err)
+	}
+	if stored, err := ReadReviewPlan(root, p.PlanID); err != nil || stored.CycleBatchFrom != nil {
+		t.Fatalf("%+v %v", stored, err)
+	}
+}
+
 func TestSealedPlanTakesNoBatchWithoutAReboundCycle(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "sealed")
