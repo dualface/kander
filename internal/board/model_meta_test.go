@@ -88,12 +88,18 @@ func modelTestExists(t *testing.T, relative, name string) bool {
 }
 
 // modelPoison breaks a card copy the done gate verifies. It stands for a new
-// transition that strands a card: nothing on the allow list covers it.
+// transition that strands a card: nothing on the allow list covers it. Like any
+// transition it adds its fact to the state key, or the search merges it away.
 func modelPoison() modelOp {
 	return modelOp{name: "Z.poison", cli: "injected dead end", shared: true, narrows: []string{modelTailOp},
 		guard: func(f *modelFacts, _ int) bool { return f.review.planned() },
-		apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
-			return os.WriteFile(filepath.Join(f.world.root, f.cards[0].Entry.State, baseEntryName(f.cards[0].Entry), "reviews", "plan.json"), []byte("{}\n"), 0o600)
+		apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
+			s, err := w.snapshot(w.members[0])
+			if err != nil {
+				return err
+			}
+			w.members[0].stranded = "injected"
+			return os.WriteFile(filepath.Join(s.Entry.Path, "reviews", "plan.json"), []byte("{}\n"), 0o600)
 		}}
 }
 
@@ -115,10 +121,62 @@ func TestModelVerdictRejectsListDrift(t *testing.T) {
 	if failures := modelVerdict(runs, gone); len(failures) != 1 || !strings.Contains(failures[0], "no longer reaches") {
 		t.Fatalf("a listed dead end that disappeared passed: %v", failures)
 	}
-	seeds = []modelSeed{{name: "injected", steps: []string{"H.claim", "R.planNA", "Z.poison"}}}
+	// The injection runs as a searched operation from a healthy seed, so the search
+	// itself must keep the damaged copy and leave the healthy state unchanged.
+	seeds = []modelSeed{{name: "healthy", steps: []string{"H.claim", "R.planNA"}}}
 	runs = []modelRun{modelExplore(t, "injected", start, seeds, modelBounds{explore: 1, exit: 1}, append(modelOps(), modelPoison()))}
-	if failures := modelVerdict(runs, listed); !slices.ContainsFunc(failures, func(f string) bool { return strings.Contains(f, "unlisted dead end") }) {
+	failures := modelVerdict(runs, listed)
+	if !slices.ContainsFunc(failures, func(f string) bool {
+		return strings.Contains(f, "unlisted dead end") && strings.Contains(f, "Z.poison")
+	}) {
 		t.Fatalf("an injected dead end passed: %v", failures)
+	}
+	if slices.ContainsFunc(failures, func(f string) bool {
+		return strings.Contains(f, "unlisted dead end") && !strings.Contains(f, "Z.poison")
+	}) {
+		t.Fatalf("the injection damaged a state it did not reach: %v", failures)
+	}
+}
+
+// A reconcile that adopts a new dispatch changes what a later release must
+// match, so the state before and after it must not merge.
+func TestModelKeyFollowsTheCheckpointDispatch(t *testing.T) {
+	modelFastTemp(t)
+	start := modelInitial(t, true, 2)
+	s := &modelSearch{ops: modelOps(), index: map[string]int{}, scratch: t.TempDir()}
+	w := modelWalk(t, s, start, "A:H.claim", "C.reconcile", "A:X.review", "C.reconcile", "A:D.prepareSync", "A:D.accept", "A:D.complete", "C.reconcile", "A:D.prepareSync")
+	before, err := w.read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	adopted := modelWalk(t, s, w, "C.reconcile")
+	after, err := adopted.read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.key() == after.key() {
+		t.Fatalf("the reconcile did not change the state key: %s", after.key())
+	}
+}
+
+// DE-14 needs the card that left the group to be the one no command can reach.
+func TestModelDE14NamesTheMemberThatCannotReturn(t *testing.T) {
+	entry := modelDeadEnds[slices.IndexFunc(modelDeadEnds, func(e modelDeadEnd) bool { return e.id == "DE-14" })]
+	card := func(state, group string) Snapshot {
+		return Snapshot{Entry: Entry{State: state}, Text: "- TASK_GROUP: " + group + "\n"}
+	}
+	diagnosis := func(mirror string, cards ...Snapshot) modelDiagnosis {
+		return modelDiagnosis{mirror: mirror, final: "ok", facts: &modelFacts{cards: cards}}
+	}
+	const refused = "group membership changed; reconcile the explicit member set"
+	if !entry.covers(diagnosis(refused, card("archived", "20261030-other-group"), card("working", coordinatorGroup))) {
+		t.Fatal("an archived card outside the group was not covered")
+	}
+	if entry.covers(diagnosis(refused, card("working", "20261030-other-group"), card("trash", coordinatorGroup))) {
+		t.Fatal("a member that can return was covered")
+	}
+	if entry.covers(diagnosis("another refusal", card("archived", "20261030-other-group"), card("working", coordinatorGroup))) {
+		t.Fatal("an unrelated refusal was covered")
 	}
 }
 

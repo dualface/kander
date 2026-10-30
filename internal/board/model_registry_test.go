@@ -154,15 +154,16 @@ func (d modelDiagnosis) terminalMemberOwesFinding() bool {
 	return false
 }
 
-// membershipDriftedAndEnded reports a member set that changed with a member that
-// no command can move back into the group.
-func (d modelDiagnosis) membershipDriftedAndEnded() bool {
-	drifted, ended := false, false
-	for _, s := range d.facts.cards {
-		drifted = drifted || modelGroupClass(TaskGroupFrom(s.Text)) != "same"
-		ended = ended || modelTerminal(s.Entry.State)
+// archivedOutsideGroup reports the reconcile refusal of a member set that no
+// command can restore: the archived card itself left the group, or another card
+// left it and the archive cleanup then removed what a later reconcile reads.
+func (d modelDiagnosis) archivedOutsideGroup() bool {
+	if !d.has("group membership changed") {
+		return false
 	}
-	return drifted && ended
+	return slices.ContainsFunc(d.facts.cards, func(s Snapshot) bool {
+		return s.Entry.State == "archived" && (modelGroupClass(TaskGroupFrom(s.Text)) != "same" || d.final != "ok")
+	})
 }
 
 func (d modelDiagnosis) planMemberEnded() bool {
@@ -189,7 +190,7 @@ func (d modelDiagnosis) planMemberEnded() bool {
 // and adds its transition to the operations.
 var modelDeadEnds = []modelDeadEnd{
 	{id: "DE-08", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool { return d.facts.world.stray }},
-	{id: "DE-14", owner: cardLedger, class: modelReached, covers: modelDiagnosis.membershipDriftedAndEnded},
+	{id: "DE-14", owner: cardLedger, class: modelReached, covers: modelDiagnosis.archivedOutsideGroup},
 	{id: "DE-09", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool {
 		return d.has("member execution cycle changed without first-start facts")
 	}},

@@ -255,7 +255,10 @@ func modelLifecycleOps() []modelOp {
 				return modelRegroup(w, m, s)
 			}},
 		{name: modelTailOp, cli: "the completion tail of one card, ending in kander move <id> done",
-			guard: func(f *modelFacts, i int) bool { return !modelTerminal(f.cards[i].Entry.State) },
+			guard: func(f *modelFacts, i int) bool {
+				state := f.cards[i].Entry.State
+				return !modelTerminal(state) || state != "archived" && f.world.group && TaskGroupFrom(f.cards[i].Text) != coordinatorGroup
+			},
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.finishMember(m) }},
 		{name: "C.reconcile", cli: "kander coordinator reconcile <observations.json>", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return f.ckpt != nil },

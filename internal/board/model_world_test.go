@@ -376,16 +376,31 @@ func (f *modelFacts) memberKey(i int) string {
 			bound += "/grant"
 		}
 	}
+	releases, _ := cardReleases(s)
 	mirror := "-"
 	if f.ckpt != nil {
 		c := f.ckpt.Members[m.id]
-		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%v", c.Cycle == planCycle(s), c.AwaitingStart, c.Dispatch != nil)
+		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs))
 	}
-	releases, _ := cardReleases(s)
 	return fmt.Sprintf("col=%s attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v self=%v stranded=%s bound=%s releases=%v handoffs=%d mirror[%s] group=%s",
 		s.Entry.State, attempt, f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
 		m.launcher != nil, m.executor, m.self, m.stranded, bound, len(releases) > 0,
 		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)))
+}
+
+// modelMirrorDispatch relates the dispatch of a checkpoint mirror to the card. A
+// reconcile that adopts a new round changes this relation, and the next release
+// is verified against the dispatch the mirror holds.
+func modelMirrorDispatch(c CoordinatorMember, bound *Dispatch, releases []DispatchRelease) string {
+	switch {
+	case c.Dispatch == nil:
+		return "none"
+	case bound != nil && bound.Input.ID == c.Dispatch.ID:
+		return "current/" + string(c.Dispatch.State)
+	case slices.ContainsFunc(releases, func(r DispatchRelease) bool { return r.Termination.Authorization.DispatchID == c.Dispatch.ID }):
+		return "released"
+	}
+	return "stale/" + string(c.Dispatch.State)
 }
 
 func modelSection(text, name string) string { b, _ := SectionBody(text, name); return b }
