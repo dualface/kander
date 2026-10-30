@@ -107,7 +107,7 @@ A `kander move` into `archived/` or `trash/` of a plan or task group member writ
 
 - Plan, batch, closure, assignment, interpretation, and legacy-map writes skip the copies of excluded members and of every archived member, and the validators stop comparing those copies. A copy that exists stays as it is.
 - Only an excluded member is exempt from the gate. Its cycle needs no rebind, and completion covers the other members. A member archived after `done/` keeps its facts and has no exemption.
-- A new run names the batch members that remain. A run prepared before the exclusion takes no copy on the excluded member (`skipped_members`) and settles for the others. A batch with no member left neither closes nor blocks: the chain continues over it, and wrap-up evidence ends at the last batch with a member.
+- A new run names the batch members that remain. A run prepared before the exclusion takes no copy on the excluded member (`skipped_members`) and settles for the others; a same-ID retry keeps the members of that run. A batch with no member left neither closes nor blocks: the chain continues over it, and wrap-up evidence ends at the last batch with a member.
 - An assigned finding of an excluded member blocks aggregation, advance, and closure until it has a `withdrawn` record (see "Status Lifecycle"). A new assignment refuses an excluded member.
 - `kander coordinator reconcile` accepts a terminal member only from what the move wrote. A member archived with `RESULT: completed` needs `FINISHED_AT`, the fact of `done/`. A member with a stored execution chain needs an exclusion whose state, result, and cycle match the card. A member with no stored chain keeps the result check alone.
 

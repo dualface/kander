@@ -711,6 +711,41 @@ func TestDroppingTheOpenBatchOfAReboundCycleOwesItAgain(t *testing.T) {
 	}
 }
 
+func TestReplacementBatchCoversACycleAfterADropOfSeveralBatches(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{gateCard(t, root, "several-a"), gateCard(t, root, "several-b")}
+	a, b, c, d := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40), strings.Repeat("d", 40)
+	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-several", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: ids, Batches: []ReviewPlanBatch{
+		{BatchID: "both", TaskIDs: ids, Base: a, TargetCommit: b, Requirements: noReviewRequirements()},
+		{BatchID: "only-b", PreviousBatchID: "both", TaskIDs: ids[1:], Base: b, TargetCommit: c, Requirements: noReviewRequirements()},
+		{BatchID: "only-a", PreviousBatchID: "only-b", TaskIDs: ids[:1], Base: c, TargetCommit: d, Requirements: noReviewRequirements()},
+	}}
+	if err := CreateReviewPlan(root, p); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deadEndClose(t, root, "both", map[string]ReviewRoleConclusion{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadEndReclaim(t, root, ids[0])
+	rebound := deadEndRebind(t, root, ids[0])
+	if rebound.CycleBatchFrom[ids[0]] != 2 {
+		t.Fatalf("%+v", rebound.CycleBatchFrom)
+	}
+	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: rebound.Revision, DropBatches: []string{"only-b", "only-a"}, Author: "coordinator", Basis: "drop"}); err != nil {
+		t.Fatal(err)
+	}
+	replacement := ReviewPlanBatch{BatchID: "replacement", PreviousBatchID: "both", TaskIDs: ids[:1], Base: b, TargetCommit: d, Requirements: noReviewRequirements()}
+	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: rebound.Revision + 1, Batch: &replacement, Seal: true, Author: "coordinator", Basis: "replace"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := deadEndClose(t, root, "replacement", map[string]ReviewRoleConclusion{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := deadEndDone(t, root, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReboundWhileABatchIsOpenOwesNoNewBatch(t *testing.T) {
 	root := tempBoard(t)
 	id := gateCard(t, root, "open-rebind")

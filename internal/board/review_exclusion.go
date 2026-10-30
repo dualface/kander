@@ -327,5 +327,9 @@ func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string) error {
 	}
 	p.Batches = slices.Clone(p.Batches[:len(p.Batches)-len(ids)])
 	p.Sealed = false
+	// The next batch lands at the new end, so a cycle owed past it must accept it.
+	for id, from := range p.CycleBatchFrom {
+		p.CycleBatchFrom[id] = min(from, len(p.Batches))
+	}
 	return nil
 }

@@ -248,11 +248,13 @@ func hydrateIncremental(root string, options archiveOptions, arguments []string,
 	if err != nil {
 		return nil, err
 	}
+	// A new run names the members that remain. A replay keeps the frozen members
+	// of its own run, which the replay check has already compared.
 	remaining, err := board.ReviewRemainingMembers(root, previous.TaskIDs)
 	if err != nil {
 		return nil, err
 	}
-	if previous.BatchID != options.batchID || !slices.Equal(remaining, options.tasks) {
+	if previous.BatchID != options.batchID || !replay && !slices.Equal(remaining, options.tasks) {
 		return nil, archiveError("incremental batch/members mismatch")
 	}
 	if len(arguments) == 7 && arguments[6] != "" && arguments[6] != previous.Commit {
