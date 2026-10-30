@@ -21,10 +21,11 @@ jobs:
         run: |
           go test ./internal/check -count=1
           go test ./cmd/kander -count=1 -run TestCheck
+      # One command per step: a PowerShell step exits with the last command's code.
       - name: Composite state model, default mode
-        run: |
-          go test ./internal/board -count=1 -timeout 30m -run TestModel
-          go test ./internal/launch -count=1 -run "TestDeadEnd|TestCoordinatorRechecksActualGitAfterWrapUpRestart"
+        run: go test ./internal/board -count=1 -timeout 30m -run TestModel
+      - name: Directed dead-end tests
+        run: go test ./internal/launch -count=1 -run "TestDeadEnd|TestCoordinatorRechecksActualGitAfterWrapUpRestart"
 
   model-full:
     runs-on: ubuntu-latest
