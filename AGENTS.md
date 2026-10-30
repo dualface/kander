@@ -188,3 +188,4 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - [TUI board refresh](docs/tui-board-refresh.md): targeted TaskPayload, asynchronous board/detail reads, generation/sequence, pendingWork coexistence, and the process-local summary cache.
 - [Windows Microsoft Store (MSIX)](docs/windows-msix-store.md): the MSIX package and its manifest, Store install behavior (no self-update, no PATH copy), the packer and the MSIX workflow, package identity variables, sideload verification, submission materials, and unverified items.
 - [Check command](docs/check-command.md): board and liveness routing, `delivery`/`overlap` Git analyzers, JSON contracts, GitPath encoding, exit codes, and platform-neutral verification.
+- [Composite state model test](docs/model-test.md): the bounded search over card flow, reading a failure, adding a transition, the dead-end allow list, and the invariant registry.
