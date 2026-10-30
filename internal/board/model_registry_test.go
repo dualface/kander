@@ -94,16 +94,25 @@ func (d modelDiagnosis) strandedBy(causes ...string) bool {
 }
 
 // pendingAttemptChanged reports a stranded attempt whose card moved on: a
-// takeover, a reclaim or a dispatch changed facts the pending record binds.
+// takeover, a reclaim or a dispatch changed facts the pending record binds. It
+// leaves out what racedStart and the confirm-dispatch row name.
 func (d modelDiagnosis) pendingAttemptChanged() bool {
 	f := d.facts
 	for i, m := range f.world.members {
-		s := f.cards[i]
-		if f.attempts[i].Status != "pending" || m.stranded == "" && !modelTerminal(s.Entry.State) {
+		if f.attempts[i].Status != "pending" {
 			continue
 		}
-		if MetadataFrom(s.Text, FieldOwner) != f.attempts[i].Owner || MetadataFrom(s.Text, FieldSession) != f.attempts[i].Session || f.bound[i] != nil {
-			return true
+		s := f.cards[i]
+		changed := MetadataFrom(s.Text, FieldOwner) != f.attempts[i].Owner || MetadataFrom(s.Text, FieldSession) != f.attempts[i].Session
+		switch m.stranded {
+		case "rollback", "confirm-session":
+			if changed || f.bound[i] != nil {
+				return true
+			}
+		case "":
+			if !changed && f.bound[i] != nil && modelTerminal(s.Entry.State) {
+				return true
+			}
 		}
 	}
 	return false
@@ -158,6 +167,9 @@ func (d modelDiagnosis) membershipDriftedAndEnded() bool {
 
 func (d modelDiagnosis) planMemberEnded() bool {
 	f := d.facts
+	if d.terminalMemberOwesFinding() {
+		return false
+	}
 	for i := range f.world.members {
 		state := f.cards[i].Entry.State
 		if state != "trash" && state != "archived" {
@@ -188,8 +200,8 @@ var modelDeadEnds = []modelDeadEnd{
 	{id: "DE-04", owner: cardIssue22, class: modelReached, covers: modelDiagnosis.racedStart},
 	{id: "DE-15", owner: cardIssue22, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("confirm-dispatch") }},
 	{id: "DE-03", owner: cardIssue22, class: modelReached, covers: modelDiagnosis.pendingAttemptChanged},
-	{id: "DE-01", owner: cardIssue22, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("rollback") }},
-	{id: "DE-02", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("confirm-session") }},
+	{id: "DE-01", owner: cardIssue22, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("rollback") && !d.pendingAttemptChanged() }},
+	{id: "DE-02", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool { return d.strandedBy("confirm-session") && !d.pendingAttemptChanged() }},
 	{id: "DE-07", owner: cardLedger, class: modelReached, covers: func(d modelDiagnosis) bool {
 		return d.has("unbound member lacks dispatch termination and release originals")
 	}},

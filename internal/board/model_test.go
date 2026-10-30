@@ -127,4 +127,24 @@ func TestModelCompositeStates(t *testing.T) {
 	for _, failure := range modelVerdict(runs, modelDeadEnds) {
 		t.Error(failure)
 	}
+	for _, failure := range modelRowsAreNeeded(runs, modelDeadEnds) {
+		t.Error(failure)
+	}
+}
+
+// modelRowsAreNeeded proves that each model row carries weight. Without a row
+// the verdict must report an unlisted state; otherwise another row hides the
+// dead end, and repairing one of the two would go unnoticed.
+func modelRowsAreNeeded(runs []modelRun, list []modelDeadEnd) []string {
+	var failures []string
+	for at, entry := range list {
+		if entry.class != modelReached {
+			continue
+		}
+		without := slices.Delete(slices.Clone(list), at, at+1)
+		if !slices.ContainsFunc(modelVerdict(runs, without), func(f string) bool { return strings.HasPrefix(f, "unlisted dead end") }) {
+			failures = append(failures, entry.id+": another row covers every state of this row; narrow one of them")
+		}
+	}
+	return failures
 }
