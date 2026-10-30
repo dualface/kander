@@ -1,4 +1,12 @@
 {
+  "board.review_advance_has_successor": "batch {{.V0}} has planned successor batches ({{.V1}}), and each base is immutable. Remove them first with kander review extend-plan and drop_batches; a removed batch that never ran returns with a new ID after the close",
+  "board.review_batch_outside_plan": "batch {{.V0}} is not in review plan {{.V2}} of card {{.V1}}. Add the batch with kander review extend-plan before its first run",
+  "board.review_cycle_batch_required": "a member was rebound after its batches closed, so its new cycle needs a batch: append one with kander review extend-plan. A batch that records N/A with its reason satisfies this",
+  "board.review_plan_chain_gap": "batch {{.V0}} has base {{.V1}}, and its predecessor {{.V2}} has target {{.V3}}. A batch chain must be continuous: use the target of the predecessor as the base",
+  "board.review_plan_worktree_mismatch": "run worktree {{.V0}} differs from {{.V1}} of plan {{.V2}}. A plan never moves: recreate the worktree at {{.V1}} and run there",
+  "board.review_run_input_conflict": "a run replays only with byte-identical inputs. Restore the configuration and pass the frozen task context, or use a new --run-id in the same batch",
+  "board.review_superseded_decision_hint": "a root run that cannot join the chain closes with a \"decision\" reference to the user decision in its superseded_runs entry; its findings stay binding",
   "board.review_task_context_frozen": "the task context differs from the one batch {{.V0}} froze (publishing a run appends the review index to the live spec.md). Rerun with the frozen snapshot {{.V1}} as the task context and put only execution and fix evidence in the supplemental review context; a change to GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, THREAT_MODEL, or OUT_OF_SCOPE needs a new batch, while ticking acceptance checkboxes does not",
-  "board.review_task_context_frozen_no_snapshot": "the task context differs from the one batch {{.V0}} froze, and the batch has no published snapshot of it; start a new batch"
+  "board.review_task_context_frozen_no_snapshot": "the task context differs from the one batch {{.V0}} froze, and no run of the batch keeps a copy. Pass the original task context bytes; a new batch is no way out while the plan names this one",
+  "board.review_withdrawal_required": "assigned finding {{.V0}}/{{.V1}} of excluded member {{.V2}} needs a withdrawn record: submit kander review disposition with status withdrawn, the exclusion ID from kander review progress, and the user decision"
 }

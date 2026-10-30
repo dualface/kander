@@ -72,7 +72,7 @@ func validateDispatchEvidence(tx *Transaction, in DispatchInput, initial bool) e
 		if in.Evidence.WrapUp == nil || in.Evidence.Fix != nil {
 			return dispatchEvidenceError("wrap-up binding required")
 		}
-		return validateDispatchWrapUp(tx, in, !initial)
+		return validateDispatchWrapUp(tx, in, !initial, false)
 	case "sync":
 		if in.Evidence != (DispatchEvidence{}) {
 			return dispatchEvidenceError("sync cannot carry fix/wrap-up evidence")

@@ -5,6 +5,7 @@ import (
 	"github.com/dualface/kander/internal/fs"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ type ReviewProgress struct {
 	TaskID       string             `json:"task_id"`
 	PlanID       string             `json:"plan_id,omitempty"`
 	Status       string             `json:"status"`
+	Exclusion    *ReviewExclusion   `json:"exclusion,omitempty"`
 	Pending      []string           `json:"pending,omitempty"`
 	RebindCycles map[string]string  `json:"rebind_cycles,omitempty"`
 	PlanTarget   string             `json:"plan_target,omitempty"`
@@ -72,6 +74,13 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		return progress, nil
 	}
 	progress.PlanID = p.PlanID
+	exclusion, excluded, err := readMemberExclusion(tx, id)
+	if err != nil {
+		return progress, err
+	}
+	if excluded {
+		return excludedProgress(tx, progress, p, exclusion)
+	}
 	if err = checkUnplannedReviewRuns(tx, p); err != nil {
 		return progress, err
 	}
@@ -79,6 +88,13 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		return progress, err
 	}
 	for _, member := range p.TaskIDs {
+		gone, e := memberExcluded(tx, member)
+		if e != nil {
+			return progress, e
+		}
+		if gone {
+			continue
+		}
 		card, e := tx.Snapshot(member)
 		if e != nil {
 			return progress, e
@@ -92,13 +108,23 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	}
 	if len(progress.RebindCycles) > 0 {
 		progress.Status = "requirements-needed"
-		if completion {
+		if completion && s.Entry.State != "done" {
 			return progress, reviewError("execution cycle changed; extend-plan with rebind_cycles retains all existing requirements and failures")
 		}
 		return progress, nil
 	}
-	if !p.Sealed {
+	if !p.Sealed && s.Entry.State != "done" {
 		progress.Pending = append(progress.Pending, "unsealed-plan")
+	}
+	for _, member := range sortedKeys(p.CycleBatchFrom) {
+		gone, e := memberExcluded(tx, member)
+		if e != nil {
+			return progress, e
+		}
+		if !gone && cycleBatchMissing(p, member) && s.Entry.State != "done" {
+			progress.Pending = append(progress.Pending, "cycle-batch:"+member)
+			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
+		}
 	}
 	covered := false
 	for _, b := range p.Batches {
@@ -138,6 +164,24 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 			return progress, e
 		}
 		if !closed {
+			void, e := voidReviewBatch(tx, b.TaskIDs)
+			if e != nil {
+				return progress, e
+			}
+			if void {
+				previous = b.TargetCommit
+				continue
+			}
+			// A later batch of other members leaves a delivered card as it was.
+			if s.Entry.State == "done" && !containsID(b.TaskIDs, id) {
+				previous = ""
+				continue
+			}
+			owed, e := withdrawalsOwed(tx, b)
+			if e != nil {
+				return progress, e
+			}
+			progress.Pending = append(progress.Pending, owed...)
 			progress.Pending = append(progress.Pending, b.BatchID)
 			pending, e := checkPendingDispositions(tx, b)
 			if e != nil {
@@ -193,7 +237,46 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	if len(progress.Pending) > 0 {
 		progress.Status = "pending"
 		if completion || s.Entry.State == "done" {
-			return progress, reviewError("unclosed review batches: " + strings.Join(progress.Pending, ","))
+			return progress, reviewError(unclosedReviewError(progress.Pending))
+		}
+	}
+	return progress, nil
+}
+
+func unclosedReviewError(pending []string) string {
+	text := "unclosed review batches: " + strings.Join(pending, ",")
+	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "cycle-batch:") }) {
+		text += "; " + t("board.review_cycle_batch_required")
+	}
+	return text
+}
+
+// excludedProgress answers for a member that left the plan: no gate binds it, and
+// the open batches still wait for the withdrawal of its assigned findings.
+func excludedProgress(tx *Transaction, progress ReviewProgress, p ReviewPlan, e ReviewExclusion) (ReviewProgress, error) {
+	progress.Status, progress.Exclusion = "excluded", &e
+	for _, pb := range p.Batches {
+		var b ReviewBatch
+		ok, err := readReviewJSON(tx, reviewBatchName(pb.BatchID), &b)
+		if err != nil {
+			return progress, err
+		}
+		var c ReviewClosure
+		closed, err := readReviewJSON(tx, closureName(pb.BatchID), &c)
+		if err != nil {
+			return progress, err
+		}
+		if !ok || closed {
+			continue
+		}
+		owed, err := withdrawalsOwed(tx, b)
+		if err != nil {
+			return progress, err
+		}
+		for _, item := range owed {
+			if strings.HasSuffix(item, "/"+e.TaskID) {
+				progress.Pending = append(progress.Pending, item)
+			}
 		}
 	}
 	return progress, nil

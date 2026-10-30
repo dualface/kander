@@ -198,6 +198,11 @@ func TestDispatchWrapUpRecordAndCompletionKeepOriginalEvidence(t *testing.T) {
 	if err = UpdateDocument(root, d.Input.TaskID, options); err == nil {
 		t.Fatal("on-behalf record overwritten")
 	}
+	s = transactionSnapshot(t, root, d.Input.TaskID)
+	report := UpdateOptions{Document: "report.md", Text: "报告\n", ExpectedRevision: s.Revision, Authorization: grant.Authorization}
+	if err = UpdateDocument(root, d.Input.TaskID, report); err == nil || !strings.Contains(err.Error(), "kander dispatch fail") {
+		t.Fatalf("wrap-up report hint: %v", err)
+	}
 	if _, err = MoveWithOptions(s.Entry, root, "done", MoveOptions{Result: "completed", Authorization: grant.Authorization, DeliveryCommit: strings.Repeat("c", 40)}); err == nil {
 		t.Fatal("unbound completion commit accepted")
 	}

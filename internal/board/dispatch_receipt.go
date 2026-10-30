@@ -79,7 +79,7 @@ func stageDispatchMove(tx *Transaction, s Snapshot, target string, o MoveOptions
 			return false, false, dispatchError(a.DispatchID)
 		}
 		if d.Input.Evidence.WrapUp != nil {
-			if err := validateDispatchWrapUp(tx, d.Input, true); err != nil {
+			if err := validateDispatchWrapUp(tx, d.Input, true, false); err != nil {
 				return false, false, err
 			}
 		}

@@ -31,7 +31,10 @@ type ReviewPlan struct {
 	TaskIDs        []string          `json:"task_ids"`
 	Cycles         map[string]string `json:"cycles"`
 	Batches        []ReviewPlanBatch `json:"batches"`
-	RecordedAt     string            `json:"recorded_at"`
+	// CycleBatchFrom maps a member rebound after all its batches closed to the
+	// count of batches at that rebind. Its new cycle needs a batch from there on.
+	CycleBatchFrom map[string]int `json:"cycle_batch_from,omitempty"`
+	RecordedAt     string         `json:"recorded_at"`
 }
 
 func planName(id string) string     { return "plans/" + id + ".json" }
@@ -165,6 +168,14 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 				}
 			}
 		}
+		for i, b := range p.Batches[1:] {
+			if previous := p.Batches[i]; b.Base != previous.TargetCommit {
+				return reviewError(t("board.review_plan_chain_gap", b.BatchID, b.Base, previous.BatchID, previous.TargetCommit))
+			}
+		}
+		if err = checkUnplannedReviewRuns(tx, p); err != nil {
+			return err
+		}
 		p.Revision = 1
 		p.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		for _, id := range ids {
@@ -242,6 +253,13 @@ func verifyPlanCopiesFor(tx *Transaction, p ReviewPlan, currentCycle bool) error
 		return reviewError("plan schema")
 	}
 	for _, id := range p.TaskIDs {
+		excluded, err := memberExcluded(tx, id)
+		if err != nil {
+			return err
+		}
+		if excluded {
+			continue
+		}
 		s, err := tx.Snapshot(id)
 		if err != nil {
 			return err
@@ -259,12 +277,15 @@ func verifyPlanCopiesFor(tx *Transaction, p ReviewPlan, currentCycle bool) error
 		if currentCycle && p.Cycles[id] != planCycle(s) {
 			return reviewError("plan execution cycle mismatch")
 		}
-		text, err := tx.Read(id, "reviews/plan.json")
-		if err != nil {
-			return err
-		}
-		if text != reviewJSON(p) {
-			return reviewError("plan copy mismatch: " + id)
+		// An archived card is final, so plan writes leave its copy behind.
+		if s.Entry.State != "archived" {
+			text, err := tx.Read(id, "reviews/plan.json")
+			if err != nil {
+				return err
+			}
+			if text != reviewJSON(p) {
+				return reviewError("plan copy mismatch: " + id)
+			}
 		}
 		current, exists, err := readTaskPlan(tx, id)
 		if err != nil {
@@ -329,6 +350,23 @@ func validatePreviousClosure(tx *Transaction, b ReviewBatch) error {
 		ok, err := readReviewJSON(tx, closureName(b.PreviousBatchID), &previous)
 		if err != nil {
 			return err
+		}
+		if !ok {
+			var void ReviewBatch
+			found, err := readReviewJSON(tx, reviewBatchName(b.PreviousBatchID), &void)
+			if err != nil {
+				return err
+			}
+			if found && void.PlanID == b.PlanID && void.TargetCommit == b.Base {
+				skip, err := voidReviewBatch(tx, void.TaskIDs)
+				if err != nil {
+					return err
+				}
+				if skip {
+					b = void
+					continue
+				}
+			}
 		}
 		if !ok || previous.BatchID != b.PreviousBatchID || previous.PlanID != b.PlanID || previous.TargetCommit != b.Base {
 			return reviewError(fmt.Sprintf("previous closed batch required: %s", b.PreviousBatchID))

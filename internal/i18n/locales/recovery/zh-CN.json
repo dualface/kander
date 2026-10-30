@@ -1,5 +1,5 @@
 {
-  "board.review_unlinked_run_hint": "run {{.V0}} 是执行成功的 {{.V1}} run，但不在 {{.V2}} 的结论链上。下一步：若它与链上某个 run 在同一提交、同一 reviewer 下并行运行，在关闭请求中加入 \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<链上执行成功的 run，例如 {{.V2}}>\", \"basis\": \"<为何是重复 run>\"}}；它的 findings 仍须分配并有作者处置。若它有已修复的 must-fix finding，先用 --previous-run-id {{.V2}} 运行一次增量审核，再以该 run 作结论。",
+  "board.review_unlinked_run_hint": "run {{.V0}} 是执行成功的 {{.V1}} run，但不在 {{.V2}} 的结论链上。下一步：若它与链上某个 run 在同一提交、同一 reviewer 下并行运行，在关闭请求中加入 \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<链上执行成功的 run，例如 {{.V2}}>\", \"basis\": \"<为何是重复 run>\"}}；它的 findings 仍须分配并有作者处置。若它有已修复的 must-fix finding，先用 --previous-run-id {{.V2}} 运行一次增量审核，再以该 run 作结论。若它是无法入链的根 run（例如换过 reviewer），在该条目中加入 \"decision\": \"<用户决定引用>\"。",
   "board.review_unlinked_runs_warning": "警告：batch {{.V0}} 中已有 run {{.V3}} 的前驱链覆盖不到的 {{.V1}} run：{{.V2}}。本次 run 继续执行。review close 之前，用 --previous-run-id 把 run 接成链，或在关闭请求的 superseded_runs 中标记并行的重复 run。",
   "review.unlinked_runs_unchecked": "警告：无法检查该角色的其他 run：{{.V0}}。本次 run 继续执行。",
   "board.update_hint_owner": "下一步：按 kander show 的输出原样保留这一行；它由 kander move <task-id> working --owner 写入。",

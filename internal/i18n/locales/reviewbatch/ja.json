@@ -1,4 +1,12 @@
 {
+  "board.review_advance_has_successor": "バッチ {{.V0}} には計画済みの後続バッチ（{{.V1}}）があり、バッチの base は変更できません。先に kander review extend-plan の drop_batches で削除してください。実行前のバッチはクローズ後に新しい ID で追加できます",
+  "board.review_batch_outside_plan": "バッチ {{.V0}} はカード {{.V1}} のレビュープラン {{.V2}} にありません。最初の run の前に kander review extend-plan でバッチを追加してください",
+  "board.review_cycle_batch_required": "メンバーはバッチのクローズ後に再バインドされたため、新しい実行サイクルにバッチが必要です。kander review extend-plan で追加してください。理由を記した N/A バッチでも満たせます",
+  "board.review_plan_chain_gap": "バッチ {{.V0}} の base は {{.V1}}、先行バッチ {{.V2}} のターゲットは {{.V3}} です。バッチチェーンは連続する必要があります。先行バッチのターゲットを base にしてください",
+  "board.review_plan_worktree_mismatch": "run の worktree {{.V0}} はプラン {{.V2}} の {{.V1}} と異なります。プランは移動できません。{{.V1}} に worktree を作り直してそこで実行してください",
+  "board.review_run_input_conflict": "run はバイト単位で同一の入力でのみ再実行できます。元の設定に戻して凍結済み task context を渡すか、同じバッチで新しい --run-id を使ってください",
+  "board.review_superseded_decision_hint": "チェーンに入れないルート run は、superseded_runs エントリに \"decision\"（ユーザー決定の参照）を書くとクローズできます。その finding は引き続き拘束します",
   "board.review_task_context_frozen": "タスクコンテキストがバッチ {{.V0}} で固定されたものと異なります (実行を公開するとレビュー索引が現在の spec.md に追記されます). 固定スナップショット {{.V1}} をタスクコンテキストとして再実行し, 補足レビューコンテキストには実行と修正の証拠だけを入れてください. GOAL, USER_DECISIONS, EXPECTED_OUTCOME, ACCEPTANCE_CRITERIA, THREAT_MODEL, OUT_OF_SCOPE を変更する場合は新しいバッチが必要です. 受け入れ条件のチェックだけなら不要です",
-  "board.review_task_context_frozen_no_snapshot": "タスクコンテキストがバッチ {{.V0}} で固定されたものと異なり, そのバッチには公開済みのスナップショットがありません. 新しいバッチを開始してください"
+  "board.review_task_context_frozen_no_snapshot": "タスクコンテキストがバッチ {{.V0}} で固定されたものと異なり、そのバッチの run にコピーがありません。元のタスクコンテキストのバイト列を渡してください。プランがこのバッチを含む間は、新しいバッチは解決策になりません",
+  "board.review_withdrawal_required": "除外メンバー {{.V2}} に割り当てられた finding {{.V0}}/{{.V1}} には withdrawn レコードが必要です。status を withdrawn とし、kander review progress が示す除外 ID とユーザー決定を添えて kander review disposition を実行してください"
 }

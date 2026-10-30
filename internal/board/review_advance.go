@@ -133,6 +133,9 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 		if a.PreviousTarget != b.TargetCommit || a.Target == a.PreviousTarget || !validCommit(a.Target) || strings.TrimSpace(a.Reason) == "" {
 			return reviewError("batch target CAS conflict")
 		}
+		if err = requireNoSuccessorBatch(tx, b); err != nil {
+			return err
+		}
 		if err = validateReviewAdvanceAttribution(a, b.TaskIDs); err != nil {
 			return err
 		}
@@ -195,10 +198,8 @@ func syncPlannedBatchTarget(tx *Transaction, batch ReviewBatch, request reviewPl
 	previous.Batches = slices.Clone(p.Batches)
 	p.Batches[index].TargetCommit = batch.TargetCommit
 	p.Revision++
-	for _, id := range p.TaskIDs {
-		if err = tx.Put(id, "reviews/plan.json", reviewJSON(p)); err != nil {
-			return err
-		}
+	if err = putPlanCopies(tx, p); err != nil {
+		return err
 	}
 	if err = tx.PutGroup(reviewControlGroup, fmt.Sprintf("plan-history/%s/%d.json", p.PlanID, p.Revision), reviewJSON(struct {
 		Previous   ReviewPlan                  `json:"previous"`

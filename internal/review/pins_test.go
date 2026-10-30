@@ -139,7 +139,7 @@ func TestBoundReviewPinningRequiresOneSettingPerRole(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "working", second, "spec.md"), []byte(unpinned), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := boundReviewPinning(root, []string{first, second}, "PMQA"); err == nil || !strings.Contains(err.Error(), second) {
+	if _, err := boundReviewPinning(root, []string{first, second}, "PMQA"); err == nil || !strings.Contains(err.Error(), second) || !strings.Contains(err.Error(), "--contract-decision-file") {
 		t.Fatalf("forced vs unset accepted: %v", err)
 	}
 	if pinning, err := boundReviewPinning(root, []string{second}, "PMQA"); err != nil || pinning.any || pinning.scale != "" {

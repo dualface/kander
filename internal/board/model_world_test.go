@@ -59,7 +59,6 @@ type modelWorld struct {
 	group   bool
 	members []*modelMember
 	plans   []string
-	stray   bool
 	seq     int
 	trace   []string
 }
@@ -156,6 +155,8 @@ type modelFacts struct {
 	bound    []*Dispatch
 	ckpt     *CoordinatorCheckpoint
 	review   modelReviewFacts
+	excluded []bool   // the member has an exclusion record
+	copies   []string // the text of each member's plan copy, "" when it has none
 }
 
 // modelMemberFacts is the view of one member an invariant reads.
@@ -176,16 +177,18 @@ func (m modelMemberFacts) chained() bool {
 }
 
 type modelBatchFacts struct {
-	id       string
-	plan     string
-	sealed   bool
-	closed   bool
-	base     string
-	target   string
-	advances int
-	required []string
-	members  []string
-	runs     []modelRunFacts
+	id         string
+	plan       string
+	sealed     bool
+	closed     bool
+	base       string
+	target     string
+	advances   int
+	required   []string
+	members    []string
+	live       []string // members that can still take a run
+	runs       []modelRunFacts
+	superseded map[string]ReviewSupersededRun // the closure's retired runs
 }
 
 type modelRunFacts struct {
@@ -200,7 +203,9 @@ type modelRunFacts struct {
 }
 
 type modelReviewFacts struct {
-	batches []modelBatchFacts
+	batches   []modelBatchFacts
+	cycleOwed []string // members whose rebound cycle has no batch
+	foreign   []string // runs of a plan member outside every batch of that plan
 }
 
 func (r modelRunFacts) recorded(finding, task string) bool {
@@ -249,9 +254,18 @@ func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
 			for _, b := range p.Batches {
 				names = append(names, b.BatchID)
 			}
-		}
-		if w.stray {
-			names = append(names, modelStrayBatch)
+			for _, member := range p.TaskIDs {
+				gone, e := memberExcluded(tx, member)
+				if e != nil {
+					return e
+				}
+				if !gone && cycleBatchMissing(p, member) {
+					facts.cycleOwed = append(facts.cycleOwed, member)
+				}
+			}
+			if e := checkUnplannedReviewRuns(tx, p); e != nil {
+				facts.foreign = append(facts.foreign, e.Error())
+			}
 		}
 		for _, id := range names {
 			batch, ok, e := modelReadBatch(tx, id)
@@ -273,6 +287,15 @@ func modelReadBatch(tx *Transaction, id string) (facts modelBatchFacts, exists b
 		return
 	}
 	facts = modelBatchFacts{id: id, plan: b.PlanID, base: b.Base, target: b.TargetCommit, advances: len(b.Advances), members: b.TaskIDs}
+	for _, member := range b.TaskIDs {
+		gone, e := memberExcluded(tx, member)
+		if e != nil {
+			return facts, true, e
+		}
+		if !gone {
+			facts.live = append(facts.live, member)
+		}
+	}
 	for _, role := range slices.Sorted(maps.Keys(b.Requirements)) {
 		if b.Requirements[role] == "required" {
 			facts.required = append(facts.required, role)
@@ -282,6 +305,7 @@ func modelReadBatch(tx *Transaction, id string) (facts modelBatchFacts, exists b
 	if facts.closed, err = readReviewJSON(tx, closureName(id), &closure); err != nil {
 		return
 	}
+	facts.superseded = closure.Request.SupersededRuns
 	if b.PlanID != "" {
 		var p ReviewPlan
 		if _, err = readReviewJSON(tx, planName(b.PlanID), &p); err != nil {
@@ -341,6 +365,22 @@ func (w *modelWorld) read() (*modelFacts, error) {
 		if err != nil {
 			return nil, modelInfra(err)
 		}
+		excluded, copied := false, ""
+		err = WithTransaction(w.root, reviewScope([]string{m.id}, true), func(tx *Transaction) error {
+			var e error
+			if excluded, e = memberExcluded(tx, m.id); e != nil {
+				return e
+			}
+			if copied, e = tx.Read(m.id, "reviews/plan.json"); errors.Is(e, os.ErrNotExist) {
+				return nil
+			}
+			return e
+		})
+		if err != nil {
+			return nil, modelInfra(err)
+		}
+		f.excluded = append(f.excluded, excluded)
+		f.copies = append(f.copies, copied)
 		f.attempts = append(f.attempts, attempt)
 		f.ledgers = append(f.ledgers, ledger)
 		f.rounds = append(f.rounds, rounds)
@@ -414,8 +454,8 @@ func (f *modelFacts) memberKey(i int) string {
 		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs))
 	}
 	settled := slices.ContainsFunc(f.rounds[i], func(d Dispatch) bool { return d.Settlement != nil })
-	return fmt.Sprintf("col=%s attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
-		s.Entry.State, attempt, f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
+	return fmt.Sprintf("col=%s excluded=%v attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
+		s.Entry.State, f.excluded[i], attempt, f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
 		m.launcher != nil, m.executor, m.executor && m.unproven, m.self, m.stranded, bound, len(releases) > 0, settled,
 		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)))
 }
@@ -460,6 +500,7 @@ func (f *modelFacts) reviewKey() string {
 		}
 		parts = append(parts, fmt.Sprintf("%s/%s/sealed=%v/adv=%d/%s", b.id, state, b.sealed, b.advances, strings.Join(runs, ",")))
 	}
+	parts = append(parts, fmt.Sprintf("cycle-owed=%d", len(f.review.cycleOwed)))
 	return strings.Join(parts, ";")
 }
 

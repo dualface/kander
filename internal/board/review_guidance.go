@@ -11,6 +11,7 @@ type ReviewNextAction struct {
 	BatchID string   `json:"batch_id"`
 	Role    string   `json:"role"`
 	RunIDs  []string `json:"run_ids"`
+	TaskID  string   `json:"task_id,omitempty"`
 }
 
 // reviewChainHeads returns the successful runs of role that no other successful

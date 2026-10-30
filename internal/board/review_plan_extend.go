@@ -10,11 +10,14 @@ import (
 )
 
 // ReviewPlanExtension appends one batch after the prior closure, seals the
-// cycle, rebinds execution cycles, or syncs a drifted plan target to the
-// runtime batch. Existing requirements, members and evidence are never replaced.
+// cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
+// batch, or drops trailing batches no run has reached. Existing requirements,
+// members and evidence are never replaced. A sealed plan takes a batch only for
+// a rebound cycle that has none.
 type ReviewPlanExtension struct {
 	RebindCycles     map[string]string `json:"rebind_cycles,omitempty"`
 	SyncTargets      map[string]string `json:"sync_targets,omitempty"`
+	DropBatches      []string          `json:"drop_batches,omitempty"`
 	PlanID           string            `json:"plan_id"`
 	ExpectedRevision uint64            `json:"expected_revision"`
 	Batch            *ReviewPlanBatch  `json:"batch,omitempty"`
@@ -24,7 +27,7 @@ type ReviewPlanExtension struct {
 }
 
 func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
-	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 {
+	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 {
 		return reviewError("plan extension provenance")
 	}
 	exclusiveOps := 0
@@ -37,8 +40,11 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 	if x.Batch != nil || x.Seal {
 		exclusiveOps++
 	}
+	if len(x.DropBatches) > 0 {
+		exclusiveOps++
+	}
 	if exclusiveOps > 1 {
-		return reviewError("rebind_cycles, sync_targets and batch/seal are mutually exclusive")
+		return reviewError("rebind_cycles, sync_targets, drop_batches and batch/seal are mutually exclusive")
 	}
 	var p ReviewPlan
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
@@ -59,7 +65,8 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 		if err != nil {
 			return err
 		}
-		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 || p.Revision != x.ExpectedRevision {
+		cycleBatch := x.Batch != nil && !x.Seal && slices.ContainsFunc(x.Batch.TaskIDs, func(id string) bool { return cycleBatchMissing(p, id) })
+		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && !cycleBatch || p.Revision != x.ExpectedRevision {
 			return reviewError("plan extension CAS/sealed conflict")
 		}
 		if err = verifyPlanCopiesFor(tx, p, len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0); err != nil {
@@ -67,18 +74,27 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 		}
 		previous := p
 		p.Cycles = maps.Clone(p.Cycles)
+		p.CycleBatchFrom = maps.Clone(p.CycleBatchFrom)
 		changed := map[string]string{}
 		for _, id := range p.TaskIDs {
+			excluded, e := memberExcluded(tx, id)
+			if e != nil {
+				return e
+			}
+			if excluded {
+				continue
+			}
 			s, e := tx.Snapshot(id)
 			if e != nil {
 				return e
 			}
-			if s.Entry.State != "working" && s.Entry.State != "review" && (len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 || p.Cycles[id] != planCycle(s)) {
+			if p.Cycles[id] == planCycle(s) {
+				continue
+			}
+			if s.Entry.State != "working" && s.Entry.State != "review" {
 				return reviewError("plan member is terminal")
 			}
-			if p.Cycles[id] != planCycle(s) {
-				changed[id] = planCycle(s)
-			}
+			changed[id] = planCycle(s)
 		}
 		if len(x.RebindCycles) > 0 {
 			if !maps.Equal(changed, x.RebindCycles) {
@@ -86,6 +102,21 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			}
 			for id, cycle := range changed {
 				p.Cycles[id] = cycle
+				closed, e := memberBatchesClosed(tx, p, id)
+				if e != nil {
+					return e
+				}
+				if closed {
+					if p.CycleBatchFrom == nil {
+						p.CycleBatchFrom = map[string]int{}
+					}
+					p.CycleBatchFrom[id] = len(p.Batches)
+				}
+			}
+		}
+		if len(x.DropBatches) > 0 {
+			if err = dropPlanBatches(tx, &p, x.DropBatches); err != nil {
+				return err
 			}
 		}
 		if len(x.SyncTargets) > 0 {
@@ -132,10 +163,8 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				p.Batches[index].TargetCommit = b.TargetCommit
 			}
 			p.Revision++
-			for _, id := range p.TaskIDs {
-				if err = tx.Put(id, "reviews/plan.json", reviewJSON(p)); err != nil {
-					return err
-				}
+			if err = putPlanCopies(tx, p); err != nil {
+				return err
 			}
 			if err = tx.PutGroup(reviewControlGroup, fmt.Sprintf("plan-history/%s/%d.json", p.PlanID, p.Revision), reviewJSON(struct {
 				Previous   ReviewPlan                             `json:"previous"`
@@ -165,6 +194,13 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			for _, id := range ids {
 				if !containsID(p.TaskIDs, id) {
 					return reviewError("foreign plan member")
+				}
+				s, e := tx.Snapshot(id)
+				if e != nil {
+					return e
+				}
+				if s.Entry.State != "working" && s.Entry.State != "review" {
+					return reviewError("batch member is terminal: " + id)
 				}
 			}
 			if err = validateRequirements(b.Requirements); err != nil {
@@ -210,9 +246,9 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			if err = tx.PutGroup(reviewControlGroup, "tracked-cycles/"+id+".json", reviewJSON(map[string]string{"cycle": p.Cycles[id]})); err != nil {
 				return err
 			}
-			if err = tx.Put(id, "reviews/plan.json", reviewJSON(p)); err != nil {
-				return err
-			}
+		}
+		if err = putPlanCopies(tx, p); err != nil {
+			return err
 		}
 		if err = tx.PutGroup(reviewControlGroup, fmt.Sprintf("plan-history/%s/%d.json", p.PlanID, p.Revision), reviewJSON(struct {
 			Previous   ReviewPlan          `json:"previous"`

@@ -1,4 +1,12 @@
 {
+  "board.review_advance_has_successor": "批次 {{.V0}} 有已计划的后继批次（{{.V1}}），批次 base 不可变。先用 kander review extend-plan 的 drop_batches 移除它们；未运行过的批次可以在关闭之后用新 ID 追加",
+  "board.review_batch_outside_plan": "批次 {{.V0}} 不在卡 {{.V1}} 的复审 plan {{.V2}} 中。首次 run 之前，先用 kander review extend-plan 加入该批次",
+  "board.review_cycle_batch_required": "成员在批次关闭之后重绑，新执行周期需要一个批次：用 kander review extend-plan 追加。写明理由的 N/A 批次也满足这一要求",
+  "board.review_plan_chain_gap": "批次 {{.V0}} 的 base 是 {{.V1}}，前驱 {{.V2}} 的目标是 {{.V3}}。批次链必须连续：用前驱的目标作为 base",
+  "board.review_plan_worktree_mismatch": "run 的 worktree {{.V0}} 与 plan {{.V2}} 的 {{.V1}} 不同。plan 不能迁移：在 {{.V1}} 重建 worktree，然后在那里运行",
+  "board.review_run_input_conflict": "run 只接受字节一致的输入重放。恢复原配置并传入冻结的 task context，或者在同一批次用新的 --run-id",
+  "board.review_superseded_decision_hint": "无法入链的根 run 在 superseded_runs 条目中写 \"decision\"（用户决定引用）后可以关闭；其 finding 仍然约束关闭",
   "board.review_task_context_frozen": "任务上下文与批次 {{.V0}} 冻结的不一致（发布运行时会往实时 spec.md 追加审核索引）。请用冻结快照 {{.V1}} 作为任务上下文重新运行，补充 review context 只放执行和修复证据；GOAL、USER_DECISIONS、EXPECTED_OUTCOME、ACCEPTANCE_CRITERIA、THREAT_MODEL、OUT_OF_SCOPE 有变化时需要开新批次，仅勾选验收条目不需要",
-  "board.review_task_context_frozen_no_snapshot": "任务上下文与批次 {{.V0}} 冻结的不一致，且该批次没有已发布的快照；请开新批次"
+  "board.review_task_context_frozen_no_snapshot": "任务上下文与批次 {{.V0}} 冻结的不一致，且该批次没有 run 保留副本。请传入原始的任务上下文字节；plan 仍然含有该批次时，开新批次不是出路",
+  "board.review_withdrawal_required": "已排除成员 {{.V2}} 的已分配 finding {{.V0}}/{{.V1}} 需要 withdrawn 记录：提交 kander review disposition，status 为 withdrawn，并写明 kander review progress 给出的排除 ID 与用户决定"
 }

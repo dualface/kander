@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +33,10 @@ type DispatchWrapUpBinding struct {
 	Git      DispatchIntegration `json:"git"`
 }
 
-func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published bool) error {
+// validateDispatchWrapUp checks the integration of a wrap-up. A completed round
+// (historical) was bound to the plan of its day: a batch appended later for
+// another member's rebound cycle moves the end of the plan, not this delivery.
+func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, historical bool) error {
 	w := in.Evidence.WrapUp
 	if w == nil {
 		return dispatchEvidenceError("wrap-up binding required")
@@ -41,9 +45,21 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published bool) e
 	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
-	reviewRange, err := dispatchReviewRange(tx, in.TaskID)
-	if err != nil {
-		return err
+	var reviewRange ReviewGitEdge
+	if historical {
+		plan, _, err := readTaskPlan(tx, in.TaskID)
+		if err != nil {
+			return err
+		}
+		reviewRange.Descendant = g.ReviewTarget
+		if slices.ContainsFunc(plan.Batches, func(b ReviewPlanBatch) bool { return b.TargetCommit == g.ReviewTarget }) {
+			reviewRange.Ancestor = plan.Batches[0].Base
+		}
+	} else {
+		var err error
+		if reviewRange, err = dispatchReviewRange(tx, in.TaskID); err != nil {
+			return err
+		}
 	}
 	if g.RebasedBase == "" && g.SourceCommit != g.ReviewTarget || g.ReviewTarget != reviewRange.Descendant || g.ReviewBase != reviewRange.Ancestor || g.RebasedBase != "" && !dispatchCommitPattern.MatchString(g.RebasedBase) {
 		return dispatchEvidenceError("integration does not bind final review target " + reviewRange.Descendant)
@@ -105,7 +121,7 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 			return e
 		}
 		if d.Input.Kind != "wrap-up" || d.Revision != expected || d.Authorization != authFrom(s.Text) || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.WrapUpAuthority != nil || d.Authorization.Epoch == ^uint64(0) || (s.Entry.State != "review" && s.Entry.State != "working") || strings.TrimSpace(author) == "" || strings.TrimSpace(reason) == "" {
-			return dispatchEvidenceError("wrap-up authority conflict")
+			return dispatchEvidenceError("wrap-up authority conflict: " + t("board.wrap_up_grant_hint"))
 		}
 		if e = requireDispatchCycle(d, s); e != nil {
 			return e
@@ -200,12 +216,12 @@ func (tx *Transaction) validateWrapUpUpdate(s Snapshot, o UpdateOptions) error {
 	if o.Document == "spec.md" {
 		prefix := strings.TrimRight(s.Text, "\n") + "\n\n## WRAP_UP_RECORDS\n\n"
 		if !strings.HasPrefix(o.Text, prefix) || strings.TrimSpace(strings.TrimPrefix(o.Text, prefix)) == "" {
-			return dispatchEvidenceError("wrap-up spec update must append WRAP_UP_RECORDS")
+			return dispatchEvidenceError("wrap-up spec update must append WRAP_UP_RECORDS: " + t("board.wrap_up_grant_hint"))
 		}
 		return nil
 	}
 	if o.Document != "wrap-up/"+d.Input.ID+"-"+strconv.FormatUint(a.Epoch, 10)+".md" {
-		return dispatchEvidenceError("wrap-up-only record path required")
+		return dispatchEvidenceError("wrap-up-only record path required: " + t("board.wrap_up_grant_hint"))
 	}
 	// Do not overwrite a prior record even within the same authorization.
 	raw, err := tx.Read(s.Entry.TaskID, o.Document)
@@ -229,7 +245,17 @@ func dispatchReviewRange(tx *Transaction, task string) (ReviewGitEdge, error) {
 	if !exists || len(plan.Batches) == 0 {
 		return ReviewGitEdge{}, dispatchEvidenceError("sealed review plan required")
 	}
-	return ReviewGitEdge{Ancestor: plan.Batches[0].Base, Descendant: plan.Batches[len(plan.Batches)-1].TargetCommit}, nil
+	// A batch with no member left never closes, so the plan ends before it.
+	for _, b := range slices.Backward(plan.Batches) {
+		void, err := voidReviewBatch(tx, b.TaskIDs)
+		if err != nil {
+			return ReviewGitEdge{}, err
+		}
+		if !void {
+			return ReviewGitEdge{Ancestor: plan.Batches[0].Base, Descendant: b.TargetCommit}, nil
+		}
+	}
+	return ReviewGitEdge{}, dispatchEvidenceError("sealed review plan required")
 }
 
 // DispatchReviewRange identifies the closed plan range to bind into Git evidence.

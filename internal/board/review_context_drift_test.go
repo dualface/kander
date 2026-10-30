@@ -76,16 +76,17 @@ func TestReviewTaskContextDriftPrefersPreviousRun(t *testing.T) {
 	}
 }
 
-// Without a finalized, published run there is no snapshot to name, so the error asks for a new batch.
-func TestReviewTaskContextDriftWithoutSnapshot(t *testing.T) {
+// Before any run finalized the frozen bytes sit in the control directory. A new batch is no way out.
+func TestReviewTaskContextDriftWithoutPublishedRun(t *testing.T) {
 	root := tempBoard(t)
 	id := archiveCard(t, root, "drift-none")
 	if _, _, err := PrepareReviewRun(root, archiveInput([]string{id}, "drift-prepared", "PMQA"), archiveRequirements(), nil, archiveOriginals(), "test"); err != nil {
 		t.Fatal(err)
 	}
 	_, _, err := PrepareReviewRun(root, archiveInput([]string{id}, "drift-after", "PMQA"), nil, nil, driftOriginals(), "test")
-	if err == nil || !strings.Contains(err.Error(), "batch") || strings.Contains(err.Error(), "task-context.md") || strings.Contains(err.Error(), "batch binding conflict") {
-		t.Fatalf("no-snapshot error = %v", err)
+	want := control(root, "groups", reviewControlGroup, "runs", "drift-prepared", "inputs", "task-context.md")
+	if err == nil || !strings.Contains(err.Error(), want) || strings.Contains(err.Error(), "batch binding conflict") {
+		t.Fatalf("no-snapshot error = %v, want %s", err, want)
 	}
 	if _, exists, err := LookupReviewRun(root, "drift-after"); err != nil || exists {
 		t.Fatalf("drifted run persisted: %v %v", exists, err)

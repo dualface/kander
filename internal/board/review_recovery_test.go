@@ -2,6 +2,7 @@ package board
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -76,10 +77,12 @@ func TestRebindPreservesClosedEvidenceAndTerminalMember(t *testing.T) {
 	if err = ExtendReviewPlan(root, x); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range ids {
-		if progress, err = ReviewTaskProgress(root, id); err != nil || progress.Status != "closed" {
-			t.Fatalf("%+v %v", progress, err)
-		}
+	// The rebind keeps the closed evidence and owes the new cycle a batch.
+	if progress, err = ReviewTaskProgress(root, ids[0]); err != nil || progress.Status != "pending" || !slices.Contains(progress.Pending, "cycle-batch:"+ids[0]) {
+		t.Fatalf("%+v %v", progress, err)
+	}
+	if progress, err = ReviewTaskProgress(root, ids[1]); err != nil || progress.Status != "closed" {
+		t.Fatalf("%+v %v", progress, err)
 	}
 	if transactionSnapshot(t, root, ids[1]).Entry.State != "done" {
 		t.Fatal("terminal member moved during rebind")

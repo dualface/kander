@@ -148,10 +148,37 @@ func reclaimHandoffs(tx *Transaction, s Snapshot, w coordinatorWalk) ([]lifecycl
 	return lifecycleHandoffs(tx, s, w.segment[at].FromCycle)
 }
 
+// verifyTerminalExit accepts the end of a member only from what the move wrote. A
+// member archived after done keeps the facts of done. A legacy member has only its
+// result. Any other member needs the exclusion record of that same move.
+func verifyTerminalExit(tx *Transaction, s Snapshot, l executionLedger) error {
+	id, result := s.Entry.TaskID, MetadataFrom(s.Text, FieldResult)
+	if s.Entry.State == "archived" && result == "completed" {
+		if MetadataFrom(s.Text, FieldFinishedAt) == "" {
+			return coordinatorError("completed member has no finish time: " + id)
+		}
+		return nil
+	}
+	e, excluded, err := readMemberExclusion(tx, id)
+	if err != nil {
+		return err
+	}
+	if !excluded {
+		if len(l.chain) > l.synthesized {
+			return coordinatorError("terminal member has no exclusion record: " + id)
+		}
+		return nil
+	}
+	if e.State != s.Entry.State || e.Result != result || e.Cycle != planCycle(s) {
+		return coordinatorError("member exclusion does not match the card: " + id)
+	}
+	return nil
+}
+
 // reconcileTerminalMember is the branch of a member that ended in archived or
-// trash. No later round can start there, so it checks only the result field and
-// the chain. Start facts and dispatch rounds no longer matter. Archive cleanup may
-// have removed the records of a card; its receipt stands in for them.
+// trash. No later round can start there, so it checks the end the move recorded
+// and the chain. Start facts and dispatch rounds no longer matter. Archive cleanup
+// may have removed the records of a card; its receipt stands in for them.
 func reconcileTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, old CoordinatorMember, o CoordinatorObservation) (m CoordinatorMember, err error) {
 	id := s.Entry.TaskID
 	if MetadataFrom(s.Text, FieldResult) == "" {
@@ -173,6 +200,9 @@ func reconcileTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, o
 	}
 	l, w, err := coordinatorWalkChain(ctx, tx, s, old)
 	if err != nil {
+		return m, err
+	}
+	if err = verifyTerminalExit(tx, s, l); err != nil {
 		return m, err
 	}
 	handoffs, err := reclaimHandoffs(tx, s, w)

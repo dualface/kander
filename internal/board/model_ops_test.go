@@ -30,7 +30,7 @@ type modelOp struct {
 
 // modelAfterAbandon limits the search behind an archive or a trash. Every dead
 // end of a terminal member shows at the next tail or reconcile.
-var modelAfterAbandon = []string{modelTailOp, "C.reconcile", "T.archive", "T.trash"}
+var modelAfterAbandon = []string{modelTailOp, "C.reconcile", "T.archive", "T.trash", "R.withdraw"}
 
 func modelInState(states ...string) func(*modelFacts, int) bool {
 	return func(f *modelFacts, i int) bool {

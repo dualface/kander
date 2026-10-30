@@ -12,7 +12,7 @@
   "launch.pin_agent_conflict": "{{.V0}} は {{.V1}} を指定していますが、--agent は {{.V2}} を求めています。指定された agent を使うか、契約変更でカードを修正してください",
   "launch.pin_owner_conflict": "{{.V0}} は {{.V1}} を指定していますが、カードは {{.V2}} で実行中です。--agent {{.V1}} で引き継ぐか、契約変更でカードを修正してください",
   "review.pin_agent_conflict": "{{.V0}} は {{.V1}} を指定していますが、コマンドの reviewer は {{.V2}} です",
-  "review.pin_batch_conflict": "カード {{.V1}} と {{.V2}} で {{.V0}} の指定が異なります。バインドされたレビューではロールごとに設定を 1 つにしてください",
+  "review.pin_batch_conflict": "カード {{.V1}} と {{.V2}} で {{.V0}} の指定が異なります。バインドされたレビューではロールごとに設定を 1 つにしてください。kander update --contract-decision-file で一方の pin を変更してから再実行してください",
   "review.pin_env_conflict": "{{.V0}} は {{.V1}} を指定していますが、環境変数の上書きは {{.V2}} を求めています",
   "review.pin_role_not_applicable": "注意: {{.V0}} は {{.V1}} の reviewer を指定していますが、バッチ {{.V2}} で {{.V1}} は N/A のため、この指定は効きません"
 }

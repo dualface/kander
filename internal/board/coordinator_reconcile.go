@@ -123,6 +123,13 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 		if err = validateDispatchFix(tx, d.Input, false, true); err != nil {
 			return m, err
 		}
+	} else if d.Input.Kind == "wrap-up" && d.State == DispatchCompleted {
+		if d.Input.Evidence.WrapUp == nil {
+			return m, dispatchEvidenceError("wrap-up binding required")
+		}
+		if err = validateDispatchWrapUp(tx, d.Input, true, true); err != nil {
+			return m, err
+		}
 	} else if err = validateDispatchEvidence(tx, d.Input, false); err != nil {
 		return m, err
 	}
@@ -148,12 +155,22 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 			return m, e
 		}
 		for _, b := range plan.Batches {
+			if d.State == DispatchCompleted && !containsID(b.TaskIDs, id) {
+				continue
+			}
 			var closure ReviewClosure
 			ok, e := readReviewJSON(tx, closureName(b.BatchID), &closure)
 			if e != nil {
 				return m, e
 			}
 			if !ok {
+				void, e := voidReviewBatch(tx, b.TaskIDs)
+				if e != nil {
+					return m, e
+				}
+				if void {
+					continue
+				}
 				return m, coordinatorError("closed batch missing")
 			}
 			facts.Closures = append(facts.Closures, closure)

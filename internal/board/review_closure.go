@@ -18,6 +18,9 @@ type ReviewRunView struct {
 	Findings       *ReviewFindings       `json:"findings,omitempty"`
 	Assignment     *ReviewAssignment     `json:"assignment,omitempty"`
 	Records        []ReviewDisposition   `json:"records"`
+	// Withdrawn repeats the records whose finding was withdrawn with its member.
+	// omitempty keeps views written before the field byte-identical on re-encode.
+	Withdrawn []ReviewDisposition `json:"withdrawn,omitempty"`
 }
 
 // ReviewBatchView is generated from originals; it never substitutes an orchestrator's
@@ -49,11 +52,15 @@ type ReviewCloseRequest struct {
 	Opinions         []ReviewOpinion                 `json:"opinions"`
 }
 
-// ReviewSupersededRun retires a parallel duplicate of a conclusion-chain run.
-// omitempty keeps closures written before the field byte-identical on re-encode.
+// ReviewSupersededRun retires a parallel duplicate of a conclusion-chain run. With
+// a user decision reference it also retires a root run that cannot join the chain,
+// and the chain that grew from it. Findings and failures of a retired run stay
+// binding, and the entry stays in the closure. omitempty keeps closures written
+// before the field byte-identical on re-encode.
 type ReviewSupersededRun struct {
 	Replacement string `json:"replacement"`
 	Basis       string `json:"basis"`
+	Decision    string `json:"decision,omitempty"`
 }
 type ReviewGitEdge struct {
 	Ancestor   string `json:"ancestor"`
@@ -150,6 +157,7 @@ func aggregateReviewBatch(tx *Transaction, b ReviewBatch) (ReviewBatchView, erro
 			rv.Findings = &findings
 			rv.Assignment = &ledger.Assignment
 			rv.Records = ledger.Records
+			rv.Withdrawn = withdrawnRecords(ledger)
 		}
 		view.Runs = append(view.Runs, rv)
 	}
@@ -247,7 +255,11 @@ func PublishReviewDisposition(root, id string) (v ReviewBatchView, err error) {
 		if e != nil {
 			return e
 		}
-		for _, task := range b.TaskIDs {
+		targets, e := reviewCopyTargets(tx, b.TaskIDs)
+		if e != nil {
+			return e
+		}
+		for _, task := range targets {
 			if e = tx.Put(task, "reviews/batches/"+id+"/disposition.json", reviewJSON(v)); e != nil {
 				return e
 			}
@@ -258,10 +270,12 @@ func PublishReviewDisposition(root, id string) (v ReviewBatchView, err error) {
 }
 
 // supersededReplacement admits a successful run outside the conclusion chain
-// only as a parallel duplicate: a chain run with the same commit and reviewer
-// shares its predecessor, or its predecessor is itself superseded and it
-// matches the conclusion's commit and reviewer. Anything else would let a full
-// re-run bypass the incremental fix round or switch reviewers mid-batch.
+// as a parallel duplicate: a chain run with the same commit and reviewer shares
+// its predecessor, or its predecessor is itself superseded and it matches the
+// conclusion's commit and reviewer. Anything else needs a user decision
+// reference, and then only a root run or a run on a retired chain qualifies:
+// without one, a full re-run could bypass the incremental fix round or switch
+// reviewers mid-batch.
 func supersededReplacement(runs map[string]ReviewRunView, chain map[string]bool, conclusion, run ReviewRun, superseded map[string]ReviewSupersededRun) (string, error) {
 	s, ok := superseded[run.RunID]
 	if !ok {
@@ -269,6 +283,9 @@ func supersededReplacement(runs map[string]ReviewRunView, chain map[string]bool,
 	}
 	if strings.TrimSpace(s.Basis) == "" {
 		return "", reviewError("superseded_runs basis required: " + run.RunID)
+	}
+	if s.Decision != "" && strings.TrimSpace(s.Decision) == "" {
+		return "", reviewError("superseded_runs decision is blank: " + run.RunID)
 	}
 	replacement, ok := runs[s.Replacement]
 	if !ok || !chain[s.Replacement] || replacement.Run.ExecutionStatus != "ok" {
@@ -283,7 +300,10 @@ func supersededReplacement(runs map[string]ReviewRunView, chain map[string]bool,
 	if _, ok := superseded[run.PreviousRunID]; ok && run.Commit == conclusion.Commit && run.Reviewer == conclusion.Reviewer {
 		return replacement.Run.Commit, nil
 	}
-	return "", reviewError("superseded_runs entry has no parallel twin (same commit, reviewer and predecessor) on the conclusion chain: " + run.RunID)
+	if s.Decision != "" && (run.PreviousRunID == "" || superseded[run.PreviousRunID].Decision != "") {
+		return replacement.Run.Commit, nil
+	}
+	return "", reviewError("superseded_runs entry has no parallel twin (same commit, reviewer and predecessor) on the conclusion chain: " + run.RunID + "; " + t("board.review_superseded_decision_hint"))
 }
 func latestViewRecords(rv ReviewRunView) []ReviewDisposition {
 	return latestDispositions(dispositionLedger{Records: rv.Records})
@@ -536,7 +556,11 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 			return verifyClosureCopies(tx, c)
 		}
 		c = ReviewClosure{Schema: 1, PlanID: p.PlanID, BatchID: b.BatchID, TargetCommit: b.TargetCommit, Request: r, Git: evidence, RoleStatuses: statuses, View: v, ClosedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-		for _, id := range b.TaskIDs {
+		targets, e := reviewCopyTargets(tx, b.TaskIDs)
+		if e != nil {
+			return e
+		}
+		for _, id := range targets {
 			if e = tx.Put(id, "reviews/batches/"+b.BatchID+"/disposition.json", reviewJSON(v)); e != nil {
 				return e
 			}
@@ -552,7 +576,13 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 	return
 }
 func verifyClosureCopies(tx *Transaction, c ReviewClosure) error {
-	for _, id := range c.View.Batch.TaskIDs {
+	// A member that left after the closure keeps its copies, and one that left
+	// before it never took them. Neither is damage.
+	targets, err := reviewCopyTargets(tx, c.View.Batch.TaskIDs)
+	if err != nil {
+		return err
+	}
+	for _, id := range targets {
 		text, err := tx.Read(id, "reviews/batches/"+c.BatchID+"/closed.json")
 		if err != nil {
 			return err

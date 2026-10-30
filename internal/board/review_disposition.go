@@ -46,6 +46,14 @@ type ReviewDisposition struct {
 	Mechanical        string                  `json:"mechanical,omitempty"`
 	Verification      string                  `json:"verification,omitempty"`
 	Waiver            *ReviewWaiver           `json:"waiver,omitempty"`
+	Withdrawal        *ReviewWithdrawal       `json:"withdrawal,omitempty"`
+}
+
+// ReviewWithdrawal binds a withdrawn record to the exclusion of its member and to
+// the user decision. It is never a fix, and only an excluded member can have one.
+type ReviewWithdrawal struct {
+	ExclusionID string `json:"exclusion_id"`
+	Decision    string `json:"decision"`
 }
 type dispositionLedger struct {
 	Assignment ReviewAssignment    `json:"assignment"`
@@ -160,7 +168,11 @@ func MapLegacyReview(root string, m LegacyFindingMap) error {
 			return reviewError("immutable legacy map")
 		}
 		m.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		for _, id := range run.TaskIDs {
+		targets, err := reviewCopyTargets(tx, run.TaskIDs)
+		if err != nil {
+			return err
+		}
+		for _, id := range targets {
 			if err = tx.Put(id, "reviews/"+m.RunID+"/legacy-map.json", reviewJSON(m)); err != nil {
 				return err
 			}
@@ -202,6 +214,13 @@ func AssignReviewFindings(root string, a ReviewAssignment) error {
 				if !containsID(run.TaskIDs, id) {
 					return reviewError("foreign assignment")
 				}
+				excluded, err := memberExcluded(tx, id)
+				if err != nil {
+					return err
+				}
+				if excluded {
+					return reviewError("assigned card left the plan: " + id)
+				}
 				s, err := tx.Snapshot(id)
 				if err != nil {
 					return err
@@ -226,7 +245,11 @@ func AssignReviewFindings(root string, a ReviewAssignment) error {
 			return reviewError("immutable assignment conflict")
 		}
 		a.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		for _, id := range run.TaskIDs {
+		targets, err := reviewCopyTargets(tx, run.TaskIDs)
+		if err != nil {
+			return err
+		}
+		for _, id := range targets {
 			if err = tx.Put(id, "reviews/"+run.RunID+"/assignment.json", reviewJSON(a)); err != nil {
 				return err
 			}
@@ -259,11 +282,18 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 	case strings.TrimSpace(d.Basis) == "":
 		return reviewError("disposition basis is required")
 	}
-	if d.Status != "confirmed" && d.Status != "fixed" && d.Status != "rejected" && d.Status != "unverifiable" && d.Status != "waived" && d.Status != "deferred" {
+	if d.Status != "confirmed" && d.Status != "fixed" && d.Status != "rejected" && d.Status != "unverifiable" && d.Status != "waived" && d.Status != "deferred" && d.Status != "withdrawn" {
 		return reviewError("disposition status")
 	}
-	if !mustFix(item.Tier) && d.Status != "fixed" && d.Status != "deferred" && d.Status != "rejected" {
+	if !mustFix(item.Tier) && d.Status != "fixed" && d.Status != "deferred" && d.Status != "rejected" && d.Status != "withdrawn" {
 		return reviewError("non-blocking status")
+	}
+	if d.Status == "withdrawn" {
+		if d.Withdrawal == nil || strings.TrimSpace(d.Withdrawal.ExclusionID) == "" || strings.TrimSpace(d.Withdrawal.Decision) == "" {
+			return reviewError("withdrawn requires withdrawal.exclusion_id and withdrawal.decision")
+		}
+	} else if d.Withdrawal != nil {
+		return reviewError("withdrawal without withdrawn status")
 	}
 	if mustFix(item.Tier) && d.Status == "deferred" {
 		return reviewError("must-fix cannot be deferred")
@@ -309,6 +339,9 @@ func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision 
 		if err != nil {
 			return err
 		}
+		if d.Status == "withdrawn" {
+			return withdrawReviewFinding(tx, run, d, expectedRevision)
+		}
 		s, err := tx.Expect(d.TaskID, "working", expectedRevision)
 		if err != nil {
 			return err
@@ -327,51 +360,96 @@ func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision 
 			return reviewError("only current executing owner may submit")
 		}
 		d.SubmittedRevision = s.Revision
-		var ledger dispositionLedger
-		exists, err := readReviewJSON(tx, ledgerName(d.RunID), &ledger)
-		if err != nil {
+		ledger, fresh, err := appendDisposition(tx, run, &d)
+		if err != nil || !fresh {
 			return err
 		}
-		if !exists {
-			return reviewError("assignment required")
-		}
-		findings, err := runFindings(tx, run)
-		if err != nil {
-			return err
-		}
-		var item ReviewFinding
-		for _, f := range findings.all() {
-			if f.ID == d.FindingID {
-				item = f
-			}
-		}
-		if err = validateDisposition(d, run, item, ledger.Assignment); err != nil {
-			return err
-		}
-		previous := ""
-		for _, record := range ledger.Records {
-			if record.RecordID == d.RecordID {
-				d.RecordedAt = record.RecordedAt
-				d.SubmittedRevision = record.SubmittedRevision
-				if reflect.DeepEqual(d, record) {
-					return nil
-				}
-				return reviewError("immutable author record")
-			}
-			if dispositionKey(record) == dispositionKey(d) {
-				previous = record.RecordID
-			}
-		}
-		if d.PreviousRecordID != previous {
-			return reviewError("disposition predecessor CAS conflict")
-		}
-		d.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		ledger.Records = append(ledger.Records, d)
 		if err = tx.Put(d.TaskID, dispositionPath(d), reviewJSON(d)); err != nil {
 			return err
 		}
 		return tx.PutGroup(reviewControlGroup, ledgerName(d.RunID), reviewJSON(ledger))
 	})
+}
+
+// appendDisposition validates d against the assignment and adds it to the ledger.
+// fresh is false when the same record already exists.
+func appendDisposition(tx *Transaction, run ReviewRun, d *ReviewDisposition) (ledger dispositionLedger, fresh bool, err error) {
+	exists, err := readReviewJSON(tx, ledgerName(d.RunID), &ledger)
+	if err != nil {
+		return ledger, false, err
+	}
+	if !exists {
+		return ledger, false, reviewError("assignment required")
+	}
+	findings, err := runFindings(tx, run)
+	if err != nil {
+		return ledger, false, err
+	}
+	var item ReviewFinding
+	for _, f := range findings.all() {
+		if f.ID == d.FindingID {
+			item = f
+		}
+	}
+	if err = validateDisposition(*d, run, item, ledger.Assignment); err != nil {
+		return ledger, false, err
+	}
+	previous := ""
+	for _, record := range ledger.Records {
+		if record.RecordID == d.RecordID {
+			d.RecordedAt = record.RecordedAt
+			d.SubmittedRevision = record.SubmittedRevision
+			if reflect.DeepEqual(*d, record) {
+				return ledger, false, nil
+			}
+			return ledger, false, reviewError("immutable author record")
+		}
+		if dispositionKey(record) == dispositionKey(*d) {
+			previous = record.RecordID
+		}
+	}
+	if d.PreviousRecordID != previous {
+		return ledger, false, reviewError("disposition predecessor CAS conflict")
+	}
+	d.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	ledger.Records = append(ledger.Records, *d)
+	return ledger, true, nil
+}
+
+// withdrawReviewFinding records the orchestrator's withdrawal of a finding assigned
+// to an excluded member. The member has no executor left to dispose of it, and its
+// card may be final, so the original lives in the ledger alone.
+func withdrawReviewFinding(tx *Transaction, run ReviewRun, d ReviewDisposition, expectedRevision uint64) error {
+	s, err := tx.Expect(d.TaskID, "", expectedRevision)
+	if err != nil {
+		return err
+	}
+	if err = requireWithdrawalBinding(tx, d); err != nil {
+		return err
+	}
+	d.SubmittedRevision = s.Revision
+	ledger, fresh, err := appendDisposition(tx, run, &d)
+	if err != nil || !fresh {
+		return err
+	}
+	return tx.PutGroup(reviewControlGroup, ledgerName(d.RunID), reviewJSON(ledger))
+}
+
+func requireWithdrawalBinding(tx *Transaction, d ReviewDisposition) error {
+	if d.Withdrawal == nil {
+		return reviewError("withdrawn requires withdrawal.exclusion_id and withdrawal.decision")
+	}
+	e, excluded, err := readMemberExclusion(tx, d.TaskID)
+	if err != nil {
+		return err
+	}
+	if !excluded {
+		return reviewError("withdrawn is only for an excluded member: " + d.TaskID)
+	}
+	if e.ExclusionID != d.Withdrawal.ExclusionID {
+		return reviewError("withdrawal must name the exclusion of " + d.TaskID + ": " + e.ExclusionID)
+	}
+	return nil
 }
 
 func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispositionLedger, error) {
@@ -393,7 +471,11 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 	if l.Assignment.RunID != run.RunID || l.Assignment.BatchID != run.BatchID || len(l.Assignment.Items) != len(f.all()) {
 		return l, reviewError("assignment coverage/binding")
 	}
-	for _, id := range run.TaskIDs {
+	targets, err := reviewCopyTargets(tx, run.TaskIDs)
+	if err != nil {
+		return l, err
+	}
+	for _, id := range targets {
 		text, err := tx.Read(id, "reviews/"+run.RunID+"/assignment.json")
 		if err != nil {
 			return l, err
@@ -408,7 +490,7 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 		return l, err
 	}
 	if mapped {
-		for _, id := range run.TaskIDs {
+		for _, id := range targets {
 			text, err := tx.Read(id, "reviews/"+run.RunID+"/legacy-map.json")
 			if err != nil {
 				return l, err
@@ -448,6 +530,12 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 		if _, err = time.Parse(time.RFC3339Nano, d.RecordedAt); err != nil {
 			return l, reviewError("author timestamp")
 		}
+		if d.Status == "withdrawn" {
+			if err = requireWithdrawalBinding(tx, d); err != nil {
+				return l, err
+			}
+			continue
+		}
 		text, err := tx.Read(d.TaskID, dispositionPath(d))
 		if err != nil {
 			return l, err
@@ -459,9 +547,17 @@ func readDispositionLedger(tx *Transaction, run ReviewRun, complete bool) (dispo
 	if complete {
 		for _, item := range f.all() {
 			for _, id := range l.Assignment.Items[item.ID] {
-				if latest[item.ID+"/"+id] == "" {
-					return l, reviewError(fmt.Sprintf("missing author disposition: %s/%s/%s", run.RunID, item.ID, id))
+				if latest[item.ID+"/"+id] != "" {
+					continue
 				}
+				excluded, err := memberExcluded(tx, id)
+				if err != nil {
+					return l, err
+				}
+				if excluded {
+					return l, reviewError(t("board.review_withdrawal_required", run.RunID, item.ID, id))
+				}
+				return l, reviewError(fmt.Sprintf("missing author disposition: %s/%s/%s", run.RunID, item.ID, id))
 			}
 		}
 	}

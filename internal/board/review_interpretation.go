@@ -94,7 +94,11 @@ func readInterpretation(tx *Transaction, run ReviewRun, report []byte) (ReviewIn
 			return m, true, reviewError("interpretation timestamp")
 		}
 	}
-	for _, id := range run.TaskIDs {
+	targets, err := reviewCopyTargets(tx, run.TaskIDs)
+	if err != nil {
+		return m, exists, err
+	}
+	for _, id := range targets {
 		text, err := tx.Read(id, interpretationPath(run.RunID))
 		if !exists && errors.Is(err, os.ErrNotExist) {
 			continue
@@ -167,7 +171,11 @@ func InterpretReview(root string, m ReviewInterpretation) error {
 			return err
 		}
 		m.RecordedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		for _, id := range run.TaskIDs {
+		targets, err := reviewCopyTargets(tx, run.TaskIDs)
+		if err != nil {
+			return err
+		}
+		for _, id := range targets {
 			if err = tx.Put(id, interpretationPath(run.RunID), reviewJSON(m)); err != nil {
 				return err
 			}

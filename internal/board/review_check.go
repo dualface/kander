@@ -105,6 +105,9 @@ func CheckReviewEvidence(root string, ids []string) (problems []Problem, err err
 					add(id, reviewError(runID+": incomplete publication"))
 					continue
 				}
+				if slices.Contains(run.SkippedMembers, id) {
+					continue
+				}
 				e = checkRunStructure(tx, run, runs)
 				if e != nil {
 					add(id, e)
@@ -189,8 +192,11 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 	if e != nil {
 		return e
 	}
-	if !ok || batch.Schema != 1 || batch.TaskContextHash != run.InputHashes["task-context.md"] || batch.BatchID != run.BatchID || batch.Base != run.Base || !reflect.DeepEqual(batch.TaskIDs, run.TaskIDs) || batch.ReportLanguage != run.ReportLanguage || batch.Requirements[run.Role] != "required" {
+	if !ok || batch.Schema != 1 || batch.TaskContextHash != run.InputHashes["task-context.md"] || batch.BatchID != run.BatchID || batch.Base != run.Base || batch.ReportLanguage != run.ReportLanguage || batch.Requirements[run.Role] != "required" {
 		return reviewError("batch mismatch")
+	}
+	if e = requireRunMembers(tx, batch, run.TaskIDs); e != nil {
+		return e
 	}
 	if batch.PlanID != "" {
 		p, e := batchPlan(tx, batch)
@@ -244,7 +250,7 @@ func checkRunStructure(tx *Transaction, run ReviewRun, runs map[string]ReviewRun
 		return reviewError("sidecar schema")
 	}
 	expected := run
-	expected.Published = nil
+	expected.Published, expected.SkippedMembers = nil, nil
 	if !reflect.DeepEqual(expected, archived) {
 		return reviewError("sidecar/intent conflict")
 	}
@@ -350,6 +356,9 @@ func verifyPublishedReview(tx *Transaction, run ReviewRun) error {
 		}
 		manifest := ReviewManifest{Schema: 1, Input: ancestor.ReviewInput, SidecarHash: ReviewDigest(sidecar), Hashes: ancestor.Hashes}
 		for _, id := range ancestor.TaskIDs {
+			if slices.Contains(ancestor.SkippedMembers, id) {
+				continue
+			}
 			if err = verifyCardReview(tx, id, manifest, sidecar); err != nil {
 				return err
 			}

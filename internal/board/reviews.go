@@ -91,6 +91,8 @@ type ReviewRun struct {
 	DurationMS      int64             `json:"duration_ms"`
 	Hashes          map[string]string `json:"hashes"`
 	Published       map[string]bool   `json:"published"`
+	// SkippedMembers took no copy: they left the batch before publication.
+	SkippedMembers []string `json:"skipped_members,omitempty"`
 }
 
 type ReviewIndex struct {
@@ -300,7 +302,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 		input.TaskGroup = TaskGroupFrom(first.Text)
 		if exists {
 			if run.Schema != 1 || !reflect.DeepEqual(input, run.ReviewInput) {
-				return reviewError(input.RunID + ": input conflict")
+				return reviewError(input.RunID + ": input conflict: " + t("board.review_run_input_conflict"))
 			}
 			var batch ReviewBatch
 			ok, e := readReviewJSON(tx, reviewBatchName(input.BatchID), &batch)
@@ -324,6 +326,9 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if advance != nil || len(requirements) == 0 {
 				return reviewError("new batch requires requirements; no advance")
 			}
+			if e = requireNoStrayBatch(tx, input.TaskIDs, input.BatchID); e != nil {
+				return e
+			}
 			if err := validateRequirements(requirements); err != nil {
 				return err
 			}
@@ -335,8 +340,16 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 			if batch.TaskContextHash == "" {
 				batch.TaskContextHash = input.InputHashes["task-context.md"]
 			}
-			if batch.Schema != 1 || batch.Base != input.Base || !reflect.DeepEqual(batch.TaskIDs, input.TaskIDs) || batch.ReportLanguage != language || len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
+			if batch.Schema != 1 || batch.Base != input.Base || batch.ReportLanguage != language || len(requirements) > 0 && !reflect.DeepEqual(requirements, batch.Requirements) {
 				return reviewError("batch binding conflict")
+			}
+			if e = requireRunMembers(tx, batch, input.TaskIDs); e != nil {
+				return e
+			}
+			if batch.PlanID == "" {
+				if e = requireNoStrayBatch(tx, input.TaskIDs, input.BatchID); e != nil {
+					return e
+				}
 			}
 			if batch.TaskContextHash != input.InputHashes["task-context.md"] {
 				return frozenTaskContextError(tx, batch, input.PreviousRunID)
@@ -345,7 +358,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				if p, e := batchPlan(tx, batch); e != nil {
 					return e
 				} else if !SameReviewCWD(p.CWD, input.CWD) {
-					return reviewError("run/plan worktree mismatch")
+					return reviewError("run/plan worktree mismatch: " + t("board.review_plan_worktree_mismatch", input.CWD, p.CWD, p.PlanID))
 				}
 				if e := validatePreviousClosure(tx, batch); e != nil {
 					return e
@@ -355,7 +368,10 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				if advance == nil || advance.PreviousTarget != batch.TargetCommit || advance.Target != input.Commit || strings.TrimSpace(advance.Reason) == "" {
 					return reviewError("batch target CAS conflict")
 				}
-				if e = validateReviewAdvanceAttribution(*advance, input.TaskIDs); e != nil {
+				if e = requireNoSuccessorBatch(tx, batch); e != nil {
+					return e
+				}
+				if e = validateReviewAdvanceAttribution(*advance, batch.TaskIDs); e != nil {
 					return e
 				}
 				if e = settledReviewBatch(tx, input.BatchID); e != nil {
@@ -612,6 +628,7 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 	}
 	failures := map[string]error{}
 	for _, id := range run.TaskIDs {
+		skipped := false
 		err = WithTransaction(root, reviewScope([]string{id}, false), func(tx *Transaction) error {
 			var current ReviewRun
 			ok, e := readReviewJSON(tx, reviewRunName(runID), &current)
@@ -628,7 +645,21 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 			if TaskGroupFrom(s.Text) != run.TaskGroup {
 				return reviewError("card group binding")
 			}
+			if slices.Contains(current.SkippedMembers, id) {
+				return nil
+			}
 			if !current.Published[id] {
+				excluded, e := memberExcluded(tx, id)
+				if e != nil {
+					return e
+				}
+				if excluded {
+					// The member left during the run: it takes no copy, and the
+					// run still settles for the members that remain.
+					current.Published[id] = true
+					current.SkippedMembers, skipped = append(current.SkippedMembers, id), true
+					return tx.PutGroup(reviewControlGroup, reviewRunName(runID), reviewJSON(current))
+				}
 				if _, e = reviewCards(tx, []string{id}, run.ReportLanguage, run.ReportLanguage); e != nil {
 					return e
 				}
@@ -638,8 +669,11 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 			if e != nil {
 				return e
 			}
-			if !ok || batch.Base != run.Base || !reflect.DeepEqual(batch.TaskIDs, run.TaskIDs) || batch.ReportLanguage != run.ReportLanguage {
+			if !ok || batch.Base != run.Base || batch.ReportLanguage != run.ReportLanguage {
 				return reviewError("publication batch binding")
+			}
+			if e = requireRunMembers(tx, batch, run.TaskIDs); e != nil {
+				return e
 			}
 			ancestors, e := reviewAncestors(tx, current)
 			if e != nil {
@@ -712,6 +746,9 @@ func publishReviewRun(root string, runID string, published func(string)) (Review
 			failures[id] = err
 		} else {
 			run.Published[id] = true
+			if skipped {
+				run.SkippedMembers = append(run.SkippedMembers, id)
+			}
 			if published != nil {
 				published(id)
 			}

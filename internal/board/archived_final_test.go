@@ -126,10 +126,12 @@ func TestArchivedCardRejectsReviewWrites(t *testing.T) {
 	archived := archiveSnapshot(t, root, transactionSnapshot(t, root, ids[0]))
 	peer := transactionSnapshot(t, root, ids[1])
 	quote := ReviewReportQuote{StartLine: 3, EndLine: 4, Quote: "{\"FINDINGS\":[],\"NON_BLOCKING\":[]}\n```No findings in either section."}
-	requireArchivedFinal(t, InterpretReview(root, zeroInterpretation(interpreted, quote)))
+	if err := InterpretReview(root, zeroInterpretation(interpreted, quote)); err != nil {
+		t.Fatal(err)
+	}
 	requireUnchanged(t, root, archived)
-	if after := transactionSnapshot(t, root, ids[1]); after.Revision != peer.Revision {
-		t.Fatal("interpretation reached the live peer")
+	if _, err := os.Stat(filepath.Join(peer.Entry.Path, filepath.FromSlash(interpretationPath(interpreted.RunID)))); err != nil {
+		t.Fatalf("interpretation missed the live peer: %v", err)
 	}
 }
 

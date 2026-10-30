@@ -4,14 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 )
 
-// Cards that own the follow-up work the registries below name.
-const (
-	cardEvidence = "20261030-review-evidence-dead-ends-task"
-	cardRecovery = "20261030-group-member-recovery-task"
-)
+// cardRecovery owns the follow-up work the registries below name.
+const cardRecovery = "20261030-group-member-recovery-task"
 
 // modelInvariant is one row of the invariant table. A row with a check is
 // enabled; a row without one waits for the records its owner card adds.
@@ -28,9 +24,9 @@ var modelInvariants = []modelInvariant{
 	{id: "I3", check: modelCheckI3, definition: "Each OWNER, SESSION or WINDOW change has one execution transition record."},
 	{id: "I4", check: modelCheckI4, definition: "When the execution authorization is set, the dispatch it names exists, that dispatch's execution cycle equals the current cycle, and the card has no other nonterminal dispatch."},
 	{id: "I5", check: modelCheckI5, definition: "When a card enters done, each completed fix or sync dispatch of the card has a later dispatch that replaced it, or a settlement record; a wrap-up dispatch completes on move done and is exempt. When a card enters archived or trash, the same transaction writes the settlement original of a completed binding."},
-	{id: "I6", owner: cardEvidence, definition: "Each review run of a plan member belongs to a batch of that plan. Successful runs of one role form one chain, or carry an explicit replacement record."},
+	{id: "I6", check: modelCheckI6, definition: "Each review run of a plan member belongs to a batch of that plan. Successful runs of one role form one chain, or carry an explicit replacement record."},
 	{id: "I7", definition: "Before a review batch advances, each assigned finding has an author disposition.", check: modelCheckI7},
-	{id: "I8", owner: cardEvidence, definition: "A member that ends in archived or trash gets a member exclusion record in the same transaction, and later plan writes skip its copy. An excluded member's assigned findings may wait for withdrawal, but they need a withdrawn disposition before aggregation and closure. A done member is not excluded, and archiving it later does not exclude it, but plan writes skip the copies of every archived member."},
+	{id: "I8", check: modelCheckI8, definition: "A member that ends in archived or trash gets a member exclusion record in the same transaction, and later plan writes skip its copy. An excluded member's assigned findings may wait for withdrawal, but they need a withdrawn disposition before aggregation and closure. A done member is not excluded, and archiving it later does not exclude it, but plan writes skip the copies of every archived member."},
 	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state."},
 }
 
@@ -183,6 +179,65 @@ func modelCheckI7(before, after *modelFacts) error {
 	return nil
 }
 
+func modelCheckI6(_, after *modelFacts) error {
+	if len(after.review.foreign) > 0 {
+		return fmt.Errorf("runs outside the plan: %v", after.review.foreign)
+	}
+	for _, b := range after.review.batches {
+		if !b.closed {
+			continue
+		}
+		for _, role := range b.required {
+			head, ok := b.head(role)
+			if !ok {
+				return fmt.Errorf("closed batch %s has no %s run", b.id, role)
+			}
+			chain := b.chain(head)
+			for _, r := range b.runs {
+				if _, retired := b.superseded[r.id]; r.role == role && !chain[r.id] && !retired {
+					return fmt.Errorf("run %s of closed batch %s is outside the chain with no record", r.id, b.id)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func modelCheckI8(before, after *modelFacts) error {
+	if before == nil {
+		return nil
+	}
+	for i, m := range after.world.members {
+		was, now := before.cards[i].Entry.State, after.cards[i].Entry.State
+		if was != now && (now == "archived" || now == "trash") {
+			member := was != "todo" && before.review.planned() || after.world.group
+			wants := member && !(was == "done" && now == "archived")
+			if !after.member(i).chained() {
+				continue
+			}
+			if after.excluded[i] != wants {
+				return fmt.Errorf("%s: move %s to %s: exclusion record %v, want %v", m.label, was, now, after.excluded[i], wants)
+			}
+		}
+		// A copy can only disappear, with the archive cleanup.
+		if (before.excluded[i] || was == "archived") && after.copies[i] != "" && after.copies[i] != before.copies[i] {
+			return fmt.Errorf("%s: a plan write reached a member that left", m.label)
+		}
+	}
+	for _, b := range after.review.batches {
+		old, ok := before.review.batch(b.id)
+		if !b.closed || !ok || old.closed {
+			continue
+		}
+		for _, r := range b.runs {
+			if open := r.undisposed(); len(open) > 0 {
+				return fmt.Errorf("batch %s closed with undisposed findings %v", b.id, open)
+			}
+		}
+	}
+	return nil
+}
+
 // modelCheckInvariants runs every enabled invariant over one transition.
 func modelCheckInvariants(before, after *modelFacts, op string) []string {
 	var violations []string
@@ -214,56 +269,10 @@ type modelDeadEnd struct {
 	covers func(modelDiagnosis) bool
 }
 
-func (d modelDiagnosis) terminalMemberOwesFinding() bool {
-	f := d.facts
-	for i, m := range f.world.members {
-		if state := f.cards[i].Entry.State; state != "trash" && state != "archived" {
-			continue
-		}
-		for _, b := range f.review.batches {
-			if b.closed {
-				continue
-			}
-			for _, run := range b.runs {
-				if slices.ContainsFunc(run.undisposed(), func(item string) bool { return strings.HasPrefix(item, m.id+"/") }) {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func (d modelDiagnosis) planMemberEnded() bool {
-	f := d.facts
-	if d.terminalMemberOwesFinding() {
-		return false
-	}
-	for i := range f.world.members {
-		state := f.cards[i].Entry.State
-		if state != "trash" && state != "archived" {
-			continue
-		}
-		for _, b := range f.review.batches {
-			if containsID(b.members, f.world.members[i].id) && (!b.closed || d.has("plan member is terminal") || d.has("archived cards are final")) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // modelDeadEnds is the allow list. Order matters: a state can show two causes,
 // and the first row that covers it names it. Each repair card removes its rows
 // and adds its transition to the operations.
 var modelDeadEnds = []modelDeadEnd{
-	{id: "DE-08", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool { return d.facts.world.stray }},
-	{id: "DE-13", owner: cardEvidence, class: modelReached, covers: modelDiagnosis.terminalMemberOwesFinding},
-	{id: "DE-12", owner: cardEvidence, class: modelReached, covers: modelDiagnosis.planMemberEnded},
-	{id: "DE-10", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool { return d.has("unconnected successful role run") }},
-	{id: "DE-11", owner: cardEvidence, class: modelReached, covers: func(d modelDiagnosis) bool {
-		return d.has("previous closed batch required") || d.has("closed batch chain mismatch")
-	}},
 	{id: "DE-18", owner: cardRecovery, class: modelDirected, proof: "internal/launch:TestCoordinatorRechecksActualGitAfterWrapUpRestart"},
 }
 

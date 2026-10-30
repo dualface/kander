@@ -1,5 +1,5 @@
 {
-  "board.review_unlinked_run_hint": "run {{.V0}} は実行に成功した {{.V1}} run ですが、{{.V2}} の結論チェーン上にありません。次の手順: チェーン上の run と同じコミット・同じ reviewer で並行実行されたものなら、close リクエストに \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<チェーン上の成功した run。例: {{.V2}}>\", \"basis\": \"<重複である理由>\"}} を追加します。その findings には引き続き割り当てと作成者の処置が必要です。修正済みの must-fix finding がある場合は、先に --previous-run-id {{.V2}} で増分レビューを実行し、その run を結論にします。",
+  "board.review_unlinked_run_hint": "run {{.V0}} は実行に成功した {{.V1}} run ですが、{{.V2}} の結論チェーン上にありません。次の手順: チェーン上の run と同じコミット・同じ reviewer で並行実行されたものなら、close リクエストに \"superseded_runs\": {\"{{.V0}}\": {\"replacement\": \"<チェーン上の成功した run。例: {{.V2}}>\", \"basis\": \"<重複である理由>\"}} を追加します。その findings には引き続き割り当てと作成者の処置が必要です。修正済みの must-fix finding がある場合は、先に --previous-run-id {{.V2}} で増分レビューを実行し、その run を結論にします。チェーンに入れないルート run（reviewer の変更後など）なら、そのエントリに \"decision\": \"<ユーザー決定の参照>\" を追加します。",
   "board.review_unlinked_runs_warning": "警告: batch {{.V0}} には run {{.V3}} の前任チェーンが届かない {{.V1}} run がすでにあります: {{.V2}}。この run は続行します。review close の前に、--previous-run-id で run をつなぐか、close リクエストの superseded_runs で並行した重複 run を指定してください。",
   "review.unlinked_runs_unchecked": "警告: このロールの他の run を確認できませんでした: {{.V0}}。この run は続行します。",
   "board.update_hint_owner": "次の手順: この行は kander show の出力どおりに残してください。kander move <task-id> working --owner が書き込みます。",

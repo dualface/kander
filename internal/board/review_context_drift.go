@@ -9,8 +9,9 @@ import (
 
 // frozenTaskContextError explains a later run of an existing batch whose task context differs from the
 // one the batch froze. Publication appends the review index to each member's spec.md, so passing the
-// live spec path again always drifts; the error names the frozen snapshot to pass instead, or says that
-// none is available and a new batch is needed.
+// live spec path again always drifts; the error names the frozen snapshot to pass instead. The bytes
+// always exist once the batch has a run: before publication they sit in the run's control directory. A
+// new batch is no way out, because the plan names the batch and every member belongs to one plan.
 func frozenTaskContextError(tx *Transaction, batch ReviewBatch, previousRunID string) error {
 	snapshot, err := frozenTaskContextSnapshot(tx, batch, previousRunID)
 	if err != nil {
@@ -25,7 +26,7 @@ func frozenTaskContextError(tx *Transaction, batch ReviewBatch, previousRunID st
 // frozenTaskContextSnapshot picks a finalized run of the batch whose task context hash equals the frozen
 // one: the named previous run when it qualifies, otherwise the earliest by creation time. It returns the
 // absolute path of that run's published task-context.md in the first member, by task ID, that has it,
-// or "" when no run qualifies.
+// otherwise the input of any run of the batch in the control directory, or "" when no run qualifies.
 func frozenTaskContextSnapshot(tx *Transaction, batch ReviewBatch, previousRunID string) (string, error) {
 	runs, err := batchRuns(tx, batch)
 	if err != nil {
@@ -60,6 +61,16 @@ func frozenTaskContextSnapshot(tx *Transaction, batch ReviewBatch, previousRunID
 			path := filepath.Join(card.Entry.Path, "reviews", run.RunID, "task-context.md")
 			if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() {
 				return path, nil
+			}
+		}
+	}
+	for _, run := range runs {
+		if run.InputHashes["task-context.md"] == batch.TaskContextHash {
+			name := "runs/" + run.RunID + "/inputs/task-context.md"
+			if _, ok, err := tx.ReadGroup(reviewControlGroup, name); err != nil {
+				return "", err
+			} else if ok {
+				return tx.groupPath(reviewControlGroup, name)
 			}
 		}
 	}

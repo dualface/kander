@@ -31,7 +31,7 @@ func TestEvidenceSchemaPrintsEveryField(t *testing.T) {
 	if !strings.Contains(schemaOutput(t, "advance"), "field: advance.foreign_commits\nrequired: no\n") {
 		t.Fatal("foreign commits")
 	}
-	if !strings.Contains(schemaOutput(t, "disposition"), "values: confirmed | fixed | rejected | unverifiable | waived | deferred\n") {
+	if !strings.Contains(schemaOutput(t, "disposition"), "values: confirmed | fixed | rejected | unverifiable | waived | deferred | withdrawn\n") {
 		t.Fatal("status values")
 	}
 	if !strings.Contains(schemaOutput(t, "close"), "field: roles.<key>.passed_at\nrequired: yes\n") {
@@ -80,7 +80,7 @@ func TestCloseSchemaDescribesSupersededRunsInEveryLanguage(t *testing.T) {
 		t.Setenv(config.EnvLang, lang)
 		config.BindEffectiveLanguage()
 		out := schemaOutput(t, "close")
-		for _, field := range []string{"superseded_runs", "superseded_runs.<key>.replacement", "superseded_runs.<key>.basis"} {
+		for _, field := range []string{"superseded_runs", "superseded_runs.<key>.replacement", "superseded_runs.<key>.basis", "superseded_runs.<key>.decision"} {
 			description := config.Text(schemaTextID("close", field))
 			if !strings.Contains(out, "field: "+field+"\n") || !strings.Contains(out, description) || strings.HasPrefix(description, "review.schema.") {
 				t.Fatalf("%s: %s undocumented:\n%s", lang, field, out)

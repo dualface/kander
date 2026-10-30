@@ -2,15 +2,15 @@ package board
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 )
 
 const (
-	modelStrayBatch = "model-stray"
-	modelPlanID     = "model-plan"
-	modelMaxRuns    = 2 // a third full run adds no state a second run does not reach
+	modelPlanID  = "model-plan"
+	modelMaxRuns = 2 // a third full run adds no state a second run does not reach
 )
 
 var modelFinding = ReviewFinding{ID: "PMQA-01", Tier: "medium", Text: "model finding", Evidence: "model.go:1"}
@@ -69,7 +69,7 @@ func (w *modelWorld) publishRun(in ReviewInput, requirements map[string]string, 
 }
 
 func (b modelBatchFacts) input(w *modelWorld, role, previous, reviewed string) ReviewInput {
-	return ReviewInput{RunID: w.nextID("run"), BatchID: b.id, TaskIDs: b.members, Role: role, Reviewer: "codex", Model: "model", Effort: "high", CWD: "/repo", Base: b.base, Commit: b.target, PreviousRunID: previous, ReviewedCommit: reviewed, ReportLanguage: "en"}
+	return ReviewInput{RunID: w.nextID("run"), BatchID: b.id, TaskIDs: b.live, Role: role, Reviewer: "codex", Model: "model", Effort: "high", CWD: "/repo", Base: b.base, Commit: b.target, PreviousRunID: previous, ReviewedCommit: reviewed, ReportLanguage: "en"}
 }
 
 func (w *modelWorld) closeBatch(id string, facts modelBatchFacts) error {
@@ -85,9 +85,14 @@ func (w *modelWorld) closeBatch(id string, facts modelBatchFacts) error {
 			continue
 		}
 		roles[role] = ReviewRoleConclusion{RunID: head.id, PassedAt: head.commit, Basis: "model conclusion"}
+		chain := facts.chain(head)
 		for _, run := range facts.runs {
-			if run.role == role && run.id != head.id && run.commit == head.commit && run.previous == head.previous {
+			switch {
+			case run.role != role || chain[run.id]:
+			case run.commit == head.commit && run.previous == head.previous:
 				superseded[run.id] = ReviewSupersededRun{Replacement: head.id, Basis: "model parallel duplicate"}
+			default:
+				superseded[run.id] = ReviewSupersededRun{Replacement: head.id, Basis: "model replaced root", Decision: "model-decision"}
 			}
 		}
 	}
@@ -98,6 +103,20 @@ func (w *modelWorld) closeBatch(id string, facts modelBatchFacts) error {
 	}
 	_, err = CloseReviewBatch(w.root, r, ReviewGitEvidence{CWD: "/repo", Head: v.Batch.TargetCommit, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
 	return err
+}
+
+// chain returns the run IDs from head back to its root.
+func (b modelBatchFacts) chain(head modelRunFacts) map[string]bool {
+	chain := map[string]bool{}
+	for id := head.id; id != ""; {
+		chain[id] = true
+		at := slices.IndexFunc(b.runs, func(r modelRunFacts) bool { return r.id == id })
+		if at < 0 {
+			break
+		}
+		id = b.runs[at].previous
+	}
+	return chain
 }
 
 func (w *modelWorld) assign(run modelRunFacts, batch string, task string) error {
@@ -120,7 +139,28 @@ func (w *modelWorld) dispose(m *modelMember, run modelRunFacts, batch, finding s
 	return SubmitReviewDisposition(w.root, d, s.Revision)
 }
 
-func (b modelBatchFacts) open() bool { return !b.closed }
+// withdraw is the orchestrator's record for a finding of an excluded member.
+func (w *modelWorld) withdraw(m *modelMember, run modelRunFacts, batch, finding string) error {
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	var id string
+	err = WithTransaction(w.root, reviewScope(nil, true), func(tx *Transaction) error {
+		e, _, err := readMemberExclusion(tx, m.id)
+		id = e.ExclusionID
+		return err
+	})
+	if err != nil {
+		return modelInfra(err)
+	}
+	d := ReviewDisposition{RecordID: w.nextID("record"), RunID: run.id, FindingID: finding, BatchID: batch, TaskID: m.id, Author: "coordinator", ReportHash: run.report, Original: modelFinding.Text, Status: "withdrawn", Basis: "model withdrawal", Withdrawal: &ReviewWithdrawal{ExclusionID: id, Decision: "model-decision"}}
+	return SubmitReviewDisposition(w.root, d, s.Revision)
+}
+
+// open reports a batch that can still close: a batch with no member left neither
+// closes nor waits.
+func (b modelBatchFacts) open() bool { return !b.closed && len(b.live) > 0 }
 
 // quiet reports that no launcher is mid-start. A review needs a delivered
 // commit, so no review command races a starting executor.
@@ -130,11 +170,32 @@ func (f *modelFacts) quiet() bool {
 
 func (r modelReviewFacts) firstOpen() (modelBatchFacts, bool) {
 	for _, b := range r.batches {
-		if b.id != modelStrayBatch && b.open() {
+		if b.open() {
 			return b, true
 		}
 	}
 	return modelBatchFacts{}, false
+}
+
+// withdrawable names a finding an excluded member still owes.
+func (f *modelFacts) withdrawable(i int) (modelBatchFacts, modelRunFacts, string, bool) {
+	id := f.world.members[i].id
+	if !f.excluded[i] {
+		return modelBatchFacts{}, modelRunFacts{}, "", false
+	}
+	for _, b := range f.review.batches {
+		if b.closed {
+			continue
+		}
+		for _, r := range b.runs {
+			for _, item := range r.undisposed() {
+				if task, finding, _ := strings.Cut(item, "/"); task == id {
+					return b, r, finding, true
+				}
+			}
+		}
+	}
+	return modelBatchFacts{}, modelRunFacts{}, "", false
 }
 
 func (r modelReviewFacts) planned() bool {
@@ -207,20 +268,10 @@ func modelReviewOps() []modelOp {
 				head, _ := b.head("PMQA")
 				return w.publishRun(b.input(w, "PMQA", head.id, head.commit), nil, modelFindings(false))
 			}},
-		{name: "R.runStray", cli: "kander review --batch-id <a batch outside the plan>", shared: true, narrows: []string{"F.done"},
-			guard: func(f *modelFacts, _ int) bool { return f.review.planned() && !f.world.stray && f.quiet() },
-			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
-				b := modelBatchFacts{id: modelStrayBatch, members: w.memberIDs(), base: modelCommit(0), target: modelCommit(1)}
-				if err := w.publishRun(b.input(w, "PMQA", "", ""), modelRequired(), modelFindings(false)); err != nil {
-					return err
-				}
-				w.stray = true
-				return nil
-			}},
 		{name: "R.assign", cli: "kander review assign <assignment.json>",
-			guard: func(f *modelFacts, _ int) bool {
+			guard: func(f *modelFacts, i int) bool {
 				b, ok := f.review.firstOpen()
-				return ok && slices.ContainsFunc(b.runs, func(r modelRunFacts) bool { return r.assigned == nil })
+				return ok && !f.excluded[i] && slices.ContainsFunc(b.runs, func(r modelRunFacts) bool { return r.assigned == nil })
 			},
 			apply: func(w *modelWorld, m *modelMember, f *modelFacts) error {
 				b, _ := f.review.firstOpen()
@@ -239,6 +290,12 @@ func modelReviewOps() []modelOp {
 			apply: func(w *modelWorld, m *modelMember, f *modelFacts) error {
 				b, r, _ := f.review.fixTarget(m.id)
 				return w.dispose(m, r, b.id, modelFinding.ID)
+			}},
+		{name: "R.withdraw", cli: "kander review disposition <withdrawn-record.json> <revision>",
+			guard: func(f *modelFacts, i int) bool { _, _, _, ok := f.withdrawable(i); return ok },
+			apply: func(w *modelWorld, m *modelMember, f *modelFacts) error {
+				b, r, finding, _ := f.withdrawable(f.index(m))
+				return w.withdraw(m, r, b.id, finding)
 			}},
 		{name: "R.advance", cli: "kander review advance <advance.json>", shared: true,
 			guard: func(f *modelFacts, i int) bool {
@@ -279,6 +336,22 @@ func modelReviewOps() []modelOp {
 				}
 				return nil
 			}},
+		{name: "R.dropBatch", cli: "kander review extend-plan: drop_batches", shared: true,
+			guard: func(f *modelFacts, _ int) bool {
+				count := len(f.review.batches)
+				return count > 1 && len(f.review.batches[count-1].runs) == 0 && !f.review.batches[count-1].closed
+			},
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
+				last := f.review.batches[len(f.review.batches)-1]
+				p, err := ReadReviewPlan(w.root, last.plan)
+				if err != nil {
+					return modelInfra(err)
+				}
+				return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{last.id}, Author: "coordinator", Basis: "model"})
+			}},
+		{name: "R.cycleBatch", cli: "kander review extend-plan: append a batch for a rebound cycle", shared: true,
+			guard: func(f *modelFacts, _ int) bool { return len(f.review.cycleOwed) > 0 },
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.appendCycleBatch(f.review) }},
 		{name: "R.extendSeal", cli: "kander review extend-plan: seal", shared: true,
 			guard: func(f *modelFacts, _ int) bool {
 				return slices.ContainsFunc(f.review.batches, func(b modelBatchFacts) bool { return b.plan != "" && !b.sealed })
@@ -306,10 +379,21 @@ func modelReviewOps() []modelOp {
 				if err != nil {
 					return modelInfra(err)
 				}
-				batch := modelPlanBatch("model-batch-2", last.id, last.members, last.target, w.nextCommit(), noReviewRequirements())
+				batch := modelPlanBatch("model-batch-2", last.id, last.live, last.target, w.nextCommit(), noReviewRequirements())
 				return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model"})
 			}},
 	}
+}
+
+// appendCycleBatch gives the rebound cycles an N/A batch after the last batch.
+func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
+	last := review.batches[len(review.batches)-1]
+	p, err := ReadReviewPlan(w.root, last.plan)
+	if err != nil {
+		return modelInfra(err)
+	}
+	batch := modelPlanBatch(fmt.Sprintf("model-cycle-%d", len(review.batches)), last.id, review.cycleOwed, last.target, w.nextCommit(), noReviewRequirements())
+	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model cycle batch"})
 }
 
 func (w *modelWorld) rebind(m *modelMember) error {
@@ -355,6 +439,12 @@ func (w *modelWorld) settleReview(m *modelMember) error {
 		review, err := w.readReview()
 		if err != nil {
 			return err
+		}
+		if len(review.cycleOwed) > 0 {
+			if err := w.appendCycleBatch(review); err != nil {
+				return err
+			}
+			continue
 		}
 		b, ok := review.openFor(m.id)
 		if !ok {
@@ -436,14 +526,20 @@ func (w *modelWorld) settleBatch(m *modelMember, id string) error {
 			if err != nil {
 				return err
 			}
-			if s.Entry.State != "working" || !member.self && !member.executor {
+			gone := !containsID(b.live, member.id)
+			if !gone && (s.Entry.State != "working" || !member.self && !member.executor) {
 				continue
 			}
 			for _, finding := range r.findings {
-				if containsID(r.assigned[finding], member.id) && !r.recorded(finding, member.id) {
-					if err := w.dispose(member, r, b.id, finding); err != nil {
-						return err
-					}
+				if !containsID(r.assigned[finding], member.id) || r.recorded(finding, member.id) {
+					continue
+				}
+				record := w.dispose
+				if gone {
+					record = w.withdraw
+				}
+				if err := record(member, r, b.id, finding); err != nil {
+					return err
 				}
 			}
 		}
@@ -453,7 +549,7 @@ func (w *modelWorld) settleBatch(m *modelMember, id string) error {
 
 func (r modelReviewFacts) openFor(task string) (modelBatchFacts, bool) {
 	for _, b := range r.batches {
-		if b.id != modelStrayBatch && b.open() && containsID(b.members, task) {
+		if b.open() && containsID(b.members, task) {
 			return b, true
 		}
 	}

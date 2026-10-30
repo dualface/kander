@@ -10,10 +10,7 @@ import (
 )
 
 // The owner table of the card that added this test; the repair cards shrink it.
-var modelExpectedOwners = map[string]string{
-	"DE-08": cardEvidence, "DE-10": cardEvidence, "DE-11": cardEvidence, "DE-12": cardEvidence, "DE-13": cardEvidence,
-	"DE-18": cardRecovery,
-}
+var modelExpectedOwners = map[string]string{"DE-18": cardRecovery}
 
 func TestModelRegistriesAreComplete(t *testing.T) {
 	seen := map[string]bool{}
@@ -48,7 +45,7 @@ func TestModelRegistriesAreComplete(t *testing.T) {
 			t.Errorf("%s is missing from the allow list", id)
 		}
 	}
-	for _, closed := range []string{"DE-02", "DE-05", "DE-06", "DE-07", "DE-09", "DE-14", "DE-16", "DE-17", "DE-19", "DE-20"} {
+	for _, closed := range []string{"DE-02", "DE-05", "DE-06", "DE-07", "DE-08", "DE-09", "DE-10", "DE-11", "DE-12", "DE-13", "DE-14", "DE-16", "DE-17", "DE-19", "DE-20"} {
 		if seen[closed] {
 			t.Errorf("%s is closed and must stay off the allow list", closed)
 		}
@@ -106,24 +103,24 @@ func modelPoison() modelOp {
 func TestModelVerdictRejectsListDrift(t *testing.T) {
 	modelFastTemp(t)
 	start := modelInitial(t, false, 1)
-	listed := []modelDeadEnd{modelDeadEnds[slices.IndexFunc(modelDeadEnds, func(e modelDeadEnd) bool { return e.id == "DE-08" })]}
-	seeds := []modelSeed{{name: "stray", steps: []string{"H.claim", "R.planNA", "R.runStray"}}}
-	runs := []modelRun{modelExplore(t, "stray", start, seeds, modelBounds{explore: 1, exit: 1}, modelOps())}
+	// The injection runs as a searched operation from a healthy seed, so the search
+	// itself must keep the damaged copy and leave the healthy state unchanged.
+	seeds := []modelSeed{{name: "healthy", steps: []string{"H.claim", "R.planNA"}}}
+	runs := []modelRun{modelExplore(t, "injected", start, seeds, modelBounds{explore: 1, exit: 1}, append(modelOps(), modelPoison()))}
+	listed := []modelDeadEnd{{id: "DE-99", class: modelReached, covers: func(d modelDiagnosis) bool {
+		return d.facts.world.members[0].stranded == "injected"
+	}}}
 	if failures := modelVerdict(runs, listed); len(failures) != 0 {
 		t.Fatalf("the listed dead end failed the verdict: %v", failures)
 	}
 	if failures := modelVerdict(runs, nil); len(failures) == 0 || !strings.Contains(failures[0], "unlisted dead end") {
 		t.Fatalf("a dead end removed from the list passed: %v", failures)
 	}
-	gone := append(slices.Clone(listed), modelDeadEnd{id: "DE-11", owner: cardEvidence, class: modelReached, covers: func(modelDiagnosis) bool { return false }})
+	gone := append(slices.Clone(listed), modelDeadEnd{id: "DE-98", class: modelReached, covers: func(modelDiagnosis) bool { return false }})
 	if failures := modelVerdict(runs, gone); len(failures) != 1 || !strings.Contains(failures[0], "no longer reaches") {
 		t.Fatalf("a listed dead end that disappeared passed: %v", failures)
 	}
-	// The injection runs as a searched operation from a healthy seed, so the search
-	// itself must keep the damaged copy and leave the healthy state unchanged.
-	seeds = []modelSeed{{name: "healthy", steps: []string{"H.claim", "R.planNA"}}}
-	runs = []modelRun{modelExplore(t, "injected", start, seeds, modelBounds{explore: 1, exit: 1}, append(modelOps(), modelPoison()))}
-	failures := modelVerdict(runs, listed)
+	failures := modelVerdict(runs, nil)
 	if !slices.ContainsFunc(failures, func(f string) bool {
 		return strings.Contains(f, "unlisted dead end") && strings.Contains(f, "Z.poison")
 	}) {

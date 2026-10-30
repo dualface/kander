@@ -417,10 +417,13 @@ func TestPlanCannotHideUnplannedRunsOrDeletedPointer(t *testing.T) {
 	id := gateCard(t, root, "unplanned")
 	run := finalizedRun(t, root, archiveInput([]string{id}, "unplanned", "PMQA"))
 	publishRun(t, root, run.RunID)
-	exemptReviewFixture(t, root, id)
-	if _, err := ReviewTaskProgress(root, id); err == nil {
-		t.Fatal("N/A plan hid existing unplanned runs")
+	p := ReviewPlan{Schema: 1, Sealed: true, PlanID: "exempt-" + id, Author: "fixture", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{{BatchID: "exempt-" + id, TaskIDs: []string{id}, Base: run.Base, TargetCommit: run.Commit, Requirements: noReviewRequirements()}}}
+	if err := CreateReviewPlan(root, p); err == nil || !strings.Contains(err.Error(), "unplanned execution batch: "+run.BatchID) {
+		t.Fatalf("N/A plan hid existing unplanned runs: %v", err)
 	}
+
+	id = gateCard(t, root, "pointer")
+	exemptReviewFixture(t, root, id)
 	if err := os.Remove(control(root, "groups", reviewControlGroup, "task-plans", id+".json")); err != nil {
 		t.Fatal(err)
 	}

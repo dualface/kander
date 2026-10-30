@@ -83,7 +83,7 @@ func readPruneReceipt(root, id string) (pruneReceipt, error) {
 
 // prunePlan is the complete deletion set computed from one board snapshot.
 type prunePlan struct {
-	runs, batches, plans, taskPlans, starts, dispatches, groups map[string]bool
+	runs, batches, plans, taskPlans, exclusions, starts, dispatches, groups map[string]bool
 	// receipts maps a card to the evidence removed for it in this round.
 	receipts map[string]*pruneReceipt
 	// copies lists card-side review directories and copyFiles the plan copies;
@@ -163,6 +163,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	for _, id := range sortedKeys(plan.taskPlans) {
 		remove(review("task-plans", id+".json"), false)
 		remove(review("tracked-cycles", id+".json"), false)
+	}
+	for _, id := range sortedKeys(plan.exclusions) {
+		remove(review("exclusions", id+".json"), false)
 	}
 	for _, id := range sortedKeys(plan.starts) {
 		remove(control(root, "groups", taskStartGroup, id), true)
@@ -288,7 +291,7 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 		runs[name] = v
 	}
 
-	plan := &prunePlan{runs: map[string]bool{}, batches: map[string]bool{}, plans: map[string]bool{}, taskPlans: map[string]bool{}, starts: map[string]bool{}, dispatches: map[string]bool{}, groups: map[string]bool{}, receipts: map[string]*pruneReceipt{}}
+	plan := &prunePlan{runs: map[string]bool{}, batches: map[string]bool{}, plans: map[string]bool{}, taskPlans: map[string]bool{}, exclusions: map[string]bool{}, starts: map[string]bool{}, dispatches: map[string]bool{}, groups: map[string]bool{}, receipts: map[string]*pruneReceipt{}}
 	for id, p := range plans {
 		plan.plans[id] = allSettled(p.TaskIDs)
 	}
@@ -364,6 +367,18 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 		}
 		if _, live := plans[v.PlanID]; settled(name) && (!live || plan.plans[v.PlanID]) {
 			plan.taskPlans[name] = true
+		}
+	}
+	// A withdrawn record reads the exclusion of its member, so the exclusion goes
+	// only with the plan; a member of no plan has nothing left to bind.
+	for _, name := range jsonNames(root, review("exclusions"), warn) {
+		var v ReviewExclusion
+		if e := readControlJSON(root, review("exclusions", name+".json"), &v); e != nil || v.TaskID != name {
+			warn("exclusions/"+name, errors.Join(e, reviewError("invalid member exclusion")))
+			continue
+		}
+		if _, live := plans[v.PlanID]; settled(name) && (!live || plan.plans[v.PlanID]) {
+			plan.exclusions[name] = true
 		}
 	}
 	for _, name := range dirNames(root, control(root, "groups", taskStartGroup), warn) {

@@ -1,6 +1,7 @@
 package board
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -225,8 +226,20 @@ func TestFixDispatchStillRejectsForeignRuns(t *testing.T) {
 		findings.Findings = []ReviewFinding{f}
 		input := archiveInput([]string{in.TaskID}, "stray-pmqa", "PMQA")
 		input.BatchID = "stray"
+		// Only a binary from before the stray-batch refusal could add this run.
+		pointer := control(root, "groups", reviewControlGroup, "task-plans", in.TaskID+".json")
+		saved, err := os.ReadFile(pointer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.Remove(pointer); err != nil {
+			t.Fatal(err)
+		}
 		prepared, _, err := PrepareReviewRun(root, input, archiveRequirements(), nil, archiveOriginals(), "test")
 		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(pointer, saved, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		prepared.LaunchStatus, prepared.ExecutionStatus = "started", "ok"

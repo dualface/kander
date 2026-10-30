@@ -131,7 +131,10 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 	}
 	scope := LockScope{Tasks: []string{entry.TaskID}, ExclusiveBoard: true}
 	if target == "archived" {
-		scope.Groups = []string{pruneControlGroup}
+		scope.Groups = []string{pruneControlGroup, reviewControlGroup}
+	}
+	if target == "trash" {
+		scope.Groups = []string{reviewControlGroup}
 	}
 	if target == "working" {
 		scope.Groups = []string{taskStartGroup}
@@ -201,6 +204,9 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 			}
 		}
 		if e = stageExecutionMove(tx, s, target, updated, options, handoff); e != nil {
+			return e
+		}
+		if e = stageMemberExclusion(tx, s, target, updated, options); e != nil {
 			return e
 		}
 		if e = tx.Relocate(entry.TaskID, target); e != nil {

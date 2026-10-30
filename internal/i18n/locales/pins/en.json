@@ -12,7 +12,7 @@
   "launch.pin_agent_conflict": "{{.V0}} pins {{.V1}} but --agent asks for {{.V2}}; use the pinned agent or change the card through a contract decision",
   "launch.pin_owner_conflict": "{{.V0}} pins {{.V1}} but the card runs {{.V2}}; take over with --agent {{.V1}} or change the card through a contract decision",
   "review.pin_agent_conflict": "{{.V0}} pins {{.V1}} but the command names reviewer {{.V2}}",
-  "review.pin_batch_conflict": "cards {{.V1}} and {{.V2}} pin {{.V0}} differently; a bound review needs one setting for the role",
+  "review.pin_batch_conflict": "cards {{.V1}} and {{.V2}} pin {{.V0}} differently; a bound review needs one setting for the role. Change one pin with kander update --contract-decision-file, then rerun",
   "review.pin_env_conflict": "{{.V0}} pins {{.V1}} but the environment override asks for {{.V2}}",
   "review.pin_role_not_applicable": "notice: {{.V0}} pins the {{.V1}} reviewer, but {{.V1}} is N/A in batch {{.V2}}; the pin takes no effect there"
 }
