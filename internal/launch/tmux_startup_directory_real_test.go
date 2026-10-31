@@ -127,7 +127,7 @@ func wantAgentCwd(t *testing.T, report, startupDir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 	if len(lines) != 2 || lines[0] != want {
 		t.Fatalf("agent cwd report %q, want %q", lines, want)
 	}
@@ -143,11 +143,15 @@ func TestRealTmuxAgentRunsInStartupDirectory(t *testing.T) {
 		subdir     string
 		env        []string
 		deleteHome bool
+		// directoryOnly drops the process name, so only pane_directory can
+		// prove the entry.
+		directoryOnly bool
 	}{
 		{name: "server directory deleted", subdir: "project", deleteHome: true},
 		{name: "plain directory", subdir: "project"},
 		{name: "space and apostrophe", subdir: "pro ject's dir"},
 		{name: "stale PWD", subdir: "project", env: []string{"PWD=/kander/stale/pwd"}},
+		{name: "trailing space proven by the directory", subdir: "project ", directoryOnly: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			serverDir := t.TempDir()
@@ -165,7 +169,11 @@ func TestRealTmuxAgentRunsInStartupDirectory(t *testing.T) {
 				t.Fatal(err)
 			}
 			invocation, report := cwdAgent(t)
-			if _, err := launchAgent(server.plan(), filepath.Join(startupDir, "kanban"), "task", invocation, nil, nil, nil); err != nil {
+			plan := server.plan()
+			if tc.directoryOnly {
+				plan.processName = ""
+			}
+			if _, err := launchAgent(plan, filepath.Join(startupDir, "kanban"), "task", invocation, nil, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 			wantAgentCwd(t, report, startupDir)

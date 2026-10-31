@@ -75,7 +75,7 @@ func watchPaneEntry(plan LaunchPlan, pane, dir string) paneEntry {
 		if errors.Is(err, terminal.ErrUnsupported) {
 			return paneEntered
 		}
-		if err == nil && sameDirectory(directory, dir) {
+		if err == nil && matchesSessionDirectory(directory, dir) {
 			return paneEntered
 		}
 		facts, err := backend.PaneFacts(ctx, conn, pane)
@@ -94,18 +94,4 @@ func watchPaneEntry(plan LaunchPlan, pane, dir string) paneEntry {
 		}
 		sleepFn(min(notifyPollInterval, remaining))
 	}
-}
-
-// sameDirectory compares by file identity: the terminal reports the kernel's
-// path, which can differ from dir by symlinks or letter case.
-func sameDirectory(reported, dir string) bool {
-	if reported == "" {
-		return false
-	}
-	first, err := os.Stat(reported)
-	if err != nil {
-		return false
-	}
-	second, err := os.Stat(dir)
-	return err == nil && os.SameFile(first, second)
 }

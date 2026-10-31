@@ -79,10 +79,10 @@ func TestTmuxDefinitionArgvMatchesGoBackend(t *testing.T) {
 		},
 		{
 			name:  "pane_directory",
-			reply: func([]string) probe.Result { return probe.Result{Stdout: "/work dir\n"} },
+			reply: func([]string) probe.Result { return probe.Result{Stdout: "/work dir \n"} },
 			run: func(conn terminal.Conn) error {
 				got, err := backend.(terminal.PaneDirectoryReader).PaneDirectory(context.Background(), conn, "%9")
-				if err == nil && got != "/work dir" {
+				if err == nil && got != "/work dir " {
 					return fmt.Errorf("directory %q", got)
 				}
 				return err

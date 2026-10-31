@@ -295,7 +295,7 @@
         {
           "store": "pane",
           "argv": ["display-message", "-p", "-t", "{pane}", "#{{?#{{==:#{{pane_current_command}},tmux}},,#{{pane_current_path}}}}"],
-          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"}
+          "output": {"source": "stdout", "parse": "regex:(?s)^(.*?)[\\r\\n]*$"}
         }
       ],
       "result": {"directory": "{step.pane.text}"}
