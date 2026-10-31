@@ -198,6 +198,7 @@ type modelRunFacts struct {
 	commit   string
 	previous string
 	report   string
+	current  bool // the run reviewed the current cycle of every member left
 	findings []string
 	assigned map[string][]string // nil when the run has no assignment
 	records  []ReviewDisposition
@@ -207,6 +208,8 @@ type modelReviewFacts struct {
 	batches    []modelBatchFacts
 	cycleOwed  []string // members whose rebound cycle has no batch
 	reviewOwed []string // members whose recovery still needs an actual review
+	dropOwed   []string // members a dropped required batch still owes a review
+	recoveries int      // recovery records of members reset with no plan
 	foreign    []string // runs of a plan member outside every batch of that plan
 	resolved   int      // unplanned batches a plan accepted
 }
@@ -243,8 +246,18 @@ func (b modelBatchFacts) head(role string) (modelRunFacts, bool) {
 }
 
 func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
-	err = WithTransaction(w.root, reviewScope(nil, true), func(tx *Transaction) error {
+	err = WithTransaction(w.root, reviewLedgerScope(w.memberIDs(), true), func(tx *Transaction) error {
 		names := []string{}
+		for _, id := range w.memberIDs() {
+			var o RecoveryReview
+			ok, e := readReviewJSON(tx, recoveryReviewName(id), &o)
+			if e != nil {
+				return e
+			}
+			if ok && o.PlanID == "" {
+				facts.recoveries++
+			}
+		}
 		for _, id := range w.plans {
 			var p ReviewPlan
 			ok, e := readReviewJSON(tx, planName(id), &p)
@@ -274,6 +287,16 @@ func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
 				}
 				if owed {
 					facts.reviewOwed = append(facts.reviewOwed, member)
+				}
+			}
+			owed, e := dropObligationsOwed(tx, p, true)
+			if e != nil {
+				return e
+			}
+			for _, item := range owed {
+				member, _, _ := strings.Cut(item, "/")
+				if !slices.Contains(facts.dropOwed, member) {
+					facts.dropOwed = append(facts.dropOwed, member)
 				}
 			}
 			if e := checkUnplannedReviewRuns(tx, p); e != nil {
@@ -333,7 +356,14 @@ func modelReadBatch(tx *Transaction, id string) (facts modelBatchFacts, exists b
 	}
 	slices.SortFunc(runs, func(x, y ReviewRun) int { return strings.Compare(x.CreatedAt+x.RunID, y.CreatedAt+y.RunID) })
 	for _, run := range runs {
-		r := modelRunFacts{id: run.RunID, role: run.Role, commit: run.Commit, previous: run.PreviousRunID, report: run.Hashes["report.md"]}
+		r := modelRunFacts{id: run.RunID, role: run.Role, commit: run.Commit, previous: run.PreviousRunID, report: run.Hashes["report.md"], current: true}
+		for _, member := range facts.live {
+			covers, e := runCoversCycle(tx, run, member)
+			if e != nil {
+				return facts, true, e
+			}
+			r.current = r.current && covers
+		}
 		findings, e := runFindings(tx, run)
 		if e != nil {
 			return facts, true, e
@@ -515,11 +545,11 @@ func (f *modelFacts) reviewKey() string {
 		}
 		runs := []string{}
 		for _, r := range b.runs {
-			runs = append(runs, fmt.Sprintf("%s:f%d:a%v:u%d:p%v:at-target%v", r.role, len(r.findings), r.assigned != nil, len(r.undisposed()), r.previous != "", r.commit == b.target))
+			runs = append(runs, fmt.Sprintf("%s:f%d:a%v:u%d:p%v:at-target%v:current%v", r.role, len(r.findings), r.assigned != nil, len(r.undisposed()), r.previous != "", r.commit == b.target, r.current))
 		}
 		parts = append(parts, fmt.Sprintf("%s/%s/sealed=%v/adv=%d/%s", b.id, state, b.sealed, b.advances, strings.Join(runs, ",")))
 	}
-	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d foreign=%d resolved=%d", len(f.review.cycleOwed), len(f.review.reviewOwed), len(f.review.foreign), f.review.resolved))
+	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d drop-owed=%d recoveries=%d foreign=%d resolved=%d", len(f.review.cycleOwed), len(f.review.reviewOwed), len(f.review.dropOwed), f.review.recoveries, len(f.review.foreign), f.review.resolved))
 	return strings.Join(parts, ";")
 }
 

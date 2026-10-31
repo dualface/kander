@@ -44,7 +44,7 @@ func TestModelRegistriesAreComplete(t *testing.T) {
 			t.Errorf("%s: every invariant is enabled, so each needs a check", inv.id)
 		}
 	}
-	if !slices.Equal(ids, []string{"I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9"}) {
+	if !slices.Equal(ids, []string{"I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9", "I10"}) {
 		t.Errorf("invariant table %v", ids)
 	}
 }

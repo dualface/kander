@@ -23,6 +23,7 @@ var modelInvariants = []modelInvariant{
 	{id: "I7", definition: "Before a review batch advances, each assigned finding has an author disposition.", check: modelCheckI7},
 	{id: "I8", check: modelCheckI8, definition: "A member that ends in archived or trash gets a member exclusion record in the same transaction, and later plan writes skip its copy. An excluded member's assigned findings may wait for withdrawal, but they need a withdrawn disposition before aggregation and closure. A done member is not excluded, and archiving it later does not exclude it, but plan writes skip the copies of every archived member."},
 	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state. A recovery that moved a mirror has an immutable record: a reset names the recover transition on the chain, and a confirmation names the cycle of the card."},
+	{id: "I10", check: modelCheckI10, definition: "When a card enters done, each batch of its plan that names it is closed, each drop obligation on it is discharged by a later closed batch that requires the role, and its recovery obligation is discharged by actual reviews or, for a member reset with no plan under an all N/A plan, by a recorded decision."},
 }
 
 // modelCheckEach runs check for every member, and hands it the same member of the
@@ -259,6 +260,77 @@ func modelCheckI8(before, after *modelFacts) error {
 		}
 	}
 	return nil
+}
+
+// modelCheckI10 reads the records itself and shares no check with the done gate, so
+// it still fails when the gate stops asking.
+func modelCheckI10(before, after *modelFacts) error {
+	if before == nil {
+		return nil
+	}
+	return modelCheckEach(before, after, func(i int, old *modelMemberFacts, m modelMemberFacts) error {
+		if old.card.Entry.State == "done" || m.card.Entry.State != "done" {
+			return nil
+		}
+		return modelReviewPaid(after.world, m.card)
+	})
+}
+
+func modelReviewPaid(w *modelWorld, s Snapshot) error {
+	id := s.Entry.TaskID
+	return WithTransaction(w.root, reviewScope(nil, true), func(tx *Transaction) error {
+		p, exists, err := readTaskPlan(tx, id)
+		if err != nil || !exists {
+			return err
+		}
+		closures := map[string]ReviewClosure{}
+		for _, b := range p.Batches {
+			var c ReviewClosure
+			closed, err := readReviewJSON(tx, closureName(b.BatchID), &c)
+			if err != nil {
+				return err
+			}
+			if closed {
+				closures[b.BatchID] = c
+			} else if containsID(b.TaskIDs, id) {
+				return fmt.Errorf("entered done with open batch %s", b.BatchID)
+			}
+		}
+		paid := func(from int, role, cycle string) bool {
+			for _, b := range p.Batches[min(from, len(p.Batches)):] {
+				c, closed := closures[b.BatchID]
+				if closed && containsID(b.TaskIDs, id) && b.Requirements[role] == "required" && (cycle == "" || closedInCycle(c, role, id, cycle)) {
+					return true
+				}
+			}
+			return false
+		}
+		for _, o := range p.DropObligations {
+			for _, role := range o.Roles {
+				if containsID(o.TaskIDs, id) && !paid(o.FromBatch, role, "") {
+					return fmt.Errorf("entered done owing %s of dropped batch %s", role, o.BatchID)
+				}
+			}
+		}
+		var o RecoveryReview
+		ok, err := readReviewJSON(tx, recoveryReviewName(id), &o)
+		if err != nil || !ok {
+			return err
+		}
+		roles, cycle := o.Roles, ""
+		if o.PlanID == "" {
+			roles, cycle = slices.Concat(o.Roles, planRequiredRoles(p)), planCycle(s)
+			if len(roles) == 0 && o.ReleaseDecision == "" {
+				return fmt.Errorf("entered done with an unreleased recovery under an all N/A plan")
+			}
+		}
+		for _, role := range roles {
+			if !paid(o.FromBatch, role, cycle) {
+				return fmt.Errorf("entered done owing %s of recovery %s", role, o.RecoveryID)
+			}
+		}
+		return nil
+	})
 }
 
 // modelCheckInvariants runs every enabled invariant over one transition.

@@ -333,13 +333,10 @@ func modelLifecycleOps() []modelOp {
 			guard: modelInState("review"),
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.oldReclaim(m) }},
 		{name: "H.recover", cli: "kander coordinator recover <request.json>",
-			guard: func(f *modelFacts, i int) bool {
-				// The liveness probe refuses a reset of a confirmed executor, and a
-				// reset refuses a binding; a finished member has neither.
-				state := f.cards[i].Entry.State
-				live := state == "working" || state == "review"
-				return f.blocked(i) && (!live || f.bound[i] == nil && !f.world.members[i].adoptable())
-			},
+			guard: func(f *modelFacts, i int) bool { return f.review.planned() && modelRecoverable(f, i) },
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.recoverMember(m) }},
+		{name: "H.recoverNoPlan", cli: "kander coordinator recover <request.json>: a member with no review plan",
+			guard: func(f *modelFacts, i int) bool { return !f.review.planned() && modelRecoverable(f, i) },
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.recoverMember(m) }},
 		{name: "C.reconcile", cli: "kander coordinator reconcile <observations.json>", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return f.ckpt != nil },
@@ -654,6 +651,15 @@ func (w *modelWorld) writeSummary(m *modelMember) error {
 		return nil
 	}
 	return UpdateDocument(w.root, m.id, UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision, Authorization: authFrom(s.Text)})
+}
+
+// modelRecoverable reports a blocked member a reset can take: the liveness probe
+// refuses a confirmed executor, and a reset refuses a binding. A finished member has
+// neither.
+func modelRecoverable(f *modelFacts, i int) bool {
+	state := f.cards[i].Entry.State
+	live := state == "working" || state == "review"
+	return f.blocked(i) && (!live || f.bound[i] == nil && !f.world.members[i].adoptable())
 }
 
 // unblock ends the block of a member. Most blocks end with the next reconcile.

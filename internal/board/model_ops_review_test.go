@@ -286,6 +286,14 @@ func modelReviewOps() []modelOp {
 				return w.publishRun(b.input(w, "PMQA", "", ""), nil, modelFindings(findings))
 			}}
 	}
+	droppable := func(f *modelFacts, required bool) bool {
+		count := len(f.review.batches)
+		if count < 2 {
+			return false
+		}
+		last := f.review.batches[count-1]
+		return len(last.runs) == 0 && !last.closed && len(last.required) > 0 == required
+	}
 	return []modelOp{
 		{name: "R.planRequired", cli: "kander review plan: one sealed batch, PMQA required", shared: true, guard: allStarted,
 			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
@@ -303,6 +311,13 @@ func modelReviewOps() []modelOp {
 				return w.createPlan(modelPlanID, ids, true,
 					modelPlanBatch("model-batch-1", "", ids, modelCommit(0), modelCommit(1), noReviewRequirements()),
 					modelPlanBatch("model-batch-2", "model-batch-1", ids, modelCommit(1), modelCommit(2), noReviewRequirements()))
+			}},
+		{name: "R.planChainedRequired", cli: "kander review plan: two batches named in advance, the second with PMQA required", shared: true, guard: allStarted,
+			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
+				ids := w.memberIDs()
+				return w.createPlan(modelPlanID, ids, true,
+					modelPlanBatch("model-batch-1", "", ids, modelCommit(0), modelCommit(1), noReviewRequirements()),
+					modelPlanBatch("model-batch-2", "model-batch-1", ids, modelCommit(1), modelCommit(2), modelRequired()))
 			}},
 		{name: "R.planOpen", cli: "kander review plan: one unsealed batch", shared: true, guard: allStarted,
 			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
@@ -402,21 +417,14 @@ func modelReviewOps() []modelOp {
 				b, _ := f.review.firstClosed()
 				return w.resolveStray(b.plan, b.id)
 			}},
-		{name: "R.dropBatch", cli: "kander review extend-plan: drop_batches", shared: true,
-			guard: func(f *modelFacts, _ int) bool {
-				count := len(f.review.batches)
-				return count > 1 && len(f.review.batches[count-1].runs) == 0 && !f.review.batches[count-1].closed
-			},
-			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
-				last := f.review.batches[len(f.review.batches)-1]
-				p, err := ReadReviewPlan(w.root, last.plan)
-				if err != nil {
-					return modelInfra(err)
-				}
-				return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{last.id}, Author: "coordinator", Basis: "model"})
-			}},
+		{name: "R.dropBatch", cli: "kander review extend-plan: drop_batches on an N/A batch", shared: true,
+			guard: func(f *modelFacts, _ int) bool { return droppable(f, false) },
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.dropLast(f.review) }},
+		{name: "R.dropRequired", cli: "kander review extend-plan: drop_batches on a required batch, with no decision", shared: true,
+			guard: func(f *modelFacts, _ int) bool { return droppable(f, true) },
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.dropLast(f.review) }},
 		{name: "R.cycleBatch", cli: "kander review extend-plan: append a batch for a rebound cycle", shared: true,
-			guard: func(f *modelFacts, _ int) bool { return len(f.review.cycleOwed)+len(f.review.reviewOwed) > 0 },
+			guard: func(f *modelFacts, _ int) bool { return f.review.batchOwed() },
 			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.appendCycleBatch(f.review) }},
 		{name: "R.extendSeal", cli: "kander review extend-plan: seal", shared: true,
 			guard: func(f *modelFacts, _ int) bool {
@@ -451,8 +459,22 @@ func modelReviewOps() []modelOp {
 	}
 }
 
+// dropLast removes the last batch of the plan.
+func (w *modelWorld) dropLast(review modelReviewFacts) error {
+	last := review.batches[len(review.batches)-1]
+	p, err := ReadReviewPlan(w.root, last.plan)
+	if err != nil {
+		return modelInfra(err)
+	}
+	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{last.id}, Author: "coordinator", Basis: "model"})
+}
+
+func (r modelReviewFacts) batchOwed() bool {
+	return len(r.cycleOwed)+len(r.reviewOwed)+len(r.dropOwed) > 0
+}
+
 // appendCycleBatch gives the rebound cycles an N/A batch after the last batch. A
-// recovery needs the review it owes, and N/A never discharges that.
+// recovery or a dropped batch needs the review it owes, and N/A never discharges that.
 func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 	last := review.batches[len(review.batches)-1]
 	p, err := ReadReviewPlan(w.root, last.plan)
@@ -460,10 +482,10 @@ func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 		return modelInfra(err)
 	}
 	requirements := noReviewRequirements()
-	if len(review.reviewOwed) > 0 {
+	if len(review.reviewOwed)+len(review.dropOwed) > 0 {
 		requirements = modelRequired()
 	}
-	ids := slices.Compact(slices.Sorted(slices.Values(slices.Concat(review.cycleOwed, review.reviewOwed))))
+	ids := slices.Compact(slices.Sorted(slices.Values(slices.Concat(review.cycleOwed, review.reviewOwed, review.dropOwed))))
 	batch := modelPlanBatch(fmt.Sprintf("model-cycle-%d", len(review.batches)), last.id, ids, last.target, w.nextCommit(), requirements)
 	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model cycle batch"})
 }
@@ -507,7 +529,7 @@ func (w *modelWorld) settleReview(m *modelMember) error {
 			return err
 		}
 	}
-	for range 4 {
+	for range 6 {
 		review, err := w.readReview()
 		if err != nil {
 			return err
@@ -517,7 +539,7 @@ func (w *modelWorld) settleReview(m *modelMember) error {
 			b, ok = review.firstOpen()
 		}
 		// A batch appends only after its predecessor closed.
-		if len(review.cycleOwed) > 0 || len(review.reviewOwed) > 0 && !ok {
+		if len(review.cycleOwed) > 0 || review.batchOwed() && !ok {
 			if err := w.appendCycleBatch(review); err != nil {
 				return err
 			}
@@ -574,7 +596,7 @@ func (w *modelWorld) settleBatch(m *modelMember, id string) error {
 	for _, role := range b.required {
 		head, ok := b.head(role)
 		switch {
-		case !ok:
+		case !ok, head.commit == b.target && !head.current:
 			err = w.publishRun(b.input(w, role, "", ""), nil, modelFindings(false))
 		case head.commit != b.target:
 			err = w.publishRun(b.input(w, role, head.id, head.commit), nil, modelFindings(false))
