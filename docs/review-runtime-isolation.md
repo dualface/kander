@@ -60,15 +60,15 @@ A timeout, an interrupt, or a non-zero exit has no result to protect, so Kander 
 
 ### Process Group Member Records
 
-Kander writes member records whenever it finds the group alive after the leader ended; a run with an empty group has none. With a run, they go to `reviews/<run_id>/process-evidence.json` (see [Review evidence and recovery](review-evidence.md#original-artifacts-and-schema)), and a process failure names that path relative to the card. Without a run, one `process evidence:` line with the same JSON goes to stderr and the failure names no location.
+Kander writes member records whenever it finds the group alive after the leader ended; a run with an empty group has none. The record is written before `SIGKILL` with `cleanup.sigkill` `pending`, because the identities are gone afterwards, and again with the final cleanup result. With a run, it goes to `reviews/<run_id>/process-evidence.json` (see [Review evidence and recovery](review-evidence.md#original-artifacts-and-schema)), and every failure of that run names the path relative to the card. Without a run, one `process evidence:` line per write with the same JSON goes to stderr and the failure names no location.
 
 - `leader_pid`, `recheck` (`performed`, `duration_ms`), and `observation` (`failed`, `reason`).
 - `members`: one record per observed process incarnation, so one PID with two start times has two records. Each has `pid`, `ppid`, `pgid`, `start_time`, `executable`, `observed_at` (the last observation that saw it, UTC), and `outcome`.
-- `outcome` is `leftover`, `exited`, `attributed` (helper of a tracked reviewer), `not_rechecked` (no recheck ran), or `unknown` (the recheck failed before a conclusion).
+- `outcome` is `leftover`, `exited`, `attributed` (helper of a tracked reviewer, matched by PID and start time), `not_rechecked` (no recheck ran), or `unknown` (the recheck failed before a conclusion).
 - `start_time` is platform text. On Linux it is field 22 of `/proc/<pid>/stat`, in clock ticks since boot. Elsewhere it is the `lstart` of `ps` in the C locale. Compare it only with values of the same host.
 - `executable` is a base name. On Linux it comes from the kernel `comm`, which holds at most 15 characters. Elsewhere it is the base name of the `ps` `comm` column.
 - `members` holds at most 64 records, leftovers first; `omitted_members` counts the rest.
-- `cleanup`: `sigkill` is `sent`, `not_sent`, or `failed`; `collected` says whether the group is gone; `error` holds a collection failure.
+- `cleanup`: `sigkill` is `pending` (a gate that stopped before the end leaves this), `sent`, `not_sent`, or `failed`; `collected` says whether the group is gone; `error` holds a collection failure.
 
 Records never contain argv or a path, because both can hold credentials or private locations.
 
