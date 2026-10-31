@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dualface/kander/internal/config"
 )
 
 const strayBatchID = "stray-b2"
@@ -299,7 +301,7 @@ func TestResolutionRecordsHistoryAndBindsTheBatch(t *testing.T) {
 	if !reflect.DeepEqual(r.Git.Edges, []ReviewGitEdge{{straySecond, straySecond}, {strayThird, strayFourth}, {strayFourth, strayFourth}}) {
 		t.Fatalf("edges: %+v", r.Git.Edges)
 	}
-	if err = s.resolve(s.request(t, s.fixed())); err == nil || !strings.Contains(err.Error(), "already resolved") {
+	if err = s.resolve(s.request(t, s.fixed())); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_repeat", strayBatchID, s.plan)) {
 		t.Fatalf("second resolution: %v", err)
 	}
 }
@@ -429,19 +431,19 @@ func TestResolutionOfANonBlockingFinding(t *testing.T) {
 func TestResolutionRefusesAnUnrelatedOrOpenBatch(t *testing.T) {
 	s := newStrayBoard(t, "cover", archiveRequirements(), archiveRequirements(), sameMembers, "medium", "one")
 	x := s.request(t, s.fixed())
-	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), "not closed") {
+	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_cover_open", "b3")) {
 		t.Fatalf("open cover: %v", err)
 	}
 	x.ResolveBatch.CoveringBatchID = "foreign"
-	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), "not in review plan") {
+	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_cover_unknown", "foreign", s.plan)) {
 		t.Fatalf("foreign cover: %v", err)
 	}
 	x.ResolveBatch.BatchID = "b1"
-	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), "outside the plan") {
+	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_planned", "b1", s.plan)) {
 		t.Fatalf("planned batch: %v", err)
 	}
 	x.ResolveBatch.BatchID = "absent"
-	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), "does not exist") {
+	if err := s.resolve(x); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_missing", "absent")) {
 		t.Fatalf("absent batch: %v", err)
 	}
 }
@@ -490,7 +492,7 @@ func TestResolutionRefusesABatchWithNoPlanMember(t *testing.T) {
 	publishRun(t, s.root, run.RunID)
 	x := s.request(t)
 	x.ResolveBatch.BatchID = "foreign-batch"
-	if err = s.resolve(x); err == nil || !strings.Contains(err.Error(), "no member") {
+	if err = s.resolve(x); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_no_member", "foreign-batch", s.plan)) {
 		t.Fatalf("foreign batch: %v", err)
 	}
 }
@@ -507,7 +509,7 @@ func TestResolutionRefusesABatchWithNoRun(t *testing.T) {
 	}
 	x := s.request(t)
 	x.ResolveBatch.BatchID = "empty"
-	if err = s.resolve(x); err == nil || !strings.Contains(err.Error(), "no run") {
+	if err = s.resolve(x); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_no_run", "empty")) {
 		t.Fatalf("empty batch: %v", err)
 	}
 }
@@ -542,7 +544,7 @@ func TestResolutionWaitsForInterpretationAndPublication(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if err := u.resolve(u.request(t, u.fixed())); err == nil || !strings.Contains(err.Error(), "publication") {
+	if err := u.resolve(u.request(t, u.fixed())); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_publication", "stray-unpublished")) {
 		t.Fatalf("unpublished run: %v", err)
 	}
 }
