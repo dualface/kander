@@ -74,30 +74,6 @@ type ReviewBatch struct {
 	Revision        uint64            `json:"revision"`
 }
 
-// ReviewRun separates execution facts from semantic interpretation. An ok run
-// never asserts PASS. Publication is complete only after all receipts verify.
-type ReviewRun struct {
-	Schema int `json:"schema"`
-	ReviewInput
-	KanderVersion   string            `json:"kander_version"`
-	Phase           string            `json:"phase"`
-	LaunchStatus    string            `json:"launch_status"`
-	ExecutionStatus string            `json:"execution_status"`
-	SemanticStatus  string            `json:"semantic_status"`
-	FailureReason   string            `json:"failure_reason,omitempty"`
-	ExitCode        int               `json:"exit_code"`
-	CreatedAt       string            `json:"created_at"`
-	FinishedAt      string            `json:"finished_at,omitempty"`
-	DurationMS      int64             `json:"duration_ms"`
-	Hashes          map[string]string `json:"hashes"`
-	Published       map[string]bool   `json:"published"`
-	// SkippedMembers took no copy: they left the batch before publication.
-	SkippedMembers []string `json:"skipped_members,omitempty"`
-	// MemberCycles binds the run to the execution cycle of each member when it was
-	// created. omitempty keeps runs written before the field byte-identical.
-	MemberCycles map[string]string `json:"member_cycles,omitempty"`
-}
-
 type ReviewIndex struct {
 	RunID           string `json:"run_id"`
 	BatchID         string `json:"batch_id"`
@@ -442,13 +418,9 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				}
 			}
 		}
-		cycles := make(map[string]string, len(input.TaskIDs))
-		for _, id := range input.TaskIDs {
-			s, e := tx.Snapshot(id)
-			if e != nil {
-				return e
-			}
-			cycles[id] = planCycle(s)
+		cycles, e := memberCycles(tx, input.TaskIDs)
+		if e != nil {
+			return e
 		}
 		run = ReviewRun{Schema: 1, ReviewInput: input, KanderVersion: version, Phase: "prepared", LaunchStatus: "not_started", ExecutionStatus: "incomplete", SemanticStatus: "unassessed", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Hashes: map[string]string{}, Published: map[string]bool{}, MemberCycles: cycles}
 		if e = tx.PutGroup(reviewControlGroup, reviewBatchName(input.BatchID), reviewJSON(batch)); e != nil {

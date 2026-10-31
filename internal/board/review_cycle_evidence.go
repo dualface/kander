@@ -8,6 +8,19 @@ func reviewLedgerScope(ids []string, readOnly bool) LockScope {
 	return scope
 }
 
+// memberCycles reads the cycle a new run binds for each of its members.
+func memberCycles(tx *Transaction, ids []string) (map[string]string, error) {
+	cycles := make(map[string]string, len(ids))
+	for _, id := range ids {
+		s, err := tx.Snapshot(id)
+		if err != nil {
+			return nil, err
+		}
+		cycles[id] = planCycle(s)
+	}
+	return cycles, nil
+}
+
 // cycleUnchanged reports a card that only ever had one execution cycle. The card and
 // the from side of a link count too: a binary with no ledger left no link for a
 // change of its time.
