@@ -64,15 +64,6 @@ var legacyFirstWrites = []struct {
 	}},
 }
 
-func boundLegacy(t *testing.T, root, id string) Snapshot {
-	t.Helper()
-	s := transactionSnapshot(t, root, id)
-	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
-		t.Fatal(err)
-	}
-	return s
-}
-
 func legacyOriginals(t *testing.T, root, id string) map[string]string {
 	t.Helper()
 	originals := map[string]string{}
@@ -108,14 +99,14 @@ func TestFirstWriteKeepsALegacyCardWorking(t *testing.T) {
 				id := fixture.build(t, root, "legacy-first").Entry.TaskID
 				originals := legacyOriginals(t, root, id)
 				c := coordinatorClaim(t, root, id)
-				if err := first.write(t, root, boundLegacy(t, root, id)); err != nil {
+				if err := first.write(t, root, bound(t, root, id)); err != nil {
 					t.Fatal(err)
 				}
 				requireRecordMatchesCard(t, root, id)
 				if c = coordinatorReconcile(t, root, c); c.Members[id].AwaitingStart {
 					t.Fatalf("mirror %+v", c.Members[id])
 				}
-				if _, err := RecordExecutionWindow(root, boundLegacy(t, root, id).Entry, "tmux:second", ""); err != nil {
+				if _, err := RecordExecutionWindow(root, bound(t, root, id).Entry, "tmux:second", ""); err != nil {
 					t.Fatal("second write: ", err)
 				}
 				requireRecordMatchesCard(t, root, id)
@@ -136,7 +127,7 @@ func TestFirstWriteLinksAnOldTakeover(t *testing.T) {
 	if view := ledgerOf(t, root, id); view.current.ID == legacyAttemptID || view.current.PreviousID != legacyAttemptID || view.current.Owner != "claude" {
 		t.Fatalf("view %+v", view.current)
 	}
-	if _, err := RecordExecutionWindow(root, boundLegacy(t, root, id).Entry, "tmux:drifted", ""); err != nil {
+	if _, err := RecordExecutionWindow(root, bound(t, root, id).Entry, "tmux:drifted", ""); err != nil {
 		t.Fatal(err)
 	}
 	l := ledgerOf(t, root, id)
@@ -162,11 +153,11 @@ func TestTakeoverAroundAFirstWrite(t *testing.T) {
 				id := fixture.build(t, root, "legacy-next").Entry.TaskID
 				c := coordinatorClaim(t, root, id)
 				if written {
-					if _, err := RecordExecutionWindow(root, boundLegacy(t, root, id).Entry, "tmux:drifted", ""); err != nil {
+					if _, err := RecordExecutionWindow(root, bound(t, root, id).Entry, "tmux:drifted", ""); err != nil {
 						t.Fatal(err)
 					}
 				}
-				s := boundLegacy(t, root, id)
+				s := bound(t, root, id)
 				if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "grok", Session: "grok next"}); err != nil {
 					t.Fatal(err)
 				}
@@ -193,11 +184,11 @@ func TestSynthesizedPrefixIgnoresTheCardOwner(t *testing.T) {
 			root := tempBoard(t)
 			s := build(t, root, "legacy-prefix")
 			id := s.Entry.TaskID
-			if _, err := RecordExecutionWindow(root, boundLegacy(t, root, id).Entry, "tmux:drifted", ""); err != nil {
+			if _, err := RecordExecutionWindow(root, bound(t, root, id).Entry, "tmux:drifted", ""); err != nil {
 				t.Fatal(err)
 			}
 			before := ledgerOf(t, root, id)
-			next := boundLegacy(t, root, id)
+			next := bound(t, root, id)
 			if _, err := BeginTakeover(root, next.Entry, TakeoverInput{Owner: "grok", Session: "grok next"}); err != nil {
 				t.Fatal(err)
 			}
@@ -225,7 +216,7 @@ func TestSynthesizedPrefixIgnoresTheCardOwner(t *testing.T) {
 func TestFirstWriteKeepsTheLedgerChecks(t *testing.T) {
 	root := tempBoard(t)
 	id := legacyRunningCard(t, root, "legacy-tamper").Entry.TaskID
-	if _, err := RecordExecutionWindow(root, boundLegacy(t, root, id).Entry, "tmux:drifted", ""); err != nil {
+	if _, err := RecordExecutionWindow(root, bound(t, root, id).Entry, "tmux:drifted", ""); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(control(root, "groups", taskStartGroup, id), "current.json")
