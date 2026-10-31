@@ -112,22 +112,31 @@ func newResolveWorld(t *testing.T, strayBase func(*resolveWorld) string, strayTa
 	return w
 }
 
-func (w *resolveWorld) request(t *testing.T, fix string) string {
+func (w *resolveWorld) fixed(fix string) board.ReviewResolvedFinding {
+	return board.ReviewResolvedFinding{RunID: resolveRun, FindingID: "PMQA-001", Status: "fixed", Basis: "fixed in the next commit", FixCommit: fix, Verification: "b3 reviewed the fix"}
+}
+
+// decided carries no fix commit, so only the coverage edges can refuse it.
+func decided() board.ReviewResolvedFinding {
+	return board.ReviewResolvedFinding{RunID: resolveRun, FindingID: "PMQA-001", Status: "rejected", Basis: "user accepted the wording", Decision: "user-1"}
+}
+
+func (w *resolveWorld) request(t *testing.T, finding board.ReviewResolvedFinding) string {
 	t.Helper()
 	p, err := board.ReadReviewPlan(w.root, "stray-plan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return dispositionJSON(t, w.h, "resolve", board.ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Author: "claude", Basis: "b3 reviewed the range", ResolveBatch: &board.ReviewBatchResolutionRequest{BatchID: resolveStray, CoveringBatchID: resolveCover, Findings: []board.ReviewResolvedFinding{{RunID: resolveRun, FindingID: "PMQA-001", Status: "fixed", Basis: "fixed in the next commit", FixCommit: fix, Verification: "b3 reviewed the fix"}}}})
+	return dispositionJSON(t, w.h, "resolve", board.ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Author: "claude", Basis: "b3 reviewed the range", ResolveBatch: &board.ReviewBatchResolutionRequest{BatchID: resolveStray, CoveringBatchID: resolveCover, Findings: []board.ReviewResolvedFinding{finding}}})
 }
 
-func (w *resolveWorld) refused(t *testing.T, fix string) {
+func (w *resolveWorld) refused(t *testing.T, finding board.ReviewResolvedFinding) {
 	t.Helper()
 	before, err := board.ReadReviewPlan(w.root, "stray-plan")
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := captureRun(t, []string{"extend-plan", w.h.repo, w.request(t, fix)})
+	code, _, stderr := captureRun(t, []string{"extend-plan", w.h.repo, w.request(t, finding)})
 	if code == 0 || !strings.Contains(stderr, "Git ancestry") {
 		t.Fatalf("accepted: %d %s", code, stderr)
 	}
@@ -148,7 +157,7 @@ func TestResolveBatchRecordsVerifiedGitThroughCLI(t *testing.T) {
 	if code, _, stderr := captureRun(t, []string{"progress", w.h.repo, w.id}); code == 0 || !strings.Contains(stderr, "unplanned execution batch: "+resolveStray) {
 		t.Fatalf("stray batch not reported: %d %s", code, stderr)
 	}
-	commandOK(t, "extend-plan", w.h.repo, w.request(t, w.cover))
+	commandOK(t, "extend-plan", w.h.repo, w.request(t, w.fixed(w.cover)))
 	p, err := board.ReadReviewPlan(w.root, "stray-plan")
 	if err != nil {
 		t.Fatal(err)
@@ -168,21 +177,21 @@ func TestResolveBatchRecordsVerifiedGitThroughCLI(t *testing.T) {
 func TestResolveBatchRefusesACoverOutsideTheRange(t *testing.T) {
 	t.Run("target", func(t *testing.T) {
 		w := newResolveWorld(t, stayOnHead, func(w *resolveWorld) string { return w.side })
-		w.refused(t, w.cover)
+		w.refused(t, decided())
 	})
 	// A range that spans two closed batches has no single cover: the known limit.
 	t.Run("base", func(t *testing.T) {
 		w := newResolveWorld(t, func(w *resolveWorld) string { return w.h.base }, onStrayTarget)
-		w.refused(t, w.cover)
+		w.refused(t, decided())
 	})
 }
 
 func TestResolveBatchRefusesAFixOutsideTheReviewedRange(t *testing.T) {
 	w := newResolveWorld(t, stayOnHead, onStrayTarget)
-	t.Run("not after the reviewed commit", func(t *testing.T) { w.refused(t, w.side) })
-	t.Run("after the conclusion run", func(t *testing.T) { w.refused(t, w.later) })
+	t.Run("not after the reviewed commit", func(t *testing.T) { w.refused(t, w.fixed(w.side)) })
+	t.Run("after the conclusion run", func(t *testing.T) { w.refused(t, w.fixed(w.later)) })
 	t.Run("the reviewed commit", func(t *testing.T) {
-		code, _, stderr := captureRun(t, []string{"extend-plan", w.h.repo, w.request(t, w.strayTarget)})
+		code, _, stderr := captureRun(t, []string{"extend-plan", w.h.repo, w.request(t, w.fixed(w.strayTarget))})
 		if code == 0 || !strings.Contains(stderr, w.strayTarget) {
 			t.Fatalf("accepted: %d %s", code, stderr)
 		}
