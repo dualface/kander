@@ -53,7 +53,8 @@ func launchCoordinatorRequest(t *testing.T, root, task string, c board.Coordinat
 
 // launchCompletedWrapUp takes the single member of the fixture through wrap-up.
 // cleanup runs just before the move into done, where the agent removes its worktree.
-func launchCompletedWrapUp(t *testing.T, cleanup ...func(board.DispatchInput)) (root, task string, in board.DispatchInput, d board.Dispatch, c board.CoordinatorCheckpoint) {
+// It receives that move, so it can try it from where the agent stands.
+func launchCompletedWrapUp(t *testing.T, cleanup ...func(board.DispatchInput, func() error)) (root, task string, in board.DispatchInput, d board.Dispatch, c board.CoordinatorCheckpoint) {
 	t.Helper()
 	root, task, in, c = launchCoordinatorFixture(t)
 	d, e := PrepareBoundDispatch(root, in)
@@ -83,7 +84,7 @@ func launchCompletedWrapUp(t *testing.T, cleanup ...func(board.DispatchInput)) (
 			o.DeliveryCommit = in.Base
 			o.Result = "completed"
 			for _, step := range cleanup {
-				step(in)
+				step(in, func() error { _, e := board.MoveWithOptions(s.Entry, root, state, o); return e })
 			}
 		}
 		if _, e = board.MoveWithOptions(s.Entry, root, state, o); e != nil {
@@ -157,31 +158,23 @@ func removeRecordedWorktree(t *testing.T, in board.DispatchInput) string {
 	return survivor
 }
 
-func TestCompletionVerifiesInTheCurrentCheckout(t *testing.T) {
-	root, _, _, d, c := launchCompletedWrapUp(t, func(in board.DispatchInput) { t.Chdir(removeRecordedWorktree(t, in)) })
+func TestCompletionNeedsACheckoutAndThenSurvivesARewrite(t *testing.T) {
+	var survivor string
+	root, task, _, d, c := launchCompletedWrapUp(t, func(in board.DispatchInput, move func() error) {
+		survivor = removeRecordedWorktree(t, in)
+		t.Chdir(t.TempDir())
+		if e := move(); e == nil || !strings.Contains(e.Error(), "checkout") {
+			t.Fatal("a completion passed with no evidence", e)
+		}
+		t.Chdir(survivor)
+	})
 	if _, e := os.Stat(launchWrapUpEvidence(root, c.GroupID, d.Input.ID)); e != nil {
 		t.Fatal("the move did not verify in the checkout it runs from", e)
 	}
-}
-
-func TestCompletionWithNoRepositoryWaitsForReconcile(t *testing.T) {
-	var survivor string
-	root, task, _, d, c := launchCompletedWrapUp(t, func(in board.DispatchInput) {
-		survivor = removeRecordedWorktree(t, in)
-		t.Chdir(t.TempDir())
-	})
-	path := launchWrapUpEvidence(root, c.GroupID, d.Input.ID)
-	if _, e := os.Stat(path); !errors.Is(e, os.ErrNotExist) {
-		t.Fatal("evidence without a verification", e)
-	}
-	r := launchCoordinatorRequest(t, root, task, c, d)
-	r.CWD = survivor
-	next, e := ReconcileCoordinator(context.Background(), root, r)
+	launchRewriteDevelop(t, survivor)
+	next, e := ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, d))
 	if e != nil || len(next.BlockedMembers()) != 0 {
 		t.Fatal(next.Members[task], e)
-	}
-	if _, e = os.Stat(path); e != nil {
-		t.Fatal("reconcile wrote no evidence", e)
 	}
 }
 

@@ -59,4 +59,5 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Claiming, Starting, and Coordinatio
 
 - A revision conflict: read and reconcile the current document before retrying.
 - A missing gate record, an unknown state, a missing result or decision, or a plain move on a bound card.
+- A wrap-up of a group with a coordinator checkpoint whose Git facts fail verification, or with no checkout in reach that holds the target commit. Run the move from a checkout of the repository.
 - A missing task ID or state, an option without a value, or an unknown option is a usage error.

@@ -448,10 +448,11 @@ func TestRecoveredMemberNeedsAnActualReview(t *testing.T) {
 	}
 }
 
-func TestDroppingATailBatchMovesTheRecoveryPosition(t *testing.T) {
-	root := tempBoard(t)
+// droppedTailPlan resets a member whose plan has a closed batch and an unrun tail,
+// then drops the tail. The recovery position was past the end of the plan.
+func droppedTailPlan(t *testing.T, root string) (string, ReviewPlan) {
+	t.Helper()
 	ids := []string{recoveryMember(t, root, "drop-a"), recoveryMember(t, root, "drop-b")}
-	id := ids[0]
 	c := coordinatorReconcile(t, root, coordinatorClaim(t, root, ids...))
 	b := strings.Repeat("b", 40)
 	plan := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-drop", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: ids, Batches: []ReviewPlanBatch{
@@ -466,9 +467,9 @@ func TestDroppingATailBatchMovesTheRecoveryPosition(t *testing.T) {
 	if _, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": passRole(run)}); err != nil {
 		t.Fatal(err)
 	}
-	staleReclaim(t, root, id)
-	recoverMember(t, root, coordinatorRequestAfter(t, root, c), id)
-	p := deadEndRebind(t, root, id)
+	staleReclaim(t, root, ids[0])
+	recoverMember(t, root, coordinatorRequestAfter(t, root, c), ids[0])
+	p := deadEndRebind(t, root, ids[0])
 	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{"tail"}, Author: "coordinator", Basis: "replace the tail"}); err != nil {
 		t.Fatal(err)
 	}
@@ -476,24 +477,36 @@ func TestDroppingATailBatchMovesTheRecoveryPosition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p = appendBatch(t, root, p, id, "cycle-na", noReviewRequirements())
-	if _, err = deadEndClose(t, root, "cycle-na", map[string]ReviewRoleConclusion{}, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err = deadEndDone(t, root, id); err == nil || !strings.Contains(err.Error(), "recovery-review:"+id) {
-		t.Fatalf("an N/A batch at the moved position passed: %v", err)
-	}
+	return ids[0], p
+}
+
+func TestABatchReplacingADroppedTailDischargesTheRecovery(t *testing.T) {
+	root := tempBoard(t)
+	id, p := droppedTailPlan(t, root)
 	p = appendBatch(t, root, p, id, "cycle-real", archiveRequirements())
 	closeActualBatch(t, root, p, id, "cycle-real")
 	// A drop reopens a sealed plan.
-	if p, err = ReadReviewPlan(root, p.PlanID); err != nil {
+	p, err := ReadReviewPlan(root, p.PlanID)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Seal: true, Author: "coordinator", Basis: "seal"}); err != nil {
 		t.Fatal(err)
 	}
 	if err = deadEndDone(t, root, id); err != nil {
-		t.Fatalf("the review after the drop did not count: %v", err)
+		t.Fatalf("the review that replaced the tail did not count: %v", err)
+	}
+}
+
+func TestAnNABatchReplacingADroppedTailStaysOwed(t *testing.T) {
+	root := tempBoard(t)
+	id, p := droppedTailPlan(t, root)
+	appendBatch(t, root, p, id, "cycle-na", noReviewRequirements())
+	if _, err := deadEndClose(t, root, "cycle-na", map[string]ReviewRoleConclusion{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := deadEndDone(t, root, id); err == nil || !strings.Contains(err.Error(), "recovery-review:"+id) {
+		t.Fatalf("an N/A batch at the moved position passed: %v", err)
 	}
 }
 
