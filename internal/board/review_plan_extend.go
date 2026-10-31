@@ -59,7 +59,7 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 		exclusiveOps++
 	}
 	if exclusiveOps > 1 {
-		return reviewError("rebind_cycles, sync_targets, drop_batches, release_obligation and batch/seal are mutually exclusive")
+		return reviewError(t("board.review_extend_exclusive"))
 	}
 	var p ReviewPlan
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {

@@ -38,5 +38,6 @@
   "board.review_seal_dropped": "不能封存：被删除的 required 批次还欠 {{.V0}}（成员/角色）。在同一请求中追加要求该角色并包含该成员的批次，或用 release_obligation 写明用户决定",
   "board.review_dropped_required": "被删除的 required 批次继续欠复审（dropped-review:<成员>/<角色>）：用 kander review extend-plan 追加要求该角色并包含该成员的批次并关闭它，或用 release_obligation 写明用户决定。N/A 不算",
   "board.review_stale_conclusion": "角色 {{.V1}} 的 run {{.V0}} 审的是成员 {{.V2}} 的另一个执行周期，不能关闭批次 {{.V3}}。在当前周期运行角色 {{.V1}}：在新 commit 上用 --advance-file 与 --previous-run-id，或在同一 commit 上运行并用 superseded_runs 取代旧 run",
-  "board.review_stale_run_required": "要求的角色只有其他执行周期的 run（stale-run:<批次>/<角色>/<成员>）：在当前周期运行该角色，用新 run 关闭批次"
+  "board.review_stale_run_required": "要求的角色只有其他执行周期的 run（stale-run:<批次>/<角色>/<成员>）：在当前周期运行该角色，用新 run 关闭批次",
+  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation 与 batch/seal 互斥"
 }

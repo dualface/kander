@@ -38,5 +38,6 @@
   "board.review_seal_dropped": "シールできません。削除した required バッチの {{.V0}}（メンバー/ロール）が未完了です。同じリクエストでロールを要求しメンバーを含むバッチを追加するか、release_obligation にユーザー決定を記してください",
   "board.review_dropped_required": "削除した required バッチのレビュー義務は残ります（dropped-review:<メンバー>/<ロール>）。kander review extend-plan でロールを要求しメンバーを含むバッチを追加してクローズするか、release_obligation にユーザー決定を記してください。N/A は数えられません",
   "board.review_stale_conclusion": "ロール {{.V1}} の run {{.V0}} はメンバー {{.V2}} の別の実行サイクルをレビューしたため、バッチ {{.V3}} をクローズできません。現在のサイクルでロール {{.V1}} を実行してください。新しいコミットでは --advance-file と --previous-run-id を使い、同じコミットでは superseded_runs で古い run を置き換えます",
-  "board.review_stale_run_required": "要求されたロールに別の実行サイクルの run しかありません（stale-run:<バッチ>/<ロール>/<メンバー>）。現在のサイクルでロールを実行し、新しい run でバッチをクローズしてください"
+  "board.review_stale_run_required": "要求されたロールに別の実行サイクルの run しかありません（stale-run:<バッチ>/<ロール>/<メンバー>）。現在のサイクルでロールを実行し、新しい run でバッチをクローズしてください",
+  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation、batch/seal は同時に使えません"
 }
