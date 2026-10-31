@@ -40,7 +40,8 @@ func planRequiredRoles(p ReviewPlan) []string {
 }
 
 // stageRecoveryReview replaces the record of a member with one for the whole plan
-// as it stands. A later recovery covers an earlier one: the roles only grow and the
+// as it stands. A later recovery covers an earlier one: the roles only grow, so the
+// roles of the record stay even when a drop took them out of the plan, and the
 // position only moves on.
 func stageRecoveryReview(tx *Transaction, id, recovery string) error {
 	p, exists, err := readTaskPlan(tx, id)
@@ -50,7 +51,11 @@ func stageRecoveryReview(tx *Transaction, id, recovery string) error {
 	if !exists {
 		return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(RecoveryReview{Schema: 1, TaskID: id, RecoveryID: recovery, Roles: []string{}}))
 	}
-	roles := planRequiredRoles(p)
+	var old RecoveryReview
+	if _, err = readReviewJSON(tx, recoveryReviewName(id), &old); err != nil {
+		return err
+	}
+	roles := slices.Compact(slices.Sorted(slices.Values(slices.Concat(old.Roles, planRequiredRoles(p)))))
 	if len(roles) == 0 {
 		return nil
 	}

@@ -324,6 +324,29 @@ func TestDroppedRoleStaysOnARecoveryWithNoPlan(t *testing.T) {
 	}
 }
 
+func TestSecondResetKeepsTheRolesADropLeftOnTheRecovery(t *testing.T) {
+	root := tempBoard(t)
+	ids, c := blockedGroup(t, root)
+	c = recoverMember(t, root, c, ids[0])
+	id := ids[0]
+	a, b, d := owedCommit(0), owedCommit(1), owedCommit(2)
+	security := map[string]string{"PMQA": "N/A: fixture", "Security": "required"}
+	plan := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-" + id, Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: []string{id}, Batches: []ReviewPlanBatch{
+		{BatchID: "batch", TaskIDs: []string{id}, Base: a, TargetCommit: b, Requirements: security},
+		{BatchID: "second", PreviousBatchID: "batch", TaskIDs: []string{id}, Base: b, TargetCommit: d, Requirements: archiveRequirements()},
+	}}
+	if err := CreateReviewPlan(root, plan); err != nil {
+		t.Fatal(err)
+	}
+	extendOwed(t, root, readOwedPlan(t, root, plan.PlanID), ReviewPlanExtension{DropBatches: []string{"second"}, Decision: "user-decision"})
+	staleReclaim(t, root, id)
+	recoverMember(t, root, coordinatorRequestAfter(t, root, c), id)
+	o, ok := recoveryRecord(t, root, id)
+	if !ok || o.PlanID != plan.PlanID || o.FromBatch != 1 || !slices.Equal(o.Roles, []string{"PMQA", "Security"}) {
+		t.Fatalf("the second reset forgot a role: %+v %v", o, ok)
+	}
+}
+
 func TestArchiveCleanupRemovesARecoveryWithNoPlan(t *testing.T) {
 	root := tempBoard(t)
 	ids, c := blockedGroup(t, root)
