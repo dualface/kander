@@ -129,7 +129,8 @@ kander
 
 ## 8. 作者のその他のプロジェクト
 
-Kander の作者 [dualface](https://github.com/dualface) によるその他のプロジェクト：
+作者 [dualface](https://dualface.dev/) のその他のプロジェクトもぜひお試しください：
 
 - [Ullage](https://github.com/dualface/ullage-cli)：Claude、ChatGPT、Grok、Cursor などのサブスクリプション使用量を確認するローカルデーモン + CLI。
+- [ste-zh](https://github.com/dualface/ste-zh)：ASD-STE100 の原則に沿って Agent に中国語で結果を報告させるスキル。結論を先に、状態語を固定し、検証の有無を明記。
 - [QuickTUI](https://quicktui.ai/)：あらゆるコーディング Agent のための、スマホ上の完全なターミナル。セルフホストで直接接続。1 台のホストまで無料。

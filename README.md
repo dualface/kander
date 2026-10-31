@@ -129,7 +129,8 @@ Release notes live in [CHANGELOG.md](CHANGELOG.md).
 
 ## 8. More Projects by the Author
 
-Other projects by [dualface](https://github.com/dualface), the author of Kander:
+Explore other projects by [dualface](https://dualface.dev/):
 
 - [Ullage](https://github.com/dualface/ullage-cli): a local daemon and CLI that shows subscription usage for Claude, ChatGPT, Grok, Cursor, and more.
+- [ste-zh](https://github.com/dualface/ste-zh): an agent skill that makes agents report results in Chinese by ASD-STE100 principles: conclusion first, fixed status words, explicit verification state.
 - [QuickTUI](https://quicktui.ai/): a full terminal for any coding agent, on your phone. Self-hosted, direct connection. Free for a single host.

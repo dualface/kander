@@ -161,8 +161,8 @@ git clone https://github.com/dualface/ste-zh.git ~/.claude/skills/ste
 
 ## 9. 作者的其他项目
 
-以下是 Kander 作者 [dualface](https://github.com/dualface) 的其他项目：
+欢迎体验作者 [dualface](https://dualface.dev/) 的其他项目：
 
-- [ste-zh](https://github.com/dualface/ste-zh)：让 Agent 按 ASD-STE100 原则用中文汇报结果，结论先行、状态词固定、写明是否验证。
 - [Ullage](https://github.com/dualface/ullage-cli)：本地守护进程 + CLI，查看 Claude、ChatGPT、Grok、Cursor 等订阅的用量。
+- [ste-zh](https://github.com/dualface/ste-zh)：让 Agent 按 ASD-STE100 原则用中文汇报结果，结论先行、状态词固定、写明是否验证。
 - [QuickTUI](https://quicktui.ai/)：手机上的完整终端，适用于任何编码 Agent。自托管直连，单台主机免费。
