@@ -24,6 +24,29 @@ jobs:
       # One command per step: a PowerShell step exits with the last command's code.
       # The runner temp directory is real on macOS, where the default temp path is
       # a symlink the board refuses, and it is the fast drive on Windows.
+      # The process tests come first and run past each other's failure: a push to
+      # develop is their only CI trigger, so one run must report all of them.
+      - name: Process identity tests
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v ./internal/process -count=1
+      - name: Liveness tests
+        if: ${{ !cancelled() }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v ./internal/liveness -count=1
+      # Every test of internal/launch/late_failure_test.go.
+      - name: Late failure tests
+        if: ${{ !cancelled() }}
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v ./internal/launch -count=1 -run '^(TestLateFailureKeepsAnExecutorThatWorked|TestLateFailureWithoutEvidenceClosesAndRollsBack|TestStandingIsReadBeforeTheContainerCloses|TestEvidenceSurvivesASuccessfulWindowWrite|TestFailedCloseDoesNotRollBack|TestWriteAfterTheJudgementEndsUnresolved|TestUnreadableStandingKeepsTheContainer|TestSupersededStartExitsNormally|TestLateFailureWithoutAContainer|TestUnresolvedOutputAndExitStatus|TestTakeoverLateFailureEndsUnresolved|TestTakeoverDecisionRequirement|TestResumeRefusesMixedAdoptOptions|TestAdoptKeepsTheExecutor|TestAdoptRefusesAnExecutorWithoutProcessIdentity|TestSessionRepairWaitsForAnUnfinishedStart|TestGroupMemberLeavesUnresolvedByAdoption|TestGroupMemberLeavesUnresolvedByTakeover)$'
       - name: Composite state model, default mode
         env:
           TMPDIR: ${{ runner.temp }}
