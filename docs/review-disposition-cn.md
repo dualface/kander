@@ -170,7 +170,7 @@ kander review progress <绝对工作目录> <task-id>
 全部满足以下条件时才接受：
 
 - 批次有 run，不在计划中，并且计划至少含它的一个成员。
-- 每个 run 都已定稿并发布完成，没有 run 等待 `review interpret`。失败的 run 没有 finding 需要列出。
+- 每个 run 都已定稿并发布完成，没有 run 等待 `review interpret`。没有报告的失败 run 没有 finding 需要列出。留有可读报告的失败 run 与其他 run 相同。留有不可读报告的失败 run 被拒绝，因为它不能解释，它的 finding 未知。
 - `covering_batch_id` 指定本计划的一个已关闭批次。它的 base 等于计划外批次的 base 或是其祖先，它的目标等于计划外批次的目标或是其后代。
 - 计划外批次每个 `required` 角色在覆盖批次中也是 `required`。计划外批次中属于该计划且未被排除的成员都是覆盖批次的成员。
 - `findings` 把每个 run 的每个 finding 各列一次，不含其他项。must-fix finding 是 `fixed`，或者带 `decision`（用户决定引用）的 `rejected`。其他 finding 是 `fixed`、`deferred` 或 `rejected`。每项都有 `basis`，`fixed` 还需要 `fix_commit` 与 `verification`。

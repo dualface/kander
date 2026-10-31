@@ -29,5 +29,6 @@
   "board.review_resolve_fixed": "fixed finding {{.V0}} needs a full fix_commit and verification",
   "board.review_resolve_fix_evidence": "finding {{.V0}} has fix evidence without the status fixed",
   "board.review_resolve_fix_order": "fix_commit of finding {{.V0}} is the reviewed commit {{.V1}}. It must be a later commit",
-  "board.review_resolve_stale": "resolved batch {{.V0}} changed after its resolution: {{.V1}}"
+  "board.review_resolve_stale": "resolved batch {{.V0}} changed after its resolution: {{.V1}}",
+  "board.review_resolve_failed_report": "failed run {{.V0}} kept a report Kander cannot read, so its findings are unknown and this batch cannot be resolved"
 }

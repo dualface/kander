@@ -355,8 +355,9 @@ type resolutionItem struct {
 	finding ReviewFinding
 }
 
-// resolutionItems binds the runs and collects their findings. A failed run has no
-// finding, and the covering batch reviewed its range.
+// resolutionItems binds the runs and collects their findings. A run that failed after
+// its report was written keeps those findings, and nothing can interpret a failed
+// run, so an unreadable report refuses: it never reads as zero findings.
 func resolutionItems(tx *Transaction, facts *batchResolutionFacts) (map[FindingRef]resolutionItem, error) {
 	items := map[FindingRef]resolutionItem{}
 	for _, run := range facts.runs {
@@ -364,10 +365,14 @@ func resolutionItems(tx *Transaction, facts *batchResolutionFacts) (map[FindingR
 			return nil, reviewError(t("board.review_resolve_publication", run.RunID))
 		}
 		facts.bound = append(facts.bound, ReviewResolvedRun{RunID: run.RunID, ReportHash: run.Hashes["report.md"]})
-		if run.ExecutionStatus != "ok" {
+		failed := run.ExecutionStatus != "ok"
+		if failed && run.Hashes["report.md"] == "" {
 			continue
 		}
 		findings, err := runFindings(tx, run)
+		if failed && err != nil {
+			return nil, reviewError(t("board.review_resolve_failed_report", run.RunID))
+		}
 		if errors.Is(err, errInterpretationPending) {
 			return nil, reviewError(t("board.review_resolve_interpret", run.RunID))
 		}

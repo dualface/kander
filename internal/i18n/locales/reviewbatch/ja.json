@@ -29,5 +29,6 @@
   "board.review_resolve_fixed": "fixed の finding {{.V0}} には完全な fix_commit と verification が必要です",
   "board.review_resolve_fix_evidence": "finding {{.V0}} は状態が fixed でないのに修正の証拠があります",
   "board.review_resolve_fix_order": "finding {{.V0}} の fix_commit はレビュー済みコミット {{.V1}} です。それより後のコミットにしてください",
-  "board.review_resolve_stale": "処理済みのバッチ {{.V0}} は処理後に変更されました: {{.V1}}"
+  "board.review_resolve_stale": "処理済みのバッチ {{.V0}} は処理後に変更されました: {{.V1}}",
+  "board.review_resolve_failed_report": "失敗した run {{.V0}} には Kander が読めないレポートが残っています。finding が不明なため、このバッチは処理できません"
 }

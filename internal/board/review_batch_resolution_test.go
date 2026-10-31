@@ -159,7 +159,12 @@ func (s *strayBoard) resolve(x ReviewPlanExtension) error {
 
 func (s *strayBoard) mustResolve(t *testing.T) {
 	t.Helper()
-	if err := s.resolve(s.request(t, s.fixed())); err != nil {
+	s.mustResolveWith(t, s.fixed())
+}
+
+func (s *strayBoard) mustResolveWith(t *testing.T, findings ...ReviewResolvedFinding) {
+	t.Helper()
+	if err := s.resolve(s.request(t, findings...)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -655,6 +660,90 @@ func TestArchiveCleanupRemovesTheResolutionWithThePlan(t *testing.T) {
 		}
 	}
 	if text := s.problems(id); text != "" {
+		t.Fatalf("archived card: %q", text)
+	}
+}
+
+// failedRun ends a stray run the way a runtime cleanup failure does: the reviewer
+// wrote its report, and the run is failed all the same.
+func (s *strayBoard) failedRun(t *testing.T, run string, report []byte) {
+	t.Helper()
+	withoutPlanPointer(t, s.root, s.ids, func() {
+		failed, _, err := PrepareReviewRun(s.root, strayRunInput(s.ids, strayBatchID, run), nil, nil, archiveOriginals(), "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		failed.LaunchStatus, failed.ExecutionStatus, failed.ExitCode, failed.FailureReason = "started", "failed", 2, "runtime cleanup failed"
+		if _, err = FinalizeReviewRun(s.root, failed, report); err != nil {
+			t.Fatal(err)
+		}
+		publishRun(t, s.root, run)
+	})
+}
+
+func TestResolutionCountsTheReportOfAFailedRun(t *testing.T) {
+	s := defaultStrayBoard(t, "failed-report")
+	found := ReviewFindings{Findings: []ReviewFinding{{ID: "PMQA-002", Tier: "high", Text: "real defect", Evidence: "x.go:1"}}, NonBlocking: []ReviewFinding{}}
+	s.failedRun(t, "stray-failed", structuredReport(found))
+	if err := s.resolve(s.request(t, s.fixed())); err == nil || !strings.Contains(err.Error(), "stray-failed/PMQA-002") {
+		t.Fatalf("finding of a failed run skipped: %v", err)
+	}
+	second := s.fixed()
+	second.RunID, second.FindingID = "stray-failed", "PMQA-002"
+	second.FixCommit, second.Verification = "", ""
+	if err := s.resolve(s.request(t, s.fixed(), second)); err == nil {
+		t.Fatal("must-fix of a failed run closed by basis text")
+	}
+	second.FixCommit, second.Verification = strayFourth, "b3 reviewed the fix"
+	s.mustResolveWith(t, s.fixed(), second)
+}
+
+func TestResolutionRefusesAFailedRunItCannotRead(t *testing.T) {
+	s := defaultStrayBoard(t, "failed-unreadable")
+	s.failedRun(t, "stray-unreadable", []byte("half a report\n"))
+	if err := s.resolve(s.request(t, s.fixed())); err == nil || !strings.Contains(err.Error(), config.Text("board.review_resolve_failed_report", "stray-unreadable")) {
+		t.Fatalf("unreadable report: %v", err)
+	}
+}
+
+func TestResolutionAcceptsAFailedRunWithNoReport(t *testing.T) {
+	s := defaultStrayBoard(t, "failed-silent")
+	s.failedRun(t, "stray-silent", nil)
+	s.mustResolve(t)
+	p, err := ReadReviewPlan(s.root, s.plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(p.ResolvedBatches[0].Runs, ReviewResolvedRun{RunID: "stray-silent"}) {
+		t.Fatalf("failed run not bound: %+v", p.ResolvedBatches[0].Runs)
+	}
+}
+
+// The trashed member keeps the plan, so the plan still revalidates the batch of the
+// archived member, which alone would pass for settled.
+func TestArchiveCleanupKeepsABatchAKeptPlanResolved(t *testing.T) {
+	s := newStrayBoard(t, "kept", archiveRequirements(), archiveRequirements(), sameMembers, "medium", "one", "two")
+	s.closeClean(t, "b3", straySecond, strayFourth, s.ids)
+	archived, trashed := s.ids[0], s.ids[1]
+	s.strayRun(t, strayRunInput([]string{archived}, "stray-solo", "solo-run"), archiveRequirements(), emptyFindings())
+	s.mustResolve(t)
+	solo := s.request(t)
+	solo.ResolveBatch.BatchID = "stray-solo"
+	if err := s.resolve(solo); err != nil {
+		t.Fatal(err)
+	}
+	s.seal(t)
+	deadEndExit(t, s.root, trashed, "trash")
+	if err := deadEndDone(t, s.root, archived); err != nil {
+		t.Fatal(err)
+	}
+	deadEndExit(t, s.root, archived, "archived")
+	for _, path := range []string{control(s.root, "groups", reviewControlGroup, "batches", "stray-solo.json"), control(s.root, "groups", reviewControlGroup, "runs", "solo-run", "run.json"), control(s.root, "groups", reviewControlGroup, "plans", s.plan+".json")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if text := s.problems(archived); text != "" {
 		t.Fatalf("archived card: %q", text)
 	}
 }

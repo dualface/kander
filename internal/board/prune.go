@@ -346,6 +346,17 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 				plan.plans[v.PlanID], changed = false, true
 			}
 		}
+		// A resolved batch has no PlanID, and a kept plan revalidates it.
+		for id, p := range plans {
+			if plan.plans[id] {
+				continue
+			}
+			for _, r := range p.ResolvedBatches {
+				if plan.batches[r.Request.BatchID] {
+					plan.batches[r.Request.BatchID], changed = false, true
+				}
+			}
+		}
 		for id, v := range batches {
 			if plan.batches[id] && !plan.plans[v.PlanID] {
 				if _, hasPlan := plans[v.PlanID]; hasPlan {

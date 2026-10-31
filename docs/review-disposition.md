@@ -171,7 +171,7 @@ The request is one operation, mutually exclusive with every other `extend-plan` 
 The request is accepted only when all of these hold:
 
 - The batch has a run and is outside the plan, and the plan holds at least one of its members.
-- Every run is finalized and fully published, and no run waits for `review interpret`. A failed run has no finding to list.
+- Every run is finalized and fully published, and no run waits for `review interpret`. A failed run with no report has no finding to list. A failed run that kept a readable report counts like any other run. A failed run with an unreadable report is refused, because nothing can interpret it and its findings stay unknown.
 - `covering_batch_id` names one closed batch of this plan. Its base is the base of the unplanned batch or an ancestor, and its target is the target of the unplanned batch or a descendant.
 - Every `required` role of the unplanned batch is `required` in the covering batch. Every plan member of the unplanned batch that was not excluded is a member of the covering batch.
 - `findings` lists every finding of every run once, and nothing else. A must-fix finding is `fixed`, or `rejected` with `decision`, the user decision reference. Any other finding is `fixed`, `deferred`, or `rejected`. Every entry has a `basis`, and `fixed` also needs `fix_commit` and `verification`.

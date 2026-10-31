@@ -29,5 +29,6 @@
   "board.review_resolve_fixed": "fixed 状态的 finding {{.V0}} 需要完整的 fix_commit 和 verification",
   "board.review_resolve_fix_evidence": "finding {{.V0}} 带有修复证据，状态却不是 fixed",
   "board.review_resolve_fix_order": "finding {{.V0}} 的 fix_commit 等于被审 commit {{.V1}}。它必须是之后的 commit",
-  "board.review_resolve_stale": "已处理的批次 {{.V0}} 在处理后发生变化：{{.V1}}"
+  "board.review_resolve_stale": "已处理的批次 {{.V0}} 在处理后发生变化：{{.V1}}",
+  "board.review_resolve_failed_report": "失败的 run {{.V0}} 留有 Kander 无法读取的报告，它的 finding 未知，这个批次不能处理"
 }
