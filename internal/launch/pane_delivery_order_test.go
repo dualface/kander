@@ -47,7 +47,9 @@ func TestTmuxPaneDeliveryWaitsBeforeSessionDiscovery(t *testing.T) {
 	callback := func() (AgentSession, error) {
 		discovered = true
 		order := mustRead(t, log+".order")
-		if !strings.Contains(order, "respawn-pane\ncapture-pane\ncapture-pane\nsend-keys\nsend-keys\n") {
+		// The display-message and show-options lines are the pane watch, which
+		// answers on its first poll because the pane shows the agent process.
+		if !strings.Contains(order, "respawn-pane\ndisplay-message\nshow-options\nshow-options\ncapture-pane\ncapture-pane\nsend-keys\nsend-keys\n") {
 			t.Fatalf("launch, readiness and delivery out of order: %s", order)
 		}
 		sent := mustRead(t, log+".send-keys")
