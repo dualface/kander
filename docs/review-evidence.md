@@ -78,10 +78,13 @@ reviews/<run_id>/
   stdout.log
   error.log
   report.md           # present when the output decoded validly
+  process-evidence.json # POSIX only; present when a reviewer process group member was observed
   sidecar.json
   manifest.json
   interpretation.json # optional receiver reading, separately published after the run
 ```
+
+process-evidence.json holds the bounded process group member records and the cleanup result, in the format of [Process Group Member Records](review-runtime-isolation.md#process-group-member-records). It is written to staging when the process tree is collected, frozen with the other originals, and covered by the manifest hashes. It is optional: a run without it, such as any run of an older binary, stays valid. A run with it is rejected by older binaries, which do not know the file.
 
 raw/log files are stored as-is, including invalid UTF-8. report.md stores the valid result text without rewriting line endings or content; a JSON Reviewer's original JSON is stored separately as output.raw. When there is no valid report, no report.md is fabricated and the index points to output.raw. Failure evidence may contain empty files; the sidecar states explicitly that the run did not start or failed, and an empty file does not indicate success.
 

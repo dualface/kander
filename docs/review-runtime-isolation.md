@@ -45,7 +45,43 @@ The final message remains the complete report. A `kander-findings` JSON fence is
 ## Process Collection
 
 - After the reviewer exits, the process group must be forcibly reaped; failure to do so is a review failure.
-- Cursor, Devin, OpenCode, Kimi, and Droid may ship helper processes that do not wait for wrap-up; for them, only detached descendants that left the parent chain count as leftovers and cause the result to be rejected, while ordinary child processes do not. For other reviewers, a non-empty process group at the moment of exit causes rejection.
+- Cursor, Devin, OpenCode, Kimi, and Droid may ship helper processes that do not wait for wrap-up (`review.spawns_helpers`); for them, members the process tree attributed to the reviewer do not count as leftovers, and ordinary child processes are reaped without rejecting the result. Unattributed members count, and so does every member when the tree never completed an observation. For other reviewers, every group member counts.
+
+### Recheck
+
+On POSIX, a leader that exited with 0 and left a live group member gets a recheck before `SIGKILL`. The recheck polls the process table every 50 ms until no counted member is alive. Its total time, process snapshots included, never exceeds 1 second; each snapshot has at most 500 ms of that. The window is short because a counted child keeps running through it, and the worktree verification after collection still sees what such a child changed.
+
+- A member alive in the last observation is a leftover and rejects the result, also when it appeared after the first observation. Group membership alone decides: a member with a reused PID is a leftover when it is in the group, and a process with a reused PID outside the group is not one.
+- A member that exits during the recheck is not a leftover. When the group is empty at the end, Kander sends no `SIGKILL`.
+- A failed or late process snapshot rejects the result, and the evidence names the failure.
+- Reviewer text is never evidence of cleanup. A clean report does not remove a leftover.
+
+A timeout, an interrupt, or a non-zero exit has no result to protect, so Kander skips the recheck, records the members once, and sends `SIGKILL` at once.
+
+### Process Group Member Records
+
+Kander writes member records whenever it finds the group alive after the leader ended; a run with an empty group has none. With a run, they go to `reviews/<run_id>/process-evidence.json` (see [Review evidence and recovery](review-evidence.md#original-artifacts-and-schema)), and a process failure names that path relative to the card. Without a run, one `process evidence:` line with the same JSON goes to stderr and the failure names no location.
+
+- `leader_pid`, `recheck` (`performed`, `duration_ms`), and `observation` (`failed`, `reason`).
+- `members`: one record per observed process incarnation, so one PID with two start times has two records. Each has `pid`, `ppid`, `pgid`, `start_time`, `executable`, `observed_at` (the last observation that saw it, UTC), and `outcome`.
+- `outcome` is `leftover`, `exited`, `attributed` (helper of a tracked reviewer), `not_rechecked` (no recheck ran), or `unknown` (the recheck failed before a conclusion).
+- `start_time` is platform text. On Linux it is field 22 of `/proc/<pid>/stat`, in clock ticks since boot. Elsewhere it is the `lstart` of `ps` in the C locale. Compare it only with values of the same host.
+- `executable` is a base name. On Linux it comes from the kernel `comm`, which holds at most 15 characters. Elsewhere it is the base name of the `ps` `comm` column.
+- `members` holds at most 64 records, leftovers first; `omitted_members` counts the rest.
+- `cleanup`: `sigkill` is `sent`, `not_sent`, or `failed`; `collected` says whether the group is gone; `error` holds a collection failure.
+
+Records never contain argv or a path, because both can hold credentials or private locations.
+
+Windows produces no member records. A job object reports only an active process count, so a Windows reviewer job with active processes at exit keeps rejecting at once, with no recheck.
+
+### Recovery From a Leftover Rejection
+
+Do not rerun the review with the same input to clear a rejection. Rerunning does not answer why a process stayed. A retry of the same run ID never starts the reviewer; it only verifies the stored evidence.
+
+1. Read `reviews/<run_id>/process-evidence.json` of that run from the card.
+2. `leftover` records with `cleanup.collected: true` are real survivors: they outlived the recheck and Kander killed them. The `executable`, `ppid`, and `start_time` identify what the reviewer left. Fix that cause in the reviewer setup.
+3. `observation.failed: true` means no conclusion exists about the members. Fix the snapshot failure named in `reason`.
+4. Run the role again with a new run ID only after a cause changed, per [Review evidence and recovery](review-evidence.md).
 
 ## Runtime Directory Contract
 
