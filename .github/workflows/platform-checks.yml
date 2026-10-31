@@ -35,7 +35,9 @@ jobs:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: go test ./internal/launch -count=1 -run "TestDeadEnd|TestCoordinatorRechecksActualGitAfterWrapUpRestart"
+        run: go test ./internal/launch -count=1 -v -run "TestLateFailureKeepsAnExecutorThatWorked|TestStartConfirmsSessionOverExecutorWrite|TestPaneDeliveryExecutorWriteKeepsTheStart|TestTakeoverDiscoverySurvivesExecutorWrite|TestCompletedWrapUpVerifiesGitOnce"
+      - name: Workflow test patterns
+        run: go test ./cmd/kander -count=1 -v -run TestWorkflowRunPattern
 
   model-full:
     runs-on: ubuntu-latest
