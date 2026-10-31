@@ -269,7 +269,9 @@ func (a *archiveExecution) recover() int {
 		a.run.FailureReason = config.Text("review.archive_interrupted")
 		// A gate killed after its first evidence write still left the record in staging.
 		if _, err := os.Lstat(filepath.Join(a.staging, board.ReviewProcessEvidence)); err == nil {
-			a.run.FailureReason += "; " + processEvidenceNote(a.run.RunID)
+			note := processEvidenceNote(a.run.RunID)
+			a.run.FailureReason += "; " + note
+			userError(note)
 		}
 		var err error
 		a.run, err = board.FinalizeReviewRun(a.root, a.run, nil)

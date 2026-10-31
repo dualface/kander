@@ -449,7 +449,7 @@ func TestStagedEvidenceSurvivesAnInterruptedGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, stderr := captureRun(t, args)
-	if code != 2 {
+	if code != 2 || !strings.Contains(stderr, "reviews/stable/"+board.ReviewProcessEvidence) {
 		t.Fatalf("%d %s", code, stderr)
 	}
 	run, err := board.ReadReviewRun(root, "stable")
