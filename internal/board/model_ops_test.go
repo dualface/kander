@@ -332,6 +332,34 @@ func modelLifecycleOps() []modelOp {
 		{name: "U.oldReclaim", cli: "an old binary: kander move <id> working --owner <agent> from review, with no handoff and no ledger link", seedOnly: true,
 			guard: modelInState("review"),
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.oldReclaim(m) }},
+		{name: "U.oldStart", cli: "kander start <id> of 1.0.0: a succeeded schema 1 attempt and no ledger link", seedOnly: true,
+			guard: modelInState("todo"),
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.oldStart(m) }},
+		{name: "U.oldTakeover", cli: "kander resume --agent <agent> of 1.0.0: new OWNER, SESSION and WINDOW on the card and no record of them", seedOnly: true,
+			guard: modelLegacyRunning,
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error {
+				s, err := w.snapshot(m)
+				if err != nil {
+					return err
+				}
+				return modelInfra(writeLegacyTakeover(w.root, s, modelTaker, modelTaker+" old-takeover", "tmux:old"))
+			}},
+		{name: "X.firstWindow", cli: "kander notify <id>: a drifted pane, the first ledger write on a 1.0.0 card",
+			guard: modelLegacyRunning,
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error {
+				return w.firstWrite(m, func(s Snapshot) error {
+					_, err := RecordExecutionWindow(w.root, s.Entry, "tmux:drifted", "")
+					return err
+				})
+			}},
+		{name: "X.firstSession", cli: "kander resume <id>: a session repair, the first ledger write on a 1.0.0 card",
+			guard: modelLegacyRunning,
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error {
+				return w.firstWrite(m, func(s Snapshot) error {
+					_, err := RecordExecutionSession(context.Background(), w.root, s.Entry, MetadataFrom(s.Text, FieldSession), modelExecutor+" repaired-session")
+					return err
+				})
+			}},
 		{name: "H.recover", cli: "kander coordinator recover <request.json>",
 			guard: func(f *modelFacts, i int) bool { return f.review.planned() && modelRecoverable(f, i) },
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.recoverMember(m) }},
@@ -734,6 +762,52 @@ func (w *modelWorld) oldReclaim(m *modelMember) error {
 	}
 	m.self, m.executor = true, false
 	return nil
+}
+
+// modelLegacyRunning reports a running card with no stored ledger link.
+func modelLegacyRunning(f *modelFacts, i int) bool {
+	state, l := f.cards[i].Entry.State, f.ledgers[i]
+	return (state == "working" || state == "review") && l.end() > 0 && l.synthesized == len(l.chain) && l.current.Status == ExecutionRunning
+}
+
+// oldStart writes what a start of 1.0.0 left: the card metadata and a succeeded
+// schema 1 attempt.
+func (w *modelWorld) oldStart(m *modelMember) error {
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	text, err := moveMetadata(s.Text, "todo", "working", MoveOptions{Owner: modelExecutor})
+	if err == nil {
+		text, err = setMetadata(text, FieldSession, modelExecutor+" old-session")
+	}
+	if err != nil {
+		return modelInfra(err)
+	}
+	if err = WithTransaction(w.root, LockScope{Tasks: []string{m.id}, ExclusiveBoard: true}, func(tx *Transaction) error {
+		if e := tx.Put(m.id, "spec.md", text); e != nil {
+			return e
+		}
+		return tx.Relocate(m.id, "working")
+	}); err != nil {
+		return modelInfra(err)
+	}
+	if s, err = w.snapshot(m); err != nil {
+		return err
+	}
+	m.executor, m.self = true, false
+	return modelInfra(writeLegacyAttempt(w.root, s, w.nextID("attempt"), "succeeded", s.Revision))
+}
+
+func (w *modelWorld) firstWrite(m *modelMember, write func(Snapshot) error) error {
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	if _, err = BindExecutionCursor(w.root, s.Entry); err != nil {
+		return err
+	}
+	return write(s)
 }
 
 // finishMember is the completion tail of one card: claim an unstarted card, let

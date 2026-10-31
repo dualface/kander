@@ -102,3 +102,16 @@ If a crash or kill signal interrupts an operation:
 
 1. **Review Artifacts**: The `Transaction.PutBytes` API stores binary attachments losslessly. In the recovery journal, non-UTF-8 files are encoded with `"binary": true` and base64 payloads.
 2. **Durable Dispatch Authorization**: Updates originating from an active dispatch must supply `--dispatch-id` and `--execution-epoch`. Card updates validate both the operation revision and execution authorization before committing.
+
+## 6. First Ledger Write on a Legacy Card
+
+A legacy card is a card an old binary started: it has a schema 1 start attempt and no stored transition. Its current record is synthesized on every read. The first write turns that record into a stored record. These rules keep the card working afterwards:
+
+- **Writers.** The first write can come from `RecordExecutionWindow`, `RecordExecutionSession`, `RecordExecutionProcess`, `stageWindowRestore`, `BeginTakeover`, a reclaim, or a coordinator reset.
+- **Attempt originals are immutable.** `pending.json` and `result.json` of the attempt never change.
+- **The record keeps the completion fact.** A synthesized record of a running attempt copies `FinishedRevision`, because the reader refuses a running record below its revision.
+- **The record equals the card.** `OWNER`, `SESSION` and `WINDOW` come from the card.
+- **An old takeover gets its own record.** `OWNER` is part of the identity the attempt originals fix, so a card whose `OWNER` differs from the attempt reads as a record with a derived ID. The first write stores that record, a `handed-off` original of the attempt, and one `handoff` link from the attempt to the record. The caller's own link follows it. A change of `SESSION` or `WINDOW` alone needs no new record.
+- **The synthesized prefix is fixed.** Stored links are numbered after the prefix, so the prefix never depends on the current card. The attempts fix its length. Once a stored link exists, the links a claim or a reclaim adds read the card facts from the first stored link. For that reason the old takeover link is stored, never synthesized.
+- **Nothing is relaxed.** The reader still compares every stored record with its originals, so a stored record that lost `FinishedRevision` or changed `OWNER` stays damage.
+

@@ -6,13 +6,13 @@ import (
 	"testing"
 )
 
-// legacyAttempt writes a schema 1 start attempt the way the old binary did.
-func legacyAttempt(t *testing.T, root string, s Snapshot, id, status string, finished uint64) {
-	t.Helper()
+// writeLegacyAttempt writes a schema 1 start attempt the way the old binary did.
+func writeLegacyAttempt(root string, s Snapshot, id, status string, finished uint64) error {
 	cycle, owner, session := planCycle(s), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession)
 	type attempt struct {
 		ID               string `json:"id"`
 		TaskID           string `json:"task_id"`
+		PreviousID       string `json:"previous_id,omitempty"`
 		Cycle            string `json:"cycle"`
 		Owner            string `json:"owner"`
 		Session          string `json:"session"`
@@ -22,21 +22,52 @@ func legacyAttempt(t *testing.T, root string, s Snapshot, id, status string, fin
 	}
 	dir := control(root, "groups", taskStartGroup, s.Entry.TaskID)
 	if err := os.MkdirAll(filepath.Join(dir, id), 0o700); err != nil {
-		t.Fatal(err)
+		return err
 	}
-	pending := attempt{id, s.Entry.TaskID, cycle, owner, session, s.Revision, "pending", 0}
+	pending := attempt{ID: id, TaskID: s.Entry.TaskID, Cycle: cycle, Owner: owner, Session: session, Revision: s.Revision, Status: "pending"}
 	result := pending
 	result.Status, result.FinishedRevision = status, finished
-	write := func(path string, value attempt) {
-		if err := os.WriteFile(path, []byte(reviewJSON(value)), 0o600); err != nil {
-			t.Fatal(err)
+	files := []struct {
+		path  string
+		value attempt
+	}{{filepath.Join(dir, id, "pending.json"), pending}, {filepath.Join(dir, "current.json"), result}}
+	if status != "pending" {
+		files = append(files, struct {
+			path  string
+			value attempt
+		}{filepath.Join(dir, id, "result.json"), result})
+	}
+	for _, file := range files {
+		if err := os.WriteFile(file.path, []byte(reviewJSON(file.value)), 0o600); err != nil {
+			return err
 		}
 	}
-	write(filepath.Join(dir, id, "pending.json"), pending)
-	if status != "pending" {
-		write(filepath.Join(dir, id, "result.json"), result)
+	return nil
+}
+
+func legacyAttempt(t *testing.T, root string, s Snapshot, id, status string, finished uint64) {
+	t.Helper()
+	if err := writeLegacyAttempt(root, s, id, status, finished); err != nil {
+		t.Fatal(err)
 	}
-	write(filepath.Join(dir, "current.json"), result)
+}
+
+// writeLegacyTakeover writes what a takeover of the old binary left: new facts on
+// the card, no record of them, and the start attempt as it was.
+func writeLegacyTakeover(root string, s Snapshot, owner, session, window string) error {
+	text, err := setMetadata(s.Text, FieldOwner, owner)
+	if err == nil {
+		text, err = setMetadata(text, FieldSession, session)
+	}
+	if err == nil {
+		text, err = setMetadata(text, FieldWindow, window)
+	}
+	if err != nil {
+		return err
+	}
+	return WithTransaction(root, LockScope{Tasks: []string{s.Entry.TaskID}}, func(tx *Transaction) error {
+		return tx.Put(s.Entry.TaskID, "spec.md", text)
+	})
 }
 
 // fixtureClaim gives a card the metadata an old binary's start left, with no ledger.

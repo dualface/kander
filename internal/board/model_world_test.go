@@ -503,8 +503,8 @@ func (f *modelFacts) memberKey(i int) string {
 		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d blocked=%v confirmed=%v", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs), c.Blocked != nil, c.Confirmed != nil)
 	}
 	settled := slices.ContainsFunc(f.rounds[i], func(d Dispatch) bool { return d.Settlement != nil })
-	return fmt.Sprintf("col=%s excluded=%v attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
-		s.Entry.State, f.excluded[i], attempt, f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
+	return fmt.Sprintf("col=%s excluded=%v attempt=%s stored=%v evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
+		s.Entry.State, f.excluded[i], attempt, f.ledgers[i].synthesized < len(f.ledgers[i].chain), f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
 		m.launcher != nil, m.executor, m.executor && m.unproven, m.self, m.stranded, bound, len(releases) > 0, settled,
 		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)))
 }

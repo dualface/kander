@@ -131,7 +131,7 @@ A member whose current record is `pending` or `unresolved` stays waiting: reconc
 
 Coordinator claims and reconciles write the current checkpoint schema. A schema 1 mirror has no position, so the first reconcile selects one by its facts: the observed start attempt, or the last link that reaches its cycle. No match fails with the same errors as before.
 
-A card from before the ledger has no transitions. A reader synthesizes its chain in memory from start attempts, claim lines, and `LIFECYCLE_DECISION` handoffs, and never writes that chain back. The first producer write on such a card continues the sequence after the synthesized links. A stuck schema 1 `pending` attempt opens to a takeover. Old and new binaries cannot share a board: an old binary rejects schema 2 records.
+A card from before the ledger has no transitions. A reader synthesizes its chain in memory from start attempts, claim lines, and `LIFECYCLE_DECISION` handoffs, and never writes that chain back. The first producer write on such a card continues the sequence after the synthesized links. [Card Transactions](card-transactions.md#6-first-ledger-write-on-a-legacy-card) gives the rules of that write. A stuck schema 1 `pending` attempt opens to a takeover. Old and new binaries cannot share a board: an old binary rejects schema 2 records.
 
 ## Member Isolation
 

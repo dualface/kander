@@ -275,8 +275,12 @@ func putRetiredOriginal(tx *Transaction, a ExecutionRecord, name string) error {
 // putCurrentRecord replaces the pointer without a new status. A record that was
 // only synthesized gets its originals here: the first write on a legacy card
 // makes it a stored record.
-func putCurrentRecord(tx *Transaction, a ExecutionRecord) error {
-	if _, ok, err := tx.ReadGroup(taskStartGroup, executionPath(a.TaskID, a.ID, firstOriginal(a.Kind))); err != nil {
+func putCurrentRecord(tx *Transaction, s Snapshot, l *executionLedger, a ExecutionRecord) error {
+	if l.legacyTakeover() {
+		if err := storeLegacyTakeover(tx, s, l); err != nil {
+			return err
+		}
+	} else if _, ok, err := tx.ReadGroup(taskStartGroup, executionPath(a.TaskID, a.ID, firstOriginal(a.Kind))); err != nil {
 		return err
 	} else if !ok {
 		return publishRecord(tx, a)
@@ -284,17 +288,27 @@ func putCurrentRecord(tx *Transaction, a ExecutionRecord) error {
 	return tx.PutGroup(taskStartGroup, a.TaskID+"/current.json", reviewJSON(a))
 }
 
-// publishRecord writes a record that starts in a settled status, with the
-// originals its reader requires.
-func publishRecord(tx *Transaction, a ExecutionRecord) error {
+// putRecordOriginals writes the originals the reader of a settled record requires
+// and returns the record its pointer may name.
+func putRecordOriginals(tx *Transaction, a ExecutionRecord) (ExecutionRecord, error) {
 	if err := tx.PutGroup(taskStartGroup, executionPath(a.TaskID, a.ID, firstOriginal(a.Kind)), reviewJSON(a)); err != nil {
-		return err
+		return a, err
 	}
 	if name := statusOriginal(a.Status); name != firstOriginal(a.Kind) {
 		a.FinishedRevision = a.Revision
 		if err := tx.PutGroup(taskStartGroup, executionPath(a.TaskID, a.ID, name), reviewJSON(a)); err != nil {
-			return err
+			return a, err
 		}
+	}
+	return a, nil
+}
+
+// publishRecord writes a record that starts in a settled status and moves the
+// pointer to it.
+func publishRecord(tx *Transaction, a ExecutionRecord) error {
+	a, err := putRecordOriginals(tx, a)
+	if err != nil {
+		return err
 	}
 	return tx.PutGroup(taskStartGroup, a.TaskID+"/current.json", reviewJSON(a))
 }
@@ -376,6 +390,12 @@ type executionLedger struct {
 }
 
 func (l executionLedger) end() uint64 { return uint64(len(l.chain)) }
+
+// legacyTakeover reports a current record that only reads an old takeover from the
+// card. A stored takeover always has a stored link.
+func (l executionLedger) legacyTakeover() bool {
+	return l.current != nil && l.current.Kind == ExecutionTakeover && len(l.chain) == l.synthesized
+}
 
 // supersedes reports that a handoff, an adoption, a reclaim or a recovery ended the record a
 // launcher fenced. The launcher no longer speaks for the execution.
@@ -527,6 +547,9 @@ func stageExecutionMove(tx *Transaction, s Snapshot, target, text string, o Move
 	if err != nil {
 		return err
 	}
+	if err = storeLegacyTakeover(tx, s, &l); err != nil {
+		return err
+	}
 	next := Snapshot{Entry: s.Entry, Text: text}
 	r := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, Cycle: planCycle(next), Kind: ExecutionClaim, Status: ExecutionRunning, Owner: MetadataFrom(text, FieldOwner), Session: MetadataFrom(text, FieldSession), Window: MetadataFrom(text, FieldWindow), Revision: s.Revision + 1}
 	t := transitionFrom(TransitionClaim, s, l.current).onChain(l)
@@ -631,15 +654,14 @@ func stageWindowRestore(tx *Transaction, s Snapshot, text string, l *executionLe
 	if before == after {
 		return nil
 	}
-	t := transitionFrom(TransitionWindowUpdate, s, l.current).withCard(s, text, s.Revision+1)
 	if l.current != nil {
 		updated := *l.current
 		updated.Window = after
-		if err := putCurrentRecord(tx, updated); err != nil {
+		if err := putCurrentRecord(tx, s, l, updated); err != nil {
 			return err
 		}
 	}
-	return putTransition(tx, l, t)
+	return putTransition(tx, l, transitionFrom(TransitionWindowUpdate, s, l.current).withCard(s, text, s.Revision+1))
 }
 
 func lifecycleJSONLines(text string) []string {

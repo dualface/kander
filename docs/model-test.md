@@ -50,7 +50,7 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 
 An operation that always strands a card, or that only exists to reach one dead end, sets `narrows`, so the search does not expand everything behind it.
 
-A state only an old binary reaches has an operation with `seedOnly`: a seed can start there, and the search never tries it. `U.oldReclaim` is one. It breaks I2 and I3 by construction, so I3 skips a card that was already off its chain. `U.oldStrayRun` is another: it writes a run in a batch outside the plan, which breaks I6 until `R.resolveBatch` accepts the batch, so I6 skips a world that holds such a run.
+A state only an old binary reaches has an operation with `seedOnly`: a seed can start there, and the search never tries it. `U.oldReclaim` is one. It breaks I2 and I3 by construction, so I3 skips a card that was already off its chain. `U.oldStrayRun` is another: it writes a run in a batch outside the plan, which breaks I6 until `R.resolveBatch` accepts the batch, so I6 skips a world that holds such a run. `U.oldStart` writes the card and the schema 1 attempt of a 1.0.0 start, and `U.oldTakeover` changes `OWNER`, `SESSION` and `WINDOW` on that card with no record. The seeds `old-start`, `old-takeover` and `old-takeover-review` start there, and `X.firstWindow` and `X.firstSession` make the first ledger write. The state key holds `stored`, so a card before its first write and the same card after it stay two states.
 
 ## Allow list and invariant registry
 

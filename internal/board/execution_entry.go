@@ -322,7 +322,7 @@ func RecordExecutionWindow(root string, entry Entry, window, resolved string) (E
 		}
 		updated := *l.current
 		updated.Window = window
-		if err = putCurrentRecord(tx, updated); err != nil {
+		if err = putCurrentRecord(tx, s, l, updated); err != nil {
 			return "", err
 		}
 		return text, putTransition(tx, l, transitionFrom(TransitionWindowUpdate, s, l.current).withCard(s, text, s.Revision+1))
@@ -349,7 +349,7 @@ func RecordExecutionSession(ctx context.Context, root string, entry Entry, befor
 		}
 		updated := *l.current
 		updated.Session = after
-		if err = putCurrentRecord(tx, updated); err != nil {
+		if err = putCurrentRecord(tx, s, l, updated); err != nil {
 			return "", err
 		}
 		return text, putTransition(tx, l, transitionFrom(TransitionSessionRepair, s, l.current).withCard(s, text, s.Revision+1))
@@ -374,7 +374,7 @@ func RecordExecutionProcess(root string, entry Entry, process ExecutionProcess) 
 		}
 		updated := *l.current
 		updated.Process = &process
-		if err := putCurrentRecord(tx, updated); err != nil {
+		if err := putCurrentRecord(tx, s, l, updated); err != nil {
 			return "", err
 		}
 		return "", putTransition(tx, l, transitionFrom(TransitionProcessIdentity, s, l.current).withCard(s, s.Text, s.Revision))
@@ -406,6 +406,9 @@ func BeginTakeover(root string, entry Entry, in TakeoverInput) (ExecutionResult,
 		revision := s.Revision
 		if text != s.Text {
 			revision++
+		}
+		if err = storeLegacyTakeover(tx, s, l); err != nil {
+			return "", err
 		}
 		retired := *cur
 		retired.Schema, retired.Status, retired.FinishedRevision = executionSchema, ExecutionHandedOff, revision

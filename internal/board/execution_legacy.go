@@ -110,7 +110,13 @@ func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) 
 			add(TransitionRollback, a.ID, emptyCycle(task), "", "", a.FinishedRevision)
 		}
 	}
+	// The first stored link froze the card facts these links read: a later change
+	// of the card must not rewrite the history the stored links continue.
 	owner, session, _ := cardExecutionFacts(s)
+	revision := s.Revision
+	if len(stored) > 0 {
+		owner, session, revision = stored[0].OldOwner, stored[0].OldSession, stored[0].CardRevision
+	}
 	for i, h := range handoffs {
 		if i == 0 && cycle != h.OldCycle {
 			add(TransitionClaim, legacyRecordID(task, len(chain)), h.OldCycle, owner, session, h.CardRevision)
@@ -130,14 +136,17 @@ func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) 
 		end, started = stored[0].FromCycle, stored[0].FromRecord != record
 	}
 	if started {
-		add(TransitionClaim, legacyRecordID(task, len(chain)), end, owner, session, s.Revision)
+		add(TransitionClaim, legacyRecordID(task, len(chain)), end, owner, session, revision)
 	}
 	return chain, nil
 }
 
 // synthesizeCurrent derives the current record of a card with no stored
 // transition. A running execution reads its facts from the card: the old
-// takeover and session writes left no other record of them.
+// takeover and session writes left no other record of them. An old takeover that
+// changed OWNER reads as a record of its own, because OWNER is part of the identity
+// the immutable originals of the attempt fix. Its ID derives from the chain, so
+// every read and the first write name the same record.
 func synthesizeCurrent(s Snapshot, stored *ExecutionRecord, chain []ExecutionTransition) *ExecutionRecord {
 	if len(chain) == 0 {
 		return stored
@@ -151,8 +160,10 @@ func synthesizeCurrent(s Snapshot, stored *ExecutionRecord, chain []ExecutionTra
 	}
 	r := ExecutionRecord{Schema: executionSchema, ID: last.ToRecord, TaskID: s.Entry.TaskID, Cycle: last.ToCycle, Kind: ExecutionClaim, Status: ExecutionRunning, Owner: owner, Session: session, Window: window, Revision: max(last.CardRevision, 1)}
 	switch {
+	case stored != nil && last.ToRecord == stored.ID && stored.Owner != owner:
+		r.ID, r.Kind, r.FinishedRevision = legacyRecordID(s.Entry.TaskID, len(chain)), ExecutionTakeover, r.Revision
 	case stored != nil && last.ToRecord == stored.ID:
-		r.Kind, r.Revision, r.PreviousID = ExecutionStart, stored.Revision, stored.PreviousID
+		r.Kind, r.Revision, r.PreviousID, r.FinishedRevision = ExecutionStart, stored.Revision, stored.PreviousID, stored.FinishedRevision
 	case last.Kind == TransitionReclaim:
 		r.Kind = ExecutionReclaim
 	case session != "":
@@ -164,4 +175,35 @@ func synthesizeCurrent(s Snapshot, stored *ExecutionRecord, chain []ExecutionTra
 		r.PreviousID = stored.ID
 	}
 	return &r
+}
+
+// storeLegacyTakeover stores the originals of an old takeover before the first
+// write on its card, with the handoff link the old binary never wrote. The caller
+// moves the pointer. The originals of the attempt stay as they are. The link is a
+// stored one on purpose: a synthesized link would read the card, so the prefix
+// would change length with OWNER, and the stored links are numbered after the
+// prefix.
+func storeLegacyTakeover(tx *Transaction, s Snapshot, l *executionLedger) error {
+	if !l.legacyTakeover() {
+		return nil
+	}
+	cur := l.current
+	attempt, ok, err := readRecordJSON(tx, executionPath(l.task, cur.PreviousID, statusOriginal(cur.Status)))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return coordinatorError("start attempt original")
+	}
+	retired := attempt
+	retired.Schema, retired.Status, retired.FinishedRevision = executionSchema, ExecutionHandedOff, s.Revision
+	if err = putRetiredOriginal(tx, retired, statusOriginal(ExecutionHandedOff)); err != nil {
+		return err
+	}
+	if _, err = putRecordOriginals(tx, *cur); err != nil {
+		return err
+	}
+	t := transitionFrom(TransitionHandoff, s, cur).onChain(*l).withCard(s, s.Text, s.Revision)
+	t.OldOwner, t.OldSession, t.OldWindow, t.FromStatus = attempt.Owner, attempt.Session, "", attempt.Status
+	return putTransition(tx, l, t)
 }

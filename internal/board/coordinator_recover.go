@@ -171,6 +171,9 @@ func stageRecoverReset(tx *Transaction, s Snapshot, r CoordinatorRecover, record
 	if err != nil {
 		return m, err
 	}
+	if err = storeLegacyTakeover(tx, s, &l); err != nil {
+		return m, err
+	}
 	rounds, err := dispatchRounds(tx, s)
 	if err != nil {
 		return m, err
