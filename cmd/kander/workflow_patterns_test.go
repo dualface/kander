@@ -18,6 +18,7 @@ import (
 var (
 	repositoryRoot = filepath.Join("..", "..")
 	runFlagWord    = regexp.MustCompile(`(^|\s)-run(\s|=|$)`)
+	commandChain   = regexp.MustCompile(`[;&]|\|\||\s\|\s`)
 )
 
 // workflowRunPattern is one `go test -run` command of a workflow file.
@@ -27,8 +28,9 @@ type workflowRunPattern struct {
 	pattern  string
 }
 
-// parseWorkflowRunPatterns needs each command on one line, and refuses a -run it
-// cannot attribute: a skipped command would be the silent gap this file closes.
+// parseWorkflowRunPatterns needs each command alone on one line, and refuses a
+// -run it cannot attribute: a skipped command would be the silent gap this file
+// closes.
 func parseWorkflowRunPatterns(workflow string) ([]workflowRunPattern, error) {
 	var found []workflowRunPattern
 	line := 0
@@ -41,6 +43,9 @@ func parseWorkflowRunPatterns(workflow string) ([]workflowRunPattern, error) {
 		_, command, ok := strings.Cut(text, "go test ")
 		if !ok {
 			return nil, fmt.Errorf("line %d: -run outside a one-line go test command", line)
+		}
+		if commandChain.MatchString(text) {
+			return nil, fmt.Errorf("line %d: -run in a chained command", line)
 		}
 		current := workflowRunPattern{line: line}
 		words := strings.Fields(command)
@@ -128,6 +133,7 @@ func TestWorkflowRunPatternChecksReportFailures(t *testing.T) {
 		{"unknown package", "run: go test ./cmd/no-such-package -run TestCheck\n", "line 1: go test -list TestCheck ./cmd/no-such-package"},
 		{"no command", "run: go build ./...\n# go test ./cmd/kander -run TestCheck\n", "no go test -run command found"},
 		{"continued command", "run: go test ./cmd/kander \\\n  -run TestCheck\n", "line 2: -run outside a one-line go test command"},
+		{"chained commands", "run: go test ./cmd/kander -run TestNoSuchTest && go test ./cmd/kander -run TestCheck\n", "line 1: -run in a chained command"},
 		{"no package path", "run: go test -run TestCheck\n", "line 1: go test command without a package path"},
 		{"no pattern", "run: go test ./cmd/kander -run\n", "line 1: go test command without a package path or a -run value"},
 	}
