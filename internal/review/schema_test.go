@@ -28,6 +28,12 @@ func TestEvidenceSchemaPrintsEveryField(t *testing.T) {
 	if !strings.Contains(schemaOutput(t, "assign"), "field: items\nrequired: yes\n") {
 		t.Fatal("assign items")
 	}
+	extend := schemaOutput(t, "extend-plan")
+	for _, field := range []string{"decision", "release_obligation", "release_obligation.kind", "release_obligation.task_ids"} {
+		if !strings.Contains(extend, "field: "+field+"\n") {
+			t.Fatalf("extend-plan is missing %s", field)
+		}
+	}
 	if !strings.Contains(schemaOutput(t, "advance"), "field: advance.foreign_commits\nrequired: no\n") {
 		t.Fatal("foreign commits")
 	}
