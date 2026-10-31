@@ -50,8 +50,9 @@ fi
 			}
 			// Both bounds start at the deadline itself: a clock read beside
 			// WithTimeout drifts under load. The reverse fake sleeps 3s, so a
-			// budget that is not shared exceeds the upper bound, while the delay
-			// of reaping a killed process stays far below it.
+			// reverse probe outside the deadline exceeds the upper bound, while
+			// the delay of reaping a killed process stays far below it. A shorter
+			// separate budget stays inside the bound; the next test catches that.
 			if overrun := returned.Sub(deadline); overrun < 0 || overrun > 1500*time.Millisecond {
 				t.Fatalf("returned %s after the shared 400ms deadline", overrun)
 			}
