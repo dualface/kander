@@ -92,10 +92,10 @@ func TestHerdrRevalidationUsesRemainingBudget(t *testing.T) {
 	installPOSIXFakes(t, true)
 	script := `#!/bin/sh
 if [ "$2" = list ]; then
- /bin/sleep 0.15
+ /bin/sleep 0.3
  echo '{"result":{"panes":[{"tab_id":"w1:t2","pane_id":"w1:p2","agent":"codex","agent_session":{"value":"wanted"}}]}}'
 elif [ "$3" = w1:p1 ]; then
- /bin/sleep 0.15
+ /bin/sleep 0.3
  echo '{"error":{"code":"pane_not_found"}}' >&2
  exit 1
 else
@@ -108,12 +108,15 @@ fi
 	if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	// The fakes spend 600ms of the budget and leave 400ms to reach the recheck, the
+	// time three process starts take on a macOS runner. A recheck with a budget of
+	// its own returns about 600ms after the deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	started := time.Now()
+	deadline, _ := ctx.Deadline()
 	rep := ClassifyTaskContext(ctx, board.Entry{TaskID: "recheck"}, "- SESSION: codex wanted\n- WINDOW: herdr:w1:t1:w1:p1\n")
-	if elapsed := time.Since(started); elapsed > 650*time.Millisecond {
-		t.Fatalf("elapsed=%s", elapsed)
+	if overrun := time.Since(deadline); overrun < 0 || overrun > 500*time.Millisecond {
+		t.Fatalf("returned %s after the 1s deadline", overrun)
 	}
 	if rep.Status != Unknown || rep.NewWindow != "" || !strings.Contains(rep.Detail, "探测期限已耗尽") {
 		t.Fatalf("report=%+v", rep)
