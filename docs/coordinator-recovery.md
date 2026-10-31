@@ -175,7 +175,20 @@ The column of the member selects the mode:
 | `working`, `review` | reset | card, ledger, recovery review record, mirror, record |
 | `done`, `archived`, `trash` | confirm | mirror, record |
 
-A reset refuses a member with any dispatch binding, including a completed one, and launch refuses an executor that reads `alive` or `alive-orphaned`. Other probe results proceed: `unknown` never counts as alive. launch probes before the command takes a lock, and board requires the card revision that was probed.
+A reset refuses a member with any dispatch binding, including a completed one. launch also probes the executor, with reverse lookup on, and the probe result decides:
+
+| Probe result | Reset | Why |
+| --- | --- | --- |
+| `alive`, `alive-orphaned` | refused | The executor runs at the recorded address. |
+| `drifted` | refused | Reverse lookup found the executor at a new address. |
+| `stopped` | proceeds | The address is stale and the lookup found no executor. |
+| `unknown` | proceeds | A user decided, and `recover` is the last way out when the terminal cannot be probed. `unknown` never counts as alive. |
+
+`identity-mismatch` and `unprobeable` proceed like `unknown`. Adoption keeps its probe without reverse lookup: it reads a drifted address as `stopped` and refuses, which is the safe direction there. For a reset, the same reading would pass a running executor.
+
+A session with no reference has nothing to search by, so a drifted `WINDOW` still reads `stopped` and the reset proceeds. Classification does not change for this case.
+
+The probe has its own budget, `recoverProbeBudget`, which is `liveness.DefaultBatchBudget` (10 seconds), inside the 30-second command context. A hung terminal reads `unknown` at that limit, and the rest of the deadline stays for the board write. Without the budget the probe could use the whole deadline, and the reset that `unknown` allows would then fail. launch probes before the command takes a lock, and board requires the card revision that was probed.
 
 A reset writes `STARTED_AT`, a new claim, an execution record of kind `recover`, and a transition of kind `recover` with the decision reference, and retires the old record as `handed-off`. The transition continues the chain, not the card, so it also records a gap from a change no producer recorded, such as the plain reclaim of a binary from before #20. A `review/` card moves to `working/`, because its delivery belongs to the old cycle. `OWNER`, `SESSION`, and `WINDOW` stay; the takeover replaces them and closes the old container. A record of kind `recover` has no session of its owner, so plain `resume`, `notify`, and `dismiss` refuse it and name `resume --agent`.
 

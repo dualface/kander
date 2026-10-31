@@ -80,21 +80,30 @@ func verifyWrapUpCompletion(ctx context.Context, root string, facts board.Coordi
 	return launchError("launch.wrap_up_needs_checkout", facts.Integration.TaskID, facts.Integration.TargetCommit)
 }
 
-// recoverLivenessFn observes the recorded address only, as adoption does.
+// recoverProbeBudget bounds the probe of a reset. A hung terminal reads unknown
+// at this limit, and the rest of the command deadline stays for the board write.
+var recoverProbeBudget = liveness.DefaultBatchBudget
+
+// recoverLivenessFn searches a stale address, unlike adoption: a drifted WINDOW
+// must not read stopped, or a reset would pass a running executor.
 var recoverLivenessFn = func(ctx context.Context, s board.Snapshot) liveness.Report {
-	return liveness.ClassifyTaskLookupContext(ctx, s.Entry, s.Text, false)
+	ctx, cancel := context.WithTimeout(ctx, recoverProbeBudget)
+	defer cancel()
+	return liveness.ClassifyTaskContext(ctx, s.Entry, s.Text)
 }
 
 // RecoverCoordinator refuses a reset of a member whose executor is confirmed
-// running, then lets board apply the request to the card it observed. Any other
-// probe result proceeds: the user decided, and unknown never counts as alive.
+// running, at the recorded address or at a new one, then lets board apply the
+// request to the card it observed. Any other probe result proceeds: the user
+// decided, and unknown never counts as alive.
 func RecoverCoordinator(ctx context.Context, root string, r board.CoordinatorRecover) (board.CoordinatorCheckpoint, error) {
 	s, err := board.ReadSnapshot(root, r.Member)
 	if err != nil {
 		return board.CoordinatorCheckpoint{}, err
 	}
 	if s.Entry.State == "working" || s.Entry.State == "review" {
-		if report := recoverLivenessFn(ctx, s); report.Status == liveness.Alive || report.Status == liveness.AliveOrphaned {
+		switch report := recoverLivenessFn(ctx, s); report.Status {
+		case liveness.Alive, liveness.AliveOrphaned, liveness.Drifted:
 			return board.CoordinatorCheckpoint{}, launchError("launch.recover_executor_alive", s.Entry.TaskID, report.Status)
 		}
 	}
