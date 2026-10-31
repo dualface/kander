@@ -154,16 +154,18 @@ func parsePsLine(line string) (int, procInfo, bool) {
 	return pid, info, true
 }
 
+// reviewerProcessTree attributes helpers by incarnation: ownTree maps a PID to its start time, so a reused PID
+// inherits nothing. The leader starts with an empty time because it is not read until the first observation.
 type reviewerProcessTree struct {
 	leaderPID int
-	ownTree   map[int]struct{}
+	ownTree   map[int]string
 	observed  bool
 }
 
 func newReviewerProcessTree(leaderPID int) *reviewerProcessTree {
 	return &reviewerProcessTree{
 		leaderPID: leaderPID,
-		ownTree:   map[int]struct{}{leaderPID: {}},
+		ownTree:   map[int]string{leaderPID: ""},
 	}
 }
 
@@ -178,7 +180,7 @@ func (t *reviewerProcessTree) observe() {
 	pending := map[int]struct{}{}
 	for pid, info := range table {
 		if info.pgid == t.leaderPID && !info.zombie {
-			if _, ok := t.ownTree[pid]; !ok {
+			if startTime, ok := t.ownTree[pid]; !ok || startTime != info.startTime {
 				pending[pid] = struct{}{}
 			}
 		}
@@ -188,7 +190,7 @@ func (t *reviewerProcessTree) observe() {
 		progressed = false
 		for pid := range pending {
 			if _, ok := t.ownTree[table[pid].ppid]; ok {
-				t.ownTree[pid] = struct{}{}
+				t.ownTree[pid] = table[pid].startTime
 				delete(pending, pid)
 				progressed = true
 			}

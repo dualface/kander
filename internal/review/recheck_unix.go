@@ -41,12 +41,12 @@ func newGroupObserver(lp *launchedProcess) *groupObserver {
 	return o
 }
 
-func (o *groupObserver) attributed(pid int) bool {
+func (o *groupObserver) attributed(key memberKey) bool {
 	if o.tracker == nil {
 		return false
 	}
-	_, ok := o.tracker.ownTree[pid]
-	return ok
+	startTime, ok := o.tracker.ownTree[key.pid]
+	return ok && startTime == key.startTime
 }
 
 // observe records one bounded snapshot and returns the live members it holds. Group membership decides alone:
@@ -86,7 +86,7 @@ func (o *groupObserver) recheck() (map[memberKey]bool, error) {
 
 func (o *groupObserver) hasUnattributed(live map[memberKey]bool) bool {
 	for key := range live {
-		if !o.attributed(key.pid) {
+		if !o.attributed(key) {
 			return true
 		}
 	}
@@ -99,7 +99,7 @@ func (o *groupObserver) outcome(key memberKey, live map[memberKey]bool, recheck 
 		return memberNotRechecked
 	case err != nil:
 		return memberUnknown
-	case o.attributed(key.pid):
+	case o.attributed(key):
 		return memberAttributed
 	case live[key]:
 		return memberLeftover
@@ -143,7 +143,7 @@ func observeReviewerGroup(lp *launchedProcess, recheck bool) (processCollection,
 	} else {
 		live, err = o.observe(recheckSnapshotLimit)
 	}
-	evidence := &processEvidence{Schema: 1, LeaderPID: o.leader, Cleanup: processCleanup{Sigkill: sigkillNotSent}}
+	evidence := &processEvidence{Schema: 1, LeaderPID: o.leader, Cleanup: processCleanup{Sigkill: sigkillPending}}
 	if recheck {
 		evidence.Recheck = processRecheck{Performed: true, DurationMS: time.Since(started).Milliseconds()}
 	}

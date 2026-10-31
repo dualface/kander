@@ -74,7 +74,6 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 	var failure *gateError
 	timedOut := false
 	outputPrinted := false
-	processNote := ""
 
 	fail := func(err error) {
 		var ge *gateError
@@ -87,17 +86,19 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		exitCode = 2
 	}
 
-	// collect retains the evidence before reporting a failure, so a process failure can name the evidence.
 	collect := func(recheck bool) (processCollection, error) {
 		treeAttempted = true
-		collection, stopErr := stopProcessTree(lp, recheck)
 		var retainErr error
-		processNote, retainErr = retainProcessEvidence(ctx, collection.evidence)
+		collection, stopErr := stopProcessTree(lp, recheck, func(evidence *processEvidence) {
+			if err := retainProcessEvidence(ctx, evidence); err != nil && retainErr == nil {
+				retainErr = err
+			}
+		})
 		if stopErr != nil {
 			if retainErr != nil {
 				userError(retainErr.Error())
 			}
-			return collection, processStopFailure(stopErr, processNote)
+			return collection, stopErr
 		}
 		treeCollected = true
 		return collection, retainErr
@@ -117,7 +118,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		}
 		if reviewStarted && !treeCollected {
 			if ctx.archive != nil {
-				ctx.archive.reason = withProcessNote(config.Text("review.archive_tree_incomplete"), processNote)
+				ctx.archive.reason = config.Text("review.archive_tree_incomplete")
 			}
 			exitCode = 2
 		} else if reviewStarted && !targetIsUnchanged(ctx) {
@@ -325,7 +326,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		return exitCode
 	}
 	if exitCode == 0 && collection.lingering {
-		fail(processRejection(ctx.settings.name, processNote, collection))
+		fail(processRejection(ctx.settings.name, collection))
 		return exitCode
 	}
 	if timedOut || exitCode != 0 {

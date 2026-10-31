@@ -143,8 +143,8 @@ func jobActiveProcesses(job windows.Handle) (int, error) {
 	return int(info.ActiveProcesses), nil
 }
 
-// stopProcessTree reports only a job's active process count, so recheck has no effect and no evidence exists.
-func stopProcessTree(lp *launchedProcess, recheck bool) (processCollection, error) {
+// stopProcessTree reports only a job's active process count, so recheck has no effect and record is never called.
+func stopProcessTree(lp *launchedProcess, recheck bool, record func(*processEvidence)) (processCollection, error) {
 	if lp == nil {
 		return processCollection{}, nil
 	}

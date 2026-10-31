@@ -94,9 +94,10 @@ func processGroupHasLiveMembers(lp *launchedProcess) bool {
 	return false
 }
 
-// stopProcessTree collects the reviewer process group. recheck is true only for a leader that exited with 0;
-// the evidence stays in the result on every failure path.
-func stopProcessTree(lp *launchedProcess, recheck bool) (processCollection, error) {
+// stopProcessTree collects the reviewer process group. recheck is true only for a leader that exited with 0.
+// record receives the evidence before SIGKILL, because the identities are gone afterwards, and again with the
+// final cleanup result.
+func stopProcessTree(lp *launchedProcess, recheck bool, record func(*processEvidence)) (processCollection, error) {
 	if lp == nil || lp.cmd == nil || lp.cmd.Process == nil {
 		return processCollection{}, nil
 	}
@@ -106,15 +107,19 @@ func stopProcessTree(lp *launchedProcess, recheck bool) (processCollection, erro
 	}
 	collection, empty := observeReviewerGroup(lp, recheck)
 	cleanup := &collection.evidence.Cleanup
+	defer func() { record(collection.evidence) }()
 	if empty {
 		waitLeader(lp, 5*time.Second)
+		cleanup.Sigkill = sigkillNotSent
 		cleanup.Collected = true
 		return collection, nil
 	}
+	record(collection.evidence)
 	switch err := syscall.Kill(-lp.cmd.Process.Pid, syscall.SIGKILL); {
 	case err == nil:
 		cleanup.Sigkill = sigkillSent
 	case errors.Is(err, syscall.ESRCH):
+		cleanup.Sigkill = sigkillNotSent
 	default:
 		cleanup.Sigkill = sigkillFailed
 		cleanup.Error = err.Error()

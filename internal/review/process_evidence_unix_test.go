@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -323,7 +324,7 @@ func TestTrackerAttribution(t *testing.T) {
 	injectTables(t, table)
 	tracked := fakeGroup()
 	tracked.tracker = newReviewerProcessTree(leaderPID)
-	tracked.tracker.ownTree[100] = struct{}{}
+	tracked.tracker.ownTree[100] = "own"
 	tracked.tracker.observed = true
 	collection, empty := observeReviewerGroup(tracked, true)
 	got := outcomes(collection.evidence)
@@ -342,6 +343,125 @@ func TestTrackerAttribution(t *testing.T) {
 	collection, _ = observeReviewerGroup(tracked, true)
 	if !collection.lingering || outcomes(collection.evidence)["100/own"] != memberLeftover {
 		t.Fatalf("%+v", collection)
+	}
+}
+
+func TestReusedHelperPIDInheritsNoAttribution(t *testing.T) {
+	injectTables(t,
+		map[int]procInfo{100: member("own"), 200: member("stray")},
+		map[int]procInfo{100: member("reused")},
+	)
+	tracked := fakeGroup()
+	tracked.tracker = newReviewerProcessTree(leaderPID)
+	tracked.tracker.ownTree[100] = "own"
+	tracked.tracker.observed = true
+	collection, _ := observeReviewerGroup(tracked, true)
+	if got := outcomes(collection.evidence); !collection.lingering || got["100/reused"] != memberLeftover {
+		t.Fatalf("%+v %v", collection, got)
+	}
+}
+
+func TestTrackerAttributesAHelperByIncarnation(t *testing.T) {
+	helper := member("second")
+	helper.ppid = leaderPID
+	injectTables(t, map[int]procInfo{100: helper})
+	tree := newReviewerProcessTree(leaderPID)
+	tree.ownTree[100] = "first"
+	tree.observe()
+	if tree.ownTree[100] != "second" {
+		t.Fatalf("%v", tree.ownTree)
+	}
+}
+
+func TestEvidenceIsRecordedBeforeSIGKILL(t *testing.T) {
+	cmd := exec.Command("sleep", "20")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	lp := &launchedProcess{cmd: cmd, waitDone: make(chan struct{})}
+	go func() {
+		lp.waitErr = cmd.Wait()
+		close(lp.waitDone)
+	}()
+	var states []string
+	_, err := stopProcessTree(lp, false, func(e *processEvidence) {
+		alive := syscall.Kill(cmd.Process.Pid, 0) == nil && !processExited(lp)
+		states = append(states, fmt.Sprintf("%s/%d/%v", e.Cleanup.Sigkill, len(e.Members), alive))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{sigkillPending + "/1/true", sigkillSent + "/1/false"}
+	if !slices.Equal(states, want) {
+		t.Fatalf("%v", states)
+	}
+}
+
+func processExited(lp *launchedProcess) bool {
+	select {
+	case <-lp.waitDone:
+		return true
+	default:
+		return false
+	}
+}
+
+func TestEveryProcessFailureNamesTheEvidence(t *testing.T) {
+	h, root, args := archiveHarness(t)
+	writeFake(t, h.fake, "#!/bin/sh\ncat >/dev/null\n(sleep 20) >/dev/null 2>&1 &\nexit 3\n")
+	code, _, stderr := captureRun(t, args)
+	location := "reviews/stable/" + board.ReviewProcessEvidence
+	if code != 3 || !strings.Contains(stderr, location) {
+		t.Fatalf("%d %s", code, stderr)
+	}
+	run, err := board.ReadReviewRun(root, "stable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(run.FailureReason, location) {
+		t.Fatalf("%+v", run)
+	}
+}
+
+func TestStagedEvidenceSurvivesAnInterruptedGate(t *testing.T) {
+	_, root, args := archiveHarness(t)
+	options, remaining, err := parseArchiveOptions(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, rest, err := splitAgentArgs(remaining)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := validateContextMode(agent, rest, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = archiveInvocation(&ctx, options, rest, root, board.FindingsSchemaReceiver); err != nil {
+		t.Fatal(err)
+	}
+	if err = ctx.archive.phase("running", "started"); err != nil {
+		t.Fatal(err)
+	}
+	pending := &processEvidence{Schema: 1, Cleanup: processCleanup{Sigkill: sigkillPending}}
+	if err = retainProcessEvidence(ctx, pending); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := captureRun(t, args)
+	if code != 2 {
+		t.Fatalf("%d %s", code, stderr)
+	}
+	run, err := board.ReadReviewRun(root, "stable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ExecutionStatus != "interrupted" || !strings.Contains(run.FailureReason, board.ReviewProcessEvidence) {
+		t.Fatalf("%+v", run)
+	}
+	evidence, _ := archivedEvidence(t, root, "stable")
+	if evidence.Cleanup.Sigkill != sigkillPending {
+		t.Fatalf("%+v", evidence)
 	}
 }
 

@@ -2,7 +2,6 @@ package review
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +22,7 @@ const (
 	memberNotRechecked = "not_rechecked"
 	memberUnknown      = "unknown"
 
+	sigkillPending = "pending"
 	sigkillSent    = "sent"
 	sigkillNotSent = "not_sent"
 	sigkillFailed  = "failed"
@@ -73,55 +73,40 @@ type processCleanup struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// retainProcessEvidence stores the evidence with the run. It prints the evidence when no run exists or the
-// write fails, so the record survives either way. It returns the sentence that names the stored location, which
-// is empty when nothing was stored.
-func retainProcessEvidence(ctx reviewContext, evidence *processEvidence) (string, error) {
-	if evidence == nil {
-		return "", nil
-	}
+// retainProcessEvidence stores the evidence with the run, replacing an earlier version. It prints the evidence
+// when no run exists or the write fails, so the record survives either way.
+func retainProcessEvidence(ctx reviewContext, evidence *processEvidence) error {
 	var stored error
 	if ctx.archive != nil {
 		data, err := json.MarshalIndent(evidence, "", "  ")
 		if err != nil {
-			return "", err
+			return err
 		}
 		path := filepath.Join(ctx.archive.staging, board.ReviewProcessEvidence)
-		stored = fs.WriteTextAtomic(ctx.archive.staging, path, string(data)+"\n", false)
+		stored = fs.WriteTextAtomic(ctx.archive.staging, path, string(data)+"\n", true)
 		if stored == nil {
-			return config.Text("review.process_evidence", "reviews/"+ctx.archive.run.RunID+"/"+board.ReviewProcessEvidence), nil
+			ctx.archive.processEvidence = true
+			return nil
 		}
 	}
 	data, err := json.Marshal(evidence)
 	if err != nil {
-		return "", err
+		return err
 	}
 	fmt.Fprintln(os.Stderr, config.Text("review.process_evidence", string(data)))
-	return "", stored
+	return stored
 }
 
-// withProcessNote appends the evidence location to a process failure.
-func withProcessNote(message, note string) string {
-	if note == "" {
-		return message
-	}
-	return message + "; " + note
+// processEvidenceNote names the stored evidence of a run, relative to its card.
+func processEvidenceNote(runID string) string {
+	return config.Text("review.process_evidence", "reviews/"+runID+"/"+board.ReviewProcessEvidence)
 }
 
-// processRejection is the failure message of a collection that rejects a reviewer result.
-func processRejection(name, note string, collection processCollection) *gateError {
+// processRejection is the failure of a collection that rejects a reviewer result.
+func processRejection(name string, collection processCollection) *gateError {
 	key := "review.review_left_background_child_processes_the_result_was_rejected"
 	if collection.evidence != nil && collection.evidence.Observation.Failed {
 		key = "review.process_observation_failed_the_result_was_rejected"
 	}
-	return newGateMsg(2, withProcessNote(config.Text(key, name), note))
-}
-
-// processStopFailure adds the evidence location to a failed collection.
-func processStopFailure(err error, note string) error {
-	var ge *gateError
-	if errors.As(err, &ge) {
-		return newGateMsg(ge.code, withProcessNote(ge.message, note))
-	}
-	return err
+	return newGate(2, key, name)
 }

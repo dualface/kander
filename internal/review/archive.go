@@ -25,6 +25,8 @@ type archiveExecution struct {
 	report       []byte
 	taskSnapshot []byte
 	reason       string
+	// processEvidence is true once this process stored the evidence in staging.
+	processEvidence bool
 }
 
 func archiveError(detail string) error { return newGate(2, "review.archive_invalid", detail) }
@@ -244,6 +246,11 @@ func (a *archiveExecution) finish(code int) int {
 	if code != 0 && a.run.FailureReason == "" {
 		a.run.FailureReason = config.Text("review.archive_execution_failed", code)
 	}
+	if code != 0 && a.processEvidence {
+		note := processEvidenceNote(a.run.RunID)
+		a.run.FailureReason += "; " + note
+		userError(note)
+	}
 	run, err := board.FinalizeReviewRun(a.root, a.run, a.report)
 	if err != nil {
 		userError(config.Text("review.archive_publish_failed", a.run.RunID, err.Error()))
@@ -260,6 +267,10 @@ func (a *archiveExecution) recover() int {
 		a.run.ExecutionStatus = "interrupted"
 		a.run.ExitCode = 2
 		a.run.FailureReason = config.Text("review.archive_interrupted")
+		// A gate killed after its first evidence write still left the record in staging.
+		if _, err := os.Lstat(filepath.Join(a.staging, board.ReviewProcessEvidence)); err == nil {
+			a.run.FailureReason += "; " + processEvidenceNote(a.run.RunID)
+		}
 		var err error
 		a.run, err = board.FinalizeReviewRun(a.root, a.run, nil)
 		if err != nil {
