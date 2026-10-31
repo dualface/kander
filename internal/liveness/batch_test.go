@@ -53,6 +53,23 @@ fi
 	return dir
 }
 
+// waitForBatchProbe returns after the fake command for pane has logged its start
+// and recorded its PID, so a later kill cannot erase the concurrency evidence.
+func waitForBatchProbe(t *testing.T, dir, pane string) {
+	t.Helper()
+	path := filepath.Join(dir, pane)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("probe never started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func assertBatchPeakAndCleanup(t *testing.T, dir string, wantPeak, wantStarts int) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, "events"))

@@ -57,6 +57,9 @@ func TestSubscriptionDispatchDeadlineDoesNotWaitForProbe(t *testing.T) {
 	if !attention.Liveness[id].Collecting || attention.Liveness[id].Status != Unknown || !attention.Dispatches[id].ConfirmationOverdue {
 		t.Fatalf("slow probe hid deadline: %+v", attention)
 	}
+	// The attention event may precede the probe process: it never waits for one,
+	// and a slow dispatch write can leave the deadline already past at startup.
+	waitForBatchProbe(t, dir, "w1:p0")
 	cancel()
 	<-done
 	assertBatchPeakAndCleanup(t, dir, 1, 1)
