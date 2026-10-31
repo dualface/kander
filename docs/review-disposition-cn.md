@@ -140,6 +140,51 @@ kander review progress <绝对工作目录> <task-id>
 
 ---
 
+### 计划外批次的处理
+
+成员在计划外批次中有 run 时，`kander check`、`kander review progress`、`kander move <id> done` 都报 `unplanned execution batch: <batch-id>`。当前版本在批次产生前就拒绝这样的 run，但旧版本留下的 run 仍在看板上。这种批次不能加入批次链，因为后继批次的 base 必须等于前驱批次关闭时的目标。改用 `extend-plan` 的 `resolve_batch` 接受它。
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 3,
+  "author": "coordinator",
+  "basis": "batch-three reviewed the range of the old batch",
+  "resolve_batch": {
+    "batch_id": "old-batch",
+    "covering_batch_id": "batch-three",
+    "findings": [{
+      "run_id": "old-run",
+      "finding_id": "PMQA-001",
+      "status": "fixed",
+      "basis": "the next commit updates the document",
+      "fix_commit": "<full SHA>",
+      "verification": "batch-three reviewed the fix"
+    }]
+  }
+}
+```
+
+这个请求是单独的操作，与 `extend-plan` 的其他操作互斥。CWD 必须是计划的工作树。已封存的计划也接受它，并保持封存。计划的 `batches` 不变，计划外 run、批次记录、`reviews/<run_id>/`、`REVIEWS` 索引行都不变。
+
+全部满足以下条件时才接受：
+
+- 批次有 run，不在计划中，并且计划至少含它的一个成员。
+- 每个 run 都已定稿并发布完成，没有 run 等待 `review interpret`。失败的 run 没有 finding 需要列出。
+- `covering_batch_id` 指定本计划的一个已关闭批次。它的 base 等于计划外批次的 base 或是其祖先，它的目标等于计划外批次的目标或是其后代。
+- 计划外批次每个 `required` 角色在覆盖批次中也是 `required`。计划外批次中属于该计划且未被排除的成员都是覆盖批次的成员。
+- `findings` 把每个 run 的每个 finding 各列一次，不含其他项。must-fix finding 是 `fixed`，或者带 `decision`（用户决定引用）的 `rejected`。其他 finding 是 `fixed`、`deferred` 或 `rejected`。每项都有 `basis`，`fixed` 还需要 `fix_commit` 与 `verification`。
+- `fix_commit` 是所属 run 的 commit 的严格后代，并且是该角色在覆盖批次的结论 run 的 commit 或其祖先。
+- 本计划没有处理过这个批次。
+
+限制：只接受一个覆盖批次。范围跨 2 个已关闭批次时没有覆盖批次，请求被拒绝。
+
+`internal/review` 执行 Git 检查，把边交给 `internal/board`；后者与自己推导的边比较，不调用 Git。计划在 `resolved_batches` 中保存记录，含批次修订号、全部 run ID 与报告哈希、已验证的边，`plan-history` 保存相同的记录。`kander review plan` 忽略这个字段。`kander review progress` 打印记录，每个 finding 的处理结果都能读到。
+
+门禁按当前记录重新验证这些条件。批次新增 run、批次修订号变化或报告变化，都让 `kander check` 与 `kander move <id> done` 再次失败。另一个计划外批次单独失败。
+
+`done/` 的成员与其他计划写入一样接收新的计划副本，已归档成员不接收。被排除的成员不需要在覆盖批次中。执行周期变化不阻止处理，也不能阻止：批次处理之后 `review progress` 才能给出 `rebind_cycles`，所以重绑在处理之后。批次中不属于本计划的成员由它自己的计划处理。带处理记录的看板需要认识 `resolved_batches` 的版本；v1.0.0 把它当作未知字段并拒绝计划。归档清理与其他证据一起删除计划和 `plan-history`。
+
 ## 3. 结构化结论与历史报告映射
 
 每个审查 Agent 的报告末尾必须输出且仅输出一个独立的围栏代码块：

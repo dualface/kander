@@ -140,6 +140,14 @@ kander review progress <絶対作業ディレクトリ> <task-id>
 
 ---
 
+### 計画外バッチの処理
+
+メンバーが計画外バッチに run を持つと、`kander check`、`kander review progress`、`kander move <id> done` は `unplanned execution batch: <batch-id>` で失敗します。現在のバイナリはバッチの作成前にその run を拒否しますが、古いバイナリが残した run はボードに残ります。後続バッチの base は先行バッチのクローズ時の目標と一致する必要があるため、このバッチはチェーンに入れません。代わりに `extend-plan` の `resolve_batch` で受け入れます。
+
+このリクエストは単独の操作で、`extend-plan` の他の操作とは排他です。CWD は計画のワークツリーです。封印済みの計画も受け付け、封印は維持されます。計画の `batches`、計画外 run、バッチレコード、`reviews/<run_id>/`、`REVIEWS` の行は変わりません。`covering_batch_id` はこの計画のクローズ済みバッチ 1 つで、計画外バッチの範囲を含み、その required ロールと計画に残るメンバーをすべて含む必要があります。範囲が 2 つのクローズ済みバッチにまたがる場合は拒否します。`findings` は全 run の全 finding を挙げます。must-fix の finding は `fixed`、または `decision`（ユーザー決定の参照）付きの `rejected` です。`fix_commit` は run のコミットの厳密な子孫で、そのロールの結論 run のコミットかその祖先です。
+
+計画は `resolved_batches` に、バッチのリビジョン、全 run ID とレポートハッシュ、検証済みの Git の辺を記録します。`plan-history` にも同じ記録が残ります。ゲートはこれらの条件を現在のレコードで再検証するため、run の追加やリビジョンの変更は再び失敗します。実行サイクルの再バインドは、この処理の後で行います。条件の全文は [英語版](review-disposition.md#unplanned-batch-resolution) を参照してください。
+
 ## 3. 構造化された指摘とレガシーレポートのマッピング
 
 各 Reviewer Agent のレポート末尾には、以下の独立したコードブロックを必ず 1 つ出力する必要があります：

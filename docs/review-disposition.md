@@ -141,6 +141,51 @@ For multi-step delivery:
 
 ---
 
+### Unplanned Batch Resolution
+
+A run in a batch outside the plan of a member fails `kander check`, `kander review progress`, and `kander move <id> done` with `unplanned execution batch: <batch-id>`. Current binaries refuse such a run before the batch exists, but a run from an older binary stays on the board. The batch cannot join the chain, because a successor's base must equal the closed target of its predecessor. `extend-plan` with `resolve_batch` accepts it instead.
+
+```json
+{
+  "plan_id": "implementation-cycle",
+  "expected_revision": 3,
+  "author": "coordinator",
+  "basis": "batch-three reviewed the range of the old batch",
+  "resolve_batch": {
+    "batch_id": "old-batch",
+    "covering_batch_id": "batch-three",
+    "findings": [{
+      "run_id": "old-run",
+      "finding_id": "PMQA-001",
+      "status": "fixed",
+      "basis": "the next commit updates the document",
+      "fix_commit": "<full SHA>",
+      "verification": "batch-three reviewed the fix"
+    }]
+  }
+}
+```
+
+The request is one operation, mutually exclusive with every other `extend-plan` operation. The CWD must be the plan's worktree. A sealed plan accepts it and stays sealed. The plan's `batches` do not change, and the unplanned run, its batch record, `reviews/<run_id>/`, and its `REVIEWS` line stay as they are.
+
+The request is accepted only when all of these hold:
+
+- The batch has a run and is outside the plan, and the plan holds at least one of its members.
+- Every run is finalized and fully published, and no run waits for `review interpret`. A failed run has no finding to list.
+- `covering_batch_id` names one closed batch of this plan. Its base is the base of the unplanned batch or an ancestor, and its target is the target of the unplanned batch or a descendant.
+- Every `required` role of the unplanned batch is `required` in the covering batch. Every plan member of the unplanned batch that was not excluded is a member of the covering batch.
+- `findings` lists every finding of every run once, and nothing else. A must-fix finding is `fixed`, or `rejected` with `decision`, the user decision reference. Any other finding is `fixed`, `deferred`, or `rejected`. Every entry has a `basis`, and `fixed` also needs `fix_commit` and `verification`.
+- A `fix_commit` is a strict descendant of the commit of its run, and it is the commit of the role's conclusion run in the covering batch or an ancestor of that commit.
+- The plan has not resolved this batch before.
+
+The limit: one covering batch only. A range that spans two closed batches has no covering batch, so the request is refused.
+
+`internal/review` runs the Git checks and passes the edges to `internal/board`, which compares them with the edges it derives and runs no Git. The plan stores the record in `resolved_batches`, with the batch revision, every run ID and report hash, and the verified edges, and `plan-history` keeps the same record. `kander review plan` ignores that field. `kander review progress` prints the record, so each finding's result is readable there.
+
+The gate reruns these conditions on the current records. A new run in the batch, a changed batch revision, or a changed report fails `kander check` and `kander move <id> done` again. Another unplanned batch fails them on its own.
+
+Members in `done/` take the new plan copy like any other plan write, and archived members take none. An excluded member needs no place in the covering batch. A changed execution cycle does not block the resolution, and it must not: `review progress` can name `rebind_cycles` only after the batch is resolved. Rebind afterwards. A member of the batch outside this plan answers in its own plan. A board with a resolution needs a binary that knows `resolved_batches`; v1.0.0 rejects the plan as an unknown field. Archive cleanup removes the plan and `plan-history` with the rest of the evidence.
+
 ## 3. Report Extraction and Receiver Interpretation
 
 Reviewers return a complete readable report. The recommended format below is extracted automatically; nonempty reports with formatting errors remain execution-successful and await receiver interpretation:
