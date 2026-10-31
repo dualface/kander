@@ -46,6 +46,8 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 5. When the card repairs a dead end, remove its row. When it adds the records an invariant needs, give that row of `modelInvariants` a `check` and drop its `owner`.
 6. Run `go test ./internal/board -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -run TestModelCompositeStates`. Compare the time with the budgets: 45 seconds for the default mode and 5 minutes for the full mode.
 
+`R.dropRequired` drops a required batch with no decision, from the seed `dropped-required`, which `R.planChainedRequired` builds. `H.recoverNoPlan` resets a member that has no plan, from the seed `recovered-no-plan`. `R.dropBatch` drops an N/A batch and `H.recover` resets a member with a plan.
+
 An operation that always strands a card, or that only exists to reach one dead end, sets `narrows`, so the search does not expand everything behind it.
 
 A state only an old binary reaches has an operation with `seedOnly`: a seed can start there, and the search never tries it. `U.oldReclaim` is one. It breaks I2 and I3 by construction, so I3 skips a card that was already off its chain. `U.oldStrayRun` is another: it writes a run in a batch outside the plan, which breaks I6 until `R.resolveBatch` accepts the batch, so I6 skips a world that holds such a run.
@@ -55,7 +57,7 @@ A state only an old binary reaches has an operation with `seedOnly`: a seed can 
 `model_registry_test.go` holds both.
 
 - `modelDeadEnds` is empty, and `TestModelRegistriesAreComplete` keeps it empty. A row names one known dead end, with its owner card and its evidence class: `model` (the search reaches it), `directed` (a directed test reproduces it), or `outside` (neither reproduces it). Rows are ordered: a state can show two causes, and the first row that covers it names it. Every `model` row must be needed: the test removes each row in turn and fails when no state turns unlisted, so one row cannot hide another.
-- `modelInvariants` has one row per invariant. Every invariant is enabled and has a `check`, which receives the facts before and after one transition.
+- `modelInvariants` has one row per invariant. Every invariant is enabled and has a `check`, which receives the facts before and after one transition. I10 reads the batches, closures, drop obligations and recovery records itself and shares no check with the done gate, so it fails when that gate stops asking. Removing the drop check means both callers of `dropObligationsOwed`: with the seal check alone in place a plan stays unsealed and `done` still refuses.
 
 `model_meta_test.go` keeps both tables honest: it fails on a missing owner and on a directed test that does not exist. It also proves that the verdict fails on a removed row, on a repaired dead end that stays listed, and on an injected dead end.
 

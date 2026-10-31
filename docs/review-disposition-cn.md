@@ -100,6 +100,34 @@ kander review progress <绝对工作目录> <task-id>
 
 `done/` 成员不受影响：其他成员的后续批次、不含该成员的未关闭批次、其他成员的重绑，都不改变它的 `check`、coordinator 镜像，以及已完成的 wrap-up。已完成的 wrap-up 仍然绑定当时的计划终点。
 
+### run 的周期绑定
+
+`run.json` 与 sidecar 记录 `member_cycles`：run 创建时每个成员的执行周期。新的关闭要求结论 run 是每个留下成员当前周期的 run。其他周期的 run 不能关闭未关闭的批次，它留在批次中，所以计划仍然不能隐藏它。计划收编的批次、重绑时未关闭的批次都如此。`kander review close` 拒绝，并写明 run、角色、成员与批次。`kander review progress` 在 `pending` 中列出 `stale-run:<批次>/<角色>/<成员>`，动作为 `rerun-current-cycle`，`kander move <id> done` 用同一项拒绝。
+
+有两条出路。在新 commit 上用 `--advance-file` 与 `--previous-run-id` 运行该角色：链可以从旧周期开始，链头复审当前周期。或者在同一 commit 上运行该角色，用 `superseded_runs` 取代旧 run。两条路上，旧 run 的 finding 都继续约束。
+
+已关闭批次继续有效，其中的 run 不需要当前绑定。没有绑定的 run 来自旧版本。它只在周期未变化时才算开放批次或收编批次的证据，也就是成员的执行链排除 `emptyCycle` 之后只有一个周期。这是破坏性变化：旧周期 run 不再满足闸门，升级时曾在复审中途 reclaim 的卡要多做一次复审。
+
+### 被删除的 required 批次
+
+删除含 `required` 角色的批次不会结束这次复审。计划在 `drop_obligations` 中记录批次、角色、当时在 `working/` 或 `review/` 的成员，以及从哪个位置起的批次才算数。后续删除保留之前的记录。删除 N/A 批次不留记录。
+
+- 后续批次包含该成员、要求该角色并关闭后，该成员的记录结束。N/A 不算，不含该成员的批次对它不算。已排除成员不再欠复审。
+- 某角色没有要求它并包含该成员的后续批次时，`seal` 拒绝。这样的批次可以与 seal 在同一请求中到达。done 仍然等它关闭。
+- `kander review progress` 在 `pending` 中列出 `dropped-review:<成员>/<角色>`，动作为 `append-required-batch`。`kander move <id> done` 用同一项拒绝。
+- `drop_batches` 接受可选的 `decision`（用户决定引用），此时不留记录。只含空白时按没有决定处理。
+- 之后也可以用 `release_obligation`（`{"kind": "dropped", "task_ids": [...]}`）加 `decision` 结束记录。已封存的计划接受它，并保持封存。没有记录的成员被拒绝。
+- 两种 `decision` 都留在 `plan-history`。与 `--decision` 一样，Kander 不能验证它来自用户。它们都不结束恢复义务，也不结束新执行周期欠的批次。
+
+### 没有计划时的恢复
+
+`kander coordinator recover` 处理没有计划的成员时，写入 `plan_id` 为空的 `recovery-reviews/<task-id>.json`。记录的角色来自之后创建的计划，后续删除从计划中拿走的角色也留在记录里，带 `decision` 时同样如此。
+
+- 至少有一个角色时，每个角色都需要包含该成员、要求该角色的已关闭批次，结论 run 必须是当前周期 run。N/A 不算，`release_obligation` 被拒绝。
+- 没有角色时计划全部是 N/A，`kander move <id> done` 拒绝，直到 `release_obligation`（`{"kind": "recovery", "task_ids": [...]}`）加 `decision` 记录用户决定。这个决定留在记录与 `plan-history` 中。改为追加 required 批次也能解除，已封存的计划接受这个批次。
+
+有计划的成员重置时规则不变：记录写明计划要求的角色，只有该位置之后的已关闭批次才能解除。`release_obligation` 不适用。
+
 ### 成员排除（Member Exclusion）
 
 `kander move` 把 plan 成员或任务组成员移入 `archived/` 或 `trash/` 时，在同一事务中写 `exclusions/<task-id>.json`：排除 ID、计划、任务组、来源与目标状态、结果、执行周期、原因、决定引用。只有这个 move 写这份记录，两个状态都没有回路，所以排除无法伪造来逃避复审。从 `done/` 移入 `archived/` 不写记录。从 `done/` 移入 `trash/` 要写，因为这张卡不再算已交付。
@@ -380,7 +408,7 @@ kander review close <工作目录> <关闭请求.json>
 
 执行 `kander move <task-id> done` 时会严格验证：
 1. **计划封存**：审查计划为 `"sealed": true`。
-2. **批次全关**：所有批次均已关闭且结论有效。没有成员的批次除外。全部旧批次已关闭后才重绑的成员，必须有一个后续批次。
+2. **批次全关**：所有批次均已关闭且结论是当前周期的有效结论。没有成员的批次除外。全部旧批次已关闭后才重绑的成员，必须有一个后续批次。删除义务与恢复义务都已解除。
 3. **无未决阻碍**：所有阻塞性缺陷均处于 `fixed` 或合规 `waived` 状态。
 4. **Git 祖先链**：所有通过 Commit 和修复 Commit 均为最终交付目标的直接祖先。
 5. **产物完整性**：本地审查账本哈希与副本完全吻合，无断链或缺失。已排除成员与已归档成员的副本不比对。

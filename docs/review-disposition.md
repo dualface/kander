@@ -101,6 +101,34 @@ A rebind after every batch of the member closed starts a cycle no batch reviews.
 
 A member in `done/` stays as it was: a later batch of another member, an open batch that does not name it, and the rebind of another member do not change its `check`, its coordinator mirror, or its completed wrap-up, which stays bound to the plan end of its day.
 
+### Cycle Binding of Runs
+
+`run.json` and the sidecar record `member_cycles`: the execution cycle of each member when the run was created. A new closure needs a conclusion run of the current cycle of every member that remains. A run of another cycle cannot close an open batch, and it stays in the batch, so a plan still cannot hide it. This holds for a batch a plan adopted and for a batch that was open at a rebind. `kander review close` refuses with the run, role, member, and batch. `kander review progress` lists `stale-run:<batch>/<role>/<member>` under `pending` and the action `rerun-current-cycle`, and `kander move <id> done` refuses with the same item.
+
+There are two ways out. Run the role on a new commit with `--advance-file` and `--previous-run-id`: the chain may start in the old cycle, and its head reviewed the current one. Or run the role on the same commit and retire the old run through `superseded_runs`. Findings of the old run stay binding on both paths.
+
+A closed batch stays valid: its runs need no current binding. A run with no binding comes from an older binary. It counts as evidence of an open or adopted batch only while the cycle is unchanged, which means the execution chain of the member, with `emptyCycle` left out, names one cycle. This is a breaking change: a run of an old cycle no longer satisfies the gate, and a card that was reclaimed mid-review needs one more review after an upgrade.
+
+### Dropped Required Batches
+
+Dropping a batch with a `required` role does not end that review. The plan records it in `drop_obligations`: the batch, the roles, the members that were in `working/` or `review/`, and the position from which a batch counts. A later drop keeps earlier records. Dropping an N/A batch records nothing.
+
+- A record ends for a member when a later batch names that member, requires the role, and closes. N/A does not count, and a batch without the member does not count for it. An excluded member owes nothing.
+- `seal` refuses while a role has no later batch that requires it and names the member. Such a batch may arrive in the same request as the seal. Done still waits for it to close.
+- `kander review progress` lists `dropped-review:<member>/<role>` under `pending` and the action `append-required-batch`. `kander move <id> done` refuses with the same item.
+- `drop_batches` takes an optional `decision`, the user decision reference, and then records nothing. White space counts as no decision.
+- `release_obligation` with `{"kind": "dropped", "task_ids": [...]}` and a `decision` ends a record later. A sealed plan accepts it, and it stays sealed. A member with no record is refused.
+- Both `decision` values stay in `plan-history`. As with `--decision`, Kander cannot verify that the user gave them. Neither ends a recovery obligation or the batch a new cycle owes.
+
+### Recovery With No Plan
+
+`kander coordinator recover` on a member with no plan writes `recovery-reviews/<task-id>.json` with an empty `plan_id`. The record takes its roles from the plan created later, and it keeps the roles a later drop takes out of that plan, also with a `decision`.
+
+- With at least one role, every role needs a closed batch that names the member and requires the role, and its conclusion run must be a run of the current cycle. N/A does not count, and `release_obligation` is refused.
+- With no role, the plan is all N/A, and `kander move <id> done` refuses until `release_obligation` with `{"kind": "recovery", "task_ids": [...]}` and a `decision` records the user decision. That decision stays in the record and in `plan-history`. A required batch appended instead also discharges the record, and a sealed plan accepts that batch.
+
+A reset of a member that has a plan keeps its existing rules: the record names the plan roles, and only a closed batch from its position on discharges it. `release_obligation` does not apply to it.
+
 ### Member Exclusion
 
 A `kander move` into `archived/` or `trash/` of a plan or task group member writes `exclusions/<task-id>.json` in the same transaction: exclusion ID, plan, task group, source and target state, result, cycle, reason, and decision reference. Only that move writes the record, and neither state has a way back, so an exclusion cannot be forged to escape a review. A move from `done/` into `archived/` writes none. A move from `done/` into `trash/` does, because the card no longer counts as delivered.
@@ -337,7 +365,7 @@ kander review advance <absolute-CWD> <advance-request.json>
 
 The request records `{batch_id, expected_revision, advance: {previous_target, target, reason, deliveries, foreign_commits}}`. `deliveries` maps batch-member commit SHAs to task IDs. Optional `foreign_commits` maps other commit SHAs in the range to nonempty reasons. Every commit in the range must appear in exactly one map. Git working tree must be clean.
 
-A batch with a planned successor refuses both entrances, because the base of the successor is immutable and must equal the closed target of this batch. The error names the successors. Remove them with `extend-plan` and `drop_batches`, which accepts trailing batches with no run, advance, or closure, reopens a sealed plan, and leaves the batch records, so an ID cannot return with another base. After the close, append the next batch under a new ID, then seal again.
+A batch with a planned successor refuses both entrances, because the base of the successor is immutable and must equal the closed target of this batch. The error names the successors. Remove them with `extend-plan` and `drop_batches`, which accepts trailing batches with no run, advance, or closure, reopens a sealed plan, and leaves the batch records, so an ID cannot return with another base. After the close, append the next batch under a new ID, then seal again. A dropped `required` batch stays owed, so the batch you append must require the role and name the member, and the seal fails without it (see "Dropped Required Batches").
 
 The command, and an incremental run with `--advance-file`, refuses while any assigned finding has no author disposition. Mechanical items count. The error lists each `task/run/finding`, and neither the batch nor the plan changes. An assigned finding without a record is a fix round that has not ended, and a target move would overtake it.
 
@@ -417,7 +445,7 @@ Every successful run of a required role must sit on the conclusion chain (the co
 
 The `kander move <task-id> done` gate checks:
 1. **Plan Sealed**: The task's review plan has `"sealed": true`.
-2. **Batches Closed**: All batches are closed with valid role conclusions, except a batch with no member left. A rebound member whose every earlier batch closed has a later batch.
+2. **Batches Closed**: All batches are closed with valid role conclusions of the current cycle, except a batch with no member left. A rebound member whose every earlier batch closed has a later batch. Drop obligations and recovery obligations are discharged.
 3. **No Unresolved Blockers**: All blocking findings are resolved (`fixed` or validly `waived`).
 4. **Git Ancestry**: All pass commits and fix commits are verified ancestors of the final delivery target.
 5. **Artifact Integrity**: Local ledger matches hashes, without missing copies or broken links. Copies of excluded and archived members are not compared.

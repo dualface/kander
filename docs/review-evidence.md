@@ -93,6 +93,7 @@ sidecar schema 1 contains:
 - report_language, SHA-256 of the inputs and all original artifacts, kander_version.
 - phase, launch_status, execution_status, semantic_status, exit_code, failure_reason.
 - created_at, finished_at, duration_ms.
+- member_cycles: the execution cycle of each member when the run was created. A run of an older binary has none. A new closure accepts only a conclusion run of the current cycle; a closed batch keeps its runs. See [cycle binding of runs](review-disposition.md#cycle-binding-of-runs).
 
 launch_status is not_started, unknown, or started. Before launching, launching/unknown is persisted first; on successful launch, running/started is written; on launch failure, not_started is recorded as final. execution_status is incomplete during preparation and finally ok, failed, not_started, or interrupted. semantic_status is always unassessed; ok only means the tool's execution verification succeeded and does not equal a semantic PASS.
 
