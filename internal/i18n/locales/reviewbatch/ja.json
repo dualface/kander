@@ -30,5 +30,13 @@
   "board.review_resolve_fix_evidence": "finding {{.V0}} は状態が fixed でないのに修正の証拠があります",
   "board.review_resolve_fix_order": "finding {{.V0}} の fix_commit はレビュー済みコミット {{.V1}} です。それより後のコミットにしてください",
   "board.review_resolve_stale": "処理済みのバッチ {{.V0}} は処理後に変更されました: {{.V1}}",
-  "board.review_resolve_failed_report": "失敗した run {{.V0}} には Kander が読めないレポートが残っています。finding が不明なため、このバッチは処理できません"
+  "board.review_resolve_failed_report": "失敗した run {{.V0}} には Kander が読めないレポートが残っています。finding が不明なため、このバッチは処理できません",
+  "board.review_decision_unused": "decision は drop_batches か release_obligation でのみ使えますが、このリクエストにはどちらもありません",
+  "board.review_release_decision": "release_obligation には空でない decision（ユーザー決定の参照）が必要です",
+  "board.review_release_nothing": "メンバー {{.V1}} に解除できる {{.V0}} 義務はありません",
+  "board.review_release_recovery_roles": "メンバー {{.V0}} の復旧には {{.V1}} が未完了で、決定は実際のレビューの代わりになりません。kander review extend-plan でこれらのロールを要求しメンバーを含むバッチを追加し、クローズしてください",
+  "board.review_seal_dropped": "シールできません。削除した required バッチの {{.V0}}（メンバー/ロール）が未完了です。同じリクエストでロールを要求しメンバーを含むバッチを追加するか、release_obligation にユーザー決定を記してください",
+  "board.review_dropped_required": "削除した required バッチのレビュー義務は残ります（dropped-review:<メンバー>/<ロール>）。kander review extend-plan でロールを要求しメンバーを含むバッチを追加してクローズするか、release_obligation にユーザー決定を記してください。N/A は数えられません",
+  "board.review_stale_conclusion": "ロール {{.V1}} の run {{.V0}} はメンバー {{.V2}} の別の実行サイクルをレビューしたため、バッチ {{.V3}} をクローズできません。現在のサイクルでロール {{.V1}} を実行してください。新しいコミットでは --advance-file と --previous-run-id を使い、同じコミットでは superseded_runs で古い run を置き換えます",
+  "board.review_stale_run_required": "要求されたロールに別の実行サイクルの run しかありません（stale-run:<バッチ>/<ロール>/<メンバー>）。現在のサイクルでロールを実行し、新しい run でバッチをクローズしてください"
 }

@@ -30,5 +30,13 @@
   "board.review_resolve_fix_evidence": "finding {{.V0}} has fix evidence without the status fixed",
   "board.review_resolve_fix_order": "fix_commit of finding {{.V0}} is the reviewed commit {{.V1}}. It must be a later commit",
   "board.review_resolve_stale": "resolved batch {{.V0}} changed after its resolution: {{.V1}}",
-  "board.review_resolve_failed_report": "failed run {{.V0}} kept a report Kander cannot read, so its findings are unknown and this batch cannot be resolved"
+  "board.review_resolve_failed_report": "failed run {{.V0}} kept a report Kander cannot read, so its findings are unknown and this batch cannot be resolved",
+  "board.review_decision_unused": "decision belongs to drop_batches or release_obligation, and this request has neither",
+  "board.review_release_decision": "release_obligation needs a non-empty decision: the user decision reference",
+  "board.review_release_nothing": "member {{.V1}} has no {{.V0}} obligation to release",
+  "board.review_release_recovery_roles": "the recovery of member {{.V0}} owes {{.V1}}, and a decision does not replace an actual review: append a batch with kander review extend-plan that requires these roles and names the member, then close it",
+  "board.review_seal_dropped": "cannot seal: a dropped required batch still owes {{.V0}} (member/role). Append a batch that requires the role and names the member, with the seal in the same request, or send release_obligation with a user decision",
+  "board.review_dropped_required": "a dropped required batch stays owed (dropped-review:<member>/<role>): append a batch with kander review extend-plan that requires the role and names the member, close it, or release it with release_obligation and a user decision. N/A does not count",
+  "board.review_stale_conclusion": "run {{.V0}} of role {{.V1}} reviewed another execution cycle of member {{.V2}}, so it cannot close batch {{.V3}}. Run role {{.V1}} in this cycle: on a new commit with --advance-file and --previous-run-id, or on the same commit, retiring the old run through superseded_runs",
+  "board.review_stale_run_required": "a required role has only runs of another execution cycle (stale-run:<batch>/<role>/<member>): run that role in this cycle and close the batch on the new run"
 }

@@ -54,7 +54,7 @@
   "board.recover_state": "{{.V0}} は {{.V1}} にあります。復旧できるのは working、review、done、archived、trash のメンバーです。backlog、todo のメンバーには復旧する実行がありません。",
   "board.recover_dispatch_bound": "{{.V0}} はディスパッチ {{.V1}} にバインドされています。次の手順: kander dispatch fail、cancel、settle のいずれかでバインドを終了してから復旧してください。",
   "board.wrap_up_blocked_members": "グループ {{.V0}} にブロックされたメンバーがあります: {{.V1}}。kander coordinator reconcile が受け入れるか、ユーザーが kander coordinator recover を決定するまで wrap-up は開始できません。",
-  "board.review_recovery_required": "復旧したメンバーには plan が要求した各ロールの実際のレビューが必要です。kander review extend-plan でバッチを追加してください。N/A は数えられません",
+  "board.review_recovery_required": "復旧したメンバーには plan が要求した各ロールの実際のレビューが必要です。kander review extend-plan でバッチを追加してください。N/A は数えられません。plan がない状態でリセットされ、その後の plan がどのロールも要求しないメンバーには、kind が recovery の release_obligation とユーザー決定が必要です",
   "launch.recover_executor_alive": "{{.V0}} の executor はまだ実行中です（{{.V1}}）。復旧はそれを置き換えません。次の手順: kander resume --agent <agent>、または先にその executor を停止してください。",
   "launch.wrap_up_needs_checkout": "{{.V0}} の wrap-up を検証できません。到達できる checkout にコミット {{.V1}} がありません。次の手順: このリポジトリの checkout で kander move を実行してください。"
 }

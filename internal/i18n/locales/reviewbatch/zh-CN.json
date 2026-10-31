@@ -30,5 +30,13 @@
   "board.review_resolve_fix_evidence": "finding {{.V0}} 带有修复证据，状态却不是 fixed",
   "board.review_resolve_fix_order": "finding {{.V0}} 的 fix_commit 等于被审 commit {{.V1}}。它必须是之后的 commit",
   "board.review_resolve_stale": "已处理的批次 {{.V0}} 在处理后发生变化：{{.V1}}",
-  "board.review_resolve_failed_report": "失败的 run {{.V0}} 留有 Kander 无法读取的报告，它的 finding 未知，这个批次不能处理"
+  "board.review_resolve_failed_report": "失败的 run {{.V0}} 留有 Kander 无法读取的报告，它的 finding 未知，这个批次不能处理",
+  "board.review_decision_unused": "decision 只用于 drop_batches 或 release_obligation，这个请求两者都没有",
+  "board.review_release_decision": "release_obligation 需要非空的 decision：用户决定引用",
+  "board.review_release_nothing": "成员 {{.V1}} 没有可解除的 {{.V0}} 义务",
+  "board.review_release_recovery_roles": "成员 {{.V0}} 的恢复义务还欠 {{.V1}}，决定不能代替实际复审：用 kander review extend-plan 追加要求这些角色并包含该成员的批次，然后关闭它",
+  "board.review_seal_dropped": "不能封存：被删除的 required 批次还欠 {{.V0}}（成员/角色）。在同一请求中追加要求该角色并包含该成员的批次，或用 release_obligation 写明用户决定",
+  "board.review_dropped_required": "被删除的 required 批次继续欠复审（dropped-review:<成员>/<角色>）：用 kander review extend-plan 追加要求该角色并包含该成员的批次并关闭它，或用 release_obligation 写明用户决定。N/A 不算",
+  "board.review_stale_conclusion": "角色 {{.V1}} 的 run {{.V0}} 审的是成员 {{.V2}} 的另一个执行周期，不能关闭批次 {{.V3}}。在当前周期运行角色 {{.V1}}：在新 commit 上用 --advance-file 与 --previous-run-id，或在同一 commit 上运行并用 superseded_runs 取代旧 run",
+  "board.review_stale_run_required": "要求的角色只有其他执行周期的 run（stale-run:<批次>/<角色>/<成员>）：在当前周期运行该角色，用新 run 关闭批次"
 }

@@ -145,5 +145,14 @@
   "review.schema.plan.resolved_batches.item.git.edges": "由 Kander 写入：已验证的祖先关系。",
   "review.schema.plan.resolved_batches.item.git.edges.item.ancestor": "由 Kander 写入：较早的 commit。",
   "review.schema.plan.resolved_batches.item.git.edges.item.descendant": "由 Kander 写入：较新的 commit，或同一 commit。",
-  "review.schema.plan.resolved_batches.item.recorded_at": "由 Kander 写入：处理的 UTC 时间。"
+  "review.schema.plan.resolved_batches.item.recorded_at": "由 Kander 写入：处理的 UTC 时间。",
+  "review.schema.extend-plan.decision": "用户决定引用。与 drop_batches 同用时，这次删除不留下义务。与 release_obligation 同用时，解除所列成员的义务。其他操作拒绝这个字段。只含空白时按没有决定处理。写入 plan-history。Kander 不能验证它。",
+  "review.schema.extend-plan.release_obligation": "按用户决定解除义务：需要 decision，已封存的计划也接受，并与其他操作互斥。删除义务与恢复义务分别解除。",
+  "review.schema.extend-plan.release_obligation.kind": "使用 release_obligation 时必填。dropped 解除 required 批次被删除留下的义务。recovery 解除成员在没有计划时重置留下的义务，只在计划不要求任何角色时可用。",
+  "review.schema.extend-plan.release_obligation.task_ids": "使用 release_obligation 时必填。要解除义务的计划成员，每个成员都必须有这类义务。",
+  "review.schema.plan.drop_obligations": "由 Kander 写入：没有决定引用时被删除的 required 批次。每个角色继续欠复审，直到后续批次要求该角色、包含该成员并关闭。",
+  "review.schema.plan.drop_obligations.item.batch_id": "被删除的批次。",
+  "review.schema.plan.drop_obligations.item.from_batch": "能解除这项义务的第一个批次的位置。",
+  "review.schema.plan.drop_obligations.item.roles": "被删除批次要求的角色。",
+  "review.schema.plan.drop_obligations.item.task_ids": "仍欠这些角色的成员。"
 }

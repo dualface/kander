@@ -67,7 +67,7 @@ func validateResolutionProvenance(x ReviewPlanExtension) error {
 	if x.ResolveBatch == nil || !ValidReviewID(x.PlanID) || x.ExpectedRevision == 0 || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" {
 		return reviewError("plan extension provenance")
 	}
-	if x.Batch != nil || x.Seal || len(x.RebindCycles) > 0 || len(x.SyncTargets) > 0 || len(x.DropBatches) > 0 {
+	if x.Batch != nil || x.Seal || len(x.RebindCycles) > 0 || len(x.SyncTargets) > 0 || len(x.DropBatches) > 0 || x.ReleaseObligation != nil || strings.TrimSpace(x.Decision) != "" {
 		return reviewError(t("board.review_resolve_exclusive"))
 	}
 	if !ValidReviewID(x.ResolveBatch.BatchID) || !ValidReviewID(x.ResolveBatch.CoveringBatchID) {

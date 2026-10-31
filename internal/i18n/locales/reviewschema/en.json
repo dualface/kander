@@ -145,5 +145,14 @@
   "review.schema.plan.resolved_batches.item.git.edges": "Written by Kander: the verified ancestry claims.",
   "review.schema.plan.resolved_batches.item.git.edges.item.ancestor": "Written by Kander: the older commit.",
   "review.schema.plan.resolved_batches.item.git.edges.item.descendant": "Written by Kander: the newer commit, or the same commit.",
-  "review.schema.plan.resolved_batches.item.recorded_at": "Written by Kander: the UTC time of the resolution."
+  "review.schema.plan.resolved_batches.item.recorded_at": "Written by Kander: the UTC time of the resolution.",
+  "review.schema.extend-plan.decision": "The user decision reference. With drop_batches this drop leaves no obligation. With release_obligation it releases the named members. Any other operation refuses it. White space counts as no decision. Written to plan-history. Kander cannot verify it.",
+  "review.schema.extend-plan.release_obligation": "Releases an obligation on a user decision: needs decision, works on a sealed plan, and excludes every other operation. A drop obligation and a recovery obligation are released separately.",
+  "review.schema.extend-plan.release_obligation.kind": "Required with release_obligation. dropped releases what a drop of a required batch left. recovery releases the obligation of a member reset with no plan, only while the plan requires no role.",
+  "review.schema.extend-plan.release_obligation.task_ids": "Required with release_obligation. The plan members to release. Each one must hold such an obligation.",
+  "review.schema.plan.drop_obligations": "Written by Kander: the required batches a drop removed with no decision. Each role stays owed until a later batch that requires it, names the member and closes.",
+  "review.schema.plan.drop_obligations.item.batch_id": "The dropped batch.",
+  "review.schema.plan.drop_obligations.item.from_batch": "Position of the first batch that can discharge this obligation.",
+  "review.schema.plan.drop_obligations.item.roles": "The roles the dropped batch required.",
+  "review.schema.plan.drop_obligations.item.task_ids": "The members that still owe these roles."
 }

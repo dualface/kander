@@ -132,6 +132,23 @@ func TestGroupReclaimRetainsPlanFailuresAndOriginalAuthorsThroughCLI(t *testing.
 		t.Fatal("rebind discarded old failed run")
 	}
 	r.ResolvedFailures = map[string]string{"bad": "pm"}
+	code, _, stderr := captureRun(t, []string{"close", h.repo, dispositionJSON(t, h, "close", r)})
+	if code == 0 || !strings.Contains(stderr, ids[0]) || !strings.Contains(stderr, "PMQA") {
+		t.Fatalf("the run of the old cycle closed the batch: %d %s", code, stderr)
+	}
+	clean, _ := json.Marshal(board.ReviewFindings{Findings: []board.ReviewFinding{}, NonBlocking: []board.ReviewFinding{}})
+	t.Setenv("FAKE_CODEX_REPORT", "```kander-findings\n"+string(clean)+"\n```")
+	args[8] = "pm-new-cycle"
+	commandOK(t, args...)
+	commandOK(t, "assign", h.repo, dispositionJSON(t, h, "assign-new", board.ReviewAssignment{RunID: "pm-new-cycle", BatchID: "batch", Author: "coordinator", Basis: "no findings", Items: map[string][]string{}}))
+	if v, err = board.ReadReviewBatchView(root, "batch"); err != nil {
+		t.Fatal(err)
+	}
+	r.ViewHash = board.ReviewViewDigest(v)
+	r.ExpectedRevision = v.Batch.Revision
+	r.Roles["PMQA"] = board.ReviewRoleConclusion{RunID: "pm-new-cycle", PassedAt: h.head, Basis: "the new cycle reviewed the delivery"}
+	r.ResolvedFailures = map[string]string{"bad": "pm-new-cycle"}
+	r.SupersededRuns = map[string]board.ReviewSupersededRun{"pm": {Replacement: "pm-new-cycle", Basis: "parallel run of the old cycle"}}
 	commandOK(t, "close", h.repo, dispositionJSON(t, h, "close", r))
 	for _, id := range ids {
 		if board.RunMove([]string{id, "done", "--result", "completed"}) != 0 {

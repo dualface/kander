@@ -507,7 +507,7 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 	if err != nil {
 		return c, err
 	}
-	err = WithTransaction(root, reviewScope(plan.TaskIDs, false), func(tx *Transaction) error {
+	err = WithTransaction(root, reviewLedgerScope(plan.TaskIDs, false), func(tx *Transaction) error {
 		ok, e := readReviewJSON(tx, reviewBatchName(r.BatchID), &b)
 		if e != nil {
 			return e
@@ -554,6 +554,9 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 				return reviewError("immutable closure")
 			}
 			return verifyClosureCopies(tx, c)
+		}
+		if e = requireCurrentConclusions(tx, b, r); e != nil {
+			return e
 		}
 		c = ReviewClosure{Schema: 1, PlanID: p.PlanID, BatchID: b.BatchID, TargetCommit: b.TargetCommit, Request: r, Git: evidence, RoleStatuses: statuses, View: v, ClosedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 		targets, e := reviewCopyTargets(tx, b.TaskIDs)

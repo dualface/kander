@@ -470,7 +470,7 @@ func droppedTailPlan(t *testing.T, root string) (string, ReviewPlan) {
 	staleReclaim(t, root, ids[0])
 	recoverMember(t, root, coordinatorRequestAfter(t, root, c), ids[0])
 	p := deadEndRebind(t, root, ids[0])
-	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{"tail"}, Author: "coordinator", Basis: "replace the tail"}); err != nil {
+	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{"tail"}, Decision: "user-replaces-the-tail", Author: "coordinator", Basis: "replace the tail"}); err != nil {
 		t.Fatal(err)
 	}
 	p, err := ReadReviewPlan(root, p.PlanID)

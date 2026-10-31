@@ -54,7 +54,7 @@
   "board.recover_state": "{{.V0}} is in {{.V1}}. Recovery accepts working, review, done, archived, and trash members; a backlog or todo member has no execution to recover.",
   "board.recover_dispatch_bound": "{{.V0}} is bound to dispatch {{.V1}}. Next step: end the binding with kander dispatch fail, cancel, or settle, then recover.",
   "board.wrap_up_blocked_members": "Group {{.V0}} has blocked members: {{.V1}}. No wrap-up can start until kander coordinator reconcile accepts them, or the user decides a kander coordinator recover.",
-  "board.review_recovery_required": "a recovered member needs an actual review of every role its plan required; append a batch with kander review extend-plan, N/A does not count",
+  "board.review_recovery_required": "a recovered member needs an actual review of every role its plan required; append a batch with kander review extend-plan, N/A does not count. A member reset with no plan under a plan that requires no role instead needs release_obligation with kind recovery and a user decision",
   "launch.recover_executor_alive": "{{.V0}} still has a running executor ({{.V1}}). Recovery does not replace it. Next step: kander resume --agent <agent>, or stop that executor first.",
   "launch.wrap_up_needs_checkout": "{{.V0}} cannot verify its wrap-up: no checkout in reach holds commit {{.V1}}. Next step: run kander move from a checkout of this repository."
 }

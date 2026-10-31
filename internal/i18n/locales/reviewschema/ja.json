@@ -145,5 +145,14 @@
   "review.schema.plan.resolved_batches.item.git.edges": "Kander が書き込みます: 検証済みの祖先関係です。",
   "review.schema.plan.resolved_batches.item.git.edges.item.ancestor": "Kander が書き込みます: 古いコミットです。",
   "review.schema.plan.resolved_batches.item.git.edges.item.descendant": "Kander が書き込みます: 新しいコミット、または同じコミットです。",
-  "review.schema.plan.resolved_batches.item.recorded_at": "Kander が書き込みます: 処理の UTC 時刻です。"
+  "review.schema.plan.resolved_batches.item.recorded_at": "Kander が書き込みます: 処理の UTC 時刻です。",
+  "review.schema.extend-plan.decision": "ユーザー決定の参照。drop_batches と併用すると、この削除は義務を残しません。release_obligation と併用すると、指定メンバーの義務を解除します。他の操作では拒否されます。空白のみは決定なしとして扱います。plan-history に記録されます。Kander は検証できません。",
+  "review.schema.extend-plan.release_obligation": "ユーザー決定で義務を解除します。decision が必要で、シール済みの plan でも受け付け、他の操作とは同時に使えません。削除の義務と復旧の義務は別々に解除します。",
+  "review.schema.extend-plan.release_obligation.kind": "release_obligation で必須。dropped は required バッチの削除が残した義務を解除します。recovery は plan がない状態でリセットされたメンバーの義務を解除し、plan がどのロールも要求しないときだけ使えます。",
+  "review.schema.extend-plan.release_obligation.task_ids": "release_obligation で必須。解除する plan メンバー。各メンバーにその義務が必要です。",
+  "review.schema.plan.drop_obligations": "Kander が記録します。決定なしで削除された required バッチです。各ロールは、後続バッチがロールを要求しメンバーを含みクローズするまで残ります。",
+  "review.schema.plan.drop_obligations.item.batch_id": "削除されたバッチ。",
+  "review.schema.plan.drop_obligations.item.from_batch": "この義務を解除できる最初のバッチの位置。",
+  "review.schema.plan.drop_obligations.item.roles": "削除されたバッチが要求したロール。",
+  "review.schema.plan.drop_obligations.item.task_ids": "これらのロールが未完了のメンバー。"
 }

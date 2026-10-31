@@ -34,6 +34,9 @@ type ReviewPlan struct {
 	// CycleBatchFrom maps a rebound member to the position of the first batch that
 	// can review its new cycle. That cycle needs a batch from there on.
 	CycleBatchFrom map[string]int `json:"cycle_batch_from,omitempty"`
+	// DropObligations keeps the review a drop of required batches still owes.
+	// omitempty keeps plans without one byte-identical on re-encode.
+	DropObligations []ReviewDropObligation `json:"drop_obligations,omitempty"`
 	// ResolvedBatches accepts unplanned batches; see ResolveReviewBatch. omitempty
 	// keeps plans without one byte-identical on re-encode.
 	ResolvedBatches []ReviewBatchResolution `json:"resolved_batches,omitempty"`
@@ -118,6 +121,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 		p.ReportLanguage = language
 		p.Cycles = map[string]string{}
 		p.CycleBatchFrom = nil
+		p.DropObligations = nil
 		p.ResolvedBatches = nil
 		for _, id := range ids {
 			s, err := tx.Snapshot(id)
@@ -162,6 +166,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 			p.RecordedAt = old.RecordedAt
 			p.Revision = old.Revision
 			p.CycleBatchFrom = old.CycleBatchFrom
+			p.DropObligations = old.DropObligations
 			p.ResolvedBatches = old.ResolvedBatches
 			if !reflect.DeepEqual(old, p) {
 				return reviewError("immutable review plan conflict")

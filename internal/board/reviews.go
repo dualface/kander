@@ -93,6 +93,9 @@ type ReviewRun struct {
 	Published       map[string]bool   `json:"published"`
 	// SkippedMembers took no copy: they left the batch before publication.
 	SkippedMembers []string `json:"skipped_members,omitempty"`
+	// MemberCycles binds the run to the execution cycle of each member when it was
+	// created. omitempty keeps runs written before the field byte-identical.
+	MemberCycles map[string]string `json:"member_cycles,omitempty"`
 }
 
 type ReviewIndex struct {
@@ -439,7 +442,15 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 				}
 			}
 		}
-		run = ReviewRun{Schema: 1, ReviewInput: input, KanderVersion: version, Phase: "prepared", LaunchStatus: "not_started", ExecutionStatus: "incomplete", SemanticStatus: "unassessed", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Hashes: map[string]string{}, Published: map[string]bool{}}
+		cycles := make(map[string]string, len(input.TaskIDs))
+		for _, id := range input.TaskIDs {
+			s, e := tx.Snapshot(id)
+			if e != nil {
+				return e
+			}
+			cycles[id] = planCycle(s)
+		}
+		run = ReviewRun{Schema: 1, ReviewInput: input, KanderVersion: version, Phase: "prepared", LaunchStatus: "not_started", ExecutionStatus: "incomplete", SemanticStatus: "unassessed", CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Hashes: map[string]string{}, Published: map[string]bool{}, MemberCycles: cycles}
 		if e = tx.PutGroup(reviewControlGroup, reviewBatchName(input.BatchID), reviewJSON(batch)); e != nil {
 			return e
 		}

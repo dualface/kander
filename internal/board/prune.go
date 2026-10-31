@@ -83,7 +83,7 @@ func readPruneReceipt(root, id string) (pruneReceipt, error) {
 
 // prunePlan is the complete deletion set computed from one board snapshot.
 type prunePlan struct {
-	runs, batches, plans, taskPlans, exclusions, starts, dispatches, groups map[string]bool
+	runs, batches, plans, taskPlans, recoveries, exclusions, starts, dispatches, groups map[string]bool
 	// receipts maps a card to the evidence removed for it in this round.
 	receipts map[string]*pruneReceipt
 	// copies lists card-side review directories and copyFiles the plan copies;
@@ -163,6 +163,9 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	for _, id := range sortedKeys(plan.taskPlans) {
 		remove(review("task-plans", id+".json"), false)
 		remove(review("tracked-cycles", id+".json"), false)
+		remove(review("recovery-reviews", id+".json"), false)
+	}
+	for _, id := range sortedKeys(plan.recoveries) {
 		remove(review("recovery-reviews", id+".json"), false)
 	}
 	for _, id := range sortedKeys(plan.exclusions) {
@@ -292,7 +295,7 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 		runs[name] = v
 	}
 
-	plan := &prunePlan{runs: map[string]bool{}, batches: map[string]bool{}, plans: map[string]bool{}, taskPlans: map[string]bool{}, exclusions: map[string]bool{}, starts: map[string]bool{}, dispatches: map[string]bool{}, groups: map[string]bool{}, receipts: map[string]*pruneReceipt{}}
+	plan := &prunePlan{runs: map[string]bool{}, batches: map[string]bool{}, plans: map[string]bool{}, taskPlans: map[string]bool{}, recoveries: map[string]bool{}, exclusions: map[string]bool{}, starts: map[string]bool{}, dispatches: map[string]bool{}, groups: map[string]bool{}, receipts: map[string]*pruneReceipt{}}
 	for id, p := range plans {
 		plan.plans[id] = allSettled(p.TaskIDs)
 	}
@@ -369,7 +372,9 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 	dropFalse(plan.batches)
 	dropFalse(plan.plans)
 
+	pointed := map[string]bool{}
 	for _, name := range jsonNames(root, review("task-plans"), warn) {
+		pointed[name] = true
 		var v struct {
 			PlanID string `json:"plan_id"`
 		}
@@ -379,6 +384,12 @@ func planPrune(root string, report *PruneReport) (*prunePlan, error) {
 		}
 		if _, live := plans[v.PlanID]; settled(name) && (!live || plan.plans[v.PlanID]) {
 			plan.taskPlans[name] = true
+		}
+	}
+	// A reset of a member with no plan leaves a record no plan pointer names.
+	for _, name := range jsonNames(root, review("recovery-reviews"), warn) {
+		if !pointed[name] && settled(name) {
+			plan.recoveries[name] = true
 		}
 	}
 	// A withdrawn record reads the exclusion of its member, so the exclusion goes

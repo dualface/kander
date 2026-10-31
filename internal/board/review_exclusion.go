@@ -274,7 +274,8 @@ func cycleBatchMissing(p ReviewPlan, id string) bool {
 // cycleBatchStart returns the position from which a batch reviews the new cycle of
 // a member: its first open batch, or the end of the plan when every batch of the
 // member closed. A rebind alone must not pass done. A member of no batch has no
-// closed review to reuse, and the seal covers it.
+// closed review to reuse, and the seal covers it. An open batch may already hold a
+// run of the old cycle; requireCurrentConclusions keeps it from closing on that run.
 func cycleBatchStart(tx *Transaction, p ReviewPlan, id string) (int, bool, error) {
 	found := false
 	for i, b := range p.Batches {
@@ -310,8 +311,9 @@ func putPlanCopies(tx *Transaction, p ReviewPlan) error {
 
 // dropPlanBatches removes a trailing run of batches no run has reached, so a
 // predecessor can advance. The batch records stay, so a dropped ID cannot come
-// back with another base, and the plan reopens: only a later seal ends it.
-func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string) error {
+// back with another base, and the plan reopens: only a later seal ends it. A dropped
+// required batch stays owed unless a user decision comes with the drop.
+func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string, decision string) error {
 	if len(ids) >= len(p.Batches) {
 		return reviewError("drop_batches must leave one batch")
 	}
@@ -341,11 +343,16 @@ func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string) error {
 			return reviewError("drop_batches accepts only a batch with no run: " + pb.BatchID)
 		}
 	}
-	p.Batches = slices.Clone(p.Batches[:len(p.Batches)-len(ids)])
+	keep := len(p.Batches) - len(ids)
+	if err := keepDropObligations(tx, p, tail, keep, decision); err != nil {
+		return err
+	}
+	droppedRoles := planRequiredRoles(ReviewPlan{Batches: tail})
+	p.Batches = slices.Clone(p.Batches[:keep])
 	p.Sealed = false
 	// The next batch lands at the new end, so a cycle owed past it must accept it.
 	for id, from := range p.CycleBatchFrom {
 		p.CycleBatchFrom[id] = min(from, len(p.Batches))
 	}
-	return moveRecoveryReviews(tx, *p)
+	return moveRecoveryReviews(tx, *p, droppedRoles)
 }

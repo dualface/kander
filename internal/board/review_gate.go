@@ -2,6 +2,7 @@ package board
 
 import (
 	"errors"
+	"fmt"
 	"github.com/dualface/kander/internal/fs"
 	"os"
 	"reflect"
@@ -38,7 +39,7 @@ func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (
 		}
 		return nil
 	})
-	scope := reviewScope(ids, false)
+	scope := reviewLedgerScope(ids, false)
 	scope.ExclusiveBoard = exclusive
 	scope.warnings = journalWarningLog(warnings)
 	return scope, err
@@ -145,6 +146,17 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
 		}
 	}
+	if s.Entry.State != "done" {
+		owed, e := dropObligationsOwed(tx, p, true)
+		if e != nil {
+			return progress, e
+		}
+		for _, item := range owed {
+			member, role, _ := strings.Cut(item, "/")
+			progress.Pending = append(progress.Pending, "dropped-review:"+item)
+			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-required-batch", Role: role, RunIDs: []string{}, TaskID: member})
+		}
+	}
 	covered := false
 	for _, b := range p.Batches {
 		if containsID(b.TaskIDs, id) {
@@ -212,6 +224,14 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 				return progress, e
 			}
 			progress.NextActions = append(progress.NextActions, duplicateRunActions(b, runs)...)
+			stale, e := staleRunActions(tx, b, runs)
+			if e != nil {
+				return progress, e
+			}
+			for _, a := range stale {
+				progress.Pending = append(progress.Pending, fmt.Sprintf("stale-run:%s/%s/%s", a.BatchID, a.Role, a.TaskID))
+			}
+			progress.NextActions = append(progress.NextActions, stale...)
 			previous = ""
 			continue
 		}
@@ -269,6 +289,12 @@ func unclosedReviewError(pending []string) string {
 	}
 	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "recovery-review:") }) {
 		text += "; " + t("board.review_recovery_required")
+	}
+	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "dropped-review:") }) {
+		text += "; " + t("board.review_dropped_required")
+	}
+	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "stale-run:") }) {
+		text += "; " + t("board.review_stale_run_required")
 	}
 	return text
 }

@@ -11,29 +11,36 @@ import (
 
 // ReviewPlanExtension appends one batch after the prior closure, seals the
 // cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
-// batch, drops trailing batches no run has reached, or resolves an unplanned batch
-// (ResolveReviewBatch). Existing requirements, members and evidence are never
-// replaced. A sealed plan takes a batch only for a rebound cycle that has none, or
-// for a recovery that still owes a review.
+// batch, drops trailing batches no run has reached, releases an obligation on a user
+// decision, or resolves an unplanned batch (ResolveReviewBatch). Existing
+// requirements, members and evidence are never replaced. A sealed plan takes a batch
+// only for a rebound cycle that has none, or for a recovery that still owes a review.
 type ReviewPlanExtension struct {
-	RebindCycles     map[string]string             `json:"rebind_cycles,omitempty"`
-	SyncTargets      map[string]string             `json:"sync_targets,omitempty"`
-	DropBatches      []string                      `json:"drop_batches,omitempty"`
-	ResolveBatch     *ReviewBatchResolutionRequest `json:"resolve_batch,omitempty"`
-	PlanID           string                        `json:"plan_id"`
-	ExpectedRevision uint64                        `json:"expected_revision"`
-	Batch            *ReviewPlanBatch              `json:"batch,omitempty"`
-	Seal             bool                          `json:"seal"`
-	Author           string                        `json:"author"`
-	Basis            string                        `json:"basis"`
+	RebindCycles      map[string]string             `json:"rebind_cycles,omitempty"`
+	SyncTargets       map[string]string             `json:"sync_targets,omitempty"`
+	DropBatches       []string                      `json:"drop_batches,omitempty"`
+	ReleaseObligation *ReviewObligationRelease      `json:"release_obligation,omitempty"`
+	Decision          string                        `json:"decision,omitempty"`
+	ResolveBatch      *ReviewBatchResolutionRequest `json:"resolve_batch,omitempty"`
+	PlanID            string                        `json:"plan_id"`
+	ExpectedRevision  uint64                        `json:"expected_revision"`
+	Batch             *ReviewPlanBatch              `json:"batch,omitempty"`
+	Seal              bool                          `json:"seal"`
+	Author            string                        `json:"author"`
+	Basis             string                        `json:"basis"`
 }
 
 func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 	if x.ResolveBatch != nil {
 		return reviewError("resolve_batch needs the Git evidence of ResolveReviewBatch")
 	}
-	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 {
+	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil {
 		return reviewError("plan extension provenance")
+	}
+	// A decision of only white space is no decision, also in plan-history.
+	x.Decision = strings.TrimSpace(x.Decision)
+	if x.Decision != "" && len(x.DropBatches) == 0 && x.ReleaseObligation == nil {
+		return reviewError(t("board.review_decision_unused"))
 	}
 	exclusiveOps := 0
 	if len(x.RebindCycles) > 0 {
@@ -48,8 +55,11 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 	if len(x.DropBatches) > 0 {
 		exclusiveOps++
 	}
+	if x.ReleaseObligation != nil {
+		exclusiveOps++
+	}
 	if exclusiveOps > 1 {
-		return reviewError("rebind_cycles, sync_targets, drop_batches and batch/seal are mutually exclusive")
+		return reviewError("rebind_cycles, sync_targets, drop_batches, release_obligation and batch/seal are mutually exclusive")
 	}
 	var p ReviewPlan
 	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
@@ -76,7 +86,7 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				return err
 			}
 		}
-		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && !cycleBatch || p.Revision != x.ExpectedRevision {
+		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && x.ReleaseObligation == nil && !cycleBatch || p.Revision != x.ExpectedRevision {
 			return reviewError("plan extension CAS/sealed conflict")
 		}
 		if err = verifyPlanCopiesFor(tx, p, len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0); err != nil {
@@ -125,7 +135,12 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			}
 		}
 		if len(x.DropBatches) > 0 {
-			if err = dropPlanBatches(tx, &p, x.DropBatches); err != nil {
+			if err = dropPlanBatches(tx, &p, x.DropBatches, x.Decision); err != nil {
+				return err
+			}
+		}
+		if x.ReleaseObligation != nil {
+			if err = releaseObligation(tx, &p, *x.ReleaseObligation, x.Decision); err != nil {
 				return err
 			}
 		}
@@ -248,6 +263,13 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 				if !found {
 					return reviewError("seal requires every member assigned")
 				}
+			}
+			owed, e := dropObligationsOwed(tx, p, false)
+			if e != nil {
+				return e
+			}
+			if len(owed) > 0 {
+				return reviewError(t("board.review_seal_dropped", strings.Join(owed, ", ")))
 			}
 			p.Sealed = true
 		}
