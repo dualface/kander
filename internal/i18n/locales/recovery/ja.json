@@ -47,5 +47,13 @@
   "liveness.suggestion_orphaned": "提案: 未完了の起動を終えるには kander resume {{.V0}} --adopt --decision <参照>、executor を置き換えるには kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を実行してください",
   "liveness.suggestion_verify_by_hand": "提案: executor を手動で確認してください。この結果を生存として扱わないでください",
   "launch.process_identity_not_recorded": "警告: {{.V0}}: プロセス ID 情報を記録できなかったため、kander check は unknown を報告します: {{.V1}}\n",
-  "launch.native_resume_unsupported": "{{.V0}} は {{.V1}} で動作しており、ネイティブ再開に対応していません。次の手順: kander check {{.V0}} で executor を確認し、未完了の起動は kander resume {{.V0}} --adopt --decision <参照> で終えるか、kander resume {{.V0}} --agent <agent> --message <メッセージ> で executor を置き換えてください。"
+  "launch.native_resume_unsupported": "{{.V0}} は {{.V1}} で動作しており、ネイティブ再開に対応していません。次の手順: kander check {{.V0}} で executor を確認し、未完了の起動は kander resume {{.V0}} --adopt --decision <参照> で終えるか、kander resume {{.V0}} --agent <agent> --message <メッセージ> で executor を置き換えてください。",
+  "board.coordinator_all_blocked": "グループ {{.V0}}: reconcile はどのメンバーも受け入れませんでした。最初の理由: {{.V1}}",
+  "board.recover_request_invalid": "recover リクエストには group_id、member、expected_revision、expected_epoch、decision、reason が必要です。",
+  "board.recover_not_blocked": "{{.V0}} はこの checkpoint でブロックされていないため、復旧するものはありません。メンバーが失敗したら先に kander coordinator reconcile を実行してください。",
+  "board.recover_state": "{{.V0}} は {{.V1}} にあります。復旧できるのは working、review、done、archived、trash のメンバーです。backlog、todo のメンバーには復旧する実行がありません。",
+  "board.recover_dispatch_bound": "{{.V0}} はディスパッチ {{.V1}} にバインドされています。次の手順: kander dispatch fail、cancel、settle のいずれかでバインドを終了してから復旧してください。",
+  "board.wrap_up_blocked_members": "グループ {{.V0}} にブロックされたメンバーがあります: {{.V1}}。kander coordinator reconcile が受け入れるか、ユーザーが kander coordinator recover を決定するまで wrap-up は開始できません。",
+  "board.review_recovery_required": "復旧したメンバーには plan が要求した各ロールの実際のレビューが必要です。kander review extend-plan でバッチを追加してください。N/A は数えられません",
+  "launch.recover_executor_alive": "{{.V0}} の executor はまだ実行中です（{{.V1}}）。復旧はそれを置き換えません。次の手順: kander resume --agent <agent>、または先にその executor を停止してください。"
 }

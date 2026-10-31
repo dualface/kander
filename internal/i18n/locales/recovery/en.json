@@ -47,5 +47,13 @@
   "liveness.suggestion_orphaned": "Suggestion: to end an unfinished start, run kander resume {{.V0}} --adopt --decision <reference>; to replace the executor, run kander resume {{.V0}} --agent <agent> --decision <reference> --message <message>",
   "liveness.suggestion_verify_by_hand": "Suggestion: verify the executor by hand; do not treat this result as alive",
   "launch.process_identity_not_recorded": "warning: {{.V0}}: process identity not recorded, so kander check reports unknown: {{.V1}}\n",
-  "launch.native_resume_unsupported": "{{.V0}} runs on {{.V1}}, which has no native resume. Next step: check the executor with kander check {{.V0}}; end an unfinished start with kander resume {{.V0}} --adopt --decision <reference>, or replace the executor with kander resume {{.V0}} --agent <agent> --message <message>."
+  "launch.native_resume_unsupported": "{{.V0}} runs on {{.V1}}, which has no native resume. Next step: check the executor with kander check {{.V0}}; end an unfinished start with kander resume {{.V0}} --adopt --decision <reference>, or replace the executor with kander resume {{.V0}} --agent <agent> --message <message>.",
+  "board.coordinator_all_blocked": "Group {{.V0}}: reconcile accepted no member. First reason: {{.V1}}",
+  "board.recover_request_invalid": "The recover request needs group_id, member, expected_revision, expected_epoch, decision, and reason.",
+  "board.recover_not_blocked": "{{.V0}} is not blocked in this checkpoint, so there is nothing to recover. Run kander coordinator reconcile first when a member fails.",
+  "board.recover_state": "{{.V0}} is in {{.V1}}. Recovery accepts working, review, done, archived, and trash members; a backlog or todo member has no execution to recover.",
+  "board.recover_dispatch_bound": "{{.V0}} is bound to dispatch {{.V1}}. Next step: end the binding with kander dispatch fail, cancel, or settle, then recover.",
+  "board.wrap_up_blocked_members": "Group {{.V0}} has blocked members: {{.V1}}. No wrap-up can start until kander coordinator reconcile accepts them, or the user decides a kander coordinator recover.",
+  "board.review_recovery_required": "a recovered member needs an actual review of every role its plan required; append a batch with kander review extend-plan, N/A does not count",
+  "launch.recover_executor_alive": "{{.V0}} still has a running executor ({{.V1}}). Recovery does not replace it. Next step: kander resume --agent <agent>, or stop that executor first."
 }

@@ -105,7 +105,7 @@ func (s *modelSearch) goalReached(w *modelWorld, f *modelFacts) (bool, error) {
 		return false, err
 	}
 	defer os.RemoveAll(c.root)
-	err = c.reconcile()
+	err = c.reconcileAll()
 	var infra modelInfraError
 	if errors.As(err, &infra) {
 		return false, err
@@ -114,7 +114,7 @@ func (s *modelSearch) goalReached(w *modelWorld, f *modelFacts) (bool, error) {
 }
 
 func (n *modelNode) wants(op modelOp, tailOnly bool) bool {
-	if n.narrow != nil && !slices.Contains(n.narrow, op.name) {
+	if op.seedOnly || n.narrow != nil && !slices.Contains(n.narrow, op.name) {
 		return false
 	}
 	if op.name == modelTailOp {
@@ -498,7 +498,7 @@ func (s *modelSearch) diagnose(start *modelWorld, n *modelNode) (d modelDiagnosi
 		}
 		return modelSummary(err), nil
 	}
-	if d.mirror, err = check(w.reconcile()); err != nil {
+	if d.mirror, err = check(w.reconcileAll()); err != nil {
 		return d, err
 	}
 	for _, m := range w.members {
@@ -508,7 +508,7 @@ func (s *modelSearch) diagnose(start *modelWorld, n *modelNode) (d modelDiagnosi
 		}
 		d.tails = append(d.tails, tail)
 	}
-	d.final, err = check(w.reconcile())
+	d.final, err = check(w.reconcileAll())
 	return d, err
 }
 

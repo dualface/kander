@@ -240,6 +240,21 @@ func withdrawnRecords(l dispositionLedger) []ReviewDisposition {
 	return out
 }
 
+// cycleBatchOwed reports a batch a sealed plan must still take: one of ids has a
+// rebound cycle with no batch, or a recovery that needs an actual review.
+func cycleBatchOwed(tx *Transaction, p ReviewPlan, ids []string) (bool, error) {
+	for _, id := range ids {
+		if cycleBatchMissing(p, id) {
+			return true, nil
+		}
+		owed, err := recoveryReviewOwed(tx, p, id)
+		if owed || err != nil {
+			return owed, err
+		}
+	}
+	return false, nil
+}
+
 // cycleBatchMissing reports a member whose rebound cycle has no batch. A batch from
 // the recorded position on covers the cycle, so dropping it owes the batch again.
 func cycleBatchMissing(p ReviewPlan, id string) bool {

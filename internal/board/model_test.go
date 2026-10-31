@@ -58,6 +58,8 @@ func modelGroupSeeds() []modelSeed {
 	review := slices.Concat(claimed, []string{"A:X.review", "B:X.review", "C.reconcile"})
 	launching := []string{"A:L.begin", "B:H.claim", "C.reconcile"}
 	round := slices.Concat(review, []string{"A:D.prepareSync", "A:D.accept", "A:D.complete", "C.reconcile"})
+	closed := slices.Concat(claimed, []string{"R.planRequired", "R.runClean", "A:R.assign", "R.close", "A:X.review", "B:X.review", "C.reconcile"})
+	oldReclaim := []string{"A:U.oldReclaim", "C.reconcile"}
 	return []modelSeed{
 		{name: "todo"},
 		{name: "claimed", focus: "A", steps: claimed},
@@ -71,6 +73,10 @@ func modelGroupSeeds() []modelSeed {
 		{name: "closed", focus: "A", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile"})},
 		{name: "chained", focus: "B", steps: slices.Concat(claimed, []string{"R.planChained", "B:X.review", "C.reconcile"})},
 		{name: "rebound", focus: "A", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile", "B:F.done", "A:H.reclaimDecision", "R.rebind", "C.reconcile"})},
+		{name: "old-reclaim", focus: "A", steps: slices.Concat(review, oldReclaim)},
+		{name: "recovered", focus: "A", steps: slices.Concat(closed, oldReclaim, []string{"A:H.recover", "C.reconcile"})},
+		{name: "rejected-wrap-up", focus: "B", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile", "A:F.done", "C.gitRejected"})},
+		{name: "confirmed", focus: "B", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile", "A:F.done", "C.gitRejected", "A:H.recover", "C.reconcile"})},
 		{name: "excluded", focus: "A", steps: slices.Concat(claimed, []string{"R.planRequired", "R.run", "B:R.assign", "B:T.trash", "C.reconcile"})},
 	}
 }

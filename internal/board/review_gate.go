@@ -126,6 +126,23 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
 		}
 	}
+	for _, member := range p.TaskIDs {
+		gone, e := memberExcluded(tx, member)
+		if e != nil {
+			return progress, e
+		}
+		if gone || s.Entry.State == "done" {
+			continue
+		}
+		owed, e := recoveryReviewOwed(tx, p, member)
+		if e != nil {
+			return progress, e
+		}
+		if owed {
+			progress.Pending = append(progress.Pending, "recovery-review:"+member)
+			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
+		}
+	}
 	covered := false
 	for _, b := range p.Batches {
 		if containsID(b.TaskIDs, id) {
@@ -247,6 +264,9 @@ func unclosedReviewError(pending []string) string {
 	text := "unclosed review batches: " + strings.Join(pending, ",")
 	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "cycle-batch:") }) {
 		text += "; " + t("board.review_cycle_batch_required")
+	}
+	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "recovery-review:") }) {
+		text += "; " + t("board.review_recovery_required")
 	}
 	return text
 }

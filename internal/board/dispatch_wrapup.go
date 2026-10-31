@@ -123,6 +123,9 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 		if d.Input.Kind != "wrap-up" || d.Revision != expected || d.Authorization != authFrom(s.Text) || d.State == DispatchCompleted || d.State == DispatchFailed || d.State == DispatchCancelled || d.WrapUpAuthority != nil || d.Authorization.Epoch == ^uint64(0) || (s.Entry.State != "review" && s.Entry.State != "working") || strings.TrimSpace(author) == "" || strings.TrimSpace(reason) == "" {
 			return dispatchEvidenceError("wrap-up authority conflict: " + t("board.wrap_up_grant_hint"))
 		}
+		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
+			return e
+		}
 		if e = requireDispatchCycle(d, s); e != nil {
 			return e
 		}

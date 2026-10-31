@@ -229,7 +229,7 @@ func TestCoordinatorAndReviewRecoverReleasedReclaim(t *testing.T) {
 			// Reconcile a previously observed bound member directly across both changes.
 			old := original.Members[s.Entry.TaskID]
 			err = WithTransaction(root, LockScope{Tasks: []string{s.Entry.TaskID}, Groups: []string{taskStartGroup, reviewControlGroup}}, func(tx *Transaction) error {
-				next, e := reconcileCoordinatorMember(context.Background(), tx, s.Entry.TaskID, old, CoordinatorObservation{Revision: transactionRevision(t, root, s.Entry.TaskID)}, nil)
+				next, e := reconcileCoordinatorMember(context.Background(), tx, &coordinatorPass{}, s.Entry.TaskID, old, CoordinatorObservation{Revision: transactionRevision(t, root, s.Entry.TaskID)})
 				if e == nil && (next.Dispatch != nil || next.Cycle != m.Cycle) {
 					t.Fatal("old bound cursor not recovered")
 				}
@@ -309,9 +309,10 @@ func TestCoordinatorRejectsMissingReleaseAndHandoffEvidence(t *testing.T) {
 				t.Fatal("missing evidence accepted", damage)
 			}
 			after, err := ReadCoordinatorCheckpoint(root, c.GroupID)
-			if err != nil || !reflect.DeepEqual(after, c) {
-				t.Fatal("failed reconcile changed checkpoint", err)
+			if err != nil {
+				t.Fatal(err)
 			}
+			coordinatorOnlyBlocked(t, c, after)
 		})
 	}
 }

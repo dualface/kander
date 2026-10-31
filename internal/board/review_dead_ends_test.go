@@ -3,6 +3,7 @@ package board
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"slices"
 	"strings"
@@ -777,10 +778,22 @@ func TestPruneRemovesExclusionWithItsPlan(t *testing.T) {
 	}
 }
 
+// deadEndReconcile reports the block of a member as the failure it is. It keeps
+// reconciling from the last stored checkpoint, because a block advances it.
 func deadEndReconcile(t *testing.T, root string, c CoordinatorCheckpoint) error {
 	t.Helper()
-	_, err := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), nil)
-	return err
+	stored, err := ReadCoordinatorCheckpoint(root, c.GroupID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, stored), nil)
+	if err != nil {
+		return err
+	}
+	if blocked := next.BlockedMembers(); len(blocked) > 0 {
+		return errors.New(next.Members[blocked[0]].Blocked.Reason)
+	}
+	return nil
 }
 
 func TestCoordinatorTerminalBranchNeedsTheExclusionRecord(t *testing.T) {

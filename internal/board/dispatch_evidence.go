@@ -55,10 +55,41 @@ func dispatchEvidenceScope(root string, in DispatchInput) (LockScope, error) {
 			return scope, err
 		}
 		scope.Tasks = append(scope.Tasks, review.Tasks...)
+		card, err := ReadSnapshot(root, in.TaskID)
+		if err != nil {
+			return scope, err
+		}
+		if group := TaskGroupFrom(card.Text); group != "" {
+			scope.Groups = append(scope.Groups, group)
+		}
 	}
 	slices.Sort(scope.Tasks)
 	scope.Tasks = slices.Compact(scope.Tasks)
 	return scope, nil
+}
+
+// refuseBlockedWrapUp keeps a group from ending while the coordinator has not
+// accepted one of its members. dispatchEvidenceScope locks the group of a wrap-up.
+func refuseBlockedWrapUp(tx *Transaction, in DispatchInput) error {
+	if in.Evidence.WrapUp == nil {
+		return nil
+	}
+	s, err := tx.Snapshot(in.TaskID)
+	if err != nil {
+		return err
+	}
+	group := TaskGroupFrom(s.Text)
+	if group == "" {
+		return nil
+	}
+	c, exists, err := readCheckpoint(tx, group)
+	if err != nil || !exists {
+		return err
+	}
+	if blocked := c.BlockedMembers(); len(blocked) > 0 {
+		return kanbanError("board.wrap_up_blocked_members", group, strings.Join(blocked, ", "))
+	}
+	return nil
 }
 
 func validateDispatchEvidence(tx *Transaction, in DispatchInput, initial bool) error {

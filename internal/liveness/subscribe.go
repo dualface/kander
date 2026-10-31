@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"strconv"
@@ -55,6 +56,7 @@ type livenessJSON struct {
 type groupEvent struct {
 	Dispatches             map[string]dispatchJSON `json:"dispatches,omitempty"`
 	Attention              []string                `json:"attention,omitempty"`
+	Blocked                map[string]string       `json:"blocked,omitempty"`
 	SchemaVersion          int                     `json:"schema_version"`
 	SubscriptionID         string                  `json:"subscription_id"`
 	Seq                    uint64                  `json:"seq"`
@@ -314,6 +316,11 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			}
 		} else if len(updated) > 0 {
 			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
+				return err
+			}
+		}
+		if !maps.Equal(snapshot.blocked, current.blocked) {
+			if err := session.emit(w, "member-blocked", current, nil, nil, nil); err != nil {
 				return err
 			}
 		}

@@ -79,7 +79,7 @@ func verifyChainOriginals(tx *Transaction, l executionLedger) error {
 			record = t.FromRecord
 		case TransitionUnresolve:
 			name = statusOriginal(ExecutionUnresolved)
-		case TransitionConfirm, TransitionAdopt, TransitionClaim, TransitionReclaim:
+		case TransitionConfirm, TransitionAdopt, TransitionClaim, TransitionReclaim, TransitionRecover:
 		default:
 			continue
 		}
@@ -191,7 +191,7 @@ func reconcileTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, o
 		return m, coordinatorError("delivery has no completed receipt: " + id)
 	}
 	m = old
-	m.State, m.Revision, m.AwaitingStart = s.Entry.State, s.Revision, false
+	m.State, m.Revision, m.AwaitingStart, m.Blocked = s.Entry.State, s.Revision, false, nil
 	if s.Entry.State == "archived" {
 		receipt, e := readPruneReceipt(tx.root, id)
 		if e != nil || receipt.TaskID == id {

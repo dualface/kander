@@ -69,6 +69,21 @@ func coordinatorReconcile(t *testing.T, root string, c CoordinatorCheckpoint) Co
 	return next
 }
 
+// coordinatorOnlyBlocked requires that a failed reconcile added blocks and moved
+// no mirror.
+func coordinatorOnlyBlocked(t *testing.T, before, after CoordinatorCheckpoint) {
+	t.Helper()
+	if len(after.BlockedMembers()) == 0 {
+		t.Fatal("no member blocked")
+	}
+	for id, m := range after.Members {
+		m.Blocked = nil
+		if !reflect.DeepEqual(m, before.Members[id]) {
+			t.Fatalf("a failure moved the mirror of %s", id)
+		}
+	}
+}
+
 func TestCoordinatorConcurrentClaimAndFencing(t *testing.T) {
 	root := tempBoard(t)
 	s := coordinatorCard(t, root, "race")
@@ -206,9 +221,18 @@ func TestCoordinatorRejectsUnprovenFactsWithoutWrites(t *testing.T) {
 				t.Fatal("invalid evidence accepted")
 			}
 			after, e := ReadCoordinatorCheckpoint(root, c.GroupID)
-			if e != nil || !reflect.DeepEqual(c, after) {
-				t.Fatal("failed observation changed cursor", e)
+			if e != nil {
+				t.Fatal(e)
 			}
+			// A bad observation of one member is a verdict on it; a bad request
+			// is not, so it leaves the checkpoint alone.
+			if kind == "unknown-member" || kind == "old-revision" {
+				if !reflect.DeepEqual(c, after) {
+					t.Fatal("a refused request changed the cursor")
+				}
+				return
+			}
+			coordinatorOnlyBlocked(t, c, after)
 		})
 	}
 }

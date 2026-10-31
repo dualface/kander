@@ -259,6 +259,9 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 		fix.Authors = append([]DispatchAuthorReference(nil), fix.Authors...)
 		in.Evidence.Fix = &fix
 	}
+	if e := refuseBlockedWrapUp(tx, in); e != nil {
+		return e
+	}
 	registered, exists, e := tx.ReadGroup(dispatchRegistry, in.ID+".json")
 	if e != nil {
 		return e
@@ -368,6 +371,9 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		}
 		if d.WrapUpAuthority != nil {
 			return dispatchEvidenceError("wrap-up-only grant cannot launch or deliver")
+		}
+		if e = refuseBlockedWrapUp(tx, d.Input); e != nil {
+			return e
 		}
 		if e = requireDispatchCycle(d, s); e != nil {
 			return e

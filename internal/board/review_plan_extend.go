@@ -65,7 +65,12 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 		if err != nil {
 			return err
 		}
-		cycleBatch := x.Batch != nil && !x.Seal && slices.ContainsFunc(x.Batch.TaskIDs, func(id string) bool { return cycleBatchMissing(p, id) })
+		cycleBatch := false
+		if x.Batch != nil && !x.Seal {
+			if cycleBatch, err = cycleBatchOwed(tx, p, x.Batch.TaskIDs); err != nil {
+				return err
+			}
+		}
 		if !ok || p.Sealed && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 && !cycleBatch || p.Revision != x.ExpectedRevision {
 			return reviewError("plan extension CAS/sealed conflict")
 		}

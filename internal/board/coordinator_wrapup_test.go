@@ -111,13 +111,11 @@ func TestCoordinatorWrapUpRestartsAfterPartialArchive(t *testing.T) {
 	if e = os.WriteFile(filepath.Join(s.Entry.Path, "reviews", pmqa.RunID, "report.md"), []byte("damaged"), 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), verify); e == nil {
-		t.Fatal("archive lost report accepted")
+	after, e := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), verify)
+	if e != nil {
+		t.Fatal(e)
 	}
-	after, e := ReadCoordinatorCheckpoint(root, c.GroupID)
-	if e != nil || !reflect.DeepEqual(before, after) {
-		t.Fatal("damage changed checkpoint", e)
-	}
+	coordinatorOnlyBlocked(t, before, after)
 }
 
 func TestCoordinatorWrapUpRequiresGitAndDedicatedGrant(t *testing.T) {

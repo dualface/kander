@@ -9,9 +9,6 @@ import (
 	"testing"
 )
 
-// The owner table of the card that added this test; the repair cards shrink it.
-var modelExpectedOwners = map[string]string{"DE-18": cardRecovery}
-
 func TestModelRegistriesAreComplete(t *testing.T) {
 	seen := map[string]bool{}
 	for _, entry := range modelDeadEnds {
@@ -19,9 +16,6 @@ func TestModelRegistriesAreComplete(t *testing.T) {
 			t.Errorf("%s listed twice", entry.id)
 		}
 		seen[entry.id] = true
-		if want, ok := modelExpectedOwners[entry.id]; ok && entry.owner != want {
-			t.Errorf("%s: owner %s, want %s", entry.id, entry.owner, want)
-		}
 		switch entry.class {
 		case modelReached:
 			if entry.covers == nil {
@@ -40,21 +34,14 @@ func TestModelRegistriesAreComplete(t *testing.T) {
 			t.Errorf("%s: unknown class %q", entry.id, entry.class)
 		}
 	}
-	for id := range modelExpectedOwners {
-		if !seen[id] {
-			t.Errorf("%s is missing from the allow list", id)
-		}
-	}
-	for _, closed := range []string{"DE-02", "DE-05", "DE-06", "DE-07", "DE-08", "DE-09", "DE-10", "DE-11", "DE-12", "DE-13", "DE-14", "DE-16", "DE-17", "DE-19", "DE-20"} {
-		if seen[closed] {
-			t.Errorf("%s is closed and must stay off the allow list", closed)
-		}
+	if len(modelDeadEnds) != 0 {
+		t.Errorf("the allow list must stay empty: %d rows", len(modelDeadEnds))
 	}
 	var ids []string
 	for _, inv := range modelInvariants {
 		ids = append(ids, inv.id)
-		if (inv.check == nil) == (inv.owner == "") {
-			t.Errorf("%s: an invariant has a check or an owner card, never both or neither", inv.id)
+		if inv.check == nil {
+			t.Errorf("%s: every invariant is enabled, so each needs a check", inv.id)
 		}
 	}
 	if !slices.Equal(ids, []string{"I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9"}) {

@@ -25,6 +25,7 @@ const (
 	ExecutionClaim    = "claim"
 	ExecutionTakeover = "takeover"
 	ExecutionReclaim  = "reclaim"
+	ExecutionRecover  = "recover"
 
 	ExecutionPending    = "pending"
 	ExecutionRunning    = "running"
@@ -43,6 +44,7 @@ const (
 	TransitionHandoff         = "handoff"
 	TransitionClaim           = "claim"
 	TransitionReclaim         = "reclaim"
+	TransitionRecover         = "recover"
 	TransitionSessionRepair   = "session-repair"
 	TransitionWindowUpdate    = "window-update"
 	TransitionProcessIdentity = "process-identity"
@@ -116,7 +118,7 @@ func (r ExecutionRecord) StartUnfinished() bool {
 
 // SelfClaimed reports a record no launcher started, so no session exists.
 func (r ExecutionRecord) SelfClaimed() bool {
-	return r.Kind == ExecutionClaim || r.Kind == ExecutionReclaim
+	return r.Kind == ExecutionClaim || r.Kind == ExecutionReclaim || r.Kind == ExecutionRecover
 }
 
 func executionPath(task, id, name string) string { return task + "/" + id + "/" + name + ".json" }
@@ -139,7 +141,7 @@ func statusOriginal(status string) string {
 
 // firstOriginal is the original a record's identity is checked against.
 func firstOriginal(kind string) string {
-	if kind == ExecutionClaim || kind == ExecutionReclaim {
+	if kind == ExecutionClaim || kind == ExecutionReclaim || kind == ExecutionRecover {
 		return "result"
 	}
 	return "pending"
@@ -181,7 +183,7 @@ func validRecord(a ExecutionRecord, task string) bool {
 		if a.Owner == "" {
 			return false
 		}
-	case ExecutionClaim:
+	case ExecutionClaim, ExecutionRecover:
 	default:
 		return false
 	}
@@ -340,7 +342,7 @@ func readTransitions(tx *Transaction, task string) ([]ExecutionTransition, error
 
 func validTransitionKind(kind string) bool {
 	switch kind {
-	case TransitionStart, TransitionConfirm, TransitionRollback, TransitionUnresolve, TransitionAdopt, TransitionHandoff, TransitionClaim, TransitionReclaim, TransitionSessionRepair, TransitionWindowUpdate, TransitionProcessIdentity:
+	case TransitionStart, TransitionConfirm, TransitionRollback, TransitionUnresolve, TransitionAdopt, TransitionHandoff, TransitionClaim, TransitionReclaim, TransitionRecover, TransitionSessionRepair, TransitionWindowUpdate, TransitionProcessIdentity:
 		return true
 	}
 	return false
@@ -375,11 +377,11 @@ type executionLedger struct {
 
 func (l executionLedger) end() uint64 { return uint64(len(l.chain)) }
 
-// supersedes reports that a handoff, an adoption or a reclaim ended the record a
+// supersedes reports that a handoff, an adoption, a reclaim or a recovery ended the record a
 // launcher fenced. The launcher no longer speaks for the execution.
 func (l executionLedger) supersedes(f ExecutionFence) bool {
 	return f.launcher && slices.ContainsFunc(l.chain, func(t ExecutionTransition) bool {
-		return t.FromRecord == f.RecordID && (t.Kind == TransitionHandoff || t.Kind == TransitionAdopt || t.Kind == TransitionReclaim)
+		return t.FromRecord == f.RecordID && (t.Kind == TransitionHandoff || t.Kind == TransitionAdopt || t.Kind == TransitionReclaim || t.Kind == TransitionRecover)
 	})
 }
 
@@ -491,6 +493,21 @@ func transitionFrom(kind string, s Snapshot, cur *ExecutionRecord) ExecutionTran
 	return t
 }
 
+// onChain makes a link continue the chain even when the card left it. A change no
+// record carries, such as a reclaim of an old binary, is a gap in the history; this
+// link records the gap, because a link from the card would break the chain for good.
+func (t ExecutionTransition) onChain(l executionLedger) ExecutionTransition {
+	tail, ok := l.tail()
+	if !ok {
+		return t
+	}
+	t.FromRecord, t.FromCycle = tail.ToRecord, tail.ToCycle
+	if len(l.chain) > l.synthesized {
+		t.OldOwner, t.OldSession, t.OldWindow = tail.NewOwner, tail.NewSession, tail.NewWindow
+	}
+	return t
+}
+
 // withCard fills the to side of a link from the card after the change.
 func (t ExecutionTransition) withCard(s Snapshot, text string, revision uint64) ExecutionTransition {
 	next := Snapshot{Entry: s.Entry, Text: text}
@@ -512,7 +529,7 @@ func stageExecutionMove(tx *Transaction, s Snapshot, target, text string, o Move
 	}
 	next := Snapshot{Entry: s.Entry, Text: text}
 	r := ExecutionRecord{Schema: executionSchema, ID: tx.record.ID, TaskID: s.Entry.TaskID, Cycle: planCycle(next), Kind: ExecutionClaim, Status: ExecutionRunning, Owner: MetadataFrom(text, FieldOwner), Session: MetadataFrom(text, FieldSession), Window: MetadataFrom(text, FieldWindow), Revision: s.Revision + 1}
-	t := transitionFrom(TransitionClaim, s, l.current)
+	t := transitionFrom(TransitionClaim, s, l.current).onChain(l)
 	t.ToRecord = r.ID
 	if l.current != nil {
 		r.PreviousID = l.current.ID

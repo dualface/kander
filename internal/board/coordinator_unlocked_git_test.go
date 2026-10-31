@@ -146,16 +146,18 @@ func TestCoordinatorBoardChangeDuringGitVerification(t *testing.T) {
 	}
 }
 
-func TestCoordinatorGitFailureKeepsCheckpoint(t *testing.T) {
+func TestCoordinatorGitFailureBlocksTheMember(t *testing.T) {
 	root, _, c := unlockedGitFixture(t, "failed")
 	absent := errors.New("Git ancestry absent")
-	if _, e := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), func(context.Context, CoordinatorGitFacts) error { return absent }); !errors.Is(e, absent) {
+	var blocked *CoordinatorBlockedError
+	if _, e := ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, c), func(context.Context, CoordinatorGitFacts) error { return absent }); !errors.As(e, &blocked) || !strings.Contains(e.Error(), absent.Error()) {
 		t.Fatal("Git error not returned", e)
 	}
 	after, e := ReadCoordinatorCheckpoint(root, c.GroupID)
-	if e != nil || !reflect.DeepEqual(after, c) {
-		t.Fatal("Git failure changed the checkpoint", e)
+	if e != nil {
+		t.Fatal(e)
 	}
+	coordinatorOnlyBlocked(t, c, after)
 }
 
 func bumpCoordinatorCard(t *testing.T, root, id string) {
@@ -182,12 +184,13 @@ func TestCoordinatorInvalidCardFailsBeforeGit(t *testing.T) {
 		calls++
 		return errors.New("Git ancestry absent")
 	})
-	var ke *Error
-	if !errors.As(e, &ke) || ke.Code != "board.size_invalid" || calls != 0 {
+	var blocked *CoordinatorBlockedError
+	if !errors.As(e, &blocked) || !strings.Contains(e.Error(), "SIZE") || calls != 0 {
 		t.Fatal("card error not reported before Git", e, calls)
 	}
 	after, e := ReadCoordinatorCheckpoint(root, c.GroupID)
-	if e != nil || !reflect.DeepEqual(after, c) {
-		t.Fatal("invalid card changed the checkpoint", e)
+	if e != nil {
+		t.Fatal(e)
 	}
+	coordinatorOnlyBlocked(t, c, after)
 }

@@ -163,6 +163,7 @@ func pruneArchived(root string, warnings *WarningLog) (report PruneReport, err e
 	for _, id := range sortedKeys(plan.taskPlans) {
 		remove(review("task-plans", id+".json"), false)
 		remove(review("tracked-cycles", id+".json"), false)
+		remove(review("recovery-reviews", id+".json"), false)
 	}
 	for _, id := range sortedKeys(plan.exclusions) {
 		remove(review("exclusions", id+".json"), false)

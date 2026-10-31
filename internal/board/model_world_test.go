@@ -203,9 +203,10 @@ type modelRunFacts struct {
 }
 
 type modelReviewFacts struct {
-	batches   []modelBatchFacts
-	cycleOwed []string // members whose rebound cycle has no batch
-	foreign   []string // runs of a plan member outside every batch of that plan
+	batches    []modelBatchFacts
+	cycleOwed  []string // members whose rebound cycle has no batch
+	reviewOwed []string // members whose recovery still needs an actual review
+	foreign    []string // runs of a plan member outside every batch of that plan
 }
 
 func (r modelRunFacts) recorded(finding, task string) bool {
@@ -259,8 +260,18 @@ func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
 				if e != nil {
 					return e
 				}
-				if !gone && cycleBatchMissing(p, member) {
+				if gone {
+					continue
+				}
+				if cycleBatchMissing(p, member) {
 					facts.cycleOwed = append(facts.cycleOwed, member)
+				}
+				owed, e := recoveryReviewOwed(tx, p, member)
+				if e != nil {
+					return e
+				}
+				if owed {
+					facts.reviewOwed = append(facts.reviewOwed, member)
 				}
 			}
 			if e := checkUnplannedReviewRuns(tx, p); e != nil {
@@ -428,6 +439,11 @@ func modelTerminal(state string) bool {
 	return state == "done" || state == "archived" || state == "trash"
 }
 
+// blocked reports a member the last reconcile did not accept.
+func (f *modelFacts) blocked(i int) bool {
+	return f.ckpt != nil && f.ckpt.Members[f.world.members[i].id].Blocked != nil
+}
+
 func (f *modelFacts) evidence(i int) bool {
 	return f.attempts[i].ID != "" && f.cards[i].Revision > f.attempts[i].Revision
 }
@@ -451,7 +467,7 @@ func (f *modelFacts) memberKey(i int) string {
 	mirror := "-"
 	if f.ckpt != nil {
 		c := f.ckpt.Members[m.id]
-		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs))
+		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d blocked=%v confirmed=%v", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs), c.Blocked != nil, c.Confirmed != nil)
 	}
 	settled := slices.ContainsFunc(f.rounds[i], func(d Dispatch) bool { return d.Settlement != nil })
 	return fmt.Sprintf("col=%s excluded=%v attempt=%s evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
@@ -500,7 +516,7 @@ func (f *modelFacts) reviewKey() string {
 		}
 		parts = append(parts, fmt.Sprintf("%s/%s/sealed=%v/adv=%d/%s", b.id, state, b.sealed, b.advances, strings.Join(runs, ",")))
 	}
-	parts = append(parts, fmt.Sprintf("cycle-owed=%d", len(f.review.cycleOwed)))
+	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d", len(f.review.cycleOwed), len(f.review.reviewOwed)))
 	return strings.Join(parts, ";")
 }
 
@@ -524,6 +540,27 @@ func (f *modelFacts) rebindNeeded(i int) bool {
 // reconcile observes every member through the same request the orchestrator
 // sends. Git is structural in this model: the verifier accepts every fact.
 func (w *modelWorld) reconcile() error {
+	return w.reconcileWith(func(context.Context, CoordinatorGitFacts) error { return nil })
+}
+
+// reconcileAll is the reconcile of a finished group: a blocked member is a failure.
+func (w *modelWorld) reconcileAll() error {
+	if err := w.reconcile(); err != nil {
+		return err
+	}
+	c, err := w.checkpoint()
+	if err != nil || c == nil {
+		return err
+	}
+	if blocked := c.BlockedMembers(); len(blocked) > 0 {
+		return errors.New("blocked: " + c.Members[blocked[0]].Blocked.Reason)
+	}
+	return nil
+}
+
+// reconcileWith publishes whatever the request decides: a blocked member is a
+// result of the command, and only a refused request discards the copy.
+func (w *modelWorld) reconcileWith(verify func(context.Context, CoordinatorGitFacts) error) error {
 	checkpoint, err := w.checkpoint()
 	if err != nil || checkpoint == nil {
 		return err
@@ -548,7 +585,11 @@ func (w *modelWorld) reconcile() error {
 		}
 		r.Members[id] = o
 	}
-	_, err = ReconcileCoordinator(context.Background(), w.root, r, func(context.Context, CoordinatorGitFacts) error { return nil })
+	_, err = ReconcileCoordinator(context.Background(), w.root, r, verify)
+	var blocked *CoordinatorBlockedError
+	if errors.As(err, &blocked) {
+		return nil
+	}
 	return err
 }
 

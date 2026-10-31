@@ -141,8 +141,16 @@ func TestStartOriginalDamageStopsRecovery(t *testing.T) {
 				t.Fatal("missing start original accepted")
 			}
 			after, err := ReadCoordinatorCheckpoint(root, c.GroupID)
-			if err != nil || !reflect.DeepEqual(after, c) {
-				t.Fatal("damage changed checkpoint", err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := after.Members[original.Entry.TaskID]
+			if m.Blocked == nil {
+				t.Fatal("damage left no reason")
+			}
+			m.Blocked = nil
+			if !reflect.DeepEqual(m, c.Members[original.Entry.TaskID]) {
+				t.Fatal("damage moved the mirror", err)
 			}
 		})
 	}

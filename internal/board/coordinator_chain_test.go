@@ -2,6 +2,7 @@ package board
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -105,8 +106,8 @@ func TestReconcileRejectsAChangeNoLinkRecords(t *testing.T) {
 			if err = fixtureWrite(root, s.Entry, text); err != nil {
 				t.Fatal(err)
 			}
-			var e *Error
-			if _, err = ReconcileCoordinator(t.Context(), root, coordinatorRequest(t, root, c), nil); !errors.As(err, &e) || e.Code != "board.coordinator_conflict" {
+			var blocked *CoordinatorBlockedError
+			if _, err = ReconcileCoordinator(t.Context(), root, coordinatorRequest(t, root, c), nil); !errors.As(err, &blocked) || !strings.Contains(err.Error(), "without lifecycle handoff") {
 				t.Fatalf("err=%v", err)
 			}
 		})

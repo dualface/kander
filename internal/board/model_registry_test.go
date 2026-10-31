@@ -6,15 +6,10 @@ import (
 	"slices"
 )
 
-// cardRecovery owns the follow-up work the registries below name.
-const cardRecovery = "20261030-group-member-recovery-task"
-
-// modelInvariant is one row of the invariant table. A row with a check is
-// enabled; a row without one waits for the records its owner card adds.
+// modelInvariant is one row of the invariant table. Every row is enabled.
 type modelInvariant struct {
 	id         string
 	definition string
-	owner      string
 	check      func(before, after *modelFacts) error
 }
 
@@ -27,7 +22,7 @@ var modelInvariants = []modelInvariant{
 	{id: "I6", check: modelCheckI6, definition: "Each review run of a plan member belongs to a batch of that plan. Successful runs of one role form one chain, or carry an explicit replacement record."},
 	{id: "I7", definition: "Before a review batch advances, each assigned finding has an author disposition.", check: modelCheckI7},
 	{id: "I8", check: modelCheckI8, definition: "A member that ends in archived or trash gets a member exclusion record in the same transaction, and later plan writes skip its copy. An excluded member's assigned findings may wait for withdrawal, but they need a withdrawn disposition before aggregation and closure. A done member is not excluded, and archiving it later does not exclude it, but plan writes skip the copies of every archived member."},
-	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state."},
+	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state. A recovery that moved a mirror has an immutable record: a reset names the recover transition on the chain, and a confirmation names the cycle of the card."},
 }
 
 // modelCheckEach runs check for every member, and hands it the same member of the
@@ -85,6 +80,10 @@ func modelCheckI3(before, after *modelFacts) error {
 		now[0], now[1], now[2] = cardExecutionFacts(m.card)
 		if was != now && m.ledger.end() <= old.ledger.end() {
 			return fmt.Errorf("execution fields changed from %v to %v with no transition", was, now)
+		}
+		// A card an old binary changed stays off its chain until a recovery.
+		if old.ledger.assertCard(old.card) != nil {
+			return nil
 		}
 		return m.ledger.assertCard(m.card)
 	})
@@ -144,8 +143,31 @@ func modelCheckI9(_, after *modelFacts) error {
 		return nil
 	}
 	return modelCheckEach(nil, after, func(i int, _ *modelMemberFacts, m modelMemberFacts) error {
-		c := after.ckpt.Members[after.world.members[i].id]
+		id := after.world.members[i].id
+		c := after.ckpt.Members[id]
 		if !m.chained() {
+			return nil
+		}
+		for _, r := range after.ckpt.Recoveries {
+			if r.TaskID != id {
+				continue
+			}
+			switch r.Mode {
+			case RecoverReset:
+				if r.TransitionSeq == 0 || r.TransitionSeq > m.ledger.end() || m.ledger.chain[r.TransitionSeq-1].Kind != TransitionRecover || m.ledger.chain[r.TransitionSeq-1].Decision != r.Decision {
+					return fmt.Errorf("reset %s names no recover transition", r.RecoveryID)
+				}
+			case RecoverConfirm:
+				if c.Confirmed != nil && c.Confirmed.RecoveryID == r.RecoveryID && c.Confirmed.Cycle != planCycle(m.card) {
+					return fmt.Errorf("confirmation %s names another cycle", r.RecoveryID)
+				}
+			default:
+				return fmt.Errorf("recovery %s has mode %q", r.RecoveryID, r.Mode)
+			}
+		}
+		// A blocked mirror stays where the last good reconcile left it. A confirmed
+		// one names the card, and the checks above bound it to its record.
+		if c.Blocked != nil || c.Confirmed != nil {
 			return nil
 		}
 		if c.TransitionSeq > m.ledger.end() || c.DispatchSeq > uint64(len(m.rounds)) {
@@ -272,9 +294,7 @@ type modelDeadEnd struct {
 // modelDeadEnds is the allow list. Order matters: a state can show two causes,
 // and the first row that covers it names it. Each repair card removes its rows
 // and adds its transition to the operations.
-var modelDeadEnds = []modelDeadEnd{
-	{id: "DE-18", owner: cardRecovery, class: modelDirected, proof: "internal/launch:TestCoordinatorRechecksActualGitAfterWrapUpRestart"},
-}
+var modelDeadEnds = []modelDeadEnd{}
 
 // modelClassify names the dead end that covers a state, or "" for an unlisted one.
 func modelClassify(list []modelDeadEnd, d modelDiagnosis) string {

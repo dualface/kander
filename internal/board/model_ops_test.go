@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -23,6 +24,7 @@ type modelOp struct {
 	cli      string
 	shared   bool
 	abandons bool     // an archive or a trash gives the card up; it is never a way out
+	seedOnly bool     // a state only an old binary reaches; a seed may start there
 	narrows  []string // the only operations the search tries after this one
 	guard    func(f *modelFacts, i int) bool
 	apply    func(w *modelWorld, m *modelMember, f *modelFacts) error
@@ -30,7 +32,7 @@ type modelOp struct {
 
 // modelAfterAbandon limits the search behind an archive or a trash. Every dead
 // end of a terminal member shows at the next tail or reconcile.
-var modelAfterAbandon = []string{modelTailOp, "C.reconcile", "T.archive", "T.trash", "R.withdraw"}
+var modelAfterAbandon = []string{modelTailOp, "C.reconcile", "T.archive", "T.trash", "R.withdraw", "H.recover"}
 
 func modelInState(states ...string) func(*modelFacts, int) bool {
 	return func(f *modelFacts, i int) bool {
@@ -318,12 +320,33 @@ func modelLifecycleOps() []modelOp {
 			}},
 		{name: modelTailOp, cli: "the completion tail of one card, ending in kander move <id> done",
 			guard: func(f *modelFacts, i int) bool {
-				return !modelTerminal(f.cards[i].Entry.State)
+				return !modelTerminal(f.cards[i].Entry.State) || f.blocked(i)
 			},
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.finishMember(m) }},
+		{name: "U.oldReclaim", cli: "an old binary: kander move <id> working --owner <agent> from review, with no handoff and no ledger link", seedOnly: true,
+			guard: modelInState("review"),
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.oldReclaim(m) }},
+		{name: "H.recover", cli: "kander coordinator recover <request.json>",
+			guard: func(f *modelFacts, i int) bool {
+				// The liveness probe refuses a reset of a confirmed executor, and a
+				// reset refuses a binding; a finished member has neither.
+				state := f.cards[i].Entry.State
+				live := state == "working" || state == "review"
+				return f.blocked(i) && (!live || f.bound[i] == nil && !f.world.members[i].adoptable())
+			},
+			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.recoverMember(m) }},
 		{name: "C.reconcile", cli: "kander coordinator reconcile <observations.json>", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return f.ckpt != nil },
 			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error { return w.reconcile() }},
+		{name: "C.gitRejected", cli: "kander coordinator reconcile, after the Git facts of a wrap-up stopped holding", shared: true,
+			guard: func(f *modelFacts, _ int) bool {
+				return f.ckpt != nil && slices.ContainsFunc(f.bound, func(d *Dispatch) bool { return d != nil && d.Input.Kind == "wrap-up" })
+			},
+			apply: func(w *modelWorld, _ *modelMember, _ *modelFacts) error {
+				return w.reconcileWith(func(context.Context, CoordinatorGitFacts) error {
+					return errors.New("integration left the target branch")
+				})
+			}},
 		{name: "C.claim", cli: "kander coordinator claim <claim.json>: a new coordinator session fences the old one", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return f.ckpt != nil },
 			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
@@ -627,12 +650,89 @@ func (w *modelWorld) writeSummary(m *modelMember) error {
 	return UpdateDocument(w.root, m.id, UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision, Authorization: authFrom(s.Text)})
 }
 
+// unblock ends the block of a member. Most blocks end with the next reconcile.
+// One that stays takes the steps a user decides: stop the executor, end the
+// binding, recover.
+func (w *modelWorld) unblock(m *modelMember) error {
+	f, err := w.read()
+	if err != nil || !f.blocked(f.index(m)) {
+		return err
+	}
+	if err = w.reconcile(); err != nil {
+		return err
+	}
+	if f, err = w.read(); err != nil || !f.blocked(f.index(m)) {
+		return err
+	}
+	i := f.index(m)
+	if d := f.bound[i]; d != nil && !modelTerminal(f.cards[i].Entry.State) {
+		if d.State == DispatchCompleted {
+			err = SettleDispatch(w.root, m.id, d.Input.ID, d.Revision)
+		} else {
+			err = EndDispatch(w.root, m.id, d.Input.ID, d.Revision, DispatchCancelled, "model", "model-decision")
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return w.recoverMember(m)
+}
+
+// recoverMember is the request a user decides on. No executor runs after it.
+func (w *modelWorld) recoverMember(m *modelMember) error {
+	c, err := w.checkpoint()
+	if err != nil {
+		return err
+	}
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	_, err = RecoverCoordinator(context.Background(), w.root, CoordinatorRecover{GroupID: c.GroupID, Member: m.id, ExpectedRevision: c.Revision, ExpectedEpoch: c.Authority.Epoch, Decision: "model-decision", Reason: "model recovery"}, s.Revision)
+	if err != nil {
+		return err
+	}
+	if !modelTerminal(s.Entry.State) {
+		m.launcher, m.executor, m.unproven, m.self, m.stranded = nil, false, false, false, ""
+	}
+	return nil
+}
+
+// oldReclaim writes what a reclaim of an old binary left: a new claim and a new
+// column on the card, with no handoff and no link on the chain.
+func (w *modelWorld) oldReclaim(m *modelMember) error {
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	text, err := setMetadata(s.Text, FieldOwner, modelTaker)
+	if err != nil {
+		return modelInfra(err)
+	}
+	if text, err = NewClaimMetadata(text); err != nil {
+		return modelInfra(err)
+	}
+	if err = WithTransaction(w.root, LockScope{Tasks: []string{m.id}, ExclusiveBoard: true}, func(tx *Transaction) error {
+		if e := tx.Put(m.id, "spec.md", text); e != nil {
+			return e
+		}
+		return tx.Relocate(m.id, "working")
+	}); err != nil {
+		return modelInfra(err)
+	}
+	m.self, m.executor = true, false
+	return nil
+}
+
 // finishMember is the completion tail of one card: claim an unstarted card, let
 // a running launcher confirm, take over a card with no live owner, then deliver.
 // A single card ends with a plain move done; a member goes through review and a
 // wrap-up dispatch. The tail uses ordinary commands only. A state it cannot
 // finish is left to the exit search, which puts other operations in front of it.
 func (w *modelWorld) finishMember(m *modelMember) error {
+	if err := w.unblock(m); err != nil {
+		return err
+	}
 	for range 10 {
 		s, err := w.snapshot(m)
 		if err != nil {
@@ -706,7 +806,10 @@ func (w *modelWorld) finishMember(m *modelMember) error {
 		default:
 			var in DispatchInput
 			if in, err = w.nextRoundInput(m); err == nil {
-				_, err = PrepareDispatch(w.root, in)
+				// A rebind for the plan ended the block of a member on it.
+				if err = w.reconcile(); err == nil {
+					_, err = PrepareDispatch(w.root, in)
+				}
 			}
 		}
 		if err != nil {

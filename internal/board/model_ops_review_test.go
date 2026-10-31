@@ -350,7 +350,7 @@ func modelReviewOps() []modelOp {
 				return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{last.id}, Author: "coordinator", Basis: "model"})
 			}},
 		{name: "R.cycleBatch", cli: "kander review extend-plan: append a batch for a rebound cycle", shared: true,
-			guard: func(f *modelFacts, _ int) bool { return len(f.review.cycleOwed) > 0 },
+			guard: func(f *modelFacts, _ int) bool { return len(f.review.cycleOwed)+len(f.review.reviewOwed) > 0 },
 			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.appendCycleBatch(f.review) }},
 		{name: "R.extendSeal", cli: "kander review extend-plan: seal", shared: true,
 			guard: func(f *modelFacts, _ int) bool {
@@ -385,14 +385,20 @@ func modelReviewOps() []modelOp {
 	}
 }
 
-// appendCycleBatch gives the rebound cycles an N/A batch after the last batch.
+// appendCycleBatch gives the rebound cycles an N/A batch after the last batch. A
+// recovery needs the review it owes, and N/A never discharges that.
 func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 	last := review.batches[len(review.batches)-1]
 	p, err := ReadReviewPlan(w.root, last.plan)
 	if err != nil {
 		return modelInfra(err)
 	}
-	batch := modelPlanBatch(fmt.Sprintf("model-cycle-%d", len(review.batches)), last.id, review.cycleOwed, last.target, w.nextCommit(), noReviewRequirements())
+	requirements := noReviewRequirements()
+	if len(review.reviewOwed) > 0 {
+		requirements = modelRequired()
+	}
+	ids := slices.Compact(slices.Sorted(slices.Values(slices.Concat(review.cycleOwed, review.reviewOwed))))
+	batch := modelPlanBatch(fmt.Sprintf("model-cycle-%d", len(review.batches)), last.id, ids, last.target, w.nextCommit(), requirements)
 	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model cycle batch"})
 }
 
@@ -440,14 +446,18 @@ func (w *modelWorld) settleReview(m *modelMember) error {
 		if err != nil {
 			return err
 		}
-		if len(review.cycleOwed) > 0 {
+		b, ok := review.openFor(m.id)
+		if !ok {
+			b, ok = review.firstOpen()
+		}
+		// A batch appends only after its predecessor closed.
+		if len(review.cycleOwed) > 0 || len(review.reviewOwed) > 0 && !ok {
 			if err := w.appendCycleBatch(review); err != nil {
 				return err
 			}
 			continue
 		}
-		b, ok := review.openFor(m.id)
-		if !ok {
+		if b, ok = review.openFor(m.id); !ok {
 			return w.sealOpenPlans(review)
 		}
 		if err := w.settleBatch(m, b.id); err != nil {

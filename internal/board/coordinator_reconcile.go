@@ -7,13 +7,20 @@ import (
 	"strconv"
 )
 
-func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string, old CoordinatorMember, o CoordinatorObservation, verify func(context.Context, CoordinatorGitFacts) error) (m CoordinatorMember, err error) {
+func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coordinatorPass, id string, old CoordinatorMember, o CoordinatorObservation) (m CoordinatorMember, err error) {
 	s, err := tx.Expect(id, "", o.Revision)
 	if err != nil {
 		return m, err
 	}
 	if s.Revision < old.Revision {
 		return m, coordinatorError("member revision or execution cycle changed: " + id)
+	}
+	if memberConfirmed(s, old) {
+		// A recovery accepted this finished execution as it is. Nothing is left to
+		// check: the record of that decision replaces the facts that failed.
+		m = old
+		m.Revision, m.State, m.Blocked = s.Revision, s.Entry.State, nil
+		return m, nil
 	}
 	if s.Entry.State == "archived" || s.Entry.State == "trash" {
 		return reconcileTerminalMember(ctx, tx, s, old, o)
@@ -25,6 +32,7 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 	if err != nil {
 		return m, err
 	}
+	verify := pass.verify
 	m = CoordinatorMember{Revision: s.Revision, State: s.Entry.State, Cycle: walk.cycle, AwaitingStart: walk.awaiting, StartAttempt: walk.attempt, DeliveryCommit: old.DeliveryCommit, TransitionSeq: walk.seq, DispatchSeq: old.DispatchSeq}
 
 	m.ReleasedDispatches = append([]ArtifactReference(nil), old.ReleasedDispatches...)
@@ -146,40 +154,30 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, id string,
 		return m, coordinatorError("delivery has no completed receipt: " + id)
 	}
 	if w := d.Input.Evidence.WrapUp; w != nil {
-		if verify == nil {
-			return m, coordinatorError("Git-aware reconciliation required")
+		completed := d.State == DispatchCompleted
+		if completed && (s.Entry.State != "done" && s.Entry.State != "archived" || MetadataFrom(s.Text, "RESULT") != "completed") {
+			return m, coordinatorError("wrap-up completion state: " + id)
 		}
-		facts := CoordinatorGitFacts{Integration: w.Git}
-		plan, _, e := readTaskPlan(tx, id)
+		recorded, e := readWrapUpEvidence(tx, pass.group, d)
 		if e != nil {
 			return m, e
 		}
-		for _, b := range plan.Batches {
-			if d.State == DispatchCompleted && !containsID(b.TaskIDs, id) {
-				continue
+		// Q9: a completed wrap-up is verified once. Later rewrites of the history
+		// are for kander check delivery, not a reason to fail the group.
+		if !completed || !recorded {
+			if verify == nil {
+				return m, coordinatorError("Git-aware reconciliation required")
 			}
-			var closure ReviewClosure
-			ok, e := readReviewJSON(tx, closureName(b.BatchID), &closure)
+			facts, e := wrapUpGitFacts(tx, id, d)
 			if e != nil {
 				return m, e
 			}
-			if !ok {
-				void, e := voidReviewBatch(tx, b.TaskIDs)
-				if e != nil {
-					return m, e
-				}
-				if void {
-					continue
-				}
-				return m, coordinatorError("closed batch missing")
+			if err = verify(ctx, facts); err != nil {
+				return m, err
 			}
-			facts.Closures = append(facts.Closures, closure)
 		}
-		if err = verify(ctx, facts); err != nil {
-			return m, err
-		}
-		if d.State == DispatchCompleted && (s.Entry.State != "done" && s.Entry.State != "archived" || MetadataFrom(s.Text, "RESULT") != "completed") {
-			return m, coordinatorError("wrap-up completion state: " + id)
+		if completed && !recorded {
+			pass.evidence = append(pass.evidence, newWrapUpEvidence(d, wrapUpVerifiedByReconcile))
 		}
 	}
 	return m, ctx.Err()

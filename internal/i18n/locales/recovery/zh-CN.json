@@ -47,5 +47,13 @@
   "liveness.suggestion_orphaned": "建议：结束未决启动用 kander resume {{.V0}} --adopt --decision <引用>；替换 executor 用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>",
   "liveness.suggestion_verify_by_hand": "建议：人工核对 executor，不得把这个结果当作存活",
   "launch.process_identity_not_recorded": "警告：{{.V0}}：没有记录进程身份，kander check 将报 unknown：{{.V1}}\n",
-  "launch.native_resume_unsupported": "{{.V0}} 运行在 {{.V1}} 上，不支持原生恢复。下一步：用 kander check {{.V0}} 核对 executor；用 kander resume {{.V0}} --adopt --decision <引用> 结束未决启动，或者用 kander resume {{.V0}} --agent <agent> --message <消息> 替换 executor。"
+  "launch.native_resume_unsupported": "{{.V0}} 运行在 {{.V1}} 上，不支持原生恢复。下一步：用 kander check {{.V0}} 核对 executor；用 kander resume {{.V0}} --adopt --decision <引用> 结束未决启动，或者用 kander resume {{.V0}} --agent <agent> --message <消息> 替换 executor。",
+  "board.coordinator_all_blocked": "任务组 {{.V0}}：reconcile 没有接受任何成员。第一个原因：{{.V1}}",
+  "board.recover_request_invalid": "recover 请求必须包含 group_id、member、expected_revision、expected_epoch、decision 与 reason。",
+  "board.recover_not_blocked": "{{.V0}} 在这个 checkpoint 中没有阻塞，无需恢复。成员失败时先运行 kander coordinator reconcile。",
+  "board.recover_state": "{{.V0}} 在 {{.V1}} 列。恢复只接受 working、review、done、archived、trash 列的成员；backlog、todo 列的成员没有可恢复的执行。",
+  "board.recover_dispatch_bound": "{{.V0}} 绑定了派发 {{.V1}}。下一步：用 kander dispatch fail、cancel 或 settle 结束绑定，再恢复。",
+  "board.wrap_up_blocked_members": "任务组 {{.V0}} 有阻塞成员：{{.V1}}。在 kander coordinator reconcile 接受这些成员之前，或用户决定 kander coordinator recover 之前，不能开始 wrap-up。",
+  "board.review_recovery_required": "恢复过的成员需要对其 plan 要求的每个角色做实际复审；用 kander review extend-plan 追加批次，N/A 不算",
+  "launch.recover_executor_alive": "{{.V0}} 的 executor 仍在运行（{{.V1}}）。恢复不替换它。下一步：kander resume --agent <agent>，或先停掉该 executor。"
 }

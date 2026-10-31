@@ -139,10 +139,18 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 	if target == "working" {
 		scope.Groups = []string{taskStartGroup}
 	}
+	var wrapUp *wrapUpCompletion
 	if target == "done" {
+		// Git runs here, before any lock of this move is taken.
+		if wrapUp, err = verifyWrapUpCompletion(root, entry, options); err != nil {
+			return moved, err
+		}
 		scope, err = reviewGateScope(root, entry.TaskID, true, entryWarningLog(entry))
 		if err != nil {
 			return moved, err
+		}
+		if wrapUp != nil {
+			scope.Groups = append(scope.Groups, wrapUp.group)
 		}
 	}
 	scope.warnings = entryWarningLog(entry)
@@ -205,6 +213,11 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		}
 		if e = stageExecutionMove(tx, s, target, updated, options, handoff); e != nil {
 			return e
+		}
+		if wrapUp != nil {
+			if e = wrapUp.stage(tx, entry.TaskID); e != nil {
+				return e
+			}
 		}
 		if e = stageMemberExclusion(tx, s, target, updated, options); e != nil {
 			return e

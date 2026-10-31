@@ -1,7 +1,11 @@
 package launch
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/check"
+	"github.com/dualface/kander/internal/liveness"
 )
 
 func launchCoordinatorFixture(t *testing.T) (string, string, board.DispatchInput, board.CoordinatorCheckpoint) {
@@ -45,8 +51,10 @@ func launchCoordinatorRequest(t *testing.T, root, task string, c board.Coordinat
 	return board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{task: o}}
 }
 
-func TestCoordinatorRechecksActualGitAfterWrapUpRestart(t *testing.T) {
-	root, task, in, c := launchCoordinatorFixture(t)
+// launchCompletedWrapUp takes the single member of the fixture through wrap-up.
+func launchCompletedWrapUp(t *testing.T) (root, task string, in board.DispatchInput, d board.Dispatch, c board.CoordinatorCheckpoint) {
+	t.Helper()
+	root, task, in, c = launchCoordinatorFixture(t)
 	d, e := PrepareBoundDispatch(root, in)
 	if e != nil {
 		t.Fatal(e)
@@ -82,53 +90,135 @@ func TestCoordinatorRechecksActualGitAfterWrapUpRestart(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	r := launchCoordinatorRequest(t, root, task, c, d)
-	next, e := ReconcileCoordinator(context.Background(), root, r)
+	return root, task, in, d, c
+}
+
+// launchRewriteDevelop points develop at a disjoint history.
+func launchRewriteDevelop(t *testing.T, cwd string) {
+	t.Helper()
+	for _, args := range [][]string{{"checkout", "--orphan", "unrelated"}, {"-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "unrelated"}, {"branch", "-f", "develop", "HEAD"}} {
+		if out, e := exec.Command("git", append([]string{"-C", cwd}, args...)...).CombinedOutput(); e != nil {
+			t.Fatal(string(out), e)
+		}
+	}
+}
+
+func launchWrapUpEvidence(root, group, dispatch string) string {
+	return filepath.Join(root, ".kander", "groups", group, "wrap-up-git", dispatch+".json")
+}
+
+func TestCompletedWrapUpVerifiesGitOnce(t *testing.T) {
+	root, task, in, d, c := launchCompletedWrapUp(t)
+	if _, e := os.Stat(launchWrapUpEvidence(root, c.GroupID, d.Input.ID)); e != nil {
+		t.Fatal("move done wrote no evidence", e)
+	}
+	next, e := ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, d))
 	if e != nil {
 		t.Fatal(e)
 	}
 	if next.Members[task].Dispatch.PendingWrapUp {
 		t.Fatal("completed wrap-up still pending")
 	}
-	// The integration artifact may name a worktree removed by cleanup. A
-	// surviving checkout must prove exactly those same immutable Git objects.
-	survivor := filepath.Join(t.TempDir(), "survivor")
-	if out, e := exec.Command("git", "clone", "--no-hardlinks", in.Evidence.WrapUp.Git.CWD, survivor).CombinedOutput(); e != nil {
-		t.Fatal(string(out), e)
+	// DE-18: the history under a completed wrap-up changes. Reconcile reads no Git,
+	// so the worktree may even be gone; a person still finds the change.
+	cwd := in.Evidence.WrapUp.Git.CWD
+	launchRewriteDevelop(t, cwd)
+	again, e := ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, next, d))
+	if e != nil || !reflect.DeepEqual(next, again) {
+		t.Fatal("rewritten history reached reconcile", e)
 	}
-	if e = os.RemoveAll(in.Evidence.WrapUp.Git.CWD); e != nil {
-		t.Fatal(e)
-	}
-	r = launchCoordinatorRequest(t, root, task, next, d)
-	r.CWD = survivor
-	recovered, e := ReconcileCoordinator(context.Background(), root, r)
-	if e != nil || !reflect.DeepEqual(next, recovered) {
-		t.Fatal("surviving worktree could not recover", e)
-	}
-	// Changing the actual target to a disjoint history cannot be hidden by
-	// repeating a completed dispatch or trusting the old checkpoint.
-	for _, args := range [][]string{{"checkout", "--orphan", "unrelated"}, {"-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--allow-empty", "-m", "unrelated"}, {"branch", "-f", "develop", "HEAD"}} {
-		if out, e := exec.Command("git", append([]string{"-C", survivor}, args...)...).CombinedOutput(); e != nil {
-			t.Fatal(string(out), e)
-		}
-	}
-	if _, e = ReconcileCoordinator(context.Background(), root, r); e == nil {
-		t.Fatal("stale integration accepted")
-	}
-	after, e := board.ReadCoordinatorCheckpoint(root, next.GroupID)
-	if e != nil || !reflect.DeepEqual(next, after) {
-		t.Fatal("failed Git changed cursor", e)
-	}
-	// DE-18: a new coordinator session finds the same refusal, so a member already
-	// done has no exit. A repair turns this red and removes the modelDeadEnds row.
 	fenced, e := board.ClaimCoordinator(context.Background(), root, board.CoordinatorClaim{GroupID: next.GroupID, ExpectedRevision: next.Revision, ExpectedEpoch: next.Authority.Epoch, Owner: "coordinator", Token: "two-session", Basis: "recovery", Members: []string{task}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	r = launchCoordinatorRequest(t, root, task, fenced, d)
+	if _, e = ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, fenced, d)); e != nil {
+		t.Fatal("a new coordinator session stopped at the rewritten history", e)
+	}
+	t.Chdir(cwd)
+	if check.Run([]string{"delivery", "--base", in.Base, "--json"}) == 0 {
+		t.Fatal("kander check delivery no longer reports the rewrite")
+	}
+}
+
+func TestOldWrapUpVerifiesOnceAndConfirmationEndsAFailure(t *testing.T) {
+	root, task, in, d, c := launchCompletedWrapUp(t)
+	path := launchWrapUpEvidence(root, c.GroupID, d.Input.ID)
+	if e := os.Remove(path); e != nil {
+		t.Fatal(e)
+	}
+	// An old wrap-up verifies through a surviving checkout, once.
+	survivor := filepath.Join(t.TempDir(), "survivor")
+	if out, e := exec.Command("git", "clone", "--no-hardlinks", in.Evidence.WrapUp.Git.CWD, survivor).CombinedOutput(); e != nil {
+		t.Fatal(string(out), e)
+	}
+	r := launchCoordinatorRequest(t, root, task, c, d)
 	r.CWD = survivor
-	if _, e = ReconcileCoordinator(context.Background(), root, r); e == nil {
-		t.Fatal("a new coordinator session accepted the rewritten history")
+	next, e := ReconcileCoordinator(context.Background(), root, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = os.Stat(path); e != nil {
+		t.Fatal("reconcile wrote no evidence", e)
+	}
+	if e = os.Remove(path); e != nil {
+		t.Fatal(e)
+	}
+	// Failed verification blocks the member; only a confirmation ends that.
+	launchRewriteDevelop(t, survivor)
+	r = launchCoordinatorRequest(t, root, task, next, d)
+	r.CWD = survivor
+	blocked, e := ReconcileCoordinator(context.Background(), root, r)
+	var all *board.CoordinatorBlockedError
+	if !errors.As(e, &all) || blocked.Members[task].Blocked == nil {
+		t.Fatal("rewritten history accepted", e)
+	}
+	recovered, e := RecoverCoordinator(context.Background(), root, board.CoordinatorRecover{GroupID: blocked.GroupID, Member: task, ExpectedRevision: blocked.Revision, ExpectedEpoch: blocked.Authority.Epoch, Decision: "user-decision", Reason: "the rewrite was deliberate"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	r = launchCoordinatorRequest(t, root, task, recovered, d)
+	r.CWD = survivor
+	final, e := ReconcileCoordinator(context.Background(), root, r)
+	if e != nil || len(final.BlockedMembers()) != 0 || final.Recoveries[0].Mode != board.RecoverConfirm {
+		t.Fatal(final, e)
+	}
+}
+
+func TestRejectedCompletionKeepsTheCardInWorking(t *testing.T) {
+	root, task, in, c := launchCoordinatorFixture(t)
+	d, e := PrepareBoundDispatch(root, in)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if c, e = ReconcileCoordinator(context.Background(), root, launchCoordinatorRequest(t, root, task, c, d)); e != nil {
+		t.Fatal(e)
+	}
+	s, e := board.ReadSnapshot(root, task)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Authorization: d.Authorization}); e != nil {
+		t.Fatal(e)
+	}
+	launchRewriteDevelop(t, in.Evidence.WrapUp.Git.CWD)
+	s, e = board.ReadSnapshot(root, task)
+	if e != nil {
+		t.Fatal(e)
+	}
+	text := strings.ReplaceAll(s.Text, "<FILL_IN>", "测试完成")
+	text = strings.Replace(text, "## SUMMARY\n", "## SUMMARY\n\n测试交付和收尾完成。\n", 1)
+	if e = board.UpdateDocument(root, task, board.UpdateOptions{Document: "spec.md", Text: text, ExpectedRevision: s.Revision, Authorization: d.Authorization}); e != nil {
+		t.Fatal(e)
+	}
+	s, e = board.ReadSnapshot(root, task)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = board.MoveWithOptions(s.Entry, root, "done", board.MoveOptions{Authorization: d.Authorization, DeliveryCommit: in.Base, Result: "completed"}); e == nil {
+		t.Fatal("wrap-up completed over a failed Git check")
+	}
+	if s, e = board.ReadSnapshot(root, task); e != nil || s.Entry.State != "working" {
+		t.Fatal(s.Entry.State, e)
 	}
 }
 
@@ -151,9 +241,11 @@ func TestCoordinatorFirstDeliveryRequiresActualTaskHead(t *testing.T) {
 		t.Fatal(e)
 	}
 	r := board.CoordinatorReconcile{CWD: cwd, GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{task: {Revision: s.Revision, DeliveryCommit: strings.Repeat("f", 40)}}}
-	if _, e = ReconcileCoordinator(context.Background(), root, r); e == nil {
+	blocked, e := ReconcileCoordinator(context.Background(), root, r)
+	if e == nil || blocked.Members[task].Blocked == nil {
 		t.Fatal("invented delivery accepted")
 	}
+	r.ExpectedRevision = blocked.Revision
 	r.Members[task] = board.CoordinatorObservation{Revision: s.Revision, DeliveryCommit: in.Base}
 	next, e := ReconcileCoordinator(context.Background(), root, r)
 	if e != nil {
@@ -176,5 +268,102 @@ func TestCoordinatorCommandRejectsInvalidInputBeforeClaim(t *testing.T) {
 	after, e := board.ReadCoordinatorCheckpoint(root, c.GroupID)
 	if e != nil || !reflect.DeepEqual(c, after) {
 		t.Fatal("invalid command changed checkpoint", e)
+	}
+}
+
+func captureStdout(t *testing.T, run func() int) (int, []byte) {
+	t.Helper()
+	r, w, e := os.Pipe()
+	if e != nil {
+		t.Fatal(e)
+	}
+	saved := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = saved }()
+	status := run()
+	w.Close()
+	var out bytes.Buffer
+	if _, e = io.Copy(&out, r); e != nil {
+		t.Fatal(e)
+	}
+	return status, out.Bytes()
+}
+
+func TestReconcileOutcomeReachesExitCodeAndJSON(t *testing.T) {
+	blocked := board.CoordinatorCheckpoint{Members: map[string]board.CoordinatorMember{"a": {Blocked: &board.CoordinatorBlock{Reason: "x"}}, "b": {}}}
+	for _, tc := range []struct {
+		name   string
+		c      board.CoordinatorCheckpoint
+		err    error
+		status int
+		result string
+	}{
+		{"complete", board.CoordinatorCheckpoint{Members: map[string]board.CoordinatorMember{"a": {}}}, nil, 0, "complete"},
+		{"partial", blocked, nil, 3, "partial"},
+		{"failed", blocked, &board.CoordinatorBlockedError{Group: "g", Reason: "x"}, 1, "failed"},
+		{"refused", board.CoordinatorCheckpoint{}, errors.New("checkpoint CAS"), 1, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			status, out := captureStdout(t, func() int { return finishReconcile(tc.c, tc.err) })
+			if status != tc.status {
+				t.Fatalf("status %d", status)
+			}
+			if tc.result == "" {
+				if len(out) != 0 {
+					t.Fatalf("a refused request printed %q", out)
+				}
+				return
+			}
+			var decoded struct {
+				Result string `json:"result"`
+			}
+			if e := json.Unmarshal(out, &decoded); e != nil || decoded.Result != tc.result {
+				t.Fatalf("%s %v", out, e)
+			}
+		})
+	}
+}
+
+func TestRecoverReachesTheCommandAndRefusesAProvenExecutor(t *testing.T) {
+	root, task, _, c := launchCoordinatorFixture(t)
+	s, e := board.ReadSnapshot(root, task)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r := board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{task: {Revision: s.Revision, DispatchID: "stale-round", Epoch: 1}}}
+	blocked, _ := ReconcileCoordinator(context.Background(), root, r)
+	if blocked.Members[task].Blocked == nil {
+		t.Fatal("no block")
+	}
+	request := board.CoordinatorRecover{GroupID: blocked.GroupID, Member: task, ExpectedRevision: blocked.Revision, ExpectedEpoch: blocked.Authority.Epoch, Decision: "user-decision", Reason: "reset"}
+	saved := recoverLivenessFn
+	t.Cleanup(func() { recoverLivenessFn = saved })
+	for _, status := range []string{liveness.Alive, liveness.AliveOrphaned} {
+		recoverLivenessFn = func(context.Context, board.Snapshot) liveness.Report { return liveness.Report{Status: status} }
+		if _, e = RecoverCoordinator(context.Background(), root, request); e == nil || !strings.Contains(e.Error(), "resume --agent") {
+			t.Fatal(status, e)
+		}
+	}
+	recoverLivenessFn = func(context.Context, board.Snapshot) liveness.Report {
+		return liveness.Report{Status: liveness.Unknown}
+	}
+	next, e := RecoverCoordinator(context.Background(), root, request)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(next.Recoveries) != 1 || next.Recoveries[0].Mode != board.RecoverReset {
+		t.Fatal(next.Recoveries)
+	}
+	// T-02 holds for a recovered card, before any dispatch binds.
+	if e = RequireSessionExecution(root, task); e == nil || !strings.Contains(e.Error(), board.ExecutionRecover) {
+		t.Fatal(e)
+	}
+}
+
+func TestRecoverCommandRequiresAnAbsoluteRequest(t *testing.T) {
+	root, _, _, _ := launchCoordinatorFixture(t)
+	t.Chdir(filepath.Dir(root))
+	if status := RunCoordinator([]string{"recover", "request.json"}); status != 2 {
+		t.Fatal(status)
 	}
 }

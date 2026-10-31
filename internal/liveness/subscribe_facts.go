@@ -20,6 +20,7 @@ type subscriptionFacts struct {
 	states     map[string]string
 	revisions  map[string]uint64
 	dispatches map[string]dispatchJSON
+	blocked    map[string]string
 	watched    []string
 	monitored  []string
 	groups     map[string][]string
@@ -183,6 +184,17 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 			facts.dispatches[id] = summarizeDispatch(*dispatch, facts.observedAt)
 		}
 	}
+	facts.blocked = map[string]string{}
+	for group := range facts.versions {
+		if err = board.ReadBlockedMembers(ctx, root, group, facts.blocked); err != nil {
+			return facts, err
+		}
+	}
+	if s.opts.Group != "" {
+		if err = board.ReadBlockedMembers(ctx, root, s.opts.Group, facts.blocked); err != nil {
+			return facts, err
+		}
+	}
 	return facts, nil
 }
 
@@ -215,8 +227,8 @@ func (s *subscription) payload(event string, facts subscriptionFacts) groupEvent
 	s.seq++
 	return groupEvent{
 		SchemaVersion: 1, SubscriptionID: s.id, Seq: s.seq, ObservedAt: facts.observedAt,
-		Dispatches: facts.dispatches,
-		Event:      event, GroupID: s.opts.Group, Tasks: facts.states, TaskRevisions: facts.revisions,
+		Dispatches: facts.dispatches, Blocked: facts.blocked,
+		Event: event, GroupID: s.opts.Group, Tasks: facts.states, TaskRevisions: facts.revisions,
 		Watched: facts.watched, WatchReferences: s.opts.Watch, Memberships: facts.groups,
 		MembershipVersions: facts.versions, MembershipComplete: true,
 		ReconciliationRequired: s.reconciliation, ReadStatus: "committed",

@@ -58,3 +58,35 @@ func TestReadContextStillBlocksOnOwnershipItCannotRuleOut(t *testing.T) {
 		t.Fatalf("ownership that could hide a member of %s did not block", watched)
 	}
 }
+
+func TestSubscriptionShowsBlockedMembers(t *testing.T) {
+	root, opts, _ := factsMember(t)
+	id := opts.Members[0]
+	s, err := board.ReadSnapshot(root, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := board.ClaimCoordinator(context.Background(), root, board.CoordinatorClaim{GroupID: opts.Group, Owner: "coordinator", Token: "session-one", Basis: "fixture", Members: []string{id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.Refresh = 0.02
+	events := make(runtimeEvents, 64)
+	cancel, _ := runRuntimeSubscription(t, root, opts, events)
+	defer cancel()
+	nextRuntimeEvent(t, events, func(e groupEvent) bool { return e.Event == "snapshot" && len(e.Blocked) == 0 })
+	r := board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{id: {Revision: s.Revision, DispatchID: "stale-round", Epoch: 1}}}
+	c, _ = board.ReconcileCoordinator(context.Background(), root, r, nil)
+	if c.Members[id].Blocked == nil {
+		t.Fatalf("no block: %+v", c.Members[id])
+	}
+	event := nextRuntimeEvent(t, events, func(e groupEvent) bool { return e.Event == "member-blocked" })
+	if event.Blocked[id] != c.Members[id].Blocked.Reason {
+		t.Fatalf("reason missing: %+v", event.Blocked)
+	}
+	r = board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{id: {Revision: s.Revision}}}
+	if _, err = board.ReconcileCoordinator(context.Background(), root, r, nil); err != nil {
+		t.Fatal(err)
+	}
+	nextRuntimeEvent(t, events, func(e groupEvent) bool { return e.Event == "member-blocked" && len(e.Blocked) == 0 })
+}

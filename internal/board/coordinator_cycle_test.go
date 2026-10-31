@@ -81,13 +81,14 @@ func TestCoordinatorBindsFirstStartFromCompleteMemberSnapshot(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, next), nil); err == nil {
-				t.Fatal("already bound cycle silently replaced")
+			if _, err = ReconcileCoordinator(context.Background(), root, coordinatorRequest(t, root, next), nil); err != nil {
+				t.Fatal(err)
 			}
 			afterCheckpoint, err := ReadCoordinatorCheckpoint(root, c.GroupID)
-			if err != nil || !reflect.DeepEqual(afterCheckpoint, next) {
-				t.Fatal("invalid cycle changed cursor", err)
+			if err != nil {
+				t.Fatal(err)
 			}
+			coordinatorOnlyBlocked(t, next, afterCheckpoint)
 		})
 	}
 }
@@ -130,8 +131,13 @@ func TestCoordinatorFirstStartRequiresPersistentFactsAndCAS(t *testing.T) {
 				t.Fatal("unproven first start accepted")
 			}
 			after, err := ReadCoordinatorCheckpoint(root, c.GroupID)
-			if err != nil || !reflect.DeepEqual(after, c) {
-				t.Fatal("failed start changed cursor", err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind != "stale-checkpoint" && kind != "stale-revision" {
+				coordinatorOnlyBlocked(t, c, after)
+			} else if !reflect.DeepEqual(after, c) {
+				t.Fatal("a refused request changed the cursor")
 			}
 		})
 	}

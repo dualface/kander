@@ -84,9 +84,10 @@ func TestCoordinatorCompletedFixSurvivesClosedBatchRestart(t *testing.T) {
 				t.Fatal("damaged historical original accepted")
 			}
 			actual, err := ReadCoordinatorCheckpoint(root, c.GroupID)
-			if err != nil || !reflect.DeepEqual(actual, next) {
-				t.Fatal("damage changed cursor", err)
+			if err != nil {
+				t.Fatal(err)
 			}
+			coordinatorOnlyBlocked(t, next, actual)
 		})
 	}
 }
