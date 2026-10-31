@@ -370,8 +370,8 @@ func (b *DeclarativeBackend) WaitReady(conn Conn, pane string, timeoutMS int) er
 	return err
 }
 
-func (b *DeclarativeBackend) RunCommand(conn Conn, pane, command string, posix bool) error {
-	_, err := b.launchOp(OpRunCommand, conn, map[string]string{"pane": pane, "command": command, "posix": strconv.FormatBool(posix)})
+func (b *DeclarativeBackend) RunCommand(conn Conn, pane, cwdQuoted, command string, posix bool) error {
+	_, err := b.launchOp(OpRunCommand, conn, map[string]string{"pane": pane, "cwd_quoted": cwdQuoted, "command": command, "posix": strconv.FormatBool(posix)})
 	return err
 }
 

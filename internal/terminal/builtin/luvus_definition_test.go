@@ -59,7 +59,7 @@ func TestLuvusDefinitionArgvAndParsing(t *testing.T) {
 	}{
 		{"ready", func(c terminal.Conn) error { return backend.WaitReady(c, "7", 15000) },
 			`{"id":"1","result":{"type":"pane_read","pane":"7","text":"\n$ "}}`, [][]string{{"pane", "read", "7"}}},
-		{"run", func(c terminal.Conn) error { return backend.RunCommand(c, "7", "agent 'task file'", true) },
+		{"run", func(c terminal.Conn) error { return backend.RunCommand(c, "7", "/work", "agent 'task file'", true) },
 			`{"id":"1","result":{}}`, [][]string{{"pane", "run", "7", "agent 'task file'"}}},
 		{"facts", func(c terminal.Conn) error {
 			got, e := backend.PaneFacts(ctx, c, "7")

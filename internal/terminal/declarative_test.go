@@ -63,7 +63,7 @@ func TestDeclarativeBackendOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantCalls(t, fake, []string{"ready", "p1"})
-	if err := backend.RunCommand(spawn, "p1", "codex --flag", true); err != nil {
+	if err := backend.RunCommand(spawn, "p1", "/work", "codex --flag", true); err != nil {
 		t.Fatal(err)
 	}
 	wantCalls(t, fake, []string{"run", "p1", "codex --flag"})

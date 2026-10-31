@@ -274,7 +274,7 @@
       "steps": [
         {
           "when": "field:posix=true",
-          "argv": ["respawn-pane", "-k", "-t", "{pane}", "exec {command}"],
+          "argv": ["respawn-pane", "-k", "-t", "{pane}", "cd -- {cwd_quoted} && exec {command}"],
           "messages": {
             "exec": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]},
             "exit": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]}

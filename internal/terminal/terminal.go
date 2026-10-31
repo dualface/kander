@@ -174,7 +174,10 @@ type Backend interface {
 	CreateContainer(conn Conn, target Target, cwd, label string) (Address, error)
 	// WaitReady waits up to timeoutMS for the new pane to accept input.
 	WaitReady(conn Conn, pane string, timeoutMS int) error
-	RunCommand(conn Conn, pane, command string, posix bool) error
+	// RunCommand starts command in the pane. cwdQuoted is the startup directory
+	// already quoted for the pane shell by the caller, empty when posix is false;
+	// a backend that enters the directory in the pane must not quote it again.
+	RunCommand(conn Conn, pane, cwdQuoted, command string, posix bool) error
 	SetSessionMarker(conn Conn, pane, value string) error
 	ReportSession(SessionReport) error
 

@@ -70,7 +70,7 @@ func (b *Backend) SetSessionMarker(terminal.Conn, string, string) error {
 }
 func (b *Backend) ReportSession(terminal.SessionReport) error { return terminal.ErrUnsupported }
 func (b *Backend) WaitReady(terminal.Conn, string, int) error { return terminal.ErrUnsupported }
-func (b *Backend) RunCommand(terminal.Conn, string, string, bool) error {
+func (b *Backend) RunCommand(terminal.Conn, string, string, string, bool) error {
 	return terminal.ErrUnsupported
 }
 

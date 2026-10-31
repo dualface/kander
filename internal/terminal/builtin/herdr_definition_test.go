@@ -35,7 +35,9 @@ func TestHerdrDefinitionArgvMatchesGoBackend(t *testing.T) {
 		}, `{"result":{"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}`, [][]string{{"tab", "create", "--workspace", "w1", "--cwd", "/project path", "--label", "task name", "--no-focus"}}},
 		{"ready", func(c terminal.Conn) error { return backend.WaitReady(c, address.Pane, 15000) }, "", [][]string{{"pane", "wait-output", "w1:p1", "--regex", `\S`, "--source", "visible", "--timeout", "15000"}}},
 		{"ready extended", func(c terminal.Conn) error { return backend.WaitReady(c, address.Pane, 120000) }, "", [][]string{{"pane", "wait-output", "w1:p1", "--regex", `\S`, "--source", "visible", "--timeout", "120000"}}},
-		{"run", func(c terminal.Conn) error { return backend.RunCommand(c, address.Pane, "agent 'task file'", true) }, "", [][]string{{"pane", "run", "w1:p1", "agent 'task file'"}}},
+		{"run", func(c terminal.Conn) error {
+			return backend.RunCommand(c, address.Pane, "/work", "agent 'task file'", true)
+		}, "", [][]string{{"pane", "run", "w1:p1", "agent 'task file'"}}},
 		{"facts", func(c terminal.Conn) error { _, e := backend.PaneFacts(ctx, c, address.Pane); return e }, `{"result":{"pane":{"pane_id":"w1:p1"}}}`, [][]string{{"pane", "get", "w1:p1"}}},
 		{"read", func(c terminal.Conn) error {
 			got, e := backend.ReadOutput(ctx, c, address.Pane)

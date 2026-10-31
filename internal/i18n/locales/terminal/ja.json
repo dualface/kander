@@ -36,5 +36,8 @@
   "terminal.target_reported_gone": "ターミナルが対象を存在しないと報告しました",
   "terminal.executable_not_in_path": "{{.V0}} が PATH にありません",
   "terminal.agent_list_duplicate_pane": "agent 一覧が pane {{.V0}} を複数回報告しました",
-  "terminal.herdr_agent_list_invalid": "herdr agent list が無効な出力を返しました"
+  "terminal.herdr_agent_list_invalid": "herdr agent list が無効な出力を返しました",
+  "launch.startup_directory_unusable": "ディレクトリ {{.V0}} で起動できません: {{.V1}}",
+  "launch.startup_directory_is_not_a_directory": "このパスはディレクトリではありません",
+  "launch.pane_ended_before_agent_started": "Agent は起動しませんでした: 起動直後に pane が終了しました (起動ディレクトリ {{.V0}})"
 }

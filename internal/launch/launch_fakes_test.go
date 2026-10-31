@@ -78,7 +78,7 @@ if [ "$1" = "send-keys" ]; then
 fi
 if [ "$1" = "respawn-pane" ]; then
   printf '%s\n' "$5" > "$log.command"
-  command=${5#exec }; current=${command%% *}
+  command=${5#cd -- * && }; command=${command#exec }; current=${command%% *}
   printf '%s\n' "${current##*/}" > "$log.current"
   if [ "${current##*/}" = "codex" ]; then
     task=$(printf '%s\n' "$5" | grep -Eo '[0-9]{8}-[a-z0-9-]+-task' | head -n 1)

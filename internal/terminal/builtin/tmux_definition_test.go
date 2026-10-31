@@ -66,12 +66,14 @@ func TestTmuxDefinitionArgvMatchesGoBackend(t *testing.T) {
 		},
 		{
 			name: "run_command posix",
-			run:  func(conn terminal.Conn) error { return backend.RunCommand(conn, "%9", "codex 'a b'", true) },
-			want: [][]string{{"respawn-pane", "-k", "-t", "%9", "exec codex 'a b'"}},
+			run: func(conn terminal.Conn) error {
+				return backend.RunCommand(conn, "%9", "'/work dir'", "codex 'a b'", true)
+			},
+			want: [][]string{{"respawn-pane", "-k", "-t", "%9", "cd -- '/work dir' && exec codex 'a b'"}},
 		},
 		{
 			name: "run_command without exec",
-			run:  func(conn terminal.Conn) error { return backend.RunCommand(conn, "%9", "codex", false) },
+			run:  func(conn terminal.Conn) error { return backend.RunCommand(conn, "%9", "", "codex", false) },
 			want: [][]string{{"respawn-pane", "-k", "-t", "%9", "codex"}},
 		},
 		{

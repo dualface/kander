@@ -78,6 +78,10 @@ func launchAgent(
 		}
 		return running, nil
 	}
+	startupDir := filepath.Dir(root)
+	if err := validateStartupDirectory(startupDir); err != nil {
+		return LaunchOutcome{}, fail(err)
+	}
 	command, err := paneCommand(invocation)
 	if err != nil {
 		return LaunchOutcome{}, fail(err)
@@ -88,7 +92,7 @@ func launchAgent(
 		locateNow = nil
 	}
 	conn := spawnConn(plan)
-	address, err := backend.CreateContainer(conn, plan.Target, filepath.Dir(root), name)
+	address, err := backend.CreateContainer(conn, plan.Target, startupDir, name)
 	if err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
@@ -111,8 +115,20 @@ func launchAgent(
 		}
 	}
 	sendAttempted = true
-	if err := backend.RunCommand(conn, address.Pane, command, !runtimeWindows()); err != nil {
+	if err := backend.RunCommand(conn, address.Pane, quotedPaneCwd(startupDir), command, !runtimeWindows()); err != nil {
 		return LaunchOutcome{}, fail(err)
+	}
+	if caps.ForegroundProcess {
+		if ended, gone := paneEnded(plan, address.Pane); ended {
+			// The agent never held the pane, so the delivery outcome is known
+			// and the durable branch of fail does not apply. A gone pane took
+			// its window with it, which leaves nothing to close.
+			sendAttempted = false
+			if gone {
+				stop = func() string { return "" }
+			}
+			return LaunchOutcome{}, fail(launchError("launch.pane_ended_before_agent_started", startupDir))
+		}
 	}
 	if paneDelivery {
 		if err := completePaneDelivery(plan, outcome); err != nil {

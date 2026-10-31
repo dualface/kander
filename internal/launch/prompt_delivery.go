@@ -12,6 +12,7 @@ import (
 func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) error {
 	definition := config.AgentFor(cfg, agent)
 	plan.sessionFileDeclared = definition.Session != nil && definition.Session.File != nil
+	plan.processName = definition.ProcessName
 	plan.extendedTimeouts = cfg.ExtendedLaunchTimeouts
 	if definition.PromptDelivery != nil {
 		plan.PromptDelivery = *clonePlanDelivery(definition.PromptDelivery)

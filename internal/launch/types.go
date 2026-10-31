@@ -51,10 +51,13 @@ type LaunchPlan struct {
 	// its own integration reports a path-kind session identity; the proactive
 	// id report is skipped for it.
 	sessionFileDeclared bool
-	Launcher            string
-	Target              terminal.Target
-	PromptDelivery      config.PromptDelivery
-	Prompt              string
+	// processName is the foreground command of the running agent; paneEnded
+	// stops watching as soon as the pane shows it.
+	processName    string
+	Launcher       string
+	Target         terminal.Target
+	PromptDelivery config.PromptDelivery
+	Prompt         string
 
 	// extendedTimeouts carries extended_launch_timeouts into the launch-time
 	// waits; see launchTimeout.

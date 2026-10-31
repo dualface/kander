@@ -298,7 +298,7 @@ func (c *checker) run(_ bool) (string, error) {
 	}
 	script := `process=$(ps -p "$$" -o comm=) || exit; process=${process##*/}; printf '%s%s:%s\n' 'kander-process-' '` + c.nonce + `' "$process"; printf '%s%s\n' 'kander-ready-' '` + c.nonce + `'; while IFS= read -r line; do printf '%s%s\n' 'kander-ack-' "$line"; done`
 	command := quote(shell) + " -c " + quote(script)
-	return "", c.backend.RunCommand(c.conn, c.address.Pane, command, true)
+	return "", c.backend.RunCommand(c.conn, c.address.Pane, quote(c.cwd), command, true)
 }
 func quote(value string) string { return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'" }
 func (c *checker) wait(supported bool) (string, error) {

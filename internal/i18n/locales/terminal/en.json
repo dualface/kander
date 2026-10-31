@@ -36,5 +36,8 @@
   "terminal.target_reported_gone": "the terminal reported the target as gone",
   "terminal.executable_not_in_path": "{{.V0}} is not in PATH",
   "terminal.agent_list_duplicate_pane": "agent list reports pane {{.V0}} more than once",
-  "terminal.herdr_agent_list_invalid": "herdr agent list returned invalid output"
+  "terminal.herdr_agent_list_invalid": "herdr agent list returned invalid output",
+  "launch.startup_directory_unusable": "cannot start in directory {{.V0}}: {{.V1}}",
+  "launch.startup_directory_is_not_a_directory": "it is not a directory",
+  "launch.pane_ended_before_agent_started": "the agent did not start: its pane ended right after launch (startup directory {{.V0}})"
 }

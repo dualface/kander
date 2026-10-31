@@ -29,6 +29,8 @@ func main() {
 		data, _ := json.Marshal(args)
 		if err := os.WriteFile(os.Getenv("FAKE_TMUX_RUN_LOG"), data, 0600); err != nil { panic(err) }
 	case "set-option":
+	case "display-message":
+		fmt.Print("agent\t0\t0\n")
 	default:
 		os.Exit(1)
 	}
@@ -49,12 +51,12 @@ func main() {
 	oldRuntimeWindows := runtimeWindows
 	t.Cleanup(func() { runtimeWindows = oldRuntimeWindows })
 	invocation := process.ProcessInvocation{
-		Argv: []string{"/tools/agent name", "", "a'b", "$(touch forbidden); & | 中文"},
+		Argv: []string{"/tools/agent name", "--model", "gpt-x", "--ask-for-approval", "never", "", "a'b", "$(touch forbidden); & | 中文"},
 	}
 	for _, launcher := range []string{"tmux", "tmux-session"} {
 		for _, windows := range []bool{false, true} {
 			name := launcher + "/posix"
-			want := "exec " + posixJoin(invocation.Argv)
+			want := "cd -- " + posixQuote(dir) + " && exec " + posixJoin(invocation.Argv)
 			if windows {
 				name = launcher + "/windows"
 				want = powershellJoin(invocation.Argv, invocation.ShellEnv)
