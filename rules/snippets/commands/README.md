@@ -8,12 +8,12 @@ Read first: `show`, `update`, `move`, `check`.
 
 | Command | Purpose | Users | Contract |
 | --- | --- | --- | --- |
-| `config` | Print the effective configuration | every agent, at session start | `snippets/commands/config.md` |
+| `config` | Print effective configuration | every agent, at session start | `snippets/commands/config.md` |
 | `doctor` | Check and repair the installation | user | `snippets/commands/doctor.md` |
-| `version` | Print the binary version | user | `snippets/commands/version.md` |
+| `version` | Print the version | user | `snippets/commands/version.md` |
 | `install` | Interactive installer | user | `snippets/commands/install.md` |
 | `terminal` | List and test launchers | user | `snippets/commands/terminal.md` |
-| `init` | Create or recover the board | user, maintenance | `snippets/commands/init.md` |
+| `init` | Create or recover board | user, maintenance | `snippets/commands/init.md` |
 | `list` | List cards by state | card creator, user | `snippets/commands/list.md` |
 | `show` | Print a card and its revision | every agent on a card | `snippets/commands/show.md` |
 | `new` | Create a card in `backlog/` | card creator | `snippets/commands/new.md` |
@@ -25,12 +25,12 @@ Read first: `show`, `update`, `move`, `check`.
 | `resume` | Wake or take over an executing agent | orchestrator (via notify), user | `snippets/commands/resume.md` |
 | `notify` | Dispatch items back to the executing agent | orchestrator | `snippets/commands/notify.md` |
 | `dispatch` | Inspect and end durable dispatches | orchestrator | `snippets/commands/dispatch.md` |
-| `dismiss` | Exit a finished agent and its container | orchestrator, user | `snippets/commands/dismiss.md` |
+| `dismiss` | Exit an agent and its container | orchestrator, user | `snippets/commands/dismiss.md` |
 | `check` | Validate cards, probe liveness, Git checks | executing agent, orchestrator | `snippets/commands/check.md` |
 | `guard-write` | Advisory pre-write check | agent hooks | `snippets/commands/guard-write.md` |
 | `subscribe` | Stream group events | orchestrator | `snippets/commands/subscribe.md` |
 | `coordinator` | Durable group checkpoints | orchestrator | `snippets/commands/coordinator.md` |
-| `review` | Run a reviewer, manage review evidence | main agent, orchestrator | `snippets/commands/review.md` |
+| `review` | Run a reviewer, manage evidence | main agent, orchestrator | `snippets/commands/review.md` |
 | `issue` | Import and triage GitHub issues | user, issue session | `snippets/commands/issue.md` |
 
 ```text
@@ -66,6 +66,7 @@ kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-i
 kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>
+kander coordinator recover <absolute-request.json>
 kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]
 kander review plan <absolute-CWD> <absolute-plan.json>
 kander review extend-plan <absolute-CWD> <absolute-extension.json>

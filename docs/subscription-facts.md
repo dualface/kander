@@ -23,6 +23,10 @@ A controlled update to the body or attachments in the same state advances the re
 
 Heartbeats are timed independently, defaulting to refresh=1 second and heartbeat=900 seconds. Only `working` cards in the current watch set are collected, plus `review` cards whose durable dispatch is still awaiting confirmation; scanning does not wait for probing or output. An event's `observed_at` denotes the card snapshot time and does not masquerade as the probe completion time. For the bounded lifecycle of probing and output, see the section below.
 
+## Blocked Members
+
+Every event carries `blocked`, keyed by task ID, with the reason of each member the last `kander coordinator reconcile` did not accept. It covers the subscribed group and the groups named in `--watch`, and it is absent when no member is blocked. A group with no checkpoint has none. The set comes from the committed checkpoint, in the same 2-second read budget as the other facts but in its own read, so it can lag the card states of the same event by one reconcile. A change of the set emits `member-blocked`, also when the set becomes empty. See [Orchestration checkpoints and recovery](coordinator-recovery.md#member-isolation).
+
 ## Dispatch Facts and Confirmation Deadlines
 
 Snapshots, heartbeats, and related change events may carry `dispatches`, keyed by task ID. Each summary contains:

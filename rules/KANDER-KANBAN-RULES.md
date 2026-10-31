@@ -57,6 +57,7 @@ kander subscribe [--refresh SECONDS] [--heartbeat SECONDS] (<task-group> <task-i
 kander coordinator show <group-id>
 kander coordinator claim <absolute-claim.json>
 kander coordinator reconcile <absolute-observations.json>
+kander coordinator recover <absolute-request.json>
 kander review [agent] [--task <id>]... [--run-id <id>] [--batch-id <id>] [--previous-run-id <id>] [--requirements-file <JSON>] [--advance-file <JSON>] <CWD> <base-commit> <commit> <role> <task-goal|absolute-spec-path> [review-context] [reviewed-commit]
 kander review plan <absolute-CWD> <absolute-plan.json>
 kander review extend-plan <absolute-CWD> <absolute-extension.json>
@@ -100,6 +101,7 @@ backlog <-> todo -> working -> done -> archived        (single-card flow)
 
 todo -> backlog                                       withdraw commitment, back to scheduling
 review -> working (--owner --decision)                user-authorized reclaim of an unbound card, see `snippets/commands/move.md` "Reclaiming"
+review -> working (coordinator recover)               user-decided reset of a blocked group member, see `snippets/failure-recovery.md` "Blocked Group Members"
 backlog, todo, working, review -> archived            only user-authorized termination
 any state except archived and trash -> trash          only on explicit user request
 ```
