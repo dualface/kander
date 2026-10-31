@@ -85,6 +85,10 @@ type ReviewIndex struct {
 	Report          string `json:"report"`
 }
 
+// ReviewProcessEvidence is the optional original that records the reviewer process group. Only a run that
+// observed a group member has it, so older runs stay valid without it.
+const ReviewProcessEvidence = "process-evidence.json"
+
 type ReviewManifest struct {
 	Schema      int               `json:"schema"`
 	Input       ReviewInput       `json:"input"`
@@ -578,7 +582,7 @@ func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, er
 }
 func reviewOriginals(tx *Transaction, id string, final bool) (map[string][]byte, error) {
 	result := map[string][]byte{}
-	names := map[string]string{"task-context.md": "inputs", "review-context.md": "inputs", "prompt.txt": "inputs", "review-contract.md": "inputs", "evidence.txt": "inputs", "output.raw": "staging", "stdout.log": "staging", "error.log": "staging"}
+	names := map[string]string{"task-context.md": "inputs", "review-context.md": "inputs", "prompt.txt": "inputs", "review-contract.md": "inputs", "evidence.txt": "inputs", "output.raw": "staging", "stdout.log": "staging", "error.log": "staging", ReviewProcessEvidence: "staging"}
 	if final {
 		names["report.md"] = "originals"
 	}

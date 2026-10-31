@@ -720,6 +720,8 @@
   "review.review_exceeded_seconds": "{{.V0}} レビューが {{.V1}} 秒を超えました",
   "review.review_home_is_not_readable_and_writable": "{{.V0}} レビューホームが読み書きできません: {{.V1}}",
   "review.review_is_still_running_after_s": "{{.V0}} レビューは {{.V1}}s 後も実行中です",
+  "review.process_evidence": "プロセス証跡: {{.V0}}",
+  "review.process_observation_failed_the_result_was_rejected": "{{.V0}} レビューのプロセスを観察できませんでした; 結果を拒否しました",
   "review.review_left_background_child_processes_the_result_was_rejected": "{{.V0}} レビューがバックグラウンド子プロセスを残しました; 結果を拒否しました",
   "review.review_modified_the_target_worktree": "{{.V0}} レビューが対象 worktree を変更しました: {{.V1}}",
   "review.review_runtime_i_o_failed": "レビューランタイムの I/O に失敗しました: {{.V0}}: {{.V1}}",

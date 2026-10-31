@@ -720,6 +720,8 @@
   "review.review_exceeded_seconds": "{{.V0}} review exceeded {{.V1}} seconds",
   "review.review_home_is_not_readable_and_writable": "{{.V0}} review home is not readable and writable: {{.V1}}",
   "review.review_is_still_running_after_s": "{{.V0}} review is still running after {{.V1}}s",
+  "review.process_evidence": "process evidence: {{.V0}}",
+  "review.process_observation_failed_the_result_was_rejected": "{{.V0}} review could not observe its processes; the result was rejected",
   "review.review_left_background_child_processes_the_result_was_rejected": "{{.V0}} review left background child processes; the result was rejected",
   "review.review_modified_the_target_worktree": "{{.V0}} review modified the target worktree: {{.V1}}",
   "review.review_runtime_i_o_failed": "review runtime I/O failed: {{.V0}}: {{.V1}}",

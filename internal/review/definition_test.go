@@ -455,10 +455,3 @@ func TestReviewOutputParsingUsesProcessEntry(t *testing.T) {
 		t.Fatal("review parsing must use the review-subset entry")
 	}
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

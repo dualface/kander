@@ -588,3 +588,55 @@ func TestReviewBatchFreezesFallbackAcrossLaterRoles(t *testing.T) {
 		t.Fatalf("%+v %v", run, err)
 	}
 }
+
+func TestReviewProcessEvidenceIsOptional(t *testing.T) {
+	root := tempBoard(t)
+	id := archiveCard(t, root, "archive-process")
+	finish := func(runID string, evidence string) ReviewRun {
+		t.Helper()
+		run, _, err := PrepareReviewRun(root, archiveInput([]string{id}, runID, "PMQA"), archiveRequirements(), nil, archiveOriginals(), "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		stage, err := ReviewStaging(root, runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if evidence != "" {
+			if err = fs.WriteTextAtomic(stage, filepath.Join(stage, ReviewProcessEvidence), evidence, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+		run.ExecutionStatus = "failed"
+		run.FailureReason = "left background child processes"
+		run.ExitCode = 2
+		run.LaunchStatus = "started"
+		run, err = FinalizeReviewRun(root, run, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		publishRun(t, root, runID)
+		return run
+	}
+	without := finish("without-evidence", "")
+	with := finish("with-evidence", "{\"schema\":1}\n")
+	if _, ok := without.Hashes[ReviewProcessEvidence]; ok {
+		t.Fatal("a run without evidence must not hash one")
+	}
+	if with.Hashes[ReviewProcessEvidence] == "" {
+		t.Fatal("evidence must be hashed")
+	}
+	problems, err := CheckReviewEvidence(root, []string{id})
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("%v %+v", err, problems)
+	}
+	s := transactionSnapshot(t, root, id)
+	copyPath := filepath.Join(s.Entry.Path, "reviews", "with-evidence", ReviewProcessEvidence)
+	if err = os.WriteFile(copyPath, []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	problems, err = CheckReviewEvidence(root, []string{id})
+	if err != nil || len(problems) == 0 {
+		t.Fatalf("tampered evidence passed: %v %+v", err, problems)
+	}
+}

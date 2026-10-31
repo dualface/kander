@@ -74,6 +74,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 	var failure *gateError
 	timedOut := false
 	outputPrinted := false
+	processNote := ""
 
 	fail := func(err error) {
 		var ge *gateError
@@ -86,17 +87,26 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		exitCode = 2
 	}
 
+	// collect retains the evidence before reporting a failure, so a process failure can name the evidence.
+	collect := func(recheck bool) (processCollection, error) {
+		treeAttempted = true
+		collection, stopErr := stopProcessTree(lp, recheck)
+		var retainErr error
+		processNote, retainErr = retainProcessEvidence(ctx, collection.evidence)
+		if stopErr != nil {
+			if retainErr != nil {
+				userError(retainErr.Error())
+			}
+			return collection, processStopFailure(stopErr, processNote)
+		}
+		treeCollected = true
+		return collection, retainErr
+	}
+
 	defer func() {
 		if lp != nil && !treeAttempted {
-			treeAttempted = true
-			if _, err := stopProcessTree(lp); err != nil {
-				var ge *gateError
-				if errors.As(err, &ge) {
-					failure = ge
-					exitCode = ge.code
-				}
-			} else {
-				treeCollected = true
+			if _, err := collect(false); err != nil {
+				fail(err)
 			}
 		}
 		if failure != nil && failure.message != "" {
@@ -107,7 +117,7 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		}
 		if reviewStarted && !treeCollected {
 			if ctx.archive != nil {
-				ctx.archive.reason = config.Text("review.archive_tree_incomplete")
+				ctx.archive.reason = withProcessNote(config.Text("review.archive_tree_incomplete"), processNote)
 			}
 			exitCode = 2
 		} else if reviewStarted && !targetIsUnchanged(ctx) {
@@ -309,17 +319,13 @@ func executeInRuntime(ctx reviewContext, runtimeDir *fs.TempDir, abort <-chan os
 		}
 	}
 	exitCode, timedOut = monitorProcess(ctx, outputRoot, lp, errorFile, abort)
-	treeAttempted = true
-	lingering, stopErr := stopProcessTree(lp)
-	if stopErr != nil {
-		fail(stopErr)
+	collection, collectErr := collect(exitCode == 0 && !timedOut)
+	if collectErr != nil {
+		fail(collectErr)
 		return exitCode
 	}
-	treeCollected = true
-	if exitCode == 0 && lingering {
-		fail(newGate(2,
-			"review.review_left_background_child_processes_the_result_was_rejected", ctx.settings.name,
-		))
+	if exitCode == 0 && collection.lingering {
+		fail(processRejection(ctx.settings.name, processNote, collection))
 		return exitCode
 	}
 	if timedOut || exitCode != 0 {

@@ -143,16 +143,17 @@ func jobActiveProcesses(job windows.Handle) (int, error) {
 	return int(info.ActiveProcesses), nil
 }
 
-func stopProcessTree(lp *launchedProcess) (bool, error) {
+// stopProcessTree reports only a job's active process count, so recheck has no effect and no evidence exists.
+func stopProcessTree(lp *launchedProcess, recheck bool) (processCollection, error) {
 	if lp == nil {
-		return false, nil
+		return processCollection{}, nil
 	}
 	defer func() {
 		closeHandle(lp.eventHandle)
 		lp.eventHandle = 0
 	}()
 	if lp.job == 0 {
-		return false, newGate(2, "review.reviewer_process_is_not_protected_by_a_windows_job")
+		return processCollection{}, newGate(2, "review.reviewer_process_is_not_protected_by_a_windows_job")
 	}
 	defer func() {
 		closeHandle(lp.job)
@@ -160,12 +161,12 @@ func stopProcessTree(lp *launchedProcess) (bool, error) {
 	}()
 	active, err := jobActiveProcesses(lp.job)
 	if err != nil {
-		return false, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree", err.Error())
+		return processCollection{}, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree", err.Error())
 	}
 	lingering := active > 0
 	if active > 0 {
 		if err := windows.TerminateJobObject(lp.job, 1); err != nil {
-			return false, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree", err.Error())
+			return processCollection{}, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree", err.Error())
 		}
 	}
 	deadline := time.Now().Add(5 * time.Second)
@@ -173,16 +174,16 @@ func stopProcessTree(lp *launchedProcess) (bool, error) {
 		time.Sleep(10 * time.Millisecond)
 		active, err = jobActiveProcesses(lp.job)
 		if err != nil {
-			return false, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree", err.Error())
+			return processCollection{}, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree", err.Error())
 		}
 	}
 	if active > 0 {
-		return false, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree_windows")
+		return processCollection{}, newGate(2, "review.could_not_collect_the_windows_reviewer_process_tree_windows")
 	}
 	select {
 	case <-lp.waitDone:
 	case <-time.After(5 * time.Second):
-		return false, newGate(2, "review.windows_reviewer_process_did_not_exit_after_its_job")
+		return processCollection{}, newGate(2, "review.windows_reviewer_process_did_not_exit_after_its_job")
 	}
-	return lingering, nil
+	return processCollection{lingering: lingering}, nil
 }

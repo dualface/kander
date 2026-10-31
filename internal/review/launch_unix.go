@@ -3,6 +3,8 @@
 package review
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
@@ -76,11 +78,13 @@ func processGroupExists(lp *launchedProcess) bool {
 }
 
 func processGroupHasLiveMembers(lp *launchedProcess) bool {
-	table := snapshotProcessTable()
 	pid := lp.cmd.Process.Pid
-	if len(table) == 0 {
+	ctx, cancel := context.WithTimeout(context.Background(), processTableBudget)
+	defer cancel()
+	table, err := readProcessTable(ctx)
+	if err != nil {
 		err := syscall.Kill(-pid, 0)
-		return err == nil || err == syscall.EPERM
+		return err == nil || errors.Is(err, syscall.EPERM)
 	}
 	for _, info := range table {
 		if info.pgid == pid && !info.zombie {
@@ -90,21 +94,31 @@ func processGroupHasLiveMembers(lp *launchedProcess) bool {
 	return false
 }
 
-func stopProcessTree(lp *launchedProcess) (bool, error) {
+// stopProcessTree collects the reviewer process group. recheck is true only for a leader that exited with 0;
+// the evidence stays in the result on every failure path.
+func stopProcessTree(lp *launchedProcess, recheck bool) (processCollection, error) {
 	if lp == nil || lp.cmd == nil || lp.cmd.Process == nil {
-		return false, nil
+		return processCollection{}, nil
 	}
 	if !processGroupExists(lp) {
 		waitLeader(lp, 5*time.Second)
-		return false, nil
+		return processCollection{}, nil
 	}
-	hadLingering := true
-	if lp.tracker != nil && lp.tracker.observed {
-		unattributed, ok := lp.tracker.unattributedMembers()
-		hadLingering = !ok || len(unattributed) > 0
+	collection, empty := observeReviewerGroup(lp, recheck)
+	cleanup := &collection.evidence.Cleanup
+	if empty {
+		waitLeader(lp, 5*time.Second)
+		cleanup.Collected = true
+		return collection, nil
 	}
-	if err := syscall.Kill(-lp.cmd.Process.Pid, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
-		return false, newGate(2,
+	switch err := syscall.Kill(-lp.cmd.Process.Pid, syscall.SIGKILL); {
+	case err == nil:
+		cleanup.Sigkill = sigkillSent
+	case errors.Is(err, syscall.ESRCH):
+	default:
+		cleanup.Sigkill = sigkillFailed
+		cleanup.Error = err.Error()
+		return collection, newGate(2,
 			"review.could_not_terminate_the_posix_reviewer_process_group", err.Error(),
 		)
 	}
@@ -112,13 +126,17 @@ func stopProcessTree(lp *launchedProcess) (bool, error) {
 	for processGroupHasLiveMembers(lp) && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
+	gate := newGate(2, "review.could_not_collect_the_posix_reviewer_process_group")
 	if processGroupHasLiveMembers(lp) {
-		return false, newGate(2, "review.could_not_collect_the_posix_reviewer_process_group")
+		cleanup.Error = gate.message
+		return collection, gate
 	}
 	select {
 	case <-lp.waitDone:
 	case <-time.After(5 * time.Second):
-		return false, newGate(2, "review.could_not_collect_the_posix_reviewer_process_group")
+		cleanup.Error = gate.message
+		return collection, gate
 	}
-	return hadLingering, nil
+	cleanup.Collected = true
+	return collection, nil
 }

@@ -720,6 +720,8 @@
   "review.review_exceeded_seconds": "{{.V0}} 审核超过 {{.V1}} 秒",
   "review.review_home_is_not_readable_and_writable": "{{.V0}} 审核目录不可读写: {{.V1}}",
   "review.review_is_still_running_after_s": "{{.V0}} 审核仍在运行, 已耗时 {{.V1}}s",
+  "review.process_evidence": "进程证据: {{.V0}}",
+  "review.process_observation_failed_the_result_was_rejected": "{{.V0}} 审核无法观察其进程, 已拒绝审核结果",
   "review.review_left_background_child_processes_the_result_was_rejected": "{{.V0}} 审核退出后仍有后台子进程, 已拒绝审核结果",
   "review.review_modified_the_target_worktree": "{{.V0}} 审核修改了目标 worktree: {{.V1}}",
   "review.review_runtime_i_o_failed": "审核运行目录读写失败: {{.V0}}: {{.V1}}",
