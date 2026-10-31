@@ -214,6 +214,60 @@ func TestRealTmuxDirectoryRemovedAfterValidationFailsTheLaunch(t *testing.T) {
 	}
 }
 
+// A shell that needs longer than the first polls to reach cd is still decided by
+// the cd: an open pane alone never counts as started.
+func TestRealTmuxSlowShellThatCannotEnterFailsTheLaunch(t *testing.T) {
+	resetLang(t)
+	server := startRealTmux(t, t.TempDir())
+	slowShell := filepath.Join(filepath.Dir(server.wrapper), "slow-sh")
+	if err := os.WriteFile(slowShell, []byte("#!/bin/sh\nsleep 3\nexec /bin/sh \"$@\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	server.run("set-option", "-g", "default-shell", slowShell)
+	startupDir := filepath.Join(t.TempDir(), "project")
+	if err := os.Mkdir(startupDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	server.removeBeforeRespawn(startupDir)
+	invocation, report := cwdAgent(t)
+	_, err := launchAgent(server.plan(), filepath.Join(startupDir, "kanban"), "task", invocation, nil, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), startupDir) {
+		t.Fatalf("err=%v", err)
+	}
+	if _, statErr := os.Stat(report); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("agent ran: %v", statErr)
+	}
+	if got := strings.Join(server.windowNames(), " "); got != "keep" {
+		t.Fatalf("windows after the failed launch: %q", got)
+	}
+}
+
+// The fork of a respawned pane reports the server's directory for a moment, so
+// a server started in the project must not read as an entered pane.
+func TestRealTmuxServerInTheStartupDirectoryIsNotEntry(t *testing.T) {
+	resetLang(t)
+	startupDir := filepath.Join(t.TempDir(), "project")
+	if err := os.Mkdir(startupDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < 20; attempt++ {
+		server := startRealTmux(t, startupDir)
+		server.removeBeforeRespawn(startupDir)
+		invocation, report := cwdAgent(t)
+		_, err := launchAgent(server.plan(), filepath.Join(startupDir, "kanban"), "task", invocation, nil, nil, nil)
+		if err == nil {
+			t.Fatal("launch succeeded without entering the directory")
+		}
+		if _, statErr := os.Stat(report); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("agent ran: %v", statErr)
+		}
+		server.run("kill-server")
+		if err := os.Mkdir(startupDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // StartChat passes no paneSession, so nothing after run_command would notice
 // the missing agent without the pane watch.
 func TestRealTmuxChatFailsWhenTheDirectoryIsRemovedAfterValidation(t *testing.T) {

@@ -26,6 +26,10 @@ if [ "$1" = "display-message" ]; then
       printf '%s\n' '$42'
       exit 0
       ;;
+    *pane_current_path*)
+      printf '%s\n' "${KANBAN_TMUX_PANE_CWD:-$KANBAN_LAUNCH_CWD}"
+      exit 0
+      ;;
   esac
   printf '%s\n' '$42'
   exit 0
@@ -77,6 +81,7 @@ if [ "$1" = "send-keys" ]; then
   exit 0
 fi
 if [ "$1" = "respawn-pane" ]; then
+  [ "$5" = "-c" ] && shift 2
   printf '%s\n' "$5" > "$log.command"
   command=${5#cd -- * && }; command=${command#exec }; current=${command%% *}
   printf '%s\n' "${current##*/}" > "$log.current"

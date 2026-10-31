@@ -39,5 +39,6 @@
   "terminal.herdr_agent_list_invalid": "herdr agent list 返回了无效输出",
   "launch.startup_directory_unusable": "无法在目录 {{.V0}} 启动: {{.V1}}",
   "launch.startup_directory_is_not_a_directory": "该路径不是目录",
-  "launch.pane_ended_before_agent_started": "Agent 未启动: pane 在启动后立即结束 (启动目录 {{.V0}})"
+  "launch.pane_ended_before_agent_started": "Agent 未启动: pane 在启动后立即结束 (启动目录 {{.V0}})",
+  "launch.agent_start_unconfirmed": "无法确认 Agent 已启动: pane 在时限内既未进入启动目录 {{.V0}}, 也未结束"
 }

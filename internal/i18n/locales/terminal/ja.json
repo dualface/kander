@@ -39,5 +39,6 @@
   "terminal.herdr_agent_list_invalid": "herdr agent list が無効な出力を返しました",
   "launch.startup_directory_unusable": "ディレクトリ {{.V0}} で起動できません: {{.V1}}",
   "launch.startup_directory_is_not_a_directory": "このパスはディレクトリではありません",
-  "launch.pane_ended_before_agent_started": "Agent は起動しませんでした: 起動直後に pane が終了しました (起動ディレクトリ {{.V0}})"
+  "launch.pane_ended_before_agent_started": "Agent は起動しませんでした: 起動直後に pane が終了しました (起動ディレクトリ {{.V0}})",
+  "launch.agent_start_unconfirmed": "Agent の起動を確認できません: pane は時間内に起動ディレクトリ {{.V0}} へ移動せず、終了もしませんでした"
 }

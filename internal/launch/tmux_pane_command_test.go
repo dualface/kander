@@ -30,7 +30,7 @@ func main() {
 		if err := os.WriteFile(os.Getenv("FAKE_TMUX_RUN_LOG"), data, 0600); err != nil { panic(err) }
 	case "set-option":
 	case "display-message":
-		fmt.Print("agent\t0\t0\n")
+		fmt.Print(os.Getenv("FAKE_TMUX_CWD") + "\n")
 	default:
 		os.Exit(1)
 	}
@@ -48,6 +48,7 @@ func main() {
 	}
 	log := filepath.Join(dir, "run.json")
 	t.Setenv("FAKE_TMUX_RUN_LOG", log)
+	t.Setenv("FAKE_TMUX_CWD", dir)
 	oldRuntimeWindows := runtimeWindows
 	t.Cleanup(func() { runtimeWindows = oldRuntimeWindows })
 	invocation := process.ProcessInvocation{
@@ -56,10 +57,10 @@ func main() {
 	for _, launcher := range []string{"tmux", "tmux-session"} {
 		for _, windows := range []bool{false, true} {
 			name := launcher + "/posix"
-			want := "cd -- " + posixQuote(dir) + " && exec " + posixJoin(invocation.Argv)
+			wantArgs := []string{"respawn-pane", "-k", "-t", "%9", "-c", "/", "cd -- " + posixQuote(dir) + " && exec " + posixJoin(invocation.Argv)}
 			if windows {
 				name = launcher + "/windows"
-				want = powershellJoin(invocation.Argv, invocation.ShellEnv)
+				wantArgs = []string{"respawn-pane", "-k", "-t", "%9", powershellJoin(invocation.Argv, invocation.ShellEnv)}
 			}
 			t.Run(name, func(t *testing.T) {
 				runtimeWindows = func() bool { return windows }
@@ -71,7 +72,6 @@ func main() {
 				if err := json.Unmarshal([]byte(readRunLog(t, log)), &got); err != nil {
 					t.Fatal(err)
 				}
-				wantArgs := []string{"respawn-pane", "-k", "-t", "%9", want}
 				if !reflect.DeepEqual(got, wantArgs) {
 					t.Fatalf("respawn argv\n got %q\nwant %q", got, wantArgs)
 				}

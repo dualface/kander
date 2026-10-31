@@ -274,7 +274,7 @@
       "steps": [
         {
           "when": "field:posix=true",
-          "argv": ["respawn-pane", "-k", "-t", "{pane}", "cd -- {cwd_quoted} && exec {command}"],
+          "argv": ["respawn-pane", "-k", "-t", "{pane}", "-c", "/", "cd -- {cwd_quoted} && exec {command}"],
           "messages": {
             "exec": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]},
             "exit": {"id": "launch.tmux_failed_to_start_agent", "args": ["{detail}"]}
@@ -289,6 +289,16 @@
           }
         }
       ]
+    },
+    "pane_directory": {
+      "steps": [
+        {
+          "store": "pane",
+          "argv": ["display-message", "-p", "-t", "{pane}", "#{{?#{{==:#{{pane_current_command}},tmux}},,#{{pane_current_path}}}}"],
+          "output": {"source": "stdout", "parse": "regex:(?s)^\\s*(.*?)\\s*$"}
+        }
+      ],
+      "result": {"directory": "{step.pane.text}"}
     },
     "set_session_marker": {
       "steps": [

@@ -51,8 +51,8 @@ type LaunchPlan struct {
 	// its own integration reports a path-kind session identity; the proactive
 	// id report is skipped for it.
 	sessionFileDeclared bool
-	// processName is the foreground command of the running agent; paneEnded
-	// stops watching as soon as the pane shows it.
+	// processName is the foreground command of the running agent; the pane
+	// watch accepts it as proof that the shell got past cd.
 	processName    string
 	Launcher       string
 	Target         terminal.Target

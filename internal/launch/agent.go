@@ -118,17 +118,20 @@ func launchAgent(
 	if err := backend.RunCommand(conn, address.Pane, quotedPaneCwd(startupDir), command, !runtimeWindows()); err != nil {
 		return LaunchOutcome{}, fail(err)
 	}
-	if caps.ForegroundProcess {
-		if ended, gone := paneEnded(plan, address.Pane); ended {
-			// The agent never held the pane, so the delivery outcome is known
-			// and the durable branch of fail does not apply. A gone pane took
-			// its window with it, which leaves nothing to close.
-			sendAttempted = false
-			if gone {
-				stop = func() string { return "" }
-			}
-			return LaunchOutcome{}, fail(launchError("launch.pane_ended_before_agent_started", startupDir))
-		}
+	switch watchPaneEntry(plan, address.Pane, startupDir) {
+	case paneUnconfirmed:
+		// The agent may be running, so a durable dispatch stays DeliveryUnknown.
+		return LaunchOutcome{}, fail(launchError("launch.agent_start_unconfirmed", startupDir))
+	case paneGone:
+		// The window went with its only pane, which leaves nothing to close.
+		stop = func() string { return "" }
+		fallthrough
+	case paneDead:
+		// No agent is left in the pane to reach, so the delivery is not open:
+		// fail applies the judgement, and the dispatch receipts cover an agent
+		// that started and exited between two polls.
+		sendAttempted = false
+		return LaunchOutcome{}, fail(launchError("launch.pane_ended_before_agent_started", startupDir))
 	}
 	if paneDelivery {
 		if err := completePaneDelivery(plan, outcome); err != nil {

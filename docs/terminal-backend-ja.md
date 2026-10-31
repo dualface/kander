@@ -90,6 +90,7 @@ opaque（不透明部分）のエンコードおよびデコードは、対応�
 | `CreateContainer` | 新しいタブ/ウィンドウを生成し `Address` を返却。 |
 | `WaitReady` | 指定のミリ秒予算内で端末が入力受付可能になるまで待機。 |
 | `RunCommand` | ペインへ初期コマンド行を送信。呼び出し側が POSIX ペインシェル向けにクォートした起動ディレクトリも受け取る。tmux は `exec` の前にそのディレクトリへ移動し、他のバックエンドは無視する。 |
+| `PaneDirectory` | 任意の拡張 `PaneDirectoryReader`: ペインのフォアグラウンドプロセスの作業ディレクトリ。起動時に、ペインが起動ディレクトリへ移動したことの確認に使う。 |
 | `SetSessionMarker` | ペインに Kander の静的マーカーを設定。 |
 | `ReportSession` | マルチプレクサのソケットへ Agent の起動情報を報告。 |
 | `PaneFacts` | ペインの生存状態、プロセス情報、マーカー、および報告されたセッション ID（`AgentSession` 値と `AgentSessionKind` 種別）を取得。 |

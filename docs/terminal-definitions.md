@@ -43,7 +43,7 @@ These points are the contract and are not extended:
 | `hooks`        | Mount point to registered hook name (below) |
 | `ops`          | Operation name to operation object (below) |
 
-A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover, and the pane watch of a launch) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session`, `agent_session_kind` and `container`, and `topology` lists pane IDs through `rows`).
+A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session`, `agent_session_kind` and `container`, and `topology` lists pane IDs through `rows`).
 
 `ParseAddress` applies the `address` patterns strictly. The read-only focus path (`ParseFocusAddress`) also accepts the same number of fields when each is a plain colon-free segment, which keeps legacy IDs without a prefix focusable.
 
@@ -76,12 +76,15 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 
 `cwd_quoted` is the startup directory, already quoted for a POSIX pane shell by `internal/launch`, and empty when `posix` is `false`. Use it verbatim, as in `cd -- {cwd_quoted} && exec {command}`; a definition never adds its own quoting. A definition that does not use it stays valid.
 
+`pane_directory` reports the working directory of the pane's foreground process, and an empty `directory` while there is none to report. A launch uses it to confirm the pane entered the startup directory, so a definition that declares it must start the pane somewhere else and enter the directory itself, as tmux does with `respawn-pane -c /`. Without the operation a launch does not watch the pane. See [Startup Directory](launch-and-delivery.md#startup-directory).
+
 | Operation            | Inputs (placeholders)                                   | Result fields |
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
 | `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label` | `session`, `container`, `pane` (container and pane required) |
 | `wait_ready` (optional; absent means ready) | `pane`, `timeout_ms` (the readiness budget: 15000, or 120000 with `extended_launch_timeouts`; `kander terminal test` always passes 15000) | none |
 | `run_command`        | `pane`, `cwd_quoted`, `command`, `posix` (`true`/`false`) | none |
+| `pane_directory` (optional) | `pane` | `directory` |
 | `set_session_marker` | `pane`, `value`                                         | none |
 | `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `agent_session_kind`, `container` |
 | `read_output`        | `pane`                                                  | `text` |
@@ -326,7 +329,7 @@ their declared socket channels; only their CLI read-back has an argv trace.
 | WaitOutput, ReadOutput | Confirm a unique output marker assembled inside the pane |
 | SetSessionMarker | Write a unique marker and compare the PaneFacts read-back |
 | ReportSession | Report an isolated test identity and compare its read-back |
-| PaneFacts | Live pane; foreground command, dead and copy-mode fields |
+| PaneFacts | Live pane; foreground command, dead and copy-mode fields; `pane_directory`, when declared, reports the directory RunCommand entered |
 | Topology, ContainerExists | Owning container and exactly one pane; existence |
 | ReverseLookup | Resolve the unique identity back to the created address |
 | Focus | Focus the created pane with an attached client |

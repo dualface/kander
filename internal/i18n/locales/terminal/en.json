@@ -39,5 +39,6 @@
   "terminal.herdr_agent_list_invalid": "herdr agent list returned invalid output",
   "launch.startup_directory_unusable": "cannot start in directory {{.V0}}: {{.V1}}",
   "launch.startup_directory_is_not_a_directory": "it is not a directory",
-  "launch.pane_ended_before_agent_started": "the agent did not start: its pane ended right after launch (startup directory {{.V0}})"
+  "launch.pane_ended_before_agent_started": "the agent did not start: its pane ended right after launch (startup directory {{.V0}})",
+  "launch.agent_start_unconfirmed": "could not confirm the agent started: its pane neither entered the startup directory {{.V0}} nor ended in time"
 }

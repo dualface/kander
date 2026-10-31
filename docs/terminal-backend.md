@@ -90,6 +90,7 @@ Every operation receives a `terminal.Conn` containing the resolved binary path a
 | `CreateContainer` | Allocates a new tab/window and returns its `Address`. |
 | `WaitReady` | Waits up to the given millisecond budget until the container shell/pane is responsive. |
 | `RunCommand` | Dispatches an initial startup command line to the pane. It also receives the startup directory, quoted by the caller for a POSIX pane shell. tmux enters that directory before `exec`; other backends ignore it. |
+| `PaneDirectory` | Optional `PaneDirectoryReader` extension: the working directory of the pane's foreground process. A launch uses it to confirm the pane entered the startup directory. |
 | `SetSessionMarker` | Statically tags a pane with a Kander session reference. |
 | `ReportSession` | Actively reports agent startup identity to the multiplexer socket. |
 | `PaneFacts` | Inspects pane liveness, foreground process, marker metadata, and the reported session identity (`AgentSession` value plus `AgentSessionKind`). |

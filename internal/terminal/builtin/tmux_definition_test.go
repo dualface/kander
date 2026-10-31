@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -69,12 +70,26 @@ func TestTmuxDefinitionArgvMatchesGoBackend(t *testing.T) {
 			run: func(conn terminal.Conn) error {
 				return backend.RunCommand(conn, "%9", "'/work dir'", "codex 'a b'", true)
 			},
-			want: [][]string{{"respawn-pane", "-k", "-t", "%9", "cd -- '/work dir' && exec codex 'a b'"}},
+			want: [][]string{{"respawn-pane", "-k", "-t", "%9", "-c", "/", "cd -- '/work dir' && exec codex 'a b'"}},
 		},
 		{
 			name: "run_command without exec",
 			run:  func(conn terminal.Conn) error { return backend.RunCommand(conn, "%9", "", "codex", false) },
 			want: [][]string{{"respawn-pane", "-k", "-t", "%9", "codex"}},
+		},
+		{
+			name:  "pane_directory",
+			reply: func([]string) probe.Result { return probe.Result{Stdout: "/work dir\n"} },
+			run: func(conn terminal.Conn) error {
+				got, err := backend.(terminal.PaneDirectoryReader).PaneDirectory(context.Background(), conn, "%9")
+				if err == nil && got != "/work dir" {
+					return fmt.Errorf("directory %q", got)
+				}
+				return err
+			},
+			// The fork of a respawned pane still reports the tmux server's own
+			// directory, so the format hides it.
+			want: [][]string{{"display-message", "-p", "-t", "%9", "#{?#{==:#{pane_current_command},tmux},,#{pane_current_path}}"}},
 		},
 		{
 			name: "set_session_marker",

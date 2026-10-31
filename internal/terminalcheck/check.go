@@ -411,7 +411,33 @@ func (c *checker) facts(supported bool) (string, error) {
 		}
 		return facts.Command == c.process && facts.Dead == "0" && facts.InMode == "0", nil
 	})
-	return "", err
+	if err != nil {
+		return "", err
+	}
+	return "", c.paneDirectory()
+}
+
+// paneDirectory confirms pane_directory reports the directory RunCommand entered.
+func (c *checker) paneDirectory() error {
+	reader, ok := c.backend.(terminal.PaneDirectoryReader)
+	if !ok {
+		return nil
+	}
+	want, err := os.Stat(c.cwd)
+	if err != nil {
+		return err
+	}
+	return c.poll(func(ctx context.Context) (bool, error) {
+		directory, err := reader.PaneDirectory(ctx, c.conn, c.address.Pane)
+		if errors.Is(err, terminal.ErrUnsupported) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		got, err := os.Stat(directory)
+		return err == nil && os.SameFile(got, want), nil
+	})
 }
 func (c *checker) topology(_ bool) (string, error) {
 	topology, err := c.backend.Topology(context.Background(), c.conn, c.address)
