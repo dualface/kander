@@ -445,7 +445,7 @@ Every successful run of a required role must sit on the conclusion chain (the co
 
 The `kander move <task-id> done` gate checks:
 1. **Plan Sealed**: The task's review plan has `"sealed": true`.
-2. **Batches Closed**: All batches are closed with valid role conclusions of the current cycle, except a batch with no member left. A rebound member whose every earlier batch closed has a later batch. Drop obligations and recovery obligations are discharged.
+2. **Batches Closed**: All batches are closed with valid role conclusions, except a batch with no member left. A new closure needs conclusions of the cycle current when it closes, and a closed batch stays valid after a later cycle change. A rebound member whose every earlier batch closed has a later batch. Drop obligations and recovery obligations are discharged.
 3. **No Unresolved Blockers**: All blocking findings are resolved (`fixed` or validly `waived`).
 4. **Git Ancestry**: All pass commits and fix commits are verified ancestors of the final delivery target.
 5. **Artifact Integrity**: Local ledger matches hashes, without missing copies or broken links. Copies of excluded and archived members are not compared.
