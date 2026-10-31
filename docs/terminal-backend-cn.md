@@ -89,7 +89,7 @@ $$\text{WINDOW} = \langle\text{launcher}\rangle{:}\langle\text{opaque}\rangle$$
 | `Prepare` | 解析目标程序、平台兼容性、PATH 及运行环境变量。 |
 | `CreateContainer` | 分配新标签页/窗口并返回其 `Address`。 |
 | `WaitReady` | 在给定的毫秒预算内等待容器终端就绪。 |
-| `RunCommand` | 发送初始命令行给窗格执行。 |
+| `RunCommand` | 发送初始命令行给窗格执行。同时接收由调用方按 POSIX 窗格 shell 引好号的启动目录。tmux 在 `exec` 之前进入该目录，其他后端忽略它。 |
 | `SetSessionMarker` | 给窗格打上 Kander 静态会话标记。 |
 | `ReportSession` | 汇报 Agent 启动身份至复用器套接字。 |
 | `PaneFacts` | 检查窗格存活、前台进程、标记元数据及上报的会话身份（`AgentSession` 值与 `AgentSessionKind` 种类）。 |
