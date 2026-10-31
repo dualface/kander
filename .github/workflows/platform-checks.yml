@@ -24,8 +24,8 @@ jobs:
       # One command per step: a PowerShell step exits with the last command's code.
       # The runner temp directory is real on macOS, where the default temp path is
       # a symlink the board refuses, and it is the fast drive on Windows.
-      # The process tests come first and run past each other's failure: a push to
-      # develop is their only CI trigger, so one run must report all of them.
+      # The process tests come first and run past each other's failure, so one run
+      # reports all of them without waiting for the model test.
       - name: Process identity tests
         env:
           TMPDIR: ${{ runner.temp }}
