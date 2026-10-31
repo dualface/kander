@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func TestClassifyTaskSharesForwardAndReverseDeadline(t *testing.T) {
@@ -21,14 +22,12 @@ func TestClassifyTaskSharesForwardAndReverseDeadline(t *testing.T) {
 			if channel == "herdr" {
 				window = "herdr:w1:t1:w1:p1"
 				script += `if [ "$2" = get ]; then
- /bin/sleep 0.3
  echo '{"error":{"code":"pane_not_found"}}' >&2
  exit 1
 fi
 `
 			} else {
 				script += `if [ "$1" = display-message ]; then
- /bin/sleep 0.3
  echo "can't find pane" >&2
  exit 1
 fi
@@ -43,19 +42,47 @@ fi
 			text := "- SESSION: codex wanted\n- WINDOW: " + window + "\n"
 			ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
 			defer cancel()
-			started := time.Now()
+			deadline, _ := ctx.Deadline()
 			rep := ClassifyTaskContext(ctx, board.Entry{TaskID: "budget"}, text)
-			elapsed := time.Since(started)
+			returned := time.Now()
 			if rep.Status != Unknown || rep.NewWindow != "" || !strings.Contains(rep.Detail, "反查:") || !strings.Contains(rep.Detail, "探测期限已耗尽") {
 				t.Fatalf("report=%+v", rep)
 			}
-			if elapsed < 400*time.Millisecond || elapsed > 650*time.Millisecond {
-				t.Fatalf("elapsed=%s; shared budget=400ms", elapsed)
+			// Both bounds start at the deadline itself: a clock read beside
+			// WithTimeout drifts under load. The reverse fake sleeps 3s, so a
+			// budget that is not shared exceeds the upper bound, while the delay
+			// of reaping a killed process stays far below it.
+			if overrun := returned.Sub(deadline); overrun < 0 || overrun > 1500*time.Millisecond {
+				t.Fatalf("returned %s after the shared 400ms deadline", overrun)
 			}
 			if _, err := os.Stat(marker); err != nil {
 				t.Fatalf("reverse stage was not reached: %v", err)
 			}
 		})
+	}
+}
+
+type deadlineBackend struct {
+	terminal.Backend
+	deadline time.Time
+}
+
+func (b *deadlineBackend) ReverseLookup(ctx context.Context, _ terminal.Conn, _ terminal.Identity) (terminal.Address, error) {
+	b.deadline, _ = ctx.Deadline()
+	return terminal.Address{}, context.DeadlineExceeded
+}
+
+// The end-to-end test above bounds time only loosely. This one catches any
+// separate reverse budget, however short, by comparing the deadline itself.
+func TestReverseLookupInheritsCallerDeadline(t *testing.T) {
+	resetLang(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	want, _ := ctx.Deadline()
+	backend := &deadlineBackend{}
+	staleReport(ctx, board.Entry{TaskID: "budget"}, TaskSession{Agent: "codex", Reference: "wanted"}, "fake", "fake", "stale", "fake", backend, true)
+	if !backend.deadline.Equal(want) {
+		t.Fatalf("reverse deadline=%s; want %s", backend.deadline, want)
 	}
 }
 
