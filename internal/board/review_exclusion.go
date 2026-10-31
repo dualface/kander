@@ -152,7 +152,8 @@ func requireRunMembers(tx *Transaction, batch ReviewBatch, ids []string) error {
 }
 
 // requireNoStrayBatch refuses a batch outside the plan of a member before the batch
-// exists. The done gate rejects such a run, and extend-plan cannot adopt it.
+// exists. The done gate rejects such a run until extend-plan resolves its batch, and
+// the batch can never join the chain of the plan.
 func requireNoStrayBatch(tx *Transaction, ids []string, batchID string) error {
 	for _, id := range ids {
 		p, exists, err := readTaskPlan(tx, id)

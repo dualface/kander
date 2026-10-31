@@ -11,16 +11,17 @@ import (
 )
 
 type ReviewProgress struct {
-	TaskID       string             `json:"task_id"`
-	PlanID       string             `json:"plan_id,omitempty"`
-	Status       string             `json:"status"`
-	Exclusion    *ReviewExclusion   `json:"exclusion,omitempty"`
-	Pending      []string           `json:"pending,omitempty"`
-	RebindCycles map[string]string  `json:"rebind_cycles,omitempty"`
-	PlanTarget   string             `json:"plan_target,omitempty"`
-	BatchTarget  string             `json:"batch_target,omitempty"`
-	BatchID      string             `json:"batch_id,omitempty"`
-	NextActions  []ReviewNextAction `json:"next_actions,omitempty"`
+	TaskID          string                  `json:"task_id"`
+	PlanID          string                  `json:"plan_id,omitempty"`
+	Status          string                  `json:"status"`
+	Exclusion       *ReviewExclusion        `json:"exclusion,omitempty"`
+	Pending         []string                `json:"pending,omitempty"`
+	RebindCycles    map[string]string       `json:"rebind_cycles,omitempty"`
+	PlanTarget      string                  `json:"plan_target,omitempty"`
+	BatchTarget     string                  `json:"batch_target,omitempty"`
+	BatchID         string                  `json:"batch_id,omitempty"`
+	NextActions     []ReviewNextAction      `json:"next_actions,omitempty"`
+	ResolvedBatches []ReviewBatchResolution `json:"resolved_batches,omitempty"`
 }
 
 func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (LockScope, error) {
@@ -84,6 +85,7 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	if err = checkUnplannedReviewRuns(tx, p); err != nil {
 		return progress, err
 	}
+	progress.ResolvedBatches = p.ResolvedBatches
 	if err = verifyPlanCopiesFor(tx, p, false); err != nil {
 		return progress, err
 	}
@@ -380,9 +382,14 @@ func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {
 			return reviewError("missing run")
 		}
 		for _, id := range p.TaskIDs {
-			if containsID(run.TaskIDs, id) && !planned[run.BatchID] {
+			if containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
 				return reviewError("unplanned execution batch: " + run.BatchID)
 			}
+		}
+	}
+	for _, r := range p.ResolvedBatches {
+		if err = verifyBatchResolution(tx, p, r); err != nil {
+			return err
 		}
 	}
 	return nil

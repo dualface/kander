@@ -11,22 +11,27 @@ import (
 
 // ReviewPlanExtension appends one batch after the prior closure, seals the
 // cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
-// batch, or drops trailing batches no run has reached. Existing requirements,
-// members and evidence are never replaced. A sealed plan takes a batch only for
-// a rebound cycle that has none, or for a recovery that still owes a review.
+// batch, drops trailing batches no run has reached, or resolves an unplanned batch
+// (ResolveReviewBatch). Existing requirements, members and evidence are never
+// replaced. A sealed plan takes a batch only for a rebound cycle that has none, or
+// for a recovery that still owes a review.
 type ReviewPlanExtension struct {
-	RebindCycles     map[string]string `json:"rebind_cycles,omitempty"`
-	SyncTargets      map[string]string `json:"sync_targets,omitempty"`
-	DropBatches      []string          `json:"drop_batches,omitempty"`
-	PlanID           string            `json:"plan_id"`
-	ExpectedRevision uint64            `json:"expected_revision"`
-	Batch            *ReviewPlanBatch  `json:"batch,omitempty"`
-	Seal             bool              `json:"seal"`
-	Author           string            `json:"author"`
-	Basis            string            `json:"basis"`
+	RebindCycles     map[string]string             `json:"rebind_cycles,omitempty"`
+	SyncTargets      map[string]string             `json:"sync_targets,omitempty"`
+	DropBatches      []string                      `json:"drop_batches,omitempty"`
+	ResolveBatch     *ReviewBatchResolutionRequest `json:"resolve_batch,omitempty"`
+	PlanID           string                        `json:"plan_id"`
+	ExpectedRevision uint64                        `json:"expected_revision"`
+	Batch            *ReviewPlanBatch              `json:"batch,omitempty"`
+	Seal             bool                          `json:"seal"`
+	Author           string                        `json:"author"`
+	Basis            string                        `json:"basis"`
 }
 
 func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
+	if x.ResolveBatch != nil {
+		return reviewError("resolve_batch needs the Git evidence of ResolveReviewBatch")
+	}
 	if !ValidReviewID(x.PlanID) || strings.TrimSpace(x.Author) == "" || strings.TrimSpace(x.Basis) == "" || x.Batch == nil && !x.Seal && len(x.RebindCycles) == 0 && len(x.SyncTargets) == 0 && len(x.DropBatches) == 0 {
 		return reviewError("plan extension provenance")
 	}

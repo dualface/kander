@@ -89,11 +89,15 @@ func runDispositionCommand(args []string) int {
 		var x board.ReviewPlanExtension
 		if err = readArchiveJSON(input, &x); err == nil {
 			err = verifyPlanCWD(root, x.PlanID, cwd)
-			if err == nil && x.Batch != nil && board.ReviewNeedsGit(*x.Batch) {
-				err = verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: x.Batch.Base, Descendant: x.Batch.TargetCommit})
-			}
-			if err == nil {
-				err = board.ExtendReviewPlan(root, x)
+			if err == nil && x.ResolveBatch != nil {
+				err = resolveBatchWithGit(root, cwd, x)
+			} else if err == nil {
+				if x.Batch != nil && board.ReviewNeedsGit(*x.Batch) {
+					err = verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: x.Batch.Base, Descendant: x.Batch.TargetCommit})
+				}
+				if err == nil {
+					err = board.ExtendReviewPlan(root, x)
+				}
 			}
 		}
 		result = map[string]string{"plan_id": x.PlanID}
@@ -238,6 +242,21 @@ func closeWithGit(root, cwd string, r board.ReviewCloseRequest) (board.ReviewClo
 		return c, err
 	}
 	return board.CloseReviewBatch(root, r, board.ReviewGitEvidence{CWD: cwd, Head: v.Batch.TargetCommit, Mechanical: mechanical, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
+}
+
+// resolveBatchWithGit verifies the claims of a resolution the way closeWithGit does:
+// board names the edges, this layer runs Git, and board compares the evidence.
+func resolveBatchWithGit(root, cwd string, x board.ReviewPlanExtension) error {
+	edges, err := board.ReviewBatchResolutionEdges(root, x)
+	if err != nil {
+		return err
+	}
+	for _, edge := range edges {
+		if err = verifyGitEdge(cwd, edge); err != nil {
+			return err
+		}
+	}
+	return board.ResolveReviewBatch(root, x, board.ReviewResolutionGit{CWD: cwd, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
 }
 
 func hydrateIncremental(root string, options archiveOptions, arguments []string, replay bool) ([]string, error) {
