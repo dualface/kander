@@ -48,6 +48,27 @@ func stageRecoveryReview(tx *Transaction, id, recovery string) error {
 	return tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(RecoveryReview{Schema: 1, TaskID: id, PlanID: p.PlanID, RecoveryID: recovery, FromBatch: len(p.Batches), Roles: roles}))
 }
 
+// moveRecoveryReviews follows a drop of trailing batches. The next batch lands at
+// the new end, so a recovery owed past it must accept it. Every batch left stays
+// below that position, so none of them counts.
+func moveRecoveryReviews(tx *Transaction, p ReviewPlan) error {
+	for _, id := range p.TaskIDs {
+		var o RecoveryReview
+		ok, err := readReviewJSON(tx, recoveryReviewName(id), &o)
+		if err != nil {
+			return err
+		}
+		if !ok || o.PlanID != p.PlanID || o.FromBatch <= len(p.Batches) {
+			continue
+		}
+		o.FromBatch = len(p.Batches)
+		if err = tx.PutGroup(reviewControlGroup, recoveryReviewName(id), reviewJSON(o)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // recoveryReviewOwed reports a member whose recovery still needs an actual review.
 func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (bool, error) {
 	var o RecoveryReview

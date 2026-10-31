@@ -346,5 +346,5 @@ func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string) error {
 	for id, from := range p.CycleBatchFrom {
 		p.CycleBatchFrom[id] = min(from, len(p.Batches))
 	}
-	return nil
+	return moveRecoveryReviews(tx, *p)
 }

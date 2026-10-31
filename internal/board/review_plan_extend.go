@@ -13,7 +13,7 @@ import (
 // cycle, rebinds execution cycles, syncs a drifted plan target to the runtime
 // batch, or drops trailing batches no run has reached. Existing requirements,
 // members and evidence are never replaced. A sealed plan takes a batch only for
-// a rebound cycle that has none.
+// a rebound cycle that has none, or for a recovery that still owes a review.
 type ReviewPlanExtension struct {
 	RebindCycles     map[string]string `json:"rebind_cycles,omitempty"`
 	SyncTargets      map[string]string `json:"sync_targets,omitempty"`

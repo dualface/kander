@@ -63,13 +63,20 @@ func verifyWrapUpGit(ctx context.Context, cwd string, facts board.CoordinatorGit
 }
 
 // verifyWrapUpCompletion runs for kander move done. Cleanup may already have
-// removed the recorded worktree, so the main worktree proves the same objects.
+// removed the recorded worktree, and a board set by KANBAN_DIR can live outside the
+// repository, so it looks for any checkout that holds the same objects. With none
+// in reach the check waits for a reconcile, which can name one.
 func verifyWrapUpCompletion(ctx context.Context, root string, facts board.CoordinatorGitFacts) error {
-	cwd := ""
-	if _, err := os.Stat(facts.Integration.CWD); err != nil {
-		cwd = filepath.Dir(root)
+	working, err := os.Getwd()
+	if err != nil {
+		return err
 	}
-	return verifyWrapUpGit(ctx, cwd, facts)
+	for _, cwd := range []string{facts.Integration.CWD, working, filepath.Dir(root)} {
+		if exec.CommandContext(ctx, "git", "-C", cwd, "cat-file", "-e", facts.Integration.TargetCommit+"^{commit}").Run() == nil {
+			return verifyWrapUpGit(ctx, cwd, facts)
+		}
+	}
+	return board.ErrWrapUpGitDeferred
 }
 
 // recoverLivenessFn observes the recorded address only, as adoption does.

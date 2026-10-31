@@ -2,6 +2,7 @@ package board
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,11 @@ const (
 
 // WrapUpGitVerifier checks the Git facts of a wrap-up for the given board root.
 type WrapUpGitVerifier func(ctx context.Context, root string, facts CoordinatorGitFacts) error
+
+// ErrWrapUpGitDeferred tells a completion that no repository holding the facts is
+// in reach, which says nothing about the facts. The move goes on, and the next
+// reconcile verifies once, with the cwd its caller names.
+var ErrWrapUpGitDeferred = errors.New("wrap-up Git verification deferred")
 
 var wrapUpGitVerifier atomic.Pointer[WrapUpGitVerifier]
 
@@ -108,7 +114,8 @@ func wrapUpGitFacts(tx *Transaction, id string, d Dispatch) (CoordinatorGitFacts
 // verifyWrapUpCompletion runs before the transaction of a bound move into done, so
 // Git runs with no lock held. The result binds the epoch; the move fails when the
 // binding changed. It returns nil when no record applies: another kind of round, a
-// replayed completion, a group with no checkpoint, or a binary with no verifier.
+// replayed completion, a group with no checkpoint, a binary with no verifier, or a
+// verifier with no repository in reach.
 func verifyWrapUpCompletion(root string, entry Entry, o MoveOptions) (*wrapUpCompletion, error) {
 	verifier := wrapUpGitVerifier.Load()
 	if verifier == nil || o.Authorization.DispatchID == "" {
@@ -146,7 +153,9 @@ func verifyWrapUpCompletion(root string, entry Entry, o MoveOptions) (*wrapUpCom
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), wrapUpCompletionGitDeadline)
 	defer cancel()
-	if err = (*verifier)(ctx, root, facts); err != nil {
+	if err = (*verifier)(ctx, root, facts); errors.Is(err, ErrWrapUpGitDeferred) {
+		return nil, nil
+	} else if err != nil {
 		return nil, err
 	}
 	result.evidence = newWrapUpEvidence(d, wrapUpVerifiedByCompletion)

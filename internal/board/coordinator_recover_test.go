@@ -448,6 +448,55 @@ func TestRecoveredMemberNeedsAnActualReview(t *testing.T) {
 	}
 }
 
+func TestDroppingATailBatchMovesTheRecoveryPosition(t *testing.T) {
+	root := tempBoard(t)
+	ids := []string{recoveryMember(t, root, "drop-a"), recoveryMember(t, root, "drop-b")}
+	id := ids[0]
+	c := coordinatorReconcile(t, root, coordinatorClaim(t, root, ids...))
+	b := strings.Repeat("b", 40)
+	plan := ReviewPlan{Schema: 1, Sealed: true, PlanID: "plan-drop", Author: "coordinator", Basis: "fixture", CWD: "/repo", ReportLanguage: "en", TaskIDs: ids, Batches: []ReviewPlanBatch{
+		{BatchID: "batch", TaskIDs: ids, Base: strings.Repeat("a", 40), TargetCommit: b, Requirements: archiveRequirements()},
+		{BatchID: "tail", PreviousBatchID: "batch", TaskIDs: ids, Base: b, TargetCommit: strings.Repeat("c", 40), Requirements: archiveRequirements()},
+	}}
+	if err := CreateReviewPlan(root, plan); err != nil {
+		t.Fatal(err)
+	}
+	run := gateRun(t, root, archiveInput(ids, "drop-pmqa", "PMQA"), emptyFindings())
+	assignGate(t, root, run, map[string][]string{})
+	if _, err := gateClose(t, root, map[string]ReviewRoleConclusion{"PMQA": passRole(run)}); err != nil {
+		t.Fatal(err)
+	}
+	staleReclaim(t, root, id)
+	recoverMember(t, root, coordinatorRequestAfter(t, root, c), id)
+	p := deadEndRebind(t, root, id)
+	if err := ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{"tail"}, Author: "coordinator", Basis: "replace the tail"}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := ReadReviewPlan(root, p.PlanID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p = appendBatch(t, root, p, id, "cycle-na", noReviewRequirements())
+	if _, err = deadEndClose(t, root, "cycle-na", map[string]ReviewRoleConclusion{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = deadEndDone(t, root, id); err == nil || !strings.Contains(err.Error(), "recovery-review:"+id) {
+		t.Fatalf("an N/A batch at the moved position passed: %v", err)
+	}
+	p = appendBatch(t, root, p, id, "cycle-real", archiveRequirements())
+	closeActualBatch(t, root, p, id, "cycle-real")
+	// A drop reopens a sealed plan.
+	if p, err = ReadReviewPlan(root, p.PlanID); err != nil {
+		t.Fatal(err)
+	}
+	if err = ExtendReviewPlan(root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Seal: true, Author: "coordinator", Basis: "seal"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = deadEndDone(t, root, id); err != nil {
+		t.Fatalf("the review after the drop did not count: %v", err)
+	}
+}
+
 func TestReclaimAfterRecoveryKeepsTheReviewOwed(t *testing.T) {
 	root := tempBoard(t)
 	ids, p := recoveredPlan(t, root)
