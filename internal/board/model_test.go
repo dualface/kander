@@ -50,6 +50,7 @@ func modelSingleSeeds() []modelSeed {
 		{name: "unresolved", steps: []string{"L.begin", "X.write", "L.fail"}},
 		{name: "close-failed", steps: []string{"L.begin", "L.closeFailed"}},
 		{name: "two-roots", steps: []string{"H.claim", "R.planRequired", "R.run", "R.assign", "R.runClean"}},
+		{name: "stray", steps: []string{"H.claim", "R.planRequired", "R.runClean", "R.assign", "R.close", "U.oldStrayRun"}},
 	}
 }
 
@@ -77,6 +78,7 @@ func modelGroupSeeds() []modelSeed {
 		{name: "recovered", focus: "A", steps: slices.Concat(closed, oldReclaim, []string{"A:H.recover", "C.reconcile"})},
 		{name: "rejected-wrap-up", focus: "B", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile", "A:F.done", "C.gitRejected"})},
 		{name: "confirmed", focus: "B", steps: slices.Concat(claimed, []string{"R.planNA", "R.close", "A:X.review", "B:X.review", "C.reconcile", "A:F.done", "C.gitRejected", "A:H.recover", "C.reconcile"})},
+		{name: "stray", focus: "A", steps: slices.Concat(claimed, []string{"R.planRequired", "R.runClean", "A:R.assign", "R.close", "U.oldStrayRun", "A:X.review", "B:X.review", "C.reconcile"})},
 		{name: "excluded", focus: "A", steps: slices.Concat(claimed, []string{"R.planRequired", "R.run", "B:R.assign", "B:T.trash", "C.reconcile"})},
 	}
 }

@@ -3,14 +3,16 @@ package board
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
 )
 
 const (
-	modelPlanID  = "model-plan"
-	modelMaxRuns = 2 // a third full run adds no state a second run does not reach
+	modelPlanID     = "model-plan"
+	modelStrayBatch = "model-stray"
+	modelMaxRuns    = 2 // a third full run adds no state a second run does not reach
 )
 
 var modelFinding = ReviewFinding{ID: "PMQA-01", Tier: "medium", Text: "model finding", Evidence: "model.go:1"}
@@ -177,6 +179,61 @@ func (r modelReviewFacts) firstOpen() (modelBatchFacts, bool) {
 	return modelBatchFacts{}, false
 }
 
+func (r modelReviewFacts) firstClosed() (modelBatchFacts, bool) {
+	at := slices.IndexFunc(r.batches, func(b modelBatchFacts) bool { return b.closed })
+	if at < 0 {
+		return modelBatchFacts{}, false
+	}
+	return r.batches[at], true
+}
+
+// oldStrayRun writes what v1.0.0 left: a run with one finding in a batch outside the
+// plan, on the range of b. No current path can write it, so the plan pointers step
+// aside for the run.
+func (w *modelWorld) oldStrayRun(b modelBatchFacts) (err error) {
+	for _, id := range b.live {
+		path := control(w.root, "groups", reviewControlGroup, "task-plans", id+".json")
+		if err = os.Rename(path, path+".moved"); err != nil {
+			return modelInfra(err)
+		}
+		defer func() { err = errors.Join(err, modelInfra(os.Rename(path+".moved", path))) }()
+	}
+	in := b.input(w, "PMQA", "", "")
+	in.BatchID = modelStrayBatch
+	w.stray = in.RunID
+	return modelInfra(w.publishRun(in, modelRequired(), modelFindings(true)))
+}
+
+func (w *modelWorld) resolveStray(plan, cover string) error {
+	p, err := ReadReviewPlan(w.root, plan)
+	if err != nil {
+		return modelInfra(err)
+	}
+	finding := ReviewResolvedFinding{RunID: w.stray, FindingID: modelFinding.ID, Status: "rejected", Basis: "model", Decision: "model-decision"}
+	x := ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Author: "coordinator", Basis: "model", ResolveBatch: &ReviewBatchResolutionRequest{BatchID: modelStrayBatch, CoveringBatchID: cover, Findings: []ReviewResolvedFinding{finding}}}
+	edges, err := ReviewBatchResolutionEdges(w.root, x)
+	if err != nil {
+		return err
+	}
+	return ResolveReviewBatch(w.root, x, ReviewResolutionGit{CWD: "/repo", VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
+}
+
+// settleStray lets the completion tail resolve the batch an old binary left. The
+// tail needs it as its first step, and the exit search would pay one operation.
+func (w *modelWorld) settleStray() error {
+	if w.stray == "" {
+		return nil
+	}
+	p, err := ReadReviewPlan(w.root, modelPlanID)
+	if err != nil {
+		return modelInfra(err)
+	}
+	if resolvedBatch(p, modelStrayBatch) != nil {
+		return nil
+	}
+	return w.resolveStray(p.PlanID, p.Batches[0].BatchID)
+}
+
 // withdrawable names a finding an excluded member still owes.
 func (f *modelFacts) withdrawable(i int) (modelBatchFacts, modelRunFacts, string, bool) {
 	id := f.world.members[i].id
@@ -335,6 +392,15 @@ func modelReviewOps() []modelOp {
 					}
 				}
 				return nil
+			}},
+		{name: "R.resolveBatch", cli: "kander review extend-plan: resolve_batch", shared: true,
+			guard: func(f *modelFacts, _ int) bool {
+				_, closed := f.review.firstClosed()
+				return f.world.stray != "" && len(f.review.foreign) > 0 && closed
+			},
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
+				b, _ := f.review.firstClosed()
+				return w.resolveStray(b.plan, b.id)
 			}},
 		{name: "R.dropBatch", cli: "kander review extend-plan: drop_batches", shared: true,
 			guard: func(f *modelFacts, _ int) bool {

@@ -202,7 +202,8 @@ func modelCheckI7(before, after *modelFacts) error {
 }
 
 func modelCheckI6(_, after *modelFacts) error {
-	if len(after.review.foreign) > 0 {
+	// An old binary left the stray run; only a resolution clears it.
+	if len(after.review.foreign) > 0 && after.world.stray == "" {
 		return fmt.Errorf("runs outside the plan: %v", after.review.foreign)
 	}
 	for _, b := range after.review.batches {

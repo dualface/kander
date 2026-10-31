@@ -323,6 +323,12 @@ func modelLifecycleOps() []modelOp {
 				return !modelTerminal(f.cards[i].Entry.State) || f.blocked(i)
 			},
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.finishMember(m) }},
+		{name: "U.oldStrayRun", cli: "an old binary: kander review with a batch outside the plan", seedOnly: true, shared: true,
+			guard: func(f *modelFacts, _ int) bool { _, closed := f.review.firstClosed(); return closed },
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
+				b, _ := f.review.firstClosed()
+				return w.oldStrayRun(b)
+			}},
 		{name: "U.oldReclaim", cli: "an old binary: kander move <id> working --owner <agent> from review, with no handoff and no ledger link", seedOnly: true,
 			guard: modelInState("review"),
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.oldReclaim(m) }},
@@ -730,6 +736,9 @@ func (w *modelWorld) oldReclaim(m *modelMember) error {
 // wrap-up dispatch. The tail uses ordinary commands only. A state it cannot
 // finish is left to the exit search, which puts other operations in front of it.
 func (w *modelWorld) finishMember(m *modelMember) error {
+	if err := w.settleStray(); err != nil {
+		return err
+	}
 	if err := w.unblock(m); err != nil {
 		return err
 	}

@@ -59,6 +59,7 @@ type modelWorld struct {
 	group   bool
 	members []*modelMember
 	plans   []string
+	stray   string // the run an old binary left outside the plan
 	seq     int
 	trace   []string
 }
@@ -207,6 +208,7 @@ type modelReviewFacts struct {
 	cycleOwed  []string // members whose rebound cycle has no batch
 	reviewOwed []string // members whose recovery still needs an actual review
 	foreign    []string // runs of a plan member outside every batch of that plan
+	resolved   int      // unplanned batches a plan accepted
 }
 
 func (r modelRunFacts) recorded(finding, task string) bool {
@@ -277,6 +279,7 @@ func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
 			if e := checkUnplannedReviewRuns(tx, p); e != nil {
 				facts.foreign = append(facts.foreign, e.Error())
 			}
+			facts.resolved += len(p.ResolvedBatches)
 		}
 		for _, id := range names {
 			batch, ok, e := modelReadBatch(tx, id)
@@ -516,7 +519,7 @@ func (f *modelFacts) reviewKey() string {
 		}
 		parts = append(parts, fmt.Sprintf("%s/%s/sealed=%v/adv=%d/%s", b.id, state, b.sealed, b.advances, strings.Join(runs, ",")))
 	}
-	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d", len(f.review.cycleOwed), len(f.review.reviewOwed)))
+	parts = append(parts, fmt.Sprintf("cycle-owed=%d review-owed=%d foreign=%d resolved=%d", len(f.review.cycleOwed), len(f.review.reviewOwed), len(f.review.foreign), f.review.resolved))
 	return strings.Join(parts, ";")
 }
 

@@ -48,7 +48,7 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 
 An operation that always strands a card, or that only exists to reach one dead end, sets `narrows`, so the search does not expand everything behind it.
 
-A state only an old binary reaches has an operation with `seedOnly`: a seed can start there, and the search never tries it. `U.oldReclaim` is one. It breaks I2 and I3 by construction, so I3 skips a card that was already off its chain.
+A state only an old binary reaches has an operation with `seedOnly`: a seed can start there, and the search never tries it. `U.oldReclaim` is one. It breaks I2 and I3 by construction, so I3 skips a card that was already off its chain. `U.oldStrayRun` is another: it writes a run in a batch outside the plan, which breaks I6 until `R.resolveBatch` accepts the batch, so I6 skips a world that holds such a run.
 
 ## Allow list and invariant registry
 
