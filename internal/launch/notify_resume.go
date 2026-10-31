@@ -36,6 +36,25 @@ func RequireSessionExecution(root, task string) error {
 	return nil
 }
 
+// RequireResumable is the shared check of plain resume and notify. Beyond
+// RequireSessionExecution it refuses a working or review card whose start attempt
+// has not ended: a second process on that session would rewrite WINDOW under the
+// launcher, adoption and takeover. Dismiss keeps the narrower check, because it
+// takes only done and archived cards, which neither way out accepts.
+func RequireResumable(root string, entry board.Entry) error {
+	if err := RequireSessionExecution(root, entry.TaskID); err != nil {
+		return err
+	}
+	record, exists, err := board.CurrentExecution(root, entry.TaskID)
+	if err != nil {
+		return err
+	}
+	if exists && record.StartUnfinished() && (entry.State == "working" || entry.State == "review") {
+		return launchError("board.dispatch_start_unfinished", entry.TaskID, record.Status)
+	}
+	return nil
+}
+
 // ResolvedSession resolves the card session; Codex cards without an id go through rollout lookup.
 func ResolvedSession(taskID, text string) (AgentSession, error) {
 	return resolvedTaskSession(taskID, text)

@@ -35,7 +35,7 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 	if err = launch.CheckExecutionPins(cfg, s.Text, s.Entry.Kind, nil); err != nil {
 		return err
 	}
-	if err = launch.RequireSessionExecution(root, task); err != nil {
+	if err = launch.RequireResumable(root, s.Entry); err != nil {
 		return err
 	}
 	var o launch.DispatchOptions

@@ -149,7 +149,7 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 		o = options[0]
 	}
 	if agent == nil {
-		err = RequireSessionExecution(root, task)
+		err = RequireResumable(root, s.Entry)
 	} else {
 		err = requireTakeoverDecision(root, task, o.Decision)
 	}

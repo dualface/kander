@@ -27,6 +27,7 @@ kander resume --adopt --decision <reference> <task-id>
 ## Preconditions
 
 - The card is in `review/` or `working/`. A plain `resume` needs a `SESSION` record and an execution a launcher started; a claimed or reclaimed card is refused before any dispatch binds. `resume --agent` needs neither.
+- A plain `resume`, with or without a dispatch option, needs a finished start. With a current execution record in `pending` or `unresolved` it is refused before any dispatch binds: a second process on that session would rewrite `WINDOW`, and adoption and takeover would then use the wrong pane. Nothing starts, and the card and the record stay unchanged. While the launcher runs, wait for it. Otherwise use `kander resume <task-id> --adopt --decision <reference>` or `kander resume <task-id> --agent <agent> --decision <reference>`.
 - `resume --adopt` needs a current execution record in `pending` or `unresolved`, and an executor confirmed alive at the recorded address.
 - A card whose agent differs from `EXEC_AGENT` refuses a plain resume (`snippets/commands/start.md` "Card Pins").
 
@@ -65,6 +66,7 @@ kander resume --adopt --decision <reference> <task-id>
 ## Rejections
 
 - A card outside `review/` or `working/`, a missing `SESSION`, a claimed or reclaimed card without `--agent` (the error names `snippets/failure-recovery.md`), a pin violation, an immediate agent exit, or a dispatch conflict.
+- A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover.
 - `--agent` without `--decision` on a `pending` or `unresolved` record.
 - `--adopt` on a record in another status, or with an executor that is not confirmed alive.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error. So are `--adopt` with any option except `--decision`, `--adopt` without `--decision`, and `--decision` without `--adopt` or `--agent`.

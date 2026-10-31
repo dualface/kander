@@ -194,6 +194,12 @@ func doneCard(title string) string {
 
 func makeDone(t *testing.T, root, slug, window string) (string, string) {
 	t.Helper()
+	return makeDoneAfter(t, root, slug, window, func(board.Entry) {})
+}
+
+// makeDoneAfter lets during act on the card once it holds an execution.
+func makeDoneAfter(t *testing.T, root, slug, window string, during func(board.Entry)) (string, string) {
+	t.Helper()
 	path, err := board.NewTask(root, "feature", slug, "任务 "+slug, "en", false)
 	if err != nil {
 		t.Fatal(err)
@@ -220,6 +226,7 @@ func makeDone(t *testing.T, root, slug, window string) (string, string) {
 		t.Fatal(err)
 	}
 	executionFixture(t, root, working)
+	during(working)
 	review, err := board.MoveEntry(working, root, "review")
 	if err != nil {
 		t.Fatal(err)
@@ -307,6 +314,39 @@ func TestDismissArchivedCardClosesContainerWithoutWrite(t *testing.T) {
 	}
 	if after, _ := os.ReadFile(archived.Document); string(before) != string(after) {
 		t.Fatal("card mutated")
+	}
+	if !strings.Contains(out, "关闭容器=w1:t8") {
+		t.Fatalf("out=%s", out)
+	}
+}
+
+// The refusal of plain resume and notify is not dismiss's: neither way out of an
+// unfinished start accepts a done card, so dismiss would leave no exit.
+func TestDismissClosesACardWhoseStartNeverEnded(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
+	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p9")
+	t.Setenv("KANBAN_HERDR_TAB_ID", "w1:t8")
+	t.Setenv("KANBAN_HERDR_LIST_JSON", `{"id":"cli:pane:list","result":{"type":"pane_list","panes":[{"pane_id":"w1:p8","tab_id":"w1:t8","agent":"claude","agent_status":"idle","agent_session":{"value":"session-1"}}]}}`)
+	taskID, _ := makeDoneAfter(t, root, "dismiss-unfinished", "herdr:w1:t9:w1:p9", func(working board.Entry) {
+		s, err := board.ReadSnapshot(root, working.TaskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = board.BindExecutionCursor(root, s.Entry); err != nil {
+			t.Fatal(err)
+		}
+		in := board.TakeoverInput{Owner: board.MetadataFrom(s.Text, board.FieldOwner), Session: board.MetadataFrom(s.Text, board.FieldSession), Window: board.MetadataFrom(s.Text, board.FieldWindow)}
+		if _, err = board.BeginTakeover(root, s.Entry, in); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if record, _, err := board.CurrentExecution(root, taskID); err != nil || !record.StartUnfinished() {
+		t.Fatalf("%+v %v", record, err)
+	}
+	out, _, err := capture(t, func() error { return commandDismiss(root, taskID, 61) })
+	if err != nil {
+		t.Fatal(err)
 	}
 	if !strings.Contains(out, "关闭容器=w1:t8") {
 		t.Fatalf("out=%s", out)
