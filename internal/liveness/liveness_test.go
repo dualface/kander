@@ -81,7 +81,9 @@ func makeReady(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(data)
+	// A Windows checkout gives the card template CRLF line ends; the edits of these
+	// tests match LF.
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
 	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
 		text = strings.Replace(text, "<FILL_IN>", replacement, 1)
 	}

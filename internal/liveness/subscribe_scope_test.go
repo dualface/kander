@@ -22,12 +22,12 @@ func watchedGroupBoard(t *testing.T, brokenMetadata string) (string, subscribeOp
 	if _, err := board.NewTask(root, "chore", "scope-broken", "Broken", "en", false); err != nil {
 		t.Fatal(err)
 	}
-	setMeta(t, filepath.Join(root, "backlog", todayID("scope-broken"), "spec.md"), "- TASK_GROUP:\n", brokenMetadata)
+	setMeta(t, filepath.Join(root, "backlog", todayID("scope-broken"), "spec.md"), "- TASK_GROUP:", brokenMetadata)
 	return root, opts, watched
 }
 
 func TestReadContextIgnoresCardsOutsideTheWatchedGroups(t *testing.T) {
-	root, opts, watched := watchedGroupBoard(t, "- TASK_GROUP: not a group id\n")
+	root, opts, watched := watchedGroupBoard(t, "- TASK_GROUP: not a group id")
 	scanned, err := board.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestReadContextIgnoresCardsOutsideTheWatchedGroups(t *testing.T) {
 }
 
 func TestReadContextStillBlocksOnOwnershipItCannotRuleOut(t *testing.T) {
-	root, opts, watched := watchedGroupBoard(t, "- TASK_GROUP: 20260908-other-group\n- TASK_GROUP: "+"20260908-watched-group"+"\n")
+	root, opts, watched := watchedGroupBoard(t, "- TASK_GROUP: 20260908-other-group\n- TASK_GROUP: "+"20260908-watched-group")
 	s, err := newSubscription(opts)
 	if err != nil {
 		t.Fatal(err)
