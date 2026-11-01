@@ -245,19 +245,28 @@ func TestRecoverResetRefusesABoundMember(t *testing.T) {
 // when a start begins after that read.
 func TestRecoverResetRefusesAPendingStart(t *testing.T) {
 	root := tempBoard(t)
-	ids, c := blockedGroup(t, root)
-	s := transactionSnapshot(t, root, ids[0])
-	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
+	id := recoveryMember(t, root, "pending-reset")
+	other := recoveryMember(t, root, "pending-reset-other")
+	r := coordinatorRequest(t, root, coordinatorReconcile(t, root, coordinatorClaim(t, root, id, other)))
+	o := r.Members[id]
+	o.DispatchID, o.Epoch = "stale-round", 1
+	r.Members[id] = o
+	blocked, err := ReconcileCoordinator(context.Background(), root, r, nil)
+	if err != nil || blocked.Members[id].Blocked == nil {
+		t.Fatalf("%+v %v", blocked.Members[id], err)
+	}
+	s := transactionSnapshot(t, root, id)
+	if _, err = BindExecutionCursor(root, s.Entry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "codex", Session: "codex next", Decision: "user-decision"}); err != nil {
+	if _, err = BeginTakeover(root, s.Entry, TakeoverInput{Owner: "codex", Session: "codex next", Decision: "user-decision"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := RecoverCoordinator(context.Background(), root, recoverRequest(c, ids[0]), transactionRevision(t, root, ids[0]))
+	_, err = RecoverCoordinator(context.Background(), root, recoverRequest(blocked, id), transactionRevision(t, root, id))
 	if err == nil || !strings.Contains(err.Error(), "--adopt") || !strings.Contains(err.Error(), "--agent") {
 		t.Fatal(err)
 	}
-	if record, _, err := CurrentExecution(root, ids[0]); err != nil || record.Status != ExecutionPending {
+	if record, _, err := CurrentExecution(root, id); err != nil || record.Status != ExecutionPending {
 		t.Fatalf("%+v %v", record, err)
 	}
 }

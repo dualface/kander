@@ -118,6 +118,9 @@ type scriptedPane struct{ terminal.Backend }
 
 func (scriptedPane) Name() string { return "pane-entry-test" }
 
+// A registered backend stays for the test binary, so ParseWindow reaches it later.
+func (scriptedPane) Capabilities() terminal.Capabilities { return terminal.Capabilities{} }
+
 func (scriptedPane) PaneDirectory(ctx context.Context, _ terminal.Conn, _ string) (string, error) {
 	script := &paneEntryScript
 	if script.blocked {
