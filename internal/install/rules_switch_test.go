@@ -238,3 +238,31 @@ func TestSymlinkedRulesFileNeedsEveryReader(t *testing.T) {
 		t.Fatalf("linked rules files not grouped: %v", shared)
 	}
 }
+
+func TestPlanListsOverrideOfLinkedRulesFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	home := setupInstallHome(t)
+	paths, _ := config.GlobalInstallPaths()
+	codex := filepath.Join(home, ".codex", "AGENTS.md")
+	writeIntegrateFile(t, codex, "# Mine\n")
+	if err := os.MkdirAll(filepath.Join(home, ".grok"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(codex, filepath.Join(home, ".grok", "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	override := filepath.Join(home, ".grok", "AGENTS.override.md")
+	writeIntegrateFile(t, override, "# Grok override\n")
+	changes := plannedChanges(PlanRulesInjection(paths))
+	if got, ok := changes[override]; !ok || got != RulesChangeAppend {
+		t.Fatalf("grok override change=%v ok=%v; plan=%v", got, ok, changes)
+	}
+	if _, err := Perform(Request{Language: "cn", Source: stubBinary(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(readBytes(t, override), "KANDER-AGENTS.md") {
+		t.Fatal("install did not append to the planned override")
+	}
+}

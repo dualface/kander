@@ -66,6 +66,11 @@ func PlanRulesInjection(paths config.InstallPaths) []PlanGroup {
 		if index, ok := byTarget[key]; ok {
 			groups[index].Agents = append(groups[index].Agents, agent)
 			byAgent[agent] = index
+			// A rules file linked to another agent's still has its own override sibling,
+			// which Perform edits through this agent's target.
+			if override := rulesOverrideTarget(target); override != "" && !groupHasFile(groups[index], override) {
+				groups[index].Files = append(groups[index].Files, planRulesFile(agent, override, false, paths, legacyEntryWillRetire(paths)))
+			}
 			continue
 		}
 		byTarget[key] = len(groups)
@@ -131,6 +136,14 @@ func planExtension(agent string, paths config.InstallPaths) PlannedFile {
 		file.Change = RulesChangeNone
 	}
 	return file
+}
+
+// groupHasFile reports whether the group already plans the file target resolves to.
+func groupHasFile(group PlanGroup, target string) bool {
+	key := rulesFileKey(target)
+	return slices.ContainsFunc(group.Files, func(file PlannedFile) bool {
+		return file.Target != "" && rulesFileKey(file.Target) == key
+	})
 }
 
 // linksToLegacyEntry reports whether target is a symlink aimed at the previous rules entry,
