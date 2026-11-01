@@ -33,6 +33,9 @@ const (
 	// IntegrationFrontmatterAdded means a .mdc rule that already referenced the entry gained
 	// the alwaysApply frontmatter and no reference had to be appended.
 	IntegrationFrontmatterAdded
+	// IntegrationDisabled means an agent that reads the file has install_rules off, so
+	// nothing was read or written; DisabledBy names those agents.
+	IntegrationDisabled
 )
 
 // IntegrationOutcome is the result of ensuring one agent rules file references the Kander entry.
@@ -46,6 +49,12 @@ type IntegrationOutcome struct {
 	// already exists next to an AGENTS.md target; nil otherwise. It never carries its own
 	// Override.
 	Override *IntegrationOutcome
+	// Inactive marks a file that still mentions the entry after the call, but only where the
+	// agent does not load it (an HTML comment, a code fence, or a negated sentence): the
+	// mention blocks another append, so the file stays without an active reference.
+	Inactive bool
+	// DisabledBy lists the agents whose install_rules switch is off and that read the file.
+	DisabledBy []string
 }
 
 // integrateAgentRules ensures agent rules files reference the Kander entry after an install.
@@ -233,6 +242,17 @@ func rulesFileIntegration(agent, target, entry string, paths config.InstallPaths
 // The write gate is strictReferencePresent, not RulesIntegration: appending must never repeat, so any
 // literal mention of the entry blocks it, even one RulesIntegration would report as inactive.
 func EnsureRulesIntegration(agent string, paths config.InstallPaths) (IntegrationOutcome, error) {
+	switches, err := config.ScopeInstallRules(paths)
+	if err != nil {
+		return IntegrationOutcome{Agent: agent}, err
+	}
+	return EnsureRulesIntegrationWith(agent, paths, switches)
+}
+
+// EnsureRulesIntegrationWith is EnsureRulesIntegration under explicit switches, for a caller
+// whose new switch values are not saved yet (the options save writes them afterwards). A file
+// that an agent with its switch off reads is neither read nor written.
+func EnsureRulesIntegrationWith(agent string, paths config.InstallPaths, switches config.InstallRules) (IntegrationOutcome, error) {
 	outcome := IntegrationOutcome{Agent: agent}
 	if paths.Mode == config.ModeProject && paths.ProjectRoot == "" {
 		return outcome, fmt.Errorf("%s", config.Text("config.project_install_paths_are_missing_the_main_worktree"))
@@ -245,9 +265,15 @@ func EnsureRulesIntegration(agent string, paths config.InstallPaths) (Integratio
 		return outcome, fmt.Errorf("%s", config.Text("config.cannot_resolve_home_directory"))
 	}
 	outcome.Target = target
+	if disabled := DisabledReaders(target, paths, switches); len(disabled) > 0 {
+		outcome.Status = IntegrationDisabled
+		outcome.DisabledBy = disabled
+		return outcome, nil
+	}
 	main, err := ensureTargetIntegration(agent, target, true, paths)
 	outcome.Status = main.Status
 	outcome.Removed = main.Removed
+	outcome.Inactive = main.Inactive
 	if err != nil {
 		return outcome, err
 	}
@@ -277,55 +303,84 @@ func rulesOverrideTarget(target string) string {
 // ensureTargetIntegration runs the reference pipeline on one rules file. The configured target
 // may be created when missing (create=true); an override sibling (create=false) is only edited.
 func ensureTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (IntegrationOutcome, error) {
-	outcome := IntegrationOutcome{Agent: agent, Target: target}
+	edit, err := planTargetIntegration(agent, target, create, paths)
+	if err != nil || edit.path == "" {
+		return edit.outcome, err
+	}
+	if edit.created {
+		if err := os.MkdirAll(filepath.Dir(edit.path), 0o755); err != nil {
+			return edit.outcome, err
+		}
+	}
+	anchor, err := fileAnchor(edit.path)
+	if err != nil {
+		return edit.outcome, err
+	}
+	if err := fs.WriteBytesAtomicInherited(anchor, edit.path, edit.content, !edit.created); err != nil {
+		return edit.outcome, err
+	}
+	if !edit.appended && edit.outcome.Status != IntegrationCreated {
+		edit.outcome.Inactive = !referenceActive(agent, target, paths)
+	}
+	return edit.outcome, nil
+}
+
+// targetEdit is the write the reference pipeline plans for one rules file; path is empty when
+// the file stays as it is.
+type targetEdit struct {
+	outcome  IntegrationOutcome
+	path     string
+	content  []byte
+	created  bool
+	appended bool
+}
+
+// planTargetIntegration computes the reference pipeline's result for one rules file without
+// writing, so the install wizard can show the change before anything is written.
+func planTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (targetEdit, error) {
+	edit := targetEdit{outcome: IntegrationOutcome{Agent: agent, Target: target}}
 	block := referenceBlock(agent, paths)
 	mdc := isMDCTarget(target)
 	info, err := os.Lstat(target)
 	if os.IsNotExist(err) {
 		if !create {
-			return outcome, err
+			return edit, err
 		}
 		if mdc {
 			block = alwaysApplyFrontmatter + block
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return outcome, err
-		}
-		anchor, err := fileAnchor(target)
-		if err != nil {
-			return outcome, err
-		}
-		if err := fs.WriteBytesAtomicInherited(anchor, target, []byte(block), false); err != nil {
-			return outcome, err
-		}
-		outcome.Status = IntegrationCreated
-		return outcome, nil
+		edit.path = target
+		edit.content = []byte(block)
+		edit.created = true
+		edit.appended = true
+		edit.outcome.Status = IntegrationCreated
+		return edit, nil
 	}
 	if err != nil {
-		return outcome, err
+		return edit, err
 	}
 	if mdc && info.Mode()&os.ModeSymlink != 0 {
-		return outcome, fmt.Errorf("%s", config.Text("menu.mdc_rule_is_symlink", target))
+		return edit, fmt.Errorf("%s", config.Text("menu.mdc_rule_is_symlink", target))
 	}
 	resolved := target
 	if info.Mode()&os.ModeSymlink != 0 {
 		if resolved, err = filepath.EvalSymlinks(target); err != nil {
-			return outcome, err
+			return edit, err
 		}
 		// A cloned repository controls its own CLAUDE.md/AGENTS.md; never let one aim a
 		// project install's append at a file outside the project (e.g. the user's dotfiles).
 		if paths.Mode == config.ModeProject && !withinDirectory(paths.ProjectRoot, resolved) {
-			return outcome, fmt.Errorf("%s", config.Text("install.rules_target_symlink_escapes_project", target))
+			return edit, fmt.Errorf("%s", config.Text("install.rules_target_symlink_escapes_project", target))
 		}
 	}
 	if info, err := os.Stat(resolved); err != nil {
-		return outcome, err
+		return edit, err
 	} else if info.IsDir() {
-		return outcome, fmt.Errorf("%s", config.Text("menu.cannot_read", target))
+		return edit, fmt.Errorf("%s", config.Text("menu.cannot_read", target))
 	}
 	existing, err := os.ReadFile(resolved)
 	if err != nil {
-		return outcome, err
+		return edit, err
 	}
 	// A reference to the previous rules location is rewritten first, even when the current
 	// reference is already present: a repair that ran before the migration may have appended
@@ -335,7 +390,7 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	if mdc {
 		switch classifyMDCFrontmatter(text) {
 		case mdcOtherFrontmatter:
-			return outcome, fmt.Errorf("%s", config.Text("menu.mdc_rule_not_always_applied", target))
+			return edit, fmt.Errorf("%s", config.Text("menu.mdc_rule_not_always_applied", target))
 		case mdcNoFrontmatter:
 			needFrontmatter = true
 		}
@@ -349,11 +404,11 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 	// repeated import can neither satisfy the strict gate nor survive the repair.
 	cleaned, removed := CleanRulesReferences(text, paths, filepath.Dir(target))
 	if !needFrontmatter && !legacyChanged && cleaned == text && strictReferencePresent(text, RulesEntry(paths), filepath.Dir(target)) {
-		outcome.Status = IntegrationPresent
-		return outcome, nil
+		edit.outcome.Status = IntegrationPresent
+		edit.outcome.Inactive = !referenceActive(agent, target, paths)
+		return edit, nil
 	}
 	final := cleaned
-	appended := false
 	if !strictReferencePresent(cleaned, RulesEntry(paths), filepath.Dir(target)) {
 		separator := "\n"
 		if len(cleaned) == 0 || strings.HasSuffix(cleaned, "\n\n") {
@@ -364,34 +419,35 @@ func ensureTargetIntegration(agent, target string, create bool, paths config.Ins
 			separator = "\n\n"
 		}
 		final = cleaned + separator + block
-		appended = true
+		edit.appended = true
 	}
 	if needFrontmatter {
 		final = alwaysApplyFrontmatter + final
 	}
-	writePath := resolved
+	edit.path = resolved
 	if real, err := filepath.EvalSymlinks(resolved); err == nil {
-		writePath = real
+		edit.path = real
 	}
-	anchor, err := fileAnchor(writePath)
-	if err != nil {
-		return outcome, err
-	}
-	if err := fs.WriteBytesAtomicInherited(anchor, writePath, []byte(final), true); err != nil {
-		return outcome, err
-	}
-	outcome.Removed = removed
+	edit.content = []byte(final)
+	edit.outcome.Removed = removed
 	switch {
-	case appended:
-		outcome.Status = IntegrationUpdated
+	case edit.appended:
+		edit.outcome.Status = IntegrationUpdated
 	case needFrontmatter:
-		outcome.Status = IntegrationFrontmatterAdded
+		edit.outcome.Status = IntegrationFrontmatterAdded
 	case legacyChanged:
-		outcome.Status = IntegrationRewritten
+		edit.outcome.Status = IntegrationRewritten
 	default:
-		outcome.Status = IntegrationCleaned
+		edit.outcome.Status = IntegrationCleaned
 	}
-	return outcome, nil
+	return edit, nil
+}
+
+// referenceActive reports whether the rules file references the entry where the agent loads
+// it, applying the comment-, fence- and negation-aware check RulesIntegration uses.
+func referenceActive(agent, target string, paths config.InstallPaths) bool {
+	active, _ := rulesFileIntegration(agent, target, RulesEntry(paths), paths)
+	return active
 }
 
 // entrySpelling is the portable spelling of the rules entry written into agent rules files:

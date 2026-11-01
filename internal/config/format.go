@@ -168,6 +168,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 		}
 	}
 	lines = append(lines, Text("rules.modules")+": "+FormatRulesSummary(effective.Rules))
+	lines = append(lines, formatInstallRulesLines(cfg)...)
 	lines = append(lines, Text("config.issue_result_on_done")+": "+effective.Issue.ResultOnDone)
 	stored := ConfiguredLanguage()
 	language := stored

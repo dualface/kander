@@ -306,8 +306,14 @@ func Update(mutate func(*Config) error) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return UpdateAt(path, mutate)
+}
+
+// UpdateAt is Update on an explicit config file, for an install that targets a
+// scope other than the running binary's. A missing file starts from DefaultConfig.
+func UpdateAt(path string, mutate func(*Config) error) (string, error) {
 	var saved string
-	err = withConfigLock(path, func() error {
+	err := withConfigLock(path, func() error {
 		cfg, loadErr := loadValidated(path, true)
 		if loadErr != nil {
 			return loadErr

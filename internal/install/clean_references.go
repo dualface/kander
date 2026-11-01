@@ -349,3 +349,81 @@ func liveLines(text string) []string {
 	}
 	return live
 }
+
+// RemoveRulesReferences removes every Kander rules load command from text, whatever entry it
+// names, and returns the result with the number of dropped load commands. It recognizes the
+// same forms as CleanRulesReferences and also drops the `## Kander Rules Entry` heading and the
+// blank lines of a block that held nothing else, plus the blank line Kander put before an
+// appended block. Lines inside HTML comments and code fences stay.
+func RemoveRulesReferences(text string) (string, int) {
+	trailingNewline := strings.HasSuffix(text, "\n")
+	body := strings.TrimSuffix(text, "\n")
+	lines := strings.Split(body, "\n")
+	live := liveLines(body)
+	drop := make([]bool, len(lines))
+	removed := 0
+	for i := 0; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(live[i])
+		if trimmed == "" {
+			continue
+		}
+		if trimmed == rulesReferenceBlockHeading {
+			end := i + 1
+			for end < len(lines) && !strings.HasPrefix(strings.TrimSpace(live[end]), "#") {
+				end++
+			}
+			tokens, other := 0, 0
+			for j := i + 1; j < end; j++ {
+				if _, ok := firstEntryToken(live[j]); ok {
+					drop[j] = true
+					tokens++
+				} else if strings.TrimSpace(lines[j]) != "" {
+					other++
+				}
+			}
+			if tokens > 0 {
+				removed += tokens
+				drop[i] = true
+				if other == 0 {
+					for j := i + 1; j < end; j++ {
+						drop[j] = true
+					}
+				}
+			}
+			i = end - 1
+			continue
+		}
+		if _, ok := loadCommandToken(trimmed); ok {
+			drop[i] = true
+			removed++
+		}
+	}
+	if removed == 0 {
+		return text, 0
+	}
+	// An appended block was separated from the content above by one blank line; drop it when
+	// the removed lines ran to the end of the file or up to another blank line.
+	for i := 1; i < len(lines); i++ {
+		if !drop[i] || drop[i-1] || strings.TrimSpace(lines[i-1]) != "" {
+			continue
+		}
+		j := i
+		for j < len(lines) && drop[j] {
+			j++
+		}
+		if j == len(lines) || strings.TrimSpace(lines[j]) == "" {
+			drop[i-1] = true
+		}
+	}
+	var kept []string
+	for i, line := range lines {
+		if !drop[i] {
+			kept = append(kept, line)
+		}
+	}
+	out := strings.Join(kept, "\n")
+	if trailingNewline && len(kept) > 0 {
+		out += "\n"
+	}
+	return out, removed
+}

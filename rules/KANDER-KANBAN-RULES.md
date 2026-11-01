@@ -29,6 +29,7 @@ kander config [--json]
 kander doctor
 kander version
 kander install
+kander uninstall [--yes]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--maintenance] [project-path]

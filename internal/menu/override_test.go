@@ -12,7 +12,7 @@ import (
 
 // setupOverrideDoctorHome prepares a global scope where codex is covered and returns the
 // AGENTS.md target together with its AGENTS.override.md sibling path.
-func setupOverrideDoctorHome(t *testing.T) (config.InstallPaths, *config.Config, string, string) {
+func setupOverrideDoctorHome(t *testing.T) (config.InstallPaths, string, string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -24,22 +24,20 @@ func setupOverrideDoctorHome(t *testing.T) (config.InstallPaths, *config.Config,
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
 	target := filepath.Join(home, ".codex", "AGENTS.md")
 	override := filepath.Join(home, ".codex", "AGENTS.override.md")
 	block := "## Kander Rules Entry\n\nAt the start of every session, read `" + entry +
 		"` and follow it as the Kander workflow rules entry.\n"
 	writeRulesFile(t, target, "# Personal rules\n\n"+block)
-	return paths, cfg, target, override
+	return paths, target, override
 }
 
 func TestReportRulesIntegrationDetectsMissingOverrideReference(t *testing.T) {
-	paths, cfg, _, override := setupOverrideDoctorHome(t)
+	paths, _, override := setupOverrideDoctorHome(t)
 	writeRulesFile(t, override, "# Override rules\n")
 
 	lines := CaptureReport(func() {
-		if reportRulesIntegration(cfg, paths, false) {
+		if reportRulesIntegration(paths, allInstallRules, false) {
 			t.Error("an override without the reference must make doctor unhealthy")
 		}
 	})
@@ -54,7 +52,7 @@ func TestReportRulesIntegrationDetectsMissingOverrideReference(t *testing.T) {
 	}
 
 	lines = CaptureReport(func() {
-		if !reportRulesIntegration(cfg, paths, true) {
+		if !reportRulesIntegration(paths, allInstallRules, true) {
 			t.Error("repair must succeed")
 		}
 	})
@@ -71,14 +69,14 @@ func TestReportRulesIntegrationDetectsMissingOverrideReference(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), "KANDER-AGENTS.md") {
 		t.Fatalf("override lacks the reference: %v %q", err, data)
 	}
-	if !reportRulesIntegration(cfg, paths, false) {
+	if !reportRulesIntegration(paths, allInstallRules, false) {
 		t.Fatal("report after repair must be healthy")
 	}
 }
 
 func TestReportRulesIntegrationOverrideNeverCreated(t *testing.T) {
-	paths, cfg, _, override := setupOverrideDoctorHome(t)
-	if !reportRulesIntegration(cfg, paths, true) {
+	paths, _, override := setupOverrideDoctorHome(t)
+	if !reportRulesIntegration(paths, allInstallRules, true) {
 		t.Fatal("repair must succeed")
 	}
 	if _, err := os.Lstat(override); !os.IsNotExist(err) {
@@ -87,14 +85,14 @@ func TestReportRulesIntegrationOverrideNeverCreated(t *testing.T) {
 }
 
 func TestReportRulesIntegrationHintsOverrideIssues(t *testing.T) {
-	paths, cfg, _, override := setupOverrideDoctorHome(t)
+	paths, _, override := setupOverrideDoctorHome(t)
 	entry := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 	block := "## Kander Rules Entry\n\nAt the start of every session, read `" + entry +
 		"` and follow it as the Kander workflow rules entry.\n"
 	writeRulesFile(t, override, "/dead/KANDER-AGENTS.md\n\n"+block+"\n"+block)
 
 	lines := CaptureReport(func() {
-		if !reportRulesIntegration(cfg, paths, false) {
+		if !reportRulesIntegration(paths, allInstallRules, false) {
 			t.Error("a connected override keeps doctor healthy")
 		}
 	})

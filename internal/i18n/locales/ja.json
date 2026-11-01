@@ -524,7 +524,7 @@
   "menu.default_stage_policy_for": "{{.V0}} の既定ステージポリシーは?",
   "menu.does_not_import_or_include_kander_agents_md": "{{.V0}} は KANDER-AGENTS.md をインポートまたは含めていません",
   "menu.mdc_rule_is_symlink": "{{.V0}} はシンボリックリンクです。Kander はリンク経由で cursor ルールを読み書きしません。通常のファイルに置き換えてください。",
-  "menu.mdc_rule_missing_frontmatter": "{{.V0}} に frontmatter がないため、cursor は毎回のセッションで読み込みません。kander doctor --repair が先頭に alwaysApply: true を追加します。",
+  "menu.mdc_rule_missing_frontmatter": "{{.V0}} に frontmatter がないため、cursor は毎回のセッションで読み込みません。kander doctor が先頭に alwaysApply: true を追加します。",
   "menu.mdc_rule_not_always_applied": "{{.V0}} の frontmatter に alwaysApply: true がないため、cursor は毎回のセッションで読み込みません。Kander はこの frontmatter を書き換えません。",
   "menu.does_not_point_to_the_project_rules_entry": "{{.V0}} はプロジェクトのルール入口 {{.V1}} を指していません",
   "menu.effort": "{{.V0}} {{.V1}}推論強度",

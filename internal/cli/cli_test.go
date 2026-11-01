@@ -90,7 +90,7 @@ func TestUnimplementedCommands(t *testing.T) {
 		"new": {}, "move": {}, "pick": {},
 		"guard-write": {}, "update": {}, "dispatch": {},
 		"doctor": {}, "config": {},
-		"version": {}, "install": {}, "issue": {}, "terminal": {},
+		"version": {}, "install": {}, "uninstall": {}, "issue": {}, "terminal": {},
 	}
 	names := append([]string{"ls"}, commandNames...)
 	for _, name := range names {
@@ -199,6 +199,18 @@ func TestDefaultRunner(t *testing.T) {
 	}
 	if code := Run([]string{"kander"}); code != 7 || !called {
 		t.Fatalf("code=%d called=%v", code, called)
+	}
+}
+
+func TestUninstallCommandRegistered(t *testing.T) {
+	resetLang(t)
+	code, out, diagnostic := captureRun(t, []string{"kander", "--lang", "en", "uninstall", "--help"})
+	if code != 0 || !onlyFallbackHint(diagnostic) || !strings.Contains(out, "kander uninstall [--yes]") || !strings.Contains(out, "snippets/commands/uninstall.md") {
+		t.Fatalf("code=%d out=%q err=%q", code, out, diagnostic)
+	}
+	code, out, _ = captureRun(t, []string{"kander", "--lang", "en", "help"})
+	if code != 0 || !strings.Contains(out, "  uninstall\n") {
+		t.Fatalf("help does not list uninstall: code=%d out=%q", code, out)
 	}
 }
 

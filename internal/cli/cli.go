@@ -25,6 +25,7 @@ var commandNames = []string{
 	"config",
 	"version",
 	"install",
+	"uninstall",
 	"review",
 	"init",
 	"issue",
@@ -66,6 +67,7 @@ func init() {
 	Commands["config"] = menu.Config
 	Commands["version"] = runVersion
 	Commands["install"] = install.Run
+	Commands["uninstall"] = install.RunUninstall
 	Commands["terminal"] = terminalcheck.Run
 }
 

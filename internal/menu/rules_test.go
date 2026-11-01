@@ -139,7 +139,7 @@ func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
 	}
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
-	if !reportRulesIntegration(cfg, paths, true) {
+	if !reportRulesIntegration(paths, allInstallRules, true) {
 		t.Fatal("repair must succeed")
 	}
 	target := filepath.Join(home, ".codex", "AGENTS.md")
@@ -147,10 +147,10 @@ func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
 	if err != nil || !strings.Contains(string(got), "KANDER-AGENTS.md") {
 		t.Fatalf("reference missing: %v %q", err, got)
 	}
-	if !reportRulesIntegration(cfg, paths, false) {
+	if !reportRulesIntegration(paths, allInstallRules, false) {
 		t.Fatal("report after repair must be healthy")
 	}
-	if !reportRulesIntegration(cfg, paths, true) {
+	if !reportRulesIntegration(paths, allInstallRules, true) {
 		t.Fatal("second repair must succeed")
 	}
 	again, _ := os.ReadFile(target)
@@ -175,7 +175,7 @@ func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T
 	writeRulesFile(t, target, "# Notes\n\n/dead/KANDER-AGENTS.md\n\n"+block+"\n"+block)
 
 	lines := CaptureReport(func() {
-		if !reportRulesIntegration(cfg, paths, false) {
+		if !reportRulesIntegration(paths, allInstallRules, false) {
 			t.Error("non-repair report must stay healthy on a connected file")
 		}
 	})
@@ -190,7 +190,7 @@ func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T
 	}
 
 	lines = CaptureReport(func() {
-		if !reportRulesIntegration(cfg, paths, true) {
+		if !reportRulesIntegration(paths, allInstallRules, true) {
 			t.Error("repair must succeed")
 		}
 	})
@@ -210,7 +210,7 @@ func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T
 	}
 
 	lines = CaptureReport(func() {
-		if !reportRulesIntegration(cfg, paths, true) {
+		if !reportRulesIntegration(paths, allInstallRules, true) {
 			t.Error("second repair must succeed")
 		}
 	})
@@ -240,7 +240,7 @@ func TestReportRulesIntegrationCoversEveryInstalledAgent(t *testing.T) {
 
 	var lines []ReportLine
 	healthy := true
-	lines = CaptureReport(func() { healthy = reportRulesIntegration(cfg, paths, false) })
+	lines = CaptureReport(func() { healthy = reportRulesIntegration(paths, allInstallRules, false) })
 	if healthy {
 		t.Fatal("unintegrated covered targets must make doctor unhealthy")
 	}
@@ -259,7 +259,7 @@ func TestReportRulesIntegrationCoversEveryInstalledAgent(t *testing.T) {
 		}
 	}
 
-	if !reportRulesIntegration(cfg, paths, true) {
+	if !reportRulesIntegration(paths, allInstallRules, true) {
 		t.Fatal("repair must succeed")
 	}
 	claudeTarget := filepath.Join(home, ".claude", "CLAUDE.md")
@@ -275,7 +275,7 @@ func TestReportRulesIntegrationCoversEveryInstalledAgent(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(home, ".grok")); !os.IsNotExist(err) {
 		t.Fatalf("agent without a configuration directory gained files: %v", err)
 	}
-	if !reportRulesIntegration(cfg, paths, false) {
+	if !reportRulesIntegration(paths, allInstallRules, false) {
 		t.Fatal("report after repair must be healthy")
 	}
 }
@@ -294,10 +294,10 @@ func TestReportRulesIntegrationCoversProjectTargets(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
 
-	if reportRulesIntegration(cfg, paths, false) {
+	if reportRulesIntegration(paths, allInstallRules, false) {
 		t.Fatal("unintegrated project targets must make doctor unhealthy")
 	}
-	if !reportRulesIntegration(cfg, paths, true) {
+	if !reportRulesIntegration(paths, allInstallRules, true) {
 		t.Fatal("repair must succeed")
 	}
 	claudeTarget := filepath.Join(project, "CLAUDE.md")
@@ -310,7 +310,7 @@ func TestReportRulesIntegrationCoversProjectTargets(t *testing.T) {
 	if err != nil || !strings.Contains(string(got), "Kander Rules Entry") {
 		t.Fatalf("project AGENTS.md reference missing after repair: %v %q", err, got)
 	}
-	if !reportRulesIntegration(cfg, paths, false) {
+	if !reportRulesIntegration(paths, allInstallRules, false) {
 		t.Fatal("report after repair must be healthy")
 	}
 }

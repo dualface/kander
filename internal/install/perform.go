@@ -20,6 +20,9 @@ type Request struct {
 	DeleteLegacy bool
 	// CopyBinary opts into a global binary copy. Project installs always copy.
 	CopyBinary bool
+	// RulesChoice is the install wizard's per-agent install_rules values that differ from
+	// the scope's current switches; Perform saves them before writing any rules file.
+	RulesChoice map[string]bool
 }
 
 // Result records what Perform wrote.
@@ -113,6 +116,9 @@ func Perform(req Request) (Result, error) {
 		return result, fmt.Errorf("%s", config.Text("install.failed_to_extract_rules", err.Error()))
 	}
 	if err := config.SetLanguageIfPresent(paths.ConfigPath, lang); err != nil {
+		return result, err
+	}
+	if err := saveRulesChoice(paths, req.RulesChoice, lang); err != nil {
 		return result, err
 	}
 	cleanupAgentsEntryLink(paths)

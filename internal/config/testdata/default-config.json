@@ -196,5 +196,6 @@
     "result_on_done": "auto"
   },
   "language": "en",
-  "agent_language": "en"
+  "agent_language": "en",
+  "install_rules": true
 }

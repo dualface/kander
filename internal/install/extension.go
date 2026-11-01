@@ -27,6 +27,9 @@ const (
 	ExtensionWritten
 	// ExtensionUpdated means EnsureExtension rewrote an outdated file.
 	ExtensionUpdated
+	// ExtensionDisabled means the agent has install_rules off; the file was neither read
+	// nor written.
+	ExtensionDisabled
 )
 
 // ExtensionOutcome records the inspection or write result of one agent extension.
@@ -40,6 +43,12 @@ type ExtensionOutcome struct {
 type AgentExtension struct {
 	ExtensionOutcome
 	Err error
+}
+
+// ExtensionTarget resolves the scope's install target of one agent's rules
+// extension; it is empty when the agent declares none for the scope.
+func ExtensionTarget(agent string, paths config.InstallPaths) (string, error) {
+	return extensionTarget(agent, paths)
 }
 
 // extensionTarget resolves the scope's install target of one agent's rules
@@ -215,6 +224,16 @@ func InspectExtension(agent string, paths config.InstallPaths) (ExtensionOutcome
 // and a file matching no known version is treated as a local edit and left
 // untouched. Reparse points anywhere on the target chain refuse the write.
 func EnsureExtension(agent string, paths config.InstallPaths) (ExtensionOutcome, error) {
+	switches, err := config.ScopeInstallRules(paths)
+	if err != nil {
+		return ExtensionOutcome{Agent: agent}, err
+	}
+	return EnsureExtensionWith(agent, paths, switches)
+}
+
+// EnsureExtensionWith is EnsureExtension under explicit switches, for a caller whose new
+// switch values are not saved yet.
+func EnsureExtensionWith(agent string, paths config.InstallPaths, switches config.InstallRules) (ExtensionOutcome, error) {
 	outcome := ExtensionOutcome{Agent: agent}
 	_, embedded, ok := config.AgentExtension(agent)
 	if !ok {
@@ -228,6 +247,10 @@ func EnsureExtension(agent string, paths config.InstallPaths) (ExtensionOutcome,
 		return outcome, nil
 	}
 	outcome.Target = target
+	if !switches.Enabled(agent) {
+		outcome.Status = ExtensionDisabled
+		return outcome, nil
+	}
 	base, err := extensionBase(agent, target, paths)
 	if err != nil {
 		return outcome, err

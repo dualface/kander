@@ -624,10 +624,13 @@ func (s *Session) saveScope() (string, error) {
 	if baseline == nil {
 		baseline = s.existing
 	}
-	// Options no longer edits agents.*; keep the loaded agents section so a
-	// TUI save cannot clobber hand-edited path/process_name/templates.
+	// Options no longer edits agents.* except install_rules; keep the loaded
+	// agents section so a TUI save cannot clobber hand-edited
+	// path/process_name/templates, then carry the edited switches over.
 	if baseline != nil {
+		edited := config.InstallRulesOf(cfg)
 		cfg.Agents = config.CloneAgents(baseline.Agents)
+		config.ApplyAgentInstallRules(cfg, edited)
 	}
 	path, err := config.SaveIfUnchanged(cfg, baseline)
 	if err == nil {

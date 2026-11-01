@@ -157,6 +157,10 @@ type Config struct {
 	// ExtendedLaunchTimeouts raises the launch-time waits to
 	// ExtendedLaunchTimeout; see LaunchTimeout.
 	ExtendedLaunchTimeouts bool `json:"extended_launch_timeouts"`
+
+	// InstallRules is the global rules-injection switch; agents.<name>.install_rules
+	// overrides it per agent. Only the scope config file sets it; see ScopeInstallRules.
+	InstallRules bool `json:"install_rules"`
 }
 
 // Clone deep-copies the config so a long-lived editing session can keep its baseline.
@@ -288,6 +292,7 @@ func DefaultConfig() *Config {
 		Issue:           DefaultIssue(),
 		Language:        "en",
 		AgentLanguage:   DefaultAgentLanguage("en"),
+		InstallRules:    true,
 	}
 }
 
@@ -782,6 +787,10 @@ func Validate(raw any) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	installRules, err := validateInstallRules(obj)
+	if err != nil {
+		return nil, err
+	}
 	reviewersRaw, ok := asObject(obj["reviewers"])
 	if !ok {
 		return nil, configErrorf("config.reviewers_must_be_a_json_object")
@@ -866,6 +875,7 @@ func Validate(raw any) (*Config, error) {
 		Agents:          definitions,
 
 		ExtendedLaunchTimeouts: extendedTimeouts,
+		InstallRules:           installRules,
 	}
 	applyChatFallbacks(cfg, obj)
 	return cfg, nil

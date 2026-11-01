@@ -95,10 +95,7 @@ func ExpandConfigDir(value string) (string, error) {
 // ships with a repository and must not redirect writes to the user's global
 // agent files. Paths without a config file yield no override.
 func ScopeAgentConfigDir(paths InstallPaths, name string) (string, error) {
-	file := paths.ConfigPath
-	if override := os.Getenv(EnvConfig); override != "" {
-		file = expandUser(override)
-	}
+	file := ScopeConfigFile(paths)
 	if file == "" {
 		return "", nil
 	}
@@ -111,10 +108,15 @@ func ScopeAgentConfigDir(paths InstallPaths, name string) (string, error) {
 
 // dropOverlayConfigDirs removes agents.<name>.config_dir from an overlay copy
 // before the merge: the effective config never carries an overlay value, and an
-// invalid one cannot fail Load while doctor reports it as ignored. An agent
-// entry left empty by the removal goes too, since an empty custom agent would
-// fail validation on its own.
+// invalid one cannot fail Load while doctor reports it as ignored.
 func dropOverlayConfigDirs(overlay map[string]any) {
+	dropOverlayAgentField(overlay, "config_dir")
+}
+
+// dropOverlayAgentField removes one scope-only field from every agent entry of
+// an overlay copy. An agent entry left empty by the removal goes too, since an
+// empty custom agent would fail validation on its own.
+func dropOverlayAgentField(overlay map[string]any, field string) {
 	agents, ok := asObject(overlay["agents"])
 	if !ok {
 		return
@@ -124,10 +126,10 @@ func dropOverlayConfigDirs(overlay map[string]any) {
 		if !ok {
 			continue
 		}
-		if _, declared := fields["config_dir"]; !declared {
+		if _, declared := fields[field]; !declared {
 			continue
 		}
-		delete(fields, "config_dir")
+		delete(fields, field)
 		if len(fields) == 0 {
 			delete(agents, name)
 		}

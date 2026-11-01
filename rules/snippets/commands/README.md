@@ -2,7 +2,7 @@
 
 Before running any `kander` command in this session, read `<rules root>/snippets/commands/README.md` once. Before the first use of a command, read its contract file.
 
-Each contract has seven sections: Purpose and users, Syntax, Arguments, Preconditions, Effects, Output, Rejections. `--help` prints the Syntax block and the contract path. The final block equals `KANDER-KANBAN-RULES.md` "Command Contract".
+`--help` prints the Syntax block and the contract path. The final block equals `KANDER-KANBAN-RULES.md` "Command Contract".
 
 Read first: `show`, `update`, `move`, `check`.
 
@@ -12,6 +12,7 @@ Read first: `show`, `update`, `move`, `check`.
 | `doctor` | Check and repair the installation | user | `snippets/commands/doctor.md` |
 | `version` | Print the version | user | `snippets/commands/version.md` |
 | `install` | Interactive installer | user | `snippets/commands/install.md` |
+| `uninstall` | Remove injected rules | user | `snippets/commands/uninstall.md` |
 | `terminal` | List and test launchers | user | `snippets/commands/terminal.md` |
 | `init` | Create or recover board | user, maintenance | `snippets/commands/init.md` |
 | `list` | List cards by state | card creator, user | `snippets/commands/list.md` |
@@ -38,6 +39,7 @@ kander config [--json]
 kander doctor
 kander version
 kander install
+kander uninstall [--yes]
 kander terminal list
 kander terminal test <name> [--keep] [--skip-focus]
 kander init [--maintenance] [project-path]

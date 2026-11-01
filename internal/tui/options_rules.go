@@ -67,6 +67,7 @@ func (p *optionsPanel) rulesGroup(bind *formBinding) *huh.Group {
 	bind.formFields = append(bind.formFields, huh.NewNote().Title(t("rules.independent")))
 	bind.addRuleFields(p, p.session.Config.Rules, independentRuleModules)
 	bind.addIssueResultField(p)
+	bind.addInstallRulesFields(p)
 	bind.formFields = append(bind.formFields, huh.NewNote().Description(t("rules.contract_notice")))
 	bind.addPageRestore(p)
 	return huh.NewGroup(bind.formFields...)
@@ -117,6 +118,7 @@ func (b *formBinding) applyIssueResult(p *optionsPanel) {
 
 func (b *formBinding) applyRules(p *optionsPanel) {
 	b.applyIssueResult(p)
+	b.applyInstallRules(p)
 	rules := p.session.Config.Rules.Clone()
 	focus := "rules:preset"
 	for _, module := range config.RuleModules {
@@ -158,5 +160,67 @@ func (b *formBinding) applyRules(p *optionsPanel) {
 	}
 	if presetChanged || matchWorkflowPreset(p.session.Config.Rules) != b.rulePreset {
 		p.rebuildAt(focus)
+	}
+}
+
+const installRulesFocusKey = "install_rules:"
+
+// addInstallRulesFields edits the rules-injection switches: the global one, bound under "",
+// and one per agent the scope covers. Only the scope config file holds them, so the Project
+// tab shows none.
+func (bind *formBinding) addInstallRulesFields(p *optionsPanel) {
+	bind.installRules = nil
+	if p.session.EditingOverlay() {
+		return
+	}
+	switches := p.session.InstallRules()
+	bind.installRules = map[string]*bool{}
+	bind.addSpacer()
+	bind.formFields = append(bind.formFields, huh.NewNote().Title(t("config.install_rules")))
+	global := switches.Global
+	bind.installRules[""] = &global
+	bind.fieldIndex[installRulesFocusKey] = bind.focusable
+	bind.addField(inlineConfirm().Title(optionTitle(t("rules.install_rules_global"))).
+		Affirmative(t("rules.on")).Negative(t("rules.off")).
+		Value(&global))
+	for _, agent := range p.session.InstallRulesAgents() {
+		enabled := switches.Enabled(agent)
+		bind.installRules[agent] = &enabled
+		bind.fieldIndex[installRulesFocusKey+agent] = bind.focusable
+		bind.addField(inlineConfirm().Title(optionTitle(config.AgentDisplayName(agent))).
+			Affirmative(t("rules.on")).Negative(t("rules.off")).
+			Value(&enabled))
+	}
+}
+
+// applyInstallRules stores edited switches; agent fields are rebuilt after a global change,
+// since agents without their own value follow it.
+func (b *formBinding) applyInstallRules(p *optionsPanel) {
+	if b.installRules == nil {
+		return
+	}
+	switches := p.session.InstallRules()
+	if value := b.installRules[""]; value != nil && *value != switches.Global {
+		if err := p.session.SetInstallRules(*value); err != nil {
+			*value = switches.Global
+			p.showReport(t("config.install_rules"), nil, err.Error())
+			return
+		}
+		p.markDirty()
+		p.rebuildAt(installRulesFocusKey)
+		return
+	}
+	for agent, value := range b.installRules {
+		if agent == "" || value == nil || *value == switches.Enabled(agent) {
+			continue
+		}
+		if err := p.session.SetAgentInstallRules(agent, *value); err != nil {
+			*value = switches.Enabled(agent)
+			p.showReport(t("config.install_rules"), nil, err.Error())
+			return
+		}
+		p.markDirty()
+		p.rebuildAt(installRulesFocusKey + agent)
+		return
 	}
 }

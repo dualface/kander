@@ -174,6 +174,7 @@ var parserFunctions = map[string][]string{
 	"doctor":      {"internal/menu/commands.go:Doctor"},
 	"version":     {"internal/cli/cli.go:runVersion"},
 	"install":     {"internal/install/cmd.go:Run"},
+	"uninstall":   {"internal/install/uninstall.go:RunUninstall"},
 	"terminal":    {"internal/terminalcheck/command.go:run"},
 	"init":        {"internal/board/cmd.go:RunInit"},
 	"list":        {"internal/board/cmd.go:RunList"},

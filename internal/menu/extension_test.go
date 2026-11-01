@@ -30,26 +30,26 @@ func setupExtensionHome(t *testing.T) (string, config.InstallPaths, string) {
 
 func TestReportAgentExtensionsRepairsMissing(t *testing.T) {
 	_, paths, target := setupExtensionHome(t)
-	if reportAgentExtensions(paths, false) {
+	if reportAgentExtensions(paths, allInstallRules, false) {
 		t.Fatal("a missing extension must make doctor unhealthy")
 	}
-	if !reportAgentExtensions(paths, true) {
+	if !reportAgentExtensions(paths, allInstallRules, true) {
 		t.Fatal("repair must succeed")
 	}
 	if _, err := os.Lstat(target); err != nil {
 		t.Fatalf("extension not written: %v", err)
 	}
-	if !reportAgentExtensions(paths, false) {
+	if !reportAgentExtensions(paths, allInstallRules, false) {
 		t.Fatal("installed extension must be healthy")
 	}
-	if !reportAgentExtensions(paths, true) {
+	if !reportAgentExtensions(paths, allInstallRules, true) {
 		t.Fatal("repair must be idempotent")
 	}
 }
 
 func TestReportAgentExtensionsReportsModifiedWithoutOverwrite(t *testing.T) {
 	_, paths, target := setupExtensionHome(t)
-	if !reportAgentExtensions(paths, true) {
+	if !reportAgentExtensions(paths, allInstallRules, true) {
 		t.Fatal("initial write failed")
 	}
 	foreign := []byte("// user edit\n")
@@ -57,7 +57,7 @@ func TestReportAgentExtensionsReportsModifiedWithoutOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := CaptureReport(func() {
-		if !reportAgentExtensions(paths, false) {
+		if !reportAgentExtensions(paths, allInstallRules, false) {
 			t.Error("a locally modified extension is a hint, not unhealthy")
 		}
 	})
@@ -71,7 +71,7 @@ func TestReportAgentExtensionsReportsModifiedWithoutOverwrite(t *testing.T) {
 		t.Fatalf("modified report misses the target: %+v", lines)
 	}
 	lines = CaptureReport(func() {
-		if !reportAgentExtensions(paths, true) {
+		if !reportAgentExtensions(paths, allInstallRules, true) {
 			t.Error("repair must keep the modified file and stay healthy")
 		}
 	})
@@ -92,16 +92,16 @@ func TestReportAgentExtensionsCoversProject(t *testing.T) {
 	}
 	spec, _, _ := config.AgentExtension("pi")
 	target := filepath.Join(project, filepath.FromSlash(spec.Project))
-	if reportAgentExtensions(paths, false) {
+	if reportAgentExtensions(paths, allInstallRules, false) {
 		t.Fatal("missing project extension must be unhealthy")
 	}
-	if !reportAgentExtensions(paths, true) {
+	if !reportAgentExtensions(paths, allInstallRules, true) {
 		t.Fatal("project repair failed")
 	}
 	if _, err := os.Lstat(target); err != nil {
 		t.Fatalf("project extension not written: %v", err)
 	}
-	if !reportAgentExtensions(paths, false) {
+	if !reportAgentExtensions(paths, allInstallRules, false) {
 		t.Fatal("installed project extension must be healthy")
 	}
 }
@@ -113,14 +113,14 @@ func TestReportAgentExtensionsSkipsMissingPiDir(t *testing.T) {
 	installtest.IsolateAgentConfigEnv(t)
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	lines := CaptureReport(func() {
-		if !reportAgentExtensions(paths, false) {
+		if !reportAgentExtensions(paths, allInstallRules, false) {
 			t.Error("no ~/.pi/agent must produce no findings and stay healthy")
 		}
 	})
 	if len(lines) != 0 {
 		t.Fatalf("unexpected report lines: %+v", lines)
 	}
-	if !reportAgentExtensions(paths, true) {
+	if !reportAgentExtensions(paths, allInstallRules, true) {
 		t.Fatal("repair with no pi must be a no-op success")
 	}
 	if _, err := os.Lstat(filepath.Join(home, ".pi")); !os.IsNotExist(err) {
@@ -133,7 +133,7 @@ func TestReportAgentExtensionsUsesPiDirectory(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "pi")
 	t.Setenv("PI_CODING_AGENT_DIR", directory)
 	if lines := CaptureReport(func() {
-		if !reportAgentExtensions(paths, true) {
+		if !reportAgentExtensions(paths, allInstallRules, true) {
 			t.Error("missing override must be skipped")
 		}
 	}); len(lines) != 0 {
@@ -145,10 +145,10 @@ func TestReportAgentExtensionsUsesPiDirectory(t *testing.T) {
 	if err := os.Mkdir(directory, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if reportAgentExtensions(paths, false) {
+	if reportAgentExtensions(paths, allInstallRules, false) {
 		t.Fatal("missing extension in override must be unhealthy")
 	}
-	if !reportAgentExtensions(paths, true) || !reportAgentExtensions(paths, false) {
+	if !reportAgentExtensions(paths, allInstallRules, true) || !reportAgentExtensions(paths, allInstallRules, false) {
 		t.Fatal("override repair or subsequent inspection failed")
 	}
 	if _, err := os.Stat(filepath.Join(directory, "extensions", "kander-rules.ts")); err != nil {
@@ -158,3 +158,7 @@ func TestReportAgentExtensionsUsesPiDirectory(t *testing.T) {
 		t.Fatalf("doctor wrote default target: %v", err)
 	}
 }
+
+// allInstallRules turns rules injection on for every agent, the default of a config
+// without install_rules keys.
+var allInstallRules = config.InstallRulesOf(nil)

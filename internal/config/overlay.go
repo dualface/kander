@@ -34,6 +34,9 @@ var overlayAllowedKeys = map[string]struct{}{
 	"agents":         {},
 
 	"extended_launch_timeouts": {},
+	// install_rules is accepted so a shared overlay still loads; the merge drops
+	// it and doctor warns, since only the scope config file may set it.
+	"install_rules": {},
 }
 
 func cloneRawValue(v any) any {
@@ -289,6 +292,7 @@ func mergeOverlayRaw(scope map[string]any, overlay map[string]any) (map[string]a
 	}
 	overlayCopy := cloneRawObjectDeep(overlay)
 	dropOverlayConfigDirs(overlayCopy)
+	dropOverlayInstallRules(overlayCopy)
 	if err := normalizeReviewStagesField(overlayCopy); err != nil {
 		return nil, err
 	}

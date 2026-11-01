@@ -170,3 +170,43 @@ func TestRulePanelSavesIssueResultOnDone(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesPageEditsInstallRulesOnScopeTabOnly(t *testing.T) {
+	_, panel := openPanel(t)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	pumpPanel(panel, panel.dispatch(sectionRules))
+	codex := panel.bind.installRules["codex"]
+	global := panel.bind.installRules[""]
+	if codex == nil || global == nil || !*codex || !*global {
+		t.Fatalf("switch fields=%v", panel.bind.installRules)
+	}
+	if _, ok := panel.bind.installRules["claude"]; ok {
+		t.Fatal("an agent the scope does not cover has a switch")
+	}
+	*codex = false
+	panel.bind.apply(panel)
+	if panel.session.InstallRules().Enabled("codex") || !panel.dirty {
+		t.Fatal("codex switch edit not applied")
+	}
+	*panel.bind.installRules[""] = false
+	panel.bind.apply(panel)
+	if panel.session.Config.InstallRules {
+		t.Fatal("global switch edit not applied")
+	}
+	pumpPanel(panel, panel.finishSection())
+	saved, err := config.LoadScope(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if switches := config.InstallRulesOf(saved); switches.Global || switches.Enabled("codex") {
+		t.Fatalf("saved switches=%+v", switches)
+	}
+	attachTempOverlay(t, panel.session, config.ModeProject)
+	pumpPanel(panel, panel.openSection(sectionRules))
+	if panel.bind.installRules != nil {
+		t.Fatal("project tab shows the install_rules switches")
+	}
+	if _, ok := panel.bind.fieldIndex[installRulesFocusKey]; ok {
+		t.Fatal("project tab focuses an install_rules field")
+	}
+}

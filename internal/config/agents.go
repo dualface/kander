@@ -29,6 +29,9 @@ type AgentDefinition struct {
 	// ConfigDir relocates a built-in agent's global config directory for rules
 	// installation; only the scope config file's value takes effect.
 	ConfigDir string `json:"config_dir,omitempty"`
+	// InstallRules overrides the global install_rules switch for one built-in
+	// agent; nil follows it. Only the scope config file's value takes effect.
+	InstallRules *bool `json:"install_rules,omitempty"`
 }
 
 type AgentArgs struct {
@@ -201,6 +204,10 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 	d.Session = cloneSession(d.Session)
 	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
 	d.ExitCommand = cloneExitCommand(d.ExitCommand)
+	if d.InstallRules != nil {
+		v := *d.InstallRules
+		d.InstallRules = &v
+	}
 	return d
 }
 
@@ -272,6 +279,14 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		fields, ok := asObject(value)
 		if !ok {
 			return nil, agentDefinitionError(name, Text("config.agent_object"))
+		}
+		if v, exists := fields["install_rules"]; exists {
+			if _, builtin := embeddedByName(name); !builtin {
+				return nil, agentDefinitionError(name, Text("config.agent_install_rules_builtin_only"))
+			}
+			if _, ok := v.(bool); !ok {
+				return nil, agentDefinitionError(name, Text("config.agent_install_rules"))
+			}
 		}
 		data, _ := json.Marshal(fields)
 		var d AgentDefinition

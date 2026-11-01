@@ -189,6 +189,7 @@ func (s *Session) prepare(configValid bool) error {
 	cfg.Launcher = s.existing.Launcher
 	s.normalizeLauncher(cfg)
 	cfg.ExtendedLaunchTimeouts = s.existing.ExtendedLaunchTimeouts
+	cfg.InstallRules = s.existing.InstallRules
 	cfg.TUI = s.existing.TUI
 	cfg.Rules = s.existing.Rules.Clone()
 	cfg.ReviewStages = cloneReviewStages(s.existing.ReviewStages)
@@ -672,6 +673,8 @@ func (s *Session) finish() error {
 		return err
 	}
 	entry := rulesEntry(paths)
+	// The switches being saved decide the writes; config.json still holds the old values.
+	switches := config.InstallRulesOf(s.scopeBuffer())
 	seen := map[string]struct{}{}
 	for _, selected := range install.IntegrationAgents(paths) {
 		// A resolution error is not deduplicated: the integration call below reports it.
@@ -683,7 +686,7 @@ func (s *Session) finish() error {
 			continue
 		}
 		seen[target] = struct{}{}
-		outcome, ensureErr := install.EnsureRulesIntegration(selected, paths)
+		outcome, ensureErr := install.EnsureRulesIntegrationWith(selected, paths, switches)
 		if ensureErr != nil {
 			warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], ensureErr.Error()))
 			hint(config.Text(
@@ -697,7 +700,7 @@ func (s *Session) finish() error {
 		}
 	}
 	// The rules-extension files converge the same way the references do.
-	reportAgentExtensions(paths, true)
+	reportAgentExtensions(paths, switches, true)
 	note(config.Text(
 		"menu.note_kanban_start_uses_the_agent_s_no_confirmation",
 	))
@@ -788,6 +791,7 @@ func NewSessionForTest(existing *config.Config) (*Session, error) {
 	cfg.Rules = existing.Rules.Clone()
 	cfg.Launcher = existing.Launcher
 	cfg.ExtendedLaunchTimeouts = existing.ExtendedLaunchTimeouts
+	cfg.InstallRules = existing.InstallRules
 	cfg.TUI = existing.TUI
 	cfg.Language = existing.Language
 	cfg.AgentLanguage = existing.AgentLanguage

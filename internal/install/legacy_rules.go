@@ -88,7 +88,7 @@ func migrateLegacyRules(paths config.InstallPaths) LegacyRulesMigration {
 // removeLegacyEntrySymlinks drops agent rules files that are symlinks aimed at the previous
 // rules entry once that entry is gone. The following integration pass recreates them as
 // reference files pointing at the current entry, so no agent is left reading a dangling link.
-// Returns the targets it removed.
+// A link an agent with install_rules off reads stays. Returns the targets it removed.
 func removeLegacyEntrySymlinks(paths config.InstallPaths) []string {
 	legacy := legacyRulesEntry(paths)
 	if legacy == "" || legacyEntryExists(legacy) {
@@ -108,18 +108,11 @@ func removeLegacyEntrySymlinks(paths config.InstallPaths) []string {
 			continue
 		}
 		seen[target] = struct{}{}
-		info, err := os.Lstat(target)
-		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		if !linksToLegacyEntry(target, paths) {
 			continue
 		}
-		link, err := os.Readlink(target)
-		if err != nil {
-			continue
-		}
-		if !filepath.IsAbs(link) {
-			link = filepath.Join(filepath.Dir(target), link)
-		}
-		if filepath.Clean(link) != filepath.Clean(legacy) {
+		// The replacement is a write to the agent's rules file, so install_rules gates it.
+		if !targetInjectionAllowed(target, paths) {
 			continue
 		}
 		if err := os.Remove(target); err != nil {

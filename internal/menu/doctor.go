@@ -197,6 +197,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 	}
 
 	reportOverlayConfigDirs()
+	reportOverlayInstallRules()
 	loaded, loadErr := config.Load(false)
 	if loadErr != nil {
 		warning(loadErr.Error())
@@ -212,8 +213,14 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 		healthy = validateConfiguredResources(loaded, agents, paths, tools) && healthy
 		reportAgentSessionFileInheritance(loaded)
 		if loaded.WelcomeComplete {
-			healthy = reportRulesIntegration(loaded, paths, repair) && healthy
-			healthy = reportAgentExtensions(paths, repair) && healthy
+			switches, switchErr := config.ScopeInstallRules(paths)
+			if switchErr != nil {
+				warning(switchErr.Error())
+				healthy = false
+			} else {
+				healthy = reportRulesIntegration(paths, switches, repair) && healthy
+				healthy = reportAgentExtensions(paths, switches, repair) && healthy
+			}
 		}
 	}
 	return healthy
@@ -233,10 +240,24 @@ func reportOverlayConfigDirs() {
 	}
 }
 
+// reportOverlayInstallRules warns about install_rules keys in the project overlay: only the
+// scope config file may turn the rules injection on or off.
+func reportOverlayInstallRules() {
+	file, keys, err := config.OverlayInstallRules()
+	if err != nil {
+		// config.Load reads the same overlay next and reports this error.
+		return
+	}
+	for _, key := range keys {
+		warning(config.Text("menu.overlay_install_rules_ignored", key, file))
+	}
+}
+
 // reportRulesIntegration reports whether the rules file of every agent the install scope covers
 // references the Kander entry, reusing install.IntegrationAgents so doctor cannot drift from the
 // install-time coverage; in repair mode it writes the missing references instead of only warning.
-func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair bool) bool {
+// A file an agent with install_rules off reads is reported as turned off and is never touched.
+func reportRulesIntegration(paths config.InstallPaths, switches config.InstallRules, repair bool) bool {
 	healthy := true
 	labels := agentLabels()
 	entry := rulesEntry(paths)
@@ -252,18 +273,24 @@ func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair 
 		}
 		seen[target] = struct{}{}
 		if repair {
-			outcome, ensureErr := install.EnsureRulesIntegration(selected, paths)
+			outcome, ensureErr := install.EnsureRulesIntegrationWith(selected, paths, switches)
 			if ensureErr != nil {
 				healthy = false
 				warning(config.Text("menu.is_not_connected_to_kander_rules", labels[selected], ensureErr.Error()))
 				hint(config.Text("menu.follow_the_readme_integration_section_and_point_the_rules", entry))
 				continue
 			}
-			reportIntegrationOutcome(labels[selected], outcome)
+			healthy = reportIntegrationOutcome(labels[selected], outcome) && healthy
 			if outcome.Override != nil {
-				reportIntegrationOutcome(labels[selected], *outcome.Override)
+				healthy = reportIntegrationOutcome(labels[selected], *outcome.Override) && healthy
 			}
 			continue
+		}
+		if targetErr == nil {
+			if disabled := install.DisabledReaders(target, paths, switches); len(disabled) > 0 {
+				hint(config.Text("menu.rules_injection_disabled", install.AgentLabelList(disabled), target))
+				continue
+			}
 		}
 		integrated, detail := rulesIntegration(selected, paths)
 		if integrated {
@@ -292,18 +319,20 @@ func reportRulesIntegration(_ *config.Config, paths config.InstallPaths, repair 
 // reusing install.ExtensionAgents so doctor cannot drift from the install-time
 // coverage; in repair mode it writes missing and outdated copies instead of only
 // warning, while a locally modified file is reported and left untouched.
-func reportAgentExtensions(paths config.InstallPaths, repair bool) bool {
+func reportAgentExtensions(paths config.InstallPaths, switches config.InstallRules, repair bool) bool {
 	healthy := true
 	for _, agent := range install.ExtensionAgents(paths) {
 		label := config.AgentDisplayName(agent)
 		if repair {
-			outcome, ensureErr := install.EnsureExtension(agent, paths)
+			outcome, ensureErr := install.EnsureExtensionWith(agent, paths, switches)
 			if ensureErr != nil {
 				healthy = false
 				warning(config.Text("menu.agent_extension_error", label, ensureErr.Error()))
 				continue
 			}
 			switch outcome.Status {
+			case install.ExtensionDisabled:
+				hint(config.Text("menu.rules_injection_disabled", label, outcome.Target))
 			case install.ExtensionInstalled:
 				success(config.Text("menu.agent_extension_installed", label, outcome.Target))
 			case install.ExtensionWritten:
@@ -316,6 +345,11 @@ func reportAgentExtensions(paths config.InstallPaths, repair bool) bool {
 				healthy = false
 				warning(config.Text("menu.agent_extension_missing", label, outcome.Target))
 			}
+			continue
+		}
+		if !switches.Enabled(agent) {
+			target, _ := install.ExtensionTarget(agent, paths)
+			hint(config.Text("menu.rules_injection_disabled", label, target))
 			continue
 		}
 		outcome, inspectErr := install.InspectExtension(agent, paths)
@@ -341,10 +375,17 @@ func reportAgentExtensions(paths config.InstallPaths, repair bool) bool {
 }
 
 // reportIntegrationOutcome prints the per-file result of one ensured rules file; doctor repair
-// and the options finish share it so the override sibling reports identically.
-func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) {
+// and the options finish share it so the override sibling reports identically. It returns false
+// when the file still has no reference the agent loads.
+func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) bool {
 	switch outcome.Status {
+	case install.IntegrationDisabled:
+		hint(config.Text("menu.rules_injection_disabled", install.AgentLabelList(outcome.DisabledBy), outcome.Target))
+		return true
 	case install.IntegrationPresent:
+		if outcome.Inactive {
+			break
+		}
 		success(config.Text("menu.is_connected_to_kander_rules", label, outcome.Target))
 	case install.IntegrationRewritten:
 		success(config.Text("menu.updated_kander_rules_reference", label, outcome.Target))
@@ -361,6 +402,11 @@ func reportIntegrationOutcome(label string, outcome install.IntegrationOutcome) 
 			label, outcome.Removed, outcome.Target,
 		))
 	}
+	if outcome.Inactive {
+		warning(config.Text("menu.rules_reference_inactive", label, outcome.Target))
+		return false
+	}
+	return true
 }
 
 // sessionFileInheritSpec reports whether the named agent overlay declares a
