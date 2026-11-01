@@ -280,37 +280,72 @@ func TestRecoverRefusesAPendingStartAndNamesItsWaysOut(t *testing.T) {
 	requireRecord(t, root, task, board.ExecutionPending)
 }
 
-// A takeover refuses a binding, so the error must end it first for its last step to work.
+// A takeover refuses a binding, so the error must end it first for its last step to
+// work, and a completed round ends only through settle.
 func TestRecoverOfABoundPendingStartNamesAWayOutThatWorks(t *testing.T) {
-	root, task, in, c := launchCoordinatorFixture(t)
-	d, err := PrepareBoundDispatch(root, in)
-	if err != nil {
-		t.Fatal(err)
+	for name, tc := range map[string]struct {
+		complete bool
+		end      func(task, id, revision string) []string
+	}{
+		"unfinished round": {false, func(task, id, revision string) []string {
+			return []string{"cancel", task, id, revision, "starter gone", "--decision", "user"}
+		}},
+		"completed round": {true, func(task, id, revision string) []string { return []string{"settle", task, id, revision} }},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, task, in, c := launchCoordinatorFixture(t)
+			in.ID, in.Kind, in.Evidence = "bound-round", "sync", board.DispatchEvidence{}
+			d, err := board.PrepareDispatch(root, in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := board.ReadSnapshot(root, task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.complete {
+				if _, err = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Authorization: d.Authorization}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if s, err = board.ReadSnapshot(root, task); err != nil {
+				t.Fatal(err)
+			}
+			r := board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{task: {Revision: s.Revision, DispatchID: "stale-round", Epoch: 1}}}
+			blocked, _ := ReconcileCoordinator(context.Background(), root, r)
+			if blocked.Members[task].Blocked == nil {
+				t.Fatal("no block")
+			}
+			takeoverFixture(t, root, task)
+			if tc.complete {
+				// The executor of the takeover delivers and exits before the starter confirms.
+				if s, err = board.ReadSnapshot(root, task); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = board.MoveWithOptions(s.Entry, root, "review", board.MoveOptions{Authorization: d.Authorization, DeliveryCommit: in.Base}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			requireRecord(t, root, task, board.ExecutionPending)
+			request := board.CoordinatorRecover{GroupID: blocked.GroupID, Member: task, ExpectedRevision: blocked.Revision, ExpectedEpoch: blocked.Authority.Epoch, Decision: "user-decision", Reason: "reset"}
+			requireRefused(t, root, task, request, "--adopt --decision", "dispatch fail", "dispatch settle", d.Input.ID, "--agent <agent> --decision")
+			if d, err = board.ReadDispatch(root, task, d.Input.ID); err != nil {
+				t.Fatal(err)
+			}
+			code := 0
+			_, errOut, _ := capture(t, func() error {
+				code = RunDispatch(tc.end(task, d.Input.ID, strconv.FormatUint(d.Revision, 10)))
+				return nil
+			})
+			if code != 0 {
+				t.Fatalf("code=%d %s", code, errOut)
+			}
+			if code, errOut := resumeReview(t, "--agent", "claude", "--decision", "user", "--launcher", "tmux", "--message", "take over", task); code != 0 {
+				t.Fatalf("code=%d %s", code, errOut)
+			}
+			requireRecord(t, root, task, board.ExecutionRunning)
+		})
 	}
-	s, err := board.ReadSnapshot(root, task)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{task: {Revision: s.Revision, DispatchID: "stale-round", Epoch: 1}}}
-	blocked, _ := ReconcileCoordinator(context.Background(), root, r)
-	if blocked.Members[task].Blocked == nil {
-		t.Fatal("no block")
-	}
-	takeoverFixture(t, root, task)
-	request := board.CoordinatorRecover{GroupID: blocked.GroupID, Member: task, ExpectedRevision: blocked.Revision, ExpectedEpoch: blocked.Authority.Epoch, Decision: "user-decision", Reason: "reset"}
-	requireRefused(t, root, task, request, "--adopt --decision", "dispatch fail", d.Input.ID, "--agent <agent> --decision")
-	code := 0
-	_, errOut, _ := capture(t, func() error {
-		code = RunDispatch([]string{"cancel", task, d.Input.ID, strconv.FormatUint(d.Revision, 10), "starter gone", "--decision", "user"})
-		return nil
-	})
-	if code != 0 {
-		t.Fatalf("code=%d %s", code, errOut)
-	}
-	if code, errOut := resumeReview(t, "--agent", "claude", "--decision", "user", "--launcher", "tmux", "--message", "take over", task); code != 0 {
-		t.Fatalf("code=%d %s", code, errOut)
-	}
-	requireRecord(t, root, task, board.ExecutionRunning)
 }
 
 // unresolved keeps its way through the probe: its starter has ended.
