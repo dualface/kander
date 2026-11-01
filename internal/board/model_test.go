@@ -54,6 +54,7 @@ func modelSingleSeeds() []modelSeed {
 		{name: "stray", steps: []string{"H.claim", "R.planRequired", "R.runClean", "R.assign", "R.close", "U.oldStrayRun"}},
 		{name: "old-start", steps: []string{"U.oldStart"}},
 		{name: "old-takeover", steps: []string{"U.oldStart", "U.oldTakeover"}},
+		{name: "old-start-reclaim", steps: []string{"U.oldStart", "X.review", "U.oldReclaim"}},
 	}
 }
 
@@ -66,6 +67,7 @@ func modelGroupSeeds() []modelSeed {
 	oldReclaim := []string{"A:U.oldReclaim", "C.reconcile"}
 	oldStart := []string{"A:U.oldStart", "B:H.claim", "C.reconcile"}
 	oldTakeover := slices.Concat(oldStart, []string{"A:U.oldTakeover", "C.reconcile"})
+	oldStartReview := slices.Concat(oldStart, []string{"A:X.review", "B:X.review", "C.reconcile"})
 	return []modelSeed{
 		{name: "todo"},
 		{name: "claimed", focus: "A", steps: claimed},
@@ -91,6 +93,7 @@ func modelGroupSeeds() []modelSeed {
 		{name: "old-start", focus: "A", steps: oldStart},
 		{name: "old-takeover", focus: "A", steps: oldTakeover},
 		{name: "old-takeover-review", focus: "A", steps: slices.Concat(oldTakeover, []string{"A:X.review", "B:X.review", "C.reconcile"})},
+		{name: "old-start-reclaim", focus: "A", steps: slices.Concat(oldStartReview, oldReclaim)},
 	}
 }
 

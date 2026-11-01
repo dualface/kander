@@ -825,29 +825,24 @@ func (w *modelWorld) doneOwing(m *modelMember, owed []string) error {
 	return err
 }
 
-// oldReclaim writes what a reclaim of an old binary left: a new claim and a new
-// column on the card, with no handoff and no link on the chain.
+// oldReclaim writes what a reclaim of an old binary left: new move metadata and a
+// new column on the card, with no handoff and no link on the chain. On a card with
+// no stored link this is the shape the synthesized prefix must read.
 func (w *modelWorld) oldReclaim(m *modelMember) error {
 	s, err := w.snapshot(m)
 	if err != nil {
 		return err
 	}
-	text, err := setMetadata(s.Text, FieldOwner, modelTaker)
+	f, err := w.read()
 	if err != nil {
-		return modelInfra(err)
+		return err
 	}
-	if text, err = NewClaimMetadata(text); err != nil {
-		return modelInfra(err)
-	}
-	if err = WithTransaction(w.root, LockScope{Tasks: []string{m.id}, ExclusiveBoard: true}, func(tx *Transaction) error {
-		if e := tx.Put(m.id, "spec.md", text); e != nil {
-			return e
-		}
-		return tx.Relocate(m.id, "working")
-	}); err != nil {
+	l := f.ledgers[f.index(m)]
+	if err = writeOldReclaim(w.root, s, modelTaker); err != nil {
 		return modelInfra(err)
 	}
 	m.self, m.executor = true, false
+	m.oldReclaimed = l.synthesized == len(l.chain) && l.end() > 0
 	return nil
 }
 

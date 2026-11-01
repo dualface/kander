@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // modelInvariant is one row of the invariant table. Every row is enabled.
@@ -25,6 +26,7 @@ var modelInvariants = []modelInvariant{
 	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state. A recovery that moved a mirror has an immutable record: a reset names the recover transition on the chain, and a confirmation names the cycle of the card."},
 	{id: "I10", check: modelCheckI10, definition: "When a card enters done, each batch of its plan that names it is closed, each drop obligation on it is discharged by a later closed batch that requires the role, and its recovery obligation is discharged by actual reviews or, for a member reset with no plan under an all N/A plan, by a recorded decision."},
 	{id: "I11", check: modelCheckI11, definition: "When a card enters done, it has no debt in the operation history: each reset and each dropped required batch has a later closed batch that names the card and requires a role. F.doneOwing tries the move while a debt is open, and a refusal of the review gate must name that debt."},
+	{id: "I12", check: modelCheckI12, definition: "A card that 1.0.0 reclaimed with no handoff and no stored link stays on its chain: its current record has the cycle of the card and no reconcile blocks it for that reclaim. The world records the reclaim where it runs, so the check does not read the mark it proves."},
 }
 
 // modelCheckEach runs check for every member, and hands it the same member of the
@@ -286,6 +288,25 @@ func modelCheckI11(before, after *modelFacts) error {
 	return modelCheckEach(before, after, func(i int, old *modelMemberFacts, m modelMemberFacts) error {
 		if owed := after.owed(i); old.card.Entry.State != "done" && m.card.Entry.State == "done" && len(owed) > 0 {
 			return fmt.Errorf("entered done owing %v", owed)
+		}
+		return nil
+	})
+}
+
+// modelCheckI12 ends at the first stored link: from there on a later old reclaim
+// or a recovery is a change this invariant says nothing about.
+func modelCheckI12(_, after *modelFacts) error {
+	return modelCheckEach(nil, after, func(i int, _ *modelMemberFacts, m modelMemberFacts) error {
+		if !after.world.members[i].oldReclaimed || !m.chained() || m.ledger.synthesized < len(m.ledger.chain) {
+			return nil
+		}
+		if cur := m.ledger.current; cur == nil || cur.Cycle != planCycle(m.card) || cur.Kind != ExecutionReclaim {
+			return fmt.Errorf("an old reclaim left the record %+v off the card", cur)
+		}
+		if after.ckpt != nil {
+			if c := after.ckpt.Members[after.world.members[i].id]; c.Blocked != nil && strings.Contains(c.Blocked.Reason, "lifecycle handoff") {
+				return fmt.Errorf("an old reclaim blocked the member: %s", c.Blocked.Reason)
+			}
 		}
 		return nil
 	})
