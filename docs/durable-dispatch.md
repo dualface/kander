@@ -49,6 +49,14 @@ A new dispatch record (schema 2) carries two fields the producer computes. `cycl
 
 Accepting, completing, ending and settling a dispatch, and rotating its epoch, all require `cycle` to equal the current execution cycle. A mismatch fails with an error that says the cycle changed. A schema 1 record has no `cycle` and stays usable, so a dispatch in flight across an upgrade does not get stuck. Its place in the chain comes from the card revisions of its receipts. Epoch cannot order rounds, because a release resets it. When the receipts do not fix the order, the coordinator reports an error and does not guess.
 
+A schema 1 round with no receipt has no `Accepted`, `Completed` or `Release` record. An old binary left such a round when it cancelled a round and a later round replaced it, so the round can sit anywhere in the chain. Its `Input.CreatedAt` places it: a silent round comes after every receipted round created before it. The order stays `legacy dispatch order unknown` in these cases:
+
+- `Input.CreatedAt` of a silent round is missing.
+- `Input.CreatedAt` of a silent round equals the time of an adjacent round.
+- The creation times disagree with the order of the receipts, so the time of a silent round cannot be trusted.
+
+Two receipted rounds with one creation time stay valid, because their receipts order them.
+
 `kander dispatch settle <task-id> <dispatch-id> <revision>` ends the binding of a completed round of the current cycle. It writes the immutable `dispatches/<id>/settlement.json` and clears `DISPATCH_ID` and `EXECUTION_EPOCH`. The dispatch stays completed and keeps its delivery commit. A settlement counts as a release for a reclaim. `kander move` into `archived/` or `trash/` settles a completed binding in its own transaction.
 
 `dispatch fail|cancel` on an accepted round requires `--decision`, because the executor may still be running.
