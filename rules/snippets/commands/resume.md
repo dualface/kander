@@ -42,9 +42,9 @@ kander resume --adopt --decision <reference> <task-id>
 **Taking Over with a New Session**
 
 - By default `resume` keeps the original agent and context. An explicit `--agent <name>` means the user authorizes a takeover: even with the same name, a brand-new session is allocated and the old context is not migrated. The new agent rebuilds progress from the card, task worktree, Git state, and implementation records, then handles the message. It verifies delivery facts against the card, the task branch, and the review originals; it does not reset acceptance criteria, rewrite the contract, or reopen a finding closed by verified evidence unless it cites the specific gap (command, output, commit). Retracting a predecessor's completion claim is a separate `TAKEOVER_AUDIT` entry with the invalidating evidence; the predecessor's claim stays as history.
-- The command overwrites `OWNER`/`SESSION`/`WINDOW` with the new agent, session, and launcher, and keeps `STARTED_AT`. In the same transaction it ends the current execution record and opens a new pending one; the new record runs once the agent is alive. A launch that fails restores the record it replaced. After the new agent is alive, it tries to exit and close the original container under the gate of `dismiss`. When that fails it prints `original container kept` with the reason and still succeeds.
+- The command overwrites `OWNER`/`SESSION`/`WINDOW` with the new agent, session, and launcher, and keeps `STARTED_AT`. In the same transaction it ends the current execution record and opens a new pending one; the new record runs once the agent is alive. A launch that fails restores the record it replaced. Before the new agent starts, it searches a stale `WINDOW` by session, and it resolves a Codex card with no reference first, because the new session would match afterwards. After the new agent is alive, it tries to exit and close the original container under the gate of `dismiss`: the container of the drifted pane when the search found one, otherwise the recorded one. The new agent's address is never a target. When that fails, or when the search did not finish or found several matches, it prints `original container kept` with the reason and still succeeds. A kept drifted pane is named by its own address.
 - A takeover of a card with an unfinished durable dispatch rotates the epoch per `snippets/commands/dispatch.md`.
-- A takeover of a `pending` or `unresolved` record ends that start attempt: the handoff record carries the decision, and a launcher that is still running steps aside with `superseded`.
+- A takeover of a `pending` or `unresolved` record ends that start attempt: the handoff record carries the decision, and a launcher that is still running steps aside with `superseded`. This is the way out when the starter and the executor have ended. A task group member in `review/` takes this takeover without a dispatch option. With a `running` record, that member refuses `resume --agent` without a dispatch option.
 - A takeover is a launcher, so its late failures follow `snippets/commands/start.md` "Late Failures": the same judgement, the same `started-unresolved` output, and the same exit status. A failed takeover without executor evidence restores the record it replaced, including `unresolved`.
 
 **Foreground and Console Have No Native Resume**
@@ -65,6 +65,7 @@ kander resume --adopt --decision <reference> <task-id>
 
 ## Rejections
 
+- A task group `review/` card without a dispatch option, unless the takeover ends an unfinished start.
 - A card outside `review/` or `working/`, a missing `SESSION`, a claimed or reclaimed card without `--agent` (the error names `snippets/failure-recovery.md`), a pin violation, an immediate agent exit, or a dispatch conflict.
 - A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover.
 - `--agent` without `--decision` on a `pending` or `unresolved` record.

@@ -175,20 +175,28 @@ The column of the member selects the mode:
 | `working`, `review` | reset | card, ledger, recovery review record, mirror, record |
 | `done`, `archived`, `trash` | confirm | mirror, record |
 
-A reset refuses a member with any dispatch binding, including a completed one. launch also probes the executor, with reverse lookup on, and the probe result decides:
+A reset refuses a member with any dispatch binding, including a completed one. It also refuses a current execution record in `pending`: the starter may still run, a reset would make it step aside with `execution superseded`, and its executor would lose management. launch checks this first for the error, and board checks it again under the lock. The error names three next steps: wait while the starter runs, `kander resume --adopt --decision` when the executor is alive, and `kander resume --agent --decision` when the starter and the executor have ended. An `unresolved` record has no starter left, so its reset follows the probe.
+
+launch then probes the executor, with reverse lookup on, and the probe result decides:
 
 | Probe result | Reset | Why |
 | --- | --- | --- |
 | `alive`, `alive-orphaned` | refused | The executor runs at the recorded address. |
 | `drifted` | refused | Reverse lookup found the executor at a new address. |
 | `stopped` | proceeds | The address is stale and the lookup found no executor. |
-| `unknown` | proceeds | A user decided, and `recover` is the last way out when the terminal cannot be probed. `unknown` never counts as alive. |
+| `unknown` with `Report.Evidence` | refused | The probe finished and saw an executor it could not prove. |
+| `unknown` without evidence | proceeds | The probe failed. A user decided, and `recover` is the last way out when the terminal cannot be probed. |
+| `identity-mismatch`, `unprobeable` | proceeds | A process identity that cannot be checked does not stop the last way out. |
 
-`identity-mismatch` and `unprobeable` proceed like `unknown`. Adoption keeps its probe without reverse lookup: it reads a drifted address as `stopped` and refuses, which is the safe direction there. For a reset, the same reading would pass a running executor.
+`Report.Evidence` has four sources: a reverse lookup with 2 or more matches, a recorded or found pane whose session identity is uncertain for a reason other than the deadline, a recorded or found pane whose agent status cannot be classified, and a tmux pane with the agent running and no session marker. A failed probe is a terminal that is unavailable, a deadline, a reverse lookup that did not finish, or a resolution that failed. The field is not serialized, and `kander check` shows both kinds of `unknown` the same way.
 
-A session with no reference has nothing to search by, so a drifted `WINDOW` still reads `stopped` and the reset proceeds. Classification does not change for this case.
+Each refusal names its evidence and a next step that works. A `working/` member with a running executor gets the address and `kander resume --agent`, or stopping that executor. A `review/` member takes no takeover without a dispatch while its record is `running`, and a takeover cannot exit an executor it cannot prove, so these get the address and "stop it, then recover again". Several matches have no one address, because `terminal.MatchError` carries none, so that error gives the count and "stop the executors that match this session". A refused reset writes nothing, so the same request works afterwards.
 
-The probe has its own budget, `recoverProbeBudget`, which is `liveness.DefaultBatchBudget` (10 seconds), inside the 30-second command context. A hung terminal reads `unknown` at that limit, and the rest of the deadline stays for the board write. Without the budget the probe could use the whole deadline, and the reset that `unknown` allows would then fail. launch probes before the command takes a lock, and board requires the card revision that was probed.
+Adoption keeps its probe without reverse lookup: it reads a drifted address as `stopped` and refuses, which is the safe direction there. For a reset, the same reading would pass a running executor.
+
+A Codex card with no reference is resolved for the search through `ClassifyTaskResolving`, the path `notify` and `dismiss` use. Resolution runs only after the recorded address proved stale, because a failure or a newer rollout must not change an `alive` result. A resolution that fails reads `unknown` without evidence. A session with no reference and no way to resolve one (`session.mode=none`) has nothing to search by, so a drifted `WINDOW` still reads `stopped` and the reset proceeds.
+
+The probe has its own budget, `recoverProbeBudget`, which is `liveness.DefaultBatchBudget` (10 seconds), inside the 30-second command context. The resolution shares it, and the rollout scan stops with its context. A hung terminal reads `unknown` at that limit, and the rest of the deadline stays for the board write. Without the budget the probe could use the whole deadline, and the reset that a failed probe allows would then fail. launch probes before the command takes a lock, and board requires the card revision that was probed.
 
 A reset writes `STARTED_AT`, a new claim, an execution record of kind `recover`, and a transition of kind `recover` with the decision reference, and retires the old record as `handed-off`. The transition continues the chain, not the card, so it also records a gap from a change no producer recorded, such as the plain reclaim of a binary from before #20. A `review/` card moves to `working/`, because its delivery belongs to the old cycle. `OWNER`, `SESSION`, and `WINDOW` stay; the takeover replaces them and closes the old container. A record of kind `recover` has no session of its owner, so plain `resume`, `notify`, and `dismiss` refuse it and name `resume --agent`.
 

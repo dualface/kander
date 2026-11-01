@@ -33,16 +33,21 @@ kander coordinator recover <absolute-request.json>
 - `show`, `claim`, and `reconcile` store or read a checkpoint through the board transaction protocol. They never notify, move cards, integrate Git, or grant execution authority.
 - `reconcile` judges each member alone. A member that fails stays at its last mirror with `blocked.reason`, and the other members advance. Each reconcile judges a blocked member again and clears the field when the member passes, so a stale observation ends with the next correct one. While any member is blocked, every wrap-up dispatch of the group is refused.
 - `recover` on a `working/` or `review/` member is a reset: it writes an execution record and a transition of kind `recover`, a new claim that changes the execution cycle, and moves a `review/` card to `working/`. The checkpoint mirror rebinds to the ledger. The old cycle's review evidence no longer satisfies the done gate, so the plan needs `rebind_cycles`. Then every role the plan required in any batch needs an actual review in a batch that closes after the recovery. A later reclaim does not end this requirement. The next step is `kander resume --agent <agent>`; plain `resume`, `notify`, and `dismiss` refuse the card.
-- Before a reset, `recover` probes the member's executor, and it searches a stale `WINDOW` by session. The probe stops after 10 seconds and then reads `unknown`. The result decides:
+- Before a reset, `recover` refuses a member whose current execution record is `pending`. An `unresolved` record has no such check; its reset follows the probe.
+- Then `recover` probes the member's executor, and it searches a stale `WINDOW` by session. A Codex card with no session reference is resolved from its rollouts for that search, only when the recorded address is stale. The probe and the resolution stop after 10 seconds together and then read `unknown`. The result decides:
 
 | Probe result | Reset |
 | --- | --- |
 | `alive`, `alive-orphaned` | refused |
 | `drifted` (running at a new address) | refused |
+| `unknown` with executor evidence | refused |
+| `unknown` from a failed probe | proceeds, because `recover` is the last way out when the terminal cannot be probed |
+| `identity-mismatch`, `unprobeable` | proceeds |
 | `stopped` | proceeds |
-| `unknown` | proceeds, because `recover` is the last way out when the terminal cannot be probed |
 
-- A session with no reference has nothing to search by, so a drifted `WINDOW` then reads `stopped`. `identity-mismatch` and `unprobeable` proceed like `unknown`.
+- Executor evidence means that the probe finished and saw an executor it could not prove. There are four cases: a reverse lookup with 2 or more matches; a recorded or found pane whose session identity is uncertain for a reason other than the probe deadline; a recorded or found pane whose agent status cannot be classified; a tmux pane with the agent running and no session marker.
+- A failed probe means that the terminal is unavailable, the probe reached its deadline, the reverse lookup did not finish, or the session reference could not be resolved. `kander check` still shows both kinds of `unknown` the same way.
+- A session with no reference and no way to resolve one (`session.mode=none`) has nothing to search by, so a drifted `WINDOW` then reads `stopped`.
 - `recover` on a `done/`, `archived/`, or `trash/` member is a confirmation: it writes only the audit record and rebinds the mirror. It changes no card, execution cycle, or review evidence. Reconcile then accepts that member as it is for this cycle.
 - Each recovery writes an immutable record that binds the checkpoint revision and the coordinator epoch. `kander update` cannot reach it, and `show` lists it under `recoveries`.
 
@@ -54,5 +59,10 @@ kander coordinator recover <absolute-request.json>
 ## Rejections
 
 - `reconcile` refuses the whole request on a stale card revision (retry with a fresh observation), a stale checkpoint revision or authority, a changed member set, an unknown member, or Git facts that changed during the command. Damaged originals, a failed Git verification, or a wrong dispatch observation block that member instead.
-- `recover` refuses a missing field, a stale revision or epoch, a member that is not blocked, and a `backlog/` or `todo/` member. A repeated request fails on the revision, so one recovery wins; after a lost response read `recoveries` with `show`. A reset also refuses a member with a dispatch binding (end it with `dispatch fail|cancel|settle`) and a member whose executor reads `alive`, `alive-orphaned`, or `drifted` (use `resume --agent`). The error names the probe result.
+- `recover` refuses a missing field, a stale revision or epoch, a member that is not blocked, and a `backlog/` or `todo/` member. A repeated request fails on the revision, so one recovery wins; after a lost response read `recoveries` with `show`. A reset also refuses a member with a dispatch binding (end it with `dispatch fail|cancel|settle`), a `pending` member, and a member with a running executor or executor evidence. Each error names its evidence and next steps:
+
+  - `pending`: wait while the starter runs. When the executor is alive, use `kander resume <task-id> --adopt --decision <reference>`. When the starter and the executor have ended, use `kander resume <task-id> --agent <agent> --decision <reference>`.
+  - `alive`, `alive-orphaned`, or `drifted` in `working/`: the error names the address. Use `kander resume --agent <agent>`, or stop the executor at that address and run `recover` again.
+  - `alive`, `alive-orphaned`, or `drifted` in `review/`, and `unknown` with evidence at one address: the error names the address. Stop the executor at that address and run `recover` again. A `review/` member takes `resume --agent` only while its start attempt has not ended, and a takeover cannot exit an executor it cannot prove.
+  - 2 or more matches: the error names the count. Stop the executors that match this session and run `recover` again.
 - A wrong argument count, a relative `recover` path, or an unknown subcommand is a usage error.
