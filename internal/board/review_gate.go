@@ -120,29 +120,32 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 		progress.Pending = append(progress.Pending, "unsealed-plan")
 	}
 	for _, member := range sortedKeys(p.CycleBatchFrom) {
-		gone, e := memberExcluded(tx, member)
+		open, e := memberObligationsOpen(tx, s, member)
 		if e != nil {
 			return progress, e
 		}
-		if !gone && cycleBatchMissing(p, member) && s.Entry.State != "done" {
+		if open && cycleBatchMissing(p, member) {
 			progress.Pending = append(progress.Pending, "cycle-batch:"+member)
 			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
 		}
 	}
 	for _, member := range p.TaskIDs {
-		gone, e := memberExcluded(tx, member)
+		open, e := memberObligationsOpen(tx, s, member)
 		if e != nil {
 			return progress, e
 		}
-		if gone || s.Entry.State == "done" {
+		if !open {
 			continue
 		}
-		owed, e := recoveryReviewOwed(tx, p, member)
+		missing, owed, e := recoveryReviewOwed(tx, p, member)
 		if e != nil {
 			return progress, e
 		}
 		if owed {
 			progress.Pending = append(progress.Pending, "recovery-review:"+member)
+			for _, role := range missing {
+				progress.Pending = append(progress.Pending, "recovery-role:"+member+"/"+role)
+			}
 			progress.NextActions = append(progress.NextActions, ReviewNextAction{Action: "append-cycle-batch", RunIDs: []string{}, TaskID: member})
 		}
 	}
@@ -199,20 +202,23 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 			if e != nil {
 				return progress, e
 			}
+			// A later batch of other members leaves a delivered card as it was.
+			delivered := s.Entry.State == "done" && !containsID(b.TaskIDs, id)
+			if !delivered {
+				owed, e := withdrawalsOwed(tx, b)
+				if e != nil {
+					return progress, e
+				}
+				progress.Pending = append(progress.Pending, owed...)
+			}
 			if void {
 				previous = b.TargetCommit
 				continue
 			}
-			// A later batch of other members leaves a delivered card as it was.
-			if s.Entry.State == "done" && !containsID(b.TaskIDs, id) {
+			if delivered {
 				previous = ""
 				continue
 			}
-			owed, e := withdrawalsOwed(tx, b)
-			if e != nil {
-				return progress, e
-			}
-			progress.Pending = append(progress.Pending, owed...)
 			progress.Pending = append(progress.Pending, b.BatchID)
 			pending, e := checkPendingDispositions(tx, b)
 			if e != nil {
@@ -282,6 +288,24 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	return progress, nil
 }
 
+// memberObligationsOpen reports whether the obligations of member bind the gate of
+// card s. A delivered card answers for nobody else. A member that left owes nothing,
+// and a member that reached done passed this gate itself and can take no new batch.
+func memberObligationsOpen(tx *Transaction, s Snapshot, member string) (bool, error) {
+	if s.Entry.State == "done" {
+		return false, nil
+	}
+	excluded, err := memberExcluded(tx, member)
+	if err != nil || excluded {
+		return false, err
+	}
+	card, err := tx.Snapshot(member)
+	if err != nil {
+		return false, err
+	}
+	return card.Entry.State != "done" && card.Entry.State != "archived", nil
+}
+
 func unclosedReviewError(pending []string) string {
 	text := "unclosed review batches: " + strings.Join(pending, ",")
 	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "cycle-batch:") }) {
@@ -295,6 +319,9 @@ func unclosedReviewError(pending []string) string {
 	}
 	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "stale-run:") }) {
 		text += "; " + t("board.review_stale_run_required")
+	}
+	if slices.ContainsFunc(pending, func(item string) bool { return strings.HasPrefix(item, "withdrawal:") }) {
+		text += "; " + t("board.review_withdrawal_owed")
 	}
 	return text
 }

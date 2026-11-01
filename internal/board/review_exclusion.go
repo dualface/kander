@@ -93,7 +93,8 @@ func reviewCopyTargets(tx *Transaction, ids []string) ([]string, error) {
 }
 
 // voidReviewBatch reports a batch with no member left. No run can reach it, so it
-// neither closes nor waits: the chain continues over it.
+// never closes and the chain continues over it. Only the withdrawn records it owes
+// still bind the members that remain.
 func voidReviewBatch(tx *Transaction, ids []string) (bool, error) {
 	for _, id := range ids {
 		excluded, err := memberExcluded(tx, id)
@@ -194,7 +195,9 @@ func requireNoSuccessorBatch(tx *Transaction, b ReviewBatch) error {
 }
 
 // withdrawalsOwed lists the assigned findings of a batch that wait for a withdrawn
-// record of an excluded member, as `withdrawal:<run>/<finding>/<task>`.
+// record of an excluded member, as `withdrawal:<run>/<finding>/<task>`. A finding
+// whose latest record is confirmed or unverifiable waits too: closure refuses both
+// statuses, and the member that left can no longer settle them.
 func withdrawalsOwed(tx *Transaction, b ReviewBatch) ([]string, error) {
 	runs, err := batchRuns(tx, b)
 	if err != nil {
@@ -210,9 +213,9 @@ func withdrawalsOwed(tx *Transaction, b ReviewBatch) ([]string, error) {
 		if !exists {
 			continue
 		}
-		recorded := map[string]bool{}
+		latest := map[string]string{}
 		for _, d := range ledger.Records {
-			recorded[dispositionKey(d)] = true
+			latest[dispositionKey(d)] = d.Status
 		}
 		for _, finding := range sortedKeys(ledger.Assignment.Items) {
 			for _, id := range ledger.Assignment.Items[finding] {
@@ -220,7 +223,8 @@ func withdrawalsOwed(tx *Transaction, b ReviewBatch) ([]string, error) {
 				if err != nil {
 					return nil, err
 				}
-				if excluded && !recorded[finding+"/"+id] {
+				status, recorded := latest[finding+"/"+id]
+				if excluded && (!recorded || status == "confirmed" || status == "unverifiable") {
 					owed = append(owed, fmt.Sprintf("withdrawal:%s/%s/%s", run.RunID, finding, id))
 				}
 			}
@@ -248,7 +252,7 @@ func cycleBatchOwed(tx *Transaction, p ReviewPlan, ids []string) (bool, error) {
 		if cycleBatchMissing(p, id) {
 			return true, nil
 		}
-		owed, err := recoveryReviewOwed(tx, p, id)
+		_, owed, err := recoveryReviewOwed(tx, p, id)
 		if owed || err != nil {
 			return owed, err
 		}
@@ -347,6 +351,7 @@ func dropPlanBatches(tx *Transaction, p *ReviewPlan, ids []string, decision stri
 	if err := keepDropObligations(tx, p, tail, keep, decision); err != nil {
 		return err
 	}
+	recordDroppedRoles(p, tail)
 	droppedRoles := planRequiredRoles(ReviewPlan{Batches: tail})
 	p.Batches = slices.Clone(p.Batches[:keep])
 	p.Sealed = false

@@ -151,6 +151,7 @@
   "review.schema.extend-plan.release_obligation.kind": "Required with release_obligation. dropped releases what a drop of a required batch left. recovery releases the obligation of a member reset with no plan, only while the plan requires no role.",
   "review.schema.extend-plan.release_obligation.task_ids": "Required with release_obligation. The plan members to release. Each one must hold such an obligation.",
   "review.schema.plan.drop_obligations": "Written by Kander: the required batches a drop removed with no decision. Each role stays owed until a later batch that requires it, names the member and closes.",
+  "review.schema.plan.dropped_roles": "Written by Kander: a member, mapped to the roles dropped batches required of it. It stays after a decision or a release, and a later reset owes these roles.",
   "review.schema.plan.drop_obligations.item.batch_id": "The dropped batch.",
   "review.schema.plan.drop_obligations.item.from_batch": "Position of the first batch that can discharge this obligation.",
   "review.schema.plan.drop_obligations.item.roles": "The roles the dropped batch required.",

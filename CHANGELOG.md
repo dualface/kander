@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fix (review): review obligations are now exact per member. A drop of a `required` batch no longer hides its role from a later `kander coordinator recover`: the plan keeps the roles of dropped batches per member in `dropped_roles`, also after a `decision` or a `release_obligation`, and the reset owes them in either order. `kander move done` and `kander review progress` name each missing role as `recovery-role:<member>/<role>`.
+- Fix (review): a member that reached `done/`, or moved from `done/` into `archived/`, no longer blocks the other members with its recovery obligation, and `kander review progress` suggests no batch for it.
+- Fix (review): a batch with no member left now blocks `kander move done` of the other members until each assigned finding of the excluded member has a `withdrawn` record. The record can be written without closing the batch. A finding whose latest status is `confirmed` or `unverifiable` counts as owed in every batch. A card already in `done/` stays valid when another member leaves later.
+- Test (model): the composite state model now tries `move done` while a card owes a review, decides that debt from the history of operations, and fails when the gate stops naming it.
+
 ## v1.1.0 — 2026-11-01
 
 - Fix (tmux, #26): an agent started through `tmux` or `tmux-session` now runs in the startup directory whatever the tmux server's own directory is. The pane enters the directory before `exec`.

@@ -151,6 +151,7 @@
   "review.schema.extend-plan.release_obligation.kind": "release_obligation で必須。dropped は required バッチの削除が残した義務を解除します。recovery は plan がない状態でリセットされたメンバーの義務を解除し、plan がどのロールも要求しないときだけ使えます。",
   "review.schema.extend-plan.release_obligation.task_ids": "release_obligation で必須。解除する plan メンバー。各メンバーにその義務が必要です。",
   "review.schema.plan.drop_obligations": "Kander が記録します。決定なしで削除された required バッチです。各ロールは、後続バッチがロールを要求しメンバーを含みクローズするまで残ります。",
+  "review.schema.plan.dropped_roles": "Kander が記録します。メンバーから、削除したバッチがそのメンバーに要求したロールへの対応です。決定や解除の後も残り、後のリセットはこれらのロールを求めます。",
   "review.schema.plan.drop_obligations.item.batch_id": "削除されたバッチ。",
   "review.schema.plan.drop_obligations.item.from_batch": "この義務を解除できる最初のバッチの位置。",
   "review.schema.plan.drop_obligations.item.roles": "削除されたバッチが要求したロール。",

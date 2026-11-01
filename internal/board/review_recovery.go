@@ -6,9 +6,9 @@ import (
 )
 
 // RecoveryReview is what a reset leaves on the member's review: the roles its plan
-// required, which only a closed batch from FromBatch on can discharge. N/A never
-// counts, and a later reclaim changes nothing, because the record binds the
-// member, not an execution cycle.
+// required, also those of its dropped batches, which only a closed batch from
+// FromBatch on can discharge. N/A never counts, and a later reclaim changes nothing,
+// because the record binds the member, not an execution cycle.
 //
 // A reset of a member with no plan writes the record with no PlanID. The roles then
 // come from the plan created later, and Roles keeps those a drop took out of it. Only
@@ -39,10 +39,15 @@ func planRequiredRoles(p ReviewPlan) []string {
 	return slices.Sorted(maps.Keys(roles))
 }
 
+func unionRoles(lists ...[]string) []string {
+	return slices.Compact(slices.Sorted(slices.Values(slices.Concat(lists...))))
+}
+
 // stageRecoveryReview replaces the record of a member with one for the whole plan
-// as it stands. A later recovery covers an earlier one: the roles only grow, so the
-// roles of the record stay even when a drop took them out of the plan, and the
-// position only moves on.
+// as it stands, with the roles the member's dropped batches required: neither a drop
+// decision nor a release ends a recovery, in either order. A later recovery covers an
+// earlier one: the roles only grow, so the roles of the record stay even when a drop
+// took them out of the plan, and the position only moves on.
 func stageRecoveryReview(tx *Transaction, id, recovery string) error {
 	p, exists, err := readTaskPlan(tx, id)
 	if err != nil {
@@ -55,7 +60,7 @@ func stageRecoveryReview(tx *Transaction, id, recovery string) error {
 	if _, err = readReviewJSON(tx, recoveryReviewName(id), &old); err != nil {
 		return err
 	}
-	roles := slices.Compact(slices.Sorted(slices.Values(slices.Concat(old.Roles, planRequiredRoles(p)))))
+	roles := unionRoles(old.Roles, planRequiredRoles(p), p.DroppedRoles[id])
 	if len(roles) == 0 {
 		return nil
 	}
@@ -77,7 +82,7 @@ func moveRecoveryReviews(tx *Transaction, p ReviewPlan, droppedRoles []string) e
 		case !ok:
 			continue
 		case o.PlanID == "":
-			o.Roles = slices.Compact(slices.Sorted(slices.Values(slices.Concat(o.Roles, droppedRoles))))
+			o.Roles = unionRoles(o.Roles, droppedRoles)
 		case o.PlanID != p.PlanID || o.FromBatch <= len(p.Batches):
 			continue
 		default:
@@ -95,22 +100,23 @@ func recoveryRoles(p ReviewPlan, o RecoveryReview) []string {
 	if o.PlanID != "" {
 		return o.Roles
 	}
-	return slices.Compact(slices.Sorted(slices.Values(slices.Concat(o.Roles, planRequiredRoles(p)))))
+	return unionRoles(o.Roles, planRequiredRoles(p))
 }
 
-// recoveryReviewOwed reports a member whose recovery still needs an actual review.
-func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (bool, error) {
+// recoveryReviewOwed reports a member whose recovery still needs an actual review,
+// and the roles that review misses. A record with no role has none to name.
+func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (missing []string, owed bool, err error) {
 	var o RecoveryReview
 	ok, err := readReviewJSON(tx, recoveryReviewName(id), &o)
 	if err != nil || !ok {
-		return false, err
+		return nil, false, err
 	}
 	if o.Schema != 1 || o.TaskID != id || o.PlanID != "" && len(o.Roles) == 0 {
-		return false, reviewError("invalid recovery review: " + id)
+		return nil, false, reviewError("invalid recovery review: " + id)
 	}
 	roles := recoveryRoles(p, o)
 	if len(roles) == 0 {
-		return o.ReleaseDecision == "", nil
+		return nil, o.ReleaseDecision == "", nil
 	}
 	from := o.FromBatch
 	if o.PlanID != p.PlanID {
@@ -120,7 +126,7 @@ func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (bool, error) 
 	if o.PlanID == "" {
 		s, err := tx.Snapshot(id)
 		if err != nil {
-			return false, err
+			return nil, false, err
 		}
 		cycle = planCycle(s)
 	}
@@ -132,7 +138,7 @@ func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (bool, error) 
 		var c ReviewClosure
 		closed, err := readReviewJSON(tx, closureName(b.BatchID), &c)
 		if err != nil {
-			return false, err
+			return nil, false, err
 		}
 		if !closed {
 			continue
@@ -143,7 +149,8 @@ func recoveryReviewOwed(tx *Transaction, p ReviewPlan, id string) (bool, error) 
 			}
 		}
 	}
-	return slices.ContainsFunc(roles, func(role string) bool { return !reviewed[role] }), nil
+	missing = slices.DeleteFunc(slices.Clone(roles), func(role string) bool { return reviewed[role] })
+	return missing, len(missing) > 0, nil
 }
 
 // closedInCycle reports a closure whose conclusion run of role reviewed cycle. A

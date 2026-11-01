@@ -21,6 +21,7 @@ func evidenceSchemaDocs() map[string]map[string]schemaMeta {
 			"drop_obligations[].from_batch":       opt(""),
 			"drop_obligations[].roles":            opt(""),
 			"drop_obligations[].task_ids":         opt(""),
+			"dropped_roles":                       opt(""),
 			"resolved_batches":                    opt(""),
 			"resolved_batches[].request":          opt(""),
 			"resolved_batches[].request.batch_id": opt(""),

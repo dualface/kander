@@ -2,6 +2,7 @@ package board
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 )
 
@@ -62,6 +63,24 @@ func keepDropObligations(tx *Transaction, p *ReviewPlan, dropped []ReviewPlanBat
 		}
 	}
 	return nil
+}
+
+// recordDroppedRoles adds the required roles of the dropped batches to the record of
+// each of their members, with or without a decision.
+func recordDroppedRoles(p *ReviewPlan, dropped []ReviewPlanBatch) {
+	p.DroppedRoles = maps.Clone(p.DroppedRoles)
+	for _, b := range dropped {
+		roles := planRequiredRoles(ReviewPlan{Batches: []ReviewPlanBatch{b}})
+		if len(roles) == 0 {
+			continue
+		}
+		if p.DroppedRoles == nil {
+			p.DroppedRoles = map[string][]string{}
+		}
+		for _, id := range b.TaskIDs {
+			p.DroppedRoles[id] = unionRoles(p.DroppedRoles[id], roles)
+		}
+	}
 }
 
 // dropObligationsOwed lists the undischarged obligations as `<member>/<role>`. With

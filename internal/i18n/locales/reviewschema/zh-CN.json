@@ -151,6 +151,7 @@
   "review.schema.extend-plan.release_obligation.kind": "使用 release_obligation 时必填。dropped 解除 required 批次被删除留下的义务。recovery 解除成员在没有计划时重置留下的义务，只在计划不要求任何角色时可用。",
   "review.schema.extend-plan.release_obligation.task_ids": "使用 release_obligation 时必填。要解除义务的计划成员，每个成员都必须有这类义务。",
   "review.schema.plan.drop_obligations": "由 Kander 写入：没有决定引用时被删除的 required 批次。每个角色继续欠复审，直到后续批次要求该角色、包含该成员并关闭。",
+  "review.schema.plan.dropped_roles": "由 Kander 写入：成员，到被删除批次要求它的角色。带决定或解除之后继续保留，之后的重置继续欠这些角色。",
   "review.schema.plan.drop_obligations.item.batch_id": "被删除的批次。",
   "review.schema.plan.drop_obligations.item.from_batch": "能解除这项义务的第一个批次的位置。",
   "review.schema.plan.drop_obligations.item.roles": "被删除批次要求的角色。",

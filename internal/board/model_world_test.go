@@ -281,7 +281,7 @@ func (w *modelWorld) readReview() (facts modelReviewFacts, err error) {
 				if cycleBatchMissing(p, member) {
 					facts.cycleOwed = append(facts.cycleOwed, member)
 				}
-				owed, e := recoveryReviewOwed(tx, p, member)
+				_, owed, e := recoveryReviewOwed(tx, p, member)
 				if e != nil {
 					return e
 				}

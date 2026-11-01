@@ -119,6 +119,7 @@ Dropping a batch with a `required` role does not end that review. The plan recor
 - `drop_batches` takes an optional `decision`, the user decision reference, and then records nothing. White space counts as no decision.
 - `release_obligation` with `{"kind": "dropped", "task_ids": [...]}` and a `decision` ends a record later. A sealed plan accepts it, and it stays sealed. A member with no record is refused.
 - Both `decision` values stay in `plan-history`. As with `--decision`, Kander cannot verify that the user gave them. Neither ends a recovery obligation or the batch a new cycle owes.
+- The plan also records in `dropped_roles`, per member, the roles every dropped batch required of it. This record stays after a `decision`, a release, or a later batch, because a reset voids the review evidence. A reset of the member adds these roles to its recovery obligation, so the result does not depend on the order of the drop and the reset.
 
 ### Recovery With No Plan
 
@@ -127,16 +128,20 @@ Dropping a batch with a `required` role does not end that review. The plan recor
 - With at least one role, every role needs a closed batch that names the member and requires the role, and its conclusion run must be a run of the current cycle. N/A does not count, and `release_obligation` is refused.
 - With no role, the plan is all N/A, and `kander move <id> done` refuses until `release_obligation` with `{"kind": "recovery", "task_ids": [...]}` and a `decision` records the user decision. That decision stays in the record and in `plan-history`. A required batch appended instead also discharges the record, and a sealed plan accepts that batch.
 
-A reset of a member that has a plan keeps its existing rules: the record names the plan roles, and only a closed batch from its position on discharges it. `release_obligation` does not apply to it.
+A reset of a member that has a plan keeps its existing rules: the record names the plan roles and the member's `dropped_roles`, and only a closed batch from its position on discharges it. `release_obligation` does not apply to it.
+
+While a recovery is owed, `kander review progress` lists `recovery-review:<member>` and one `recovery-role:<member>/<role>` for each role still missing. `kander move <id> done` refuses with the same items.
+
+A recovery binds its member. A member in `done/`, or one that moved from `done/` into `archived/`, passed the gate with that recovery discharged and can take no new batch. So `kander review progress` lists neither a recovery nor `append-cycle-batch` for it, and a role a later batch of another member adds to the plan does not block that other member.
 
 ### Member Exclusion
 
 A `kander move` into `archived/` or `trash/` of a plan or task group member writes `exclusions/<task-id>.json` in the same transaction: exclusion ID, plan, task group, source and target state, result, cycle, reason, and decision reference. Only that move writes the record, and neither state has a way back, so an exclusion cannot be forged to escape a review. A move from `done/` into `archived/` writes none. A move from `done/` into `trash/` does, because the card no longer counts as delivered.
 
 - Plan, batch, closure, assignment, interpretation, and legacy-map writes skip the copies of excluded members and of every archived member, and the validators stop comparing those copies. A copy that exists stays as it is.
-- Only an excluded member is exempt from the gate. Its cycle needs no rebind, and completion covers the other members. A member archived after `done/` keeps its facts and has no exemption.
-- A new run names the batch members that remain. A run prepared before the exclusion takes no copy on the excluded member (`skipped_members`) and settles for the others; a same-ID retry keeps the members of that run. A batch with no member left neither closes nor blocks: the chain continues over it, and wrap-up evidence ends at the last batch with a member.
-- An assigned finding of an excluded member blocks aggregation, advance, and closure until it has a `withdrawn` record (see "Status Lifecycle"). A new assignment refuses an excluded member.
+- Only an excluded member is exempt from the gate. Its cycle needs no rebind, and completion covers the other members. A member archived after `done/` keeps its facts and has no exemption; it only stops owing a recovery (see "Recovery With No Plan").
+- A new run names the batch members that remain. A run prepared before the exclusion takes no copy on the excluded member (`skipped_members`) and settles for the others; a same-ID retry keeps the members of that run. A batch with no member left does not close: the chain continues over it, and wrap-up evidence ends at the last batch with a member. It blocks the other members only through the `withdrawn` records it owes.
+- An assigned finding of an excluded member blocks aggregation, advance, and closure until it has a `withdrawn` record (see "Status Lifecycle"). A finding with no record, or whose latest status is `confirmed` or `unverifiable`, is owed; a latest status of `fixed`, `rejected`, `deferred`, `waived`, or `withdrawn` is not. In a batch with no member left, each such finding blocks `kander move <id> done` of the other members until the record is written. The record needs no closure of that batch. A card already in `done/` stays valid when another member leaves later. A new assignment refuses an excluded member, so a finding of such a batch that was never assigned needs no record and blocks nothing.
 - `kander coordinator reconcile` accepts a terminal member only from what the move wrote. A member archived with `RESULT: completed` needs `FINISHED_AT`, the fact of `done/`. A member with a stored execution chain needs an exclusion whose state, result, and cycle match the card. A member with no stored chain keeps the result check alone.
 
 ### Incremental Multi-Batch Planning
@@ -445,7 +450,7 @@ Every successful run of a required role must sit on the conclusion chain (the co
 
 The `kander move <task-id> done` gate checks:
 1. **Plan Sealed**: The task's review plan has `"sealed": true`.
-2. **Batches Closed**: All batches are closed with valid role conclusions, except a batch with no member left. A new closure needs conclusions of the cycle current when it closes, and a closed batch stays valid after a later cycle change. A rebound member whose every earlier batch closed has a later batch. Drop obligations and recovery obligations are discharged.
+2. **Batches Closed**: All batches are closed with valid role conclusions, except a batch with no member left, which owes only its `withdrawn` records. A new closure needs conclusions of the cycle current when it closes, and a closed batch stays valid after a later cycle change. A rebound member whose every earlier batch closed has a later batch. Drop obligations and recovery obligations are discharged.
 3. **No Unresolved Blockers**: All blocking findings are resolved (`fixed` or validly `waived`).
 4. **Git Ancestry**: All pass commits and fix commits are verified ancestors of the final delivery target.
 5. **Artifact Integrity**: Local ledger matches hashes, without missing copies or broken links. Copies of excluded and archived members are not compared.

@@ -37,6 +37,11 @@ type ReviewPlan struct {
 	// DropObligations keeps the review a drop of required batches still owes.
 	// omitempty keeps plans without one byte-identical on re-encode.
 	DropObligations []ReviewDropObligation `json:"drop_obligations,omitempty"`
+	// DroppedRoles maps a member to the roles dropped batches required of it. Unlike
+	// an obligation it stays after a decision or a release: a later reset voids the
+	// review evidence, so it owes these roles again. omitempty keeps plans without
+	// one byte-identical on re-encode.
+	DroppedRoles map[string][]string `json:"dropped_roles,omitempty"`
 	// ResolvedBatches accepts unplanned batches; see ResolveReviewBatch. omitempty
 	// keeps plans without one byte-identical on re-encode.
 	ResolvedBatches []ReviewBatchResolution `json:"resolved_batches,omitempty"`
@@ -122,6 +127,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 		p.Cycles = map[string]string{}
 		p.CycleBatchFrom = nil
 		p.DropObligations = nil
+		p.DroppedRoles = nil
 		p.ResolvedBatches = nil
 		for _, id := range ids {
 			s, err := tx.Snapshot(id)
@@ -167,6 +173,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 			p.Revision = old.Revision
 			p.CycleBatchFrom = old.CycleBatchFrom
 			p.DropObligations = old.DropObligations
+			p.DroppedRoles = old.DroppedRoles
 			p.ResolvedBatches = old.ResolvedBatches
 			if !reflect.DeepEqual(old, p) {
 				return reviewError("immutable review plan conflict")
