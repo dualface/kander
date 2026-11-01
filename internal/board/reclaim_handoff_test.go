@@ -65,7 +65,7 @@ func TestReclaimWritesDispatchlessHandoff(t *testing.T) {
 	}
 	after := transactionSnapshot(t, root, id)
 	if err := WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true}, func(tx *Transaction) error {
-		chain, err := lifecycleHandoffs(tx, after, planCycle(before))
+		chain, err := lifecycleHandoffs(tx, after, planCycle(before), nil)
 		if err != nil {
 			return err
 		}
@@ -207,7 +207,7 @@ func TestLifecycleHandoffsRejectUnprovenDispatchlessRecords(t *testing.T) {
 			}
 			s = transactionSnapshot(t, root, id)
 			if err = WithTransaction(root, LockScope{Tasks: []string{id}, ReadOnly: true}, func(tx *Transaction) error {
-				_, e := lifecycleHandoffs(tx, s, from)
+				_, e := lifecycleHandoffs(tx, s, from, nil)
 				return e
 			}); err == nil {
 				t.Fatal("unproven dispatchless handoff accepted")

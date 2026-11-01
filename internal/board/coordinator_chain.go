@@ -140,12 +140,22 @@ func coordinatorWalkChain(ctx context.Context, tx *Transaction, s Snapshot, old 
 }
 
 // reclaimHandoffs collects the protected records of the reclaims a walk crossed.
-func reclaimHandoffs(tx *Transaction, s Snapshot, w coordinatorWalk) ([]lifecycleHandoff, error) {
+func reclaimHandoffs(tx *Transaction, s Snapshot, l executionLedger, w coordinatorWalk) ([]lifecycleHandoff, error) {
 	at := slices.IndexFunc(w.segment, func(t ExecutionTransition) bool { return t.Kind == TransitionReclaim })
 	if at < 0 {
 		return nil, nil
 	}
-	return lifecycleHandoffs(tx, s, w.segment[at].FromCycle)
+	return lifecycleHandoffs(tx, s, w.segment[at].FromCycle, l.unrecordedReclaims())
+}
+
+// mirrorUnrecorded copies the marked links of a chain into a checkpoint mirror. It
+// reads the whole prefix, so a checkpoint claimed after the reclaim shows it too.
+func mirrorUnrecorded(l executionLedger) []CoordinatorUnrecordedReclaim {
+	var marks []CoordinatorUnrecordedReclaim
+	for _, t := range l.unrecordedReclaims() {
+		marks = append(marks, CoordinatorUnrecordedReclaim{FromCycle: t.FromCycle, ToCycle: t.ToCycle, Record: t.ToRecord})
+	}
+	return marks
 }
 
 // verifyTerminalExit accepts the end of a member only from what the move wrote. A
@@ -205,11 +215,11 @@ func reconcileTerminalMember(ctx context.Context, tx *Transaction, s Snapshot, o
 	if err = verifyTerminalExit(tx, s, l); err != nil {
 		return m, err
 	}
-	handoffs, err := reclaimHandoffs(tx, s, w)
+	handoffs, err := reclaimHandoffs(tx, s, l, w)
 	if err != nil {
 		return m, err
 	}
-	m.Cycle, m.StartAttempt, m.TransitionSeq = planCycle(s), w.attempt, l.end()
+	m.Cycle, m.StartAttempt, m.TransitionSeq, m.UnrecordedReclaims = planCycle(s), w.attempt, l.end(), mirrorUnrecorded(l)
 	if m.Cycle != old.Cycle {
 		m.DeliveryCommit = ""
 	}

@@ -28,17 +28,27 @@ func NewClaimMetadata(text string) (string, error) {
 	return appendLifecycleRecord(text, "LIFECYCLE_DECISION", lifecycleJSON(claimRecord{Kind: "claim", ClaimID: id})), nil
 }
 
-func claimIdentity(text string) string {
+func claimRecords(text string) []claimRecord {
 	body, _ := SectionBody(text, "LIFECYCLE_DECISION")
-	id := ""
+	var records []claimRecord
 	for _, line := range strings.Split(body, "\n") {
 		var r claimRecord
 		if json.Unmarshal([]byte(line), &r) == nil && r.Kind == "claim" {
-			id = r.ClaimID
+			records = append(records, r)
 		}
 	}
-	return id
+	return records
 }
+
+func claimIdentity(text string) string {
+	records := claimRecords(text)
+	if len(records) == 0 {
+		return ""
+	}
+	return records[len(records)-1].ClaimID
+}
+
+func claimLines(text string) int { return len(claimRecords(text)) }
 
 type lifecycleHandoff struct {
 	Kind         string `json:"kind"`
@@ -124,8 +134,9 @@ func verifyDispatchlessHandoff(tx *Transaction, s Snapshot, releases []DispatchR
 
 // lifecycleHandoffs consumes only producer-owned records. Each link must bind a
 // verified release, or prove its old cycle never held a dispatch, and advance
-// both cycle and revision; old owners remain history.
-func lifecycleHandoffs(tx *Transaction, s Snapshot, from string) ([]lifecycleHandoff, error) {
+// both cycle and revision; old owners remain history. unrecorded holds the marked
+// links of the synthesized prefix, the only cycle changes a handoff need not record.
+func lifecycleHandoffs(tx *Transaction, s Snapshot, from string, unrecorded []ExecutionTransition) ([]lifecycleHandoff, error) {
 	if from == planCycle(s) {
 		return nil, nil
 	}
@@ -133,8 +144,15 @@ func lifecycleHandoffs(tx *Transaction, s Snapshot, from string) ([]lifecycleHan
 	if err != nil {
 		return nil, err
 	}
+	crossUnrecorded := func(cycle string) string {
+		at := slices.IndexFunc(unrecorded, func(t ExecutionTransition) bool { return t.FromCycle == cycle })
+		if at < 0 {
+			return cycle
+		}
+		return unrecorded[at].ToCycle
+	}
 	body, _ := SectionBody(s.Text, "LIFECYCLE_DECISION")
-	cycle := from
+	cycle := crossUnrecorded(from)
 	var result []lifecycleHandoff
 	var revision uint64
 	for _, line := range strings.Split(body, "\n") {
@@ -165,7 +183,7 @@ func lifecycleHandoffs(tx *Transaction, s Snapshot, from string) ([]lifecycleHan
 			}
 		}
 		result = append(result, h)
-		cycle, revision = h.NewCycle, h.CardRevision
+		cycle, revision = crossUnrecorded(h.NewCycle), h.CardRevision
 	}
 	if cycle != planCycle(s) {
 		return nil, coordinatorError("execution cycle changed without lifecycle handoff")

@@ -37,11 +37,12 @@ func reconcileCoordinatorMember(ctx context.Context, tx *Transaction, pass *coor
 
 	m.ReleasedDispatches = append([]ArtifactReference(nil), old.ReleasedDispatches...)
 	m.Handoffs = append([]lifecycleHandoff(nil), old.Handoffs...)
-	handoffs, err := reclaimHandoffs(tx, s, walk)
+	handoffs, err := reclaimHandoffs(tx, s, l, walk)
 	if err != nil {
 		return m, err
 	}
 	m.Handoffs = append(m.Handoffs, handoffs...)
+	m.UnrecordedReclaims = mirrorUnrecorded(l)
 	if walk.cycle != old.Cycle && !walk.awaiting && !old.AwaitingStart && old.Cycle != emptyCycle(id) {
 		// A previous cycle's delivery is history, never this executor's delivery.
 		m.DeliveryCommit = ""

@@ -25,7 +25,11 @@ func verifyCoordinatorHandoffs(tx *Transaction, s Snapshot, old CoordinatorMembe
 		}
 	}
 	if len(old.Handoffs) > 0 {
-		chain, err := lifecycleHandoffs(tx, s, old.Handoffs[0].OldCycle)
+		l, err := readExecutionLedger(tx, s)
+		if err != nil {
+			return err
+		}
+		chain, err := lifecycleHandoffs(tx, s, old.Handoffs[0].OldCycle, l.unrecordedReclaims())
 		if err != nil {
 			return err
 		}

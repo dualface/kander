@@ -133,6 +133,8 @@ Coordinator claims and reconciles write the current checkpoint schema. A schema 
 
 A card from before the ledger has no transitions. A reader synthesizes its chain in memory from start attempts, claim lines, and `LIFECYCLE_DECISION` handoffs, and never writes that chain back. The first producer write on such a card continues the sequence after the synthesized links. [Card Transactions](card-transactions.md#6-first-ledger-write-on-a-legacy-card) gives the rules of that write. A stuck schema 1 `pending` attempt opens to a takeover. Old and new binaries cannot share a board: an old binary rejects schema 2 records.
 
+A reclaim of 1.0.0 with no handoff changed the cycle with no record of it. The prefix carries that reclaim as a marked link ([Card Transactions](card-transactions.md#6-first-ledger-write-on-a-legacy-card) gives the conditions). Reconcile passes the cycle change only on a marked link: `lifecycleHandoffs` crosses the marked links of the synthesized prefix and nothing else. A cycle change in a stored link with no handoff, or one that no link reaches, still fails with `execution cycle changed without lifecycle handoff`. The user accepted that the marked change has no decision record. So that it stays visible, every reconcile writes the marked links of the chain to the mirror as `unrecorded_reclaims`, with `from_cycle`, `to_cycle` and `record`. The field is optional in schema 3. A card reclaimed with no attempt and no handoff has no such link: its prefix is one claim link to the card's cycle, so a mirror of an older cycle stays blocked and takes a recovery.
+
 ## Member Isolation
 
 Reconcile judges each member alone, so one failure no longer stops the group. A member that fails keeps its last mirror unchanged and gets `blocked.reason`; the others advance, and the checkpoint is published. A later reconcile judges the member again from that mirror and clears the field when it passes. A stale observation therefore ends with the next correct one, and only a lasting failure needs a recovery.
@@ -227,7 +229,7 @@ release is the only way to clear a binding and a bound card rejects `--owner`, s
 a dispatch always has its own release. The producer and the consumers apply one check
 (`verifyDispatchlessHandoff`): no release names the old cycle, and every completed or accepted
 dispatch before the handoff was followed by a release or has a settlement original. A plain reclaim that an older binary
-already wrote has no handoff and stays rejected; this change does not repair such a checkpoint. A successful launch original remains
+already wrote has no handoff. It passes only as a marked link of a synthesized prefix (see above) and stays rejected everywhere else; this change does not repair such a checkpoint. A successful launch original remains
 unchanged: its original cycle can reach the new cycle only through those verified handoff
 links. The same path supports a manually claimed card without a launch original. Reconciliation
 updates the member cycle, retains the start-attempt identity and handoff history, and clears

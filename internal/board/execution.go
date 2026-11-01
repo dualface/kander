@@ -103,6 +103,9 @@ type ExecutionTransition struct {
 	CardRevision uint64 `json:"card_revision"`
 	DispatchID   string `json:"dispatch_id,omitempty"`
 	Decision     string `json:"decision_reference,omitempty"`
+	// Unrecorded marks a synthesized reclaim that no handoff records. It stays in
+	// memory, so a stored link can never carry it.
+	Unrecorded bool `json:"-"`
 }
 
 // ExecutionTerminal reports a record that no longer owns the card.
@@ -395,6 +398,18 @@ func (l executionLedger) end() uint64 { return uint64(len(l.chain)) }
 // card. A stored takeover always has a stored link.
 func (l executionLedger) legacyTakeover() bool {
 	return l.current != nil && l.current.Kind == ExecutionTakeover && len(l.chain) == l.synthesized
+}
+
+// unrecordedReclaims returns the marked links of the synthesized prefix. A link
+// after the prefix never counts: a stored cycle change needs its handoff.
+func (l executionLedger) unrecordedReclaims() []ExecutionTransition {
+	var links []ExecutionTransition
+	for _, t := range l.chain[:l.synthesized] {
+		if t.Unrecorded {
+			links = append(links, t)
+		}
+	}
+	return links
 }
 
 // supersedes reports that a handoff, an adoption, a reclaim or a recovery ended the record a

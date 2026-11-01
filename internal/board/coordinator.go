@@ -52,6 +52,17 @@ type CoordinatorMember struct {
 	Blocked *CoordinatorBlock `json:"blocked,omitempty"`
 	// Confirmed names the recovery that accepted a finished member as it is.
 	Confirmed *CoordinatorConfirmation `json:"confirmed,omitempty"`
+	// UnrecordedReclaims lists the reclaims of 1.0.0 on the chain of this member.
+	// They changed the cycle with no handoff, so they have no decision record.
+	UnrecordedReclaims []CoordinatorUnrecordedReclaim `json:"unrecorded_reclaims,omitempty"`
+}
+
+// CoordinatorUnrecordedReclaim names one synthesized reclaim link by its cycles and
+// the record it leads to.
+type CoordinatorUnrecordedReclaim struct {
+	FromCycle string `json:"from_cycle"`
+	ToCycle   string `json:"to_cycle"`
+	Record    string `json:"record"`
 }
 
 // CoordinatorBlock says why reconcile did not accept a member.

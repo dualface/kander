@@ -87,6 +87,11 @@ func legacyHandoffs(s Snapshot, stored []ExecutionTransition) []lifecycleHandoff
 // start originals and protected handoffs. The result is never written back.
 // stored holds the transitions on disk: the oldest one fixes where the prefix
 // ends, because the writer that created it read this same prefix.
+//
+// A reclaim of 1.0.0 that no release preceded wrote a new STARTED_AT and claim line,
+// and no handoff. The prefix carries it as a marked reclaim link, because the attempt
+// cannot speak for the cycle of the card. The user accepted that this cycle change
+// has no decision record.
 func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) ([]ExecutionTransition, error) {
 	task := s.Entry.TaskID
 	attempts, err := legacyAttempts(tx, task)
@@ -99,6 +104,10 @@ func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) 
 	add := func(kind, to, toCycle, owner, session string, revision uint64) {
 		chain = append(chain, ExecutionTransition{Schema: transitionSchema, Seq: uint64(len(chain)) + 1, TaskID: task, Kind: kind, FromRecord: record, ToRecord: to, FromCycle: cycle, ToCycle: toCycle, NewOwner: owner, NewSession: session, CardRevision: revision})
 		cycle, record = toCycle, to
+	}
+	unrecorded := func(toCycle, owner, session string, revision uint64) {
+		add(TransitionReclaim, legacyRecordID(task, len(chain)), toCycle, owner, session, revision)
+		chain[len(chain)-1].Unrecorded = true
 	}
 	active := false
 	for _, a := range attempts {
@@ -113,13 +122,17 @@ func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) 
 	// The first stored link froze the card facts these links read: a later change
 	// of the card must not rewrite the history the stored links continue.
 	owner, session, _ := cardExecutionFacts(s)
-	revision := s.Revision
+	revision, end := s.Revision, planCycle(s)
 	if len(stored) > 0 {
-		owner, session, revision = stored[0].OldOwner, stored[0].OldSession, stored[0].CardRevision
+		owner, session, revision, end = stored[0].OldOwner, stored[0].OldSession, stored[0].CardRevision, stored[0].FromCycle
 	}
 	for i, h := range handoffs {
 		if i == 0 && cycle != h.OldCycle {
-			add(TransitionClaim, legacyRecordID(task, len(chain)), h.OldCycle, owner, session, h.CardRevision)
+			if active {
+				unrecorded(h.OldCycle, owner, session, h.CardRevision)
+			} else {
+				add(TransitionClaim, legacyRecordID(task, len(chain)), h.OldCycle, owner, session, h.CardRevision)
+			}
 		}
 		if h.OldCycle != cycle {
 			return nil, coordinatorError("execution cycle changed without lifecycle handoff")
@@ -127,13 +140,18 @@ func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) 
 		add(TransitionReclaim, legacyRecordID(task, len(chain)), h.NewCycle, h.Owner, session, h.CardRevision)
 	}
 	if active || len(handoffs) > 0 {
+		// A second claim line is what the reclaim left. Without one, the cycle changed
+		// some other way, and the card stays off its chain.
+		if end != cycle && claimLines(s.Text) > 1 {
+			unrecorded(end, owner, session, revision)
+		}
 		return chain, nil
 	}
 	// A manual claim left no record but the claim line. It sits between the last
 	// rollback and the first stored transition, or at the end of a started card.
-	end, started := planCycle(s), MetadataFrom(s.Text, FieldStartedAt) != "" || s.Entry.State == "working" || s.Entry.State == "review"
+	started := MetadataFrom(s.Text, FieldStartedAt) != "" || s.Entry.State == "working" || s.Entry.State == "review"
 	if len(stored) > 0 {
-		end, started = stored[0].FromCycle, stored[0].FromRecord != record
+		started = stored[0].FromRecord != record
 	}
 	if started {
 		add(TransitionClaim, legacyRecordID(task, len(chain)), end, owner, session, revision)
