@@ -419,10 +419,10 @@ func modelReviewOps() []modelOp {
 			}},
 		{name: "R.dropBatch", cli: "kander review extend-plan: drop_batches on an N/A batch", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return droppable(f, false) },
-			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.dropLast(f.review) }},
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.dropLast(f) }},
 		{name: "R.dropRequired", cli: "kander review extend-plan: drop_batches on a required batch, with no decision", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return droppable(f, true) },
-			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.dropLast(f.review) }},
+			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.dropLast(f) }},
 		{name: "R.cycleBatch", cli: "kander review extend-plan: append a batch for a rebound cycle", shared: true,
 			guard: func(f *modelFacts, _ int) bool { return f.review.batchOwed() },
 			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error { return w.appendCycleBatch(f.review) }},
@@ -459,14 +459,29 @@ func modelReviewOps() []modelOp {
 	}
 }
 
-// dropLast removes the last batch of the plan.
-func (w *modelWorld) dropLast(review modelReviewFacts) error {
-	last := review.batches[len(review.batches)-1]
+// dropLast removes the last batch of the plan. A required batch leaves a debt on the
+// members still running, and marks every member it named for a later reset.
+func (w *modelWorld) dropLast(f *modelFacts) error {
+	last := f.review.batches[len(f.review.batches)-1]
 	p, err := ReadReviewPlan(w.root, last.plan)
 	if err != nil {
 		return modelInfra(err)
 	}
-	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{last.id}, Author: "coordinator", Basis: "model"})
+	if err = ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, DropBatches: []string{last.id}, Author: "coordinator", Basis: "model"}); err != nil {
+		return err
+	}
+	w.drops++
+	kept := modelBatchIDs(p.Batches[:len(p.Batches)-1])
+	for i, m := range w.members {
+		if len(last.required) == 0 || !containsID(last.members, m.id) {
+			continue
+		}
+		m.dropped = true
+		if state := f.cards[i].Entry.State; (state == "working" || state == "review") && !f.excluded[i] {
+			m.debts = append(m.debts, modelDebt{"dropped-review:" + m.id + "/PMQA", kept})
+		}
+	}
+	return nil
 }
 
 func (r modelReviewFacts) batchOwed() bool {
@@ -486,7 +501,8 @@ func (w *modelWorld) appendCycleBatch(review modelReviewFacts) error {
 		requirements = modelRequired()
 	}
 	ids := slices.Compact(slices.Sorted(slices.Values(slices.Concat(review.cycleOwed, review.reviewOwed, review.dropOwed))))
-	batch := modelPlanBatch(fmt.Sprintf("model-cycle-%d", len(review.batches)), last.id, ids, last.target, w.nextCommit(), requirements)
+	// A dropped ID stays used, so the drops of a path are part of the next ID.
+	batch := modelPlanBatch(fmt.Sprintf("model-cycle-%d-%d", len(review.batches), w.drops), last.id, ids, last.target, w.nextCommit(), requirements)
 	return ExtendReviewPlan(w.root, ReviewPlanExtension{PlanID: p.PlanID, ExpectedRevision: p.Revision, Batch: &batch, Author: "coordinator", Basis: "model cycle batch"})
 }
 

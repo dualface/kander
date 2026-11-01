@@ -161,6 +161,10 @@ func (s *modelSearch) expand(n *modelNode, tailOnly bool) (x modelExpansion) {
 					x.err = fmt.Errorf("%s: %w", name, err)
 					return x
 				}
+				var broken modelViolation
+				if errors.As(err, &broken) {
+					x.violations = append(x.violations, fmt.Sprintf("%s: %v", name, err))
+				}
 				continue
 			}
 			f, err := c.read()

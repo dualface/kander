@@ -31,6 +31,13 @@ func modelInfra(err error) error {
 	return modelInfraError{err}
 }
 
+// modelViolation marks a refusal that breaks what the model asserts: the search
+// reports it like a broken invariant.
+type modelViolation struct{ err error }
+
+func (e modelViolation) Error() string { return e.err.Error() }
+func (e modelViolation) Unwrap() error { return e.err }
+
 type modelCursor struct {
 	state    string
 	revision uint64
@@ -49,6 +56,17 @@ type modelMember struct {
 	unproven bool   // the liveness probe cannot confirm the executor (unknown)
 	self     bool   // the current session owns the card (manual claim)
 	stranded string // why a launcher ended without finishing its start attempt
+	debts    []modelDebt
+	dropped  bool // a dropped batch required a role of this card
+}
+
+// modelDebt is a review the operation history says a card owes. The model writes it
+// where the operation runs and reads no gate, record or board verdict for it, so it
+// still names the debt when a change stops the board from asking. Only a batch the
+// plan did not hold at that moment can pay it.
+type modelDebt struct {
+	item   string   // the pending item the done gate must name
+	before []string // the batches of the plan when the debt arose
 }
 
 // modelWorld is one concrete state: a private copy of a board plus the facts
@@ -60,6 +78,7 @@ type modelWorld struct {
 	members []*modelMember
 	plans   []string
 	stray   string // the run an old binary left outside the plan
+	drops   int    // batches this path dropped
 	seq     int
 	trace   []string
 }
@@ -77,6 +96,7 @@ func (w *modelWorld) clone(root string) (*modelWorld, error) {
 			cursor := *m.launcher
 			copied.launcher = &cursor
 		}
+		copied.debts = slices.Clone(m.debts)
 		c.members[i] = &copied
 	}
 	c.plans = slices.Clone(w.plans)
@@ -212,6 +232,32 @@ type modelReviewFacts struct {
 	recoveries int      // recovery records of members reset with no plan
 	foreign    []string // runs of a plan member outside every batch of that plan
 	resolved   int      // unplanned batches a plan accepted
+}
+
+// owed lists the debts of a member that no closed batch paid. The cycle of a
+// conclusion stays out: a later reclaim can only leave more owed than this says.
+func (f *modelFacts) owed(i int) []string {
+	m := f.world.members[i]
+	var owed []string
+	for _, d := range m.debts {
+		paid := slices.ContainsFunc(f.review.batches, func(b modelBatchFacts) bool {
+			return b.closed && len(b.required) > 0 && containsID(b.members, m.id) && !slices.Contains(d.before, b.id)
+		})
+		if !paid && !slices.Contains(owed, d.item) {
+			owed = append(owed, d.item)
+		}
+	}
+	return owed
+}
+
+// debtKey holds what decides a later payment and what a later reset reads.
+func (f *modelFacts) debtKey(i int) string {
+	m := f.world.members[i]
+	parts := []string{fmt.Sprintf("dropped=%v unpaid=%d", m.dropped, len(f.owed(i)))}
+	for _, d := range m.debts {
+		parts = append(parts, fmt.Sprintf("%s@%d", strings.SplitN(d.item, ":", 2)[0], len(d.before)))
+	}
+	return strings.Join(parts, " ")
 }
 
 func (r modelRunFacts) recorded(finding, task string) bool {
@@ -503,10 +549,10 @@ func (f *modelFacts) memberKey(i int) string {
 		mirror = fmt.Sprintf("match=%v awaiting=%v dispatch=%s delivery=%v handoffs=%d blocked=%v confirmed=%v", c.Cycle == planCycle(s), c.AwaitingStart, modelMirrorDispatch(c, f.bound[i], releases), c.DeliveryCommit != "", len(c.Handoffs), c.Blocked != nil, c.Confirmed != nil)
 	}
 	settled := slices.ContainsFunc(f.rounds[i], func(d Dispatch) bool { return d.Settlement != nil })
-	return fmt.Sprintf("col=%s excluded=%v attempt=%s stored=%v evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s",
+	return fmt.Sprintf("col=%s excluded=%v attempt=%s stored=%v evidence=%v owner=%s session=%q launcher=%v executor=%v unproven=%v self=%v stranded=%s bound=%s releases=%v settled=%v handoffs=%d mirror[%s] group=%s debts[%s]",
 		s.Entry.State, f.excluded[i], attempt, f.ledgers[i].synthesized < len(f.ledgers[i].chain), f.evidence(i), MetadataFrom(s.Text, FieldOwner), MetadataFrom(s.Text, FieldSession),
 		m.launcher != nil, m.executor, m.executor && m.unproven, m.self, m.stranded, bound, len(releases) > 0, settled,
-		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)))
+		strings.Count(modelSection(s.Text, "LIFECYCLE_DECISION"), `"kind":"reclaim"`), mirror, modelGroupClass(TaskGroupFrom(s.Text)), f.debtKey(i))
 }
 
 // modelMirrorDispatch relates the dispatch of a checkpoint mirror to the card. A

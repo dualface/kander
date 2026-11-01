@@ -24,6 +24,7 @@ var modelInvariants = []modelInvariant{
 	{id: "I8", check: modelCheckI8, definition: "A member that ends in archived or trash gets a member exclusion record in the same transaction, and later plan writes skip its copy. An excluded member's assigned findings may wait for withdrawal, but they need a withdrawn disposition before aggregation and closure. A done member is not excluded, and archiving it later does not exclude it, but plan writes skip the copies of every archived member."},
 	{id: "I9", check: modelCheckI9, definition: "Each checkpoint mirror has a chain of execution transition and dispatch records to the member's current state. A recovery that moved a mirror has an immutable record: a reset names the recover transition on the chain, and a confirmation names the cycle of the card."},
 	{id: "I10", check: modelCheckI10, definition: "When a card enters done, each batch of its plan that names it is closed, each drop obligation on it is discharged by a later closed batch that requires the role, and its recovery obligation is discharged by actual reviews or, for a member reset with no plan under an all N/A plan, by a recorded decision."},
+	{id: "I11", check: modelCheckI11, definition: "When a card enters done, it has no debt in the operation history: each reset and each dropped required batch has a later closed batch that names the card and requires a role. F.doneOwing tries the move while a debt is open, and a refusal of the review gate must name that debt."},
 }
 
 // modelCheckEach runs check for every member, and hands it the same member of the
@@ -273,6 +274,20 @@ func modelCheckI10(before, after *modelFacts) error {
 			return nil
 		}
 		return modelReviewPaid(after.world, m.card)
+	})
+}
+
+// modelCheckI11 reads only the history, so it still fails when a change stops writing
+// the record the gate and I10 read.
+func modelCheckI11(before, after *modelFacts) error {
+	if before == nil {
+		return nil
+	}
+	return modelCheckEach(before, after, func(i int, old *modelMemberFacts, m modelMemberFacts) error {
+		if owed := after.owed(i); old.card.Entry.State != "done" && m.card.Entry.State == "done" && len(owed) > 0 {
+			return fmt.Errorf("entered done owing %v", owed)
+		}
+		return nil
 	})
 }
 

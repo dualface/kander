@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ const (
 	modelExecutor = "codex"
 	modelTaker    = "claude"
 	modelTailOp   = "F.done"
+	modelOwingOp  = "F.doneOwing"
 )
 
 // modelOp is one supported command or launcher step. cli names the command a
@@ -323,6 +325,11 @@ func modelLifecycleOps() []modelOp {
 				return !modelTerminal(f.cards[i].Entry.State) || f.blocked(i)
 			},
 			apply: func(w *modelWorld, m *modelMember, _ *modelFacts) error { return w.finishMember(m) }},
+		{name: modelOwingOp, cli: "kander move <id> done --result completed, while the card owes a review",
+			guard: func(f *modelFacts, i int) bool {
+				return f.cards[i].Entry.State == "working" && f.bound[i] == nil && len(f.owed(i)) > 0 && f.review.planned() && f.world.stray == ""
+			},
+			apply: func(w *modelWorld, m *modelMember, f *modelFacts) error { return w.doneOwing(m, f.owed(f.index(m))) }},
 		{name: "U.oldStrayRun", cli: "an old binary: kander review with a batch outside the plan", seedOnly: true, shared: true,
 			guard: func(f *modelFacts, _ int) bool { _, closed := f.review.firstClosed(); return closed },
 			apply: func(w *modelWorld, _ *modelMember, f *modelFacts) error {
@@ -734,8 +741,83 @@ func (w *modelWorld) recoverMember(m *modelMember) error {
 	}
 	if !modelTerminal(s.Entry.State) {
 		m.launcher, m.executor, m.unproven, m.self, m.stranded = nil, false, false, false, ""
+		return w.oweRecovery(m)
 	}
 	return nil
+}
+
+// planOf reads the plan of a member from the plans the model created.
+func (w *modelWorld) planOf(id string) (ReviewPlan, bool, error) {
+	for _, name := range w.plans {
+		p, err := ReadReviewPlan(w.root, name)
+		if err != nil {
+			continue // removed by archive cleanup
+		}
+		if containsID(p.TaskIDs, id) {
+			return p, true, nil
+		}
+	}
+	return ReviewPlan{}, false, nil
+}
+
+func modelBatchIDs(batches []ReviewPlanBatch) []string {
+	ids := make([]string, 0, len(batches))
+	for _, b := range batches {
+		ids = append(ids, b.BatchID)
+	}
+	return ids
+}
+
+// oweRecovery is the debt of a reset. A member with no plan owes it under any plan
+// that follows. A member with a plan owes it when that plan required a role, now or
+// in a dropped batch of this member, and a later reset moves an earlier debt on.
+func (w *modelWorld) oweRecovery(m *modelMember) error {
+	p, planned, err := w.planOf(m.id)
+	if err != nil {
+		return err
+	}
+	item := "recovery-review:" + m.id
+	required := slices.ContainsFunc(p.Batches, func(b ReviewPlanBatch) bool {
+		return slices.Contains(slices.Collect(maps.Values(b.Requirements)), "required")
+	})
+	earlier := slices.ContainsFunc(m.debts, func(d modelDebt) bool { return d.item == item })
+	if planned && !required && !m.dropped && !earlier {
+		return nil
+	}
+	m.debts = append(slices.DeleteFunc(m.debts, func(d modelDebt) bool { return d.item == item }), modelDebt{item, modelBatchIDs(p.Batches)})
+	return nil
+}
+
+// doneOwing tries to complete a card the history says owes a review. Everything
+// else the gate reads may be open as well, so a refusal counts only when it names
+// the debt: a gate that stopped asking refuses for another reason, or passes and
+// fails I11. A rebind comes first, because the gate lists nothing before it.
+func (w *modelWorld) doneOwing(m *modelMember, owed []string) error {
+	p, err := ReviewTaskProgress(w.root, m.id)
+	if err != nil {
+		return err
+	}
+	if len(p.RebindCycles) > 0 {
+		if err = w.rebind(m); err != nil {
+			return err
+		}
+	}
+	if err = w.writeSummary(m); err != nil {
+		return err
+	}
+	s, err := w.snapshot(m)
+	if err != nil {
+		return err
+	}
+	if _, err = MoveWithOptions(s.Entry, w.root, "done", MoveOptions{Result: "completed"}); err == nil || !strings.Contains(err.Error(), "unclosed review batches") {
+		return err
+	}
+	for _, item := range owed {
+		if !strings.Contains(err.Error(), item) {
+			return modelViolation{fmt.Errorf("the gate does not name %s: %w", item, err)}
+		}
+	}
+	return err
 }
 
 // oldReclaim writes what a reclaim of an old binary left: a new claim and a new

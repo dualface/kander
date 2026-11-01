@@ -44,7 +44,7 @@ func TestModelRegistriesAreComplete(t *testing.T) {
 			t.Errorf("%s: every invariant is enabled, so each needs a check", inv.id)
 		}
 	}
-	if !slices.Equal(ids, []string{"I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9", "I10"}) {
+	if !slices.Equal(ids, []string{"I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9", "I10", "I11"}) {
 		t.Errorf("invariant table %v", ids)
 	}
 }
@@ -218,6 +218,80 @@ func TestModelInvariantI7RejectsAdvanceOverOpenFinding(t *testing.T) {
 	before.review.batches[0].runs[0] = run
 	if err := modelCheckI7(before, after); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The history owes what the operations left, and only a later closed batch pays it.
+func TestModelDebtFollowsTheOperations(t *testing.T) {
+	modelFastTemp(t)
+	start := modelInitial(t, false, 1)
+	s := &modelSearch{ops: modelOps(), index: map[string]int{}, scratch: t.TempDir()}
+	item := "dropped-review:" + start.members[0].id + "/PMQA"
+	owed := func(w *modelWorld) []string {
+		t.Helper()
+		f, err := w.read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f.owed(0)
+	}
+	w := modelWalk(t, s, start, "H.claim", "R.planChainedRequired", "R.close", "R.dropRequired")
+	if got := owed(w); !slices.Equal(got, []string{item}) {
+		t.Fatalf("after a drop: %v", got)
+	}
+	modelRefuses(t, s, w, modelOwingOp)
+	if got := owed(modelWalk(t, s, w, "R.cycleBatch", "R.runClean", "R.assign", "R.close")); len(got) != 0 {
+		t.Fatalf("a closed required batch left %v", got)
+	}
+}
+
+func TestModelResetOwesOnlyWhatThePlanRequired(t *testing.T) {
+	modelFastTemp(t)
+	start := modelInitial(t, true, 2)
+	s := &modelSearch{ops: modelOps(), index: map[string]int{}, scratch: t.TempDir()}
+	claimed := []string{"A:H.claim", "B:H.claim", "C.reconcile"}
+	reset := []string{"A:X.review", "B:X.review", "C.reconcile", "A:U.oldReclaim", "C.reconcile", "A:H.recover", "C.reconcile"}
+	for name, tc := range map[string]struct {
+		steps []string
+		owes  bool
+	}{
+		"an all N/A plan":              {slices.Concat(claimed, []string{"R.planNA", "R.close"}, reset), false},
+		"a required batch":             {slices.Concat(claimed, []string{"R.planRequired", "R.runClean", "A:R.assign", "R.close"}, reset), true},
+		"a dropped batch left no role": {slices.Concat(claimed, []string{"R.planChainedRequired", "R.close", "R.dropRequired"}, reset), true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, err := modelWalk(t, s, start, tc.steps...).read()
+			if err != nil {
+				t.Fatal(err)
+			}
+			item := "recovery-review:" + start.members[0].id
+			if got := slices.Contains(f.owed(0), item); got != tc.owes {
+				t.Fatalf("owed %v, want %v", f.owed(0), tc.owes)
+			}
+		})
+	}
+}
+
+// A refusal that names another obligation and a pass that owes both fail the model,
+// which is how a change that stops the gate from asking shows.
+func TestModelDoneOwingFailsAGateThatStoppedAsking(t *testing.T) {
+	modelFastTemp(t)
+	start := modelInitial(t, false, 1)
+	s := &modelSearch{ops: modelOps(), index: map[string]int{}, scratch: t.TempDir()}
+	w := modelWalk(t, s, start, "H.claim", "R.planChainedRequired", "R.close", "R.dropRequired")
+	var broken modelViolation
+	if err := w.doneOwing(w.members[0], []string{"recovery-review:other"}); !errors.As(err, &broken) {
+		t.Fatalf("a refusal without the debt passed: %v", err)
+	}
+	before, err := w.read()
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := *before
+	after.cards = slices.Clone(before.cards)
+	after.cards[0].Entry.State = "done"
+	if modelCheckI11(before, &after) == nil {
+		t.Fatal("a card entered done owing a review")
 	}
 }
 
