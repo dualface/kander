@@ -36,6 +36,10 @@ func locateOldExecutor(entry board.Entry, text, oldWindow string, oldSession Age
 		}
 	case liveness.Unknown:
 		target.failure = strings.Join(strings.Fields(report.Detail), " ")
+		// The search saw an executor it cannot prove, so that pane is the one kept.
+		if report.Evidence != nil && report.Evidence.Window != "" {
+			target.window = report.Evidence.Window
+		}
 	}
 	return target
 }

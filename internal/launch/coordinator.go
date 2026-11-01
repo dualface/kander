@@ -149,6 +149,10 @@ func RecoverCoordinator(ctx context.Context, root string, r board.CoordinatorRec
 			return board.CoordinatorCheckpoint{}, err
 		}
 		if exists && record.Status == board.ExecutionPending {
+			// A takeover needs an unbound card, so a binding comes first in the way out.
+			if id := board.MetadataFrom(s.Text, "DISPATCH_ID"); id != "" {
+				return board.CoordinatorCheckpoint{}, launchError("launch.recover_start_pending_bound", s.Entry.TaskID, id)
+			}
 			return board.CoordinatorCheckpoint{}, launchError("board.recover_start_pending", s.Entry.TaskID)
 		}
 		if err = recoverRefusal(s, recoverLivenessFn(ctx, s)); err != nil {

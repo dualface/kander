@@ -145,3 +145,28 @@ func TestTakeoverDoesNotReportCleanedWhenTheSearchFails(t *testing.T) {
 		t.Fatalf("out=%s", out)
 	}
 }
+
+// The search found the executor at a new address and could not prove it. Nothing
+// exits it, and the report names that pane, not the WINDOW it left.
+func TestTakeoverReportsTheUnprovenPaneItKeeps(t *testing.T) {
+	root, task := driftedWorkingCard(t, "takeover-unproven")
+	s, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = executionFixture(root, s.Entry, "pi", "pi wanted", "herdr:w1:t1:w1:p1"); err != nil {
+		t.Fatal(err)
+	}
+	writeRecoverHerdr(t, root)
+	t.Setenv("KANBAN_RECORDED_PANE", "")
+	t.Setenv("KANBAN_FOUND_PANE", herdrPane("w9:p9", "w9:t9", "strange", `{"value":"wanted"}`))
+	t.Setenv("KANBAN_HERDR_LIST_JSON", herdrFoundList)
+	calls := recordCleanup(t)
+	out := takeOver(t, root, task, "claude")
+	if len(*calls) != 0 {
+		t.Fatalf("calls=%+v", *calls)
+	}
+	if strings.Contains(out, "已清理原容器") || !strings.Contains(out, "原容器保留: herdr:w9:t9:w9:p9") {
+		t.Fatalf("out=%s", out)
+	}
+}

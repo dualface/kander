@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -176,6 +177,12 @@ func herdrRecoverRequest(t *testing.T) (string, string, board.CoordinatorRecover
 	root, task, request := blockedRecoverRequest(t, func(string) string { return "" })
 	setCardField(t, root, task, "SESSION", "pi wanted")
 	setCardField(t, root, task, "WINDOW", "herdr:w1:t1:w1:p1")
+	writeRecoverHerdr(t, root)
+	return root, task, request
+}
+
+func writeRecoverHerdr(t *testing.T, root string) {
+	t.Helper()
 	script := `#!/bin/sh
 if [ "$2" = "list" ]; then
   printf '%s\n' "$KANBAN_HERDR_LIST_JSON"
@@ -194,20 +201,21 @@ printf '{"result":{"pane":%s}}\n' "$KANBAN_FOUND_PANE"
 	if err := os.WriteFile(filepath.Join(root, "fake-bin", "herdr"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return root, task, request
 }
 
 func herdrPane(pane, tab, status, session string) string {
 	return `{"pane_id":"` + pane + `","tab_id":"` + tab + `","agent":"pi","agent_status":"` + status + `","agent_session":` + session + `}`
 }
 
+// herdrFoundList is the pane list of an executor that moved to w9:p9.
+const herdrFoundList = `{"result":{"panes":[{"pane_id":"w9:p9","tab_id":"w9:t9","agent":"pi","agent_status":"idle","agent_session":{"value":"wanted"}}]}}`
+
 func TestRecoverRefusesAHerdrPaneItCouldNotProve(t *testing.T) {
 	const (
-		id        = `{"value":"wanted"}`
-		unknown   = `{"kind":"path","value":"/no/such/session"}`
-		recorded  = "herdr:w1:t1:w1:p1"
-		moved     = "herdr:w9:t9:w9:p9"
-		foundList = `{"result":{"panes":[` + `{"pane_id":"w9:p9","tab_id":"w9:t9","agent":"pi","agent_status":"idle","agent_session":{"value":"wanted"}}` + `]}}`
+		id       = `{"value":"wanted"}`
+		unknown  = `{"kind":"path","value":"/no/such/session"}`
+		recorded = "herdr:w1:t1:w1:p1"
+		moved    = "herdr:w9:t9:w9:p9"
 	)
 	for name, tc := range map[string]struct{ recorded, found, want string }{
 		"recorded identity uncertain": {recorded: herdrPane("w1:p1", "w1:t1", "idle", unknown), want: recorded},
@@ -219,7 +227,7 @@ func TestRecoverRefusesAHerdrPaneItCouldNotProve(t *testing.T) {
 			root, task, request := herdrRecoverRequest(t)
 			t.Setenv("KANBAN_RECORDED_PANE", tc.recorded)
 			t.Setenv("KANBAN_FOUND_PANE", tc.found)
-			t.Setenv("KANBAN_HERDR_LIST_JSON", foundList)
+			t.Setenv("KANBAN_HERDR_LIST_JSON", herdrFoundList)
 			requireRefused(t, root, task, request, liveness.Unknown, tc.want, "kander coordinator recover")
 		})
 	}
@@ -270,6 +278,39 @@ func TestRecoverRefusesAPendingStartAndNamesItsWaysOut(t *testing.T) {
 	takeoverFixture(t, root, task)
 	requireRefused(t, root, task, request, "--adopt --decision", "--agent <agent> --decision")
 	requireRecord(t, root, task, board.ExecutionPending)
+}
+
+// A takeover refuses a binding, so the error must end it first for its last step to work.
+func TestRecoverOfABoundPendingStartNamesAWayOutThatWorks(t *testing.T) {
+	root, task, in, c := launchCoordinatorFixture(t)
+	d, err := PrepareBoundDispatch(root, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := board.CoordinatorReconcile{GroupID: c.GroupID, ExpectedRevision: c.Revision, Authority: c.Authority, Members: map[string]board.CoordinatorObservation{task: {Revision: s.Revision, DispatchID: "stale-round", Epoch: 1}}}
+	blocked, _ := ReconcileCoordinator(context.Background(), root, r)
+	if blocked.Members[task].Blocked == nil {
+		t.Fatal("no block")
+	}
+	takeoverFixture(t, root, task)
+	request := board.CoordinatorRecover{GroupID: blocked.GroupID, Member: task, ExpectedRevision: blocked.Revision, ExpectedEpoch: blocked.Authority.Epoch, Decision: "user-decision", Reason: "reset"}
+	requireRefused(t, root, task, request, "--adopt --decision", "dispatch fail", d.Input.ID, "--agent <agent> --decision")
+	code := 0
+	_, errOut, _ := capture(t, func() error {
+		code = RunDispatch([]string{"cancel", task, d.Input.ID, strconv.FormatUint(d.Revision, 10), "starter gone", "--decision", "user"})
+		return nil
+	})
+	if code != 0 {
+		t.Fatalf("code=%d %s", code, errOut)
+	}
+	if code, errOut := resumeReview(t, "--agent", "claude", "--decision", "user", "--launcher", "tmux", "--message", "take over", task); code != 0 {
+		t.Fatalf("code=%d %s", code, errOut)
+	}
+	requireRecord(t, root, task, board.ExecutionRunning)
 }
 
 // unresolved keeps its way through the probe: its starter has ended.
