@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 — 2026-11-01
 
 - Fix (tmux, #26): an agent started through `tmux` or `tmux-session` now runs in the startup directory whatever the tmux server's own directory is. The pane enters the directory before `exec`.
 - Fix (start, #26): a container launcher now refuses a startup directory that is missing, is not a directory, or has a line break in its path, before it creates a container. tmux used to exit 0 and open the pane in `$HOME`. `foreground` and `console` are unchanged.
