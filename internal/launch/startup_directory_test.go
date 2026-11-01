@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -203,6 +204,9 @@ func TestWatchPaneEntryStaysWithinOneBudget(t *testing.T) {
 // An unconfirmed pane may hold a running agent: a durable dispatch keeps it and
 // stays unknown, and any other launch closes it like a failed start.
 func TestUnconfirmedPaneKeepsADurableDelivery(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX terminal fakes")
+	}
 	resetLang(t)
 	root, _, bin := setupBoard(t)
 	shortPaneEntryTimeout(t, 200*time.Millisecond)

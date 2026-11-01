@@ -38,7 +38,13 @@ func startRealTmux(t *testing.T, serverDir string, env ...string) *realTmux {
 	if err != nil {
 		t.Skip("tmux is not installed; real tmux regression not run")
 	}
-	root := t.TempDir()
+	// A test temp directory embeds the test name, and a socket path has a limit
+	// of about 100 bytes, which a long TMPDIR would pass.
+	root, err := os.MkdirTemp("", "ktmux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	server := &realTmux{t: t, binary: binary, socket: filepath.Join(root, "socket"), wrapper: filepath.Join(root, "tmux"), session: realTmuxSession}
 	t.Setenv("HOME", root)
 	t.Setenv("SHELL", "/bin/sh")
