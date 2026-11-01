@@ -173,6 +173,7 @@ type CleanupResult struct {
 }
 
 // CleanupTakeover is assigned by the dismiss package once it exposes its API; while unset, start/resume report N/A.
+// oldWindow is the address locateOldExecutor found, not always the recorded WINDOW.
 var CleanupTakeover func(oldWindow string, oldSession AgentSession, newWindow string, timeout float64) CleanupResult
 
 var (

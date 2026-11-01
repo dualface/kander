@@ -22,6 +22,8 @@ type DispatchOptions struct {
 	// Decision is the user decision of a takeover. It never opts into the
 	// durable protocol.
 	Decision string
+	// Takeover marks a resume --agent. Like Decision, it opts into nothing.
+	Takeover bool
 }
 
 // PrepareAction resolves defaults once; a retry compares the original payload
@@ -30,7 +32,13 @@ func PrepareAction(root string, s board.Snapshot, message string, o DispatchOpti
 	active := o.EvidenceFile != "" || o.ID != "" || o.Kind != "" || o.Base != ""
 	if !active {
 		if s.Entry.State == "review" && (board.TaskGroupFrom(s.Text) != "" || board.MetadataFrom(s.Text, "DISPATCH_ID") != "") {
-			return board.Dispatch{}, false, launchError("launch.review_dispatch_required", s.Entry.TaskID)
+			ends, err := takeoverEndsStart(root, s, o)
+			if err != nil {
+				return board.Dispatch{}, false, err
+			}
+			if !ends {
+				return board.Dispatch{}, false, launchError("launch.review_dispatch_required", s.Entry.TaskID)
+			}
 		}
 		return board.Dispatch{}, false, nil
 	}
@@ -88,6 +96,17 @@ func PrepareAction(root string, s board.Snapshot, message string, o DispatchOpti
 	in.ConfirmBy = in.CreatedAt.Add(time.Duration(timeout * float64(time.Second)))
 	d, err := PrepareBoundDispatch(root, in)
 	return d, true, err
+}
+
+// takeoverEndsStart reports the one review card that takes no dispatch: an unbound
+// member whose start never ended, where a takeover is the way out left once the
+// starter and the executor are gone. A running record keeps the dispatch rule.
+func takeoverEndsStart(root string, s board.Snapshot, o DispatchOptions) (bool, error) {
+	if !o.Takeover || board.MetadataFrom(s.Text, "DISPATCH_ID") != "" {
+		return false, nil
+	}
+	record, exists, err := board.CurrentExecution(root, s.Entry.TaskID)
+	return exists && record.StartUnfinished(), err
 }
 
 // DispatchInstruction names the only business acknowledgement and completion
@@ -148,6 +167,7 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if len(options) > 0 {
 		o = options[0]
 	}
+	o.Takeover = agent != nil
 	if agent == nil {
 		err = RequireResumable(root, s.Entry)
 	} else {

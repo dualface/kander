@@ -689,12 +689,12 @@ func (w *modelWorld) writeSummary(m *modelMember) error {
 }
 
 // modelRecoverable reports a blocked member a reset can take: the liveness probe
-// refuses a confirmed executor, and a reset refuses a binding. A finished member has
-// neither.
+// refuses a confirmed executor, and a reset refuses a binding and a start that has
+// not ended. A finished member has none of them.
 func modelRecoverable(f *modelFacts, i int) bool {
 	state := f.cards[i].Entry.State
 	live := state == "working" || state == "review"
-	return f.blocked(i) && (!live || f.bound[i] == nil && !f.world.members[i].adoptable())
+	return f.blocked(i) && (!live || f.bound[i] == nil && f.attempts[i].Status != ExecutionPending && !f.world.members[i].adoptable())
 }
 
 // unblock ends the block of a member. Most blocks end with the next reconcile.
@@ -719,6 +719,11 @@ func (w *modelWorld) unblock(m *modelMember) error {
 			err = EndDispatch(w.root, m.id, d.Input.ID, d.Revision, DispatchCancelled, "model", "model-decision")
 		}
 		if err != nil {
+			return err
+		}
+	}
+	if !modelTerminal(f.cards[i].Entry.State) && f.attempts[i].Status == ExecutionPending {
+		if err = modelTakeover(w, m); err != nil {
 			return err
 		}
 	}

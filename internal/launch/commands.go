@@ -290,7 +290,9 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 	if plan.capabilities().Container {
 		loc = recordWindowLocation(root, plan, moved, choice)
 	}
+	var target takeoverTarget
 	if takeover {
+		target = locateOldExecutor(entry, text, oldWindow, oldSession)
 		window := ""
 		if !plan.capabilities().Container {
 			window = plan.Launcher
@@ -363,8 +365,11 @@ func commandResumeLegacy(root string, agent *string, launcherOverride, taskID, m
 			} else {
 				cleanup = CleanupResult{Cleaned: false, OldWindow: orNA(oldWindow), Detail: strings.Join(strings.Fields(err.Error()), " ")}
 			}
+			if target.failure != "" {
+				cleanup = CleanupResult{Cleaned: false, OldWindow: orNA(target.window), Detail: target.failure}
+			}
 			if cleanup.Detail == "" {
-				cleanup = CleanupTakeover(oldWindow, oldSession, newWindow, timeout)
+				cleanup = CleanupTakeover(target.window, target.session, newWindow, timeout)
 			}
 		}
 		if cleanup.Cleaned {

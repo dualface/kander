@@ -1,6 +1,8 @@
 package launch
 
 import (
+	"context"
+
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/window"
@@ -62,7 +64,7 @@ func ResolvedSession(taskID, text string) (AgentSession, error) {
 
 // ResolvedSessionIdentity resolves terminal identity independently of resume support.
 func ResolvedSessionIdentity(taskID, text string) (AgentSession, error) {
-	return resolveTaskIdentity(taskID, text, false)
+	return resolveTaskIdentity(context.Background(), taskID, text, false)
 }
 
 // NotifyViaResume resumes the original session, or starts fresh for session.mode=none.

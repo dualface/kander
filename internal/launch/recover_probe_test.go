@@ -92,36 +92,40 @@ func TestRecoverRefusesAnExecutorThatDrifted(t *testing.T) {
 	}
 }
 
-func TestRecoverResetsWhenTheLookupFindsNoExecutor(t *testing.T) {
-	for name, rows := range map[string]func(string) string{
-		"stopped": func(string) string { return paneRow("%9", "another-session") },
-		"unknown": func(reference string) string { return paneRow("%8", reference) + "\n" + paneRow("%9", reference) },
-	} {
-		t.Run(name, func(t *testing.T) {
-			root, _, request := blockedRecoverRequest(t, rows)
-			if code, errOut := runRecover(t, request); code != 0 {
-				t.Fatalf("code=%d %s", code, errOut)
-			}
-			c, err := board.ReadCoordinatorCheckpointContext(context.Background(), root, request.GroupID)
-			if err != nil || len(c.Recoveries) != 1 || c.Recoveries[0].Mode != board.RecoverReset {
-				t.Fatalf("%+v %v", c.Recoveries, err)
-			}
-		})
-	}
-}
-
-// A hung terminal must leave the board write its share of the command deadline.
-func TestRecoverProbeStopsAtItsBudget(t *testing.T) {
-	root, _, request := blockedRecoverRequest(t, func(string) string { return "" })
-	writeRecoverTmux(t, root, "exec sleep 30\n")
-	saved := recoverProbeBudget
-	t.Cleanup(func() { recoverProbeBudget = saved })
-	recoverProbeBudget = 200 * time.Millisecond
-	started := time.Now()
+func requireReset(t *testing.T, root string, request board.CoordinatorRecover) {
+	t.Helper()
 	if code, errOut := runRecover(t, request); code != 0 {
 		t.Fatalf("code=%d %s", code, errOut)
 	}
-	if elapsed := time.Since(started); elapsed > 10*time.Second {
-		t.Fatalf("probe took %s", elapsed)
+	c, err := board.ReadCoordinatorCheckpointContext(context.Background(), root, request.GroupID)
+	if err != nil || len(c.Recoveries) != 1 || c.Recoveries[0].Mode != board.RecoverReset {
+		t.Fatalf("%+v %v", c.Recoveries, err)
 	}
+}
+
+func TestRecoverResetsWhenTheLookupFindsNoExecutor(t *testing.T) {
+	root, _, request := blockedRecoverRequest(t, func(string) string { return paneRow("%9", "another-session") })
+	requireReset(t, root, request)
+}
+
+// A hung terminal must leave the board write its share of the command deadline,
+// and a terminal that cannot be probed must not close the last way out.
+func TestRecoverResetsWhenTheProbeFails(t *testing.T) {
+	t.Run("timeout", func(t *testing.T) {
+		root, _, request := blockedRecoverRequest(t, func(string) string { return "" })
+		writeRecoverTmux(t, root, "exec sleep 30\n")
+		saved := recoverProbeBudget
+		t.Cleanup(func() { recoverProbeBudget = saved })
+		recoverProbeBudget = 200 * time.Millisecond
+		started := time.Now()
+		requireReset(t, root, request)
+		if elapsed := time.Since(started); elapsed > 10*time.Second {
+			t.Fatalf("probe took %s", elapsed)
+		}
+	})
+	t.Run("terminal unavailable", func(t *testing.T) {
+		root, _, request := blockedRecoverRequest(t, func(string) string { return "" })
+		t.Setenv("PATH", t.TempDir())
+		requireReset(t, root, request)
+	})
 }

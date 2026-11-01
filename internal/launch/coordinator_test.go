@@ -378,7 +378,8 @@ func TestRecoverReachesTheCommandAndRefusesAProvenExecutor(t *testing.T) {
 	t.Cleanup(func() { recoverLivenessFn = saved })
 	for _, status := range []string{liveness.Alive, liveness.AliveOrphaned} {
 		recoverLivenessFn = func(context.Context, board.Snapshot) liveness.Report { return liveness.Report{Status: status} }
-		if _, e = RecoverCoordinator(context.Background(), root, request); e == nil || !strings.Contains(e.Error(), "resume --agent") {
+		// The fixture member is in review, where only stopping the executor works.
+		if _, e = RecoverCoordinator(context.Background(), root, request); e == nil || !strings.Contains(e.Error(), status) || !strings.Contains(e.Error(), "coordinator recover") {
 			t.Fatal(status, e)
 		}
 	}

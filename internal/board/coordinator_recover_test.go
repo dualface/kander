@@ -241,6 +241,27 @@ func TestRecoverResetRefusesABoundMember(t *testing.T) {
 	}
 }
 
+// launch refuses a pending record first, for its error. This is the check that holds
+// when a start begins after that read.
+func TestRecoverResetRefusesAPendingStart(t *testing.T) {
+	root := tempBoard(t)
+	ids, c := blockedGroup(t, root)
+	s := transactionSnapshot(t, root, ids[0])
+	if _, err := BindExecutionCursor(root, s.Entry); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BeginTakeover(root, s.Entry, TakeoverInput{Owner: "codex", Session: "codex next", Decision: "user-decision"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := RecoverCoordinator(context.Background(), root, recoverRequest(c, ids[0]), transactionRevision(t, root, ids[0]))
+	if err == nil || !strings.Contains(err.Error(), "--adopt") || !strings.Contains(err.Error(), "--agent") {
+		t.Fatal(err)
+	}
+	if record, _, err := CurrentExecution(root, ids[0]); err != nil || record.Status != ExecutionPending {
+		t.Fatalf("%+v %v", record, err)
+	}
+}
+
 func TestRecoverConcurrentRequestsOneWins(t *testing.T) {
 	root := tempBoard(t)
 	ids, c := blockedGroup(t, root)

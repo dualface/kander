@@ -171,6 +171,10 @@ func stageRecoverReset(tx *Transaction, s Snapshot, r CoordinatorRecover, record
 	if err != nil {
 		return m, err
 	}
+	// A reset would make the starter step aside and leave its executor unmanaged.
+	if l.current != nil && l.current.Status == ExecutionPending {
+		return m, kanbanError("board.recover_start_pending", id)
+	}
 	if err = storeLegacyTakeover(tx, s, &l); err != nil {
 		return m, err
 	}

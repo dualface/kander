@@ -32,22 +32,57 @@ func report(entry board.Entry, session *TaskSession, status, channel, container,
 	}
 }
 
-func staleReport(ctx context.Context, entry board.Entry, session TaskSession, channel, container, detail, program string, backend terminal.Backend, allowReverseLookup bool) Report {
+// staleSearch says what a classification may do once the recorded address is stale.
+type staleSearch struct {
+	reverse bool
+	// resolve runs only then, because a resolved session may be newer than the
+	// executor a live recorded address names.
+	resolve ReferenceResolver
+}
+
+// sawExecutor marks an unknown report whose probe saw an executor at window. A
+// deadline that ended the probe leaves it a probe failure.
+func sawExecutor(ctx context.Context, out Report, window string) Report {
+	if ctx.Err() == nil {
+		out.Evidence = &ExecutorEvidence{Window: window}
+	}
+	return out
+}
+
+func staleReport(ctx context.Context, entry board.Entry, session TaskSession, channel, container, detail, program string, backend terminal.Backend, search staleSearch) Report {
 	sess := session
 	lookupFailure := func(err error) Report {
 		status := Unknown
+		var evidence *ExecutorEvidence
 		var matchError *terminal.MatchError
-		if errors.As(err, &matchError) && matchError.Matches == 0 {
-			status = Stopped
-		}
-		return report(entry, &sess, status, channel, container,
-			t("liveness.stale_address_reverse_lookup", detail, probe.FailureDetail(err)), "")
-	}
-	if !allowReverseLookup || session.Reference == "" {
-		if session.Reference == "" {
-			if definition, err := config.LoadAgent(session.Agent); err == nil && config.SessionResolvesEmptyReference(definition.Session) {
-				detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
+		if errors.As(err, &matchError) {
+			if matchError.Matches == 0 {
+				status = Stopped
+			} else {
+				evidence = &ExecutorEvidence{Matches: matchError.Matches}
 			}
+		}
+		out := report(entry, &sess, status, channel, container,
+			t("liveness.stale_address_reverse_lookup", detail, probe.FailureDetail(err)), "")
+		out.Evidence = evidence
+		return out
+	}
+	resolvable := false
+	if session.Reference == "" {
+		if definition, err := config.LoadAgent(session.Agent); err == nil {
+			resolvable = config.SessionResolvesEmptyReference(definition.Session)
+		}
+	}
+	if search.reverse && resolvable && search.resolve != nil {
+		reference, err := search.resolve(ctx)
+		if err != nil {
+			return lookupFailure(err)
+		}
+		session.Reference = reference
+	}
+	if !search.reverse || session.Reference == "" {
+		if resolvable {
+			detail += t("liveness.use_notify_directly_for_this_codex_task_the_command")
 		}
 		return report(entry, &sess, Stopped, channel, container, detail, "")
 	}
@@ -76,8 +111,8 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 			case terminal.SessionDiffers:
 				return report(entry, &sess, Stopped, channel, container, detail, "")
 			case terminal.SessionUncertain:
-				return lookupFailure(&probe.Error{Message: t(
-					"liveness.session_identity_uncertain_reverse", detail)})
+				return sawExecutor(ctx, lookupFailure(&probe.Error{Message: t(
+					"liveness.session_identity_uncertain_reverse", detail)}), newWindow)
 			}
 		}
 		status := pane.AgentStatus
@@ -86,16 +121,19 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 			if status == "" {
 				status = "N/A"
 			}
-			return lookupFailure(&probe.Error{Message: t(
-				"liveness.the_reverse_looked_up_pane_agent_status_cannot_be", status)})
+			return sawExecutor(ctx, lookupFailure(&probe.Error{Message: t(
+				"liveness.the_reverse_looked_up_pane_agent_status_cannot_be", status)}), newWindow)
 		}
 	}
 	out := report(entry, &sess, Drifted, channel, container, detail, newWindow)
 	out.RuntimeState = runtimeState
+	if sess.Reference == "" {
+		out.Reference = session.Reference
+	}
 	return out
 }
 
-func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) Report {
+func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, search staleSearch) Report {
 	session := ParseTaskSession(text)
 	window := board.MetadataFrom(text, board.FieldWindow)
 	if session == nil {
@@ -110,9 +148,9 @@ func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allo
 	}
 	switch caps := backend.Capabilities(); {
 	case caps.AgentIdentity:
-		return classifyAgentPane(ctx, entry, *session, backend, address, allowReverseLookup)
+		return classifyAgentPane(ctx, entry, *session, backend, address, search)
 	case caps.ForegroundProcess:
-		return classifyProcessPane(ctx, entry, *session, backend, address, allowReverseLookup)
+		return classifyProcessPane(ctx, entry, *session, backend, address, search)
 	default:
 		// A container whose panes report neither identity has nothing to classify.
 		return report(entry, session, Unknown, window, window, t("liveness.this_launcher_has_no_probeable_address"), "")
@@ -121,7 +159,7 @@ func probeTaskLiveness(ctx context.Context, entry board.Entry, text string, allo
 
 // classifyAgentPane classifies a pane whose backend reports the agent, its
 // status and session identity (herdr, luvus).
-func classifyAgentPane(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, allowReverseLookup bool) Report {
+func classifyAgentPane(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, search staleSearch) Report {
 	channel, container, paneID := backend.Name(), address.Container, address.Pane
 	program, err := lookPath(backend.Executable())
 	if err != nil {
@@ -131,15 +169,15 @@ func classifyAgentPane(ctx context.Context, entry board.Entry, session TaskSessi
 	if err != nil {
 		return report(entry, &session, Unknown, channel, container, probe.FailureDetail(err), "")
 	}
-	return classifyAgentFacts(ctx, entry, session, backend, address, program, pane, allowReverseLookup)
+	return classifyAgentFacts(ctx, entry, session, backend, address, program, pane, search)
 }
 
 // classifyAgentFacts classifies the facts already collected for the recorded
 // pane, whether from PaneFacts or from an agent list row.
-func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, program string, pane terminal.PaneFacts, allowReverseLookup bool) Report {
+func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, program string, pane terminal.PaneFacts, search staleSearch) Report {
 	channel, container, paneID := backend.Name(), address.Container, address.Pane
 	if pane.Gone {
-		return staleReport(ctx, entry, session, channel, container, t("launch.pane_does_not_exist_2", paneID), program, backend, allowReverseLookup)
+		return staleReport(ctx, entry, session, channel, container, t("launch.pane_does_not_exist_2", paneID), program, backend, search)
 	}
 	if pane.Agent != session.Agent {
 		actual := pane.Agent
@@ -148,18 +186,18 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 		}
 		return staleReport(ctx, entry, session, channel, container, t(
 			"liveness.agent_mismatch_expected_actual", session.Agent, actual,
-		), program, backend, allowReverseLookup)
+		), program, backend, search)
 	}
 	actualSession := pane.AgentSession
 	if session.Reference != "" && (actualSession != "" || pane.AgentSessionKind != "") {
 		verdict, detail := terminal.MatchAgentSession(ctx, session.Agent, pane.AgentSessionKind, actualSession, session.Reference)
 		switch verdict {
 		case terminal.SessionDiffers:
-			return staleReport(ctx, entry, session, channel, container, t("liveness.session_identity_mismatch"), program, backend, allowReverseLookup)
+			return staleReport(ctx, entry, session, channel, container, t("liveness.session_identity_mismatch"), program, backend, search)
 		case terminal.SessionUncertain:
-			return report(entry, &session, Unknown, channel, container, t(
+			return sawExecutor(ctx, report(entry, &session, Unknown, channel, container, t(
 				"liveness.session_identity_uncertain", detail,
-			), "")
+			), ""), "")
 		}
 	}
 	status := pane.AgentStatus
@@ -167,9 +205,9 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 		if status == "" {
 			status = "N/A"
 		}
-		return report(entry, &session, Unknown, channel, container, t(
+		return sawExecutor(ctx, report(entry, &session, Unknown, channel, container, t(
 			"liveness.agent_status_cannot_be_classified", status,
-		), "")
+		), ""), "")
 	}
 	if session.Reference != "" && actualSession == "" {
 		out := report(entry, &session, Alive, channel, container, t(
@@ -185,7 +223,7 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 
 // classifyProcessPane classifies a pane whose backend reports the foreground
 // process and a session marker (tmux).
-func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, allowReverseLookup bool) Report {
+func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSession, backend terminal.Backend, address terminal.Address, search staleSearch) Report {
 	launcher, paneID := backend.Name(), address.Pane
 	container := address.Session + ":" + address.Container
 	program, err := lookPath(backend.Executable())
@@ -197,7 +235,7 @@ func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSes
 		return report(entry, &session, Unknown, launcher, container, probe.FailureDetail(err), "")
 	}
 	if facts.Gone {
-		return staleReport(ctx, entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), program, backend, allowReverseLookup)
+		return staleReport(ctx, entry, session, launcher, container, t("launch.pane_does_not_exist_2", paneID), program, backend, search)
 	}
 	expected, err := agentCommandName(session.Agent)
 	if err != nil {
@@ -211,13 +249,13 @@ func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSes
 		detail := t(
 			"liveness.pane_is_dead_or_foreground_process_mismatches_expected_actual", expected, actual,
 		)
-		return staleReport(ctx, entry, session, launcher, container, detail, program, backend, allowReverseLookup)
+		return staleReport(ctx, entry, session, launcher, container, detail, program, backend, search)
 	}
 	if facts.SessionMarker == "" {
-		return report(entry, &session, Unknown, launcher, container, t("liveness.tmux_pane_has_no_session_marker"), "")
+		return sawExecutor(ctx, report(entry, &session, Unknown, launcher, container, t("liveness.tmux_pane_has_no_session_marker"), ""), "")
 	}
 	if session.Reference != "" && facts.SessionMarker != session.Reference {
-		return staleReport(ctx, entry, session, launcher, container, t("liveness.tmux_session_marker_mismatch"), program, backend, allowReverseLookup)
+		return staleReport(ctx, entry, session, launcher, container, t("liveness.tmux_session_marker_mismatch"), program, backend, search)
 	}
 	detail := t("liveness.agent_is_reachable")
 	if facts.InMode != "0" {
@@ -249,7 +287,18 @@ func ClassifyTaskContext(ctx context.Context, entry board.Entry, text string) Re
 }
 
 // ClassifyTaskLookupContext additionally controls whether stale addresses are searched.
-func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) (out Report) {
+func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text string, allowReverseLookup bool) Report {
+	return classifyTask(ctx, entry, text, staleSearch{reverse: allowReverseLookup})
+}
+
+// ClassifyTaskResolving is ClassifyTaskContext for a caller that can also find the
+// session of a card that records none, once its recorded address is stale. resolve
+// shares the deadline of the classification.
+func ClassifyTaskResolving(ctx context.Context, entry board.Entry, text string, resolve ReferenceResolver) Report {
+	return classifyTask(ctx, entry, text, staleSearch{reverse: true, resolve: resolve})
+}
+
+func classifyTask(ctx context.Context, entry board.Entry, text string, search staleSearch) (out Report) {
 	ctx, cancel := probe.WithDefaultTimeout(ctx)
 	defer cancel()
 	defer func() {
@@ -263,7 +312,7 @@ func ClassifyTaskLookupContext(ctx context.Context, entry board.Entry, text stri
 	if err := ctx.Err(); err != nil {
 		return unknownFrom(entry, text, probe.FailureDetail(err))
 	}
-	out = probeTaskLiveness(ctx, entry, text, allowReverseLookup)
+	out = probeTaskLiveness(ctx, entry, text, search)
 	if err := ctx.Err(); err != nil && out.Status != Unknown {
 		return unknownFrom(entry, text, probe.FailureDetail(err))
 	}

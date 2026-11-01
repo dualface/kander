@@ -137,7 +137,7 @@ func TestReverseLookupTimeoutIsUnknown(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 			defer cancel()
-			report := staleReport(ctx, board.Entry{TaskID: "timeout"}, TaskSession{Agent: "codex", Reference: "wanted"}, channel, "old", "old pane gone", channel, backendFor(t, channel), true)
+			report := staleReport(ctx, board.Entry{TaskID: "timeout"}, TaskSession{Agent: "codex", Reference: "wanted"}, channel, "old", "old pane gone", channel, backendFor(t, channel), staleSearch{reverse: true})
 			if report.Status != Unknown || report.NewWindow != "" || !strings.Contains(report.Detail, "context deadline exceeded") || !strings.Contains(report.Detail, "old pane gone") || !strings.Contains(report.Detail, "反查:") {
 				t.Fatalf("report=%+v", report)
 			}

@@ -55,6 +55,9 @@
   "board.recover_dispatch_bound": "{{.V0}} 绑定了派发 {{.V1}}。下一步：用 kander dispatch fail、cancel 或 settle 结束绑定，再恢复。",
   "board.wrap_up_blocked_members": "任务组 {{.V0}} 有阻塞成员：{{.V1}}。在 kander coordinator reconcile 接受这些成员之前，或用户决定 kander coordinator recover 之前，不能开始 wrap-up。",
   "board.review_recovery_required": "恢复过的成员需要对其 plan 要求的每个角色做实际复审，也包括被删除批次要求的角色（recovery-role:<成员>/<角色>）；用 kander review extend-plan 追加批次，N/A 不算。成员在没有计划时重置、之后的计划不要求任何角色时，改用 kind 为 recovery 的 release_obligation 写明用户决定",
-  "launch.recover_executor_alive": "{{.V0}} 的 executor 仍在运行（{{.V1}}）。恢复不替换它。下一步：kander resume --agent <agent>，或先停掉该 executor。",
+  "launch.recover_executor_alive": "{{.V0}} 的 executor 仍在运行（{{.V1}}：{{.V2}}），地址 {{.V3}}。恢复不替换它。下一步：kander resume --agent <agent>，或停止这个地址的 executor，再次运行 kander coordinator recover。",
+  "launch.recover_executor_stop": "{{.V0}} 仍有 executor 的迹象（{{.V1}}：{{.V2}}），地址 {{.V3}}。恢复不替换它。下一步：停止这个地址的 executor，再次运行 kander coordinator recover。",
+  "launch.recover_executor_ambiguous": "{{.V0}} 有 {{.V1}} 个 executor 匹配它的 session（{{.V2}}）。恢复不替换它们。下一步：停止匹配这个 session 的 executor，再次运行 kander coordinator recover。",
+  "board.recover_start_pending": "{{.V0}} 的启动尝试尚未结束（状态 pending），重置会让它的 executor 失去管理。下一步：启动者仍在运行时等待；executor 存活时用 kander resume {{.V0}} --adopt --decision <引用>；启动者与 executor 都已结束时用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
   "launch.wrap_up_needs_checkout": "{{.V0}} 无法校验 wrap-up：可达的 checkout 都没有 commit {{.V1}}。下一步：在这个仓库的 checkout 中运行 kander move。"
 }

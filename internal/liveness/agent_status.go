@@ -128,7 +128,7 @@ func observeBackend(ctx context.Context, group []agentTarget, reports []Report) 
 			missing = append(missing, target)
 			continue
 		}
-		reports[target.index] = classifyAgentFacts(ctx, target.entry, target.session, backend, target.address, program, facts, false)
+		reports[target.index] = classifyAgentFacts(ctx, target.entry, target.session, backend, target.address, program, facts, staleSearch{})
 	}
 	return missing
 }
@@ -148,7 +148,7 @@ func probePanes(ctx context.Context, targets []agentTarget, reports []Report, co
 						t("liveness.batch_not_observed", probe.FailureDetail(err)), "")
 					continue
 				}
-				reports[target.index] = classifyAgentPane(ctx, target.entry, target.session, target.backend, target.address, false)
+				reports[target.index] = classifyAgentPane(ctx, target.entry, target.session, target.backend, target.address, staleSearch{})
 			}
 		}()
 	}

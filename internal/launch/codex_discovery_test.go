@@ -167,7 +167,7 @@ func TestCodexPromptPrefixesBuiltOncePerLookup(t *testing.T) {
 		}
 	})
 	count("lookup", func() {
-		if _, err := codexSessionsForTask(task); err != nil {
+		if _, err := codexSessionsForTask(context.Background(), task); err != nil {
 			t.Fatal(err)
 		}
 	})

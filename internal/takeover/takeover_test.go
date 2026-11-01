@@ -192,13 +192,8 @@ func doneCard(title string) string {
 	return "# " + title + "\n\n- TYPE: Feature\n- SIZE: small\n- TASK_GROUP:\n- CREATED_AT: 2026-09-04 02:19\n- OWNER: claude\n- SESSION: claude session-1\n- WINDOW: herdr:w1:t9:w1:p9\n- STARTED_AT: 2026-09-04 11:00\n- FINISHED_AT: 2026-09-04 12:00\n- TASK_BRANCH: task/demo\n- RESULT: completed\n\n## GOAL\n\n实现目标\n\n## USER_DECISIONS\n\nN/A\n\n## EXPECTED_OUTCOME\n\n产生可验证结果\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] 满足验收\n\n## THREAT_MODEL\n\nN/A\n\n## OUT_OF_SCOPE\n\n- 无额外范围\n\n## DISCUSSION\n\nSELF_REVIEW: 通过\nCARD_REVIEW: 通过\n\n## IMPLEMENTATION\n\n## SUMMARY\n完成\n"
 }
 
-func makeDone(t *testing.T, root, slug, window string) (string, string) {
-	t.Helper()
-	return makeDoneAfter(t, root, slug, window, func(board.Entry) {})
-}
-
-// makeDoneAfter lets during act on the card once it holds an execution.
-func makeDoneAfter(t *testing.T, root, slug, window string, during func(board.Entry)) (string, string) {
+// makeWorkingCard is a card with a running execution at window.
+func makeWorkingCard(t *testing.T, root, slug, window string) board.Entry {
 	t.Helper()
 	path, err := board.NewTask(root, "feature", slug, "任务 "+slug, "en", false)
 	if err != nil {
@@ -226,6 +221,18 @@ func makeDoneAfter(t *testing.T, root, slug, window string, during func(board.En
 		t.Fatal(err)
 	}
 	executionFixture(t, root, working)
+	return working
+}
+
+func makeDone(t *testing.T, root, slug, window string) (string, string) {
+	t.Helper()
+	return makeDoneAfter(t, root, slug, window, func(board.Entry) {})
+}
+
+// makeDoneAfter lets during act on the card once it holds an execution.
+func makeDoneAfter(t *testing.T, root, slug, window string, during func(board.Entry)) (string, string) {
+	t.Helper()
+	working := makeWorkingCard(t, root, slug, window)
 	during(working)
 	review, err := board.MoveEntry(working, root, "review")
 	if err != nil {
@@ -564,5 +571,128 @@ func TestDismissRefusesACardNoLauncherStarted(t *testing.T) {
 	_, _, err = capture(t, func() error { return commandDismiss(root, id, 61) })
 	if err == nil || !strings.Contains(err.Error(), "failure-recovery.md") {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+// A drifted pane is what the search found, so the cleanup ends it there.
+func TestCleanupEndsTheDriftedTmuxPane(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$5")
+	t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@5")
+	result := Cleanup("tmux:$5:@5:%5", launch.AgentSession{Agent: "claude", Reference: "session-1"}, "tmux:$1:@1:%1", 61)
+	if !result.Cleaned || result.OldWindow != "tmux:$5:@5:%5" {
+		t.Fatalf("%+v", result)
+	}
+	sent, err := os.ReadFile(filepath.Join(root, "tmux.log.instruction"))
+	if err != nil || !strings.Contains(string(sent), "%5") {
+		t.Fatalf("%s %v", sent, err)
+	}
+}
+
+func TestCleanupReportsADriftedPaneItKeeps(t *testing.T) {
+	root, _ := setupBoard(t)
+	t.Setenv("KANBAN_TMUX_TARGET_SESSION", "$5")
+	t.Setenv("KANBAN_TMUX_TARGET_WINDOW", "@5")
+	t.Setenv("KANBAN_TMUX_WINDOW_PANES", "2")
+	result := Cleanup("tmux:$5:@5:%5", launch.AgentSession{Agent: "claude", Reference: "session-1"}, "tmux:$1:@1:%1", 61)
+	if result.Cleaned || result.OldWindow != "tmux:$5:@5:%5" || result.Detail == "" {
+		t.Fatalf("%+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(root, "tmux.log.instruction")); err == nil {
+		t.Fatal("exit sent to a shared window")
+	}
+}
+
+// driftTmux answers for three panes: %3, the recorded one, is gone; %5 runs the old
+// executor until it gets the exit command; %20 is the pane a takeover creates.
+const driftTmux = `#!/bin/sh
+log="$KANBAN_TMUX_LOG"
+printf '%s\n' "$*" >> "$log"
+target=""
+previous=""
+for arg in "$@"; do
+  [ "$previous" = "-t" ] && target="$arg"
+  previous="$arg"
+done
+format=""
+for arg in "$@"; do format="$arg"; done
+case "$1" in
+list-panes)
+  printf '%%5\t$5\tmoved\t@5\tclaude\t0\tsession-1\t\n'
+  ;;
+new-window)
+  printf '@20\t%%20\n'
+  ;;
+set-option)
+  [ "$2" = "-p" ] && printf '%s\n' "$format" > "$log.marker"
+  ;;
+show-options)
+  [ "$target" = "%3" ] && exit 1
+  if [ "$target" = "%5" ]; then printf 'session-1\n'; else cat "$log.marker"; fi
+  ;;
+display-message)
+  [ "$target" = "%3" ] && { printf "can't find pane\n" >&2; exit 1; }
+  case "$format" in
+  *pane_current_path*) printf '%s\n' "$KANBAN_TMUX_CWD" ;;
+  *pane_current_command*pane_in_mode*pane_dead*)
+    dead=0
+    [ "$target" = "%5" ] && [ -f "$log.exited" ] && dead=1
+    printf 'claude\t0\t%s\n' "$dead"
+    ;;
+  *pane_current_command*) printf 'claude\t0\n' ;;
+  *session_id*session_name*window_id*window_panes*) printf '$5\tmoved\t@5\t1\n' ;;
+  *) printf '$1\n' ;;
+  esac
+  ;;
+send-keys)
+  [ "$target" = "%5" ] && : > "$log.exited"
+  ;;
+esac
+exit 0
+`
+
+// The whole path of kander resume --agent: the search before the launch finds the
+// pane that WINDOW lost, and the cleanup ends the old executor there and only there.
+func TestTakeoverEndsTheDriftedExecutor(t *testing.T) {
+	root, fakeBin := setupBoard(t)
+	task := makeWorkingCard(t, root, "takeover-drift", "tmux:$1:@1:%3").TaskID
+	if err := os.WriteFile(filepath.Join(fakeBin, "tmux"), []byte(driftTmux), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(fakeBin, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMUX", "/tmp/fake-tmux,1,0")
+	t.Setenv("TMUX_PANE", "%1")
+	t.Setenv("KANBAN_TMUX_CWD", filepath.Dir(root))
+	code := 0
+	out, errOut, _ := capture(t, func() error {
+		code = launch.RunResume([]string{"--agent", "claude", "--launcher", "tmux", "--message", "take over", task})
+		return nil
+	})
+	if code != 0 {
+		t.Fatalf("code=%d %s %s", code, out, errOut)
+	}
+	if !strings.Contains(out, "tmux:$5:@5:%5") {
+		t.Fatalf("out=%s", out)
+	}
+	log, err := os.ReadFile(filepath.Join(root, "tmux.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sent []string
+	for _, line := range strings.Split(string(log), "\n") {
+		if strings.HasPrefix(line, "send-keys") {
+			sent = append(sent, line)
+		}
+	}
+	if len(sent) == 0 || !strings.Contains(strings.Join(sent, "\n"), "%5") {
+		t.Fatalf("log:\n%s", log)
+	}
+	if located, started := strings.Index(string(log), "list-panes"), strings.Index(string(log), "new-window"); located < 0 || located > started {
+		t.Fatalf("log:\n%s", log)
+	}
+	if strings.Contains(string(log), "kill-window -t %20") || strings.Contains(string(log), "kill-window -t @20") {
+		t.Fatalf("log:\n%s", log)
 	}
 }

@@ -142,10 +142,10 @@ func sessionFrom(text string) (AgentSession, error) {
 }
 
 func resolvedTaskSession(taskID, text string, configs ...*config.Config) (AgentSession, error) {
-	return resolveTaskIdentity(taskID, text, true, configs...)
+	return resolveTaskIdentity(context.Background(), taskID, text, true, configs...)
 }
 
-func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*config.Config) (AgentSession, error) {
+func resolveTaskIdentity(ctx context.Context, taskID, text string, requireResume bool, configs ...*config.Config) (AgentSession, error) {
 	session, err := sessionFrom(text)
 	if err != nil {
 		return AgentSession{}, err
@@ -167,7 +167,7 @@ func resolveTaskIdentity(taskID, text string, requireResume bool, configs ...*co
 		return AgentSession{}, config.AgentResumeError(session.Agent)
 	}
 	if config.SessionResolvesEmptyReference(definition.Session) && session.Reference == "" {
-		id, err := runSessionResolveHook(definition.Session.Mode, taskID)
+		id, err := runSessionResolveHook(ctx, definition.Session.Mode, taskID)
 		if err != nil {
 			return AgentSession{}, err
 		}
@@ -296,8 +296,9 @@ type fileInfo struct {
 }
 
 // codexSessionsForTask lists the sessions of every rollout whose user prompt
-// starts with this task's prompt, newest rollout first.
-func codexSessionsForTask(taskID string) ([]string, error) {
+// starts with this task's prompt, newest rollout first. A canceled ctx ends the scan
+// with its error, because a partial scan proves no session.
+func codexSessionsForTask(ctx context.Context, taskID string) ([]string, error) {
 	root, err := filepath.Abs(codexSessionsRoot())
 	if err != nil {
 		return nil, err
@@ -310,6 +311,9 @@ func codexSessionsForTask(taskID string) ([]string, error) {
 	}
 	var files []fileInfo
 	_ = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err != nil || fi.IsDir() {
 			return nil
 		}
@@ -319,11 +323,17 @@ func codexSessionsForTask(taskID string) ([]string, error) {
 		}
 		return nil
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	slices.SortFunc(files, func(a, b fileInfo) int { return b.mod.Compare(a.mod) })
 	prefixes := codexPromptPrefixes(taskID)
 	var sessions []string
 	seen := map[string]struct{}{}
 	for _, f := range files {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		id := codexRolloutMentionsTask(f.path, prefixes)
 		if id != "" && sessionReferenceRe.MatchString(id) {
 			if _, ok := seen[id]; !ok {
@@ -348,14 +358,14 @@ func runSessionAllocateHook(mode string, program *process.AgentProgram) (string,
 	}
 }
 
-func runSessionResolveHook(mode, taskID string) (string, error) {
+func runSessionResolveHook(ctx context.Context, mode, taskID string) (string, error) {
 	name, ok := config.ParseSessionHook(mode)
 	if !ok {
 		return "", launchError("launch.unsupported_agent", mode)
 	}
 	switch name {
 	case "codex-rollout":
-		return findCodexSession(taskID)
+		return findCodexSession(ctx, taskID)
 	default:
 		return "", launchError("launch.unsupported_agent", name)
 	}
@@ -421,8 +431,8 @@ func sessionDiscoverSnapshot(session *config.AgentSessionDefinition, taskID stri
 	return previous, nil
 }
 
-func findCodexSession(taskID string) (string, error) {
-	sessions, err := codexSessionsForTask(taskID)
+func findCodexSession(ctx context.Context, taskID string) (string, error) {
+	sessions, err := codexSessionsForTask(ctx, taskID)
 	if err != nil {
 		return "", err
 	}

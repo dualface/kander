@@ -1,6 +1,7 @@
 package liveness
 
 import (
+	"context"
 	"os/exec"
 	"regexp"
 	"time"
@@ -34,6 +35,20 @@ type TaskSession struct {
 	Reference string
 }
 
+// ExecutorEvidence says why an unknown observation still shows an executor: the
+// probe finished and saw one, but could not prove its identity or its state. A
+// probe that failed has none.
+type ExecutorEvidence struct {
+	// Window is the address the executor shows at; empty means the recorded WINDOW.
+	Window string
+	// Matches counts the panes of a reverse lookup that matched several.
+	Matches int
+}
+
+// ReferenceResolver finds the session of a card that records none, within the
+// deadline of the classification.
+type ReferenceResolver func(context.Context) (string, error)
+
 // Report is the read-only liveness classification of one card; it never writes to the card.
 type Report struct {
 	TaskID           string
@@ -47,6 +62,10 @@ type Report struct {
 	Identity         ObservationIdentity `json:"identity"`
 	RuntimeState     string              `json:"runtime_state"`
 	ObservationValid bool                `json:"observation_valid"`
+	// Evidence separates an unknown that saw an executor from a failed probe.
+	Evidence *ExecutorEvidence `json:"-"`
+	// Reference is the session a drift was found by, when the card records none.
+	Reference string `json:"-"`
 }
 
 func t(id string, args ...any) string {

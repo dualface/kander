@@ -80,31 +80,79 @@ func verifyWrapUpCompletion(ctx context.Context, root string, facts board.Coordi
 	return launchError("launch.wrap_up_needs_checkout", facts.Integration.TaskID, facts.Integration.TargetCommit)
 }
 
-// recoverProbeBudget bounds the probe of a reset. A hung terminal reads unknown
-// at this limit, and the rest of the command deadline stays for the board write.
+// recoverProbeBudget bounds the probe of a reset, session resolution included. A
+// hung terminal reads unknown at this limit, and the rest of the command deadline
+// stays for the board write.
 var recoverProbeBudget = liveness.DefaultBatchBudget
 
 // recoverLivenessFn searches a stale address, unlike adoption: a drifted WINDOW
-// must not read stopped, or a reset would pass a running executor.
+// must not read stopped, or a reset or a takeover would pass a running executor. A
+// card with no reference is resolved only for that search.
 var recoverLivenessFn = func(ctx context.Context, s board.Snapshot) liveness.Report {
 	ctx, cancel := context.WithTimeout(ctx, recoverProbeBudget)
 	defer cancel()
-	return liveness.ClassifyTaskContext(ctx, s.Entry, s.Text)
+	return liveness.ClassifyTaskResolving(ctx, s.Entry, s.Text, func(ctx context.Context) (string, error) {
+		session, err := resolveIdentityFn(ctx, s.Entry.TaskID, s.Text)
+		return session.Reference, err
+	})
 }
 
-// RecoverCoordinator refuses a reset of a member whose executor is confirmed
-// running, at the recorded address or at a new one, then lets board apply the
-// request to the card it observed. Any other probe result proceeds: the user
-// decided, and unknown never counts as alive.
+// resolveIdentityFn is a var so tests can hold a resolution past its budget.
+var resolveIdentityFn = func(ctx context.Context, taskID, text string) (AgentSession, error) {
+	return resolveTaskIdentity(ctx, taskID, text, false)
+}
+
+// recoverRefusal names the executor a reset must not pass and the next step that
+// works for it. A review member takes no takeover without a dispatch, a takeover
+// cannot exit an executor it cannot prove, and several matches have no one address.
+func recoverRefusal(s board.Snapshot, report liveness.Report) error {
+	switch report.Status {
+	case liveness.Alive, liveness.AliveOrphaned, liveness.Drifted:
+	case liveness.Unknown:
+		if report.Evidence == nil {
+			return nil
+		}
+	default:
+		return nil
+	}
+	task, window := s.Entry.TaskID, board.MetadataFrom(s.Text, board.FieldWindow)
+	if e := report.Evidence; e != nil {
+		if e.Matches > 0 {
+			return launchError("launch.recover_executor_ambiguous", task, e.Matches, report.Detail)
+		}
+		if e.Window != "" {
+			window = e.Window
+		}
+	}
+	if report.NewWindow != "" {
+		window = report.NewWindow
+	}
+	if s.Entry.State == "review" || report.Status == liveness.Unknown {
+		return launchError("launch.recover_executor_stop", task, report.Status, report.Detail, window)
+	}
+	return launchError("launch.recover_executor_alive", task, report.Status, report.Detail, window)
+}
+
+// RecoverCoordinator refuses a reset beside a start that has not ended and beside
+// an executor the probe saw, at the recorded address or at a new one, then lets
+// board apply the request to the card it observed. A probe that failed proceeds:
+// the user decided, and recover is the last way out of a terminal that cannot be
+// probed.
 func RecoverCoordinator(ctx context.Context, root string, r board.CoordinatorRecover) (board.CoordinatorCheckpoint, error) {
 	s, err := board.ReadSnapshot(root, r.Member)
 	if err != nil {
 		return board.CoordinatorCheckpoint{}, err
 	}
 	if s.Entry.State == "working" || s.Entry.State == "review" {
-		switch report := recoverLivenessFn(ctx, s); report.Status {
-		case liveness.Alive, liveness.AliveOrphaned, liveness.Drifted:
-			return board.CoordinatorCheckpoint{}, launchError("launch.recover_executor_alive", s.Entry.TaskID, report.Status)
+		record, exists, err := board.CurrentExecution(root, s.Entry.TaskID)
+		if err != nil {
+			return board.CoordinatorCheckpoint{}, err
+		}
+		if exists && record.Status == board.ExecutionPending {
+			return board.CoordinatorCheckpoint{}, launchError("board.recover_start_pending", s.Entry.TaskID)
+		}
+		if err = recoverRefusal(s, recoverLivenessFn(ctx, s)); err != nil {
+			return board.CoordinatorCheckpoint{}, err
 		}
 	}
 	return board.RecoverCoordinator(ctx, root, r, s.Revision)

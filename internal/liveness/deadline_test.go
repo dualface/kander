@@ -81,7 +81,7 @@ func TestReverseLookupInheritsCallerDeadline(t *testing.T) {
 	defer cancel()
 	want, _ := ctx.Deadline()
 	backend := &deadlineBackend{}
-	staleReport(ctx, board.Entry{TaskID: "budget"}, TaskSession{Agent: "codex", Reference: "wanted"}, "fake", "fake", "stale", "fake", backend, true)
+	staleReport(ctx, board.Entry{TaskID: "budget"}, TaskSession{Agent: "codex", Reference: "wanted"}, "fake", "fake", "stale", "fake", backend, staleSearch{reverse: true})
 	if !backend.deadline.Equal(want) {
 		t.Fatalf("reverse deadline=%s; want %s", backend.deadline, want)
 	}
