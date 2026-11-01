@@ -137,8 +137,6 @@ func TestReportRulesIntegrationRepairWritesReference(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
 	if !reportRulesIntegration(paths, allInstallRules, true) {
 		t.Fatal("repair must succeed")
 	}
@@ -167,8 +165,6 @@ func TestReportRulesIntegrationReportsInvalidAndDuplicateReferences(t *testing.T
 	paths := config.InstallPaths{Mode: config.ModeGlobal, RulesDir: filepath.Join(home, ".agents", "kander")}
 	entry := filepath.Join(paths.RulesDir, "KANDER-AGENTS.md")
 	writeRulesFile(t, entry, "# Kander entry\n")
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
 	target := filepath.Join(home, ".codex", "AGENTS.md")
 	block := "## Kander Rules Entry\n\nAt the start of every session, read `" + entry +
 		"` and follow it as the Kander workflow rules entry.\n"
@@ -235,8 +231,6 @@ func TestReportRulesIntegrationCoversEveryInstalledAgent(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
 
 	var lines []ReportLine
 	healthy := true
@@ -291,8 +285,6 @@ func TestReportRulesIntegrationCoversProjectTargets(t *testing.T) {
 		RulesDir:    filepath.Join(project, ".kander", "rules"),
 	}
 	writeRulesFile(t, filepath.Join(paths.RulesDir, "KANDER-AGENTS.md"), "# Kander entry\n")
-	cfg := config.DefaultConfig()
-	cfg.WelcomeComplete = true
 
 	if reportRulesIntegration(paths, allInstallRules, false) {
 		t.Fatal("unintegrated project targets must make doctor unhealthy")

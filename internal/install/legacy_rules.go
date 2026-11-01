@@ -123,6 +123,20 @@ func removeLegacyEntrySymlinks(paths config.InstallPaths) []string {
 	return removed
 }
 
+// legacyEntryWillRetire reports whether the previous entry is gone once Perform has run
+// migrateLegacyRules: it is already missing, or it is a file the migration deletes.
+func legacyEntryWillRetire(paths config.InstallPaths) bool {
+	legacy := legacyRulesEntry(paths)
+	if legacy == "" {
+		return false
+	}
+	info, err := os.Lstat(legacy)
+	if os.IsNotExist(err) {
+		return true
+	}
+	return err == nil && !info.IsDir() && agentRulesTargetsResolve(paths)
+}
+
 // legacyEntryExists reports whether anything still sits at the previous entry path.
 func legacyEntryExists(legacy string) bool {
 	_, err := os.Lstat(legacy)
@@ -179,10 +193,13 @@ func legacyEntryReplacements(paths config.InstallPaths, baseDir string) map[stri
 // still be meant.
 func rewriteLegacyReference(text string, paths config.InstallPaths, baseDir string) (string, bool) {
 	legacy := legacyRulesEntry(paths)
-	if legacy == "" {
-		return text, false
-	}
-	if legacyEntryExists(legacy) {
+	return rewriteLegacyReferenceIf(text, paths, baseDir, legacy != "" && !legacyEntryExists(legacy))
+}
+
+// rewriteLegacyReferenceIf is rewriteLegacyReference with the retirement of the previous entry
+// given by the caller, so the install plan can assume the migration Perform runs first.
+func rewriteLegacyReferenceIf(text string, paths config.InstallPaths, baseDir string, retired bool) (string, bool) {
+	if !retired || legacyRulesEntry(paths) == "" {
 		return text, false
 	}
 	replacements := legacyEntryReplacements(paths, baseDir)

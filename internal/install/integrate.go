@@ -303,7 +303,8 @@ func rulesOverrideTarget(target string) string {
 // ensureTargetIntegration runs the reference pipeline on one rules file. The configured target
 // may be created when missing (create=true); an override sibling (create=false) is only edited.
 func ensureTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (IntegrationOutcome, error) {
-	edit, err := planTargetIntegration(agent, target, create, paths)
+	legacy := legacyRulesEntry(paths)
+	edit, err := planTargetIntegration(agent, target, create, paths, legacy != "" && !legacyEntryExists(legacy))
 	if err != nil || edit.path == "" {
 		return edit.outcome, err
 	}
@@ -336,8 +337,9 @@ type targetEdit struct {
 }
 
 // planTargetIntegration computes the reference pipeline's result for one rules file without
-// writing, so the install wizard can show the change before anything is written.
-func planTargetIntegration(agent, target string, create bool, paths config.InstallPaths) (targetEdit, error) {
+// writing, so the install wizard can show the change before anything is written. legacyRetired
+// says whether the previous rules entry is gone, which decides the legacy rewrite.
+func planTargetIntegration(agent, target string, create bool, paths config.InstallPaths, legacyRetired bool) (targetEdit, error) {
 	edit := targetEdit{outcome: IntegrationOutcome{Agent: agent, Target: target}}
 	block := referenceBlock(agent, paths)
 	mdc := isMDCTarget(target)
@@ -396,7 +398,7 @@ func planTargetIntegration(agent, target string, create bool, paths config.Insta
 		}
 	}
 	legacyChanged := false
-	if rewritten, changed := rewriteLegacyReference(text, paths, filepath.Dir(target)); changed {
+	if rewritten, changed := rewriteLegacyReferenceIf(text, paths, filepath.Dir(target), legacyRetired); changed {
 		text = rewritten
 		legacyChanged = true
 	}

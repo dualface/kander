@@ -205,3 +205,36 @@ func TestCommentedReferenceIsInactive(t *testing.T) {
 		t.Fatalf("active reference outcome=%+v err=%v", outcome, err)
 	}
 }
+
+func TestSymlinkedRulesFileNeedsEveryReader(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	home := setupInstallHome(t)
+	writeScopeSwitches(t, home, true, map[string]bool{"codex": false})
+	paths, _ := config.GlobalInstallPaths()
+	codex := filepath.Join(home, ".codex", "AGENTS.md")
+	writeIntegrateFile(t, codex, "# Mine\n")
+	if err := os.MkdirAll(filepath.Join(home, ".grok"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(codex, filepath.Join(home, ".grok", "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := EnsureRulesIntegration("grok", paths)
+	if err != nil || outcome.Status != IntegrationDisabled || !slices.Equal(outcome.DisabledBy, []string{"codex"}) {
+		t.Fatalf("outcome=%+v err=%v", outcome, err)
+	}
+	if got := readBytes(t, codex); got != "# Mine\n" {
+		t.Fatalf("codex file written through the grok link: %q", got)
+	}
+	var shared []string
+	for _, group := range PlanRulesInjection(paths) {
+		if slices.Contains(group.Agents, "grok") {
+			shared = group.Agents
+		}
+	}
+	if !slices.Equal(shared, []string{"codex", "grok"}) {
+		t.Fatalf("linked rules files not grouped: %v", shared)
+	}
+}

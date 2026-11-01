@@ -62,12 +62,13 @@ func PlanRulesInjection(paths config.InstallPaths) []PlanGroup {
 		if target == "" {
 			continue
 		}
-		if index, ok := byTarget[target]; ok {
+		key := rulesFileKey(target)
+		if index, ok := byTarget[key]; ok {
 			groups[index].Agents = append(groups[index].Agents, agent)
 			byAgent[agent] = index
 			continue
 		}
-		byTarget[target] = len(groups)
+		byTarget[key] = len(groups)
 		byAgent[agent] = len(groups)
 		groups = append(groups, PlanGroup{Agents: []string{agent}, Files: planRulesFiles(agent, target, paths)})
 	}
@@ -83,20 +84,25 @@ func PlanRulesInjection(paths config.InstallPaths) []PlanGroup {
 	return groups
 }
 
-// planRulesFiles plans the configured rules file and its existing AGENTS.override.md sibling.
+// planRulesFiles plans the configured rules file and its existing AGENTS.override.md sibling
+// against the state Perform leaves after migrateLegacyRules: once the previous entry retires,
+// a symlink to it is replaced and references to it are rewritten.
 func planRulesFiles(agent, target string, paths config.InstallPaths) []PlannedFile {
-	if linksToLegacyEntry(target, paths) {
-		return []PlannedFile{{Target: target, Change: RulesChangeReplace}}
+	retired := legacyEntryWillRetire(paths)
+	var files []PlannedFile
+	if retired && linksToLegacyEntry(target, paths) {
+		files = append(files, PlannedFile{Target: target, Change: RulesChangeReplace})
+	} else {
+		files = append(files, planRulesFile(agent, target, true, paths, retired))
 	}
-	files := []PlannedFile{planRulesFile(agent, target, true, paths)}
 	if override := rulesOverrideTarget(target); override != "" {
-		files = append(files, planRulesFile(agent, override, false, paths))
+		files = append(files, planRulesFile(agent, override, false, paths, retired))
 	}
 	return files
 }
 
-func planRulesFile(agent, target string, create bool, paths config.InstallPaths) PlannedFile {
-	edit, err := planTargetIntegration(agent, target, create, paths)
+func planRulesFile(agent, target string, create bool, paths config.InstallPaths, retired bool) PlannedFile {
+	edit, err := planTargetIntegration(agent, target, create, paths, retired)
 	file := PlannedFile{Target: target, Err: err}
 	switch {
 	case err != nil:
@@ -153,14 +159,15 @@ func groupEnabled(group PlanGroup, switches config.InstallRules) bool {
 	return !slices.ContainsFunc(group.Agents, func(agent string) bool { return !switches.Enabled(agent) })
 }
 
-// rulesChoice maps the selected groups to the agent switches that change: an agent of an
-// unselected group turns off, and an agent of a selected group that was off turns on.
+// rulesChoice maps the selected groups to the agent switches to save: every agent of an
+// unselected group gets its own false, so a later global change cannot turn it back on, and an
+// agent of a selected group that was off turns on.
 func rulesChoice(groups []PlanGroup, selected []int, switches config.InstallRules) map[string]bool {
 	choice := map[string]bool{}
 	for index, group := range groups {
 		want := slices.Contains(selected, index)
 		for _, agent := range group.Agents {
-			if switches.Enabled(agent) != want {
+			if !want || !switches.Enabled(agent) {
 				choice[agent] = want
 			}
 		}

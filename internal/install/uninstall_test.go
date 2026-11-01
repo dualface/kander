@@ -24,6 +24,7 @@ func TestRemoveRulesReferences(t *testing.T) {
 		{"legacy and invalid", "# Mine\n\n@~/.agents/KANDER-AGENTS.md\n/gone/KANDER-AGENTS.md\n", "# Mine\n", 2},
 		{"comment and prose stay", "<!-- @~/.agents/kander/KANDER-AGENTS.md -->\nSee ~/.agents/kander/KANDER-AGENTS.md for rules.\n", "", 0},
 		{"no trailing newline", "# Mine\n\n@~/.agents/kander/KANDER-AGENTS.md", "# Mine", 1},
+		{"comment on the command line", "@~/.agents/kander/KANDER-AGENTS.md <!-- user: run checks before committing -->\n", "<!-- user: run checks before committing -->\n", 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got, removed := RemoveRulesReferences(tt.text)
@@ -256,5 +257,29 @@ func TestRunUninstallConfirmation(t *testing.T) {
 	}
 	if code := run("--force"); code != 2 {
 		t.Fatalf("unknown option: code=%d", code)
+	}
+}
+
+func TestUninstallEmptiesFileBehindSymlinkedDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	home := setupInstallHome(t)
+	dotfiles := filepath.Join(home, "dotfiles", "codex")
+	if err := os.MkdirAll(dotfiles, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(dotfiles, filepath.Join(home, ".codex")); err != nil {
+		t.Fatal(err)
+	}
+	paths, _ := config.GlobalInstallPaths()
+	real := filepath.Join(dotfiles, "AGENTS.md")
+	writeIntegrateFile(t, real, referenceBlock("codex", paths))
+	plan := PlanUninstall(paths)
+	if err := ApplyUninstall(plan, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readBytes(t, real); got != "" {
+		t.Fatalf("file behind the symlinked directory=%q", got)
 	}
 }

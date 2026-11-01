@@ -108,7 +108,7 @@ func TestRulesChoiceRecordsOnlyChanges(t *testing.T) {
 	config.SetAgentInstallRules(cfg, "codex", &off)
 	switches := config.InstallRulesOf(cfg)
 	groups := []PlanGroup{{Agents: []string{"claude"}}, {Agents: []string{"codex"}}, {Agents: []string{"pi"}}}
-	if got := rulesChoice(groups, []int{0, 2}, switches); len(got) != 0 {
+	if got := rulesChoice(groups, []int{0, 2}, switches); len(got) != 1 || got["codex"] {
 		t.Fatalf("default selection recorded %v", got)
 	}
 	got := rulesChoice(groups, []int{1}, switches)
@@ -152,5 +152,58 @@ func TestPerformSavesRulesChoiceBeforeWriting(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".claude", "CLAUDE.md")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRulesChoiceStoresFalseForInheritedOff(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.InstallRules = false
+	groups := []PlanGroup{{Agents: []string{"claude"}}, {Agents: []string{"codex"}}}
+	got := rulesChoice(groups, []int{1}, config.InstallRulesOf(cfg))
+	if len(got) != 2 || got["claude"] || !got["codex"] {
+		t.Fatalf("choice=%v", got)
+	}
+}
+
+func TestPlanRulesInjectionAssumesLegacyMigration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	home := setupInstallHome(t)
+	paths, _ := config.GlobalInstallPaths()
+	legacy := legacyRulesEntry(paths)
+	writeIntegrateFile(t, legacy, "# previous entry\n")
+	for _, dir := range []string{".claude", ".codex"} {
+		if err := os.MkdirAll(filepath.Join(home, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claude := filepath.Join(home, ".claude", "CLAUDE.md")
+	writeIntegrateFile(t, claude, "# Mine\n\n@~/.agents/KANDER-AGENTS.md\n")
+	codex := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.Symlink(legacy, codex); err != nil {
+		t.Fatal(err)
+	}
+	override := filepath.Join(home, ".codex", "AGENTS.override.md")
+	writeIntegrateFile(t, override, "# Override\n")
+	changes := plannedChanges(PlanRulesInjection(paths))
+	for target, want := range map[string]RulesChange{claude: RulesChangeRewrite, codex: RulesChangeReplace, override: RulesChangeAppend} {
+		if got, ok := changes[target]; !ok || got != want {
+			t.Errorf("%s: change=%v ok=%v want %v", target, got, ok, want)
+		}
+	}
+	result, err := Perform(Request{Language: "cn", Source: stubBinary(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual := map[string]IntegrationStatus{}
+	for _, item := range result.Integrations {
+		actual[item.Target] = item.Status
+		if item.Override != nil {
+			actual[item.Override.Target] = item.Override.Status
+		}
+	}
+	if actual[claude] != IntegrationRewritten || actual[override] != IntegrationUpdated || !slices.Contains(result.LegacyLinksRemoved, codex) {
+		t.Fatalf("install did not match the plan: %v links=%v", actual, result.LegacyLinksRemoved)
 	}
 }

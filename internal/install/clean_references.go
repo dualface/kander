@@ -284,26 +284,7 @@ func referenceResolves(ref string, spellings map[string]struct{}, entry, baseDir
 // blanked out, mirroring stripCommentsAndFences so classification sees exactly the active
 // lines while the original lines stay available for output.
 func liveLines(text string) []string {
-	dead := make([]bool, len(text))
-	for i := 0; i < len(text); {
-		rel := strings.Index(text[i:], "<!--")
-		if rel < 0 {
-			break
-		}
-		start := i + rel
-		end := strings.Index(text[start+4:], "-->")
-		if end < 0 {
-			for j := start; j < len(text); j++ {
-				dead[j] = true
-			}
-			break
-		}
-		stop := start + 4 + end + 3
-		for j := start; j < stop; j++ {
-			dead[j] = true
-		}
-		i = stop
-	}
+	dead := htmlCommentMask(text)
 	lines := strings.Split(text, "\n")
 	live := make([]string, len(lines))
 	pos := 0
@@ -350,16 +331,44 @@ func liveLines(text string) []string {
 	return live
 }
 
+// htmlCommentMask marks every byte of text that lies inside an HTML comment, an unclosed
+// comment running to the end.
+func htmlCommentMask(text string) []bool {
+	dead := make([]bool, len(text))
+	for i := 0; i < len(text); {
+		rel := strings.Index(text[i:], "<!--")
+		if rel < 0 {
+			break
+		}
+		start := i + rel
+		end := strings.Index(text[start+4:], "-->")
+		if end < 0 {
+			for j := start; j < len(text); j++ {
+				dead[j] = true
+			}
+			break
+		}
+		stop := start + 4 + end + 3
+		for j := start; j < stop; j++ {
+			dead[j] = true
+		}
+		i = stop
+	}
+	return dead
+}
+
 // RemoveRulesReferences removes every Kander rules load command from text, whatever entry it
 // names, and returns the result with the number of dropped load commands. It recognizes the
 // same forms as CleanRulesReferences and also drops the `## Kander Rules Entry` heading and the
 // blank lines of a block that held nothing else, plus the blank line Kander put before an
-// appended block. Lines inside HTML comments and code fences stay.
+// appended block. Lines inside HTML comments and code fences stay, and comment text sharing a
+// line with a load command is kept on that line.
 func RemoveRulesReferences(text string) (string, int) {
 	trailingNewline := strings.HasSuffix(text, "\n")
 	body := strings.TrimSuffix(text, "\n")
 	lines := strings.Split(body, "\n")
 	live := liveLines(body)
+	comments := commentLines(body)
 	drop := make([]bool, len(lines))
 	removed := 0
 	for i := 0; i < len(lines); i++ {
@@ -417,8 +426,13 @@ func RemoveRulesReferences(text string) (string, int) {
 	}
 	var kept []string
 	for i, line := range lines {
-		if !drop[i] {
+		switch {
+		case !drop[i]:
 			kept = append(kept, line)
+		case comments[i] != "":
+			// The load command shares its line with comment text the user wrote; only the
+			// command goes.
+			kept = append(kept, comments[i])
 		}
 	}
 	out := strings.Join(kept, "\n")
@@ -426,4 +440,24 @@ func RemoveRulesReferences(text string) (string, int) {
 		out += "\n"
 	}
 	return out, removed
+}
+
+// commentLines returns, per line, the HTML comment text the line holds, trimmed; a line without
+// a comment yields "".
+func commentLines(text string) []string {
+	dead := htmlCommentMask(text)
+	lines := strings.Split(text, "\n")
+	out := make([]string, len(lines))
+	pos := 0
+	for i, line := range lines {
+		var b strings.Builder
+		for j := 0; j < len(line); j++ {
+			if dead[pos+j] {
+				b.WriteByte(line[j])
+			}
+		}
+		out[i] = strings.TrimSpace(b.String())
+		pos += len(line) + 1
+	}
+	return out
 }

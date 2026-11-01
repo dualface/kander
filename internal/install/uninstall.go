@@ -194,8 +194,11 @@ func planReferenceRemoval(target string, override bool, paths config.InstallPath
 		return UninstallItem{}, false
 	}
 	rest := strings.TrimSpace(stripped)
-	if !linked && !override && (rest == "" || isMDCTarget(target) && rest == strings.TrimSpace(alwaysApplyFrontmatter)) {
-		return UninstallItem{Action: UninstallRemove, Path: resolved}, true
+	kanderOnly := rest == "" || isMDCTarget(target) && rest == strings.TrimSpace(alwaysApplyFrontmatter)
+	// Deletion never follows a symlink: a file whose directory is reached through one is
+	// emptied of the Kander lines instead.
+	if kanderOnly && !linked && !override && resolved == filepath.Clean(target) {
+		return UninstallItem{Action: UninstallRemove, Path: target}, true
 	}
 	return UninstallItem{Action: UninstallEdit, Path: resolved, content: []byte(stripped)}, true
 }

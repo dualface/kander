@@ -38,6 +38,14 @@ func setupSwitchHome(t *testing.T) (string, config.InstallPaths) {
 
 func TestDoctorReportsSwitchOffWithoutWriting(t *testing.T) {
 	home, paths := setupSwitchHome(t)
+	existing := map[string]string{
+		filepath.Join(home, ".codex", "AGENTS.md"):                           "# Mine\n",
+		filepath.Join(home, ".codex", "AGENTS.override.md"):                  "# Override\n",
+		filepath.Join(home, ".pi", "agent", "extensions", "kander-rules.ts"): "// old\n",
+	}
+	for path, content := range existing {
+		writeRulesFile(t, path, content)
+	}
 	off := false
 	cfg := config.DefaultConfig()
 	config.SetAgentInstallRules(cfg, "codex", &off)
@@ -60,14 +68,13 @@ func TestDoctorReportsSwitchOffWithoutWriting(t *testing.T) {
 			t.Fatalf("repair=%v: turned-off agent reported as a problem:\n%s", repair, text)
 		}
 	}
-	for _, path := range []string{
-		filepath.Join(home, ".codex", "AGENTS.md"),
-		filepath.Join(home, ".pi", "agent", "AGENTS.md"),
-		filepath.Join(home, ".pi", "agent", "extensions", "kander-rules.ts"),
-	} {
-		if _, err := os.Lstat(path); !os.IsNotExist(err) {
-			t.Fatalf("%s written: %v", path, err)
+	for path, content := range existing {
+		if got, err := os.ReadFile(path); err != nil || string(got) != content {
+			t.Fatalf("%s changed: %q %v", path, got, err)
 		}
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".pi", "agent", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("pi rules file written: %v", err)
 	}
 }
 
