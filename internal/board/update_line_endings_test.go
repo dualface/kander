@@ -79,8 +79,8 @@ func TestUpdateAcceptsLFSubmissionOnCRLFCard(t *testing.T) {
 	if err := tryUpdate(root, s, lf); err != nil {
 		t.Fatalf("LF submission on a CRLF card: %v", err)
 	}
-	if got := storedCardBytes(t, root, s.Entry.TaskID); got != lf {
-		t.Fatalf("stored body is not the LF submission:\n%q", got)
+	if got := storedCardBytes(t, root, s.Entry.TaskID); got != crlf(lf) {
+		t.Fatalf("stored body is not the submission with the CRLF line endings of the card:\n%q", got)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestUpdateAcceptsCRLFSubmissionOnLFCard(t *testing.T) {
 		t.Fatalf("CRLF submission on an LF card: %v", err)
 	}
 	if got := storedCardBytes(t, root, s.Entry.TaskID); got != lf {
-		t.Fatalf("stored body is not the submission with LF line endings:\n%q", got)
+		t.Fatalf("stored body is not the submission with the LF line endings of the card:\n%q", got)
 	}
 }
 

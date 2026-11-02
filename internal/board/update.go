@@ -258,11 +258,13 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		if err != nil {
 			return err
 		}
+		// Every check of the body compares lines byte for byte, so both sides use
+		// LF: a card or a submission may carry CRLF from a Windows editor or from
+		// a template a CRLF build embedded. The stored body then takes the line
+		// ending of the card, as the other producers of a CRLF card do.
+		crlfCard := false
 		if o.Document == "spec.md" {
-			// Every check of the body compares lines byte for byte, so both sides
-			// use LF: a card or a submission may carry CRLF from a Windows editor
-			// or from a template a CRLF build embedded. The stored body keeps LF
-			// too, because metadata writes and record sections always add LF lines.
+			crlfCard = strings.Contains(s.Text, "\r\n")
 			s.Text = lfLineEndings(s.Text)
 			o.Text = lfLineEndings(o.Text)
 		}
@@ -299,6 +301,9 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			text, err = validSpecUpdate(s.Text, text, state, o.ContractDecision)
 			if err != nil {
 				return err
+			}
+			if crlfCard {
+				text = strings.ReplaceAll(text, "\n", "\r\n")
 			}
 		} else if o.ContractDecision != "" {
 			return kanbanError("board.transaction_invalid", "--contract-decision-file")
