@@ -101,7 +101,8 @@ cd "$repo_root"
 
 workdir=
 cleanup() {
-	[ -n "$workdir" ] && [ -d "$workdir" ] && rm -rf "$workdir"
+	# An if keeps a false test from becoming the script's exit status.
+	if [ -n "$workdir" ] && [ -d "$workdir" ]; then rm -rf "$workdir"; fi
 }
 trap cleanup EXIT
 
