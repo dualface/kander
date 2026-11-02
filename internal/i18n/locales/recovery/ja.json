@@ -70,5 +70,7 @@
   "launch.session_repair_start_unfinished_takeover": "{{.V0}} の開始試行は未完了です（状態 {{.V1}}）。セッションは修復できません。{{.V2}}次の手順: ランチャーの実行中は待ちます。それ以外は kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> で開始試行を終わらせてください。",
   "board.coordinator_missing_handoff": "コーディネーターのチェックポイント競合、または事実が無効です: execution cycle changed without lifecycle handoff",
   "board.coordinator_missing_handoff_next_step": "次の手順: reconcile はこのメンバーを受け入れられません。まずユーザーに報告して判断を仰ぎ、ユーザーが決めた後で kander coordinator recover を実行してください（snippets/failure-recovery.md「Blocked Group Members」）。",
-  "launch.unmarked_pane_cannot_adopt": "kander resume --adopt では終わらせられません: {{.V0}} の pane にはセッションマーカーがありません。--agent で引き継いでもそこの古い executor は動き続けるため、先に手動で停止してください。"
+  "launch.unmarked_pane_cannot_adopt": "kander resume --adopt では終わらせられません: {{.V0}} の pane にはセッションマーカーがありません。--agent で引き継いでもそこの古い executor は動き続けるため、先に手動で停止してください。",
+  "launch.recover_start_pending_takeover": "{{.V0}} の開始試行は終わっていません（状態 pending）。リセットするとその executor が管理されなくなります。{{.V1}}次の手順: ランチャーの実行中は待ちます。ランチャーが終わっていれば kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
+  "launch.recover_start_pending_bound_takeover": "{{.V0}} の開始試行は終わっていません（状態 pending）。リセットするとその executor が管理されなくなります。{{.V2}}次の手順: ランチャーの実行中は待ちます。ランチャーが終わっていれば、dispatch {{.V1}} を kander dispatch fail または cancel（完了している場合は kander dispatch settle）で終わらせてから kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。"
 }

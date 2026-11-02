@@ -244,16 +244,24 @@ func unmarkedPane(report liveness.Report) bool {
 	return report.Status == liveness.Unknown && report.Evidence != nil && report.Evidence.Unmarked
 }
 
-// startUnfinishedError refuses an action while a start attempt has not ended. Its
-// next step names adoption only when adoption can work: the card must still show
-// the identity of the attempt, and a pane must be able to prove its executor.
-func startUnfinishedError(s board.Snapshot, record board.ExecutionRecord, adoptKey, takeoverKey string) error {
-	task := s.Entry.TaskID
+// adoptionBlocker says why adoption cannot end an unfinished start, or returns ""
+// when it can: the card must still show the identity of the attempt, and the pane
+// must be able to prove its executor.
+func adoptionBlocker(s board.Snapshot, record board.ExecutionRecord) string {
 	if board.StartIdentityChanged(s, record) {
-		return launchError(takeoverKey, task, record.Status, t("launch.start_identity_changed"))
+		return t("launch.start_identity_changed")
 	}
 	if unmarkedPane(adoptLivenessFn(s)) {
-		return launchError(takeoverKey, task, record.Status, t("launch.unmarked_pane_cannot_adopt", orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
+		return t("launch.unmarked_pane_cannot_adopt", orNA(board.MetadataFrom(s.Text, board.FieldWindow)))
 	}
-	return launchError(adoptKey, task, record.Status)
+	return ""
+}
+
+// startUnfinishedError refuses an action while a start attempt has not ended. Its
+// next step names adoption only when adoption can work.
+func startUnfinishedError(s board.Snapshot, record board.ExecutionRecord, adoptKey, takeoverKey string) error {
+	if blocker := adoptionBlocker(s, record); blocker != "" {
+		return launchError(takeoverKey, s.Entry.TaskID, record.Status, blocker)
+	}
+	return launchError(adoptKey, s.Entry.TaskID, record.Status)
 }

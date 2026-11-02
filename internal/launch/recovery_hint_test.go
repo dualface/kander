@@ -153,4 +153,9 @@ func TestOldTakenOverCardOffersOnlyTheTakeover(t *testing.T) {
 	requireTakeoverOnly(t, task, RequireResumable(root, s.Entry), changed)
 	_, err = RepairMissingSession(context.Background(), root, s, "")
 	requireTakeoverOnly(t, task, err, changed)
+	_, err = RecoverCoordinator(context.Background(), root, board.CoordinatorRecover{Member: task})
+	requireTakeoverOnly(t, task, err, changed)
+	if probed {
+		t.Fatal("a hint probed a card whose identity changed")
+	}
 }
