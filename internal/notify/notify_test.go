@@ -432,7 +432,12 @@ func assertPastedLanguageReminder(t *testing.T, root, payload, language string) 
 // the synthesized one, and a failed delivery still recovers the session after the
 // rollback: the stored record is this execution, not a successor.
 func TestNotifyRecoversALegacyCardAfterADriftWriteBack(t *testing.T) {
-	root, _ := setupBoard(t)
+	root, fakeBin := setupBoard(t)
+	// The recovery channel resolves the card's agent on PATH, so the test must not
+	// depend on a claude installed on the host.
+	if err := os.WriteFile(filepath.Join(fakeBin, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("KANBAN_HERDR_SESSION", "session-1")
 	t.Setenv("KANBAN_HERDR_STALE_PANE", "w0:p0")
 	t.Setenv("KANBAN_HERDR_PROMPT_FAIL", "1")
