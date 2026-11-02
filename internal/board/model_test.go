@@ -107,10 +107,16 @@ func modelModeBounds() modelScenarioBounds {
 func modelSearches(t *testing.T, bounds modelScenarioBounds, ops []modelOp) []modelRun {
 	t.Helper()
 	modelFastTemp(t)
-	return []modelRun{
-		modelExplore(t, "single", modelInitial(t, false, 1), modelSingleSeeds(), bounds.single, ops),
-		modelExplore(t, "group", modelInitial(t, true, 2), modelGroupSeeds(), bounds.group, ops),
+	// Each scenario logs as soon as it ends. With -v the line reaches the CI log
+	// at once, so a run that times out still shows the scenarios it finished.
+	var runs []modelRun
+	finish := func(r modelRun) {
+		t.Logf("%s: operations=%d members=%d explore=%d exit=%d states=%d expanded=%d dead=%d seconds=%.1f", r.name, r.operations, r.members, r.bounds.explore, r.bounds.exit, r.states, r.expanded, len(r.dead), r.elapsed.Seconds())
+		runs = append(runs, r)
 	}
+	finish(modelExplore(t, "single", modelInitial(t, false, 1), modelSingleSeeds(), bounds.single, ops))
+	finish(modelExplore(t, "group", modelInitial(t, true, 2), modelGroupSeeds(), bounds.group, ops))
+	return runs
 }
 
 // modelVerdict compares the search with the allow list. It returns one failure
@@ -142,7 +148,6 @@ func TestModelCompositeStates(t *testing.T) {
 	runs := modelSearches(t, modelModeBounds(), modelOps())
 	found := map[string][]*modelNode{}
 	for _, r := range runs {
-		t.Logf("%s: operations=%d members=%d explore=%d exit=%d states=%d expanded=%d dead=%d seconds=%.1f", r.name, r.operations, r.members, r.bounds.explore, r.bounds.exit, r.states, r.expanded, len(r.dead), r.elapsed.Seconds())
 		for _, n := range r.dead {
 			id := modelClassify(modelDeadEnds, n.diagnosis)
 			found[id] = append(found[id], n)
