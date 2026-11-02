@@ -258,6 +258,14 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		if err != nil {
 			return err
 		}
+		if o.Document == "spec.md" {
+			// Every check of the body compares lines byte for byte, so both sides
+			// use LF: a card or a submission may carry CRLF from a Windows editor
+			// or from a template a CRLF build embedded. The stored body keeps LF
+			// too, because metadata writes and record sections always add LF lines.
+			s.Text = lfLineEndings(s.Text)
+			o.Text = lfLineEndings(o.Text)
+		}
 		if err = tx.requireExecution(s, o.Authorization, true); err != nil {
 			return err
 		}
@@ -297,6 +305,12 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 		}
 		return tx.Put(id, o.Document, text)
 	})
+}
+
+// lfLineEndings replaces each CRLF line ending with LF. A lone CR is content,
+// not a line ending, and stays.
+func lfLineEndings(text string) string {
+	return strings.ReplaceAll(text, "\r\n", "\n")
 }
 
 // RunUpdate implements the versioned UTF-8 body and attachment update entrance.
