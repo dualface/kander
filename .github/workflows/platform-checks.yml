@@ -7,6 +7,9 @@ on:
 
 jobs:
   test:
+    # Above the model step's go test timeout, so the test, not the runner, ends a
+    # slow search and prints its goroutine dump.
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -56,19 +59,23 @@ jobs:
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
         run: go test -v ./internal/review -count=1 -run '^(TestProcessTableHasIdentity|TestChildExitingDuringRecheckIsNotLeftover|TestLeftoverIsRejectedCollectedAndAttributed|TestAbnormalEndsSkipTheRecheck|TestWindowsDelayedTamperCollected)$'
+      # Windows takes 60 to 85 minutes here (docs/model-test.md). -v prints each
+      # scenario's size and time as it ends, also in a run that times out.
       - name: Composite state model, default mode
         env:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: go test ./internal/board -count=1 -timeout 90m -run TestModel
+        run: go test ./internal/board -count=1 -v -timeout 150m -run TestModel
       - name: Directed dead-end tests
+        if: ${{ !cancelled() }}
         env:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
         run: go test ./internal/launch -count=1 -v -run "TestLateFailureKeepsAnExecutorThatWorked|TestStartConfirmsSessionOverExecutorWrite|TestPaneDeliveryExecutorWriteKeepsTheStart|TestTakeoverDiscoverySurvivesExecutorWrite|TestCompletedWrapUpVerifiesGitOnce"
       - name: Workflow test patterns
+        if: ${{ !cancelled() }}
         run: go test ./cmd/kander -count=1 -v -run TestWorkflowRunPattern
 
   model-full:

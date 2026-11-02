@@ -22,7 +22,20 @@ The search is bounded. It does not prove that no dead end exists.
 | default | `go test ./...` | explore 3, exit 2 | explore 2, exit 2, focused |
 | full | `KANDER_MODEL_DEPTH=full` | explore 4, exit 3 | explore 3, exit 3, focused |
 
-`platform-checks.yml` runs the default mode on Linux, macOS and Windows and the full mode in the `model-full` job on Linux. Without a memory directory the search is much slower: expect several minutes on macOS and tens of minutes on Windows. Those steps set `TMPDIR`, `TMP` and `TEMP` to the runner temp directory, because `tempBoard` refuses the symlinked default temp path of macOS. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
+`platform-checks.yml` runs the default mode on Linux, macOS and Windows and the full mode in the `model-full` job on Linux. The test logs one line per scenario as soon as that scenario ends, with its `states`, `expanded` and `seconds`. The default-mode step runs with `-v`, so the CI log shows these lines at once, also in a run that times out.
+
+Without a memory directory the search is much slower. The four passing `platform-checks` runs after commit 9c4341e (41285615796, 41394355819, 41394364238 and 41399684333) measured these model step times:
+
+| Job | Mode | Minutes |
+| --- | --- | --- |
+| `test (ubuntu-latest)` | default | 5.0 to 6.5 |
+| `test (macos-latest)` | default | 10.3 to 16.2 |
+| `test (windows-latest)` | default | 61.5 to 83.7 |
+| `model-full` (Linux) | full | 12.8 to 27.6 |
+
+Windows takes 10 to 16 times as long as Linux in the same run, and one commit can vary widely: on commit 66c6b4b, Windows took 61.5 minutes in run 41399684333 and reached the earlier 90-minute limit in run 41399815626. Run 41363725793 also reached that limit. The default-mode step now allows 150 minutes and the `test` job 180, and the later steps of the job run after a model failure. The full mode comes close to its 30-minute limit.
+
+The model steps set `TMPDIR`, `TMP` and `TEMP` to the runner temp directory, because `tempBoard` refuses the symlinked default temp path of macOS. On Linux the search runs in `/dev/shm` when that mount has at least 1 GiB free, because board writes sync every file. The full mode peaks near 310 MiB there. The search keeps few copies on disk: it drops a copy as soon as its state is known and expands at most 64 states between merges.
 
 ## Reading a failure
 
@@ -47,7 +60,7 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 3. Allocate identifiers with `nextID` and `nextCommit`, so one path gives one set of identifiers in every run.
 4. Add a seed when the new state sits deeper than the bounds.
 5. When the card repairs a dead end, remove its row. When it adds the records an invariant needs, give that row of `modelInvariants` a `check` and drop its `owner`.
-6. Run `go test ./internal/board -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -run TestModelCompositeStates`. Compare the time with the budgets: 45 seconds for the default mode and 5 minutes for the full mode.
+6. Run `go test ./internal/board -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -run TestModelCompositeStates`. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search multiplies the Windows time in "Modes", which already uses most of its 150-minute limit, and the full mode, which is near its 30-minute limit.
 
 `R.dropRequired` drops a required batch with no decision, from the seed `dropped-required`, which `R.planChainedRequired` builds. `H.recoverNoPlan` resets a member that has no plan, from the seed `recovered-no-plan`. The seed `dropped-recovered` resets a member after a drop left its plan with no required role. `R.dropBatch` drops an N/A batch and `H.recover` resets a member with a plan.
 
