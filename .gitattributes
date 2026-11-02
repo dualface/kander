@@ -1,0 +1,5 @@
+# Text files use LF in the index and in every checkout, so a Windows build
+# embeds the same bytes as the release builds. Windows batch files need CRLF.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf

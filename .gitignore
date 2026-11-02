@@ -20,5 +20,6 @@ Thumbs.db
 /kanban/
 
 .*
+!.gitattributes
 !.github/
 !.github/**
