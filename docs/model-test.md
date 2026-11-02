@@ -60,7 +60,7 @@ A failure that says `model infrastructure` is a defect of the test itself, not a
 3. Allocate identifiers with `nextID` and `nextCommit`, so one path gives one set of identifiers in every run.
 4. Add a seed when the new state sits deeper than the bounds.
 5. When the card repairs a dead end, remove its row. When it adds the records an invariant needs, give that row of `modelInvariants` a `check` and drop its `owner`.
-6. Run `go test ./internal/board -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -run TestModelCompositeStates`. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search multiplies the Windows time in "Modes", which already uses most of its 150-minute limit, and the full mode, which is near its 30-minute limit.
+6. Run `go test ./internal/board -v -run TestModel` and `KANDER_MODEL_DEPTH=full go test ./internal/board -v -run TestModelCompositeStates`; without `-v` a passing test hides the scenario lines. Compare the `seconds` of each scenario with the same command before the change. A change that slows the search multiplies the Windows time in "Modes", which already uses most of its 150-minute limit, and the full mode, which is near its 30-minute limit.
 
 `R.dropRequired` drops a required batch with no decision, from the seed `dropped-required`, which `R.planChainedRequired` builds. `H.recoverNoPlan` resets a member that has no plan, from the seed `recovered-no-plan`. The seed `dropped-recovered` resets a member after a drop left its plan with no required role. `R.dropBatch` drops an N/A batch and `H.recover` resets a member with a plan.
 
