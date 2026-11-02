@@ -87,6 +87,12 @@ jobs:
           "ref=$ref", "version=$version", "test=$($test.ToString().ToLower())", "release=$($release.ToString().ToLower())", "build=$($build.ToString().ToLower())" |
             Add-Content -LiteralPath $env:GITHUB_OUTPUT
 
+      # An older tag has no .gitattributes, and the runner's default converts text
+      # files to CRLF, which the binary would then embed.
+      - name: Keep LF line endings
+        if: steps.mode.outputs.build == 'true'
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v5
         if: steps.mode.outputs.build == 'true'
         with:
@@ -96,6 +102,10 @@ jobs:
         if: steps.mode.outputs.build == 'true'
         with:
           go-version-file: go.mod
+
+      - name: Embedded line endings
+        if: steps.mode.outputs.build == 'true'
+        run: go test ./rules ./internal/board ./internal/issue ./internal/config -count=1 -v -run TestEmbeddedFilesUseLF
 
       # The packer's version and identity rules, checked without building.
       - name: Check packer version rules

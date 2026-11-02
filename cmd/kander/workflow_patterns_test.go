@@ -1,7 +1,7 @@
 package main
 
-// platform-checks.yml selects tests by name, and `go test -run` exits 0 when its
-// pattern matches nothing. A renamed or deleted test therefore leaves a green CI
+// platform-checks.yml and msix.yml select tests by name, and `go test -run`
+// exits 0 when its pattern matches nothing. A renamed or deleted test therefore leaves a green CI
 // step that runs no test. These tests turn that state into a failure.
 
 import (
@@ -112,12 +112,16 @@ func checkWorkflowRunPatterns(t *testing.T, root, workflow string) error {
 }
 
 func TestWorkflowRunPatternsMatchTests(t *testing.T) {
-	workflow, err := os.ReadFile(filepath.Join(repositoryRoot, ".github", "workflows", "platform-checks.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := checkWorkflowRunPatterns(t, repositoryRoot, string(workflow)); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"platform-checks.yml", "msix.yml"} {
+		t.Run(name, func(t *testing.T) {
+			workflow, err := os.ReadFile(filepath.Join(repositoryRoot, ".github", "workflows", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkWorkflowRunPatterns(t, repositoryRoot, string(workflow)); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
