@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 — 2026-11-02
 
 - New (#21): the `install_rules` switch controls whether Kander writes into an agent's own files: the rules file reference, `AGENTS.override.md`, the `.mdc` frontmatter, the replacement of a symlink to the previous entry, and the rules extension. The top-level key covers every agent, and `agents.<name>.install_rules` (built-in agents only) overrides it per agent. Both default to `true`, so existing configs keep their behavior. Only the scope `config.json` sets them; a project overlay value is ignored with a doctor warning.
 - New (#21): with an agent's switch off, `kander install`, `kander doctor`, the bare `kander` startup doctor, the TUI environment check, and the options save never write its files, and doctor prints one "turned off" line instead of a missing-integration warning. The rules root is still extracted and repaired. A rules file that several agents read (a project `AGENTS.md`, or one linked to another agent's) stays unwritten while any of them is off.
@@ -24,8 +24,6 @@
 - Fix (upgrade from 1.0.0): a card that 1.0.0 started and then reclaimed from `review/` with `kander move <id> working --owner <agent>`, with no handoff, works again. It read as a takeover of the old cycle: `kander resume` and `kander resume --agent` failed with `start success binding`, also when `kander coordinator recover` named that way out, and `kander coordinator reconcile` blocked the member. It now reads as a reclaim of the card's cycle, also after the first write. `kander resume --agent --decision` replaces the executor and `kander coordinator reconcile` accepts the member. A plain `kander resume`, `kander notify` and `kander dismiss` refuse it with the error that names `kander resume --agent`, because the record has no session of its own. `SESSION` still shows the old executor.
 - Reconcile accepts this cycle change only on a link synthesized for such a card. The cycle change has no decision record, and the user accepted that. The checkpoint shows it per member in `unrecorded_reclaims`. Any other cycle change with no handoff still fails with `execution cycle changed without lifecycle handoff`.
 - Fix (upgrade from 1.0.0): a schema 1 dispatch round with no receipt now keeps its real place, by `Input.CreatedAt`. It used to sort last, so `kander coordinator reconcile` failed with `unfinished previous dispatch` or `unbound member lacks dispatch termination`, and a card with several such rounds failed `kander dispatch prepare`. A missing creation time, a time equal to an adjacent round, or times that disagree with the receipts still fail with `legacy dispatch order unknown`.
-
-## v1.1.0 — 2026-11-01
 
 - Fix (tmux, #26): an agent started through `tmux` or `tmux-session` now runs in the startup directory whatever the tmux server's own directory is. The pane enters the directory before `exec`.
 - Fix (start, #26): a container launcher now refuses a startup directory that is missing, is not a directory, or has a line break in its path, before it creates a container. tmux used to exit 0 and open the pane in `$HOME`. `foreground` and `console` are unchanged.
