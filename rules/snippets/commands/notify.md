@@ -49,7 +49,7 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 ## Rejections
 
 - A card claimed or reclaimed with `--owner`: it has no executor session. The refusal comes before any dispatch binds and names `snippets/failure-recovery.md`.
-- A card whose start attempt has not ended (current execution record `pending` or `unresolved`): the refusal comes before any dispatch binds, and the error names `kander resume <task-id> --adopt --decision <reference>` and `kander resume <task-id> --agent <agent> --decision <reference>` (`snippets/commands/start.md` "Late Failures").
+- A card whose start attempt has not ended (current execution record `pending` or `unresolved`): the refusal comes before any dispatch binds, and the error names `kander resume <task-id> --adopt --decision <reference>` and `kander resume <task-id> --agent <agent> --decision <reference>` (`snippets/commands/start.md` "Late Failures"). For an unmarked pane or an old card shape it names only the takeover (`snippets/commands/resume.md` "Adopting an Unfinished Start").
 - "target agent busy, not delivered" after the probe retries; both reasons when direct delivery and recovery fail; dispatch conflicts per `snippets/commands/dispatch.md`.
 - A card in `review/` that belongs to a task group or carries a binding, with no dispatch option: the error gives the `--kind` usage. `notify` never turns such a message into a fix dispatch.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error.

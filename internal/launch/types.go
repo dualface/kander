@@ -134,6 +134,10 @@ type LaunchOutcome struct {
 	Poll      func() *int
 	Container string
 	Pane      string
+	// SessionMarked: the pane carries the session marker of this launch. Only a
+	// PaneMetadata backend writes one, and without it no probe can prove the
+	// executor alive.
+	SessionMarked bool
 	// IdentityDone closes when the process identity step ended. It is nil for a
 	// launch that records none.
 	IdentityDone <-chan struct{}
@@ -200,5 +204,6 @@ var (
 	readDocumentFn      = board.ReadDocument
 	beginStartFn        = board.BeginTaskStart
 	beginTakeoverFn     = board.BeginTakeover
+	confirmStartFn      = board.ConfirmTaskStart
 	readStandingFn      = board.ReadExecutionStanding
 )

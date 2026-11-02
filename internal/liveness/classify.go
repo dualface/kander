@@ -252,7 +252,11 @@ func classifyProcessPane(ctx context.Context, entry board.Entry, session TaskSes
 		return staleReport(ctx, entry, session, launcher, container, detail, program, backend, search)
 	}
 	if facts.SessionMarker == "" {
-		return sawExecutor(ctx, report(entry, &session, Unknown, launcher, container, t("liveness.tmux_pane_has_no_session_marker"), ""), "")
+		out := sawExecutor(ctx, report(entry, &session, Unknown, launcher, container, t("liveness.tmux_pane_has_no_session_marker"), ""), "")
+		if out.Evidence != nil {
+			out.Evidence.Unmarked = true
+		}
+		return out
 	}
 	if session.Reference != "" && facts.SessionMarker != session.Reference {
 		return staleReport(ctx, entry, session, launcher, container, t("liveness.tmux_session_marker_mismatch"), program, backend, search)

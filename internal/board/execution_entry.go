@@ -470,6 +470,24 @@ func UnresolveExecution(root string, entry Entry, window, reason string) (Execut
 	})
 }
 
+// StartIdentityChanged reports a start attempt whose card shows another OWNER or
+// SESSION than the attempt recorded. A takeover of Kander 1.0.0 left this shape:
+// it rewrote the card and left the attempt pending.
+func StartIdentityChanged(s Snapshot, record ExecutionRecord) bool {
+	owner, session, _ := cardExecutionFacts(s)
+	return record.Owner != owner || record.Session != session
+}
+
+// CheckAdoptable refuses an adoption the card cannot take before any probe runs:
+// the card left working and review, or it no longer shows the identity of the
+// start attempt. Only a takeover ends such an attempt.
+func CheckAdoptable(s Snapshot, record ExecutionRecord) error {
+	if s.Entry.State != "working" && s.Entry.State != "review" || StartIdentityChanged(s, record) {
+		return kanbanError("board.adopt_start_identity_changed", s.Entry.TaskID, record.Status)
+	}
+	return nil
+}
+
 // AdoptExecution keeps the running executor of an unfinished start and ends the
 // attempt. observed is the snapshot the caller proved alive, with a cursor bound
 // to its record. A handoff in between refuses the write through the fence. A new
@@ -485,8 +503,8 @@ func AdoptExecution(root string, observed Snapshot, decision string) (ExecutionR
 		if !cur.StartUnfinished() {
 			return "", kanbanError("board.adopt_needs_unfinished_start", l.task, cur.Status)
 		}
-		if s.Entry.State != "working" && s.Entry.State != "review" || cur.Owner != owner || cur.Session != session {
-			return "", coordinatorError("start adoption binding")
+		if err := CheckAdoptable(s, *cur); err != nil {
+			return "", err
 		}
 		if o, ses, w := cardExecutionFacts(s); o != owner || ses != session || w != window {
 			return "", coordinatorError("start adoption binding")

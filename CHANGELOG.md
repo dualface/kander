@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fix (#22, `kander start` and `kander resume --agent`): a late failure on tmux, tmux-session, or another launcher whose panes carry the session marker, before the marker was written (failed session discovery or marker write), no longer lists `kander resume --adopt`. Such a pane reads `unknown`, so adoption could never succeed. `started-unresolved` now first tells you to stop the old executor in `WINDOW` by hand, because a takeover leaves it running, then names `kander resume <id> --agent <agent> --decision <reference> --message <message>`. A start that wrote the marker, and herdr and the other launchers, keep both next steps.
+- Fix (#22, `kander resume --adopt`): adoption of an unmarked pane is refused with the same hint. The plain `kander resume` and `kander notify` refusals of an unfinished start no longer name `--adopt` for an unmarked pane either.
+- Fix (upgrade from 1.0.0): a card whose start attempt stayed `pending` after a 1.0.0 takeover rewrote `OWNER` or `SESSION` is now refused by `kander resume --adopt` before any probe, with a localized error that names `kander resume <id> --agent <agent> --decision <reference> --message <message>`. It used to probe and then fail with `start adoption binding`. The attempt stays `pending`. The plain `kander resume` and `kander notify` refusals name only the takeover for such a card.
+- Fix (#20, `kander coordinator reconcile`): a member blocked by `execution cycle changed without lifecycle handoff` keeps that reason and now adds the next step: ask the user first, and run `kander coordinator recover` only after the user decides.
+
 ## v1.1.0 — 2026-11-02
 
 - New (#21): the `install_rules` switch controls whether Kander writes into an agent's own files: the rules file reference, `AGENTS.override.md`, the `.mdc` frontmatter, the replacement of a symlink to the previous entry, and the rules extension. The top-level key covers every agent, and `agents.<name>.install_rules` (built-in agents only) overrides it per agent. Both default to `true`, so existing configs keep their behavior. Only the scope `config.json` sets them; a project overlay value is ignored with a doctor warning.

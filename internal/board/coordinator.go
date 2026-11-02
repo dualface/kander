@@ -144,6 +144,21 @@ const checkpointSchema = 3
 func coordinatorError(detail string) error { return kanbanError("board.coordinator_conflict", detail) }
 func coordinatorHash(v any) string         { b, _ := json.Marshal(v); return messageHash(string(b)) }
 
+// missingHandoffError refuses an execution cycle change that no lifecycle handoff
+// records. Its text is the coordinator conflict with a fixed detail.
+func missingHandoffError() error { return kanbanError("board.coordinator_missing_handoff") }
+
+// blockReason is the reason a checkpoint keeps for a member it did not accept. A
+// cycle change without a handoff never reconciles by itself, and its only exit
+// loosens checks, so the reason adds that exit after the user's decision.
+func blockReason(err error) string {
+	var e *Error
+	if errors.As(err, &e) && e.Code == "board.coordinator_missing_handoff" {
+		return e.Message + " " + t("board.coordinator_missing_handoff_next_step")
+	}
+	return err.Error()
+}
+
 func checkpointIDs(c CoordinatorCheckpoint) []string {
 	ids := make([]string, 0, len(c.Members))
 	for id := range c.Members {
@@ -489,7 +504,7 @@ func reconcileCheckpoint(ctx context.Context, tx *Transaction, r CoordinatorReco
 				return c, false, e
 			}
 			m = c.Members[id]
-			m.Blocked = &CoordinatorBlock{Reason: e.Error()}
+			m.Blocked = &CoordinatorBlock{Reason: blockReason(e)}
 		}
 		members[id] = m
 	}

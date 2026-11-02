@@ -30,7 +30,7 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 		return snapshot, err
 	}
 	if exists && record.StartUnfinished() {
-		return snapshot, repairError("launch.session_repair_start_unfinished", snapshot.Entry.TaskID, record.Status)
+		return snapshot, startUnfinishedError(snapshot, record, "launch.session_repair_start_unfinished", "launch.session_repair_start_unfinished_takeover")
 	}
 	value := board.MetadataFrom(snapshot.Text, board.FieldWindow)
 	backend, address, ok := terminal.ParseWindow(value)

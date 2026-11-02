@@ -75,7 +75,7 @@ A start has three results:
 - When closing the container fails, the executor may still run. The starter does not roll back, and the result is unresolved.
 - A write that lands after the judgement makes the rollback refuse. The result is then unresolved too, although the container is closed.
 - The judgement has two limits. A dispatch or a manual `kander update` also counts as evidence, so the result is unresolved; that error is on the safe side. An executor that runs but has not written the card counts as no evidence, so the container closes and the executor ends with it.
-- The output is one line, then two next steps:
+- The output is one line, then the next steps. A start whose pane can prove its executor gets two:
 
 ```text
 started-unresolved: <task-id> window=<address> reason=<reason>
@@ -83,7 +83,16 @@ started-unresolved: <task-id> window=<address> reason=<reason>
   kander resume <task-id> --agent <agent> --decision <reference> --message <message>
 ```
 
-- After `started-unresolved`, never retry `kander start`. The card is no longer in `todo/`, and a second executor could overwrite the first. Report to the user and let the user choose adoption or takeover.
+- An unmarked start lists only the takeover. On tmux, tmux-session, and any launcher whose panes carry the session marker, the marker is written after session discovery. When discovery or the marker write fails, the pane has no marker, so `kander check` and `resume --adopt` read it as `unknown` and adoption can never succeed. The first next step then tells you to stop the old executor in `WINDOW` by hand, because a takeover does not stop it, and the second is the takeover:
+
+```text
+started-unresolved: <task-id> window=<address> reason=<reason>
+  stop the old executor at <address> by hand first: ...
+  kander resume <task-id> --agent <agent> --decision <reference> --message <message>
+```
+
+- A start that failed after the marker write, and every other launcher, keep both next steps.
+- After `started-unresolved`, never retry `kander start`. The card is no longer in `todo/`, and a second executor could overwrite the first. Report to the user and let the user choose among the next steps printed.
 - When a takeover or an adoption ended the attempt first, the starter prints `superseded: <task-id> ...` and exits 0. It closes nothing and rolls back nothing.
 
 **Start Checks and Rollback**

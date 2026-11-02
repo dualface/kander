@@ -504,7 +504,7 @@ func (l executionLedger) assertCard(s Snapshot) error {
 		if l.current != nil && l.current.StartUnfinished() {
 			return coordinatorError("pending start facts changed")
 		}
-		return coordinatorError("execution cycle changed without lifecycle handoff")
+		return missingHandoffError()
 	}
 	if l.current != nil && (s.Entry.State == "todo" || s.Entry.State == "backlog") && !l.current.ExecutionTerminal() {
 		return coordinatorError("member execution cycle changed without first-start facts: " + l.task)

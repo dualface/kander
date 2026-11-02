@@ -52,7 +52,11 @@ func RequireResumable(root string, entry board.Entry) error {
 		return err
 	}
 	if exists && record.StartUnfinished() && (entry.State == "working" || entry.State == "review") {
-		return launchError("board.dispatch_start_unfinished", entry.TaskID, record.Status)
+		s, err := board.ReadSnapshot(root, entry.TaskID)
+		if err != nil {
+			return err
+		}
+		return startUnfinishedError(s, record, "board.dispatch_start_unfinished", "launch.dispatch_start_unfinished_takeover")
 	}
 	return nil
 }

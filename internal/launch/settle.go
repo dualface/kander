@@ -52,6 +52,9 @@ type UnresolvedError struct {
 	Window  string
 	Reason  string
 	Command string
+	// Unmarked: the pane at Window carries no session marker, so adoption cannot
+	// prove its executor alive and a takeover leaves that executor running.
+	Unmarked bool
 	// hold keeps a foreground executor attached to this terminal.
 	hold func()
 }
@@ -61,12 +64,14 @@ func (e *UnresolvedError) Error() string {
 	return fmt.Sprintf("started-unresolved: %s window=%s reason=%s", e.TaskID, orNA(e.Window), e.Reason)
 }
 
-// NextSteps names the two ways out. A retried start is not one of them.
+// NextSteps names the ways out that can work. A retried start is not one of
+// them, and adoption is not one for a pane without a session marker.
 func (e *UnresolvedError) NextSteps() []string {
-	return []string{
-		fmt.Sprintf("%s resume %s --adopt --decision <reference>", e.Command, e.TaskID),
-		fmt.Sprintf("%s resume %s --agent <agent> --decision <reference> --message <message>", e.Command, e.TaskID),
+	takeover := fmt.Sprintf("%s resume %s --agent <agent> --decision <reference> --message <message>", e.Command, e.TaskID)
+	if e.Unmarked {
+		return []string{t("launch.unmarked_executor_stop_first", e.Window), takeover}
 	}
+	return []string{fmt.Sprintf("%s resume %s --adopt --decision <reference>", e.Command, e.TaskID), takeover}
 }
 
 func isUnresolved(err error) bool {
@@ -93,6 +98,7 @@ func recordUnresolved(root string, plan LaunchPlan, entry board.Entry, outcome L
 		return launchError("launch.value", cause.Error(), err.Error())
 	}
 	unresolved := &UnresolvedError{TaskID: entry.TaskID, Window: record.Window, Reason: reason, Command: "kander"}
+	unresolved.Unmarked = plan.capabilities().PaneMetadata && outcome.Container != "" && !outcome.SessionMarked
 	if paths, err := currentInstallPaths(); err == nil {
 		unresolved.Command = commandName(paths)
 	}
@@ -155,7 +161,11 @@ func exitLaunch(err error) int {
 		return fail(err)
 	}
 	fmt.Println(unresolved.Error())
-	fmt.Println(t("launch.unresolved_next_steps"))
+	header := "launch.unresolved_next_steps"
+	if unresolved.Unmarked {
+		header = "launch.unresolved_unmarked_next_steps"
+	}
+	fmt.Println(t(header))
 	for _, step := range unresolved.NextSteps() {
 		fmt.Println("  " + step)
 	}
@@ -210,7 +220,14 @@ func commandAdopt(root, task, decision string) error {
 	if !record.StartUnfinished() {
 		return launchError("board.adopt_needs_unfinished_start", s.Entry.TaskID, record.Status)
 	}
+	// A card that names another identity cannot be adopted whatever the probe says.
+	if err = board.CheckAdoptable(s, record); err != nil {
+		return err
+	}
 	if report := adoptLivenessFn(s); report.Status != liveness.Alive && report.Status != liveness.AliveOrphaned {
+		if unmarkedPane(report) {
+			return launchError("launch.adopt_unmarked_pane", s.Entry.TaskID, t("launch.unmarked_executor_stop_first", orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
+		}
 		return launchError("launch.adopt_liveness_unconfirmed", s.Entry.TaskID, report.Status, report.Detail)
 	}
 	if _, err = board.AdoptExecution(root, s, decision); err != nil {
@@ -218,4 +235,25 @@ func commandAdopt(root, task, decision string) error {
 	}
 	fmt.Println(t("launch.adopted", s.Entry.TaskID, orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
 	return nil
+}
+
+// unmarkedPane reports a probe that saw the agent in a pane without a session
+// marker. Kander writes the marker only during the launch, so no later probe of
+// that pane can prove the executor alive.
+func unmarkedPane(report liveness.Report) bool {
+	return report.Status == liveness.Unknown && report.Evidence != nil && report.Evidence.Unmarked
+}
+
+// startUnfinishedError refuses an action while a start attempt has not ended. Its
+// next step names adoption only when adoption can work: the card must still show
+// the identity of the attempt, and a pane must be able to prove its executor.
+func startUnfinishedError(s board.Snapshot, record board.ExecutionRecord, adoptKey, takeoverKey string) error {
+	task := s.Entry.TaskID
+	if board.StartIdentityChanged(s, record) {
+		return launchError(takeoverKey, task, record.Status, t("launch.start_identity_changed"))
+	}
+	if unmarkedPane(adoptLivenessFn(s)) {
+		return launchError(takeoverKey, task, record.Status, t("launch.unmarked_pane_cannot_adopt", orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
+	}
+	return launchError(adoptKey, task, record.Status)
 }

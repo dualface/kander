@@ -60,5 +60,15 @@
   "launch.recover_executor_ambiguous": "{{.V0}} 有 {{.V1}} 个 executor 匹配它的 session（{{.V2}}）。恢复不替换它们。下一步：停止匹配这个 session 的 executor，再次运行 kander coordinator recover。",
   "board.recover_start_pending": "{{.V0}} 的启动尝试尚未结束（状态 pending），重置会让它的 executor 失去管理。下一步：启动者仍在运行时等待；executor 存活时用 kander resume {{.V0}} --adopt --decision <引用>；启动者与 executor 都已结束时用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
   "launch.recover_start_pending_bound": "{{.V0}} 的启动尝试尚未结束（状态 pending），重置会让它的 executor 失去管理。下一步：启动者仍在运行时等待；executor 存活时用 kander resume {{.V0}} --adopt --decision <引用>；启动者与 executor 都已结束时，先结束派发 {{.V1}}（未完成的用 kander dispatch fail 或 cancel，已完成的用 kander dispatch settle），再用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
-  "launch.wrap_up_needs_checkout": "{{.V0}} 无法校验 wrap-up：可达的 checkout 都没有 commit {{.V1}}。下一步：在这个仓库的 checkout 中运行 kander move。"
+  "launch.wrap_up_needs_checkout": "{{.V0}} 无法校验 wrap-up：可达的 checkout 都没有 commit {{.V1}}。下一步：在这个仓库的 checkout 中运行 kander move。",
+  "board.adopt_start_identity_changed": "{{.V0}} 不能接手（状态 {{.V1}}）：卡片不在 working 或 review，或者卡片上的 OWNER 或 SESSION 与启动尝试的记录不同（Kander 1.0.0 的 takeover 会留下这种情况）。下一步：用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
+  "launch.unresolved_unmarked_next_steps": "executor 可能仍在工作。不要再次运行 kander start。下一步，按顺序执行：",
+  "launch.unmarked_executor_stop_first": "先手动停止 {{.V0}} 中的旧 executor：该 pane 没有会话标记，kander resume --adopt 无法确认它，用 --agent 接手之后它仍会运行",
+  "launch.adopt_unmarked_pane": "{{.V0}} 不能接手：executor 存活未确认。下一步：{{.V1}}；然后用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
+  "launch.start_identity_changed": "kander resume --adopt 无法结束它：卡片上的 OWNER 或 SESSION 与启动尝试的记录不同（Kander 1.0.0 的 takeover 会留下这种情况）。",
+  "launch.dispatch_start_unfinished_takeover": "{{.V0}} 的启动尝试尚未结束（状态 {{.V1}}）。{{.V2}}下一步：启动者还在运行时等待它；否则用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息> 结束启动尝试。",
+  "launch.session_repair_start_unfinished_takeover": "{{.V0}} 的启动尝试尚未结束（状态 {{.V1}}），不能修复会话。{{.V2}}下一步：启动者还在运行时等待它；否则用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息> 结束启动尝试。",
+  "board.coordinator_missing_handoff": "编排检查点冲突或事实无效：execution cycle changed without lifecycle handoff",
+  "board.coordinator_missing_handoff_next_step": "下一步：reconcile 无法接受这个成员。先请示用户并报告；用户决定后，再执行 kander coordinator recover（snippets/failure-recovery.md「Blocked Group Members」）。",
+  "launch.unmarked_pane_cannot_adopt": "kander resume --adopt 无法结束它：{{.V0}} 的 pane 没有会话标记。用 --agent 接手之后那里的旧 executor 仍会运行，所以要先手动停止它。"
 }

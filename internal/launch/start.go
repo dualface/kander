@@ -175,7 +175,7 @@ func Start(root, agentOverride, launcherOverride, taskID string) (result StartRe
 	} else {
 		taskFileHandedOff = true
 		if !persistSession {
-			if err = board.ConfirmTaskStart(root, moved); err != nil {
+			if err = confirmStartFn(root, moved); err != nil {
 				err = settleAfterLaunch(root, plan, moved, entry.State, outcome, err, original)
 			}
 		}

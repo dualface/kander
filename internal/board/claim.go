@@ -186,7 +186,7 @@ func lifecycleHandoffs(tx *Transaction, s Snapshot, from string, unrecorded []Ex
 		cycle, revision = crossUnrecorded(h.NewCycle), h.CardRevision
 	}
 	if cycle != planCycle(s) {
-		return nil, coordinatorError("execution cycle changed without lifecycle handoff")
+		return nil, missingHandoffError()
 	}
 	return result, nil
 }

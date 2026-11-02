@@ -43,6 +43,8 @@ type ExecutorEvidence struct {
 	Window string
 	// Matches counts the panes of a reverse lookup that matched several.
 	Matches int
+	// Unmarked: the pane runs the agent but carries no session marker.
+	Unmarked bool
 }
 
 // ReferenceResolver finds the session of a card that records none, within the

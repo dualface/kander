@@ -155,6 +155,7 @@ func launchAgent(
 			if err := backend.SetSessionMarker(conn, address.Pane, sess.Reference); err != nil {
 				return LaunchOutcome{}, fail(err)
 			}
+			running.SessionMarked, outcome.SessionMarked = true, true
 		}
 		if plan.sessionFinalize != nil {
 			if err := plan.sessionFinalize(sess); err != nil {

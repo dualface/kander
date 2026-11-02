@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/liveness"
 )
 
@@ -344,12 +345,17 @@ func TestLateFailureWithoutAContainer(t *testing.T) {
 	}
 }
 
+// A discovery failure leaves the tmux pane without a session marker, so the output
+// names only the takeover, after stopping the old executor by hand.
 func TestUnresolvedOutputAndExitStatus(t *testing.T) {
 	skipOnWindows(t)
 	root, _, _ := setupBoard(t)
 	task, _ := makeTodo(t, root, "late-output")
 	lateDiscoveryFailure(t, func() { executorWrite(t, root, task) })
 	_, _, err := capture(t, func() error { return commandStart(root, "devin", "tmux", task) })
+	if unresolved := requireUnresolved(t, err); !unresolved.Unmarked {
+		t.Fatalf("unresolved=%+v", unresolved)
+	}
 	code := 0
 	out, _, _ := capture(t, func() error { code = exitLaunch(err); return nil })
 	if code != exitUnresolved || code == 1 {
@@ -363,12 +369,13 @@ func TestUnresolvedOutputAndExitStatus(t *testing.T) {
 	for _, line := range lines {
 		if strings.Contains(line, "resume "+task) {
 			steps++
-			if !strings.Contains(line, "--decision <reference>") {
-				t.Fatalf("next step without --decision: %q", line)
+			if !strings.Contains(line, "--decision <reference>") || strings.Contains(line, "--adopt") {
+				t.Fatalf("next step: %q", line)
 			}
 		}
 	}
-	if steps != 2 {
+	window := strings.TrimPrefix(strings.Fields(lines[0])[2], "window=")
+	if steps != 1 || !strings.Contains(out, config.Text("launch.unmarked_executor_stop_first", window)) {
 		t.Fatalf("out=%q", out)
 	}
 	code = 0

@@ -135,7 +135,7 @@ func synthesizeChain(tx *Transaction, s Snapshot, stored []ExecutionTransition) 
 			}
 		}
 		if h.OldCycle != cycle {
-			return nil, coordinatorError("execution cycle changed without lifecycle handoff")
+			return nil, missingHandoffError()
 		}
 		add(TransitionReclaim, legacyRecordID(task, len(chain)), h.NewCycle, h.Owner, session, h.CardRevision)
 	}

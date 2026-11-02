@@ -27,8 +27,8 @@ kander resume --adopt --decision <reference> <task-id>
 ## Preconditions
 
 - The card is in `review/` or `working/`. A plain `resume` needs a `SESSION` record and an execution a launcher started; a claimed or reclaimed card is refused before any dispatch binds. `resume --agent` needs neither.
-- A plain `resume`, with or without a dispatch option, needs a finished start. With a current execution record in `pending` or `unresolved` it is refused before any dispatch binds: a second process on that session would rewrite `WINDOW`, and adoption and takeover would then use the wrong pane. Nothing starts, and the card and the record stay unchanged. While the launcher runs, wait for it. Otherwise use `kander resume <task-id> --adopt --decision <reference>` or `kander resume <task-id> --agent <agent> --decision <reference>`.
-- `resume --adopt` needs a current execution record in `pending` or `unresolved`, and an executor confirmed alive at the recorded address.
+- A plain `resume`, with or without a dispatch option, needs a finished start. With a current execution record in `pending` or `unresolved` it is refused before any dispatch binds: a second process on that session would rewrite `WINDOW`, and adoption and takeover would then use the wrong pane. Nothing starts, and the card and the record stay unchanged. While the launcher runs, wait for it. Otherwise use `kander resume <task-id> --adopt --decision <reference>` or `kander resume <task-id> --agent <agent> --decision <reference>`. The error, and the same refusal of a session repair by `notify`, names adoption only when it can work. It names only the takeover for an old card shape and for an unmarked pane ("Adopting an Unfinished Start"); for an unmarked pane it first tells you to stop the old executor in `WINDOW` by hand.
+- `resume --adopt` needs a current execution record in `pending` or `unresolved`, a card that still shows the `OWNER` and `SESSION` of that start attempt, and an executor confirmed alive at the recorded address.
 - A card whose agent differs from `EXEC_AGENT` refuses a plain resume (`snippets/commands/start.md` "Card Pins").
 
 ## Effects
@@ -55,6 +55,8 @@ kander resume --adopt --decision <reference> <task-id>
 
 - `resume --adopt` starts no executor. Use it when the start attempt has no result and the executor works. Then a takeover would replace a healthy executor.
 - The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start without a recorded identity reads `unknown` (the launcher died first, or the agent has not read its task file yet), and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
+- An unmarked pane (`snippets/commands/start.md` "Late Failures") never proves its executor. The refusal says so and names the exit: stop the old executor in `WINDOW` by hand first, because a takeover leaves it running, then run `kander resume <task-id> --agent <agent> --decision <reference> --message <message>`.
+- An old card shape is refused before any probe runs. A card upgraded from 1.0.0 can keep its start attempt in `pending` after a 1.0.0 takeover rewrote `OWNER` or `SESSION`. The record no longer names the card's executor, so adoption cannot end it. The localized error names the takeover, and the record stays `pending`. A card that left `working/` and `review/` gets the same error.
 - On success it writes `kind=adopt` with the decision and changes the record to `running`. The card stays unchanged. A launcher that is still running steps aside with `superseded`.
 
 ## Output
@@ -67,7 +69,7 @@ kander resume --adopt --decision <reference> <task-id>
 
 - A task group `review/` card without a dispatch option, unless the takeover ends an unfinished start.
 - A card outside `review/` or `working/`, a missing `SESSION`, a claimed or reclaimed card without `--agent` (the error names `snippets/failure-recovery.md`), a pin violation, an immediate agent exit, or a dispatch conflict.
-- A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover.
+- A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover, or only the takeover for an old card shape or an unmarked pane.
 - `--agent` without `--decision` on a `pending` or `unresolved` record.
-- `--adopt` on a record in another status, or with an executor that is not confirmed alive.
+- `--adopt` on a record in another status, on a card whose `OWNER` or `SESSION` differs from the start attempt, or with an executor that is not confirmed alive. The last two name the takeover as the next step.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error. So are `--adopt` with any option except `--decision`, `--adopt` without `--decision`, and `--decision` without `--adopt` or `--agent`.

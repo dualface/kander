@@ -34,7 +34,7 @@ func coordinatorChainPosition(l executionLedger, old CoordinatorMember) (uint64,
 			return 0, coordinatorError("execution chain regressed: " + l.task)
 		}
 		if !old.AwaitingStart && l.chain[old.TransitionSeq-1].ToCycle != old.Cycle {
-			return 0, coordinatorError("execution cycle changed without lifecycle handoff")
+			return 0, missingHandoffError()
 		}
 		return old.TransitionSeq, nil
 	}
@@ -54,7 +54,7 @@ func coordinatorChainPosition(l executionLedger, old CoordinatorMember) (uint64,
 			return uint64(i) + 1, nil
 		}
 	}
-	return 0, coordinatorError("execution cycle changed without lifecycle handoff")
+	return 0, missingHandoffError()
 }
 
 // verifyChainOriginals requires the immutable original each stored link
