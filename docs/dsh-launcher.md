@@ -10,13 +10,13 @@ The launcher is POSIX-only (Linux and macOS). It never takes part in `auto`: whe
 | --- | --- | --- |
 | Terminal definition | `internal/terminal/builtin/definitions/dsh.json` | Maps every `terminal.Backend` operation to one `curl --unix-socket` call on the plugin socket |
 | Plugin, host half | `integrations/kander-dsh/lib/` | Pane multiplexer, socket server, carrier election, JavaScript interface for the page routes |
-| Plugin, page half | `integrations/kander-dsh/` (card `20261103-dsh-kander-view-task`) | The Kander view: board, agent terminal tabs, HTTP routes |
+| Plugin, page half | `integrations/kander-dsh/lib/client.js`, `boards.js`, `routes.js` | The Kander view: board, agent terminal tabs, HTTP routes; see [dsh Kander view](dsh-kander-view.md) |
 
 Host half modules:
 
 | Module | Responsibility |
 | --- | --- |
-| `index.js` | dsh plugin entry (`apply(ctx, config)`): builds one `KanderHost`, stops it with the plugin |
+| `index.js` | dsh plugin entry (`apply(ctx, config)`): builds one `KanderHost`, stops it with the plugin, and registers the view routes |
 | `host.js` | `KanderHost`: composes the parts below and exposes the JavaScript interface |
 | `mux.js` | One container per pane, one PTY per pane through `ctx.subprocess.spawnTerminal`, a headless screen per pane (vendored `@xterm/headless` 5.5.0) for `read_output` and terminal query replies, an output ring for subscribers |
 | `carrier.js` | Which host of a `DSH_HOME` holds the socket |
