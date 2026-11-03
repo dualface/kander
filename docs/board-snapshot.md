@@ -5,7 +5,7 @@
 ## Command
 
 ```text
-kander list [--mobile | --json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
+kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
 ```
 
 - `--json` prints one JSON object on stdout and exits 0. Without `--json` the table output is unchanged.

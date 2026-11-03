@@ -177,7 +177,7 @@ var parserFunctions = map[string][]string{
 	"uninstall":   {"internal/install/uninstall.go:RunUninstall"},
 	"terminal":    {"internal/terminalcheck/command.go:run"},
 	"init":        {"internal/board/cmd.go:RunInit"},
-	"list":        {"internal/board/cmd.go:RunList"},
+	"list":        {"internal/board/cmd.go:RunListWithAgentStatus"},
 	"show":        {"internal/board/cmd.go:RunShow"},
 	"new":         {"internal/board/cmd.go:RunNew"},
 	"move":        {"internal/board/cmd.go:RunMove"},

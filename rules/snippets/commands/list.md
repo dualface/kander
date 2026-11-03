@@ -9,7 +9,7 @@ Lists cards, optionally for one state. Used by card creators and the user; orche
 ## Syntax
 
 ```text
-kander list [--mobile | --json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
+kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done|archived|trash]
 ```
 
 ## Arguments
