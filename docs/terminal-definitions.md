@@ -1,6 +1,6 @@
 # Terminal Definitions
 
-A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `herdr`, `luvus`, `tmux` and `tmux-session` launchers are embedded definitions ([`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
+A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `herdr`, `herdr-core`, `luvus`, `tmux` and `tmux-session` launchers are embedded definitions ([`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`herdr-core.json`](../internal/terminal/builtin/definitions/herdr-core.json), [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
 
 ## Fixed Boundaries
 
@@ -36,14 +36,16 @@ These points are the contract and are not extended:
 | `name`         | Definition name, `^[a-z][a-z0-9-]{0,31}$`, equal to the file name |
 | `binary`       | Command on `PATH` or an absolute path; `Backend.Executable` |
 | `version_args` | argv printing the version (doctor, options panel); literal elements only, a placeholder is rejected |
-| `capabilities` | `container` (must be `true`), `focus`, `pane_metadata`, `foreground_process`, `agent_identity`, `wait_output`, `session_report`; `POSIXOnly` follows each launcher's `requires.platform` |
-| `address`      | Ordered `WINDOW` fields after `<launcher>:`, each `{"name": "session" | "container" | "pane", "pattern": <regex without capturing groups>}`; `container` and `pane` are required; the default pattern is `[^:\s]+` |
+| `capabilities` | `container` (must be `true`), `focus`, `pane_metadata`, `foreground_process`, `agent_identity`, `program_status`, `wait_output`, `session_report`; `POSIXOnly` follows each launcher's `requires.platform` |
+| `address`      | Ordered `WINDOW` fields after `<launcher>:`, each `{"name": "session" | "container" | "pane", "pattern": <regex without capturing groups>}`; `pane` is required; without `container` the container is the pane itself (a terminal that holds one program per container); the default pattern is `[^:\s]+` |
 | `launchers`    | Launcher name to launcher object (below); one definition may provide several launchers |
 | `errors`       | Error classification rules (below) |
 | `hooks`        | Mount point to registered hook name (below) |
 | `ops`          | Operation name to operation object (below) |
 
 A capability flag requires its operation (`focus`, `set_session_marker` for `pane_metadata`, `wait_output`), and an operation whose capability is false is rejected. `session_report` requires the `report_session` hook. Callers pick the process-pane policies (liveness, notify, takeover) from `foreground_process` and `pane_metadata`, and the agent-pane policies from `agent_identity` (pane facts then carry `agent`, `agent_status`, `agent_session`, `agent_session_kind` and `container`, and `topology` lists pane IDs through `rows`).
+
+`program_status` requires `agent_identity` and excludes `agent_list`. Its pane facts carry `agent_app`, the `status.app` the program reported through OSC 7501, instead of `agent`, and `agent_status` holds the reported state. The host maps that state onto Kander's words: `idle`, `working`, `blocked` and `done` pass through, `error` becomes `blocked` with the reason `error`. An empty `agent_app` means the pane has not reported yet; callers then treat the agent as undecided rather than absent. A launch on such a backend refuses agents without a reporting `program_status` declaration and delivers a pane prompt only after the pane reported the declared app.
 
 `ParseAddress` applies the `address` patterns strictly. The read-only focus path (`ParseFocusAddress`) also accepts the same number of fields when each is a plain colon-free segment, which keeps legacy IDs without a prefix focusable.
 
@@ -58,7 +60,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
       "binary": <bool>,
       "inside_session": <bool>,
       "env": [{"name": "<VAR>", "value": "<optional exact value>", "trim": <bool>,
-               "before_binary": <bool>, "skip_auto": <bool>, "message": <message>}],
+               "before_binary": <bool>, "skip_auto": <bool>, "auto_only": <bool>, "message": <message>}],
       "messages": {"platform": <message>, "binary": <message>, "env": <message>}
     },
     "started_lines": [{"when": <conditions>, "message": <message>}],
@@ -68,6 +70,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 ```
 
 - `requires` is checked by `Prepare` before any container exists, in the order platform, the variables marked `before_binary`, binary on `PATH`, the remaining variables (each group in declaration order); a failure names what is missing. A variable with `trim` is compared without surrounding whitespace, and `{env.<VAR>}` expands to that trimmed value. A variable's own `message` replaces `messages.env` for it. The messages replace the generic diagnostics and may use `launcher`, `binary`, `platform` and `name` (the missing variable). `inside_session` is not a `Prepare` check.
+- A variable with `auto_only` takes part in auto detection only; `Prepare` does not require it, so an explicitly chosen launcher also works outside the terminal's own session. It excludes `skip_auto` and `before_binary`.
 - `auto` selects only launchers with `auto_priority > 0` and `inside_session: true` whose environment requirements hold, ignoring variables marked `skip_auto` (which `Prepare` still requires and reports), highest priority first, after the Go backends. The host policy stays in `internal/terminal`: `auto` resolves only among container launchers and never falls back to `foreground` or `console`, whose own preconditions (three TTY streams, native Windows) are Go code.
 - `started_lines` render the launch report; the placeholders are `head`, `session`, `session_exists`, `workspace`, `project`, `container`, `pane` and `env.<VAR>`.
 - `ops` replaces whole operations for this launcher; `tmux` and `tmux-session` share one definition this way.
@@ -81,12 +84,12 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | Operation            | Inputs (placeholders)                                   | Result fields |
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
-| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label` | `session`, `container`, `pane` (container and pane required) |
+| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name` | `session`, `container`, `pane` (pane required; container required when the address has one) |
 | `wait_ready` (optional; absent means ready) | `pane`, `timeout_ms` (the readiness budget: 15000, or 120000 with `extended_launch_timeouts`; `kander terminal test` always passes 15000) | none |
 | `run_command`        | `pane`, `cwd_quoted`, `command`, `posix` (`true`/`false`) | none |
 | `pane_directory` (optional) | `pane` | `directory` |
 | `set_session_marker` | `pane`, `value`                                         | none |
-| `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_status`, `agent_session`, `agent_session_kind`, `container` |
+| `pane_facts`         | `pane`                                                  | `command`, `in_mode`, `dead`, `session_marker`, `agent`, `agent_app`, `agent_status`, `agent_session`, `agent_session_kind`, `container` |
 | `read_output`        | `pane`                                                  | `text` |
 | `wait_output`        | `pane`, `marker` (literal or `regex:` prefixed), `marker_literal` (the marker without a `regex:` prefix, else empty), `marker_regex` (the expression after `regex:`, else empty), `timeout_ms` | none |
 | `deliver_text`       | `pane`, `text`                                          | none |
@@ -97,7 +100,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | `focus`              | `session`, `container`, `pane`                          | focus notice |
 | `close_container`    | `session`, `container`, `pane`                          | none |
 
-Every template also accepts `env.<VAR>` and the stored step results `step.<store>.<field>`. `project_key` is the directory label plus an eight-digit digest of the project path. `cwd_resolved` is `cwd` with symbolic links resolved (and so without a trailing separator), or `cwd` unchanged when it cannot be resolved; a definition that reads the new pane's directory back compares against both. `report_session` has no steps; it is the `report_session` hook.
+Every template also accepts `env.<VAR>` and the stored step results `step.<store>.<field>`. `project_key` is the directory label plus an eight-digit digest of the project path. `label_name` is the label reduced to a terminal name: its lowercase ASCII letters, digits and hyphens (at most 23 characters), a hyphen, and eight random hexadecimal digits, so two launches of one card (a takeover opens its container before the old one closes) never share it. `cwd_resolved` is `cwd` with symbolic links resolved (and so without a trailing separator), or `cwd` unchanged when it cannot be resolved; a definition that reads the new pane's directory back compares against both. `report_session` has no steps; it is the `report_session` hook.
 
 An operation object is:
 
@@ -260,6 +263,10 @@ The embedded herdr definition extracts `agent_session.kind` and `agent_session.v
 
 The embedded luvus definition opens its pane with `pane split --cwd` and then verifies the directory with only steps and conditions: an `agent get` step polls `result.cwd` until it is non-empty and continues on error; a `pane close` step runs when the stored text equals neither `{cwd}` nor `{cwd_resolved}` (a failed readback stores no text, so it closes the pane too), so an older luvus that ignores `--cwd` leaves no orphan pane. Then the first `fail` step that holds ends the operation: `luvus.cwd_unreadable` when the readback step failed (`step.where.ok=false`), otherwise `luvus.cwd_mismatch` when the text equals neither directory. The pane move, rename and refocus that follow continue on error. Reverse lookup reads `agent list` rows and declares `rows.session` with an extracted `session_kind` field that luvus does not report today, so every session is a direct id; a same-agent pane without a session makes the lookup incomplete. Usage, prerequisites and limits are in [Terminal backends](terminal-backend.md#8-the-built-in-luvus-launcher).
 
+## herdr-core Notes
+
+The embedded herdr-core definition has a single-field address (`herdr-core:t8`), declares `program_status`, and uses `pane_metadata` to keep the session in the terminal label `kander-session`, written by `set_session_marker` and read back by `pane_facts` and `reverse_lookup`. A `finished` or `lost` terminal is gone through `gone_when`; `not_found` is both a gone rule and a `meta_missing` rule, so `close_container` continues past a terminal that its `--rm` flag already removed. `HC_TERMINAL_ID` is `auto_only`. Usage, prerequisites and limits are in [Terminal backends](terminal-backend.md#9-the-built-in-herdr-core-launcher).
+
 ## Example
 
 A fragment of a two-field address definition:
@@ -384,4 +391,7 @@ real lifecycle. Otherwise its test reports the precise skip reason. Preserve
 that skip in contribution evidence rather than claiming a real herdr pass.
 Luvus is opt-in the same way: only `KANDER_E2E_LUVUS=1` inside a luvus pane
 (`LUVUS_ENV=1` and `LUVUS_PANE_ID` set) runs the real lifecycle against the
-calling pane's luvus server.
+calling pane's luvus server. herdr-core is opt-in through
+`KANDER_E2E_HERDR_CORE=1` with `hc` on `PATH` and a running core; it runs the
+lifecycle with `--skip-focus` and checks that a forwarded variable reaches the
+program in the new terminal.

@@ -132,6 +132,19 @@ The built-in Droid definition targets the Factory CLI shape verified on `droid` 
 
 A brand-new templated agent is recommended to launch via tmux / tmux-session, probed with the configured foreground name and session markers. herdr still relies on its own recognition of agent types; configuring path does not install a recognizer for herdr. foreground/console has no terminal address for `check` to probe and keeps the unknown classification.
 
+## Program Status (OSC 7501)
+
+`program_status` declares whether an agent reports its status to the terminal through OSC 7501 (the Program Status Protocol) and which `status.app` value it reports:
+
+```json
+"program_status": {"reports": true, "app": "claude-code"}
+```
+
+- `reports` is a boolean. `app` is required, non-empty and single-line when `reports` is `true`, and must be omitted when it is `false`.
+- Every built-in agent declares it. claude (`claude-code`), codex (`codex`), pi (`pi`), grok (`grok-build`), kimi (`kimi-code`) and devin (`devin`) report; the app values were observed in herdr-core. cursor, opencode and droid declare `reports: false`: cursor sends no report, and opencode and droid were not observed.
+- A custom agent may set its own declaration in `agents.<name>`. Without one it inherits the declaration of its dialect, like `prompt_delivery`; a templated agent without a dialect has none.
+- Only a program status launcher (`herdr-core`) reads it. That launcher identifies an agent by the app its terminal reports, so it refuses an agent whose declaration is missing or says `reports: false`, before any side effect of start, resume, takeover, notify recovery, orchestrate, issue triage, refinement, issue result or chat. `kander doctor` lists the configured execution agents (both task scales and the chat agent) that would be refused. Other launchers ignore the field.
+
 ## Chat Agent and Model
 
 TUI chat sessions use the independent `chat_agent`, which must name a usable execution agent. Its settings live under `models.chat.<agent>`: `model` is available for every agent, while `effort` is available only when that agent's argv template supports it (Cursor therefore accepts only `model`). For example:

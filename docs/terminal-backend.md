@@ -34,7 +34,7 @@ To ensure stability across heterogeneous terminal multiplexers and OS platforms,
 | Package | Role |
 |---|---|
 | `internal/terminal` | Defines `Backend` interface, `Address`, `Target`, `PaneFacts`, `Topology`, and `DeclarativeBackend`. |
-| `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/herdr.json`, `luvus.json`, `tmux.json`) and Go hooks. |
+| `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/herdr.json`, `herdr-core.json`, `luvus.json`, `tmux.json`) and Go hooks. |
 | `internal/terminal/herdr` | Specialized socket hooks for herdr session reporting and pane focusing. Both dial one control channel from `HERDR_SOCKET_PATH`: a unix socket on POSIX, the named pipe `\\.\pipe\` plus that path on Windows. |
 | `internal/terminal/direct` | Containerless backends (`foreground`, `console`). Container operations return `terminal.ErrUnsupported`. |
 | `internal/terminal/terminaltest`| Test harnesses running the test binary as a mock terminal. |
@@ -52,6 +52,7 @@ Only the owning backend parses and formats the opaque component:
 | Launcher | Opaque Format | Parsed `Address` Structure |
 |---|---|---|
 | `herdr` | `<tab-id>:<pane-id>` | `Container` = tab (`w0:...`), `Pane` = pane |
+| `herdr-core` | `<terminal>` | `Container` = `Pane` = hc terminal address (`t8`) |
 | `luvus` | `<pane-id>:<pane-id>` | `Container` = `Pane` = luvus pane id (`7`) |
 | `tmux` | `<session-id>:<window-id>:<pane-id>` | `Session` = `$0`, `Container` = `@1`, `Pane` = `%1` |
 | `tmux-session` | `<session-name>:<window-id>:<pane-id>` | `Session` = `kander-...`, `Container` = `@1`, `Pane` = `%1` |
@@ -64,17 +65,20 @@ Only the owning backend parses and formats the opaque component:
 
 Backends declare supported features via `terminal.Capabilities`:
 
-| Capability | Description | herdr | luvus | tmux / tmux-session | foreground / console |
-|---|---|:---:|:---:|:---:|:---:|
-| `Container` | Can spawn isolated tabs/windows | Yes | Yes | Yes | No |
-| `Focus` | Can switch active window/pane focus | Yes | Yes | Yes | No |
-| `PaneMetadata` | Can read window/pane variables | No | No | Yes | No |
-| `ForegroundProcess` | Can inspect active foreground PID/name | No | No | Yes | No |
-| `AgentIdentity` | Supports agent-reported identity checks | Yes | Yes | No | No |
-| `SessionReport` | Supports bidirectional session handshake | Yes | No | No | No |
-| `WaitOutput` | Native output pattern matching | Yes | No *(polled)* | No *(polled)* | No |
-| `POSIXOnly` | Restricted to POSIX platforms | No | Yes | Yes | No |
-| `Detached` | Runs as an unmanaged detached process | No | No | No | console only |
+| Capability | Description | herdr | herdr-core | luvus | tmux / tmux-session | foreground / console |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| `Container` | Can spawn isolated tabs/windows | Yes | Yes | Yes | Yes | No |
+| `Focus` | Can switch active window/pane focus | Yes | No | Yes | Yes | No |
+| `PaneMetadata` | Can read window/pane variables | No | Yes *(label)* | No | Yes | No |
+| `ForegroundProcess` | Can inspect active foreground PID/name | No | No | No | Yes | No |
+| `AgentIdentity` | Supports agent-reported identity checks | Yes | Yes | Yes | No | No |
+| `ProgramStatus` | Identity and status come from OSC 7501 reports | No | Yes | No | No | No |
+| `SessionReport` | Supports bidirectional session handshake | Yes | No | No | No | No |
+| `WaitOutput` | Native output pattern matching | Yes | No *(polled)* | No *(polled)* | No *(polled)* | No |
+| `POSIXOnly` | Restricted to POSIX platforms | No | Yes | Yes | Yes | No |
+| `Detached` | Runs as an unmanaged detached process | No | No | No | No | console only |
+
+`ProgramStatus` refines `AgentIdentity`: the pane names no agent, only the `status.app` its program reported through OSC 7501 (`PaneFacts.AgentApp`). Callers compare a pane with the expected agent through `PaneFacts.MatchAgent`, which is tri-state: a match, another agent, or undecided while the pane has not reported (or the agent's declaration cannot be read). Undecided is never a stopped observation. `terminal.AddressFreeBackend` (the backend of a `--pane` override or a card without `WINDOW`) skips program status backends, because their terminals carry the session only in the marker Kander wrote at launch.
 
 ---
 
@@ -146,3 +150,17 @@ The embedded [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json)
 - **Session identity**: luvus reports an agent's session through its own integration hooks. Run `luvus integration install <agent>` once per agent so `pane_facts` and reverse lookup carry the session id. Kander binds no session hook of its own.
 - **Known limits**: the calling pane briefly loses focus while the new pane moves to its tab. Agents without a luvus integration hook (for example cursor and pi) report no session: liveness can still confirm the agent and status of the recorded pane, but direct `notify` delivery is unavailable and a reverse lookup of a moved pane stays incomplete (`unknown`), never `stopped`. A plain shell pane reports the shell name as its agent. Inside nested tmux and luvus, `auto` follows the priorities above.
 - A user definition named `luvus.json` in the global or project share directory replaces this embedded definition as a whole; remove an older hand-written copy to use the built-in one.
+
+---
+
+## 9. The Built-In herdr-core Launcher
+
+The embedded [`herdr-core.json`](../internal/terminal/builtin/definitions/herdr-core.json) provides the `herdr-core` launcher. herdr-core is the terminal runtime behind Herdr App; its CLI is `hc`. It is a separate runtime from the herdr TUI, and the two do not share agents. The launcher is POSIX-only and runs every operation through `hc … --json`, with no Go hook.
+
+- **Prerequisites**: `hc` on `PATH` and a running core (`kander doctor` checks both through `hc server status --json`; Kander never installs or starts the core). An explicit `--launcher herdr-core` works from any terminal. `auto` picks herdr-core with priority 120, between luvus (150) and tmux (100), when `HC_TERMINAL_ID` is non-empty: a herdr or luvus pane running inside an hc terminal is the inner environment, and `TMUX` can leak into every terminal of a core started from tmux.
+- **Agents**: herdr-core identifies agents only by their OSC 7501 (Program Status Protocol) reports. Every start entrance refuses, before any side effect, an agent whose `program_status` declaration is missing or says it does not report (see [Custom execution agents](custom-agents.md#program-status-osc-7501)). There is no fallback for such agents.
+- **Container**: `hc run --bg --no-parent --rm --json --cwd <startup dir> --name <label_name> --label kander-window=<label> -- /usr/bin/env PATH=… KANBAN_DIR=… KANDER_CONFIG=… KANDER_LANG=… /bin/sh`. `--no-parent` keeps the terminal alive when the calling terminal ends; `--rm` removes it when the agent exits. The core's own environment does not carry the caller's, so the definition forwards these variables of the Kander process (an unset one is left out); the agent itself starts by its resolved absolute path. `WINDOW` is `herdr-core:<terminal>`.
+- **Start**: `run_command` sends `cd -- <dir> && exec <agent command>` to the shell with `hc send`. After the session is known, `set_session_marker` stores it in the terminal label `kander-session`; `pane_facts` reads it back as the session identity, and `reverse_lookup` lists live terminals with `hc ls --label kander-session=<session>`.
+- **State**: `pane_facts` reads `hc get`. A `finished` or `lost` terminal, or one hc no longer knows, is gone, whatever its last status says. A live terminal maps `status.state` onto the agent status: `idle`, `working`, `blocked` and `done` unchanged, `error` as `blocked` with the reason `error`; a `null` status (no report yet) leaves the agent undecided, so liveness reads `unknown` and notify waits. Kander never derives a herdr-core agent state from the screen, the output, or the foreground process.
+- **Close**: `hc kill` then `hc rm`; `not_found` counts as already closed, because an exited agent took its `--rm` terminal with it.
+- **Not supported**: focus (herdr-core has no API to switch the Herdr App view), session reporting, `agent_list`, Windows, and remote machines (`hc machine`, `machine/t7` addresses).
