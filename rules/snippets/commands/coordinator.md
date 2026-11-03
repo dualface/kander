@@ -47,6 +47,7 @@ kander coordinator recover <absolute-request.json>
 | `stopped` | proceeds |
 
 - Executor evidence means that the probe finished and saw an executor it could not prove. There are four cases: a reverse lookup with 2 or more matches; a recorded or found pane whose session identity is uncertain for a reason other than the probe deadline; a recorded or found pane whose agent status cannot be classified; a tmux pane with the agent running and no session marker.
+- A refusal of a member whose `unresolved` start has not ended also names `kander resume <task-id> --adopt --decision <reference>` when adoption can end it: the card shows the attempt's `OWNER` and `SESSION`, and the recorded pane reads `alive` or `alive-orphaned`, or is unmarked with a session adoption can mark (`snippets/commands/resume.md` "Adopting an Unfinished Start"). It uses the probe already made and static facts; it runs no session discovery and writes nothing.
 - A failed probe means that the terminal is unavailable, the probe reached its deadline, the reverse lookup did not finish, or the session reference could not be resolved. `kander check` still shows both kinds of `unknown` the same way.
 - A session with no reference and no way to resolve one (`session.mode=none`) has nothing to search by, so a drifted `WINDOW` then reads `stopped`.
 - `recover` on a `done/`, `archived/`, or `trash/` member is a confirmation: it writes only the audit record and rebinds the mirror. It changes no card, execution cycle, or review evidence. Reconcile then accepts that member as it is for this cycle.
