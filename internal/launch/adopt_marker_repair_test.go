@@ -211,6 +211,26 @@ func TestAdoptRefusesTwoCodexSessions(t *testing.T) {
 	requireAdoptRefused(t, root, task, before, record)
 }
 
+func TestAdoptRefusesAFailedCodexScan(t *testing.T) {
+	skipOnWindows(t)
+	root, _, _ := setupBoard(t)
+	task, _ := makeTodo(t, root, "adopt-codex-scan")
+	unresolved := unmarkedStart(t, root, "codex", task, nil)
+	previous := findAdoptSessionsFn
+	t.Cleanup(func() { findAdoptSessionsFn = previous })
+	findAdoptSessionsFn = func(string, time.Time, string) ([]string, error) {
+		return nil, errors.New("rollout directory unreadable")
+	}
+	record := requireRecord(t, root, task, board.ExecutionUnresolved)
+	before := readSnapshot(t, root, task)
+	_, _, err := capture(t, func() error { return commandAdopt(root, task, "user") })
+	requireStopFirst(t, task, unresolved.Window, err)
+	if !strings.Contains(err.Error(), "rollout directory unreadable") {
+		t.Fatalf("err=%v", err)
+	}
+	requireAdoptRefused(t, root, task, before, record)
+}
+
 func TestAdoptRefusesCodexSessionsOfAnotherTaskOrDirectory(t *testing.T) {
 	skipOnWindows(t)
 	root, _, _ := setupBoard(t)
@@ -361,6 +381,14 @@ func TestAdoptRetriesAfterTheLedgerWriteFails(t *testing.T) {
 	if _, _, err := capture(t, func() error { return commandResume(root, nil, "", task, "go", "", true, 61) }); err == nil || err.Error() != unfinished {
 		t.Fatalf("resume: err=%v", err)
 	}
+	// An unresolved attempt follows the probe in coordinator recover, which now
+	// reads the marked pane alive and refuses the reset.
+	window := board.MetadataFrom(readSnapshot(t, root, task).Text, board.FieldWindow)
+	recoverRefused := launchError("launch.recover_executor_alive", task, liveness.Alive, config.Text("liveness.agent_is_reachable"), window).Error()
+	if _, err := RecoverCoordinator(context.Background(), root, board.CoordinatorRecover{Member: task}); err == nil || err.Error() != recoverRefused {
+		t.Fatalf("recover: err=%v", err)
+	}
+	requireRecord(t, root, task, board.ExecutionUnresolved)
 	adoptExecutionFn = previous
 	forbidSessionScan(t)
 	writes := markerWrites(t, root)

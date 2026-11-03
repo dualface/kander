@@ -76,5 +76,6 @@
   "launch.adopt_marker_written": "session-marker-written: {{.V0}} window={{.V1}} session={{.V2}}",
   "launch.adopt_session_unproven": "{{.V0}} 不能接手：它的 pane 没有会话标记，与本任务、启动目录和本次启动尝试相符的 Codex 会话有 {{.V1}} 个；只有恰好 1 个时才会补写标记。下一步：{{.V2}}；然后用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
   "launch.adopt_changed_before_marker": "{{.V0}} 不能接手：探测之后卡片或其启动尝试发生了变化，所以没有写会话标记。下一步：运行 kander check {{.V0}}，按结果处理。",
-  "launch.adopt_marker_write_failed": "{{.V0}} 不能接手：在 {{.V1}} 的 pane 上写会话标记失败：{{.V2}}。下一步：再次运行 kander resume {{.V0}} --adopt --decision <引用>；如果仍然失败，{{.V3}}，然后用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。"
+  "launch.adopt_marker_write_failed": "{{.V0}} 不能接手：在 {{.V1}} 的 pane 上写会话标记失败：{{.V2}}。下一步：再次运行 kander resume {{.V0}} --adopt --decision <引用>；如果仍然失败，{{.V3}}，然后用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。",
+  "launch.adopt_session_scan_failed": "{{.V0}} 不能接手：它的 pane 没有会话标记，且无法查找本次启动尝试的 Codex 会话：{{.V1}}。下一步：{{.V2}}；然后用 kander resume {{.V0}} --agent <agent> --decision <引用> --message <消息>。"
 }

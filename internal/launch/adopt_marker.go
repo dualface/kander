@@ -75,22 +75,24 @@ func repairSessionMarker(root string, observed board.Snapshot, record board.Exec
 // names its session gives it directly. Otherwise markerRepairable admitted only
 // a Codex agent, whose rollouts are scanned once: exactly one created since this
 // attempt began, for this task and launch directory, proves the session.
+// A floor or a scan that fails proves nothing either, and refuses with the same
+// way out.
 func provableReference(root string, observed board.Snapshot, record board.ExecutionRecord) (string, error) {
 	task := observed.Entry.TaskID
 	if session := parseTaskSession(observed.Text); session != nil && session.Reference != "" {
 		return session.Reference, nil
 	}
+	stop := t("launch.unmarked_executor_stop_first", orNA(board.MetadataFrom(observed.Text, board.FieldWindow)))
 	floor, err := board.ExecutionStartFloor(root, record)
 	if err != nil {
-		return "", err
+		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
 	}
 	candidates, err := findAdoptSessionsFn(task, floor, parentDir(root))
 	if err != nil {
-		return "", err
+		return "", launchError("launch.adopt_session_scan_failed", task, err.Error(), stop)
 	}
 	if len(candidates) != 1 {
-		window := board.MetadataFrom(observed.Text, board.FieldWindow)
-		return "", launchError("launch.adopt_session_unproven", task, strconv.Itoa(len(candidates)), t("launch.unmarked_executor_stop_first", orNA(window)))
+		return "", launchError("launch.adopt_session_unproven", task, strconv.Itoa(len(candidates)), stop)
 	}
 	return candidates[0], nil
 }
