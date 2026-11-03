@@ -13,6 +13,7 @@ export function stateDirectory(env = process.env, home = homedir()) {
 }
 
 export const socketPath = (directory) => join(directory, 'mux.sock')
+export const lockPath = (directory) => join(directory, 'lock')
 
 /**
  * Creates the directory with mode 0700, or tightens an existing one. A symbolic

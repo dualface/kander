@@ -20,6 +20,7 @@ Host half modules:
 | `host.js` | `KanderHost`: composes the parts below and exposes the JavaScript interface |
 | `mux.js` | One container per pane, one PTY per pane through `ctx.subprocess.spawnTerminal`, a headless screen per pane (vendored `@xterm/headless` 5.5.0) for `read_output` and terminal query replies, an output ring for subscribers |
 | `carrier.js` | Which host of a `DSH_HOME` holds the socket |
+| `lock.js` | The lock the hosts of a `DSH_HOME` share for the socket path and the pane sequence |
 | `ops.js` | The socket operations |
 | `protocol.js` | Socket protocol version, HTTP framing, error classes |
 | `ids.js` | Persistent pane and container IDs |
@@ -30,7 +31,7 @@ Host half modules:
 
 A pane is one PTY that the dsh host opens with `ctx.subprocess.spawnTerminal`. A container holds exactly one pane, and every agent launch creates a new container. `WINDOW` is `dsh:<container>:<pane>`, for example `dsh:c7-81234:p7-81234`.
 
-IDs are `p<n>-<pid>` and `c<n>-<pid>`, where `<pid>` is the dsh host pid. A number belongs to the process that creates the empty file `<state dir>/taken/<n>` with `O_EXCL`, so two processes never get the same number, even two hosts that both serve for an instant during a handover. `<state dir>/sequence` (mode 0600) records the last number and only says where to start looking: a stale or regressed record costs a few failed creations, never a reused number. The marks 64 numbers below the newest are removed. So within one `DSH_HOME`, IDs never repeat across the hosts or across host restarts, and an old card's `WINDOW` never names a later pane. A `sequence` file that does not hold a number makes pane creation fail instead of restarting at 1.
+IDs are `p<n>-<pid>` and `c<n>-<pid>`, where `<pid>` is the dsh host pid. `<n>` is read from `<state dir>/sequence` (mode 0600), incremented, and written back under the lock all hosts of the `DSH_HOME` share (see "Carrier Host"), so two hosts never take the same number and the recorded number never goes back. So within one `DSH_HOME`, IDs never repeat across the hosts or across host restarts, and an old card's `WINDOW` never names a later pane. A `sequence` file that does not hold a number makes pane creation fail instead of restarting at 1.
 
 The pane runs `/bin/sh -c 'cd -- <startup dir> && exec <agent command>'` with `/` as its initial directory, like tmux. When the program exits, the pane stays as `dead` until `close_container`. The program is told `TERM=xterm-256color`, and the pane's headless screen answers its terminal queries (cursor position, device attributes) through the pane's ordered input queue, whether or not a page shows the pane.
 
@@ -50,12 +51,12 @@ Start the dsh host with the `PATH` the agents need.
 
 Several dsh hosts can share one `DSH_HOME`, for example dsh Web and dsh Desktop (separate profiles under the same home). They share one socket, `$DSH_HOME/kander/mux.sock` (`~/.dsh/kander/mux.sock` when `DSH_HOME` is unset or empty). The host whose server the socket path names is the carrier host; only it hosts dsh-launcher panes.
 
-- A starting host probes the socket with `hello`. When a server answers, the host stays a non-carrier and writes `<socket> is held by another dsh host (pid N)` to the dsh host log (the cordis logger of the plugin).
-- A host publishes its socket without replacing anything: it binds a temporary name `.mux-<pid>-<n>` in the same directory, sets it to 0600, and hard-links it onto the path. `link` fails while any socket is at the path, so two hosts never both publish.
-- When the path names a socket nobody serves (a host killed with SIGKILL leaves one), the host renames it aside and links its own. It removes the moved file only when it is the stale inode it inspected; a socket another host published in between is linked back. A path that is not a socket is never replaced; the host logs it and stays a non-carrier.
+- The hosts of a `DSH_HOME` share the lock `<state dir>/lock`, a directory created with `mkdir` that names its holder. Every step that judges or changes the socket path runs under it: probing the object at the path, removing a stale socket, publishing, and a carrier's removal of its socket on stop. Taking a pane number runs under it too. A holder keeps it for at most a probe (1 second), so a lock whose holder process is gone, or that is older than 5 seconds, is left over from a crash and is broken; breaking renames it aside and removes it only when it still names the holder judged stale.
+- Under the lock, a host probes the path with `hello`. When a server answers, the host stays a non-carrier and writes `<socket> is held by another dsh host (pid N)` to the dsh host log (the cordis logger of the plugin). A path that is not a socket is never replaced; the host logs it and stays a non-carrier.
+- When the path is absent, or names a socket nobody serves (a host killed with SIGKILL leaves one), the host removes that socket and hard-links its own onto the path, still under the lock. No host can publish while another holds the lock, so a stale verdict never meets a socket published after it. The host's socket is bound first to a temporary name `.mux-<pid>-<n>` in the same directory and set to 0600, so it is private before it becomes reachable.
 - Every host repeats the check every second. A non-carrier therefore takes the socket over without a restart once the carrier exits.
-- A carrier whose path no longer names its own socket (the link-back above found the path taken again) closes its server, ends its panes, logs it, and competes again. Kander can no longer reach those panes and reads them as stopped; ending them keeps a `resume` from running a second executor beside a hidden one.
-- A carrier that stops removes its socket. Closing a server unlinks only the temporary name node bound, so a host never removes a socket that belongs to another host.
+- A carrier whose path was removed from outside links its socket again from the temporary name. A carrier whose path names another socket closes its server, ends its panes, logs it, and competes again: Kander can no longer reach those panes and reads them as stopped, and ending them keeps a `resume` from running a second executor beside a hidden one.
+- A carrier that stops removes its socket under the lock. Closing a server unlinks only its temporary name, never the path.
 
 `KanderHost.carrierStatus()` returns `{carrier, socket, reason, holderPid}`; `reason` is `carrier`, `held`, `lost`, `blocked`, `unreachable`, `starting` or `stopped`. A non-carrier lists no panes, and its Kander view shows dsh agents by status only.
 
@@ -147,7 +148,7 @@ The socket can start processes as the current user, type into agents and read th
 
 ## Verification
 
-- `node --test integrations/kander-dsh/test/` (Node 22 or later): socket operations, gone classification, close failures, terminal query replies, carrier election among hosts that start together on a missing or stale socket, takeover and step-down, pane ID uniqueness across processes, protocol version, foreground name on Linux and macOS (simulated `ps`), permissions.
+- `node --test integrations/kander-dsh/test/` (Node 22 or later): socket operations, gone classification, close failures, terminal query replies, carrier election among hosts that start together on a missing or stale socket, a stale verdict that arrives after another host tried to publish, takeover and step-down, the shared lock and its stale-lock breaking, pane ID uniqueness across hosts and processes, protocol version, foreground name on Linux and macOS (simulated `ps`), permissions.
 - `go test ./internal/terminal/builtin -run Dsh`: definition shape, socket path, argv, protocol failures, gone rules.
 - CI runs the plugin tests on Linux and macOS (`platform-checks.yml`, job `kander-dsh`).
 

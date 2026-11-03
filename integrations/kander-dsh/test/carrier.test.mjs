@@ -4,6 +4,7 @@ import { existsSync, lstatSync, mkdirSync, renameSync, writeFileSync } from 'nod
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { afterEach, describe, test } from 'node:test'
+import { probeSocket } from '../lib/carrier.js'
 import { KanderHost } from '../lib/host.js'
 import { FakeSubprocess, RecordingLog, call, eventually, temporaryDirectory } from './helpers.mjs'
 
@@ -17,9 +18,10 @@ async function leaveStaleSocket(path) {
 
 describe('carrier host', () => {
   const hosts = []
-  const newHost = (directory) => {
+  const newHost = (directory, options = {}) => {
     const log = new RecordingLog()
-    const host = new KanderHost({ subprocess: new FakeSubprocess(), log, directory, intervalMs: 20 })
+    const host = new KanderHost({ subprocess: new FakeSubprocess(), log, directory, intervalMs: 20, ...options })
+    host.log = log
     hosts.push(host)
     return { host, log }
   }
@@ -78,8 +80,7 @@ describe('carrier host', () => {
     const { pane } = (await call(socket, 'create_container', { cwd: '/w' })).body
     await call(socket, 'run_command', { pane, cwd_quoted: "'/w'", command: 'agent', posix: 'true' })
     const [terminal] = first.host.mux.subprocess.terminals
-    // Another host's live socket lands on the path, as when two hosts raced
-    // over a stale socket and the restore of removeStale found the path taken.
+    // Another host's live socket lands on the path from outside the lock.
     const other = createServer((request, response) => response.end('{"pid":999}'))
     const otherName = join(directory, '.other')
     await new Promise((resolve) => other.listen(otherName, resolve))
@@ -90,12 +91,47 @@ describe('carrier host', () => {
       assert.deepEqual(first.host.carrierStatus(), { carrier: false, socket, reason: 'held', holderPid: 999 })
       assert.equal(terminal.terminated, true)
       assert.deepEqual(await first.host.listPanes(), [])
-      assert.ok(first.log.lines.some(([, line]) => line.includes('no longer names')), first.log.lines)
+      assert.ok(first.log.lines.some(([, line]) => line.includes('names another host')), first.log.lines)
       // The demoted host left the other host's socket in place.
       assert.equal((await call(socket, 'hello', { protocol: '1' })).body.pid, 999)
     } finally {
       await new Promise((resolve) => other.close(resolve))
     }
+  })
+
+  test('a stale verdict that arrives late never removes a socket published meanwhile', async () => {
+    const directory = join(temporaryDirectory(), 'kander')
+    mkdirSync(directory, { mode: 0o700 })
+    const socket = join(directory, 'mux.sock')
+    await leaveStaleSocket(socket)
+    // B probes the stale socket first, and its ECONNREFUSED comes back late.
+    let release
+    const gate = new Promise((resolve) => { release = resolve })
+    let probing
+    const probed = new Promise((resolve) => { probing = resolve })
+    const lateProbe = async (path) => {
+      probing()
+      await gate
+      return probeSocket(path)
+    }
+    const b = newHost(directory, { probe: lateProbe }).host
+    const a = newHost(directory).host
+    const bStarted = b.start()
+    await probed
+    // A tries to take the socket over while B's verdict is pending.
+    const aStarted = a.start()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    assert.equal(a.isCarrier(), false)
+    release()
+    await Promise.all([bStarted, aStarted])
+    const carrier = [a, b].filter((host) => host.isCarrier())
+    assert.equal(carrier.length, 1)
+    const { pane } = (await call(socket, 'create_container', { cwd: '/w' })).body
+    for (let round = 0; round < 5; round++) await Promise.all([a.carrier.tick(), b.carrier.tick()])
+    assert.equal(carrier[0].isCarrier(), true)
+    assert.ok(carrier[0].mux.get(pane), 'the carrier kept its pane')
+    for (const host of [a, b]) assert.ok(!host.log.lines?.some(([, line]) => line.includes('names another host')))
+    assert.deepEqual(await call(socket, 'pane_facts', { pane }), { status: 200, body: { command: '', in_mode: '0', dead: '0', session_marker: '' } })
   })
 
   for (const stale of [false, true]) {

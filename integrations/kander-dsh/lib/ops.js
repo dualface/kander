@@ -26,7 +26,7 @@ export function createOps(host) {
       return { protocol: String(PROTOCOL_VERSION), upgrade: upgradeSide(Number(text)), pid: process.pid }
     },
     async create_container(params) {
-      const pane = mux.create({ cwd: required(params, 'cwd'), label: params.get('label') ?? '', project: params.get('project') ?? '' })
+      const pane = await mux.create({ cwd: required(params, 'cwd'), label: params.get('label') ?? '', project: params.get('project') ?? '' })
       return { container: pane.container, pane: pane.id }
     },
     async run_command(params) {

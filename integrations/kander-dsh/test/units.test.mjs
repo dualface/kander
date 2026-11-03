@@ -1,58 +1,98 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { processName } from '../lib/foreground.js'
 import { PaneSequence } from '../lib/ids.js'
 import { paneEnvironment } from '../lib/index.js'
+import { DirectoryLock } from '../lib/lock.js'
 import { ensurePrivateDirectory, stateDirectory } from '../lib/paths.js'
 import { upgradeSide } from '../lib/protocol.js'
 import { temporaryDirectory } from './helpers.mjs'
 
 describe('pane sequence', () => {
-  const take = (seen, sequence) => {
-    const { pane, container } = sequence.next()
-    assert.ok(!seen.has(pane) && !seen.has(container), pane)
-    seen.add(pane)
-    seen.add(container)
-    return pane
-  }
+  const sequenceIn = (directory, pid) => new PaneSequence(directory, new DirectoryLock(join(directory, 'lock')), pid)
 
-  test('IDs never repeat across restarts, between hosts, or after a regressed record', () => {
+  test('IDs continue across restarts', async () => {
     const directory = temporaryDirectory()
-    const seen = new Set()
-    const first = new PaneSequence(directory, 100)
-    assert.equal(take(seen, first), 'p1-100')
-    take(seen, first)
-    // A restarted host reusing the same pid continues the persisted number.
-    assert.equal(take(seen, new PaneSequence(directory, 100)), 'p3-100')
-    // A record written late by a slower host points back; taken numbers are skipped.
-    writeFileSync(join(directory, 'sequence'), '1\n')
-    assert.equal(take(seen, new PaneSequence(directory, 100)), 'p4-100')
+    assert.equal((await sequenceIn(directory, 100).next()).pane, 'p1-100')
+    assert.deepEqual(await sequenceIn(directory, 100).next(), { pane: 'p2-100', container: 'c2-100' })
     assert.equal(statSync(join(directory, 'sequence')).mode & 0o777, 0o600)
+  })
+
+  test('two hosts taking numbers together never share one or move the record back', async () => {
+    const directory = temporaryDirectory()
+    const a = sequenceIn(directory, 100)
+    const b = sequenceIn(directory, 100)
+    // More than the 64 numbers an earlier design reclaimed, interleaved.
+    const taken = await Promise.all(Array.from({ length: 150 }, (_, index) => (index % 2 ? a : b).next()))
+    assert.equal(new Set(taken.map((ids) => ids.pane)).size, 150)
+    assert.equal(a.read(), 150)
+    assert.equal((await b.next()).pane, 'p151-100')
   })
 
   test('processes taking numbers at the same time never share one', async () => {
     const directory = temporaryDirectory()
-    const script = `import { PaneSequence } from ${JSON.stringify(new URL('../lib/ids.js', import.meta.url).href)}
-      const sequence = new PaneSequence(process.argv[1], 7)
+    const lib = (name) => JSON.stringify(new URL(`../lib/${name}`, import.meta.url).href)
+    const script = `import { PaneSequence } from ${lib('ids.js')}
+      import { DirectoryLock } from ${lib('lock.js')}
+      const sequence = new PaneSequence(process.argv[1], new DirectoryLock(process.argv[1] + '/lock'), 7)
       const out = []
-      for (let i = 0; i < 40; i++) out.push(sequence.next().pane)
+      for (let i = 0; i < 40; i++) out.push((await sequence.next()).pane)
       console.log(JSON.stringify(out))`
     const runs = await Promise.all(Array.from({ length: 4 }, () => new Promise((resolve, reject) => {
       execFile(process.execPath, ['--input-type=module', '-e', script, directory], (error, stdout) => (error ? reject(error) : resolve(JSON.parse(stdout))))
     })))
     const panes = runs.flat()
-    assert.equal(panes.length, 160)
     // All four children use the pid 7, so only the number keeps them apart.
     assert.equal(new Set(panes).size, 160)
+    assert.equal(sequenceIn(directory, 7).read(), 160)
   })
 
-  test('a damaged sequence record is refused instead of restarting at 1', () => {
+  test('a damaged sequence record is refused instead of restarting at 1', async () => {
     const directory = temporaryDirectory()
     writeFileSync(join(directory, 'sequence'), 'garbage')
-    assert.throws(() => new PaneSequence(directory).next(), /does not hold a pane sequence number/)
+    await assert.rejects(sequenceIn(directory).next(), /does not hold a pane sequence number/)
+  })
+})
+
+describe('directory lock', () => {
+  test('a second holder waits for the first', async () => {
+    const lock = new DirectoryLock(join(temporaryDirectory(), 'lock'))
+    const order = []
+    let release
+    const first = lock.run(() => new Promise((resolve) => { order.push('first'); release = resolve }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const second = lock.run(() => { order.push('second') })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    assert.deepEqual(order, ['first'])
+    release()
+    await Promise.all([first, second])
+    assert.deepEqual(order, ['first', 'second'])
+  })
+
+  test('a lock left by a dead process or held too long is broken', async () => {
+    const path = join(temporaryDirectory(), 'lock')
+    mkdirSync(path)
+    // pid 2^22 + 1 is above the Linux and macOS pid limits, so it is not running.
+    writeFileSync(join(path, 'owner'), '4194305 dead')
+    assert.equal(await new DirectoryLock(path, { timeoutMs: 200 }).run(() => 'ran'), 'ran')
+    mkdirSync(path)
+    writeFileSync(join(path, 'owner'), `${process.pid} old`)
+    const old = new Date(Date.now() - 60_000)
+    utimesSync(join(path, 'owner'), old, old)
+    assert.equal(await new DirectoryLock(path, { timeoutMs: 200 }).run(() => 'ran'), 'ran')
+  })
+
+  test('a live lock is not broken, and a holder never removes a lock it lost', async () => {
+    const path = join(temporaryDirectory(), 'lock')
+    mkdirSync(path)
+    writeFileSync(join(path, 'owner'), `${process.pid} live`)
+    await assert.rejects(new DirectoryLock(path, { timeoutMs: 100 }).run(() => {}), /stayed locked/)
+    const lock = new DirectoryLock(path)
+    lock.release('someone else')
+    assert.equal(readFileSync(join(path, 'owner'), 'utf8'), `${process.pid} live`)
   })
 })
 
