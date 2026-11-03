@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.1 — 2026-11-03
 
 - Fix (#22, `kander start` and `kander resume --agent`): a late failure on tmux, tmux-session, or another launcher whose panes carry the session marker, before the marker was written (failed session discovery or marker write), no longer lists `kander resume --adopt`. Such a pane reads `unknown`, so adoption could never succeed. `started-unresolved` now first tells you to stop the old executor in `WINDOW` by hand, because a takeover leaves it running, then names `kander resume <id> --agent <agent> --decision <reference> --message <message>`. A start that wrote the marker, and herdr and the other launchers, keep both next steps.
 - Fix (#22, `kander resume --adopt`): adoption of an unmarked pane is refused with the same hint. The plain `kander resume` and `kander notify` refusals of an unfinished start no longer name `--adopt` for an unmarked pane either.
