@@ -55,6 +55,7 @@ func TestDefinitionConformanceLifecycle(t *testing.T) {
 		{name: "pass"}, {name: "metadata mismatch", wrong: true, wantCode: 1}, {name: "keep", keep: true},
 		{name: "keep after failure", keep: true, wrong: true, wantCode: 1},
 		{name: "no metadata", capability: "pane_metadata"}, {name: "no foreground", capability: "foreground_process"},
+		{name: "no focus", capability: "focus"},
 		{name: "no metadata ordinary failure", capability: "pane_metadata", failFacts: true, wantCode: 1},
 		{name: "no foreground ordinary failure", capability: "foreground_process", failFacts: true, wantCode: 1},
 	} {
@@ -93,7 +94,7 @@ func TestDefinitionConformanceLifecycle(t *testing.T) {
 			if code == 0 {
 				for _, s := range methodSteps {
 					state := "pass"
-					if s.method == "ReportSession" || (s.method == "CloseContainer" && test.keep) || (test.capability == "pane_metadata" && (s.method == "SetSessionMarker" || s.method == "ReverseLookup")) || (test.capability == "foreground_process" && s.method == "PaneFacts") {
+					if s.method == "ReportSession" || (s.method == "CloseContainer" && test.keep) || (test.capability == "pane_metadata" && (s.method == "SetSessionMarker" || s.method == "ReverseLookup")) || (test.capability == "foreground_process" && s.method == "PaneFacts") || (test.capability == "focus" && s.method == "Focus") {
 						state = "skip"
 					}
 					if !strings.Contains(text, state+" "+s.method+" ") {

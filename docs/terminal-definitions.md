@@ -214,7 +214,7 @@ Each value becomes `candidate` and runs the steps with fresh candidate stores; t
 
 ## Host Policies
 
-These stay in Go and are the same for every definition: `pane_facts`, `topology` and `reverse_lookup` run within the default probe budget when the caller has no deadline; launch-time operations run without a deadline; focus probes the pane first (probe failure, gone or `closed_when` end it), runs its steps (the container-level switch) through the same step machinery as other operations, then an optional `focus_pane` hook. A failed focus step, or a `fail` step, ends focus with `focus.switch_failed`; without a declared message its notice is `<subcommand>: <run error, stderr, stdout or exit status>`. A step failure that `on_error` continues past makes the result a switch with the `focus.tab_only` notice.
+These stay in Go and are the same for every definition: `pane_facts`, `topology` and `reverse_lookup` run within the default probe budget when the caller has no deadline; launch-time operations run without a deadline; focus without a `focus` operation (capability `focus` false) returns `focus.unsupported` without running a command; otherwise focus probes the pane first (probe failure, gone or `closed_when` end it), runs its steps (the container-level switch) through the same step machinery as other operations, then an optional `focus_pane` hook. A failed focus step, or a `fail` step, ends focus with `focus.switch_failed`; without a declared message its notice is `<subcommand>: <run error, stderr, stdout or exit status>`. A step failure that `on_error` continues past makes the result a switch with the `focus.tab_only` notice.
 
 ## Hooks
 

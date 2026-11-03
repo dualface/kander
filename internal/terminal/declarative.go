@@ -613,7 +613,12 @@ func (b *DeclarativeBackend) sessionRow(e *execution, rows *Rows, identity Ident
 // and then an optional focus_pane hook whose degraded result still counts as
 // switched.
 func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Address) FocusResult {
-	op, _ := b.op(OpFocus)
+	op, ok := b.op(OpFocus)
+	if !ok {
+		// Validation ties the focus operation to the focus capability, so a
+		// definition without it cannot focus; report that before any probe.
+		return FocusResult{ID: "focus.unsupported"}
+	}
 	e := b.newExecution(ctx, conn, b.getenv, addressInputs(address))
 	for index := range op.Unavailable {
 		line := &op.Unavailable[index]

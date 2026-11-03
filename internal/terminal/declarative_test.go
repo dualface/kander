@@ -498,6 +498,26 @@ func TestDeclarativeHooks(t *testing.T) {
 	}
 }
 
+func TestDeclarativeFocusWithoutOperationIsUnsupported(t *testing.T) {
+	def, err := DecodeDefinition("faketerm.json", mutateFixture(t, func(root map[string]any) {
+		object(root, "capabilities")["focus"] = false
+		delete(object(root, "ops"), OpFocus)
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backend, err := NewDeclarativeBackend(def, "faketerm", noEnv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := terminaltest.New(t)
+	result := backend.Focus(context.Background(), fakeConn(fake), Address{Container: "c1", Pane: "p1"})
+	if result.Success || result.ID != "focus.unsupported" {
+		t.Fatalf("focus=%+v", result)
+	}
+	wantCalls(t, fake)
+}
+
 func TestDeclarativeFocusClosedAndUnavailable(t *testing.T) {
 	resetLanguage(t)
 	backend := declarativeOp(t, OpFocus, `{

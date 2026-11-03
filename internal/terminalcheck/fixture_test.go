@@ -157,6 +157,8 @@ func fixture(t *testing.T, capability string) (terminal.Backend, string) {
 			delete(ops, "set_session_marker")
 			delete(result, "session_marker")
 			facts["steps"] = facts["steps"].([]any)[:1]
+		case "focus":
+			delete(ops, "focus")
 		case "foreground_process":
 			delete(result, "command")
 			delete(result, "dead")
