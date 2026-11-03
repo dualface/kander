@@ -84,7 +84,7 @@ func CheckTerminalTools() TerminalTools {
 		tools.Luvus = probeTerminalTool(luvusBackend())
 		tools.HerdrCore = probeTerminalTool(herdrCoreBackend())
 		if tools.HerdrCore.Available() {
-			tools.HerdrCoreDown = probeHerdrCoreServer(tools.HerdrCore.Path)
+			tools.HerdrCoreDown = probeHerdrCoreServer(systemHerdrCoreSocketEnv())
 		}
 	}
 	return tools
@@ -93,19 +93,6 @@ func CheckTerminalTools() TerminalTools {
 func herdrCoreBackend() terminal.Backend {
 	backend, _ := terminal.Lookup(builtin.HerdrCore)
 	return backend
-}
-
-// probeHerdrCoreServer asks hc whether its core is running and returns the
-// reason when it is not. It only reads the status; it never starts the core.
-func probeHerdrCoreServer(path string) string {
-	out, err := terminal.VersionOutput(path, []string{"server", "status", "--json"})
-	if err == nil {
-		return ""
-	}
-	if detail := strings.TrimSpace(out); detail != "" {
-		return detail
-	}
-	return err.Error()
 }
 
 func herdrBackend() terminal.Backend {

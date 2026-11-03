@@ -28,5 +28,7 @@
   "program_status.ready_timeout": "terminal {{.V0}} did not report the status of agent {{.V1}} within the ready timeout; nothing was delivered",
   "program_status.unreported": "the agent has not reported its status (OSC 7501) yet",
   "program_status.agent_status_reason": "agent status: {{.V0}} (reported: {{.V1}})",
-  "program_status.pane_unreported": "terminal {{.V0}} has not reported its agent status (OSC 7501) yet"
+  "program_status.pane_unreported": "terminal {{.V0}} has not reported its agent status (OSC 7501) yet",
+  "herdr_core.doctor_socket_unreadable": "cannot read the socket setting of {{.V0}}; Kander cannot tell whether herdr-core is running",
+  "herdr_core.doctor_no_core": "no core listens at {{.V0}}: {{.V1}}"
 }

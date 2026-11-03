@@ -3,6 +3,8 @@
 package menu
 
 import (
+	"net"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,18 +12,36 @@ import (
 	"github.com/dualface/kander/internal/config"
 )
 
-// fakeHC answers --version and reports a running core unless HC_FAKE_DOWN is set.
+// fakeHC answers --version only: doctor must not ask hc about the core,
+// because every hc command starts a missing one.
 const fakeHC = `#!/bin/sh
 case "$1" in
 --version) printf '%s\n' 'hc 0.1.17' ;;
-server)
-  if [ -n "${HC_FAKE_DOWN:-}" ]; then
-    printf '%s\n' '{"error":{"kind":"unavailable","message":"the core is not running"}}' >&2
-    exit 5
-  fi
-  printf '%s\n' '{"version":"0.1.17"}' ;;
+*) printf '%s\n' "doctor ran hc $*" >&2; exit 9 ;;
 esac
 `
+
+// listenCore serves a fake core socket for the doctor subprocess and returns
+// its path.
+func listenCore(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "core.sock")
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			_ = conn.Close()
+		}
+	}()
+	return path
+}
 
 func TestDoctorReportsMissingHC(t *testing.T) {
 	h := newHarness(t)
@@ -44,10 +64,11 @@ func TestDoctorReportsHerdrCoreNotRunning(t *testing.T) {
 	h := newHarness(t)
 	h.installFake(true)
 	h.fakeCommand("hc", fakeHC)
-	h.setenv("HC_FAKE_DOWN", "1")
+	missing := filepath.Join(t.TempDir(), "core.sock")
+	h.setenv("HC_SOCKET", missing)
 	h.writeConfig(defaultPayload(map[string]any{"launcher": "herdr-core", "language": "en", "welcome_complete": true}))
 	code, _, out := h.run("doctor")
-	if code == 0 || !strings.Contains(out, "herdr-core is not running") || !strings.Contains(out, "the core is not running") {
+	if code == 0 || !strings.Contains(out, "herdr-core is not running") || !strings.Contains(out, "no core listens at "+missing) || strings.Contains(out, "doctor ran hc") {
 		t.Fatalf("%d %s", code, out)
 	}
 	if cfg := readDoctorConfig(t, h); cfg.Launcher != "herdr-core" {
@@ -61,6 +82,7 @@ func TestDoctorListsHerdrCoreAgentsWithoutProgramStatus(t *testing.T) {
 	h := newHarness(t)
 	h.installFake(true)
 	h.fakeCommand("hc", fakeHC)
+	h.setenv("HC_SOCKET", listenCore(t))
 	h.fakeCommand("cursor-agent", "")
 	h.fakeCommand("opencode", "")
 	payload := defaultPayload(map[string]any{"launcher": "herdr-core", "language": "en", "welcome_complete": true,

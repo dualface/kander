@@ -28,5 +28,7 @@
   "program_status.ready_timeout": "终端 {{.V0}} 在就绪超时内没有上报 Agent {{.V1}} 的状态; 未投递任何内容",
   "program_status.unreported": "Agent 尚未上报状态 (OSC 7501)",
   "program_status.agent_status_reason": "Agent 状态: {{.V0}} (上报: {{.V1}})",
-  "program_status.pane_unreported": "终端 {{.V0}} 尚未上报 Agent 状态 (OSC 7501)"
+  "program_status.pane_unreported": "终端 {{.V0}} 尚未上报 Agent 状态 (OSC 7501)",
+  "herdr_core.doctor_socket_unreadable": "无法读取 {{.V0}} 中的 socket 设置; Kander 无法判断 herdr-core 是否在运行",
+  "herdr_core.doctor_no_core": "{{.V0}} 上没有 core 在监听: {{.V1}}"
 }

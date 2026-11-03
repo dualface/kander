@@ -28,5 +28,7 @@
   "program_status.ready_timeout": "ターミナル {{.V0}} は準備のタイムアウトまでに Agent {{.V1}} の状態を報告しませんでした; 何も配信していません",
   "program_status.unreported": "Agent はまだ状態 (OSC 7501) を報告していません",
   "program_status.agent_status_reason": "Agent 状態: {{.V0}} (報告: {{.V1}})",
-  "program_status.pane_unreported": "ターミナル {{.V0}} はまだ Agent 状態 (OSC 7501) を報告していません"
+  "program_status.pane_unreported": "ターミナル {{.V0}} はまだ Agent 状態 (OSC 7501) を報告していません",
+  "herdr_core.doctor_socket_unreadable": "{{.V0}} の socket 設定を読み取れません; Kander は herdr-core が実行中か判断できません",
+  "herdr_core.doctor_no_core": "{{.V0}} で待ち受けている core はありません: {{.V1}}"
 }
