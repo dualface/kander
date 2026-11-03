@@ -14,7 +14,9 @@ The Kander view is the page half of the `kander-dsh` plugin: a global panel in d
 
 The board tab shows the columns backlog, todo, working, review, and done; archived and trash cards are not shown. A card shows its title, task ID, size, launcher, and, for `working` and `review` cards with a `WINDOW`, the agent status from `kander list --json --agent-status`.
 
-- A `todo` card has **Start**. After confirmation the plugin runs `kander start --launcher dsh <task-id>` in the board's main worktree. On success the new agent's terminal tab opens; on failure the view shows the output of `kander start` and the card stays in `todo`.
+- A `todo` card has **Start**. After confirmation the plugin runs `kander start --launcher dsh <task-id>` in the board's main worktree. On success the new agent's terminal tab opens. Any other exit status shows the output of `kander start` (standard error, then standard output) as a failed start, and the card's column follows what `kander start` did:
+  - A launch that failed and was rolled back leaves no agent, and the card stays in `todo`.
+  - A launch that ends `started-unresolved` (exit status 3: it failed after the agent may have started, or its container could not be closed) is not rolled back. The card keeps the column `kander start` left it in, and an agent may run. The output lists the next steps; follow them with the `kander` CLI ([Launch, delivery, and terminal cleanup](launch-and-delivery.md)) instead of starting the card again.
 - A `working` or `review` card whose `WINDOW` launcher is `dsh` has **Open terminal**; it opens the agent's tab, or switches to it when it is open. Cards of other launchers (tmux, herdr, and others) show the agent status only.
 - A card marked **Needs attention** has a dsh agent that waits for terminal input, a dsh agent that exited while the card is still in `working`, or an agent whose snapshot `status` is `stopped` or whose `runtime_state` is `blocked`.
 
