@@ -47,10 +47,13 @@ func AgentNotifyTarget(backend terminal.Backend, program, paneID string, session
 	if err != nil {
 		return terminal.PaneFacts{}, err
 	}
-	if pane.Agent != session.Agent {
+	switch pane.MatchAgent(session.Agent) {
+	case terminal.AgentDiffers:
 		return terminal.PaneFacts{}, notifyError(
-			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.Agent),
+			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.ReportedAgent()),
 		)
+	case terminal.AgentUndecided:
+		return terminal.PaneFacts{}, notifyError("program_status.pane_unreported", paneID)
 	}
 	if pane.AgentStatus != "idle" && pane.AgentStatus != "done" {
 		return terminal.PaneFacts{}, notifyError(
@@ -95,10 +98,15 @@ func AgentNotifyProbe(backend terminal.Backend, program, paneID string, session 
 			"launch.pane_does_not_exist", paneID, pane.GoneDetail,
 		)}
 	}
-	if pane.Agent != session.Agent {
+	switch pane.MatchAgent(session.Agent) {
+	case terminal.AgentDiffers:
 		return TargetProbe{State: "stale", Detail: t(
-			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.Agent),
+			"notify.agent_mismatch_task_pane", session.Agent, orNA(pane.ReportedAgent()),
 		)}
+	case terminal.AgentUndecided:
+		// Nothing is delivered before the pane reports its program status;
+		// the wait loop retries until it does or the timeout ends.
+		return TargetProbe{State: "busy", Detail: t("program_status.pane_unreported", paneID)}
 	}
 	verdict, detail := matchSession(session, pane)
 	switch verdict {

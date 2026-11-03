@@ -1,0 +1,87 @@
+//go:build unix
+
+package terminalcheck
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/dualface/kander/internal/terminal"
+	"github.com/dualface/kander/internal/terminal/builtin"
+)
+
+func herdrCoreE2E(t *testing.T, env map[string]string) (terminal.Backend, terminal.Conn) {
+	t.Helper()
+	if os.Getenv("KANDER_E2E_HERDR_CORE") != "1" {
+		t.Skip("herdr-core: set KANDER_E2E_HERDR_CORE=1 explicitly to create a test terminal")
+	}
+	program, err := exec.LookPath(builtin.HerdrCoreExecutable)
+	if err != nil {
+		t.Skip("herdr-core: hc is not in PATH")
+	}
+	if out, err := terminal.VersionOutput(program, []string{"server", "status", "--json"}); err != nil {
+		t.Skipf("herdr-core: the core is not running: %s", strings.TrimSpace(out))
+	}
+	getenv := func(name string) string {
+		if value, ok := env[name]; ok {
+			return value
+		}
+		return os.Getenv(name)
+	}
+	backend, err := builtin.DefinitionBackend("herdr-core", builtin.HerdrCore, getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return backend, terminal.Conn{Program: program, Run: terminal.SpawnRunner}
+}
+
+// TestEmbeddedHerdrCoreConformance runs the embedded herdr-core definition
+// against the local core. It is opt-in because it opens a real terminal.
+func TestEmbeddedHerdrCoreConformance(t *testing.T) {
+	backend, _ := herdrCoreE2E(t, nil)
+	var output bytes.Buffer
+	err := Check(backend, Options{SkipFocus: true}, &output)
+	t.Log("embedded herdr-core definition:\n" + output.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "pass PaneFacts.gone") {
+		t.Fatal("missing gone check")
+	}
+}
+
+// The environment Kander forwards reaches the process in the hc terminal,
+// although the core's own environment does not carry it.
+func TestHerdrCoreForwardsKanderEnvironment(t *testing.T) {
+	marker := "/kander-e2e/" + time.Now().Format("150405.000000") + "/config.json"
+	backend, conn := herdrCoreE2E(t, map[string]string{"KANDER_CONFIG": marker})
+	cwd := t.TempDir()
+	address, err := backend.CreateContainer(conn, terminal.Target{}, cwd, "kander-env-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = backend.CloseContainer(context.Background(), conn, address) })
+	if err := backend.WaitReady(conn, address.Pane, int(terminal.DefaultReadyTimeout/time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	command := `sh -c 'printf "kander-env:%s\n" "$KANDER_CONFIG"; exec cat'`
+	if err := backend.RunCommand(conn, address.Pane, "'"+cwd+"'", command, true); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		output, err := backend.ReadOutput(context.Background(), conn, address.Pane)
+		if err == nil && strings.Contains(output, "\nkander-env:"+marker) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("forwarded KANDER_CONFIG not visible: %q %v", output, err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}

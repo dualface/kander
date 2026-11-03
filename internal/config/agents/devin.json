@@ -47,6 +47,7 @@
     }
   },
   "exit_command": "/exit",
+  "program_status": {"reports": true, "app": "devin"},
   "display_name": "Devin",
   "supports_effort": false,
   "prompt_delivery": {

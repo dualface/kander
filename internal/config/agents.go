@@ -26,6 +26,7 @@ type AgentDefinition struct {
 	PromptDelivery *PromptDelivery         `json:"prompt_delivery,omitempty"`
 	Review         *AgentReview            `json:"review,omitempty"`
 	ExitCommand    *string                 `json:"exit_command,omitempty"`
+	ProgramStatus  *ProgramStatus          `json:"program_status,omitempty"`
 	// ConfigDir relocates a built-in agent's global config directory for rules
 	// installation; only the scope config file's value takes effect.
 	ConfigDir string `json:"config_dir,omitempty"`
@@ -173,6 +174,11 @@ func AgentFor(cfg *Config, name string) AgentDefinition {
 			d.ExitCommand = &cmd
 		}
 	}
+	if d.ProgramStatus == nil {
+		if emb, ok := embeddedByName(d.Dialect); ok {
+			d.ProgramStatus = cloneProgramStatus(emb.ProgramStatus)
+		}
+	}
 	return d
 }
 
@@ -204,6 +210,7 @@ func cloneAgent(d AgentDefinition) AgentDefinition {
 	d.Session = cloneSession(d.Session)
 	d.PromptDelivery = clonePromptDelivery(d.PromptDelivery)
 	d.ExitCommand = cloneExitCommand(d.ExitCommand)
+	d.ProgramStatus = cloneProgramStatus(d.ProgramStatus)
 	if d.InstallRules != nil {
 		v := *d.InstallRules
 		d.InstallRules = &v
@@ -316,7 +323,7 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 				return nil, agentDefinitionError(name, Text("config.agent_config_dir"))
 			}
 		}
-		for _, key := range []string{"args", "session", "prompt_delivery", "review"} {
+		for _, key := range []string{"args", "session", "prompt_delivery", "review", "program_status"} {
 			if v, exists := fields[key]; exists {
 				if _, ok := asObject(v); !ok {
 					return nil, agentDefinitionError(name, Text("config.agent_object"))
@@ -328,6 +335,9 @@ func validateAgentDefinitions(raw any) (map[string]AgentDefinition, error) {
 		}
 		if err := validatePromptDelivery(name, d.PromptDelivery); err != nil {
 			return nil, err
+		}
+		if !validProgramStatus(d.ProgramStatus) {
+			return nil, agentDefinitionError(name, Text("program_status.agent_definition_invalid"))
 		}
 		if d.Path != "" && !validateAgentProgram(d.Path) {
 			return nil, agentDefinitionError(name, Text("config.agent_path", d.Path))

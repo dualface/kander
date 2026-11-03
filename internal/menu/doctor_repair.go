@@ -371,11 +371,13 @@ func doctorLauncherAvailable(launcher string, tools TerminalTools) bool {
 	}
 	switch launcher {
 	case "auto":
-		return tools.Herdr.Installed() || tools.Tmux.Available() || tools.Luvus.Available()
+		return tools.Herdr.Installed() || tools.Tmux.Available() || tools.Luvus.Available() || tools.HerdrCore.Available()
 	case builtin.Herdr:
 		return tools.Herdr.Installed()
 	case builtin.Luvus:
 		return !isWindowsOS() && tools.Luvus.Available()
+	case builtin.HerdrCore:
+		return !isWindowsOS() && tools.HerdrCore.Available()
 	case builtin.Tmux, builtin.TmuxSession:
 		return tools.Tmux.Available()
 	}

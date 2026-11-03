@@ -84,6 +84,7 @@ type embeddedAgent struct {
 	SupportsEffort   bool                   `json:"supports_effort"`
 	PromptDelivery   PromptDelivery         `json:"prompt_delivery"`
 	ExitCommand      string                 `json:"exit_command"`
+	ProgramStatus    *ProgramStatus         `json:"program_status"`
 	Review           AgentReview            `json:"review"`
 	RulesTarget      agentRulesTarget       `json:"rules_target"`
 	ConfigHome       agentConfigHome        `json:"config_home"`
@@ -221,6 +222,11 @@ func parseEmbeddedAgentFile(fileName string, data []byte) (embeddedAgent, error)
 	}
 	if err := validatePromptDelivery(fileName, &agent.PromptDelivery); err != nil {
 		return embeddedAgent{}, err
+	}
+	// Every embedded agent declares OSC 7501, even when it does not report,
+	// so a terminal that relies on the reports never guesses for a built-in.
+	if agent.ProgramStatus == nil || !validProgramStatus(agent.ProgramStatus) {
+		return embeddedAgent{}, embedAgentError(fileName, "program_status")
 	}
 	if agent.RulesTarget.Global != "" && !validAgentText(agent.RulesTarget.Global) {
 		return embeddedAgent{}, embedAgentError(fileName, "rules_target.global")

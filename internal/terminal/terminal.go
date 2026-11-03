@@ -43,6 +43,10 @@ type Capabilities struct {
 	// AgentIdentity: pane facts report the agent name, the agent status, the
 	// reported session identity and the owning container.
 	AgentIdentity bool
+	// ProgramStatus: an AgentIdentity backend whose panes identify the agent
+	// by the OSC 7501 program status the terminal records (PaneFacts.AgentApp)
+	// instead of an agent name; a pane that has not reported names no agent.
+	ProgramStatus bool
 	// SessionReport: the session identity is reported out of band after start.
 	SessionReport bool
 	// WaitOutput: the backend blocks on output itself; otherwise callers poll
@@ -105,6 +109,13 @@ type PaneFacts struct {
 	// consumers treat as a direct session id for compatibility.
 	AgentSessionKind string
 	Container        string
+	// ProgramStatus backends: the facts identify the agent by AgentApp, the
+	// OSC 7501 app the pane reported; empty until the first report.
+	// AgentStatusReason keeps a reported state that was mapped onto
+	// AgentStatus (error is reported as blocked).
+	ProgramStatus     bool
+	AgentApp          string
+	AgentStatusReason string
 }
 
 // Topology is the container that owns a pane.

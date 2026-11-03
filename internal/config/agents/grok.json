@@ -63,6 +63,7 @@
     "mode": "generated"
   },
   "exit_command": "/quit",
+  "program_status": {"reports": true, "app": "grok-build"},
   "display_name": "Grok",
   "supports_effort": true,
   "prompt_delivery": {

@@ -111,11 +111,15 @@ func TestDefinitionValidationRejects(t *testing.T) {
 		{"address field name", func(r map[string]any) {
 			r["address"] = []any{map[string]any{"name": "tab"}, map[string]any{"name": "pane"}}
 		}, []string{"field address[0].name"}},
-		{"address without container", func(r map[string]any) { r["address"] = []any{map[string]any{"name": "pane"}} }, []string{"field address", "must include container and pane"}},
+		{"address without pane", func(r map[string]any) { r["address"] = []any{map[string]any{"name": "container"}} }, []string{"field address", "must include pane"}},
 		{"address pattern group", func(r map[string]any) {
 			r["address"] = []any{map[string]any{"name": "container", "pattern": "(w\\d+)"}, map[string]any{"name": "pane"}}
 		}, []string{"field address[0].pattern", "capturing groups"}},
 		{"container capability", func(r map[string]any) { object(r, "capabilities")["container"] = false }, []string{"field capabilities.container"}},
+		{"program status without agent identity", func(r map[string]any) { object(r, "capabilities")["program_status"] = true }, []string{"field capabilities.program_status", "requires agent_identity"}},
+		{"auto_only with skip_auto", func(r map[string]any) {
+			object(r, "launchers", "faketerm", "requires")["env"] = []any{map[string]any{"name": "FAKETERM", "auto_only": true, "skip_auto": true}}
+		}, []string{"field launchers.faketerm.requires.env[0].auto_only", "excludes skip_auto"}},
 		{"gone_when outside facts", func(r map[string]any) {
 			step := firstStep(r, "read_output")
 			step["gone_when"] = "field_missing:step.out.text"

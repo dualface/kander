@@ -1,0 +1,694 @@
+{
+  "schema_version": 1,
+  "name": "herdr-core",
+  "binary": "hc",
+  "version_args": [
+    "--version"
+  ],
+  "capabilities": {
+    "container": true,
+    "focus": false,
+    "pane_metadata": true,
+    "foreground_process": false,
+    "agent_identity": true,
+    "program_status": true,
+    "session_report": false,
+    "wait_output": false
+  },
+  "address": [
+    {
+      "name": "pane",
+      "pattern": "t[0-9a-z]+"
+    }
+  ],
+  "errors": {
+    "gone": [
+      "stderr_json:error.kind=not_found"
+    ],
+    "meta_missing": [
+      "stderr_json:error.kind=not_found"
+    ]
+  },
+  "launchers": {
+    "herdr-core": {
+      "auto_priority": 120,
+      "requires": {
+        "platform": "posix",
+        "binary": true,
+        "inside_session": true,
+        "env": [
+          {
+            "name": "HC_TERMINAL_ID",
+            "trim": true,
+            "auto_only": true
+          }
+        ],
+        "messages": {
+          "binary": {
+            "id": "herdr_core.not_in_path"
+          }
+        }
+      },
+      "started_lines": [
+        {
+          "message": {
+            "id": "herdr_core.started",
+            "args": [
+              "{head}",
+              "{pane}"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "ops": {
+    "create_container": {
+      "steps": [
+        {
+          "argv": [
+            "run",
+            "--bg",
+            "--no-parent",
+            "--rm",
+            "--json",
+            "--cwd",
+            "{cwd}",
+            "--name",
+            "{label_name}",
+            "--label",
+            "kander-window={label}",
+            "--",
+            "/usr/bin/env",
+            "PATH={env.PATH}",
+            "KANBAN_DIR={env.KANBAN_DIR}",
+            "KANDER_CONFIG={env.KANDER_CONFIG}",
+            "KANDER_LANG={env.KANDER_LANG}",
+            "/bin/sh"
+          ],
+          "store": "new",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:address"
+          },
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "run",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "run",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "container": "{step.new.text}",
+        "pane": "{step.new.text}"
+      }
+    },
+    "wait_ready": {
+      "steps": [
+        {
+          "argv": [
+            "read",
+            "--json",
+            "{pane}"
+          ],
+          "output": {
+            "source": "stdout",
+            "parse": "regex:\"text\":\\s*\"(?:\\\\[nrt]|\\s)*([^\\s\"\\\\])"
+          },
+          "poll": {
+            "interval": "200ms",
+            "timeout": "{timeout_ms}",
+            "until": "nonempty"
+          },
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.terminal_not_ready",
+              "args": [
+                "{pane}",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "run_command": {
+      "steps": [
+        {
+          "argv": [
+            "send",
+            "--json",
+            "{pane}",
+            "cd -- {cwd_quoted} && exec {command}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "send",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "send",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "set_session_marker": {
+      "steps": [
+        {
+          "when": "field_missing:value",
+          "argv": [
+            "label",
+            "--json",
+            "{pane}",
+            "kander-session="
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.marker_failed",
+              "args": [
+                "{pane}",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.marker_failed",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "when": "!field_missing:value",
+          "argv": [
+            "label",
+            "--json",
+            "{pane}",
+            "kander-session={value}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.marker_failed",
+              "args": [
+                "{pane}",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.marker_failed",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "pane_facts": {
+      "steps": [
+        {
+          "argv": [
+            "get",
+            "--json",
+            "{pane}"
+          ],
+          "store": "get",
+          "fields": {
+            "id": "json_field:address",
+            "state": "json_field:state",
+            "app": "json_field:status.app",
+            "status": "json_field:status.state",
+            "session": "json_field:labels.kander-session"
+          },
+          "expect": [
+            [
+              "!field_missing:step.get.id",
+              "field:step.get.id={pane}"
+            ]
+          ],
+          "gone_when": [
+            [
+              "field:step.get.state=finished"
+            ],
+            [
+              "field:step.get.state=lost"
+            ]
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.terminal_missing",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.get_invalid",
+              "args": [
+                "{pane}"
+              ]
+            },
+            "gone": {
+              "id": "herdr_core.terminal_ended",
+              "args": [
+                "{pane}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "session_marker": "{step.get.session}",
+        "agent_app": "{step.get.app}",
+        "agent_status": "{step.get.status}",
+        "agent_session": "{step.get.session}",
+        "container": "{pane}"
+      }
+    },
+    "read_output": {
+      "steps": [
+        {
+          "argv": [
+            "read",
+            "--json",
+            "{pane}"
+          ],
+          "store": "read",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:text"
+          },
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "read",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "read",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "text": "{step.read.text}"
+      }
+    },
+    "deliver_text": {
+      "steps": [
+        {
+          "argv": [
+            "send",
+            "--json",
+            "{pane}",
+            "{text}"
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "send",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "send",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "topology": {
+      "steps": [
+        {
+          "argv": [
+            "ls",
+            "--json"
+          ],
+          "store": "list",
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "ls",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "ls",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "from": "list",
+        "split": "json_array:terminals",
+        "fields": {
+          "pane": "json_field:address"
+        },
+        "match": "field:row.pane={pane}",
+        "result": {
+          "pane": "{row.pane}"
+        },
+        "messages": {
+          "missing": {
+            "id": "herdr_core.list_missing"
+          }
+        }
+      },
+      "result": {
+        "container": "{container}"
+      }
+    },
+    "container_exists": {
+      "steps": [
+        {
+          "argv": [
+            "get",
+            "--json",
+            "{pane}"
+          ],
+          "store": "get",
+          "fields": {
+            "id": "json_field:address",
+            "state": "json_field:state",
+            "app": "json_field:status.app",
+            "status": "json_field:status.state",
+            "session": "json_field:labels.kander-session"
+          },
+          "expect": [
+            [
+              "!field_missing:step.get.id",
+              "field:step.get.id={pane}"
+            ]
+          ],
+          "gone_when": [
+            [
+              "field:step.get.state=finished"
+            ],
+            [
+              "field:step.get.state=lost"
+            ]
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.terminal_missing",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.get_invalid",
+              "args": [
+                "{pane}"
+              ]
+            },
+            "gone": {
+              "id": "herdr_core.terminal_ended",
+              "args": [
+                "{pane}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "reverse_lookup": {
+      "steps": [
+        {
+          "argv": [
+            "ls",
+            "--json",
+            "--label",
+            "kander-session={reference}"
+          ],
+          "store": "list",
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "ls",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "ls",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "from": "list",
+        "split": "json_array:terminals",
+        "fields": {
+          "pane": "json_field:address"
+        },
+        "expect": "!field_missing:row.pane",
+        "match": "!field_missing:reference",
+        "result": {
+          "container": "{row.pane}",
+          "pane": "{row.pane}"
+        },
+        "messages": {
+          "missing": {
+            "id": "herdr_core.list_missing"
+          },
+          "invalid": {
+            "id": "herdr_core.list_missing"
+          },
+          "none": {
+            "id": "herdr_core.lookup_none",
+            "args": [
+              "{reference}"
+            ]
+          },
+          "ambiguous": {
+            "id": "herdr_core.lookup_ambiguous",
+            "args": [
+              "{reference}",
+              "{count}"
+            ]
+          }
+        }
+      }
+    },
+    "close_container": {
+      "steps": [
+        {
+          "argv": [
+            "kill",
+            "--json",
+            "{pane}"
+          ],
+          "on_error": "meta_missing",
+          "timeout": "10s",
+          "messages": {
+            "exec": {
+              "id": "herdr_core.close_failed",
+              "args": [
+                "{pane}",
+                {
+                  "id": "herdr_core.invocation_failed",
+                  "args": [
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.close_failed",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "argv": [
+            "rm",
+            "--json",
+            "{pane}"
+          ],
+          "on_error": "meta_missing",
+          "timeout": "10s",
+          "messages": {
+            "exec": {
+              "id": "herdr_core.close_failed",
+              "args": [
+                "{pane}",
+                {
+                  "id": "herdr_core.invocation_failed",
+                  "args": [
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.close_failed",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

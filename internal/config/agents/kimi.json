@@ -38,6 +38,7 @@
     }
   },
   "exit_command": "/exit",
+  "program_status": {"reports": true, "app": "kimi-code"},
   "display_name": "Kimi",
   "supports_effort": false,
   "prompt_delivery": {

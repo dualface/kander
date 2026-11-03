@@ -41,6 +41,7 @@
     "mode": "generated"
   },
   "exit_command": "/exit",
+  "program_status": {"reports": true, "app": "claude-code"},
   "display_name": "Claude",
   "supports_effort": true,
   "prompt_delivery": {

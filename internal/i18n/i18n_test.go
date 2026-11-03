@@ -47,6 +47,7 @@ var testCatalogFiles = []string{
 	"locales/pins/%s.json",
 	"locales/archive/%s.json",
 	"locales/luvus/%s.json",
+	"locales/herdrcore/%s.json",
 	"locales/report/%s.json",
 	"locales/theme/%s.json",
 	"locales/recovery/%s.json",

@@ -69,10 +69,13 @@ func cleanupAgentContainer(backend terminal.Backend, address terminal.Address, o
 	if err := validateAgentContainer(backend, program, address, pane); err != nil {
 		return launch.CleanupResult{}, err
 	}
-	if pane.Agent != "" {
+	if pane.MatchAgent(oldSession.Agent) == terminal.AgentUndecided {
+		return launch.CleanupResult{}, takeoverError("program_status.pane_unreported", paneID)
+	}
+	if pane.ReportedAgent() != "" {
 		sameSession := false
 		var uncertainDetail string
-		if pane.Agent == oldSession.Agent && oldSession.Reference != "" && pane.AgentSession != "" {
+		if pane.MatchAgent(oldSession.Agent) == terminal.AgentMatches && oldSession.Reference != "" && pane.AgentSession != "" {
 			ctx, cancel := probe.WithDefaultTimeout(context.Background())
 			verdict, detail := terminal.MatchAgentSession(ctx, oldSession.Agent, pane.AgentSessionKind, pane.AgentSession, oldSession.Reference)
 			cancel()

@@ -90,14 +90,24 @@ func notInPath(backend terminal.Backend) error {
 // address: it reports agent identity, so a pane override or a reverse lookup
 // needs no launcher-specific coordinates.
 func agentBackend() (terminal.Backend, bool) {
-	return terminal.FindBackend(func(c terminal.Capabilities) bool { return c.AgentIdentity })
+	return terminal.AddressFreeBackend()
+}
+
+// overrideBackend is the backend a --pane override addresses: the card's own
+// WINDOW backend when it reports agent identity, because the override names a
+// pane of the same terminal, otherwise the address-free fallback backend.
+func overrideBackend(window terminal.Backend, parsed bool) (terminal.Backend, bool) {
+	if parsed && window.Capabilities().AgentIdentity {
+		return window, true
+	}
+	return agentBackend()
 }
 
 // ResolveTarget resolves and fully validates the direct-delivery target before any payload is created.
 func ResolveTarget(window, paneOverride string, session liveness.TaskSession, timeout float64) (DirectTarget, error) {
 	backend, address, parsed := terminal.ParseWindow(window)
 	if paneOverride != "" {
-		agent, ok := agentBackend()
+		agent, ok := overrideBackend(backend, parsed)
 		if !ok {
 			return DirectTarget{}, notifyError("liveness.herdr_is_not_in_path")
 		}

@@ -129,7 +129,7 @@ func printDoctorWithTools(tools TerminalTools, repair bool, interactive bool) bo
 	if isWindowsOS() {
 		success(config.Text("menu.windows_console_launcher_available"))
 	} else if tools.Tmux.Available() {
-		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != builtin.Herdr && configuredLauncher != builtin.Luvus {
+		if os.Getenv("TMUX") == "" && configuredLauncher != builtin.TmuxSession && configuredLauncher != "auto" && configuredLauncher != builtin.Herdr && configuredLauncher != builtin.Luvus && configuredLauncher != builtin.HerdrCore {
 			hint(config.Text(
 				"menu.tmux_installed_but_not_in_a_session_start_one", builtin.TmuxSessionHint,
 			))
@@ -577,8 +577,10 @@ func validateConfiguredResources(cfg *config.Config, agents map[string]agentStat
 		} else {
 			hint(config.Text("luvus.doctor_ready"))
 		}
+	case builtin.HerdrCore:
+		healthy = validateHerdrCoreLauncher(effective, tools) && healthy
 	case "auto":
-		if !tools.Tmux.Available() && !tools.Herdr.Available() && !tools.Luvus.Available() {
+		if !tools.Tmux.Available() && !tools.Herdr.Available() && !tools.Luvus.Available() && !tools.HerdrCore.Available() {
 			healthy = false
 			if tools.Herdr.OffPath != "" {
 				// herdr is installed but the current PATH cannot see it; pointing at

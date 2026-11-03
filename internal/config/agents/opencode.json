@@ -40,6 +40,7 @@
     }
   },
   "exit_command": "/exit",
+  "program_status": {"reports": false},
   "display_name": "OpenCode",
   "supports_effort": true,
   "prompt_delivery": {

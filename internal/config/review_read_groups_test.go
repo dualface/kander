@@ -67,6 +67,7 @@ func TestEmbeddedReviewWindowsReadGroupsValidation(t *testing.T) {
 		},
 		"session":           map[string]any{"mode": "generated"},
 		"display_name":      "Demo",
+		"program_status":    map[string]any{"reports": false},
 		"supports_effort":   true,
 		"prompt_delivery":   map[string]any{"mode": "argv"},
 		"rules_target":      map[string]any{"global": ".demo/AGENTS.md", "project": "AGENTS.md"},

@@ -254,7 +254,7 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 	}
 	backend, address, parsed := terminal.ParseWindow(value)
 	if override != "" {
-		agent, ok := agentBackend()
+		agent, ok := overrideBackend(backend, parsed)
 		if !ok {
 			return DirectTarget{}, false, notifyError("launch.dispatch_recovery_unproven", task, value)
 		}
@@ -274,7 +274,7 @@ func dispatchTarget(ctx context.Context, value, override, task, text string) (Di
 	}
 	if backend.Capabilities().AgentIdentity {
 		proven := false
-		if !found.Gone && found.Agent == session.Agent && session.Reference != "" {
+		if !found.Gone && found.MatchAgent(session.Agent) == terminal.AgentMatches && session.Reference != "" {
 			verdict, _ := terminal.MatchAgentSession(ctx, session.Agent, found.AgentSessionKind, found.AgentSession, session.Reference)
 			proven = verdict == terminal.SessionMatches
 		}

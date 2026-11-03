@@ -34,7 +34,9 @@ func repairMissingSession(ctx context.Context, root string, snapshot board.Snaps
 	}
 	value := board.MetadataFrom(snapshot.Text, board.FieldWindow)
 	backend, address, ok := terminal.ParseWindow(value)
-	if !ok || !backend.Capabilities().AgentIdentity {
+	// A program status pane carries the session in the marker Kander writes
+	// itself; there is no agent-reported identity to repair.
+	if !ok || !backend.Capabilities().AgentIdentity || backend.Capabilities().ProgramStatus {
 		return snapshot, nil
 	}
 	if override != "" {

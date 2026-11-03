@@ -71,16 +71,25 @@ func agentWaitExit(backend terminal.Backend, program string, address terminal.Ad
 				"takeover.the_herdr_pane_moved_to_another_tab_while_waiting", tabID, orNA(pane.Container),
 			)
 		}
-		if pane.Agent == "" {
+		match := pane.MatchAgent(session.Agent)
+		if match == terminal.AgentDiffers && pane.ReportedAgent() == "" {
 			if err := validateAgentContainer(backend, program, address, pane); err != nil {
 				return false, err
 			}
 			return true, nil
 		}
-		if pane.Agent != session.Agent {
+		if match == terminal.AgentDiffers {
 			return false, takeoverError(
-				"takeover.the_pane_changed_to_another_agent_while_waiting_for", session.Agent, pane.Agent,
+				"takeover.the_pane_changed_to_another_agent_while_waiting_for", session.Agent, pane.ReportedAgent(),
 			)
+		}
+		if match == terminal.AgentUndecided {
+			// The pane reports no program status at the moment; the agent
+			// has not exited, so keep waiting.
+			if remaining := deadline.Sub(nowFn()); remaining > 0 {
+				sleepFn(min(pollInterval, remaining))
+			}
+			continue
 		}
 		if session.Reference == "" {
 			return false, takeoverError(

@@ -42,6 +42,7 @@
     }
   },
   "exit_command": "/quit",
+  "program_status": {"reports": true, "app": "pi"},
   "display_name": "Pi",
   "supports_effort": true,
   "prompt_delivery": {

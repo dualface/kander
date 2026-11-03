@@ -53,11 +53,16 @@ type LaunchPlan struct {
 	sessionFileDeclared bool
 	// processName is the foreground command of the running agent; the pane
 	// watch accepts it as proof that the shell got past cd.
-	processName    string
-	Launcher       string
-	Target         terminal.Target
-	PromptDelivery config.PromptDelivery
-	Prompt         string
+	processName string
+	// agent and programStatusApp name the agent of this launch and the OSC
+	// 7501 app it declares; a program status terminal is delivered to only
+	// once its pane reports that app.
+	agent            string
+	programStatusApp string
+	Launcher         string
+	Target           terminal.Target
+	PromptDelivery   config.PromptDelivery
+	Prompt           string
 
 	// extendedTimeouts carries extended_launch_timeouts into the launch-time
 	// waits; see launchTimeout.

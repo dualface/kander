@@ -96,7 +96,7 @@ func TestLauncherChoicesOfferLuvus(t *testing.T) {
 	if !slices.Equal(got[:4], []string{"auto", "tmux", "tmux-session", "luvus"}) {
 		t.Fatalf("with luvus: %v", got)
 	}
-	if choices[0].Label != "choose herdr, luvus, or tmux from the current environment" || choices[3].Label != config.Text("luvus.menu_choice") {
+	if choices[0].Label != "choose herdr, luvus, herdr-core, or tmux from the current environment" || choices[3].Label != config.Text("luvus.menu_choice") {
 		t.Fatalf("labels: %+v", choices)
 	}
 }

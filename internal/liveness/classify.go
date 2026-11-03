@@ -99,8 +99,14 @@ func staleReport(ctx context.Context, entry board.Entry, session TaskSession, ch
 			return lookupFailure(&probe.Error{Message: t(
 				"liveness.failed_to_probe_the_reverse_looked_up_pane", probe.FailureDetail(err))})
 		}
-		if pane.Gone || pane.Agent != session.Agent {
+		if pane.Gone {
 			return report(entry, &sess, Stopped, channel, container, detail, "")
+		}
+		switch pane.MatchAgent(session.Agent) {
+		case terminal.AgentDiffers:
+			return report(entry, &sess, Stopped, channel, container, detail, "")
+		case terminal.AgentUndecided:
+			return sawExecutor(ctx, lookupFailure(&probe.Error{Message: t("program_status.unreported")}), newWindow)
 		}
 		if session.Reference != "" {
 			// A pane found by session must keep a decidable identity: an
@@ -179,14 +185,19 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 	if pane.Gone {
 		return staleReport(ctx, entry, session, channel, container, t("launch.pane_does_not_exist_2", paneID), program, backend, search)
 	}
-	if pane.Agent != session.Agent {
-		actual := pane.Agent
+	switch pane.MatchAgent(session.Agent) {
+	case terminal.AgentDiffers:
+		actual := pane.ReportedAgent()
 		if actual == "" {
 			actual = "N/A"
 		}
 		return staleReport(ctx, entry, session, channel, container, t(
 			"liveness.agent_mismatch_expected_actual", session.Agent, actual,
 		), program, backend, search)
+	case terminal.AgentUndecided:
+		// A program status pane that has not reported names no agent yet:
+		// neither the expected agent nor proof of another one.
+		return sawExecutor(ctx, report(entry, &session, Unknown, channel, container, t("program_status.unreported"), ""), "")
 	}
 	actualSession := pane.AgentSession
 	if session.Reference != "" && (actualSession != "" || pane.AgentSessionKind != "") {
@@ -216,7 +227,11 @@ func classifyAgentFacts(ctx context.Context, entry board.Entry, session TaskSess
 		out.RuntimeState = status
 		return out
 	}
-	out := report(entry, &session, Alive, channel, container, t("liveness.agent_status", status), "")
+	detail := t("liveness.agent_status", status)
+	if pane.AgentStatusReason != "" {
+		detail = t("program_status.agent_status_reason", status, pane.AgentStatusReason)
+	}
+	out := report(entry, &session, Alive, channel, container, detail, "")
 	out.RuntimeState = status
 	return out
 }

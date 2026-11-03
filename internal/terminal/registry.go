@@ -133,3 +133,12 @@ func FindBackend(match func(Capabilities) bool) (Backend, bool) {
 	}
 	return nil, false
 }
+
+// AddressFreeBackend is the backend that locates a session without a recorded
+// WINDOW address (a pane override, or a card without WINDOW): the first one
+// whose panes report agent identity by themselves. A program status backend
+// is never chosen: its panes carry the session only in the marker Kander
+// wrote at launch, which such a card never recorded.
+func AddressFreeBackend() (Backend, bool) {
+	return FindBackend(func(c Capabilities) bool { return c.AgentIdentity && !c.ProgramStatus })
+}

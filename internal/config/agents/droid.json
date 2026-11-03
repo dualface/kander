@@ -28,6 +28,7 @@
     "mode": "hook:droid-sessions"
   },
   "exit_command": "/quit",
+  "program_status": {"reports": false},
   "display_name": "Droid",
   "supports_effort": false,
   "prompt_delivery": {

@@ -365,7 +365,7 @@ func validateResumedAgentReceipt(plan LaunchPlan, outcome LaunchOutcome, session
 				status := pane.AgentStatus
 				// An unresolved reported identity counts as unconfirmed, not as
 				// a mismatch: the loop keeps polling until the deadline.
-				if pane.Agent == session.Agent &&
+				if pane.MatchAgent(session.Agent) == terminal.AgentMatches &&
 					(session.Reference == "" || ref == "" || verdict == terminal.SessionMatches) &&
 					(status == "idle" || status == "working" || status == "blocked") {
 					ok = true

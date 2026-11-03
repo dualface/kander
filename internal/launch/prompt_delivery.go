@@ -7,19 +7,43 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/terminal"
 )
 
 func applyAgentDelivery(plan *LaunchPlan, cfg *config.Config, agent string) error {
 	definition := config.AgentFor(cfg, agent)
 	plan.sessionFileDeclared = definition.Session != nil && definition.Session.File != nil
 	plan.processName = definition.ProcessName
+	plan.agent = agent
 	plan.extendedTimeouts = cfg.ExtendedLaunchTimeouts
 	if definition.PromptDelivery != nil {
 		plan.PromptDelivery = *clonePlanDelivery(definition.PromptDelivery)
 	} else {
 		plan.PromptDelivery = config.PromptDelivery{Mode: "argv"}
 	}
+	if err := rejectUnreportedAgent(plan, definition); err != nil {
+		return err
+	}
 	return rejectPaneDirectLauncher(*plan)
+}
+
+// rejectUnreportedAgent refuses, before any side effect, an agent that a
+// program status terminal cannot identify: the terminal names the agent only
+// through its OSC 7501 reports, so an agent without a reporting declaration
+// could never be observed, notified or dismissed there.
+func rejectUnreportedAgent(plan *LaunchPlan, definition config.AgentDefinition) error {
+	if !plan.capabilities().ProgramStatus {
+		return nil
+	}
+	if definition.ProgramStatus == nil {
+		return launchError("program_status.agent_undeclared", plan.Launcher, plan.agent)
+	}
+	app, ok := config.ProgramStatusApp(definition)
+	if !ok {
+		return launchError("program_status.agent_not_reporting", plan.Launcher, plan.agent)
+	}
+	plan.programStatusApp = app
+	return nil
 }
 
 func clonePlanDelivery(src *config.PromptDelivery) *config.PromptDelivery {
@@ -56,11 +80,17 @@ func attachPrompt(plan *LaunchPlan, args []string, prompt string) []string {
 }
 
 func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
-	deadline, err := waitAgentTUI(plan, outcome)
-	if err != nil {
-		return err
+	if plan.capabilities().ProgramStatus {
+		if err := waitProgramStatus(plan, outcome); err != nil {
+			return err
+		}
+	} else {
+		deadline, err := waitAgentTUI(plan, outcome)
+		if err != nil {
+			return err
+		}
+		waitAgentRecognized(plan, outcome, deadline)
 	}
-	waitAgentRecognized(plan, outcome, deadline)
 	if err := deliverPromptToPane(plan, outcome); err != nil {
 		output := resumedAgentFailureOutput(plan, outcome)
 		return launchError("launch.pane_prompt_rejected", err.Error(), output)
@@ -91,6 +121,36 @@ func waitAgentRecognized(plan LaunchPlan, outcome LaunchOutcome, deadline time.T
 			slice = remaining
 		}
 		sleepFn(slice)
+	}
+}
+
+// waitProgramStatus is the delivery readiness of a program status terminal:
+// the pane has reported once (OSC 7501) and the reported app is the one the
+// agent declares. The screen is never read for readiness. A pane that stays
+// unreported within the ready budget, or reports another app, fails the
+// delivery before the prompt is sent.
+func waitProgramStatus(plan LaunchPlan, outcome LaunchOutcome) error {
+	timeout := terminal.DefaultReadyTimeout
+	if ready := plan.PromptDelivery.Ready; ready != nil {
+		timeout = time.Duration(ready.TimeoutMS) * time.Millisecond
+	}
+	deadline := nowFn().Add(plan.launchTimeout(timeout))
+	for {
+		facts, err := plan.backend().PaneFacts(context.Background(), boundedSpawnConn(plan), outcome.Pane)
+		switch {
+		case err != nil:
+		case facts.Gone:
+			return launchError("program_status.terminal_ended", outcome.Pane, facts.GoneDetail)
+		case facts.AgentApp == plan.programStatusApp:
+			return nil
+		case facts.AgentApp != "":
+			return launchError("program_status.app_mismatch", outcome.Pane, facts.AgentApp, plan.agent, plan.programStatusApp)
+		}
+		remaining := deadline.Sub(nowFn())
+		if remaining <= 0 {
+			return launchError("program_status.ready_timeout", outcome.Pane, plan.agent)
+		}
+		sleepFn(min(notifyPollInterval, remaining))
 	}
 }
 

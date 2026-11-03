@@ -84,6 +84,7 @@ func (b *DeclarativeBackend) Capabilities() Capabilities {
 		SessionReport:     c.SessionReport,
 		WaitOutput:        c.WaitOutput,
 		AgentIdentity:     c.AgentIdentity,
+		ProgramStatus:     c.ProgramStatus,
 		POSIXOnly:         b.spec.Requires.Platform == "posix",
 	}
 }
@@ -131,7 +132,19 @@ func (b *DeclarativeBackend) ParseAddress(value string) (Address, bool) {
 			address.Pane = match[index+1]
 		}
 	}
-	return address, true
+	return b.paneContainer(address), true
+}
+
+// paneContainer makes the pane its own container when the address has no
+// container field: such a terminal holds exactly one program per container.
+func (b *DeclarativeBackend) paneContainer(address Address) Address {
+	for _, field := range b.def.Address {
+		if field.Name == "container" {
+			return address
+		}
+	}
+	address.Container = address.Pane
+	return address
 }
 
 // ParseFocusAddress accepts a strict WINDOW value, or, for the read-only focus
@@ -159,7 +172,7 @@ func (b *DeclarativeBackend) ParseFocusAddress(fields []string) (Address, bool) 
 			address.Pane = value
 		}
 	}
-	return address, true
+	return b.paneContainer(address), true
 }
 
 var plainSegment = regexp.MustCompile(`^[^:\s]+$`)
@@ -266,7 +279,7 @@ func (b *DeclarativeBackend) PrepareWithRunner(request PrepareRequest, runner Ru
 	getenv := b.launcherGetenv(request.Getenv)
 	checkEnv := func(beforeBinary bool) error {
 		for _, requirement := range requires.Env {
-			if requirement.BeforeBinary != beforeBinary || requirement.satisfied(request.Getenv) {
+			if requirement.AutoOnly || requirement.BeforeBinary != beforeBinary || requirement.satisfied(request.Getenv) {
 				continue
 			}
 			names["name"] = requirement.Name
@@ -337,11 +350,12 @@ func (b *DeclarativeBackend) CreateContainer(conn Conn, target Target, cwd, labe
 	result, err := b.launchOp(OpCreateContainer, conn, map[string]string{
 		"session": target.Session, "session_exists": strconv.FormatBool(target.SessionExists), "workspace": target.Workspace,
 		"project": target.Project, "project_key": ProjectKey(target.Project), "cwd": cwd, "cwd_resolved": resolvedPath(cwd), "label": label,
+		"label_name": LabelName(label),
 	})
 	if err != nil {
 		return Address{}, err
 	}
-	address := Address{Session: result["session"], Container: result["container"], Pane: result["pane"]}
+	address := b.paneContainer(Address{Session: result["session"], Container: result["container"], Pane: result["pane"]})
 	if address.Container == "" || address.Pane == "" {
 		return Address{}, &probe.Error{Message: config.Text("terminal.container_address_missing", b.launcher)}
 	}
@@ -440,11 +454,15 @@ func (b *DeclarativeBackend) PaneFacts(ctx context.Context, conn Conn, pane stri
 	if err != nil {
 		return PaneFacts{}, err
 	}
-	return PaneFacts{
+	facts := PaneFacts{
 		Command: result["command"], InMode: result["in_mode"], Dead: result["dead"], SessionMarker: result["session_marker"],
 		Agent: result["agent"], AgentStatus: result["agent_status"], AgentSession: result["agent_session"],
 		AgentSessionKind: result["agent_session_kind"], Container: result["container"],
-	}, nil
+	}
+	if b.def.Capabilities.ProgramStatus {
+		facts = programStatusFacts(facts, result["agent_app"])
+	}
+	return facts, nil
 }
 
 func (b *DeclarativeBackend) ReadOutput(ctx context.Context, conn Conn, pane string) (string, error) {
@@ -633,6 +651,7 @@ func (b *DeclarativeBackend) Focus(ctx context.Context, conn Conn, address Addre
 	e.values["facts.command"], e.values["facts.in_mode"] = facts.Command, facts.InMode
 	e.values["facts.dead"], e.values["facts.session_marker"] = facts.Dead, facts.SessionMarker
 	e.values["facts.agent"], e.values["facts.agent_status"] = facts.Agent, facts.AgentStatus
+	e.values["facts.agent_app"] = facts.AgentApp
 	e.values["facts.agent_session"], e.values["facts.agent_session_kind"] = facts.AgentSession, facts.AgentSessionKind
 	e.values["facts.container"] = facts.Container
 	if facts.Gone || (op.ClosedWhen != nil && e.holds(op.ClosedWhen)) {

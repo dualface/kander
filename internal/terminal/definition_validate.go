@@ -30,7 +30,7 @@ var stepMessageNames = []string{"detail", "error", "output"}
 // method arguments.
 var opInputs = map[string][]string{
 	OpPrepare:          {"project", "project_key", "command"},
-	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label"},
+	OpCreateContainer:  {"session", "session_exists", "workspace", "project", "project_key", "cwd", "cwd_resolved", "label", "label_name"},
 	OpWaitReady:        {"pane", "timeout_ms"},
 	OpRunCommand:       {"pane", "cwd_quoted", "command", "posix"},
 	OpSetSessionMarker: {"pane", "value"},
@@ -52,7 +52,7 @@ var opInputs = map[string][]string{
 var opResults = map[string][]string{
 	OpPrepare:         {"session", "session_exists", "workspace"},
 	OpCreateContainer: {"session", "container", "pane"},
-	OpPaneFacts:       {"command", "in_mode", "dead", "session_marker", "agent", "agent_status", "agent_session", "agent_session_kind", "container"},
+	OpPaneFacts:       {"command", "in_mode", "dead", "session_marker", "agent", "agent_app", "agent_status", "agent_session", "agent_session_kind", "container"},
 	OpProcessFacts:    {"pane", "processes"},
 	OpPaneDirectory:   {"directory"},
 	OpReadOutput:      {"text"},
@@ -64,7 +64,7 @@ var startedLineNames = []string{"head", "session", "session_exists", "workspace"
 
 var paneFactNames = []string{
 	"facts.command", "facts.in_mode", "facts.dead", "facts.session_marker",
-	"facts.agent", "facts.agent_status", "facts.agent_session", "facts.agent_session_kind", "facts.container",
+	"facts.agent", "facts.agent_app", "facts.agent_status", "facts.agent_session", "facts.agent_session_kind", "facts.container",
 }
 
 // rowResults are the per-row result fields of the operations that scan rows.
@@ -100,6 +100,9 @@ func ValidateDefinition(source string, def *Definition) error {
 	}
 	if !def.Capabilities.Container {
 		return v.fieldErr("capabilities.container", "must be true: a definition provides container launchers")
+	}
+	if def.Capabilities.ProgramStatus && !def.Capabilities.AgentIdentity {
+		return v.fieldErr("capabilities.program_status", "requires agent_identity")
 	}
 	if err := v.address(def.Address); err != nil {
 		return err
@@ -341,8 +344,8 @@ func (v validator) address(fields []AddressField) error {
 			}
 		}
 	}
-	if !seen["container"] || !seen["pane"] {
-		return v.fieldErr("address", "must include container and pane")
+	if !seen["pane"] {
+		return v.fieldErr("address", "must include pane")
 	}
 	return nil
 }
@@ -399,6 +402,9 @@ func (v validator) launcher(def *Definition, name string, launcher LauncherDefin
 		label := field + ".requires.env[" + strconv.Itoa(index) + "]"
 		if !envNamePattern.MatchString(env.Name) {
 			return v.fieldErr(label+".name", "invalid environment variable name")
+		}
+		if env.AutoOnly && (env.SkipAuto || env.BeforeBinary) {
+			return v.fieldErr(label+".auto_only", "excludes skip_auto and before_binary")
 		}
 		if err := v.optionalMessage(label+".message", env.Message, messageNames); err != nil {
 			return err
@@ -459,6 +465,11 @@ func (v validator) requiredOps(def *Definition, name string, launcher LauncherDe
 	// AgentIdentity backend has.
 	if has(OpAgentList) && !def.Capabilities.AgentIdentity {
 		return v.fieldErr("launchers."+name+".ops", "operation %s is declared but agent_identity is false", OpAgentList)
+	}
+	// Agent list rows carry no program status app, so they cannot identify
+	// the agent of a program status backend.
+	if has(OpAgentList) && def.Capabilities.ProgramStatus {
+		return v.fieldErr("launchers."+name+".ops", "operation %s is declared but program_status is true", OpAgentList)
 	}
 	sort.Strings(required)
 	for _, op := range required {

@@ -43,6 +43,7 @@
     "mode": "hook:codex-rollout"
   },
   "exit_command": "/exit",
+  "program_status": {"reports": true, "app": "codex"},
   "display_name": "Codex",
   "supports_effort": true,
   "prompt_delivery": {

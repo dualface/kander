@@ -74,11 +74,15 @@ type DefinitionCapabilities struct {
 	WaitOutput        bool `json:"wait_output"`
 	SessionReport     bool `json:"session_report"`
 	AgentIdentity     bool `json:"agent_identity"`
+	// ProgramStatus: the agent identity and status come from the OSC 7501
+	// program status the terminal records; requires agent_identity.
+	ProgramStatus bool `json:"program_status"`
 }
 
 // AddressField is one colon-separated field of the opaque WINDOW part.
 type AddressField struct {
-	// Name is session, container or pane.
+	// Name is session, container or pane. Without a container field the
+	// container is the pane itself.
 	Name string `json:"name"`
 	// Pattern is a regular expression without capturing groups; the default
 	// is one colon-free, whitespace-free segment.
@@ -122,6 +126,10 @@ type EnvRequirement struct {
 	// SkipAuto leaves this variable out of auto detection; Prepare still
 	// requires it, so auto selects the launcher and reports what is missing.
 	SkipAuto bool `json:"skip_auto,omitempty"`
+	// AutoOnly takes this variable into auto detection only; Prepare does
+	// not require it, so an explicitly chosen launcher also works outside
+	// the terminal's own session.
+	AutoOnly bool `json:"auto_only,omitempty"`
 	// Message replaces requires.messages.env for this variable.
 	Message *Message `json:"message,omitempty"`
 }

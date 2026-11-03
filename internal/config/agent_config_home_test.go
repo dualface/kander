@@ -49,6 +49,7 @@ func TestEmbeddedConfigHomeValidation(t *testing.T) {
 			"review":            map[string]any{"cwd": "root", "output_name": "output.txt", "inspection": "read-only", "output": map[string]any{"source": "stdout", "parse": "raw"}},
 			"session":           map[string]any{"mode": "generated"},
 			"display_name":      "Demo",
+			"program_status":    map[string]any{"reports": false},
 			"prompt_delivery":   map[string]any{"mode": "argv"},
 			"rules_target":      map[string]any{"global": global, "project": "AGENTS.md"},
 			"config_home":       home,

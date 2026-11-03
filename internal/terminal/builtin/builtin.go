@@ -19,6 +19,10 @@ const (
 	Herdr = "herdr"
 	// HerdrExecutable is the herdr command resolved on PATH.
 	HerdrExecutable = "herdr"
+	// HerdrCore is the launcher provided by the embedded herdr-core definition.
+	HerdrCore = "herdr-core"
+	// HerdrCoreExecutable is the herdr-core CLI resolved on PATH.
+	HerdrCoreExecutable = "hc"
 	// Luvus is the launcher provided by the embedded luvus definition.
 	Luvus = "luvus"
 	// LuvusExecutable is the luvus command resolved on PATH.

@@ -31,9 +31,13 @@ func (t TerminalTool) Installed() bool { return t.Available() || t.OffPath != ""
 
 // TerminalTools is shared by doctor and Settings; it never modifies the launcher config.
 type TerminalTools struct {
-	Herdr TerminalTool
-	Tmux  TerminalTool
-	Luvus TerminalTool
+	Herdr     TerminalTool
+	Tmux      TerminalTool
+	Luvus     TerminalTool
+	HerdrCore TerminalTool
+	// HerdrCoreDown is why herdr-core is not running, empty while it runs or
+	// when hc is unavailable and the server was not probed.
+	HerdrCoreDown string
 }
 
 func (t TerminalTools) NeedsHerdrInstall() bool {
@@ -78,8 +82,30 @@ func CheckTerminalTools() TerminalTools {
 	if !isWindowsOS() {
 		tools.Tmux = probeTerminalTool(tmuxBackend())
 		tools.Luvus = probeTerminalTool(luvusBackend())
+		tools.HerdrCore = probeTerminalTool(herdrCoreBackend())
+		if tools.HerdrCore.Available() {
+			tools.HerdrCoreDown = probeHerdrCoreServer(tools.HerdrCore.Path)
+		}
 	}
 	return tools
+}
+
+func herdrCoreBackend() terminal.Backend {
+	backend, _ := terminal.Lookup(builtin.HerdrCore)
+	return backend
+}
+
+// probeHerdrCoreServer asks hc whether its core is running and returns the
+// reason when it is not. It only reads the status; it never starts the core.
+func probeHerdrCoreServer(path string) string {
+	out, err := terminal.VersionOutput(path, []string{"server", "status", "--json"})
+	if err == nil {
+		return ""
+	}
+	if detail := strings.TrimSpace(out); detail != "" {
+		return detail
+	}
+	return err.Error()
 }
 
 func herdrBackend() terminal.Backend {
@@ -206,6 +232,16 @@ func reportTerminalTools(tools TerminalTools) {
 	// reported; the configured-launcher checks name a missing one.
 	if tools.Luvus.Path != "" {
 		report(builtin.LuvusExecutable, tools.Luvus)
+	}
+	if !isWindowsOS() {
+		report(builtin.HerdrCoreExecutable, tools.HerdrCore)
+		if tools.HerdrCore.Available() {
+			if tools.HerdrCoreDown == "" {
+				success(config.Text("herdr_core.doctor_running"))
+			} else {
+				hint(config.Text("herdr_core.doctor_not_running", tools.HerdrCoreDown))
+			}
+		}
 	}
 	if tools.NeedsHerdrInstall() {
 		if isWindowsOS() {
