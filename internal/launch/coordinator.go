@@ -162,11 +162,29 @@ func RecoverCoordinator(ctx context.Context, root string, r board.CoordinatorRec
 			}
 			return board.CoordinatorCheckpoint{}, launchError("board.recover_start_pending", s.Entry.TaskID)
 		}
-		if err = recoverRefusal(s, recoverLivenessFn(ctx, s)); err != nil {
+		report := recoverLivenessFn(ctx, s)
+		if err = recoverRefusal(s, report); err != nil {
+			if exists && record.StartUnfinished() && adoptableAfterProbe(s, record, report) {
+				return board.CoordinatorCheckpoint{}, launchError("launch.recover_start_unresolved_adopt", err.Error(), s.Entry.TaskID)
+			}
 			return board.CoordinatorCheckpoint{}, err
 		}
 	}
 	return board.RecoverCoordinator(ctx, root, r, s.Revision)
+}
+
+// adoptableAfterProbe says whether adoption can end the unfinished start of a
+// refused reset, from the probe already made and static facts: the card shows
+// the attempt's identity, and the recorded pane is alive or unmarked with a
+// session adoption can mark. It runs no discovery and writes nothing.
+func adoptableAfterProbe(s board.Snapshot, record board.ExecutionRecord, report liveness.Report) bool {
+	if board.StartIdentityChanged(s, record) {
+		return false
+	}
+	if unmarkedPane(report) {
+		return markerRepairable(board.MetadataFrom(s.Text, board.FieldSession))
+	}
+	return report.Status == liveness.Alive || report.Status == liveness.AliveOrphaned
 }
 
 // reconcileExitPartial is the exit status of a reconcile that blocked some

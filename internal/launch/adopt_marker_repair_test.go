@@ -382,9 +382,10 @@ func TestAdoptRetriesAfterTheLedgerWriteFails(t *testing.T) {
 		t.Fatalf("resume: err=%v", err)
 	}
 	// An unresolved attempt follows the probe in coordinator recover, which now
-	// reads the marked pane alive and refuses the reset.
+	// reads the marked pane alive, refuses the reset and names adoption.
 	window := board.MetadataFrom(readSnapshot(t, root, task).Text, board.FieldWindow)
-	recoverRefused := launchError("launch.recover_executor_alive", task, liveness.Alive, config.Text("liveness.agent_is_reachable"), window).Error()
+	alive := launchError("launch.recover_executor_alive", task, liveness.Alive, config.Text("liveness.agent_is_reachable"), window).Error()
+	recoverRefused := launchError("launch.recover_start_unresolved_adopt", alive, task).Error()
 	if _, err := RecoverCoordinator(context.Background(), root, board.CoordinatorRecover{Member: task}); err == nil || err.Error() != recoverRefused {
 		t.Fatalf("recover: err=%v", err)
 	}
@@ -458,6 +459,16 @@ func TestUnmarkedHintsFollowStaticRepairability(t *testing.T) {
 				t.Fatalf("steps=%q", steps)
 			}
 			hints()
+			// An unresolved attempt reaches the probe refusal of coordinator recover.
+			writes := markerWrites(t, root)
+			_, err := RecoverCoordinator(context.Background(), root, board.CoordinatorRecover{Member: task})
+			if err == nil || strings.Contains(err.Error(), "resume "+task+" --adopt --decision") != tc.adopt {
+				t.Fatalf("recover: err=%v", err)
+			}
+			if markerWrites(t, root) != writes {
+				t.Fatal("coordinator recover wrote a marker")
+			}
+			requireRecord(t, root, task, board.ExecutionUnresolved)
 		})
 	}
 }

@@ -77,5 +77,6 @@
   "launch.adopt_session_unproven": "{{.V0}} は引き取れません: その pane にはセッションマーカーがなく、このタスク、起動ディレクトリ、今回の開始試行に合う Codex セッションが {{.V1}} 個あります。マーカーを書くのはちょうど 1 個のときだけです。次の手順: {{.V2}}。その後 kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
   "launch.adopt_changed_before_marker": "{{.V0}} は引き取れません: 確認の後にカードまたは開始試行が変わったため、セッションマーカーは書いていません。次の手順: kander check {{.V0}} を実行し、その結果に従ってください。",
   "launch.adopt_marker_write_failed": "{{.V0}} は引き取れません: {{.V1}} の pane へのセッションマーカーの書き込みに失敗しました: {{.V2}}。次の手順: kander resume {{.V0}} --adopt --decision <参照> をもう一度実行してください。失敗が続く場合は {{.V3}}。その後 kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
-  "launch.adopt_session_scan_failed": "{{.V0}} は引き取れません: その pane にはセッションマーカーがなく、今回の開始試行の Codex セッションを検索できませんでした: {{.V1}}。次の手順: {{.V2}}。その後 kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。"
+  "launch.adopt_session_scan_failed": "{{.V0}} は引き取れません: その pane にはセッションマーカーがなく、今回の開始試行の Codex セッションを検索できませんでした: {{.V1}}。次の手順: {{.V2}}。その後 kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
+  "launch.recover_start_unresolved_adopt": "{{.V0}} {{.V1}} の開始試行は未完了です。この executor を残す場合は、代わりに kander resume {{.V1}} --adopt --decision <参照> を実行してください。"
 }
