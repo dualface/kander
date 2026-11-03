@@ -78,7 +78,7 @@ exit 0
 const fakeMuxDefinition = `{
   "schema_version": 1,
   "name": "fakemux",
-  "binary": "fakemux",
+  "binary": "fakemuxctl",
   "version_args": ["--version"],
   "capabilities": {"container": true, "focus": true, "pane_metadata": true, "foreground_process": true},
   "address": [{"name": "container"}, {"name": "pane"}],
@@ -215,7 +215,7 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(state, "panes"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bin, "fakemux"), []byte(fakeMuxScript), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "fakemuxctl"), []byte(fakeMuxScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
@@ -285,6 +285,11 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	notify := runKander(t, "notify", "--timeout", "61", "--message", "status please", id).require(t, "notify")
 	if output, _ := os.ReadFile(filepath.Join(state, "panes", "p1", "output")); !strings.Contains(notify.stdout, "acknowledgement=confirmed") || !strings.Contains(string(output), "kander-notify:") {
 		t.Fatalf("notify did not deliver directly: %q\n%s", output, notify.stdout)
+	}
+	// The binary differs from the definition name: both the progress line and
+	// the result line name the channel after the definition.
+	if !strings.Contains(notify.stdout, "waiting for acknowledgement: channel=fakemux-direct\n") || !strings.Contains(notify.stdout, "\tchannel=fakemux-direct\t") {
+		t.Fatalf("notify channel is not named after the definition:\n%s", notify.stdout)
 	}
 
 	resume := runKander(t, "resume", "--agent", "claude", "--timeout", "61", "--message", "take over", id).require(t, "resume takeover")

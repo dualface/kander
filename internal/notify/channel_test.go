@@ -53,8 +53,9 @@ func definitionBackend(t *testing.T, name, launcher, rename, binary string) term
 	return backend
 }
 
-// The progress line and the result line both name the channel after the
-// terminal definition, never after its executable or launcher.
+// The progress line names the channel after the terminal definition, never
+// after its executable or launcher. The command-level result line is covered
+// by TestTerminalDefinitionLifecycle.
 func TestDirectChannelNamesTheDefinition(t *testing.T) {
 	resetLang(t)
 	cases := []struct {
@@ -83,9 +84,6 @@ func TestDirectChannelNamesTheDefinition(t *testing.T) {
 			}
 			if !strings.Contains(out, "通道="+tc.want+"\n") {
 				t.Fatalf("progress line=%q want %s", out, tc.want)
-			}
-			if got := directChannelName(target.Backend); got != tc.want {
-				t.Fatalf("result channel=%q want %s", got, tc.want)
 			}
 		})
 	}
