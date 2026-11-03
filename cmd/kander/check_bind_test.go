@@ -167,3 +167,13 @@ func TestCheckCommandDeliveryBoardFree(t *testing.T) {
 		t.Fatalf("expected not-repository error, got %s", outBytes)
 	}
 }
+
+func TestListCommandUsesLivenessAgentStatusInFullBinary(t *testing.T) {
+	got := cli.Commands["list"]
+	if got == nil {
+		t.Fatal("list is not registered")
+	}
+	if reflect.ValueOf(got).Pointer() != reflect.ValueOf(liveness.RunList).Pointer() {
+		t.Fatal("full binary must bind liveness.RunList so --agent-status is available")
+	}
+}

@@ -1,6 +1,7 @@
 package board
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -95,9 +96,21 @@ func RunInit(args []string) int {
 	return 0
 }
 
-// RunList implements kander list / ls.
+// RunList implements kander list / ls without agent status observation; the
+// full binary binds RunListWithAgentStatus through internal/liveness.
 func RunList(args []string) int {
+	return RunListWithAgentStatus(args, nil)
+}
+
+// RunListWithAgentStatus implements kander list / ls. A nil observe makes
+// --agent-status an unknown option.
+func RunListWithAgentStatus(args []string, observe AgentStatusFunc) int {
 	args, mobile := takeFlag(args, "--mobile")
+	args, machine := takeFlag(args, "--json")
+	agentStatus := false
+	if observe != nil {
+		args, agentStatus = takeFlag(args, "--agent-status")
+	}
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
 			return usageFail("list", "board.unknown_option", arg)
@@ -113,6 +126,12 @@ func RunList(args []string) int {
 			return usageFail("list", "board.unknown_state", state)
 		}
 	}
+	if machine && mobile {
+		return usageFail("list", "board.unknown_option", "--mobile")
+	}
+	if agentStatus && !machine {
+		return usageFail("list", "board.unknown_option", "--agent-status")
+	}
 	root, err := requireRoot()
 	if err != nil {
 		return fail(err)
@@ -120,6 +139,19 @@ func RunList(args []string) int {
 	board, err := LoadBoard(root)
 	if err != nil {
 		return fail(err)
+	}
+	if machine {
+		if !agentStatus {
+			observe = nil
+		}
+		snapshot, err := BuildListSnapshot(context.Background(), root, board, state, observe)
+		if err != nil {
+			return fail(err)
+		}
+		if err = json.NewEncoder(os.Stdout).Encode(snapshot); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	out, err := FormatList(board, state, mobile)
 	if err != nil {
