@@ -71,6 +71,10 @@ func (b *DeclarativeBackend) Name() string          { return b.launcher }
 func (b *DeclarativeBackend) Executable() string    { return b.def.Binary }
 func (b *DeclarativeBackend) VersionArgs() []string { return append([]string{}, b.def.VersionArgs...) }
 
+// DefinitionName is the name of the definition that provides this launcher;
+// every launcher of one definition shares it.
+func (b *DeclarativeBackend) DefinitionName() string { return b.def.Name }
+
 // AutoPriority orders definition launchers during auto resolution.
 func (b *DeclarativeBackend) AutoPriority() int { return b.spec.AutoPriority }
 
