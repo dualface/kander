@@ -18,9 +18,9 @@ export class KanderHost {
    * @param options.env - variables added to every pane.
    * @param options.intervalMs - the socket ownership check interval.
    * @param options.foregroundName - resolves a process group id to a command name.
-   * @param options.holderOptions - LockHolder options of the carrier lock, for tests.
+   * @param options.lockOptions - CarrierLock options of the carrier lock, for tests.
    */
-  constructor({ subprocess, log, directory = stateDirectory(), env = {}, intervalMs, foregroundName, holderOptions }) {
+  constructor({ subprocess, log, directory = stateDirectory(), env = {}, intervalMs, foregroundName, lockOptions }) {
     this.log = log
     this.directory = directory
     this.mux = new Mux({ subprocess, sequence: new PaneSequence(directory), env, foregroundName, log })
@@ -31,8 +31,7 @@ export class KanderHost {
       server: createOpsServer(createOps(this)),
       log,
       intervalMs,
-      onLost: () => this.mux.closeAll(),
-      holderOptions,
+      lockOptions,
     })
   }
 
@@ -41,10 +40,12 @@ export class KanderHost {
     await this.carrier.start()
   }
 
-  /** Stops serving kander and ends every pane program with the host. */
+  /**
+   * Stops serving kander and ends every pane program with the host, before
+   * the carrier lock passes to another host.
+   */
   async stop() {
-    await this.carrier.stop()
-    await this.mux.closeAll()
+    await this.carrier.stop(() => this.mux.closeAll())
   }
 
   /** Whether this host holds the socket and so runs the dsh-launcher panes. */
@@ -52,7 +53,7 @@ export class KanderHost {
     return this.carrier.isCarrier()
   }
 
-  /** {carrier, socket, reason, holderPid}; reason is carrier, held, lost, blocked, unreachable, starting or stopped. */
+  /** {carrier, socket, reason, holderPid}; reason is carrier, held, waiting, blocked, unreachable, starting or stopped. */
   carrierStatus() {
     return this.carrier.status()
   }

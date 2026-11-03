@@ -20,7 +20,7 @@ Host half modules:
 | `host.js` | `KanderHost`: composes the parts below and exposes the JavaScript interface |
 | `mux.js` | One container per pane, one PTY per pane through `ctx.subprocess.spawnTerminal`, a headless screen per pane (vendored `@xterm/headless` 5.5.0) for `read_output` and terminal query replies, an output ring for subscribers |
 | `carrier.js` | Which host of a `DSH_HOME` holds the socket |
-| `lock.js` | The carrier lock: an exclusive file lock held by a `flock(1)` or `lockf(1)` child process, released by the kernel when its holder ends |
+| `lock.js` | The carrier lock: an exclusive file lock on a file description the dsh host itself keeps open, released only when the host releases it or dies |
 | `processes.js` | Whether a process exists, for removing names left by dead hosts |
 | `ops.js` | The socket operations |
 | `protocol.js` | Socket protocol version, HTTP framing, error classes |
@@ -52,14 +52,13 @@ Start the dsh host with the `PATH` the agents need.
 
 Several dsh hosts can share one `DSH_HOME`, for example dsh Web and dsh Desktop (separate profiles under the same home). They share one socket, `$DSH_HOME/kander/mux.sock` (`~/.dsh/kander/mux.sock` when `DSH_HOME` is unset or empty). The host whose server the socket path names is the carrier host; only it hosts dsh-launcher panes.
 
-- The carrier is the host that holds the carrier lock `<state dir>/carrier.lock`, an exclusive file lock (`flock(2)` semantics). Node has no file locking of its own, so a child process holds it: `flock -o` (util-linux) on Linux and `lockf -k` of the base system on macOS, each running a shell that reports `held` and then waits on its stdin. The kernel releases the lock when that holder ends: when the plugin releases it, when the dsh host dies and its end of the pipe closes, or when the holder is killed. No host ever judges whether a lock was left over.
-- Every other host keeps one holder waiting for the lock. It reads the socket's `hello` and writes `<socket> is held by another dsh host (pid N); this host does not host kander panes and waits for the carrier lock` to the dsh host log (the cordis logger of the plugin). The kernel hands the lock to a waiting host as soon as the carrier's holder ends, so that host becomes the carrier without a restart.
+- The carrier is the host that holds the carrier lock `<state dir>/carrier.lock` (mode 0600), an exclusive `flock(2)`-style lock on a file description the dsh host process keeps open itself. The lock lasts exactly as long as that descriptor: it ends when the host releases it or dies, never earlier, so a host that still runs never stops being the carrier behind its own back, and a paused host keeps it until it resumes or dies. No host ever judges whether a lock was left over. Node has no file locking, so on Linux the host opens the file and lets `flock -n -x 3` lock that descriptor (passed as fd 3); `flock` exits at once and the lock stays with the host. macOS opens the file with `O_EXLOCK | O_NONBLOCK`, which takes the same lock in `open(2)`. No helper process waits for the lock.
+- Every other host tries the lock once a second. It reads the socket's `hello` and writes `<socket> is held by another dsh host (pid N); this host does not host kander panes and waits for the carrier lock` to the dsh host log (the cordis logger of the plugin). Once the carrier releases the lock or dies, the next try succeeds, so that host becomes the carrier within a second, without a restart. A host that is not the carrier stops at once.
 - Holding the lock makes the carrier the only host that touches the socket path, so a socket it finds there is left over (a host killed with SIGKILL leaves one) and is replaced. A path that is not a socket is never replaced; the host logs it, releases the lock, and tries again a second later. The carrier binds its server to a temporary name `.mux-<pid>-<n>` in the same directory, sets it to 0600, and links it onto the path, so the socket is private before it becomes reachable. It also removes the temporary names of hosts that are gone.
 - The carrier checks the path every second; a path changed or removed from outside is linked to its socket again.
-- A carrier whose lock holder ends while it serves (the holder was killed) closes its server, ends its panes, logs it, and waits for the lock again: another host takes the lock, Kander can no longer reach those panes and reads them as stopped, and ending them keeps a `resume` from running a second executor beside a hidden one.
-- A carrier that stops removes its socket, closes its server, and then releases the lock. Closing a server unlinks only its temporary name, never the path.
+- A carrier that stops removes its socket, closes its server, ends its panes, and only then releases the lock, so the next carrier never starts beside panes that are still running. Closing a server unlinks only its temporary name, never the path.
 
-`KanderHost.carrierStatus()` returns `{carrier, socket, reason, holderPid}`; `reason` is `carrier`, `held`, `waiting`, `lost`, `blocked`, `unreachable`, `starting` or `stopped`. A non-carrier lists no panes, and its Kander view shows dsh agents by status only.
+`KanderHost.carrierStatus()` returns `{carrier, socket, reason, holderPid}`; `reason` is `carrier`, `held`, `waiting`, `blocked`, `unreachable`, `starting` or `stopped`. A non-carrier lists no panes, and its Kander view shows dsh agents by status only.
 
 ## Socket Protocol
 
@@ -141,7 +140,7 @@ dsh plugin --profile desktop add /path/to/kander/integrations/kander-dsh
 
 Then start dsh Desktop. A plugin installed in both profiles serves both hosts; the first host to start is the carrier. The Desktop installation is not verified on the development machine (no dsh Desktop there).
 
-The dsh host needs `flock` (util-linux) on its `PATH` on Linux; macOS has `lockf` in its base system. Kander side: `curl` on `PATH` and the same `DSH_HOME` as the dsh host (or neither sets it). Check the setup with `kander terminal test dsh` while a dsh host with the plugin runs.
+On Linux the dsh host needs `flock` (util-linux) on its `PATH`; macOS needs no tool. Kander side: `curl` on `PATH` and the same `DSH_HOME` as the dsh host (or neither sets it). Check the setup with `kander terminal test dsh` while a dsh host with the plugin runs.
 
 ## Security
 
@@ -149,7 +148,7 @@ The socket can start processes as the current user, type into agents and read th
 
 ## Verification
 
-- `node --test integrations/kander-dsh/test/` (Node 22 or later): socket operations, gone classification, close failures, terminal query replies, carrier election among hosts that start together on a missing or stale socket, repeated handovers with one carrier at a time, a killed lock holder, the carrier lock across processes (mutual exclusion, release on holder death, a missing lock command), pane ID continuity, protocol version, foreground name on Linux and macOS (simulated `ps`), permissions.
+- `node --test integrations/kander-dsh/test/` (Node 22 or later): socket operations, gone classification, close failures, terminal query replies, carrier election among hosts that start together on a missing or stale socket, repeated handovers with one carrier at a time, a paused carrier process that keeps the carrier until it dies, a non-carrier that stops at once, a carrier that ends its panes before the handover, the carrier lock across processes (mutual exclusion, kept by a stopped holder, released on holder death, a missing flock), pane ID continuity, protocol version, foreground name on Linux and macOS (simulated `ps`), permissions.
 - `go test ./internal/terminal/builtin -run Dsh`: definition shape, socket path, argv, protocol failures, gone rules.
 - CI runs the plugin tests on Linux and macOS (`platform-checks.yml`, job `kander-dsh`).
 

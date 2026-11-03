@@ -6,7 +6,7 @@ import { describe, test } from 'node:test'
 import { processName } from '../lib/foreground.js'
 import { PaneSequence } from '../lib/ids.js'
 import { paneEnvironment } from '../lib/index.js'
-import { LockHolder, lockCommand } from '../lib/lock.js'
+import { CarrierLock } from '../lib/lock.js'
 import { ensurePrivateDirectory, stateDirectory } from '../lib/paths.js'
 import { upgradeSide } from '../lib/protocol.js'
 import { temporaryDirectory } from './helpers.mjs'
@@ -36,26 +36,35 @@ describe('pane sequence', () => {
 })
 
 describe('carrier lock', () => {
-  test('flock on Linux and lockf elsewhere wait for the lock, then hold it', () => {
-    assert.deepEqual(lockCommand('/s/carrier.lock', 'linux'), ['flock', ['-o', '/s/carrier.lock', '/bin/sh', '-c', 'echo held; exec cat']])
-    assert.deepEqual(lockCommand('/s/carrier.lock', 'darwin'), ['lockf', ['-k', '/s/carrier.lock', '/bin/sh', '-c', 'echo held; exec cat']])
+  test('one holder at a time, and a release lets the next one in', async () => {
+    const file = join(temporaryDirectory(), 'carrier.lock')
+    const a = new CarrierLock(file)
+    const b = new CarrierLock(file)
+    assert.equal(await a.tryAcquire(), true)
+    assert.equal(await b.tryAcquire(), false)
+    assert.equal(await a.tryAcquire(), true)
+    a.release()
+    assert.equal(await b.tryAcquire(), true)
+    assert.equal(await a.tryAcquire(), false)
+    b.release()
+    assert.equal(statSync(file).mode & 0o777, 0o600)
   })
 
-  // Each process enters, writes enter and exit lines around a short pause, and
-  // leaves, ten times; the lines never interleave between processes.
+  // Each process takes the lock ten times and writes enter and exit lines
+  // around a short pause; the lines never interleave between processes.
   test('processes never hold the lock at the same time', async () => {
     const directory = temporaryDirectory()
     const file = join(directory, 'carrier.lock')
     const record = join(directory, 'record')
-    const script = `import { LockHolder } from ${JSON.stringify(new URL('../lib/lock.js', import.meta.url).href)}
+    const script = `import { CarrierLock } from ${JSON.stringify(new URL('../lib/lock.js', import.meta.url).href)}
       import { appendFileSync } from 'node:fs'
+      const lock = new CarrierLock(process.argv[1])
       for (let i = 0; i < 10; i++) {
-        const holder = new LockHolder(process.argv[1])
-        await new Promise((resolve) => { holder.once('held', resolve); holder.start() })
+        while (!(await lock.tryAcquire())) await new Promise((resolve) => setTimeout(resolve, 2))
         appendFileSync(process.argv[2], 'enter ' + process.pid + '\\n')
         await new Promise((resolve) => setTimeout(resolve, 5))
         appendFileSync(process.argv[2], 'exit ' + process.pid + '\\n')
-        await holder.release()
+        lock.release()
       }`
     await Promise.all(Array.from({ length: 3 }, () => new Promise((resolve, reject) => {
       execFile(process.execPath, ['--input-type=module', '-e', script, file, record], (error) => (error ? reject(error) : resolve()))
@@ -69,32 +78,33 @@ describe('carrier lock', () => {
     }
   })
 
-  test('the lock is free once its holder process is killed', async () => {
+  test('the lock stays with a stopped holder process and ends when it is killed', async () => {
     const file = join(temporaryDirectory(), 'carrier.lock')
-    const script = `import { LockHolder } from ${JSON.stringify(new URL('../lib/lock.js', import.meta.url).href)}
-      const holder = new LockHolder(process.argv[1])
-      holder.once('held', () => console.log('held'))
-      holder.start()`
+    const script = `import { CarrierLock } from ${JSON.stringify(new URL('../lib/lock.js', import.meta.url).href)}
+      const lock = new CarrierLock(process.argv[1])
+      console.log(await lock.tryAcquire() ? 'held' : 'busy')
+      setInterval(() => {}, 1000)`
     const child = spawn(process.execPath, ['--input-type=module', '-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] })
-    await new Promise((resolve) => child.stdout.once('data', resolve))
-    const waiter = new LockHolder(file)
-    let held = false
-    waiter.once('held', () => { held = true })
-    waiter.start()
-    await new Promise((resolve) => setTimeout(resolve, 200))
-    assert.equal(held, false)
-    child.kill('SIGKILL')
-    await new Promise((resolve) => { if (held) resolve(); else waiter.once('held', resolve) })
-    await waiter.release()
+    try {
+      assert.equal(String(await new Promise((resolve) => child.stdout.once('data', resolve))).trim(), 'held')
+      const lock = new CarrierLock(file)
+      child.kill('SIGSTOP')
+      assert.equal(await lock.tryAcquire(), false)
+      child.kill('SIGKILL')
+      await new Promise((resolve) => child.once('exit', resolve))
+      assert.equal(await lock.tryAcquire(), true)
+      lock.release()
+    } finally {
+      child.kill('SIGKILL')
+    }
   })
 
-  test('a missing lock command ends the attempt with the reason', async () => {
-    const holder = new LockHolder(join(temporaryDirectory(), 'carrier.lock'), {
+  test('a missing flock fails the attempt with the reason', { skip: process.platform !== 'linux' }, async () => {
+    const lock = new CarrierLock(join(temporaryDirectory(), 'carrier.lock'), {
       spawn: (command, args, options) => spawn('/nonexistent/flock', args, options),
     })
-    const ended = new Promise((resolve) => holder.once('ended', resolve))
-    holder.start()
-    assert.match(await ended, /ENOENT/)
+    await assert.rejects(lock.tryAcquire(), /flock: .*ENOENT/)
+    assert.equal(lock.held, false)
   })
 })
 

@@ -1,74 +1,85 @@
-// The carrier lock: an exclusive file lock that the kernel releases when its
-// holder process ends, so no host ever has to judge or reclaim a lock left by
-// a crashed one. Node has no flock(2), so a child process holds it: flock(1)
-// from util-linux on Linux, lockf(1) of the base system elsewhere (macOS).
-// The child prints `held` once it holds the lock and then waits on its stdin.
-// Ending stdin releases the lock; when the dsh host dies, its end of the pipe
-// closes and the lock goes with it.
+// The carrier lock: an exclusive flock(2)-style lock on carrier.lock, held on a
+// file description that the dsh host process itself keeps open. The lock
+// therefore lives exactly as long as that process holds the descriptor: it
+// ends when the host releases it or dies, never earlier, and no host ever
+// judges whether a lock was left over.
+//
+// Node has no flock(2). On Linux the host opens the file and lets flock(1)
+// lock that very descriptor (`flock -n -x 3`, the descriptor passed as fd 3);
+// flock exits at once and the lock stays with the shared file description.
+// macOS opens the file with O_EXLOCK | O_NONBLOCK, which takes the same lock in
+// open(2). Both attempts return at once, so no helper process waits for the
+// lock and nothing outlives the host.
 import { spawn as nodeSpawn } from 'node:child_process'
-import { EventEmitter } from 'node:events'
+import { closeSync, constants, openSync } from 'node:fs'
 
-const HOLD = ['/bin/sh', '-c', 'echo held; exec cat']
+// <fcntl.h> of macOS and the BSDs; Node does not export them.
+const O_EXLOCK = 0x20
+const BSD_O_NONBLOCK = 0x4
 
-/** The argv that waits for the lock on file, then holds it. */
-export function lockCommand(file, platform = process.platform) {
-  // -o: the waiting command does not inherit the lock, so the lock ends with flock itself.
-  if (platform === 'linux') return ['flock', ['-o', file, ...HOLD]]
-  // -k: keep the lock file; lockf(1) waits without a timeout by default.
-  return ['lockf', ['-k', file, ...HOLD]]
-}
-
-/**
- * One attempt to hold the lock. Emits `held` once the lock is held, and
- * `ended` with a reason when the holder process ended, before or after it
- * held the lock.
- */
-export class LockHolder extends EventEmitter {
-  constructor(file, { spawn = nodeSpawn, platform = process.platform } = {}) {
-    super()
+export class CarrierLock {
+  /**
+   * @param file - the lock file; created 0600 when missing.
+   * @param options.platform - selects flock(1) (linux) or O_EXLOCK (others).
+   * @param options.spawn - child_process.spawn, for tests.
+   */
+  constructor(file, { platform = process.platform, spawn = nodeSpawn } = {}) {
     this.file = file
-    this.spawn = spawn
     this.platform = platform
-    this.held = false
-    this.child = undefined
+    this.spawn = spawn
+    this.fd = undefined
   }
 
-  start() {
-    const [command, args] = lockCommand(this.file, this.platform)
-    const child = this.spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] })
-    this.child = child
-    let output = ''
-    let errors = ''
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk) => {
-      output += chunk
-      if (!this.held && output.includes('held\n')) {
-        this.held = true
-        this.emit('held')
-      }
-    })
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk) => { errors = (errors + chunk).slice(-2000) })
-    // A write to the stdin of an ended holder is not an error worth a crash.
-    child.stdin.on('error', () => {})
-    let ended = false
-    const end = (reason) => {
-      if (ended) return
-      ended = true
-      this.held = false
-      // A waiting command that kept the lock fd (lockf may pass it on) ends with its stdin.
-      child.stdin.end()
-      this.emit('ended', reason)
+  get held() {
+    return this.fd !== undefined
+  }
+
+  /** One attempt that returns at once; resolves true when this process now holds the lock. */
+  async tryAcquire() {
+    if (this.held) return true
+    if (this.platform !== 'linux') return this.tryExclusiveOpen()
+    const fd = openSync(this.file, constants.O_RDWR | constants.O_CREAT, 0o600)
+    let locked = false
+    try {
+      locked = await this.flockDescriptor(fd)
+    } finally {
+      if (locked) this.fd = fd
+      else closeSync(fd)
     }
-    child.on('error', (error) => end(`${command}: ${error?.message ?? error}`))
-    child.on('exit', (code, signal) => end(errors.trim() || `${command} ended (${signal ?? `exit ${code}`})`))
-    this.ended = new Promise((resolve) => this.once('ended', resolve))
+    return locked
   }
 
-  /** Releases the lock, or stops waiting for it; resolves once the holder ended. */
-  async release() {
-    if (!this.child) return
-    this.child.stdin.end()
-    await this.ended
+  tryExclusiveOpen() {
+    try {
+      this.fd = openSync(this.file, constants.O_RDWR | constants.O_CREAT | O_EXLOCK | BSD_O_NONBLOCK, 0o600)
+      return true
+    } catch (error) {
+      if (error?.code === 'EAGAIN' || error?.code === 'EWOULDBLOCK') return false
+      throw error
+    }
+  }
+
+  // flock -n exits 0 when it locked the descriptor, 1 when another holds it.
+  flockDescriptor(fd) {
+    return new Promise((resolve, reject) => {
+      const child = this.spawn('flock', ['-n', '-x', '3'], { stdio: ['ignore', 'ignore', 'pipe', fd] })
+      let errors = ''
+      child.stderr.setEncoding('utf8')
+      child.stderr.on('data', (chunk) => { errors = (errors + chunk).slice(-2000) })
+      child.on('error', (error) => reject(new Error(`flock: ${error?.message ?? error}`)))
+      child.on('exit', (code, signal) => {
+        if (code === 0) resolve(true)
+        else if (code === 1) resolve(false)
+        else reject(new Error(errors.trim() || `flock ended (${signal ?? `exit ${code}`})`))
+      })
+    })
+  }
+
+  /** Releases the lock; the next attempt of any host can take it. */
+  release() {
+    if (!this.held) return
+    const fd = this.fd
+    this.fd = undefined
+    closeSync(fd)
   }
 }
