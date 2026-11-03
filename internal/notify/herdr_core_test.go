@@ -104,6 +104,15 @@ func TestNotifyRefusesUnrunnableRecoveryBeforeDispatch(t *testing.T) {
 	if err != nil || after.Revision != before.Revision || board.MetadataFrom(after.Text, "DISPATCH_ID") != "" {
 		t.Fatalf("dispatch written before the refusal: %v\n%s", err, after.Text)
 	}
+	// An explicit pane override names the live executor: it is validated and
+	// delivered to without observing the stopped recorded address.
+	if _, _, err = capture(t, func() error { return commandNotify(root, taskID, "x", "", "w1:p8", true, 61) }); err != nil {
+		t.Fatalf("pane override not delivered to: %v", err)
+	}
+	// The fake herdr reports an agentless pane once a prompt was delivered.
+	if err := os.Remove(filepath.Join(root, "herdr.log.prompt")); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("KANBAN_HERDR_STALE_PANE", "")
 	if _, _, err = capture(t, func() error { return commandNotify(root, taskID, "x", "", "", true, 61) }); err != nil {
 		t.Fatalf("live executor not delivered to: %v", err)

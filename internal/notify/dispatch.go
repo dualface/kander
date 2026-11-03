@@ -42,7 +42,7 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 	if len(options) > 0 {
 		o = options[0]
 	}
-	if err = launch.NotifyPreflight(context.Background(), root, s, o.ID); err != nil {
+	if err = launch.NotifyPreflight(context.Background(), root, s, o.ID, pane); err != nil {
 		return err
 	}
 	d, active, err := launch.PrepareAction(root, s, msg, o, timeout)

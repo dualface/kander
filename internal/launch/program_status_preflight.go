@@ -74,10 +74,11 @@ func RecoveryPreflight(text string) error {
 // dispatch, when the notify could only end in a recovery the configured
 // launcher would refuse: the executor is observed stopped and its agent has
 // no reporting program status declaration for that launcher. A live executor
-// still gets direct delivery, and a retry of an existing dispatch is checked
-// where it would begin a recovery.
-func NotifyPreflight(ctx context.Context, root string, s board.Snapshot, id string) error {
-	if dispatchExists(root, s.Entry.TaskID, id) {
+// still gets direct delivery, an explicit pane override is validated and
+// delivered to without observing the recorded address, and a retry of an
+// existing dispatch is checked where it would begin a recovery.
+func NotifyPreflight(ctx context.Context, root string, s board.Snapshot, id, paneOverride string) error {
+	if paneOverride != "" || dispatchExists(root, s.Entry.TaskID, id) {
 		return nil
 	}
 	refusal := RecoveryPreflight(s.Text)
