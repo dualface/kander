@@ -42,6 +42,12 @@ window.__ModuleLoader__.load({
       'view.kanderFailed': 'kander list failed:',
       'view.network': 'dsh did not answer: {error}',
       'carrier.other': 'The dsh agents run in another dsh (pid {pid}). Here they show their status only; starting and terminals are available there.',
+      'carrier.otherUnknown': 'The dsh agents run in another dsh. Here they show their status only; starting and terminals are available there.',
+      'carrier.waiting': 'Another dsh is taking over the dsh agents. Here they show their status only for now.',
+      'carrier.starting': 'This dsh is starting to host the dsh agents.',
+      'carrier.blocked': '{socket} exists and is not a socket. Remove it to let this dsh host the dsh agents.',
+      'carrier.unreachable': 'This dsh cannot serve {socket}; see the dsh log. It tries again every second.',
+      'carrier.stopped': 'The kander-dsh plugin of this dsh stopped hosting the dsh agents.',
       'carrier.none': 'This dsh does not host the dsh agents ({reason}).',
       'column.backlog': 'Backlog',
       'column.todo': 'Todo',
@@ -85,6 +91,12 @@ window.__ModuleLoader__.load({
       'view.kanderFailed': 'kander list 失败:',
       'view.network': 'dsh 没有响应: {error}',
       'carrier.other': 'dsh agent 在另一个 dsh 中运行 (pid {pid}). 这里只显示状态; 启动与终端请在那个 dsh 中使用.',
+      'carrier.otherUnknown': 'dsh agent 在另一个 dsh 中运行. 这里只显示状态; 启动与终端请在那个 dsh 中使用.',
+      'carrier.waiting': '另一个 dsh 正在接管 dsh agent. 这里暂时只显示状态.',
+      'carrier.starting': '这个 dsh 正在开始承载 dsh agent.',
+      'carrier.blocked': '{socket} 已存在且不是 socket. 删除它后这个 dsh 才能承载 dsh agent.',
+      'carrier.unreachable': '这个 dsh 无法提供 {socket}, 详见 dsh 日志. 每秒重试一次.',
+      'carrier.stopped': '这个 dsh 的 kander-dsh 插件已停止承载 dsh agent.',
       'carrier.none': '这个 dsh 不承载 dsh agent ({reason}).',
       'column.backlog': 'Backlog',
       'column.todo': 'Todo',
@@ -703,10 +715,17 @@ window.__ModuleLoader__.load({
       }, h('div', { style: { fontSize: 13, lineHeight: '20px' } }, t('start.body', vars)))
     }
 
+    // The notice for a host that does not hold the socket, by the carrier
+    // reason of KanderHost.carrierStatus().
     function carrierNotice(live, t) {
       if (!live || live.carrier?.carrier) return null
-      if (live.carrier?.reason === 'held') return t('carrier.other', { pid: live.carrier.holderPid ?? '?' })
-      return t('carrier.none', { reason: live.carrier?.reason ?? 'unknown' })
+      const { reason, holderPid, socket } = live.carrier ?? {}
+      switch (reason) {
+        case 'held': return holderPid ? t('carrier.other', { pid: holderPid }) : t('carrier.otherUnknown')
+        case 'waiting': case 'starting': case 'stopped': return t(`carrier.${reason}`)
+        case 'blocked': case 'unreachable': return t(`carrier.${reason}`, { socket: socket ?? 'mux.sock' })
+        default: return t('carrier.none', { reason: reason ?? 'unknown' })
+      }
     }
 
     function Page({ store, t: slotT }) {
@@ -874,7 +893,7 @@ window.__ModuleLoader__.load({
     exports.inject = ['slots', 'locale', 'layout', 'sessions', 'workspaces']
     exports.apply = apply
     exports.logic = {
-      COLUMNS, InputQueue, SseParser, boardsOf, closeTab, columnsOf, createStore, dshWindow, keepSnapshot,
+      COLUMNS, InputQueue, SseParser, boardsOf, carrierNotice, closeTab, columnsOf, createStore, dshWindow, keepSnapshot,
       loadTabs, mainSessionId, needsAttention, newFocus, openTab, saveTabs, tabLabel, translator, workspacePathOf,
     }
     return module.exports

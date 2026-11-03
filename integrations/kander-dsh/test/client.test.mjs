@@ -207,6 +207,26 @@ describe('terminal transport', () => {
     assert.equal(logic.translator('en')('start.running', { task: 't' }), 'Starting t…')
     assert.equal(logic.translator('ja')('card.attention'), 'Needs attention')
   })
+
+  test('a non-carrier host explains every carrier reason', () => {
+    const t = logic.translator('en')
+    const notice = (carrier) => logic.carrierNotice({ carrier }, t)
+    assert.equal(logic.carrierNotice(null, t), null)
+    assert.equal(notice({ carrier: true, reason: 'carrier' }), null)
+    assert.match(notice({ carrier: false, reason: 'held', holderPid: 42 }), /another dsh \(pid 42\)/)
+    assert.doesNotMatch(notice({ carrier: false, reason: 'held', holderPid: null }), /pid/)
+    assert.match(notice({ carrier: false, reason: 'blocked', socket: '/h/kander/mux.sock' }), /^\/h\/kander\/mux\.sock exists and is not a socket/)
+    assert.match(notice({ carrier: false, reason: 'unreachable', socket: '/h/kander/mux.sock' }), /cannot serve \/h\/kander\/mux\.sock/)
+    for (const reason of ['waiting', 'starting', 'stopped']) {
+      // A known reason has its own sentence, not the generic one.
+      assert.doesNotMatch(notice({ carrier: false, reason }), /\{|does not host the dsh agents \(/)
+    }
+    assert.match(notice({ carrier: false, reason: 'later' }), /\(later\)/)
+    const zh = logic.translator('zh-CN')
+    for (const reason of ['held', 'waiting', 'starting', 'blocked', 'unreachable', 'stopped']) {
+      assert.doesNotMatch(logic.carrierNotice({ carrier: { carrier: false, reason, holderPid: 7, socket: '/s' } }, zh), /\{|dsh agents/)
+    }
+  })
 })
 
 describe('client store', () => {

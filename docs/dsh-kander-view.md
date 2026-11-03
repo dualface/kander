@@ -34,6 +34,19 @@ The board tab shows the columns backlog, todo, working, review, and done; archiv
 
 When dsh Web and dsh Desktop run on the same `DSH_HOME`, only the carrier host runs dsh agents ([Carrier Host](dsh-launcher.md#carrier-host)). The view of the other host shows the board normally, a notice that the dsh agents run in another dsh, dsh agents by status only, and a disabled **Start**. When the carrier exits and this host takes the socket over, the view enables Start and the terminals on its next poll, without a page reload.
 
+The notice follows the `reason` of `carrierStatus()`:
+
+| Reason | Notice |
+| --- | --- |
+| `held` | The dsh agents run in another dsh, with its pid when the socket reported one |
+| `waiting` | Another dsh is taking over; the agents show their status only for now |
+| `starting` | This dsh is starting to host the agents |
+| `blocked` | The socket path exists and is not a socket; remove it |
+| `unreachable` | This dsh cannot serve the socket; see the dsh log |
+| `stopped` | The plugin of this dsh stopped hosting the agents |
+
+Any other reason shows a generic notice that names it.
+
 ## Plugin Configuration
 
 The plugin entry in the dsh profile takes two optional settings:
