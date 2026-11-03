@@ -82,6 +82,22 @@ jobs:
         if: ${{ !cancelled() }}
         run: go test ./cmd/kander -count=1 -v -run TestWorkflowRunPattern
 
+  # The dsh plugin is POSIX only, like the dsh launcher it serves.
+  kander-dsh:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Plugin tests
+        working-directory: integrations/kander-dsh
+        run: node --test "test/*.test.mjs"
+
   model-full:
     runs-on: ubuntu-latest
     steps:

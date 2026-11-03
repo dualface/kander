@@ -1,0 +1,32 @@
+{
+  "name": "kander-dsh",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kander inside DeepSeek Harness: host Kander task agents in dsh-owned terminals through the embedded dsh launcher.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "lib",
+    "vendor",
+    "cordis.patch.yml"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0",
+    "node": ">=22"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}
