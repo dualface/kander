@@ -117,6 +117,15 @@ export class Boards {
   }
 
   /** Checks that project is an absolute directory with a kanban/ directory. */
+  /**
+   * The environment of a kander call on the project's board. kander reads
+   * KANBAN_DIR before it looks at its directory, so a KANBAN_DIR of the dsh
+   * host would make every board show and start the cards of one board.
+   */
+  envOf(directory) {
+    return { ...this.env, KANBAN_DIR: join(directory, 'kanban') }
+  }
+
   async validProject(project) {
     if (typeof project !== 'string' || !isAbsolute(project) || !(await isDirectory(join(project, 'kanban')))) {
       throw new BoardError('no-board', `${project} has no kanban/ directory`)
@@ -132,7 +141,7 @@ export class Boards {
   async list(project) {
     const directory = await this.validProject(project)
     const kander = await this.executable(directory)
-    const result = await run(kander, ['list', '--json', '--agent-status'], { cwd: directory, timeout: LIST_TIMEOUT_MS, env: this.env, execFile: this.execFile })
+    const result = await run(kander, ['list', '--json', '--agent-status'], { cwd: directory, timeout: LIST_TIMEOUT_MS, env: this.envOf(directory), execFile: this.execFile })
     if (result.code !== 0) {
       throw new BoardError('kander-failed', result.stderr.trim() || `kander list exited with ${result.code}`, { kander, stderr: result.stderr, stdout: result.stdout })
     }
@@ -156,7 +165,7 @@ export class Boards {
     if (typeof task !== 'string' || !TASK_ID.test(task)) throw new BoardError('bad-request', `invalid task ID ${task}`)
     const directory = await this.validProject(project)
     const kander = await this.executable(directory)
-    const result = await run(kander, ['start', '--launcher', 'dsh', task], { cwd: directory, timeout: START_TIMEOUT_MS, env: this.env, execFile: this.execFile })
+    const result = await run(kander, ['start', '--launcher', 'dsh', task], { cwd: directory, timeout: START_TIMEOUT_MS, env: this.envOf(directory), execFile: this.execFile })
     return { ok: result.code === 0, ...result }
   }
 }

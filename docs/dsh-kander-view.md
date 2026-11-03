@@ -66,7 +66,7 @@ Set them in the profile's `cordis.patch.yml`, for example:
 
 Without `kander`, the view looks per board, in this order: `<main worktree>/.kander/bin/kander` (a project install), then `kander` on the `PATH` of the dsh host. When none is found, the view shows the places it searched and how to fix it.
 
-The `kander` processes inherit the dsh host's environment, including `DSH_HOME` and `KANDER_CONFIG`. Every `kander` and `git` call runs asynchronously: `kander start --launcher dsh` calls back into the same host's socket, so a synchronous call would deadlock the host.
+The `kander` processes inherit the dsh host's environment, including `DSH_HOME` and `KANDER_CONFIG`, except `KANBAN_DIR`: every call sets it to the selected board's `kanban/`, because `kander` reads `KANBAN_DIR` before it looks at its directory. Every `kander` and `git` call runs asynchronously: `kander start --launcher dsh` calls back into the same host's socket, so a synchronous call would deadlock the host.
 
 ## HTTP Routes
 

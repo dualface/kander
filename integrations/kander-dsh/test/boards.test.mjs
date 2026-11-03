@@ -22,13 +22,13 @@ function repository() {
 }
 
 /**
- * A fake kander: records its argv and directory in <dir>/calls and answers by
+ * A fake kander: records its directory, argv, and KANBAN_DIR in <dir>/calls and answers by
  * FAKE_MODE (list, fail, garbage, slow).
  */
 function fakeKander(directory, name = 'kander') {
   const path = join(directory, name)
   writeFileSync(path, `#!/bin/sh
-printf '%s|%s\\n' "$PWD" "$*" >> "${directory}/calls"
+printf '%s|%s|%s\\n' "$PWD" "$*" "$KANBAN_DIR" >> "${directory}/calls"
 case "$FAKE_MODE" in
   fail) echo "kander: boom" >&2; exit 1 ;;
   garbage) echo "not json" ;;
@@ -105,13 +105,13 @@ describe('kander lookup', () => {
 })
 
 describe('kander commands', () => {
-  const setup = (mode) => {
+  const setup = (mode, env = {}) => {
     const root = temporaryDirectory()
     mkdirSync(join(root, 'kanban'))
     fakeKander(root)
     const calls = () => readFileSync(join(root, 'calls'), 'utf8').trim().split('\n')
     // The fake needs sleep from the system directories.
-    return { root, calls, boards: new Boards({ env: { PATH: `${root}:/usr/bin:/bin`, FAKE_MODE: mode } }) }
+    return { root, calls, boards: new Boards({ env: { PATH: `${root}:/usr/bin:/bin`, FAKE_MODE: mode, ...env } }) }
   }
 
   test('list runs kander list --json --agent-status in the project', async () => {
@@ -119,7 +119,17 @@ describe('kander commands', () => {
     const { kander, snapshot } = await boards.list(root)
     assert.equal(kander, join(root, 'kander'))
     assert.equal(snapshot.change_token, 't')
-    assert.deepEqual(calls(), [`${root}|list --json --agent-status`])
+    assert.deepEqual(calls(), [`${root}|list --json --agent-status|${join(root, 'kanban')}`])
+  })
+
+  test('a KANBAN_DIR of the dsh host never redirects list or start to another board', async () => {
+    const other = join(temporaryDirectory(), 'kanban')
+    const { root, calls, boards } = setup('list', { KANBAN_DIR: other })
+    await boards.list(root)
+    await boards.start(root, '20261103-alpha-task')
+    const board = join(root, 'kanban')
+    assert.deepEqual(calls(), [`${root}|list --json --agent-status|${board}`, `${root}|start --launcher dsh 20261103-alpha-task|${board}`])
+    assert.equal(boards.env.KANBAN_DIR, other)
   })
 
   test('a failed or unreadable list is an error with the kander output', async () => {
@@ -139,7 +149,7 @@ describe('kander commands', () => {
     const { root, calls, boards } = setup('list')
     const result = await boards.start(root, '20261103-alpha-task')
     assert.equal(result.ok, true)
-    assert.deepEqual(calls(), [`${root}|start --launcher dsh 20261103-alpha-task`])
+    assert.deepEqual(calls(), [`${root}|start --launcher dsh 20261103-alpha-task|${join(root, 'kanban')}`])
     for (const task of ['--help', '20261103-a--b', 'x; rm -rf /', '', 7]) {
       await assert.rejects(boards.start(root, task), { code: 'bad-request' })
     }
