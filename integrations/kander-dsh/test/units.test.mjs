@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { statSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { processName } from '../lib/foreground.js'
@@ -10,35 +11,48 @@ import { upgradeSide } from '../lib/protocol.js'
 import { temporaryDirectory } from './helpers.mjs'
 
 describe('pane sequence', () => {
-  test('IDs never repeat across restarts and between hosts', () => {
-    const path = join(temporaryDirectory(), 'sequence')
+  const take = (seen, sequence) => {
+    const { pane, container } = sequence.next()
+    assert.ok(!seen.has(pane) && !seen.has(container), pane)
+    seen.add(pane)
+    seen.add(container)
+    return pane
+  }
+
+  test('IDs never repeat across restarts, between hosts, or after a regressed record', () => {
+    const directory = temporaryDirectory()
     const seen = new Set()
-    const take = (sequence) => {
-      const { pane, container } = sequence.next()
-      assert.ok(!seen.has(pane) && !seen.has(container), pane)
-      seen.add(pane)
-      seen.add(container)
-    }
-    const first = new PaneSequence(path, 100)
-    take(first)
-    take(first)
+    const first = new PaneSequence(directory, 100)
+    assert.equal(take(seen, first), 'p1-100')
+    take(seen, first)
     // A restarted host reusing the same pid continues the persisted number.
-    take(new PaneSequence(path, 100))
-    // Two hosts that read the same number during a handover differ by pid.
-    const a = new PaneSequence(path, 200)
-    const b = new PaneSequence(path, 300)
-    const number = a.read()
-    writeFileSync(path, `${number}\n`)
-    take(a)
-    writeFileSync(path, `${number}\n`)
-    take(b)
-    assert.equal(statSync(path).mode & 0o777, 0o600)
+    assert.equal(take(seen, new PaneSequence(directory, 100)), 'p3-100')
+    // A record written late by a slower host points back; taken numbers are skipped.
+    writeFileSync(join(directory, 'sequence'), '1\n')
+    assert.equal(take(seen, new PaneSequence(directory, 100)), 'p4-100')
+    assert.equal(statSync(join(directory, 'sequence')).mode & 0o777, 0o600)
   })
 
-  test('a damaged sequence file is refused instead of restarting at 1', () => {
-    const path = join(temporaryDirectory(), 'sequence')
-    writeFileSync(path, 'garbage')
-    assert.throws(() => new PaneSequence(path).next(), /does not hold a pane sequence number/)
+  test('processes taking numbers at the same time never share one', async () => {
+    const directory = temporaryDirectory()
+    const script = `import { PaneSequence } from ${JSON.stringify(new URL('../lib/ids.js', import.meta.url).href)}
+      const sequence = new PaneSequence(process.argv[1], 7)
+      const out = []
+      for (let i = 0; i < 40; i++) out.push(sequence.next().pane)
+      console.log(JSON.stringify(out))`
+    const runs = await Promise.all(Array.from({ length: 4 }, () => new Promise((resolve, reject) => {
+      execFile(process.execPath, ['--input-type=module', '-e', script, directory], (error, stdout) => (error ? reject(error) : resolve(JSON.parse(stdout))))
+    })))
+    const panes = runs.flat()
+    assert.equal(panes.length, 160)
+    // All four children use the pid 7, so only the number keeps them apart.
+    assert.equal(new Set(panes).size, 160)
+  })
+
+  test('a damaged sequence record is refused instead of restarting at 1', () => {
+    const directory = temporaryDirectory()
+    writeFileSync(join(directory, 'sequence'), 'garbage')
+    assert.throws(() => new PaneSequence(directory).next(), /does not hold a pane sequence number/)
   })
 })
 
@@ -79,8 +93,17 @@ describe('paths and environment', () => {
     assert.equal(stateDirectory({}, '/home/u'), '/home/u/.dsh/kander')
   })
 
+  test('a new directory is created 0700', () => {
+    const directory = join(temporaryDirectory(), 'kander')
+    ensurePrivateDirectory(directory)
+    assert.equal(statSync(directory).mode & 0o777, 0o700)
+  })
+
   test('an existing directory is tightened to 0700', () => {
     const directory = join(temporaryDirectory(), 'kander')
+    mkdirSync(directory)
+    chmodSync(directory, 0o755)
+    assert.equal(statSync(directory).mode & 0o777, 0o755)
     ensurePrivateDirectory(directory)
     assert.equal(statSync(directory).mode & 0o777, 0o700)
   })

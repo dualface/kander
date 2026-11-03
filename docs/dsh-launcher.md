@@ -18,7 +18,7 @@ Host half modules:
 | --- | --- |
 | `index.js` | dsh plugin entry (`apply(ctx, config)`): builds one `KanderHost`, stops it with the plugin |
 | `host.js` | `KanderHost`: composes the parts below and exposes the JavaScript interface |
-| `mux.js` | One container per pane, one PTY per pane through `ctx.subprocess.spawnTerminal`, a headless screen per pane (vendored `@xterm/headless` 5.5.0) for `read_output`, an output ring for subscribers |
+| `mux.js` | One container per pane, one PTY per pane through `ctx.subprocess.spawnTerminal`, a headless screen per pane (vendored `@xterm/headless` 5.5.0) for `read_output` and terminal query replies, an output ring for subscribers |
 | `carrier.js` | Which host of a `DSH_HOME` holds the socket |
 | `ops.js` | The socket operations |
 | `protocol.js` | Socket protocol version, HTTP framing, error classes |
@@ -30,9 +30,11 @@ Host half modules:
 
 A pane is one PTY that the dsh host opens with `ctx.subprocess.spawnTerminal`. A container holds exactly one pane, and every agent launch creates a new container. `WINDOW` is `dsh:<container>:<pane>`, for example `dsh:c7-81234:p7-81234`.
 
-IDs are `p<n>-<pid>` and `c<n>-<pid>`. `<n>` is a sequence number persisted in `<state dir>/sequence` (mode 0600) before it is used; `<pid>` is the dsh host pid. So within one `DSH_HOME`, IDs never repeat across the hosts or across host restarts, and an old card's `WINDOW` never names a later pane. A sequence file that does not hold a number makes pane creation fail instead of restarting at 1.
+IDs are `p<n>-<pid>` and `c<n>-<pid>`, where `<pid>` is the dsh host pid. A number belongs to the process that creates the empty file `<state dir>/taken/<n>` with `O_EXCL`, so two processes never get the same number, even two hosts that both serve for an instant during a handover. `<state dir>/sequence` (mode 0600) records the last number and only says where to start looking: a stale or regressed record costs a few failed creations, never a reused number. The marks 64 numbers below the newest are removed. So within one `DSH_HOME`, IDs never repeat across the hosts or across host restarts, and an old card's `WINDOW` never names a later pane. A `sequence` file that does not hold a number makes pane creation fail instead of restarting at 1.
 
-The pane runs `/bin/sh -c 'cd -- <startup dir> && exec <agent command>'` with `/` as its initial directory, like tmux. When the program exits, the pane stays as `dead` until `close_container`.
+The pane runs `/bin/sh -c 'cd -- <startup dir> && exec <agent command>'` with `/` as its initial directory, like tmux. When the program exits, the pane stays as `dead` until `close_container`. The program is told `TERM=xterm-256color`, and the pane's headless screen answers its terminal queries (cursor position, device attributes) through the pane's ordered input queue, whether or not a page shows the pane.
+
+`close_container` returns only after dsh confirmed that the pane's terminal session ended. When dsh cannot confirm it, the operation fails (409) and the pane stays, so `kander` reports the failed cleanup and can close it again.
 
 ## Environment of the Agent
 
@@ -49,9 +51,11 @@ Start the dsh host with the `PATH` the agents need.
 Several dsh hosts can share one `DSH_HOME`, for example dsh Web and dsh Desktop (separate profiles under the same home). They share one socket, `$DSH_HOME/kander/mux.sock` (`~/.dsh/kander/mux.sock` when `DSH_HOME` is unset or empty). The host whose server the socket path names is the carrier host; only it hosts dsh-launcher panes.
 
 - A starting host probes the socket with `hello`. When a server answers, the host stays a non-carrier and writes `<socket> is held by another dsh host (pid N)` to the dsh host log (the cordis logger of the plugin).
-- When the path is absent, or names a socket nobody serves (a host killed with SIGKILL leaves one), the host binds a temporary name `.mux-<pid>` in the same directory, sets it to 0600, and renames it onto the path. A path that is not a socket is never replaced; the host logs it and stays a non-carrier.
-- Every host repeats the check every second. A non-carrier therefore takes the socket over without a restart once the carrier exits. A carrier whose path no longer names its own socket (another host replaced a socket it judged stale in the same instant) closes its server and competes again.
-- A carrier that stops removes its socket. Closing a server unlinks only the temporary name node bound, so a host never removes a socket that already belongs to another host.
+- A host publishes its socket without replacing anything: it binds a temporary name `.mux-<pid>-<n>` in the same directory, sets it to 0600, and hard-links it onto the path. `link` fails while any socket is at the path, so two hosts never both publish.
+- When the path names a socket nobody serves (a host killed with SIGKILL leaves one), the host renames it aside and links its own. It removes the moved file only when it is the stale inode it inspected; a socket another host published in between is linked back. A path that is not a socket is never replaced; the host logs it and stays a non-carrier.
+- Every host repeats the check every second. A non-carrier therefore takes the socket over without a restart once the carrier exits.
+- A carrier whose path no longer names its own socket (the link-back above found the path taken again) closes its server, ends its panes, logs it, and competes again. Kander can no longer reach those panes and reads them as stopped; ending them keeps a `resume` from running a second executor beside a hidden one.
+- A carrier that stops removes its socket. Closing a server unlinks only the temporary name node bound, so a host never removes a socket that belongs to another host.
 
 `KanderHost.carrierStatus()` returns `{carrier, socket, reason, holderPid}`; `reason` is `carrier`, `held`, `lost`, `blocked`, `unreachable`, `starting` or `stopped`. A non-carrier lists no panes, and its Kander view shows dsh agents by status only.
 
@@ -106,6 +110,8 @@ Writes to one pane reach the program in call order; `deliver_text` writes the te
 | `resize(pane, cols, rows)` | a promise; positive integers only |
 | `lastFocus()` | the latest focus request or `null` |
 
+The pane's screen already answers the program's terminal queries. A page that shows the pane in its own terminal emulator must forward only the user's input to `write`, not that emulator's query replies, or the program receives every answer twice.
+
 `inputWaiting` is `true` when `inspectForeground()` of the dsh subprocess service returns `inputWaiting: true` for the pane (its foreground process group reads terminal input), `false` when it returns `false`, and `null` when it returns no foreground group or fails. An unknown pane throws `Gone`.
 
 ## Lifecycle
@@ -141,7 +147,7 @@ The socket can start processes as the current user, type into agents and read th
 
 ## Verification
 
-- `node --test integrations/kander-dsh/test/` (Node 22 or later): socket operations, gone classification, carrier election and takeover, pane ID uniqueness, protocol version, foreground name on Linux and macOS (simulated `ps`), permissions.
+- `node --test integrations/kander-dsh/test/` (Node 22 or later): socket operations, gone classification, close failures, terminal query replies, carrier election among hosts that start together on a missing or stale socket, takeover and step-down, pane ID uniqueness across processes, protocol version, foreground name on Linux and macOS (simulated `ps`), permissions.
 - `go test ./internal/terminal/builtin -run Dsh`: definition shape, socket path, argv, protocol failures, gone rules.
 - CI runs the plugin tests on Linux and macOS (`platform-checks.yml`, job `kander-dsh`).
 

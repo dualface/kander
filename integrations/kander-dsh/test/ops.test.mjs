@@ -80,6 +80,32 @@ describe('socket operations', () => {
     assert.deepEqual(await call(socket, 'nope'), { status: 404, body: { error: 'unknown op' } })
   })
 
+  test('a pane whose program does not end stays and the close fails', async () => {
+    const { container, pane } = await createPane()
+    await call(socket, 'run_command', { pane, cwd_quoted: "'/work'", command: 'agent', posix: 'true' })
+    const [terminal] = subprocess.terminals
+    const terminate = terminal.terminate.bind(terminal)
+    terminal.terminate = async () => { throw new Error('session members survived') }
+    const failed = await call(socket, 'close_container', { container })
+    assert.deepEqual(failed, { status: 409, body: { error: 'session members survived' } })
+    assert.equal((await call(socket, 'pane_facts', { pane })).body.dead, '0')
+    assert.deepEqual((await call(socket, 'container_exists', { container })).body, { container })
+    terminal.terminate = terminate
+    assert.equal((await call(socket, 'close_container', { container })).status, 200)
+    assert.deepEqual(await call(socket, 'pane_facts', { pane }), { status: 404, body: { error: 'gone' } })
+  })
+
+  test('the screen answers terminal queries through the pane input', async () => {
+    const { pane } = await createPane()
+    await call(socket, 'run_command', { pane, cwd_quoted: "'/work'", command: 'agent', posix: 'true' })
+    const [terminal] = subprocess.terminals
+    terminal.output.write('ab\x1b[6n')
+    await eventually(() => terminal.writes.includes('\x1b[1;3R'))
+    // Replies and kander's input share one ordered queue.
+    await call(socket, 'deliver_text', { pane, text: 'next' })
+    assert.deepEqual(terminal.writes, ['\x1b[1;3R', 'next'])
+  })
+
   test('focus records the latest request for the page', async () => {
     const { container, pane } = await createPane()
     assert.equal(host.lastFocus(), null)

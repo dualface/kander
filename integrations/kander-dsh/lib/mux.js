@@ -1,7 +1,8 @@
 // The pane multiplexer: one container holds exactly one pane, and a pane is one
 // PTY that the dsh host opens with ctx.subprocess.spawnTerminal. A headless
-// screen per pane answers read_output, and a bounded output ring replays the
-// recent output to a new subscriber.
+// screen per pane answers read_output and the terminal queries the program
+// sends (cursor position, device attributes), and a bounded output ring
+// replays the recent output to a new subscriber.
 import { createRequire } from 'node:module'
 import { processName } from './foreground.js'
 
@@ -23,9 +24,11 @@ export class Mux {
    * @param options.sequence - a PaneSequence that issues pane and container IDs.
    * @param options.env - variables added to every pane on top of dsh's scrubbed environment.
    * @param options.foregroundName - resolves a process group id to a command name.
+   * @param options.log - a logger with warn.
    */
-  constructor({ subprocess, sequence, env = {}, foregroundName = processName }) {
+  constructor({ subprocess, sequence, env = {}, foregroundName = processName, log = console }) {
     this.subprocess = subprocess
+    this.log = log
     this.sequence = sequence
     this.env = { ...Object.fromEntries(FOREIGN_TERMINAL_VARIABLES.map((name) => [name, ''])), ...env }
     this.foregroundName = foregroundName
@@ -52,6 +55,15 @@ export class Mux {
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
     }
+    // The program was told it runs in xterm-256color; a program that asks the
+    // terminal (ESC[6n and the like) waits for the answer, also while no page
+    // shows the pane. The screen's answers go through the ordered input queue.
+    pane.replies = pane.screen.onData((data) => {
+      this.write(pane, data).catch((error) => {
+        // A reply to a program that already exited has nobody to read it.
+        if (!pane.exited) this.log.warn(`kander pane ${pane.id} did not get a terminal reply: ${error?.message ?? error}`)
+      })
+    })
     this.panes.set(id, pane)
     return pane
   }
@@ -163,19 +175,27 @@ export class Mux {
     if (pane.handle && !pane.exited) await pane.handle.resize(cols, rows)
   }
 
-  /** Ends the program and forgets the pane. */
+  /**
+   * Ends the program and forgets the pane. When dsh cannot confirm the end,
+   * the error propagates and the pane stays, so kander reports the failed
+   * cleanup and can close it again.
+   */
   async close(pane) {
+    if (pane.handle) await pane.handle.terminate()
     this.panes.delete(pane.id)
-    if (pane.handle) await pane.handle.terminate().catch(() => {})
     if (!pane.exited) {
       pane.exited = true
       for (const listener of pane.listeners) listener(null)
     }
     pane.listeners.clear()
+    pane.replies.dispose()
     pane.screen.dispose()
   }
 
+  /** Closes every pane; rejects with every failure after trying them all. */
   async closeAll() {
-    await Promise.all(this.list().map((pane) => this.close(pane)))
+    const results = await Promise.allSettled(this.list().map((pane) => this.close(pane)))
+    const failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
+    if (failures.length > 0) throw new AggregateError(failures, `${failures.length} kander pane(s) did not end`)
   }
 }

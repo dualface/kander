@@ -7,7 +7,7 @@ import { Carrier } from './carrier.js'
 import { PaneSequence } from './ids.js'
 import { Mux } from './mux.js'
 import { createOps } from './ops.js'
-import { ensurePrivateDirectory, sequencePath, socketPath, stateDirectory } from './paths.js'
+import { ensurePrivateDirectory, socketPath, stateDirectory } from './paths.js'
 import { Gone, createOpsServer } from './protocol.js'
 
 export class KanderHost {
@@ -22,9 +22,15 @@ export class KanderHost {
   constructor({ subprocess, log, directory = stateDirectory(), env = {}, intervalMs, foregroundName }) {
     this.log = log
     this.directory = directory
-    this.mux = new Mux({ subprocess, sequence: new PaneSequence(sequencePath(directory)), env, foregroundName })
+    this.mux = new Mux({ subprocess, sequence: new PaneSequence(directory), env, foregroundName, log })
     this.focusRequest = null
-    this.carrier = new Carrier({ path: socketPath(directory), server: createOpsServer(createOps(this)), log, intervalMs })
+    this.carrier = new Carrier({
+      path: socketPath(directory),
+      server: createOpsServer(createOps(this)),
+      log,
+      intervalMs,
+      onLost: () => this.mux.closeAll(),
+    })
   }
 
   async start() {

@@ -2,22 +2,30 @@
 // the lock: the host whose server the path names is the carrier host, and only
 // it hosts dsh-launcher panes. A host that finds a live socket stays a
 // non-carrier and checks again on every tick, so it takes the socket over
-// without a restart once the carrier exits. A carrier whose path stops naming
-// its own socket (another host replaced a socket it judged stale) closes its
-// server and competes again.
+// without a restart once the carrier exits.
 //
-// A server binds a private temporary name and renames it onto the path. The
-// rename replaces a stale socket atomically, the socket is 0600 before it
-// becomes reachable, and closing the server only unlinks the temporary name
-// node bound, never a path that already names another host's socket. The
-// temporary name is short and per pid: a unix socket path is limited to about
-// 100 bytes, and one host binds one name at a time.
-import { chmodSync, lstatSync, renameSync, unlinkSync } from 'node:fs'
+// Publication never replaces a path. A server binds a private temporary name
+// (0600 before anything can reach it) and hard-links it onto the path; link
+// fails with EEXIST while any socket is there, so two hosts never both publish.
+// A socket nobody serves (left by a killed host) is moved aside with rename,
+// and when the moved inode is not the stale one this host inspected (another
+// host published in between) it is linked back. Closing a server unlinks only
+// the temporary name node bound, so a host never removes another host's
+// socket. The temporary name is short and per process and instance: a unix
+// socket path is limited to about 100 bytes.
+//
+// A carrier whose path no longer names its own socket closes its server and
+// calls onLost, which ends its panes: kander can no longer reach them, and an
+// agent that kander reads as stopped must not keep running beside the one a
+// resume starts.
+import { randomBytes } from 'node:crypto'
+import { chmodSync, linkSync, lstatSync, renameSync, unlinkSync } from 'node:fs'
 import { request } from 'node:http'
 import { dirname, join } from 'node:path'
 import { PROTOCOL_VERSION } from './protocol.js'
 
 const PROBE_TIMEOUT_MS = 1000
+let instances = 0
 
 /** Asks the server at path for its hello; resolves {pid} or rejects with the connect error. */
 export function probeSocket(path, timeoutMs = PROBE_TIMEOUT_MS) {
@@ -45,17 +53,22 @@ export function probeSocket(path, timeoutMs = PROBE_TIMEOUT_MS) {
   })
 }
 
+/** The path names something other than a socket; it is never replaced. */
+class Blocked extends Error {}
+
 export class Carrier {
   /**
    * @param options.path - the socket path.
    * @param options.server - an unlistened node:http server that answers the socket operations.
    * @param options.log - a logger with info and warn.
+   * @param options.onLost - awaited after this host stopped being the carrier.
    * @param options.intervalMs - how often a non-carrier retries and a carrier rechecks the path.
    */
-  constructor({ path, server, log, intervalMs = 1000 }) {
+  constructor({ path, server, log, onLost = async () => {}, intervalMs = 1000 }) {
     this.path = path
     this.server = server
     this.log = log
+    this.onLost = onLost
     this.intervalMs = intervalMs
     this.listening = false
     this.inode = undefined
@@ -63,6 +76,7 @@ export class Carrier {
     this.timer = undefined
     this.ticking = undefined
     this.stopped = false
+    this.temporary = join(dirname(path), `.mux-${process.pid}-${instances++}`)
   }
 
   isCarrier() {
@@ -88,52 +102,89 @@ export class Carrier {
 
   async round() {
     if (this.stopped) return
-    if (this.listening) {
+    if (this.state.carrier) {
       if (this.ownsPath()) return
       await this.closeServer()
-      this.setState(false, 'lost', null, `${this.path} no longer names this host's socket; competing for it again`)
+      this.setState(false, 'lost', null, `${this.path} no longer names this host's socket; ending this host's kander panes and competing again`)
+      try {
+        await this.onLost()
+      } catch (error) {
+        this.log.warn(`could not end every kander pane after losing ${this.path}: ${error?.message ?? error}`)
+      }
     }
-    let holder
     try {
-      holder = await probeSocket(this.path)
+      await this.claim()
     } catch (error) {
-      await this.claimFree(error)
-      return
+      if (this.listening) await this.closeServer()
+      if (error instanceof Blocked) {
+        this.setState(false, 'blocked', null, `${this.path} exists and is not a socket; remove it to let this host serve kander`)
+      } else {
+        this.setState(false, 'unreachable', null, `cannot claim ${this.path}: ${error?.message ?? error}`)
+      }
     }
-    this.setState(false, 'held', holder.pid, `${this.path} is held by another dsh host${holder.pid ? ` (pid ${holder.pid})` : ''}; this host does not host kander panes`)
   }
 
-  // The probe failed: the path is absent, or names a socket nobody serves.
-  async claimFree(error) {
-    if (error?.code === 'ECONNREFUSED') {
-      let stat
+  async claim() {
+    const temporary = await this.listenTemporary()
+    // The second attempt follows the removal of a stale socket.
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        stat = lstatSync(this.path)
-      } catch (statError) {
-        if (statError?.code !== 'ENOENT') {
-          this.setState(false, 'unreachable', null, `cannot inspect ${this.path}: ${statError.message}`)
-          return
+        linkSync(temporary, this.path)
+      } catch (error) {
+        if (error?.code !== 'EEXIST') throw error
+        let holder
+        try {
+          holder = await probeSocket(this.path)
+        } catch (probeError) {
+          if (probeError?.code !== 'ECONNREFUSED' && probeError?.code !== 'ENOENT') throw probeError
+          this.removeStale()
+          continue
         }
-      }
-      if (stat && !stat.isSocket()) {
-        this.setState(false, 'blocked', null, `${this.path} exists and is not a socket; remove it to let this host serve kander`)
+        await this.closeServer()
+        this.setState(false, 'held', holder.pid, `${this.path} is held by another dsh host${holder.pid ? ` (pid ${holder.pid})` : ''}; this host does not host kander panes`)
         return
       }
-    } else if (error?.code !== 'ENOENT') {
-      this.setState(false, 'unreachable', null, `cannot probe ${this.path}: ${error?.message ?? error}`)
+      unlinkSync(temporary)
+      this.setState(true, 'carrier', process.pid, `serving kander on ${this.path}`)
       return
     }
-    try {
-      await this.listen()
-    } catch (listenError) {
-      this.setState(false, 'unreachable', null, `could not bind ${this.path}: ${listenError?.message ?? listenError}`)
-      return
-    }
-    this.setState(true, 'carrier', process.pid, `serving kander on ${this.path}`)
+    // Another host published right after this one removed a stale socket.
+    await this.closeServer()
+    this.setState(false, 'held', null, `${this.path} was taken by another dsh host; this host does not host kander panes`)
   }
 
-  listen() {
-    const temporary = join(dirname(this.path), `.mux-${process.pid}`)
+  // Moves aside the socket at the path only while it is the stale inode this
+  // host inspected. A socket another host published in between goes back,
+  // unless the path is taken again; then that host steps down on its next
+  // round, because the path no longer names its socket.
+  removeStale() {
+    let stale
+    try {
+      stale = lstatSync(this.path)
+    } catch (error) {
+      if (error?.code === 'ENOENT') return
+      throw error
+    }
+    if (!stale.isSocket()) throw new Blocked()
+    const aside = join(dirname(this.path), `.stale-${process.pid}-${randomBytes(4).toString('hex')}`)
+    try {
+      renameSync(this.path, aside)
+    } catch (error) {
+      if (error?.code === 'ENOENT') return
+      throw error
+    }
+    try {
+      if (lstatSync(aside).ino !== stale.ino) {
+        try { linkSync(aside, this.path) } catch (error) { if (error?.code !== 'EEXIST') throw error }
+      }
+    } finally {
+      unlinkSync(aside)
+    }
+  }
+
+  /** Binds the server to this host's temporary name; resolves the name. */
+  listenTemporary() {
+    const temporary = this.temporary
     // A name left by a killed host with the same pid would refuse the bind.
     try { unlinkSync(temporary) } catch {}
     return new Promise((resolve, reject) => {
@@ -143,17 +194,15 @@ export class Carrier {
       }
       const listened = () => {
         this.server.off('error', failed)
+        this.listening = true
         try {
           chmodSync(temporary, 0o600)
           this.inode = lstatSync(temporary).ino
-          renameSync(temporary, this.path)
         } catch (error) {
-          this.server.close()
           reject(error)
           return
         }
-        this.listening = true
-        resolve()
+        resolve(temporary)
       }
       this.server.once('error', failed)
       this.server.once('listening', listened)
@@ -193,7 +242,7 @@ export class Carrier {
     if (this.timer) clearInterval(this.timer)
     await this.ticking
     if (!this.listening) return
-    const owned = this.ownsPath()
+    const owned = this.state.carrier && this.ownsPath()
     await this.closeServer()
     if (owned) {
       try { unlinkSync(this.path) } catch {}
