@@ -36,7 +36,7 @@ kander list [--mobile|--json [--agent-status]] [backlog|todo|working|review|done
   - `launcher` is the part of `window` before the first colon; `""` when `window` is empty.
   - `agent`: `status`, `runtime_state`, `reason`, `observed_at` (strings), `valid` (boolean). `status` is one of `alive`, `stopped`, `drifted`, `unknown`, `alive-orphaned`, `identity-mismatch`, `unprobeable`. `runtime_state` is one of `idle`, `working`, `blocked`, `done`, `unknown`. `agent` is `null` on every card without `--agent-status`, and on every card that is not in `working` or `review` or has an empty `window`.
   - `change_token` digests the snapshot without `generated_at` and every `observed_at`, plus the `spec.md` of every listed card. Any change of a listed card (added, removed, moved, body or header edited) or of an agent object changes it; an unchanged snapshot keeps it. With a state filter it covers only the listed cards.
-  - Tasks are ordered as in the table.
+  - Tasks are ordered by state in board order, then by newest sort time (`STARTED_AT` for `working` and `review`, `FINISHED_AT` for `done`, `CREATED_AT` otherwise), then by task ID descending. This is not the table order.
 - The full contract is in the repository document `docs/board-snapshot.md`.
 
 ## Rejections

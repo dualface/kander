@@ -49,7 +49,7 @@ Every key is always present. A string field without a value is `""`.
 | `revision`    | integer        | the committed revision, equal to `kander show --json`  |
 | `agent`       | object or null | see "Agent"                                            |
 
-Tasks are ordered as in the table: by state in board order, then newest display time first, then task ID descending.
+Tasks are ordered by state in board order, then by sort time descending, then by task ID descending. The sort time is `STARTED_AT` for `working` and `review`, `FINISHED_AT` (or the `spec.md` modification time when it is empty) for `done`, and `CREATED_AT` for every other state; a missing value is `-` and sorts after every time. This order is not the table order: the table sorts `backlog`, `todo`, `archived`, and `trash` cards by task ID only.
 
 ### Agent
 

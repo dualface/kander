@@ -86,7 +86,8 @@ func BuildListSnapshot(ctx context.Context, root string, board Board, state stri
 		sortKeys[entry.TaskID] = TaskDisplayTime(entry, text)
 		documents[entry.TaskID] = text
 	}
-	// Same order as the table: state, then newest display time, then task ID.
+	// State in board order, then newest TaskDisplayTime, then task ID. Unlike
+	// the table, backlog, todo, archived and trash cards sort by CREATED_AT.
 	sort.SliceStable(tasks, func(i, j int) bool {
 		if ki, kj := sortKeys[tasks[i].TaskID], sortKeys[tasks[j].TaskID]; ki != kj {
 			return ki > kj

@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+var createdAtLine = regexp.MustCompile(`(?m)^- CREATED_AT: .*$`)
 
 // listJSON runs list with the given observer and decodes the snapshot twice:
 // once typed and once as raw maps, so key presence can be checked.
@@ -268,5 +271,31 @@ func TestListJSONOptionErrors(t *testing.T) {
 	}
 	if code, _, stderr := capture(t, func() int { return RunList([]string{"--json", "--agent-status"}) }); code != 2 || !strings.Contains(stderr, "--agent-status") {
 		t.Fatalf("board-only list accepted --agent-status: code=%d %s", code, stderr)
+	}
+}
+
+func TestListJSONOrdersBacklogByCreatedAt(t *testing.T) {
+	resetLang(t)
+	root := tempBoard(t)
+	for _, slug := range []string{"order-z", "order-a"} {
+		if code, _, stderr := capture(t, func() int { return RunNew([]string{"chore", slug, slug}) }); code != 0 {
+			t.Fatal(stderr)
+		}
+	}
+	created := map[string]string{"order-z": "2026-01-01 10:00", "order-a": "2026-01-01 11:00"}
+	for slug, value := range created {
+		path := filepath.Join(root, "backlog", todayID(slug), "spec.md")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := createdAtLine.ReplaceAllString(string(data), "- CREATED_AT: "+value)
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshot, _ := listJSON(t, nil)
+	if len(snapshot.Tasks) != 2 || snapshot.Tasks[0].TaskID != todayID("order-a") || snapshot.Tasks[1].TaskID != todayID("order-z") {
+		t.Fatalf("order %+v", snapshot.Tasks)
 	}
 }
