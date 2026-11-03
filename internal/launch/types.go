@@ -206,4 +206,6 @@ var (
 	beginTakeoverFn     = board.BeginTakeover
 	confirmStartFn      = board.ConfirmTaskStart
 	readStandingFn      = board.ReadExecutionStanding
+	adoptExecutionFn    = board.AdoptExecution
+	findAdoptSessionsFn = findCodexAdoptSessions
 )

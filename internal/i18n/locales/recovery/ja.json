@@ -72,5 +72,9 @@
   "board.coordinator_missing_handoff_next_step": "次の手順: reconcile はこのメンバーを受け入れられません。まずユーザーに報告して判断を仰ぎ、ユーザーが決めた後で kander coordinator recover を実行してください（snippets/failure-recovery.md「Blocked Group Members」）。",
   "launch.unmarked_pane_cannot_adopt": "kander resume --adopt では終わらせられません: {{.V0}} の pane にはセッションマーカーがありません。--agent で引き継いでもそこの古い executor は動き続けるため、先に手動で停止してください。",
   "launch.recover_start_pending_takeover": "{{.V0}} の開始試行は終わっていません（状態 pending）。リセットするとその executor が管理されなくなります。{{.V1}}次の手順: ランチャーの実行中は待ちます。ランチャーが終わっていれば kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
-  "launch.recover_start_pending_bound_takeover": "{{.V0}} の開始試行は終わっていません（状態 pending）。リセットするとその executor が管理されなくなります。{{.V2}}次の手順: ランチャーの実行中は待ちます。ランチャーが終わっていれば、dispatch {{.V1}} を kander dispatch fail または cancel（完了している場合は kander dispatch settle）で終わらせてから kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。"
+  "launch.recover_start_pending_bound_takeover": "{{.V0}} の開始試行は終わっていません（状態 pending）。リセットするとその executor が管理されなくなります。{{.V2}}次の手順: ランチャーの実行中は待ちます。ランチャーが終わっていれば、dispatch {{.V1}} を kander dispatch fail または cancel（完了している場合は kander dispatch settle）で終わらせてから kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
+  "launch.adopt_marker_written": "session-marker-written: {{.V0}} window={{.V1}} session={{.V2}}",
+  "launch.adopt_session_unproven": "{{.V0}} は引き取れません: その pane にはセッションマーカーがなく、このタスク、起動ディレクトリ、今回の開始試行に合う Codex セッションが {{.V1}} 個あります。マーカーを書くのはちょうど 1 個のときだけです。次の手順: {{.V2}}。その後 kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。",
+  "launch.adopt_changed_before_marker": "{{.V0}} は引き取れません: 確認の後にカードまたは開始試行が変わったため、セッションマーカーは書いていません。次の手順: kander check {{.V0}} を実行し、その結果に従ってください。",
+  "launch.adopt_marker_write_failed": "{{.V0}} は引き取れません: {{.V1}} の pane へのセッションマーカーの書き込みに失敗しました: {{.V2}}。次の手順: kander resume {{.V0}} --adopt --decision <参照> をもう一度実行してください。失敗が続く場合は {{.V3}}。その後 kander resume {{.V0}} --agent <agent> --decision <参照> --message <メッセージ> を使ってください。"
 }

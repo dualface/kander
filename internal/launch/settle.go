@@ -52,9 +52,11 @@ type UnresolvedError struct {
 	Window  string
 	Reason  string
 	Command string
-	// Unmarked: the pane at Window carries no session marker, so adoption cannot
+	// Unmarked: the pane at Window carries no session marker, so no probe can
 	// prove its executor alive and a takeover leaves that executor running.
 	Unmarked bool
+	// Repairable: adoption can write the missing marker first (markerRepairable).
+	Repairable bool
 	// hold keeps a foreground executor attached to this terminal.
 	hold func()
 }
@@ -64,11 +66,17 @@ func (e *UnresolvedError) Error() string {
 	return fmt.Sprintf("started-unresolved: %s window=%s reason=%s", e.TaskID, orNA(e.Window), e.Reason)
 }
 
+// adoptBlocked reports a pane without a session marker that adoption cannot
+// mark either.
+func (e *UnresolvedError) adoptBlocked() bool {
+	return e.Unmarked && !e.Repairable
+}
+
 // NextSteps names the ways out that can work. A retried start is not one of
-// them, and adoption is not one for a pane without a session marker.
+// them, and adoption is not one for a pane it can neither prove nor mark.
 func (e *UnresolvedError) NextSteps() []string {
 	takeover := fmt.Sprintf("%s resume %s --agent <agent> --decision <reference> --message <message>", e.Command, e.TaskID)
-	if e.Unmarked {
+	if e.adoptBlocked() {
 		return []string{t("launch.unmarked_executor_stop_first", e.Window), takeover}
 	}
 	return []string{fmt.Sprintf("%s resume %s --adopt --decision <reference>", e.Command, e.TaskID), takeover}
@@ -99,6 +107,7 @@ func recordUnresolved(root string, plan LaunchPlan, entry board.Entry, outcome L
 	}
 	unresolved := &UnresolvedError{TaskID: entry.TaskID, Window: record.Window, Reason: reason, Command: "kander"}
 	unresolved.Unmarked = plan.capabilities().PaneMetadata && outcome.Container != "" && !outcome.SessionMarked
+	unresolved.Repairable = unresolved.Unmarked && markerRepairable(record.Session)
 	if paths, err := currentInstallPaths(); err == nil {
 		unresolved.Command = commandName(paths)
 	}
@@ -162,7 +171,7 @@ func exitLaunch(err error) int {
 	}
 	fmt.Println(unresolved.Error())
 	header := "launch.unresolved_next_steps"
-	if unresolved.Unmarked {
+	if unresolved.adoptBlocked() {
 		header = "launch.unresolved_unmarked_next_steps"
 	}
 	fmt.Println(t(header))
@@ -196,8 +205,10 @@ var adoptLivenessFn = func(s board.Snapshot) liveness.Report {
 
 // commandAdopt keeps the running executor of an unfinished start. Foreground and
 // console cards are observed by their process identity, and an executor whose
-// starter is gone is the case adoption exists for. Every other observation refuses:
-// an unknown executor is never adopted.
+// starter is gone is the case adoption exists for. A pane that runs the agent
+// without a session marker gets the marker first when its session can be
+// proven, and is probed again. Every other observation refuses: an unknown
+// executor is never adopted.
 func commandAdopt(root, task, decision string) error {
 	s, err := board.ReadSnapshot(root, task)
 	if err != nil {
@@ -224,13 +235,20 @@ func commandAdopt(root, task, decision string) error {
 	if err = board.CheckAdoptable(s, record); err != nil {
 		return err
 	}
-	if report := adoptLivenessFn(s); report.Status != liveness.Alive && report.Status != liveness.AliveOrphaned {
+	report := adoptLivenessFn(s)
+	if unmarkedPane(report) && markerRepairable(board.MetadataFrom(s.Text, board.FieldSession)) {
+		if err = repairSessionMarker(root, s, record); err != nil {
+			return err
+		}
+		report = adoptLivenessFn(s)
+	}
+	if report.Status != liveness.Alive && report.Status != liveness.AliveOrphaned {
 		if unmarkedPane(report) {
 			return launchError("launch.adopt_unmarked_pane", s.Entry.TaskID, t("launch.unmarked_executor_stop_first", orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
 		}
 		return launchError("launch.adopt_liveness_unconfirmed", s.Entry.TaskID, report.Status, report.Detail)
 	}
-	if _, err = board.AdoptExecution(root, s, decision); err != nil {
+	if _, err = adoptExecutionFn(root, s, decision); err != nil {
 		return err
 	}
 	fmt.Println(t("launch.adopted", s.Entry.TaskID, orNA(board.MetadataFrom(s.Text, board.FieldWindow))))
@@ -238,20 +256,21 @@ func commandAdopt(root, task, decision string) error {
 }
 
 // unmarkedPane reports a probe that saw the agent in a pane without a session
-// marker. Kander writes the marker only during the launch, so no later probe of
-// that pane can prove the executor alive.
+// marker. The launch writes the marker; after it only adoption can, so until
+// then no probe of that pane can prove the executor alive.
 func unmarkedPane(report liveness.Report) bool {
 	return report.Status == liveness.Unknown && report.Evidence != nil && report.Evidence.Unmarked
 }
 
 // adoptionBlocker says why adoption cannot end an unfinished start, or returns ""
 // when it can: the card must still show the identity of the attempt, and the pane
-// must be able to prove its executor.
+// must be able to prove its executor or be marked by adoption. Whether adoption
+// can mark it is a static judgement: a hint never runs session discovery.
 func adoptionBlocker(s board.Snapshot, record board.ExecutionRecord) string {
 	if board.StartIdentityChanged(s, record) {
 		return t("launch.start_identity_changed")
 	}
-	if unmarkedPane(adoptLivenessFn(s)) {
+	if !markerRepairable(board.MetadataFrom(s.Text, board.FieldSession)) && unmarkedPane(adoptLivenessFn(s)) {
 		return t("launch.unmarked_pane_cannot_adopt", orNA(board.MetadataFrom(s.Text, board.FieldWindow)))
 	}
 	return ""

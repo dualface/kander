@@ -108,7 +108,12 @@ func newAgentSession(agent string, program *process.AgentProgram, configs ...*co
 }
 
 func parseTaskSession(text string) *AgentSession {
-	value := metadataFrom(text, sessionField)
+	return parseSessionValue(metadataFrom(text, sessionField))
+}
+
+// parseSessionValue parses a SESSION value; it returns nil when the value is
+// empty or malformed.
+func parseSessionValue(value string) *AgentSession {
 	if value == "" {
 		return nil
 	}
