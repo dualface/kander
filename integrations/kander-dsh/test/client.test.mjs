@@ -198,6 +198,34 @@ describe('terminal transport', () => {
     assert.deepEqual(errors, ['gone'])
   })
 
+  test('a failed send names the lost input, and a sent one is confirmed', async () => {
+    const failed = []
+    const confirmed = []
+    let fail = true
+    const queue = new logic.InputQueue(async () => { if (fail) throw new Error('offline') },
+      (error, message) => failed.push([error.message, message.data]),
+      (message) => confirmed.push(message.data))
+    await queue.push('lost', 80, 24)
+    fail = false
+    await queue.push('', 80, 24)
+    await queue.push('typed', 80, 24)
+    assert.deepEqual(failed, [['offline', 'lost']])
+    assert.deepEqual(confirmed, ['', 'typed'])
+  })
+
+  test('a live terminal shows lost input apart from its status', () => {
+    const t = logic.translator('en')
+    const base = { status: 'live', error: '', inputError: '', carrier: true, known: true, paneInfo: { pane: 'p1' } }
+    assert.deepEqual(plain(logic.terminalStatus(base, t)), { shown: 'live', text: 'Live', inputText: '' })
+    const failed = plain(logic.terminalStatus({ ...base, inputError: 'HTTP 409' }, t))
+    assert.equal(failed.shown, 'live')
+    assert.equal(failed.inputText, 'Input was not delivered: HTTP 409. Type it again once the terminal answers.')
+    assert.match(logic.terminalStatus({ ...base, inputError: 'HTTP 409' }, logic.translator('zh-CN')).inputText, /^输入未送达: HTTP 409/)
+    assert.equal(logic.terminalStatus({ ...base, status: 'error', error: 'boom' }, t).text, 'Terminal error: boom')
+    assert.equal(logic.terminalStatus({ ...base, paneInfo: null }, t).shown, 'gone')
+    assert.equal(logic.terminalStatus({ ...base, paneInfo: { exited: true } }, t).shown, 'exited')
+  })
+
   test('only the host screen answers terminal queries, also for replayed output', async () => {
     const replies = (mute) => {
       const term = new HeadlessTerminal({ cols: 80, rows: 24, allowProposedApi: true })

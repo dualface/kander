@@ -74,6 +74,7 @@ window.__ModuleLoader__.load({
       'term.gone': 'The terminal no longer exists',
       'term.otherHost': 'The agent runs in another dsh',
       'term.error': 'Terminal error: {error}',
+      'term.inputFailed': 'Input was not delivered: {error}. Type it again once the terminal answers.',
       'header.open': 'Open the Kander board of this workspace',
     }
     const zh = {
@@ -123,6 +124,7 @@ window.__ModuleLoader__.load({
       'term.gone': '终端已不存在',
       'term.otherHost': 'agent 在另一个 dsh 中运行',
       'term.error': '终端错误: {error}',
+      'term.inputFailed': '输入未送达: {error}. 终端恢复后请重新输入.',
       'header.open': '打开这个工作区的 Kander 看板',
     }
 
@@ -261,10 +263,15 @@ window.__ModuleLoader__.load({
      * one, which carries the latest terminal size.
      */
     class InputQueue {
-      /** @param send - async ({data, cols, rows}) => void; a rejection goes to onError. */
-      constructor(send, onError = () => {}) {
+      /**
+       * @param send - async ({data, cols, rows}) => void.
+       * @param onError - (error, message) for a request that failed; its input is lost.
+       * @param onSent - (message) for a request that the host took.
+       */
+      constructor(send, onError = () => {}, onSent = () => {}) {
         this.send = send
         this.onError = onError
+        this.onSent = onSent
         this.data = ''
         this.size = null
         this.waiting = false
@@ -287,8 +294,10 @@ window.__ModuleLoader__.load({
           try {
             await this.send(message)
           } catch (error) {
-            this.onError(error)
+            this.onError(error, message)
+            continue
           }
+          this.onSent(message)
         }
       }
     }
@@ -311,6 +320,15 @@ window.__ModuleLoader__.load({
       parser.registerDcsHandler({ intermediates: '$', final: 'q' }, swallow)
       // A color is still set; only a request ("?") is dropped.
       for (const ident of [4, 10, 11, 12]) parser.registerOscHandler(ident, (data) => data.split(';').includes('?'))
+    }
+
+    /** The status line of a terminal tab: {shown, text, inputText}. */
+    function terminalStatus({ status, error, inputError, carrier, known, paneInfo }, t) {
+      let shown = status
+      if (carrier && known && !paneInfo) shown = 'gone'
+      else if (paneInfo?.exited) shown = 'exited'
+      const text = shown === 'error' ? t('term.error', { error }) : t(`term.${shown}`)
+      return { shown, text, inputText: inputError ? t('term.inputFailed', { error: inputError }) : '' }
     }
 
     /** A focus request newer than the last one seen, or null. */
@@ -581,6 +599,7 @@ window.__ModuleLoader__.load({
       const terminal = useRef(null)
       const [status, setStatus] = useState(carrier ? 'connecting' : 'otherHost')
       const [error, setError] = useState('')
+      const [inputError, setInputError] = useState('')
       const activeRef = useRef(active)
       activeRef.current = active
 
@@ -596,7 +615,9 @@ window.__ModuleLoader__.load({
         let observer
         const queue = new InputQueue(
           (message) => call('POST', '/input', { pane, ...message }),
-          (failure) => { if (!stopped) setError(String(failure?.message ?? failure)) },
+          (failure) => { if (!stopped) setInputError(String(failure?.message ?? failure)) },
+          // Input that arrived clears the notice; a size-only request says nothing about typed input.
+          (message) => { if (!stopped && message.data) setInputError('') },
         )
         const sendSize = () => { if (term) void queue.push('', term.cols, term.rows) }
         const refit = () => {
@@ -661,12 +682,10 @@ window.__ModuleLoader__.load({
         terminal.current.term.focus()
       }, [active, status])
 
-      let shown = status
-      if (carrier && known && !paneInfo) shown = 'gone'
-      else if (paneInfo?.exited) shown = 'exited'
-      const text = shown === 'error' ? t('term.error', { error }) : t(`term.${shown}`)
+      const { shown, text, inputText } = terminalStatus({ status, error, inputError, carrier, known, paneInfo }, t)
       return h('div', { style: { ...style.terminal, display: active ? 'flex' : 'none' }, 'data-testid': `kander-terminal-${pane}` },
         h('div', { style: style.termStatus, 'data-testid': `kander-terminal-status-${pane}`, 'data-status': shown }, `${pane} · ${text}`),
+        inputText ? h('div', { style: { ...style.termStatus, color: '#f88' }, role: 'alert', 'data-testid': `kander-terminal-input-error-${pane}` }, inputText) : null,
         h('div', { ref: host, style: style.termHost, 'data-testid': `kander-terminal-screen-${pane}` }))
     }
 
@@ -915,7 +934,8 @@ window.__ModuleLoader__.load({
     exports.apply = apply
     exports.logic = {
       COLUMNS, InputQueue, SseParser, boardsOf, carrierNotice, closeTab, columnsOf, createStore, dshWindow, keepSnapshot,
-      loadTabs, mainSessionId, muteQueries, needsAttention, newFocus, openTab, saveTabs, tabLabel, translator, workspacePathOf,
+      loadTabs, mainSessionId, muteQueries, needsAttention, newFocus, openTab, saveTabs, tabLabel, terminalStatus, translator,
+      workspacePathOf,
     }
     return module.exports
   },

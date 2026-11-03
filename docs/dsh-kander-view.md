@@ -24,6 +24,7 @@ The board tab shows the columns backlog, todo, working, review, and done; archiv
 - Every input request carries the tab's terminal size, so the agent's terminal takes the size of the tab that sent input last. Showing a tab or resizing it sends its size without text.
 - A hidden tab keeps receiving output. Closing a tab does not end the agent.
 - A tab whose agent exited shows that it exited; a tab whose terminal is gone (the dsh host restarted) shows that.
+- When an input request fails, the tab shows that the input was not delivered, with the error, below its status line. The keys of that request are lost; the notice stays until typed input reaches the agent again.
 - The host's screen of the pane is the only terminal that answers terminal queries (cursor position, device attributes, mode and status requests), also while no page shows the pane. The terminal in the page answers none, so a query is answered once however many tabs show the pane, and replaying the buffered output into a reopened tab answers nothing again. Color queries (OSC 4, 10, 11, 12 with `?`) are answered by neither, as without the view.
 - The open tabs of each board are kept in the browser's local storage and come back after a page reload.
 
