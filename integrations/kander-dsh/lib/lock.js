@@ -1,133 +1,74 @@
-// A lock shared by the dsh hosts of one DSH_HOME. It serializes every step
-// that judges or changes the shared state: the stale-socket verdict, its
-// removal, the socket publication and release, and taking a pane number.
-//
-// The lock is a directory created with mkdir, which fails while it exists;
-// the owner file inside names the holder. Holders keep it for at most a probe
-// timeout, so a lock whose holder process is gone, or that is older than
-// staleMs, is left over from a crash and may be broken. Breaking renames the
-// directory aside and removes it only when it still names the holder judged
-// stale; a lock taken in between is put back.
-import { randomBytes } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+// The carrier lock: an exclusive file lock that the kernel releases when its
+// holder process ends, so no host ever has to judge or reclaim a lock left by
+// a crashed one. Node has no flock(2), so a child process holds it: flock(1)
+// from util-linux on Linux, lockf(1) of the base system elsewhere (macOS).
+// The child prints `held` once it holds the lock and then waits on its stdin.
+// Ending stdin releases the lock; when the dsh host dies, its end of the pipe
+// closes and the lock goes with it.
+import { spawn as nodeSpawn } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const HOLD = ['/bin/sh', '-c', 'echo held; exec cat']
 
-const alive = (pid) => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    // EPERM: the process exists but belongs to another user.
-    return error?.code === 'EPERM'
-  }
+/** The argv that waits for the lock on file, then holds it. */
+export function lockCommand(file, platform = process.platform) {
+  // -o: the waiting command does not inherit the lock, so the lock ends with flock itself.
+  if (platform === 'linux') return ['flock', ['-o', file, ...HOLD]]
+  // -k: keep the lock file; lockf(1) waits without a timeout by default.
+  return ['lockf', ['-k', file, ...HOLD]]
 }
 
-export class DirectoryLock {
-  /**
-   * @param path - the lock directory.
-   * @param options.staleMs - age after which a held lock counts as left over.
-   * @param options.timeoutMs - how long acquire waits for a live holder.
-   */
-  constructor(path, { staleMs = 5000, timeoutMs = 4000, retryMs = 10 } = {}) {
-    this.path = path
-    this.staleMs = staleMs
-    this.timeoutMs = timeoutMs
-    this.retryMs = retryMs
+/**
+ * One attempt to hold the lock. Emits `held` once the lock is held, and
+ * `ended` with a reason when the holder process ended, before or after it
+ * held the lock.
+ */
+export class LockHolder extends EventEmitter {
+  constructor(file, { spawn = nodeSpawn, platform = process.platform } = {}) {
+    super()
+    this.file = file
+    this.spawn = spawn
+    this.platform = platform
+    this.held = false
+    this.child = undefined
   }
 
-  /** Runs fn while holding the lock and releases it afterwards. */
-  async run(fn) {
-    const token = await this.acquire()
-    try {
-      return await fn()
-    } finally {
-      this.release(token)
-    }
-  }
-
-  async acquire() {
-    const token = `${process.pid} ${randomBytes(8).toString('hex')}`
-    const deadline = Date.now() + this.timeoutMs
-    for (;;) {
-      try {
-        mkdirSync(this.path, { mode: 0o700 })
-      } catch (error) {
-        if (error?.code !== 'EEXIST') throw error
-        if (this.breakIfStale()) continue
-        if (Date.now() > deadline) throw new Error(`${this.path} stayed locked by another dsh host`)
-        await sleep(this.retryMs)
-        continue
+  start() {
+    const [command, args] = lockCommand(this.file, this.platform)
+    const child = this.spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    this.child = child
+    let output = ''
+    let errors = ''
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      output += chunk
+      if (!this.held && output.includes('held\n')) {
+        this.held = true
+        this.emit('held')
       }
-      try {
-        writeFileSync(join(this.path, 'owner'), token, { mode: 0o600 })
-      } catch (error) {
-        rmSync(this.path, { recursive: true, force: true })
-        throw error
-      }
-      return token
+    })
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk) => { errors = (errors + chunk).slice(-2000) })
+    // A write to the stdin of an ended holder is not an error worth a crash.
+    child.stdin.on('error', () => {})
+    let ended = false
+    const end = (reason) => {
+      if (ended) return
+      ended = true
+      this.held = false
+      // A waiting command that kept the lock fd (lockf may pass it on) ends with its stdin.
+      child.stdin.end()
+      this.emit('ended', reason)
     }
+    child.on('error', (error) => end(`${command}: ${error?.message ?? error}`))
+    child.on('exit', (code, signal) => end(errors.trim() || `${command} ended (${signal ?? `exit ${code}`})`))
+    this.ended = new Promise((resolve) => this.once('ended', resolve))
   }
 
-  release(token) {
-    const owner = join(this.path, 'owner')
-    let current
-    try {
-      current = readFileSync(owner, 'utf8')
-    } catch {
-      return
-    }
-    // A lock broken as stale and taken by another host is not ours to remove.
-    if (current !== token) return
-    unlinkSync(owner)
-    rmdirSync(this.path)
-  }
-
-  // Returns true when the lock was broken or vanished, so acquire retries at once.
-  breakIfStale() {
-    const judged = this.holder()
-    if (judged === undefined) return true
-    if (!judged.stale) return false
-    const aside = `${this.path}.stale-${process.pid}-${randomBytes(4).toString('hex')}`
-    try {
-      renameSync(this.path, aside)
-    } catch (error) {
-      if (error?.code === 'ENOENT') return true
-      throw error
-    }
-    let moved = null
-    try { moved = readFileSync(join(aside, 'owner'), 'utf8') } catch {}
-    if (moved !== judged.token) {
-      // A live lock was taken in between: put it back unless the path is taken again.
-      try {
-        renameSync(aside, this.path)
-        return false
-      } catch {}
-    }
-    rmSync(aside, { recursive: true, force: true })
-    return true
-  }
-
-  /** {token, stale} of the current holder, or undefined when the lock is free. */
-  holder() {
-    let token = null
-    let changed
-    try {
-      token = readFileSync(join(this.path, 'owner'), 'utf8')
-      changed = statSync(join(this.path, 'owner')).mtimeMs
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
-      // A holder between mkdir and writing its owner file, or one that crashed there.
-      try {
-        changed = statSync(this.path).mtimeMs
-      } catch (statError) {
-        if (statError?.code === 'ENOENT') return undefined
-        throw statError
-      }
-    }
-    const pid = token === null ? NaN : Number(token.split(' ')[0])
-    const stale = Date.now() - changed > this.staleMs || (Number.isInteger(pid) && pid > 0 && !alive(pid))
-    return { token, stale }
+  /** Releases the lock, or stops waiting for it; resolves once the holder ended. */
+  async release() {
+    if (!this.child) return
+    this.child.stdin.end()
+    await this.ended
   }
 }

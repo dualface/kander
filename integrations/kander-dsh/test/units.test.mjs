@@ -1,98 +1,100 @@
 import assert from 'node:assert/strict'
-import { execFile } from 'node:child_process'
-import { chmodSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { execFile, spawn } from 'node:child_process'
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { processName } from '../lib/foreground.js'
 import { PaneSequence } from '../lib/ids.js'
 import { paneEnvironment } from '../lib/index.js'
-import { DirectoryLock } from '../lib/lock.js'
+import { LockHolder, lockCommand } from '../lib/lock.js'
 import { ensurePrivateDirectory, stateDirectory } from '../lib/paths.js'
 import { upgradeSide } from '../lib/protocol.js'
 import { temporaryDirectory } from './helpers.mjs'
 
 describe('pane sequence', () => {
-  const sequenceIn = (directory, pid) => new PaneSequence(directory, new DirectoryLock(join(directory, 'lock')), pid)
-
-  test('IDs continue across restarts', async () => {
+  test('IDs continue across restarts and never go below the last one a host took', () => {
     const directory = temporaryDirectory()
-    assert.equal((await sequenceIn(directory, 100).next()).pane, 'p1-100')
-    assert.deepEqual(await sequenceIn(directory, 100).next(), { pane: 'p2-100', container: 'c2-100' })
+    const first = new PaneSequence(directory, 100)
+    assert.equal(first.next().pane, 'p1-100')
+    assert.deepEqual(new PaneSequence(directory, 100).next(), { pane: 'p2-100', container: 'c2-100' })
     assert.equal(statSync(join(directory, 'sequence')).mode & 0o777, 0o600)
+    // A record moved back from outside does not make this host repeat a number.
+    writeFileSync(join(directory, 'sequence'), '1\n')
+    assert.equal(first.next().pane, 'p2-100')
+    const again = new PaneSequence(directory, 100)
+    again.next()
+    again.next()
+    writeFileSync(join(directory, 'sequence'), '0\n')
+    assert.equal(again.next().pane, 'p5-100')
   })
 
-  test('two hosts taking numbers together never share one or move the record back', async () => {
-    const directory = temporaryDirectory()
-    const a = sequenceIn(directory, 100)
-    const b = sequenceIn(directory, 100)
-    // More than the 64 numbers an earlier design reclaimed, interleaved.
-    const taken = await Promise.all(Array.from({ length: 150 }, (_, index) => (index % 2 ? a : b).next()))
-    assert.equal(new Set(taken.map((ids) => ids.pane)).size, 150)
-    assert.equal(a.read(), 150)
-    assert.equal((await b.next()).pane, 'p151-100')
-  })
-
-  test('processes taking numbers at the same time never share one', async () => {
-    const directory = temporaryDirectory()
-    const lib = (name) => JSON.stringify(new URL(`../lib/${name}`, import.meta.url).href)
-    const script = `import { PaneSequence } from ${lib('ids.js')}
-      import { DirectoryLock } from ${lib('lock.js')}
-      const sequence = new PaneSequence(process.argv[1], new DirectoryLock(process.argv[1] + '/lock'), 7)
-      const out = []
-      for (let i = 0; i < 40; i++) out.push((await sequence.next()).pane)
-      console.log(JSON.stringify(out))`
-    const runs = await Promise.all(Array.from({ length: 4 }, () => new Promise((resolve, reject) => {
-      execFile(process.execPath, ['--input-type=module', '-e', script, directory], (error, stdout) => (error ? reject(error) : resolve(JSON.parse(stdout))))
-    })))
-    const panes = runs.flat()
-    // All four children use the pid 7, so only the number keeps them apart.
-    assert.equal(new Set(panes).size, 160)
-    assert.equal(sequenceIn(directory, 7).read(), 160)
-  })
-
-  test('a damaged sequence record is refused instead of restarting at 1', async () => {
+  test('a damaged sequence record is refused instead of restarting at 1', () => {
     const directory = temporaryDirectory()
     writeFileSync(join(directory, 'sequence'), 'garbage')
-    await assert.rejects(sequenceIn(directory).next(), /does not hold a pane sequence number/)
+    assert.throws(() => new PaneSequence(directory).next(), /does not hold a pane sequence number/)
   })
 })
 
-describe('directory lock', () => {
-  test('a second holder waits for the first', async () => {
-    const lock = new DirectoryLock(join(temporaryDirectory(), 'lock'))
-    const order = []
-    let release
-    const first = lock.run(() => new Promise((resolve) => { order.push('first'); release = resolve }))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    const second = lock.run(() => { order.push('second') })
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    assert.deepEqual(order, ['first'])
-    release()
-    await Promise.all([first, second])
-    assert.deepEqual(order, ['first', 'second'])
+describe('carrier lock', () => {
+  test('flock on Linux and lockf elsewhere wait for the lock, then hold it', () => {
+    assert.deepEqual(lockCommand('/s/carrier.lock', 'linux'), ['flock', ['-o', '/s/carrier.lock', '/bin/sh', '-c', 'echo held; exec cat']])
+    assert.deepEqual(lockCommand('/s/carrier.lock', 'darwin'), ['lockf', ['-k', '/s/carrier.lock', '/bin/sh', '-c', 'echo held; exec cat']])
   })
 
-  test('a lock left by a dead process or held too long is broken', async () => {
-    const path = join(temporaryDirectory(), 'lock')
-    mkdirSync(path)
-    // pid 2^22 + 1 is above the Linux and macOS pid limits, so it is not running.
-    writeFileSync(join(path, 'owner'), '4194305 dead')
-    assert.equal(await new DirectoryLock(path, { timeoutMs: 200 }).run(() => 'ran'), 'ran')
-    mkdirSync(path)
-    writeFileSync(join(path, 'owner'), `${process.pid} old`)
-    const old = new Date(Date.now() - 60_000)
-    utimesSync(join(path, 'owner'), old, old)
-    assert.equal(await new DirectoryLock(path, { timeoutMs: 200 }).run(() => 'ran'), 'ran')
+  // Each process enters, writes enter and exit lines around a short pause, and
+  // leaves, ten times; the lines never interleave between processes.
+  test('processes never hold the lock at the same time', async () => {
+    const directory = temporaryDirectory()
+    const file = join(directory, 'carrier.lock')
+    const record = join(directory, 'record')
+    const script = `import { LockHolder } from ${JSON.stringify(new URL('../lib/lock.js', import.meta.url).href)}
+      import { appendFileSync } from 'node:fs'
+      for (let i = 0; i < 10; i++) {
+        const holder = new LockHolder(process.argv[1])
+        await new Promise((resolve) => { holder.once('held', resolve); holder.start() })
+        appendFileSync(process.argv[2], 'enter ' + process.pid + '\\n')
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        appendFileSync(process.argv[2], 'exit ' + process.pid + '\\n')
+        await holder.release()
+      }`
+    await Promise.all(Array.from({ length: 3 }, () => new Promise((resolve, reject) => {
+      execFile(process.execPath, ['--input-type=module', '-e', script, file, record], (error) => (error ? reject(error) : resolve()))
+    })))
+    const lines = readFileSync(record, 'utf8').trim().split('\n')
+    assert.equal(lines.length, 60)
+    for (let i = 0; i < lines.length; i += 2) {
+      const [enter, pid] = lines[i].split(' ')
+      assert.equal(enter, 'enter')
+      assert.equal(lines[i + 1], `exit ${pid}`)
+    }
   })
 
-  test('a live lock is not broken, and a holder never removes a lock it lost', async () => {
-    const path = join(temporaryDirectory(), 'lock')
-    mkdirSync(path)
-    writeFileSync(join(path, 'owner'), `${process.pid} live`)
-    await assert.rejects(new DirectoryLock(path, { timeoutMs: 100 }).run(() => {}), /stayed locked/)
-    const lock = new DirectoryLock(path)
-    lock.release('someone else')
-    assert.equal(readFileSync(join(path, 'owner'), 'utf8'), `${process.pid} live`)
+  test('the lock is free once its holder process is killed', async () => {
+    const file = join(temporaryDirectory(), 'carrier.lock')
+    const script = `import { LockHolder } from ${JSON.stringify(new URL('../lib/lock.js', import.meta.url).href)}
+      const holder = new LockHolder(process.argv[1])
+      holder.once('held', () => console.log('held'))
+      holder.start()`
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] })
+    await new Promise((resolve) => child.stdout.once('data', resolve))
+    const waiter = new LockHolder(file)
+    let held = false
+    waiter.once('held', () => { held = true })
+    waiter.start()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    assert.equal(held, false)
+    child.kill('SIGKILL')
+    await new Promise((resolve) => { if (held) resolve(); else waiter.once('held', resolve) })
+    await waiter.release()
+  })
+
+  test('a missing lock command ends the attempt with the reason', async () => {
+    const holder = new LockHolder(join(temporaryDirectory(), 'carrier.lock'), {
+      spawn: (command, args, options) => spawn('/nonexistent/flock', args, options),
+    })
+    const ended = new Promise((resolve) => holder.once('ended', resolve))
+    holder.start()
+    assert.match(await ended, /ENOENT/)
   })
 })
 

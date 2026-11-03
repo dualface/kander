@@ -4,7 +4,6 @@ import { existsSync, linkSync, lstatSync, mkdirSync, renameSync, writeFileSync }
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { afterEach, describe, test } from 'node:test'
-import { probeSocket } from '../lib/carrier.js'
 import { KanderHost } from '../lib/host.js'
 import { FakeSubprocess, RecordingLog, call, eventually, temporaryDirectory } from './helpers.mjs'
 
@@ -75,66 +74,66 @@ describe('carrier host', () => {
     assert.equal(existsSync(join(directory, '.mux-4194305-0')), false)
   })
 
-  test('a carrier whose path was replaced ends its panes and competes again', async () => {
+  test('a path changed from outside is linked again and the carrier keeps its panes', async () => {
     const directory = join(temporaryDirectory(), 'kander')
     const socket = join(directory, 'mux.sock')
-    const first = newHost(directory)
-    await first.host.start()
+    const { host, log } = newHost(directory)
+    await host.start()
     const { pane } = (await call(socket, 'create_container', { cwd: '/w' })).body
-    await call(socket, 'run_command', { pane, cwd_quoted: "'/w'", command: 'agent', posix: 'true' })
-    const [terminal] = first.host.mux.subprocess.terminals
-    // Another host's live socket lands on the path from outside the lock.
     const other = createServer((request, response) => response.end('{"pid":999}'))
     const otherName = join(directory, '.other')
     await new Promise((resolve) => other.listen(otherName, resolve))
     renameSync(otherName, socket)
     try {
-      await first.host.carrier.tick()
-      assert.equal(first.host.isCarrier(), false)
-      assert.deepEqual(first.host.carrierStatus(), { carrier: false, socket, reason: 'held', holderPid: 999 })
-      assert.equal(terminal.terminated, true)
-      assert.deepEqual(await first.host.listPanes(), [])
-      assert.ok(first.log.lines.some(([, line]) => line.includes('names another host')), first.log.lines)
-      // The demoted host left the other host's socket in place.
-      assert.equal((await call(socket, 'hello', { protocol: '1' })).body.pid, 999)
+      await host.carrier.tick()
+      assert.equal(host.isCarrier(), true)
+      assert.equal((await call(socket, 'hello', { protocol: '1' })).body.pid, process.pid)
+      assert.ok(host.mux.get(pane))
+      assert.ok(log.lines.some(([, line]) => line.includes('changed from outside')), log.lines)
     } finally {
       await new Promise((resolve) => other.close(resolve))
     }
   })
 
-  test('a stale verdict that arrives late never removes a socket published meanwhile', async () => {
+  test('a carrier whose lock holder is killed ends its panes and the waiting host takes over', async () => {
     const directory = join(temporaryDirectory(), 'kander')
-    mkdirSync(directory, { mode: 0o700 })
     const socket = join(directory, 'mux.sock')
-    await leaveStaleSocket(socket)
-    // B probes the stale socket first, and its ECONNREFUSED comes back late.
-    let release
-    const gate = new Promise((resolve) => { release = resolve })
-    let probing
-    const probed = new Promise((resolve) => { probing = resolve })
-    const lateProbe = async (path) => {
-      probing()
-      await gate
-      return probeSocket(path)
-    }
-    const b = newHost(directory, { probe: lateProbe }).host
-    const a = newHost(directory).host
-    const bStarted = b.start()
-    await probed
-    // A tries to take the socket over while B's verdict is pending.
-    const aStarted = a.start()
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    assert.equal(a.isCarrier(), false)
-    release()
-    await Promise.all([bStarted, aStarted])
-    const carrier = [a, b].filter((host) => host.isCarrier())
-    assert.equal(carrier.length, 1)
+    const first = newHost(directory)
+    const second = newHost(directory)
+    await first.host.start()
+    await second.host.start()
     const { pane } = (await call(socket, 'create_container', { cwd: '/w' })).body
-    for (let round = 0; round < 5; round++) await Promise.all([a.carrier.tick(), b.carrier.tick()])
-    assert.equal(carrier[0].isCarrier(), true)
-    assert.ok(carrier[0].mux.get(pane), 'the carrier kept its pane')
-    for (const host of [a, b]) assert.ok(!host.log.lines?.some(([, line]) => line.includes('names another host')))
-    assert.deepEqual(await call(socket, 'pane_facts', { pane }), { status: 200, body: { command: '', in_mode: '0', dead: '0', session_marker: '' } })
+    await call(socket, 'run_command', { pane, cwd_quoted: "'/w'", command: 'agent', posix: 'true' })
+    const [terminal] = first.host.mux.subprocess.terminals
+    first.host.carrier.holder.child.kill('SIGKILL')
+    await eventually(() => second.host.isCarrier())
+    await eventually(() => terminal.terminated)
+    assert.equal(first.host.isCarrier(), false)
+    assert.deepEqual(await first.host.listPanes(), [])
+    assert.ok(first.log.lines.some(([, line]) => line.includes('carrier lock') && line.includes('ended')), first.log.lines)
+    assert.equal((await call(socket, 'hello', { protocol: '1' })).status, 200)
+    // The first host waits for the lock again and takes over after the second stops.
+    await second.host.stop()
+    await eventually(() => first.host.isCarrier())
+  })
+
+  test('one host at a time holds the carrier, through repeated handovers', async () => {
+    const directory = join(temporaryDirectory(), 'kander')
+    const socket = join(directory, 'mux.sock')
+    const contenders = Array.from({ length: 3 }, () => newHost(directory).host)
+    await Promise.all(contenders.map((host) => host.start()))
+    for (let round = 0; round < 4; round++) {
+      await eventually(() => contenders.filter((host) => host.isCarrier()).length === 1)
+      const carrier = contenders.find((host) => host.isCarrier())
+      const { pane } = (await call(socket, 'create_container', { cwd: '/w' })).body
+      // Several ticks of every host leave the carrier and its pane alone.
+      for (let tick = 0; tick < 3; tick++) await Promise.all(contenders.map((host) => host.carrier.tick()))
+      assert.equal(carrier.isCarrier(), true)
+      assert.ok(carrier.mux.get(pane))
+      assert.equal(contenders.filter((host) => host.carrier.holder?.held).length, 1)
+      carrier.carrier.holder.child.kill('SIGKILL')
+      await eventually(() => !carrier.isCarrier())
+    }
   })
 
   for (const stale of [false, true]) {

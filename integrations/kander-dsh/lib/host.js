@@ -5,7 +5,6 @@
 // carrier.
 import { Carrier } from './carrier.js'
 import { PaneSequence } from './ids.js'
-import { DirectoryLock } from './lock.js'
 import { Mux } from './mux.js'
 import { createOps } from './ops.js'
 import { ensurePrivateDirectory, lockPath, socketPath, stateDirectory } from './paths.js'
@@ -19,22 +18,21 @@ export class KanderHost {
    * @param options.env - variables added to every pane.
    * @param options.intervalMs - the socket ownership check interval.
    * @param options.foregroundName - resolves a process group id to a command name.
-   * @param options.probe - replaces the socket probe of the carrier election, for tests.
+   * @param options.holderOptions - LockHolder options of the carrier lock, for tests.
    */
-  constructor({ subprocess, log, directory = stateDirectory(), env = {}, intervalMs, foregroundName, probe }) {
+  constructor({ subprocess, log, directory = stateDirectory(), env = {}, intervalMs, foregroundName, holderOptions }) {
     this.log = log
     this.directory = directory
-    const lock = new DirectoryLock(lockPath(directory))
-    this.mux = new Mux({ subprocess, sequence: new PaneSequence(directory, lock), env, foregroundName, log })
+    this.mux = new Mux({ subprocess, sequence: new PaneSequence(directory), env, foregroundName, log })
     this.focusRequest = null
     this.carrier = new Carrier({
       path: socketPath(directory),
+      lockFile: lockPath(directory),
       server: createOpsServer(createOps(this)),
-      lock,
       log,
       intervalMs,
       onLost: () => this.mux.closeAll(),
-      probe,
+      holderOptions,
     })
   }
 

@@ -1,42 +1,33 @@
-// Socket ownership between the dsh hosts of one DSH_HOME. The socket path is
-// the lock-guarded state: the host whose server the path names is the carrier
-// host, and only it hosts dsh-launcher panes. A host that finds a live socket
-// stays a non-carrier and checks again on every tick, so it takes the socket
-// over without a restart once the carrier exits.
+// Socket ownership between the dsh hosts of one DSH_HOME. The carrier host is
+// the host that holds the carrier lock (lock.js), a kernel file lock that ends
+// with its holder; only the carrier serves the socket path and hosts
+// dsh-launcher panes. Every other host waits for that lock, so it becomes the
+// carrier as soon as the carrier exits, without a restart and without judging
+// whether a lock or socket was left over: the kernel decides.
 //
-// Judging the path, removing a stale socket, publishing, and removing a
-// carrier's own socket on stop all run under the DirectoryLock the hosts
-// share, and the judgement is made on the object at the path inside the lock.
-// So a stale verdict can never meet a socket published after it, and two hosts
-// never both publish.
+// Holding the lock makes the carrier the only host that touches the socket
+// path, so whatever socket it finds there is left over and is replaced. Its
+// server binds a private temporary name first (0600 before anything can reach
+// it) and links that name onto the path; the name stays while the host is the
+// carrier, so a path removed from outside can be linked again. Closing the
+// server unlinks only that name. The name is short and per process and
+// instance: a unix socket path is limited to about 100 bytes.
 //
-// A server binds a private temporary name (0600 before anything can reach
-// it) and hard-links it onto the path. The temporary name stays while the
-// host is the carrier, so a path that was removed from outside can be linked
-// again; closing the server unlinks only that name, never the path. The name
-// is short and per process and instance: a unix socket path is limited to
-// about 100 bytes.
-//
-// A carrier whose path names another socket closes its server and calls
-// onLost, which ends its panes: kander can no longer reach them, and an agent
-// that kander reads as stopped must not keep running beside the one a resume
-// starts.
+// A carrier whose lock holder ends (killed from outside) stops serving and
+// calls onLost, which ends its panes: another host takes the lock, kander can
+// no longer reach those panes, and an agent kander reads as stopped must not
+// keep running beside the one a resume starts.
 import { chmodSync, linkSync, lstatSync, readdirSync, unlinkSync } from 'node:fs'
 import { request } from 'node:http'
 import { dirname, join } from 'node:path'
+import { LockHolder } from './lock.js'
+import { alive } from './processes.js'
 import { PROTOCOL_VERSION } from './protocol.js'
 
 const PROBE_TIMEOUT_MS = 1000
+// How long start waits for a free lock before it reports the current holder.
+const FIRST_WAIT_MS = 1000
 let instances = 0
-
-const alive = (pid) => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error?.code === 'EPERM'
-  }
-}
 
 /** Asks the server at path for its hello; resolves {pid} or rejects with the connect error. */
 export function probeSocket(path, timeoutMs = PROBE_TIMEOUT_MS) {
@@ -64,38 +55,32 @@ export function probeSocket(path, timeoutMs = PROBE_TIMEOUT_MS) {
   })
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 /** The path names something other than a socket; it is never replaced. */
 class Blocked extends Error {}
-
-const lstatOrNull = (path) => {
-  try {
-    return lstatSync(path)
-  } catch (error) {
-    if (error?.code === 'ENOENT') return null
-    throw error
-  }
-}
 
 export class Carrier {
   /**
    * @param options.path - the socket path.
+   * @param options.lockFile - the carrier lock file in the same directory.
    * @param options.server - an unlistened node:http server that answers the socket operations.
-   * @param options.lock - the DirectoryLock shared by the hosts of this DSH_HOME.
    * @param options.log - a logger with info and warn.
    * @param options.onLost - awaited after this host stopped being the carrier.
-   * @param options.intervalMs - how often a non-carrier retries and a carrier rechecks the path.
-   * @param options.probe - resolves {pid} for a live socket, rejects with the connect error.
+   * @param options.intervalMs - how often the carrier rechecks the path and a non-carrier its status.
+   * @param options.holderOptions - LockHolder options, for tests.
    */
-  constructor({ path, server, lock, log, onLost = async () => {}, intervalMs = 1000, probe = probeSocket }) {
+  constructor({ path, lockFile, server, log, onLost = async () => {}, intervalMs = 1000, holderOptions = {} }) {
     this.path = path
+    this.lockFile = lockFile
     this.server = server
-    this.lock = lock
     this.log = log
     this.onLost = onLost
     this.intervalMs = intervalMs
-    this.probe = probe
+    this.holderOptions = holderOptions
     this.listening = false
     this.inode = undefined
+    this.holder = undefined
     this.state = { carrier: false, reason: 'starting', holderPid: null }
     this.timer = undefined
     this.ticking = undefined
@@ -113,86 +98,113 @@ export class Carrier {
   }
 
   async start() {
-    await this.tick()
+    const first = new Promise((resolve) => { this.firstTurn = resolve })
+    this.wait()
+    await Promise.race([first, sleep(FIRST_WAIT_MS)])
+    if (!this.state.carrier) await this.tick()
     this.timer = setInterval(() => { void this.tick() }, this.intervalMs)
     this.timer.unref?.()
   }
 
-  /** One ownership round; concurrent calls share the round in progress. */
-  tick() {
-    this.ticking ??= this.round().finally(() => { this.ticking = undefined })
-    return this.ticking
+  // Starts waiting for the carrier lock.
+  wait() {
+    if (this.stopped) return
+    const holder = new LockHolder(this.lockFile, this.holderOptions)
+    this.holder = holder
+    holder.on('held', () => { void this.takeOver(holder) })
+    holder.on('ended', (reason) => { void this.holderEnded(holder, reason) })
+    holder.start()
   }
 
-  async round() {
-    if (this.stopped) return
+  async takeOver(holder) {
     try {
-      if (this.state.carrier) {
-        if (this.ownsPath() || !(await this.lock.run(() => this.lostPath()))) return
+      await this.listenTemporary()
+      // The lock may have ended while the server was binding.
+      if (this.stopped || this.holder !== holder || !holder.held) {
         await this.closeServer()
-        this.setState(false, 'lost', null, `${this.path} names another host's socket; ending this host's kander panes and competing again`)
-        try {
-          await this.onLost()
-        } catch (error) {
-          this.log.warn(`could not end every kander pane after losing ${this.path}: ${error?.message ?? error}`)
-        }
-      }
-      await this.claim()
-    } catch (error) {
-      if (this.state.carrier) {
-        // The carrier keeps serving; the next round checks the path again.
-        this.log.warn(`cannot check ${this.path}: ${error?.message ?? error}`)
         return
       }
+      this.publish()
+      this.sweepTemporaries()
+      this.setState(true, 'carrier', process.pid, `serving kander on ${this.path}`)
+    } catch (error) {
       if (this.listening) await this.closeServer()
       if (error instanceof Blocked) {
         this.setState(false, 'blocked', null, `${this.path} exists and is not a socket; remove it to let this host serve kander`)
       } else {
-        this.setState(false, 'unreachable', null, `cannot claim ${this.path}: ${error?.message ?? error}`)
+        this.setState(false, 'unreachable', null, `cannot serve ${this.path}: ${error?.message ?? error}`)
       }
+      // Let another host try; this one waits again after the release.
+      await holder.release()
+    } finally {
+      this.firstTurn?.()
     }
   }
 
-  // Under the lock: true when the path names another socket. A path removed
-  // from outside is linked again, and the host stays the carrier.
-  lostPath() {
-    const stat = lstatOrNull(this.path)
-    if (stat === null) {
-      linkSync(this.temporary, this.path)
-      return false
+  async holderEnded(holder, reason) {
+    if (this.holder !== holder) return
+    this.holder = undefined
+    if (this.stopped) return
+    if (this.state.carrier) {
+      await this.closeServer()
+      this.setState(false, 'lost', null, `the carrier lock of ${this.path} ended (${reason}); ending this host's kander panes`)
+      try {
+        await this.onLost()
+      } catch (error) {
+        this.log.warn(`could not end every kander pane after losing ${this.path}: ${error?.message ?? error}`)
+      }
+    } else if (this.state.reason !== 'unreachable' && this.state.reason !== 'blocked') {
+      this.setState(false, 'unreachable', null, `cannot wait for the carrier lock ${this.lockFile}: ${reason}`)
     }
-    return !(stat.isSocket() && stat.ino === this.inode)
+    this.firstTurn?.()
+    const retry = setTimeout(() => this.wait(), this.intervalMs)
+    retry.unref?.()
   }
 
-  async claim() {
-    await this.listenTemporary()
-    const holder = await this.lock.run(async () => {
-      const stat = lstatOrNull(this.path)
-      if (stat !== null) {
-        if (!stat.isSocket()) throw new Blocked()
-        try {
-          return await this.probe(this.path)
-        } catch (error) {
-          if (error?.code !== 'ECONNREFUSED' && error?.code !== 'ENOENT') throw error
-        }
-        // Nobody serves the socket, and no host can publish while this one
-        // holds the lock: this is the stale object the probe judged.
-        unlinkSync(this.path)
+  // Only the lock holder runs this: a socket at the path is left over. A path
+  // that is not a socket is never replaced.
+  publish() {
+    let stat
+    try {
+      stat = lstatSync(this.path)
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+    if (stat && !stat.isSocket()) throw new Blocked()
+    if (stat) unlinkSync(this.path)
+    linkSync(this.temporary, this.path)
+  }
+
+  /** One check; concurrent calls share the check in progress. */
+  tick() {
+    this.ticking ??= this.check().finally(() => { this.ticking = undefined })
+    return this.ticking
+  }
+
+  async check() {
+    if (this.stopped) return
+    if (this.state.carrier) {
+      if (this.ownsPath()) return
+      try {
+        this.publish()
+        this.log.warn(`${this.path} was changed from outside; linked this host's socket again`)
+      } catch (error) {
+        this.log.warn(`cannot link ${this.path} again: ${error?.message ?? error}`)
       }
-      linkSync(this.temporary, this.path)
-      this.sweepTemporaries()
-      return null
-    })
-    if (holder === null) {
-      this.setState(true, 'carrier', process.pid, `serving kander on ${this.path}`)
       return
     }
-    await this.closeServer()
-    this.setState(false, 'held', holder.pid, `${this.path} is held by another dsh host${holder.pid ? ` (pid ${holder.pid})` : ''}; this host does not host kander panes`)
+    if (!this.holder || this.holder.held) return
+    try {
+      const holder = await probeSocket(this.path)
+      if (!this.state.carrier) this.setState(false, 'held', holder.pid, `${this.path} is held by another dsh host${holder.pid ? ` (pid ${holder.pid})` : ''}; this host does not host kander panes and waits for the carrier lock`)
+    } catch {
+      // Another host holds the lock and has not published yet.
+      if (!this.state.carrier) this.setState(false, 'waiting', null, `waiting for the carrier lock ${this.lockFile}`)
+    }
   }
 
-  // Under the lock: removes the temporary names of hosts that are gone. A
-  // carrier keeps its name while it serves, so a killed carrier leaves one.
+  // Removes the temporary names of hosts that are gone; a host killed while
+  // it was the carrier leaves its name behind.
   sweepTemporaries() {
     const directory = dirname(this.path)
     for (const name of readdirSync(directory)) {
@@ -254,17 +266,17 @@ export class Carrier {
     else this.log.warn(message)
   }
 
-  /** Stops competing; a carrier removes its socket so another host can take over at once. */
+  /** Stops serving and waiting; a carrier removes its socket before it releases the lock. */
   async stop() {
     this.stopped = true
     if (this.timer) clearInterval(this.timer)
     await this.ticking
-    if (this.state.carrier) {
-      await this.lock.run(() => {
-        if (this.ownsPath()) unlinkSync(this.path)
-      }).catch((error) => this.log.warn(`could not remove ${this.path}: ${error?.message ?? error}`))
+    if (this.state.carrier && this.ownsPath()) {
+      try { unlinkSync(this.path) } catch {}
     }
     if (this.listening) await this.closeServer()
+    await this.holder?.release()
+    this.holder = undefined
     this.state = { carrier: false, reason: 'stopped', holderPid: null }
   }
 }

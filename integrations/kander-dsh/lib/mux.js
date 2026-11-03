@@ -35,8 +35,8 @@ export class Mux {
     this.panes = new Map()
   }
 
-  async create({ cwd, label = '', project = '' }) {
-    const { pane: id, container } = await this.sequence.next()
+  create({ cwd, label = '', project = '' }) {
+    const { pane: id, container } = this.sequence.next()
     // The sequence never repeats a number; a repeat would replace a live pane.
     if (this.panes.has(id) || this.byContainer(container)) throw new Error(`pane ${id} already exists`)
     const pane = {

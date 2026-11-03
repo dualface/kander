@@ -3,33 +3,29 @@
 // number is persisted per DSH_HOME and survives host restarts and socket
 // handovers, and the host pid is part of the ID as well.
 //
-// Reading the last number and recording the next one happen under the lock
-// the hosts of a DSH_HOME share, so two hosts never take the same number and
-// the recorded number never goes back.
+// Only the carrier creates panes, and the carrier lock lets one host at a time
+// be the carrier, so the read and the write of the number never interleave
+// between hosts. A host also never goes below the last number it took itself.
 import { randomBytes } from 'node:crypto'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export class PaneSequence {
-  /**
-   * @param directory - the plugin state directory.
-   * @param lock - the DirectoryLock of that directory.
-   */
-  constructor(directory, lock, pid = process.pid) {
+  /** @param directory - the plugin state directory. */
+  constructor(directory, pid = process.pid) {
     this.path = join(directory, 'sequence')
-    this.lock = lock
     this.pid = pid
+    this.last = 0
   }
 
-  /** Resolves the next {pane, container} pair; the number is recorded before it is returned. */
+  /** Returns the next {pane, container} pair; the number is recorded before it is returned. */
   next() {
-    return this.lock.run(() => {
-      const number = this.read() + 1
-      const temporary = `${this.path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
-      writeFileSync(temporary, `${number}\n`, { mode: 0o600 })
-      renameSync(temporary, this.path)
-      return { pane: `p${number}-${this.pid}`, container: `c${number}-${this.pid}` }
-    })
+    const number = Math.max(this.read(), this.last) + 1
+    const temporary = `${this.path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
+    writeFileSync(temporary, `${number}\n`, { mode: 0o600 })
+    renameSync(temporary, this.path)
+    this.last = number
+    return { pane: `p${number}-${this.pid}`, container: `c${number}-${this.pid}` }
   }
 
   /** The last recorded number; 0 before the first. */
