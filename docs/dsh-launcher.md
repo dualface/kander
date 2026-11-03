@@ -56,7 +56,7 @@ Several dsh hosts can share one `DSH_HOME`, for example dsh Web and dsh Desktop 
 - When the path is absent, or names a socket nobody serves (a host killed with SIGKILL leaves one), the host removes that socket and hard-links its own onto the path, still under the lock. No host can publish while another holds the lock, so a stale verdict never meets a socket published after it. The host's socket is bound first to a temporary name `.mux-<pid>-<n>` in the same directory and set to 0600, so it is private before it becomes reachable.
 - Every host repeats the check every second. A non-carrier therefore takes the socket over without a restart once the carrier exits.
 - A carrier whose path was removed from outside links its socket again from the temporary name. A carrier whose path names another socket closes its server, ends its panes, logs it, and competes again: Kander can no longer reach those panes and reads them as stopped, and ending them keeps a `resume` from running a second executor beside a hidden one.
-- A carrier that stops removes its socket under the lock. Closing a server unlinks only its temporary name, never the path.
+- A carrier that stops removes its socket under the lock. Closing a server unlinks only its temporary name, never the path. A host killed while it was the carrier leaves its temporary name; the next host that publishes removes the temporary names of processes that are gone.
 
 `KanderHost.carrierStatus()` returns `{carrier, socket, reason, holderPid}`; `reason` is `carrier`, `held`, `lost`, `blocked`, `unreachable`, `starting` or `stopped`. A non-carrier lists no panes, and its Kander view shows dsh agents by status only.
 

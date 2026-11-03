@@ -21,13 +21,22 @@
 // onLost, which ends its panes: kander can no longer reach them, and an agent
 // that kander reads as stopped must not keep running beside the one a resume
 // starts.
-import { chmodSync, linkSync, lstatSync, unlinkSync } from 'node:fs'
+import { chmodSync, linkSync, lstatSync, readdirSync, unlinkSync } from 'node:fs'
 import { request } from 'node:http'
 import { dirname, join } from 'node:path'
 import { PROTOCOL_VERSION } from './protocol.js'
 
 const PROBE_TIMEOUT_MS = 1000
 let instances = 0
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
 
 /** Asks the server at path for its hello; resolves {pid} or rejects with the connect error. */
 export function probeSocket(path, timeoutMs = PROBE_TIMEOUT_MS) {
@@ -171,6 +180,7 @@ export class Carrier {
         unlinkSync(this.path)
       }
       linkSync(this.temporary, this.path)
+      this.sweepTemporaries()
       return null
     })
     if (holder === null) {
@@ -179,6 +189,17 @@ export class Carrier {
     }
     await this.closeServer()
     this.setState(false, 'held', holder.pid, `${this.path} is held by another dsh host${holder.pid ? ` (pid ${holder.pid})` : ''}; this host does not host kander panes`)
+  }
+
+  // Under the lock: removes the temporary names of hosts that are gone. A
+  // carrier keeps its name while it serves, so a killed carrier leaves one.
+  sweepTemporaries() {
+    const directory = dirname(this.path)
+    for (const name of readdirSync(directory)) {
+      const match = /^\.mux-([0-9]+)-[0-9]+$/.exec(name)
+      if (!match || join(directory, name) === this.temporary || alive(Number(match[1]))) continue
+      try { unlinkSync(join(directory, name)) } catch {}
+    }
   }
 
   listenTemporary() {

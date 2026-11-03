@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, lstatSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, lstatSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { afterEach, describe, test } from 'node:test'
@@ -66,10 +66,13 @@ describe('carrier host', () => {
     await leaveStaleSocket(socket)
     assert.ok(lstatSync(socket).isSocket())
 
+    // The killed host's temporary name stays behind too.
+    linkSync(socket, join(directory, '.mux-4194305-0'))
     const { host } = newHost(directory)
     await host.start()
     assert.equal(host.isCarrier(), true)
     assert.equal((await call(socket, 'hello', { protocol: '1' })).body.pid, process.pid)
+    assert.equal(existsSync(join(directory, '.mux-4194305-0')), false)
   })
 
   test('a carrier whose path was replaced ends its panes and competes again', async () => {
