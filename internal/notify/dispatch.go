@@ -42,6 +42,9 @@ func commandNotify(root, task, message, messageFile, pane string, messageSet boo
 	if len(options) > 0 {
 		o = options[0]
 	}
+	if err = launch.NotifyPreflight(context.Background(), root, s, o.ID); err != nil {
+		return err
+	}
 	d, active, err := launch.PrepareAction(root, s, msg, o, timeout)
 	if err != nil {
 		return err
@@ -85,6 +88,16 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 	// Accepted retries may recover the same payload only after a fresh stopped
 	// observation. An explicit pane override cannot prove the old executor exited.
 	if d.State == board.DispatchAccepted && paneOverride == "" {
+		// Recovery reauthorizes the dispatch; refuse first when the
+		// configured launcher could not run the agent. The receipt is still
+		// returned by the deferred reconciliation.
+		card, err := board.ReadSnapshot(root, task)
+		if err != nil {
+			return err
+		}
+		if err = launch.RecoveryPreflight(card.Text); err != nil {
+			return err
+		}
 		d, err = launch.RecoverAcceptedDispatch(parent, root, d)
 		if err != nil {
 			return err

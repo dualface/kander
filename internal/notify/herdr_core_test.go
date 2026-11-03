@@ -3,8 +3,12 @@ package notify
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
@@ -58,5 +62,50 @@ func TestOverrideBackendPrefersTheWindowBackend(t *testing.T) {
 		if got, ok := overrideBackend(tc.backend, tc.parsed); !ok || got.Name() != builtin.Herdr {
 			t.Fatalf("fallback: %v %v", got, ok)
 		}
+	}
+}
+
+// useHerdrCoreRecovery configures herdr-core as the recovery launcher for an
+// agent that declares it does not report its program status.
+func useHerdrCoreRecovery(t *testing.T) {
+	t.Helper()
+	cfg, err := config.Load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Launcher = "herdr-core"
+	cfg.Agents = map[string]config.AgentDefinition{"claude": {ProgramStatus: &config.ProgramStatus{Reports: false}}}
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A durable notify whose executor stopped would end in a recovery the
+// configured launcher refuses; it is refused before the dispatch exists. A
+// live executor still gets direct delivery.
+func TestNotifyRefusesUnrunnableRecoveryBeforeDispatch(t *testing.T) {
+	root, _ := setupBoard(t)
+	useHerdrCoreRecovery(t)
+	taskID, path := makeReview(t, root, "pstatus-notify")
+	setWindow(t, path, "herdr:w1:t9:w1:p9")
+	t.Setenv("KANBAN_HERDR_STALE_PANE", "w1:p9")
+	t.Setenv("KANBAN_HERDR_LIST_JSON", `{"id":"cli:pane:list","result":{"type":"pane_list","panes":[]}}`)
+	before, err := board.ReadSnapshot(root, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = capture(t, func() error {
+		return commandNotify(root, taskID, "sync", "", "", true, 61, launch.DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
+	})
+	if err == nil || err.Error() != config.Text("program_status.agent_not_reporting", "herdr-core", "claude") {
+		t.Fatalf("err=%v", err)
+	}
+	after, err := board.ReadSnapshot(root, taskID)
+	if err != nil || after.Revision != before.Revision || board.MetadataFrom(after.Text, "DISPATCH_ID") != "" {
+		t.Fatalf("dispatch written before the refusal: %v\n%s", err, after.Text)
+	}
+	t.Setenv("KANBAN_HERDR_STALE_PANE", "")
+	if _, _, err = capture(t, func() error { return commandNotify(root, taskID, "x", "", "", true, 61) }); err != nil {
+		t.Fatalf("live executor not delivered to: %v", err)
 	}
 }

@@ -1,9 +1,12 @@
 package launch
 
 import (
+	"context"
 	"os"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -27,6 +30,31 @@ func programStatusPreflight(cfg *config.Config, launcher, agent string) error {
 	return rejectUnreportedAgent(&plan, config.AgentFor(cfg, agent))
 }
 
+// launchPreflight checks the agent a resume would launch: the takeover agent,
+// else the card's session agent. A card without either is left to the launch.
+func launchPreflight(cfg *config.Config, launcher string, agent *string, text string) error {
+	name := ""
+	if agent != nil {
+		name = *agent
+	} else if session := parseTaskSession(text); session != nil {
+		name = session.Agent
+	}
+	if name == "" {
+		return nil
+	}
+	return programStatusPreflight(cfg, launcher, name)
+}
+
+// dispatchExists reports whether a dispatch ID names an existing dispatch of
+// the card; an empty ID names a new one.
+func dispatchExists(root, task, id string) bool {
+	if id == "" {
+		return false
+	}
+	_, err := board.ReadDispatch(root, task, id)
+	return err == nil
+}
+
 // RecoveryPreflight refuses, without side effects, a notify recovery whose
 // configured launcher cannot identify the card's agent; the recovery launch
 // itself would refuse the same agent, after the dispatch attempt began.
@@ -40,4 +68,24 @@ func RecoveryPreflight(text string) error {
 		return err
 	}
 	return programStatusPreflight(cfg, "", session.Agent)
+}
+
+// NotifyPreflight refuses a new durable notify, before it prepares its
+// dispatch, when the notify could only end in a recovery the configured
+// launcher would refuse: the executor is observed stopped and its agent has
+// no reporting program status declaration for that launcher. A live executor
+// still gets direct delivery, and a retry of an existing dispatch is checked
+// where it would begin a recovery.
+func NotifyPreflight(ctx context.Context, root string, s board.Snapshot, id string) error {
+	if dispatchExists(root, s.Entry.TaskID, id) {
+		return nil
+	}
+	refusal := RecoveryPreflight(s.Text)
+	if refusal == nil {
+		return nil
+	}
+	if DispatchObservation(ctx, s).Status != liveness.Stopped {
+		return nil
+	}
+	return refusal
 }

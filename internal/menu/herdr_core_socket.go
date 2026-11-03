@@ -38,9 +38,13 @@ func systemHerdrCoreSocketEnv() herdrCoreSocketEnv {
 	}
 }
 
-// configSocketLine matches a top-level `socket = "<path>"` (or a literal
-// single-quoted path) of the hc config file.
-var configSocketLine = regexp.MustCompile(`^socket\s*=\s*(?:"([^"\\]*)"|'([^']*)')\s*(?:#.*)?$`)
+// configSocketKey matches the socket key of the hc config file, bare or
+// quoted, and captures its value text; configSocketValue reads a basic string
+// without escapes or a literal string from that text.
+var (
+	configSocketKey   = regexp.MustCompile(`^(?:socket|"socket"|'socket')\s*=(.*)$`)
+	configSocketValue = regexp.MustCompile(`^\s*(?:"([^"\\]*)"|'([^']*)')\s*(?:#.*)?$`)
+)
 
 // herdrCoreSocket resolves the socket of the herdr-core session the hc CLI
 // talks to: HC_SOCKET, else `socket` in the hc config file, else
@@ -97,17 +101,15 @@ func configuredSocket(env herdrCoreSocketEnv, path string) (string, error) {
 		if strings.HasPrefix(line, "[") {
 			break
 		}
-		if !strings.HasPrefix(line, "socket") {
+		key := configSocketKey.FindStringSubmatch(line)
+		if key == nil {
 			continue
 		}
-		match := configSocketLine.FindStringSubmatch(line)
-		if match == nil {
-			if key, _, ok := strings.Cut(line, "="); ok && strings.TrimSpace(key) == "socket" {
-				return "", errors.New(config.Text("herdr_core.doctor_socket_unreadable", path))
-			}
-			continue
+		value := configSocketValue.FindStringSubmatch(key[1])
+		if value == nil {
+			return "", errors.New(config.Text("herdr_core.doctor_socket_unreadable", path))
 		}
-		return match[1] + match[2], nil
+		return value[1] + value[2], nil
 	}
 	return "", scanner.Err()
 }

@@ -398,3 +398,38 @@ func TestRecoveryPreflight(t *testing.T) {
 	cfg.Launcher = "herdr-core"
 	requireRefusal(t, RecoveryPreflight(before.Text), hcLog)
 }
+
+// A same-ID retry of an accepted dispatch keeps returning its receipt after the
+// launcher changed to one that cannot run the card's agent: nothing launches.
+func TestHerdrCoreKeepsDispatchReceiptRetry(t *testing.T) {
+	root, task, d := resumeDispatchFixture(t)
+	writeFakeHC(t, filepath.Join(root, "fake-bin"), root)
+	s, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = board.MoveWithOptions(s.Entry, root, "working", board.MoveOptions{Authorization: d.Authorization}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := envConfig("claude", "herdr-core", nil)
+	cfg.Agents = map[string]config.AgentDefinition{"claude": {ProgramStatus: &config.ProgramStatus{Reports: false}}}
+	loadEffective = func() (*config.Config, error) { return cfg, nil }
+	out, _, err := capture(t, func() error {
+		return commandResume(root, nil, "", task, d.Input.Message, "", true, 61, DispatchOptions{ID: d.Input.ID})
+	})
+	if err != nil || !strings.Contains(out, `"state":"accepted"`) {
+		t.Fatalf("receipt retry: %s %v", out, err)
+	}
+	// A new dispatch for the same card is refused before it is prepared.
+	before, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = capture(t, func() error {
+		return commandResume(root, nil, "", task, "again", "", true, 61, DispatchOptions{Kind: "sync", Base: strings.Repeat("a", 40)})
+	})
+	if err == nil || err.Error() != config.Text("program_status.agent_not_reporting", "herdr-core", "claude") {
+		t.Fatalf("new dispatch: %v", err)
+	}
+	requireUnchanged(t, root, before)
+}

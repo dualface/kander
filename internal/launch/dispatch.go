@@ -176,14 +176,10 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if err != nil {
 		return err
 	}
-	agentName := ""
-	if agent != nil {
-		agentName = *agent
-	} else if session := parseTaskSession(s.Text); session != nil {
-		agentName = session.Agent
-	}
-	if agentName != "" {
-		if err = programStatusPreflight(cfg, launcher, agentName); err != nil {
+	// A new dispatch is the first write of this resume; a retry of an existing
+	// one is checked by resumeDispatch after its receipt is reconciled.
+	if !dispatchExists(root, task, o.ID) {
+		if err = launchPreflight(cfg, launcher, agent, s.Text); err != nil {
 			return err
 		}
 	}
@@ -226,6 +222,18 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 func resumeDispatch(parent context.Context, root string, agent *string, launcher, task string, d board.Dispatch, decision string, launched *ResumeLaunch) error {
 	if d.State == board.DispatchCompleted || d.State == board.DispatchAccepted && agent == nil {
 		return PrintDispatchResult(d)
+	}
+	// Everything below may reauthorize the dispatch or launch an agent.
+	cfg, err := loadEffective()
+	if err != nil {
+		return err
+	}
+	card, err := board.ReadSnapshot(root, task)
+	if err != nil {
+		return err
+	}
+	if err := launchPreflight(cfg, launcher, agent, card.Text); err != nil {
+		return err
 	}
 	if d.State != board.DispatchAccepted {
 		if err := ValidateActionEvidence(parent, root, d); err != nil {

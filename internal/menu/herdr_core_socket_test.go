@@ -18,6 +18,8 @@ func TestHerdrCoreSocketResolution(t *testing.T) {
 		{"explicit socket", map[string]string{"HC_SOCKET": "/s/core.sock", "HOME": "/h", "XDG_RUNTIME_DIR": "/run/x"}, `socket = "/cfg.sock"`, true, "/s/core.sock", false},
 		{"config socket", map[string]string{"HOME": "/h", "XDG_RUNTIME_DIR": "/run/x"}, "# hc\nsocket = \"/cfg.sock\" # mine\n[machines]\nsocket = \"/other\"", true, "/cfg.sock", false},
 		{"literal config socket", map[string]string{"HOME": "/h"}, "socket = '/lit.sock'", false, "/lit.sock", false},
+		{"quoted config key", map[string]string{"HOME": "/h"}, "\"socket\" = \"/q.sock\"\n'socket' = '/ignored'", false, "/q.sock", false},
+		{"literal quoted key", map[string]string{"HOME": "/h"}, "'socket'='/l.sock' # x", false, "/l.sock", false},
 		{"unreadable config socket", map[string]string{"HOME": "/h"}, `socket = "/a\"b"`, false, "", true},
 		{"table socket ignored", map[string]string{"HOME": "/h", "XDG_RUNTIME_DIR": "/run/x"}, "[machine]\nsocket = \"/m.sock\"", false, "/run/x/herdr-core/default.sock", false},
 		{"runtime dir", map[string]string{"HOME": "/h", "XDG_RUNTIME_DIR": "/run/x", "HC_SESSION": " work "}, "", false, "/run/x/herdr-core/work.sock", false},
