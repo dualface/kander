@@ -147,6 +147,9 @@ func deliverDispatchContext(parent context.Context, root, task, id, paneOverride
 			return err
 		}
 		if stopped {
+			if err = launch.RecoveryPreflight(s.Text); err != nil {
+				return err
+			}
 			d, err = board.BeginDispatchAttempt(root, task, id, d.Revision, s.Revision)
 			if err != nil {
 				return reconcileDispatch(root, task, id, err)

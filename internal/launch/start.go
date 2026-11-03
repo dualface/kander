@@ -219,6 +219,11 @@ func PreviewStart(root, taskID string) (preview StartPreview, err error) {
 	if err != nil {
 		return StartPreview{}, err
 	}
+	// The TUI moves a backlog card to todo after this preview, so an agent the
+	// launcher cannot run is refused here, before that move.
+	if err := programStatusPreflight(cfg, launcher, agent); err != nil {
+		return StartPreview{}, err
+	}
 	return StartPreview{TaskID: taskID, State: snapshot.Entry.State, Size: snapshot.Entry.Kind, Agent: agent, Launcher: launcher}, nil
 }
 

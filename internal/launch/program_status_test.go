@@ -354,3 +354,47 @@ func TestHerdrCorePaneDeliveryWaitsForProgramStatus(t *testing.T) {
 		})
 	}
 }
+
+// The TUI moves a backlog card to todo after its start preview; the preview
+// refuses first, so the card stays in backlog.
+func TestHerdrCorePreviewStartRefusesBeforeBacklogMove(t *testing.T) {
+	root, _, hcLog, _ := programStatusFixture(t, "herdr-core")
+	path, err := board.NewTask(root, "chore", "pstatus-preview", "任务 pstatus-preview", "en", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskID := filepath.Base(path)
+	_, err = PreviewStart(root, taskID)
+	requireRefusal(t, err, hcLog)
+	snapshot, err := board.ReadSnapshot(root, taskID)
+	if err != nil || snapshot.Entry.State != "backlog" {
+		t.Fatalf("card left backlog: %+v %v", snapshot.Entry, err)
+	}
+}
+
+// A durable dispatch resume refuses before it prepares the dispatch.
+func TestHerdrCoreRefusesUndeclaredAgentBeforeDispatch(t *testing.T) {
+	root, _, hcLog, _ := programStatusFixture(t, "tmux")
+	taskID, before := startUnderTmux(t, root, "pstatus-dispatch")
+	noTaskFile(t)
+	_, _, err := capture(t, func() error {
+		return commandResume(root, nil, "herdr-core", taskID, "sync", "", true, 61, DispatchOptions{Kind: "sync"})
+	})
+	requireRefusal(t, err, hcLog)
+	requireUnchanged(t, root, before)
+	if _, statErr := os.Stat(filepath.Join(before.Entry.Path, "dispatches")); !os.IsNotExist(statErr) {
+		t.Fatalf("dispatch evidence written before the refusal: %v", statErr)
+	}
+}
+
+// Notify recovery checks the configured launcher before it begins a dispatch
+// attempt; another launcher passes.
+func TestRecoveryPreflight(t *testing.T) {
+	root, _, hcLog, cfg := programStatusFixture(t, "tmux")
+	_, before := startUnderTmux(t, root, "pstatus-recovery")
+	if err := RecoveryPreflight(before.Text); err != nil {
+		t.Fatalf("tmux recovery refused: %v", err)
+	}
+	cfg.Launcher = "herdr-core"
+	requireRefusal(t, RecoveryPreflight(before.Text), hcLog)
+}

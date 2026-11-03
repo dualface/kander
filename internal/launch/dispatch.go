@@ -176,6 +176,17 @@ func commandResume(root string, agent *string, launcher, task, message, messageF
 	if err != nil {
 		return err
 	}
+	agentName := ""
+	if agent != nil {
+		agentName = *agent
+	} else if session := parseTaskSession(s.Text); session != nil {
+		agentName = session.Agent
+	}
+	if agentName != "" {
+		if err = programStatusPreflight(cfg, launcher, agentName); err != nil {
+			return err
+		}
+	}
 	d, active, err := PrepareAction(root, s, msg, o, timeout)
 	if err != nil {
 		return err

@@ -84,7 +84,7 @@ A capability flag requires its operation (`focus`, `set_session_marker` for `pan
 | Operation            | Inputs (placeholders)                                   | Result fields |
 | -------------------- | ------------------------------------------------------- | ------------- |
 | `prepare` (optional) | `project`, `project_key`, `command`                     | `session`, `session_exists` (`true`/`false`), `workspace` |
-| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name` | `session`, `container`, `pane` (pane required; container required when the address has one) |
+| `create_container`   | `session`, `session_exists`, `workspace`, `project`, `project_key`, `cwd`, `cwd_resolved`, `label`, `label_name` | `session`, `container`, `pane` (container and pane required; with an address without `container`, map the pane as the container) |
 | `wait_ready` (optional; absent means ready) | `pane`, `timeout_ms` (the readiness budget: 15000, or 120000 with `extended_launch_timeouts`; `kander terminal test` always passes 15000) | none |
 | `run_command`        | `pane`, `cwd_quoted`, `command`, `posix` (`true`/`false`) | none |
 | `pane_directory` (optional) | `pane` | `directory` |
