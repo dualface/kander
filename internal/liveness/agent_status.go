@@ -21,13 +21,16 @@ type AgentStatusInput struct {
 // resolveWindow parses a WINDOW value; tests replace it with fake backends.
 var resolveWindow = terminal.ParseWindow
 
-// agentTarget is one input whose WINDOW names an AgentIdentity backend.
+// agentTarget is one input whose WINDOW names an AgentIdentity backend, or a
+// process-pane backend (process set) whose pane facts report the foreground
+// command.
 type agentTarget struct {
 	index   int
 	entry   board.Entry
 	session TaskSession
 	backend terminal.Backend
 	address terminal.Address
+	process bool
 }
 
 // ObserveAgentStatus classifies the executing agent of every input with the
@@ -35,8 +38,10 @@ type agentTarget struct {
 // one Report per input, in input order. Each backend that implements
 // terminal.AgentLister is listed once; a card whose pane is missing from that
 // list, and every card of a backend without the list, is probed with
-// PaneFacts. A failed list marks only the cards of that backend unknown.
-// The fixed worker set is joined before returning.
+// PaneFacts. A failed list marks only the cards of that backend unknown. A
+// card of a process-pane backend (tmux, dsh) is probed with PaneFacts and
+// classified by the foreground command and session marker, as `kander check`
+// does. The fixed worker set is joined before returning.
 func ObserveAgentStatus(ctx context.Context, inputs []AgentStatusInput, options BatchOptions) []Report {
 	if options.Budget <= 0 {
 		options.Budget = DefaultBatchBudget
@@ -47,8 +52,7 @@ func ObserveAgentStatus(ctx context.Context, inputs []AgentStatusInput, options 
 	ctx, cancel := context.WithTimeout(ctx, options.Budget)
 	defer cancel()
 	reports := make([]Report, len(inputs))
-	groups, order := groupAgentTargets(inputs, reports)
-	var probes []agentTarget
+	groups, order, probes := groupAgentTargets(inputs, reports)
 	for _, name := range order {
 		probes = append(probes, observeBackend(ctx, groups[name], reports)...)
 	}
@@ -61,11 +65,13 @@ func ObserveAgentStatus(ctx context.Context, inputs []AgentStatusInput, options 
 	return reports
 }
 
-// groupAgentTargets reports the inputs that cannot be observed and groups the
-// rest by backend, keeping the first-seen backend order.
-func groupAgentTargets(inputs []AgentStatusInput, reports []Report) (map[string][]agentTarget, []string) {
+// groupAgentTargets reports the inputs that cannot be observed, groups the
+// AgentIdentity inputs by backend in first-seen backend order, and returns the
+// process-pane inputs, which are always probed one by one.
+func groupAgentTargets(inputs []AgentStatusInput, reports []Report) (map[string][]agentTarget, []string, []agentTarget) {
 	groups := map[string][]agentTarget{}
 	var order []string
+	var processes []agentTarget
 	for index, input := range inputs {
 		entry := board.Entry{TaskID: input.TaskID}
 		session := ParseSessionValue(input.Session)
@@ -78,7 +84,13 @@ func groupAgentTargets(inputs []AgentStatusInput, reports []Report) (map[string]
 			reports[index] = report(entry, session, Unknown, "unknown", input.Window, t("liveness.window_metadata_is_empty_or_invalid"), "")
 			continue
 		}
-		if !backend.Capabilities().AgentIdentity {
+		target := agentTarget{index: index, entry: entry, session: *session, backend: backend, address: address}
+		if caps := backend.Capabilities(); !caps.AgentIdentity {
+			if caps.ForegroundProcess {
+				target.process = true
+				processes = append(processes, target)
+				continue
+			}
 			reports[index] = report(entry, session, Unknown, input.Window, input.Window, t("liveness.this_launcher_has_no_probeable_address"), "")
 			continue
 		}
@@ -86,9 +98,9 @@ func groupAgentTargets(inputs []AgentStatusInput, reports []Report) (map[string]
 		if _, seen := groups[name]; !seen {
 			order = append(order, name)
 		}
-		groups[name] = append(groups[name], agentTarget{index: index, entry: entry, session: *session, backend: backend, address: address})
+		groups[name] = append(groups[name], target)
 	}
-	return groups, order
+	return groups, order, processes
 }
 
 // observeBackend classifies the cards of one backend from a single agent list
@@ -146,6 +158,10 @@ func probePanes(ctx context.Context, targets []agentTarget, reports []Report, co
 				if err := ctx.Err(); err != nil {
 					reports[target.index] = report(target.entry, &target.session, Unknown, target.backend.Name(), target.address.Container,
 						t("liveness.batch_not_observed", probe.FailureDetail(err)), "")
+					continue
+				}
+				if target.process {
+					reports[target.index] = classifyProcessPane(ctx, target.entry, target.session, target.backend, target.address, staleSearch{})
 					continue
 				}
 				reports[target.index] = classifyAgentPane(ctx, target.entry, target.session, target.backend, target.address, staleSearch{})

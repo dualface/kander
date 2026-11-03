@@ -16,6 +16,7 @@ type fakeAgentBackend struct {
 	terminal.Backend
 	name     string
 	identity bool
+	process  bool
 	lister   bool
 	listErr  error
 	panes    []terminal.AgentPane
@@ -29,7 +30,7 @@ type fakeAgentBackend struct {
 func (b *fakeAgentBackend) Name() string       { return b.name }
 func (b *fakeAgentBackend) Executable() string { return b.name }
 func (b *fakeAgentBackend) Capabilities() terminal.Capabilities {
-	return terminal.Capabilities{Container: true, AgentIdentity: b.identity}
+	return terminal.Capabilities{Container: true, AgentIdentity: b.identity, ForegroundProcess: b.process, PaneMetadata: b.process}
 }
 
 func (b *fakeAgentBackend) PaneFacts(_ context.Context, _ terminal.Conn, pane string) (terminal.PaneFacts, error) {
@@ -174,5 +175,31 @@ func TestObserveAgentStatusSkipsProbesAfterDeadline(t *testing.T) {
 	reports := ObserveAgentStatus(ctx, []AgentStatusInput{{TaskID: "late", Session: "claude", Window: "plain:p1"}}, BatchOptions{})
 	if reports[0].Status != Unknown || len(plain.factsCalls) != 0 {
 		t.Fatalf("report=%+v facts=%v", reports[0], plain.factsCalls)
+	}
+}
+
+// A process-pane backend (tmux, dsh) is classified by the foreground command
+// and the session marker, never by an agent list or a reverse lookup.
+func TestObserveAgentStatusClassifiesProcessPanes(t *testing.T) {
+	dsh := &fakeAgentBackend{name: "dsh", process: true, lister: true, facts: map[string]terminal.PaneFacts{
+		"p1": {Command: "claude", Dead: "0", InMode: "0", SessionMarker: "s1"},
+		"p2": {Command: "sh", Dead: "1", InMode: "0", SessionMarker: "s2"},
+		"p3": {Command: "claude", Dead: "0", InMode: "0"},
+	}}
+	useFakeBackends(t, dsh)
+	reports := ObserveAgentStatus(context.Background(), []AgentStatusInput{
+		{TaskID: "alive", Session: "claude s1", Window: "dsh:p1"},
+		{TaskID: "exited", Session: "claude s2", Window: "dsh:p2"},
+		{TaskID: "unmarked", Session: "claude s3", Window: "dsh:p3"},
+		{TaskID: "gone", Session: "claude s4", Window: "dsh:p4"},
+	}, BatchOptions{})
+	want := map[string]string{"alive": Alive, "exited": Stopped, "unmarked": Unknown, "gone": Stopped}
+	for _, rep := range reports {
+		if rep.Status != want[rep.TaskID] || rep.ObservationValid != (rep.Status != Unknown) {
+			t.Fatalf("%s: %+v", rep.TaskID, rep)
+		}
+	}
+	if dsh.listCalls != 0 || len(dsh.factsCalls) != 4 {
+		t.Fatalf("list=%d facts=%v", dsh.listCalls, dsh.factsCalls)
 	}
 }

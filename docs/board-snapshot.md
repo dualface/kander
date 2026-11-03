@@ -63,7 +63,7 @@ Tasks are ordered as in the table: by state in board order, then newest display 
 | `observed_at`   | string  | RFC 3339 time in UTC of the observation                    |
 | `valid`         | boolean | `false` when `status` is `unknown`                         |
 
-The value sets are the status constants of `internal/liveness` and the agent states a terminal reports. The observation is `liveness.ObserveAgentStatus`, the same batch observation as the TUI agent status marks: one agent list per terminal backend, a pane facts probe as the fallback, and no session reverse lookup (unlike `kander check`). A card whose launcher has no probeable agent identity, such as `foreground` or `console`, gets `status` `unknown`. A consumer that needs to act on a lost agent tests for `stopped`.
+The value sets are the status constants of `internal/liveness` and the agent states a terminal reports. The observation is `liveness.ObserveAgentStatus`, the batch observation behind the TUI agent status marks: one agent list per terminal backend, a pane facts probe as the fallback, and no session reverse lookup (unlike `kander check`). A card on a process-pane terminal (`dsh`, `tmux`, `tmux-session`: the pane reports its foreground command and session marker, not the agent) is probed with pane facts and classified by the `kander check` rules for such panes, with `runtime_state` `unknown`; the TUI marks still cover only terminals that report agent identity. A card whose launcher has no probeable pane, such as `foreground` or `console`, gets `status` `unknown`. A consumer that needs to act on a lost agent tests for `stopped`.
 
 ## Change token
 
