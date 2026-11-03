@@ -152,6 +152,7 @@ describe('socket operations', () => {
   test('the directory is 0700 and the socket 0600', () => {
     assert.equal(statSync(directory).mode & 0o777, 0o700)
     assert.equal(statSync(socket).mode & 0o777, 0o600)
+    assert.equal(statSync(join(directory, 'carrier.lock')).mode & 0o777, 0o600)
     assert.ok(statSync(socket).isSocket())
   })
 })

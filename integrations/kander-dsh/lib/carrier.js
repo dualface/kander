@@ -17,7 +17,7 @@
 // calls onLost, which ends its panes: another host takes the lock, kander can
 // no longer reach those panes, and an agent kander reads as stopped must not
 // keep running beside the one a resume starts.
-import { chmodSync, linkSync, lstatSync, readdirSync, unlinkSync } from 'node:fs'
+import { chmodSync, closeSync, linkSync, lstatSync, openSync, readdirSync, unlinkSync } from 'node:fs'
 import { request } from 'node:http'
 import { dirname, join } from 'node:path'
 import { LockHolder } from './lock.js'
@@ -109,6 +109,15 @@ export class Carrier {
   // Starts waiting for the carrier lock.
   wait() {
     if (this.stopped) return
+    // flock(1) and lockf(1) would create the file with the umask.
+    try {
+      closeSync(openSync(this.lockFile, 'a', 0o600))
+    } catch (error) {
+      this.setState(false, 'unreachable', null, `cannot open the carrier lock ${this.lockFile}: ${error?.message ?? error}`)
+      const retry = setTimeout(() => this.wait(), this.intervalMs)
+      retry.unref?.()
+      return
+    }
     const holder = new LockHolder(this.lockFile, this.holderOptions)
     this.holder = holder
     holder.on('held', () => { void this.takeOver(holder) })
