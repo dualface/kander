@@ -114,7 +114,7 @@ func commandNotifyLegacy(root, taskID, message, messageFile, pane string, messag
 		instruction := notifyInstruction(entry, messagePath, language)
 		var confirmed bool
 		confirmed, acknowledgementDetail, err = directNotify(target, instruction, marker, target.Timeout)
-		directChannel = target.Backend.Executable() + "-direct"
+		directChannel = directChannelName(target.Backend)
 		if err != nil {
 			directChannel = ""
 			return err

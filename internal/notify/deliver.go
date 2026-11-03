@@ -36,6 +36,18 @@ func AgentPrompt(backend terminal.Backend, program, paneID, text string) error {
 	return notifyError("notify.herdr_agent_prompt_failed", commandErr.Detail())
 }
 
+// directChannelName names the direct-delivery channel after the terminal
+// definition that provides the backend, not its executable or launcher, so
+// every launcher of one definition reports the same channel. A Go backend is
+// its own definition.
+func directChannelName(backend terminal.Backend) string {
+	name := backend.Name()
+	if definition, ok := backend.(interface{ DefinitionName() string }); ok {
+		name = definition.DefinitionName()
+	}
+	return name + "-direct"
+}
+
 // directNotify delivers the instruction line and waits for its marker. A
 // backend that waits on output itself is asked to; otherwise the pane text is
 // polled until the timeout.
@@ -50,7 +62,7 @@ func waitingNotify(target DirectTarget, instruction, marker string, timeout floa
 	if err := AgentPrompt(target.Backend, target.Program, target.PaneID, instruction); err != nil {
 		return false, "", err
 	}
-	fmt.Println(t("notify.delivered_waiting_for_acknowledgement_channel_herdr_direct"))
+	fmt.Println(t("notify.delivered_waiting_for_acknowledgement_channel", directChannelName(target.Backend)))
 	flushStdout()
 	ms := int(timeout * 1000)
 	if ms < 1 {
@@ -66,7 +78,7 @@ func pollingNotify(target DirectTarget, instruction, marker string, timeout floa
 	if err := target.Backend.DeliverText(context.Background(), probeConn(target.Program), target.PaneID, instruction); err != nil {
 		return false, "", notifyError("notify.tmux_direct_notification_failed", commandDetail(err))
 	}
-	fmt.Println(t("notify.delivered_waiting_for_acknowledgement_channel_tmux_direct"))
+	fmt.Println(t("notify.delivered_waiting_for_acknowledgement_channel", directChannelName(target.Backend)))
 	flushStdout()
 	deadline := nowFn().Add(time.Duration(timeout * float64(time.Second)))
 	for {

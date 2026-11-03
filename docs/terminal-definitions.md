@@ -33,7 +33,7 @@ These points are the contract and are not extended:
 | Field          | Meaning |
 | -------------- | ------- |
 | `schema_version` | `1` |
-| `name`         | Definition name, `^[a-z][a-z0-9-]{0,31}$`, equal to the file name |
+| `name`         | Definition name, `^[a-z][a-z0-9-]{0,31}$`, equal to the file name; `DeclarativeBackend.DefinitionName`, and the `kander notify` direct channel `<name>-direct` |
 | `binary`       | Command on `PATH` or an absolute path; `Backend.Executable` |
 | `version_args` | argv printing the version (doctor, options panel); literal elements only, a placeholder is rejected |
 | `capabilities` | `container` (must be `true`), `focus`, `pane_metadata`, `foreground_process`, `agent_identity`, `wait_output`, `session_report`; `POSIXOnly` follows each launcher's `requires.platform` |
