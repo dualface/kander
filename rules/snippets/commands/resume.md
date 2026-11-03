@@ -54,22 +54,27 @@ kander resume --adopt --decision <reference> <task-id>
 **Adopting an Unfinished Start**
 
 - `resume --adopt` starts no executor. Use it when the start attempt has no result and the executor works. Then a takeover would replace a healthy executor.
-- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start without a recorded identity reads `unknown` (the launcher died first, or the agent has not read its task file yet), and a tmux pane with no session marker reads `unknown`, so those are refused too. Use a takeover in these cases.
-- An unmarked pane (`snippets/commands/start.md` "Late Failures") never proves its executor. The refusal says so and names the exit: stop the old executor in `WINDOW` by hand first, because a takeover leaves it running, then run `kander resume <task-id> --agent <agent> --decision <reference> --message <message>`.
+- The command probes the recorded `SESSION` and `WINDOW`; foreground and console cards are probed by their process identity. It accepts only `alive` and `alive-orphaned`, and every other result refuses. A foreground or console start without a recorded identity reads `unknown` (the launcher died first, or the agent has not read its task file yet), so it is refused too. Use a takeover in that case.
+- An unmarked pane (`snippets/commands/start.md` "Late Failures") reads `unknown`: the pane exists and runs the card's agent, but it has no session marker. Adoption first writes the missing marker when it can prove the session, then probes again and adopts only on `alive`:
+  - The card `SESSION` names a session (for example a `claude` card): that session is the marker.
+  - A `codex` card without a session reference: adoption scans the Codex rollouts once. It writes the marker only when exactly one rollout names this task, its launch directory, and a creation time not earlier than the start attempt began. The card keeps `SESSION: codex`, as after a successful start.
+- The marker goes on the pane only. The card and the start attempt stay unchanged until the adoption writes `kind=adopt`. Before it writes the marker, adoption reads the card and the record again and refuses when the attempt ended or `OWNER`, `SESSION`, or `WINDOW` changed. When the marker write fails, nothing else was written. When the marker was written and the adoption write failed, the attempt stays unfinished, so plain `resume`, `notify`, and `coordinator recover` still refuse; run `--adopt` again, and the probe then proves the marked pane.
+- Every other unmarked pane is refused as before: an agent whose sessions cannot be tied to one launch (`droid` and the agents with `session.mode: discovered`, such as `devin`, `kimi`, and `opencode`), zero or several matching Codex rollouts, and a pane whose foreground process is not the card's agent. The refusal names the exit: stop the old executor in `WINDOW` by hand first, because a takeover leaves it running, then run `kander resume <task-id> --agent <agent> --decision <reference> --message <message>`. For those agents adoption runs no session discovery.
 - An old card shape is refused before any probe runs. A card upgraded from 1.0.0 can keep its start attempt in `pending` after a 1.0.0 takeover rewrote `OWNER` or `SESSION`. The record no longer names the card's executor, so adoption cannot end it. The localized error names the takeover, and the record stays `pending`. A card that leaves `working/` and `review/` while the adoption is being written fails that write with the same error.
 - On success it writes `kind=adopt` with the decision and changes the record to `running`. The card stays unchanged. A launcher that is still running steps aside with `superseded`.
 
 ## Output
 
 - `resumed`, or for a takeover `cleaned up original container: ...` then `taken over: ...`. A generated dispatch ID is printed before any send when the request is durable and the ID was omitted.
-- `adopted: <task-id> window=<address>` for an adoption.
+- `adopted: <task-id> window=<address>` for an adoption, preceded by `session-marker-written: <task-id> window=<address> session=<session>` when adoption wrote the missing marker.
 - `started-unresolved: ...` with exit status 3 for a takeover that failed late with executor evidence (`snippets/commands/start.md` "Late Failures"). `superseded: <task-id> ...` with exit status 0 for a takeover another execution overtook.
 
 ## Rejections
 
 - A task group `review/` card without a dispatch option, unless the takeover ends an unfinished start.
 - A card outside `review/` or `working/`, a missing `SESSION`, a claimed or reclaimed card without `--agent` (the error names `snippets/failure-recovery.md`), a pin violation, an immediate agent exit, or a dispatch conflict.
-- A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover, or only the takeover for an old card shape or an unmarked pane.
+- A plain `resume` on a `pending` or `unresolved` record: the error names adoption and takeover, or only the takeover for an old card shape or for an unmarked pane that adoption cannot mark. That judgement uses static facts only (a session in `SESSION`, or a `codex` card); the error never runs session discovery and writes nothing.
 - `--agent` without `--decision` on a `pending` or `unresolved` record.
 - `--adopt` on a record in another status, on a card whose `OWNER` or `SESSION` differs from the start attempt, or with an executor that is not confirmed alive. The last two name the takeover as the next step.
+- `--adopt` on an unmarked pane whose session cannot be proven, when the card or the attempt changed before the marker write, or when the marker write fails. Nothing is written; the error names the takeover, after stopping the old executor by hand.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error. So are `--adopt` with any option except `--decision`, `--adopt` without `--decision`, and `--decision` without `--adopt` or `--agent`.

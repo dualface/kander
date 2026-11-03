@@ -83,7 +83,8 @@ started-unresolved: <task-id> window=<address> reason=<reason>
   kander resume <task-id> --agent <agent> --decision <reference> --message <message>
 ```
 
-- An unmarked start lists only the takeover. On tmux, tmux-session, and any launcher whose panes carry the session marker, the marker is written after session discovery. When discovery or the marker write fails, the pane has no marker, so `kander check` and `resume --adopt` read it as `unknown` and adoption can never succeed. The first next step then tells you to stop the old executor in `WINDOW` by hand, because a takeover does not stop it, and the second is the takeover:
+- On tmux, tmux-session, and any launcher whose panes carry the session marker, the marker is written after session discovery. When discovery or the marker write fails, the pane has no marker, so `kander check` reads it as `unknown`. `resume --adopt` can still write the marker when the session can be proven (`snippets/commands/resume.md` "Adopting an Unfinished Start"): the card `SESSION` names a session, or the agent is `codex`. Such an unmarked start keeps both next steps.
+- Every other unmarked start lists only the takeover, because adoption can never succeed there. The first next step then tells you to stop the old executor in `WINDOW` by hand, because a takeover does not stop it, and the second is the takeover:
 
 ```text
 started-unresolved: <task-id> window=<address> reason=<reason>
