@@ -4,7 +4,7 @@ Source: new in this file; the rule files did not describe this command beyond it
 
 ## Purpose and users
 
-Lists the available terminal launchers (built-in and loaded definitions) and tests one of them. Used by the user when setting up herdr, tmux, or luvus.
+Lists the available terminal launchers (built-in and loaded definitions) and tests one of them. Used by the user when setting up herdr, tmux, luvus, or dsh.
 
 ## Syntax
 

@@ -1,0 +1,9 @@
+{
+  "dsh.not_in_path": "curl 不在 PATH 中: dsh launcher 通过 curl 驱动 kander-dsh 插件; 请安装 curl 或改选其他启动方式",
+  "dsh.started": "{{.V0}} (dsh pane {{.V1}}); 在 dsh 中打开 Kander 视图查看",
+  "dsh.host_unreachable": "$DSH_HOME/kander/mux.sock (未设置 DSH_HOME 时为 ~/.dsh/kander/mux.sock) 上没有装有 kander-dsh 插件的 dsh 宿主应答: {{.V0}}; 请启动装有该插件的 dsh Web 或 dsh Desktop; 未创建 pane",
+  "dsh.upgrade_kander": "kander-dsh 插件使用 dsh launcher 协议 {{.V0}}, 而当前 kander 使用协议 {{.V1}}: 请升级 kander; 未创建 pane",
+  "dsh.upgrade_plugin": "kander-dsh 插件使用 dsh launcher 协议 {{.V0}}, 而当前 kander 使用协议 {{.V1}}: 请升级 kander-dsh 插件; 未创建 pane",
+  "dsh.command_failed": "kander-dsh {{.V0}} 失败: {{.V1}}",
+  "dsh.unexpected_response": "kander-dsh {{.V0}} 返回了无法识别的响应: {{.V1}}"
+}

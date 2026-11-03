@@ -1,6 +1,6 @@
 # Terminal Definitions
 
-A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `herdr`, `herdr-core`, `luvus`, `tmux` and `tmux-session` launchers are embedded definitions ([`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`herdr-core.json`](../internal/terminal/builtin/definitions/herdr-core.json), [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
+A terminal definition is a JSON file that turns a terminal multiplexer into a Kander launcher without Go code. The built-in `dsh`, `herdr`, `herdr-core`, `luvus`, `tmux` and `tmux-session` launchers are embedded definitions ([`dsh.json`](../internal/terminal/builtin/definitions/dsh.json), [`herdr.json`](../internal/terminal/builtin/definitions/herdr.json), [`herdr-core.json`](../internal/terminal/builtin/definitions/herdr-core.json), [`luvus.json`](../internal/terminal/builtin/definitions/luvus.json), [`tmux.json`](../internal/terminal/builtin/definitions/tmux.json)) and run through the same `terminal.DeclarativeBackend` as user definitions. The operations a definition maps are the `terminal.Backend` operations described in [Terminal backends](terminal-backend.md).
 
 ## Fixed Boundaries
 
@@ -266,6 +266,10 @@ The embedded luvus definition opens its pane with `pane split --cwd` and then ve
 ## herdr-core Notes
 
 The embedded herdr-core definition has a single-field address (`herdr-core:t8`), declares `program_status`, and uses `pane_metadata` to keep the session in the terminal label `kander-session`, written by `set_session_marker` and read back by `pane_facts` and `reverse_lookup`. A `finished` or `lost` terminal is gone through `gone_when`; `not_found` is both a gone rule and a `meta_missing` rule, so `close_container` continues past a terminal that its `--rm` flag already removed. `HC_TERMINAL_ID` is `auto_only`. Usage, prerequisites and limits are in [Terminal backends](terminal-backend.md#9-the-built-in-herdr-core-launcher).
+
+## dsh Notes
+
+The embedded dsh definition drives the `kander-dsh` plugin with `curl`, one `POST /op/<name>` per step with form fields. Its steps name the socket twice, `--unix-socket {env.HOME}/.dsh/kander/mux.sock --unix-socket {env.DSH_HOME}/kander/mux.sock`: curl uses the last one, and an empty `DSH_HOME` drops the second pair, so the socket follows `DSH_HOME` and falls back to `~/.dsh`. A step without form fields adds `-X POST`. curl runs with `--fail-with-body`, so a 404 `{"error":"gone"}` answer exits non-zero with that body on stdout and the `stdout_json:error=gone` rule classifies it. `create_container` runs `hello` first and two `fail` steps compare the plugin's protocol with the definition's own; the address has only `container` and `pane`, so no result carries a session. Usage and the socket protocol are in [dsh launcher](dsh-launcher.md).
 
 ## Example
 

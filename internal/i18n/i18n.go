@@ -45,6 +45,7 @@ var catalogFiles = []string{
 	"locales/archive/en.json", "locales/archive/zh-CN.json", "locales/archive/ja.json",
 	"locales/luvus/en.json", "locales/luvus/zh-CN.json", "locales/luvus/ja.json",
 	"locales/herdrcore/en.json", "locales/herdrcore/zh-CN.json", "locales/herdrcore/ja.json",
+	"locales/dsh/en.json", "locales/dsh/zh-CN.json", "locales/dsh/ja.json",
 	"locales/report/en.json", "locales/report/zh-CN.json", "locales/report/ja.json",
 	"locales/theme/en.json", "locales/theme/zh-CN.json", "locales/theme/ja.json",
 	"locales/recovery/en.json", "locales/recovery/zh-CN.json", "locales/recovery/ja.json",

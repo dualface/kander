@@ -20,7 +20,8 @@ To ensure stability across heterogeneous terminal multiplexers and OS platforms,
        +-----------------+-----------------+
        |                                   |
 [ Declarative Backends ]          [ Direct Backends ]
- (herdr, luvus, tmux, tmux-session) (foreground, console)
+ (dsh, herdr, herdr-core, luvus,   (foreground, console)
+  tmux, tmux-session)
 ```
 
 1. **No Raw Terminal Commands**: Callers (`launch`, `liveness`, `notify`, `takeover`, `focus`, `tui`) **never** construct command-line argument lists or execute terminal binaries directly. They resolve a backend via `terminal.Lookup`, `terminal.ParseWindow`, or `terminal.ResolveAuto`, and invoke `terminal.Backend` methods.
@@ -34,7 +35,7 @@ To ensure stability across heterogeneous terminal multiplexers and OS platforms,
 | Package | Role |
 |---|---|
 | `internal/terminal` | Defines `Backend` interface, `Address`, `Target`, `PaneFacts`, `Topology`, and `DeclarativeBackend`. |
-| `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/herdr.json`, `herdr-core.json`, `luvus.json`, `tmux.json`) and Go hooks. |
+| `internal/terminal/builtin` | Registers built-in declarative definitions (`definitions/dsh.json`, `herdr.json`, `herdr-core.json`, `luvus.json`, `tmux.json`) and Go hooks. |
 | `internal/terminal/herdr` | Specialized socket hooks for herdr session reporting and pane focusing. Both dial one control channel from `HERDR_SOCKET_PATH`: a unix socket on POSIX, the named pipe `\\.\pipe\` plus that path on Windows. |
 | `internal/terminal/direct` | Containerless backends (`foreground`, `console`). Container operations return `terminal.ErrUnsupported`. |
 | `internal/terminal/terminaltest`| Test harnesses running the test binary as a mock terminal. |
@@ -51,6 +52,7 @@ Only the owning backend parses and formats the opaque component:
 
 | Launcher | Opaque Format | Parsed `Address` Structure |
 |---|---|---|
+| `dsh` | `<container>:<pane>` | `Container` = `c7-1234`, `Pane` = `p7-1234` (sequence number and dsh host pid) |
 | `herdr` | `<tab-id>:<pane-id>` | `Container` = tab (`w0:...`), `Pane` = pane |
 | `herdr-core` | `<terminal>` | `Container` = `Pane` = hc terminal address (`t8`) |
 | `luvus` | `<pane-id>:<pane-id>` | `Container` = `Pane` = luvus pane id (`7`) |
@@ -65,18 +67,18 @@ Only the owning backend parses and formats the opaque component:
 
 Backends declare supported features via `terminal.Capabilities`:
 
-| Capability | Description | herdr | herdr-core | luvus | tmux / tmux-session | foreground / console |
-|---|---|:---:|:---:|:---:|:---:|:---:|
-| `Container` | Can spawn isolated tabs/windows | Yes | Yes | Yes | Yes | No |
-| `Focus` | Can switch active window/pane focus | Yes | No | Yes | Yes | No |
-| `PaneMetadata` | Can read window/pane variables | No | Yes *(label)* | No | Yes | No |
-| `ForegroundProcess` | Can inspect active foreground PID/name | No | No | No | Yes | No |
-| `AgentIdentity` | Supports agent-reported identity checks | Yes | Yes | Yes | No | No |
-| `ProgramStatus` | Identity and status come from OSC 7501 reports | No | Yes | No | No | No |
-| `SessionReport` | Supports bidirectional session handshake | Yes | No | No | No | No |
-| `WaitOutput` | Native output pattern matching | Yes | No *(polled)* | No *(polled)* | No *(polled)* | No |
-| `POSIXOnly` | Restricted to POSIX platforms | No | Yes | Yes | Yes | No |
-| `Detached` | Runs as an unmanaged detached process | No | No | No | No | console only |
+| Capability | Description | dsh | herdr | herdr-core | luvus | tmux / tmux-session | foreground / console |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| `Container` | Can spawn isolated tabs/windows | Yes | Yes | Yes | Yes | Yes | No |
+| `Focus` | Can switch active window/pane focus | Yes *(recorded for the Kander view)* | Yes | No | Yes | Yes | No |
+| `PaneMetadata` | Can read window/pane variables | Yes | No | Yes *(label)* | No | Yes | No |
+| `ForegroundProcess` | Can inspect active foreground PID/name | Yes | No | No | No | Yes | No |
+| `AgentIdentity` | Supports agent-reported identity checks | No | Yes | Yes | Yes | No | No |
+| `ProgramStatus` | Identity and status come from OSC 7501 reports | No | No | Yes | No | No | No |
+| `SessionReport` | Supports bidirectional session handshake | No | Yes | No | No | No | No |
+| `WaitOutput` | Native output pattern matching | No *(polled)* | Yes | No *(polled)* | No *(polled)* | No *(polled)* | No |
+| `POSIXOnly` | Restricted to POSIX platforms | Yes | No | Yes | Yes | Yes | No |
+| `Detached` | Runs as an unmanaged detached process | No | No | No | No | No | console only |
 
 `ProgramStatus` refines `AgentIdentity`: the pane names no agent, only the `status.app` its program reported through OSC 7501 (`PaneFacts.AgentApp`). Callers compare a pane with the expected agent through `PaneFacts.MatchAgent`, which is tri-state: a match, another agent, or undecided while the pane has not reported (or the agent's declaration cannot be read). Undecided is never a stopped observation. `terminal.AddressFreeBackend` (the backend of a `--pane` override or a card without `WINDOW`) skips program status backends, because their terminals carry the session only in the marker Kander wrote at launch.
 
@@ -164,3 +166,9 @@ The embedded [`herdr-core.json`](../internal/terminal/builtin/definitions/herdr-
 - **State**: `pane_facts` reads `hc get`. A `finished` or `lost` terminal, or one hc no longer knows, is gone, whatever its last status says. A live terminal maps `status.state` onto the agent status: `idle`, `working`, `blocked` and `done` unchanged, `error` as `blocked` with the reason `error`; a `null` status (no report yet) leaves the agent undecided, so liveness reads `unknown` and notify waits. Kander never derives a herdr-core agent state from the screen, the output, or the foreground process.
 - **Close**: `hc kill` then `hc rm`; `not_found` counts as already closed, because an exited agent took its `--rm` terminal with it.
 - **Not supported**: focus (herdr-core has no API to switch the Herdr App view), session reporting, `agent_list`, Windows, and remote machines (`hc machine`, `machine/t7` addresses).
+
+---
+
+## 10. The Built-In dsh Launcher
+
+The embedded [`dsh.json`](../internal/terminal/builtin/definitions/dsh.json) provides the `dsh` launcher: the executing agent runs as a child of a DeepSeek Harness (dsh) host process, in a terminal that the `kander-dsh` plugin ([`integrations/kander-dsh/`](../integrations/kander-dsh/)) opens. It is POSIX-only and never chosen by `auto`, because it depends on a running dsh host that no environment variable reveals; select it with `launcher: dsh` or `kander start --launcher dsh`. Every operation is one `curl --unix-socket` call on the plugin socket `$DSH_HOME/kander/mux.sock` (`~/.dsh/kander/mux.sock` without `DSH_HOME`). `create_container` first checks the socket protocol version, so `start` and `resume` fail before any pane exists when the plugin and Kander disagree, and the error names the side to upgrade. `WINDOW` is `dsh:<container>:<pane>`. Architecture, protocol, installation and limits are in [dsh launcher](dsh-launcher.md).

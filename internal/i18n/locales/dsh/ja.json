@@ -1,0 +1,9 @@
+{
+  "dsh.not_in_path": "curl が PATH にありません: dsh 起動方式は curl で kander-dsh プラグインを操作します; curl をインストールするか別の起動方式を選んでください",
+  "dsh.started": "{{.V0}} (dsh pane {{.V1}}); dsh で Kander ビューを開いて確認してください",
+  "dsh.host_unreachable": "$DSH_HOME/kander/mux.sock (DSH_HOME が未設定なら ~/.dsh/kander/mux.sock) で kander-dsh プラグイン入りの dsh ホストが応答しません: {{.V0}}; プラグインを入れた dsh Web または dsh Desktop を起動してください; pane は作成していません",
+  "dsh.upgrade_kander": "kander-dsh プラグインは dsh 起動方式のプロトコル {{.V0}} を使いますが、この kander はプロトコル {{.V1}} です: kander を更新してください; pane は作成していません",
+  "dsh.upgrade_plugin": "kander-dsh プラグインは dsh 起動方式のプロトコル {{.V0}} を使いますが、この kander はプロトコル {{.V1}} です: kander-dsh プラグインを更新してください; pane は作成していません",
+  "dsh.command_failed": "kander-dsh {{.V0}} に失敗しました: {{.V1}}",
+  "dsh.unexpected_response": "kander-dsh {{.V0}} が想定外の応答を返しました: {{.V1}}"
+}

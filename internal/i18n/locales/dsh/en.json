@@ -1,0 +1,9 @@
+{
+  "dsh.not_in_path": "curl is not in PATH: the dsh launcher drives the kander-dsh plugin with curl; install curl or select another launcher",
+  "dsh.started": "{{.V0}} (dsh pane {{.V1}}); open the Kander view in dsh to watch it",
+  "dsh.host_unreachable": "no dsh host with the kander-dsh plugin answers on $DSH_HOME/kander/mux.sock (~/.dsh/kander/mux.sock without DSH_HOME): {{.V0}}; start dsh Web or dsh Desktop with the plugin installed; no pane was created",
+  "dsh.upgrade_kander": "the kander-dsh plugin speaks dsh launcher protocol {{.V0}}, but this kander speaks protocol {{.V1}}: upgrade kander; no pane was created",
+  "dsh.upgrade_plugin": "the kander-dsh plugin speaks dsh launcher protocol {{.V0}}, but this kander speaks protocol {{.V1}}: upgrade the kander-dsh plugin; no pane was created",
+  "dsh.command_failed": "kander-dsh {{.V0}} failed: {{.V1}}",
+  "dsh.unexpected_response": "kander-dsh {{.V0}} returned an unexpected response: {{.V1}}"
+}

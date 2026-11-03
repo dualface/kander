@@ -1,0 +1,803 @@
+{
+  "schema_version": 1,
+  "name": "dsh",
+  "binary": "curl",
+  "version_args": [
+    "--version"
+  ],
+  "capabilities": {
+    "container": true,
+    "focus": true,
+    "pane_metadata": true,
+    "foreground_process": true,
+    "wait_output": false,
+    "session_report": false
+  },
+  "address": [
+    {
+      "name": "container"
+    },
+    {
+      "name": "pane"
+    }
+  ],
+  "errors": {
+    "gone": [
+      "stdout_json:error=gone"
+    ]
+  },
+  "launchers": {
+    "dsh": {
+      "requires": {
+        "platform": "posix",
+        "binary": true,
+        "inside_session": false,
+        "env": [
+          {
+            "name": "HOME"
+          }
+        ],
+        "messages": {
+          "binary": {
+            "id": "dsh.not_in_path"
+          }
+        }
+      },
+      "started_lines": [
+        {
+          "message": {
+            "id": "dsh.started",
+            "args": [
+              "{head}",
+              "{pane}"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "ops": {
+    "create_container": {
+      "steps": [
+        {
+          "store": "hello",
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "protocol=1",
+            "http://dsh/op/hello"
+          ],
+          "fields": {
+            "protocol": "json_field:protocol",
+            "upgrade": "json_field:upgrade"
+          },
+          "expect": "!field_missing:step.hello.protocol",
+          "messages": {
+            "exec": {
+              "id": "dsh.host_unreachable",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.host_unreachable",
+              "args": [
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "hello",
+                "{detail}"
+              ]
+            }
+          }
+        },
+        {
+          "when": [
+            [
+              "!field:step.hello.protocol=1",
+              "field:step.hello.upgrade=kander"
+            ]
+          ],
+          "fail": {
+            "id": "dsh.upgrade_kander",
+            "args": [
+              "{step.hello.protocol}",
+              "1"
+            ]
+          }
+        },
+        {
+          "when": "!field:step.hello.protocol=1",
+          "fail": {
+            "id": "dsh.upgrade_plugin",
+            "args": [
+              "{step.hello.protocol}",
+              "1"
+            ]
+          }
+        },
+        {
+          "store": "new",
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "cwd={cwd}",
+            "--data-urlencode",
+            "label={label}",
+            "--data-urlencode",
+            "project={project}",
+            "http://dsh/op/create_container"
+          ],
+          "fields": {
+            "container": "json_field:container",
+            "pane": "json_field:pane"
+          },
+          "expect": [
+            [
+              "!field_missing:step.new.container",
+              "!field_missing:step.new.pane"
+            ]
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "create_container",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "create_container",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "create_container",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "container": "{step.new.container}",
+        "pane": "{step.new.pane}"
+      }
+    },
+    "run_command": {
+      "steps": [
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "--data-urlencode",
+            "cwd_quoted={cwd_quoted}",
+            "--data-urlencode",
+            "command={command}",
+            "--data-urlencode",
+            "posix={posix}",
+            "http://dsh/op/run_command"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "run_command",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "run_command",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "run_command",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "set_session_marker": {
+      "steps": [
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "--data-urlencode",
+            "value={value}",
+            "http://dsh/op/set_session_marker"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "set_session_marker",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "set_session_marker",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "set_session_marker",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "pane_facts": {
+      "steps": [
+        {
+          "store": "pane",
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "http://dsh/op/pane_facts"
+          ],
+          "fields": {
+            "command": "json_field:command",
+            "in_mode": "json_field:in_mode",
+            "dead": "json_field:dead",
+            "marker": "json_field:session_marker"
+          },
+          "expect": "!field_missing:step.pane.dead",
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "pane_facts",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "pane_facts",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "pane_facts",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "command": "{step.pane.command}",
+        "in_mode": "{step.pane.in_mode}",
+        "dead": "{step.pane.dead}",
+        "session_marker": "{step.pane.marker}"
+      }
+    },
+    "read_output": {
+      "steps": [
+        {
+          "store": "out",
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "http://dsh/op/read_output"
+          ],
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:text"
+          },
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "read_output",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "read_output",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "read_output",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "text": "{step.out.text}"
+      }
+    },
+    "deliver_text": {
+      "steps": [
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "--data-urlencode",
+            "text={text}",
+            "http://dsh/op/deliver_text"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "deliver_text",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "deliver_text",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "deliver_text",
+                "{detail}"
+              ]
+            }
+          }
+        },
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "http://dsh/op/enter"
+          ],
+          "delay": "500ms",
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "enter",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "enter",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "enter",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "topology": {
+      "steps": [
+        {
+          "store": "t",
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "http://dsh/op/topology"
+          ],
+          "fields": {
+            "container": "json_field:container",
+            "count": "json_field:pane_count"
+          },
+          "expect": "!field_missing:step.t.container",
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "topology",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "topology",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "topology",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "container": "{step.t.container}",
+        "pane_count": "{step.t.count}"
+      }
+    },
+    "container_exists": {
+      "steps": [
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "container={container}",
+            "http://dsh/op/container_exists"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "container_exists",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "container_exists",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "container_exists",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "reverse_lookup": {
+      "steps": [
+        {
+          "store": "panes",
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "-X",
+            "POST",
+            "http://dsh/op/list"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "list",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "list",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "list",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ],
+      "rows": {
+        "from": "panes",
+        "split": "json_array:panes",
+        "fields": {
+          "pane": "json_field:pane",
+          "container": "json_field:container",
+          "command": "json_field:command",
+          "dead": "json_field:dead",
+          "marker": "json_field:marker"
+        },
+        "expect": [
+          [
+            "!field_missing:row.pane",
+            "!field_missing:row.container",
+            "!field_missing:row.dead"
+          ]
+        ],
+        "match": [
+          [
+            "!field_missing:reference",
+            "field:row.marker={reference}",
+            "field:row.dead=0",
+            "field:row.command={process_name}"
+          ]
+        ],
+        "result": {
+          "container": "{row.container}",
+          "pane": "{row.pane}"
+        },
+        "messages": {
+          "missing": {
+            "id": "dsh.unexpected_response",
+            "args": [
+              "list",
+              "no panes"
+            ]
+          },
+          "invalid": {
+            "id": "dsh.unexpected_response",
+            "args": [
+              "list",
+              "a pane has no pane, container or dead field"
+            ]
+          }
+        }
+      }
+    },
+    "close_container": {
+      "steps": [
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "container={container}",
+            "http://dsh/op/close_container"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "close_container",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "close_container",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "close_container",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "focus": {
+      "closed_when": "field:facts.dead=1",
+      "steps": [
+        {
+          "argv": [
+            "-sS",
+            "--fail-with-body",
+            "--max-time",
+            "10",
+            "--unix-socket",
+            "{env.HOME}/.dsh/kander/mux.sock",
+            "--unix-socket",
+            "{env.DSH_HOME}/kander/mux.sock",
+            "--data-urlencode",
+            "pane={pane}",
+            "http://dsh/op/focus"
+          ],
+          "messages": {
+            "exec": {
+              "id": "dsh.command_failed",
+              "args": [
+                "focus",
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "dsh.command_failed",
+              "args": [
+                "focus",
+                {
+                  "or": [
+                    "{output}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "dsh.unexpected_response",
+              "args": [
+                "focus",
+                "{detail}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
