@@ -3,10 +3,13 @@
 // stub, and a fake fetch.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { describe, test } from 'node:test'
 import vm from 'node:vm'
 
 const source = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+// The host's screen (lib/mux.js) uses the same xterm parser as the browser terminal.
+const { Terminal: HeadlessTerminal } = createRequire(import.meta.url)('../vendor/xterm-headless.cjs')
 
 function loadClient({ fetch, storage } = {}) {
   let entry
@@ -193,6 +196,35 @@ describe('terminal transport', () => {
     await queue.push('y', 80, 24)
     assert.deepEqual(sent, ['x', 'y'])
     assert.deepEqual(errors, ['gone'])
+  })
+
+  test('only the host screen answers terminal queries, also for replayed output', async () => {
+    const replies = (mute) => {
+      const term = new HeadlessTerminal({ cols: 80, rows: 24, allowProposedApi: true })
+      if (mute) logic.muteQueries(term)
+      const data = []
+      term.onData((reply) => data.push(reply))
+      return { term, data }
+    }
+    const write = (term, text) => new Promise((resolve) => term.write(text, resolve))
+    const queries = 'ab\x1b[6n\x1b[5n\x1b[?6n\x1b[c\x1b[>c\x1b[4$p\x1b[?25$p\x1bP$qm\x1b\\'
+    // The host answers every query once.
+    const host = replies(false)
+    await write(host.term, queries)
+    assert.deepEqual(host.data, ['\x1b[1;3R', '\x1b[0n', '\x1b[?1;3R', '\x1b[?1;2c', '\x1b[>0;276;0c', '\x1b[4;2$y', '\x1b[?25;1$y', '\x1bP1$r0m\x1b\\'])
+    // The page writes the same output, then a reopened tab replays it: no answer.
+    const page = replies(true)
+    await write(page.term, queries)
+    await write(page.term, queries)
+    assert.deepEqual(page.data, [])
+    assert.equal(page.term.buffer.active.getLine(0).translateToString(true), 'abab')
+    // Color queries are dropped; setting a color still reaches xterm's handler.
+    const reached = []
+    const colors = new HeadlessTerminal({ cols: 80, rows: 24, allowProposedApi: true })
+    for (const ident of [4, 10, 11, 12]) colors.parser.registerOscHandler(ident, (data) => { reached.push(`${ident};${data}`); return true })
+    logic.muteQueries(colors)
+    await write(colors, '\x1b]11;?\x07\x1b]4;1;?\x07\x1b]10;?;?\x07\x1b]11;rgb:00/00/00\x07\x1b]4;1;#ff0000\x07')
+    assert.deepEqual(reached, ['11;rgb:00/00/00', '4;1;#ff0000'])
   })
 
   test('only a newer focus request counts', () => {

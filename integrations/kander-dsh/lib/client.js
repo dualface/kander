@@ -293,6 +293,26 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * Keeps a browser terminal from answering terminal queries (device
+     * attributes, cursor position, mode and status requests, color queries).
+     * The host's screen of the pane is the only answerer, also while no page
+     * shows the pane; an answer from the page would reach the program a second
+     * time, and replaying the output buffer would answer old queries again.
+     */
+    function muteQueries(term) {
+      const parser = term.parser
+      const swallow = () => true
+      for (const id of [
+        { final: 'c' }, { prefix: '>', final: 'c' },
+        { final: 'n' }, { prefix: '?', final: 'n' },
+        { intermediates: '$', final: 'p' }, { prefix: '?', intermediates: '$', final: 'p' },
+      ]) parser.registerCsiHandler(id, swallow)
+      parser.registerDcsHandler({ intermediates: '$', final: 'q' }, swallow)
+      // A color is still set; only a request ("?") is dropped.
+      for (const ident of [4, 10, 11, 12]) parser.registerOscHandler(ident, (data) => data.split(';').includes('?'))
+    }
+
     /** A focus request newer than the last one seen, or null. */
     function newFocus(lastAt, focus) {
       return focus && typeof focus.at === 'number' && (lastAt === undefined || focus.at > lastAt) ? focus : null
@@ -591,6 +611,7 @@ window.__ModuleLoader__.load({
           term = new Terminal({ fontSize: 13, fontFamily: MONO, scrollback: 5000, allowProposedApi: true })
           fit = new FitAddon()
           term.loadAddon(fit)
+          muteQueries(term)
           term.open(host.current)
           terminal.current = { term, refit, sendSize }
           term.onData((data) => { void queue.push(data, term.cols, term.rows) })
@@ -894,7 +915,7 @@ window.__ModuleLoader__.load({
     exports.apply = apply
     exports.logic = {
       COLUMNS, InputQueue, SseParser, boardsOf, carrierNotice, closeTab, columnsOf, createStore, dshWindow, keepSnapshot,
-      loadTabs, mainSessionId, needsAttention, newFocus, openTab, saveTabs, tabLabel, translator, workspacePathOf,
+      loadTabs, mainSessionId, muteQueries, needsAttention, newFocus, openTab, saveTabs, tabLabel, translator, workspacePathOf,
     }
     return module.exports
   },
