@@ -39,10 +39,11 @@ func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "
 
 // Session is one opened project on one server.
 type Session struct {
-	Client  *client.Client
-	Project *client.Project
-	Info    api.Project
-	Home    string
+	ServerURL string
+	Client    *client.Client
+	Project   *client.Project
+	Info      api.Project
+	Home      string
 }
 
 // Home returns the private client directory of this user.
@@ -154,16 +155,28 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Session{Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
+	return &Session{ServerURL: cfg.Server.URL, Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
 }
 
-// Credential is one execution's claim on this host.
+// Credential is one execution's claim on this host. The worker renews it
+// until the server releases the claim or the lease is lost; a lost credential
+// is kept, marked, so its worktree and branch stay for manual handling.
 type Credential struct {
-	ProjectID   string `json:"project_id"`
-	TaskID      string `json:"task_id"`
-	ExecutionID string `json:"execution_id"`
-	Generation  uint64 `json:"generation"`
-	Token       string `json:"token"`
+	ServerURL     string       `json:"server_url"`
+	ClientID      string       `json:"client_id"`
+	ProjectID     string       `json:"project_id"`
+	TaskID        string       `json:"task_id"`
+	ExecutionID   string       `json:"execution_id"`
+	Generation    uint64       `json:"generation"`
+	Token         string       `json:"token"`
+	RenewInterval api.Duration `json:"renew_interval"`
+	TTL           api.Duration `json:"ttl"`
+	RenewedAt     time.Time    `json:"renewed_at"`
+	// AgentPID is the managed agent process the worker stops when the lease
+	// is lost; zero when the claim was taken by hand.
+	AgentPID   int    `json:"agent_pid,omitzero"`
+	Lost       bool   `json:"lost,omitzero"`
+	LostReason string `json:"lost_reason,omitempty"`
 }
 
 // Claim returns the headers form of the credential.
@@ -175,20 +188,87 @@ func credentialDir(home, project, task string) string {
 	return filepath.Join(home, "executions", project, task)
 }
 
-// SaveCredential stores the credential privately, keyed by execution.
+// SaveCredential stores a new claim of this host and makes it the latest
+// credential of its task.
 func (s *Session) SaveCredential(c Credential) error {
-	dir := credentialDir(s.Home, c.ProjectID, c.TaskID)
-	if err := fs.EnsurePrivateDirectory(s.Home, dir, true); err != nil {
+	if err := WriteCredential(s.Home, c); err != nil {
+		return err
+	}
+	return fs.WriteTextAtomic(s.Home, filepath.Join(credentialDir(s.Home, c.ProjectID, c.TaskID), "latest"), c.ExecutionID+"\n", true)
+}
+
+// WriteCredential replaces one credential record.
+func WriteCredential(home string, c Credential) error {
+	dir := credentialDir(home, c.ProjectID, c.TaskID)
+	if err := fs.EnsurePrivateDirectory(home, dir, true); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := fs.WriteTextAtomic(s.Home, filepath.Join(dir, c.ExecutionID+".json"), string(data)+"\n", true); err != nil {
+	return fs.WriteTextAtomic(home, filepath.Join(dir, c.ExecutionID+".json"), string(data)+"\n", true)
+}
+
+// RemoveCredential deletes a credential whose claim the server released.
+func RemoveCredential(home string, c Credential) error {
+	dir := credentialDir(home, c.ProjectID, c.TaskID)
+	if _, err := fs.RemoveRegularFileIfExists(home, filepath.Join(dir, c.ExecutionID+".json")); err != nil {
 		return err
 	}
-	return fs.WriteTextAtomic(s.Home, filepath.Join(dir, "latest"), c.ExecutionID+"\n", true)
+	latest, ok, err := fs.ReadRegularFileIfExists(home, filepath.Join(dir, "latest"))
+	if err == nil && ok && strings.TrimSpace(string(latest)) == c.ExecutionID {
+		_, err = fs.RemoveRegularFileIfExists(home, filepath.Join(dir, "latest"))
+	}
+	return err
+}
+
+// Credentials lists every credential record below home.
+func Credentials(home string) ([]Credential, error) {
+	root := filepath.Join(home, "executions")
+	exists, err := fs.DirectoryExists(home, root)
+	if err != nil || !exists {
+		return nil, err
+	}
+	var out []Credential
+	projects, err := fs.ListDirectory(home, root)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range projects {
+		if p.Kind != fs.KindDirectory {
+			continue
+		}
+		tasks, err := fs.ListDirectory(home, filepath.Join(root, p.Name))
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range tasks {
+			if t.Kind != fs.KindDirectory {
+				continue
+			}
+			dir := filepath.Join(root, p.Name, t.Name)
+			files, err := fs.ListDirectory(home, dir)
+			if err != nil {
+				return nil, err
+			}
+			for _, f := range files {
+				if f.Kind != fs.KindFile || !strings.HasSuffix(f.Name, ".json") {
+					continue
+				}
+				data, err := fs.ReadRegularFile(home, filepath.Join(dir, f.Name))
+				if err != nil {
+					return nil, err
+				}
+				var c Credential
+				if err := json.Unmarshal(data, &c); err != nil {
+					return nil, errors.New("execution credential " + filepath.Join(dir, f.Name) + " is damaged")
+				}
+				out = append(out, c)
+			}
+		}
+	}
+	return out, nil
 }
 
 // Credential returns the credential this process may present for task. A

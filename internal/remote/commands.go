@@ -354,8 +354,16 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if err := s.SaveCredential(Credential{ProjectID: s.Info.ID, TaskID: grant.Task.TaskID, ExecutionID: execution, Generation: grant.Claim.Generation, Token: grant.Token}); err != nil {
+	credential := Credential{
+		ServerURL: s.ServerURL, ClientID: s.Client.ClientID(), ProjectID: s.Info.ID, TaskID: grant.Task.TaskID,
+		ExecutionID: execution, Generation: grant.Claim.Generation, Token: grant.Token,
+		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: grant.Claim.RenewedAt,
+	}
+	if err := s.SaveCredential(credential); err != nil {
 		return fail(err)
+	}
+	if err := EnsureWorker(s.Home); err != nil {
+		fmt.Fprintln(stderr, config.Text("remote.worker_start_failed", err.Error()))
 	}
 	fmt.Fprintln(stdout, location(s, grant.Task.TaskID))
 	fmt.Fprintln(stderr, config.Text("remote.claimed", grant.Task.TaskID, grant.Claim.Generation, execution))

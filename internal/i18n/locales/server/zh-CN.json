@@ -24,5 +24,6 @@
   "remote.not_configured": "必须配置 server.url 与 project.name",
   "remote.claim_line": "领取: {{.V0}} 位于 {{.V1}}, 代次 {{.V2}}, {{.V3}}, 租约至 {{.V4}}",
   "remote.dispatch_unsupported": "服务端模式暂不支持派发绑定参数",
-  "remote.claimed": "已领取 {{.V0}}, 代次 {{.V1}}, 执行 {{.V2}}"
+  "remote.claimed": "已领取 {{.V0}}, 代次 {{.V1}}, 执行 {{.V2}}",
+  "remote.worker_start_failed": "后台 worker 未能启动, 本机领取不会续租: {{.V0}}"
 }

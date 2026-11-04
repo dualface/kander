@@ -73,6 +73,23 @@ A claim is the server-side ownership of one task by one execution, kept in `cont
 
 A claim is written `pending` before the board move and turned `active` after it. Startup turns a pending claim whose card is in `working` with that owner into an active lease, and releases any other pending claim. Old executions therefore cannot overwrite a newer one: their token hash and generation no longer match, whatever order their late renewals, writes, rollbacks, or queued submissions arrive in.
 
+## Client and worker
+
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, and `pick` run against the server project; the other commands are not adapted yet (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+
+- `client-id`: the persistent host identity, created on first use.
+- `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`.
+- `worker.lock`, `worker.log`: the background worker.
+
+A process started for one execution carries `KANDER_EXECUTION_ID` and presents only that execution's credential, so an agent of an older generation cannot pick up a newer claim made on the same host. An interactive command without the variable uses the task's latest credential. `move <task> working --owner <agent>` claims a `todo` task; with `--decision` it takes over a lost claim.
+
+After a claim the client starts `kander worker` detached unless one already holds `worker.lock`. One worker runs per client home, independent of the TUI and of the command that started it, and exits after two minutes without a live claim. On each tick it renews every credential whose renewal interval passed:
+
+- A successful renewal records the confirmed time.
+- A refusal of a claim the server shows as released (the card reached `done`, `archived`, or `trash`) removes the credential.
+- Any other refusal (taken over, expired, unknown) marks the credential lost and stops the managed agent. The worktree, the branch, and uncommitted changes stay untouched. If stopping fails the reason is recorded; the server still refuses every later write of that generation.
+- A transport failure keeps retrying until a full TTL has passed since the last confirmed renewal; then the worker assumes the lease is gone and handles it as lost, because the server clock has already expired it.
+
 ## Collaboration requests
 
 A non-holder asks the holder to act through `POST .../requests` with a kind (`fix`, `sync`, `review`, `stop`), a message, and the generation it targets; a request for a generation that is not current is refused. Only the live holder of that generation answers it (`accepted`, `done`, `rejected`). A takeover marks the open requests of older generations `superseded` instead of handing them to the new execution. Delivering a request to the agent is the worker's job (**planned**); external actions are not exactly-once, so a lost answer is settled by reading the request and the execution facts, never by restarting an agent.

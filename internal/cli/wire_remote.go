@@ -3,7 +3,12 @@ package cli
 import (
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
+	"github.com/dualface/kander/internal/worker"
 )
+
+// worker is an internal command: `kander` starts it detached after a claim.
+// It is not listed in the usage text.
+func init() { Commands["worker"] = worker.Run }
 
 // RemoteCommands are the server-mode runners. When the effective config sets
 // server.url they replace the v1 runners of the same name, so these commands

@@ -24,5 +24,6 @@
   "remote.not_configured": "server.url と project.name を設定する必要があります",
   "remote.claim_line": "クレーム: {{.V1}} の {{.V0}}、世代 {{.V2}}、{{.V3}}、リース期限 {{.V4}}",
   "remote.dispatch_unsupported": "サーバーモードではディスパッチ関連のオプションはまだ使えません",
-  "remote.claimed": "{{.V0}} を世代 {{.V1}}、実行 {{.V2}} でクレームしました"
+  "remote.claimed": "{{.V0}} を世代 {{.V1}}、実行 {{.V2}} でクレームしました",
+  "remote.worker_start_failed": "バックグラウンド worker を起動できませんでした。このホストのリースは更新されません: {{.V0}}"
 }
