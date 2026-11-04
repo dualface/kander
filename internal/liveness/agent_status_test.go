@@ -3,10 +3,12 @@ package liveness
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -187,6 +189,9 @@ func TestObserveAgentStatusClassifiesProcessPanes(t *testing.T) {
 		"p3": {Command: "claude", Dead: "0", InMode: "0"},
 	}}
 	useFakeBackends(t, dsh)
+	// Process panes are classified by the configured agents; never read the runner's own config.
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	writeCompleteConfig(t)
 	reports := ObserveAgentStatus(context.Background(), []AgentStatusInput{
 		{TaskID: "alive", Session: "claude s1", Window: "dsh:p1"},
 		{TaskID: "exited", Session: "claude s2", Window: "dsh:p2"},
