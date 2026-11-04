@@ -43,21 +43,25 @@ jobs:
           LDFLAGS="-s -w -X ${VERSION_PACKAGE}.Version=${VERSION}"
 
           mkdir -p dist
-          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
-            GOOS="${target%/*}"
-            GOARCH="${target#*/}"
-            bin=kander
-            [ "$GOOS" = windows ] && bin=kander.exe
-            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-              go build -trimpath -ldflags "$LDFLAGS" -o "dist/$bin" ./cmd/kander
-            name="kander-${GOOS}-${GOARCH}"
-            if [ "$GOOS" = windows ]; then
-              (cd dist && zip -q "${name}.zip" "$bin" && rm "$bin")
-            else
-              tar -czf "dist/${name}.tar.gz" -C dist "$bin"
-              rm "dist/$bin"
-            fi
-            echo "packaged ${name}"
+          # Each binary ships in its own archive: the client self-updater
+          # accepts an archive with exactly one kander entry.
+          for program in kander kander-server; do
+            for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+              GOOS="${target%/*}"
+              GOARCH="${target#*/}"
+              bin="$program"
+              [ "$GOOS" = windows ] && bin="$program.exe"
+              CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+                go build -trimpath -ldflags "$LDFLAGS" -o "dist/$bin" "./cmd/$program"
+              name="${program}-${GOOS}-${GOARCH}"
+              if [ "$GOOS" = windows ]; then
+                (cd dist && zip -q "${name}.zip" "$bin" && rm "$bin")
+              else
+                tar -czf "dist/${name}.tar.gz" -C dist "$bin"
+                rm "dist/$bin"
+              fi
+              echo "packaged ${name}"
+            done
           done
 
           (cd dist && sha256sum -- * > checksums.txt)
@@ -68,6 +72,11 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: kander ${{ env.VERSION }}
           generate_release_notes: true
+          # A tag with a suffix (v2.0.0-alpha.N) is a prerelease. It never
+          # becomes the latest release, so the stable update check of v1
+          # clients (releases/latest) never offers it.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
           files: |
             dist/*.zip
             dist/*.tar.gz
@@ -78,8 +87,9 @@ jobs:
       # repo (GITHUB_TOKEN cannot push to another repository). Without the
       # secret the release still succeeds and the formula must be synced by
       # hand with: scripts/release.sh --skip-tag <tag>
+      # Prereleases never reach the stable Homebrew formula.
       - name: Sync Homebrew tap
-        if: env.HOMEBREW_TAP_TOKEN != ''
+        if: env.HOMEBREW_TAP_TOKEN != '' && !contains(github.ref_name, '-')
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |

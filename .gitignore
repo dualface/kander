@@ -3,6 +3,7 @@
 
 # Build and system artifacts
 /kander
+/kander-server
 *.exe
 *.test
 *.out

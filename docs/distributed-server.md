@@ -112,6 +112,12 @@ Each project keeps `control/events.jsonl`. Events carry identities (`task_change
 
 The server logs JSON lines with method, path, status, client ID, operation ID (derived from the idempotency key), claim generation, and duration; claim transitions log project, task, and generation. Claim tokens are never logged.
 
+## Build and release
+
+`make build` (and `make-windows.cmd`) builds `kander` and `kander-server`. The release workflow packages each binary for every platform in its own archive (`kander-<os>-<arch>` and `kander-server-<os>-<arch>`), because the client self-updater accepts an archive with exactly one `kander` entry. A tag with a suffix, such as `v2.0.0-alpha.N`, is published as a GitHub prerelease that is never marked latest and never syncs the Homebrew formula; the MSIX job already skips suffixed tags. The update check reads `releases/latest` and refuses prerelease and suffixed versions, so a v1 stable client never installs a v2 prerelease, and a v2 prerelease client is never offered the older v1 stable release.
+
+Run the server with `kander-server --data <dir> --listen <host:port>` (defaults: `$XDG_DATA_HOME/kander-server` or `~/.local/share/kander-server`, `127.0.0.1:7878`); `--ttl` and `--renew` set the lease timings. Health: `GET /api/v1/health`, readiness: `GET /api/v1/ready`, protocol: `GET /api/v1/version`.
+
 ## Planned stages
 
 1. Branch conventions, the wire contract, the server (this document).

@@ -122,6 +122,27 @@ func TestCheckUpdateStableRelease(t *testing.T) {
 	}
 }
 
+// A v2 prerelease client is never offered the older v1 stable release, and a
+// prerelease answer is never offered to anyone.
+func TestCheckUpdateSeparatesV2Prereleases(t *testing.T) {
+	oldVersion, oldClient := version.Version, updateCheckHTTPClient
+	t.Cleanup(func() { version.Version, updateCheckHTTPClient = oldVersion, oldClient })
+	answer := ""
+	updateCheckHTTPClient = &http.Client{Transport: updateRoundTrip(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(answer)), Request: request}, nil
+	})}
+	version.Version = "2.0.0-alpha.1"
+	answer = `{"tag_name":"v1.3.0","draft":false,"prerelease":false}`
+	if info, err := CheckUpdate(t.Context()); err != nil || info != nil {
+		t.Fatalf("v2 alpha must not downgrade to v1 stable: info=%+v err=%v", info, err)
+	}
+	version.Version = "1.2.0"
+	answer = `{"tag_name":"v2.0.0-alpha.2","draft":false,"prerelease":true}`
+	if info, err := CheckUpdate(t.Context()); err != nil || info != nil {
+		t.Fatalf("v1 stable must not install a v2 prerelease: info=%+v err=%v", info, err)
+	}
+}
+
 // stubBrew swaps the Homebrew seams of applyBrewUpdate and records the
 // command sequence. failOn names the brew argument that returns an error.
 func stubBrew(t *testing.T, failOn string, installedVersion string, probeErr error) *[][]string {
