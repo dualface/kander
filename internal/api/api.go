@@ -203,6 +203,37 @@ type ClaimRequest struct {
 	Owner              string `json:"owner"`
 	Decision           string `json:"decision,omitempty"`
 	ExpectedGeneration uint64 `json:"expected_generation,omitzero"`
+	// Start makes the claim a launcher start: the card records the session,
+	// window, and resolved pins in the same transaction, and the execution
+	// stays unconfirmed until POST .../execution confirms or rolls it back.
+	Start *StartInput `json:"start,omitempty"`
+}
+
+// StartInput is the launcher metadata of a start claim.
+type StartInput struct {
+	Session      string `json:"session,omitempty"`
+	Window       string `json:"window,omitempty"`
+	ExecResolved string `json:"exec_resolved,omitempty"`
+}
+
+// Execution actions of POST .../tasks/{task}/execution, all by the holder.
+const (
+	ExecutionWindow   = "window"
+	ExecutionSession  = "session"
+	ExecutionConfirm  = "confirm"
+	ExecutionRollback = "rollback"
+)
+
+// ExecutionUpdate records launcher facts of the current execution. window
+// writes WINDOW; session replaces SessionBefore with SessionAfter; confirm
+// records start success (with a session replacement when both are set);
+// rollback returns a failed start to todo and releases the claim.
+type ExecutionUpdate struct {
+	Action        string `json:"action"`
+	Window        string `json:"window,omitempty"`
+	SessionBefore string `json:"session_before,omitempty"`
+	SessionAfter  string `json:"session_after,omitempty"`
+	ExecResolved  string `json:"exec_resolved,omitempty"`
 }
 
 // ClaimGrant answers a claim or takeover. Token is returned exactly once.

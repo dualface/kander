@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
@@ -15,6 +16,7 @@ import (
 
 func init() {
 	cli.Commands["start"] = RunStart
+	cli.RemoteCommands["start"] = RunStartRemote
 	cli.Commands["resume"] = RunResume
 	cli.Commands["dispatch"] = RunDispatch
 	cli.Commands["coordinator"] = RunCoordinator
@@ -122,6 +124,30 @@ func RunStart(args []string) int {
 		return fail(err)
 	}
 	if err := commandStart(root, agent, launcher, task); err != nil {
+		return exitLaunch(err)
+	}
+	return 0
+}
+
+// RunStartRemote implements kander start in server mode.
+func RunStartRemote(args []string) int {
+	rest, agent, launcher, _, message := parseAgentLauncher(args)
+	if message != "" {
+		usage(os.Stderr, "start")
+		fmt.Fprintln(os.Stderr, message)
+		return 2
+	}
+	if len(rest) != 1 || strings.HasPrefix(rest[0], "-") {
+		return usageFail("start", "launch.task_id_is_required")
+	}
+	result, err := StartRemote(agent, launcher, rest[0])
+	for _, warning := range result.Warnings {
+		fmt.Fprint(os.Stderr, warning)
+	}
+	if err != nil {
+		return exitLaunch(err)
+	}
+	if err := reportLaunch(t("launch.started"), board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome); err != nil {
 		return exitLaunch(err)
 	}
 	return 0

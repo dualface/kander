@@ -131,6 +131,21 @@ func GitRemote(ctx context.Context, dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// ProjectDir returns the main worktree of the repository at dir, or dir when
+// it is not in a Git repository. Agents start there, as in v1.
+func ProjectDir(dir string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "worktree", "list", "--porcelain").Output()
+	if err == nil {
+		first, _, _ := strings.Cut(string(out), "\n")
+		if main, ok := strings.CutPrefix(first, "worktree "); ok && filepath.IsAbs(main) {
+			return main
+		}
+	}
+	return dir
+}
+
 // Open resolves the project of cfg and checks protocol compatibility.
 func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error) {
 	if !Enabled(cfg) || cfg.Project.Name == "" {

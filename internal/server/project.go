@@ -26,6 +26,7 @@ type project struct {
 	root   string
 	board  string
 	events *eventLog
+	starts map[string]startCursor
 }
 
 func (p *project) log() *slog.Logger { return p.server.log.With("project", p.info.ID) }
@@ -47,6 +48,7 @@ func (p *project) open() error {
 		return err
 	}
 	p.events = events
+	p.starts = map[string]startCursor{}
 	return p.reconcileClaims()
 }
 
@@ -383,10 +385,24 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 			r.Generation, r.Handoffs = previous.Generation+1, previous.Handoffs
 		}
 		r.TokenHash = tokenHash(p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation))
+		if req.Start != nil {
+			if r.OriginalText, err = view.Document(entry.TaskID); err != nil {
+				return outcome{err: err}
+			}
+		}
 		if err := p.writeClaim(r); err != nil {
 			return outcome{err: err}
 		}
-		if _, err := board.MoveWithOptions(entry, p.board, "working", board.MoveOptions{Owner: req.Owner}); err != nil {
+		var moved board.Entry
+		if req.Start != nil {
+			moved, err = board.BeginTaskStart(entry, p.board, board.TaskStartInput{Owner: req.Owner, Session: req.Start.Session, Window: req.Start.Window, ExecResolved: req.Start.ExecResolved})
+		} else {
+			moved, err = board.MoveWithOptions(entry, p.board, "working", board.MoveOptions{Owner: req.Owner})
+		}
+		if err == nil && req.Start != nil {
+			p.starts[entry.TaskID] = startCursor{entry: moved, generation: r.Generation}
+		}
+		if err != nil {
 			if found {
 				_ = p.writeClaim(previous)
 			} else {

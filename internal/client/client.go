@@ -301,6 +301,13 @@ func (p *Project) Takeover(ctx context.Context, key, id string, req api.ClaimReq
 	return g, err
 }
 
+// Execution records a launcher fact of the holder's execution.
+func (p *Project) Execution(ctx context.Context, key, id string, update api.ExecutionUpdate, claim Claim) (api.Task, error) {
+	var t api.Task
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path(taskPath(id, "execution")...), body: update, key: key, claim: &claim}, &t)
+	return t, err
+}
+
 // Renew extends the lease of claim.
 func (p *Project) Renew(ctx context.Context, id string, claim Claim) (api.Renewal, error) {
 	var r api.Renewal

@@ -105,6 +105,13 @@ func (s *Server) Handler() http.Handler {
 		}
 		return p.takeover(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
 	})
+	s.projectRoute(mux, "POST "+task+"/execution", func(p *project, r *http.Request) outcome {
+		var req api.ExecutionUpdate
+		if err := decode(r, &req); err != nil {
+			return outcome{err: err}
+		}
+		return p.execution(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
+	})
 	s.projectRoute(mux, "POST "+task+"/renew", func(p *project, r *http.Request) outcome {
 		renewal, err := p.renew(r.PathValue("task"), holderOf(r))
 		return result(http.StatusOK, renewal, err)

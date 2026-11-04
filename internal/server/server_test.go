@@ -386,3 +386,53 @@ func TestDocumentDigestMismatchPublishesNothing(t *testing.T) {
 	_, err = a.Document(t.Context(), task.TaskID, "report.md")
 	expectCode(t, err, api.CodeNotFound)
 }
+
+func startClaim(t *testing.T, p *client.Project, id string) (api.ClaimGrant, client.Claim) {
+	t.Helper()
+	g, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-start", Owner: "claude", Start: &api.StartInput{Session: "claude pending", Window: ""}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return g, client.Claim{Token: g.Token, Generation: g.Claim.Generation}
+}
+
+func TestLauncherStartRecordsWindowAndConfirms(t *testing.T) {
+	f := newFixture(t)
+	a := f.project("host-a")
+	task := todoTask(t, a, "launch")
+	g, own := startClaim(t, a, task.TaskID)
+	if !strings.Contains(g.Task.Text, "- SESSION: claude pending") {
+		t.Fatalf("the start claim records the session:\n%s", g.Task.Text)
+	}
+	shown, err := a.Execution(t.Context(), "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionWindow, Window: "tmux:s1:w1"}, own)
+	if err != nil || !strings.Contains(shown.Text, "- WINDOW: tmux:s1:w1") {
+		t.Fatalf("window: %v", err)
+	}
+	if _, err := a.Execution(t.Context(), "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionConfirm}, own); err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.Execution(t.Context(), "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionRollback}, own)
+	expectCode(t, err, api.CodeInvalidRequest)
+	b := f.project("host-b")
+	_, err = b.Execution(t.Context(), "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionWindow, Window: "x"}, client.Claim{})
+	expectCode(t, err, api.CodeHeldByOther)
+}
+
+func TestFailedLauncherStartRollsBackToTodo(t *testing.T) {
+	f := newFixture(t)
+	a := f.project("host-a")
+	task := todoTask(t, a, "rollback")
+	_, own := startClaim(t, a, task.TaskID)
+	shown, err := a.Execution(t.Context(), "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionRollback}, own)
+	if err != nil || shown.State != "todo" || shown.Claim == nil || shown.Claim.Status != api.ClaimReleased {
+		t.Fatalf("rollback must return the card to todo and release the claim: %+v %v", shown.Claim, err)
+	}
+	if strings.Contains(shown.Text, "claude pending") {
+		t.Fatal("rollback restores the card text")
+	}
+	_, err = a.Renew(t.Context(), task.TaskID, own)
+	expectCode(t, err, api.CodeLeaseInvalid)
+	if g, err := claim(t, a, task.TaskID, "host-b"); err != nil || g.Claim.Generation != 2 {
+		t.Fatalf("the task is claimable again with the next generation: %v", err)
+	}
+}

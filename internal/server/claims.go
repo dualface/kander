@@ -27,6 +27,9 @@ type claimRecord struct {
 	ExpiresAt   time.Time     `json:"expires_at"`
 	RenewedAt   time.Time     `json:"renewed_at"`
 	Handoffs    []api.Handoff `json:"handoffs,omitempty"`
+	// OriginalText is the card before a launcher start claim, kept so a
+	// failed start can return the card to todo.
+	OriginalText string `json:"original_text,omitempty"`
 }
 
 const claimPending = "pending"
