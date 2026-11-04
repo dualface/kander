@@ -12,6 +12,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func dispositionCommand(name string) bool {
@@ -30,6 +31,9 @@ func runDispositionCommand(args []string) int {
 	}
 	if len(args) < 3 {
 		return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
+	}
+	if cfg, err := config.Load(true); err == nil && remote.Enabled(cfg) {
+		return runRemoteDisposition(cfg, args)
 	}
 	action, cwd, input := args[0], args[1], args[2]
 	if !filepath.IsAbs(cwd) {

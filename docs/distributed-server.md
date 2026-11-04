@@ -47,6 +47,8 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/tasks/{t}/move` | State moves other than claims |
 | `POST /projects/{p}/tasks/{t}/claim`, `/takeover`, `/renew` | Ownership |
 | `GET`, `POST /projects/{p}/tasks/{t}/requests`, `POST .../requests/{r}/answer` | Collaboration requests |
+| `POST /projects/{p}/tasks/{t}/execution` | Launcher facts of the holder: window, session, confirm, rollback |
+| `POST /projects/{p}/reviews/plan`, `POST .../reviews/batches/{b}/aggregate`, `GET .../reviews/batches/{b}/view`, `POST .../reviews/close`, `GET .../reviews/progress/{t}` | Review gate evidence |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
 Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
@@ -73,9 +75,17 @@ A claim is the server-side ownership of one task by one execution, kept in `cont
 
 A claim is written `pending` before the board move and turned `active` after it. Startup turns a pending claim whose card is in `working` with that owner into an active lease, and releases any other pending claim. Old executions therefore cannot overwrite a newer one: their token hash and generation no longer match, whatever order their late renewals, writes, rollbacks, or queued submissions arrive in.
 
+## Starting an agent
+
+`kander start` in server mode claims the `todo` card with a start input (initial session, window, resolved pins); the server runs `board.BeginTaskStart`, so the move, the start metadata, and the pending execution record land in one board transaction, and it keeps the launcher's board cursor in memory for the holder (a restart rebinds a cursor from the current execution record). The client then launches the agent on its own host with a fresh `KANDER_EXECUTION_ID` (in the environment of a spawned process, as an `env NAME=value` prefix of a POSIX container command, or a PowerShell assignment), reports `WINDOW` and the discovered session through `POST .../execution`, and confirms the start. A launch failure posts `rollback`: the server restores the card text from before the claim, returns it to `todo`, and releases the claim. The managed agent PID of a spawned process is stored in the credential, so the worker can stop it when the lease is lost.
+
+## Review gate
+
+The client runs every Git check of `kander review plan`, `aggregate`, `close`, and `progress` against its own repository, exactly as v1 does, and sends the board request together with the Git facts. The server revalidates structure and bindings with the board package and publishes atomically; it never runs Git. Every claimed member of a plan or batch must be held by the caller. A plan over cards of several holders needs a joint confirmation (**planned**) and is refused with `held_by_other`. The other evidence commands (`extend-plan`, `advance`, `assign`, `disposition`, `interpret`, `map-legacy`) are not adapted yet (**planned**). The client prints each answer through its board type, so the aggregate bytes a close request hashes are the same as in v1.
+
 ## Client and worker
 
-The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, and `pick` run against the server project; the other commands are not adapted yet (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, and the review gate commands above run against the server project; the other commands are not adapted yet (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`.

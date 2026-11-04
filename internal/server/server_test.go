@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/server"
 )
@@ -434,5 +436,59 @@ func TestFailedLauncherStartRollsBackToTodo(t *testing.T) {
 	expectCode(t, err, api.CodeLeaseInvalid)
 	if g, err := claim(t, a, task.TaskID, "host-b"); err != nil || g.Claim.Generation != 2 {
 		t.Fatalf("the task is claimable again with the next generation: %v", err)
+	}
+}
+
+// The N/A review gate runs over the server: only the holder publishes the
+// plan and the closure, and done releases the claim.
+func TestReviewGateAndCompletionOverTheServer(t *testing.T) {
+	f := newFixture(t)
+	a, b := f.project("host-a"), f.project("host-b")
+	task := todoTask(t, a, "gate")
+	g, err := claim(t, a, task.TaskID, "host-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := &client.Claim{Token: g.Token, Generation: g.Claim.Generation}
+	cwd := t.TempDir()
+	plan := map[string]any{
+		"schema": 1, "sealed": true, "plan_id": "plan-1", "author": "claude", "basis": "test", "cwd": cwd, "report_language": "en",
+		"task_ids": []string{task.TaskID},
+		"batches": []map[string]any{{"batch_id": "batch-1", "task_ids": []string{task.TaskID}, "base": "N/A", "target_commit": "N/A",
+			"requirements": map[string]string{"PMQA": "N/A: test", "Security": "N/A: test"}}},
+	}
+	_, err = b.ReviewPlan(t.Context(), "", plan, nil)
+	expectCode(t, err, api.CodeHeldByOther)
+	if _, err := a.ReviewPlan(t.Context(), "", plan, own); err != nil {
+		t.Fatal(err)
+	}
+	view, err := a.ReviewAggregate(t.Context(), "", "batch-1", own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v board.ReviewBatchView
+	if err := json.Unmarshal(view, &v); err != nil {
+		t.Fatal(err)
+	}
+	report := api.Document{Path: "report.md", Text: "done", ExpectedRevision: g.Task.Revision}
+	if shown, err := a.Show(t.Context(), task.TaskID); err == nil {
+		report.ExpectedRevision = shown.Revision
+	}
+	if _, err := a.PutDocument(t.Context(), "", task.TaskID, report, own); err != nil {
+		t.Fatal(err)
+	}
+	request := board.ReviewCloseRequest{BatchID: "batch-1", ExpectedRevision: v.Batch.Revision, ViewHash: board.ReviewViewDigest(v), Author: "claude",
+		Roles: map[string]board.ReviewRoleConclusion{}, ResolvedFailures: map[string]string{}, Opinions: []board.ReviewOpinion{}}
+	edges, _, err := board.ReviewClosureEdges(v, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence := board.ReviewGitEvidence{CWD: cwd, Head: "N/A", NotApplicable: "test", VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges}
+	if _, err := a.ReviewClose(t.Context(), "", map[string]any{"request": request, "evidence": evidence}, own); err != nil {
+		t.Fatal(err)
+	}
+	done, err := a.Move(t.Context(), "", task.TaskID, api.Move{State: "done", Result: "completed"}, own)
+	if err != nil || done.State != "done" || done.Claim.Status != api.ClaimReleased {
+		t.Fatalf("done must release the claim: %+v %v", done.Claim, err)
 	}
 }

@@ -145,6 +145,7 @@ func (s *Server) Handler() http.Handler {
 		}
 		return outcome{status: http.StatusOK, body: p.events.read(r.Context(), r.URL.Query().Get("cursor"), wait)}
 	})
+	s.reviewRoutes(mux)
 	return mux
 }
 

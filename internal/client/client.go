@@ -346,3 +346,38 @@ func (p *Project) Events(ctx context.Context, cursor string, wait time.Duration)
 	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("events"), query: q}, &page)
 	return page, err
 }
+
+// ReviewPlan publishes a review plan; body is the board plan JSON.
+func (p *Project) ReviewPlan(ctx context.Context, key string, plan any, claim *Claim) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("reviews", "plan"), body: plan, key: key, claim: claim}, &out)
+	return out, err
+}
+
+// ReviewAggregate publishes the disposition view of a batch.
+func (p *Project) ReviewAggregate(ctx context.Context, key, batch string, claim *Claim) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("reviews", "batches", url.PathEscape(batch), "aggregate"), key: key, claim: claim}, &out)
+	return out, err
+}
+
+// ReviewBatchView reads the published view of a batch.
+func (p *Project) ReviewBatchView(ctx context.Context, batch string) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("reviews", "batches", url.PathEscape(batch), "view")}, &out)
+	return out, err
+}
+
+// ReviewClose closes a batch with the closure request and client Git evidence.
+func (p *Project) ReviewClose(ctx context.Context, key string, request any, claim *Claim) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("reviews", "close"), body: request, key: key, claim: claim}, &out)
+	return out, err
+}
+
+// ReviewProgress reads the review gate progress of a task.
+func (p *Project) ReviewProgress(ctx context.Context, task string) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("reviews", "progress", url.PathEscape(task))}, &out)
+	return out, err
+}
