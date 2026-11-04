@@ -262,5 +262,8 @@ func Run(arguments []string) int {
 		fmt.Fprintln(os.Stdout, config.CommandUsage(name))
 		return 0
 	}
+	if remoteRunner, ok := RemoteCommands[name]; ok && serverMode() {
+		runner = remoteRunner
+	}
 	return runner(parsed.rest)
 }

@@ -150,6 +150,8 @@ type Config struct {
 	Models          Models                       `json:"models"`
 	TUI             TUI                          `json:"tui"`
 	Issue           Issue                        `json:"issue"`
+	Server          Server                       `json:"server,omitzero"`
+	Project         Project                      `json:"project,omitzero"`
 	Language        string                       `json:"language"`
 	AgentLanguage   string                       `json:"agent_language"`
 	Agents          map[string]AgentDefinition   `json:"agents,omitempty"`
@@ -841,6 +843,18 @@ func Validate(raw any) (*Config, error) {
 			return nil, err
 		}
 	}
+	var server Server
+	if _, exists := obj["server"]; exists {
+		if server, err = validateServer(obj["server"]); err != nil {
+			return nil, err
+		}
+	}
+	var project Project
+	if _, exists := obj["project"]; exists {
+		if project, err = validateProject(obj["project"]); err != nil {
+			return nil, err
+		}
+	}
 	languageRaw, hasLanguage := obj["language"]
 	if !hasLanguage {
 		languageRaw = "en"
@@ -870,6 +884,8 @@ func Validate(raw any) (*Config, error) {
 		Models:          models,
 		TUI:             tui,
 		Issue:           issue,
+		Server:          server,
+		Project:         project,
 		Language:        language,
 		AgentLanguage:   agentLanguage,
 		Agents:          definitions,

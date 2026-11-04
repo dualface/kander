@@ -29,6 +29,8 @@ var overlayAllowedKeys = map[string]struct{}{
 	"models":         {},
 	"tui":            {},
 	"issue":          {},
+	"server":         {},
+	"project":        {},
 	"language":       {},
 	"agent_language": {},
 	"agents":         {},

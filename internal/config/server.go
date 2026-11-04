@@ -1,0 +1,55 @@
+package config
+
+import (
+	"net/url"
+	"regexp"
+	"strings"
+)
+
+// Server selects the kander-server a v2 client talks to.
+type Server struct {
+	URL string `json:"url,omitempty"`
+}
+
+// Project names the server project a repository binds to. Hosts with the same
+// name on one server share one board.
+type Project struct {
+	Name string `json:"name,omitempty"`
+}
+
+var projectNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+// validateServer accepts a missing url; commands that need the server report
+// the missing value when they run.
+func validateServer(raw any) (Server, error) {
+	obj, ok := asObject(raw)
+	if !ok {
+		return Server{}, configErrorf("config.server_must_be_a_json_object")
+	}
+	var s Server
+	if value, exists := obj["url"]; exists {
+		text, ok := value.(string)
+		u, err := url.Parse(text)
+		if !ok || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+			return Server{}, configErrorf("config.server_url_invalid")
+		}
+		s.URL = strings.TrimRight(text, "/")
+	}
+	return s, nil
+}
+
+func validateProject(raw any) (Project, error) {
+	obj, ok := asObject(raw)
+	if !ok {
+		return Project{}, configErrorf("config.project_must_be_a_json_object")
+	}
+	var p Project
+	if value, exists := obj["name"]; exists {
+		text, ok := value.(string)
+		if !ok || !projectNameRe.MatchString(text) {
+			return Project{}, configErrorf("config.project_name_invalid")
+		}
+		p.Name = text
+	}
+	return p, nil
+}
