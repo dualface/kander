@@ -1,0 +1,85 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"github.com/dualface/kander/internal/version"
+)
+
+// DefaultListen binds loopback; serving a LAN is an explicit choice because
+// the first version has no authentication.
+const DefaultListen = "127.0.0.1:7878"
+
+// Main runs kander-server until SIGINT or SIGTERM.
+func Main(args []string) int {
+	flags := flag.NewFlagSet("kander-server", flag.ContinueOnError)
+	data := flags.String("data", "", "data directory (default: $XDG_DATA_HOME/kander-server or ~/.local/share/kander-server)")
+	listen := flags.String("listen", DefaultListen, "listen address")
+	ttl := flags.Duration("ttl", DefaultTTL, "claim lease TTL")
+	renew := flags.Duration("renew", DefaultRenewInterval, "claim renewal interval announced to clients")
+	showVersion := flags.Bool("version", false, "print the version and exit")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if *showVersion {
+		fmt.Println(version.String())
+		return 0
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	dir, err := dataDir(*data)
+	if err != nil {
+		logger.Error("data directory", "error", err)
+		return 1
+	}
+	s, err := Open(Options{DataDir: dir, TTL: *ttl, RenewInterval: *renew, Logger: logger, Version: version.String()})
+	if err != nil {
+		logger.Error("open failed", "error", err)
+		return 1
+	}
+	defer s.Close()
+	listener, err := net.Listen("tcp", *listen)
+	if err != nil {
+		logger.Error("listen failed", "error", err)
+		return 1
+	}
+	httpServer := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutdown)
+	}()
+	logger.Info("listening", "address", listener.Addr().String(), "version", version.String())
+	if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("serve failed", "error", err)
+		return 1
+	}
+	return 0
+}
+
+func dataDir(flagValue string) (string, error) {
+	if flagValue != "" {
+		return filepath.Abs(flagValue)
+	}
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" && filepath.IsAbs(xdg) {
+		return filepath.Join(xdg, "kander-server"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".local", "share", "kander-server"), nil
+}

@@ -7,6 +7,13 @@ This file is the development contract for the Kander repository itself. The work
 - In this repository the second-stage role `Security` is always marked N/A and never run; `PMQA` remains applicable.
 - When every change since the review base is Markdown rules or documentation, skip the review. As soon as any script, code, or other non-Markdown file is included, run `PMQA` per the applicable rules; `Security` stays N/A per the previous bullet.
 
+## v2 Development Branch
+
+- `v2` is a long-lived branch for the distributed client-server architecture. It runs in parallel with `main` and `develop`, which keep maintaining v1. `v2` started from `develop` at `1b0d425dfbfcb4ca34b7ff7507e28825aa6233bc`.
+- v2 work items branch from `v2` (or `origin/v2`) and integrate back into `v2` only. Never integrate v2 work into `develop` or `main`, and never fall back to `origin/develop` because a v2 ref is missing. A v1 fix is ported to `v2` by a separate change and verified again there; the long-lived branches are never merged into each other automatically.
+- This exception binds only the development of this repository. It does not change the integration branch the released rules prescribe for downstream projects.
+- v2 builds two binaries: `cmd/kander` (the client) and `cmd/kander-server` (the board server). Development releases are tagged `v2.0.0-alpha.N`, are published as GitHub prereleases, and never replace the v1 stable release. A formal v2 release, a default branch change, and replacing `main` with `v2` need an explicit user decision.
+
 ## README Editing
 
 - README series files (`README.md` and `README-*.md`) are reserved for manual editing by the user. Agents must not edit, translate, synchronize, or regenerate them, including during feature work, releases, or documentation maintenance. Describe any proposed README changes to the user instead of applying them.
@@ -22,7 +29,7 @@ This file is the development contract for the Kander repository itself. The work
 ## Go Module and Package Map
 
 - Module path: `github.com/dualface/kander`.
-- Single binary entry point: `cmd/kander`. `main.go` only calls `internal/cli.Run`; the other files in that directory wire in implementation packages via blank imports, triggering each package's `init` bindings. Do not add a second command entry point.
+- Two binary entry points: `cmd/kander` (the client) and `cmd/kander-server` (the board server, see [Distributed server](docs/distributed-server.md)). `cmd/kander/main.go` only calls `internal/cli.Run`; the other files in that directory wire in implementation packages via blank imports, triggering each package's `init` bindings. `cmd/kander-server/main.go` only calls `internal/server.Main`. Do not add a third command entry point.
 - Running `kander` without a subcommand opens the terminal kanban directly: `internal/cli` exposes `DefaultRunner`, set by `internal/tui` at registration time; `internal/cli` does not depend back on `internal/tui`.
 - `internal/cli` centrally maintains the command-name and Runner registry. New commands extend that table; `terminal` binds the definition list and conformance checker directly, without changing `main.go`. `doctor`/`config`/`version` and the board commands are wired in this package; launch/liveness/notify/review/takeover/`internal/check` override their Runners from the implementation packages (liveness overrides `list` so `--agent-status` can observe agents, which board cannot import). `check` stays unimplemented in the CLI table until the full binary lets `internal/check` own it: `delivery`/`overlap` are board-free Git analyzers, and the no-mode form delegates to liveness (structural check plus the liveness section). The storage commands of `dispatch` are first wired to board, and the full binary lets launch add the Git integration evidence and exit-fact verification entry.
 - Package responsibilities:
@@ -31,6 +38,9 @@ This file is the development contract for the Kander repository itself. The work
 | ------------------- | -------------------------------------------------------------------- |
 | `internal/cli`      | Command-name and Runner registry, global `--lang`, argument parsing and dispatch |
 | `internal/config` | Install scopes, optional project `.kander-config.json` overlay merge and sparse overlay writes, `config.json` schema/repair, embedded execution-agent definitions under `internal/config/agents/` (`go:embed`, `schema_version` 1; user `agents.<name>` overlays them; `agents/extensions/` embeds agent-declared extension payloads such as the pi rules extension, an embedded-only contract overlays cannot change), read access for language/agent language/launcher/agents/models (including `chat_agent` and `models.chat`) /rules/TUI, and the launcher name registry (built-in defaults, names registered by the terminal layer, and lazily supplied names of loaded terminal definitions; `config` never imports `internal/terminal`) |
+| `internal/api`      | The `/api/v1` wire contract shared by `kander-server` and the client: resource and request types, stable error codes, header names, the protocol version range, identity validation; no behavior, imported one way by both sides |
+| `internal/server`   | `kander-server`: the single-instance data directory lock, project registry (names map to stable internal IDs, a bound Git remote refuses another), per-project boards below the data directory, claims with leases, generations, derived tokens and takeover handoffs, collaboration requests, idempotency receipts with crash inspection, the event log with long-poll cursors, startup recovery before readiness, and the HTTP routes; reuses `internal/board` transactions and never runs Git; see [Distributed server](docs/distributed-server.md) |
+| `internal/client`   | The REST client of `/api/v1`: protocol handshake, idempotency keys reused across transport retries, claim headers; never touches a local board |
 | `internal/version`  | Injected build version; String() returns it or `dev`                  |
 | `internal/i18n`     | go-i18n message catalogs and template rendering; one general catalog per language plus optional topic catalogs under `locales/<topic>/`, merged into one bundle so no shared catalog crosses the reviewable file ceiling; does not depend on config, the language is passed in by the caller |
 | `internal/fs`       | POSIX no-follow and Windows handle/reparse/DACL/shared and exclusive locks, including no-follow file and empty-directory removal |
@@ -200,4 +210,5 @@ Go runtime writes of configuration, board migration, the review runtime, Git exc
 - [Board snapshot](docs/board-snapshot.md): the `kander list --json` schema, field types and value sets, agent observation, and the `change_token` rule.
 - [dsh launcher](docs/dsh-launcher.md): the `dsh` launcher, the `kander-dsh` plugin architecture, panes and IDs, the carrier host, the socket protocol and version check, the JavaScript interface, installation in dsh Web and Desktop, and limits.
 - [dsh Kander view](docs/dsh-kander-view.md): the plugin's Kander view in dsh (board, Start, agent terminal tabs, focus, two hosts), the plugin configuration and `kander` lookup, the HTTP routes and the event-stream output, and the page implementation.
+- [Distributed server](docs/distributed-server.md): the v2 server/client split, data directory, protocol and error codes, idempotency, claims, leases, generations and takeover, collaboration requests, events, and the planned stages.
 - [Composite state model test](docs/model-test.md): the bounded search over card flow, reading a failure, adding a transition, the dead-end allow list, and the invariant registry.

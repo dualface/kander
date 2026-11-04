@@ -446,6 +446,35 @@ func InitBoardWithOptions(project string, options InitOptions) (root string, exc
 	return root, exclude, rules, migrated, nil
 }
 
+// InitStorage creates an empty board at an absolute root without the Git
+// exclude, rules lookup, or migration of InitBoard. kander-server uses it for
+// the per-project board below its data directory, which belongs to no Git
+// worktree.
+func InitStorage(root string) error {
+	if !filepath.IsAbs(root) {
+		return kanbanError("board.board_path_is_not_a_directory", root)
+	}
+	if err := ensureWindowsLexicalPathSafe(root); err != nil {
+		return err
+	}
+	if existsNoFollow(root) && !isDirNoFollow(root) {
+		return kanbanError("board.board_path_is_not_a_directory", root)
+	}
+	if isWindows() {
+		if err := ensurePrivateBoardDirectory(root); err != nil {
+			return err
+		}
+	} else if err := fs.EnsureInheritedDirectoryPath(root); err != nil {
+		return wrapFS(err, "board.board_path_is_not_a_directory", root)
+	}
+	for _, state := range States {
+		if err := createStateDirectory(filepath.Join(root, state)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func ensureLayout(root string) error {
 	if err := ensureWindowsLexicalPathSafe(root); err != nil {
 		return err
