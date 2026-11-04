@@ -507,7 +507,27 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 			}),
 		}
 		r.TokenHash = tokenHash(p.server.token(p.info.ID, r.TaskID, r.ExecutionID, r.Generation))
+		// The card's execution ledger hands off in the same project lock: the
+		// new owner, session, and window replace the old execution's, and the
+		// new executor reports and confirms its start through .../execution.
+		snapshot, err := board.ReadSnapshot(p.board, t.TaskID)
+		if err != nil {
+			return outcome{err: err}
+		}
+		if _, err := board.BindExecutionCursor(p.board, snapshot.Entry); err != nil {
+			return outcome{err: err}
+		}
+		in := board.TakeoverInput{Owner: req.Owner, Decision: req.Decision}
+		if req.Start != nil {
+			in.Session, in.Window, in.ExecResolved = req.Start.Session, req.Start.Window, req.Start.ExecResolved
+		}
+		if _, err := board.BeginTakeover(p.board, snapshot.Entry, in); err != nil {
+			return outcome{err: err}
+		}
+		p.starts[r.TaskID] = startCursor{entry: snapshot.Entry, generation: r.Generation}
 		if err := p.writeClaim(r); err != nil {
+			// The ledger handed off; the claim record follows on retry, which
+			// finds no live lease and the handed-off generation.
 			return outcome{err: err}
 		}
 		if err := p.supersedeRequests(r.TaskID, r.Generation); err != nil {

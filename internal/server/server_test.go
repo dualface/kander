@@ -215,6 +215,9 @@ func TestExpiredLeaseNeedsExplicitTakeoverAndFencesTheOldExecution(t *testing.T)
 	if next.Claim.Generation != 2 || next.Token == "" {
 		t.Fatalf("takeover must grant generation 2: %+v", next.Claim)
 	}
+	if !strings.Contains(next.Task.Text, "- OWNER: codex") {
+		t.Fatalf("the takeover must hand the card's execution to the new owner:\n%s", next.Task.Text)
+	}
 	// Every late write of the old execution is refused.
 	late := api.Document{Path: "report.md", Text: "late", ExpectedRevision: next.Task.Revision}
 	_, err = a.PutDocument(t.Context(), "", task.TaskID, late, &old)
