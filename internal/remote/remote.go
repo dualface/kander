@@ -189,9 +189,12 @@ type Credential struct {
 	RenewedAt     time.Time    `json:"renewed_at"`
 	// AgentPID is the managed agent process the worker stops when the lease
 	// is lost; zero when the claim was taken by hand.
-	AgentPID   int    `json:"agent_pid,omitzero"`
-	Lost       bool   `json:"lost,omitzero"`
-	LostReason string `json:"lost_reason,omitempty"`
+	AgentPID int  `json:"agent_pid,omitzero"`
+	Lost     bool `json:"lost,omitzero"`
+	// Delivered lists the collaboration requests the worker already typed
+	// into the agent.
+	Delivered  []string `json:"delivered,omitempty"`
+	LostReason string   `json:"lost_reason,omitempty"`
 }
 
 // Claim returns the headers form of the credential.

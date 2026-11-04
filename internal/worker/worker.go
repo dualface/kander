@@ -13,10 +13,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
@@ -34,7 +37,15 @@ type Options struct {
 	Now      func() time.Time
 	// Stop ends a managed agent process; the default signals the PID.
 	Stop func(pid int) error
+	// Deliver types one line into the agent recorded by the card's WINDOW
+	// and SESSION; the default is Deliver.
+	Deliver func(window, session, text string) error
 }
+
+// Deliver is the terminal delivery of collaboration requests. The notify
+// package sets it at init, so this package stays free of terminal code; a
+// binary without it keeps requests open for the holder to read.
+var Deliver func(window, session, text string) error
 
 // Run is `kander worker`: it holds the worker lock of the client home and
 // renews until idle or signaled.
@@ -80,6 +91,9 @@ func Serve(ctx context.Context, o Options) error {
 	}
 	if o.Stop == nil {
 		o.Stop = stopProcess
+	}
+	if o.Deliver == nil {
+		o.Deliver = Deliver
 	}
 	if err := os.MkdirAll(o.Home, 0o700); err != nil {
 		return err
@@ -181,6 +195,7 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	switch {
 	case err == nil:
 		c.RenewedAt = now
+		w.deliver(callCtx, log, project, &c)
 		if err := remote.WriteCredential(w.o.Home, c); err != nil {
 			log.Error("credential write failed", "error", err)
 		}
@@ -225,4 +240,56 @@ func (w *loop) lose(log *slog.Logger, c remote.Credential, reason string) {
 	if err := remote.WriteCredential(w.o.Home, c); err != nil {
 		log.Error("credential write failed", "error", err)
 	}
+}
+
+// deliver hands the open requests of this generation to the agent once each.
+// A delivered request is accepted with the holder's claim; the agent answers
+// it with kander request answer. A failed delivery stays open and is tried
+// again on the next renewal.
+func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential) {
+	if w.o.Deliver == nil {
+		return
+	}
+	requests, err := project.Requests(ctx, c.TaskID)
+	if err != nil {
+		log.Warn("reading requests failed", "error", err)
+		return
+	}
+	var task *api.Task
+	for _, r := range requests {
+		if r.Status != api.RequestOpen || r.TargetGeneration != c.Generation || slices.Contains(c.Delivered, r.ID) {
+			continue
+		}
+		if task == nil {
+			t, err := project.Show(ctx, c.TaskID)
+			if err != nil {
+				log.Warn("reading the task failed", "error", err)
+				return
+			}
+			task = &t
+		}
+		window, session := board.MetadataFrom(task.Text, board.FieldWindow), board.MetadataFrom(task.Text, board.FieldSession)
+		if err := w.o.Deliver(window, session, requestLine(c.TaskID, r)); err != nil {
+			log.Warn("request delivery failed; it stays open", "request", r.ID, "error", err)
+			continue
+		}
+		c.Delivered = append(c.Delivered, r.ID)
+		if _, err := project.AnswerRequest(ctx, client.NewKey(), c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, Note: "delivered to the agent"}, *c.Claim()); err != nil {
+			log.Warn("accepting a delivered request failed", "request", r.ID, "error", err)
+		}
+		log.Info("request delivered", "request", r.ID, "kind", r.Kind)
+	}
+}
+
+// requestLine renders a request as one terminal line; control characters of
+// the remote message never reach the pane.
+func requestLine(task string, r api.CollabRequest) string {
+	message := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, r.Message)
+	return fmt.Sprintf("# kander-request %s %s for %s from %s: %s (answer: kander request answer %s %s done|rejected [note])",
+		r.ID, r.Kind, task, r.FromClient, message, task, r.ID)
 }

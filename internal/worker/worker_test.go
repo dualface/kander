@@ -23,6 +23,7 @@ type harness struct {
 	http    *httptest.Server
 	home    string
 	stopped []int
+	lines   []string
 	loop    *loop
 }
 
@@ -41,6 +42,9 @@ func newHarness(t *testing.T) *harness {
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h.loop = &loop{o: Options{Home: h.home, Logger: quiet, Now: h.now, Stop: func(pid int) error {
 		h.stopped = append(h.stopped, pid)
+		return nil
+	}, Deliver: func(window, session, text string) error {
+		h.lines = append(h.lines, text)
 		return nil
 	}}, clients: map[string]*client.Client{}}
 	return h
@@ -196,5 +200,28 @@ func TestSecondWorkerExits(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWorkerDeliversRequestsOnce(t *testing.T) {
+	h := newHarness(t)
+	_, c := h.claimed("deliver")
+	b := h.project("host-b")
+	r, err := b.CreateRequest(t.Context(), "", c.TaskID, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix\nthe test", TargetGeneration: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		h.advance(16 * time.Second)
+		if _, err := h.loop.pass(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(h.lines) != 1 || !strings.Contains(h.lines[0], r.ID) || strings.Contains(h.lines[0], "\n") {
+		t.Fatalf("one single-line delivery expected: %q", h.lines)
+	}
+	requests, err := b.Requests(t.Context(), c.TaskID)
+	if err != nil || requests[0].Status != api.RequestAccepted {
+		t.Fatalf("a delivered request is accepted: %+v %v", requests, err)
 	}
 }

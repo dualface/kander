@@ -8,7 +8,11 @@ import (
 
 // worker is an internal command: `kander` starts it detached after a claim.
 // It is not listed in the usage text.
-func init() { Commands["worker"] = worker.Run }
+func init() {
+	Commands["worker"] = worker.Run
+	// request exists only in server mode; v1 has no collaboration requests.
+	Commands["request"] = remote.RunRequest
+}
 
 // RemoteCommands are the server-mode runners. When the effective config sets
 // server.url they replace the v1 runners of the same name, so these commands
