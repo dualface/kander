@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,8 +22,12 @@ import (
 // the first version has no authentication.
 const DefaultListen = "127.0.0.1:7878"
 
-// Main runs kander-server until SIGINT or SIGTERM.
+// Main runs kander-server until SIGINT or SIGTERM, or runs the import
+// subcommand.
 func Main(args []string) int {
+	if len(args) > 0 && args[0] == "import" {
+		return runImport(args[1:])
+	}
 	flags := flag.NewFlagSet("kander-server", flag.ContinueOnError)
 	data := flags.String("data", "", "data directory (default: $XDG_DATA_HOME/kander-server or ~/.local/share/kander-server)")
 	listen := flags.String("listen", DefaultListen, "listen address")
@@ -82,4 +87,39 @@ func dataDir(flagValue string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".local", "share", "kander-server"), nil
+}
+
+// runImport is `kander-server import`: an explicit, offline migration of one
+// v1 board into an empty project. It takes the data directory lock, so it
+// refuses to run beside a serving instance.
+func runImport(args []string) int {
+	flags := flag.NewFlagSet("kander-server import", flag.ContinueOnError)
+	data := flags.String("data", "", "data directory")
+	name := flags.String("project", "", "project name (the clients' project.name)")
+	remoteURL := flags.String("remote", "", "Git remote URL the project binds to")
+	from := flags.String("from", "", "v1 board directory (the kanban/ of the main worktree)")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || *name == "" || *from == "" {
+		fmt.Fprintln(os.Stderr, "usage: kander-server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR")
+		return 2
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	dir, err := dataDir(*data)
+	if err != nil {
+		logger.Error("data directory", "error", err)
+		return 1
+	}
+	s, err := Open(Options{DataDir: dir, Logger: logger, Version: version.String()})
+	if err != nil {
+		logger.Error("open failed", "error", err)
+		return 1
+	}
+	defer s.Close()
+	result, err := s.Import(*name, *remoteURL, *from)
+	if err != nil {
+		logger.Error("import failed", "error", err)
+		return 1
+	}
+	out, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println(string(out))
+	return 0
 }

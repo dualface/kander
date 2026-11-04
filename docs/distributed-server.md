@@ -112,6 +112,17 @@ Each project keeps `control/events.jsonl`. Events carry identities (`task_change
 
 The server logs JSON lines with method, path, status, client ID, operation ID (derived from the idempotency key), claim generation, and duration; claim transitions log project, task, and generation. Claim tokens are never logged.
 
+## Migrating a v1 board
+
+`kander-server import [--data DIR] --project NAME [--remote URL] --from KANBAN_DIR` imports one v1 board into a project. It takes the data directory lock, so it refuses to run while the server serves that directory. Before running it, stop the v1 executing agents and other writers of the source board, as for `kander init --maintenance`.
+
+1. It recovers the source board's interrupted transactions and takes a snapshot: every regular file, sorted, digested by path and SHA-256. A symlink, junction, or other entry refuses the import.
+2. The project must have no tasks. Importing the same snapshot into the same project again answers with the earlier import; any other import into a project with tasks is refused with `project_not_empty`. Two existing boards are never merged.
+3. Every file is copied byte for byte into a staging directory beside the project board, the staged snapshot must equal the source snapshot, the staged board must load with the same task set and pass `kander check --all`.
+4. Only then is the staging directory published in one rename, and `control/import.json` records the snapshot.
+
+The source board is never changed and stays as the local backup; review originals, journals, and their hashes keep their bytes. Claimed cards of the old board have no claim record, read as generation 0, and need an explicit takeover. Afterwards each clone sets `server.url` and `project.name` (for example in `.kander-config.json`) and stops using the local `kanban/`.
+
 ## Build and release
 
 `make build` (and `make-windows.cmd`) builds `kander` and `kander-server`. The release workflow packages each binary for every platform in its own archive (`kander-<os>-<arch>` and `kander-server-<os>-<arch>`), because the client self-updater accepts an archive with exactly one `kander` entry. A tag with a suffix, such as `v2.0.0-alpha.N`, is published as a GitHub prerelease that is never marked latest and never syncs the Homebrew formula; the MSIX job already skips suffixed tags. The update check reads `releases/latest` and refuses prerelease and suffixed versions, so a v1 stable client never installs a v2 prerelease, and a v2 prerelease client is never offered the older v1 stable release.
