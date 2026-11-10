@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.1 — 2026-11-10
+
+- Rules: new task cards must save the detailed plan confirmed by the user and agent before creation self-review, including cards left in backlog for later execution. Small cards use `IMPLEMENTATION`; large cards use `plan.md` linked from `spec.md`. The saved plan preserves the technical approach, ordered steps, constraints, decisions, and verification needed by an agent that did not join the discussion. Existing cards need no backfill and are not blocked by a missing plan.
+- Rules: card templates, content requirements, scope declarations, conditional workflow fields, and creation checks now have one definition in `snippets/card-content.md`. Intake, task group, issue, review, and execution rules reference it while retaining their applicability and operational responsibilities. Additional review scope detail remains conditional on the review module or an explicit request for the full review flow.
+- Rules: creation self-review checks plan completeness, and independent card reviewers read linked plans and attachments. Multi-card plans must preserve the full confirmed plan across their members; temporary handover notes never replace the saved card content.
+
 ## v1.2.0 — 2026-11-04
 
 - New launcher `dsh` (POSIX only): runs the executing agent inside a DeepSeek Harness host (dsh Web or dsh Desktop) through the new `kander-dsh` plugin in `integrations/kander-dsh/`. Install the plugin with `dsh plugin --profile web add <path>` (or `--profile desktop`); it is not published to npm. Select the launcher with `launcher: dsh` or `kander start --launcher dsh`; `auto` never picks it. `WINDOW` is `dsh:<container>:<pane>`. `kander check`, `kander notify`, `kander resume`, `kander dismiss` and `kander terminal test dsh` work on these cards; the agent ends with the dsh host. Kander drives the plugin socket `$DSH_HOME/kander/mux.sock` (`~/.dsh/kander/mux.sock` without `DSH_HOME`) with `curl` through the embedded definition `dsh.json`, and `start` and `resume` fail before creating a pane when the plugin and Kander speak different protocol versions, naming the side to upgrade. When several dsh hosts share one `DSH_HOME`, the first holds the socket and another takes it over without a restart once the first exits. See `docs/dsh-launcher.md`.
