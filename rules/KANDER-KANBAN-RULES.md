@@ -112,7 +112,7 @@ any state except archived and trash -> trash          only on explicit user requ
 
 ## Entries and Documents
 
-This section alone defines the card template, contract content, and saved plan requirements. Other rules reference it.
+Before creating, completing, updating, or reviewing card content, read `snippets/card-content.md`. It is the single definition of card content; this section governs storage and controlled publication.
 
 ### Invariants
 
@@ -130,81 +130,6 @@ This section alone defines the card template, contract content, and saved plan r
 - Completion uses `kander move <task-id> done --result completed`, with validation, `RESULT`, and `FINISHED_AT` in one transaction, after the summary or report was written through update. Termination uses `move <task-id> archived --result cancelled|duplicate|wontfix --reason <reason> --decision <user-decision-reference>` (`--duplicate-of <replacement-id>` for duplicate); archiving a completed card uses `--result completed` with reason and decision reference; trash uses `move <task-id> trash --result trashed --reason <reason> --decision <user-decision-reference>`. These references record the authorization basis; the tool does not verify user intent. `--expect-revision` is available on move when the transition must match a previously read snapshot.
 - After a card enters todo, its contract stays frozen even if withdrawn to backlog. A user-authorized contract change uses update with `--contract-decision-file <UTF8-decision>` and the expected revision; Kander records the decision and old/new frozen fields in the protected `CONTRACT_DECISIONS` section. This never authorizes changing managed metadata or language.
 - A process interrupted during publication leaves a recoverable transaction. Readers report the unfinished operation without repairing it; run `kander init` explicitly to finish prepared writes and moves. A recovery conflict preserves the evidence and both copies; never guess a primary copy or delete one. Transactions protect commands and agents that follow this protocol, not arbitrary local processes editing files directly.
-
-### Small Task Template (`<task-id>/spec.md`)
-
-```markdown
-# <task title>
-
-- TYPE: Feature | Bug | Chore | Research
-- SIZE: small
-- TASK_GROUP:
-- LANGUAGE: <agent communication language, e.g. en, zh-CN, ja>
-- CREATED_AT: YYYY-MM-DD HH:MM
-- OWNER:
-- SESSION:
-- WINDOW:
-- STARTED_AT:
-- FINISHED_AT:
-- TASK_BRANCH:
-- RESULT:
-
-## GOAL
-
-<what to change and why>
-
-## USER_DECISIONS
-
-<directions and trade-offs the user has confirmed; write N/A if none>
-
-## EXPECTED_OUTCOME
-
-<observable, verifiable state after completion>
-
-## ACCEPTANCE_CRITERIA
-
-- [ ] <condition>
-
-## THREAT_MODEL
-
-<for security tasks: assets, trusted principals, and attacker capabilities; for non-security tasks write N/A>
-
-## OUT_OF_SCOPE
-
-- <state exclusion or inclusion for each of the four categories: existing issues, hardening, shared contracts and docs, adjacent features; give a reason for each>
-
-## DISCUSSION
-
-<key conclusions; task group cards also record PREREQUISITES at the beginning>
-
-## IMPLEMENTATION
-
-<detailed task plan preserved at creation per "Required Plan for New Cards"; then branch, commits, verification commands, results, environment gaps, and blockers>
-
-## SUMMARY
-
-<actual results, deviations, unresolved issues, and acceptance conclusion; leave empty before completion>
-```
-
-### Large Task Documents
-
-- `SIZE: large` selects the large-task contract. `spec.md` holds the metadata and the contract sections `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, `OUT_OF_SCOPE`, `DISCUSSION`. Plan content and storage follow "Required Plan for New Cards". `report.md` is created on completion, never empty, with actual changes, final commits, verification, deviations, unresolved issues, risks, and the acceptance conclusion.
-
-### Required Plan for New Cards
-
-- Every new card must save a detailed plan before creation self-review, even when left in `backlog/`, regardless of module settings or execution choice. Cards predating this requirement need no backfill; a missing plan alone never blocks their continuation or completion.
-- Preserve the confirmed technical approach, ordered steps, affected modules and paths, interfaces, data flows, constraints, dependencies, verification, and applicable release, integration, and rollback steps. Include confirmed choices, trade-offs, and stated reasons. Mark unresolved questions; never present proposals as user decisions.
-- Small cards use `IMPLEMENTATION`; large cards use `plan.md`, linked from `spec.md` under `DISCUSSION`. Publish through `update`. Confirmed directions and trade-offs also belong in `USER_DECISIONS`; plans never authorize changing frozen contract fields.
-- The card and attachments must let an agent outside the discussion execute without recovering the conversation or repeating settled design decisions. Summaries or conversation references alone are insufficient. Use structured prose, not transcripts; compressing execution history must preserve still-applicable plan details.
-- For multiple cards, each saves its own plan and necessary shared decisions, contracts, dependencies, and integration steps. Together they preserve the full confirmed plan. Temporary handover notes never replace these records.
-
-### Contract and Records
-
-- `LANGUAGE` is the language for everything written for the user about this card: title and body, records, reports, review reports, and the messages passed to `kander notify` and `kander resume`. `kander new` fills it from the configured `agent_language` or `--language <value>`; it is fixed at creation and overrides the configuration, and an old card without it falls back to the configuration per `KANDER-AGENTS.md` "Language".
-- Manual claiming and `start` write `OWNER`, `STARTED_AT`, `SESSION`, and `WINDOW` as described above; manually claimed cards leave `SESSION` and `WINDOW` empty. Update `TASK_BRANCH` through the controlled body entrance (`N/A` without a branch). The command fills `FINISHED_AT` on entering `done/`, and the move options fill the result atomically on entering `done/`, `archived/`, or `trash/`.
-- Once a card enters `todo/`, `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `OUT_OF_SCOPE`, `SIZE`, and task group relations are frozen; changing any needs an explicit user decision first. One exception: while the card is in `working/` or `review/`, the executing agent ticks acceptance criteria through ordinary `update`, without a decision file. A tick toggles only the line-start marker of a top-level item between `- [ ] ` and `- [x] `; any other change, including an uppercase `[X]` or an indented item, is a contract change. `THREAT_MODEL` is part of the review task context but not frozen; refine it through ordinary `update` and note the change in `DISCUSSION`.
-- `OUT_OF_SCOPE` defines the boundary truthfully; unconfirmed extended goals are not written into `ACCEPTANCE_CRITERIA`. With the review module on, refine the scope per the review contract of `KANDER-REVIEW-RULES.md`.
-- During implementation, append only key decisions, verification, environment gaps, commits, blockers, and next steps, never the session transcript: at most one dated entry per round, earlier rounds compressed to one summary line each once superseded. Review reports, finding lists, and dispositions are referenced by `reviews/<run_id>/` and `dispatches/`, never pasted. The unresolved items list in `SUMMARY` (or `report.md`) holds one line per item. A finding names role, tier, status, and the card-relative path of its disposition record. A role not completed, a missing report section, or a verification gap names the run's sidecar or error log with tier and status `N/A`. With no run (a preflight failure, or a gap outside review) the line names the actual command log or the `IMPLEMENTATION` verification record and says "no run produced", never an invented path. A card body above roughly 30 KB signals duplicated history. Stable architecture, APIs, and long-term rules still go into repository documentation or project rules.
 
 ## Archived Review Evidence
 
@@ -224,7 +149,7 @@ This section alone defines the card template, contract content, and saved plan r
   - Uncertainty: a design choice is still open at creation, the card is a contract card of a task group, or it revises the design of an earlier delivery whose assumptions failed. A follow-up card that only applies deferred or non-blocking findings does not meet this by that fact alone.
   A card whose whole change and verification fit one `IMPLEMENTATION` entry and meet none of these is `small`. Group membership grants no exemption: assess every member independently; how a request is split is governed by `KANDER-TASK-GROUP-RULES.md` "Task Splitting and Task Groups", not by `SIZE`.
 - Cards keep optional task group fields and dependency records. With task_groups off, every request becomes a single card, whatever the number of goals; when on, plan and execute per `KANDER-TASK-GROUP-RULES.md`, with git also on. Intake guidance belongs to `KANDER-TASK-INTAKE-RULES.md` and is read only when `rules.task_intake=true`; a user operating the board directly does not need it.
-- `kander new` creates the template in backlog; the caller fills in the full contract and the detailed plan per "Required Plan for New Cards" from confirmed content, in the card's `LANGUAGE`, and never writes suggestions as user decisions.
+- `kander new` creates the template in backlog; the caller fills in the full contract and the detailed plan per `snippets/card-content.md` "Required Plan for New Cards" from confirmed content, in the card's `LANGUAGE`, and never writes suggestions as user decisions.
 
 ### Explicit Migration and Maintenance
 
@@ -234,16 +159,7 @@ This section alone defines the card template, contract content, and saved plan r
 
 ### Post-Creation Self-Review
 
-- After filling in the full contract, the creator self-reviews before `todo/`, fixes problems, and re-checks until it passes. This step is part of card creation and independent of the `task_intake` and `review` switches. Check against the user's goal, the confirmed plan, and project rules:
-  - Goal and outcome are consistent, no confirmed requirement is missing, and no suggestion or assumption is written as a user decision.
-  - The card satisfies "Required Plan for New Cards"; apply its existing-card exemption when relevant.
-  - The boundary is clear, scope and exclusions do not conflict, and work necessary to reach the goal is not excluded.
-  - Constraints are accurate, actionable, and consistent with user decisions, project rules, and the actual interfaces and environment.
-  - `ACCEPTANCE_CRITERIA` cover the goal and outcome, are decidable, and neither miss key conditions nor add out-of-scope requirements.
-  - The contract is written for the executing agent and the reviewers, per the writing principles of ASD-STE100 (Simplified Technical English). Each acceptance criterion states one checkable result. A condition comes before the action it limits. One term names one thing across the whole card; a term the reader cannot know is defined at first use.
-  - `SIZE` is justified against "Task Scale and Grouping": name the criterion that makes the card `large`, or state that none applies. A `small` card whose planned changes meet a `large` criterion is resized before `todo/`; listing such items under `OUT_OF_SCOPE` does not avoid resizing.
-- Record the conclusion and fixes in `DISCUSSION` as a separate line `SELF_REVIEW: <conclusion>` (ASCII colon, may be a list item); the `todo/` gate checks that the line exists. Fix what existing decisions settle; list ambiguities that need new user decisions explicitly and wait, never fill them in on your own.
-- Large cards and task group members additionally need an independent card review. The reviewer is an agent that does not share the creation session context (a new session or a subagent); it reads only the card, its linked plan and attachments, and the user's original requirement and judges the points above. After fixing, the creator records `CARD_REVIEW: <conclusion>` with the reviewer in `DISCUSSION`, which the gate checks likewise. The tool checks only that the line exists; independence and quality are the creator's truthful responsibility, and writing the line without an actual review is forbidden.
+Follow `snippets/card-content.md` "Post-Creation Self-Review" before advancing a newly completed card to `todo/`.
 
 ## Phase Rules
 

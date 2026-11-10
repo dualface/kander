@@ -26,7 +26,7 @@ kander new [--large] [--language <agent language>] <feature|bug|chore|research> 
 
 ## Effects
 
-- Writes `<task-id>/spec.md` with the metadata and the contract template; `new` writes `SIZE` and, for a small card, the IMPLEMENTATION/SUMMARY sections. The command creates the template only. The caller completes the card through `update` per `KANDER-KANBAN-RULES.md` "Entries and Documents", including "Required Plan for New Cards", then follows "Post-Creation Self-Review".
+- Writes `<task-id>/spec.md` with the metadata and the contract template; `new` writes `SIZE` and, for a small card, the IMPLEMENTATION/SUMMARY sections. The command creates the template only. The caller completes the card through `update` per `snippets/card-content.md`, then follows "Post-Creation Self-Review".
 
 ## Output
 

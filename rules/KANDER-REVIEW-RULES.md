@@ -132,7 +132,7 @@ A standard review has two stages. Whether each role runs is resolved per "Review
 
 **Carrying Conclusions Forward**
 
-- All roles of a full review share `CWD`, base, and task context; historical `CSA` and `Hacker` triggered together use the same commit. The task context is the authoritative requirement contract: a string for short tasks, a readable absolute spec path for long tasks. The first run of a batch freezes the task context. Publishing a run appends the review index to the live `spec.md`, so every later run of the same batch, whether another role or an incremental round, passes the frozen snapshot `reviews/<run-id>/task-context.md` from a member card instead of the live spec. Put only execution and fix evidence in the supplemental review context. A change to `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, or `OUT_OF_SCOPE` needs a new batch; ticking acceptance criteria per `KANDER-KANBAN-RULES.md` "Contract and Records" is not a contract change and needs none.
+- All roles of a full review share `CWD`, base, and task context; historical `CSA` and `Hacker` triggered together use the same commit. The task context is the authoritative requirement contract: a string for short tasks, a readable absolute spec path for long tasks. The first run of a batch freezes the task context. Publishing a run appends the review index to the live `spec.md`, so every later run of the same batch, whether another role or an incremental round, passes the frozen snapshot `reviews/<run-id>/task-context.md` from a member card instead of the live spec. Put only execution and fix evidence in the supplemental review context. A change to `GOAL`, `USER_DECISIONS`, `EXPECTED_OUTCOME`, `ACCEPTANCE_CRITERIA`, `THREAT_MODEL`, or `OUT_OF_SCOPE` needs a new batch; ticking acceptance criteria per `snippets/card-content.md` "Contract and Records" is not a contract change and needs none.
 - Under the same base, Security fixes receive only Security incremental re-review; they do not reopen a passed `PMQA` or require a skipped `PMQA` to run. Necessary verification and the mechanical-only exception still apply. If a later, independently required `PMQA` fix substantively changes already-reviewed security code, the enabled security role re-reviews that changed scope. Historical four-role batches likewise do not reopen passed `PM` or `QA` solely because of a security fix; their frozen role requirements and evidence remain unchanged.
 - Roles may pass on different commits; within the same base, the final commit must descend from every passing commit.
 - Non-integration changes such as switching base, recreating the branch, or a forced rebase during review invalidate all conclusions. Because every batch with reviewer runs must still close, first close the open batch on its current target: the remaining required roles run there, and superseded findings are disposed as `rejected` with the user's quoted decision. A task context change on the same base chain then continues in a new batch of the same, still unsealed plan, starting at the previous closed target and reviewing only the work after it. When the user wants the closed range re-reviewed under the new contract, or when the base or the history changed, continue as new work under new cards and a new plan per `snippets/orchestrate-review.md` "Group-Level Review for Task Groups". Report the wasted rounds either way.
@@ -205,7 +205,7 @@ Review profiles decide which roles run in a round and the default content of eac
 
 ## task context and review context Templates
 
-- `OUT_OF_SCOPE` is the risk-bounded stop boundary of the review, judged category by category with reasons. It has four categories: problems that existed before the change; concurrency interleaving, cross-platform, and security hardening; syncing shared contracts, public APIs, and architecture docs; adjacent features and later phases. Categories not required by `ACCEPTANCE_CRITERIA` are stated as excluded; categories this card owns are stated as included. A single generic exclusion does not complete the contract; the card-creating agent completes it before `pick`. Reviewer and main agent both use this list to judge overreach; overstepping findings are recorded as unresolved with a follow-up card suggested.
+- Read `snippets/card-content.md` "Scope Content" for `OUT_OF_SCOPE`, for both card-bound and non-kanban task contexts. Reviewer and main agent use those declarations as the review boundary. Record overstepping findings as unresolved and suggest a follow-up card; scope declarations never suppress finding severity.
 
 The task context has six fields; keep all of them, write `N/A` when nothing applies, and never fabricate `USER_DECISIONS` or `ACCEPTANCE_CRITERIA`. When using an absolute spec, pass the full contract including any `DISCUSSION`:
 
@@ -215,7 +215,7 @@ USER_DECISIONS: <directions and trade-offs the user has explicitly decided>
 EXPECTED_OUTCOME: <observable, verifiable state after completion>
 ACCEPTANCE_CRITERIA: <keep each confirmed verifiable condition item by item>
 THREAT_MODEL: <protected assets, trusted principals and realistic attacker capabilities; write N/A for non-security tasks>
-OUT_OF_SCOPE: <see the list below; state each item with its reason>
+OUT_OF_SCOPE: <scope declarations per snippets/card-content.md "Scope Content">
 ```
 
 The optional review context for roles in each stage is for evidence and navigation; changing the task context is forbidden:
@@ -227,16 +227,7 @@ Verification records: <commands run and their results, including items that coul
 Environment gaps: <actual environment problems affecting verification and substitute evidence; omit if none>
 ```
 
-Common `OUT_OF_SCOPE` items:
-
-- Existing problems: `<specific item> existed before the change (see <commit>); fixing it would expand this task's scope.`
-- User-decided directions: `This is the direction the user explicitly requested; do not oppose the direction itself on the grounds of <opposing claim>; the user is aware of the trade-off.`
-- Hardening beyond the contract: `Concurrency interleaving, cross-platform or security hardening is not listed in ACCEPTANCE_CRITERIA; this card only guarantees <ACCEPTANCE_CRITERIA>, the rest is handled by <follow-up card>.`
-- Theoretical defects with disproportionate cost, excludable only when all three hold (triggering needs an additional precondition already compromised; the consequence is minor or safer; fix complexity clearly exceeds the benefit): `<specific item> requires <premise> to trigger, has consequence <consequence>, and fixing it needs <cost>; not in this round's scope.`
-- Environment verification gaps: `<command> could not be executed because of <reason>; covered by <substitute verification>; do not judge a problem on that basis.`
-- Dropped backward compatibility: `The project has dropped all backward compatibility; do not raise compatibility, migration or fallback issues.`
-
-Exclusions exclude only scope, never severity: "do not report high" or "report only doc issues" is forbidden. Exclusion reasons rest on facts (the introducing commit, the triggering premise, the user instruction); "not important" or "later" is forbidden. When other agents did the implementation, say so in the review context and point out the problems already fixed, so the reviewer re-checks similar half-changed states.
+When other agents did the implementation, say so in the review context and point out the problems already fixed, so the reviewer re-checks similar half-changed states.
 
 ## Conclusions and Failure Handling
 
@@ -246,7 +237,7 @@ Exclusions exclude only scope, never severity: "do not report high" or "report o
 **Unresolved Items Summary**
 
 - When the loop ends (pass or termination), show the user every unresolved item of this round. The items are: unfixed `low`, `recommend`, and `suggest`; findings rejected or unverifiable; risks the user accepted and security findings timed out and ignored; roles not completed due to backend failure and roles that provided no `NON-BLOCKING` section. Each item states the source role, tier, problem, impact, and rationale. Reporting only "review passed" or "no blocking issues" is forbidden; when review was skipped for no whitelist hit, the notification rule in "Preconditions and Execution" suffices.
-- The delivery notes and, for kanban tasks, the card carry the same items as one-line references per `KANDER-KANBAN-RULES.md` "Contract and Records". Findings point at their disposition record. Roles not completed, missing sections, and verification gaps point at the run's sidecar or error log with tier and status `N/A`, or, when no run exists, at the actual command log or `IMPLEMENTATION` record with the note "no run produced". The full text stays in the user report and the review artifacts.
+- The delivery notes and, for kanban tasks, the card carry the same items as one-line references per `snippets/card-content.md` "Contract and Records". Findings point at their disposition record. Roles not completed, missing sections, and verification gaps point at the run's sidecar or error log with tier and status `N/A`, or, when no run exists, at the actual command log or `IMPLEMENTATION` record with the note "no run produced". The full text stays in the user report and the review artifacts.
 - Round cap: when the same finding is still open after two fix rounds, or a batch has run three fix rounds, stop and report which finding is stuck, what was tried, and numbered options (`1. Accept the current state and record the item as unresolved`, `2. Change the contract`, `3. Continue with one more round`). Never open a further round on your own.
 - Review entry argument, authentication, precondition, or local environment errors are corrected first. Only when the same role invocation with correct arguments returns HTTP 5xx or an explicit service unavailable error 3 times in a row is it a persistent backend failure of that reviewer.
 

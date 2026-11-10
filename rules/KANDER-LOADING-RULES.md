@@ -49,10 +49,11 @@ The rules root is the directory containing `KANDER-AGENTS.md`. It decides the sc
 
 ## Phase Snippets
 
-Phase rules live in `snippets/` below the rules root; Kander names the file in the prompt that starts the phase. Every applicable rule binds whether or not it was read. Command contracts: `snippets/commands/`.
+Phase rules live in `snippets/`; prompts and rule references name what to read. Every applicable rule binds whether read or not. Command contracts: `snippets/commands/`.
 
 | Snippet | Read when |
 | --- | --- |
+| `snippets/card-content.md` | Creating, completing, updating, or reviewing card content |
 | `snippets/execute-single.md` | Executing a card (start, resume, takeover) |
 | `snippets/orchestrate-sessions.md` | Orchestrating; a blocked executing agent |
 | `snippets/failure-recovery.md` | Terminating a card; a stopped or lost executing agent |

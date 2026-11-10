@@ -27,7 +27,7 @@ This snippet is read when a `notify --kind fix` dispatch arrives: it holds the e
 
 **Verification Split Between Orchestrator and Executing Agent**
 
-- The executing agent bears the "Main Agent Verification Duty". Verify item by item. Fix confirmed items on the card's task branch, commit, rebase onto the latest group branch, re-verify, and update the task branch per the Git rule file. Write the basis for rejected or unverifiable items. Never update the group branch. Submit each conclusion through `review disposition`. Write into `IMPLEMENTATION` one entry with the counts per status, the card-relative paths of the disposition records, and the full SHA of the latest delivery (never the finding list itself, per `KANDER-KANBAN-RULES.md` "Contract and Records"). Then `move review` and end the turn. The orchestrator verifies and fast-forward receives the fix delivery, then triggers incremental re-review.
+- The executing agent bears the "Main Agent Verification Duty". Verify item by item. Fix confirmed items on the card's task branch, commit, rebase onto the latest group branch, re-verify, and update the task branch per the Git rule file. Write the basis for rejected or unverifiable items. Never update the group branch. Submit each conclusion through `review disposition`. Write into `IMPLEMENTATION` one entry with the counts per status, the card-relative paths of the disposition records, and the full SHA of the latest delivery (never the finding list itself, per `snippets/card-content.md` "Contract and Records"). Then `move review` and end the turn. The orchestrator verifies and fast-forward receives the fix delivery, then triggers incremental re-review.
 
 **Dispatching Findings Back**
 
