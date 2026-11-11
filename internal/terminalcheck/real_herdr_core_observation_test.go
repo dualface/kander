@@ -45,6 +45,11 @@ done
 	if err := backend.SetSessionMarker(conn, address.Pane, "test-session"); err != nil {
 		t.Fatal(err)
 	}
+	// Labels can share names with terminal fields without changing them.
+	labels, err := conn.Run(t.Context(), conn.Program, []string{"label", "--json", address.Pane, "status=ready", "address=remote/t8", "state=lost"})
+	if err != nil || labels.Code != 0 {
+		t.Fatalf("set same-name labels: %+v, %v", labels, err)
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		panes, err := backend.(terminal.AgentLister).AgentList(t.Context(), conn)
