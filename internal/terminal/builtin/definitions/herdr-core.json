@@ -195,7 +195,8 @@
                 "{detail}"
               ]
             }
-          }
+          },
+          "timeout": "90s"
         }
       ]
     },
@@ -416,7 +417,8 @@
                 "{detail}"
               ]
             }
-          }
+          },
+          "timeout": "90s"
         }
       ]
     },
@@ -546,10 +548,8 @@
       "steps": [
         {
           "argv": [
-            "ls",
-            "--json",
-            "--label",
-            "kander-session={reference}"
+            "connect",
+            "--json"
           ],
           "store": "list",
           "messages": {
@@ -562,7 +562,7 @@
             "exit": {
               "id": "herdr_core.command_failed",
               "args": [
-                "ls",
+                "connect",
                 {
                   "or": [
                     "{error}",
@@ -574,10 +574,29 @@
             "invalid": {
               "id": "herdr_core.unexpected_response",
               "args": [
-                "ls",
+                "terminal.list",
                 "{detail}"
               ]
             }
+          },
+          "stdin": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"terminal.list\",\"params\":{}}\n",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result",
+            "success": [
+              {
+                "json_field": "id",
+                "equals": 1
+              },
+              {
+                "json_field": "jsonrpc",
+                "equals": "2.0"
+              },
+              {
+                "json_field": "error",
+                "absent": true
+              }
+            ]
           }
         }
       ],
@@ -585,10 +604,39 @@
         "from": "list",
         "split": "json_array:terminals",
         "fields": {
-          "pane": "json_field:address"
+          "pane": "json_field:address",
+          "state": "json_field:state",
+          "app": "json_field:status.app",
+          "status": "json_field:status.state",
+          "session": "json_field:labels.kander-session",
+          "valid_address": "regex:\"address\":\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"",
+          "local": "regex:\"address\":\"(t[0-9a-z]+)\"",
+          "valid_state": "regex:\"state\":\"(live|finished|lost)\"",
+          "bad_status": "regex:\"status\":([^{n])",
+          "bad_app": "regex:\"app\":([^\"n])",
+          "bad_state": "regex:\"state\":([^\"n])",
+          "bad_labels": "regex:\"labels\":([^{n])",
+          "bad_session": "regex:\"kander-session\":([^\"n])"
         },
-        "expect": "!field_missing:row.pane",
-        "match": "!field_missing:reference",
+        "expect": [
+          [
+            "!field_missing:row.valid_address",
+            "!field_missing:row.valid_state",
+            "field_missing:row.bad_status",
+            "field_missing:row.bad_app",
+            "field_missing:row.bad_state",
+            "field_missing:row.bad_labels",
+            "field_missing:row.bad_session"
+          ]
+        ],
+        "match": [
+          [
+            "!field_missing:reference",
+            "!field_missing:row.local",
+            "field:row.state=live",
+            "field:row.session={reference}"
+          ]
+        ],
         "result": {
           "container": "{row.pane}",
           "pane": "{row.pane}"
@@ -689,6 +737,168 @@
           }
         }
       ]
+    },
+    "process_facts": {
+      "steps": [
+        {
+          "argv": [
+            "get",
+            "--json",
+            "{pane}"
+          ],
+          "store": "get",
+          "fields": {
+            "id": "json_field:address",
+            "state": "json_field:state",
+            "foreground": "json_field:foreground"
+          },
+          "expect": [
+            [
+              "!field_missing:step.get.id",
+              "field:step.get.id={pane}",
+              "field:step.get.state=live"
+            ]
+          ],
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.terminal_missing",
+              "args": [
+                "{pane}",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.get_invalid",
+              "args": [
+                "{pane}"
+              ]
+            }
+          }
+        }
+      ],
+      "result": {
+        "pane": "{step.get.id}",
+        "processes": "[{step.get.foreground}]"
+      }
+    },
+    "agent_list": {
+      "steps": [
+        {
+          "argv": [
+            "connect",
+            "--json"
+          ],
+          "store": "list",
+          "messages": {
+            "exec": {
+              "id": "herdr_core.invocation_failed",
+              "args": [
+                "{detail}"
+              ]
+            },
+            "exit": {
+              "id": "herdr_core.command_failed",
+              "args": [
+                "connect",
+                {
+                  "or": [
+                    "{error}",
+                    "{detail}"
+                  ]
+                }
+              ]
+            },
+            "invalid": {
+              "id": "herdr_core.unexpected_response",
+              "args": [
+                "terminal.list",
+                "{detail}"
+              ]
+            }
+          },
+          "stdin": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"terminal.list\",\"params\":{}}\n",
+          "output": {
+            "source": "stdout",
+            "parse": "json_field:result",
+            "success": [
+              {
+                "json_field": "id",
+                "equals": 1
+              },
+              {
+                "json_field": "jsonrpc",
+                "equals": "2.0"
+              },
+              {
+                "json_field": "error",
+                "absent": true
+              }
+            ]
+          }
+        }
+      ],
+      "rows": {
+        "from": "list",
+        "split": "json_array:terminals",
+        "fields": {
+          "pane": "json_field:address",
+          "state": "json_field:state",
+          "app": "json_field:status.app",
+          "status": "json_field:status.state",
+          "session": "json_field:labels.kander-session",
+          "valid_address": "regex:\"address\":\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"",
+          "local": "regex:\"address\":\"(t[0-9a-z]+)\"",
+          "valid_state": "regex:\"state\":\"(live|finished|lost)\"",
+          "bad_status": "regex:\"status\":([^{n])",
+          "bad_app": "regex:\"app\":([^\"n])",
+          "bad_state": "regex:\"state\":([^\"n])",
+          "bad_labels": "regex:\"labels\":([^{n])",
+          "bad_session": "regex:\"kander-session\":([^\"n])"
+        },
+        "expect": [
+          [
+            "!field_missing:row.valid_address",
+            "!field_missing:row.valid_state",
+            "field_missing:row.bad_status",
+            "field_missing:row.bad_app",
+            "field_missing:row.bad_state",
+            "field_missing:row.bad_labels",
+            "field_missing:row.bad_session"
+          ]
+        ],
+        "match": [
+          [
+            "!field_missing:row.local",
+            "field:row.state=live"
+          ]
+        ],
+        "result": {
+          "pane": "{row.pane}",
+          "agent_app": "{row.app}",
+          "agent_status": "{row.status}",
+          "agent_session": "{row.session}",
+          "session_marker": "{row.session}"
+        },
+        "messages": {
+          "missing": {
+            "id": "herdr_core.list_missing"
+          },
+          "invalid": {
+            "id": "herdr_core.list_missing"
+          }
+        }
+      }
     }
   }
 }

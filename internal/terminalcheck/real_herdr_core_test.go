@@ -7,10 +7,12 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/dualface/kander/internal/probe"
 	"github.com/dualface/kander/internal/terminal"
 	"github.com/dualface/kander/internal/terminal/builtin"
 )
@@ -24,8 +26,28 @@ func herdrCoreE2E(t *testing.T, env map[string]string) (terminal.Backend, termin
 	if err != nil {
 		t.Skip("herdr-core: hc is not in PATH")
 	}
-	if out, err := terminal.VersionOutput(program, []string{"server", "status", "--json"}); err != nil {
-		t.Skipf("herdr-core: the core is not running: %s", strings.TrimSpace(out))
+	// Never connect an opt-in smoke to the user's core or its terminals.
+	root, err := os.MkdirTemp("/var/tmp", "kander-hc-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	for name, value := range map[string]string{
+		"HC_SESSION": "kander-test", "HC_SOCKET": filepath.Join(root, "core.sock"),
+		"HC_TERMINAL_ID": "", "XDG_CONFIG_HOME": filepath.Join(root, "config"),
+		"XDG_STATE_HOME": filepath.Join(root, "state"), "XDG_RUNTIME_DIR": root,
+	} {
+		t.Setenv(name, value)
+	}
+	t.Cleanup(func() {
+		res, err := probe.CaptureContext(context.Background(), program, []string{"server", "stop", "--json"})
+		if err != nil || res.Code != 0 {
+			t.Errorf("isolated core cleanup: %+v %v", res, err)
+		}
+	})
+	res, err := probe.CaptureContext(t.Context(), program, []string{"server", "start", "--json"})
+	if err != nil || res.Code != 0 {
+		t.Fatalf("isolated core startup: %+v %v", res, err)
 	}
 	getenv := func(name string) string {
 		if value, ok := env[name]; ok {
@@ -41,7 +63,7 @@ func herdrCoreE2E(t *testing.T, env map[string]string) (terminal.Backend, termin
 }
 
 // TestEmbeddedHerdrCoreConformance runs the embedded herdr-core definition
-// against the local core. It is opt-in because it opens a real terminal.
+// against an isolated core. It is opt-in because it opens a real terminal.
 func TestEmbeddedHerdrCoreConformance(t *testing.T) {
 	backend, _ := herdrCoreE2E(t, nil)
 	var output bytes.Buffer

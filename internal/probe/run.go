@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -55,6 +56,14 @@ func CaptureContext(ctx context.Context, program string, args []string) (Result,
 		return res, errors.Join(contextErr, err)
 	}
 	return res, err
+}
+
+// CaptureInput sends finite input and closes stdin, bounding the command and
+// both output streams while retaining the usual process-tree ownership.
+func CaptureInput(ctx context.Context, program string, args []string, input string, limit int64) (Result, error) {
+	ctx, cancel := WithDefaultTimeout(ctx)
+	defer cancel()
+	return captureWithInput(ctx, program, args, nil, "", limit, strings.NewReader(input))
 }
 
 // CaptureWithEnv runs an argv command with explicit environment and the same
@@ -116,12 +125,17 @@ func captureWithEnvDir(ctx context.Context, program string, args, env []string, 
 }
 
 func captureWithEnvDirBound(ctx context.Context, program string, args, env []string, dir string, limit int64) (res Result, runErr error) {
+	return captureWithInput(ctx, program, args, env, dir, limit, nil)
+}
+
+func captureWithInput(ctx context.Context, program string, args, env []string, dir string, limit int64, input io.Reader) (res Result, runErr error) {
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
 	cmd := exec.Command(program, args...)
 	cmd.Env = env
 	cmd.Dir = dir
+	cmd.Stdin = input
 	tree, err := newProcessTree(cmd)
 	if err != nil {
 		return res, err

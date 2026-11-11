@@ -74,10 +74,6 @@ func TestValidateAgentList(t *testing.T) {
 		want   string
 	}{
 		{"needs-agent-identity", agentListOp, nil, "agent_identity is false"},
-		{"not-program-status", agentListOp, func(root map[string]any) {
-			withAgentIdentity(root)
-			object(root, "capabilities")["program_status"] = true
-		}, "program_status is true"},
 		{"needs-rows", `{"steps":[{"argv":["agent","list"],"store":"list"}]}`, withAgentIdentity, "require rows"},
 		{"no-operation-result", strings.Replace(agentListOp, `"steps":`, `"result":{"pane":"x"},"steps":`, 1), withAgentIdentity, "is not a result field"},
 		{"no-session-identity", strings.Replace(agentListOp, `"match":`, `"session":{"kind":"kind","value":"reference"},"match":`, 1), withAgentIdentity, "only reverse_lookup declares a session"},

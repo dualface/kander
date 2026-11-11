@@ -71,7 +71,7 @@ var paneFactNames = []string{
 var rowResults = map[string][]string{
 	OpReverseLookup: {"session", "container", "pane"},
 	OpTopology:      {"pane"},
-	OpAgentList:     {"pane", "agent", "agent_status", "agent_session", "agent_session_kind"},
+	OpAgentList:     {"pane", "agent", "agent_app", "agent_status", "agent_session", "agent_session_kind", "session_marker"},
 }
 
 // ValidateDefinition checks a decoded definition. Hooks named by the
@@ -466,11 +466,6 @@ func (v validator) requiredOps(def *Definition, name string, launcher LauncherDe
 	if has(OpAgentList) && !def.Capabilities.AgentIdentity {
 		return v.fieldErr("launchers."+name+".ops", "operation %s is declared but agent_identity is false", OpAgentList)
 	}
-	// Agent list rows carry no program status app, so they cannot identify
-	// the agent of a program status backend.
-	if has(OpAgentList) && def.Capabilities.ProgramStatus {
-		return v.fieldErr("launchers."+name+".ops", "operation %s is declared but program_status is true", OpAgentList)
-	}
 	sort.Strings(required)
 	for _, op := range required {
 		if !has(op) {
@@ -563,7 +558,7 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 		return nil, v.fieldErr("argv", "a step declares exactly one of argv and fail")
 	}
 	if step.Fail != nil {
-		if step.Store != "" || step.Output != nil || step.Fields != nil || step.Expect != nil || step.Poll != nil ||
+		if step.Stdin != "" || step.Store != "" || step.Output != nil || step.Fields != nil || step.Expect != nil || step.Poll != nil ||
 			step.OnError != "" || step.Timeout != "" || step.Delay != "" || step.StopOnSuccess || step.Messages != (StepMessages{}) {
 			return nil, v.fieldErr("fail", "a fail step declares only when and fail")
 		}
@@ -571,6 +566,9 @@ func (v validator) step(op string, step *Step, names scope) (scope, error) {
 	}
 	if len(step.Argv) == 0 {
 		return nil, v.fieldErr("argv", "must not be empty")
+	}
+	if len(step.Stdin) > 64<<10 || strings.ContainsRune(step.Stdin, '\x00') {
+		return nil, v.fieldErr("stdin", "must be at most 64 KiB and contain no NUL")
 	}
 	if err := v.argv("argv", step.Argv, names); err != nil {
 		return nil, err

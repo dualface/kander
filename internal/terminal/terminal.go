@@ -20,10 +20,16 @@ import (
 // tree, SpawnRunner only enforces a deadline present on the context.
 type Runner func(ctx context.Context, program string, args []string) (probe.Result, error)
 
+// InputRunner executes an argv command with finite stdin, then closes stdin.
+type InputRunner func(ctx context.Context, program string, args []string, input string) (probe.Result, error)
+
 // Conn binds a resolved backend executable to the runner used for one call.
 type Conn struct {
 	Program string
 	Run     Runner
+	// RunInput handles steps with literal stdin. Nil uses ProbeInputRunner,
+	// which owns the process tree and bounds its runtime and output.
+	RunInput InputRunner
 }
 
 // Capabilities describe what a backend can do; callers degrade on these flags.

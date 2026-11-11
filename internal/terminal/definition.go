@@ -165,9 +165,11 @@ type Op struct {
 
 // Step runs one argv command, or fails the operation with a message.
 type Step struct {
-	Store  string              `json:"store,omitempty"`
-	When   Conditions          `json:"when,omitempty"`
-	Argv   []string            `json:"argv,omitempty"`
+	Store string     `json:"store,omitempty"`
+	When  Conditions `json:"when,omitempty"`
+	Argv  []string   `json:"argv,omitempty"`
+	// Stdin is literal input, without placeholder expansion, followed by EOF.
+	Stdin  string              `json:"stdin,omitempty"`
 	Fail   *Message            `json:"fail,omitempty"`
 	Output *process.OutputSpec `json:"output,omitempty"`
 	Fields map[string]string   `json:"fields,omitempty"`

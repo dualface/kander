@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,13 @@ func TestProbeProcessHelper(t *testing.T) {
 	}
 	mode, dir := args[len(args)-2], args[len(args)-1]
 	switch mode {
+	case "input":
+		input, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			os.Exit(6)
+		}
+		_, _ = os.Stdout.Write(input)
+		os.Exit(0)
 	case "output":
 		fmt.Fprint(os.Stdout, strings.Repeat("out", 100000))
 		fmt.Fprint(os.Stderr, strings.Repeat("err", 100000))
@@ -63,6 +71,30 @@ func TestProbeProcessHelper(t *testing.T) {
 	}
 	time.Sleep(5 * time.Second)
 	os.Exit(0)
+}
+
+func TestCaptureInputClosesStdinAndBoundsOutput(t *testing.T) {
+	configureProbeHelpers(t)
+	input := "{\"method\":\"terminal.list\",\"text\":\"中文 $()\"}\n"
+	for _, limit := range []int64{4096, 8} {
+		res, err := CaptureInput(t.Context(), os.Args[0], helperArgs("input", t.TempDir()), input, limit)
+		if err != nil || res.Code != 0 || res.Stdout != input[:min(int(limit), len(input))] || res.Overflow != (limit == 8) {
+			t.Fatalf("limit=%d result=%+v err=%v", limit, res, err)
+		}
+	}
+}
+
+func TestCaptureInputCancellationWhileChildDoesNotRead(t *testing.T) {
+	configureProbeHelpers(t)
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	_, err := CaptureInput(ctx, os.Args[0], helperArgs("parent", dir), strings.Repeat("input", 1<<20), 1024)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err=%v", err)
+	}
+	requireStopped(t, helperPID(t, dir, "parent"))
+	requireStopped(t, helperPID(t, dir, "child"))
 }
 
 func TestCaptureWithEnvDirUsesWorkingDirectory(t *testing.T) {

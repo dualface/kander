@@ -1,4 +1,5 @@
 {
+  "terminal.command_output_limit": "端末コマンドの出力がバイト上限を超えました",
   "terminal.text": "{{.V0}}",
   "terminal.value_contains_line_break": "プレースホルダー {{.V0}} の値に改行または NUL が含まれています",
   "terminal.output_does_not_match": "出力が定義と一致しません",

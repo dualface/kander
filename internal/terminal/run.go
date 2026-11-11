@@ -15,6 +15,12 @@ func ProbeRunner(ctx context.Context, program string, args []string) (probe.Resu
 	return probe.CaptureContext(ctx, program, args)
 }
 
+// ProbeInputRunner executes a bounded request/response command with finite
+// stdin. Four MiB per stream bounds full terminal-list responses.
+func ProbeInputRunner(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
+	return probe.CaptureInput(ctx, program, args, input, 4<<20)
+}
+
 // SpawnRunner runs a plain child process. It enforces only a deadline present
 // on the context, by killing the child when it expires; a context without a
 // deadline never times out.

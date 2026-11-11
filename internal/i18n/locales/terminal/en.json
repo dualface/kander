@@ -1,4 +1,5 @@
 {
+  "terminal.command_output_limit": "Terminal command output exceeded the byte limit",
   "terminal.text": "{{.V0}}",
   "terminal.value_contains_line_break": "the value of placeholder {{.V0}} contains a line break or NUL",
   "terminal.output_does_not_match": "output does not match the definition",
