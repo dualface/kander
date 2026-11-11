@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.0 — 2026-11-11
+
+- herdr-core: the TUI and `kander list --json --agent-status` now observe multiple hc terminals with one `terminal.list` request through `hc connect --json`. The full response preserves OSC 7501 app identity, status, and session labels that the compact `hc ls --json` output omits. A missing terminal is confirmed individually; malformed or duplicate rows fail the observation instead of reporting an agent alive.
+- Fix (herdr-core): session reverse lookup now uses the full list response and compares each terminal's actual `kander-session` label. It excludes finished and remote terminals. Validation follows exact JSON paths, so unrelated labels named `status`, `state`, or `address` cannot reject a valid response or make a remote terminal appear local.
+- herdr-core: the terminal interface now exposes foreground PID and process name from `hc get` for a matching live terminal. Agent identity and readiness still require OSC 7501 reports; foreground process names never substitute for them.
+- Fix (herdr-core): command and notification delivery allow up to 90 seconds for hc's default 60-second draft protection and submission checks, while respecting a shorter caller deadline. A `started: false` response does not trigger a resend; notification acknowledgement still checks its marker. Cancelled sends are not retried.
+- Terminal definitions (schema version 1, optional additions): steps accept literal `stdin` of up to 64 KiB, with EOF, process-tree cancellation, and bounded output in the default runner. Step and row field maps accept `json_regex:<dotted.path>:<pattern>` to validate one JSON value without matching unrelated nested fields. Program-status definitions may provide `agent_list` with `agent_app` and `session_marker`.
+- Validated against hc 0.1.20 on Linux with isolated real-core lifecycle tests. The launcher remains local and POSIX-only. Focus and native Agent session reporting remain unavailable; Kander uses session labels and polls output for notification acknowledgement.
+
 ## v1.2.1 — 2026-11-10
 
 - Rules: new task cards must save the detailed plan confirmed by the user and agent before creation self-review, including cards left in backlog for later execution. Small cards use `IMPLEMENTATION`; large cards use `plan.md` linked from `spec.md`. The saved plan preserves the technical approach, ordered steps, constraints, decisions, and verification needed by an agent that did not join the discussion. Existing cards need no backfill and are not blocked by a missing plan.
