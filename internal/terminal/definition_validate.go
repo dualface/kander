@@ -649,8 +649,7 @@ func (v validator) fields(field string, fields map[string]string) ([]string, err
 				return nil, v.fieldErr(field+"."+name, "field name is reserved")
 			}
 		}
-		spec := process.OutputSpec{Source: process.SourceStdout, Parse: fields[name]}
-		if err := process.ValidateTerminalOutput(spec); err != nil {
+		if err := validateFieldParser(fields[name]); err != nil {
 			return nil, v.fieldErr(field+"."+name, "%s", err.Error())
 		}
 	}

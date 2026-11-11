@@ -47,11 +47,15 @@ func TestHerdrCoreAgentList(t *testing.T) {
 	}{
 		{"live-and-remote", `[{"address":"remote/t8","state":"live"},{"address":"t8","state":"live","status":{"app":"claude-code","state":"error"},"labels":{"kander-session":"s1"}},{"address":"t9","state":"finished"}]`, true},
 		{"unreported", `[{"address":"t8","state":"live","status":null}]`, true},
+		{"same-name-labels", `[{"address":"t8","state":"live","status":{"app":"claude-code","state":"idle"},"labels":{"status":"ready","app":"ignored","state":"lost","labels":"ignored","address":"remote/t8","kander-session":"s1"}}]`, true},
+		{"remote-with-local-label", `[{"address":"remote/t8","state":"live","labels":{"address":"t8","kander-session":"s1"}},{"address":"t8","state":"live"}]`, true},
 		{"duplicate", `[{"address":"t8","state":"live"},{"address":"t8","state":"live"}]`, false},
 		{"missing-address", `[{"state":"live"}]`, false},
 		{"bad-address", `[{"address":"t8:bad","state":"live"}]`, false},
 		{"bad-status", `[{"address":"t8","state":"live","status":42}]`, false},
 		{"bad-app", `[{"address":"t8","state":"live","status":{"app":42}}]`, false},
+		{"bad-status-state", `[{"address":"t8","state":"live","status":{"state":42}}]`, false},
+		{"invalid-masked-by-label", `[{"address":"bad","state":"bad","labels":{"address":"t8","state":"live"}}]`, false},
 		{"bad-labels", `[{"address":"t8","state":"live","labels":[]}]`, false},
 		{"bad-session", `[{"address":"t8","state":"live","labels":{"kander-session":42}}]`, false},
 		{"missing-state", `[{"address":"t8"}]`, false},
@@ -86,16 +90,20 @@ func TestHerdrCoreAgentList(t *testing.T) {
 }
 
 func TestHerdrCoreLookupFiltersRemoteAndStaleLabels(t *testing.T) {
-	r := &recorder{reply: func([]string) probe.Result {
-		return probe.Result{Stdout: `{"jsonrpc":"2.0","id":1,"result":{"terminals":[
-			{"address":"remote/t8","state":"live","labels":{"kander-session":"s1"}},
+	for _, extraLabels := range []string{"", `,"status":"ready","app":"ignored","state":"lost","labels":"ignored"`} {
+		t.Run(extraLabels, func(t *testing.T) {
+			r := &recorder{reply: func([]string) probe.Result {
+				return probe.Result{Stdout: `{"jsonrpc":"2.0","id":1,"result":{"terminals":[
+			{"address":"remote/t8","state":"live","labels":{"address":"t8","kander-session":"s1"}},
 			{"address":"t1","state":"finished","labels":{"kander-session":"s1"}},
 			{"address":"t2","state":"live","labels":{"kander-session":"other"}},
-			{"address":"t8","state":"live","labels":{"kander-session":"s1"}}]}}`}
-	}}
-	got, err := herdrCoreBackendForTest(t, nil).ReverseLookup(t.Context(), r.conn(), terminal.Identity{Agent: "claude", Reference: "s1"})
-	if err != nil || got.Pane != "t8" || got.Container != "t8" {
-		t.Fatalf("lookup=%+v err=%v", got, err)
+			{"address":"t8","state":"live","labels":{"kander-session":"s1"` + extraLabels + `}}]}}`}
+			}}
+			got, err := herdrCoreBackendForTest(t, nil).ReverseLookup(t.Context(), r.conn(), terminal.Identity{Agent: "claude", Reference: "s1"})
+			if err != nil || got.Pane != "t8" || got.Container != "t8" {
+				t.Fatalf("lookup=%+v err=%v", got, err)
+			}
+		})
 	}
 }
 

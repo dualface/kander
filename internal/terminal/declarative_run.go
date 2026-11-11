@@ -517,6 +517,12 @@ func extractFields(step *Step, text string) map[string]string {
 func parseFields(fields map[string]string, source, text string) map[string]string {
 	out := make(map[string]string, len(fields))
 	for name, parse := range fields {
+		if path, pattern, scoped := jsonRegexParts(parse); scoped {
+			if value, err := parseJSONRegex(path, pattern, text); err == nil {
+				out[name] = value
+			}
+			continue
+		}
 		spec := process.OutputSpec{Source: source, Parse: parse}
 		if value, _, err := extractOutput(&spec, probe.Result{Stdout: text, Stderr: text}); err == nil {
 			out[name] = value

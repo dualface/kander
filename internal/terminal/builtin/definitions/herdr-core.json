@@ -609,24 +609,24 @@
           "app": "json_field:status.app",
           "status": "json_field:status.state",
           "session": "json_field:labels.kander-session",
-          "valid_address": "regex:\"address\":\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"",
-          "local": "regex:\"address\":\"(t[0-9a-z]+)\"",
-          "valid_state": "regex:\"state\":\"(live|finished|lost)\"",
-          "bad_status": "regex:\"status\":([^{n])",
-          "bad_app": "regex:\"app\":([^\"n])",
-          "bad_state": "regex:\"state\":([^\"n])",
-          "bad_labels": "regex:\"labels\":([^{n])",
-          "bad_session": "regex:\"kander-session\":([^\"n])"
+          "valid_address": "json_regex:address:^\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"$",
+          "local": "json_regex:address:^\"(t[0-9a-z]+)\"$",
+          "valid_state": "json_regex:state:^\"(live|finished|lost)\"$",
+          "valid_status": "json_regex:status:^(null|\\{.*\\})$",
+          "valid_app": "json_regex:status.app:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
+          "valid_status_state": "json_regex:status.state:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
+          "valid_labels": "json_regex:labels:^(null|\\{.*\\})$",
+          "valid_session": "json_regex:labels.kander-session:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$"
         },
         "expect": [
           [
             "!field_missing:row.valid_address",
             "!field_missing:row.valid_state",
-            "field_missing:row.bad_status",
-            "field_missing:row.bad_app",
-            "field_missing:row.bad_state",
-            "field_missing:row.bad_labels",
-            "field_missing:row.bad_session"
+            "!field_missing:row.valid_status",
+            "!field_missing:row.valid_app",
+            "!field_missing:row.valid_status_state",
+            "!field_missing:row.valid_labels",
+            "!field_missing:row.valid_session"
           ]
         ],
         "match": [
@@ -857,24 +857,24 @@
           "app": "json_field:status.app",
           "status": "json_field:status.state",
           "session": "json_field:labels.kander-session",
-          "valid_address": "regex:\"address\":\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"",
-          "local": "regex:\"address\":\"(t[0-9a-z]+)\"",
-          "valid_state": "regex:\"state\":\"(live|finished|lost)\"",
-          "bad_status": "regex:\"status\":([^{n])",
-          "bad_app": "regex:\"app\":([^\"n])",
-          "bad_state": "regex:\"state\":([^\"n])",
-          "bad_labels": "regex:\"labels\":([^{n])",
-          "bad_session": "regex:\"kander-session\":([^\"n])"
+          "valid_address": "json_regex:address:^\"((?:[^/:\\s\"\\\\]+/)?t[0-9a-z]+)\"$",
+          "local": "json_regex:address:^\"(t[0-9a-z]+)\"$",
+          "valid_state": "json_regex:state:^\"(live|finished|lost)\"$",
+          "valid_status": "json_regex:status:^(null|\\{.*\\})$",
+          "valid_app": "json_regex:status.app:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
+          "valid_status_state": "json_regex:status.state:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$",
+          "valid_labels": "json_regex:labels:^(null|\\{.*\\})$",
+          "valid_session": "json_regex:labels.kander-session:^(null|\"(?:[^\"\\\\]|\\\\.)*\")$"
         },
         "expect": [
           [
             "!field_missing:row.valid_address",
             "!field_missing:row.valid_state",
-            "field_missing:row.bad_status",
-            "field_missing:row.bad_app",
-            "field_missing:row.bad_state",
-            "field_missing:row.bad_labels",
-            "field_missing:row.bad_session"
+            "!field_missing:row.valid_status",
+            "!field_missing:row.valid_app",
+            "!field_missing:row.valid_status_state",
+            "!field_missing:row.valid_labels",
+            "!field_missing:row.valid_session"
           ]
         ],
         "match": [
