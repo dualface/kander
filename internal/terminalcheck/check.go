@@ -97,7 +97,7 @@ func Check(backend terminal.Backend, options Options, out io.Writer) (result err
 		return err
 	}
 	c := &checker{backend: backend, options: options, out: out, cwd: cwd, nonce: hex.EncodeToString(token[:])}
-	c.conn = terminal.Conn{Program: backend.Executable(), Run: c.trace}
+	c.conn = terminal.Conn{Program: backend.Executable(), Run: c.trace, RunInput: c.traceInput}
 	defer func() {
 		defer func() {
 			if !c.created || c.closed {
@@ -163,9 +163,23 @@ func (c *checker) status(name, skip string, err error) {
 }
 
 func (c *checker) trace(ctx context.Context, program string, args []string) (probe.Result, error) {
+	return c.traceCommand(ctx, program, args, "")
+}
+
+func (c *checker) traceInput(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
+	return c.traceCommand(ctx, program, args, input)
+}
+
+func (c *checker) traceCommand(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	res, err := terminal.ProbeRunner(ctx, program, args)
+	var res probe.Result
+	var err error
+	if input == "" {
+		res, err = terminal.ProbeRunner(ctx, program, args)
+	} else {
+		res, err = terminal.ProbeInputRunner(ctx, program, args, input)
+	}
 	argv, _ := json.Marshal(append([]string{program}, args...))
 	c.print(config.Text("terminal.test_trace", string(argv), res.Code, summary(res.Stdout), summary(res.Stderr), fmt.Sprint(err)))
 	c.lastStderr = strings.TrimSpace(res.Stderr)

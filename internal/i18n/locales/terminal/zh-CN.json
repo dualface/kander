@@ -1,4 +1,5 @@
 {
+  "terminal.command_output_limit": "终端命令输出超出字节上限",
   "terminal.text": "{{.V0}}",
   "terminal.value_contains_line_break": "占位符 {{.V0}} 的值包含换行或 NUL",
   "terminal.output_does_not_match": "输出不符合定义",

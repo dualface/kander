@@ -23,12 +23,15 @@ type recorder struct {
 }
 
 func (r *recorder) conn() terminal.Conn {
-	return terminal.Conn{Program: "tmux", Run: func(_ context.Context, program string, args []string) (probe.Result, error) {
+	run := func(_ context.Context, program string, args []string) (probe.Result, error) {
 		r.calls = append(r.calls, append([]string{}, args...))
 		if r.reply == nil {
 			return probe.Result{}, nil
 		}
 		return r.reply(args), nil
+	}
+	return terminal.Conn{Program: "tmux", Run: run, RunInput: func(ctx context.Context, program string, args []string, input string) (probe.Result, error) {
+		return run(ctx, program, args)
 	}}
 }
 

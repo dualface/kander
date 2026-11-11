@@ -380,7 +380,17 @@ func (e *execution) attempt(ctx context.Context, step *Step, argv []string) (pro
 		deadline = time.Now().Add(timeout)
 	}
 	for {
-		result, runErr := e.conn.Run(ctx, e.conn.Program, argv)
+		var result probe.Result
+		var runErr error
+		if step.Stdin != "" {
+			run := e.conn.RunInput
+			if run == nil {
+				run = ProbeInputRunner
+			}
+			result, runErr = run(ctx, e.conn.Program, argv, step.Stdin)
+		} else {
+			result, runErr = e.conn.Run(ctx, e.conn.Program, argv)
+		}
 		if runErr != nil {
 			return result, "", nil, &stepFailure{kind: KindExec, cause: runErr, result: result, detail: runErr.Error()}
 		}
@@ -390,6 +400,9 @@ func (e *execution) attempt(ctx context.Context, step *Step, argv []string) (pro
 				detail = "exit " + strconv.Itoa(result.Code)
 			}
 			return result, "", nil, &stepFailure{kind: KindExit, result: result, detail: detail}
+		}
+		if result.Overflow {
+			return result, "", nil, &stepFailure{kind: KindInvalidResponse, result: result, detail: config.Text("terminal.command_output_limit")}
 		}
 		text, parseKind, parseErr := extractOutput(step.Output, result)
 		if step.Poll == nil {

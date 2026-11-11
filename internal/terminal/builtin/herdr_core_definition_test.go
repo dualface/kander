@@ -112,7 +112,7 @@ func TestHerdrCoreDefinitionArgvAndParsing(t *testing.T) {
 				t.Fatalf("address=%+v", got)
 			}
 			return e
-		}, `{"hidden_finished":0,"terminals":[{"address":"t8","state":"live"}]}`, [][]string{{"ls", "--json", "--label", "kander-session=s1"}}},
+		}, `{"jsonrpc":"2.0","id":1,"result":{"hidden_finished":0,"terminals":[{"address":"t8","state":"live","labels":{"kander-session":"s1"}}]}}`, [][]string{{"connect", "--json"}}},
 		{"exists", func(c terminal.Conn) error {
 			got, e := backend.ContainerExists(ctx, c, address)
 			if e == nil && !got {
@@ -268,7 +268,7 @@ func TestHerdrCoreDefinitionRemovedTerminal(t *testing.T) {
 // of matching every terminal.
 func TestHerdrCoreDefinitionLookupWithoutReference(t *testing.T) {
 	r := &recorder{reply: func([]string) probe.Result {
-		return probe.Result{Stdout: `{"hidden_finished":0,"terminals":[{"address":"t3","state":"live"},{"address":"t8","state":"live"}]}`}
+		return probe.Result{Stdout: `{"jsonrpc":"2.0","id":1,"result":{"hidden_finished":0,"terminals":[{"address":"t3","state":"live"},{"address":"t8","state":"live"}]}}`}
 	}}
 	_, err := herdrCoreBackendForTest(t, nil).ReverseLookup(context.Background(), r.conn(), terminal.Identity{Agent: "claude"})
 	var match *terminal.MatchError

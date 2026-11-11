@@ -16,11 +16,18 @@ type AgentPane struct {
 	AgentStatus      string
 	AgentSession     string
 	AgentSessionKind string
+	SessionMarker    string
+	AgentApp         string
+	ProgramStatus    bool
 }
 
 // Facts returns the pane facts the agent list reported for this pane.
 func (p AgentPane) Facts() PaneFacts {
-	return PaneFacts{Agent: p.Agent, AgentStatus: p.AgentStatus, AgentSession: p.AgentSession, AgentSessionKind: p.AgentSessionKind}
+	facts := PaneFacts{Agent: p.Agent, AgentStatus: p.AgentStatus, AgentSession: p.AgentSession, AgentSessionKind: p.AgentSessionKind, SessionMarker: p.SessionMarker}
+	if p.ProgramStatus {
+		facts = programStatusFacts(facts, p.AgentApp)
+	}
+	return facts
 }
 
 // AgentLister is an optional Backend extension of AgentIdentity backends: one
@@ -58,6 +65,7 @@ func (b *DeclarativeBackend) AgentList(ctx context.Context, conn Conn) ([]AgentP
 		panes = append(panes, AgentPane{
 			Pane: row["pane"], Agent: row["agent"], AgentStatus: row["agent_status"],
 			AgentSession: row["agent_session"], AgentSessionKind: row["agent_session_kind"],
+			SessionMarker: row["session_marker"], AgentApp: row["agent_app"], ProgramStatus: b.def.Capabilities.ProgramStatus,
 		})
 	}
 	return panes, nil
