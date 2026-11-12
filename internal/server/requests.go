@@ -160,7 +160,7 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		if err != nil {
 			return request, err
 		}
-		data, found, err := tx.ReadGroup(serviceGroup, requestName(normalized, requestID))
+		data, found, err := tx.ReadGroup(serviceGroup, filepath.ToSlash(requestName(normalized, requestID)))
 		if err != nil {
 			return request, err
 		}

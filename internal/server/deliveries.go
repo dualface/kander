@@ -47,14 +47,14 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 			// A later generation or content revision may attest the same SHA;
 			// the previous immutable version remains available in history.
 			name := deliveryPath(task, input.Commit)
-			if previous, found, err := tx.ReadGroup(serviceGroup, name); err != nil {
+			if previous, found, err := tx.ReadGroup(serviceGroup, filepath.ToSlash(name)); err != nil {
 				return err
 			} else if found {
 				var old api.DeliveryEvidence
 				if err := json.Unmarshal(previous, &old); err != nil {
 					return err
 				}
-				if err := tx.PutGroup(serviceGroup, filepath.Join("delivery-history", task, digest(string(previous))+".json"), string(previous)); err != nil {
+				if err := tx.PutGroup(serviceGroup, filepath.ToSlash(filepath.Join("delivery-history", task, digest(string(previous))+".json")), string(previous)); err != nil {
 					return err
 				}
 			}

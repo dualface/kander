@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   native:
-    name: Native ${{ matrix.os }}
+    name: Native ${{ matrix.os }} (${{ matrix.suite }})
     timeout-minutes: 180
     strategy:
       fail-fast: false
@@ -24,10 +24,18 @@ jobs:
         include:
           - os: ubuntu-latest
             suffix: ''
+            suite: all
           - os: macos-latest
             suffix: ''
+            suite: all
           - os: windows-latest
             suffix: '.exe'
+            suite: services
+          # The Windows board model passed in 71 minutes. Run it separately so
+          # service failures are visible without waiting for the model search.
+          - os: windows-latest
+            suffix: '.exe'
+            suite: board
     runs-on: ${{ matrix.os }}
     env:
       GOMEMLIMIT: 2GiB
@@ -51,12 +59,31 @@ jobs:
       # Disable the test result cache: large model-test input logs otherwise
       # require substantially more memory after the tests themselves finish.
       - name: Complete native tests
+        if: matrix.suite == 'all'
         # runner is available at step scope, not in the job's env mapping.
         env:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
         run: go test -p 1 -count=1 -timeout 150m ./...
+      - name: Complete Windows service tests
+        if: matrix.suite == 'services'
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        shell: pwsh
+        run: |
+          $packages = @(go list ./... | Where-Object { $_ -ne 'github.com/dualface/kander/internal/board' })
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go test -v -p 1 -count=1 -timeout 20m $packages
+      - name: Complete Windows board tests
+        if: matrix.suite == 'board'
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -v -p 1 -count=1 -timeout 150m ./internal/board
 
   race:
     runs-on: ubuntu-latest

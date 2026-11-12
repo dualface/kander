@@ -193,6 +193,12 @@ func TestWindowsGrantReadWalkAddsEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	user := currentUserSID(t)
+	// Windows may serialize a SID as an SDDL alias, such as LA for RID 500.
+	expected, err := windows.SecurityDescriptorFromString("D:(A;;FA;;;" + user + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullControl := ";" + strings.TrimPrefix(expected.String(), "D:(A;;")
 	for _, path := range []string{dir.Path, file, filepath.Join(dir.Path, "nested"), nestedFile} {
 		sddl := daclString(t, path)
 		if !strings.HasPrefix(sddl, "D:P") {
@@ -201,7 +207,7 @@ func TestWindowsGrantReadWalkAddsEntries(t *testing.T) {
 		if !strings.Contains(sddl, ";BU)") {
 			t.Fatalf("%s: read entry missing: %s", path, sddl)
 		}
-		if !strings.Contains(sddl, ";FA;;;"+user+")") {
+		if !strings.Contains(sddl, fullControl) {
 			t.Fatalf("%s: user full control missing: %s", path, sddl)
 		}
 	}

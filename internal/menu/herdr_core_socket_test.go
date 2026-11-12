@@ -3,6 +3,7 @@ package menu
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -32,7 +33,7 @@ func TestHerdrCoreSocketResolution(t *testing.T) {
 			env := herdrCoreSocketEnv{
 				getenv: func(name string) string { return tc.env[name] },
 				readFile: func(path string) ([]byte, error) {
-					if tc.config == "" || path != "/h/.config/herdr-core/config.toml" {
+					if tc.config == "" || filepath.ToSlash(path) != "/h/.config/herdr-core/config.toml" {
 						return nil, os.ErrNotExist
 					}
 					return []byte(tc.config), nil
@@ -41,7 +42,7 @@ func TestHerdrCoreSocketResolution(t *testing.T) {
 				uid:   1000,
 			}
 			got, err := herdrCoreSocket(env)
-			if (err != nil) != tc.fails || got != tc.want {
+			if (err != nil) != tc.fails || filepath.ToSlash(got) != tc.want {
 				t.Fatalf("socket=%q err=%v; want %q fails=%v", got, err, tc.want, tc.fails)
 			}
 		})

@@ -50,10 +50,18 @@ func TestCreationRetryKeepsItsOriginalSnapshotAfterInterruptionAndLaterEdits(t *
 			// HTTP operation's fallback finish. A handler interruption skips finish.
 			srv.createFault = func(created api.Task) { createdChannel <- created; panic("injected creation interruption") }
 			request := api.NewTask{Type: "chore", Slug: "creation-receipt", Title: "  Original title  ", Language: "en"}
-			if _, err := project.NewTask(t.Context(), "creation-key", request); err == nil {
+			_, createErr := project.NewTask(t.Context(), "creation-key", request)
+			var original api.Task
+			select {
+			case original = <-createdChannel:
+			case <-time.After(5 * time.Second):
+				httpServer.Close()
+				srv.Close()
+				t.Fatalf("creation did not reach the interruption hook: %v", createErr)
+			}
+			if createErr == nil {
 				t.Fatal("interrupted response appeared successful")
 			}
-			original := <-createdChannel
 			httpServer.Close()
 			if err := srv.Close(); err != nil {
 				t.Fatal(err)

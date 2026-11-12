@@ -2,6 +2,7 @@ package launch
 
 import (
 	"os"
+	"runtime"
 	"testing"
 )
 
@@ -153,6 +154,10 @@ if [ "$1" = "create-chat" ]; then
 fi
 exit 0
 `
+	if runtime.GOOS == "windows" {
+		path += ".cmd"
+		script = "@echo off\r\nexit /b 0\r\n"
+	}
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}

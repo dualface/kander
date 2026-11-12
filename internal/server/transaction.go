@@ -22,7 +22,8 @@ func stageJSON(tx *board.Transaction, name string, value any) error {
 	if err != nil {
 		return err
 	}
-	return tx.PutGroup(serviceGroup, name, string(data)+"\n")
+	// Board document names use slashes even when the host joins native paths.
+	return tx.PutGroup(serviceGroup, filepath.ToSlash(name), string(data)+"\n")
 }
 
 func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *claimRecord) (api.Task, error) {
