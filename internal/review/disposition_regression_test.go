@@ -108,7 +108,7 @@ func TestMechanicalAssessmentRequiresActualGitScope(t *testing.T) {
 	item := board.ReviewFinding{ID: "PM-01", Tier: "medium", Text: "Documentation mismatch"}
 	d := board.ReviewDisposition{RecordID: "fix", RunID: "pm", FindingID: item.ID, TaskID: "20260907-mechanical-task", Status: "fixed", Mechanical: "documentation", ReportHash: strings.Repeat("a", 64), FixCommit: next}
 	v := board.ReviewBatchView{Runs: []board.ReviewRunView{{Run: board.ReviewRun{ReviewInput: board.ReviewInput{RunID: "pm", Commit: h.head, Role: "PM"}}, Findings: &board.ReviewFindings{Findings: []board.ReviewFinding{item}}, Records: []board.ReviewDisposition{d}}}}
-	r := board.ReviewCloseRequest{Author: "main", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "pm"}}}
+	r := board.ReviewCloseRequest{Author: "main", Roles: map[string]board.ReviewRoleConclusion{"PM": {RunID: "pm", PassedAt: next}}}
 	if _, err := verifyMechanicalGit(h.repo, v, r); err == nil {
 		t.Fatal("author tag alone bypassed re-review")
 	}

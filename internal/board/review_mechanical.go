@@ -37,6 +37,23 @@ type ReviewMechanicalGit struct {
 
 func assessmentKey(run, record, task string) string { return run + "/" + record + "/" + task }
 
+// ReviewRoleFixedRecords returns the latest fixed dispositions per finding and
+// task in every successful run of a role, using the same selection as closure.
+func ReviewRoleFixedRecords(v ReviewBatchView, role string) []ReviewDisposition {
+	var records []ReviewDisposition
+	for _, rv := range v.Runs {
+		if rv.Run.Role != role || rv.Run.ExecutionStatus != "ok" {
+			continue
+		}
+		for _, d := range latestViewRecords(rv) {
+			if d.Status == "fixed" {
+				records = append(records, d)
+			}
+		}
+	}
+	return records
+}
+
 // ReviewMechanicalClaims rejects a bare mechanical label. It requires a main
 // agent's separately attributed, category-specific assessment of each exception.
 // It does not infer semantic correctness from a reviewer label or a Git hash.

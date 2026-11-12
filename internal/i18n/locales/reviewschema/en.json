@@ -33,7 +33,7 @@
   "review.schema.close.mechanical.item.finding.finding_id": "Required on each mechanical entry. Finding ID.",
   "review.schema.close.mechanical.item.finding.run_id": "Required on each mechanical entry. Run ID of the finding.",
   "review.schema.close.mechanical.item.fix_commit": "Required on each mechanical entry. The same fix_commit as the disposition.",
-  "review.schema.close.mechanical.item.paths": "Required on each mechanical entry. Sorted unique repository-relative paths. They must be exactly the files changed from the run commit to fix_commit. No absolute path, empty name, or .. .",
+  "review.schema.close.mechanical.item.paths": "Required on each mechanical entry. Sorted unique repository-relative paths changed by this finding's fix; each must change from the conclusion run commit to fix_commit. No absolute path, empty name, or .. . Across all assessments and roles, paths must cover every changed file in each role's conclusion-commit-to-passed_at repair range. dead-code and redundant-test paths must have zero added lines in that range unless also declared by documentation; whitespace amount changes are ignored and binary changes count as additions.",
   "review.schema.close.mechanical.item.record_id": "Required on each mechanical entry. record_id of that disposition.",
   "review.schema.close.mechanical.item.report_hash": "Required on each mechanical entry. The same report_hash as the disposition.",
   "review.schema.close.mechanical.item.reported_category": "Required on each mechanical entry. The reviewer's mechanical label, or an empty string when the reviewer omitted it.",

@@ -353,15 +353,25 @@ kander review run --task <task-id> --previous-run-id <run-id>
 
 ### 3. 机械性修复关闭门禁（Mechanical Fix Closure）
 
-如果**所有**待决修复均为机械性（如文档拼写修正、无用代码清理），门禁允许将 `passed_at` 前移至修复 Commit，无需重新调用审查 Agent。
+如果**所有**待决修复均为机械性（如文档拼写修正、无用代码清理），门禁允许将 `passed_at` 前移，无需重新调用审查 Agent。
 
 关闭请求中必须附带 `mechanical` 校验数组：
-- `diff_hash`：针对变更文件的原始 Git diff 的 SHA-256 哈希。
-- `facts`：说明无逻辑变更的事实验证证据（逐句比对、测试覆盖等）。
+
+- `paths`：这条 finding 的修复改动的文件，使用已排序、去重的仓库相对路径。每个申报文件必须在结论 run 的 commit 到本条评估的 `fix_commit` 之间发生变更。不得使用绝对路径或 `..`。
+- `diff_hash`：下列命令 stdout 的小写 SHA-256。每个路径都加 `:(literal)`。
+- `facts`：说明无逻辑变更的事实验证证据。`documentation` 评估申报代码文件时，结案者必须确认新增行只修改注释；工具无法跨语言检查这一点。
 
 ```sh
 git diff --no-ext-diff --no-textconv --no-renames --binary --full-index --no-color <run-commit> <fix-commit> -- ':(literal)<path>'
 ```
+
+有 mechanical 评估的角色，其**修复范围**是结论 run 的 `commit..passed_at`。结案入口先检查原有的逐条文件和哈希绑定，再执行以下检查：
+
+- 该角色所有成功 run 中，每条最新的 `fixed` 处置记录，其 `fix_commit` 必须等于 `passed_at` 或是它的祖先。非阻断项和早期 run 也算。拒绝信息列出 run、finding 和修复提交。下一步是修正 `passed_at` 或运行增量复审。
+- 每个修复范围的全部变更文件，必须被关闭请求中**所有** mechanical 评估的 `paths` 并集覆盖，包括其他角色的评估。取范围 diff 时不加路径过滤。拒绝信息列出该范围的每个未申报文件。下一步是补全评估申报，或运行增量复审。
+- `dead-code` 或 `redundant-test` 评估申报的文件，在所属角色的整个修复范围内必须没有新增行；同一文件也被请求中任一 `documentation` 评估申报时豁免。判定使用 `git diff --no-ext-diff --no-textconv --no-renames --ignore-space-change --numstat -z`，忽略空白数量变化，并将二进制改动视为含新增行。拒绝信息列出含新增行的文件，并要求增量复审。`documentation` 只豁免自身申报的路径。
+
+以上拒绝都不会写入关闭记录。被拒后，运行该角色的增量复审：`kander review --task <task-id> --batch-id <batch-id> --previous-run-id <结论-run-id> <CWD> <base> <target> <role> <task-context>`（必要时先推进批次目标）。改用新 run 结案，之前的 mechanical 修复就不再需要同 run 评估。新检查只约束结案入口；历史 `VerifyClosedReviewGit` 保留原有的按申报路径校验 diff 和哈希的逻辑，`ReviewMechanicalGit` 和 `closed.json` 的保存格式不变。
 
 ### 4. 关闭批次（Close Batch）
 

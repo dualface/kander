@@ -40,5 +40,10 @@
   "board.review_stale_conclusion": "run {{.V0}} of role {{.V1}} reviewed another execution cycle of member {{.V2}}, so it cannot close batch {{.V3}}. Run role {{.V1}} in this cycle: on a new commit with --advance-file and --previous-run-id, or on the same commit, retiring the old run through superseded_runs",
   "board.review_withdrawal_owed": "an assigned finding of an excluded member needs a withdrawn record while it has no record, or its latest status is confirmed or unverifiable (withdrawal:<run>/<finding>/<member>), also in a batch with no member left: submit kander review disposition with status withdrawn, the exclusion ID from kander review progress of that member, and the user decision",
   "board.review_stale_run_required": "a required role has only runs of another execution cycle (stale-run:<batch>/<role>/<member>): run that role in this cycle and close the batch on the new run",
-  "board.review_extend_exclusive": "rebind_cycles, sync_targets, drop_batches, release_obligation and batch/seal are mutually exclusive"
+  "board.review_extend_exclusive": "rebind_cycles, sync_targets, drop_batches, release_obligation and batch/seal are mutually exclusive",
+  "review.mechanical_fix_outside_range": "mechanical repair range excludes fixed disposition {{.V0}}/{{.V1}} (fix_commit {{.V2}} is not an ancestor of passed_at {{.V3}}); correct passed_at or run incremental review for this repair range with kander review --task <task-id> --previous-run-id {{.V4}}",
+  "review.mechanical_unreported_files": "mechanical repair range has unreported files: {{.V0}}; complete mechanical assessment paths or run incremental review for this repair range with kander review --task <task-id> --previous-run-id {{.V1}}",
+  "review.mechanical_added_lines": "mechanical dead-code or redundant-test repair contains added lines (binary changes count as additions): {{.V0}}; run incremental review for this repair range with kander review --task <task-id> --previous-run-id {{.V1}}",
+  "review.mechanical_diff_failed": "cannot read mechanical repair range diff: {{.V0}}",
+  "review.mechanical_numstat_invalid": "invalid mechanical repair numstat: {{.V0}}"
 }

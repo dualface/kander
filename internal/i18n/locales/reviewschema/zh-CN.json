@@ -33,7 +33,7 @@
   "review.schema.close.mechanical.item.finding.finding_id": "每条 mechanical 记录必填。finding ID。",
   "review.schema.close.mechanical.item.finding.run_id": "每条 mechanical 记录必填。finding 所在的运行 ID。",
   "review.schema.close.mechanical.item.fix_commit": "每条 mechanical 记录必填。与该处置相同的 fix_commit。",
-  "review.schema.close.mechanical.item.paths": "每条 mechanical 记录必填。已排序、无重复的仓库相对路径。必须正好是从运行 commit 到 fix_commit 的变更文件。不能是绝对路径、空名或 .. 。",
+  "review.schema.close.mechanical.item.paths": "每条 mechanical 记录必填。该 finding 修复改动的文件，使用已排序、去重的仓库相对路径；每个文件必须在结论 run 的 commit 到 fix_commit 之间有变更。不能是绝对路径、空名或 .. 。所有角色评估的 paths 并集必须覆盖每个角色结论 commit 到 passed_at 的全部变更文件。dead-code 和 redundant-test 路径必须在该范围内无新增行，除非也由 documentation 申报；忽略空白数量变化，二进制改动视为含新增行。",
   "review.schema.close.mechanical.item.record_id": "每条 mechanical 记录必填。对应处置的 record_id。",
   "review.schema.close.mechanical.item.report_hash": "每条 mechanical 记录必填。与该处置相同的 report_hash。",
   "review.schema.close.mechanical.item.reported_category": "每条 mechanical 记录必填。审核员给出的 mechanical 标签；审核员没写时用空字符串。",

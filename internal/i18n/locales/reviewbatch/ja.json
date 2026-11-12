@@ -40,5 +40,10 @@
   "board.review_stale_conclusion": "ロール {{.V1}} の run {{.V0}} はメンバー {{.V2}} の別の実行サイクルをレビューしたため、バッチ {{.V3}} をクローズできません。現在のサイクルでロール {{.V1}} を実行してください。新しいコミットでは --advance-file と --previous-run-id を使い、同じコミットでは superseded_runs で古い run を置き換えます",
   "board.review_withdrawal_owed": "除外メンバーに割り当てられた finding は、レコードがないか最新ステータスが confirmed か unverifiable のとき、withdrawn レコードが必要です（withdrawal:<run>/<finding>/<メンバー>）。メンバーが残っていないバッチも同じです。status を withdrawn とし、そのメンバーの kander review progress が示す除外 ID とユーザー決定を添えて kander review disposition を実行してください",
   "board.review_stale_run_required": "要求されたロールに別の実行サイクルの run しかありません（stale-run:<バッチ>/<ロール>/<メンバー>）。現在のサイクルでロールを実行し、新しい run でバッチをクローズしてください",
-  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation、batch/seal は同時に使えません"
+  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation、batch/seal は同時に使えません",
+  "review.mechanical_fix_outside_range": "mechanical 修正範囲に fixed 処置 {{.V0}}/{{.V1}} が含まれません（fix_commit {{.V2}} は passed_at {{.V3}} の祖先ではありません）。passed_at を訂正するか、この範囲の増分レビューを実行してください：kander review --task <task-id> --previous-run-id {{.V4}}",
+  "review.mechanical_unreported_files": "mechanical 修正範囲に未申告ファイルがあります：{{.V0}}。mechanical 評価の paths を補完するか、この範囲の増分レビューを実行してください：kander review --task <task-id> --previous-run-id {{.V1}}",
+  "review.mechanical_added_lines": "mechanical の dead-code または redundant-test 修正に追加行があります（バイナリ変更も追加行として扱います）：{{.V0}}。この範囲の増分レビューを実行してください：kander review --task <task-id> --previous-run-id {{.V1}}",
+  "review.mechanical_diff_failed": "mechanical 修正範囲の diff を読み取れません：{{.V0}}",
+  "review.mechanical_numstat_invalid": "mechanical 修正の numstat が無効です：{{.V0}}"
 }
