@@ -54,6 +54,7 @@ func newPanelSpinner(app *App) spinner.Model {
 
 func newPanelApp(t *testing.T) *App {
 	t.Helper()
+	isolateTestOverlay(t)
 	app := newApp(true, 30, tuiPageContext(),
 		func() (BoardPayload, error) { return BoardPayload{}, nil },
 		func(string) (Task, error) { return Task{}, nil },
@@ -68,6 +69,7 @@ func newPanelApp(t *testing.T) *App {
 // rules of an agent that honors one of those variables.
 func newTestSession(t *testing.T, initial ...*config.Config) *menu.Session {
 	t.Helper()
+	isolateTestOverlay(t)
 	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
 	missing := t.TempDir()
 	for _, name := range installtest.AgentConfigEnvNames() {

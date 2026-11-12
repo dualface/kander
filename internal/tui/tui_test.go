@@ -389,6 +389,7 @@ func TestCopyAndDetailKeys(t *testing.T) {
 
 func TestColumnCountPrefs(t *testing.T) {
 	dir := t.TempDir()
+	t.Chdir(dir)
 	configPath := filepath.Join(dir, "config.json")
 	t.Setenv(config.EnvConfig, configPath)
 	if loadPrefs().Columns != defaultColumns {
