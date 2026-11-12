@@ -234,22 +234,36 @@ type StartInput struct {
 
 // Execution actions of POST .../tasks/{task}/execution, all by the holder.
 const (
-	ExecutionWindow   = "window"
-	ExecutionSession  = "session"
-	ExecutionConfirm  = "confirm"
-	ExecutionRollback = "rollback"
+	ExecutionWindow    = "window"
+	ExecutionSession   = "session"
+	ExecutionConfirm   = "confirm"
+	ExecutionRollback  = "rollback"
+	ExecutionUnresolve = "unresolve"
+	ExecutionAdopt     = "adopt"
 )
 
 // ExecutionUpdate records launcher facts of the current execution. window
 // writes WINDOW; session replaces SessionBefore with SessionAfter; confirm
 // records start success (with a session replacement when both are set);
 // rollback returns a failed start to todo and releases the claim.
+type ExecutionState struct {
+	ObservationTicket string                  `json:"observation_ticket"`
+	Task              Task                    `json:"task"`
+	Record            board.ExecutionRecord   `json:"record"`
+	Standing          board.ExecutionStanding `json:"standing"`
+}
+
 type ExecutionUpdate struct {
-	Action        string `json:"action"`
-	Window        string `json:"window,omitempty"`
-	SessionBefore string `json:"session_before,omitempty"`
-	SessionAfter  string `json:"session_after,omitempty"`
-	ExecResolved  string `json:"exec_resolved,omitempty"`
+	ObservationTicket string            `json:"observation_ticket,omitempty"`
+	Reason            string            `json:"reason,omitempty"`
+	Decision          string            `json:"decision,omitempty"`
+	ExpectedRevision  uint64            `json:"expected_revision,omitzero"`
+	Presence          *AgentObservation `json:"presence,omitempty"`
+	Action            string            `json:"action"`
+	Window            string            `json:"window,omitempty"`
+	SessionBefore     string            `json:"session_before,omitempty"`
+	SessionAfter      string            `json:"session_after,omitempty"`
+	ExecResolved      string            `json:"exec_resolved,omitempty"`
 }
 
 // ClaimGrant answers a claim or takeover. Token is returned exactly once.

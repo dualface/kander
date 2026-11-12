@@ -58,6 +58,20 @@ func (p *project) taskTransaction(key, operation string, request any, id string,
 				}
 			}
 			if claim != nil {
+				snapshot, err := tx.StagedSnapshot(id)
+				if err != nil {
+					return err
+				}
+				if grant {
+					record, err := tx.StagedExecutionRecord(id)
+					if err != nil {
+						return err
+					}
+					if record.StartUnfinished() {
+						claim.LaunchRecordID = record.ID
+					}
+				}
+				claim.LaunchRevision = snapshot.Revision
 				if err := stageJSON(tx, "claims/"+id+".json", claim); err != nil {
 					return err
 				}

@@ -56,5 +56,6 @@
   "remote.wrap_up_holder_required": "wrap-up needs the live local holder",
   "remote.wrap_up_identity_mismatch": "wrap-up intent identity mismatch",
   "remote.wrap_up_decision_conflict": "wrap-up authorization already belongs to another decision",
-  "remote.wrap_up_foreign_terminal": "foreign terminal cannot be observed for wrap-up"
+  "remote.wrap_up_foreign_terminal": "foreign terminal cannot be observed for wrap-up",
+  "remote.execution_holder_required": "This operation requires the live task credential of this host"
 }

@@ -56,5 +56,6 @@
   "remote.wrap_up_holder_required": "收尾需要当前本机持有者的有效租约",
   "remote.wrap_up_identity_mismatch": "收尾意图身份不一致",
   "remote.wrap_up_decision_conflict": "收尾授权已绑定其他决定",
-  "remote.wrap_up_foreign_terminal": "无法在本机确认其他主机终端的收尾退出事实"
+  "remote.wrap_up_foreign_terminal": "无法在本机确认其他主机终端的收尾退出事实",
+  "remote.execution_holder_required": "此操作需要本机持有的有效任务凭据"
 }

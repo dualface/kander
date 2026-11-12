@@ -79,3 +79,9 @@ kander resume --adopt --decision <reference> <task-id>
 - `--adopt` on an unmarked pane whose session cannot be proven, or when the marker write fails. Nothing is written; the error names the takeover, after stopping the old executor by hand.
 - `--adopt` when the card or the attempt changed after the probe and before the marker write. No marker is written; the error tells you to run `kander check <task-id>` and act on its result.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error. So are `--adopt` with any option except `--decision`, `--adopt` without `--decision`, and `--decision` without `--adopt` or `--agent`.
+
+## Distributed adoption
+
+With a configured server, `resume --adopt --decision <reference>` uses only this host's private credential for the fixed execution. It fetches the current record and a short-lived service-clock observation ticket, observes the exact local process incarnation or terminal session, and submits the decision with the unchanged card revision. The server checks the ticket, generation and revision in the adoption transaction. A foreign host, lost credential, changed identity, unknown presence or stale ticket refuses adoption. This path never reads a local board or treats a lease timeout as a stopped executor.
+
+Remote starts retain a durable record/revision cursor. Server restart and later launcher writes cannot erase executor-progress evidence. A late or uncertain launch failure preserves the executor and its task file and records an unresolved start; it does not restore the pre-start document over executor work. A superseded launcher touches no successor. Inspect the same execution before any recovery; repeating `start` cannot create a second executor for a claimed task.

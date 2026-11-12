@@ -62,6 +62,7 @@ type LaunchPlan struct {
 	Launcher         string
 	Target           terminal.Target
 	PromptDelivery   config.PromptDelivery
+	beforePrompt     func() error
 	Prompt           string
 
 	// extendedTimeouts carries extended_launch_timeouts into the launch-time

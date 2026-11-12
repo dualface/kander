@@ -57,11 +57,11 @@ type TakeoverInput struct {
 // ExecutionStanding is what a launcher must know before it destroys anything.
 type ExecutionStanding struct {
 	// Superseded: the record of this launcher ended without it.
-	Superseded bool
+	Superseded bool `json:"superseded"`
 	// Evidence: the card moved past the cursor. The launcher's own writes keep
 	// the cursor current, so they never count. A dispatch or a human update counts
 	// too; that misjudgment keeps a container and is the safe direction.
-	Evidence bool
+	Evidence bool `json:"evidence"`
 }
 
 // ReadExecutionStanding judges a failed launch on the latest card. It writes
@@ -459,7 +459,7 @@ func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, ex
 // stays, and the card keeps its column. A container address the card lacks is
 // recorded here, because the next owner needs it; a card that already left working
 // and review keeps its text.
-func UnresolveExecution(root string, entry Entry, window, reason string) (ExecutionResult, error) {
+func UnresolveExecutionWithTransaction(root string, entry Entry, window, reason string, extensions ...TransactionExtension) (ExecutionResult, error) {
 	if strings.TrimSpace(reason) == "" {
 		return ExecutionResult{}, coordinatorError("start unresolved reason")
 	}
@@ -489,7 +489,7 @@ func UnresolveExecution(root string, entry Entry, window, reason string) (Execut
 		t := transitionFrom(TransitionUnresolve, s, cur).withCard(s, text, revision)
 		t.FromStatus = cur.Status
 		return text, putTransition(tx, l, t)
-	})
+	}, extensions...)
 }
 
 // StartIdentityChanged reports a start attempt whose card shows another OWNER or
@@ -515,7 +515,7 @@ func CheckAdoptable(s Snapshot, record ExecutionRecord) error {
 // to its record. A handoff in between refuses the write through the fence. A new
 // OWNER, SESSION or WINDOW on the same record refuses it here: the proof named the
 // old identity. The card stays unchanged.
-func AdoptExecution(root string, observed Snapshot, decision string) (ExecutionResult, error) {
+func AdoptExecutionWithTransaction(root string, observed Snapshot, decision string, extensions ...TransactionExtension) (ExecutionResult, error) {
 	if strings.TrimSpace(decision) == "" {
 		return ExecutionResult{}, kanbanError("board.adopt_decision_required", observed.Entry.TaskID)
 	}
@@ -539,7 +539,7 @@ func AdoptExecution(root string, observed Snapshot, decision string) (ExecutionR
 		t := transitionFrom(TransitionAdopt, s, cur).withCard(s, s.Text, s.Revision)
 		t.FromStatus, t.Decision = cur.Status, decision
 		return "", putTransition(tx, l, t)
-	})
+	}, extensions...)
 }
 
 // ConfirmTaskStart records launcher success. The card stays unchanged, so a fast

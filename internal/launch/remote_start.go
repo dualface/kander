@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/process"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -158,10 +160,31 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err := session.SaveCredential(credential); err != nil {
 		return result, err
 	}
-	if err := remote.EnsureWorker(session.Home); err != nil {
+	if err := ensureRemoteWorker(session.Home); err != nil {
 		result.Warnings = append(result.Warnings, t("remote.worker_start_failed", err.Error())+"\n")
 	}
 	own := *credential.Claim()
+	promptAttempted := false
+	plan.beforePrompt = func() error { promptAttempted = true; return nil }
+	plan.judge = func() launchVerdict {
+		ctx, cancel := call()
+		defer cancel()
+		state, err := session.Project.ExecutionState(ctx, task.TaskID, own)
+		if api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeLeaseInvalid) {
+			return verdictSuperseded
+		}
+		if err != nil {
+			return verdictKeep
+		}
+		if state.Standing.Superseded {
+			return verdictSuperseded
+		}
+		if state.Standing.Evidence || promptAttempted {
+			return verdictKeep
+		}
+		return verdictCleanup
+	}
+
 	executionUpdate := func(u api.ExecutionUpdate) error {
 		ctx, cancel := call()
 		defer cancel()
@@ -175,6 +198,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			defer close(done)
 			facts, err := process.ObserveStarted(context.Background(), pid, running)
 			if err == nil {
+				promptAttempted = true
 				credential.AgentPID, credential.AgentStart = facts.PID, facts.Start
 				credential.BootID, err = process.BootIdentity()
 			}
@@ -207,7 +231,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			if err := remote.WriteCredential(session.Home, credential); err != nil {
 				return err
 			}
-			_ = remote.EnsureWorker(session.Home)
+			_ = ensureRemoteWorker(session.Home)
 			return executionUpdate(api.ExecutionUpdate{Action: api.ExecutionConfirm, SessionBefore: initialSession, SessionAfter: effective.Render()})
 		}
 	}
@@ -225,18 +249,48 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	launchStart = nowFn()
 	// launchAgent starts the agent in the parent of root; the server-mode
 	// root is only that anchor, never a board.
-	outcome, err := launchAgent(plan, filepath.Join(project, "kanban"), name, inv, location, paneCB, &agentSession)
+	outcome, err := launchAgent(plan, filepath.Join(project, "kanban"), name, inv, location, paneCB, &agentSession, true)
 	result.TaskID, result.Size, result.Agent = task.TaskID, kind, agentName
 	result.Plan, result.Outcome = plan, outcome
 	if err != nil {
 		failure := asLaunchFailure(err)
 		result.Outcome = failure.Outcome
-		if rerr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionRollback}); rerr != nil {
+		if failure.Verdict == verdictSuperseded {
+			result.Superseded = true
 			taskFileHandedOff = true
-			return result, launchError("launch.start_and_rollback_both_failed_task_remains_in", "working", failure.Err.Error()+"; "+rerr.Error())
+			return result, nil
 		}
-		_ = remote.RemoveCredential(session.Home, credential)
-		return result, failure.Err
+		if !failure.DeliveryUnknown && failure.Verdict == verdictCleanup && failure.CloseError == "" {
+			if rollbackErr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionRollback}); rollbackErr == nil {
+				_ = remote.RemoveCredential(session.Home, credential)
+				return result, failure.Err
+			} else {
+				err = errors.Join(failure.Err, rollbackErr)
+			}
+		}
+		taskFileHandedOff = true
+		if failure.CloseError != "" {
+			err = errors.Join(failure.Err, errors.New(failure.CloseError))
+		}
+		reason := failure.Err.Error()
+		if err != nil {
+			reason = err.Error()
+		}
+		reason = issue.Sanitize(reason)
+		window := credential.Window
+		if failure.Outcome.Container != "" {
+			window = locationOf(plan, failure.Outcome)
+		}
+		if recordErr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionUnresolve, Window: window, Reason: reason}); recordErr != nil {
+			result.Warnings = append(result.Warnings, recordErr.Error()+"\n")
+		}
+		unresolved := &UnresolvedError{TaskID: task.TaskID, Window: window, Reason: reason, Command: "kander"}
+		unresolved.Unmarked = plan.capabilities().PaneMetadata && failure.Outcome.Container != "" && !failure.Outcome.SessionMarked
+		unresolved.Repairable = unresolved.Unmarked && markerRepairable(agentSession.Render())
+		if plan.OccupiesTerminal() && failure.Outcome.Wait != nil {
+			unresolved.hold = func() { _, _ = failure.Outcome.Wait() }
+		}
+		return result, unresolved
 	}
 	taskFileHandedOff = true
 	if outcome.Process != nil {
@@ -253,14 +307,22 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			result.Warnings = append(result.Warnings, err.Error()+"\n")
 		}
 	}
-	_ = remote.EnsureWorker(session.Home)
+	_ = ensureRemoteWorker(session.Home)
 	if !persistSession {
 		credential.Session = agentSession.Render()
 		if err := remote.WriteCredential(session.Home, credential); err != nil {
 			return result, err
 		}
 		if err := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionConfirm}); err != nil {
-			return result, err
+			reason := issue.Sanitize(err.Error())
+			if recordErr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionUnresolve, Window: credential.Window, Reason: reason}); recordErr != nil {
+				result.Warnings = append(result.Warnings, recordErr.Error()+"\n")
+			}
+			unresolved := &UnresolvedError{TaskID: task.TaskID, Window: credential.Window, Reason: reason, Command: "kander"}
+			if plan.OccupiesTerminal() && outcome.Wait != nil {
+				unresolved.hold = func() { _, _ = outcome.Wait() }
+			}
+			return result, unresolved
 		}
 	}
 	return result, nil

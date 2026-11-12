@@ -56,5 +56,6 @@
   "remote.wrap_up_holder_required": "終了処理には有効なローカル所有者が必要です",
   "remote.wrap_up_identity_mismatch": "終了処理の意図の識別情報が一致しません",
   "remote.wrap_up_decision_conflict": "終了処理の承認は別の決定に関連付けられています",
-  "remote.wrap_up_foreign_terminal": "別ホストの端末の終了処理をこのホストで観測できません"
+  "remote.wrap_up_foreign_terminal": "別ホストの端末の終了処理をこのホストで観測できません",
+  "remote.execution_holder_required": "この操作にはこのホストの有効なタスク資格情報が必要です"
 }

@@ -29,7 +29,10 @@ type claimRecord struct {
 	Handoffs    []api.Handoff         `json:"handoffs,omitempty"`
 	// OriginalText is the card before a launcher start claim, kept so a
 	// failed start can return the card to todo.
-	OriginalText string `json:"original_text,omitempty"`
+	OriginalText     string `json:"original_text,omitempty"`
+	LaunchRecordID   string `json:"launch_record_id,omitempty"`
+	LaunchRevision   uint64 `json:"launch_revision,omitzero"`
+	ExecutorEvidence bool   `json:"executor_evidence,omitzero"`
 }
 
 const claimPending = "pending"

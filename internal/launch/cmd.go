@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/issue"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func init() {
@@ -147,6 +148,10 @@ func RunStartRemote(args []string) int {
 	if err != nil {
 		return exitLaunch(err)
 	}
+	if result.Superseded {
+		stepAside(result.TaskID, result.Plan, result.Outcome)
+		return 0
+	}
 	if err := reportLaunch(t("launch.started"), board.Entry{TaskID: result.TaskID, Kind: result.Size}, result.Agent, result.Plan, result.Outcome); err != nil {
 		return exitLaunch(err)
 	}
@@ -264,8 +269,15 @@ func RunResume(args []string) int {
 		return usageFail("resume", "launch.decision_needs_adopt_or_agent")
 	}
 	dispatchOptions.Decision = decision
-	if _, err := config.Load(false); err != nil {
+	cfg, err := config.Load(false)
+	if err != nil {
 		return fail(err)
+	}
+	if remote.Enabled(cfg) && adopt {
+		if err := commandRemoteAdopt(cfg, positional[0], decision); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	var agentPtr *string
 	if agentSet {

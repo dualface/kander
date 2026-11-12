@@ -41,3 +41,10 @@ func ConfirmTaskStartSession(root string, entry Entry, before, after string) err
 func RollbackDocument(root string, entry Entry, text, state string) error {
 	return RollbackDocumentWithTransaction(root, entry, text, state)
 }
+
+func UnresolveExecution(root string, entry Entry, window, reason string) (ExecutionResult, error) {
+	return UnresolveExecutionWithTransaction(root, entry, window, reason)
+}
+func AdoptExecution(root string, observed Snapshot, decision string) (ExecutionResult, error) {
+	return AdoptExecutionWithTransaction(root, observed, decision)
+}

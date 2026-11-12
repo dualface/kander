@@ -91,6 +91,11 @@ func completePaneDelivery(plan LaunchPlan, outcome LaunchOutcome) error {
 		}
 		waitAgentRecognized(plan, outcome, deadline)
 	}
+	if plan.beforePrompt != nil {
+		if err := plan.beforePrompt(); err != nil {
+			return err
+		}
+	}
 	if err := deliverPromptToPane(plan, outcome); err != nil {
 		output := resumedAgentFailureOutput(plan, outcome)
 		return launchError("launch.pane_prompt_rejected", err.Error(), output)
