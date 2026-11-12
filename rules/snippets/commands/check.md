@@ -42,3 +42,7 @@ kander check overlap --source <ref> [--head <ref>] [--json]
 ## Rejections
 
 - An unknown option, a duplicate flag, a missing `--base` or `--source`, or an unexpected argument is a usage error (exit 2 for `delivery` and `overlap`).
+
+## Distributed project
+
+In a distributed project, the ordinary check runs structural and review-evidence validation on the server, then displays generation-bound worker observations. It does not scan a local board or probe another host's terminal address. Delivery and overlap remain local, board-free Git checks.

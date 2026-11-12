@@ -28,5 +28,8 @@
   "remote.worker_start_failed": "后台 worker 未能启动, 本机领取不会续租: {{.V0}}",
   "remote.stale_snapshot": "离线快照已陈旧（{{.V0}}）；请重新连接以刷新。写入必须连接服务端。",
   "remote.stale_label": "陈旧快照",
-  "remote.publication_confirmation_request": "联合评审资料 {{.V0}} 已准备。请核对操作与版本，再在你自己的本地项目目录确认：kander review confirm <absolute-CWD> {{.V0}} {{.V1}}。确认仅绑定本卡版本及当前执行代次。"
+  "remote.publication_confirmation_request": "联合评审资料 {{.V0}} 已准备。请核对操作与版本，再在你自己的本地项目目录确认：kander review confirm <absolute-CWD> {{.V0}} {{.V1}}。确认仅绑定本卡版本及当前执行代次。",
+  "remote.agent_observation_pending": "尚无当前 Agent 存活观察",
+  "remote.lease_lost_agent_unknown": "租约已失效；尚未确认 Agent 进程状态",
+  "remote.agent_observation_stale": "Agent 存活观察已过期"
 }

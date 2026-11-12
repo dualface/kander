@@ -63,3 +63,7 @@ A subscription is a background process plus a file. The loop, in order:
 
 - A nonexistent or empty target, a duplicate member, overlapping expansions, or an ownership mismatch fails before subscribing.
 - A missing group or member list without `--watch`, a missing `--watch` value, or an unknown option is a usage error.
+
+## Distributed project
+
+In a distributed project, membership, revisions, dispatches and blocked members come from the service snapshot. The client resumes the service event cursor and performs no local board scan. Worker observations describe agent presence; an expired lease alone does not prove the agent stopped. A cursor reset emits `snapshot-reset` after a complete refresh, and generation or status changes emit `claim-change`. These schema-1 events include the service cursor and public claims.

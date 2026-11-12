@@ -13,6 +13,9 @@ import (
 // views. Implementations perform REST calls; there is no local board adapter.
 // Git, terminal control and private execution files remain client concerns.
 type ProjectService interface {
+	Check(context.Context, api.CheckQuery) (api.CheckResult, error)
+	Snapshot(context.Context, api.SnapshotQuery) (api.BoardSnapshot, error)
+	ObserveAgent(context.Context, string, string, api.AgentObservation, client.Claim) (api.ClaimView, error)
 	ReviewRuntime(context.Context, string, string, string, any, *client.Claim) (json.RawMessage, error)
 	ReviewEvidence(context.Context, string, string, string) (json.RawMessage, error)
 	ReviewRemaining(context.Context, []string) ([]string, error)

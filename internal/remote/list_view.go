@@ -43,8 +43,9 @@ func (s *Session) machineList(ctx context.Context, list api.TaskList, observe bo
 				requests = append(requests, board.AgentStatusRequest{TaskID: item.TaskID, Session: item.Session, Window: item.Window})
 			}
 		}
-		if item.Claim != nil && item.Claim.Status == api.ClaimLost {
-			task.Agent = &board.ListAgent{Status: "stopped", Reason: "server lease expired", ObservedAt: out.GeneratedAt, Valid: true}
+		if item.Claim != nil && (item.Claim.Status == api.ClaimLost || observe != nil && item.Claim.Observation != nil) {
+			agent := ClaimAgent(item.Claim, list.ObservedAt, time.Now())
+			task.Agent = &agent
 		}
 		out.Tasks = append(out.Tasks, task)
 	}
@@ -68,6 +69,11 @@ func (s *Session) machineList(ctx context.Context, list api.TaskList, observe bo
 		if rows[i].Claim != nil {
 			claim := *rows[i].Claim
 			claim.RenewedAt, claim.ExpiresAt = time.Time{}, time.Time{}
+			if claim.Observation != nil {
+				observation := *claim.Observation
+				observation.ObservedAt = time.Time{}
+				claim.Observation = &observation
+			}
 			rows[i].Claim = &claim
 		}
 	}

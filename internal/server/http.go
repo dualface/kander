@@ -149,6 +149,8 @@ func (s *Server) Handler() http.Handler {
 	s.reviewRoutes(mux)
 	s.reviewActionRoutes(mux)
 	s.reviewRuntimeRoutes(mux)
+	s.observationRoutes(mux)
+	s.snapshotRoutes(mux)
 	s.issueRoutes(mux)
 	s.publicationRoutes(mux)
 	return mux

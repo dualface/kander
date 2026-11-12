@@ -28,5 +28,8 @@
   "remote.worker_start_failed": "the background worker did not start; leases of this host are not renewed: {{.V0}}",
   "remote.stale_snapshot": "Stale offline snapshot from {{.V0}}; reconnect to refresh. Writes require the server.",
   "remote.stale_label": "STALE",
-  "remote.publication_confirmation_request": "Joint review material {{.V0}} is ready. Inspect its operation and versions, then confirm this task from your own local project directory: kander review confirm <absolute-CWD> {{.V0}} {{.V1}}. Confirmation is limited to this task revision and execution generation."
+  "remote.publication_confirmation_request": "Joint review material {{.V0}} is ready. Inspect its operation and versions, then confirm this task from your own local project directory: kander review confirm <absolute-CWD> {{.V0}} {{.V1}}. Confirmation is limited to this task revision and execution generation.",
+  "remote.agent_observation_pending": "No current agent observation has been reported",
+  "remote.lease_lost_agent_unknown": "Lease lost; the agent process state is unconfirmed",
+  "remote.agent_observation_stale": "The agent observation is stale"
 }

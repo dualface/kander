@@ -103,7 +103,7 @@ func (p *project) list(ctx context.Context, state string) (api.TaskList, error) 
 		return api.TaskList{}, err
 	}
 	now := p.server.now()
-	out := api.TaskList{Tasks: []api.TaskSummary{}, Cursor: cursor, Warnings: view.Warnings}
+	out := api.TaskList{ObservedAt: now, Tasks: []api.TaskSummary{}, Cursor: cursor, Warnings: view.Warnings}
 	for _, t := range view.Tasks {
 		if state != "" && t.State != state {
 			continue
@@ -133,7 +133,7 @@ func (p *project) show(id string) (api.Task, error) {
 	if err != nil {
 		return api.Task{}, err
 	}
-	t := api.Task{TaskID: s.Entry.TaskID, State: s.Entry.State, Revision: s.Revision, OperationID: s.OperationID, Text: s.Text}
+	t := api.Task{ObservedAt: p.server.now(), TaskID: s.Entry.TaskID, State: s.Entry.State, Revision: s.Revision, OperationID: s.OperationID, Text: s.Text}
 	r, found, err := p.readClaim(s.Entry.TaskID)
 	if err != nil {
 		return api.Task{}, err

@@ -80,6 +80,10 @@ func boardContentKey(tasks []Task) string {
 			item["claim_status"], item["claim_client_id"] = task.ClaimStatus, task.ClaimClientID
 			item["session"], item["window"] = task.Session, task.Window
 		}
+		if task.AgentObservation != nil {
+			agent := task.AgentObservation
+			item["agent_status"], item["agent_runtime"], item["agent_reason"] = agent.Status, agent.RuntimeState, agent.Reason
+		}
 		if task.Document == "" {
 			delete(item, "document")
 		}

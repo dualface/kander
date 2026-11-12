@@ -9,21 +9,22 @@ import (
 
 // TaskSummary is the task digest used by tui; its fields match the onevoke payload.
 type TaskSummary struct {
-	ClaimStatus   string   `json:"claim_status,omitempty"`
-	ClaimClientID string   `json:"claim_client_id,omitempty"`
-	Warnings      []string `json:"warnings,omitempty"`
-	TaskID        string   `json:"task_id"`
-	Title         string   `json:"title"`
-	State         string   `json:"state"`
-	Kind          string   `json:"kind"`
-	Type          string   `json:"type"`
-	TaskGroup     string   `json:"task_group"`
-	Assignee      string   `json:"assignee"`
-	CreatedAt     string   `json:"created_at"`
-	StartedAt     string   `json:"started_at"`
-	CompletedAt   string   `json:"completed_at"`
-	Time          string   `json:"time"`
-	Result        string   `json:"result"`
+	AgentObservation *ListAgent `json:"agent_observation,omitempty"`
+	ClaimStatus      string     `json:"claim_status,omitempty"`
+	ClaimClientID    string     `json:"claim_client_id,omitempty"`
+	Warnings         []string   `json:"warnings,omitempty"`
+	TaskID           string     `json:"task_id"`
+	Title            string     `json:"title"`
+	State            string     `json:"state"`
+	Kind             string     `json:"kind"`
+	Type             string     `json:"type"`
+	TaskGroup        string     `json:"task_group"`
+	Assignee         string     `json:"assignee"`
+	CreatedAt        string     `json:"created_at"`
+	StartedAt        string     `json:"started_at"`
+	CompletedAt      string     `json:"completed_at"`
+	Time             string     `json:"time"`
+	Result           string     `json:"result"`
 	// Session and Window are the raw execution metadata, consumed by the TUI
 	// agent status observation.
 	Session  string `json:"session,omitempty"`

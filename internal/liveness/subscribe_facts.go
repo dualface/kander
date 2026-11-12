@@ -10,12 +10,17 @@ import (
 	"sort"
 	"time"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/remote"
 )
 
 const subscriptionReadTimeout = 2 * time.Second
 
 type subscriptionFacts struct {
+	claims     map[string]*api.ClaimView
+	cursor     string
+	serverNow  time.Time
 	scanned    board.Board
 	states     map[string]string
 	revisions  map[string]uint64
@@ -29,6 +34,8 @@ type subscriptionFacts struct {
 }
 
 type subscription struct {
+	service              *remote.Session
+	cursor               string
 	opts                 subscribeOptions
 	id                   string
 	seq                  uint64
@@ -85,6 +92,9 @@ func newSubscription(opts subscribeOptions) (*subscription, error) {
 }
 
 func (s *subscription) readContext(ctx context.Context, root string) (facts subscriptionFacts, err error) {
+	if s.service != nil {
+		return s.readRemote(ctx)
+	}
 	facts.observedAt = nowFn().UTC()
 	ctx, cancel := context.WithTimeout(ctx, subscriptionReadTimeout)
 	defer cancel()
@@ -101,6 +111,26 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 	if err != nil {
 		return facts, err
 	}
+	facts, err = s.expandFacts(facts)
+	if err != nil {
+		return facts, err
+	}
+	facts.blocked = map[string]string{}
+	for group := range facts.versions {
+		if err = board.ReadBlockedMembers(ctx, root, group, facts.blocked); err != nil {
+			return facts, err
+		}
+	}
+	if s.opts.Group != "" {
+		if err = board.ReadBlockedMembers(ctx, root, s.opts.Group, facts.blocked); err != nil {
+			return facts, err
+		}
+	}
+	return facts, nil
+}
+
+func (s *subscription) expandFacts(facts subscriptionFacts) (subscriptionFacts, error) {
+	var err error
 	facts.states = map[string]string{}
 	facts.revisions = map[string]uint64{}
 	facts.dispatches = map[string]dispatchJSON{}
@@ -184,17 +214,7 @@ func (s *subscription) readContext(ctx context.Context, root string) (facts subs
 			facts.dispatches[id] = summarizeDispatch(*dispatch, facts.observedAt)
 		}
 	}
-	facts.blocked = map[string]string{}
-	for group := range facts.versions {
-		if err = board.ReadBlockedMembers(ctx, root, group, facts.blocked); err != nil {
-			return facts, err
-		}
-	}
-	if s.opts.Group != "" {
-		if err = board.ReadBlockedMembers(ctx, root, s.opts.Group, facts.blocked); err != nil {
-			return facts, err
-		}
-	}
+
 	return facts, nil
 }
 
@@ -227,7 +247,7 @@ func (s *subscription) payload(event string, facts subscriptionFacts) groupEvent
 	s.seq++
 	return groupEvent{
 		SchemaVersion: 1, SubscriptionID: s.id, Seq: s.seq, ObservedAt: facts.observedAt,
-		Dispatches: facts.dispatches, Blocked: facts.blocked,
+		Claims: facts.claims, Cursor: facts.cursor, Dispatches: facts.dispatches, Blocked: facts.blocked,
 		Event: event, GroupID: s.opts.Group, Tasks: facts.states, TaskRevisions: facts.revisions,
 		Watched: facts.watched, WatchReferences: s.opts.Watch, Memberships: facts.groups,
 		MembershipVersions: facts.versions, MembershipComplete: true,

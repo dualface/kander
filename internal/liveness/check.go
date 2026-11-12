@@ -10,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func formatReport(rep Report) string {
@@ -118,6 +119,9 @@ func RunCheck(args []string) int {
 	}
 	for _, warning := range config.AgentWarnings(cfg) {
 		fmt.Fprintln(os.Stderr, warning)
+	}
+	if remote.Enabled(cfg) {
+		return runRemoteCheck(cfg, tasks, all)
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

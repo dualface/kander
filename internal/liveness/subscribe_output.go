@@ -68,6 +68,7 @@ func newSubscriptionOutput(ctx context.Context, writer ContextWriter) *subscript
 	ctx, cancel := context.WithCancel(ctx)
 	out := &subscriptionOutputQueue{ctx: ctx, cancel: cancel, lines: make(chan queuedLine, subscriptionQueueSize), done: make(chan struct{})}
 	go func() {
+		defer out.cancel()
 		defer close(out.done)
 		for line := range out.lines {
 			writeCtx, stop := context.WithDeadline(ctx, line.deadline)

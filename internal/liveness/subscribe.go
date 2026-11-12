@@ -13,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 const (
@@ -54,29 +56,31 @@ type livenessJSON struct {
 }
 
 type groupEvent struct {
-	Dispatches             map[string]dispatchJSON `json:"dispatches,omitempty"`
-	Attention              []string                `json:"attention,omitempty"`
-	Blocked                map[string]string       `json:"blocked,omitempty"`
-	SchemaVersion          int                     `json:"schema_version"`
-	SubscriptionID         string                  `json:"subscription_id"`
-	Seq                    uint64                  `json:"seq"`
-	ObservedAt             time.Time               `json:"observed_at"`
-	TaskRevisions          map[string]uint64       `json:"task_revisions"`
-	Updated                []string                `json:"updated,omitempty"`
-	WatchReferences        []string                `json:"watch_references,omitempty"`
-	MembershipVersions     map[string]string       `json:"membership_versions,omitempty"`
-	Memberships            map[string][]string     `json:"memberships,omitempty"`
-	MembershipComplete     bool                    `json:"membership_complete"`
-	ReconciliationRequired bool                    `json:"reconciliation_required"`
-	ReadStatus             string                  `json:"read_status"`
-	Detail                 string                  `json:"detail,omitempty"`
-	Removed                []string                `json:"removed,omitempty"`
-	Event                  string                  `json:"event"`
-	GroupID                string                  `json:"group_id"`
-	Tasks                  map[string]string       `json:"tasks"`
-	Changed                []changeEvent           `json:"changed,omitempty"`
-	Watched                []string                `json:"watched,omitempty"`
-	Liveness               map[string]livenessJSON `json:"liveness,omitempty"`
+	Claims                 map[string]*api.ClaimView `json:"claims,omitempty"`
+	Cursor                 string                    `json:"cursor,omitempty"`
+	Dispatches             map[string]dispatchJSON   `json:"dispatches,omitempty"`
+	Attention              []string                  `json:"attention,omitempty"`
+	Blocked                map[string]string         `json:"blocked,omitempty"`
+	SchemaVersion          int                       `json:"schema_version"`
+	SubscriptionID         string                    `json:"subscription_id"`
+	Seq                    uint64                    `json:"seq"`
+	ObservedAt             time.Time                 `json:"observed_at"`
+	TaskRevisions          map[string]uint64         `json:"task_revisions"`
+	Updated                []string                  `json:"updated,omitempty"`
+	WatchReferences        []string                  `json:"watch_references,omitempty"`
+	MembershipVersions     map[string]string         `json:"membership_versions,omitempty"`
+	Memberships            map[string][]string       `json:"memberships,omitempty"`
+	MembershipComplete     bool                      `json:"membership_complete"`
+	ReconciliationRequired bool                      `json:"reconciliation_required"`
+	ReadStatus             string                    `json:"read_status"`
+	Detail                 string                    `json:"detail,omitempty"`
+	Removed                []string                  `json:"removed,omitempty"`
+	Event                  string                    `json:"event"`
+	GroupID                string                    `json:"group_id"`
+	Tasks                  map[string]string         `json:"tasks"`
+	Changed                []changeEvent             `json:"changed,omitempty"`
+	Watched                []string                  `json:"watched,omitempty"`
+	Liveness               map[string]livenessJSON   `json:"liveness,omitempty"`
 }
 
 var nowFn = time.Now
@@ -208,7 +212,10 @@ func Subscribe(root string, opts subscribeOptions, w io.Writer, stop <-chan stru
 // SubscribeContext owns one probe batch and one bounded output worker. It joins
 // both before returning. Custom writers must implement ContextWriter; files,
 // bytes.Buffer, strings.Builder and io.Discard are adapted internally.
-func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer) (result error) {
+func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer) error {
+	return subscribeContext(ctx, root, opts, w, nil)
+}
+func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w io.Writer, service *remote.Session) (result error) {
 
 	refresh, valid := subscriptionInterval(opts.Refresh)
 	if !valid {
@@ -222,6 +229,7 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 	if err != nil {
 		return err
 	}
+	session.service = service
 	writer, cleanup, err := subscriptionWriter(w)
 	if err != nil {
 		return err
@@ -268,7 +276,12 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 		}
 		wait = session.dispatchWait(snapshot, nowFn(), wait)
 		probeCompleted := false
-		timer := time.NewTimer(wait)
+		reset := false
+		timerWait := wait
+		if service != nil {
+			timerWait = 0
+		}
+		timer := time.NewTimer(timerWait)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -284,11 +297,30 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			}
 			probeCompleted = true
 		case <-timer.C:
+			if service != nil {
+				page, err := service.Project.Events(output.ctx, session.cursor, min(wait, time.Minute))
+				if err != nil {
+					return session.unavailable(w, snapshot, err)
+				}
+				if page.Reset {
+					session.reconciliation = true
+					reset = true
+				}
+			}
 		}
 		current, err := session.readTolerant(ctx, root, refresh, w, output)
 		if err != nil {
 			return err
 		}
+		if service != nil {
+			probes.start(current)
+		}
+		if reset {
+			if err := session.emit(w, "snapshot-reset", current, nil, nil, nil); err != nil {
+				return err
+			}
+		}
+
 		var changed []changeEvent
 		var updated []string
 		for _, taskID := range current.monitored {
@@ -316,6 +348,11 @@ func SubscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			}
 		} else if len(updated) > 0 {
 			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
+				return err
+			}
+		}
+		if ids := changedClaims(snapshot, current); len(ids) > 0 {
+			if err := session.emit(w, "claim-change", current, nil, ids, nil); err != nil {
 				return err
 			}
 		}
@@ -388,6 +425,29 @@ func RunSubscribe(args []string) int {
 			return 1
 		}
 		return 1
+	}
+	cfg, err := config.Effective(nil)
+	if err != nil {
+		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
+		return 1
+	}
+	if remote.Enabled(cfg) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
+			return 1
+		}
+		ctx, cancel := subscriptionSignalContext()
+		defer cancel()
+		service, err := remote.Open(ctx, cfg, cwd)
+		if err == nil {
+			err = subscribeContext(ctx, service.Location(""), opts, os.Stdout, service)
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
+			return 1
+		}
+		return 0
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

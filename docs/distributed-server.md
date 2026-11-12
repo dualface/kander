@@ -51,6 +51,8 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/tasks/{t}/claim`, `/takeover`, `/renew` | Ownership |
 | `GET`, `POST /projects/{p}/tasks/{t}/requests`, `POST .../requests/{r}/answer` | Collaboration requests |
 | `POST /projects/{p}/tasks/{t}/execution` | Launcher facts of the holder: window, session, confirm, rollback |
+| `POST /projects/{p}/tasks/{t}/observation` | Generation-bound agent presence, independent of worker liveness |
+| `POST /projects/{p}/snapshot`, `/check` | Coordinated read snapshots and server-side structural/evidence checks |
 | `POST /projects/{p}/reviews/plan`, `POST .../reviews/batches/{b}/aggregate`, `GET .../reviews/batches/{b}/view`, `POST .../reviews/close`, `GET .../reviews/progress/{t}` | Review gate evidence |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
@@ -94,7 +96,7 @@ The client auto-confirms locally owned members and creates generation-bound coll
 
 ## Client and worker
 
-The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, issue import/triage, the TUI board and start actions, and the review gate commands above use the server project. The remaining lifecycle, result-reconciliation and evidence commands still need adaptation (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. The remaining lifecycle, result-reconciliation and evidence commands still need adaptation (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`. Per-execution locks merge renewals and launch facts; release tombstones prevent a late writer from recreating a removed credential or erasing a successor pointer.
@@ -104,7 +106,7 @@ A process started for one execution carries `KANDER_EXECUTION_ID` and presents o
 
 After a claim the client starts `kander worker` detached unless one already holds `worker.lock`. One worker runs per client home, independent of the TUI and of the command that started it, and exits after two minutes without a live claim. On each tick it renews every credential whose renewal interval passed:
 
-- A successful renewal records the confirmed time.
+- A successful renewal records the local receipt time rather than comparing a client wall clock to the server timestamp. The worker observes the managed process incarnation or local terminal session separately. A confirmed exit is reported through `/observation`, ends the claim's active lease without changing the card revision, and permits an explicit takeover. Missing identity, observation failure, waiting for input, and lack of output never prove an exit. Public claim views retain the generation-bound observation.
 - A refusal of a claim the server shows as released (the card reached `done`, `archived`, or `trash`) removes the credential.
 - Any other refusal (taken over, expired, unknown) persists the lost state and a target-specific stop intent before attempting to stop the agent. Linux pins a pidfd and Windows verifies and terminates through one process handle; a reused PID never receives that signal. Other platforms refuse unpinned process termination and record the limitation. Terminal stops revalidate the locally recorded session, use observed process identity when supported or the configured agent exit command, and retain the container. Missing or uncertain identity records an unresolved stop; the service still refuses every later write of that generation. A later launch observation can trigger one stop attempt for its newly known target, but a worker restart never blindly repeats an uncertain external effect. Worktrees, branches and uncommitted changes stay untouched.
 - A transport failure keeps retrying until a full TTL has passed since the last confirmed renewal; then the worker assumes the lease is gone and handles it as lost, because the server clock has already expired it.
@@ -121,7 +123,11 @@ Event cursors resume within a running server's bounded window. A service restart
 
 The TUI writes only a private list cache under the client home, keyed by the server URL and project ID. A transport failure may display that cache with a persistent stale label and its observation time. It never turns the cache into a writable board or queues an offline move. Detail reads and mutations still require the server. The executing worker is independent of the view lifetime.
 
-`kander list --json` keeps the schema-1 CLI snapshot consumed by dsh and adds project ID, event cursor and public claim observations. The change token ignores renewal timestamps and pure observation timestamps. Agent observation and terminal focus are restricted to this client's claims. Remote terminal addresses are not passed to this host's backends; lost leases remain visible as lost.
+`kander list --json` keeps the schema-1 CLI snapshot consumed by dsh and adds project ID, event cursor and public claim observations. The change token ignores renewal timestamps and pure observation timestamps. Local terminal observation and focus are restricted to this client's claims. Foreign tasks display their owning worker's service observation; their terminal addresses never reach this host's backends. Lease loss remains visible but never invents evidence of process exit. Observation and renewal timestamps are excluded from the change token.
+
+`subscribe` expands membership from a coordinated `/snapshot` response and resumes `/events` from that snapshot's cursor. Its in-memory board view contains resource identities and no write cursor; it creates no local card directories. Group expansion, task revisions, dispatch summaries and blocked members come from the service. Public liveness uses generation-bound worker observations and translates service-clock age for local display. Cursor resets trigger a fresh snapshot and an explicit `snapshot-reset` event. Claim generation/status changes emit `claim-change`; ordinary renewal timestamps do not. The bounded output worker cancels an outstanding event poll when output closes.
+
+The ordinary `check` route performs the board's structural, prerequisite and review-evidence checks on the server and appends the reported agent observations on the client. Delivery and overlap checks continue to inspect local Git without a board.
 
 dsh resolves the Git main worktree or a non-Git project's configuration directory, without requiring `kanban/`. Its subprocess environment removes inherited `KANBAN_DIR`; kander resolves the server binding from the repository and configuration. dsh keeps its existing schema-1 list consumer and asynchronous start boundary.
 

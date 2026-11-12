@@ -368,7 +368,7 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 	credential := Credential{
 		ServerURL: s.ServerURL, ClientID: s.Client.ClientID(), ProjectID: s.Info.ID, TaskID: grant.Task.TaskID,
 		ExecutionID: execution, Generation: grant.Claim.Generation, Token: grant.Token,
-		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: grant.Claim.RenewedAt,
+		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: time.Now().UTC(),
 	}
 	if err := s.SaveCredential(credential); err != nil {
 		return fail(err)

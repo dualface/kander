@@ -30,6 +30,7 @@ const idleExit = 2 * time.Minute
 
 // Options configure one worker loop; tests shorten the timings.
 type Options struct {
+	Observe  func(context.Context, remote.Credential) api.AgentObservation
 	Home     string
 	Tick     time.Duration
 	IdleExit time.Duration
@@ -194,6 +195,21 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	switch {
 	case err == nil:
 		c.RenewedAt = now
+		observeCtx, stopObservation := context.WithTimeout(ctx, 2*time.Second)
+		observation := w.observe(observeCtx, c)
+		stopObservation()
+		if observation.Status != "unknown" {
+			reportCtx, stopReport := context.WithTimeout(ctx, 5*time.Second)
+			_, reportErr := project.ObserveAgent(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
+			stopReport()
+			if reportErr != nil {
+				log.Warn("agent observation report failed", "error", reportErr)
+			}
+			if observation.Status == "stopped" {
+				w.lose(log, c, "agent stopped: "+observation.Reason)
+				return false
+			}
+		}
 		w.deliver(callCtx, log, project, &c)
 		if err := remote.WriteCredential(w.o.Home, c); err != nil {
 			log.Error("credential write failed", "error", err)

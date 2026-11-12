@@ -30,7 +30,7 @@ func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *c
 	if err != nil {
 		return api.Task{}, err
 	}
-	task := api.Task{TaskID: id, State: snapshot.Entry.State, Revision: snapshot.Revision, OperationID: snapshot.OperationID, Text: snapshot.Text}
+	task := api.Task{ObservedAt: p.server.now(), TaskID: id, State: snapshot.Entry.State, Revision: snapshot.Revision, OperationID: snapshot.OperationID, Text: snapshot.Text}
 	if claim == nil {
 		stored, found, err := p.readClaim(id)
 		if err != nil {

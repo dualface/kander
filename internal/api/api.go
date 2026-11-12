@@ -111,13 +111,14 @@ type RegisterProject struct {
 
 // ClaimView is the public part of a claim; the token never appears here.
 type ClaimView struct {
-	ClientID    string    `json:"client_id"`
-	ExecutionID string    `json:"execution_id"`
-	Owner       string    `json:"owner"`
-	Generation  uint64    `json:"generation"`
-	Status      string    `json:"status"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	RenewedAt   time.Time `json:"renewed_at"`
+	Observation *AgentObservation `json:"observation,omitempty"`
+	ClientID    string            `json:"client_id"`
+	ExecutionID string            `json:"execution_id"`
+	Owner       string            `json:"owner"`
+	Generation  uint64            `json:"generation"`
+	Status      string            `json:"status"`
+	ExpiresAt   time.Time         `json:"expires_at"`
+	RenewedAt   time.Time         `json:"renewed_at"`
 }
 
 // Claim status values. A claim is active while its lease is unexpired, lost
@@ -131,6 +132,7 @@ const (
 
 // Task is one card as the server publishes it.
 type Task struct {
+	ObservedAt  time.Time  `json:"observed_at"`
 	TaskID      string     `json:"task_id"`
 	State       string     `json:"state"`
 	Revision    uint64     `json:"revision"`
@@ -161,7 +163,8 @@ type TaskSummary struct {
 
 // TaskList is GET /api/v1/projects/{project}/tasks.
 type TaskList struct {
-	Tasks []TaskSummary `json:"tasks"`
+	ObservedAt time.Time     `json:"observed_at"`
+	Tasks      []TaskSummary `json:"tasks"`
 	// Cursor is the event cursor the list is consistent with; a subscriber
 	// continues from it without missing a change.
 	Cursor   string   `json:"cursor"`

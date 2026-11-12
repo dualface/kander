@@ -34,6 +34,15 @@ func (p *subscriptionProbes) start(facts subscriptionFacts) {
 	if p.running || p.ctx.Err() != nil {
 		return
 	}
+	if facts.claims != nil {
+		p.cached = map[string]subscriptionObservation{}
+		for _, id := range facts.monitored {
+			if facts.needsProbe(id) {
+				p.cached[id] = subscriptionObservation{revision: facts.revisions[id], report: remoteObservation(id, facts)}
+			}
+		}
+		return
+	}
 	var inputs []TaskInput
 	revisions := map[string]uint64{}
 	for _, id := range facts.monitored {

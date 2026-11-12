@@ -151,7 +151,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	credential := remote.Credential{
 		ServerURL: session.ServerURL, ClientID: session.Client.ClientID(), ProjectID: session.Info.ID, TaskID: grant.Task.TaskID,
 		ExecutionID: execution, Generation: grant.Claim.Generation, Token: grant.Token,
-		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: grant.Claim.RenewedAt,
+		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: time.Now().UTC(),
 	}
 	if err := session.SaveCredential(credential); err != nil {
 		return result, err

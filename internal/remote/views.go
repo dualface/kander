@@ -76,6 +76,14 @@ func (s *Session) ListView(ctx context.Context, allowStale bool) (board.BoardVie
 		summary := board.TaskSummary{TaskID: item.TaskID, Title: item.Title, State: item.State, Kind: item.Kind, Type: item.Type, TaskGroup: item.TaskGroup, Assignee: item.Assignee, CreatedAt: item.CreatedAt, StartedAt: item.StartedAt, CompletedAt: item.CompletedAt, Time: item.Time, Result: item.Result}
 		if item.Claim != nil {
 			summary.ClaimStatus, summary.ClaimClientID = item.Claim.Status, item.Claim.ClientID
+			if item.Claim.Observation != nil || item.Claim.Status == api.ClaimLost {
+				agent := ClaimAgent(item.Claim, list.ObservedAt, time.Now())
+				if stale {
+					agent.Status, agent.RuntimeState, agent.Valid = "unknown", "unknown", false
+					agent.Reason = config.Text("remote.stale_label")
+				}
+				summary.AgentObservation = &agent
+			}
 			// A remote terminal address has meaning only on its execution host.
 			if item.Claim.ClientID == s.Client.ClientID() && !stale {
 				summary.Session, summary.Window = item.Session, item.Window
@@ -98,6 +106,10 @@ func (s *Session) TaskView(ctx context.Context, id string) (board.TaskSummary, e
 	summary.Document = task.Text
 	if task.Claim != nil {
 		summary.ClaimStatus, summary.ClaimClientID = task.Claim.Status, task.Claim.ClientID
+		if task.Claim.Observation != nil || task.Claim.Status == api.ClaimLost {
+			agent := ClaimAgent(task.Claim, task.ObservedAt, time.Now())
+			summary.AgentObservation = &agent
+		}
 	}
 	if task.Claim == nil || task.Claim.ClientID != s.Client.ClientID() {
 		summary.Session, summary.Window = "", ""

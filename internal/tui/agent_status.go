@@ -201,9 +201,21 @@ func sanitizeAgentDetail(detail string) string {
 // agentStatusFor returns the observation of a card still observed at the
 // same WINDOW.
 func (a *App) agentStatusFor(task Task) (agentStatus, bool) {
-	if task.ClaimStatus == "lost" {
-		return agentStatus{class: agentLost, window: task.Window, detail: t("remote.error_lease_invalid")}, true
+	if task.State != "working" && task.State != "review" {
+		return agentStatus{}, false
 	}
+	if task.ClaimStatus == "lost" {
+		detail := t("remote.error_lease_invalid")
+		if task.AgentObservation != nil {
+			detail = task.AgentObservation.Reason
+		}
+		return agentStatus{class: agentLost, window: task.Window, detail: sanitizeAgentDetail(detail)}, true
+	}
+	if agent := task.AgentObservation; agent != nil {
+		observed, _ := time.Parse(time.RFC3339Nano, agent.ObservedAt)
+		return agentStatus{class: agentClassOf(liveness.Report{Status: agent.Status, RuntimeState: agent.RuntimeState}), window: task.Window, detail: sanitizeAgentDetail(agent.Reason), observed: observed}, true
+	}
+
 	status, ok := a.agents.statuses[task.TaskID]
 	if !ok || status.window != task.Window || (task.State != "working" && task.State != "review") {
 		return agentStatus{}, false

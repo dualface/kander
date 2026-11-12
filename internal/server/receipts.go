@@ -82,6 +82,20 @@ func (p *project) idempotent(key, operation string, request any, run func() outc
 // finish records a final outcome. Internal failures stay pending, so a retry
 // re-inspects instead of replaying a stored internal error forever.
 func (p *project) finish(rel string, r receipt, out outcome) outcome {
+	// Domain producers may already have committed their exact response with
+	// the mutation. Never replace it with a later observation after unlock.
+	var committed receipt
+	found, err := readJSON(p.root, rel, &committed)
+	if err != nil {
+		return outcome{err: err}
+	}
+	if found && committed.Status == receiptDone {
+		if committed.Operation != r.Operation || committed.Digest != r.Digest {
+			return outcome{err: apiError(api.CodeIdempotencyMismatch, "receipt changed during its operation")}
+		}
+		return outcome{status: committed.HTTP, body: committed.Body}
+	}
+
 	status, body := out.status, out.body
 	if out.err != nil {
 		e := asAPIError(out.err)

@@ -16,16 +16,17 @@ import (
 // a claim or takeover is between its record write and the board move; startup
 // reconciliation settles a pending record from the card state.
 type claimRecord struct {
-	TaskID      string        `json:"task_id"`
-	ClientID    string        `json:"client_id"`
-	ExecutionID string        `json:"execution_id"`
-	Owner       string        `json:"owner"`
-	Generation  uint64        `json:"generation"`
-	TokenHash   string        `json:"token_hash"`
-	Status      string        `json:"status"`
-	ExpiresAt   time.Time     `json:"expires_at"`
-	RenewedAt   time.Time     `json:"renewed_at"`
-	Handoffs    []api.Handoff `json:"handoffs,omitempty"`
+	Observation *api.AgentObservation `json:"observation,omitempty"`
+	TaskID      string                `json:"task_id"`
+	ClientID    string                `json:"client_id"`
+	ExecutionID string                `json:"execution_id"`
+	Owner       string                `json:"owner"`
+	Generation  uint64                `json:"generation"`
+	TokenHash   string                `json:"token_hash"`
+	Status      string                `json:"status"`
+	ExpiresAt   time.Time             `json:"expires_at"`
+	RenewedAt   time.Time             `json:"renewed_at"`
+	Handoffs    []api.Handoff         `json:"handoffs,omitempty"`
 	// OriginalText is the card before a launcher start claim, kept so a
 	// failed start can return the card to todo.
 	OriginalText string `json:"original_text,omitempty"`
@@ -73,7 +74,7 @@ func (r claimRecord) view(now time.Time) *api.ClaimView {
 		status = api.ClaimLost
 	}
 	return &api.ClaimView{
-		ClientID: r.ClientID, ExecutionID: r.ExecutionID, Owner: r.Owner,
+		Observation: r.Observation, ClientID: r.ClientID, ExecutionID: r.ExecutionID, Owner: r.Owner,
 		Generation: r.Generation, Status: status, ExpiresAt: r.ExpiresAt, RenewedAt: r.RenewedAt,
 	}
 }
