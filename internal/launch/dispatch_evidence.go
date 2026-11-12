@@ -13,6 +13,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func readDispatchEvidence(path string) (board.DispatchEvidence, error) {
@@ -235,6 +236,13 @@ func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result 
 // RunDispatch adds the Git-aware and observation-aware producers to the single
 // public command. The board-only runner remains available for pure operations.
 func RunDispatch(args []string) int {
+	cfg, err := config.Load(false)
+	if err != nil {
+		return fail(err)
+	}
+	if remote.Enabled(cfg) {
+		return runRemoteDispatch(args, cfg)
+	}
 	if len(args) != 2 || (args[0] != "prepare" && args[0] != "authorize-wrap-up") {
 		return board.RunDispatch(args)
 	}

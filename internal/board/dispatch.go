@@ -147,6 +147,7 @@ func putDispatch(tx *Transaction, d Dispatch) error {
 	if err != nil {
 		return err
 	}
+	tx.SetOperationResult(d)
 	return tx.Put(d.Input.TaskID, dispatchPath(d.Input.ID, "state"), string(b)+"\n")
 }
 func readDispatch(tx *Transaction, task, id string) (Dispatch, error) {
@@ -226,7 +227,7 @@ func ReadDispatch(root, task, id string) (d Dispatch, err error) {
 
 // PrepareDispatch publishes a globally unique immutable intent and fences the
 // previous completed execution. Only one nonterminal intent can own a card.
-func PrepareDispatch(root string, in DispatchInput) (d Dispatch, err error) {
+func PrepareDispatchWithTransaction(root string, in DispatchInput, extensions ...TransactionExtension) (d Dispatch, err error) {
 	if in.ID == "" {
 		in.ID, err = NewDispatchID()
 		if err != nil {
@@ -246,8 +247,9 @@ func PrepareDispatch(root string, in DispatchInput) (d Dispatch, err error) {
 		return d, e
 	}
 	err = WithTransaction(root, scope, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(d) }()
 		return tx.prepareDispatch(in, &d)
-	})
+	}, extensions...)
 	return
 }
 
@@ -350,7 +352,7 @@ func (tx *Transaction) prepareDispatch(in DispatchInput, d *Dispatch) error {
 
 // BeginDispatchAttempt CASes an uncertain send before invoking any external
 // transport. Retries require a new observation and the same intent revision.
-func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision ...uint64) (d Dispatch, err error) {
+func BeginDispatchAttemptWithTransaction(root, task, id string, expected uint64, cardRevision []uint64, extensions ...TransactionExtension) (d Dispatch, err error) {
 	d, err = ReadDispatch(root, task, id)
 	if err != nil {
 		return
@@ -360,6 +362,7 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		return d, err
 	}
 	err = WithTransaction(root, scope, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(d) }()
 		var e error
 		d, e = readDispatch(tx, task, id)
 		if e != nil {
@@ -391,7 +394,7 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 		d.Revision++
 		d.Attempts++
 		return putDispatch(tx, d)
-	})
+	}, extensions...)
 	return
 }
 
@@ -399,8 +402,9 @@ func BeginDispatchAttempt(root, task, id string, expected uint64, cardRevision .
 // takeover. Old receipts remain immutable in their epoch-specific paths.
 // Accepted work needs fresh stopped evidence and gets a new acceptance deadline.
 // Pending work retains its current deadline.
-func ReauthorizeDispatch(root, task, id string, expected uint64, stopped ...WrapUpExitEvidence) (d Dispatch, err error) {
+func ReauthorizeDispatchWithTransaction(root, task, id string, expected uint64, stopped []WrapUpExitEvidence, extensions ...TransactionExtension) (d Dispatch, err error) {
 	err = WithTransaction(root, LockScope{Tasks: []string{task}}, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(d) }()
 		var e error
 		d, e = readDispatch(tx, task, id)
 		if e != nil {
@@ -449,6 +453,6 @@ func ReauthorizeDispatch(root, task, id string, expected uint64, stopped ...Wrap
 			return e
 		}
 		return putDispatch(tx, d)
-	})
+	}, extensions...)
 	return
 }

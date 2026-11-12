@@ -152,6 +152,8 @@ func (s *Server) Handler() http.Handler {
 	s.observationRoutes(mux)
 	s.snapshotRoutes(mux)
 	s.groupRoutes(mux)
+	s.dispatchRoutes(mux)
+	s.deliveryRoutes(mux)
 	s.issueRoutes(mux)
 	s.publicationRoutes(mux)
 	return mux

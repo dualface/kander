@@ -36,7 +36,7 @@ func (p *project) groupWrite(key, operation, group string, request any, h holder
 			if !ok {
 				return apiError(api.CodeInternal, "coordinator producer omitted its transaction result")
 			}
-			return p.groupReceipt(tx, key, operation, request, value)
+			return p.stageOperationReceipt(tx, key, operation, request, value)
 		}}
 		checkpoint, err := apply(guard)
 		if err == nil || len(checkpoint.Members) > 0 {

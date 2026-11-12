@@ -75,6 +75,14 @@ func Run(args []string) (exitCode int) {
 				userError(openErr.Error())
 				return 2
 			}
+			if session.Info.Remote != "" {
+				for _, commit := range []string{rest[1], rest[2]} {
+					if fetchErr := session.FetchCommit(context.Background(), rest[0], commit); fetchErr != nil {
+						userError(fetchErr.Error())
+						return 2
+					}
+				}
+			}
 			store, err = newRemoteReviewStore(session)
 			if err == nil {
 				archiveRoot = store.Root()

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -250,8 +251,9 @@ func RunUpdate(args []string) int {
 	if len(args) != 1 || values["--document"] == "" || values["--file"] == "" || values["--expect-revision"] == "" {
 		return printUsage("update")
 	}
-	if values["--dispatch-id"] != "" || values["--execution-epoch"] != "" {
-		return fail(errors.New(config.Text("remote.dispatch_unsupported")))
+	authorization, authErr := executionAuthorization(values)
+	if authErr != nil {
+		return printUsage("update")
 	}
 	revision, err := strconv.ParseUint(values["--expect-revision"], 10, 64)
 	if err != nil {
@@ -277,7 +279,7 @@ func RunUpdate(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	t, err := s.Project.PutDocument(ctx, client.NewKey(), args[0], api.Document{Path: values["--document"], Text: text, ExpectedRevision: revision, ContractDecision: decision}, claim)
+	t, err := s.Project.PutDocument(ctx, client.NewKey(), args[0], api.Document{Path: values["--document"], Text: text, ExpectedRevision: revision, ContractDecision: decision, Authorization: authorization}, claim)
 	if err != nil {
 		return fail(err)
 	}
@@ -289,6 +291,9 @@ func readUTF8(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
+	}
+	if !utf8.Valid(data) {
+		return "", errors.New(config.Text("board.task_document_is_not_valid_utf_8", path))
 	}
 	return string(data), nil
 }
@@ -306,11 +311,11 @@ func RunMove(args []string) int {
 	if len(args) != 2 || strings.HasPrefix(args[0], "-") || strings.HasPrefix(args[1], "-") {
 		return printUsage("move")
 	}
-	for _, name := range []string{"--dispatch-id", "--execution-epoch", "--delivery-commit", "--disposition"} {
-		if values[name] != "" {
-			return fail(errors.New(config.Text("remote.dispatch_unsupported")))
-		}
+	authorization, authErr := executionAuthorization(values)
+	if authErr != nil || authorization.DispatchID != "" && values["--owner"] != "" {
+		return printUsage("move")
 	}
+
 	ctx, cancel := commandContext()
 	defer cancel()
 	s, _, err := open(ctx)
@@ -321,7 +326,14 @@ func RunMove(args []string) int {
 	if state == "working" && values["--owner"] != "" {
 		return claim(ctx, s, task, values["--owner"], values["--decision"])
 	}
-	req := api.Move{State: state, Result: values["--result"], Reason: values["--reason"], Decision: values["--decision"], DuplicateOf: values["--duplicate-of"]}
+	req := api.Move{Authorization: authorization, DeliveryCommit: values["--delivery-commit"], State: state, Result: values["--result"], Reason: values["--reason"], Decision: values["--decision"], DuplicateOf: values["--duplicate-of"]}
+	if path := values["--disposition"]; path != "" {
+		id, err := board.NormalizeTaskID(task)
+		if err != nil {
+			return fail(err)
+		}
+		req.Disposition = &board.ArtifactReference{TaskID: id, Path: path}
+	}
 	if raw := values["--expect-revision"]; raw != "" {
 		v, err := strconv.ParseUint(raw, 10, 64)
 		if err != nil {
@@ -329,11 +341,7 @@ func RunMove(args []string) int {
 		}
 		req.ExpectedRevision = &v
 	}
-	credential, err := claimFor(s, task)
-	if err != nil {
-		return fail(err)
-	}
-	t, err := s.Project.Move(ctx, client.NewKey(), task, req, credential)
+	t, err := s.MoveTask(ctx, task, req)
 	if err != nil {
 		return fail(err)
 	}
@@ -360,6 +368,21 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 		if current.Claim != nil {
 			req.ExpectedGeneration = current.Claim.Generation
 		}
+		if current.Claim != nil && current.Claim.ExecutionID == execution {
+			return fail(&api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.execution_cannot_reclaim")})
+		}
+		if id := board.MetadataFrom(current.Text, "DISPATCH_ID"); id != "" {
+			dispatch, err := s.Project.Dispatch(ctx, current.TaskID, id)
+			if err != nil {
+				return fail(err)
+			}
+			mode := "retain"
+			if dispatch.State == board.DispatchCompleted {
+				mode = "settle-completed"
+			}
+			req.Dispatch = &board.DispatchTakeover{Authorization: dispatch.Authorization, Revision: dispatch.Revision, Mode: mode}
+		}
+
 		grant, err = s.Project.Takeover(ctx, client.NewKey(), task, req)
 	}
 	if err != nil {
@@ -398,4 +421,16 @@ func RunPick(args []string) int {
 	}
 	fmt.Fprintln(stdout, location(s, t.TaskID))
 	return 0
+}
+
+func executionAuthorization(values map[string]string) (board.ExecutionAuthorization, error) {
+	id, raw := values["--dispatch-id"], values["--execution-epoch"]
+	if id == "" && raw == "" {
+		return board.ExecutionAuthorization{}, nil
+	}
+	epoch, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil || id == "" || epoch == 0 || !api.ValidIdentity(id) {
+		return board.ExecutionAuthorization{}, errors.New("invalid dispatch authorization")
+	}
+	return board.ExecutionAuthorization{DispatchID: id, Epoch: epoch}, nil
 }

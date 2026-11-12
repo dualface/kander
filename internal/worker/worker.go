@@ -338,6 +338,9 @@ func requestLine(task string, r api.CollabRequest) string {
 		}
 		return r
 	}, r.Message)
+	if r.Dispatch != nil {
+		message += fmt.Sprintf("; inspect the proposed dispatch and card version: kander request show %s %s --json", task, r.ID)
+	}
 	return fmt.Sprintf("# kander-request %s %s for %s from %s: %s (answer: kander request answer %s %s done|rejected [note])",
 		r.ID, r.Kind, task, r.FromClient, message, task, r.ID)
 }

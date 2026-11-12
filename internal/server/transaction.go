@@ -52,6 +52,11 @@ func (p *project) taskTransaction(key, operation string, request any, id string,
 	return board.TransactionExtension{
 		Groups: []string{serviceGroup}, Before: validate,
 		After: func(tx *board.Transaction) error {
+			if validate != nil {
+				if err := validate(tx); err != nil {
+					return err
+				}
+			}
 			if claim != nil {
 				if err := stageJSON(tx, "claims/"+id+".json", claim); err != nil {
 					return err

@@ -26,7 +26,7 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 
 ## Preconditions
 
-- A located board. The rules of the "Durable Dispatch" section below.
+- The configured server project in distributed mode, or a located legacy board. The rules of the "Durable Dispatch" section below.
 
 ## Effects
 
@@ -64,3 +64,9 @@ kander dispatch settle <task-id> <dispatch-id> <dispatch-revision>
 - `prepare` of a new round on a card whose start attempt has not ended (current execution record `pending` or `unresolved`). A replay of an existing ID stays allowed.
 - An accepted round ended without `--decision`, or a dispatch of another execution cycle.
 - A missing subcommand, wrong argument count, an empty `--decision` value, or an unknown subcommand is a usage error.
+
+## Distributed authority
+
+In server mode every formal dispatch mutation carries the live task credential and its separate business epoch. Card changes, dispatch originals and exact operation receipts share one server transaction. `show` is a shared read. A foreign `prepare` creates a generation- and card-version-bound collaboration proposal containing the typed input; its output is a request with `status=open`, not a prepared dispatch. Inspect it with `kander request show <task-id> <request-id> --json`. The holder must still inspect evidence before preparing work.
+
+For a registered Git remote, working-to-review CLI and TUI moves publish the full delivery SHA to an immutable generation-specific remote ref and confirm that ref before the move. A missing commit, failed fetch, changed content revision or replaced execution blocks advancement. A task takeover must name its inspected dispatch context; a completed binding can settle atomically with the handoff, while retaining an unfinished binding grants no permission to repeat business effects. Lease loss alone never substitutes for the fresh stopped observation of accepted-round reauthorization.

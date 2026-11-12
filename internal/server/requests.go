@@ -97,6 +97,15 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		if err != nil {
 			return request, err
 		}
+		if input.Dispatch != nil {
+			if input.Dispatch.TaskID != normalized || input.CardRevision == 0 || input.CardRevision != task.Revision {
+				return request, apiError(api.CodeRevisionConflict, "dispatch request must bind the inspected card version")
+			}
+			raw, err := json.Marshal(input.Dispatch)
+			if err != nil || len(raw) > 512<<10 {
+				return request, apiError(api.CodeInvalidRequest, "dispatch request exceeds its evidence bound")
+			}
+		}
 		claim, found, err := p.readClaim(normalized)
 		if err != nil {
 			return request, err
@@ -108,7 +117,7 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 			return request, apiError(api.CodeLeaseInvalid, "request target generation is not live")
 		}
 		now := p.server.now()
-		return api.CollabRequest{Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
+		return api.CollabRequest{Dispatch: input.Dispatch, CardRevision: input.CardRevision, Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
 	}, http.StatusCreated)
 }
 func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {

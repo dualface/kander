@@ -42,7 +42,7 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, histor
 		return dispatchEvidenceError("wrap-up binding required")
 	}
 	g := w.Git
-	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
+	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !validDispatchLocation(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
 	var reviewRange ReviewGitEdge
@@ -101,7 +101,7 @@ type WrapUpAuthority struct {
 // AuthorizeDispatchWrapUp reconciles the same dispatch under CAS, archives its
 // old epoch, and fences it before issuing a cleanup-and-records-only grant.
 // The caller owns the delivery lease and verifies the exit observation first.
-func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, reason string, exit WrapUpExitEvidence) (d Dispatch, err error) {
+func AuthorizeDispatchWrapUpWithTransaction(root, task, id string, expected uint64, author, reason string, exit WrapUpExitEvidence, extensions ...TransactionExtension) (d Dispatch, err error) {
 	d, err = ReadDispatch(root, task, id)
 	if err != nil {
 		return
@@ -111,6 +111,7 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 		return d, err
 	}
 	err = WithTransaction(root, scope, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(d) }()
 		var e error
 		d, e = readDispatch(tx, task, id)
 		if e != nil {
@@ -158,7 +159,7 @@ func AuthorizeDispatchWrapUp(root, task, id string, expected uint64, author, rea
 			return e
 		}
 		return tx.Put(task, "spec.md", text)
-	})
+	}, extensions...)
 	return
 }
 
@@ -270,4 +271,13 @@ func DispatchReviewRange(root, task string) (reviewRange ReviewGitEdge, err erro
 	scope.ReadOnly = true
 	err = WithTransaction(root, scope, func(tx *Transaction) error { var e error; reviewRange, e = dispatchReviewRange(tx, task); return e })
 	return
+}
+
+// validDispatchLocation retains historical machine paths while allowing new
+// service records to name their project without importing client storage.
+func validDispatchLocation(value string) bool {
+	if project, ok := strings.CutPrefix(value, "project:"); ok {
+		return ValidReviewID(project)
+	}
+	return filepath.IsAbs(value)
 }

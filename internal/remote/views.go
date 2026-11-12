@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -127,6 +128,33 @@ func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (ap
 	var claim *client.Claim
 	if found {
 		claim = credential.Claim()
+	}
+	if request.State == "review" && s.Info.Remote != "" {
+		current, err := s.Project.Show(ctx, id)
+		if err != nil {
+			return api.Task{}, err
+		}
+		if request.ExpectedRevision != nil && *request.ExpectedRevision != current.Revision {
+			return api.Task{}, &api.Error{Code: api.CodeRevisionConflict, Message: config.Text("remote.delivery_card_changed")}
+		}
+		if current.State == "working" {
+			if !found {
+				return api.Task{}, &api.Error{Code: api.CodeClaimRequired, Message: config.Text("remote.delivery_holder_required")}
+			}
+			dir, err := os.Getwd()
+			if err != nil {
+				return api.Task{}, err
+			}
+			delivery, err := s.PublishCommit(ctx, dir, current.TaskID, request.DeliveryCommit, credential)
+			if err != nil {
+				return api.Task{}, err
+			}
+			request.DeliveryCommit = delivery.Commit
+			if request.ExpectedRevision == nil {
+				revision := delivery.CardRevision
+				request.ExpectedRevision = &revision
+			}
+		}
 	}
 	return s.Project.Move(ctx, client.NewKey(), id, request, claim)
 }

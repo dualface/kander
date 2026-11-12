@@ -17,7 +17,7 @@ type DispatchSettlement struct {
 
 // SettleDispatch gives a completed binding of the current cycle a direct exit.
 // Without it the only way out was to prepare another dispatch and end it.
-func SettleDispatch(root, task, id string, expected uint64) error {
+func SettleDispatchWithTransaction(root, task, id string, expected uint64, extensions ...TransactionExtension) error {
 	return WithTransaction(root, LockScope{Tasks: []string{task}}, func(tx *Transaction) error {
 		d, err := readDispatch(tx, task, id)
 		if err != nil {
@@ -41,7 +41,7 @@ func SettleDispatch(root, task, id string, expected uint64) error {
 			return err
 		}
 		return tx.Put(task, "spec.md", text)
-	})
+	}, extensions...)
 }
 
 // stageDispatchSettlement writes the immutable original beside the dispatch. The

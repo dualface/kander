@@ -46,6 +46,7 @@ type TaskStartInput struct {
 
 // TakeoverInput is what a takeover records when it replaces an executor.
 type TakeoverInput struct {
+	Dispatch     *DispatchTakeover
 	Owner        string
 	Session      string
 	Window       string
@@ -242,7 +243,10 @@ func BeginTaskStartWithTransaction(entry Entry, root string, in TaskStartInput, 
 // the new card text, or "" when the card stays unchanged; a change of text
 // publishes one new revision and needs a card in working or review. A pure
 // confirmation changes no text, so a fast executor may have moved the card on.
-func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *Transaction, s Snapshot, l *executionLedger) (string, error), extensions ...TransactionExtension) (result ExecutionResult, err error) {
+func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *Transaction, s Snapshot, l *executionLedger) (string, error), extensions ...TransactionExtension) (ExecutionResult, error) {
+	return executionWriteGuarded(ctx, root, entry, fn, requireIdentityWrite, extensions...)
+}
+func executionWriteGuarded(ctx context.Context, root string, entry Entry, fn func(tx *Transaction, s Snapshot, l *executionLedger) (string, error), identityGuard func(*Transaction, Snapshot, *Version) error, extensions ...TransactionExtension) (result ExecutionResult, err error) {
 	v := entry.Version
 	if v == nil {
 		return result, kanbanError("board.transaction_conflict", entry.TaskID)
@@ -274,7 +278,7 @@ func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *T
 		if text == "" || text == s.Text {
 			return nil
 		}
-		if e = requireIdentityWrite(tx, s, v); e != nil {
+		if e = identityGuard(tx, s, v); e != nil {
 			return e
 		}
 		revision++
@@ -390,7 +394,18 @@ func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, ex
 		return ExecutionResult{}, kanbanError("board.transaction_conflict", entry.TaskID)
 	}
 	var fence ExecutionFence
-	result, err := executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
+	settled := false
+	var nextAuthorization ExecutionAuthorization
+	guard := func(tx *Transaction, s Snapshot, v *Version) error {
+		if !settled {
+			return requireIdentityWrite(tx, s, v)
+		}
+		if (s.Entry.State != "working" && s.Entry.State != "review") || v.authorization != authFrom(s.Text) {
+			return dispatchError(v.authorization.DispatchID)
+		}
+		return tx.requireFullExecution(s)
+	}
+	result, err := executionWriteGuarded(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		cur := l.current
 		if cur.ExecutionTerminal() {
 			return "", coordinatorError("start success binding")
@@ -398,11 +413,17 @@ func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, ex
 		if cur.StartUnfinished() && strings.TrimSpace(in.Decision) == "" {
 			return "", kanbanError("board.takeover_decision_required", l.task, cur.Status)
 		}
-		text, err := renderTakeover(s.Text, in)
+		source, released, err := stageTakeoverDispatch(tx, s, in.Dispatch, in.Decision)
+		if err != nil {
+			return "", err
+		}
+		settled = released
+		text, err := renderTakeover(source, in)
 		if err != nil {
 			return "", err
 		}
 		// A takeover by the same identity publishes no new card revision.
+		nextAuthorization = authFrom(text)
 		revision := s.Revision
 		if text != s.Text {
 			revision++
@@ -423,10 +444,11 @@ func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, ex
 		t.ToRecord, t.FromStatus, t.Decision = next.ID, cur.Status, in.Decision
 		fence = ExecutionFence{RecordID: next.ID, Cycle: next.Cycle, launcher: true}
 		return text, putTransition(tx, l, t)
-	}, extensions...)
+	}, guard, extensions...)
 	if err == nil {
 		v.mu.Lock()
 		v.fence, v.record, v.pinned = fence, fence.RecordID, true
+		v.authorization = nextAuthorization
 		v.mu.Unlock()
 	}
 	return result, err

@@ -169,7 +169,8 @@ func TestCoordinatorRequiresVerdictsForTheExactCurrentGitFacts(t *testing.T) {
 	if _, err := project.PutDocument(t.Context(), "", id, api.Document{Path: "spec.md", Text: text, ExpectedRevision: card.Revision}, &taskProof); err != nil {
 		t.Fatal(err)
 	}
-	card, err = project.Move(t.Context(), "", id, api.Move{State: "review"}, &taskProof)
+	stageDelivery(t, project, executor, strings.Repeat("b", 40))
+	card, err = project.Move(t.Context(), "", id, api.Move{State: "review", DeliveryCommit: strings.Repeat("b", 40)}, &taskProof)
 	if err != nil {
 		t.Fatal(err)
 	}

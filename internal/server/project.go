@@ -239,7 +239,7 @@ func (p *project) putDocument(key, id string, doc api.Document, h holder) outcom
 			generation = r.Generation
 		}
 		err = board.UpdateDocument(p.board, s.Entry.TaskID, board.UpdateOptions{
-			Document: doc.Path, Text: doc.Text, ExpectedRevision: doc.ExpectedRevision, ContractDecision: doc.ContractDecision,
+			Document: doc.Path, Text: doc.Text, ExpectedRevision: doc.ExpectedRevision, ContractDecision: doc.ContractDecision, Authorization: doc.Authorization,
 			Transaction: p.taskTransaction(key, "put:"+id+":"+doc.Path, doc, id, p.mutationGuard(id, h, false), nil, false),
 		})
 		if err != nil {
@@ -276,7 +276,7 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 			return outcome{err: err}
 		}
 		from := entry.State
-		if req.State == "working" && from != "review" {
+		if req.State == "working" && from != "review" && !(from == "working" && req.Authorization.DispatchID != "") {
 			return outcome{err: apiError(api.CodeClaimRequired, "a move into working is a claim")}
 		}
 		var claim claimRecord
@@ -296,9 +296,23 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 			claim.Status = api.ClaimReleased
 			nextClaim = &claim
 		}
+		validate := p.mutationGuard(id, h, req.State == "archived" || req.State == "trash")
+		if p.info.Remote != "" && from == "working" && req.State == "review" {
+			ownership := validate
+			validate = func(tx *board.Transaction) error {
+				if err := ownership(tx); err != nil {
+					return err
+				}
+				return p.deliveryGuard(entry.TaskID, req.DeliveryCommit, h)(tx)
+			}
+		}
+		businessCommit := req.DeliveryCommit
+		if req.Authorization.DispatchID == "" {
+			businessCommit = ""
+		}
 		_, err = board.MoveWithOptions(entry, p.board, req.State, board.MoveOptions{
-			Transaction: p.taskTransaction(key, "move:"+id, req, id, p.mutationGuard(id, h, req.State == "archived" || req.State == "trash"), nextClaim, false),
-			Result:      req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision,
+			Transaction: p.taskTransaction(key, "move:"+id, req, id, validate, nextClaim, false),
+			Result:      req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision, Authorization: req.Authorization, DeliveryCommit: businessCommit, Disposition: req.Disposition,
 		})
 		if err != nil {
 			return outcome{err: err}
@@ -386,6 +400,10 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 		if claimedState(entry.State) {
 			return outcome{err: apiError(api.CodeHeldByOther, "task "+entry.TaskID+" is already claimed")}
 		}
+		if found && (previous.ExecutionID == req.ExecutionID || previous.Generation == ^uint64(0)) {
+			return outcome{err: apiError(api.CodeLeaseInvalid, "a new claim requires a fresh execution identity and generation")}
+		}
+
 		r := claimRecord{TaskID: entry.TaskID, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner, Generation: 1, Status: claimPending}
 		if found {
 			r.Generation, r.Handoffs = previous.Generation+1, previous.Handoffs
@@ -512,6 +530,10 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 		if previous.Generation != req.ExpectedGeneration {
 			return outcome{err: apiError(api.CodeLeaseInvalid, "the observed generation is not current")}
 		}
+		if previous.Generation == ^uint64(0) || previous.ExecutionID != "" && previous.ExecutionID == req.ExecutionID {
+			return outcome{err: apiError(api.CodeLeaseInvalid, "takeover requires a fresh execution identity and generation")}
+		}
+
 		r := claimRecord{
 			TaskID: t.TaskID, ClientID: req.ClientID, ExecutionID: req.ExecutionID, Owner: req.Owner,
 			Generation: previous.Generation + 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(p.server.ttl),
@@ -531,7 +553,10 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 		if _, err := board.BindExecutionCursor(p.board, snapshot.Entry); err != nil {
 			return outcome{err: err}
 		}
-		in := board.TakeoverInput{Owner: req.Owner, Decision: req.Decision}
+		if board.MetadataFrom(snapshot.Text, "DISPATCH_ID") != "" && req.Dispatch == nil {
+			return outcome{err: apiError(api.CodeEvidenceIncomplete, "takeover of a bound task needs the exact inspected dispatch context")}
+		}
+		in := board.TakeoverInput{Owner: req.Owner, Decision: req.Decision, Dispatch: req.Dispatch}
 		if req.Start != nil {
 			in.Session, in.Window, in.ExecResolved = req.Start.Session, req.Start.Window, req.Start.ExecResolved
 		}

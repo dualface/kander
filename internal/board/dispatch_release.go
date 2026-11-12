@@ -31,7 +31,7 @@ type DispatchRelease struct {
 // EndDispatch records explicit termination and removes the active binding in
 // one transaction. A legacy terminal binding needs a decision to release only,
 // and so does ending an accepted round.
-func EndDispatch(root, task, id string, expected uint64, state DispatchState, reason string, decisions ...string) error {
+func EndDispatchWithTransaction(root, task, id string, expected uint64, state DispatchState, reason string, decisions []string, extensions ...TransactionExtension) error {
 	decision := ""
 	if len(decisions) > 1 {
 		return dispatchError(id)
@@ -89,7 +89,7 @@ func EndDispatch(root, task, id string, expected uint64, state DispatchState, re
 		}
 		text = appendLifecycleRecord(text, "DISPATCHES", lifecycleJSON(release))
 		return tx.Put(task, "spec.md", text)
-	})
+	}, extensions...)
 }
 
 func clearDispatchBinding(text string) (string, error) {

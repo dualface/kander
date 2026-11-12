@@ -32,6 +32,20 @@ func RunRequest(args []string) int {
 		return fail(err)
 	}
 	switch args[0] {
+	case "show":
+		if len(args) != 4 || args[3] != "--json" {
+			return requestUsage()
+		}
+		requests, err := s.Project.Requests(ctx, args[1])
+		if err != nil {
+			return fail(err)
+		}
+		for _, request := range requests {
+			if request.ID == args[2] {
+				return encode(request)
+			}
+		}
+		return fail(&api.Error{Code: api.CodeNotFound, Message: "request does not exist"})
 	case "list":
 		if len(args) != 2 {
 			return requestUsage()

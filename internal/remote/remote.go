@@ -122,14 +122,28 @@ func sanitize(value string) string {
 // GitRemote returns the origin URL of the repository at dir, or "" when there
 // is none. It binds the project name to one repository on the server.
 func GitRemote(ctx context.Context, dir string) string {
+	remote, _ := ResolveGitRemote(ctx, dir)
+	return remote
+}
+
+// ResolveGitRemote permits board reads outside a checkout, but refuses remote
+// values that would leak credentials or ambiguously identify several origins.
+func ResolveGitRemote(ctx context.Context, dir string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "remote", "get-url", "origin")
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "remote", "get-url", "--all", "origin")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", nil
 	}
-	return strings.TrimSpace(string(out))
+	value := strings.TrimSpace(string(out))
+	if !api.SafeGitRemote(value) {
+		return "", errors.New(config.Text("remote.git_unsafe_origin"))
+	}
+	return value, nil
 }
 
 // ProjectDir returns the main worktree of the repository at dir, or dir when
@@ -167,7 +181,11 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if _, err := c.CheckCompatible(ctx); err != nil {
 		return nil, err
 	}
-	info, err := c.Register(ctx, cfg.Project.Name, GitRemote(ctx, dir))
+	repository, err := ResolveGitRemote(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	info, err := c.Register(ctx, cfg.Project.Name, repository)
 	if err != nil {
 		return nil, err
 	}

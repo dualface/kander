@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -49,13 +48,6 @@ func (p *project) groupView(ctx context.Context, group string) (api.GroupView, e
 		value.Claim = claim.view(p.server.now())
 	}
 	return value, err
-}
-func (p *project) groupReceipt(tx *board.Transaction, key, operation string, request, body any) error {
-	data, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-	return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), receipt{Key: key, Operation: operation, Digest: requestDigest(operation, request), Status: receiptDone, HTTP: http.StatusOK, Body: data, CreatedAt: p.server.now()})
 }
 func (p *project) claimGroup(ctx context.Context, key, group, client string, input api.GroupClaim, h holder) outcome {
 	if !api.ValidIdentity(input.ExecutionID) || !api.ValidIdentity(client) || input.Request.GroupID != group {
@@ -127,7 +119,7 @@ func (p *project) claimGroup(ctx context.Context, key, group, client string, inp
 			if err := stageJSON(tx, groupClaimName(group), claim); err != nil {
 				return err
 			}
-			return p.groupReceipt(tx, key, operation, input, api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *claim.view(p.server.now()), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)})
+			return p.stageOperationReceipt(tx, key, operation, input, api.GroupGrant{GroupID: group, Checkpoint: checkpoint, Claim: *claim.view(p.server.now()), RenewInterval: api.DurationOf(p.server.renew), TTL: api.DurationOf(p.server.ttl)})
 		}}
 		checkpoint, err := board.ClaimCoordinatorWithTransaction(ctx, p.board, request, extension)
 		if err != nil {

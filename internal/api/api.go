@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/dualface/kander/internal/board"
 )
 
 // ProtocolVersion is the wire protocol this build speaks. MinProtocolVersion is
@@ -185,33 +187,38 @@ type NewTask struct {
 // only after the received bytes match it, so an interrupted upload never
 // becomes a visible partial document.
 type Document struct {
-	Path             string `json:"path"`
-	Text             string `json:"text"`
-	SHA256           string `json:"sha256"`
-	ExpectedRevision uint64 `json:"expected_revision"`
-	ContractDecision string `json:"contract_decision,omitempty"`
+	Authorization    board.ExecutionAuthorization `json:"authorization,omitzero"`
+	Path             string                       `json:"path"`
+	Text             string                       `json:"text"`
+	SHA256           string                       `json:"sha256"`
+	ExpectedRevision uint64                       `json:"expected_revision"`
+	ContractDecision string                       `json:"contract_decision,omitempty"`
 }
 
 // Move is POST /api/v1/projects/{project}/tasks/{task}/move. A move into
 // working is refused here; it is a claim.
 type Move struct {
-	State            string  `json:"state"`
-	Result           string  `json:"result,omitempty"`
-	Reason           string  `json:"reason,omitempty"`
-	Decision         string  `json:"decision,omitempty"`
-	DuplicateOf      string  `json:"duplicate_of,omitempty"`
-	ExpectedRevision *uint64 `json:"expected_revision,omitempty"`
+	Authorization    board.ExecutionAuthorization `json:"authorization,omitzero"`
+	DeliveryCommit   string                       `json:"delivery_commit,omitempty"`
+	Disposition      *board.ArtifactReference     `json:"disposition,omitempty"`
+	State            string                       `json:"state"`
+	Result           string                       `json:"result,omitempty"`
+	Reason           string                       `json:"reason,omitempty"`
+	Decision         string                       `json:"decision,omitempty"`
+	DuplicateOf      string                       `json:"duplicate_of,omitempty"`
+	ExpectedRevision *uint64                      `json:"expected_revision,omitempty"`
 }
 
 // ClaimRequest is POST .../tasks/{task}/claim: an atomic todo -> working
 // claim. Takeover is POST .../tasks/{task}/takeover with the generation the
 // caller observed as lost, and a decision reference for the handoff record.
 type ClaimRequest struct {
-	ClientID           string `json:"client_id"`
-	ExecutionID        string `json:"execution_id"`
-	Owner              string `json:"owner"`
-	Decision           string `json:"decision,omitempty"`
-	ExpectedGeneration uint64 `json:"expected_generation,omitzero"`
+	Dispatch           *board.DispatchTakeover `json:"dispatch,omitempty"`
+	ClientID           string                  `json:"client_id"`
+	ExecutionID        string                  `json:"execution_id"`
+	Owner              string                  `json:"owner"`
+	Decision           string                  `json:"decision,omitempty"`
+	ExpectedGeneration uint64                  `json:"expected_generation,omitzero"`
 	// Start makes the claim a launcher start: the card records the session,
 	// window, and resolved pins in the same transaction, and the execution
 	// stays unconfirmed until POST .../execution confirms or rolls it back.
@@ -289,25 +296,29 @@ const (
 // task. It targets one generation; a takeover supersedes the open requests of
 // the old generation instead of handing them to the new execution.
 type CollabRequest struct {
-	Revision         uint64    `json:"revision"`
-	ID               string    `json:"id"`
-	TaskID           string    `json:"task_id"`
-	Kind             string    `json:"kind"`
-	Message          string    `json:"message"`
-	FromClient       string    `json:"from_client"`
-	TargetGeneration uint64    `json:"target_generation"`
-	Status           string    `json:"status"`
-	Note             string    `json:"note,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	Dispatch         *board.DispatchInput `json:"dispatch,omitempty"`
+	CardRevision     uint64               `json:"card_revision,omitzero"`
+	Revision         uint64               `json:"revision"`
+	ID               string               `json:"id"`
+	TaskID           string               `json:"task_id"`
+	Kind             string               `json:"kind"`
+	Message          string               `json:"message"`
+	FromClient       string               `json:"from_client"`
+	TargetGeneration uint64               `json:"target_generation"`
+	Status           string               `json:"status"`
+	Note             string               `json:"note,omitempty"`
+	CreatedAt        time.Time            `json:"created_at"`
+	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
 // NewCollabRequest is POST .../tasks/{task}/requests.
 type NewCollabRequest struct {
-	Kind             string `json:"kind"`
-	Message          string `json:"message"`
-	FromClient       string `json:"from_client"`
-	TargetGeneration uint64 `json:"target_generation"`
+	Dispatch         *board.DispatchInput `json:"dispatch,omitempty"`
+	CardRevision     uint64               `json:"card_revision,omitzero"`
+	Kind             string               `json:"kind"`
+	Message          string               `json:"message"`
+	FromClient       string               `json:"from_client"`
+	TargetGeneration uint64               `json:"target_generation"`
 }
 
 // CollabAnswer is POST .../tasks/{task}/requests/{id}/answer by the holder.

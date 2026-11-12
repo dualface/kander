@@ -23,6 +23,8 @@ The first version trusts its network: there is no login and no role model, one s
       .kander/groups/00000000-service-group/
         claims/<task>.json       task claim and handoff history
         group-claims/<group>.json coordinator lease and handoffs
+        deliveries/<task>/<commit>.json current authenticated Git publication
+        delivery-history/<task>/<digest>.json immutable earlier attestations
         receipts/<sha256>.json   idempotency receipts
         requests/<task>/<id>.json generation-bound collaboration requests
         publications/<id>.json   immutable joint material and confirmations
@@ -48,6 +50,8 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/tasks` | `kander new` |
 | `GET /projects/{p}/tasks/{t}` | `kander show` |
 | `GET`, `PUT /projects/{p}/tasks/{t}/documents/{path}` | Read or publish `spec.md`, `plan.md`, `report.md`, attachments |
+| `POST /projects/{p}/tasks/{t}/deliveries`, `GET .../deliveries/{sha}` | Authenticated publication facts for a commit available from the common remote |
+| `GET .../tasks/{t}/dispatches/{id}`, `POST .../dispatches/actions/{action}` | Controlled dispatch preparation, attempts, reauthorization, terminal decisions, settlement and wrap-up grants |
 | `POST /projects/{p}/tasks/{t}/move` | State moves other than claims |
 | `POST /projects/{p}/tasks/{t}/claim`, `/takeover`, `/renew` | Ownership |
 | `GET`, `POST /projects/{p}/tasks/{t}/requests`, `POST .../requests/{r}/answer` | Collaboration requests |
@@ -63,7 +67,7 @@ Errors are JSON `{code, message, board_code}` with stable codes: `invalid_reques
 
 ### Idempotency
 
-Every write carries an `Idempotency-Key`. The server writes a pending receipt before the operation. Card updates, moves, launcher facts, claims and takeovers stage the completed receipt in the same board redo transaction as the card and claim. A successful board recovery therefore also recovers the exact answer. Review producers, runtime finalization and collaboration requests also stage their exact result receipts in the domain transaction. Remaining dispatch and coordination producers still need service adapters. The same key with the same request returns the stored answer; the same key with a different request is refused with `idempotency_mismatch`. A pending receipt (a crash between the operation and its answer) makes the retry inspect the current state for the operation's effect first and answer from it; the operation runs again only when its effect is not visible. Internal failures stay pending so a retry re-inspects. The client retries transport failures and `not_ready` with the same key.
+Every write carries an `Idempotency-Key`. The server writes a pending receipt before the operation. Card updates, moves, launcher facts, claims and takeovers stage the completed receipt in the same board redo transaction as the card and claim. A successful board recovery therefore also recovers the exact answer. Review producers, runtime finalization and collaboration requests also stage their exact result receipts in the domain transaction. Dispatch and coordinator producers also stage their exact receipts in the same domain transaction. The same key with the same request returns the stored answer; the same key with a different request is refused with `idempotency_mismatch`. A pending receipt (a crash between the operation and its answer) makes the retry inspect the current state for the operation's effect first and answer from it; the operation runs again only when its effect is not visible. Internal failures stay pending so a retry re-inspects. The client retries transport failures and `not_ready` with the same key.
 
 ### Documents
 
@@ -97,6 +101,18 @@ The client auto-confirms locally owned members and creates generation-bound coll
 
 `POST .../reviews/runtime/{run}/finalize` validates every uploaded file digest and allowed filename, then commits all output bytes, immutable originals and its receipt together. A client saves the exact pending finalization in its private runtime directory before transport. After an outage, a retry uploads that saved result without rerunning the reviewer. An interrupted invocation without a completed saved result records interrupted facts. Formal run publication uses fresh holder confirmations and `PublishReviewRunAtomic`, committing all member copies and indexes together. Runtime output and writer secrets never create a local board. The client prints each answer through its board type, so the aggregate bytes a close request hashes are the same as in v1.
 
+## Git delivery and dispatch
+
+For a project registered with an origin, the normal CLI and TUI working-to-review move first publishes the chosen full SHA (HEAD when omitted). The client verifies the registered origin and its push URL, pushes only `refs/heads/kander/<project>/<task>/g<generation>/<commit>`, and rereads that exact remote ref. A retry inspects the ref before pushing and reconciles even a nonzero push result against the remote facts. This never advances the integration branch or force-rewrites another execution's reference. Shared remote identities refuse embedded passwords, HTTP userinfo, query tokens, ambiguous origins and executable Git helpers.
+
+`POST .../deliveries` authenticates the holder and checks the execution, generation and inspected card revision under the same transaction as the publication receipt. The service records an authenticated client's transport observation; it does not independently query Git. The state-changing transaction checks those bindings again. A content edit or takeover invalidates an earlier attestation. Another clone fetches the recorded reference and confirms it still names the expected SHA before accepting the local object. Missing remote refs block it even when that SHA is cached locally. Review invocations fetch their exact base and target through the registered remote before launching a reviewer.
+
+Dispatch lease generations and business epochs fence separate authorities. Preparation, attempt reservation, explicit terminal decisions, completed settlement and wrap-up grants reuse the board's existing evidence producers through REST. Their card changes and exact result receipts commit together. A dispatch is never accepted merely because a transport succeeded. New wrap-up evidence stores `project:<id>` while local verification uses the caller's checkout; historical CWD bytes remain unchanged. The explicit target-integration authority remains **planned**.
+
+A foreign `dispatch prepare` becomes a generation- and card-version-bound collaboration proposal with the original typed input. It returns a request object with `status=open`, not a prepared dispatch. The holder inspects it using `kander request show <task-id> <request-id> --json`. Only the live holder can prepare or settle formal dispatch evidence. Requests remain proposals until the holder takes a controlled action.
+
+An explicit takeover of a bound task names the inspected dispatch ID, epoch and revision. It retains an unfinished binding without authorizing business replay, or settles a completed binding in the same transaction as the new lease and execution handoff. This avoids requiring an expired execution to settle before its successor can take over. An old execution identity cannot reacquire its own lost lease. Fresh stopped evidence is still required for accepted-round reauthorization; lease expiry alone proves no agent exit.
+
 ## Coordinator authority
 
 A group's public checkpoint `authority.token` is a session label, not a bearer credential. The service keeps a separate private group lease in `group-claims/`. Concurrent claims have one winner; a live lease cannot be preempted. An explicit claim after expiry or a reported coordinator exit requires the observed generation and a decision, advances both lease ownership and checkpoint authority atomically, and records the handoff. Reusing the old execution ID cannot revive its lease. Checkpoint epochs and lease generations remain separate fields, including after migration.
@@ -109,7 +125,7 @@ Distributed `orchestrate` reads cards and expands groups through a service snaps
 
 ## Client and worker
 
-The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. The remaining lifecycle, result-reconciliation and evidence commands still need adaptation (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, `dispatch`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. The remaining lifecycle, result-reconciliation and evidence commands still need adaptation (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`. Per-execution locks merge renewals and launch facts; release tombstones prevent a late writer from recreating a removed credential or erasing a successor pointer.

@@ -181,6 +181,9 @@ func (s *Server) attach(info api.Project) error {
 // register returns the project of name, creating it on first use. The remote
 // of the first registration binds the name; a different remote is refused.
 func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
+	if req.Remote != "" && !api.SafeGitRemote(req.Remote) {
+		return api.Project{}, false, apiError(api.CodeInvalidRequest, "Git remote must not contain credentials or query parameters")
+	}
 	if !api.ValidProjectName(req.Name) {
 		return api.Project{}, false, apiError(api.CodeInvalidRequest, "invalid project name")
 	}

@@ -25,7 +25,7 @@ func (p *project) updateGroupLease(key, group, operation string, input any, h ho
 				return err
 			}
 			view = *claim.view(p.server.now())
-			return p.groupReceipt(tx, key, operation, input, api.Renewal{Claim: view})
+			return p.stageOperationReceipt(tx, key, operation, input, api.Renewal{Claim: view})
 		})
 		if err == nil {
 			_ = p.events.append(api.Event{Kind: api.EventGroupChanged, GroupID: group, Generation: view.Generation})
