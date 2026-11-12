@@ -229,8 +229,8 @@ func BindExecutionCursor(root string, entry Entry) (r ExecutionRecord, err error
 
 // BeginTaskStart claims a todo card for a launcher in one transaction: the move,
 // the start metadata, the pending record and its transition.
-func BeginTaskStart(entry Entry, root string, in TaskStartInput) (Entry, error) {
-	moved, err := MoveWithOptions(entry, root, "working", MoveOptions{Owner: in.Owner, start: &in})
+func BeginTaskStartWithTransaction(entry Entry, root string, in TaskStartInput, extensions ...TransactionExtension) (Entry, error) {
+	moved, err := MoveWithOptions(entry, root, "working", MoveOptions{Owner: in.Owner, start: &in, Transaction: combineExtensions(extensions)})
 	if err == nil {
 		moved.Version.fence.launcher = true
 	}
@@ -242,7 +242,7 @@ func BeginTaskStart(entry Entry, root string, in TaskStartInput) (Entry, error) 
 // the new card text, or "" when the card stays unchanged; a change of text
 // publishes one new revision and needs a card in working or review. A pure
 // confirmation changes no text, so a fast executor may have moved the card on.
-func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *Transaction, s Snapshot, l *executionLedger) (string, error)) (result ExecutionResult, err error) {
+func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *Transaction, s Snapshot, l *executionLedger) (string, error), extensions ...TransactionExtension) (result ExecutionResult, err error) {
 	v := entry.Version
 	if v == nil {
 		return result, kanbanError("board.transaction_conflict", entry.TaskID)
@@ -279,7 +279,7 @@ func executionWrite(ctx context.Context, root string, entry Entry, fn func(tx *T
 		}
 		revision++
 		return tx.Put(entry.TaskID, "spec.md", text)
-	})
+	}, extensions...)
 	if err == nil {
 		v.revision, v.advanced = revision, v.advanced || result.Advanced
 	}
@@ -308,7 +308,7 @@ func applyExecResolved(text, resolved string) (string, error) {
 }
 
 // RecordExecutionWindow writes WINDOW, with the EXEC_RESOLVED value of a relaunch.
-func RecordExecutionWindow(root string, entry Entry, window, resolved string) (ExecutionResult, error) {
+func RecordExecutionWindowWithTransaction(root string, entry Entry, window, resolved string, extensions ...TransactionExtension) (ExecutionResult, error) {
 	return executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		text, err := setExecutionField(s.Text, FieldWindow, FieldSession, window)
 		if err != nil {
@@ -326,12 +326,12 @@ func RecordExecutionWindow(root string, entry Entry, window, resolved string) (E
 			return "", err
 		}
 		return text, putTransition(tx, l, transitionFrom(TransitionWindowUpdate, s, l.current).withCard(s, text, s.Revision+1))
-	})
+	}, extensions...)
 }
 
 // RecordExecutionSession replaces SESSION on the current record without changing
 // its status. Session repair and the session a takeover or resume discovers use it.
-func RecordExecutionSession(ctx context.Context, root string, entry Entry, before, after string) (ExecutionResult, error) {
+func RecordExecutionSessionWithTransaction(ctx context.Context, root string, entry Entry, before, after string, extensions ...TransactionExtension) (ExecutionResult, error) {
 	if before == "" || after == "" || before == after {
 		return ExecutionResult{}, coordinatorError("start discovered session binding")
 	}
@@ -353,12 +353,12 @@ func RecordExecutionSession(ctx context.Context, root string, entry Entry, befor
 			return "", err
 		}
 		return text, putTransition(tx, l, transitionFrom(TransitionSessionRepair, s, l.current).withCard(s, text, s.Revision+1))
-	})
+	}, extensions...)
 }
 
 // RecordExecutionProcess writes the process identity of the current record once.
 // The original is immutable; the card stays unchanged.
-func RecordExecutionProcess(root string, entry Entry, process ExecutionProcess) (ExecutionResult, error) {
+func RecordExecutionProcessWithTransaction(root string, entry Entry, process ExecutionProcess, extensions ...TransactionExtension) (ExecutionResult, error) {
 	return executionWrite(context.Background(), root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		if l.current.Process != nil {
 			return "", coordinatorError("immutable start original")
@@ -378,13 +378,13 @@ func RecordExecutionProcess(root string, entry Entry, process ExecutionProcess) 
 			return "", err
 		}
 		return "", putTransition(tx, l, transitionFrom(TransitionProcessIdentity, s, l.current).withCard(s, s.Text, s.Revision))
-	})
+	}, extensions...)
 }
 
 // BeginTakeover replaces the execution of a card in one transaction: the handoff
 // link, the handed-off original of the old record, a new pending record, and
 // OWNER, SESSION and WINDOW on the latest snapshot. It preserves the cycle.
-func BeginTakeover(root string, entry Entry, in TakeoverInput) (ExecutionResult, error) {
+func BeginTakeoverWithTransaction(root string, entry Entry, in TakeoverInput, extensions ...TransactionExtension) (ExecutionResult, error) {
 	v := entry.Version
 	if v == nil {
 		return ExecutionResult{}, kanbanError("board.transaction_conflict", entry.TaskID)
@@ -423,7 +423,7 @@ func BeginTakeover(root string, entry Entry, in TakeoverInput) (ExecutionResult,
 		t.ToRecord, t.FromStatus, t.Decision = next.ID, cur.Status, in.Decision
 		fence = ExecutionFence{RecordID: next.ID, Cycle: next.Cycle, launcher: true}
 		return text, putTransition(tx, l, t)
-	})
+	}, extensions...)
 	if err == nil {
 		v.mu.Lock()
 		v.fence, v.record, v.pinned = fence, fence.RecordID, true
@@ -522,16 +522,16 @@ func AdoptExecution(root string, observed Snapshot, decision string) (ExecutionR
 
 // ConfirmTaskStart records launcher success. The card stays unchanged, so a fast
 // executor keeps its revision. The cursor's fence stops a stale launcher.
-func ConfirmTaskStart(root string, entry Entry) error {
+func ConfirmTaskStartWithTransaction(root string, entry Entry, extensions ...TransactionExtension) error {
 	return confirmExecution(root, entry, func(tx *Transaction, s Snapshot, l *executionLedger) (string, error) {
 		return "", finishConfirm(tx, s, s.Text, s.Revision, l)
-	}, func(l *executionLedger) error { return nil })
+	}, func(l *executionLedger) error { return nil }, extensions...)
 }
 
 // ConfirmTaskStartSession replaces a launch-time provisional session and records
 // start success. It compares the execution cycle, OWNER, the provisional SESSION
 // and the column, never the card revision.
-func ConfirmTaskStartSession(root string, entry Entry, before, after string) error {
+func ConfirmTaskStartSessionWithTransaction(root string, entry Entry, before, after string, extensions ...TransactionExtension) error {
 	if before == "" || after == "" || before == after {
 		return coordinatorError("start discovered session binding")
 	}
@@ -550,12 +550,12 @@ func ConfirmTaskStartSession(root string, entry Entry, before, after string) err
 			return coordinatorError("start success binding")
 		}
 		return nil
-	})
+	}, extensions...)
 }
 
 // confirmExecution runs a confirmation. An already running record of this fence
 // is a retry: replay checks it and writes nothing.
-func confirmExecution(root string, entry Entry, confirm func(*Transaction, Snapshot, *executionLedger) (string, error), replay func(*executionLedger) error) error {
+func confirmExecution(root string, entry Entry, confirm func(*Transaction, Snapshot, *executionLedger) (string, error), replay func(*executionLedger) error, extensions ...TransactionExtension) error {
 	if entry.Version == nil {
 		return coordinatorError("start cursor missing")
 	}
@@ -568,7 +568,7 @@ func confirmExecution(root string, entry Entry, confirm func(*Transaction, Snaps
 			return "", replay(l)
 		}
 		return confirm(tx, s, l)
-	})
+	}, extensions...)
 	return err
 }
 

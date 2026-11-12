@@ -9,10 +9,11 @@ import { temporaryDirectory } from './helpers.mjs'
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { stdio: 'ignore' })
 
 /** A Git repository with a kanban/ directory and a second worktree. */
-function repository() {
+function repository(withLocalBoard = true) {
   const root = temporaryDirectory()
   const main = join(root, 'main')
-  mkdirSync(join(main, 'kanban'), { recursive: true })
+  mkdirSync(main, { recursive: true })
+  if (withLocalBoard) mkdirSync(join(main, 'kanban'))
   git(root, 'init', '-q', '-b', 'main', main)
   git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
   const worktree = join(root, 'wt')
@@ -41,6 +42,12 @@ esac
 }
 
 describe('board resolution', () => {
+  test('a remote-bound clone and worktree need no local kanban directory', async () => {
+    const { main, worktree } = repository(false)
+    const boards = new Boards()
+    assert.equal(await boards.projectOf(worktree), main)
+    assert.equal(await boards.validProject(main), main)
+  })
   test('a worktree and a subdirectory resolve to the main worktree', async () => {
     const { main, worktree } = repository()
     const boards = new Boards()
@@ -49,9 +56,9 @@ describe('board resolution', () => {
     assert.equal(await boards.projectOf(main), main)
   })
 
-  test('outside Git the nearest ancestor with kanban/ wins', async () => {
+  test('outside Git the nearest ancestor with project config wins', async () => {
     const root = temporaryDirectory()
-    mkdirSync(join(root, 'kanban'))
+    writeFileSync(join(root, '.kander-config.json'), '{}')
     mkdirSync(join(root, 'a', 'b'), { recursive: true })
     assert.equal(await new Boards().projectOf(join(root, 'a', 'b')), root)
   })
@@ -119,7 +126,7 @@ describe('kander commands', () => {
     const { kander, snapshot } = await boards.list(root)
     assert.equal(kander, join(root, 'kander'))
     assert.equal(snapshot.change_token, 't')
-    assert.deepEqual(calls(), [`${root}|list --json --agent-status|${join(root, 'kanban')}`])
+    assert.deepEqual(calls(), [`${root}|list --json --agent-status|`])
   })
 
   test('a KANBAN_DIR of the dsh host never redirects list or start to another board', async () => {
@@ -127,8 +134,7 @@ describe('kander commands', () => {
     const { root, calls, boards } = setup('list', { KANBAN_DIR: other })
     await boards.list(root)
     await boards.start(root, '20261103-alpha-task')
-    const board = join(root, 'kanban')
-    assert.deepEqual(calls(), [`${root}|list --json --agent-status|${board}`, `${root}|start --launcher dsh 20261103-alpha-task|${board}`])
+    assert.deepEqual(calls(), [`${root}|list --json --agent-status|`, `${root}|start --launcher dsh 20261103-alpha-task|`])
     assert.equal(boards.env.KANBAN_DIR, other)
   })
 
@@ -139,8 +145,8 @@ describe('kander commands', () => {
     await assert.rejects(garbage.boards.list(garbage.root), { code: 'bad-output' })
   })
 
-  test('a project without kanban/ is refused before kander runs', async () => {
-    const root = temporaryDirectory()
+  test('missing and relative project directories are refused before kander runs', async () => {
+    const root = join(temporaryDirectory(), 'missing')
     await assert.rejects(new Boards({ env: { PATH: root } }).list(root), { code: 'no-board' })
     await assert.rejects(new Boards().list('relative'), { code: 'no-board' })
   })
@@ -149,7 +155,7 @@ describe('kander commands', () => {
     const { root, calls, boards } = setup('list')
     const result = await boards.start(root, '20261103-alpha-task')
     assert.equal(result.ok, true)
-    assert.deepEqual(calls(), [`${root}|start --launcher dsh 20261103-alpha-task|${join(root, 'kanban')}`])
+    assert.deepEqual(calls(), [`${root}|start --launcher dsh 20261103-alpha-task|`])
     for (const task of ['--help', '20261103-a--b', 'x; rm -rf /', '', 7]) {
       await assert.rejects(boards.start(root, task), { code: 'bad-request' })
     }

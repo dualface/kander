@@ -142,8 +142,12 @@ func (a *App) renderStatusBar(p palette, w, visible int) string {
 	if notice := a.transientNotice(); notice != "" {
 		return styleFor("footer", p).Render(padLine(" "+clipText(notice, max(0, w-1)), w))
 	}
+	brand := "KANDER"
+	if a.Model.Stale {
+		brand += " · " + t("remote.stale_label")
+	}
 	segments := []string{
-		"KANDER",
+		brand,
 		itoa(visible) + "/" + itoa(len(a.Model.States())) + " " + a.Context.ColumnUnit,
 		itoa(a.visibleTaskCount()) + " " + a.Context.CardUnit,
 	}

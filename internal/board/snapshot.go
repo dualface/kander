@@ -54,7 +54,7 @@ func readPinnedDocument(ctx context.Context, entry Entry) (string, error) {
 // this operation still owns the current revision; it cannot erase newer work. A
 // card that moved past the cursor refuses the rollback even when a later
 // entrance call caught the cursor up.
-func RollbackDocument(root string, entry Entry, text, state string) error {
+func RollbackDocumentWithTransaction(root string, entry Entry, text, state string, extensions ...TransactionExtension) error {
 	v := entry.Version
 	if v == nil {
 		return kanbanError("board.transaction_conflict", entry.TaskID)
@@ -88,7 +88,7 @@ func RollbackDocument(root string, entry Entry, text, state string) error {
 			return tx.Relocate(entry.TaskID, state)
 		}
 		return nil
-	})
+	}, extensions...)
 	if err == nil {
 		v.revision++
 	}
@@ -98,6 +98,7 @@ func RollbackDocument(root string, entry Entry, text, state string) error {
 // MoveOptions are the dedicated managed-field entrances. A decision reference
 // records the user's authorization basis; the tool cannot verify user intent.
 type MoveOptions struct {
+	Transaction      TransactionExtension
 	Owner            string
 	Result           string
 	Reason           string
@@ -239,7 +240,7 @@ func MoveWithOptions(entry Entry, root, target string, options MoveOptions) (mov
 		}
 		moved.Version = &Version{revision: s.Revision + 1, authorization: authFrom(updated), warnings: entryWarningLog(entry), fence: ExecutionFence{RecordID: tx.record.ID, Cycle: planCycle(Snapshot{Entry: s.Entry, Text: updated})}, record: tx.record.ID, pinned: true}
 		return nil
-	})
+	}, options.Transaction)
 	if err == nil && moved.State == "archived" && entry.State != "archived" {
 		report, e := pruneArchived(root, entryWarningLog(entry))
 		report.Err = e

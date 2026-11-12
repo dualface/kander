@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
@@ -146,6 +147,7 @@ func (s *Server) Handler() http.Handler {
 		return outcome{status: http.StatusOK, body: p.events.read(r.Context(), r.URL.Query().Get("cursor"), wait)}
 	})
 	s.reviewRoutes(mux)
+	s.issueRoutes(mux)
 	return mux
 }
 
@@ -166,6 +168,10 @@ func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*proje
 		p, err := s.project(r.PathValue("project"))
 		if err != nil {
 			return outcome{err: err}
+		}
+		if r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/events") {
+			p.mu.Lock()
+			defer p.mu.Unlock()
 		}
 		return fn(p, r)
 	}))

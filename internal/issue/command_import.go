@@ -3,7 +3,9 @@ package issue
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/dualface/kander/internal/remote"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -111,11 +113,7 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		}
 		language = cfg.AgentLanguage
 	}
-	root, err := board.BoardRoot()
-	if err != nil {
-		fmt.Fprintln(stderr, formatError(err))
-		return 1
-	}
+
 	provider := factory()
 	repository, code := resolveRepository(provider, options.repository, options.hasRepo, stderr)
 	if code != 0 {
@@ -123,12 +121,32 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	result, err := Import(ctx, provider, root, repository, options.number, ImportOptions{
-		Type:     taskType,
-		Large:    options.large,
-		Language: language,
-		Comments: options.comments,
-	})
+	cfg, err := config.Load(true)
+	if err != nil {
+		fmt.Fprintln(stderr, formatError(err))
+		return 1
+	}
+	importOptions := ImportOptions{Type: taskType, Large: options.large, Language: language, Comments: options.comments}
+	var result ImportResult
+	if remote.Enabled(cfg) {
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			fmt.Fprintln(stderr, formatError(cwdErr))
+			return 1
+		}
+		session, openErr := remote.Open(ctx, cfg, cwd)
+		if openErr != nil {
+			fmt.Fprintln(stderr, formatError(openErr))
+			return 1
+		}
+		result, err = ImportRemote(ctx, session, provider, repository, options.number, importOptions)
+	} else {
+		var root string
+		root, err = board.BoardRoot()
+		if err == nil {
+			result, err = Import(ctx, provider, root, repository, options.number, importOptions)
+		}
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, formatError(err))
 		return 1

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 )
@@ -102,10 +103,13 @@ func location(s *Session, task string) string {
 }
 
 // RunList implements kander list in server mode.
-func RunList(args []string) int {
+func RunList(args []string) int { return RunListWithAgentStatus(args, nil) }
+
+// RunListWithAgentStatus supplies this host's terminal observer to a REST list.
+func RunListWithAgentStatus(args []string, observe board.AgentStatusFunc) int {
 	args, machine := takeFlag(args, "--json")
 	args, _ = takeFlag(args, "--mobile")
-	args, _ = takeFlag(args, "--agent-status")
+	args, agentStatus := takeFlag(args, "--agent-status")
 	if len(args) > 1 || len(args) == 1 && strings.HasPrefix(args[0], "-") {
 		return printUsage("list")
 	}
@@ -124,7 +128,14 @@ func RunList(args []string) int {
 		return fail(err)
 	}
 	if machine {
-		return encode(list)
+		if !agentStatus {
+			observe = nil
+		}
+		snapshot, err := s.machineList(ctx, list, observe)
+		if err != nil {
+			return fail(err)
+		}
+		return encode(snapshot)
 	}
 	w := tabwriter.NewWriter(stdout, 0, 2, 2, ' ', 0)
 	for _, t := range list.Tasks {

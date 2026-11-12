@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -63,7 +64,11 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
-	plan, err := prepareLaunch(launcher, parentDir(request.Root), "triage")
+	projectDir := request.ProjectDir
+	if projectDir == "" {
+		projectDir = parentDir(request.Root)
+	}
+	plan, err := prepareLaunch(launcher, projectDir, "triage")
 	if err != nil {
 		return result, err
 	}
@@ -121,7 +126,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	}
 	// A takeover session owns no card, so it records no pane session marker and
 	// reports no Herdr agent session; those identities belong to card launches.
-	outcome, err := launchAgent(plan, request.Root, triageWindowName(request.Repository, request.Number), inv, nil, nil, nil)
+	outcome, err := launchAgent(plan, filepath.Join(projectDir, "task-context"), triageWindowName(request.Repository, request.Number), inv, nil, nil, nil)
 	if err != nil {
 		return result, err
 	}

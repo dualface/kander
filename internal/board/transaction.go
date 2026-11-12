@@ -79,25 +79,26 @@ type Transaction struct {
 
 // WithTransaction commits all staged writes, or leaves a prepared recovery record
 // on publication failure. No user callback runs during recovery.
-func WithTransaction(root string, scope LockScope, fn func(*Transaction) error) (err error) {
-	return withTransaction(nil, root, scope, fn)
+func WithTransaction(root string, scope LockScope, fn func(*Transaction) error, extensions ...TransactionExtension) (err error) {
+	return withTransaction(nil, root, scope, fn, extensions...)
 }
 
 // WithTransactionContext bounds lock contention and preparation. Once a redo
 // intent is published, completion follows the existing non-cancellable journal
 // protocol; OS file operations and crash recovery retain their existing limits.
-func WithTransactionContext(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error) error {
-	return withTransaction(ctx, root, scope, fn)
+func WithTransactionContext(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error, extensions ...TransactionExtension) error {
+	return withTransaction(ctx, root, scope, fn, extensions...)
 }
 
-func withTransaction(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error) (err error) {
-	return withTransactionCheckpoint(ctx, root, scope, nil, fn)
+func withTransaction(ctx context.Context, root string, scope LockScope, fn func(*Transaction) error, extensions ...TransactionExtension) (err error) {
+	return withTransactionCheckpoint(ctx, root, scope, nil, fn, extensions...)
 }
 
 // withTransactionCheckpoint is withTransaction with an optional publication
 // checkpoint. A nil checkpoint is the production path; interruption tests use it
 // to stop between the journal write and the commit.
-func withTransactionCheckpoint(ctx context.Context, root string, scope LockScope, checkpoint func(string) error, fn func(*Transaction) error) (err error) {
+func withTransactionCheckpoint(ctx context.Context, root string, scope LockScope, checkpoint func(string) error, fn func(*Transaction) error, extensions ...TransactionExtension) (err error) {
+	scope, fn = extendTransaction(scope, fn, extensions)
 	if err = ensureLayout(root); err != nil {
 		return err
 	}

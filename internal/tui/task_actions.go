@@ -1,14 +1,18 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/remote"
 )
 
 type taskAction string
@@ -24,12 +28,14 @@ const (
 )
 
 type taskActionSource struct {
+	service  *remote.Session
 	root     string
 	snapshot board.Snapshot
 	warnings *board.WarningLog
 	// startProblem is the first start check a backlog card fails; nil when the
 	// card can start or the check could not finish.
-	startProblem error
+	startProblem   error
+	localExecution bool
 }
 
 // checkStartProblem is replaced by tests that need a failing check.
@@ -140,7 +146,11 @@ func (a *App) applyTaskActionsLoaded(result taskActionsLoaded) {
 	if warnings := result.source.warningMessages(); len(warnings) > 0 {
 		a.showFocusNotice(strings.Join(warnings, "\n"))
 	}
-	dialog.items = availableTaskActions(result.source.snapshot.Entry.State, board.MetadataFrom(result.source.snapshot.Text, board.FieldWindow), result.source.startProblem != nil)
+	window := board.MetadataFrom(result.source.snapshot.Text, board.FieldWindow)
+	if result.source.service != nil && !result.source.localExecution {
+		window = ""
+	}
+	dialog.items = availableTaskActions(result.source.snapshot.Entry.State, window, result.source.startProblem != nil)
 	if len(dialog.items) == 0 {
 		a.TaskActions = nil
 		a.showFocusNotice(strings.Join(append([]string{t("actions.none")}, result.source.warningMessages()...), "\n"))
@@ -207,6 +217,13 @@ func runTaskAction(source taskActionSource, action taskAction, options board.Mov
 		target = "todo"
 	case actionArchive:
 		target = "archived"
+	}
+	if source.service != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		revision := source.snapshot.Revision
+		_, err := source.service.MoveTask(ctx, source.snapshot.Entry.TaskID, api.Move{State: target, ExpectedRevision: &revision, Result: options.Result, Reason: options.Reason, Decision: options.Decision, DuplicateOf: options.DuplicateOf})
+		return target, nil, err
 	}
 	var err error
 	switch action {

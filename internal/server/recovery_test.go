@@ -1,9 +1,12 @@
 package server
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -164,5 +167,79 @@ func TestStartupReleasesClaimsOfFinishedCards(t *testing.T) {
 	r, _, err := proj.readClaim(id)
 	if err != nil || r.Status != api.ClaimReleased {
 		t.Fatalf("claim of a trashed card must be released: %+v %v", r, err)
+	}
+}
+
+// The lease and receipt must belong to the board transaction, rather than
+// depending on a later best-effort write by the HTTP handler.
+func TestClaimAndTakeoverPersistInTheCardJournal(t *testing.T) {
+	dir := t.TempDir()
+	at := time.Now().UTC()
+	s, h := openTest(t, dir, func() time.Time { return at })
+	defer s.Close()
+	defer h.Close()
+	p, id := prepareTodo(t, h.URL)
+	proj, _ := s.project(p.ID())
+	request := api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex"}
+	grant, err := p.Claim(t.Context(), "atomic-claim", id, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertTransaction := func(key string) {
+		t.Helper()
+		execution, _, err := board.CurrentExecution(proj.board, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(proj.board, ".kander", "operations", "committed", execution.ID+".json")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var record board.OperationRecord
+		if err := json.Unmarshal(raw, &record); err != nil {
+			t.Fatal(err)
+		}
+		claim, receipt := false, false
+		for _, change := range record.Files {
+			claim = claim || filepath.Base(change.Path) == id+".json" && strings.Contains(change.Path, "claims")
+			receipt = receipt || filepath.Base(change.Path) == filepath.Base(receiptPath(key)) && strings.Contains(change.Path, "receipts")
+		}
+		if !claim || !receipt {
+			t.Fatalf("card transaction omitted claim or receipt: %+v", record.Files)
+		}
+	}
+	assertTransaction("atomic-claim")
+	at = at.Add(2 * time.Minute)
+	request.ExecutionID, request.ExpectedGeneration, request.Decision = "exec-b", grant.Claim.Generation, "user takeover"
+	if _, err := p.Takeover(t.Context(), "atomic-takeover", id, request); err != nil {
+		t.Fatal(err)
+	}
+	assertTransaction("atomic-takeover")
+}
+
+func TestReleasedExecutionCannotModifyUnclaimedCard(t *testing.T) {
+	s, h := openTest(t, t.TempDir(), nil)
+	defer s.Close()
+	defer h.Close()
+	p, id := prepareTodo(t, h.URL)
+	grant, err := p.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "codex", Start: &api.StartInput{Session: "codex pending"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := client.Claim{Token: grant.Token, Generation: grant.Claim.Generation}
+	if _, err := p.Execution(t.Context(), "", id, api.ExecutionUpdate{Action: api.ExecutionRollback}, own); err != nil {
+		t.Fatal(err)
+	}
+	current, err := p.Show(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.PutDocument(t.Context(), "late-write", id, api.Document{Path: "report.md", Text: "stale result", ExpectedRevision: current.Revision}, &own)
+	if !api.IsCode(err, api.CodeLeaseInvalid) {
+		t.Fatalf("released execution wrote to an unclaimed task: %v", err)
+	}
+	if _, err := p.Document(t.Context(), id, "report.md"); !api.IsCode(err, api.CodeNotFound) {
+		t.Fatalf("stale report became visible: %v", err)
 	}
 }

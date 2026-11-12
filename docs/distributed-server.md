@@ -20,10 +20,11 @@ The first version trusts its network: there is no login and no role model, one s
   projects.json          registry: id, name, remote, created_at
   projects/<id>/
     board/               a board in the v1 layout (backlog/ ... trash/)
+      .kander/groups/00000000-service-group/
+        claims/<task>.json       claim record and handoff history
+        receipts/<sha256>.json   idempotency receipts
     control/
-      claims/<task>.json         claim record and handoff history
       requests/<task>/<id>.json  collaboration requests
-      receipts/<sha256>.json     idempotency receipts
       events.jsonl               append-only change log
       events-epoch.json          log identity for cursors
 ```
@@ -55,7 +56,7 @@ Errors are JSON `{code, message, board_code}` with stable codes: `invalid_reques
 
 ### Idempotency
 
-Every write carries an `Idempotency-Key`. The server writes a pending receipt before the operation and the final answer after it. The same key with the same request returns the stored answer; the same key with a different request is refused with `idempotency_mismatch`. A pending receipt (a crash between the operation and its answer) makes the retry inspect the current state for the operation's effect first and answer from it; the operation runs again only when its effect is not visible. Internal failures stay pending so a retry re-inspects. The client retries transport failures and `not_ready` with the same key.
+Every write carries an `Idempotency-Key`. The server writes a pending receipt before the operation. Card updates, moves, launcher facts, claims and takeovers stage the completed receipt in the same board redo transaction as the card and claim. A successful board recovery therefore also recovers the exact answer. Other domain producers are still being moved to this transaction boundary. The same key with the same request returns the stored answer; the same key with a different request is refused with `idempotency_mismatch`. A pending receipt (a crash between the operation and its answer) makes the retry inspect the current state for the operation's effect first and answer from it; the operation runs again only when its effect is not visible. Internal failures stay pending so a retry re-inspects. The client retries transport failures and `not_ready` with the same key.
 
 ### Documents
 
@@ -63,21 +64,21 @@ Every write carries an `Idempotency-Key`. The server writes a pending receipt be
 
 ## Claims and leases
 
-A claim is the server-side ownership of one task by one execution, kept in `control/claims/<task>.json` outside the card:
+A claim is the server-side ownership of one task by one execution, kept in `board/.kander/groups/00000000-service-group/claims/<task>.json` outside the card:
 
 - `client_id` (the persistent host identity), `execution_id` (one execution on that host), `owner` (the agent), `generation` (monotonic per task, distinct from the dispatch execution epoch), the lease expiry, and a token.
 - The token is an HMAC of the project, task, execution, and generation under the server secret. The server stores only its hash; a replayed claim receipt derives it again, so the token is never written to disk or to a log.
 - `POST .../claim` moves a `todo` card into `working` with the owner and grants generation `n+1` in one step under the project lock. A plain move into `working` is refused with `claim_required`; `review -> working` stays a move of the live holder.
 - `POST .../renew` with the claim headers (`Kander-Claim-Token`, `Kander-Claim-Generation`) extends the lease by the TTL. A renewal writes no card, so it never changes the card revision. Default TTL 90 s and renewal interval 15 s; the server announces both in the grant and decides time with its own clock.
 - A lease past its expiry reads as `lost`. It is never renewed again and the task is never reassigned automatically: `POST .../takeover` with a decision reference and the generation the caller observed hands the task to a new execution with generation `n+1`, appends a handoff record, and supersedes the open requests of older generations. In the same project lock the card's execution ledger hands off (`board.BeginTakeover`): `OWNER`, `SESSION`, and `WINDOW` name the new execution, the old record is retired as handed off, and the new executor reports and confirms its start through `POST .../execution` like a start. A live lease refuses a takeover with `lease_active`. A claimed card without any claim record (a migrated board) can be taken over from generation 0.
-- Every write of a `working` or `review` card (document, move, request answer) checks inside the project lock that the presented token and generation are the live claim; another token is `held_by_other`, a stale generation or an expired lease is `lease_invalid`. All writes of a project share that lock with the board transaction, so the ownership check and the write are one atomic step. A user-authorized `archived`/`trash` termination may end a task whose lease is lost; a live lease still refuses it.
-- A move into `done`, `archived`, or `trash` releases the claim. If the server stops between the card move and the release, startup releases the claim from the card state.
+- Every write of a `working` or `review` card (document, move, request answer) checks inside the project lock that the presented token and generation are the live claim; another token is `held_by_other`, a stale generation or an expired lease is `lease_invalid`. Card updates and moves additionally run the ownership check under the board transaction locks. Their receipts and any claim release are staged in that same redo record. Server read routes share the project lock, so a snapshot cannot mix a newly committed card with an older claim. A presented execution credential is also checked when its card is no longer claimed; a released execution cannot publish a late result to a todo card. A user-authorized `archived`/`trash` termination may end a task whose lease is lost; a live lease still refuses it.
+- A move into `done`, `archived`, or `trash` stages the claim release in the card transaction. Startup recovers the whole redo record before serving reads. It also reconciles pending records left by the earlier prototype.
 
-A claim is written `pending` before the board move and turned `active` after it. Startup turns a pending claim whose card is in `working` with that owner into an active lease, and releases any other pending claim. Old executions therefore cannot overwrite a newer one: their token hash and generation no longer match, whatever order their late renewals, writes, rollbacks, or queued submissions arrive in.
+A claim and its receipt are staged with the todo-to-working move and execution ledger. A takeover similarly stages the next claim generation, handoff and receipt with the new execution record. The transaction extension declares the service control lock before taking task locks. Startup retains recovery of legacy pending claims: a committed working card with that owner activates the claim; an uncommitted move releases it. Old executions therefore cannot overwrite a newer one: their token hash and generation no longer match, whatever order their late renewals, writes, rollbacks, or queued submissions arrive in.
 
 ## Starting an agent
 
-`kander start` in server mode claims the `todo` card with a start input (initial session, window, resolved pins); the server runs `board.BeginTaskStart`, so the move, the start metadata, and the pending execution record land in one board transaction, and it keeps the launcher's board cursor in memory for the holder (a restart rebinds a cursor from the current execution record). The client then launches the agent on its own host with a fresh `KANDER_EXECUTION_ID` (in the environment of a spawned process, as an `env NAME=value` prefix of a POSIX container command, or a PowerShell assignment), reports `WINDOW` and the discovered session through `POST .../execution`, and confirms the start. A launch failure posts `rollback`: the server restores the card text from before the claim, returns it to `todo`, and releases the claim. The managed agent PID of a spawned process is stored in the credential, so the worker can stop it when the lease is lost.
+`kander start` in server mode claims the `todo` card with a start input (initial session, window, resolved pins); the server runs `board.BeginTaskStart`, so the move, the start metadata, and the pending execution record land in one board transaction, and it keeps the launcher's board cursor in memory for the holder (a restart rebinds a cursor from the current execution record). The client then launches the agent on its own host with a fresh `KANDER_EXECUTION_ID` (in the environment of a spawned process, as an `env NAME=value` prefix of a POSIX container command, or a PowerShell assignment), reports `WINDOW` and the discovered session through `POST .../execution`, and confirms the start. A launch failure posts `rollback`: the server restores the card text from before the claim, returns it to `todo`, and releases the claim in the same transaction. Confirmation clears rollback authority in that transaction as well. The managed agent PID of a spawned process is stored in the credential, so the worker can stop it when the lease is lost.
 
 ## Review gate
 
@@ -85,7 +86,7 @@ The client runs every Git check of `kander review plan`, `aggregate`, `close`, a
 
 ## Client and worker
 
-The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, and the review gate commands above run against the server project; the other commands are not adapted yet (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, issue import/triage, the TUI board and start actions, and the review gate commands above use the server project. The remaining lifecycle, result-reconciliation and evidence commands still need adaptation (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`.
@@ -104,9 +105,23 @@ After a claim the client starts `kander worker` detached unless one already hold
 
 A non-holder asks the holder to act through `POST .../requests` with a kind (`fix`, `sync`, `review`, `stop`), a message, and the generation it targets; a request for a generation that is not current is refused. Only the live holder of that generation answers it (`accepted`, `done`, `rejected`). A takeover marks the open requests of older generations `superseded` instead of handing them to the new execution. `kander request <task> fix|sync|review|stop <message>` asks, `kander request list <task>` lists, and `kander request answer <task> <id> accepted|done|rejected [note]` answers with this host's execution credential. On each successful renewal the worker of the holder reads the open requests of its generation, types each one once into the agent recorded by the card's `WINDOW` and `SESSION` (the target resolution and agent prompt primitive of `kander notify`, one line with control characters removed), remembers it in the credential, and accepts it. A failed delivery stays open and is retried on the next renewal. A card without a terminal `WINDOW` (foreground, console) keeps its requests open for the holder to read; external actions are not exactly-once, so a lost answer is settled by reading the request and the execution facts, never by restarting an agent.
 
+## Client views and issue import
+
+`internal/remote.ProjectService` is the typed REST boundary shared by client commands and views. It has no local board implementation. The TUI binds its board, detail, action and start callbacks to that service when `server.url` is configured. A captured task-action revision fences the move at the server; a stale dialog cannot overwrite a newer task.
+
+The TUI writes only a private list cache under the client home, keyed by the server URL and project ID. A transport failure may display that cache with a persistent stale label and its observation time. It never turns the cache into a writable board or queues an offline move. Detail reads and mutations still require the server. The executing worker is independent of the view lifetime.
+
+`kander list --json` keeps the schema-1 CLI snapshot consumed by dsh and adds project ID, event cursor and public claim observations. The change token ignores renewal timestamps and pure observation timestamps. Agent observation and terminal focus are restricted to this client's claims. Remote terminal addresses are not passed to this host's backends; lost leases remain visible as lost.
+
+dsh resolves the Git main worktree or a non-Git project's configuration directory, without requiring `kanban/`. Its subprocess environment removes inherited `KANBAN_DIR`; kander resolves the server binding from the repository and configuration. dsh keeps its existing schema-1 list consumer and asynchronous start boundary.
+
+`POST /projects/{p}/issues/import` receives a bounded source snapshot, type choice, language and size. The server validates the canonical repository and issue identity, sanitizes the source again, authors the fixed contract itself, and reuses the exclusive-board source-key transaction. It never accepts client-authored contract sections or puts issue bodies/comments into them. Concurrent imports return one anchor with both source attachments. `GET .../issues/index` returns canonical bindings with resource locations instead of server filesystem paths.
+
+Issue triage and refinement run on the client. Their refreshed or downloaded source evidence lives in the client's project-private data directory. The launch request distinguishes that evidence directory from the local Git repository; no local card-state directories are created. Result publication/closure still needs the distributed coordination path (**planned**).
+
 ## Events
 
-Each project keeps `control/events.jsonl`. Events carry identities (`task_changed`, `claim_changed`, `request_changed` with task, state, revision, generation), never bodies. A cursor is `<epoch>:<seq>`; the task list returns the cursor it is consistent with. `GET .../events?cursor=&wait=` long-polls up to 60 s. An unknown epoch, a future sequence, or a cursor older than the retained window answers `reset`; the client re-reads the task list and continues from its cursor. The TUI and `kander subscribe` share this stream (**planned**).
+Each project keeps `control/events.jsonl`. Events carry identities (`task_changed`, `claim_changed`, `request_changed` with task, state, revision, generation), never bodies. A cursor is `<epoch>:<seq>`; the task list returns the cursor it is consistent with. `GET .../events?cursor=&wait=` long-polls up to 60 s. An unknown epoch, a future sequence, or a cursor older than the retained window answers `reset`; the client re-reads the task list and continues from its cursor. The TUI reads server snapshots and keeps a private read-only offline snapshot. Binding the TUI and `kander subscribe` to this event stream is still **planned**.
 
 ## Logging
 

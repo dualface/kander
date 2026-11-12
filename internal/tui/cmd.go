@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
@@ -16,6 +17,7 @@ import (
 	"github.com/dualface/kander/internal/issue"
 	"github.com/dualface/kander/internal/launch"
 	"github.com/dualface/kander/internal/menu"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/version"
 )
 
@@ -113,15 +115,30 @@ func Run(_ []string) int {
 	if !containsString(themes, prefs.Theme) {
 		return fail(fmt.Errorf("%s: %s", ctx.UnknownTheme, prefs.Theme))
 	}
-	root, err := board.BoardRoot()
+	var root string
+	var serverSession *remote.Session
+	cfg, err := config.Load(true)
 	if err != nil {
-		// A missing board still opens the TUI so first-run and out-of-project
-		// launches can show the empty-board welcome instead of exiting.
-		if !board.IsBoardNotFound(err) {
+		return fail(err)
+	}
+	if remote.Enabled(cfg) {
+		cwd, err := os.Getwd()
+		if err != nil {
 			return fail(err)
 		}
-		root = ""
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		serverSession, err = remote.Open(ctx, cfg, cwd)
+		cancel()
+		if err != nil {
+			return fail(err)
+		}
+	} else {
+		root, err = board.BoardRoot()
+		if err != nil && !board.IsBoardNotFound(err) {
+			return fail(err)
+		}
 	}
+
 	app := newApp(prefs.Single, prefs.Refresh, ctx, nil, nil, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
 	app.Compact = prefs.Compact
 	app.AutoThemes = autoThemes{Light: prefs.ThemeLight, Dark: prefs.ThemeDark}
@@ -130,7 +147,11 @@ func Run(_ []string) int {
 	app.updateApply = install.ApplyUpdate
 	app.IssueProvider = cli.IssueProvider
 	app.ObserveAgents = observeAgentStatus
-	attachBoard(app, root)
+	if serverSession != nil {
+		attachRemoteBoard(app, serverSession)
+	} else {
+		attachBoard(app, root)
+	}
 	initial, err := app.GetBoard()
 	if err != nil {
 		return fail(err)

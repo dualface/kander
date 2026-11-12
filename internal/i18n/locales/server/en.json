@@ -25,5 +25,7 @@
   "remote.claim_line": "Claim: {{.V0}} on {{.V1}}, generation {{.V2}}, {{.V3}}, lease until {{.V4}}",
   "remote.dispatch_unsupported": "dispatch-bound options are not available in server mode yet",
   "remote.claimed": "claimed {{.V0}} with generation {{.V1}} for execution {{.V2}}",
-  "remote.worker_start_failed": "the background worker did not start; leases of this host are not renewed: {{.V0}}"
+  "remote.worker_start_failed": "the background worker did not start; leases of this host are not renewed: {{.V0}}",
+  "remote.stale_snapshot": "Stale offline snapshot from {{.V0}}; reconnect to refresh. Writes require the server.",
+  "remote.stale_label": "STALE"
 }

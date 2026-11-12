@@ -49,35 +49,35 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 		if err != nil {
 			return outcome{err: err}
 		}
+		nextClaim := claim
+		if u.Action == api.ExecutionConfirm {
+			nextClaim.OriginalText = ""
+		}
+		if u.Action == api.ExecutionRollback {
+			nextClaim.Status = api.ClaimReleased
+		}
+		extension := p.taskTransaction(key, "execution:"+id, u, id, p.mutationGuard(id, h, false), &nextClaim, false)
 		switch u.Action {
 		case api.ExecutionWindow:
-			_, err = board.RecordExecutionWindow(p.board, entry, u.Window, u.ExecResolved)
+			_, err = board.RecordExecutionWindowWithTransaction(p.board, entry, u.Window, u.ExecResolved, extension)
 		case api.ExecutionSession:
-			_, err = board.RecordExecutionSession(context.Background(), p.board, entry, u.SessionBefore, u.SessionAfter)
+			_, err = board.RecordExecutionSessionWithTransaction(context.Background(), p.board, entry, u.SessionBefore, u.SessionAfter, extension)
 		case api.ExecutionConfirm:
 			if u.SessionBefore != "" || u.SessionAfter != "" {
-				err = board.ConfirmTaskStartSession(p.board, entry, u.SessionBefore, u.SessionAfter)
+				err = board.ConfirmTaskStartSessionWithTransaction(p.board, entry, u.SessionBefore, u.SessionAfter, extension)
 			} else {
-				err = board.ConfirmTaskStart(p.board, entry)
+				err = board.ConfirmTaskStartWithTransaction(p.board, entry, extension)
 			}
 			if err == nil {
 				// A confirmed start is no longer a failed launch to undo.
 				delete(p.starts, id)
-				if claim.OriginalText != "" {
-					claim.OriginalText = ""
-					err = p.writeClaim(claim)
-				}
 			}
 		case api.ExecutionRollback:
 			if claim.OriginalText == "" {
 				return outcome{err: apiError(api.CodeInvalidRequest, "only a launcher start can be rolled back")}
 			}
-			if err = board.RollbackDocument(p.board, entry, claim.OriginalText, "todo"); err == nil {
+			if err = board.RollbackDocumentWithTransaction(p.board, entry, claim.OriginalText, "todo", extension); err == nil {
 				delete(p.starts, id)
-				claim.Status = api.ClaimReleased
-				if werr := p.writeClaim(claim); werr != nil {
-					p.log().Error("claim release failed", "task", id, "error", werr)
-				}
 				_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: id, Generation: claim.Generation})
 			}
 		default:

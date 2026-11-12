@@ -76,6 +76,10 @@ func boardContentKey(tasks []Task) string {
 			"title":        task.Title,
 			"type":         task.Type,
 		}
+		if task.ClaimStatus != "" {
+			item["claim_status"], item["claim_client_id"] = task.ClaimStatus, task.ClaimClientID
+			item["session"], item["window"] = task.Session, task.Window
+		}
 		if task.Document == "" {
 			delete(item, "document")
 		}

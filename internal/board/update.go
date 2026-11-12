@@ -89,6 +89,7 @@ func moveMetadata(text, from, to string, o MoveOptions) (string, error) {
 
 // UpdateOptions constrains an agent-authored replacement to one expected revision.
 type UpdateOptions struct {
+	Transaction      TransactionExtension
 	Document         string
 	Text             string
 	ExpectedRevision uint64
@@ -309,7 +310,7 @@ func UpdateDocument(root, id string, o UpdateOptions) error {
 			return kanbanError("board.transaction_invalid", "--contract-decision-file")
 		}
 		return tx.Put(id, o.Document, text)
-	})
+	}, o.Transaction)
 }
 
 // lfLineEndings replaces each CRLF line ending with LF. A lone CR is content,

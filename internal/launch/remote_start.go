@@ -246,3 +246,32 @@ func withExecutionIdentity(plan LaunchPlan, inv process.ProcessInvocation, execu
 	inv.Argv = append([]string{"env", entry}, inv.Argv...)
 	return inv
 }
+
+// PreviewRemoteStart resolves a server task's local execution configuration
+// without claiming it or creating a local card.
+func PreviewRemoteStart(ctx context.Context, session *remote.Session, taskID string) (StartPreview, error) {
+	task, err := session.Project.Show(ctx, taskID)
+	if err != nil {
+		return StartPreview{}, err
+	}
+	cfg, err := loadEffective()
+	if err != nil {
+		return StartPreview{}, err
+	}
+	size := board.MetadataFrom(task.Text, board.FieldSize)
+	if size != "large" {
+		size = "small"
+	}
+	choice, err := resolveExecution(cfg, task.Text, size, "", execStart)
+	if err != nil {
+		return StartPreview{}, err
+	}
+	launcher, err := resolveStartLauncher(cfg.Launcher)
+	if err != nil {
+		return StartPreview{}, err
+	}
+	if err := programStatusPreflight(cfg, launcher, choice.Agent); err != nil {
+		return StartPreview{}, err
+	}
+	return StartPreview{TaskID: task.TaskID, State: task.State, Size: size, Agent: choice.Agent, Launcher: launcher}, nil
+}

@@ -2,7 +2,9 @@ package issue
 
 import (
 	"fmt"
+	"github.com/dualface/kander/internal/remote"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -82,18 +84,35 @@ func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	if code != 0 {
 		return code
 	}
-	root, err := board.BoardRoot()
+
+	ctx, cancel := commandContext()
+	defer cancel()
+	cfg, err := config.Load(true)
 	if err != nil {
 		fmt.Fprintln(stderr, formatTriageError(err))
 		return 1
 	}
-	ctx, cancel := commandContext()
-	defer cancel()
-	outcome, err := StartTriage(ctx, provider, root, repository, options.number, TriageOptions{
-		CardID:   options.card,
-		Agent:    options.agent,
-		Launcher: options.launcher,
-	})
+	triageOptions := TriageOptions{CardID: options.card, Agent: options.agent, Launcher: options.launcher}
+	var outcome TriageOutcome
+	if remote.Enabled(cfg) {
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			fmt.Fprintln(stderr, formatTriageError(cwdErr))
+			return 1
+		}
+		session, openErr := remote.Open(ctx, cfg, cwd)
+		if openErr != nil {
+			fmt.Fprintln(stderr, formatTriageError(openErr))
+			return 1
+		}
+		outcome, err = StartRemoteTriage(ctx, session, provider, remote.ProjectDir(cwd), repository, options.number, triageOptions, false)
+	} else {
+		var root string
+		root, err = board.BoardRoot()
+		if err == nil {
+			outcome, err = StartTriage(ctx, provider, root, repository, options.number, triageOptions)
+		}
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, formatTriageError(err))
 		return 1

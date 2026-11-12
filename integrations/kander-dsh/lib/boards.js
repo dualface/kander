@@ -33,6 +33,10 @@ const isDirectory = async (path) => {
   }
 }
 
+const isRegularFile = async (path) => {
+  try { return (await lstat(path)).isFile() } catch { return false }
+}
+
 const isExecutable = async (path) => {
   try {
     if (!(await stat(path)).isFile()) return false
@@ -71,16 +75,16 @@ export class Boards {
   }
 
   /**
-   * The project of a workspace directory: the directory holding its board.
-   * Like kander, the Git main worktree's kanban/ wins, then the nearest
-   * ancestor with a kanban/ directory. Returns null without a board.
+   * The local repository bound to a server project. Git worktrees resolve to
+   * their main worktree; a non-Git project uses its nearest config directory.
+   * No local kanban directory is required.
    */
   async projectOf(path) {
     if (typeof path !== 'string' || !isAbsolute(path) || !(await isDirectory(path))) return null
     const main = await this.mainWorktree(path)
-    if (main && (await isDirectory(join(main, 'kanban')))) return main
+    if (main && (await isDirectory(main))) return main
     for (let current = resolve(path); ; current = dirname(current)) {
-      if (await isDirectory(join(current, 'kanban'))) return current
+      if (await isRegularFile(join(current, '.kander-config.json')) || await isRegularFile(join(current, '.kander', 'config.json'))) return current
       if (dirname(current) === current) return null
     }
   }
@@ -116,19 +120,16 @@ export class Boards {
     throw new BoardError('kander-not-found', 'kander was not found', { searched })
   }
 
-  /** Checks that project is an absolute directory with a kanban/ directory. */
-  /**
-   * The environment of a kander call on the project's board. kander reads
-   * KANBAN_DIR before it looks at its directory, so a KANBAN_DIR of the dsh
-   * host would make every board show and start the cards of one board.
-   */
-  envOf(directory) {
-    return { ...this.env, KANBAN_DIR: join(directory, 'kanban') }
+  /** Host-wide v1 board overrides must never select a different project. */
+  envOf() {
+    const env = { ...this.env }
+    delete env.KANBAN_DIR
+    return env
   }
 
   async validProject(project) {
-    if (typeof project !== 'string' || !isAbsolute(project) || !(await isDirectory(join(project, 'kanban')))) {
-      throw new BoardError('no-board', `${project} has no kanban/ directory`)
+    if (typeof project !== 'string' || !isAbsolute(project) || !(await isDirectory(project))) {
+      throw new BoardError('no-board', `${project} is not a project directory`)
     }
     return resolve(project)
   }

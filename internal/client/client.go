@@ -381,3 +381,17 @@ func (p *Project) ReviewProgress(ctx context.Context, task string) (json.RawMess
 	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("reviews", "progress", url.PathEscape(task))}, &out)
 	return out, err
 }
+
+// ImportIssue publishes an issue snapshot through the server's atomic importer.
+func (p *Project) ImportIssue(ctx context.Context, key string, request api.IssueImport) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("issues", "import"), body: request, key: key}, &out)
+	return out, err
+}
+
+// IssueIndex reads the canonical issue-to-card bindings of the server board.
+func (p *Project) IssueIndex(ctx context.Context) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("issues", "index")}, &out)
+	return out, err
+}

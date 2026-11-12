@@ -339,7 +339,7 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 	if number <= 0 {
 		return result, NewError(ErrorInvalidQuery, "number", strconv.Itoa(number))
 	}
-	language, err := config.ValidateAgentLanguage(options.Language)
+	_, err = config.ValidateAgentLanguage(options.Language)
 	if err != nil {
 		return result, NewError(ErrorInvalidQuery, "language", Sanitize(options.Language))
 	}
@@ -377,6 +377,35 @@ func Import(ctx context.Context, provider IssueProvider, root string, repository
 	}
 	if err := validateImportIdentity(record, repository, number); err != nil {
 		return result, err
+	}
+	return PublishImport(root, record, options)
+}
+
+// PublishImport validates a normalized source snapshot and atomically publishes
+// the card and attachments. The server uses this entrance without running an
+// issue provider or trusting client-authored contract text.
+func PublishImport(root string, record ImportSnapshot, options ImportOptions) (result ImportResult, err error) {
+	snapshot, err := SnapshotFromImport(record)
+	if err != nil {
+		return result, err
+	}
+	normalized, err := BuildImportSnapshot(snapshot)
+	if err != nil {
+		return result, err
+	}
+	if normalized.SourceKey != record.SourceKey || normalized.SourceURL != record.SourceURL {
+		return result, NewError(ErrorImportConflict, "import", "source identity mismatch")
+	}
+	record = normalized
+	repository, number := snapshot.Repository, snapshot.Number
+	sourceKey, sourceURL := record.SourceKey, record.SourceURL
+	language, err := config.ValidateAgentLanguage(options.Language)
+	if err != nil {
+		return result, err
+	}
+	requestedType := strings.TrimSpace(options.Type)
+	if requestedType != "" && !containsValue(board.TaskTypes(), requestedType) {
+		return result, NewError(ErrorInvalidQuery, "type", Sanitize(requestedType))
 	}
 	taskType := requestedType
 	if taskType == "" {

@@ -41,7 +41,7 @@ func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "
 type Session struct {
 	ServerURL string
 	Client    *client.Client
-	Project   *client.Project
+	Project   ProjectService
 	Info      api.Project
 	Home      string
 }

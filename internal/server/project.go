@@ -56,7 +56,7 @@ func (p *project) open() error {
 // pending claim whose move committed becomes active, one whose move did not
 // is released, and a claim of a card that left working/review is released.
 func (p *project) reconcileClaims() error {
-	if err := ensureDir(p.root, filepath.Join("control", "claims")); err != nil {
+	if err := ensureDir(p.root, servicePath("claims")); err != nil {
 		return err
 	}
 	view, err := board.LoadBoard(p.board)
@@ -109,10 +109,15 @@ func (p *project) list(ctx context.Context, state string) (api.TaskList, error) 
 			continue
 		}
 		s := api.TaskSummary{
-			TaskID: t.TaskID, Title: t.Title, State: t.State, Kind: t.Kind, Type: t.Type,
+			TaskID: t.TaskID, Title: t.Title, State: t.State, Kind: t.Kind, Type: t.Type, Session: t.Session, Window: t.Window,
 			TaskGroup: t.TaskGroup, Assignee: t.Assignee, CreatedAt: t.CreatedAt,
 			StartedAt: t.StartedAt, CompletedAt: t.CompletedAt, Time: t.Time, Result: t.Result,
 		}
+		snapshot, err := board.ReadSnapshot(p.board, t.TaskID)
+		if err != nil {
+			return api.TaskList{}, err
+		}
+		s.Revision = snapshot.Revision
 		if r, found, err := p.readClaim(t.TaskID); err != nil {
 			return api.TaskList{}, err
 		} else if found && r.Status != claimPending {
@@ -235,6 +240,7 @@ func (p *project) putDocument(key, id string, doc api.Document, h holder) outcom
 		}
 		err = board.UpdateDocument(p.board, s.Entry.TaskID, board.UpdateOptions{
 			Document: doc.Path, Text: doc.Text, ExpectedRevision: doc.ExpectedRevision, ContractDecision: doc.ContractDecision,
+			Transaction: p.taskTransaction(key, "put:"+id+":"+doc.Path, doc, id, p.mutationGuard(id, h, false), nil, false),
 		})
 		if err != nil {
 			return outcome{err: err}
@@ -285,19 +291,19 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 			}
 			claim, claimed = r, err == nil || r.TaskID != ""
 		}
+		var nextClaim *claimRecord
+		if claimed && !claimedState(req.State) {
+			claim.Status = api.ClaimReleased
+			nextClaim = &claim
+		}
 		_, err = board.MoveWithOptions(entry, p.board, req.State, board.MoveOptions{
-			Result: req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision,
+			Transaction: p.taskTransaction(key, "move:"+id, req, id, p.mutationGuard(id, h, req.State == "archived" || req.State == "trash"), nextClaim, false),
+			Result:      req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision,
 		})
 		if err != nil {
 			return outcome{err: err}
 		}
 		if claimed && !claimedState(req.State) {
-			claim.Status = api.ClaimReleased
-			if err := p.writeClaim(claim); err != nil {
-				// The move committed; startup reconciliation releases the claim
-				// from the card state.
-				p.log().Error("claim release failed", "task", entry.TaskID, "error", err)
-			}
 			_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: entry.TaskID, Generation: claim.Generation})
 		}
 		p.changed(entry.TaskID, claim.Generation)
@@ -390,27 +396,30 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 				return outcome{err: err}
 			}
 		}
-		if err := p.writeClaim(r); err != nil {
-			return outcome{err: err}
-		}
+		now := p.server.now()
+		r.Status, r.RenewedAt, r.ExpiresAt = api.ClaimActive, now, now.Add(p.server.ttl)
+		extension := p.taskTransaction(key, "claim:"+id, req, r.TaskID, func(tx *board.Transaction) error {
+			snapshot, err := tx.Snapshot(r.TaskID)
+			if err == nil && snapshot.Entry.State != "todo" {
+				return apiError(api.CodeRevisionConflict, "task is no longer todo")
+			}
+			return err
+		}, &r, true)
+
 		var moved board.Entry
 		if req.Start != nil {
-			moved, err = board.BeginTaskStart(entry, p.board, board.TaskStartInput{Owner: req.Owner, Session: req.Start.Session, Window: req.Start.Window, ExecResolved: req.Start.ExecResolved})
+			moved, err = board.BeginTaskStartWithTransaction(entry, p.board, board.TaskStartInput{Owner: req.Owner, Session: req.Start.Session, Window: req.Start.Window, ExecResolved: req.Start.ExecResolved}, extension)
 		} else {
-			moved, err = board.MoveWithOptions(entry, p.board, "working", board.MoveOptions{Owner: req.Owner})
+			moved, err = board.MoveWithOptions(entry, p.board, "working", board.MoveOptions{Owner: req.Owner, Transaction: extension})
 		}
 		if err == nil && req.Start != nil {
 			p.starts[entry.TaskID] = startCursor{entry: moved, generation: r.Generation}
 		}
 		if err != nil {
-			if found {
-				_ = p.writeClaim(previous)
-			} else {
-				r.Status = api.ClaimReleased
-				_ = p.writeClaim(r)
-			}
 			return outcome{err: err}
 		}
+		_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: r.TaskID, Generation: r.Generation})
+		p.changed(r.TaskID, r.Generation)
 		return p.activate(r)
 	}
 	applied := func() (outcome, bool) {
@@ -455,16 +464,21 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 	if err != nil {
 		return api.Renewal{}, err
 	}
-	r, err := p.requireHolder(id, h)
+	var r claimRecord
+	err = board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}}, func(tx *board.Transaction) error {
+		var err error
+		r, err = p.requireHolder(id, h)
+		if err != nil {
+			return err
+		}
+		now := p.server.now()
+		r.RenewedAt, r.ExpiresAt = now, now.Add(p.server.ttl)
+		return stageJSON(tx, "claims/"+id+".json", r)
+	})
 	if err != nil {
 		return api.Renewal{}, err
 	}
-	now := p.server.now()
-	r.RenewedAt, r.ExpiresAt = now, now.Add(p.server.ttl)
-	if err := p.writeClaim(r); err != nil {
-		return api.Renewal{}, err
-	}
-	return api.Renewal{Claim: *r.view(now)}, nil
+	return api.Renewal{Claim: *r.view(p.server.now())}, nil
 }
 
 // takeover hands a lost claim to a new execution with the next generation.
@@ -521,15 +535,13 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 		if req.Start != nil {
 			in.Session, in.Window, in.ExecResolved = req.Start.Session, req.Start.Window, req.Start.ExecResolved
 		}
-		if _, err := board.BeginTakeover(p.board, snapshot.Entry, in); err != nil {
+		if _, err := board.BeginTakeoverWithTransaction(p.board, snapshot.Entry, in, p.taskTransaction(key, "takeover:"+id, req, r.TaskID, func(tx *board.Transaction) error {
+			_, err := tx.Expect(r.TaskID, snapshot.Entry.State, snapshot.Revision)
+			return err
+		}, &r, true)); err != nil {
 			return outcome{err: err}
 		}
 		p.starts[r.TaskID] = startCursor{entry: snapshot.Entry, generation: r.Generation}
-		if err := p.writeClaim(r); err != nil {
-			// The ledger handed off; the claim record follows on retry, which
-			// finds no live lease and the handed-off generation.
-			return outcome{err: err}
-		}
 		if err := p.supersedeRequests(r.TaskID, r.Generation); err != nil {
 			p.log().Error("superseding requests failed", "task", r.TaskID, "error", err)
 		}

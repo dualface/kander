@@ -6,6 +6,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/issue"
 )
 
 // boardCodes maps board message keys to stable API codes. A board key not
@@ -51,6 +52,10 @@ func asAPIError(err error) *api.Error {
 			e.Status = http.StatusInternalServerError
 		}
 		return e
+	}
+	var issueError *issue.Error
+	if errors.As(err, &issueError) {
+		return apiError(api.CodeInvalidRequest, issue.Message(issueError))
 	}
 	var b *board.Error
 	if errors.As(err, &b) && b.Code != "" {

@@ -41,6 +41,9 @@ type TriageOptions struct {
 // confirmed identity, the local evidence paths and the caller overrides; remote
 // text never enters it, so the launcher can build its prompt from paths only.
 type TriageLaunch struct {
+	// ProjectDir separates the local repository from private evidence storage.
+	ProjectDir   string
+	CardSnapshot *board.TaskSummary
 	// RefineCard selects contract completion for an imported backlog card.
 	RefineCard bool
 	// ResultSync selects the independent completed-result protocol.

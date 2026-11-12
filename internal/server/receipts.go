@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"path/filepath"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
@@ -38,7 +37,7 @@ type outcome struct {
 
 func receiptPath(key string) string {
 	sum := sha256.Sum256([]byte(key))
-	return filepath.Join("control", "receipts", hex.EncodeToString(sum[:])+".json")
+	return servicePath("receipts", hex.EncodeToString(sum[:])+".json")
 }
 
 func requestDigest(operation string, request any) string {

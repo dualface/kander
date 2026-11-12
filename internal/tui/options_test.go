@@ -757,6 +757,8 @@ func assertTypedIntoView(t *testing.T, panel *optionsPanel, want string) {
 }
 
 func TestExecutionModelInputSavesWhenAgentsMatch(t *testing.T) {
+	// This scope-save assertion must not inherit the developer project overlay.
+	t.Chdir(t.TempDir())
 	_, panel := openPanel(t)
 	pumpPanel(panel, panel.dispatch(sectionExecution))
 	large := panel.session.Config.KanbanAgents["large"]

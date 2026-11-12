@@ -1,5 +1,8 @@
 # dsh Kander View
 
+For v2 server bindings, the view resolves the Git main worktree (or a non-Git project's configuration directory) and calls the configured client. A local `kanban/` directory is not required. The subprocess removes inherited `KANBAN_DIR`, and `kander list --json --agent-status` retains its schema-1 snapshot with additional server project and claim fields. Terminal observations refer only to executions on the current client host.
+
+
 The Kander view is the page half of the `kander-dsh` plugin: a global panel in dsh Web and dsh Desktop that shows a Kander board and the terminals of the agents the [dsh launcher](dsh-launcher.md) runs. Install the plugin as described there; the same installation serves the view.
 
 ## Using the View

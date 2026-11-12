@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -41,7 +40,7 @@ type holder struct {
 	clientID   string
 }
 
-func claimPath(task string) string { return filepath.Join("control", "claims", task+".json") }
+func claimPath(task string) string { return servicePath("claims", task+".json") }
 
 func (p *project) readClaim(task string) (claimRecord, bool, error) {
 	var r claimRecord

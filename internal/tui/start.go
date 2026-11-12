@@ -1,17 +1,22 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/terminal"
 )
 
 type startRequest struct {
+	service *remote.Session
 	launch.StartPreview
 	root string
 }
@@ -32,6 +37,21 @@ func runTaskStart(request startRequest) (result launch.StartResult, err error) {
 	defer func() { result.Warnings = append(warnings.Messages(), result.Warnings...) }()
 	if !backgroundStartLauncher(request.Launcher) {
 		return launch.StartResult{}, fmt.Errorf("%s", t("tui.start_use_cli", request.Launcher))
+	}
+	if request.service != nil {
+		if request.State == "backlog" {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			task, err := request.service.Project.Show(ctx, request.TaskID)
+			if err != nil {
+				return result, err
+			}
+			revision := task.Revision
+			if _, err := request.service.MoveTask(ctx, task.TaskID, api.Move{State: "todo", ExpectedRevision: &revision}); err != nil {
+				return result, err
+			}
+		}
+		return launch.StartRemote(request.Agent, request.Launcher, request.TaskID)
 	}
 	if request.State == "backlog" {
 		snapshot, err := board.ReadSnapshotWithWarnings(request.root, request.TaskID, &warnings)
