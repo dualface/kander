@@ -21,9 +21,8 @@ type ReviewClose struct {
 	Evidence board.ReviewGitEvidence  `json:"evidence"`
 }
 
-// requireHolders checks that h holds every claimed card among tasks. A plan
-// over cards of several holders needs a joint confirmation, which this
-// version does not offer; it is refused with held_by_other.
+// requireHolders checks direct credential authority for each claimed card.
+// reviewWrite handles version-bound joint publication confirmations separately.
 func (p *project) requireHolders(tasks []string, h holder) error {
 	for _, id := range tasks {
 		s, err := board.ReadSnapshot(p.board, id)
