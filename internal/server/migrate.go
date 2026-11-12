@@ -1,11 +1,11 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -33,117 +33,146 @@ type importRecord struct {
 	ImportedAt time.Time `json:"imported_at"`
 }
 
-// Import copies a v1 board into a project that has no tasks. It runs with
-// the data directory locked (the server is not serving). The source must be
-// quiet: its interrupted transactions are recovered first, then every
-// regular file is copied byte for byte into a staging directory and compared
-// by SHA-256 against the source, the staged board is loaded and checked, and
-// only then is it published in one directory rename. The source board is
-// never changed and stays as the local backup. Importing the same snapshot
-// into the same project again returns the earlier import; any other import
-// into a project with tasks is refused.
+// Import copies a quiescent v1 board into an empty project. Source recovery
+// precedes a board-exclusive snapshot; original evidence bytes are retained.
+// A durable directory publication intent is recovered before the server opens.
 func (s *Server) Import(name, remote, source string) (ImportResult, error) {
-	source, err := filepath.Abs(source)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	return s.ImportContext(ctx, name, remote, source)
+}
+
+func (s *Server) ImportContext(ctx context.Context, name, remote, source string) (result ImportResult, err error) {
+	source, err = filepath.Abs(source)
 	if err != nil {
-		return ImportResult{}, err
+		return result, err
+	}
+	if importPathsOverlap(source, s.data) {
+		return result, errors.New("source board and server data directories must not overlap")
 	}
 	if err := board.RecoverTransactions(source); err != nil {
-		return ImportResult{}, fmt.Errorf("recover the source board first: %w", err)
-	}
-	files, snapshot, err := snapshotTree(source)
-	if err != nil {
-		return ImportResult{}, err
-	}
-	sourceBoard, err := board.LoadBoard(source)
-	if err != nil {
-		return ImportResult{}, err
+		return result, fmt.Errorf("recover the source board first: %w", err)
 	}
 	info, _, err := s.register(api.RegisterProject{Name: name, Remote: remote})
 	if err != nil {
-		return ImportResult{}, err
+		return result, err
 	}
 	p, err := s.project(info.ID)
 	if err != nil {
-		return ImportResult{}, err
+		return result, err
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	var previous importRecord
-	if found, err := readJSON(p.root, filepath.Join("control", "import.json"), &previous); err != nil {
-		return ImportResult{}, err
-	} else if found && previous.Snapshot == snapshot {
-		return ImportResult{Project: info, Files: previous.Files, Tasks: previous.Tasks, Snapshot: snapshot, Existing: true}, nil
+	if err := p.recoverImport(); err != nil {
+		return result, err
 	}
-	current, err := board.LoadBoard(p.board)
-	if err != nil {
-		return ImportResult{}, err
-	}
-	if len(current.Entries) > 0 {
-		return ImportResult{}, apiError(api.CodeProjectNotEmpty, "project "+name+" already has tasks; an import only fills an empty project")
-	}
-	staging := filepath.Join(p.root, "board.import")
-	if err := os.RemoveAll(staging); err != nil {
-		return ImportResult{}, err
-	}
-	if err := ensureDir(p.root, "board.import"); err != nil {
-		return ImportResult{}, err
-	}
-	for _, rel := range files {
-		data, err := fs.ReadRegularFile(source, filepath.Join(source, rel))
+	err = board.WithTransactionContext(ctx, source, board.LockScope{ExclusiveBoard: true, ReadOnly: true}, func(*board.Transaction) error {
+		files, snapshot, err := snapshotTree(source)
 		if err != nil {
-			return ImportResult{}, err
+			return err
 		}
-		target := filepath.Join(staging, rel)
-		if err := fs.EnsurePrivateDirectory(p.root, filepath.Dir(target), true); err != nil {
-			return ImportResult{}, err
+		var previous importRecord
+		found, err := readJSON(p.root, filepath.Join("control", "import.json"), &previous)
+		if err != nil {
+			return err
 		}
-		if err := fs.WriteBytesAtomicInherited(p.root, target, data, false); err != nil {
-			return ImportResult{}, err
+		if found && previous.Snapshot == snapshot {
+			result = ImportResult{Project: info, Files: previous.Files, Tasks: previous.Tasks, Snapshot: snapshot, Existing: true}
+			return nil
 		}
-	}
-	// Empty state directories carry no file; create the full layout.
-	if err := board.InitStorage(staging); err != nil {
-		return ImportResult{}, err
-	}
-	stagedFiles, stagedSnapshot, err := snapshotTree(staging)
+		current, err := board.LoadBoard(p.board)
+		if err != nil {
+			return err
+		}
+		if len(current.Entries) > 0 {
+			return apiError(api.CodeProjectNotEmpty, "project "+name+" already has tasks; an import only fills an empty project")
+		}
+		_, emptyDigest, err := snapshotTree(p.board)
+		if err != nil {
+			return err
+		}
+		staging := filepath.Join(p.root, "board.import")
+		if err := removeImportDirectory(p.root, staging); err != nil {
+			return err
+		}
+		if err := ensureDir(p.root, "board.import"); err != nil {
+			return err
+		}
+		for _, rel := range files {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			data, err := fs.ReadRegularFile(source, filepath.Join(source, rel))
+			if err != nil {
+				return err
+			}
+			target := filepath.Join(staging, rel)
+			if err := fs.EnsurePrivateDirectory(p.root, filepath.Dir(target), true); err != nil {
+				return err
+			}
+			if err := fs.WriteBytesAtomicInherited(p.root, target, data, false); err != nil {
+				return err
+			}
+		}
+		if err := s.importCheckpoint("copied"); err != nil {
+			return err
+		}
+		if err := board.InitStorage(staging); err != nil {
+			return err
+		}
+		stagedFiles, stagedDigest, err := snapshotTree(staging)
+		if err != nil {
+			return err
+		}
+		if stagedDigest != snapshot || !slices.Equal(stagedFiles, files) {
+			return errors.New("staged board differs from the source; nothing was published")
+		}
+		staged, err := board.LoadBoard(staging)
+		if err != nil {
+			return err
+		}
+		code, _, problems, err := board.CheckBoardForImport(staging)
+		if err != nil {
+			return fmt.Errorf("staged board check failed: %w", err)
+		}
+		if code != 0 {
+			return fmt.Errorf("staged board fails check; nothing was published: %s", strings.Join(problems, "; "))
+		}
+		// A non-cooperating external writer must also invalidate publication.
+		_, again, err := snapshotTree(source)
+		if err != nil {
+			return err
+		}
+		if again != snapshot {
+			return errors.New("source board changed during import; nothing was published")
+		}
+		// Validation uses read locks, which may add empty lock files. They carry no
+		// evidence, but must be removed from staging to retain the exact snapshot.
+		if err := removeImportValidationFiles(staging, files, snapshot); err != nil {
+			return err
+		}
+		record := importRecord{Snapshot: snapshot, Source: source, Files: len(files), Tasks: len(staged.Entries), ImportedAt: s.now()}
+		pending := importPublication{Schema: 1, Record: record, EmptyDigest: emptyDigest}
+		if err := writeJSON(p.root, filepath.Join("control", "import-pending.json"), pending); err != nil {
+			return err
+		}
+		if err := s.importCheckpoint("prepared"); err != nil {
+			return err
+		}
+		if err := p.publishImport(pending); err != nil {
+			return err
+		}
+		result = ImportResult{Project: info, Files: record.Files, Tasks: record.Tasks, Snapshot: snapshot}
+		return nil
+	})
 	if err != nil {
-		return ImportResult{}, err
+		return result, err
 	}
-	if stagedSnapshot != snapshot || !slices.Equal(stagedFiles, files) {
-		return ImportResult{}, errors.New("staged board differs from the source; nothing was published")
-	}
-	staged, err := board.LoadBoard(staging)
-	if err != nil {
-		return ImportResult{}, err
-	}
-	if len(staged.Entries) != len(sourceBoard.Entries) {
-		return ImportResult{}, errors.New("staged board lists another task set; nothing was published")
-	}
-	if code, _, problems, err := board.CheckBoard(staging, nil, true); err != nil || code != 0 {
-		return ImportResult{}, fmt.Errorf("staged board fails check (%s); nothing was published: %w", strings.Join(problems, "; "), err)
-	}
-	if err := os.RemoveAll(p.board); err != nil {
-		return ImportResult{}, err
-	}
-	// Both directories are siblings the server created in its own private
-	// project directory; fs.Rename only renames below board state directories.
-	if fs.IsReparsePoint(staging) || fs.IsReparsePoint(p.root) {
-		return ImportResult{}, errors.New("project directory contains a reparse point")
-	}
-	if err := os.Rename(staging, p.board); err != nil {
-		return ImportResult{}, err
-	}
-	record := importRecord{Snapshot: snapshot, Source: source, Files: len(files), Tasks: len(staged.Entries), ImportedAt: s.now()}
-	if err := writeJSON(p.root, filepath.Join("control", "import.json"), record); err != nil {
-		return ImportResult{}, err
-	}
-	// Claimed cards of the old board have no claim record; they read as lost
-	// generation 0 and need an explicit takeover.
 	if err := p.reconcileClaims(); err != nil {
-		return ImportResult{}, err
+		return result, err
 	}
-	p.log().Info("board imported", "files", record.Files, "tasks", record.Tasks, "snapshot", snapshot)
-	return ImportResult{Project: info, Files: record.Files, Tasks: record.Tasks, Snapshot: snapshot}, nil
+	p.log().Info("board imported", "files", result.Files, "tasks", result.Tasks, "snapshot", result.Snapshot)
+	return result, nil
 }
 
 // snapshotTree lists every regular file below root (sorted, root-relative)

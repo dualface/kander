@@ -32,6 +32,12 @@ func TestRemoteHistoricalResolutionVerifiesGitAndBindsOriginals(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := strings.Replace(snapshot.Text, "- TASK_BRANCH: task\n", "- TASK_BRANCH: task\n- OWNER: codex\n- SESSION: codex legacy\n- WINDOW: foreground\n- STARTED_AT:\n", 1)
+	text += "\n## EXPECTED_OUTCOME\n\nResolve historical review evidence.\n\n## ACCEPTANCE_CRITERIA\n\n- [ ] Historical originals remain intact.\n\n## OUT_OF_SCOPE\n\nNo unrelated changes.\n"
+	originalPath := filepath.Join(snapshot.Entry.Path, "reviews", resolveRun, "report.md")
+	originalReport, err := os.ReadFile(originalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(snapshot.Entry.Document, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -41,33 +47,32 @@ func TestRemoteHistoricalResolutionVerifiesGitAndBindsOriginals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer := httptest.NewServer(srv.Handler())
-	connection, _ := client.New(httpServer.URL, "fixture-host")
-	info, err := connection.Register(t.Context(), "historical-review", "")
+	// Exercise the real explicit migration boundary. Unresolved historical
+	// business work must retain its original evidence without becoming PASS.
+	imported, err := srv.Import("historical-review", "", w.root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer.Close()
+	info := imported.Project
 	if err := srv.Close(); err != nil {
-		t.Fatal(err)
-	}
-	// Seed storage while the service is stopped, as an older service version
-	// would have left it. The production migration checker remains unchanged.
-	target := filepath.Join(dataDir, "projects", info.ID, "board")
-	if err := os.RemoveAll(target); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.CopyFS(target, os.DirFS(w.root)); err != nil {
 		t.Fatal(err)
 	}
 	srv, err = server.Open(options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpServer = httptest.NewServer(srv.Handler())
+	httpServer := httptest.NewServer(srv.Handler())
 	t.Cleanup(func() { httpServer.Close(); _ = srv.Close() })
-	connection, _ = client.New(httpServer.URL, "fixture-host")
+	connection, _ := client.New(httpServer.URL, "fixture-host")
 	project := connection.Project(info.ID)
+	copied, err := project.Document(t.Context(), w.id, "reviews/"+resolveRun+"/report.md")
+	if err != nil || copied.Text != string(originalReport) {
+		t.Fatalf("migration changed original report: %v", err)
+	}
+	sourceReport, err := os.ReadFile(originalPath)
+	if err != nil || string(sourceReport) != string(originalReport) {
+		t.Fatalf("migration changed local backup: %v", err)
+	}
 	grant, err := project.Takeover(t.Context(), "historical-takeover", w.id, api.ClaimRequest{ClientID: "fixture-host", ExecutionID: "historical-executor", Owner: "codex", Decision: "explicit recovery of historical storage"})
 	if err != nil {
 		t.Fatal(err)

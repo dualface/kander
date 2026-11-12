@@ -42,16 +42,17 @@ type Options struct {
 // Server is one opened data directory. Open takes its exclusive lock; Close
 // releases it.
 type Server struct {
-	data     string
-	ttl      time.Duration
-	renew    time.Duration
-	log      *slog.Logger
-	clock    func() time.Time
-	version  string
-	secret   []byte
-	lock     *fs.ExclusiveLock
-	lockFile *os.File
-	ready    atomic.Bool
+	importFault func(string) error
+	data        string
+	ttl         time.Duration
+	renew       time.Duration
+	log         *slog.Logger
+	clock       func() time.Time
+	version     string
+	secret      []byte
+	lock        *fs.ExclusiveLock
+	lockFile    *os.File
+	ready       atomic.Bool
 
 	mu       sync.Mutex
 	projects map[string]*project

@@ -48,6 +48,9 @@ func reviewGateScope(root, id string, exclusive bool, warnings ...*WarningLog) (
 // validateTaskReview is shared by completion and check. Pending work is legitimate
 // during execution; completion demands all planned batches and immutable copies.
 func validateTaskReview(tx *Transaction, id string, completion bool) (progress ReviewProgress, err error) {
+	return validateTaskReviewMode(tx, id, completion, false)
+}
+func validateTaskReviewMode(tx *Transaction, id string, completion, importHistory bool) (progress ReviewProgress, err error) {
 	progress.TaskID = id
 	s, err := tx.Snapshot(id)
 	if err != nil {
@@ -83,7 +86,7 @@ func validateTaskReview(tx *Transaction, id string, completion bool) (progress R
 	if excluded {
 		return excludedProgress(tx, progress, p, exclusion)
 	}
-	if err = checkUnplannedReviewRuns(tx, p); err != nil {
+	if err = checkUnplannedReviewRunsMode(tx, p, importHistory); err != nil {
 		return progress, err
 	}
 	progress.ResolvedBatches = p.ResolvedBatches
@@ -411,6 +414,9 @@ func CheckReviewGate(root string, ids []string) []Problem {
 }
 
 func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {
+	return checkUnplannedReviewRunsMode(tx, p, false)
+}
+func checkUnplannedReviewRunsMode(tx *Transaction, p ReviewPlan, importHistory bool) error {
 	planned := map[string]bool{}
 	for _, b := range p.Batches {
 		planned[b.BatchID] = true
@@ -435,7 +441,7 @@ func checkUnplannedReviewRuns(tx *Transaction, p ReviewPlan) error {
 			return reviewError("missing run")
 		}
 		for _, id := range p.TaskIDs {
-			if containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
+			if !importHistory && containsID(run.TaskIDs, id) && !planned[run.BatchID] && resolvedBatch(p, run.BatchID) == nil {
 				return reviewError("unplanned execution batch: " + run.BatchID)
 			}
 		}

@@ -286,6 +286,15 @@ func dependencyProblems(board Board, selected map[string]struct{}, skipStates ma
 
 // CheckBoard validates entries and the dependency graph, without liveness probing. It returns the exit code and the stdout summary line.
 func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdout string, stderr []string, err error) {
+	return checkBoard(root, taskIDs, includeAll, false)
+}
+
+// CheckBoardForImport validates all storage and evidence while retaining an
+// unresolved historical batch as pending business work, never a successful gate.
+func CheckBoardForImport(root string) (code int, stdout string, stderr []string, err error) {
+	return checkBoard(root, nil, true, true)
+}
+func checkBoard(root string, taskIDs []string, includeAll, importHistory bool) (code int, stdout string, stderr []string, err error) {
 	skipStates := map[string]struct{}{}
 	if !includeAll {
 		skipStates = deferredCheckStates
@@ -342,7 +351,11 @@ func CheckBoard(root string, taskIDs []string, includeAll bool) (code int, stdou
 		allProblems = append(allProblems, Problem{Path: root, Message: reviewErr.Error()})
 	}
 	allProblems = append(allProblems, reviewProblems...)
-	allProblems = append(allProblems, CheckReviewGate(root, reviewTasks)...)
+	if importHistory {
+		allProblems = append(allProblems, checkImportReviewGate(root, reviewTasks)...)
+	} else {
+		allProblems = append(allProblems, CheckReviewGate(root, reviewTasks)...)
+	}
 	dependencyBoard := board
 	if len(taskIDs) > 0 {
 		dependencyBoard, err = Scan(root)

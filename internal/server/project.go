@@ -37,6 +37,9 @@ func (p *project) open() error {
 	if err := ensureDir(p.root, "control"); err != nil {
 		return err
 	}
+	if err := p.recoverImport(); err != nil {
+		return err
+	}
 	if err := board.InitStorage(p.board); err != nil {
 		return err
 	}
