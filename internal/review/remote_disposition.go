@@ -191,7 +191,7 @@ func remoteEvidenceAction(ctx context.Context, session *remote.Session, cwd, act
 		}
 		tasks = plan.TaskIDs
 		if request.ResolveBatch != nil {
-			return nil, archiveError("resolve_batch requires distributed historical Git evidence")
+			return remoteResolveBatch(ctx, session, cwd, request)
 		}
 		if request.Batch != nil && board.ReviewNeedsGit(*request.Batch) {
 			if err := verifyGitEdge(cwd, board.ReviewGitEdge{Ancestor: request.Batch.Base, Descendant: request.Batch.TargetCommit}); err != nil {

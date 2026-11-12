@@ -43,6 +43,19 @@ func (p *project) reviewWrite(key, operation string, request any, tasks func() (
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	run := func() outcome {
+		if h.publication != "" {
+			existing, err := p.readPublication(h.publication)
+			if err != nil {
+				return outcome{err: err}
+			}
+			if existing.Status == "published" {
+				value, err := p.publicationBinding(h.publication, operation, request, nil)
+				if err != nil {
+					return outcome{err: err}
+				}
+				return outcome{status: http.StatusOK, body: value.Result}
+			}
+		}
 		ids, err := tasks()
 		if err != nil {
 			return outcome{err: err}

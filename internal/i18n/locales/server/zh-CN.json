@@ -82,5 +82,6 @@
   "remote.launch_no_executor_reconciled": "已恢复之前的领取回执，并确认尚未启动 Agent。该执行归属已结束；可重试命令：{{.V0}}",
   "remote.launch_operation_id_invalid": "--operation-id 需要有效且稳定的操作标识",
   "remote.local_execution_required": "此操作需要执行主机保留的精确执行记录",
-  "remote.execution_dismissed": "已退出并关闭任务执行：{{.V0}}"
+  "remote.execution_dismissed": "已退出并关闭任务执行：{{.V0}}",
+  "remote.review_material_conflict": "私有联合评审材料损坏，或与已检查的操作不一致"
 }

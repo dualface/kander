@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"reflect"
@@ -34,7 +35,15 @@ func (p *project) writer(run, client, secret string) (reviewWriter, error) {
 	return writer, nil
 }
 func (p *project) validateWriter(tx *board.Transaction, writer reviewWriter) error {
-	for id, generation := range writer.Generations {
+	remaining, err := board.ReviewRemainingMembersInTransaction(tx, slices.Sorted(maps.Keys(writer.Generations)))
+	if err != nil {
+		return err
+	}
+	if len(remaining) == 0 {
+		return apiError(api.CodeLeaseInvalid, "review has no remaining members")
+	}
+	for _, id := range remaining {
+		generation := writer.Generations[id]
 		snapshot, err := tx.Snapshot(id)
 		if err != nil {
 			return err
@@ -170,6 +179,9 @@ func (s *Server) reviewRuntimeRoutes(mux *http.ServeMux) {
 			}
 			extension := board.TransactionExtension{Groups: []string{serviceGroup}, Tasks: run.TaskIDs, Before: func(tx *board.Transaction) error { return p.validateWriter(tx, writer) }}
 			extension.After = func(tx *board.Transaction) error {
+				if err := p.validateWriter(tx, writer); err != nil {
+					return err
+				}
 				data, err := json.Marshal(tx.OperationResult())
 				if err != nil {
 					return err

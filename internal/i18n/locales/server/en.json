@@ -82,5 +82,6 @@
   "remote.launch_no_executor_reconciled": "Recovered the previous claim and verified no executor was launched. Its lease is ended; retry the command: {{.V0}}",
   "remote.launch_operation_id_invalid": "--operation-id requires a valid stable operation identity",
   "remote.local_execution_required": "This operation requires the exact retained execution on its owning host",
-  "remote.execution_dismissed": "Dismissed task execution: {{.V0}}"
+  "remote.execution_dismissed": "Dismissed task execution: {{.V0}}",
+  "remote.review_material_conflict": "The private joint-review material is damaged or differs from the inspected operation"
 }

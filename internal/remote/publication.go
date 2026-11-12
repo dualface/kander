@@ -47,12 +47,15 @@ func (s *Session) publicationPayload(operation string, value any) (json.RawMessa
 // and asks other holders to confirm the exact prepared material. Pending
 // confirmations are durable and do not publish any card evidence.
 func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload any, tasks []string) (*client.Claim, error) {
-	if len(tasks) <= 1 {
-		return s.ClaimsFor(tasks)
-	}
 	raw, err := s.publicationPayload(operation, payload)
 	if err != nil {
 		return nil, err
+	}
+	if proof, found, err := s.completedReviewPublication(ctx, operation, raw); err != nil || found {
+		return proof, err
+	}
+	if len(tasks) <= 1 {
+		return s.ClaimsFor(tasks)
 	}
 	members := make([]api.PublicationMember, 0, len(tasks))
 	for _, id := range slices.Sorted(slices.Values(tasks)) {
@@ -75,6 +78,10 @@ func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload
 		}
 		return s.ClaimsFor(ids)
 	}
+	raw, err = s.freezePublicationMaterial(operation, raw, members)
+	if err != nil {
+		return nil, err
+	}
 	identity, err := json.Marshal(struct {
 		Operation string
 		Payload   json.RawMessage
@@ -85,12 +92,15 @@ func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload
 	}
 	digest := sha256.Sum256(identity)
 	id := "review-" + hex.EncodeToString(digest[:])
+	if _, err := s.publicationHistory(operation, raw, id); err != nil {
+		return nil, err
+	}
 	prepared, err := s.Project.PreparePublication(ctx, api.PublicationPrepare{ID: id, Operation: operation, Payload: raw, Members: members})
 	if err != nil {
 		return nil, err
 	}
 	if prepared.Status == "published" {
-		return &client.Claim{PublicationID: id}, nil
+		return &client.Claim{PublicationID: id, PublicationPayload: raw}, nil
 	}
 	var pending []string
 	for _, member := range members {
@@ -115,7 +125,7 @@ func (s *Session) ReviewAuthority(ctx context.Context, operation string, payload
 	if len(pending) > 0 {
 		return nil, &api.Error{Code: api.CodeEvidenceIncomplete, Message: "publication " + id + " awaits holder confirmation for " + strings.Join(pending, ", ")}
 	}
-	return &client.Claim{PublicationID: id}, nil
+	return &client.Claim{PublicationID: id, PublicationPayload: raw}, nil
 }
 
 // ConfirmReviewPublication confirms only the credential available to this

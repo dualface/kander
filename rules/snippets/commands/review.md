@@ -62,3 +62,13 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 With a server binding, a review operation over several claimed cards first prepares immutable material and each member's exact task revision and execution generation. Each holder independently confirms its member. `review confirm` reads the prepared publication and uses only the calling process's execution credential; it cannot borrow a successor's generation. Read the material before confirming. A changed task, expired lease or takeover invalidates the prepared authority and requires new coordination.
 
 A coordinator may publish that exact material after all confirmations. The service checks the whole set inside the same redo transaction that publishes the member copies and completed operation receipt. A partial set publishes no card evidence and survives server restart. Retrying an already completed publication returns its saved result. The server neither runs Git nor launches a reviewer or agent.
+
+## Distributed historical resolution and member changes
+
+The `extend-plan` operation with `resolve_batch` reads a service snapshot of the plan, historical batch, report hashes, membership and required Git edges. The client fetches missing commits from the common remote and verifies ancestry locally. The service compares the exact inspected originals again in the resolution transaction, then publishes the plan copies, audit and receipt atomically under current-holder or joint authority. Historical CWD bytes remain unchanged; they identify old evidence rather than the client's checkout.
+
+Joint retries preserve the original verified payload while it waits for confirmations. Rechecking the same immutable Git edges at another time does not create a new proposal solely because the verification timestamp changed. The client sends the exact material each holder confirmed. A substantive fact, revision or generation change requires a new proposal.
+
+An audited terminal member exclusion lets runtime uploads continue for the remaining live generations. It does not exempt a member that was merely taken over, lost, or completed without an exclusion. Final publication still needs current remaining-holder authority and never rewrites an excluded card.
+
+An already published operation replays its immutable result even if publication advanced the card versions or a member later left. Replay validates the original operation and material and performs no producer write. A still-prepared operation continues to require current confirmations; an old approval never authorizes another generation.

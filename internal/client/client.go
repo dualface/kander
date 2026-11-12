@@ -50,11 +50,12 @@ func (c *Client) ClientID() string { return c.clientID }
 
 // Claim is the context a holder presents on every write of a claimed task.
 type Claim struct {
-	ReviewWriter  string
-	PublicationID string
-	Members       map[string]api.ClaimProof
-	Token         string
-	Generation    uint64
+	ReviewWriter       string
+	PublicationPayload json.RawMessage
+	PublicationID      string
+	Members            map[string]api.ClaimProof
+	Token              string
+	Generation         uint64
 }
 
 // NewKey returns a fresh idempotency key.
@@ -77,6 +78,12 @@ type call struct {
 
 func (c *Client) do(ctx context.Context, in call, out any) error {
 	var payload []byte
+	if in.claim != nil && in.claim.PublicationID != "" && len(in.claim.PublicationPayload) != 0 {
+		if !strings.Contains(in.path, "/reviews/") || !json.Valid(in.claim.PublicationPayload) {
+			return errors.New("frozen publication payload requires a review operation")
+		}
+		in.body = in.claim.PublicationPayload
+	}
 	if in.body != nil {
 		var err error
 		if payload, err = json.Marshal(in.body); err != nil {

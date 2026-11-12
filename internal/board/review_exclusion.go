@@ -115,6 +115,12 @@ func ReviewRemainingMembers(root string, ids []string) (remaining []string, err 
 	return remaining, err
 }
 
+// ReviewRemainingMembersInTransaction applies the audited exclusion records
+// while the caller already holds the review control group and member locks.
+func ReviewRemainingMembersInTransaction(tx *Transaction, ids []string) ([]string, error) {
+	return withoutExcluded(tx, ids)
+}
+
 func withoutExcluded(tx *Transaction, ids []string) ([]string, error) {
 	remaining := make([]string, 0, len(ids))
 	for _, id := range ids {

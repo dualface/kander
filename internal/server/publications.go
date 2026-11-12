@@ -62,6 +62,9 @@ func (p *project) publicationBinding(id, operation string, request any, tasks []
 	if value.Operation != operation || value.Digest != digest {
 		return value, apiError(api.CodeEvidenceIncomplete, "publication material differs from the confirmed operation")
 	}
+	if value.Status == "published" {
+		return value, nil
+	}
 	members := make([]string, len(value.Members))
 	for i, member := range value.Members {
 		members[i] = member.TaskID

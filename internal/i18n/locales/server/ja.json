@@ -82,5 +82,6 @@
   "remote.launch_no_executor_reconciled": "以前の取得記録を復元し、Agent が未起動であることを確認しました。リースは終了しました。コマンドを再試行できます: {{.V0}}",
   "remote.launch_operation_id_invalid": "--operation-id には有効で安定した操作識別子が必要です",
   "remote.local_execution_required": "この操作には所有ホストに保持された正確な実行記録が必要です",
-  "remote.execution_dismissed": "タスク実行を終了して閉じました: {{.V0}}"
+  "remote.execution_dismissed": "タスク実行を終了して閉じました: {{.V0}}",
+  "remote.review_material_conflict": "非公開の共同レビュー資料が破損しているか、確認した操作と一致しません"
 }

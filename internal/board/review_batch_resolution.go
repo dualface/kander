@@ -155,11 +155,18 @@ func ReviewBatchResolutionEdges(root string, x ReviewPlanExtension) (edges []Rev
 // ResolveReviewBatch records a resolution in the plan and in plan-history. The
 // plan keeps its batches and its seal, and no run or batch record changes.
 func ResolveReviewBatch(root string, x ReviewPlanExtension, git ReviewResolutionGit) error {
+	return ResolveReviewBatchWithTransaction(root, x, git)
+}
+
+// ResolveReviewBatchWithTransaction publishes the resolution and service
+// authority/receipt under the same locks and redo record.
+func ResolveReviewBatchWithTransaction(root string, x ReviewPlanExtension, git ReviewResolutionGit, extensions ...TransactionExtension) error {
 	ids, err := resolutionScope(root, x)
 	if err != nil {
 		return err
 	}
 	return WithTransaction(root, reviewScope(ids, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(map[string]string{"plan_id": x.PlanID}) }()
 		p, facts, err := resolutionEntry(tx, x)
 		if err != nil {
 			return err
@@ -187,7 +194,7 @@ func ResolveReviewBatch(root string, x ReviewPlanExtension, git ReviewResolution
 			return err
 		}
 		return tx.PutGroup(reviewControlGroup, planName(p.PlanID), reviewJSON(p))
-	})
+	}, extensions...)
 }
 
 func resolvedBatch(p ReviewPlan, id string) *ReviewBatchResolution {

@@ -34,6 +34,18 @@ func (s *Server) reviewActionRoutes(mux *http.ServeMux) {
 	s.projectRoute(mux, "POST "+base+"/actions/{action}", func(p *project, r *http.Request) outcome {
 		key, action, h := r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("action"), holderOf(r)
 		switch action {
+		case "resolution-facts":
+			var request board.ReviewPlanExtension
+			if err := decode(r, &request); err != nil {
+				return outcome{err: err}
+			}
+			return p.resolutionFacts(request)
+		case "resolve-batch":
+			var request api.ReviewResolution
+			if err := decode(r, &request); err != nil {
+				return outcome{err: err}
+			}
+			return p.resolveReview(key, request, h)
 		case "extend-plan":
 			var request board.ReviewPlanExtension
 			if err := decode(r, &request); err != nil {
