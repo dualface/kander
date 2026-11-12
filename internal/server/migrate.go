@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -104,7 +102,7 @@ func (s *Server) ImportContext(ctx context.Context, name, remote, source string)
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			data, err := readImportFile(source, rel)
+			data, err := fs.ReadRegularFile(source, filepath.Join(source, filepath.FromSlash(rel)))
 			if err != nil {
 				return err
 			}
@@ -209,7 +207,7 @@ func snapshotTree(root string) ([]string, string, error) {
 	slices.Sort(files)
 	h := sha256.New()
 	for _, rel := range files {
-		data, err := readImportFile(root, rel)
+		data, err := fs.ReadRegularFile(root, filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
 			return nil, "", err
 		}
@@ -217,30 +215,4 @@ func snapshotTree(root string) ([]string, string, error) {
 		fmt.Fprintf(h, "%s\x00%x\n", rel, sum)
 	}
 	return files, hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func readImportFile(root, rel string) ([]byte, error) {
-	path := filepath.Join(root, filepath.FromSlash(rel))
-	if !strings.HasPrefix(rel, ".kander/locks/") || !strings.HasSuffix(rel, ".lock") {
-		return fs.ReadRegularFile(root, path)
-	}
-	file, err := fs.OpenRegularFileIfExists(root, path)
-	if err != nil {
-		return nil, err
-	}
-	if file == nil {
-		return nil, &os.PathError{Op: "open", Path: path, Err: os.ErrNotExist}
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-	// Windows rejects even an EOF read through a second handle in a locked
-	// range. Retain the empty file and its digest from the validated handle's
-	// metadata while the source board's exclusive lock remains held.
-	if info.Size() == 0 {
-		return []byte{}, nil
-	}
-	return io.ReadAll(file)
 }

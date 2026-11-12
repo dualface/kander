@@ -35,7 +35,7 @@ func TestImportSnapshotPreservesFilesWhileTheSourceLockIsHeld(t *testing.T) {
 			t.Fatalf("locked snapshot lost a file or changed its digest: %v", after)
 		}
 		for rel, expected := range map[string]string{".kander/locks/board.lock": "", other: "original bytes\n"} {
-			data, err := readImportFile(root, rel)
+			data, err := fs.ReadRegularFile(root, filepath.Join(root, filepath.FromSlash(rel)))
 			if err != nil || string(data) != expected {
 				t.Fatalf("copy %s while locked: %q %v", rel, data, err)
 			}

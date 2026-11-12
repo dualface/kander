@@ -55,7 +55,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: go test -p 1 -count=1 -timeout 5m ./internal/server -run '^(TestImport.*|TestOfflineMaintenance.*|TestMaintainCommand.*|TestIssueResult.*)$'
+        run: go test -p 1 -count=1 -timeout 5m ./internal/fs ./internal/server -run '^(TestWindowsReadingLockedFilesPreservesEmptyAndNonemptySemantics|TestImport.*|TestOfflineMaintenance.*|TestMaintainCommand.*|TestIssueResult.*)$'
       - name: Concurrent lock and launcher regressions
         env:
           TMPDIR: ${{ runner.temp }}

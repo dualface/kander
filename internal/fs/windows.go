@@ -435,19 +435,21 @@ func deleteHandle(handle windows.Handle, path string, required bool) error {
 	return nil
 }
 
-func handleFileSize(handle windows.Handle) int64 {
+func readHandle(handle windows.Handle, path string) ([]byte, error) {
 	var info windows.ByHandleFileInformation
 	if err := windows.GetFileInformationByHandle(handle, &info); err != nil {
-		return 0
+		return nil, wrap("stat", path, err)
 	}
-	return int64(uint64(info.FileSizeHigh)<<32 | uint64(info.FileSizeLow))
-}
-
-func readHandle(handle windows.Handle, path string) ([]byte, error) {
+	size := int64(uint64(info.FileSizeHigh)<<32 | uint64(info.FileSizeLow))
+	// A zero-length regular file has no bytes to read. Windows rejects even an
+	// EOF read through another handle when an exclusive byte-range lock is held.
+	if size == 0 {
+		return nil, nil
+	}
 	scratch := acquireReadScratch()
 	defer releaseReadScratch(scratch)
 	buf := *scratch
-	chunks := destForSize(handleFileSize(handle))
+	chunks := destForSize(size)
 	for {
 		var done uint32
 		err := windows.ReadFile(handle, buf, &done, nil)
