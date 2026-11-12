@@ -51,6 +51,7 @@ func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*confi
 		t.Fatal(err)
 	}
 	text := strings.ReplaceAll(card.Text, "<FILL_IN>", "filled")
+	text = strings.Replace(text, "- TASK_BRANCH:", "- TASK_BRANCH: remote-fixture-branch", 1)
 	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\n", 1)
 	card, err = session.Project.PutDocument(t.Context(), "", card.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: card.Revision}, nil)
 	if err != nil {

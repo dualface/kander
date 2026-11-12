@@ -53,3 +53,11 @@ kander notify [--pane HERDR-PANE-ID] [--timeout SECONDS] (--message TEXT | --mes
 - "target agent busy, not delivered" after the probe retries; both reasons when direct delivery and recovery fail; dispatch conflicts per `snippets/commands/dispatch.md`.
 - A card in `review/` that belongs to a task group or carries a binding, with no dispatch option: the error gives the `--kind` usage. `notify` never turns such a message into a fix dispatch.
 - A missing or doubled message, a timeout of 60 seconds or less, a missing task ID, or an unknown option is a usage error.
+
+## Distributed requests
+
+With a configured server, notify queues a generation-bound collaboration request for the owning worker and prints its JSON state. A queued or accepted request is not a business dispatch receipt. Dispatch options freeze the typed intent and inspected card revision; reuse the ID to inspect/retry the same material, and use a new ID after changing it. Relative acceptance windows use the service clock and are bounded to 24 hours. A retry retains the original deadline.
+
+The worker reserves delivery only while that version and generation remain current. Stale or expired proposals are rejected without typing. Formal preparation by the holder verifies the original proposal and acknowledges it in the dispatch transaction. Inspect the full request with `kander request show <task-id> <request-id> --json`; do not act on a superseded request or one for another execution generation.
+
+Before transport the client saves a private operation receipt. A lost response is reconciled against the original request after restart, including when a successor now holds the task. It never silently retargets pending material. An uncertain terminal attempt remains recorded and is not automatically repeated. A pane override must match the current private local execution; foreign pane addresses are refused before any terminal operation.

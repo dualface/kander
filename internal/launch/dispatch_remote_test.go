@@ -98,6 +98,11 @@ func TestRemoteDispatchCLIUsesHolderAuthorityAndProposesForForeignHolder(t *test
 	if err := json.Unmarshal([]byte(out), &request); err != nil || request.Status != api.RequestOpen || request.Dispatch == nil || request.CardRevision == 0 {
 		t.Fatalf("proposal: %s %v", out, err)
 	}
+	code, retryOut := captureStdout(t, func() int { return RunDispatch([]string{"prepare", path}) })
+	var same api.CollabRequest
+	if err := json.Unmarshal(retryOut, &same); code != 0 || err != nil || same.ID != request.ID {
+		t.Fatalf("proposal replay: %d %s %v", code, retryOut, err)
+	}
 	if _, err := project.Dispatch(t.Context(), card.TaskID, input.ID); !api.IsCode(err, api.CodeNotFound) {
 		t.Fatalf("foreign proposal became a dispatch: %v", err)
 	}

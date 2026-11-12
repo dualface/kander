@@ -1,13 +1,12 @@
 package server
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -16,10 +15,8 @@ import (
 
 var requestKinds = []string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}
 
-func requestID(key string) string {
-	sum := sha256.Sum256([]byte(key))
-	return "req-" + hex.EncodeToString(sum[:8])
-}
+func requestID(key string) string { return api.CollaborationRequestID(key) }
+
 func requestName(task, id string) string { return filepath.Join("requests", task, id+".json") }
 func requestDir(task string) string      { return servicePath("requests", task) }
 func (p *project) readRequests(task string) ([]api.CollabRequest, error) {
@@ -85,6 +82,9 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 	if !slices.Contains(requestKinds, input.Kind) || !api.ValidIdentity(input.FromClient) || strings.TrimSpace(input.Message) == "" || len(input.Message) > 64<<10 {
 		return outcome{err: apiError(api.CodeInvalidRequest, "request needs kind, client and a message of at most 64 KiB")}
 	}
+	if input.AcceptWithin != 0 && (input.Dispatch == nil || input.AcceptWithin <= 0 || input.AcceptWithin > api.DurationOf(24*time.Hour) || !input.Dispatch.CreatedAt.IsZero() || !input.Dispatch.ConfirmBy.IsZero()) {
+		return outcome{err: apiError(api.CodeInvalidRequest, "relative acceptance window requires an unstamped dispatch and a duration of at most 24 hours")}
+	}
 	normalized, err := board.NormalizeTaskID(id)
 	if err != nil {
 		return outcome{err: err}
@@ -98,6 +98,9 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 			return request, err
 		}
 		if input.Dispatch != nil {
+			if input.Dispatch.Message != input.Message {
+				return request, apiError(api.CodeInvalidRequest, "dispatch proposal message differs from its visible request")
+			}
 			if input.Dispatch.TaskID != normalized || input.CardRevision == 0 || input.CardRevision != task.Revision {
 				return request, apiError(api.CodeRevisionConflict, "dispatch request must bind the inspected card version")
 			}
@@ -116,8 +119,29 @@ func (p *project) createRequest(key, id string, input api.NewCollabRequest) outc
 		if claim.Generation != input.TargetGeneration || !p.server.now().Before(claim.ExpiresAt) {
 			return request, apiError(api.CodeLeaseInvalid, "request target generation is not live")
 		}
+		if input.Dispatch != nil {
+			previous, err := p.readRequests(normalized)
+			if err != nil {
+				return request, err
+			}
+			for _, old := range previous {
+				if old.Dispatch == nil || old.Dispatch.ID != input.Dispatch.ID {
+					continue
+				}
+				if old.FromClient != input.FromClient || old.TargetGeneration != input.TargetGeneration || old.CardRevision != input.CardRevision || old.AcceptWithin != input.AcceptWithin || !sameRequestedDispatch(old, input) {
+					return request, apiError(api.CodeIdempotencyMismatch, "dispatch ID already identifies another immutable proposal")
+				}
+				return old, nil
+			}
+		}
 		now := p.server.now()
-		return api.CollabRequest{Dispatch: input.Dispatch, CardRevision: input.CardRevision, Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
+		dispatch := input.Dispatch
+		if dispatch != nil && input.AcceptWithin != 0 {
+			copy := *dispatch
+			copy.CreatedAt, copy.ConfirmBy = now, now.Add(input.AcceptWithin.Std())
+			dispatch = &copy
+		}
+		return api.CollabRequest{AcceptWithin: input.AcceptWithin, Dispatch: dispatch, CardRevision: input.CardRevision, Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
 	}, http.StatusCreated)
 }
 func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {
@@ -152,6 +176,14 @@ func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnsw
 		if answer.ExpectedRevision != 0 && answer.ExpectedRevision != request.Revision {
 			return request, apiError(api.CodeRevisionConflict, "request revision changed")
 		}
+		if request.Dispatch != nil && request.Status == api.RequestOpen && answer.Status == api.RequestAccepted {
+			if !request.Dispatch.ConfirmBy.IsZero() && !p.server.now().Before(request.Dispatch.ConfirmBy) {
+				return request, apiError(api.CodeEvidenceIncomplete, "dispatch proposal acceptance window has elapsed")
+			}
+			if _, err := tx.Expect(normalized, "", request.CardRevision); err != nil {
+				return request, err
+			}
+		}
 		if request.Status == answer.Status && request.Note == answer.Note {
 			return request, nil
 		}
@@ -181,4 +213,14 @@ func (p *project) stageSupersedeRequests(tx *board.Transaction, task string, gen
 		}
 	}
 	return nil
+}
+
+func sameRequestedDispatch(old api.CollabRequest, input api.NewCollabRequest) bool {
+	stored := *old.Dispatch
+	if input.AcceptWithin != 0 {
+		stored.CreatedAt, stored.ConfirmBy = time.Time{}, time.Time{}
+	}
+	left, _ := json.Marshal(stored)
+	right, _ := json.Marshal(input.Dispatch)
+	return string(left) == string(right)
 }

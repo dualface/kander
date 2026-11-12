@@ -312,6 +312,7 @@ const (
 // task. It targets one generation; a takeover supersedes the open requests of
 // the old generation instead of handing them to the new execution.
 type CollabRequest struct {
+	AcceptWithin     Duration             `json:"accept_within_ms,omitzero"`
 	Dispatch         *board.DispatchInput `json:"dispatch,omitempty"`
 	CardRevision     uint64               `json:"card_revision,omitzero"`
 	Revision         uint64               `json:"revision"`
@@ -329,6 +330,7 @@ type CollabRequest struct {
 
 // NewCollabRequest is POST .../tasks/{task}/requests.
 type NewCollabRequest struct {
+	AcceptWithin     Duration             `json:"accept_within_ms,omitzero"`
 	Dispatch         *board.DispatchInput `json:"dispatch,omitempty"`
 	CardRevision     uint64               `json:"card_revision,omitzero"`
 	Kind             string               `json:"kind"`

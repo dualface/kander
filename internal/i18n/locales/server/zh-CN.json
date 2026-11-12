@@ -60,5 +60,11 @@
   "remote.execution_holder_required": "此操作需要本机持有的有效任务凭据",
   "remote.worktree_recovery_required": "执行工作树存在不完整或冲突的 Git 状态；请保留工作树并检查已记录意图后再恢复",
   "remote.credential_stale": "旧执行不能替换更新代次的本机私有凭据指针",
-  "remote.credential_head_damaged": "本机私有执行代次索引损坏；请检查本机恢复记录"
+  "remote.credential_head_damaged": "本机私有执行代次索引损坏；请检查本机恢复记录",
+  "remote.request_timeout_bound": "请求的接受期限不能超过 24 小时",
+  "remote.foreign_pane_override": "指定 pane 必须属于本机的当前执行；请先检查或采用其当前会话",
+  "remote.dispatch_proposal_changed": "该派发 ID 已绑定其他不可变提案；请检查原提案或使用新 ID",
+  "remote.request_receipt_damaged": "本机私有请求回执损坏或属于其他客户端：{{.V0}}",
+  "remote.request_recovery_mismatch": "请求事实与已保存的目标不一致；请保留本机回执并检查服务端",
+  "remote.request_pending": "请求结果未确认。重试同一请求时会协调已保存操作 {{.V0}}；重复动作前请检查请求 {{.V1}}"
 }

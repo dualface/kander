@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -126,6 +127,11 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 		return fail(err)
 	}
 	command.CardRevision = current.Revision
+	if action == "prepare" {
+		if err := completeRemoteDispatchInput(ctx, session, cwd, command.Input); err != nil {
+			return fail(err)
+		}
+	}
 	credential, found, err := session.Credential(current.TaskID)
 	if err != nil {
 		return fail(err)
@@ -133,6 +139,28 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 	if !found || current.Claim == nil || current.Claim.ClientID != session.Client.ClientID() || current.Claim.ExecutionID != credential.ExecutionID {
 		if command.Input == nil || current.Claim == nil {
 			return fail(&api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.dispatch_holder_required")})
+		}
+		previous, err := session.Project.Requests(ctx, current.TaskID)
+		if err != nil {
+			return fail(err)
+		}
+		for _, candidate := range previous {
+			if candidate.Dispatch == nil || candidate.Dispatch.ID != command.Input.ID {
+				continue
+			}
+			stored := *candidate.Dispatch
+			if candidate.AcceptWithin != 0 && command.Input.CreatedAt.IsZero() && command.Input.ConfirmBy.IsZero() {
+				stored.CreatedAt, stored.ConfirmBy = time.Time{}, time.Time{}
+			}
+			left, _ := json.Marshal(stored)
+			right, _ := json.Marshal(command.Input)
+			if !bytes.Equal(left, right) {
+				return fail(&api.Error{Code: api.CodeIdempotencyMismatch, Message: config.Text("remote.dispatch_proposal_changed")})
+			}
+			if err := json.NewEncoder(os.Stdout).Encode(candidate); err != nil {
+				return fail(err)
+			}
+			return 0
 		}
 		kind := api.RequestSync
 		if command.Input.Kind == "fix" {
@@ -147,11 +175,6 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 			return fail(err)
 		}
 		return 0
-	}
-	if action == "prepare" {
-		if err := completeRemoteDispatchInput(ctx, session, cwd, command.Input); err != nil {
-			return fail(err)
-		}
 	}
 	value, err := session.Project.DispatchAction(ctx, client.NewKey(), current.TaskID, action, command, *credential.Claim())
 	if err != nil {
@@ -202,6 +225,25 @@ func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, c
 	if err != nil && !api.IsCode(err, api.CodeNotFound) {
 		return err
 	}
+	proposals, err := session.Project.Requests(ctx, input.TaskID)
+	if err != nil {
+		return err
+	}
+	for _, proposal := range proposals {
+		if proposal.Dispatch == nil || proposal.Dispatch.ID != input.ID || proposal.Dispatch.Evidence.WrapUp == nil {
+			continue
+		}
+		old := proposal.Dispatch.Evidence.WrapUp.Git
+		if w.Git.ReviewBase == "" {
+			w.Git.ReviewBase = old.ReviewBase
+		}
+		if w.Git.ReviewTarget == "" {
+			w.Git.ReviewTarget = old.ReviewTarget
+		}
+		if w.Git.VerifiedAt.IsZero() {
+			w.Git.VerifiedAt = old.VerifiedAt
+		}
+	}
 	edge, err := session.Project.DispatchRange(ctx, input.TaskID)
 	if err != nil {
 		return err
@@ -220,7 +262,9 @@ func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, c
 		return err
 	}
 	w.Git.CWD = "project:" + session.Info.ID
-	w.Git.VerifiedAt = time.Now().UTC()
+	if w.Git.VerifiedAt.IsZero() {
+		w.Git.VerifiedAt = time.Now().UTC()
+	}
 	return nil
 }
 

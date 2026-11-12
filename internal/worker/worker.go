@@ -17,10 +17,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -307,7 +309,28 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 			}
 			task = &t
 		}
+		if r.Dispatch != nil && !r.Dispatch.ConfirmBy.IsZero() && !task.ObservedAt.Before(r.Dispatch.ConfirmBy) {
+			_, err := project.AnswerRequest(ctx, "expired-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: "dispatch proposal acceptance window elapsed; a new inspected proposal needs a new ID"}, *c.Claim())
+			if err != nil {
+				log.Warn("rejecting expired dispatch proposal failed", "request", r.ID, "error", err)
+			}
+			continue
+		}
+		if r.Dispatch != nil && r.CardRevision != task.Revision {
+			_, err := project.AnswerRequest(ctx, "stale-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestRejected, ExpectedRevision: r.Revision, Note: "dispatch proposal targets an earlier card version; inspect the current task before creating a new proposal"}, *c.Claim())
+			if err != nil {
+				log.Warn("rejecting stale dispatch proposal failed", "request", r.ID, "error", err)
+			}
+			continue
+		}
 		window, session := board.MetadataFrom(task.Text, board.FieldWindow), board.MetadataFrom(task.Text, board.FieldSession)
+		if window == "" || session == "" {
+			continue
+		}
+		if c.Window != "" && c.Window != window || c.Session != "" && c.Session != session {
+			log.Warn("request routing differs from this execution's local facts", "request", r.ID)
+			continue
+		}
 		accepted, err := project.AnswerRequest(ctx, "delivery-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: "automatic delivery reserved; outcome is uncertain until observed"}, *c.Claim())
 		if err != nil {
 			log.Warn("reserving request delivery failed", "request", r.ID, "error", err)
@@ -318,7 +341,17 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 			log.Error("request delivery intent could not be saved", "request", r.ID, "error", err)
 			continue
 		}
-		if err := w.o.Deliver(window, session, requestLine(c.TaskID, r)); err != nil {
+		line := requestLine(c.TaskID, r)
+		language := board.MetadataFrom(task.Text, board.FieldLanguage)
+		if language == "" {
+			if cfg, err := config.Load(false); err == nil {
+				language = cfg.AgentLanguage
+			}
+		}
+		if reminder := config.LanguageReminder(language); reminder != "" {
+			line += " " + reminder
+		}
+		if err := w.o.Deliver(window, session, line); err != nil {
 			log.Warn("request delivery outcome unresolved; automatic retry suppressed", "request", r.ID, "error", err)
 			continue
 		}
@@ -333,14 +366,12 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 // the remote message never reach the pane.
 func requestLine(task string, r api.CollabRequest) string {
 	message := strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
 			return ' '
 		}
 		return r
 	}, r.Message)
-	if r.Dispatch != nil {
-		message += fmt.Sprintf("; inspect the proposed dispatch and card version: kander request show %s %s --json", task, r.ID)
-	}
+	message += fmt.Sprintf("; inspect the full request and its proposed material: kander request show %s %s --json; do not act on superseded requests or another execution generation", task, r.ID)
 	return fmt.Sprintf("# kander-request %s %s for %s from %s: %s (answer: kander request answer %s %s done|rejected [note])",
 		r.ID, r.Kind, task, r.FromClient, message, task, r.ID)
 }

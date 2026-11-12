@@ -94,6 +94,14 @@ func RunRequest(args []string) int {
 	if len(args) < 3 || !slices.Contains([]string{api.RequestFix, api.RequestSync, api.RequestReview, api.RequestStop}, args[1]) {
 		return requestUsage()
 	}
+	logical := struct{ Task, Kind, Message string }{args[0], args[1], strings.Join(args[2:], " ")}
+	if recovered, found, err := s.RecoverRequest(ctx, logical); found || err != nil {
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, recovered.ID, "g"+strconv.FormatUint(recovered.TargetGeneration, 10), recovered.Status)
+		return 0
+	}
 	task, err := s.Project.Show(ctx, args[0])
 	if err != nil {
 		return fail(err)
@@ -101,7 +109,7 @@ func RunRequest(args []string) int {
 	if task.Claim == nil {
 		return fail(errors.New("task " + task.TaskID + " has no holder"))
 	}
-	r, err := s.Project.CreateRequest(ctx, client.NewKey(), task.TaskID, api.NewCollabRequest{Kind: args[1], Message: strings.Join(args[2:], " "), TargetGeneration: task.Claim.Generation})
+	r, err := s.SendRequest(ctx, client.NewKey(), task.TaskID, api.NewCollabRequest{Kind: args[1], Message: strings.Join(args[2:], " "), TargetGeneration: task.Claim.Generation}, logical)
 	if err != nil {
 		return fail(err)
 	}

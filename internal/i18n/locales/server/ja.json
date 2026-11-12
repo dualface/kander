@@ -60,5 +60,11 @@
   "remote.execution_holder_required": "この操作にはこのホストの有効なタスク資格情報が必要です",
   "remote.worktree_recovery_required": "実行ワークツリーの Git 状態が不完全か競合しています。保持したまま記録済みの意図を確認してから復旧してください",
   "remote.credential_stale": "古い実行は後続世代のローカル資格情報ポインターを置換できません",
-  "remote.credential_head_damaged": "ローカル実行世代インデックスが破損しています。復旧記録を確認してください"
+  "remote.credential_head_damaged": "ローカル実行世代インデックスが破損しています。復旧記録を確認してください",
+  "remote.request_timeout_bound": "リクエストの受理期限は 24 時間以内にしてください",
+  "remote.foreign_pane_override": "指定ペインはこのホストの現在の実行と一致する必要があります。先に現在のセッションを確認または採用してください",
+  "remote.dispatch_proposal_changed": "このディスパッチ ID は別の不変な提案に関連付けられています。元の提案を確認するか新しい ID を使用してください",
+  "remote.request_receipt_damaged": "ローカルのリクエスト記録が破損しているか別のクライアントに属しています: {{.V0}}",
+  "remote.request_recovery_mismatch": "リクエストの事実が保存済みの対象と一致しません。ローカル記録を保持してサーバーを確認してください",
+  "remote.request_pending": "リクエストの結果が未確認です。同じリクエストを再試行すると保存済み操作 {{.V0}} を照合します。処理を繰り返す前にリクエスト {{.V1}} を確認してください"
 }

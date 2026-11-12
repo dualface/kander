@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func init() {
@@ -111,8 +113,19 @@ func RunNotify(args []string) int {
 	if len(positional) != 1 {
 		return usageFail("launch.task_id_is_required")
 	}
-	if _, err := config.Load(false); err != nil {
+	cfg, err := config.Load(false)
+	if err != nil {
 		return fail(err)
+	}
+	if remote.Enabled(cfg) {
+		request, err := launch.NotifyRemote(positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions)
+		if err != nil {
+			return fail(err)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

@@ -65,7 +65,7 @@ func (h *harness) project(id string) *client.Project {
 
 // claimed creates a todo task, claims it for host-a, and stores the
 // credential the worker renews.
-func (h *harness) claimed(slug string) (*client.Project, remote.Credential) {
+func (h *harness) claimed(slug string, routing ...bool) (*client.Project, remote.Credential) {
 	ctx := h.t.Context()
 	p := h.project("host-a")
 	task, err := p.NewTask(ctx, "", api.NewTask{Type: "feature", Slug: slug, Title: slug, Language: "en"})
@@ -80,13 +80,23 @@ func (h *harness) claimed(slug string) (*client.Project, remote.Credential) {
 	if _, err = p.Move(ctx, "", task.TaskID, api.Move{State: "todo"}, nil); err != nil {
 		h.t.Fatal(err)
 	}
-	g, err := p.Claim(ctx, "", task.TaskID, api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"})
+	input := api.ClaimRequest{ClientID: "host-a", ExecutionID: "exec-a", Owner: "claude"}
+	if len(routing) != 0 && routing[0] {
+		input.Start = &api.StartInput{Window: "tmux:$1:@1:%1", Session: "claude local-session"}
+	}
+	g, err := p.Claim(ctx, "", task.TaskID, input)
 	if err != nil {
 		h.t.Fatal(err)
 	}
 	c := remote.Credential{
 		ServerURL: h.http.URL, ClientID: "host-a", ProjectID: p.ID(), TaskID: task.TaskID, ExecutionID: "exec-a",
 		Generation: g.Claim.Generation, Token: g.Token, RenewInterval: g.RenewInterval, TTL: g.TTL, RenewedAt: g.Claim.RenewedAt, AgentPID: 4242,
+	}
+	if input.Start != nil {
+		c.Window, c.Session = input.Start.Window, input.Start.Session
+		if _, err := p.Execution(ctx, "", task.TaskID, api.ExecutionUpdate{Action: api.ExecutionConfirm}, *c.Claim()); err != nil {
+			h.t.Fatal(err)
+		}
 	}
 	if err := remote.WriteCredential(h.home, c); err != nil {
 		h.t.Fatal(err)
@@ -205,7 +215,7 @@ func TestSecondWorkerExits(t *testing.T) {
 
 func TestWorkerDeliversRequestsOnce(t *testing.T) {
 	h := newHarness(t)
-	_, c := h.claimed("deliver")
+	_, c := h.claimed("deliver", true)
 	b := h.project("host-b")
 	r, err := b.CreateRequest(t.Context(), "", c.TaskID, api.NewCollabRequest{Kind: api.RequestFix, Message: "fix\nthe test", TargetGeneration: 1})
 	if err != nil {

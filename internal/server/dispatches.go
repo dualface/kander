@@ -17,12 +17,28 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 		if _, err := p.requireHolder(task, h); err != nil {
 			return outcome{err: err}
 		}
+		existing := false
+		if action == "prepare" && input.Input != nil {
+			_, err := board.ReadDispatch(p.board, task, input.Input.ID)
+			existing = err == nil
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return outcome{err: err}
+			}
+		}
+		var proposal *api.CollabRequest
 		guard := board.TransactionExtension{Groups: []string{serviceGroup}, Before: func(tx *board.Transaction) error {
 			if _, err := p.requireHolder(task, h); err != nil {
 				return err
 			}
 			if input.CardRevision != 0 {
 				if _, err := tx.Expect(task, "", input.CardRevision); err != nil {
+					return err
+				}
+			}
+			if action == "prepare" && !existing {
+				var err error
+				proposal, err = p.inspectDispatchProposal(tx, task, input, h)
+				if err != nil {
 					return err
 				}
 			}
@@ -39,6 +55,9 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 			dispatch, ok := tx.OperationResult().(board.Dispatch)
 			if !ok {
 				return apiError(api.CodeInternal, "dispatch producer omitted its transaction result")
+			}
+			if err := p.stagePreparedProposal(tx, proposal); err != nil {
+				return err
 			}
 			return p.stageOperationReceipt(tx, key, operation, input, dispatch)
 		}}

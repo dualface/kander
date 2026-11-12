@@ -172,3 +172,8 @@ func digestDelivery(value api.DeliveryEvidence) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
+
+// LocalCommit resolves a local baseline without trusting a ref as an option.
+func LocalCommit(ctx context.Context, dir string) (string, error) {
+	return gitCommand(ctx, dir, "rev-parse", "--verify", "HEAD^{commit}")
+}

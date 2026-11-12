@@ -60,5 +60,11 @@
   "remote.execution_holder_required": "This operation requires the live task credential of this host",
   "remote.worktree_recovery_required": "The execution worktree has partial or conflicting Git state; preserve it and inspect its recorded intent before recovery",
   "remote.credential_stale": "An older execution cannot replace the private credential pointer of a later generation",
-  "remote.credential_head_damaged": "The private execution generation index is damaged; inspect local recovery records"
+  "remote.credential_head_damaged": "The private execution generation index is damaged; inspect local recovery records",
+  "remote.request_timeout_bound": "The request acceptance window must not exceed 24 hours",
+  "remote.foreign_pane_override": "A pane override must match this execution on this host; inspect or adopt its current session first",
+  "remote.dispatch_proposal_changed": "A dispatch ID already identifies another immutable proposal; inspect it or use a new ID",
+  "remote.request_receipt_damaged": "The private request receipt is damaged or belongs to another client: {{.V0}}",
+  "remote.request_recovery_mismatch": "The request facts do not match the saved subject; preserve the local receipt and inspect the server",
+  "remote.request_pending": "Request outcome is unresolved. The saved operation {{.V0}} will be reconciled on the same request retry; inspect request {{.V1}} before repeating effects"
 }

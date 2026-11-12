@@ -72,7 +72,7 @@ func TestWorkerStopsLateAgentFactsWithoutRepeatingUncertainEffect(t *testing.T) 
 
 func TestWorkerDoesNotRepeatAnUncertainRequestDelivery(t *testing.T) {
 	h := newHarness(t)
-	_, credential := h.claimed("uncertain-delivery")
+	_, credential := h.claimed("uncertain-delivery", true)
 	sender := h.project("host-b")
 	request, err := sender.CreateRequest(t.Context(), "", credential.TaskID, api.NewCollabRequest{Kind: api.RequestFix, TargetGeneration: credential.Generation, Message: "check this once"})
 	if err != nil {
