@@ -131,13 +131,13 @@ func TestJournalLegacyPendingAndInitHint(t *testing.T) {
 					func() error { _, err := Scan(root); return err },
 				} {
 					err := read()
-					if err == nil || !strings.Contains(err.Error(), r.ID) || !strings.Contains(err.Error(), "kander init") {
+					if err == nil || !strings.Contains(err.Error(), r.ID) || !strings.Contains(err.Error(), "kander-server maintain --project NAME") {
 						t.Errorf("missing pending identity/hint: %v", err)
 					}
 				}
 				return 0
 			})
-			if partition == "" && !strings.Contains(stderr, "kander init") {
+			if partition == "" && !strings.Contains(stderr, "kander-server maintain --project NAME") {
 				t.Fatal("missing legacy layout hint")
 			}
 		})
