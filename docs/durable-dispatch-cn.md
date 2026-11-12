@@ -73,7 +73,7 @@ kander dispatch show <task-id> <id>
 |---|---|---|
 | `fix` | `working` $\to$ `review` | 绑定对应批次 ID、缺陷 ID 以及此前已存在的作者处置记录。 |
 | `sync` | `working` $\to$ `review` | 用于分支变基与环境同步。不接受审查缺陷绑定。 |
-| `wrap-up` | `working` $\to$ `done` | 绑定已封存的审查终态 Commit、Git 集成 Commit 与 develop 分支引用。 |
+| `wrap-up` | `working` $\to$ `done` | 绑定已封存的审查终态 Commit、Git 集成 Commit 与主线分支引用。 |
 
 ---
 
@@ -116,7 +116,7 @@ kander dispatch show <task-id> <id>
 
 ### 标准收尾派发
 
-将已审查通过的最终 Commit 与已集成进 develop 分支的 Commit 建立绑定：
+将已审查通过的最终 Commit 与已集成进主线分支的 Commit 建立绑定。主线分支由 `cwd` 所在检出（含其项目配置）的 `git.branch_mode` 决定：`main-develop`（默认）为 `develop`，`main-only` 为 `main`。`target_ref` 必须是 `refs/heads/<主线分支>` 或 `refs/remotes/origin/<主线分支>`；示例为 `main-develop`：
 
 ```json
 {

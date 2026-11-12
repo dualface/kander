@@ -81,7 +81,7 @@ kander dispatch show <task-id> <id>
 |---|---|---|
 | `fix` | `working` $\to$ `review` | Binds batch ID, finding IDs, and prior author disposition records. |
 | `sync` | `working` $\to$ `review` | Used for branch/rebase synchronization. Does not accept review finding bindings. |
-| `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and develop branch ref. |
+| `wrap-up` | `working` $\to$ `done` | Binds closed review target SHA, Git integration commit, and mainline branch ref. |
 
 ---
 
@@ -124,7 +124,7 @@ Fix dispatches enforce that the executor receives exact, structured review findi
 
 ### Standard Wrap-up
 
-Binds the closed review final commit with the integrated Git develop branch commit:
+Binds the closed review final commit with the commit integrated into the mainline branch. `git.branch_mode` of the checkout at `cwd` (its project overlay included) selects the mainline branch: `develop` for `main-develop` (the default), `main` for `main-only`. `target_ref` must be `refs/heads/<mainline>` or `refs/remotes/origin/<mainline>`; the example uses `main-develop`:
 
 ```json
 {
