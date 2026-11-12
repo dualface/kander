@@ -36,4 +36,7 @@ TypeOK == \A m \in Members :
 NoCompletion == ~ (\A m \in Members : state[m].done = 1)
 NoReviewedRecoveryCompletion == ~ (\A m \in Members :
     state[m].done = 1 /\ state[m].cycle = MaxCycle /\ state[m].recoverOwed = 1)
+NoReleasedRoleCompletion == ~ (\A m \in Members :
+    state[m].done = 1 /\ state[m].unplanned = 1 /\
+    state[m].unplannedReleased = 1 /\ state[m].required = 1 /\ state[m].closed > 0)
 ====

@@ -6,7 +6,6 @@ import (
 	"maps"
 	"os"
 	"slices"
-	"strings"
 	"testing"
 
 	obligations "github.com/dualface/kander/experiments/review-obligations"
@@ -53,16 +52,17 @@ func abstractObligations(s obligations.Member) obligationObservation {
 	drop := s.DropOwed == 1 && s.Closed <= s.DropFloor
 	recovery := s.RecoverOwed == 1 && !(s.Closed > s.RecoverFloor && s.ClosedCycle == s.Cycle)
 	hasRole := s.Required == 1 || s.Remembered == 1
-	unplanned := s.Unplanned == 1 && !(hasRole && s.Closed > 0 && s.ClosedCycle == s.Cycle)
+	unplanned := s.Unplanned == 1 && ((!hasRole && s.UnplannedReleased == 0) ||
+		hasRole && !(s.Closed > 0 && s.ClosedCycle == s.Cycle))
 	return obligationObservation{drop, recovery || unplanned, recovery || unplanned && hasRole}
 }
 
 func TestObligationRefinement(t *testing.T) {
-	bounds, count := obligations.Bounds{MaxCycle: 2, MaxBatch: 2}, 130
+	bounds, count := obligations.Bounds{MaxCycle: 2, MaxBatch: 2}, 128
 	switch os.Getenv("KANDER_OBLIGATION_REFINEMENT_FULL") {
 	case "":
 	case "1":
-		bounds, count = obligations.Bounds{MaxCycle: 3, MaxBatch: 3}, 1964
+		bounds, count = obligations.Bounds{MaxCycle: 3, MaxBatch: 3}, 1866
 	default:
 		t.Fatal("KANDER_OBLIGATION_REFINEMENT_FULL must be empty or 1")
 	}
@@ -70,14 +70,11 @@ func TestObligationRefinement(t *testing.T) {
 	if len(traces) != count {
 		t.Fatalf("state inventory changed: %d; re-audit coverage", len(traces))
 	}
-	checks, mismatches, unsafeCompletions := 0, 0, 0
-	gapStates := map[obligations.Member]bool{}
-	first := ""
+	checks, completions := 0, 0
 	for i, trace := range traces {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			f := newObligationFixture(t)
 			state := obligations.Initial(1)
-			releasedNoPlan := false
 			for n, event := range trace.steps {
 				next, ok := obligations.Step(state, 0, event, bounds)
 				if !ok {
@@ -86,11 +83,6 @@ func TestObligationRefinement(t *testing.T) {
 				if err := f.step(event); err != nil {
 					t.Fatalf("%v: %v", trace.steps[:n+1], err)
 				}
-				if event == "reset" && state[0].Plan == 0 {
-					releasedNoPlan = false
-				} else if event == "releaseRecovery" {
-					releasedNoPlan = true
-				}
 				state = next
 				got, err := f.observe()
 				if err != nil {
@@ -98,32 +90,20 @@ func TestObligationRefinement(t *testing.T) {
 				}
 				checks++
 				want := abstractObligations(state[0])
-				// Known gap: release clears the model's only no-plan marker.
-				// Production retains the record; a later required role revives
-				// its debt until a current-cycle required closure pays it. The
-				// history bit is deliberately outside the generated state.
-				s := state[0]
-				gap := releasedNoPlan && s.Unplanned == 0 && s.RecoverOwed == 0 &&
-					(s.Required == 1 || s.Remembered == 1) && !(s.Closed > 0 && s.ClosedCycle == s.Cycle)
-				if gap {
-					mismatches++
-					gapStates[s] = true
-					if first == "" {
-						first = fmt.Sprintf("%s: got %+v model %+v", strings.Join(trace.steps[:n+1], " -> "), got, want)
-					}
-					want.Recovery, want.RecoveryRole = true, true
-					if s.Done == 1 {
-						unsafeCompletions++
-					}
-				}
 				if got != want {
-					t.Fatalf("unknown correspondence change: %v got=%+v expected=%+v known_gap=%v", trace.steps[:n+1], got, want, gap)
+					t.Fatalf("correspondence mismatch: %v got=%+v expected=%+v", trace.steps[:n+1], got, want)
+				}
+				if state[0].Done == 1 {
+					completions++
+					if got.Drop || got.Recovery {
+						t.Fatalf("modeled completion retains production debt: %v %+v", trace.steps[:n+1], got)
+					}
 				}
 			}
 		})
 	}
-	t.Logf("states=%d prefix_checks=%d known_gap_checks=%d known_gap_states=%d model_only_completions=%d first=%s", len(traces), checks, mismatches, len(gapStates), unsafeCompletions, first)
-	if mismatches == 0 || unsafeCompletions == 0 {
-		t.Fatal("expected abstraction gap disappeared; re-audit before changing the result")
+	t.Logf("states=%d prefix_checks=%d debt_free_completions=%d", len(traces), checks, completions)
+	if completions == 0 {
+		t.Fatal("comparison never reached completion")
 	}
 }
