@@ -57,5 +57,8 @@
   "remote.wrap_up_identity_mismatch": "終了処理の意図の識別情報が一致しません",
   "remote.wrap_up_decision_conflict": "終了処理の承認は別の決定に関連付けられています",
   "remote.wrap_up_foreign_terminal": "別ホストの端末の終了処理をこのホストで観測できません",
-  "remote.execution_holder_required": "この操作にはこのホストの有効なタスク資格情報が必要です"
+  "remote.execution_holder_required": "この操作にはこのホストの有効なタスク資格情報が必要です",
+  "remote.worktree_recovery_required": "実行ワークツリーの Git 状態が不完全か競合しています。保持したまま記録済みの意図を確認してから復旧してください",
+  "remote.credential_stale": "古い実行は後続世代のローカル資格情報ポインターを置換できません",
+  "remote.credential_head_damaged": "ローカル実行世代インデックスが破損しています。復旧記録を確認してください"
 }

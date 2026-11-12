@@ -57,5 +57,8 @@
   "remote.wrap_up_identity_mismatch": "收尾意图身份不一致",
   "remote.wrap_up_decision_conflict": "收尾授权已绑定其他决定",
   "remote.wrap_up_foreign_terminal": "无法在本机确认其他主机终端的收尾退出事实",
-  "remote.execution_holder_required": "此操作需要本机持有的有效任务凭据"
+  "remote.execution_holder_required": "此操作需要本机持有的有效任务凭据",
+  "remote.worktree_recovery_required": "执行工作树存在不完整或冲突的 Git 状态；请保留工作树并检查已记录意图后再恢复",
+  "remote.credential_stale": "旧执行不能替换更新代次的本机私有凭据指针",
+  "remote.credential_head_damaged": "本机私有执行代次索引损坏；请检查本机恢复记录"
 }

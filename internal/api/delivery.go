@@ -10,6 +10,7 @@ import (
 // DeliveryEvidence records an authenticated holder's successful push and exact
 // remote-ref observation. The server stores these facts; it never runs Git.
 type DeliveryEvidence struct {
+	Purpose      string    `json:"purpose,omitempty"`
 	TaskID       string    `json:"task_id"`
 	ExecutionID  string    `json:"execution_id"`
 	Generation   uint64    `json:"generation"`

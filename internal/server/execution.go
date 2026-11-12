@@ -146,14 +146,14 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 				return nil
 			}
 		}
-		if u.Action == api.ExecutionAdopt {
+		if u.Action == api.ExecutionAdopt || u.Action == api.ExecutionWorkspace {
 			ownership := validate
 			validate = func(tx *board.Transaction) error {
 				if err := ownership(tx); err != nil {
 					return err
 				}
 				_, err := tx.Expect(id, current.Entry.State, u.ExpectedRevision)
-				if err == nil && !p.validObservationTicket(id, u.ExpectedRevision, claim.Generation, u.ObservationTicket) {
+				if u.Action == api.ExecutionAdopt && err == nil && !p.validObservationTicket(id, u.ExpectedRevision, claim.Generation, u.ObservationTicket) {
 					return apiError(api.CodeEvidenceIncomplete, "executor observation ticket is stale or belongs to another version")
 				}
 				return err
@@ -161,6 +161,12 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 		}
 		extension := p.taskTransaction(key, "execution:"+id, u, id, validate, &nextClaim, false)
 		switch u.Action {
+		case api.ExecutionWorkspace:
+			expected := "kander/" + p.info.ID + "/" + id + "/g" + strconv.FormatUint(claim.Generation, 10)
+			if p.info.Remote == "" || u.ExpectedRevision == 0 || u.Branch != expected {
+				return outcome{err: apiError(api.CodeEvidenceIncomplete, "workspace must name the current generation branch and inspected card revision")}
+			}
+			_, err = board.RecordExecutionBranchWithTransaction(p.board, entry, u.Branch, extension)
 		case api.ExecutionUnresolve:
 			_, err = board.UnresolveExecutionWithTransaction(p.board, entry, u.Window, u.Reason, extension)
 		case api.ExecutionAdopt:

@@ -141,7 +141,10 @@ func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (ap
 			if !found {
 				return api.Task{}, &api.Error{Code: api.CodeClaimRequired, Message: config.Text("remote.delivery_holder_required")}
 			}
-			dir, err := os.Getwd()
+			dir := credential.Worktree
+			if dir == "" {
+				dir, err = os.Getwd()
+			}
 			if err != nil {
 				return api.Task{}, err
 			}

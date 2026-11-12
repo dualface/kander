@@ -196,6 +196,9 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 // until the server releases the claim or the lease is lost; a lost credential
 // is kept, marked, so its worktree and branch stay for manual handling.
 type Credential struct {
+	Worktree      string       `json:"worktree,omitempty"`
+	Branch        string       `json:"branch,omitempty"`
+	BaseCommit    string       `json:"base_commit,omitempty"`
 	ResourceKind  string       `json:"resource_kind,omitempty"`
 	ServerURL     string       `json:"server_url"`
 	ClientID      string       `json:"client_id"`
@@ -302,16 +305,25 @@ func (s *Session) CoordinatorCredential(group string) (Credential, bool, error) 
 	return s.credentialFor(group, execution)
 }
 func (s *Session) credentialFor(task, execution string) (Credential, bool, error) {
+	var indexedGeneration uint64
 	if !api.ValidIdentity(task) || !api.ValidIdentity(s.Info.ID) {
 		return Credential{}, false, errors.New("invalid execution credential location")
 	}
 	dir := credentialDir(s.Home, s.Info.ID, task)
 	if execution == "" {
-		data, ok, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, "latest"))
-		if err != nil || !ok {
+		head, found, err := readCredentialHead(s.Home, dir)
+		if err != nil {
 			return Credential{}, false, err
 		}
-		execution = strings.TrimSpace(string(data))
+		if found {
+			execution, indexedGeneration = head.ExecutionID, head.Generation
+		} else {
+			data, ok, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, "latest"))
+			if err != nil || !ok {
+				return Credential{}, false, err
+			}
+			execution = strings.TrimSpace(string(data))
+		}
 	}
 	if !api.ValidIdentity(execution) {
 		return Credential{}, false, nil
@@ -327,6 +339,9 @@ func (s *Session) credentialFor(task, execution string) (Credential, bool, error
 	var c Credential
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Credential{}, false, errors.New("execution credential of " + task + " is damaged")
+	}
+	if indexedGeneration != 0 && c.Generation != indexedGeneration {
+		return Credential{}, false, errors.New(config.Text("remote.credential_head_damaged"))
 	}
 	if c.ProjectID != s.Info.ID || c.TaskID != task || c.ExecutionID != execution || s.ServerURL != "" && c.ServerURL != s.ServerURL || s.Client != nil && c.ClientID != s.Client.ClientID() {
 		return Credential{}, false, errors.New("execution credential identity does not match its private location")

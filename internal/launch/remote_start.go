@@ -114,6 +114,9 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
+	if session.Info.Remote != "" {
+		body += "\n\nThe current directory is the worktree and branch prepared for this execution generation. Use this worktree for implementation and keep all predecessor worktrees intact. Task documents and execution authority belong to the configured server project; do not create a local kanban directory.\n"
+	}
 	taskFile, err := createTaskFile(body, "kander-"+task.TaskID+"-start-", taskFileTrailer(paths))
 	if err != nil {
 		return result, err
@@ -164,6 +167,47 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 		result.Warnings = append(result.Warnings, t("remote.worker_start_failed", err.Error())+"\n")
 	}
 	own := *credential.Claim()
+	executionUpdate := func(u api.ExecutionUpdate) error {
+		ctx, cancel := call()
+		defer cancel()
+		_, err := session.Project.Execution(ctx, client.NewKey(), task.TaskID, u, own)
+		return err
+	}
+	if session.Info.Remote != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		baseline, workspaceErr := session.PublishBaseline(ctx, cwd, task.TaskID, "", credential)
+		var workspace remote.ExecutionWorktree
+		if workspaceErr == nil {
+			workspace, workspaceErr = session.PrepareWorktree(ctx, cwd, baseline.Commit, credential)
+		}
+		cancel()
+		if workspaceErr == nil {
+			project = workspace.Path
+			credential.Worktree, credential.Branch, credential.BaseCommit = workspace.Path, workspace.Branch, workspace.Base
+			plan, workspaceErr = prepareLaunch(launcher, project, "start")
+		}
+		if workspaceErr == nil {
+			workspaceErr = applyAgentDelivery(&plan, cfg, agentName)
+		}
+		if workspaceErr == nil {
+			plan.warning = func(message string) { result.Warnings = append(result.Warnings, message) }
+			inv, workspaceErr = launchInvocation(plan, *program, attachPrompt(&plan, args, prompt))
+			inv = withExecutionIdentity(plan, inv, execution)
+		}
+		if workspaceErr == nil {
+			workspaceErr = executionUpdate(api.ExecutionUpdate{Action: api.ExecutionWorkspace, Branch: workspace.Branch, ExpectedRevision: grant.Task.Revision})
+		}
+		if workspaceErr == nil {
+			previous, workspaceErr = sessionDiscoverSnapshot(sessionDef, task.TaskID, discoverSession, program, project, plan.launchTimeout)
+		}
+		if workspaceErr != nil {
+			if rollbackErr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionRollback}); rollbackErr != nil {
+				return result, errors.Join(workspaceErr, rollbackErr)
+			}
+			_ = remote.RemoveCredential(session.Home, credential)
+			return result, workspaceErr
+		}
+	}
 	promptAttempted := false
 	plan.beforePrompt = func() error { promptAttempted = true; return nil }
 	plan.judge = func() launchVerdict {
@@ -183,13 +227,6 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			return verdictKeep
 		}
 		return verdictCleanup
-	}
-
-	executionUpdate := func(u api.ExecutionUpdate) error {
-		ctx, cancel := call()
-		defer cancel()
-		_, err := session.Project.Execution(ctx, client.NewKey(), task.TaskID, u, own)
-		return err
 	}
 
 	if !plan.capabilities().Container {
@@ -249,7 +286,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	launchStart = nowFn()
 	// launchAgent starts the agent in the parent of root; the server-mode
 	// root is only that anchor, never a board.
-	outcome, err := launchAgent(plan, filepath.Join(project, "kanban"), name, inv, location, paneCB, &agentSession, true)
+	outcome, err := launchAgent(plan, filepath.Join(project, "task-context"), name, inv, location, paneCB, &agentSession, true)
 	result.TaskID, result.Size, result.Agent = task.TaskID, kind, agentName
 	result.Plan, result.Outcome = plan, outcome
 	if err != nil {

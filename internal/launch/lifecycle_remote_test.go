@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,10 +18,13 @@ import (
 	"github.com/dualface/kander/internal/server"
 )
 
-func remoteLifecycleFixture(t *testing.T, slug string) (*config.Config, *remote.Session, api.Task, string, string) {
+func remoteLifecycleFixture(t *testing.T, slug string, origin ...string) (*config.Config, *remote.Session, api.Task, string, string) {
 	t.Helper()
 	fakeRoot, _, _ := setupBoard(t)
 	cwd := t.TempDir()
+	if len(origin) != 0 {
+		lifecycleGit(t, cwd, "clone", "--branch", "v2", origin[0], cwd)
+	}
 	t.Chdir(cwd)
 	t.Setenv("KANBAN_LAUNCH_CWD", cwd)
 	forbidden := filepath.Join(cwd, "forbidden-board")
@@ -136,5 +140,81 @@ func TestRemoteLateLaunchFailureKeepsExecutorProgressAndRefusesRelaunch(t *testi
 	}
 	if _, err := os.Stat(forbidden); !os.IsNotExist(err) {
 		t.Fatalf("start touched a local board: %v", err)
+	}
+}
+
+func lifecycleGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid"}, args...)...)
+	data, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Git %v: %s: %v", args, data, err)
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func TestRemoteStartCreatesExecutionWorktreeAndPublishesItsActualHead(t *testing.T) {
+	skipOnWindows(t)
+	source, head := integrationGit(t)
+	lifecycleGit(t, source, "branch", "v2", head)
+	bare := filepath.Join(t.TempDir(), "common.git")
+	lifecycleGit(t, source, "clone", "--bare", source, bare)
+	_, session, card, forbidden, _ := remoteLifecycleFixture(t, "managed-execution-worktree", bare)
+	root, err := session.LocalDataRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(root, "worktrees", card.TaskID, "g1")
+	t.Setenv("KANBAN_LAUNCH_CWD", worktree)
+	result, err := StartRemote("claude", "tmux", card.TaskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, found, err := session.Credential(card.TaskID)
+	if err != nil || !found || credential.Worktree != worktree || credential.Branch == "" || credential.BaseCommit != head {
+		t.Fatalf("managed workspace: %+v %v", credential, err)
+	}
+	if result.Outcome.Container == "" {
+		t.Fatal("missing launched container")
+	}
+	baseline, err := session.Project.Delivery(t.Context(), card.TaskID, head)
+	if err != nil || baseline.Purpose != "baseline" {
+		t.Fatalf("baseline publication: %+v %v", baseline, err)
+	}
+	_, err = session.Project.Move(t.Context(), "baseline-is-not-completion", card.TaskID, api.Move{State: "review", DeliveryCommit: head}, credential.Claim())
+	if !api.IsCode(err, api.CodeEvidenceIncomplete) {
+		t.Fatalf("baseline granted completion authority: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, "implemented.txt"), []byte("execution implementation\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lifecycleGit(t, worktree, "add", "implemented.txt")
+	lifecycleGit(t, worktree, "commit", "-m", "Implement execution work")
+	implemented := lifecycleGit(t, worktree, "rev-parse", "HEAD")
+	// The invoking view still runs in the main checkout. The shared MoveTask
+	// boundary must publish this execution's worktree HEAD, not that checkout.
+	moved, err := session.MoveTask(t.Context(), card.TaskID, api.Move{State: "review"})
+	if err != nil || moved.State != "review" {
+		t.Fatalf("delivery move: %+v %v", moved, err)
+	}
+	delivery, err := session.Project.Delivery(t.Context(), card.TaskID, implemented)
+	if err != nil || delivery.Purpose != "delivery" || delivery.Generation != credential.Generation {
+		t.Fatalf("wrong implementation delivered: %+v %v", delivery, err)
+	}
+	if lifecycleGit(t, worktree, "ls-remote", "--refs", "origin", delivery.Ref) != implemented+"\t"+delivery.Ref {
+		t.Fatal("implementation is absent from common remote")
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lifecycleGit(t, cwd, "rev-parse", "HEAD") != head {
+		t.Fatal("start or delivery changed the source checkout")
+	}
+	if _, err := os.Stat(forbidden); !os.IsNotExist(err) {
+		t.Fatalf("managed start used a local board: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktree, "kanban")); !os.IsNotExist(err) {
+		t.Fatalf("managed workspace contains a client board: %v", err)
 	}
 }

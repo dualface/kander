@@ -26,7 +26,7 @@ func (p *project) readDelivery(task, commit string) (api.DeliveryEvidence, error
 }
 
 func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, h holder) outcome {
-	if input.TaskID != task || !api.CommitSHA(input.Commit) || !api.ValidIdentity(input.ExecutionID) || input.Generation == 0 || input.CardRevision == 0 || input.Ref != api.DeliveryRef(p.info.ID, task, input.Generation, input.Commit) || input.Remote == "" || input.Remote != p.info.Remote || input.ObservedAt.IsZero() {
+	if (input.Purpose != "" && input.Purpose != "delivery" && input.Purpose != "baseline") || input.TaskID != task || !api.CommitSHA(input.Commit) || !api.ValidIdentity(input.ExecutionID) || input.Generation == 0 || input.CardRevision == 0 || input.Ref != api.DeliveryRef(p.info.ID, task, input.Generation, input.Commit) || input.Remote == "" || input.Remote != p.info.Remote || input.ObservedAt.IsZero() {
 		return outcome{err: apiError(api.CodeEvidenceIncomplete, "delivery must bind the registered remote, exact commit, card version and generation")}
 	}
 	p.mu.Lock()
@@ -83,7 +83,7 @@ func (p *project) deliveryGuard(task, commit string, h holder) func(*board.Trans
 		if err != nil {
 			return err
 		}
-		if value.Generation != claim.Generation || value.ExecutionID != claim.ExecutionID || value.CardRevision != snapshot.Revision {
+		if value.Purpose == "baseline" || value.Generation != claim.Generation || value.ExecutionID != claim.ExecutionID || value.CardRevision != snapshot.Revision {
 			return apiError(api.CodeEvidenceIncomplete, "delivery belongs to another content version or execution")
 		}
 		return nil

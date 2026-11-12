@@ -64,8 +64,13 @@ func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sa := &remote.Session{Client: a, Project: a.Project(info.ID), Info: info}
-	sb := &remote.Session{Client: b, Project: b.Project(info.ID), Info: info}
+	sa := &remote.Session{Client: a, Project: a.Project(info.ID), Info: info, ServerURL: httpServer.URL, Home: filepath.Join(root, "client first")}
+	sb := &remote.Session{Client: b, Project: b.Project(info.ID), Info: info, ServerURL: httpServer.URL, Home: filepath.Join(root, "client second")}
+	for _, session := range []*remote.Session{sa, sb} {
+		if err := os.MkdirAll(session.Home, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	card, err := sa.Project.NewTask(t.Context(), "", api.NewTask{Type: "feature", Slug: "clone-delivery", Title: "Verify independent clone delivery", Language: "en"})
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +89,7 @@ func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	credential := remote.Credential{ClientID: "host-a", ProjectID: info.ID, TaskID: card.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token}
+	credential := remote.Credential{ServerURL: httpServer.URL, ClientID: "host-a", ProjectID: info.ID, TaskID: card.TaskID, ExecutionID: grant.Claim.ExecutionID, Generation: grant.Claim.Generation, Token: grant.Token}
 	delivery, err := sa.PublishCommit(t.Context(), first, card.TaskID, commit, credential)
 	if err != nil {
 		t.Fatal(err)
@@ -98,6 +103,42 @@ func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
 	}
 	if got := deliveryGit(t, second, "show", commit+":work.txt"); got != "delivered" {
 		t.Fatal(got)
+	}
+	firstWorktree, err := sa.PrepareWorktree(t.Context(), first, commit, credential)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(firstWorktree.Path, "work.txt"), []byte("uncommitted predecessor work\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repeated, err := sa.PrepareWorktree(t.Context(), first, commit, credential)
+	if err != nil || repeated.Path != firstWorktree.Path {
+		t.Fatalf("worktree retry: %+v %v", repeated, err)
+	}
+	if _, err := a.Project(info.ID).ObserveAgent(t.Context(), "confirmed-exit", card.TaskID, api.AgentObservation{Status: "stopped", Reason: "explicit fixture exit"}, *credential.Claim()); err != nil {
+		t.Fatal(err)
+	}
+	successor, err := sb.Project.Takeover(t.Context(), "takeover-new-clone", card.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "clone-successor", Owner: "codex", Decision: "explicit takeover in second independent clone", ExpectedGeneration: credential.Generation})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := remote.Credential{ServerURL: httpServer.URL, ClientID: "host-b", ProjectID: info.ID, TaskID: card.TaskID, ExecutionID: successor.Claim.ExecutionID, Generation: successor.Claim.Generation, Token: successor.Token}
+	nextWorktree, err := sb.PrepareWorktree(t.Context(), second, commit, next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nextWorktree.Branch == firstWorktree.Branch || nextWorktree.Path == firstWorktree.Path {
+		t.Fatal("takeover reused the predecessor's execution workspace")
+	}
+	if deliveryGit(t, nextWorktree.Path, "rev-parse", "HEAD") != commit {
+		t.Fatal("successor did not start at the fetched delivery")
+	}
+	oldWork, err := os.ReadFile(filepath.Join(firstWorktree.Path, "work.txt"))
+	if err != nil || string(oldWork) != "uncommitted predecessor work\n" {
+		t.Fatalf("takeover lost predecessor work: %q %v", oldWork, err)
+	}
+	if _, err := sa.PrepareWorktree(t.Context(), first, commit, credential); err == nil {
+		t.Fatal("old execution provisioned after takeover")
 	}
 	deliveryGit(t, second, "push", "origin", ":"+delivery.Ref)
 	if _, err := sb.FetchDelivery(t.Context(), second, card.TaskID, commit); err == nil {

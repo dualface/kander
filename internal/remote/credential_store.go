@@ -8,12 +8,29 @@ import (
 	"strings"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
 )
 
 // ErrCredentialReleased prevents a delayed launcher or renewal from recreating
 // an execution record after completion removed it.
 var ErrCredentialReleased = errors.New("execution credential was released")
+
+type credentialHead struct {
+	ExecutionID string `json:"execution_id"`
+	Generation  uint64 `json:"generation"`
+}
+
+func readCredentialHead(home, dir string) (head credentialHead, found bool, err error) {
+	data, found, err := fs.ReadRegularFileIfExists(home, filepath.Join(dir, "latest-generation"))
+	if err != nil || !found {
+		return head, found, err
+	}
+	if err := json.Unmarshal(data, &head); err != nil || !api.ValidIdentity(head.ExecutionID) || head.Generation == 0 {
+		return head, true, errors.New(config.Text("remote.credential_head_damaged"))
+	}
+	return head, true, nil
+}
 
 func withCredentialLock(home string, c Credential, name string, fn func() error) (err error) {
 	if !api.ValidIdentity(c.ProjectID) || !api.ValidIdentity(c.TaskID) || !api.ValidIdentity(c.ExecutionID) {
@@ -39,11 +56,56 @@ func withCredentialLock(home string, c Credential, name string, fn func() error)
 // SaveCredential serializes the latest pointer with release. The lock order is
 // task registry, then execution, so an old release cannot erase a newer pointer.
 func (s *Session) SaveCredential(c Credential) error {
+	if c.Generation == 0 {
+		return &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.credential_stale")}
+	}
 	return withCredentialLock(s.Home, c, "registry", func() error {
+		dir := credentialDir(s.Home, c.ProjectID, c.TaskID)
+		head, found, err := readCredentialHead(s.Home, dir)
+		if err != nil {
+			return err
+		}
+		if !found {
+			// Upgrade the earlier prototype's pointer without guessing its epoch.
+			data, exists, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, "latest"))
+			if err != nil {
+				return err
+			}
+			if exists {
+				id := strings.TrimSpace(string(data))
+				if !api.ValidIdentity(id) {
+					return errors.New(config.Text("remote.credential_head_damaged"))
+				}
+				data, exists, err = fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, id+".json"))
+				if err != nil {
+					return err
+				}
+				if exists {
+					var previous Credential
+					if err := json.Unmarshal(data, &previous); err != nil {
+						return err
+					}
+					head = credentialHead{ExecutionID: previous.ExecutionID, Generation: previous.Generation}
+					found = true
+				}
+			}
+		}
+		if found && (head.Generation > c.Generation || head.Generation == c.Generation && head.ExecutionID != c.ExecutionID) {
+			return &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.credential_stale")}
+		}
 		if err := WriteCredential(s.Home, c); err != nil {
 			return err
 		}
-		return fs.WriteTextAtomic(s.Home, filepath.Join(credentialDir(s.Home, c.ProjectID, c.TaskID), "latest"), c.ExecutionID+"\n", true)
+		data, err := json.Marshal(credentialHead{ExecutionID: c.ExecutionID, Generation: c.Generation})
+		if err != nil {
+			return err
+		}
+		// Keep the maximum generation after release. A delayed initial save must
+		// not resurrect an older interactive pointer after the successor exits.
+		if err := fs.WriteTextAtomic(s.Home, filepath.Join(dir, "latest-generation"), string(data), true); err != nil {
+			return err
+		}
+		return fs.WriteTextAtomic(s.Home, filepath.Join(dir, "latest"), c.ExecutionID+"\n", true)
 	})
 }
 
@@ -82,7 +144,7 @@ func WriteCredential(home string, c Credential) error {
 			if c.AgentPID == 0 {
 				c.AgentPID = old.AgentPID
 			}
-			for _, pair := range [][2]*string{{&c.AgentStart, &old.AgentStart}, {&c.BootID, &old.BootID}, {&c.Window, &old.Window}, {&c.Session, &old.Session}} {
+			for _, pair := range [][2]*string{{&c.AgentStart, &old.AgentStart}, {&c.BootID, &old.BootID}, {&c.Window, &old.Window}, {&c.Session, &old.Session}, {&c.Worktree, &old.Worktree}, {&c.Branch, &old.Branch}, {&c.BaseCommit, &old.BaseCommit}} {
 				if *pair[0] != "" && *pair[1] != "" && *pair[0] != *pair[1] {
 					return errors.New("managed agent identity conflict")
 				}

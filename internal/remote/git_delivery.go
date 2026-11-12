@@ -68,6 +68,15 @@ func observeDeliveryRef(ctx context.Context, dir, ref, commit string) (bool, err
 // retry first inspects that ref, including after a push returned an error.
 // It neither rewrites branches nor interprets transport failure as failure to push.
 func (s *Session) PublishCommit(ctx context.Context, dir, task, commit string, credential Credential) (api.DeliveryEvidence, error) {
+	return s.publishCommit(ctx, dir, task, commit, "delivery", credential)
+}
+
+// PublishBaseline makes a start commit available to other clones. It carries no
+// completion authority; a later review move needs a separate delivery attestation.
+func (s *Session) PublishBaseline(ctx context.Context, dir, task, commit string, credential Credential) (api.DeliveryEvidence, error) {
+	return s.publishCommit(ctx, dir, task, commit, "baseline", credential)
+}
+func (s *Session) publishCommit(ctx context.Context, dir, task, commit, purpose string, credential Credential) (api.DeliveryEvidence, error) {
 	var value api.DeliveryEvidence
 	if credential.Lost || credential.ResourceKind != "" || credential.TaskID != task || credential.ProjectID != s.Info.ID || credential.ClientID != s.Client.ClientID() {
 		return value, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_credential_required")}
@@ -107,10 +116,10 @@ func (s *Session) PublishCommit(ctx context.Context, dir, task, commit string, c
 			return value, errors.Join(pushErr, err, errors.New(config.Text("remote.git_publication_unconfirmed")))
 		}
 	}
-	value = api.DeliveryEvidence{TaskID: task, ExecutionID: credential.ExecutionID, Generation: credential.Generation, CardRevision: taskView.Revision, Commit: commit, Ref: ref, Remote: s.Info.Remote, ObservedAt: time.Now().UTC()}
+	value = api.DeliveryEvidence{Purpose: purpose, TaskID: task, ExecutionID: credential.ExecutionID, Generation: credential.Generation, CardRevision: taskView.Revision, Commit: commit, Ref: ref, Remote: s.Info.Remote, ObservedAt: time.Now().UTC()}
 	// A deterministic key binds the inspected content version; retries cannot
 	// turn one upload into authority for an unrelated version.
-	if previous, err := s.Project.Delivery(ctx, task, commit); err == nil && previous.ExecutionID == value.ExecutionID && previous.Generation == value.Generation && previous.CardRevision == value.CardRevision && previous.Remote == value.Remote && previous.Ref == value.Ref {
+	if previous, err := s.Project.Delivery(ctx, task, commit); err == nil && previous.Purpose == value.Purpose && previous.ExecutionID == value.ExecutionID && previous.Generation == value.Generation && previous.CardRevision == value.CardRevision && previous.Remote == value.Remote && previous.Ref == value.Ref {
 		value = previous
 	}
 	key := "delivery-" + digestDelivery(value)

@@ -17,6 +17,7 @@ func TestCredentialWritersPreserveLauncherAndWorkerFacts(t *testing.T) {
 	}
 	launcher, worker := initial, initial
 	launcher.AgentPID = 4242
+	launcher.Worktree, launcher.Branch, launcher.BaseCommit = "/private/worktree", "execution-branch", "base-sha"
 	worker.RenewedAt = initial.RenewedAt.Add(time.Minute)
 	worker.Delivered = []string{"request-one"}
 	var writers sync.WaitGroup
@@ -32,7 +33,7 @@ func TestCredentialWritersPreserveLauncherAndWorkerFacts(t *testing.T) {
 		}
 	}
 	current, found, err := session.Credential(initial.TaskID)
-	if err != nil || !found || current.AgentPID != 4242 || !current.RenewedAt.Equal(worker.RenewedAt) || len(current.Delivered) != 1 {
+	if err != nil || !found || current.AgentPID != 4242 || current.Worktree != launcher.Worktree || current.Branch != launcher.Branch || current.BaseCommit != launcher.BaseCommit || !current.RenewedAt.Equal(worker.RenewedAt) || len(current.Delivered) != 1 {
 		t.Fatalf("independent execution facts were lost: %+v %v", current, err)
 	}
 	current.Lost, current.LostReason = true, "lease expired"
@@ -79,5 +80,30 @@ func TestCredentialReleaseFencesLateWritesAndKeepsSuccessorPointer(t *testing.T)
 	all, err := Credentials(session.Home)
 	if err != nil || len(all) != 1 || all[0].ExecutionID != next.ExecutionID {
 		t.Fatalf("released execution was rediscovered by the worker: %+v %v", all, err)
+	}
+}
+
+func TestCredentialHeadNeverRegressesAfterSuccessorRelease(t *testing.T) {
+	session := &Session{Home: t.TempDir(), Info: api.Project{ID: "project"}}
+	old := Credential{ProjectID: "project", TaskID: "20261112-generation-task", ExecutionID: "old-execution", Generation: 1, Token: "old"}
+	if err := session.SaveCredential(old); err != nil {
+		t.Fatal(err)
+	}
+	next := old
+	next.Generation, next.ExecutionID, next.Token = 2, "next-execution", "next"
+	if err := session.SaveCredential(next); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SaveCredential(old); err == nil {
+		t.Fatal("late initial save replaced the successor")
+	}
+	if err := RemoveCredential(session.Home, next); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SaveCredential(old); err == nil {
+		t.Fatal("successor release let an old execution reclaim latest")
+	}
+	if _, found, err := session.Credential(old.TaskID); err != nil || found {
+		t.Fatalf("released generation became active: %v %v", found, err)
 	}
 }

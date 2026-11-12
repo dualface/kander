@@ -118,3 +118,7 @@ started-unresolved: <task-id> window=<address> reason=<reason>
 
 - A card outside `todo/`, a failed `todo` gate, an unavailable agent or launcher, a pin violation, or a failed launch (the container is closed and the card rolled back).
 - More than one task ID, an option without a value, or an unknown option is a usage error.
+
+## Distributed Git workspace
+
+For a registered Git remote, start publishes its baseline under a generation-specific reference and creates a new private execution worktree and branch. It records that branch through the holder's controlled execution entrance before launching. Use the prepared current directory for implementation; retain predecessor worktrees and their uncommitted files. The baseline is not a completed delivery. Moving to review publishes the managed worktree's actual implementation HEAD and requires current revision/generation evidence. Partial Git creation stops with the private intent path and preserves its artifacts; recovery inspects facts before any retry.

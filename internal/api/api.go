@@ -240,6 +240,7 @@ const (
 	ExecutionRollback  = "rollback"
 	ExecutionUnresolve = "unresolve"
 	ExecutionAdopt     = "adopt"
+	ExecutionWorkspace = "workspace"
 )
 
 // ExecutionUpdate records launcher facts of the current execution. window
@@ -254,6 +255,7 @@ type ExecutionState struct {
 }
 
 type ExecutionUpdate struct {
+	Branch            string            `json:"branch,omitempty"`
 	ObservationTicket string            `json:"observation_ticket,omitempty"`
 	Reason            string            `json:"reason,omitempty"`
 	Decision          string            `json:"decision,omitempty"`

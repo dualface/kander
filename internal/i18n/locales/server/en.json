@@ -57,5 +57,8 @@
   "remote.wrap_up_identity_mismatch": "wrap-up intent identity mismatch",
   "remote.wrap_up_decision_conflict": "wrap-up authorization already belongs to another decision",
   "remote.wrap_up_foreign_terminal": "foreign terminal cannot be observed for wrap-up",
-  "remote.execution_holder_required": "This operation requires the live task credential of this host"
+  "remote.execution_holder_required": "This operation requires the live task credential of this host",
+  "remote.worktree_recovery_required": "The execution worktree has partial or conflicting Git state; preserve it and inspect its recorded intent before recovery",
+  "remote.credential_stale": "An older execution cannot replace the private credential pointer of a later generation",
+  "remote.credential_head_damaged": "The private execution generation index is damaged; inspect local recovery records"
 }
