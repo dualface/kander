@@ -88,9 +88,6 @@ func (s *Session) ClaimsFor(tasks []string) (*client.Claim, error) {
 		if !found {
 			continue
 		}
-		if credential.Lost {
-			return nil, &api.Error{Code: api.CodeLeaseInvalid, Message: "this execution lost its lease"}
-		}
 		proofs[task] = api.ClaimProof{Token: credential.Token, Generation: credential.Generation}
 	}
 	if len(proofs) == 0 {
