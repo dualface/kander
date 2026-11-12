@@ -1,5 +1,10 @@
 # Prototype results
 
+Follow-up: [production correspondence](REFINEMENT.md) found a missing rule for
+roles added after a no-plan recovery release. Production retains that debt;
+this baseline can permit completion. The measurements below remain results of
+the original abstraction, not evidence of production equivalence.
+
 The restricted definition successfully generates TLA+ and Go. Finite baseline
 checks complete, all three deliberate faults produce debt-safety counterexamples,
 and the generated Go agrees with the tested model/reference transitions. This

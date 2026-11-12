@@ -182,6 +182,12 @@ mutation disabled and requires the final incorrect completion to be refused.
 
 ## Results and next decision
 
+The follow-up [production correspondence experiment](REFINEMENT.md) found a
+release-history rule missing from both this kernel and its history observer.
+Production rejects completion in the reproduced case, while this baseline can
+accept it. The original model is retained so the discrepancy stays reproducible;
+its passing checks must not be interpreted as production conformance.
+
 See [RESULTS.md](RESULTS.md) for measured results and counterexample sequences.
 The experiment is a feasibility check for generated decision logic. It is not a
 replacement for the existing board model tests, and introduces no runtime
