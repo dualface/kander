@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Git branch mode: the new `git.branch_mode` setting (`main-develop` by default, or `main-only`) selects the mainline branch that single cards and task group branches integrate into. In `main-only` mode the released Git rules create task and group branches from `main`, merge finished work straight back into `main` under the card's own authorization, and never create `develop`. `kander config`, `kander doctor`, the project overlay, and the Options rules page handle the setting; a config without it keeps the `main` + `develop` workflow. Wrap-up integration evidence must target the configured mainline branch, read from the integration checkout's project overlay.
-- Git rules: `main` and the mainline branch may now be rewritten on the remote with `--force-with-lease` pinned to the just-fetched commit, in both modes; plain `--force` stays forbidden, and no flow requires such a push. When the local sync after a remote integration fails because the local mainline branch is no longer an ancestor of the remote, the rules reset it to the remote after stashing uncommitted changes and saving unpushed commits on a local `backup/<branch>-<timestamp>` branch.
+- Git rules: `main` and the mainline branch may now be rewritten on the remote with `--force-with-lease` pinned to the just-fetched commit, in both modes; plain `--force` stays forbidden, and no flow requires such a push. When the local sync of the mainline branch or `main` fails because the local branch is no longer an ancestor of the remote, the rules reset it to the remote after stashing any uncommitted changes (and restoring only that stash entry) and saving unpushed commits on a local `backup/<branch>-<timestamp>` branch.
 
 ## v1.3.0 — 2026-11-11
 
