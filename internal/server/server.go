@@ -30,6 +30,7 @@ const (
 
 // Options configure one server instance.
 type Options struct {
+	maintenance   *maintenanceRequest
 	DataDir       string
 	TTL           time.Duration
 	RenewInterval time.Duration
@@ -42,17 +43,19 @@ type Options struct {
 // Server is one opened data directory. Open takes its exclusive lock; Close
 // releases it.
 type Server struct {
-	importFault func(string) error
-	data        string
-	ttl         time.Duration
-	renew       time.Duration
-	log         *slog.Logger
-	clock       func() time.Time
-	version     string
-	secret      []byte
-	lock        *fs.ExclusiveLock
-	lockFile    *os.File
-	ready       atomic.Bool
+	maintenance        *maintenanceRequest
+	maintenanceChanged int
+	importFault        func(string) error
+	data               string
+	ttl                time.Duration
+	renew              time.Duration
+	log                *slog.Logger
+	clock              func() time.Time
+	version            string
+	secret             []byte
+	lock               *fs.ExclusiveLock
+	lockFile           *os.File
+	ready              atomic.Bool
 
 	mu       sync.Mutex
 	projects map[string]*project
@@ -68,7 +71,7 @@ func Open(o Options) (*Server, error) {
 		return nil, errors.New("server data directory must be an absolute path")
 	}
 	s := &Server{
-		data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version,
+		maintenance: o.maintenance, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version,
 		projects: map[string]*project{}, byName: map[string]string{},
 	}
 	if s.ttl <= 0 {
@@ -108,8 +111,16 @@ func Open(o Options) (*Server, error) {
 		s.Close()
 		return nil, err
 	}
-	s.ready.Store(true)
-	s.log.Info("server ready", "data", s.data, "projects", len(s.projects))
+	if s.maintenance != nil {
+		if _, err := s.projectByName(s.maintenance.Project); err != nil {
+			_ = s.Close()
+			return nil, err
+		}
+		s.log.Info("offline maintenance complete", "project_name", s.maintenance.Project, "changed_tasks", s.maintenanceChanged)
+	} else {
+		s.ready.Store(true)
+		s.log.Info("server ready", "data", s.data, "projects", len(s.projects))
+	}
 	return s, nil
 }
 

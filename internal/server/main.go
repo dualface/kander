@@ -25,8 +25,13 @@ const DefaultListen = "127.0.0.1:7878"
 // Main runs kander-server until SIGINT or SIGTERM, or runs the import
 // subcommand.
 func Main(args []string) int {
-	if len(args) > 0 && args[0] == "import" {
-		return runImport(args[1:])
+	if len(args) > 0 {
+		switch args[0] {
+		case "import":
+			return runImport(args[1:])
+		case "maintain":
+			return runMaintain(args[1:])
+		}
 	}
 	flags := flag.NewFlagSet("kander-server", flag.ContinueOnError)
 	data := flags.String("data", "", "data directory (default: $XDG_DATA_HOME/kander-server or ~/.local/share/kander-server)")
@@ -35,6 +40,13 @@ func Main(args []string) int {
 	renew := flags.Duration("renew", DefaultRenewInterval, "claim renewal interval announced to clients")
 	showVersion := flags.Bool("version", false, "print the version and exit")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if flags.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "unexpected server arguments")
 		return 2
 	}
 	if *showVersion {

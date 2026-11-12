@@ -4,7 +4,7 @@ Source: moved from `KANDER-KANBAN-RULES.md` "Command Contract" ("Initializing th
 
 ## Purpose and users
 
-Creates the board and recovers interrupted transactions. Used by the user, and by an agent only when a rule file names `kander init` as the recovery step.
+Binds a checkout to a service project. Used by the user when configuring a client. Normal clients never open local board storage.
 
 ## Syntax
 
@@ -12,32 +12,35 @@ Creates the board and recovers interrupted transactions. Used by the user, and b
 kander init [--maintenance] [project-path]
 ```
 
+This historical syntax remains indexed for compatibility. `--maintenance` is rejected with the service operator's maintenance direction; it never changes a local board.
+
 ## Arguments
 
-- `project-path`: the project whose board to initialize; default is the current directory's project.
-- `--maintenance`: acknowledge the maintenance preconditions of `KANDER-KANBAN-RULES.md` "Explicit Migration and Maintenance" for migration and recovery.
+- `project-path`: checkout whose project binding to initialize; default is the current checkout.
+- `--maintenance`: unsupported client maintenance request. Use the offline server command below.
 
 ## Preconditions
 
-- Migration and recovery require every writer paused per "Explicit Migration and Maintenance".
+- A readable scope configuration and reachable compatible service.
+- A service URL and project name, from configuration or the additional flags below.
 
 ## Effects
 
-- `init` idempotently creates the board and the 7 state directories (`backlog`, `todo`, `working`, `review`, `done`, `archived`, `trash`); rerunning only creates missing directories, and Git projects only update the local `info/exclude`.
-- Migrates legacy `<task-id>.md` files and replays prepared transactions per "Explicit Migration and Maintenance"; cleans archived-only data left by earlier releases.
+- Registers or reads the service project, verifies its canonical Git origin, and sparsely saves explicitly requested binding fields.
+- Never creates or recovers local `kanban/`, changes Git excludes, migrates cards, or prunes evidence. `KANBAN_DIR` does not select a client board.
 
 ## Output
 
-- What was created, migrated, or recovered.
+- The service project binding.
 
 ## Rejections
 
-- When `working/` or `review/` cards exist and migration is needed, `init` refuses by default and lists the affected IDs; only `--maintenance` proceeds.
-- More than one path argument or an unknown option is a usage error.
+- More than one path, an unknown option, invalid configuration, incompatible protocol, unreachable service, or origin mismatch refuses binding.
+- A concurrent project overlay change refuses the save.
 
-## Distributed client
+## Offline service maintenance
 
-Normal client execution always uses `/api/v1`. `init` registers or reads a service project and never creates local board state. An existing scope configuration and an explicit service binding are required. `KANBAN_DIR` does not select a client board.
+Stop `kander-server` and pause every executor and external writer. Run `kander-server maintain [--data DIR] --project NAME`. If active cards require form migration, add `--maintenance` only after all writers are paused. The command takes the exclusive server data-directory lock and never starts an HTTP listener or stops agents. It converts imported legacy file cards using the existing board redo journal. A repeat reports zero changes. Original import snapshots and evidence bytes stay intact. Keep writers paused after failure and retry the same maintenance command; never choose or delete a partial copy manually.
 
 ## Additional Syntax
 

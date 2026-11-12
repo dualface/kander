@@ -43,7 +43,13 @@ func (p *project) open() error {
 	if err := board.InitStorage(p.board); err != nil {
 		return err
 	}
-	if err := board.RecoverTransactions(p.board); err != nil {
+	if request := p.server.maintenance; request != nil && request.Project == p.info.Name {
+		count, err := board.MigrateCards(p.board, board.InitOptions{Maintenance: request.Acknowledged})
+		if err != nil {
+			return err
+		}
+		p.server.maintenanceChanged = count
+	} else if err := board.RecoverTransactions(p.board); err != nil {
 		return err
 	}
 	events, err := openEventLog(p.root)

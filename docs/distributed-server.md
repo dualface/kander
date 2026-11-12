@@ -42,6 +42,12 @@ A project name is an identifier (`[A-Za-z0-9][A-Za-z0-9._-]{0,127}`), never a pa
 
 `kander-server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
 
+## Offline card maintenance
+
+After an explicit import, legacy file cards stay readable and read-only. Pause executors and external writers, stop the server, and run `kander-server maintain --data <data> --project <name>`. If active file cards or a pending active migration exist, the command refuses until `--maintenance` acknowledges the write stop. A serving instance holds the same exclusive data-directory lock, so maintenance cannot run beside it. This command never becomes ready or serves requests.
+
+Maintenance reuses the board migration redo journal, checks the final board and returns JSON with `project`, `changed_tasks`, and the final `snapshot` digest. An interrupted migration resumes from the exact prepared mapping and original operation ID. Original import identity, the source backup and historical report bytes remain unchanged. Repeating a completed migration reports zero changes. Resume writers only after success and a fresh service snapshot. This operation does not prune historical evidence. Normal startup recovers ordinary transactions but refuses an active pending form migration until explicit offline maintenance acknowledges the paused writers.
+
 ## Protocol
 
 All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n>`; a version outside the server's `[min, current]` range is refused with `protocol_incompatible` (412) before any domain operation. `GET /api/v1/version` returns both ranges so a client can refuse an incompatible server first.
