@@ -15,18 +15,21 @@ import (
 // DispatchIntegration is produced by the Git-aware launch layer. Board verifies
 // its structure and immutable copies, never interprets Git or claims integration.
 type DispatchIntegration struct {
-	DispatchID   string    `json:"dispatch_id"`
-	TaskID       string    `json:"task_id"`
-	CWD          string    `json:"cwd"`
-	SourceCommit string    `json:"source_commit"`
-	ReviewTarget string    `json:"review_target"`
-	ReviewBase   string    `json:"review_base"`
-	RebasedBase  string    `json:"rebased_base,omitempty"`
-	TargetCommit string    `json:"target_commit"`
-	TargetRef    string    `json:"target_ref"`
-	Author       string    `json:"author"`
-	Basis        string    `json:"basis"`
-	VerifiedAt   time.Time `json:"verified_at"`
+	IntegrationID         string    `json:"integration_id,omitempty"`
+	IntegrationExecution  string    `json:"integration_execution,omitempty"`
+	IntegrationGeneration uint64    `json:"integration_generation,omitzero"`
+	DispatchID            string    `json:"dispatch_id"`
+	TaskID                string    `json:"task_id"`
+	CWD                   string    `json:"cwd"`
+	SourceCommit          string    `json:"source_commit"`
+	ReviewTarget          string    `json:"review_target"`
+	ReviewBase            string    `json:"review_base"`
+	RebasedBase           string    `json:"rebased_base,omitempty"`
+	TargetCommit          string    `json:"target_commit"`
+	TargetRef             string    `json:"target_ref"`
+	Author                string    `json:"author"`
+	Basis                 string    `json:"basis"`
+	VerifiedAt            time.Time `json:"verified_at"`
 }
 type DispatchWrapUpBinding struct {
 	Artifact ArtifactReference   `json:"artifact"`
@@ -42,7 +45,7 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, histor
 		return dispatchEvidenceError("wrap-up binding required")
 	}
 	g := w.Git
-	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !validDispatchLocation(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
+	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !validDispatchLocation(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || !validWrapUpTarget(g) || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
 	var reviewRange ReviewGitEdge
@@ -280,4 +283,15 @@ func validDispatchLocation(value string) bool {
 		return ValidReviewID(project)
 	}
 	return filepath.IsAbs(value)
+}
+
+// Portable targets require a service identity and a complete receipt binding.
+// The service independently checks the published immutable integration record.
+func validWrapUpTarget(g DispatchIntegration) bool {
+	hasReceipt := g.IntegrationID != "" || g.IntegrationExecution != "" || g.IntegrationGeneration != 0
+	if !hasReceipt {
+		return g.TargetRef == "refs/heads/develop" || g.TargetRef == "refs/remotes/origin/develop"
+	}
+	project, portable := strings.CutPrefix(g.CWD, "project:")
+	return portable && ValidReviewID(project) && strings.HasPrefix(g.TargetRef, "refs/heads/") && strings.HasPrefix(g.IntegrationID, "i-") && len(g.IntegrationID) == 66 && commitPattern.MatchString(strings.TrimPrefix(g.IntegrationID, "i-")) && len(g.IntegrationExecution) > 0 && len(g.IntegrationExecution) <= 128 && g.IntegrationGeneration > 0
 }

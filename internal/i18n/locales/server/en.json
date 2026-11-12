@@ -83,5 +83,12 @@
   "remote.launch_operation_id_invalid": "--operation-id requires a valid stable operation identity",
   "remote.local_execution_required": "This operation requires the exact retained execution on its owning host",
   "remote.execution_dismissed": "Dismissed task execution: {{.V0}}",
-  "remote.review_material_conflict": "The private joint-review material is damaged or differs from the inspected operation"
+  "remote.review_material_conflict": "The private joint-review material is damaged or differs from the inspected operation",
+  "remote.integration_input_required": "Integration requires a stable operation ID, purpose, exact source SHA, target ref, member scope and decision",
+  "remote.integration_members_changed": "Integration membership or its execution changed; inspect the current service snapshot",
+  "remote.integration_delivery_required": "Every contributing member needs its current published delivery and live review ownership",
+  "remote.integration_fast_forward_required": "The inspected target cannot advance to the source by fast-forward",
+  "remote.integration_operation_changed": "The integration operation ID already names other material; preserve its receipt",
+  "remote.integration_recovery_required": "Integration remains unresolved; inspect its private receipt and exact remote state before continuing",
+  "remote.integration_process_required": "Integration requires an observable local command process"
 }

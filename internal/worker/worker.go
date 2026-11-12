@@ -201,7 +201,9 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	callCtx, cancel := context.WithTimeout(ctx, min(interval, 10*time.Second))
 	defer cancel()
 	project := cl.Project(c.ProjectID)
-	if c.ResourceKind == "group" {
+	if c.ResourceKind == "integration" {
+		_, err = project.RenewIntegration(callCtx, c.TaskID, *c.Claim())
+	} else if c.ResourceKind == "group" {
 		_, err = project.RenewGroup(callCtx, c.TaskID, *c.Claim())
 	} else {
 		_, err = project.Renew(callCtx, c.TaskID, *c.Claim())
@@ -209,6 +211,9 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	switch {
 	case err == nil:
 		c.RenewedAt = now
+		if c.ResourceKind == "integration" {
+			return w.integrationRenewed(ctx, log, c)
+		}
 		observeCtx, stopObservation := context.WithTimeout(ctx, 2*time.Second)
 		observation := w.observe(observeCtx, c)
 		stopObservation()
@@ -236,10 +241,15 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 			log.Error("credential write failed", "error", err)
 		}
 		return true
-	case api.IsCode(err, api.CodeLeaseInvalid) || api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeNotFound):
+	case api.IsCode(err, api.CodeLeaseInvalid) || api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeNotFound) || c.ResourceKind == "integration" && api.IsCode(err, api.CodeRevisionConflict):
 		// A released claim is a normal end; anything else lost the lease.
 		var claim *api.ClaimView
-		if c.ResourceKind == "group" {
+		if c.ResourceKind == "integration" {
+			value, lookupErr := project.Integration(callCtx, c.TaskID)
+			if lookupErr == nil {
+				claim = &api.ClaimView{Generation: value.Generation, Status: value.Status}
+			}
+		} else if c.ResourceKind == "group" {
 			value, err := project.Group(callCtx, c.TaskID)
 			if err == nil {
 				claim = value.Claim

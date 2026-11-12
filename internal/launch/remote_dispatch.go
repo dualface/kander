@@ -256,9 +256,8 @@ func completeRemoteDispatchInput(ctx context.Context, session *remote.Session, c
 	}
 	// Only local verification consumes a machine path. New shared evidence
 	// stores the stable project identity instead.
-	local := w.Git
-	local.CWD = cwd
-	if err := verifyDispatchIntegration(ctx, local); err != nil {
+	w.Git.CWD = "project:" + session.Info.ID
+	if err := session.VerifyWrapUpIntegration(ctx, cwd, w.Git); err != nil {
 		return err
 	}
 	w.Git.CWD = "project:" + session.Info.ID
@@ -323,9 +322,7 @@ func authorizeRemoteWrapUp(ctx context.Context, session *remote.Session, cwd str
 		return value, errors.New(config.Text("remote.wrap_up_foreign_terminal"))
 	}
 	if w := value.Input.Evidence.WrapUp; w != nil {
-		local := w.Git
-		local.CWD = cwd
-		if err := verifyDispatchIntegration(ctx, local); err != nil {
+		if err := session.VerifyWrapUpIntegration(ctx, cwd, w.Git); err != nil {
 			return value, err
 		}
 	}

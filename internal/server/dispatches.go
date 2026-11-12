@@ -56,6 +56,11 @@ func (p *project) dispatchWrite(key, action, task string, input api.DispatchComm
 			if !ok {
 				return apiError(api.CodeInternal, "dispatch producer omitted its transaction result")
 			}
+			if w := dispatch.Input.Evidence.WrapUp; w != nil {
+				if err := p.wrapUpIntegration(tx, task, h.generation, w.Git); err != nil {
+					return err
+				}
+			}
 			if err := p.stagePreparedProposal(tx, proposal); err != nil {
 				return err
 			}

@@ -29,6 +29,9 @@ The first version trusts its network: there is no login and no role model, one s
         requests/<task>/<id>.json generation-bound collaboration requests
         publications/<id>.json   immutable joint material and confirmations
         review-writers/<id>.json private uploader binding and execution generations
+        integrations/<target-id>/current.json target lease and observed Git phase
+        integrations/<target-id>/executions/<execution>.json historical target result
+        task-integrations/<task>/<generation>.json final delivery receipt
       .kander/groups/00000000-review-archive-group/  review inputs and originals
     control/
       events.jsonl               bounded event diagnostic log
@@ -119,7 +122,7 @@ For a project registered with an origin, the normal CLI and TUI working-to-revie
 
 `POST .../deliveries` authenticates the holder and checks the execution, generation and inspected card revision under the same transaction as the publication receipt. The service records an authenticated client's transport observation; it does not independently query Git. The state-changing transaction checks those bindings again. A content edit or takeover invalidates an earlier attestation. Another clone fetches the recorded reference and confirms it still names the expected SHA before accepting the local object. Missing remote refs block it even when that SHA is cached locally. Review invocations fetch their exact base and target through the registered remote before launching a reviewer.
 
-Dispatch lease generations and business epochs fence separate authorities. Preparation, attempt reservation, explicit terminal decisions, completed settlement and wrap-up grants reuse the board's existing evidence producers through REST. Their card changes and exact result receipts commit together. A dispatch is never accepted merely because a transport succeeded. New wrap-up evidence stores `project:<id>` while local verification uses the caller's checkout; historical CWD bytes remain unchanged. The explicit target-integration authority remains **planned**.
+Dispatch lease generations and business epochs fence separate authorities. Preparation, attempt reservation, explicit terminal decisions, completed settlement and wrap-up grants reuse the board's existing evidence producers through REST. Their card changes and exact result receipts commit together. A dispatch is never accepted merely because a transport succeeded. New wrap-up evidence stores `project:<id>` while local verification uses the caller's checkout; historical CWD bytes remain unchanged. Explicit target-integration authority is described in [Distributed Git integration](distributed-integration.md).
 
 A foreign `dispatch prepare` becomes a generation- and card-version-bound collaboration proposal with the original typed input. It returns a request object with `status=open`, not a prepared dispatch. The holder inspects it using `kander request show <task-id> <request-id> --json`. Only the live holder can prepare or settle formal dispatch evidence. Requests remain proposals until the holder takes a controlled action.
 
@@ -129,7 +132,7 @@ An explicit takeover of a bound task names the inspected dispatch ID, epoch and 
 
 A group's public checkpoint `authority.token` is a session label, not a bearer credential. The service keeps a separate private group lease in `group-claims/`. Concurrent claims have one winner; a live lease cannot be preempted. An explicit claim after expiry or a reported coordinator exit requires the observed generation and a decision, advances both lease ownership and checkpoint authority atomically, and records the handoff. Reusing the old execution ID cannot revive its lease. Checkpoint epochs and lease generations remain separate fields, including after migration.
 
-`kander coordinator claim` stores the returned private credential and starts the same background worker used by tasks. Group renewals change no card or checkpoint version. Every checkpoint mutation checks that private lease inside its producer transaction. Recovery that writes a claimed member additionally requires that member's task credential; group authority alone grants no card write access. A pending task start must settle before recovery. The lost-member recovery entrance and target-branch integration lease still require further adaptation (**planned**).
+`kander coordinator claim` stores the returned private credential and starts the same background worker used by tasks. Group renewals change no card or checkpoint version. Every checkpoint mutation checks that private lease inside its producer transaction. Recovery that writes a claimed member additionally requires that member's task credential; group authority alone grants no card write access. A pending task start must settle before recovery. The lost-member recovery entrance still requires further adaptation (**planned**). Target-branch integration has a separate private lease.
 
 For reconcile, the client first reads the exact Git facts the producer needs, verifies them in its own clone, and sends the facts with its verdicts. The server repeats the producer pass and accepts only a verdict for the exact current facts. Missing or changed Git facts block the member instead of manufacturing delivery. The server never executes Git. Whole-request CAS failures preserve the checkpoint; per-member failures retain their blocked mirrors and the existing partial/failed CLI exit statuses.
 

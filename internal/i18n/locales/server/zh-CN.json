@@ -83,5 +83,12 @@
   "remote.launch_operation_id_invalid": "--operation-id 需要有效且稳定的操作标识",
   "remote.local_execution_required": "此操作需要执行主机保留的精确执行记录",
   "remote.execution_dismissed": "已退出并关闭任务执行：{{.V0}}",
-  "remote.review_material_conflict": "私有联合评审材料损坏，或与已检查的操作不一致"
+  "remote.review_material_conflict": "私有联合评审材料损坏，或与已检查的操作不一致",
+  "remote.integration_input_required": "集成需要稳定的操作 ID、用途、来源完整 SHA、目标引用、成员范围和决定来源",
+  "remote.integration_members_changed": "集成成员或执行已变化；请核对服务端当前快照",
+  "remote.integration_delivery_required": "每个交付成员都需要当前已发布交付和有效的 review 归属",
+  "remote.integration_fast_forward_required": "已检查的目标无法快进到来源提交",
+  "remote.integration_operation_changed": "该集成操作 ID 已绑定其他材料；请保留原回执",
+  "remote.integration_recovery_required": "集成结果仍未明确；继续前请核对私有回执与实际远端状态",
+  "remote.integration_process_required": "集成需要可观察的本机命令进程"
 }

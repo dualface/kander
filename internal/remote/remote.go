@@ -40,11 +40,12 @@ func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "
 
 // Session is one opened project on one server.
 type Session struct {
-	ServerURL string
-	Client    *client.Client
-	Project   ProjectService
-	Info      api.Project
-	Home      string
+	ServerURL     string
+	Client        *client.Client
+	Project       ProjectService
+	Info          api.Project
+	Home          string
+	WorkerStarter func(string) error
 }
 
 // Home returns the private client directory of this user.
@@ -196,20 +197,21 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 // until the server releases the claim or the lease is lost; a lost credential
 // is kept, marked, so its worktree and branch stay for manual handling.
 type Credential struct {
-	Worktree      string       `json:"worktree,omitempty"`
-	Branch        string       `json:"branch,omitempty"`
-	BaseCommit    string       `json:"base_commit,omitempty"`
-	ResourceKind  string       `json:"resource_kind,omitempty"`
-	ServerURL     string       `json:"server_url"`
-	ClientID      string       `json:"client_id"`
-	ProjectID     string       `json:"project_id"`
-	TaskID        string       `json:"task_id"`
-	ExecutionID   string       `json:"execution_id"`
-	Generation    uint64       `json:"generation"`
-	Token         string       `json:"token"`
-	RenewInterval api.Duration `json:"renew_interval"`
-	TTL           api.Duration `json:"ttl"`
-	RenewedAt     time.Time    `json:"renewed_at"`
+	AuthorityExecutionID string       `json:"authority_execution_id,omitempty"`
+	Worktree             string       `json:"worktree,omitempty"`
+	Branch               string       `json:"branch,omitempty"`
+	BaseCommit           string       `json:"base_commit,omitempty"`
+	ResourceKind         string       `json:"resource_kind,omitempty"`
+	ServerURL            string       `json:"server_url"`
+	ClientID             string       `json:"client_id"`
+	ProjectID            string       `json:"project_id"`
+	TaskID               string       `json:"task_id"`
+	ExecutionID          string       `json:"execution_id"`
+	Generation           uint64       `json:"generation"`
+	Token                string       `json:"token"`
+	RenewInterval        api.Duration `json:"renew_interval"`
+	TTL                  api.Duration `json:"ttl"`
+	RenewedAt            time.Time    `json:"renewed_at"`
 	// AgentPID is the managed agent process the worker stops when the lease
 	// is lost; zero when the claim was taken by hand.
 	AgentPID     int      `json:"agent_pid,omitzero"`

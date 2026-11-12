@@ -159,6 +159,24 @@ func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (ap
 			}
 		}
 	}
+	if request.State == "done" && s.Info.Remote != "" {
+		value, err := s.Project.TaskIntegration(ctx, id)
+		if err != nil {
+			return api.Task{}, err
+		}
+		dir := credential.Worktree
+		if dir == "" {
+			dir, err = os.Getwd()
+		}
+		if err != nil {
+			return api.Task{}, err
+		}
+		if value.Phase != "not-applicable" {
+			if err := s.VerifyIntegration(ctx, dir, value); err != nil {
+				return api.Task{}, err
+			}
+		}
+	}
 	return s.Project.Move(ctx, client.NewKey(), id, request, claim)
 }
 

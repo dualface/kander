@@ -233,8 +233,8 @@ func coordinatorUsageFail() int {
 	return 2
 }
 
-// RunCoordinator is a one-shot recovery tool. Subscription events are wakeups;
-// it never starts a subscriber, notifies an agent or changes a Git reference.
+// RunCoordinator runs checkpoint operations and explicitly requested, leased
+// Git integration. Subscription events remain read-only wakeups.
 func RunCoordinator(args []string) int {
 	if len(args) != 2 {
 		return coordinatorUsageFail()
@@ -242,6 +242,11 @@ func RunCoordinator(args []string) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if args[0] == "integrate" || args[0] == "integration-show" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		return runRemoteIntegration(ctx, cfg, args)
 	}
 	if err = cfg.Rules.CheckTaskGroup("coordinator"); err != nil {
 		return fail(err)

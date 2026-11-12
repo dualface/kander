@@ -310,6 +310,16 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 				return p.deliveryGuard(entry.TaskID, req.DeliveryCommit, h)(tx)
 			}
 		}
+		if p.info.Remote != "" && req.State == "done" && from != "done" {
+			ownership := validate
+			validate = func(tx *board.Transaction) error {
+				if err := ownership(tx); err != nil {
+					return err
+				}
+				_, err := p.completionIntegration(tx, entry.TaskID, h.generation)
+				return err
+			}
+		}
 		businessCommit := req.DeliveryCommit
 		if req.Authorization.DispatchID == "" {
 			businessCommit = ""

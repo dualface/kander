@@ -76,3 +76,19 @@ The service owns the checkpoint. Its public authority token is a session label a
 The background worker renews the group lease independently of the UI and reports confirmed coordinator exit. Reconcile sends locally checked Git facts; the service repeats the producer pass and refuses to advance a member without the matching verdict. Recovery also requires the affected card's holder for any claimed-card mutation. Group authority never substitutes for task ownership.
 
 To release a distributed coordinator explicitly, use `kander coordinator release <absolute-release.json>` with `group_id`, `reason`, and `decision`. This ends the private lease; the public checkpoint and its audit history remain readable.
+
+## Additional Syntax
+
+```text
+kander coordinator release <absolute-release.json>
+kander coordinator integrate <absolute-integration.json>
+kander coordinator integration-show <target-ref>
+```
+
+`integrate` is an explicit distributed Git operation. Its UTF-8 JSON input is at most 64 KiB and requires `operation_id`, `purpose`, `target_ref`, `commit`, and `decision`. The commit is a complete SHA. Use a stable operation ID when recovering an interrupted command; changing its source, target, actor or scope requires a new ID.
+
+A standalone delivery specifies `task_id` and purpose `deliver`. A group operation specifies `group_id`: `initialize` creates its `refs/heads/group/<group-id>` anchor, `assemble` advances that ref using the listed `contributors`, and `deliver` integrates the group's closed review target into the explicitly named final target. Group operations require the current private coordinator credential. Standalone delivery requires the task holder. Contributions require live review generations and their immutable delivery refs in the registered common remote.
+
+The client verifies remote identity, delivery availability and ancestry before claiming the exclusive target lease. It records push intent before an update and uses the observed target SHA as a compare-and-swap condition. A divergent target requires a new reviewed integration commit. Neither a cached Git object nor a successful local command alone proves publication. The service records completion only after a fresh remote observation verifies that the source is contained in the target.
+
+The worker renews the target lease for the integration command's recorded process identity. A lost lease stops that command. Its operation journal retains uncertain effects; recovery inspects the remote and the service receipt before another update. Published receipts remain readable after later target generations. `integration-show` prints the public target record without any private credential.

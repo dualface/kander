@@ -144,7 +144,7 @@ func WriteCredential(home string, c Credential) error {
 			if c.AgentPID == 0 {
 				c.AgentPID = old.AgentPID
 			}
-			for _, pair := range [][2]*string{{&c.AgentStart, &old.AgentStart}, {&c.BootID, &old.BootID}, {&c.Window, &old.Window}, {&c.Worktree, &old.Worktree}, {&c.Branch, &old.Branch}, {&c.BaseCommit, &old.BaseCommit}} {
+			for _, pair := range [][2]*string{{&c.AuthorityExecutionID, &old.AuthorityExecutionID}, {&c.AgentStart, &old.AgentStart}, {&c.BootID, &old.BootID}, {&c.Window, &old.Window}, {&c.Worktree, &old.Worktree}, {&c.Branch, &old.Branch}, {&c.BaseCommit, &old.BaseCommit}} {
 				if *pair[0] != "" && *pair[1] != "" && *pair[0] != *pair[1] {
 					return errors.New("managed agent identity conflict")
 				}
