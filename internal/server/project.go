@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -196,40 +195,29 @@ func (p *project) newTask(key string, req api.NewTask) outcome {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	run := func() outcome {
-		target, err := board.NewTask(p.board, req.Type, req.Slug, req.Title, req.Language, req.Large)
+		var created api.Task
+		extension := board.TransactionExtension{Groups: []string{serviceGroup}, After: func(tx *board.Transaction) error {
+			snapshot, ok := tx.OperationResult().(board.Snapshot)
+			if !ok {
+				return apiError(api.CodeInternal, "creation did not stage its initial snapshot")
+			}
+			created = api.Task{ObservedAt: p.server.now(), TaskID: snapshot.Entry.TaskID, State: snapshot.Entry.State, Revision: snapshot.Revision, OperationID: snapshot.OperationID, Text: snapshot.Text}
+			return p.stageOperationReceiptStatus(tx, key, "new", req, http.StatusCreated, created)
+		}}
+		_, err := board.NewTaskWithTransaction(p.board, req.Type, req.Slug, req.Title, req.Language, req.Large, extension)
 		if err != nil {
 			return outcome{err: err}
 		}
-		id := filepath.Base(target)
-		p.changed(id, 0)
-		t, err := p.show(id)
-		if err != nil {
-			return outcome{err: err}
+		p.changed(created.TaskID, 0)
+		if p.server.createFault != nil {
+			p.server.createFault(created)
 		}
-		return outcome{status: http.StatusCreated, body: t}
+		return outcome{status: http.StatusCreated, body: created}
 	}
-	// A task created by the interrupted attempt carries the requested title in
-	// backlog; the retry returns it instead of failing on the existing ID.
-	applied := func() (outcome, bool) {
-		view, err := board.LoadBoard(p.board)
-		if err != nil {
-			return outcome{}, false
-		}
-		for id, entry := range view.Entries {
-			if !strings.HasSuffix(id, "-"+req.Slug+"-task") || entry.State != "backlog" {
-				continue
-			}
-			text, err := view.Document(id)
-			if err == nil && board.TitleFrom(text) == req.Title {
-				t, err := p.show(id)
-				if err == nil {
-					return outcome{status: http.StatusCreated, body: t}, true
-				}
-			}
-		}
-		return outcome{}, false
-	}
-	return p.idempotent(key, "new", req, run, applied)
+	// Recovery restores a committed creation receipt before the service is
+	// ready. A pending current-schema intent has not committed a creation;
+	// mutable titles, dates and card states are never operation identities.
+	return p.idempotent(key, "new", req, run, func() (outcome, bool) { return outcome{}, false })
 }
 
 func (p *project) putDocument(key, id string, doc api.Document, h holder) outcome {

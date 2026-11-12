@@ -2,6 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"reflect"
+
+	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"net/http"
 	"testing"
 )
@@ -30,5 +34,22 @@ func TestFinishPreservesTheResponseCommittedByTheDomainTransaction(t *testing.T)
 	var stored receipt
 	if _, err := readJSON(p.root, path, &stored); err != nil || string(stored.Body) != string(committed.Body) {
 		t.Fatalf("committed response was rewritten: %+v %v", stored, err)
+	}
+}
+
+func TestPendingBoardRecoveryDoesNotPoisonTheOperationReceipt(t *testing.T) {
+	p := &project{root: t.TempDir()}
+	original := receipt{Schema: receiptSchema, Key: "pending-operation", Operation: "new", Digest: "original-digest", Status: receiptPending}
+	path := receiptPath(original.Key)
+	if err := writeJSON(p.root, path, original); err != nil {
+		t.Fatal(err)
+	}
+	out := p.finish(path, original, outcome{err: &board.Error{Code: "board.transaction_pending", Message: "recovery required"}})
+	if out.err == nil || asAPIError(out.err).Code != api.CodeNotReady || asAPIError(out.err).Status != http.StatusServiceUnavailable {
+		t.Fatalf("pending recovery was cached as a domain rejection: %+v", out)
+	}
+	var after receipt
+	if _, err := readJSON(p.root, path, &after); err != nil || !reflect.DeepEqual(original, after) {
+		t.Fatalf("pending receipt changed: %+v %v", after, err)
 	}
 }

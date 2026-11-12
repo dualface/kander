@@ -46,6 +46,7 @@ type Server struct {
 	maintenance        *maintenanceRequest
 	maintenanceChanged int
 	importFault        func(string) error
+	createFault        func(api.Task)
 	data               string
 	ttl                time.Duration
 	renew              time.Duration

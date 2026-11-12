@@ -14,6 +14,7 @@ import (
 // the retry asks the operation whether its effect is already visible before
 // running it again, so an applied write is never applied twice.
 type receipt struct {
+	Schema    int             `json:"schema,omitzero"`
 	Key       string          `json:"key"`
 	Operation string          `json:"operation"`
 	Digest    string          `json:"digest"`
@@ -24,6 +25,7 @@ type receipt struct {
 }
 
 const (
+	receiptSchema  = 1
 	receiptPending = "pending"
 	receiptDone    = "done"
 )
@@ -67,11 +69,17 @@ func (p *project) idempotent(key, operation string, request any, run func() outc
 		if r.Status == receiptDone {
 			return outcome{status: r.HTTP, body: r.Body}
 		}
+		// Earlier creation intents did not bind a result to the card redo.
+		// Their mutable board state cannot prove whether creation committed.
+		// Preserve that uncertain intent for inspection instead of guessing.
+		if operation == "new" && r.Schema != receiptSchema {
+			return outcome{err: apiError(api.CodeEvidenceIncomplete, "legacy pending creation has no atomic result; inspect the original operation before retrying")}
+		}
 		if out, ok := applied(); ok {
 			return p.finish(rel, r, out)
 		}
 	} else {
-		r = receipt{Key: key, Operation: operation, Digest: digest, Status: receiptPending, CreatedAt: time.Now().UTC()}
+		r = receipt{Schema: receiptSchema, Key: key, Operation: operation, Digest: digest, Status: receiptPending, CreatedAt: time.Now().UTC()}
 		if err := writeJSON(p.root, rel, r); err != nil {
 			return outcome{err: err}
 		}

@@ -14,6 +14,7 @@ import (
 // it from BoardCode with the same localized text as the v1 command.
 var boardCodes = map[string]string{
 	"board.transaction_conflict": api.CodeRevisionConflict,
+	"board.transaction_pending":  api.CodeNotReady,
 	"board.task_does_not_exist":  api.CodeNotFound,
 	"board.invalid_task_id":      api.CodeInvalidRequest,
 }

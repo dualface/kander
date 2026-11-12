@@ -50,17 +50,27 @@ func newTask(tx *Transaction, root, kind, slug, title, language string, large bo
 	}
 	rel, _ := filepath.Rel(root, target)
 	tx.record.Entries = append(tx.record.Entries, EntryChange{To: rel, Kind: "large", Text: contract})
+	tx.SetOperationResult(Snapshot{
+		Entry: Entry{TaskID: taskID, State: "backlog", Path: target, Document: filepath.Join(target, "spec.md"), Kind: taskKind},
+		Text:  contract, Revision: tx.record.Revisions[taskID], OperationID: tx.record.ID,
+	})
 	return target, nil
 }
 
 // NewTask creates an entry under the board and task locks, including identity allocation.
 func NewTask(root, kind, slug, title, language string, large bool) (target string, err error) {
+	return NewTaskWithTransaction(root, kind, slug, title, language, large)
+}
+
+// NewTaskWithTransaction creates a card and lets a service stage its exact
+// initial Snapshot from OperationResult in the same redo transaction.
+func NewTaskWithTransaction(root, kind, slug, title, language string, large bool, extensions ...TransactionExtension) (target string, err error) {
 	id := todayPrefix() + "-" + slug + "-task"
 	err = WithTransaction(root, LockScope{Tasks: []string{id}, ExclusiveBoard: true}, func(tx *Transaction) error {
 		var e error
 		target, e = newTask(tx, root, kind, slug, title, language, large)
 		return e
-	})
+	}, extensions...)
 	return target, err
 }
 
