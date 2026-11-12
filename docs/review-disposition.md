@@ -391,13 +391,22 @@ The reviewer prompt automatically receives the predecessor report, author dispos
 If **all** remaining fixes are mechanical (e.g. comment typo, dead code removal), the gate allows advancing `passed_at` without launching an extra reviewer agent.
 
 The close request must provide a `mechanical` verification array:
-- `paths`: the sorted, unique, repository-relative files changed from the run commit to `fix_commit`. No other changed file may be omitted.
+
+- `paths`: the sorted, unique, repository-relative files changed by this finding's fix. Each listed file must have changed from the conclusion run commit to this assessment's `fix_commit`. No absolute paths or `..` are allowed.
 - `diff_hash`: lowercase SHA-256 of the stdout of the command below. Repeat `:(literal)` once per path.
-- `facts`: factual proof that no logic changed.
+- `facts`: factual proof that no logic changed. For a `documentation` assessment that declares code files, the closer must establish that the additions only change comments; the tool cannot check that across languages.
 
 ```sh
 git diff --no-ext-diff --no-textconv --no-renames --binary --full-index --no-color <run-commit> <fix-commit> -- :(literal)<path>
 ```
+
+The **repair range** for a role with mechanical assessments is its conclusion run's `commit..passed_at`. At the close entry, these checks run after the existing per-assessment path and hash checks:
+
+- Every latest `fixed` disposition in every successful run of that role must have a `fix_commit` equal to or an ancestor of `passed_at`, including non-blocking findings and earlier runs. A refusal names the run, finding, and fix commit. Correct `passed_at` or run an incremental review.
+- All changed files in each repair range must be covered by the union of `paths` from **all** mechanical assessments in the close request, across roles. The range diff has no path filter. A refusal lists every unreported file in that range. Complete the assessments' declarations or run an incremental review.
+- Files declared by `dead-code` or `redundant-test` assessments must have zero added lines over their role's full repair range, unless the same file is also declared by any `documentation` assessment in the request. The check uses `git diff --no-ext-diff --no-textconv --no-renames --ignore-space-change --numstat -z`: whitespace amount changes are ignored, and binary changes count as additions. A refusal lists the files with additions and requires an incremental review. A `documentation` declaration exempts only its own paths.
+
+These refusals write no closure. To review a refused repair range, run the role with `kander review --task <task-id> --batch-id <batch-id> --previous-run-id <conclusion-run-id> <CWD> <base> <target> <role> <task-context>` (advance the batch target first when needed). Conclude with the new run; previous mechanical fixes then no longer need same-run assessments. The new checks apply only at close. Historical `VerifyClosedReviewGit` retains its existing path-filtered diff/hash validation, and the stored `ReviewMechanicalGit` and `closed.json` formats do not change.
 
 ### 4. Close the Batch
 

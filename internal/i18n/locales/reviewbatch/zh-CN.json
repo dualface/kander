@@ -40,5 +40,10 @@
   "board.review_stale_conclusion": "角色 {{.V1}} 的 run {{.V0}} 审的是成员 {{.V2}} 的另一个执行周期，不能关闭批次 {{.V3}}。在当前周期运行角色 {{.V1}}：在新 commit 上用 --advance-file 与 --previous-run-id，或在同一 commit 上运行并用 superseded_runs 取代旧 run",
   "board.review_withdrawal_owed": "已排除成员的已分配 finding 没有记录，或者最新状态是 confirmed 或 unverifiable 时，需要 withdrawn 记录（withdrawal:<run>/<finding>/<成员>），没有剩余成员的批次也一样：提交 kander review disposition，status 为 withdrawn，并写明该成员 kander review progress 给出的排除 ID 与用户决定",
   "board.review_stale_run_required": "要求的角色只有其他执行周期的 run（stale-run:<批次>/<角色>/<成员>）：在当前周期运行该角色，用新 run 关闭批次",
-  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation 与 batch/seal 互斥"
+  "board.review_extend_exclusive": "rebind_cycles、sync_targets、drop_batches、release_obligation 与 batch/seal 互斥",
+  "review.mechanical_fix_outside_range": "mechanical 修复范围未包含 fixed 处置 {{.V0}}/{{.V1}}（fix_commit {{.V2}} 不是 passed_at {{.V3}} 的祖先）；请修正 passed_at，或对该修复范围运行增量复审：kander review --task <task-id> --previous-run-id {{.V4}}",
+  "review.mechanical_unreported_files": "mechanical 修复范围存在未申报文件：{{.V0}}；请补全 mechanical 评估的 paths，或对该修复范围运行增量复审：kander review --task <task-id> --previous-run-id {{.V1}}",
+  "review.mechanical_added_lines": "mechanical 的 dead-code 或 redundant-test 修复含新增行（二进制改动视为含新增行）：{{.V0}}；请对该修复范围运行增量复审：kander review --task <task-id> --previous-run-id {{.V1}}",
+  "review.mechanical_diff_failed": "无法读取 mechanical 修复范围 diff：{{.V0}}",
+  "review.mechanical_numstat_invalid": "mechanical 修复的 numstat 无效：{{.V0}}"
 }

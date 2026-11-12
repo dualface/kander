@@ -9,7 +9,15 @@ import (
 )
 
 func verifyMechanicalGit(cwd string, v board.ReviewBatchView, r board.ReviewCloseRequest) ([]board.ReviewMechanicalGit, error) {
-	return verifyMechanicalGitContext(context.Background(), cwd, v, r)
+	ctx := context.Background()
+	claims, err := verifyMechanicalGitContext(ctx, cwd, v, r)
+	if err != nil {
+		return nil, err
+	}
+	if err = verifyMechanicalClosureScope(ctx, cwd, v, r); err != nil {
+		return nil, err
+	}
+	return claims, nil
 }
 
 func verifyMechanicalGitContext(ctx context.Context, cwd string, v board.ReviewBatchView, r board.ReviewCloseRequest) ([]board.ReviewMechanicalGit, error) {

@@ -315,15 +315,25 @@ Reviewer のプロンプトには、前回のレポート、改ざん防止さ�
 
 ### 3. 機械的修正のクローズゲート（Mechanical Fix Closure）
 
-残りの修正が**すべて**機械的（コメントのタイポ修正、不要コード削除など）である場合、ゲートは Reviewer Agent を再起動することなく `passed_at` を修正コミットまで進めることを許可します。
+残りの修正が**すべて**機械的（コメントのタイポ修正、不要コード削除など）である場合、ゲートは Reviewer Agent を再起動せずに `passed_at` を進めることを許可します。
 
-クローズリクエストには `mechanical` 検証配列を添付する必要があります：
-- `diff_hash`：変更ファイルに対する生の Git diff の SHA-256。
-- `facts`：ロジック変更がないことを示す客観的事実の証拠。
+クローズリクエストには `mechanical` 検証配列が必要です：
+
+- `paths`：この finding の修正で変更したファイル。ソート済みで重複のないリポジトリ相対パスを指定します。各ファイルは結論 run の commit からこの評価の `fix_commit` までに変更されている必要があります。絶対パスと `..` は禁止です。
+- `diff_hash`：次のコマンドの stdout の小文字 SHA-256。各パスに `:(literal)` を付けます。
+- `facts`：ロジック変更がないことを示す事実。`documentation` 評価がコードファイルを申告する場合、クローズ担当者が追加行はコメント変更のみと確認します。ツールは言語を横断して判定できません。
 
 ```sh
 git diff --no-ext-diff --no-textconv --no-renames --binary --full-index --no-color <run-commit> <fix-commit> -- ':(literal)<path>'
 ```
+
+mechanical 評価があるロールの**修正範囲**は、結論 run の `commit..passed_at` です。クローズ入口は既存の評価ごとのファイルとハッシュの検証後に、次を検証します：
+
+- そのロールのすべての成功 run の最新の各 `fixed` 処置は、`fix_commit` が `passed_at` と同じか、その祖先である必要があります。非ブロッキング finding と以前の run も対象です。拒否時には run、finding、修正コミットを示します。`passed_at` を訂正するか、増分レビューを実行します。
+- 各修正範囲の全変更ファイルを、リクエスト内の**全** mechanical 評価の `paths` の和集合がカバーする必要があります。他のロールの評価も含みます。範囲の diff にパスフィルターは付けません。拒否時にはその範囲の未申告ファイルをすべて示します。申告を補完するか、増分レビューを実行します。
+- `dead-code` または `redundant-test` 評価のファイルは、そのロールの全修正範囲で追加行がゼロである必要があります。同じファイルをリクエスト内のいずれかの `documentation` 評価も申告している場合は免除します。`git diff --no-ext-diff --no-textconv --no-renames --ignore-space-change --numstat -z` を使い、空白量の変更を無視し、バイナリ変更は追加行ありと扱います。拒否時には追加行があるファイルを示し、増分レビューを要求します。`documentation` の免除は申告したパスだけに適用します。
+
+これらの拒否ではクローズ記録を書きません。拒否された範囲は、`kander review --task <task-id> --batch-id <batch-id> --previous-run-id <結論-run-id> <CWD> <base> <target> <role> <task-context>` でそのロールの増分レビューを実行します（必要なら先にバッチ目標を進めます）。新しい run を結論に使うと、以前の mechanical 修正には同じ run の評価が不要になります。新検証はクローズ入口だけに適用します。過去の `VerifyClosedReviewGit` は申告パスで絞った diff とハッシュの既存検証を維持し、`ReviewMechanicalGit` と `closed.json` の保存形式は変わりません。
 
 ### 4. バッチのクローズ（Close Batch）
 

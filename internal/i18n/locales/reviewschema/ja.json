@@ -33,7 +33,7 @@
   "review.schema.close.mechanical.item.finding.finding_id": "各 mechanical 要素で必須。finding ID。",
   "review.schema.close.mechanical.item.finding.run_id": "各 mechanical 要素で必須。finding の実行 ID。",
   "review.schema.close.mechanical.item.fix_commit": "各 mechanical 要素で必須。その処置と同じ fix_commit。",
-  "review.schema.close.mechanical.item.paths": "各 mechanical 要素で必須。ソート済みで重複のないリポジトリ相対パス。実行 commit から fix_commit までの変更ファイルちょうどです。絶対パス、空名、.. は不可。",
+  "review.schema.close.mechanical.item.paths": "各 mechanical 要素で必須。その finding の修正で変更した、ソート済みで重複のないリポジトリ相対パス。各ファイルは結論 run の commit から fix_commit までに変更されている必要があります。絶対パス、空名、.. は不可。全ロールの評価の paths の和集合で、各ロールの結論 commit から passed_at までの全変更ファイルをカバーします。dead-code と redundant-test のパスは、その範囲で追加行がゼロである必要がありますが、documentation も申告したパスは免除します。空白量の変更は無視し、バイナリ変更は追加行ありと扱います。",
   "review.schema.close.mechanical.item.record_id": "各 mechanical 要素で必須。その処置の record_id。",
   "review.schema.close.mechanical.item.report_hash": "各 mechanical 要素で必須。その処置と同じ report_hash。",
   "review.schema.close.mechanical.item.reported_category": "各 mechanical 要素で必須。レビュアーの mechanical ラベル。レビュアーが省略したときは空文字。",
