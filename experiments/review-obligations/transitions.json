@@ -21,7 +21,8 @@
     "unplanned": 0,
     "cycleNeed": 0,
     "cycleFloor": 0,
-    "done": 0
+    "done": 0,
+    "unplannedReleased": 0
   },
   "actions": {
     "planNA": {
@@ -293,7 +294,37 @@
             0
           ],
           1,
-          "unplanned"
+          [
+            "if",
+            [
+              "and",
+              [
+                "=",
+                "plan",
+                1
+              ],
+              [
+                "or",
+                [
+                  "=",
+                  "required",
+                  1
+                ],
+                [
+                  "=",
+                  "remembered",
+                  1
+                ],
+                [
+                  "=",
+                  "recoverOwed",
+                  1
+                ]
+              ]
+            ],
+            0,
+            "unplanned"
+          ]
         ],
         "cycleNeed": [
           "if",
@@ -314,6 +345,45 @@
           ],
           "batch",
           "cycleFloor"
+        ],
+        "unplannedReleased": [
+          "if",
+          [
+            "or",
+            [
+              "=",
+              "plan",
+              0
+            ],
+            [
+              "and",
+              [
+                "=",
+                "plan",
+                1
+              ],
+              [
+                "or",
+                [
+                  "=",
+                  "required",
+                  1
+                ],
+                [
+                  "=",
+                  "remembered",
+                  1
+                ],
+                [
+                  "=",
+                  "recoverOwed",
+                  1
+                ]
+              ]
+            ]
+          ],
+          0,
+          "unplannedReleased"
         ]
       }
     },
@@ -596,11 +666,26 @@
             "=",
             "recoverOwed",
             0
+          ],
+          [
+            "=",
+            "unplannedReleased",
+            0
           ]
         ]
       ],
       "set": {
-        "unplanned": 0
+        "unplanned": [
+          "if",
+          [
+            "=",
+            "Mutation",
+            4
+          ],
+          0,
+          "unplanned"
+        ],
+        "unplannedReleased": 1
       }
     },
     "done": {
@@ -683,7 +768,7 @@
               0
             ],
             [
-              "and",
+              "if",
               [
                 "or",
                 [
@@ -698,14 +783,22 @@
                 ]
               ],
               [
-                ">",
-                "closed",
-                0
+                "and",
+                [
+                  ">",
+                  "closed",
+                  0
+                ],
+                [
+                  "=",
+                  "closedCycle",
+                  "cycle"
+                ]
               ],
               [
                 "=",
-                "closedCycle",
-                "cycle"
+                "unplannedReleased",
+                1
               ]
             ]
           ],

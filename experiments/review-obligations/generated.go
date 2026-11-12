@@ -4,27 +4,28 @@ package obligations
 // Bounds belong to the finite experiment, not the production protocol.
 type Bounds struct{ MaxCycle, MaxBatch, Mutation int }
 type Member struct {
-	Cycle          int `json:"cycle"`
-	Bound          int `json:"bound"`
-	Plan           int `json:"plan"`
-	Required       int `json:"required"`
-	Remembered     int `json:"remembered"`
-	Batch          int `json:"batch"`
-	Pending        int `json:"pending"`
-	BatchRequired  int `json:"batchRequired"`
-	BatchCycle     int `json:"batchCycle"`
-	Closed         int `json:"closed"`
-	ClosedCycle    int `json:"closedCycle"`
-	AnyClosed      int `json:"anyClosed"`
-	AnyClosedCycle int `json:"anyClosedCycle"`
-	DropOwed       int `json:"dropOwed"`
-	DropFloor      int `json:"dropFloor"`
-	RecoverOwed    int `json:"recoverOwed"`
-	RecoverFloor   int `json:"recoverFloor"`
-	Unplanned      int `json:"unplanned"`
-	CycleNeed      int `json:"cycleNeed"`
-	CycleFloor     int `json:"cycleFloor"`
-	Done           int `json:"done"`
+	Cycle             int `json:"cycle"`
+	Bound             int `json:"bound"`
+	Plan              int `json:"plan"`
+	Required          int `json:"required"`
+	Remembered        int `json:"remembered"`
+	Batch             int `json:"batch"`
+	Pending           int `json:"pending"`
+	BatchRequired     int `json:"batchRequired"`
+	BatchCycle        int `json:"batchCycle"`
+	Closed            int `json:"closed"`
+	ClosedCycle       int `json:"closedCycle"`
+	AnyClosed         int `json:"anyClosed"`
+	AnyClosedCycle    int `json:"anyClosedCycle"`
+	DropOwed          int `json:"dropOwed"`
+	DropFloor         int `json:"dropFloor"`
+	RecoverOwed       int `json:"recoverOwed"`
+	RecoverFloor      int `json:"recoverFloor"`
+	Unplanned         int `json:"unplanned"`
+	CycleNeed         int `json:"cycleNeed"`
+	CycleFloor        int `json:"cycleFloor"`
+	Done              int `json:"done"`
+	UnplannedReleased int `json:"unplannedReleased"`
 }
 type State []Member
 
@@ -35,27 +36,28 @@ func Initial(members int) State {
 	state := make(State, members)
 	for i := range members {
 		state[i] = Member{
-			Cycle:          1,
-			Bound:          1,
-			Plan:           0,
-			Required:       0,
-			Remembered:     0,
-			Batch:          0,
-			Pending:        0,
-			BatchRequired:  0,
-			BatchCycle:     0,
-			Closed:         0,
-			ClosedCycle:    0,
-			AnyClosed:      0,
-			AnyClosedCycle: 0,
-			DropOwed:       0,
-			DropFloor:      0,
-			RecoverOwed:    0,
-			RecoverFloor:   0,
-			Unplanned:      0,
-			CycleNeed:      0,
-			CycleFloor:     0,
-			Done:           0,
+			Cycle:             1,
+			Bound:             1,
+			Plan:              0,
+			Required:          0,
+			Remembered:        0,
+			Batch:             0,
+			Pending:           0,
+			BatchRequired:     0,
+			BatchCycle:        0,
+			Closed:            0,
+			ClosedCycle:       0,
+			AnyClosed:         0,
+			AnyClosedCycle:    0,
+			DropOwed:          0,
+			DropFloor:         0,
+			RecoverOwed:       0,
+			RecoverFloor:      0,
+			Unplanned:         0,
+			CycleNeed:         0,
+			CycleFloor:        0,
+			Done:              0,
+			UnplannedReleased: 0,
 		}
 	}
 	return state
@@ -63,7 +65,7 @@ func Initial(members int) State {
 
 // Step leaves its input untouched, including on refusal. Assignments read the pre-state.
 func Step(state State, member int, event string, b Bounds) (State, bool) {
-	if len(state) < 1 || len(state) > 2 || member < 0 || member >= len(state) || b.MaxCycle < 1 || b.MaxCycle > 3 || b.MaxBatch < 1 || b.MaxBatch > 3 || b.Mutation < 0 || b.Mutation > 3 {
+	if len(state) < 1 || len(state) > 2 || member < 0 || member >= len(state) || b.MaxCycle < 1 || b.MaxCycle > 3 || b.MaxBatch < 1 || b.MaxBatch > 3 || b.Mutation < 0 || b.Mutation > 4 {
 		return state, false
 	}
 	s := state[member]
@@ -145,7 +147,12 @@ func Step(state State, member int, event string, b Bounds) (State, bool) {
 			if s.Plan == 0 {
 				return 1
 			}
-			return s.Unplanned
+			return func() int {
+				if (s.Plan == 1) && ((s.Required == 1) || (s.Remembered == 1) || (s.RecoverOwed == 1)) {
+					return 0
+				}
+				return s.Unplanned
+			}()
 		}()
 		n.CycleNeed = func() int {
 			if s.Plan == 1 {
@@ -158,6 +165,12 @@ func Step(state State, member int, event string, b Bounds) (State, bool) {
 				return s.Batch
 			}
 			return s.CycleFloor
+		}()
+		n.UnplannedReleased = func() int {
+			if (s.Plan == 0) || ((s.Plan == 1) && ((s.Required == 1) || (s.Remembered == 1) || (s.RecoverOwed == 1))) {
+				return 0
+			}
+			return s.UnplannedReleased
 		}()
 	case "rebind":
 		if !((s.Done == 0) && ((s.Plan == 1) && (s.Bound != s.Cycle))) {
@@ -243,17 +256,28 @@ func Step(state State, member int, event string, b Bounds) (State, bool) {
 			return s.RecoverOwed
 		}()
 	case "releaseRecovery":
-		if !((s.Done == 0) && ((s.Plan == 1) && (s.Unplanned == 1) && (s.Required == 0) && (s.Remembered == 0) && (s.RecoverOwed == 0))) {
+		if !((s.Done == 0) && ((s.Plan == 1) && (s.Unplanned == 1) && (s.Required == 0) && (s.Remembered == 0) && (s.RecoverOwed == 0) && (s.UnplannedReleased == 0))) {
 			return state, false
 		}
-		n.Unplanned = 0
+		n.Unplanned = func() int {
+			if b.Mutation == 4 {
+				return 0
+			}
+			return s.Unplanned
+		}()
+		n.UnplannedReleased = 1
 	case "done":
 		if !((s.Done == 0) && ((s.Plan == 1) && (s.Pending == 0) && (s.Bound == s.Cycle) && ((s.DropOwed == 0) || (s.Closed > s.DropFloor)) && ((s.RecoverOwed == 0) || func() bool {
 			if b.Mutation == 2 {
 				return (s.Closed > 0)
 			}
 			return ((s.Closed > s.RecoverFloor) && (s.ClosedCycle == s.Cycle))
-		}()) && ((s.Unplanned == 0) || (((s.Required == 1) || (s.Remembered == 1)) && (s.Closed > 0) && (s.ClosedCycle == s.Cycle))) && ((s.CycleNeed == 0) || ((s.AnyClosed > s.CycleFloor) && (s.AnyClosedCycle == s.Cycle))))) {
+		}()) && ((s.Unplanned == 0) || func() bool {
+			if (s.Required == 1) || (s.Remembered == 1) {
+				return ((s.Closed > 0) && (s.ClosedCycle == s.Cycle))
+			}
+			return (s.UnplannedReleased == 1)
+		}()) && ((s.CycleNeed == 0) || ((s.AnyClosed > s.CycleFloor) && (s.AnyClosedCycle == s.Cycle))))) {
 			return state, false
 		}
 		n.Done = 1

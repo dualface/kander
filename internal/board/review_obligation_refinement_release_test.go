@@ -8,7 +8,7 @@ import (
 	obligations "github.com/dualface/kander/experiments/review-obligations"
 )
 
-// Reproduce the discovered abstraction gap through board entrance APIs. The
+// Pin the repaired abstraction against both historical board entrance traces. The
 // existing helpers provide coordinator and Git evidence fixtures, not real agents.
 func TestObligationRefinementReleasedRecovery(t *testing.T) {
 	for _, drop := range []string{"dropReleased", "releaseDrop"} {
@@ -58,15 +58,19 @@ func TestObligationRefinementReleasedRecovery(t *testing.T) {
 			state := obligations.Initial(1)
 			for _, event := range steps {
 				next, ok := obligations.Step(state, 0, event, obligations.Bounds{MaxCycle: 3, MaxBatch: 3})
-				if !ok {
-					t.Fatalf("expected known prototype gap disappeared at %s; re-audit correspondence", event)
+				if event == "done" {
+					if ok || !slices.Equal(next, state) {
+						t.Fatal("model allowed completion despite revived recovery debt")
+					}
+				} else if !ok {
+					t.Fatalf("model refused prefix event %s", event)
 				}
 				state = next
 			}
-			if state[0].Done != 1 {
-				t.Fatal("prototype did not reach the documented unsafe abstraction state")
+			if got := abstractObligations(state[0]); got != (obligationObservation{Recovery: true, RecoveryRole: true}) {
+				t.Fatalf("model lost recovery debt: %+v", got)
 			}
-			t.Logf("known model gap: %s; prototype done accepted, production done refused recovery debt", strings.Join(steps, " -> "))
+			t.Logf("repaired regression: %s; model and production both refused recovery debt", strings.Join(steps, " -> "))
 		})
 	}
 }

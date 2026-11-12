@@ -1,5 +1,10 @@
 # Production obligation correspondence
 
+> Historical report from before the provenance repair. The current model and
+> tests have changed; see [PROVENANCE.md](PROVENANCE.md) for the repaired rules,
+> strict comparison results, and current reproduction commands. Counts and
+> statements below describe the earlier delivery, not the current checkout.
+
 **The prototype is not a replacement for the production obligation logic.**
 Trace comparison found one missing model rule: releasing a no-role recovery does
 not erase its history. A later required role can make that recovery owed again.

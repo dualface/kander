@@ -5,7 +5,8 @@ definition to a TLA+ model and Go decision code. It checks a small obligation
 kernel, not the entire Kander implementation. Production packages do not import
 it, and the production binary needs none of its verification tools.
 
-The baseline is `f3dd5ed4931cf1bfd7763d6d2e1496ff78b90c54` on `develop`.
+The original baseline was `f3dd5ed4931cf1bfd7763d6d2e1496ff78b90c54` on `develop`.
+The provenance repair uses `b0747fab54b5b0f971fb6111084cd747f718e545` as its base.
 The earlier state-machine audit is the research input. The active v2 distributed
 execution implementation is outside this experiment's baseline.
 
@@ -61,7 +62,7 @@ function validates invocation bounds and member indices, but is not a parser or
 validator for arbitrary persisted state. Input and output slices must not be
 concurrently mutated by the caller.
 
-`Mutation=0` is the baseline. Values 1–3 deliberately introduce faults into the
+`Mutation=0` is the baseline. Values 1–4 deliberately introduce faults into the
 same generated model and Go code. They exist only to test detection in this
 isolated experiment, and must never be used as production feature switches.
 
@@ -82,7 +83,7 @@ isolation and interleaving, not shared-plan membership/role union behavior.
 | `remembered` | `recordDroppedRoles`, retained after a drop decision |
 | `dropOwed`, `dropFloor` | `DropObligations`, `dropObligationsOwed` |
 | `recoverOwed`, `recoverFloor` | `RecoveryReview`, `recoveryReviewOwed` |
-| `unplanned` | Recovery without a plan, including explicit no-role release |
+| `unplanned`, `unplannedReleased` | Persistent no-plan record and its separate release decision |
 | `cycleNeed`, `cycleFloor` | `CycleBatchFrom`, `cycleBatchMissing` |
 | `close` | An abstract valid `CloseReviewBatch` result |
 | `releaseDrop`, `releaseRecovery` | `releaseObligation`, `releaseRecoveryReview` |
@@ -108,7 +109,12 @@ Within one kernel:
   user decision. A later reset therefore recreates their review requirement.
 - `reset` advances the cycle and preserves role obligations; a plan with no
   required role creates only a new-cycle coverage obligation. Reset before plan
-  creation records the separate `unplanned` obligation.
+  creation records the persistent `unplanned` provenance. `releaseRecovery`
+  sets `unplannedReleased` without erasing that record. With no role, the
+  release pays the debt; when a role later appears, a current-cycle required
+  closure is needed regardless of that release. A planned reset with role
+  history replaces the no-plan record with planned recovery. A planned reset
+  without roles leaves the record and its release status intact.
 - `close` requires current cycle binding. It stands for successful interpretation,
   author disposition, Git checks and closure publication. It is an assumed
   evidence producer, not a model of those protocols.
@@ -131,8 +137,11 @@ actions cannot be used to infer atomic external side effects.
 
 `Oracle.tla` is handwritten separately from the transition definition. It derives
 debts from accepted events, remembers that a role was required, and records the
-batch boundaries after which new evidence can pay debts. It never reads
-`dropOwed`, `recoverOwed`, `unplanned`, `cycleNeed`, or the generated done guard.
+batch boundaries after which new evidence can pay debts. It separately retains
+no-plan provenance and the cycle of the last required closure. Introducing a
+role revives no-plan debt unless that cycle already has required evidence.
+It never reads
+`dropOwed`, `recoverOwed`, `unplanned`, `unplannedReleased`, `cycleNeed`, or the generated done guard.
 It does read event context (`plan`, batch identity, batch role, and cycle).
 Independence is therefore scoped: it detects omitted obligation bookkeeping and
 bad discharge logic, but is not a completely independent model of plan storage.
@@ -151,19 +160,21 @@ two cycles / two allocated batches. There is no trajectory-depth cutoff.
 TLC uses state fingerprints and reports their collision estimate in its logs.
 Passing these instances does not establish arbitrary-size correctness.
 
-Two additional runs deliberately check false `NoCompletion` properties. Their
+Three additional runs deliberately check false `NoCompletion` properties. Their
 counterexamples are **success witnesses**: both members can finish; and a member
-can reset twice after a required review, then pay the renewed debt and finish.
+can reset twice after a required review, then pay the renewed debt and finish; and a released no-role recovery can
+acquire a required role, pay it with a new closure, and finish.
 The runner requires these exact witness-property failures with no safety failure.
 Witness runs stop at the first witness and are not full-space checks.
 
-Three deliberate faults must violate `DebtSafety`:
+Four deliberate faults must violate `DebtSafety`:
 
 | Mutation | Changed rule | Expected bad behavior |
 | --- | --- | --- |
 | 1 | Reset omits the recovery obligation | An N/A review allows completion |
 | 2 | Any old required closure pays recovery | Old-cycle evidence is reused |
 | 3 | Drop release also clears recovery | Consent for one kind clears another |
+| 4 | Recovery release erases no-plan provenance | Later role debt is forgotten |
 
 The runner feeds the actual TLC JSON transitions into generated Go and compares
 acceptance and every post-state field. A separate Python interpreter explores
@@ -173,22 +184,22 @@ traces and the Go emitter against a reference evaluator. It is not a proof of th
 compiler, and not an exhaustive comparison against every TLC edge. Both emitters
 and the reference evaluator share the validated input definition.
 
-The checked-in `testdata/tlc-vectors.jsonl` contains the five diagnostic/witness
+The checked-in `testdata/tlc-vectors.jsonl` contains the seven diagnostic/witness
 traces from TLC v1.8.0, single worker, seed 1, fingerprint polynomial 0. Its trace
 labels identify the case, bounds and mutation. To refresh after a reviewed model
 change, inspect a successful full run and copy its `tlc-vectors.jsonl` into that
-path, then rerun Go tests. Go also replays the three mutant action sequences with
+path, then rerun Go tests. Go also replays the four mutant action sequences with
 mutation disabled and requires the final incorrect completion to be refused.
 
 ## Results and next decision
 
-The follow-up [production correspondence experiment](REFINEMENT.md) found a
-release-history rule missing from both this kernel and its history observer.
-Production rejects completion in the reproduced case, while this baseline can
-accept it. The original model is retained so the discrepancy stays reproducible;
-its passing checks must not be interpreted as production conformance.
+The [production correspondence experiment](REFINEMENT.md) found a release-history
+rule missing from both the original kernel and its observer. The subsequent
+[provenance repair](PROVENANCE.md) corrects both and removes the known-gap
+exception from the real Go query comparison. The old defect remains reproducible
+as mutation 4. See that report for current measurements; [RESULTS.md](RESULTS.md)
+and [REFINEMENT.md](REFINEMENT.md) preserve the earlier stages' results.
 
-See [RESULTS.md](RESULTS.md) for measured results and counterexample sequences.
 The experiment is a feasibility check for generated decision logic. It is not a
 replacement for the existing board model tests, and introduces no runtime
 verification service. Before production adoption, establish a refinement mapping

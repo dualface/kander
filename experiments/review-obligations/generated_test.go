@@ -77,8 +77,8 @@ func TestBaselineRejectsMutantCounterexamples(t *testing.T) {
 			cases[v.Case] = append(cases[v.Case], v)
 		}
 	})
-	if len(cases) != 3 {
-		t.Fatalf("want three mutation counterexamples, got %d", len(cases))
+	if len(cases) != 4 {
+		t.Fatalf("want four mutation counterexamples, got %d", len(cases))
 	}
 	for name, trace := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestInvalidInvocationIsRefused(t *testing.T) {
 		{1, "planNA", Bounds{3, 3, 0}},
 		{0, "unknown", Bounds{3, 3, 0}},
 		{0, "planNA", Bounds{4, 3, 0}},
-		{0, "planNA", Bounds{3, 3, 4}},
+		{0, "planNA", Bounds{3, 3, 5}},
 	} {
 		if after, ok := Step(state, c.member, c.event, c.bounds); ok || !slices.Equal(after, state) {
 			t.Fatalf("invalid invocation changed state: %+v", c)

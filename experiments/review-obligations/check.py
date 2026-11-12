@@ -175,8 +175,10 @@ def main():
         ("reset-lost", 1, 3, 3, 1, None),
         ("old-closure", 1, 3, 3, 2, None),
         ("release-crosses-kind", 1, 3, 3, 3, None),
+        ("release-forgets-history", 1, 3, 3, 4, None),
         ("completion", 2, 2, 2, 0, "NoCompletion"),
         ("twice-reset-completion", 1, 3, 3, 0, "NoReviewedRecoveryCompletion"),
+        ("released-role-completion", 1, 3, 3, 0, "NoReleasedRoleCompletion"),
     ]
     with (output / "tlc-vectors.jsonl").open("w") as trace_stream, (output / "vectors.jsonl").open("w") as all_stream:
         for case in cases:

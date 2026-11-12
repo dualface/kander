@@ -1,5 +1,10 @@
 # Prototype results
 
+> Historical report from before the provenance repair. The current model and
+> tests have changed; see [PROVENANCE.md](PROVENANCE.md) for the repaired rules,
+> strict comparison results, and current reproduction commands. Counts and
+> statements below describe the earlier delivery, not the current checkout.
+
 Follow-up: [production correspondence](REFINEMENT.md) found a missing rule for
 roles added after a no-plan recovery release. Production retains that debt;
 this baseline can permit completion. The measurements below remain results of

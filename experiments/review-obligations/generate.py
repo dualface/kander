@@ -11,7 +11,7 @@ CONSTANTS = {"MaxCycle", "MaxBatch", "Mutation"}
 
 
 def expression_type(expr, fields):
-    if type(expr) is int and 0 <= expr <= 3:
+    if type(expr) is int and 0 <= expr <= 4:
         return "int"
     if isinstance(expr, str) and expr in fields | CONSTANTS:
         return "int"
@@ -127,7 +127,7 @@ def go(spec):
     lines += ["} }; return state", "}", "",
               "// Step leaves its input untouched, including on refusal. Assignments read the pre-state.",
               "func Step(state State, member int, event string, b Bounds) (State, bool) {",
-              "if len(state) < 1 || len(state) > 2 || member < 0 || member >= len(state) || b.MaxCycle < 1 || b.MaxCycle > 3 || b.MaxBatch < 1 || b.MaxBatch > 3 || b.Mutation < 0 || b.Mutation > 3 { return state, false }",
+              "if len(state) < 1 || len(state) > 2 || member < 0 || member >= len(state) || b.MaxCycle < 1 || b.MaxCycle > 3 || b.MaxBatch < 1 || b.MaxBatch > 3 || b.Mutation < 0 || b.Mutation > 4 { return state, false }",
               "s := state[member]", "n := s", "switch event {"]
     for event, action in spec["actions"].items():
         lines += [f"case {json.dumps(event)}:", f'if !{render(action["guard"], "go", fields)} {{ return state, false }}']

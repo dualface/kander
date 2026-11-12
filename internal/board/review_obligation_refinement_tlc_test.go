@@ -49,7 +49,7 @@ func TestObligationRefinementTLC(t *testing.T) {
 		}
 		traces[key] = append(traces[key], v)
 	}
-	if len(order) != 6 {
+	if len(order) != 8 {
 		t.Fatalf("TLC inventory changed: %v", order)
 	}
 	transitions, mutants, witnesses := 0, 0, 0
@@ -97,7 +97,7 @@ func TestObligationRefinementTLC(t *testing.T) {
 			}
 		})
 	}
-	if transitions != 38 || mutants != 3 || witnesses != 3 {
+	if transitions != 52 || mutants != 4 || witnesses != 4 {
 		t.Fatalf("incomplete TLC coverage: transitions=%d mutants=%d member_witnesses=%d", transitions, mutants, witnesses)
 	}
 	t.Logf("TLC transitions=%d detected_mutants=%d debt_free_member_witnesses=%d", transitions, mutants, witnesses)
