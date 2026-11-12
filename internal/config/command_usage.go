@@ -56,26 +56,5 @@ func commandUsage(rulesDir, command string, warn io.Writer) string {
 	return strings.Join(lines, "\n") + "\nContract: " + root + "/" + name + "\n" + CommandReadSentence(root)
 }
 
-// contractSyntaxLines returns the lines of the first fenced code block under the "## Syntax"
-// heading of a contract file.
-func contractSyntaxLines(contract string) []string {
-	var lines []string
-	inSyntax, inBlock := false, false
-	for _, line := range strings.Split(contract, "\n") {
-		switch {
-		case strings.HasPrefix(line, "## "):
-			if inBlock {
-				return lines
-			}
-			inSyntax = strings.TrimSpace(line) == "## Syntax"
-		case inSyntax && strings.HasPrefix(line, "```"):
-			if inBlock {
-				return lines
-			}
-			inBlock = true
-		case inBlock:
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
+// contractSyntaxLines includes the base contract and additional command forms.
+func contractSyntaxLines(contract string) []string { return rules.CommandSyntaxLines(contract) }

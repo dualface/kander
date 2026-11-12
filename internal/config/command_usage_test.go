@@ -99,3 +99,11 @@ func TestCommandUsageWarnsWhenInstalledContractIsMissing(t *testing.T) {
 		t.Fatalf("installed contract present, no hint expected: %q", warn.String())
 	}
 }
+
+func TestCommandUsageIncludesDistributedForms(t *testing.T) {
+	for _, tc := range []struct{ Command, Flag string }{{"resume", "--release"}, {"orchestrate", "--operation-id"}} {
+		if got := commandUsage("", tc.Command, nil); !strings.Contains(got, tc.Flag) {
+			t.Fatalf("%s help omitted %s: %s", tc.Command, tc.Flag, got)
+		}
+	}
+}

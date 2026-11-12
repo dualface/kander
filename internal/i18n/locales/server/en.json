@@ -66,5 +66,21 @@
   "remote.dispatch_proposal_changed": "A dispatch ID already identifies another immutable proposal; inspect it or use a new ID",
   "remote.request_receipt_damaged": "The private request receipt is damaged or belongs to another client: {{.V0}}",
   "remote.request_recovery_mismatch": "The request facts do not match the saved subject; preserve the local receipt and inspect the server",
-  "remote.request_pending": "Request outcome is unresolved. The saved operation {{.V0}} will be reconciled on the same request retry; inspect request {{.V1}} before repeating effects"
+  "remote.request_pending": "Request outcome is unresolved. The saved operation {{.V0}} will be reconciled on the same request retry; inspect request {{.V1}} before repeating effects",
+  "remote.takeover_decision_required": "A new execution requires an explicit --decision reference",
+  "remote.native_requires_local_execution": "Native resume requires this host's exact previous execution; use an explicit takeover for another host",
+  "remote.restart_needs_stopped": "The previous executor is not confirmed stopped; preserve it and inspect its local process or session",
+  "remote.takeover_source_missing": "No shared baseline or delivery is recorded; provide a full --base SHA available from the common remote",
+  "remote.launcher_requires_takeover": "Changing a launcher requires an explicit execution takeover",
+  "remote.finish_dispatch_before_restart": "An unfinished dispatch already owns the task; inspect its receipt and reuse that ID or explicitly end it before proposing another round",
+  "remote.continuation_recovery_required": "Local changes could not be transferred safely. Preserve both worktrees and inspect the private continuation intent before retrying.",
+  "remote.release_takes_only_a_decision": "--release requires --decision and accepts no launch, message, adoption, or dispatch options",
+  "remote.release_requires_server": "Task lease release requires a configured server",
+  "remote.execution_released": "Released task execution: {{.V0}}",
+  "remote.launch_receipt_damaged": "The private launch receipt is damaged",
+  "remote.launch_reconciliation_required": "Inspect the previous launch receipt and actual execution before starting another agent: {{.V0}}",
+  "remote.launch_no_executor_reconciled": "Recovered the previous claim and verified no executor was launched. Its lease is ended; retry the command: {{.V0}}",
+  "remote.launch_operation_id_invalid": "--operation-id requires a valid stable operation identity",
+  "remote.local_execution_required": "This operation requires the exact retained execution on its owning host",
+  "remote.execution_dismissed": "Dismissed task execution: {{.V0}}"
 }

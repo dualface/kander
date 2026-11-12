@@ -308,6 +308,13 @@ func (p *Project) Claim(ctx context.Context, key, id string, req api.ClaimReques
 
 // Takeover hands a lost claim to a new execution.
 func (p *Project) Takeover(ctx context.Context, key, id string, req api.ClaimRequest) (api.ClaimGrant, error) {
+	if req.ExpectedRevision == 0 {
+		observed, err := p.Show(ctx, id)
+		if err != nil {
+			return api.ClaimGrant{}, err
+		}
+		req.ExpectedRevision = observed.Revision
+	}
 	var g api.ClaimGrant
 	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path(taskPath(id, "takeover")...), body: req, key: key}, &g)
 	return g, err

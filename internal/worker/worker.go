@@ -224,12 +224,12 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 			if reportErr != nil {
 				log.Warn("agent observation report failed", "error", reportErr)
 			}
-			if observation.Status == "stopped" {
+			if c.ResourceKind == "group" && observation.Status == "stopped" {
 				w.lose(log, c, "agent stopped: "+observation.Reason)
 				return false
 			}
 		}
-		if c.ResourceKind != "group" {
+		if c.ResourceKind != "group" && observation.Status != "stopped" {
 			w.deliver(callCtx, log, project, &c)
 		}
 		if err := remote.WriteCredential(w.o.Home, c); err != nil {

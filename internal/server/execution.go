@@ -126,6 +126,14 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 		if u.Action == api.ExecutionConfirm || u.Action == api.ExecutionAdopt {
 			nextClaim.OriginalText = ""
 		}
+		if u.Action == api.ExecutionRelease {
+			nextClaim.Status, nextClaim.ExpiresAt = api.ClaimLost, p.server.now()
+			if u.Presence != nil {
+				observed := *u.Presence
+				observed.ObservedAt = p.server.now()
+				nextClaim.Observation = &observed
+			}
+		}
 		if u.Action == api.ExecutionRollback {
 			nextClaim.Status = api.ClaimReleased
 		}
@@ -146,14 +154,14 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 				return nil
 			}
 		}
-		if u.Action == api.ExecutionAdopt || u.Action == api.ExecutionWorkspace {
+		if u.Action == api.ExecutionAdopt || u.Action == api.ExecutionWorkspace || u.Action == api.ExecutionRelease {
 			ownership := validate
 			validate = func(tx *board.Transaction) error {
 				if err := ownership(tx); err != nil {
 					return err
 				}
 				_, err := tx.Expect(id, current.Entry.State, u.ExpectedRevision)
-				if u.Action == api.ExecutionAdopt && err == nil && !p.validObservationTicket(id, u.ExpectedRevision, claim.Generation, u.ObservationTicket) {
+				if (u.Action == api.ExecutionAdopt || u.Action == api.ExecutionRelease) && err == nil && !p.validObservationTicket(id, u.ExpectedRevision, claim.Generation, u.ObservationTicket) {
 					return apiError(api.CodeEvidenceIncomplete, "executor observation ticket is stale or belongs to another version")
 				}
 				return err
@@ -161,6 +169,20 @@ func (p *project) execution(key, id string, u api.ExecutionUpdate, h holder) out
 		}
 		extension := p.taskTransaction(key, "execution:"+id, u, id, validate, &nextClaim, false)
 		switch u.Action {
+		case api.ExecutionRelease:
+			if u.ExpectedRevision == 0 || strings.TrimSpace(u.Decision) == "" || u.Presence == nil || u.Presence.Status != "stopped" {
+				return outcome{err: apiError(api.CodeEvidenceIncomplete, "lease release requires a decision and a fresh confirmed stopped executor")}
+			}
+			err = board.WithTransaction(p.board, board.LockScope{Tasks: []string{id}}, func(tx *board.Transaction) error {
+				return stageJSON(tx, "releases/"+id+"/"+digest(key)+".json", struct {
+					Generation  uint64    `json:"generation"`
+					ExecutionID string    `json:"execution_id"`
+					ClientID    string    `json:"client_id"`
+					Decision    string    `json:"decision"`
+					Revision    uint64    `json:"revision"`
+					At          time.Time `json:"at"`
+				}{claim.Generation, claim.ExecutionID, claim.ClientID, u.Decision, u.ExpectedRevision, p.server.now()})
+			}, extension)
 		case api.ExecutionWorkspace:
 			expected := "kander/" + p.info.ID + "/" + id + "/g" + strconv.FormatUint(claim.Generation, 10)
 			if p.info.Remote == "" || u.ExpectedRevision == 0 || u.Branch != expected {

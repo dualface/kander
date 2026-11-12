@@ -30,14 +30,31 @@ func TestAgentExitIsReportedWithoutTreatingWorkerPresenceAsAgentLife(t *testing.
 	}
 	status = "stopped"
 	h.advance(16 * time.Second)
-	if live, err := h.loop.pass(t.Context()); err != nil || live != 0 {
-		t.Fatalf("stopped agent kept a lease: %d %v", live, err)
+	if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+		t.Fatalf("stopped observation ended the worker lease: %d %v", live, err)
 	}
 	stopped, err := project.Show(t.Context(), credential.TaskID)
-	if err != nil || stopped.Claim.Status != api.ClaimLost || stopped.Claim.Observation.Status != "stopped" || stopped.Revision != before.Revision {
+	if err != nil || stopped.Claim.Status != api.ClaimActive || stopped.Claim.Observation.Status != "stopped" || stopped.Revision != before.Revision {
 		t.Fatalf("agent exit not reported independently: %+v %v", stopped, err)
 	}
 	successor := h.project("host-b")
+	_, err = successor.Takeover(t.Context(), "no-preemption", credential.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "premature", Owner: "codex", Decision: "foreign takeover fixture", ExpectedGeneration: credential.Generation})
+	if !api.IsCode(err, api.CodeLeaseActive) {
+		t.Fatalf("agent presence preempted a healthy worker: %v", err)
+	}
+	for range 7 {
+		h.advance(16 * time.Second)
+		if live, err := h.loop.pass(t.Context()); err != nil || live != 1 {
+			t.Fatalf("stopped task lost renewal: %d %v", live, err)
+		}
+	}
+	state, err := project.ExecutionState(t.Context(), credential.TaskID, *credential.Claim())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := project.Execution(t.Context(), "release-for-handoff", credential.TaskID, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "holder explicitly releases the stopped executor", Presence: &api.AgentObservation{Status: "stopped"}}, *credential.Claim()); err != nil {
+		t.Fatal(err)
+	}
 	grant, err := successor.Takeover(t.Context(), "", credential.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "after-exit", Owner: "codex", Decision: "explicit takeover after confirmed exit", ExpectedGeneration: credential.Generation})
 	if err != nil || grant.Claim.Generation != credential.Generation+1 {
 		t.Fatalf("confirmed exit did not allow explicit takeover: %+v %v", grant, err)

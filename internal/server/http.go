@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 )
 
 // maxBody bounds one request body; card documents and reports stay far below.
@@ -104,7 +105,11 @@ func (s *Server) Handler() http.Handler {
 		if err := decode(r, &req); err != nil {
 			return outcome{err: err}
 		}
-		return p.takeover(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req)
+		return p.takeover(r.Header.Get(api.HeaderIdempotencyKey), r.PathValue("task"), req, holderOf(r))
+	})
+	s.projectRoute(mux, "GET "+task+"/execution/record", func(p *project, r *http.Request) outcome {
+		record, _, err := board.CurrentExecution(p.board, r.PathValue("task"))
+		return result(http.StatusOK, record, err)
 	})
 	s.projectRoute(mux, "GET "+task+"/execution", func(p *project, r *http.Request) outcome {
 		value, err := p.executionState(r.PathValue("task"), holderOf(r))

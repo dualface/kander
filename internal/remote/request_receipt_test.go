@@ -116,6 +116,13 @@ func TestRequestReceiptRestartNeverRebindsUncertaintyToSuccessor(t *testing.T) {
 	if _, err := f.holder.ObserveAgent(t.Context(), "stopped-fixture", f.grant.Task.TaskID, api.AgentObservation{Status: "stopped"}, proof); err != nil {
 		t.Fatal(err)
 	}
+	state, err := f.holder.ExecutionState(t.Context(), f.grant.Task.TaskID, proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.holder.Execution(t.Context(), "release-for-successor", f.grant.Task.TaskID, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "holder releases stopped execution for successor", Presence: &api.AgentObservation{Status: "stopped"}}, proof); err != nil {
+		t.Fatal(err)
+	}
 	successor, err := client.New(f.sender.ServerURL, "successor")
 	if err != nil {
 		t.Fatal(err)

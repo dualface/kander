@@ -94,6 +94,10 @@ func commandDismiss(root, taskID string, timeout float64) error {
 }
 
 func dismissAgentPane(backend terminal.Backend, address terminal.Address, parsed bool, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64) (string, string, error) {
+	return dismissAgentPaneAt(backend, address, parsed, live, session, command, timeout, true)
+}
+
+func dismissAgentPaneAt(backend terminal.Backend, address terminal.Address, parsed bool, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64, allowReverse bool) (string, string, error) {
 	program, err := lookPath(backend.Executable())
 	if err != nil {
 		return "", "", notInPath(backend)
@@ -103,6 +107,9 @@ func dismissAgentPane(backend terminal.Backend, address terminal.Address, parsed
 		tabID, paneID = address.Container, address.Pane
 		probeResult := notify.AgentNotifyProbe(backend, program, paneID, live, probe.DefaultCommandTimeout)
 		if probeResult.State == "stale" {
+			if !allowReverse {
+				return "", "", takeoverError("remote.local_execution_required")
+			}
 			discovered, err := reverseLookupStale(probeResult.Detail, func() (terminal.Address, error) {
 				return liveness.ReverseLookup(context.Background(), backend, program, live)
 			})
@@ -148,6 +155,10 @@ func dismissAgentPane(backend terminal.Backend, address terminal.Address, parsed
 }
 
 func dismissProcessPane(backend terminal.Backend, address terminal.Address, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64) (string, string, error) {
+	return dismissProcessPaneAt(backend, address, live, session, command, timeout, true)
+}
+
+func dismissProcessPaneAt(backend terminal.Backend, address terminal.Address, live liveness.TaskSession, session launch.AgentSession, command string, timeout float64, allowReverse bool) (string, string, error) {
 	target := address
 	program, err := lookPath(backend.Executable())
 	if err != nil {
@@ -155,6 +166,9 @@ func dismissProcessPane(backend terminal.Backend, address terminal.Address, live
 	}
 	probeResult := notify.ProcessNotifyProbe(backend, program, target.Pane, live, probe.DefaultCommandTimeout)
 	if probeResult.State == "stale" {
+		if !allowReverse {
+			return "", "", takeoverError("remote.local_execution_required")
+		}
 		location, err := reverseLookupStale(probeResult.Detail, func() (terminal.Address, error) {
 			return liveness.ReverseLookup(context.Background(), backend, program, live)
 		})

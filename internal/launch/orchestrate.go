@@ -2,6 +2,8 @@ package launch
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
@@ -21,11 +24,12 @@ var orchestrateGroupRe = regexp.MustCompile(`^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*-gro
 // OrchestrateRequest names the plan a creating session hands to a separate
 // orchestrator session. References keep the confirmed plan order.
 type OrchestrateRequest struct {
-	Root       string
-	References []string
-	Handover   string
-	Agent      string
-	Launcher   string
+	Root        string
+	References  []string
+	Handover    string
+	Agent       string
+	Launcher    string
+	OperationID string
 }
 
 // OrchestrateTask is one card the orchestrator session receives.
@@ -71,6 +75,24 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	if err != nil {
 		return result, err
 	}
+	var journal *remote.ActionJournal
+	if service != nil {
+		var fresh bool
+		journal, fresh, err = service.BeginAction("orchestrate", struct {
+			References                             []string
+			Handover, Agent, Launcher, OperationID string
+		}{request.References, request.Handover, request.Agent, request.Launcher, request.OperationID})
+		if err != nil {
+			return result, err
+		}
+		defer journal.Close()
+		if !fresh && journal.Value.Phase != "prepared" && journal.Value.Phase != "session-ready" {
+			if journal.Value.Phase == "complete" && json.Unmarshal(journal.Value.Result, &result) == nil {
+				return result, nil
+			}
+			return result, launchError("remote.launch_reconciliation_required", journal.Path)
+		}
+	}
 	tasks, texts, err := resolveOrchestrateTasks(loaded, request.References)
 	if err != nil {
 		return result, err
@@ -103,7 +125,7 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	if err != nil {
 		return result, err
 	}
-	session, err := newAgentSession(agent, program, cfg)
+	session, err := journalAgentSession(journal, agent, program, cfg)
 	if err != nil {
 		return result, err
 	}
@@ -144,15 +166,27 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	var location func(LaunchOutcome) error
 	var paneSession func() (AgentSession, error)
 	if service != nil {
-		inv, location, paneSession, err = bindRemoteOrchestrator(&plan, inv, &session, service, program, tasks[0].TaskID, parentDir(request.Root))
+		inv, location, paneSession, err = bindRemoteOrchestrator(&plan, inv, &session, service, program, tasks[0].TaskID, parentDir(request.Root), journal)
 		if err != nil {
 			return result, err
 		}
 	}
+	if journal != nil {
+		journal.Value.TaskFile, journal.Value.Phase = taskFile, "launching"
+		if err := journal.Save(); err != nil {
+			return result, err
+		}
+		plan.beforePrompt = func() error { journal.Value.Phase = "prompt-attempted"; return journal.Save() }
+		plan.judge = func() launchVerdict { return verdictKeep }
+	}
 	// Local legacy orchestration has no card identity. Distributed sessions keep
 	// their identity in private launcher context for later coordinator leases.
-	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, location, paneSession, &session)
+	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, location, paneSession, &session, service != nil)
 	if err != nil {
+		if journal != nil {
+			handedOff = true
+			return result, errors.Join(err, launchError("remote.launch_reconciliation_required", journal.Path))
+		}
 		return result, err
 	}
 	handedOff = true
@@ -167,6 +201,16 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	}
 	result.Agent, result.Launcher, result.Tasks = agent, plan.Launcher, tasks
 	result.Address = OpaqueAddress(plan, outcome)
+	if journal != nil {
+		journal.Value.Phase = "complete"
+		journal.Value.Result, err = json.Marshal(result)
+		if err == nil {
+			err = journal.Save()
+		}
+		if err != nil {
+			return result, err
+		}
+	}
 	return result, nil
 }
 
@@ -315,12 +359,23 @@ func RunOrchestrate(args []string) int {
 	if message != "" {
 		return orchestrateUsageFail(message)
 	}
-	var handover, handoverFile string
+	var handover, handoverFile, operationID string
 	var handoverSet bool
 	var references []string
 	for i := 0; i < len(rest); i++ {
 		arg := rest[i]
 		switch {
+		case arg == "--operation-id":
+			val, next, ok := takeValue(rest, i)
+			if !ok || !api.ValidIdentity(val) {
+				return orchestrateUsageFail(t("remote.launch_operation_id_invalid"))
+			}
+			operationID, i = val, next
+		case strings.HasPrefix(arg, "--operation-id="):
+			operationID = strings.TrimPrefix(arg, "--operation-id=")
+			if !api.ValidIdentity(operationID) {
+				return orchestrateUsageFail(t("remote.launch_operation_id_invalid"))
+			}
 		case arg == "--message":
 			val, next, ok := takeValue(rest, i)
 			if !ok {
@@ -368,7 +423,7 @@ func RunOrchestrate(args []string) int {
 		}
 	}
 	result, err := StartOrchestrator(OrchestrateRequest{
-		Root: root, References: references, Handover: text, Agent: agent, Launcher: launcher,
+		Root: root, OperationID: operationID, References: references, Handover: text, Agent: agent, Launcher: launcher,
 	})
 	for _, warning := range result.Warnings {
 		fmt.Fprint(os.Stderr, warning)

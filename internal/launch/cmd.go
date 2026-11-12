@@ -172,7 +172,7 @@ func RunResume(args []string) int {
 	}
 	timeout := notifyDefaultTimeout
 	var message, messageFile, agent, launcher, decision string
-	var messageSet, agentSet, adopt, timeoutSet bool
+	var messageSet, agentSet, adopt, release, timeoutSet bool
 	var positional []string
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -211,6 +211,8 @@ func RunResume(args []string) int {
 			timeout, timeoutSet = n, true
 		case arg == "--adopt":
 			adopt = true
+		case arg == "--release":
+			release = true
 		case arg == "--decision":
 			val, next, ok := takeValue(args, i)
 			if !ok {
@@ -259,19 +261,31 @@ func RunResume(args []string) int {
 	if len(positional) != 1 {
 		return usageFail("resume", "launch.task_id_is_required")
 	}
+	if release && adopt {
+		return usageFail("resume", "remote.release_takes_only_a_decision")
+	}
+	if release && (agentSet || messageSet || messageFile != "" || launcher != "" || timeoutSet || dispatchOptions != (DispatchOptions{}) || strings.TrimSpace(decision) == "") {
+		return usageFail("resume", "remote.release_takes_only_a_decision")
+	}
 	if adopt && (agentSet || messageSet || messageFile != "" || launcher != "" || timeoutSet || dispatchOptions != (DispatchOptions{})) {
 		return usageFail("resume", "launch.adopt_takes_only_a_decision")
 	}
 	if adopt && strings.TrimSpace(decision) == "" {
 		return usageFail("resume", "board.adopt_decision_required", positional[0])
 	}
-	if !adopt && !agentSet && decision != "" {
-		return usageFail("resume", "launch.decision_needs_adopt_or_agent")
-	}
 	dispatchOptions.Decision = decision
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if release {
+		if !remote.Enabled(cfg) {
+			return fail(launchError("remote.release_requires_server"))
+		}
+		if err := commandRemoteRelease(cfg, positional[0], decision); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	if remote.Enabled(cfg) && adopt {
 		if err := commandRemoteAdopt(cfg, positional[0], decision); err != nil {
@@ -279,9 +293,15 @@ func RunResume(args []string) int {
 		}
 		return 0
 	}
+	if !remote.Enabled(cfg) && !adopt && !agentSet && decision != "" {
+		return usageFail("resume", "launch.decision_needs_adopt_or_agent")
+	}
 	var agentPtr *string
 	if agentSet {
 		agentPtr = &agent
+	}
+	if remote.Enabled(cfg) {
+		return runRemoteResume(cfg, agentPtr, launcher, positional[0], message, messageFile, messageSet, timeout, dispatchOptions)
 	}
 	root, err := boardRootFn()
 	if err != nil {

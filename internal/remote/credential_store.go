@@ -144,13 +144,20 @@ func WriteCredential(home string, c Credential) error {
 			if c.AgentPID == 0 {
 				c.AgentPID = old.AgentPID
 			}
-			for _, pair := range [][2]*string{{&c.AgentStart, &old.AgentStart}, {&c.BootID, &old.BootID}, {&c.Window, &old.Window}, {&c.Session, &old.Session}, {&c.Worktree, &old.Worktree}, {&c.Branch, &old.Branch}, {&c.BaseCommit, &old.BaseCommit}} {
+			for _, pair := range [][2]*string{{&c.AgentStart, &old.AgentStart}, {&c.BootID, &old.BootID}, {&c.Window, &old.Window}, {&c.Worktree, &old.Worktree}, {&c.Branch, &old.Branch}, {&c.BaseCommit, &old.BaseCommit}} {
 				if *pair[0] != "" && *pair[1] != "" && *pair[0] != *pair[1] {
 					return errors.New("managed agent identity conflict")
 				}
 				if *pair[0] == "" {
 					*pair[0] = *pair[1]
 				}
+			}
+			switch {
+			case c.Session == "", sessionReferenceAdvances(c.Session, old.Session):
+				c.Session = old.Session
+			case old.Session == "", c.Session == old.Session, sessionReferenceAdvances(old.Session, c.Session):
+			default:
+				return errors.New("managed agent session conflict")
 			}
 			for _, target := range old.StopAttempts {
 				if !slices.Contains(c.StopAttempts, target) {
@@ -185,6 +192,22 @@ func RemoveCredential(home string, c Credential) error {
 	return withCredentialLock(home, c, "registry", func() error {
 		return withCredentialLock(home, c, c.ExecutionID, func() error {
 			dir := credentialDir(home, c.ProjectID, c.TaskID)
+			previous, found, err := fs.ReadRegularFileIfExists(home, filepath.Join(dir, c.ExecutionID+".json"))
+			if err != nil {
+				return err
+			}
+			retained := c
+			if found {
+				if err := json.Unmarshal(previous, &retained); err != nil {
+					return err
+				}
+				if retained.ExecutionID != c.ExecutionID || retained.Generation != c.Generation {
+					return errors.New("execution history identity conflict")
+				}
+			}
+			if err := retainExecution(home, retained, found); err != nil {
+				return err
+			}
 			if err := fs.WriteTextAtomic(home, filepath.Join(dir, c.ExecutionID+".released"), "released\n", true); err != nil {
 				return err
 			}
@@ -201,4 +224,10 @@ func RemoveCredential(home string, c Credential) error {
 			return err
 		})
 	})
+}
+
+// Session discovery only fills a previously missing reference for the same
+// agent. A delayed heartbeat cannot erase it or replace a known reference.
+func sessionReferenceAdvances(previous, next string) bool {
+	return previous != "" && !strings.ContainsAny(previous, " \t\r\n") && strings.HasPrefix(next, previous+" ") && strings.TrimSpace(strings.TrimPrefix(next, previous+" ")) != "" && !strings.ContainsAny(next, "\r\n")
 }

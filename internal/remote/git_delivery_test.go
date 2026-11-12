@@ -118,6 +118,13 @@ func TestDeliveryCrossesIndependentClonesAndMissingRemoteBlocks(t *testing.T) {
 	if _, err := a.Project(info.ID).ObserveAgent(t.Context(), "confirmed-exit", card.TaskID, api.AgentObservation{Status: "stopped", Reason: "explicit fixture exit"}, *credential.Claim()); err != nil {
 		t.Fatal(err)
 	}
+	state, err := sa.Project.ExecutionState(t.Context(), card.TaskID, *credential.Claim())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sa.Project.Execution(t.Context(), "release-source", card.TaskID, api.ExecutionUpdate{Action: api.ExecutionRelease, ExpectedRevision: state.Task.Revision, ObservationTicket: state.ObservationTicket, Decision: "source holder releases for explicit clone takeover", Presence: &api.AgentObservation{Status: "stopped"}}, *credential.Claim()); err != nil {
+		t.Fatal(err)
+	}
 	successor, err := sb.Project.Takeover(t.Context(), "takeover-new-clone", card.TaskID, api.ClaimRequest{ClientID: "host-b", ExecutionID: "clone-successor", Owner: "codex", Decision: "explicit takeover in second independent clone", ExpectedGeneration: credential.Generation})
 	if err != nil {
 		t.Fatal(err)

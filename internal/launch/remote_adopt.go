@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -70,11 +71,17 @@ func observeLocalExecution(ctx context.Context, credential remote.Credential) ap
 			return result
 		}
 		boot, err := process.BootIdentity()
-		if err != nil || !process.SameBoot(credential.BootID, boot) {
+		if err != nil {
+			return result
+		}
+		if !process.SameBoot(credential.BootID, boot) {
+			result.Status = "stopped"
 			return result
 		}
 		facts, err := process.ObserveProcess(ctx, credential.AgentPID)
-		if err == nil && facts.Start == credential.AgentStart {
+		if errors.Is(err, process.ErrProcessGone) || err == nil && facts.Start != credential.AgentStart {
+			result.Status = "stopped"
+		} else if err == nil {
 			result.Status = "alive"
 		}
 		return result
@@ -85,6 +92,9 @@ func observeLocalExecution(ctx context.Context, credential remote.Credential) ap
 		result.Reason, result.RuntimeState = report.Detail, report.RuntimeState
 		if report.Status == liveness.Alive || report.Status == liveness.AliveOrphaned {
 			result.Status = "alive"
+		}
+		if report.Status == liveness.Stopped || report.Status == liveness.IdentityMismatch {
+			result.Status = "stopped"
 		}
 	}
 	return result

@@ -66,5 +66,21 @@
   "remote.dispatch_proposal_changed": "このディスパッチ ID は別の不変な提案に関連付けられています。元の提案を確認するか新しい ID を使用してください",
   "remote.request_receipt_damaged": "ローカルのリクエスト記録が破損しているか別のクライアントに属しています: {{.V0}}",
   "remote.request_recovery_mismatch": "リクエストの事実が保存済みの対象と一致しません。ローカル記録を保持してサーバーを確認してください",
-  "remote.request_pending": "リクエストの結果が未確認です。同じリクエストを再試行すると保存済み操作 {{.V0}} を照合します。処理を繰り返す前にリクエスト {{.V1}} を確認してください"
+  "remote.request_pending": "リクエストの結果が未確認です。同じリクエストを再試行すると保存済み操作 {{.V0}} を照合します。処理を繰り返す前にリクエスト {{.V1}} を確認してください",
+  "remote.takeover_decision_required": "後続の実行を開始するには明示的な --decision 参照が必要です",
+  "remote.native_requires_local_execution": "ネイティブ再開にはこのホストの正確な以前の実行が必要です。別ホストからは実行エージェントを指定して引き継いでください",
+  "remote.restart_needs_stopped": "以前の実行が停止したことを確認できません。状態を保持してローカルのプロセスまたはセッションを確認してください",
+  "remote.takeover_source_missing": "共有済みの基点または配信が記録されていません。共通リモートから取得できる完全な SHA を --base で指定してください",
+  "remote.launcher_requires_takeover": "ランチャーの変更には明示的な実行の引き継ぎが必要です",
+  "remote.finish_dispatch_before_restart": "未完了のディスパッチがタスクを所有しています。記録を確認して同じ ID を使うか、明示的に終了してから新しいラウンドを提案してください",
+  "remote.continuation_recovery_required": "ローカル変更を安全に移行できません。両方のワークツリーを保持し、再試行前に非公開の継続記録を確認してください。",
+  "remote.release_takes_only_a_decision": "--release には --decision が必要です。起動、メッセージ、採用、ディスパッチのオプションは指定できません",
+  "remote.release_requires_server": "タスクのリース解放にはサーバー設定が必要です",
+  "remote.execution_released": "タスク実行を解放しました: {{.V0}}",
+  "remote.launch_receipt_damaged": "非公開の起動記録が破損しています",
+  "remote.launch_reconciliation_required": "再起動前に以前の起動記録と実際の実行を確認してください: {{.V0}}",
+  "remote.launch_no_executor_reconciled": "以前の取得記録を復元し、Agent が未起動であることを確認しました。リースは終了しました。コマンドを再試行できます: {{.V0}}",
+  "remote.launch_operation_id_invalid": "--operation-id には有効で安定した操作識別子が必要です",
+  "remote.local_execution_required": "この操作には所有ホストに保持された正確な実行記録が必要です",
+  "remote.execution_dismissed": "タスク実行を終了して閉じました: {{.V0}}"
 }

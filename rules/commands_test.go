@@ -247,7 +247,7 @@ func TestContractFlagsMatchParsers(t *testing.T) {
 			t.Fatal(err)
 		}
 		flags := map[string]bool{}
-		for _, line := range syntaxBlock(t, string(data)) {
+		for _, line := range CommandSyntaxLines(string(data)) {
 			for _, flag := range flagInSyntax.FindAllString(line, -1) {
 				flags[flag] = true
 			}

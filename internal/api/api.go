@@ -134,13 +134,14 @@ const (
 
 // Task is one card as the server publishes it.
 type Task struct {
-	ObservedAt  time.Time  `json:"observed_at"`
-	TaskID      string     `json:"task_id"`
-	State       string     `json:"state"`
-	Revision    uint64     `json:"revision"`
-	OperationID string     `json:"operation_id,omitempty"`
-	Text        string     `json:"text"`
-	Claim       *ClaimView `json:"claim,omitempty"`
+	Delivery    *DeliveryEvidence `json:"delivery,omitempty"`
+	ObservedAt  time.Time         `json:"observed_at"`
+	TaskID      string            `json:"task_id"`
+	State       string            `json:"state"`
+	Revision    uint64            `json:"revision"`
+	OperationID string            `json:"operation_id,omitempty"`
+	Text        string            `json:"text"`
+	Claim       *ClaimView        `json:"claim,omitempty"`
 }
 
 // TaskSummary is one list row. Its fields follow the v1 board summary.
@@ -213,6 +214,9 @@ type Move struct {
 // claim. Takeover is POST .../tasks/{task}/takeover with the generation the
 // caller observed as lost, and a decision reference for the handoff record.
 type ClaimRequest struct {
+	ExpectedRevision   uint64                  `json:"expected_revision,omitzero"`
+	ObservationTicket  string                  `json:"observation_ticket,omitempty"`
+	PreviousPresence   *AgentObservation       `json:"previous_presence,omitempty"`
 	Dispatch           *board.DispatchTakeover `json:"dispatch,omitempty"`
 	ClientID           string                  `json:"client_id"`
 	ExecutionID        string                  `json:"execution_id"`
@@ -241,6 +245,7 @@ const (
 	ExecutionUnresolve = "unresolve"
 	ExecutionAdopt     = "adopt"
 	ExecutionWorkspace = "workspace"
+	ExecutionRelease   = "release"
 )
 
 // ExecutionUpdate records launcher facts of the current execution. window

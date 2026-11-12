@@ -61,10 +61,25 @@ func (p *project) publishDelivery(key, task string, input api.DeliveryEvidence, 
 			if err := stageJSON(tx, name, input); err != nil {
 				return err
 			}
+			if err := stageJSON(tx, deliveryPath(task, "latest"), input); err != nil {
+				return err
+			}
 			return p.stageOperationReceipt(tx, key, operation, input, input)
 		})
 		return result(http.StatusOK, input, err)
 	}, func() (outcome, bool) { return outcome{}, false })
+}
+
+func (p *project) latestDelivery(task string) (*api.DeliveryEvidence, error) {
+	var value api.DeliveryEvidence
+	found, err := readJSON(p.root, servicePath(deliveryPath(task, "latest")), &value)
+	if err != nil || !found {
+		return nil, err
+	}
+	if value.TaskID != task || !api.CommitSHA(value.Commit) || value.Remote != p.info.Remote || value.Ref != api.DeliveryRef(p.info.ID, task, value.Generation, value.Commit) {
+		return nil, apiError(api.CodeEvidenceIncomplete, "latest delivery index does not match its project and commit")
+	}
+	return &value, nil
 }
 
 // deliveryGuard runs in the state-changing transaction, including its final

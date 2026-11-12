@@ -12,6 +12,7 @@ import (
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/launch"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func init() {
@@ -82,8 +83,15 @@ func RunDismiss(args []string) int {
 	if len(positional) != 1 {
 		return usageFail("launch.task_id_is_required")
 	}
-	if _, err := config.Load(false); err != nil {
+	cfg, err := config.Load(false)
+	if err != nil {
 		return fail(err)
+	}
+	if remote.Enabled(cfg) {
+		if err := commandRemoteDismiss(cfg, positional[0], timeout); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

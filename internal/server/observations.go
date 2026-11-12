@@ -43,10 +43,6 @@ func (s *Server) observationRoutes(mux *http.ServeMux) {
 				observation := input
 				observation.ObservedAt = p.server.now()
 				claim.Observation = &observation
-				if observation.Status == "stopped" {
-					claim.Status = api.ClaimLost
-					claim.ExpiresAt = p.server.now()
-				}
 				if err := stageJSON(tx, "claims/"+id+".json", claim); err != nil {
 					return err
 				}

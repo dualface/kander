@@ -2,6 +2,10 @@ package remote
 
 import (
 	"errors"
+	"github.com/dualface/kander/internal/client"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -105,5 +109,62 @@ func TestCredentialHeadNeverRegressesAfterSuccessorRelease(t *testing.T) {
 	}
 	if _, found, err := session.Credential(old.TaskID); err != nil || found {
 		t.Fatalf("released generation became active: %v %v", found, err)
+	}
+}
+
+func TestCredentialRemovalRetainsLatestRoutingWithoutAnySecret(t *testing.T) {
+	cl, _ := client.New("http://127.0.0.1:1", "local-client")
+	session := &Session{Home: t.TempDir(), Info: api.Project{ID: "project"}, Client: cl, ServerURL: "http://127.0.0.1:1"}
+	old := Credential{ServerURL: session.ServerURL, ClientID: cl.ClientID(), ProjectID: "project", TaskID: "20261112-retained-task", ExecutionID: "executor", Generation: 1, Token: "never-retain-this-secret"}
+	if err := session.SaveCredential(old); err != nil {
+		t.Fatal(err)
+	}
+	latest := old
+	latest.Session, latest.Window, latest.Worktree = "claude retained", "tmux:$1:@1:%1", "/private/worktree"
+	if err := WriteCredential(session.Home, latest); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveCredential(session.Home, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveCredential(session.Home, old); err != nil {
+		t.Fatal(err)
+	}
+	task := api.Task{TaskID: old.TaskID, Claim: &api.ClaimView{ClientID: old.ClientID, ExecutionID: old.ExecutionID, Generation: old.Generation, Status: api.ClaimReleased}}
+	retained, err := session.Retained(task)
+	if err != nil || retained.Session != latest.Session || retained.Window != latest.Window || retained.Worktree != latest.Worktree {
+		t.Fatalf("retained facts: %+v %v", retained, err)
+	}
+	data, err := os.ReadFile(filepath.Join(session.Home, "retained-executions", old.ProjectID, old.TaskID, old.ExecutionID+".json"))
+	if err != nil || strings.Contains(string(data), old.Token) || strings.Contains(string(data), "token") {
+		t.Fatalf("retained a secret: %v", err)
+	}
+	t.Setenv(EnvExecutionID, "predecessor")
+	if _, err := session.Retained(task); err == nil {
+		t.Fatal("predecessor borrowed successor routing")
+	}
+}
+
+func TestCredentialSessionDiscoveryIsMonotonic(t *testing.T) {
+	session := &Session{Home: t.TempDir(), Info: api.Project{ID: "project"}}
+	initial := Credential{ProjectID: "project", TaskID: "20261112-session-task", ExecutionID: "executor", Generation: 1, Token: "secret", Session: "devin"}
+	if err := session.SaveCredential(initial); err != nil {
+		t.Fatal(err)
+	}
+	discovered := initial
+	discovered.Session = "devin discovered-reference"
+	if err := WriteCredential(session.Home, discovered); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteCredential(session.Home, initial); err != nil {
+		t.Fatal(err)
+	}
+	actual, _, err := session.Credential(initial.TaskID)
+	if err != nil || actual.Session != discovered.Session {
+		t.Fatalf("discovery regressed: %+v %v", actual, err)
+	}
+	discovered.Session = "devin another-reference"
+	if err := WriteCredential(session.Home, discovered); err == nil {
+		t.Fatal("replaced an immutable discovered session")
 	}
 }

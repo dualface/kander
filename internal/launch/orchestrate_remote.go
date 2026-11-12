@@ -31,8 +31,8 @@ func remoteOrchestrateBoard(ctx context.Context, cfg *config.Config) (board.Boar
 
 // bindRemoteOrchestrator preserves one fixed process identity for every group
 // the session later claims. Separate task executors clear that coordinator ID.
-func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, session *AgentSession, service *remote.Session, program *process.AgentProgram, task, project string) (process.ProcessInvocation, func(LaunchOutcome) error, func() (AgentSession, error), error) {
-	execution := remote.NewExecutionID()
+func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, session *AgentSession, service *remote.Session, program *process.AgentProgram, task, project string, journal *remote.ActionJournal) (process.ProcessInvocation, func(LaunchOutcome) error, func() (AgentSession, error), error) {
+	execution := journal.Value.ExecutionID
 	inv = withInvocationEnvironment(*plan, inv, map[string]string{remote.EnvExecutionID: execution, remote.EnvCoordinatorExecutionID: execution})
 	value := remote.ExecutionContext{ServerURL: service.ServerURL, ClientID: service.Client.ClientID(), ProjectID: service.Info.ID, ExecutionID: execution}
 	if session.Reference != "" {
@@ -41,7 +41,13 @@ func bindRemoteOrchestrator(plan *LaunchPlan, inv process.ProcessInvocation, ses
 	if !plan.capabilities().Container {
 		value.Window = plan.Launcher
 	}
-	save := func() error { return remote.SaveExecutionContext(service.Home, value) }
+	save := func() error {
+		if err := remote.SaveExecutionContext(service.Home, value); err != nil {
+			return err
+		}
+		journal.Value.Session, journal.Value.Window = value.Session, value.Window
+		return journal.Save()
+	}
 	if err := save(); err != nil {
 		return inv, nil, nil, err
 	}

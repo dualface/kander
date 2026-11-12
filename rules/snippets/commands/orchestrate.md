@@ -35,3 +35,15 @@ kander orchestrate [--agent <configured-agent>] [--launcher <launcher>] (--messa
 
 - A launch failure closes the container and changes no card.
 - A missing message, both message forms, no task IDs, or an unknown option is a usage error.
+
+## Additional Syntax
+
+```text
+kander orchestrate --operation-id <stable-id> [--agent <configured-agent>] [--launcher <launcher>] (--message TEXT | --message-file FILE) <task-id|task-group-id>...
+```
+
+## Distributed launch receipts
+
+With a configured server, the client records a private launch intent and fixed execution identity before any terminal effect. A repeat of a completed logical request returns the saved result. An interrupted or uncertain launch retains its task file, local process/window/session facts and private receipt; repeating the request does not launch another agent. Inspect the actual execution before recovery.
+
+The supplemental `--operation-id <stable-id>` option identifies an intentionally new confirmed orchestration. Reuse its value when retrying. Choosing a new value does not settle an older uncertain launch; reconcile that execution first. This option never grants task or coordinator authority by itself.

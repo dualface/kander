@@ -66,5 +66,21 @@
   "remote.dispatch_proposal_changed": "该派发 ID 已绑定其他不可变提案；请检查原提案或使用新 ID",
   "remote.request_receipt_damaged": "本机私有请求回执损坏或属于其他客户端：{{.V0}}",
   "remote.request_recovery_mismatch": "请求事实与已保存的目标不一致；请保留本机回执并检查服务端",
-  "remote.request_pending": "请求结果未确认。重试同一请求时会协调已保存操作 {{.V0}}；重复动作前请检查请求 {{.V1}}"
+  "remote.request_pending": "请求结果未确认。重试同一请求时会协调已保存操作 {{.V0}}；重复动作前请检查请求 {{.V1}}",
+  "remote.takeover_decision_required": "启动后继执行需要明确的 --decision 引用",
+  "remote.native_requires_local_execution": "原生恢复需要本机的精确旧执行；接管其他主机请显式选择执行 Agent",
+  "remote.restart_needs_stopped": "尚未确认旧执行者停止；请保留现场并检查本机进程或会话",
+  "remote.takeover_source_missing": "没有已记录的共享基线或交付；请通过 --base 提供共同远端可获取的完整 SHA",
+  "remote.launcher_requires_takeover": "变更启动器需要显式接管执行",
+  "remote.finish_dispatch_before_restart": "任务已有未完成派发；请检查回执并复用原 ID，或明确结束原轮次后再提出新轮次",
+  "remote.continuation_recovery_required": "无法安全迁移本机修改。请保留两代工作树，并在重试前检查私有续接记录。",
+  "remote.release_takes_only_a_decision": "--release 必须带 --decision，且不能与启动、消息、采纳或派发选项混用",
+  "remote.release_requires_server": "任务租约释放需要配置服务端",
+  "remote.execution_released": "已释放任务执行：{{.V0}}",
+  "remote.launch_receipt_damaged": "私有启动回执损坏",
+  "remote.launch_reconciliation_required": "再次启动前，请核对已有启动回执与实际执行：{{.V0}}",
+  "remote.launch_no_executor_reconciled": "已恢复之前的领取回执，并确认尚未启动 Agent。该执行归属已结束；可重试命令：{{.V0}}",
+  "remote.launch_operation_id_invalid": "--operation-id 需要有效且稳定的操作标识",
+  "remote.local_execution_required": "此操作需要执行主机保留的精确执行记录",
+  "remote.execution_dismissed": "已退出并关闭任务执行：{{.V0}}"
 }

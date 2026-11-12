@@ -70,9 +70,19 @@ func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testi
 		t.Fatal(err)
 	}
 	loadEffective = func() (*config.Config, error) { return cfg, nil }
-	result, err := StartOrchestrator(OrchestrateRequest{Root: forbidden, References: []string{group}, Handover: "Execute this confirmed group in plan order.", Agent: "claude", Launcher: "tmux"})
+	launchRequest := OrchestrateRequest{Root: forbidden, References: []string{group}, Handover: "Execute this confirmed group in plan order.", Agent: "claude", Launcher: "tmux"}
+	result, err := StartOrchestrator(launchRequest)
 	if err != nil {
 		t.Fatal(err)
+	}
+	beforeRetry, _ := os.ReadFile(os.Getenv("KANBAN_TMUX_LOG"))
+	replay, err := StartOrchestrator(launchRequest)
+	if err != nil || replay.Address != result.Address {
+		t.Fatalf("completed receipt replay: %+v %v", replay, err)
+	}
+	afterRetry, _ := os.ReadFile(os.Getenv("KANBAN_TMUX_LOG"))
+	if string(beforeRetry) != string(afterRetry) {
+		t.Fatal("completed orchestrator launch was repeated")
 	}
 	if len(result.Tasks) != 2 {
 		t.Fatalf("incomplete group expansion: %+v", result.Tasks)

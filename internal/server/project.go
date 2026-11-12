@@ -134,6 +134,10 @@ func (p *project) show(id string) (api.Task, error) {
 		return api.Task{}, err
 	}
 	t := api.Task{ObservedAt: p.server.now(), TaskID: s.Entry.TaskID, State: s.Entry.State, Revision: s.Revision, OperationID: s.OperationID, Text: s.Text}
+	t.Delivery, err = p.latestDelivery(s.Entry.TaskID)
+	if err != nil {
+		return api.Task{}, err
+	}
 	r, found, err := p.readClaim(s.Entry.TaskID)
 	if err != nil {
 		return api.Task{}, err
@@ -418,6 +422,9 @@ func (p *project) claim(key, id string, req api.ClaimRequest) outcome {
 		r.Status, r.RenewedAt, r.ExpiresAt = api.ClaimActive, now, now.Add(p.server.ttl)
 		extension := p.taskTransaction(key, "claim:"+id, req, r.TaskID, func(tx *board.Transaction) error {
 			snapshot, err := tx.Snapshot(r.TaskID)
+			if err == nil && req.ExpectedRevision != 0 && req.ExpectedRevision != snapshot.Revision {
+				return apiError(api.CodeRevisionConflict, "start input names an earlier card version")
+			}
 			if err == nil && snapshot.Entry.State != "todo" {
 				return apiError(api.CodeRevisionConflict, "task is no longer todo")
 			}
@@ -501,8 +508,9 @@ func (p *project) renew(id string, h holder) (api.Renewal, error) {
 
 // takeover hands a lost claim to a new execution with the next generation.
 // Only an expired lease, or a claimed card without any claim record (a
-// migrated board), can be taken over; a live lease is never preempted.
-func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
+// migrated board), can be taken over. A live lease is never preempted: its
+// own holder may restart a freshly confirmed stopped executor on the same host.
+func (p *project) takeover(key, id string, req api.ClaimRequest, h holder) outcome {
 	if err := validClaimRequest(req); err != nil {
 		return outcome{err: err}
 	}
@@ -519,13 +527,28 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 		if !claimedState(t.State) {
 			return outcome{err: apiError(api.CodeClaimRequired, "task "+t.TaskID+" is not claimed; claim it instead")}
 		}
+		if req.ExpectedRevision == 0 || req.ExpectedRevision != t.Revision {
+			return outcome{err: apiError(api.CodeRevisionConflict, "takeover requires the inspected card revision")}
+		}
 		previous, found, err := p.readClaim(t.TaskID)
 		if err != nil {
 			return outcome{err: err}
 		}
 		now := p.server.now()
-		if found && previous.Status == api.ClaimActive && now.Before(previous.ExpiresAt) {
-			return outcome{err: apiError(api.CodeLeaseActive, "the lease of task "+t.TaskID+" is still active")}
+		ownedRestart := found && previous.Status == api.ClaimActive && now.Before(previous.ExpiresAt)
+		if ownedRestart {
+			if h.token == "" {
+				return outcome{err: apiError(api.CodeLeaseActive, "the lease of task "+t.TaskID+" is still active")}
+			}
+			if h.clientID != previous.ClientID {
+				return outcome{err: apiError(api.CodeHeldByOther, "only the current client may restart its stopped executor")}
+			}
+			if _, err := p.requireHolder(t.TaskID, h); err != nil {
+				return outcome{err: err}
+			}
+			if req.ClientID != previous.ClientID || req.ExpectedRevision != t.Revision || req.PreviousPresence == nil || req.PreviousPresence.Status != "stopped" || !p.validObservationTicket(t.TaskID, req.ExpectedRevision, previous.Generation, req.ObservationTicket) {
+				return outcome{err: apiError(api.CodeEvidenceIncomplete, "an owned restart requires a fresh stopped observation, version and private holder proof")}
+			}
 		}
 		if previous.Generation != req.ExpectedGeneration {
 			return outcome{err: apiError(api.CodeLeaseInvalid, "the observed generation is not current")}
@@ -562,7 +585,18 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 		}
 		if _, err := board.BeginTakeoverWithTransaction(p.board, snapshot.Entry, in, p.taskTransaction(key, "takeover:"+id, req, r.TaskID, func(tx *board.Transaction) error {
 			_, err := tx.Expect(r.TaskID, snapshot.Entry.State, snapshot.Revision)
-			return err
+			if err != nil {
+				return err
+			}
+			if ownedRestart {
+				if _, err := p.requireHolder(r.TaskID, h); err != nil {
+					return err
+				}
+				if !p.validObservationTicket(r.TaskID, req.ExpectedRevision, previous.Generation, req.ObservationTicket) {
+					return apiError(api.CodeEvidenceIncomplete, "owned restart observation expired before commit")
+				}
+			}
+			return nil
 		}, &r, true), board.TransactionExtension{Before: func(tx *board.Transaction) error { return p.stageSupersedeRequests(tx, r.TaskID, r.Generation) }}); err != nil {
 			return outcome{err: err}
 		}

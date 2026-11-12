@@ -27,7 +27,16 @@ const remoteCall = 30 * time.Second
 // back, and confirms the start. A launch failure rolls the claim back so the
 // card returns to todo. The agent's own kander calls carry
 // KANDER_EXECUTION_ID, so they present only this execution's credential.
-func StartRemote(agentOverride, launcherOverride, taskID string) (result StartResult, err error) {
+func StartRemote(agentOverride, launcherOverride, taskID string) (StartResult, error) {
+	return launchRemote(remoteLaunchInput{Agent: agentOverride, Launcher: launcherOverride, TaskID: taskID})
+}
+
+func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
+	agentOverride, launcherOverride, taskID := input.Agent, input.Launcher, input.TaskID
+	verb := "start"
+	if input.Takeover {
+		verb = "resume"
+	}
 	if taskID == "" {
 		return result, launchError("launch.task_id_is_required")
 	}
@@ -55,7 +64,20 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	if task.State != "todo" {
+	journal, fresh, err := session.BeginAction("task-launch", struct {
+		Task  string
+		Input remoteLaunchInput
+	}{task.TaskID, input})
+	if err != nil {
+		return result, err
+	}
+	defer journal.Close()
+	if !fresh && journal.Value.Phase != "failed" && journal.Value.Phase != "prepared" && journal.Value.Phase != "session-ready" {
+		ctx, cancel := call()
+		defer cancel()
+		return result, recoverRemoteLaunch(ctx, session, journal)
+	}
+	if !input.Takeover && task.State != "todo" {
 		return result, launchError("launch.start_only_accepts_tasks_in_todo_is_in", task.TaskID, task.State)
 	}
 	original := task.Text
@@ -66,7 +88,26 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if problem := cfg.Rules.CheckTaskGroup(taskGroupFrom(original)); problem != nil {
 		return result, problem
 	}
-	choice, err := resolveExecution(cfg, original, kind, agentOverride, execStart)
+	var restart remoteRestart
+	if input.Takeover {
+		ctx, cancel := call()
+		restart, err = prepareRemoteRestart(ctx, session, task, cwd, input)
+		cancel()
+		if err != nil {
+			return result, err
+		}
+		if input.Native {
+			agentOverride = restart.Session.Agent
+		}
+	}
+	mode := execStart
+	if input.Takeover {
+		mode = execTakeover
+	}
+	if input.Native {
+		mode = execContinue
+	}
+	choice, err := resolveExecution(cfg, original, kind, agentOverride, mode)
 	if err != nil {
 		return result, err
 	}
@@ -78,7 +119,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if launcher == "" {
 		launcher = cfg.Launcher
 	}
-	plan, err := prepareLaunch(launcher, project, "start")
+	plan, err := prepareLaunch(launcher, project, verb)
 	if err != nil {
 		return result, err
 	}
@@ -90,13 +131,21 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	agentSession, err := newAgentSession(agentName, program, cfg)
+	agentSession := restart.Session
+	if !input.Native {
+		agentSession, err = journalAgentSession(journal, agentName, program, cfg)
+	}
+	if input.Native {
+		if err := refuseNativeResume(task.TaskID, original, plan); err != nil {
+			return result, err
+		}
+	}
 	if err != nil {
 		return result, err
 	}
 	sessionDef := config.AgentFor(cfg, agentName).Session
 	initialSession := agentSession.Render()
-	persistSession := config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef))
+	persistSession := !input.Native && (config.SessionPersistsAfterStart(sessionDef) || (plan.capabilities().SessionReport && config.SessionDiscoversAfterStart(sessionDef)))
 	discoverSession := plan.capabilities().PaneMetadata || persistSession
 	previous, err := sessionDiscoverSnapshot(sessionDef, task.TaskID, discoverSession, program, project, plan.launchTimeout)
 	if err != nil {
@@ -110,14 +159,36 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	body, err := startAgentPrompt(task.TaskID, paths, taskGroupFrom(original), original)
+	var body string
+	if input.Takeover {
+		body, err = takeoverAgentPrompt(task.TaskID, input.Message, paths, board.MetadataFrom(original, board.FieldOwner), task.State, original)
+	} else {
+		body, err = startAgentPrompt(task.TaskID, paths, taskGroupFrom(original), original)
+	}
 	if err != nil {
 		return result, err
+	}
+	if input.Takeover {
+		body = "Read the current task from the configured server before writing. The embedded card is a pre-handoff snapshot. Reconcile existing receipts and pending external effects before continuing; never repeat an already accepted or completed action blindly.\n\n" + body
+		if restart.Dispatch != nil {
+			if restart.Request.Dispatch.Mode == "settle-completed" {
+				body += "\nThe previous dispatch is completed and is settled atomically with this handoff. Do not reuse its authorization or repeat its work.\n"
+			} else {
+				instruction, instructionErr := DispatchInstruction(paths, *restart.Dispatch)
+				if instructionErr != nil {
+					return result, instructionErr
+				}
+				body += "\n\n" + instruction + "\nOriginal dispatch message:\n" + restart.Dispatch.Input.Message + "\n"
+			}
+		}
+		if input.PendingRequest != "" {
+			body = "Begin with read-only reconciliation. Wait for this generation's proposal before any new code changes or external actions: kander request show " + task.TaskID + " " + input.PendingRequest + " --json. It is published after this session is confirmed. Inspect its version and generation, prepare it through the controlled dispatch producer, and accept its business authorization before starting the new round. If it remains absent or is superseded, report the facts and stop; do not invent a replacement.\n\n" + body
+		}
 	}
 	if session.Info.Remote != "" {
 		body += "\n\nThe current directory is the worktree and branch prepared for this execution generation. Use this worktree for implementation and keep all predecessor worktrees intact. Task documents and execution authority belong to the configured server project; do not create a local kanban directory.\n"
 	}
-	taskFile, err := createTaskFile(body, "kander-"+task.TaskID+"-start-", taskFileTrailer(paths))
+	taskFile, err := createTaskFile(body, "kander-"+task.TaskID+"-"+verb+"-", taskFileTrailer(paths))
 	if err != nil {
 		return result, err
 	}
@@ -131,11 +202,11 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	prompt, err := headedTaskFileInstruction(paths, "start", task.TaskID, "", 0, language, taskFile)
+	prompt, err := headedTaskFileInstruction(paths, verb, task.TaskID, "", 0, language, taskFile)
 	if err != nil {
 		return result, err
 	}
-	args, err := execArguments(choice, agentSession, false, cfg)
+	args, err := execArguments(choice, agentSession, input.Native && sessionDef.Mode != "none", cfg)
 	if err != nil {
 		return result, err
 	}
@@ -143,14 +214,54 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if err != nil {
 		return result, err
 	}
-	execution := remote.NewExecutionID()
+	execution := journal.Value.ExecutionID
 	inv = withExecutionIdentity(plan, inv, execution)
 
 	ctx, cancel = call()
-	grant, err := session.Project.Claim(ctx, client.NewKey(), task.TaskID, api.ClaimRequest{
-		ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName,
-		Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record},
-	})
+	if restart.Continuation != nil {
+		if err := remote.VerifyContinuation(ctx, restart.SourceDir, *restart.Continuation); err != nil {
+			cancel()
+			return result, err
+		}
+	}
+	if restart.Proof != nil {
+		state, verifyErr := session.Project.ExecutionState(ctx, task.TaskID, *restart.Proof)
+		if verifyErr != nil {
+			cancel()
+			return result, verifyErr
+		}
+		if state.Task.Revision != task.Revision {
+			cancel()
+			return result, &api.Error{Code: api.CodeRevisionConflict, Message: t("remote.delivery_card_changed")}
+		}
+		presence := observeLocalExecution(ctx, *restart.Subject)
+		if presence.Status != "stopped" {
+			cancel()
+			return result, launchError("remote.restart_needs_stopped")
+		}
+		restart.Request.ObservationTicket, restart.Request.PreviousPresence = state.ObservationTicket, &presence
+	}
+	request := api.ClaimRequest{ClientID: session.Client.ClientID(), ExecutionID: execution, Owner: agentName, ExpectedRevision: task.Revision, Start: &api.StartInput{Session: initialSession, Window: window, ExecResolved: choice.record}}
+	var grant api.ClaimGrant
+	if input.Takeover {
+		request.Decision, request.Dispatch, request.ExpectedGeneration = restart.Request.Decision, restart.Request.Dispatch, restart.Request.ExpectedGeneration
+		request.ObservationTicket, request.PreviousPresence = restart.Request.ObservationTicket, restart.Request.PreviousPresence
+		if err := freezeRemoteLaunch(journal, task.TaskID, request, restart.Proof, true, taskFile); err != nil {
+			cancel()
+			return result, err
+		}
+		if restart.Proof != nil {
+			grant, err = session.Project.Handoff(ctx, journal.Value.ClaimKey, task.TaskID, request, *restart.Proof)
+		} else {
+			grant, err = session.Project.Takeover(ctx, journal.Value.ClaimKey, task.TaskID, request)
+		}
+	} else {
+		if err := freezeRemoteLaunch(journal, task.TaskID, request, nil, false, taskFile); err != nil {
+			cancel()
+			return result, err
+		}
+		grant, err = session.Project.Claim(ctx, journal.Value.ClaimKey, task.TaskID, request)
+	}
 	cancel()
 	if err != nil {
 		return result, err
@@ -158,7 +269,7 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	credential := remote.Credential{
 		ServerURL: session.ServerURL, ClientID: session.Client.ClientID(), ProjectID: session.Info.ID, TaskID: grant.Task.TaskID,
 		ExecutionID: execution, Generation: grant.Claim.Generation, Token: grant.Token,
-		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: time.Now().UTC(),
+		RenewInterval: grant.RenewInterval, TTL: grant.TTL, RenewedAt: time.Now().UTC(), Session: initialSession, Window: window,
 	}
 	if err := session.SaveCredential(credential); err != nil {
 		return result, err
@@ -175,16 +286,23 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	if session.Info.Remote != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		baseline, workspaceErr := session.PublishBaseline(ctx, cwd, task.TaskID, "", credential)
+		sourceDir := cwd
+		if restart.SourceDir != "" {
+			sourceDir = restart.SourceDir
+		}
+		baseline, workspaceErr := session.PublishBaseline(ctx, sourceDir, task.TaskID, restart.Base, credential)
 		var workspace remote.ExecutionWorktree
 		if workspaceErr == nil {
-			workspace, workspaceErr = session.PrepareWorktree(ctx, cwd, baseline.Commit, credential)
+			workspace, workspaceErr = session.PrepareWorktree(ctx, sourceDir, baseline.Commit, credential)
+		}
+		if workspaceErr == nil && restart.Continuation != nil {
+			workspaceErr = session.RestoreContinuation(ctx, workspace, *restart.Continuation, credential)
 		}
 		cancel()
 		if workspaceErr == nil {
 			project = workspace.Path
 			credential.Worktree, credential.Branch, credential.BaseCommit = workspace.Path, workspace.Branch, workspace.Base
-			plan, workspaceErr = prepareLaunch(launcher, project, "start")
+			plan, workspaceErr = prepareLaunch(launcher, project, verb)
 		}
 		if workspaceErr == nil {
 			workspaceErr = applyAgentDelivery(&plan, cfg, agentName)
@@ -201,15 +319,17 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			previous, workspaceErr = sessionDiscoverSnapshot(sessionDef, task.TaskID, discoverSession, program, project, plan.launchTimeout)
 		}
 		if workspaceErr != nil {
-			if rollbackErr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionRollback}); rollbackErr != nil {
+			ctx, cancel := call()
+			rollbackErr := abandonUnlaunchedGeneration(ctx, session, credential, input.Takeover, journal)
+			cancel()
+			if rollbackErr != nil {
 				return result, errors.Join(workspaceErr, rollbackErr)
 			}
-			_ = remote.RemoveCredential(session.Home, credential)
 			return result, workspaceErr
 		}
 	}
 	promptAttempted := false
-	plan.beforePrompt = func() error { promptAttempted = true; return nil }
+	plan.beforePrompt = func() error { promptAttempted = true; journal.Value.Phase = "prompt-attempted"; return journal.Save() }
 	plan.judge = func() launchVerdict {
 		ctx, cancel := call()
 		defer cancel()
@@ -265,6 +385,10 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if persistSession {
 		plan.sessionFinalize = func(effective AgentSession) error {
 			credential.Session = effective.Render()
+			journal.Value.Session = credential.Session
+			if err := journal.Save(); err != nil {
+				return err
+			}
 			if err := remote.WriteCredential(session.Home, credential); err != nil {
 				return err
 			}
@@ -276,11 +400,19 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	if plan.capabilities().Container {
 		location = func(outcome LaunchOutcome) error {
 			credential.Window = locationOf(plan, outcome)
+			journal.Value.Window = credential.Window
+			if err := journal.Save(); err != nil {
+				return err
+			}
 			if err := remote.WriteCredential(session.Home, credential); err != nil {
 				return err
 			}
 			return executionUpdate(api.ExecutionUpdate{Action: api.ExecutionWindow, Window: credential.Window})
 		}
+	}
+	journal.Value.Phase = "launching"
+	if err := journal.Save(); err != nil {
+		return result, err
 	}
 	name := windowName(board.Entry{TaskID: task.TaskID}, original)
 	launchStart = nowFn()
@@ -298,12 +430,13 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			return result, nil
 		}
 		if !failure.DeliveryUnknown && failure.Verdict == verdictCleanup && failure.CloseError == "" {
-			if rollbackErr := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionRollback}); rollbackErr == nil {
-				_ = remote.RemoveCredential(session.Home, credential)
+			ctx, cancel := call()
+			rollbackErr := abandonUnlaunchedGeneration(ctx, session, credential, input.Takeover, journal)
+			cancel()
+			if rollbackErr == nil {
 				return result, failure.Err
-			} else {
-				err = errors.Join(failure.Err, rollbackErr)
 			}
+			err = errors.Join(failure.Err, rollbackErr)
 		}
 		taskFileHandedOff = true
 		if failure.CloseError != "" {
@@ -361,6 +494,10 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 			}
 			return result, unresolved
 		}
+	}
+	journal.Value.Phase = "complete"
+	if err := journal.Save(); err != nil {
+		return result, &UnresolvedError{TaskID: task.TaskID, Window: credential.Window, Reason: err.Error(), Command: "kander"}
 	}
 	return result, nil
 }

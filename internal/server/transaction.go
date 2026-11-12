@@ -31,6 +31,10 @@ func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *c
 		return api.Task{}, err
 	}
 	task := api.Task{ObservedAt: p.server.now(), TaskID: id, State: snapshot.Entry.State, Revision: snapshot.Revision, OperationID: snapshot.OperationID, Text: snapshot.Text}
+	task.Delivery, err = p.latestDelivery(id)
+	if err != nil {
+		return api.Task{}, err
+	}
 	if claim == nil {
 		stored, found, err := p.readClaim(id)
 		if err != nil {

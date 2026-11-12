@@ -85,3 +85,19 @@ kander resume --adopt --decision <reference> <task-id>
 With a configured server, `resume --adopt --decision <reference>` uses only this host's private credential for the fixed execution. It fetches the current record and a short-lived service-clock observation ticket, observes the exact local process incarnation or terminal session, and submits the decision with the unchanged card revision. The server checks the ticket, generation and revision in the adoption transaction. A foreign host, lost credential, changed identity, unknown presence or stale ticket refuses adoption. This path never reads a local board or treats a lease timeout as a stopped executor.
 
 Remote starts retain a durable record/revision cursor. Server restart and later launcher writes cannot erase executor-progress evidence. A late or uncertain launch failure preserves the executor and its task file and records an unresolved start; it does not restore the pre-start document over executor work. A superseded launcher touches no successor. Inspect the same execution before any recovery; repeating `start` cannot create a second executor for a claimed task.
+
+## Additional Syntax
+
+```text
+kander resume --release --decision <reference> <task-id>
+```
+
+## Distributed restart and explicit release
+
+`resume <task> --release --decision <reference>` ends a stopped local execution's lease without changing the card content or assigning another host. It accepts no message, launcher, agent, adoption, or dispatch options. The client must hold the current private credential and prove the executor stopped using a service-clock observation ticket and exact card revision. The server commits release, audit evidence and the exact receipt together. The task becomes lost until an explicit takeover.
+
+A healthy worker renews working/review ownership even after its agent stops. A fresh `--agent` takeover always needs a decision. An active lease can only be handed off by its own client with private holder proof and a fresh stopped observation. An expired or explicitly released lease permits another client's deliberate takeover. Every handoff uses a new execution identity, generation, branch and worktree; old requests are superseded.
+
+Plain resume queues a collaboration request while the executor is alive or unknown. A locally proven stopped executor with a finished start can resume its native session through a controlled handoff. The client privately snapshots index changes, worktree changes and non-ignored untracked regular files, verifies the source before handoff, and restores into the new generation. The predecessor remains intact. Partial restore or concurrent source edits block automatic retry. Native resume still refuses foreground/console. Unfinished starts require explicit adoption or takeover.
+
+Bound dispatch context is inspected and retained without business replay. A completed binding is settled atomically with handoff. A newly requested round is queued for the confirmed successor; the launch prompt instructs it to wait read-only for that generation's exact proposal and accept its formal authorization before work.
