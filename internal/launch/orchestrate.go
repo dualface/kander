@@ -1,14 +1,17 @@
 package launch
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 // orchestrateGroupRe mirrors the board's task group ID grammar; a reference that
@@ -52,15 +55,23 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	if strings.TrimSpace(request.Handover) == "" {
 		return result, launchError("launch.message_must_not_be_empty", "orchestrate")
 	}
-	loaded, err := board.LoadBoardWithWarnings(request.Root, &warnings)
+	cfg, err := loadEffective()
+	if err != nil {
+		return result, err
+	}
+	var loaded board.Board
+	var service *remote.Session
+	if remote.Enabled(cfg) {
+		ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
+		loaded, service, request.Root, err = remoteOrchestrateBoard(ctx, cfg)
+		cancel()
+	} else {
+		loaded, err = board.LoadBoardWithWarnings(request.Root, &warnings)
+	}
 	if err != nil {
 		return result, err
 	}
 	tasks, texts, err := resolveOrchestrateTasks(loaded, request.References)
-	if err != nil {
-		return result, err
-	}
-	cfg, err := loadEffective()
 	if err != nil {
 		return result, err
 	}
@@ -130,9 +141,17 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	if err != nil {
 		return result, err
 	}
-	// The orchestrator owns no card, so it records no pane session marker and
-	// reports no Herdr agent session; those identities belong to card launches.
-	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, nil, nil, nil)
+	var location func(LaunchOutcome) error
+	var paneSession func() (AgentSession, error)
+	if service != nil {
+		inv, location, paneSession, err = bindRemoteOrchestrator(&plan, inv, &session, service, program, tasks[0].TaskID, parentDir(request.Root))
+		if err != nil {
+			return result, err
+		}
+	}
+	// Local legacy orchestration has no card identity. Distributed sessions keep
+	// their identity in private launcher context for later coordinator leases.
+	outcome, err := launchAgent(plan, request.Root, orchestratorWindowName(tasks[0].TaskID), inv, location, paneSession, &session)
 	if err != nil {
 		return result, err
 	}
@@ -201,7 +220,7 @@ func resolveOrchestrateTasks(loaded board.Board, references []string) ([]Orchest
 		if entry.State != "backlog" && entry.State != "todo" {
 			return nil, nil, launchError("orchestrate.task_already_started", id, entry.State)
 		}
-		text, err := readDocumentFn(entry)
+		text, err := loaded.Document(id)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -331,12 +350,22 @@ func RunOrchestrate(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if _, err := config.Load(false); err != nil {
-		return fail(err)
-	}
-	root, err := boardRootFn()
+	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	var root string
+	if remote.Enabled(cfg) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fail(err)
+		}
+		root = filepath.Join(remote.ProjectDir(cwd), "task-context")
+	} else {
+		root, err = boardRootFn()
+		if err != nil {
+			return fail(err)
+		}
 	}
 	result, err := StartOrchestrator(OrchestrateRequest{
 		Root: root, References: references, Handover: text, Agent: agent, Launcher: launcher,

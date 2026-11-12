@@ -100,7 +100,7 @@ func verifyCoordinatorRecoveries(tx *Transaction, c CoordinatorCheckpoint) error
 // evidence. Finished members are confirmed: the audit record and the mirror change,
 // and no card, cycle or review evidence does. The caller reads the card at revision
 // observed and probes its executor before this runs, with no lock held.
-func RecoverCoordinator(ctx context.Context, root string, r CoordinatorRecover, observed uint64) (c CoordinatorCheckpoint, err error) {
+func RecoverCoordinatorWithTransaction(ctx context.Context, root string, r CoordinatorRecover, observed uint64, extensions ...TransactionExtension) (c CoordinatorCheckpoint, err error) {
 	if !taskGroupRe.MatchString(r.GroupID) || r.ExpectedRevision == 0 || r.ExpectedEpoch == 0 || strings.TrimSpace(r.Decision) == "" || strings.TrimSpace(r.Reason) == "" {
 		return c, kanbanError("board.recover_request_invalid")
 	}
@@ -110,6 +110,7 @@ func RecoverCoordinator(ctx context.Context, root string, r CoordinatorRecover, 
 	}
 	scope := LockScope{Groups: []string{r.GroupID, reviewControlGroup, dispatchRegistry, taskStartGroup}, Tasks: []string{id}, ExclusiveBoard: true}
 	err = WithTransactionContext(ctx, root, scope, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(c) }()
 		var exists bool
 		var e error
 		if c, exists, e = readCheckpoint(tx, r.GroupID); e != nil {
@@ -155,7 +156,7 @@ func RecoverCoordinator(ctx context.Context, root string, r CoordinatorRecover, 
 			return e
 		}
 		return putCheckpoint(tx, &c)
-	})
+	}, extensions...)
 	return c, err
 }
 

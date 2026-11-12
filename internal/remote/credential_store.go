@@ -70,7 +70,7 @@ func WriteCredential(home string, c Credential) error {
 			if err := json.Unmarshal(oldBytes, &old); err != nil {
 				return errors.New("execution credential is damaged")
 			}
-			if old.ProjectID != c.ProjectID || old.TaskID != c.TaskID || old.ExecutionID != c.ExecutionID || old.Generation != c.Generation || old.Token != c.Token || old.ClientID != c.ClientID || old.ServerURL != c.ServerURL {
+			if old.ResourceKind != c.ResourceKind || old.ProjectID != c.ProjectID || old.TaskID != c.TaskID || old.ExecutionID != c.ExecutionID || old.Generation != c.Generation || old.Token != c.Token || old.ClientID != c.ClientID || old.ServerURL != c.ServerURL {
 				return errors.New("immutable execution credential conflict")
 			}
 			if old.RenewedAt.After(c.RenewedAt) {

@@ -68,3 +68,11 @@ kander coordinator recover <absolute-request.json>
   - `alive`, `alive-orphaned`, or `drifted` in `review/`, and `unknown` with evidence at one address: the error names the address. Stop the executor at that address and run `recover` again. A `review/` member takes `resume --agent` only while its start attempt has not ended, and a takeover cannot exit an executor it cannot prove.
   - 2 or more matches: the error names the count. Stop the executors that match this session and run `recover` again.
 - A wrong argument count, a relative `recover` path, or an unknown subcommand is a usage error.
+
+## Distributed project
+
+The service owns the checkpoint. Its public authority token is a session label and does not authorize a distributed write. `claim` receives a separate private lease bound to this coordinator execution. A live lease refuses a competing claim. After lease loss, an explicit claim with the observed checkpoint revision and epoch uses its basis as the handoff decision and obtains a new execution generation. An old process cannot silently reuse that generation.
+
+The background worker renews the group lease independently of the UI and reports confirmed coordinator exit. Reconcile sends locally checked Git facts; the service repeats the producer pass and refuses to advance a member without the matching verdict. Recovery also requires the affected card's holder for any claimed-card mutation. Group authority never substitutes for task ownership.
+
+To release a distributed coordinator explicitly, use `kander coordinator release <absolute-release.json>` with `group_id`, `reason`, and `decision`. This ends the private lease; the public checkpoint and its audit history remain readable.

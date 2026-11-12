@@ -21,7 +21,8 @@ The first version trusts its network: there is no login and no role model, one s
   projects/<id>/
     board/               a board in the v1 layout (backlog/ ... trash/)
       .kander/groups/00000000-service-group/
-        claims/<task>.json       claim record and handoff history
+        claims/<task>.json       task claim and handoff history
+        group-claims/<group>.json coordinator lease and handoffs
         receipts/<sha256>.json   idempotency receipts
         requests/<task>/<id>.json generation-bound collaboration requests
         publications/<id>.json   immutable joint material and confirmations
@@ -54,6 +55,8 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/tasks/{t}/observation` | Generation-bound agent presence, independent of worker liveness |
 | `POST /projects/{p}/snapshot`, `/check` | Coordinated read snapshots and server-side structural/evidence checks |
 | `POST /projects/{p}/reviews/plan`, `POST .../reviews/batches/{b}/aggregate`, `GET .../reviews/batches/{b}/view`, `POST .../reviews/close`, `GET .../reviews/progress/{t}` | Review gate evidence |
+| `GET /projects/{p}/groups/{g}`, `POST .../claim`, `/renew`, `/observation`, `/release` | Private coordinator lease and its public checkpoint |
+| `POST /projects/{p}/groups/{g}/facts`, `/reconcile`, `/recover` | Controlled coordinator producers and client Git verdicts |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
 Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
@@ -94,6 +97,16 @@ The client auto-confirms locally owned members and creates generation-bound coll
 
 `POST .../reviews/runtime/{run}/finalize` validates every uploaded file digest and allowed filename, then commits all output bytes, immutable originals and its receipt together. A client saves the exact pending finalization in its private runtime directory before transport. After an outage, a retry uploads that saved result without rerunning the reviewer. An interrupted invocation without a completed saved result records interrupted facts. Formal run publication uses fresh holder confirmations and `PublishReviewRunAtomic`, committing all member copies and indexes together. Runtime output and writer secrets never create a local board. The client prints each answer through its board type, so the aggregate bytes a close request hashes are the same as in v1.
 
+## Coordinator authority
+
+A group's public checkpoint `authority.token` is a session label, not a bearer credential. The service keeps a separate private group lease in `group-claims/`. Concurrent claims have one winner; a live lease cannot be preempted. An explicit claim after expiry or a reported coordinator exit requires the observed generation and a decision, advances both lease ownership and checkpoint authority atomically, and records the handoff. Reusing the old execution ID cannot revive its lease. Checkpoint epochs and lease generations remain separate fields, including after migration.
+
+`kander coordinator claim` stores the returned private credential and starts the same background worker used by tasks. Group renewals change no card or checkpoint version. Every checkpoint mutation checks that private lease inside its producer transaction. Recovery that writes a claimed member additionally requires that member's task credential; group authority alone grants no card write access. A pending task start must settle before recovery. The lost-member recovery entrance and target-branch integration lease still require further adaptation (**planned**).
+
+For reconcile, the client first reads the exact Git facts the producer needs, verifies them in its own clone, and sends the facts with its verdicts. The server repeats the producer pass and accepts only a verdict for the exact current facts. Missing or changed Git facts block the member instead of manufacturing delivery. The server never executes Git. Whole-request CAS failures preserve the checkpoint; per-member failures retain their blocked mirrors and the existing partial/failed CLI exit statuses.
+
+Distributed `orchestrate` reads cards and expands groups through a service snapshot. Its task file carries a fresh fixed execution identity in both `KANDER_COORDINATOR_EXECUTION_ID` and `KANDER_EXECUTION_ID`. Its PID incarnation or window/session is retained below the private client `sessions/` directory before later group claims. A group credential binds to that context, so the worker can observe coordinator exit independently of TUI lifetime. A separate task executor clears inherited coordinator authority and receives its own task execution ID. Neither orchestration nor checkpoint claim creates a local board or mutates member cards.
+
 ## Client and worker
 
 The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. The remaining lifecycle, result-reconciliation and evidence commands still need adaptation (**planned**). The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
@@ -125,7 +138,7 @@ The TUI writes only a private list cache under the client home, keyed by the ser
 
 `kander list --json` keeps the schema-1 CLI snapshot consumed by dsh and adds project ID, event cursor and public claim observations. The change token ignores renewal timestamps and pure observation timestamps. Local terminal observation and focus are restricted to this client's claims. Foreign tasks display their owning worker's service observation; their terminal addresses never reach this host's backends. Lease loss remains visible but never invents evidence of process exit. Observation and renewal timestamps are excluded from the change token.
 
-`subscribe` expands membership from a coordinated `/snapshot` response and resumes `/events` from that snapshot's cursor. Its in-memory board view contains resource identities and no write cursor; it creates no local card directories. Group expansion, task revisions, dispatch summaries and blocked members come from the service. Public liveness uses generation-bound worker observations and translates service-clock age for local display. Cursor resets trigger a fresh snapshot and an explicit `snapshot-reset` event. Claim generation/status changes emit `claim-change`; ordinary renewal timestamps do not. The bounded output worker cancels an outstanding event poll when output closes.
+`subscribe` expands membership from a coordinated `/snapshot` response and resumes `/events` from that snapshot's cursor. Its in-memory board view contains resource identities and no write cursor; it creates no local card directories. Group expansion, task revisions, dispatch summaries and blocked members come from the service. Public liveness uses generation-bound worker observations and translates service-clock age for local display. Cursor resets trigger a fresh snapshot and an explicit `snapshot-reset` event. Claim generation/status changes emit `claim-change`. Group checkpoint or authority changes emit `coordinator-change` with public coordinator summaries; ordinary renewal timestamps do not. The bounded output worker cancels an outstanding event poll when output closes.
 
 The ordinary `check` route performs the board's structural, prerequisite and review-evidence checks on the server and appends the reported agent observations on the client. Delivery and overlap checks continue to inspect local Git without a board.
 
@@ -137,7 +150,7 @@ Issue triage and refinement run on the client. Their refreshed or downloaded sou
 
 ## Events
 
-Each project keeps `control/events.jsonl`. Events carry identities (`task_changed`, `claim_changed`, `request_changed` with task, state, revision, generation), never bodies. A cursor is `<epoch>:<seq>`; the task list returns the cursor it is consistent with. `GET .../events?cursor=&wait=` long-polls up to 60 s. An unknown epoch, a future sequence, or a cursor older than the retained window answers `reset`; the client re-reads the task list and continues from its cursor. The TUI reads server snapshots and keeps a private read-only offline snapshot. Binding the TUI and `kander subscribe` to this event stream is still **planned**.
+Each project keeps `control/events.jsonl`. Events carry identities (`task_changed`, `claim_changed`, `request_changed`, `group_changed` with task or group, state, revision, generation), never bodies. A cursor is `<epoch>:<seq>`; the task list returns the cursor it is consistent with. `GET .../events?cursor=&wait=` long-polls up to 60 s. An unknown epoch, a future sequence, or a cursor older than the retained window answers `reset`; the client re-reads the task list and continues from its cursor. The TUI reads server snapshots and keeps a private read-only offline snapshot. `subscribe` resumes the stream and refreshes after a cursor reset. Event-driven TUI wakeups remain **planned**; its current refresh reads snapshots.
 
 ## Logging
 

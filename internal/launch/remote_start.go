@@ -2,8 +2,10 @@ package launch
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/dualface/kander/internal/api"
@@ -269,22 +271,30 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 // one typed command, so POSIX prefixes `env NAME=value` and PowerShell
 // assigns the variable first.
 func withExecutionIdentity(plan LaunchPlan, inv process.ProcessInvocation, execution string) process.ProcessInvocation {
-	entry := remote.EnvExecutionID + "=" + execution
+	return withInvocationEnvironment(plan, inv, map[string]string{remote.EnvExecutionID: execution, remote.EnvCoordinatorExecutionID: ""})
+}
+func withInvocationEnvironment(plan LaunchPlan, inv process.ProcessInvocation, values map[string]string) process.ProcessInvocation {
+	inv.Env = maps.Clone(inv.Env)
 	if inv.Env == nil {
 		inv.Env = map[string]string{}
 	}
-	inv.Env[remote.EnvExecutionID] = execution
+	maps.Copy(inv.Env, values)
 	if !plan.capabilities().Container {
 		return inv
 	}
 	if runtimeWindows() {
+		inv.ShellEnv = maps.Clone(inv.ShellEnv)
 		if inv.ShellEnv == nil {
 			inv.ShellEnv = map[string]string{}
 		}
-		inv.ShellEnv[remote.EnvExecutionID] = execution
+		maps.Copy(inv.ShellEnv, values)
 		return inv
 	}
-	inv.Argv = append([]string{"env", entry}, inv.Argv...)
+	prefix := []string{"env"}
+	for _, name := range slices.Sorted(maps.Keys(values)) {
+		prefix = append(prefix, name+"="+values[name])
+	}
+	inv.Argv = append(prefix, inv.Argv...)
 	return inv
 }
 

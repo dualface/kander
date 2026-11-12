@@ -1,8 +1,9 @@
 package api
 
 import (
-	"github.com/dualface/kander/internal/board"
 	"time"
+
+	"github.com/dualface/kander/internal/board"
 )
 
 // SnapshotQuery selects a coordinated read. Nil tasks captures the entire
@@ -12,11 +13,12 @@ type SnapshotQuery struct {
 	Groups []string `json:"groups,omitempty"`
 }
 type BoardSnapshot struct {
-	ObservedAt time.Time             `json:"observed_at"`
-	View       board.CapturedView    `json:"view"`
-	Claims     map[string]*ClaimView `json:"claims"`
-	Blocked    map[string]string     `json:"blocked"`
-	Cursor     string                `json:"cursor"`
+	Coordinators map[string]CoordinatorSummary `json:"coordinators,omitempty"`
+	ObservedAt   time.Time                     `json:"observed_at"`
+	View         board.CapturedView            `json:"view"`
+	Claims       map[string]*ClaimView         `json:"claims"`
+	Blocked      map[string]string             `json:"blocked"`
+	Cursor       string                        `json:"cursor"`
 }
 
 type CheckQuery struct {

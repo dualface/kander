@@ -18,19 +18,20 @@ import (
 const subscriptionReadTimeout = 2 * time.Second
 
 type subscriptionFacts struct {
-	claims     map[string]*api.ClaimView
-	cursor     string
-	serverNow  time.Time
-	scanned    board.Board
-	states     map[string]string
-	revisions  map[string]uint64
-	dispatches map[string]dispatchJSON
-	blocked    map[string]string
-	watched    []string
-	monitored  []string
-	groups     map[string][]string
-	versions   map[string]string
-	observedAt time.Time
+	coordinators map[string]api.CoordinatorSummary
+	claims       map[string]*api.ClaimView
+	cursor       string
+	serverNow    time.Time
+	scanned      board.Board
+	states       map[string]string
+	revisions    map[string]uint64
+	dispatches   map[string]dispatchJSON
+	blocked      map[string]string
+	watched      []string
+	monitored    []string
+	groups       map[string][]string
+	versions     map[string]string
+	observedAt   time.Time
 }
 
 type subscription struct {
@@ -247,7 +248,7 @@ func (s *subscription) payload(event string, facts subscriptionFacts) groupEvent
 	s.seq++
 	return groupEvent{
 		SchemaVersion: 1, SubscriptionID: s.id, Seq: s.seq, ObservedAt: facts.observedAt,
-		Claims: facts.claims, Cursor: facts.cursor, Dispatches: facts.dispatches, Blocked: facts.blocked,
+		Coordinators: facts.coordinators, Claims: facts.claims, Cursor: facts.cursor, Dispatches: facts.dispatches, Blocked: facts.blocked,
 		Event: event, GroupID: s.opts.Group, Tasks: facts.states, TaskRevisions: facts.revisions,
 		Watched: facts.watched, WatchReferences: s.opts.Watch, Memberships: facts.groups,
 		MembershipVersions: facts.versions, MembershipComplete: true,

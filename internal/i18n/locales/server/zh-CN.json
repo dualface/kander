@@ -31,5 +31,8 @@
   "remote.publication_confirmation_request": "联合评审资料 {{.V0}} 已准备。请核对操作与版本，再在你自己的本地项目目录确认：kander review confirm <absolute-CWD> {{.V0}} {{.V1}}。确认仅绑定本卡版本及当前执行代次。",
   "remote.agent_observation_pending": "尚无当前 Agent 存活观察",
   "remote.lease_lost_agent_unknown": "租约已失效；尚未确认 Agent 进程状态",
-  "remote.agent_observation_stale": "Agent 存活观察已过期"
+  "remote.agent_observation_stale": "Agent 存活观察已过期",
+  "remote.coordinator_checkpoint_missing": "编排 checkpoint 不存在",
+  "remote.coordinator_holder_recovery_required": "必须由任务持有者执行恢复，或先显式移交执行权",
+  "remote.coordinator_stopped_required": "恢复前必须确认本机执行已停止"
 }

@@ -67,3 +67,5 @@ A subscription is a background process plus a file. The loop, in order:
 ## Distributed project
 
 In a distributed project, membership, revisions, dispatches and blocked members come from the service snapshot. The client resumes the service event cursor and performs no local board scan. Worker observations describe agent presence; an expired lease alone does not prove the agent stopped. A cursor reset emits `snapshot-reset` after a complete refresh, and generation or status changes emit `claim-change`. These schema-1 events include the service cursor and public claims.
+
+Distributed subscriptions also emit `coordinator-change` with the selected groups' checkpoint revisions, authority epochs and public lease generations. Coordinator renewal timestamps alone do not emit a change.

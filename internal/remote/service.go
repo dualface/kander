@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 )
 
@@ -13,6 +14,13 @@ import (
 // views. Implementations perform REST calls; there is no local board adapter.
 // Git, terminal control and private execution files remain client concerns.
 type ProjectService interface {
+	ObserveGroup(context.Context, string, string, api.AgentObservation, client.Claim) (api.Renewal, error)
+	ReleaseGroup(context.Context, string, string, api.GroupRelease, client.Claim) (api.Renewal, error)
+	Group(context.Context, string) (api.GroupView, error)
+	ClaimGroup(context.Context, string, string, api.GroupClaim, *client.Claim) (api.GroupGrant, error)
+	RenewGroup(context.Context, string, client.Claim) (api.Renewal, error)
+	CoordinatorFacts(context.Context, string, board.CoordinatorReconcile) ([]board.CoordinatorGitFacts, error)
+	CoordinatorAction(context.Context, string, string, string, any, client.Claim) (board.CoordinatorCheckpoint, error)
 	Check(context.Context, api.CheckQuery) (api.CheckResult, error)
 	Snapshot(context.Context, api.SnapshotQuery) (api.BoardSnapshot, error)
 	ObserveAgent(context.Context, string, string, api.AgentObservation, client.Claim) (api.ClaimView, error)

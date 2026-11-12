@@ -56,31 +56,32 @@ type livenessJSON struct {
 }
 
 type groupEvent struct {
-	Claims                 map[string]*api.ClaimView `json:"claims,omitempty"`
-	Cursor                 string                    `json:"cursor,omitempty"`
-	Dispatches             map[string]dispatchJSON   `json:"dispatches,omitempty"`
-	Attention              []string                  `json:"attention,omitempty"`
-	Blocked                map[string]string         `json:"blocked,omitempty"`
-	SchemaVersion          int                       `json:"schema_version"`
-	SubscriptionID         string                    `json:"subscription_id"`
-	Seq                    uint64                    `json:"seq"`
-	ObservedAt             time.Time                 `json:"observed_at"`
-	TaskRevisions          map[string]uint64         `json:"task_revisions"`
-	Updated                []string                  `json:"updated,omitempty"`
-	WatchReferences        []string                  `json:"watch_references,omitempty"`
-	MembershipVersions     map[string]string         `json:"membership_versions,omitempty"`
-	Memberships            map[string][]string       `json:"memberships,omitempty"`
-	MembershipComplete     bool                      `json:"membership_complete"`
-	ReconciliationRequired bool                      `json:"reconciliation_required"`
-	ReadStatus             string                    `json:"read_status"`
-	Detail                 string                    `json:"detail,omitempty"`
-	Removed                []string                  `json:"removed,omitempty"`
-	Event                  string                    `json:"event"`
-	GroupID                string                    `json:"group_id"`
-	Tasks                  map[string]string         `json:"tasks"`
-	Changed                []changeEvent             `json:"changed,omitempty"`
-	Watched                []string                  `json:"watched,omitempty"`
-	Liveness               map[string]livenessJSON   `json:"liveness,omitempty"`
+	Coordinators           map[string]api.CoordinatorSummary `json:"coordinators,omitempty"`
+	Claims                 map[string]*api.ClaimView         `json:"claims,omitempty"`
+	Cursor                 string                            `json:"cursor,omitempty"`
+	Dispatches             map[string]dispatchJSON           `json:"dispatches,omitempty"`
+	Attention              []string                          `json:"attention,omitempty"`
+	Blocked                map[string]string                 `json:"blocked,omitempty"`
+	SchemaVersion          int                               `json:"schema_version"`
+	SubscriptionID         string                            `json:"subscription_id"`
+	Seq                    uint64                            `json:"seq"`
+	ObservedAt             time.Time                         `json:"observed_at"`
+	TaskRevisions          map[string]uint64                 `json:"task_revisions"`
+	Updated                []string                          `json:"updated,omitempty"`
+	WatchReferences        []string                          `json:"watch_references,omitempty"`
+	MembershipVersions     map[string]string                 `json:"membership_versions,omitempty"`
+	Memberships            map[string][]string               `json:"memberships,omitempty"`
+	MembershipComplete     bool                              `json:"membership_complete"`
+	ReconciliationRequired bool                              `json:"reconciliation_required"`
+	ReadStatus             string                            `json:"read_status"`
+	Detail                 string                            `json:"detail,omitempty"`
+	Removed                []string                          `json:"removed,omitempty"`
+	Event                  string                            `json:"event"`
+	GroupID                string                            `json:"group_id"`
+	Tasks                  map[string]string                 `json:"tasks"`
+	Changed                []changeEvent                     `json:"changed,omitempty"`
+	Watched                []string                          `json:"watched,omitempty"`
+	Liveness               map[string]livenessJSON           `json:"liveness,omitempty"`
 }
 
 var nowFn = time.Now
@@ -348,6 +349,12 @@ func subscribeContext(ctx context.Context, root string, opts subscribeOptions, w
 			}
 		} else if len(updated) > 0 {
 			if err := session.emit(w, "task-update", current, nil, updated, nil); err != nil {
+				return err
+			}
+		}
+		if changed, takenOver := changedCoordinators(snapshot, current); changed {
+			session.reconciliation = session.reconciliation || takenOver
+			if err := session.emit(w, "coordinator-change", current, nil, nil, nil); err != nil {
 				return err
 			}
 		}

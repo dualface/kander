@@ -151,6 +151,7 @@ func (s *Server) Handler() http.Handler {
 	s.reviewRuntimeRoutes(mux)
 	s.observationRoutes(mux)
 	s.snapshotRoutes(mux)
+	s.groupRoutes(mux)
 	s.issueRoutes(mux)
 	s.publicationRoutes(mux)
 	return mux
@@ -221,7 +222,7 @@ func (s *Server) domain(fn func(*http.Request) outcome) http.HandlerFunc {
 			writeJSONResponse(w, status, out.body)
 		}
 		s.log.Info("request", "method", r.Method, "path", r.URL.Path, "status", status,
-			"client", r.Header.Get(api.HeaderClientID), "operation", r.Header.Get(api.HeaderOperationID),
+			"client", r.Header.Get(api.HeaderClientID), "group", r.PathValue("group"), "operation", r.Header.Get(api.HeaderOperationID),
 			"generation", r.Header.Get(api.HeaderClaimGen), "duration_ms", time.Since(started).Milliseconds())
 	}
 }

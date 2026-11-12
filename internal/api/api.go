@@ -319,6 +319,7 @@ type CollabAnswer struct {
 
 // Event kinds.
 const (
+	EventGroupChanged = "group_changed"
 	EventTaskChanged  = "task_changed"
 	EventClaimChanged = "claim_changed"
 	EventRequest      = "request_changed"
@@ -327,6 +328,7 @@ const (
 // Event is one change notification. Events carry identities, not bodies; a
 // subscriber reads the current resource.
 type Event struct {
+	GroupID    string    `json:"group_id,omitempty"`
 	Seq        uint64    `json:"seq"`
 	Kind       string    `json:"kind"`
 	TaskID     string    `json:"task_id,omitempty"`

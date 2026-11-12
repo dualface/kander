@@ -14,6 +14,7 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/liveness"
+	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/review"
 )
 
@@ -23,25 +24,28 @@ func init() { board.SetWrapUpGitVerifier(verifyWrapUpCompletion) }
 // original review/dispatch records and commits only a fenced checkpoint.
 func ReconcileCoordinator(ctx context.Context, root string, r board.CoordinatorReconcile) (board.CoordinatorCheckpoint, error) {
 	return board.ReconcileCoordinator(ctx, root, r, func(ctx context.Context, facts board.CoordinatorGitFacts) error {
-		if d := facts.Delivery; d != nil {
-			if !filepath.IsAbs(r.CWD) || d.Branch == "main" || d.Branch == "develop" || strings.HasPrefix(d.Branch, "group/") {
-				return launchError("board.coordinator_conflict", "delivery CWD or task branch")
-			}
-			cmd := exec.CommandContext(ctx, "git", "-C", r.CWD, "check-ref-format", "refs/heads/"+d.Branch)
-			if err := cmd.Run(); err != nil {
-				return err
-			}
-			out, err := exec.CommandContext(ctx, "git", "-C", r.CWD, "rev-parse", "--verify", "refs/heads/"+d.Branch+"^{commit}").Output()
-			if err != nil {
-				return err
-			}
-			if strings.TrimSpace(string(out)) != d.Commit {
-				return launchError("board.coordinator_conflict", "task branch head differs from delivery")
-			}
-			return ctx.Err()
-		}
-		return verifyWrapUpGit(ctx, r.CWD, facts)
+		return verifyCoordinatorGitFacts(ctx, r.CWD, facts)
 	})
+}
+func verifyCoordinatorGitFacts(ctx context.Context, cwd string, facts board.CoordinatorGitFacts) error {
+	if d := facts.Delivery; d != nil {
+		if !filepath.IsAbs(cwd) || d.Branch == "main" || d.Branch == "develop" || strings.HasPrefix(d.Branch, "group/") {
+			return launchError("board.coordinator_conflict", "delivery CWD or task branch")
+		}
+		cmd := exec.CommandContext(ctx, "git", "-C", cwd, "check-ref-format", "refs/heads/"+d.Branch)
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		out, err := exec.CommandContext(ctx, "git", "-C", cwd, "rev-parse", "--verify", "refs/heads/"+d.Branch+"^{commit}").Output()
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(out)) != d.Commit {
+			return launchError("board.coordinator_conflict", "task branch head differs from delivery")
+		}
+		return ctx.Err()
+	}
+	return verifyWrapUpGit(ctx, cwd, facts)
 }
 
 // verifyWrapUpGit proves the integration of a wrap-up and its closed batches. cwd
@@ -241,6 +245,11 @@ func RunCoordinator(args []string) int {
 	}
 	if err = cfg.Rules.CheckTaskGroup("coordinator"); err != nil {
 		return fail(err)
+	}
+	if remote.Enabled(cfg) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return runRemoteCoordinator(ctx, cfg, args)
 	}
 	root, err := board.BoardRoot()
 	if err != nil {

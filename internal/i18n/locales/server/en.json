@@ -31,5 +31,8 @@
   "remote.publication_confirmation_request": "Joint review material {{.V0}} is ready. Inspect its operation and versions, then confirm this task from your own local project directory: kander review confirm <absolute-CWD> {{.V0}} {{.V1}}. Confirmation is limited to this task revision and execution generation.",
   "remote.agent_observation_pending": "No current agent observation has been reported",
   "remote.lease_lost_agent_unknown": "Lease lost; the agent process state is unconfirmed",
-  "remote.agent_observation_stale": "The agent observation is stale"
+  "remote.agent_observation_stale": "The agent observation is stale",
+  "remote.coordinator_checkpoint_missing": "The coordinator checkpoint does not exist",
+  "remote.coordinator_holder_recovery_required": "The task holder must handle recovery or explicitly hand off the execution",
+  "remote.coordinator_stopped_required": "Recovery requires a confirmed stopped local execution"
 }

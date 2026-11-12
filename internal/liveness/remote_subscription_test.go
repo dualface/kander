@@ -171,3 +171,48 @@ func TestRemoteCheckReadsServiceEvidenceWithoutLocalKanban(t *testing.T) {
 		t.Fatalf("check used local board: %v", err)
 	}
 }
+
+func TestRemoteSubscriptionWakesForCoordinatorAuthorityChanges(t *testing.T) {
+	service, executor := remoteSubscriptionService(t)
+	group := "20261112-coordinator-watch-group"
+	task := subscriptionRemoteCard(t, executor, "coordinator-watched", group)
+	events := make(runtimeEvents, 32)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		done <- subscribeContext(ctx, service.Location(""), subscribeOptions{Watch: []string{group}, Refresh: 0.01, Heartbeat: 1}, events, service)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if err != nil && !errors.Is(err, context.Canceled) {
+				t.Error(err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("group subscription did not join")
+		}
+	})
+	nextRuntimeEvent(t, events, func(event groupEvent) bool { return event.Event == "snapshot" })
+	grant, err := executor.ClaimGroup(t.Context(), "", group, api.GroupClaim{ExecutionID: "watched-coordinator", Request: board.CoordinatorClaim{GroupID: group, Owner: "coordinator", Token: "public-label", Basis: "confirmed subscription fixture", Members: []string{task.TaskID}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimed := nextRuntimeEvent(t, events, func(event groupEvent) bool {
+		return event.Event == "coordinator-change" && event.Coordinators[group].Claim != nil
+	})
+	if claimed.Coordinators[group].Claim.Generation != grant.Claim.Generation || claimed.Coordinators[group].Revision != grant.Checkpoint.Revision {
+		t.Fatal("subscription lost coordinator ownership")
+	}
+	_, err = executor.ReleaseGroup(t.Context(), "", group, api.GroupRelease{GroupID: group, Reason: "fixture complete", Decision: "explicit release"}, client.Claim{Token: grant.Token, Generation: grant.Claim.Generation})
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := nextRuntimeEvent(t, events, func(event groupEvent) bool {
+		value := event.Coordinators[group]
+		return event.Event == "coordinator-change" && value.Claim != nil && value.Claim.Status == api.ClaimReleased
+	})
+	if released.Coordinators[group].Revision != grant.Checkpoint.Revision {
+		t.Fatal("lease release changed the checkpoint")
+	}
+}

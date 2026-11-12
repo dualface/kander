@@ -31,5 +31,8 @@
   "remote.publication_confirmation_request": "共同レビュー資料 {{.V0}} が準備されました。操作とバージョンを確認し、自分のローカルプロジェクトから承認してください: kander review confirm <absolute-CWD> {{.V0}} {{.V1}}。承認はこのタスクのリビジョンと実行世代に限定されます。",
   "remote.agent_observation_pending": "現在のエージェント観測は未報告です",
   "remote.lease_lost_agent_unknown": "リースは失効しました。エージェントの状態は未確認です",
-  "remote.agent_observation_stale": "エージェントの観測が古くなっています"
+  "remote.agent_observation_stale": "エージェントの観測が古くなっています",
+  "remote.coordinator_checkpoint_missing": "コーディネーターのチェックポイントが存在しません",
+  "remote.coordinator_holder_recovery_required": "タスク保持者が復旧するか、先に実行権を明示的に引き継いでください",
+  "remote.coordinator_stopped_required": "復旧にはローカル実行の停止確認が必要です"
 }

@@ -27,8 +27,9 @@ import (
 // credential of a later one. EnvClientHome relocates the private client
 // directory (tests, several identities on one machine).
 const (
-	EnvExecutionID = "KANDER_EXECUTION_ID"
-	EnvClientHome  = "KANDER_CLIENT_HOME"
+	EnvExecutionID            = "KANDER_EXECUTION_ID"
+	EnvCoordinatorExecutionID = "KANDER_COORDINATOR_EXECUTION_ID"
+	EnvClientHome             = "KANDER_CLIENT_HOME"
 )
 
 // ErrNotConfigured reports a client without server.url or project.name.
@@ -177,6 +178,7 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 // until the server releases the claim or the lease is lost; a lost credential
 // is kept, marked, so its worktree and branch stay for manual handling.
 type Credential struct {
+	ResourceKind  string       `json:"resource_kind,omitempty"`
 	ServerURL     string       `json:"server_url"`
 	ClientID      string       `json:"client_id"`
 	ProjectID     string       `json:"project_id"`
@@ -272,8 +274,20 @@ func Credentials(home string) ([]Credential, error) {
 // execution's credential; an interactive process gets the latest claim this
 // host made. found=false means this host holds no claim the process may use.
 func (s *Session) Credential(task string) (Credential, bool, error) {
+	return s.credentialFor(task, os.Getenv(EnvExecutionID))
+}
+func (s *Session) CoordinatorCredential(group string) (Credential, bool, error) {
+	execution := os.Getenv(EnvCoordinatorExecutionID)
+	if execution == "" {
+		execution = os.Getenv(EnvExecutionID)
+	}
+	return s.credentialFor(group, execution)
+}
+func (s *Session) credentialFor(task, execution string) (Credential, bool, error) {
+	if !api.ValidIdentity(task) || !api.ValidIdentity(s.Info.ID) {
+		return Credential{}, false, errors.New("invalid execution credential location")
+	}
 	dir := credentialDir(s.Home, s.Info.ID, task)
-	execution := os.Getenv(EnvExecutionID)
 	if execution == "" {
 		data, ok, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, "latest"))
 		if err != nil || !ok {
@@ -295,6 +309,9 @@ func (s *Session) Credential(task string) (Credential, bool, error) {
 	var c Credential
 	if err := json.Unmarshal(data, &c); err != nil {
 		return Credential{}, false, errors.New("execution credential of " + task + " is damaged")
+	}
+	if c.ProjectID != s.Info.ID || c.TaskID != task || c.ExecutionID != execution || s.ServerURL != "" && c.ServerURL != s.ServerURL || s.Client != nil && c.ClientID != s.Client.ClientID() {
+		return Credential{}, false, errors.New("execution credential identity does not match its private location")
 	}
 	return c, true, nil
 }

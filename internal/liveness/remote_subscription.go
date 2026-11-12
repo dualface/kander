@@ -38,6 +38,7 @@ func (s *subscription) readRemote(ctx context.Context) (subscriptionFacts, error
 		return facts, err
 	}
 	facts.observedAt = nowFn().UTC()
+	facts.coordinators = snapshot.Coordinators
 	facts.serverNow = snapshot.ObservedAt
 	facts.claims = snapshot.Claims
 	facts.cursor = snapshot.Cursor
@@ -81,4 +82,30 @@ func changedClaims(previous, current subscriptionFacts) []string {
 		}
 	}
 	return changed
+}
+
+func changedCoordinators(previous, current subscriptionFacts) (changed, takenOver bool) {
+	if len(previous.coordinators) != len(current.coordinators) {
+		changed = true
+	}
+	for id, next := range current.coordinators {
+		old, found := previous.coordinators[id]
+		if !found || old.Revision != next.Revision || old.ContentHash != next.ContentHash || old.Epoch != next.Epoch {
+			changed = true
+		}
+		if found && old.Epoch != next.Epoch {
+			takenOver = true
+		}
+		a, b := old.Claim, next.Claim
+		if a == nil && b == nil {
+			continue
+		}
+		if a == nil || b == nil || a.Generation != b.Generation || a.Status != b.Status || a.ExecutionID != b.ExecutionID {
+			changed = true
+		}
+		if a != nil && b != nil && a.Generation != b.Generation {
+			takenOver = true
+		}
+	}
+	return
 }

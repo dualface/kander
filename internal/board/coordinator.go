@@ -248,7 +248,7 @@ func ReadBlockedMembers(ctx context.Context, root, group string, into map[string
 
 // ClaimCoordinator creates a checkpoint or explicitly fences an earlier writer
 // under group CAS. Replaying an identical claim preserves its epoch and cursor.
-func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c CoordinatorCheckpoint, err error) {
+func ClaimCoordinatorWithTransaction(ctx context.Context, root string, r CoordinatorClaim, extensions ...TransactionExtension) (c CoordinatorCheckpoint, err error) {
 	ids, err := orderedIDs(r.Members, false)
 	if err != nil {
 		return c, err
@@ -258,6 +258,7 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 	}
 	r.Members = ids
 	err = WithTransactionContext(ctx, root, LockScope{Groups: []string{r.GroupID, taskStartGroup}, Tasks: ids, ExclusiveBoard: true}, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(c) }()
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -303,7 +304,7 @@ func ClaimCoordinator(ctx context.Context, root string, r CoordinatorClaim) (c C
 		c.Authority = CoordinatorAuthority{Owner: r.Owner, Token: r.Token, Epoch: c.Authority.Epoch + 1}
 		c.ClaimHash, c.LastRequestHash, c.Basis = coordinatorHash(r), "", r.Basis
 		return putCheckpoint(tx, &c)
-	})
+	}, extensions...)
 	return
 }
 
@@ -366,7 +367,7 @@ type coordinatorPass struct {
 // Each member is judged alone. A member that fails stays at its last mirror with
 // the reason in blocked, and the others advance. The checkpoint is published
 // either way; a *CoordinatorBlockedError reports that every member is blocked.
-func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconcile, verify func(context.Context, CoordinatorGitFacts) error) (c CoordinatorCheckpoint, err error) {
+func ReconcileCoordinatorWithTransaction(ctx context.Context, root string, r CoordinatorReconcile, verify func(context.Context, CoordinatorGitFacts) error, extensions ...TransactionExtension) (c CoordinatorCheckpoint, err error) {
 	ids := make([]string, 0, len(r.Members))
 	for id := range r.Members {
 		ids = append(ids, id)
@@ -408,6 +409,7 @@ func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconci
 		}
 	}
 	err = WithTransactionContext(ctx, root, scope, func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(c) }()
 		pass := &coordinatorPass{group: r.GroupID, verify: compare}
 		var changed bool
 		c, changed, err = reconcileCheckpoint(ctx, tx, r, ids, pass)
@@ -423,7 +425,7 @@ func ReconcileCoordinator(ctx context.Context, root string, r CoordinatorReconci
 			return nil
 		}
 		return putCheckpoint(tx, &c)
-	})
+	}, extensions...)
 	if err != nil {
 		return c, err
 	}

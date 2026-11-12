@@ -158,6 +158,14 @@ func (w *loop) pass(ctx context.Context) (int, error) {
 	}
 	live := 0
 	for _, c := range credentials {
+		if c.ResourceKind == "group" {
+			if err := remote.RefreshExecutionContext(w.o.Home, &c); err != nil {
+				w.o.Logger.Error("group execution context could not be read", "group", c.TaskID, "error", err)
+			} else if err := remote.WriteCredential(w.o.Home, c); err != nil {
+				w.o.Logger.Error("group execution context could not be saved", "group", c.TaskID, "error", err)
+			}
+		}
+
 		if c.Lost {
 			w.stopLost(ctx, w.o.Logger, c)
 			continue
@@ -191,7 +199,11 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 	callCtx, cancel := context.WithTimeout(ctx, min(interval, 10*time.Second))
 	defer cancel()
 	project := cl.Project(c.ProjectID)
-	_, err = project.Renew(callCtx, c.TaskID, *c.Claim())
+	if c.ResourceKind == "group" {
+		_, err = project.RenewGroup(callCtx, c.TaskID, *c.Claim())
+	} else {
+		_, err = project.Renew(callCtx, c.TaskID, *c.Claim())
+	}
 	switch {
 	case err == nil:
 		c.RenewedAt = now
@@ -200,7 +212,12 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 		stopObservation()
 		if observation.Status != "unknown" {
 			reportCtx, stopReport := context.WithTimeout(ctx, 5*time.Second)
-			_, reportErr := project.ObserveAgent(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
+			var reportErr error
+			if c.ResourceKind == "group" {
+				_, reportErr = project.ObserveGroup(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
+			} else {
+				_, reportErr = project.ObserveAgent(reportCtx, client.NewKey(), c.TaskID, observation, *c.Claim())
+			}
 			stopReport()
 			if reportErr != nil {
 				log.Warn("agent observation report failed", "error", reportErr)
@@ -210,14 +227,28 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 				return false
 			}
 		}
-		w.deliver(callCtx, log, project, &c)
+		if c.ResourceKind != "group" {
+			w.deliver(callCtx, log, project, &c)
+		}
 		if err := remote.WriteCredential(w.o.Home, c); err != nil {
 			log.Error("credential write failed", "error", err)
 		}
 		return true
 	case api.IsCode(err, api.CodeLeaseInvalid) || api.IsCode(err, api.CodeHeldByOther) || api.IsCode(err, api.CodeNotFound):
 		// A released claim is a normal end; anything else lost the lease.
-		if t, serr := project.Show(callCtx, c.TaskID); serr == nil && t.Claim != nil && t.Claim.Generation == c.Generation && t.Claim.Status == api.ClaimReleased {
+		var claim *api.ClaimView
+		if c.ResourceKind == "group" {
+			value, err := project.Group(callCtx, c.TaskID)
+			if err == nil {
+				claim = value.Claim
+			}
+		} else {
+			value, err := project.Show(callCtx, c.TaskID)
+			if err == nil {
+				claim = value.Claim
+			}
+		}
+		if claim != nil && claim.Generation == c.Generation && claim.Status == api.ClaimReleased {
 			log.Info("claim released; credential removed")
 			if err := remote.RemoveCredential(w.o.Home, c); err != nil {
 				log.Error("credential removal failed", "error", err)
