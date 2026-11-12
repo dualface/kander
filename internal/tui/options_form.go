@@ -42,9 +42,8 @@ type formBinding struct {
 	rules          map[string]*bool
 	rulePreset     string
 	prevRulePreset string
-	issueResult    *string
-	gitBranchMode  *string
 	installRules   map[string]*bool
+	ruleChoices
 
 	modelFields  []menu.ModelField
 	modelInputs  map[string]modelInput
