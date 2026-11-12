@@ -29,10 +29,6 @@ func binaryName() string {
 	return "kander"
 }
 
-func asideName() string {
-	return binaryName() + ".old"
-}
-
 func fileAnchor(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {

@@ -302,18 +302,12 @@ func checksumFor(data []byte, name string) ([]byte, error) {
 	return match, nil
 }
 
-func extractUpdateBinary(asset string, data []byte) ([]byte, error) {
-	return extractComponentBinary(asset, data, binaryName())
-}
-
 func extractComponentBinary(asset string, data []byte, name string) ([]byte, error) {
 	if strings.HasSuffix(asset, ".zip") {
 		return extractComponentZip(data, name)
 	}
 	return extractComponentTar(data, name)
 }
-
-func extractUpdateTar(data []byte) ([]byte, error) { return extractComponentTar(data, binaryName()) }
 
 func extractComponentTar(data []byte, name string) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(data))
@@ -344,8 +338,6 @@ func extractComponentTar(data []byte, name string) ([]byte, error) {
 	}
 	return binary, nil
 }
-
-func extractUpdateZip(data []byte) ([]byte, error) { return extractComponentZip(data, binaryName()) }
 
 func extractComponentZip(data []byte, name string) ([]byte, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))

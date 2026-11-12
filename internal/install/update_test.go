@@ -78,7 +78,7 @@ func TestExtractUpdateTarRejectsUnsafeEntries(t *testing.T) {
 		return out.Bytes()
 	}
 	regular := tar.Header{Name: binaryName(), Mode: 0o755, Size: 3, Typeflag: tar.TypeReg}
-	got, err := extractUpdateTar(archive(regular))
+	got, err := extractComponentTar(archive(regular), binaryName())
 	if err != nil || string(got) != "xxx" {
 		t.Fatalf("binary=%q err=%v", got, err)
 	}
@@ -88,7 +88,7 @@ func TestExtractUpdateTarRejectsUnsafeEntries(t *testing.T) {
 		{regular, regular},
 		{{Name: "other", Size: 1, Typeflag: tar.TypeReg}},
 	} {
-		if _, err := extractUpdateTar(archive(entries...)); err == nil {
+		if _, err := extractComponentTar(archive(entries...), binaryName()); err == nil {
 			t.Fatalf("accepted unsafe entries: %#v", entries)
 		}
 	}

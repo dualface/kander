@@ -205,15 +205,3 @@ func runReview(args []string, required bool) (exitCode int) {
 	defer signal.Stop(interrupt)
 	return executeReview(ctx, interrupt)
 }
-
-func toLower(s string) string {
-	b := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		b[i] = c
-	}
-	return string(b)
-}

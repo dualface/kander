@@ -22,7 +22,6 @@ func dispositionCommand(name string) bool {
 	}
 	return false
 }
-func runDispositionCommand(args []string) int { return runDispositionMode(args, false) }
 func runDispositionMode(args []string, required bool) int {
 	if len(args) >= 2 && args[1] == "--schema" {
 		if len(args) != 2 || !schemaCommand(args[0]) {
