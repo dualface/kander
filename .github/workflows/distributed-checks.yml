@@ -1,0 +1,76 @@
+name: distributed-checks
+
+on:
+  push:
+    branches: [v2, v2-distributed-execution]
+  pull_request:
+    branches: [v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suffix: ''
+          - os: macos-latest
+            suffix: ''
+          - os: windows-latest
+            suffix: '.exe'
+    runs-on: ${{ matrix.os }}
+    env:
+      # Use the real runner volume, including on macOS where /var is a link.
+      TMPDIR: ${{ runner.temp }}
+      TMP: ${{ runner.temp }}
+      TEMP: ${{ runner.temp }}
+      GOMEMLIMIT: 2GiB
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build client
+        run: go build -o "${{ runner.temp }}/kander-check${{ matrix.suffix }}" ./cmd/kander
+      - name: Build server
+        run: go build -o "${{ runner.temp }}/kander-server-check${{ matrix.suffix }}" ./cmd/kander-server
+      - name: Static analysis
+        run: go vet ./...
+      # Disable the test result cache: large model-test input logs otherwise
+      # require substantially more memory after the tests themselves finish.
+      - name: Complete native tests
+        run: go test -p 1 -count=1 -timeout 150m ./...
+
+  race:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOMEMLIMIT: 2GiB
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Distributed and lifecycle race tests
+        run: go test -race -p 1 -count=1 -timeout 20m ./internal/server ./internal/worker ./internal/remote ./internal/launch ./internal/review ./internal/issue ./internal/liveness ./internal/tui
+
+  dsh:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Plugin tests
+        working-directory: integrations/kander-dsh
+        run: node --test "test/*.test.mjs"
