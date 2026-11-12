@@ -173,6 +173,7 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 	lines = append(lines, Text("config.issue_result_on_done")+": "+effective.Issue.ResultOnDone)
 	lines = append(lines, Text("config.server_url")+": "+cmp.Or(effective.Server.URL, "-"))
 	lines = append(lines, Text("config.project_name")+": "+cmp.Or(effective.Project.Name, "-"))
+	lines = append(lines, Text("config.git_branch_mode")+": "+effective.Git.BranchMode)
 	stored := ConfiguredLanguage()
 	language := stored
 	if language == "" {

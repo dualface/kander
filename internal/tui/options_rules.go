@@ -66,6 +66,7 @@ func (p *optionsPanel) rulesGroup(bind *formBinding) *huh.Group {
 	bind.addSpacer()
 	bind.formFields = append(bind.formFields, huh.NewNote().Title(t("rules.independent")))
 	bind.addRuleFields(p, p.session.Config.Rules, independentRuleModules)
+	bind.addGitBranchModeField(p)
 	bind.addIssueResultField(p)
 	bind.addInstallRulesFields(p)
 	bind.formFields = append(bind.formFields, huh.NewNote().Description(t("rules.contract_notice")))
@@ -101,6 +102,38 @@ func (bind *formBinding) addIssueResultField(p *optionsPanel) {
 
 const issueResultFocusKey = "issue:result_on_done"
 
+// addGitBranchModeField edits git.branch_mode, the mainline branch the Git
+// rules integrate cards and task group branches into.
+func (bind *formBinding) addGitBranchModeField(p *optionsPanel) {
+	mode := p.session.Config.Git.BranchMode
+	bind.gitBranchMode = &mode
+	options := make([]huh.Option[string], 0, len(config.GitBranchModes))
+	for _, value := range config.GitBranchModes {
+		options = append(options, huh.NewOption(config.GitBranchModeLabel(value), value))
+	}
+	bind.fieldIndex[gitBranchModeFocusKey] = bind.focusable
+	bind.addField(huh.NewSelect[string]().
+		Title(p.inheritTitle(t("config.git_branch_mode"), config.GitBranchModeLabel(mode), "git", "branch_mode")).
+		Options(options...).Inline(true).Value(bind.gitBranchMode))
+}
+
+const gitBranchModeFocusKey = "git:branch_mode"
+
+func (b *formBinding) applyGitBranchMode(p *optionsPanel) {
+	if b.gitBranchMode == nil || *b.gitBranchMode == p.session.Config.Git.BranchMode {
+		return
+	}
+	before := p.overridePresence("git", "branch_mode")
+	if err := p.session.SetGitBranchMode(*b.gitBranchMode); err != nil {
+		*b.gitBranchMode = p.session.Config.Git.BranchMode
+		p.showReport(t("config.git_branch_mode"), nil, err.Error())
+		p.rebuildAt(gitBranchModeFocusKey)
+		return
+	}
+	p.markDirty()
+	p.rebuildIfOverrideChanged(before, gitBranchModeFocusKey, "git", "branch_mode")
+}
+
 func (b *formBinding) applyIssueResult(p *optionsPanel) {
 	if b.issueResult == nil || *b.issueResult == p.session.Config.Issue.ResultOnDone {
 		return
@@ -117,6 +150,7 @@ func (b *formBinding) applyIssueResult(p *optionsPanel) {
 }
 
 func (b *formBinding) applyRules(p *optionsPanel) {
+	b.applyGitBranchMode(p)
 	b.applyIssueResult(p)
 	b.applyInstallRules(p)
 	rules := p.session.Config.Rules.Clone()

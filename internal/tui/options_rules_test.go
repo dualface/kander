@@ -210,3 +210,56 @@ func TestRulesPageEditsInstallRulesOnScopeTabOnly(t *testing.T) {
 		t.Fatal("project tab focuses an install_rules field")
 	}
 }
+
+func TestRulePanelSavesGitBranchModeToScope(t *testing.T) {
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	_, panel := openPanel(t)
+	for _, mode := range []string{config.GitBranchModeMainOnly, config.GitBranchModeMainDevelop} {
+		pumpPanel(panel, panel.openSection(sectionRules))
+		if panel.bind.gitBranchMode == nil {
+			t.Fatal("rules page has no git.branch_mode field")
+		}
+		*panel.bind.gitBranchMode = mode
+		panel.bind.apply(panel)
+		pumpPanel(panel, panel.finishSection())
+		saved, err := config.LoadScope(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if saved.Git.BranchMode != mode {
+			t.Fatalf("saved %q, want %q", saved.Git.BranchMode, mode)
+		}
+	}
+}
+
+func TestRulePanelSavesGitBranchModeToProjectOverlay(t *testing.T) {
+	_, panel := openPanel(t)
+	_, path := attachTempOverlay(t, panel.session, config.ModeGlobal)
+	if err := panel.session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	pumpPanel(panel, panel.dispatch(sectionRules))
+	if panel.bind.gitBranchMode == nil {
+		t.Fatal("project rules page has no git.branch_mode field")
+	}
+	*panel.bind.gitBranchMode = config.GitBranchModeMainOnly
+	panel.bind.apply(panel)
+	if err := panel.persistNow(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := config.ReadOverlayFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	git, _ := raw["git"].(map[string]any)
+	if git["branch_mode"] != config.GitBranchModeMainOnly || len(raw) != 1 {
+		t.Fatalf("overlay %#v", raw)
+	}
+	scope, err := config.LoadScope(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope.Git.BranchMode != config.GitBranchModeMainDevelop {
+		t.Fatalf("project save wrote %q into the scope file", scope.Git.BranchMode)
+	}
+}

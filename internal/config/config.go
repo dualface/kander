@@ -152,6 +152,7 @@ type Config struct {
 	Issue           Issue                        `json:"issue"`
 	Server          Server                       `json:"server,omitzero"`
 	Project         Project                      `json:"project,omitzero"`
+	Git             Git                          `json:"git"`
 	Language        string                       `json:"language"`
 	AgentLanguage   string                       `json:"agent_language"`
 	Agents          map[string]AgentDefinition   `json:"agents,omitempty"`
@@ -292,6 +293,7 @@ func DefaultConfig() *Config {
 		Models:          DefaultModels(),
 		TUI:             DefaultTUI(),
 		Issue:           DefaultIssue(),
+		Git:             DefaultGit(),
 		Language:        "en",
 		AgentLanguage:   DefaultAgentLanguage("en"),
 		InstallRules:    true,
@@ -855,6 +857,13 @@ func Validate(raw any) (*Config, error) {
 			return nil, err
 		}
 	}
+	git := DefaultGit()
+	if _, exists := obj["git"]; exists {
+		git, err = validateGit(obj["git"])
+		if err != nil {
+			return nil, err
+		}
+	}
 	languageRaw, hasLanguage := obj["language"]
 	if !hasLanguage {
 		languageRaw = "en"
@@ -886,6 +895,7 @@ func Validate(raw any) (*Config, error) {
 		Issue:           issue,
 		Server:          server,
 		Project:         project,
+		Git:             git,
 		Language:        language,
 		AgentLanguage:   agentLanguage,
 		Agents:          definitions,

@@ -36,6 +36,17 @@ type DispatchWrapUpBinding struct {
 	Git      DispatchIntegration `json:"git"`
 }
 
+// mainlineTargetRef accepts the local or origin ref of either mainline branch
+// git.branch_mode can select. The structural check stays configuration-free;
+// the Git verifier in launch narrows it to the configured branch.
+func mainlineTargetRef(ref string) bool {
+	switch ref {
+	case "refs/heads/develop", "refs/remotes/origin/develop", "refs/heads/main", "refs/remotes/origin/main":
+		return true
+	}
+	return false
+}
+
 // validateDispatchWrapUp checks the integration of a wrap-up. A completed round
 // (historical) was bound to the plan of its day: a batch appended later for
 // another member's rebound cycle moves the end of the plan, not this delivery.
@@ -290,7 +301,7 @@ func validDispatchLocation(value string) bool {
 func validWrapUpTarget(g DispatchIntegration) bool {
 	hasReceipt := g.IntegrationID != "" || g.IntegrationExecution != "" || g.IntegrationGeneration != 0
 	if !hasReceipt {
-		return g.TargetRef == "refs/heads/develop" || g.TargetRef == "refs/remotes/origin/develop"
+		return mainlineTargetRef(g.TargetRef)
 	}
 	project, portable := strings.CutPrefix(g.CWD, "project:")
 	return portable && ValidReviewID(project) && strings.HasPrefix(g.TargetRef, "refs/heads/") && strings.HasPrefix(g.IntegrationID, "i-") && len(g.IntegrationID) == 66 && commitPattern.MatchString(strings.TrimPrefix(g.IntegrationID, "i-")) && len(g.IntegrationExecution) > 0 && len(g.IntegrationExecution) <= 128 && g.IntegrationGeneration > 0
