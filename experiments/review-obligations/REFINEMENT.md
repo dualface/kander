@@ -13,7 +13,7 @@ From the repository root, with the ordinary Go toolchain:
 
 ```sh
 go test -count=1 -v ./internal/board -run '^TestObligationRefinement'
-KANDER_OBLIGATION_REFINEMENT_FULL=1 go test -count=1 -v ./internal/board -run '^TestObligationRefinement'
+KANDER_OBLIGATION_REFINEMENT_FULL=1 go test -timeout=20m -count=1 -v ./internal/board -run '^TestObligationRefinement'
 go test -race -count=1 ./internal/board -run '^TestObligationRefinement'
 python3 experiments/review-obligations/check.py --output /tmp/kander-obligations-new-run
 ```
@@ -131,8 +131,13 @@ Measurements on Linux amd64, Go 1.27.3, 2026-11-12:
 Drop-debt observations agree throughout these paths. All recovery disagreements
 fall into the confirmed release-history gap. These counts are observations of
 representative paths, not counts of independent bugs or all concrete states.
-The default comparison plus diagnostic tests takes about six seconds locally;
-full replay takes about ninety seconds. These are not performance guarantees.
+The initial default comparison plus diagnostics took about six seconds; the
+initial full exploration took 92 seconds. A later disk replay timed out after
+ten minutes in `Fsync`. On Linux, setting both `TMPDIR` and `GOTMPDIR` to
+`/dev/shm` completed the full regression in 15.216 seconds. Go 1.27's
+`testing.TempDir` uses `GOTMPDIR` when set; changing `TMPDIR` alone did not move
+these fixtures. These are environment observations, not performance guarantees
+or evidence of crash durability on disk.
 
 `TestObligationRefinementTLC` additionally consumes the existing 38 TLC transition
 vectors, preserving their mutation settings and checking their recorded states.
@@ -145,6 +150,34 @@ The original `check.py` checks still pass: both finite safety searches complete,
 three deliberate mutants are detected, two success witnesses are found, and
 23,606 generated/reference/TLC vectors agree. That result is compatible with the
 new discrepancy because those checks do not establish the production mapping.
+
+## Repository verification
+
+PMQA passed with one non-blocking recommendation to run the repository-wide Go
+suite. The follow-up command at code commit
+`02b9393ca1be3f91cf9fea13a764dcaad903ef5f` was:
+
+```sh
+TMPDIR=/dev/shm GOTMPDIR=/dev/shm go test -count=1 -timeout=20m -json ./...
+```
+
+It exited 1: 29 packages passed, one failed, and four had no tests. Top-level
+test outcomes were 2,628 passed, nine skipped, and one failed. The only failure
+was `internal/tui.TestExecutionModelInputSavesWhenAgentsMatch`:
+
+```text
+options_test.go:790: disk large_model="gpt-6.1-sol" want "gpt-5.6-solX"
+```
+
+Running that test alone reproduced the same failure at both the code commit
+and the unchanged base `43850bb7a9d478e1e75f1dbdd79715aabb6d73a7`.
+It is a pre-existing test failure in this environment; the suite is not reported
+as passing and this task does not change TUI behavior. The board package passed,
+including its existing composite model test (1,818 single-member states and
+2,665 group states, no dead ends at its default bounds). Targeted correspondence
+tests, race checking, `go vet` for board and the experiment, and the delivery
+check also passed. Task-card verification artifacts retain the full JSON test
+stream, summary, baseline reproduction, and timeout diagnostics.
 
 ## Next step and limits
 
