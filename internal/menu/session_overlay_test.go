@@ -177,6 +177,31 @@ func TestRestoreSectionClearsPageOverrides(t *testing.T) {
 	}
 }
 
+func TestRestoreRulesSectionClearsGitBranchMode(t *testing.T) {
+	session, _ := tempOverlaySession(t, config.ModeGlobal)
+	if err := session.SetTarget(config.TargetOverlay); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetGitBranchMode(config.GitBranchModeMainOnly); err != nil {
+		t.Fatal(err)
+	}
+	if !session.SectionHasOverrides("rules") {
+		t.Fatal("a git.branch_mode override alone must offer the rules page restore")
+	}
+	if err := session.SetIssueResultOnDone(config.IssueResultOff); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.RestoreSection("rules"); err != nil {
+		t.Fatal(err)
+	}
+	if session.SectionHasOverrides("rules") || session.FieldOverridden("git") || session.FieldOverridden("issue") {
+		t.Fatal("rules page overrides remained after restore")
+	}
+	if session.Config.Git.BranchMode != config.GitBranchModeMainDevelop {
+		t.Fatalf("restored branch mode = %q", session.Config.Git.BranchMode)
+	}
+}
+
 func TestSessionOverlaySaveIsSparseAndIsolated(t *testing.T) {
 	session, path := tempOverlaySession(t, config.ModeGlobal)
 	if err := session.SetTarget(config.TargetOverlay); err != nil {
