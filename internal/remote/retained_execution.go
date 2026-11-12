@@ -76,3 +76,14 @@ func (s *Session) Retained(task api.Task) (RetainedExecution, error) {
 	}
 	return value, nil
 }
+
+// SceneIsLocal requires this host's exact saved execution routing. A public
+// client ID alone is insufficient: a released recovery generation may retain
+// the predecessor's WINDOW as evidence without owning that terminal.
+func (s *Session) SceneIsLocal(task string, claim *api.ClaimView, window, session string) bool {
+	if window == "" || session == "" {
+		return false
+	}
+	local, err := s.Retained(api.Task{TaskID: task, Claim: claim})
+	return err == nil && local.Window == window && local.Session == session
+}

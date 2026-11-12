@@ -86,7 +86,7 @@ func (s *Session) ListView(ctx context.Context, allowStale bool) (board.BoardVie
 				summary.AgentObservation = &agent
 			}
 			// A remote terminal address has meaning only on its execution host.
-			if item.Claim.ClientID == s.Client.ClientID() && !stale {
+			if !stale && s.SceneIsLocal(item.TaskID, item.Claim, item.Window, item.Session) {
 				summary.Session, summary.Window = item.Session, item.Window
 			}
 		}
@@ -112,7 +112,7 @@ func (s *Session) TaskView(ctx context.Context, id string) (board.TaskSummary, e
 			summary.AgentObservation = &agent
 		}
 	}
-	if task.Claim == nil || task.Claim.ClientID != s.Client.ClientID() {
+	if !s.SceneIsLocal(task.TaskID, task.Claim, summary.Window, summary.Session) {
 		summary.Session, summary.Window = "", ""
 	}
 	return summary, nil

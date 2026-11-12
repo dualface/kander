@@ -15,12 +15,16 @@ func TestMachineListObservesOnlyThisHostAndIgnoresRenewalTimestamps(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Session{Client: c, Info: api.Project{ID: "project-1", Name: "test"}}
+	s := &Session{Client: c, ServerURL: "http://example.invalid", Home: t.TempDir(), Info: api.Project{ID: "project-1", Name: "test"}}
 	now := time.Now()
 	list := api.TaskList{Tasks: []api.TaskSummary{
-		{TaskID: "20261112-local-task", State: "working", Window: "tmux:$1:@1:%1", Session: "codex local", Claim: &api.ClaimView{ClientID: "host-a", Generation: 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(time.Minute)}},
+		{TaskID: "20261112-local-task", State: "working", Window: "tmux:$1:@1:%1", Session: "codex local", Claim: &api.ClaimView{ClientID: "host-a", ExecutionID: "local-execution", Generation: 1, Status: api.ClaimActive, RenewedAt: now, ExpiresAt: now.Add(time.Minute)}},
 		{TaskID: "20261112-foreign-task", State: "working", Window: "tmux:$1:@1:%1", Session: "codex foreign", Claim: &api.ClaimView{ClientID: "host-b", Generation: 1, Status: api.ClaimActive}},
 	}}
+	credential := Credential{ServerURL: s.ServerURL, ClientID: c.ClientID(), ProjectID: s.Info.ID, TaskID: list.Tasks[0].TaskID, ExecutionID: "local-execution", Generation: 1, Token: "private-proof", Window: list.Tasks[0].Window, Session: list.Tasks[0].Session}
+	if err := s.SaveCredential(credential); err != nil {
+		t.Fatal(err)
+	}
 	observe := func(_ context.Context, requests []board.AgentStatusRequest) []board.ListAgent {
 		if len(requests) != 1 || requests[0].TaskID != list.Tasks[0].TaskID {
 			t.Fatalf("foreign pane reached this host's observer: %+v", requests)

@@ -39,7 +39,7 @@ func attachRemoteBoard(app *App, session *remote.Session) {
 		if err != nil {
 			return taskActionSource{}, err
 		}
-		localExecution := task.Claim != nil && task.Claim.ClientID == session.Client.ClientID()
+		localExecution := session.SceneIsLocal(task.TaskID, task.Claim, board.MetadataFrom(task.Text, board.FieldWindow), board.MetadataFrom(task.Text, board.FieldSession))
 		source := taskActionSource{localExecution: localExecution, root: session.Location(""), service: session, warnings: &board.WarningLog{}, snapshot: remoteSnapshot(session, task)}
 		if task.State == "backlog" {
 			if problem, err := checkStartProblem(source.snapshot.Entry, task.Text); err == nil {
