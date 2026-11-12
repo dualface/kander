@@ -3,6 +3,7 @@
 package fs
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -72,7 +73,15 @@ func OpenLockFile(root, path string) (*os.File, error) {
 		return nil, err
 	}
 	defer parent.close()
-	fd, err := openat(parent.parentFD, parent.name, unix.O_RDWR|unix.O_CREAT, uint32(privateFileMode))
+	// Keep existing opens separate from creation. Concurrent first-open calls
+	// must converge on the exclusive creator's inode, never replace its lock.
+	fd, err := openat(parent.parentFD, parent.name, unix.O_RDWR, 0)
+	if errors.Is(err, unix.ENOENT) {
+		fd, err = openat(parent.parentFD, parent.name, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL, uint32(privateFileMode))
+		if errors.Is(err, unix.EEXIST) {
+			fd, err = openat(parent.parentFD, parent.name, unix.O_RDWR, 0)
+		}
+	}
 	if err != nil {
 		return nil, mapOpenErr("lock-open", path, err)
 	}

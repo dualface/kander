@@ -3,8 +3,10 @@
 package board
 
 import (
+	"errors"
 	"os"
 	"os/exec"
+	"runtime"
 	"testing"
 )
 
@@ -17,7 +19,12 @@ func TestBoardRootOverrideAfterCWDDeletion(t *testing.T) {
 		if err := os.Remove(dir); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := os.Getwd(); err == nil {
+		if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("current directory was not removed: %v", err)
+		}
+		// Linux loses getcwd after unlink. Darwin may retain the last path;
+		// the explicit board override must succeed in both cases.
+		if _, err := os.Getwd(); runtime.GOOS == "linux" && err == nil {
 			t.Fatal("cwd still available")
 		}
 		got, err := BoardRoot()

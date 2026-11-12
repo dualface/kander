@@ -42,6 +42,12 @@ jobs:
         run: go build -o "${{ runner.temp }}/kander-server-check${{ matrix.suffix }}" ./cmd/kander-server
       - name: Static analysis
         run: go vet ./...
+      - name: Concurrent lock and launcher regressions
+        env:
+          TMPDIR: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
+        run: go test -p 1 -count=20 -timeout 10m ./internal/fs ./internal/board ./cmd/kander -run '^(TestOpenLockFile.*|TestSortedBatchLocksAndConcurrentIndexAppend|TestBoardRootOverrideAfterCWDDeletion|TestLuvusLauncherStart)$'
       # Disable the test result cache: large model-test input logs otherwise
       # require substantially more memory after the tests themselves finish.
       - name: Complete native tests
