@@ -100,6 +100,13 @@ func (bind *formBinding) addIssueResultField(p *optionsPanel) {
 		Options(options...).Inline(true).Value(bind.issueResult))
 }
 
+// ruleChoices holds the select fields of the rules page that are not module
+// switches; formBinding embeds it.
+type ruleChoices struct {
+	issueResult   *string
+	gitBranchMode *string
+}
+
 const issueResultFocusKey = "issue:result_on_done"
 
 // addGitBranchModeField edits git.branch_mode, the mainline branch the Git
