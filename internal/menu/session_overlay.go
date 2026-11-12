@@ -259,7 +259,7 @@ func OptionsSectionOverlayRoots(section string) [][]string {
 	case "review_stages":
 		return [][]string{{"review_stages"}}
 	case "rules":
-		return [][]string{{"rules"}, {"issue"}}
+		return [][]string{{"rules"}, {"issue"}, {"git"}}
 	default:
 		return nil
 	}
