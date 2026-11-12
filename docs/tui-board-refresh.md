@@ -32,14 +32,24 @@ The board marks each `working/` or `review/` card whose `WINDOW` names an `Agent
 - The observation runs outside `Update`, carries a sequence, and a result whose sequence is not the in-flight one is dropped. Quit cancels it.
 - A status is shown only while the card keeps the `WINDOW` it was observed at. The card title starts with the mark, the panel title (or, on a narrow board, its state tab) adds the blocked count, and the detail view shows the status, observation time and the sanitized reason in the separator row, so neither the card nor the detail geometry changes.
 
-## Process-local summary cache
+## Storage summary cache
 
 `SummaryIndex` is a display cache owned by `internal/board`, isolated by a canonical board root (`Abs` + `Clean`, no symlink follow). It is not an authorization source: start, pick, archive, trash, and other writers still use `ReadSnapshot` / `Expect` / CAS.
 
-- The TUI binds `GetBoard` / `GetBoardCtx` to `SummaryIndex.View`. Detail still uses `TaskPayload`. Switching board roots closes the previous index; quit closes the current one.
+- The retained storage harness binds `GetBoard` / `GetBoardCtx` to `SummaryIndex.View`; normal client TUI sessions use the REST service instead. Detail still uses `TaskPayload`. Switching board roots closes the previous index; quit closes the current one.
 - First load and a full `Invalidate()` rebuild run a coordinated scan (shared board lock, per-card locks, pending-journal rejection) and parse every committed card. Summaries and sort order match uncached `BoardPayload`.
 - A later incremental `View` compares fingerprints (state, path, file vs directory form, revision, size, mtime, volume, file index) and rereads a body only for new, dirty, or fingerprint-changed cards. Unchanged incremental rounds reuse the last sorted `Tasks` slice and do not parse. Deleted IDs are dropped; the map holds only live cards.
 - Strong verification starts at most every `max(60s, TUI refresh interval)`. `SetStrongEvery` follows live TUI `RefreshSecs` changes. That pass rereads bodies and checks SHA-256 so same-size/same-mtime edits surface. It does not claim zero body reads. If hashes match, the sorted result may still be reused.
 - Fingerprint-visible external add/delete/move/replace appears on the next successful incremental scan. A content edit that preserves every fingerprint field appears on the next successful strong pass.
 - `Invalidate(ids...)` marks those IDs (or the whole index when called with no IDs) and bumps a generation so an in-flight scan cannot publish. Scan I/O runs without the index mutex; `Invalidate` and `Close` return without waiting for it. TUI start, pick, return to backlog, archive, and trash call it on completion, including failure and rollback, then request a coordinated refresh. In-flight board reads still follow the generation/sequence rules above.
 - A pending prepared journal, unreadable card, duplicate-ID/path failure, canceled/incomplete scan, or shared-lock close failure returns an error and does not publish a mixed generation as a fresh success. The TUI keeps the last valid snapshot and shows the existing refresh error. The cache is memory-only: no SQLite, watchers, or extra config keys.
+
+## Distributed event wakeups
+
+Normal client TUI sessions use REST. Each session has one cancellable 25-second event poll with a 30-second request budget. It starts from the cursor of the latest successful board snapshot, separately from pending terminal work and board/detail reads. Events invalidate the display; they never apply card changes directly.
+
+A change or cursor reset queues the existing asynchronous snapshot reader. Polling pauses until that snapshot arrives. A reset response does not advance the saved cursor: changes between that response and the full snapshot remain visible. The next poll starts at the snapshot's cursor. In-flight reads retain the existing sequence and write exclusion guards.
+
+A failed event endpoint backs off for two seconds, even when list reads still succeed. An offline cached snapshot remains explicitly stale and triggers bounded snapshot retries rather than polling its old cursor. Periodic refresh remains a fallback for service-clock lease expiry and read recovery.
+
+Quit cancels the UI's event, board, detail and observation requests. It does not cancel the independent worker. HTTP tests verify that the same generation continues renewing after UI shutdown without changing the card revision.

@@ -184,6 +184,7 @@ func (a *App) applyBoardRead(result boardReadResult) {
 }
 
 func (a *App) applyBoardPayload(payload BoardPayload, err error) bool {
+	a.boardEventsSnapshot(payload, err)
 	previous := a.Model.RefreshError
 	a.LastRefresh = a.Now()
 	if err != nil {

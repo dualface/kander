@@ -214,6 +214,9 @@ type doctorResult struct {
 // applyWork consumes the result of a background task; the Bubble Tea shell calls it on a workMsg.
 func (a *App) applyWork(payload any) tea.Cmd {
 	switch result := payload.(type) {
+	case boardEventResult:
+		a.applyBoardEvents(result)
+		return nil
 	case boardReadResult:
 		a.applyBoardRead(result)
 		return nil

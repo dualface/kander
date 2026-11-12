@@ -203,6 +203,9 @@ func (a *App) takePending() tea.Cmd {
 	if cmd := a.takeQueuedReads(); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
+	if cmd := a.takeBoardEvents(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 	if len(cmds) == 0 {
 		return nil
 	}

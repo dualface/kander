@@ -18,6 +18,10 @@ import (
 // attachRemoteBoard binds display and mutations to the REST service. The
 // resource location is a label; it is never used as a filesystem board root.
 func attachRemoteBoard(app *App, session *remote.Session) {
+	app.cancelBoardEvents()
+	app.boardEvents = boardEventWatch{seq: app.boardEvents.seq, poll: func(ctx context.Context, cursor string) (api.EventPage, error) {
+		return session.Project.Events(ctx, cursor, 25*time.Second)
+	}}
 	app.boardRoot = session.Location("")
 	app.missingBoard = false
 	app.GetBoardCtx = func(ctx context.Context) (BoardPayload, error) { return session.ListView(ctx, true) }

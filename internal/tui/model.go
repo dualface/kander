@@ -2,6 +2,7 @@ package tui
 
 // BoardModel holds column focus, search, and per-state selection/scroll.
 type BoardModel struct {
+	Cursor          string
 	Stale           bool
 	Single          bool
 	Tasks           []Task
@@ -64,6 +65,7 @@ func (m *BoardModel) CurrentState() string {
 }
 
 func (m *BoardModel) SetBoard(payload BoardPayload) bool {
+	m.Cursor = payload.Cursor
 	parsed := make([]Task, 0, len(payload.Tasks))
 	for _, task := range payload.Tasks {
 		if knownState(task.State) {
