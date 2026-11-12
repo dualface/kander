@@ -110,8 +110,19 @@ func TestLuvusLauncherStart(t *testing.T) {
 	}
 
 	t.Setenv("FAKELUVUS_IGNORE_CWD", "")
+	// Keep the picker independent of creation-time ordering across a minute
+	// boundary. The rollback above is already verified before this withdrawal.
+	runKander(t, "move", rejected, "backlog").require(t, "withdraw rejected fixture")
 	started := readyCard(t, "luvus-new")
-	runKanderInput(t, "invalid\n2\n", "start").require(t, "interactive service start")
+	list, err := service.Project.List(t.Context(), "todo")
+	if err != nil || len(list.Tasks) != 1 || list.Tasks[0].TaskID != started {
+		t.Fatalf("interactive start requires one eligible fixture: %+v %v", list.Tasks, err)
+	}
+	result = runKanderInput(t, "invalid\n2\n1\n", "start")
+	result.require(t, "interactive service start")
+	if !strings.Contains(result.stdout, "1. "+started) || strings.Count(result.stdout, config.Text("board.enter_a_number_from_1_to", "1")) != 2 {
+		t.Fatalf("picker must reject invalid and out-of-range input:\n%s", result.stdout)
+	}
 	if window := cardField(t, started, board.FieldWindow); window != "luvus:7:7" {
 		t.Fatalf("WINDOW=%q", window)
 	}
