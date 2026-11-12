@@ -2,13 +2,18 @@ package issue
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 // runResult exposes the controlled inspection, assessment and decision protocol.
@@ -23,7 +28,7 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		}
 		name := strings.SplitN(args[i], "=", 2)[0]
 		switch name {
-		case "--repo", "--card", "--agent", "--launcher", "--action", "--file":
+		case "--repo", "--card", "--agent", "--launcher", "--action", "--file", "--operation-id":
 			value, next, ok := optionValue(args, i, name, stderr)
 			if !ok {
 				return 2
@@ -48,15 +53,14 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		fmt.Fprintln(stderr, usageText())
 		return 2
 	}
+	if operation := values["--operation-id"]; operation != "" && (action != "start" || !api.ValidIdentity(operation)) {
+		fmt.Fprintln(stderr, usageText())
+		return 2
+	}
 	provider := factory()
 	repository, code := resolveRepository(provider, values["--repo"], values["--repo"] != "", stderr)
 	if code != 0 {
 		return code
-	}
-	root, err := board.BoardRoot()
-	if err != nil {
-		fmt.Fprintln(stderr, formatTriageError(err))
-		return 1
 	}
 	writer, ok := provider.(ResultProvider)
 	if !ok {
@@ -65,27 +69,58 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
+	cfg, err := config.Load(false)
+	if err != nil {
+		fmt.Fprintln(stderr, formatTriageError(err))
+		return 1
+	}
+	root := ""
+	if remote.Enabled(cfg) {
+		cwd, e := os.Getwd()
+		if e != nil {
+			err = e
+		} else {
+			session, e := remote.Open(ctx, cfg, cwd)
+			if e != nil {
+				err = e
+			} else {
+				root, err = session.LocalDataRoot()
+				ctx = WithRemoteResult(ctx, session, cwd)
+			}
+		}
+	} else {
+		root, err = board.BoardRoot()
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, formatTriageError(err))
+		return 1
+	}
 	var out any
 	switch action {
 	case "start":
-		out, err = StartResult(ctx, writer, root, repository, number, TriageOptions{CardID: values["--card"], Agent: values["--agent"], Launcher: values["--launcher"]})
+		out, err = StartResult(ctx, writer, root, repository, number, TriageOptions{OperationID: values["--operation-id"], CardID: values["--card"], Agent: values["--agent"], Launcher: values["--launcher"]})
 	case "inspect":
 		out, err = InspectResult(ctx, writer, root, repository, number, values["--card"])
 	case "apply", "decide":
 		var data []byte
-		data, err = os.ReadFile(values["--file"])
+		var file *os.File
+		file, err = os.Open(values["--file"])
 		if err == nil {
-			if len(data) > 65536 {
+			data, err = io.ReadAll(io.LimitReader(file, 65537))
+			err = errors.Join(err, file.Close())
+		}
+		if err == nil {
+			if len(data) > 65536 || !utf8.Valid(data) {
 				err = resultError("input exceeds 64 KiB")
 			} else if action == "apply" {
 				var proposal ResultProposal
-				err = json.Unmarshal(data, &proposal)
+				err = board.DecodeReviewJSON(data, &proposal)
 				if err == nil {
 					out, err = ApplyResult(ctx, writer, root, repository, number, values["--card"], proposal)
 				}
 			} else {
 				var decision ResultDecision
-				err = json.Unmarshal(data, &decision)
+				err = board.DecodeReviewJSON(data, &decision)
 				if err == nil {
 					out, err = DecideResult(ctx, writer, root, repository, number, values["--card"], decision)
 				}

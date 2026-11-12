@@ -33,7 +33,7 @@ type ResultProvider interface {
 	CloseResult(context.Context, Repository, int) error
 }
 
-// ResultCard exposes current local evidence without modifying the completed card.
+// ResultCard exposes completion evidence without modifying the completed card.
 type ResultCard struct {
 	TaskID          string   `json:"task_id"`
 	State           string   `json:"state"`

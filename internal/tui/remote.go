@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/issue"
 	"os"
@@ -91,6 +92,25 @@ func attachRemoteBoard(app *App, session *remote.Session) {
 	}
 	app.RefineIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
 		return startIssue(ctx, repository, number, options, true)
+	}
+	app.ResultIssue = func(ctx context.Context, repository issue.Repository, number int, options issue.TriageOptions) (issue.TriageOutcome, error) {
+		factory := app.IssueProvider
+		if factory == nil {
+			factory = cli.IssueProvider
+		}
+		provider, ok := factory().(issue.ResultProvider)
+		if !ok {
+			return issue.TriageOutcome{}, errors.New(t("tui.issues_takeover_unavailable"))
+		}
+		root, err := session.LocalDataRoot()
+		if err != nil {
+			return issue.TriageOutcome{}, err
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return issue.TriageOutcome{}, err
+		}
+		return issue.StartResult(issue.WithRemoteResult(ctx, session, remote.ProjectDir(cwd)), provider, root, repository, number, options)
 	}
 
 	app.PrepareChat = launch.PreviewChat

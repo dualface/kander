@@ -15,6 +15,18 @@ func (s *Server) issueRoutes(mux *http.ServeMux) {
 			return outcome{err: err}
 		}
 		for key, card := range index {
+			if card.WorkReady {
+				query := api.IssueResultQuery{SourceKey: key, TaskID: card.TaskID}
+				repository, number, work, err := p.issueResultInputs(query)
+				if err != nil {
+					return outcome{err: err}
+				}
+				value, err := p.readIssueResult(r.Context(), query, repository, number)
+				if err != nil {
+					return outcome{err: err}
+				}
+				card.ResultPending = !value.Store.HasPublishedEvidence(work.EvidenceVersion)
+			}
 			card.Path = "kander-server:" + p.info.Name + "/" + card.TaskID
 			index[key] = card
 		}

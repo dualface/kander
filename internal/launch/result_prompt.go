@@ -7,11 +7,17 @@ import (
 )
 
 func resultAgentPrompt(request issue.TriageLaunch, paths config.InstallPaths) (string, string, error) {
-	work, err := issue.ReadResultWork(request.Root, request.Repository, request.Number, request.CardID)
-	if err != nil {
-		return "", "", err
+	spec := ""
+	if request.CardSnapshot != nil {
+		spec = request.CardSnapshot.Document
+	} else {
+		work, err := issue.ReadResultWork(request.Root, request.Repository, request.Number, request.CardID)
+		if err != nil {
+			return "", "", err
+		}
+		spec = work.Anchor().Spec
 	}
-	lang, err := resolvePromptLanguage(work.Anchor().Spec, paths)
+	lang, err := resolvePromptLanguage(spec, paths)
 	if err != nil {
 		return "", "", err
 	}

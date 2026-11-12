@@ -28,6 +28,9 @@ type LocalAction struct {
 	Session       string            `json:"session,omitempty"`
 	Window        string            `json:"window,omitempty"`
 	TaskFile      string            `json:"task_file,omitempty"`
+	AgentPID      int               `json:"agent_pid,omitzero"`
+	AgentStart    string            `json:"agent_start,omitempty"`
+	BootID        string            `json:"boot_id,omitempty"`
 	Result        json.RawMessage   `json:"result,omitempty"`
 }
 

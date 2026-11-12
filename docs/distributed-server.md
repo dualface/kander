@@ -32,6 +32,7 @@ The first version trusts its network: there is no login and no role model, one s
         integrations/<target-id>/current.json target lease and observed Git phase
         integrations/<target-id>/executions/<execution>.json historical target result
         task-integrations/<task>/<generation>.json final delivery receipt
+        issue-results/<source-key-digest>.json result CAS and durable external intents
       .kander/groups/00000000-review-archive-group/  review inputs and originals
     control/
       events.jsonl               bounded event diagnostic log
@@ -64,6 +65,7 @@ All routes live below `/api/v1`. Every domain request sends `Kander-Protocol: <n
 | `POST /projects/{p}/reviews/plan`, `POST .../reviews/batches/{b}/aggregate`, `GET .../reviews/batches/{b}/view`, `POST .../reviews/close`, `GET .../reviews/progress/{t}` | Review gate evidence |
 | `GET /projects/{p}/groups/{g}`, `POST .../claim`, `/renew`, `/observation`, `/release` | Private coordinator lease and its public checkpoint |
 | `POST /projects/{p}/groups/{g}/facts`, `/reconcile`, `/recover` | Controlled coordinator producers and client Git verdicts |
+| `POST /projects/{p}/issues/results/view`, `/save` | Completed work-set evidence and versioned result publication/decision history |
 | `GET /projects/{p}/events?cursor=&wait=` | Long-polled change log |
 
 Errors are JSON `{code, message, board_code}` with stable codes: `invalid_request`, `not_found`, `revision_conflict`, `held_by_other`, `lease_invalid`, `lease_active`, `claim_required`, `evidence_incomplete`, `protocol_incompatible`, `idempotency_mismatch`, `project_mismatch`, `project_not_empty`, `board_rejected`, `not_ready`, `internal`. `board_code` carries the board package message key of a domain rejection so the client renders the same localized text as v1.
@@ -140,7 +142,7 @@ Distributed `orchestrate` reads cards and expands groups through a service snaps
 
 ## Client and worker
 
-The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, `dispatch`, `notify`, `resume` (including `--adopt` and `--release`), `dismiss`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. Result-reconciliation and the remaining evidence gaps still need adaptation (**planned**). Board-free orchestrators also keep private launch intents. A completed logical retry returns its recorded result, and an uncertain retry reports the retained receipt without creating another terminal. `orchestrate --operation-id <stable-id>` distinguishes an intentionally new confirmed session; a new ID does not settle any prior uncertain effect. The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, `dispatch`, `notify`, `resume` (including `--adopt` and `--release`), `dismiss`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. Issue result reconciliation also uses the service; the remaining evidence gaps are tracked separately. Board-free orchestrators also keep private launch intents. A completed logical retry returns its recorded result, and an uncertain retry reports the retained receipt without creating another terminal. `orchestrate --operation-id <stable-id>` distinguishes an intentionally new confirmed session; a new ID does not settle any prior uncertain effect. The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`. Per-execution locks merge renewals and launch facts; release tombstones prevent a late writer from recreating a removed credential or erasing a successor pointer.
@@ -185,7 +187,7 @@ dsh resolves the Git main worktree or a non-Git project's configuration director
 
 `POST /projects/{p}/issues/import` receives a bounded source snapshot, type choice, language and size. The server validates the canonical repository and issue identity, sanitizes the source again, authors the fixed contract itself, and reuses the exclusive-board source-key transaction. It never accepts client-authored contract sections or puts issue bodies/comments into them. Concurrent imports return one anchor with both source attachments. `GET .../issues/index` returns canonical bindings with resource locations instead of server filesystem paths.
 
-Issue triage and refinement run on the client. Their refreshed or downloaded source evidence lives in the client's project-private data directory. The launch request distinguishes that evidence directory from the local Git repository; no local card-state directories are created. Result publication/closure still needs the distributed coordination path (**planned**).
+Issue triage and refinement run on the client. Their refreshed or downloaded source evidence lives in the client's project-private data directory. The launch request distinguishes that evidence directory from the local Git repository; no local card-state directories are created. Result inspection, publication, consent and recovery use the independent central CAS described in [Distributed Issue results](distributed-issue-results.md).
 
 ## Events
 

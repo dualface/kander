@@ -166,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	s.integrationRoutes(mux)
 	s.taskIntegrationRoutes(mux)
 	s.issueRoutes(mux)
+	s.issueResultRoutes(mux)
 	s.publicationRoutes(mux)
 	return mux
 }

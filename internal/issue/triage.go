@@ -9,6 +9,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/remote"
 )
 
 // The two local evidence files one takeover session is pointed at. The JSON
@@ -28,6 +29,8 @@ type TriageEvidence struct {
 
 // TriageOptions are the caller choices of one takeover.
 type TriageOptions struct {
+	// OperationID distinguishes an intentionally new result session.
+	OperationID string
 	// CardID binds the session to a card that already carries the issue; the
 	// agent completes that card instead of importing a duplicate.
 	CardID string
@@ -41,6 +44,8 @@ type TriageOptions struct {
 // confirmed identity, the local evidence paths and the caller overrides; remote
 // text never enters it, so the launcher can build its prompt from paths only.
 type TriageLaunch struct {
+	// Action is a caller-owned private journal, held through the launch.
+	Action *remote.ActionJournal
 	// ProjectDir separates the local repository from private evidence storage.
 	ProjectDir   string
 	CardSnapshot *board.TaskSummary

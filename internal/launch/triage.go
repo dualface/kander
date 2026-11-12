@@ -1,6 +1,9 @@
 package launch
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -41,6 +44,12 @@ func PreviewTriage(agentOverride, launcherOverride string) (TriagePreview, error
 // selected prompt defines investigation, refinement, or result authority. A
 // failed start closes its container and removes its temporary task file.
 func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err error) {
+	if journal := request.Action; journal != nil && journal.Value.Phase != "prepared" && journal.Value.Phase != "starting" && journal.Value.Phase != "session-ready" {
+		if journal.Value.Phase == "complete" && json.Unmarshal(journal.Value.Result, &result) == nil {
+			return result, nil
+		}
+		return result, launchError("remote.launch_reconciliation_required", journal.Path)
+	}
 	var warnings board.WarningLog
 	defer func() { result.Warnings = append(warnings.Messages(), result.Warnings...) }()
 
@@ -83,7 +92,7 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
-	session, err := newAgentSession(agent, program, cfg)
+	session, err := journalAgentSession(request.Action, agent, program, cfg)
 	if err != nil {
 		return result, err
 	}
@@ -124,13 +133,55 @@ func StartTriage(request issue.TriageLaunch) (result issue.TriageOutcome, err er
 	if err != nil {
 		return result, err
 	}
+	var location func(LaunchOutcome) error
+	if request.Action != nil {
+		location = func(outcome LaunchOutcome) error {
+			request.Action.Value.Window, request.Action.Value.Phase = locationOf(plan, outcome), "scene-created"
+			return request.Action.Save()
+		}
+		if !plan.capabilities().Container {
+			plan.processRecord = func(pid int, running func() bool) <-chan struct{} {
+				done := make(chan struct{})
+				defer close(done)
+				facts, err := process.ObserveStarted(context.Background(), pid, running)
+				if err == nil {
+					request.Action.Value.AgentPID, request.Action.Value.AgentStart = facts.PID, facts.Start
+					request.Action.Value.BootID, err = process.BootIdentity()
+				}
+				if err == nil {
+					err = request.Action.Save()
+				}
+				if err != nil && plan.warning != nil {
+					plan.warning(err.Error() + "\n")
+				}
+				return done
+			}
+		}
+		request.Action.Value.TaskFile, request.Action.Value.Phase = taskFile, "launching"
+		if err := request.Action.Save(); err != nil {
+			return result, err
+		}
+		inv = withExecutionIdentity(plan, inv, request.Action.Value.ExecutionID)
+		plan.beforePrompt = func() error { request.Action.Value.Phase = "prompt-attempted"; return request.Action.Save() }
+		plan.judge = func() launchVerdict { return verdictKeep }
+	}
 	// A takeover session owns no card, so it records no pane session marker and
 	// reports no Herdr agent session; those identities belong to card launches.
-	outcome, err := launchAgent(plan, filepath.Join(projectDir, "task-context"), triageWindowName(request.Repository, request.Number), inv, nil, nil, nil)
+	outcome, err := launchAgent(plan, filepath.Join(projectDir, "task-context"), triageWindowName(request.Repository, request.Number), inv, location, nil, nil)
 	if err != nil {
+		if request.Action != nil {
+			handedOff = true
+			return result, errors.Join(err, launchError("remote.launch_reconciliation_required", request.Action.Path))
+		}
 		return result, err
 	}
 	handedOff = true
+	if request.Action != nil {
+		request.Action.Value.Window, request.Action.Value.Phase = OpaqueAddress(plan, outcome), "launched"
+		if err := request.Action.Save(); err != nil {
+			return result, err
+		}
+	}
 	if plan.OccupiesTerminal() {
 		code, waitErr := outcome.Wait()
 		if waitErr != nil {

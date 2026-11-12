@@ -43,3 +43,13 @@ kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME
 
 - A missing subcommand, an unknown subcommand, a missing NUMBER or `--card`, or an unknown option is a usage error.
 - `result` fails while any member of the work set is incomplete, naming the pending cards, and fails for a sibling `--card`, naming the anchor card.
+
+## Additional Syntax
+
+```text
+kander issue result <number> --repo <repository> --card <task-id> [--action start] [--agent <name>] [--launcher <name>] [--operation-id <stable-id>]
+```
+
+In a distributed project, result inspection, publication intent, decisions and recovery records use the service's independent CAS resource. A changed work-set digest or result version refuses the save before any external write. Comment and close intents commit before calling the provider. Unknown effects remain uncertain until complete remote observations reconcile their exact body and numeric identity. Closing still needs separate explicit consent for the current issue state.
+
+Result launches keep a private action journal. Repeating the same inspected operation returns its completed session or retains its uncertain launch for inspection; it never blindly starts another agent. `--operation-id` distinguishes an intentionally new session. Evidence files stay in the client's private project directory; the result launcher does not read a local board.

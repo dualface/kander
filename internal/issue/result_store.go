@@ -15,13 +15,16 @@ import (
 	"github.com/dualface/kander/internal/fs"
 )
 
-type resultStore struct {
+type ResultStore struct {
 	Schema    int                      `json:"schema_version"`
 	SourceKey string                   `json:"source_key"`
 	TaskID    string                   `json:"task_id"`
 	IssueID   int64                    `json:"issue_id"`
 	Records   map[string]*ResultRecord `json:"records"`
 }
+
+// resultStore retains the local implementation name for existing callers.
+type resultStore = ResultStore
 
 func resultHash(value any) string {
 	data, _ := json.Marshal(value)
@@ -47,6 +50,9 @@ func recordTaskKeyValid(record *ResultRecord, anchor string) bool {
 // withResultStore serializes all local writers, including recovery, for an
 // issue across task worktrees. Persist precedes every remote mutation.
 func withResultStore(ctx context.Context, root string, repository Repository, number int, cardID string, fn func(*resultStore, func() error) error) (err error) {
+	if backend, ok := remoteResultOf(ctx); ok {
+		return withRemoteResultStore(ctx, backend, repository, number, cardID, fn)
+	}
 	key, err := repository.IssueSourceKey(number)
 	if err != nil {
 		return err
@@ -86,18 +92,8 @@ func withResultStore(ctx context.Context, root string, repository Repository, nu
 				return err
 			}
 		}
-		if store.Schema != 1 || store.SourceKey != key || store.TaskID != cardID || store.Records == nil {
-			return resultError("inconsistent result recovery record")
-		}
-		for version, record := range store.Records {
-			if record == nil || record.Version != version || !recordTaskKeyValid(record, cardID) || resultVersion(record.taskKey(cardID), record.Commits, record.Outcomes, record.FullyResolved) != version {
-				return resultError("invalid result record")
-			}
-			switch record.Status {
-			case "uncertain", "published", "equivalent", "rejected":
-			default:
-				return resultError("invalid result status")
-			}
+		if err := ValidateResultStore(store, key, cardID); err != nil {
+			return err
 		}
 	}
 	save := func() error {
@@ -119,10 +115,16 @@ func ReadResultWork(root string, repository Repository, number int, cardID strin
 	if err != nil {
 		return ResultWork{}, err
 	}
-	sets, err := LoadWorkSets(root)
+	view, err := board.Scan(root)
 	if err != nil {
 		return ResultWork{}, err
 	}
+	return readResultWorkView(view, key, cardID, func(id string, anchor bool) (ResultCard, error) {
+		return readResultEvidence(root, key, repository, number, id, anchor)
+	})
+}
+func readResultWorkView(view board.Board, key, cardID string, read func(string, bool) (ResultCard, error)) (ResultWork, error) {
+	sets := workSetsFrom(view, indexFrom(view))
 	set, ok := sets[key]
 	if !ok || cardID == "" {
 		return ResultWork{}, NewError(ErrorInvalidQuery, "card", Sanitize(cardID))
@@ -141,7 +143,7 @@ func ReadResultWork(root string, repository Repository, number int, cardID strin
 		work.Excluded = []WorkCard{}
 	}
 	for i, member := range set.Members() {
-		card, err := readResultEvidence(root, key, repository, number, member.TaskID, i == 0)
+		card, err := read(member.TaskID, i == 0)
 		if err != nil {
 			return ResultWork{}, err
 		}
@@ -204,11 +206,14 @@ func readResultEvidence(root, key string, repository Repository, number int, tas
 	if err != nil {
 		return ResultCard{}, err
 	}
+	return resultEvidence(snapshot, key, repository, number, taskID, anchor, func(name string) ([]byte, bool, error) { return board.ReadCardFile(snapshot.Entry, name) })
+}
+func resultEvidence(snapshot board.Snapshot, key string, repository Repository, number int, taskID string, anchor bool, read func(string) ([]byte, bool, error)) (ResultCard, error) {
 	if !workCardOf(snapshot.Entry, snapshot.Text).Complete() {
 		return ResultCard{}, resultError("card " + taskID + " is no longer complete")
 	}
 	if anchor {
-		source, found, err := board.ReadCardFile(snapshot.Entry, SourceFileName)
+		source, found, err := read(SourceFileName)
 		if err != nil {
 			return ResultCard{}, err
 		}
@@ -223,7 +228,7 @@ func readResultEvidence(root, key string, repository Repository, number int, tas
 			return ResultCard{}, err
 		}
 	}
-	report, hasReport, err := board.ReadCardFile(snapshot.Entry, "report.md")
+	report, hasReport, err := read("report.md")
 	if err != nil {
 		return ResultCard{}, err
 	}
@@ -278,12 +283,7 @@ func resultPending(root string, set WorkSet) bool {
 	if err := json.Unmarshal(data, &store); err != nil {
 		return true
 	}
-	for _, record := range store.Records {
-		if record != nil && (record.Status == "published" || record.Status == "equivalent") && record.EvidenceVersion == work.EvidenceVersion {
-			return false
-		}
-	}
-	return true
+	return !store.HasPublishedEvidence(work.EvidenceVersion)
 }
 
 func resultToken(digest string, remote ResultRemote) string {
@@ -291,7 +291,7 @@ func resultToken(digest string, remote ResultRemote) string {
 }
 
 func readResult(ctx context.Context, provider ResultProvider, root string, repository Repository, number int, cardID string, store *resultStore) (ResultWork, ResultRemote, error) {
-	work, err := ReadResultWork(root, repository, number, cardID)
+	work, err := readResultWork(ctx, root, repository, number, cardID)
 	if err != nil {
 		return work, ResultRemote{}, err
 	}
@@ -307,7 +307,7 @@ func readResult(ctx context.Context, provider ResultProvider, root string, repos
 	}
 	store.IssueID = remote.IssueID
 	// Recheck after network latency; stale state or binding never reaches writes.
-	current, err := ReadResultWork(root, repository, number, cardID)
+	current, err := readResultWork(ctx, root, repository, number, cardID)
 	if err != nil {
 		return work, remote, err
 	}
