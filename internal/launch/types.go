@@ -135,6 +135,8 @@ func probeConn(plan LaunchPlan) terminal.Conn {
 
 // LaunchOutcome is the process or terminal address of one launch.
 type LaunchOutcome struct {
+	// Replayed is a read-only receipt, not a newly observed process exit.
+	Replayed  bool
 	Process   *os.Process
 	Wait      func() (int, error)
 	Poll      func() *int

@@ -255,6 +255,10 @@ func joinSemi(items []string) string {
 }
 
 func reportLaunch(verb string, entry board.Entry, agentName string, plan LaunchPlan, outcome LaunchOutcome) error {
+	if outcome.Replayed {
+		fmt.Println(t("remote.launch_already_confirmed", entry.TaskID))
+		return nil
+	}
 	scale := entry.Kind
 	if id, ok := map[string]string{"large": "launch.large_task", "small": "launch.small_task"}[entry.Kind]; ok {
 		scale = t(id)

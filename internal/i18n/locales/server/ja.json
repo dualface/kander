@@ -93,5 +93,7 @@
   "remote.integration_process_required": "統合には観測可能なローカルコマンドプロセスが必要です",
   "remote.init_maintenance_server": "移行と保守は kander-server で明示的に実行してください。クライアントの init はサービスプロジェクトだけを設定します。",
   "remote.project_bound": "プロジェクト {{.V0}}（{{.V1}}）を {{.V2}} に設定しました。",
-  "remote.guard_service_documents": "タスク文書はサービス経由の kander update で公開してください。"
+  "remote.guard_service_documents": "タスク文書はサービス経由の kander update で公開してください。",
+  "remote.launch_already_confirmed": "タスク {{.V0}} の以前の起動は確認済みです。これは履歴記録であり、新しい起動や生存確認ではありません。",
+  "remote.native_attempt_settled": "ネイティブ再開の試行は実行者を起動せず終了しました。記録を確認し、新しい試行には明示的な --decision を指定してください: {{.V0}}"
 }

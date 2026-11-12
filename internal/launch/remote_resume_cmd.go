@@ -12,7 +12,6 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
-	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 )
@@ -43,34 +42,13 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 		return fail(err)
 	}
 	if agent == nil && options.Decision == "" {
-		credential, found, err := session.Credential(card.TaskID)
-		if err != nil {
-			return fail(err)
-		}
-		ownedStopped := found && !credential.Lost && card.Claim != nil && card.Claim.Status == api.ClaimActive && card.Claim.ClientID == session.Client.ClientID() && card.Claim.ExecutionID == credential.ExecutionID && observeLocalExecution(ctx, credential).Status == "stopped"
-		if ownedStopped {
-			record, err := session.Project.ExecutionRecord(ctx, card.TaskID)
-			if err != nil {
-				return fail(err)
-			}
-			ownedStopped = !record.StartUnfinished()
-		}
-		if ownedStopped {
-			options.Decision = "native-resume:" + client.NewKey()
-		} else {
-			if launcher != "" {
-				return fail(launchError("remote.launcher_requires_takeover"))
-			}
-			request, err := NotifyRemote(card.TaskID, text, "", "", true, timeout, options)
-			if err != nil {
-				return fail(err)
-			}
-			if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
-				return fail(err)
-			}
-			return 0
-		}
+		return runImplicitNativeResume(ctx, session, card, launcher, text, timeout, options)
 	}
+	return runRemoteResumeLaunch(ctx, session, card, agent, launcher, text, timeout, options, nil)
+}
+
+func runRemoteResumeLaunch(ctx context.Context, session *remote.Session, card api.Task, agent *string, launcher, text string, timeout float64, options DispatchOptions, command *remote.ActionJournal) int {
+	var err error
 	if strings.TrimSpace(options.Decision) == "" {
 		return fail(launchError("remote.takeover_decision_required"))
 	}
@@ -113,6 +91,21 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 		digest := sha256.Sum256([]byte(card.TaskID + "\x00" + options.ID))
 		input.PendingRequest = api.CollaborationRequestID("dispatch-proposal-" + hex.EncodeToString(digest[:]))
 	}
+	if command != nil {
+		state := nativeResumeIntent{Input: input, Options: options, NewRound: newRound}
+		data, err := json.Marshal(state)
+		if err != nil {
+			return fail(err)
+		}
+		command.Value.Result, command.Value.Phase = data, "pending"
+		if err := command.Save(); err != nil {
+			return fail(err)
+		}
+	}
+	return executeRemoteResume(input, options, newRound, timeout, command)
+}
+
+func executeRemoteResume(input remoteLaunchInput, options DispatchOptions, newRound bool, timeout float64, command *remote.ActionJournal) int {
 	result, err := launchRemote(input)
 	for _, warning := range result.Warnings {
 		fmt.Fprint(os.Stderr, warning)
@@ -125,11 +118,26 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 		return 0
 	}
 	if newRound {
-		request, err := NotifyRemote(card.TaskID, text, "", "", true, timeout, options)
+		request, err := notifyRemoteForExecution(input.TaskID, input.Message, "", "", true, timeout, options, result.executionID)
 		if err != nil {
-			return exitLaunch(&UnresolvedError{TaskID: card.TaskID, Window: locationOf(result.Plan, result.Outcome), Reason: err.Error(), Command: "kander"})
+			return exitLaunch(&UnresolvedError{TaskID: input.TaskID, Window: locationOf(result.Plan, result.Outcome), Reason: err.Error(), Command: "kander"})
 		}
 		if err := json.NewEncoder(os.Stdout).Encode(request); err != nil {
+			return fail(err)
+		}
+	}
+	if command != nil {
+		var state nativeResumeIntent
+		if err := json.Unmarshal(command.Value.Result, &state); err != nil {
+			return fail(err)
+		}
+		state.CompletedExecution = result.executionID
+		data, err := json.Marshal(state)
+		if err != nil {
+			return fail(err)
+		}
+		command.Value.Result, command.Value.Phase = data, "complete"
+		if err := command.Save(); err != nil {
 			return fail(err)
 		}
 	}

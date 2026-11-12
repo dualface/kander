@@ -10,11 +10,12 @@ import (
 
 // StartResult describes a started task. Foreground callers must consume Outcome.Wait.
 type StartResult struct {
-	TaskID  string
-	Size    string
-	Agent   string
-	Plan    LaunchPlan
-	Outcome LaunchOutcome
+	executionID string
+	TaskID      string
+	Size        string
+	Agent       string
+	Plan        LaunchPlan
+	Outcome     LaunchOutcome
 	// Superseded: a takeover or an adoption ended this start attempt first. The
 	// start stepped aside and that is not a failure.
 	Superseded bool

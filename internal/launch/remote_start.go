@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"os"
@@ -64,7 +65,11 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 	if err != nil {
 		return result, err
 	}
-	journal, fresh, err := session.BeginAction("task-launch", struct {
+	begin := session.BeginAction
+	if input.Native {
+		begin = session.RetainAction
+	}
+	journal, fresh, err := begin("task-launch", struct {
 		Task  string
 		Input remoteLaunchInput
 	}{task.TaskID, input})
@@ -72,6 +77,12 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		return result, err
 	}
 	defer journal.Close()
+	if !fresh && journal.Value.Phase == "complete" && len(journal.Value.Result) != 0 {
+		return completedRemoteLaunch(journal)
+	}
+	if !fresh && journal.Value.Phase == "failed" {
+		return result, launchError("remote.native_attempt_settled", journal.Path)
+	}
 	if !fresh && journal.Value.Phase != "failed" && journal.Value.Phase != "prepared" && journal.Value.Phase != "session-ready" {
 		ctx, cancel := call()
 		defer cancel()
@@ -215,6 +226,7 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 		return result, err
 	}
 	execution := journal.Value.ExecutionID
+	result.executionID = execution
 	inv = withExecutionIdentity(plan, inv, execution)
 
 	ctx, cancel = call()
@@ -494,6 +506,10 @@ func launchRemote(input remoteLaunchInput) (result StartResult, err error) {
 			}
 			return result, unresolved
 		}
+	}
+	journal.Value.Result, err = json.Marshal(taskLaunchReceipt{TaskID: task.TaskID, Size: kind, Agent: agentName, Launcher: plan.Launcher, Target: plan.Target, Container: outcome.Container, Pane: outcome.Pane, SessionMarked: outcome.SessionMarked})
+	if err != nil {
+		return result, err
 	}
 	journal.Value.Phase = "complete"
 	if err := journal.Save(); err != nil {

@@ -20,6 +20,10 @@ import (
 // NotifyRemote submits a generation-bound request to the owning worker. Its
 // result is a queued proposal, never an assertion of business acceptance.
 func NotifyRemote(task, message, messageFile, pane string, messageSet bool, timeout float64, options DispatchOptions) (api.CollabRequest, error) {
+	return notifyRemoteForExecution(task, message, messageFile, pane, messageSet, timeout, options, "")
+}
+
+func notifyRemoteForExecution(task, message, messageFile, pane string, messageSet bool, timeout float64, options DispatchOptions, expectedExecution string) (api.CollabRequest, error) {
 	var out api.CollabRequest
 	if err := ValidateTimeout(timeout, "notify"); err != nil {
 		return out, err
@@ -61,6 +65,9 @@ func NotifyRemote(task, message, messageFile, pane string, messageSet bool, time
 	}{Task: card.TaskID, Message: message, Pane: pane, Options: options}
 	if recovered, found, err := session.RecoverRequest(ctx, logical); found || err != nil {
 		return recovered, err
+	}
+	if expectedExecution != "" && (card.Claim == nil || card.Claim.ExecutionID != expectedExecution || card.Claim.Status != api.ClaimActive) {
+		return out, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.git_owner_changed")}
 	}
 	if card.State != "working" && card.State != "review" {
 		return out, launchError("launch.only_tasks_in_review_or_working_can_be_resumed", card.TaskID, card.State)

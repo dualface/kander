@@ -47,6 +47,16 @@ func (a *ActionJournal) Close() error { return a.close() }
 // BeginAction serializes one logical invocation. Callers must inspect existing
 // receipts before changing central state or performing any terminal operation.
 func (s *Session) BeginAction(kind string, logical any) (journal *ActionJournal, fresh bool, err error) {
+	return s.beginAction(kind, logical, true)
+}
+
+// RetainAction preserves a conclusively failed attempt as well. An implicit
+// native continuation must not turn a recovery retry into a fresh launch.
+func (s *Session) RetainAction(kind string, logical any) (journal *ActionJournal, fresh bool, err error) {
+	return s.beginAction(kind, logical, false)
+}
+
+func (s *Session) beginAction(kind string, logical any, retryFailed bool) (journal *ActionJournal, fresh bool, err error) {
 	data, err := json.Marshal(struct {
 		Kind  string
 		Input any
@@ -91,7 +101,7 @@ func (s *Session) BeginAction(kind string, logical any) (journal *ActionJournal,
 			_ = journal.Close()
 			return nil, false, errors.New(config.Text("remote.launch_receipt_damaged"))
 		}
-		if journal.Value.Phase == "failed" {
+		if journal.Value.Phase == "failed" && retryFailed {
 			journal.Value = LocalAction{Schema: 1, Kind: kind, ExecutionID: NewExecutionID(), Phase: "prepared"}
 			if err := journal.Save(); err != nil {
 				_ = journal.Close()
