@@ -38,7 +38,7 @@ kander review <plan|extend-plan|assign|disposition|interpret|advance|close> --sc
 
 ## Effects
 
-- `kander review` is a single-review tool that can be invoked explicitly. Invoking it does not enable the full review or Git flow and does not require the target branch to be `develop`.
+- `kander review` is a single-review tool that can be invoked explicitly. Invoking it does not enable the full review or Git flow and does not require the target branch to be the mainline branch.
 - A missing run ID is generated and printed to stderr. Run and batch IDs are board-wide, so a chosen ID starts with the task ID (or task-group ID), never a short generic name. Reuse a run ID only to recover or finish publication of the same run; it never launches another reviewer, and changed inputs conflict: restore the configuration and pass the frozen task context, or use a new run ID in the same batch. Use distinct run IDs for different roles on the same target. A retry after a process crash records interrupted evidence, never PASS.
 - New runs and batches accept only the roles `PMQA` and `Security` (case-insensitive). Historical four-key (`PM`, `QA`, `CSA`, `Hacker`) and six-key batches stay readable, retryable, and closable with their original roles; never rewrite their requirements, role order, run IDs, originals, hashes, closures, or dispositions.
 - Raw output, logs, input snapshots, sidecar, and manifest stay in each card's `reviews/<run_id>/`; the machine-owned REVIEWS section holds one JSON index line per run. Tool success is separate from semantic PASS. Never edit or delete these artifacts; only Kander removes them, after every card they belong to is archived.

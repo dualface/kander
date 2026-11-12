@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Git branch mode: the new `git.branch_mode` setting (`main-develop` by default, or `main-only`) selects the mainline branch that single cards and task group branches integrate into. In `main-only` mode the released Git rules create task and group branches from `main`, merge finished work straight back into `main` under the card's own authorization, and never create `develop`. `kander config`, `kander doctor`, the project overlay, and the Options rules page handle the setting; a config without it keeps the `main` + `develop` workflow. Wrap-up integration evidence must target the configured mainline branch, read from the integration checkout's project overlay.
+- Git rules: `main` and the mainline branch may now be rewritten on the remote with `--force-with-lease` pinned to the just-fetched commit, in both modes; plain `--force` stays forbidden, and no flow requires such a push. When the local sync after a remote integration fails because the local mainline branch is no longer an ancestor of the remote, the rules reset it to the remote after stashing uncommitted changes and saving unpushed commits on a local `backup/<branch>-<timestamp>` branch.
+
 ## v1.3.0 — 2026-11-11
 
 - herdr-core: the TUI and `kander list --json --agent-status` now observe multiple hc terminals with one `terminal.list` request through `hc connect --json`. The full response preserves OSC 7501 app identity, status, and session labels that the compact `hc ls --json` output omits. A missing terminal is confirmed individually; malformed or duplicate rows fail the observation instead of reporting an agent alive.

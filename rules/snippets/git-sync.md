@@ -4,7 +4,7 @@ Source: moved from `KANDER-GIT-RULES.md` "Keeping a Task Branch Current".
 
 ## Keeping a Task Branch Current
 
-- A task branch drifts from its source branch (`develop` for a single card, the group branch for an in-group card) the whole time it is open, and the eventual conflict grows with the drift. Fetch at every natural pause (before starting a work item, after finishing one, before requesting review, before delivery) and run the overlap check, with `SOURCE` the remote or local source branch:
+- A task branch drifts from its source branch (the mainline branch for a single card, the group branch for an in-group card) the whole time it is open, and the eventual conflict grows with the drift. Fetch at every natural pause (before starting a work item, after finishing one, before requesting review, before delivery) and run the overlap check, with `SOURCE` the remote or local source branch:
 
 ```sh
 git fetch -q origin

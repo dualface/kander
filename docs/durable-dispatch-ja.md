@@ -73,7 +73,7 @@ kander dispatch show <task-id> <id>
 |---|---|---|
 | `fix` | `working` $\to$ `review` | バッチ ID、指摘 ID、既存の作成者処置記録。 |
 | `sync` | `working` $\to$ `review` | ブランチのリベースや同期用。レビュー指摘のバインドは不可。 |
-| `wrap-up` | `working` $\to$ `done` | レビュー完了コミット、Git 統合コミット、develop 参照。 |
+| `wrap-up` | `working` $\to$ `done` | レビュー完了コミット、Git 統合コミット、メインライン参照。 |
 
 ---
 
@@ -116,7 +116,7 @@ kander dispatch show <task-id> <id>
 
 ### 通常の Wrap-up
 
-レビュー済みの最終コミットと develop 統合コミットをバインドします：
+レビュー済みの最終コミットとメインラインブランチへの統合コミットをバインドします。メインラインブランチは `cwd` のチェックアウト（プロジェクト設定を含む）の `git.branch_mode` で決まります：`main-develop`（既定）は `develop`、`main-only` は `main`。`target_ref` は `refs/heads/<メインライン>` または `refs/remotes/origin/<メインライン>` です。例は `main-develop` です：
 
 ```json
 {

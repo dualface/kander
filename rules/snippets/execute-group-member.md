@@ -6,9 +6,9 @@ This snippet extends `snippets/execute-single.md`: read that one first, then thi
 
 ## Git Branches and Worktrees
 
-- A single card's executing agent creates a dedicated task branch and `<repo-root>/worktrees/<task-name>/` worktree per the Git rule file, with `develop` as the source branch.
+- A single card's executing agent creates a dedicated task branch and `<repo-root>/worktrees/<task-name>/` worktree per the Git rule file, with the mainline branch (`KANDER-GIT-RULES.md` "Branches and Worktrees") as the source branch.
 - A task group uses two layers: the orchestrator holds the group branch `group/<task-group-id>` and the worktree `<repo-root>/worktrees/<task-group-id>/`, used to receive deliveries, run group-level verification and applicable reviews, and integrate. Each member's executing agent still creates its own task branch and worktree.
-- In-group task branches are created from the latest group branch, with `group/<task-group-id>` as the source branch, not from `develop`; on the remote path fetch `origin/group/<task-group-id>` first. Other naming, paths, and user change protection follow the Git rule file.
+- In-group task branches are created from the latest group branch, with `group/<task-group-id>` as the source branch, not from the mainline branch; on the remote path fetch `origin/group/<task-group-id>` first. Other naming, paths, and user change protection follow the Git rule file.
 - The executing agent changes only its own card's worktree and does its own rebases and conflict fixes there. The orchestrator operates only on the group worktree and the integration target and never modifies task branches or code on a member's behalf.
 
 **Delivering a Task Branch to the Group Branch**
