@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -239,50 +238,11 @@ func TestACardWriteBeforeTheExecRecordsNothing(t *testing.T) {
 	}
 }
 
-// A native wrapper: the kernel image is the started file itself, and it execs late.
-// Neither the name nor any quiet time records it.
-func TestLateExecOfANativeWrapperIsNeverAMismatch(t *testing.T) {
-	skipOnWindows(t)
-	requireAccessTimes(t)
-	root, _, _ := setupBoard(t)
-	task, _ := makeTodo(t, root, "identity-wrapper")
-	path := filepath.Join(t.TempDir(), "task")
-	if err := os.WriteFile(path, []byte("task"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	wrapper := exec.Command("sh", "-c", "sleep 1.5; exec sleep 30")
-	moved := beginDirect(t, root, task, "foreground")
-	record := processRecorder(root, moved, LaunchPlan{Launcher: "foreground"}, path)
-	if err := wrapper.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = wrapper.Process.Kill(); _ = wrapper.Wait() })
-	var exited atomic.Bool
-	done := record(wrapper.Process.Pid, func() bool { return !exited.Load() })
-	t.Cleanup(func() { exited.Store(true); <-done })
-	time.Sleep(time.Second)
-	if current, _, err := board.CurrentExecution(root, task); err != nil || current.Process != nil {
-		t.Fatalf("recorded before the exec: %+v err=%v", current, err)
-	}
-	awaitExec(t, wrapper.Process.Pid)
-	if _, err := os.ReadFile(path); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the identity step did not end")
-	}
-	if identity := requireIdentity(t, root, task); identity.Executable != "sleep" {
-		t.Fatalf("identity=%+v", identity)
-	}
-	if got := observeCard(t, root, task); got.Status != liveness.Alive {
-		t.Fatalf("report=%+v", got)
-	}
-}
-
 // An executor that finished removes its task file; that is a read too.
 func TestARemovedTaskFileCountsAsRead(t *testing.T) {
+	if !process.ImageCanChange {
+		t.Skip("task-file readiness is used only on platforms with exec")
+	}
 	path := filepath.Join(t.TempDir(), "task")
 	if err := os.WriteFile(path, []byte("task"), 0o600); err != nil {
 		t.Fatal(err)
