@@ -90,3 +90,23 @@ func (s *Session) SetIssueResultOnDone(mode string) error {
 	s.syncScopeRaw([]string{"issue", "result_on_done"}, mode)
 	return nil
 }
+
+// SetGitBranchMode shares the branch mode choice between both configuration
+// UIs, with the same validation and copy boundary as the rules.
+func (s *Session) SetGitBranchMode(mode string) error {
+	if !slices.Contains(config.GitBranchModes, mode) {
+		return fmt.Errorf("%s", config.Text("config.must_be_one_of", "git.branch_mode", strings.Join(config.GitBranchModes, ", ")))
+	}
+	if s.Config.Git.BranchMode == mode {
+		return nil
+	}
+	if s.EditingOverlay() {
+		return s.applyOverlayEdit(func(candidate map[string]any) {
+			config.OverlaySet(candidate, mode, "git", "branch_mode")
+		})
+	}
+	s.Config.Git.BranchMode = mode
+	s.ScopeDirty = true
+	s.syncScopeRaw([]string{"git", "branch_mode"}, mode)
+	return nil
+}

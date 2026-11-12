@@ -29,7 +29,17 @@ func readDispatchEvidence(path string) (board.DispatchEvidence, error) {
 }
 
 func verifyDispatchIntegration(ctx context.Context, g board.DispatchIntegration) error {
-	if !filepath.IsAbs(g.CWD) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") {
+	if !filepath.IsAbs(g.CWD) {
+		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
+	}
+	// The mainline branch follows the git.branch_mode in force for the checkout
+	// that holds the integration, not for the directory this process runs in.
+	cfg, err := config.LoadFor(g.CWD)
+	if err != nil {
+		return err
+	}
+	mainline := config.MainlineBranch(cfg)
+	if g.TargetRef != "refs/heads/"+mainline && g.TargetRef != "refs/remotes/origin/"+mainline {
 		return launchError("board.dispatch_evidence_invalid", "integration CWD or target ref")
 	}
 	for _, commit := range []string{g.SourceCommit, g.TargetCommit, g.ReviewTarget, g.ReviewBase} {

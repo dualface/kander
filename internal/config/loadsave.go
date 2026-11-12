@@ -93,7 +93,7 @@ func loadScopeRawAt(path string, missingOK bool) (*Config, map[string]any, error
 	return cfg, cloneRawObjectDeep(obj), nil
 }
 
-func loadEffective(missingOK bool) (*Config, error) {
+func loadEffective(cwd string, missingOK bool) (*Config, error) {
 	path, err := ConfigPath()
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func loadEffective(missingOK bool) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, overlayRaw, err := readOverlay("")
+	_, overlayRaw, err := readOverlay(cwd)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,14 @@ func loadEffective(missingOK bool) (*Config, error) {
 // substituting DefaultConfig. A missing scope file yields the default config only when
 // missingOK is true, which remains for Effective, doctor repair, and write-path helpers.
 func Load(missingOK bool) (*Config, error) {
-	return loadEffective(missingOK)
+	return loadEffective("", missingOK)
+}
+
+// LoadFor is Load with the project overlay looked up from cwd instead of the
+// process working directory, for checks that run against another checkout.
+// A missing scope file fails, as for operational commands.
+func LoadFor(cwd string) (*Config, error) {
+	return loadEffective(cwd, false)
 }
 
 // LoadScope reads only the current-scope config.json and never applies a project overlay.

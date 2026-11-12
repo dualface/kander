@@ -12,10 +12,24 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/config"
 )
+
+// useGitBranchMode isolates the scope config the integration verifier reads.
+func useGitBranchMode(t *testing.T, mode string) {
+	t.Helper()
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	cfg := config.DefaultConfig()
+	cfg.WelcomeComplete = true
+	cfg.Git.BranchMode = mode
+	if _, err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func integrationGit(t *testing.T) (string, string) {
 	t.Helper()
+	useGitBranchMode(t, config.GitBranchModeMainDevelop)
 	cwd := t.TempDir()
 	git := func(args ...string) string {
 		t.Helper()
@@ -60,6 +74,65 @@ func TestDispatchIntegrationUsesActualGitAncestry(t *testing.T) {
 	g.TargetCommit = strings.Repeat("a", 40)
 	if err = verifyDispatchIntegration(context.Background(), g); err == nil {
 		t.Fatal("unavailable target claimed as integrated")
+	}
+}
+
+func TestDispatchIntegrationTargetsConfiguredMainline(t *testing.T) {
+	cwd, head := integrationGit(t)
+	cmd := exec.Command("git", "-C", cwd, "update-ref", "refs/remotes/origin/main", head)
+	if data, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(data), err)
+	}
+	if data, err := exec.Command("git", "-C", cwd, "branch", "main", head).CombinedOutput(); err != nil {
+		t.Fatal(string(data), err)
+	}
+	if data, err := exec.Command("git", "-C", cwd, "update-ref", "refs/remotes/origin/develop", head).CombinedOutput(); err != nil {
+		t.Fatal(string(data), err)
+	}
+	verify := func(ref string) error {
+		g := board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, ReviewBase: head, TargetCommit: head, TargetRef: ref}
+		return verifyDispatchIntegration(context.Background(), g)
+	}
+	modes := []struct {
+		mode     string
+		accepted []string
+		rejected []string
+	}{
+		{config.GitBranchModeMainDevelop, []string{"refs/heads/develop", "refs/remotes/origin/develop"}, []string{"refs/heads/main", "refs/remotes/origin/main"}},
+		{config.GitBranchModeMainOnly, []string{"refs/heads/main", "refs/remotes/origin/main"}, []string{"refs/heads/develop", "refs/remotes/origin/develop"}},
+	}
+	for _, m := range modes {
+		useGitBranchMode(t, m.mode)
+		for _, ref := range m.accepted {
+			if err := verify(ref); err != nil {
+				t.Fatalf("%s rejected %s: %v", m.mode, ref, err)
+			}
+		}
+		for _, ref := range m.rejected {
+			if err := verify(ref); err == nil {
+				t.Fatalf("%s accepted %s", m.mode, ref)
+			}
+		}
+	}
+}
+
+// The branch mode of the integration checkout decides, even when this process
+// runs in another repository whose overlay selects the other mode.
+func TestDispatchIntegrationReadsOverlayOfIntegrationCheckout(t *testing.T) {
+	cwd, head := integrationGit(t)
+	if data, err := exec.Command("git", "-C", cwd, "branch", "main", head).CombinedOutput(); err != nil {
+		t.Fatal(string(data), err)
+	}
+	if err := os.WriteFile(filepath.Join(cwd, config.OverlayFilename), []byte(`{"git":{"branch_mode":"main-only"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g := board.DispatchIntegration{CWD: cwd, SourceCommit: head, ReviewTarget: head, ReviewBase: head, TargetCommit: head, TargetRef: "refs/heads/main"}
+	if err := verifyDispatchIntegration(context.Background(), g); err != nil {
+		t.Fatalf("overlay of the integration checkout ignored: %v", err)
+	}
+	g.TargetRef = "refs/heads/develop"
+	if err := verifyDispatchIntegration(context.Background(), g); err == nil {
+		t.Fatal("develop accepted although the checkout overlay selects main-only")
 	}
 }
 

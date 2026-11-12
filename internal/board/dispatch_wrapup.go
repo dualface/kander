@@ -33,6 +33,17 @@ type DispatchWrapUpBinding struct {
 	Git      DispatchIntegration `json:"git"`
 }
 
+// mainlineTargetRef accepts the local or origin ref of either mainline branch
+// git.branch_mode can select. The structural check stays configuration-free;
+// the Git verifier in launch narrows it to the configured branch.
+func mainlineTargetRef(ref string) bool {
+	switch ref {
+	case "refs/heads/develop", "refs/remotes/origin/develop", "refs/heads/main", "refs/remotes/origin/main":
+		return true
+	}
+	return false
+}
+
 // validateDispatchWrapUp checks the integration of a wrap-up. A completed round
 // (historical) was bound to the plan of its day: a batch appended later for
 // another member's rebound cycle moves the end of the plan, not this delivery.
@@ -42,7 +53,7 @@ func validateDispatchWrapUp(tx *Transaction, in DispatchInput, published, histor
 		return dispatchEvidenceError("wrap-up binding required")
 	}
 	g := w.Git
-	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || (g.TargetRef != "refs/heads/develop" && g.TargetRef != "refs/remotes/origin/develop") || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
+	if w.Artifact != (ArtifactReference{in.TaskID, dispatchPath(in.ID, "integration")}) || g.DispatchID != in.ID || g.TaskID != in.TaskID || !filepath.IsAbs(g.CWD) || g.SourceCommit != in.Base || !dispatchCommitPattern.MatchString(g.TargetCommit) || !mainlineTargetRef(g.TargetRef) || strings.TrimSpace(g.Author) == "" || strings.TrimSpace(g.Basis) == "" || g.VerifiedAt.IsZero() || g.VerifiedAt.After(time.Now()) {
 		return dispatchEvidenceError("integration binding")
 	}
 	var reviewRange ReviewGitEdge
