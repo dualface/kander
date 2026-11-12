@@ -9,16 +9,17 @@ import (
 // releaseRE parses an optional leading v, a semver base, and an optional suffix.
 // A `-N-g<hex>` suffix is the git-describe commits-ahead form; any other suffix
 // marks a prerelease, which sorts below the plain release of the same base.
-var releaseRE = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:-(.*))?$`)
+var releaseRE = regexp.MustCompile(`^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$`)
 
 var describeRE = regexp.MustCompile(`^(\d+)-g[0-9a-fA-F]+$`)
 
 type parsedVersion struct {
 	major, minor, patch int
 	// rank: 0 prerelease, 1 release, 2 commits ahead of the tag
-	rank  int
-	ahead int
-	ok    bool
+	rank   int
+	ahead  int
+	suffix string
+	ok     bool
 }
 
 func parseVersion(value string) parsedVersion {
@@ -33,6 +34,11 @@ func parseVersion(value string) parsedVersion {
 		rank:  1,
 		ok:    true,
 	}
+	for _, number := range match[1:4] {
+		if _, err := strconv.Atoi(number); err != nil {
+			return parsedVersion{}
+		}
+	}
 	switch suffix := match[4]; {
 	case suffix == "":
 	case describeRE.MatchString(suffix):
@@ -40,6 +46,12 @@ func parseVersion(value string) parsedVersion {
 		parsed.ahead = mustAtoi(describeRE.FindStringSubmatch(suffix)[1])
 	default:
 		parsed.rank = 0
+		parsed.suffix = suffix
+		for id := range strings.SplitSeq(suffix, ".") {
+			if numericIdentifier(id) && len(id) > 1 && id[0] == '0' {
+				return parsedVersion{}
+			}
+		}
 	}
 	return parsed
 }
@@ -83,6 +95,50 @@ func Compare(a, b string) int {
 			}
 			return 1
 		}
+	}
+	if pa.rank == 0 {
+		return comparePrerelease(pa.suffix, pb.suffix)
+	}
+	return 0
+}
+
+func numericIdentifier(value string) bool {
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return value != ""
+}
+
+func comparePrerelease(a, b string) int {
+	aa, bb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := range min(len(aa), len(bb)) {
+		if aa[i] == bb[i] {
+			continue
+		}
+		an, bn := numericIdentifier(aa[i]), numericIdentifier(bb[i])
+		if an && bn {
+			if len(aa[i]) < len(bb[i]) {
+				return -1
+			}
+			if len(aa[i]) > len(bb[i]) {
+				return 1
+			}
+		}
+		if an != bn {
+			if an {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(aa[i], bb[i])
+	}
+	if len(aa) < len(bb) {
+		return -1
+	}
+	if len(aa) > len(bb) {
+		return 1
 	}
 	return 0
 }

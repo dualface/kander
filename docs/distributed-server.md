@@ -1,6 +1,6 @@
 # Distributed server
 
-Kander v2 splits the tool into a resident board server, `kander-server`, and the `kander` client. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Parts marked **planned** are not implemented yet.
+Kander v2 splits the tool into a resident board server, `kander-server`, and the `kander` client. Every host that works on one Git repository talks to the same server over REST, so all hosts see one board, task ownership is decided in one place, and each host executes its own tasks. This document is the design contract of the v2 branch. Normal client entry points use the service contract described below.
 
 ## Roles
 
@@ -222,14 +222,17 @@ The source board is never changed and stays as the local backup; review original
 
 `make build` (and `make-windows.cmd`) builds `kander` and `kander-server`. The release workflow packages each binary for every platform in its own archive (`kander-<os>-<arch>` and `kander-server-<os>-<arch>`), because the client self-updater accepts an archive with exactly one `kander` entry. A tag with a suffix, such as `v2.0.0-alpha.N`, is published as a GitHub prerelease that is never marked latest and never syncs the Homebrew formula; the MSIX job already skips suffixed tags. The update check reads `releases/latest` and refuses prerelease and suffixed versions, so a v1 stable client never installs a v2 prerelease, and a v2 prerelease client is never offered the older v1 stable release.
 
+`kander install` copies an optional executable `kander-server` sibling beside the client into the selected scope. Both destinations and the sibling source are preflighted before replacement. A missing sibling is valid for a host that uses a remote server. Each file replacement is atomic; the pair is not one atomic transaction. If the service copy fails after the client succeeds, installation returns an error naming the installed client, retains the old server, and can be retried. Existing binaries use the no-follow and Windows busy-file replacement boundaries.
+
+`kander-server install [--dir DIR]` installs only the service executable (default: the user binary directory). It writes no agent integration or client configuration. `kander-server update --check` reports the stable channel offer; `kander-server update` applies it. A prerelease server stays out of that channel. An operator can explicitly choose a newer release with `kander-server update --version 2.0.0-alpha.N`. Downloads use trusted HTTPS release hosts, bounded streams, exactly one matching checksum and exactly the service executable in its archive. The staged executable must report the exact requested version before replacement. Downgrades and invalid versions refuse before downloading. Updating a client does not silently update a remote service, and updating a service never restarts it: pause writers and arrange the service restart explicitly, then check `/ready` and protocol compatibility.
+
+MSIX bundles contain both executables and expose both command aliases. A packaged component refuses PATH copying and self-update; the Store owns its replacement. Alpha tags never build or publish Store bundles. The v2 packaging workflow's push job creates only a test identity sideload artifact, never a Store submission.
+
 Run the server with `kander-server --data <dir> --listen <host:port>` (defaults: `$XDG_DATA_HOME/kander-server` or `~/.local/share/kander-server`, `127.0.0.1:7878`); `--ttl` and `--renew` set the lease timings. Health: `GET /api/v1/health`, readiness: `GET /api/v1/ready`, protocol: `GET /api/v1/version`.
 
-## Planned stages
+## Implementation boundaries
 
-1. Branch conventions, the wire contract, the server (this document).
-2. Client configuration (`server.url`, `project.name`, the persistent client ID), the background worker (renewals, lease loss handling, request delivery), and the single-card loop over REST.
-3. Review runs, dispatch, task groups, issue import, TUI, `subscribe`, and dsh over REST; joint review publication with holder confirmations.
-4. Explicit migration of a v1 board into an empty project, two-binary build, install, update, and `v2.0.0-alpha.N` prereleases.
+The service owns board transactions and execution authority. The client owns Git verification, agent effects and private recovery journals. Native platform and packaging verification are recorded separately from cross-builds; a successful build does not prove native behavior.
 
 ## Retained local execution routing
 

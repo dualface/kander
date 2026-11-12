@@ -178,6 +178,9 @@ func ApplyUpdate(ctx context.Context, info UpdateInfo) (UpdateResult, error) {
 	if !version.Valid(info.Version) || strings.Contains(info.Version, "-") {
 		return UpdateResult{}, errors.New("invalid update version")
 	}
+	if current := version.String(); version.Valid(current) && version.Compare(info.Version, current) <= 0 {
+		return UpdateResult{}, errors.New("update is not newer than the running version")
+	}
 	expectedAsset, ok := updateAssetName(runtime.GOOS, runtime.GOARCH)
 	if !ok || info.AssetName != expectedAsset {
 		return UpdateResult{}, errors.New("update asset does not match this platform")
@@ -232,6 +235,10 @@ func runBrewCommand(ctx context.Context, brew string, output io.Writer, args ...
 }
 
 func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (UpdateResult, error) {
+	return applyComponentUpdate(ctx, info, dest, binaryName(), probeBinary)
+}
+
+func applyComponentUpdate(ctx context.Context, info UpdateInfo, dest, name string, probe func(context.Context, string) (string, error)) (UpdateResult, error) {
 	tag := "v" + strings.TrimPrefix(info.Version, "v")
 	base := "https://github.com/dualface/kander/releases/download/" + tag + "/"
 	checksums, err := updateGet(ctx, updateDownloadHTTPClient, base+"checksums.txt", maxChecksums)
@@ -250,7 +257,7 @@ func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (Updat
 	if !bytes.Equal(got[:], want) {
 		return UpdateResult{}, errors.New("update archive checksum mismatch")
 	}
-	binary, err := extractUpdateBinary(info.AssetName, archive)
+	binary, err := extractComponentBinary(info.AssetName, archive, name)
 	if err != nil {
 		return UpdateResult{}, err
 	}
@@ -259,15 +266,15 @@ func applyDirectUpdate(ctx context.Context, info UpdateInfo, dest string) (Updat
 		return UpdateResult{}, err
 	}
 	defer os.RemoveAll(tempDir)
-	staged := filepath.Join(tempDir, binaryName())
+	staged := filepath.Join(tempDir, name)
 	if err := os.WriteFile(staged, binary, 0o700); err != nil {
 		return UpdateResult{}, err
 	}
-	gotVersion, err := probeBinary(ctx, staged)
+	gotVersion, err := probe(ctx, staged)
 	if err != nil {
 		return UpdateResult{}, err
 	}
-	if version.Compare(gotVersion, info.Version) != 0 {
+	if strings.TrimPrefix(gotVersion, "v") != strings.TrimPrefix(info.Version, "v") {
 		return UpdateResult{}, fmt.Errorf("update binary reports %s, expected %s", gotVersion, info.Version)
 	}
 	if err := writeBinary(dest, binary); err != nil {
@@ -296,13 +303,19 @@ func checksumFor(data []byte, name string) ([]byte, error) {
 }
 
 func extractUpdateBinary(asset string, data []byte) ([]byte, error) {
-	if strings.HasSuffix(asset, ".zip") {
-		return extractUpdateZip(data)
-	}
-	return extractUpdateTar(data)
+	return extractComponentBinary(asset, data, binaryName())
 }
 
-func extractUpdateTar(data []byte) ([]byte, error) {
+func extractComponentBinary(asset string, data []byte, name string) ([]byte, error) {
+	if strings.HasSuffix(asset, ".zip") {
+		return extractComponentZip(data, name)
+	}
+	return extractComponentTar(data, name)
+}
+
+func extractUpdateTar(data []byte) ([]byte, error) { return extractComponentTar(data, binaryName()) }
+
+func extractComponentTar(data []byte, name string) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("open update archive: %w", err)
@@ -318,7 +331,7 @@ func extractUpdateTar(data []byte) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read update archive: %w", err)
 		}
-		if !safeArchiveName(header.Name) || header.Typeflag != tar.TypeReg || path.Base(header.Name) != binaryName() || binary != nil {
+		if !safeArchiveName(header.Name) || header.Typeflag != tar.TypeReg || path.Base(header.Name) != name || binary != nil {
 			return nil, errors.New("update archive has an unsafe or unexpected entry")
 		}
 		binary, err = readLimited(reader, maxUpdateBinary)
@@ -327,19 +340,21 @@ func extractUpdateTar(data []byte) ([]byte, error) {
 		}
 	}
 	if len(binary) == 0 {
-		return nil, errors.New("update archive does not contain kander")
+		return nil, fmt.Errorf("update archive does not contain %s", name)
 	}
 	return binary, nil
 }
 
-func extractUpdateZip(data []byte) ([]byte, error) {
+func extractUpdateZip(data []byte) ([]byte, error) { return extractComponentZip(data, binaryName()) }
+
+func extractComponentZip(data []byte, name string) ([]byte, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, fmt.Errorf("open update archive: %w", err)
 	}
 	var binary []byte
 	for _, file := range reader.File {
-		if !safeArchiveName(file.Name) || !file.Mode().IsRegular() || path.Base(file.Name) != binaryName() || binary != nil {
+		if !safeArchiveName(file.Name) || !file.Mode().IsRegular() || path.Base(file.Name) != name || binary != nil {
 			return nil, errors.New("update archive has an unsafe or unexpected entry")
 		}
 		stream, err := file.Open()
@@ -353,7 +368,7 @@ func extractUpdateZip(data []byte) ([]byte, error) {
 		}
 	}
 	if len(binary) == 0 {
-		return nil, errors.New("update archive does not contain kander")
+		return nil, fmt.Errorf("update archive does not contain %s", name)
 	}
 	return binary, nil
 }
@@ -374,14 +389,18 @@ func readLimited(reader io.Reader, limit int64) ([]byte, error) {
 }
 
 func validateUpdateBinary(ctx context.Context, binary string) (string, error) {
+	return validateComponentVersion(ctx, binary, "version", "kander")
+}
+
+func validateComponentVersion(ctx context.Context, binary, argument, prefix string) (string, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(probeCtx, binary, "version").Output()
+	output, err := exec.CommandContext(probeCtx, binary, argument).Output()
 	if err != nil {
 		return "", fmt.Errorf("validate update binary: %w", err)
 	}
 	line, _, _ := strings.Cut(string(output), "\n")
-	reported := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "kander"))
+	reported := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), prefix))
 	if !version.Valid(reported) {
 		return "", errors.New("update binary reported an invalid version")
 	}

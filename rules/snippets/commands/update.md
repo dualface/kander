@@ -30,7 +30,7 @@ kander update <task-id> --document <relative-path> --file <UTF8-input> --expect-
 
 - Full-body replacements preserve `LANGUAGE`, `OWNER`, `SESSION`, `WINDOW`, the timestamps, `RESULT`, execution metadata, and managed indexes (`REVIEWS`, `*_RESOLVED`, `CONTRACT_DECISIONS`, `LIFECYCLE_DECISION`).
 - Never writes managed `reviews/`, `dispatches/`, manifests, indexes, or control records; dedicated producers own them.
-- Legacy file cards are read-only: the command fails before side effects and directs the caller to `kander init`.
+- Legacy file cards are read-only: the command fails before side effects and directs the caller to offline `kander-server maintain --project NAME`.
 
 ## Output
 

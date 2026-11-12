@@ -61,6 +61,18 @@
         </uap3:Extension>
       </Extensions>
     </Application>
+    <Application Id="KanderServer" Executable="kander-server.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Kander Server" Description="Shared Kander board service."
+        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" AppListEntry="none" />
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="kander-server.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="kander-server.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
   </Applications>
 
   <Capabilities>

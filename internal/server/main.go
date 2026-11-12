@@ -22,11 +22,15 @@ import (
 // the first version has no authentication.
 const DefaultListen = "127.0.0.1:7878"
 
-// Main runs kander-server until SIGINT or SIGTERM, or runs the import
-// subcommand.
+// Main runs kander-server until SIGINT or SIGTERM, or an explicit offline
+// import, maintenance or component installation command.
 func Main(args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
+		case "install":
+			return runComponentInstall(args[1:])
+		case "update":
+			return runComponentUpdate(args[1:])
 		case "import":
 			return runImport(args[1:])
 		case "maintain":

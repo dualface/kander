@@ -65,15 +65,17 @@ func destIsExecutable(path string) bool {
 	return info.Mode()&0o111 != 0
 }
 
-// CleanupStaleBinary removes a leftover Windows rename-aside copy of kander.exe.
+// CleanupStaleBinary removes leftover Windows rename-aside component copies.
 func CleanupStaleBinary(paths config.InstallPaths) {
 	if runtime.GOOS != "windows" {
 		return
 	}
-	aside := filepath.Join(paths.BinDir, asideName())
-	anchor, err := fileAnchor(aside)
-	if err != nil {
-		return
+	for _, name := range []string{binaryName(), componentBinaryName("kander-server")} {
+		aside := filepath.Join(paths.BinDir, name+".old")
+		anchor, err := fileAnchor(aside)
+		if err != nil {
+			continue
+		}
+		_, _ = fs.RemoveNonDirectoryIfExists(anchor, aside)
 	}
-	_, _ = fs.RemoveNonDirectoryIfExists(anchor, aside)
 }
