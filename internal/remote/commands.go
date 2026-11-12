@@ -241,7 +241,7 @@ func RunNew(args []string) int {
 
 // claimFor returns the credential this process presents for task, or nil.
 func claimFor(s *Session, task string) (*client.Claim, error) {
-	c, found, err := s.Credential(task)
+	c, found, err := s.MutationCredential(task)
 	if err != nil || !found {
 		return nil, err
 	}

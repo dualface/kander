@@ -81,7 +81,7 @@ var _ ProjectService = (*client.Project)(nil)
 func (s *Session) ClaimsFor(tasks []string) (*client.Claim, error) {
 	proofs := map[string]api.ClaimProof{}
 	for _, task := range tasks {
-		credential, found, err := s.Credential(task)
+		credential, found, err := s.MutationCredential(task)
 		if err != nil {
 			return nil, err
 		}

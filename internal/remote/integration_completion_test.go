@@ -8,6 +8,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/remote"
 )
 
 func TestIntegrationReceiptGatesDoneAndPortableWrapUp(t *testing.T) {
@@ -60,6 +61,14 @@ func TestIntegrationReceiptGatesDoneAndPortableWrapUp(t *testing.T) {
 	replay, err := f.a.MoveTask(t.Context(), f.task.TaskID, completion)
 	if err != nil || replay.MoveReceipt == nil || !replay.MoveReceipt.Replayed || replay.Revision != done.Revision {
 		t.Fatalf("released dispatch receipt: %+v %v", replay, err)
+	}
+	if err := remote.RemoveCredential(f.a.Home, f.credential); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(remote.EnvExecutionID, f.credential.ExecutionID)
+	historical, err := f.a.MoveTask(t.Context(), f.task.TaskID, completion)
+	if err != nil || historical.MoveReceipt == nil || !historical.MoveReceipt.Replayed || historical.Revision != done.Revision {
+		t.Fatalf("released fixed execution could not read the exact completed receipt: %+v %v", historical.MoveReceipt, err)
 	}
 	forgedCompletion := completion
 	forgedCompletion.DeliveryCommit = f.base

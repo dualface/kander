@@ -121,7 +121,19 @@ func (s *Session) TaskView(ctx context.Context, id string) (board.TaskSummary, e
 // MoveTask uses the process-bound execution credential and server CAS. It
 // never queues a mutation for offline replay.
 func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (api.Task, error) {
-	credential, found, err := s.Credential(id)
+	// A completed dispatch is an immutable business receipt. The server's
+	// producer checks the complete replay payload and cannot mutate a done card
+	// through this path. It needs neither an ended bearer nor fresh Git effects.
+	if request.State == "done" && request.Authorization.DispatchID != "" {
+		current, err := s.Project.Show(ctx, id)
+		if err != nil {
+			return api.Task{}, err
+		}
+		if current.State == "done" {
+			return s.Project.Move(ctx, client.NewKey(), id, request, nil)
+		}
+	}
+	credential, found, err := s.MutationCredential(id)
 	if err != nil {
 		return api.Task{}, err
 	}

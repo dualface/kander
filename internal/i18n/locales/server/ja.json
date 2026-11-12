@@ -96,5 +96,6 @@
   "remote.guard_service_documents": "タスク文書はサービス経由の kander update で公開してください。",
   "remote.launch_already_confirmed": "タスク {{.V0}} の以前の起動は確認済みです。これは履歴記録であり、新しい起動や生存確認ではありません。",
   "remote.native_attempt_settled": "ネイティブ再開の試行は実行者を起動せず終了しました。記録を確認し、新しい試行には明示的な --decision を指定してください: {{.V0}}",
-  "remote.dispatch_receipt_missing": "サービスの移動記録にディスパッチ結果がありません。再試行前に既存の操作を確認してください。"
+  "remote.dispatch_receipt_missing": "サービスの移動記録にディスパッチ結果がありません。再試行前に既存の操作を確認してください。",
+  "remote.fixed_execution_ended": "タスク {{.V1}} の固定実行 {{.V0}} は終了しているため、新しい変更を送信できません。"
 }
