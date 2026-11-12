@@ -310,6 +310,21 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 			nextClaim = &claim
 		}
 		validate := p.mutationGuard(id, h, req.State == "archived" || req.State == "trash")
+		// An exact completed dispatch replay is a read-only receipt. The board
+		// producer still validates the entire authorization and completion payload;
+		// it cannot turn this exception into a new mutation of a released task.
+		if from == "done" && req.State == "done" && req.Authorization.DispatchID != "" {
+			validate = func(tx *board.Transaction) error {
+				snapshot, err := tx.Snapshot(id)
+				if err != nil {
+					return err
+				}
+				if snapshot.Entry.State != "done" {
+					return apiError(api.CodeRevisionConflict, "completed dispatch moved")
+				}
+				return nil
+			}
+		}
 		if p.info.Remote != "" && from == "working" && req.State == "review" {
 			ownership := validate
 			validate = func(tx *board.Transaction) error {
@@ -333,9 +348,21 @@ func (p *project) move(key, id string, req api.Move, h holder) outcome {
 		if req.Authorization.DispatchID == "" {
 			businessCommit = ""
 		}
+		replayed := false
 		_, err = board.MoveWithOptions(entry, p.board, req.State, board.MoveOptions{
-			Transaction: p.taskTransaction(key, "move:"+id, req, id, validate, nextClaim, false),
-			Result:      req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision, Authorization: req.Authorization, DeliveryCommit: businessCommit, Disposition: req.Disposition,
+			Transaction: p.taskTransaction(key, "move:"+id, req, id, validate, nextClaim, false, func(tx *board.Transaction, task *api.Task) error {
+				task.MoveReceipt = &api.MoveReceipt{Replayed: replayed}
+				if req.Authorization.DispatchID != "" {
+					d, err := tx.StagedDispatch(id, req.Authorization.DispatchID)
+					if err != nil {
+						return err
+					}
+					task.MoveReceipt.Dispatch = &d
+				}
+				return nil
+			}),
+			Replayed: &replayed,
+			Result:   req.Result, Reason: req.Reason, Decision: req.Decision, DuplicateOf: req.DuplicateOf, ExpectedRevision: req.ExpectedRevision, Authorization: req.Authorization, DeliveryCommit: businessCommit, Disposition: req.Disposition,
 		})
 		if err != nil {
 			return outcome{err: err}

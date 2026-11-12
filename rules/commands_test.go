@@ -189,7 +189,7 @@ var parserFunctions = map[string][]string{
 	"subscribe":   {"internal/liveness/subscribe.go:parseSubscribeArgs"},
 	"start":       {"internal/launch/cmd.go:RunStart", "internal/launch/cmd.go:parseAgentLauncher"},
 	"resume":      {"internal/launch/cmd.go:runServiceResume", "internal/launch/dispatch.go:ParseDispatchOptions"},
-	"notify":      {"internal/notify/cmd.go:runServiceNotify", "internal/launch/dispatch.go:ParseDispatchOptions"},
+	"notify":      {"internal/notify/cmd.go:runServiceNotify", "internal/launch/dispatch.go:ParseDispatchOptions", "internal/remote/request_cmd.go:RunRequest"},
 	"orchestrate": {"internal/launch/orchestrate.go:runServiceOrchestrate", "internal/launch/cmd.go:parseAgentLauncher"},
 	"coordinator": {"internal/launch/coordinator.go:runServiceCoordinator"},
 	"dismiss":     {"internal/takeover/cmd.go:runServiceDismiss"},

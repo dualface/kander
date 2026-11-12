@@ -249,3 +249,11 @@ The private review operation index also remembers prepared publication identitie
 The worker continues renewing ownership after an agent exit. It leaves that generation's requests queued instead of delivering to a stopped pane or spawning a replacement. The holder can explicitly resume a locally proven stopped native session; a new handoff generation supersedes the old requests. A fresh proposal is a separate explicit instruction to the successor.
 
 An implicit native resume saves its decision and normalized launch input before handoff. Another command process reopens that intent before probing the new generation. Unknown responses reconcile the original key and predecessor proof. A proven no-launch attempt audit-releases its generation and remains settled; a deliberate new attempt needs an explicit new decision. Once launch and proposal publication complete, retries return a historical receipt without changing authority. A later confirmed stop of that exact successful execution permits an intentionally new native continuation; the child launch receipts remain immutable.
+
+## CLI move receipts and completion advice
+
+A move's exact dispatch result and replay flag are captured inside its board transaction and stored in the service receipt. CLI durable moves retain the `{dispatch, replayed}` JSON output; other moves print the logical `kander-server:<project>/<task>` location. An identical completed dispatch may be read after claim release, but any changed payload still refuses and the old execution gains no mutation authority.
+
+For a non-replayed CLI terminal move, the reporting switch prints the completion template on stderr using the committed service snapshot and logical resource location. The Issue module compares central work-set readiness before and after that move, honors `issue.result_on_done`, and prints the explicit result handoff when the last member completes or is withdrawn. Advice failures never change a successful move. The TUI invokes no CLI advice hooks.
+
+`kander request --help` uses the supplemental collaboration forms in the notify contract. Root help lists `notify / request`; the installed historical command index remains the user's manually maintained file.

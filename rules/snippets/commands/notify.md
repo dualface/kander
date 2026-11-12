@@ -61,3 +61,16 @@ With a configured server, notify queues a generation-bound collaboration request
 The worker reserves delivery only while that version and generation remain current. Stale or expired proposals are rejected without typing. Formal preparation by the holder verifies the original proposal and acknowledges it in the dispatch transaction. Inspect the full request with `kander request show <task-id> <request-id> --json`; do not act on a superseded request or one for another execution generation.
 
 Before transport the client saves a private operation receipt. A lost response is reconciled against the original request after restart, including when a successor now holds the task. It never silently retargets pending material. An uncertain terminal attempt remains recorded and is not automatically repeated. A pane override must match the current private local execution; foreign pane addresses are refused before any terminal operation.
+
+## Additional Syntax
+
+```text
+kander request <task-id> fix|sync|review|stop <message...>
+kander request list <task-id>
+kander request show <task-id> <request-id> --json
+kander request answer <task-id> <request-id> accepted|done|rejected [note...]
+```
+
+These v2 collaboration forms share this contract. They use the same service project and never select a local board. A request has a stable identity, revision, and target generation. Any client may propose work. Only the live holder answers with its private execution proof and the observed request revision. `show --json` reads the exact proposal for an executor's read-only reconciliation. A transport retry recovers the frozen request, and a changed message is a different logical proposal.
+
+A worker that observes its agent stopped keeps renewing the lease but leaves proposals queued. It never delivers to that stopped scene or launches a replacement automatically. The holder must explicitly continue or release that execution. A handoff supersedes old-generation proposals; a successor needs a new explicit proposal. Request acceptance is transport acknowledgement, not formal dispatch business acceptance or proof of completion.

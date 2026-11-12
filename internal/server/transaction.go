@@ -52,7 +52,7 @@ func (p *project) taskFromTransaction(tx *board.Transaction, id string, claim *c
 
 // taskTransaction publishes a receipt and an optional claim in the card's
 // transaction. A crash at any publication step rolls all of them forward.
-func (p *project) taskTransaction(key, operation string, request any, id string, validate func(*board.Transaction) error, claim *claimRecord, grant bool) board.TransactionExtension {
+func (p *project) taskTransaction(key, operation string, request any, id string, validate func(*board.Transaction) error, claim *claimRecord, grant bool, decorate ...func(*board.Transaction, *api.Task) error) board.TransactionExtension {
 	return board.TransactionExtension{
 		Groups: []string{serviceGroup}, Before: validate,
 		After: func(tx *board.Transaction) error {
@@ -83,6 +83,11 @@ func (p *project) taskTransaction(key, operation string, request any, id string,
 			task, err := p.taskFromTransaction(tx, id, claim)
 			if err != nil {
 				return err
+			}
+			for _, fn := range decorate {
+				if err := fn(tx, &task); err != nil {
+					return err
+				}
 			}
 			var body any = task
 			if grant {

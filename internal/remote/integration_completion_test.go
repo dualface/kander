@@ -40,6 +40,35 @@ func TestIntegrationReceiptGatesDoneAndPortableWrapUp(t *testing.T) {
 	if err != nil || prepared.Input.Evidence.WrapUp.Git.TargetRef != "refs/heads/v2" {
 		t.Fatalf("portable wrap-up: %+v %v", prepared, err)
 	}
+	accepted, err := f.a.Project.Move(t.Context(), "accept-portable-wrap", f.task.TaskID, api.Move{State: "working", Authorization: prepared.Authorization}, f.credential.Claim())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.a.Project.PutDocument(t.Context(), "wrap-completion-report", f.task.TaskID, api.Document{Path: "report.md", Text: "Verified portable wrap-up through both independent clones.", ExpectedRevision: accepted.Revision, Authorization: prepared.Authorization}, f.credential.Claim())
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.credential.Worktree = f.first
+	if err := f.a.SaveCredential(f.credential); err != nil {
+		t.Fatal(err)
+	}
+	completion := api.Move{State: "done", Result: "completed", Authorization: prepared.Authorization, DeliveryCommit: f.commit}
+	done, err := f.a.MoveTask(t.Context(), f.task.TaskID, completion)
+	if err != nil || done.MoveReceipt == nil || done.MoveReceipt.Replayed || done.MoveReceipt.Dispatch == nil || done.MoveReceipt.Dispatch.State != board.DispatchCompleted {
+		t.Fatalf("wrap-up completion: %+v %v", done, err)
+	}
+	replay, err := f.a.MoveTask(t.Context(), f.task.TaskID, completion)
+	if err != nil || replay.MoveReceipt == nil || !replay.MoveReceipt.Replayed || replay.Revision != done.Revision {
+		t.Fatalf("released dispatch receipt: %+v %v", replay, err)
+	}
+	forgedCompletion := completion
+	forgedCompletion.DeliveryCommit = f.base
+	if _, err := f.a.Project.Move(t.Context(), "forged-completed-replay", f.task.TaskID, forgedCompletion, f.credential.Claim()); err == nil {
+		t.Fatal("released holder changed the completion payload")
+	}
+	if _, err := f.a.Project.PutDocument(t.Context(), "late-after-wrap", f.task.TaskID, api.Document{Path: "late.md", Text: "stale execution", ExpectedRevision: done.Revision, Authorization: prepared.Authorization}, f.credential.Claim()); err == nil {
+		t.Fatal("receipt replay restored mutation authority")
+	}
 }
 func TestIntegrationReceiptAllowsDoneButRewoundRemoteBlocksClient(t *testing.T) {
 	f := newIntegrationFixture(t)

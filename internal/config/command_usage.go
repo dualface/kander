@@ -38,7 +38,13 @@ func CommandUsage(command string) string {
 // embedded copy stands in, the Contract line still names the installed path the agent will
 // look for, so the embedded-fallback hint goes to warn to make the gap visible.
 func commandUsage(rulesDir, command string, warn io.Writer) string {
-	name := commandContractsDir + "/" + command + ".md"
+	contract := command
+	// Collaboration request forms share the notify contract; the historical
+	// indexed command table stays stable while the v2 forms are supplemental.
+	if command == "request" {
+		contract = "notify"
+	}
+	name := commandContractsDir + "/" + contract + ".md"
 	root := rulesRootPlaceholder
 	if rulesDir != "" {
 		root = process.AgentPath(filepath.Clean(rulesDir))
@@ -49,6 +55,15 @@ func commandUsage(rulesDir, command string, warn io.Writer) string {
 	if data, source, err := rules.Installed(rulesDir, name); err == nil {
 		warnEmbeddedFallback(warn, name, source)
 		lines = contractSyntaxLines(string(data))
+	}
+	if command == "request" {
+		filtered := lines[:0]
+		for _, line := range lines {
+			if strings.HasPrefix(line, "kander request ") {
+				filtered = append(filtered, line)
+			}
+		}
+		lines = filtered
 	}
 	if len(lines) == 0 {
 		lines = []string{"kander " + command}

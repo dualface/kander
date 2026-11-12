@@ -133,7 +133,14 @@ const (
 )
 
 // Task is one card as the server publishes it.
+// MoveReceipt is the exact producer result saved with the move transaction.
+type MoveReceipt struct {
+	Dispatch *board.Dispatch `json:"dispatch,omitempty"`
+	Replayed bool            `json:"replayed"`
+}
+
 type Task struct {
+	MoveReceipt *MoveReceipt      `json:"move_receipt,omitempty"`
 	Delivery    *DeliveryEvidence `json:"delivery,omitempty"`
 	ObservedAt  time.Time         `json:"observed_at"`
 	TaskID      string            `json:"task_id"`

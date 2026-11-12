@@ -95,5 +95,6 @@
   "remote.project_bound": "Project {{.V0}} ({{.V1}}) is bound to {{.V2}}.",
   "remote.guard_service_documents": "Publish task documents with kander update through the service.",
   "remote.launch_already_confirmed": "The previous launch is already confirmed for {{.V0}}; this is its historical receipt, not a new launch or liveness check.",
-  "remote.native_attempt_settled": "The native continuation attempt is settled without an executor. Read its receipt and use an explicit new --decision for a new attempt: {{.V0}}"
+  "remote.native_attempt_settled": "The native continuation attempt is settled without an executor. Read its receipt and use an explicit new --decision for a new attempt: {{.V0}}",
+  "remote.dispatch_receipt_missing": "The service move receipt lacks its dispatch result; inspect the existing operation before retrying."
 }

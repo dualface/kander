@@ -95,5 +95,6 @@
   "remote.project_bound": "项目 {{.V0}}（{{.V1}}）已绑定 {{.V2}}。",
   "remote.guard_service_documents": "请通过服务端使用 kander update 发布任务文档。",
   "remote.launch_already_confirmed": "任务 {{.V0}} 的前次启动已经确认；此为历史回执，不代表新启动或当前存活检查。",
-  "remote.native_attempt_settled": "原生续接尝试已结束且未启动执行者。请先核对回执，新尝试须提供新的 --decision：{{.V0}}"
+  "remote.native_attempt_settled": "原生续接尝试已结束且未启动执行者。请先核对回执，新尝试须提供新的 --decision：{{.V0}}",
+  "remote.dispatch_receipt_missing": "服务端移动回执缺少派发结果；请先核对已有操作再重试。"
 }

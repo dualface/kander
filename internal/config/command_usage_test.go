@@ -101,7 +101,7 @@ func TestCommandUsageWarnsWhenInstalledContractIsMissing(t *testing.T) {
 }
 
 func TestCommandUsageIncludesDistributedForms(t *testing.T) {
-	for _, tc := range []struct{ Command, Flag string }{{"resume", "--release"}, {"orchestrate", "--operation-id"}} {
+	for _, tc := range []struct{ Command, Flag string }{{"resume", "--release"}, {"orchestrate", "--operation-id"}, {"request", "kander request show"}} {
 		if got := commandUsage("", tc.Command, nil); !strings.Contains(got, tc.Flag) {
 			t.Fatalf("%s help omitted %s: %s", tc.Command, tc.Flag, got)
 		}

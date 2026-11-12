@@ -30,23 +30,33 @@ func writeCompletionReportReminder(w io.Writer, moved Entry) {
 		fmt.Fprintln(w, t("board.report_template_unavailable", err.Error()))
 		return
 	}
-	language := strings.TrimSpace(MetadataFrom(text, FieldLanguage))
-	if language == "" {
-		language = cfg.AgentLanguage
-	}
 	path, err := filepath.Abs(moved.Path)
 	if err != nil {
 		path = moved.Path
+	}
+	WriteCompletionReportSnapshot(w, moved.TaskID, moved.State, text, path, cfg)
+}
+
+// WriteCompletionReportSnapshot renders the same CLI reminder from an already
+// committed service snapshot. resource is a logical service location, not a
+// client filesystem path; this entry never reads local board storage.
+func WriteCompletionReportSnapshot(w io.Writer, taskID, state, text, resource string, cfg *config.Config) {
+	if state != "done" && state != "archived" && state != "trash" || cfg == nil || !cfg.Rules[config.RuleReporting] {
+		return
+	}
+	language := strings.TrimSpace(MetadataFrom(text, FieldLanguage))
+	if language == "" {
+		language = cfg.AgentLanguage
 	}
 	paths, err := installPathsFn()
 	if err != nil {
 		paths = config.InstallPaths{}
 	}
 	report, err := config.RenderRulesTemplate(paths, "templates/report/completion.md", map[string]string{
-		"TaskID":     moved.TaskID,
+		"TaskID":     taskID,
 		"Title":      singleLine(TitleFrom(text)),
-		"Path":       path,
-		"FinalState": finalCardState(moved.State, MetadataFrom(text, FieldResult)),
+		"Path":       resource,
+		"FinalState": finalCardState(state, MetadataFrom(text, FieldResult)),
 	}, w)
 	if err != nil {
 		fmt.Fprintln(w, t("board.report_template_unavailable", err.Error()))

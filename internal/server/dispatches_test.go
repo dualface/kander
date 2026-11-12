@@ -50,6 +50,13 @@ func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
+	if working.MoveReceipt == nil || working.MoveReceipt.Replayed || working.MoveReceipt.Dispatch == nil || working.MoveReceipt.Dispatch.State != board.DispatchAccepted {
+		t.Fatalf("accepted receipt: %+v", working.MoveReceipt)
+	}
+	replayedMove, err := a.Move(t.Context(), "accept-again", task.TaskID, api.Move{State: "working", Authorization: prepared.Authorization}, &proof)
+	if err != nil || replayedMove.MoveReceipt == nil || !replayedMove.MoveReceipt.Replayed || replayedMove.Revision != working.Revision {
+		t.Fatalf("move replay: %+v %v", replayedMove, err)
+	}
 	document := api.Document{Path: "progress.md", Text: "Verified synchronization facts", ExpectedRevision: working.Revision}
 	_, err = a.PutDocument(t.Context(), "missing-epoch", task.TaskID, document, &proof)
 	expectCode(t, err, api.CodeBoardRejected)
@@ -61,6 +68,10 @@ func TestDispatchServiceKeepsOwnershipAndBusinessEpochAsSeparateFences(t *testin
 	reviewed, err := a.Move(t.Context(), "complete", task.TaskID, api.Move{State: "review", DeliveryCommit: strings.Repeat("b", 40), Authorization: prepared.Authorization}, &proof)
 	if err != nil {
 		t.Fatal(err)
+	}
+	historical, err := a.Move(t.Context(), "accept", task.TaskID, api.Move{State: "working", Authorization: prepared.Authorization}, &proof)
+	if err != nil || historical.MoveReceipt == nil || historical.MoveReceipt.Dispatch == nil || historical.MoveReceipt.Replayed || historical.MoveReceipt.Dispatch.State != board.DispatchAccepted || historical.Revision != working.Revision {
+		t.Fatalf("historical move receipt changed: %+v %v", historical, err)
 	}
 	completed, err := a.Dispatch(t.Context(), task.TaskID, input.ID)
 	if err != nil || completed.State != board.DispatchCompleted || completed.Completed == nil || completed.Completed.CardRevision != reviewed.Revision {

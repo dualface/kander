@@ -115,9 +115,10 @@ type LocalCard struct {
 	Number     int
 	// WorkDone and WorkTotal count the complete members of the issue's work
 	// set; WorkReady is true when every member is complete.
-	WorkDone  int
-	WorkTotal int
-	WorkReady bool
+	WorkDone     int
+	WorkTotal    int
+	WorkExcluded int
+	WorkReady    bool
 	// ResultPending marks a ready work set whose current completion evidence
 	// has no published or equivalent result comment in the local records.
 	ResultPending bool
@@ -278,6 +279,7 @@ func LoadIndex(root string) (Index, error) {
 		local := index[key]
 		local.WorkDone, local.WorkTotal = set.Progress()
 		local.WorkReady = set.Ready()
+		local.WorkExcluded = len(set.Excluded)
 		if local.WorkReady {
 			local.ResultPending = resultPending(root, set)
 		}

@@ -102,6 +102,9 @@ func usage(w io.Writer) {
 		if name == "list" {
 			label = "list / ls"
 		}
+		if name == "notify" {
+			label = "notify / request"
+		}
 		fmt.Fprintf(w, "  %s\n", label)
 	}
 	fmt.Fprintln(w, config.Text("cli.global_options"))

@@ -327,7 +327,7 @@ func RunMove(args []string) int {
 
 	ctx, cancel := commandContext()
 	defer cancel()
-	s, _, err := open(ctx)
+	s, cfg, err := open(ctx)
 	if err != nil {
 		return fail(err)
 	}
@@ -350,9 +350,30 @@ func RunMove(args []string) int {
 		}
 		req.ExpectedRevision = &v
 	}
+	before, err := s.Project.Show(ctx, task)
+	if err != nil {
+		return fail(err)
+	}
+	notices := observeServiceMove(ctx, s, before, state)
 	t, err := s.MoveTask(ctx, task, req)
 	if err != nil {
 		return fail(err)
+	}
+	replayed := t.MoveReceipt != nil && t.MoveReceipt.Replayed
+	if !replayed {
+		board.WriteCompletionReportSnapshot(stderr, t.TaskID, t.State, t.Text, location(s, t.TaskID), cfg)
+		for _, notice := range notices {
+			notice(stderr, t)
+		}
+	}
+	if authorization.DispatchID != "" {
+		if t.MoveReceipt == nil || t.MoveReceipt.Dispatch == nil {
+			return fail(&api.Error{Code: api.CodeEvidenceIncomplete, Message: config.Text("remote.dispatch_receipt_missing")})
+		}
+		if err := json.NewEncoder(stdout).Encode(t.MoveReceipt); err != nil {
+			return fail(err)
+		}
+		return 0
 	}
 	fmt.Fprintln(stdout, location(s, t.TaskID))
 	return 0

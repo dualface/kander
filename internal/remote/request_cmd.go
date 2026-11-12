@@ -11,6 +11,7 @@ import (
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/client"
+	"github.com/dualface/kander/internal/config"
 )
 
 // RunRequest implements kander request, the collaboration requests of a
@@ -118,6 +119,6 @@ func RunRequest(args []string) int {
 }
 
 func requestUsage() int {
-	fmt.Fprintln(stderr, "usage: kander request <task-id> fix|sync|review|stop <message...>\n       kander request list <task-id>\n       kander request answer <task-id> <request-id> accepted|done|rejected [note...]")
+	fmt.Fprintln(stderr, config.CommandUsage("request"))
 	return 2
 }
