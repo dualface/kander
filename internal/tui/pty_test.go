@@ -392,7 +392,12 @@ func TestBoardOpensOptionsPanelOnPTY(t *testing.T) {
 
 func TestOptionsProjectTabsAndNarrowPathsOnPTY(t *testing.T) {
 	bin := buildKander(t)
-	project := t.TempDir()
+	// Keep the complete path visible at the fixed wide-terminal test geometry.
+	project, err := os.MkdirTemp("", "kp-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(project) })
 	_, env := boardEnv(t)
 	writeCompleteConfig(t, env)
 	configPath := configPathFromEnv(t, env)

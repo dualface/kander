@@ -29,7 +29,7 @@ func TestHerdrCodexDiscoversAndPersistsWithoutNativeHook(t *testing.T) {
 			repairRollout(t, task, "orchestrator", "orchestrator-session", "orchestrate "+task)
 			var reports chan map[string]any
 			if reportAvailable {
-				socket, ch := herdrReportListener(t, root)
+				socket, ch := herdrReportListener(t)
 				reports = ch
 				t.Setenv("HERDR_SOCKET_PATH", socket)
 			} else {
@@ -106,8 +106,14 @@ func TestCodexDiscoveryRejectsAbsentAndAmbiguousNewSessions(t *testing.T) {
 // herdrReportListener fakes the herdr session-report socket: every accepted
 // connection's request line is decoded into the reports channel and answered
 // with a success result.
-func herdrReportListener(t *testing.T, root string) (socketPath string, reports chan map[string]any) {
+func herdrReportListener(t *testing.T) (socketPath string, reports chan map[string]any) {
 	t.Helper()
+	// Unix socket names have a small kernel limit, independent of TMPDIR.
+	root, err := os.MkdirTemp("", "kh-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	socketPath = filepath.Join(root, "herdr-report.sock")
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
@@ -155,7 +161,7 @@ func TestHerdrSessionReportSkipsSessionFileAgents(t *testing.T) {
 	}
 	root, _, fakeBin := setupBoard(t)
 	installHerdr(t, root, fakeBin)
-	socketPath, reports := herdrReportListener(t, root)
+	socketPath, reports := herdrReportListener(t)
 	t.Setenv("HERDR_SOCKET_PATH", socketPath)
 
 	piID, piPath := makeTodo(t, root, "herdr-report-pi-skip")

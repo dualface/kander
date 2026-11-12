@@ -3,10 +3,12 @@ package liveness
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/terminal"
 )
 
@@ -57,6 +59,11 @@ func (b *fakeAgentBackend) AgentList(context.Context, terminal.Conn) ([]terminal
 // useFakeBackends routes WINDOW values "<name>:<pane>" to the given backends.
 func useFakeBackends(t *testing.T, backends ...*fakeAgentBackend) {
 	t.Helper()
+	t.Chdir(t.TempDir())
+	t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+	if _, err := config.Save(config.DefaultConfig()); err != nil {
+		t.Fatal(err)
+	}
 	resetLang(t)
 	byName := map[string]*fakeAgentBackend{}
 	for _, backend := range backends {
@@ -187,7 +194,7 @@ func TestObserveAgentStatusClassifiesProcessPanes(t *testing.T) {
 		"p3": {Command: "claude", Dead: "0", InMode: "0"},
 	}}
 	useFakeBackends(t, dsh)
-	reports := ObserveAgentStatus(context.Background(), []AgentStatusInput{
+	reports := ObserveAgentStatus(t.Context(), []AgentStatusInput{
 		{TaskID: "alive", Session: "claude s1", Window: "dsh:p1"},
 		{TaskID: "exited", Session: "claude s2", Window: "dsh:p2"},
 		{TaskID: "unmarked", Session: "claude s3", Window: "dsh:p3"},
