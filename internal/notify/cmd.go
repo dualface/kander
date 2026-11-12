@@ -18,6 +18,7 @@ import (
 
 func init() {
 	cli.Commands["notify"] = RunNotify
+	cli.RemoteCommands["notify"] = cli.RequireService(RunNotifyRemote)
 }
 
 func fail(err error) int {
@@ -45,7 +46,12 @@ func takeValue(args []string, i int) (string, int, bool) {
 }
 
 // RunNotify implements kander notify.
-func RunNotify(args []string) int {
+func RunNotify(args []string) int { return runServiceNotify(args, false) }
+
+// RunNotifyRemote is the mandatory REST entrance used by the client binary.
+func RunNotifyRemote(args []string) int { return runServiceNotify(args, true) }
+
+func runServiceNotify(args []string, required bool) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			usage(os.Stdout)
@@ -116,6 +122,11 @@ func RunNotify(args []string) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return fail(err)
+		}
 	}
 	if remote.Enabled(cfg) {
 		request, err := launch.NotifyRemote(positional[0], message, messageFile, pane, messageSet, timeout, dispatchOptions)

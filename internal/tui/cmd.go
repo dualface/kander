@@ -115,28 +115,20 @@ func Run(_ []string) int {
 	if !containsString(themes, prefs.Theme) {
 		return fail(fmt.Errorf("%s: %s", ctx.UnknownTheme, prefs.Theme))
 	}
-	var root string
-	var serverSession *remote.Session
+
 	cfg, err := config.Load(true)
 	if err != nil {
 		return fail(err)
 	}
-	if remote.Enabled(cfg) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fail(err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		serverSession, err = remote.Open(ctx, cfg, cwd)
-		cancel()
-		if err != nil {
-			return fail(err)
-		}
-	} else {
-		root, err = board.BoardRoot()
-		if err != nil && !board.IsBoardNotFound(err) {
-			return fail(err)
-		}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fail(err)
+	}
+	serviceCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	serverSession, err := remote.Open(serviceCtx, cfg, cwd)
+	cancel()
+	if err != nil {
+		return fail(err)
 	}
 
 	app := newApp(prefs.Single, prefs.Refresh, ctx, nil, nil, prefs.Theme, prefs.Columns, saveColumns, copyToClipboard)
@@ -147,11 +139,7 @@ func Run(_ []string) int {
 	app.updateApply = install.ApplyUpdate
 	app.IssueProvider = cli.IssueProvider
 	app.ObserveAgents = observeAgentStatus
-	if serverSession != nil {
-		attachRemoteBoard(app, serverSession)
-	} else {
-		attachBoard(app, root)
-	}
+	attachRemoteBoard(app, serverSession)
 	initial, err := app.GetBoard()
 	if err != nil {
 		return fail(err)

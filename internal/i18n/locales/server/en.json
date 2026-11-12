@@ -21,7 +21,7 @@
   "remote.error_not_ready": "server is not ready",
   "remote.error_internal": "server error",
   "remote.unreachable": "cannot reach kander-server: {{.V0}}",
-  "remote.not_configured": "server.url and project.name must be configured",
+  "remote.not_configured": "Configure server.url and project.name with kander init --server <URL> --project <name>. Local board mode is unavailable.",
   "remote.claim_line": "Claim: {{.V0}} on {{.V1}}, generation {{.V2}}, {{.V3}}, lease until {{.V4}}",
   "remote.dispatch_unsupported": "dispatch-bound options are not available in server mode yet",
   "remote.claimed": "claimed {{.V0}} with generation {{.V1}} for execution {{.V2}}",
@@ -90,5 +90,8 @@
   "remote.integration_fast_forward_required": "The inspected target cannot advance to the source by fast-forward",
   "remote.integration_operation_changed": "The integration operation ID already names other material; preserve its receipt",
   "remote.integration_recovery_required": "Integration remains unresolved; inspect its private receipt and exact remote state before continuing",
-  "remote.integration_process_required": "Integration requires an observable local command process"
+  "remote.integration_process_required": "Integration requires an observable local command process",
+  "remote.init_maintenance_server": "Run explicit migration or maintenance through kander-server. Client init only binds a service project.",
+  "remote.project_bound": "Project {{.V0}} ({{.V1}}) is bound to {{.V2}}.",
+  "remote.guard_service_documents": "Publish task documents with kander update through the service."
 }

@@ -19,6 +19,10 @@ import (
 // runResult exposes the controlled inspection, assessment and decision protocol.
 // No raw gh write command is part of the agent workflow.
 func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
+	return runResultMode(factory, args, stdout, stderr, false)
+}
+
+func runResultMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	values := map[string]string{"--action": "start"}
 	number := 0
 	for i := 0; i < len(args); i++ {
@@ -75,6 +79,12 @@ func runResult(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 		return 1
 	}
 	root := ""
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			fmt.Fprintln(stderr, formatError(err))
+			return 1
+		}
+	}
 	if remote.Enabled(cfg) {
 		cwd, e := os.Getwd()
 		if e != nil {

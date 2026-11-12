@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/check"
 	"github.com/dualface/kander/internal/cli"
@@ -37,91 +38,37 @@ func TestCheckCommandUsesLivenessInFullBinary(t *testing.T) {
 		t.Fatal("check bound to liveness.RunCheck; full binary must route through check.Run")
 	}
 
-	root := t.TempDir()
-	for _, state := range board.States {
-		if err := os.Mkdir(filepath.Join(root, state), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
+	t.Chdir(t.TempDir())
+	root := filepath.Join(t.TempDir(), "forbidden-board")
 	t.Setenv(board.EnvBoardDir, root)
-	// macOS puts TempDir under a /var symlink, which config.Save rejects.
-	configDir, symErr := filepath.EvalSymlinks(t.TempDir())
-	if symErr != nil {
-		t.Fatal(symErr)
+	configDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
 	}
 	t.Setenv(config.EnvConfig, filepath.Join(configDir, "config.json"))
 	cfg := config.DefaultConfig()
 	cfg.WelcomeComplete = true
-	cfg.Language = "cn"
-	cfg.AgentLanguage = "zh-CN"
+	cfg.Language = "en"
+	cfg.AgentLanguage = "en"
+	service := commandService(t, cfg)
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-
-	slug := "full-binary-check"
-	created, err := board.NewTask(root, "chore", slug, "binding", "en", false)
+	id := readyCard(t, "full-binary-check")
+	grant, err := service.Project.Claim(t.Context(), "", id, api.ClaimRequest{ClientID: service.Client.ClientID(), ExecutionID: "check-observation", Owner: "codex"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := created
-	id := strings.TrimSuffix(filepath.Base(path), ".md")
-	data, err := os.ReadFile(filepath.Join(path, "spec.md"))
-	if err != nil {
-		t.Fatal(err)
+	out := runKander(t, "check", id).require(t, "service check")
+	if !strings.Contains(out.stdout, id) || !strings.Contains(out.stdout, "status=unknown") {
+		t.Fatalf("service liveness output missing: %+v", out)
 	}
-	// A CRLF checkout (autocrlf on Windows) would defeat the \n replacements.
-	text := strings.ReplaceAll(string(data), "\r\n", "\n")
-	for _, replacement := range []string{"实现目标", "产生可验证结果", "满足验收", "无额外范围"} {
-		text = strings.Replace(text, board.Placeholder, replacement, 1)
+	after, err := service.Project.Show(t.Context(), id)
+	if err != nil || after.Revision != grant.Task.Revision {
+		t.Fatal("check changed the task")
 	}
-	discussion := "## " + board.SectionDiscussion + "\n"
-	text = strings.Replace(
-		text, discussion,
-		discussion+"\n"+board.MarkerSelfReview+": 通过\n"+board.MarkerCardReview+": 通过\n", 1,
-	)
-	branch := "- " + board.FieldTaskBranch + ":"
-	text = strings.Replace(text, branch+"\n", branch+" task/"+slug+"\n", 1)
-	if err := os.WriteFile(filepath.Join(path, "spec.md"), []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := board.ReadSnapshot(root, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	moved, err := board.MoveEntry(snapshot.Entry, root, "todo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	moved, err = board.MoveEntry(moved, root, "working")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = moved
-
-	stdoutR, stdoutW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	oldOut, oldErr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = stdoutW, stderrW
-	code := got(nil)
-	_ = stdoutW.Close()
-	_ = stderrW.Close()
-	os.Stdout, os.Stderr = oldOut, oldErr
-	outBytes, _ := io.ReadAll(stdoutR)
-	errBytes, _ := io.ReadAll(stderrR)
-	_ = stdoutR.Close()
-	_ = stderrR.Close()
-	out := string(outBytes)
-	if code != 0 {
-		t.Fatalf("check exit=%d stderr=%s stdout=%s", code, errBytes, out)
-	}
-	if !strings.Contains(out, "存活: "+id) {
-		t.Fatalf("full binary check must emit liveness output; got %q", out)
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatalf("check used local board: %v", err)
 	}
 }
 

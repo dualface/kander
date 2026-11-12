@@ -235,13 +235,23 @@ func coordinatorUsageFail() int {
 
 // RunCoordinator runs checkpoint operations and explicitly requested, leased
 // Git integration. Subscription events remain read-only wakeups.
-func RunCoordinator(args []string) int {
+func RunCoordinator(args []string) int { return runServiceCoordinator(args, false) }
+
+// RunCoordinatorRemote is the mandatory REST entrance used by the client binary.
+func RunCoordinatorRemote(args []string) int { return runServiceCoordinator(args, true) }
+
+func runServiceCoordinator(args []string, required bool) int {
 	if len(args) != 2 {
 		return coordinatorUsageFail()
 	}
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return fail(err)
+		}
 	}
 	if args[0] == "integrate" || args[0] == "integration-show" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

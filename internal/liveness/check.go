@@ -101,7 +101,12 @@ func usageCheck(w *os.File) {
 }
 
 // RunCheck implements kander check, reusing the board structural validation and appending a read-only liveness section.
-func RunCheck(args []string) int {
+func RunCheck(args []string) int { return runServiceCheck(args, false) }
+
+// RunCheckRemote is the client service entrance.
+func RunCheckRemote(args []string) int { return runServiceCheck(args, true) }
+
+func runServiceCheck(args []string, required bool) int {
 	args, all := takeFlag(args, "--all")
 	var tasks []string
 	for _, arg := range args {
@@ -119,6 +124,12 @@ func RunCheck(args []string) int {
 	}
 	for _, warning := range config.AgentWarnings(cfg) {
 		fmt.Fprintln(os.Stderr, warning)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 	}
 	if remote.Enabled(cfg) {
 		return runRemoteCheck(cfg, tasks, all)

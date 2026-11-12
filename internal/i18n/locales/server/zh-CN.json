@@ -21,7 +21,7 @@
   "remote.error_not_ready": "服务端尚未就绪",
   "remote.error_internal": "服务端错误",
   "remote.unreachable": "无法连接 kander-server: {{.V0}}",
-  "remote.not_configured": "必须配置 server.url 与 project.name",
+  "remote.not_configured": "请用 kander init --server <URL> --project <name> 配置 server.url 和 project.name。客户端不提供本地看板运行模式。",
   "remote.claim_line": "领取: {{.V0}} 位于 {{.V1}}, 代次 {{.V2}}, {{.V3}}, 租约至 {{.V4}}",
   "remote.dispatch_unsupported": "服务端模式暂不支持派发绑定参数",
   "remote.claimed": "已领取 {{.V0}}, 代次 {{.V1}}, 执行 {{.V2}}",
@@ -90,5 +90,8 @@
   "remote.integration_fast_forward_required": "已检查的目标无法快进到来源提交",
   "remote.integration_operation_changed": "该集成操作 ID 已绑定其他材料；请保留原回执",
   "remote.integration_recovery_required": "集成结果仍未明确；继续前请核对私有回执与实际远端状态",
-  "remote.integration_process_required": "集成需要可观察的本机命令进程"
+  "remote.integration_process_required": "集成需要可观察的本机命令进程",
+  "remote.init_maintenance_server": "请通过 kander-server 显式迁移或维护。客户端 init 只绑定服务项目。",
+  "remote.project_bound": "项目 {{.V0}}（{{.V1}}）已绑定 {{.V2}}。",
+  "remote.guard_service_documents": "请通过服务端使用 kander update 发布任务文档。"
 }

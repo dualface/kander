@@ -235,10 +235,20 @@ func AuthorizeWrapUp(ctx context.Context, root string, r WrapUpRequest) (result 
 
 // RunDispatch adds the Git-aware and observation-aware producers to the single
 // public command. The board-only runner remains available for pure operations.
-func RunDispatch(args []string) int {
+func RunDispatch(args []string) int { return runServiceDispatch(args, false) }
+
+// RunDispatchRemote is the mandatory REST entrance used by the client binary.
+func RunDispatchRemote(args []string) int { return runServiceDispatch(args, true) }
+
+func runServiceDispatch(args []string, required bool) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return fail(err)
+		}
 	}
 	if remote.Enabled(cfg) {
 		return runRemoteDispatch(args, cfg)

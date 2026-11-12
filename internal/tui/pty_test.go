@@ -19,19 +19,21 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/dualface/kander/internal/board"
+	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 )
 
 // ptySession runs kander inside a pseudo-terminal and answers capability queries like a real terminal would,
 // otherwise Bubble Tea keeps waiting for the background color and cursor position responses.
 type ptySession struct {
-	t      *testing.T
-	cmd    *exec.Cmd
-	master *os.File
-	mu     sync.Mutex
-	out    []byte
-	done   chan error
-	osc11  string
+	service *client.Project
+	t       *testing.T
+	cmd     *exec.Cmd
+	master  *os.File
+	mu      sync.Mutex
+	out     []byte
+	done    chan error
+	osc11   string
 }
 
 func startPTY(t *testing.T, bin string, env []string, args ...string) *ptySession {
@@ -51,6 +53,10 @@ func startPTYReply(t *testing.T, bin string, env []string, osc11 string, args ..
 
 func startPTYAtReply(t *testing.T, dir, bin string, env []string, osc11 string, args ...string) *ptySession {
 	t.Helper()
+	var service *client.Project
+	if len(args) == 0 {
+		service = bindPTYService(t, dir, env)
+	}
 	master, slave, err := openPTY()
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +71,7 @@ func startPTYAtReply(t *testing.T, dir, bin string, env []string, osc11 string, 
 		t.Fatal(err)
 	}
 	_ = slave.Close()
-	session := &ptySession{t: t, cmd: cmd, master: master, done: make(chan error, 1), osc11: osc11}
+	session := &ptySession{service: service, t: t, cmd: cmd, master: master, done: make(chan error, 1), osc11: osc11}
 	go func() {
 		buf := make([]byte, 4096)
 		for {
@@ -270,6 +276,7 @@ func childEnvWithoutKander(t *testing.T, env []string) []string {
 func boardEnv(t *testing.T) (string, []string) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), "kanban")
+	t.Chdir(filepath.Dir(root))
 	t.Setenv(board.EnvBoardDir, root)
 	if _, _, _, err := board.InitBoard(""); err != nil {
 		t.Fatal(err)
@@ -700,6 +707,10 @@ func TestIssueTakeoverDialogOnPTY(t *testing.T) {
 	if cards, err := os.ReadDir(filepath.Join(root, "backlog")); err != nil || len(cards) != 0 {
 		t.Fatalf("the takeover dialog created a backlog card: %v %v", cards, err)
 	}
+	tasks, err := session.service.List(t.Context(), "backlog")
+	if err != nil || len(tasks.Tasks) != 0 {
+		t.Fatalf("cancelled takeover changed the service board: %+v %v", tasks, err)
+	}
 }
 
 // With tui.theme=auto the board follows the terminal background at runtime:
@@ -799,4 +810,61 @@ func TestAutoThemeKeepsThemeWhenProbeUnansweredOnPTY(t *testing.T) {
 	if err := session.waitExit(8 * time.Second); err != nil {
 		t.Fatalf("exit: %v\npty:\n%s", err, session.text())
 	}
+}
+
+// PTY fixtures may prepare legacy storage as migration input. The subprocess
+// always consumes the imported service project and never that local board.
+func bindPTYService(t *testing.T, dir string, env []string) *client.Project {
+	t.Helper()
+	var source string
+	for _, value := range env {
+		if path, ok := strings.CutPrefix(value, board.EnvBoardDir+"="); ok {
+			source = path
+		}
+	}
+	url := newTUIService(t, source)
+	connection, err := client.New(url, "pty-inspection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := connection.Register(t.Context(), "tui-fixture", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := connection.Project(info.ID)
+	path := configPathFromEnv(t, env)
+	data, err := os.ReadFile(path)
+	if err == nil {
+		var raw map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			t.Fatal(err)
+		}
+		raw["server"] = map[string]string{"url": url}
+		raw["project"] = map[string]string{"name": "tui-fixture"}
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, encoded, 0600); err != nil {
+			t.Fatal(err)
+		}
+		return service
+	}
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if dir == "" {
+		dir, err = os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	encoded, err := json.Marshal(map[string]any{"server": map[string]string{"url": url}, "project": map[string]string{"name": "tui-fixture"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, config.OverlayFilename), encoded, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return service
 }

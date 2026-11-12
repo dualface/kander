@@ -82,6 +82,7 @@ func TestLuvusLauncherStart(t *testing.T) {
 	cfg.KanbanAgent = "claude"
 	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
 	cfg.Launcher = "auto"
+	service := commandService(t, cfg)
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestLuvusLauncherStart(t *testing.T) {
 	}
 
 	t.Setenv("FAKELUVUS_IGNORE_CWD", "1")
-	rejected := readyCard(t, root, "luvus-old")
+	rejected := readyCard(t, "luvus-old")
 	result := runKander(t, "start", rejected)
 	if result.code == 0 {
 		t.Fatalf("start accepted a pane in the wrong directory:\n%s", result.stdout)
@@ -100,8 +101,8 @@ func TestLuvusLauncherStart(t *testing.T) {
 	if !strings.Contains(result.stdout+result.stderr, "restart the luvus server") {
 		t.Fatalf("start does not ask to upgrade luvus:\n%s%s", result.stdout, result.stderr)
 	}
-	if snapshot, err := board.ReadSnapshot(root, rejected); err != nil || snapshot.Entry.State != "todo" {
-		t.Fatalf("card entry=%+v err=%v", snapshot.Entry, err)
+	if snapshot, err := service.Project.Show(t.Context(), rejected); err != nil || snapshot.State != "todo" {
+		t.Fatalf("card entry=%+v err=%v", snapshot.State, err)
 	}
 	log := calls()
 	if !strings.Contains(log, "pane close 7") || strings.Contains(log, "pane run") || strings.Contains(log, "pane move") {
@@ -109,9 +110,9 @@ func TestLuvusLauncherStart(t *testing.T) {
 	}
 
 	t.Setenv("FAKELUVUS_IGNORE_CWD", "")
-	started := readyCard(t, root, "luvus-new")
-	runKander(t, "start", started).require(t, "start")
-	if window := cardField(t, root, started, board.FieldWindow); window != "luvus:7:7" {
+	started := readyCard(t, "luvus-new")
+	runKanderInput(t, "invalid\n2\n", "start").require(t, "interactive service start")
+	if window := cardField(t, started, board.FieldWindow); window != "luvus:7:7" {
 		t.Fatalf("WINDOW=%q", window)
 	}
 	log = calls()

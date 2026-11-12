@@ -1,34 +1,49 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
+	"os"
+
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/remote"
 	"github.com/dualface/kander/internal/worker"
 )
 
-// worker is an internal command: `kander` starts it detached after a claim.
-// It is not listed in the usage text.
 func init() {
 	Commands["worker"] = worker.Run
-	// request exists only in server mode; v1 has no collaboration requests.
 	Commands["request"] = remote.RunRequest
 }
 
-// RemoteCommands are the server-mode runners. When the effective config sets
-// server.url they replace the v1 runners of the same name, so these commands
-// read and write the board only through kander-server.
+// RemoteCommands are the mandatory service entrances of the client binary.
+// Storage helpers remain available to the server and package tests only.
 var RemoteCommands = map[string]Runner{
-	"list":   remote.RunList,
-	"show":   remote.RunShow,
-	"new":    remote.RunNew,
-	"update": remote.RunUpdate,
-	"move":   remote.RunMove,
-	"pick":   remote.RunPick,
+	"init":        remote.RunInit,
+	"list":        remote.RunList,
+	"show":        remote.RunShow,
+	"new":         remote.RunNew,
+	"update":      remote.RunUpdate,
+	"move":        remote.RunMove,
+	"pick":        remote.RunPick,
+	"guard-write": remote.RunGuardWrite,
 }
 
-// serverMode reports whether the effective config selects a server. An
-// unreadable config keeps the v1 runner, which reports the config error itself.
-func serverMode() bool {
-	cfg, err := config.Load(true)
-	return err == nil && remote.Enabled(cfg)
+// RequireService prevents a registered lifecycle runner from entering its
+// storage compatibility helpers when the client has no project binding.
+func RequireService(runner Runner) Runner {
+	return func(args []string) int {
+		cfg, err := config.Load(false)
+		if err == nil && (!remote.Enabled(cfg) || cfg.Project.Name == "") {
+			err = remote.ErrNotConfigured
+		}
+		if err != nil {
+			if errors.Is(err, remote.ErrNotConfigured) {
+				fmt.Fprintln(os.Stderr, config.Text("remote.not_configured"))
+			} else {
+				fmt.Fprintf(os.Stderr, "kander: %s\n", err)
+			}
+			return 1
+		}
+		return runner(args)
+	}
 }

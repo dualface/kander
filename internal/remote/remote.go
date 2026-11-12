@@ -38,6 +38,15 @@ var ErrNotConfigured = errors.New("server.url and project.name are not configure
 // Enabled reports whether cfg selects the server mode.
 func Enabled(cfg *config.Config) bool { return cfg != nil && cfg.Server.URL != "" }
 
+// RequireBinding validates the mandatory runtime service boundary. Storage
+// compatibility callers do not use this entrance.
+func RequireBinding(cfg *config.Config) error {
+	if !Enabled(cfg) || cfg.Project.Name == "" {
+		return ErrNotConfigured
+	}
+	return nil
+}
+
 // Session is one opened project on one server.
 type Session struct {
 	ServerURL     string

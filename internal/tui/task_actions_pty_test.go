@@ -46,9 +46,13 @@ func TestTaskActionsLifecycleOnPTY(t *testing.T) {
 	if !session.waitFor("moved to trash", 8*time.Second) {
 		t.Fatalf("completion: %s", session.text())
 	}
-	snapshot, err := board.ReadSnapshot(root, filepath.Base(path))
-	if err != nil || snapshot.Entry.State != "trash" {
-		t.Fatalf("state=%s error=%v", snapshot.Entry.State, err)
+	snapshot, err := session.service.Show(t.Context(), filepath.Base(path))
+	if err != nil || snapshot.State != "trash" {
+		t.Fatalf("state=%s error=%v", snapshot.State, err)
+	}
+	original, err := board.ReadSnapshot(root, filepath.Base(path))
+	if err != nil || original.Entry.State != "backlog" {
+		t.Fatal("REST action changed the retained migration source")
 	}
 	session.send("q")
 	if err := session.waitExit(8 * time.Second); err != nil {

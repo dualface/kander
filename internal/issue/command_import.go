@@ -28,6 +28,10 @@ type issueImportOptions struct {
 // board root and the repository before it touches the network, so a usage or
 // location error never costs an API call.
 func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
+	return runImportMode(factory, args, stdout, stderr, false)
+}
+
+func runImportMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	var options issueImportOptions
 	positional := 0
 	for index := 0; index < len(args); index++ {
@@ -128,6 +132,12 @@ func runImport(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	}
 	importOptions := ImportOptions{Type: taskType, Large: options.large, Language: language, Comments: options.comments}
 	var result ImportResult
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			fmt.Fprintln(stderr, formatError(err))
+			return 1
+		}
+	}
 	if remote.Enabled(cfg) {
 		cwd, cwdErr := os.Getwd()
 		if cwdErr != nil {

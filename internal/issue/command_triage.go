@@ -25,6 +25,10 @@ type triageCommandOptions struct {
 // evidence and starts the takeover session through the shared StartTriage path,
 // so the TUI and the CLI always launch the same way.
 func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Writer) int {
+	return runTriageMode(factory, args, stdout, stderr, false)
+}
+
+func runTriageMode(factory func() IssueProvider, args []string, stdout, stderr io.Writer, required bool) int {
 	var options triageCommandOptions
 	positional := 0
 	for index := 0; index < len(args); index++ {
@@ -94,6 +98,12 @@ func runTriage(factory func() IssueProvider, args []string, stdout, stderr io.Wr
 	}
 	triageOptions := TriageOptions{CardID: options.card, Agent: options.agent, Launcher: options.launcher}
 	var outcome TriageOutcome
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			fmt.Fprintln(stderr, formatError(err))
+			return 1
+		}
+	}
 	if remote.Enabled(cfg) {
 		cwd, cwdErr := os.Getwd()
 		if cwdErr != nil {

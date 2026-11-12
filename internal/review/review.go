@@ -14,7 +14,12 @@ import (
 )
 
 // Run is the entry point of the `kander review` subcommand. args excludes the program name and the subcommand name.
-func Run(args []string) (exitCode int) {
+func Run(args []string) int { return runReview(args, false) }
+
+// RunRemote is the service-only client review entrance.
+func RunRemote(args []string) int { return runReview(args, true) }
+
+func runReview(args []string, required bool) (exitCode int) {
 	if len(args) > 0 && args[0] == windowsJobBootstrap {
 		return windowsJobBootstrapMain(args[1:])
 	}
@@ -29,7 +34,7 @@ func Run(args []string) (exitCode int) {
 		return 1
 	}
 	if dispositionCommand(args[0]) {
-		return runDispositionCommand(args)
+		return runDispositionMode(args, required)
 	}
 	options, args, err := parseArchiveOptions(args)
 	if err != nil {
@@ -69,6 +74,12 @@ func Run(args []string) (exitCode int) {
 			return 2
 		}
 		var store reviewStore
+		if required {
+			if err := remote.RequireBinding(cfg); err != nil {
+				userError(err.Error())
+				return 2
+			}
+		}
 		if remote.Enabled(cfg) {
 			session, openErr := remote.Open(context.Background(), cfg, rest[0])
 			if openErr != nil {

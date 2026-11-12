@@ -24,12 +24,13 @@ var orchestrateGroupRe = regexp.MustCompile(`^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*-gro
 // OrchestrateRequest names the plan a creating session hands to a separate
 // orchestrator session. References keep the confirmed plan order.
 type OrchestrateRequest struct {
-	Root        string
-	References  []string
-	Handover    string
-	Agent       string
-	Launcher    string
-	OperationID string
+	requireService bool
+	Root           string
+	References     []string
+	Handover       string
+	Agent          string
+	Launcher       string
+	OperationID    string
 }
 
 // OrchestrateTask is one card the orchestrator session receives.
@@ -62,6 +63,11 @@ func StartOrchestrator(request OrchestrateRequest) (result OrchestrateResult, er
 	cfg, err := loadEffective()
 	if err != nil {
 		return result, err
+	}
+	if request.requireService {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return result, err
+		}
 	}
 	var loaded board.Board
 	var service *remote.Session
@@ -348,7 +354,12 @@ func orchestratorWindowName(firstTaskID string) string {
 }
 
 // RunOrchestrate implements kander orchestrate.
-func RunOrchestrate(args []string) int {
+func RunOrchestrate(args []string) int { return runServiceOrchestrate(args, false) }
+
+// RunOrchestrateRemote is the mandatory REST entrance used by the client binary.
+func RunOrchestrateRemote(args []string) int { return runServiceOrchestrate(args, true) }
+
+func runServiceOrchestrate(args []string, required bool) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			fmt.Fprintln(os.Stdout, config.CommandUsage("orchestrate"))
@@ -409,6 +420,11 @@ func RunOrchestrate(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return fail(err)
+		}
+	}
 	var root string
 	if remote.Enabled(cfg) {
 		cwd, err := os.Getwd()
@@ -423,7 +439,7 @@ func RunOrchestrate(args []string) int {
 		}
 	}
 	result, err := StartOrchestrator(OrchestrateRequest{
-		Root: root, OperationID: operationID, References: references, Handover: text, Agent: agent, Launcher: launcher,
+		Root: root, requireService: required, OperationID: operationID, References: references, Handover: text, Agent: agent, Launcher: launcher,
 	})
 	for _, warning := range result.Warnings {
 		fmt.Fprint(os.Stderr, warning)

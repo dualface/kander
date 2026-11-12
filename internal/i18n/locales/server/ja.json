@@ -21,7 +21,7 @@
   "remote.error_not_ready": "サーバーの準備ができていません",
   "remote.error_internal": "サーバーエラー",
   "remote.unreachable": "kander-server に接続できません: {{.V0}}",
-  "remote.not_configured": "server.url と project.name を設定する必要があります",
+  "remote.not_configured": "kander init --server <URL> --project <name> で server.url と project.name を設定してください。ローカル看板モードはありません。",
   "remote.claim_line": "クレーム: {{.V1}} の {{.V0}}、世代 {{.V2}}、{{.V3}}、リース期限 {{.V4}}",
   "remote.dispatch_unsupported": "サーバーモードではディスパッチ関連のオプションはまだ使えません",
   "remote.claimed": "{{.V0}} を世代 {{.V1}}、実行 {{.V2}} でクレームしました",
@@ -90,5 +90,8 @@
   "remote.integration_fast_forward_required": "確認した対象はソースへ fast-forward できません",
   "remote.integration_operation_changed": "この統合操作 ID は別の資料に結び付いています。元の記録を保持してください",
   "remote.integration_recovery_required": "統合結果は未確定です。続行前に非公開記録と正確なリモート状態を確認してください",
-  "remote.integration_process_required": "統合には観測可能なローカルコマンドプロセスが必要です"
+  "remote.integration_process_required": "統合には観測可能なローカルコマンドプロセスが必要です",
+  "remote.init_maintenance_server": "移行と保守は kander-server で明示的に実行してください。クライアントの init はサービスプロジェクトだけを設定します。",
+  "remote.project_bound": "プロジェクト {{.V0}}（{{.V1}}）を {{.V2}} に設定しました。",
+  "remote.guard_service_documents": "タスク文書はサービス経由の kander update で公開してください。"
 }

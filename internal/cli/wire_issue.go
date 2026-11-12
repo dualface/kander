@@ -13,4 +13,10 @@ func IssueProvider() issue.IssueProvider {
 
 func init() {
 	Commands["issue"] = issue.Command(IssueProvider)
+	RemoteCommands["issue"] = func(args []string) int {
+		if len(args) > 0 && (args[0] == "import" || args[0] == "triage" || args[0] == "result") {
+			return RequireService(issue.ServiceCommand(IssueProvider))(args)
+		}
+		return Commands["issue"](args)
+	}
 }

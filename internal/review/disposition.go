@@ -22,7 +22,8 @@ func dispositionCommand(name string) bool {
 	}
 	return false
 }
-func runDispositionCommand(args []string) int {
+func runDispositionCommand(args []string) int { return runDispositionMode(args, false) }
+func runDispositionMode(args []string, required bool) int {
 	if len(args) >= 2 && args[1] == "--schema" {
 		if len(args) != 2 || !schemaCommand(args[0]) {
 			return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
@@ -32,7 +33,16 @@ func runDispositionCommand(args []string) int {
 	if len(args) < 3 {
 		return dispositionFailure(newGateMsg(2, config.CommandUsage("review")))
 	}
-	if cfg, err := config.Load(true); err == nil && remote.Enabled(cfg) {
+	cfg, loadErr := config.Load(true)
+	if loadErr != nil {
+		return dispositionFailure(loadErr)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return dispositionFailure(err)
+		}
+	}
+	if remote.Enabled(cfg) {
 		return runRemoteDisposition(cfg, args)
 	}
 	action, cwd, input := args[0], args[1], args[2]

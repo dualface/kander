@@ -404,7 +404,12 @@ func writeSubscriptionDiagnostic(w io.Writer, message string) error {
 }
 
 // RunSubscribe implements kander subscribe.
-func RunSubscribe(args []string) int {
+func RunSubscribe(args []string) int { return runServiceSubscribe(args, false) }
+
+// RunSubscribeRemote is the client service entrance.
+func RunSubscribeRemote(args []string) int { return runServiceSubscribe(args, true) }
+
+func runServiceSubscribe(args []string, required bool) int {
 	opts, parseErr := parseSubscribeArgs(args)
 	if parseErr == "usage" {
 		if err := usageSubscribe(os.Stderr); err != nil {
@@ -437,6 +442,12 @@ func RunSubscribe(args []string) int {
 	if err != nil {
 		_ = writeSubscriptionDiagnostic(os.Stderr, "kander: "+err.Error())
 		return 1
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 	}
 	if remote.Enabled(cfg) {
 		cwd, err := os.Getwd()

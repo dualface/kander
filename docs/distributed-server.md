@@ -7,7 +7,7 @@ Kander v2 splits the tool into a resident board server, `kander-server`, and the
 | Side | Owns | Never owns |
 | --- | --- | --- |
 | `kander-server` | Registered projects, card documents and attachments, claims and leases, handoff records, collaboration requests, idempotency receipts, the event log, published review evidence | Code, Git repositories, worktrees, agent sessions, terminals |
-| `kander` client and worker | Agent and terminal control, repository location, worktrees, sessions, temporary logs, unpublished output, the private pending-write queue (**planned**) | The board; a client never writes a local `kanban/` in normal operation |
+| `kander` client and worker | Agent and terminal control, repository location, worktrees, sessions, temporary logs, unpublished output, the private action and request journals | The board; a client never writes a local `kanban/` in normal operation |
 
 The first version trusts its network: there is no login and no role model, one server instance serves one data directory, and storage reuses the board package's file transactions instead of a database. Claim tokens and generations isolate concurrent executions; they do not defend against a malicious client on the network. The server binds `127.0.0.1:7878` by default; serving a LAN is an explicit `--listen` choice.
 
@@ -142,7 +142,9 @@ Distributed `orchestrate` reads cards and expands groups through a service snaps
 
 ## Client and worker
 
-The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. When `server.url` is set, `list`, `show`, `new`, `update`, `move`, `pick`, `start`, `dispatch`, `notify`, `resume` (including `--adopt` and `--release`), `dismiss`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. Issue result reconciliation also uses the service; the remaining evidence gaps are tracked separately. Board-free orchestrators also keep private launch intents. A completed logical retry returns its recorded result, and an uncertain retry reports the retained receipt without creating another terminal. `orchestrate --operation-id <stable-id>` distinguishes an intentionally new confirmed session; a new ID does not settle any prior uncertain effect. The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
+The client reads `server.url` and `project.name` from the scope config or the project overlay `.kander-config.json`. The client always requires this binding. Use `kander init --server http://127.0.0.1:7878 --project <name>` in each checkout after starting the server. `init` validates protocol and canonical origin before saving only those fields to the project overlay. An explicit project-path argument targets that checkout. Missing configuration or an unreachable service fails without a local board fallback.
+
+`list`, `show`, `new`, `update`, `move`, `pick`, `start`, `dispatch`, `notify`, `resume` (including `--adopt` and `--release`), `dismiss`, issue import/triage, the TUI board and start actions, `check`, `subscribe`, and the review gate commands above use the server project. Issue result reconciliation also uses the service; the remaining provider effects keep durable intents and central CAS receipts. Board-free orchestrators also keep private launch intents. A completed logical retry returns its recorded result, and an uncertain retry reports the retained receipt without creating another terminal. `orchestrate --operation-id <stable-id>` distinguishes an intentionally new confirmed session; a new ID does not settle any prior uncertain effect. The client directory (`~/.local/share/kander/client/`, or `KANDER_CLIENT_HOME`) is private to the user and never part of Git:
 
 - `client-id`: the persistent host identity, created on first use.
 - `executions/<project>/<task>/<execution>.json`: the credential of each claim this host made (server URL, generation, token, lease timings, the managed agent PID when known), plus `latest`. Per-execution locks merge renewals and launch facts; release tombstones prevent a late writer from recreating a removed credential or erasing a successor pointer.
@@ -173,7 +175,7 @@ Event cursors resume within a running server's bounded window. A service restart
 
 ## Client views and issue import
 
-`internal/remote.ProjectService` is the typed REST boundary shared by client commands and views. It has no local board implementation. The TUI binds its board, detail, action and start callbacks to that service when `server.url` is configured. A captured task-action revision fences the move at the server; a stale dialog cannot overwrite a newer task.
+`internal/remote.ProjectService` is the typed REST boundary shared by client commands and views. It has no local board implementation. The TUI binds its board, detail, action and start callbacks to that service on every normal launch. A captured task-action revision fences the move at the server; a stale dialog cannot overwrite a newer task.
 
 The TUI writes only a private list cache under the client home, keyed by the server URL and project ID. A transport failure may display that cache with a persistent stale label and its observation time. It never turns the cache into a writable board or queues an offline move. Detail reads and mutations still require the server. The executing worker is independent of the view lifetime.
 

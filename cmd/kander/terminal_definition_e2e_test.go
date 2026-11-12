@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/cli"
 	"github.com/dualface/kander/internal/config"
@@ -34,7 +35,13 @@ case "$1" in
     printf 'w%s\tp%s\n' "$count" "$count" ;;
   run)
     dir=$(pane_dir "$2"); [ -d "$dir" ] || { printf 'no such pane: %s\n' "$2" >&2; exit 1; }
-    command=${3#exec }; command=${command%% *}; command=${command#\'}; command=${command%\'}
+    command=${3#exec }
+    case "$command" in
+      env\ *)
+        command=${command#env }
+        while :; do first=${command%% *}; case "$first" in *=*) command=${command#* } ;; *) break ;; esac; done ;;
+    esac
+    command=${command%% *}; command=${command#\'}; command=${command%\'}
     printf '%s' "${command##*/}" > "$dir/command"; printf '%s' "$3" > "$dir/launched" ;;
   meta-set) printf '%s' "$3" > "$(pane_dir "$2")/marker" ;;
   meta-get)
@@ -175,9 +182,9 @@ func (r commandResult) require(t *testing.T, what string) commandResult {
 	return r
 }
 
-func cardField(t *testing.T, root, id, field string) string {
+func cardField(t *testing.T, id, field string) string {
 	t.Helper()
-	snapshot, err := board.ReadSnapshot(root, id)
+	snapshot, err := currentCommandSession(t).Project.Show(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,6 +248,7 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	cfg.KanbanAgent = "claude"
 	cfg.KanbanAgents = map[string]string{"large": "claude", "small": "claude"}
 	cfg.Launcher = "fakemux"
+	service := commandService(t, cfg)
 	if _, err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -263,37 +271,48 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	id := readyCard(t, root, "definition-lifecycle")
+	id := readyCard(t, "definition-lifecycle")
 	runKander(t, "start", "--launcher", "fakemux", id).require(t, "start")
-	window := cardField(t, root, id, board.FieldWindow)
+	window := cardField(t, id, board.FieldWindow)
 	if window != "fakemux:w1:p1" {
 		t.Fatalf("WINDOW=%q", window)
 	}
 	if backend, address, ok := terminal.ParseWindow(window); !ok || backend.Name() != "fakemux" || address.Pane != "p1" {
 		t.Fatalf("WINDOW is not parseable: %q", window)
 	}
-	session := strings.TrimPrefix(cardField(t, root, id, board.FieldSession), "claude ")
+	session := strings.TrimPrefix(cardField(t, id, board.FieldSession), "claude ")
 	if marker, _ := os.ReadFile(filepath.Join(state, "panes", "p1", "marker")); string(marker) != session {
 		t.Fatalf("pane marker=%q session=%q", marker, session)
 	}
 
+	waitCommandFact(t, func() bool {
+		task, err := service.Project.Show(t.Context(), id)
+		return err == nil && task.Claim.Observation != nil && task.Claim.Observation.Status == "alive"
+	})
 	check := runKander(t, "check", id)
-	if !strings.Contains(check.stdout, "status=alive\tchannel=fakemux") {
+	if !strings.Contains(check.stdout, "status=alive") {
 		t.Fatalf("check is not alive:\n%s%s", check.stdout, check.stderr)
 	}
 
-	notify := runKander(t, "notify", "--timeout", "61", "--message", "status please", id).require(t, "notify")
-	if output, _ := os.ReadFile(filepath.Join(state, "panes", "p1", "output")); !strings.Contains(notify.stdout, "acknowledgement=confirmed") || !strings.Contains(string(output), "kander-notify:") {
-		t.Fatalf("notify did not deliver directly: %q\n%s", output, notify.stdout)
+	notify := runKander(t, "notify", "--message", "status please", id).require(t, "notify proposal")
+	if !strings.Contains(notify.stdout, `"status":"open"`) {
+		t.Fatalf("notify did not return an open proposal: %s", notify.stdout)
 	}
-	// The binary differs from the definition name: both the progress line and
-	// the result line name the channel after the definition.
-	if !strings.Contains(notify.stdout, "waiting for acknowledgement: channel=fakemux-direct\n") || !strings.Contains(notify.stdout, "\tchannel=fakemux-direct\t") {
-		t.Fatalf("notify channel is not named after the definition:\n%s", notify.stdout)
+	waitCommandFact(t, func() bool {
+		output, _ := os.ReadFile(filepath.Join(state, "panes", "p1", "output"))
+		return strings.Contains(string(output), "kander request show "+id)
+	})
+	requests, err := service.Project.Requests(t.Context(), id)
+	if err != nil || len(requests) != 1 || requests[0].Status != api.RequestAccepted {
+		t.Fatalf("holder delivery receipt: %+v %v", requests, err)
+	}
+	// A fresh executor requires a confirmed local stop and an explicit decision.
+	if err := os.RemoveAll(filepath.Join(state, "panes", "p1")); err != nil {
+		t.Fatal(err)
 	}
 
-	resume := runKander(t, "resume", "--agent", "claude", "--timeout", "61", "--message", "take over", id).require(t, "resume takeover")
-	if got := cardField(t, root, id, board.FieldWindow); got != "fakemux:w2:p2" {
+	resume := runKander(t, "resume", "--agent", "claude", "--timeout", "61", "--message", "take over", "--decision", "user explicitly restarts the stopped executor", id).require(t, "resume takeover")
+	if got := cardField(t, id, board.FieldWindow); got != "fakemux:w2:p2" {
 		t.Fatalf("takeover WINDOW=%q\n%s", got, resume.stdout)
 	}
 	if _, err := os.Stat(filepath.Join(state, "panes", "p1")); !os.IsNotExist(err) || !strings.Contains(resume.stdout, "window=w2") {
@@ -311,12 +330,16 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(state, "panes", "p2")); err != nil {
 		t.Fatal(err)
 	}
-	if check := runKander(t, "check", id); !strings.Contains(check.stdout, "status=stopped\tchannel=fakemux") {
+	waitCommandFact(t, func() bool {
+		task, err := service.Project.Show(t.Context(), id)
+		return err == nil && task.Claim.Observation != nil && task.Claim.Observation.Status == "stopped"
+	})
+	if check := runKander(t, "check", id); !strings.Contains(check.stdout, "status=stopped") {
 		t.Fatalf("check after pane loss:\n%s%s", check.stdout, check.stderr)
 	}
 
 	// Dismiss exits the agent and closes a fresh container of an archived card.
-	dismissID := readyCard(t, root, "definition-dismiss")
+	dismissID := readyCard(t, "definition-dismiss")
 	runKander(t, "start", "--launcher", "fakemux", dismissID).require(t, "start for dismiss")
 	runKander(t, "move", dismissID, "archived", "--result", "cancelled", "--reason", "fixture", "--decision", "test").require(t, "archive")
 	runKander(t, "dismiss", "--timeout", "61", dismissID).require(t, "dismiss")
@@ -344,27 +367,19 @@ func TestTerminalDefinitionLifecycle(t *testing.T) {
 	}
 }
 
-func readyCard(t *testing.T, root, slug string) string {
+func readyCard(t *testing.T, slug string) string {
 	t.Helper()
-	created, err := board.NewTask(root, "chore", slug, "definition "+slug, "en", false)
+	service := currentCommandSession(t)
+	task, err := service.Project.NewTask(t.Context(), "", api.NewTask{Type: "chore", Slug: slug, Title: "Definition " + slug, Language: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := filepath.Join(created, "spec.md")
-	data, err := os.ReadFile(spec)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, replacement := range []string{"goal", "outcome", "criterion", "none"} {
-		text = strings.Replace(text, board.Placeholder, replacement, 1)
-	}
+	text := strings.ReplaceAll(task.Text, board.Placeholder, "filled")
 	discussion := "## " + board.SectionDiscussion + "\n"
 	text = strings.Replace(text, discussion, discussion+"\n"+board.MarkerSelfReview+": pass\n"+board.MarkerCardReview+": pass\n", 1)
-	if err := os.WriteFile(spec, []byte(text), 0o644); err != nil {
+	if _, err := service.Project.PutDocument(t.Context(), "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil); err != nil {
 		t.Fatal(err)
 	}
-	id := filepath.Base(created)
-	runKander(t, "move", id, "todo").require(t, "move todo")
-	return id
+	runKander(t, "move", task.TaskID, "todo").require(t, "move todo")
+	return task.TaskID
 }

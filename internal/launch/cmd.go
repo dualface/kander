@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -19,9 +20,13 @@ func init() {
 	cli.Commands["start"] = RunStart
 	cli.RemoteCommands["start"] = RunStartRemote
 	cli.Commands["resume"] = RunResume
+	cli.RemoteCommands["resume"] = cli.RequireService(RunResumeRemote)
 	cli.Commands["dispatch"] = RunDispatch
+	cli.RemoteCommands["dispatch"] = cli.RequireService(RunDispatchRemote)
 	cli.Commands["coordinator"] = RunCoordinator
+	cli.RemoteCommands["coordinator"] = cli.RequireService(RunCoordinatorRemote)
 	cli.Commands["orchestrate"] = RunOrchestrate
+	cli.RemoteCommands["orchestrate"] = cli.RequireService(RunOrchestrateRemote)
 	// The issue command front end never imports this package; the takeover
 	// starter is wired here so every binary that can start agents also supports
 	// `kander issue triage` and the TUI's `s` confirmation.
@@ -138,10 +143,34 @@ func RunStartRemote(args []string) int {
 		fmt.Fprintln(os.Stderr, message)
 		return 2
 	}
-	if len(rest) != 1 || strings.HasPrefix(rest[0], "-") {
+	if len(rest) > 1 || len(rest) == 1 && strings.HasPrefix(rest[0], "-") {
 		return usageFail("start", "launch.task_id_is_required")
 	}
-	result, err := StartRemote(agent, launcher, rest[0])
+	var taskID string
+	if len(rest) == 0 {
+		cfg, err := config.Load(false)
+		if err != nil {
+			return fail(err)
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fail(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), remoteCall)
+		defer cancel()
+		session, err := remote.Open(ctx, cfg, cwd)
+		if err != nil {
+			return fail(err)
+		}
+		selected, err := remote.SelectTask(ctx, session, "todo", os.Stdin, os.Stdout)
+		if err != nil {
+			return fail(err)
+		}
+		taskID = selected.TaskID
+	} else {
+		taskID = rest[0]
+	}
+	result, err := StartRemote(agent, launcher, taskID)
 	for _, warning := range result.Warnings {
 		fmt.Fprint(os.Stderr, warning)
 	}
@@ -159,7 +188,12 @@ func RunStartRemote(args []string) int {
 }
 
 // RunResume implements kander resume.
-func RunResume(args []string) int {
+func RunResume(args []string) int { return runServiceResume(args, false) }
+
+// RunResumeRemote is the mandatory REST entrance used by the client binary.
+func RunResumeRemote(args []string) int { return runServiceResume(args, true) }
+
+func runServiceResume(args []string, required bool) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			usage(os.Stdout, "resume")
@@ -277,6 +311,11 @@ func RunResume(args []string) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return fail(err)
+		}
 	}
 	if release {
 		if !remote.Enabled(cfg) {

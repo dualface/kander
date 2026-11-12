@@ -17,6 +17,7 @@ import (
 
 func init() {
 	cli.Commands["dismiss"] = RunDismiss
+	cli.RemoteCommands["dismiss"] = cli.RequireService(RunDismissRemote)
 	launch.CleanupTakeover = Cleanup
 }
 
@@ -45,7 +46,12 @@ func takeValue(args []string, i int) (string, int, bool) {
 }
 
 // RunDismiss implements kander dismiss.
-func RunDismiss(args []string) int {
+func RunDismiss(args []string) int { return runServiceDismiss(args, false) }
+
+// RunDismissRemote is the mandatory REST entrance used by the client binary.
+func RunDismissRemote(args []string) int { return runServiceDismiss(args, true) }
+
+func runServiceDismiss(args []string, required bool) int {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			usage(os.Stdout)
@@ -86,6 +92,11 @@ func RunDismiss(args []string) int {
 	cfg, err := config.Load(false)
 	if err != nil {
 		return fail(err)
+	}
+	if required {
+		if err := remote.RequireBinding(cfg); err != nil {
+			return fail(err)
+		}
 	}
 	if remote.Enabled(cfg) {
 		if err := commandRemoteDismiss(cfg, positional[0], timeout); err != nil {

@@ -5,6 +5,7 @@ import (
 	"github.com/dualface/kander/internal/install/installtest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dualface/kander/internal/board"
@@ -81,6 +82,7 @@ func TestPostInstallOpensInterfaceWithoutBoard(t *testing.T) {
 	}
 	t.Cleanup(func() { runBoardTUI = origRun })
 
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
@@ -135,6 +137,7 @@ func TestPostInstallFirstLaunchCreatesConfigInInstallLanguage(t *testing.T) {
 	runBoardTUI = func(*App) error { return nil }
 	t.Cleanup(func() { runBoardTUI = origRun })
 
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
@@ -198,6 +201,7 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	}
 	t.Cleanup(func() { runBoardTUI = origRun })
 
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
@@ -219,10 +223,10 @@ func TestMissingConfigOpensInterfaceWithoutWizard(t *testing.T) {
 	}
 }
 
-// TestExistingConfigWithoutBoardShowsWelcome covers a normal launch with a
+// TestExistingConfigWithEmptyServiceShowsWelcome covers a normal launch with a
 // scope config already present but no kanban/ in the CWD: the TUI must still
 // start and show the empty-board welcome instead of exiting.
-func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
+func TestExistingConfigWithEmptyServiceShowsWelcome(t *testing.T) {
 	previousCheck := checkStartupCopy
 	checkStartupCopy = func() (bool, int) { return false, 0 }
 	t.Cleanup(func() { checkStartupCopy = previousCheck })
@@ -269,6 +273,7 @@ func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
 	}
 	t.Cleanup(func() { runBoardTUI = origRun })
 
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
@@ -281,12 +286,12 @@ func TestExistingConfigWithoutBoardShowsWelcome(t *testing.T) {
 	if !captured.shouldShowWelcome() {
 		t.Fatal("missing board with an existing config should show welcome")
 	}
-	if !captured.missingBoard || captured.StartChat != nil {
-		t.Fatal("a missing board must stay unbound until init")
+	if captured.missingBoard || captured.StartChat == nil || !strings.HasPrefix(captured.boardRoot, "kander-server:") {
+		t.Fatal("an empty service project must remain bound without a local board")
 	}
 	captured.HandleKey("c")
-	if captured.BoardInit == nil || captured.Chat != nil {
-		t.Fatal("c must offer to initialize kanban/ instead of opening chat")
+	if captured.BoardInit != nil || captured.Chat == nil {
+		t.Fatal("c must open chat without offering local board initialization")
 	}
 	if _, err := captured.GetTask("any"); err == nil {
 		t.Fatal("detail lookup must refuse without a board")
@@ -330,8 +335,8 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 
 	cwd := t.TempDir()
 	t.Chdir(cwd)
-	if _, _, _, err := board.InitBoard(""); err != nil {
-		t.Fatal(err)
+	if _, err := os.Lstat(filepath.Join(cwd, "kanban")); !os.IsNotExist(err) {
+		t.Fatal("fixture unexpectedly has a local board")
 	}
 
 	origTTY := isInteractiveTerminal
@@ -346,6 +351,7 @@ func TestExistingConfigDoesNotOpenOptions(t *testing.T) {
 	}
 	t.Cleanup(func() { runBoardTUI = origRun })
 
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
@@ -422,6 +428,7 @@ func TestStartupVersionGateStaleStampRunsDoctor(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
@@ -443,10 +450,28 @@ func TestStartupVersionGateCurrentStampSkipsDoctor(t *testing.T) {
 	if err := install.RecordStartupVersion(paths); err != nil {
 		t.Fatal(err)
 	}
+	bindStartupService(t)
 	if code := Run(nil); code != 0 {
 		t.Fatalf("Run exit=%d", code)
 	}
 	if *doctorRan || *ackRan {
 		t.Fatalf("current stamp must skip doctor and ack: doctor=%v ack=%v", *doctorRan, *ackRan)
+	}
+}
+
+func TestUnconfiguredTUIDoesNotOpenLocalBoard(t *testing.T) {
+	startupGateTestEnv(t)
+	stampStartupVersion(t)
+	root := filepath.Join(t.TempDir(), "forbidden-board")
+	t.Setenv(board.EnvBoardDir, root)
+	called := false
+	old := runBoardTUI
+	runBoardTUI = func(*App) error { called = true; return nil }
+	t.Cleanup(func() { runBoardTUI = old })
+	if code := Run(nil); code == 0 || called {
+		t.Fatal("unconfigured TUI opened a board")
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatal("unconfigured TUI used KANBAN_DIR")
 	}
 }

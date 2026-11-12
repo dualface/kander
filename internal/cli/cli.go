@@ -262,7 +262,7 @@ func Run(arguments []string) int {
 		fmt.Fprintln(os.Stdout, config.CommandUsage(name))
 		return 0
 	}
-	if remoteRunner, ok := RemoteCommands[name]; ok && serverMode() {
+	if remoteRunner, ok := RemoteCommands[name]; ok {
 		runner = remoteRunner
 	}
 	return runner(parsed.rest)

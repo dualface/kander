@@ -23,8 +23,17 @@ import (
 // commands. They keep the v1 arguments; output names the server project
 // instead of a local path.
 
-var stdout io.Writer = os.Stdout
-var stderr io.Writer = os.Stderr
+type commandOutput struct{ diagnostic bool }
+
+func (out commandOutput) Write(data []byte) (int, error) {
+	if out.diagnostic {
+		return os.Stderr.Write(data)
+	}
+	return os.Stdout.Write(data)
+}
+
+var stdout io.Writer = commandOutput{}
+var stderr io.Writer = commandOutput{diagnostic: true}
 
 func fail(err error) int {
 	fmt.Fprintf(stderr, "kander: %s\n", describe(err))
@@ -406,20 +415,32 @@ func claim(ctx context.Context, s *Session, task, owner, decision string) int {
 
 // RunPick implements kander pick in server mode.
 func RunPick(args []string) int {
-	if len(args) != 1 || strings.HasPrefix(args[0], "-") {
+	if len(args) > 1 || len(args) == 1 && strings.HasPrefix(args[0], "-") {
 		return printUsage("pick")
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	s, _, err := open(ctx)
+	session, _, err := open(ctx)
 	if err != nil {
 		return fail(err)
 	}
-	t, err := s.Project.Move(ctx, client.NewKey(), args[0], api.Move{State: "todo"}, nil)
+	var task api.TaskSummary
+	if len(args) == 0 {
+		task, err = SelectTask(ctx, session, "backlog", os.Stdin, stdout)
+	} else {
+		var current api.Task
+		current, err = session.Project.Show(ctx, args[0])
+		task = api.TaskSummary{TaskID: current.TaskID, Revision: current.Revision, State: current.State}
+	}
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, location(s, t.TaskID))
+	revision := task.Revision
+	moved, err := session.MoveTask(ctx, task.TaskID, api.Move{State: "todo", ExpectedRevision: &revision})
+	if err != nil {
+		return fail(err)
+	}
+	fmt.Fprintln(stdout, location(session, moved.TaskID))
 	return 0
 }
 

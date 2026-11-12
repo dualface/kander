@@ -34,3 +34,17 @@ kander init [--maintenance] [project-path]
 
 - When `working/` or `review/` cards exist and migration is needed, `init` refuses by default and lists the affected IDs; only `--maintenance` proceeds.
 - More than one path argument or an unknown option is a usage error.
+
+## Distributed client
+
+Normal client execution always uses `/api/v1`. `init` registers or reads a service project and never creates local board state. An existing scope configuration and an explicit service binding are required. `KANBAN_DIR` does not select a client board.
+
+## Additional Syntax
+
+```text
+kander init [--server <URL>] [--project <name>] [project-path]
+```
+
+The optional URL and name are validated with the normal configuration schema. The client checks protocol compatibility, registers the project with its canonical Git origin and saves only the requested binding fields in the project's sparse `.kander-config.json`. A concurrent overlay edit refuses the save. Repeating the binding returns the same project. Different checkout paths do not affect project identity. A name already bound to another origin is refused.
+
+Without these flags, `init` uses the existing binding at the selected project path. `--maintenance` does not open a local board: run explicit import or service maintenance through `kander-server`. Unconfigured or unreachable service commands fail; they never fall back to local storage.
