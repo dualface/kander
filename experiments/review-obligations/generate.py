@@ -124,9 +124,8 @@ def go(spec):
               "if members < 1 || members > 2 { panic(\"experiment supports one or two members\") }",
               "state := make(State, members)", "for i := range members { state[i] = Member{"]
     lines += [f"{go_name(k)}: {v}," for k, v in fields.items()]
-    lines += ["} }; return state", "}", "", "var Events = []string{"]
-    lines += [json.dumps(e) + "," for e in spec["actions"]]
-    lines += ["}", "", "// Step leaves its input untouched, including on refusal. Assignments read the pre-state.",
+    lines += ["} }; return state", "}", "",
+              "// Step leaves its input untouched, including on refusal. Assignments read the pre-state.",
               "func Step(state State, member int, event string, b Bounds) (State, bool) {",
               "if len(state) < 1 || len(state) > 2 || member < 0 || member >= len(state) || b.MaxCycle < 1 || b.MaxCycle > 3 || b.MaxBatch < 1 || b.MaxBatch > 3 || b.Mutation < 0 || b.Mutation > 3 { return state, false }",
               "s := state[member]", "n := s", "switch event {"]

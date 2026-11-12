@@ -61,21 +61,6 @@ func Initial(members int) State {
 	return state
 }
 
-var Events = []string{
-	"planNA",
-	"appendNA",
-	"planRequired",
-	"appendRequired",
-	"reset",
-	"rebind",
-	"drop",
-	"dropReleased",
-	"close",
-	"releaseDrop",
-	"releaseRecovery",
-	"done",
-}
-
 // Step leaves its input untouched, including on refusal. Assignments read the pre-state.
 func Step(state State, member int, event string, b Bounds) (State, bool) {
 	if len(state) < 1 || len(state) > 2 || member < 0 || member >= len(state) || b.MaxCycle < 1 || b.MaxCycle > 3 || b.MaxBatch < 1 || b.MaxBatch > 3 || b.Mutation < 0 || b.Mutation > 3 {
