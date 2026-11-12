@@ -31,10 +31,20 @@ type GroupReconcile struct {
 	Request board.CoordinatorReconcile `json:"request"`
 	Checks  []CoordinatorGitCheck      `json:"checks"`
 }
+
+// RecoveryLease explicitly fences a lost member without launching an agent.
+// Its audit generation is released in the same recovery transaction.
+type RecoveryLease struct {
+	ExecutionID        string `json:"execution_id"`
+	ExpectedGeneration uint64 `json:"expected_generation"`
+}
+
 type GroupRecover struct {
-	Request          board.CoordinatorRecover `json:"request"`
-	ObservedRevision uint64                   `json:"observed_revision"`
-	Observation      AgentObservation         `json:"observation"`
+	Lost              *RecoveryLease           `json:"lost,omitempty"`
+	ObservationTicket string                   `json:"observation_ticket,omitempty"`
+	Request           board.CoordinatorRecover `json:"request"`
+	ObservedRevision  uint64                   `json:"observed_revision"`
+	Observation       AgentObservation         `json:"observation"`
 }
 
 type GroupRelease struct {

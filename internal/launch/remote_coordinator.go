@@ -12,7 +12,6 @@ import (
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
-	"github.com/dualface/kander/internal/liveness"
 	"github.com/dualface/kander/internal/remote"
 )
 
@@ -101,30 +100,7 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 		if err := board.DecodeReviewJSON(data, &request); err != nil {
 			return fail(err)
 		}
-		task, err := session.Project.Show(ctx, request.Member)
-		if err != nil {
-			return fail(err)
-		}
-		input := api.GroupRecover{Request: request, ObservedRevision: task.Revision, Observation: api.AgentObservation{Status: "stopped", Reason: "finished member recovery"}}
-		if task.State == "working" || task.State == "review" {
-			credential, found, err := session.Credential(task.TaskID)
-			if err != nil {
-				return fail(err)
-			}
-			if !found || credential.Lost {
-				return fail(&api.Error{Code: api.CodeHeldByOther, Message: config.Text("remote.coordinator_holder_recovery_required")})
-			}
-			reports := liveness.ObserveAgentStatus(ctx, []liveness.AgentStatusInput{{TaskID: task.TaskID, Window: credential.Window, Session: credential.Session}}, liveness.BatchOptions{})
-			if reports[0].Status != liveness.Stopped {
-				return fail(errors.New(config.Text("remote.coordinator_stopped_required")))
-			}
-			input.Observation.Reason = reports[0].Detail
-		}
-		proof, err := session.CoordinatorAuthority(request.GroupID, []string{task.TaskID})
-		if err != nil {
-			return fail(err)
-		}
-		checkpoint, err = session.Project.CoordinatorAction(ctx, client.NewKey(), request.GroupID, "recover", input, proof)
+		checkpoint, err = recoverRemoteCoordinatorMember(ctx, session, request)
 		if err != nil {
 			return fail(err)
 		}

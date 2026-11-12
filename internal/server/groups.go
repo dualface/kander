@@ -123,12 +123,31 @@ func (s *Server) groupRoutes(mux *http.ServeMux) {
 		if err := decode(r, &input); err != nil {
 			return outcome{err: err}
 		}
-		if input.Request.GroupID != r.PathValue("group") || input.Observation.Status != "stopped" {
-			return outcome{err: apiError(api.CodeEvidenceIncomplete, "recovery needs a confirmed stopped execution")}
+		if input.Request.GroupID != r.PathValue("group") {
+			return outcome{err: apiError(api.CodeInvalidRequest, "recovery group differs from its route")}
 		}
 		h := holderOf(r)
+		if input.Lost != nil {
+			return p.recoverLostMember(r.Context(), r.Header.Get(api.HeaderIdempotencyKey), input, h)
+		}
+		if input.Observation.Status != "stopped" {
+			return outcome{err: apiError(api.CodeEvidenceIncomplete, "owned recovery needs a confirmed stopped execution")}
+		}
 		return p.groupWrite(r.Header.Get(api.HeaderIdempotencyKey), "group-recover:"+input.Request.GroupID, input.Request.GroupID, input, h, func(extension board.TransactionExtension) (board.CoordinatorCheckpoint, error) {
 			readiness := board.TransactionExtension{Before: func(tx *board.Transaction) error {
+				snapshot, err := tx.Snapshot(input.Request.Member)
+				if err != nil {
+					return err
+				}
+				if claimedState(snapshot.Entry.State) {
+					claim, err := p.requireHolder(snapshot.Entry.TaskID, h)
+					if err != nil {
+						return err
+					}
+					if !p.validObservationTicket(snapshot.Entry.TaskID, input.ObservedRevision, claim.Generation, input.ObservationTicket) {
+						return apiError(api.CodeEvidenceIncomplete, "owned recovery needs a fresh stopped observation ticket")
+					}
+				}
 				view, err := tx.CurrentExecutionInTransaction(input.Request.Member)
 				if err != nil {
 					return err

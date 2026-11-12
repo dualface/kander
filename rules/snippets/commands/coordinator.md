@@ -73,7 +73,11 @@ kander coordinator recover <absolute-request.json>
 
 The service owns the checkpoint. Its public authority token is a session label and does not authorize a distributed write. `claim` receives a separate private lease bound to this coordinator execution. A live lease refuses a competing claim. After lease loss, an explicit claim with the observed checkpoint revision and epoch uses its basis as the handoff decision and obtains a new execution generation. An old process cannot silently reuse that generation.
 
-The background worker renews the group lease independently of the UI and reports confirmed coordinator exit. Reconcile sends locally checked Git facts; the service repeats the producer pass and refuses to advance a member without the matching verdict. Recovery also requires the affected card's holder for any claimed-card mutation. Group authority never substitutes for task ownership.
+The background worker renews the group lease independently of the UI and reports confirmed coordinator exit. Reconcile sends locally checked Git facts; the service repeats the producer pass and refuses to advance a member without the matching verdict. Recovery of a live member requires its private task proof and a fresh service-clock ticket around a confirmed stop on the owning host. An unknown, running or foreign executor refuses this route.
+
+After a member lease is lost or released, an explicit user decision may instead reset the blocked member under the current private coordinator lease. The service rechecks the exact task revision and old generation in the transaction. It records a new released audit generation, preserves the predecessor scene and an honest unknown observation, and supersedes old-generation requests. This recovery does not assign or start an executor. Continue with a fresh `resume --agent <agent> --decision <reference>` and satisfy the existing review-cycle requirements. Pending starts and dispatch bindings still block reset.
+
+The client freezes recovery input, private proof and operation key before transport. A retry reconciles that exact request, including after a lost response or an expired coordinator lease. A completed receipt replays read-only; it cannot authorize a new recovery.
 
 To release a distributed coordinator explicitly, use `kander coordinator release <absolute-release.json>` with `group_id`, `reason`, and `decision`. This ends the private lease; the public checkpoint and its audit history remain readable.
 
