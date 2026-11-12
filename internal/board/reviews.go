@@ -206,7 +206,7 @@ func reviewCards(tx *Transaction, ids []string, fallback, frozen string) (string
 
 // PrepareReviewRun commits all input bytes and intent before process launch.
 // Reusing an identity returns its durable state and never authorizes a rerun.
-func PrepareReviewRun(root string, input ReviewInput, requirements map[string]string, advance *ReviewAdvance, originals map[string][]byte, version string) (run ReviewRun, fresh bool, err error) {
+func PrepareReviewRunWithTransaction(root string, input ReviewInput, requirements map[string]string, advance *ReviewAdvance, originals map[string][]byte, version string, extensions ...TransactionExtension) (run ReviewRun, fresh bool, err error) {
 	if input.FindingsSchema < 0 || input.FindingsSchema > FindingsSchemaReceiver || input.RunID == "batches" || !ValidReviewID(input.RunID) || !ValidReviewID(input.BatchID) || input.PreviousRunID != "" && !ValidReviewID(input.PreviousRunID) {
 		return run, false, reviewError("run/batch/previous ID")
 	}
@@ -255,6 +255,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 		return run, false, err
 	}
 	err = WithTransaction(root, reviewScope(scopeIDs, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(ReviewPreparation{Run: run, Fresh: fresh}) }()
 		exists, e := readReviewJSON(tx, reviewRunName(input.RunID), &run)
 		if e != nil {
 			return e
@@ -442,7 +443,7 @@ func PrepareReviewRun(root string, input ReviewInput, requirements map[string]st
 		}
 		fresh = true
 		return tx.PutGroup(reviewControlGroup, reviewRunName(input.RunID), reviewJSON(run))
-	})
+	}, extensions...)
 	return
 }
 func reviewRole(role string) bool {
@@ -469,8 +470,9 @@ func ReviewStaging(root, runID string) (string, error) {
 
 // UpdateReviewRun records execution phase before and after launch. Callers hold
 // LockReviewRun; this short transaction never retains a card lock during review.
-func UpdateReviewRun(root string, run ReviewRun) error {
+func UpdateReviewRunWithTransaction(root string, run ReviewRun, extensions ...TransactionExtension) error {
 	return WithTransaction(root, reviewScope(nil, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(run) }()
 		var old ReviewRun
 		ok, err := readReviewJSON(tx, reviewRunName(run.RunID), &old)
 		if err != nil {
@@ -480,16 +482,17 @@ func UpdateReviewRun(root string, run ReviewRun) error {
 			return reviewError("run update conflict")
 		}
 		return tx.PutGroup(reviewControlGroup, reviewRunName(run.RunID), reviewJSON(run))
-	})
+	}, extensions...)
 }
 
 // StoreReviewArtifact snapshots generated prompts before launch, without giving
 // the reviewer a board transaction or write access through a Kander command.
-func StoreReviewArtifact(root, runID, name string, data []byte) error {
+func StoreReviewArtifactWithTransaction(root, runID, name string, data []byte, extensions ...TransactionExtension) error {
 	if !ValidReviewID(runID) || (name != "prompt.txt" && name != "review-contract.md" && name != "evidence.txt") {
 		return reviewError("artifact")
 	}
 	return WithTransaction(root, reviewScope(nil, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(map[string]string{"run_id": runID}) }()
 		var run ReviewRun
 		ok, err := readReviewJSON(tx, reviewRunName(runID), &run)
 		if err != nil {
@@ -510,13 +513,14 @@ func StoreReviewArtifact(root, runID, name string, data []byte) error {
 			return reviewError("artifact conflict")
 		}
 		return tx.putGroupBytes(reviewControlGroup, path, data)
-	})
+	}, extensions...)
 }
 
 // FinalizeReviewRun freezes originals only after the execution layer has settled
 // process collection, target checks and runtime cleanup. Recovery uses interrupted.
-func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, error) {
+func FinalizeReviewRunWithTransaction(root string, run ReviewRun, report []byte, extensions ...TransactionExtension) (ReviewRun, error) {
 	err := WithTransaction(root, reviewScope(run.TaskIDs, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(run) }()
 		var old ReviewRun
 		ok, err := readReviewJSON(tx, reviewRunName(run.RunID), &old)
 		if err != nil {
@@ -577,7 +581,7 @@ func FinalizeReviewRun(root string, run ReviewRun, report []byte) (ReviewRun, er
 			return err
 		}
 		return tx.PutGroup(reviewControlGroup, reviewRunName(run.RunID), reviewJSON(run))
-	})
+	}, extensions...)
 	return run, err
 }
 func reviewOriginals(tx *Transaction, id string, final bool) (map[string][]byte, error) {
@@ -590,7 +594,7 @@ func reviewOriginals(tx *Transaction, id string, final bool) (map[string][]byte,
 		if final {
 			dir = "originals"
 		}
-		data, ok, err := tx.ReadGroup(reviewControlGroup, "runs/"+id+"/"+dir+"/"+name)
+		data, ok, err := tx.StagedGroup(reviewControlGroup, "runs/"+id+"/"+dir+"/"+name)
 		if err != nil {
 			return nil, err
 		}
@@ -601,156 +605,6 @@ func reviewOriginals(tx *Transaction, id string, final bool) (map[string][]byte,
 	return result, nil
 }
 
-// PublishReviewRun commits each card independently, preserving successful
-// receipts on partial failure. A retry verifies originals and only fills gaps.
-func PublishReviewRun(root string, runID string) (ReviewRun, map[string]error, error) {
-	return publishReviewRun(root, runID, nil)
-}
-func publishReviewRun(root string, runID string, published func(string)) (ReviewRun, map[string]error, error) {
-	var run ReviewRun
-	err := WithTransaction(root, reviewScope(nil, true), func(tx *Transaction) error {
-		ok, e := readReviewJSON(tx, reviewRunName(runID), &run)
-		if e != nil {
-			return e
-		}
-		if !ok || run.Phase != "finalized" {
-			return reviewError("run not finalized")
-		}
-		return nil
-	})
-	if err != nil {
-		return run, nil, err
-	}
-	failures := map[string]error{}
-	for _, id := range run.TaskIDs {
-		skipped := false
-		err = WithTransaction(root, reviewScope([]string{id}, false), func(tx *Transaction) error {
-			var current ReviewRun
-			ok, e := readReviewJSON(tx, reviewRunName(runID), &current)
-			if e != nil {
-				return e
-			}
-			if !ok || !reflect.DeepEqual(current.ReviewInput, run.ReviewInput) {
-				return reviewError("intent conflict")
-			}
-			s, e := tx.Snapshot(id)
-			if e != nil {
-				return e
-			}
-			if TaskGroupFrom(s.Text) != run.TaskGroup {
-				return reviewError("card group binding")
-			}
-			if slices.Contains(current.SkippedMembers, id) {
-				return nil
-			}
-			if !current.Published[id] {
-				excluded, e := memberExcluded(tx, id)
-				if e != nil {
-					return e
-				}
-				if excluded {
-					// The member left during the run: it takes no copy, and the
-					// run still settles for the members that remain.
-					current.Published[id] = true
-					current.SkippedMembers, skipped = append(current.SkippedMembers, id), true
-					return tx.PutGroup(reviewControlGroup, reviewRunName(runID), reviewJSON(current))
-				}
-				if _, e = reviewCards(tx, []string{id}, run.ReportLanguage, run.ReportLanguage); e != nil {
-					return e
-				}
-			}
-			var batch ReviewBatch
-			ok, e = readReviewJSON(tx, reviewBatchName(run.BatchID), &batch)
-			if e != nil {
-				return e
-			}
-			if !ok || batch.Base != run.Base || batch.ReportLanguage != run.ReportLanguage {
-				return reviewError("publication batch binding")
-			}
-			if e = requireRunMembers(tx, batch, run.TaskIDs); e != nil {
-				return e
-			}
-			ancestors, e := reviewAncestors(tx, current)
-			if e != nil {
-				return e
-			}
-			if e = checkRunStructure(tx, current, ancestors); e != nil {
-				return e
-			}
-			originals, e := reviewOriginals(tx, runID, true)
-			if e != nil {
-				return e
-			}
-			if e = verifyReviewHashes(originals, run.Hashes); e != nil {
-				return e
-			}
-			sidecar, ok, e := tx.ReadGroup(reviewControlGroup, "runs/"+runID+"/sidecar.json")
-			if e != nil {
-				return e
-			}
-			if !ok {
-				return reviewError("missing sidecar")
-			}
-			manifest := ReviewManifest{Schema: 1, Input: run.ReviewInput, SidecarHash: ReviewDigest(sidecar), Hashes: run.Hashes}
-			prefix := "reviews/" + runID + "/"
-			if current.Published[id] {
-				return verifyCardReview(tx, id, manifest, sidecar)
-			}
-			for name, data := range originals {
-				if e = putImmutableReview(tx, id, prefix+name, data); e != nil {
-					return e
-				}
-			}
-			if e = putImmutableReview(tx, id, prefix+"sidecar.json", sidecar); e != nil {
-				return e
-			}
-			if e = putImmutableReview(tx, id, prefix+"manifest.json", []byte(reviewJSON(manifest))); e != nil {
-				return e
-			}
-			index := reviewIndex(run)
-			indexes, e := ParseReviewIndexes(s.Text)
-			if e != nil {
-				return e
-			}
-			for _, existing := range indexes {
-				if existing.RunID == runID {
-					return reviewError("index exists without receipt")
-				}
-			}
-			line, _ := json.Marshal(index)
-			text, e := appendReviewIndex(s.Text, string(line))
-			if e != nil {
-				return e
-			}
-			if _, e = ParseReviewIndexes(text); e != nil {
-				return e
-			}
-			if run.Resolved != "" {
-				// The record shares the index transaction, so it adds no card revision of its own.
-				if text, e = WithResolvedRecord(text, ReviewResolvedField(run.Role), run.Resolved); e != nil {
-					return e
-				}
-			}
-			if e = tx.Put(id, "spec.md", text); e != nil {
-				return e
-			}
-			current.Published[id] = true
-			return tx.PutGroup(reviewControlGroup, reviewRunName(runID), reviewJSON(current))
-		})
-		if err != nil {
-			failures[id] = err
-		} else {
-			run.Published[id] = true
-			if skipped {
-				run.SkippedMembers = append(run.SkippedMembers, id)
-			}
-			if published != nil {
-				published(id)
-			}
-		}
-	}
-	return run, failures, nil
-}
 func verifyReviewHashes(files map[string][]byte, hashes map[string]string) error {
 	if len(files) != len(hashes) {
 		return reviewError("original set mismatch")

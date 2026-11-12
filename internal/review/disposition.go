@@ -17,7 +17,7 @@ import (
 
 func dispositionCommand(name string) bool {
 	switch name {
-	case "plan", "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "aggregate", "close", "progress":
+	case "plan", "extend-plan", "advance", "assign", "disposition", "interpret", "map-legacy", "aggregate", "close", "progress", "confirm":
 		return true
 	}
 	return false
@@ -36,6 +36,9 @@ func runDispositionCommand(args []string) int {
 		return runRemoteDisposition(cfg, args)
 	}
 	action, cwd, input := args[0], args[1], args[2]
+	if action == "confirm" {
+		return dispositionFailure(remote.ErrNotConfigured)
+	}
 	if !filepath.IsAbs(cwd) {
 		return dispositionFailure(archiveError("absolute CWD required"))
 	}
@@ -263,17 +266,18 @@ func resolveBatchWithGit(root, cwd string, x board.ReviewPlanExtension) error {
 	return board.ResolveReviewBatch(root, x, board.ReviewResolutionGit{CWD: cwd, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano), Edges: edges})
 }
 
-func hydrateIncremental(root string, options archiveOptions, arguments []string, replay bool) ([]string, error) {
+func hydrateIncremental(root string, options archiveOptions, arguments []string, replay bool, stores ...reviewStore) ([]string, error) {
+	store := selectedReviewStore(root, stores)
 	if options.previousID == "" {
 		return arguments, nil
 	}
-	previous, err := board.ReadReviewRun(root, options.previousID)
+	previous, err := store.Run(options.previousID)
 	if err != nil {
 		return nil, err
 	}
 	// A new run names the members that remain. A replay keeps the frozen members
 	// of its own run, which the replay check has already compared.
-	remaining, err := board.ReviewRemainingMembers(root, previous.TaskIDs)
+	remaining, err := store.Remaining(previous.TaskIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -289,9 +293,9 @@ func hydrateIncremental(root string, options archiveOptions, arguments []string,
 	}
 	var context []byte
 	if replay {
-		context, err = board.ReadReviewInput(root, options.runID, "review-context.md")
+		context, err = store.Input(options.runID, "review-context.md")
 	} else {
-		context, err = board.ReviewIncrementalContext(root, options.previousID)
+		context, err = store.Incremental(options.previousID)
 	}
 	if err != nil {
 		return nil, err

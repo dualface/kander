@@ -79,6 +79,9 @@ kander issue triage NUMBER [--card TASK_ID] [--repo HOST/OWNER/REPO] [--agent NA
 kander issue result NUMBER --card TASK_ID [--repo HOST/OWNER/REPO] [--agent NAME] [--launcher NAME] [--action start|inspect|apply|decide] [--file JSON]
 ```
 
+For distributed holder confirmation, use `kander review confirm <absolute-CWD> <publication-id> <task-id>` as described in the review command contract.
+
+
 - Commands only do structural and mechanical validation; authorization, dependencies, and termination reasons are judged by the agent per this file.
 
 ## State Model

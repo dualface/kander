@@ -35,9 +35,12 @@ const claimPending = "pending"
 
 // holder is the claim context a write presents in its headers.
 type holder struct {
-	token      string
-	generation uint64
-	clientID   string
+	publication string
+	members     map[string]api.ClaimProof
+	invalid     error
+	token       string
+	generation  uint64
+	clientID    string
 }
 
 func claimPath(task string) string { return servicePath("claims", task+".json") }
@@ -66,7 +69,7 @@ func tokenHash(token string) string {
 // view renders the public claim with the lease status the server clock decides.
 func (r claimRecord) view(now time.Time) *api.ClaimView {
 	status := r.Status
-	if status == api.ClaimActive && now.After(r.ExpiresAt) {
+	if status == api.ClaimActive && !now.Before(r.ExpiresAt) {
 		status = api.ClaimLost
 	}
 	return &api.ClaimView{
@@ -82,6 +85,16 @@ func claimedState(state string) bool { return state == "working" || state == "re
 // hold the project lock, so the check and the following board write are one
 // atomic step with respect to every other server operation.
 func (p *project) requireHolder(task string, h holder) (claimRecord, error) {
+	if h.invalid != nil {
+		return claimRecord{}, h.invalid
+	}
+	if h.members != nil {
+		proof, found := h.members[task]
+		if !found {
+			return claimRecord{}, apiError(api.CodeHeldByOther, "a separate claim proof is required for task "+task)
+		}
+		h.token, h.generation = proof.Token, proof.Generation
+	}
 	r, found, err := p.readClaim(task)
 	if err != nil {
 		return r, err
@@ -95,7 +108,7 @@ func (p *project) requireHolder(task string, h holder) (claimRecord, error) {
 	if h.generation != r.Generation {
 		return r, apiError(api.CodeLeaseInvalid, "claim generation "+strconv.FormatUint(h.generation, 10)+" is not current")
 	}
-	if p.server.now().After(r.ExpiresAt) {
+	if !p.server.now().Before(r.ExpiresAt) {
 		return r, apiError(api.CodeLeaseInvalid, "the lease of task "+task+" expired; an explicit takeover is required")
 	}
 	return r, nil

@@ -238,12 +238,13 @@ func ReadReviewBatchView(root, id string) (v ReviewBatchView, err error) {
 	})
 	return
 }
-func PublishReviewDisposition(root, id string) (v ReviewBatchView, err error) {
+func PublishReviewDispositionWithTransaction(root, id string, extensions ...TransactionExtension) (v ReviewBatchView, err error) {
 	b, err := ReadReviewBatch(root, id)
 	if err != nil {
 		return v, err
 	}
 	err = WithTransaction(root, reviewScope(b.TaskIDs, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(v) }()
 		ok, e := readReviewJSON(tx, reviewBatchName(id), &b)
 		if e != nil {
 			return e
@@ -265,7 +266,7 @@ func PublishReviewDisposition(root, id string) (v ReviewBatchView, err error) {
 			}
 		}
 		return tx.PutGroup(reviewControlGroup, "dispositions/"+id+".json", reviewJSON(v))
-	})
+	}, extensions...)
 	return
 }
 
@@ -497,7 +498,7 @@ func ReviewClosureEdges(v ReviewBatchView, r ReviewCloseRequest) ([]ReviewGitEdg
 	}
 	return edges, statuses, nil
 }
-func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvidence) (c ReviewClosure, err error) {
+func CloseReviewBatchWithTransaction(root string, r ReviewCloseRequest, evidence ReviewGitEvidence, extensions ...TransactionExtension) (c ReviewClosure, err error) {
 	b, err := ReadReviewBatch(root, r.BatchID)
 	if err != nil {
 		return c, err
@@ -508,6 +509,7 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 		return c, err
 	}
 	err = WithTransaction(root, reviewLedgerScope(plan.TaskIDs, false), func(tx *Transaction) error {
+		defer func() { tx.SetOperationResult(c) }()
 		ok, e := readReviewJSON(tx, reviewBatchName(r.BatchID), &b)
 		if e != nil {
 			return e
@@ -575,7 +577,7 @@ func CloseReviewBatch(root string, r ReviewCloseRequest, evidence ReviewGitEvide
 			return e
 		}
 		return tx.PutGroup(reviewControlGroup, closureName(b.BatchID), reviewJSON(c))
-	})
+	}, extensions...)
 	return
 }
 func verifyClosureCopies(tx *Transaction, c ReviewClosure) error {

@@ -166,6 +166,25 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 		_, err := session.Project.Execution(ctx, client.NewKey(), task.TaskID, u, own)
 		return err
 	}
+
+	if !plan.capabilities().Container {
+		plan.processRecord = func(pid int, running func() bool) <-chan struct{} {
+			done := make(chan struct{})
+			defer close(done)
+			facts, err := process.ObserveStarted(context.Background(), pid, running)
+			if err == nil {
+				credential.AgentPID, credential.AgentStart = facts.PID, facts.Start
+				credential.BootID, err = process.BootIdentity()
+			}
+			if err == nil {
+				err = remote.WriteCredential(session.Home, credential)
+			}
+			if err != nil {
+				result.Warnings = append(result.Warnings, err.Error()+"\n")
+			}
+			return done
+		}
+	}
 	var launchStart time.Time
 	var paneCB func() (AgentSession, error)
 	if discoverSession {
@@ -182,13 +201,22 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	}
 	if persistSession {
 		plan.sessionFinalize = func(effective AgentSession) error {
+			credential.Session = effective.Render()
+			if err := remote.WriteCredential(session.Home, credential); err != nil {
+				return err
+			}
+			_ = remote.EnsureWorker(session.Home)
 			return executionUpdate(api.ExecutionUpdate{Action: api.ExecutionConfirm, SessionBefore: initialSession, SessionAfter: effective.Render()})
 		}
 	}
 	var location func(LaunchOutcome) error
 	if plan.capabilities().Container {
 		location = func(outcome LaunchOutcome) error {
-			return executionUpdate(api.ExecutionUpdate{Action: api.ExecutionWindow, Window: locationOf(plan, outcome)})
+			credential.Window = locationOf(plan, outcome)
+			if err := remote.WriteCredential(session.Home, credential); err != nil {
+				return err
+			}
+			return executionUpdate(api.ExecutionUpdate{Action: api.ExecutionWindow, Window: credential.Window})
 		}
 	}
 	name := windowName(board.Entry{TaskID: task.TaskID}, original)
@@ -211,11 +239,24 @@ func StartRemote(agentOverride, launcherOverride, taskID string) (result StartRe
 	taskFileHandedOff = true
 	if outcome.Process != nil {
 		credential.AgentPID = outcome.Process.Pid
+		if facts, observeErr := process.ObserveProcess(context.Background(), credential.AgentPID); observeErr == nil {
+			credential.AgentStart = facts.Start
+			credential.BootID, _ = process.BootIdentity()
+		}
+		credential.Session = agentSession.Render()
+		if credential.Window == "" {
+			credential.Window = window
+		}
 		if err := remote.WriteCredential(session.Home, credential); err != nil {
 			result.Warnings = append(result.Warnings, err.Error()+"\n")
 		}
 	}
+	_ = remote.EnsureWorker(session.Home)
 	if !persistSession {
+		credential.Session = agentSession.Render()
+		if err := remote.WriteCredential(session.Home, credential); err != nil {
+			return result, err
+		}
 		if err := executionUpdate(api.ExecutionUpdate{Action: api.ExecutionConfirm}); err != nil {
 			return result, err
 		}

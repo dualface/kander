@@ -189,8 +189,14 @@ type Credential struct {
 	RenewedAt     time.Time    `json:"renewed_at"`
 	// AgentPID is the managed agent process the worker stops when the lease
 	// is lost; zero when the claim was taken by hand.
-	AgentPID int  `json:"agent_pid,omitzero"`
-	Lost     bool `json:"lost,omitzero"`
+	AgentPID     int      `json:"agent_pid,omitzero"`
+	AgentStart   string   `json:"agent_start,omitempty"`
+	BootID       string   `json:"boot_id,omitempty"`
+	Window       string   `json:"window,omitempty"`
+	Session      string   `json:"session,omitempty"`
+	StopAttempts []string `json:"stop_attempts,omitempty"`
+	StopResult   string   `json:"stop_result,omitempty"`
+	Lost         bool     `json:"lost,omitzero"`
 	// Delivered lists the collaboration requests the worker already typed
 	// into the agent.
 	Delivered  []string `json:"delivered,omitempty"`
@@ -204,41 +210,6 @@ func (c Credential) Claim() *client.Claim {
 
 func credentialDir(home, project, task string) string {
 	return filepath.Join(home, "executions", project, task)
-}
-
-// SaveCredential stores a new claim of this host and makes it the latest
-// credential of its task.
-func (s *Session) SaveCredential(c Credential) error {
-	if err := WriteCredential(s.Home, c); err != nil {
-		return err
-	}
-	return fs.WriteTextAtomic(s.Home, filepath.Join(credentialDir(s.Home, c.ProjectID, c.TaskID), "latest"), c.ExecutionID+"\n", true)
-}
-
-// WriteCredential replaces one credential record.
-func WriteCredential(home string, c Credential) error {
-	dir := credentialDir(home, c.ProjectID, c.TaskID)
-	if err := fs.EnsurePrivateDirectory(home, dir, true); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-	return fs.WriteTextAtomic(home, filepath.Join(dir, c.ExecutionID+".json"), string(data)+"\n", true)
-}
-
-// RemoveCredential deletes a credential whose claim the server released.
-func RemoveCredential(home string, c Credential) error {
-	dir := credentialDir(home, c.ProjectID, c.TaskID)
-	if _, err := fs.RemoveRegularFileIfExists(home, filepath.Join(dir, c.ExecutionID+".json")); err != nil {
-		return err
-	}
-	latest, ok, err := fs.ReadRegularFileIfExists(home, filepath.Join(dir, "latest"))
-	if err == nil && ok && strings.TrimSpace(string(latest)) == c.ExecutionID {
-		_, err = fs.RemoveRegularFileIfExists(home, filepath.Join(dir, "latest"))
-	}
-	return err
 }
 
 // Credentials lists every credential record below home.
@@ -278,6 +249,13 @@ func Credentials(home string) ([]Credential, error) {
 				if err != nil {
 					return nil, err
 				}
+				released, err := fs.RegularFileExists(home, filepath.Join(dir, strings.TrimSuffix(f.Name, ".json")+".released"))
+				if err != nil {
+					return nil, err
+				}
+				if released {
+					continue
+				}
 				var c Credential
 				if err := json.Unmarshal(data, &c); err != nil {
 					return nil, errors.New("execution credential " + filepath.Join(dir, f.Name) + " is damaged")
@@ -305,6 +283,10 @@ func (s *Session) Credential(task string) (Credential, bool, error) {
 	}
 	if !api.ValidIdentity(execution) {
 		return Credential{}, false, nil
+	}
+	released, err := fs.RegularFileExists(s.Home, filepath.Join(dir, execution+".released"))
+	if err != nil || released {
+		return Credential{}, false, err
 	}
 	data, ok, err := fs.ReadRegularFileIfExists(s.Home, filepath.Join(dir, execution+".json"))
 	if err != nil || !ok {

@@ -506,7 +506,7 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 			return outcome{err: err}
 		}
 		now := p.server.now()
-		if found && previous.Status == api.ClaimActive && !now.After(previous.ExpiresAt) {
+		if found && previous.Status == api.ClaimActive && now.Before(previous.ExpiresAt) {
 			return outcome{err: apiError(api.CodeLeaseActive, "the lease of task "+t.TaskID+" is still active")}
 		}
 		if previous.Generation != req.ExpectedGeneration {
@@ -538,13 +538,10 @@ func (p *project) takeover(key, id string, req api.ClaimRequest) outcome {
 		if _, err := board.BeginTakeoverWithTransaction(p.board, snapshot.Entry, in, p.taskTransaction(key, "takeover:"+id, req, r.TaskID, func(tx *board.Transaction) error {
 			_, err := tx.Expect(r.TaskID, snapshot.Entry.State, snapshot.Revision)
 			return err
-		}, &r, true)); err != nil {
+		}, &r, true), board.TransactionExtension{Before: func(tx *board.Transaction) error { return p.stageSupersedeRequests(tx, r.TaskID, r.Generation) }}); err != nil {
 			return outcome{err: err}
 		}
 		p.starts[r.TaskID] = startCursor{entry: snapshot.Entry, generation: r.Generation}
-		if err := p.supersedeRequests(r.TaskID, r.Generation); err != nil {
-			p.log().Error("superseding requests failed", "task", r.TaskID, "error", err)
-		}
 		p.log().Info("claim taken over", "task", r.TaskID, "from_generation", previous.Generation, "generation", r.Generation, "client", r.ClientID)
 		_ = p.events.append(api.Event{Kind: api.EventClaimChanged, TaskID: r.TaskID, Generation: r.Generation})
 		g, err := p.grant(r)

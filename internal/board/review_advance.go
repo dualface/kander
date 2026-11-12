@@ -80,7 +80,7 @@ func requireAuthorDispositions(tx *Transaction, b ReviewBatch) error {
 // AdvanceReviewBatch receives a verified in-batch delivery without starting a
 // reviewer. Mechanical-only fixes need this same CAS to close at their new HEAD.
 // Planned batches also rewrite the plan's recorded target in the same transaction.
-func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
+func AdvanceReviewBatchWithTransaction(root string, x ReviewBatchAdvance, extensions ...TransactionExtension) error {
 	if !ValidReviewID(x.BatchID) {
 		return reviewError("batch_id")
 	}
@@ -155,7 +155,7 @@ func AdvanceReviewBatch(root string, x ReviewBatchAdvance) error {
 			Kind:           "advance",
 			PreviousTarget: a.PreviousTarget,
 		})
-	})
+	}, extensions...)
 }
 
 // syncPlannedBatchTarget rewrites one plan batch's recorded target to match the

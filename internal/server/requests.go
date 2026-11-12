@@ -3,11 +3,11 @@ package server
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/dualface/kander/internal/api"
 	"github.com/dualface/kander/internal/board"
@@ -20,9 +20,8 @@ func requestID(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return "req-" + hex.EncodeToString(sum[:8])
 }
-
-func requestDir(task string) string { return filepath.Join("control", "requests", task) }
-
+func requestName(task, id string) string { return filepath.Join("requests", task, id+".json") }
+func requestDir(task string) string      { return servicePath("requests", task) }
 func (p *project) readRequests(task string) ([]api.CollabRequest, error) {
 	dir := filepath.Join(p.root, requestDir(task))
 	exists, err := fs.DirectoryExists(p.root, dir)
@@ -34,25 +33,19 @@ func (p *project) readRequests(task string) ([]api.CollabRequest, error) {
 		return nil, err
 	}
 	out := []api.CollabRequest{}
-	for _, e := range entries {
-		if e.Kind != fs.KindFile || !strings.HasSuffix(e.Name, ".json") {
+	for _, entry := range entries {
+		if entry.Kind != fs.KindFile || !strings.HasSuffix(entry.Name, ".json") {
 			continue
 		}
-		var r api.CollabRequest
-		if _, err := readJSON(p.root, filepath.Join(requestDir(task), e.Name), &r); err != nil {
+		var request api.CollabRequest
+		if _, err := readJSON(p.root, filepath.Join(requestDir(task), entry.Name), &request); err != nil {
 			return nil, err
 		}
-		out = append(out, r)
+		out = append(out, request)
 	}
 	slices.SortFunc(out, func(a, b api.CollabRequest) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	return out, nil
 }
-
-func (p *project) writeRequest(r api.CollabRequest) error {
-	return writeJSON(p.root, filepath.Join(requestDir(r.TaskID), r.ID+".json"), r)
-}
-
-// requests lists the collaboration requests of a task, oldest first.
 func (p *project) requests(id string) ([]api.CollabRequest, error) {
 	id, err := board.NormalizeTaskID(id)
 	if err != nil {
@@ -61,103 +54,119 @@ func (p *project) requests(id string) ([]api.CollabRequest, error) {
 	return p.readRequests(id)
 }
 
-// createRequest records a request for the current holder. The target
-// generation must be current: a request written for an execution that was
-// taken over is refused instead of reaching the new execution.
-func (p *project) createRequest(key, id string, req api.NewCollabRequest) outcome {
-	if !slices.Contains(requestKinds, req.Kind) || !api.ValidIdentity(req.FromClient) || strings.TrimSpace(req.Message) == "" {
-		return outcome{err: apiError(api.CodeInvalidRequest, "kind, from_client and message are required")}
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	run := func() outcome {
-		t, err := p.show(id)
+// requestWrite shares generation validation, the request state and the exact
+// operation receipt in one redo. It never advances the card's content version.
+func (p *project) requestWrite(key, operation, id string, payload any, produce func(*board.Transaction) (api.CollabRequest, error), status int) outcome {
+	return p.idempotent(key, operation, payload, func() outcome {
+		var request api.CollabRequest
+		err := board.WithTransaction(p.board, board.LockScope{Groups: []string{serviceGroup}, Tasks: []string{id}}, func(tx *board.Transaction) error {
+			var err error
+			request, err = produce(tx)
+			if err != nil {
+				return err
+			}
+			if err := stageJSON(tx, requestName(id, request.ID), request); err != nil {
+				return err
+			}
+			data, err := json.Marshal(request)
+			if err != nil {
+				return err
+			}
+			return stageJSON(tx, filepath.Join("receipts", filepath.Base(receiptPath(key))), receipt{Key: key, Operation: operation, Digest: requestDigest(operation, payload), Status: receiptDone, HTTP: status, Body: data, CreatedAt: p.server.now()})
+		})
 		if err != nil {
 			return outcome{err: err}
 		}
-		if t.Claim == nil || !claimedState(t.State) || t.Claim.Status == api.ClaimReleased {
-			return outcome{err: apiError(api.CodeClaimRequired, "task "+t.TaskID+" has no holder to answer a request")}
+		_ = p.events.append(api.Event{Kind: api.EventRequest, TaskID: id, RequestID: request.ID, Generation: request.TargetGeneration})
+		return outcome{status: status, body: request}
+	}, func() (outcome, bool) { return outcome{}, false })
+}
+func (p *project) createRequest(key, id string, input api.NewCollabRequest) outcome {
+	if !slices.Contains(requestKinds, input.Kind) || !api.ValidIdentity(input.FromClient) || strings.TrimSpace(input.Message) == "" || len(input.Message) > 64<<10 {
+		return outcome{err: apiError(api.CodeInvalidRequest, "request needs kind, client and a message of at most 64 KiB")}
+	}
+	normalized, err := board.NormalizeTaskID(id)
+	if err != nil {
+		return outcome{err: err}
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.requestWrite(key, "request:"+id, normalized, input, func(tx *board.Transaction) (api.CollabRequest, error) {
+		var request api.CollabRequest
+		task, err := tx.Snapshot(normalized)
+		if err != nil {
+			return request, err
 		}
-		if t.Claim.Generation != req.TargetGeneration {
-			return outcome{err: apiError(api.CodeLeaseInvalid, "the target generation is not current")}
+		claim, found, err := p.readClaim(normalized)
+		if err != nil {
+			return request, err
+		}
+		if !claimedState(task.Entry.State) || !found || claim.Status != api.ClaimActive {
+			return request, apiError(api.CodeClaimRequired, "task has no holder to answer a request")
+		}
+		if claim.Generation != input.TargetGeneration || !p.server.now().Before(claim.ExpiresAt) {
+			return request, apiError(api.CodeLeaseInvalid, "request target generation is not live")
 		}
 		now := p.server.now()
-		r := api.CollabRequest{
-			ID: requestID(key), TaskID: t.TaskID, Kind: req.Kind, Message: req.Message,
-			FromClient: req.FromClient, TargetGeneration: req.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now,
-		}
-		if err := p.writeRequest(r); err != nil {
-			return outcome{err: err}
-		}
-		_ = p.events.append(api.Event{Kind: api.EventRequest, TaskID: t.TaskID, RequestID: r.ID, Generation: r.TargetGeneration})
-		return outcome{status: http.StatusCreated, body: r}
-	}
-	// The request ID derives from the idempotency key, so the effect of an
-	// interrupted attempt is the request file itself.
-	applied := func() (outcome, bool) {
-		task, err := board.NormalizeTaskID(id)
-		if err != nil {
-			return outcome{}, false
-		}
-		var r api.CollabRequest
-		found, err := readJSON(p.root, filepath.Join(requestDir(task), requestID(key)+".json"), &r)
-		return outcome{status: http.StatusCreated, body: r}, err == nil && found
-	}
-	return p.idempotent(key, "request:"+id, req, run, applied)
+		return api.CollabRequest{Revision: 1, ID: requestID(key), TaskID: normalized, Kind: input.Kind, Message: input.Message, FromClient: input.FromClient, TargetGeneration: input.TargetGeneration, Status: api.RequestOpen, CreatedAt: now, UpdatedAt: now}, nil
+	}, http.StatusCreated)
 }
-
-// answerRequest lets the live holder of the target generation settle a request.
 func (p *project) answerRequest(key, id, requestID string, answer api.CollabAnswer, h holder) outcome {
-	switch answer.Status {
-	case api.RequestAccepted, api.RequestDone, api.RequestRejected:
-	default:
-		return outcome{err: apiError(api.CodeInvalidRequest, "status must be accepted, done or rejected")}
+	if !slices.Contains([]string{api.RequestAccepted, api.RequestDone, api.RequestRejected}, answer.Status) || !api.ValidIdentity(requestID) {
+		return outcome{err: apiError(api.CodeInvalidRequest, "invalid request answer")}
 	}
-	if !api.ValidIdentity(requestID) {
-		return outcome{err: apiError(api.CodeInvalidRequest, "invalid request id")}
+	normalized, err := board.NormalizeTaskID(id)
+	if err != nil {
+		return outcome{err: err}
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	run := func() outcome {
-		id, err := board.NormalizeTaskID(id)
+	return p.requestWrite(key, "answer:"+id+":"+requestID, normalized, answer, func(tx *board.Transaction) (api.CollabRequest, error) {
+		var request api.CollabRequest
+		claim, err := p.requireHolder(normalized, h)
 		if err != nil {
-			return outcome{err: err}
+			return request, err
 		}
-		claim, err := p.requireHolder(id, h)
+		data, found, err := tx.ReadGroup(serviceGroup, requestName(normalized, requestID))
 		if err != nil {
-			return outcome{err: err}
-		}
-		var r api.CollabRequest
-		found, err := readJSON(p.root, filepath.Join(requestDir(id), requestID+".json"), &r)
-		if err != nil {
-			return outcome{err: err}
+			return request, err
 		}
 		if !found {
-			return outcome{err: apiError(api.CodeNotFound, "request "+requestID+" does not exist")}
+			return request, apiError(api.CodeNotFound, "request does not exist")
 		}
-		if r.TargetGeneration != claim.Generation || r.Status == api.RequestSuperseded {
-			return outcome{err: apiError(api.CodeLeaseInvalid, "the request targets another generation")}
+		if err := json.Unmarshal(data, &request); err != nil {
+			return request, err
 		}
-		r.Status, r.Note, r.UpdatedAt = answer.Status, answer.Note, p.server.now()
-		if err := p.writeRequest(r); err != nil {
-			return outcome{err: err}
+		if request.TargetGeneration != claim.Generation || request.Status == api.RequestSuperseded {
+			return request, apiError(api.CodeLeaseInvalid, "request targets another generation")
 		}
-		_ = p.events.append(api.Event{Kind: api.EventRequest, TaskID: id, RequestID: r.ID, Generation: r.TargetGeneration})
-		return outcome{status: http.StatusOK, body: r}
-	}
-	return p.idempotent(key, "answer:"+id+":"+requestID, answer, run, func() (outcome, bool) { return outcome{}, false })
+		if answer.ExpectedRevision != 0 && answer.ExpectedRevision != request.Revision {
+			return request, apiError(api.CodeRevisionConflict, "request revision changed")
+		}
+		if request.Status == answer.Status && request.Note == answer.Note {
+			return request, nil
+		}
+		if request.Status == api.RequestDone || request.Status == api.RequestRejected {
+			return request, apiError(api.CodeRevisionConflict, "a settled request cannot change its answer")
+		}
+		request.Status, request.Note, request.UpdatedAt = answer.Status, answer.Note, p.server.now()
+		request.Revision++
+		return request, nil
+	}, http.StatusOK)
 }
 
-// supersedeRequests closes the open requests of earlier generations.
-func (p *project) supersedeRequests(task string, generation uint64) error {
-	all, err := p.readRequests(task)
+// stageSupersedeRequests runs inside the execution handoff transaction, so no
+// old request remains actionable after the successor claim becomes visible.
+func (p *project) stageSupersedeRequests(tx *board.Transaction, task string, generation uint64) error {
+	requests, err := p.readRequests(task)
 	if err != nil {
 		return err
 	}
-	for _, r := range all {
-		if r.TargetGeneration < generation && (r.Status == api.RequestOpen || r.Status == api.RequestAccepted) {
-			r.Status, r.UpdatedAt = api.RequestSuperseded, time.Now().UTC()
-			if err := p.writeRequest(r); err != nil {
+	for _, request := range requests {
+		if request.TargetGeneration < generation && (request.Status == api.RequestOpen || request.Status == api.RequestAccepted) {
+			request.Status, request.UpdatedAt = api.RequestSuperseded, p.server.now()
+			request.Revision++
+			if err := stageJSON(tx, requestName(task, request.ID), request); err != nil {
 				return err
 			}
 		}

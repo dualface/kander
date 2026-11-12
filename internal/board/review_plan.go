@@ -109,7 +109,7 @@ func CreateHistoricalReviewPlan(root string, p ReviewPlan) error {
 	return createReviewPlan(root, p, false)
 }
 
-func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
+func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool, extensions ...TransactionExtension) error {
 	if p.Schema != 1 || !ValidReviewID(p.PlanID) || strings.TrimSpace(p.Author) == "" || strings.TrimSpace(p.Basis) == "" || p.CWD == "" || len(p.Batches) == 0 {
 		return reviewError("review plan identity/provenance")
 	}
@@ -242,7 +242,7 @@ func createReviewPlan(root string, p ReviewPlan, restrictNewShape bool) error {
 			}
 		}
 		return tx.PutGroup(reviewControlGroup, planName(p.PlanID), reviewJSON(p))
-	})
+	}, extensions...)
 }
 func readTaskPlan(tx *Transaction, id string) (p ReviewPlan, exists bool, err error) {
 	var pointer struct {
@@ -416,4 +416,9 @@ func validReviewTargets(base, target string, requirements map[string]string) boo
 // ReviewNeedsGit separates explicit non-Git N/A plans from commit-bound batches.
 func ReviewNeedsGit(b ReviewPlanBatch) bool {
 	return !noGitReviewBatch(b.Base, b.TargetCommit, b.Requirements)
+}
+
+// CreateReviewPlanWithTransaction binds service authority to plan publication.
+func CreateReviewPlanWithTransaction(root string, plan ReviewPlan, extensions ...TransactionExtension) error {
+	return createReviewPlan(root, plan, true, extensions...)
 }

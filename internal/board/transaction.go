@@ -72,6 +72,7 @@ type OperationRecord struct {
 // Transaction stages multi-file publications under a fixed lock set. Callers
 // must use its Snapshot and Put methods, never call locking board APIs inside it.
 type Transaction struct {
+	result any
 	root   string
 	scope  LockScope
 	record OperationRecord

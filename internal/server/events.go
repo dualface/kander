@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -20,8 +19,8 @@ import (
 // older cursor reads as reset, and the client re-reads the task list.
 const eventRetention = 4096
 
-// eventLog is the per-project append-only change log. The epoch changes when
-// the log is recreated, so a cursor from a lost log never resumes silently.
+// eventLog is a bounded per-project change stream. Restart or append failure
+// changes its epoch, so an observer always refreshes after an uncertain gap.
 type eventLog struct {
 	mu      sync.Mutex
 	root    string
@@ -33,44 +32,20 @@ type eventLog struct {
 }
 
 func openEventLog(root string) (*eventLog, error) {
+	if err := ensureDir(root, "control"); err != nil {
+		return nil, err
+	}
 	l := &eventLog{root: root, rel: filepath.Join("control", "events.jsonl"), changed: make(chan struct{})}
-	var meta struct {
-		Epoch string `json:"epoch"`
-	}
-	found, err := readJSON(root, filepath.Join("control", "events-epoch.json"), &meta)
-	if err != nil {
+	// Events are invalidation hints, not the board's durable source of truth.
+	// Every service restart resets cursors, including a crash after a domain
+	// commit but before its event append.
+	if err := l.rotate(); err != nil {
 		return nil, err
 	}
-	if !found || meta.Epoch == "" {
-		b := make([]byte, 8)
-		if _, err := rand.Read(b); err != nil {
-			return nil, err
-		}
-		meta.Epoch = hex.EncodeToString(b)
-		if err := writeJSON(root, filepath.Join("control", "events-epoch.json"), meta); err != nil {
-			return nil, err
-		}
-	}
-	l.epoch = meta.Epoch
-	l.next = 1
-	data, ok, err := fs.ReadRegularFileIfExists(root, filepath.Join(root, l.rel))
-	if err != nil {
+	if err := fs.WriteTextAtomic(root, filepath.Join(root, l.rel), "", true); err != nil {
 		return nil, err
 	}
-	if ok {
-		scanner := bufio.NewScanner(strings.NewReader(string(data)))
-		scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
-		for scanner.Scan() {
-			var e api.Event
-			// A torn last line from a crash is skipped; the sequence resumes
-			// after the last complete event.
-			if json.Unmarshal(scanner.Bytes(), &e) != nil {
-				continue
-			}
-			l.push(e)
-			l.next = e.Seq + 1
-		}
-	}
+
 	return l, nil
 }
 
@@ -82,9 +57,17 @@ func (l *eventLog) push(e api.Event) {
 }
 
 // append records events durably, then wakes long-polling readers.
-func (l *eventLog) append(events ...api.Event) error {
+func (l *eventLog) append(events ...api.Event) (err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	defer func() {
+		if err != nil {
+			// Any observer that could have missed a committed write must re-read.
+			_ = l.rotate()
+			close(l.changed)
+			l.changed = make(chan struct{})
+		}
+	}()
 	file, err := fs.OpenAppendFile(l.root, filepath.Join(l.root, l.rel))
 	if err != nil {
 		return err
@@ -117,6 +100,17 @@ func (l *eventLog) append(events ...api.Event) error {
 	}
 	for _, e := range events {
 		l.push(e)
+	}
+	if l.next%eventRetention == 0 {
+		var compact strings.Builder
+		for _, event := range l.window {
+			data, _ := json.Marshal(event)
+			compact.Write(data)
+			compact.WriteByte('\n')
+		}
+		if err := fs.WriteTextAtomic(l.root, filepath.Join(l.root, l.rel), compact.String(), true); err != nil {
+			return err
+		}
 	}
 	close(l.changed)
 	l.changed = make(chan struct{})
@@ -172,4 +166,16 @@ func (l *eventLog) pageLocked(cursor string) (api.EventPage, bool) {
 		}
 	}
 	return api.EventPage{Cursor: current, Events: out}, true
+}
+
+// rotate runs only during startup or under mu after an append failure.
+func (l *eventLog) rotate() error {
+	var entropy [16]byte
+	if _, err := rand.Read(entropy[:]); err != nil {
+		return err
+	}
+	l.epoch = hex.EncodeToString(entropy[:])
+	l.next = 1
+	l.window = nil
+	return nil
 }

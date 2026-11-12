@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/config"
+	"github.com/dualface/kander/internal/remote"
 )
 
 // Run is the entry point of the `kander review` subcommand. args excludes the program name and the subcommand name.
@@ -57,15 +59,36 @@ func Run(args []string) (exitCode int) {
 		return 2
 	}
 	archiveRoot := ""
+	var stores []reviewStore
 	replay := false
 	var existing board.ReviewRun
 	if len(options.tasks) > 0 {
-		archiveRoot, err = board.BoardRootAt(rest[0])
+		cfg, loadErr := config.Effective(nil)
+		if loadErr != nil {
+			userError(loadErr.Error())
+			return 2
+		}
+		var store reviewStore
+		if remote.Enabled(cfg) {
+			session, openErr := remote.Open(context.Background(), cfg, rest[0])
+			if openErr != nil {
+				userError(openErr.Error())
+				return 2
+			}
+			store, err = newRemoteReviewStore(session)
+			if err == nil {
+				archiveRoot = store.Root()
+				stores = []reviewStore{store}
+			}
+		} else {
+			archiveRoot, err = board.BoardRootAt(rest[0])
+			store = localReviewStore{root: archiveRoot}
+		}
 		if err != nil {
 			userError(err.Error())
 			return 2
 		}
-		unlock, e := board.LockReviewRun(archiveRoot, options.runID)
+		unlock, e := store.Lock(options.runID)
 		if e != nil {
 			userError(e.Error())
 			return 2
@@ -76,7 +99,7 @@ func Run(args []string) (exitCode int) {
 				userError(e.Error())
 			}
 		}()
-		old, exists, e := board.LookupReviewRun(archiveRoot, options.runID)
+		old, exists, e := store.Lookup(options.runID)
 		if e != nil {
 			userError(e.Error())
 			return 2
@@ -89,7 +112,7 @@ func Run(args []string) (exitCode int) {
 		existing = old
 	}
 	role, ok := parseReviewRole(rest[3])
-	if !ok || !admitReviewRole(role, archiveRoot, options, replay, existing) {
+	if !ok || !admitReviewRole(role, archiveRoot, options, replay, existing, stores...) {
 		userError(config.Text("review.unsupported_role", rest[3]))
 		return 2
 	}
@@ -97,7 +120,7 @@ func Run(args []string) (exitCode int) {
 	pinRole := reviewerConfigRole(role)
 	var pinning reviewPinning
 	if len(options.tasks) > 0 {
-		pinning, err = boundReviewPinning(archiveRoot, options.tasks, pinRole)
+		pinning, err = boundReviewPinning(archiveRoot, options.tasks, pinRole, stores...)
 		if err != nil {
 			userError(err.Error())
 			return 2
@@ -123,7 +146,7 @@ func Run(args []string) (exitCode int) {
 		}
 	}
 	if len(options.tasks) > 0 {
-		rest, err = hydrateIncremental(archiveRoot, options, rest, replay)
+		rest, err = hydrateIncremental(archiveRoot, options, rest, replay, stores...)
 		if err != nil {
 			userError(err.Error())
 			return 2
@@ -149,7 +172,7 @@ func Run(args []string) (exitCode int) {
 		if replay {
 			findingsSchema = existing.FindingsSchema
 		}
-		fresh, e := archiveInvocation(&ctx, options, rest, archiveRoot, findingsSchema)
+		fresh, e := archiveInvocation(&ctx, options, rest, archiveRoot, findingsSchema, stores...)
 		if e != nil {
 			userError(e.Error())
 			return 2

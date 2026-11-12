@@ -27,5 +27,6 @@
   "remote.claimed": "已领取 {{.V0}}, 代次 {{.V1}}, 执行 {{.V2}}",
   "remote.worker_start_failed": "后台 worker 未能启动, 本机领取不会续租: {{.V0}}",
   "remote.stale_snapshot": "离线快照已陈旧（{{.V0}}）；请重新连接以刷新。写入必须连接服务端。",
-  "remote.stale_label": "陈旧快照"
+  "remote.stale_label": "陈旧快照",
+  "remote.publication_confirmation_request": "联合评审资料 {{.V0}} 已准备。请核对操作与版本，再在你自己的本地项目目录确认：kander review confirm <absolute-CWD> {{.V0}} {{.V1}}。确认仅绑定本卡版本及当前执行代次。"
 }

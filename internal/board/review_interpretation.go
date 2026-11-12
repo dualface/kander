@@ -130,7 +130,7 @@ func receiverFindings(tx *Transaction, run ReviewRun, report []byte) (ReviewFind
 
 // InterpretReview publishes one immutable interpretation atomically to every
 // member. It never changes the original run, report, manifest, or execution exit.
-func InterpretReview(root string, m ReviewInterpretation) error {
+func InterpretReviewWithTransaction(root string, m ReviewInterpretation, extensions ...TransactionExtension) error {
 	run, err := ReadReviewRun(root, m.RunID)
 	if err != nil {
 		return err
@@ -181,7 +181,7 @@ func InterpretReview(root string, m ReviewInterpretation) error {
 			}
 		}
 		return tx.PutGroup(reviewControlGroup, interpretationName(run.RunID), reviewJSON(m))
-	})
+	}, extensions...)
 }
 
 // ReviewNeedsInterpretation reports a normal pending state, while archive damage

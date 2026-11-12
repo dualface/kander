@@ -28,6 +28,8 @@ const (
 	HeaderIdempotencyKey = "Idempotency-Key"
 	HeaderClaimToken     = "Kander-Claim-Token"
 	HeaderClaimGen       = "Kander-Claim-Generation"
+	HeaderClaims         = "Kander-Claims"
+	HeaderPublication    = "Kander-Publication"
 	HeaderClientID       = "Kander-Client-Id"
 	HeaderOperationID    = "Kander-Operation-Id"
 )
@@ -284,6 +286,7 @@ const (
 // task. It targets one generation; a takeover supersedes the open requests of
 // the old generation instead of handing them to the new execution.
 type CollabRequest struct {
+	Revision         uint64    `json:"revision"`
 	ID               string    `json:"id"`
 	TaskID           string    `json:"task_id"`
 	Kind             string    `json:"kind"`
@@ -306,8 +309,9 @@ type NewCollabRequest struct {
 
 // CollabAnswer is POST .../tasks/{task}/requests/{id}/answer by the holder.
 type CollabAnswer struct {
-	Status string `json:"status"`
-	Note   string `json:"note,omitempty"`
+	ExpectedRevision uint64 `json:"expected_revision,omitzero"`
+	Status           string `json:"status"`
+	Note             string `json:"note,omitempty"`
 }
 
 // Event kinds.
@@ -366,4 +370,12 @@ type IssueImport struct {
 	Type     string          `json:"type,omitempty"`
 	Language string          `json:"language"`
 	Large    bool            `json:"large,omitzero"`
+}
+
+// ClaimProof is one execution's private authority over one task. A multi-task
+// operation supplies a separate proof for each task; it never reuses one token
+// as authority for another task.
+type ClaimProof struct {
+	Token      string `json:"token"`
+	Generation uint64 `json:"generation"`
 }

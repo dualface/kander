@@ -81,7 +81,7 @@ func (f *fixture) project(clientID string) *client.Project {
 }
 
 // todoTask creates a task with a complete contract and moves it to todo.
-func todoTask(t *testing.T, p *client.Project, slug string) api.Task {
+func todoTask(t *testing.T, p *client.Project, slug string, group ...string) api.Task {
 	t.Helper()
 	ctx := t.Context()
 	task, err := p.NewTask(ctx, "", api.NewTask{Type: "feature", Slug: slug, Title: "Demo " + slug, Language: "en"})
@@ -89,6 +89,10 @@ func todoTask(t *testing.T, p *client.Project, slug string) api.Task {
 		t.Fatal(err)
 	}
 	text := strings.ReplaceAll(task.Text, "<FILL_IN>", "filled")
+	if len(group) != 0 {
+		text = strings.Replace(text, "- TASK_GROUP:", "- TASK_GROUP: "+group[0], 1)
+		text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nCARD_REVIEW: PASS\n", 1)
+	}
 	text = strings.Replace(text, "## DISCUSSION\n", "## DISCUSSION\n\nSELF_REVIEW: PASS\n", 1)
 	if task, err = p.PutDocument(ctx, "", task.TaskID, api.Document{Path: "spec.md", Text: text, ExpectedRevision: task.Revision}, nil); err != nil {
 		t.Fatal(err)

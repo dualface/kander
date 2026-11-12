@@ -57,7 +57,20 @@ func RunRequest(args []string) int {
 		if !found {
 			return fail(&api.Error{Code: api.CodeHeldByOther, Message: "this host holds no claim of " + args[1]})
 		}
-		r, err := s.Project.AnswerRequest(ctx, client.NewKey(), args[1], args[2], api.CollabAnswer{Status: args[3], Note: strings.Join(args[4:], " ")}, *credential.Claim())
+		requests, err := s.Project.Requests(ctx, args[1])
+		if err != nil {
+			return fail(err)
+		}
+		var revision uint64
+		for _, request := range requests {
+			if request.ID == args[2] {
+				revision = request.Revision
+			}
+		}
+		if revision == 0 {
+			return fail(&api.Error{Code: api.CodeNotFound, Message: "request does not exist"})
+		}
+		r, err := s.Project.AnswerRequest(ctx, client.NewKey(), args[1], args[2], api.CollabAnswer{ExpectedRevision: revision, Status: args[3], Note: strings.Join(args[4:], " ")}, *credential.Claim())
 		if err != nil {
 			return fail(err)
 		}

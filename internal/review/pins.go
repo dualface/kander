@@ -20,7 +20,8 @@ type reviewPinning struct {
 
 // boundReviewPinning reads the bound cards and requires them to agree on the
 // role's pin; one card pinning while another leaves the role unset is a conflict.
-func boundReviewPinning(root string, taskIDs []string, role string) (reviewPinning, error) {
+func boundReviewPinning(root string, taskIDs []string, role string, stores ...reviewStore) (reviewPinning, error) {
+	store := selectedReviewStore(root, stores)
 	cfg, err := config.Effective(nil)
 	if err != nil {
 		return reviewPinning{}, err
@@ -28,7 +29,7 @@ func boundReviewPinning(root string, taskIDs []string, role string) (reviewPinni
 	var result reviewPinning
 	sizes := map[string]bool{}
 	for i, id := range taskIDs {
-		snapshot, err := board.ReadSnapshot(root, id)
+		snapshot, err := store.Snapshot(id)
 		if err != nil {
 			return reviewPinning{}, err
 		}

@@ -131,7 +131,7 @@ func reviewRunForMutation(tx *Transaction, runID string) (run ReviewRun, err err
 	}
 	return
 }
-func MapLegacyReview(root string, m LegacyFindingMap) error {
+func MapLegacyReviewWithTransaction(root string, m LegacyFindingMap, extensions ...TransactionExtension) error {
 	run, err := ReadReviewRun(root, m.RunID)
 	if err != nil {
 		return err
@@ -178,9 +178,9 @@ func MapLegacyReview(root string, m LegacyFindingMap) error {
 			}
 		}
 		return tx.PutGroup(reviewControlGroup, name, reviewJSON(m))
-	})
+	}, extensions...)
 }
-func AssignReviewFindings(root string, a ReviewAssignment) error {
+func AssignReviewFindingsWithTransaction(root string, a ReviewAssignment, extensions ...TransactionExtension) error {
 	run, err := ReadReviewRun(root, a.RunID)
 	if err != nil {
 		return err
@@ -255,7 +255,7 @@ func AssignReviewFindings(root string, a ReviewAssignment) error {
 			}
 		}
 		return tx.PutGroup(reviewControlGroup, ledgerName(run.RunID), reviewJSON(dispositionLedger{Assignment: a, Records: []ReviewDisposition{}}))
-	})
+	}, extensions...)
 }
 func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding, a ReviewAssignment) error {
 	switch {
@@ -329,7 +329,7 @@ func validateDisposition(d ReviewDisposition, run ReviewRun, item ReviewFinding,
 	}
 	return nil
 }
-func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision uint64) error {
+func SubmitReviewDispositionWithTransaction(root string, d ReviewDisposition, expectedRevision uint64, extensions ...TransactionExtension) error {
 	run, err := ReadReviewRun(root, d.RunID)
 	if err != nil {
 		return err
@@ -368,7 +368,7 @@ func SubmitReviewDisposition(root string, d ReviewDisposition, expectedRevision 
 			return err
 		}
 		return tx.PutGroup(reviewControlGroup, ledgerName(d.RunID), reviewJSON(ledger))
-	})
+	}, extensions...)
 }
 
 // appendDisposition validates d against the assignment and adds it to the ledger.

@@ -35,7 +35,8 @@ type Options struct {
 	IdleExit time.Duration
 	Logger   *slog.Logger
 	Now      func() time.Time
-	// Stop ends a managed agent process; the default signals the PID.
+	// Stop overrides process termination in tests. The default verifies the
+	// recorded process incarnation before signaling its kernel handle.
 	Stop func(pid int) error
 	// Deliver types one line into the agent recorded by the card's WINDOW
 	// and SESSION; the default is Deliver.
@@ -88,9 +89,6 @@ func Serve(ctx context.Context, o Options) error {
 	}
 	if o.Now == nil {
 		o.Now = time.Now
-	}
-	if o.Stop == nil {
-		o.Stop = stopProcess
 	}
 	if o.Deliver == nil {
 		o.Deliver = Deliver
@@ -160,6 +158,7 @@ func (w *loop) pass(ctx context.Context) (int, error) {
 	live := 0
 	for _, c := range credentials {
 		if c.Lost {
+			w.stopLost(ctx, w.o.Logger, c)
 			continue
 		}
 		if w.step(ctx, c) {
@@ -228,24 +227,17 @@ func (w *loop) step(ctx context.Context, c remote.Credential) bool {
 // branch, and uncommitted changes are left untouched for manual handling.
 func (w *loop) lose(log *slog.Logger, c remote.Credential, reason string) {
 	c.Lost, c.LostReason = true, reason
-	if c.AgentPID > 0 {
-		if err := w.o.Stop(c.AgentPID); err != nil {
-			log.Error("stopping the managed agent failed; its later submissions are refused by the server", "pid", c.AgentPID, "error", err)
-			c.LostReason += "; agent stop failed: " + err.Error()
-		} else {
-			log.Info("managed agent stopped", "pid", c.AgentPID)
-		}
-	}
 	log.Warn("lease lost", "reason", reason)
 	if err := remote.WriteCredential(w.o.Home, c); err != nil {
-		log.Error("credential write failed", "error", err)
+		log.Error("credential write failed; agent stop is deferred", "error", err)
+		return
 	}
+	w.stopLost(context.Background(), log, c)
 }
 
 // deliver hands the open requests of this generation to the agent once each.
-// A delivered request is accepted with the holder's claim; the agent answers
-// it with kander request answer. A failed delivery stays open and is tried
-// again on the next renewal.
+// A durable acceptance reserves delivery before the terminal effect. An
+// uncertain attempt is inspected by the holder instead of being typed again.
 func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Project, c *remote.Credential) {
 	if w.o.Deliver == nil {
 		return
@@ -269,13 +261,22 @@ func (w *loop) deliver(ctx context.Context, log *slog.Logger, project *client.Pr
 			task = &t
 		}
 		window, session := board.MetadataFrom(task.Text, board.FieldWindow), board.MetadataFrom(task.Text, board.FieldSession)
-		if err := w.o.Deliver(window, session, requestLine(c.TaskID, r)); err != nil {
-			log.Warn("request delivery failed; it stays open", "request", r.ID, "error", err)
+		accepted, err := project.AnswerRequest(ctx, "delivery-"+c.ExecutionID+"-"+r.ID, c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: r.Revision, Note: "automatic delivery reserved; outcome is uncertain until observed"}, *c.Claim())
+		if err != nil {
+			log.Warn("reserving request delivery failed", "request", r.ID, "error", err)
 			continue
 		}
 		c.Delivered = append(c.Delivered, r.ID)
-		if _, err := project.AnswerRequest(ctx, client.NewKey(), c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, Note: "delivered to the agent"}, *c.Claim()); err != nil {
-			log.Warn("accepting a delivered request failed", "request", r.ID, "error", err)
+		if err := remote.WriteCredential(w.o.Home, *c); err != nil {
+			log.Error("request delivery intent could not be saved", "request", r.ID, "error", err)
+			continue
+		}
+		if err := w.o.Deliver(window, session, requestLine(c.TaskID, r)); err != nil {
+			log.Warn("request delivery outcome unresolved; automatic retry suppressed", "request", r.ID, "error", err)
+			continue
+		}
+		if _, err := project.AnswerRequest(ctx, client.NewKey(), c.TaskID, r.ID, api.CollabAnswer{Status: api.RequestAccepted, ExpectedRevision: accepted.Revision, Note: "delivered to the agent"}, *c.Claim()); err != nil {
+			log.Warn("request delivery receipt failed", "request", r.ID, "error", err)
 		}
 		log.Info("request delivered", "request", r.ID, "kind", r.Kind)
 	}

@@ -19,6 +19,7 @@ type archiveOptions struct {
 	runID, batchID, previousID, requirementsFile, advanceFile string
 }
 type archiveExecution struct {
+	store        reviewStore
 	root         string
 	run          board.ReviewRun
 	staging      string
@@ -106,7 +107,8 @@ func parseArchiveOptions(args []string) (archiveOptions, []string, error) {
 	return options, append(prefix, args...), nil
 }
 
-func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []string, root string, findingsSchema int) (bool, error) {
+func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []string, root string, findingsSchema int, stores ...reviewStore) (bool, error) {
+	store := selectedReviewStore(root, stores)
 	requirements := map[string]string{}
 	if options.requirementsFile != "" {
 		if err := readArchiveJSON(options.requirementsFile, &requirements); err != nil {
@@ -121,7 +123,7 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 		}
 		// The range may hold a delivery of a member that left the batch since.
 		members := options.tasks
-		if b, err := board.ReadReviewBatch(root, options.batchID); err == nil {
+		if b, err := store.Batch(options.batchID); err == nil {
 			members = b.TaskIDs
 		}
 		if err := validateReviewAdvance(*ctx, *advance, members); err != nil {
@@ -144,18 +146,18 @@ func archiveInvocation(ctx *reviewContext, options archiveOptions, arguments []s
 		reviewContext = []byte(arguments[5])
 	}
 	input := board.ReviewInput{FindingsSchema: findingsSchema, RunID: options.runID, BatchID: options.batchID, PreviousRunID: options.previousID, TaskIDs: options.tasks, Role: ctx.role, Reviewer: ctx.agent, Model: ctx.settings.model, Effort: ctx.settings.effort, CWD: ctx.root, Base: ctx.base, Commit: ctx.commit, ReviewedCommit: ctx.reviewed, ReportLanguage: ctx.reportLanguage, Resolved: ctx.resolved}
-	run, fresh, err := board.PrepareReviewRun(root, input, requirements, advance, map[string][]byte{"task-context.md": task, "review-context.md": reviewContext}, version.String())
+	run, fresh, err := store.Prepare(input, requirements, advance, map[string][]byte{"task-context.md": task, "review-context.md": reviewContext}, version.String())
 	if err != nil {
 		return false, err
 	}
-	staging, err := board.ReviewStaging(root, run.RunID)
+	staging, err := store.Staging(run.RunID)
 	if err != nil {
 		return false, err
 	}
 	ctx.reportLanguage = run.ReportLanguage
-	ctx.archive = &archiveExecution{root: root, run: run, staging: staging, taskSnapshot: task}
+	ctx.archive = &archiveExecution{store: store, root: root, run: run, staging: staging, taskSnapshot: task}
 	fmt.Fprintln(os.Stderr, config.Text("review.archive_identity", run.RunID, run.BatchID))
-	if fresh {
+	if fresh && len(stores) == 0 {
 		// The warning is advisory: the intent is already committed, so a read
 		// failure is reported and the run continues.
 		if unlinked, e := board.UnlinkedReviewRuns(root, run); e != nil {
@@ -230,7 +232,7 @@ func validateReviewAdvance(ctx reviewContext, advance board.ReviewAdvance, tasks
 func (a *archiveExecution) phase(phase, launch string) error {
 	a.run.Phase = phase
 	a.run.LaunchStatus = launch
-	return board.UpdateReviewRun(a.root, a.run)
+	return a.backend().Update(a.run)
 }
 func (a *archiveExecution) finish(code int) int {
 	a.run.ExitCode = code
@@ -251,7 +253,7 @@ func (a *archiveExecution) finish(code int) int {
 		a.run.FailureReason += "; " + note
 		userError(note)
 	}
-	run, err := board.FinalizeReviewRun(a.root, a.run, a.report)
+	run, err := a.backend().Finalize(a.run, a.report)
 	if err != nil {
 		userError(config.Text("review.archive_publish_failed", a.run.RunID, err.Error()))
 		return 2
@@ -274,7 +276,7 @@ func (a *archiveExecution) recover() int {
 			userError(note)
 		}
 		var err error
-		a.run, err = board.FinalizeReviewRun(a.root, a.run, nil)
+		a.run, err = a.backend().Finalize(a.run, nil)
 		if err != nil {
 			userError(err.Error())
 			return 2
@@ -282,15 +284,15 @@ func (a *archiveExecution) recover() int {
 	}
 	// Replay exactly the saved semantic report, or the raw partial output when no
 	// semantic report exists. This path never launches a reviewer.
-	if data, err := board.ReadReviewOriginal(a.root, a.run.RunID, "report.md"); err == nil {
+	if data, err := a.backend().Original(a.run.RunID, "report.md"); err == nil {
 		_, _ = os.Stdout.Write(data)
-	} else if data, err := board.ReadReviewOriginal(a.root, a.run.RunID, "output.raw"); err == nil {
+	} else if data, err := a.backend().Original(a.run.RunID, "output.raw"); err == nil {
 		_, _ = os.Stdout.Write(data)
 	}
 	return a.publish()
 }
 func (a *archiveExecution) publish() int {
-	run, failures, err := board.PublishReviewRun(a.root, a.run.RunID)
+	run, failures, err := a.backend().Publish(a.run.RunID)
 	if err != nil {
 		userError(config.Text("review.archive_publish_failed", a.run.RunID, err.Error()))
 		return 2
@@ -307,11 +309,11 @@ func (a *archiveExecution) publish() int {
 	if len(failures) > 0 {
 		return 2
 	}
-	if err = board.ReviewPublicationComplete(a.root, run.RunID); err != nil {
+	if err = a.backend().Complete(run.RunID); err != nil {
 		userError(err.Error())
 		return 2
 	}
-	pending, err := board.ReviewNeedsInterpretation(a.root, run.RunID)
+	pending, err := a.backend().NeedsInterpretation(run.RunID)
 	if err != nil {
 		userError(err.Error())
 		return 2
@@ -327,7 +329,7 @@ func (a *archiveExecution) snapshotRuntime(runtime string) error {
 		if err != nil {
 			return err
 		}
-		if err = board.StoreReviewArtifact(a.root, a.run.RunID, name, data); err != nil {
+		if err = a.backend().Artifact(a.run.RunID, name, data); err != nil {
 			return err
 		}
 	}
@@ -338,4 +340,11 @@ func (a *archiveExecution) snapshotRuntime(runtime string) error {
 // invocation identity even when the worktree or CLI availability has changed.
 func sameReplayTarget(run board.ReviewRun, options archiveOptions) bool {
 	return run.BatchID == options.batchID && reflect.DeepEqual(run.TaskIDs, options.tasks)
+}
+
+func (a *archiveExecution) backend() reviewStore {
+	if a.store != nil {
+		return a.store
+	}
+	return localReviewStore{root: a.root}
 }

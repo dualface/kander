@@ -30,7 +30,7 @@ type ReviewPlanExtension struct {
 	Basis             string                        `json:"basis"`
 }
 
-func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
+func ExtendReviewPlanWithTransaction(root string, x ReviewPlanExtension, extensions ...TransactionExtension) error {
 	if x.ResolveBatch != nil {
 		return reviewError("resolve_batch needs the Git evidence of ResolveReviewBatch")
 	}
@@ -290,5 +290,5 @@ func ExtendReviewPlan(root string, x ReviewPlanExtension) error {
 			return err
 		}
 		return tx.PutGroup(reviewControlGroup, planName(p.PlanID), reviewJSON(p))
-	})
+	}, extensions...)
 }

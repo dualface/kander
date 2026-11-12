@@ -31,7 +31,7 @@ func currentReviewRole(role string) bool {
 
 func reviewerConfigRole(role string) string { return board.PinRole(role) }
 
-func admitReviewRole(role string, root string, options archiveOptions, replay bool, existing board.ReviewRun) bool {
+func admitReviewRole(role string, root string, options archiveOptions, replay bool, existing board.ReviewRun, stores ...reviewStore) bool {
 	if currentReviewRole(role) {
 		return true
 	}
@@ -41,7 +41,7 @@ func admitReviewRole(role string, root string, options archiveOptions, replay bo
 	if root == "" || options.batchID == "" {
 		return false
 	}
-	batch, err := board.ReadReviewBatch(root, options.batchID)
+	batch, err := selectedReviewStore(root, stores).Batch(options.batchID)
 	if err != nil {
 		return false
 	}

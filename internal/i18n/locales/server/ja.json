@@ -27,5 +27,6 @@
   "remote.claimed": "{{.V0}} を世代 {{.V1}}、実行 {{.V2}} でクレームしました",
   "remote.worker_start_failed": "バックグラウンド worker を起動できませんでした。このホストのリースは更新されません: {{.V0}}",
   "remote.stale_snapshot": "{{.V0}} のオフラインスナップショットは古くなっています。更新には再接続が必要です。書き込みにはサーバー接続が必要です。",
-  "remote.stale_label": "古いスナップショット"
+  "remote.stale_label": "古いスナップショット",
+  "remote.publication_confirmation_request": "共同レビュー資料 {{.V0}} が準備されました。操作とバージョンを確認し、自分のローカルプロジェクトから承認してください: kander review confirm <absolute-CWD> {{.V0}} {{.V1}}。承認はこのタスクのリビジョンと実行世代に限定されます。"
 }

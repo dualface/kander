@@ -147,7 +147,10 @@ func (s *Server) Handler() http.Handler {
 		return outcome{status: http.StatusOK, body: p.events.read(r.Context(), r.URL.Query().Get("cursor"), wait)}
 	})
 	s.reviewRoutes(mux)
+	s.reviewActionRoutes(mux)
+	s.reviewRuntimeRoutes(mux)
 	s.issueRoutes(mux)
+	s.publicationRoutes(mux)
 	return mux
 }
 
@@ -160,7 +163,18 @@ func result(status int, body any, err error) outcome {
 
 func holderOf(r *http.Request) holder {
 	generation, _ := strconv.ParseUint(r.Header.Get(api.HeaderClaimGen), 10, 64)
-	return holder{token: r.Header.Get(api.HeaderClaimToken), generation: generation, clientID: r.Header.Get(api.HeaderClientID)}
+	h := holder{publication: r.Header.Get(api.HeaderPublication), token: r.Header.Get(api.HeaderClaimToken), generation: generation, clientID: r.Header.Get(api.HeaderClientID)}
+	if raw := r.Header.Get(api.HeaderClaims); raw != "" {
+		if len(raw) > 64<<10 || json.Unmarshal([]byte(raw), &h.members) != nil || len(h.members) == 0 || len(h.members) > 256 {
+			h.invalid = apiError(api.CodeInvalidRequest, "invalid multi-task claim proofs")
+		}
+		for id, proof := range h.members {
+			if !api.ValidIdentity(id) || len(proof.Token) != 64 || proof.Generation == 0 {
+				h.invalid = apiError(api.CodeInvalidRequest, "invalid multi-task claim proof")
+			}
+		}
+	}
+	return h
 }
 
 func (s *Server) projectRoute(mux *http.ServeMux, pattern string, fn func(*project, *http.Request) outcome) {

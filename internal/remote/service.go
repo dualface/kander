@@ -13,6 +13,14 @@ import (
 // views. Implementations perform REST calls; there is no local board adapter.
 // Git, terminal control and private execution files remain client concerns.
 type ProjectService interface {
+	ReviewRuntime(context.Context, string, string, string, any, *client.Claim) (json.RawMessage, error)
+	ReviewEvidence(context.Context, string, string, string) (json.RawMessage, error)
+	ReviewRemaining(context.Context, []string) ([]string, error)
+	PreparePublication(context.Context, api.PublicationPrepare) (api.Publication, error)
+	Publication(context.Context, string) (api.Publication, error)
+	ConfirmPublication(context.Context, string, api.PublicationApproval, client.Claim) (api.Publication, error)
+	ReviewAction(context.Context, string, string, any, *client.Claim) (json.RawMessage, error)
+	ReviewResource(context.Context, string, string) (json.RawMessage, error)
 	ImportIssue(context.Context, string, api.IssueImport) (json.RawMessage, error)
 	IssueIndex(context.Context) (json.RawMessage, error)
 	ID() string
@@ -38,3 +46,26 @@ type ProjectService interface {
 }
 
 var _ ProjectService = (*client.Project)(nil)
+
+// ClaimsFor resolves each task independently. A process-bound execution cannot
+// borrow a later generation or another execution from the latest pointer.
+func (s *Session) ClaimsFor(tasks []string) (*client.Claim, error) {
+	proofs := map[string]api.ClaimProof{}
+	for _, task := range tasks {
+		credential, found, err := s.Credential(task)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			continue
+		}
+		if credential.Lost {
+			return nil, &api.Error{Code: api.CodeLeaseInvalid, Message: "this execution lost its lease"}
+		}
+		proofs[task] = api.ClaimProof{Token: credential.Token, Generation: credential.Generation}
+	}
+	if len(proofs) == 0 {
+		return nil, nil
+	}
+	return &client.Claim{Members: proofs}, nil
+}

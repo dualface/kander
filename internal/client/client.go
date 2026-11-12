@@ -50,8 +50,11 @@ func (c *Client) ClientID() string { return c.clientID }
 
 // Claim is the context a holder presents on every write of a claimed task.
 type Claim struct {
-	Token      string
-	Generation uint64
+	ReviewWriter  string
+	PublicationID string
+	Members       map[string]api.ClaimProof
+	Token         string
+	Generation    uint64
 }
 
 // NewKey returns a fresh idempotency key.
@@ -125,6 +128,15 @@ func (c *Client) once(ctx context.Context, in call, target string, payload []byt
 		req.Header.Set(api.HeaderIdempotencyKey, in.key)
 	}
 	if in.claim != nil {
+		req.Header.Set(api.HeaderReviewWriter, in.claim.ReviewWriter)
+		req.Header.Set(api.HeaderPublication, in.claim.PublicationID)
+		if len(in.claim.Members) != 0 {
+			proofs, err := json.Marshal(in.claim.Members)
+			if err != nil {
+				return false, err
+			}
+			req.Header.Set(api.HeaderClaims, string(proofs))
+		}
 		req.Header.Set(api.HeaderClaimToken, in.claim.Token)
 		req.Header.Set(api.HeaderClaimGen, strconv.FormatUint(in.claim.Generation, 10))
 	}
@@ -393,5 +405,41 @@ func (p *Project) ImportIssue(ctx context.Context, key string, request api.Issue
 func (p *Project) IssueIndex(ctx context.Context) (json.RawMessage, error) {
 	var out json.RawMessage
 	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("issues", "index")}, &out)
+	return out, err
+}
+
+// ReviewAction invokes a controlled evidence producer. The server accepts only
+// the declared review actions and decodes each payload into its domain type.
+func (p *Project) ReviewAction(ctx context.Context, key, action string, payload any, claim *Claim) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("reviews", "actions", url.PathEscape(action)), body: payload, key: key, claim: claim}, &out)
+	return out, err
+}
+
+// ReviewResource reads published review metadata, independent of a client CWD.
+func (p *Project) ReviewResource(ctx context.Context, kind, id string) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("reviews", kind, url.PathEscape(id))}, &out)
+	return out, err
+}
+
+// PreparePublication stores immutable material before holder confirmation.
+func (p *Project) PreparePublication(ctx context.Context, request api.PublicationPrepare) (api.Publication, error) {
+	var out api.Publication
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("publications"), body: request}, &out)
+	return out, err
+}
+
+// Publication reads a prepared or completed joint publication.
+func (p *Project) Publication(ctx context.Context, id string) (api.Publication, error) {
+	var out api.Publication
+	err := p.c.do(ctx, call{method: http.MethodGet, path: p.path("publications", url.PathEscape(id))}, &out)
+	return out, err
+}
+
+// ConfirmPublication binds this holder's approval to the exact version/digest.
+func (p *Project) ConfirmPublication(ctx context.Context, id string, approval api.PublicationApproval, proof Claim) (api.Publication, error) {
+	var out api.Publication
+	err := p.c.do(ctx, call{method: http.MethodPost, path: p.path("publications", url.PathEscape(id), "confirm"), body: approval, claim: &proof}, &out)
 	return out, err
 }
