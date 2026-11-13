@@ -105,7 +105,7 @@ func TestCloneAndFormatCoverChat(t *testing.T) {
 		t.Fatal("clone aliased chat settings")
 	}
 	cfg.ChatAgent = "claude"
-	lines, err := FormatConfigLines(cfg)
+	lines, err := FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestFormatConfigLinesOmitsChatOnlyKanbanModel(t *testing.T) {
 	cfg.KanbanAgents["large"] = "codex"
 	cfg.KanbanAgents["small"] = "codex"
 	cfg.ChatAgent = "claude"
-	lines, err := FormatConfigLines(cfg)
+	lines, err := FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}

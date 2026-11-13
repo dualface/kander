@@ -265,7 +265,7 @@ func TestFormatConfigLinesListOnlyTwoRoles(t *testing.T) {
 	setupHome(t)
 	cfg := DefaultConfig()
 	cfg.WelcomeComplete = true
-	lines, err := FormatConfigLines(cfg)
+	lines, err := FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}

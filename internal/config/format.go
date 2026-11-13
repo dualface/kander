@@ -125,14 +125,9 @@ func FormatReviewStagesSummary(stages map[string]map[string]string) []string {
 }
 
 // FormatConfigLines produces the read-only human-readable output of kander
-// config without a server board path.
-func FormatConfigLines(cfg *Config) ([]string, error) {
-	return FormatConfigLinesWithBoard(cfg, "")
-}
-
-// FormatConfigLinesWithBoard is FormatConfigLines with the board path the
-// server reported for the bound project; an empty path prints as unavailable.
-func FormatConfigLinesWithBoard(cfg *Config, boardPath string) ([]string, error) {
+// config. boardPath is the board path the server reported for the bound
+// project; an empty path prints as unavailable.
+func FormatConfigLines(cfg *Config, boardPath string) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {
 		return nil, err

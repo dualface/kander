@@ -50,7 +50,7 @@ func TestExtendedLaunchTimeoutsOverlayAndFormat(t *testing.T) {
 	if err != nil || !merged.ExtendedLaunchTimeouts {
 		t.Fatalf("overlay: extended=%v err=%v", merged != nil && merged.ExtendedLaunchTimeouts, err)
 	}
-	lines, err := FormatConfigLines(merged)
+	lines, err := FormatConfigLines(merged, "")
 	if err != nil {
 		t.Fatal(err)
 	}

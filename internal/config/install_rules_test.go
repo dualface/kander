@@ -159,7 +159,7 @@ func TestConfigLinesShowInstallRules(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.WelcomeComplete = true
 	SetAgentInstallRules(cfg, "codex", &off)
-	lines, err := FormatConfigLines(cfg)
+	lines, err := FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}

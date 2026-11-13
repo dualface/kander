@@ -474,7 +474,7 @@ func TestFormatConfigLinesIncludesOverlayPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines, err := FormatConfigLines(cfg)
+	lines, err := FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}

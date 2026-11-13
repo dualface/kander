@@ -218,7 +218,7 @@ func TestFormatReviewStagesSummaryFoldsIdenticalScales(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.WelcomeComplete = true
 	cfg.ReviewStages = same
-	lines, err := FormatConfigLines(cfg)
+	lines, err := FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestFormatReviewStagesSummaryFoldsIdenticalScales(t *testing.T) {
 		t.Fatalf("%v", split)
 	}
 	cfg.ReviewStages = different
-	lines, err = FormatConfigLines(cfg)
+	lines, err = FormatConfigLines(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -44,7 +44,7 @@ func serverBoardPath(cfg *config.Config) string {
 }
 
 func printConfig(cfg *config.Config) error {
-	lines, err := config.FormatConfigLinesWithBoard(cfg, serverBoardPath(cfg))
+	lines, err := config.FormatConfigLines(cfg, serverBoardPath(cfg))
 	if err != nil {
 		return err
 	}
