@@ -23,7 +23,7 @@ import (
 const DefaultListen = "127.0.0.1:7878"
 
 // Main runs kander-server until SIGINT or SIGTERM, or an explicit offline
-// import, maintenance or component installation command.
+// import, maintenance, project listing or component installation command.
 func Main(args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
@@ -35,6 +35,8 @@ func Main(args []string) int {
 			return runImport(args[1:])
 		case "maintain":
 			return runMaintain(args[1:])
+		case "projects":
+			return runProjects(args[1:])
 		}
 	}
 	flags := flag.NewFlagSet("kander-server", flag.ContinueOnError)

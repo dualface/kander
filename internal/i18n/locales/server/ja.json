@@ -2,7 +2,7 @@
   "config.server_must_be_a_json_object": "server は JSON オブジェクトである必要があります",
   "config.server_url_invalid": "server.url は資格情報、クエリ、フラグメントを含まない http または https の URL である必要があります",
   "config.project_must_be_a_json_object": "project は JSON オブジェクトである必要があります",
-  "config.project_name_invalid": "project.name は英数字で始まり、英数字、'.'、'_'、'-' のみを含む必要があります (最大 128 文字)",
+  "config.project_name_invalid": "project.name は ASCII 英字で始まり、ASCII 英数字、'_'、'-' のみを含む必要があります (最大 128 文字)",
   "config.server_url": "サーバー URL",
   "config.project_name": "プロジェクト名",
   "remote.error_invalid_request": "無効なリクエスト",

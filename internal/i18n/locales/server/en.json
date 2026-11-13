@@ -2,7 +2,7 @@
   "config.server_must_be_a_json_object": "server must be a JSON object",
   "config.server_url_invalid": "server.url must be an http or https URL without credentials, query, or fragment",
   "config.project_must_be_a_json_object": "project must be a JSON object",
-  "config.project_name_invalid": "project.name must start with a letter or digit and contain only letters, digits, '.', '_' or '-' (at most 128 characters)",
+  "config.project_name_invalid": "project.name must start with an ASCII letter and contain only ASCII letters, digits, '_' or '-' (at most 128 characters)",
   "config.server_url": "Server URL",
   "config.project_name": "Project name",
   "remote.error_invalid_request": "invalid request",

@@ -32,7 +32,7 @@ type MaintenanceResult struct {
 // never serves requests, prunes archived evidence or changes the import source.
 func Maintain(options Options, project string, acknowledged bool) (result MaintenanceResult, err error) {
 	if !api.ValidProjectName(project) {
-		return result, apiError(api.CodeInvalidRequest, "invalid maintenance project name")
+		return result, apiError(api.CodeInvalidRequest, "invalid maintenance project name: "+api.ProjectNameRule)
 	}
 	options.maintenance = &maintenanceRequest{Project: project, Acknowledged: acknowledged}
 	service, err := Open(options)

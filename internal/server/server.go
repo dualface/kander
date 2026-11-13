@@ -19,8 +19,12 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/api"
+	"github.com/dualface/kander/internal/board"
 	"github.com/dualface/kander/internal/fs"
 )
+
+// projectIDFor derives project IDs; tests replace it to force a collision.
+var projectIDFor = api.ProjectID
 
 // Defaults of the lease protocol; the server decides time.
 const (
@@ -120,6 +124,9 @@ func Open(o Options) (*Server, error) {
 		s.log.Info("offline maintenance complete", "project_name", s.maintenance.Project, "changed_tasks", s.maintenanceChanged)
 	} else {
 		s.ready.Store(true)
+		for _, info := range s.projectInfos() {
+			s.log.Info("project", "name", info.Name, "id", info.ID, "board", info.BoardPath)
+		}
 		s.log.Info("server ready", "data", s.data, "projects", len(s.projects))
 	}
 	return s, nil
@@ -165,11 +172,11 @@ func (s *Server) load() error {
 	if s.secret, err = hex.DecodeString(secret.Secret); err != nil || len(s.secret) < 32 {
 		return errors.New("server secret is damaged")
 	}
-	var reg registry
-	if _, err := readJSON(s.data, "projects.json", &reg); err != nil {
+	projects, err := readRegistry(s.data)
+	if err != nil {
 		return err
 	}
-	for _, info := range reg.Projects {
+	for _, info := range projects {
 		if err := s.attach(info); err != nil {
 			return err
 		}
@@ -177,12 +184,39 @@ func (s *Server) load() error {
 	return nil
 }
 
+// readRegistry reads projects.json and refuses entries whose name breaks the
+// project name rule or whose ID is not derived from the name. Such entries
+// come from an older development build, whose data is not migrated.
+func readRegistry(data string) ([]api.Project, error) {
+	var reg registry
+	if _, err := readJSON(data, "projects.json", &reg); err != nil {
+		return nil, err
+	}
+	for i, info := range reg.Projects {
+		if !api.ValidProjectName(info.Name) || info.ID != api.ProjectID(info.Name) {
+			return nil, errors.New("server data directory " + data + " holds project " + info.ID + " (" + info.Name + ") from an older development build; remove the data directory and import the boards again")
+		}
+		reg.Projects[i].BoardPath = projectBoardPath(data, info.Name)
+	}
+	return reg.Projects, nil
+}
+
+// projectRoot is the directory of one project below the data directory.
+func projectRoot(data, name string) string {
+	return filepath.Join(data, "projects", api.ProjectDirName(name))
+}
+
+func projectBoardPath(data, name string) string {
+	return filepath.Join(projectRoot(data, name), "board")
+}
+
 func (s *Server) attach(info api.Project) error {
-	root := filepath.Join(s.data, "projects", info.ID)
-	if err := ensureDir(s.data, filepath.Join("projects", info.ID)); err != nil {
+	root := projectRoot(s.data, info.Name)
+	if err := ensureDir(s.data, filepath.Join("projects", api.ProjectDirName(info.Name))); err != nil {
 		return err
 	}
-	p := &project{server: s, info: info, root: root, board: filepath.Join(root, "board")}
+	info.BoardPath = filepath.Join(root, "board")
+	p := &project{server: s, info: info, root: root, board: info.BoardPath}
 	if err := p.open(); err != nil {
 		return err
 	}
@@ -198,7 +232,7 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		return api.Project{}, false, apiError(api.CodeInvalidRequest, "Git remote must not contain credentials or query parameters")
 	}
 	if !api.ValidProjectName(req.Name) {
-		return api.Project{}, false, apiError(api.CodeInvalidRequest, "invalid project name")
+		return api.Project{}, false, apiError(api.CodeInvalidRequest, "invalid project name: "+api.ProjectNameRule)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -209,17 +243,22 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		}
 		return info, false, nil
 	}
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
+	id := projectIDFor(req.Name)
+	if other, ok := s.projects[id]; ok {
+		return api.Project{}, false, apiError(api.CodeProjectMismatch, "project "+req.Name+" derives ID "+id+", which project "+other.info.Name+" already uses")
+	}
+	if err := refuseOccupiedProjectDir(s.data, req.Name); err != nil {
 		return api.Project{}, false, err
 	}
-	info := api.Project{ID: "p-" + hex.EncodeToString(b), Name: req.Name, Remote: req.Remote, CreatedAt: s.now()}
+	info := api.Project{ID: id, Name: req.Name, Remote: req.Remote, CreatedAt: s.now()}
 	if err := s.attach(info); err != nil {
 		return api.Project{}, false, err
 	}
 	reg := registry{}
 	for _, p := range s.projects {
-		reg.Projects = append(reg.Projects, p.info)
+		stored := p.info
+		stored.BoardPath = ""
+		reg.Projects = append(reg.Projects, stored)
 	}
 	slices.SortFunc(reg.Projects, func(a, b api.Project) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	if err := writeJSON(s.data, "projects.json", reg); err != nil {
@@ -227,8 +266,47 @@ func (s *Server) register(req api.RegisterProject) (api.Project, bool, error) {
 		delete(s.byName, info.Name)
 		return api.Project{}, false, err
 	}
-	s.log.Info("project registered", "project", info.ID, "name", info.Name)
+	info = s.projects[info.ID].info
+	s.log.Info("project registered", "project", info.ID, "name", info.Name, "board", info.BoardPath)
 	return info, true, nil
+}
+
+// refuseOccupiedProjectDir lets a new registration reuse an existing project
+// directory only while its board holds no task. Such a directory is left when
+// a registration attached it but failed to write projects.json.
+func refuseOccupiedProjectDir(data, name string) error {
+	root := projectRoot(data, name)
+	if _, err := os.Lstat(root); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	boardDir := filepath.Join(root, "board")
+	if _, err := os.Lstat(boardDir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	current, err := board.LoadBoard(boardDir)
+	if err != nil {
+		return err
+	}
+	if len(current.Entries) > 0 {
+		return apiError(api.CodeProjectNotEmpty, "project directory "+root+" already holds tasks of an unregistered project; remove it before registering "+name)
+	}
+	return nil
+}
+
+// projectInfos lists the registered projects in creation order.
+func (s *Server) projectInfos() []api.Project {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	infos := make([]api.Project, 0, len(s.projects))
+	for _, p := range s.projects {
+		infos = append(infos, p.info)
+	}
+	slices.SortFunc(infos, func(a, b api.Project) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return infos
 }
 
 func (s *Server) project(id string) (*project, error) {

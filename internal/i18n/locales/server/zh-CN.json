@@ -2,7 +2,7 @@
   "config.server_must_be_a_json_object": "server 必须是 JSON 对象",
   "config.server_url_invalid": "server.url 必须是 http 或 https URL, 不能包含凭据、查询参数或片段",
   "config.project_must_be_a_json_object": "project 必须是 JSON 对象",
-  "config.project_name_invalid": "project.name 必须以字母或数字开头, 只能包含字母、数字、'.'、'_' 或 '-' (最多 128 个字符)",
+  "config.project_name_invalid": "project.name 必须以 ASCII 字母开头, 只能包含 ASCII 字母、数字、'_' 或 '-' (最多 128 个字符)",
   "config.server_url": "服务端 URL",
   "config.project_name": "项目名",
   "remote.error_invalid_request": "请求无效",

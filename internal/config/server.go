@@ -17,7 +17,14 @@ type Project struct {
 	Name string `json:"name,omitempty"`
 }
 
-var projectNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+// projectNamePattern copies api.ProjectNamePattern; this package cannot import
+// internal/api, so a test in internal/api pins the two together.
+const projectNamePattern = `^[A-Za-z][A-Za-z0-9_-]{0,127}$`
+
+var projectNameRe = regexp.MustCompile(projectNamePattern)
+
+// ValidProjectName reports whether name satisfies the project name rule.
+func ValidProjectName(name string) bool { return projectNameRe.MatchString(name) }
 
 // validateServer accepts a missing url; commands that need the server report
 // the missing value when they run.
@@ -46,7 +53,7 @@ func validateProject(raw any) (Project, error) {
 	var p Project
 	if value, exists := obj["name"]; exists {
 		text, ok := value.(string)
-		if !ok || !projectNameRe.MatchString(text) {
+		if !ok || !ValidProjectName(text) {
 			return Project{}, configErrorf("config.project_name_invalid")
 		}
 		p.Name = text

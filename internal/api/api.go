@@ -5,10 +5,13 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/dualface/kander/internal/board"
@@ -93,15 +96,19 @@ type Health struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// Project is one registered project. ID is server-assigned and stable; Name is
-// the value of the client's project.name. Remote is the Git remote URL the
-// first registration declared; a later registration with another remote is
-// refused, so two different repositories cannot share one board by accident.
+// Project is one registered project. ID is ProjectID(Name), so one name has
+// the same ID on every server; Name is the value of the client's project.name.
+// Remote is the Git remote URL the first registration declared; a later
+// registration with another remote is refused, so two different repositories
+// cannot share one board by accident. BoardPath is the absolute board
+// directory on the server host; it appears only in responses and is never
+// stored in the server registry.
 type Project struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Remote    string    `json:"remote,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	BoardPath string    `json:"board_path,omitempty"`
 }
 
 // RegisterProject is POST /api/v1/projects. Registering an existing name with
@@ -397,13 +404,42 @@ func (d Duration) Std() time.Duration { return time.Duration(d) * time.Milliseco
 func DurationOf(d time.Duration) Duration { return Duration(d / time.Millisecond) }
 
 var (
-	projectNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+	projectNameRe = regexp.MustCompile(ProjectNamePattern)
 	identityRe    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 )
 
+// ProjectNamePattern is the project name rule: an ASCII letter, then up to
+// 127 ASCII letters, digits, underscores, or hyphens. internal/config keeps a
+// copy because it cannot import this package; a test pins the two together.
+const ProjectNamePattern = `^[A-Za-z][A-Za-z0-9_-]{0,127}$`
+
+// ProjectNameRule describes ProjectNamePattern in refusal messages.
+const ProjectNameRule = "a project name starts with an ASCII letter and contains only ASCII letters, digits, '_' and '-', at most 128 characters"
+
 // ValidProjectName reports whether name can name a project. Names are
-// identifiers, never paths: the server maps them to internal IDs.
+// identifiers, never paths: the server derives the ID and directory from them.
 func ValidProjectName(name string) bool { return projectNameRe.MatchString(name) }
+
+// projectDirPrefixLimit bounds the readable part of a project directory name.
+const projectDirPrefixLimit = 48
+
+// projectHash is the first 16 hex digits of the SHA-256 of the exact name.
+func projectHash(name string) string {
+	sum := sha256.Sum256([]byte(name))
+	return hex.EncodeToString(sum[:8])
+}
+
+// ProjectID derives the stable ID of a valid project name.
+func ProjectID(name string) string { return "p-" + projectHash(name) }
+
+// ProjectDirName derives the directory name of a valid project name: the
+// lowercase name, cut to projectDirPrefixLimit bytes, then the name hash. The
+// hash of the exact name keeps names that differ only in case apart on
+// case-insensitive file systems.
+func ProjectDirName(name string) string {
+	prefix := strings.ToLower(name)
+	return prefix[:min(len(prefix), projectDirPrefixLimit)] + "-" + projectHash(name)
+}
 
 // ValidIdentity validates client IDs, execution IDs, request IDs, and
 // idempotency keys.
