@@ -18,7 +18,7 @@ The first version trusts its network: there is no login and no role model, one s
   server.lock            exclusive lock; a second instance is refused
   secret.json            server secret that derives claim tokens (0600)
   projects.json          registry: id, name, remote, created_at
-  projects/<id>/
+  projects/<name>-<hash>/  lowercase name (first 48 characters) and name hash
     board/               a board in the v1 layout (backlog/ ... trash/)
       .kander/groups/00000000-service-group/
         claims/<task>.json       task claim and handoff history
@@ -38,9 +38,19 @@ The first version trusts its network: there is no login and no role model, one s
       events.jsonl               bounded event diagnostic log
 ```
 
-A project name is an identifier (`[A-Za-z0-9][A-Za-z0-9._-]{0,127}`), never a path; the server maps it to an internal ID. The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. No record keys on a client's absolute path.
+A project name is an identifier, never a path: an ASCII letter, then up to 127 ASCII letters, digits, `_` or `-` (`^[A-Za-z][A-Za-z0-9_-]{0,127}$`). Clients (configuration, `kander init --project`) and the server (registration, `import`, `maintain`) refuse any other name and state the rule; nothing is rewritten or filtered.
 
-`kander-server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
+The project identity derives from the exact name. With `h` the first 16 hex digits of SHA-256(name), the project ID is `p-<h>` and the project directory is `projects/<lowercase name, first 48 characters>-<h>/`; for example `golf` has the ID `p-625fe74cad4600b5` and the directory `projects/golf-625fe74cad4600b5/`. One name has the same ID and directory on every server. Names that differ only in case get different hashes, so they never share a directory on a case-insensitive file system. A registration whose ID already belongs to another name is refused with `project_mismatch` and writes nothing. A registration that finds its directory already present but missing from `projects.json` (left by a registration that failed before writing the registry) reuses it while its board holds no task and is refused with `project_not_empty` otherwise, leaving the directory unchanged.
+
+Project responses (`GET` and `POST /api/v1/projects`, and the import result) carry `board_path`, the absolute board directory on the server host; `projects.json` never stores it. `kander init` prints it after the binding, and the human-readable `kander config` asks the bound server for it with one `GET` bounded to 3 seconds, sending no write and creating no file; an unreachable server, a missing binding or an unregistered name prints it as unavailable without changing the exit code. `kander config --json` stays offline and unchanged.
+
+`kander-server projects [--data DIR] [--json]` lists every project with its name, ID, remote, creation time and board path. It reads `projects.json` without the data directory lock and writes nothing, so it also runs beside a serving instance. A missing data directory lists nothing.
+
+v2 development data is not migrated. When `projects.json` holds a project whose ID is not derived from its name, or whose name breaks the rule, the server refuses to open and `kander-server projects` exits nonzero; remove the data directory and import the boards again.
+
+The first registration of a name may bind a Git remote URL; a later registration with a different remote is refused with `project_mismatch`, so two repositories cannot share a board by a name collision. No record keys on a client's absolute path.
+
+`kander-server` opens the data directory, takes `server.lock`, recovers every project's interrupted board transactions (`board.RecoverTransactions`), settles claims from the committed card state, logs one `project` line per project with its name, ID and board path, and only then reports ready. Until ready, domain routes answer `not_ready` (503).
 
 ## Offline card maintenance
 

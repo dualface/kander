@@ -31,11 +31,12 @@ This historical syntax remains indexed for compatibility. `--maintenance` is rej
 
 ## Output
 
-- The service project binding.
+- The service project binding, then the project's board path on the server host when the server reports one.
 
 ## Rejections
 
 - More than one path, an unknown option, invalid configuration, incompatible protocol, unreachable service, or origin mismatch refuses binding.
+- A project name must start with an ASCII letter and contain only ASCII letters, digits, `_`, or `-` (at most 128 characters); any other name is refused, never rewritten.
 - A concurrent project overlay change refuses the save.
 
 ## Offline service maintenance
