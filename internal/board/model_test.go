@@ -145,6 +145,9 @@ func modelVerdict(runs []modelRun, list []modelDeadEnd) []string {
 }
 
 func TestModelCompositeStates(t *testing.T) {
+	if modelSubprocess(t, "TestModelCompositeStates") {
+		return
+	}
 	runs := modelSearches(t, modelModeBounds(), modelOps())
 	found := map[string][]*modelNode{}
 	for _, r := range runs {
