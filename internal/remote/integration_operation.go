@@ -138,7 +138,7 @@ func (s *Session) finishIntegration(journal *ActionJournal, state *integrationOp
 }
 
 func (s *Session) retireIntegration(journal *ActionJournal, state *integrationOperation, attempt *integrationAttempt, current api.Integration) error {
-	if err := RemoveCredential(s.Home, Credential{ResourceKind: "integration", ProjectID: s.Info.ID, TaskID: current.ID, ExecutionID: attempt.Request.ExecutionID, Generation: current.Generation}); err != nil {
+	if err := RemoveCredential(s.Home, Credential{ResourceKind: "integration", ServerURL: s.ServerURL, ProjectID: s.Info.ID, TaskID: current.ID, ExecutionID: attempt.Request.ExecutionID, Generation: current.Generation}); err != nil {
 		return err
 	}
 	attempt.Retired = true

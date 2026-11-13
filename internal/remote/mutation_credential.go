@@ -28,7 +28,7 @@ func (s *Session) MutationCredential(task string) (Credential, bool, error) {
 		if !api.ValidIdentity(execution) {
 			return Credential{}, false, &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.fixed_execution_ended", execution, id)}
 		}
-		released, err := fs.RegularFileExists(s.Home, filepath.Join(credentialDir(s.Home, s.Info.ID, id), execution+".released"))
+		released, err := fs.RegularFileExists(s.Home, filepath.Join(credentialDir(s.Home, s.ServerURL, s.Info.ID, id), execution+".released"))
 		if err != nil {
 			return Credential{}, false, err
 		}

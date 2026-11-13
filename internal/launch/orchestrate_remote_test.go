@@ -87,7 +87,7 @@ func TestRemoteOrchestratorUsesServiceCardsAndRetainsItsPrivateIdentity(t *testi
 	if len(result.Tasks) != 2 {
 		t.Fatalf("incomplete group expansion: %+v", result.Tasks)
 	}
-	files, err := filepath.Glob(filepath.Join(home, "sessions", info.ID, "*.json"))
+	files, err := filepath.Glob(filepath.Join(home, "sessions", "*", "*.json"))
 	if err != nil || len(files) != 1 {
 		t.Fatalf("missing private session context: %v %v", files, err)
 	}

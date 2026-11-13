@@ -36,7 +36,7 @@ func withCredentialLock(home string, c Credential, name string, fn func() error)
 	if !api.ValidIdentity(c.ProjectID) || !api.ValidIdentity(c.TaskID) || !api.ValidIdentity(c.ExecutionID) {
 		return errors.New("invalid execution credential identity")
 	}
-	dir := credentialDir(home, c.ProjectID, c.TaskID)
+	dir := credentialDir(home, c.ServerURL, c.ProjectID, c.TaskID)
 	if err := fs.EnsurePrivateDirectory(home, dir, true); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (s *Session) SaveCredential(c Credential) error {
 		return &api.Error{Code: api.CodeLeaseInvalid, Message: config.Text("remote.credential_stale")}
 	}
 	return withCredentialLock(s.Home, c, "registry", func() error {
-		dir := credentialDir(s.Home, c.ProjectID, c.TaskID)
+		dir := credentialDir(s.Home, c.ServerURL, c.ProjectID, c.TaskID)
 		head, found, err := readCredentialHead(s.Home, dir)
 		if err != nil {
 			return err
@@ -114,7 +114,7 @@ func (s *Session) SaveCredential(c Credential) error {
 // the irreversible lost-lease state recorded by another process.
 func WriteCredential(home string, c Credential) error {
 	return withCredentialLock(home, c, c.ExecutionID, func() error {
-		dir := credentialDir(home, c.ProjectID, c.TaskID)
+		dir := credentialDir(home, c.ServerURL, c.ProjectID, c.TaskID)
 		released, err := fs.RegularFileExists(home, filepath.Join(dir, c.ExecutionID+".released"))
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func WriteCredential(home string, c Credential) error {
 func RemoveCredential(home string, c Credential) error {
 	return withCredentialLock(home, c, "registry", func() error {
 		return withCredentialLock(home, c, c.ExecutionID, func() error {
-			dir := credentialDir(home, c.ProjectID, c.TaskID)
+			dir := credentialDir(home, c.ServerURL, c.ProjectID, c.TaskID)
 			previous, found, err := fs.ReadRegularFileIfExists(home, filepath.Join(dir, c.ExecutionID+".json"))
 			if err != nil {
 				return err

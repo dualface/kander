@@ -23,14 +23,14 @@ type ExecutionContext struct {
 	Session     string `json:"session,omitempty"`
 }
 
-func executionContextPath(home, project, execution string) string {
-	return filepath.Join(home, "sessions", project, execution+".json")
+func executionContextPath(home, serverURL, project, execution string) string {
+	return filepath.Join(home, "sessions", projectNamespace(serverURL, project), execution+".json")
 }
 func SaveExecutionContext(home string, value ExecutionContext) error {
 	if !api.ValidIdentity(value.ProjectID) || !api.ValidIdentity(value.ExecutionID) || !api.ValidIdentity(value.ClientID) {
 		return errors.New("invalid local execution context")
 	}
-	path := executionContextPath(home, value.ProjectID, value.ExecutionID)
+	path := executionContextPath(home, value.ServerURL, value.ProjectID, value.ExecutionID)
 	if err := fs.EnsurePrivateDirectory(home, filepath.Dir(path), true); err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func RefreshExecutionContext(home string, c *Credential) error {
 	if c.ResourceKind != "group" {
 		return nil
 	}
-	data, found, err := fs.ReadRegularFileIfExists(home, executionContextPath(home, c.ProjectID, c.ExecutionID))
+	data, found, err := fs.ReadRegularFileIfExists(home, executionContextPath(home, c.ServerURL, c.ProjectID, c.ExecutionID))
 	if err != nil {
 		return err
 	}

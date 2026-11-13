@@ -53,3 +53,39 @@ func TestCredentialIsBoundToTheExecution(t *testing.T) {
 		t.Fatalf("listing: %+v %v", all, err)
 	}
 }
+
+// Project IDs derive from project names, so two servers can serve projects
+// with one ID. Their claims on one task must not share host-private records.
+func TestCredentialsOfOneProjectIDOnTwoServersStayApart(t *testing.T) {
+	home := t.TempDir()
+	id := api.ProjectID("golf")
+	task := "20261114-demo-task"
+	var sessions []*Session
+	for i, server := range []string{"http://a.invalid:7878", "http://b.invalid:7878"} {
+		s := &Session{Home: home, ServerURL: server, Info: api.Project{ID: id}}
+		c := Credential{ServerURL: server, ProjectID: id, TaskID: task, ExecutionID: []string{"x-a", "x-b"}[i], Generation: 1, Token: server}
+		if err := s.SaveCredential(c); err != nil {
+			t.Fatalf("claim on %s: %v", server, err)
+		}
+		if err := SaveExecutionContext(home, ExecutionContext{ServerURL: server, ClientID: "c-1", ProjectID: id, ExecutionID: c.ExecutionID}); err != nil {
+			t.Fatalf("context on %s: %v", server, err)
+		}
+		sessions = append(sessions, s)
+	}
+	for i, s := range sessions {
+		got, found, err := s.Credential(task)
+		if err != nil || !found || got.ExecutionID != []string{"x-a", "x-b"}[i] || got.ServerURL != s.ServerURL {
+			t.Fatalf("%s reads %+v %v %v", s.ServerURL, got, found, err)
+		}
+	}
+	first, _, err := sessions[0].Credential(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveCredential(home, first); err != nil {
+		t.Fatal(err)
+	}
+	if got, found, err := sessions[1].Credential(task); err != nil || !found || got.ExecutionID != "x-b" {
+		t.Fatalf("releasing the claim of one server touched the other: %+v %v %v", got, found, err)
+	}
+}

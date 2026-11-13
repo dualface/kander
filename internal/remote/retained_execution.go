@@ -31,7 +31,7 @@ func retainExecution(home string, c Credential, replace bool) error {
 	if c.ResourceKind != "" {
 		return nil
 	}
-	path := filepath.Join(home, "retained-executions", c.ProjectID, c.TaskID, c.ExecutionID+".json")
+	path := filepath.Join(home, "retained-executions", projectNamespace(c.ServerURL, c.ProjectID), c.TaskID, c.ExecutionID+".json")
 	if err := fs.EnsurePrivateDirectory(home, filepath.Dir(path), true); err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (s *Session) Retained(task api.Task) (RetainedExecution, error) {
 	if found && credential.ExecutionID == task.Claim.ExecutionID && credential.Generation == task.Claim.Generation {
 		return RetainedExecution{ServerURL: credential.ServerURL, ClientID: credential.ClientID, ProjectID: credential.ProjectID, TaskID: credential.TaskID, ExecutionID: credential.ExecutionID, Generation: credential.Generation, Session: credential.Session, Window: credential.Window, Worktree: credential.Worktree, Branch: credential.Branch, BaseCommit: credential.BaseCommit}, nil
 	}
-	path := filepath.Join(s.Home, "retained-executions", s.Info.ID, task.TaskID, task.Claim.ExecutionID+".json")
+	path := filepath.Join(s.Home, "retained-executions", projectNamespace(s.ServerURL, s.Info.ID), task.TaskID, task.Claim.ExecutionID+".json")
 	data, err := fs.ReadRegularFile(s.Home, path)
 	if err != nil {
 		return value, err

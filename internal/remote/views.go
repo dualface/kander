@@ -2,8 +2,6 @@ package remote
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -25,8 +23,7 @@ type cachedList struct {
 }
 
 func (s *Session) cachePath() string {
-	sum := sha256.Sum256([]byte(s.ServerURL + "\x00" + s.Info.ID))
-	return filepath.Join(s.Home, "cache", hex.EncodeToString(sum[:])+".json")
+	return filepath.Join(s.Home, "cache", projectNamespace(s.ServerURL, s.Info.ID)+".json")
 }
 
 // Location is a resource identity for display and prompts, never a local path.
@@ -195,8 +192,7 @@ func (s *Session) MoveTask(ctx context.Context, id string, request api.Move) (ap
 // LocalDataRoot isolates host-only issue evidence and recovery files by server
 // project. It contains no card-state directories and is never a board backend.
 func (s *Session) LocalDataRoot() (string, error) {
-	sum := sha256.Sum256([]byte(s.ServerURL + "\x00" + s.Info.ID))
-	root := filepath.Join(s.Home, "projects", hex.EncodeToString(sum[:]))
+	root := filepath.Join(s.Home, "projects", projectNamespace(s.ServerURL, s.Info.ID))
 	if err := fs.EnsurePrivateDirectory(s.Home, root, true); err != nil {
 		return "", err
 	}

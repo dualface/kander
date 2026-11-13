@@ -135,7 +135,7 @@ func TestCredentialRemovalRetainsLatestRoutingWithoutAnySecret(t *testing.T) {
 	if err != nil || retained.Session != latest.Session || retained.Window != latest.Window || retained.Worktree != latest.Worktree {
 		t.Fatalf("retained facts: %+v %v", retained, err)
 	}
-	data, err := os.ReadFile(filepath.Join(session.Home, "retained-executions", old.ProjectID, old.TaskID, old.ExecutionID+".json"))
+	data, err := os.ReadFile(filepath.Join(session.Home, "retained-executions", projectNamespace(old.ServerURL, old.ProjectID), old.TaskID, old.ExecutionID+".json"))
 	if err != nil || strings.Contains(string(data), old.Token) || strings.Contains(string(data), "token") {
 		t.Fatalf("retained a secret: %v", err)
 	}

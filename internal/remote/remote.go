@@ -7,6 +7,7 @@ package remote
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -242,8 +243,16 @@ func (c Credential) Claim() *client.Claim {
 	return &client.Claim{Token: c.Token, Generation: c.Generation}
 }
 
-func credentialDir(home, project, task string) string {
-	return filepath.Join(home, "executions", project, task)
+// projectNamespace isolates host-private records by server and project.
+// Project IDs derive from the project name, so one ID can name projects on
+// two servers that this client home talks to.
+func projectNamespace(serverURL, projectID string) string {
+	sum := sha256.Sum256([]byte(serverURL + "\x00" + projectID))
+	return hex.EncodeToString(sum[:])
+}
+
+func credentialDir(home, serverURL, project, task string) string {
+	return filepath.Join(home, "executions", projectNamespace(serverURL, project), task)
 }
 
 // Credentials lists every credential record below home.
@@ -320,7 +329,7 @@ func (s *Session) credentialFor(task, execution string) (Credential, bool, error
 	if !api.ValidIdentity(task) || !api.ValidIdentity(s.Info.ID) {
 		return Credential{}, false, errors.New("invalid execution credential location")
 	}
-	dir := credentialDir(s.Home, s.Info.ID, task)
+	dir := credentialDir(s.Home, s.ServerURL, s.Info.ID, task)
 	if execution == "" {
 		head, found, err := readCredentialHead(s.Home, dir)
 		if err != nil {
