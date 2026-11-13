@@ -323,3 +323,47 @@ func TestProjectsCommandRefusesOlderRegistries(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 }
+
+// A registration interrupted inside board initialization leaves a partial
+// board; with no task in it, the next registration reuses the directory.
+func TestRegistrationReusesAPartlyInitializedDirectory(t *testing.T) {
+	dir := t.TempDir()
+	partial := filepath.Join(dir, "projects", api.ProjectDirName("golf"), "board", "backlog")
+	if err := os.MkdirAll(partial, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	if info := registerName(t, s, "golf"); info.BoardPath != filepath.Dir(partial) {
+		t.Fatalf("board %s, want %s", info.BoardPath, filepath.Dir(partial))
+	}
+}
+
+// A restored board without control records is refused before any write, so
+// the refusal creates no lock file or control directory in it.
+func TestRegistrationRefusesARestoredBoardWithoutTouchingIt(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "projects", api.ProjectDirName("golf"))
+	card := filepath.Join(root, "board", "todo", "20261114-left-task", "spec.md")
+	if err := os.MkdirAll(filepath.Dir(card), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(card, []byte("# Left behind\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := openIdentityServer(t, dir, nil)
+	defer s.Close()
+	before := treeSnapshot(t, root)
+	_, _, err := s.register(api.RegisterProject{Name: "golf"})
+	var apiErr *api.Error
+	if !errors.As(err, &apiErr) || apiErr.Code != api.CodeProjectNotEmpty {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "board", ".kander")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("refusal created control records: %v", err)
+	}
+	after := treeSnapshot(t, root)
+	if len(after) != len(before) || after[card] != before[card] {
+		t.Fatalf("refusal changed the directory: %v -> %v", before, after)
+	}
+}

@@ -281,17 +281,11 @@ func refuseOccupiedProjectDir(data, name string) error {
 	} else if err != nil {
 		return err
 	}
-	boardDir := filepath.Join(root, "board")
-	if _, err := os.Lstat(boardDir); errors.Is(err, os.ErrNotExist) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	current, err := board.LoadBoard(boardDir)
+	occupied, err := board.HasTaskEntries(filepath.Join(root, "board"))
 	if err != nil {
 		return err
 	}
-	if len(current.Entries) > 0 {
+	if occupied {
 		return apiError(api.CodeProjectNotEmpty, "project directory "+root+" already holds tasks of an unregistered project; remove it before registering "+name)
 	}
 	return nil
