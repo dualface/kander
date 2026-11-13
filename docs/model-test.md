@@ -4,6 +4,21 @@
 
 The search is bounded. It does not prove that no dead end exists.
 
+`TestModelCompositeStates` re-executes the test binary to run the search in a
+child process, selecting only that test and omitting `-test.testlogfile`.
+Otherwise the search's millions of file operations produce a multi-gigabyte
+testlog, which `go test` reads into memory to calculate the test cache key and
+stores in the build cache. The parent reads `KANDER_MODEL_DEPTH` before starting
+the child so default and full mode keep distinct cache keys. The small searches
+in `model_meta_test.go` still run in the original test process.
+
+The child inherits the environment, including `TMPDIR`, `TMP` and `TEMP`, and
+uses the remaining parent timeout with time reserved for reporting its failure.
+With `-timeout 0` it has no timeout. Its output is forwarded immediately, so `-v`
+shows each scenario line when that scenario ends. A failed verdict, panic or
+timeout fails the parent test with the child's output. Child execution does not
+contribute to coverage reported by `-cover`.
+
 ## Terms
 
 - **Operation**: one supported command or launcher step, one `modelOp` in `model_ops_test.go` or `model_ops_review_test.go`. Names carry a prefix: `L` launcher, `X` executor, `H` human, `T` terminal move, `U` card update, `D` dispatch, `R` review, `C` coordinator, `F` completion tail.
