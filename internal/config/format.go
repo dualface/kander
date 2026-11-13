@@ -124,12 +124,22 @@ func FormatReviewStagesSummary(stages map[string]map[string]string) []string {
 	}
 }
 
-// FormatConfigLines produces the read-only human-readable output of kander config.
+// FormatConfigLines produces the read-only human-readable output of kander
+// config without a server board path.
 func FormatConfigLines(cfg *Config) ([]string, error) {
+	return FormatConfigLinesWithBoard(cfg, "")
+}
+
+// FormatConfigLinesWithBoard is FormatConfigLines with the board path the
+// server reported for the bound project; an empty path prints as unavailable.
+func FormatConfigLinesWithBoard(cfg *Config, boardPath string) ([]string, error) {
 	effective, err := Effective(cfg)
 	if err != nil {
 		return nil, err
 	}
+	// The binding is in force whatever welcome_complete says (clients read it
+	// through Load), so it is shown from the loaded config, not from Effective.
+	binding := cmp.Or(cfg, effective)
 	status := Text("config.complete")
 	if !cfg.WelcomeComplete {
 		status = Text("config.incomplete")
@@ -171,8 +181,9 @@ func FormatConfigLines(cfg *Config) ([]string, error) {
 	lines = append(lines, Text("rules.modules")+": "+FormatRulesSummary(effective.Rules))
 	lines = append(lines, formatInstallRulesLines(cfg)...)
 	lines = append(lines, Text("config.issue_result_on_done")+": "+effective.Issue.ResultOnDone)
-	lines = append(lines, Text("config.server_url")+": "+cmp.Or(effective.Server.URL, "-"))
-	lines = append(lines, Text("config.project_name")+": "+cmp.Or(effective.Project.Name, "-"))
+	lines = append(lines, Text("config.server_url")+": "+cmp.Or(binding.Server.URL, "-"))
+	lines = append(lines, Text("config.project_name")+": "+cmp.Or(binding.Project.Name, "-"))
+	lines = append(lines, Text("config.server_board_path")+": "+cmp.Or(boardPath, Text("config.server_board_unavailable")))
 	lines = append(lines, Text("config.git_branch_mode")+": "+effective.Git.BranchMode)
 	stored := ConfiguredLanguage()
 	language := stored

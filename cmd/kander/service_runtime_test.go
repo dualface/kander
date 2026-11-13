@@ -79,7 +79,7 @@ func TestClientInitBindsIndependentDirectoriesAndPreservesScope(t *testing.T) {
 	t.Setenv(board.EnvBoardDir, forbidden)
 	first, second := t.TempDir(), t.TempDir()
 	t.Chdir(first)
-	runKander(t, "init", "--server", httpServer.URL, "--project", "shared-project").require(t, "bind first clone")
+	bound := runKander(t, "init", "--server", httpServer.URL, "--project", "shared-project").require(t, "bind first clone")
 	created := runKander(t, "new", "chore", "shared-service", "Shared service task").require(t, "create through REST")
 	connection, err := client.New(httpServer.URL, "inspection-client")
 	if err != nil {
@@ -88,6 +88,9 @@ func TestClientInitBindsIndependentDirectoriesAndPreservesScope(t *testing.T) {
 	info, err := connection.Register(t.Context(), "shared-project", "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if info.BoardPath == "" || !strings.Contains(bound.stdout, info.BoardPath) {
+		t.Fatalf("init output omitted the server board path %q: %s", info.BoardPath, bound.stdout)
 	}
 	tasks, err := connection.Project(info.ID).List(t.Context(), "")
 	if err != nil || len(tasks.Tasks) != 1 {

@@ -74,5 +74,8 @@ func RunInit(args []string) int {
 		}
 	}
 	fmt.Fprintln(stdout, config.Text("remote.project_bound", session.Info.Name, session.Info.ID, session.ServerURL))
+	if session.Info.BoardPath != "" {
+		fmt.Fprintln(stdout, config.Text("remote.project_board_path", session.Info.BoardPath))
+	}
 	return 0
 }

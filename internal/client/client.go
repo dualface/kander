@@ -226,6 +226,14 @@ func (c *Client) Register(ctx context.Context, name, remote string) (api.Project
 	return p, err
 }
 
+// ProjectByName resolves a registered project without registering it: it
+// sends only GET, so a missing project stays missing.
+func (c *Client) ProjectByName(ctx context.Context, name string) (api.Project, error) {
+	var p api.Project
+	err := c.do(ctx, call{method: http.MethodGet, path: "/api/v1/projects", query: url.Values{"name": {name}}}, &p)
+	return p, err
+}
+
 // Project returns a Project handle for an already resolved project ID.
 func (c *Client) Project(id string) *Project { return &Project{c: c, id: id} }
 

@@ -1,11 +1,14 @@
 package menu
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 )
 
@@ -13,8 +16,35 @@ func prepareLanguage() {
 	config.BindEffectiveLanguage()
 }
 
+// configBoardTimeout bounds the board path lookup of the human-readable
+// kander config output, including the client's transport retries.
+const configBoardTimeout = 3 * time.Second
+
+// configClientID identifies the lookup; kander config never reads or creates
+// the client home's client-id, and the server does not check it on this route.
+const configClientID = "config-readonly"
+
+// serverBoardPath asks the bound server for the project's board path. It sends
+// only GET and writes nothing; every failure reads as unavailable.
+func serverBoardPath(cfg *config.Config) string {
+	if cfg == nil || cfg.Server.URL == "" || cfg.Project.Name == "" {
+		return ""
+	}
+	c, err := client.New(cfg.Server.URL, configClientID)
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), configBoardTimeout)
+	defer cancel()
+	info, err := c.ProjectByName(ctx, cfg.Project.Name)
+	if err != nil {
+		return ""
+	}
+	return info.BoardPath
+}
+
 func printConfig(cfg *config.Config) error {
-	lines, err := config.FormatConfigLines(cfg)
+	lines, err := config.FormatConfigLinesWithBoard(cfg, serverBoardPath(cfg))
 	if err != nil {
 		return err
 	}
