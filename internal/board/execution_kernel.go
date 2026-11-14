@@ -82,13 +82,22 @@ func projectLedger(s Snapshot, l executionLedger) (*ledgerKernel, error) {
 		}
 	}
 	k.state = st
+	var ok bool
+	if k.params, ok = ledgerParams(st); !ok {
+		return nil, coordinatorError("execution ledger out of range")
+	}
+	return k, nil
+}
+
+// ledgerParams bounds the counters of one operation: two above the projected
+// values, so an entrance can add a record, a link, and a revision.
+func ledgerParams(st executionledger.State) (executionledger.Params, bool) {
 	top := max(st.Record, st.Seq, st.Cycle) + 2
 	rev := max(st.Rev, st.RecRev) + 2
 	if top > math.MaxUint32 || rev > math.MaxUint32 {
-		return nil, coordinatorError("execution ledger out of range")
+		return executionledger.Params{}, false
 	}
-	k.params = executionledger.Params{MaxSeq: uint32(top), MaxRev: uint32(rev)}
-	return k, nil
+	return executionledger.Params{MaxSeq: uint32(top), MaxRev: uint32(rev)}, true
 }
 
 // fence is the kernel identity of the record a cursor is bound to, or 0 when
