@@ -122,13 +122,29 @@ def entries : List Entry := [
     source := "KanderFormal/Machines/ReviewObligation.lean"
     vectors := { depth := 5, paramSets := [[("maxBatch", 2)]], natDomain := [], events := obligationEvents }
     theorems := [
-      ``KanderFormal.Proofs.ReviewObligation.wellTyped
+      ``KanderFormal.Proofs.ReviewObligation.wellTyped,
+      ``KanderFormal.Proofs.ReviewObligation.step_enc,
+      ``KanderFormal.Proofs.ReviewObligation.debt_safety,
+      ``KanderFormal.Proofs.ReviewObligation.evidence_floor,
+      ``KanderFormal.Proofs.ReviewObligation.release_once,
+      ``KanderFormal.Proofs.ReviewObligation.reachable_inv,
+      ``KanderFormal.Proofs.ReviewObligation.counter_dropReleased,
+      ``KanderFormal.Proofs.ReviewObligation.counter_releaseDrop,
+      ``KanderFormal.Proofs.ReviewObligation.witness_members,
+      ``KanderFormal.Proofs.ReviewObligation.witness_twoResets,
+      ``KanderFormal.Proofs.ReviewObligation.witness_releasedRole,
+      ``KanderFormal.Proofs.ReviewObligation.completes_reachable
     ] },
   { machine := Machines.ReviewPlan.reviewPlanMachine
     source := "KanderFormal/Machines/ReviewPlan.lean"
     vectors := { depth := 5, paramSets := [[("maxBatch", 2)]], natDomain := [], events := planEvents }
     theorems := [
-      ``KanderFormal.Proofs.ReviewPlan.wellTyped
+      ``KanderFormal.Proofs.ReviewPlan.wellTyped,
+      ``KanderFormal.Proofs.ReviewPlan.integrity_refused,
+      ``KanderFormal.Proofs.ReviewPlan.sealed_append,
+      ``KanderFormal.Proofs.ReviewPlan.sealed_seal,
+      ``KanderFormal.Proofs.ReviewPlan.sealed_admit,
+      ``KanderFormal.Proofs.ReviewPlan.reachable_inv
     ] }
 ]
 
