@@ -37,8 +37,8 @@ var projectNameRe = regexp.MustCompile(projectNamePattern)
 // ValidProjectName reports whether name satisfies the project name rule.
 func ValidProjectName(name string) bool { return projectNameRe.MatchString(name) }
 
-// validateServer accepts a missing url; commands that need the server report
-// the missing value when they run.
+// validateServer permits an omitted URL; runtime service entrances resolve
+// the effective default through ServerURL.
 func validateServer(raw any) (Server, error) {
 	obj, ok := asObject(raw)
 	if !ok {

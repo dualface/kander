@@ -28,6 +28,9 @@ func commandRemoteDismiss(cfg *config.Config, task string, timeout float64) erro
 	if err != nil {
 		return err
 	}
+	operationCtx, finishOperation := service.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	card, err := service.Project.Show(ctx, task)
 	if err != nil {
 		return err

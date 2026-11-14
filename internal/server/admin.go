@@ -53,6 +53,6 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSONResponse(w, http.StatusAccepted, map[string]string{"status": "stopping"})
-		s.shutdownOnce.Do(func() { close(s.shutdown) })
+		s.shutdownCancel()
 	})
 }

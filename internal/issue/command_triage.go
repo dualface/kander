@@ -115,6 +115,9 @@ func runTriageMode(factory func() IssueProvider, args []string, stdout, stderr i
 			fmt.Fprintln(stderr, formatTriageError(openErr))
 			return 1
 		}
+		operationCtx, finishOperation := session.OperationContext(ctx)
+		defer finishOperation()
+		ctx = operationCtx
 		outcome, err = StartRemoteTriage(ctx, session, provider, remote.ProjectDir(cwd), repository, options.number, triageOptions, false)
 	} else {
 		var root string

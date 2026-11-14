@@ -58,12 +58,14 @@ func ServiceSelected(cfg *config.Config, required bool) bool { return required |
 
 // Session is one opened project on one server.
 type Session struct {
-	ServerURL     string
-	Client        *client.Client
-	Project       ProjectService
-	Info          api.Project
-	Home          string
-	WorkerStarter func(string) error
+	afterQuestion   bool
+	operationBudget time.Duration
+	ServerURL       string
+	Client          *client.Client
+	Project         ProjectService
+	Info            api.Project
+	Home            string
+	WorkerStarter   func(string) error
 }
 
 // Home returns the private client directory of this user.
@@ -185,6 +187,10 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if cfg == nil || cfg.Project.Name == "" {
 		return nil, ErrNotConfigured
 	}
+	var operationBudget time.Duration
+	if deadline, ok := ctx.Deadline(); ok {
+		operationBudget = max(time.Until(deadline), time.Millisecond)
+	}
 	home, err := Home()
 	if err != nil {
 		return nil, err
@@ -214,7 +220,7 @@ func Open(ctx context.Context, cfg *config.Config, dir string) (*Session, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Session{ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
+	return &Session{afterQuestion: prompted, operationBudget: operationBudget, ServerURL: config.ServerURL(cfg), Client: c, Project: c.Project(info.ID), Info: info, Home: home}, nil
 }
 
 // Credential is one execution's claim on this host. The worker renews it

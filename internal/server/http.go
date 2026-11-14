@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -154,7 +155,12 @@ func (s *Server) Handler() http.Handler {
 			}
 			wait = min(time.Duration(seconds)*time.Second, maxWait)
 		}
-		return outcome{status: http.StatusOK, body: p.events.read(r.Context(), r.URL.Query().Get("cursor"), wait)}
+		// Long polls have no writes to drain and should not delay shutdown.
+		ctx, cancel := context.WithCancel(r.Context())
+		stop := context.AfterFunc(s.shutdown, cancel)
+		defer stop()
+		defer cancel()
+		return outcome{status: http.StatusOK, body: p.events.read(ctx, r.URL.Query().Get("cursor"), wait)}
 	})
 	s.reviewRoutes(mux)
 	s.reviewActionRoutes(mux)

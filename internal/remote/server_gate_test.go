@@ -57,6 +57,10 @@ func serverGateFixture(t *testing.T) (*config.Config, *atomic.Bool, *api.Version
 		case "/api/v1/projects":
 			_ = json.NewEncoder(w).Encode(api.Project{ID: api.ProjectID("gate"), Name: "gate"})
 		default:
+			if strings.HasSuffix(r.URL.Path, "/tasks") {
+				_ = json.NewEncoder(w).Encode(api.TaskList{})
+				return
+			}
 			http.NotFound(w, r)
 		}
 	}))
@@ -226,5 +230,61 @@ func TestDefaultServerURLDoesNotEnableOptionalStorage(t *testing.T) {
 	}
 	if err := RequireBinding(&config.Config{}); err == nil || !strings.Contains(err.Error(), "kander init --project <name>") {
 		t.Fatalf("binding=%v", err)
+	}
+}
+
+// deadlineServerAnswer consumes the real command deadline at its question.
+type deadlineServerAnswer struct{ ctx context.Context }
+
+func (r deadlineServerAnswer) Read(p []byte) (int, error) { <-r.ctx.Done(); return copy(p, "y\n"), nil }
+
+func TestListAfterStartupOrRestartQuestionRenewsOperationBudget(t *testing.T) {
+	for _, restart := range []bool{false, true} {
+		t.Run(map[bool]string{false: "startup", true: "restart"}[restart], func(t *testing.T) {
+			cfg, available, v, _ := serverGateFixture(t)
+			t.Chdir(t.TempDir())
+			t.Setenv(config.EnvConfig, filepath.Join(t.TempDir(), "config.json"))
+			cfg.Language = "en"
+			if _, err := config.Save(cfg); err != nil {
+				t.Fatal(err)
+			}
+			if restart {
+				available.Store(true)
+				v.ServerVersion = "old-version"
+			}
+			oldContext, oldOutput := commandContext, stdout
+			var output bytes.Buffer
+			stdout = &output
+			t.Cleanup(func() { commandContext = oldContext; stdout = oldOutput })
+			var original context.Context
+			commandContext = func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				original = ctx
+				serverPromptInput = deadlineServerAnswer{ctx: ctx}
+				return ctx, cancel
+			}
+			if code := RunList([]string{"--json"}); code != 0 || output.Len() == 0 {
+				t.Fatalf("list after question exit=%d output=%q", code, output.String())
+			}
+			if !errors.Is(original.Err(), context.DeadlineExceeded) {
+				t.Fatal("question did not consume original budget")
+			}
+		})
+	}
+}
+
+func TestRenewedOperationStillHonorsExplicitCancellation(t *testing.T) {
+	parent, cancel := context.WithTimeout(t.Context(), time.Minute)
+	s := &Session{afterQuestion: true, operationBudget: time.Minute}
+	ctx, done := s.OperationContext(parent)
+	defer done()
+	cancel()
+	select {
+	case <-ctx.Done():
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Fatal(ctx.Err())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("explicit cancellation was lost")
 	}
 }

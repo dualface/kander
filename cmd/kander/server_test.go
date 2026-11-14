@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http/httptrace"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -258,5 +259,59 @@ func TestForegroundServerInterrupt(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestServerRestartWithActiveEventPoll(t *testing.T) {
+	ctl, address, target := serverCommandEnv(t)
+	dir := t.TempDir()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = ctl.Stop(ctx, target)
+	})
+	first, err := ctl.Start(t.Context(), servicectl.StartOptions{DataDir: dir, Listen: address, TTL: api.DefaultTTL, Renew: api.DefaultRenewInterval})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := client.New(target, "restart-poll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Retries = 0
+	info, err := c.Register(t.Context(), "restart-poll", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.Project(info.ID)
+	page, err := p.Events(t.Context(), "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := make(chan struct{})
+	var once sync.Once
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { once.Do(func() { close(sent) }) }})
+	finished := make(chan error, 1)
+	go func() { _, err := p.Events(ctx, page.Cursor, 25*time.Second); finished <- err }()
+	select {
+	case <-sent:
+	case <-time.After(5 * time.Second):
+		t.Fatal("poll was not sent")
+	}
+	select {
+	case err := <-finished:
+		t.Fatalf("poll ended before restart: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	next, err := ctl.Restart(t.Context(), target)
+	if err != nil || next.PID == first.PID {
+		t.Fatalf("active-poll restart=%+v %v", next, err)
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("old poll did not drain")
 	}
 }

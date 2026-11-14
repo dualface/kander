@@ -94,6 +94,9 @@ func runResultMode(factory func() IssueProvider, args []string, stdout, stderr i
 			if e != nil {
 				err = e
 			} else {
+				operationCtx, finishOperation := session.OperationContext(ctx)
+				defer finishOperation()
+				ctx = operationCtx
 				root, err = session.LocalDataRoot()
 				ctx = WithRemoteResult(ctx, session, cwd)
 			}

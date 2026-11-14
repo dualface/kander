@@ -52,6 +52,9 @@ func notifyRemoteForExecution(task, message, messageFile, pane string, messageSe
 	if err != nil {
 		return out, err
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	card, err := session.Project.Show(ctx, task)
 	if err != nil {
 		return out, err

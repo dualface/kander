@@ -26,6 +26,9 @@ func runRemoteCoordinator(ctx context.Context, cfg *config.Config, args []string
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	if args[0] == "show" {
 		view, err := session.Project.Group(ctx, args[1])
 		if err != nil {

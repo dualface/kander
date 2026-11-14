@@ -31,6 +31,9 @@ func runRemoteDispatch(args []string, cfg *config.Config) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	if args[0] == "show" {
 		if len(args) != 3 {
 			return usageFail("dispatch", "")

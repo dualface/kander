@@ -32,6 +32,9 @@ func RunRequest(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := s.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	switch args[0] {
 	case "show":
 		if len(args) != 4 || args[3] != "--json" {

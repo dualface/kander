@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/process"
 )
 
 // WorkerLockName is the lock one worker per client home holds while it runs.
@@ -48,7 +49,7 @@ func EnsureWorker(home string) error {
 	cmd := exec.Command(self, "worker")
 	cmd.Env = append(os.Environ(), EnvClientHome+"="+home)
 	cmd.Stdout, cmd.Stderr = log.File, log.File
-	detach(cmd)
+	process.Detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}

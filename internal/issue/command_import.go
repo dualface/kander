@@ -149,6 +149,9 @@ func runImportMode(factory func() IssueProvider, args []string, stdout, stderr i
 			fmt.Fprintln(stderr, formatError(openErr))
 			return 1
 		}
+		operationCtx, finishOperation := session.OperationContext(ctx)
+		defer finishOperation()
+		ctx = operationCtx
 		result, err = ImportRemote(ctx, session, provider, repository, options.number, importOptions)
 	} else {
 		var root string

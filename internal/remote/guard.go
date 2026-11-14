@@ -21,6 +21,9 @@ func RunGuardWrite(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	path, err := filepath.Abs(args[0])
 	if err != nil {
 		return fail(err)

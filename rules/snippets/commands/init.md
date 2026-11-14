@@ -22,7 +22,7 @@ This historical syntax remains indexed for compatibility. `--maintenance` is rej
 ## Preconditions
 
 - A readable scope configuration and reachable compatible service.
-- A service URL and project name, from configuration or the additional flags below.
+- A project name from configuration or `--project`. The effective service URL comes from `--server`, configuration, or the default `http://127.0.0.1:7878`.
 
 ## Effects
 
@@ -51,4 +51,4 @@ kander init [--server <URL>] [--project <name>] [project-path]
 
 The optional URL and name are validated with the normal configuration schema. The client checks protocol compatibility, registers the project with its canonical Git origin and saves only the requested binding fields in the project's sparse `.kander-config.json`. A concurrent overlay edit refuses the save. Repeating the binding returns the same project. Different checkout paths do not affect project identity. A name already bound to another origin is refused.
 
-Without these flags, `init` uses the existing binding at the selected project path. `--maintenance` does not open a local board: run explicit import or service maintenance through `kander server`. Unconfigured or unreachable service commands fail; they never fall back to local storage.
+Without these flags, `init` uses the existing binding at the selected project path. `--maintenance` does not open a local board: run explicit import or service maintenance through `kander server`. A missing project name fails with `kander init --project <name>`. Unreachable loopback services offer interactive startup with the storage paths and default `[Y/n]`; Agent and noninteractive calls fail with `kander server start` and the data directory. Remote unavailable services fail. No path falls back to local storage.

@@ -47,7 +47,7 @@ func TestAdministrationAuthenticationAndNoSecretDisclosure(t *testing.T) {
 			t.Fatalf("refusal=%d %s", out.Code, out.Body.String())
 		}
 		select {
-		case <-s.shutdown:
+		case <-s.shutdown.Done():
 			t.Fatal("refused request shut down server")
 		default:
 		}
@@ -75,7 +75,7 @@ func TestAdministrationAuthenticationAndNoSecretDisclosure(t *testing.T) {
 		t.Fatalf("shutdown=%d", out.Code)
 	}
 	select {
-	case <-s.shutdown:
+	case <-s.shutdown.Done():
 	default:
 		t.Fatal("authenticated shutdown not requested")
 	}

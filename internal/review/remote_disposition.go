@@ -41,6 +41,9 @@ func runRemoteDisposition(cfg *config.Config, args []string) int {
 	if err != nil {
 		return dispositionFailure(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 
 	var out json.RawMessage
 	// typed is the board type of the answer; printing it through that type

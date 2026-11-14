@@ -29,6 +29,9 @@ func runRemoteIntegration(ctx context.Context, cfg *config.Config, args []string
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	if args[0] == "integration-show" {
 		if !api.IntegrationTarget(args[1]) {
 			return coordinatorUsageFail()

@@ -60,8 +60,8 @@ type Server struct {
 	listen             string
 	startedAt          time.Time
 	adminToken         string
-	shutdown           chan struct{}
-	shutdownOnce       sync.Once
+	shutdown           context.Context
+	shutdownCancel     context.CancelFunc
 	secret             []byte
 	lock               *fs.ExclusiveLock
 	lockFile           *os.File
@@ -80,9 +80,16 @@ func Open(o Options) (*Server, error) {
 	if !filepath.IsAbs(o.DataDir) {
 		return nil, errors.New("server data directory must be an absolute path")
 	}
+	shutdown, shutdownCancel := context.WithCancel(context.Background())
+	opened := false
+	defer func() {
+		if !opened {
+			shutdownCancel()
+		}
+	}()
 	s := &Server{
 		maintenance: o.maintenance, data: o.DataDir, ttl: o.TTL, renew: o.RenewInterval, log: o.Logger, clock: o.Now, version: o.Version,
-		projects: map[string]*project{}, byName: map[string]string{}, shutdown: make(chan struct{}), startedAt: time.Now().UTC(),
+		projects: map[string]*project{}, byName: map[string]string{}, shutdown: shutdown, shutdownCancel: shutdownCancel, startedAt: time.Now().UTC(),
 	}
 	if s.ttl <= 0 {
 		s.ttl = DefaultTTL
@@ -138,12 +145,14 @@ func Open(o Options) (*Server, error) {
 		}
 		s.log.Info("server ready", "data", s.data, "projects", len(s.projects))
 	}
+	opened = true
 	return s, nil
 }
 
 // Close releases the data directory lock.
 func (s *Server) Close() error {
 	s.ready.Store(false)
+	s.shutdownCancel()
 	var err error
 	if s.lock != nil {
 		err = s.lock.Unlock()

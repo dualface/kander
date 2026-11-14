@@ -104,7 +104,7 @@ func open(ctx context.Context) (*Session, *config.Config, error) {
 	return s, cfg, err
 }
 
-func commandContext() (context.Context, context.CancelFunc) {
+var commandContext = func() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 2*time.Minute)
 }
 
@@ -133,6 +133,9 @@ func RunListWithAgentStatus(args []string, observe board.AgentStatusFunc) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := s.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	list, err := s.Project.List(ctx, state)
 	if err != nil {
 		return fail(err)
@@ -185,6 +188,9 @@ func RunShow(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := s.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	t, err := s.Project.Show(ctx, args[0])
 	if err != nil {
 		return fail(err)
@@ -222,6 +228,9 @@ func RunNew(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := s.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	if !languageGiven {
 		language = cfg.AgentLanguage
 	}
@@ -284,6 +293,9 @@ func RunUpdate(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := s.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	claim, err := claimFor(s, args[0])
 	if err != nil {
 		return fail(err)
@@ -331,6 +343,9 @@ func RunMove(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := s.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	task, state := args[0], args[1]
 	if state == "working" && values["--owner"] != "" {
 		return claim(ctx, s, task, values["--owner"], values["--decision"])
@@ -445,6 +460,9 @@ func RunPick(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	var task api.TaskSummary
 	if len(args) == 0 {
 		task, err = SelectTask(ctx, session, "backlog", os.Stdin, stdout)

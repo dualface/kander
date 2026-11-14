@@ -264,7 +264,12 @@ func TestProjectsCommandListsWhileServingAndStopped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Capture all bytes with no exclusive OS lock held. Windows refuses reads
+	// of server.lock while serving; no file is excluded from the comparison.
+	s.Close()
 	before := treeSnapshot(t, dir)
+	s = openIdentityServer(t, dir, nil)
+	t.Cleanup(func() { _ = s.Close() })
 	check := func(state string) {
 		code, out, errOut := runProjectsCommand(t, "--data", dir, "--json")
 		if code != 0 {

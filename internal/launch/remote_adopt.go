@@ -27,6 +27,9 @@ func commandRemoteAdopt(cfg *config.Config, task, decision string) error {
 	if err != nil {
 		return err
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	credential, found, err := session.Credential(task)
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 //go:build windows
 
-package servicectl
+package process
 
 import (
 	"os/exec"
@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func detach(cmd *exec.Cmd) {
+// Detach configures a child to outlive the launching terminal.
+func Detach(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP}
 }

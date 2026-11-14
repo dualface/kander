@@ -25,6 +25,9 @@ func runRemoteCheck(cfg *config.Config, tasks []string, all bool) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	operationCtx, finishOperation := service.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	result, err := service.Project.Check(ctx, api.CheckQuery{Tasks: tasks, All: all})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

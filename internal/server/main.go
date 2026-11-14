@@ -58,8 +58,9 @@ func RunForeground(ctx context.Context, options Options, listen string) error {
 		defer close(finished)
 		select {
 		case <-ctx.Done():
-		case <-s.shutdown:
+		case <-s.shutdown.Done():
 		}
+		s.shutdownCancel()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdown); err != nil {

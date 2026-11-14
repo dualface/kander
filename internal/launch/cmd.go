@@ -162,6 +162,9 @@ func RunStartRemote(args []string) int {
 		if err != nil {
 			return fail(err)
 		}
+		operationCtx, finishOperation := session.OperationContext(ctx)
+		defer finishOperation()
+		ctx = operationCtx
 		selected, err := remote.SelectTask(ctx, session, "todo", os.Stdin, os.Stdout)
 		if err != nil {
 			return fail(err)

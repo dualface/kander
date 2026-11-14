@@ -15,6 +15,7 @@ import (
 	"github.com/dualface/kander/internal/client"
 	"github.com/dualface/kander/internal/config"
 	"github.com/dualface/kander/internal/fs"
+	"github.com/dualface/kander/internal/process"
 )
 
 // Controller owns bounded start/stop operations. Executable is injectable for
@@ -95,7 +96,7 @@ func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, 
 	}
 	cmd := exec.Command(exe, "server", "start", "--foreground", "--data", dir, "--listen", o.Listen, "--ttl", o.TTL.String(), "--renew", o.Renew.String())
 	cmd.Stdout, cmd.Stderr = log.File, log.File
-	detach(cmd)
+	process.Detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return api.ServerInfo{}, err
 	}
@@ -105,7 +106,22 @@ func (c Controller) Start(ctx context.Context, o StartOptions) (api.ServerInfo, 
 	defer cancel()
 	for {
 		if healthy(wait, target) {
-			return Info(wait, target)
+			info, err := Info(wait, target)
+			if err != nil {
+				continue
+			}
+			if info.PID != cmd.Process.Pid {
+				// A concurrent starter won. Reap our losing child before returning
+				// so it cannot acquire the data lock when the winner later stops.
+				killErr := cmd.Process.Kill()
+				select {
+				case <-exited:
+					// A child that exited concurrently also counts as reaped.
+				case <-wait.Done():
+					return api.ServerInfo{}, errors.Join(wait.Err(), killErr)
+				}
+			}
+			return info, nil
 		}
 		select {
 		case <-wait.Done():
@@ -162,7 +178,18 @@ func (c Controller) Stop(ctx context.Context, target string) (bool, error) {
 		_, err := p.Health(probe)
 		done()
 		if client.IsUnreachable(err) && wait.Err() == nil {
-			return true, nil
+			// Shutdown closes the listener before draining active requests.
+			// The lock protects those writes until the old instance is closed.
+			file, err := fs.OpenLockFile(info.DataDir, filepath.Join(info.DataDir, "server.lock"))
+			if err != nil {
+				return true, err
+			}
+			defer file.Close()
+			lock, err := fs.LockExclusiveContext(wait, file)
+			if err != nil {
+				return true, fmt.Errorf("%s: %w", config.Text("server.stop_timeout"), err)
+			}
+			return true, lock.Unlock()
 		}
 		select {
 		case <-wait.Done():

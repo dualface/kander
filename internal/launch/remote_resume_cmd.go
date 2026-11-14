@@ -34,6 +34,9 @@ func runRemoteResume(cfg *config.Config, agent *string, launcher, task, message,
 	if err != nil {
 		return fail(err)
 	}
+	operationCtx, finishOperation := session.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	card, err := session.Project.Show(ctx, task)
 	if err != nil {
 		return fail(err)

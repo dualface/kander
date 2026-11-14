@@ -21,6 +21,9 @@ func remoteOrchestrateBoard(ctx context.Context, cfg *config.Config) (board.Boar
 	if err != nil {
 		return board.Board{}, nil, "", err
 	}
+	operationCtx, finishOperation := service.OperationContext(ctx)
+	defer finishOperation()
+	ctx = operationCtx
 	snapshot, err := service.Project.Snapshot(ctx, api.SnapshotQuery{})
 	if err != nil {
 		return board.Board{}, nil, "", err
