@@ -3,6 +3,7 @@ package remote_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,5 +109,23 @@ func TestIntegrationReceiptAllowsDoneButRewoundRemoteBlocksClient(t *testing.T) 
 		if _, err := os.Stat(filepath.Join(dir, "kanban")); !os.IsNotExist(err) {
 			t.Fatal("completion materialized a local board")
 		}
+	}
+}
+
+func TestPortableWrapUpAcceptsAlreadyContainedReceipt(t *testing.T) {
+	f := newIntegrationFixture(t)
+	// Another path already published the reviewed commit on the target.
+	deliveryGit(t, f.first, "push", "origin", f.commit+":refs/heads/v2")
+	result, err := f.a.Integrate(t.Context(), f.first, f.options("already-contained"))
+	if err != nil || !result.Request.AlreadyContained || result.ObservedTarget != f.commit {
+		t.Fatalf("already contained integration: %+v %v", result, err)
+	}
+	g := board.DispatchIntegration{IntegrationID: result.ID, IntegrationExecution: result.Request.ExecutionID, IntegrationGeneration: result.Generation, DispatchID: "contained-wrap", TaskID: f.task.TaskID, CWD: "project:" + f.a.Info.ID, SourceCommit: f.commit, ReviewTarget: f.commit, ReviewBase: f.base, TargetCommit: result.ObservedTarget, TargetRef: result.Request.TargetRef, Author: "coordinator", Basis: "published integration receipt", VerifiedAt: time.Now().UTC()}
+	if err := f.b.VerifyWrapUpIntegration(t.Context(), f.second, g); err != nil {
+		t.Fatal(err)
+	}
+	g.IntegrationExecution = ""
+	if err := f.b.VerifyWrapUpIntegration(t.Context(), f.second, g); !api.IsCode(err, api.CodeEvidenceIncomplete) || !strings.Contains(err.Error(), "integration_execution") {
+		t.Fatalf("missing execution diagnostic: %v", err)
 	}
 }
